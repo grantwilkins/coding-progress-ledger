@@ -6,6 +6,7 @@ Plausible wrong implementations:
 - Score subtasks by count instead of weight.
 - Count parent nodes even when active children exist.
 - Treat invalidated or deleted children as active children.
+- Treat inactive statuses as partially complete.
 - Allow reverse-progress events without changing the denominator or numerator.
 - Leave partial state behind after rejecting an invalid completion event.
 """
@@ -40,6 +41,26 @@ def test_progress_increases_when_work_completed():
     assert obs.complete_weight == 2.0
     assert obs.active_weight == 4.0
     assert obs.progress == 0.5
+
+
+def test_inactive_statuses_count_in_denominator_but_not_numerator():
+    ledger = new_ledger("Fix bug")
+    ledger = add_subtask(ledger, "Not started work", step=1, subtask_id="N", weight=2)
+    ledger = add_subtask(ledger, "Started work", step=1, subtask_id="I", weight=3)
+    ledger = add_subtask(ledger, "Blocked work", step=1, subtask_id="B", weight=5)
+    apply_event(ledger, event(2, EventType.UPDATE_STATUS, "I", {
+        "status": "in_progress",
+        "evidence": ["Started investigating."],
+    }))
+    apply_event(ledger, event(2, EventType.UPDATE_STATUS, "B", {"status": "blocked"}, "Need external input"))
+
+    obs = score(ledger)
+
+    assert obs.complete_weight == 0
+    assert obs.active_weight == 10
+    assert obs.progress == 0.0
+    assert obs.active_leaf_count == 3
+    assert obs.complete_leaf_count == 0
 
 
 def test_reverse_progress_when_new_work_is_discovered():
@@ -100,6 +121,17 @@ def test_parent_with_children_does_not_count_as_leaf():
     assert obs.active_weight == 3.0
 
 
+def test_zero_and_negative_weights_are_rejected():
+    ledger = new_ledger("Fix bug")
+
+    with pytest.raises(ValueError):
+        add_subtask(ledger, "Zero weight", step=1, weight=0)
+    with pytest.raises(ValueError):
+        add_subtask(ledger, "Negative weight", step=1, weight=-1)
+    assert ledger.subtasks == {}
+    assert len(ledger.events) == 1
+
+
 def test_splitting_completed_parent_can_reduce_progress():
     ledger = new_ledger("Fix bug")
     ledger = add_subtask(ledger, "Validate fix", step=1)
@@ -115,6 +147,25 @@ def test_splitting_completed_parent_can_reduce_progress():
     obs = score(ledger)
     assert obs.progress == 0.0
     assert obs.active_leaf_count == 3
+
+
+def test_splitting_completed_weighted_parent_replaces_parent_with_child_leaves():
+    ledger = new_ledger("Fix bug")
+    ledger = add_subtask(ledger, "Broad fix", step=1, subtask_id="P", weight=10)
+    ledger = mark_complete(ledger, "P", evidence="Broad fix looked done", step=2)
+    assert (score(ledger).complete_weight, score(ledger).active_weight, score(ledger).progress) == (10, 10, 1.0)
+
+    ledger = split_subtask(ledger, "P", [
+        {"id": "P.1", "description": "Patch parser", "weight": 3},
+        {"id": "P.2", "description": "Run regression", "weight": 2},
+    ], step=3, reason="Done work was too broad")
+
+    obs = score(ledger)
+    assert obs.complete_weight == 0
+    assert obs.active_weight == 5
+    assert obs.progress == 0.0
+    assert obs.active_leaf_count == 2
+    assert obs.complete_leaf_count == 0
 
 
 def test_invalidated_and_deleted_subtasks_not_counted_but_kept_in_history():
@@ -161,3 +212,17 @@ def test_weighted_scoring_is_not_count_based():
 
     obs = score(ledger)
     assert (obs.complete_weight, obs.active_weight, obs.progress) == (5, 6, 5 / 6)
+
+
+def test_weighted_fixture_has_explainable_weights_and_leaf_counts():
+    ledger = new_ledger("Fix bug")
+    ledger = add_subtask(ledger, "Heavy task", step=1, subtask_id="A", weight=3)
+    ledger = add_subtask(ledger, "Light task", step=1, subtask_id="B", weight=1)
+    ledger = mark_complete(ledger, "A", evidence="Heavy task done", step=2)
+
+    obs = score(ledger)
+    assert obs.complete_weight == 3
+    assert obs.active_weight == 4
+    assert obs.progress == 0.75
+    assert obs.complete_leaf_count == 1
+    assert obs.active_leaf_count == 2

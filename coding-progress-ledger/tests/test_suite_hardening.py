@@ -13,6 +13,7 @@ Plausible wrong implementations:
 """
 
 import importlib.util
+import hashlib
 import json
 from pathlib import Path
 
@@ -95,6 +96,43 @@ def test_drop_source_reports_excluded_category_for_bookkeeping_drop(tmp_path):
     assert summary["largest_coding_drop_source"] == "none"
 
 
+def test_incomplete_coding_work_can_make_overall_progress_exceed_coding_progress(tmp_path):
+    run_dir = write_run(tmp_path, "incomplete_coding_fixture", [
+        event(0, "init", None, {"root_task": "Incomplete coding"}),
+        event(1, "add_subtask", "P", {"description": "Patch behavior", "category": "product"}),
+        event(1, "add_subtask", "A", {"description": "Export artifact bundle", "category": "artifact"}),
+        event(2, "update_status", "A", {"status": "complete", "evidence": ["artifact exists"]}),
+    ])
+
+    summary = rescore.rescore_run(run_dir)
+
+    assert summary["final_coding_progress"] == 0.0
+    assert summary["final_overall_progress"] == 0.5
+    assert summary["excluded_active_weight_final"] == 1.0
+    assert summary["excluded_completed_weight_final"] == 1.0
+    assert summary["excluded_categories_final"]["artifact"] == {"active": 1.0, "complete": 1.0}
+
+
+def test_environment_only_drop_affects_overall_but_not_coding(tmp_path):
+    run_dir = write_run(tmp_path, "environment_drop_fixture", [
+        event(0, "init", None, {"root_task": "Environment drop"}),
+        event(1, "add_subtask", "P", {"description": "Patch behavior", "category": "product"}),
+        event(2, "update_status", "P", {"status": "complete", "evidence": ["final_diff.patch shows patch"]}),
+        event(3, "add_subtask", "E", {"description": "Prepare optional environment", "category": "environment"}),
+        event(3, "update_status", "E", {"status": "complete", "evidence": ["command output shows setup"]}),
+        event(4, "reopen_subtask", "E", {"reason": "Environment setup missing package"}),
+    ])
+
+    summary = rescore.rescore_run(run_dir)
+
+    assert summary["coding_largest_drop"] == 0.0
+    assert summary["overall_largest_drop"] == 0.5
+    assert summary["largest_coding_drop_source"] == "none"
+    assert summary["largest_overall_drop_source"] == "environment"
+    assert summary["largest_overall_drop_mostly_excluded"] is True
+    assert summary["excluded_categories_final"]["environment"] == {"active": 1.0, "complete": 0}
+
+
 def test_suite_summary_table_includes_weight_and_success_source_columns():
     lines = rescore.suite_summary_table([
         {
@@ -151,6 +189,60 @@ def test_drop_source_reports_mixed_when_multiple_categories_are_material(tmp_pat
     assert summary["largest_overall_drop_category_contributions"] == {"product": 0.5, "validation": 0.5}
 
 
+def test_drop_source_reports_single_product_or_validation_category(tmp_path):
+    product_run = write_run(tmp_path, "product_drop_fixture", [
+        event(0, "init", None, {"root_task": "Product drop"}),
+        event(1, "add_subtask", "P", {"description": "Patch behavior", "category": "product"}),
+        event(1, "add_subtask", "V", {"description": "Run validation", "category": "validation"}),
+        event(2, "update_status", "P", {"status": "complete", "evidence": ["final_diff.patch shows patch"]}),
+        event(2, "update_status", "V", {"status": "complete", "evidence": ["test_output.txt shows pytest passed"]}),
+        event(3, "reopen_subtask", "P", {"reason": "Product behavior still wrong"}),
+    ])
+    validation_run = write_run(tmp_path, "validation_drop_fixture", [
+        event(0, "init", None, {"root_task": "Validation drop"}),
+        event(1, "add_subtask", "P", {"description": "Patch behavior", "category": "product"}),
+        event(1, "add_subtask", "V", {"description": "Run validation", "category": "validation"}),
+        event(2, "update_status", "P", {"status": "complete", "evidence": ["final_diff.patch shows patch"]}),
+        event(2, "update_status", "V", {"status": "complete", "evidence": ["test_output.txt shows pytest passed"]}),
+        event(3, "reopen_subtask", "V", {"reason": "Validation was incomplete"}),
+    ])
+
+    product_summary = rescore.rescore_run(product_run)
+    validation_summary = rescore.rescore_run(validation_run)
+
+    assert product_summary["largest_coding_drop_source"] == "product"
+    assert validation_summary["largest_coding_drop_source"] == "validation"
+
+
+def test_drop_source_materiality_threshold_distinguishes_dominant_from_mixed(tmp_path):
+    dominant_run = write_run(tmp_path, "dominant_drop_fixture", [
+        event(0, "init", None, {"root_task": "Dominant drop"}),
+        event(1, "add_subtask", "P", {"description": "Patch behavior", "category": "product", "weight": 9}),
+        event(1, "add_subtask", "V", {"description": "Run validation", "category": "validation", "weight": 1}),
+        event(2, "update_status", "P", {"status": "complete", "evidence": ["final_diff.patch shows patch"]}),
+        event(2, "update_status", "V", {"status": "complete", "evidence": ["test_output.txt shows pytest passed"]}),
+        event(3, "reopen_subtask", "P", {"reason": "Product behavior still wrong"}),
+        event(3, "reopen_subtask", "V", {"reason": "Validation was incomplete"}),
+    ])
+    mixed_run = write_run(tmp_path, "material_mixed_drop_fixture", [
+        event(0, "init", None, {"root_task": "Mixed material drop"}),
+        event(1, "add_subtask", "P", {"description": "Patch behavior", "category": "product", "weight": 3}),
+        event(1, "add_subtask", "V", {"description": "Run validation", "category": "validation", "weight": 2}),
+        event(2, "update_status", "P", {"status": "complete", "evidence": ["final_diff.patch shows patch"]}),
+        event(2, "update_status", "V", {"status": "complete", "evidence": ["test_output.txt shows pytest passed"]}),
+        event(3, "reopen_subtask", "P", {"reason": "Product behavior still wrong"}),
+        event(3, "reopen_subtask", "V", {"reason": "Validation was incomplete"}),
+    ])
+
+    dominant = rescore.rescore_run(dominant_run)
+    mixed = rescore.rescore_run(mixed_run)
+
+    assert dominant["largest_coding_drop_source"] == "product"
+    assert dominant["largest_coding_drop_category_contributions"] == {"product": 0.9, "validation": 0.1}
+    assert mixed["largest_coding_drop_source"] == "mixed"
+    assert mixed["largest_coding_drop_category_contributions"] == {"product": 0.6, "validation": 0.4}
+
+
 def test_control_coding_complete_artifacts_incomplete_fixture():
     summary = json.loads((ROOT / "runs/control_coding_complete_artifacts_incomplete/summary_by_category.json").read_text())
 
@@ -188,6 +280,29 @@ def test_evidence_audit_marks_test_output_and_diff_evidence_strong():
 
     assert audit["status"] == "strong"
     assert audit["weak_completion_evidence_count"] == 0
+
+
+def test_evidence_classifier_recognizes_expected_evidence_types():
+    cases = [
+        ("pytest tests passed", "test_output"),
+        ("unittest suite OK", "test_output"),
+        ("npm test passed", "test_output"),
+        ("test_output.txt captured failure then pass", "test_output"),
+        ("final_diff.patch modifies parser.py", "diff"),
+        ("diff shows parser patch", "diff"),
+        ("created output.csv", "file_exists"),
+        ("wrote file summary.json", "file_exists"),
+        ("artifact exists", "file_exists"),
+        ("stdout shows CLI result", "command_output"),
+        ("stderr contains expected warning", "command_output"),
+        ("python -m package.module succeeded", "command_output"),
+        ("task.md describes expected behavior", "contract_text"),
+        ("README states the contract", "contract_text"),
+        ("I checked this manually", "manual_note"),
+    ]
+
+    for text, expected_type in cases:
+        assert expected_type in rescore.classify_evidence([text])
 
 
 def test_evidence_audit_marks_manual_only_product_completion_weak():
@@ -229,6 +344,23 @@ def test_evidence_audit_reports_category_severity_independently():
     assert audit["by_category"]["investigation"]["status"] == "strong"
 
 
+def test_evidence_audit_counts_weak_completions_by_category():
+    audit = rescore.audit_completion_evidence([
+        event(0, "init", None, {"root_task": "Evidence counts"}),
+        event(1, "add_subtask", "P", {"description": "Patch behavior", "category": "product"}),
+        event(1, "add_subtask", "V", {"description": "Run validation", "category": "validation"}),
+        event(1, "add_subtask", "I", {"description": "Understand ambiguous requirement", "category": "investigation"}),
+        event(2, "update_status", "P", {"status": "complete", "evidence": ["Looks fine"]}),
+        event(3, "update_status", "V", {"status": "complete", "evidence": ["Expected behavior documented"]}),
+        event(4, "update_status", "I", {"status": "complete", "evidence": ["task.md describes the expected contract"]}),
+    ])
+
+    assert audit["weak_completion_evidence_count"] == 2
+    assert audit["by_category"]["product"]["weak_completion_evidence_count"] == 1
+    assert audit["by_category"]["validation"]["weak_completion_evidence_count"] == 1
+    assert audit["by_category"]["investigation"]["weak_completion_evidence_count"] == 0
+
+
 def test_legacy_run_is_audited_without_rewriting_ledger_jsonl(tmp_path):
     source = ROOT / "runs/task_1_parser_timezone_offset"
     run_dir = tmp_path / source.name
@@ -242,6 +374,20 @@ def test_legacy_run_is_audited_without_rewriting_ledger_jsonl(tmp_path):
     assert (run_dir / "ledger.jsonl").read_text() == original_ledger
     assert summary["evidence_audit_status"] in {"strong", "weak"}
     assert summary["weak_completion_evidence_count"] >= 0
+
+
+def test_rescore_run_does_not_mutate_ledger_jsonl_bytes(tmp_path):
+    run_dir = write_run(tmp_path, "rescore_immutability_fixture", [
+        event(0, "init", None, {"root_task": "Rescore immutability"}),
+        event(1, "add_subtask", "P", {"description": "Patch behavior", "category": "product"}),
+        event(2, "update_status", "P", {"status": "complete", "evidence": ["final_diff.patch shows patch"]}),
+    ])
+    before = hashlib.sha256((run_dir / "ledger.jsonl").read_bytes()).hexdigest()
+
+    rescore.rescore_run(run_dir)
+
+    after = hashlib.sha256((run_dir / "ledger.jsonl").read_bytes()).hexdigest()
+    assert after == before
 
 
 def test_rescore_preserves_explicit_categories_for_new_ledgers(tmp_path):

@@ -9,10 +9,15 @@ Plausible wrong implementations:
 - Round-trip through replay with a duplicated init event.
 """
 
+import hashlib
 import json
+from pathlib import Path
 
-from ledger_progress import EventType, LedgerEvent, apply_event, from_jsonl, new_ledger, score, to_jsonl
+from ledger_progress import EventType, LedgerEvent, Status, apply_event, from_jsonl, new_ledger, replay, score, to_jsonl
 from ledger_progress.serialization import event_from_dict, event_to_dict, load_events_jsonl, write_events_jsonl
+
+
+FIXTURES = Path(__file__).parent / "fixtures"
 
 
 def event(step, event_type, subtask_id, payload, reason=None):
@@ -57,3 +62,47 @@ def test_event_helpers_preserve_order(tmp_path):
     write_events_jsonl(events, str(path))
 
     assert [event.step for event in load_events_jsonl(str(path))] == [0, 3, 2]
+
+
+def test_canonical_roundtrip_preserves_all_event_fields_and_replay_state(tmp_path):
+    source = FIXTURES / "canonical_roundtrip.jsonl"
+    raw_lines = [json.loads(line) for line in source.read_text().splitlines() if line.strip()]
+    events = load_events_jsonl(str(source))
+    out = tmp_path / "roundtrip.jsonl"
+
+    write_events_jsonl(events, str(out))
+
+    roundtripped_lines = [json.loads(line) for line in out.read_text().splitlines() if line.strip()]
+    ledger = replay(events)
+    roundtripped = from_jsonl(str(out))
+
+    assert roundtripped_lines == raw_lines
+    assert [event.step for event in events] == [line["step"] for line in raw_lines]
+    assert score(roundtripped) == score(ledger)
+    assert roundtripped.subtasks == ledger.subtasks
+    assert roundtripped.subtasks["P.1"].parent_id == "P"
+    assert roundtripped.subtasks["P.1"].category.value == "product"
+    assert roundtripped.subtasks["P.1"].weight == 3.0
+    assert roundtripped.subtasks["P.1"].evidence == [
+        "parser.py inspected before patch",
+        "final_diff.patch shows parser.py modified",
+    ]
+    assert roundtripped.subtasks["P.2"].status is Status.IN_PROGRESS
+    assert roundtripped.subtasks["A.1"].status is Status.INVALIDATED
+    assert roundtripped.events[4].reason == "Broad task needed checkable leaves"
+    assert roundtripped.events[4].payload["children"][1]["category"] == "validation"
+
+
+def test_score_does_not_mutate_ledger_jsonl_bytes():
+    path = FIXTURES / "canonical_roundtrip.jsonl"
+    before = _sha256(path)
+    ledger = from_jsonl(str(path))
+
+    score(ledger)
+    score(ledger)
+
+    assert _sha256(path) == before
+
+
+def _sha256(path):
+    return hashlib.sha256(Path(path).read_bytes()).hexdigest()

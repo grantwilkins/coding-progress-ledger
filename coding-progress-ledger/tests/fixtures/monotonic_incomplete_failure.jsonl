@@ -1,0 +1,9 @@
+{"step":0,"event_type":"init","subtask_id":null,"payload":{"root_task":"Monotonic incomplete failure"},"reason":null}
+{"step":1,"event_type":"add_subtask","subtask_id":"I","payload":{"description":"Understand expected behavior","category":"investigation","weight":1.0},"reason":"Initial decomposition"}
+{"step":1,"event_type":"add_subtask","subtask_id":"P1","payload":{"description":"Patch simple branch","category":"product","weight":1.0},"reason":"Initial decomposition"}
+{"step":1,"event_type":"add_subtask","subtask_id":"P2","payload":{"description":"Patch complex branch","category":"product","weight":1.0},"reason":"Initial decomposition"}
+{"step":1,"event_type":"add_subtask","subtask_id":"V1","payload":{"description":"Run targeted validation","category":"validation","weight":1.0},"reason":"Initial decomposition"}
+{"step":1,"event_type":"add_subtask","subtask_id":"V2","payload":{"description":"Run full validation","category":"validation","weight":1.0},"reason":"Initial decomposition"}
+{"step":2,"event_type":"update_status","subtask_id":"I","payload":{"status":"complete","evidence":["task.md describes expected behavior"]},"reason":null}
+{"step":3,"event_type":"update_status","subtask_id":"P1","payload":{"status":"complete","evidence":["final_diff.patch shows simple branch patch"]},"reason":null}
+{"step":4,"event_type":"update_status","subtask_id":"V1","payload":{"status":"complete","evidence":["test_output.txt shows targeted validation passed"]},"reason":null}

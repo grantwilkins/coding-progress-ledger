@@ -1,0 +1,8 @@
+{"step":0,"event_type":"init","subtask_id":null,"payload":{"root_task":"Weighted leaves"},"reason":null}
+{"step":1,"event_type":"add_subtask","subtask_id":"A","payload":{"description":"Patch primary behavior","category":"product","weight":3.0},"reason":"Primary behavior dominates effort"}
+{"step":1,"event_type":"add_subtask","subtask_id":"B","payload":{"description":"Run regression validation","category":"validation","weight":2.0},"reason":"Validation is substantial"}
+{"step":1,"event_type":"add_subtask","subtask_id":"C","payload":{"description":"Understand edge contract","category":"investigation","weight":1.0},"reason":"Contract review required"}
+{"step":1,"event_type":"add_subtask","subtask_id":"D","payload":{"description":"Patch minor follow-up","category":"product","weight":1.0},"reason":"Small remaining product leaf"}
+{"step":2,"event_type":"update_status","subtask_id":"A","payload":{"status":"complete","evidence":["final_diff.patch shows primary behavior patch"]},"reason":null}
+{"step":3,"event_type":"update_status","subtask_id":"B","payload":{"status":"complete","evidence":["test_output.txt shows regression validation passed"]},"reason":null}
+{"step":4,"event_type":"update_status","subtask_id":"C","payload":{"status":"complete","evidence":["task.md describes expected edge contract"]},"reason":null}

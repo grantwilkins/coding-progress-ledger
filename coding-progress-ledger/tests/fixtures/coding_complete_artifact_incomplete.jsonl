@@ -1,0 +1,6 @@
+{"step":0,"event_type":"init","subtask_id":null,"payload":{"root_task":"Coding complete with unfinished artifacts"},"reason":null}
+{"step":1,"event_type":"add_subtask","subtask_id":"P","payload":{"description":"Patch behavior","category":"product","weight":1.0},"reason":"Product work discovered"}
+{"step":1,"event_type":"add_subtask","subtask_id":"V","payload":{"description":"Run validation","category":"validation","weight":1.0},"reason":"Validation required"}
+{"step":1,"event_type":"add_subtask","subtask_id":"A","payload":{"description":"Export artifact bundle","category":"artifact","weight":1.0},"reason":"Run packaging required"}
+{"step":2,"event_type":"update_status","subtask_id":"P","payload":{"status":"complete","evidence":["final_diff.patch shows behavior patch"]},"reason":null}
+{"step":3,"event_type":"update_status","subtask_id":"V","payload":{"status":"complete","evidence":["test_output.txt shows pytest passed"]},"reason":null}

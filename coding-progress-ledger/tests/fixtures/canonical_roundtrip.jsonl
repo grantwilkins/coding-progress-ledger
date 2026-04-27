@@ -1,0 +1,11 @@
+{"step":0,"event_type":"init","subtask_id":null,"payload":{"root_task":"Canonical roundtrip"},"reason":"Start canonical fixture"}
+{"step":1,"event_type":"add_subtask","subtask_id":"P","payload":{"description":"Patch broad behavior","category":"product","weight":5.0},"reason":"Initial product work"}
+{"step":2,"event_type":"add_subtask","subtask_id":"A","payload":{"description":"Export artifact bundle","category":"artifact","weight":2.0},"reason":"Run artifact required"}
+{"step":3,"event_type":"update_status","subtask_id":"P","payload":{"status":"complete","evidence":["final_diff.patch shows broad behavior patch"]},"reason":"Broad behavior looked done"}
+{"step":4,"event_type":"split_subtask","subtask_id":"P","payload":{"children":[{"id":"P.1","description":"Patch parser branch","category":"product","weight":3.0},{"id":"P.2","description":"Run parser validation","category":"validation","weight":2.0}]},"reason":"Broad task needed checkable leaves"}
+{"step":5,"event_type":"add_evidence","subtask_id":"P.1","payload":{"evidence":["parser.py inspected before patch"]},"reason":"Preserve investigation note"}
+{"step":6,"event_type":"update_status","subtask_id":"P.1","payload":{"status":"complete","evidence":["final_diff.patch shows parser.py modified"]},"reason":"Parser branch fixed"}
+{"step":7,"event_type":"update_status","subtask_id":"P.2","payload":{"status":"complete","evidence":["test_output.txt shows parser validation passed"]},"reason":"Validation initially passed"}
+{"step":8,"event_type":"reopen_subtask","subtask_id":"P.2","payload":{"reason":"Validation missed an edge case"},"reason":"Validation missed an edge case"}
+{"step":9,"event_type":"add_subtask","subtask_id":"A.1","payload":{"description":"Write summary artifact","parent_id":"A","category":"artifact","weight":1.0},"reason":"Artifact parent decomposed"}
+{"step":10,"event_type":"invalidate_subtask","subtask_id":"A.1","payload":{"reason":"Summary artifact moved to another run"},"reason":"Summary artifact moved to another run"}
