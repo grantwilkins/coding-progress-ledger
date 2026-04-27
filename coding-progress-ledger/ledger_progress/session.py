@@ -1,9 +1,10 @@
 from __future__ import annotations
 
 import csv
+from collections.abc import Iterable
 from pathlib import Path
 
-from .core import EventType, Ledger, LedgerEvent, Status, apply_event, new_ledger, replay
+from .core import EventType, Ledger, LedgerEvent, Status, SubtaskCategory, apply_event, new_ledger, replay
 from .scoring import score as score_ledger
 from .serialization import to_jsonl
 
@@ -12,13 +13,25 @@ class LedgerSession:
     def __init__(self, root_task: str | Ledger):
         self.ledger = root_task if isinstance(root_task, Ledger) else new_ledger(root_task)
 
-    def add(self, description: str, step: int, parent_id: str | None = None, weight: float = 1.0, reason: str | None = None) -> str:
+    def add(
+        self,
+        description: str,
+        step: int,
+        parent_id: str | None = None,
+        weight: float = 1.0,
+        reason: str | None = None,
+        category: SubtaskCategory | str = SubtaskCategory.PRODUCT,
+    ) -> str:
         subtask_id = self._next_id()
-        self._apply(step, EventType.ADD_SUBTASK, subtask_id, {
+        category = _category(category)
+        payload = {
             "description": description,
             "parent_id": parent_id,
             "weight": weight,
-        }, reason)
+        }
+        if category is not SubtaskCategory.PRODUCT:
+            payload["category"] = category
+        self._apply(step, EventType.ADD_SUBTASK, subtask_id, payload, reason)
         return subtask_id
 
     def complete(self, subtask_id: str, evidence: str | list[str], step: int, reason: str | None = None) -> Ledger:
@@ -36,17 +49,37 @@ class LedgerSession:
     def invalidate(self, subtask_id: str, step: int, reason: str) -> Ledger:
         return self._apply(step, EventType.INVALIDATE_SUBTASK, subtask_id, {"reason": reason}, reason)
 
-    def split(self, subtask_id: str, child_descriptions: list[str], step: int, reason: str) -> list[str]:
+    def split(
+        self,
+        subtask_id: str,
+        child_descriptions: list[str],
+        step: int,
+        reason: str,
+        categories: list[SubtaskCategory | str | None] | None = None,
+        category: SubtaskCategory | str | None = None,
+    ) -> list[str]:
+        if category is not None and categories is not None:
+            raise ValueError("provide either category or categories, not both")
+        if category is not None:
+            categories = [category] * len(child_descriptions)
+        if categories is not None and len(categories) != len(child_descriptions):
+            raise ValueError("categories must match child_descriptions length")
         child_ids = self._child_ids(subtask_id, len(child_descriptions))
+        children = []
+        for sid, desc, category in zip(child_ids, child_descriptions, categories or [None] * len(child_descriptions)):
+            child = {"id": sid, "description": desc}
+            if category is not None:
+                child["category"] = _category(category)
+            children.append(child)
         self._apply(step, EventType.SPLIT_SUBTASK, subtask_id, {
-            "children": [{"id": sid, "description": desc} for sid, desc in zip(child_ids, child_descriptions)],
+            "children": children,
         }, reason)
         return child_ids
 
-    def score(self, step: int | None = None):
+    def score(self, step: int | None = None, categories: Iterable[SubtaskCategory | str] | None = None):
         if step is None:
-            return score_ledger(self.ledger)
-        return score_ledger(replay([event for event in self.ledger.events if event.step <= step]))
+            return score_ledger(self.ledger, categories=categories)
+        return score_ledger(replay([event for event in self.ledger.events if event.step <= step]), categories=categories)
 
     def export_jsonl(self, path: str) -> None:
         to_jsonl(self.ledger, path)
@@ -86,3 +119,7 @@ class LedgerSession:
 
 
 LedgerBuilder = LedgerSession
+
+
+def _category(value: SubtaskCategory | str) -> SubtaskCategory:
+    return value if isinstance(value, SubtaskCategory) else SubtaskCategory(value)

@@ -1,0 +1,140 @@
+--- /tmp/cpl_live_baseline/run1/rescore_suite_by_category.py	2026-04-27 01:10:51
++++ scripts/rescore_suite_by_category.py	2026-04-27 01:11:11
+@@ -195,6 +195,10 @@
+         "subtask_categories": category_map,
+         "final_coding_progress": final["coding_progress"],
+         "final_overall_progress": final["overall_progress"],
++        "final_coding_complete_weight": final["coding_complete_weight"],
++        "final_coding_active_weight": final["coding_active_weight"],
++        "final_overall_complete_weight": final["overall_complete_weight"],
++        "final_overall_active_weight": final["overall_active_weight"],
+         "coding_largest_drop": coding_drop_detail["amount"],
+         "overall_largest_drop": overall_drop_detail["amount"],
+         "largest_coding_drop": coding_drop_detail["amount"],
+@@ -571,16 +575,20 @@
+ 
+ def suite_summary_table(summaries: list[dict[str, Any]]) -> list[str]:
+     lines = [
+-        "| Run | final_coding_progress | final_overall_progress | active_coding_leaves_final | completed_coding_leaves_final | active_overall_leaves_final | completed_overall_leaves_final | historical_subtasks_created | coding_largest_drop | overall_largest_drop | largest_coding_drop_source | largest_overall_drop_source | excluded_active_weight_final | excluded_completed_weight_final | coding_nonmonotonic | final_success | evidence_audit_status | weak_completion_evidence_count |",
+-        "| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- | --- | ---: | ---: | --- | --- | --- | ---: |",
++        "| Run | final_coding_progress | final_overall_progress | coding_complete_weight_final | coding_active_weight_final | overall_complete_weight_final | overall_active_weight_final | active_coding_leaves_final | completed_coding_leaves_final | active_overall_leaves_final | completed_overall_leaves_final | historical_subtasks_created | coding_largest_drop | overall_largest_drop | largest_coding_drop_source | largest_overall_drop_source | excluded_active_weight_final | excluded_completed_weight_final | coding_nonmonotonic | final_success | final_success_source | evidence_audit_status | weak_completion_evidence_count |",
++        "| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- | --- | ---: | ---: | --- | --- | --- | --- | ---: |",
+     ]
+     for summary in sorted(summaries, key=lambda item: run_sort_key(item["task_id"])):
+         run_id = summary["task_id"]
+         lines.append(
+-            "| `{run}` | {coding:.3f} | {overall:.3f} | {active_coding} | {completed_coding} | {active_overall} | {completed_overall} | {historical} | {coding_drop:.3f} | {overall_drop:.3f} | {coding_source} | {overall_source} | {excluded_active:.3f} | {excluded_completed:.3f} | {coding_nm} | {success} | {audit} | {weak_count} |".format(
++            "| `{run}` | {coding:.3f} | {overall:.3f} | {coding_complete_weight:.3f} | {coding_active_weight:.3f} | {overall_complete_weight:.3f} | {overall_active_weight:.3f} | {active_coding} | {completed_coding} | {active_overall} | {completed_overall} | {historical} | {coding_drop:.3f} | {overall_drop:.3f} | {coding_source} | {overall_source} | {excluded_active:.3f} | {excluded_completed:.3f} | {coding_nm} | {success} | {success_source} | {audit} | {weak_count} |".format(
+                 run=run_id,
+                 coding=summary["final_coding_progress"],
+                 overall=summary["final_overall_progress"],
++                coding_complete_weight=summary["final_coding_complete_weight"],
++                coding_active_weight=summary["final_coding_active_weight"],
++                overall_complete_weight=summary["final_overall_complete_weight"],
++                overall_active_weight=summary["final_overall_active_weight"],
+                 active_coding=summary["active_coding_leaves_final"],
+                 completed_coding=summary["completed_coding_leaves_final"],
+                 active_overall=summary["active_overall_leaves_final"],
+@@ -594,6 +602,7 @@
+                 excluded_completed=summary["excluded_completed_weight_final"],
+                 coding_nm=yes_no(summary["coding_nonmonotonic"]),
+                 success=yes_no(summary["final_success"]) if isinstance(summary["final_success"], bool) else "unknown",
++                success_source=summary["final_success_source"],
+                 audit=summary["evidence_audit_status"],
+                 weak_count=summary["weak_completion_evidence_count"],
+             )
+--- /tmp/cpl_live_baseline/run1/test_suite_hardening.py	2026-04-27 01:10:51
++++ tests/test_suite_hardening.py	2026-04-27 01:11:28
+@@ -69,6 +69,10 @@
+     assert summary["completed_coding_leaves_final"] == 1
+     assert summary["active_overall_leaves_final"] == 3
+     assert summary["completed_overall_leaves_final"] == 1
++    assert summary["final_coding_complete_weight"] == 1.0
++    assert summary["final_coding_active_weight"] == 3.0
++    assert summary["final_overall_complete_weight"] == 1.0
++    assert summary["final_overall_active_weight"] == 3.0
+ 
+ 
+ def test_drop_source_reports_excluded_category_for_bookkeeping_drop(tmp_path):
+@@ -89,6 +93,42 @@
+     assert summary["largest_coding_drop_source"] == "none"
+ 
+ 
++def test_suite_summary_table_includes_weight_and_success_source_columns():
++    lines = rescore.suite_summary_table([
++        {
++            "task_id": "summary_fixture",
++            "final_coding_progress": 0.5,
++            "final_overall_progress": 0.4,
++            "final_coding_complete_weight": 2.0,
++            "final_coding_active_weight": 4.0,
++            "final_overall_complete_weight": 2.0,
++            "final_overall_active_weight": 5.0,
++            "active_coding_leaves_final": 4,
++            "completed_coding_leaves_final": 2,
++            "active_overall_leaves_final": 5,
++            "completed_overall_leaves_final": 2,
++            "historical_subtasks_created": 6,
++            "coding_largest_drop": 0.25,
++            "overall_largest_drop": 0.2,
++            "largest_coding_drop_source": "validation",
++            "largest_overall_drop_source": "artifact",
++            "excluded_active_weight_final": 1.0,
++            "excluded_completed_weight_final": 0.0,
++            "coding_nonmonotonic": True,
++            "final_success": False,
++            "final_success_source": "summary.final_success",
++            "evidence_audit_status": "strong",
++            "weak_completion_evidence_count": 0,
++        }
++    ])
++
++    assert "coding_complete_weight_final" in lines[0]
++    assert "overall_active_weight_final" in lines[0]
++    assert "final_success_source" in lines[0]
++    assert "| `summary_fixture` | 0.500 | 0.400 | 2.000 | 4.000 | 2.000 | 5.000 |" in lines[2]
++    assert "summary.final_success" in lines[2]
++
++
+ def test_drop_source_reports_mixed_when_multiple_categories_are_material(tmp_path):
+     run_dir = write_run(tmp_path, "mixed_drop_fixture", [
+         event(0, "init", None, {"root_task": "Mixed drop"}),
+--- /tmp/cpl_live_baseline/run1/SUITE_SUMMARY.md	2026-04-27 01:10:51
++++ runs/SUITE_SUMMARY.md	2026-04-27 01:11:46
+@@ -5,21 +5,21 @@
+ after the audit, and three hardening controls now exercise final coding/overall
+ divergence, monotonic incomplete failure, and high-progress failed work.
+ 
+-| Run | final_coding_progress | final_overall_progress | active_coding_leaves_final | completed_coding_leaves_final | active_overall_leaves_final | completed_overall_leaves_final | historical_subtasks_created | coding_largest_drop | overall_largest_drop | largest_coding_drop_source | largest_overall_drop_source | excluded_active_weight_final | excluded_completed_weight_final | coding_nonmonotonic | final_success | evidence_audit_status | weak_completion_evidence_count |
+-| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- | --- | ---: | ---: | --- | --- | --- | ---: |
+-| `task_1_parser_timezone_offset` | 1.000 | 1.000 | 6 | 6 | 7 | 7 | 8 | 0.150 | 0.143 | validation | artifact | 1.000 | 1.000 | yes | yes | weak | 3 |
+-| `task_2_cli_output_flag` | 1.000 | 1.000 | 6 | 6 | 7 | 7 | 9 | 0.167 | 0.143 | validation | product | 1.000 | 1.000 | yes | yes | strong | 0 |
+-| `task_3_config_error_type` | 1.000 | 1.000 | 5 | 5 | 6 | 6 | 7 | 0.150 | 0.100 | product | product | 1.000 | 1.000 | yes | yes | weak | 3 |
+-| `task_4_csv_messy_aggregation` | 1.000 | 1.000 | 9 | 9 | 9 | 9 | 10 | 0.321 | 0.321 | product | product | 0.000 | 0.000 | yes | yes | weak | 1 |
+-| `task_5_reset_state_reducer` | 1.000 | 1.000 | 4 | 4 | 7 | 7 | 9 | 0.333 | 0.167 | product | product | 3.000 | 3.000 | yes | yes | weak | 1 |
+-| `task_6_async_stale_result` | 1.000 | 1.000 | 6 | 6 | 8 | 8 | 9 | 0.300 | 0.300 | product | product | 2.000 | 2.000 | yes | yes | weak | 1 |
+-| `task_7_refactor_validation_split` | 1.000 | 1.000 | 6 | 6 | 7 | 7 | 8 | 0.333 | 0.229 | validation | validation | 1.000 | 1.000 | yes | yes | strong | 0 |
+-| `task_8_package_import_failure` | 1.000 | 1.000 | 6 | 6 | 7 | 7 | 9 | 0.167 | 0.143 | mixed | mixed | 1.000 | 1.000 | yes | yes | strong | 0 |
+-| `control_coding_complete_artifacts_incomplete` | 1.000 | 0.667 | 2 | 2 | 3 | 2 | 3 | 0.000 | 0.000 | none | none | 1.000 | 0.000 | no | yes | strong | 0 |
+-| `control_high_progress_wrong_solution` | 0.857 | 0.857 | 4 | 3 | 4 | 3 | 4 | 0.000 | 0.000 | none | none | 0.000 | 0.000 | no | no | strong | 0 |
+-| `control_monotonic_incomplete_failure` | 0.600 | 0.600 | 5 | 3 | 5 | 3 | 5 | 0.000 | 0.000 | none | none | 0.000 | 0.000 | no | no | strong | 0 |
+-| `negative_control_incomplete_budget_limited` | 0.667 | 0.667 | 6 | 4 | 6 | 4 | 6 | 0.250 | 0.250 | product | product | 0.000 | 0.000 | yes | no | strong | 0 |
+-| `negative_control_monotonic_one_line` | 1.000 | 1.000 | 4 | 4 | 4 | 4 | 4 | 0.000 | 0.000 | none | none | 0.000 | 0.000 | no | yes | strong | 0 |
++| Run | final_coding_progress | final_overall_progress | coding_complete_weight_final | coding_active_weight_final | overall_complete_weight_final | overall_active_weight_final | active_coding_leaves_final | completed_coding_leaves_final | active_overall_leaves_final | completed_overall_leaves_final | historical_subtasks_created | coding_largest_drop | overall_largest_drop | largest_coding_drop_source | largest_overall_drop_source | excluded_active_weight_final | excluded_completed_weight_final | coding_nonmonotonic | final_success | final_success_source | evidence_audit_status | weak_completion_evidence_count |
++| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- | --- | ---: | ---: | --- | --- | --- | --- | ---: |
++| `task_1_parser_timezone_offset` | 1.000 | 1.000 | 6.000 | 6.000 | 7.000 | 7.000 | 6 | 6 | 7 | 7 | 8 | 0.150 | 0.143 | validation | artifact | 1.000 | 1.000 | yes | yes | summary.test_status | weak | 3 |
++| `task_2_cli_output_flag` | 1.000 | 1.000 | 6.000 | 6.000 | 7.000 | 7.000 | 6 | 6 | 7 | 7 | 9 | 0.167 | 0.143 | validation | product | 1.000 | 1.000 | yes | yes | summary.test_status | strong | 0 |
++| `task_3_config_error_type` | 1.000 | 1.000 | 5.000 | 5.000 | 6.000 | 6.000 | 5 | 5 | 6 | 6 | 7 | 0.150 | 0.100 | product | product | 1.000 | 1.000 | yes | yes | summary.test_status | weak | 3 |
++| `task_4_csv_messy_aggregation` | 1.000 | 1.000 | 9.000 | 9.000 | 9.000 | 9.000 | 9 | 9 | 9 | 9 | 10 | 0.321 | 0.321 | product | product | 0.000 | 0.000 | yes | yes | summary.test_status | weak | 1 |
++| `task_5_reset_state_reducer` | 1.000 | 1.000 | 4.000 | 4.000 | 7.000 | 7.000 | 4 | 4 | 7 | 7 | 9 | 0.333 | 0.167 | product | product | 3.000 | 3.000 | yes | yes | summary.test_status | weak | 1 |
++| `task_6_async_stale_result` | 1.000 | 1.000 | 6.000 | 6.000 | 8.000 | 8.000 | 6 | 6 | 8 | 8 | 9 | 0.300 | 0.300 | product | product | 2.000 | 2.000 | yes | yes | summary.test_status | weak | 1 |
++| `task_7_refactor_validation_split` | 1.000 | 1.000 | 6.000 | 6.000 | 7.000 | 7.000 | 6 | 6 | 7 | 7 | 8 | 0.333 | 0.229 | validation | validation | 1.000 | 1.000 | yes | yes | summary.test_status | strong | 0 |
++| `task_8_package_import_failure` | 1.000 | 1.000 | 6.000 | 6.000 | 7.000 | 7.000 | 6 | 6 | 7 | 7 | 9 | 0.167 | 0.143 | mixed | mixed | 1.000 | 1.000 | yes | yes | summary.test_status | strong | 0 |
++| `control_coding_complete_artifacts_incomplete` | 1.000 | 0.667 | 2.000 | 2.000 | 2.000 | 3.000 | 2 | 2 | 3 | 2 | 3 | 0.000 | 0.000 | none | none | 1.000 | 0.000 | no | yes | summary.final_success | strong | 0 |
++| `control_high_progress_wrong_solution` | 0.857 | 0.857 | 3.000 | 3.500 | 3.000 | 3.500 | 4 | 3 | 4 | 3 | 4 | 0.000 | 0.000 | none | none | 0.000 | 0.000 | no | no | summary.final_success | strong | 0 |
++| `control_monotonic_incomplete_failure` | 0.600 | 0.600 | 3.000 | 5.000 | 3.000 | 5.000 | 5 | 3 | 5 | 3 | 5 | 0.000 | 0.000 | none | none | 0.000 | 0.000 | no | no | summary.final_success | strong | 0 |
++| `negative_control_incomplete_budget_limited` | 0.667 | 0.667 | 4.000 | 6.000 | 4.000 | 6.000 | 6 | 4 | 6 | 4 | 6 | 0.250 | 0.250 | product | product | 0.000 | 0.000 | yes | no | summary.test_status | strong | 0 |
++| `negative_control_monotonic_one_line` | 1.000 | 1.000 | 4.000 | 4.000 | 4.000 | 4.000 | 4 | 4 | 4 | 4 | 4 | 0.000 | 0.000 | none | none | 0.000 | 0.000 | no | yes | summary.test_status | strong | 0 |
+ 
+ ## Run Notes
+ 

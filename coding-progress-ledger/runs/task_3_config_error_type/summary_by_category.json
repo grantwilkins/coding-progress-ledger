@@ -1,0 +1,152 @@
+{
+  "active_coding_leaves_final": 5,
+  "active_overall_leaves_final": 6,
+  "category_active_weight_final": {
+    "artifact": 1.0,
+    "documentation": 0,
+    "environment": 0,
+    "investigation": 0,
+    "product": 3.0,
+    "validation": 2.0
+  },
+  "category_completed_weight_final": {
+    "artifact": 1.0,
+    "documentation": 0,
+    "environment": 0,
+    "investigation": 0,
+    "product": 3.0,
+    "validation": 2.0
+  },
+  "coding_categories": [
+    "product",
+    "validation",
+    "investigation"
+  ],
+  "coding_largest_drop": 0.15000000000000002,
+  "coding_nonmonotonic": true,
+  "completed_coding_leaves_final": 5,
+  "completed_overall_leaves_final": 6,
+  "evidence_audit_by_category": {
+    "investigation": {
+      "audited_completion_count": 0,
+      "status": "not_applicable",
+      "weak_completion_evidence_count": 0,
+      "weak_subtask_ids": []
+    },
+    "product": {
+      "audited_completion_count": 4,
+      "status": "weak",
+      "weak_completion_evidence_count": 3,
+      "weak_subtask_ids": [
+        "S1",
+        "S3.1",
+        "S3.2"
+      ]
+    },
+    "validation": {
+      "audited_completion_count": 2,
+      "status": "strong",
+      "weak_completion_evidence_count": 0,
+      "weak_subtask_ids": []
+    }
+  },
+  "evidence_audit_status": "weak",
+  "evidence_audit_weak_categories": [
+    "product"
+  ],
+  "excluded_active_weight_final": 1.0,
+  "excluded_categories": [
+    "artifact",
+    "documentation",
+    "environment"
+  ],
+  "excluded_categories_final": {
+    "artifact": {
+      "active": 1.0,
+      "complete": 1.0
+    },
+    "documentation": {
+      "active": 0,
+      "complete": 0
+    },
+    "environment": {
+      "active": 0,
+      "complete": 0
+    }
+  },
+  "excluded_completed_weight_final": 1.0,
+  "final_coding_active_weight": 5.0,
+  "final_coding_complete_weight": 5.0,
+  "final_coding_progress": 1.0,
+  "final_overall_active_weight": 6.0,
+  "final_overall_complete_weight": 6.0,
+  "final_overall_progress": 1.0,
+  "final_success": true,
+  "final_success_source": "summary.test_status",
+  "historical_subtasks_created": 7,
+  "largest_coding_drop": 0.15000000000000002,
+  "largest_coding_drop_category_contributions": {
+    "product": 0.233333333333
+  },
+  "largest_coding_drop_detail": {
+    "amount": 0.15000000000000002,
+    "from_step": 4,
+    "to_step": 5
+  },
+  "largest_coding_drop_source": "product",
+  "largest_overall_drop": 0.09999999999999998,
+  "largest_overall_drop_category_contributions": {
+    "product": 0.2
+  },
+  "largest_overall_drop_detail": {
+    "amount": 0.09999999999999998,
+    "from_step": 4,
+    "to_step": 5
+  },
+  "largest_overall_drop_mostly_excluded": false,
+  "largest_overall_drop_source": "product",
+  "nonmonotonic_coding": true,
+  "nonmonotonic_overall": true,
+  "overall_largest_drop": 0.09999999999999998,
+  "overall_nonmonotonic": true,
+  "subtask_categories": {
+    "S1": "product",
+    "S2": "validation",
+    "S3": "product",
+    "S3.1": "product",
+    "S3.2": "product",
+    "S4": "validation",
+    "S5": "artifact"
+  },
+  "task_id": "task_3_config_error_type",
+  "weak_completion_evidence": [
+    {
+      "category": "product",
+      "description": "Create toy Python repo with intentionally inconsistent config exceptions",
+      "evidence_types": [
+        "manual_note"
+      ],
+      "step": 2,
+      "subtask_id": "S1"
+    },
+    {
+      "category": "product",
+      "description": "Keep missing-key raise site on ConfigError",
+      "evidence_types": [
+        "manual_note"
+      ],
+      "step": 5,
+      "subtask_id": "S3.1"
+    },
+    {
+      "category": "product",
+      "description": "Convert timeout type raise site to ConfigError",
+      "evidence_types": [
+        "manual_note"
+      ],
+      "step": 6,
+      "subtask_id": "S3.2"
+    }
+  ],
+  "weak_completion_evidence_count": 3
+}

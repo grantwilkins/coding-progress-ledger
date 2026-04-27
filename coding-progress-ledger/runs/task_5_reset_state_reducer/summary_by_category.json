@@ -1,0 +1,134 @@
+{
+  "active_coding_leaves_final": 4,
+  "active_overall_leaves_final": 7,
+  "category_active_weight_final": {
+    "artifact": 2.0,
+    "documentation": 1.0,
+    "environment": 0,
+    "investigation": 0,
+    "product": 3.0,
+    "validation": 1.0
+  },
+  "category_completed_weight_final": {
+    "artifact": 2.0,
+    "documentation": 1.0,
+    "environment": 0,
+    "investigation": 0,
+    "product": 3.0,
+    "validation": 1.0
+  },
+  "coding_categories": [
+    "product",
+    "validation",
+    "investigation"
+  ],
+  "coding_largest_drop": 0.33333333333333337,
+  "coding_nonmonotonic": true,
+  "completed_coding_leaves_final": 4,
+  "completed_overall_leaves_final": 7,
+  "evidence_audit_by_category": {
+    "investigation": {
+      "audited_completion_count": 0,
+      "status": "not_applicable",
+      "weak_completion_evidence_count": 0,
+      "weak_subtask_ids": []
+    },
+    "product": {
+      "audited_completion_count": 4,
+      "status": "weak",
+      "weak_completion_evidence_count": 1,
+      "weak_subtask_ids": [
+        "S3.2"
+      ]
+    },
+    "validation": {
+      "audited_completion_count": 1,
+      "status": "strong",
+      "weak_completion_evidence_count": 0,
+      "weak_subtask_ids": []
+    }
+  },
+  "evidence_audit_status": "weak",
+  "evidence_audit_weak_categories": [
+    "product"
+  ],
+  "excluded_active_weight_final": 3.0,
+  "excluded_categories": [
+    "artifact",
+    "documentation",
+    "environment"
+  ],
+  "excluded_categories_final": {
+    "artifact": {
+      "active": 2.0,
+      "complete": 2.0
+    },
+    "documentation": {
+      "active": 1.0,
+      "complete": 1.0
+    },
+    "environment": {
+      "active": 0,
+      "complete": 0
+    }
+  },
+  "excluded_completed_weight_final": 3.0,
+  "final_coding_active_weight": 4.0,
+  "final_coding_complete_weight": 4.0,
+  "final_coding_progress": 1.0,
+  "final_overall_active_weight": 7.0,
+  "final_overall_complete_weight": 7.0,
+  "final_overall_progress": 1.0,
+  "final_success": true,
+  "final_success_source": "summary.test_status",
+  "historical_subtasks_created": 9,
+  "largest_coding_drop": 0.33333333333333337,
+  "largest_coding_drop_category_contributions": {
+    "product": 0.333333333333
+  },
+  "largest_coding_drop_detail": {
+    "amount": 0.33333333333333337,
+    "from_step": 14,
+    "to_step": 15
+  },
+  "largest_coding_drop_source": "product",
+  "largest_overall_drop": 0.16666666666666669,
+  "largest_overall_drop_category_contributions": {
+    "product": 0.166666666667
+  },
+  "largest_overall_drop_detail": {
+    "amount": 0.16666666666666669,
+    "from_step": 14,
+    "to_step": 15
+  },
+  "largest_overall_drop_mostly_excluded": false,
+  "largest_overall_drop_source": "product",
+  "nonmonotonic_coding": true,
+  "nonmonotonic_overall": true,
+  "overall_largest_drop": 0.16666666666666669,
+  "overall_nonmonotonic": true,
+  "subtask_categories": {
+    "S1": "product",
+    "S2": "validation",
+    "S3": "product",
+    "S3.1": "product",
+    "S3.2": "product",
+    "S4": "artifact",
+    "S5": "artifact",
+    "S6": "documentation",
+    "S7": "environment"
+  },
+  "task_id": "task_5_reset_state_reducer",
+  "weak_completion_evidence": [
+    {
+      "category": "product",
+      "description": "Reset clears validation error state",
+      "evidence_types": [
+        "manual_note"
+      ],
+      "step": 19,
+      "subtask_id": "S3.2"
+    }
+  ],
+  "weak_completion_evidence_count": 1
+}

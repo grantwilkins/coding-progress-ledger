@@ -25,11 +25,21 @@ class EventType(Enum):
     DELETE_SUBTASK = "delete_subtask"
 
 
+class SubtaskCategory(Enum):
+    PRODUCT = "product"
+    VALIDATION = "validation"
+    INVESTIGATION = "investigation"
+    ENVIRONMENT = "environment"
+    ARTIFACT = "artifact"
+    DOCUMENTATION = "documentation"
+
+
 @dataclass
 class Subtask:
     id: str
     description: str
     status: Status
+    category: SubtaskCategory = SubtaskCategory.PRODUCT
     evidence: list[str] = field(default_factory=list)
     weight: float = 1.0
     parent_id: str | None = None
@@ -38,6 +48,7 @@ class Subtask:
 
     def __post_init__(self) -> None:
         self.status = _status(self.status)
+        self.category = _category(self.category)
         if not self.id or not self.description:
             raise ValueError("subtask id and description are required")
         if self.weight <= 0:
@@ -75,6 +86,7 @@ class Ledger:
 @dataclass
 class ProgressObservation:
     step: int
+    categories_included: tuple[SubtaskCategory, ...]
     complete_weight: float
     active_weight: float
     progress: float
@@ -124,6 +136,7 @@ def _add_subtask(ledger: Ledger, event: LedgerEvent) -> None:
         id=subtask_id,
         description=_required(event, "description"),
         status=_status(event.payload.get("status", Status.NOT_STARTED)),
+        category=_category(event.payload.get("category", SubtaskCategory.PRODUCT)),
         weight=float(event.payload.get("weight", 1.0)),
         parent_id=parent_id,
         created_at_step=event.step,
@@ -153,7 +166,8 @@ def _add_evidence(ledger: Ledger, event: LedgerEvent) -> None:
 
 
 def _split_subtask(ledger: Ledger, event: LedgerEvent) -> None:
-    parent_id = _subtask(ledger, event).id
+    parent = _subtask(ledger, event)
+    parent_id = parent.id
     children = _required(event, "children")
     if not isinstance(children, list) or not children:
         raise ValueError("children must be a non-empty list")
@@ -165,6 +179,7 @@ def _split_subtask(ledger: Ledger, event: LedgerEvent) -> None:
             id=child["id"],
             description=child["description"],
             status=_status(child.get("status", Status.NOT_STARTED)),
+            category=_category(child.get("category", parent.category)),
             weight=float(child.get("weight", 1.0)),
             parent_id=parent_id,
             created_at_step=event.step,
@@ -183,6 +198,10 @@ def _set_status(ledger: Ledger, event: LedgerEvent, status: Status) -> None:
 
 def _status(value: str | Status) -> Status:
     return value if isinstance(value, Status) else Status(value)
+
+
+def _category(value: str | SubtaskCategory) -> SubtaskCategory:
+    return value if isinstance(value, SubtaskCategory) else SubtaskCategory(value)
 
 
 def _subtask_id(event: LedgerEvent) -> str:

@@ -24,3 +24,15 @@ Protocol:
 9. Export the CSV curve when you need a compact progress trace.
 
 Do not call an LLM from the ledger layer. Do not ingest traces automatically. Do not treat progress as elapsed time or force it to be monotonic.
+
+## Interpreting Progress
+
+Do not use progress as a success flag. Progress is only the fraction of active
+leaf work with completion evidence under the selected categories. Keep separate
+records for test status, final success, evidence quality, and known unresolved
+work.
+
+When a task succeeds with incomplete run-management leaves, coding progress can
+be 1.0 while overall progress is lower. When a task fails late, progress can be
+high if the unresolved issue is a small active leaf. Both cases are valid ledger
+observations, not scoring errors.

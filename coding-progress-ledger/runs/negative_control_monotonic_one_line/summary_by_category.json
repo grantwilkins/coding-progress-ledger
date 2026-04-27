@@ -1,0 +1,111 @@
+{
+  "active_coding_leaves_final": 4,
+  "active_overall_leaves_final": 4,
+  "category_active_weight_final": {
+    "artifact": 0,
+    "documentation": 0,
+    "environment": 0,
+    "investigation": 0,
+    "product": 2.0,
+    "validation": 2.0
+  },
+  "category_completed_weight_final": {
+    "artifact": 0,
+    "documentation": 0,
+    "environment": 0,
+    "investigation": 0,
+    "product": 2.0,
+    "validation": 2.0
+  },
+  "coding_categories": [
+    "product",
+    "validation",
+    "investigation"
+  ],
+  "coding_largest_drop": 0.0,
+  "coding_nonmonotonic": false,
+  "completed_coding_leaves_final": 4,
+  "completed_overall_leaves_final": 4,
+  "evidence_audit_by_category": {
+    "investigation": {
+      "audited_completion_count": 0,
+      "status": "not_applicable",
+      "weak_completion_evidence_count": 0,
+      "weak_subtask_ids": []
+    },
+    "product": {
+      "audited_completion_count": 2,
+      "status": "strong",
+      "weak_completion_evidence_count": 0,
+      "weak_subtask_ids": []
+    },
+    "validation": {
+      "audited_completion_count": 2,
+      "status": "strong",
+      "weak_completion_evidence_count": 0,
+      "weak_subtask_ids": []
+    }
+  },
+  "evidence_audit_status": "strong",
+  "evidence_audit_weak_categories": [],
+  "excluded_active_weight_final": 0,
+  "excluded_categories": [
+    "artifact",
+    "documentation",
+    "environment"
+  ],
+  "excluded_categories_final": {
+    "artifact": {
+      "active": 0,
+      "complete": 0
+    },
+    "documentation": {
+      "active": 0,
+      "complete": 0
+    },
+    "environment": {
+      "active": 0,
+      "complete": 0
+    }
+  },
+  "excluded_completed_weight_final": 0,
+  "final_coding_active_weight": 4.0,
+  "final_coding_complete_weight": 4.0,
+  "final_coding_progress": 1.0,
+  "final_overall_active_weight": 4.0,
+  "final_overall_complete_weight": 4.0,
+  "final_overall_progress": 1.0,
+  "final_success": true,
+  "final_success_source": "summary.test_status",
+  "historical_subtasks_created": 4,
+  "largest_coding_drop": 0.0,
+  "largest_coding_drop_category_contributions": {},
+  "largest_coding_drop_detail": {
+    "amount": 0.0,
+    "from_step": null,
+    "to_step": null
+  },
+  "largest_coding_drop_source": "none",
+  "largest_overall_drop": 0.0,
+  "largest_overall_drop_category_contributions": {},
+  "largest_overall_drop_detail": {
+    "amount": 0.0,
+    "from_step": null,
+    "to_step": null
+  },
+  "largest_overall_drop_mostly_excluded": false,
+  "largest_overall_drop_source": "none",
+  "nonmonotonic_coding": false,
+  "nonmonotonic_overall": false,
+  "overall_largest_drop": 0.0,
+  "overall_nonmonotonic": false,
+  "subtask_categories": {
+    "S1": "product",
+    "S2": "validation",
+    "S3": "product",
+    "S4": "validation"
+  },
+  "task_id": "negative_control_monotonic_one_line",
+  "weak_completion_evidence": [],
+  "weak_completion_evidence_count": 0
+}

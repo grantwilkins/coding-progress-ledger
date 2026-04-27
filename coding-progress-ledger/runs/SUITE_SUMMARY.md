@@ -2,21 +2,24 @@
 
 All eight benchmark runs produced the required artifact bundle and passed the
 coordinator rerun of their toy repo tests. Two negative controls were added
-after the audit: one monotonic passing run and one intentionally incomplete
-failing run.
+after the audit, and three hardening controls now exercise final coding/overall
+divergence, monotonic incomplete failure, and high-progress failed work.
 
-| Run | Final progress | Subtasks | Completed | Splits | Reopens | Invalidations | Largest drop | Non-monotonic |
-| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- |
-| `task_1_parser_timezone_offset` | 1.00 | 8 | 8 | 1 | 1 | 0 | 0.143 | yes |
-| `task_2_cli_output_flag` | 1.00 | 9 | 7 | 1 | 1 | 1 | 0.143 | yes |
-| `task_3_config_error_type` | 1.00 | 7 | 6 | 1 | 1 | 0 | 0.100 | yes |
-| `task_4_csv_messy_aggregation` | 1.00 | 10 | 9 | 1 | 0 | 0 | 0.321 | yes |
-| `task_5_reset_state_reducer` | 1.00 | 9 | 7 | 1 | 1 | 1 | 0.167 | yes |
-| `task_6_async_stale_result` | 1.00 | 9 | 8 | 1 | 1 | 0 | 0.300 | yes |
-| `task_7_refactor_validation_split` | 1.00 | 8 | 8 | 1 | 0 | 0 | 0.229 | yes |
-| `task_8_package_import_failure` | 1.00 | 9 | 7 | 1 | 1 | 1 | 0.143 | yes |
-| `negative_control_monotonic_one_line` | 1.00 | 4 | 4 | 0 | 0 | 0 | 0.000 | no |
-| `negative_control_incomplete_budget_limited` | 0.667 | 6 | 4 | 0 | 0 | 0 | 0.250 | yes |
+| Run | final_coding_progress | final_overall_progress | coding_complete_weight_final | coding_active_weight_final | overall_complete_weight_final | overall_active_weight_final | active_coding_leaves_final | completed_coding_leaves_final | active_overall_leaves_final | completed_overall_leaves_final | historical_subtasks_created | coding_largest_drop | overall_largest_drop | largest_coding_drop_source | largest_overall_drop_source | excluded_active_weight_final | excluded_completed_weight_final | coding_nonmonotonic | final_success | final_success_source | evidence_audit_status | weak_completion_evidence_count |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- | --- | ---: | ---: | --- | --- | --- | --- | ---: |
+| `task_1_parser_timezone_offset` | 1.000 | 1.000 | 6.000 | 6.000 | 7.000 | 7.000 | 6 | 6 | 7 | 7 | 8 | 0.150 | 0.143 | validation | artifact | 1.000 | 1.000 | yes | yes | summary.test_status | weak | 3 |
+| `task_2_cli_output_flag` | 1.000 | 1.000 | 6.000 | 6.000 | 7.000 | 7.000 | 6 | 6 | 7 | 7 | 9 | 0.167 | 0.143 | validation | product | 1.000 | 1.000 | yes | yes | summary.test_status | strong | 0 |
+| `task_3_config_error_type` | 1.000 | 1.000 | 5.000 | 5.000 | 6.000 | 6.000 | 5 | 5 | 6 | 6 | 7 | 0.150 | 0.100 | product | product | 1.000 | 1.000 | yes | yes | summary.test_status | weak | 3 |
+| `task_4_csv_messy_aggregation` | 1.000 | 1.000 | 9.000 | 9.000 | 9.000 | 9.000 | 9 | 9 | 9 | 9 | 10 | 0.321 | 0.321 | product | product | 0.000 | 0.000 | yes | yes | summary.test_status | weak | 1 |
+| `task_5_reset_state_reducer` | 1.000 | 1.000 | 4.000 | 4.000 | 7.000 | 7.000 | 4 | 4 | 7 | 7 | 9 | 0.333 | 0.167 | product | product | 3.000 | 3.000 | yes | yes | summary.test_status | weak | 1 |
+| `task_6_async_stale_result` | 1.000 | 1.000 | 6.000 | 6.000 | 8.000 | 8.000 | 6 | 6 | 8 | 8 | 9 | 0.300 | 0.300 | product | product | 2.000 | 2.000 | yes | yes | summary.test_status | weak | 1 |
+| `task_7_refactor_validation_split` | 1.000 | 1.000 | 6.000 | 6.000 | 7.000 | 7.000 | 6 | 6 | 7 | 7 | 8 | 0.333 | 0.229 | validation | validation | 1.000 | 1.000 | yes | yes | summary.test_status | strong | 0 |
+| `task_8_package_import_failure` | 1.000 | 1.000 | 6.000 | 6.000 | 7.000 | 7.000 | 6 | 6 | 7 | 7 | 9 | 0.167 | 0.143 | mixed | mixed | 1.000 | 1.000 | yes | yes | summary.test_status | strong | 0 |
+| `control_coding_complete_artifacts_incomplete` | 1.000 | 0.667 | 2.000 | 2.000 | 2.000 | 3.000 | 2 | 2 | 3 | 2 | 3 | 0.000 | 0.000 | none | none | 1.000 | 0.000 | no | yes | summary.final_success | strong | 0 |
+| `control_high_progress_wrong_solution` | 0.857 | 0.857 | 3.000 | 3.500 | 3.000 | 3.500 | 4 | 3 | 4 | 3 | 4 | 0.000 | 0.000 | none | none | 0.000 | 0.000 | no | no | summary.final_success | strong | 0 |
+| `control_monotonic_incomplete_failure` | 0.600 | 0.600 | 3.000 | 5.000 | 3.000 | 5.000 | 5 | 3 | 5 | 3 | 5 | 0.000 | 0.000 | none | none | 0.000 | 0.000 | no | no | summary.final_success | strong | 0 |
+| `negative_control_incomplete_budget_limited` | 0.667 | 0.667 | 4.000 | 6.000 | 4.000 | 6.000 | 6 | 4 | 6 | 4 | 6 | 0.250 | 0.250 | product | product | 0.000 | 0.000 | yes | no | summary.test_status | strong | 0 |
+| `negative_control_monotonic_one_line` | 1.000 | 1.000 | 4.000 | 4.000 | 4.000 | 4.000 | 4 | 4 | 4 | 4 | 4 | 0.000 | 0.000 | none | none | 0.000 | 0.000 | no | yes | summary.test_status | strong | 0 |
 
 ## Run Notes
 

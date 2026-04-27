@@ -1,0 +1,155 @@
+{
+  "active_coding_leaves_final": 6,
+  "active_overall_leaves_final": 7,
+  "category_active_weight_final": {
+    "artifact": 1.0,
+    "documentation": 0,
+    "environment": 0,
+    "investigation": 1.0,
+    "product": 3.0,
+    "validation": 2.0
+  },
+  "category_completed_weight_final": {
+    "artifact": 1.0,
+    "documentation": 0,
+    "environment": 0,
+    "investigation": 1.0,
+    "product": 3.0,
+    "validation": 2.0
+  },
+  "coding_categories": [
+    "product",
+    "validation",
+    "investigation"
+  ],
+  "coding_largest_drop": 0.15000000000000002,
+  "coding_nonmonotonic": true,
+  "completed_coding_leaves_final": 6,
+  "completed_overall_leaves_final": 7,
+  "evidence_audit_by_category": {
+    "investigation": {
+      "audited_completion_count": 1,
+      "status": "strong",
+      "weak_completion_evidence_count": 0,
+      "weak_subtask_ids": []
+    },
+    "product": {
+      "audited_completion_count": 4,
+      "status": "weak",
+      "weak_completion_evidence_count": 2,
+      "weak_subtask_ids": [
+        "S4.1",
+        "S4.2"
+      ]
+    },
+    "validation": {
+      "audited_completion_count": 2,
+      "status": "weak",
+      "weak_completion_evidence_count": 1,
+      "weak_subtask_ids": [
+        "S6"
+      ]
+    }
+  },
+  "evidence_audit_status": "weak",
+  "evidence_audit_weak_categories": [
+    "product",
+    "validation"
+  ],
+  "excluded_active_weight_final": 1.0,
+  "excluded_categories": [
+    "artifact",
+    "documentation",
+    "environment"
+  ],
+  "excluded_categories_final": {
+    "artifact": {
+      "active": 1.0,
+      "complete": 1.0
+    },
+    "documentation": {
+      "active": 0,
+      "complete": 0
+    },
+    "environment": {
+      "active": 0,
+      "complete": 0
+    }
+  },
+  "excluded_completed_weight_final": 1.0,
+  "final_coding_active_weight": 6.0,
+  "final_coding_complete_weight": 6.0,
+  "final_coding_progress": 1.0,
+  "final_overall_active_weight": 7.0,
+  "final_overall_complete_weight": 7.0,
+  "final_overall_progress": 1.0,
+  "final_success": true,
+  "final_success_source": "summary.test_status",
+  "historical_subtasks_created": 8,
+  "largest_coding_drop": 0.15000000000000002,
+  "largest_coding_drop_category_contributions": {
+    "validation": 0.15
+  },
+  "largest_coding_drop_detail": {
+    "amount": 0.15000000000000002,
+    "from_step": 7,
+    "to_step": 8
+  },
+  "largest_coding_drop_source": "validation",
+  "largest_overall_drop": 0.1428571428571429,
+  "largest_overall_drop_category_contributions": {
+    "artifact": 0.142857142857
+  },
+  "largest_overall_drop_detail": {
+    "amount": 0.1428571428571429,
+    "from_step": 14,
+    "to_step": 15
+  },
+  "largest_overall_drop_mostly_excluded": true,
+  "largest_overall_drop_source": "artifact",
+  "nonmonotonic_coding": true,
+  "nonmonotonic_overall": true,
+  "overall_largest_drop": 0.1428571428571429,
+  "overall_nonmonotonic": true,
+  "subtask_categories": {
+    "S1": "product",
+    "S2": "validation",
+    "S3": "investigation",
+    "S4": "product",
+    "S4.1": "product",
+    "S4.2": "product",
+    "S5": "artifact",
+    "S6": "validation"
+  },
+  "task_id": "task_1_parser_timezone_offset",
+  "weak_completion_evidence": [
+    {
+      "category": "product",
+      "description": "Accept compact positive HHMM offsets",
+      "evidence_types": [
+        "manual_note"
+      ],
+      "step": 11,
+      "subtask_id": "S4.1"
+    },
+    {
+      "category": "product",
+      "description": "Accept compact negative HHMM offsets with sign",
+      "evidence_types": [
+        "manual_note"
+      ],
+      "step": 12,
+      "subtask_id": "S4.2"
+    },
+    {
+      "category": "validation",
+      "description": "Preserve colon behavior while adding compact syntax",
+      "evidence_types": [
+        "manual_note"
+      ],
+      "step": 13,
+      "subtask_id": "S6"
+    }
+  ],
+  "weak_completion_evidence_count": 3
+}

@@ -1,0 +1,40 @@
+--- /tmp/cpl_live_baseline/run4/README.md	2026-04-27 01:18:47
++++ README.md	2026-04-27 01:18:53
+@@ -10,6 +10,19 @@
+ 
+ This first version is intentionally not an LLM system. It has no agent, prompt wrapper, trace ingester, trainer, scheduler, or policy logic.
+ 
++## Progress Is Not Success
++
++A progress score describes how much of the currently active, discovered leaf work
++has concrete completion evidence. It does not say whether the final answer is
++correct, whether the tests are sufficient, or whether the task should be
++accepted.
++
++For example, a failed run can still show high progress if most known leaves were
++completed before one important defect remained. A successful coding change can
++also have overall progress below 1.0 when artifact or documentation leaves are
++still active. Treat final success, test status, and evidence audit findings as
++separate metadata from progress.
++
+ ```python
+ from ledger_progress import new_ledger, apply_event, score, LedgerEvent, EventType
+ 
+--- /tmp/cpl_live_baseline/run4/AGENT_USAGE.md	2026-04-27 01:18:47
++++ docs/AGENT_USAGE.md	2026-04-27 01:18:58
+@@ -24,3 +24,15 @@
+ 9. Export the CSV curve when you need a compact progress trace.
+ 
+ Do not call an LLM from the ledger layer. Do not ingest traces automatically. Do not treat progress as elapsed time or force it to be monotonic.
++
++## Interpreting Progress
++
++Do not use progress as a success flag. Progress is only the fraction of active
++leaf work with completion evidence under the selected categories. Keep separate
++records for test status, final success, evidence quality, and known unresolved
++work.
++
++When a task succeeds with incomplete run-management leaves, coding progress can
++be 1.0 while overall progress is lower. When a task fails late, progress can be
++high if the unresolved issue is a small active leaf. Both cases are valid ledger
++observations, not scoring errors.

@@ -1,0 +1,183 @@
+--- /tmp/cpl_live_baseline/run3/rescore_suite_by_category.py	2026-04-27 01:16:42
++++ scripts/rescore_suite_by_category.py	2026-04-27 01:26:09
+@@ -236,6 +236,8 @@
+         "largest_coding_drop_category_contributions": coding_drop_contributions,
+         "largest_overall_drop_category_contributions": overall_drop_contributions,
+         "evidence_audit_status": evidence_audit["status"],
++        "evidence_audit_by_category": evidence_audit["by_category"],
++        "evidence_audit_weak_categories": evidence_audit["weak_categories"],
+         "weak_completion_evidence_count": evidence_audit["weak_completion_evidence_count"],
+         "weak_completion_evidence": evidence_audit["weak_completion_evidence"],
+     }
+@@ -257,21 +259,23 @@
+         event_type = event["event_type"]
+         if event_type == "add_subtask":
+             subtask_id = event["subtask_id"]
+-            category = category_for(run_id, subtask_id, event["payload"]["description"])
++            category = category_for(run_id, subtask_id, event["payload"]["description"], event["payload"].get("category"))
+             event["payload"]["category"] = category.value
+             category_map[subtask_id] = category.value
+         elif event_type == "split_subtask":
+             for child in event["payload"]["children"]:
+-                category = category_for(run_id, child["id"], child["description"])
++                category = category_for(run_id, child["id"], child["description"], child.get("category"))
+                 child["category"] = category.value
+                 category_map[child["id"]] = category.value
+     return annotated, dict(sorted(category_map.items()))
+ 
+ 
+-def category_for(run_id: str, subtask_id: str, description: str) -> SubtaskCategory:
++def category_for(run_id: str, subtask_id: str, description: str, explicit_category: str | None = None) -> SubtaskCategory:
+     override = CATEGORY_OVERRIDES.get(run_id, {}).get(subtask_id)
+     if override is not None:
+         return override
++    if explicit_category is not None:
++        return SubtaskCategory(explicit_category)
+     return infer_category(description)
+ 
+ 
+@@ -501,6 +505,8 @@
+     categories: dict[str, SubtaskCategory] = {}
+     weak: list[dict[str, Any]] = []
+     audited_count = 0
++    audited_by_category = {category: 0 for category in CODING_CATEGORIES}
++    weak_by_category = {category: [] for category in CODING_CATEGORIES}
+ 
+     for event in events:
+         event_type = event["event_type"]
+@@ -523,6 +529,7 @@
+             if category not in {SubtaskCategory.PRODUCT, SubtaskCategory.VALIDATION, SubtaskCategory.INVESTIGATION}:
+                 continue
+             audited_count += 1
++            audited_by_category[category] += 1
+             evidence = evidence_by_subtask.get(subtask_id, [])
+             evidence_types = sorted(classify_evidence(evidence))
+             strong = bool(STRONG_EVIDENCE_TYPES & set(evidence_types))
+@@ -534,15 +541,15 @@
+             ):
+                 strong = True
+             if not strong:
+-                weak.append(
+-                    {
+-                        "step": event["step"],
+-                        "subtask_id": subtask_id,
+-                        "category": category.value,
+-                        "description": descriptions.get(subtask_id, ""),
+-                        "evidence_types": evidence_types or ["manual_note"],
+-                    }
+-                )
++                weak_item = {
++                    "step": event["step"],
++                    "subtask_id": subtask_id,
++                    "category": category.value,
++                    "description": descriptions.get(subtask_id, ""),
++                    "evidence_types": evidence_types or ["manual_note"],
++                }
++                weak.append(weak_item)
++                weak_by_category[category].append(weak_item)
+ 
+     if audited_count == 0:
+         status = "not_applicable"
+@@ -552,11 +559,40 @@
+         status = "strong"
+     return {
+         "status": status,
++        "by_category": evidence_audit_by_category(audited_by_category, weak_by_category),
++        "weak_categories": [
++            category.value
++            for category in CODING_CATEGORIES
++            if weak_by_category[category]
++        ],
+         "weak_completion_evidence_count": len(weak),
+         "weak_completion_evidence": weak,
+     }
+ 
+ 
++def evidence_audit_by_category(
++    audited_by_category: dict[SubtaskCategory, int],
++    weak_by_category: dict[SubtaskCategory, list[dict[str, Any]]],
++) -> dict[str, dict[str, Any]]:
++    by_category = {}
++    for category in CODING_CATEGORIES:
++        audited_count = audited_by_category[category]
++        weak_items = weak_by_category[category]
++        if audited_count == 0:
++            status = "not_applicable"
++        elif weak_items:
++            status = "weak"
++        else:
++            status = "strong"
++        by_category[category.value] = {
++            "status": status,
++            "audited_completion_count": audited_count,
++            "weak_completion_evidence_count": len(weak_items),
++            "weak_subtask_ids": [item["subtask_id"] for item in weak_items],
++        }
++    return by_category
++
++
+ def classify_evidence(evidence: list[str]) -> set[str]:
+     evidence_types: set[str] = set()
+     for item in evidence:
+--- /tmp/cpl_live_baseline/run3/test_suite_hardening.py	2026-04-27 01:16:42
++++ tests/test_suite_hardening.py	2026-04-27 01:26:28
+@@ -200,8 +200,35 @@
+     assert audit["status"] == "weak"
+     assert audit["weak_completion_evidence_count"] == 1
+     assert audit["weak_completion_evidence"][0]["subtask_id"] == "P"
++    assert audit["weak_categories"] == ["product"]
++    assert audit["by_category"]["product"] == {
++        "status": "weak",
++        "audited_completion_count": 1,
++        "weak_completion_evidence_count": 1,
++        "weak_subtask_ids": ["P"],
++    }
++    assert audit["by_category"]["validation"]["status"] == "not_applicable"
+ 
+ 
++def test_evidence_audit_reports_category_severity_independently():
++    audit = rescore.audit_completion_evidence([
++        event(0, "init", None, {"root_task": "Evidence"}),
++        event(1, "add_subtask", "P", {"description": "Patch behavior", "category": "product"}),
++        event(1, "add_subtask", "V", {"description": "Run validation", "category": "validation"}),
++        event(1, "add_subtask", "I", {"description": "Understand task contract", "category": "investigation"}),
++        event(2, "update_status", "P", {"status": "complete", "evidence": ["final_diff.patch shows solver.py modified"]}),
++        event(3, "update_status", "V", {"status": "complete", "evidence": ["Looks fine"]}),
++        event(4, "update_status", "I", {"status": "complete", "evidence": ["task.md describes expected behavior"]}),
++    ])
++
++    assert audit["status"] == "weak"
++    assert audit["weak_categories"] == ["validation"]
++    assert audit["by_category"]["product"]["status"] == "strong"
++    assert audit["by_category"]["validation"]["status"] == "weak"
++    assert audit["by_category"]["validation"]["weak_subtask_ids"] == ["V"]
++    assert audit["by_category"]["investigation"]["status"] == "strong"
++
++
+ def test_legacy_run_is_audited_without_rewriting_ledger_jsonl(tmp_path):
+     source = ROOT / "runs/task_1_parser_timezone_offset"
+     run_dir = tmp_path / source.name
+@@ -215,3 +242,23 @@
+     assert (run_dir / "ledger.jsonl").read_text() == original_ledger
+     assert summary["evidence_audit_status"] in {"strong", "weak"}
+     assert summary["weak_completion_evidence_count"] >= 0
++
++
++def test_rescore_preserves_explicit_categories_for_new_ledgers(tmp_path):
++    run_dir = write_run(tmp_path, "explicit_category_fixture", [
++        event(0, "init", None, {"root_task": "Explicit categories"}),
++        event(1, "add_subtask", "I", {
++            "description": "Inspect ambiguous task contract",
++            "category": "investigation",
++        }),
++        event(2, "update_status", "I", {
++            "status": "complete",
++            "evidence": ["task.md describes the expected contract"],
++        }),
++    ])
++
++    summary = rescore.rescore_run(run_dir)
++
++    assert summary["subtask_categories"]["I"] == "investigation"
++    assert summary["evidence_audit_by_category"]["investigation"]["status"] == "strong"
++    assert summary["evidence_audit_by_category"]["product"]["status"] == "not_applicable"

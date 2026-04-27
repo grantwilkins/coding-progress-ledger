@@ -1,0 +1,122 @@
+{
+  "active_coding_leaves_final": 6,
+  "active_overall_leaves_final": 7,
+  "category_active_weight_final": {
+    "artifact": 1.0,
+    "documentation": 0,
+    "environment": 0,
+    "investigation": 0,
+    "product": 2.0,
+    "validation": 4.0
+  },
+  "category_completed_weight_final": {
+    "artifact": 1.0,
+    "documentation": 0,
+    "environment": 0,
+    "investigation": 0,
+    "product": 2.0,
+    "validation": 4.0
+  },
+  "coding_categories": [
+    "product",
+    "validation",
+    "investigation"
+  ],
+  "coding_largest_drop": 0.16666666666666674,
+  "coding_nonmonotonic": true,
+  "completed_coding_leaves_final": 6,
+  "completed_overall_leaves_final": 7,
+  "evidence_audit_by_category": {
+    "investigation": {
+      "audited_completion_count": 0,
+      "status": "not_applicable",
+      "weak_completion_evidence_count": 0,
+      "weak_subtask_ids": []
+    },
+    "product": {
+      "audited_completion_count": 3,
+      "status": "strong",
+      "weak_completion_evidence_count": 0,
+      "weak_subtask_ids": []
+    },
+    "validation": {
+      "audited_completion_count": 4,
+      "status": "strong",
+      "weak_completion_evidence_count": 0,
+      "weak_subtask_ids": []
+    }
+  },
+  "evidence_audit_status": "strong",
+  "evidence_audit_weak_categories": [],
+  "excluded_active_weight_final": 1.0,
+  "excluded_categories": [
+    "artifact",
+    "documentation",
+    "environment"
+  ],
+  "excluded_categories_final": {
+    "artifact": {
+      "active": 1.0,
+      "complete": 1.0
+    },
+    "documentation": {
+      "active": 0,
+      "complete": 0
+    },
+    "environment": {
+      "active": 0,
+      "complete": 0
+    }
+  },
+  "excluded_completed_weight_final": 1.0,
+  "final_coding_active_weight": 6.0,
+  "final_coding_complete_weight": 6.0,
+  "final_coding_progress": 1.0,
+  "final_overall_active_weight": 7.0,
+  "final_overall_complete_weight": 7.0,
+  "final_overall_progress": 1.0,
+  "final_success": true,
+  "final_success_source": "summary.test_status",
+  "historical_subtasks_created": 9,
+  "largest_coding_drop": 0.16666666666666674,
+  "largest_coding_drop_category_contributions": {
+    "investigation": 0.119047619048,
+    "product": 0.033333333333
+  },
+  "largest_coding_drop_detail": {
+    "amount": 0.16666666666666674,
+    "from_step": 14,
+    "to_step": 15
+  },
+  "largest_coding_drop_source": "mixed",
+  "largest_overall_drop": 0.1428571428571429,
+  "largest_overall_drop_category_contributions": {
+    "investigation": 0.089285714286,
+    "product": 0.047619047619
+  },
+  "largest_overall_drop_detail": {
+    "amount": 0.1428571428571429,
+    "from_step": 14,
+    "to_step": 15
+  },
+  "largest_overall_drop_mostly_excluded": false,
+  "largest_overall_drop_source": "mixed",
+  "nonmonotonic_coding": true,
+  "nonmonotonic_overall": true,
+  "overall_largest_drop": 0.1428571428571429,
+  "overall_nonmonotonic": true,
+  "subtask_categories": {
+    "S1": "product",
+    "S2": "validation",
+    "S2.1": "validation",
+    "S2.2": "validation",
+    "S2.3": "validation",
+    "S3": "product",
+    "S4": "validation",
+    "S5": "artifact",
+    "S9": "investigation"
+  },
+  "task_id": "task_8_package_import_failure",
+  "weak_completion_evidence": [],
+  "weak_completion_evidence_count": 0
+}
