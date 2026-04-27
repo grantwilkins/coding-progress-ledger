@@ -1,0 +1,81 @@
+diff --git a/src/cli_output_demo/cli.py b/src/cli_output_demo/cli.py
+index f657e2a..443a83e 100644
+--- a/src/cli_output_demo/cli.py
++++ b/src/cli_output_demo/cli.py
+@@ -3,6 +3,7 @@ from __future__ import annotations
+ import argparse
+ import json
+ import sys
++from pathlib import Path
+ 
+ 
+ def build_payload() -> dict[str, object]:
+@@ -15,7 +16,10 @@ def main(argv: list[str] | None = None) -> int:
+     args = parser.parse_args(argv)
+ 
+     text = json.dumps(build_payload(), sort_keys=True) + "\n"
+-    sys.stdout.write(text)
++    if args.output == "-":
++        sys.stdout.write(text)
++    else:
++        Path(args.output).write_text(text)
+     return 0
+ 
+ 
+diff --git a/tests/test_cli_output.py b/tests/test_cli_output.py
+new file mode 100644
+index 0000000..925a910
+--- /dev/null
++++ b/tests/test_cli_output.py
+@@ -0,0 +1,51 @@
++"""
++Claim:
++The CLI emits the same deterministic JSON payload to stdout by default and
++when '--output -' is used, but writes that payload only to the requested file
++when '--output path.json' is provided.
++
++Plausible wrong implementations:
++- Parse '--output' but ignore the value and always print JSON to stdout.
++- Write a file but also leak the JSON to stdout, breaking shell composition.
++- Treat '-' as a literal filename instead of the conventional stdout sentinel.
++- Change the JSON payload depending on the output destination.
++"""
++
++from __future__ import annotations
++
++import json
++
++from cli_output_demo.cli import main
++
++
++EXPECTED = {"status": "ok", "items": [1, 2, 3]}
++
++
++def test_default_writes_json_to_stdout(capsys):
++    assert main([]) == 0
++
++    captured = capsys.readouterr()
++    assert json.loads(captured.out) == EXPECTED
++    assert captured.err == ""
++
++
++def test_output_path_writes_file_without_stdout(tmp_path, capsys):
++    output_path = tmp_path / "result.json"
++
++    assert main(["--output", str(output_path)]) == 0
++
++    captured = capsys.readouterr()
++    assert captured.out == ""
++    assert captured.err == ""
++    assert json.loads(output_path.read_text()) == EXPECTED
++
++
++def test_output_dash_preserves_stdout_and_does_not_create_dash_file(tmp_path, monkeypatch, capsys):
++    monkeypatch.chdir(tmp_path)
++
++    assert main(["--output", "-"]) == 0
++
++    captured = capsys.readouterr()
++    assert json.loads(captured.out) == EXPECTED
++    assert captured.err == ""
++    assert not (tmp_path / "-").exists()

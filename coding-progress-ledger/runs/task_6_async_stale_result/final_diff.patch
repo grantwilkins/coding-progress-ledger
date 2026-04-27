@@ -1,0 +1,92 @@
+diff --git a/async_result.py b/async_result.py
+index f82427e..0b57728 100644
+--- a/async_result.py
++++ b/async_result.py
+@@ -22,8 +22,11 @@ class AsyncSearchController:
+     def __init__(self, fetcher: Fetcher) -> None:
+         self._fetcher = fetcher
+         self.state = ResultState()
++        self._latest_request_id = 0
+ 
+     async def search(self, query: str) -> str:
++        self._latest_request_id += 1
++        request_id = self._latest_request_id
+         self.state.loading = True
+         self.state.query = query
+         self.state.error = None
+@@ -31,12 +34,14 @@ class AsyncSearchController:
+         try:
+             result = await self._fetcher(query)
+         except BaseException as exc:
+-            self.state.loading = False
+-            self.state.error = exc
++            if request_id == self._latest_request_id:
++                self.state.loading = False
++                self.state.error = exc
+             raise
+ 
+-        self.state.loading = False
+-        self.state.result = result
++        if request_id == self._latest_request_id:
++            self.state.loading = False
++            self.state.result = result
+         return result
+ 
+     def snapshot(self) -> dict[str, Any]:
+diff --git a/tests/test_async_result.py b/tests/test_async_result.py
+index 4e767af..7a5d234 100644
+--- a/tests/test_async_result.py
++++ b/tests/test_async_result.py
+@@ -17,8 +17,6 @@ from __future__ import annotations
+ 
+ import asyncio
+ 
+-import pytest
+-
+ from async_result import AsyncSearchController
+ 
+ 
+@@ -33,14 +31,19 @@ class ControlledFetcher:
+         return f"result:{query}"
+ 
+ 
+-@pytest.mark.asyncio
+-async def test_out_of_order_completion_keeps_newest_result() -> None:
++def test_out_of_order_completion_keeps_newest_result() -> None:
++    asyncio.run(_out_of_order_completion_keeps_newest_result())
++
++
++async def _out_of_order_completion_keeps_newest_result() -> None:
+     fetcher = ControlledFetcher()
+     controller = AsyncSearchController(fetcher)
+ 
+     old_task = asyncio.create_task(controller.search("old"))
++    await asyncio.sleep(0)
+     await fetcher.started["old"].wait()
+     new_task = asyncio.create_task(controller.search("new"))
++    await asyncio.sleep(0)
+     await fetcher.started["new"].wait()
+ 
+     fetcher.release["new"].set()
+@@ -62,14 +65,19 @@ async def test_out_of_order_completion_keeps_newest_result() -> None:
+     }
+ 
+ 
+-@pytest.mark.asyncio
+-async def test_old_completion_does_not_clear_loading_for_newer_pending_request() -> None:
++def test_old_completion_does_not_clear_loading_for_newer_pending_request() -> None:
++    asyncio.run(_old_completion_does_not_clear_loading_for_newer_pending_request())
++
++
++async def _old_completion_does_not_clear_loading_for_newer_pending_request() -> None:
+     fetcher = ControlledFetcher()
+     controller = AsyncSearchController(fetcher)
+ 
+     old_task = asyncio.create_task(controller.search("old"))
++    await asyncio.sleep(0)
+     await fetcher.started["old"].wait()
+     new_task = asyncio.create_task(controller.search("new"))
++    await asyncio.sleep(0)
+     await fetcher.started["new"].wait()
+ 
+     fetcher.release["old"].set()

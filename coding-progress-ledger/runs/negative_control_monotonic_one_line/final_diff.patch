@@ -1,0 +1,8 @@
+diff --git a/predicates.py b/predicates.py
+index e11328a..24ebaae 100644
+--- a/predicates.py
++++ b/predicates.py
+@@ -1,2 +1,2 @@
+ def is_even(value: int) -> bool:
+-    return value % 2 == 1
++    return value % 2 == 0

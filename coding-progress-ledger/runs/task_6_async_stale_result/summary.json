@@ -1,0 +1,24 @@
+{
+  "task_id": "task_6_async_stale_result",
+  "final_progress": 1.0,
+  "subtasks_created": 9,
+  "completed_subtasks": 8,
+  "splits": 1,
+  "reopens": 1,
+  "invalidations": 0,
+  "largest_progress_drop": 0.3,
+  "non_monotonic": true,
+  "test_command": "../../../.venv/bin/python -m pytest -q",
+  "test_status": "passed",
+  "artifact_paths": [
+    "task.md",
+    "README.md",
+    "agent_transcript.md",
+    "ledger.jsonl",
+    "progress.csv",
+    "final_diff.patch",
+    "test_output.txt",
+    "run_notes.md",
+    "summary.json"
+  ]
+}

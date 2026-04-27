@@ -1,0 +1,193 @@
+diff --git a/invoice_summary.py b/invoice_summary.py
+index 27fb729..a71247d 100644
+--- a/invoice_summary.py
++++ b/invoice_summary.py
+@@ -3,6 +3,47 @@
+ from __future__ import annotations
+ 
+ 
++def _normalize_item(item):
++    if "name" not in item:
++        raise ValueError("item missing name")
++    if "unit_price_cents" not in item:
++        raise ValueError("item missing unit_price_cents")
++
++    name = str(item["name"]).strip()
++    if not name:
++        raise ValueError("item name must not be blank")
++
++    quantity = int(item.get("quantity", 1))
++    unit_price_cents = int(item["unit_price_cents"])
++    if quantity <= 0:
++        raise ValueError("quantity must be positive")
++    if unit_price_cents < 0:
++        raise ValueError("unit_price_cents must be non-negative")
++
++    category = str(item.get("category", "uncategorized")).strip().lower() or "uncategorized"
++    return {
++        "name": name,
++        "quantity": quantity,
++        "unit_price_cents": unit_price_cents,
++        "category": category,
++        "clearance": bool(item.get("clearance")),
++    }
++
++
++def _line_totals(item, discount_codes):
++    line_subtotal = item["quantity"] * item["unit_price_cents"]
++    line_discount = 0
++
++    if item["clearance"]:
++        line_discount += line_subtotal // 10
++    if "BULK5" in discount_codes and item["quantity"] >= 5:
++        line_discount += line_subtotal * 5 // 100
++    if "SAVE10" in discount_codes:
++        line_discount += 1000
++
++    return line_subtotal, min(line_discount, line_subtotal)
++
++
+ def summarize_invoice(items, *, tax_rate=0.0, discount_codes=()):
+     """Return subtotal, discount, tax, and total for invoice line items."""
+     if tax_rate < 0:
+@@ -14,40 +55,13 @@ def summarize_invoice(items, *, tax_rate=0.0, discount_codes=()):
+     categories = {}
+     line_count = 0
+ 
+-    for item in items:
+-        if "name" not in item:
+-            raise ValueError("item missing name")
+-        if "unit_price_cents" not in item:
+-            raise ValueError("item missing unit_price_cents")
+-
+-        name = str(item["name"]).strip()
+-        if not name:
+-            raise ValueError("item name must not be blank")
+-
+-        quantity = int(item.get("quantity", 1))
+-        unit_price_cents = int(item["unit_price_cents"])
+-        if quantity <= 0:
+-            raise ValueError("quantity must be positive")
+-        if unit_price_cents < 0:
+-            raise ValueError("unit_price_cents must be non-negative")
+-
+-        category = str(item.get("category", "uncategorized")).strip().lower() or "uncategorized"
+-        line_subtotal = quantity * unit_price_cents
+-        line_discount = 0
+-
+-        if item.get("clearance"):
+-            line_discount += line_subtotal // 10
+-        if "BULK5" in normalized_codes and quantity >= 5:
+-            line_discount += line_subtotal * 5 // 100
+-        if "SAVE10" in normalized_codes:
+-            line_discount += 1000
+-
+-        if line_discount > line_subtotal:
+-            line_discount = line_subtotal
++    for raw_item in items:
++        item = _normalize_item(raw_item)
++        line_subtotal, line_discount = _line_totals(item, normalized_codes)
+ 
+         subtotal_cents += line_subtotal
+         discount_cents += line_discount
+-        categories[category] = categories.get(category, 0) + line_subtotal - line_discount
++        categories[item["category"]] = categories.get(item["category"], 0) + line_subtotal - line_discount
+         line_count += 1
+ 
+     taxable_cents = subtotal_cents - discount_cents
+diff --git a/tests/test_api_compatibility.py b/tests/test_api_compatibility.py
+new file mode 100644
+index 0000000..b5f71be
+--- /dev/null
++++ b/tests/test_api_compatibility.py
+@@ -0,0 +1,36 @@
++"""
++Claim:
++The refactor preserves the public API: callers still import summarize_invoice
++and call it with items plus keyword-only tax and discount options.
++
++Plausible wrong implementations:
++- Rename or remove summarize_invoice while extracting helpers.
++- Make tax_rate or discount_codes positional-only/required by accident.
++- Return a tuple or helper-oriented structure instead of the documented dict.
++"""
++
++import inspect
++
++import invoice_summary
++
++
++def test_public_api_signature_is_compatible():
++    signature = inspect.signature(invoice_summary.summarize_invoice)
++    assert list(signature.parameters) == ["items", "tax_rate", "discount_codes"]
++    assert signature.parameters["tax_rate"].kind is inspect.Parameter.KEYWORD_ONLY
++    assert signature.parameters["discount_codes"].kind is inspect.Parameter.KEYWORD_ONLY
++    assert signature.parameters["tax_rate"].default == 0.0
++    assert signature.parameters["discount_codes"].default == ()
++
++
++def test_public_result_keys_are_stable():
++    result = invoice_summary.summarize_invoice([{"name": "A", "unit_price_cents": 100}])
++
++    assert set(result) == {
++        "subtotal_cents",
++        "discount_cents",
++        "tax_cents",
++        "total_cents",
++        "line_count",
++        "category_totals",
++    }
+diff --git a/tests/test_regression_invoice.py b/tests/test_regression_invoice.py
+new file mode 100644
+index 0000000..de75b80
+--- /dev/null
++++ b/tests/test_regression_invoice.py
+@@ -0,0 +1,48 @@
++"""
++Claim:
++Invoice totals are compositional: recombining independent groups should preserve
++the sum of subtotal, discount, and post-tax total at zero tax.
++
++Plausible wrong implementations:
++- Let category state or discount caps leak between adjacent line items.
++- Count lines from categories instead of the original items.
++- Drop uncategorized or blank-category items during normalization.
++"""
++
++from invoice_summary import summarize_invoice
++
++
++def test_zero_tax_totals_recompose_across_item_groups():
++    group_a = [
++        {"name": "A", "unit_price_cents": 300, "quantity": 5, "category": "Parts"},
++        {"name": "B", "unit_price_cents": 250, "quantity": 1, "category": ""},
++    ]
++    group_b = [
++        {"name": "C", "unit_price_cents": 900, "quantity": 2, "clearance": True},
++        {"name": "D", "unit_price_cents": 1200, "quantity": 1, "category": "Service"},
++    ]
++
++    combined = summarize_invoice(group_a + group_b, discount_codes=["BULK5"])
++    left = summarize_invoice(group_a, discount_codes=["BULK5"])
++    right = summarize_invoice(group_b, discount_codes=["BULK5"])
++
++    assert combined["subtotal_cents"] == left["subtotal_cents"] + right["subtotal_cents"]
++    assert combined["discount_cents"] == left["discount_cents"] + right["discount_cents"]
++    assert combined["total_cents"] == left["total_cents"] + right["total_cents"]
++    assert combined["line_count"] == 4
++    assert combined["category_totals"] == {
++        "parts": 1425,
++        "service": 1200,
++        "uncategorized": 1870,
++    }
++
++
++def test_discount_never_makes_line_or_total_negative():
++    result = summarize_invoice(
++        [{"name": "Sticker", "unit_price_cents": 150, "quantity": 1, "category": "Promo"}],
++        discount_codes=["SAVE10"],
++    )
++
++    assert result["discount_cents"] == 150
++    assert result["total_cents"] == 0
++    assert result["category_totals"] == {"promo": 0}

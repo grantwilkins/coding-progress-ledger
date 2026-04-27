@@ -1,0 +1,16 @@
+diff --git a/src/reducer.js b/src/reducer.js
+index d3dbe90..f4759b5 100644
+--- a/src/reducer.js
++++ b/src/reducer.js
+@@ -31,10 +31,7 @@ export function reducer(state = initialState, action) {
+     }
+ 
+     case "reset":
+-      return {
+-        ...state,
+-        count: 0
+-      };
++      return initialState;
+ 
+     default:
+       return state;

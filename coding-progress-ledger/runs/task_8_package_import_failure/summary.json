@@ -1,0 +1,24 @@
+{
+  "task_id": "task_8_package_import_failure",
+  "final_progress": 1.0,
+  "subtasks_created": 9,
+  "completed_subtasks": 7,
+  "splits": 1,
+  "reopens": 1,
+  "invalidations": 1,
+  "largest_progress_drop": 0.1428571428571429,
+  "non_monotonic": true,
+  "test_command": "python3 -m widget_runner.module && python3 tests/test_imports.py && python3 -c \"from widget_runner import build_message; print(build_message(' ada   lovelace '))\"",
+  "test_status": "passed",
+  "artifact_paths": [
+    "task.md",
+    "README.md",
+    "agent_transcript.md",
+    "ledger.jsonl",
+    "progress.csv",
+    "final_diff.patch",
+    "test_output.txt",
+    "run_notes.md",
+    "summary.json"
+  ]
+}

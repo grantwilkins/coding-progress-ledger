@@ -1,0 +1,52 @@
+$ ../../../.venv/bin/python -m pytest
+
+Initial baseline output:
+============================= test session starts ==============================
+platform darwin -- Python 3.10.19, pytest-9.0.3, pluggy-1.6.0
+rootdir: /Users/grantwilkins/houdini/coding-progress-ledger/runs/task_7_refactor_validation_split/repo
+configfile: pyproject.toml
+testpaths: tests
+collected 5 items
+
+tests/test_targeted_invoice.py .....                                     [100%]
+
+============================== 5 passed in 0.01s ===============================
+
+After helper refactor with targeted tests only:
+============================= test session starts ==============================
+platform darwin -- Python 3.10.19, pytest-9.0.3, pluggy-1.6.0
+rootdir: /Users/grantwilkins/houdini/coding-progress-ledger/runs/task_7_refactor_validation_split/repo
+configfile: pyproject.toml
+testpaths: tests
+collected 5 items
+
+tests/test_targeted_invoice.py .....                                     [100%]
+
+============================== 5 passed in 0.01s ===============================
+
+After broader regression tests were added:
+============================= test session starts ==============================
+platform darwin -- Python 3.10.19, pytest-9.0.3, pluggy-1.6.0
+rootdir: /Users/grantwilkins/houdini/coding-progress-ledger/runs/task_7_refactor_validation_split/repo
+configfile: pyproject.toml
+testpaths: tests
+collected 7 items
+
+tests/test_regression_invoice.py ..                                      [ 28%]
+tests/test_targeted_invoice.py .....                                     [100%]
+
+============================== 7 passed in 0.01s ===============================
+
+Final output with API compatibility tests:
+============================= test session starts ==============================
+platform darwin -- Python 3.10.19, pytest-9.0.3, pluggy-1.6.0
+rootdir: /Users/grantwilkins/houdini/coding-progress-ledger/runs/task_7_refactor_validation_split/repo
+configfile: pyproject.toml
+testpaths: tests
+collected 9 items
+
+tests/test_api_compatibility.py ..                                       [ 22%]
+tests/test_regression_invoice.py ..                                      [ 44%]
+tests/test_targeted_invoice.py .....                                     [100%]
+
+============================== 9 passed in 0.01s ===============================

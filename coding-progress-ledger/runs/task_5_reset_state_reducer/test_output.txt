@@ -1,0 +1,16 @@
+
+> task-5-reset-state-reducer@1.0.0 test
+> node --test
+
+✔ increment changes only the current count and clears stale errors (0.459083ms)
+✔ submit records the current count and derived double count (0.070583ms)
+✔ reset clears visible count and all submitted or derived state (0.154125ms)
+✔ reset clears validation error state (0.106083ms)
+ℹ tests 4
+ℹ suites 0
+ℹ pass 4
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 53.01075

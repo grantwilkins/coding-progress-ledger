@@ -1,0 +1,12 @@
+$ python3 -m widget_runner.module
+widget ready for Ada Lovelace
+
+$ python3 tests/test_imports.py
+..
+----------------------------------------------------------------------
+Ran 2 tests in 0.027s
+
+OK
+
+$ python3 -c "from widget_runner import build_message; print(build_message(' ada   lovelace '))"
+widget ready for Ada Lovelace

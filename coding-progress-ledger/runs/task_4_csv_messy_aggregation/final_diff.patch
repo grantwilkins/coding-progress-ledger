@@ -1,0 +1,113 @@
+diff --git a/README.md b/README.md
+index eb8043d..cf2ae57 100644
+--- a/README.md
++++ b/README.md
+@@ -5,7 +5,7 @@ Tiny CSV aggregation exercise.
+ Run tests from this `repo/` directory:
+ 
+ ```sh
+-python -m pytest
++PYTHONPATH=. uv run pytest
+ ```
+ 
+ Run the script:
+diff --git a/aggregator.py b/aggregator.py
+index 617451b..234b754 100644
+--- a/aggregator.py
++++ b/aggregator.py
+@@ -9,12 +9,15 @@ def aggregate_totals(input_path: str | Path, output_path: str | Path) -> None:
+     totals: dict[str, float] = defaultdict(float)
+     with Path(input_path).open(newline="") as input_file:
+         for row in csv.DictReader(input_file):
+-            totals[row["user_id"]] += float(row["amount"])
++            user_id = row["user_id"].strip()
++            amount_text = row["amount"].strip()
++            amount = float(amount_text) if amount_text else 0.0
++            totals[user_id] += amount
+ 
+     with Path(output_path).open("w", newline="") as output_file:
+         writer = csv.writer(output_file)
+         writer.writerow(["user_id", "total"])
+-        for user_id, total in totals.items():
++        for user_id, total in sorted(totals.items()):
+             writer.writerow([user_id, f"{total:.2f}"])
+ 
+ 
+diff --git a/data/input.csv b/data/input.csv
+index 1209033..d0adb1e 100644
+--- a/data/input.csv
++++ b/data/input.csv
+@@ -1,4 +1,5 @@
+ user_id,amount
++ bob ,2
+ alice,3.50
+-bob,2
+-alice,1.25
++bob,
++ alice ,1.25
+diff --git a/tests/test_aggregator.py b/tests/test_aggregator.py
+index d583ae6..b7b7c34 100644
+--- a/tests/test_aggregator.py
++++ b/tests/test_aggregator.py
+@@ -1,11 +1,15 @@
+ """
+ Claim:
+-The aggregator computes exact per-user totals from CSV rows.
++The aggregator computes exact per-user totals from CSV rows after normalizing
++user ID whitespace, treating missing numeric amounts as zero, and emitting a
++deterministic user_id order independent of input row order.
+ 
+ Plausible wrong implementations:
+ - Sum by row position instead of user ID, losing repeated users.
+ - Format totals inconsistently, making downstream CSV comparison ambiguous.
+-- Include or skip the CSV header incorrectly.
++- Treat " alice " and "alice" as distinct users.
++- Crash or drop a user when amount is missing instead of counting it as zero.
++- Preserve first-seen row order, making equivalent shuffled inputs differ.
+ """
+ 
+ from __future__ import annotations
+@@ -31,3 +35,43 @@ def test_clean_rows_sum_repeated_users(tmp_path):
+         {"user_id": "alice", "total": "4.75"},
+         {"user_id": "bob", "total": "2.00"},
+     ]
++
++
++def test_messy_rows_normalize_missing_values_and_sort_users(tmp_path):
++    input_path = tmp_path / "input.csv"
++    output_path = tmp_path / "output.csv"
++    input_path.write_text(
++        "user_id,amount\n"
++        " bob ,2\n"
++        "alice,3.50\n"
++        "charlie,\n"
++        " alice ,1.25\n"
++        "bob,4\n"
++    )
++
++    aggregate_totals(input_path, output_path)
++
++    assert read_rows(output_path) == [
++        {"user_id": "alice", "total": "4.75"},
++        {"user_id": "bob", "total": "6.00"},
++        {"user_id": "charlie", "total": "0.00"},
++    ]
++
++
++def test_row_order_does_not_change_output_order_or_totals(tmp_path):
++    first_input = tmp_path / "first.csv"
++    second_input = tmp_path / "second.csv"
++    first_output = tmp_path / "first_out.csv"
++    second_output = tmp_path / "second_out.csv"
++    first_input.write_text("user_id,amount\nzoe,1\namy,2\nzoe,3\n")
++    second_input.write_text("user_id,amount\nzoe,3\nzoe,1\namy,2\n")
++
++    aggregate_totals(first_input, first_output)
++    aggregate_totals(second_input, second_output)
++
++    expected = [
++        {"user_id": "amy", "total": "2.00"},
++        {"user_id": "zoe", "total": "4.00"},
++    ]
++    assert read_rows(first_output) == expected
++    assert read_rows(second_output) == expected

@@ -1,0 +1,21 @@
+{"step":0,"event_type":"init","subtask_id":null,"payload":{"root_task":"TASK 3: Wrong exception type"},"reason":null}
+{"step":1,"event_type":"add_subtask","subtask_id":"S1","payload":{"description":"Create toy Python repo with intentionally inconsistent config exceptions","parent_id":null,"weight":1.0},"reason":null}
+{"step":1,"event_type":"add_subtask","subtask_id":"S2","payload":{"description":"Add deterministic pytest contract tests for ConfigError behavior","parent_id":null,"weight":1.0},"reason":null}
+{"step":1,"event_type":"add_subtask","subtask_id":"S3","payload":{"description":"Patch config loader to raise ConfigError consistently","parent_id":null,"weight":1.0},"reason":null}
+{"step":1,"event_type":"add_subtask","subtask_id":"S4","payload":{"description":"Run tests and capture reproducible evidence","parent_id":null,"weight":1.0},"reason":null}
+{"step":1,"event_type":"add_subtask","subtask_id":"S5","payload":{"description":"Export ledger and required run artifact bundle","parent_id":null,"weight":1.0},"reason":null}
+{"step":2,"event_type":"update_status","subtask_id":"S1","payload":{"status":"in_progress","evidence":["Creating package, tests, and git baseline"]},"reason":null}
+{"step":2,"event_type":"update_status","subtask_id":"S1","payload":{"status":"complete","evidence":["Initial repo committed with ConfigError plus two ValueError raise sites"]},"reason":null}
+{"step":3,"event_type":"update_status","subtask_id":"S2","payload":{"status":"in_progress","evidence":["Running initial tests against buggy baseline"]},"reason":null}
+{"step":3,"event_type":"update_status","subtask_id":"S2","payload":{"status":"complete","evidence":["Initial pytest failed as expected with return code 1"]},"reason":null}
+{"step":4,"event_type":"update_status","subtask_id":"S3","payload":{"status":"in_progress","evidence":["Applying first narrow ConfigError replacement"]},"reason":null}
+{"step":4,"event_type":"update_status","subtask_id":"S3","payload":{"status":"complete","evidence":["Patched missing-key raise site to ConfigError"]},"reason":null}
+{"step":5,"event_type":"reopen_subtask","subtask_id":"S3","payload":{"reason":"Verification showed a second ValueError raise site remained"},"reason":"Verification showed a second ValueError raise site remained"}
+{"step":5,"event_type":"split_subtask","subtask_id":"S3","payload":{"children":[{"id":"S3.1","description":"Keep missing-key raise site on ConfigError"},{"id":"S3.2","description":"Convert timeout type raise site to ConfigError"}]},"reason":"The broad patch task hid two independently checkable branches"}
+{"step":5,"event_type":"update_status","subtask_id":"S3.1","payload":{"status":"complete","evidence":["Missing required key test now raises ConfigError with the original message"]},"reason":null}
+{"step":6,"event_type":"update_status","subtask_id":"S3.2","payload":{"status":"in_progress","evidence":["Replacing timeout type ValueError with ConfigError"]},"reason":null}
+{"step":6,"event_type":"update_status","subtask_id":"S3.2","payload":{"status":"complete","evidence":["Timeout type branch now raises ConfigError with preserved message"]},"reason":null}
+{"step":7,"event_type":"update_status","subtask_id":"S4","payload":{"status":"in_progress","evidence":["Running final pytest command"]},"reason":null}
+{"step":7,"event_type":"update_status","subtask_id":"S4","payload":{"status":"complete","evidence":["Final ../../../.venv/bin/python -m pytest passed; output captured in test_output.txt"]},"reason":null}
+{"step":8,"event_type":"update_status","subtask_id":"S5","payload":{"status":"in_progress","evidence":["Writing run metadata and patch artifacts"]},"reason":null}
+{"step":8,"event_type":"update_status","subtask_id":"S5","payload":{"status":"complete","evidence":["Required artifact files written; ledger export pending as final side effect"]},"reason":null}
