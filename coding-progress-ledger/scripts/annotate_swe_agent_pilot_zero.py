@@ -417,6 +417,123 @@ applicable `eval_output.txt` / `test_output.txt` history.)
 """
 
 
+def _run_notes_body_f_03(progress_overall: float, progress_coding: float) -> str:
+    return f"""\
+## Run notes — `swe_agent_pilot_f_03` (`asottile__setup-cfg-fmt-132`)
+
+- annotator: Claude (pilot-zero stress-test, third trace)
+- annotation pass: pilot-zero (stress-test for D1 stuck-loop +
+  harness-submit refinements)
+- protocol: `docs/RETROSPECTIVE_LEDGER_ANNOTATION_PROTOCOL.md`
+- source addendum: `docs/SWE_AGENT_RETROSPECTIVE_LEDGER_PROTOCOL.md`
+- upstream success label (NOT a feature): `False`
+
+### 1. Initial reading
+
+The issue is that `configparser` downcases keys in unrelated sections
+(e.g. `DJANGO_SETTINGS_MODULE` becomes `django_settings_module` even
+when it lives in `[tool:pytest]`, not in a section setup-cfg-fmt
+processes). The fix is in `setup_cfg_fmt.py`: configure the
+parser to preserve case, or process only the sections it should.
+
+### 2. Initial ledger proposal (written before the walk)
+
+```text
+- INVESTIGATION  Reproduce the case-folding behavior
+- INVESTIGATION  Locate the configparser configuration in setup_cfg_fmt.py
+- PRODUCT        Configure the parser to preserve case (or scope it to known sections)
+- VALIDATION     Run tests
+- ARTIFACT       Submit
+```
+
+The walk's ledger has only the first two leaves and the second is
+`blocked`. The remaining three never become discovered work.
+
+### 3. Checkpoint notes
+
+- step 7: `python reproduce.py` succeeds; the repro environment is set
+  up. Agent moves on without explicitly verifying the bug from the cat
+  output (truncated in normalized trace; agent's transition implies it
+  considered repro adequate).
+- step 10-17: legitimate investigation. `search_dir`, `open`,
+  `search_file 'configparser'`, `goto 156`. The agent has located the
+  configparser usage at line 156 of setup_cfg_fmt.py.
+- step 18: stuck loop begins. `search_file 'test.ini'` returns
+  no matches (test.ini lives in /setup-cfg-fmt, not as source).
+- step 22: third iteration of the loop begins; pattern is now
+  observably stuck per general protocol § 6.
+- steps 22-112: 23 more iterations of the same 4-command cycle.
+  No edits, no new files, no query variations.
+- step 112: last in-trace step is `goto 156` (not a `submit`).
+  Trace ends because the SWE-agent harness force-terminated at
+  context exhaustion (`exit_status='submitted (exit_context)'`).
+
+### 4. Uncertain decisions
+
+- **When exactly to mark `blocked`.** Alternatives: step 18 (loop
+  start), step 22 (third iteration per the protocol's N≥3 rule),
+  step 30 (when the loop is unmistakable to a casual reader), step
+  50 (when even a generous observer concedes). Chose step 22 because
+  the general protocol explicitly defines the threshold as "third
+  iteration begins". Re-evaluate if D5 audit suggests the threshold
+  is too lenient or too strict.
+
+### 5. Evidence citations
+
+| subtask id | category        | completed at step | evidence step(s) | one-line citation |
+|------------|-----------------|-------------------|------------------|-------------------|
+| `S1`       | `INVESTIGATION` | 7                 | 5, 7             | reproduce.py created and run; agent moves on |
+| `S2`       | `INVESTIGATION` | (blocked at 22)   | 18-112           | identical 4-command cycle repeats 24x without variation |
+
+### 6. Known missing evidence
+
+- `S2` (locate configparser config) **left at `blocked`**. The agent
+  surfaced the right region of the right file (line 156 of
+  setup_cfg_fmt.py) but could not pivot the query and never made the
+  PRODUCT leaf visible.
+- **No PRODUCT leaf.** The trace shows no `edit` or `create` of
+  product code anywhere from step 8 onward. `reproduce.py` is the
+  only file the agent created, and it is investigation/repro, not
+  product. Per SWE-agent addendum § 5 pitfall #7, the non-empty
+  `final_diff.patch` (560 chars) reflects reproduce.py, not a fix —
+  do **not** treat it as PRODUCT evidence.
+- **No VALIDATION leaf.** No pytest, tox, or test mock was run
+  after step 6 (which only ran reproduce.py).
+- **No ARTIFACT leaf.** Per SWE-agent addendum § 5 pitfall #6,
+  `exit_status='submitted (exit_context)'` is harness-forced
+  termination at context exhaustion. The agent's last command was
+  `goto 156` at step 112, not `submit`. No discovered ARTIFACT work.
+- **Hidden-work gap (borderline-discoverable).** The agent has the
+  configparser-using code visible at line 156 throughout the loop;
+  the issue text names the exact behavior; the agent's mental model
+  treated `test.ini` (the artifact) as the problem instead of the
+  parser configuration. An honest observer reading the trace can
+  describe the missing PRODUCT subtask but cannot point to a step
+  where the agent surfaced it as discovered work, so per general
+  § 2 it stays hidden in the ledger and is recorded only here.
+
+### 7. Final scope closure
+
+- total leaves: 2
+- complete: 1 · in_progress: 0 · blocked: 1 · not_started: 0 · invalidated: 0
+- progress (overall): {progress_overall:.2f}
+- progress (CODING_CATEGORIES = product+validation+investigation): {progress_coding:.2f}
+
+Was there ever a temptation to use `final_success` as evidence? **No.**
+Knowing the run failed doesn't change a single ledger event:
+investigation was visibly stuck, no PRODUCT/VALIDATION/ARTIFACT
+leaves became discovered work.
+
+### 8. Schema gaps observed
+
+None observed — both refinements added to the protocols (general §
+6 stuck-loop rule; SWE-agent addendum § 5 pitfall #6
+harness-forced-submit; pitfall #7 final_diff.patch caveat) covered
+the trace cleanly. f_03 was the input that forced these refinements;
+this annotation is the validation that they suffice.
+"""
+
+
 # ---------- D5 quality artifact ----------
 
 
@@ -485,9 +602,90 @@ def emit_one(annotator: Callable[[], Tuple[LedgerSession, AnnotationMeta]]) -> N
     )
 
 
+def annotate_f_03() -> Tuple[LedgerSession, "AnnotationMeta"]:
+    """swe_agent_pilot_f_03 / asottile__setup-cfg-fmt-132 (113 steps, failure).
+
+    Stress-test pilot for the protocol's stuck-loop guidance and for
+    the harness-forced-termination case. Trace shape:
+
+      * 2-9   create + run reproduce.py; cat test.ini.
+      * 10-17 legitimate investigation: search for `import configparser`,
+              open setup_cfg_fmt.py, search_file 'configparser', goto 156.
+      * 18-112 STUCK LOOP: same 4-command cycle (search_file
+               'configparser' / goto 156 / search_file 'test.ini' /
+               'no matches found') repeated ~24 times verbatim, no
+               query variation, no new tool output, no progress.
+      * exit_status='submitted (exit_context)' — harness force-terminated
+        at context exhaustion. Agent never issued `submit`.
+
+    Per the refined protocol:
+      * S2 enters `blocked` at step 22 (start of third iteration of
+        the loop), latest visible repetition step 112.
+      * NO ARTIFACT leaf — the submission is environmental.
+      * `final_diff.patch` (560 chars) is investigation residue
+        (reproduce.py from steps 4-5), not PRODUCT evidence.
+    """
+    s = LedgerSession("Fix configparser downcasing keys in unrelated sections")
+
+    repro = s.add(
+        "Reproduce the configparser case-folding bug from the issue text",
+        step=2,
+        category=SubtaskCategory.INVESTIGATION,
+    )
+    s.complete(
+        repro,
+        [
+            "step 5: edit reproduce.py (10 lines) creates the repro script",
+            "step 7: python reproduce.py outputs 'INI file written.'; agent transitions to inspecting the resulting test.ini",
+        ],
+        step=7,
+    )
+
+    locate = s.add(
+        "Locate configparser-handling code in setup_cfg_fmt.py",
+        step=10,
+        category=SubtaskCategory.INVESTIGATION,
+    )
+    s.block(
+        locate,
+        step=22,
+        reason=(
+            "Stuck loop (general protocol § 6 stuck-loop rule). The "
+            "agent runs the same 4-command cycle (search_file "
+            "'configparser' / goto 156 / search_file 'test.ini' / "
+            "'no matches found') verbatim from step 18 onward. Third "
+            "iteration begins at step 22; pattern still visible at "
+            "step 112 (last in-trace step). No query variation, no "
+            "new tool output. Mental model gap: agent searches for "
+            "'test.ini' (the test artifact) instead of varying the "
+            "query toward the actual configparser configuration."
+        ),
+    )
+
+    # NO ARTIFACT leaf: exit_status='submitted (exit_context)' is
+    # harness-forced. The agent's last in-trace command at step 112
+    # is `goto 156`, not `submit`. Per SWE-agent addendum § 5 pitfall
+    # #6, harness-forced termination does not generate discovered work.
+
+    meta = AnnotationMeta(
+        pilot_id="swe_agent_pilot_f_03",
+        instance_id="asottile__setup-cfg-fmt-132",
+        upstream_success_label=False,
+        annotation_time_minutes=40,
+        number_of_uncertain_events=1,  # when exactly to call `blocked`; see run_notes § 4
+        number_of_evidence_gaps=2,    # blocked locate + harness-submit-not-discovered
+        whether_final_success_used_only_at_end=True,
+        whether_progress_forced=False,
+        whether_schema_gap_found=False,
+        run_notes_body=_run_notes_body_f_03,
+    )
+    return s, meta
+
+
 def main() -> int:
     emit_one(annotate_s_01)
     emit_one(annotate_f_01)
+    emit_one(annotate_f_03)
     return 0
 
 

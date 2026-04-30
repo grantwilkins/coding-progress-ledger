@@ -247,6 +247,22 @@ These supplement (do not replace) the general pitfalls in
    output). Trust the upstream `role` field, not the surface text;
    the normalizer already preserved the upstream role under
    `events[].raw.role`.
+6. **Harness-forced termination is not an agent submit.** When the
+   normalized trace's `exit_status` is `submitted (exit_context)`,
+   `submitted (exit_format)`, or any other harness-forced submission
+   AND the agent never issued a literal `submit` command in-trace,
+   do **not** add an `ARTIFACT` leaf. The submission is environmental,
+   not discovered work. Record the forced termination in
+   `run_notes.md` § 6 instead. Distinguish from `submitted` (no
+   parenthetical), which is the agent's own `submit`.
+7. **`final_diff.patch` is a state diff, not an agent-action diff.**
+   It captures every file change since the start of the trace,
+   including reproduction scripts created by `create` / `edit` very
+   early on. If the trace shows the agent never edited
+   product code, treat any non-empty `final_diff.patch` as
+   investigation/repro residue, not as `PRODUCT` evidence. Always
+   cross-check `final_diff.patch` against the trace's `edit` /
+   `create` history before citing it.
 
 ## 6. Open questions / known caveats (SWE-agent specific)
 
