@@ -442,7 +442,7 @@ no parallel script unless explicitly justified
 ## § Workstream D — Retrospective ledger annotation protocol
 
 ### D1. Write annotation guidelines
-Status: not started
+Status: done — `docs/SWE_AGENT_RETROSPECTIVE_LEDGER_PROTOCOL.md`. Worked examples are real pilot runs (s_01 `Melevir__cognitive_complexity-15` succeeds with full investigation→product→validation flow; f_01 `WIPACrepo__iceprod-339` submits without ever running tests, used as the "validation never started" example). Cross-references `ledger_progress/core.py` for the canonical Status / EventType / SubtaskCategory enums and `ledger_progress/queries.py:CODING_CATEGORIES` for the coding-progress slice.
 
 Goal: A protocol document that constrains annotation to visible trace evidence and prevents narrative reconstruction.
 
