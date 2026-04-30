@@ -665,6 +665,9 @@ all ledger.jsonl files replay (via ledger_progress.serialization.from_jsonl + re
 ```
 
 ### E2. Run run-manager exports
+Status: done — `ledger-run export-run` was invoked by `scripts/annotate_pilots_from_spec.py` for each of the 20 pilots during E1 annotation. `ledger-run check-run` reports "all required artifacts present" on every pilot. `final_diff.patch` and `test_output.txt` are present for all 20 (sourced by C3 from upstream `generated_patch` / `eval_logs`); no fabricated placeholders.
+
+### E2-original. Run run-manager exports (legacy header preserved for traceability)
 Status: not started
 
 Goal: Use the existing tooling to regenerate derived artifacts from the source-of-truth ledger.
@@ -685,7 +688,7 @@ missing artifacts are documented per-run, never invented
 ```
 
 ### E3. Write pilot annotation summary
-Status: not started
+Status: done — `runs/swe_agent_pilot/PILOT_ANNOTATION_SUMMARY.md` (committed via gitignore exception; the dir is otherwise gitignored to keep upstream traces local-only). Reports per-pilot table, headline numbers, notable shapes (high-progress failure `f_06`, low-progress success `s_04`, three REOPEN runs, six BLOCKED runs), four protocol refinements forced by the pilot, common evidence-gap patterns, category distribution, annotation uncertainty distribution, and an honest qualitative judgment ("~85% observation, ~15% narrative-reconstruction risk concentrated in test-edits-as-PRODUCT and validation-as-implicit-discovered-work calls").
 
 Outputs:
 ```text
