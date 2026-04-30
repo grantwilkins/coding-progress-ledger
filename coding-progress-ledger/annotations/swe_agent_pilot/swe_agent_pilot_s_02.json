@@ -1,0 +1,50 @@
+{
+  "pilot_id": "swe_agent_pilot_s_02",
+  "instance_id": "geomet__geomet-101",
+  "root_task": "Make geomet.esri.dumps honor the srid option",
+  "events": [
+    {"op": "add", "step": 2, "id": "S1", "category": "INVESTIGATION",
+     "description": "Reproduce the ignored-srid bug"},
+    {"op": "complete", "step": 7, "id": "S1",
+     "evidence": [
+       "step 3: create reproduce.py",
+       "step 5: edit reproduce.py to embed the issue snippet (17 lines)",
+       "step 7: python reproduce.py prints {'spatialReference': {'wkid': 4326}, ...} -- srid was ignored, default returned; bug confirmed"
+     ]},
+    {"op": "add", "step": 8, "id": "S2", "category": "INVESTIGATION",
+     "description": "Locate geomet/esri.py"},
+    {"op": "complete", "step": 11, "id": "S2",
+     "evidence": [
+       "step 9: find_file 'esri.py' returns one match",
+       "step 11: open geomet/esri.py confirms (248 lines)"
+     ]},
+    {"op": "add", "step": 12, "id": "S3", "category": "PRODUCT",
+     "description": "Wire the srid option through esri.py at lines 80-100, 116, 126, 141, 162"},
+    {"op": "complete", "step": 21, "id": "S3",
+     "evidence": [
+       "step 13: edit 80:100 ack'd (file 248 -> 250)",
+       "step 15, 17, 19, 21: edits at 116, 126, 141, 162 (all ack'd)"
+     ]},
+    {"op": "add", "step": 22, "id": "S4", "category": "VALIDATION",
+     "description": "Re-run reproduce.py to confirm srid is now honored"},
+    {"op": "complete", "step": 23, "id": "S4",
+     "evidence": "step 23: python reproduce.py now prints {'spatialReference': {'wkid': 32632}, ...} -- srid 32632 honored, fix confirmed"},
+    {"op": "add", "step": 24, "id": "S5", "category": "ARTIFACT",
+     "description": "Clean up reproduce.py and submit"},
+    {"op": "complete", "step": 26, "id": "S5",
+     "evidence": [
+       "step 25: rm reproduce.py removes repro from final patch",
+       "step 26: submit issued"
+     ]}
+  ],
+  "quality": {
+    "annotator": "Claude (E1)",
+    "annotation_pass": "E1",
+    "annotation_time_minutes": 18,
+    "number_of_uncertain_events": 0,
+    "number_of_evidence_gaps": 0,
+    "whether_final_success_used_only_at_end": true,
+    "whether_progress_forced": false,
+    "whether_schema_gap_found": false
+  }
+}

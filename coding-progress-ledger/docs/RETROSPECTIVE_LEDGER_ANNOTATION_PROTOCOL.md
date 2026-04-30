@@ -155,18 +155,32 @@ Canonical names live in `ledger_progress/core.py:Status`.
 - `in_progress` — partial action visible in the trace.
 - `blocked` — agent is stalled on something it cannot resolve from
   the visible context. Pair `blocked` with a `reason` payload citing
-  the step index. **Stuck-loop rule:** when the agent's recent
-  commands form a repeating cycle — of any cycle length, including
-  1 (a single command repeated) or 2 (a two-command oscillation,
-  e.g. an edit and an inverse edit) or longer — and the cycle has
-  repeated three or more times verbatim, with no query variation and
-  no new tool output, the trace is visibly stuck. Mark `blocked` at
-  the step where the third iteration begins; cite both that step
-  and the latest visible step at which the pattern is still
-  present. If multiple loop patterns are nested or sequential, mark
-  `blocked` at the **earliest** step where any such pattern hits its
-  third iteration — that is when an honest observer first knows the
-  trace is stuck.
+  the step index.
+
+  Two stuck-loop variants apply, and **either** triggers `blocked`.
+  Take the **earlier** triggering step when both apply.
+
+  **(a) Command-loop rule:** when the agent's recent commands form
+  a repeating cycle — of any cycle length, including 1 (a single
+  command repeated) or 2 (a two-command oscillation, e.g. an edit
+  and an inverse edit) or longer — and the cycle has repeated three
+  or more times verbatim, with no query variation and no new tool
+  output, the trace is visibly stuck. Mark `blocked` at the step
+  where the third iteration begins.
+
+  **(b) Tool-response-loop rule:** when the agent's tool responses
+  are identical or near-identical for three or more consecutive
+  steps **regardless of how much the agent's queries vary**, the
+  trace is visibly stuck on that tool's failure mode (typical
+  example: every `find_file` returns "No matches found" while the
+  agent cycles through synonyms). Mark `blocked` at the third
+  identical response.
+
+  In either case, cite both the triggering step and the latest
+  visible step at which the pattern is still present. If multiple
+  loop patterns are nested or sequential, mark `blocked` at the
+  **earliest** step where any such pattern hits its third iteration
+  — that is when an honest observer first knows the trace is stuck.
 - `complete` — supported by concrete trace evidence (see § 4).
   REQUIRED: at least one evidence string in the event payload.
 - `invalidated` — the subtask is no longer load-bearing (e.g.

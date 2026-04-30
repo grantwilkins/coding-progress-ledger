@@ -1,0 +1,39 @@
+{
+  "pilot_id": "swe_agent_pilot_f_04",
+  "instance_id": "dfm__emcee-510",
+  "root_task": "Replace numpy.VisibleDeprecationWarning with numpy.exceptions.VisibleDeprecationWarning for numpy 2 compat",
+  "events": [
+    {"op": "add", "step": 2, "id": "S1", "category": "INVESTIGATION",
+     "description": "Locate the VisibleDeprecationWarning use site"},
+    {"op": "complete", "step": 11, "id": "S1",
+     "evidence": [
+       "step 3: search_dir 'VisibleDeprecationWarning' returns one match",
+       "step 5: open src/emcee/ensemble.py confirms (684 lines)",
+       "step 11: goto 505 places the line in view"
+     ]},
+    {"op": "add", "step": 12, "id": "S2", "category": "PRODUCT",
+     "description": "Edit ensemble.py around line 505 to use the new namespaced VisibleDeprecationWarning"},
+    {"op": "complete", "step": 17, "id": "S2",
+     "evidence": [
+       "step 12: edit 505:507 attempt -- syntax-error rejection (step 13)",
+       "step 14: edit 505:507 retry -- syntax-error rejection (step 15)",
+       "step 16: edit 504:506 third attempt succeeds (step 17 tool ack); file 684 -> 696 (+12 lines)"
+     ]},
+    {"op": "add", "step": 16, "id": "S3", "category": "VALIDATION",
+     "description": "Verify the edit doesn't break tests under numpy 2"},
+    {"op": "add", "step": 18, "id": "S4", "category": "ARTIFACT",
+     "description": "Submit final patch"},
+    {"op": "complete", "step": 18, "id": "S4",
+     "evidence": "step 18: submit issued; exit_status 'submitted'"}
+  ],
+  "quality": {
+    "annotator": "Claude (E1)",
+    "annotation_pass": "E1",
+    "annotation_time_minutes": 12,
+    "number_of_uncertain_events": 0,
+    "number_of_evidence_gaps": 1,
+    "whether_final_success_used_only_at_end": true,
+    "whether_progress_forced": false,
+    "whether_schema_gap_found": false
+  }
+}

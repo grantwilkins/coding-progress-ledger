@@ -628,7 +628,22 @@ honesty: "whether_progress_forced" and "whether_final_success_used_only_at_end" 
 ## § Workstream E — Retrospective annotation at pilot scale
 
 ### E1. Annotate 20 traces
-Status: not started
+Status: done — all 20 pilots annotated via the spec-driven driver (`annotations/swe_agent_pilot/<pilot_id>.{json,notes.md}`). Every run passes `ledger-run check-run`. F2/F3 ingest the full 20-pilot dataset cleanly: integrity checks (`completed_exceeds_active`, `delta_mismatches`) all empty. One audit warning surfaced (`s_03` shows a 0.33 native-vs-resolved coding-progress divergence around the step-22 REOPEN); recorded as a downstream-audit signal, not blocking.
+
+**Progress shape across the 20 pilots:**
+- 9 of 10 successes end at 1.00; one (`s_04`) ends at 0.75 — the "validated-by-chance" submit-without-test shape, identical to `f_01`/`f_04` despite opposite upstream labels.
+- Failures span 0.50–1.00, discriminating cleanly between failure modes:
+  - 1.00 (`f_06`): all discovered work completed; failure sits entirely in undiscovered hidden work (the agent's repro never actually triggered the bug). Canonical "framework-allowed-positive-progress-on-failure" case.
+  - 0.83 (`f_09`): validation re-opened because final edit happened post-pytest.
+  - 0.75 (`f_01`, `f_04`): submitted without in-trace validation.
+  - 0.71 (`f_08`): validation in_progress, fields.py investigation blocked in scroll loop.
+  - 0.67 (`f_07`, `f_10`): PRODUCT done with validation blocked / PRODUCT blocked in syntax-error stuck loop.
+  - 0.60 (`f_05`): PRODUCT and VALIDATION both blocked mid-edit-cycle.
+  - 0.50 (`f_02`, `f_03`): investigation blocked; never reached PRODUCT.
+
+The progress signal is highly discriminating between failure modes — exactly the contract D1 promised — and is genuinely independent of `final_success`.
+
+**Pre-E2 protocol refinement** (forced by `f_02`'s 509-step thesaurus loop): general § 6 `blocked` rule split into `(a) command-loop` (same command verbatim ≥3×) and `(b) tool-response-loop` (identical tool response ≥3× regardless of query variation). f_02 didn't trigger (a) because the agent varied keywords; (b) was needed.
 
 Goal: Apply the D1 protocol to the full pilot sample.
 

@@ -1,0 +1,47 @@
+{
+  "pilot_id": "swe_agent_pilot_s_08",
+  "instance_id": "oasis-open__cti-taxii-client-11",
+  "root_task": "Accept content-type strings with parameters (e.g. '; charset=utf-8') in the TAXII client",
+  "events": [
+    {"op": "add", "step": 2, "id": "S1", "category": "INVESTIGATION",
+     "description": "Open the content-type check at taxii2client/__init__.py:481 (the issue cites the line directly)"},
+    {"op": "complete", "step": 3, "id": "S1",
+     "evidence": "step 3: find_file '__init__.py' opens taxii2client/__init__.py (514 lines)"},
+    {"op": "add", "step": 4, "id": "S2", "category": "PRODUCT",
+     "description": "Edit __init__.py:481 to accept content-type strings with parameters"},
+    {"op": "complete", "step": 5, "id": "S2",
+     "evidence": "step 5: tool ack of edit 481:481"},
+    {"op": "add", "step": 6, "id": "S3", "category": "VALIDATION",
+     "description": "Build and iterate a custom test_content_type.py to confirm flexible content-type parsing"},
+    {"op": "complete", "step": 23, "id": "S3",
+     "evidence": [
+       "step 7: create test_content_type.py",
+       "step 9: edit test (26 lines)",
+       "step 11: python test_content_type.py -- Traceback (test still failing)",
+       "step 13: edit 5:10 -- syntax-error rejection",
+       "step 15: edit 5:12 -- syntax-error rejection",
+       "step 17: edit 17:23 succeeds (file 26 lines)",
+       "step 19: python test -- Traceback (still failing)",
+       "step 21: edit 7:11 succeeds (file 27 lines)",
+       "step 23: python test outputs 'Script completed successfully, no errors.' -- fix confirmed"
+     ]},
+    {"op": "add", "step": 24, "id": "S4", "category": "ARTIFACT",
+     "description": "Clean up test artifact, review fix, and submit"},
+    {"op": "complete", "step": 28, "id": "S4",
+     "evidence": [
+       "step 25: rm test_content_type.py removes test from final patch",
+       "step 27: open __init__.py at 481 -- final review of the in-place product change",
+       "step 28: submit issued"
+     ]}
+  ],
+  "quality": {
+    "annotator": "Claude (E1)",
+    "annotation_pass": "E1",
+    "annotation_time_minutes": 20,
+    "number_of_uncertain_events": 0,
+    "number_of_evidence_gaps": 0,
+    "whether_final_success_used_only_at_end": true,
+    "whether_progress_forced": false,
+    "whether_schema_gap_found": false
+  }
+}

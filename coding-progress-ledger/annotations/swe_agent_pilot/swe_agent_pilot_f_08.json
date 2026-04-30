@@ -1,0 +1,67 @@
+{
+  "pilot_id": "swe_agent_pilot_f_08",
+  "instance_id": "pydantic__pydantic-740",
+  "root_task": "Make __post_init__ trigger for descendant pydantic dataclasses",
+  "events": [
+    {"op": "add", "step": 2, "id": "S1", "category": "INVESTIGATION",
+     "description": "Reproduce __post_init__ not firing for child pydantic dataclasses"},
+    {"op": "complete", "step": 7, "id": "S1",
+     "evidence": [
+       "step 5: edit reproduce_bug.py (21 lines) using the issue snippet",
+       "step 7: python reproduce_bug.py emits Traceback -- bug confirmed"
+     ]},
+
+    {"op": "add", "step": 12, "id": "S2", "category": "INVESTIGATION",
+     "description": "Locate validate_model in main.py"},
+    {"op": "complete", "step": 27, "id": "S2",
+     "evidence": [
+       "steps 13/15/17: ls + open pydantic/dataclasses.py (130 lines)",
+       "steps 23/25/27: open main.py + search 'def validate_model' + goto 716"
+     ]},
+
+    {"op": "add", "step": 28, "id": "S3", "category": "PRODUCT",
+     "description": "Edit main.py:716-787 (validate_model region) to call __post_init__ on descendants"},
+    {"op": "complete", "step": 29, "id": "S3",
+     "evidence": "step 29: tool ack of edit 716:787 (file 787 -> 791, +4 lines)"},
+
+    {"op": "add", "step": 30, "id": "S4", "category": "VALIDATION",
+     "description": "Re-run reproduce_bug.py after each fix attempt"},
+    {"op": "start", "step": 31, "id": "S4",
+     "evidence": [
+       "step 31: pytest re-run #1 emits Traceback (validate_model edit insufficient)",
+       "step 41: pytest re-run #2 outputs 'Called!' (partial progress)",
+       "step 51: pytest re-run #3 emits Traceback (regression after extending the fix)"
+     ]},
+
+    {"op": "add", "step": 32, "id": "S5", "category": "INVESTIGATION",
+     "description": "Locate BaseModel.__init__ (validate_model alone proved insufficient)"},
+    {"op": "complete", "step": 37, "id": "S5",
+     "evidence": [
+       "step 33: search_file 'class BaseModel' returns one match",
+       "step 35: goto 256 places BaseModel in view; step 37: scroll_down completes the locate phase"
+     ]},
+
+    {"op": "add", "step": 38, "id": "S6", "category": "PRODUCT",
+     "description": "Extend fix to BaseModel.__init__ region (edits at main.py:270-278 and 280-294)"},
+    {"op": "complete", "step": 49, "id": "S6",
+     "evidence": [
+       "step 39: tool ack of edit 270:278 (file 791 -> 792)",
+       "step 49: tool ack of edit 280:294 (final BaseModel-region edit)"
+     ]},
+
+    {"op": "add", "step": 58, "id": "S7", "category": "INVESTIGATION",
+     "description": "Investigate fields.py for the residual Traceback after BaseModel fix"},
+    {"op": "block", "step": 64, "id": "S7",
+     "reason": "Stuck loop (general § 6 stuck-loop rule, cycle-of-length-1 case). After step 51's Traceback the agent opens fields.py at step 58 and then issues 4 consecutive scroll_down then mixed scroll_up/scroll_down (steps 60-76) without any edit; third iteration of the scroll-only cycle begins at step 64 and continues to step 76 (last in-trace step). exit_status='submitted (exit_context)' -- harness force-terminated; no agent submit."}
+  ],
+  "quality": {
+    "annotator": "Claude (E1)",
+    "annotation_pass": "E1",
+    "annotation_time_minutes": 35,
+    "number_of_uncertain_events": 1,
+    "number_of_evidence_gaps": 2,
+    "whether_final_success_used_only_at_end": true,
+    "whether_progress_forced": false,
+    "whether_schema_gap_found": false
+  }
+}
