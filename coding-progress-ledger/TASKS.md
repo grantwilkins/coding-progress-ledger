@@ -371,6 +371,8 @@ trajectory_summary.md is short, scannable, and lists per-step thought/action/obs
 ### C3. Implement import-to-run script
 Status: done — `scripts/import_swe_agent_trace.py` + `tests/test_import_swe_agent_trace.py` (commit 801fbf3). Cache populated by `scripts/populate_swe_agent_pilot_cache.py` (network) into `external_data/swe_agent/pilot_cache/` (gitignored). All 20 pilot run dirs materialized at `runs/swe_agent_pilot/` (gitignored) and `--verify-only` reports `verify ok: 20 run dirs`.
 
+**Follow-up surfaced by D4 (pilot-zero):** the importer writes `eval_output.txt` (matching the upstream `eval_logs` field), but `ledger-run check-run` requires `test_output.txt`. The pilot-zero annotation script aliases them at annotation time. A clean fix is to have C3 write both names (or write `test_output.txt` directly and keep `eval_output.txt` only as a doc-named alias). Tracked here; do before E1 to avoid the alias step in 18 more annotations.
+
 Goal: Bulk-convert the pilot sample into per-run directories. Critically, **does not produce `ledger.jsonl` yet** — annotation is its own workstream.
 
 Inputs:
@@ -524,7 +526,7 @@ template references LedgerSession method names (add/complete/split/etc.) so the 
 ```
 
 ### D3. Manual annotation helper (deferred by default)
-Status: deferred · _decision flipped from brief: build only if D4 reveals concrete friction_
+Status: deferred — D4 confirmed snippets are sufficient. The pilot-zero annotations were hand-encoded directly against `LedgerSession` in `scripts/annotate_swe_agent_pilot_zero.py`; no boilerplate-paste friction surfaced that a generic CLI helper would address. Per § D3 acceptance: helper not built; closing this section. Re-open only if E1 (full N=20) reveals concrete repeated friction.
 
 Goal: Make annotation easier without automating semantic decisions.
 
@@ -553,7 +555,7 @@ if not built, this section is closed with a note in D4's run_notes.md saying "sn
 ```
 
 ### D4. Annotate 2 traces by hand as pilot-zero
-Status: not started
+Status: done — `scripts/annotate_swe_agent_pilot_zero.py` is the source-controlled annotation. Materializes both pilots; both pass `ledger-run check-run` ("all required artifacts present"). s_01 ends at progress=1.00 (6/6 leaves complete); f_01 ends at progress=0.75, coding=0.67 with the validation leaf deliberately at `not_started` per the protocol's "submit-without-validation" pattern. Saw-tooth progress curve matches expectations: dips when new discovered work is added before it's completed.
 
 Goal: Catch protocol problems with a tiny sample before scaling to 20.
 
@@ -580,7 +582,7 @@ human reviews both before scaling to 20 traces
 ```
 
 ### D5. Annotation quality checklist
-Status: not started
+Status: done — `annotation_quality.json` emitted by the same pilot-zero script. `whether_schema_gap_found=True` for both runs (real gap surfaced: framework's `test_output.txt` vs C3's `eval_output.txt`; aliased at annotation time and recorded in run_notes § 8). `whether_final_success_used_only_at_end=True` and `whether_progress_forced=False` for both — the upstream label was never used as ledger evidence during the walk.
 
 Goal: Per-run quality metadata so we can later audit annotation drift, not just code drift.
 
