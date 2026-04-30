@@ -442,7 +442,9 @@ no parallel script unless explicitly justified
 ## § Workstream D — Retrospective ledger annotation protocol
 
 ### D1. Write annotation guidelines
-Status: done — `docs/SWE_AGENT_RETROSPECTIVE_LEDGER_PROTOCOL.md`. Worked examples are real pilot runs (s_01 `Melevir__cognitive_complexity-15` succeeds with full investigation→product→validation flow; f_01 `WIPACrepo__iceprod-339` submits without ever running tests, used as the "validation never started" example). Cross-references `ledger_progress/core.py` for the canonical Status / EventType / SubtaskCategory enums and `ledger_progress/queries.py:CODING_CATEGORIES` for the coding-progress slice.
+Status: done — split into two files so the protocol is reusable across trace sources:
+- `docs/RETROSPECTIVE_LEDGER_ANNOTATION_PROTOCOL.md` — the **general** binding protocol (rules, categories, statuses, event types, procedure, pitfalls). Source-agnostic. Cross-references `ledger_progress/core.py` and `ledger_progress/queries.py:CODING_CATEGORIES`.
+- `docs/SWE_AGENT_RETROSPECTIVE_LEDGER_PROTOCOL.md` — a **thin SWE-agent addendum** that specializes the general protocol: shell-vocabulary→category map, run-dir artifact list, two real worked examples (s_01 / f_01) of good and bad annotations, SWE-agent-specific pitfalls. The general doc wins on any conflict.
 
 Goal: A protocol document that constrains annotation to visible trace evidence and prevents narrative reconstruction.
 
