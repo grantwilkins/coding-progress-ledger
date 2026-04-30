@@ -1,0 +1,22 @@
+# Raw upstream SWE-agent trajectories — immutable, redownloadable, often large.
+# See external_data/swe_agent/README.md.
+external_data/swe_agent/raw/
+external_data/swe_agent/pilot_cache/
+
+# SWE-agent pilot run dirs contain source_trace.json (verbatim upstream).
+# Re-materialize via scripts/import_swe_agent_trace.py from the cache.
+runs/swe_agent_pilot/
+
+# Python
+__pycache__/
+*.pyc
+.pytest_cache/
+*.egg-info/
+.venv/
+build/
+dist/
+
+# Editor / OS
+.DS_Store
+.idea/
+.vscode/

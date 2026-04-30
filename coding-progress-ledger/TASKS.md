@@ -369,7 +369,7 @@ trajectory_summary.md is short, scannable, and lists per-step thought/action/obs
 ```
 
 ### C3. Implement import-to-run script
-Status: code done; **blocked on raw-row cache** — needs a one-shot population pass that pulls each pilot_id's raw row out of the HF stream into `external_data/swe_agent/pilot_cache/<pilot_id>.json`. Importer is offline-deterministic by design and refuses to run without that cache.
+Status: done — `scripts/import_swe_agent_trace.py` + `tests/test_import_swe_agent_trace.py` (commit 801fbf3). Cache populated by `scripts/populate_swe_agent_pilot_cache.py` (network) into `external_data/swe_agent/pilot_cache/` (gitignored). All 20 pilot run dirs materialized at `runs/swe_agent_pilot/` (gitignored) and `--verify-only` reports `verify ok: 20 run dirs`.
 
 Goal: Bulk-convert the pilot sample into per-run directories. Critically, **does not produce `ledger.jsonl` yet** — annotation is its own workstream.
 
