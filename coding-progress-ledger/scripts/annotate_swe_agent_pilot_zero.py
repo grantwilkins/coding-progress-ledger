@@ -117,7 +117,7 @@ def annotate_s_01() -> Tuple[LedgerSession, "AnnotationMeta"]:
         val2,
         [
             "step 41: pytest tool output observed in-trace",
-            "eval_output.txt corroborates: post-submission eval reports passing",
+            "test_output.txt corroborates: post-submission eval reports passing",
         ],
         step=41,
     )
@@ -138,7 +138,7 @@ def annotate_s_01() -> Tuple[LedgerSession, "AnnotationMeta"]:
         number_of_evidence_gaps=0,
         whether_final_success_used_only_at_end=True,
         whether_progress_forced=False,
-        whether_schema_gap_found=True,  # eval_output vs test_output; see run_notes § 8
+        whether_schema_gap_found=False,
         run_notes_body=_run_notes_body_s_01,
     )
     return s, meta
@@ -203,7 +203,7 @@ def annotate_f_01() -> Tuple[LedgerSession, "AnnotationMeta"]:
         number_of_evidence_gaps=2,  # validation leaf + hidden-work tests/core gap
         whether_final_success_used_only_at_end=True,
         whether_progress_forced=False,
-        whether_schema_gap_found=True,  # eval_output vs test_output; see run_notes § 8
+        whether_schema_gap_found=False,
         run_notes_body=_run_notes_body_f_01,
     )
     return s, meta
@@ -278,13 +278,13 @@ update). Both came from the trace, not the issue.
 | `S2`       | `PRODUCT`       | 25                | 25               | tool ack of edit 88:88 |
 | `S3`       | `VALIDATION`    | 27                | 27               | pytest output triggered fixture-update branch |
 | `S4`       | `PRODUCT`       | 39                | 28, 34, 38       | retry after syntax error; both fixture line edits ack'd |
-| `S5`       | `VALIDATION`    | 41                | 41               | pytest #2 in-trace; eval_output.txt corroborates |
+| `S5`       | `VALIDATION`    | 41                | 41               | pytest #2 in-trace; test_output.txt corroborates |
 | `S6`       | `ARTIFACT`      | 42                | 42               | submit issued |
 
 ### 6. Known missing evidence
 
 None for this run. All discovered subtasks reached `complete` with
-in-trace evidence; `eval_output.txt` was used only as corroborating
+in-trace evidence; `test_output.txt` was used only as corroborating
 evidence for the validation leaf, never as the primary justification.
 
 ### 7. Final scope closure
@@ -300,21 +300,19 @@ resolved from the issue text, not from the upstream label.
 
 ### 8. Schema gaps observed
 
-**Artifact naming: `eval_output.txt` vs `test_output.txt`.** The
-framework's `ledger-run check-run` requires `test_output.txt`; C3's
-SWE-agent importer wrote the same content as `eval_output.txt` to
-match the upstream `eval_logs` field. The annotation script aliases
-them (byte-copies `eval_output.txt` -> `test_output.txt`) so the
-framework's check-run accepts the run dir without modifying C3. A
-permanent fix would be to have the C3 importer write both names; we
-defer that to a follow-up because it touches a tested script.
-
-The framework's category set
+None observed. The framework's category set
 (`INVESTIGATION / PRODUCT / VALIDATION / ARTIFACT`) and event types
 (`ADD_SUBTASK`, `UPDATE_STATUS`) covered the trace cleanly. The
 `syntax error rejected` attempt at step 28 was naturally absorbed as
 zero-evidence and the retry at step 34 carried the actual edit
 evidence; no special convention was required.
+
+(An earlier pilot-zero run flagged an `eval_output.txt` /
+`test_output.txt` artifact-name divergence between C3's SWE-agent
+importer and the framework's `ledger-run check-run`. That was a real
+gap, fixed at the importer level: C3 now writes the framework name
+`test_output.txt` directly, sourced from upstream `eval_logs`. This
+re-annotation runs against the post-fix run dirs.)
 """
 
 
@@ -381,11 +379,11 @@ unambiguous evidence; the debate was about what *not* to record.
 
 - `S3` (validation) **left at `not_started`**. The agent submitted at
   step 16 without running pytest, tox, a repro script, or any
-  in-trace eval read. `eval_output.txt` (4030 chars) exists post-hoc
-  and per the upstream eval reports the patch did not resolve the
-  issue, but per general § 4.4 a post-hoc artifact cannot complete a
-  validation leaf the agent never started. Final progress is < 1.0 by
-  design.
+  in-trace eval read. `test_output.txt` (4030 chars; sourced by C3
+  from upstream `eval_logs`) exists post-hoc and per the upstream
+  eval reports the patch did not resolve the issue, but per general
+  § 4.4 a post-hoc artifact cannot complete a validation leaf the
+  agent never started. Final progress is < 1.0 by design.
 - **Hidden-work gap.** Step 7's grep explicitly surfaced
   `tests/core/functions_test.py` as containing `getip.php`. The
   agent did not open this file. Whether the test mock update was
@@ -409,15 +407,13 @@ visible in the trace independent of the upstream label.
 
 ### 8. Schema gaps observed
 
-**Artifact naming: `eval_output.txt` vs `test_output.txt`.** Same as
-in `swe_agent_pilot_s_01` § 8 — `ledger-run check-run` requires
-`test_output.txt`; C3 wrote `eval_output.txt`. The annotation script
-aliases them. Worth a follow-up to have C3 write both names.
+None observed. The combination of "leave validation at not_started" +
+"record the hidden-work gap in run_notes.md" expressed the entire
+shape of this failure cleanly. No category, status, or event-type
+gap.
 
-Beyond the artifact-name gap, the combination of "leave validation at
-not_started" + "record the hidden-work gap in run_notes.md" expressed
-the entire shape of this failure cleanly. No category, status, or
-event-type gap.
+(See `swe_agent_pilot_s_01` § 8 for the resolved-and-no-longer-
+applicable `eval_output.txt` / `test_output.txt` history.)
 """
 
 
@@ -462,16 +458,6 @@ def emit_one(annotator: Callable[[], Tuple[LedgerSession, AnnotationMeta]]) -> N
     run_dir = PILOT_ROOT / meta.pilot_id
     if not run_dir.is_dir():
         raise FileNotFoundError(f"run dir {run_dir} not found; run import_swe_agent_trace first")
-
-    # Schema-gap resolution: ledger-run check-run requires test_output.txt;
-    # the SWE-agent importer (C3) wrote the same content as eval_output.txt
-    # to match upstream nomenclature. Alias them at annotation time so the
-    # framework's check-run accepts the run dir, and record the gap in
-    # run_notes § 8.
-    eval_path = run_dir / "eval_output.txt"
-    test_path = run_dir / "test_output.txt"
-    if eval_path.is_file() and not test_path.is_file():
-        test_path.write_bytes(eval_path.read_bytes())
 
     session.export_jsonl(str(run_dir / "ledger.jsonl"))
 

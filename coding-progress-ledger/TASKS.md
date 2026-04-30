@@ -371,7 +371,7 @@ trajectory_summary.md is short, scannable, and lists per-step thought/action/obs
 ### C3. Implement import-to-run script
 Status: done — `scripts/import_swe_agent_trace.py` + `tests/test_import_swe_agent_trace.py` (commit 801fbf3). Cache populated by `scripts/populate_swe_agent_pilot_cache.py` (network) into `external_data/swe_agent/pilot_cache/` (gitignored). All 20 pilot run dirs materialized at `runs/swe_agent_pilot/` (gitignored) and `--verify-only` reports `verify ok: 20 run dirs`.
 
-**Follow-up surfaced by D4 (pilot-zero):** the importer writes `eval_output.txt` (matching the upstream `eval_logs` field), but `ledger-run check-run` requires `test_output.txt`. The pilot-zero annotation script aliases them at annotation time. A clean fix is to have C3 write both names (or write `test_output.txt` directly and keep `eval_output.txt` only as a doc-named alias). Tracked here; do before E1 to avoid the alias step in 18 more annotations.
+**D4 follow-up resolved:** the importer now writes `test_output.txt` (the framework's standard artifact name; `ledger-run check-run` requires it) sourced from upstream `eval_logs`. The earlier `eval_output.txt` mirrored the upstream field name unnecessarily. Generalizable rule: importers map `<upstream-field-name>` → `<framework-artifact-name>`; the framework does not learn upstream-specific names. Pilot-zero annotation script's alias workaround removed; re-import + re-annotation reproduce the same progress numbers (s_01: 1.00 / f_01: 0.75).
 
 Goal: Bulk-convert the pilot sample into per-run directories. Critically, **does not produce `ledger.jsonl` yet** — annotation is its own workstream.
 

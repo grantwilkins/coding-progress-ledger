@@ -15,17 +15,25 @@ and matching ``raw_path_or_dataset_index``) is a separate one-shot
 operation deliberately kept out of the importer so the importer is
 deterministic, offline, and unit-testable.
 
-Per-run output layout (per the C3 brief):
+Per-run output layout (framework-standard names):
 
     <runs-dir>/<pilot_id>/
         task.md
         source_trace.json          (byte-equivalent copy from cache)
         normalized_trace.json
         trajectory_summary.md
-        final_diff.patch
-        eval_output.txt
+        final_diff.patch           (sourced from upstream `generated_patch`)
+        test_output.txt            (sourced from upstream `eval_logs`)
         run_notes.md
         source_metadata.json
+
+Naming choice: `test_output.txt` is the framework's standard artifact
+name (`ledger-run check-run` requires it; toy / control runs use it
+too). The upstream nebius rows ship the same content under
+`eval_logs`; we map upstream-field-name -> framework-artifact-name
+here so every retrospective import produces framework-shaped run
+dirs regardless of source. The mapping is the importer's
+responsibility, not a per-run convention.
 
 Verification
 ------------
@@ -57,7 +65,7 @@ PRE_ANNOTATION_ARTIFACTS: Tuple[str, ...] = (
     "normalized_trace.json",
     "trajectory_summary.md",
     "final_diff.patch",
-    "eval_output.txt",
+    "test_output.txt",
     "run_notes.md",
     "source_metadata.json",
 )
@@ -66,7 +74,7 @@ PRE_ANNOTATION_ARTIFACTS: Tuple[str, ...] = (
 # CSV flag is True. Mapping artifact -> pilot CSV column.
 NONEMPTY_IF_FLAG: Dict[str, str] = {
     "final_diff.patch": "patch_available",
-    "eval_output.txt": "eval_log_available",
+    "test_output.txt": "eval_log_available",
 }
 
 RUN_NOTES_TEMPLATE = """\
@@ -193,7 +201,7 @@ def _write_artifact_strings(run_dir: Path, raw: Dict[str, object]) -> None:
     patch = raw.get("generated_patch")
     eval_logs = raw.get("eval_logs")
     (run_dir / "final_diff.patch").write_text(patch if isinstance(patch, str) else "", encoding="utf-8")
-    (run_dir / "eval_output.txt").write_text(eval_logs if isinstance(eval_logs, str) else "", encoding="utf-8")
+    (run_dir / "test_output.txt").write_text(eval_logs if isinstance(eval_logs, str) else "", encoding="utf-8")
 
 
 def import_one(pilot: PilotRow, raw_cache_dir: Path, runs_dir: Path) -> Path:
