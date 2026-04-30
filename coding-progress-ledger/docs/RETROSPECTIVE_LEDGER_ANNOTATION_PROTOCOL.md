@@ -182,8 +182,11 @@ Canonical list lives in `ledger_progress/core.py:EventType`.
 - `ADD_EVIDENCE` — when new evidence accumulates on an
   already-known subtask without changing its status.
 - `SPLIT_SUBTASK` — when a vague subtask becomes several leaf
-  subtasks. The parent is invalidated automatically by the replay
-  engine; do not also issue `INVALIDATE_SUBTASK`.
+  subtasks. The parent's status is unchanged by the split, but it
+  stops being a leaf (now has children), so it drops out of the
+  active-leaf set used for progress. Do not also issue
+  `INVALIDATE_SUBTASK` — splitting already removes the parent from
+  the progress denominator.
 - `REOPEN_SUBTASK` — when previously-complete work is shown
   incomplete. **This is the canonical non-monotonic event** — use it
   whenever the trace contradicts an earlier completion, even if it
@@ -266,9 +269,11 @@ of repeated `find_file`s") belong in source-specific addenda.
    observation. Smoothing it out reduces the channel to a monotone
    proxy, which is what the framework explicitly is not.
 6. **"I split a vague leaf into three children, then also marked
-   the parent invalidated."** Redundant — `SPLIT_SUBTASK`
-   invalidates the parent automatically (`ledger_progress/core.py`
-   replay rules). Do not also emit `INVALIDATE_SUBTASK`.
+   the parent invalidated."** Redundant — `SPLIT_SUBTASK` already
+   removes the parent from the leaf set (any subtask with children
+   is excluded from progress; see `ledger_progress/core.py` replay
+   rules and `ledger_progress/scoring.py`). Do not also emit
+   `INVALIDATE_SUBTASK`.
 7. **"I'll add a leaf for work the agent never named because it's
    *obviously* needed."** Allowed only if the visible trace makes
    that work nameable to an honest observer (§ 2). Cite the step. If

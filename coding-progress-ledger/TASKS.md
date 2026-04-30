@@ -561,7 +561,13 @@ if not built, this section is closed with a note in D4's run_notes.md saying "sn
 ```
 
 ### D4. Annotate 2 traces by hand as pilot-zero
-Status: done — `scripts/annotate_swe_agent_pilot_zero.py` is the source-controlled annotation. Materializes both pilots; both pass `ledger-run check-run` ("all required artifacts present"). s_01 ends at progress=1.00 (6/6 leaves complete); f_01 ends at progress=0.75, coding=0.67 with the validation leaf deliberately at `not_started` per the protocol's "submit-without-validation" pattern. Saw-tooth progress curve matches expectations: dips when new discovered work is added before it's completed.
+Status: done — three pilot-zero annotations (s_01 / f_01 / f_03) drive an E1-ready pipeline:
+- `annotations/swe_agent_pilot/<pilot_id>.json` — declarative event spec (committed; the canonical annotation record).
+- `annotations/swe_agent_pilot/<pilot_id>.notes.md` — run_notes prose with `{{PROGRESS_OVERALL}}` / `{{PROGRESS_CODING}}` placeholders (committed).
+- `scripts/annotate_pilots_from_spec.py` — source-agnostic driver that replays specs into ledger.jsonl + run_notes.md + annotation_quality.json under each `runs/.../<pilot_id>/`. Idempotent.
+- `tests/test_annotate_pilots_from_spec.py` — 12 tests covering op routing (block != complete), split-without-invalidate, id-mismatch errors, unknown-op rejection, placeholder substitution, and missing-notes-file failure.
+
+Final progress: s_01 = 1.00 / 1.00; f_01 = 0.75 / 0.67; f_03 = 0.50 / 0.50. All three pass `ledger-run check-run`.
 
 Goal: Catch protocol problems with a tiny sample before scaling to 20.
 
