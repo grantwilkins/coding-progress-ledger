@@ -155,12 +155,18 @@ Canonical names live in `ledger_progress/core.py:Status`.
 - `in_progress` — partial action visible in the trace.
 - `blocked` — agent is stalled on something it cannot resolve from
   the visible context. Pair `blocked` with a `reason` payload citing
-  the step index. **Stuck-loop rule:** when the agent issues the
-  same sequence of N ≥ 3 commands verbatim, in order, without query
-  variation or new tool output, the trace is visibly stuck. Mark
-  `blocked` at the step where the third iteration begins; cite both
-  that step and the latest visible step at which the pattern is
-  still present.
+  the step index. **Stuck-loop rule:** when the agent's recent
+  commands form a repeating cycle — of any cycle length, including
+  1 (a single command repeated) or 2 (a two-command oscillation,
+  e.g. an edit and an inverse edit) or longer — and the cycle has
+  repeated three or more times verbatim, with no query variation and
+  no new tool output, the trace is visibly stuck. Mark `blocked` at
+  the step where the third iteration begins; cite both that step
+  and the latest visible step at which the pattern is still
+  present. If multiple loop patterns are nested or sequential, mark
+  `blocked` at the **earliest** step where any such pattern hits its
+  third iteration — that is when an honest observer first knows the
+  trace is stuck.
 - `complete` — supported by concrete trace evidence (see § 4).
   REQUIRED: at least one evidence string in the event payload.
 - `invalidated` — the subtask is no longer load-bearing (e.g.

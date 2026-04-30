@@ -448,11 +448,12 @@ Status: done — split into two files so the protocol is reusable across trace s
 - `docs/RETROSPECTIVE_LEDGER_ANNOTATION_PROTOCOL.md` — the **general** binding protocol (rules, categories, statuses, event types, procedure, pitfalls). Source-agnostic. Cross-references `ledger_progress/core.py` and `ledger_progress/queries.py:CODING_CATEGORIES`.
 - `docs/SWE_AGENT_RETROSPECTIVE_LEDGER_PROTOCOL.md` — a **thin SWE-agent addendum** that specializes the general protocol: shell-vocabulary→category map, run-dir artifact list, two real worked examples (s_01 / f_01) of good and bad annotations, SWE-agent-specific pitfalls. The general doc wins on any conflict.
 
-**Pre-E1 stress-test refinements (from f_03 walk, 113-step stuck loop):**
-- General protocol § 6 `blocked` now carries a stuck-loop rule: same N≥3 commands verbatim, no query variation, no new tool output → mark `blocked` at the third iteration; cite both endpoints.
+**Pre-E1 stress-test refinements (from f_03 113-step + f_07 183-step walks):**
+- General protocol § 6 `blocked` now carries a stuck-loop rule that handles cycles of **any length**, including a single command repeated and 2-command oscillations. Mark `blocked` at the **earliest** step where any pattern hits its third iteration.
 - SWE-agent addendum § 5 pitfall #6: harness-forced termination (`exit_status='submitted (exit_context)'` etc.) does NOT generate an `ARTIFACT` leaf when the agent never issued a literal `submit`.
-- SWE-agent addendum § 5 pitfall #7: `final_diff.patch` is a state diff, not an action diff — investigation/repro residue (e.g. created `reproduce.py`) shows up there even when no fix was attempted.
-- f_03 annotated as a third pilot-zero validation run; ends at progress=0.50 / coding=0.50 (1 complete + 1 blocked) under the refined guidance.
+- SWE-agent addendum § 5 pitfall #7: `final_diff.patch` is a state diff, not an action diff — investigation/repro residue shows up there even when no fix was attempted (or alongside a real fix, as in f_07).
+- General § 7 `SPLIT_SUBTASK` corrected: the parent's status is unchanged by split; it just stops being a leaf and drops out of the progress denominator. (Earlier draft incorrectly said "parent invalidated automatically".)
+- Four pilots now span four shapes: s_01 (1.00 success), f_01 (0.75, no validation), f_03 (0.50, investigation blocked), f_07 (0.67, validation blocked after real PRODUCT edit). The progress signal discriminates between failure modes — exactly the contract the framework was supposed to deliver.
 
 Goal: A protocol document that constrains annotation to visible trace evidence and prevents narrative reconstruction.
 
