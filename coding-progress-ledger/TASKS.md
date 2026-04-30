@@ -498,7 +498,7 @@ protocol cross-references the in-repo enum source files so annotators don't drif
 ```
 
 ### D2. Create annotation template
-Status: not started
+Status: done — `docs/LEDGER_ANNOTATION_TEMPLATE.md` (general; not SWE-agent-specific). Sections: initial reading, initial ledger proposal, checkpoint notes, uncertain decisions, evidence citations, known missing evidence, final scope closure, schema gaps. Header lists every `LedgerSession` method so the notes-to-events link is explicit.
 
 Goal: A copy-pasteable scaffold for `run_notes.md` so annotators record the same kinds of evidence in the same shape.
 
