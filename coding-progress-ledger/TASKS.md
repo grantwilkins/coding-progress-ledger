@@ -1346,6 +1346,181 @@ Workstream-to-agent assignment (one suggestion, not a hard contract):
 
 | Agent | Owns |
 |-------|------|
+## § Workstream T — Task-set as first-class structure
+Status: not started · _out of pilot scope; revisit after M_
+
+The framework currently models progress within one task / one trace. Real long-range agentic work — a multi-week refactor decomposed into 30 sub-issues, a research agent running a sequence of partly-independent experiments, even a single SWE-bench run viewed as "one issue out of N" — has a coarser unit of analysis: the **set of tasks**. Workstream T introduces that unit *without disturbing the single-task pipeline*.
+
+**Architectural decision.** Add `LedgerSet` as a thin, source-agnostic container over an ordered collection of `Ledger`s, plus a sibling `LedgerSetSession` that mirrors `LedgerSession` ergonomics one level up. A `LedgerSet` holds `(set_id, members: list[LedgerSetMember])` where `LedgerSetMember` is `(member_id, ledger_ref, weight: float = 1.0, status_override: Status | None = None)`. `ledger_ref` is a path / handle to an existing `Ledger`, not an inline copy — the set never owns ledger bytes, and a ledger may belong to multiple sets. No cross-member dependencies, no DAG edges, no time windows in v1; future addenda can grow optional fields on members. The existing `Ledger` / `LedgerSession` / `Subtask` types are unchanged.
+
+**Minimal API.** `LedgerSetSession(set_id)` exposes `add_member(ledger_ref, weight=1.0)`, `mark_member(member_id, status)` (only when a member's outcome is decided outside the ledger — e.g. a sub-issue declared out-of-scope), `score()`, `export_jsonl()`. No splits or reopens at the set level in v1: a member's progress shape is the member's ledger's job.
+
+**Aggregation rule (v1, simplest defensible).** Set-level progress is the **weight-weighted mean of per-member coding-progress**: each member contributes `weight * member.score(CODING_CATEGORIES).progress`, divided by `sum(weight)`. Members with `status_override in {INVALIDATED, DELETED}` drop out of both numerator and denominator (matches single-task semantics). Rationale: leaf-count weighting would let a 30-leaf member dominate a 3-leaf member when both are "one sub-issue"; explicit per-member `weight` puts that call in the annotator's hands and defaults to uniform.
+
+**What does NOT change.** The B2 sampler, C3 importer, D1 protocol, E1 annotation, F2/F3 dataset, and `ledger-run` CLI all continue to operate on single ledgers. Reason: the discovered-vs-hidden rule and the anti-narrative stance are properties of one trace; promoting them to the set level would invite retro-fitting cross-task dependencies the traces don't surface. The set layer reads finished ledgers and aggregates; it does not annotate.
+
+**Migration.** The 20 SWE-agent pilot ledgers each become a `LedgerSet` of size 1 via a trivial wrapper (T4). Their per-run artifacts are untouched; only a sibling `set.jsonl` appears at `runs/swe_agent_pilot/<pilot_id>/`. The suite-level rollup at `runs/swe_agent_pilot/PILOT_ANNOTATION_SUMMARY.md` (E3) becomes the first non-trivial set: one `LedgerSet` of 20 members, weight 1.0 each.
+
+**Rejected alternatives.** (1) *Make `Ledger` itself recursive (a ledger may contain ledgers)* — overloads `Subtask` semantics and forces scoring to traverse mixed leaf / sub-ledger trees. (2) *Track sets only as a CSV manifest with no runtime type* — pushes aggregation policy into ad-hoc scripts and loses replay / serialization parity with `Ledger`.
+
+### T1. Write general LedgerSet protocol doc
+Status: not started
+
+Goal: Source-agnostic protocol covering the data model, aggregation rule, and what is explicitly out of scope (DAGs, time windows, cross-member evidence).
+
+Outputs:
+```text
+docs/LEDGER_SET_PROTOCOL.md
+```
+
+Acceptance:
+```text
+doc states the v1 weight-weighted-mean aggregation rule
+doc names the two rejected alternatives with reasons
+doc cross-references ledger_progress/core.py enums for any types it discusses
+doc explicitly defers DAGs, time windows, cross-member evidence to future addenda
+```
+
+### T2. Add LedgerSet / LedgerSetMember types and JSONL serialization
+Status: blocked on T1
+
+Goal: Implement the data model in source files that are siblings of (not edits to) the single-task types.
+
+Outputs:
+```text
+ledger_progress/set_core.py        # LedgerSet, LedgerSetMember dataclasses
+ledger_progress/set_serialization.py
+tests/test_set_serialization.py
+```
+
+Acceptance:
+```text
+round-trip on a 1-member set and a 20-member set
+no edits to ledger_progress/core.py
+```
+
+### T3. Add LedgerSetSession and score_set
+Status: blocked on T2
+
+Goal: Session API mirroring `LedgerSession`'s ergonomics one level up; weight-weighted-mean aggregation with the CODING_CATEGORIES slice.
+
+Outputs:
+```text
+ledger_progress/set_session.py
+ledger_progress/scoring.py    # extended with score_set(...)
+tests/test_set_session.py
+tests/test_score_set.py
+```
+
+Acceptance:
+```text
+score_set on a 3-member fixture (mixed weights, one INVALIDATED member) matches a hand-computed reference
+LedgerSetSession.add_member / mark_member / score / export_jsonl all exercised
+```
+
+### T4. Wrap the 20 SWE-agent pilots as singleton sets + one 20-member rollup
+Status: blocked on T3, E1
+
+Goal: First real use of the set layer; closes the loop from D2 single-task annotations to set-level aggregation.
+
+Outputs:
+```text
+runs/swe_agent_pilot/<pilot_id>/set.jsonl     # singleton set per pilot
+runs/swe_agent_pilot/pilot_rollup_set.jsonl   # 20-member rollup
+```
+
+Acceptance:
+```text
+rollup set's score reproduces the median / mean reported in E3 within rounding
+each pilot's singleton set's score equals its single-ledger coding-progress
+no source_trace.json or ledger.jsonl edited
+```
+
+### T5. Write SWE-agent LedgerSet addendum
+Status: blocked on T1
+
+Goal: Mirror the `SWE_AGENT_RETROSPECTIVE_LEDGER_PROTOCOL.md` thin-addendum pattern for set-level work.
+
+Outputs:
+```text
+docs/SWE_AGENT_LEDGER_SET_ADDENDUM.md
+```
+
+Acceptance:
+```text
+addendum defers to the general LEDGER_SET_PROTOCOL.md on every conflict
+addendum adds only SWE-agent-specific naming (e.g. one repo's worth of issues maps to one LedgerSet)
+no edits to the general doc
+```
+
+### Open questions / known caveats
+
+1. Should a member carry a *contribution-to-set* annotation distinct from `weight` (e.g. "blocking" vs "nice-to-have")? Deferred — `weight` covers it for v1; promote only if real projects need a richer signal.
+2. How does set-level progress interact with members at `BLOCKED`? v1 treats blocked members as in-progress (their ledger's score is whatever it is); a set is not itself "blocked" as a status. Revisit if a real multi-issue project surfaces a counter-example.
+3. Q (predictive modeling) may eventually want set-level features. T does not pre-build them; Q can opt in by consuming `score_set` once T3 lands. Per the locked-in framing, Q's prediction target is "on-time finish, regardless of failure" — set-level progress should support that without privileging the upstream success label.
+
+---
+
+## § Workstream P — Cross-source dataset generalization
+
+### P1. Investigate a second trace source (e.g. APEX-Agents)
+Status: not started
+
+Goal: Test the framework's "general protocol + thin source addendum" claim by exercising it on a non-SWE-agent trace source. Without this, the protocol's source-agnosticism is hypothesis, not evidence.
+
+Outputs:
+```text
+external_data/<source_name>/SOURCE_FORMAT.md
+external_data/<source_name>/raw/sample_row.json
+docs/<SOURCE_NAME>_RETROSPECTIVE_LEDGER_PROTOCOL.md   (thin addendum, mirrors SWE_AGENT_*)
+```
+
+Candidate sources to evaluate:
+```text
+APEX-Agents (per user; confirm exact dataset name / location before fetching)
+SWE-bench/SWE-smith-trajectories (already named as fallback in A2)
+Any HF dataset of multi-step agent trajectories with role+text per turn
+```
+
+Acceptance:
+```text
+SOURCE_FORMAT.md inspects ONE real row (no bulk download)
+field-name -> framework-name mapping documented per the C3 generalizable rule
+addendum specifies source-specific role mapping, action vocabulary, worked examples
+zero edits to docs/RETROSPECTIVE_LEDGER_ANNOTATION_PROTOCOL.md or the general schema doc -- if the general protocol needed changing to land on this source, that is the finding
+```
+
+### P2. Annotate one pilot trace from the second source
+Status: blocked on P1
+
+Goal: Walk one real trace under the new addendum end-to-end. If the spec-driven driver and the existing pipeline accept it without modification, the source-agnostic claim is empirically supported.
+
+Acceptance:
+```text
+one <source>_pilot_*.json + .notes.md committed under annotations/<source>_pilot/
+ledger-run check-run passes on the materialized run dir
+F2 / F3 ingest the new ledger cleanly OR the gap is documented
+```
+
+### P3. Compare progress shape distributions across sources
+Status: blocked on P2 (and likely E3)
+
+Goal: Same-shape protocol on two sources should produce comparable progress signals. Do they? Or does each source have idiosyncratic shapes that dominate?
+
+Outputs:
+```text
+runs/cross_source_comparison.md
+```
+
+Acceptance:
+```text
+report compares per-shape distributions (1.00, 0.75, etc.) across sources
+identifies any shape that is source-specific vs cross-source
+flags any divergence in interpretability that suggests the general protocol is leaking source-specific assumptions
+```
+
+---
+
 | Agent 1 | A (inventory + source format + sampler) — **blocking input** for Agents 2 and 4 |
 | Agent 2 | C (import + normalization scripts) |
 | Agent 3 | D1, D2, D3 (annotation protocol + templates) |

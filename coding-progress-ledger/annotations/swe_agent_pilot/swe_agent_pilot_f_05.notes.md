@@ -17,7 +17,8 @@ signature are plausibly in scope.
 ### 3. Checkpoint notes
 
 - step 3: pytest run upfront -- the agent uses the issue's repro
-  command to surface the failing estimator check.
+  command to **probe** (not validate) the failing estimator check.
+  Consistent with s_07's CLI probes, this is INVESTIGATION.
 - step 11: agent has both the production file and the failing test
   open.
 - step 15: edit test_sklearn_compat.py:39 -- a test pattern fix
@@ -46,7 +47,7 @@ signature are plausibly in scope.
 
 | subtask id | category        | completed at step | evidence step(s)         | one-line citation |
 |------------|-----------------|-------------------|--------------------------|-------------------|
-| `S1`       | `VALIDATION`    | 3                 | 3                        | upfront pytest reveals failing estimator check |
+| `S1`       | `INVESTIGATION` | 3                 | 3                        | upfront pytest probes the bug per issue's repro command |
 | `S2`       | `INVESTIGATION` | 11                | 7, 9, 11                 | search_dir + opens for both files |
 | `S3`       | `PRODUCT`       | 15                | 15                       | test pattern aligned with new sklearn API |
 | `S4`       | `PRODUCT`       | (blocked at 32)   | 22-34                    | _correlation_remover edits oscillate; iter 3 at step 32 |

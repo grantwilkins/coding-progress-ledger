@@ -3,10 +3,10 @@
   "instance_id": "fairlearn__fairlearn-967",
   "root_task": "Make CorrelationRemover pass scikit-learn estimator checks (sample_weight no longer optional)",
   "events": [
-    {"op": "add", "step": 2, "id": "S1", "category": "VALIDATION",
-     "description": "Run pytest test/unit/preprocessing per the issue's reproduce step"},
+    {"op": "add", "step": 2, "id": "S1", "category": "INVESTIGATION",
+     "description": "Reproduce the failing estimator check via the issue's repro command"},
     {"op": "complete", "step": 3, "id": "S1",
-     "evidence": "step 3: pytest output observed; agent then proceeds to fix the failing estimator check"},
+     "evidence": "step 3: 'python -m pytest test/unit/preprocessing' output observed; agent proceeds to locate the failing check (consistent with s_07: running the system to probe a known bug is INVESTIGATION, not VALIDATION)"},
     {"op": "add", "step": 4, "id": "S2", "category": "INVESTIGATION",
      "description": "Locate CorrelationRemover and the failing test module"},
     {"op": "complete", "step": 11, "id": "S2",
