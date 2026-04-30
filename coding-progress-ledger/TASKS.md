@@ -667,10 +667,7 @@ all ledger.jsonl files replay (via ledger_progress.serialization.from_jsonl + re
 ### E2. Run run-manager exports
 Status: done — `ledger-run export-run` was invoked by `scripts/annotate_pilots_from_spec.py` for each of the 20 pilots during E1 annotation. `ledger-run check-run` reports "all required artifacts present" on every pilot. `final_diff.patch` and `test_output.txt` are present for all 20 (sourced by C3 from upstream `generated_patch` / `eval_logs`); no fabricated placeholders.
 
-### E2-original. Run run-manager exports (legacy header preserved for traceability)
-Status: not started
-
-Goal: Use the existing tooling to regenerate derived artifacts from the source-of-truth ledger.
+Goal (original): Use the existing tooling to regenerate derived artifacts from the source-of-truth ledger.
 
 Per run:
 ```bash
