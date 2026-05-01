@@ -1,0 +1,49 @@
+
+diff --git a/CHANGELOG.md b/CHANGELOG.md
+index a4a3db0..4cbe829 100644
+--- a/CHANGELOG.md
++++ b/CHANGELOG.md
+@@ -8,6 +8,30 @@ This project adheres to [Semantic Versioning](http://semver.org/) and [Keep a Ch
+ ## Unreleased
+ ---
+ 
++### Added
++
++
++### Changed
++
++
++### Deprecated
++
++
++### Removed
++
++
++### Fixed
++
++
++### Security
++
++
++## [2.0.0] - 2024-10-05
++---
++
++## [1.0.0] - 2024-10-05
++---
++
+ ### Added
+ * Added the new CLI flags for the Changelog v1.1 change types
+   * `--added`, `--changed`, `--deprecated`, `--removed`, `--fixed`, `--security`
+diff --git a/src/changelog/commands.py b/src/changelog/commands.py
+index d038747..7b29803 100644
+--- a/src/changelog/commands.py
++++ b/src/changelog/commands.py
+@@ -60,7 +60,7 @@ def release(release_type: str, auto_confirm: bool) -> None:
+     try:
+         new_version = CL.get_new_release_version(release_type)
+         if auto_confirm:
+-            CL.cut_release()
++            CL.cut_release(release_type)
+         else:
+             if click.confirm(f"Planning on releasing version {new_version}. Proceed?"):
+                 CL.cut_release(release_type)

@@ -1,0 +1,449 @@
+{
+  "active_coding_leaves_final": 39,
+  "active_overall_leaves_final": 40,
+  "category_active_weight_final": {
+    "artifact": 0,
+    "documentation": 1.0,
+    "environment": 0,
+    "investigation": 7.0,
+    "product": 32.0,
+    "validation": 0
+  },
+  "category_completed_weight_final": {
+    "artifact": 0,
+    "documentation": 1.0,
+    "environment": 0,
+    "investigation": 7.0,
+    "product": 31.0,
+    "validation": 0
+  },
+  "coding_categories": [
+    "product",
+    "validation",
+    "investigation"
+  ],
+  "coding_largest_drop": 0.02564102564102566,
+  "coding_nonmonotonic": true,
+  "completed_coding_leaves_final": 38,
+  "completed_overall_leaves_final": 39,
+  "evidence_audit_by_category": {
+    "investigation": {
+      "audited_completion_count": 7,
+      "status": "weak",
+      "weak_completion_evidence_count": 2,
+      "weak_subtask_ids": [
+        "SW2",
+        "SW8"
+      ]
+    },
+    "product": {
+      "audited_completion_count": 31,
+      "status": "weak",
+      "weak_completion_evidence_count": 27,
+      "weak_subtask_ids": [
+        "SW6",
+        "SW22",
+        "SW24",
+        "SW26",
+        "SW28",
+        "SW30",
+        "SW32",
+        "SW34",
+        "SW36",
+        "SW38",
+        "SW40",
+        "SW48",
+        "SW50",
+        "SW52",
+        "SW54",
+        "SW56",
+        "SW58",
+        "SW60",
+        "SW62",
+        "SW64",
+        "SW66",
+        "SW68",
+        "SW70",
+        "SW72",
+        "SW74",
+        "SW76",
+        "SW78"
+      ]
+    },
+    "validation": {
+      "audited_completion_count": 0,
+      "status": "not_applicable",
+      "weak_completion_evidence_count": 0,
+      "weak_subtask_ids": []
+    }
+  },
+  "evidence_audit_status": "weak",
+  "evidence_audit_weak_categories": [
+    "product",
+    "investigation"
+  ],
+  "excluded_active_weight_final": 1.0,
+  "excluded_categories": [
+    "artifact",
+    "documentation",
+    "environment"
+  ],
+  "excluded_categories_final": {
+    "artifact": {
+      "active": 0,
+      "complete": 0
+    },
+    "documentation": {
+      "active": 1.0,
+      "complete": 1.0
+    },
+    "environment": {
+      "active": 0,
+      "complete": 0
+    }
+  },
+  "excluded_completed_weight_final": 1.0,
+  "final_coding_active_weight": 39.0,
+  "final_coding_complete_weight": 38.0,
+  "final_coding_progress": 0.9743589743589743,
+  "final_overall_active_weight": 40.0,
+  "final_overall_complete_weight": 39.0,
+  "final_overall_progress": 0.975,
+  "final_success": false,
+  "final_success_source": "source_metadata.target",
+  "generator": "ledger_progress.sidecar",
+  "historical_subtasks_created": 40,
+  "largest_coding_drop": 0.02564102564102566,
+  "largest_coding_drop_category_contributions": {
+    "product": 0.025641025641
+  },
+  "largest_coding_drop_detail": {
+    "amount": 0.02564102564102566,
+    "from_step": 78,
+    "to_step": 80
+  },
+  "largest_coding_drop_source": "product",
+  "largest_overall_drop": 0.025000000000000022,
+  "largest_overall_drop_category_contributions": {
+    "product": 0.025
+  },
+  "largest_overall_drop_detail": {
+    "amount": 0.025000000000000022,
+    "from_step": 78,
+    "to_step": 80
+  },
+  "largest_overall_drop_mostly_excluded": false,
+  "largest_overall_drop_source": "product",
+  "nonmonotonic_coding": true,
+  "nonmonotonic_overall": true,
+  "overall_largest_drop": 0.025000000000000022,
+  "overall_nonmonotonic": true,
+  "source_ledger_sha256": "df05d84bcd99f6ea2b274fff9b587609b413fef640d41c064ce64442ceaac5e7",
+  "subtask_categories": {
+    "SW10": "product",
+    "SW12": "investigation",
+    "SW14": "investigation",
+    "SW16": "investigation",
+    "SW18": "investigation",
+    "SW2": "investigation",
+    "SW20": "investigation",
+    "SW22": "product",
+    "SW24": "product",
+    "SW26": "product",
+    "SW28": "product",
+    "SW30": "product",
+    "SW32": "product",
+    "SW34": "product",
+    "SW36": "product",
+    "SW38": "product",
+    "SW4": "documentation",
+    "SW40": "product",
+    "SW42": "product",
+    "SW44": "product",
+    "SW46": "product",
+    "SW48": "product",
+    "SW50": "product",
+    "SW52": "product",
+    "SW54": "product",
+    "SW56": "product",
+    "SW58": "product",
+    "SW6": "product",
+    "SW60": "product",
+    "SW62": "product",
+    "SW64": "product",
+    "SW66": "product",
+    "SW68": "product",
+    "SW70": "product",
+    "SW72": "product",
+    "SW74": "product",
+    "SW76": "product",
+    "SW78": "product",
+    "SW8": "investigation",
+    "SW80": "product"
+  },
+  "task_id": "walles__px-50",
+  "weak_completion_evidence": [
+    {
+      "category": "investigation",
+      "description": "Inspect code or repo state via open https://github.com/walles/px/issues/new at step 2",
+      "evidence_types": [
+        "manual_note"
+      ],
+      "step": 2,
+      "subtask_id": "SW2"
+    },
+    {
+      "category": "product",
+      "description": "Change implementation via edit 1:1 ### Reported Unmatched Last Line The following line was requested to be reported: <norbert pts/3 mosh [29846... at step 6",
+      "evidence_types": [
+        "manual_note"
+      ],
+      "step": 6,
+      "subtask_id": "SW6"
+    },
+    {
+      "category": "investigation",
+      "description": "Inspect code or repo state via ls -F at step 8",
+      "evidence_types": [
+        "contract_text"
+      ],
+      "step": 8,
+      "subtask_id": "SW8"
+    },
+    {
+      "category": "product",
+      "description": "Change implementation via edit 19:31 LAST_RE = re.compile( LAST_USERNAME + \" +\" + LAST_DEVICE + \" +\" + LAST_ADDRESS + \" +\" + LAST_FROM + LAST_D... at step 22",
+      "evidence_types": [
+        "manual_note"
+      ],
+      "step": 22,
+      "subtask_id": "SW22"
+    },
+    {
+      "category": "product",
+      "description": "Change implementation via edit 19:32 LAST_RE = re.compile( LAST_USERNAME + \" +\" + LAST_DEVICE + \" +\" + LAST_ADDRESS + \" +\" + LAST_FROM + LAST_D... at step 24",
+      "evidence_types": [
+        "manual_note"
+      ],
+      "step": 24,
+      "subtask_id": "SW24"
+    },
+    {
+      "category": "product",
+      "description": "Change implementation via edit 19:32 LAST_RE = re.compile( LAST_USERNAME + \" +\" + LAST_DEVICE + \" +\" + LAST_ADDRESS + \" +\" + LAST_FROM + LAST_D... at step 26",
+      "evidence_types": [
+        "manual_note"
+      ],
+      "step": 26,
+      "subtask_id": "SW26"
+    },
+    {
+      "category": "product",
+      "description": "Change implementation via edit 19:32 LAST_RE = re.compile( LAST_USERNAME + \" +\" + LAST_DEVICE + \" +\" + LAST_ADDRESS + \" +\" + LAST_FROM + LAST_D... at step 28",
+      "evidence_types": [
+        "manual_note"
+      ],
+      "step": 28,
+      "subtask_id": "SW28"
+    },
+    {
+      "category": "product",
+      "description": "Change implementation via edit 17:17 LAST_DURATION = \"([0-9]+\\\\+)?([0-9][0-9]):([0-9][0-9])\" end_of_edit at step 30",
+      "evidence_types": [
+        "manual_note"
+      ],
+      "step": 30,
+      "subtask_id": "SW30"
+    },
+    {
+      "category": "product",
+      "description": "Change implementation via edit 17:32 LAST_DURATION = \"([0-9]+\\\\+)?([0-9][0-9]):([0-9][0-9])\" LAST_RE = re.compile( LAST_USERNAME + \" +\" + LAST_... at step 32",
+      "evidence_types": [
+        "manual_note"
+      ],
+      "step": 32,
+      "subtask_id": "SW32"
+    },
+    {
+      "category": "product",
+      "description": "Change implementation via edit 17:32 LAST_DURATION = \"([0-9]+\\\\\\+)?([0-9][0-9]):([0-9][0-9])\" LAST_RE = re.compile( LAST_USERNAME + \" +\" + LAST... at step 34",
+      "evidence_types": [
+        "manual_note"
+      ],
+      "step": 34,
+      "subtask_id": "SW34"
+    },
+    {
+      "category": "product",
+      "description": "Change implementation via edit 17:32 LAST_DURATION = \"([0-9]+\\\\\\\\+)?([0-9][0-9]):([0-9][0-9])\" LAST_RE = re.compile( LAST_USERNAME + \" +\" + LAS... at step 36",
+      "evidence_types": [
+        "manual_note"
+      ],
+      "step": 36,
+      "subtask_id": "SW36"
+    },
+    {
+      "category": "product",
+      "description": "Change implementation via edit 17:32 LAST_DURATION = \"([0-9]+\\\\\\\\\\\\+)?([0-9][0-9]):([0-9][0-9])\" LAST_RE = re.compile( LAST_USERNAME + \" +\" + L... at step 38",
+      "evidence_types": [
+        "manual_note"
+      ],
+      "step": 38,
+      "subtask_id": "SW38"
+    },
+    {
+      "category": "product",
+      "description": "Change implementation via edit 17:32 LAST_DURATION = \"([0-9]+\\\\\\\\\\\\\\\\+)?([0-9][0-9]):([0-9][0-9])\" LAST_RE = re.compile( LAST_USERNAME + \" +\" +... at step 40",
+      "evidence_types": [
+        "manual_note"
+      ],
+      "step": 40,
+      "subtask_id": "SW40"
+    },
+    {
+      "category": "product",
+      "description": "Change implementation via edit 17:32 LAST_DURATION = \"([0-9]+\\\\\\\\+)?([0-9][0-9]):([0-9][0-9])\" LAST_RE = re.compile( LAST_USERNAME + \" +\" + LAS... at step 48",
+      "evidence_types": [
+        "manual_note"
+      ],
+      "step": 48,
+      "subtask_id": "SW48"
+    },
+    {
+      "category": "product",
+      "description": "Change implementation via edit 17:32 LAST_DURATION = \"([0-9]+\\\\\\\\\\\\\\\\+)?([0-9][0-9]):([0-9][0-9])\" LAST_RE = re.compile( LAST_USERNAME + \" +\" +... at step 50",
+      "evidence_types": [
+        "manual_note"
+      ],
+      "step": 50,
+      "subtask_id": "SW50"
+    },
+    {
+      "category": "product",
+      "description": "Change implementation via edit 17:32 LAST_DURATION = \"([0-9]+\\\\\\\\+)?([0-9][0-9]):([0-9][0-9])\" LAST_RE = re.compile( LAST_USERNAME + \" +\" + LAS... at step 52",
+      "evidence_types": [
+        "manual_note"
+      ],
+      "step": 52,
+      "subtask_id": "SW52"
+    },
+    {
+      "category": "product",
+      "description": "Change implementation via edit 17:32 LAST_DURATION = \"([0-9]+\\\\\\\\\\\\\\\\\\\\\\\\+)?([0-9][0-9]):([0-9][0-9])\" LAST_RE = re.compile( LAST_USERNAME + \" ... at step 54",
+      "evidence_types": [
+        "manual_note"
+      ],
+      "step": 54,
+      "subtask_id": "SW54"
+    },
+    {
+      "category": "product",
+      "description": "Change implementation via edit 17:32 LAST_DURATION = \"([0-9]+\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\+)?([0-9][0-9]):([0-9][0-9])\" LAST_RE = re.compile( LAST_USERNAME ... at step 56",
+      "evidence_types": [
+        "manual_note"
+      ],
+      "step": 56,
+      "subtask_id": "SW56"
+    },
+    {
+      "category": "product",
+      "description": "Change implementation via edit 17:32 LAST_DURATION = \"([0-9]+\\\\\\\\+)?([0-9][0-9]):([0-9][0-9])\" LAST_RE = re.compile( LAST_USERNAME + \" +\" + LAS... at step 58",
+      "evidence_types": [
+        "manual_note"
+      ],
+      "step": 58,
+      "subtask_id": "SW58"
+    },
+    {
+      "category": "product",
+      "description": "Change implementation via edit 17:32 LAST_DURATION = \"([0-9]+\\\\\\\\\\\\\\\\+)?([0-9][0-9]):([0-9][0-9])\" LAST_RE = re.compile( LAST_USERNAME + \" +\" +... at step 60",
+      "evidence_types": [
+        "manual_note"
+      ],
+      "step": 60,
+      "subtask_id": "SW60"
+    },
+    {
+      "category": "product",
+      "description": "Change implementation via edit 17:32 LAST_DURATION = \"([0-9]+\\\\\\\\\\\\\\\\\\\\\\\\+)?([0-9][0-9]):([0-9][0-9])\" LAST_RE = re.compile( LAST_USERNAME + \" ... at step 62",
+      "evidence_types": [
+        "manual_note"
+      ],
+      "step": 62,
+      "subtask_id": "SW62"
+    },
+    {
+      "category": "product",
+      "description": "Change implementation via edit 17:32 LAST_DURATION = \"([0-9]+\\\\\\\\+)?([0-9][0-9]):([0-9][0-9])\" LAST_RE = re.compile( LAST_USERNAME + \" +\" + LAS... at step 64",
+      "evidence_types": [
+        "manual_note"
+      ],
+      "step": 64,
+      "subtask_id": "SW64"
+    },
+    {
+      "category": "product",
+      "description": "Change implementation via edit 17:32 LAST_DURATION = \"([0-9]+\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\+)?([0-9][0-9]):([0-9][0-9])\" LAST_RE = re.compile( LAST_USERNAME ... at step 66",
+      "evidence_types": [
+        "manual_note"
+      ],
+      "step": 66,
+      "subtask_id": "SW66"
+    },
+    {
+      "category": "product",
+      "description": "Change implementation via edit 17:32 LAST_DURATION = \"([0-9]+\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\+)?([0-9][0-9]):([0-9][0-9])\" LAST_RE = re.compile( LAST_USERN... at step 68",
+      "evidence_types": [
+        "manual_note"
+      ],
+      "step": 68,
+      "subtask_id": "SW68"
+    },
+    {
+      "category": "product",
+      "description": "Change implementation via edit 17:32 LAST_DURATION = \"([0-9]+\\\\\\\\+)?([0-9][0-9]):([0-9][0-9])\" LAST_RE = re.compile( LAST_USERNAME + \" +\" + LAS... at step 70",
+      "evidence_types": [
+        "manual_note"
+      ],
+      "step": 70,
+      "subtask_id": "SW70"
+    },
+    {
+      "category": "product",
+      "description": "Change implementation via edit 17:32 LAST_DURATION = \"([0-9]+\\\\\\\\\\\\\\\\+)?([0-9][0-9]):([0-9][0-9])\" LAST_RE = re.compile( LAST_USERNAME + \" +\" +... at step 72",
+      "evidence_types": [
+        "manual_note"
+      ],
+      "step": 72,
+      "subtask_id": "SW72"
+    },
+    {
+      "category": "product",
+      "description": "Change implementation via edit 17:32 LAST_DURATION = \"([0-9]+\\\\\\\\\\\\\\\\\\\\\\\\+)?([0-9][0-9]):([0-9][0-9])\" LAST_RE = re.compile( LAST_USERNAME + \" ... at step 74",
+      "evidence_types": [
+        "manual_note"
+      ],
+      "step": 74,
+      "subtask_id": "SW74"
+    },
+    {
+      "category": "product",
+      "description": "Change implementation via edit 17:32 LAST_DURATION = \"([0-9]+\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\+)?([0-9][0-9]):([0-9][0-9])\" LAST_RE = re.compile( LAST_USERNAME ... at step 76",
+      "evidence_types": [
+        "manual_note"
+      ],
+      "step": 76,
+      "subtask_id": "SW76"
+    },
+    {
+      "category": "product",
+      "description": "Change implementation via edit 17:32 LAST_DURATION = \"([0-9]+\\\\\\\\+)?([0-9][0-9]):([0-9][0-9])\" LAST_RE = re.compile( LAST_USERNAME + \" +\" + LAS... at step 78",
+      "evidence_types": [
+        "manual_note"
+      ],
+      "step": 78,
+      "subtask_id": "SW78"
+    }
+  ],
+  "weak_completion_evidence_count": 29
+}

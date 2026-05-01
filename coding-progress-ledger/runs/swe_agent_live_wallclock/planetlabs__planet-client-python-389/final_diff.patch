@@ -1,0 +1,41 @@
+
+diff --git a/planet/cli/orders.py b/planet/cli/orders.py
+index ab03c78..a0c60e7 100644
+--- a/planet/cli/orders.py
++++ b/planet/cli/orders.py
+@@ -123,7 +123,6 @@ async def download(ctx, order_id, quiet, overwrite, dest):
+                     directory=dest,
+                     overwrite=overwrite,
+                     progress_bar=not quiet)
+-    click.echo(f'Downloaded {len(filenames)} files.')
+ 
+ 
+ def split_id_list(ctx, param, value):
+diff --git a/tests/unit/test_cli_orders.py b/tests/unit/test_cli_orders.py
+index ff9c16a..6e59fc7 100644
+--- a/tests/unit/test_cli_orders.py
++++ b/tests/unit/test_cli_orders.py
+@@ -89,6 +89,7 @@ def test_cli_orders_download(runner, patch_ordersclient, oid):
+         return
+     patch_ordersclient('poll', poll)
+ 
++    # Number of files in all_test_files
+     # Number of files in all_test_files
+     expected = 'Downloaded 4 files.\n'
+ 
+@@ -96,13 +97,13 @@ def test_cli_orders_download(runner, patch_ordersclient, oid):
+     result = runner.invoke(
+         cli.main, ['orders', 'download', oid])
+     assert not result.exception
+-    assert expected in result.output
++    assert expected not in result.output
+ 
+     # test quiet option, should be no progress reporting
+     result = runner.invoke(
+         cli.main, ['orders', 'download', '-q', oid])
+     assert not result.exception
+-    assert expected == result.output
++    assert expected not in result.output
+ 
+ 
+ class AsyncMock(Mock):

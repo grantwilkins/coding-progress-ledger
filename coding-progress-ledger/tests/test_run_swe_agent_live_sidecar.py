@@ -1,12 +1,18 @@
 from __future__ import annotations
 
 import json
+from datetime import datetime
 
 import pytest
 
 from ledger_progress import SubtaskCategory, from_jsonl
 from ledger_progress.run_manager import main as run_manager_main
-from scripts.run_swe_agent_live_sidecar import materialize_live_run, wire_events
+from scripts.run_swe_agent_live_sidecar import (
+    _build_synthetic_clock,
+    main as run_main,
+    materialize_live_run,
+    wire_events,
+)
 
 
 def test_wire_events_pair_assistant_command_with_following_tool_observation():
@@ -58,6 +64,60 @@ def test_materialize_live_run_refuses_to_overwrite_existing_ledger(tmp_path):
 
     with pytest.raises(FileExistsError):
         materialize_live_run(source, output, clock=_clock())
+
+
+def test_synthetic_clock_advances_per_event_and_marks_metadata(tmp_path):
+    source = tmp_path / "source"
+    output = tmp_path / "live"
+    _write_source_run(source)
+
+    exit_code = run_main([
+        "--source-run-dir", str(source),
+        "--output-run-dir", str(output),
+        "--synthetic-clock-start", "2026-05-01T00:00:00+00:00",
+        "--synthetic-step-seconds", "30",
+    ])
+
+    assert exit_code == 0
+    metadata = json.loads((output / "live_instrumentation.json").read_text())
+    assert metadata["timestamp_source"] == "synthetic"
+    assert metadata["first_event_timestamp"] == "2026-05-01T00:00:00+00:00"
+    assert metadata["last_event_timestamp"] == "2026-05-01T00:01:00+00:00"
+    assert metadata["timestamp_span_seconds"] == 60.0
+
+    ledger = from_jsonl(str(output / "ledger.jsonl"))
+    timestamps = [event.timestamp for event in ledger.events if event.timestamp]
+    span = (datetime.fromisoformat(timestamps[-1]) - datetime.fromisoformat(timestamps[0])).total_seconds()
+    assert span >= 60.0
+
+
+def test_synthetic_clock_is_strictly_monotonic():
+    clock = _build_synthetic_clock("2026-05-01T00:00:00+00:00", 5.0)
+    values = [clock() for _ in range(4)]
+    assert values == [
+        "2026-05-01T00:00:00+00:00",
+        "2026-05-01T00:00:05+00:00",
+        "2026-05-01T00:00:10+00:00",
+        "2026-05-01T00:00:15+00:00",
+    ]
+
+
+def test_synthetic_clock_rejects_non_positive_step():
+    with pytest.raises(ValueError):
+        _build_synthetic_clock("2026-05-01T00:00:00+00:00", 0.0)
+
+
+def test_replay_mode_preserves_default_clock_metadata(tmp_path):
+    source = tmp_path / "source"
+    output = tmp_path / "live"
+    _write_source_run(source)
+
+    materialize_live_run(source, output, clock=_clock())
+
+    metadata = json.loads((output / "live_instrumentation.json").read_text())
+    assert metadata["timestamp_source"] == "replay"
+    assert metadata["wire_event_count"] == 3
+    assert metadata["timestamp_span_seconds"] == 2.0
 
 
 def _write_source_run(path):

@@ -1,0 +1,61 @@
+Will execute following command for apply_patch:
+```
+
+cd //zaza &&
+source activate base &&
+conda activate zaza &&
+git apply -v /swebench_matterhorn/prediction_patch.patch --allow-empty
+```
+
+Checking patch mock_controllers.yaml...
+Checking patch test_config.py...
+/swebench_matterhorn/prediction_patch.patch:38: new blank line at EOF.
++
+Checking patch zaza/model.py...
+Applied patch mock_controllers.yaml cleanly.
+Applied patch test_config.py cleanly.
+Applied patch zaza/model.py cleanly.
+warning: 1 line adds whitespace errors.
+Will execute following command for apply_patch:
+```
+
+cd //zaza &&
+source activate base &&
+conda activate zaza &&
+git restore unit_tests/test_zaza_charm_lifecycle_prepare.py &&
+git apply -v /swebench_matterhorn/test_patch.patch --allow-empty
+```
+
+Checking patch unit_tests/test_zaza_charm_lifecycle_prepare.py...
+Applied patch unit_tests/test_zaza_charm_lifecycle_prepare.py cleanly.
+___ENVIRONMENT_SET_UP_PATCH_APPLIED___
+2024-09-24 07:16:52,225 - root - INFO - Will run the following test command
+2024-09-24 07:16:52,225 - root - INFO - 
+```
+cd //zaza &&
+source activate base &&
+conda activate zaza &&
+pytest --no-header -rA --tb=no  -p no:cacheprovider -W ignore::DeprecationWarning unit_tests/test_zaza_charm_lifecycle_prepare.py
+```
+Will execute following command for run_tests:
+```
+
+cd //zaza &&
+source activate base &&
+conda activate zaza &&
+pytest --no-header -rA --tb=no  -p no:cacheprovider -W ignore::DeprecationWarning unit_tests/test_zaza_charm_lifecycle_prepare.py
+```
+
+___TESTS_SECTION___
+============================= test session starts ==============================
+collected 3 items
+
+unit_tests/test_zaza_charm_lifecycle_prepare.py F..                      [100%]
+
+=========================== short test summary info ============================
+PASSED unit_tests/test_zaza_charm_lifecycle_prepare.py::TestCharmLifecyclePrepare::test_prepare
+PASSED unit_tests/test_zaza_charm_lifecycle_prepare.py::TestCharmLifecyclePrepare::test_parser
+FAILED unit_tests/test_zaza_charm_lifecycle_prepare.py::TestCharmLifecyclePrepare::test_add_model
+========================= 1 failed, 2 passed in 0.48s ==========================
+___TESTS_SECTION_END___
+Some tests failed.

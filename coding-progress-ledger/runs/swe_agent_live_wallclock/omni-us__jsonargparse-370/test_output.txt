@@ -1,0 +1,127 @@
+Will execute following command for apply_patch:
+```
+
+cd //jsonargparse &&
+source activate base &&
+conda activate jsonargparse &&
+git apply -v /swebench_matterhorn/prediction_patch.patch --allow-empty
+```
+
+Checking patch config.yaml...
+Checking patch jsonargparse/_core.py...
+Applied patch config.yaml cleanly.
+Applied patch jsonargparse/_core.py cleanly.
+Will execute following command for apply_patch:
+```
+
+cd //jsonargparse &&
+source activate base &&
+conda activate jsonargparse &&
+git restore jsonargparse_tests/test_core.py &&
+git apply -v /swebench_matterhorn/test_patch.patch --allow-empty
+```
+
+Checking patch jsonargparse_tests/test_core.py...
+Applied patch jsonargparse_tests/test_core.py cleanly.
+___ENVIRONMENT_SET_UP_PATCH_APPLIED___
+2024-10-07 03:20:43,972 - root - INFO - Will run the following test command
+2024-10-07 03:20:43,972 - root - INFO - 
+```
+cd //jsonargparse &&
+source activate base &&
+conda activate jsonargparse &&
+pytest --no-header -rA --tb=no  -p no:cacheprovider -W ignore::DeprecationWarning jsonargparse_tests/test_core.py
+```
+Will execute following command for run_tests:
+```
+
+cd //jsonargparse &&
+source activate base &&
+conda activate jsonargparse &&
+pytest --no-header -rA --tb=no  -p no:cacheprovider -W ignore::DeprecationWarning jsonargparse_tests/test_core.py
+```
+
+___TESTS_SECTION___
+============================= test session starts ==============================
+collected 74 items
+
+jsonargparse_tests/test_core.py .............,,,,,,,,,,,,,,,,,.......F...,,,,,.............,,,.....,,,,,.,,,,......s..,,,,..,,.F.................s
+
+=========================== short test summary info ============================
+PASSED jsonargparse_tests/test_core.py::test_parse_env_nested
+PASSED jsonargparse_tests/test_core.py::test_parse_known_args_not_implemented_without_caller_module
+PASSED jsonargparse_tests/test_core.py::test_parse_args_nargs_number
+PASSED jsonargparse_tests/test_core.py::test_exit_on_error
+PASSED jsonargparse_tests/test_core.py::test_save_invalid_format
+PASSED jsonargparse_tests/test_core.py::test_default_config_file_invalid_value
+PASSED jsonargparse_tests/test_core.py::test_parse_args_nested
+PASSED jsonargparse_tests/test_core.py::test_parse_args_invalid_args
+PASSED jsonargparse_tests/test_core.py::test_print_config_skip_null
+PASSED jsonargparse_tests/test_core.py::test_parse_args_nargs_asterisk
+PASSED jsonargparse_tests/test_core.py::test_default_env_property
+PASSED jsonargparse_tests/test_core.py::test_save_path_content
+PASSED jsonargparse_tests/test_core.py::test_parse_env_simple
+PASSED jsonargparse_tests/test_core.py::test_precedence_of_sources
+PASSED jsonargparse_tests/test_core.py::test_dump_incomplete
+PASSED jsonargparse_tests/test_core.py::test_parse_string_simple_errors
+PASSED jsonargparse_tests/test_core.py::test_add_multiple_config_arguments_error
+PASSED jsonargparse_tests/test_core.py::test_parse_args_unexpected_kwarg
+PASSED jsonargparse_tests/test_core.py::test_strip_unknown
+PASSED jsonargparse_tests/test_core.py::test_parse_path_simple
+PASSED jsonargparse_tests/test_core.py::test_parse_args_url_config
+PASSED jsonargparse_tests/test_core.py::test_save_overwrite
+PASSED jsonargparse_tests/test_core.py::test_print_config_normal
+PASSED jsonargparse_tests/test_core.py::test_set_get_defaults_multiple
+PASSED jsonargparse_tests/test_core.py::test_parse_args_unrecognized_arguments
+PASSED jsonargparse_tests/test_core.py::test_dump_skip_default_simple
+PASSED jsonargparse_tests/test_core.py::test_default_meta_property
+PASSED jsonargparse_tests/test_core.py::test_debug_environment_variable
+PASSED jsonargparse_tests/test_core.py::test_parse_args_nargs_plus
+PASSED jsonargparse_tests/test_core.py::test_parse_object_simple
+PASSED jsonargparse_tests/test_core.py::test_env_prefix_true
+PASSED jsonargparse_tests/test_core.py::test_named_argument_groups
+PASSED jsonargparse_tests/test_core.py::test_dump_formats
+PASSED jsonargparse_tests/test_core.py::test_parse_env_config
+PASSED jsonargparse_tests/test_core.py::test_parse_args_positional_nargs_plus
+PASSED jsonargparse_tests/test_core.py::test_env_properties_set_invalid
+PASSED jsonargparse_tests/test_core.py::test_save_multifile
+PASSED jsonargparse_tests/test_core.py::test_env_prefix_false
+PASSED jsonargparse_tests/test_core.py::test_version_print
+PASSED jsonargparse_tests/test_core.py::test_parse_known_args_not_implemented
+PASSED jsonargparse_tests/test_core.py::test_check_config_branch
+PASSED jsonargparse_tests/test_core.py::test_non_positional_required
+PASSED jsonargparse_tests/test_core.py::test_default_config_files
+PASSED jsonargparse_tests/test_core.py::test_set_get_defaults_single
+PASSED jsonargparse_tests/test_core.py::test_default_env_override_false
+PASSED jsonargparse_tests/test_core.py::test_print_config_invalid_flag
+PASSED jsonargparse_tests/test_core.py::test_parse_string_nested
+PASSED jsonargparse_tests/test_core.py::test_dump_skip_default_nested
+PASSED jsonargparse_tests/test_core.py::test_parse_args_base_namespace
+PASSED jsonargparse_tests/test_core.py::test_parse_path_simple_errors
+PASSED jsonargparse_tests/test_core.py::test_default_config_files_pattern
+PASSED jsonargparse_tests/test_core.py::test_save_subconfig_overwrite
+PASSED jsonargparse_tests/test_core.py::test_dump_order
+PASSED jsonargparse_tests/test_core.py::test_pickle_parser
+PASSED jsonargparse_tests/test_core.py::test_merge_config
+PASSED jsonargparse_tests/test_core.py::test_parse_args_positional_nargs_questionmark
+PASSED jsonargparse_tests/test_core.py::test_default_env_override_true
+PASSED jsonargparse_tests/test_core.py::test_parse_env_positional_nargs_plus
+PASSED jsonargparse_tests/test_core.py::test_parse_path_defaults
+PASSED jsonargparse_tests/test_core.py::test_parse_string_simple
+PASSED jsonargparse_tests/test_core.py::test_env_prefix_from_prog_with_dashes
+PASSED jsonargparse_tests/test_core.py::test_check_config_skip_none
+PASSED jsonargparse_tests/test_core.py::test_parse_args_simple
+PASSED jsonargparse_tests/test_core.py::test_parse_object_nested
+PASSED jsonargparse_tests/test_core.py::test_parse_args_nargs_questionmark
+PASSED jsonargparse_tests/test_core.py::test_print_config_empty_default_config_file
+PASSED jsonargparse_tests/test_core.py::test_dump_complete
+PASSED jsonargparse_tests/test_core.py::test_parse_args_positional_config
+PASSED jsonargparse_tests/test_core.py::test_parse_args_choices
+PASSED jsonargparse_tests/test_core.py::test_default_config_file_help_message_no_existing
+SKIPPED [1] jsonargparse_tests/test_core.py:686: docstring-parser package is required
+SKIPPED [1] jsonargparse_tests/test_core.py:652: fsspec package is required
+FAILED jsonargparse_tests/test_core.py::test_parse_path_file_not_readable - F...
+FAILED jsonargparse_tests/test_core.py::test_default_config_file_unreadable
+========= 2 failed, 70 passed, 2 skipped, 40 subtests passed in 0.90s ==========
+___TESTS_SECTION_END___
+All tests passed.

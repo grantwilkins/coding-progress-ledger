@@ -1,0 +1,14 @@
+
+diff --git a/iceprod/core/functions.py b/iceprod/core/functions.py
+index 964f20b9..617777ea 100644
+--- a/iceprod/core/functions.py
++++ b/iceprod/core/functions.py
+@@ -271,7 +271,7 @@ def gethostname():
+     """Get hostname of this computer."""
+     ret = socket.getfqdn()
+     try:
+-        resp = requests.get('http://simprod.icecube.wisc.edu/downloads/getip.php', timeout=1)
++        resp = requests.get('https://ifconfig.me/ip', timeout=1)
+         resp.raise_for_status()
+         logging.info('getip: %r', resp.text)
+         ret2 = resp.text.split(' ')[-1]

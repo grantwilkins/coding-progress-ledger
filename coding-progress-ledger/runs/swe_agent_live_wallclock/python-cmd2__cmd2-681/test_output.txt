@@ -1,0 +1,62 @@
+Will execute following command for apply_patch:
+```
+
+cd //cmd2 &&
+source activate base &&
+conda activate cmd2 &&
+git apply -v /swebench_matterhorn/prediction_patch.patch --allow-empty
+```
+
+Checking patch cmd2/cmd2.py...
+Checking patch tests/test_cmd2.py...
+Applied patch cmd2/cmd2.py cleanly.
+Applied patch tests/test_cmd2.py cleanly.
+Will execute following command for apply_patch:
+```
+
+cd //cmd2 &&
+source activate base &&
+conda activate cmd2 &&
+git restore tests/test_argparse.py &&
+git apply -v /swebench_matterhorn/test_patch.patch --allow-empty
+```
+
+Checking patch tests/test_argparse.py...
+Applied patch tests/test_argparse.py cleanly.
+___ENVIRONMENT_SET_UP_PATCH_APPLIED___
+2024-09-30 00:58:06,103 - root - INFO - Will run the following test command
+2024-09-30 00:58:06,103 - root - INFO - 
+```
+cd //cmd2 &&
+source activate base &&
+conda activate cmd2 &&
+pytest --no-header -rA --tb=no  -p no:cacheprovider -W ignore::DeprecationWarning tests/test_argparse.py
+```
+Will execute following command for run_tests:
+```
+
+cd //cmd2 &&
+source activate base &&
+conda activate cmd2 &&
+pytest --no-header -rA --tb=no  -p no:cacheprovider -W ignore::DeprecationWarning tests/test_argparse.py
+```
+
+___TESTS_SECTION___
+============================= test session starts ==============================
+collected 0 items / 1 error
+
+=========================== short test summary info ============================
+ERROR tests/test_argparse.py - TypeError: with_argparser() got an unexpected ...
+!!!!!!!!!!!!!!!!!!!! Interrupted: 1 error during collection !!!!!!!!!!!!!!!!!!!!
+=============================== 1 error in 0.62s ===============================
+___TESTS_SECTION_END___
+2024-09-30 00:58:08,842 - root - ERROR - 'tests/test_argparse.py::test_invalid_syntax'
+Traceback (most recent call last):
+  File "/swebench_matterhorn/scripts/parse_logs.py", line 10, in <module>
+    result, debug_info = parse_log_and_get_result()
+                         ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/swebench_matterhorn/lib/agent/parse_logs_utils.py", line 52, in parse_log_and_get_result
+    test_status = test_status_map[test_name]
+                  ~~~~~~~~~~~~~~~^^^^^^^^^^^
+KeyError: 'tests/test_argparse.py::test_invalid_syntax'
+Test results parsing failed

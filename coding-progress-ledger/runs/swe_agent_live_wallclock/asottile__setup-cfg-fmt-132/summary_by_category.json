@@ -1,0 +1,169 @@
+{
+  "active_coding_leaves_final": 56,
+  "active_overall_leaves_final": 56,
+  "category_active_weight_final": {
+    "artifact": 0,
+    "documentation": 0,
+    "environment": 0,
+    "investigation": 52.0,
+    "product": 3.0,
+    "validation": 1.0
+  },
+  "category_completed_weight_final": {
+    "artifact": 0,
+    "documentation": 0,
+    "environment": 0,
+    "investigation": 51.0,
+    "product": 3.0,
+    "validation": 1.0
+  },
+  "coding_categories": [
+    "product",
+    "validation",
+    "investigation"
+  ],
+  "coding_largest_drop": 0.017857142857142905,
+  "coding_nonmonotonic": true,
+  "completed_coding_leaves_final": 55,
+  "completed_overall_leaves_final": 55,
+  "evidence_audit_by_category": {
+    "investigation": {
+      "audited_completion_count": 51,
+      "status": "strong",
+      "weak_completion_evidence_count": 0,
+      "weak_subtask_ids": []
+    },
+    "product": {
+      "audited_completion_count": 3,
+      "status": "strong",
+      "weak_completion_evidence_count": 0,
+      "weak_subtask_ids": []
+    },
+    "validation": {
+      "audited_completion_count": 1,
+      "status": "strong",
+      "weak_completion_evidence_count": 0,
+      "weak_subtask_ids": []
+    }
+  },
+  "evidence_audit_status": "strong",
+  "evidence_audit_weak_categories": [],
+  "excluded_active_weight_final": 0,
+  "excluded_categories": [
+    "artifact",
+    "documentation",
+    "environment"
+  ],
+  "excluded_categories_final": {
+    "artifact": {
+      "active": 0,
+      "complete": 0
+    },
+    "documentation": {
+      "active": 0,
+      "complete": 0
+    },
+    "environment": {
+      "active": 0,
+      "complete": 0
+    }
+  },
+  "excluded_completed_weight_final": 0,
+  "final_coding_active_weight": 56.0,
+  "final_coding_complete_weight": 55.0,
+  "final_coding_progress": 0.9821428571428571,
+  "final_overall_active_weight": 56.0,
+  "final_overall_complete_weight": 55.0,
+  "final_overall_progress": 0.9821428571428571,
+  "final_success": false,
+  "final_success_source": "source_metadata.target",
+  "generator": "ledger_progress.sidecar",
+  "historical_subtasks_created": 56,
+  "largest_coding_drop": 0.017857142857142905,
+  "largest_coding_drop_category_contributions": {
+    "investigation": 0.017857142857
+  },
+  "largest_coding_drop_detail": {
+    "amount": 0.017857142857142905,
+    "from_step": 110,
+    "to_step": 112
+  },
+  "largest_coding_drop_source": "investigation",
+  "largest_overall_drop": 0.017857142857142905,
+  "largest_overall_drop_category_contributions": {
+    "investigation": 0.017857142857
+  },
+  "largest_overall_drop_detail": {
+    "amount": 0.017857142857142905,
+    "from_step": 110,
+    "to_step": 112
+  },
+  "largest_overall_drop_mostly_excluded": false,
+  "largest_overall_drop_source": "investigation",
+  "nonmonotonic_coding": true,
+  "nonmonotonic_overall": true,
+  "overall_largest_drop": 0.017857142857142905,
+  "overall_nonmonotonic": true,
+  "source_ledger_sha256": "3e18fdb17c9b41f10fa39fefb01fdf22678d40f14df2d0d2d8e1ec25cc3c8d20",
+  "subtask_categories": {
+    "SW10": "investigation",
+    "SW100": "investigation",
+    "SW102": "investigation",
+    "SW104": "investigation",
+    "SW106": "investigation",
+    "SW108": "investigation",
+    "SW110": "investigation",
+    "SW112": "investigation",
+    "SW12": "investigation",
+    "SW14": "investigation",
+    "SW16": "investigation",
+    "SW18": "investigation",
+    "SW2": "product",
+    "SW20": "investigation",
+    "SW22": "investigation",
+    "SW24": "investigation",
+    "SW26": "investigation",
+    "SW28": "investigation",
+    "SW30": "investigation",
+    "SW32": "investigation",
+    "SW34": "investigation",
+    "SW36": "investigation",
+    "SW38": "investigation",
+    "SW4": "product",
+    "SW40": "investigation",
+    "SW42": "investigation",
+    "SW44": "investigation",
+    "SW46": "investigation",
+    "SW48": "investigation",
+    "SW50": "investigation",
+    "SW52": "investigation",
+    "SW54": "investigation",
+    "SW56": "investigation",
+    "SW58": "investigation",
+    "SW6": "validation",
+    "SW60": "investigation",
+    "SW62": "investigation",
+    "SW64": "investigation",
+    "SW66": "investigation",
+    "SW68": "investigation",
+    "SW70": "investigation",
+    "SW72": "investigation",
+    "SW74": "investigation",
+    "SW76": "investigation",
+    "SW78": "investigation",
+    "SW8": "product",
+    "SW80": "investigation",
+    "SW82": "investigation",
+    "SW84": "investigation",
+    "SW86": "investigation",
+    "SW88": "investigation",
+    "SW90": "investigation",
+    "SW92": "investigation",
+    "SW94": "investigation",
+    "SW96": "investigation",
+    "SW98": "investigation"
+  },
+  "task_id": "asottile__setup-cfg-fmt-132",
+  "weak_completion_evidence": [],
+  "weak_completion_evidence_count": 0
+}

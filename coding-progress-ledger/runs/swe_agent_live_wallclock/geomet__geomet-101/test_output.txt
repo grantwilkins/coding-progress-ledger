@@ -1,0 +1,74 @@
+Will execute following command for apply_patch:
+```
+
+cd //geomet &&
+source activate base &&
+conda activate geomet &&
+git apply -v /swebench_matterhorn/prediction_patch.patch --allow-empty
+```
+
+Checking patch geomet/esri.py...
+Applied patch geomet/esri.py cleanly.
+Will execute following command for apply_patch:
+```
+
+cd //geomet &&
+source activate base &&
+conda activate geomet &&
+git restore geomet/tests/esri_test.py &&
+git apply -v /swebench_matterhorn/test_patch.patch --allow-empty
+```
+
+Checking patch geomet/tests/esri_test.py...
+Applied patch geomet/tests/esri_test.py cleanly.
+___ENVIRONMENT_SET_UP_PATCH_APPLIED___
+2024-10-21 02:56:52,968 - root - INFO - Will run the following test command
+2024-10-21 02:56:52,969 - root - INFO - 
+```
+cd //geomet &&
+source activate base &&
+conda activate geomet &&
+pytest --no-header -rA --tb=no  -p no:cacheprovider -W ignore::DeprecationWarning geomet/tests/esri_test.py
+```
+Will execute following command for run_tests:
+```
+
+cd //geomet &&
+source activate base &&
+conda activate geomet &&
+pytest --no-header -rA --tb=no  -p no:cacheprovider -W ignore::DeprecationWarning geomet/tests/esri_test.py
+```
+
+___TESTS_SECTION___
+============================= test session starts ==============================
+collected 23 items
+
+geomet/tests/esri_test.py .......................                        [100%]
+
+=========================== short test summary info ============================
+PASSED geomet/tests/esri_test.py::TestGeoJSONtoEsriJSONCustomSRID::test_dumps_to_esrijson_polygon_custom_srid
+PASSED geomet/tests/esri_test.py::TestGeoJSONtoEsriJSONCustomSRID::test_dumps_to_esrijson_polyline_custom_srid
+PASSED geomet/tests/esri_test.py::TestGeoJSONtoEsriJSONCustomSRID::test_dumps_to_esrijson_point_custom_srid
+PASSED geomet/tests/esri_test.py::TestGeoJSONtoEsriJSONCustomSRID::test_dumps_to_esrijson_multipoint_custom_srid
+PASSED geomet/tests/esri_test.py::TestGeoJSONtoEsriJSON::test_multipolygon_nesting
+PASSED geomet/tests/esri_test.py::TestGeoJSONtoEsriJSON::test_dumps_to_esrijson_polygon2
+PASSED geomet/tests/esri_test.py::TestGeoJSONtoEsriJSON::test_dumps_to_esrijson_multipoint
+PASSED geomet/tests/esri_test.py::TestGeoJSONtoEsriJSON::test_dumps_to_esrijson_point
+PASSED geomet/tests/esri_test.py::TestGeoJSONtoEsriJSON::test_dumps_to_esrijson_polygon1
+PASSED geomet/tests/esri_test.py::TestGeoJSONtoEsriJSON::test_srid_checks
+PASSED geomet/tests/esri_test.py::TestGeoJSONtoEsriJSON::test_dumps_to_esrijson_polyline1
+PASSED geomet/tests/esri_test.py::TestGeoJSONtoEsriJSON::test_dumps_to_esrijson_polyline2
+PASSED geomet/tests/esri_test.py::TestIOReaderWriter::test_io_load
+PASSED geomet/tests/esri_test.py::TestIOReaderWriter::test_io_dump
+PASSED geomet/tests/esri_test.py::TestEsriJSONtoGeoJSON::test_loads_to_geojson_point
+PASSED geomet/tests/esri_test.py::TestEsriJSONtoGeoJSON::test_loads_to_geojson_multipoint
+PASSED geomet/tests/esri_test.py::TestEsriJSONtoGeoJSON::test_loads_to_empty_mpt_to_gj
+PASSED geomet/tests/esri_test.py::TestEsriJSONtoGeoJSON::test_loads_to_geojson_linstring
+PASSED geomet/tests/esri_test.py::TestEsriJSONtoGeoJSON::test_loads_unsupported_geom_type
+PASSED geomet/tests/esri_test.py::TestEsriJSONtoGeoJSON::test_loads_empty_pt_to_gj
+PASSED geomet/tests/esri_test.py::TestEsriJSONtoGeoJSON::test_loads_empty_polyline_to_gj
+PASSED geomet/tests/esri_test.py::TestEsriJSONtoGeoJSON::test_loads_empty_polygon_to_gj
+PASSED geomet/tests/esri_test.py::TestEsriJSONtoGeoJSON::test_loads_to_geojson_polygon
+============================== 23 passed in 0.51s ==============================
+___TESTS_SECTION_END___
+All tests passed.

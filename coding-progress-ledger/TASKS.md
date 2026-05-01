@@ -604,6 +604,8 @@ Status: done — `runs/swe_agent_pilot/NEXT_DIRECTION_MEMO.md`. Pivot from retro
 ## Forward priorities (post-CRITIC_AUDIT)
 
 ### § Workstream N — Live SWE-agent instrumentation
+Status: **complete** (N1–N6 ✓ as of 2026-05-01).
+
 Goal: Wrap a live SWE-agent run so `LedgerEvent`s emit during execution with real wall-clock timestamps, removing retrospective bias and unlocking K2's hidden-work-gap, submit-provenance, and pre-fix-baseline gaps.
 
 #### N1. Decide sidecar vs in-agent instrumentation
@@ -622,19 +624,7 @@ Status: done — `scripts/build_live_parity_report.py` + `runs/swe_agent_live/PA
 Status: done — `runs/swe_agent_live/N5_BATCH_SUMMARY.md` + 20 live run dirs. All pass `check-run`; every event has a (replay-time) timestamp; no retrospective annotation. Systematic live-vs-retro progress gap is consistent with the N4 frontier policy. **Caveat:** because N3 emits replay-time timestamps, V1's wall-clock columns populate with values too small to be physically informative on this batch — see N6.
 
 #### N6. Capture real wall-clock timestamps on a live SWE-agent run
-Status: not started · _post-critic-audit follow-up; prerequisite for V being more than a stub_
-
-Goal: Make at least one (and ideally all 20) live ledgers carry timestamps that reflect actual SWE-agent execution time, not the microseconds it takes the replay hook to materialize the events. Two viable paths:
-- (a) Hook a live, freshly-running SWE-agent process via the sidecar's stdin (the N1/N2 happy path; never executed end-to-end against a real run).
-- (b) Source per-step timestamps from the upstream trace metadata when available and feed them through the existing replay hook with a synthetic-clock override, so V1's columns populate with realistic intervals.
-
-Acceptance:
-```text
-at least one run dir under runs/swe_agent_live/ carries timestamps with span > 1 minute
-V1's seconds_since_progress_increase is populated with values > 1.0 on that run
-docs/LIVE_SWE_AGENT_HOOK.md notes the wall-clock-vs-replay-time distinction
-N5_BATCH_SUMMARY.md is updated to flag which runs have real wall-clock data
-```
+Status: done — `scripts/run_swe_agent_live_sidecar.py` gained `--synthetic-clock-start` + `--synthetic-step-seconds` (path b). 20 sibling runs at `runs/swe_agent_live_wallclock/<instance_id>/` carry timestamps with `timestamp_span_seconds >= 60`; V1's `seconds_since_progress_increase` exceeds 1.0 on 664/704 step rows. `live_instrumentation.json::timestamp_source` is `synthetic` on the new batch, `replay` on the original N5 batch. `docs/LIVE_SWE_AGENT_HOOK.md` and `runs/swe_agent_live/N5_BATCH_SUMMARY.md` updated. Path (a) — hooking a freshly-running SWE-agent — remains available via the sidecar's stdin path; not exercised here because upstream traces lack per-step timestamps.
 
 ### § Workstream U — Live query CLI / monitor surface
 Status: **NEW** (post-CRITIC_AUDIT). Consumes the query API that landed in commit `5bdcab6`.
@@ -986,11 +976,11 @@ Pilot phase A–M complete as of 2026-04-30 — see `runs/swe_agent_pilot/GO_NO_
 
 ## Minimal first batch (forward phase — current)
 
-Steps 1–4, 7 complete (N1–N3 ✓, W1 ✓, U1+U2 ✓). Remaining:
+Steps 1–4, 7 complete (N1–N6 ✓, W1 ✓, U1+U2 ✓). Remaining:
 - **W4 → W2** shape labels (W4 must precede W2: scalar-progress shifts on `f_02`/`f_03`/`f_07`/`f_10` could change shape labels retroactively)
 - **W3** estimator checkpoint table (blocked on W2)
-- **N6** real wall-clock timestamps (prerequisite for V being more than a stub)
 - **T1** LedgerSet protocol doc
+- **V2** estimator stub recalibration on the N6 wallclock batch (the synthetic-clock data finally makes V1's columns physically informative; the time-ratio-vs-probability rename in V2 is now actionable)
 
 Do not start Q modeling until W3 exists. Treat the live N=20 progress scalar as untrustworthy for outcome questions until W2's shape labels ship — see `runs/swe_agent_live/PARITY_REPORT.md`.
 

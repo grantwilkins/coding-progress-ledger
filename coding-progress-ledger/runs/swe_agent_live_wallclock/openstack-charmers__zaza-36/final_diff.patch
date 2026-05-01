@@ -1,0 +1,58 @@
+
+diff --git a/mock_controllers.yaml b/mock_controllers.yaml
+new file mode 100644
+index 0000000..ab31ccb
+--- /dev/null
++++ b/mock_controllers.yaml
+@@ -0,0 +1,4 @@
++current-controller: test-controller
++controllers:
++  test-controller:
++    uuid: "12345678-1234-1234-1234-123456789012"
+diff --git a/test_config.py b/test_config.py
+new file mode 100644
+index 0000000..b3175bf
+--- /dev/null
++++ b/test_config.py
+@@ -0,0 +1,21 @@
++import asyncio
++from zaza.model import async_set_application_config
++
++# Settings to be tested
++settings = {
++    test-mode: True,
++    transmit-vendor-metrics: False,
++    automatically-retry-hooks: False,
++}
++
++# Model and application names
++model_name = test-model
++application_name = test-application
++
++# Set the configuration using asyncio
++loop = asyncio.get_event_loop()
++task = loop.create_task(async_set_application_config(model_name, application_name, settings))
++loop.run_until_complete(asyncio.wait([task], loop=loop))
++
++print(Configuration set successfully.)
++
+diff --git a/zaza/model.py b/zaza/model.py
+index d5b8365..655d017 100644
+--- a/zaza/model.py
++++ b/zaza/model.py
+@@ -319,8 +319,14 @@ async def async_set_application_config(model_name, application_name,
+     :rtype: None
+     """
+     async with run_in_model(model_name) as model:
++        # Add the necessary settings to the configuration
++        configuration.update({
++            "test-mode": True,
++            "transmit-vendor-metrics": False,
++            "automatically-retry-hooks": False,
++        })
+         return await (model.applications[application_name]
+-                      .set_config(configuration))
++                     .set_config(configuration))
+ 
+ set_application_config = sync_wrapper(async_set_application_config)
+ 

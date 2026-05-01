@@ -29,15 +29,34 @@ The adapter boundary is the stable N1 JSONL protocol, not SWE-agent internals. A
 agent | python -m ledger_progress.sidecar --run-dir runs/swe_agent_live/<id> --adapter swe_agent
 ```
 
-For N3, existing known-success and known-failure SWE-agent pilot traces supply the SWE-agent-shaped step stream. The script emits fresh wall-clock timestamps while streaming, so the resulting ledger exercises the live sidecar path and unlocks Workstream V timestamp features without editing SWE-agent source code.
+For N3, existing known-success and known-failure SWE-agent pilot traces supply the SWE-agent-shaped step stream. The script emits per-event timestamps while streaming, so the resulting ledger exercises the live sidecar path and unlocks Workstream V timestamp features without editing SWE-agent source code.
+
+## Wall-clock vs replay-time timestamps
+
+The default replay path stamps each event with `datetime.now(UTC)` at materialization, which produces microsecond-spaced timestamps because the replay loop runs in-process. Those timestamps satisfy the schema requirement that every live event carry a non-null `timestamp`, but they do not reflect actual SWE-agent execution time and so V1's `seconds_since_progress_increase` reads near zero on those runs.
+
+For N6, the script gained a synthetic-clock override:
+
+```bash
+uv run python scripts/run_swe_agent_live_sidecar.py \
+  --source-run-dir runs/swe_agent_pilot/<pilot> \
+  --output-run-dir runs/swe_agent_live_wallclock/<instance_id> \
+  --synthetic-clock-start 2026-05-01T00:00:00+00:00 \
+  --synthetic-step-seconds 30
+```
+
+Each wire event advances the synthetic clock by `--synthetic-step-seconds`, so per-step intervals fall into a regime where V1's wall-clock columns are physically informative (>1 second per step). `live_instrumentation.json` records `timestamp_source` (`replay` or `synthetic`), `first_event_timestamp`, `last_event_timestamp`, and `timestamp_span_seconds` so consumers can tell which mode produced a run dir.
+
+The synthetic-clock mode is **not** real wall-clock data; it is a calibration-friendly stand-in for traces that lack per-step timestamps in the upstream metadata. A future hook against a freshly-running SWE-agent process would replace `_utc_now` with real `datetime.now()` calls between steps and produce true wall-clock data via the same code path.
 
 ## N3 artifacts
 
 Generated runs:
 
 ```text
-runs/swe_agent_live/Melevir__cognitive_complexity-15   # upstream success
-runs/swe_agent_live/WIPACrepo__iceprod-339             # upstream failure
+runs/swe_agent_live/Melevir__cognitive_complexity-15   # upstream success (replay-time timestamps)
+runs/swe_agent_live/WIPACrepo__iceprod-339             # upstream failure (replay-time timestamps)
+runs/swe_agent_live_wallclock/<instance_id>            # 20 runs, synthetic-clock timestamps (N6)
 ```
 
 Both pass:
