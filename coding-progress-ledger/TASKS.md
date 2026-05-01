@@ -1335,7 +1335,7 @@ all events carry a non-None timestamp
 ledger-run check-run passes on the resulting run dir
 ```
 
-N2 test coverage also locks replay-equality, timestamp authority, explicit-op bypass, SWE-agent vocabulary categories, scope-change ops (`split` / `reopen` / `invalidate`), `add_evidence`, CLI input-file mode, and <100ms/event synthetic latency. Full suite: `uv run pytest` → 292 passed.
+N2 test coverage also locks replay-equality, per-event timestamp authority, explicit-op bypass, explicit id/category/parent/weight preservation, additive v1.x wire-format compatibility, single-`run_id` invariants, SWE-agent vocabulary categories, no completion from command/exit-status alone, scope-change ops (`split` / `reopen` / `invalidate`), `add_evidence`, CLI input-file mode, and <100ms/event synthetic latency. Full suite after test hardening: `uv run pytest` → 296 passed.
 
 #### N3. Hook one SWE-agent run
 Status: not started
