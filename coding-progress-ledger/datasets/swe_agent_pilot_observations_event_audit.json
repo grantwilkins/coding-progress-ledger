@@ -1,0 +1,708 @@
+{
+  "category_resolution": {
+    "drop_source_differences": [
+      {
+        "coding_drop_source": "validation",
+        "event_index": 5,
+        "event_type": "add_subtask",
+        "native_coding_drop_source": "product",
+        "native_overall_drop_source": "product",
+        "overall_drop_source": "validation",
+        "run_id": "swe_agent_pilot_f_05",
+        "step": 14
+      },
+      {
+        "coding_drop_source": "validation",
+        "event_index": 3,
+        "event_type": "add_subtask",
+        "native_coding_drop_source": "product",
+        "native_overall_drop_source": "product",
+        "overall_drop_source": "validation",
+        "run_id": "swe_agent_pilot_f_07",
+        "step": 16
+      },
+      {
+        "coding_drop_source": "validation",
+        "event_index": 5,
+        "event_type": "add_subtask",
+        "native_coding_drop_source": "product",
+        "native_overall_drop_source": "product",
+        "overall_drop_source": "validation",
+        "run_id": "swe_agent_pilot_f_08",
+        "step": 28
+      },
+      {
+        "coding_drop_source": "validation",
+        "event_index": 7,
+        "event_type": "add_subtask",
+        "native_coding_drop_source": "product",
+        "native_overall_drop_source": "product",
+        "overall_drop_source": "validation",
+        "run_id": "swe_agent_pilot_f_09",
+        "step": 26
+      },
+      {
+        "coding_drop_source": "validation",
+        "event_index": 7,
+        "event_type": "add_subtask",
+        "native_coding_drop_source": "product",
+        "native_overall_drop_source": "product",
+        "overall_drop_source": "validation",
+        "run_id": "swe_agent_pilot_s_01",
+        "step": 28
+      },
+      {
+        "coding_drop_source": "none",
+        "event_index": 5,
+        "event_type": "add_subtask",
+        "native_coding_drop_source": "product",
+        "native_overall_drop_source": "product",
+        "overall_drop_source": "artifact",
+        "run_id": "swe_agent_pilot_s_03",
+        "step": 16
+      },
+      {
+        "coding_drop_source": "none",
+        "event_index": 7,
+        "event_type": "reopen_subtask",
+        "native_coding_drop_source": "product",
+        "native_overall_drop_source": "product",
+        "overall_drop_source": "artifact",
+        "run_id": "swe_agent_pilot_s_03",
+        "step": 22
+      },
+      {
+        "coding_drop_source": "validation",
+        "event_index": 5,
+        "event_type": "add_subtask",
+        "native_coding_drop_source": "product",
+        "native_overall_drop_source": "product",
+        "overall_drop_source": "validation",
+        "run_id": "swe_agent_pilot_s_10",
+        "step": 8
+      }
+    ],
+    "large_native_resolved_divergences": [
+      {
+        "max_diff": 0.33333333333333337,
+        "run_id": "swe_agent_pilot_s_03"
+      }
+    ],
+    "max_abs_native_resolved_coding_progress_diff_by_run": {
+      "swe_agent_pilot_s_03": 0.33333333333333337
+    },
+    "rows_by_category_resolution_mode": {
+      "mixed": 192,
+      "native": 10
+    },
+    "runs_with_native_resolved_metric_mismatch": [
+      "swe_agent_pilot_s_03"
+    ]
+  },
+  "drops": {
+    "coding_drop_source_counts": {
+      "investigation": 14,
+      "product": 18,
+      "validation": 25
+    },
+    "largest_coding_drops_by_run": {
+      "swe_agent_pilot_f_01": {
+        "amount": 0.5,
+        "event_index": 3,
+        "source": "product",
+        "step": 12
+      },
+      "swe_agent_pilot_f_02": {
+        "amount": 0.5,
+        "event_index": 3,
+        "source": "investigation",
+        "step": 12
+      },
+      "swe_agent_pilot_f_03": {
+        "amount": 0.5,
+        "event_index": 3,
+        "source": "investigation",
+        "step": 10
+      },
+      "swe_agent_pilot_f_04": {
+        "amount": 0.5,
+        "event_index": 3,
+        "source": "product",
+        "step": 12
+      },
+      "swe_agent_pilot_f_05": {
+        "amount": 0.5,
+        "event_index": 3,
+        "source": "investigation",
+        "step": 4
+      },
+      "swe_agent_pilot_f_06": {
+        "amount": 0.5,
+        "event_index": 3,
+        "source": "investigation",
+        "step": 8
+      },
+      "swe_agent_pilot_f_07": {
+        "amount": 0.5,
+        "event_index": 3,
+        "source": "validation",
+        "step": 16
+      },
+      "swe_agent_pilot_f_08": {
+        "amount": 0.5,
+        "event_index": 3,
+        "source": "investigation",
+        "step": 12
+      },
+      "swe_agent_pilot_f_09": {
+        "amount": 0.5,
+        "event_index": 3,
+        "source": "product",
+        "step": 18
+      },
+      "swe_agent_pilot_f_10": {
+        "amount": 0.5,
+        "event_index": 3,
+        "source": "investigation",
+        "step": 14
+      },
+      "swe_agent_pilot_s_01": {
+        "amount": 0.5,
+        "event_index": 3,
+        "source": "product",
+        "step": 24
+      },
+      "swe_agent_pilot_s_02": {
+        "amount": 0.5,
+        "event_index": 3,
+        "source": "investigation",
+        "step": 8
+      },
+      "swe_agent_pilot_s_03": {
+        "amount": 0.5,
+        "event_index": 3,
+        "source": "investigation",
+        "step": 10
+      },
+      "swe_agent_pilot_s_04": {
+        "amount": 0.5,
+        "event_index": 3,
+        "source": "product",
+        "step": 14
+      },
+      "swe_agent_pilot_s_05": {
+        "amount": 0.5,
+        "event_index": 3,
+        "source": "investigation",
+        "step": 8
+      },
+      "swe_agent_pilot_s_06": {
+        "amount": 0.5,
+        "event_index": 3,
+        "source": "investigation",
+        "step": 8
+      },
+      "swe_agent_pilot_s_07": {
+        "amount": 0.5,
+        "event_index": 3,
+        "source": "investigation",
+        "step": 8
+      },
+      "swe_agent_pilot_s_08": {
+        "amount": 0.5,
+        "event_index": 3,
+        "source": "product",
+        "step": 4
+      },
+      "swe_agent_pilot_s_09": {
+        "amount": 0.5,
+        "event_index": 3,
+        "source": "product",
+        "step": 10
+      },
+      "swe_agent_pilot_s_10": {
+        "amount": 0.5,
+        "event_index": 3,
+        "source": "product",
+        "step": 6
+      }
+    },
+    "largest_overall_drops_by_run": {
+      "swe_agent_pilot_f_01": {
+        "amount": 0.5,
+        "event_index": 3,
+        "source": "product",
+        "step": 12
+      },
+      "swe_agent_pilot_f_02": {
+        "amount": 0.5,
+        "event_index": 3,
+        "source": "investigation",
+        "step": 12
+      },
+      "swe_agent_pilot_f_03": {
+        "amount": 0.5,
+        "event_index": 3,
+        "source": "investigation",
+        "step": 10
+      },
+      "swe_agent_pilot_f_04": {
+        "amount": 0.5,
+        "event_index": 3,
+        "source": "product",
+        "step": 12
+      },
+      "swe_agent_pilot_f_05": {
+        "amount": 0.5,
+        "event_index": 3,
+        "source": "investigation",
+        "step": 4
+      },
+      "swe_agent_pilot_f_06": {
+        "amount": 0.5,
+        "event_index": 3,
+        "source": "investigation",
+        "step": 8
+      },
+      "swe_agent_pilot_f_07": {
+        "amount": 0.5,
+        "event_index": 3,
+        "source": "validation",
+        "step": 16
+      },
+      "swe_agent_pilot_f_08": {
+        "amount": 0.5,
+        "event_index": 3,
+        "source": "investigation",
+        "step": 12
+      },
+      "swe_agent_pilot_f_09": {
+        "amount": 0.5,
+        "event_index": 3,
+        "source": "product",
+        "step": 18
+      },
+      "swe_agent_pilot_f_10": {
+        "amount": 0.5,
+        "event_index": 3,
+        "source": "investigation",
+        "step": 14
+      },
+      "swe_agent_pilot_s_01": {
+        "amount": 0.5,
+        "event_index": 3,
+        "source": "product",
+        "step": 24
+      },
+      "swe_agent_pilot_s_02": {
+        "amount": 0.5,
+        "event_index": 3,
+        "source": "investigation",
+        "step": 8
+      },
+      "swe_agent_pilot_s_03": {
+        "amount": 0.5,
+        "event_index": 3,
+        "source": "investigation",
+        "step": 10
+      },
+      "swe_agent_pilot_s_04": {
+        "amount": 0.5,
+        "event_index": 3,
+        "source": "product",
+        "step": 14
+      },
+      "swe_agent_pilot_s_05": {
+        "amount": 0.5,
+        "event_index": 3,
+        "source": "investigation",
+        "step": 8
+      },
+      "swe_agent_pilot_s_06": {
+        "amount": 0.5,
+        "event_index": 3,
+        "source": "investigation",
+        "step": 8
+      },
+      "swe_agent_pilot_s_07": {
+        "amount": 0.5,
+        "event_index": 3,
+        "source": "investigation",
+        "step": 8
+      },
+      "swe_agent_pilot_s_08": {
+        "amount": 0.5,
+        "event_index": 3,
+        "source": "product",
+        "step": 4
+      },
+      "swe_agent_pilot_s_09": {
+        "amount": 0.5,
+        "event_index": 3,
+        "source": "product",
+        "step": 10
+      },
+      "swe_agent_pilot_s_10": {
+        "amount": 0.5,
+        "event_index": 3,
+        "source": "product",
+        "step": 6
+      }
+    },
+    "negative_coding_delta_count": 57,
+    "negative_overall_delta_count": 73,
+    "overall_drop_source_counts": {
+      "artifact": 16,
+      "investigation": 14,
+      "product": 18,
+      "validation": 25
+    }
+  },
+  "event_vs_step": {
+    "largest_event_level_coding_drops_by_run": {
+      "swe_agent_pilot_f_01": {
+        "amount": 0.5,
+        "event_index": 3,
+        "source": "product",
+        "step": 12
+      },
+      "swe_agent_pilot_f_02": {
+        "amount": 0.5,
+        "event_index": 3,
+        "source": "investigation",
+        "step": 12
+      },
+      "swe_agent_pilot_f_03": {
+        "amount": 0.5,
+        "event_index": 3,
+        "source": "investigation",
+        "step": 10
+      },
+      "swe_agent_pilot_f_04": {
+        "amount": 0.5,
+        "event_index": 3,
+        "source": "product",
+        "step": 12
+      },
+      "swe_agent_pilot_f_05": {
+        "amount": 0.5,
+        "event_index": 3,
+        "source": "investigation",
+        "step": 4
+      },
+      "swe_agent_pilot_f_06": {
+        "amount": 0.5,
+        "event_index": 3,
+        "source": "investigation",
+        "step": 8
+      },
+      "swe_agent_pilot_f_07": {
+        "amount": 0.5,
+        "event_index": 3,
+        "source": "validation",
+        "step": 16
+      },
+      "swe_agent_pilot_f_08": {
+        "amount": 0.5,
+        "event_index": 3,
+        "source": "investigation",
+        "step": 12
+      },
+      "swe_agent_pilot_f_09": {
+        "amount": 0.5,
+        "event_index": 3,
+        "source": "product",
+        "step": 18
+      },
+      "swe_agent_pilot_f_10": {
+        "amount": 0.5,
+        "event_index": 3,
+        "source": "investigation",
+        "step": 14
+      },
+      "swe_agent_pilot_s_01": {
+        "amount": 0.5,
+        "event_index": 3,
+        "source": "product",
+        "step": 24
+      },
+      "swe_agent_pilot_s_02": {
+        "amount": 0.5,
+        "event_index": 3,
+        "source": "investigation",
+        "step": 8
+      },
+      "swe_agent_pilot_s_03": {
+        "amount": 0.5,
+        "event_index": 3,
+        "source": "investigation",
+        "step": 10
+      },
+      "swe_agent_pilot_s_04": {
+        "amount": 0.5,
+        "event_index": 3,
+        "source": "product",
+        "step": 14
+      },
+      "swe_agent_pilot_s_05": {
+        "amount": 0.5,
+        "event_index": 3,
+        "source": "investigation",
+        "step": 8
+      },
+      "swe_agent_pilot_s_06": {
+        "amount": 0.5,
+        "event_index": 3,
+        "source": "investigation",
+        "step": 8
+      },
+      "swe_agent_pilot_s_07": {
+        "amount": 0.5,
+        "event_index": 3,
+        "source": "investigation",
+        "step": 8
+      },
+      "swe_agent_pilot_s_08": {
+        "amount": 0.5,
+        "event_index": 3,
+        "source": "product",
+        "step": 4
+      },
+      "swe_agent_pilot_s_09": {
+        "amount": 0.5,
+        "event_index": 3,
+        "source": "product",
+        "step": 10
+      },
+      "swe_agent_pilot_s_10": {
+        "amount": 0.5,
+        "event_index": 3,
+        "source": "product",
+        "step": 6
+      }
+    },
+    "largest_step_level_coding_drops_by_run": {
+      "swe_agent_pilot_f_01": {
+        "amount": 0.5,
+        "event_index": 3,
+        "source": "product",
+        "step": 12
+      },
+      "swe_agent_pilot_f_02": {
+        "amount": 0.5,
+        "event_index": 3,
+        "source": "investigation",
+        "step": 12
+      },
+      "swe_agent_pilot_f_03": {
+        "amount": 0.5,
+        "event_index": 3,
+        "source": "investigation",
+        "step": 10
+      },
+      "swe_agent_pilot_f_04": {
+        "amount": 0.5,
+        "event_index": 3,
+        "source": "product",
+        "step": 12
+      },
+      "swe_agent_pilot_f_05": {
+        "amount": 0.5,
+        "event_index": 3,
+        "source": "investigation",
+        "step": 4
+      },
+      "swe_agent_pilot_f_06": {
+        "amount": 0.5,
+        "event_index": 3,
+        "source": "investigation",
+        "step": 8
+      },
+      "swe_agent_pilot_f_07": {
+        "amount": 0.5,
+        "event_index": 3,
+        "source": "validation",
+        "step": 16
+      },
+      "swe_agent_pilot_f_08": {
+        "amount": 0.5,
+        "event_index": 3,
+        "source": "investigation",
+        "step": 12
+      },
+      "swe_agent_pilot_f_09": {
+        "amount": 0.5,
+        "event_index": 3,
+        "source": "product",
+        "step": 18
+      },
+      "swe_agent_pilot_f_10": {
+        "amount": 0.5,
+        "event_index": 3,
+        "source": "investigation",
+        "step": 14
+      },
+      "swe_agent_pilot_s_01": {
+        "amount": 0.5,
+        "event_index": 3,
+        "source": "product",
+        "step": 24
+      },
+      "swe_agent_pilot_s_02": {
+        "amount": 0.5,
+        "event_index": 3,
+        "source": "investigation",
+        "step": 8
+      },
+      "swe_agent_pilot_s_03": {
+        "amount": 0.5,
+        "event_index": 3,
+        "source": "investigation",
+        "step": 10
+      },
+      "swe_agent_pilot_s_04": {
+        "amount": 0.6666666666666667,
+        "event_index": 4,
+        "source": "validation",
+        "step": 14
+      },
+      "swe_agent_pilot_s_05": {
+        "amount": 0.5,
+        "event_index": 3,
+        "source": "investigation",
+        "step": 8
+      },
+      "swe_agent_pilot_s_06": {
+        "amount": 0.5,
+        "event_index": 3,
+        "source": "investigation",
+        "step": 8
+      },
+      "swe_agent_pilot_s_07": {
+        "amount": 0.5,
+        "event_index": 3,
+        "source": "investigation",
+        "step": 8
+      },
+      "swe_agent_pilot_s_08": {
+        "amount": 0.5,
+        "event_index": 3,
+        "source": "product",
+        "step": 4
+      },
+      "swe_agent_pilot_s_09": {
+        "amount": 0.5,
+        "event_index": 3,
+        "source": "product",
+        "step": 10
+      },
+      "swe_agent_pilot_s_10": {
+        "amount": 0.5,
+        "event_index": 3,
+        "source": "product",
+        "step": 6
+      }
+    },
+    "runs_where_largest_coding_drop_differs": [
+      {
+        "difference": 0.16666666666666674,
+        "event_level_largest_coding_drop": 0.5,
+        "run_id": "swe_agent_pilot_s_04",
+        "step_level_largest_coding_drop": 0.6666666666666667
+      }
+    ],
+    "runs_with_multiple_events_at_same_step": {
+      "swe_agent_pilot_f_01": [
+        16
+      ],
+      "swe_agent_pilot_f_04": [
+        18
+      ],
+      "swe_agent_pilot_f_05": [
+        32
+      ],
+      "swe_agent_pilot_f_09": [
+        40
+      ],
+      "swe_agent_pilot_s_01": [
+        42
+      ],
+      "swe_agent_pilot_s_03": [
+        36
+      ],
+      "swe_agent_pilot_s_04": [
+        14,
+        16
+      ],
+      "swe_agent_pilot_s_07": [
+        22
+      ],
+      "swe_agent_pilot_s_09": [
+        18
+      ],
+      "swe_agent_pilot_s_10": [
+        22
+      ]
+    },
+    "substantial_largest_drop_differences": [
+      {
+        "difference": 0.16666666666666674,
+        "event_level_largest_coding_drop": 0.5,
+        "run_id": "swe_agent_pilot_s_04",
+        "step_level_largest_coding_drop": 0.6666666666666667
+      }
+    ]
+  },
+  "integrity": {
+    "completed_exceeds_active": [],
+    "delta_mismatches": [],
+    "first_delta_nonzero": [],
+    "invalid_progress": [],
+    "invalid_success_metadata": [],
+    "missing_identifiers": [],
+    "parse_failures": [],
+    "passed": true,
+    "unknown_success_metadata": []
+  },
+  "success_progress_quadrants": {
+    "failure_high_progress": [
+      "swe_agent_pilot_f_06",
+      "swe_agent_pilot_f_09",
+      "swe_agent_pilot_s_03",
+      "swe_agent_pilot_s_06",
+      "swe_agent_pilot_s_09"
+    ],
+    "failure_low_progress": [
+      "swe_agent_pilot_f_01",
+      "swe_agent_pilot_f_02",
+      "swe_agent_pilot_f_03",
+      "swe_agent_pilot_f_04",
+      "swe_agent_pilot_f_05",
+      "swe_agent_pilot_f_07",
+      "swe_agent_pilot_f_08",
+      "swe_agent_pilot_f_10"
+    ],
+    "high_progress_threshold": 0.8,
+    "success_high_progress": [
+      "swe_agent_pilot_s_01",
+      "swe_agent_pilot_s_02",
+      "swe_agent_pilot_s_05",
+      "swe_agent_pilot_s_07",
+      "swe_agent_pilot_s_08",
+      "swe_agent_pilot_s_10"
+    ],
+    "success_low_progress": [
+      "swe_agent_pilot_s_04"
+    ],
+    "unknown_success": []
+  },
+  "totals": {
+    "input_csv": "datasets/swe_agent_pilot_observations_event.csv",
+    "rows": 202,
+    "runs": 20
+  },
+  "warnings": [
+    "large native/resolved divergence: 1 runs",
+    "event-level and step-level largest drops differ substantially: 1 runs"
+  ]
+}

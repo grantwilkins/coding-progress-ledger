@@ -50,8 +50,8 @@ signature are plausibly in scope.
 | `S1`       | `INVESTIGATION` | 3                 | 3                        | upfront pytest probes the bug per issue's repro command |
 | `S2`       | `INVESTIGATION` | 11                | 7, 9, 11                 | search_dir + opens for both files |
 | `S3`       | `PRODUCT`       | 15                | 15                       | test pattern aligned with new sklearn API |
-| `S4`       | `PRODUCT`       | (blocked at 32)   | 22-34                    | _correlation_remover edits oscillate; iter 3 at step 32 |
-| `S5`       | `VALIDATION`    | (blocked at 32)   | 16, 24, 30               | three intermittent pytest runs; final state never validated |
+| `S4`       | `VALIDATION`    | (blocked at 32)   | 16, 24, 30               | three intermittent pytest runs; final state never validated |
+| `S5`       | `PRODUCT`       | (blocked at 32)   | 22-34                    | _correlation_remover edits oscillate; iter 3 at step 32 |
 
 ### 6. Known missing evidence
 

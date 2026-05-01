@@ -3,23 +3,55 @@
   "instance_id": "joke2k__django-environ-174",
   "root_task": "Allow custom backends in Env.db_url_config()",
   "events": [
-    {"op": "add", "step": 2, "id": "S1", "category": "INVESTIGATION",
-     "description": "Locate Env.db_url_config in environ.py"},
-    {"op": "complete", "step": 13, "id": "S1",
-     "evidence": [
-       "step 11: search_file 'def db_url_config' returns one match in environ/environ.py",
-       "step 13: goto 352 confirms target region in view"
-     ]},
-    {"op": "add", "step": 14, "id": "S2", "category": "PRODUCT",
-     "description": "Edit environ.py:425-426 to handle custom backend schemes"},
-    {"op": "complete", "step": 15, "id": "S2",
-     "evidence": "step 15: tool ack of edit 425:426; file size grows 794->796 (+2 lines)"},
-    {"op": "add", "step": 14, "id": "S3", "category": "VALIDATION",
-     "description": "Verify the edit doesn't break existing tests"},
-    {"op": "add", "step": 16, "id": "S4", "category": "ARTIFACT",
-     "description": "Submit final patch"},
-    {"op": "complete", "step": 16, "id": "S4",
-     "evidence": "step 16: submit issued; exit_status 'submitted'"}
+    {
+      "op": "add",
+      "step": 2,
+      "id": "S1",
+      "category": "INVESTIGATION",
+      "description": "Locate Env.db_url_config in environ.py"
+    },
+    {
+      "op": "complete",
+      "step": 13,
+      "id": "S1",
+      "evidence": [
+        "step 11: search_file 'def db_url_config' returns one match in environ/environ.py",
+        "step 13: goto 352 confirms target region in view"
+      ]
+    },
+    {
+      "op": "add",
+      "step": 14,
+      "id": "S2",
+      "category": "PRODUCT",
+      "description": "Edit environ.py:425-426 to handle custom backend schemes"
+    },
+    {
+      "op": "add",
+      "step": 14,
+      "id": "S3",
+      "category": "VALIDATION",
+      "description": "Verify the edit doesn't break existing tests"
+    },
+    {
+      "op": "complete",
+      "step": 15,
+      "id": "S2",
+      "evidence": "step 15: tool ack of edit 425:426; file size grows 794->796 (+2 lines)"
+    },
+    {
+      "op": "add",
+      "step": 16,
+      "id": "S4",
+      "category": "ARTIFACT",
+      "description": "Submit final patch"
+    },
+    {
+      "op": "complete",
+      "step": 16,
+      "id": "S4",
+      "evidence": "step 16: submit issued; exit_status 'submitted'"
+    }
   ],
   "quality": {
     "annotator": "Claude (E1)",

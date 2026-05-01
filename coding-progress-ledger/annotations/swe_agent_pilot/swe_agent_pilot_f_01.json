@@ -27,17 +27,17 @@
       "description": "Replace getip.php lookup at iceprod/core/functions.py:274"
     },
     {
-      "op": "complete",
-      "step": 15,
-      "id": "S2",
-      "evidence": "step 15: tool ack confirms edit 274:274 applied"
-    },
-    {
       "op": "add",
       "step": 14,
       "id": "S3",
       "category": "VALIDATION",
       "description": "Verify replacement does not break the test mock at tests/core/functions_test.py"
+    },
+    {
+      "op": "complete",
+      "step": 15,
+      "id": "S2",
+      "evidence": "step 15: tool ack confirms edit 274:274 applied"
     },
     {
       "op": "add",

@@ -719,7 +719,7 @@ summary states whether annotation felt like trace-backed observation or narrativ
 ## § Workstream F — Observation dataset integration
 
 ### F1. Extend dataset builder to include SWE-agent pilot
-Status: not started
+Status: done — verified the existing `scripts/build_ledger_observation_dataset.py` accepts `--runs-dir runs/swe_agent_pilot` and emits the SWE-agent-only event/step/summary CSVs without modification. `run_id` preserves the `swe_agent_pilot_*` prefix for every row; no toy/control rows are mixed in when the dataset is built with `--runs-dir runs/swe_agent_pilot`.
 
 Goal: Verify (and only modify if needed) that the existing builder picks up `runs/swe_agent_pilot/**`. The current builder already scans `runs/**/ledger.jsonl`, so this is mostly a sanity check.
 
@@ -742,7 +742,7 @@ no toy/control runs are accidentally re-categorized as SWE-agent
 ```
 
 ### F2. Generate SWE-agent-only observation tables
-Status: not started
+Status: done — generated at the spec'd paths: `datasets/swe_agent_pilot_observations_event.csv` (202 rows), `datasets/swe_agent_pilot_observations_step.csv` (191 rows), `datasets/swe_agent_pilot_observations_summary.md`. No rows from `runs/task_*`, `runs/control_*`, or `runs/negative_control_*` (verified by `--runs-dir runs/swe_agent_pilot` filter).
 
 Command:
 ```bash
@@ -762,7 +762,7 @@ no rows from runs/task_*, runs/control_*, runs/negative_control_*
 ```
 
 ### F3. Audit SWE-agent observation dataset
-Status: not started
+Status: done — `datasets/swe_agent_pilot_observations_step_audit.{md,json}` and `_event_audit.{md,json}`. Integrity checks: `completed_exceeds_active=[]`, `delta_mismatches=[]`, `first_delta_nonzero=[]`, `invalid_progress=[]`. One residual warning (`s_03` shows a 0.33 native/resolved coding-progress divergence around the step-22 REOPEN) — recorded as a downstream-audit signal, not blocking. Note: 6 spec files (`f_01`, `f_04`, `f_05`, `f_09`, `s_04`, `s_10`) were stable-sorted to step-monotonic order during F3 because non-monotonic step ordering caused 68 spurious `delta_mismatch` warnings; semantics unchanged (same final progress numbers as before).
 
 Command:
 ```bash
@@ -781,7 +781,7 @@ event-vs-step differences reported
 ```
 
 ### F4. Compare toy/live vs SWE-agent distributions
-Status: not started
+Status: done — `datasets/observation_distribution_comparison.md`. SWE-agent traces are demonstrably more diverse: they populate all four success/progress quadrants (toy/live populates only 2 of 4); they exercise BLOCKED status (toy/live does not); they have richer drop-source distribution (4 categories vs 3, with INVESTIGATION drops only on SWE-agent); and 100% of SWE-agent runs are non-monotonic vs 78% of toy/live. The doc also surfaces a real builder bug: `resolve_final_success` infers from `test_output.txt` and misclassifies 3 SWE-agent successes (`s_03`, `s_06`, `s_09`) as failures because SWE-bench eval logs format pass markers differently from toy/live's pytest output. Authoritative upstream label is `source_metadata.json:final_success`. Builder fix is a follow-up before any G claim about prediction performance.
 
 Outputs:
 ```text
@@ -813,7 +813,7 @@ report flags any toy/live property that doesn't survive on real traces
 ## § Workstream G — Completion-prediction smoke test on SWE-agent pilot
 
 ### G1. Run existing smoke script on SWE-agent-only step table
-Status: not started
+Status: done — `datasets/swe_agent_pilot_completion_smoke_predictions.csv` (574 rows, 191 steps × 3 model variants ≈ 573 + 1 header) and `datasets/swe_agent_pilot_completion_smoke_report.md`. Leave-one-run-out by `run_id`; no leakage (no future events, no `final_success` as feature). All three model variants (`progress_only`, `ledger_basic`, `elapsed_only`) produced predictions. Disclaimer included via the auto-generated report header and reinforced in G2's appended interpretation.
 
 Note: the current `scripts/smoke_test_completion_prediction.py` uses `--input-csv`, `--predictions-csv`, `--report-md`. **This file uses the existing flag names** — earlier draft language using `--output-report` / `--output-predictions` was a brief artifact, not a code change. Don't rename.
 
@@ -834,7 +834,7 @@ disclaimer included in report
 ```
 
 ### G2. Add SWE-agent smoke report interpretation
-Status: not started
+Status: done — `datasets/swe_agent_pilot_completion_smoke_report.md` extended with eight subsections (G2.1-G2.8). The report explicitly does NOT claim predictive performance (G2.1 disclaimer). High-progress failures exist naturally per upstream label: `f_06` (G2.3). Builder-classified high-progress failures include 3 misclassified upstream successes (`s_03`, `s_06`, `s_09`); only `f_06` is a real upstream-failure-at-1.00. `ledger_basic` does not improve over `progress_only` on this small/noisy a sample (G2.4); `elapsed_only` is anti-correlated because long SWE-agent traces are stuck-loop failures (G2.5). Verdict (G2.7): data is suitable for a larger retrospective study, conditional on the builder's `resolve_final_success` heuristic being fixed and Workstream H's inter-annotator pass.
 
 Goal: Make the report explicitly answer the questions that motivate the pilot.
 
@@ -855,7 +855,7 @@ report cross-references which case studies (G3) illustrate which finding
 ```
 
 ### G3. Case-study extraction
-Status: not started
+Status: done — `datasets/swe_agent_pilot_case_studies.md`. Four trace-backed case studies populating all four success/progress quadrants: `s_01` (clean success), `s_03` (non-monotonic success with REOPEN), `f_06` (high-progress failure with hidden-work gap), `f_03` (stuck-loop failure with investigation blocked). Every claim cites a ledger event or trace step; no unsupported claims; each case is one page or less.
 
 Outputs:
 ```text
