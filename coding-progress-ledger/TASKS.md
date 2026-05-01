@@ -28,7 +28,6 @@ Every agent and contributor must respect these constraints, in every workstream,
 Do not change ledger scoring semantics.
 Do not mutate source SWE-agent traces.
 Do not rewrite existing historical ledger.jsonl files.
-Do not add observer automation yet.
 Do not train large models.
 Do not claim predictive performance.
 Do not infer completion from progress.
@@ -36,16 +35,42 @@ Do not use final outcome as a feature.
 Do not use future trace events when constructing checkpoint features.
 ```
 
+> **Note (post-CRITIC_AUDIT, 2026-04-30):** the previous rule "Do not add observer automation yet" has been **removed**. It served the pilot phase by keeping retrospective annotation honest; it no longer reflects the mission. Live-instrumentation work (§ N, § U) is now the priority.
+
 Every output must distinguish:
 
 ```text
 source trace        = immutable input
-retrospective ledger = annotation artifact
+retrospective ledger = annotation artifact (pilot phase, complete)
+live ledger         = events emitted by a running agent (target phase, building)
 observation dataset  = derived replay artifact
 completion label     = final success/failure metadata
 ```
 
 If a task seems to require violating one of these rules, stop and escalate — don't quietly relax them.
+
+---
+
+## § 0.1 Mission audit (post-K, post-critic-review)
+
+The user's stated mission, verbatim:
+
+> *"an automated way to check and query progress for long range agentic tasks with a ledger design."*
+
+Four critic agents audited the framework against this mission on 2026-04-30. The unanimous verdict, with the surgical fixes already shipped and the strategic gaps still open, is documented in **`runs/swe_agent_pilot/CRITIC_AUDIT.md`**.
+
+**Surgical fixes shipped 2026-04-30 (commit `5bdcab6`):**
+
+- `LedgerEvent.timestamp` (optional ISO-8601) — round-tripped through serialization, auto-stamped by `LedgerSession`. Unlocks deadline-aware progress modeling.
+- Six new query functions on `ledger_progress/queries.py`: `current_step`, `active_blocked_leaves`, `reopens_since`, `newly_discovered_since`, `last_validation_event`, `stalled_for`. Implements the "check and query" mission verb at the package level.
+- 17 new columns on the observation channel: per-category progress (`product_progress` / `validation_progress` / `investigation_progress`), per-step event windows (`step_added_subtasks`, `step_*_completes`), evidence strength (`step_strong_completions` / `cum_*` — K1 classifier wired in), stalled intervals (`steps_since_*`). Mission features 1–10 are now all first-class.
+
+**Strategic re-scoping per CRITIC_AUDIT § 4:**
+
+- **PROMOTED to current priority:** § Workstream N (live instrumentation), § Workstream U (live query CLI / monitor — new), § Workstream T1 (LedgerSet protocol doc, the only multi-task-scope unblocker), § Workstream V (time-aware features — new, consumes the timestamp field).
+- **DEFERRED indefinitely:** § Workstream R (paper write-up; premature — locks in the retrospective framing as the product), § Workstream O (100-trace retrospective scale-out; the smoke test runs at chance by design and trace 21+ is debt), § Workstream P / P1–P3 (cross-source pilots; doubles annotation surface for a hypothesis with no live consumer).
+
+**Pilot phase (A–M) is closed.** The infrastructure produced real value (clean schema, 20 high-fidelity annotations, 5/5 quadrant inter-annotator agreement, mission features now first-class). Everything *forward* should be live-instrumentation-shaped, not annotation-shaped.
 
 ---
 
@@ -1128,6 +1153,26 @@ report tells us what a future live SWE-agent integration would need to instrumen
 report distinguishes "this source omits X" from "no source could reconstruct X"
 ```
 
+### K3. Extend `classify_evidence` with `tool_action` strong type (post-CRITIC_AUDIT)
+Status: not started · _cheap channel improvement; runs in parallel with N1_
+
+Goal: K2 found that ~60% of K1's 30 manual-only completions are short edit/submit/goto/search tool acks that the classifier currently treats as `manual_note`. Adding a `tool_action` strong-evidence type closes them without re-annotation.
+
+Outputs:
+```text
+scripts/rescore_suite_by_category.py   # add `tool_action` to STRONG_EVIDENCE_TYPES + EVIDENCE_PATTERNS
+tests/test_rescore_suite_by_category.py # extend
+runs/swe_agent_pilot/EVIDENCE_AUDIT.md  # regenerate via scripts/audit_pilot_evidence.py
+```
+
+Acceptance:
+```text
+EVIDENCE_PATTERNS gains a tuple ("tool_action", ("edit ", "submit ", "goto ", "search_file ", "search_dir ", "tool ack"))
+STRONG_EVIDENCE_TYPES includes "tool_action"
+manual-only completion count on the SWE-agent pilot drops from 30 to ≤ 12
+test invariants in tests/test_pilot_evidence_audit.py still pass
+```
+
 ---
 
 ## § Workstream L — Visualization and qualitative review
@@ -1212,8 +1257,8 @@ gate fail: H3 revisions are insufficient; do NOT proceed to M2 scale; re-open H3
 report cites which v3 leaf each revision touched and whether the gap closed
 ```
 
-### M2. Define next sample size
-Status: blocked on H4
+### M2. Define next direction (post-CRITIC_AUDIT pivot)
+Status: **REVISED** post-CRITIC_AUDIT. Original framing ("define next sample size for retrospective scale-out") is superseded. The right next direction is **live instrumentation (Workstream N)**, not a 100-trace retrospective batch. Concrete deliverable: a one-page memo at `runs/swe_agent_pilot/NEXT_DIRECTION_MEMO.md` that records the pivot, references `runs/swe_agent_pilot/CRITIC_AUDIT.md` § 4, and states the gating criterion ("proceed to N5 live N=20 only if N4 parity report shows live ↔ retrospective shape agreement within 0.05 on at least 2 instances"). Original M2 acceptance criteria (below) are preserved for reference but should not be executed without first revising the memo.
 
 Outputs:
 ```text
@@ -1243,41 +1288,221 @@ clear next action
 no ambiguity about who does what next
 ```
 
+> **Post-CRITIC_AUDIT note:** M2's framing (retrospective scale-out gated on H4) is **superseded** by the audit. The right next action is **Workstream N (live instrumentation)**, not a 100-trace retrospective batch. Re-write M2 as a one-page memo that records the pivot and references `runs/swe_agent_pilot/CRITIC_AUDIT.md` § 4.
+
 ---
 
-## Long-horizon extensions
+## Forward priorities (post-CRITIC_AUDIT)
 
-> **All of the following workstreams are out of pilot scope; revisit after M.** They are listed here so the team has a shared mental map of the road past the pilot, but they should not compete with A–M for attention. Each is intentionally less detailed than A–M.
+The workstreams in this section serve the mission verbs. They are **not** "out of pilot scope" — they are the work.
 
 ### § Workstream N — Live SWE-agent instrumentation
-Status: not started · _out of pilot scope; revisit after M_
+Status: **PROMOTED to current priority** (post-CRITIC_AUDIT, 2026-04-30). Concretized below; the original sketch was a 5-line aside.
 
-Goal: Wrap a live SWE-agent run with a `LedgerSession` callback so events emit during execution, removing retrospective bias.
+Goal: Wrap a live SWE-agent run so `LedgerEvent`s emit during execution (with real wall-clock `timestamp`s), removing retrospective bias and unlocking K2's hidden-work-gap visibility / submit-provenance / pre-fix-baseline gaps.
 
-Sketch:
+The new `LedgerSession.observe(...)` ergonomics (timestamps + clock override) and the new query API (Workstream U's consumer) make this much smaller than M1's "weeks of engineering" estimate.
+
+#### N1. Decide sidecar vs in-agent instrumentation
+Status: not started · **start here**
+
+Outputs:
 ```text
-N1. Decide sidecar vs in-agent instrumentation
-    - sidecar:    parses agent stdout/json events post-step, no agent code changes
-    - in-agent:   patch SWE-agent to call LedgerSession directly
-    - tradeoff:   fidelity vs maintenance burden vs upstream PR friction
-N2. Build minimal hook (or sidecar) for one SWE-agent invocation
-N3. Run it on 1 known-success and 1 known-failure instance from SWE-bench
-N4. Compare live ledger to retrospective ledger for the same instance — schema/evidence parity check
-N5. Decide whether to extend to a live N=20 batch
+docs/LIVE_INSTRUMENTATION_DECISION.md
+```
+
+Decision criteria:
+```text
+sidecar:   parses agent stdout/JSONL events post-step. No agent code changes;
+           works for any agent that can `print(json.dumps({...}))`. Recommended.
+in-agent:  patch SWE-agent to call LedgerSession.add() / .complete() directly.
+           Higher fidelity, requires upstream PR or fork.
+```
+
+Recommendation (pre-walk): sidecar wins for portability. SWE-agent's trajectory format is JSONL-shaped already; the sidecar reads that stream as it grows.
+
+Acceptance:
+```text
+decision recorded with the chosen branch
+constraint list documented (e.g. "agent must emit one JSONL event per step")
+```
+
+#### N2. Build the live ledger sidecar
+Status: blocked on N1
+
+Outputs:
+```text
+ledger_progress/sidecar.py        # python -m ledger_progress.sidecar --run-dir X
+                                  # consumes JSONL on stdin → ledger.jsonl on disk
+tests/test_sidecar.py             # synthetic-input integration test
+```
+
+Design:
+```text
+class LedgerSidecar:
+    accepts: structured agent step (action, observation, optional file edits,
+             optional thought, exit_status)
+    routes:  to LedgerSession.add / complete / start / block / split
+             via heuristic event inferrer (same vocabulary as the SWE-agent
+             addendum's category map)
+    emits:   ledger.jsonl with real timestamps (default clock = UTC now)
+    exposes: in-memory LedgerSession so Workstream U's queries can read it live
 ```
 
 Acceptance:
 ```text
-parity report exists comparing live vs retrospective annotation of the same instance
-parity report says whether live instrumentation closes the K2 (SOURCE_EVIDENCE_GAPS) gaps
+sidecar consumes a synthetic 5-step JSONL stream and emits a 6-event ledger.jsonl
+all events carry a non-None timestamp
+ledger-run check-run passes on the resulting run dir
 ```
 
+#### N3. Hook one SWE-agent run
+Status: blocked on N2
+
+Outputs:
+```text
+runs/swe_agent_live/<instance_id>/...   # one known-success and one known-failure
+                                         # SWE-bench instance, run live with sidecar
+```
+
+Acceptance:
+```text
+two run dirs, each with a real-time ledger.jsonl
+each event has a wall-clock timestamp (so Workstream V's time-aware features fire)
+```
+
+#### N4. Live-vs-retrospective parity report
+Status: blocked on N3
+
+Outputs:
+```text
+runs/swe_agent_live/PARITY_REPORT.md
+```
+
+Compare live vs retrospective ledger for the same SWE-bench instance:
+```text
+schema parity (do the same EventTypes / categories / statuses surface?)
+evidence parity (does live capture what K2 said retrospective could not —
+                 hidden-work gap visibility, submit provenance, pre-fix baseline?)
+shape parity (does final coding-progress agree within 0.05?)
+timestamp realism (are intervals plausible vs the harness's actual timing?)
+```
+
+Acceptance:
+```text
+report cites at least three K2 gaps and says whether live closes them
+divergences are not papered over
+```
+
+#### N5. Extend to a live N=20 batch
+Status: blocked on N4
+
+Goal: only proceed if N4 confirms parity. The result replaces (does not augment) the retrospective N=20 pilot in mission terms.
+
+Acceptance:
+```text
+20 live ledgers, each with timestamps, evidence, hidden-work-gap visibility
+no retrospective annotation needed
+the observation channel can compute mission features from these 20 directly
+```
+
+### § Workstream U — Live query CLI / monitor surface
+Status: **NEW** (post-CRITIC_AUDIT). Consumes the query API that landed in commit `5bdcab6`.
+
+Goal: Make `ledger_progress.queries` reachable from outside Python — a `ledger-run` CLI subcommand and (optionally) a small HTTP server. This is the surface a real long-running monitor would call.
+
+#### U1. `ledger-run watch <run_dir>`
+Status: blocked on N2
+
+Outputs:
+```text
+ledger-run watch <run_dir>   # tails ledger.jsonl; on each new line,
+                              # re-derives progress.csv + summary_by_category.json
+                              # and prints the new step's progress / blocked / stalled
+```
+
+Implementation: poll the file's mtime, replay incrementally, emit the diff.
+
+Acceptance:
+```text
+synthetic test: append 5 events to ledger.jsonl over 5s; watch prints 5 updates
+```
+
+#### U2. `ledger-run query <run_dir> --filter ...`
+Status: not started
+
+Goal: Expose the new query functions as CLI flags.
+
+Outputs:
+```text
+ledger-run query <run_dir> --status blocked
+ledger-run query <run_dir> --stalled-for ge 10
+ledger-run query <run_dir> --reopens-since <step>
+ledger-run query <run_dir> --newly-discovered-since <step>
+ledger-run query <run_dir> --last-validation-event
+```
+
+Acceptance:
+```text
+each flag exercises one of the queries.py functions; output is machine-parseable
+```
+
+#### U3. `ledger-run serve` HTTP server (optional)
+Status: not started · _build only if U1+U2 prove the demand_
+
+Goal: Hold one in-memory `LedgerSession` per active run; expose `POST /events` and `GET /progress` / `GET /blocked` / `GET /stalled`.
+
+Acceptance:
+```text
+single-process server returns live progress for an active run
+test: feed events via POST, query via GET, see updates without restart
+```
+
+### § Workstream V — Time-aware features
+Status: **NEW** (post-CRITIC_AUDIT). Consumes `LedgerEvent.timestamp` (commit `5bdcab6`).
+
+Goal: Once live agents (Workstream N) emit timestamps, add wall-clock-aware features to the observation channel so the mission's "probability of finishing before a deadline" becomes definable.
+
+#### V1. Add wall-clock columns to the observation channel
+Status: blocked on N3 (need at least one ledger with real timestamps)
+
+Outputs (extend `scripts/build_ledger_observation_dataset.py:DATASET_FIELDS`):
+```text
+elapsed_seconds              # event_n.timestamp - event_0.timestamp; null on legacy
+seconds_since_last_event     # event_n.timestamp - event_{n-1}.timestamp
+seconds_since_progress_increase   # wall-clock counterpart to steps_since_*
+events_per_minute            # rolling rate over a 5-event window
+```
+
+Acceptance:
+```text
+columns present and null on legacy step-only ledgers; populated on live ledgers
+```
+
+#### V2. Deadline-aware estimator stub
+Status: blocked on V1
+
+Goal: a minimal `p_finish_by(ledger, deadline)` that uses elapsed_seconds and progress to project completion. Not a real model — a documented stub with explicit assumptions, so the mission's third estimator goal becomes implementable.
+
+Outputs:
+```text
+ledger_progress/estimators.py    # minimal linear extrapolation w/ disclaimer
+tests/test_estimators.py
+```
+
+Acceptance:
+```text
+returns probability in [0, 1] given (ledger, deadline_iso8601)
+disclaimer: assumes linear progress rate; not predictive without calibration
+```
+
+### § Workstream T — Task-set as first-class structure
+Status: **PROMOTED.** T1 is the only roadmap item that addresses multi-task scope. Move to current priority. (T1 details remain at the existing § Workstream T section below; this header just promotes the priority.)
+
 ### § Workstream O — Scale-out retrospective study (100+ traces)
-Status: not started · _out of pilot scope; revisit after M_
+Status: **DEFERRED INDEFINITELY** (post-CRITIC_AUDIT). The smoke test runs at chance by design (M1 § G2.1); scaling 21+ is annotation debt without a live consumer. Re-open only if N4 parity fails badly enough that retrospective remains the only viable channel.
 
-Goal: Move from a 20-trace pilot to a 100+ trace retrospective study, only if M recommends it.
-
-Sketch:
+Sketch (preserved for reference, not for execution):
 ```text
 O1. Revised sampling policy with model/repo balance
 O2. Batch annotation tooling (improvements based on D3 + E1 friction)
@@ -1288,11 +1513,9 @@ O6. Updated GO_NO_GO at N=100
 ```
 
 ### § Workstream P — Cross-model / cross-scaffold comparison
-Status: not started · _out of pilot scope; revisit after M_
+Status: **DEFERRED INDEFINITELY** (post-CRITIC_AUDIT). Adds annotation surface to validate a hypothesis (progress shape) that has no live consumer. Re-open only after Workstream N produces ≥1 live ledger and the cross-source question becomes "does live-shape generalize?" rather than "does retrospective-shape replicate?".
 
-Goal: Take the same set of SWE-bench instances and compare progress/failure shapes across different agent models/scaffolds (e.g. SWE-agent + Llama-70B vs SWE-agent + Claude vs OpenHands + Qwen vs Agentless).
-
-Sketch:
+Sketch (preserved for reference):
 ```text
 P1. Pick 10 instances each solved/attempted by ≥3 distinct model/scaffold pairs
 P2. Annotate or instrument each
@@ -1301,7 +1524,7 @@ P4. Report whether failure shape is more about instance difficulty or about scaf
 ```
 
 ### § Workstream Q — Predictive modeling pass
-Status: not started · _out of pilot scope; revisit after M_
+Status: not started · _waits for Workstream N to land at least one live ledger; the smoke test on retrospective data is plumbing, not science_
 
 Goal: Move beyond the smoke test: real evaluation, real disclaimers.
 
@@ -1316,11 +1539,9 @@ Q6. RESULTS_DISCLAIMERS.md template — what we can and cannot claim
 ```
 
 ### § Workstream R — External write-up / paper draft
-Status: not started · _out of pilot scope; revisit after M_
+Status: **DEFERRED INDEFINITELY** (post-CRITIC_AUDIT). Premature: writing this up before live instrumentation locks in the retrospective framing as the product. Re-open only after N4 (live-vs-retrospective parity report) demonstrates the channel works on live data.
 
-Goal: If the pilot succeeds and Q produces a real result, package it for external readers.
-
-Sketch:
+Sketch (preserved for reference):
 ```text
 R1. Methods writeup (annotation protocol, evidence audit, scoring semantics)
 R2. Threats to validity (annotation drift, retrospective bias, evidence gaps)
@@ -1353,7 +1574,7 @@ Workstream-to-agent assignment (one suggestion, not a hard contract):
 | Agent | Owns |
 |-------|------|
 ## § Workstream T — Task-set as first-class structure
-Status: not started · _out of pilot scope; revisit after M_
+Status: **PROMOTED to current priority** (post-CRITIC_AUDIT). The only roadmap item that addresses the mission's *long-range* verb. T1 (the protocol doc) is unblocked and should run in parallel with N1 (live-instrumentation decision). T2–T5 stay blocked on T1.
 
 The framework currently models progress within one task / one trace. Real long-range agentic work — a multi-week refactor decomposed into 30 sub-issues, a research agent running a sequence of partly-independent experiments, even a single SWE-bench run viewed as "one issue out of N" — has a coarser unit of analysis: the **set of tasks**. Workstream T introduces that unit *without disturbing the single-task pipeline*.
 
@@ -1469,8 +1690,10 @@ no edits to the general doc
 
 ## § Workstream P — Cross-source dataset generalization
 
+> **Note:** this is a **second** workstream named "P" (the first is "Cross-model / cross-scaffold comparison" further up; both predate the audit). Both are **DEFERRED INDEFINITELY** post-CRITIC_AUDIT. Section preserved for reference; do not start P1 / P2 / P3 unless re-opened by a future audit.
+
 ### P1. Investigate a second trace source (e.g. APEX-Agents)
-Status: not started
+Status: **DEFERRED INDEFINITELY** (post-CRITIC_AUDIT). The source-agnostic claim is testable more cheaply once Workstream N produces live ledgers — at that point "does the live channel work on a second agent framework?" replaces "does the retrospective protocol work on a second dataset?". Until then, P1 doubles annotation surface for a hypothesis with no live consumer.
 
 Goal: Test the framework's "general protocol + thin source addendum" claim by exercising it on a non-SWE-agent trace source. Without this, the protocol's source-agnosticism is hypothesis, not evidence.
 
@@ -1538,42 +1761,87 @@ flags any divergence in interpretability that suggests the general protocol is l
 | Agent 9 | H (inter-annotator reliability) |
 | Agent 10 | M (final go/no-go memo) |
 
----
+### Forward parallelization (post-CRITIC_AUDIT)
 
-## Minimal first batch
-
-If you want a smaller crunch target before unleashing everyone, do only this:
-
-```text
-1. Inventory source traces.            (A1, A3)
-2. Sample 2 successful + 2 failed.     (B1 lite — n_success=2, n_failure=2)
-3. Import them into run directories.   (C1, C2, C3)
-4. Manually annotate ledgers.          (D1 lite, D4)
-5. Build step observations.            (F2 on N=4)
-6. Run audit.                          (F3 on N=4)
-7. Write a 1-page feasibility memo.    (proto-M1)
-```
-
-This is the smallest useful SWE-agent pilot. If anything breaks here, fix it before scaling to 20.
+| Agent | Owns |
+|-------|------|
+| Agent A | N1 (sidecar-vs-in-agent decision) → N2 (sidecar implementation) |
+| Agent B | U1 (`ledger-run watch`) — depends on N2 stub |
+| Agent C | T1 (LedgerSet protocol doc) — runs in parallel with N1 |
+| Agent D | U2 (`ledger-run query` CLI) — depends on the queries.py API already shipped |
+| Agent E | M1-revision memo — capture the audit-driven pivot in one page; supersedes the original M1's "scale retrospective" recommendation |
 
 ---
 
-## Definition of done for "ready to scale"
+## Minimal first batch (pilot phase — historical, complete)
 
-You are ready to scale beyond the 20-trace pilot only if:
+The smallest useful SWE-agent retrospective pilot:
 
 ```text
-20 traces imported
-20 traces annotated or failures explained
-source traces never mutated
-ledger.jsonl files replay cleanly
-step observation table generated
-audit integrity passes
-native categories are used for new annotations
-evidence gaps are quantified
-at least one failed high-progress or ambiguous run exists, OR its absence is noted
-annotation burden is measured
-go/no-go memo recommends a next step
+1. Inventory source traces.            (A1, A3)        ✓
+2. Sample 2 successful + 2 failed.     (B1 lite)        ✓
+3. Import them into run directories.   (C1, C2, C3)     ✓
+4. Manually annotate ledgers.          (D1 lite, D4)    ✓
+5. Build step observations.            (F2 on N=4)      ✓
+6. Run audit.                          (F3 on N=4)      ✓
+7. Write a 1-page feasibility memo.    (proto-M1)       ✓ (full M1 + CRITIC_AUDIT)
 ```
 
-That is the point where a larger SWE-agent retrospective study becomes a real experiment rather than a tooling exercise.
+## Minimal first batch (forward phase — current)
+
+The smallest useful **live-instrumentation** crunch target post-CRITIC_AUDIT:
+
+```text
+1. Pick sidecar branch.                          (N1)
+2. Build the sidecar.                            (N2 — `ledger_progress/sidecar.py`)
+3. Add `ledger-run watch`.                        (U1)
+4. Hook one SWE-agent run live.                   (N3 — one success, one failure)
+5. Live-vs-retrospective parity report.           (N4)
+6. T1: write LedgerSet protocol doc in parallel.  (T1)
+```
+
+If anything breaks at step 5 (parity fails badly), fix it before extending to live N=20 (N5). The retrospective pilot stays as the parity benchmark, not as a target to grow.
+
+---
+
+## Definition of done for "ready to scale" (pilot phase, A–M)
+
+The pilot phase met all the conditions below as of 2026-04-30:
+
+```text
+20 traces imported                           ✓
+20 traces annotated or failures explained    ✓
+source traces never mutated                  ✓
+ledger.jsonl files replay cleanly            ✓
+step observation table generated             ✓
+audit integrity passes                       ✓ (191/191 native, zero warnings)
+native categories are used for new annotations ✓ (J1+J2)
+evidence gaps are quantified                 ✓ (K1)
+at least one failed high-progress or ambiguous run exists ✓ (f_06)
+annotation burden is measured                ✓ (median 21 min)
+go/no-go memo recommends a next step         ✓ (M1; superseded by CRITIC_AUDIT)
+```
+
+**The pilot phase is closed.** Ready to scale ≠ ready to ship the mission. The CRITIC_AUDIT (2026-04-30) found that scaling more retrospective annotation does not advance the mission. The new bar is below.
+
+## Definition of done for "mission delivered" (post-pilot, post-audit)
+
+The mission ("automated way to check and query progress for long range agentic tasks") is delivered when:
+
+```text
+A live agent has emitted at least one ledger.jsonl with timestamps
+  (Workstream N — N3 acceptance)
+The live ledger reproduces the retrospective shape on the same instance
+  to within agreed tolerance (Workstream N — N4 parity report)
+A monitor / CLI / external caller can ask `ledger-run watch X` or
+  `ledger-run query X --status blocked` and get a live answer
+  (Workstream U — U1 + U2 acceptance)
+Multi-task projects are representable as LedgerSets with a defined
+  weight-weighted-mean aggregation (Workstream T — T2 + T3 acceptance)
+At least one wall-clock-aware feature is computed and exposed in the
+  observation channel (Workstream V — V1 acceptance)
+The mission paragraph's 10 progress features are first-class columns ✓
+  (already shipped 2026-04-30; locked in by tests/test_channel_mission_features.py)
+```
+
+The original "ready to scale" criteria above stay green; they are the *foundation* the new bar builds on.
