@@ -72,6 +72,16 @@ Four critic agents audited the framework against this mission on 2026-04-30. The
 
 **Pilot phase (A–M) is closed.** The infrastructure produced real value (clean schema, 20 high-fidelity annotations, 5/5 quadrant inter-annotator agreement, mission features now first-class). Everything *forward* should be live-instrumentation-shaped, not annotation-shaped.
 
+## § 0.2 Documentation handoff
+
+Status: done — `IMPLEMENTATION_v0.md` added as the detailed handoff document for the SWE-agent retrospective methodology, source provenance, and broad validation surface. It incorporates a critic pass and explicitly separates current revised protocol from the pre-cleanup v1 corpus where implicit-validation handling remains caveated.
+
+Next tasks:
+
+- Keep `IMPLEMENTATION_v0.md` synchronized if the four Pitfall #8 cleanup pilots (`f_02`, `f_03`, `f_07`, `f_10`) are re-materialized.
+- Add a short architecture diagram only if a future reviewer asks for a visual companion; the current handoff is intentionally prose-first.
+- When N3 lands, add a separate live-instrumentation implementation doc rather than expanding the SWE-agent retrospective methodology document.
+
 ---
 
 ## § Workstream A — Source data acquisition and inventory
