@@ -48,6 +48,12 @@ uv run ledger-run check-run <run_dir>
 
 Both ledgers have non-null timestamps on every event.
 
+## Submit-without-validation policy
+
+Raw-step live instrumentation does not invent discovered-but-unattempted validation obligations. If an agent edits and submits without running validation, the sidecar records the emitted product/artifact actions and the resulting shape is `no_validation_frontier`, not a synthetic `validation_gap`.
+
+Agents that can declare intent may still emit explicit `ledger_ops` to add an unattempted validation leaf. That higher-fidelity mode is opt-in; the default sidecar path stays a measurement layer over visible actions.
+
 ## Non-goals
 
 - This hook does not estimate completion probability.

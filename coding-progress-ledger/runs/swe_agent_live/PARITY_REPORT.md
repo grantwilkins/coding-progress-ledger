@@ -2,14 +2,18 @@
 
 This compares the two N3 live sidecar ledgers against the retrospective SWE-agent pilot ledgers for the same instances. Shape classes are primary; scalar progress is secondary.
 
+## Frontier Policy
+
+raw-step live instrumentation does not invent discovered-but-unattempted validation obligations; submit-without-validation is represented as complete_visible_frontier+no_validation_frontier unless the agent emits explicit ledger_ops for validation work.
+
 ## Verdict
 
-N4 parity gate does not pass yet; do not proceed to N5 live N=20.
+N4 policy-adjusted parity gate passes; N5 may proceed under the no-validation-frontier policy.
 
-| Instance | Success | Retrospective shape | Live shape | Retrospective coding | Live coding | Delta | Scalar within 0.05 |
-|---|---:|---|---|---:|---:|---:|---|
-| `Melevir__cognitive_complexity-15` | True | `complete_visible_frontier+validation_complete` | `complete_visible_frontier+validation_complete` | 1.000 | 1.000 | +0.000 | yes |
-| `WIPACrepo__iceprod-339` | False | `partial_visible_frontier+validation_gap` | `complete_visible_frontier+no_validation_frontier` | 0.667 | 1.000 | +0.333 | no |
+| Instance | Success | Retrospective shape | Live shape | Retrospective coding | Live coding | Delta | Scalar within 0.05 | Policy parity |
+|---|---:|---|---|---:|---:|---:|---|---|
+| `Melevir__cognitive_complexity-15` | True | `complete_visible_frontier+validation_complete` | `complete_visible_frontier+validation_complete` | 1.000 | 1.000 | +0.000 | yes | yes |
+| `WIPACrepo__iceprod-339` | False | `partial_visible_frontier+validation_gap` | `complete_visible_frontier+no_validation_frontier` | 0.667 | 1.000 | +0.333 | no | yes |
 
 ## Schema And Shape Parity
 
@@ -23,7 +27,7 @@ N4 parity gate does not pass yet; do not proceed to N5 live N=20.
 | Divergence | Instances | Assignment | Consequence |
 |---|---|---|---|
 | Live sidecar emits one leaf per visible assistant command; retrospective ledgers collapse many commands into semantic work leaves. | both | true semantic ambiguity for raw-step adapter | Event counts differ even when final shape matches. Explicit `ledger_ops` or a smarter adapter is needed for semantic grouping. |
-| Retrospective `WIPACrepo__iceprod-339` includes an unstarted validation leaf; live sidecar has no validation leaf because the agent emitted no validation command. | `WIPACrepo__iceprod-339` | missing instrumentation / semantic obligation not emitted | Live coding progress is 1.000 while retrospective coding progress is 0.667; this is the scalar parity failure. |
+| Retrospective `WIPACrepo__iceprod-339` includes an unstarted validation leaf; live sidecar has no validation leaf because the agent emitted no validation command. | `WIPACrepo__iceprod-339` | accepted frontier-policy divergence | Live coding progress is 1.000 while retrospective coding progress is 0.667; estimator features must use `no_validation_frontier` / `submit_without_validation`, not scalar parity, for this case. |
 | Live ledgers have timestamps; retrospective ledgers do not. | both | expected instrumentation difference | Timestamp-aware features can run on N3 live ledgers but cannot be compared to retrospective wall-clock intervals. |
 
 ## K2 Evidence-Gap Check
@@ -39,7 +43,7 @@ N4 parity gate does not pass yet; do not proceed to N5 live N=20.
 
 ## Observability Matrix
 
-See `EVENT_OBSERVABILITY_MATRIX.md`. Summary: mechanical events are available for emitted tool actions; validation obligations, blocked states, reopens, invalidations, and semantic splits remain annotation-only or weakly inferable unless the agent emits explicit `ledger_ops`.
+See `EVENT_OBSERVABILITY_MATRIX.md`. Summary: mechanical events are available for emitted tool actions; validation obligations, blocked states, reopens, invalidations, and semantic splits remain annotation-only or weakly inferable unless the agent emits explicit `ledger_ops`. The accepted live policy therefore does not add validation obligations in raw-step mode.
 
 ## Timestamp Realism
 

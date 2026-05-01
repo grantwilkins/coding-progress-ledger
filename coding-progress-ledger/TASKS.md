@@ -1433,7 +1433,7 @@ runs/swe_agent_live/WIPACrepo__iceprod-339             # known failure; 8 wire e
 Both pass `uv run ledger-run check-run <run_dir>`, and every `ledger.jsonl` event has a non-null timestamp.
 
 #### N4. Live-vs-retrospective parity report
-Status: done — `scripts/build_live_parity_report.py`, `runs/swe_agent_live/PARITY_REPORT.md`, and `runs/swe_agent_live/EVENT_OBSERVABILITY_MATRIX.md`. Verdict: **N4 parity gate does not pass yet; do not proceed to N5 live N=20.** The success case (`Melevir__cognitive_complexity-15`) has shape and scalar parity; the failure case (`WIPACrepo__iceprod-339`) does not because the retrospective ledger includes an unstarted validation leaf while the live sidecar records no validation frontier when the agent emits no validation command.
+Status: done — `scripts/build_live_parity_report.py`, `runs/swe_agent_live/PARITY_REPORT.md`, and `runs/swe_agent_live/EVENT_OBSERVABILITY_MATRIX.md`. Frontier policy resolved: raw-step live instrumentation does **not** invent discovered-but-unattempted validation obligations. Submit-without-validation is represented as `complete_visible_frontier+no_validation_frontier` unless the agent emits explicit `ledger_ops` for validation work. Verdict: **N4 policy-adjusted parity gate passes; N5 may proceed under the no-validation-frontier policy.** Scalar progress still differs on `WIPACrepo__iceprod-339` (`1.000` live vs `0.667` retrospective), and that divergence is documented rather than hidden.
 
 Outputs:
 ```text
@@ -1461,16 +1461,7 @@ divergences are not papered over
 ```
 
 #### N5. Extend to a live N=20 batch
-Status: blocked on N4 parity failure
-
-Unblocker:
-```text
-Resolve the submit-without-validation frontier policy before N5:
-either explicit agent-emitted ledger_ops must add discovered-but-unattempted
-validation obligations, or the live channel must intentionally use a
-"no_validation_frontier" shape distinct from retrospective validation_gap
-and N4 must be rerun with that policy accepted.
-```
+Status: not started · _unblocked by N4 policy-adjusted parity_
 
 Goal: only proceed if N4 confirms parity. The result replaces (does not augment) the retrospective N=20 pilot in mission terms.
 

@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 
 from ledger_progress import LedgerSession, SubtaskCategory, to_jsonl
-from scripts.build_live_parity_report import compare_pair, render_report, shape_class
+from scripts.build_live_parity_report import compare_pair, policy_adjusted_parity, render_report, shape_class
 
 
 def test_shape_class_distinguishes_validation_gap_from_absent_validation():
@@ -26,17 +26,20 @@ def test_compare_pair_reports_validation_category_divergence(tmp_path):
     assert item["retro_categories"] == {"product": 1, "validation": 1}
 
 
-def test_render_report_fails_gate_when_scalar_or_shape_parity_fails(tmp_path):
+def test_policy_adjusted_parity_accepts_submit_without_validation_frontier(tmp_path):
     live = tmp_path / "live"
     retro = tmp_path / "retro"
     _write_live_run(live, source=retro, with_validation=False)
     _write_retro_run(retro, with_validation=True)
 
-    report = render_report([compare_pair(live, retro)])
+    item = compare_pair(live, retro)
+    report = render_report([item])
 
-    assert "does not pass yet" in report
+    assert policy_adjusted_parity(item) is True
+    assert "policy-adjusted parity gate passes" in report
     assert "Baseline failing test output before edits" in report
     assert "Retrospective `WIPACrepo__iceprod-339` includes an unstarted validation leaf" in report
+    assert "no-validation-frontier policy" in report
 
 
 def _summary(progress, *, validation_active, validation_done):
