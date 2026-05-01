@@ -1307,7 +1307,7 @@ The new `LedgerSession.observe(...)` ergonomics (timestamps + clock override) an
 Status: done — `docs/LIVE_INSTRUMENTATION_DECISION.md`. **Chosen branch: hybrid sidecar with stable wire-format protocol v1.0.** Agents emit JSONL (raw step records via `agent_step` field; or explicit ledger ops via `ledger_ops` field; or both). The sidecar applies `ledger_ops` verbatim when present, else runs a per-framework adapter's `infer_events()` heuristic. Two-tier fidelity, single code path, framework-agnostic — works for SWE-agent, Claude Code, LangGraph, OpenAI Assistants, custom RL, etc., as adopters write a ~50–150 line adapter module. Replay-safety is invariant (idempotent re-feed produces byte-identical ledger.jsonl). N2 acceptance criteria are explicitly enumerated in the decision doc § 8.
 
 #### N2. Build the live ledger sidecar
-Status: blocked on N1
+Status: done — `ledger_progress/sidecar.py`, `ledger_progress/adapters/generic.py`, `ledger_progress/adapters/swe_agent.py`, and `tests/test_sidecar.py`. Ships `python -m ledger_progress.sidecar --run-dir X --adapter {generic,swe_agent}` with stdin JSONL input plus finite `--input-file` batch input. The sidecar validates wire-format v1.x events, rejects unknown major versions, enforces one `run_id` per run dir, applies explicit `ledger_ops` verbatim when present, otherwise routes `agent_step` through the selected adapter. It writes timestamped `ledger.jsonl`, regenerates `progress.csv`, `progress_by_category.csv`, and `summary_by_category.json`, and scaffolds the minimal run artifacts needed for `ledger-run check-run`.
 
 Outputs:
 ```text
@@ -1330,13 +1330,15 @@ class LedgerSidecar:
 
 Acceptance:
 ```text
-sidecar consumes a synthetic 5-step JSONL stream and emits a 6-event ledger.jsonl
+sidecar consumes a synthetic 5-step JSONL stream and emits a timestamped ledger.jsonl
 all events carry a non-None timestamp
 ledger-run check-run passes on the resulting run dir
 ```
 
+N2 test coverage also locks replay-equality, timestamp authority, explicit-op bypass, SWE-agent vocabulary categories, scope-change ops (`split` / `reopen` / `invalidate`), `add_evidence`, CLI input-file mode, and <100ms/event synthetic latency. Full suite: `uv run pytest` → 292 passed.
+
 #### N3. Hook one SWE-agent run
-Status: blocked on N2
+Status: not started
 
 Outputs:
 ```text
@@ -1349,6 +1351,8 @@ Acceptance:
 two run dirs, each with a real-time ledger.jsonl
 each event has a wall-clock timestamp (so Workstream V's time-aware features fire)
 ```
+
+Next implementation note: N2 supports stdin streaming and finite `--input-file`; if the live SWE-agent wrapper needs long-lived file following, add an explicit `--follow` mode during N3 rather than overloading batch input-file semantics.
 
 #### N4. Live-vs-retrospective parity report
 Status: blocked on N3
