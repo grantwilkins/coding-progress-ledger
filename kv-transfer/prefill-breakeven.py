@@ -1,242 +1,263 @@
+"""
+KV-transfer vs context-replay timing for migrating an in-flight LLM request
+between two sites at a fixed inter-site bandwidth.
+
+Single, rigorous reference setup — no mixed benchmark sources:
+  Reference HW:        8× NVIDIA H100 SXM5, bf16   (peak 7.91 PFLOPS)
+  Reference engine:    vLLM with chunked prefill   (assumed MFU = 0.35)
+  Reference context:   100,000 tokens (the prefill rate is evaluated here)
+
+Per-model prefill rate is derived analytically from architecture:
+
+  prefill_FLOPs/token(T)  =  2·active_params              (dense forward)
+                          +  4·L_softmax·n_q·head_dim·T   (attention; MAC×2)
+  prefill_tok_s           =  effective_FLOPS / prefill_FLOPs/token(T_ref)
+
+Strategy A — ship the KV cache:    t_A = T · kv_bpt · 8 / bw_bps
+Strategy B — ship prompt + replay: t_B = T / prefill_tok_s
+Crossover (T cancels):             bw* = 8 · kv_bpt · prefill_tok_s
+
+Above bw*, ship the KV. Below, replay.
+"""
+
+from dataclasses import dataclass
+
+import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-import matplotlib.pyplot as plt
 
-# ----------------------------
-# Network assumptions
-# ----------------------------
+# ============================================================================
+# Reference hardware + serving stack — single source of truth
+# ============================================================================
 
-rtt_seconds = 0.030
+H100_PEAK_FLOPS_BF16 = 989e12     # NVIDIA H100 SXM5 spec
+N_GPUS = 8
+MFU = 0.35                         # vLLM chunked prefill, production-grade
+EFFECTIVE_FLOPS = N_GPUS * H100_PEAK_FLOPS_BF16 * MFU   # 2.77 PFLOPS
 
-# Sweep effective application goodput, not advertised peak bandwidth.
-bandwidths_gbps = [0.1, 0.5, 1, 3, 10, 25, 40, 100, 400, 800]
+T_REF_FOR_PREFILL = 100_000        # context at which prefill rate is evaluated
 
-# Effective wall-clock replay rate for rebuilding this one request's usable state.
-prefill_rates_tok_s = [300, 1_000, 3_000, 10_000, 30_000, 100_000]
 
-context_lengths = np.unique(np.round(np.logspace(3, 7, 80)).astype(int))
+# ============================================================================
+# Model catalog
+# Specs from HuggingFace config.json (April 2026). All architecture numbers
+# are facts, not benchmarks — the only judgement call is MFU above.
+# ============================================================================
 
-token_id_bytes = 4
-batch_size = 1
+@dataclass
+class Model:
+    name: str
+    active_B: float    # active params, billions
+    kv_bpt: int        # KV bytes per token (bf16), accounting for MLA / hybrid
+    L_softmax: int     # number of softmax-attention layers
+    n_q: int           # query heads per softmax layer
+    head_dim: int      # attention head dim
+    arch: str          # short architecture note
 
-# ----------------------------
-# MoE model configs
-# ----------------------------
 
-models = {
-    "2T_MoE_moderate_GQA": {
-        "total_params": 2e12,
-        "layers": 96,
-        "kv_heads": 8,
-        "head_dim": 128,
-        "kv_dtype_bytes": 2,
-    },
-    "5T_MoE_large_GQA": {
-        "total_params": 5e12,
-        "layers": 128,
-        "kv_heads": 16,
-        "head_dim": 128,
-        "kv_dtype_bytes": 2,
-    },
-}
+MODELS = [
+    Model("DeepSeek-V4-Pro", active_B=49.0, kv_bpt=70_272,
+          L_softmax=61, n_q=128, head_dim=512,
+          arch="MLA, latent=512+RoPE64"),
+    Model("Kimi-K2.6", active_B=32.0, kv_bpt=70_272,
+          L_softmax=61, n_q=64, head_dim=192,
+          arch="MLA, hd=v128+rope64"),
+    Model("GLM-5", active_B=40.0, kv_bpt=1_277_952,
+          L_softmax=78, n_q=64, head_dim=64,
+          arch="full MHA n_kv=64"),
+    Model("Qwen3-235B-A22B", active_B=22.0, kv_bpt=192_512,
+          L_softmax=94, n_q=64, head_dim=128,
+          arch="GQA n_kv=4"),
+    Model("Qwen3.5-397B-A17B", active_B=17.0, kv_bpt=30_720,
+          L_softmax=15, n_q=32, head_dim=256,
+          arch="hybrid 15/60 softmax"),
+    Model("Qwen3-Next-80B-A3B", active_B=3.9, kv_bpt=24_576,
+          L_softmax=12, n_q=16, head_dim=256,
+          arch="hybrid 12/48 softmax"),
+]
 
-# Optional: use this if modeling fp8/int8 KV instead of bf16/fp16.
-# for m in models.values():
-#     m["kv_dtype_bytes"] = 1
 
-# Optional: set retained_context_cap if the model only preserves a sliding KV window.
-# For full dense attention, leave as None.
-retained_context_cap = None
-# retained_context_cap = 128_000
+# ============================================================================
+# Math
+# ============================================================================
 
-# ----------------------------
-# Helpers
-# ----------------------------
+def prefill_flops_per_token(m, T):
+    dense = 2 * m.active_B * 1e9
+    attn = 4 * m.L_softmax * m.n_q * m.head_dim * T
+    return dense + attn
 
-def kv_bytes_per_token(cfg):
-    return (
-        2
-        * cfg["layers"]
-        * cfg["kv_heads"]
-        * cfg["head_dim"]
-        * cfg["kv_dtype_bytes"]
-    )
 
-def retained_tokens(tokens):
-    if retained_context_cap is None:
-        return tokens
-    return min(tokens, retained_context_cap)
+def prefill_tok_s(m, T=T_REF_FOR_PREFILL):
+    return EFFECTIVE_FLOPS / prefill_flops_per_token(m, T)
 
-def kv_bytes(tokens, cfg):
-    return batch_size * retained_tokens(tokens) * kv_bytes_per_token(cfg)
 
-def context_bytes(tokens):
-    return batch_size * tokens * token_id_bytes
+def t_transmit(bw_gbps, T, m):
+    return T * m.kv_bpt * 8 / (bw_gbps * 1e9)
 
-def transfer_time_seconds(num_bytes, bandwidth_gbps, rtt_s):
-    return rtt_s + (8 * num_bytes) / (bandwidth_gbps * 1e9)
+
+def t_replay(T, m):
+    return T / prefill_tok_s(m)
+
+
+def crossover_bw_gbps(m):
+    return 8 * m.kv_bpt * prefill_tok_s(m) / 1e9
+
+
+# ============================================================================
+# Sweep
+# ============================================================================
+
+BANDWIDTHS_GBPS = np.arange(1, 1001, 5)
+CONTEXT_LENGTHS = [1_000, 10_000, 100_000, 1_000_000]
 
 rows = []
-
-for model_name, cfg in models.items():
-    kv_bpt = kv_bytes_per_token(cfg)
-
-    for T in context_lengths:
-        kv_b = kv_bytes(T, cfg)
-        ctx_b = context_bytes(T)
-
-        for bw in bandwidths_gbps:
-            t_kv = transfer_time_seconds(kv_b, bw, rtt_seconds)
-            t_ctx = transfer_time_seconds(ctx_b, bw, rtt_seconds)
-
-            slack_for_recompute = t_kv - t_ctx
-            breakeven_rate = T / slack_for_recompute if slack_for_recompute > 0 else np.inf
-
+for m in MODELS:
+    rate = prefill_tok_s(m)
+    cb = crossover_bw_gbps(m)
+    for T in CONTEXT_LENGTHS:
+        for bw in BANDWIDTHS_GBPS:
+            tA = t_transmit(bw, T, m)
+            tB = t_replay(T, m)
             rows.append({
-                "model": model_name,
+                "model": m.name,
                 "tokens": T,
-                "retained_tokens": retained_tokens(T),
                 "bandwidth_gbps": bw,
-                "rtt_ms": rtt_seconds * 1000,
-                "kv_bytes_per_token": kv_bpt,
-                "context_MB": ctx_b / 1e6,
-                "kv_GB": kv_b / 1e9,
-                "context_transfer_s": t_ctx,
-                "kv_transfer_s": t_kv,
-                "prefill_tok_s": np.nan,
-                "context_plus_recompute_s": np.nan,
-                "breakeven_prefill_tok_s": breakeven_rate,
+                "kv_GB": T * m.kv_bpt / 1e9,
+                "t_transmit_s": tA,
+                "t_replay_s": tB,
+                "winner": "transmit" if tA < tB else "replay",
+                "prefill_tok_s": rate,
+                "crossover_bw_gbps": cb,
             })
 
-            for rate in prefill_rates_tok_s:
-                rows.append({
-                    "model": model_name,
-                    "tokens": T,
-                    "retained_tokens": retained_tokens(T),
-                    "bandwidth_gbps": bw,
-                    "rtt_ms": rtt_seconds * 1000,
-                    "kv_bytes_per_token": kv_bpt,
-                    "context_MB": ctx_b / 1e6,
-                    "kv_GB": kv_b / 1e9,
-                    "context_transfer_s": t_ctx,
-                    "kv_transfer_s": t_kv,
-                    "prefill_tok_s": rate,
-                    "context_plus_recompute_s": t_ctx + T / rate,
-                    "breakeven_prefill_tok_s": breakeven_rate,
-                })
-
 df = pd.DataFrame(rows)
-df.to_csv("moe_migration_kv_vs_context.csv", index=False)
+df.to_csv("migration.csv", index=False)
 
-# ----------------------------
-# Print selected summary
-# ----------------------------
 
-summary_lengths = [128_000, 1_000_000, 10_000_000]
-summary_bandwidths = [1, 10, 100, 400]
+# ============================================================================
+# Stdout: derivation table
+# ============================================================================
 
-summary = (
-    df[
-        df["tokens"].isin(summary_lengths)
-        & df["bandwidth_gbps"].isin(summary_bandwidths)
-        & df["prefill_tok_s"].isna()
-    ][[
-        "model",
-        "tokens",
-        "retained_tokens",
-        "bandwidth_gbps",
-        "context_MB",
-        "kv_GB",
-        "context_transfer_s",
-        "kv_transfer_s",
-        "breakeven_prefill_tok_s",
-    ]]
-    .sort_values(["model", "tokens", "bandwidth_gbps"])
+print(f"=== Reference: 8×H100 bf16  ·  peak {N_GPUS*H100_PEAK_FLOPS_BF16/1e15:.2f} PFLOPS"
+      f"  ·  MFU {MFU:.0%}  ·  effective {EFFECTIVE_FLOPS/1e15:.2f} PFLOPS ===")
+print(f"=== Prefill rate evaluated at T_ref = {T_REF_FOR_PREFILL:,} tokens ===\n")
+print(f"{'Model':22s} {'active':>8s} {'kv/tok':>9s}  "
+      f"{'dense':>10s} {'attn':>10s}  {'prefill':>10s} {'crossover':>10s}  "
+      f"arch")
+print("-" * 115)
+for m in MODELS:
+    dense = 2 * m.active_B * 1e9
+    attn = 4 * m.L_softmax * m.n_q * m.head_dim * T_REF_FOR_PREFILL
+    rate = prefill_tok_s(m)
+    cb = crossover_bw_gbps(m)
+    print(f"{m.name:22s} {m.active_B:>6.1f}B  {m.kv_bpt/1024:>6.1f} KB  "
+          f"{dense/1e12:>7.2f} TF  {attn/1e12:>7.2f} TF  "
+          f"{rate:>7.0f} t/s  {cb:>7.1f} Gbps  {m.arch}")
+
+print("\n=== Migration time at 100 Gbps ===")
+print(f"{'Model':22s} " + " ".join(f"{T//1000:>5d}k tok" for T in CONTEXT_LENGTHS)
+      + "   |  replay 1M")
+for m in MODELS:
+    tx = " ".join(f"{t_transmit(100, T, m):>8.2f}s" for T in CONTEXT_LENGTHS)
+    print(f"{m.name:22s} {tx}   |  {t_replay(1_000_000, m):>5.0f}s")
+
+
+# ============================================================================
+# Plot styling
+# ============================================================================
+
+plt.rcParams.update({
+    "figure.dpi": 110,
+    "axes.grid": True,
+    "grid.alpha": 0.3,
+    "axes.spines.top": False,
+    "axes.spines.right": False,
+    "font.size": 10,
+})
+COLORS = plt.cm.tab10(np.arange(len(MODELS)))
+
+
+# ============================================================================
+# Plot 1: small multiples — one panel per model, fixed at 1M-token context
+# ============================================================================
+
+T_REF = 1_000_000
+
+fig, axes = plt.subplots(2, 3, figsize=(12, 6.5), sharex=True, sharey=True)
+for ax, m in zip(axes.flat, MODELS):
+    t_tx = T_REF * m.kv_bpt * 8 / (BANDWIDTHS_GBPS * 1e9)
+    t_rp = t_replay(T_REF, m)
+    cb = crossover_bw_gbps(m)
+
+    ax.fill_between(BANDWIDTHS_GBPS, np.minimum(t_tx, t_rp), np.maximum(t_tx, t_rp),
+                    where=(t_tx < t_rp), color="tab:green", alpha=0.18)
+    ax.fill_between(BANDWIDTHS_GBPS, np.minimum(t_tx, t_rp), np.maximum(t_tx, t_rp),
+                    where=(t_tx >= t_rp), color="tab:orange", alpha=0.18)
+
+    ax.plot(BANDWIDTHS_GBPS, t_tx, color="tab:blue", lw=2.2, label="ship KV")
+    ax.axhline(t_rp, color="tab:red", lw=1.8, ls="--", label="re-prefill")
+    ax.axvline(cb, color="black", lw=0.7, ls=":", alpha=0.5)
+
+    ax.set_xscale("log")
+    ax.set_yscale("log")
+    ax.set_title(f"{m.name}\ncrossover {cb:.1f} Gbps · replay {t_rp:.0f}s",
+                 fontsize=10)
+
+for ax in axes[-1, :]:
+    ax.set_xlabel("Bandwidth (Gbps)")
+for ax in axes[:, 0]:
+    ax.set_ylabel("Migration time (s)")
+
+axes[0, 0].legend(fontsize=9, loc="upper right", frameon=True)
+fig.suptitle(
+    f"Migration time at {T_REF:,}-token context  (8×H100, MFU=35%).  "
+    "Green = ship KV.  Orange = re-prefill.",
+    fontsize=12, y=1.00,
+)
+fig.tight_layout()
+fig.savefig("transmission_time.png", dpi=200, bbox_inches="tight")
+fig.savefig("transmission_time.pdf", bbox_inches="tight")
+plt.close(fig)
+
+
+# ============================================================================
+# Plot 2: crossover bandwidth bar chart
+# ============================================================================
+
+ordered = sorted(MODELS, key=crossover_bw_gbps)
+xs = [crossover_bw_gbps(m) for m in ordered]
+names = [m.name for m in ordered]
+colors_ord = [COLORS[MODELS.index(m)] for m in ordered]
+
+fig, ax = plt.subplots(figsize=(11, 5.5))
+ys = np.arange(len(ordered))
+ax.barh(ys, xs, color=colors_ord, alpha=0.85)
+ax.set_yticks(ys)
+ax.set_yticklabels(names)
+ax.set_xscale("log")
+ax.set_xlabel("Crossover bandwidth (Gbps) — above this, KV-transfer is faster than replay")
+ax.set_title(
+    f"When does KV-transfer overtake context replay?  "
+    f"(8×H100, MFU={MFU:.0%}, T_ref={T_REF_FOR_PREFILL:,})"
 )
 
-print(summary.to_string(index=False, float_format=lambda x: f"{x:.3f}"))
+for ref_bw, lbl in [(10, "10 G"), (100, "100 G"), (400, "400 G"), (1000, "1 T")]:
+    ax.axvline(ref_bw, color="gray", lw=0.5, ls=":", alpha=0.6)
+    ax.text(ref_bw, len(ordered) - 0.3, lbl, fontsize=8, color="gray", ha="center")
 
-# ----------------------------
-# Plot 1: KV transfer time for both models
-# ----------------------------
+for i, m in enumerate(ordered):
+    ax.text(xs[i] * 1.08, i,
+            f"  {m.kv_bpt/1024:>6.1f} KB/tok  ·  {prefill_tok_s(m):>6.0f} tok/s  ·  {m.arch}",
+            va="center", fontsize=8.5, color="black", family="monospace")
 
-chosen_bw = 100
+ax.set_xlim(0.3, 1e3)
+fig.tight_layout()
+fig.savefig("crossover_bandwidth.png", dpi=200, bbox_inches="tight")
+fig.savefig("crossover_bandwidth.pdf", bbox_inches="tight")
+plt.close(fig)
 
-plt.figure(figsize=(8, 5))
-for model_name in models:
-    tmp = df[
-        (df["model"] == model_name)
-        & (df["bandwidth_gbps"] == chosen_bw)
-        & (df["prefill_tok_s"].isna())
-    ]
-    plt.plot(tmp["tokens"], tmp["kv_transfer_s"], label=f"{model_name}, KV")
-
-plt.xscale("log")
-plt.yscale("log")
-plt.xlabel("Prompt context length (tokens)")
-plt.ylabel("KV transfer time (s)")
-plt.title(f"Full KV migration at {chosen_bw} Gbps effective goodput")
-plt.legend()
-plt.tight_layout()
-plt.savefig("moe_kv_transfer_time.png", dpi=200)
-
-# ----------------------------
-# Plot 2: context + replay vs KV for 5T model
-# ----------------------------
-
-chosen_model = "5T_MoE_large_GQA"
-chosen_bw = 100
-
-plt.figure(figsize=(8, 5))
-
-base = df[
-    (df["model"] == chosen_model)
-    & (df["bandwidth_gbps"] == chosen_bw)
-    & (df["prefill_tok_s"].isna())
-]
-plt.plot(base["tokens"], base["kv_transfer_s"], linewidth=3, label=f"Send full KV @ {chosen_bw} Gbps")
-
-for rate in prefill_rates_tok_s:
-    tmp = df[
-        (df["model"] == chosen_model)
-        & (df["bandwidth_gbps"] == chosen_bw)
-        & (df["prefill_tok_s"] == rate)
-    ]
-    plt.plot(tmp["tokens"], tmp["context_plus_recompute_s"], label=f"Send context + replay @ {rate:,} tok/s")
-
-plt.xscale("log")
-plt.yscale("log")
-plt.xlabel("Prompt context length (tokens)")
-plt.ylabel("Migration completion time (s)")
-plt.title(f"{chosen_model}: migration boundary comparison")
-plt.legend()
-plt.tight_layout()
-plt.savefig("moe_5t_context_replay_vs_kv.png", dpi=200)
-
-# ----------------------------
-# Plot 3: break-even replay rate vs bandwidth
-# ----------------------------
-
-plt.figure(figsize=(8, 5))
-
-for model_name, cfg in models.items():
-    kv_bpt = kv_bytes_per_token(cfg)
-    bw = np.array(bandwidths_gbps) * 1e9
-    # ignore token bytes; they are tiny compared to KV
-    breakeven = bw / (8 * (kv_bpt - token_id_bytes))
-    plt.plot(bandwidths_gbps, breakeven, marker="o", label=model_name)
-
-plt.xscale("log")
-plt.yscale("log")
-plt.xlabel("Effective inter-site goodput (Gbps)")
-plt.ylabel("Break-even replay rate (tokens/s)")
-plt.title("When does context replay beat full KV transfer?")
-plt.legend()
-plt.tight_layout()
-plt.savefig("moe_breakeven_replay_rate.png", dpi=200)
 
 print("\nWrote:")
-print("  moe_migration_kv_vs_context.csv")
-print("  moe_kv_transfer_time.png")
-print("  moe_5t_context_replay_vs_kv.png")
-print("  moe_breakeven_replay_rate.png")
+print("  migration.csv")
+print("  transmission_time.{png,pdf}")
+print("  crossover_bandwidth.{png,pdf}")

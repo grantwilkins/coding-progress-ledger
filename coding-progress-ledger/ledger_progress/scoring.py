@@ -1,6 +1,10 @@
 from collections.abc import Iterable
+from pathlib import Path
 
 from .core import Ledger, ProgressObservation, Status, SubtaskCategory
+from .queries import CODING_CATEGORIES
+from .serialization import from_jsonl
+from .set_core import LedgerSet
 
 
 def score(ledger: Ledger, categories: Iterable[SubtaskCategory | str] | None = None) -> ProgressObservation:
@@ -19,6 +23,22 @@ def score(ledger: Ledger, categories: Iterable[SubtaskCategory | str] | None = N
         complete_leaf_count=sum(1 for subtask in leaves if subtask.status is Status.COMPLETE),
         active_leaf_count=len(leaves),
     )
+
+
+def score_set(ledger_set: LedgerSet, base_dir: str | Path | None = None) -> float:
+    total_weight = 0.0
+    weighted = 0.0
+    base = Path(base_dir) if base_dir is not None else None
+    for member in ledger_set.members:
+        if member.status_override in {Status.INVALIDATED, Status.DELETED}:
+            continue
+        ref = Path(member.ledger_ref)
+        if base is not None and not ref.is_absolute():
+            ref = base / ref
+        member_progress = score(from_jsonl(str(ref)), categories=CODING_CATEGORIES).progress
+        weighted += member.weight * member_progress
+        total_weight += member.weight
+    return weighted / total_weight if total_weight else 0.0
 
 
 def _active(status: Status) -> bool:
