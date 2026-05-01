@@ -67,7 +67,7 @@ Four critic agents audited the framework against this mission on 2026-04-30. The
 
 **Strategic re-scoping per CRITIC_AUDIT § 4:**
 
-- **PROMOTED to current priority:** § Workstream N (live instrumentation), § Workstream U (live query CLI / monitor — new), § Workstream T1 (LedgerSet protocol doc, the only multi-task-scope unblocker), § Workstream V (time-aware features — new, consumes the timestamp field).
+- **PROMOTED to current priority:** § Workstream N (live instrumentation), § Workstream W (observation-channel sharpening — new), § Workstream U (live query CLI / monitor), § Workstream T1 (LedgerSet protocol doc, the only multi-task-scope unblocker), § Workstream V (time-aware features, consumes the timestamp field).
 - **DEFERRED indefinitely:** § Workstream R (paper write-up; premature — locks in the retrospective framing as the product), § Workstream O (100-trace retrospective scale-out; the smoke test runs at chance by design and trace 21+ is debt), § Workstream P / P1–P3 (cross-source pilots; doubles annotation surface for a hypothesis with no live consumer).
 
 **Pilot phase (A–M) is closed.** The infrastructure produced real value (clean schema, 20 high-fidelity annotations, 5/5 quadrant inter-annotator agreement, mission features now first-class). Everything *forward* should be live-instrumentation-shaped, not annotation-shaped.
@@ -81,6 +81,35 @@ Next tasks:
 - Keep `IMPLEMENTATION_v0.md` synchronized if the four Pitfall #8 cleanup pilots (`f_02`, `f_03`, `f_07`, `f_10`) are re-materialized.
 - Add a short architecture diagram only if a future reviewer asks for a visual companion; the current handoff is intentionally prose-first.
 - When N3 lands, add a separate live-instrumentation implementation doc rather than expanding the SWE-agent retrospective methodology document.
+
+## § 0.3 Observation-channel thesis (post-handoff critique)
+
+Status: current steering constraint.
+
+The scientific object is **the temporal evolution of the visible work frontier**, not the final progress scalar and not final success prediction. The ledger observes:
+
+```text
+discovery
+completion
+reopening
+invalidation
+blocking
+validation state
+evidence strength
+category-local progress
+```
+
+Inventory, sampling, import, normalization, and annotation are trust infrastructure. The variables above are the channel. Future work must make those variables sharper and more automatic, especially in N3/N4 and Workstream W.
+
+Rules this adds:
+
+```text
+Do not expand SubtaskCategory for estimator convenience; derive state features instead.
+Do not treat exact scalar progress as high precision when protocol sensitivity can move it.
+Prefer shape classes over absolute progress values in claims and reports.
+Do not train a better final-success classifier before building the estimator checkpoint table.
+Treat the retrospective corpus as a parity benchmark for live instrumentation, not as the product.
+```
 
 ---
 
@@ -1183,6 +1212,34 @@ manual-only completion count on the SWE-agent pilot drops from 30 to ≤ 12
 test invariants in tests/test_pilot_evidence_audit.py still pass
 ```
 
+### K4. Split manual-only evidence into semantic levels
+Status: not started · _feeds W3 and N4; do not change ledger core_
+
+Goal: `manual_note` currently mixes trace-visible but parser-missed evidence with pure annotator judgment. Split evidence audit output into three levels so live instrumentation can distinguish what is automatable from what is inherently semantic.
+
+Evidence levels:
+```text
+mechanical evidence       # test output, command output, diff, file existence
+trace_semantic evidence   # visible action/observation clearly implies visible-subtask completion
+annotator_judgment        # completion inferred from context with weak grounding
+```
+
+Outputs:
+```text
+scripts/rescore_suite_by_category.py        # add level classifier on top of existing evidence types
+scripts/audit_pilot_evidence.py             # report counts by level and category
+runs/swe_agent_pilot/EVIDENCE_AUDIT.md      # regenerate with the 3-level table
+tests/test_pilot_evidence_audit.py          # lock level counts on toy fixtures
+```
+
+Acceptance:
+```text
+existing strong/manual-only fields remain backward compatible
+K1 headline counts are still reproducible
+PRODUCT weak completions are split into trace_semantic vs annotator_judgment
+report states which trace_semantic patterns are candidates for live sidecar automation
+```
+
 ---
 
 ## § Workstream L — Visualization and qualitative review
@@ -1348,24 +1405,35 @@ ledger-run check-run passes on the resulting run dir
 N2 test coverage also locks replay-equality, per-event timestamp authority, explicit-op bypass, explicit id/category/parent/weight preservation, additive v1.x wire-format compatibility, single-`run_id` invariants, SWE-agent vocabulary categories, no completion from command/exit-status alone, scope-change ops (`split` / `reopen` / `invalidate`), `add_evidence`, CLI input-file mode, and <100ms/event synthetic latency. Full suite after test hardening: `uv run pytest` → 296 passed.
 
 #### N3. Hook one SWE-agent run
-Status: not started
+Status: done — `scripts/run_swe_agent_live_sidecar.py`, `docs/LIVE_SWE_AGENT_HOOK.md`, and two generated run dirs under `runs/swe_agent_live/`. The hook converts normalized SWE-agent assistant/tool turns into the N1 JSONL wire format, emits fresh wall-clock timestamps, streams the events through `LedgerSidecar(adapter="swe_agent")`, and writes `wire_events.jsonl` plus the standard run artifacts. It hard-fails rather than overwriting an existing live `ledger.jsonl`.
+
+Interpretation: N3 proves the live sidecar path can ingest SWE-agent-shaped events and emit timestamped ledgers. It does **not** prove semantic parity with retrospective annotation. N4 owns the sharper question: which events are mechanically observable, which are weakly inferable, and which remain annotation-only.
 
 Outputs:
 ```text
 runs/swe_agent_live/<instance_id>/...   # one known-success and one known-failure
                                          # SWE-bench instance, run live with sidecar
+runs/swe_agent_live/<instance_id>/wire_events.jsonl
 ```
 
 Acceptance:
 ```text
 two run dirs, each with a real-time ledger.jsonl
 each event has a wall-clock timestamp (so Workstream V's time-aware features fire)
+wire_events.jsonl retained exactly as consumed by the sidecar
+each live run maps to a known retrospective pilot instance
 ```
 
-Next implementation note: N2 supports stdin streaming and finite `--input-file`; if the live SWE-agent wrapper needs long-lived file following, add an explicit `--follow` mode during N3 rather than overloading batch input-file semantics.
+Generated N3 runs:
+```text
+runs/swe_agent_live/Melevir__cognitive_complexity-15   # known success; 21 wire events, 43 ledger events
+runs/swe_agent_live/WIPACrepo__iceprod-339             # known failure; 8 wire events, 17 ledger events
+```
+
+Both pass `uv run ledger-run check-run <run_dir>`, and every `ledger.jsonl` event has a non-null timestamp.
 
 #### N4. Live-vs-retrospective parity report
-Status: blocked on N3
+Status: not started
 
 Outputs:
 ```text
@@ -1377,13 +1445,18 @@ Compare live vs retrospective ledger for the same SWE-bench instance:
 schema parity (do the same EventTypes / categories / statuses surface?)
 evidence parity (does live capture what K2 said retrospective could not —
                  hidden-work gap visibility, submit provenance, pre-fix baseline?)
-shape parity (does final coding-progress agree within 0.05?)
+shape parity (same qualitative shape class, even if exact scalar progress differs?)
+scalar parity (does final coding-progress agree within 0.05? report, but do not over-weight)
+observability parity (which events are mechanical / weakly inferable / annotation-only?)
 timestamp realism (are intervals plausible vs the harness's actual timing?)
 ```
 
 Acceptance:
 ```text
 report cites at least three K2 gaps and says whether live closes them
+report includes an event observability matrix for every retrospective event type seen
+report names every live-vs-retrospective divergence and assigns it to adapter bug, missing instrumentation, or true semantic ambiguity
+report uses shape classes as the primary comparison and scalar progress as secondary evidence
 divergences are not papered over
 ```
 
@@ -1405,7 +1478,7 @@ Status: **NEW** (post-CRITIC_AUDIT). Consumes the query API that landed in commi
 Goal: Make `ledger_progress.queries` reachable from outside Python — a `ledger-run` CLI subcommand and (optionally) a small HTTP server. This is the surface a real long-running monitor would call.
 
 #### U1. `ledger-run watch <run_dir>`
-Status: blocked on N2
+Status: not started · _unblocked by N2_
 
 Outputs:
 ```text
@@ -1457,7 +1530,7 @@ Status: **NEW** (post-CRITIC_AUDIT). Consumes `LedgerEvent.timestamp` (commit `5
 Goal: Once live agents (Workstream N) emit timestamps, add wall-clock-aware features to the observation channel so the mission's "probability of finishing before a deadline" becomes definable.
 
 #### V1. Add wall-clock columns to the observation channel
-Status: blocked on N3 (need at least one ledger with real timestamps)
+Status: not started · _unblocked by N3 live ledgers_
 
 Outputs (extend `scripts/build_ledger_observation_dataset.py:DATASET_FIELDS`):
 ```text
@@ -1489,6 +1562,116 @@ returns probability in [0, 1] given (ledger, deadline_iso8601)
 disclaimer: assumes linear progress rate; not predictive without calibration
 ```
 
+### § Workstream W — Observation-channel sharpening
+Status: **NEW current priority** (post-handoff critique). Runs in parallel with N4 and before any serious modeling work.
+
+Goal: Make the scientific variables explicit. The channel observes the visible work frontier: discovery, closure, instability, stalls, validation state, evidence strength, and category-local progress. W turns those into auditable shape labels and estimator-ready checkpoint features without changing `LedgerEvent`, `Status`, or `SubtaskCategory`.
+
+#### W1. Event observability matrix
+Status: not started · _pairs with N4_
+
+Goal: For each ledger event/status/category transition seen in the retrospective SWE-agent pilots and N3 live runs, classify whether live sidecar instrumentation can produce it mechanically, weakly infer it, or still needs annotation.
+
+Outputs:
+```text
+runs/swe_agent_live/EVENT_OBSERVABILITY_MATRIX.md
+```
+
+Acceptance:
+```text
+matrix includes ADD_SUBTASK, UPDATE_STATUS complete/start/block, REOPEN, INVALIDATE, SPLIT if present
+each row is one of mechanical / weakly_inferable / annotation_only
+each annotation_only row names the missing signal or semantic judgment
+N4 parity report links to this matrix instead of duplicating it
+```
+
+#### W2. Add shape-level labels and reports
+Status: not started
+
+Goal: Report stable qualitative shapes rather than relying on exact scalar progress. These are audit tags first, not training labels.
+
+Initial shape tags:
+```text
+high_progress_failure
+low_progress_success
+stuck_loop
+submit_without_validation
+validation_induced_reopen
+scope_discovery_after_high_progress
+hidden_work_gap
+nonmonotone_recovery
+```
+
+Outputs:
+```text
+scripts/label_observation_shapes.py
+datasets/swe_agent_pilot_shape_labels.csv
+datasets/swe_agent_pilot_shape_report.md
+tests/test_shape_labels.py
+```
+
+Acceptance:
+```text
+f_06 is high_progress_failure + hidden_work_gap
+s_04 is low_progress_success + submit_without_validation
+f_02 or f_03 is stuck_loop
+s_03 is nonmonotone_recovery
+labels are derived from ledger/metadata fields plus run_notes citations where needed
+report warns that labels are audit tags, not final model targets yet
+```
+
+#### W3. Build estimator checkpoint table
+Status: blocked on W2
+
+Goal: Create the table an estimator should consume. Keep raw event/step observation tables unchanged; this is a derived belief-state feature table.
+
+Feature groups:
+```text
+frontier size: active_leaf_count, active_coding_leaf_count, active_validation_leaf_count
+closure: completed_leaf_count, coding_progress, validation_progress
+instability: num_reopens_so_far, num_invalidations_so_far, largest_progress_drop_so_far
+discovery: num_splits_so_far, steps_since_new_subtask, denominator_growth_so_far
+stalls: steps_since_completion, blocked_leaf_count, repeated_observation_loop_flag
+validation: validation_started, validation_complete, validation_failed, submit_without_validation
+evidence: strong_completion_count, manual_only_completion_count, weak_product_completion_count
+labels: final_success, finish_step, success_by_horizon, shape_tags
+```
+
+Outputs:
+```text
+scripts/build_estimator_checkpoints.py
+datasets/swe_agent_estimator_checkpoints.csv
+datasets/swe_agent_estimator_checkpoints_summary.md
+tests/test_estimator_checkpoints.py
+```
+
+Acceptance:
+```text
+one row per retained checkpoint from the step table
+no future-derived features except explicit label columns
+final_success and success_by_horizon are labels only, never feature columns
+all feature groups above are present or explicitly documented as unavailable
+legacy retrospective rows remain supported
+```
+
+#### W4. Quantify annotation sensitivity on Pitfall #8 cleanup cases
+Status: not started
+
+Goal: Show whether qualitative shapes survive when revised implicit-validation semantics move scalar progress on `f_02`, `f_03`, `f_07`, and `f_10`.
+
+Outputs:
+```text
+runs/swe_agent_pilot/PITFALL8_SENSITIVITY.md
+```
+
+Acceptance:
+```text
+report compares old vs revised scalar progress for f_02/f_03/f_07/f_10
+report states whether each shape tag changes
+if shape tags stay stable, report says scalar movement does not invalidate the observation-channel claim
+if a shape changes, report names the downstream table/report that must be regenerated
+```
+
 ### § Workstream T — Task-set as first-class structure
 Status: **PROMOTED.** T1 is the only roadmap item that addresses multi-task scope. Move to current priority. (T1 details remain at the existing § Workstream T section below; this header just promotes the priority.)
 
@@ -1517,18 +1700,24 @@ P4. Report whether failure shape is more about instance difficulty or about scaf
 ```
 
 ### § Workstream Q — Predictive modeling pass
-Status: not started · _waits for Workstream N to land at least one live ledger; the smoke test on retrospective data is plumbing, not science_
+Status: not started · _blocked on W3; final-success prediction stays deferred_
 
-Goal: Move beyond the smoke test: real evaluation, real disclaimers.
+Goal: Move beyond the old smoke test by predicting observation-channel dynamics before predicting final success. The first useful targets are about future visible-work behavior: drops, reopens, validation surprises, stuck states, and submit-without-validation. Final success classification remains downstream and noisier.
 
 Sketch:
 ```text
-Q1. Leave-one-repo-out evaluation (not just leave-one-run-out)
-Q2. Calibration curves
-Q3. Feature ablation (progress only, ledger features only, both)
-Q4. Comparison against trivial baselines (always-predict-mean, elapsed-only)
-Q5. Explicit non-leakage proofs (no future events, no final_success leakage)
-Q6. RESULTS_DISCLAIMERS.md template — what we can and cannot claim
+Q1. Define channel-native targets from W3:
+    - future_progress_drop
+    - product_reopened_after_completion
+    - validation_exposes_new_work
+    - stuck_loop_next_window
+    - submit_without_validation_state
+Q2. Build label-generation tests for each target on known SWE-agent pilots
+Q3. Baseline evaluations: always-mean, elapsed-only, progress-only, checkpoint-table features
+Q4. Leave-one-run-out first; leave-one-repo-out only once N is large enough
+Q5. Explicit non-leakage proofs (no future features, no final_success as feature)
+Q6. Revisit final_success prediction only after Q1-Q5 show the channel features are coherent
+Q7. RESULTS_DISCLAIMERS.md template — what we can and cannot claim
 ```
 
 ### § Workstream R — External write-up / paper draft
@@ -1758,11 +1947,12 @@ flags any divergence in interpretability that suggests the general protocol is l
 
 | Agent | Owns |
 |-------|------|
-| Agent A | N1 (sidecar-vs-in-agent decision) → N2 (sidecar implementation) |
-| Agent B | U1 (`ledger-run watch`) — depends on N2 stub |
-| Agent C | T1 (LedgerSet protocol doc) — runs in parallel with N1 |
+| Agent A | N4 parity report + W1 observability matrix |
+| Agent B | W2 shape labels + W3 estimator checkpoint table |
+| Agent C | K4 evidence-level split |
 | Agent D | U2 (`ledger-run query` CLI) — depends on the queries.py API already shipped |
-| Agent E | M1-revision memo — capture the audit-driven pivot in one page; supersedes the original M1's "scale retrospective" recommendation |
+| Agent E | T1 LedgerSet protocol doc |
+| Agent F | V1 wall-clock columns once N3 live ledgers are stable |
 
 ---
 
@@ -1785,15 +1975,17 @@ The smallest useful SWE-agent retrospective pilot:
 The smallest useful **live-instrumentation** crunch target post-CRITIC_AUDIT:
 
 ```text
-1. Pick sidecar branch.                          (N1)
-2. Build the sidecar.                            (N2 — `ledger_progress/sidecar.py`)
-3. Add `ledger-run watch`.                        (U1)
-4. Hook one SWE-agent run live.                   (N3 — one success, one failure)
-5. Live-vs-retrospective parity report.           (N4)
-6. T1: write LedgerSet protocol doc in parallel.  (T1)
+1. Pick sidecar branch.                          (N1) ✓
+2. Build the sidecar.                            (N2 — `ledger_progress/sidecar.py`) ✓
+3. Hook SWE-agent traces through the sidecar.     (N3) ✓
+4. Event observability matrix.                    (W1)
+5. Live-vs-retrospective shape parity report.     (N4)
+6. Shape labels + estimator checkpoint table.     (W2, W3)
+7. Add `ledger-run watch` / query surface.         (U1, U2)
+8. T1: write LedgerSet protocol doc in parallel.  (T1)
 ```
 
-If anything breaks at step 5 (parity fails badly), fix it before extending to live N=20 (N5). The retrospective pilot stays as the parity benchmark, not as a target to grow.
+If anything breaks at step 5 (parity fails badly), fix it before extending to live N=20 (N5). The retrospective pilot stays as the parity benchmark, not as a target to grow. Do not start Q modeling until W3 exists.
 
 ---
 
@@ -1826,6 +2018,10 @@ A live agent has emitted at least one ledger.jsonl with timestamps
   (Workstream N — N3 acceptance)
 The live ledger reproduces the retrospective shape on the same instance
   to within agreed tolerance (Workstream N — N4 parity report)
+The event observability matrix says what is mechanical, weakly inferable,
+  and annotation-only (Workstream W — W1 acceptance)
+The estimator checkpoint table exposes frontier/closure/instability/stall/
+  validation/evidence features without future leakage (Workstream W — W3)
 A monitor / CLI / external caller can ask `ledger-run watch X` or
   `ledger-run query X --status blocked` and get a live answer
   (Workstream U — U1 + U2 acceptance)
