@@ -1,0 +1,84 @@
+Will execute following command for apply_patch:
+```
+
+cd //iceprod &&
+source activate base &&
+conda activate iceprod &&
+git apply -v /swebench_matterhorn/prediction_patch.patch --allow-empty
+```
+
+Checking patch iceprod/core/functions.py...
+Applied patch iceprod/core/functions.py cleanly.
+Will execute following command for apply_patch:
+```
+
+cd //iceprod &&
+source activate base &&
+conda activate iceprod &&
+git restore tests/core/functions_test.py &&
+git apply -v /swebench_matterhorn/test_patch.patch --allow-empty
+```
+
+Checking patch tests/core/functions_test.py...
+Applied patch tests/core/functions_test.py cleanly.
+___ENVIRONMENT_SET_UP_PATCH_APPLIED___
+2024-10-22 16:05:56,985 - root - INFO - Will run the following test command
+2024-10-22 16:05:56,985 - root - INFO - 
+```
+cd //iceprod &&
+source activate base &&
+conda activate iceprod &&
+pytest --no-header -rA --tb=no  -p no:cacheprovider -W ignore::DeprecationWarning tests/core/functions_test.py
+```
+Will execute following command for run_tests:
+```
+
+cd //iceprod &&
+source activate base &&
+conda activate iceprod &&
+pytest --no-header -rA --tb=no  -p no:cacheprovider -W ignore::DeprecationWarning tests/core/functions_test.py
+```
+
+___TESTS_SECTION___
+============================= test session starts ==============================
+collected 33 items
+
+tests/core/functions_test.py ...FF.F.F....F.........F.........           [100%]
+
+=========================== short test summary info ============================
+PASSED tests/core/functions_test.py::functions_test::test_104_sha256sum
+PASSED tests/core/functions_test.py::functions_test::test_106_sha512sum
+PASSED tests/core/functions_test.py::functions_test::test_410_upload
+PASSED tests/core/functions_test.py::functions_test::test_101_check_md5sum
+PASSED tests/core/functions_test.py::functions_test::test_103_check_sha1sum
+PASSED tests/core/functions_test.py::functions_test::test_201_copy
+PASSED tests/core/functions_test.py::functions_test::test_302_isurl
+PASSED tests/core/functions_test.py::functions_test::test_200_removedirs
+PASSED tests/core/functions_test.py::functions_test::test_404_upload
+PASSED tests/core/functions_test.py::functions_test::test_100_md5sum
+PASSED tests/core/functions_test.py::functions_test::test_021_istarred
+PASSED tests/core/functions_test.py::functions_test::test_320_download
+PASSED tests/core/functions_test.py::functions_test::test_105_check_sha256sum
+PASSED tests/core/functions_test.py::functions_test::test_300_getInterfaces
+PASSED tests/core/functions_test.py::functions_test::test_001_uncompress
+PASSED tests/core/functions_test.py::functions_test::test_003_uncompress_tar
+PASSED tests/core/functions_test.py::functions_test::test_020_iscompressed
+PASSED tests/core/functions_test.py::functions_test::test_405_upload
+PASSED tests/core/functions_test.py::functions_test::test_420_upload
+PASSED tests/core/functions_test.py::functions_test::test_304_download
+PASSED tests/core/functions_test.py::functions_test::test_504_delete
+PASSED tests/core/functions_test.py::functions_test::test_102_sha1sum
+PASSED tests/core/functions_test.py::functions_test::test_107_check_sha512sum
+PASSED tests/core/functions_test.py::functions_test::test_002_uncompress_tar
+PASSED tests/core/functions_test.py::functions_test::test_505_delete
+PASSED tests/core/functions_test.py::functions_test::test_305_download
+PASSED tests/core/functions_test.py::functions_test::test_510_delete
+FAILED tests/core/functions_test.py::functions_test::test_503_delete - TypeEr...
+FAILED tests/core/functions_test.py::functions_test::test_402_upload - TypeEr...
+FAILED tests/core/functions_test.py::functions_test::test_301_gethostname - A...
+FAILED tests/core/functions_test.py::functions_test::test_306_download - Type...
+FAILED tests/core/functions_test.py::functions_test::test_403_upload - TypeEr...
+FAILED tests/core/functions_test.py::functions_test::test_303_download - Type...
+========================= 6 failed, 27 passed in 4.34s =========================
+___TESTS_SECTION_END___
+Some tests failed.
