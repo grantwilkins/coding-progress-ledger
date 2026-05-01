@@ -165,8 +165,14 @@ Canonical names live in `ledger_progress/core.py:Status`.
   command repeated) or 2 (a two-command oscillation, e.g. an edit
   and an inverse edit) or longer — and the cycle has repeated three
   or more times verbatim, with no query variation and no new tool
-  output, the trace is visibly stuck. Mark `blocked` at the step
-  where the third iteration begins.
+  output, the trace is visibly stuck. Mark `blocked` at the
+  **assistant-turn step** where the third iteration begins — i.e.
+  the third occurrence of the pattern-starting command, counted as
+  the first command of each iteration. "Third iteration begins"
+  here refers to the agent issuing the pattern-starting command for
+  the third time, NOT the third tool response or the cycle's
+  conclusion. *(Wording tightened per H3 revision 2 to remove
+  off-by-one ambiguity.)*
 
   **(b) Tool-response-loop rule:** when the agent's tool responses
   are identical or near-identical for three or more consecutive
@@ -261,6 +267,17 @@ Recommended order, optimized for not lying to yourself:
    uncertain decisions, evidence gaps, and whether you ever felt
    tempted to use the upstream success label (you didn't, but write
    it down if the temptation surfaced).
+
+**Granularity is annotator latitude** *(added per H3 acknowledgment)*.
+Two reasonable annotators will sometimes disagree on whether to
+model "build repro + observe output" as one `INVESTIGATION` leaf or
+as `INVESTIGATION` + `VALIDATION`; or whether to model a multi-stage
+product fix as one `PRODUCT` leaf with `REOPEN` events or as several
+complete `PRODUCT` leaves. Both are legitimate as long as they
+preserve the framework's load-bearing properties: same final-
+progress shape, evidence cited at each transition, non-monotonicity
+preserved when the trace forces it. Do not rewrite an existing
+annotation purely to change granularity.
 
 ## 10. Common pitfalls (failure mode catalogue)
 

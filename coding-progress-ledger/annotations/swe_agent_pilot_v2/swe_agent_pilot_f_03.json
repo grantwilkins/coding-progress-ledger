@@ -1,0 +1,35 @@
+{
+  "pilot_id": "swe_agent_pilot_f_03",
+  "instance_id": "asottile__setup-cfg-fmt-132",
+  "root_task": "Stop configparser from downcasing keys in unrelated sections (e.g. DJANGO_SETTINGS_MODULE under [tool:pytest]) so setup-cfg-fmt round-trips them",
+  "events": [
+    {"op": "add", "step": 2, "id": "S1", "category": "INVESTIGATION",
+     "description": "Build a reproduction script that exercises configparser on a [tool:pytest] section with an upper-case key"},
+    {"op": "complete", "step": 7, "id": "S1",
+     "evidence": [
+       "step 2: create reproduce.py",
+       "step 5: edit 1:1 lands a 10-line script that ConfigParser-writes a [tool:pytest] section with key DJANGO_SETTINGS_MODULE = test.test",
+       "step 7: python reproduce.py prints 'INI file written.'"
+     ]},
+    {"op": "add", "step": 8, "id": "S2", "category": "VALIDATION",
+     "description": "Inspect the produced INI to confirm the bug (key downcased)"},
+    {"op": "complete", "step": 9, "id": "S2",
+     "evidence": [
+       "step 9: cat test.ini outputs `[tool:pytest]\\ndjango_settings_module = test.test` -- the upper-case key was downcased, bug confirmed in-trace"
+     ]},
+    {"op": "add", "step": 10, "id": "S3", "category": "INVESTIGATION",
+     "description": "Locate the configparser construction site in setup_cfg_fmt.py that needs an `optionxform` override"},
+    {"op": "block", "step": 30, "id": "S3",
+     "reason": "stuck loop (general protocol § 6 command-loop rule, third iteration begins at step 30): from step 18 onward the agent repeats a 6-step cycle [search_file 'test.ini' setup_cfg_fmt.py -> 'No matches found' -> search_file 'configparser' -> '6 matches' -> goto 156 -> file at 156]. Cycle starts at step 18, second iteration at step 24, third at step 30. The pattern continues verbatim through step 112 with no query variation and no new tool output; latest visible step still in pattern is step 112 (goto 156)."}
+  ],
+  "quality": {
+    "annotator": "Opus subagent (Workstream H cold pass)",
+    "annotation_pass": "H1",
+    "annotation_time_minutes": 35,
+    "number_of_uncertain_events": 1,
+    "number_of_evidence_gaps": 1,
+    "whether_final_success_used_only_at_end": true,
+    "whether_progress_forced": false,
+    "whether_schema_gap_found": false
+  }
+}

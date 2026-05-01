@@ -894,7 +894,7 @@ each case study is one page or less
 > **Scheduling note:** H is methodologically important but heavy (5 extra annotations at ~30 min each). Run H **after** E2 lands and only if M leans toward "scale". If M leans "pause" or "schema-change-needed", skip H and revisit when annotation effort is justified by a real scale-out plan.
 
 ### H1. Duplicate-annotate 5 traces
-Status: deferred until after E2 · _scheduling adjusted from brief_
+Status: done — second-annotator pass by an Opus subagent on `s_01`, `s_03`, `f_01`, `f_06`, `f_03` (all four success/progress quadrants). v2 specs at `annotations/swe_agent_pilot_v2/`. Subagent was forbidden from reading v1 annotations / run_notes / pilot summary; only read protocol docs, addendum, template, core enums, and per-pilot trajectory files. Caveat: both annotators are LLM passes (correlated biases); a real human re-pass would expand the agreement signal. Layout deviation from brief: `annotations/swe_agent_pilot_v2/` instead of per-pilot reannotation subdirs because the spec-driven driver consumes specs from `annotations/`.
 
 Selection:
 ```text
@@ -916,7 +916,7 @@ same source_trace.json shared by both annotators (immutable)
 ```
 
 ### H2. Compare annotations
-Status: not started
+Status: done — `scripts/compare_annotations.py` (10 tests) + `datasets/h_inter_annotator_report.md` (raw metrics) + `runs/swe_agent_pilot_reannotation/ANNOTATION_AGREEMENT.md` (analysis). **Quadrant agreement: 5 / 5.** Mean absolute coding-progress delta: 0.10. 4 of 5 pilots are "different ledger, same conclusions"; only `f_01` shows different conclusions (0.67 vs 1.00) due to the implicit-validation gap. Verdict distribution: 1 high, 2 moderate, 2 low.
 
 Outputs:
 ```text
@@ -943,7 +943,13 @@ report distinguishes "different ledger, same conclusions" from "different conclu
 ```
 
 ### H3. Decide if annotation protocol needs changes
-Status: not started
+Status: done — `docs/SWE_AGENT_ANNOTATION_PROTOCOL_REVISIONS.md` lists 3 revisions (1 HIGH, 2 LOW) plus 1 no-change acknowledgment of granularity latitude. All three revisions applied to the protocol docs in the same commit:
+- **Revision 1 (HIGH):** addendum § 5 pitfall #8 — bug-fix tasks always have implicit validation work. Closes the f_01 disagreement.
+- **Revision 2 (LOW):** general § 6 — tightened "third iteration begins" wording to mean the assistant-turn step. Closes the f_03 step-count disagreement.
+- **Revision 3 (LOW):** addendum § 1 — `__init__.py` / package-wiring default is PRODUCT (issue-required) vs ENVIRONMENT (purely setup). Resolves the s_03 disagreement.
+- **Acknowledgment:** general § 9 — granularity is annotator latitude.
+
+A future re-pass under the revised protocol is the empirical test of whether the changes close the gaps.
 
 Outputs:
 ```text

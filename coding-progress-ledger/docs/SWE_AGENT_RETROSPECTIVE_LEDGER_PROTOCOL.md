@@ -38,6 +38,16 @@ work — e.g. ten investigation actions that locate a file are one
 `INVESTIGATION` leaf, not ten. The trace is the witness; the leaf is
 the unit of *discovered work*.
 
+**`__init__.py` re-exports and package-level wiring** *(added per
+H3 revision 3)*. Default to `PRODUCT` when the wiring change is
+required by the issue itself (e.g., the issue's stack trace points
+at the symbol the agent's edit exposes, or the issue text names the
+broken import). Default to `ENVIRONMENT` only when the wiring is
+*purely setup*: the agent's edit doesn't change runtime behavior of
+the symbol; it just makes a previously-internal symbol importable
+to satisfy a missing dependency the harness demands. When in doubt,
+choose `PRODUCT` and note the ambiguity in `run_notes.md` § 4.
+
 ## 2. SWE-agent run-dir artifacts the annotator reads
 
 Per `scripts/import_swe_agent_trace.py` (C3), each pilot run dir
@@ -263,6 +273,27 @@ These supplement (do not replace) the general pitfalls in
    investigation/repro residue, not as `PRODUCT` evidence. Always
    cross-check `final_diff.patch` against the trace's `edit` /
    `create` history before citing it.
+8. **Bug-fix tasks always have implicit validation work, even when
+   the trace doesn't surface it** *(added per H3 revision 1)*. For
+   any task whose acceptance bar requires the runtime to behave a
+   particular way (every bug-fix issue in this corpus, plus every
+   "make this test pass" or "remove this echo" task), validation is
+   implicit discovered work: an honest observer can name "verify
+   the fix works" as a unit of work the agent could perform. Always
+   add a `VALIDATION` leaf for such tasks. If the agent ran tests /
+   a repro in-trace, complete the leaf with that evidence; if the
+   agent never validated, leave the leaf at `not_started` and
+   record "submitted without in-trace validation" in
+   `run_notes.md` § 6. Final progress < 1.00 is the correct shape
+   in that case — and that shape is what distinguishes a
+   submit-without-test trace from a hidden-work-gap trace
+   (f_06-style) where the agent did everything they could see.
+
+   *Why this is in the addendum, not the general protocol:* the
+   rule is sharp only when the task type is "fix-then-verify". A
+   research-style task whose acceptance bar is "produce an answer"
+   has no implicit validation; for those, default to the general
+   protocol's strict "annotate only visible trace evidence".
 
 ## 6. Open questions / known caveats (SWE-agent specific)
 
