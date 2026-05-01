@@ -22,14 +22,13 @@ Audit of checkpoint-level observation CSV coherence.
 
 | Mode | Rows |
 | --- | ---: |
-| `mixed` | 192 |
-| `native` | 10 |
+| `native` | 202 |
 
-Runs with native/resolved metric mismatch: `swe_agent_pilot_s_03`
+Runs with native/resolved metric mismatch: none
 
 ## Drops
 
-- Negative coding deltas: 57
+- Negative coding deltas: 59
 - Negative overall deltas: 73
 
 Coding drop sources:
@@ -37,17 +36,17 @@ Coding drop sources:
 | Source | Count |
 | --- | ---: |
 | `investigation` | 14 |
-| `product` | 18 |
-| `validation` | 25 |
+| `product` | 26 |
+| `validation` | 19 |
 
 Overall drop sources:
 
 | Source | Count |
 | --- | ---: |
-| `artifact` | 16 |
+| `artifact` | 14 |
 | `investigation` | 14 |
-| `product` | 18 |
-| `validation` | 25 |
+| `product` | 26 |
+| `validation` | 19 |
 
 ## Event vs Step
 
@@ -57,13 +56,12 @@ Runs with multiple events at the same step: `swe_agent_pilot_f_01`, `swe_agent_p
 
 ## Success / Progress Quadrants
 
-- Success + high progress: `swe_agent_pilot_s_01`, `swe_agent_pilot_s_02`, `swe_agent_pilot_s_05`, `swe_agent_pilot_s_07`, `swe_agent_pilot_s_08`, `swe_agent_pilot_s_10`
+- Success + high progress: `swe_agent_pilot_s_01`, `swe_agent_pilot_s_02`, `swe_agent_pilot_s_03`, `swe_agent_pilot_s_05`, `swe_agent_pilot_s_06`, `swe_agent_pilot_s_07`, `swe_agent_pilot_s_08`, `swe_agent_pilot_s_09`, `swe_agent_pilot_s_10`
 - Success + low progress: `swe_agent_pilot_s_04`
-- Failure + high progress: `swe_agent_pilot_f_06`, `swe_agent_pilot_f_09`, `swe_agent_pilot_s_03`, `swe_agent_pilot_s_06`, `swe_agent_pilot_s_09`
+- Failure + high progress: `swe_agent_pilot_f_06`, `swe_agent_pilot_f_09`
 - Failure + low progress: `swe_agent_pilot_f_01`, `swe_agent_pilot_f_02`, `swe_agent_pilot_f_03`, `swe_agent_pilot_f_04`, `swe_agent_pilot_f_05`, `swe_agent_pilot_f_07`, `swe_agent_pilot_f_08`, `swe_agent_pilot_f_10`
 - Unknown success: none
 
 ## Warnings
 
-- large native/resolved divergence: 1 runs
 - event-level and step-level largest drops differ substantially: 1 runs

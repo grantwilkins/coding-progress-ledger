@@ -15,15 +15,13 @@ Event rows preserve replay fidelity with one row per LedgerEvent prefix. Step ro
 
 Event rows by category resolution mode:
 
-- `mixed`: 192
-- `native`: 10
+- `native`: 202
 
 Step rows by category resolution mode:
 
-- `mixed`: 181
-- `native`: 10
+- `native`: 191
 
-Runs with native/resolved metric mismatch: `swe_agent_pilot_s_03`.
+Runs with native/resolved metric mismatch: none
 
 ## Non-monotonic Coding Progress
 
@@ -39,7 +37,7 @@ Step-level: `swe_agent_pilot_f_01`, `swe_agent_pilot_f_02`, `swe_agent_pilot_f_0
 - `swe_agent_pilot_f_04`: 0.500000 (product)
 - `swe_agent_pilot_f_05`: 0.500000 (investigation)
 - `swe_agent_pilot_f_06`: 0.500000 (investigation)
-- `swe_agent_pilot_f_07`: 0.500000 (validation)
+- `swe_agent_pilot_f_07`: 0.500000 (product)
 - `swe_agent_pilot_f_08`: 0.500000 (investigation)
 - `swe_agent_pilot_f_09`: 0.500000 (product)
 - `swe_agent_pilot_f_10`: 0.500000 (investigation)
@@ -53,7 +51,7 @@ Step-level: `swe_agent_pilot_f_01`, `swe_agent_pilot_f_02`, `swe_agent_pilot_f_0
 - `swe_agent_pilot_f_04`: 0.500000 (product)
 - `swe_agent_pilot_f_05`: 0.500000 (investigation)
 - `swe_agent_pilot_f_06`: 0.500000 (investigation)
-- `swe_agent_pilot_f_07`: 0.500000 (validation)
+- `swe_agent_pilot_f_07`: 0.500000 (product)
 - `swe_agent_pilot_f_08`: 0.500000 (investigation)
 - `swe_agent_pilot_f_09`: 0.500000 (product)
 
@@ -65,7 +63,7 @@ Step-level: `swe_agent_pilot_f_01`, `swe_agent_pilot_f_02`, `swe_agent_pilot_f_0
 - `swe_agent_pilot_f_04`: 0.500000 (product)
 - `swe_agent_pilot_f_05`: 0.500000 (investigation)
 - `swe_agent_pilot_f_06`: 0.500000 (investigation)
-- `swe_agent_pilot_f_07`: 0.500000 (validation)
+- `swe_agent_pilot_f_07`: 0.500000 (product)
 - `swe_agent_pilot_f_08`: 0.500000 (investigation)
 - `swe_agent_pilot_f_09`: 0.500000 (product)
 - `swe_agent_pilot_f_10`: 0.500000 (investigation)
@@ -79,7 +77,7 @@ Step-level: `swe_agent_pilot_f_01`, `swe_agent_pilot_f_02`, `swe_agent_pilot_f_0
 - `swe_agent_pilot_f_04`: 0.500000 (product)
 - `swe_agent_pilot_f_05`: 0.500000 (investigation)
 - `swe_agent_pilot_f_06`: 0.500000 (investigation)
-- `swe_agent_pilot_f_07`: 0.500000 (validation)
+- `swe_agent_pilot_f_07`: 0.500000 (product)
 - `swe_agent_pilot_f_08`: 0.500000 (investigation)
 - `swe_agent_pilot_f_09`: 0.500000 (product)
 
@@ -99,4 +97,4 @@ Runs with multiple events at the same step: `swe_agent_pilot_f_01`, `swe_agent_p
 
 ## Sanity Check Warnings
 
-- swe_agent_pilot_s_03: native/resolved metrics differ
+- none

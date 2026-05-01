@@ -16,6 +16,7 @@ runs/swe_agent_pilot/*
 # Exception: I1/I2 derived docs, no upstream content; commit them.
 !runs/swe_agent_pilot/SCHEMA_GAPS.md
 !runs/swe_agent_pilot/SCHEMA_DECISION.md
+!runs/swe_agent_pilot/CATEGORY_RESOLUTION_REPORT.md
 
 # H4 v3 cold-pass run dirs mirror source_trace.json (verbatim upstream).
 # Re-materialize via scripts/annotate_pilots_from_spec.py against

@@ -1026,7 +1026,7 @@ no schema/code changes made silently — every change has a corresponding outcom
 ## § Workstream J — Native-category quality
 
 ### J1. Measure category resolution for SWE-agent pilot
-Status: not started
+Status: done — `runs/swe_agent_pilot/CATEGORY_RESOLUTION_REPORT.md`. **Root cause:** `LedgerSession.add()` had a "PRODUCT-is-default — don't write it to payload" optimization that stripped the `category` field from every PRODUCT subtask's serialization. The dataset builder couldn't distinguish "explicitly PRODUCT" from "missing category", so almost every SWE-agent run resolved to `mixed`. **Fix:** `add()` now always emits `category` in the payload (`ledger_progress/session.py`); one fixture in `tests/test_session.py` updated to match. **Result:** all 191 step rows and 202 event rows are now `native`; zero `mixed`, zero `legacy_inferred`, zero native/resolved warnings. Progress numbers byte-identical before and after — the bug was serialization-layer only.
 
 Goal: New annotations should be `category_resolution_mode = native` (i.e. category set explicitly on every subtask).
 
@@ -1044,7 +1044,7 @@ existing toy/control runs are exempt — they predate the native-category conven
 ```
 
 ### J2. Enforce native categories for new annotations
-Status: not started
+Status: done — `scripts/check_native_categories.py`. Walks `runs/swe_agent_pilot` and `runs/swe_agent_pilot_v3` by default; reports any ADD_SUBTASK or SPLIT child whose payload lacks `category`. Exits non-zero on any violation. Legacy toy/control/live runs are exempted via explicit `--legacy-root` path filter (not silent passing). On the current corpus: 25 SWE-agent runs (20 pilot + 5 H4 v3) all native, zero violations; 18 legacy runs path-filtered. Tests at `tests/test_native_category_invariants.py` (6 tests) cover the J1 invariant (`add()` always emits category) and J2's offender detection on hand-crafted JSONL fixtures.
 
 Outputs:
 ```text

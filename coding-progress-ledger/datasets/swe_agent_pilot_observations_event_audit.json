@@ -1,109 +1,18 @@
 {
   "category_resolution": {
-    "drop_source_differences": [
-      {
-        "coding_drop_source": "validation",
-        "event_index": 5,
-        "event_type": "add_subtask",
-        "native_coding_drop_source": "product",
-        "native_overall_drop_source": "product",
-        "overall_drop_source": "validation",
-        "run_id": "swe_agent_pilot_f_05",
-        "step": 14
-      },
-      {
-        "coding_drop_source": "validation",
-        "event_index": 3,
-        "event_type": "add_subtask",
-        "native_coding_drop_source": "product",
-        "native_overall_drop_source": "product",
-        "overall_drop_source": "validation",
-        "run_id": "swe_agent_pilot_f_07",
-        "step": 16
-      },
-      {
-        "coding_drop_source": "validation",
-        "event_index": 5,
-        "event_type": "add_subtask",
-        "native_coding_drop_source": "product",
-        "native_overall_drop_source": "product",
-        "overall_drop_source": "validation",
-        "run_id": "swe_agent_pilot_f_08",
-        "step": 28
-      },
-      {
-        "coding_drop_source": "validation",
-        "event_index": 7,
-        "event_type": "add_subtask",
-        "native_coding_drop_source": "product",
-        "native_overall_drop_source": "product",
-        "overall_drop_source": "validation",
-        "run_id": "swe_agent_pilot_f_09",
-        "step": 26
-      },
-      {
-        "coding_drop_source": "validation",
-        "event_index": 7,
-        "event_type": "add_subtask",
-        "native_coding_drop_source": "product",
-        "native_overall_drop_source": "product",
-        "overall_drop_source": "validation",
-        "run_id": "swe_agent_pilot_s_01",
-        "step": 28
-      },
-      {
-        "coding_drop_source": "none",
-        "event_index": 5,
-        "event_type": "add_subtask",
-        "native_coding_drop_source": "product",
-        "native_overall_drop_source": "product",
-        "overall_drop_source": "artifact",
-        "run_id": "swe_agent_pilot_s_03",
-        "step": 16
-      },
-      {
-        "coding_drop_source": "none",
-        "event_index": 7,
-        "event_type": "reopen_subtask",
-        "native_coding_drop_source": "product",
-        "native_overall_drop_source": "product",
-        "overall_drop_source": "artifact",
-        "run_id": "swe_agent_pilot_s_03",
-        "step": 22
-      },
-      {
-        "coding_drop_source": "validation",
-        "event_index": 5,
-        "event_type": "add_subtask",
-        "native_coding_drop_source": "product",
-        "native_overall_drop_source": "product",
-        "overall_drop_source": "validation",
-        "run_id": "swe_agent_pilot_s_10",
-        "step": 8
-      }
-    ],
-    "large_native_resolved_divergences": [
-      {
-        "max_diff": 0.33333333333333337,
-        "run_id": "swe_agent_pilot_s_03"
-      }
-    ],
-    "max_abs_native_resolved_coding_progress_diff_by_run": {
-      "swe_agent_pilot_s_03": 0.33333333333333337
-    },
+    "drop_source_differences": [],
+    "large_native_resolved_divergences": [],
+    "max_abs_native_resolved_coding_progress_diff_by_run": {},
     "rows_by_category_resolution_mode": {
-      "mixed": 192,
-      "native": 10
+      "native": 202
     },
-    "runs_with_native_resolved_metric_mismatch": [
-      "swe_agent_pilot_s_03"
-    ]
+    "runs_with_native_resolved_metric_mismatch": []
   },
   "drops": {
     "coding_drop_source_counts": {
       "investigation": 14,
-      "product": 18,
-      "validation": 25
+      "product": 26,
+      "validation": 19
     },
     "largest_coding_drops_by_run": {
       "swe_agent_pilot_f_01": {
@@ -145,7 +54,7 @@
       "swe_agent_pilot_f_07": {
         "amount": 0.5,
         "event_index": 3,
-        "source": "validation",
+        "source": "product",
         "step": 16
       },
       "swe_agent_pilot_f_08": {
@@ -267,7 +176,7 @@
       "swe_agent_pilot_f_07": {
         "amount": 0.5,
         "event_index": 3,
-        "source": "validation",
+        "source": "product",
         "step": 16
       },
       "swe_agent_pilot_f_08": {
@@ -349,13 +258,13 @@
         "step": 6
       }
     },
-    "negative_coding_delta_count": 57,
+    "negative_coding_delta_count": 59,
     "negative_overall_delta_count": 73,
     "overall_drop_source_counts": {
-      "artifact": 16,
+      "artifact": 14,
       "investigation": 14,
-      "product": 18,
-      "validation": 25
+      "product": 26,
+      "validation": 19
     }
   },
   "event_vs_step": {
@@ -399,7 +308,7 @@
       "swe_agent_pilot_f_07": {
         "amount": 0.5,
         "event_index": 3,
-        "source": "validation",
+        "source": "product",
         "step": 16
       },
       "swe_agent_pilot_f_08": {
@@ -521,7 +430,7 @@
       "swe_agent_pilot_f_07": {
         "amount": 0.5,
         "event_index": 3,
-        "source": "validation",
+        "source": "product",
         "step": 16
       },
       "swe_agent_pilot_f_08": {
@@ -667,10 +576,7 @@
   "success_progress_quadrants": {
     "failure_high_progress": [
       "swe_agent_pilot_f_06",
-      "swe_agent_pilot_f_09",
-      "swe_agent_pilot_s_03",
-      "swe_agent_pilot_s_06",
-      "swe_agent_pilot_s_09"
+      "swe_agent_pilot_f_09"
     ],
     "failure_low_progress": [
       "swe_agent_pilot_f_01",
@@ -686,9 +592,12 @@
     "success_high_progress": [
       "swe_agent_pilot_s_01",
       "swe_agent_pilot_s_02",
+      "swe_agent_pilot_s_03",
       "swe_agent_pilot_s_05",
+      "swe_agent_pilot_s_06",
       "swe_agent_pilot_s_07",
       "swe_agent_pilot_s_08",
+      "swe_agent_pilot_s_09",
       "swe_agent_pilot_s_10"
     ],
     "success_low_progress": [
@@ -702,7 +611,6 @@
     "runs": 20
   },
   "warnings": [
-    "large native/resolved divergence: 1 runs",
     "event-level and step-level largest drops differ substantially: 1 runs"
   ]
 }

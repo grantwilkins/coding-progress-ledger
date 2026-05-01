@@ -28,9 +28,8 @@ class LedgerSession:
             "description": description,
             "parent_id": parent_id,
             "weight": weight,
+            "category": category,
         }
-        if category is not SubtaskCategory.PRODUCT:
-            payload["category"] = category
         self._apply(step, EventType.ADD_SUBTASK, subtask_id, payload, reason)
         return subtask_id
 

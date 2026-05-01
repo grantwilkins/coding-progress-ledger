@@ -22,14 +22,13 @@ Audit of checkpoint-level observation CSV coherence.
 
 | Mode | Rows |
 | --- | ---: |
-| `mixed` | 181 |
-| `native` | 10 |
+| `native` | 191 |
 
-Runs with native/resolved metric mismatch: `swe_agent_pilot_s_03`
+Runs with native/resolved metric mismatch: none
 
 ## Drops
 
-- Negative coding deltas: 56
+- Negative coding deltas: 58
 - Negative overall deltas: 63
 
 Coding drop sources:
@@ -38,18 +37,18 @@ Coding drop sources:
 | --- | ---: |
 | `investigation` | 14 |
 | `mixed` | 1 |
-| `product` | 17 |
-| `validation` | 24 |
+| `product` | 25 |
+| `validation` | 18 |
 
 Overall drop sources:
 
 | Source | Count |
 | --- | ---: |
-| `artifact` | 7 |
+| `artifact` | 5 |
 | `investigation` | 14 |
 | `mixed` | 1 |
-| `product` | 17 |
-| `validation` | 24 |
+| `product` | 25 |
+| `validation` | 18 |
 
 ## Event vs Step
 
@@ -67,4 +66,4 @@ Runs with multiple events at the same step: none
 
 ## Warnings
 
-- large native/resolved divergence: 1 runs
+- none

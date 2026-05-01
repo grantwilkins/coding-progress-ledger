@@ -16,6 +16,7 @@ from ledger_progress import (
     LedgerEvent,
     LedgerSession,
     Status,
+    SubtaskCategory,
     apply_event,
     from_jsonl,
     new_ledger,
@@ -38,8 +39,8 @@ def test_session_calls_match_manual_events_score_and_replay():
 
     manual = new_ledger("Fix parser")
     for event in [
-        LedgerEvent(1, EventType.ADD_SUBTASK, "S1", {"description": "Understand failure", "parent_id": None, "weight": 1.0}, "Plan"),
-        LedgerEvent(1, EventType.ADD_SUBTASK, "S2", {"description": "Locate parser", "parent_id": None, "weight": 1.0}),
+        LedgerEvent(1, EventType.ADD_SUBTASK, "S1", {"description": "Understand failure", "parent_id": None, "weight": 1.0, "category": SubtaskCategory.PRODUCT}, "Plan"),
+        LedgerEvent(1, EventType.ADD_SUBTASK, "S2", {"description": "Locate parser", "parent_id": None, "weight": 1.0, "category": SubtaskCategory.PRODUCT}),
         LedgerEvent(2, EventType.UPDATE_STATUS, "S1", {"status": Status.IN_PROGRESS, "evidence": ["Reading issue"]}),
         LedgerEvent(3, EventType.UPDATE_STATUS, "S1", {"status": Status.COMPLETE, "evidence": ["Issue restated"]}),
         LedgerEvent(3, EventType.UPDATE_STATUS, "S2", {"status": Status.BLOCKED}, "Need failing test"),
