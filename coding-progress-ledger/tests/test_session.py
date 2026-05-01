@@ -26,7 +26,7 @@ from ledger_progress import (
 
 
 def test_session_calls_match_manual_events_score_and_replay():
-    session = LedgerSession("Fix parser")
+    session = LedgerSession("Fix parser", clock=lambda: None)
     s1 = session.add("Understand failure", step=1, reason="Plan")
     s2 = session.add("Locate parser", step=1)
     session.start(s1, step=2, evidence="Reading issue")

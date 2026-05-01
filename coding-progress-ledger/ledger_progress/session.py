@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 import csv
-from collections.abc import Iterable
+from collections.abc import Callable, Iterable
+from datetime import datetime, timezone
 from pathlib import Path
 
 from .core import EventType, Ledger, LedgerEvent, Status, SubtaskCategory, apply_event, new_ledger, replay
@@ -9,9 +10,14 @@ from .scoring import score as score_ledger
 from .serialization import to_jsonl
 
 
+def _utc_now_iso() -> str:
+    return datetime.now(timezone.utc).isoformat()
+
+
 class LedgerSession:
-    def __init__(self, root_task: str | Ledger):
+    def __init__(self, root_task: str | Ledger, clock: Callable[[], str | None] | None = None):
         self.ledger = root_task if isinstance(root_task, Ledger) else new_ledger(root_task)
+        self._clock = clock if clock is not None else _utc_now_iso
 
     def add(
         self,
@@ -98,7 +104,7 @@ class LedgerSession:
         return self._apply(step, EventType.UPDATE_STATUS, subtask_id, payload, reason)
 
     def _apply(self, step: int, event_type: EventType, subtask_id: str, payload: dict, reason: str | None) -> Ledger:
-        self.ledger = apply_event(self.ledger, LedgerEvent(step, event_type, subtask_id, payload, reason))
+        self.ledger = apply_event(self.ledger, LedgerEvent(step, event_type, subtask_id, payload, reason, self._clock()))
         return self.ledger
 
     def _next_id(self) -> str:

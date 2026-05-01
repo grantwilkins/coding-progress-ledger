@@ -63,6 +63,7 @@ class LedgerEvent:
     subtask_id: str | None
     payload: dict[str, Any]
     reason: str | None = None
+    timestamp: str | None = None
 
     def __post_init__(self) -> None:
         self.event_type = EventType(self.event_type)

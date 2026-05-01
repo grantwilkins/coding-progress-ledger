@@ -87,6 +87,23 @@ DATASET_FIELDS = [
     "native_overall_drop_source",
     "category_resolution_mode",
     "category_overrides_applied",
+    "product_progress",
+    "validation_progress",
+    "investigation_progress",
+    "step_added_subtasks",
+    "step_split_events",
+    "step_reopen_events",
+    "step_invalidation_events",
+    "step_product_completes",
+    "step_validation_completes",
+    "step_investigation_completes",
+    "step_strong_completions",
+    "step_manual_only_completions",
+    "steps_since_progress_increase",
+    "steps_since_completion",
+    "steps_since_subtask_added",
+    "cum_strong_completions",
+    "cum_manual_only_completions",
 ]
 
 
@@ -160,7 +177,7 @@ def build_dataset(runs_dir: Path) -> BuildResult:
             category_resolution_mode=resolution["mode"],
             category_overrides_applied=resolution["overrides_applied"],
         )
-        run_step_rows = build_step_rows(run_rows)
+        run_step_rows = build_step_rows(run_rows, _event_context(resolved_events))
         event_rows.extend(run_rows)
         step_rows.extend(run_step_rows)
         event_summaries.append(summarize_run(run_id, run_rows, final_success, resolution))
@@ -244,6 +261,23 @@ def build_run_rows(
             "native_overall_drop_source": _drop_source(previous_native, native_metrics, "overall_progress", native_delta_overall),
             "category_resolution_mode": category_resolution_mode,
             "category_overrides_applied": category_overrides_applied,
+            "product_progress": resolved_metrics["product_progress"],
+            "validation_progress": resolved_metrics["validation_progress"],
+            "investigation_progress": resolved_metrics["investigation_progress"],
+            "step_added_subtasks": 0,
+            "step_split_events": 0,
+            "step_reopen_events": 0,
+            "step_invalidation_events": 0,
+            "step_product_completes": 0,
+            "step_validation_completes": 0,
+            "step_investigation_completes": 0,
+            "step_strong_completions": 0,
+            "step_manual_only_completions": 0,
+            "steps_since_progress_increase": 0,
+            "steps_since_completion": 0,
+            "steps_since_subtask_added": 0,
+            "cum_strong_completions": 0,
+            "cum_manual_only_completions": 0,
         }
         rows.append(row)
         previous_resolved = resolved_metrics
@@ -251,7 +285,7 @@ def build_run_rows(
     return rows
 
 
-def build_step_rows(event_rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+def build_step_rows(event_rows: list[dict[str, Any]], event_context: dict[int, dict[str, Any]] | None = None) -> list[dict[str, Any]]:
     retained: list[dict[str, Any]] = []
     rows_by_step: dict[int, list[dict[str, Any]]] = {}
     for row in event_rows:
@@ -261,6 +295,11 @@ def build_step_rows(event_rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
 
     previous: dict[str, Any] | None = None
     previous_event_index = -1
+    cum_strong = 0
+    cum_manual = 0
+    last_increase_step: int | None = None
+    last_completion_step: int | None = None
+    last_added_step: int | None = None
     for row in retained:
         current_event_index = int(row["event_index"])
         interval_rows = [
@@ -300,9 +339,89 @@ def build_step_rows(event_rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
             delta_field="native_delta_overall_progress",
             source_field="native_overall_drop_source",
         )
+
+        ctx = event_context or {}
+        added = sum(1 for r in interval_rows if r["event_type"] == "add_subtask")
+        splits = sum(1 for r in interval_rows if r["event_type"] == "split_subtask")
+        reopens = sum(1 for r in interval_rows if r["event_type"] == "reopen_subtask")
+        invalidations = sum(1 for r in interval_rows if r["event_type"] == "invalidate_subtask")
+        prod_completes = val_completes = inv_completes = 0
+        strong = manual = 0
+        for r in interval_rows:
+            ec = ctx.get(int(r["event_index"]))
+            if ec is None or not ec.get("is_completion"):
+                continue
+            if ec["category"] == "product":
+                prod_completes += 1
+            elif ec["category"] == "validation":
+                val_completes += 1
+            elif ec["category"] == "investigation":
+                inv_completes += 1
+            if ec["evidence_strong"]:
+                strong += 1
+            elif ec["evidence_manual_only"]:
+                manual += 1
+        cum_strong += strong
+        cum_manual += manual
+        step_int = int(row["step"])
+        if float(row["delta_coding_progress"]) > EPSILON:
+            last_increase_step = step_int
+        if (added + splits + prod_completes + val_completes + inv_completes) > 0 and any(
+            r["event_type"] in {"update_status"} and ctx.get(int(r["event_index"]), {}).get("is_completion")
+            for r in interval_rows
+        ):
+            last_completion_step = step_int
+        if added > 0 or splits > 0:
+            last_added_step = step_int
+        row["step_added_subtasks"] = added
+        row["step_split_events"] = splits
+        row["step_reopen_events"] = reopens
+        row["step_invalidation_events"] = invalidations
+        row["step_product_completes"] = prod_completes
+        row["step_validation_completes"] = val_completes
+        row["step_investigation_completes"] = inv_completes
+        row["step_strong_completions"] = strong
+        row["step_manual_only_completions"] = manual
+        row["cum_strong_completions"] = cum_strong
+        row["cum_manual_only_completions"] = cum_manual
+        row["steps_since_progress_increase"] = (step_int - last_increase_step) if last_increase_step is not None else step_int
+        row["steps_since_completion"] = (step_int - last_completion_step) if last_completion_step is not None else step_int
+        row["steps_since_subtask_added"] = (step_int - last_added_step) if last_added_step is not None else step_int
+
         previous = row
         previous_event_index = current_event_index
     return retained
+
+
+def _event_context(resolved_events: list[Any]) -> dict[int, dict[str, Any]]:
+    classify = rescore.classify_evidence
+    strong_types = rescore.STRONG_EVIDENCE_TYPES
+    categories: dict[str, str] = {}
+    out: dict[int, dict[str, Any]] = {}
+    for index, event in enumerate(resolved_events):
+        et = event.event_type.value
+        payload = event.payload
+        if et == EventType.ADD_SUBTASK.value:
+            categories[event.subtask_id] = (
+                payload.get("category").value if hasattr(payload.get("category"), "value")
+                else str(payload.get("category", "product"))
+            )
+        elif et == EventType.SPLIT_SUBTASK.value:
+            for child in payload.get("children", []):
+                cat = child.get("category")
+                categories[child["id"]] = cat.value if hasattr(cat, "value") else str(cat or categories.get(event.subtask_id, "product"))
+        is_completion = (et == EventType.UPDATE_STATUS.value and str(payload.get("status", "")).endswith("complete"))
+        evidence = payload.get("evidence") or []
+        if isinstance(evidence, str):
+            evidence = [evidence]
+        types = classify(list(evidence)) if evidence else set()
+        out[index] = {
+            "category": categories.get(event.subtask_id, "product"),
+            "is_completion": is_completion,
+            "evidence_strong": bool(strong_types & types),
+            "evidence_manual_only": types == {"manual_note"},
+        }
+    return out
 
 
 def _recompute_step_delta_and_source(
@@ -519,6 +638,9 @@ def _metrics(events: list[Any]) -> dict[str, Any]:
     ledger = replay(events)
     coding = score(ledger, CODING_CATEGORIES)
     overall = score(ledger, ALL_CATEGORIES)
+    product = score(ledger, (SubtaskCategory.PRODUCT,))
+    validation = score(ledger, (SubtaskCategory.VALIDATION,))
+    investigation = score(ledger, (SubtaskCategory.INVESTIGATION,))
     return {
         "coding_progress": coding.progress,
         "overall_progress": overall.progress,
@@ -530,6 +652,9 @@ def _metrics(events: list[Any]) -> dict[str, Any]:
         "completed_coding_leaves": coding.complete_leaf_count,
         "active_overall_leaves": overall.active_leaf_count,
         "completed_overall_leaves": overall.complete_leaf_count,
+        "product_progress": product.progress,
+        "validation_progress": validation.progress,
+        "investigation_progress": investigation.progress,
         "coding_snapshot": _leaf_snapshot(ledger, CODING_CATEGORIES),
         "overall_snapshot": _leaf_snapshot(ledger, ALL_CATEGORIES),
     }

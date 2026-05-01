@@ -8,17 +8,27 @@ from .core import EventType, Ledger, LedgerEvent, replay
 
 
 def event_to_dict(event: LedgerEvent) -> dict[str, Any]:
-    return {
+    out = {
         "step": event.step,
         "event_type": event.event_type.value,
         "subtask_id": event.subtask_id,
         "payload": _jsonable(event.payload),
         "reason": event.reason,
     }
+    if event.timestamp is not None:
+        out["timestamp"] = event.timestamp
+    return out
 
 
 def event_from_dict(data: dict[str, Any]) -> LedgerEvent:
-    return LedgerEvent(data["step"], EventType(data["event_type"]), data.get("subtask_id"), data["payload"], data.get("reason"))
+    return LedgerEvent(
+        data["step"],
+        EventType(data["event_type"]),
+        data.get("subtask_id"),
+        data["payload"],
+        data.get("reason"),
+        data.get("timestamp"),
+    )
 
 
 def write_events_jsonl(events: list[LedgerEvent], path: str) -> None:
