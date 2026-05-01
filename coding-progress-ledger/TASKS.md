@@ -1100,6 +1100,8 @@ weak evidence is quantified
 weak evidence is NOT treated as replay failure (it's a known signal, not a bug)
 ```
 
+Invariant tests: `tests/test_pilot_evidence_audit.py` locks in row decomposition, totals = sum-over-pilots, classifier fallback semantics, STRONG_EVIDENCE_TYPES scope, and CODING_CATEGORIES exclusion of ARTIFACT/DOCUMENTATION.
+
 ### K2. Source trace evidence-gap report
 Status: not started
 
