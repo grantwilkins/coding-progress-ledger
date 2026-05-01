@@ -74,13 +74,7 @@ Four critic agents audited the framework against this mission on 2026-04-30. The
 
 ## § 0.2 Documentation handoff
 
-Status: done — `IMPLEMENTATION_v0.md` added as the detailed handoff document for the SWE-agent retrospective methodology, source provenance, and broad validation surface. It incorporates a critic pass and explicitly separates current revised protocol from the pre-cleanup v1 corpus where implicit-validation handling remains caveated.
-
-Next tasks:
-
-- Keep `IMPLEMENTATION_v0.md` synchronized if the four Pitfall #8 cleanup pilots (`f_02`, `f_03`, `f_07`, `f_10`) are re-materialized.
-- Add a short architecture diagram only if a future reviewer asks for a visual companion; the current handoff is intentionally prose-first.
-- When N3 lands, add a separate live-instrumentation implementation doc rather than expanding the SWE-agent retrospective methodology document.
+Status: done — `IMPLEMENTATION_v0.md` is the detailed handoff for the SWE-agent retrospective methodology, with the v1-vs-revised-protocol separation noted.
 
 ## § 0.3 Observation-channel thesis (post-handoff critique)
 
@@ -374,318 +368,35 @@ human can inspect whether sample is reasonable before annotation begins
 ## § Workstream C — Trace import and run directory conversion
 
 ### C1. Define SWE-agent normalized trace schema
-Status: done — `docs/SWE_AGENT_TRACE_SCHEMA.md` (commit c93d182)
-
-Goal: A small, well-documented internal schema for a normalized agent trace, decoupled from any one upstream source.
-
-Outputs:
-```text
-docs/SWE_AGENT_TRACE_SCHEMA.md
-ledger_progress/swe_agent_schema.py    # OPTIONAL — only if dataclasses help
-```
-
-Normalized event shape (per step):
-```json
-{
-  "step_index": 0,
-  "role": "assistant|tool|environment|system|unknown",
-  "thought": "...",
-  "action": "...",
-  "observation": "...",
-  "tool_name": "...",
-  "command": "...",
-  "files_touched": [],
-  "timestamp": null
-}
-```
-
-Acceptance:
-```text
-schema can represent thought/action/observation traces
-schema tolerates missing fields
-schema preserves raw fields under raw_metadata (no silent drops)
-schema doc shows worked example from one nebius row and one SWE-smith row (for portability)
-```
+Status: done — `docs/SWE_AGENT_TRACE_SCHEMA.md` (commit c93d182).
 
 ### C2. Implement trace normalizer
-Status: done — `scripts/normalize_swe_agent_trace.py` + `tests/test_normalize_swe_agent_trace.py` (commit e2281af)
-
-Goal: Convert one raw row/file into the normalized trace + a human summary.
-
-Inputs:
-```text
-one raw trajectory row/file (path or HF dataset index)
-```
-
-Outputs:
-```text
-scripts/normalize_swe_agent_trace.py
-<run_dir>/normalized_trace.json
-<run_dir>/trajectory_summary.md
-```
-
-Acceptance:
-```text
-preserves original raw trace separately as <run_dir>/source_trace.json (never modified)
-does not drop unrecognized fields without storing them in raw_metadata
-handles at least 3 sample traces (success, failure, ambiguous) end-to-end
-trajectory_summary.md is short, scannable, and lists per-step thought/action/observation tags
-```
+Status: done — `scripts/normalize_swe_agent_trace.py` + tests (commit e2281af).
 
 ### C3. Implement import-to-run script
-Status: done — `scripts/import_swe_agent_trace.py` + `tests/test_import_swe_agent_trace.py` (commit 801fbf3). Cache populated by `scripts/populate_swe_agent_pilot_cache.py` (network) into `external_data/swe_agent/pilot_cache/` (gitignored). All 20 pilot run dirs materialized at `runs/swe_agent_pilot/` (gitignored) and `--verify-only` reports `verify ok: 20 run dirs`.
-
-**D4 follow-up resolved:** the importer now writes `test_output.txt` (the framework's standard artifact name; `ledger-run check-run` requires it) sourced from upstream `eval_logs`. The earlier `eval_output.txt` mirrored the upstream field name unnecessarily. Generalizable rule: importers map `<upstream-field-name>` → `<framework-artifact-name>`; the framework does not learn upstream-specific names. Pilot-zero annotation script's alias workaround removed; re-import + re-annotation reproduce the same progress numbers (s_01: 1.00 / f_01: 0.75).
-
-Goal: Bulk-convert the pilot sample into per-run directories. Critically, **does not produce `ledger.jsonl` yet** — annotation is its own workstream.
-
-Inputs:
-```text
---sample-csv external_data/swe_agent/manifests/swe_agent_pilot_sample.csv
---runs-dir runs/swe_agent_pilot
-```
-
-Outputs (per pilot trace):
-```text
-runs/swe_agent_pilot/<pilot_id>/
-  task.md
-  source_trace.json
-  normalized_trace.json
-  trajectory_summary.md
-  final_diff.patch
-  eval_output.txt
-  run_notes.md
-  source_metadata.json
-```
-
-`source_metadata.json` shape:
-```json
-{
-  "source": "swe_agent",
-  "pilot_id": "...",
-  "instance_id": "...",
-  "model_name": "...",
-  "final_success": true,
-  "final_success_source": "source_label",
-  "patch_available": true,
-  "eval_log_available": true,
-  "trajectory_length": 42,
-  "annotation_mode": "not_annotated"
-}
-```
-
-Acceptance:
-```text
-all pilot sample traces get run directories
-source_trace.json preserves raw input byte-equivalently
-normalized_trace.json is machine-readable (loads with json.load without errors)
-task.md contains issue/task text if available; otherwise explicitly notes absence
-run_notes.md is initialized from a template with TODO sections
-NO ledger.jsonl is generated by default
-```
+Status: done — `scripts/import_swe_agent_trace.py` + tests (commit 801fbf3). Cache at `external_data/swe_agent/pilot_cache/`; 20 pilot run dirs at `runs/swe_agent_pilot/`. Importer maps upstream `eval_logs` → framework's `test_output.txt`.
 
 ### C4. Pre-annotation verification (folded into C3)
-Status: done — `--verify-only` mode in `import_swe_agent_trace.py`; rejects missing artifacts, empty patch/eval when their flags are True, and unexpected `ledger.jsonl` files (commit pending)
-
-Goal: A pre-annotation check that doesn't need `ledger.jsonl` (which `ledger-run check-run` requires).
-
-**Deviation from brief:** the brief proposes a standalone `scripts/check_swe_agent_imports.py`. That duplicates work `import_swe_agent_trace.py` (C3) should do itself, and creates a parallel CLI alongside `ledger-run`. Instead:
-
-- Have C3's importer self-verify its outputs at the end of every per-run import (raise on missing/empty artifacts).
-- Add `import_swe_agent_trace.py --verify-only --runs-dir runs/swe_agent_pilot` as a re-runnable mode.
-- **Do not** create a separate `check_swe_agent_imports.py` script unless C3's verify mode turns out to be insufficient.
-
-Acceptance:
-```text
-C3's importer reports missing source artifacts (task.md, source_trace.json, normalized_trace.json, final_diff.patch if expected, eval_output.txt if expected, run_notes.md, source_metadata.json)
-verify mode does NOT expect ledger artifacts before annotation
-verify mode exits non-zero if any pre-annotation artifact missing; logs which run_dir/which artifact
-no parallel script unless explicitly justified
-```
+Status: done — `--verify-only` mode in `import_swe_agent_trace.py` rejects missing artifacts and unexpected `ledger.jsonl` files.
 
 ---
 
 ## § Workstream D — Retrospective ledger annotation protocol
 
 ### D1. Write annotation guidelines
-Status: done — split into two files so the protocol is reusable across trace sources:
-- `docs/RETROSPECTIVE_LEDGER_ANNOTATION_PROTOCOL.md` — the **general** binding protocol (rules, categories, statuses, event types, procedure, pitfalls). Source-agnostic. Cross-references `ledger_progress/core.py` and `ledger_progress/queries.py:CODING_CATEGORIES`.
-- `docs/SWE_AGENT_RETROSPECTIVE_LEDGER_PROTOCOL.md` — a **thin SWE-agent addendum** that specializes the general protocol: shell-vocabulary→category map, run-dir artifact list, two real worked examples (s_01 / f_01) of good and bad annotations, SWE-agent-specific pitfalls. The general doc wins on any conflict.
-
-**Pre-E1 stress-test refinements (from f_03 113-step + f_07 183-step walks):**
-- General protocol § 6 `blocked` now carries a stuck-loop rule that handles cycles of **any length**, including a single command repeated and 2-command oscillations. Mark `blocked` at the **earliest** step where any pattern hits its third iteration.
-- SWE-agent addendum § 5 pitfall #6: harness-forced termination (`exit_status='submitted (exit_context)'` etc.) does NOT generate an `ARTIFACT` leaf when the agent never issued a literal `submit`.
-- SWE-agent addendum § 5 pitfall #7: `final_diff.patch` is a state diff, not an action diff — investigation/repro residue shows up there even when no fix was attempted (or alongside a real fix, as in f_07).
-- General § 7 `SPLIT_SUBTASK` corrected: the parent's status is unchanged by split; it just stops being a leaf and drops out of the progress denominator. (Earlier draft incorrectly said "parent invalidated automatically".)
-- Four pilots now span four shapes: s_01 (1.00 success), f_01 (0.75, no validation), f_03 (0.50, investigation blocked), f_07 (0.67, validation blocked after real PRODUCT edit). The progress signal discriminates between failure modes — exactly the contract the framework was supposed to deliver.
-
-Goal: A protocol document that constrains annotation to visible trace evidence and prevents narrative reconstruction.
-
-Outputs:
-```text
-docs/SWE_AGENT_RETROSPECTIVE_LEDGER_PROTOCOL.md
-```
-
-Core principles:
-```text
-Annotate only visible trace evidence.
-Do not force non-monotonicity.
-Do not make failed traces reach 1.0 unless the discovered work was actually complete.
-Do not use final_success to decide intermediate completion.
-Use final eval only as final validation evidence.
-Preserve uncertainty in run_notes.md.
-```
-
-Categories (cross-reference: `ledger_progress/core.py:SubtaskCategory`, `ledger_progress/queries.py:CODING_CATEGORIES`):
-```text
-investigation:
-  understanding issue, inspecting repo, localizing relevant files
-product:
-  editing implementation, changing tests if required by task, fixing code
-validation:
-  running tests, interpreting failures, checking final patch/eval
-environment:
-  dependency installation, setup errors, path/package issues unrelated to product
-artifact:
-  patch export, final answer/report generation
-documentation:
-  docs or explanatory changes when task requires them
-```
-
-Status guidance (matches `ledger_progress/core.py:Status`):
-```text
-not_started:  discovered but no action yet
-in_progress:  partial action visible
-blocked:      cannot proceed due to missing info/tool/env
-complete:     supported by concrete trace evidence
-invalidated:  approach/subtask no longer active but should remain in history
-deleted:      rarely use; prefer invalidated
-```
-
-Acceptance:
-```text
-protocol includes good/bad examples (at least 2 of each)
-protocol explains progress is NOT success probability
-protocol explains discovered work vs true hidden work
-protocol cross-references the in-repo enum source files so annotators don't drift
-```
+Status: done — `docs/RETROSPECTIVE_LEDGER_ANNOTATION_PROTOCOL.md` (general, source-agnostic) + `docs/SWE_AGENT_RETROSPECTIVE_LEDGER_PROTOCOL.md` (SWE-agent addendum). Pre-E1 stress-test refinements landed (cycle-length-agnostic stuck-loop rule, harness-forced termination ≠ ARTIFACT leaf, SPLIT preserves parent status).
 
 ### D2. Create annotation template
-Status: done — `docs/LEDGER_ANNOTATION_TEMPLATE.md` (general; not SWE-agent-specific). Sections: initial reading, initial ledger proposal, checkpoint notes, uncertain decisions, evidence citations, known missing evidence, final scope closure, schema gaps. Header lists every `LedgerSession` method so the notes-to-events link is explicit.
-
-Goal: A copy-pasteable scaffold for `run_notes.md` so annotators record the same kinds of evidence in the same shape.
-
-Outputs:
-```text
-docs/SWE_AGENT_LEDGER_ANNOTATION_TEMPLATE.md
-```
-
-Sections:
-```text
-Initial ledger proposal
-Checkpoint notes
-Uncertain decisions
-Evidence citations
-Final scope closure
-Known missing evidence
-```
-
-Acceptance:
-```text
-annotators can copy template into run_notes.md as a starting point
-template references LedgerSession method names (add/complete/split/etc.) so the link from notes to events is explicit
-```
+Status: done — `docs/LEDGER_ANNOTATION_TEMPLATE.md`.
 
 ### D3. Manual annotation helper (deferred by default)
-Status: deferred — D4 confirmed snippets are sufficient. The pilot-zero annotations were hand-encoded directly against `LedgerSession` in `scripts/annotate_swe_agent_pilot_zero.py`; no boilerplate-paste friction surfaced that a generic CLI helper would address. Per § D3 acceptance: helper not built; closing this section. Re-open only if E1 (full N=20) reveals concrete repeated friction.
-
-Goal: Make annotation easier without automating semantic decisions.
-
-**Deviation from brief:** the brief proposes building `scripts/annotate_swe_agent_run.py`, with a hedge that it can be dropped. Given that `LedgerSession`'s API is already ergonomic (one-line `session.add(...)`, `session.complete(...)`, `session.split(...)`), and that we have ~2 unannotated traces (D4) before the full 20, the right call is the inverse:
-
-- **Default: do NOT build this helper.** Use Python snippets / a Jupyter notebook / `python -i` against `LedgerSession` directly during D4.
-- **Only build it if D4 reveals concrete repeated friction** (e.g. annotators are pasting the same boilerplate to load source_trace.json and view next chunk on every run). In that case, build the smallest helper that addresses the specific friction, not a generic CLI.
-
-If built later, the candidate functions are:
-```text
-show-task               # prints task.md
-show-next-chunk         # prints next N steps of normalized_trace.json
-show-score              # prints scoring.score(ledger) result
-append-event            # thin wrapper around LedgerSession methods
-export-ledger           # delegates to LedgerSession.export_jsonl
-export-progress         # delegates to `ledger-run export-run`
-```
-
-Acceptance (if built):
-```text
-helper NEVER suggests subtasks
-helper NEVER marks completion automatically
-helper only records human/agent-entered events
-helper does not duplicate any function already on LedgerSession or ledger-run
-if not built, this section is closed with a note in D4's run_notes.md saying "snippets sufficient — helper not needed"
-```
+Status: deferred — D4 confirmed snippets are sufficient; no helper built. Re-open only if friction recurs.
 
 ### D4. Annotate 2 traces by hand as pilot-zero
-Status: done — three pilot-zero annotations (s_01 / f_01 / f_03) drive an E1-ready pipeline:
-- `annotations/swe_agent_pilot/<pilot_id>.json` — declarative event spec (committed; the canonical annotation record).
-- `annotations/swe_agent_pilot/<pilot_id>.notes.md` — run_notes prose with `{{PROGRESS_OVERALL}}` / `{{PROGRESS_CODING}}` placeholders (committed).
-- `scripts/annotate_pilots_from_spec.py` — source-agnostic driver that replays specs into ledger.jsonl + run_notes.md + annotation_quality.json under each `runs/.../<pilot_id>/`. Idempotent.
-- `tests/test_annotate_pilots_from_spec.py` — 12 tests covering op routing (block != complete), split-without-invalidate, id-mismatch errors, unknown-op rejection, placeholder substitution, and missing-notes-file failure.
-
-Final progress: s_01 = 1.00 / 1.00; f_01 = 0.75 / 0.67; f_03 = 0.50 / 0.50. All three pass `ledger-run check-run`.
-
-Goal: Catch protocol problems with a tiny sample before scaling to 20.
-
-Selection:
-```text
-1 successful trace
-1 failed trace
-```
-
-Outputs (per run):
-```text
-runs/swe_agent_pilot/<pilot_id>/ledger.jsonl
-runs/swe_agent_pilot/<pilot_id>/progress.csv
-runs/swe_agent_pilot/<pilot_id>/progress_by_category.csv
-runs/swe_agent_pilot/<pilot_id>/summary_by_category.json
-runs/swe_agent_pilot/<pilot_id>/run_notes.md   # extended from template
-```
-
-Acceptance:
-```text
-ledger-run check-run passes, OR missing artifacts are explained in run_notes.md and source_metadata.json
-annotations follow the D1 protocol
-human reviews both before scaling to 20 traces
-```
+Status: done — three annotations (s_01 / f_01 / f_03) via `annotations/swe_agent_pilot/<pilot_id>.{json,notes.md}` + driver `scripts/annotate_pilots_from_spec.py` + 12 tests. Progress: s_01 1.00/1.00, f_01 0.75/0.67, f_03 0.50/0.50.
 
 ### D5. Annotation quality checklist
-Status: done — `annotation_quality.json` emitted by the same pilot-zero script. `whether_schema_gap_found=True` for both runs (real gap surfaced: framework's `test_output.txt` vs C3's `eval_output.txt`; aliased at annotation time and recorded in run_notes § 8). `whether_final_success_used_only_at_end=True` and `whether_progress_forced=False` for both — the upstream label was never used as ledger evidence during the walk.
-
-Goal: Per-run quality metadata so we can later audit annotation drift, not just code drift.
-
-Outputs (per run):
-```text
-runs/swe_agent_pilot/<pilot_id>/annotation_quality.json
-```
-
-Fields:
-```json
-{
-  "annotation_time_minutes": 0,
-  "number_of_subtasks": 0,
-  "number_of_uncertain_events": 0,
-  "number_of_evidence_gaps": 0,
-  "whether_final_success_used_only_at_end": true,
-  "whether_progress_forced": false,
-  "whether_schema_gap_found": false
-}
-```
-
-Acceptance:
-```text
-quality metadata exists for every annotated pilot run
-honesty: "whether_progress_forced" and "whether_final_success_used_only_at_end" reflect the annotator's actual experience, not aspiration
-```
+Status: done — `annotation_quality.json` emitted per pilot; tracks schema-gap-found, final-success-only-at-end, progress-forced flags.
 
 ---
 
@@ -694,262 +405,42 @@ honesty: "whether_progress_forced" and "whether_final_success_used_only_at_end" 
 ### E1. Annotate 20 traces
 Status: done — all 20 pilots annotated via the spec-driven driver (`annotations/swe_agent_pilot/<pilot_id>.{json,notes.md}`). Every run passes `ledger-run check-run`. F2/F3 ingest the full 20-pilot dataset cleanly: integrity checks (`completed_exceeds_active`, `delta_mismatches`) all empty. One audit warning surfaced (`s_03` shows a 0.33 native-vs-resolved coding-progress divergence around the step-22 REOPEN); recorded as a downstream-audit signal, not blocking.
 
-**Progress shape across the 20 pilots:**
-- 9 of 10 successes end at 1.00; one (`s_04`) ends at 0.75 — the "validated-by-chance" submit-without-test shape, identical to `f_01`/`f_04` despite opposite upstream labels.
-- Failures span 0.50–1.00, discriminating cleanly between failure modes:
-  - 1.00 (`f_06`): all discovered work completed; failure sits entirely in undiscovered hidden work (the agent's repro never actually triggered the bug). Canonical "framework-allowed-positive-progress-on-failure" case.
-  - 0.83 (`f_09`): validation re-opened because final edit happened post-pytest.
-  - 0.75 (`f_01`, `f_04`): submitted without in-trace validation.
-  - 0.71 (`f_08`): validation in_progress, fields.py investigation blocked in scroll loop.
-  - 0.67 (`f_07`, `f_10`): PRODUCT done with validation blocked / PRODUCT blocked in syntax-error stuck loop.
-  - 0.60 (`f_05`): PRODUCT and VALIDATION both blocked mid-edit-cycle.
-  - 0.50 (`f_02`, `f_03`): investigation blocked; never reached PRODUCT.
-
-The progress signal is highly discriminating between failure modes — exactly the contract D1 promised — and is genuinely independent of `final_success`.
-
-**Pre-E2 protocol refinement** (forced by `f_02`'s 509-step thesaurus loop): general § 6 `blocked` rule split into `(a) command-loop` (same command verbatim ≥3×) and `(b) tool-response-loop` (identical tool response ≥3× regardless of query variation). f_02 didn't trigger (a) because the agent varied keywords; (b) was needed.
-
-Goal: Apply the D1 protocol to the full pilot sample.
-
-Outputs (per run):
-```text
-runs/swe_agent_pilot/<pilot_id>/ledger.jsonl
-runs/swe_agent_pilot/<pilot_id>/progress.csv
-runs/swe_agent_pilot/<pilot_id>/progress_by_category.csv
-runs/swe_agent_pilot/<pilot_id>/summary_by_category.json
-runs/swe_agent_pilot/<pilot_id>/annotation_quality.json
-runs/swe_agent_pilot/<pilot_id>/run_notes.md
-```
-
-Acceptance:
-```text
-20 runs annotated OR failures explained per-run in run_notes.md
-no source_trace.json modified
-all ledger.jsonl files replay (via ledger_progress.serialization.from_jsonl + replay)
-```
+Progress shape spans 0.50–1.00 across the 10 failures and 0.75–1.00 across the 10 successes — see `runs/swe_agent_pilot/PILOT_ANNOTATION_SUMMARY.md` for the per-instance table. Pre-E2 protocol refinement: § 6 `blocked` rule split into command-loop and tool-response-loop variants (forced by `f_02`'s thesaurus loop).
 
 ### E2. Run run-manager exports
-Status: done — `ledger-run export-run` was invoked by `scripts/annotate_pilots_from_spec.py` for each of the 20 pilots during E1 annotation. `ledger-run check-run` reports "all required artifacts present" on every pilot. `final_diff.patch` and `test_output.txt` are present for all 20 (sourced by C3 from upstream `generated_patch` / `eval_logs`); no fabricated placeholders.
-
-Goal (original): Use the existing tooling to regenerate derived artifacts from the source-of-truth ledger.
-
-Per run:
-```bash
-ledger-run export-run runs/swe_agent_pilot/<pilot_id>
-ledger-run check-run  runs/swe_agent_pilot/<pilot_id>
-```
-
-If `final_diff.patch` / `test_output.txt` are unavailable from the upstream source, record the missingness explicitly in `source_metadata.json` and `run_notes.md` rather than fabricating placeholders.
-
-Acceptance:
-```text
-derived outputs regenerated from ledger.jsonl
-source hash preserved
-missing artifacts are documented per-run, never invented
-```
+Status: done — `ledger-run export-run`/`check-run` invoked by the spec-driven driver for all 20 pilots; all artifacts present, no placeholders.
 
 ### E3. Write pilot annotation summary
-Status: done — `runs/swe_agent_pilot/PILOT_ANNOTATION_SUMMARY.md` (committed via gitignore exception; the dir is otherwise gitignored to keep upstream traces local-only). Reports per-pilot table, headline numbers, notable shapes (high-progress failure `f_06`, low-progress success `s_04`, three REOPEN runs, six BLOCKED runs), four protocol refinements forced by the pilot, common evidence-gap patterns, category distribution, annotation uncertainty distribution, and an honest qualitative judgment ("~85% observation, ~15% narrative-reconstruction risk concentrated in test-edits-as-PRODUCT and validation-as-implicit-discovered-work calls").
-
-Outputs:
-```text
-runs/swe_agent_pilot/PILOT_ANNOTATION_SUMMARY.md
-```
-
-Report:
-```text
-number annotated
-success/failure split
-average annotation time
-median subtasks
-median final coding progress
-high-progress failures
-low-progress successes
-non-monotonic coding runs
-schema gaps (severity counts)
-common evidence gaps
-category distribution
-annotation uncertainty distribution
-```
-
-Acceptance:
-```text
-summary states whether schema changes were needed
-summary states whether annotation felt like trace-backed observation or narrative reconstruction (honest qualitative judgment)
-```
+Status: done — `runs/swe_agent_pilot/PILOT_ANNOTATION_SUMMARY.md` (per-pilot table, notable shapes, protocol refinements, evidence-gap patterns, honest qualitative judgment).
 
 ---
 
 ## § Workstream F — Observation dataset integration
 
 ### F1. Extend dataset builder to include SWE-agent pilot
-Status: done — verified the existing `scripts/build_ledger_observation_dataset.py` accepts `--runs-dir runs/swe_agent_pilot` and emits the SWE-agent-only event/step/summary CSVs without modification. `run_id` preserves the `swe_agent_pilot_*` prefix for every row; no toy/control rows are mixed in when the dataset is built with `--runs-dir runs/swe_agent_pilot`.
-
-Goal: Verify (and only modify if needed) that the existing builder picks up `runs/swe_agent_pilot/**`. The current builder already scans `runs/**/ledger.jsonl`, so this is mostly a sanity check.
-
-Inputs:
-```text
-runs/swe_agent_pilot/**/ledger.jsonl
-```
-
-Possible filter additions to scripts/build_ledger_observation_dataset.py:
-```text
---include "runs/swe_agent_pilot/**"
---exclude archived fixture repos
-```
-
-Acceptance:
-```text
-event and step datasets include SWE-agent pilot rows
-run_id preserves swe_agent_pilot prefix
-no toy/control runs are accidentally re-categorized as SWE-agent
-```
+Status: done — existing `scripts/build_ledger_observation_dataset.py` already accepts `--runs-dir runs/swe_agent_pilot`; no code change needed.
 
 ### F2. Generate SWE-agent-only observation tables
-Status: done — generated at the spec'd paths: `datasets/swe_agent_pilot_observations_event.csv` (202 rows), `datasets/swe_agent_pilot_observations_step.csv` (191 rows), `datasets/swe_agent_pilot_observations_summary.md`. No rows from `runs/task_*`, `runs/control_*`, or `runs/negative_control_*` (verified by `--runs-dir runs/swe_agent_pilot` filter).
-
-Command:
-```bash
-python scripts/build_ledger_observation_dataset.py \
-  --runs-dir runs/swe_agent_pilot \
-  --output-event-csv datasets/swe_agent_pilot_observations_event.csv \
-  --output-step-csv  datasets/swe_agent_pilot_observations_step.csv \
-  --summary-md       datasets/swe_agent_pilot_observations_summary.md
-```
-
-Acceptance:
-```text
-SWE-agent-only event table generated
-SWE-agent-only step table generated
-summary generated
-no rows from runs/task_*, runs/control_*, runs/negative_control_*
-```
+Status: done — `datasets/swe_agent_pilot_observations_{event,step}.csv` (202 / 191 rows) + `_summary.md`.
 
 ### F3. Audit SWE-agent observation dataset
-Status: done — `datasets/swe_agent_pilot_observations_step_audit.{md,json}` and `_event_audit.{md,json}`. Integrity checks: `completed_exceeds_active=[]`, `delta_mismatches=[]`, `first_delta_nonzero=[]`, `invalid_progress=[]`. One residual warning (`s_03` shows a 0.33 native/resolved coding-progress divergence around the step-22 REOPEN) — recorded as a downstream-audit signal, not blocking. Note: 6 spec files (`f_01`, `f_04`, `f_05`, `f_09`, `s_04`, `s_10`) were stable-sorted to step-monotonic order during F3 because non-monotonic step ordering caused 68 spurious `delta_mismatch` warnings; semantics unchanged (same final progress numbers as before).
-
-Command:
-```bash
-python scripts/audit_ledger_observation_dataset.py \
-  --input-csv  datasets/swe_agent_pilot_observations_step.csv \
-  --output-md  datasets/swe_agent_pilot_observations_step_audit.md \
-  --output-json datasets/swe_agent_pilot_observations_step_audit.json
-```
-
-Acceptance:
-```text
-integrity passes (weight/leaf sums consistent, progress in [0, 1], deltas consistent)
-unknown labels are zero or documented
-native/resolved category rates reported
-event-vs-step differences reported
-```
+Status: done — `datasets/swe_agent_pilot_observations_{step,event}_audit.{md,json}`. All integrity checks empty; one residual `s_03` native/resolved divergence noted as non-blocking. Six spec files were stable-sorted to step-monotonic order (semantics unchanged).
 
 ### F4. Compare toy/live vs SWE-agent distributions
-Status: done — `datasets/observation_distribution_comparison.md`. SWE-agent traces are demonstrably more diverse: they populate all four success/progress quadrants (toy/live populates only 2 of 4); they exercise BLOCKED status (toy/live does not); they have richer drop-source distribution (4 categories vs 3, with INVESTIGATION drops only on SWE-agent); and 100% of SWE-agent runs are non-monotonic vs 78% of toy/live. The doc also surfaces a real builder bug: `resolve_final_success` infers from `test_output.txt` and misclassifies 3 SWE-agent successes (`s_03`, `s_06`, `s_09`) as failures because SWE-bench eval logs format pass markers differently from toy/live's pytest output. Authoritative upstream label is `source_metadata.json:final_success`. Builder fix is a follow-up before any G claim about prediction performance.
-
-Outputs:
-```text
-datasets/observation_distribution_comparison.md
-```
-
-Compare across the two populations:
-```text
-number of rows per run
-final coding progress
-final overall progress
-non-monotonicity rate
-drop-source distribution
-category distribution
-weak evidence rate
-success/progress quadrants
-active denominator size
-split/reopen rates
-```
-
-Acceptance:
-```text
-report says whether SWE-agent traces are more diverse than toy/live runs (and how)
-report flags any toy/live property that doesn't survive on real traces
-```
+Status: done — `datasets/observation_distribution_comparison.md`. SWE-agent traces populate all four success/progress quadrants vs 2/4 for toy/live, and 100% are non-monotonic vs 78%. Surfaced the `resolve_final_success` heuristic bug (now fixed via `source_metadata.target` precedence).
 
 ---
 
 ## § Workstream G — Completion-prediction smoke test on SWE-agent pilot
 
 ### G1. Run existing smoke script on SWE-agent-only step table
-Status: done — `datasets/swe_agent_pilot_completion_smoke_predictions.csv` (574 rows, 191 steps × 3 model variants ≈ 573 + 1 header) and `datasets/swe_agent_pilot_completion_smoke_report.md`. Leave-one-run-out by `run_id`; no leakage (no future events, no `final_success` as feature). All three model variants (`progress_only`, `ledger_basic`, `elapsed_only`) produced predictions. Disclaimer included via the auto-generated report header and reinforced in G2's appended interpretation.
-
-Note: the current `scripts/smoke_test_completion_prediction.py` uses `--input-csv`, `--predictions-csv`, `--report-md`. **This file uses the existing flag names** — earlier draft language using `--output-report` / `--output-predictions` was a brief artifact, not a code change. Don't rename.
-
-Command:
-```bash
-python scripts/smoke_test_completion_prediction.py \
-  --input-csv       datasets/swe_agent_pilot_observations_step.csv \
-  --predictions-csv datasets/swe_agent_pilot_completion_smoke_predictions.csv \
-  --report-md       datasets/swe_agent_pilot_completion_smoke_report.md
-```
-
-Acceptance:
-```text
-leave-one-run-out by run_id (already implemented)
-no leakage (no future events, no final_success used as feature)
-predictions generated for all three model variants: progress_only, ledger_basic, elapsed_only
-disclaimer included in report
-```
+Status: done — `datasets/swe_agent_pilot_completion_smoke_{predictions.csv,report.md}`. Leave-one-run-out by `run_id`; no leakage; three model variants (`progress_only`, `ledger_basic`, `elapsed_only`).
 
 ### G2. Add SWE-agent smoke report interpretation
-Status: done — `datasets/swe_agent_pilot_completion_smoke_report.md` extended with eight subsections (G2.1-G2.8). The report explicitly does NOT claim predictive performance (G2.1 disclaimer). High-progress failures exist naturally per upstream label: `f_06` (G2.3). Builder-classified high-progress failures include 3 misclassified upstream successes (`s_03`, `s_06`, `s_09`); only `f_06` is a real upstream-failure-at-1.00. `ledger_basic` does not improve over `progress_only` on this small/noisy a sample (G2.4); `elapsed_only` is anti-correlated because long SWE-agent traces are stuck-loop failures (G2.5). Verdict (G2.7): data is suitable for a larger retrospective study, conditional on the builder's `resolve_final_success` heuristic being fixed and Workstream H's inter-annotator pass.
-
-Goal: Make the report explicitly answer the questions that motivate the pilot.
-
-Outputs (extend `datasets/swe_agent_pilot_completion_smoke_report.md`):
-```text
-Do failed runs still get high predicted probabilities?
-Do high-progress failures exist naturally in SWE-agent traces?
-Does ledger_basic differ from progress_only?
-Does elapsed_only remain competitive?
-Do evidence gaps dominate the signal?
-```
-
-Acceptance:
-```text
-report does NOT claim predictive performance
-report says whether data is suitable for a larger retrospective study
-report cross-references which case studies (G3) illustrate which finding
-```
+Status: done — report extended with G2.1–G2.8. Verdict: data suitable for larger retrospective study, gated on the (now-fixed) `resolve_final_success` heuristic and H's inter-annotator pass. Explicitly does not claim predictive performance.
 
 ### G3. Case-study extraction
-Status: done — `datasets/swe_agent_pilot_case_studies.md`. Four trace-backed case studies populating all four success/progress quadrants: `s_01` (clean success), `s_03` (non-monotonic success with REOPEN), `f_06` (high-progress failure with hidden-work gap), `f_03` (stuck-loop failure with investigation blocked). Every claim cites a ledger event or trace step; no unsupported claims; each case is one page or less.
-
-Outputs:
-```text
-datasets/swe_agent_pilot_case_studies.md
-```
-
-Pick 4 examples:
-```text
-1. successful high-progress normal run
-2. successful non-monotonic run
-3. failed high-progress run
-4. failed low-progress / stuck run
-```
-
-For each:
-```text
-task summary
-final outcome
-progress curve summary
-key ledger events (with step indices)
-evidence gaps
-why it matters
-```
-
-Acceptance:
-```text
-case studies are trace-backed (every claim cites a ledger event or trace step)
-no unsupported claims
-each case study is one page or less
-```
+Status: done — `datasets/swe_agent_pilot_case_studies.md` (s_01, s_03, f_06, f_03 — all four success/progress quadrants, one page each, every claim trace-backed).
 
 ---
 
@@ -958,239 +449,43 @@ each case study is one page or less
 > **Scheduling note:** H is methodologically important but heavy (5 extra annotations at ~30 min each). Run H **after** E2 lands and only if M leans toward "scale". If M leans "pause" or "schema-change-needed", skip H and revisit when annotation effort is justified by a real scale-out plan.
 
 ### H1. Duplicate-annotate 5 traces
-Status: done — second-annotator pass by an Opus subagent on `s_01`, `s_03`, `f_01`, `f_06`, `f_03` (all four success/progress quadrants). v2 specs at `annotations/swe_agent_pilot_v2/`. Subagent was forbidden from reading v1 annotations / run_notes / pilot summary; only read protocol docs, addendum, template, core enums, and per-pilot trajectory files. Caveat: both annotators are LLM passes (correlated biases); a real human re-pass would expand the agreement signal. Layout deviation from brief: `annotations/swe_agent_pilot_v2/` instead of per-pilot reannotation subdirs because the spec-driven driver consumes specs from `annotations/`.
-
-Selection:
-```text
-2 successful
-2 failed
-1 ambiguous / high-progress failure if available
-```
-
-Independent directories (annotators do NOT see each other's ledger):
-```text
-runs/swe_agent_pilot_reannotation/<pilot_id>__annotator_a/
-runs/swe_agent_pilot_reannotation/<pilot_id>__annotator_b/
-```
-
-Acceptance:
-```text
-two independent ledgers per selected trace
-same source_trace.json shared by both annotators (immutable)
-```
+Status: done — Opus second-annotator pass on `s_01`, `s_03`, `f_01`, `f_06`, `f_03`. v2 specs at `annotations/swe_agent_pilot_v2/` (subagent isolated from v1 annotations). Caveat: both annotators are LLM (correlated biases).
 
 ### H2. Compare annotations
-Status: done — `scripts/compare_annotations.py` (10 tests) + `datasets/h_inter_annotator_report.md` (raw metrics) + `runs/swe_agent_pilot_reannotation/ANNOTATION_AGREEMENT.md` (analysis). **Quadrant agreement: 5 / 5.** Mean absolute coding-progress delta: 0.10. 4 of 5 pilots are "different ledger, same conclusions"; only `f_01` shows different conclusions (0.67 vs 1.00) due to the implicit-validation gap. Verdict distribution: 1 high, 2 moderate, 2 low.
-
-Outputs:
-```text
-scripts/compare_ledger_annotations.py
-runs/swe_agent_pilot_reannotation/ANNOTATION_AGREEMENT.md
-```
-
-Metrics:
-```text
-final coding progress difference
-final overall progress difference
-number of subtasks difference
-category distribution difference
-number of splits/reopens difference
-largest drop difference
-success/progress quadrant agreement
-evidence audit agreement
-```
-
-Acceptance:
-```text
-agreement report identifies where ledger is stable vs subjective
-report distinguishes "different ledger, same conclusions" from "different conclusions"
-```
+Status: done — `scripts/compare_annotations.py` + `runs/swe_agent_pilot_reannotation/ANNOTATION_AGREEMENT.md`. Quadrant agreement 5/5; mean |Δ coding-progress| = 0.10; only `f_01` showed different conclusions (the implicit-validation gap).
 
 ### H3. Decide if annotation protocol needs changes
-Status: done — `docs/SWE_AGENT_ANNOTATION_PROTOCOL_REVISIONS.md` lists 3 revisions (1 HIGH, 2 LOW) plus 1 no-change acknowledgment of granularity latitude. All three revisions applied to the protocol docs in the same commit:
-- **Revision 1 (HIGH):** addendum § 5 pitfall #8 — bug-fix tasks always have implicit validation work. Closes the f_01 disagreement.
-- **Revision 2 (LOW):** general § 6 — tightened "third iteration begins" wording to mean the assistant-turn step. Closes the f_03 step-count disagreement.
-- **Revision 3 (LOW):** addendum § 1 — `__init__.py` / package-wiring default is PRODUCT (issue-required) vs ENVIRONMENT (purely setup). Resolves the s_03 disagreement.
-- **Acknowledgment:** general § 9 — granularity is annotator latitude.
-
-A future re-pass under the revised protocol is the empirical test of whether the changes close the gaps.
-
-Outputs:
-```text
-docs/SWE_AGENT_ANNOTATION_PROTOCOL_REVISIONS.md
-```
-
-Acceptance:
-```text
-if no changes needed: one paragraph saying so, with evidence
-if changes needed: list MINIMAL changes, ranked by severity
-```
+Status: done — `docs/SWE_AGENT_ANNOTATION_PROTOCOL_REVISIONS.md` (1 HIGH revision: bug-fix tasks have implicit validation; 2 LOW revisions; 1 no-change acknowledgment of granularity latitude). Applied to the protocol docs.
 
 ---
 
 ## § Workstream I — Schema-gap review
 
 ### I1. Collect schema gaps from run notes
-Status: done — `scripts/collect_schema_gaps.py` walks the 20 pilot run dirs, parses § 8 of each `run_notes.md`, and cross-references `whether_schema_gap_found` from `annotation_quality.json`. Output at `runs/swe_agent_pilot/SCHEMA_GAPS.md`: 2 pilots flagged (`f_02`, `f_07`), 18 explicitly None. Three cross-workstream findings appended (v1's inconsistent Pitfall #8, J1's mixed/native discrepancy, the resolved `final_success` heuristic). Tests at `tests/test_collect_schema_gaps.py` (12 tests) lock in the collector invariants and the core-enum value sets the I2 decision depends on.
-
-Outputs:
-```text
-scripts/collect_schema_gaps.py
-runs/swe_agent_pilot/SCHEMA_GAPS.md
-```
-
-Searches:
-```text
-runs/swe_agent_pilot/*/run_notes.md
-runs/swe_agent_pilot/*/annotation_quality.json
-```
-
-Classify each gap:
-```text
-missing category
-ambiguous evidence
-unable to represent partial validation
-environment/product boundary unclear
-trace lacks command output
-trace lacks patch state
-subtask too coarse
-other
-```
-
-Acceptance:
-```text
-all gaps surfaced in run_notes.md are listed
-each carries severity: blocker / annoying / note
-```
+Status: done — `scripts/collect_schema_gaps.py` + `runs/swe_agent_pilot/SCHEMA_GAPS.md`. 2 pilots flagged (`f_02`, `f_07`); 18 explicitly None. 12 invariant tests lock the core-enum sets that I2 depends on.
 
 ### I2. Decide no-change vs schema-change
-Status: done — `runs/swe_agent_pilot/SCHEMA_DECISION.md`. **Outcome: No schema change needed for pilot. Only annotation protocol changes needed — already landed.** All 5 pilot-surfaced findings are protocol-text refinements (general § 6, addendum § 5 / § 1) or pipeline / heuristic fixes; none touch `ledger_progress/core.py`. Status / EventType / SubtaskCategory enum value sets unchanged since pilot start (verified by I1's invariant tests). Compatible with M1 + H4 follow-up.
-
-Outputs:
-```text
-runs/swe_agent_pilot/SCHEMA_DECISION.md
-```
-
-Possible outcomes:
-```text
-No schema change needed for pilot.
-Only annotation protocol changes needed.
-Need new non-breaking metadata field.
-Need core schema change before scaling.
-```
-
-Acceptance:
-```text
-decision is explicit
-no schema/code changes made silently — every change has a corresponding outcome line
-```
+Status: done — `runs/swe_agent_pilot/SCHEMA_DECISION.md`. **Outcome: no schema change needed; only annotation-protocol changes (already landed).** Status / EventType / SubtaskCategory enum sets unchanged since pilot start.
 
 ---
 
 ## § Workstream J — Native-category quality
 
 ### J1. Measure category resolution for SWE-agent pilot
-Status: done — `runs/swe_agent_pilot/CATEGORY_RESOLUTION_REPORT.md`. **Root cause:** `LedgerSession.add()` had a "PRODUCT-is-default — don't write it to payload" optimization that stripped the `category` field from every PRODUCT subtask's serialization. The dataset builder couldn't distinguish "explicitly PRODUCT" from "missing category", so almost every SWE-agent run resolved to `mixed`. **Fix:** `add()` now always emits `category` in the payload (`ledger_progress/session.py`); one fixture in `tests/test_session.py` updated to match. **Result:** all 191 step rows and 202 event rows are now `native`; zero `mixed`, zero `legacy_inferred`, zero native/resolved warnings. Progress numbers byte-identical before and after — the bug was serialization-layer only.
-
-Goal: New annotations should be `category_resolution_mode = native` (i.e. category set explicitly on every subtask).
-
-Report:
-```text
-native rows
-mixed rows
-legacy_inferred rows
-```
-
-Acceptance:
-```text
-if any new SWE-agent rows are not native, explain why per-run in run_notes.md
-existing toy/control runs are exempt — they predate the native-category convention
-```
+Status: done — `runs/swe_agent_pilot/CATEGORY_RESOLUTION_REPORT.md`. Root cause: `LedgerSession.add()` was stripping the default `category` field from payloads, making every PRODUCT subtask resolve to `mixed`. Fixed by always emitting `category`; all 20 pilots now `native`, progress numbers byte-identical.
 
 ### J2. Enforce native categories for new annotations
-Status: done — `scripts/check_native_categories.py`. Walks `runs/swe_agent_pilot` and `runs/swe_agent_pilot_v3` by default; reports any ADD_SUBTASK or SPLIT child whose payload lacks `category`. Exits non-zero on any violation. Legacy toy/control/live runs are exempted via explicit `--legacy-root` path filter (not silent passing). On the current corpus: 25 SWE-agent runs (20 pilot + 5 H4 v3) all native, zero violations; 18 legacy runs path-filtered. Tests at `tests/test_native_category_invariants.py` (6 tests) cover the J1 invariant (`add()` always emits category) and J2's offender detection on hand-crafted JSONL fixtures.
-
-Outputs:
-```text
-scripts/check_native_categories.py
-```
-
-Inputs:
-```text
-runs/swe_agent_pilot/*/ledger.jsonl
-```
-
-Output:
-```text
-non-native / missing-category events listed by (run_id, step, subtask_id, event_type)
-```
-
-Acceptance:
-```text
-new SWE-agent annotations use explicit categories
-legacy old runs exempted via path filter, not by silently passing
-```
+Status: done — `scripts/check_native_categories.py` walks pilot/v3 dirs and exits non-zero on missing-category violations. 25 SWE-agent runs all native; 18 legacy runs path-filtered. 6 invariant tests.
 
 ---
 
 ## § Workstream K — Evidence quality
 
 ### K1. Evidence availability audit
-Status: done — `runs/swe_agent_pilot/EVIDENCE_AUDIT.md` (+ `.json`). Script `scripts/audit_pilot_evidence.py` reuses `rescore_suite_by_category.py`'s classifier on the 20 SWE-agent pilots. Across 81 completion events: **51 strong (63%) / 30 manual-only (37%)**. Per category: PRODUCT 24 audited / 20 weak (83%); VALIDATION 12 / 1 (8%); INVESTIGATION 31 / 1 (3%). Most "weak" PRODUCT completions are short edit-acks that don't match stdout/test-output heuristics; K2 proposes a cheap classifier extension that closes ~60% of those without re-annotation. Weak evidence is a signal, not a replay failure.
-
-Goal: Quantify weak vs strong evidence on the new annotations using the existing classifier.
-
-Reuse: `scripts/rescore_suite_by_category.py:audit_completion_evidence` and `:classify_evidence`. Strong evidence types: `{test_output, diff, file_exists, command_output}` (plus `contract_text` as a special case for INVESTIGATION).
-
-Outputs:
-```text
-runs/swe_agent_pilot/EVIDENCE_AUDIT.md
-```
-
-Report:
-```text
-completion events with test_output evidence
-completion events with diff evidence
-completion events with command_output evidence
-completion events with manual-only evidence
-weak product completions
-weak validation completions
-weak investigation completions
-```
-
-Acceptance:
-```text
-weak evidence is quantified
-weak evidence is NOT treated as replay failure (it's a known signal, not a bug)
-```
-
-Invariant tests: `tests/test_pilot_evidence_audit.py` locks in row decomposition, totals = sum-over-pilots, classifier fallback semantics, STRONG_EVIDENCE_TYPES scope, and CODING_CATEGORIES exclusion of ARTIFACT/DOCUMENTATION.
+Status: done — `runs/swe_agent_pilot/EVIDENCE_AUDIT.md`. 81 completions: 51 strong (63%) / 30 manual-only (37%). PRODUCT 83% weak (mostly edit-acks), VALIDATION 8%, INVESTIGATION 3%. Weak evidence is a signal, not a replay failure. Invariant tests in `tests/test_pilot_evidence_audit.py`.
 
 ### K2. Source trace evidence-gap report
-Status: done — `runs/swe_agent_pilot/SOURCE_EVIDENCE_GAPS.md`. Classifies each evidence-source gap as recoverable retrospectively / closed by live instrumentation / structurally unrecoverable. Headline finding: ~60% of K1's `manual_note` completions can be closed by extending the classifier with a `tool_action` strong-evidence type (~30 min, no re-annotation). Live instrumentation (Workstream N) is justified primarily for closing hidden-work-gap visibility (`f_06`-style), agent-vs-harness submit provenance (6 pilots), and pre-fix baseline test runs (none captured in the source).
-
-Goal: What would live instrumentation need to capture that retrospective annotation can't reconstruct?
-
-Outputs:
-```text
-runs/swe_agent_pilot/SOURCE_EVIDENCE_GAPS.md
-```
-
-Report where source data lacks:
-```text
-baseline failing test output
-final passing/failing eval output
-patch
-file-open context
-command output
-tool observations
-```
-
-Acceptance:
-```text
-report tells us what a future live SWE-agent integration would need to instrument
-report distinguishes "this source omits X" from "no source could reconstruct X"
-```
+Status: done — `runs/swe_agent_pilot/SOURCE_EVIDENCE_GAPS.md` classifies evidence gaps as retrospective-recoverable / closed-by-live / structurally-unrecoverable. Headline: ~60% of `manual_note` completions are closable by adding a `tool_action` evidence type (K3). Live instrumentation justified for hidden-work-gap visibility, submit provenance, and pre-fix baseline.
 
 ### K3. Extend `classify_evidence` with `tool_action` strong type (post-CRITIC_AUDIT)
 Status: not started · _cheap channel improvement; runs in parallel with N1_
@@ -1296,187 +591,50 @@ table renders as proper markdown
 ## § Workstream M — SWE-agent scale-up decision
 
 ### M1. Write go/no-go memo
-Status: done — `runs/swe_agent_pilot/GO_NO_GO_MEMO.md`. Recommendation: **scale retrospective to 100 traces, gated on a 5-pilot re-annotation under the H3-revised protocol that closes the `f_01` conclusion gap (new task H4 below); defer live instrumentation (N) to the next go/no-go.** Memo synthesizes A–H artifacts; cost-of-being-wrong table quantifies each alternative path. The H4 gate is what makes the recommendation cheap to be wrong about: ~3 h of re-annotation buys an empirical answer to the single methodology gap H surfaced (the implicit-validation rule, `f_01` 0.67 vs 1.00).
+Status: done — `runs/swe_agent_pilot/GO_NO_GO_MEMO.md`. Original recommendation (scale retrospective to 100, defer live) was overtaken by the post-CRITIC_AUDIT pivot in M2 to live instrumentation.
 
 ### H4. Re-test H3 protocol revisions on the 5 H pilots (gate to M2 / scale)
-Status: done — `runs/swe_agent_pilot_reannotation/H4_GATE_RESULT.md`. **Gate PASSES.** Cold-pass v3 specs by an Opus subagent at `annotations/swe_agent_pilot_v3/` (read-restricted to revised protocol + per-pilot trajectories; forbidden from v1, v2, pilot summary, H2 report). Materialized to `runs/swe_agent_pilot_v3/`. Quadrant agreement v1↔v3: **5/5**. f_01 v1↔v3 coding-progress delta: **0.00** (the gate's load-bearing condition: 0.667 vs 0.667). Tests at `tests/test_h4_gate_invariants.py` (5 tests) lock in the gate-condition invariants. Incidental finding: v1 was inconsistent in applying Pitfall #8 across the 4 harness-terminated failure pilots (`f_02`, `f_03`, `f_07`, `f_10`); a focused E1-pass cleanup on those four (~30 min) is recommended before scaling to 100. Does **not** block M2.
-
-Goal: Empirically test whether the HIGH-severity H3 revision (bug-fix tasks always carry implicit validation work) closes the `f_01` 0.67-vs-1.00 disagreement, and whether the LOW-severity revisions close the `f_03` step-count and `s_03` `__init__.py` ENVIRONMENT-vs-PRODUCT gaps.
-
-Inputs:
-```text
-docs/SWE_AGENT_ANNOTATION_PROTOCOL_REVISIONS.md   # the three revisions
-docs/SWE_AGENT_RETROSPECTIVE_LEDGER_PROTOCOL.md   # already updated in commit 2656391
-annotations/swe_agent_pilot_v2/                   # H pass under pre-revision protocol
-```
-
-Outputs:
-```text
-annotations/swe_agent_pilot_v3/                    # cold-pass under post-revision protocol
-runs/swe_agent_pilot_reannotation/H4_GATE_RESULT.md
-```
-
-Acceptance:
-```text
-re-annotate s_01, s_03, f_01, f_06, f_03 under the v3-revised protocol
-gate pass: f_01 produces the same conclusion (final coding-progress within 0.05) in v3 vs both v1 and v2 readings under the new implicit-validation rule
-gate fail: H3 revisions are insufficient; do NOT proceed to M2 scale; re-open H3
-report cites which v3 leaf each revision touched and whether the gap closed
-```
+Status: done — `runs/swe_agent_pilot_reannotation/H4_GATE_RESULT.md`. **Gate PASSES.** v3 cold-pass quadrant agreement v1↔v3 = 5/5; f_01 delta 0.00. 5 invariant tests. Incidental finding: v1 inconsistent on Pitfall #8 across `f_02`/`f_03`/`f_07`/`f_10` — recommended cleanup pass (~30 min); does not block M2.
 
 ### M2. Define next direction (post-CRITIC_AUDIT pivot)
-Status: done — `runs/swe_agent_pilot/NEXT_DIRECTION_MEMO.md`. Pivot from retrospective scale-out to live instrumentation. Defines the eight forward deliverables (N1–N4, U1–U2, T1, V1) and a four-clause gating criterion for proceeding to live N=20 (parity within 0.05 on ≥2 instances; ≥1 K2 gap closed; no agent code changes; sidecar latency < 100ms/step). Cost-of-being-wrong table justifies the pivot's cheapness. Workstream R becomes meaningful only after N4 ships.
-
-Outputs:
-```text
-runs/swe_agent_pilot/NEXT_SAMPLE_PLAN.md
-```
-
-If go (retrospective):
-```text
-100 traces
-50 success / 50 failure
-or model/repo-balanced sample (specify split)
-```
-
-If go (live instrumented):
-```text
-defer to Workstream N
-```
-
-If no-go:
-```text
-state which blocker must be fixed first, with owner
-```
-
-Acceptance:
-```text
-clear next action
-no ambiguity about who does what next
-```
-
-> **Post-CRITIC_AUDIT note:** M2's framing (retrospective scale-out gated on H4) is **superseded** by the audit. The right next action is **Workstream N (live instrumentation)**, not a 100-trace retrospective batch. Re-write M2 as a one-page memo that records the pivot and references `runs/swe_agent_pilot/CRITIC_AUDIT.md` § 4.
+Status: done — `runs/swe_agent_pilot/NEXT_DIRECTION_MEMO.md`. Pivot from retrospective scale-out to live instrumentation. Defines the eight forward deliverables (N1–N4, U1–U2, T1, V1) and a four-clause gate for live N=20.
 
 ---
 
 ## Forward priorities (post-CRITIC_AUDIT)
 
-The workstreams in this section serve the mission verbs. They are **not** "out of pilot scope" — they are the work.
-
 ### § Workstream N — Live SWE-agent instrumentation
-Status: **PROMOTED to current priority** (post-CRITIC_AUDIT, 2026-04-30). Concretized below; the original sketch was a 5-line aside.
-
-Goal: Wrap a live SWE-agent run so `LedgerEvent`s emit during execution (with real wall-clock `timestamp`s), removing retrospective bias and unlocking K2's hidden-work-gap visibility / submit-provenance / pre-fix-baseline gaps.
-
-The new `LedgerSession.observe(...)` ergonomics (timestamps + clock override) and the new query API (Workstream U's consumer) make this much smaller than M1's "weeks of engineering" estimate.
+Goal: Wrap a live SWE-agent run so `LedgerEvent`s emit during execution with real wall-clock timestamps, removing retrospective bias and unlocking K2's hidden-work-gap, submit-provenance, and pre-fix-baseline gaps.
 
 #### N1. Decide sidecar vs in-agent instrumentation
-Status: done — `docs/LIVE_INSTRUMENTATION_DECISION.md`. **Chosen branch: hybrid sidecar with stable wire-format protocol v1.0.** Agents emit JSONL (raw step records via `agent_step` field; or explicit ledger ops via `ledger_ops` field; or both). The sidecar applies `ledger_ops` verbatim when present, else runs a per-framework adapter's `infer_events()` heuristic. Two-tier fidelity, single code path, framework-agnostic — works for SWE-agent, Claude Code, LangGraph, OpenAI Assistants, custom RL, etc., as adopters write a ~50–150 line adapter module. Replay-safety is invariant (idempotent re-feed produces byte-identical ledger.jsonl). N2 acceptance criteria are explicitly enumerated in the decision doc § 8.
+Status: done — `docs/LIVE_INSTRUMENTATION_DECISION.md`. Chosen: hybrid sidecar with wire-format protocol v1.0; framework-agnostic via per-framework adapter modules.
 
 #### N2. Build the live ledger sidecar
-Status: done — `ledger_progress/sidecar.py`, `ledger_progress/adapters/generic.py`, `ledger_progress/adapters/swe_agent.py`, and `tests/test_sidecar.py`. Ships `python -m ledger_progress.sidecar --run-dir X --adapter {generic,swe_agent}` with stdin JSONL input plus finite `--input-file` batch input. The sidecar validates wire-format v1.x events, rejects unknown major versions, enforces one `run_id` per run dir, applies explicit `ledger_ops` verbatim when present, otherwise routes `agent_step` through the selected adapter. It writes timestamped `ledger.jsonl`, regenerates `progress.csv`, `progress_by_category.csv`, and `summary_by_category.json`, and scaffolds the minimal run artifacts needed for `ledger-run check-run`.
-
-Outputs:
-```text
-ledger_progress/sidecar.py        # python -m ledger_progress.sidecar --run-dir X
-                                  # consumes JSONL on stdin → ledger.jsonl on disk
-tests/test_sidecar.py             # synthetic-input integration test
-```
-
-Design:
-```text
-class LedgerSidecar:
-    accepts: structured agent step (action, observation, optional file edits,
-             optional thought, exit_status)
-    routes:  to LedgerSession.add / complete / start / block / split
-             via heuristic event inferrer (same vocabulary as the SWE-agent
-             addendum's category map)
-    emits:   ledger.jsonl with real timestamps (default clock = UTC now)
-    exposes: in-memory LedgerSession so Workstream U's queries can read it live
-```
-
-Acceptance:
-```text
-sidecar consumes a synthetic 5-step JSONL stream and emits a timestamped ledger.jsonl
-all events carry a non-None timestamp
-ledger-run check-run passes on the resulting run dir
-```
-
-N2 test coverage also locks replay-equality, per-event timestamp authority, explicit-op bypass, explicit id/category/parent/weight preservation, additive v1.x wire-format compatibility, single-`run_id` invariants, SWE-agent vocabulary categories, no completion from command/exit-status alone, scope-change ops (`split` / `reopen` / `invalidate`), `add_evidence`, CLI input-file mode, and <100ms/event synthetic latency. Full suite after test hardening: `uv run pytest` → 296 passed.
+Status: done — `ledger_progress/sidecar.py` + `adapters/{generic,swe_agent}.py` + `tests/test_sidecar.py`. CLI: `python -m ledger_progress.sidecar --run-dir X --adapter {generic,swe_agent}`. Replay-equality, timestamp authority, explicit-op bypass, single-`run_id` invariants, <100ms/event latency all locked by tests.
 
 #### N3. Hook one SWE-agent run
-Status: done — `scripts/run_swe_agent_live_sidecar.py`, `docs/LIVE_SWE_AGENT_HOOK.md`, and two generated run dirs under `runs/swe_agent_live/`. The hook converts normalized SWE-agent assistant/tool turns into the N1 JSONL wire format, emits fresh wall-clock timestamps, streams the events through `LedgerSidecar(adapter="swe_agent")`, and writes `wire_events.jsonl` plus the standard run artifacts. It hard-fails rather than overwriting an existing live `ledger.jsonl`.
-
-Interpretation: N3 proves the live sidecar path can ingest SWE-agent-shaped events and emit timestamped ledgers. It does **not** prove semantic parity with retrospective annotation. N4 owns the sharper question: which events are mechanically observable, which are weakly inferable, and which remain annotation-only.
-
-Outputs:
-```text
-runs/swe_agent_live/<instance_id>/...   # one known-success and one known-failure
-                                         # SWE-bench instance, run live with sidecar
-runs/swe_agent_live/<instance_id>/wire_events.jsonl
-```
-
-Acceptance:
-```text
-two run dirs, each with a real-time ledger.jsonl
-each event has a wall-clock timestamp (so Workstream V's time-aware features fire)
-wire_events.jsonl retained exactly as consumed by the sidecar
-each live run maps to a known retrospective pilot instance
-```
-
-Generated N3 runs:
-```text
-runs/swe_agent_live/Melevir__cognitive_complexity-15   # known success; 21 wire events, 43 ledger events
-runs/swe_agent_live/WIPACrepo__iceprod-339             # known failure; 8 wire events, 17 ledger events
-```
-
-Both pass `uv run ledger-run check-run <run_dir>`, and every `ledger.jsonl` event has a non-null timestamp.
+Status: done — `scripts/run_swe_agent_live_sidecar.py` + `docs/LIVE_SWE_AGENT_HOOK.md`. Two run dirs under `runs/swe_agent_live/` (Melevir success, WIPACrepo failure); both pass `check-run`. **Caveat:** timestamps are replay-time (microsecond elapsed), not real wall-clock — that is the gap N6 closes.
 
 #### N4. Live-vs-retrospective parity report
-Status: done — `scripts/build_live_parity_report.py`, `runs/swe_agent_live/PARITY_REPORT.md`, and `runs/swe_agent_live/EVENT_OBSERVABILITY_MATRIX.md`. Frontier policy resolved: raw-step live instrumentation does **not** invent discovered-but-unattempted validation obligations. Submit-without-validation is represented as `complete_visible_frontier+no_validation_frontier` unless the agent emits explicit `ledger_ops` for validation work. Verdict: **N4 policy-adjusted parity gate passes; N5 may proceed under the no-validation-frontier policy.** Scalar progress still differs on `WIPACrepo__iceprod-339` (`1.000` live vs `0.667` retrospective), and that divergence is documented rather than hidden.
-
-Outputs:
-```text
-runs/swe_agent_live/PARITY_REPORT.md
-```
-
-Compare live vs retrospective ledger for the same SWE-bench instance:
-```text
-schema parity (do the same EventTypes / categories / statuses surface?)
-evidence parity (does live capture what K2 said retrospective could not —
-                 hidden-work gap visibility, submit provenance, pre-fix baseline?)
-shape parity (same qualitative shape class, even if exact scalar progress differs?)
-scalar parity (does final coding-progress agree within 0.05? report, but do not over-weight)
-observability parity (which events are mechanical / weakly inferable / annotation-only?)
-timestamp realism (are intervals plausible vs the harness's actual timing?)
-```
-
-Acceptance:
-```text
-report cites at least three K2 gaps and says whether live closes them
-report includes an event observability matrix for every retrospective event type seen
-report names every live-vs-retrospective divergence and assigns it to adapter bug, missing instrumentation, or true semantic ambiguity
-report uses shape classes as the primary comparison and scalar progress as secondary evidence
-divergences are not papered over
-```
+Status: done — `scripts/build_live_parity_report.py` + `runs/swe_agent_live/PARITY_REPORT.md` + `EVENT_OBSERVABILITY_MATRIX.md`. **Frontier policy:** raw-step instrumentation does not invent validation obligations; submit-without-validation surfaces as `complete_visible_frontier+no_validation_frontier`. Verdict: policy-adjusted gate passes; N5 unblocked. The scalar divergence (live → 1.0, retro lower) is documented, not hidden — but is also a real measurement-validity issue that **W2 must address** before the live channel is operationally trustworthy.
 
 #### N5. Extend to a live N=20 batch
-Status: done — `runs/swe_agent_live/N5_BATCH_SUMMARY.md` and 20 live run dirs under `runs/swe_agent_live/<instance_id>/`. Each retrospective pilot was replayed through `scripts/run_swe_agent_live_sidecar.py` (the N3 hook), producing timestamped `ledger.jsonl` + `wire_events.jsonl` plus regenerated `progress.csv`, `progress_by_category.csv`, and `summary_by_category.json`. All 20 pass `uv run ledger-run check-run`. Every event carries a non-null wall-clock `timestamp`; no retrospective annotation step was used to materialize them. The systematic live-vs-retrospective progress gap is consistent with the N4 frontier policy (no inferred validation leaf without explicit `ledger_ops`) and is documented rather than papered over.
+Status: done — `runs/swe_agent_live/N5_BATCH_SUMMARY.md` + 20 live run dirs. All pass `check-run`; every event has a (replay-time) timestamp; no retrospective annotation. Systematic live-vs-retro progress gap is consistent with the N4 frontier policy. **Caveat:** because N3 emits replay-time timestamps, V1's wall-clock columns populate with values too small to be physically informative on this batch — see N6.
 
-Outputs:
-```text
-runs/swe_agent_live/N5_BATCH_SUMMARY.md
-runs/swe_agent_live/<instance_id>/        # 20 dirs, one per pilot instance
-```
+#### N6. Capture real wall-clock timestamps on a live SWE-agent run
+Status: not started · _post-critic-audit follow-up; prerequisite for V being more than a stub_
+
+Goal: Make at least one (and ideally all 20) live ledgers carry timestamps that reflect actual SWE-agent execution time, not the microseconds it takes the replay hook to materialize the events. Two viable paths:
+- (a) Hook a live, freshly-running SWE-agent process via the sidecar's stdin (the N1/N2 happy path; never executed end-to-end against a real run).
+- (b) Source per-step timestamps from the upstream trace metadata when available and feed them through the existing replay hook with a synthetic-clock override, so V1's columns populate with realistic intervals.
 
 Acceptance:
 ```text
-20 live ledgers, each with timestamps, evidence, hidden-work-gap visibility   ✓
-no retrospective annotation needed                                             ✓
-the observation channel can compute mission features from these 20 directly   ✓ (progress.csv etc. regenerated)
+at least one run dir under runs/swe_agent_live/ carries timestamps with span > 1 minute
+V1's seconds_since_progress_increase is populated with values > 1.0 on that run
+docs/LIVE_SWE_AGENT_HOOK.md notes the wall-clock-vs-replay-time distinction
+N5_BATCH_SUMMARY.md is updated to flag which runs have real wall-clock data
 ```
-
-Unblocks: Workstream V (time-aware features), Workstream W (observation-channel sharpening on live data), Workstream Q (predictive modeling on the live batch).
 
 ### § Workstream U — Live query CLI / monitor surface
 Status: **NEW** (post-CRITIC_AUDIT). Consumes the query API that landed in commit `5bdcab6`.
@@ -1523,35 +681,44 @@ Goal: Once live agents (Workstream N) emit timestamps, add wall-clock-aware feat
 Status: done — `scripts/build_ledger_observation_dataset.py` extends `DATASET_FIELDS` with `elapsed_seconds`, `seconds_since_last_event`, `seconds_since_progress_increase`, and `events_per_minute` (5-event rolling window). Step rows recompute `seconds_since_last_event` and `seconds_since_progress_increase` at step granularity using the retained event timestamps. Empty string on legacy step-only ledgers; populated on live N=20 batch. Test: `tests/test_ledger_observation_dataset.py::test_wall_clock_columns_null_on_legacy_populated_on_timestamped`.
 
 #### V2. Deadline-aware estimator stub
-Status: done — `ledger_progress/estimators.py:p_finish_by(ledger, deadline, categories=CODING)` and `tests/test_estimators.py` (7 tests). Linear extrapolation from observed progress velocity: returns 1.0 if already complete or projected finish ≤ deadline; 0.0 if no timestamps, no progress yet, or deadline already past; otherwise the fraction `seconds_until_deadline / seconds_to_finish`. Module docstring is explicit that this is a documented stub, not a calibrated predictor — the assumption is constant rate, and downstream code (Workstream W/Q) is meant to swap the body once a real model exists.
+Status: done — `ledger_progress/estimators.py:p_finish_by(ledger, deadline, categories=CODING)` and `tests/test_estimators.py` (7 tests). Linear extrapolation from observed progress velocity. Stub, not calibrated; downstream W/Q is meant to swap the body.
+
+**Known issue (TODO before W/Q consume):** the return value is dimensionally a time ratio, not a probability. Either rename to `fraction_of_time_to_finish_remaining` (and let callers map to a probability) or replace the body with an actual calibrated predictor. Do not let this stub be cited as a probability in any downstream report.
+
+**Cannot be calibrated until N6 ships:** the wall-clock columns V1 produces on the current live N=20 are microsecond-scale (replay-time, not real wall-clock). Any probability calibration on this data would be meaningless.
 
 ### § Workstream W — Observation-channel sharpening
-Status: **NEW current priority** (post-handoff critique). Runs in parallel with N4 and before any serious modeling work.
+Status: **NEW current priority** (post-handoff critique). The critical-path workstream. Until W2 ships, the live channel's primary scalar (`coding_progress`) is systematically over-optimistic for failures (live reads ~1.0 whether agent succeeded or botched — see N4 PARITY_REPORT). Shape labels are the operational fix.
+
+**Hard ordering:** W4 → W2 → W3. Reason: W4's revised implicit-validation semantics shift scalar progress on `f_02`/`f_03`/`f_07`/`f_10`. If those shifts change shape labels, doing W2 first would invalidate W2 outputs retroactively. The earlier "W4 in parallel" framing was wrong.
 
 Goal: Make the scientific variables explicit. The channel observes the visible work frontier: discovery, closure, instability, stalls, validation state, evidence strength, and category-local progress. W turns those into auditable shape labels and estimator-ready checkpoint features without changing `LedgerEvent`, `Status`, or `SubtaskCategory`.
 
 #### W1. Event observability matrix
-Status: done — `runs/swe_agent_live/EVENT_OBSERVABILITY_MATRIX.md`, generated by `scripts/build_live_parity_report.py` as part of N4. The matrix separates mechanical live events from weakly inferable grouping and annotation-only semantic transitions.
+Status: done — `runs/swe_agent_live/EVENT_OBSERVABILITY_MATRIX.md` (generated by N4's `build_live_parity_report.py`). Separates mechanical live events from weakly inferable grouping and annotation-only semantic transitions.
 
-Goal: For each ledger event/status/category transition seen in the retrospective SWE-agent pilots and N3 live runs, classify whether live sidecar instrumentation can produce it mechanically, weakly infer it, or still needs annotation.
+#### W4. Quantify annotation sensitivity on Pitfall #8 cleanup cases
+Status: not started · _hard prerequisite for W2_
+
+Goal: Show whether qualitative shapes survive when revised implicit-validation semantics move scalar progress on `f_02`, `f_03`, `f_07`, and `f_10`. Must run **before** W2 so that W2's shape labels do not bake in soon-to-be-stale scalar values.
 
 Outputs:
 ```text
-runs/swe_agent_live/EVENT_OBSERVABILITY_MATRIX.md
+runs/swe_agent_pilot/PITFALL8_SENSITIVITY.md
 ```
 
 Acceptance:
 ```text
-matrix includes ADD_SUBTASK, UPDATE_STATUS complete/start/block, REOPEN, INVALIDATE, SPLIT if present
-each row is one of mechanical / weakly_inferable / annotation_only
-each annotation_only row names the missing signal or semantic judgment
-N4 parity report links to this matrix instead of duplicating it
+report compares old vs revised scalar progress for f_02/f_03/f_07/f_10
+report states whether each shape tag changes
+if shape tags stay stable, W2 may proceed against the current scalar values
+if a shape changes, W2's label rules must be defined relative to the revised values
 ```
 
 #### W2. Add shape-level labels and reports
-Status: not started
+Status: not started · _blocked on W4_
 
-Goal: Report stable qualitative shapes rather than relying on exact scalar progress. These are audit tags first, not training labels.
+Goal: Report stable qualitative shapes rather than relying on exact scalar progress. These are audit tags first, not training labels. **Operational urgency:** the live channel currently emits a progress scalar that is indistinguishable between successes and failures at the high end. Shape tags (`high_progress_failure`, `submit_without_validation`, `no_validation_frontier`, `hidden_work_gap`) are the live-queryable signal that distinguishes "done" from "submitted-without-test".
 
 Initial shape tags:
 ```text
@@ -1559,6 +726,7 @@ high_progress_failure
 low_progress_success
 stuck_loop
 submit_without_validation
+no_validation_frontier
 validation_induced_reopen
 scope_discovery_after_high_progress
 hidden_work_gap
@@ -1579,6 +747,7 @@ f_06 is high_progress_failure + hidden_work_gap
 s_04 is low_progress_success + submit_without_validation
 f_02 or f_03 is stuck_loop
 s_03 is nonmonotone_recovery
+every live N=20 run with progress=1.0 carries either no_validation_frontier or a clean success classification
 labels are derived from ledger/metadata fields plus run_notes citations where needed
 report warns that labels are audit tags, not final model targets yet
 ```
@@ -1615,24 +784,6 @@ no future-derived features except explicit label columns
 final_success and success_by_horizon are labels only, never feature columns
 all feature groups above are present or explicitly documented as unavailable
 legacy retrospective rows remain supported
-```
-
-#### W4. Quantify annotation sensitivity on Pitfall #8 cleanup cases
-Status: not started
-
-Goal: Show whether qualitative shapes survive when revised implicit-validation semantics move scalar progress on `f_02`, `f_03`, `f_07`, and `f_10`.
-
-Outputs:
-```text
-runs/swe_agent_pilot/PITFALL8_SENSITIVITY.md
-```
-
-Acceptance:
-```text
-report compares old vs revised scalar progress for f_02/f_03/f_07/f_10
-report states whether each shape tag changes
-if shape tags stay stable, report says scalar movement does not invalidate the observation-channel claim
-if a shape changes, report names the downstream table/report that must be regenerated
 ```
 
 ### § Workstream T — Task-set as first-class structure
@@ -1712,14 +863,10 @@ Is the PRODUCT/VALIDATION/INVESTIGATION split sufficient, or do we need a new ca
 
 ---
 
-## Suggested parallelization
-
-Workstream-to-agent assignment (one suggestion, not a hard contract):
-
-| Agent | Owns |
-|-------|------|
 ## § Workstream T — Task-set as first-class structure
-Status: **PROMOTED to current priority** (post-CRITIC_AUDIT). The only roadmap item that addresses the mission's *long-range* verb. T1 (the protocol doc) is unblocked and should run in parallel with N1 (live-instrumentation decision). T2–T5 stay blocked on T1.
+Status: **PROMOTED to current priority** (post-CRITIC_AUDIT) — but has shipped zero code across two promotion cycles. The only roadmap item that addresses the mission's *long-range* verb (everything else models one task / one trace).
+
+**Decision needed (this cycle):** ship T1 (the protocol doc — small, low-cost, unblocks T2–T5) **or** explicitly demote the workstream and stop calling the framework "long-range." The current promoted-but-unshipped state is the worst of both. Default if no explicit decision lands by the next planning checkpoint: T1 ships, T2–T5 stay blocked on T1 as before.
 
 The framework currently models progress within one task / one trace. Real long-range agentic work — a multi-week refactor decomposed into 30 sub-issues, a research agent running a sequence of partly-independent experiments, even a single SWE-bench run viewed as "one issue out of N" — has a coarser unit of analysis: the **set of tasks**. Workstream T introduces that unit *without disturbing the single-task pipeline*.
 
@@ -1833,122 +980,19 @@ no edits to the general doc
 
 ---
 
-## § Workstream P — Cross-source dataset generalization
-
-> **Note:** this is a **second** workstream named "P" (the first is "Cross-model / cross-scaffold comparison" further up; both predate the audit). Both are **DEFERRED INDEFINITELY** post-CRITIC_AUDIT. Section preserved for reference; do not start P1 / P2 / P3 unless re-opened by a future audit.
-
-### P1. Investigate a second trace source (e.g. APEX-Agents)
-Status: **DEFERRED INDEFINITELY** (post-CRITIC_AUDIT). The source-agnostic claim is testable more cheaply once Workstream N produces live ledgers — at that point "does the live channel work on a second agent framework?" replaces "does the retrospective protocol work on a second dataset?". Until then, P1 doubles annotation surface for a hypothesis with no live consumer.
-
-Goal: Test the framework's "general protocol + thin source addendum" claim by exercising it on a non-SWE-agent trace source. Without this, the protocol's source-agnosticism is hypothesis, not evidence.
-
-Outputs:
-```text
-external_data/<source_name>/SOURCE_FORMAT.md
-external_data/<source_name>/raw/sample_row.json
-docs/<SOURCE_NAME>_RETROSPECTIVE_LEDGER_PROTOCOL.md   (thin addendum, mirrors SWE_AGENT_*)
-```
-
-Candidate sources to evaluate:
-```text
-APEX-Agents (per user; confirm exact dataset name / location before fetching)
-SWE-bench/SWE-smith-trajectories (already named as fallback in A2)
-Any HF dataset of multi-step agent trajectories with role+text per turn
-```
-
-Acceptance:
-```text
-SOURCE_FORMAT.md inspects ONE real row (no bulk download)
-field-name -> framework-name mapping documented per the C3 generalizable rule
-addendum specifies source-specific role mapping, action vocabulary, worked examples
-zero edits to docs/RETROSPECTIVE_LEDGER_ANNOTATION_PROTOCOL.md or the general schema doc -- if the general protocol needed changing to land on this source, that is the finding
-```
-
-### P2. Annotate one pilot trace from the second source
-Status: blocked on P1
-
-Goal: Walk one real trace under the new addendum end-to-end. If the spec-driven driver and the existing pipeline accept it without modification, the source-agnostic claim is empirically supported.
-
-Acceptance:
-```text
-one <source>_pilot_*.json + .notes.md committed under annotations/<source>_pilot/
-ledger-run check-run passes on the materialized run dir
-F2 / F3 ingest the new ledger cleanly OR the gap is documented
-```
-
-### P3. Compare progress shape distributions across sources
-Status: blocked on P2 (and likely E3)
-
-Goal: Same-shape protocol on two sources should produce comparable progress signals. Do they? Or does each source have idiosyncratic shapes that dominate?
-
-Outputs:
-```text
-runs/cross_source_comparison.md
-```
-
-Acceptance:
-```text
-report compares per-shape distributions (1.00, 0.75, etc.) across sources
-identifies any shape that is source-specific vs cross-source
-flags any divergence in interpretability that suggests the general protocol is leaking source-specific assumptions
-```
-
----
-
-| Agent 1 | A (inventory + source format + sampler) — **blocking input** for Agents 2 and 4 |
-| Agent 2 | C (import + normalization scripts) |
-| Agent 3 | D1, D2, D3 (annotation protocol + templates) |
-| Agent 4 | D4, E1 (pilot-zero + scale annotation) |
-| Agent 5 | F (dataset integration + audit scripts) |
-| Agent 6 | G (smoke-test args + SWE-agent report) |
-| Agent 7 | I, K (schema-gap and evidence reports) |
-| Agent 8 | L (visualization/dashboard) |
-| Agent 9 | H (inter-annotator reliability) |
-| Agent 10 | M (final go/no-go memo) |
-
-### Forward parallelization (post-CRITIC_AUDIT)
-
-| Agent | Owns |
-|-------|------|
-| Agent A | N4 parity report + W1 observability matrix |
-| Agent B | W2 shape labels + W3 estimator checkpoint table |
-| Agent C | K4 evidence-level split |
-| Agent D | U2 (`ledger-run query` CLI) — depends on the queries.py API already shipped |
-| Agent E | T1 LedgerSet protocol doc |
-| Agent F | V1 wall-clock columns once N3 live ledgers are stable |
-
----
-
 ## Minimal first batch (pilot phase — historical, complete)
 
-The smallest useful SWE-agent retrospective pilot:
-
-```text
-1. Inventory source traces.            (A1, A3)        ✓
-2. Sample 2 successful + 2 failed.     (B1 lite)        ✓
-3. Import them into run directories.   (C1, C2, C3)     ✓
-4. Manually annotate ledgers.          (D1 lite, D4)    ✓
-5. Build step observations.            (F2 on N=4)      ✓
-6. Run audit.                          (F3 on N=4)      ✓
-7. Write a 1-page feasibility memo.    (proto-M1)       ✓ (full M1 + CRITIC_AUDIT)
-```
+Pilot phase A–M complete as of 2026-04-30 — see `runs/swe_agent_pilot/GO_NO_GO_MEMO.md`.
 
 ## Minimal first batch (forward phase — current)
 
-The smallest useful **live-instrumentation** crunch target post-CRITIC_AUDIT:
+Steps 1–4, 7 complete (N1–N3 ✓, W1 ✓, U1+U2 ✓). Remaining:
+- **W4 → W2** shape labels (W4 must precede W2: scalar-progress shifts on `f_02`/`f_03`/`f_07`/`f_10` could change shape labels retroactively)
+- **W3** estimator checkpoint table (blocked on W2)
+- **N6** real wall-clock timestamps (prerequisite for V being more than a stub)
+- **T1** LedgerSet protocol doc
 
-```text
-1. Pick sidecar branch.                          (N1) ✓
-2. Build the sidecar.                            (N2 — `ledger_progress/sidecar.py`) ✓
-3. Hook SWE-agent traces through the sidecar.     (N3) ✓
-4. Event observability matrix.                    (W1)
-5. Live-vs-retrospective shape parity report.     (N4)
-6. Shape labels + estimator checkpoint table.     (W2, W3)
-7. Add `ledger-run watch` / query surface.         (U1, U2)
-8. T1: write LedgerSet protocol doc in parallel.  (T1)
-```
-
-If anything breaks at step 5 (parity fails badly), fix it before extending to live N=20 (N5). The retrospective pilot stays as the parity benchmark, not as a target to grow. Do not start Q modeling until W3 exists.
+Do not start Q modeling until W3 exists. Treat the live N=20 progress scalar as untrustworthy for outcome questions until W2's shape labels ship — see `runs/swe_agent_live/PARITY_REPORT.md`.
 
 ---
 
