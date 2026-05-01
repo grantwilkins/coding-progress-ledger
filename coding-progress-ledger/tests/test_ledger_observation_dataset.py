@@ -300,14 +300,70 @@ def test_main_writes_dataset_artifacts(tmp_path):
     assert "Step rows: 2" in summary
 
 
-def event(step, event_type, subtask_id, payload, reason=None):
-    return {
+def test_wall_clock_columns_null_on_legacy_populated_on_timestamped(tmp_path):
+    runs_dir = tmp_path / "runs"
+    write_run(
+        runs_dir,
+        "legacy_no_ts",
+        [
+            event(0, "init", None, {"root_task": "Legacy"}),
+            event(1, "add_subtask", "P", {"description": "Patch", "category": "product"}),
+            event(2, "update_status", "P", {"status": "complete", "evidence": ["final_diff.patch shows patch"]}),
+        ],
+    )
+    write_run(
+        runs_dir,
+        "live_ts",
+        [
+            event(0, "init", None, {"root_task": "Live"}, timestamp="2026-05-01T00:00:00+00:00"),
+            event(1, "add_subtask", "P", {"description": "Patch", "category": "product"}, timestamp="2026-05-01T00:00:30+00:00"),
+            event(2, "add_subtask", "V", {"description": "Validate", "category": "validation"}, timestamp="2026-05-01T00:01:00+00:00"),
+            event(3, "update_status", "P", {"status": "complete", "evidence": ["final_diff.patch shows patch"]}, timestamp="2026-05-01T00:02:00+00:00"),
+        ],
+    )
+
+    result = builder.build_dataset(runs_dir)
+    legacy_rows = [r for r in result.event_rows if r["run_id"] == "legacy_no_ts"]
+    live_rows = [r for r in result.event_rows if r["run_id"] == "live_ts"]
+
+    for row in legacy_rows:
+        assert row["elapsed_seconds"] == ""
+        assert row["seconds_since_last_event"] == ""
+        assert row["seconds_since_progress_increase"] == ""
+        assert row["events_per_minute"] == ""
+
+    assert live_rows[0]["elapsed_seconds"] == 0.0
+    assert live_rows[0]["seconds_since_last_event"] == 0.0
+    assert live_rows[1]["elapsed_seconds"] == 30.0
+    assert live_rows[1]["seconds_since_last_event"] == 30.0
+    assert live_rows[3]["elapsed_seconds"] == 120.0
+    # progress jumps at index 3 (P completes); seconds_since_progress_increase resets to 0
+    assert live_rows[3]["seconds_since_progress_increase"] == 0.0
+    # rolling rate has 4 events spanning 120s = 2 minutes -> 2 events/min
+    assert live_rows[3]["events_per_minute"] == pytest.approx(2.0)
+
+    live_step_rows = [r for r in result.step_rows if r["run_id"] == "live_ts"]
+    legacy_step_rows = [r for r in result.step_rows if r["run_id"] == "legacy_no_ts"]
+    for row in legacy_step_rows:
+        assert row["elapsed_seconds"] == ""
+        assert row["seconds_since_progress_increase"] == ""
+    # step rows track step-level (not event-level) seconds_since_last_event
+    assert live_step_rows[0]["seconds_since_last_event"] == 0.0
+    # step 3 retains the index-3 event timestamp (00:02:00); previous retained step 2 was at 00:01:00
+    assert live_step_rows[-1]["seconds_since_last_event"] == 60.0
+
+
+def event(step, event_type, subtask_id, payload, reason=None, timestamp=None):
+    out = {
         "step": step,
         "event_type": event_type,
         "subtask_id": subtask_id,
         "payload": payload,
         "reason": reason,
     }
+    if timestamp is not None:
+        out["timestamp"] = timestamp
+    return out
 
 
 def write_run(runs_dir, run_id, events, summary=None):

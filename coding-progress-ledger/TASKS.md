@@ -1484,39 +1484,23 @@ Status: **NEW** (post-CRITIC_AUDIT). Consumes the query API that landed in commi
 Goal: Make `ledger_progress.queries` reachable from outside Python — a `ledger-run` CLI subcommand and (optionally) a small HTTP server. This is the surface a real long-running monitor would call.
 
 #### U1. `ledger-run watch <run_dir>`
-Status: not started · _unblocked by N2_
+Status: done — `ledger_progress/run_manager.py:_cmd_watch` and `tests/test_run_manager_watch_query.py::test_watch_emits_one_update_per_appended_event`. Polls ledger.jsonl, replays incrementally, prints one JSON line per new event with step / event_type / subtask_id / coding_progress / active_blocked_leaves / stalled_for_blocked / timestamp. Test appends 6 events while watch is running and asserts 6 update lines emerge.
 
-Outputs:
+CLI:
 ```text
-ledger-run watch <run_dir>   # tails ledger.jsonl; on each new line,
-                              # re-derives progress.csv + summary_by_category.json
-                              # and prints the new step's progress / blocked / stalled
-```
-
-Implementation: poll the file's mtime, replay incrementally, emit the diff.
-
-Acceptance:
-```text
-synthetic test: append 5 events to ledger.jsonl over 5s; watch prints 5 updates
+ledger-run watch <run_dir> [--poll-interval 0.5] [--exit-after-events N]
 ```
 
 #### U2. `ledger-run query <run_dir> --filter ...`
-Status: not started
+Status: done — `ledger_progress/run_manager.py:_cmd_query` and `tests/test_run_manager_watch_query.py`. Exposes every queries.py function as a flag and emits a single JSON object on stdout.
 
-Goal: Expose the new query functions as CLI flags.
-
-Outputs:
+CLI:
 ```text
 ledger-run query <run_dir> --status blocked
-ledger-run query <run_dir> --stalled-for ge 10
-ledger-run query <run_dir> --reopens-since <step>
-ledger-run query <run_dir> --newly-discovered-since <step>
+ledger-run query <run_dir> --stalled-for N            # prints stalled_for + meets_threshold
+ledger-run query <run_dir> --reopens-since STEP
+ledger-run query <run_dir> --newly-discovered-since STEP
 ledger-run query <run_dir> --last-validation-event
-```
-
-Acceptance:
-```text
-each flag exercises one of the queries.py functions; output is machine-parseable
 ```
 
 #### U3. `ledger-run serve` HTTP server (optional)
@@ -1536,37 +1520,10 @@ Status: **NEW** (post-CRITIC_AUDIT). Consumes `LedgerEvent.timestamp` (commit `5
 Goal: Once live agents (Workstream N) emit timestamps, add wall-clock-aware features to the observation channel so the mission's "probability of finishing before a deadline" becomes definable.
 
 #### V1. Add wall-clock columns to the observation channel
-Status: not started · _unblocked by N3 live ledgers_
-
-Outputs (extend `scripts/build_ledger_observation_dataset.py:DATASET_FIELDS`):
-```text
-elapsed_seconds              # event_n.timestamp - event_0.timestamp; null on legacy
-seconds_since_last_event     # event_n.timestamp - event_{n-1}.timestamp
-seconds_since_progress_increase   # wall-clock counterpart to steps_since_*
-events_per_minute            # rolling rate over a 5-event window
-```
-
-Acceptance:
-```text
-columns present and null on legacy step-only ledgers; populated on live ledgers
-```
+Status: done — `scripts/build_ledger_observation_dataset.py` extends `DATASET_FIELDS` with `elapsed_seconds`, `seconds_since_last_event`, `seconds_since_progress_increase`, and `events_per_minute` (5-event rolling window). Step rows recompute `seconds_since_last_event` and `seconds_since_progress_increase` at step granularity using the retained event timestamps. Empty string on legacy step-only ledgers; populated on live N=20 batch. Test: `tests/test_ledger_observation_dataset.py::test_wall_clock_columns_null_on_legacy_populated_on_timestamped`.
 
 #### V2. Deadline-aware estimator stub
-Status: blocked on V1
-
-Goal: a minimal `p_finish_by(ledger, deadline)` that uses elapsed_seconds and progress to project completion. Not a real model — a documented stub with explicit assumptions, so the mission's third estimator goal becomes implementable.
-
-Outputs:
-```text
-ledger_progress/estimators.py    # minimal linear extrapolation w/ disclaimer
-tests/test_estimators.py
-```
-
-Acceptance:
-```text
-returns probability in [0, 1] given (ledger, deadline_iso8601)
-disclaimer: assumes linear progress rate; not predictive without calibration
-```
+Status: done — `ledger_progress/estimators.py:p_finish_by(ledger, deadline, categories=CODING)` and `tests/test_estimators.py` (7 tests). Linear extrapolation from observed progress velocity: returns 1.0 if already complete or projected finish ≤ deadline; 0.0 if no timestamps, no progress yet, or deadline already past; otherwise the fraction `seconds_until_deadline / seconds_to_finish`. Module docstring is explicit that this is a documented stub, not a calibrated predictor — the assumption is constant rate, and downstream code (Workstream W/Q) is meant to swap the body once a real model exists.
 
 ### § Workstream W — Observation-channel sharpening
 Status: **NEW current priority** (post-handoff critique). Runs in parallel with N4 and before any serious modeling work.

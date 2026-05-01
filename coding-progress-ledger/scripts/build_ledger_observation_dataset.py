@@ -5,8 +5,10 @@ import csv
 import hashlib
 import json
 import sys
+from collections import deque
 from copy import deepcopy
 from dataclasses import dataclass
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 
@@ -104,7 +106,12 @@ DATASET_FIELDS = [
     "steps_since_subtask_added",
     "cum_strong_completions",
     "cum_manual_only_completions",
+    "elapsed_seconds",
+    "seconds_since_last_event",
+    "seconds_since_progress_increase",
+    "events_per_minute",
 ]
+EVENTS_PER_MINUTE_WINDOW = 5
 
 
 @dataclass
@@ -177,7 +184,11 @@ def build_dataset(runs_dir: Path) -> BuildResult:
             category_resolution_mode=resolution["mode"],
             category_overrides_applied=resolution["overrides_applied"],
         )
-        run_step_rows = build_step_rows(run_rows, _event_context(resolved_events))
+        event_timestamps = {
+            index: getattr(event, "timestamp", None)
+            for index, event in enumerate(resolved_events)
+        }
+        run_step_rows = build_step_rows(run_rows, _event_context(resolved_events), event_timestamps)
         event_rows.extend(run_rows)
         step_rows.extend(run_step_rows)
         event_summaries.append(summarize_run(run_id, run_rows, final_success, resolution))
@@ -214,6 +225,10 @@ def build_run_rows(
         "num_reopens_so_far": 0,
         "num_invalidations_so_far": 0,
     }
+    first_ts: datetime | None = None
+    prev_ts: datetime | None = None
+    last_increase_ts: datetime | None = None
+    rolling_window: deque[datetime] = deque(maxlen=EVENTS_PER_MINUTE_WINDOW)
     for index, (native_event, resolved_event) in enumerate(zip(native_events, resolved_events)):
         _update_counters(counters, resolved_event.event_type)
         native_metrics = _metrics(native_events[: index + 1])
@@ -278,14 +293,51 @@ def build_run_rows(
             "steps_since_subtask_added": 0,
             "cum_strong_completions": 0,
             "cum_manual_only_completions": 0,
+            "elapsed_seconds": "",
+            "seconds_since_last_event": "",
+            "seconds_since_progress_increase": "",
+            "events_per_minute": "",
         }
+        ts = _parse_iso_timestamp(getattr(resolved_event, "timestamp", None))
+        if ts is not None:
+            if first_ts is None:
+                first_ts = ts
+            row["elapsed_seconds"] = (ts - first_ts).total_seconds()
+            row["seconds_since_last_event"] = (ts - prev_ts).total_seconds() if prev_ts is not None else 0.0
+            if delta_coding > EPSILON:
+                last_increase_ts = ts
+            row["seconds_since_progress_increase"] = (
+                (ts - last_increase_ts).total_seconds() if last_increase_ts is not None else (ts - first_ts).total_seconds()
+            )
+            rolling_window.append(ts)
+            row["events_per_minute"] = _events_per_minute(rolling_window)
+            prev_ts = ts
         rows.append(row)
         previous_resolved = resolved_metrics
         previous_native = native_metrics
     return rows
 
 
-def build_step_rows(event_rows: list[dict[str, Any]], event_context: dict[int, dict[str, Any]] | None = None) -> list[dict[str, Any]]:
+def _parse_iso_timestamp(value: Any) -> datetime | None:
+    if not value:
+        return None
+    return datetime.fromisoformat(value)
+
+
+def _events_per_minute(window: deque) -> Any:
+    if len(window) < 2:
+        return ""
+    span_seconds = (window[-1] - window[0]).total_seconds()
+    if span_seconds <= 0:
+        return ""
+    return len(window) / (span_seconds / 60.0)
+
+
+def build_step_rows(
+    event_rows: list[dict[str, Any]],
+    event_context: dict[int, dict[str, Any]] | None = None,
+    event_timestamps: dict[int, str | None] | None = None,
+) -> list[dict[str, Any]]:
     retained: list[dict[str, Any]] = []
     rows_by_step: dict[int, list[dict[str, Any]]] = {}
     for row in event_rows:
@@ -300,6 +352,9 @@ def build_step_rows(event_rows: list[dict[str, Any]], event_context: dict[int, d
     last_increase_step: int | None = None
     last_completion_step: int | None = None
     last_added_step: int | None = None
+    prev_step_ts: datetime | None = None
+    last_increase_ts_step: datetime | None = None
+    first_step_ts: datetime | None = None
     for row in retained:
         current_event_index = int(row["event_index"])
         interval_rows = [
@@ -387,6 +442,18 @@ def build_step_rows(event_rows: list[dict[str, Any]], event_context: dict[int, d
         row["steps_since_progress_increase"] = (step_int - last_increase_step) if last_increase_step is not None else step_int
         row["steps_since_completion"] = (step_int - last_completion_step) if last_completion_step is not None else step_int
         row["steps_since_subtask_added"] = (step_int - last_added_step) if last_added_step is not None else step_int
+
+        ts = _parse_iso_timestamp((event_timestamps or {}).get(current_event_index))
+        if ts is not None:
+            if first_step_ts is None:
+                first_step_ts = ts
+            row["seconds_since_last_event"] = (ts - prev_step_ts).total_seconds() if prev_step_ts is not None else 0.0
+            if float(row["delta_coding_progress"]) > EPSILON:
+                last_increase_ts_step = ts
+            row["seconds_since_progress_increase"] = (
+                (ts - last_increase_ts_step).total_seconds() if last_increase_ts_step is not None else (ts - first_step_ts).total_seconds()
+            )
+            prev_step_ts = ts
 
         previous = row
         previous_event_index = current_event_index

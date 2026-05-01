@@ -12,7 +12,9 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from .serialization import from_jsonl
+from . import queries
+from .core import EventType, Status, SubtaskCategory
+from .serialization import from_jsonl, load_events_jsonl
 from .session import LedgerSession
 
 
@@ -67,6 +69,21 @@ def main(argv: list[str] | None = None) -> int:
     summarize_run = subparsers.add_parser("summarize-run", help="Print a compact run summary.")
     summarize_run.add_argument("run_dir")
     summarize_run.set_defaults(func=_cmd_summarize_run)
+
+    watch = subparsers.add_parser("watch", help="Tail ledger.jsonl and print per-event progress updates.")
+    watch.add_argument("run_dir")
+    watch.add_argument("--poll-interval", type=float, default=0.5)
+    watch.add_argument("--exit-after-events", type=int, default=0, help="Exit after observing this many total events (0 = run until interrupted).")
+    watch.set_defaults(func=_cmd_watch)
+
+    query = subparsers.add_parser("query", help="Run live queries against ledger.jsonl. Output is JSON.")
+    query.add_argument("run_dir")
+    query.add_argument("--status", choices=["blocked"], help="List active leaves with the given status.")
+    query.add_argument("--stalled-for", type=int, metavar="N", help="Print stalled_for(BLOCKED) in steps and whether it is >= N.")
+    query.add_argument("--reopens-since", type=int, metavar="STEP")
+    query.add_argument("--newly-discovered-since", type=int, metavar="STEP")
+    query.add_argument("--last-validation-event", action="store_true")
+    query.set_defaults(func=_cmd_query)
 
     args = parser.parse_args(argv)
     try:
@@ -209,6 +226,92 @@ def _cmd_summarize_run(args: argparse.Namespace) -> int:
     else:
         print("missing artifacts: none")
     return 0
+
+
+def _cmd_watch(args: argparse.Namespace) -> int:
+    from .core import replay
+    from .scoring import score
+
+    run_dir = _existing_run_dir(args.run_dir)
+    ledger_path = run_dir / "ledger.jsonl"
+    seen = 0
+    target = args.exit_after_events
+    while True:
+        if not ledger_path.exists():
+            time.sleep(args.poll_interval)
+            continue
+        events = load_events_jsonl(str(ledger_path))
+        if len(events) > seen:
+            for end in range(seen + 1, len(events) + 1):
+                ledger = replay(events[:end])
+                event = events[end - 1]
+                obs_coding = score(ledger, categories=("product", "validation", "investigation"))
+                update = {
+                    "event_index": end - 1,
+                    "step": event.step,
+                    "event_type": event.event_type.value,
+                    "subtask_id": event.subtask_id,
+                    "timestamp": event.timestamp,
+                    "coding_progress": obs_coding.progress,
+                    "active_blocked_leaves": [s.id for s in queries.active_blocked_leaves(ledger)],
+                    "stalled_for_blocked": queries.stalled_for(ledger),
+                }
+                print(json.dumps(update, sort_keys=True))
+            seen = len(events)
+            sys.stdout.flush()
+        if target and seen >= target:
+            return 0
+        time.sleep(args.poll_interval)
+
+
+def _cmd_query(args: argparse.Namespace) -> int:
+    run_dir = _existing_run_dir(args.run_dir)
+    ledger_path = run_dir / "ledger.jsonl"
+    if not ledger_path.exists():
+        raise FileNotFoundError(f"{ledger_path} is required")
+    ledger = from_jsonl(str(ledger_path))
+
+    out: dict[str, Any] = {"run_dir": str(run_dir), "current_step": queries.current_step(ledger)}
+    if args.status == "blocked":
+        out["active_blocked_leaves"] = [_subtask_to_dict(s) for s in queries.active_blocked_leaves(ledger)]
+    if args.stalled_for is not None:
+        stalled = queries.stalled_for(ledger)
+        out["stalled_for_blocked"] = stalled
+        out["stalled_for_threshold"] = args.stalled_for
+        out["meets_threshold"] = stalled >= args.stalled_for
+    if args.reopens_since is not None:
+        out["reopens_since"] = [_event_to_dict(e) for e in queries.reopens_since(ledger, args.reopens_since)]
+    if args.newly_discovered_since is not None:
+        out["newly_discovered_since"] = [_subtask_to_dict(s) for s in queries.newly_discovered_since(ledger, args.newly_discovered_since)]
+    if args.last_validation_event:
+        event = queries.last_validation_event(ledger)
+        out["last_validation_event"] = _event_to_dict(event) if event else None
+
+    print(json.dumps(out, sort_keys=True))
+    return 0
+
+
+def _subtask_to_dict(subtask: Any) -> dict[str, Any]:
+    return {
+        "id": subtask.id,
+        "description": subtask.description,
+        "status": subtask.status.value,
+        "category": subtask.category.value,
+        "weight": subtask.weight,
+        "parent_id": subtask.parent_id,
+        "created_at_step": subtask.created_at_step,
+        "updated_at_step": subtask.updated_at_step,
+    }
+
+
+def _event_to_dict(event: Any) -> dict[str, Any]:
+    return {
+        "step": event.step,
+        "event_type": event.event_type.value,
+        "subtask_id": event.subtask_id,
+        "timestamp": event.timestamp,
+        "reason": event.reason,
+    }
 
 
 def missing_artifacts(run_dir: Path) -> list[str]:
