@@ -1258,7 +1258,7 @@ report cites which v3 leaf each revision touched and whether the gap closed
 ```
 
 ### M2. Define next direction (post-CRITIC_AUDIT pivot)
-Status: **REVISED** post-CRITIC_AUDIT. Original framing ("define next sample size for retrospective scale-out") is superseded. The right next direction is **live instrumentation (Workstream N)**, not a 100-trace retrospective batch. Concrete deliverable: a one-page memo at `runs/swe_agent_pilot/NEXT_DIRECTION_MEMO.md` that records the pivot, references `runs/swe_agent_pilot/CRITIC_AUDIT.md` § 4, and states the gating criterion ("proceed to N5 live N=20 only if N4 parity report shows live ↔ retrospective shape agreement within 0.05 on at least 2 instances"). Original M2 acceptance criteria (below) are preserved for reference but should not be executed without first revising the memo.
+Status: done — `runs/swe_agent_pilot/NEXT_DIRECTION_MEMO.md`. Pivot from retrospective scale-out to live instrumentation. Defines the eight forward deliverables (N1–N4, U1–U2, T1, V1) and a four-clause gating criterion for proceeding to live N=20 (parity within 0.05 on ≥2 instances; ≥1 K2 gap closed; no agent code changes; sidecar latency < 100ms/step). Cost-of-being-wrong table justifies the pivot's cheapness. Workstream R becomes meaningful only after N4 ships.
 
 Outputs:
 ```text
@@ -1304,28 +1304,7 @@ Goal: Wrap a live SWE-agent run so `LedgerEvent`s emit during execution (with re
 The new `LedgerSession.observe(...)` ergonomics (timestamps + clock override) and the new query API (Workstream U's consumer) make this much smaller than M1's "weeks of engineering" estimate.
 
 #### N1. Decide sidecar vs in-agent instrumentation
-Status: not started · **start here**
-
-Outputs:
-```text
-docs/LIVE_INSTRUMENTATION_DECISION.md
-```
-
-Decision criteria:
-```text
-sidecar:   parses agent stdout/JSONL events post-step. No agent code changes;
-           works for any agent that can `print(json.dumps({...}))`. Recommended.
-in-agent:  patch SWE-agent to call LedgerSession.add() / .complete() directly.
-           Higher fidelity, requires upstream PR or fork.
-```
-
-Recommendation (pre-walk): sidecar wins for portability. SWE-agent's trajectory format is JSONL-shaped already; the sidecar reads that stream as it grows.
-
-Acceptance:
-```text
-decision recorded with the chosen branch
-constraint list documented (e.g. "agent must emit one JSONL event per step")
-```
+Status: done — `docs/LIVE_INSTRUMENTATION_DECISION.md`. **Chosen branch: hybrid sidecar with stable wire-format protocol v1.0.** Agents emit JSONL (raw step records via `agent_step` field; or explicit ledger ops via `ledger_ops` field; or both). The sidecar applies `ledger_ops` verbatim when present, else runs a per-framework adapter's `infer_events()` heuristic. Two-tier fidelity, single code path, framework-agnostic — works for SWE-agent, Claude Code, LangGraph, OpenAI Assistants, custom RL, etc., as adopters write a ~50–150 line adapter module. Replay-safety is invariant (idempotent re-feed produces byte-identical ledger.jsonl). N2 acceptance criteria are explicitly enumerated in the decision doc § 8.
 
 #### N2. Build the live ledger sidecar
 Status: blocked on N1
