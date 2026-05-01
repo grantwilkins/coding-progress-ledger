@@ -691,7 +691,7 @@ Status: done — `runs/swe_agent_live/EVENT_OBSERVABILITY_MATRIX.md` (generated 
 Status: done — `runs/swe_agent_pilot/PITFALL8_SENSITIVITY.md`. Replay-computed scalar shifts confirm H4's predictions exactly: f_02/f_03 0.50→0.33, f_07/f_10 0.67→0.50 (Δ=−0.1667 each). Shape labels are **stable** across the shift provided W2 anchors `high_progress_failure` at threshold ≥ 0.70 and adopts the "no validation *attempted*" reading of `no_validation_frontier`. With those anchors, W2 may proceed against the current scalar values; the dominant tag for all four pilots is `stuck_loop`, derived from event patterns invariant to leaf-count denominators.
 
 #### W2. Add shape-level labels and reports
-Status: not started · _W4 cleared; threshold guidance: `high_progress_failure` ≥ 0.70, `no_validation_frontier` = "no validation attempted"_
+Status: done — `scripts/label_observation_shapes.py` + `datasets/swe_agent_pilot_shape_labels.csv` + `datasets/swe_agent_pilot_shape_report.md` + `tests/test_shape_labels.py` (11 tests). f_06 carries `high_progress_failure` + `hidden_work_gap`; s_04 carries `low_progress_success` + `submit_without_validation`; f_02/f_03 carry `stuck_loop`; s_03 carries `nonmonotone_recovery`. On the live N=20 batch every progress=1.0 run is definitively classified (no_validation_frontier, clean_success, or high_progress_failure — extending the original two-bucket acceptance to keep failures-with-validation from being silently treated as clean successes). 9/20 pilots clean_success; 6/20 stuck_loop; 4/20 submit_without_validation. Tags use the W4 anchors (`high_progress_failure` ≥ 0.70 and `no_validation_frontier` = "no validation attempted"). `scope_discovery_after_high_progress` is restricted to PRODUCT/INVESTIGATION adds *after* a REOPEN_SUBTASK to avoid firing on routine sequential annotation layout.
 
 Goal: Report stable qualitative shapes rather than relying on exact scalar progress. These are audit tags first, not training labels. **Operational urgency:** the live channel currently emits a progress scalar that is indistinguishable between successes and failures at the high end. Shape tags (`high_progress_failure`, `submit_without_validation`, `no_validation_frontier`, `hidden_work_gap`) are the live-queryable signal that distinguishes "done" from "submitted-without-test".
 
@@ -728,7 +728,7 @@ report warns that labels are audit tags, not final model targets yet
 ```
 
 #### W3. Build estimator checkpoint table
-Status: blocked on W2
+Status: not started · _W2 cleared_
 
 Goal: Create the table an estimator should consume. Keep raw event/step observation tables unchanged; this is a derived belief-state feature table.
 
@@ -961,9 +961,8 @@ Pilot phase A–M complete as of 2026-04-30 — see `runs/swe_agent_pilot/GO_NO_
 
 ## Minimal first batch (forward phase — current)
 
-N1–N6 ✓, W1 ✓, W4 ✓, U1+U2 ✓, T1 ✓. Remaining:
-- **W2** shape labels (W4 cleared; anchor `high_progress_failure` ≥ 0.70 and `no_validation_frontier` = "no validation attempted")
-- **W3** estimator checkpoint table (blocked on W2)
+N1–N6 ✓, W1 ✓, W2 ✓, W4 ✓, U1+U2 ✓, T1 ✓. Remaining:
+- **W3** estimator checkpoint table (W2 cleared; consume shape labels as label columns)
 - **T2 → T3 → T4 / T5** LedgerSet implementation (T1 ships the protocol; T2+ are the data-model + first-use code)
 - **V2** estimator stub recalibration on the N6 wallclock batch (the synthetic-clock data finally makes V1's columns physically informative; the time-ratio-vs-probability rename in V2 is now actionable)
 
