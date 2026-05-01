@@ -14,6 +14,11 @@ runs/swe_agent_pilot/*
 # Exception: GO_NO_GO_MEMO.md (M1) is a derived synthesis doc, no upstream content; commit it.
 !runs/swe_agent_pilot/GO_NO_GO_MEMO.md
 
+# H4 v3 cold-pass run dirs mirror source_trace.json (verbatim upstream).
+# Re-materialize via scripts/annotate_pilots_from_spec.py against
+# annotations/swe_agent_pilot_v3/.
+runs/swe_agent_pilot_v3/
+
 # Python
 __pycache__/
 *.pyc

@@ -1,0 +1,41 @@
+{
+  "pilot_id": "swe_agent_pilot_f_01",
+  "instance_id": "WIPACrepo__iceprod-339",
+  "root_task": "Remove or replace the getip.php request to the soon-to-be-decommissioned SL6 server",
+  "events": [
+    {"op": "add", "step": 2, "id": "S1", "category": "INVESTIGATION",
+     "description": "Locate the getip.php request in the repo"},
+    {"op": "complete", "step": 13, "id": "S1",
+     "evidence": [
+       "step 3: ls -F shows iceprod/ tests/ etc.",
+       "step 5: find_file 'getip.php' -- no matches (would only find files literally named getip.php)",
+       "step 7: grep -r 'getip.php' returns 3 hits: tests/core/functions_test.py (2 mock hits) and iceprod/core/functions.py (the live HTTP call)",
+       "step 9: open iceprod/core/functions.py confirms the file (493 lines)",
+       "step 11: search_file pinpoints line 274",
+       "step 13: goto 274 reveals 'resp = requests.get(http://simprod.icecube.wisc.edu/downloads/getip.php, timeout=1)' inside gethostname()"
+     ]},
+    {"op": "add", "step": 14, "id": "S2", "category": "PRODUCT",
+     "description": "Replace the getip.php request with an alternative lookup at functions.py:274"},
+    {"op": "complete", "step": 15, "id": "S2",
+     "evidence": [
+       "step 14: edit 274:274 substitutes 'https://ifconfig.me/ip' for the SL6 URL",
+       "step 15: tool confirms file updated -- line 274 now reads 'resp = requests.get(\\'https://ifconfig.me/ip\\', timeout=1)'"
+     ]},
+    {"op": "add", "step": 14, "id": "S3", "category": "VALIDATION",
+     "description": "Verify the replacement works (implicit per addendum Pitfall #8)"},
+    {"op": "add", "step": 16, "id": "S4", "category": "ARTIFACT",
+     "description": "Submit final patch"},
+    {"op": "complete", "step": 16, "id": "S4",
+     "evidence": ["step 16: agent issued submit"]}
+  ],
+  "quality": {
+    "annotator": "Opus subagent (Workstream H4 v3 cold pass under H3-revised protocol)",
+    "annotation_pass": "H4-v3",
+    "annotation_time_minutes": 25,
+    "number_of_uncertain_events": 1,
+    "number_of_evidence_gaps": 1,
+    "whether_final_success_used_only_at_end": true,
+    "whether_progress_forced": false,
+    "whether_schema_gap_found": false
+  }
+}

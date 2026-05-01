@@ -1,0 +1,32 @@
+{
+  "pilot_id": "swe_agent_pilot_f_03",
+  "instance_id": "asottile__setup-cfg-fmt-132",
+  "root_task": "Stop configparser from downcasing keys in unrelated sections like [tool:pytest]",
+  "events": [
+    {"op": "add", "step": 2, "id": "S1", "category": "INVESTIGATION",
+     "description": "Build a reproduction script that writes the offending [tool:pytest] section"},
+    {"op": "complete", "step": 9, "id": "S1",
+     "evidence": [
+       "step 2: create reproduce.py",
+       "step 4-5: edit fills 10 lines that build a ConfigParser with DJANGO_SETTINGS_MODULE and write it to test.ini",
+       "step 7: python reproduce.py prints 'INI file written.'",
+       "step 9: cat test.ini shows '[tool:pytest]' followed by lower-cased key (the issue's symptom is observable)"
+     ]},
+    {"op": "add", "step": 10, "id": "S2", "category": "INVESTIGATION",
+     "description": "Locate where setup-cfg-fmt drives configparser so the case-preservation fix can be wired in"},
+    {"op": "block", "step": 26, "id": "S2",
+     "reason": "stuck-loop per general protocol § 6 H3 rev 2: the cycle 'search_file configparser -> goto 156 -> search_file test.ini' starts at step 14 (1st), repeats at step 20 (2nd), and the third iteration begins at step 26 (third occurrence of the pattern-starting command 'search_file configparser setup_cfg_fmt.py'). The cycle continues identically through step 112 with no query variation and no new tool output. Latest visible step where the pattern persists: 112 (final assistant turn before harness-forced termination)."},
+    {"op": "add", "step": 26, "id": "S3", "category": "VALIDATION",
+     "description": "Verify the configparser case-preservation fix (implicit per addendum Pitfall #8)"}
+  ],
+  "quality": {
+    "annotator": "Opus subagent (Workstream H4 v3 cold pass under H3-revised protocol)",
+    "annotation_pass": "H4-v3",
+    "annotation_time_minutes": 30,
+    "number_of_uncertain_events": 1,
+    "number_of_evidence_gaps": 1,
+    "whether_final_success_used_only_at_end": true,
+    "whether_progress_forced": false,
+    "whether_schema_gap_found": false
+  }
+}
