@@ -305,6 +305,14 @@ def count_subtasks_created(events: list[dict[str, Any]]) -> int:
 
 
 def final_success_from_metadata(run_dir: Path, summary: dict[str, Any]) -> tuple[bool | None, str]:
+    # Authoritative upstream label, when an importer (e.g. C3) declared
+    # one. This must come BEFORE the test_output.txt heuristic because
+    # SWE-bench-style eval logs contain "passed"/"error"/"failed" tokens
+    # interleaved (warnings, stderr) that confuse the keyword scan.
+    md_fs, md_source = _final_success_from_source_metadata(run_dir)
+    if md_fs is not None:
+        return md_fs, md_source
+
     if isinstance(summary.get("final_success"), bool):
         return summary["final_success"], "summary.final_success"
     test_status = summary.get("test_status")
@@ -322,6 +330,28 @@ def final_success_from_metadata(run_dir: Path, summary: dict[str, Any]) -> tuple
         if "passed" in text or " ok" in text:
             return True, "inferred_from_test_output"
     return None, "absent"
+
+
+def _final_success_from_source_metadata(run_dir: Path) -> tuple[bool | None, str]:
+    """Return upstream-declared final_success when source_metadata.json
+    has it pinned by construction (final_success_source == "source_label").
+
+    This is what C3's SWE-agent importer writes; the framework treats
+    it as authoritative and short-circuits the test_output.txt heuristic.
+    """
+    md_path = run_dir / "source_metadata.json"
+    if not md_path.is_file():
+        return None, ""
+    try:
+        md = json.loads(md_path.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError):
+        return None, ""
+    if md.get("final_success_source") != "source_label":
+        return None, ""
+    fs = md.get("final_success")
+    if isinstance(fs, bool):
+        return fs, "source_metadata.target"
+    return None, ""
 
 
 def progress_row(events, step: int) -> dict[str, Any]:

@@ -132,31 +132,32 @@ by the trace** (a re-run repro showing the previous fix was insufficient,
 or a final edit happening after the last validation). The latter is
 the empirically grounded form.
 
-### 3.6 Final-success label divergence
+### 3.6 Final-success label divergence (RESOLVED post-F4)
 
-The dataset builder's `final_success` field for SWE-agent runs is
-**`inferred_from_test_output`** (the upstream `eval_logs` content
-written to `test_output.txt` by C3). For 3 of the 10 upstream
-successes (`s_03`, `s_06`, `s_09`), the builder's heuristic
-classifies them as failures despite the upstream `target` being
-`True` and the eval log presumably containing pass markers. The
-builder's heuristic was tuned on toy/live `pytest` output; SWE-agent's
-SWE-bench-style eval logs may format pass/fail markers
-differently.
+When this F4 doc was first written, the dataset builder's
+`final_success` field for SWE-agent runs was
+**`inferred_from_test_output`** — a heuristic keyword scan over
+`test_output.txt`. For 3 of the 10 upstream successes (`s_03`,
+`s_06`, `s_09`), the heuristic classified them as failures because
+SWE-bench eval logs interleave "passed", "error", and "failed"
+tokens (warnings, stderr) that fool a simple keyword scan tuned on
+toy/live `pytest` output.
 
-**Authoritative upstream label** for any analysis that depends on
-the truth of pass/fail is `source_metadata.json:final_success`
-(present in every run dir, populated by C3 from upstream `target`).
-The dataset builder's inferred label is a separate signal worth
-keeping but not interchangeable.
+**Fix (committed after F4):** `final_success_from_metadata` and
+`resolve_final_success` now short-circuit to
+`source_metadata.json:final_success` whenever
+`final_success_source == "source_label"` is present (which C3's
+SWE-agent importer always writes). The fix is source-agnostic: any
+future importer that pins an authoritative label gets the same
+short-circuit. Toy/live runs without a `source_metadata.json`
+continue to use the heuristic, behavior unchanged. Tests:
+`tests/test_resolve_final_success_source_metadata.py`.
 
-This is a real follow-up: the builder's `resolve_final_success`
-heuristic should be source-aware (via `source_metadata.json:source`,
-which equals `"swe_agent"` for our runs) and short-circuit to
-`source_metadata.json:final_success` when present. Tracked for a
-future commit; **not** patched in F4 because changing classification
-mid-stream would invalidate G's leave-one-run-out predictions before
-they're computed.
+After the fix, the smoke report
+(`datasets/swe_agent_pilot_completion_smoke_report.md`) shows the
+correct 10/10 upstream split. The high-progress failure count drops
+from 4 (3 misclassified + `f_06`) to **1** (`f_06` only). The
+low-progress success count stays at 1 (`s_04`).
 
 ## 4. Are SWE-agent traces "more diverse" than toy/live?
 
@@ -221,5 +222,6 @@ would mistakenly believe were universal:
   Workstream H needs to confirm the shape distribution is
   reproducible before treating these rates as ground-truth.
 - The `source_metadata.json:final_success` vs builder-inferred
-  `final_success` divergence (§ 3.6) is real and worth fixing
-  before G claims anything about prediction performance.
+  `final_success` divergence (§ 3.6) was a real bug; **fixed**
+  after F4 was first written, before G's metrics were taken as
+  final. See § 3.6.

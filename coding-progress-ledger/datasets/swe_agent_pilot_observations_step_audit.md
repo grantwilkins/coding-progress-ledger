@@ -59,9 +59,9 @@ Runs with multiple events at the same step: none
 
 ## Success / Progress Quadrants
 
-- Success + high progress: `swe_agent_pilot_s_01`, `swe_agent_pilot_s_02`, `swe_agent_pilot_s_05`, `swe_agent_pilot_s_07`, `swe_agent_pilot_s_08`, `swe_agent_pilot_s_10`
+- Success + high progress: `swe_agent_pilot_s_01`, `swe_agent_pilot_s_02`, `swe_agent_pilot_s_03`, `swe_agent_pilot_s_05`, `swe_agent_pilot_s_06`, `swe_agent_pilot_s_07`, `swe_agent_pilot_s_08`, `swe_agent_pilot_s_09`, `swe_agent_pilot_s_10`
 - Success + low progress: `swe_agent_pilot_s_04`
-- Failure + high progress: `swe_agent_pilot_f_06`, `swe_agent_pilot_f_09`, `swe_agent_pilot_s_03`, `swe_agent_pilot_s_06`, `swe_agent_pilot_s_09`
+- Failure + high progress: `swe_agent_pilot_f_06`, `swe_agent_pilot_f_09`
 - Failure + low progress: `swe_agent_pilot_f_01`, `swe_agent_pilot_f_02`, `swe_agent_pilot_f_03`, `swe_agent_pilot_f_04`, `swe_agent_pilot_f_05`, `swe_agent_pilot_f_07`, `swe_agent_pilot_f_08`, `swe_agent_pilot_f_10`
 - Unknown success: none
 

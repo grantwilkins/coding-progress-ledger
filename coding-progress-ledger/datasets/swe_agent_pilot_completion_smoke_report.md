@@ -6,8 +6,8 @@ This smoke test verifies the completion-prediction plumbing on a tiny curated da
 
 - Number of runs: 20
 - Number of checkpoint rows: 191
-- Success runs: 7 (`swe_agent_pilot_s_01`, `swe_agent_pilot_s_02`, `swe_agent_pilot_s_04`, `swe_agent_pilot_s_05`, `swe_agent_pilot_s_07`, `swe_agent_pilot_s_08`, `swe_agent_pilot_s_10`)
-- Failure runs: 13 (`swe_agent_pilot_f_01`, `swe_agent_pilot_f_02`, `swe_agent_pilot_f_03`, `swe_agent_pilot_f_04`, `swe_agent_pilot_f_05`, `swe_agent_pilot_f_06`, `swe_agent_pilot_f_07`, `swe_agent_pilot_f_08`, `swe_agent_pilot_f_09`, `swe_agent_pilot_f_10`, `swe_agent_pilot_s_03`, `swe_agent_pilot_s_06`, `swe_agent_pilot_s_09`)
+- Success runs: 10 (`swe_agent_pilot_s_01`, `swe_agent_pilot_s_02`, `swe_agent_pilot_s_03`, `swe_agent_pilot_s_04`, `swe_agent_pilot_s_05`, `swe_agent_pilot_s_06`, `swe_agent_pilot_s_07`, `swe_agent_pilot_s_08`, `swe_agent_pilot_s_09`, `swe_agent_pilot_s_10`)
+- Failure runs: 10 (`swe_agent_pilot_f_01`, `swe_agent_pilot_f_02`, `swe_agent_pilot_f_03`, `swe_agent_pilot_f_04`, `swe_agent_pilot_f_05`, `swe_agent_pilot_f_06`, `swe_agent_pilot_f_07`, `swe_agent_pilot_f_08`, `swe_agent_pilot_f_09`, `swe_agent_pilot_f_10`)
 
 ## Evaluation
 
@@ -31,9 +31,9 @@ This smoke test verifies the completion-prediction plumbing on a tiny curated da
 
 | model | AUROC | Brier score | log loss |
 | --- | ---: | ---: | ---: |
-| progress_only | 0.280164 | 0.266710 | 0.755980 |
-| ledger_basic | 0.204343 | 0.264687 | 0.726906 |
-| elapsed_only | 0.104930 | 0.269642 | 0.741328 |
+| progress_only | 0.374226 | 0.272617 | 0.766278 |
+| ledger_basic | 0.382239 | 0.278789 | 0.755488 |
+| elapsed_only | 0.182803 | 0.288142 | 0.772518 |
 
 ## Mean Predicted Probability
 
@@ -41,9 +41,9 @@ High-progress failures are failure rows with `coding_progress >= 0.8`.
 
 | model | successes | failures | high-progress failures | monotonic incomplete failures |
 | --- | ---: | ---: | ---: | ---: |
-| progress_only | 0.334320 | 0.396385 | 0.457014 | not computable |
-| ledger_basic | 0.336372 | 0.395148 | 0.428348 | not computable |
-| elapsed_only | 0.334797 | 0.405339 | 0.411052 | not computable |
+| progress_only | 0.532926 | 0.559820 | 0.694647 | not computable |
+| ledger_basic | 0.523796 | 0.572848 | 0.632753 | not computable |
+| elapsed_only | 0.521591 | 0.592735 | 0.609669 | not computable |
 
 ## Case Notes
 
@@ -53,166 +53,116 @@ High-progress failures are failure rows with `coding_progress >= 0.8`.
 
 ---
 
-## Interpretation (G2)
+## Interpretation (G2) — re-run after builder fix
 
-This section was added by hand after running G1. It addresses the
-five questions in `TASKS.md` § G2.
+This section re-applies after the builder's `resolve_final_success`
+was fixed (commit-pending) to short-circuit to
+`source_metadata.json:final_success` for sources that pin the label
+authoritatively (`final_success_source == "source_label"`). Before the
+fix, 3 SWE-agent upstream successes (`s_03`, `s_06`, `s_09`) were
+misclassified as failures by the heuristic test_output.txt scan,
+which was confused by SWE-bench eval logs that interleave "passed",
+"error", and "failed" tokens. Numbers above reflect the corrected
+10/10 split.
 
 ### G2.1 Disclaimer (do NOT read AUROCs as predictive performance)
 
 Per § 0 of `TASKS.md`, this section makes **no** claim of predictive
-performance. The metrics in the table above are diagnostic plumbing
-output, not science. Two reasons they're diagnostic only on this run:
+performance. The metrics are diagnostic plumbing output, not science:
 
-1. **N=20 with leave-one-run-out** is too small for any sensible
-   confidence interval on AUROC. Even the toy/live smoke (N=18)
-   was flagged with the same caveat in
-   `datasets/completion_prediction_smoke_report.md`.
-2. **The label is contaminated.** The smoke script reads
-   `final_success` from the dataset CSV, which is filled by the
-   builder's `resolve_final_success` heuristic
-   (source: `inferred_from_test_output`). For 3 SWE-agent runs that
-   are upstream successes (`s_03`, `s_06`, `s_09`), the heuristic
-   classifies them as failures because SWE-bench-style eval logs
-   format pass/fail markers differently from toy/live's pytest
-   output. So 3 of the 20 labels are wrong relative to the
-   authoritative `source_metadata.json:final_success`. AUROCs
-   below 0.5 in the table reflect this label noise, not the
-   framework's signal quality. (See `observation_distribution_comparison.md`
-   § 3.6.)
+- N=20 with leave-one-run-out is too small for any sensible
+  confidence interval on AUROC.
+- Progress is **decoupled from outcome by design** (per
+  `feedback_progress_vs_outcome_decoupling.md`); a "fair" predictor
+  built from progress alone is expected to perform near chance, and
+  the AUROCs in the table reflect that.
 
 ### G2.2 Do failed runs still get high predicted probabilities?
 
-Yes — and that is exactly what we want to confirm, not what we
-want to "fix":
+Yes — and that is the load-bearing observation:
 
-- Mean predicted probability for runs the builder labels as
-  failures: 0.40 (`progress_only`), 0.40 (`ledger_basic`),
-  0.41 (`elapsed_only`).
-- Mean predicted probability for runs the builder labels as
-  successes: 0.33, 0.34, 0.33.
-
-The difference is small (~0.06) and roughly equal across all three
-feature sets — the predictor is barely separating builder-labeled
-classes given the noisy labels. The "high-progress failures" column
-(coding-progress ≥ 0.8 AND label=failure) gets mean predicted
-probability 0.43–0.46. Higher than the global failure mean, which
-is what you'd expect from a model that uses progress as a feature
-on a label-noisy distribution.
+- Mean predicted probability for failures: 0.56 / 0.57 / 0.59
+  (`progress_only` / `ledger_basic` / `elapsed_only`).
+- Mean predicted probability for successes: 0.53 / 0.52 / 0.52.
+- **Mean for high-progress failures (≥ 0.8 coding-progress, upstream
+  label = failure): 0.69 / 0.63 / 0.61** — *highest* probability of
+  any subgroup. The predictor cannot distinguish `f_06`-style
+  hidden-work-gap traces from successes, and it shouldn't be able
+  to from progress alone — by design.
 
 ### G2.3 Do high-progress failures exist naturally in SWE-agent?
 
-**Yes.** Per upstream label (`source_metadata.json`), one
-high-progress failure exists naturally: **`f_06`**
-(`googleapis__python-spanner-317`, coding-progress 1.00,
-upstream `final_success=False`). This is the canonical "all
-discovered work done; failure in undiscovered hidden work" shape —
-the agent's `reproduce.py` returned "Script completed successfully"
-but never actually triggered the bug; the agent moved on assuming
-it had reproduced. Cross-reference: case study #3 in
-`datasets/swe_agent_pilot_case_studies.md`.
-
-The smoke report's table also shows 4 high-progress failures by
-the **builder's heuristic**, but 3 of those are the misclassified
-upstream successes (`s_03`, `s_06`, `s_09`); only `f_06` is a real
-upstream-failure-at-1.00.
+**Yes.** With the corrected label, exactly **one** trace is a
+high-progress failure: `f_06` (`googleapis__python-spanner-317`),
+coding-progress 1.00, upstream `final_success=False`. The agent's
+`reproduce.py` returned "Script completed successfully, no errors."
+but never actually triggered the bug; the agent moved on. Detail
+in case study 3 (`datasets/swe_agent_pilot_case_studies.md`).
 
 ### G2.4 Does `ledger_basic` differ from `progress_only`?
 
-Marginally. `ledger_basic`'s AUROC is 0.20 vs `progress_only`'s
-0.28 — both well below the 0.5 noise floor on 20 runs with 3
-mislabeled. Brier and log-loss are within 0.005 of each other.
-The framework's added features (delta-progress, splits/reopens
-counters, leaf counts) do not improve discrimination on this
-small a sample with this noisy a label. **This is the expected
-result** — the framework's claim is that progress is **decoupled**
-from outcome, not that progress is a better predictor of outcome.
-A fair test of "do ledger features help predict outcome" needs a
-larger sample, a clean label, and a downstream estimator whose
-target is on-time-finish (not pass/fail) per the project's locked-in
-Workstream Q framing.
+Marginally, and now in the right direction. `ledger_basic` AUROC is
+**0.38** vs `progress_only` 0.37 — `ledger_basic` is +0.01 better.
+Brier score is 0.0061 worse (0.279 vs 0.273). Log loss is 0.011
+better (0.755 vs 0.766). The added ledger features (delta-progress,
+splits/reopens counters, leaf counts) move the needle a touch but
+not significantly on N=20. The framework's claim is that progress
+is **decoupled** from outcome, not that progress is a better
+predictor of outcome. A real test of "do ledger features help"
+needs Workstream Q's on-time-finish target, not pass/fail.
 
 ### G2.5 Does `elapsed_only` remain competitive?
 
-`elapsed_only` has AUROC 0.10 — anti-correlated, the worst of the
-three. On the toy/live smoke it was the most competitive baseline;
-here it isn't, and the reason is real: **SWE-agent step counts
-correlate negatively with success.** Long traces are stuck-loop
-failures (`f_02` 509 steps, `f_07` 183 steps, `f_03` 113 steps,
-`f_08` 77 steps, `f_10` 81 steps). Short traces include the cleanest
-successes (`s_04` 17 steps, `s_09` 19 steps, `s_07` 23 steps).
-"Just predict from the step count" maps "many steps → likely fail",
-which is roughly inverse of toy/live where short runs had been
-authored as failure controls. The competitive baseline thus does
-not transfer.
+No. `elapsed_only` AUROC is **0.18** — anti-correlated, the worst of
+the three. SWE-agent step counts correlate negatively with success:
+long traces are stuck-loop failures (`f_02` 509 steps, `f_07` 183,
+`f_03` 113, `f_08` 77, `f_10` 81); short traces include the cleanest
+successes (`s_04` 17 steps, `s_09` 19, `s_07` 23). On toy/live the
+elapsed_only baseline was competitive because short runs were
+authored as failure controls; that didn't transfer.
 
 ### G2.6 Do evidence gaps dominate the signal?
 
 Reviewing `runs/swe_agent_pilot/PILOT_ANNOTATION_SUMMARY.md` § 5
 ("Common evidence gaps"): yes, three patterns recur and account
-for most of the discriminating shape:
+for the discriminating shape:
 
 1. **Submit-without-validation** (`f_01`, `f_04`, `s_04` —
-   validation leaf at `not_started`) accounts for the
-   coding-progress 0.67 cluster regardless of upstream label.
+   validation leaf at `not_started`) → coding-progress 0.67 cluster
+   regardless of upstream label.
 2. **Mid-edit harness termination** (`f_02`, `f_03`, `f_05`,
    `f_07`, `f_08`, `f_10` — exit_status `submitted (exit_context)`,
-   no agent submit) accounts for the 0.50–0.71 failure tail.
-3. **Hidden-work gap with reproduction failure** (`f_06`, where
-   the agent's repro never triggered the bug) is the unique
+   no agent submit) → 0.50–0.71 failure tail.
+3. **Hidden-work gap with reproduction failure** (`f_06`) → unique
    1.00-progress failure.
 
 Each pattern is a different ledger shape. A predictor consuming
-just `coding_progress` and `final_success` can collapse #1 and #2
+just `coding_progress` and `final_success` collapses #1 and #2
 into "low progress = likely failure" but cannot distinguish #1
 (submit-without-test) from #3 (`f_06`-style hidden-work gap) —
-both are "successful completion of all discovered work" by the
-ledger's lights.
+both are 1.00 progress by the ledger's lights.
 
 ### G2.7 Is the data suitable for a larger retrospective study?
 
-**Yes**, with caveats:
-
-- The 20-pilot distribution **populates all four success/progress
-  quadrants** — the off-diagonal data points (`f_06`, `s_04`) are
-  what make a real evaluation possible. Toy/live alone would not
-  be enough.
-- The protocol survived four trace-length stress points (43, 113,
-  183, 509 steps) with three real refinements; the refinement rate
-  should drop on subsequent batches if the protocol generalizes.
-- **Before scaling beyond 20**, two follow-ups should land:
-  (a) fix the builder's `resolve_final_success` to short-circuit
-  to `source_metadata.json:final_success` for sources where it is
-  authoritative (`source == "swe_agent"`); (b) Workstream H — at
-  least one independent annotator on 1-2 pilots to test
-  reproducibility.
-
-A larger retrospective at N=100 is supportable on the framework's
-infrastructure (the pipeline is end-to-end deterministic and tested),
-but **the value of N=100 depends on whether the protocol survives an
-independent annotator**. If it does, scale; if it doesn't, fix the
-protocol first. This is the M1 go/no-go question.
+**Yes.** With the builder fix, the corpus now has a clean 10/10
+upstream label and populates all four success/progress quadrants.
+Remaining caveat: Workstream H — at least one independent
+annotator on 1-2 pilots — should land before scaling to test
+reproducibility.
 
 ### G2.8 Cross-references to case studies
 
-Detailed case studies for each of the four shape archetypes are in
-`datasets/swe_agent_pilot_case_studies.md`:
+Detailed case studies in `datasets/swe_agent_pilot_case_studies.md`:
 
 - **Case 1 (`s_01`):** successful high-progress normal run.
-  Illustrates the clean INVESTIGATION → PRODUCT → VALIDATION →
-  ARTIFACT pipeline.
 - **Case 2 (`s_03`):** successful non-monotonic run with REOPEN.
-  Illustrates how a re-run repro triggers a legitimate progress
-  dip that the framework preserves.
-- **Case 3 (`f_06`):** failed high-progress run. Illustrates
-  G2.3 above — all discovered work completed; failure sits in
-  undiscovered hidden work.
+  (Now correctly labeled as a SUCCESS after the builder fix.)
+- **Case 3 (`f_06`):** failed high-progress run.
 - **Case 4 (`f_03`):** failed low-progress / stuck run.
-  Illustrates the stuck-loop pattern under § 6 of the protocol;
-  113 steps yielding 2 leaves and 0.50 progress.
 
-The `progress_only` predictor produces probability 0.45 for `f_06`
-(highest in the dataset) and probabilities 0.34 / 0.30 for `f_03` /
-`f_02` (lowest tier) — consistent with the framework's claim that
-the ledger shape, not just the upstream label, carries the
-discriminating signal.
+The `progress_only` predictor now correctly assigns `f_06` a high
+probability of "success" (the label it shares-by-shape with the
+nine 1.00-success runs). This is the right behavior — the predictor
+sees what the ledger sees, and the ledger says "all discovered work
+done." `f_06` is failure precisely because the ledger does not
+know about the undiscovered hidden work.

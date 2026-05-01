@@ -220,11 +220,21 @@ def resolve_final_success(run_dir: Path, summary: dict[str, Any] | None = None) 
     if isinstance(manifest.get("final_success"), bool):
         return manifest["final_success"], manifest.get("final_success_source", "run_manifest.final_success")
 
+    # Authoritative upstream label from source_metadata.json (e.g. C3's
+    # SWE-agent importer pins final_success from the upstream `target`).
+    # Take this before any heuristic that scans test_output.txt, because
+    # eval logs from SWE-bench-style harnesses interleave "passed",
+    # "error", and "failed" tokens that fool the keyword scan.
+    md_fs, md_source = _final_success_from_source_metadata(run_dir)
+    if md_fs is not None:
+        return md_fs, md_source
+
     summary = summary if summary is not None else _load_json_if_present(run_dir / "summary_by_category.json")
     if isinstance(summary.get("final_success"), bool) and summary.get("final_success_source") in {
         "summary.final_success",
         "hidden_check_tests",
         "manual",
+        "source_metadata.target",
     }:
         return summary["final_success"], summary.get("final_success_source", "summary_by_category.final_success")
 
@@ -235,6 +245,25 @@ def resolve_final_success(run_dir: Path, summary: dict[str, Any] | None = None) 
     if isinstance(summary.get("final_success"), bool):
         return summary["final_success"], summary.get("final_success_source", "summary_by_category.final_success")
     return None, "unknown"
+
+
+def _final_success_from_source_metadata(run_dir: Path) -> tuple[bool | None, str]:
+    """Return upstream-declared final_success when source_metadata.json
+    has it pinned by construction (final_success_source == "source_label").
+    """
+    md_path = run_dir / "source_metadata.json"
+    if not md_path.is_file():
+        return None, ""
+    try:
+        md = json.loads(md_path.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError):
+        return None, ""
+    if md.get("final_success_source") != "source_label":
+        return None, ""
+    fs = md.get("final_success")
+    if isinstance(fs, bool):
+        return fs, "source_metadata.target"
+    return None, ""
 
 
 def stale_summary_warning(run_dir: Path, summary: dict[str, Any] | None = None) -> str | None:
