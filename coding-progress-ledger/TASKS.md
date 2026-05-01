@@ -728,7 +728,7 @@ report warns that labels are audit tags, not final model targets yet
 ```
 
 #### W3. Build estimator checkpoint table
-Status: not started · _W2 cleared_
+Status: done — `scripts/build_estimator_checkpoints.py` + `datasets/swe_agent_estimator_checkpoints.csv` (191 rows, 20 runs, matches step-table cardinality 1:1) + `datasets/swe_agent_estimator_checkpoints_summary.md` + `tests/test_estimator_checkpoints.py` (13 tests). All seven W3 feature groups present; label columns prefixed `label_*` so trainers can drop them by schema. No future leakage (verified by replaying reopens up to each checkpoint and confirming `largest_progress_drop_so_far` is monotone non-decreasing per run). Legacy retrospective ledgers without timestamps are supported (the pilot is the canonical legacy dataset). `success_by_horizon` defaults to 30 steps.
 
 Goal: Create the table an estimator should consume. Keep raw event/step observation tables unchanged; this is a derived belief-state feature table.
 
@@ -789,7 +789,7 @@ P4. Report whether failure shape is more about instance difficulty or about scaf
 ```
 
 ### § Workstream Q — Predictive modeling pass
-Status: not started · _blocked on W3; final-success prediction stays deferred_
+Status: not started · _W3 cleared; final-success prediction stays deferred until Q1–Q5 land_
 
 Goal: Move beyond the old smoke test by predicting observation-channel dynamics before predicting final success. The first useful targets are about future visible-work behavior: drops, reopens, validation surprises, stuck states, and submit-without-validation. Final success classification remains downstream and noisier.
 
@@ -961,10 +961,10 @@ Pilot phase A–M complete as of 2026-04-30 — see `runs/swe_agent_pilot/GO_NO_
 
 ## Minimal first batch (forward phase — current)
 
-N1–N6 ✓, W1 ✓, W2 ✓, W4 ✓, U1+U2 ✓, T1 ✓. Remaining:
-- **W3** estimator checkpoint table (W2 cleared; consume shape labels as label columns)
+N1–N6 ✓, W1 ✓, W2 ✓, W3 ✓, W4 ✓, U1+U2 ✓, T1 ✓. **Workstream W is complete.** Remaining:
 - **T2 → T3 → T4 / T5** LedgerSet implementation (T1 ships the protocol; T2+ are the data-model + first-use code)
 - **V2** estimator stub recalibration on the N6 wallclock batch (the synthetic-clock data finally makes V1's columns physically informative; the time-ratio-vs-probability rename in V2 is now actionable)
+- **Q** predictive modeling pass (now unblocked: W3 is the estimator checkpoint table)
 
 Do not start Q modeling until W3 exists. Treat the live N=20 progress scalar as untrustworthy for outcome questions until W2's shape labels ship — see `runs/swe_agent_live/PARITY_REPORT.md`.
 
