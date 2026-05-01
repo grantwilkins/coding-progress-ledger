@@ -1072,7 +1072,7 @@ legacy old runs exempted via path filter, not by silently passing
 ## § Workstream K — Evidence quality
 
 ### K1. Evidence availability audit
-Status: not started
+Status: done — `runs/swe_agent_pilot/EVIDENCE_AUDIT.md` (+ `.json`). Script `scripts/audit_pilot_evidence.py` reuses `rescore_suite_by_category.py`'s classifier on the 20 SWE-agent pilots. Across 81 completion events: **51 strong (63%) / 30 manual-only (37%)**. Per category: PRODUCT 24 audited / 20 weak (83%); VALIDATION 12 / 1 (8%); INVESTIGATION 31 / 1 (3%). Most "weak" PRODUCT completions are short edit-acks that don't match stdout/test-output heuristics; K2 proposes a cheap classifier extension that closes ~60% of those without re-annotation. Weak evidence is a signal, not a replay failure.
 
 Goal: Quantify weak vs strong evidence on the new annotations using the existing classifier.
 
@@ -1103,7 +1103,7 @@ weak evidence is NOT treated as replay failure (it's a known signal, not a bug)
 Invariant tests: `tests/test_pilot_evidence_audit.py` locks in row decomposition, totals = sum-over-pilots, classifier fallback semantics, STRONG_EVIDENCE_TYPES scope, and CODING_CATEGORIES exclusion of ARTIFACT/DOCUMENTATION.
 
 ### K2. Source trace evidence-gap report
-Status: not started
+Status: done — `runs/swe_agent_pilot/SOURCE_EVIDENCE_GAPS.md`. Classifies each evidence-source gap as recoverable retrospectively / closed by live instrumentation / structurally unrecoverable. Headline finding: ~60% of K1's `manual_note` completions can be closed by extending the classifier with a `tool_action` strong-evidence type (~30 min, no re-annotation). Live instrumentation (Workstream N) is justified primarily for closing hidden-work-gap visibility (`f_06`-style), agent-vs-harness submit provenance (6 pilots), and pre-fix baseline test runs (none captured in the source).
 
 Goal: What would live instrumentation need to capture that retrospective annotation can't reconstruct?
 
