@@ -1182,38 +1182,36 @@ table renders as proper markdown
 ## § Workstream M — SWE-agent scale-up decision
 
 ### M1. Write go/no-go memo
-Status: not started
+Status: done — `runs/swe_agent_pilot/GO_NO_GO_MEMO.md`. Recommendation: **scale retrospective to 100 traces, gated on a 5-pilot re-annotation under the H3-revised protocol that closes the `f_01` conclusion gap (new task H4 below); defer live instrumentation (N) to the next go/no-go.** Memo synthesizes A–H artifacts; cost-of-being-wrong table quantifies each alternative path. The H4 gate is what makes the recommendation cheap to be wrong about: ~3 h of re-annotation buys an empirical answer to the single methodology gap H surfaced (the implicit-validation rule, `f_01` 0.67 vs 1.00).
+
+### H4. Re-test H3 protocol revisions on the 5 H pilots (gate to M2 / scale)
+Status: not started · _gate introduced by M1; blocks M2 if "scale" is the chosen path_
+
+Goal: Empirically test whether the HIGH-severity H3 revision (bug-fix tasks always carry implicit validation work) closes the `f_01` 0.67-vs-1.00 disagreement, and whether the LOW-severity revisions close the `f_03` step-count and `s_03` `__init__.py` ENVIRONMENT-vs-PRODUCT gaps.
+
+Inputs:
+```text
+docs/SWE_AGENT_ANNOTATION_PROTOCOL_REVISIONS.md   # the three revisions
+docs/SWE_AGENT_RETROSPECTIVE_LEDGER_PROTOCOL.md   # already updated in commit 2656391
+annotations/swe_agent_pilot_v2/                   # H pass under pre-revision protocol
+```
 
 Outputs:
 ```text
-runs/swe_agent_pilot/GO_NO_GO_MEMO.md
-```
-
-Answer in order:
-```text
-Did the ledger schema represent real SWE-agent traces?
-Was retrospective annotation feasible?
-Were evidence gaps tolerable?
-Did failed traces provide useful diversity?
-Did high-progress failures appear?
-Did native category annotation work?
-Did smoke prediction plumbing still work?
-Should we scale to 100 traces?
-Should we instead instrument live SWE-agent runs?
+annotations/swe_agent_pilot_v3/                    # cold-pass under post-revision protocol
+runs/swe_agent_pilot_reannotation/H4_GATE_RESULT.md
 ```
 
 Acceptance:
 ```text
-memo gives ONE recommendation:
-  scale retrospective
-  collect live instrumented traces
-  revise schema/protocol
-  pause
-memo states the cost of being wrong about the recommendation
+re-annotate s_01, s_03, f_01, f_06, f_03 under the v3-revised protocol
+gate pass: f_01 produces the same conclusion (final coding-progress within 0.05) in v3 vs both v1 and v2 readings under the new implicit-validation rule
+gate fail: H3 revisions are insufficient; do NOT proceed to M2 scale; re-open H3
+report cites which v3 leaf each revision touched and whether the gap closed
 ```
 
 ### M2. Define next sample size
-Status: not started
+Status: blocked on H4
 
 Outputs:
 ```text

@@ -11,6 +11,8 @@ runs/swe_agent_pilot/*
 # Exception: PILOT_ANNOTATION_SUMMARY.md is a derived statistical doc,
 # no upstream content; commit it.
 !runs/swe_agent_pilot/PILOT_ANNOTATION_SUMMARY.md
+# Exception: GO_NO_GO_MEMO.md (M1) is a derived synthesis doc, no upstream content; commit it.
+!runs/swe_agent_pilot/GO_NO_GO_MEMO.md
 
 # Python
 __pycache__/
