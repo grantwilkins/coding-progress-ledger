@@ -873,7 +873,7 @@ The framework currently models progress within one task / one trace. Real long-r
 **Rejected alternatives.** (1) *Make `Ledger` itself recursive (a ledger may contain ledgers)* — overloads `Subtask` semantics and forces scoring to traverse mixed leaf / sub-ledger trees. (2) *Track sets only as a CSV manifest with no runtime type* — pushes aggregation policy into ad-hoc scripts and loses replay / serialization parity with `Ledger`.
 
 ### T1. Write general LedgerSet protocol doc
-Status: not started
+Status: done — `docs/LEDGER_SET_PROTOCOL.md`.
 
 Goal: Source-agnostic protocol covering the data model, aggregation rule, and what is explicitly out of scope (DAGs, time windows, cross-member evidence).
 
