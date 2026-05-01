@@ -967,7 +967,7 @@ if changes needed: list MINIMAL changes, ranked by severity
 ## § Workstream I — Schema-gap review
 
 ### I1. Collect schema gaps from run notes
-Status: not started
+Status: done — `scripts/collect_schema_gaps.py` walks the 20 pilot run dirs, parses § 8 of each `run_notes.md`, and cross-references `whether_schema_gap_found` from `annotation_quality.json`. Output at `runs/swe_agent_pilot/SCHEMA_GAPS.md`: 2 pilots flagged (`f_02`, `f_07`), 18 explicitly None. Three cross-workstream findings appended (v1's inconsistent Pitfall #8, J1's mixed/native discrepancy, the resolved `final_success` heuristic). Tests at `tests/test_collect_schema_gaps.py` (12 tests) lock in the collector invariants and the core-enum value sets the I2 decision depends on.
 
 Outputs:
 ```text
@@ -1000,7 +1000,7 @@ each carries severity: blocker / annoying / note
 ```
 
 ### I2. Decide no-change vs schema-change
-Status: not started
+Status: done — `runs/swe_agent_pilot/SCHEMA_DECISION.md`. **Outcome: No schema change needed for pilot. Only annotation protocol changes needed — already landed.** All 5 pilot-surfaced findings are protocol-text refinements (general § 6, addendum § 5 / § 1) or pipeline / heuristic fixes; none touch `ledger_progress/core.py`. Status / EventType / SubtaskCategory enum value sets unchanged since pilot start (verified by I1's invariant tests). Compatible with M1 + H4 follow-up.
 
 Outputs:
 ```text
