@@ -671,11 +671,7 @@ Goal: Once live agents (Workstream N) emit timestamps, add wall-clock-aware feat
 Status: done — `scripts/build_ledger_observation_dataset.py` extends `DATASET_FIELDS` with `elapsed_seconds`, `seconds_since_last_event`, `seconds_since_progress_increase`, and `events_per_minute` (5-event rolling window). Step rows recompute `seconds_since_last_event` and `seconds_since_progress_increase` at step granularity using the retained event timestamps. Empty string on legacy step-only ledgers; populated on live N=20 batch. Test: `tests/test_ledger_observation_dataset.py::test_wall_clock_columns_null_on_legacy_populated_on_timestamped`.
 
 #### V2. Deadline-aware estimator stub
-Status: done — `ledger_progress/estimators.py:p_finish_by(ledger, deadline, categories=CODING)` and `tests/test_estimators.py` (7 tests). Linear extrapolation from observed progress velocity. Stub, not calibrated; downstream W/Q is meant to swap the body.
-
-**Known issue (TODO before W/Q consume):** the return value is dimensionally a time ratio, not a probability. Either rename to `fraction_of_time_to_finish_remaining` (and let callers map to a probability) or replace the body with an actual calibrated predictor. Do not let this stub be cited as a probability in any downstream report.
-
-**Cannot be calibrated until N6 ships:** the wall-clock columns V1 produces on the current live N=20 are microsecond-scale (replay-time, not real wall-clock). Any probability calibration on this data would be meaningless.
+Status: done — `ledger_progress/estimators.py:fraction_of_time_to_finish_remaining(ledger, deadline, categories=CODING)` and `tests/test_estimators.py` (8 tests). Linear extrapolation from observed progress velocity. The function is renamed and re-documented as a **time ratio**, not a probability: callers that want a probability must supply their own calibration. The new test exercises the rename on the N6 synthetic-clock wallclock batch (every run returns a value in [0.0, 1.0] for an after-finish deadline). No backwards-compatibility alias kept; downstream W/Q must consume the new name.
 
 ### § Workstream W — Observation-channel sharpening
 Status: **NEW current priority** (post-handoff critique). The critical-path workstream. Until W2 ships, the live channel's primary scalar (`coding_progress`) is systematically over-optimistic for failures (live reads ~1.0 whether agent succeeded or botched — see N4 PARITY_REPORT). Shape labels are the operational fix.
@@ -961,9 +957,8 @@ Pilot phase A–M complete as of 2026-04-30 — see `runs/swe_agent_pilot/GO_NO_
 
 ## Minimal first batch (forward phase — current)
 
-N1–N6 ✓, W1 ✓, W2 ✓, W3 ✓, W4 ✓, U1+U2 ✓, T1 ✓. **Workstream W is complete.** Remaining:
+N1–N6 ✓, W1 ✓, W2 ✓, W3 ✓, W4 ✓, U1+U2 ✓, V1 ✓, V2 ✓, T1 ✓. **Workstream W is complete.** Remaining:
 - **T2 → T3 → T4 / T5** LedgerSet implementation (T1 ships the protocol; T2+ are the data-model + first-use code)
-- **V2** estimator stub recalibration on the N6 wallclock batch (the synthetic-clock data finally makes V1's columns physically informative; the time-ratio-vs-probability rename in V2 is now actionable)
 - **Q** predictive modeling pass (now unblocked: W3 is the estimator checkpoint table)
 
 Do not start Q modeling until W3 exists. Treat the live N=20 progress scalar as untrustworthy for outcome questions until W2's shape labels ship — see `runs/swe_agent_live/PARITY_REPORT.md`.

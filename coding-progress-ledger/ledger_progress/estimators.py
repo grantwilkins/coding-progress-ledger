@@ -1,11 +1,21 @@
 """Deadline-aware completion estimator stubs.
 
-`p_finish_by` projects whether a ledger will reach progress=1.0 by a given
-deadline using a naive linear extrapolation from observed progress velocity.
-This is a documented stub, not a calibrated predictor: it assumes the
-observed progress rate will continue unchanged. Use it to give downstream
-code (Workstream W/Q) a callable shape, then replace the body once a real
-model exists.
+`fraction_of_time_to_finish_remaining` projects, under a naive linear
+extrapolation from observed progress velocity, what fraction of the time
+needed to reach progress=1.0 is available before a given deadline. The
+return is dimensionally a *time ratio*, **not a probability**: callers
+that want a probability must supply their own calibration.
+
+Returns:
+- 1.0 when the projected finish fits before the deadline (or the ledger
+  is already complete).
+- 0.0 when there are no timestamps yet, no progress yet, or the deadline
+  is in the past.
+- Otherwise, `seconds_until_deadline / seconds_to_finish` ∈ (0, 1).
+
+This is a documented stub: the assumption that observed progress rate
+will continue is rarely true on real agent runs. Replace the body with a
+calibrated predictor before citing the value as a probability anywhere.
 """
 from __future__ import annotations
 
@@ -19,21 +29,15 @@ from .scoring import score
 CODING = (SubtaskCategory.PRODUCT, SubtaskCategory.VALIDATION, SubtaskCategory.INVESTIGATION)
 
 
-def p_finish_by(
+def fraction_of_time_to_finish_remaining(
     ledger: Ledger,
     deadline: str | datetime,
     categories: Iterable[SubtaskCategory | str] | None = CODING,
 ) -> float:
-    """Probability the ledger reaches progress=1.0 by `deadline`.
+    """Time-budget ratio for reaching progress=1.0 by `deadline`.
 
-    Returns 1.0 if already at progress=1.0. Returns 0.0 if no timestamps,
-    no progress yet, or the projected finish is past the deadline.
-    Otherwise returns a triangular falloff between (now, projected_finish).
-
-    Assumptions:
-    - Progress accrues at the average rate observed so far.
-    - Deadline is in UTC ISO 8601 if passed as a string.
-    - This is a stub; not predictive without calibration.
+    See module docstring. Returns a value in [0.0, 1.0]; this is a time
+    ratio, not a probability.
     """
     deadline_dt = deadline if isinstance(deadline, datetime) else datetime.fromisoformat(deadline)
     timestamps = [datetime.fromisoformat(e.timestamp) for e in ledger.events if e.timestamp]
