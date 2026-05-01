@@ -1,0 +1,13 @@
+
+diff --git a/dataclasses_json/core.py b/dataclasses_json/core.py
+index 529e153..7bc04bf 100644
+--- a/dataclasses_json/core.py
++++ b/dataclasses_json/core.py
+@@ -363,6 +363,6 @@ def _asdict(obj, encode_json=False):
+                     obj.items())
+     elif isinstance(obj, Collection) and not isinstance(obj, str) \
+             and not isinstance(obj, bytes):
+-        return list(_asdict(v, encode_json=encode_json) for v in obj)
++        return [_asdict(v, encode_json=encode_json) if not isinstance(v, Enum) else v.value for v in obj]
+     else:
+         return copy.deepcopy(obj)

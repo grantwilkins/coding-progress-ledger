@@ -1,0 +1,14 @@
+
+diff --git a/google/cloud/spanner_dbapi/parse_utils.py b/google/cloud/spanner_dbapi/parse_utils.py
+index 0a7d505..e8df907 100644
+--- a/google/cloud/spanner_dbapi/parse_utils.py
++++ b/google/cloud/spanner_dbapi/parse_utils.py
+@@ -524,7 +524,7 @@ def cast_for_spanner(value):
+     :returns: The value converted to a Cloud Spanner type.
+     """
+     if isinstance(value, decimal.Decimal):
+-        return str(value)
++        return spanner.param_types.NUMERIC(value)
+     return value
+ 
+ 

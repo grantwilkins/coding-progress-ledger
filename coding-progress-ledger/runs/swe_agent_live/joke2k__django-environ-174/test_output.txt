@@ -1,0 +1,168 @@
+Will execute following command for apply_patch:
+```
+
+cd //django-environ &&
+source activate base &&
+conda activate django-environ &&
+git apply -v /swebench_matterhorn/prediction_patch.patch --allow-empty
+```
+
+Checking patch environ/environ.py...
+Applied patch environ/environ.py cleanly.
+Will execute following command for apply_patch:
+```
+
+cd //django-environ &&
+source activate base &&
+conda activate django-environ &&
+git restore environ/test.py &&
+git apply -v /swebench_matterhorn/test_patch.patch --allow-empty
+```
+
+Checking patch environ/test.py...
+Checking patch environ/test_env.txt...
+Applied patch environ/test.py cleanly.
+Applied patch environ/test_env.txt cleanly.
+___ENVIRONMENT_SET_UP_PATCH_APPLIED___
+2024-10-20 19:19:27,530 - root - INFO - Will run the following test command
+2024-10-20 19:19:27,530 - root - INFO - 
+```
+cd //django-environ &&
+source activate base &&
+conda activate django-environ &&
+pytest --no-header -rA --tb=no  -p no:cacheprovider -W ignore::DeprecationWarning environ/test.py
+```
+Will execute following command for run_tests:
+```
+
+cd //django-environ &&
+source activate base &&
+conda activate django-environ &&
+pytest --no-header -rA --tb=no  -p no:cacheprovider -W ignore::DeprecationWarning environ/test.py
+```
+
+___TESTS_SECTION___
+============================= test session starts ==============================
+collected 114 items
+
+environ/test.py ........................................................ [ 49%]
+..........................................................               [100%]
+
+=========================== short test summary info ============================
+PASSED environ/test.py::SearchTestSuite::test_simple_parsing
+PASSED environ/test.py::SearchTestSuite::test_elasticsearch_parsing
+PASSED environ/test.py::SearchTestSuite::test_common_args_parsing
+PASSED environ/test.py::SearchTestSuite::test_solr_multicore_parsing
+PASSED environ/test.py::SearchTestSuite::test_solr_parsing
+PASSED environ/test.py::SearchTestSuite::test_whoosh_parsing
+PASSED environ/test.py::SearchTestSuite::test_xapian_parsing
+PASSED environ/test.py::PathTests::test_comparison
+PASSED environ/test.py::PathTests::test_path_class
+PASSED environ/test.py::PathTests::test_required_path
+PASSED environ/test.py::FileEnvTests::test_db_url_value
+PASSED environ/test.py::FileEnvTests::test_dict_value
+PASSED environ/test.py::FileEnvTests::test_str_list_with_spaces
+PASSED environ/test.py::FileEnvTests::test_float
+PASSED environ/test.py::FileEnvTests::test_json_value
+PASSED environ/test.py::FileEnvTests::test_int_tuple
+PASSED environ/test.py::FileEnvTests::test_url_encoded_parts
+PASSED environ/test.py::FileEnvTests::test_cache_url_value
+PASSED environ/test.py::FileEnvTests::test_proxied_value
+PASSED environ/test.py::FileEnvTests::test_bool_true
+PASSED environ/test.py::FileEnvTests::test_empty_list
+PASSED environ/test.py::FileEnvTests::test_contains
+PASSED environ/test.py::FileEnvTests::test_bytes
+PASSED environ/test.py::FileEnvTests::test_dict_parsing
+PASSED environ/test.py::FileEnvTests::test_exported
+PASSED environ/test.py::FileEnvTests::test_not_present_with_default
+PASSED environ/test.py::FileEnvTests::test_path
+PASSED environ/test.py::FileEnvTests::test_url_value
+PASSED environ/test.py::FileEnvTests::test_int
+PASSED environ/test.py::FileEnvTests::test_int_with_none_default
+PASSED environ/test.py::FileEnvTests::test_not_present_without_default
+PASSED environ/test.py::FileEnvTests::test_email_url_value
+PASSED environ/test.py::FileEnvTests::test_str
+PASSED environ/test.py::FileEnvTests::test_bool_false
+PASSED environ/test.py::FileEnvTests::test_int_list
+PASSED environ/test.py::DatabaseTestSuite::test_mysql_gis_parsing
+PASSED environ/test.py::DatabaseTestSuite::test_mysql_no_password
+PASSED environ/test.py::DatabaseTestSuite::test_cleardb_parsing
+PASSED environ/test.py::DatabaseTestSuite::test_database_ldap_url
+PASSED environ/test.py::DatabaseTestSuite::test_memory_sqlite_url
+PASSED environ/test.py::DatabaseTestSuite::test_empty_sqlite_url
+PASSED environ/test.py::DatabaseTestSuite::test_database_options_parsing
+PASSED environ/test.py::DatabaseTestSuite::test_postgres_parsing
+PASSED environ/test.py::DatabaseTestSuite::test_postgis_parsing
+PASSED environ/test.py::CacheTestSuite::test_locmem_parsing
+PASSED environ/test.py::CacheTestSuite::test_redis_with_password_parsing
+PASSED environ/test.py::CacheTestSuite::test_redis_multi_location_parsing
+PASSED environ/test.py::CacheTestSuite::test_filecache_windows_parsing
+PASSED environ/test.py::CacheTestSuite::test_dbcache_parsing
+PASSED environ/test.py::CacheTestSuite::test_redis_parsing
+PASSED environ/test.py::CacheTestSuite::test_memcache_multiple_parsing
+PASSED environ/test.py::CacheTestSuite::test_memcache_parsing
+PASSED environ/test.py::CacheTestSuite::test_dummycache_parsing
+PASSED environ/test.py::CacheTestSuite::test_memcache_pylib_parsing
+PASSED environ/test.py::CacheTestSuite::test_options_parsing
+PASSED environ/test.py::CacheTestSuite::test_custom_backend
+PASSED environ/test.py::CacheTestSuite::test_memcache_socket_parsing
+PASSED environ/test.py::CacheTestSuite::test_redis_socket_url
+PASSED environ/test.py::CacheTestSuite::test_locmem_named_parsing
+PASSED environ/test.py::CacheTestSuite::test_redis_socket_parsing
+PASSED environ/test.py::CacheTestSuite::test_filecache_parsing
+PASSED environ/test.py::EmailTests::test_smtp_parsing
+PASSED environ/test.py::EnvTests::test_contains
+PASSED environ/test.py::EnvTests::test_cache_url_value
+PASSED environ/test.py::EnvTests::test_url_encoded_parts
+PASSED environ/test.py::EnvTests::test_bool_false
+PASSED environ/test.py::EnvTests::test_dict_value
+PASSED environ/test.py::EnvTests::test_int
+PASSED environ/test.py::EnvTests::test_empty_list
+PASSED environ/test.py::EnvTests::test_int_list
+PASSED environ/test.py::EnvTests::test_proxied_value
+PASSED environ/test.py::EnvTests::test_str_list_with_spaces
+PASSED environ/test.py::EnvTests::test_exported
+PASSED environ/test.py::EnvTests::test_dict_parsing
+PASSED environ/test.py::EnvTests::test_json_value
+PASSED environ/test.py::EnvTests::test_str
+PASSED environ/test.py::EnvTests::test_float
+PASSED environ/test.py::EnvTests::test_int_with_none_default
+PASSED environ/test.py::EnvTests::test_path
+PASSED environ/test.py::EnvTests::test_int_tuple
+PASSED environ/test.py::EnvTests::test_url_value
+PASSED environ/test.py::EnvTests::test_db_url_value
+PASSED environ/test.py::EnvTests::test_bytes
+PASSED environ/test.py::EnvTests::test_not_present_with_default
+PASSED environ/test.py::EnvTests::test_email_url_value
+PASSED environ/test.py::EnvTests::test_not_present_without_default
+PASSED environ/test.py::EnvTests::test_bool_true
+PASSED environ/test.py::SubClassTests::test_empty_list
+PASSED environ/test.py::SubClassTests::test_email_url_value
+PASSED environ/test.py::SubClassTests::test_json_value
+PASSED environ/test.py::SubClassTests::test_int_tuple
+PASSED environ/test.py::SubClassTests::test_url_value
+PASSED environ/test.py::SubClassTests::test_str
+PASSED environ/test.py::SubClassTests::test_int
+PASSED environ/test.py::SubClassTests::test_not_present_without_default
+PASSED environ/test.py::SubClassTests::test_contains
+PASSED environ/test.py::SubClassTests::test_float
+PASSED environ/test.py::SubClassTests::test_exported
+PASSED environ/test.py::SubClassTests::test_dict_value
+PASSED environ/test.py::SubClassTests::test_proxied_value
+PASSED environ/test.py::SubClassTests::test_cache_url_value
+PASSED environ/test.py::SubClassTests::test_not_present_with_default
+PASSED environ/test.py::SubClassTests::test_bytes
+PASSED environ/test.py::SubClassTests::test_db_url_value
+PASSED environ/test.py::SubClassTests::test_singleton_environ
+PASSED environ/test.py::SubClassTests::test_bool_false
+PASSED environ/test.py::SubClassTests::test_path
+PASSED environ/test.py::SubClassTests::test_int_with_none_default
+PASSED environ/test.py::SubClassTests::test_str_list_with_spaces
+PASSED environ/test.py::SubClassTests::test_bool_true
+PASSED environ/test.py::SubClassTests::test_int_list
+PASSED environ/test.py::SubClassTests::test_dict_parsing
+PASSED environ/test.py::SubClassTests::test_url_encoded_parts
+PASSED environ/test.py::SchemaEnvTests::test_schema
+============================= 114 passed in 0.57s ==============================
+___TESTS_SECTION_END___
+All tests passed.

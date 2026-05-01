@@ -1,0 +1,142 @@
+{
+  "active_coding_leaves_final": 8,
+  "active_overall_leaves_final": 9,
+  "category_active_weight_final": {
+    "artifact": 1.0,
+    "documentation": 0,
+    "environment": 0,
+    "investigation": 5.0,
+    "product": 3.0,
+    "validation": 0
+  },
+  "category_completed_weight_final": {
+    "artifact": 1.0,
+    "documentation": 0,
+    "environment": 0,
+    "investigation": 5.0,
+    "product": 3.0,
+    "validation": 0
+  },
+  "coding_categories": [
+    "product",
+    "validation",
+    "investigation"
+  ],
+  "coding_largest_drop": 0.0,
+  "coding_nonmonotonic": false,
+  "completed_coding_leaves_final": 8,
+  "completed_overall_leaves_final": 9,
+  "evidence_audit_by_category": {
+    "investigation": {
+      "audited_completion_count": 5,
+      "status": "strong",
+      "weak_completion_evidence_count": 0,
+      "weak_subtask_ids": []
+    },
+    "product": {
+      "audited_completion_count": 3,
+      "status": "weak",
+      "weak_completion_evidence_count": 2,
+      "weak_subtask_ids": [
+        "SW12",
+        "SW14"
+      ]
+    },
+    "validation": {
+      "audited_completion_count": 0,
+      "status": "not_applicable",
+      "weak_completion_evidence_count": 0,
+      "weak_subtask_ids": []
+    }
+  },
+  "evidence_audit_status": "weak",
+  "evidence_audit_weak_categories": [
+    "product"
+  ],
+  "excluded_active_weight_final": 1.0,
+  "excluded_categories": [
+    "artifact",
+    "documentation",
+    "environment"
+  ],
+  "excluded_categories_final": {
+    "artifact": {
+      "active": 1.0,
+      "complete": 1.0
+    },
+    "documentation": {
+      "active": 0,
+      "complete": 0
+    },
+    "environment": {
+      "active": 0,
+      "complete": 0
+    }
+  },
+  "excluded_completed_weight_final": 1.0,
+  "final_coding_active_weight": 8.0,
+  "final_coding_complete_weight": 8.0,
+  "final_coding_progress": 1.0,
+  "final_overall_active_weight": 9.0,
+  "final_overall_complete_weight": 9.0,
+  "final_overall_progress": 1.0,
+  "final_success": false,
+  "final_success_source": "source_metadata.target",
+  "generator": "ledger_progress.sidecar",
+  "historical_subtasks_created": 9,
+  "largest_coding_drop": 0.0,
+  "largest_coding_drop_category_contributions": {},
+  "largest_coding_drop_detail": {
+    "amount": 0.0,
+    "from_step": null,
+    "to_step": null
+  },
+  "largest_coding_drop_source": "none",
+  "largest_overall_drop": 0.0,
+  "largest_overall_drop_category_contributions": {},
+  "largest_overall_drop_detail": {
+    "amount": 0.0,
+    "from_step": null,
+    "to_step": null
+  },
+  "largest_overall_drop_mostly_excluded": false,
+  "largest_overall_drop_source": "none",
+  "nonmonotonic_coding": false,
+  "nonmonotonic_overall": false,
+  "overall_largest_drop": 0.0,
+  "overall_nonmonotonic": false,
+  "source_ledger_sha256": "d735545ec31a1362f0ca2198ae4faf87efab1508eb79b3ec1f033f0cecc28474",
+  "subtask_categories": {
+    "SW10": "investigation",
+    "SW12": "product",
+    "SW14": "product",
+    "SW16": "product",
+    "SW18": "artifact",
+    "SW2": "investigation",
+    "SW4": "investigation",
+    "SW6": "investigation",
+    "SW8": "investigation"
+  },
+  "task_id": "dfm__emcee-510",
+  "weak_completion_evidence": [
+    {
+      "category": "product",
+      "description": "Change implementation via edit 505:507 warnings.simplefilter( \"ignore\", np.VisibleDeprecationWarning ) try: end_of_edit at step 12",
+      "evidence_types": [
+        "manual_note"
+      ],
+      "step": 12,
+      "subtask_id": "SW12"
+    },
+    {
+      "category": "product",
+      "description": "Change implementation via edit 505:507 warnings.simplefilter( \"ignore\", np.VisibleDeprecationWarning ) try: dt = np.atleast_1d(blob[0]).dtype e... at step 14",
+      "evidence_types": [
+        "manual_note"
+      ],
+      "step": 14,
+      "subtask_id": "SW14"
+    }
+  ],
+  "weak_completion_evidence_count": 2
+}

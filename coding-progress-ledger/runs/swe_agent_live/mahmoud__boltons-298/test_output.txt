@@ -1,0 +1,259 @@
+Will execute following command for apply_patch:
+```
+
+cd //boltons &&
+source activate base &&
+conda activate boltons &&
+git apply -v /swebench_matterhorn/prediction_patch.patch --allow-empty
+```
+
+Checking patch boltons/urlutils.py...
+Applied patch boltons/urlutils.py cleanly.
+Will execute following command for apply_patch:
+```
+
+cd //boltons &&
+source activate base &&
+conda activate boltons &&
+git restore tests/test_urlutils.py &&
+git apply -v /swebench_matterhorn/test_patch.patch --allow-empty
+```
+
+Checking patch tests/test_urlutils.py...
+Applied patch tests/test_urlutils.py cleanly.
+___ENVIRONMENT_SET_UP_PATCH_APPLIED___
+2024-10-02 00:36:53,643 - root - INFO - Will run the following test command
+2024-10-02 00:36:53,643 - root - INFO - 
+```
+cd //boltons &&
+source activate base &&
+conda activate boltons &&
+pytest --no-header -rA --tb=no  -p no:cacheprovider -W ignore::DeprecationWarning tests/test_urlutils.py
+```
+Will execute following command for run_tests:
+```
+
+cd //boltons &&
+source activate base &&
+conda activate boltons &&
+pytest --no-header -rA --tb=no  -p no:cacheprovider -W ignore::DeprecationWarning tests/test_urlutils.py
+```
+
+___TESTS_SECTION___
+============================= test session starts ==============================
+collected 124 items
+
+tests/test_urlutils.py ................................................. [ 39%]
+........................................................................ [ 97%]
+...                                                                      [100%]
+
+=============================== warnings summary ===============================
+tests/test_urlutils.py::test_query_params[news:alt.rec.motorcycle]
+  /opt/conda/envs/boltons/lib/python3.9/site-packages/_pytest/python.py:163: PytestReturnNotNoneWarning: Expected None, but tests/test_urlutils.py::test_query_params[news:alt.rec.motorcycle] returned True, which will be an error in a future version of pytest.  Did you mean to use `assert` instead of `return`?
+    warnings.warn(
+
+tests/test_urlutils.py::test_query_params[http://localhost/foo%2Fbar/]
+  /opt/conda/envs/boltons/lib/python3.9/site-packages/_pytest/python.py:163: PytestReturnNotNoneWarning: Expected None, but tests/test_urlutils.py::test_query_params[http://localhost/foo%2Fbar/] returned True, which will be an error in a future version of pytest.  Did you mean to use `assert` instead of `return`?
+    warnings.warn(
+
+tests/test_urlutils.py::test_query_params[ftp://ftp.rfc-editor.org/in-notes/tar/RFCs0001-0500.tar.gz]
+  /opt/conda/envs/boltons/lib/python3.9/site-packages/_pytest/python.py:163: PytestReturnNotNoneWarning: Expected None, but tests/test_urlutils.py::test_query_params[ftp://ftp.rfc-editor.org/in-notes/tar/RFCs0001-0500.tar.gz] returned True, which will be an error in a future version of pytest.  Did you mean to use `assert` instead of `return`?
+    warnings.warn(
+
+tests/test_urlutils.py::test_query_params[http://tools.ietf.org/html/rfc3986#section-3.4]
+  /opt/conda/envs/boltons/lib/python3.9/site-packages/_pytest/python.py:163: PytestReturnNotNoneWarning: Expected None, but tests/test_urlutils.py::test_query_params[http://tools.ietf.org/html/rfc3986#section-3.4] returned True, which will be an error in a future version of pytest.  Did you mean to use `assert` instead of `return`?
+    warnings.warn(
+
+tests/test_urlutils.py::test_query_params[http://(%2525)/(%2525)?(%2525)&(%2525)=(%2525)#(%2525)]
+  /opt/conda/envs/boltons/lib/python3.9/site-packages/_pytest/python.py:163: PytestReturnNotNoneWarning: Expected None, but tests/test_urlutils.py::test_query_params[http://(%2525)/(%2525)?(%2525)&(%2525)=(%2525)#(%2525)] returned True, which will be an error in a future version of pytest.  Did you mean to use `assert` instead of `return`?
+    warnings.warn(
+
+tests/test_urlutils.py::test_query_params[http://localhost/foo!!bar/]
+  /opt/conda/envs/boltons/lib/python3.9/site-packages/_pytest/python.py:163: PytestReturnNotNoneWarning: Expected None, but tests/test_urlutils.py::test_query_params[http://localhost/foo!!bar/] returned True, which will be an error in a future version of pytest.  Did you mean to use `assert` instead of `return`?
+    warnings.warn(
+
+tests/test_urlutils.py::test_query_params[http://[1080:0:0:0:8:800:200C:417A]/index.html]
+  /opt/conda/envs/boltons/lib/python3.9/site-packages/_pytest/python.py:163: PytestReturnNotNoneWarning: Expected None, but tests/test_urlutils.py::test_query_params[http://[1080:0:0:0:8:800:200C:417A]/index.html] returned True, which will be an error in a future version of pytest.  Did you mean to use `assert` instead of `return`?
+    warnings.warn(
+
+tests/test_urlutils.py::test_query_params[http://localhost/]
+  /opt/conda/envs/boltons/lib/python3.9/site-packages/_pytest/python.py:163: PytestReturnNotNoneWarning: Expected None, but tests/test_urlutils.py::test_query_params[http://localhost/] returned True, which will be an error in a future version of pytest.  Did you mean to use `assert` instead of `return`?
+    warnings.warn(
+
+tests/test_urlutils.py::test_query_params[https://xn--bcher-kva.ch]
+  /opt/conda/envs/boltons/lib/python3.9/site-packages/_pytest/python.py:163: PytestReturnNotNoneWarning: Expected None, but tests/test_urlutils.py::test_query_params[https://xn--bcher-kva.ch] returned True, which will be an error in a future version of pytest.  Did you mean to use `assert` instead of `return`?
+    warnings.warn(
+
+tests/test_urlutils.py::test_query_params[http://localhost/foo]
+  /opt/conda/envs/boltons/lib/python3.9/site-packages/_pytest/python.py:163: PytestReturnNotNoneWarning: Expected None, but tests/test_urlutils.py::test_query_params[http://localhost/foo] returned True, which will be an error in a future version of pytest.  Did you mean to use `assert` instead of `return`?
+    warnings.warn(
+
+tests/test_urlutils.py::test_query_params[http://googlewebsite.com/e-shops.aspx]
+  /opt/conda/envs/boltons/lib/python3.9/site-packages/_pytest/python.py:163: PytestReturnNotNoneWarning: Expected None, but tests/test_urlutils.py::test_query_params[http://googlewebsite.com/e-shops.aspx] returned True, which will be an error in a future version of pytest.  Did you mean to use `assert` instead of `return`?
+    warnings.warn(
+
+tests/test_urlutils.py::test_query_params[ssh://192.0.2.16:2222/]
+  /opt/conda/envs/boltons/lib/python3.9/site-packages/_pytest/python.py:163: PytestReturnNotNoneWarning: Expected None, but tests/test_urlutils.py::test_query_params[ssh://192.0.2.16:2222/] returned True, which will be an error in a future version of pytest.  Did you mean to use `assert` instead of `return`?
+    warnings.warn(
+
+tests/test_urlutils.py::test_query_params[http://xn--ggbla1c4e.xn--ngbc5azd/]
+  /opt/conda/envs/boltons/lib/python3.9/site-packages/_pytest/python.py:163: PytestReturnNotNoneWarning: Expected None, but tests/test_urlutils.py::test_query_params[http://xn--ggbla1c4e.xn--ngbc5azd/] returned True, which will be an error in a future version of pytest.  Did you mean to use `assert` instead of `return`?
+    warnings.warn(
+
+tests/test_urlutils.py::test_query_params[urn:oasis:member:A00024:x]
+  /opt/conda/envs/boltons/lib/python3.9/site-packages/_pytest/python.py:163: PytestReturnNotNoneWarning: Expected None, but tests/test_urlutils.py::test_query_params[urn:oasis:member:A00024:x] returned True, which will be an error in a future version of pytest.  Did you mean to use `assert` instead of `return`?
+    warnings.warn(
+
+tests/test_urlutils.py::test_query_params[http://wiki:pedia@hatnote.com]
+  /opt/conda/envs/boltons/lib/python3.9/site-packages/_pytest/python.py:163: PytestReturnNotNoneWarning: Expected None, but tests/test_urlutils.py::test_query_params[http://wiki:pedia@hatnote.com] returned True, which will be an error in a future version of pytest.  Did you mean to use `assert` instead of `return`?
+    warnings.warn(
+
+tests/test_urlutils.py::test_query_params[http://(%C3%A9)/(%C3%A9)?(%C3%A9)&(%C3%A9)=(%C3%A9)#(%C3%A9)]
+  /opt/conda/envs/boltons/lib/python3.9/site-packages/_pytest/python.py:163: PytestReturnNotNoneWarning: Expected None, but tests/test_urlutils.py::test_query_params[http://(%C3%A9)/(%C3%A9)?(%C3%A9)&(%C3%A9)=(%C3%A9)#(%C3%A9)] returned True, which will be an error in a future version of pytest.  Did you mean to use `assert` instead of `return`?
+    warnings.warn(
+
+tests/test_urlutils.py::test_query_params[tel:+1-800-867-5309]
+  /opt/conda/envs/boltons/lib/python3.9/site-packages/_pytest/python.py:163: PytestReturnNotNoneWarning: Expected None, but tests/test_urlutils.py::test_query_params[tel:+1-800-867-5309] returned True, which will be an error in a future version of pytest.  Did you mean to use `assert` instead of `return`?
+    warnings.warn(
+
+tests/test_urlutils.py::test_query_params[http://localhost/foo%20bar/]
+  /opt/conda/envs/boltons/lib/python3.9/site-packages/_pytest/python.py:163: PytestReturnNotNoneWarning: Expected None, but tests/test_urlutils.py::test_query_params[http://localhost/foo%20bar/] returned True, which will be an error in a future version of pytest.  Did you mean to use `assert` instead of `return`?
+    warnings.warn(
+
+tests/test_urlutils.py::test_query_params[http://localhost/foo/]
+  /opt/conda/envs/boltons/lib/python3.9/site-packages/_pytest/python.py:163: PytestReturnNotNoneWarning: Expected None, but tests/test_urlutils.py::test_query_params[http://localhost/foo/] returned True, which will be an error in a future version of pytest.  Did you mean to use `assert` instead of `return`?
+    warnings.warn(
+
+tests/test_urlutils.py::test_query_params[http://localhost]
+  /opt/conda/envs/boltons/lib/python3.9/site-packages/_pytest/python.py:163: PytestReturnNotNoneWarning: Expected None, but tests/test_urlutils.py::test_query_params[http://localhost] returned True, which will be an error in a future version of pytest.  Did you mean to use `assert` instead of `return`?
+    warnings.warn(
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+PASSED tests/test_urlutils.py::test_query_params[http://example.com/foo!@$bar?b!@z=123]
+PASSED tests/test_urlutils.py::test_regex[http://example.com/foo!@$bar?b!@z=123]
+PASSED tests/test_urlutils.py::test_roundtrip[http://example.com/foo!@$bar?b!@z=123]
+PASSED tests/test_urlutils.py::test_roundtrip[news:alt.rec.motorcycle]
+PASSED tests/test_urlutils.py::test_query_params[news:alt.rec.motorcycle]
+PASSED tests/test_urlutils.py::test_regex[news:alt.rec.motorcycle]
+PASSED tests/test_urlutils.py::test_query_params[http://localhost/foo%2Fbar/]
+PASSED tests/test_urlutils.py::test_regex[http://localhost/foo%2Fbar/]
+PASSED tests/test_urlutils.py::test_roundtrip[http://localhost/foo%2Fbar/]
+PASSED tests/test_urlutils.py::test_roundtrip[ftp://ftp.rfc-editor.org/in-notes/tar/RFCs0001-0500.tar.gz]
+PASSED tests/test_urlutils.py::test_query_params[ftp://ftp.rfc-editor.org/in-notes/tar/RFCs0001-0500.tar.gz]
+PASSED tests/test_urlutils.py::test_regex[ftp://ftp.rfc-editor.org/in-notes/tar/RFCs0001-0500.tar.gz]
+PASSED tests/test_urlutils.py::test_str_repr
+PASSED tests/test_urlutils.py::test_roundtrip[http://localhost/foo?n=/a/b]
+PASSED tests/test_urlutils.py::test_regex[http://localhost/foo?n=/a/b]
+PASSED tests/test_urlutils.py::test_query_params[http://localhost/foo?n=/a/b]
+PASSED tests/test_urlutils.py::test_roundtrip[http://tools.ietf.org/html/rfc3986#section-3.4]
+PASSED tests/test_urlutils.py::test_query_params[http://tools.ietf.org/html/rfc3986#section-3.4]
+PASSED tests/test_urlutils.py::test_regex[http://tools.ietf.org/html/rfc3986#section-3.4]
+PASSED tests/test_urlutils.py::test_roundtrip[magnet:?xt=urn:btih:1a42b9e04e122b97a5254e3df77ab3c4b7da725f&dn=Puppy%20Linux%20precise-5.7.1.iso&tr=udp://tracker.openbittorrent.com:80&tr=udp://tracker.publicbt.com:80&tr=udp://tracker.istole.it:6969&tr=udp://tracker.ccc.de:80&tr=udp://open.demonii.com:1337]
+PASSED tests/test_urlutils.py::test_regex[magnet:?xt=urn:btih:1a42b9e04e122b97a5254e3df77ab3c4b7da725f&dn=Puppy%20Linux%20precise-5.7.1.iso&tr=udp://tracker.openbittorrent.com:80&tr=udp://tracker.publicbt.com:80&tr=udp://tracker.istole.it:6969&tr=udp://tracker.ccc.de:80&tr=udp://open.demonii.com:1337]
+PASSED tests/test_urlutils.py::test_query_params[magnet:?xt=urn:btih:1a42b9e04e122b97a5254e3df77ab3c4b7da725f&dn=Puppy%20Linux%20precise-5.7.1.iso&tr=udp://tracker.openbittorrent.com:80&tr=udp://tracker.publicbt.com:80&tr=udp://tracker.istole.it:6969&tr=udp://tracker.ccc.de:80&tr=udp://open.demonii.com:1337]
+PASSED tests/test_urlutils.py::test_roundtrip[http://(%2525)/(%2525)?(%2525)&(%2525)=(%2525)#(%2525)]
+PASSED tests/test_urlutils.py::test_query_params[http://(%2525)/(%2525)?(%2525)&(%2525)=(%2525)#(%2525)]
+PASSED tests/test_urlutils.py::test_regex[http://(%2525)/(%2525)?(%2525)&(%2525)=(%2525)#(%2525)]
+PASSED tests/test_urlutils.py::test_roundtrip[https://[::101.45.75.219]:80/?hi=bye]
+PASSED tests/test_urlutils.py::test_query_params[https://[::101.45.75.219]:80/?hi=bye]
+PASSED tests/test_urlutils.py::test_regex[https://[::101.45.75.219]:80/?hi=bye]
+PASSED tests/test_urlutils.py::test_roundtrip[http://localhost/foo!!bar/]
+PASSED tests/test_urlutils.py::test_query_params[http://localhost/foo!!bar/]
+PASSED tests/test_urlutils.py::test_regex[http://localhost/foo!!bar/]
+PASSED tests/test_urlutils.py::test_find_all_links_basic
+PASSED tests/test_urlutils.py::test_quoted_userinfo
+PASSED tests/test_urlutils.py::test_regex[http://example.com:8080/search?q=123&business=Nothing%20Special]
+PASSED tests/test_urlutils.py::test_query_params[http://example.com:8080/search?q=123&business=Nothing%20Special]
+PASSED tests/test_urlutils.py::test_roundtrip[http://example.com:8080/search?q=123&business=Nothing%20Special]
+PASSED tests/test_urlutils.py::test_chained_navigate[https://host/b-https://host-paths0]
+PASSED tests/test_urlutils.py::test_regex[http://localhost/foo?n]
+PASSED tests/test_urlutils.py::test_roundtrip[http://localhost/foo?n]
+PASSED tests/test_urlutils.py::test_query_params[http://localhost/foo?n]
+PASSED tests/test_urlutils.py::test_identical_equal
+PASSED tests/test_urlutils.py::test_utf8_url
+PASSED tests/test_urlutils.py::test_regex[http://[1080:0:0:0:8:800:200C:417A]/index.html]
+PASSED tests/test_urlutils.py::test_query_params[http://[1080:0:0:0:8:800:200C:417A]/index.html]
+PASSED tests/test_urlutils.py::test_roundtrip[http://[1080:0:0:0:8:800:200C:417A]/index.html]
+PASSED tests/test_urlutils.py::test_regex[http://hatnote.com:9000?arg=1&arg=2&arg=3]
+PASSED tests/test_urlutils.py::test_roundtrip[http://hatnote.com:9000?arg=1&arg=2&arg=3]
+PASSED tests/test_urlutils.py::test_query_params[http://hatnote.com:9000?arg=1&arg=2&arg=3]
+PASSED tests/test_urlutils.py::test_query_params[http://localhost/]
+PASSED tests/test_urlutils.py::test_roundtrip[http://localhost/]
+PASSED tests/test_urlutils.py::test_regex[http://localhost/]
+PASSED tests/test_urlutils.py::test_regex[https://xn--bcher-kva.ch]
+PASSED tests/test_urlutils.py::test_roundtrip[https://xn--bcher-kva.ch]
+PASSED tests/test_urlutils.py::test_query_params[https://xn--bcher-kva.ch]
+PASSED tests/test_urlutils.py::test_roundtrip[http://localhost/foo]
+PASSED tests/test_urlutils.py::test_query_params[http://localhost/foo]
+PASSED tests/test_urlutils.py::test_regex[http://localhost/foo]
+PASSED tests/test_urlutils.py::test_query_params[http://googlewebsite.com/e-shops.aspx]
+PASSED tests/test_urlutils.py::test_regex[http://googlewebsite.com/e-shops.aspx]
+PASSED tests/test_urlutils.py::test_roundtrip[http://googlewebsite.com/e-shops.aspx]
+PASSED tests/test_urlutils.py::test_userinfo
+PASSED tests/test_urlutils.py::test_iri_path
+PASSED tests/test_urlutils.py::test_regex[http://localhost/asd?a=asd%20sdf/345]
+PASSED tests/test_urlutils.py::test_roundtrip[http://localhost/asd?a=asd%20sdf/345]
+PASSED tests/test_urlutils.py::test_query_params[http://localhost/asd?a=asd%20sdf/345]
+PASSED tests/test_urlutils.py::test_query_params[ssh://192.0.2.16:2222/]
+PASSED tests/test_urlutils.py::test_regex[ssh://192.0.2.16:2222/]
+PASSED tests/test_urlutils.py::test_roundtrip[ssh://192.0.2.16:2222/]
+PASSED tests/test_urlutils.py::test_chained_navigate[https://host/a/b-https://host-paths2]
+PASSED tests/test_urlutils.py::test_normalize_with_case
+PASSED tests/test_urlutils.py::test_navigate
+PASSED tests/test_urlutils.py::test_chained_navigate[https://host/b-https://host-paths1]
+PASSED tests/test_urlutils.py::test_query_params[http://xn--ggbla1c4e.xn--ngbc5azd/]
+PASSED tests/test_urlutils.py::test_roundtrip[http://xn--ggbla1c4e.xn--ngbc5azd/]
+PASSED tests/test_urlutils.py::test_regex[http://xn--ggbla1c4e.xn--ngbc5azd/]
+PASSED tests/test_urlutils.py::test_query_params[urn:oasis:member:A00024:x]
+PASSED tests/test_urlutils.py::test_regex[urn:oasis:member:A00024:x]
+PASSED tests/test_urlutils.py::test_roundtrip[urn:oasis:member:A00024:x]
+PASSED tests/test_urlutils.py::test_not_equal
+PASSED tests/test_urlutils.py::test_equal
+PASSED tests/test_urlutils.py::test_basic
+PASSED tests/test_urlutils.py::test_chained_navigate[https://host/a/b-https://host/a/-paths4]
+PASSED tests/test_urlutils.py::test_invalid_port
+PASSED tests/test_urlutils.py::test_roundtrip[http://localhost/foo?n=v]
+PASSED tests/test_urlutils.py::test_query_params[http://localhost/foo?n=v]
+PASSED tests/test_urlutils.py::test_regex[http://localhost/foo?n=v]
+PASSED tests/test_urlutils.py::test_roundtrip[http://wiki:pedia@hatnote.com]
+PASSED tests/test_urlutils.py::test_regex[http://wiki:pedia@hatnote.com]
+PASSED tests/test_urlutils.py::test_query_params[http://wiki:pedia@hatnote.com]
+PASSED tests/test_urlutils.py::test_roundtrip[http://(%C3%A9)/(%C3%A9)?(%C3%A9)&(%C3%A9)=(%C3%A9)#(%C3%A9)]
+PASSED tests/test_urlutils.py::test_regex[http://(%C3%A9)/(%C3%A9)?(%C3%A9)&(%C3%A9)=(%C3%A9)#(%C3%A9)]
+PASSED tests/test_urlutils.py::test_query_params[http://(%C3%A9)/(%C3%A9)?(%C3%A9)&(%C3%A9)=(%C3%A9)#(%C3%A9)]
+PASSED tests/test_urlutils.py::test_mailto
+PASSED tests/test_urlutils.py::test_regex[tel:+1-800-867-5309]
+PASSED tests/test_urlutils.py::test_query_params[tel:+1-800-867-5309]
+PASSED tests/test_urlutils.py::test_roundtrip[tel:+1-800-867-5309]
+PASSED tests/test_urlutils.py::test_parse_equals_in_qp_value
+PASSED tests/test_urlutils.py::test_iri_query
+PASSED tests/test_urlutils.py::test_parse_url
+PASSED tests/test_urlutils.py::test_invalid_ipv6
+PASSED tests/test_urlutils.py::test_regex[http://localhost/foo%20bar/]
+PASSED tests/test_urlutils.py::test_query_params[http://localhost/foo%20bar/]
+PASSED tests/test_urlutils.py::test_roundtrip[http://localhost/foo%20bar/]
+PASSED tests/test_urlutils.py::test_regex[http://localhost/foo/]
+PASSED tests/test_urlutils.py::test_query_params[http://localhost/foo/]
+PASSED tests/test_urlutils.py::test_roundtrip[http://localhost/foo/]
+PASSED tests/test_urlutils.py::test_query_params[mailto:me@example.com?to=me@example.com&body=hi%20http://wikipedia.org]
+PASSED tests/test_urlutils.py::test_regex[mailto:me@example.com?to=me@example.com&body=hi%20http://wikipedia.org]
+PASSED tests/test_urlutils.py::test_roundtrip[mailto:me@example.com?to=me@example.com&body=hi%20http://wikipedia.org]
+PASSED tests/test_urlutils.py::test_self_normalize
+PASSED tests/test_urlutils.py::test_netloc_slashes
+PASSED tests/test_urlutils.py::test_roundtrip[http://localhost]
+PASSED tests/test_urlutils.py::test_regex[http://localhost]
+PASSED tests/test_urlutils.py::test_query_params[http://localhost]
+PASSED tests/test_urlutils.py::test_rel_navigate
+PASSED tests/test_urlutils.py::test_url_copy
+PASSED tests/test_urlutils.py::test_idna
+PASSED tests/test_urlutils.py::test_chained_navigate[https://host/b-https://host-paths3]
+PASSED tests/test_urlutils.py::test_find_all_links
+PASSED tests/test_urlutils.py::test_chained_navigate[https://host/b-https://host/a-paths5]
+PASSED tests/test_urlutils.py::test_unicodey
+PASSED tests/test_urlutils.py::test_roundtrip[ldap://[::192.9.5.5]/dc=example,dc=com??sub?(sn=Jensen)]
+PASSED tests/test_urlutils.py::test_regex[ldap://[::192.9.5.5]/dc=example,dc=com??sub?(sn=Jensen)]
+PASSED tests/test_urlutils.py::test_query_params[ldap://[::192.9.5.5]/dc=example,dc=com??sub?(sn=Jensen)]
+======================= 124 passed, 20 warnings in 0.62s =======================
+___TESTS_SECTION_END___
+All tests passed.

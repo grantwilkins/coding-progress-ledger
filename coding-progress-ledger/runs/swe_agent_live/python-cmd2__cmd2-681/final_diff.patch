@@ -1,0 +1,51 @@
+
+diff --git a/cmd2/cmd2.py b/cmd2/cmd2.py
+index c29a1812..bda8694c 100644
+--- a/cmd2/cmd2.py
++++ b/cmd2/cmd2.py
+@@ -242,12 +242,14 @@ def with_argparser_and_unknown_args(argparser: argparse.ArgumentParser, preserve
+ 
+ 
+ def with_argparser(argparser: argparse.ArgumentParser,
+-                   preserve_quotes: bool = False) -> Callable[[argparse.Namespace], Optional[bool]]:
++                   preserve_quotes: bool = False,
++                   dont_parse: bool = False) -> Callable[[argparse.Namespace], Optional[bool]]:
+     """A decorator to alter a cmd2 method to populate its ``args`` argument by parsing arguments
+     with the given instance of argparse.ArgumentParser.
+ 
+     :param argparser: unique instance of ArgumentParser
+     :param preserve_quotes: if True, then arguments passed to argparse maintain their quotes
++    :param dont_parse: if True, the arguments will not be parsed and the provided Namespace will be used instead
+     :return: function that gets passed the argparse-parsed args in a Namespace
+              A member called __statement__ is added to the Namespace to provide command functions access to the
+              Statement object. This can be useful if the command function needs to know the command line.
+@@ -257,10 +259,14 @@ def with_argparser(argparser: argparse.ArgumentParser,
+     # noinspection PyProtectedMember
+     def arg_decorator(func: Callable):
+         @functools.wraps(func)
+-        def cmd_wrapper(cmd2_instance, statement: Union[Statement, str]):
++        def cmd_wrapper(cmd2_instance, statement: Union[Statement, str], parser: Optional[argparse.ArgumentParser] = None):
+             statement, parsed_arglist = cmd2_instance.statement_parser.get_command_arg_list(command_name,
+-                                                                                            statement,
+-                                                                                            preserve_quotes)
++                                                                                             statement,
++                                                                                             preserve_quotes)
++            if dont_parse:
++                if parser is None:
++                    raise ValueError("Parser is required when dont_parse is True")
++                return func(cmd2_instance, statement, parser)
+             try:
+                 args = argparser.parse_args(parsed_arglist)
+             except SystemExit:
+diff --git a/tests/test_cmd2.py b/tests/test_cmd2.py
+index 7a17cfac..c6c5e306 100644
+--- a/tests/test_cmd2.py
++++ b/tests/test_cmd2.py
+@@ -17,7 +17,6 @@ import tempfile
+ from colorama import Fore, Back, Style
+ import pytest
+ 
+-# Python 3.5 had some regressions in the unitest.mock module, so use 3rd party mock if available
+ try:
+     import mock
+ except ImportError:

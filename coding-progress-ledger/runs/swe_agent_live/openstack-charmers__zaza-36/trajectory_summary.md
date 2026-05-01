@@ -1,0 +1,74 @@
+# Trajectory summary — openstack-charmers__zaza-36
+
+- model: `swe-agent-llama-70b`
+- final_success: `False`
+- exit_status: `submitted (exit_context)`
+- trajectory_length: `183`
+- patch_length: `1747`
+- eval_logs_length: `2205`
+
+**Issue:** We're currently solving the following issue within our repository. Here's the issue text:
+
+## Steps
+
+- [000] system
+- [001] environment: We're currently solving the following issue within our repository. Here's the issue text:
+- [002] assistant: `search_dir "test-mode"`
+- [003] tool: No matches found for "test-mode" in /zaza
+- [004] assistant: `search_dir "automatically-retry-hooks" || search_dir "transmit-vendor-metrics"`
+- [005] tool: No matches found for "automatically-retry-hooks" in /zaza
+- [006] assistant: `search_dir "model"`
+- [007] tool: Found 294 matches for "model" in /zaza:
+- [008] assistant: `open zaza/zaza/model.py`
+- [009] tool: File zaza/zaza/model.py not found
+- [010] assistant: `open zaza/model.py`
+- [011] tool: [File: /zaza/zaza/model.py (391 lines total)]
+- [012] assistant: `search_file "def " zaza/model.py`
+- [013] tool: Found 22 matches for "def " in /zaza/zaza/model.py:
+- [014] assistant: `goto 308`
+- [015] tool: [File: /zaza/zaza/model.py (391 lines total)]
+- [016] assistant: `edit 308:323`
+- [017] tool: [File: /zaza/zaza/model.py (397 lines total)]
+- [018] assistant: `create test_config.py`
+- [019] tool: [File: /zaza/test_config.py (1 lines total)]
+- [020] assistant: `edit 1:1`
+- [021] tool: [File: /zaza/test_config.py (21 lines total)]
+- [022] assistant: `python test_config.py`
+- [023] tool: /opt/conda/envs/zaza/lib/python3.9/site-packages/juju/loop.py:7: UserWarning: juju.loop module is being deprecated by 3.
+- [024] assistant: `edit 1:21`
+- [025] tool: [File: /zaza/test_config.py (20 lines total)]
+- [026] assistant: `python test_config.py`
+- [027] tool: /opt/conda/envs/zaza/lib/python3.9/site-packages/juju/loop.py:7: UserWarning: juju.loop module is being deprecated by 3.
+- [028] assistant: `create mock_controllers.yaml`
+- [029] tool: [File: /zaza/mock_controllers.yaml (1 lines total)]
+- [030] assistant: `edit 1:1`
+- [031] tool: [File: /zaza/mock_controllers.yaml (4 lines total)]
+- [032] assistant: `edit 1:20`
+- [033] tool: [File: /zaza/mock_controllers.yaml (20 lines total)]
+- [034] assistant: `open test_config.py`
+- [035] tool: [File: /zaza/test_config.py (20 lines total)]
+- [036] assistant: `edit 1:20`
+- [037] tool: [File: /zaza/test_config.py (20 lines total)]
+- [038] assistant: `edit 1:20`
+- [039] tool: [File: /zaza/test_config.py (20 lines total)]
+- [040] assistant: `edit 1:20`
+- [041] tool: [File: /zaza/test_config.py (20 lines total)]
+- [042] assistant: `edit 1:20`
+- [043] tool: [File: /zaza/test_config.py (20 lines total)]
+- [044] assistant: `edit 1:20`
+- [045] tool: [File: /zaza/test_config.py (20 lines total)]
+- [046] assistant: `echo "import asyncio`
+- [047] tool: Your command ran successfully and did not produce any output.
+- [048] assistant: `python test_config.py`
+- [049] tool:   File "/zaza/test_config.py", line 20
+- [050] assistant: `edit 20:20`
+- [051] tool: Your proposed edit has introduced new syntax error(s). Please read this error message carefully and then retry editing t
+- [052] assistant: `echo "import asyncio`
+- [053] tool: Your command ran successfully and did not produce any output.
+- [054] assistant: `python test_config.py`
+- [055] tool:   File "/zaza/test_config.py", line 20
+- [056] assistant: `edit 20:20`
+- [057] tool: Your proposed edit has introduced new syntax error(s). Please read this error message carefully and then retry editing t
+- [058] assistant: `edit 1:20`
+- [059] tool: [File: /zaza/test_config.py (21 lines total)]
+- ... (123 more steps elided)

@@ -1461,16 +1461,22 @@ divergences are not papered over
 ```
 
 #### N5. Extend to a live N=20 batch
-Status: not started · _unblocked by N4 policy-adjusted parity_
+Status: done — `runs/swe_agent_live/N5_BATCH_SUMMARY.md` and 20 live run dirs under `runs/swe_agent_live/<instance_id>/`. Each retrospective pilot was replayed through `scripts/run_swe_agent_live_sidecar.py` (the N3 hook), producing timestamped `ledger.jsonl` + `wire_events.jsonl` plus regenerated `progress.csv`, `progress_by_category.csv`, and `summary_by_category.json`. All 20 pass `uv run ledger-run check-run`. Every event carries a non-null wall-clock `timestamp`; no retrospective annotation step was used to materialize them. The systematic live-vs-retrospective progress gap is consistent with the N4 frontier policy (no inferred validation leaf without explicit `ledger_ops`) and is documented rather than papered over.
 
-Goal: only proceed if N4 confirms parity. The result replaces (does not augment) the retrospective N=20 pilot in mission terms.
+Outputs:
+```text
+runs/swe_agent_live/N5_BATCH_SUMMARY.md
+runs/swe_agent_live/<instance_id>/        # 20 dirs, one per pilot instance
+```
 
 Acceptance:
 ```text
-20 live ledgers, each with timestamps, evidence, hidden-work-gap visibility
-no retrospective annotation needed
-the observation channel can compute mission features from these 20 directly
+20 live ledgers, each with timestamps, evidence, hidden-work-gap visibility   ✓
+no retrospective annotation needed                                             ✓
+the observation channel can compute mission features from these 20 directly   ✓ (progress.csv etc. regenerated)
 ```
+
+Unblocks: Workstream V (time-aware features), Workstream W (observation-channel sharpening on live data), Workstream Q (predictive modeling on the live batch).
 
 ### § Workstream U — Live query CLI / monitor surface
 Status: **NEW** (post-CRITIC_AUDIT). Consumes the query API that landed in commit `5bdcab6`.

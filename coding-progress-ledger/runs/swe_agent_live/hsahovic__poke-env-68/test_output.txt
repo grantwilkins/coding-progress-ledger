@@ -1,0 +1,70 @@
+Will execute following command for apply_patch:
+```
+
+cd //poke-env &&
+source activate base &&
+conda activate poke-env &&
+git apply -v /swebench_matterhorn/prediction_patch.patch --allow-empty
+```
+
+/swebench_matterhorn/prediction_patch.patch:11: trailing whitespace.
+Flareon  
+/swebench_matterhorn/prediction_patch.patch:12: trailing whitespace.
+Ability: Flash Fire  
+/swebench_matterhorn/prediction_patch.patch:13: trailing whitespace.
+EVs: 252 HP / 126 Def / 126 SpD / 4 Spe  
+/swebench_matterhorn/prediction_patch.patch:14: trailing whitespace.
+Hardy Nature  
+/swebench_matterhorn/prediction_patch.patch:15: trailing whitespace.
+- Flare Blitz  
+Checking patch reproduce.py...
+Checking patch src/poke_env/player/__init__.py...
+Checking patch src/poke_env/teambuilder/teambuilder.py...
+Applied patch reproduce.py cleanly.
+Applied patch src/poke_env/player/__init__.py cleanly.
+Applied patch src/poke_env/teambuilder/teambuilder.py cleanly.
+warning: squelched 39 whitespace errors
+warning: 44 lines add whitespace errors.
+Will execute following command for apply_patch:
+```
+
+cd //poke-env &&
+source activate base &&
+conda activate poke-env &&
+git restore unit_tests/teambuilder/test_constant_teambuilder.py &&
+git apply -v /swebench_matterhorn/test_patch.patch --allow-empty
+```
+
+Checking patch unit_tests/teambuilder/test_constant_teambuilder.py...
+Applied patch unit_tests/teambuilder/test_constant_teambuilder.py cleanly.
+___ENVIRONMENT_SET_UP_PATCH_APPLIED___
+2024-10-07 05:30:51,821 - root - INFO - Will run the following test command
+2024-10-07 05:30:51,822 - root - INFO - 
+```
+cd //poke-env &&
+source activate base &&
+conda activate poke-env &&
+pytest --no-header -rA --tb=no  -p no:cacheprovider -W ignore::DeprecationWarning unit_tests/teambuilder/test_constant_teambuilder.py
+```
+Will execute following command for run_tests:
+```
+
+cd //poke-env &&
+source activate base &&
+conda activate poke-env &&
+pytest --no-header -rA --tb=no  -p no:cacheprovider -W ignore::DeprecationWarning unit_tests/teambuilder/test_constant_teambuilder.py
+```
+
+___TESTS_SECTION___
+============================= test session starts ==============================
+collected 3 items
+
+unit_tests/teambuilder/test_constant_teambuilder.py ...                  [100%]
+
+=========================== short test summary info ============================
+PASSED unit_tests/teambuilder/test_constant_teambuilder.py::test_showdown_team_parsing_works_without_items
+PASSED unit_tests/teambuilder/test_constant_teambuilder.py::test_constant_teambuilder_yields_showdown
+PASSED unit_tests/teambuilder/test_constant_teambuilder.py::test_constant_teambuilder_yields_packed
+============================== 3 passed in 0.69s ===============================
+___TESTS_SECTION_END___
+All tests passed.
