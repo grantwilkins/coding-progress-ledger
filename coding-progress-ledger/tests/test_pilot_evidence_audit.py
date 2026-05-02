@@ -61,7 +61,7 @@ def test_classify_evidence_path_pattern_yields_diff():
 
 def test_strong_evidence_types_excludes_manual_note():
     # A PR that promotes manual_note to strong would erase the K1 weak/strong signal.
-    known = {"test_output", "diff", "file_exists", "command_output", "contract_text", "manual_note"}
+    known = {"test_output", "diff", "file_exists", "command_output", "contract_text", "manual_note", "tool_action"}
     assert STRONG_EVIDENCE_TYPES and STRONG_EVIDENCE_TYPES.issubset(known)
     assert "manual_note" not in STRONG_EVIDENCE_TYPES
 
@@ -81,6 +81,28 @@ def test_audit_skips_artifact_and_documentation_categories():
     result = audit_completion_evidence(events)
     assert result["status"] == "not_applicable"
     assert sum(c["audited_completion_count"] for c in result["by_category"].values()) == 0
+
+
+def test_tool_action_classifies_strong():
+    types = classify_evidence(["edit utils.py:12 acknowledged"])
+    assert "tool_action" in types or "diff" in types
+    assert STRONG_EVIDENCE_TYPES & types
+    assert classify_evidence(["submit completed"]) & STRONG_EVIDENCE_TYPES
+
+
+def test_k4_level_counts_locked():
+    data = _audit_data()
+    totals = data["totals"]
+    assert totals["level_totals"] == {"mechanical": 65, "trace_semantic": 0, "annotator_judgment": 2}
+    assert totals["completions_manual_only"] <= 12
+    assert totals["completions_with_strong"] >= 69
+
+
+def test_evidence_level_priority():
+    assert rescore.evidence_level({"manual_note"}) == "annotator_judgment"
+    assert rescore.evidence_level({"contract_text"}) == "trace_semantic"
+    assert rescore.evidence_level({"diff", "manual_note"}) == "mechanical"
+    assert rescore.evidence_level({"tool_action"}) == "mechanical"
 
 
 def test_k1_smoke_pilots_match_swe_agent_pilot_glob():

@@ -2,10 +2,10 @@
   "per_pilot": [
     {
       "pilot_id": "swe_agent_pilot_f_01",
-      "audit_status": "weak",
-      "weak_total": 1,
+      "audit_status": "strong",
+      "weak_total": 0,
       "weak_by_category": {
-        "product": 1,
+        "product": 0,
         "validation": 0,
         "investigation": 0
       },
@@ -15,23 +15,30 @@
         "investigation": 1
       },
       "evidence_type_counts": {
-        "diff": 1,
-        "manual_note": 2
+        "tool_action": 3,
+        "diff": 1
+      },
+      "level_by_category": {
+        "product": {
+          "mechanical": 1,
+          "trace_semantic": 0,
+          "annotator_judgment": 0
+        },
+        "validation": {
+          "mechanical": 0,
+          "trace_semantic": 0,
+          "annotator_judgment": 0
+        },
+        "investigation": {
+          "mechanical": 1,
+          "trace_semantic": 0,
+          "annotator_judgment": 0
+        }
       },
       "completion_events": 3,
-      "completions_with_strong": 1,
-      "completions_manual_only": 2,
-      "weak_subtasks": [
-        {
-          "step": 15,
-          "subtask_id": "S2",
-          "category": "product",
-          "description": "Replace getip.php lookup at iceprod/core/functions.py:274",
-          "evidence_types": [
-            "manual_note"
-          ]
-        }
-      ]
+      "completions_with_strong": 3,
+      "completions_manual_only": 0,
+      "weak_subtasks": []
     },
     {
       "pilot_id": "swe_agent_pilot_f_02",
@@ -48,7 +55,25 @@
         "investigation": 1
       },
       "evidence_type_counts": {
+        "tool_action": 1,
         "diff": 1
+      },
+      "level_by_category": {
+        "product": {
+          "mechanical": 0,
+          "trace_semantic": 0,
+          "annotator_judgment": 0
+        },
+        "validation": {
+          "mechanical": 0,
+          "trace_semantic": 0,
+          "annotator_judgment": 0
+        },
+        "investigation": {
+          "mechanical": 1,
+          "trace_semantic": 0,
+          "annotator_judgment": 0
+        }
       },
       "completion_events": 1,
       "completions_with_strong": 1,
@@ -70,7 +95,25 @@
         "investigation": 1
       },
       "evidence_type_counts": {
+        "tool_action": 1,
         "diff": 1
+      },
+      "level_by_category": {
+        "product": {
+          "mechanical": 0,
+          "trace_semantic": 0,
+          "annotator_judgment": 0
+        },
+        "validation": {
+          "mechanical": 0,
+          "trace_semantic": 0,
+          "annotator_judgment": 0
+        },
+        "investigation": {
+          "mechanical": 1,
+          "trace_semantic": 0,
+          "annotator_judgment": 0
+        }
       },
       "completion_events": 1,
       "completions_with_strong": 1,
@@ -79,10 +122,10 @@
     },
     {
       "pilot_id": "swe_agent_pilot_f_04",
-      "audit_status": "weak",
-      "weak_total": 1,
+      "audit_status": "strong",
+      "weak_total": 0,
       "weak_by_category": {
-        "product": 1,
+        "product": 0,
         "validation": 0,
         "investigation": 0
       },
@@ -92,30 +135,37 @@
         "investigation": 1
       },
       "evidence_type_counts": {
-        "diff": 1,
-        "manual_note": 2
+        "tool_action": 3,
+        "diff": 1
+      },
+      "level_by_category": {
+        "product": {
+          "mechanical": 1,
+          "trace_semantic": 0,
+          "annotator_judgment": 0
+        },
+        "validation": {
+          "mechanical": 0,
+          "trace_semantic": 0,
+          "annotator_judgment": 0
+        },
+        "investigation": {
+          "mechanical": 1,
+          "trace_semantic": 0,
+          "annotator_judgment": 0
+        }
       },
       "completion_events": 3,
-      "completions_with_strong": 1,
-      "completions_manual_only": 2,
-      "weak_subtasks": [
-        {
-          "step": 17,
-          "subtask_id": "S2",
-          "category": "product",
-          "description": "Edit ensemble.py around line 505 to use the new namespaced VisibleDeprecationWarning",
-          "evidence_types": [
-            "manual_note"
-          ]
-        }
-      ]
+      "completions_with_strong": 3,
+      "completions_manual_only": 0,
+      "weak_subtasks": []
     },
     {
       "pilot_id": "swe_agent_pilot_f_05",
-      "audit_status": "weak",
-      "weak_total": 1,
+      "audit_status": "strong",
+      "weak_total": 0,
       "weak_by_category": {
-        "product": 1,
+        "product": 0,
         "validation": 0,
         "investigation": 0
       },
@@ -125,25 +175,32 @@
         "investigation": 2
       },
       "evidence_type_counts": {
-        "command_output": 1,
         "test_output": 1,
-        "diff": 1,
-        "manual_note": 1
+        "command_output": 1,
+        "tool_action": 2,
+        "diff": 1
+      },
+      "level_by_category": {
+        "product": {
+          "mechanical": 1,
+          "trace_semantic": 0,
+          "annotator_judgment": 0
+        },
+        "validation": {
+          "mechanical": 0,
+          "trace_semantic": 0,
+          "annotator_judgment": 0
+        },
+        "investigation": {
+          "mechanical": 2,
+          "trace_semantic": 0,
+          "annotator_judgment": 0
+        }
       },
       "completion_events": 3,
-      "completions_with_strong": 2,
-      "completions_manual_only": 1,
-      "weak_subtasks": [
-        {
-          "step": 15,
-          "subtask_id": "S3",
-          "category": "product",
-          "description": "Edit test_sklearn_compat.py:39 to align with the new scikit-learn estimator-check API",
-          "evidence_types": [
-            "manual_note"
-          ]
-        }
-      ]
+      "completions_with_strong": 3,
+      "completions_manual_only": 0,
+      "weak_subtasks": []
     },
     {
       "pilot_id": "swe_agent_pilot_f_06",
@@ -160,7 +217,25 @@
         "investigation": 2
       },
       "evidence_type_counts": {
+        "tool_action": 4,
         "diff": 5
+      },
+      "level_by_category": {
+        "product": {
+          "mechanical": 1,
+          "trace_semantic": 0,
+          "annotator_judgment": 0
+        },
+        "validation": {
+          "mechanical": 1,
+          "trace_semantic": 0,
+          "annotator_judgment": 0
+        },
+        "investigation": {
+          "mechanical": 2,
+          "trace_semantic": 0,
+          "annotator_judgment": 0
+        }
       },
       "completion_events": 5,
       "completions_with_strong": 5,
@@ -169,10 +244,10 @@
     },
     {
       "pilot_id": "swe_agent_pilot_f_07",
-      "audit_status": "weak",
-      "weak_total": 1,
+      "audit_status": "strong",
+      "weak_total": 0,
       "weak_by_category": {
-        "product": 1,
+        "product": 0,
         "validation": 0,
         "investigation": 0
       },
@@ -182,30 +257,37 @@
         "investigation": 1
       },
       "evidence_type_counts": {
-        "diff": 1,
-        "manual_note": 1
+        "tool_action": 2,
+        "diff": 1
+      },
+      "level_by_category": {
+        "product": {
+          "mechanical": 1,
+          "trace_semantic": 0,
+          "annotator_judgment": 0
+        },
+        "validation": {
+          "mechanical": 0,
+          "trace_semantic": 0,
+          "annotator_judgment": 0
+        },
+        "investigation": {
+          "mechanical": 1,
+          "trace_semantic": 0,
+          "annotator_judgment": 0
+        }
       },
       "completion_events": 2,
-      "completions_with_strong": 1,
-      "completions_manual_only": 1,
-      "weak_subtasks": [
-        {
-          "step": 17,
-          "subtask_id": "S2",
-          "category": "product",
-          "description": "Add test-mode/automatically-retry-hooks/transmit-vendor-metrics defaults at zaza/model.py:308",
-          "evidence_types": [
-            "manual_note"
-          ]
-        }
-      ]
+      "completions_with_strong": 2,
+      "completions_manual_only": 0,
+      "weak_subtasks": []
     },
     {
       "pilot_id": "swe_agent_pilot_f_08",
-      "audit_status": "weak",
-      "weak_total": 2,
+      "audit_status": "strong",
+      "weak_total": 0,
       "weak_by_category": {
-        "product": 2,
+        "product": 0,
         "validation": 0,
         "investigation": 0
       },
@@ -215,39 +297,37 @@
         "investigation": 3
       },
       "evidence_type_counts": {
-        "diff": 3,
-        "manual_note": 2
+        "tool_action": 5,
+        "diff": 3
+      },
+      "level_by_category": {
+        "product": {
+          "mechanical": 2,
+          "trace_semantic": 0,
+          "annotator_judgment": 0
+        },
+        "validation": {
+          "mechanical": 0,
+          "trace_semantic": 0,
+          "annotator_judgment": 0
+        },
+        "investigation": {
+          "mechanical": 3,
+          "trace_semantic": 0,
+          "annotator_judgment": 0
+        }
       },
       "completion_events": 5,
-      "completions_with_strong": 3,
-      "completions_manual_only": 2,
-      "weak_subtasks": [
-        {
-          "step": 29,
-          "subtask_id": "S3",
-          "category": "product",
-          "description": "Edit main.py:716-787 (validate_model region) to call __post_init__ on descendants",
-          "evidence_types": [
-            "manual_note"
-          ]
-        },
-        {
-          "step": 49,
-          "subtask_id": "S6",
-          "category": "product",
-          "description": "Extend fix to BaseModel.__init__ region (edits at main.py:270-278 and 280-294)",
-          "evidence_types": [
-            "manual_note"
-          ]
-        }
-      ]
+      "completions_with_strong": 5,
+      "completions_manual_only": 0,
+      "weak_subtasks": []
     },
     {
       "pilot_id": "swe_agent_pilot_f_09",
-      "audit_status": "weak",
-      "weak_total": 2,
+      "audit_status": "strong",
+      "weak_total": 0,
       "weak_by_category": {
-        "product": 2,
+        "product": 0,
         "validation": 0,
         "investigation": 0
       },
@@ -257,33 +337,31 @@
         "investigation": 2
       },
       "evidence_type_counts": {
+        "tool_action": 5,
         "diff": 2,
-        "manual_note": 3,
         "test_output": 1
       },
-      "completion_events": 6,
-      "completions_with_strong": 3,
-      "completions_manual_only": 3,
-      "weak_subtasks": [
-        {
-          "step": 21,
-          "subtask_id": "S2",
-          "category": "product",
-          "description": "Edit cmd2.py around with_argparser to thread a custom Namespace through parse_args",
-          "evidence_types": [
-            "manual_note"
-          ]
+      "level_by_category": {
+        "product": {
+          "mechanical": 2,
+          "trace_semantic": 0,
+          "annotator_judgment": 0
         },
-        {
-          "step": 39,
-          "subtask_id": "S4",
-          "category": "product",
-          "description": "Edit tests/test_cmd2.py to exercise the custom-Namespace branch",
-          "evidence_types": [
-            "manual_note"
-          ]
+        "validation": {
+          "mechanical": 1,
+          "trace_semantic": 0,
+          "annotator_judgment": 0
+        },
+        "investigation": {
+          "mechanical": 2,
+          "trace_semantic": 0,
+          "annotator_judgment": 0
         }
-      ]
+      },
+      "completion_events": 6,
+      "completions_with_strong": 6,
+      "completions_manual_only": 0,
+      "weak_subtasks": []
     },
     {
       "pilot_id": "swe_agent_pilot_f_10",
@@ -301,7 +379,25 @@
       },
       "evidence_type_counts": {
         "file_exists": 1,
-        "diff": 2
+        "diff": 2,
+        "tool_action": 1
+      },
+      "level_by_category": {
+        "product": {
+          "mechanical": 0,
+          "trace_semantic": 0,
+          "annotator_judgment": 0
+        },
+        "validation": {
+          "mechanical": 0,
+          "trace_semantic": 0,
+          "annotator_judgment": 0
+        },
+        "investigation": {
+          "mechanical": 2,
+          "trace_semantic": 0,
+          "annotator_judgment": 0
+        }
       },
       "completion_events": 2,
       "completions_with_strong": 2,
@@ -310,10 +406,10 @@
     },
     {
       "pilot_id": "swe_agent_pilot_s_01",
-      "audit_status": "weak",
-      "weak_total": 2,
+      "audit_status": "strong",
+      "weak_total": 0,
       "weak_by_category": {
-        "product": 2,
+        "product": 0,
         "validation": 0,
         "investigation": 0
       },
@@ -323,40 +419,38 @@
         "investigation": 1
       },
       "evidence_type_counts": {
+        "tool_action": 4,
         "diff": 1,
-        "manual_note": 3,
         "test_output": 2
       },
-      "completion_events": 6,
-      "completions_with_strong": 3,
-      "completions_manual_only": 3,
-      "weak_subtasks": [
-        {
-          "step": 25,
-          "subtask_id": "S2",
-          "category": "product",
-          "description": "Edit utils/ast.py:88 to drop nesting increment for B-op sequences",
-          "evidence_types": [
-            "manual_note"
-          ]
+      "level_by_category": {
+        "product": {
+          "mechanical": 2,
+          "trace_semantic": 0,
+          "annotator_judgment": 0
         },
-        {
-          "step": 39,
-          "subtask_id": "S4",
-          "category": "product",
-          "description": "Update test_real_function expected values per issue spec (+4 -> +2)",
-          "evidence_types": [
-            "manual_note"
-          ]
+        "validation": {
+          "mechanical": 2,
+          "trace_semantic": 0,
+          "annotator_judgment": 0
+        },
+        "investigation": {
+          "mechanical": 1,
+          "trace_semantic": 0,
+          "annotator_judgment": 0
         }
-      ]
+      },
+      "completion_events": 6,
+      "completions_with_strong": 6,
+      "completions_manual_only": 0,
+      "weak_subtasks": []
     },
     {
       "pilot_id": "swe_agent_pilot_s_02",
-      "audit_status": "weak",
-      "weak_total": 1,
+      "audit_status": "strong",
+      "weak_total": 0,
       "weak_by_category": {
-        "product": 1,
+        "product": 0,
         "validation": 0,
         "investigation": 0
       },
@@ -366,30 +460,37 @@
         "investigation": 2
       },
       "evidence_type_counts": {
-        "diff": 4,
-        "manual_note": 1
+        "tool_action": 3,
+        "diff": 4
+      },
+      "level_by_category": {
+        "product": {
+          "mechanical": 1,
+          "trace_semantic": 0,
+          "annotator_judgment": 0
+        },
+        "validation": {
+          "mechanical": 1,
+          "trace_semantic": 0,
+          "annotator_judgment": 0
+        },
+        "investigation": {
+          "mechanical": 2,
+          "trace_semantic": 0,
+          "annotator_judgment": 0
+        }
       },
       "completion_events": 5,
-      "completions_with_strong": 4,
-      "completions_manual_only": 1,
-      "weak_subtasks": [
-        {
-          "step": 21,
-          "subtask_id": "S3",
-          "category": "product",
-          "description": "Wire the srid option through esri.py at lines 80-100, 116, 126, 141, 162",
-          "evidence_types": [
-            "manual_note"
-          ]
-        }
-      ]
+      "completions_with_strong": 5,
+      "completions_manual_only": 0,
+      "weak_subtasks": []
     },
     {
       "pilot_id": "swe_agent_pilot_s_03",
-      "audit_status": "weak",
-      "weak_total": 1,
+      "audit_status": "strong",
+      "weak_total": 0,
       "weak_by_category": {
-        "product": 1,
+        "product": 0,
         "validation": 0,
         "investigation": 0
       },
@@ -399,30 +500,37 @@
         "investigation": 2
       },
       "evidence_type_counts": {
-        "diff": 5,
-        "manual_note": 2
+        "tool_action": 6,
+        "diff": 5
+      },
+      "level_by_category": {
+        "product": {
+          "mechanical": 3,
+          "trace_semantic": 0,
+          "annotator_judgment": 0
+        },
+        "validation": {
+          "mechanical": 1,
+          "trace_semantic": 0,
+          "annotator_judgment": 0
+        },
+        "investigation": {
+          "mechanical": 2,
+          "trace_semantic": 0,
+          "annotator_judgment": 0
+        }
       },
       "completion_events": 7,
-      "completions_with_strong": 5,
-      "completions_manual_only": 2,
-      "weak_subtasks": [
-        {
-          "step": 19,
-          "subtask_id": "S3",
-          "category": "product",
-          "description": "Update player/__init__.py exports / imports",
-          "evidence_types": [
-            "manual_note"
-          ]
-        }
-      ]
+      "completions_with_strong": 7,
+      "completions_manual_only": 0,
+      "weak_subtasks": []
     },
     {
       "pilot_id": "swe_agent_pilot_s_04",
-      "audit_status": "weak",
-      "weak_total": 1,
+      "audit_status": "strong",
+      "weak_total": 0,
       "weak_by_category": {
-        "product": 1,
+        "product": 0,
         "validation": 0,
         "investigation": 0
       },
@@ -432,30 +540,37 @@
         "investigation": 1
       },
       "evidence_type_counts": {
-        "diff": 1,
-        "manual_note": 2
+        "tool_action": 3,
+        "diff": 1
+      },
+      "level_by_category": {
+        "product": {
+          "mechanical": 1,
+          "trace_semantic": 0,
+          "annotator_judgment": 0
+        },
+        "validation": {
+          "mechanical": 0,
+          "trace_semantic": 0,
+          "annotator_judgment": 0
+        },
+        "investigation": {
+          "mechanical": 1,
+          "trace_semantic": 0,
+          "annotator_judgment": 0
+        }
       },
       "completion_events": 3,
-      "completions_with_strong": 1,
-      "completions_manual_only": 2,
-      "weak_subtasks": [
-        {
-          "step": 15,
-          "subtask_id": "S2",
-          "category": "product",
-          "description": "Edit environ.py:425-426 to handle custom backend schemes",
-          "evidence_types": [
-            "manual_note"
-          ]
-        }
-      ]
+      "completions_with_strong": 3,
+      "completions_manual_only": 0,
+      "weak_subtasks": []
     },
     {
       "pilot_id": "swe_agent_pilot_s_05",
-      "audit_status": "weak",
-      "weak_total": 2,
+      "audit_status": "strong",
+      "weak_total": 0,
       "weak_by_category": {
-        "product": 2,
+        "product": 0,
         "validation": 0,
         "investigation": 0
       },
@@ -465,39 +580,37 @@
         "investigation": 2
       },
       "evidence_type_counts": {
-        "diff": 4,
-        "manual_note": 2
+        "tool_action": 5,
+        "diff": 4
+      },
+      "level_by_category": {
+        "product": {
+          "mechanical": 2,
+          "trace_semantic": 0,
+          "annotator_judgment": 0
+        },
+        "validation": {
+          "mechanical": 1,
+          "trace_semantic": 0,
+          "annotator_judgment": 0
+        },
+        "investigation": {
+          "mechanical": 2,
+          "trace_semantic": 0,
+          "annotator_judgment": 0
+        }
       },
       "completion_events": 6,
-      "completions_with_strong": 4,
-      "completions_manual_only": 2,
-      "weak_subtasks": [
-        {
-          "step": 23,
-          "subtask_id": "S3",
-          "category": "product",
-          "description": "Edit core.py:366 to recurse encode_json into nested enum lists",
-          "evidence_types": [
-            "manual_note"
-          ]
-        },
-        {
-          "step": 27,
-          "subtask_id": "S3",
-          "category": "product",
-          "description": "Edit core.py:366 to recurse encode_json into nested enum lists",
-          "evidence_types": [
-            "manual_note"
-          ]
-        }
-      ]
+      "completions_with_strong": 6,
+      "completions_manual_only": 0,
+      "weak_subtasks": []
     },
     {
       "pilot_id": "swe_agent_pilot_s_06",
-      "audit_status": "weak",
-      "weak_total": 1,
+      "audit_status": "strong",
+      "weak_total": 0,
       "weak_by_category": {
-        "product": 1,
+        "product": 0,
         "validation": 0,
         "investigation": 0
       },
@@ -507,30 +620,37 @@
         "investigation": 2
       },
       "evidence_type_counts": {
-        "diff": 4,
-        "manual_note": 1
+        "tool_action": 4,
+        "diff": 4
+      },
+      "level_by_category": {
+        "product": {
+          "mechanical": 1,
+          "trace_semantic": 0,
+          "annotator_judgment": 0
+        },
+        "validation": {
+          "mechanical": 1,
+          "trace_semantic": 0,
+          "annotator_judgment": 0
+        },
+        "investigation": {
+          "mechanical": 2,
+          "trace_semantic": 0,
+          "annotator_judgment": 0
+        }
       },
       "completion_events": 5,
-      "completions_with_strong": 4,
-      "completions_manual_only": 1,
-      "weak_subtasks": [
-        {
-          "step": 23,
-          "subtask_id": "S3",
-          "category": "product",
-          "description": "Edit urlutils.py:688 to fix list/tuple concatenation",
-          "evidence_types": [
-            "manual_note"
-          ]
-        }
-      ]
+      "completions_with_strong": 5,
+      "completions_manual_only": 0,
+      "weak_subtasks": []
     },
     {
       "pilot_id": "swe_agent_pilot_s_07",
       "audit_status": "weak",
-      "weak_total": 3,
+      "weak_total": 2,
       "weak_by_category": {
-        "product": 1,
+        "product": 0,
         "validation": 1,
         "investigation": 1
       },
@@ -540,27 +660,36 @@
         "investigation": 2
       },
       "evidence_type_counts": {
-        "manual_note": 4,
+        "manual_note": 2,
+        "tool_action": 3,
         "diff": 1
       },
+      "level_by_category": {
+        "product": {
+          "mechanical": 1,
+          "trace_semantic": 0,
+          "annotator_judgment": 0
+        },
+        "validation": {
+          "mechanical": 0,
+          "trace_semantic": 0,
+          "annotator_judgment": 1
+        },
+        "investigation": {
+          "mechanical": 1,
+          "trace_semantic": 0,
+          "annotator_judgment": 1
+        }
+      },
       "completion_events": 5,
-      "completions_with_strong": 1,
-      "completions_manual_only": 4,
+      "completions_with_strong": 3,
+      "completions_manual_only": 2,
       "weak_subtasks": [
         {
           "step": 7,
           "subtask_id": "S1",
           "category": "investigation",
           "description": "Reproduce the bug via the changelog CLI",
-          "evidence_types": [
-            "manual_note"
-          ]
-        },
-        {
-          "step": 17,
-          "subtask_id": "S3",
-          "category": "product",
-          "description": "Fix the version-bumping logic at commands.py:62-66",
           "evidence_types": [
             "manual_note"
           ]
@@ -578,10 +707,10 @@
     },
     {
       "pilot_id": "swe_agent_pilot_s_08",
-      "audit_status": "weak",
-      "weak_total": 1,
+      "audit_status": "strong",
+      "weak_total": 0,
       "weak_by_category": {
-        "product": 1,
+        "product": 0,
         "validation": 0,
         "investigation": 0
       },
@@ -592,29 +721,36 @@
       },
       "evidence_type_counts": {
         "diff": 3,
-        "manual_note": 1
+        "tool_action": 3
+      },
+      "level_by_category": {
+        "product": {
+          "mechanical": 1,
+          "trace_semantic": 0,
+          "annotator_judgment": 0
+        },
+        "validation": {
+          "mechanical": 1,
+          "trace_semantic": 0,
+          "annotator_judgment": 0
+        },
+        "investigation": {
+          "mechanical": 1,
+          "trace_semantic": 0,
+          "annotator_judgment": 0
+        }
       },
       "completion_events": 4,
-      "completions_with_strong": 3,
-      "completions_manual_only": 1,
-      "weak_subtasks": [
-        {
-          "step": 5,
-          "subtask_id": "S2",
-          "category": "product",
-          "description": "Edit __init__.py:481 to accept content-type strings with parameters",
-          "evidence_types": [
-            "manual_note"
-          ]
-        }
-      ]
+      "completions_with_strong": 4,
+      "completions_manual_only": 0,
+      "weak_subtasks": []
     },
     {
       "pilot_id": "swe_agent_pilot_s_09",
-      "audit_status": "weak",
-      "weak_total": 1,
+      "audit_status": "strong",
+      "weak_total": 0,
       "weak_by_category": {
-        "product": 1,
+        "product": 0,
         "validation": 0,
         "investigation": 0
       },
@@ -624,30 +760,37 @@
         "investigation": 1
       },
       "evidence_type_counts": {
-        "diff": 3,
-        "manual_note": 1
+        "tool_action": 3,
+        "diff": 3
+      },
+      "level_by_category": {
+        "product": {
+          "mechanical": 1,
+          "trace_semantic": 0,
+          "annotator_judgment": 0
+        },
+        "validation": {
+          "mechanical": 1,
+          "trace_semantic": 0,
+          "annotator_judgment": 0
+        },
+        "investigation": {
+          "mechanical": 1,
+          "trace_semantic": 0,
+          "annotator_judgment": 0
+        }
       },
       "completion_events": 4,
-      "completions_with_strong": 3,
-      "completions_manual_only": 1,
-      "weak_subtasks": [
-        {
-          "step": 13,
-          "subtask_id": "S2",
-          "category": "product",
-          "description": "Edit jsonargparse/_core.py:630-636 to handle empty config files",
-          "evidence_types": [
-            "manual_note"
-          ]
-        }
-      ]
+      "completions_with_strong": 4,
+      "completions_manual_only": 0,
+      "weak_subtasks": []
     },
     {
       "pilot_id": "swe_agent_pilot_s_10",
-      "audit_status": "weak",
-      "weak_total": 1,
+      "audit_status": "strong",
+      "weak_total": 0,
       "weak_by_category": {
-        "product": 1,
+        "product": 0,
         "validation": 0,
         "investigation": 0
       },
@@ -659,29 +802,36 @@
       "evidence_type_counts": {
         "file_exists": 1,
         "diff": 3,
-        "manual_note": 2,
+        "tool_action": 4,
         "test_output": 1
       },
-      "completion_events": 5,
-      "completions_with_strong": 3,
-      "completions_manual_only": 2,
-      "weak_subtasks": [
-        {
-          "step": 7,
-          "subtask_id": "S2",
-          "category": "product",
-          "description": "Remove the click.echo line at orders.py:126 per issue todo #1",
-          "evidence_types": [
-            "manual_note"
-          ]
+      "level_by_category": {
+        "product": {
+          "mechanical": 2,
+          "trace_semantic": 0,
+          "annotator_judgment": 0
+        },
+        "validation": {
+          "mechanical": 1,
+          "trace_semantic": 0,
+          "annotator_judgment": 0
+        },
+        "investigation": {
+          "mechanical": 1,
+          "trace_semantic": 0,
+          "annotator_judgment": 0
         }
-      ]
+      },
+      "completion_events": 5,
+      "completions_with_strong": 5,
+      "completions_manual_only": 0,
+      "weak_subtasks": []
     }
   ],
   "totals": {
     "pilots": 20,
     "weak_by_category": {
-      "product": 20,
+      "product": 0,
       "validation": 1,
       "investigation": 1
     },
@@ -690,15 +840,38 @@
       "validation": 12,
       "investigation": 31
     },
+    "level_by_category": {
+      "product": {
+        "mechanical": 24,
+        "trace_semantic": 0,
+        "annotator_judgment": 0
+      },
+      "validation": {
+        "mechanical": 11,
+        "trace_semantic": 0,
+        "annotator_judgment": 1
+      },
+      "investigation": {
+        "mechanical": 30,
+        "trace_semantic": 0,
+        "annotator_judgment": 1
+      }
+    },
+    "level_totals": {
+      "mechanical": 65,
+      "trace_semantic": 0,
+      "annotator_judgment": 2
+    },
     "type_totals": {
+      "tool_action": 65,
       "diff": 47,
-      "manual_note": 30,
-      "command_output": 1,
       "test_output": 5,
-      "file_exists": 2
+      "command_output": 1,
+      "file_exists": 2,
+      "manual_note": 2
     },
     "completion_events": 81,
-    "completions_with_strong": 51,
-    "completions_manual_only": 30
+    "completions_with_strong": 79,
+    "completions_manual_only": 2
   }
 }

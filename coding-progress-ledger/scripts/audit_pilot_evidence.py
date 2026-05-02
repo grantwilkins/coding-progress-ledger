@@ -25,7 +25,10 @@ _RESCORE_SPEC.loader.exec_module(rescore)
 
 audit_completion_evidence = rescore.audit_completion_evidence
 classify_evidence = rescore.classify_evidence
+evidence_level = rescore.evidence_level
 STRONG = rescore.STRONG_EVIDENCE_TYPES
+LEVELS = ("mechanical", "trace_semantic", "annotator_judgment")
+CATS = ("product", "validation", "investigation")
 
 
 def load_events(ledger_path: Path) -> list[dict]:
@@ -36,16 +39,25 @@ def per_pilot_summary(ledger_path: Path) -> dict:
     events = load_events(ledger_path)
     audit = audit_completion_evidence(events)
     type_counts: Counter = Counter()
+    level_by_category = {c: {lv: 0 for lv in LEVELS} for c in CATS}
+    categories: dict[str, str] = {}
     completion_events = 0
     completions_with_strong = 0
     completions_manual_only = 0
     for event in events:
-        if event.get("event_type") != "update_status":
-            continue
-        if event["payload"].get("status") != "complete":
+        et = event.get("event_type")
+        sid = event.get("subtask_id")
+        payload = event.get("payload", {})
+        if et == "add_subtask":
+            categories[sid] = payload.get("category", "product")
+        elif et == "split_subtask":
+            parent_cat = categories.get(sid, "product")
+            for child in payload.get("children", []):
+                categories[child["id"]] = child.get("category", parent_cat)
+        if et != "update_status" or payload.get("status") != "complete":
             continue
         completion_events += 1
-        evidence = event["payload"].get("evidence") or []
+        evidence = payload.get("evidence") or []
         types = classify_evidence(evidence)
         for t in types:
             type_counts[t] += 1
@@ -53,6 +65,9 @@ def per_pilot_summary(ledger_path: Path) -> dict:
             completions_with_strong += 1
         if types == {"manual_note"}:
             completions_manual_only += 1
+        cat = categories.get(sid, "product")
+        if cat in level_by_category:
+            level_by_category[cat][evidence_level(types)] += 1
     by_cat = audit["by_category"]
     return {
         "pilot_id": ledger_path.parent.name,
@@ -61,6 +76,7 @@ def per_pilot_summary(ledger_path: Path) -> dict:
         "weak_by_category": {c: by_cat[c]["weak_completion_evidence_count"] for c in by_cat},
         "audited_by_category": {c: by_cat[c]["audited_completion_count"] for c in by_cat},
         "evidence_type_counts": dict(type_counts),
+        "level_by_category": level_by_category,
         "completion_events": completion_events,
         "completions_with_strong": completions_with_strong,
         "completions_manual_only": completions_manual_only,
@@ -69,26 +85,31 @@ def per_pilot_summary(ledger_path: Path) -> dict:
 
 
 def aggregate(rows: list[dict]) -> dict:
-    cats = ["product", "validation", "investigation"]
-    weak_by_cat = {c: 0 for c in cats}
-    audited_by_cat = {c: 0 for c in cats}
+    weak_by_cat = {c: 0 for c in CATS}
+    audited_by_cat = {c: 0 for c in CATS}
+    level_by_cat = {c: {lv: 0 for lv in LEVELS} for c in CATS}
     types: Counter = Counter()
     completion_events = 0
     completions_with_strong = 0
     completions_manual_only = 0
     for r in rows:
-        for c in cats:
+        for c in CATS:
             weak_by_cat[c] += r["weak_by_category"][c]
             audited_by_cat[c] += r["audited_by_category"][c]
+            for lv in LEVELS:
+                level_by_cat[c][lv] += r["level_by_category"][c][lv]
         for t, n in r["evidence_type_counts"].items():
             types[t] += n
         completion_events += r["completion_events"]
         completions_with_strong += r["completions_with_strong"]
         completions_manual_only += r["completions_manual_only"]
+    level_totals = {lv: sum(level_by_cat[c][lv] for c in CATS) for lv in LEVELS}
     return {
         "pilots": len(rows),
         "weak_by_category": weak_by_cat,
         "audited_by_category": audited_by_cat,
+        "level_by_category": level_by_cat,
+        "level_totals": level_totals,
         "type_totals": dict(types),
         "completion_events": completion_events,
         "completions_with_strong": completions_with_strong,
@@ -116,6 +137,18 @@ def render_md(rows: list[dict], totals: dict) -> str:
     out.append("|---|---:|")
     for t in sorted(totals["type_totals"], key=lambda k: -totals["type_totals"][k]):
         out.append(f"| `{t}` | {totals['type_totals'][t]} |")
+    out.append("")
+    out.append("## 2b. Evidence levels (K4)")
+    out.append("")
+    out.append("| Level | product | validation | investigation | total |")
+    out.append("|---|---:|---:|---:|---:|")
+    for lv in LEVELS:
+        row = totals["level_by_category"]
+        out.append(f"| {lv} | {row['product'][lv]} | {row['validation'][lv]} | {row['investigation'][lv]} | {totals['level_totals'][lv]} |")
+    out.append("")
+    out.append("Levels: `mechanical` = test/command output, diff, file_exists, tool_action; "
+               "`trace_semantic` = contract_text on understanding-style leaves; "
+               "`annotator_judgment` = manual_note fallback. Trace_semantic counts are candidates for live sidecar automation.")
     out.append("")
     out.append("## 3. Weak completions by category")
     out.append("")

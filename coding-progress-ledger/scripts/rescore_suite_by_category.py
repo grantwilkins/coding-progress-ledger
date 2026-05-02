@@ -30,7 +30,7 @@ EXCLUDED_CATEGORIES = (
 ALL_CATEGORIES = tuple(SubtaskCategory)
 EPSILON = 1e-12
 DROP_MATERIALITY_THRESHOLD = 0.20
-STRONG_EVIDENCE_TYPES = {"test_output", "diff", "file_exists", "command_output"}
+STRONG_EVIDENCE_TYPES = {"test_output", "diff", "file_exists", "command_output", "tool_action"}
 CONTRACT_UNDERSTANDING_TERMS = ("understand", "requirement", "expected", "contract", "task", "issue")
 
 EVIDENCE_PATTERNS: tuple[tuple[str, tuple[str, ...]], ...] = (
@@ -39,7 +39,17 @@ EVIDENCE_PATTERNS: tuple[tuple[str, tuple[str, ...]], ...] = (
     ("file_exists", ("exists", "created", "wrote file", "artifact present")),
     ("command_output", ("stdout", "stderr", "command output", "cli invocation", "python -m")),
     ("contract_text", ("task.md", "readme", "issue statement", "expected behavior", "contract")),
+    ("tool_action", ("edit ", "submit ", "goto ", "search_file ", "search_dir ", "tool ack")),
 )
+EVIDENCE_LEVELS = {
+    "test_output": "mechanical",
+    "command_output": "mechanical",
+    "diff": "mechanical",
+    "file_exists": "mechanical",
+    "tool_action": "mechanical",
+    "contract_text": "trace_semantic",
+    "manual_note": "annotator_judgment",
+}
 SOURCE_PATH_PATTERN = re.compile(r"(^|\s|`)[\w./-]+\.(py|js|ts|jsx|tsx)\b", re.IGNORECASE)
 
 
@@ -621,6 +631,15 @@ def evidence_audit_by_category(
             "weak_subtask_ids": [item["subtask_id"] for item in weak_items],
         }
     return by_category
+
+
+def evidence_level(evidence_types: set[str]) -> str:
+    levels = {EVIDENCE_LEVELS[t] for t in evidence_types if t in EVIDENCE_LEVELS}
+    if "mechanical" in levels:
+        return "mechanical"
+    if "trace_semantic" in levels:
+        return "trace_semantic"
+    return "annotator_judgment"
 
 
 def classify_evidence(evidence: list[str]) -> set[str]:

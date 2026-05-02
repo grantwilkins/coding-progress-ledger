@@ -68,7 +68,7 @@ Four critic agents audited the framework against this mission on 2026-04-30. The
 **Strategic re-scoping per CRITIC_AUDIT § 4:**
 
 - **PROMOTED to current priority:** § Workstream N (live instrumentation), § Workstream W (observation-channel sharpening — new), § Workstream U (live query CLI / monitor), § Workstream T1 (LedgerSet protocol doc, the only multi-task-scope unblocker), § Workstream V (time-aware features, consumes the timestamp field).
-- **DEFERRED indefinitely:** § Workstream R (paper write-up; premature — locks in the retrospective framing as the product), § Workstream O (100-trace retrospective scale-out; the smoke test runs at chance by design and trace 21+ is debt), § Workstream P / P1–P3 (cross-source pilots; doubles annotation surface for a hypothesis with no live consumer).
+- **DELETED 2026-05-02:** Workstreams O (100-trace retrospective scale-out), P (cross-source comparison via re-annotation), R (external write-up). All three were deferred-indefinitely; deleted now because the new Hermes parity workstream supersedes them as the cross-source test.
 
 **Pilot phase (A–M) is closed.** The infrastructure produced real value (clean schema, 20 high-fidelity annotations, 5/5 quadrant inter-annotator agreement, mission features now first-class). Everything *forward* should be live-instrumentation-shaped, not annotation-shaped.
 
@@ -488,7 +488,7 @@ Status: done — `runs/swe_agent_pilot/EVIDENCE_AUDIT.md`. 81 completions: 51 st
 Status: done — `runs/swe_agent_pilot/SOURCE_EVIDENCE_GAPS.md` classifies evidence gaps as retrospective-recoverable / closed-by-live / structurally-unrecoverable. Headline: ~60% of `manual_note` completions are closable by adding a `tool_action` evidence type (K3). Live instrumentation justified for hidden-work-gap visibility, submit provenance, and pre-fix baseline.
 
 ### K3. Extend `classify_evidence` with `tool_action` strong type (post-CRITIC_AUDIT)
-Status: not started · _cheap channel improvement; runs in parallel with N1_
+Status: done — `tool_action` added to `STRONG_EVIDENCE_TYPES` + `EVIDENCE_PATTERNS`; manual-only completions on the SWE-agent pilot dropped 30 → 2.
 
 Goal: K2 found that ~60% of K1's 30 manual-only completions are short edit/submit/goto/search tool acks that the classifier currently treats as `manual_note`. Adding a `tool_action` strong-evidence type closes them without re-annotation.
 
@@ -508,7 +508,7 @@ test invariants in tests/test_pilot_evidence_audit.py still pass
 ```
 
 ### K4. Split manual-only evidence into semantic levels
-Status: not started · _feeds W3 and N4; do not change ledger core_
+Status: done — `EVIDENCE_LEVELS` + `evidence_level()` classifier; audit emits a 3-level table (mechanical=65 / trace_semantic=0 / annotator_judgment=2) by category and is locked by `tests/test_pilot_evidence_audit.py`.
 
 Goal: `manual_note` currently mixes trace-visible but parser-missed evidence with pure annotator judgment. Split evidence audit output into three levels so live instrumentation can distinguish what is automatable from what is inherently semantic.
 
@@ -540,7 +540,7 @@ report states which trace_semantic patterns are candidates for live sidecar auto
 ## § Workstream L — Visualization and qualitative review
 
 ### L1. Generate progress plots
-Status: not started
+Status: done — `scripts/plot_progress_curves.py` emits one `plots/<pilot_id>_progress.csv` per pilot (step, coding_progress, overall_progress, coding_drop_marker); no plotting lib added; 20 CSVs covering all pilots.
 
 **Pre-flight:** check `pyproject.toml` for matplotlib (or any other plotting lib) before writing the script. If no plotting dep exists, the first sub-step is "add matplotlib to pyproject.toml dev dependencies" — don't pull in plotly/seaborn/etc., matplotlib is the minimal addition. If the team prefers no new deps, fall back to writing per-run progress data to `runs/swe_agent_pilot/plots/<pilot_id>_progress.csv` and let the user plot externally.
 
@@ -567,7 +567,7 @@ no new dep added without an explicit pyproject.toml edit in the same commit
 ```
 
 ### L2. Generate pilot dashboard summary
-Status: not started
+Status: done — `scripts/build_pilot_dashboard.py` writes `runs/swe_agent_pilot/PILOT_DASHBOARD.md` (20-row markdown table; pilot_id, final_success, final_coding_progress, largest_drop, evidence_status, annotation_time, progress_csv_path); 10 successes / 10 failures.
 
 Outputs:
 ```text
@@ -760,30 +760,6 @@ legacy retrospective rows remain supported
 ### § Workstream T — Task-set as first-class structure
 Status: **PROMOTED.** T1 is the only roadmap item that addresses multi-task scope. Move to current priority. (T1 details remain at the existing § Workstream T section below; this header just promotes the priority.)
 
-### § Workstream O — Scale-out retrospective study (100+ traces)
-Status: **DEFERRED INDEFINITELY** (post-CRITIC_AUDIT). The smoke test runs at chance by design (M1 § G2.1); scaling 21+ is annotation debt without a live consumer. Re-open only if N4 parity fails badly enough that retrospective remains the only viable channel.
-
-Sketch (preserved for reference, not for execution):
-```text
-O1. Revised sampling policy with model/repo balance
-O2. Batch annotation tooling (improvements based on D3 + E1 friction)
-O3. Annotation budget tracking (annotation_quality.json roll-up)
-O4. Automated quality gates (J2 + K1 in CI-like pipeline)
-O5. Scale-out audit
-O6. Updated GO_NO_GO at N=100
-```
-
-### § Workstream P — Cross-model / cross-scaffold comparison
-Status: **DEFERRED INDEFINITELY** (post-CRITIC_AUDIT). Adds annotation surface to validate a hypothesis (progress shape) that has no live consumer. Re-open only after Workstream N produces ≥1 live ledger and the cross-source question becomes "does live-shape generalize?" rather than "does retrospective-shape replicate?".
-
-Sketch (preserved for reference):
-```text
-P1. Pick 10 instances each solved/attempted by ≥3 distinct model/scaffold pairs
-P2. Annotate or instrument each
-P3. Compare progress curves and failure modes per instance, not per model
-P4. Report whether failure shape is more about instance difficulty or about scaffold
-```
-
 ### § Workstream Q — Predictive modeling pass
 Status: **Q1–Q5, Q7 done.** Q6 (final-success prediction) explicitly deferred per the decoupling memory.
 
@@ -805,17 +781,71 @@ Status: **deferred** — channel-decoupling memory rules out final-success as th
 #### Q7. RESULTS_DISCLAIMERS
 Status: done — `datasets/RESULTS_DISCLAIMERS.md`. Documents the N=20 LORO power gap, retrospective-vs-live frontier-policy gap, the `always_mean` LORO degeneracy on per-run-constant targets, the high `progress_only` AUROC on `future_progress_drop` as feasibility-not-headline.
 
-### § Workstream R — External write-up / paper draft
-Status: **DEFERRED INDEFINITELY** (post-CRITIC_AUDIT). Premature: writing this up before live instrumentation locks in the retrospective framing as the product. Re-open only after N4 (live-vs-retrospective parity report) demonstrates the channel works on live data.
+### § Workstream H_PARITY — Hermes replay parity check (current next direction)
+Status: **NEW current priority.** Plan in `docs/HERMES_REPLAY_PLAN.md`. Goal: confirm the SWE-agent pipeline (normalize → import → annotate → checkpoint table → Q labels) transfers to a non-SWE source without changing the framework.
 
-Sketch (preserved for reference):
+Source: [`lambda/hermes-agent-reasoning-traces`](https://huggingface.co/datasets/lambda/hermes-agent-reasoning-traces) (Apache 2.0, 14.7k traces, no `final_success` upstream — this is a feature, it tests the channel-vs-outcome decoupling thesis).
+
+#### HP1. Fetch one row, write source-format docs
+Status: not started
+
+Outputs:
 ```text
-R1. Methods writeup (annotation protocol, evidence audit, scoring semantics)
-R2. Threats to validity (annotation drift, retrospective bias, evidence gaps)
-R3. Dataset card (for any released annotated artifacts)
-R4. Ethics/license review (esp. for nebius/SWE-smith trajectory licenses)
-R5. Reproducibility appendix (commands, seeds, dataset versions)
+external_data/hermes/raw/sample_row.json     # one row per config (kimi, glm-5.1)
+external_data/hermes/SOURCE_FORMAT.md        # field-by-field schema, license note
+external_data/hermes/PILOT_SAMPLING_POLICY.md # balance by category × config (no success label)
+docs/HERMES_TRACE_SCHEMA.md                  # role mapping + step extraction rules
 ```
+
+#### HP2. Normalizer + importer
+Status: not started · _blocks HP3_
+
+Outputs:
+```text
+scripts/normalize_hermes_trace.py     # role: gpt→assistant, tool→tool; <tool_call>/<tool_response> parsing
+scripts/import_hermes_trace.py        # emit the eight pre-annotation artifacts; skip final_diff/test_output if absent
+scripts/hermes_inventory.py           # parquet streamer; final_success_available always empty
+scripts/sample_hermes_pilot.py        # balance by category × config
+tests/test_normalize_hermes_trace.py
+tests/test_import_hermes_trace.py
+```
+
+#### HP3. Pilot-zero annotation (5 traces, Terminal & Coding only)
+Status: not started · _blocks HP4_
+
+Outputs:
+```text
+docs/HERMES_RETROSPECTIVE_LEDGER_PROTOCOL.md  # thin addendum; defers to general protocol
+annotations/hermes_pilot/<pilot_id>.{json,notes.md}
+runs/hermes_pilot/<pilot_id>/                 # ledger.jsonl + check-run passing
+```
+
+Acceptance: all five existing SubtaskCategory values appear at least once across the 5 pilots; no new pitfall per trace; step segmentation is unambiguous.
+
+#### HP4. Parity check vs SWE-agent
+Status: not started
+
+Outputs:
+```text
+runs/hermes_pilot/HERMES_PARITY_REPORT.md
+datasets/hermes_pilot_observations_step.csv   # via existing build_ledger_observation_dataset.py
+datasets/hermes_pilot_estimator_checkpoints.csv # via existing build_estimator_checkpoints.py
+datasets/hermes_pilot_q_labels.csv            # via existing build_q_labels.py (Q1–Q4 transfer)
+datasets/hermes_pilot_shape_labels.csv        # via existing label_observation_shapes.py
+```
+
+Acceptance:
+```text
+existing scripts/build_ledger_observation_dataset.py runs unchanged on hermes_pilot
+existing scripts/build_estimator_checkpoints.py runs unchanged on hermes_pilot
+existing scripts/build_q_labels.py runs unchanged (no final_success required for Q1-Q5)
+existing scripts/label_observation_shapes.py runs unchanged
+parity report names which channel features are stable across sources and which are not
+no edits to ledger_progress/core.py
+no edits to LedgerEvent/Status/SubtaskCategory enums
+```
+
+If HP4 passes, the framework is source-agnostic in practice, not just in design. If it fails, the failure modes are the most valuable signal in the project — record them and revise the channel-thesis docs.
 
 ### § Workstream S — Open research questions
 Status: ongoing · _living document_
@@ -903,9 +933,7 @@ N1–N6 ✓, W1 ✓, W2 ✓, W3 ✓, W4 ✓, U1+U2 ✓, V1 ✓, V2 ✓, T1 ✓, 
   - Build a live-N=20 checkpoint table by running `scripts/build_estimator_checkpoints.py` against `runs/swe_agent_live_wallclock/` so `submit_without_validation` / `validation_*` Q targets can be recomputed under the live frontier policy.
   - Reconcile selection_reason strings (B2 follow-up, still open from sampler).
   - Q6 (final-success prediction) stays deferred per the decoupling memory.
-- **Hermes adaptation (new source):** `docs/HERMES_REPLAY_PLAN.md` documents the schema map, adaptation phases, and known SWE-agent-only assumptions. No `final_success` label upstream — Q1–Q5 channel-native targets carry through; Q6 stays N/A. Inventory + sampler + normalizer + importer planned to mirror the SWE-agent pipeline; ~1 day of code + ½ day of pilot annotation (5 traces).
-- **U3** optional `ledger-run serve` HTTP surface — gated on real demand.
-- **K3 / K4** evidence-classifier sharpening (`tool_action`, three-level evidence split).
+- **§ H_PARITY (Hermes replay parity check)** — current next direction. HP1–HP4 above; plan in `docs/HERMES_REPLAY_PLAN.md`.
 
 ---
 
