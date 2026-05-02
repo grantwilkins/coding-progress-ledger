@@ -652,15 +652,7 @@ ledger-run query <run_dir> --last-validation-event
 ```
 
 #### U3. `ledger-run serve` HTTP server (optional)
-Status: not started · _build only if U1+U2 prove the demand_
-
-Goal: Hold one in-memory `LedgerSession` per active run; expose `POST /events` and `GET /progress` / `GET /blocked` / `GET /stalled`.
-
-Acceptance:
-```text
-single-process server returns live progress for an active run
-test: feed events via POST, query via GET, see updates without restart
-```
+Status: done — `ledger_progress/run_manager.py:_cmd_serve` (stdlib `http.server`) exposes `POST /events`, `GET /progress`, `GET /blocked`, `GET /stalled?threshold=N` against an in-memory replay buffer; `tests/test_run_manager_serve.py` POSTs events and asserts GET responses reflect updates without restart.
 
 ### § Workstream V — Time-aware features
 Status: **NEW** (post-CRITIC_AUDIT). Consumes `LedgerEvent.timestamp` (commit `5bdcab6`).
@@ -927,7 +919,7 @@ Pilot phase A–M complete as of 2026-04-30 — see `runs/swe_agent_pilot/GO_NO_
 
 ## Minimal first batch (forward phase — current)
 
-N1–N6 ✓, W1 ✓, W2 ✓, W3 ✓, W4 ✓, U1+U2 ✓, V1 ✓, V2 ✓, T1 ✓, T2 ✓, T3 ✓, T4 ✓, T5 ✓, Q1 ✓, Q2 ✓, Q3 ✓, Q4 ✓, Q5 ✓, Q7 ✓. **Workstreams W, T, Q (less Q6) are complete.** Remaining forward work:
+N1–N6 ✓, W1 ✓, W2 ✓, W3 ✓, W4 ✓, U1+U2+U3 ✓, V1 ✓, V2 ✓, T1 ✓, T2 ✓, T3 ✓, T4 ✓, T5 ✓, Q1 ✓, Q2 ✓, Q3 ✓, Q4 ✓, Q5 ✓, Q7 ✓. **Workstreams W, T, U, Q (less Q6) are complete.** Remaining forward work:
 
 - **Q follow-ons (post-Q5):**
   - Build a live-N=20 checkpoint table by running `scripts/build_estimator_checkpoints.py` against `runs/swe_agent_live_wallclock/` so `submit_without_validation` / `validation_*` Q targets can be recomputed under the live frontier policy.

@@ -85,6 +85,13 @@ def main(argv: list[str] | None = None) -> int:
     query.add_argument("--last-validation-event", action="store_true")
     query.set_defaults(func=_cmd_query)
 
+    serve = subparsers.add_parser("serve", help="Run an HTTP progress probe for a single run dir.")
+    serve.add_argument("run_dir")
+    serve.add_argument("--host", default="127.0.0.1")
+    serve.add_argument("--port", type=int, default=0)
+    serve.add_argument("--exit-after-events", type=int, default=0)
+    serve.set_defaults(func=_cmd_serve)
+
     args = parser.parse_args(argv)
     try:
         return args.func(args)
@@ -288,6 +295,81 @@ def _cmd_query(args: argparse.Namespace) -> int:
         out["last_validation_event"] = _event_to_dict(event) if event else None
 
     print(json.dumps(out, sort_keys=True))
+    return 0
+
+
+def _cmd_serve(args: argparse.Namespace) -> int:
+    import threading
+    from http.server import BaseHTTPRequestHandler, HTTPServer
+    from urllib.parse import parse_qs, urlparse
+
+    from .core import replay
+    from .scoring import score
+    from .serialization import event_from_dict, load_events_jsonl
+
+    run_dir = _existing_run_dir(args.run_dir)
+    ledger_path = run_dir / "ledger.jsonl"
+    events = load_events_jsonl(str(ledger_path)) if ledger_path.exists() and ledger_path.stat().st_size > 0 else []
+    state = {"posts": 0}
+    target = args.exit_after_events
+
+    def current_ledger():
+        return replay(events) if events else None
+
+    def write_json(handler: BaseHTTPRequestHandler, status: int, payload: dict) -> None:
+        body = json.dumps(payload, sort_keys=True).encode()
+        handler.send_response(status)
+        handler.send_header("Content-Type", "application/json")
+        handler.send_header("Content-Length", str(len(body)))
+        handler.end_headers()
+        handler.wfile.write(body)
+
+    class Handler(BaseHTTPRequestHandler):
+        def log_message(self, *_): pass
+
+        def do_POST(self):
+            if urlparse(self.path).path != "/events":
+                write_json(self, 404, {"error": "not found"}); return
+            length = int(self.headers.get("Content-Length", "0"))
+            data = json.loads(self.rfile.read(length).decode())
+            events.append(event_from_dict(data))
+            with ledger_path.open("a") as f:
+                f.write(json.dumps(data, separators=(",", ":")) + "\n")
+            state["posts"] += 1
+            write_json(self, 200, {"ok": True, "events": state["posts"]})
+            if target and state["posts"] >= target:
+                threading.Thread(target=server.shutdown, daemon=True).start()
+
+        def do_GET(self):
+            parsed = urlparse(self.path)
+            ledger = current_ledger()
+            if parsed.path == "/progress":
+                if ledger is None:
+                    write_json(self, 200, {"coding_progress": 0.0, "validation_progress": 0.0, "current_step": 0}); return
+                coding = score(ledger, categories=("product", "validation", "investigation"))
+                validation = score(ledger, categories=("validation",))
+                write_json(self, 200, {
+                    "coding_progress": coding.progress,
+                    "validation_progress": validation.progress,
+                    "current_step": queries.current_step(ledger),
+                })
+            elif parsed.path == "/blocked":
+                blocked = [_subtask_to_dict(s) for s in queries.active_blocked_leaves(ledger)] if ledger else []
+                write_json(self, 200, {"active_blocked_leaves": blocked})
+            elif parsed.path == "/stalled":
+                params = parse_qs(parsed.query)
+                threshold = int(params.get("threshold", ["0"])[0])
+                stalled = queries.stalled_for(ledger) if ledger else 0
+                write_json(self, 200, {"stalled_for_blocked": stalled, "meets_threshold": stalled >= threshold})
+            else:
+                write_json(self, 404, {"error": "not found"})
+
+    server = HTTPServer((args.host, args.port), Handler)
+    addr = {"host": server.server_address[0], "port": server.server_address[1]}
+    (run_dir / "serve_address.json").write_text(json.dumps(addr))
+    print(json.dumps(addr), flush=True)
+    server.serve_forever()
+    server.server_close()
     return 0
 
 
