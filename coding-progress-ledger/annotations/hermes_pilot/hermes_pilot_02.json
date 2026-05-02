@@ -1,0 +1,82 @@
+{
+  "pilot_id": "hermes_pilot_02",
+  "instance_id": "2b0993c4-8b6c-40cc-845d-bbc21b661594",
+  "root_task": "Implement a token bucket rate limiter and capture pattern as reusable skill",
+  "events": [
+    {
+      "op": "add",
+      "step": 2,
+      "id": "S1",
+      "category": "PRODUCT",
+      "description": "Write token_bucket_rate_limiter.py with thread-safe TokenBucket and demo"
+    },
+    {
+      "op": "complete",
+      "step": 3,
+      "id": "S1",
+      "evidence": "step 3: write_file ack bytes_written=9655"
+    },
+    {
+      "op": "add",
+      "step": 4,
+      "id": "S2",
+      "category": "VALIDATION",
+      "description": "Run rate limiter demo to observe behavior"
+    },
+    {
+      "op": "complete",
+      "step": 13,
+      "id": "S2",
+      "evidence": [
+        "step 5: terminal output 'Token Bucket Rate Limiter - Demo' confirms first run produces output",
+        "step 13: terminal output 'Token Bucket Rate Limiter Demo' confirms second run after refinement still works"
+      ]
+    },
+    {
+      "op": "add",
+      "step": 6,
+      "id": "S3",
+      "category": "PRODUCT",
+      "description": "Refine demo loop / formatting in token_bucket_rate_limiter.py"
+    },
+    {
+      "op": "complete",
+      "step": 11,
+      "id": "S3",
+      "evidence": [
+        "step 7: patch ack with diff at lines 253-265",
+        "step 9: read_file returns full file content (verifies state)",
+        "step 11: write_file ack bytes_written=9502 (full rewrite)"
+      ]
+    },
+    {
+      "op": "add",
+      "step": 14,
+      "id": "S4",
+      "category": "ARTIFACT",
+      "description": "Save token-bucket-rate-limiter skill with reference implementation"
+    },
+    {
+      "op": "complete",
+      "step": 23,
+      "id": "S4",
+      "evidence": [
+        "step 15: skill_manage create rejected for missing 'name' frontmatter",
+        "step 17: skill_manage write_file ack 'references/token_bucket_rate_limiter.py written'",
+        "step 19: skill_manage create rejected because skill already exists",
+        "step 21: skill_view confirms skill exists with description",
+        "step 23: skill_manage patch ack 'Patched SKILL.md (1 replacement)'"
+      ]
+    }
+  ],
+  "quality": {
+    "annotator": "Claude (HP3 first pass)",
+    "annotation_pass": "pilot-zero",
+    "annotation_time_minutes": 15,
+    "number_of_uncertain_events": 1,
+    "number_of_evidence_gaps": 0,
+    "whether_final_success_used_only_at_end": true,
+    "whether_progress_forced": false,
+    "whether_schema_gap_found": false
+  }
+}

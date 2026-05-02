@@ -1,0 +1,94 @@
+{
+  "pilot_id": "hermes_pilot_04",
+  "instance_id": "c396bc84-72bd-4954-bdb5-f1671870e065",
+  "root_task": "Write log analyzer extracting error patterns and frequencies, save as reusable skill",
+  "events": [
+    {
+      "op": "add",
+      "step": 2,
+      "id": "S1",
+      "category": "PRODUCT",
+      "description": "Write log_analyzer.py extracting error patterns and frequencies"
+    },
+    {
+      "op": "complete",
+      "step": 3,
+      "id": "S1",
+      "evidence": "step 3: write_file ack bytes_written=9546"
+    },
+    {
+      "op": "add",
+      "step": 4,
+      "id": "S2",
+      "category": "PRODUCT",
+      "description": "Write sample.log fixture for analyzer demonstration"
+    },
+    {
+      "op": "complete",
+      "step": 5,
+      "id": "S2",
+      "evidence": "step 5: write_file ack bytes_written=1519"
+    },
+    {
+      "op": "add",
+      "step": 6,
+      "id": "S3",
+      "category": "VALIDATION",
+      "description": "Run log_analyzer.py against sample.log in plain and JSON modes"
+    },
+    {
+      "op": "complete",
+      "step": 9,
+      "id": "S3",
+      "evidence": [
+        "step 7: terminal output 'LOG ANALYSIS REPORT' confirms first run produces summary",
+        "step 9: terminal output 'Report saved to: report.json' with json error_counts including ConnectionTimeoutException, NullPointerException, SQLException"
+      ]
+    },
+    {
+      "op": "add",
+      "step": 10,
+      "id": "S4",
+      "category": "ARTIFACT",
+      "description": "Save log-error-analyzer skill with SKILL.md frontmatter and bundled script"
+    },
+    {
+      "op": "add",
+      "step": 14,
+      "id": "S5",
+      "category": "INVESTIGATION",
+      "description": "Recover script content for skill packaging after skill_manage write_file requires inline file_content"
+    },
+    {
+      "op": "complete",
+      "step": 19,
+      "id": "S5",
+      "evidence": [
+        "step 15: skill_manage write_file rejected with 'file_content is required for write_file'",
+        "step 17: read_file returns full numbered listing of log_analyzer.py",
+        "step 19: execute_code (read_file via hermes_tools) re-confirms numbered listing"
+      ]
+    },
+    {
+      "op": "complete",
+      "step": 23,
+      "id": "S4",
+      "evidence": [
+        "step 11: skill_manage create rejected for missing 'name' frontmatter",
+        "step 13: skill_manage create success 'Skill log-error-analyzer created'",
+        "step 21: skill_manage write_file success 'scripts/log_analyzer.py written'",
+        "step 23: skill_view returns description matching the saved skill"
+      ]
+    }
+  ],
+  "quality": {
+    "annotator": "Claude (HP3 first pass)",
+    "annotation_pass": "pilot-zero",
+    "annotation_time_minutes": 18,
+    "number_of_uncertain_events": 1,
+    "number_of_evidence_gaps": 0,
+    "whether_final_success_used_only_at_end": true,
+    "whether_progress_forced": false,
+    "whether_schema_gap_found": false
+  }
+}

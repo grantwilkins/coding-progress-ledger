@@ -1,0 +1,137 @@
+{
+  "pilot_id": "hermes_pilot_03",
+  "instance_id": "3fc8e87a-e47d-47bb-8464-38ebc4623760",
+  "root_task": "Implement REST API client with retry logic and rate limiting, save as reusable skill",
+  "events": [
+    {
+      "op": "add",
+      "step": 2,
+      "id": "S1",
+      "category": "PRODUCT",
+      "description": "Write rest_api_client.py with retry/backoff and rate limiting"
+    },
+    {
+      "op": "complete",
+      "step": 3,
+      "id": "S1",
+      "evidence": "step 3: write_file ack bytes_written=12907"
+    },
+    {
+      "op": "add",
+      "step": 4,
+      "id": "S2",
+      "category": "PRODUCT",
+      "description": "Write test_rest_api_client.py pytest suite"
+    },
+    {
+      "op": "complete",
+      "step": 5,
+      "id": "S2",
+      "evidence": "step 5: write_file ack bytes_written=10026"
+    },
+    {
+      "op": "add",
+      "step": 6,
+      "id": "S3",
+      "category": "INVESTIGATION",
+      "description": "Locate working directory after cd /home/user fails"
+    },
+    {
+      "op": "complete",
+      "step": 9,
+      "id": "S3",
+      "evidence": [
+        "step 7: terminal observation 'bash: cd: /home/user: No such file or directory'",
+        "step 9: terminal observation pwd=/home/ubuntu/hermes-agent and ls confirms files present"
+      ]
+    },
+    {
+      "op": "add",
+      "step": 10,
+      "id": "S4",
+      "category": "VALIDATION",
+      "description": "Run rest_api_client demo against jsonplaceholder.typicode.com"
+    },
+    {
+      "op": "complete",
+      "step": 15,
+      "id": "S4",
+      "evidence": [
+        "step 11: terminal output banner 'REST API Client with Retry Logic and Rate Limiting' first run",
+        "step 15: terminal output shows initialization log + RestApiClient INFO lines after patch"
+      ]
+    },
+    {
+      "op": "add",
+      "step": 12,
+      "id": "S5",
+      "category": "PRODUCT",
+      "description": "Patch rest_api_client.py retry_config tuning"
+    },
+    {
+      "op": "complete",
+      "step": 13,
+      "id": "S5",
+      "evidence": "step 13: patch ack with diff at line 312 modifying retry_config"
+    },
+    {
+      "op": "add",
+      "step": 16,
+      "id": "S6",
+      "category": "ENVIRONMENT",
+      "description": "pytest module unavailable in venv — env gap blocks the prepared test suite"
+    },
+    {
+      "op": "block",
+      "step": 17,
+      "id": "S6",
+      "reason": "pytest not installed; agent did not pip install — pivots to a custom quick_test.py harness instead",
+      "evidence": "step 17: terminal observation '/home/ubuntu/.venv/bin/python: No module named pytest'"
+    },
+    {
+      "op": "add",
+      "step": 18,
+      "id": "S7",
+      "category": "VALIDATION",
+      "description": "Build and run quick_test.py mock-based verification harness"
+    },
+    {
+      "op": "complete",
+      "step": 27,
+      "id": "S7",
+      "evidence": [
+        "step 19: write_file ack bytes_written=4015 for quick_test.py",
+        "step 21: terminal output shows mocked client responses (RestApiClient WARNING + retry behavior)",
+        "step 23: patch ack adjusting Test 6 (no-retry on 4xx)",
+        "step 25: patch ack adjusting Test 6 to 429 retry path",
+        "step 27: terminal output confirms quick_test.py final run produces RestApiClient WARNING traces"
+      ]
+    },
+    {
+      "op": "add",
+      "step": 28,
+      "id": "S8",
+      "category": "ARTIFACT",
+      "description": "Save rest-api-client-with-retry skill"
+    },
+    {
+      "op": "complete",
+      "step": 31,
+      "id": "S8",
+      "evidence": [
+        "step 29: skill_manage create rejected for missing 'name' frontmatter (with budget warning)",
+        "step 31: skill_manage create success message 'Skill rest-api-client-with-retry created'"
+      ]
+    }
+  ],
+  "quality": {
+    "annotator": "Claude (HP3 first pass)",
+    "annotation_pass": "pilot-zero",
+    "annotation_time_minutes": 20,
+    "number_of_uncertain_events": 1,
+    "number_of_evidence_gaps": 1,
+    "whether_final_success_used_only_at_end": true,
+    "whether_progress_forced": false,
+    "whether_schema_gap_found": false
+  }
+}
