@@ -847,6 +847,11 @@ no edits to LedgerEvent/Status/SubtaskCategory enums
 
 If HP4 passes, the framework is source-agnostic in practice, not just in design. If it fails, the failure modes are the most valuable signal in the project — record them and revise the channel-thesis docs.
 
+#### HP5. Scale-up to N=30 with heuristic auto-annotation
+Status: done — N=30 pilots across (Terminal & Coding, Repository Tasks, File Operations) × (kimi, glm-5.1). Inventory grew 1k→4.5k rows, sampling pool 6→3,223. SPLIT (Pitfall H1) exercised in production at 23 multi-tool-call gpt turns. Heuristic auto-annotator (`scripts/auto_annotate_hermes.py`) deterministically maps tool→category per protocol; 12 invariant tests; 50%+ category-overlap with HP4 human annotations enforced. All four downstream pipelines run unchanged. Report at `runs/hermes_pilot_h5/HERMES_H5_REPORT.md`.
+
+Next: either (a) inject human REOPEN events on a HP5 subsample to populate Q1 channel-native targets, or (b) advance to a different source/workstream — heuristic annotation has hit its ceiling on Q1 fidelity.
+
 ### § Workstream S — Open research questions
 Status: ongoing · _living document_
 
