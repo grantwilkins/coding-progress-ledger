@@ -848,9 +848,23 @@ no edits to LedgerEvent/Status/SubtaskCategory enums
 If HP4 passes, the framework is source-agnostic in practice, not just in design. If it fails, the failure modes are the most valuable signal in the project — record them and revise the channel-thesis docs.
 
 #### HP5. Scale-up to N=30 with heuristic auto-annotation
-Status: done — N=30 pilots across (Terminal & Coding, Repository Tasks, File Operations) × (kimi, glm-5.1). Inventory grew 1k→4.5k rows, sampling pool 6→3,223. SPLIT (Pitfall H1) exercised in production at 23 multi-tool-call gpt turns. Heuristic auto-annotator (`scripts/auto_annotate_hermes.py`) deterministically maps tool→category per protocol; 12 invariant tests; 50%+ category-overlap with HP4 human annotations enforced. All four downstream pipelines run unchanged. Report at `runs/hermes_pilot_h5/HERMES_H5_REPORT.md`.
+Status: done — N=30 pilots across (Terminal & Coding, Repository Tasks, File Operations) × (kimi, glm-5.1). Inventory grew 1k→4.5k rows, sampling pool 6→3,223. SPLIT (Pitfall H1) exercised in production at 23 multi-tool-call gpt turns. Heuristic auto-annotator (`scripts/auto_annotate_hermes.py`) deterministically maps tool→category per protocol; overlap test enforces (a) ≥50% category multiset match with HP4 humans, (b) leaf count within ±50%, (c) ARTIFACT leaves only on terminal-signal tools. All four downstream pipelines run unchanged. Report at `runs/hermes_pilot_h5/HERMES_H5_REPORT.md`. Q1 transfer: 2/5 targets exercised (`future_progress_drop` 151/370, `validation_exposes_new_work` 93/370); 3/5 inaccessible to a no-REOPEN heuristic. HP5-critic ITERATION 1 PASSES.
 
-Next: either (a) inject human REOPEN events on a HP5 subsample to populate Q1 channel-native targets, or (b) advance to a different source/workstream — heuristic annotation has hit its ceiling on Q1 fidelity.
+#### HP6. Soften BLOCKED rule + pin reproducibility (post-HP5-critic)
+Status: not started · _the principal HP5 distortion_
+
+Goal: HP5's `_is_error_response` BLOCKs on the first non-zero exit code. This (a) drives `stuck_loop` to 22/30 (W2 misnamed-tag artifact), (b) stretches `coding_progress` from 0.50–1.00 (any error truncates the leaf), (c) suppresses `stuck_loop_next_window` via the W3 mask. A more honest rule requires N consecutive identical errors before BLOCKING.
+
+Outputs:
+```text
+scripts/auto_annotate_hermes.py      # require 3+ consecutive identical errors before BLOCK
+tests/test_auto_annotate_hermes.py   # update invariants; expect lower BLOCKED count
+runs/hermes_pilot_h5_v2/             # re-run HP5 with the softened rule
+runs/hermes_pilot_h5_v2/HP6_REPORT.md  # before/after stuck_loop, coding_progress, Q1 numbers
+external_data/hermes/pilot_cache_h5/  # commit the 30 raw rows (~3.3 MB) to fix the reproducibility gap
+```
+
+Acceptance: `stuck_loop` shape-tag rate drops below HP4's frontier-policy expectation; coding_progress mean rises toward 1.0 for non-loop pilots; the 30 raw rows are pinned in-tree.
 
 ### § Workstream S — Open research questions
 Status: ongoing · _living document_
@@ -938,7 +952,7 @@ N1–N6 ✓, W1 ✓, W2 ✓, W3 ✓, W4 ✓, U1+U2+U3 ✓, V1 ✓, V2 ✓, T1 �
   - Build a live-N=20 checkpoint table by running `scripts/build_estimator_checkpoints.py` against `runs/swe_agent_live_wallclock/` so `submit_without_validation` / `validation_*` Q targets can be recomputed under the live frontier policy.
   - Reconcile selection_reason strings (B2 follow-up, still open from sampler).
   - Q6 (final-success prediction) stays deferred per the decoupling memory.
-- **§ H_PARITY (Hermes replay parity check)** — HP1–HP4 ✓; HP5 (N≥30 scale-up for distributional parity) is the next-experiment if Hermes work continues.
+- **§ H_PARITY (Hermes replay parity check)** — HP1–HP5 ✓; HP6 (BLOCKED-rule softening + raw-cache pin) is the next-experiment if Hermes work continues.
 
 ---
 
