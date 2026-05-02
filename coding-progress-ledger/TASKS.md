@@ -872,76 +872,16 @@ doc explicitly defers DAGs, time windows, cross-member evidence to future addend
 ```
 
 ### T2. Add LedgerSet / LedgerSetMember types and JSONL serialization
-Status: blocked on T1
-
-Goal: Implement the data model in source files that are siblings of (not edits to) the single-task types.
-
-Outputs:
-```text
-ledger_progress/set_core.py        # LedgerSet, LedgerSetMember dataclasses
-ledger_progress/set_serialization.py
-tests/test_set_serialization.py
-```
-
-Acceptance:
-```text
-round-trip on a 1-member set and a 20-member set
-no edits to ledger_progress/core.py
-```
+Status: done — `ledger_progress/set_core.py` + `ledger_progress/set_serialization.py` + `tests/test_set_serialization.py` (7 tests). Set-level JSONL mirrors `LedgerSession.export_jsonl` one level up: `set_init` / `add_member` / `mark_member` event lines, with `Status` enum serialized as stable `.value` strings. Round-trip on 1-member and 20-member sets locked. No edits to `ledger_progress/core.py`.
 
 ### T3. Add LedgerSetSession and score_set
-Status: blocked on T2
-
-Goal: Session API mirroring `LedgerSession`'s ergonomics one level up; weight-weighted-mean aggregation with the CODING_CATEGORIES slice.
-
-Outputs:
-```text
-ledger_progress/set_session.py
-ledger_progress/scoring.py    # extended with score_set(...)
-tests/test_set_session.py
-tests/test_score_set.py
-```
-
-Acceptance:
-```text
-score_set on a 3-member fixture (mixed weights, one INVALIDATED member) matches a hand-computed reference
-LedgerSetSession.add_member / mark_member / score / export_jsonl all exercised
-```
+Status: done — `ledger_progress/set_session.py` + `ledger_progress/scoring.py::score_set` + `tests/test_set_session.py` + `tests/test_score_set.py` (13 tests). `score_set` is the weight-weighted mean over `CODING_CATEGORIES`; members with `status_override in {INVALIDATED, DELETED}` drop out of both numerator and denominator; `BLOCKED` is kept in the mean (per general § 9 open question 2). `LedgerSetSession.add_member` / `mark_member` / `score` / `export_jsonl` all exercised; an explicit `member_id` (e.g. `pilot_s_01`) is honored when supplied, otherwise `M{i}` is auto-assigned.
 
 ### T4. Wrap the 20 SWE-agent pilots as singleton sets + one 20-member rollup
-Status: blocked on T3, E1
-
-Goal: First real use of the set layer; closes the loop from D2 single-task annotations to set-level aggregation.
-
-Outputs:
-```text
-runs/swe_agent_pilot/<pilot_id>/set.jsonl     # singleton set per pilot
-runs/swe_agent_pilot/pilot_rollup_set.jsonl   # 20-member rollup
-```
-
-Acceptance:
-```text
-rollup set's score reproduces the median / mean reported in E3 within rounding
-each pilot's singleton set's score equals its single-ledger coding-progress
-no source_trace.json or ledger.jsonl edited
-```
+Status: done — `scripts/build_pilot_ledger_sets.py` + `tests/test_pilot_ledger_sets.py` (5 tests). Per-pilot singleton sets at `runs/swe_agent_pilot/<pilot_id>/set.jsonl` (in the gitignored pilot subdirs alongside `ledger.jsonl`); 20-member rollup at `runs/swe_agent_pilot/pilot_rollup_set.jsonl` (un-ignored). Locked invariants: each singleton score equals its single-ledger coding-progress; the rollup score equals the unweighted mean of the 20 per-pilot coding-progress scores (≈0.8224, in the success-mean / failure-mean band reported in `PILOT_ANNOTATION_SUMMARY.md`); `ledger.jsonl` and `source_trace.json` SHA-256s are unchanged across re-runs of the build script.
 
 ### T5. Write SWE-agent LedgerSet addendum
-Status: blocked on T1
-
-Goal: Mirror the `SWE_AGENT_RETROSPECTIVE_LEDGER_PROTOCOL.md` thin-addendum pattern for set-level work.
-
-Outputs:
-```text
-docs/SWE_AGENT_LEDGER_SET_ADDENDUM.md
-```
-
-Acceptance:
-```text
-addendum defers to the general LEDGER_SET_PROTOCOL.md on every conflict
-addendum adds only SWE-agent-specific naming (e.g. one repo's worth of issues maps to one LedgerSet)
-no edits to the general doc
-```
+Status: done — `docs/SWE_AGENT_LEDGER_SET_ADDENDUM.md`. Mirrors the thin-addendum pattern of `SWE_AGENT_RETROSPECTIVE_LEDGER_PROTOCOL.md`: defers to `docs/LEDGER_SET_PROTOCOL.md` on every conflict; only adds SWE-agent-specific naming, per-pilot singleton convention, the 20-member rollup convention (≈0.8224 unweighted mean, no `final_success` propagation per Q's locked framing), and four SWE-agent-specific pitfalls (multi-set membership, `status_override` is not the upstream label, rollup denominators under override, no rollup-as-forecast).
 
 ### Open questions / known caveats
 
@@ -957,9 +897,8 @@ Pilot phase A–M complete as of 2026-04-30 — see `runs/swe_agent_pilot/GO_NO_
 
 ## Minimal first batch (forward phase — current)
 
-N1–N6 ✓, W1 ✓, W2 ✓, W3 ✓, W4 ✓, U1+U2 ✓, V1 ✓, V2 ✓, T1 ✓. **Workstream W is complete.** Remaining:
-- **T2 → T3 → T4 / T5** LedgerSet implementation (T1 ships the protocol; T2+ are the data-model + first-use code)
-- **Q** predictive modeling pass (now unblocked: W3 is the estimator checkpoint table)
+N1–N6 ✓, W1 ✓, W2 ✓, W3 ✓, W4 ✓, U1+U2 ✓, V1 ✓, V2 ✓, T1 ✓, T2 ✓, T3 ✓, T4 ✓, T5 ✓. **Workstreams W and T are complete.** Remaining:
+- **Q** predictive modeling pass (now unblocked: W3 is the estimator checkpoint table; T3's `score_set` is available if Q wants set-level features per § Workstream T open question 3)
 
 Do not start Q modeling until W3 exists. Treat the live N=20 progress scalar as untrustworthy for outcome questions until W2's shape labels ship — see `runs/swe_agent_live/PARITY_REPORT.md`.
 
