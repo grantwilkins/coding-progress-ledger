@@ -42,7 +42,16 @@ runs/swe_agent_pilot_v3/
 external_data/hermes/raw/*
 !external_data/hermes/raw/sample_row_kimi.json
 !external_data/hermes/raw/sample_row_glm-5.1.json
-external_data/hermes/pilot_cache/
+external_data/hermes/pilot_cache/*
+# Exception: the 5 raw rows the pilot is built from (reproducibility pin
+# without committing the full ~136M cache).
+!external_data/hermes/pilot_cache/kimi/
+external_data/hermes/pilot_cache/kimi/*
+!external_data/hermes/pilot_cache/kimi/115.json
+!external_data/hermes/pilot_cache/kimi/128.json
+!external_data/hermes/pilot_cache/kimi/260.json
+!external_data/hermes/pilot_cache/kimi/315.json
+!external_data/hermes/pilot_cache/kimi/501.json
 runs/hermes_pilot/*
 !runs/hermes_pilot/HERMES_PARITY_REPORT.md
 

@@ -23,7 +23,9 @@ These resolve the open questions called out in
 A single `gpt` turn may contain multiple `<tool_call>` blocks. The
 normalizer **splits** each `<tool_call>` into its own assistant
 step, paired with its corresponding `<tool_response>` (matched on
-`tool_call_id`). Rationale:
+`tool_call_id` when both sides expose one, otherwise positional —
+in practice `<tool_call>` blocks in Hermes rarely carry an `id`,
+so positional pairing is the production path). Rationale:
 
 - Each tool_call has a matching tool_response, so the call/response
   pair is the natural step unit.
@@ -36,9 +38,13 @@ step, paired with its corresponding `<tool_response>` (matched on
   tool-response-loop variant) requires comparing *consecutive*
   identical tool_responses; merging hides this.
 
-The free-text portion of the `gpt` turn (preceding the first
-tool_call) becomes the `thought` of the FIRST split step. Subsequent
-split steps in the same turn carry an empty `thought`.
+All free-text portions of the `gpt` turn (before, between, and after
+the tool_calls) are concatenated and become the `thought` of the
+FIRST split step. Subsequent split steps in the same turn carry
+empty `thought`. Rationale: between-tool-call free text rarely
+occurs in practice but when it does it is part of the assistant's
+overall reasoning for that turn — attaching it to the first split
+keeps it visible without inflating the step count.
 
 ### 2. `<think>` blocks: COLLAPSE into `thought`
 
