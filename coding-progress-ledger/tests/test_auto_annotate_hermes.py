@@ -127,8 +127,11 @@ def test_deterministic(pid):
 
 @pytest.mark.parametrize("pid", HP4_PILOTS)
 def test_overlap_with_human_annotation(pid):
-    """At least 50% of HP4 human leaves' categories should match the heuristic
-    leaves' category multiset (loose set-overlap, not order)."""
+    """The heuristic must (a) match the human leaf-category multiset on at
+    least 50% of human leaves, (b) keep leaf count within +/-50% of the
+    human's, and (c) open at most one ARTIFACT leaf, and only on a step
+    whose tool name contains a terminal signal. (a) alone passes for a
+    degenerate "all-VALIDATION" heuristic; (b)+(c) close that loophole."""
     spec_path = ROOT / "annotations" / "hermes_pilot" / f"{pid}.json"
     if not spec_path.is_file():
         pytest.skip(f"no human spec for {pid}")
@@ -139,6 +142,7 @@ def test_overlap_with_human_annotation(pid):
     trace = _trace(pid)
     session = auto_annotate(trace)
     auto_cats = sorted(s.category.value for s in session.ledger.subtasks.values())
+
     common = 0
     auto_pool = list(auto_cats)
     for c in human_cats:
@@ -147,6 +151,24 @@ def test_overlap_with_human_annotation(pid):
             auto_pool.remove(c)
     overlap = common / max(1, len(human_cats))
     assert overlap >= 0.5, (
-        f"{pid}: heuristic vs human category overlap {overlap:.2f} < 0.50; "
+        f"{pid}: category overlap {overlap:.2f} < 0.50; "
         f"human={human_cats} auto={auto_cats}"
     )
+
+    human_n = len(human_cats)
+    auto_n = len(auto_cats)
+    assert 0.5 * human_n <= auto_n <= 1.5 * human_n + 1, (
+        f"{pid}: heuristic leaf count {auto_n} outside +/-50% of human {human_n}"
+    )
+
+    terminal_signals = ("submit", "final_response", "task_complete", "answer", "skill_manage")
+    for sub in session.ledger.subtasks.values():
+        if sub.category.value != "artifact":
+            continue
+        opener_step = sub.created_at_step
+        ev = trace["events"][opener_step]
+        tool = (ev.get("tool_name") or "").lower()
+        assert any(t in tool for t in terminal_signals), (
+            f"{pid}: ARTIFACT leaf {sub.id} opened at step {opener_step} "
+            f"on non-terminal tool {tool!r}"
+        )

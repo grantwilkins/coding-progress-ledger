@@ -167,23 +167,44 @@ fold into a recovering subtask.
 
 | target                                    | positives | total |
 |-------------------------------------------|----------:|------:|
-| `future_progress_drop`                    | 0 | 370 |
-| `product_reopened_after_completion`       | 0 | 370 |
-| `validation_exposes_new_work`             | 0 | 370 |
-| `stuck_loop_next_window`                  | 0 | 370 |
-| `submit_without_validation_state`         | 0 | 370 |
+| `future_progress_drop`                    | **151** | 370 |
+| `product_reopened_after_completion`       | 0   | 370 |
+| `validation_exposes_new_work`             | **93**  | 370 |
+| `stuck_loop_next_window`                  | 0   | 370 |
+| `submit_without_validation_state`         | 0   | 370 |
 
-All zero. This is consistent with the heuristic emitting:
+**Correction (HP5 critic, post-ship):** an earlier draft of this
+table reported all-zero across all five targets, leading to a "Q1
+channel-native targets are dead under heuristic annotation" claim.
+The actual counts (verified by re-running the count over
+`datasets/hermes_pilot_h5_q_labels.csv`) are 151 / 0 / 93 / 0 / 0.
+Two of the five targets fire substantively. The claim has been
+revised:
 
-- no REOPEN_SUBTASK events (so reopens / progress drops cannot fire),
-- BLOCKED at the same checkpoint where loop-detection would mask the
-  next-window label (HP4 saw the same suppression for pilot_03/05),
-- no ARTIFACT-complete + missing VALIDATION-complete coincidences.
+- `future_progress_drop` (151/370 ≈ 41%): the heuristic *does*
+  produce progress drops — when it BLOCKS a leaf on a transient
+  error, the next non-blocked addition reduces the
+  active-leaf-completion ratio. This is structurally similar to
+  what a REOPEN would do; the heuristic just achieves it via the
+  BLOCK→re-add path instead of the REOPEN path.
+- `validation_exposes_new_work` (93/370 ≈ 25%): the heuristic
+  groups consecutive same-category steps into one leaf. When a
+  VALIDATION leaf completes and is followed by an ADD of a
+  PRODUCT or INVESTIGATION leaf, the W3 detector fires correctly.
+- `product_reopened_after_completion = 0`: confirmed N/A — the
+  heuristic emits zero `REOPEN_SUBTASK` events.
+- `stuck_loop_next_window = 0`: the W3 mask suppresses this label
+  whenever `repeated_observation_loop_flag` is already true; on
+  HP5 the BLOCKED-on-first-error rule sets that flag at the same
+  checkpoint where `stuck_loop_next_window` would otherwise fire.
+- `submit_without_validation_state = 0`: the heuristic always
+  closes a VALIDATION leaf on `python` / `pytest` / `bash` test
+  invocations, so this terminal label never reaches `True`.
 
-This says **the heuristic does not synthesize the kind of
-mid-trajectory state changes that Q1's channel-native targets key on**.
-A human annotator could plausibly insert REOPEN events; the heuristic
-does not.
+So Q1 transfers partially: 2/5 targets are exercised; 3/5 are
+either structurally inaccessible to the heuristic (REOPEN-mediated
+ones) or suppressed by feature-mask interactions. A human
+annotator would unlock the REOPEN path.
 
 ### Leaves per pilot (HP5)
 
@@ -202,11 +223,22 @@ every assistant step was the same tool family.
 HP4: 0 multi-tool-call gpt turns across 5 pilots.
 
 HP5: **23 multi-tool-call gpt turns** across 30 pilots (4,500 rows of
-inventory scanned), producing **77 SPLIT-derived assistant steps**.
-The Pitfall H1 SPLIT path is now exercised in production at non-trivial
-volume. The 22 synthetic regression tests in
-`tests/test_normalize_hermes_trace_semantics.py` are no longer the only
-SPLIT coverage.
+inventory scanned). Two ways to count the resulting steps:
+
+- **77 assistant steps** in those 23 turns (every step in any
+  multi-call turn — the original report number).
+- **54 split-derived steps** counted as steps with `tool_call_index_in_turn > 0`
+  (only the *additional* steps the SPLIT rule created beyond what a
+  one-tool-call-per-turn rule would have produced — surfaced by HP5
+  critic).
+
+Both numbers describe the same 23 turns. The 54-step count is the
+cleaner measure of "steps the SPLIT rule produced that would
+otherwise have been collapsed." Either way: the Pitfall H1 SPLIT
+path is now exercised in production at non-trivial volume. The 22
+synthetic regression tests in
+`tests/test_normalize_hermes_trace_semantics.py` are no longer the
+only SPLIT coverage.
 
 ## G2 status — sampling pool: RESOLVED
 
@@ -302,7 +334,7 @@ What HP5 does NOT support:
   in the first 1,500. The (File Operations × kimi) bucket is empty;
   HP5 still hits N=30 because the round-robin sampler topped up other
   buckets evenly.
-- **All Q1 targets fire 0 positives** (370 checkpoint-rows). This is
+- **3 of 5 Q1 targets fire 0 positives** (the REOPEN-mediated ones plus a mask-suppressed `stuck_loop_next_window`). The other two — `future_progress_drop` (151) and `validation_exposes_new_work` (93) — exercise the channel substantively. The earlier "all-zero" claim was wrong; corrected above. This is
   not a pipeline failure — it correctly reflects that the heuristic
   emits no REOPEN events and no submit-without-validation states. A
   follow-up should either inject REOPEN events when humans would, or
@@ -313,6 +345,35 @@ What HP5 does NOT support:
   retiring or re-spec'ing in a future workstream.
 
 ## Reproducibility
+
+**Raw-cache caveat (HP5 critic):** unlike HP4 (which pinned its 5
+raw rows under `external_data/hermes/pilot_cache/kimi/{115,128,260,315,501}.json`
+via `.gitignore` exception), HP5 does **NOT** commit its 30 raw rows.
+The committed manifests
+(`hermes_inventory_kimi_3k.csv`, `hermes_inventory_glm_3k.csv`,
+`hermes_pilot_h5_sample.csv`) point at upstream offsets, but the raw
+payloads live in the gitignored `external_data/hermes/pilot_cache/`.
+A clean-clone reproducer must re-fetch via the HF datasets-server,
+which already returned HTTP 429 above 1,500 kimi rows during the
+HP5 build. Pinning all 30 HP5 raw rows would add ~3.3 MB to the
+repo (110 KB × 30 mean) — defer the decision to whoever scales next.
+
+## Future work — HP6 BLOCKED-rule softening
+
+The heuristic's BLOCKED-on-first-error rule (`auto_annotate_hermes.py`
+`_is_error_response`) is the single biggest distortion in HP5:
+
+- Drives the 22/30 `stuck_loop` over-firing.
+- Drives the 0.50–1.00 `coding_progress` spread (any error truncates
+  the leaf at non-1.0 progress).
+- Suppresses `stuck_loop_next_window` via the W3 mask (the flag is
+  already set at the same checkpoint).
+
+A more honest rule would require a follow-up failure window (e.g.,
+3 consecutive identical errors) before BLOCKING. That would make
+the heuristic far more comparable to a human annotator. Out of
+scope for HP5 (would invalidate the regression-test counts); flagged
+as the principal HP6 work item.
 
 ```bash
 # Step 1 — wider inventory (rate-limit aware: kimi capped at 1,500).
