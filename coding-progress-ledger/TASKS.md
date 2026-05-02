@@ -790,16 +790,21 @@ docs/HERMES_TRACE_SCHEMA.md                  # role mapping + step extraction ru
 ```
 
 #### HP2. Normalizer + importer
-Status: not started · _blocks HP3_
+Status: done — `scripts/normalize_hermes_trace.py` (split-per-tool-call, `<think>` collapse, thought-only retention, tool_call_id pairing), `scripts/hermes_inventory.py` (HF datasets-server REST streamer, stdlib only), `scripts/sample_hermes_pilot.py` (I1–I5 funnel, deterministic, id-sorted pilot ids), `scripts/import_hermes_trace.py` (8 pre-annotation artifacts; placeholder `final_diff.patch` / `test_output.txt`; `final_success: null`). Pilots imported: 5 at `runs/hermes_pilot/hermes_pilot_{01..05}/`. 48 new HP2 tests; full suite 474 passing.
 
 Outputs:
 ```text
-scripts/normalize_hermes_trace.py     # role: gpt→assistant, tool→tool; <tool_call>/<tool_response> parsing
-scripts/import_hermes_trace.py        # emit the eight pre-annotation artifacts; skip final_diff/test_output if absent
-scripts/hermes_inventory.py           # parquet streamer; final_success_available always empty
-scripts/sample_hermes_pilot.py        # balance by category × config
+scripts/normalize_hermes_trace.py
+scripts/import_hermes_trace.py
+scripts/hermes_inventory.py
+scripts/sample_hermes_pilot.py
 tests/test_normalize_hermes_trace.py
+tests/test_hermes_inventory.py
+tests/test_sample_hermes_pilot.py
 tests/test_import_hermes_trace.py
+external_data/hermes/manifests/hermes_inventory.csv
+external_data/hermes/manifests/hermes_pilot_sample.csv
+runs/hermes_pilot/hermes_pilot_{01..05}/   # 8 pre-annotation artifacts each
 ```
 
 #### HP3. Pilot-zero annotation (5 traces, Terminal & Coding only)
