@@ -785,25 +785,25 @@ P4. Report whether failure shape is more about instance difficulty or about scaf
 ```
 
 ### § Workstream Q — Predictive modeling pass
-Status: not started · _W3 cleared; final-success prediction stays deferred until Q1–Q5 land_
+Status: **Q1–Q5, Q7 done.** Q6 (final-success prediction) explicitly deferred per the decoupling memory.
 
-Goal: Move beyond the old smoke test by predicting observation-channel dynamics before predicting final success. The first useful targets are about future visible-work behavior: drops, reopens, validation surprises, stuck states, and submit-without-validation. Final success classification remains downstream and noisier.
+#### Q1. Channel-native target definitions
+Status: done — `docs/Q_TARGETS.md`. Five binary targets (`future_progress_drop`, `product_reopened_after_completion`, `validation_exposes_new_work`, `stuck_loop_next_window`, `submit_without_validation_state`); 5-step look-ahead window; terminal label for SWV.
 
-Sketch:
-```text
-Q1. Define channel-native targets from W3:
-    - future_progress_drop
-    - product_reopened_after_completion
-    - validation_exposes_new_work
-    - stuck_loop_next_window
-    - submit_without_validation_state
-Q2. Build label-generation tests for each target on known SWE-agent pilots
-Q3. Baseline evaluations: always-mean, elapsed-only, progress-only, checkpoint-table features
-Q4. Leave-one-run-out first; leave-one-repo-out only once N is large enough
-Q5. Explicit non-leakage proofs (no future features, no final_success as feature)
-Q6. Revisit final_success prediction only after Q1-Q5 show the channel features are coherent
-Q7. RESULTS_DISCLAIMERS.md template — what we can and cannot claim
-```
+#### Q2. Label-generation script + tests
+Status: done — `scripts/build_q_labels.py` + `datasets/swe_agent_q_labels.csv` (191 rows) + `tests/test_q_labels.py` (14 tests). Locks per-target semantics on `f_02` (stuck_loop window), `s_03` (product reopen window), `f_06` (no reopens), and constant-per-run SWV invariant.
+
+#### Q3 + Q4. LORO baseline evaluation
+Status: done — `scripts/q_baselines.py` + `datasets/swe_agent_q_baselines.csv` + `datasets/swe_agent_q_baselines_summary.md`. Four models (`always_mean`, `elapsed_only`, `progress_only`, `checkpoint_table`); leave-one-run-out by `run_id`; binned-base-rate baseline by default with sklearn fallback. Three targets have positive rates ≤ 2.1%; LORO degeneracy on per-run-constant targets noted in summary.
+
+#### Q5. Non-leakage proofs
+Status: done — `tests/test_q_no_leakage.py` (7 tests). Asserts (1) no Q1 target appears in W3 features, (2) no baseline feature is `label_*` or any Q1 target, (3) horizon-dependent labels are unchanged when source events at step ≤ S are kept and events at step > S are removed, (4) terminal SWV label is horizon-invariant.
+
+#### Q6. Final-success prediction
+Status: **deferred** — channel-decoupling memory rules out final-success as the next predictive target. Re-open only if Q1–Q5 results motivate it *and* the corpus grows enough to support honest claims.
+
+#### Q7. RESULTS_DISCLAIMERS
+Status: done — `datasets/RESULTS_DISCLAIMERS.md`. Documents the N=20 LORO power gap, retrospective-vs-live frontier-policy gap, the `always_mean` LORO degeneracy on per-run-constant targets, the high `progress_only` AUROC on `future_progress_drop` as feasibility-not-headline.
 
 ### § Workstream R — External write-up / paper draft
 Status: **DEFERRED INDEFINITELY** (post-CRITIC_AUDIT). Premature: writing this up before live instrumentation locks in the retrospective framing as the product. Re-open only after N4 (live-vs-retrospective parity report) demonstrates the channel works on live data.
@@ -897,10 +897,14 @@ Pilot phase A–M complete as of 2026-04-30 — see `runs/swe_agent_pilot/GO_NO_
 
 ## Minimal first batch (forward phase — current)
 
-N1–N6 ✓, W1 ✓, W2 ✓, W3 ✓, W4 ✓, U1+U2 ✓, V1 ✓, V2 ✓, T1 ✓, T2 ✓, T3 ✓, T4 ✓, T5 ✓. **Workstreams W and T are complete.** Remaining:
-- **Q** predictive modeling pass (now unblocked: W3 is the estimator checkpoint table; T3's `score_set` is available if Q wants set-level features per § Workstream T open question 3)
+N1–N6 ✓, W1 ✓, W2 ✓, W3 ✓, W4 ✓, U1+U2 ✓, V1 ✓, V2 ✓, T1 ✓, T2 ✓, T3 ✓, T4 ✓, T5 ✓, Q1 ✓, Q2 ✓, Q3 ✓, Q4 ✓, Q5 ✓, Q7 ✓. **Workstreams W, T, Q (less Q6) are complete.** Remaining forward work:
 
-Do not start Q modeling until W3 exists. Treat the live N=20 progress scalar as untrustworthy for outcome questions until W2's shape labels ship — see `runs/swe_agent_live/PARITY_REPORT.md`.
+- **Q follow-ons (post-Q5):**
+  - Build a live-N=20 checkpoint table by running `scripts/build_estimator_checkpoints.py` against `runs/swe_agent_live_wallclock/` so `submit_without_validation` / `validation_*` Q targets can be recomputed under the live frontier policy.
+  - Reconcile selection_reason strings (B2 follow-up, still open from sampler).
+  - Q6 (final-success prediction) stays deferred per the decoupling memory.
+- **U3** optional `ledger-run serve` HTTP surface — gated on real demand.
+- **K3 / K4** evidence-classifier sharpening (`tool_action`, three-level evidence split).
 
 ---
 
