@@ -38,6 +38,14 @@ runs/swe_agent_pilot/*
 # annotations/swe_agent_pilot_v3/.
 runs/swe_agent_pilot_v3/
 
+# Hermes — same pattern as swe_agent.
+external_data/hermes/raw/*
+!external_data/hermes/raw/sample_row_kimi.json
+!external_data/hermes/raw/sample_row_glm-5.1.json
+external_data/hermes/pilot_cache/
+runs/hermes_pilot/*
+!runs/hermes_pilot/HERMES_PARITY_REPORT.md
+
 # Python
 __pycache__/
 *.pyc
