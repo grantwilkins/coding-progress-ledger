@@ -41,10 +41,14 @@ practice, not just in design.**
 | hermes_pilot_04 | Terminal & Coding | 4/4 | 1.000 | (none) |
 | hermes_pilot_05 | Terminal & Coding | 4/4 | 1.000 | stuck_loop |
 
-`stuck_loop` fires on the two pilots whose annotations include a
-BLOCKED leaf with reason text containing `loop`/`stuck`. The other
-three pilots have no observation-channel anomaly visible to W2
-under the current rule set.
+`stuck_loop` fires whenever **any** subtask reaches `BLOCKED` (W2
+rule `_has_blocked_subtask`, no keyword filter). Pilot 03 blocks on
+missing `pytest`; pilot 05 blocks on a `skill_manage` frontmatter
+rejection. Neither reason contains the literal word "loop" — the
+tag name is a W2 legacy and **over-fires on generic blocks**.
+This is a pre-existing W2 issue, not an HP4 finding; flagged here
+so future readers do not interpret the tag as a confirmed
+agent-loop signal on Hermes.
 
 ## Q1 channel-native targets (positive counts at horizon=5)
 
@@ -117,6 +121,16 @@ This is a feature, not a bug — it forces the channel-vs-outcome
 decoupling thesis to bear weight. **Q6 (final-success prediction)
 remains N/A on Hermes by definition.** The mission-locked memory
 note (channel decoupled from outcome) is preserved.
+
+## Next experiment (if HP scales)
+
+**HP5 scale-up.** Relax `I1` to include `Repository Tasks` and
+`File Operations`; raise `--max-rows` to 5,000+; sample N≥30
+balanced across categories × configs (`kimi`, `glm-5.1`). Re-run
+the four pipelines unchanged. Only at N≥30 across multiple
+categories can we make a *distributional* parity claim ("the
+channel features are stable across sources"). HP4 deliberately
+does not.
 
 ## Honest claims (per HP2 critic § "phrase HP4 as feasibility")
 
