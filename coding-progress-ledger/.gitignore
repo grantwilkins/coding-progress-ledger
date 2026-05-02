@@ -23,6 +23,11 @@ runs/swe_agent_pilot/*
 !runs/swe_agent_pilot/CRITIC_AUDIT.md
 !runs/swe_agent_pilot/NEXT_DIRECTION_MEMO.md
 !runs/swe_agent_pilot/PITFALL8_SENSITIVITY.md
+# Exception: T4 derived 20-member rollup set (no upstream content;
+# reproducible via scripts/build_pilot_ledger_sets.py). Per-pilot
+# singleton set.jsonl files live inside the gitignored pilot subdirs
+# and are regenerated alongside ledger.jsonl by the same build script.
+!runs/swe_agent_pilot/pilot_rollup_set.jsonl
 
 # H4 v3 cold-pass run dirs mirror source_trace.json (verbatim upstream).
 # Re-materialize via scripts/annotate_pilots_from_spec.py against
