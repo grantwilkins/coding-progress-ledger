@@ -773,13 +773,13 @@ Status: **deferred** — channel-decoupling memory rules out final-success as th
 #### Q7. RESULTS_DISCLAIMERS
 Status: done — `datasets/RESULTS_DISCLAIMERS.md`. Documents the N=20 LORO power gap, retrospective-vs-live frontier-policy gap, the `always_mean` LORO degeneracy on per-run-constant targets, the high `progress_only` AUROC on `future_progress_drop` as feasibility-not-headline.
 
-### § Workstream H_PARITY — Hermes replay parity check (current next direction)
-Status: **NEW current priority.** Plan in `docs/HERMES_REPLAY_PLAN.md`. Goal: confirm the SWE-agent pipeline (normalize → import → annotate → checkpoint table → Q labels) transfers to a non-SWE source without changing the framework.
+### § Workstream H_PARITY — Hermes replay parity check
+Status: **HP1–HP4 done as of 2026-05-02.** Verdict: **HP4 PASSES** as feasibility — the framework is source-agnostic in practice, not just in design. See `runs/hermes_pilot/HERMES_PARITY_REPORT.md`.
 
 Source: [`lambda/hermes-agent-reasoning-traces`](https://huggingface.co/datasets/lambda/hermes-agent-reasoning-traces) (Apache 2.0, 14.7k traces, no `final_success` upstream — this is a feature, it tests the channel-vs-outcome decoupling thesis).
 
 #### HP1. Fetch one row, write source-format docs
-Status: not started
+Status: done — sample rows from each config + SOURCE_FORMAT.md + PILOT_SAMPLING_POLICY.md + HERMES_TRACE_SCHEMA.md (with locked SPLIT/COLLAPSE/KEEP rules).
 
 Outputs:
 ```text
@@ -823,7 +823,7 @@ Acceptance: all five SubtaskCategory values used at least once: PRODUCT, VALIDAT
 Next: HP4 (parity check vs SWE-agent) is unblocked.
 
 #### HP4. Parity check vs SWE-agent
-Status: not started
+Status: done — all four existing pipelines (`build_ledger_observation_dataset`, `build_estimator_checkpoints`, `build_q_labels`, `label_observation_shapes`) ran UNCHANGED. Outputs at `datasets/hermes_pilot_*.csv|.md`; report at `runs/hermes_pilot/HERMES_PARITY_REPORT.md`. Acknowledged gaps G1/G2/G3. Next experiment: HP5 scale-up (N≥30) for distributional parity claim.
 
 Outputs:
 ```text
@@ -933,7 +933,7 @@ N1–N6 ✓, W1 ✓, W2 ✓, W3 ✓, W4 ✓, U1+U2+U3 ✓, V1 ✓, V2 ✓, T1 �
   - Build a live-N=20 checkpoint table by running `scripts/build_estimator_checkpoints.py` against `runs/swe_agent_live_wallclock/` so `submit_without_validation` / `validation_*` Q targets can be recomputed under the live frontier policy.
   - Reconcile selection_reason strings (B2 follow-up, still open from sampler).
   - Q6 (final-success prediction) stays deferred per the decoupling memory.
-- **§ H_PARITY (Hermes replay parity check)** — current next direction. HP1–HP4 above; plan in `docs/HERMES_REPLAY_PLAN.md`.
+- **§ H_PARITY (Hermes replay parity check)** — HP1–HP4 ✓; HP5 (N≥30 scale-up for distributional parity) is the next-experiment if Hermes work continues.
 
 ---
 
