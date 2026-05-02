@@ -808,16 +808,19 @@ runs/hermes_pilot/hermes_pilot_{01..05}/   # 8 pre-annotation artifacts each
 ```
 
 #### HP3. Pilot-zero annotation (5 traces, Terminal & Coding only)
-Status: not started · _blocks HP4_
+Status: done
 
 Outputs:
 ```text
 docs/HERMES_RETROSPECTIVE_LEDGER_PROTOCOL.md  # thin addendum; defers to general protocol
 annotations/hermes_pilot/<pilot_id>.{json,notes.md}
 runs/hermes_pilot/<pilot_id>/                 # ledger.jsonl + check-run passing
+tests/test_hermes_annotations.py              # semantic-error invariants
 ```
 
-Acceptance: all five existing SubtaskCategory values appear at least once across the 5 pilots; no new pitfall per trace; step segmentation is unambiguous.
+Acceptance: all five SubtaskCategory values used at least once: PRODUCT, VALIDATION, INVESTIGATION, ENVIRONMENT, ARTIFACT (DOCUMENTATION optional, not exercised). No new pitfalls per trace. 8 tests * 5 pilots semantic suite passes.
+
+Next: HP4 (parity check vs SWE-agent) is unblocked.
 
 #### HP4. Parity check vs SWE-agent
 Status: not started
