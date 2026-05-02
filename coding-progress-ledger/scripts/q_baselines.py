@@ -1,9 +1,17 @@
-"""Q3 + Q4 — Baselines for the five Q1 targets, leave-one-run-out.
+"""Q3 + Q4 — Baseline evaluation for the Q1 channel-native targets.
 
-For each target column in `datasets/swe_agent_q_labels.csv`, fit four
-baselines (always-mean, elapsed-only, progress-only, checkpoint-table)
-on W3 features and evaluate via leave-one-run-out by `run_id`.
-Writes per-row predictions and a metrics summary.
+Joins the W3 estimator checkpoint table to the Q1 label table, fits
+four baselines per target, and evaluates each via leave-one-run-out
+by `run_id`. Emits per-row predictions and a metrics summary.
+
+Models:
+  always_mean        train-set base rate, no features
+  elapsed_only       single feature: step
+  progress_only      single feature: coding_progress
+  checkpoint_table   all numeric W3 features
+
+Estimator: scikit-learn LogisticRegression if importable, else a
+deterministic 5-bin base-rate baseline.
 """
 from __future__ import annotations
 
@@ -18,6 +26,7 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
+
 TARGET_COLUMNS = (
     "future_progress_drop",
     "product_reopened_after_completion",
@@ -26,28 +35,34 @@ TARGET_COLUMNS = (
     "submit_without_validation_state",
 )
 
+CHECKPOINT_FEATURES = (
+    "step",
+    "active_leaf_count", "active_coding_leaf_count", "active_validation_leaf_count",
+    "completed_leaf_count", "coding_progress", "validation_progress",
+    "num_reopens_so_far", "num_invalidations_so_far", "largest_progress_drop_so_far",
+    "num_splits_so_far", "steps_since_new_subtask", "denominator_growth_so_far",
+    "steps_since_completion", "blocked_leaf_count", "repeated_observation_loop_flag",
+    "validation_started", "validation_complete", "validation_failed",
+    "submit_without_validation",
+    "strong_completion_count", "manual_only_completion_count",
+    "weak_product_completion_count",
+)
+
 MODEL_FEATURES = {
     "always_mean": (),
     "elapsed_only": ("step",),
     "progress_only": ("coding_progress",),
-    "checkpoint_table": (
-        "step",
-        "active_leaf_count", "active_coding_leaf_count", "active_validation_leaf_count",
-        "completed_leaf_count", "coding_progress", "validation_progress",
-        "num_reopens_so_far", "num_invalidations_so_far", "largest_progress_drop_so_far",
-        "num_splits_so_far", "steps_since_new_subtask", "denominator_growth_so_far",
-        "steps_since_completion", "blocked_leaf_count", "repeated_observation_loop_flag",
-        "validation_started", "validation_complete", "validation_failed",
-        "submit_without_validation",
-        "strong_completion_count", "manual_only_completion_count",
-        "weak_product_completion_count",
-    ),
+    "checkpoint_table": CHECKPOINT_FEATURES,
 }
 
 PREDICTION_COLUMNS = (
     "run_id", "step", "target", "model_name", "label", "predicted_probability",
 )
+PROB_CLIP = (0.001, 0.999)
 EPSILON = 1e-12
+
+
+# ── data loading ────────────────────────────────────────────────────────────
 
 
 def _to_float(v: str) -> float:
@@ -59,13 +74,13 @@ def _to_float(v: str) -> float:
     return float(v)
 
 
-def _label_int(v) -> int:
-    if isinstance(v, bool):
-        return 1 if v else 0
-    return 1 if str(v).strip().lower() == "true" else 0
+def _label_int(value) -> int:
+    if isinstance(value, bool):
+        return int(value)
+    return 1 if str(value).strip().lower() == "true" else 0
 
 
-def _join_rows(checkpoint_csv: Path, labels_csv: Path) -> list[dict]:
+def join_rows(checkpoint_csv: Path, labels_csv: Path) -> list[dict]:
     with checkpoint_csv.open() as fh:
         ckpt = {(r["run_id"], r["step"]): r for r in csv.DictReader(fh)}
     rows = []
@@ -74,7 +89,9 @@ def _join_rows(checkpoint_csv: Path, labels_csv: Path) -> list[dict]:
             key = (lab["run_id"], lab["step"])
             if key not in ckpt:
                 raise ValueError(f"label row {key} has no W3 checkpoint")
-            merged = {**ckpt[key], **{f"label_target_{c}": lab[c] for c in TARGET_COLUMNS}}
+            merged = {**ckpt[key]}
+            for col in TARGET_COLUMNS:
+                merged[f"label_target_{col}"] = lab[col]
             rows.append(merged)
     return rows
 
@@ -83,73 +100,89 @@ def _feature_vector(row: dict, features: tuple[str, ...]) -> list[float]:
     return [_to_float(row[f]) for f in features]
 
 
-def _fit_predict(
-    train_rows: list[dict],
-    test_rows: list[dict],
-    features: tuple[str, ...],
-    target: str,
-) -> list[float]:
-    target_col = f"label_target_{target}"
-    labels = [_label_int(r[target_col]) for r in train_rows]
-    base_rate = sum(labels) / len(labels) if labels else 0.5
-    if not features:
-        return [base_rate] * len(test_rows)
-    if len(set(labels)) < 2:
-        return [base_rate] * len(test_rows)
-    sklearn_spec = importlib.util.find_spec("sklearn")
-    if sklearn_spec is not None:
-        from sklearn.linear_model import LogisticRegression
-        x_train = [_feature_vector(r, features) for r in train_rows]
-        model = LogisticRegression(max_iter=1000, random_state=0)
-        model.fit(x_train, labels)
-        return [
-            float(model.predict_proba([_feature_vector(r, features)])[0][1])
-            for r in test_rows
-        ]
-    return _binned_baseline(train_rows, test_rows, features, labels, base_rate)
+# ── model fitting ───────────────────────────────────────────────────────────
 
 
-def _binned_baseline(
+def _train_labels(train_rows: list[dict], target: str) -> list[int]:
+    return [_label_int(r[f"label_target_{target}"]) for r in train_rows]
+
+
+def _fit_always_mean(train_labels: list[int]) -> float:
+    return sum(train_labels) / len(train_labels) if train_labels else 0.5
+
+
+def _fit_sklearn(
+    train_rows: list[dict], train_labels: list[int], features: tuple[str, ...]
+):
+    from sklearn.linear_model import LogisticRegression
+    x_train = [_feature_vector(r, features) for r in train_rows]
+    model = LogisticRegression(max_iter=1000, random_state=0)
+    model.fit(x_train, train_labels)
+
+    def predict(row: dict) -> float:
+        return float(model.predict_proba([_feature_vector(row, features)])[0][1])
+
+    return predict
+
+
+def _fit_binned(
     train_rows: list[dict],
-    test_rows: list[dict],
+    train_labels: list[int],
     features: tuple[str, ...],
-    labels: list[int],
-    base_rate: float,
     bins: int = 5,
-) -> list[float]:
-    ranges = {}
-    for f in features:
-        vals = [_to_float(r[f]) for r in train_rows]
-        ranges[f] = (min(vals), max(vals))
+):
+    base_rate = sum(train_labels) / len(train_labels)
+    ranges = {f: (
+        min(_to_float(r[f]) for r in train_rows),
+        max(_to_float(r[f]) for r in train_rows),
+    ) for f in features}
 
-    def _score(row: dict) -> float:
-        norm = []
+    def _normalized_score(row: dict) -> float:
+        norms = []
         for f in features:
             lo, hi = ranges[f]
             v = _to_float(row[f])
-            norm.append(0.5 if abs(hi - lo) < EPSILON else min(1.0, max(0.0, (v - lo) / (hi - lo))))
-        return sum(norm) / len(norm)
+            norms.append(0.5 if abs(hi - lo) < EPSILON
+                         else min(1.0, max(0.0, (v - lo) / (hi - lo))))
+        return sum(norms) / len(norms)
+
+    def _bin(row: dict) -> int:
+        return min(bins - 1, max(0, int(_normalized_score(row) * bins)))
 
     rates: dict[int, float] = {}
     buckets: dict[int, list[int]] = {}
-    for r, lab in zip(train_rows, labels):
-        idx = min(bins - 1, max(0, int(_score(r) * bins)))
-        buckets.setdefault(idx, []).append(lab)
-    for idx, b in buckets.items():
-        rates[idx] = sum(b) / len(b)
+    for r, y in zip(train_rows, train_labels):
+        buckets.setdefault(_bin(r), []).append(y)
+    for b, ys in buckets.items():
+        rates[b] = sum(ys) / len(ys)
 
-    out = []
-    for r in test_rows:
-        idx = min(bins - 1, max(0, int(_score(r) * bins)))
-        out.append(rates.get(idx, base_rate))
-    return out
+    return lambda row: rates.get(_bin(row), base_rate)
 
 
-def _loro_splits(run_ids: list[str]) -> list[tuple[set[str], set[str]]]:
-    return [({rid for rid in run_ids if rid != held}, {held}) for held in sorted(set(run_ids))]
+_HAS_SKLEARN = importlib.util.find_spec("sklearn") is not None
 
 
-def _auroc(labels: list[int], probs: list[float]) -> float | None:
+def fit_predictor(
+    train_rows: list[dict], features: tuple[str, ...], target: str
+):
+    train_labels = _train_labels(train_rows, target)
+    base_rate = _fit_always_mean(train_labels)
+    if not features or len(set(train_labels)) < 2:
+        return lambda row: base_rate
+    if _HAS_SKLEARN:
+        return _fit_sklearn(train_rows, train_labels, features)
+    return _fit_binned(train_rows, train_labels, features)
+
+
+# ── splits and metrics ──────────────────────────────────────────────────────
+
+
+def loro_splits(run_ids: list[str]) -> list[tuple[set[str], set[str]]]:
+    unique = sorted(set(run_ids))
+    return [({rid for rid in unique if rid != held}, {held}) for held in unique]
+
+
+def auroc(labels: list[int], probs: list[float]) -> float | None:
     pos = sum(labels)
     neg = len(labels) - pos
     if pos == 0 or neg == 0:
@@ -162,16 +195,16 @@ def _auroc(labels: list[int], probs: list[float]) -> float | None:
         while j < len(ranked) and ranked[j][0] == ranked[i][0]:
             j += 1
         avg_rank = (i + 1 + j) / 2
-        rank_sum += avg_rank * sum(lab for _, lab in ranked[i:j])
+        rank_sum += avg_rank * sum(y for _, y in ranked[i:j])
         i = j
     return (rank_sum - pos * (pos + 1) / 2) / (pos * neg)
 
 
-def _brier(labels: list[int], probs: list[float]) -> float:
+def brier(labels: list[int], probs: list[float]) -> float:
     return sum((p - y) ** 2 for y, p in zip(labels, probs)) / len(labels)
 
 
-def _log_loss(labels: list[int], probs: list[float], clip: float = 1e-6) -> float:
+def log_loss(labels: list[int], probs: list[float], clip: float = 1e-6) -> float:
     total = 0.0
     for y, p in zip(labels, probs):
         p = min(max(p, clip), 1 - clip)
@@ -179,43 +212,76 @@ def _log_loss(labels: list[int], probs: list[float], clip: float = 1e-6) -> floa
     return total / len(labels)
 
 
-def evaluate(rows: list[dict]) -> tuple[list[dict], dict]:
-    run_ids = sorted({r["run_id"] for r in rows})
+def _clip(p: float) -> float:
+    lo, hi = PROB_CLIP
+    return min(max(p, lo), hi)
+
+
+# Compatibility aliases for existing tests.
+_loro_splits = loro_splits
+_auroc = auroc
+_brier = brier
+_log_loss = log_loss
+
+
+def _fit_predict(
+    train_rows: list[dict],
+    test_rows: list[dict],
+    features: tuple[str, ...],
+    target: str,
+) -> list[float]:
+    predictor = fit_predictor(train_rows, features, target)
+    return [predictor(row) for row in test_rows]
+
+
+# ── evaluation loop ─────────────────────────────────────────────────────────
+
+
+def _rows_by_run(rows: list[dict]) -> dict[str, list[dict]]:
     by_run: dict[str, list[dict]] = {}
     for r in rows:
         by_run.setdefault(r["run_id"], []).append(r)
+    return by_run
+
+
+def evaluate(rows: list[dict]) -> tuple[list[dict], dict]:
+    by_run = _rows_by_run(rows)
+    run_ids = sorted(by_run)
     predictions: list[dict] = []
-    metrics: dict = {}
+    metrics: dict = {target: {} for target in TARGET_COLUMNS}
+
     for target in TARGET_COLUMNS:
-        metrics[target] = {}
-        for model_name, feats in MODEL_FEATURES.items():
+        for model_name, features in MODEL_FEATURES.items():
             all_labels: list[int] = []
             all_probs: list[float] = []
-            for train_ids, test_ids in _loro_splits(run_ids):
+            for train_ids, test_ids in loro_splits(run_ids):
                 train = [r for rid in sorted(train_ids) for r in by_run[rid]]
                 test = [r for rid in sorted(test_ids) for r in by_run[rid]]
-                probs = _fit_predict(train, test, feats, target)
-                for r, p in zip(test, probs):
-                    p = min(max(p, 0.001), 0.999)
-                    label = _label_int(r[f"label_target_{target}"])
-                    all_labels.append(label)
+                predictor = fit_predictor(train, features, target)
+                for r in test:
+                    p = _clip(predictor(r))
+                    y = _label_int(r[f"label_target_{target}"])
+                    all_labels.append(y)
                     all_probs.append(p)
                     predictions.append({
                         "run_id": r["run_id"],
                         "step": r["step"],
                         "target": target,
                         "model_name": model_name,
-                        "label": "true" if label else "false",
+                        "label": "true" if y else "false",
                         "predicted_probability": f"{p:.6f}",
                     })
             metrics[target][model_name] = {
                 "n": len(all_labels),
                 "positive_rate": sum(all_labels) / len(all_labels) if all_labels else None,
-                "auroc": _auroc(all_labels, all_probs),
-                "brier": _brier(all_labels, all_probs),
-                "log_loss": _log_loss(all_labels, all_probs),
+                "auroc": auroc(all_labels, all_probs),
+                "brier": brier(all_labels, all_probs),
+                "log_loss": log_loss(all_labels, all_probs),
             }
     return predictions, metrics
+
+
+# ── output ──────────────────────────────────────────────────────────────────
 
 
 def write_predictions(path: Path, predictions: list[dict]) -> None:
@@ -226,8 +292,12 @@ def write_predictions(path: Path, predictions: list[dict]) -> None:
         writer.writerows(predictions)
 
 
+def _format_optional_float(value: float | None, places: int = 3) -> str:
+    return "n/a" if value is None else f"{value:.{places}f}"
+
+
 def write_summary(path: Path, metrics: dict, sources: dict) -> None:
-    estimator = "sklearn LogisticRegression" if importlib.util.find_spec("sklearn") else "binned base-rate baseline"
+    estimator = "sklearn LogisticRegression" if _HAS_SKLEARN else "binned base-rate baseline"
     lines = [
         "# Q3 / Q4 — Baseline evaluation summary",
         "",
@@ -247,18 +317,21 @@ def write_summary(path: Path, metrics: dict, sources: dict) -> None:
     ]
     for target in TARGET_COLUMNS:
         m = metrics[target]["always_mean"]
-        rate = "n/a" if m["positive_rate"] is None else f"{m['positive_rate']:.3f}"
-        lines.append(f"| `{target}` | {m['n']} | {rate} |")
+        lines.append(f"| `{target}` | {m['n']} | {_format_optional_float(m['positive_rate'])} |")
     lines += ["", "## LORO metrics by target × model", ""]
     for target in TARGET_COLUMNS:
-        lines.append(f"### `{target}`")
-        lines.append("")
-        lines.append("| model | AUROC | Brier | log loss |")
-        lines.append("|---|---:|---:|---:|")
+        lines += [
+            f"### `{target}`",
+            "",
+            "| model | AUROC | Brier | log loss |",
+            "|---|---:|---:|---:|",
+        ]
         for model_name in MODEL_FEATURES:
             m = metrics[target][model_name]
-            auroc = "n/a" if m["auroc"] is None else f"{m['auroc']:.3f}"
-            lines.append(f"| `{model_name}` | {auroc} | {m['brier']:.3f} | {m['log_loss']:.3f} |")
+            lines.append(
+                f"| `{model_name}` | {_format_optional_float(m['auroc'])} | "
+                f"{m['brier']:.3f} | {m['log_loss']:.3f} |"
+            )
         lines.append("")
     lines += [
         "## Reading these numbers",
@@ -286,7 +359,7 @@ def main() -> int:
     parser.add_argument("--predictions-csv", type=Path, required=True)
     parser.add_argument("--summary-md", type=Path, required=True)
     args = parser.parse_args()
-    rows = _join_rows(args.checkpoint_csv, args.labels_csv)
+    rows = join_rows(args.checkpoint_csv, args.labels_csv)
     n_runs = len({r["run_id"] for r in rows})
     predictions, metrics = evaluate(rows)
     write_predictions(args.predictions_csv, predictions)

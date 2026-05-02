@@ -903,6 +903,7 @@ N1–N6 ✓, W1 ✓, W2 ✓, W3 ✓, W4 ✓, U1+U2 ✓, V1 ✓, V2 ✓, T1 ✓, 
   - Build a live-N=20 checkpoint table by running `scripts/build_estimator_checkpoints.py` against `runs/swe_agent_live_wallclock/` so `submit_without_validation` / `validation_*` Q targets can be recomputed under the live frontier policy.
   - Reconcile selection_reason strings (B2 follow-up, still open from sampler).
   - Q6 (final-success prediction) stays deferred per the decoupling memory.
+- **Hermes adaptation (new source):** `docs/HERMES_REPLAY_PLAN.md` documents the schema map, adaptation phases, and known SWE-agent-only assumptions. No `final_success` label upstream — Q1–Q5 channel-native targets carry through; Q6 stays N/A. Inventory + sampler + normalizer + importer planned to mirror the SWE-agent pipeline; ~1 day of code + ½ day of pilot annotation (5 traces).
 - **U3** optional `ledger-run serve` HTTP surface — gated on real demand.
 - **K3 / K4** evidence-classifier sharpening (`tool_action`, three-level evidence split).
 
