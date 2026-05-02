@@ -28,6 +28,10 @@ runs/swe_agent_pilot/*
 # singleton set.jsonl files live inside the gitignored pilot subdirs
 # and are regenerated alongside ledger.jsonl by the same build script.
 !runs/swe_agent_pilot/pilot_rollup_set.jsonl
+# Exception: L1/L2 derived dashboard + per-pilot progress CSVs (no upstream content).
+!runs/swe_agent_pilot/PILOT_DASHBOARD.md
+!runs/swe_agent_pilot/plots/
+!runs/swe_agent_pilot/plots/*.csv
 
 # H4 v3 cold-pass run dirs mirror source_trace.json (verbatim upstream).
 # Re-materialize via scripts/annotate_pilots_from_spec.py against
