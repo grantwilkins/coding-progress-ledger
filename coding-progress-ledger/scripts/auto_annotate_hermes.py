@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
-"""HP5 deterministic heuristic auto-annotator.
+"""HP5/HP6 deterministic heuristic auto-annotator.
 
 Reads `normalized_trace.json` per pilot, emits `ledger.jsonl` by:
   - mapping each assistant tool call to a SubtaskCategory,
   - grouping consecutive same-category assistant steps into ONE leaf,
   - completing leaves whose last paired tool response has no error,
   - blocking leaves on 3+ identical tool-response bodies (Pitfall H3)
-    or an explicit `"error"` key in observation,
+    OR 3+ consecutive identical error responses (HP6 softened rule),
   - closing an ARTIFACT leaf on a terminal tool call match.
 Evidence cites only action / tool_name + args summary; never thought.
 """
@@ -41,6 +41,8 @@ VALIDATION_TOOLS = {"run_tests", "pytest"}
 ENVIRONMENT_TOOLS = {"pip", "pip_install", "apt_get"}
 ARTIFACT_TOOLS = {"submit_answer", "final_response", "task_complete", "finish",
                   "skill_manage", "skill_view"}
+
+ERROR_STREAK_BLOCK_THRESHOLD = 3
 
 INSTALL_RE = re.compile(r"\b(pip\s+install|apt-get\s+install|apt\s+install|conda\s+install|npm\s+install|uv\s+(add|sync|pip))\b")
 TEST_RE = re.compile(r"\b(pytest|unittest|nosetests|jest|go\s+test|cargo\s+test|npm\s+test)\b")
@@ -186,6 +188,7 @@ def auto_annotate(normalized: Dict[str, Any]) -> LedgerSession:
         desc = f"{cat.name.lower()} via {first_ev.get('tool_name')} ({desc_summary})"
         s.add(desc, step=first_step, category=cat)
         bodies: List[str] = []
+        error_streak: List[str] = []
         blocked = False
         block_step = first_step
         block_reason = ""
@@ -200,20 +203,27 @@ def auto_annotate(normalized: Dict[str, Any]) -> LedgerSession:
             obs = resp.get("observation")
             body = _response_body(obs)
             bodies.append(body)
-            if _is_error_response(obs):
-                blocked = True
-                block_step = resp["step_index"]
-                block_reason = "error response"
-                block_evidence_step = step_idx
-                break
+            is_err = _is_error_response(obs)
+            if is_err:
+                error_streak.append(body)
+                if (len(error_streak) >= ERROR_STREAK_BLOCK_THRESHOLD
+                        and len(set(error_streak[-ERROR_STREAK_BLOCK_THRESHOLD:])) == 1):
+                    blocked = True
+                    block_step = resp["step_index"]
+                    block_reason = f"{ERROR_STREAK_BLOCK_THRESHOLD}+ consecutive identical errors"
+                    block_evidence_step = step_idx
+                    break
+            else:
+                error_streak = []
             if len(bodies) >= 3 and bodies[-1] == bodies[-2] == bodies[-3]:
                 blocked = True
                 block_step = resp["step_index"]
                 block_reason = "3+ identical tool responses (Pitfall H3)"
                 block_evidence_step = step_idx
                 break
-            last_complete_step = resp["step_index"]
-            last_complete_evidence = _evidence(step_idx, ev.get("tool_name"), ev.get("command"))
+            if not is_err:
+                last_complete_step = resp["step_index"]
+                last_complete_evidence = _evidence(step_idx, ev.get("tool_name"), ev.get("command"))
         if blocked:
             ev = by_idx[block_evidence_step]
             s.block(sid, step=block_step, reason=block_reason,
@@ -235,7 +245,7 @@ def emit_one(run_dir: Path) -> Dict[str, Any]:
         check=True, cwd=str(REPO_ROOT),
     )
     quality = {
-        "annotator": "auto_annotate_hermes (HP5 heuristic)",
+        "annotator": "auto_annotate_hermes (HP6 heuristic, softened BLOCK)",
         "annotation_pass": "heuristic-auto",
         "annotation_time_minutes": 0,
         "number_of_uncertain_events": 0,

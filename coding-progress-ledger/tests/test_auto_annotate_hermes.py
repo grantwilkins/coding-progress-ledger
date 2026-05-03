@@ -14,7 +14,7 @@ sys.path.insert(0, str(ROOT))
 
 from scripts.auto_annotate_hermes import (  # noqa: E402
     auto_annotate, classify_step, _is_error_response, _build_groups,
-    TERMINAL_TOOL_RE,
+    TERMINAL_TOOL_RE, ERROR_STREAK_BLOCK_THRESHOLD,
 )
 from ledger_progress import SubtaskCategory  # noqa: E402
 
@@ -88,14 +88,136 @@ def test_events_step_monotone(pid):
 
 @pytest.mark.parametrize("pid", HP4_PILOTS)
 def test_blocked_rule_consistent(pid):
-    """A leaf is BLOCKED iff its last paired observation has an error key OR
-    we observed 3+ identical consecutive bodies."""
+    """HP6 softened: a leaf is BLOCKED iff we saw 3+ consecutive identical
+    error responses OR 3+ identical bodies (Pitfall H3). A single transient
+    error must NOT BLOCK."""
     trace = _trace(pid)
     session = auto_annotate(trace)
     for sub in session.ledger.subtasks.values():
         if sub.status.value != "blocked":
             continue
         assert sub.evidence, f"{pid}: blocked leaf {sub.id} has no evidence"
+
+
+def test_softened_rule_constants():
+    assert ERROR_STREAK_BLOCK_THRESHOLD == 3
+
+
+def _make_trace(steps):
+    """steps: list of (tool_name, args_json, observation) — emit a synthetic
+    normalized trace with paired call/tool events."""
+    events = []
+    idx = 0
+    for tool_name, args, obs in steps:
+        events.append({
+            "step_index": idx,
+            "role": "assistant",
+            "tool_name": tool_name,
+            "command": args,
+            "action": "tool_call",
+        })
+        call_idx = idx
+        idx += 1
+        events.append({
+            "step_index": idx,
+            "role": "tool",
+            "tool_name": tool_name,
+            "observation": obs,
+            "raw": {"paired_call_event_step": call_idx},
+        })
+        idx += 1
+    return {"issue_text": "synthetic", "events": events}
+
+
+def test_single_error_does_not_block():
+    """HP6: an isolated error response must NOT BLOCK the leaf."""
+    trace = _make_trace([
+        ("read_file", '{"path": "a.py"}', '{"error": "boom"}'),
+        ("read_file", '{"path": "b.py"}', '{"output": "ok"}'),
+    ])
+    session = auto_annotate(trace)
+    for sub in session.ledger.subtasks.values():
+        assert sub.status.value != "blocked", "single error should not BLOCK under softened rule"
+
+
+def test_three_identical_errors_block():
+    trace = _make_trace([
+        ("read_file", '{"path": "a"}', '{"error": "boom"}'),
+        ("read_file", '{"path": "a"}', '{"error": "boom"}'),
+        ("read_file", '{"path": "a"}', '{"error": "boom"}'),
+    ])
+    session = auto_annotate(trace)
+    blocked = [s for s in session.ledger.subtasks.values() if s.status.value == "blocked"]
+    assert len(blocked) == 1
+
+
+def test_three_distinct_errors_do_not_block():
+    """HP6: three errors with DIFFERENT bodies are not a stuck loop."""
+    trace = _make_trace([
+        ("read_file", '{"path": "a"}', '{"error": "boom1"}'),
+        ("read_file", '{"path": "b"}', '{"error": "boom2"}'),
+        ("read_file", '{"path": "c"}', '{"error": "boom3"}'),
+    ])
+    session = auto_annotate(trace)
+    for sub in session.ledger.subtasks.values():
+        assert sub.status.value != "blocked", "distinct errors should not BLOCK"
+
+
+def test_error_then_success_completes():
+    trace = _make_trace([
+        ("read_file", '{"path": "a"}', '{"error": "boom"}'),
+        ("read_file", '{"path": "a"}', '{"output": "ok"}'),
+    ])
+    session = auto_annotate(trace)
+    leaves = list(session.ledger.subtasks.values())
+    assert len(leaves) == 1
+    assert leaves[0].status.value == "complete", "recovery from transient error should complete"
+
+
+def test_streak_resets_on_success():
+    """HP6: error,error,success,error,error must not BLOCK (streak resets)."""
+    trace = _make_trace([
+        ("read_file", '{"path": "a"}', '{"error": "boom"}'),
+        ("read_file", '{"path": "a"}', '{"error": "boom"}'),
+        ("read_file", '{"path": "a"}', '{"output": "ok"}'),
+        ("read_file", '{"path": "a"}', '{"error": "boom"}'),
+        ("read_file", '{"path": "a"}', '{"error": "boom"}'),
+    ])
+    session = auto_annotate(trace)
+    for sub in session.ledger.subtasks.values():
+        assert sub.status.value != "blocked", "success should reset error streak"
+
+
+@pytest.mark.parametrize("pid", HP4_PILOTS)
+def test_softened_rule_does_not_increase_blocked_count(pid):
+    """HP6 acceptance: under the softened rule, BLOCKED leaves on HP4 traces
+    must be <= the previous behavior (which BLOCKED on first error). Computed
+    by re-deriving the "old rule" count from the trace and comparing."""
+    trace = _trace(pid)
+    session = auto_annotate(trace)
+    new_blocked = sum(
+        1 for s in session.ledger.subtasks.values() if s.status.value == "blocked"
+    )
+    # Derive the "old rule" upper bound: any leaf containing >=1 error response
+    # would have BLOCKED under the old rule. So new_blocked <= old_upper_bound.
+    by_idx = {e["step_index"]: e for e in trace["events"]}
+    groups = _build_groups(trace["events"])
+    old_upper = 0
+    for g in groups:
+        for step_idx in g["steps"]:
+            for ev in trace["events"]:
+                if (ev["role"] == "tool"
+                        and (ev.get("raw") or {}).get("paired_call_event_step") == step_idx
+                        and _is_error_response(ev.get("observation"))):
+                    old_upper += 1
+                    break
+            else:
+                continue
+            break
+    assert new_blocked <= old_upper, (
+        f"{pid}: softened rule produced {new_blocked} BLOCKED, "
+        f"old rule upper bound was {old_upper}"
+    )
 
 
 @pytest.mark.parametrize("pid", HP4_PILOTS)

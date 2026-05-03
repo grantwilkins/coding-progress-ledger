@@ -851,20 +851,19 @@ If HP4 passes, the framework is source-agnostic in practice, not just in design.
 Status: done — N=30 pilots across (Terminal & Coding, Repository Tasks, File Operations) × (kimi, glm-5.1). Inventory grew 1k→4.5k rows, sampling pool 6→3,223. SPLIT (Pitfall H1) exercised in production at 23 multi-tool-call gpt turns. Heuristic auto-annotator (`scripts/auto_annotate_hermes.py`) deterministically maps tool→category per protocol; overlap test enforces (a) ≥50% category multiset match with HP4 humans, (b) leaf count within ±50%, (c) ARTIFACT leaves only on terminal-signal tools. All four downstream pipelines run unchanged. Report at `runs/hermes_pilot_h5/HERMES_H5_REPORT.md`. Q1 transfer: 2/5 targets exercised (`future_progress_drop` 151/370, `validation_exposes_new_work` 93/370); 3/5 inaccessible to a no-REOPEN heuristic. HP5-critic ITERATION 1 PASSES.
 
 #### HP6. Soften BLOCKED rule + pin reproducibility (post-HP5-critic)
-Status: not started · _the principal HP5 distortion_
-
-Goal: HP5's `_is_error_response` BLOCKs on the first non-zero exit code. This (a) drives `stuck_loop` to 22/30 (W2 misnamed-tag artifact), (b) stretches `coding_progress` from 0.50–1.00 (any error truncates the leaf), (c) suppresses `stuck_loop_next_window` via the W3 mask. A more honest rule requires N consecutive identical errors before BLOCKING.
+Status: done — softened to 3+ consecutive identical errors. `stuck_loop` 22/30 → **1/30**. BLOCKED leaves 48 → **2**. `coding_progress` median 0.789 → **1.000** (mean 0.78 → 0.90). 21 pilots flipped `stuck_loop` true → false. 30 raw rows (~3.4 MB) pinned at `external_data/hermes/pilot_cache_h5/` via `.gitignore` exception. All four downstream pipelines run unchanged on `runs/hermes_pilot_h5_v2/`. Report: `runs/hermes_pilot_h5_v2/HP6_REPORT.md`. Tests: 7 new HP6 cases in `tests/test_auto_annotate_hermes.py` (45 parametrized total, 577/577 suite green).
 
 Outputs:
 ```text
-scripts/auto_annotate_hermes.py      # require 3+ consecutive identical errors before BLOCK
-tests/test_auto_annotate_hermes.py   # update invariants; expect lower BLOCKED count
-runs/hermes_pilot_h5_v2/             # re-run HP5 with the softened rule
-runs/hermes_pilot_h5_v2/HP6_REPORT.md  # before/after stuck_loop, coding_progress, Q1 numbers
-external_data/hermes/pilot_cache_h5/  # commit the 30 raw rows (~3.3 MB) to fix the reproducibility gap
+scripts/auto_annotate_hermes.py      # softened: ERROR_STREAK_BLOCK_THRESHOLD=3
+tests/test_auto_annotate_hermes.py   # +7 HP6 invariants; per-pilot upper-bound regression
+runs/hermes_pilot_h5_v2/             # 30 pilots re-annotated under softened rule
+runs/hermes_pilot_h5_v2/HP6_REPORT.md
+external_data/hermes/pilot_cache_h5/ # 18 glm-5.1 + 12 kimi raw rows (~3.4 MB)
+datasets/hermes_pilot_h5_v2_*.csv    # observation/checkpoint/Q/shape parity outputs
 ```
 
-Acceptance: `stuck_loop` shape-tag rate drops below HP4's frontier-policy expectation; coding_progress mean rises toward 1.0 for non-loop pilots; the 30 raw rows are pinned in-tree.
+Acceptance: `stuck_loop` shape-tag rate drops below HP4's frontier-policy expectation (PASS, 1/30); coding_progress mean rises toward 1.0 for non-loop pilots (PASS, 0.90); 30 raw rows pinned in-tree (PASS).
 
 ### § Workstream S — Open research questions
 Status: ongoing · _living document_
@@ -952,7 +951,7 @@ N1–N6 ✓, W1 ✓, W2 ✓, W3 ✓, W4 ✓, U1+U2+U3 ✓, V1 ✓, V2 ✓, T1 �
   - Build a live-N=20 checkpoint table by running `scripts/build_estimator_checkpoints.py` against `runs/swe_agent_live_wallclock/` so `submit_without_validation` / `validation_*` Q targets can be recomputed under the live frontier policy.
   - Reconcile selection_reason strings (B2 follow-up, still open from sampler).
   - Q6 (final-success prediction) stays deferred per the decoupling memory.
-- **§ H_PARITY (Hermes replay parity check)** — HP1–HP5 ✓; HP6 (BLOCKED-rule softening + raw-cache pin) is the next-experiment if Hermes work continues.
+- **§ H_PARITY (Hermes replay parity check)** — HP1–HP6 ✓ (HP6 softened BLOCK + raw-cache pin shipped 2026-05-02).
 
 ---
 
