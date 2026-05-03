@@ -26,11 +26,15 @@ ACTIVE through the error, then closes COMPLETE on the recovery step.
 | `stuck_loop` shape-tag (per pilot) | 22/30 | **1/30** | −21 |
 | BLOCKED leaves                     | 48    | **2**   | −46 |
 | COMPLETE leaves                    | 122   | **146** | +24 |
+| IN_PROGRESS leaves (trace ends mid-attempt) | 0  | **22**  | +22 |
+| NOT_STARTED leaves (channel-state bug under HP5) | 0 | **0** | — |
 | `coding_progress` median           | 0.789 | **1.000** | +0.21 |
 | `coding_progress` mean             | 0.783 | **0.902** | +0.12 |
 | pilots at coding_progress = 1.000  | 8/30  | **18/30** | +10 |
 | `Q:future_progress_drop` positives | 151/370 | 136/348 | −15 |
 | `Q:validation_exposes_new_work`    | 93/370  | 50/348  | −43 |
+| `repeated_observation_loop_flag` checkpoints | 0/370 | **9/348** | +9 |
+| Q checkpoint rows                  | 370 | 348 | −22 |
 
 All four downstream pipelines run **unchanged** on the v2 tree; the
 only edits are in `scripts/auto_annotate_hermes.py` (the rule) and
@@ -52,8 +56,25 @@ only edits are in `scripts/auto_annotate_hermes.py` (the rule) and
   while a leaf whose last response is a transient error remains
   IN_PROGRESS. This is the desired behavior: the channel reports
   the actual state, not a forced terminal verdict.
+- Emit `s.start(sid, step=call_step)` on the first paired response
+  observed for the leaf, anchored at the assistant *call* step (not
+  the response step) so the channel does not backdate the agent's
+  transition to information it had not yet observed. This separates
+  **NOT_STARTED** (agent never invoked the tool) from **IN_PROGRESS**
+  (agent attempted, did not recover). Under HP5 with BLOCK-on-first-
+  error this distinction was unreachable; HP6's softened rule made
+  it observable, so the channel must now name the state honestly.
+  Surfaced by the research-test-creator pass
+  (`test_lone_error_leaf_is_in_progress…`); call-step anchor pinned
+  by `test_in_progress_event_anchored_at_call_step_not_response_step`.
+- BLOCK reason strings now include the substring `stuck loop:` so
+  `build_estimator_checkpoints.py:184` (`if "loop" in reason or "stuck"
+  in reason: state.repeated_loop_flag = True`) actually fires. Pinned
+  by `test_block_reason_contains_loop_keyword_for_downstream_flag`.
 
-`tests/test_auto_annotate_hermes.py` adds five HP6-specific cases:
+`tests/test_auto_annotate_hermes.py` adds HP6-specific cases:
+
+Initial pass (rule mechanics):
 
 - `test_softened_rule_constants`
 - `test_single_error_does_not_block`
@@ -64,7 +85,31 @@ only edits are in `scripts/auto_annotate_hermes.py` (the rule) and
 - `test_softened_rule_does_not_increase_blocked_count` (per-pilot
   upper-bound regression vs the old rule on the HP4 traces)
 
-All 45 parametrized auto-annotator tests pass; full suite at 577/577.
+research-test-creator pass (semantic claims):
+
+- `test_lone_error_leaf_is_in_progress_not_complete_not_blocked` —
+  failed initially; surfaced the NOT_STARTED bug (the channel was
+  leaving lone-error leaves at NOT_STARTED rather than IN_PROGRESS,
+  conflating "never tried" with "tried and stuck").
+- `test_two_identical_errors_do_not_block_boundary` (off-by-one)
+- `test_error_streak_does_not_leak_across_leaves` (per-leaf state)
+- `test_recovered_leaf_contributes_full_progress_credit` (channel-
+  vs-outcome decoupling: recovery = 1.0, no penalty)
+- `test_recovered_leaf_evidence_cites_success_step_not_error_step`
+- `test_blocked_leaf_contributes_zero_progress_credit`
+
+Critic-pass adds (D1, D6, D9):
+
+- `test_in_progress_event_anchored_at_call_step_not_response_step`
+  pins D1 (call-step anchor).
+- `test_block_reason_contains_loop_keyword_for_downstream_flag`
+  pins D6 (block-reason → `repeated_observation_loop_flag` wiring).
+- `test_streak_resets_on_success` was rewritten to a 4-step
+  `err,err,ok,err` trace that *actually* fails if the reset is
+  deleted (the original 5-step `err,err,ok,err,err` passed
+  vacuously since both halves were length-2 streaks; flagged by D9).
+
+All 53 parametrized auto-annotator tests pass; full suite at 585/585.
 
 ## Acceptance gate
 
@@ -148,27 +193,43 @@ case where 3+ identical errors actually fired the new rule.
 | `future_progress_drop`                  | 151/370 | 136/348 |
 | `product_reopened_after_completion`     | 0   | 0   |
 | `validation_exposes_new_work`           | 93/370  | 50/348  |
-| `stuck_loop_next_window`                | 0   | 0   |
+| `stuck_loop_next_window`                | 0   | 0   (W3 mask, see below) |
 | `submit_without_validation_state`       | 0   | 0   |
+| `repeated_observation_loop_flag`        | 0/370 | 9/348 |
 
-`future_progress_drop` is preserved (still ~39% of checkpoints).
-`validation_exposes_new_work` drops from 93 → 50 because the heuristic
-no longer slices a single VALIDATION subtask into multiple BLOCKED
-fragments separated by category boundaries — fewer category
-transitions immediately after a VALIDATION close means the W3
-detector fires less. This is an improvement: HP5 was *over-counting*
-the pattern by manufacturing transitions out of transient errors.
+`future_progress_drop` falls from 151 → 136 because fewer transient
+errors trigger the BLOCK→re-add path that HP5 used to manufacture
+progress drops. `validation_exposes_new_work` drops from 93 → 50
+because the heuristic no longer slices a single VALIDATION subtask
+into multiple BLOCKED fragments separated by category boundaries —
+fewer category transitions immediately after a VALIDATION close
+means the W3 detector fires less. This is an improvement: HP5 was
+*over-counting* both patterns by manufacturing transitions out of
+transient errors.
 
-The three structural zeros (`product_reopened_after_completion`,
-`stuck_loop_next_window`, `submit_without_validation_state`) remain
-zero, for the same reasons documented in HP5: the heuristic emits
-no REOPEN events, the W3 mask still suppresses next-window when the
-loop flag is true on the same checkpoint, and the heuristic always
-closes a VALIDATION leaf before ARTIFACT.
+Critic-pass D6 fix: HP6's first rollout had `BLOCK` reasons reading
+"3+ consecutive identical errors" / "3+ identical tool responses
+(Pitfall H3)" — neither contained the substring `loop` or `stuck`,
+which is what `build_estimator_checkpoints.py` keys on to set
+`repeated_observation_loop_flag`. The shape-tag `stuck_loop` fired
+at 1/30 but the upstream checkpoint flag stayed 0 — the channel and
+the estimator were silently desynchronized. The fix prepends
+"stuck loop: " to both BLOCK reasons so the flag now fires
+(9/348 checkpoint rows). `stuck_loop_next_window` remains 0 by
+*W3-mask suppression* (the flag is set on the same checkpoint where
+the next-window target would otherwise fire) — this is now
+verifiable from the data, not just claimed.
 
-The total checkpoint count fell from 370 to 348 because fewer leaves
-trigger the W2 BLOCKED state machine, so fewer `(run, step)` rows
-need to be emitted. No pilot was dropped.
+The two remaining structural zeros (`product_reopened_after_completion`,
+`submit_without_validation_state`) stay zero for the same reasons
+documented in HP5: the heuristic emits no REOPEN events, and the
+heuristic always closes a VALIDATION leaf before ARTIFACT.
+
+The total checkpoint count fell from 370 to 348 because the BLOCKED
+state-machine fires fewer times (W3 emits one fewer checkpoint per
+non-blocked-anymore leaf). No pilot was dropped. The IN_PROGRESS
+event added by HP6 anchors at the assistant call step (same step as
+ADD_SUBTASK) so it does not create a new checkpoint row.
 
 ## Reproducibility — pinned
 
@@ -211,6 +272,26 @@ pinned cache together fully reproduce the v2 tree.
   per-retry-leaf split flagged in `HERMES_H5_REPORT.md`.
 - Outcome prediction (Q6) — Hermes ships no `final_success` field;
   this is unchanged structural N/A.
+
+## Known limitations (carried from HP5; pinned by critic pass)
+
+- **Body equality is verbatim.** `_response_body` returns
+  `json.dumps(obj, sort_keys=True)` for dict observations, so two
+  errors that differ only by a timestamp, PID, or tempfile path
+  are considered distinct and never form a 3-streak. Real stuck
+  loops with non-canonical bodies are false-negatives. A future
+  iteration could canonicalize tempfile paths / numeric IDs before
+  comparing.
+- **Streak is per-leaf.** A genuine stuck-loop where 3 identical
+  errors span two adjacent groups (e.g., write-then-test-then-write
+  on the same failure) is structurally invisible to the rule. The
+  test `test_error_streak_does_not_leak_across_leaves` pins this
+  *as the design choice*, not as an unintended bug.
+- **Rule attribution.** When both rules could fire (e.g., 3 identical
+  error bodies satisfy both the error-streak rule and Pitfall H3),
+  control flow ordering means the error-streak rule wins and the
+  H3 reason string is never emitted. This is benign but means the
+  BLOCKED-reason histogram is biased toward the error-streak label.
 
 ## Reproducer
 

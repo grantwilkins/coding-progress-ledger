@@ -5,7 +5,7 @@ Event rows preserve replay fidelity with one row per LedgerEvent prefix. Step ro
 ## Totals
 
 - Total runs: 30
-- Event rows: 348
+- Event rows: 518
 - Step rows: 348
 - Successful runs: 0
 - Failed runs: 0
@@ -15,7 +15,7 @@ Event rows preserve replay fidelity with one row per LedgerEvent prefix. Step ro
 
 Event rows by category resolution mode:
 
-- `native`: 348
+- `native`: 518
 
 Step rows by category resolution mode:
 
@@ -85,7 +85,7 @@ Step-level: `hermes_pilot_h5_002`, `hermes_pilot_h5_003`, `hermes_pilot_h5_004`,
 
 Runs where event-level and step-level largest coding drops differ: `hermes_pilot_h5_017`.
 
-Runs with multiple events at the same step: none
+Runs with multiple events at the same step: `hermes_pilot_h5_001`, `hermes_pilot_h5_002`, `hermes_pilot_h5_003`, `hermes_pilot_h5_004`, `hermes_pilot_h5_005`, `hermes_pilot_h5_006`, `hermes_pilot_h5_007`, `hermes_pilot_h5_008`, `hermes_pilot_h5_009`, `hermes_pilot_h5_010`, `hermes_pilot_h5_011`, `hermes_pilot_h5_012`, `hermes_pilot_h5_013`, `hermes_pilot_h5_014`, `hermes_pilot_h5_015`, `hermes_pilot_h5_016`, `hermes_pilot_h5_017`, `hermes_pilot_h5_018`, `hermes_pilot_h5_019`, `hermes_pilot_h5_020`, `hermes_pilot_h5_021`, `hermes_pilot_h5_022`, `hermes_pilot_h5_023`, `hermes_pilot_h5_024`, `hermes_pilot_h5_025`, `hermes_pilot_h5_026`, `hermes_pilot_h5_027`, `hermes_pilot_h5_028`, `hermes_pilot_h5_029`, `hermes_pilot_h5_030`.
 
 ## Success / Progress Quadrants
 

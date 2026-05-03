@@ -195,11 +195,15 @@ def auto_annotate(normalized: Dict[str, Any]) -> LedgerSession:
         block_evidence_step = first_step
         last_complete_step = first_step
         last_complete_evidence: Optional[str] = None
+        started = False
         for step_idx in steps:
             ev = by_idx[step_idx]
             resp = _paired_response(events, step_idx)
             if resp is None:
                 continue
+            if not started:
+                s.start(sid, step=step_idx)
+                started = True
             obs = resp.get("observation")
             body = _response_body(obs)
             bodies.append(body)
@@ -210,7 +214,7 @@ def auto_annotate(normalized: Dict[str, Any]) -> LedgerSession:
                         and len(set(error_streak[-ERROR_STREAK_BLOCK_THRESHOLD:])) == 1):
                     blocked = True
                     block_step = resp["step_index"]
-                    block_reason = f"{ERROR_STREAK_BLOCK_THRESHOLD}+ consecutive identical errors"
+                    block_reason = f"stuck loop: {ERROR_STREAK_BLOCK_THRESHOLD}+ consecutive identical errors"
                     block_evidence_step = step_idx
                     break
             else:
@@ -218,7 +222,7 @@ def auto_annotate(normalized: Dict[str, Any]) -> LedgerSession:
             if len(bodies) >= 3 and bodies[-1] == bodies[-2] == bodies[-3]:
                 blocked = True
                 block_step = resp["step_index"]
-                block_reason = "3+ identical tool responses (Pitfall H3)"
+                block_reason = "stuck loop: 3+ identical tool responses (Pitfall H3)"
                 block_evidence_step = step_idx
                 break
             if not is_err:
