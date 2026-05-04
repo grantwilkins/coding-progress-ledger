@@ -865,6 +865,60 @@ datasets/hermes_pilot_h5_v2_*.csv    # observation/checkpoint/Q/shape parity out
 
 Acceptance: `stuck_loop` shape-tag rate drops below HP4's frontier-policy expectation (PASS, 1/30); coding_progress mean rises toward 1.0 for non-loop pilots (PASS, 0.90); 30 raw rows pinned in-tree (PASS).
 
+### § Workstream N_TB — Live ledger on Terminal-Bench-style tasks via subagent runners
+Status: **planned, not started** (drafted 2026-05-03). Plan doc: `docs/WORKSTREAM_N_TB_PLAN.md`.
+
+Motivation: Workstream N's wallclock batch (`runs/swe_agent_live_wallclock/`) carries `timestamp_source: "synthetic"` because the upstream SWE-agent traces lack per-step timestamps. N_TB removes that mediation: a Claude Code subagent runs in an isolated worktree against a Terminal-Bench-shaped task, emits `LedgerSession` events as it actually codes, and the run dir carries *physically real* timestamps. This is also the cleanest cross-source live test left in the project — Hermes proved foreign-retrospective parity, N_TB targets foreign-live parity.
+
+Architecture: subagents emit ledger events **in-band** via `LedgerSession` (per `docs/AGENT_USAGE.md`). A driver (`scripts/run_tb_subagent.py`) builds a worktree, dispatches `Agent(subagent_type=general-purpose, isolation=worktree)`, runs the verifier afterwards, and validates the resulting run dir against `check-run` and the four downstream pipelines. Optional out-of-band path (NTB-stretch) consumes Agent tool calls into a new `ledger_progress/adapters/claude_code_agent.py` for sidecar parity testing.
+
+The TB-12 (12 ported tasks; selection rationale in plan §5):
+
+```text
+markdown-to-html-cli              (PRODUCT-heavy,    25–40 min, NTB4 pilot)
+csv-streaming-dedup               (PRODUCT+VAL,      45–75 min, memory ceiling)
+lru-cache-threadsafe              (PRODUCT+VAL,      30–60 min, concurrency)
+tar-extract-with-traversal-guard  (PRODUCT+INVEST,   40–70 min, security)
+recover-corrupted-sqlite          (INVEST-heavy,     60–120 min, hypothesis loops)
+fix-broken-pyproject-build        (PRODUCT+VAL,      25–45 min, multi-layer bug)
+decouple-state-from-controller    (PRODUCT+VAL,      50–90 min, refactor)
+sliding-window-rate-limiter       (PRODUCT+VAL,      35–55 min, fairness)
+xss-filter-bypass-then-fix        (INVEST→PROD→VAL,  60–90 min, two-phase)
+graph-tarjan-scc                  (PRODUCT+VAL,      30–50 min, algorithmic)
+directory-watcher-log-rotator     (PRODUCT+VAL,      40–70 min, wallclock-sensitive)
+b-tree-on-disk                    (PRODUCT-heavy,    90–180 min, multi-SPLIT)
+```
+
+#### NTB1. Task spec format + verifier contract
+Status: not started. Outputs: `docs/TB_LIVE_TASK_FORMAT.md`, `tasks/tb_live/_template/`. Acceptance: spec names the four required files; verifier contract is shell-exit 0 ⇔ task complete; `solution_reference/` is hidden from the subagent.
+
+#### NTB2. Port the TB-12
+Status: not started. Outputs: `tasks/tb_live/<task_id>/` × 12, `tests/test_tb_live_verifiers.py`. Acceptance: every verifier passes against its own reference solution; 200–1500 word task descriptions; categorical balance ≥ 4 PRODUCT-heavy / ≥ 3 VALIDATION-heavy / ≥ 2 INVESTIGATION-heavy / ≥ 2 mixed.
+
+#### NTB3. Subagent driver
+Status: not started. Outputs: `scripts/run_tb_subagent.py`, `tests/test_run_tb_subagent.py`. Acceptance: driver fails-fast on any post-condition violation (no `ledger.jsonl`, malformed events, missing timestamps, `check-run` failure, downstream-pipeline failure).
+
+#### NTB4. Pilot run on `markdown-to-html-cli`
+Status: not started. Outputs: `runs/tb_live/markdown-to-html-cli/`, `runs/tb_live/NTB4_PILOT_NOTES.md`. Acceptance: ≥ 5 leaves; ≥ 2 categories; `coding_progress == 1.0 ⇔ verifier exits 0`; subagent runtime ≥ 5 minutes; ≥ 1 ledger pattern (SPLIT / REOPEN / BLOCKED) emitted organically.
+
+#### NTB5. Run the remaining 11
+Status: not started. Outputs: `runs/tb_live/<task_id>/` × 12, `runs/tb_live/NTB5_BATCH_SUMMARY.md`. Acceptance: median runtime ≥ 20 min; ≥ 4 of 12 verifications fail (channel-vs-outcome stress); ≥ 1 task with verifier-pass but `coding_progress < 1.0`.
+
+#### NTB6. Live-vs-retrospective parity report
+Status: not started. The core scientific test of the workstream. Outputs: `annotations/tb_live_retro/<task_id>.json` × 12, `runs/tb_live/NTB6_PARITY_REPORT.md`. Acceptance: median category-multiset Jaccard ≥ 0.6; shape-label agreement matches N4's frontier-policy bar; every material divergence named in the report.
+
+#### NTB7. Q1 transfer evaluation
+Status: not started. Outputs: `datasets/tb_live_q_labels.csv`, `runs/tb_live/NTB7_Q_TRANSFER.md`. Acceptance: ≥ 3 of 5 Q1 targets exercised; cross-source comparison vs SWE-agent live + Hermes retrospective shipped.
+
+#### NTB8. Sidecar parity check
+Status: not started. NTB-stretch path (the out-of-band adapter). Outputs: `scripts/replay_tb_to_sidecar.py`, `runs/tb_live_sidecar_replay/`, `runs/tb_live/NTB8_SIDECAR_PARITY.md`. Acceptance: replay-equivalent on all 12, or every divergence named and traced to a documented adapter limitation.
+
+#### NTB9. LedgerSet rollup across sources
+Status: not started. Outputs: `runs/tb_live/tb_live_rollup_set.jsonl`, `runs/tb_live/NTB9_SET_COMPARISON.md`. Acceptance: three set-level scores reported (TB-12, SWE-agent-20, Hermes-30) using the T1 weight-weighted mean.
+
+#### NTB10. Workstream report + TASKS.md update
+Status: not started. Outputs: `runs/tb_live/NTB_REPORT.md`. Acceptance: HP6-style reproducer block; mission-delivered "wallclock-real" sub-bullet ticks for the first time on a non-synthetic batch.
+
 ### § Workstream S — Open research questions
 Status: ongoing · _living document_
 
@@ -952,6 +1006,7 @@ N1–N6 ✓, W1 ✓, W2 ✓, W3 ✓, W4 ✓, U1+U2+U3 ✓, V1 ✓, V2 ✓, T1 �
   - Reconcile selection_reason strings (B2 follow-up, still open from sampler).
   - Q6 (final-success prediction) stays deferred per the decoupling memory.
 - **§ H_PARITY (Hermes replay parity check)** — HP1–HP6 ✓ (HP6 softened BLOCK + raw-cache pin shipped 2026-05-02).
+- **§ Workstream N_TB (live ledger on Terminal-Bench-style tasks via subagent runners)** — planned 2026-05-03; NTB1–NTB10 not started; plan doc at `docs/WORKSTREAM_N_TB_PLAN.md`. Closes the synthetic-timestamp gap in N6 by running real subagents in worktrees against a TB-12 task set.
 
 ---
 
