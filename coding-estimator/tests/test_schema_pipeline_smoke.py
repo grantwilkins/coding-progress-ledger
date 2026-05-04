@@ -11,6 +11,7 @@ import jsonschema
 import pandas as pd
 
 from coding_estimator.leakage.guard import assert_no_forbidden
+from coding_estimator.leakage.run_constancy import assert_clean
 from coding_estimator.splits import protocol as sp
 
 SCHEMAS_DIR = Path(__file__).resolve().parents[1] / "schemas"
@@ -79,3 +80,22 @@ def test_end_to_end_schema_pipeline() -> None:
     # 2-run synthetic split, disjointness assertion
     df = pd.DataFrame([{"run_id": "r1"}, {"run_id": "r2"}])
     sp.assert_disjoint(sp.loro(df))
+
+    # All three safety rails fire in the same pipeline path:
+    # forbidden guard (above), run-constancy audit (below), and split disjointness.
+    rc_df = pd.DataFrame(
+        [
+            {"run_id": "r1", "source": "tb_live", "y_submit_without_validation": 1},
+            {"run_id": "r1", "source": "tb_live", "y_submit_without_validation": 1},
+            {"run_id": "r2", "source": "swe_agent_pilot", "y_submit_without_validation": 0},
+            {"run_id": "r2", "source": "swe_agent_pilot", "y_submit_without_validation": 0},
+        ]
+    )
+    import pytest
+
+    with pytest.raises(ValueError, match="run-constant"):
+        assert_clean(
+            rc_df,
+            feature_columns=["source"],
+            target_columns=["y_submit_without_validation"],
+        )
