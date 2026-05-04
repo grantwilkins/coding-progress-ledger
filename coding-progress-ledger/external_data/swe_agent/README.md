@@ -1,33 +1,24 @@
 # external_data/swe_agent
 
-Holding area for raw SWE-agent trajectories used by the retrospective pilot
-(see `TASKS.md` § Workstream A).
+SWE-agent source-data workspace for inventorying, sampling, and reproducible pilot reconstruction.
 
 ## Layout
 
-```
-raw/         immutable raw inputs from upstream sources (parquet, jsonl, .traj)
-manifests/   derived inventories and pilot sample CSVs
-samples/     small human-readable excerpts for documentation
-SOURCE_FORMAT.md  upstream schema reference (filled in by A2)
-```
+- `SOURCE_FORMAT.md`: verified upstream schema and provenance notes.
+- `PILOT_SAMPLING_POLICY.md`: fixed inclusion/dedupe/sampling rules.
+- `manifests/`: deterministic inventory and pilot sample outputs.
+- `raw/`: immutable local source rows (excluded from git by policy).
+- `samples/`: tiny documentation excerpts only.
 
-## Rules
+## Data handling rules
 
-- `raw/` is **immutable**. Never edit, normalize, or reformat files inside it.
-  Normalization is a separate downstream artifact (see Workstream C).
-- `raw/` is **out of scope for git**. It is excluded by the repo-root
-  `.gitignore`. Large parquet/jsonl dumps must not be committed; if a small
-  fixture is genuinely useful, place an excerpt under `samples/` instead and
-  cite the row index it came from.
-- Treat the upstream dataset (e.g. `nebius/SWE-agent-trajectories` on Hugging
-  Face) as the source of truth. If you need to recover `raw/`, redownload from
-  that source rather than restoring from a backup of this directory.
-- `manifests/` and `samples/` are **committed** — they are derived artifacts
-  small enough to live in the repo and they document what was sampled.
+- Do not mutate files under `raw/`.
+- Do not commit large raw trajectory dumps.
+- Commit manifests and summaries; they are the auditable source pointers.
+- If raw cache is missing, reacquire from the declared upstream source in `SOURCE_FORMAT.md`.
 
-## License / usage
+## Typical workflow
 
-License and usage constraints for the chosen upstream source are recorded in
-`SOURCE_FORMAT.md` (created by task A2). Do not redistribute raw traces from
-this directory; share manifests and pilot summaries instead.
+1. Build inventory with `scripts/swe_agent_inventory.py`.
+2. Generate deterministic pilot sample with `scripts/sample_swe_agent_pilot.py`.
+3. Populate pilot cache and import runs via `scripts/populate_swe_agent_pilot_cache.py` and `scripts/import_swe_agent_trace.py`.

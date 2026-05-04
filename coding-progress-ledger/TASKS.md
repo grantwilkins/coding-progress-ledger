@@ -1055,3 +1055,21 @@ The mission paragraph's 10 progress features are first-class columns ✓
 ```
 
 The original "ready to scale" criteria above stay green; they are the *foundation* the new bar builds on.
+
+## § 0.4 Documentation refresh (2026-05-04)
+
+Status: done
+
+Completed in this task:
+
+- Added/updated README coverage for project subfolders and key nested directories:
+  - `annotations/` and pilot subfolders (`hermes_pilot`, `swe_agent_pilot`, `swe_agent_pilot_v2`, `swe_agent_pilot_v3`)
+  - `datasets/`, `docs/`, `examples/`, `external_data/`, `external_data/hermes/`, `external_data/swe_agent/`
+  - `ledger_progress/`, `ledger_progress/adapters/`, `scripts/`, `tasks/`, `tasks/tb_live/`, `tests/`, `runs/`
+- Rewrote `IMPLEMENTATION_v0.md` as an end-to-end implementation/methodology handoff reflecting current retrospective + live instrumentation scope.
+
+Next documentation tasks:
+
+- Add a generated index doc that maps every script in `scripts/` to input/output artifacts and owning workstream.
+- Add a reproducibility playbook (`docs/REPRODUCIBILITY.md`) with exact command sequences for SWE-agent and Hermes rebuild paths.
+- Add a concise changelog section to `IMPLEMENTATION_v0.md` that tracks protocol-breaking vs protocol-neutral edits.
