@@ -1099,7 +1099,7 @@ build_estimator_checkpoints output (parity test).
 ```
 
 ### D3. Feature extractors
-Status: not started
+Status: done
 
 Goal: One module per feature group from B3. Each module is a pure function `(ReplayState, RunRecord, t) → dict[str, Any]`.
 
@@ -1137,7 +1137,7 @@ Each test asserts:
 ```
 
 ### D4. Build CLI
-Status: not started
+Status: done
 
 Goal: Single command to build per-source and combined checkpoint datasets.
 
@@ -1170,7 +1170,7 @@ tests/test_build_checkpoints.py covers a 2-run synthetic source.
 ```
 
 ### D5. Leakage gate
-Status: not started
+Status: done
 
 Goal: Every output of D4 passes a structural and behavioral leakage audit.
 
@@ -1202,7 +1202,7 @@ ledger that injects a future event into one feature module.
 ```
 
 ### D5.5. Within-run constancy audit
-Status: not started
+Status: done
 
 Goal: Catch the failure mode where a constant-within-run feature pairs with a constant-within-run label and yields a perfect-but-meaningless predictor.
 

@@ -1,15 +1,18 @@
-"""Checkpoint-construction audit skeleton.
+"""Checkpoint-construction audit (D5 gate).
 
-The audit is a structural report that a checkpoint dataset has not
-leaked future state, has no forbidden columns, has run-constancy
-clean, and lists the missingness profile per source. It is the
-PRE-MODELING gate: Workstream G does not start until this report runs
-clean.
+The audit is the PRE-MODELING gate: Workstream G does not start until
+this report runs clean.
 
-This module ships the skeleton in D2.5; the full populated audit lands
-in D5 after D3 feature builders exist. Until then, the skeleton
-asserts on what it CAN check (forbidden columns, run-constancy) and
-emits a placeholder for sections that depend on D3.
+D2.5 shipped the skeleton with placeholder sections. D5 lights up
+each placeholder using the now-existing D3 feature builders and the
+D4 build pipeline. Sections cover:
+- structural (forbidden columns, schema validity, run/checkpoint counts)
+- behavioral (future-mutation invariance: rebuild from a truncated
+  ledger and assert byte-equality with the row built from the full ledger)
+- run-constancy
+- missingness profile by feature and source
+- live-source and retrospective-source row examples
+- auto-generated retrospective + tb_live caveats
 """
 
 from __future__ import annotations
@@ -122,6 +125,173 @@ def _section_run_counts(df: pd.DataFrame) -> AuditSection:
     )
 
 
+def _section_feature_columns_by_group(df: pd.DataFrame) -> AuditSection:
+    from coding_estimator.checkpoints.features.registry import GROUPS
+
+    cols = set(df.columns)
+    lines = []
+    all_present = True
+    for group_name, group_features in sorted(GROUPS.items()):
+        if group_name == "source_task":
+            # source_task features are not emitted by D3 v0 (per
+            # B3 plan); they live in the combined manifest instead.
+            continue
+        present = [f.column_name for f in group_features if f.column_name in cols]
+        missing = [f.column_name for f in group_features if f.column_name not in cols]
+        lines.append(
+            f"- **{group_name}**: {len(present)} present, {len(missing)} missing"
+        )
+        if missing:
+            lines.append(f"  - missing: {missing}")
+            all_present = False
+    return AuditSection(
+        "Feature columns by group",
+        "\n".join(lines),
+        passed=all_present,
+    )
+
+
+def _section_behavioral_prefix(df: pd.DataFrame, *, sample_runs: int = 2) -> AuditSection:
+    """Behavioral leakage check: rebuild rows from a truncated ledger
+    and confirm byte-equality with the row built from the full ledger
+    at the same checkpoint. The replay engine's runtime assertions
+    already guarantee this; the section confirms the property holds
+    end-to-end through the build pipeline, not just inside replay."""
+    from coding_estimator.checkpoints.build import build_run_rows
+    from coding_estimator.ingest.run_record import RunRecord, load_run
+
+    if "run_id" not in df.columns or "source" not in df.columns:
+        return AuditSection(
+            "Behavioral prefix-truncation audit",
+            "FAIL — frame lacks run_id or source.",
+            passed=False,
+        )
+
+    diffs: list[str] = []
+    sampled = (
+        df[["source", "run_id"]]
+        .drop_duplicates()
+        .head(sample_runs)
+        .itertuples(index=False)
+    )
+    for source, run_id in sampled:
+        try:
+            run = load_run(source, run_id)
+        except (FileNotFoundError, OSError, ValueError) as exc:
+            diffs.append(f"- {source}/{run_id}: failed to reload ({exc})")
+            continue
+        full_rows = build_run_rows(run)
+        if len(full_rows) < 2:
+            continue
+        # Mid-step rebuild: reconstruct a synthetic RunRecord whose
+        # events are truncated at the mid-step, then confirm the row at
+        # mid-step matches the canonical row at mid-step.
+        mid_idx = len(full_rows) // 2
+        mid_row_full = full_rows[mid_idx]
+        mid_step = mid_row_full["checkpoint_step"]
+        truncated_events = tuple(e for e in run.events if e.step <= mid_step)
+        truncated_run = RunRecord(
+            run_id=run.run_id,
+            source=run.source,
+            ledger_path=run.ledger_path,
+            events=truncated_events,
+            has_real_wallclock=run.has_real_wallclock,
+            start_wall_time=run.start_wall_time,
+            end_wall_time=run.end_wall_time,
+            task_id=run.task_id,
+            task_family=run.task_family,
+            agent_scaffold=run.agent_scaffold,
+            model_name=run.model_name,
+            raw_metadata=run.raw_metadata,
+        )
+        truncated_rows = build_run_rows(truncated_run)
+        # Find the row at mid_step in the truncated build (last row,
+        # since truncated_run ends at mid_step).
+        mid_row_trunc = truncated_rows[-1]
+        # is_terminal_checkpoint will differ -- the truncated run's
+        # mid_step IS the terminal of that synthetic run. Strip it.
+        full_compare = {k: v for k, v in mid_row_full.items() if k != "is_terminal_checkpoint"}
+        trunc_compare = {k: v for k, v in mid_row_trunc.items() if k != "is_terminal_checkpoint"}
+        if full_compare != trunc_compare:
+            diffs.append(
+                f"- {source}/{run_id} at step {mid_step}: prefix-truncation "
+                "produced a different row (LEAKAGE!)"
+            )
+
+    if diffs:
+        return AuditSection(
+            "Behavioral prefix-truncation audit",
+            "FAIL — leakage detected:\n" + "\n".join(diffs),
+            passed=False,
+        )
+    return AuditSection(
+        "Behavioral prefix-truncation audit",
+        f"PASS — no leakage detected on {sample_runs} sampled runs.",
+        passed=True,
+    )
+
+
+def _section_missingness(df: pd.DataFrame) -> AuditSection:
+    from coding_estimator.checkpoints.features.registry import all_features
+
+    feat_cols = {f.column_name for f in all_features() if f.column_name in df.columns}
+    if not feat_cols:
+        return AuditSection(
+            "Missingness by feature and source",
+            "FAIL — no recognized feature columns in frame.",
+            passed=False,
+        )
+    rows: list[str] = []
+    for source, sub in df.groupby("source"):
+        nulls = {c: int(sub[c].isna().sum()) for c in sorted(feat_cols)}
+        nontrivial = {c: n for c, n in nulls.items() if n > 0}
+        rows.append(
+            f"- `{source}`: {len(sub)} rows; "
+            f"{len(nontrivial)} features with any null"
+        )
+    return AuditSection(
+        "Missingness by feature and source",
+        "\n".join(sorted(rows)),
+        passed=True,
+    )
+
+
+def _section_examples(df: pd.DataFrame, *, retrospective: bool) -> AuditSection:
+    from coding_estimator.ingest.sources import retrospective_source_ids
+
+    retro_ids = retrospective_source_ids()
+    sub = (
+        df[df["source"].isin(retro_ids)]
+        if retrospective
+        else df[~df["source"].isin(retro_ids)]
+    )
+    title = "Retrospective-source row examples" if retrospective else "Live-source row examples"
+    if sub.empty:
+        return AuditSection(
+            title,
+            "_no rows from this source class in the audited frame_",
+            passed=True,
+            placeholder=True,
+        )
+    sample = sub.head(3)
+    cols = [
+        "run_id",
+        "source",
+        "checkpoint_step",
+        "active_leaf_count",
+        "coding_progress",
+    ]
+    cols = [c for c in cols if c in sub.columns]
+    header = "| " + " | ".join(cols) + " |"
+    sep = "|" + "|".join(["---"] * len(cols)) + "|"
+    rows = [
+        "| " + " | ".join(str(r[c]) for c in cols) + " |"
+        for _, r in sample.iterrows()
+    ]
+    body = "\n".join([header, sep, *rows])
+    return AuditSection(title, body, passed=True)
+
+
 def build_audit(
     df: pd.DataFrame,
     *,
@@ -129,17 +299,14 @@ def build_audit(
     feature_columns: Iterable[str] | None = None,
     target_columns: Iterable[str] | None = None,
 ) -> CheckpointAudit:
-    """Build the audit object. Sections that depend on D3 builders are
-    emitted as placeholders until D3 lands."""
+    """Build the audit object. After D3+D4, every section is fully
+    populated; only `Label balance by target and source` remains a
+    placeholder pending Workstream E."""
     audit = CheckpointAudit(sources=tuple(sorted(set(sources))))
     audit.sections.append(_section_run_counts(df))
-    audit.sections.append(
-        _placeholder("Feature columns by group", "needs D3 feature builders")
-    )
+    audit.sections.append(_section_feature_columns_by_group(df))
     audit.sections.append(_section_forbidden_columns(df))
-    audit.sections.append(
-        _placeholder("Behavioral prefix-truncation audit", "needs D3 + D4 build CLI")
-    )
+    audit.sections.append(_section_behavioral_prefix(df))
     if feature_columns is not None and target_columns is not None:
         audit.sections.append(
             _section_run_constancy(
@@ -150,18 +317,12 @@ def build_audit(
         audit.sections.append(
             _placeholder("Run-constancy audit", "no feature/target columns supplied")
         )
-    audit.sections.append(
-        _placeholder("Missingness by feature and source", "needs D3 feature builders")
-    )
+    audit.sections.append(_section_missingness(df))
     audit.sections.append(
         _placeholder("Label balance by target and source", "needs Workstream E labels")
     )
-    audit.sections.append(
-        _placeholder("Live-source row examples", "needs D3 feature builders")
-    )
-    audit.sections.append(
-        _placeholder("Retrospective-source row examples", "needs D3 feature builders")
-    )
+    audit.sections.append(_section_examples(df, retrospective=False))
+    audit.sections.append(_section_examples(df, retrospective=True))
     return audit
 
 

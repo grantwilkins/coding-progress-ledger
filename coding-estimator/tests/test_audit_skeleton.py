@@ -25,6 +25,7 @@ from __future__ import annotations
 from pathlib import Path
 
 import pandas as pd
+import pytest
 
 from coding_estimator.leakage.audit import (
     AUDIT_FILENAME,
@@ -64,15 +65,20 @@ def test_forbidden_column_section_fails_on_leakage() -> None:
     assert "final_success" in forbidden.body
 
 
-def test_overall_passes_when_only_placeholders_and_clean_sections() -> None:
-    """A skeleton audit on a clean frame must NOT report 'PASS' as if
-    the D5 gate were satisfied. Placeholders are non-blocking but the
-    rendered text must clearly signal that some work is pending."""
-    audit = build_audit(_frame(), sources=["tb_live"])
+def test_overall_passes_on_a_real_built_frame(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """A real D4-built frame on a healthy source must produce a
+    PASS audit. Failure here means a D5 section is over-strict or a
+    builder is silently missing a column."""
+    monkeypatch.delenv("LEDGER_ROOT", raising=False)
+    from coding_estimator.checkpoints.build import build_source_frame
+
+    df = build_source_frame("tb_live")
+    audit = build_audit(df, sources=["tb_live"])
     rendered = render_audit(audit)
-    assert "PLACEHOLDER" in rendered
-    # Despite placeholders, the overall flag is True so the build CLI
-    # can finish; D5 will tighten this when builders land.
+    # The Workstream-E-pending placeholder is acceptable.
+    assert "Label balance" in rendered
     assert audit.passed is True
 
 
