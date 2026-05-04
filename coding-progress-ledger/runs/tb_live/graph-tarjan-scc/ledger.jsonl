@@ -1,0 +1,13 @@
+{"step":0,"event_type":"init","subtask_id":null,"payload":{"root_task":"graph-tarjan-scc"},"reason":null,"timestamp":"2026-05-04T07:53:40.589473Z"}
+{"step":1,"event_type":"add_subtask","subtask_id":"i1","payload":{"description":"read task spec","parent_id":null,"weight":1.0,"category":"investigation"},"reason":null,"timestamp":"2026-05-04T07:53:40.589473Z"}
+{"step":1,"event_type":"update_status","subtask_id":"i1","payload":{"status":"in_progress"},"reason":null,"timestamp":"2026-05-04T07:53:40.589473Z"}
+{"step":2,"event_type":"update_status","subtask_id":"i1","payload":{"status":"complete","evidence":["task spec read: implement tarjan_scc package with scc() function, src/ layout, 8 example cases, sorted output contract"]},"reason":null,"timestamp":"2026-05-04T07:53:45.793141Z"}
+{"step":3,"event_type":"add_subtask","subtask_id":"p1","payload":{"description":"implement tarjan_scc package with scc() function","parent_id":null,"weight":1.0,"category":"product"},"reason":null,"timestamp":"2026-05-04T07:53:56.007564Z"}
+{"step":3,"event_type":"update_status","subtask_id":"p1","payload":{"status":"in_progress"},"reason":null,"timestamp":"2026-05-04T07:53:56.007564Z"}
+{"step":3,"event_type":"add_subtask","subtask_id":"v1","payload":{"description":"write tests for all 8 spec examples","parent_id":null,"weight":1.0,"category":"validation"},"reason":null,"timestamp":"2026-05-04T07:53:56.007564Z"}
+{"step":3,"event_type":"add_subtask","subtask_id":"v2","payload":{"description":"run pytest and verify all tests pass","parent_id":null,"weight":1.0,"category":"validation"},"reason":null,"timestamp":"2026-05-04T07:53:56.007564Z"}
+{"step":4,"event_type":"update_status","subtask_id":"p1","payload":{"status":"complete","evidence":["tarjan_scc/__init__.py written with recursive Tarjan SCC, all-nodes collection, sorted output contract"]},"reason":null,"timestamp":"2026-05-04T07:54:06.324983Z"}
+{"step":5,"event_type":"update_status","subtask_id":"v1","payload":{"status":"in_progress"},"reason":null,"timestamp":"2026-05-04T07:54:11.410337Z"}
+{"step":6,"event_type":"update_status","subtask_id":"v1","payload":{"status":"complete","evidence":["9 tests written covering all 8 spec examples plus target-only-node edge case"]},"reason":null,"timestamp":"2026-05-04T07:54:37.017265Z"}
+{"step":7,"event_type":"update_status","subtask_id":"v2","payload":{"status":"in_progress"},"reason":null,"timestamp":"2026-05-04T07:54:41.270890Z"}
+{"step":7,"event_type":"update_status","subtask_id":"v2","payload":{"status":"complete","evidence":["uv run pytest tests/ -q: 9 passed in 0.01s"]},"reason":null,"timestamp":"2026-05-04T07:54:41.270890Z"}

@@ -1,0 +1,127 @@
+{
+  "active_coding_leaves_final": 4,
+  "active_overall_leaves_final": 4,
+  "category_active_weight_final": {
+    "artifact": 0,
+    "documentation": 0,
+    "environment": 0,
+    "investigation": 1.0,
+    "product": 2.0,
+    "validation": 1.0
+  },
+  "category_completed_weight_final": {
+    "artifact": 0,
+    "documentation": 0,
+    "environment": 0,
+    "investigation": 1.0,
+    "product": 2.0,
+    "validation": 1.0
+  },
+  "coding_categories": [
+    "product",
+    "validation",
+    "investigation"
+  ],
+  "coding_largest_drop": 0.0,
+  "coding_nonmonotonic": false,
+  "completed_coding_leaves_final": 4,
+  "completed_overall_leaves_final": 4,
+  "evidence_audit_by_category": {
+    "investigation": {
+      "audited_completion_count": 1,
+      "status": "strong",
+      "weak_completion_evidence_count": 0,
+      "weak_subtask_ids": []
+    },
+    "product": {
+      "audited_completion_count": 2,
+      "status": "weak",
+      "weak_completion_evidence_count": 1,
+      "weak_subtask_ids": [
+        "p1"
+      ]
+    },
+    "validation": {
+      "audited_completion_count": 1,
+      "status": "strong",
+      "weak_completion_evidence_count": 0,
+      "weak_subtask_ids": []
+    }
+  },
+  "evidence_audit_status": "weak",
+  "evidence_audit_weak_categories": [
+    "product"
+  ],
+  "excluded_active_weight_final": 0,
+  "excluded_categories": [
+    "artifact",
+    "documentation",
+    "environment"
+  ],
+  "excluded_categories_final": {
+    "artifact": {
+      "active": 0,
+      "complete": 0
+    },
+    "documentation": {
+      "active": 0,
+      "complete": 0
+    },
+    "environment": {
+      "active": 0,
+      "complete": 0
+    }
+  },
+  "excluded_completed_weight_final": 0,
+  "final_coding_active_weight": 4.0,
+  "final_coding_complete_weight": 4.0,
+  "final_coding_progress": 1.0,
+  "final_overall_active_weight": 4.0,
+  "final_overall_complete_weight": 4.0,
+  "final_overall_progress": 1.0,
+  "final_success": null,
+  "final_success_source": "absent",
+  "generator": "ledger_progress.sidecar",
+  "historical_subtasks_created": 4,
+  "largest_coding_drop": 0.0,
+  "largest_coding_drop_category_contributions": {},
+  "largest_coding_drop_detail": {
+    "amount": 0.0,
+    "from_step": null,
+    "to_step": null
+  },
+  "largest_coding_drop_source": "none",
+  "largest_overall_drop": 0.0,
+  "largest_overall_drop_category_contributions": {},
+  "largest_overall_drop_detail": {
+    "amount": 0.0,
+    "from_step": null,
+    "to_step": null
+  },
+  "largest_overall_drop_mostly_excluded": false,
+  "largest_overall_drop_source": "none",
+  "nonmonotonic_coding": false,
+  "nonmonotonic_overall": false,
+  "overall_largest_drop": 0.0,
+  "overall_nonmonotonic": false,
+  "source_ledger_sha256": "f22d66c5ae8a44b24c6a4ed0290fd3b48d88ece72c635ddbfe1c987cf413672f",
+  "subtask_categories": {
+    "i1": "investigation",
+    "p1": "product",
+    "p2": "product",
+    "v1": "validation"
+  },
+  "task_id": "fix-broken-pyproject-build",
+  "weak_completion_evidence": [
+    {
+      "category": "product",
+      "description": "write pyproject.toml with PEP 621 + hatchling backend",
+      "evidence_types": [
+        "manual_note"
+      ],
+      "step": 3,
+      "subtask_id": "p1"
+    }
+  ],
+  "weak_completion_evidence_count": 1
+}

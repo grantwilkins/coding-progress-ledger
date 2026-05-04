@@ -1,0 +1,133 @@
+{
+  "active_coding_leaves_final": 4,
+  "active_overall_leaves_final": 4,
+  "category_active_weight_final": {
+    "artifact": 0,
+    "documentation": 0,
+    "environment": 0,
+    "investigation": 1.0,
+    "product": 1.0,
+    "validation": 2.0
+  },
+  "category_completed_weight_final": {
+    "artifact": 0,
+    "documentation": 0,
+    "environment": 0,
+    "investigation": 1.0,
+    "product": 1.0,
+    "validation": 2.0
+  },
+  "coding_categories": [
+    "product",
+    "validation",
+    "investigation"
+  ],
+  "coding_largest_drop": 0.75,
+  "coding_nonmonotonic": true,
+  "completed_coding_leaves_final": 4,
+  "completed_overall_leaves_final": 4,
+  "evidence_audit_by_category": {
+    "investigation": {
+      "audited_completion_count": 1,
+      "status": "strong",
+      "weak_completion_evidence_count": 0,
+      "weak_subtask_ids": []
+    },
+    "product": {
+      "audited_completion_count": 1,
+      "status": "strong",
+      "weak_completion_evidence_count": 0,
+      "weak_subtask_ids": []
+    },
+    "validation": {
+      "audited_completion_count": 2,
+      "status": "weak",
+      "weak_completion_evidence_count": 1,
+      "weak_subtask_ids": [
+        "v1"
+      ]
+    }
+  },
+  "evidence_audit_status": "weak",
+  "evidence_audit_weak_categories": [
+    "validation"
+  ],
+  "excluded_active_weight_final": 0,
+  "excluded_categories": [
+    "artifact",
+    "documentation",
+    "environment"
+  ],
+  "excluded_categories_final": {
+    "artifact": {
+      "active": 0,
+      "complete": 0
+    },
+    "documentation": {
+      "active": 0,
+      "complete": 0
+    },
+    "environment": {
+      "active": 0,
+      "complete": 0
+    }
+  },
+  "excluded_completed_weight_final": 0,
+  "final_coding_active_weight": 4.0,
+  "final_coding_complete_weight": 4.0,
+  "final_coding_progress": 1.0,
+  "final_overall_active_weight": 4.0,
+  "final_overall_complete_weight": 4.0,
+  "final_overall_progress": 1.0,
+  "final_success": null,
+  "final_success_source": "absent",
+  "generator": "ledger_progress.sidecar",
+  "historical_subtasks_created": 4,
+  "largest_coding_drop": 0.75,
+  "largest_coding_drop_category_contributions": {
+    "product": 0.5,
+    "validation": 1.0
+  },
+  "largest_coding_drop_detail": {
+    "amount": 0.75,
+    "from_step": 2,
+    "to_step": 3
+  },
+  "largest_coding_drop_source": "mixed",
+  "largest_overall_drop": 0.75,
+  "largest_overall_drop_category_contributions": {
+    "product": 0.5,
+    "validation": 1.0
+  },
+  "largest_overall_drop_detail": {
+    "amount": 0.75,
+    "from_step": 2,
+    "to_step": 3
+  },
+  "largest_overall_drop_mostly_excluded": false,
+  "largest_overall_drop_source": "mixed",
+  "nonmonotonic_coding": true,
+  "nonmonotonic_overall": true,
+  "overall_largest_drop": 0.75,
+  "overall_nonmonotonic": true,
+  "source_ledger_sha256": "daddc41f0f2555453b4efbe8db7681c0e35108fb88e42754f351abdb89cd0e91",
+  "subtask_categories": {
+    "i1": "investigation",
+    "p1": "product",
+    "v1": "validation",
+    "v2": "validation"
+  },
+  "task_id": "graph-tarjan-scc",
+  "weak_completion_evidence": [
+    {
+      "category": "validation",
+      "description": "write tests for all 8 spec examples",
+      "evidence_types": [
+        "manual_note"
+      ],
+      "step": 6,
+      "subtask_id": "v1"
+    }
+  ],
+  "weak_completion_evidence_count": 1
+}

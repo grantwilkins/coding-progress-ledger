@@ -1,0 +1,132 @@
+{
+  "active_coding_leaves_final": 5,
+  "active_overall_leaves_final": 5,
+  "category_active_weight_final": {
+    "artifact": 0,
+    "documentation": 0,
+    "environment": 0,
+    "investigation": 1.0,
+    "product": 2.0,
+    "validation": 2.0
+  },
+  "category_completed_weight_final": {
+    "artifact": 0,
+    "documentation": 0,
+    "environment": 0,
+    "investigation": 1.0,
+    "product": 2.0,
+    "validation": 2.0
+  },
+  "coding_categories": [
+    "product",
+    "validation",
+    "investigation"
+  ],
+  "coding_largest_drop": 0.5,
+  "coding_nonmonotonic": true,
+  "completed_coding_leaves_final": 5,
+  "completed_overall_leaves_final": 5,
+  "evidence_audit_by_category": {
+    "investigation": {
+      "audited_completion_count": 1,
+      "status": "strong",
+      "weak_completion_evidence_count": 0,
+      "weak_subtask_ids": []
+    },
+    "product": {
+      "audited_completion_count": 2,
+      "status": "strong",
+      "weak_completion_evidence_count": 0,
+      "weak_subtask_ids": []
+    },
+    "validation": {
+      "audited_completion_count": 2,
+      "status": "weak",
+      "weak_completion_evidence_count": 1,
+      "weak_subtask_ids": [
+        "s5"
+      ]
+    }
+  },
+  "evidence_audit_status": "weak",
+  "evidence_audit_weak_categories": [
+    "validation"
+  ],
+  "excluded_active_weight_final": 0,
+  "excluded_categories": [
+    "artifact",
+    "documentation",
+    "environment"
+  ],
+  "excluded_categories_final": {
+    "artifact": {
+      "active": 0,
+      "complete": 0
+    },
+    "documentation": {
+      "active": 0,
+      "complete": 0
+    },
+    "environment": {
+      "active": 0,
+      "complete": 0
+    }
+  },
+  "excluded_completed_weight_final": 0,
+  "final_coding_active_weight": 5.0,
+  "final_coding_complete_weight": 5.0,
+  "final_coding_progress": 1.0,
+  "final_overall_active_weight": 5.0,
+  "final_overall_complete_weight": 5.0,
+  "final_overall_progress": 1.0,
+  "final_success": null,
+  "final_success_source": "absent",
+  "generator": "ledger_progress.sidecar",
+  "historical_subtasks_created": 5,
+  "largest_coding_drop": 0.5,
+  "largest_coding_drop_category_contributions": {
+    "product": 0.5
+  },
+  "largest_coding_drop_detail": {
+    "amount": 0.5,
+    "from_step": 2,
+    "to_step": 3
+  },
+  "largest_coding_drop_source": "product",
+  "largest_overall_drop": 0.5,
+  "largest_overall_drop_category_contributions": {
+    "product": 0.5
+  },
+  "largest_overall_drop_detail": {
+    "amount": 0.5,
+    "from_step": 2,
+    "to_step": 3
+  },
+  "largest_overall_drop_mostly_excluded": false,
+  "largest_overall_drop_source": "product",
+  "nonmonotonic_coding": true,
+  "nonmonotonic_overall": true,
+  "overall_largest_drop": 0.5,
+  "overall_nonmonotonic": true,
+  "source_ledger_sha256": "8ae4419a65abb2349fe171c3e308824f6faa413c0ff0354467c8bace698ca63f",
+  "subtask_categories": {
+    "s1": "investigation",
+    "s2": "product",
+    "s3": "validation",
+    "s4": "product",
+    "s5": "validation"
+  },
+  "task_id": "tar-extract-with-traversal-guard",
+  "weak_completion_evidence": [
+    {
+      "category": "validation",
+      "description": "verify PYTHONPATH=src import and final test run",
+      "evidence_types": [
+        "manual_note"
+      ],
+      "step": 9,
+      "subtask_id": "s5"
+    }
+  ],
+  "weak_completion_evidence_count": 1
+}
