@@ -1,0 +1,63 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "coding-estimator/feature_schema",
+  "title": "EstimatorFeatureSpec",
+  "description": "One row per feature column declared in the registry.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "column_name",
+    "dtype",
+    "group",
+    "populated_on",
+    "fill_when_missing",
+    "run_constant_flag",
+    "prefix_only",
+    "feature_or_label"
+  ],
+  "properties": {
+    "column_name": {"type": "string", "pattern": "^[a-z][a-z0-9_]*$"},
+    "dtype": {"type": "string", "enum": ["int", "float", "bool", "str"]},
+    "group": {
+      "type": "string",
+      "enum": [
+        "frontier",
+        "closure",
+        "discovery",
+        "instability",
+        "stalling",
+        "validation",
+        "evidence",
+        "time_budget",
+        "source_task"
+      ]
+    },
+    "populated_on": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "enum": [
+          "swe_agent_pilot",
+          "swe_agent_pilot_v3",
+          "swe_agent_live",
+          "swe_agent_live_wallclock",
+          "hermes_pilot",
+          "hermes_pilot_h5",
+          "hermes_pilot_h5_v2",
+          "tb_live"
+        ]
+      },
+      "minItems": 1,
+      "uniqueItems": true
+    },
+    "upstream_source": {"type": ["string", "null"]},
+    "fill_when_missing": {"type": "string", "enum": ["null", "zero", "false"]},
+    "run_constant_flag": {"type": "boolean"},
+    "derivable_from": {
+      "type": "string",
+      "enum": ["yes", "no", "requires_transcript", "requires_source_trace"]
+    },
+    "feature_or_label": {"type": "string", "const": "feature"},
+    "prefix_only": {"type": "boolean", "const": true}
+  }
+}

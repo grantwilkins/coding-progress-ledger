@@ -1,0 +1,34 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "coding-estimator/run_constant_features",
+  "title": "RunConstantFeatures",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["features", "policy"],
+  "properties": {
+    "features": {
+      "type": "array",
+      "items": {"type": "string", "pattern": "^[a-z][a-z0-9_]*$"},
+      "uniqueItems": true
+    },
+    "policy": {
+      "type": "object",
+      "required": ["fail_on_run_constant_pair"],
+      "properties": {
+        "fail_on_run_constant_pair": {"type": "boolean", "const": true}
+      }
+    }
+  },
+  "data": {
+    "features": [
+      "source",
+      "agent_scaffold",
+      "model_name",
+      "task_family_hash",
+      "repo_family_hash",
+      "initial_prompt_length",
+      "initial_files_count"
+    ],
+    "policy": {"fail_on_run_constant_pair": true}
+  }
+}

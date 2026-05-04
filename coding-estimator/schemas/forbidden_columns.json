@@ -1,0 +1,51 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "coding-estimator/forbidden_columns",
+  "title": "ForbiddenColumns",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["exact", "prefixes", "suffixes"],
+  "properties": {
+    "exact": {
+      "type": "array",
+      "items": {"type": "string"},
+      "uniqueItems": true
+    },
+    "prefixes": {
+      "type": "array",
+      "items": {"type": "string"},
+      "uniqueItems": true
+    },
+    "suffixes": {
+      "type": "array",
+      "items": {"type": "string"},
+      "uniqueItems": true
+    }
+  },
+  "data": {
+    "exact": [
+      "final_success",
+      "final_success_source",
+      "finish_step",
+      "finish_seconds",
+      "verifier_exit_code",
+      "verifier_pass",
+      "shape_label",
+      "shape_tags",
+      "checkpoint_event_index_at_terminal",
+      "final_artifact_without_validation"
+    ],
+    "prefixes": [
+      "y_",
+      "label_",
+      "test_output_",
+      "eval_log_",
+      "final_diff_",
+      "summary_by_category_"
+    ],
+    "suffixes": [
+      "_at_terminal",
+      "_final"
+    ]
+  }
+}

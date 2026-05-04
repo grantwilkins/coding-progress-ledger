@@ -1,0 +1,48 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "coding-estimator/checkpoint_schema",
+  "title": "EstimatorCheckpoint",
+  "description": "One row per (run_id, t). Identity + features + provenance. Labels live in label_schema.json.",
+  "type": "object",
+  "additionalProperties": true,
+  "required": [
+    "run_id",
+    "source",
+    "checkpoint_id",
+    "checkpoint_step",
+    "checkpoint_event_index",
+    "is_terminal_checkpoint",
+    "ledger_path",
+    "schema_version",
+    "builder_commit_sha",
+    "source_protocol_version"
+  ],
+  "properties": {
+    "run_id": {"type": "string", "minLength": 1},
+    "source": {
+      "type": "string",
+      "enum": [
+        "swe_agent_pilot",
+        "swe_agent_pilot_v3",
+        "swe_agent_live",
+        "swe_agent_live_wallclock",
+        "hermes_pilot",
+        "hermes_pilot_h5",
+        "hermes_pilot_h5_v2",
+        "tb_live"
+      ]
+    },
+    "checkpoint_id": {"type": "string", "minLength": 1},
+    "checkpoint_step": {"type": "integer", "minimum": 0},
+    "checkpoint_event_index": {"type": "integer", "minimum": 0},
+    "checkpoint_wall_time": {"type": ["string", "null"]},
+    "checkpoint_elapsed_seconds": {"type": ["number", "null"]},
+    "checkpoint_fraction_timeout": {"type": ["number", "null"], "minimum": 0, "maximum": 1.0001},
+    "is_terminal_checkpoint": {"type": "boolean"},
+    "timestamp_quality": {"type": "string", "enum": ["real", "synthetic", "synthetic_backfill", "missing"]},
+    "ledger_path": {"type": "string", "minLength": 1},
+    "schema_version": {"type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"},
+    "builder_commit_sha": {"type": "string", "minLength": 7},
+    "source_protocol_version": {"type": "string", "minLength": 1}
+  }
+}

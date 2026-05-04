@@ -1,0 +1,43 @@
+[project]
+name = "coding-estimator"
+version = "0.0.0"
+description = "Belief-state estimator over coding-progress-ledger histories."
+readme = "README.md"
+requires-python = ">=3.11,<3.13"
+dependencies = [
+    "pandas>=2.2,<3",
+    "pyarrow>=15,<22",
+    "numpy>=1.26,<3",
+    "scipy>=1.11,<2",
+    "scikit-learn>=1.4,<2",
+    "jsonschema>=4.21,<5",
+]
+
+[project.optional-dependencies]
+gbm = ["lightgbm>=4.3,<5"]
+plot = ["matplotlib>=3.8,<4"]
+
+[dependency-groups]
+dev = [
+    "pytest>=8",
+    "pytest-cov>=5",
+    "ruff>=0.5",
+]
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["coding_estimator*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+norecursedirs = ["datasets", "models", "reports", ".venv", ".git"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "B", "SIM"]
