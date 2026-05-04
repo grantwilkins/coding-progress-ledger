@@ -1,4 +1,18 @@
-"""Disjointness on every scheme; jsonschema validation; warning on synthetic temporal."""
+"""Disjointness on every scheme; jsonschema validation; warning on synthetic temporal.
+
+Claim:
+    For LORO over a frame with N unique run_ids, sp.loro produces N folds;
+    in each fold (train_run_ids, test_run_ids) is a partition of those N
+    run_ids: their union covers every input run, their intersection is
+    empty, and |test_run_ids| == 1.
+
+Plausible wrong implementations:
+    - test_run_ids contains a run not in the input (e.g. mislabeled)
+    - the held-out run leaks into train_run_ids (off-by-one when constructing
+      the complement)
+    - n_folds != n_runs (e.g. iterates over checkpoints not unique runs)
+    - LTFO accidentally puts some runs of the held-out family into train
+"""
 
 from __future__ import annotations
 
@@ -100,6 +114,37 @@ def test_assert_disjoint_catches_overlap() -> None:
     )
     with pytest.raises(ValueError, match="r2"):
         sp.assert_disjoint(bad)
+
+
+def test_loro_train_is_exact_complement_of_test() -> None:
+    # For every fold: train_run_ids ∪ test_run_ids must equal the full set
+    # of unique run_ids, AND the intersection must be empty.
+    df = _frame()
+    runs_in = set(df["run_id"].unique())
+    s = sp.loro(df)
+    assert len(s.folds) == len(runs_in)
+    for fold in s.folds:
+        train = set(fold.train_run_ids)
+        test = set(fold.test_run_ids)
+        assert len(test) == 1, "LORO test partition must hold exactly one run"
+        assert train | test == runs_in, "train ∪ test must cover all input runs"
+        assert train & test == set(), "train ∩ test must be empty"
+
+
+def test_ltfo_held_out_family_runs_never_in_train() -> None:
+    # Every run that belongs to the held-out family must appear ONLY in the
+    # test partition of its fold and NEVER in the training partition.
+    df = _frame()
+    s = sp.ltfo(df)
+    fam_to_runs: dict[str, set[str]] = {}
+    for _, sub in df[["run_id", "task_family"]].drop_duplicates().groupby("task_family"):
+        fam_to_runs[str(sub["task_family"].iloc[0])] = set(sub["run_id"])
+    for fold in s.folds:
+        # fold_id is "ltfo::<family>"
+        family = fold.fold_id.split("::", 1)[1]
+        held_runs = fam_to_runs[family]
+        assert held_runs.issubset(set(fold.test_run_ids))
+        assert held_runs.isdisjoint(set(fold.train_run_ids))
 
 
 def test_temporal_requires_timestamps() -> None:

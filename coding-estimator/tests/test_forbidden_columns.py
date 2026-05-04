@@ -1,4 +1,15 @@
-"""Forbidden-column guard exercises exact / prefix / suffix matching."""
+"""Forbidden-column guard exercises exact / prefix / suffix matching.
+
+Claim:
+    Suffix matching uses str.endswith(suffix), not substring containment.
+    A column whose name *contains* a forbidden suffix elsewhere in the
+    string must NOT be rejected; only true suffixes must.
+
+Plausible wrong implementations:
+    - `if suffix in col` instead of `col.endswith(suffix)` -> over-matches
+    - applying prefixes as suffixes (or vice versa) -> wrong directional check
+    - case-insensitive match -> "Final" wrongly accepted/rejected
+"""
 
 from __future__ import annotations
 
@@ -71,6 +82,27 @@ def test_load_spec() -> None:
     assert "final_success" in spec.exact
     assert "y_" in spec.prefixes
     assert "_final" in spec.suffixes
+
+
+def test_suffix_match_is_endswith_not_substring() -> None:
+    # `_final` is a forbidden suffix. `score_finally` only CONTAINS that
+    # substring; it does not end with it -> must be allowed.
+    df_ok = pd.DataFrame({"score_finally": [1.0]})
+    assert_no_forbidden(df_ok)
+    # The true suffix case must still be rejected.
+    df_bad = pd.DataFrame({"score_final": [1.0]})
+    with pytest.raises(ValueError, match="forbidden columns"):
+        assert_no_forbidden(df_bad)
+
+
+def test_at_terminal_endswith_only() -> None:
+    # `_at_terminal` is a forbidden suffix. The legitimate `checkpoint_event_index`
+    # feature must pass; only the terminal-leakage variant must be rejected.
+    df_ok = pd.DataFrame({"checkpoint_event_index": [12]})
+    assert_no_forbidden(df_ok)
+    df_bad = pd.DataFrame({"checkpoint_event_index_at_terminal": [12]})
+    with pytest.raises(ValueError, match="forbidden columns"):
+        assert_no_forbidden(df_bad)
 
 
 def test_submit_without_validation_so_far_is_NOT_forbidden() -> None:

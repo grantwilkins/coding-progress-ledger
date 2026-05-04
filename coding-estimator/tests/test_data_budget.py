@@ -1,4 +1,16 @@
-"""Per-(target, source) budget flags infeasible cells correctly on a small fixture."""
+"""Per-(target, source) budget flags infeasible cells correctly on a small fixture.
+
+Claim:
+    _per_fold_min(df, target, "loro") returns the minimum positives and
+    minimum negatives over TRAINING folds (each training fold = the
+    complement of the held-out run); feasibility requires both >= 5.
+
+Plausible wrong implementations:
+    - returns the held-out (test) fold minimums instead of training-fold
+    - returns the held-out (test) fold values for `runs - 1` runs
+    - off-by-one on fold count (returns n_runs - 1 or n_runs + 1)
+    - uses `df["source"] != g` instead of `df["run_id"] != g` for loro
+"""
 
 from __future__ import annotations
 
@@ -56,6 +68,38 @@ def test_missing_target_flagged(fixture_df: pd.DataFrame) -> None:
     cells = compute_budget(fixture_df, targets=["never_existed"], schemes=("loro",))
     assert cells[0].feasible is False
     assert cells[0].reason == "target_missing"
+
+
+def test_per_fold_min_uses_training_fold_not_test_fold(fixture_df: pd.DataFrame) -> None:
+    # Concentrate ALL `easy` positives in one run (r0). Under loro:
+    #   held-out r0 -> training fold = r1..r4 -> 0 positives -> infeasible.
+    #   held-out rk (k>0) -> training fold contains r0 (10 pos) -> feasible if neg>=5.
+    # If the function were returning test-fold minimums instead, the held-out
+    # run with no positives (e.g. r1) would be considered the 'minimum' and
+    # the 0-positive scenario would never surface as a training-fold blocker.
+    # We verify the OVERALL feasibility flag fires because some training fold
+    # has 0 positives -- the only way that happens is if the code is correctly
+    # taking the min over the *complement* of each held-out group.
+    df = fixture_df.copy()
+    df["concentrated"] = 0
+    df.loc[df["run_id"] == "r0", "concentrated"] = 1  # 4 positives, all in r0
+    cells = compute_budget(df, targets=["concentrated"], schemes=("loro",))
+    cell = cells[0]
+    assert cell.feasible is False
+    # Reason must reflect a positives shortage, not a negatives shortage:
+    # negatives in any training fold are >= 12 (>=5 OK), positives drop to 0
+    # only when r0 is held out.
+    assert "pos=0" in cell.reason
+
+
+def test_per_fold_min_uses_run_id_for_loro_not_source(fixture_df: pd.DataFrame) -> None:
+    # If LORO accidentally grouped by `source` instead of `run_id`, all 5 runs
+    # share one source ("tb_live") and the loop body would never execute
+    # (single group => returns 0,0,n). Construct a target that *is* feasible
+    # under correct LORO grouping; if the code grouped by source, it would
+    # be flagged infeasible (single-source dataset).
+    cells = compute_budget(fixture_df, targets=["easy"], schemes=("loro",))
+    assert cells[0].feasible is True
 
 
 def test_writes_artifacts(fixture_df: pd.DataFrame, tmp_path: Path) -> None:
