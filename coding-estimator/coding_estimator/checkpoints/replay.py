@@ -39,6 +39,26 @@ class ReplayState:
     ledger: Ledger
     coding_score: ProgressObservation
 
+    def __post_init__(self) -> None:
+        # Defense in depth: even if a future regression breaks the
+        # filter in prefix_replay, the constructed ReplayState refuses
+        # to exist if its ledger is built from any future event.
+        max_event_step = max((e.step for e in self.ledger.events), default=-1)
+        if max_event_step > self.t_step:
+            raise FutureLeakageError(
+                f"ledger contains an event with step={max_event_step} > "
+                f"t_step={self.t_step}; the prefix filter is broken"
+            )
+        max_subtask_step = max(
+            (s.created_at_step for s in self.ledger.subtasks.values()),
+            default=-1,
+        )
+        if max_subtask_step > self.t_step:
+            raise FutureLeakageError(
+                f"ledger contains a subtask created at step={max_subtask_step} > "
+                f"t_step={self.t_step}; the prefix filter is broken"
+            )
+
 
 def _assert_prefix_only(events: tuple[LedgerEvent, ...], t_step: int) -> None:
     for e in events:

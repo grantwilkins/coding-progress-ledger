@@ -1,15 +1,18 @@
 """Auto-generated caveat blocks for reports.
 
-Every report that consumes retrospective sources (`swe_agent_*`,
-`hermes_*`) must include the leakage caveat. This is mechanical: we do
-not trust report writers to remember.
+Every report that consumes retrospective sources must include the
+leakage caveat. The set of retrospective sources is derived from the
+canonical source registry (`coding_estimator.ingest.sources`), not a
+hand-maintained prefix list — adding a new retrospective source there
+automatically wires it through here.
 """
 
 from __future__ import annotations
 
 from collections.abc import Iterable
 
-RETROSPECTIVE_PREFIXES: tuple[str, ...] = ("swe_agent_", "hermes_")
+from coding_estimator.ingest.sources import SOURCES, retrospective_source_ids
+
 LIVE_SOURCES: frozenset[str] = frozenset({"tb_live"})
 
 RETROSPECTIVE_CAVEAT = """\
@@ -31,7 +34,11 @@ TB_LIVE_FRAMING = """\
 
 
 def _is_retrospective(source_id: str) -> bool:
-    return any(source_id.startswith(p) for p in RETROSPECTIVE_PREFIXES)
+    """A source is retrospective iff the registry says it is. Unknown
+    source ids are treated as non-retrospective; the source must be
+    declared in `sources.SOURCES` for the caveat machinery to fire,
+    which is exactly the contract we want."""
+    return source_id in retrospective_source_ids()
 
 
 def caveat_block(sources_used: Iterable[str]) -> str:
@@ -67,3 +74,20 @@ def assert_caveat_present(report_text: str, sources_used: Iterable[str]) -> None
             raise AssertionError(
                 f"report omits required caveat fragment: {fragment_marker!r}"
             )
+
+
+def assert_registry_consistency() -> None:
+    """Cross-check the caveats helper against the source registry.
+
+    Rule: every retrospective source the registry declares must be
+    recognized by `_is_retrospective`. Any drift (e.g. a new retrospective
+    source added to the registry that this helper doesn't see) is a bug."""
+    declared = retrospective_source_ids()
+    seen = {sid for sid in SOURCES if _is_retrospective(sid)}
+    if declared != seen:
+        missing = declared - seen
+        extra = seen - declared
+        raise AssertionError(
+            f"caveats helper out of sync with sources registry "
+            f"(missing={sorted(missing)}, extra={sorted(extra)})"
+        )

@@ -165,3 +165,33 @@ def test_terminal_step_replay_uses_all_events() -> None:
     run = _run(CANONICAL)
     state = prefix_replay(run, EXPECTED["terminal_step"])
     assert len(state.events_so_far) == len(run.events)
+
+
+def test_replay_state_post_init_defense_catches_a_poisoned_ledger() -> None:
+    """The ReplayState dataclass has a __post_init__ guard so that a
+    future regression that bypasses the prefix filter in prefix_replay
+    still cannot construct a ReplayState with future events. This is
+    defense in depth for the load-bearing leakage invariant.
+    """
+    from ledger_progress.core import replay as upstream_replay
+
+    canonical = _run(CANONICAL)
+    # Build a ledger from THE FULL run, then try to wrap it in a
+    # ReplayState claiming t_step=2. The guard must reject.
+    full_ledger = upstream_replay(list(canonical.events))
+    full_score = type(prefix_replay(canonical, 0).coding_score)(
+        step=full_ledger.events[-1].step,
+        categories_included=(),
+        complete_weight=0.0,
+        active_weight=0.0,
+        progress=0.0,
+        complete_leaf_count=0,
+        active_leaf_count=0,
+    )
+    with pytest.raises(FutureLeakageError, match="prefix filter is broken"):
+        ReplayState(
+            t_step=2,
+            events_so_far=tuple(e for e in canonical.events if e.step <= 2),
+            ledger=full_ledger,
+            coding_score=full_score,
+        )

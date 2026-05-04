@@ -23,8 +23,8 @@ import pytest
 
 from coding_estimator.reports.caveats import (
     LIVE_SOURCES,
-    RETROSPECTIVE_PREFIXES,
     assert_caveat_present,
+    assert_registry_consistency,
     caveat_block,
 )
 
@@ -76,8 +76,23 @@ def test_assert_caveat_present_fails_for_partial_caveat() -> None:
         assert_caveat_present(partial, ["tb_live", "swe_agent_pilot"])
 
 
-def test_known_prefixes_lock() -> None:
-    # If these constants drift, both the docs/SOURCES.md mapping and
-    # every report-template consumer drift with them. Pin.
-    assert RETROSPECTIVE_PREFIXES == ("swe_agent_", "hermes_")
+def test_live_sources_locked() -> None:
+    # If LIVE_SOURCES drifts, every report-template consumer drifts
+    # with it. Pin.
     assert frozenset({"tb_live"}) == LIVE_SOURCES
+
+
+def test_caveats_helper_in_sync_with_source_registry() -> None:
+    """The retrospective set must be derivable from the source
+    registry, not a hand-maintained prefix list. A new retrospective
+    source added to sources.py is automatically picked up here; this
+    test guards against drift."""
+    assert_registry_consistency()
+
+
+def test_unknown_source_id_not_treated_as_retrospective() -> None:
+    """A source ID that isn't declared in the registry must not be
+    silently treated as retrospective. The contract is: declare it,
+    or it's not in the system."""
+    out = caveat_block(["openai_agent_pilot"])
+    assert "Retrospective annotation caveat" not in out

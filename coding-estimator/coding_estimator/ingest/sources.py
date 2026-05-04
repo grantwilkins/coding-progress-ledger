@@ -26,6 +26,7 @@ class Source:
     label_field_path: LabelFieldPath
     schema_version: str
     canonical_for_v0: bool
+    is_retrospective: bool
     known_caveats: tuple[str, ...]
     protocol_doc: str | None = None
 
@@ -38,6 +39,7 @@ SOURCES: dict[str, Source] = {
         label_field_path="source_metadata.final_success",
         schema_version="0.1.0",
         canonical_for_v0=True,
+        is_retrospective=True,
         known_caveats=(
             "retrospective annotation: events were tagged knowing run outcome",
             "no event timestamps; step-only ordering",
@@ -51,6 +53,7 @@ SOURCES: dict[str, Source] = {
         label_field_path="source_metadata.final_success",
         schema_version="0.1.0",
         canonical_for_v0=False,
+        is_retrospective=True,
         known_caveats=(
             "revised retrospective protocol; reserved for parity comparisons (Workstream L)",
         ),
@@ -62,6 +65,7 @@ SOURCES: dict[str, Source] = {
         label_field_path="source_metadata.final_success",
         schema_version="0.1.0",
         canonical_for_v0=False,
+        is_retrospective=True,
         known_caveats=("synthetic timestamps via sidecar replay; reserved for sidecar tests",),
     ),
     "swe_agent_live_wallclock": Source(
@@ -71,6 +75,7 @@ SOURCES: dict[str, Source] = {
         label_field_path="source_metadata.final_success",
         schema_version="0.1.0",
         canonical_for_v0=False,
+        is_retrospective=True,
         known_caveats=(
             "wallclock back-filled per upstream WORKSTREAM_N_TB_PLAN.md; "
             "do NOT mix into headline pools",
@@ -83,6 +88,7 @@ SOURCES: dict[str, Source] = {
         label_field_path="source_metadata.final_success",
         schema_version="0.1.0",
         canonical_for_v0=False,
+        is_retrospective=True,
         known_caveats=("retrospective LLM annotation; superseded by hermes_pilot_h5_v2",),
     ),
     "hermes_pilot_h5": Source(
@@ -92,6 +98,7 @@ SOURCES: dict[str, Source] = {
         label_field_path="source_metadata.final_success",
         schema_version="0.1.0",
         canonical_for_v0=False,
+        is_retrospective=True,
         known_caveats=("intermediate Hermes annotation; superseded by hermes_pilot_h5_v2",),
     ),
     "hermes_pilot_h5_v2": Source(
@@ -101,6 +108,7 @@ SOURCES: dict[str, Source] = {
         label_field_path="source_metadata.final_success",
         schema_version="0.1.0",
         canonical_for_v0=True,
+        is_retrospective=True,
         known_caveats=(
             "retrospective LLM annotation: outcome-aware event tagging is unfixable here",
             "many runs have source_metadata.final_success == null and must be skipped",
@@ -113,6 +121,7 @@ SOURCES: dict[str, Source] = {
         label_field_path="live_instrumentation.verifier_pass",
         schema_version="0.1.0",
         canonical_for_v0=True,
+        is_retrospective=False,
         known_caveats=(
             "12 first-party live runs; verifier_pass is the canonical success signal",
             "summary_by_category.final_success is null on every run; do NOT use it",
@@ -123,6 +132,13 @@ SOURCES: dict[str, Source] = {
 
 def canonical_sources() -> list[Source]:
     return [s for s in SOURCES.values() if s.canonical_for_v0]
+
+
+def retrospective_source_ids() -> frozenset[str]:
+    """Source IDs whose ledgers were annotated post-hoc with outcome
+    knowledge. Consumers should derive any retrospective-related logic
+    from this rather than from a hand-maintained prefix list."""
+    return frozenset(s.source_id for s in SOURCES.values() if s.is_retrospective)
 
 
 def source(source_id: str) -> Source:

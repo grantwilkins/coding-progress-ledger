@@ -10,7 +10,7 @@
     "dtype",
     "group",
     "populated_on",
-    "fill_when_missing",
+    "missingness_semantic",
     "run_constant_flag",
     "prefix_only",
     "feature_or_label"
@@ -51,7 +51,15 @@
       "uniqueItems": true
     },
     "upstream_source": {"type": ["string", "null"]},
-    "fill_when_missing": {"type": "string", "enum": ["null", "zero", "false"]},
+    "missingness_semantic": {
+      "type": "string",
+      "enum": [
+        "not_applicable_to_source",
+        "applicable_absent_so_far",
+        "applicable_never_observed_in_run",
+        "unknown_due_to_missing_artifact"
+      ]
+    },
     "run_constant_flag": {"type": "boolean"},
     "derivable_from": {
       "type": "string",
