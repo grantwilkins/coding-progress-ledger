@@ -20,6 +20,7 @@ name = "coding-estimator"
 version = "0.0.0"
 source = { editable = "." }
 dependencies = [
+    { name = "coding-progress-ledger" },
     { name = "jsonschema" },
     { name = "numpy" },
     { name = "pandas" },
@@ -45,6 +46,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
+    { name = "coding-progress-ledger", editable = "../coding-progress-ledger" },
     { name = "jsonschema", specifier = ">=4.21,<5" },
     { name = "lightgbm", marker = "extra == 'gbm'", specifier = ">=4.3,<5" },
     { name = "matplotlib", marker = "extra == 'plot'", specifier = ">=3.8,<4" },
@@ -62,6 +64,16 @@ dev = [
     { name = "pytest-cov", specifier = ">=5" },
     { name = "ruff", specifier = ">=0.5" },
 ]
+
+[[package]]
+name = "coding-progress-ledger"
+version = "0.1.0"
+source = { editable = "../coding-progress-ledger" }
+
+[package.metadata]
+
+[package.metadata.requires-dev]
+dev = [{ name = "pytest", specifier = ">=8" }]
 
 [[package]]
 name = "colorama"

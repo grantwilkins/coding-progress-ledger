@@ -11,7 +11,11 @@ dependencies = [
     "scipy>=1.11,<2",
     "scikit-learn>=1.4,<2",
     "jsonschema>=4.21,<5",
+    "coding-progress-ledger",
 ]
+
+[tool.uv.sources]
+coding-progress-ledger = { path = "../coding-progress-ledger", editable = true }
 
 [project.optional-dependencies]
 gbm = ["lightgbm>=4.3,<5"]

@@ -775,7 +775,7 @@ Behavior:
 Each source has a different on-disk shape and a different protocol generation. We expose them through a single `RunRecord` interface so downstream code is source-agnostic.
 
 ### C1. Source registry
-Status: not started
+Status: done
 
 Goal: Central enumeration of all sources, their roots, and their schema-version policy.
 
@@ -840,7 +840,7 @@ annotation-leakage note verbatim.
 ```
 
 ### C2. RunRecord and ledger reader
-Status: not started
+Status: done
 
 Goal: A single immutable representation of one run that downstream code consumes.
 
@@ -884,7 +884,7 @@ live_instrumentation.json claim.
 ```
 
 ### C3. Final-label loader
-Status: not started
+Status: done
 
 Goal: Resolve `final_success` for every run, separately from feature construction. Re-use upstream `ledger_progress.run_manager.resolve_final_success` where possible.
 
@@ -918,7 +918,7 @@ Final labels are NEVER joined into the feature-only frame.
 ```
 
 ### C4. Per-source ingestion adapters
-Status: not started
+Status: done
 
 Per-source code lives under `coding_estimator/ingest/<source>.py`. Each adapter:
 
@@ -945,7 +945,7 @@ A missing or malformed run is reported (not silently dropped).
 ```
 
 ### C5. Combined manifest
-Status: not started
+Status: done
 
 Goal: One manifest covering all sources for downstream profiling.
 
