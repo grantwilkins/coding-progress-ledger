@@ -47,13 +47,38 @@ def test_full_audit_on_tb_live_passes(real_ledger: None) -> None:
 
 def test_audit_renders_caveat_when_retrospective_source_used(real_ledger: None) -> None:
     """The audit on a swe_agent_pilot frame must include the
-    retrospective caveat in the rendered text -- AGENTS.md invariant 5."""
+    retrospective caveat in the rendered text -- AGENTS.md invariant 5
+    -- AND the audit must actually pass on this clean source. The
+    `passed` assertion is load-bearing: an earlier version of the
+    behavioral section produced false-positive LEAKAGE on every
+    sparse-event source (events at non-contiguous steps), which
+    would have been masked if this test only checked the caveat."""
     from coding_estimator.checkpoints.build import build_source_frame
 
     df = build_source_frame("swe_agent_pilot")
     audit = build_audit(df, sources=["swe_agent_pilot"])
     rendered = render_audit(audit)
     assert "Retrospective annotation caveat" in rendered
+    # Critically: a sparse-event source must not produce a behavioral
+    # false positive.
+    behavioral = next(
+        s for s in audit.sections if s.title == "Behavioral prefix-truncation audit"
+    )
+    assert behavioral.passed is True, behavioral.body
+    assert audit.passed is True
+
+
+def test_full_audit_on_hermes_pilot_h5_v2_passes(real_ledger: None) -> None:
+    """Same regression guard for the second canonical retrospective
+    source. Both sparse-event sources must clear the audit."""
+    from coding_estimator.checkpoints.build import build_source_frame
+
+    df = build_source_frame("hermes_pilot_h5_v2")
+    audit = build_audit(df, sources=["hermes_pilot_h5_v2"])
+    behavioral = next(
+        s for s in audit.sections if s.title == "Behavioral prefix-truncation audit"
+    )
+    assert behavioral.passed is True, behavioral.body
 
 
 def test_behavioral_section_catches_synthetic_leakage(

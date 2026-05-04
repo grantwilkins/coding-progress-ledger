@@ -152,11 +152,21 @@ def _section_feature_columns_by_group(df: pd.DataFrame) -> AuditSection:
 
 
 def _section_behavioral_prefix(df: pd.DataFrame, *, sample_runs: int = 2) -> AuditSection:
-    """Behavioral leakage check: rebuild rows from a truncated ledger
+    """Behavioral leakage check: rebuild a row from a truncated ledger
     and confirm byte-equality with the row built from the full ledger
     at the same checkpoint. The replay engine's runtime assertions
-    already guarantee this; the section confirms the property holds
-    end-to-end through the build pipeline, not just inside replay."""
+    already guarantee this for features; this section confirms the
+    property holds end-to-end through the build pipeline (identity
+    columns, time_budget, etc.) and would catch a regression where a
+    builder reaches into `run.events` directly instead of going
+    through `state.events_so_far`.
+
+    Implementation note: `mid_step` is chosen from the run's ACTUAL
+    event steps so the truncated run's terminal IS `mid_step`. Picking
+    a gap step would compare row-at-mid_step against row-at-(previous
+    event step) and produce systematic false positives on sparse-event
+    retrospective sources (swe_agent_*, hermes_*).
+    """
     from coding_estimator.checkpoints.build import build_run_rows
     from coding_estimator.ingest.run_record import RunRecord, load_run
 
@@ -174,21 +184,26 @@ def _section_behavioral_prefix(df: pd.DataFrame, *, sample_runs: int = 2) -> Aud
         .head(sample_runs)
         .itertuples(index=False)
     )
+    skipped = 0
     for source, run_id in sampled:
         try:
             run = load_run(source, run_id)
         except (FileNotFoundError, OSError, ValueError) as exc:
             diffs.append(f"- {source}/{run_id}: failed to reload ({exc})")
             continue
-        full_rows = build_run_rows(run)
-        if len(full_rows) < 2:
+        if len(run.events) < 3:
+            skipped += 1
             continue
-        # Mid-step rebuild: reconstruct a synthetic RunRecord whose
-        # events are truncated at the mid-step, then confirm the row at
-        # mid-step matches the canonical row at mid-step.
-        mid_idx = len(full_rows) // 2
-        mid_row_full = full_rows[mid_idx]
-        mid_step = mid_row_full["checkpoint_step"]
+        # Pick mid_step from the actual event steps so both the full
+        # and truncated runs have a row at that step.
+        event_steps = sorted({e.step for e in run.events})
+        mid_step = event_steps[len(event_steps) // 2]
+        full_rows = build_run_rows(run)
+        try:
+            mid_row_full = next(r for r in full_rows if r["checkpoint_step"] == mid_step)
+        except StopIteration:
+            skipped += 1
+            continue
         truncated_events = tuple(e for e in run.events if e.step <= mid_step)
         truncated_run = RunRecord(
             run_id=run.run_id,
@@ -205,17 +220,28 @@ def _section_behavioral_prefix(df: pd.DataFrame, *, sample_runs: int = 2) -> Aud
             raw_metadata=run.raw_metadata,
         )
         truncated_rows = build_run_rows(truncated_run)
-        # Find the row at mid_step in the truncated build (last row,
-        # since truncated_run ends at mid_step).
-        mid_row_trunc = truncated_rows[-1]
-        # is_terminal_checkpoint will differ -- the truncated run's
-        # mid_step IS the terminal of that synthetic run. Strip it.
+        try:
+            mid_row_trunc = next(
+                r for r in truncated_rows if r["checkpoint_step"] == mid_step
+            )
+        except StopIteration:
+            diffs.append(
+                f"- {source}/{run_id} at step {mid_step}: truncated build "
+                "did not produce a row at mid_step (this should not happen)"
+            )
+            continue
+        # `is_terminal_checkpoint` is expected to differ -- mid_step is
+        # the terminal of the truncated run but not of the full run.
         full_compare = {k: v for k, v in mid_row_full.items() if k != "is_terminal_checkpoint"}
         trunc_compare = {k: v for k, v in mid_row_trunc.items() if k != "is_terminal_checkpoint"}
         if full_compare != trunc_compare:
+            differing = sorted(
+                k for k in full_compare
+                if full_compare[k] != trunc_compare.get(k)
+            )
             diffs.append(
                 f"- {source}/{run_id} at step {mid_step}: prefix-truncation "
-                "produced a different row (LEAKAGE!)"
+                f"produced a different row (LEAKAGE!) differing columns: {differing[:6]}"
             )
 
     if diffs:
@@ -224,9 +250,10 @@ def _section_behavioral_prefix(df: pd.DataFrame, *, sample_runs: int = 2) -> Aud
             "FAIL — leakage detected:\n" + "\n".join(diffs),
             passed=False,
         )
+    note = f" ({skipped} skipped: too short or no row at mid_step)" if skipped else ""
     return AuditSection(
         "Behavioral prefix-truncation audit",
-        f"PASS — no leakage detected on {sample_runs} sampled runs.",
+        f"PASS — no leakage detected on {sample_runs - skipped} sampled runs{note}.",
         passed=True,
     )
 

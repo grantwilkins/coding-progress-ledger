@@ -2,15 +2,21 @@
 
 Source: ../coding-progress-ledger/scripts/rescore_suite_by_category.py
 Snapshot date: 2026-05-04
+Snapshot SHA256 of upstream file at snapshot time:
+  f2b9f9e5dc771cd83290576c5cfcd6b16a9c98d6e2da91540d49793d65574b3d
+
 Reason: upstream `scripts/` is not packaged, so we cannot import
 directly. Per AGENTS.md and TASKS.md D3g, we copy a snapshot. Do NOT
-diverge from upstream without bumping the snapshot date and recording
-the change in the commit.
+diverge from upstream without bumping the snapshot date AND the SHA
+recorded above, and recording the change in the commit.
 """
 
 from __future__ import annotations
 
 import re
+
+UPSTREAM_FILE_RELPATH = "../coding-progress-ledger/scripts/rescore_suite_by_category.py"
+SNAPSHOT_SHA256 = "f2b9f9e5dc771cd83290576c5cfcd6b16a9c98d6e2da91540d49793d65574b3d"
 
 STRONG_EVIDENCE_TYPES = frozenset(
     {"test_output", "diff", "file_exists", "command_output", "tool_action"}
