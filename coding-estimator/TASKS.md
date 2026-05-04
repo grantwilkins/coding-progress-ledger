@@ -1038,7 +1038,7 @@ tests/test_golden_fixture.py:
 ```
 
 ### D1. Checkpoint policy
-Status: not started
+Status: done
 
 Goal: Decide where in each run a checkpoint row exists.
 
@@ -1061,7 +1061,7 @@ increasing checkpoint index on a synthetic run.
 ```
 
 ### D2. Prefix replay engine
-Status: not started
+Status: done
 
 Goal: Given a RunRecord and a checkpoint t, return the replayed ledger state and an `events_so_far` list whose every entry has step ≤ t.
 
