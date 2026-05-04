@@ -64,6 +64,10 @@ runs/hermes_pilot_h5_v2/*
 !external_data/hermes/pilot_cache_h5/
 !external_data/hermes/pilot_cache_h5/**
 
+# N_TB live runs: agent's repo/ scratch dir is per-run; report docs are commit-worthy.
+runs/tb_live/*/repo/
+runs/tb_live/*/.uv-cache/
+
 # Python
 __pycache__/
 *.pyc

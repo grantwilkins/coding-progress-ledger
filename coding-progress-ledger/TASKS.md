@@ -890,13 +890,13 @@ b-tree-on-disk                    (PRODUCT-heavy,    90–180 min, multi-SPLIT)
 ```
 
 #### NTB1. Task spec format + verifier contract
-Status: not started. Outputs: `docs/TB_LIVE_TASK_FORMAT.md`, `tasks/tb_live/_template/`. Acceptance: spec names the four required files; verifier contract is shell-exit 0 ⇔ task complete; `solution_reference/` is hidden from the subagent.
+Status: done — `docs/TB_LIVE_TASK_FORMAT.md` defines the four-file task layout (`task.md`, `verifier.sh`, `verifier_tests/`, `solution_reference/`), the wire-event schema, and the three-step run workflow (prepare / dispatch / validate). `tasks/tb_live/_prompt_template.md` is the literal subagent prompt. No `_template/` dir — the spec doc is the template.
 
 #### NTB2. Port the TB-12
-Status: not started. Outputs: `tasks/tb_live/<task_id>/` × 12, `tests/test_tb_live_verifiers.py`. Acceptance: every verifier passes against its own reference solution; 200–1500 word task descriptions; categorical balance ≥ 4 PRODUCT-heavy / ≥ 3 VALIDATION-heavy / ≥ 2 INVESTIGATION-heavy / ≥ 2 mixed.
+Status: in progress (1/12) — `tasks/tb_live/markdown-to-html-cli/` shipped as the pilot. 5 fixtures (headings, paragraphs+emphasis, links+inline code, unordered list, code block); `verifier_tests/test_md.py` parametrizes over fixtures + tests CLI file/stdin paths; `solution_reference/src/md2html/{__init__.py,__main__.py}` (~30 LOC) passes the verifier. Remaining 11 tasks tracked in plan §5; ported one-at-a-time as we run them.
 
 #### NTB3. Subagent driver
-Status: not started. Outputs: `scripts/run_tb_subagent.py`, `tests/test_run_tb_subagent.py`. Acceptance: driver fails-fast on any post-condition violation (no `ledger.jsonl`, malformed events, missing timestamps, `check-run` failure, downstream-pipeline failure).
+Status: done — minimal split into two scripts (no monolithic driver; the Agent tool dispatches the subagent itself). `scripts/tb_emit.py` is the agent-side wire-event helper (15 LOC); `scripts/validate_tb_run.py` is the post-run validator that runs the sidecar over `events.jsonl`, runs the task verifier, captures `final_diff.patch` + `test_output.txt`, runs `ledger-run check-run`, and writes `live_instrumentation.json` with `timestamp_source: "wallclock"`. `tests/test_tb_live_verifiers.py` parametrizes over every TB-live task and asserts the verifier passes against its reference (1/12 currently locked).
 
 #### NTB4. Pilot run on `markdown-to-html-cli`
 Status: not started. Outputs: `runs/tb_live/markdown-to-html-cli/`, `runs/tb_live/NTB4_PILOT_NOTES.md`. Acceptance: ≥ 5 leaves; ≥ 2 categories; `coding_progress == 1.0 ⇔ verifier exits 0`; subagent runtime ≥ 5 minutes; ≥ 1 ledger pattern (SPLIT / REOPEN / BLOCKED) emitted organically.
