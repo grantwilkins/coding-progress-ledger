@@ -1,0 +1,26 @@
+{
+  "fixture_id": "golden_run_v1",
+  "t_mid": 10,
+  "terminal_step": 13,
+  "notes": [
+    "Hand-derived per-step expected aggregates. Independently confirmed against upstream replay+score and reproducible via tests/fixtures/golden_run/README.md.",
+    "Drops are STRICT decreases of coding_progress relative to the prior step. Discovery (add_subtask) and split-induced denominator growth count.",
+    "Five drops total: at steps 3, 4, 5, 9, 10. Largest drop (0.5) occurs at step 3 when the first product subtask is added after s1 completed."
+  ],
+  "checkpoints": [
+    {"step": 0, "active_leaf_count": 0, "completed_leaf_count": 0, "coding_progress": 0.0, "num_adds_so_far": 0, "num_splits_so_far": 0, "num_reopens_so_far": 0, "num_invalidations_so_far": 0, "num_progress_drops_so_far": 0, "largest_progress_drop_so_far": 0.0},
+    {"step": 1, "active_leaf_count": 1, "completed_leaf_count": 0, "coding_progress": 0.0, "num_adds_so_far": 1, "num_splits_so_far": 0, "num_reopens_so_far": 0, "num_invalidations_so_far": 0, "num_progress_drops_so_far": 0, "largest_progress_drop_so_far": 0.0},
+    {"step": 2, "active_leaf_count": 1, "completed_leaf_count": 1, "coding_progress": 1.0, "num_adds_so_far": 1, "num_splits_so_far": 0, "num_reopens_so_far": 0, "num_invalidations_so_far": 0, "num_progress_drops_so_far": 0, "largest_progress_drop_so_far": 0.0},
+    {"step": 3, "active_leaf_count": 2, "completed_leaf_count": 1, "coding_progress": 0.5, "num_adds_so_far": 2, "num_splits_so_far": 0, "num_reopens_so_far": 0, "num_invalidations_so_far": 0, "num_progress_drops_so_far": 1, "largest_progress_drop_so_far": 0.5},
+    {"step": 4, "active_leaf_count": 3, "completed_leaf_count": 1, "coding_progress": 0.3333333333333333, "num_adds_so_far": 3, "num_splits_so_far": 0, "num_reopens_so_far": 0, "num_invalidations_so_far": 0, "num_progress_drops_so_far": 2, "largest_progress_drop_so_far": 0.5},
+    {"step": 5, "active_leaf_count": 4, "completed_leaf_count": 1, "coding_progress": 0.25, "num_adds_so_far": 3, "num_splits_so_far": 1, "num_reopens_so_far": 0, "num_invalidations_so_far": 0, "num_progress_drops_so_far": 3, "largest_progress_drop_so_far": 0.5},
+    {"step": 6, "active_leaf_count": 4, "completed_leaf_count": 2, "coding_progress": 0.5, "num_adds_so_far": 3, "num_splits_so_far": 1, "num_reopens_so_far": 0, "num_invalidations_so_far": 0, "num_progress_drops_so_far": 3, "largest_progress_drop_so_far": 0.5},
+    {"step": 7, "active_leaf_count": 4, "completed_leaf_count": 3, "coding_progress": 0.75, "num_adds_so_far": 3, "num_splits_so_far": 1, "num_reopens_so_far": 0, "num_invalidations_so_far": 0, "num_progress_drops_so_far": 3, "largest_progress_drop_so_far": 0.5},
+    {"step": 8, "active_leaf_count": 4, "completed_leaf_count": 3, "coding_progress": 0.75, "num_adds_so_far": 3, "num_splits_so_far": 1, "num_reopens_so_far": 0, "num_invalidations_so_far": 0, "num_progress_drops_so_far": 3, "largest_progress_drop_so_far": 0.5},
+    {"step": 9, "active_leaf_count": 4, "completed_leaf_count": 2, "coding_progress": 0.5, "num_adds_so_far": 3, "num_splits_so_far": 1, "num_reopens_so_far": 1, "num_invalidations_so_far": 0, "num_progress_drops_so_far": 4, "largest_progress_drop_so_far": 0.5},
+    {"step": 10, "active_leaf_count": 3, "completed_leaf_count": 1, "coding_progress": 0.3333333333333333, "num_adds_so_far": 3, "num_splits_so_far": 1, "num_reopens_so_far": 1, "num_invalidations_so_far": 1, "num_progress_drops_so_far": 5, "largest_progress_drop_so_far": 0.5},
+    {"step": 11, "active_leaf_count": 3, "completed_leaf_count": 1, "coding_progress": 0.3333333333333333, "num_adds_so_far": 3, "num_splits_so_far": 1, "num_reopens_so_far": 1, "num_invalidations_so_far": 1, "num_progress_drops_so_far": 5, "largest_progress_drop_so_far": 0.5},
+    {"step": 12, "active_leaf_count": 3, "completed_leaf_count": 2, "coding_progress": 0.6666666666666666, "num_adds_so_far": 3, "num_splits_so_far": 1, "num_reopens_so_far": 1, "num_invalidations_so_far": 1, "num_progress_drops_so_far": 5, "largest_progress_drop_so_far": 0.5},
+    {"step": 13, "active_leaf_count": 3, "completed_leaf_count": 3, "coding_progress": 1.0, "num_adds_so_far": 3, "num_splits_so_far": 1, "num_reopens_so_far": 1, "num_invalidations_so_far": 1, "num_progress_drops_so_far": 5, "largest_progress_drop_so_far": 0.5}
+  ]
+}

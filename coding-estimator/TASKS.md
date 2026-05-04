@@ -974,7 +974,68 @@ final_success_source ∈ allowed enum.
 
 ## § Workstream D — Checkpoint dataset construction
 
-This is the heart of the estimator's input pipeline.
+This is the heart of the estimator's input pipeline. The plan was tightened
+after a senior critique: **the checkpoint builder silently determines the
+scientific validity of everything downstream**. We treat D as a
+measurement-system validation project — the winning v0 outcome is not a
+trained classifier but a prefix-only checkpoint dataset that provably does
+not leak future state.
+
+The locked ordering is:
+
+```text
+D0  Golden semantic fixture           (executable definition of feature semantics)
+D1  Checkpoint policy
+D2  Prefix replay engine              (validated against D0 + future-mutation tests)
+D2.5 Audit skeleton                   (structural before features land)
+D3  Feature builders                  (each tested against D0)
+D4  Build CLI
+D5  Checkpoint construction audit gate (blocks Workstream G)
+```
+
+### D0. Golden semantic fixture
+Status: done
+
+Goal: A hand-authored ledger plus hand-authored expected checkpoint states.
+Built BEFORE the prefix replay engine so the engine cannot become the de
+facto semantics by accident.
+
+Outputs:
+```text
+tests/fixtures/golden_run/ledger.jsonl
+tests/fixtures/golden_run/expected_checkpoints.json
+tests/fixtures/golden_run/README.md
+tests/test_golden_fixture.py
+```
+
+The fixture must include at least one event of each kind:
+```text
+init, add_subtask, update_status (in_progress / complete / blocked),
+add_evidence, split_subtask, reopen_subtask, invalidate_subtask,
+validation pass (validation leaf -> complete),
+validation fail (validation leaf -> invalidate / blocked),
+a strict progress drop (reopen of a previously-completed leaf),
+a "future" event past the chosen mid-step `t_mid` whose presence/absence
+must NOT affect any feature value at `t <= t_mid`.
+```
+
+For the fixture, expected checkpoint states are authored by hand for at
+least these aggregates at every step: `active_leaf_count`,
+`completed_leaf_count`, `num_adds_so_far`, `num_splits_so_far`,
+`num_reopens_so_far`, `num_invalidations_so_far`,
+`num_progress_drops_so_far`, `largest_progress_drop_so_far`. The full
+feature set lands as builders come online (D3), each pinned to the same
+fixture.
+
+Acceptance:
+```text
+tests/test_golden_fixture.py:
+- every required event_type appears in ledger.jsonl
+- the fixture parses through upstream load_events_jsonl
+- expected_checkpoints.json has one entry per step in the ledger
+- the future-mutation invariant fixture (a paired ledger that diverges
+  past t_mid) is byte-identical to the canonical ledger up to t_mid
+```
 
 ### D1. Checkpoint policy
 Status: not started

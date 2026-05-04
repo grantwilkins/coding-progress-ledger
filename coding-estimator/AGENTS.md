@@ -54,3 +54,64 @@ work; everything below adds estimator-specific constraints.
 - New schemas live under `schemas/`; their docs under `docs/`.
 - New label columns go through `coding_estimator/labels/registry.py`.
 - New feature columns go through `coding_estimator/checkpoints/features/registry.py`.
+
+## Cross-cutting invariants (post-D plan)
+
+These invariants apply to every workstream from D onward. Violating them
+is a regression even if all per-task tests pass.
+
+1. **Forbidden-column guard at every choke point.** The dataset-build-time
+   guard is necessary but not sufficient. Every model `.fit()`, every
+   `.predict()`, and every report-generator that joins frames must call
+   `coding_estimator.leakage.guard.assert_no_forbidden` on its input.
+   Defense in depth: a later merge must not be able to silently
+   reintroduce `final_success`, `verifier_pass`, `finish_step`, or shape
+   labels.
+
+2. **Future-mutation invariance.** For any (run, t) pair, mutating events
+   past `t` must not change any feature column at any checkpoint
+   `t' <= t`. The prefix replay engine (D2) ships with this as a hard
+   property test. Every feature group (D3a..h) inherits it.
+
+3. **`y_submit_without_validation` is a negative control, not a headline.**
+   It is run-constant and terminal. Any non-trivial AUROC at non-terminal
+   `t` is a property of the data distribution, not of the estimator. It
+   is reported alongside G1/G2 in the audit, never in headline tables.
+
+4. **TB-12 measures online realism, not model performance.** TB-12 runs
+   answer "can the pipeline produce honest online checkpoint features?"
+   Headline modeling claims do NOT optimize TB-12-only metrics.
+
+5. **Retrospective-leakage caveat is mechanical, not editorial.** Any
+   report that consumes `swe_agent_*` or `hermes_*` data emits an
+   auto-generated caveat block via the report-template helper. If a
+   report is missing the caveat, that's a bug, not a stylistic choice.
+
+6. **Absolute progress is never reported alone.** Any table that includes
+   `final_progress` (or any scalar coding_progress at terminal `t`) must
+   also include `final_success` and at least one dynamics column —
+   `num_progress_drops_so_far`, `num_reopens_so_far`, or
+   `validation_complete`. Scalar progress in isolation invites
+   misinterpretation.
+
+7. **Missingness has four explicit semantics.** The feature dataclass
+   carries a `missingness_semantic` enum, not a string:
+   - `not_applicable_to_source` — concept does not apply (e.g.
+     `elapsed_wall_time` on `swe_agent_pilot`)
+   - `applicable_absent_so_far` — applies, hasn't been observed yet at `t`
+     but could become observable later in the run (e.g.
+     `validation_started` at step 3 of a run that validates at step 10)
+   - `applicable_never_observed_in_run` — applies, will never be observed
+     in this run (e.g. `validation_failed` on a run that only ever saw
+     validation passes)
+   - `unknown_due_to_missing_artifact` — cannot be determined because the
+     source-side artifact (e.g. `live_instrumentation.json`) is missing
+     for this run
+
+   Writing `null` vs `False` vs `0` is decided by the semantic, not by
+   convenience.
+
+8. **`reports/CHECKPOINT_CONSTRUCTION_AUDIT.md` is a hard pre-modeling
+   gate.** No baseline (Workstream G) starts until this report exists,
+   covers every section in D5, and reports clean on the structural,
+   prefix, forbidden-column, and run-constancy audits.
