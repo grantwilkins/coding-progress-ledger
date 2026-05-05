@@ -1,7 +1,9 @@
 """Verifier for high_progress_failure_01_subtasks_done_verifier_strict.
 
-Strict checks: items sort ascending, blanks ignored, POST persists
-synchronously and echoes name.
+The verifier itself starts the server (the agent's `done` need not
+include keeping it running), runs assertions against it, then tears
+it down. Strict checks: items sort ascending, blanks ignored, POST
+persists synchronously and echoes name.
 """
 
 from __future__ import annotations
@@ -10,14 +12,16 @@ import json
 import os
 import socket
 import subprocess
+import sys
 import time
-import urllib.error
 import urllib.request
 from pathlib import Path
 
 import pytest
 
-PORT = 8080
+WS = Path(os.environ.get("TB_LIVE_V2_WORKSPACE", str(Path.cwd())))
+APP = WS / "server.py"
+PORT = int(os.environ.get("TB_LIVE_V2_TEST_PORT", "8090"))
 BASE = f"http://127.0.0.1:{PORT}"
 
 
@@ -52,7 +56,8 @@ def _post(path: str, payload: dict):
 
 @pytest.fixture(scope="module", autouse=True)
 def _server():
-    proc = subprocess.Popen(["python", "/app/server.py", str(PORT)])
+    assert APP.is_file(), f"{APP} not created"
+    proc = subprocess.Popen([sys.executable, str(APP), str(PORT)], cwd=str(WS))
     try:
         _wait_listening()
         yield
@@ -72,23 +77,19 @@ def test_version():
 
 
 def test_items_sorted_and_blanks_ignored():
-    """Strict check: ascending sort, no empty entries."""
     code, body = _get("/items")
     assert code == 200
     items = body["items"]
     assert "" not in items
     assert items == sorted(items)
-    # The fixture seeded apple, banana, cherry (and a blank line).
     assert {"apple", "banana", "cherry"}.issubset(set(items))
 
 
 def test_post_persists_and_echoes():
-    """Strict check: POST must echo name AND be visible to next GET."""
     code, body = _post("/items", {"name": "date"})
     assert code == 201
     assert body == {"name": "date"}
     code2, body2 = _get("/items")
     assert code2 == 200
     assert "date" in body2["items"]
-    # And persistence to disk:
-    assert "date" in Path("/app/items.txt").read_text().splitlines()
+    assert "date" in (WS / "items.txt").read_text().splitlines()

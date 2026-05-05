@@ -1,12 +1,11 @@
 #!/usr/bin/env bash
 set -euo pipefail
-
-cat > /app/server.py <<'PY'
+cat > server.py <<'PY'
 import json, sys
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
 
-ITEMS = Path("/app/items.txt")
+ITEMS = Path("items.txt")
 
 def _read_items():
     if not ITEMS.is_file():
@@ -53,7 +52,5 @@ class H(BaseHTTPRequestHandler):
 
 if __name__ == "__main__":
     port = int(sys.argv[1]) if len(sys.argv) > 1 else 8080
-    HTTPServer(("0.0.0.0", port), H).serve_forever()
+    HTTPServer(("127.0.0.1", port), H).serve_forever()
 PY
-python /app/server.py 8080 &
-sleep 1

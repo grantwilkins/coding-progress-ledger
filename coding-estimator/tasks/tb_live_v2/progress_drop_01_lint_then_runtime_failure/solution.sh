@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
+# Oracle: write csv_summary.py to cwd. Works on host and in Docker.
 set -euo pipefail
-
-cat > /app/csv_summary.py <<'PY'
+cat > csv_summary.py <<'PY'
 import csv, sys
 
 def is_number(s: str) -> bool:
