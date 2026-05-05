@@ -120,7 +120,10 @@ def plot(
              (TIME_ONLY, "tab:orange", "G2 time-only")]
     for k, run_id in enumerate(runs):
         ax = axes[k // cols, k % cols]
-        truth = int(j[j["run_id"] == run_id]["_y"].iloc[0])
+        run_rows = j[j["run_id"] == run_id].sort_values("checkpoint_step")
+        y_steps = run_rows["checkpoint_step"].to_numpy()
+        y_vals = run_rows["_y"].to_numpy()
+        run_constant = bool(np.all(y_vals == y_vals[0]))
         for spec, color, label in specs:
             steps, P = _bootstrap_predictions(j, run_id, spec, sources, b, seed)
             med = np.median(P, axis=0)
@@ -128,9 +131,17 @@ def plot(
             hi_q = np.percentile(P, 97.5, axis=0)
             ax.fill_between(steps, lo_q, hi_q, color=color, alpha=0.18)
             ax.plot(steps, med, color=color, linewidth=1.4, label=label)
-        ax.axhline(truth, color="black", linestyle="--", linewidth=0.8, alpha=0.6)
-        ax.set_ylim(-0.02, 1.02)
-        ax.set_title(f"{run_id}\n(y={truth})", fontsize=8)
+        if run_constant:
+            ax.axhline(y_vals[0], color="black", linestyle="--",
+                       linewidth=0.8, alpha=0.6)
+            title = f"{run_id}\n(y={int(y_vals[0])})"
+        else:
+            ax.scatter(y_steps, y_vals, color="black", s=10,
+                       marker="o", alpha=0.7, zorder=5)
+            pos = int(y_vals.sum())
+            title = f"{run_id}\n(pos {pos}/{len(y_vals)})"
+        ax.set_ylim(-0.05, 1.05)
+        ax.set_title(title, fontsize=8)
         ax.tick_params(labelsize=7)
         if k % cols == 0:
             ax.set_ylabel(f"P({target})", fontsize=8)
