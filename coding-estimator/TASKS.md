@@ -29,8 +29,10 @@ Interpretation:
 Consequence:
   The next phase is not model polish, online inference, semantic features,
   or scheduling. The next phase is targeted data work:
-    1. annotate the existing Hermes retrospective corpus;
-    2. collect a much larger, outcome-diverse live Terminal-Bench corpus;
+    1. collect a much larger, outcome-diverse live Terminal-Bench corpus
+       (tb_live_v2: 100+ verified runs, deliberately mixed outcomes);
+    2. use Hermes HF retrospectively for *process-dynamics* scaling only
+       (not for terminal-success gates — Hermes ships no verifier);
     3. rerun the estimator only after those data foundations exist.
 ```
 
@@ -182,9 +184,47 @@ the data supports.
 
 ---
 
-## § Workstream T — Hermes annotation unblock
+## § Workstream T — Hermes annotation unblock — DEFERRED (2026-05-05)
 
-The highest-leverage retrospective task. `hermes_pilot_h5_v2` has 30 runs and 896 checkpoints, but **zero labels** because all 30 runs are upstream-unannotated (`source_metadata.final_success = null`, `annotation_mode = not_annotated`). That blocks P1.c. Fix is upstream annotation, not local code.
+> **Reframed by user direction (2026-05-05).** Hermes HF is not a labeled
+> outcome source. The published HF schema (14.7k tool-calling trajectories
+> across Kimi and GLM configs, with conversations, tools, categories,
+> subcategories, task descriptions) **does not** expose `final_success`,
+> `verifier_pass`, `eval_log`, or any benchmark outcome field. Annotating
+> terminal success on Hermes traces would either (a) derive `final_success`
+> from agent self-claims (fabrication, § 0.9), or (b) require an external
+> verifier that does not exist in the dataset.
+>
+> Therefore:
+>
+> - **Do not** derive `final_success` from self-claims.
+> - **Do not** treat final assistant completion as success.
+> - **Do not** use Hermes HF for terminal-success gates unless a
+>   human-reviewed or external verifier label is added.
+> - **Do** use Hermes HF to scale observation-channel ingestion and
+>   process-dynamics analysis (visible discovered work, progress drops,
+>   validation events, stuck/blocked patterns). That use is consistent
+>   with the dataset's schema.
+>
+> P1.c "combined retrospective" gate is **not** the right unblock target
+> for Hermes. The right unblock target is `tb_live_v2` (Workstream U) —
+> outcome-diverse Terminal-Bench tasks with deterministic verifiers.
+>
+> **What stays.** The conservative grader and proposal harness ship
+> as-is and remain useful as a *process-dynamics* annotation aid (it
+> never asserts `final_success=true`, only flags BLOCK / budget-exhaust
+> as failure-shaped trajectories, which is a *trajectory-shape* signal,
+> not a terminal-outcome signal). Reframed handoff is in
+> `reports/HERMES_ANNOTATION_PROPOSAL.md`.
+>
+> **What is deferred.** Upstream commit of any `final_success` label on
+> `hermes_pilot_h5_v2`. Workstream T sub-tasks T2 and T3 are deferred
+> until either an external verifier exists for Hermes traces, or a
+> human-reviewed annotation pass is explicitly funded.
+
+The original Workstream T plan is preserved below as historical record.
+
+---
 
 ### T1. Confirm upstream Hermes annotation state
 Status: done (2026-05-05)
@@ -202,7 +242,7 @@ have ledger.jsonl present, all 30/30 have `source_metadata.final_success
 bug. T2 must materialize labels upstream.
 
 ### T2. Annotate 30 Hermes runs upstream
-Status: in progress — proposal harness shipped (2026-05-05); upstream human review pending.
+Status: **DEFERRED** (2026-05-05) — Hermes HF is not a labeled outcome source; see Workstream T banner above. The harness below is preserved as a process-dynamics aid but does not run as a terminal-success annotator.
 
 What landed in this repo:
 ```text
@@ -284,7 +324,7 @@ All missing labels are explained per-run.
 ```
 
 ### T3. Rebuild estimator artifacts with Hermes
-Status: blocked on T2
+Status: **DEFERRED** (2026-05-05) — gated on T2 which is deferred per the Workstream T banner. Hermes does not contribute terminal-success labels under the current dataset definition.
 
 Commands:
 ```bash
@@ -336,7 +376,7 @@ tb_live_v2:
 The 100+ target (vs. 30) is to enable slicing by task type, difficulty, trajectory shape, and failure mode — a measurement study, not just a gate-unblock.
 
 ### U1. Study the Terminal-Bench ecosystem
-Status: not started
+Status: done (2026-05-05) — `reports/TB_TASK_SPACE_REVIEW.md` shipped. TB2 (89 tasks, 3/57/29 easy/medium/hard, 24 categories) is the primary pool; original TB fills the easy slot; TB-Pro deferred. Two-arm collection design (degraded top model + mid-tier baseline) selected to land in the 0.40–0.60 outcome-diversity band.
 
 Where to look:
 ```text
@@ -403,7 +443,7 @@ channel.
 ```
 
 ### U2. Define the tb_live_v2 sampling policy
-Status: not started
+Status: done (2026-05-05) — `docs/TB_LIVE_V2_SAMPLING_POLICY.md` shipped. Pre-registered two-arm config (Arm A = top model with degraded budget; Arm B = mid-tier model at default), TB2 + original-TB-easy + 25 internal tasks, anti-tuning rules explicit, rebalance rule for out-of-band batches.
 
 Outputs: `docs/TB_LIVE_V2_SAMPLING_POLICY.md`.
 
@@ -453,7 +493,7 @@ batch is all successes.
 ```
 
 ### U3. Design new Terminal-Bench-style tasks if needed
-Status: not started
+Status: in progress (2026-05-05) — package skeleton + 5 example task scaffolds shipped (one per shape: progress_drop, validation_new_work, stuck_blocked, high_progress_failure, low_progress_success). 20 remaining tasks specified in `tasks/tb_live_v2/MANIFEST.md`. Each scaffold has Dockerfile, task.yaml, solution.sh, tests/test_outputs.py, shape.yaml. Shared docker-compose template under `tasks/tb_live_v2/docker-compose.template.yaml`.
 
 Goal: If the public task pool does not provide enough diversity, design additional internal tasks following Terminal-Bench conventions.
 
@@ -497,7 +537,7 @@ Every task has a category and expected difficulty.
 ```
 
 ### U4. Run tb_live_v2 in batches
-Status: not started
+Status: plan shipped (2026-05-05) — `docs/TB_LIVE_V2_BATCH_PLAN.md` covers Batch 0/1/2/3 + reserve, per-batch loop, reproducibility artifacts, stop conditions, cost discipline, risk mitigations. Execution gated on harness install + cost sign-off + remaining 20 internal tasks (U3).
 
 Batch plan:
 ```text
@@ -777,22 +817,23 @@ model-effort policy in this repo. This repo outputs belief estimates only.
 Strict dependencies:
 
 ```text
-S1 → S2 (framing locked)
-T1 → T2 → T3                   (Hermes annotation, runs in coding-progress-ledger)
-U1 → U2 → U3 → U4 → U5         (tb_live_v2 collection)
-V1                              (human baseline on existing prompts, can run anytime)
-V2                              (blocked on U4)
-W1, W2                          (process dynamics package, can run after S2)
-X1 → X2                         (completion-risk retest, blocked on T3 OR U5)
-Y1, Y2, Y3                      (active guardrails, no work — review-time only)
+S1 → S2                         done — framing locked
+T1                              done — verdict deferred (Hermes is not an outcome source)
+T2, T3                          DEFERRED — see Workstream T banner
+U1 → U2 → U3 → U4 → U5         tb_live_v2 collection (now the critical path)
+V1                              human baseline on existing prompts, can run anytime
+V2                              blocked on U4
+W1, W2                          process dynamics package, can run after S2
+X1 → X2                         completion-risk retest, blocked on U5
+Y1, Y2, Y3                      active guardrails, no work — review-time only
 ```
 
 Parallelism windows:
 ```text
-- S1, S2, V1, W1, W2 can run in parallel after the v0 boundary lands.
-- T1–T3 (upstream Hermes work) and U1–U5 (live tb_live_v2 collection)
-  are independent and should run in parallel.
-- X1 can be defined as soon as S2 is done; X2 is gated on T3 or U5.
+- V1, W1, W2 can run in parallel with U work.
+- U1–U2 (research + sampling policy) and U3 (internal task design) can run
+  in parallel once U1 has produced the task-space review.
+- X1 can be defined as soon as S2 is done; X2 is gated on U5.
 ```
 
 ---
@@ -808,8 +849,8 @@ If you are tempted to add a model, ask:
 If the answer is no, do not build it.
 
 The immediate priority is:
-1. annotate Hermes (Workstream T);
-2. design and collect tb_live_v2 with 100+ outcome-diverse tasks (Workstream U);
+1. design and collect tb_live_v2 with 100+ outcome-diverse, **verified** tasks (Workstream U);
+2. use Hermes HF as a process-dynamics scaling source only — not for terminal-success gates (Workstream T deferred);
 3. run the human baseline (Workstream V);
 4. package the process-dynamics result (Workstream W);
 5. re-test completion risk only after the data can actually answer it (Workstream X).

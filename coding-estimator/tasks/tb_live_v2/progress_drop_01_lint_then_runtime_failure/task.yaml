@@ -1,0 +1,21 @@
+descriptions:
+  - key: base
+    description: |
+      Write a Python module `csv_summary.py` at /app that reads a CSV
+      file from a path given on the command line and prints a one-line
+      summary of the form:
+
+          rows=<N> cols=<M> numeric_cols=<K>
+
+      where `numeric_cols` is the count of columns whose values are all
+      parseable as floats (treating an empty string as not-a-number).
+
+      Run with:    python /app/csv_summary.py <path>
+      Exit non-zero on any error; print only the summary on success.
+author_email: estimator-team@coding-estimator.local
+difficulty: medium
+tags: [progress_drop, file_operations, python]
+max_agent_timeout_sec: 180
+max_test_timeout_sec: 30
+test_scripts: [setup-uv-pytest.sh, run-uv-pytest.sh]
+run_tests_in_same_shell: true

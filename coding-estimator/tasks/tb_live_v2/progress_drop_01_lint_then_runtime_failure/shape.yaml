@@ -1,0 +1,15 @@
+target_shape: progress_drop
+secondary_shapes: [validation_new_work]
+expected_pass_rate: 0.45
+notes: |
+  The naive implementation (csv.reader + try/float on each cell) lints
+  cleanly and runs fine on a uniform numeric CSV. The hidden test
+  fixture has (a) a column with mixed values "1.0", "", "2.0" — the
+  agent must decide whether empty cells count as numeric (per spec
+  they do not), and (b) a column with quoted commas inside fields —
+  csv.reader handles this but a string.split-based shortcut does not.
+
+  Agent typically: writes a draft, runs it on a simple CSV, declares
+  done. Verifier then surfaces the empty-string and quoted-comma cases.
+  The progress curve drops as the agent reopens the implementation,
+  giving us the target shape.

@@ -20,9 +20,11 @@ v0 has established a measurement boundary, not a deployable estimator.
   The v0 verdict is `indeterminate`, driven by data gaps — not leakage or
   code defects.
 
-The next phase is **targeted data work**, not modeling: annotate the
-existing Hermes retrospective corpus, collect an outcome-diverse
-`tb_live_v2` (≥100 runs, ≥25 failures), then re-test completion risk.
+The next phase is **targeted data work**, not modeling: collect an
+outcome-diverse `tb_live_v2` (≥100 verified runs, ≥25 failures) as the
+critical path. Hermes HF is not a labeled outcome source by design;
+it is used only for process-dynamics scaling, not for terminal-success
+gates (see `TASKS.md § Workstream T` deferral banner).
 
 Full evidence:
 [reports/V0_FINDINGS.md](reports/V0_FINDINGS.md) ·
@@ -52,5 +54,5 @@ uv run python -c "import coding_estimator"
 ```
 
 See [TASKS.md](TASKS.md) for the v1 backlog (Workstreams S–Y). The
-immediate priority is Workstream T (Hermes annotation unblock) and
-Workstream U (`tb_live_v2` collection).
+immediate priority is Workstream U (`tb_live_v2` collection of
+outcome-diverse, verifier-backed Terminal-Bench tasks).

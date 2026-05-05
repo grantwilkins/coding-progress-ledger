@@ -1,0 +1,19 @@
+descriptions:
+  - key: base
+    description: |
+      The script /app/scrape.py uses the Python package `bs4`
+      (BeautifulSoup) to parse a small HTML fixture at /app/page.html
+      and write the text of the first `<h1>` tag to /app/h1.txt.
+
+      The package is not installed. Make `python /app/scrape.py` succeed
+      and produce /app/h1.txt with the correct text.
+
+      You may modify any file under /app, but do not modify the test
+      verifier (you cannot read it anyway).
+author_email: estimator-team@coding-estimator.local
+difficulty: medium
+tags: [stuck_blocked, python, dependencies]
+max_agent_timeout_sec: 180
+max_test_timeout_sec: 30
+test_scripts: [setup-uv-pytest.sh, run-uv-pytest.sh]
+run_tests_in_same_shell: true

@@ -1,0 +1,27 @@
+descriptions:
+  - key: base
+    description: |
+      Build a small REST mock server at /app/server.py that, when run
+      with `python /app/server.py 8080 &`, serves the following on
+      localhost:8080:
+
+        - GET /health         -> 200, body: {"status": "ok"}
+        - GET /version        -> 200, body: {"version": "1.0.0"}
+        - GET /items          -> 200, body: {"items": [...]}, with a
+                                 stable, sorted (ascending) list of the
+                                 string names found in /app/items.txt
+                                 (one name per line, ignore blank lines).
+        - POST /items {name}  -> 201, body: {"name": "<name>"}, AND the
+                                 name is appended to /app/items.txt
+                                 (one per line) so a subsequent GET /items
+                                 reflects the change.
+
+      Use only the Python standard library. The body of every JSON
+      response must be valid JSON parseable by `json.loads`.
+author_email: estimator-team@coding-estimator.local
+difficulty: hard
+tags: [high_progress_failure, http, python]
+max_agent_timeout_sec: 240
+max_test_timeout_sec: 60
+test_scripts: [setup-uv-pytest.sh, run-uv-pytest.sh]
+run_tests_in_same_shell: true

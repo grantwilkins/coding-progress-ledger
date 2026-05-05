@@ -1,0 +1,13 @@
+target_shape: stuck_blocked
+secondary_shapes: [late_recovery]
+expected_pass_rate: 0.50
+notes: |
+  The trap is the import-name vs pip-name mismatch: the package is
+  imported as `bs4` but installed via `pip install beautifulsoup4`.
+  Agents commonly run `pip install bs4` (which DOES install a stub
+  package and shadows the real one but is not what the script needs)
+  or get stuck retrying `pip install bs4` after import failures.
+
+  Recovery path: install `beautifulsoup4`, OR rewrite scrape.py without
+  bs4 (use html.parser from stdlib). Both succeed; the agent that
+  recognizes the rewrite-around path produces a late_recovery shape.

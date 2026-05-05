@@ -1,0 +1,17 @@
+target_shape: high_progress_failure
+secondary_shapes: []
+expected_pass_rate: 0.35
+notes: |
+  Five visible subtasks: /health, /version, /items GET, /items POST,
+  persistence to /app/items.txt. Agents typically complete all five
+  visibly — progress curve climbs to ~1.0 — but two strict verifier
+  checks regularly fail:
+
+    1. GET /items must sort ascending and ignore blank lines.
+       Naive impl returns insertion order or includes blanks.
+    2. POST /items must persist BEFORE returning 201, AND the response
+       body must echo the name. Naive impl writes async or returns
+       only status.
+
+  Result: high_progress_failure shape — most subtasks "done" by visible
+  signal, but verifier strict checks fail.

@@ -38,7 +38,8 @@ include = ["coding_estimator*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-norecursedirs = ["datasets", "models", "reports", ".venv", ".git"]
+norecursedirs = ["datasets", "models", "reports", "tasks", ".venv", ".git"]
+addopts = "--ignore=tasks"
 
 [tool.ruff]
 line-length = 100

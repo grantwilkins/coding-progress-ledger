@@ -1,5 +1,16 @@
 # Hermes annotation precheck (T1)
 
+> **Note (2026-05-05, post-shipping).** After this precheck shipped, the
+> project decided to **defer all of Workstream T**. Hermes HF is not a
+> labeled outcome source by design — its published schema does not
+> include `final_success`, `verifier_pass`, `eval_log`, or any benchmark
+> outcome field. The precheck below is still factually correct (the
+> upstream metadata fields are unset and the local loader is not
+> broken), but the *implied next step* — annotate `final_success`
+> upstream — is no longer the right move. See `TASKS.md § Workstream T`
+> banner for the full reframing. Hermes remains a valid
+> **process-dynamics** source.
+
 _Generated 2026-05-05. Closes T1 in TASKS.md (Workstream T)._
 
 ## Question

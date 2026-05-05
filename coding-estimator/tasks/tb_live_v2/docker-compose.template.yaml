@@ -1,0 +1,18 @@
+# Shared docker-compose template for tasks/tb_live_v2.
+# Each task may symlink this file as its docker-compose.yaml or override
+# specific keys (volumes, environment, ports). Names like
+# T_BENCH_TASK_DOCKER_CLIENT_IMAGE_NAME come from the upstream harness.
+services:
+  client:
+    image: ${T_BENCH_TASK_DOCKER_CLIENT_IMAGE_NAME}
+    container_name: ${T_BENCH_TASK_DOCKER_NAME_PREFIX}-client
+    build:
+      context: .
+      dockerfile: Dockerfile
+    environment:
+      T_BENCH_CONTAINER_LOGS_PATH: ${T_BENCH_CONTAINER_LOGS_PATH}
+      T_BENCH_TASK_LOGS_PATH: ${T_BENCH_TASK_LOGS_PATH}
+      T_BENCH_TEST_DIR: ${T_BENCH_TEST_DIR}
+    working_dir: /app
+    tty: true
+    stdin_open: true
