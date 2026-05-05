@@ -1,0 +1,16 @@
+descriptions:
+  - key: base
+    description: |
+      The script /app/greet.py defines a function `greet(name)` that
+      should return the string `"Hello, terminal-bench, <name>!"`.
+      It currently returns `"Hello, terminl-bench, <name>!"` (typo:
+      "terminl-bench" should be "terminal-bench"). Fix the typo. Do
+      not refactor; the smallest change that makes it correct is
+      preferred.
+author_email: estimator-team@coding-estimator.local
+difficulty: easy
+tags: [low_progress_success, debugging, python]
+max_agent_timeout_sec: 60
+max_test_timeout_sec: 15
+test_scripts: [setup-uv-pytest.sh, run-uv-pytest.sh]
+run_tests_in_same_shell: true

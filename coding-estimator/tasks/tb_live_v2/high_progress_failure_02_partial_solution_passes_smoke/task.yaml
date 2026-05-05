@@ -1,0 +1,31 @@
+descriptions:
+  - key: base
+    description: |
+      Write `/app/parse_duration.py`. The script provides a function
+      `parse_duration(s: str) -> int` that parses a human-readable
+      duration string and returns the number of seconds.
+
+      Required behavior:
+        - "30s"           ->        30
+        - "5m"            ->       300
+        - "2h"            ->      7200
+        - "1d"            ->     86400
+        - Combinations like "1h30m", "2d3h", "1h30m45s" are ALSO
+          required: sum the parts. Any combination of d/h/m/s in
+          decreasing-magnitude order MUST be supported.
+        - The bare integer "0" MUST return 0.
+        - Whitespace inside the input is allowed and must be ignored:
+          "1h 30m" parses the same as "1h30m".
+        - Invalid input must raise ValueError. Invalid examples:
+          "abc", "5", "5x", "", "1m30h" (out-of-order is invalid).
+        - Use only the Python standard library.
+
+      Provide a CLI: `python /app/parse_duration.py <string>` prints
+      the result to stdout (or exits non-zero on ValueError).
+author_email: estimator-team@coding-estimator.local
+difficulty: hard
+tags: [high_progress_failure, parsing, python]
+max_agent_timeout_sec: 90
+max_test_timeout_sec: 15
+test_scripts: [setup-uv-pytest.sh, run-uv-pytest.sh]
+run_tests_in_same_shell: true

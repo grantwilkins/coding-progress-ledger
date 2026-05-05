@@ -493,7 +493,7 @@ batch is all successes.
 ```
 
 ### U3. Design new Terminal-Bench-style tasks if needed
-Status: in progress (2026-05-05) — package skeleton + 5 example task scaffolds shipped (one per shape: progress_drop, validation_new_work, stuck_blocked, high_progress_failure, low_progress_success). 20 remaining tasks specified in `tasks/tb_live_v2/MANIFEST.md`. Each scaffold has Dockerfile, task.yaml, solution.sh, tests/test_outputs.py, shape.yaml. Shared docker-compose template under `tasks/tb_live_v2/docker-compose.template.yaml`.
+Status: in progress (2026-05-05) — 10 task scaffolds shipped (2 per shape). Batch-0 set: lps_01, vnw_01, sb_01, hpf_01, pd_01. Batch-1A set: lps_03, vnw_05, sb_02, hpf_02, pd_03. 15 remaining tasks specified in `tasks/tb_live_v2/MANIFEST.md`. Each scaffold has Dockerfile, task.yaml, seed.sh, solution.sh, tests/test_outputs.py, shape.yaml. Shared docker-compose template under `tasks/tb_live_v2/docker-compose.template.yaml`.
 
 Goal: If the public task pool does not provide enough diversity, design additional internal tasks following Terminal-Bench conventions.
 
@@ -537,7 +537,7 @@ Every task has a category and expected difficulty.
 ```
 
 ### U4. Run tb_live_v2 in batches
-Status: Batch 0 pilot shipped (2026-05-05) — 5 task scaffolds × 3 arms (A=opus, B=sonnet, C=haiku) = 15 runs. 10 pass / 5 fail / 0 unresolved. Outcome rate already in the 0.25–0.60 band on n=15. Sidecar replay bug fixed (relative path under `cwd=` of upstream repo). See `reports/TB_LIVE_V2_BATCH0_PILOT.md`. Arm C (haiku) added at user request alongside the original A/B (opus/sonnet) two-arm design; same budget as arm B (20 actions). Batches 1–3 still gated on U3 shipping the remaining 20 internal tasks plus TB2 task ingestion.
+Status: Batch 0 + Batch 1A shipped (2026-05-05) — 10 task scaffolds × 3 arms (A=opus, B=sonnet, C=haiku) = 30 runs. 21 pass / 9 fail / 0 unresolved (30% failure rate, in 0.25–0.60 band). Sidecar replay bug fixed (relative path under `cwd=` of upstream repo). Arm C (haiku) added alongside A/B at user request. **Failure mode discovered:** Sonnet/Haiku interpret task descriptions' `/app/<file>.py` as a literal path and create a workspace subdirectory; Opus interprets it as Docker convention. Treat this as data, not bug — it shows model interpretation variance. See `reports/TB_LIVE_V2_BATCH0_PILOT.md` and `reports/TB_LIVE_V2_BATCH1A.md`. Batches 1B+ gated on U3 shipping the remaining 15 internal tasks plus optional TB2 task ingestion.
 
 Batch plan:
 ```text

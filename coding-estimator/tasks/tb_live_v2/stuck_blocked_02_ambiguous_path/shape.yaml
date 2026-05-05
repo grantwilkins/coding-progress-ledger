@@ -1,0 +1,12 @@
+target_shape: stuck_blocked
+secondary_shapes: [validation_new_work]
+expected_pass_rate: 0.55
+notes: |
+  Two files named `data.txt` exist (data/, reference/). The script as
+  shipped reads `data.txt` from its own directory using a relative
+  path; the agent must redirect it to `reference/data.txt`.
+
+  The trap: agents often `cat data.txt` first, see content, edit
+  the wrong file, or try to "find data.txt" and pick the first match.
+  The recovery is reading the task description carefully and pointing
+  the script at `reference/data.txt`.

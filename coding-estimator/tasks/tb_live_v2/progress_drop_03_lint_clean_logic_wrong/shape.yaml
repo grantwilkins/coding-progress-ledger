@@ -1,0 +1,16 @@
+target_shape: progress_drop
+secondary_shapes: [validation_new_work]
+expected_pass_rate: 0.55
+notes: |
+  Naive impl: `[mean(xs[i:i+window]) for i in range(len(xs) - window + 1)]`.
+  This works for the basic case (window=3, len=5 → 3 means) and lints
+  cleanly. Verifier strict checks:
+    1. `window > len(xs)` → must return `[]` (naive impl returns
+       `[mean(xs)]` when range gives a single value because of off-by-one,
+       OR raises StopIteration / negative range).
+    2. `window <= 0` → must raise ValueError (naive impl silently does
+       nothing or crashes elsewhere).
+    3. Empty `xs` → must return `[]` cleanly.
+
+  Result: agent runs the basic case, declares done. Verifier reopens
+  the implementation as the edge cases bite.

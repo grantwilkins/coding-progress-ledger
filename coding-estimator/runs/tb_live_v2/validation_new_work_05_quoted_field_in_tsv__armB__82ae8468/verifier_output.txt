@@ -1,0 +1,42 @@
+FFFF                                                                     [100%]
+=================================== FAILURES ===================================
+______________________________ test_module_exists ______________________________
+/Users/grantwilkins/houdini/coding-estimator/tasks/tb_live_v2/validation_new_work_05_quoted_field_in_tsv/tests/test_outputs.py:26: in test_module_exists
+    assert APP.is_file(), f"{APP} not created"
+E   AssertionError: /var/folders/3j/5n1r8yyx2d58jn87prrxs_lm0000gn/T/tb_live_v2_validation_new_work_05_quoted_field_in_tsv__armB__82ae8468_u4f4zdia/tsv_to_json.py not created
+E   assert False
+E    +  where False = is_file()
+E    +    where is_file = PosixPath('/var/folders/3j/5n1r8yyx2d58jn87prrxs_lm0000gn/T/tb_live_v2_validation_new_work_05_quoted_field_in_tsv__armB__82ae8468_u4f4zdia/tsv_to_json.py').is_file
+____________________________ test_basic_two_columns ____________________________
+/Users/grantwilkins/houdini/coding-estimator/tasks/tb_live_v2/validation_new_work_05_quoted_field_in_tsv/tests/test_outputs.py:31: in test_basic_two_columns
+    assert _run(tsv, tmp_path) == [
+           ^^^^^^^^^^^^^^^^^^^
+/Users/grantwilkins/houdini/coding-estimator/tasks/tb_live_v2/validation_new_work_05_quoted_field_in_tsv/tests/test_outputs.py:18: in _run
+    out = subprocess.run(
+/opt/homebrew/Cellar/python@3.12/3.12.9/Frameworks/Python.framework/Versions/3.12/lib/python3.12/subprocess.py:573: in run
+    raise CalledProcessError(retcode, process.args,
+E   subprocess.CalledProcessError: Command '['/Users/grantwilkins/houdini/coding-estimator/.venv/bin/python3', '/var/folders/3j/5n1r8yyx2d58jn87prrxs_lm0000gn/T/tb_live_v2_validation_new_work_05_quoted_field_in_tsv__armB__82ae8468_u4f4zdia/tsv_to_json.py', '/private/var/folders/3j/5n1r8yyx2d58jn87prrxs_lm0000gn/T/pytest-of-grantwilkins/pytest-536/test_basic_two_columns0/f.tsv']' returned non-zero exit status 2.
+___________________________ test_quoted_tab_in_field ___________________________
+/Users/grantwilkins/houdini/coding-estimator/tasks/tb_live_v2/validation_new_work_05_quoted_field_in_tsv/tests/test_outputs.py:41: in test_quoted_tab_in_field
+    got = _run(tsv, tmp_path)
+          ^^^^^^^^^^^^^^^^^^^
+/Users/grantwilkins/houdini/coding-estimator/tasks/tb_live_v2/validation_new_work_05_quoted_field_in_tsv/tests/test_outputs.py:18: in _run
+    out = subprocess.run(
+/opt/homebrew/Cellar/python@3.12/3.12.9/Frameworks/Python.framework/Versions/3.12/lib/python3.12/subprocess.py:573: in run
+    raise CalledProcessError(retcode, process.args,
+E   subprocess.CalledProcessError: Command '['/Users/grantwilkins/houdini/coding-estimator/.venv/bin/python3', '/var/folders/3j/5n1r8yyx2d58jn87prrxs_lm0000gn/T/tb_live_v2_validation_new_work_05_quoted_field_in_tsv__armB__82ae8468_u4f4zdia/tsv_to_json.py', '/private/var/folders/3j/5n1r8yyx2d58jn87prrxs_lm0000gn/T/pytest-of-grantwilkins/pytest-536/test_quoted_tab_in_field0/f.tsv']' returned non-zero exit status 2.
+___________________________ test_blank_line_skipped ____________________________
+/Users/grantwilkins/houdini/coding-estimator/tasks/tb_live_v2/validation_new_work_05_quoted_field_in_tsv/tests/test_outputs.py:50: in test_blank_line_skipped
+    assert _run(tsv, tmp_path) == [
+           ^^^^^^^^^^^^^^^^^^^
+/Users/grantwilkins/houdini/coding-estimator/tasks/tb_live_v2/validation_new_work_05_quoted_field_in_tsv/tests/test_outputs.py:18: in _run
+    out = subprocess.run(
+/opt/homebrew/Cellar/python@3.12/3.12.9/Frameworks/Python.framework/Versions/3.12/lib/python3.12/subprocess.py:573: in run
+    raise CalledProcessError(retcode, process.args,
+E   subprocess.CalledProcessError: Command '['/Users/grantwilkins/houdini/coding-estimator/.venv/bin/python3', '/var/folders/3j/5n1r8yyx2d58jn87prrxs_lm0000gn/T/tb_live_v2_validation_new_work_05_quoted_field_in_tsv__armB__82ae8468_u4f4zdia/tsv_to_json.py', '/private/var/folders/3j/5n1r8yyx2d58jn87prrxs_lm0000gn/T/pytest-of-grantwilkins/pytest-536/test_blank_line_skipped0/f.tsv']' returned non-zero exit status 2.
+=========================== short test summary info ============================
+FAILED ../../../../../../../var/folders/3j/5n1r8yyx2d58jn87prrxs_lm0000gn/T/tb_live_v2_validation_new_work_05_quoted_field_in_tsv__armB__82ae8468_u4f4zdia/tests/test_outputs.py::test_module_exists
+FAILED ../../../../../../../var/folders/3j/5n1r8yyx2d58jn87prrxs_lm0000gn/T/tb_live_v2_validation_new_work_05_quoted_field_in_tsv__armB__82ae8468_u4f4zdia/tests/test_outputs.py::test_basic_two_columns
+FAILED ../../../../../../../var/folders/3j/5n1r8yyx2d58jn87prrxs_lm0000gn/T/tb_live_v2_validation_new_work_05_quoted_field_in_tsv__armB__82ae8468_u4f4zdia/tests/test_outputs.py::test_quoted_tab_in_field
+FAILED ../../../../../../../var/folders/3j/5n1r8yyx2d58jn87prrxs_lm0000gn/T/tb_live_v2_validation_new_work_05_quoted_field_in_tsv__armB__82ae8468_u4f4zdia/tests/test_outputs.py::test_blank_line_skipped
+4 failed in 0.14s

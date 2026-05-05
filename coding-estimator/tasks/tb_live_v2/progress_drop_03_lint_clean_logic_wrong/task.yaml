@@ -1,0 +1,27 @@
+descriptions:
+  - key: base
+    description: |
+      Write `/app/sliding_mean.py`. The script provides a function
+      `sliding_mean(xs: list[float], window: int) -> list[float]`
+      that returns the running mean over a sliding window of size
+      `window`.
+
+      Required behavior:
+        - For `xs = [1, 2, 3, 4, 5]` and `window = 3`, return
+          `[2.0, 3.0, 4.0]` (means of [1,2,3], [2,3,4], [3,4,5]).
+        - For `window > len(xs)`, return `[]`.
+        - For `window == 1`, return a copy of `xs` as floats.
+        - For `window == len(xs)`, return a single-element list.
+        - For `window <= 0`, raise `ValueError`.
+        - For an empty `xs` and any `window > 0`, return `[]`.
+        - Use only the Python standard library.
+
+      Provide a CLI: `python /app/sliding_mean.py <window> <x1> <x2>...`
+      prints the resulting list as a JSON array to stdout.
+author_email: estimator-team@coding-estimator.local
+difficulty: medium
+tags: [progress_drop, algorithms, python]
+max_agent_timeout_sec: 90
+max_test_timeout_sec: 15
+test_scripts: [setup-uv-pytest.sh, run-uv-pytest.sh]
+run_tests_in_same_shell: true

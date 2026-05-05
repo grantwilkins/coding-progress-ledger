@@ -1,0 +1,27 @@
+descriptions:
+  - key: base
+    description: |
+      The workspace contains a Python script `count_words.py` that
+      reads `data.txt` from its current working directory and prints
+      the number of words separated by whitespace.
+
+      Two files named `data.txt` exist in the workspace tree:
+
+        - data/data.txt              (one short line; wrong content)
+        - reference/data.txt         (the correct fixture)
+
+      The reference file under `reference/` is the canonical fixture.
+      Make `python count_words.py` (run from the workspace root)
+      print the word count of `reference/data.txt`. The simplest
+      working change is preferred — no need to refactor or rename
+      files.
+
+      Hint: do not delete or modify the data files; only modify the
+      script.
+author_email: estimator-team@coding-estimator.local
+difficulty: medium
+tags: [stuck_blocked, file_operations, python]
+max_agent_timeout_sec: 90
+max_test_timeout_sec: 15
+test_scripts: [setup-uv-pytest.sh, run-uv-pytest.sh]
+run_tests_in_same_shell: true
