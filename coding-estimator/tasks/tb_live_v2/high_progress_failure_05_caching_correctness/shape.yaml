@@ -1,0 +1,31 @@
+target_shape: high_progress_failure
+secondary_shapes: []
+expected_pass_rate: 0.30
+notes: |
+  The hard constraint is "fast on repeats" + "correct after table
+  mutation". These pull in opposite directions:
+    - "Cache" suggests memoization; the obvious draft uses
+      `functools.lru_cache` keyed on `(id(table), query)` or some
+      module-level cache keyed on `id(table)`.
+    - But mutation means `id(table)` is stable while contents change,
+      so cache returns stale values.
+
+  Spec deliberately includes "MUST behave correctly even when ...
+  mutates the same `table` between calls". A naive cache that keys
+  on `id(table)` or simple `(table, query)` (which raises since
+  dict is unhashable) misses this.
+
+  Verifier path:
+    1. Lookup with table A — confirm fast result.
+    2. Mutate table A in-place (add/remove/update a key).
+    3. Lookup again — must reflect mutation.
+
+  Correct designs:
+    - Re-derive the lookup index when the table identity OR a
+      cached "fingerprint" (sorted items hash) changes.
+    - Avoid id() — use `frozenset(table.items())`.
+    - Or simply call `table.get(query.lower(), "NONE")` directly,
+      which is already O(1) per query — perhaps the cleanest.
+
+  This is a high_progress_failure: visible single-call tests pass,
+  the strict "after-mutation" test fails the naive cache.

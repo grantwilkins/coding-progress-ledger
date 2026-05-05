@@ -1,0 +1,129 @@
+{
+  "active_coding_leaves_final": 2,
+  "active_overall_leaves_final": 2,
+  "category_active_weight_final": {
+    "artifact": 0,
+    "documentation": 0,
+    "environment": 0,
+    "investigation": 1.0,
+    "product": 1.0,
+    "validation": 0
+  },
+  "category_completed_weight_final": {
+    "artifact": 0,
+    "documentation": 0,
+    "environment": 0,
+    "investigation": 1.0,
+    "product": 1.0,
+    "validation": 0
+  },
+  "coding_categories": [
+    "product",
+    "validation",
+    "investigation"
+  ],
+  "coding_largest_drop": 0.5,
+  "coding_nonmonotonic": true,
+  "completed_coding_leaves_final": 2,
+  "completed_overall_leaves_final": 2,
+  "evidence_audit_by_category": {
+    "investigation": {
+      "audited_completion_count": 1,
+      "status": "strong",
+      "weak_completion_evidence_count": 0,
+      "weak_subtask_ids": []
+    },
+    "product": {
+      "audited_completion_count": 1,
+      "status": "weak",
+      "weak_completion_evidence_count": 1,
+      "weak_subtask_ids": [
+        "S2"
+      ]
+    },
+    "validation": {
+      "audited_completion_count": 0,
+      "status": "not_applicable",
+      "weak_completion_evidence_count": 0,
+      "weak_subtask_ids": []
+    }
+  },
+  "evidence_audit_status": "weak",
+  "evidence_audit_weak_categories": [
+    "product"
+  ],
+  "excluded_active_weight_final": 0,
+  "excluded_categories": [
+    "artifact",
+    "documentation",
+    "environment"
+  ],
+  "excluded_categories_final": {
+    "artifact": {
+      "active": 0,
+      "complete": 0
+    },
+    "documentation": {
+      "active": 0,
+      "complete": 0
+    },
+    "environment": {
+      "active": 0,
+      "complete": 0
+    }
+  },
+  "excluded_completed_weight_final": 0,
+  "final_coding_active_weight": 2.0,
+  "final_coding_complete_weight": 2.0,
+  "final_coding_progress": 1.0,
+  "final_overall_active_weight": 2.0,
+  "final_overall_complete_weight": 2.0,
+  "final_overall_progress": 1.0,
+  "final_success": null,
+  "final_success_source": "absent",
+  "generator": "ledger_progress.sidecar",
+  "historical_subtasks_created": 2,
+  "largest_coding_drop": 0.5,
+  "largest_coding_drop_category_contributions": {
+    "product": 0.5
+  },
+  "largest_coding_drop_detail": {
+    "amount": 0.5,
+    "from_step": 4,
+    "to_step": 5
+  },
+  "largest_coding_drop_source": "product",
+  "largest_overall_drop": 0.5,
+  "largest_overall_drop_category_contributions": {
+    "product": 0.5
+  },
+  "largest_overall_drop_detail": {
+    "amount": 0.5,
+    "from_step": 4,
+    "to_step": 5
+  },
+  "largest_overall_drop_mostly_excluded": false,
+  "largest_overall_drop_source": "product",
+  "nonmonotonic_coding": true,
+  "nonmonotonic_overall": true,
+  "overall_largest_drop": 0.5,
+  "overall_nonmonotonic": true,
+  "source_ledger_sha256": "5146f0fa9d02d2e3978581e13dd52679b171db4cd77e5746d0ef3cabbc1281cd",
+  "subtask_categories": {
+    "S1": "investigation",
+    "S2": "product"
+  },
+  "task_id": "stuck_blocked_04_module_not_found_pythonpath__armA__ca44079b",
+  "weak_completion_evidence": [
+    {
+      "category": "product",
+      "description": "product: set PYTHONPATH=lib in run.sh",
+      "evidence_types": [
+        "manual_note"
+      ],
+      "step": 6,
+      "subtask_id": "S2"
+    }
+  ],
+  "weak_completion_evidence_count": 1
+}

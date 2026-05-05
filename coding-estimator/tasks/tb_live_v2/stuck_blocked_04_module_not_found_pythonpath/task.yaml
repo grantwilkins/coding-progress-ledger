@@ -1,0 +1,32 @@
+descriptions:
+  - key: base
+    description: |
+      The workspace contains:
+
+        - lib/widget.py        (a small in-house module)
+        - tools/render.py      (a script that imports `widget`)
+        - run.sh               (a shell script that runs render.py)
+
+      Running `./run.sh` from the workspace root should produce a file
+      `out/result.txt` containing exactly the line:
+
+          rendered: hello
+
+      Currently `./run.sh` fails with `ModuleNotFoundError: No module
+      named 'widget'`. Make `./run.sh` succeed.
+
+      Constraints:
+        - DO NOT install any package or use pip.
+        - DO NOT move, rename, or copy `lib/widget.py`.
+        - DO NOT add an `__init__.py` anywhere — leave the directory
+          structure exactly as shipped.
+        - The fix must be inside `run.sh` (or a single-character edit
+          to render.py — agent's choice). The minimal correct fix is
+          preferred.
+author_email: estimator-team@coding-estimator.local
+difficulty: medium
+tags: [stuck_blocked, environment, python]
+max_agent_timeout_sec: 90
+max_test_timeout_sec: 15
+test_scripts: [setup-uv-pytest.sh, run-uv-pytest.sh]
+run_tests_in_same_shell: true

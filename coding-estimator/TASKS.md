@@ -493,7 +493,7 @@ batch is all successes.
 ```
 
 ### U3. Design new Terminal-Bench-style tasks if needed
-Status: in progress (2026-05-05) — 15 task scaffolds shipped (3 per shape). Batch-0 set: lps_01, vnw_01, sb_01, hpf_01, pd_01. Batch-1A set: lps_03, vnw_05, sb_02, hpf_02, pd_03. Batch-1B set: lps_02, vnw_02, sb_03, hpf_04, pd_04. 10 remaining tasks specified in `tasks/tb_live_v2/MANIFEST.md`. Future batches should target harder traps — Batch 1B passed at 100% across all 3 arms, indicating the spec rows are calibrated for weaker agents than current Claude lineup. Shared docker-compose template under `tasks/tb_live_v2/docker-compose.template.yaml`.
+Status: 20 of 25 spec rows shipped (4 per shape). Batch-0: lps_01, vnw_01, sb_01, hpf_01, pd_01. Batch-1A: lps_03, vnw_05, sb_02, hpf_02, pd_03. Batch-1B: lps_02, vnw_02, sb_03, hpf_04, pd_04. Batch-2: lps_04, vnw_04, sb_04, hpf_05, pd_05. 5 remaining (lps_05, vnw_03, sb_05, hpf_03, pd_02). **Decision:** further single-file Python tasks won't generate failures from current Claude lineup — Batch 1B and Batch 2 both hit 100% pass even with hidden traps. Future task expansion should switch substrate (real TB2 tasks, multi-file refactors, exotic libraries) rather than continue the spec list. Shared docker-compose template under `tasks/tb_live_v2/docker-compose.template.yaml`.
 
 Goal: If the public task pool does not provide enough diversity, design additional internal tasks following Terminal-Bench conventions.
 
@@ -537,7 +537,7 @@ Every task has a category and expected difficulty.
 ```
 
 ### U4. Run tb_live_v2 in batches
-Status: Batches 0 + 1A + 1B shipped (2026-05-05) — 15 task scaffolds × 3 arms (A=opus, B=sonnet, C=haiku) = 45 runs. 36 pass / 9 fail / 0 unresolved (20% failure rate; below the 0.25–0.60 band, drifting easy). Sidecar replay bug fixed. Path-convention fix in Batch 1B (no `/app/` in descriptions) eliminated the cross-arm path-interpretation confound from Batch 1A. Per-arm cumulative: A=15/15, B=11/15, C=10/15. Per-shape cumulative: lps 9/9, sb 9/9, hpf 7/9, pd 6/9, vnw 5/9. See `reports/TB_LIVE_V2_BATCH0_PILOT.md`, `BATCH1A.md`, `BATCH1B.md`. Future batches must harden traps to keep failure rate ≥ 25% (current spec rows are calibrated for weaker agents).
+Status: Batches 0 + 1A + 1B + 2 shipped (2026-05-05) — 20 task scaffolds × 3 arms = 60 runs. 51 pass / 9 fail / 0 unresolved (**15% failure rate; well below 0.25–0.60 sampling band**). Per-arm: A=20/20, B=16/20, C=15/20. Per-shape: lps 12/12, sb 12/12, hpf 10/12, pd 9/12, vnw 8/12. **Batch 2 used hidden traps and still hit 100% pass — the substrate (single-file Python tasks with deterministic verifiers) does not generate failures from current Claude lineup.** Reports: `reports/TB_LIVE_V2_BATCH0_PILOT.md`, `BATCH1A.md`, `BATCH1B.md`, `BATCH2.md`. Recommended next move: stop expanding tasks; rebuild checkpoints/labels on n=60 corpus and run process-dynamics evaluation. Further failures require switching substrate.
 
 Batch plan:
 ```text

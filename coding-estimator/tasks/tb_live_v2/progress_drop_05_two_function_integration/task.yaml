@@ -1,0 +1,25 @@
+descriptions:
+  - key: base
+    description: |
+      Implement two functions in `pipeline.py` (in the workspace).
+
+      `parse_orders(path: str) -> list[dict]`
+        - Reads a CSV file with columns `id,qty,unit_price`.
+        - Returns a list of dicts, one per data row.
+        - Header is the first line.
+
+      `total_revenue(orders: list[dict]) -> float`
+        - Returns `sum(qty * unit_price)` over all orders.
+
+      Provide a CLI: `python pipeline.py <csv_path>` should print
+      `total_revenue=<X>` where X is the float result formatted with
+      Python's default `str(float)`.
+
+      Use only the Python standard library.
+author_email: estimator-team@coding-estimator.local
+difficulty: medium
+tags: [progress_drop, integration, python]
+max_agent_timeout_sec: 90
+max_test_timeout_sec: 15
+test_scripts: [setup-uv-pytest.sh, run-uv-pytest.sh]
+run_tests_in_same_shell: true
