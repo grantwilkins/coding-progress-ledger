@@ -1,0 +1,33 @@
+descriptions:
+  - key: base
+    description: |
+      Author a configuration file `config.yaml` in the workspace
+      describing a service's deployment, conforming to this schema:
+
+      Required top-level keys (all required):
+        - `service` (string, non-empty)
+        - `replicas` (integer, >= 1)
+        - `port` (integer, 1..65535)
+        - `env` (mapping of string -> string; may be empty {})
+        - `resources` (mapping with required sub-keys `cpu` (string)
+          and `memory` (string)). The `resources` sub-keys are also
+          all required.
+
+      Constraints:
+        - Use only the Python standard library; YAML is parsed with
+          `yaml.safe_load` (PyYAML, which is preinstalled).
+        - The file must be valid YAML.
+        - Every required key must be present and of the correct type.
+        - The schema validator is provided by the verifier and is
+          stricter than YAML parsing: it rejects missing keys,
+          wrong types, and out-of-range values.
+
+      Pick reasonable values; the goal is conformance, not
+      configuration of any specific service.
+author_email: estimator-team@coding-estimator.local
+difficulty: medium
+tags: [progress_drop, configuration, yaml]
+max_agent_timeout_sec: 90
+max_test_timeout_sec: 15
+test_scripts: [setup-uv-pytest.sh, run-uv-pytest.sh]
+run_tests_in_same_shell: true

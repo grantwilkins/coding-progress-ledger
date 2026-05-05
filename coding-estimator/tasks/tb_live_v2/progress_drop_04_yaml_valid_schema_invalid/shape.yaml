@@ -1,0 +1,14 @@
+target_shape: progress_drop
+secondary_shapes: [validation_new_work]
+expected_pass_rate: 0.55
+notes: |
+  Naive impl: write a config.yaml with the obvious top-level keys
+  (service, replicas, port). Linter-clean, parses fine. Verifier
+  reveals:
+    1. `env` (empty dict still required)
+    2. `resources.cpu` and `resources.memory` (required sub-keys)
+    3. type strictness — `replicas: "3"` (string) is rejected;
+       must be an integer
+
+  Each of these surfaces as a "I thought I was done" reopen — the
+  progress_drop shape.

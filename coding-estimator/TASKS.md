@@ -493,7 +493,7 @@ batch is all successes.
 ```
 
 ### U3. Design new Terminal-Bench-style tasks if needed
-Status: in progress (2026-05-05) — 10 task scaffolds shipped (2 per shape). Batch-0 set: lps_01, vnw_01, sb_01, hpf_01, pd_01. Batch-1A set: lps_03, vnw_05, sb_02, hpf_02, pd_03. 15 remaining tasks specified in `tasks/tb_live_v2/MANIFEST.md`. Each scaffold has Dockerfile, task.yaml, seed.sh, solution.sh, tests/test_outputs.py, shape.yaml. Shared docker-compose template under `tasks/tb_live_v2/docker-compose.template.yaml`.
+Status: in progress (2026-05-05) — 15 task scaffolds shipped (3 per shape). Batch-0 set: lps_01, vnw_01, sb_01, hpf_01, pd_01. Batch-1A set: lps_03, vnw_05, sb_02, hpf_02, pd_03. Batch-1B set: lps_02, vnw_02, sb_03, hpf_04, pd_04. 10 remaining tasks specified in `tasks/tb_live_v2/MANIFEST.md`. Future batches should target harder traps — Batch 1B passed at 100% across all 3 arms, indicating the spec rows are calibrated for weaker agents than current Claude lineup. Shared docker-compose template under `tasks/tb_live_v2/docker-compose.template.yaml`.
 
 Goal: If the public task pool does not provide enough diversity, design additional internal tasks following Terminal-Bench conventions.
 
@@ -537,7 +537,7 @@ Every task has a category and expected difficulty.
 ```
 
 ### U4. Run tb_live_v2 in batches
-Status: Batch 0 + Batch 1A shipped (2026-05-05) — 10 task scaffolds × 3 arms (A=opus, B=sonnet, C=haiku) = 30 runs. 21 pass / 9 fail / 0 unresolved (30% failure rate, in 0.25–0.60 band). Sidecar replay bug fixed (relative path under `cwd=` of upstream repo). Arm C (haiku) added alongside A/B at user request. **Failure mode discovered:** Sonnet/Haiku interpret task descriptions' `/app/<file>.py` as a literal path and create a workspace subdirectory; Opus interprets it as Docker convention. Treat this as data, not bug — it shows model interpretation variance. See `reports/TB_LIVE_V2_BATCH0_PILOT.md` and `reports/TB_LIVE_V2_BATCH1A.md`. Batches 1B+ gated on U3 shipping the remaining 15 internal tasks plus optional TB2 task ingestion.
+Status: Batches 0 + 1A + 1B shipped (2026-05-05) — 15 task scaffolds × 3 arms (A=opus, B=sonnet, C=haiku) = 45 runs. 36 pass / 9 fail / 0 unresolved (20% failure rate; below the 0.25–0.60 band, drifting easy). Sidecar replay bug fixed. Path-convention fix in Batch 1B (no `/app/` in descriptions) eliminated the cross-arm path-interpretation confound from Batch 1A. Per-arm cumulative: A=15/15, B=11/15, C=10/15. Per-shape cumulative: lps 9/9, sb 9/9, hpf 7/9, pd 6/9, vnw 5/9. See `reports/TB_LIVE_V2_BATCH0_PILOT.md`, `BATCH1A.md`, `BATCH1B.md`. Future batches must harden traps to keep failure rate ≥ 25% (current spec rows are calibrated for weaker agents).
 
 Batch plan:
 ```text

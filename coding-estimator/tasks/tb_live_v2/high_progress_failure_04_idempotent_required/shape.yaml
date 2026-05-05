@@ -1,0 +1,17 @@
+target_shape: high_progress_failure
+secondary_shapes: []
+expected_pass_rate: 0.40
+notes: |
+  A single-pass migration is the obvious draft and works on the
+  visible smoke test (run once, inspect state.json, looks fine).
+  The verifier runs the script TWICE. Common mistakes:
+    1. Always-append: each user's `migrated:true` is added with
+       `users.append(...)` — duplicates on second run.
+    2. Always-increment: `state["version"] = state.get("version",1)+1`
+       — second run pushes version to 3.
+    3. Sort that uses a stable but non-idempotent key (rare; mostly
+       a non-issue but worth flagging).
+
+  This is a clean high_progress_failure: one obvious correct-looking
+  draft, surface verifier passes, strict verifier (twice-run) catches
+  the missing idempotency invariant.

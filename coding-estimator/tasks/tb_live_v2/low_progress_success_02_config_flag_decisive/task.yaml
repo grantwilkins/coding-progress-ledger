@@ -1,0 +1,25 @@
+descriptions:
+  - key: base
+    description: |
+      The script `fetch_data.py` in the workspace currently always
+      tries to make a network request. We need to add a `--offline`
+      flag that, when passed, makes the script print exactly the
+      string `OFFLINE_MODE` to stdout and exit 0 without performing
+      any network call.
+
+      Required behavior:
+        - `python fetch_data.py --offline` must print `OFFLINE_MODE`
+          and exit 0.
+        - When `--offline` is NOT passed, the script must keep its
+          current behavior (which attempts a network request and
+          would fail in a sandboxed environment, but that path is
+          NOT under test).
+        - The smallest change that meets the requirement is
+          preferred.
+author_email: estimator-team@coding-estimator.local
+difficulty: easy
+tags: [low_progress_success, debugging, python]
+max_agent_timeout_sec: 60
+max_test_timeout_sec: 15
+test_scripts: [setup-uv-pytest.sh, run-uv-pytest.sh]
+run_tests_in_same_shell: true

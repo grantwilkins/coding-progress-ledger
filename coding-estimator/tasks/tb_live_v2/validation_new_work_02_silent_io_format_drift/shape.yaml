@@ -1,0 +1,14 @@
+target_shape: validation_new_work
+secondary_shapes: [progress_drop]
+expected_pass_rate: 0.55
+notes: |
+  Naive impl: read all lines, json.loads each, build a set of
+  records["user"]. This crashes on:
+    1. A blank line (json.loads("") raises ValueError)
+    2. A malformed JSON line (e.g. trailing comma)
+    3. A record missing the `"user"` field (KeyError)
+
+  Spec requires graceful skip. Recovery: wrap json.loads in try/except
+  and check `"user" in record`. Verifier surfaces this as a
+  validation_new_work shape — the visible smoke test on a clean
+  fixture passes; only the verifier's malformed fixture exposes it.

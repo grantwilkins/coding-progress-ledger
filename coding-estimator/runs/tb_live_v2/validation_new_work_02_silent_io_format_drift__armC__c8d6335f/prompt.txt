@@ -1,0 +1,88 @@
+You are running a Terminal-Bench-style task for the coding-estimator
+`tb_live_v2` corpus. The task description is below. Solve it by editing
+files and running shell commands inside the workspace.
+
+## Workspace
+
+Workspace root: /var/folders/3j/5n1r8yyx2d58jn87prrxs_lm0000gn/T/tb_live_v2_validation_new_work_02_silent_io_format_drift__armC__c8d6335f_9rg428js
+Run directory (you write logs here, NOT inside workspace): /Users/grantwilkins/houdini/coding-estimator/runs/tb_live_v2/validation_new_work_02_silent_io_format_drift__armC__c8d6335f
+
+The workspace already contains the task seed files. The verifier under
+`tests/` is held back and is NOT in the workspace — do not look for it.
+After you finish, the driver will copy the verifier in and run pytest.
+
+## Task
+
+# Task — validation_new_work_02_silent_io_format_drift
+
+Write `count_users.py` in the workspace. The script reads a
+JSON-Lines file (one JSON object per line) passed as its first
+argument, and prints the number of distinct values of the
+`"user"` field across all valid records.
+
+Example:
+    python count_users.py events.jsonl
+    # prints something like: 7
+
+Required behavior:
+  - Each line is parsed independently as JSON.
+  - Lines that fail to parse OR that lack a `"user"` field
+    MUST be skipped (not counted, not raised).
+  - Empty lines MUST be skipped.
+  - The output is the count of distinct user values among the
+    valid records, printed as a decimal integer followed by a
+    newline.
+  - Use only the Python standard library.
+  - Exit 0 on success, even if some lines were malformed.
+
+## Action budget
+
+You have at most 20 actions. An action is one shell command,
+one file read, one file write, or one file edit. You should plan to
+finish well within the budget.
+
+If you cannot finish, append a `done` record anyway with a brief note in
+its `summary` field about what is left.
+
+## Required transcript logging
+
+**Before each action**, append exactly one JSON object (single line) to
+`/Users/grantwilkins/houdini/coding-estimator/runs/tb_live_v2/validation_new_work_02_silent_io_format_drift__armC__c8d6335f/transcript.jsonl`. The shape is:
+
+    {"step": <int starting at 1, increment per action>,
+      "ts": "<ISO-8601 UTC of right now, e.g. 2026-05-05T12:34:56Z>",
+      "kind": "shell" | "read_file" | "write_file" | "edit_file" |
+              "list_dir" | "grep" | "thought" | "done",
+      "summary": "<short imperative description of the action>",
+      "command": "<shell command if kind == shell, omit otherwise>",
+      "path": "<path if file op, omit otherwise>",
+      "exit_code": <int after shell action; omit before>,
+      "obs_snippet": "<<=500 chars of stdout/stderr or file content>"}
+
+The simplest way: keep an integer counter `STEP`, and before every
+Bash / Read / Write / Edit call, run a Bash command that appends one
+line. For example:
+
+    python -c "import json,datetime; print(json.dumps({'step':1,'ts':datetime.datetime.utcnow().isoformat()+'Z','kind':'read_file','summary':'inspect task.md','path':'/var/folders/3j/5n1r8yyx2d58jn87prrxs_lm0000gn/T/tb_live_v2_validation_new_work_02_silent_io_format_drift__armC__c8d6335f_9rg428js/task.md'}))" >> /Users/grantwilkins/houdini/coding-estimator/runs/tb_live_v2/validation_new_work_02_silent_io_format_drift__armC__c8d6335f/transcript.jsonl
+
+Then do the actual Read.
+
+When you finish, append a final line with kind `done`:
+
+    {"step": <next>, "ts": "<now>", "kind": "done",
+      "summary": "<one-line summary of the outcome you believe>"}
+
+## Rules
+
+- Stay within the workspace. Do not modify anything outside `/var/folders/3j/5n1r8yyx2d58jn87prrxs_lm0000gn/T/tb_live_v2_validation_new_work_02_silent_io_format_drift__armC__c8d6335f_9rg428js`
+  or `/Users/grantwilkins/houdini/coding-estimator/runs/tb_live_v2/validation_new_work_02_silent_io_format_drift__armC__c8d6335f`.
+- Do not look for files under any `tests/` directory — the verifier is
+  added by the driver, not the agent.
+- The transcript is the ledger source of truth. If you take an action
+  without logging it, the resulting trace is incomplete and the run is
+  dropped.
+- Pass/fail is determined by the verifier, not by your `done` record.
+  A correct-looking `done` does not mean success; a `done` with
+  caveats does not mean failure.
+
+Begin.

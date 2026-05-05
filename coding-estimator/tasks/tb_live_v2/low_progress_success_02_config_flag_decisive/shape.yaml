@@ -1,0 +1,9 @@
+target_shape: low_progress_success
+secondary_shapes: []
+expected_pass_rate: 0.85
+notes: |
+  Add a one-line argparse / sys.argv check for `--offline` and short-
+  circuit. Agents that read first and edit second produce a trajectory
+  with very few discovered subtasks (read, edit, validate). Adds a
+  second easy task to the corpus so low_progress_success isn't
+  represented by a single fix shape.
