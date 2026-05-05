@@ -123,7 +123,7 @@ The corresponding artifacts on disk are stable and reproducible from `scripts/ru
 ## § 0. Project rules (apply to all workstreams)
 
 ```text
-0.1  Do not mutate any artifact under ../coding-progress-ledger/.
+0.1  Do not mutate any code under ../coding-progress-ledger/.
 0.2  Do not redefine ledger semantics. Progress is what coding-progress-ledger
      says it is. We add features and labels around it, never inside it.
 0.3  Do not use any ledger event with step > S when constructing features at
@@ -150,39 +150,35 @@ The corresponding artifacts on disk are stable and reproducible from `scripts/ru
 Goal: Make the current state impossible to misunderstand and align the project framing with what the data actually supports.
 
 ### S1. Update project framing
-Status: not started
+Status: done (2026-05-04)
 
-Outputs:
+Outputs (shipped):
 ```text
-TASKS.md top banner updated (this file)
-README.md updated to reflect v0 boundary
-reports/V0_FINDINGS.md cross-linked from README
-reports/NOT_READY_FOR_SCHEDULING.md cross-linked from README
+TASKS.md top banner — already states the four points (no edit needed).
+README.md — rewritten with the v0-boundary paragraph and cross-links.
+reports/V0_FINDINGS.md — cross-linked from README.
+reports/NOT_READY_FOR_SCHEDULING.md — cross-linked from README.
 ```
 
-Acceptance:
-```text
-The first page of TASKS.md says:
-  - dynamics prediction works;
-  - terminal success prediction does not yet beat elapsed time;
-  - not_safe_for_control remains true;
-  - next phase is Hermes annotation + tb_live_v2 collection.
-README states the same in one paragraph.
-```
+Acceptance: met. README now states the four points in one paragraph
+(positive, negative, not_safe_for_control, next phase = Hermes + tb_live_v2).
 
 ### S2. Make process dynamics the primary v0 target
-Status: not started
+Status: done (2026-05-04)
 
-Goal: Align the plan and reports with what the data supports. No model changes — relabel headline targets and rebuild reports from the existing artifacts.
-
-Acceptance:
+Outputs (shipped):
 ```text
-TASKS.md no longer implies y_success_eventual is the only or primary
-scientific target of v0. Reports/g5/g5_eval.md and
-reports/sign_off_ledger_basic_v0.1.md surface y_future_progress_drop_h5
-and y_validation_new_work_h5 as the headline targets, with
-y_success_eventual as the secondary/negative target.
+reports/g5/g5_eval.md — added headline-framing paragraph; primary table
+  is y_future_progress_drop_h5 / y_validation_new_work_h5; the success
+  table is preserved as a "secondary / negative" result.
+reports/sign_off_ledger_basic_v0.1.md — already states process dynamics
+  primary, terminal success secondary/negative (no edit needed).
+TASKS.md current scientific state section — primary v0 target family
+  is process dynamics; y_success_eventual is secondary/negative.
 ```
+
+Acceptance: met. No model changes. Headline framing aligned with what
+the data supports.
 
 ---
 
@@ -191,37 +187,65 @@ y_success_eventual as the secondary/negative target.
 The highest-leverage retrospective task. `hermes_pilot_h5_v2` has 30 runs and 896 checkpoints, but **zero labels** because all 30 runs are upstream-unannotated (`source_metadata.final_success = null`, `annotation_mode = not_annotated`). That blocks P1.c. Fix is upstream annotation, not local code.
 
 ### T1. Confirm upstream Hermes annotation state
-Status: not started
+Status: done (2026-05-05)
 
-Inputs:
+Outputs (shipped):
 ```text
-reports/HERMES_LABEL_DIAGNOSIS.md
-../coding-progress-ledger/runs/hermes_pilot_h5_v2/**
-../coding-progress-ledger/annotations/hermes_pilot/**
+reports/HERMES_ANNOTATION_PRECHECK.md
 ```
 
-Tasks:
-```text
-- Count runs.
-- Count ledger.jsonl files.
-- Count source_metadata.final_success != null.
-- Count annotation_mode != not_annotated.
-- Confirm whether final labels are missing because annotation is missing,
-  not because coding-estimator label loading is broken.
-```
-
-Outputs: `reports/HERMES_ANNOTATION_PRECHECK.md`.
-
-Acceptance:
-```text
-Report states one of:
-  A. upstream annotation missing; proceed to T2;
-  B. local label loader broken; fix before T2;
-  C. source should be removed from canonical v0 until annotation lands.
-```
+Verdict: **Path A — upstream annotation missing.** All 30/30 runs
+have ledger.jsonl present, all 30/30 have `source_metadata.final_success
+= null`, `final_success_source = "missing"`, `annotation_mode =
+"not_annotated"`. Local loader returns 0 labeled rows, classifying all
+30 as `unresolvable` (correct behavior; not malformed). No local wiring
+bug. T2 must materialize labels upstream.
 
 ### T2. Annotate 30 Hermes runs upstream
-Status: blocked on T1
+Status: in progress — proposal harness shipped (2026-05-05); upstream human review pending.
+
+What landed in this repo:
+```text
+coding_estimator/labels/hermes_terminal_grader.py  # conservative deterministic grader
+scripts/build_hermes_annotation_proposal.py        # proposal generator
+reports/HERMES_ANNOTATION_PROPOSAL.md              # 30-run summary
+reports/hermes_annotation_proposals/<run_id>.md    # 30 per-run proposals
+```
+
+Heuristic verdict distribution (30 runs):
+```text
+failure              (low/medium confidence): 11   # budget-exhausted or BLOCK pattern
+success_self_claim   (low confidence):         6   # terminal tool call, no verifier
+ambiguous            (no terminating signal): 13
+```
+
+Why end-to-end T2 was not finished autonomously:
+```text
+Hermes traces ship NO upstream eval log. final_success cannot be
+machine-derived from the trace alone, only inferred from self-claim or
+budget-exhaust signals. Setting final_success=true from a self-claim
+fabricates data (rule § 0.9). The 25/30 usable-labels acceptance threshold
+is therefore unreachable without a human read of trajectory_summary.md
+and final_diff.patch per run. The grader exists to make that human pass
+fast; it is not a substitute for it.
+```
+
+Threshold arithmetic (flagged by critic 2026-05-05):
+```text
+The harness yields at most 11 confident-failure + 6 self-claim = 17
+runs where the trace alone provides any evidence at all. The remaining
+13 are ambiguous (no terminating signal). If the upstream annotator
+cannot resolve some of those 13 by reading final_diff.patch, T2's 25/30
+acceptance is unreachable even with human review.
+
+Mitigation options the upstream annotator may choose:
+  (a) drop the threshold to >= 17/30 with explicit per-run notes;
+  (b) introduce annotation_mode = "inconclusive_no_verifier" for runs
+      that cannot be resolved even after human review, and accept those
+      as a documented null label rather than a missing label;
+  (c) collect a re-run with a deterministic verifier (Hermes v3) so
+      final_success is machine-derivable.
+```
 
 Goal: Materialize valid retrospective ledgers and final labels for all `hermes_pilot_h5_v2` runs. **Work happens in `../coding-progress-ledger`, not here.**
 

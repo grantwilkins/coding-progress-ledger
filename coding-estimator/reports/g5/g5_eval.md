@@ -4,6 +4,8 @@ _Generated 2026-05-05T05:00:45+00:00._
 
 G2 (`time_only`) vs G4 (`ledger_basic`) vs G5 (`ledger_dynamics`) vs `g4_plus_g5` per source under LORO across the recentered v0 headline targets. Lower Brier is better. Run-level bootstrap 95% CI (B=500).
 
+**Headline framing (v1).** The primary v0 target family is **process dynamics** (`y_future_progress_drop_h5`, `y_validation_new_work_h5`). `y_success_eventual` is a **secondary / negative** target — ledger features do not yet beat elapsed time on it at the current N. Read the dynamics table first; the success table is preserved as a negative result, not a headline.
+
 ## Primary headline targets (process dynamics)
 
 | target | source | model | n_runs | n_ckpts | pos | AUROC | Brier | Brier 95% CI | note |
