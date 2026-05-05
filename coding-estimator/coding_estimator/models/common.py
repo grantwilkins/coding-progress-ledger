@@ -12,6 +12,10 @@ from typing import Protocol
 import numpy as np
 import pandas as pd
 
+from coding_estimator.checkpoints.features.registry import (
+    GROUPS as FEATURE_GROUPS,
+    all_features,
+)
 from coding_estimator.eval.bootstrap import bootstrap_brier_ci, brier_per_run
 from coding_estimator.eval.harness import EvalCell, cells_to_frame
 from coding_estimator.eval.metrics import OUTPUT_CLIP, auroc, brier, ece, log_loss
@@ -276,6 +280,49 @@ def target_horizon_json(target: str) -> dict[str, int | str | None]:
     return {"units": meta.horizon_units, "value": meta.horizon_value}
 
 
+def _feature_schema_for_groups(groups: tuple[str, ...]) -> list[dict]:
+    out: list[dict] = []
+    seen: set[str] = set()
+    for g in groups:
+        for f in FEATURE_GROUPS.get(g, []):
+            if f.column_name in seen:
+                continue
+            seen.add(f.column_name)
+            out.append(
+                {
+                    "column_name": f.column_name,
+                    "dtype": f.dtype,
+                    "group": f.group,
+                    "populated_on": list(f.populated_on),
+                    "missingness_semantic": f.missingness_semantic.value,
+                    "run_constant_flag": bool(f.run_constant_flag),
+                    "prefix_only": bool(f.prefix_only),
+                    "feature_or_label": f.feature_or_label,
+                }
+            )
+    return out
+
+
+def _target_schema_for(targets: tuple[str, ...]) -> list[dict]:
+    out: list[dict] = []
+    for name in targets:
+        meta = V0_TARGETS.get(name)
+        if meta is None:
+            continue
+        out.append(
+            {
+                "name": meta.name,
+                "family": meta.family,
+                "horizon_units": meta.horizon_units,
+                "horizon_value": meta.horizon_value,
+                "window_kind": meta.window_kind,
+                "run_constant_flag": bool(meta.run_constant_flag),
+                "definition": meta.definition,
+            }
+        )
+    return out
+
+
 def save_model_bundle(
     *,
     out_dir: Path,
@@ -284,6 +331,10 @@ def save_model_bundle(
     eval_cells: list[EvalCell],
     model_card_text: str,
     calibration_source: str,
+    feature_groups: tuple[str, ...] | None = None,
+    targets: tuple[str, ...] | None = None,
+    training_report_text: str | None = None,
+    card_record: dict | None = None,
 ) -> None:
     out_dir.mkdir(parents=True, exist_ok=True)
     (out_dir / "model.pkl").write_bytes(pickle.dumps(fitted_models))
@@ -318,6 +369,27 @@ def save_model_bundle(
         out_dir / "metrics.csv",
         sort_by=["scheme", "source_slice", "target", "model"],
     )
+    if feature_groups is not None:
+        write_json(
+            _feature_schema_for_groups(feature_groups),
+            out_dir / "feature_schema.json",
+        )
+    if targets is not None:
+        write_json(_target_schema_for(targets), out_dir / "target_schema.json")
+    if training_report_text is not None:
+        (out_dir / "training_report.md").write_text(
+            training_report_text, encoding="utf-8", newline="\n"
+        )
+    if card_record is not None:
+        from coding_estimator.models.cards import render_card_markdown, validate_card
+
+        validate_card(card_record)
+        write_json(card_record, out_dir / "model_card.json")
+        # If a structured card_record was supplied, prefer its markdown
+        # rendering over the legacy `model_card_text`.
+        (out_dir / "model_card.md").write_text(
+            render_card_markdown(card_record), encoding="utf-8", newline="\n"
+        )
 
 
 def render_model_card(

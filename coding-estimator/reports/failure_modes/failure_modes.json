@@ -1,0 +1,66 @@
+{
+  "O1": {
+    "detail": {
+      "high_progress_threshold": 0.8,
+      "n_failed_runs": 10,
+      "n_rows": 45
+    },
+    "metric_name": "median_p_success_on_high_progress_failures",
+    "metric_value": 0.5779153687911136,
+    "note": null,
+    "outcome": "pass",
+    "test_id": "O1",
+    "threshold": 0.7
+  },
+  "O5": {
+    "detail": {
+      "source_task_columns_present": ""
+    },
+    "metric_name": "loso_brier_delta_with_source_task",
+    "metric_value": null,
+    "note": "no source_task numeric columns present in checkpoints frame — comparison is identity, test is vacuous",
+    "outcome": "indeterminate",
+    "test_id": "O5",
+    "threshold": 0.02
+  },
+  "O7": [
+    {
+      "detail": {
+        "source": "hermes_pilot_h5_v2"
+      },
+      "metric_name": "brier_g2_minus_brier_g4",
+      "metric_value": null,
+      "note": "hermes_pilot_h5_v2: no LORO predictions",
+      "outcome": "indeterminate",
+      "test_id": "O7",
+      "threshold": 0.02
+    },
+    {
+      "detail": {
+        "brier_g2": 0.28256053563653377,
+        "brier_g4": 0.2911810432855222,
+        "n_checkpoints": 599,
+        "source": "swe_agent_pilot",
+        "target": "y_success_eventual"
+      },
+      "metric_name": "brier_g2_minus_brier_g4",
+      "metric_value": -0.008620507648988418,
+      "note": null,
+      "outcome": "fail",
+      "test_id": "O7",
+      "threshold": 0.02
+    },
+    {
+      "detail": {
+        "source": "tb_live",
+        "target": "y_success_eventual"
+      },
+      "metric_name": "brier_g2_minus_brier_g4",
+      "metric_value": null,
+      "note": "tb_live: single-class y on `y_success_eventual`",
+      "outcome": "indeterminate",
+      "test_id": "O7",
+      "threshold": 0.02
+    }
+  ]
+}
