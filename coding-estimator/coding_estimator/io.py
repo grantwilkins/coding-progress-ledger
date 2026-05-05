@@ -28,7 +28,8 @@ def _ordered(df: pd.DataFrame, sort_by: Iterable[str] | None) -> pd.DataFrame:
     out = df.copy()
     out = out.reindex(sorted(out.columns), axis=1)
     keys = list(sort_by) if sort_by is not None else [c for c in out.columns]
-    if keys:
+    keys = [k for k in keys if k in out.columns]
+    if keys and not out.empty:
         out = out.sort_values(by=keys, kind="mergesort").reset_index(drop=True)
     return out
 

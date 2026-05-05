@@ -98,6 +98,30 @@ The headline live source has 12 runs with median ~13–30 events per run; the li
 
 This section pins our north-star: **the v0 estimator is a small, calibrated, no-regression demonstration on a tiny dataset, not a polished classifier.**
 
+**Empirical findings (2026-05-04, end of Workstream G):**
+
+```text
+- hermes_pilot_h5_v2: ALL 30 runs are unannotated (annotation_mode ==
+  "not_annotated", source_metadata.final_success == null). Label build
+  emits 0 rows. P1.c's "swe_agent_pilot u hermes_pilot_h5_v2 ~ 50 runs"
+  premise is BROKEN as of this snapshot. Either annotated hermes runs
+  must land upstream, or P1.c must be restated. The non-canonical
+  swe_agent_live (20 labeled) is the most likely substitute pool.
+- tb_live y_success_eventual is 12/0 (twelve successes, zero failures
+  across the snapshot). P1.a "G4 >= G2 on at least one source" is
+  unsatisfiable on tb_live for that target — the gate must be evaluated
+  on swe_agent_pilot (with annotation-leakage caveat stamped).
+- LOSO swe_agent_pilot -> tb_live transfer for y_future_progress_drop_h5
+  is positive: G4 stays near 0 on drop-quiet runs and spikes at the
+  correct step on the 3 positive cases (gut-check, not statistical).
+  This is evidence the LORO tracking on swe_agent_pilot is not pure
+  annotation leakage. See reports/trajectory_confidence_loso_swe_to_tb.png.
+- Per-checkpoint targets (y_future_progress_drop_h5) produce far more
+  legible trajectory plots than run-constant targets. The headline
+  figure for the v0 sign-off package (Workstream N) should be a
+  per-checkpoint trajectory plot, not a run-constant one.
+```
+
 ---
 
 ## § 0.1 Repository scope and relationship to coding-progress-ledger

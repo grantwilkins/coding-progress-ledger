@@ -111,7 +111,10 @@ SOURCES: dict[str, Source] = {
         is_retrospective=True,
         known_caveats=(
             "retrospective LLM annotation: outcome-aware event tagging is unfixable here",
-            "many runs have source_metadata.final_success == null and must be skipped",
+            "as of 2026-05-04 ALL 30 runs have source_metadata.final_success == null "
+            "(annotation_mode == 'not_annotated'); label_build emits 0 rows. P1.c's "
+            "'~50 runs from swe_agent_pilot u hermes_pilot_h5_v2' premise is broken "
+            "until annotated hermes runs land upstream",
         ),
     ),
     "tb_live": Source(

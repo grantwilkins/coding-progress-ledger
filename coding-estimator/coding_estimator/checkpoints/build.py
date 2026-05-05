@@ -25,6 +25,7 @@ from coding_estimator.checkpoints.features import (
     time_budget,
     validation,
 )
+from coding_estimator.checkpoints.features.registry import all_features
 from coding_estimator.checkpoints.policy import p_step_checkpoints
 from coding_estimator.checkpoints.replay import prefix_replay
 from coding_estimator.ingest.run_record import RunRecord, load_run
@@ -127,12 +128,44 @@ def build_source_frame(source_id: str, run_ids: list[str] | None = None) -> pd.D
     return df
 
 
+def apply_canonical_fills(df: pd.DataFrame) -> pd.DataFrame:
+    """Apply per-feature canonical fills from the registry.
+
+    Producer-side, called from `write_source_checkpoints`. Without this,
+    every consumer of the parquet has to remember to fill (sklearn
+    refuses NaN; the harness, plot scripts, and future model trainers
+    all hit it). Per AGENTS.md invariant 7, the missingness contract
+    says count-features at "applicable absent so far" SHOULD be 0, not
+    null — so applying the fill brings the stored frame in line with
+    the contract.
+
+    Cells that remain null after this call are exactly the
+    `unknown_due_to_missing_artifact` and `not_applicable_to_source`
+    cases — the genuinely-missing ones. The F11 missingness audit
+    already exempts the former; the latter is structural.
+    """
+    if "source" not in df.columns or df.empty:
+        return df
+    out = df.copy()
+    for source_id, idx in out.groupby("source").groups.items():
+        for f in all_features():
+            if f.column_name not in out.columns:
+                continue
+            fill = f.canonical_fill_for(str(source_id))
+            if fill is None:
+                continue
+            col = out.loc[idx, f.column_name]
+            out.loc[idx, f.column_name] = col.fillna(fill)
+    return out
+
+
 def write_source_checkpoints(
     source_id: str,
     out_path: Path,
     run_ids: list[str] | None = None,
 ) -> tuple[Path, pd.DataFrame]:
     df = build_source_frame(source_id, run_ids=run_ids)
+    df = apply_canonical_fills(df)
     # Defense in depth: the forbidden-column guard fires here, NOT just
     # at schema-load time. Any future regression that joins terminal
     # leakage into the frame will hit this.
