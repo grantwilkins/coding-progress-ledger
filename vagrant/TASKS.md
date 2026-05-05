@@ -166,7 +166,7 @@ This is the single trace the MVP plot is computed against. **Adversarial by desi
 
 **Goal.** From a trace, derive `(nodes, state_objects, edges)` — the Serving Group Manifest.
 
-**B1 — Replay-derived state index** (`not started`)
+**B1 — Replay-derived state index** (`done`, 2026-05-05)
 `vagrant_agent/manifest.py`: replay a trace, walk events, accumulate state objects, and record producers/consumers per node. Reuses `ledger_progress.replay`; does not duplicate it.
 
 **State identity rule.** Every state object carries both `state_id` and `content_hash`.
@@ -179,23 +179,31 @@ primary key  = state_id if present, else content_hash
 
 Two reads of `"OK"` from different tools have the same `content_hash` but different `state_id` — they are not the same state object. This rule is necessary for real adapters; synthetic uses stable `state_id`s.
 
-**B2 — Edge construction** (`not started`)
+**B2 — Edge construction** (`done`, 2026-05-05)
 The **canonical representation** is bipartite: `node --uses--> state_object`, stored as the consumer/producer lists on each `StateObject`. Pairwise `StateEdge(node_a, node_b, state_id, tokens)` is a **derived view** for policy convenience.
 
 For MVP, emit pairwise edges for every pair of consumers of the same state object, weighted by token count. Keep the bipartite source-of-truth so the derived view can be regenerated.
 
-**B3 — Manifest serialization** (`not started`)
+**B3 — Manifest serialization** (`done`, 2026-05-05)
 JSON output with `nodes`, `state_objects`, `edges`. Schema documented in `docs/manifest_schema.md`. Round-trip test.
 
-**B4 — `vagrant-manifest build` CLI** (`not started`)
+**B4 — `vagrant-manifest build` CLI** (`done`, 2026-05-05)
 `vagrant-manifest build --trace <jsonl> --out <json>`. Single command, no flags beyond input/output for MVP.
 
-**Gate (B done).** Running the CLI on the toy trace produces a manifest where:
+**Gate (B done).** ✅ Met as of 2026-05-05. `vagrant-manifest build` on the toy trace produces a manifest where:
 
-- Shared repo context appears as one `StateObject` with 4 consumers (parent + 3 subagents).
-- Workspace state appears with 2 consumers (A, C).
-- Private contexts are 1-consumer state objects.
-- A test asserts these counts.
+- Shared repo context: 1 `StateObject`, 4 consumers (parent + 3 subagents).
+- Workspace state: 2 consumers (A, C).
+- Private contexts: 1 consumer each.
+- `tests/test_manifest.py:test_workstream_b_gate_consumer_counts` asserts all six counts in one block.
+
+**Critic-review fixes folded into B (2026-05-05).**
+
+- Reconciliation pass after event loop so trace event ordering doesn't leave `WorkNode.required_state` / `produced_state` inconsistent with the bipartite source.
+- Validation pass: every node referenced as a producer/consumer must have an `add_subtask` event.
+- Hardened state-id semantics: any duplicate `state_declare` for the same `state_id` hard-fails (was: silently tolerated when hash matched).
+- Removed redundant `dict.fromkeys` consumer dedup; deduplication is enforced upstream by `_read`.
+- CLI dead `return 2` removed; `parent_id` read from `Subtask` not payload.
 
 ---
 

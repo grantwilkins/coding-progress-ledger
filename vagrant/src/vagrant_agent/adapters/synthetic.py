@@ -136,12 +136,12 @@ def generate_events(config: SyntheticConfig) -> list[dict]:
         priv_id = f"private_{label}"
         emit(v_events.STATE_DECLARE, None, _state(
             priv_id, "prompt_context", "private",
-            tokens=cfg.private_context_tokens[i], producer_node_id=sid,
+            tokens=cfg.private_context_tokens[i], producer_node_id=None,
         ))
 
     emit(v_events.STATE_DECLARE, None, _state(
         "workspace_AC", "workspace", "shared",
-        tokens=0, bytes_=cfg.workspace_bytes, producer_node_id=subagents[0],
+        tokens=0, bytes_=cfg.workspace_bytes, producer_node_id=None,
     ))
 
     for i, sid in enumerate(subagents):
