@@ -82,21 +82,14 @@
     {
       "condition_id": "P1.c",
       "evidence": {
-        "delta_brier_ci_high": 0.030304287809465282,
-        "delta_brier_ci_low": -0.05002770406980162,
-        "delta_brier_point": -0.008620507648988418,
-        "n_rows": 599,
-        "n_runs": 20,
-        "note": "hermes_pilot_h5_v2 labels not built; combined retrospective is currently swe_agent_pilot alone — plan assumed both",
-        "target": "y_success_eventual",
-        "train_sources": [
-          "swe_agent_pilot"
-        ]
+        "missing_source_labels": "hermes_pilot_h5_v2",
+        "note": "swe_agent_pilot-only result is available in the Workstream H baselines; do NOT promote that to the combined-retrospective gate",
+        "target": "y_success_eventual"
       },
       "name": "Combined-retrospective LORO: G4 beats G2 with 95% CI excluding zero",
-      "outcome": "fail",
+      "outcome": "indeterminate",
       "required": true,
-      "summary": "Δ Brier (G2 − G4) = -0.009, 95% CI = [-0.050, +0.030]; CI INCLUDES zero"
+      "summary": "hermes_pilot_h5_v2 labels not built into `datasets/labels_all.parquet` — combined retrospective is not testable as the plan defines it"
     },
     {
       "condition_id": "P1.d",
@@ -125,12 +118,14 @@
       "condition_id": "P1.f",
       "evidence": {
         "audited_cells": 128,
-        "audits": []
+        "audits": [],
+        "skipped_empty_join": 120,
+        "skipped_no_labels": 0
       },
       "name": "G4 training-fold run-constancy: zero joint (feature, target) pairs",
       "outcome": "pass",
       "required": true,
-      "summary": "audited 128 (source, target, fold) cells; 0 have run-constant pairs"
+      "summary": "audited 128 (source, target, fold) cells; 0 have run-constant pairs; skipped 120 cells (0 no labels, 120 empty join)"
     },
     {
       "condition_id": "P1.g",
@@ -140,7 +135,7 @@
       "name": "D5 behavioral leakage audit (Workstream M deferred)",
       "outcome": "indeterminate",
       "required": true,
-      "summary": "D5 audit artifact not provided; Workstream M is deferred — re-evaluate this condition once D5 ships"
+      "summary": "D5 audit artifact not provided; Workstream M is deferred — re-evaluate this condition once D5 ships with required fields ['schema_version', 'n_runs_audited', 'n_checkpoints_audited', 'findings', 'clean']"
     },
     {
       "condition_id": "P1.h",
@@ -193,9 +188,9 @@
       },
       "name": "Submit-without-validation caveat",
       "outcome": "pass",
-      "required": false,
-      "summary": "winning cells span multiple targets — caveat optional"
+      "required": true,
+      "summary": "winning cells span multiple targets — caveat does not apply"
     }
   ],
-  "verdict": "fail"
+  "verdict": "indeterminate"
 }

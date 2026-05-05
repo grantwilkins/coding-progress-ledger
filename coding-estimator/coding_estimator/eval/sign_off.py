@@ -65,13 +65,21 @@ def _decide_not_safe_for_control(
     """Default `not_safe_for_control = True`. Flip to False ONLY if
     every required gate condition is `pass` AND every failure-mode
     test (O1, O5, every per-source O7 result) is `pass`. Per
-    docs/VERSIONING.md."""
+    docs/VERSIONING.md.
+
+    Reasons are emitted at the most specific level that applies so a
+    reader can act on them; the redundant "gate verdict is `fail`"
+    bullet is suppressed when at least one specific required condition
+    has already been listed (it would be derivable from the per-condition
+    reasons)."""
     reasons: list[str] = []
-    if gate.verdict != "pass":
+    failing_required = [
+        c for c in gate.conditions if c.required and c.outcome != "pass"
+    ]
+    for c in failing_required:
+        reasons.append(f"required gate `{c.condition_id}` is `{c.outcome}`")
+    if gate.verdict != "pass" and not failing_required:
         reasons.append(f"gate verdict is `{gate.verdict}`")
-    for c in gate.conditions:
-        if c.required and c.outcome != "pass":
-            reasons.append(f"required gate `{c.condition_id}` is `{c.outcome}`")
     if o1.outcome != "pass":
         reasons.append(f"O1 outcome is `{o1.outcome}`")
     if o5.outcome != "pass":
@@ -252,45 +260,75 @@ def _recommendations_for(
     o5: FailureModeResult,
     o7: list[FailureModeResult],
 ) -> list[str]:
-    out: list[str] = []
+    """Prioritized recommendations grouped into:
+        BLOCKING — required gate conditions that FAIL or O7 fails
+                   (these fundamentally invalidate v0).
+        DATA     — required gate conditions that are INDETERMINATE
+                   because of missing data / labels / cohort size.
+        AUDIT    — process / artifact gaps that block the gate without
+                   needing model changes (e.g. D5 audit).
+    Each line is a single bullet so a reader can scan top-down."""
     if gate.verdict == "pass":
-        out.append(
-            "- gate passes; flip `not_safe_for_control` to `false` only "
-            "after a second confirmatory pass on a refresh of the data."
-        )
-        return out
+        return [
+            "- (gate passes) Flip `not_safe_for_control` to `false` "
+            "only after a second confirmatory pass on a refresh of "
+            "the data."
+        ]
+    out: list[str] = []
+    blocking: list[str] = []
+    data: list[str] = []
+    audit: list[str] = []
+
     failing_o7 = [r for r in o7 if r.outcome == "fail"]
     if failing_o7:
-        out.append(
-            "- O7 timeout-bias **FAIL**: the v0 ledger features do not "
-            "carry decision-relevant signal beyond elapsed time on "
-            f"{[r.detail.get('source', '?') for r in failing_o7]}. The "
-            "cheapest next experiment is to add the deferred dynamics "
-            "feature group (G5) and re-run O7."
+        srcs = sorted({r.detail.get("source", "?") for r in failing_o7})
+        blocking.append(
+            "- **BLOCKING (O7)** the v0 ledger features do not carry "
+            f"decision-relevant signal beyond elapsed time on {srcs}. "
+            "Cheapest next experiment: add the deferred dynamics group "
+            "(G5) and re-run O7."
         )
+    failing_required = [
+        c for c in gate.conditions
+        if c.required and c.outcome == "fail"
+    ]
+    for c in failing_required:
+        blocking.append(
+            f"- **BLOCKING ({c.condition_id})** {c.summary}"
+        )
+
     indeterminate_required = [
-        c for c in gate.conditions if c.required and c.outcome == "indeterminate"
+        c for c in gate.conditions
+        if c.required and c.outcome == "indeterminate"
     ]
     for c in indeterminate_required:
-        if c.condition_id == "P1.b" or c.condition_id == "P1.d":
-            out.append(
-                f"- {c.condition_id} indeterminate: tb_live cohort is "
+        if c.condition_id in ("P1.b", "P1.d"):
+            data.append(
+                f"- **DATA ({c.condition_id})** tb_live cohort is "
                 "12/12 successes — collect at least 5 tb_live failures "
                 "before this gate is even testable."
             )
-        elif c.condition_id == "P1.g":
-            out.append(
-                "- P1.g indeterminate: ship the D5 behavioral leakage "
-                "audit artifact (Workstream M deferred → D5 substitute "
-                "is still required)."
-            )
         elif c.condition_id == "P1.c":
-            out.append(
-                "- P1.c indeterminate: build hermes_pilot_h5_v2 labels "
-                "into `datasets/labels_all.parquet` so the combined "
-                "retrospective (~50 runs) is testable as the plan "
-                "intended."
+            data.append(
+                f"- **DATA ({c.condition_id})** build hermes_pilot_h5_v2 "
+                "labels into `datasets/labels_all.parquet` so the "
+                "combined retrospective (~50 runs) is testable as the "
+                "plan intended."
             )
+        elif c.condition_id == "P1.g":
+            audit.append(
+                f"- **AUDIT ({c.condition_id})** ship the D5 behavioral "
+                "leakage audit artifact (Workstream M deferred → D5 "
+                "substitute is still required)."
+            )
+        else:
+            data.append(
+                f"- **DATA ({c.condition_id})** {c.summary}"
+            )
+
+    out.extend(blocking)
+    out.extend(data)
+    out.extend(audit)
     if not out:
         out.append(
             "- Re-run after the next data collection or annotation pass."
@@ -406,7 +444,12 @@ def render_not_ready_report(
         for c in blocked:
             lines.append(f"- `{c.condition_id}` ({c.outcome}): {c.summary}")
     lines.append("")
-    lines.append("## Cheapest next experiments")
+    lines.append("## Recommended next experiments (P + O)")
+    lines.append("")
+    lines.append(
+        "Recommendations are tagged BLOCKING (must land first), DATA "
+        "(unblocks indeterminate gates), or AUDIT (process artifact)."
+    )
     lines.append("")
     lines.extend(_recommendations_for(gate, o1, o5, o7))
     lines.append("")

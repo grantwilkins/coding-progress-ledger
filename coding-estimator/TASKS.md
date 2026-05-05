@@ -1795,40 +1795,33 @@ Until then, the offline pipeline (predict_at via prefix-replay over a frozen led
 ## § Workstream N — Estimator artifacts and model cards
 
 ### N1. Model card schema
-Status: not started
+Status: shipped
 
-Outputs:
-```text
-docs/MODEL_CARD_TEMPLATE.md
-schemas/model_card_schema.json
-```
-
-Required fields (per plan § 15.5):
-```text
-training data, source versions, feature groups, target definitions,
-split protocol, known limits, not_safe_for_control (bool), calibration
-status (ECE, Brier), intended use, non-use cases, commit_sha.
-```
+Outputs: `docs/MODEL_CARD_TEMPLATE.md`,
+`schemas/model_card_schema.json`. Schema enforces every plan § 15.5
+field plus `failure_mode_results` and an optional `go_no_go_gate`
+pointer. `coding_estimator/models/cards.py::validate_card` is the
+runtime guard.
 
 ### N2. Model artifact bundle
-Status: not started
+Status: shipped
 
-Outputs: `models/<estimator_id>/{model.pkl, calibration.json, feature_schema.json, target_schema.json, model_card.md, training_report.md}`.
-
-Acceptance: `tests/test_model_card.py` validates every saved card against the schema.
+Outputs: `models/<estimator_id>/{model.pkl, calibration.json,
+feature_schema.json, target_schema.json, model_card.md,
+model_card.json, training_report.md}`. `save_model_bundle` validates
+`model_card.json` against the schema before writing.
+Acceptance: `tests/test_model_card.py` (34 tests; rejects every
+required-field omission, enforces estimator_id and commit_sha regexes,
+round-trips written sidecars).
 
 ### N3. Versioning policy
-Status: not started
+Status: shipped
 
-Outputs: `docs/VERSIONING.md`.
-
-```text
-Estimator versions are immutable.
-Format: <model_family>_v<major>.<minor>_<source-slice>.
-Bumping rules:
-  major: schema change in features or targets.
-  minor: model-fit change without schema change.
-```
+Output: `docs/VERSIONING.md`. Format
+`<model_family>_v<major>.<minor>[_<source-slice>]`; immutability rules;
+sign-off requires N1 schema + Workstream O results + Workstream P
+verdict on the card. Pre-v1 estimators carry
+`not_safe_for_control = true` regardless of test results.
 
 ---
 
@@ -1837,9 +1830,12 @@ Bumping rules:
 These are *adversarial* tests that the estimator must survive before consideration for any downstream consumer.
 
 ### O1. Progress-overconfidence test
-Status: not started
+Status: shipped — **PASS** (median 0.578)
 
-Construct a held-out slice of high-progress failures. Assert: median predicted P(success) on this slice is < 0.7. (Threshold tunable; the *existence* of a measurable bound is the gate.)
+`evaluate_o1` slices on (final_success == 0) AND (per-row
+coding_progress ≥ 0.8). On the v0 G4 LORO predictions across all
+sources, median predicted P(success) on the slice is 0.578 < 0.7
+threshold.
 
 ### O2. Late-discovery surprise test
 Status: deferred — slice has < 5 runs at current N. Reintroduce when N
@@ -1853,9 +1849,13 @@ runs at current N.
 Status: deferred — slice has < 3 runs at current N.
 
 ### O5. Source-leakage test
-Status: not started
+Status: shipped (vacuous on v0)
 
-Train I1 with the `source_task` feature group ablated. If `loso` performance is unchanged, the source_task group is just memorizing dataset identity. Report the delta.
+`coding_estimator/eval/failure_modes.py::evaluate_o5` compares G4
+against G4 + numeric source_task columns under LOSO → tb_live. v0
+checkpoints don't carry the source_task numeric columns yet, so the
+comparison is identity and the result is `indeterminate`. Re-runnable
+once the columns are built into the checkpoint frame.
 
 ### O6. Retrospective/live mismatch test
 Status: deferred — overlaps L3 (retro→live transfer with feature-group
@@ -1863,9 +1863,15 @@ ablation). Reintroduce only if L3 surfaces feature-level findings that
 warrant per-feature LOFO.
 
 ### O7. Timeout-bias test
-Status: not started
+Status: shipped — **FAIL on swe_agent_pilot (v0)**
 
-Ablate every feature except `fraction_timeout_consumed`. If the resulting model is within 0.02 Brier of G5 on terminal-success prediction, the ledger is **not** adding information beyond elapsed time. This is the strongest scientific gate.
+`evaluate_o7` per-source LORO comparison of G4 vs G2. On the largest
+canonical source (`swe_agent_pilot`, ~600 checkpoints), Brier delta is
+**−0.009** — G4 is *worse* than G2, well under the +0.02 gate. tb_live
+is `indeterminate` (single-class y on `y_success_eventual`). Output:
+`reports/failure_modes/failure_modes.md`. This is the strongest
+scientific finding from O — adding the deferred dynamics group (G5) is
+the cheapest next experiment.
 
 ---
 
@@ -1874,9 +1880,25 @@ Ablate every feature except `fraction_timeout_consumed`. If the resulting model 
 The decision point that determines whether the estimator is ready to be consumed by anything beyond an evaluation harness. Given § 0.0 (data-budget), this gate is intentionally a **no-regression** gate, not a "wins" gate. The original aspirational gate is preserved as P-future (below).
 
 ### P1. v0 no-regression gate
-Status: not started
+Status: shipped — **verdict: INDETERMINATE** at v0
 
-Outputs: `reports/ESTIMATOR_GO_NO_GO.md`.
+Outputs: `reports/ESTIMATOR_GO_NO_GO.md`,
+`reports/ESTIMATOR_GO_NO_GO.json`. Driver:
+`scripts/run_go_no_go.py`. Module: `coding_estimator/eval/go_no_go.py`.
+v0 verdict at current data:
+- P1.a PASS (G4 wins or ties G2 on 6/8 cells)
+- P1.b INDETERMINATE (single-class y on tb_live)
+- P1.c INDETERMINATE (hermes labels missing — combined retrospective
+  not testable as plan defines it)
+- P1.d INDETERMINATE (single-class y on tb_live)
+- P1.e PASS (no forbidden columns; prefix/suffix/exact all checked)
+- P1.f PASS (zero run-constant feature/target pairs in G4 folds)
+- P1.g INDETERMINATE (D5 audit not provided; bare `clean: true`
+  rejected — must include schema_version, n_runs_audited,
+  n_checkpoints_audited, findings)
+- P1.h PASS (winners span multiple targets)
+Overall: indeterminate, gate cannot be cleared until tb_live
+collects failures, hermes labels ship, and D5 audit lands.
 
 Pass conditions (all must hold):
 ```text
@@ -1924,31 +1946,26 @@ P-future.e  Online-vs-offline parity (Workstream M) zero diff.
 ```
 
 ### P2. Sign-off package
-Status: not started
+Status: shipped (v0 estimator: `ledger_basic_v0.1`)
 
-Outputs:
-```text
-models/estimator_v1/
-reports/sign_off_estimator_v1.md
-```
-
-Sign-off package contains:
-```text
-- model card.
-- gate report.
-- failure-mode test results (O1–O7).
-- known limits.
-- not_safe_for_control flag (default true; flip only if O1–O7 + P1
-  all pass with margin).
-- recommendations for what to collect next.
-```
+Outputs: `models/ledger_basic_v0.1/{model_card.json, model_card.md}`
++ `reports/sign_off_ledger_basic_v0.1.md`. Driver:
+`scripts/run_sign_off.py`. Module:
+`coding_estimator/eval/sign_off.py`. The card embeds the gate verdict
+and every failure-mode result so a consumer can read the full sign-off
+from a single artifact. `not_safe_for_control = true` because P1.c is
+indeterminate, P1.b/P1.d are indeterminate, P1.g is indeterminate,
+and O7 fails on swe_agent_pilot — none of those clear with margin.
 
 ### P3. Downstream readiness
-Status: not started
+Status: shipped — `reports/NOT_READY_FOR_SCHEDULING.md`
 
-If P1 passes, write `reports/READY_FOR_SCHEDULING.md` describing the contract that any downstream scheduler must respect (output schema, calibration window, recommended decision threshold).
-
-If P1 fails, write `reports/NOT_READY_FOR_SCHEDULING.md` describing which gate failed and what the cheapest next experiment is.
+`coding_estimator/eval/sign_off.py::write_p3_report` emits
+`READY_FOR_SCHEDULING.md` iff `gate.verdict == "pass"`, else
+`NOT_READY_FOR_SCHEDULING.md`. v0 verdict is `indeterminate`, so the
+NOT_READY artifact is on disk with prioritized recommendations
+(BLOCKING / DATA / AUDIT) for the cheapest next experiment per
+blocking condition.
 
 ---
 

@@ -1,8 +1,10 @@
 # Estimator go/no-go gate (Workstream P)
 
-_Generated 2026-05-05T04:27:29+00:00._
+_Generated 2026-05-05T04:42:06+00:00._
 
-## Overall verdict: ❌ FAIL
+## Overall verdict: ⚠️ INDETERMINATE
+
+**Blocked by:** INDETERMINATE on `P1.b`, `P1.c`, `P1.d`, `P1.g`.
 
 Eight conditions from TASKS.md § Workstream P. The gate is intentionally a *no-regression* gate at v0 — see § P-future for the aspirational gate that requires CI exclusion on tb_live and ECE within plan.
 
@@ -14,12 +16,12 @@ Required conditions must all be `pass` for the overall verdict to be `pass`. Any
 |---|:---:|---|---|
 | `P1.a` | yes | ✅ pass | G4 wins or ties G2 on 6 of 8 (target, source) cells. |
 | `P1.b` | yes | ⚠️ indeterminate | single-class y on tb_live for `y_success_eventual` (N=12 cohort is currently 12/12 successes) |
-| `P1.c` | yes | ❌ fail | Δ Brier (G2 − G4) = -0.009, 95% CI = [-0.050, +0.030]; CI INCLUDES zero |
+| `P1.c` | yes | ⚠️ indeterminate | hermes_pilot_h5_v2 labels not built into `datasets/labels_all.parquet` — combined retrospective is not testable as the plan defines it |
 | `P1.d` | yes | ⚠️ indeterminate | single-class y on tb_live for `y_success_eventual` |
 | `P1.e` | yes | ✅ pass | no forbidden columns in the checkpoints frame |
-| `P1.f` | yes | ✅ pass | audited 128 (source, target, fold) cells; 0 have run-constant pairs |
-| `P1.g` | yes | ⚠️ indeterminate | D5 audit artifact not provided; Workstream M is deferred — re-evaluate this condition once D5 ships |
-| `P1.h` | no | ✅ pass | winning cells span multiple targets — caveat optional |
+| `P1.f` | yes | ✅ pass | audited 128 (source, target, fold) cells; 0 have run-constant pairs; skipped 120 cells (0 no labels, 120 empty join) |
+| `P1.g` | yes | ⚠️ indeterminate | D5 audit artifact not provided; Workstream M is deferred — re-evaluate this condition once D5 ships with required fields ['schema_version', 'n_runs_audited', 'n_checkpoints_audited', 'findings', 'clean'] |
+| `P1.h` | yes | ✅ pass | winning cells span multiple targets — caveat does not apply |
 
 ## P1.a — G4 ties or beats G2 on at least one (target, source) under LORO
 
@@ -29,15 +31,16 @@ Required conditions must all be `pass` for the overall verdict to be `pass`. Any
 
 ### Evidence
 
-- `rows`:
-  - {'source': 'swe_agent_pilot', 'target': 'y_success_eventual', 'brier_g2': 0.28256053563653377, 'brier_g4': 0.2911810432855222, 'wins_or_ties': False}
-  - {'source': 'swe_agent_pilot', 'target': 'y_future_progress_drop_h5', 'brier_g2': 0.14162896462928085, 'brier_g4': 0.03933643964066982, 'wins_or_ties': True}
-  - {'source': 'swe_agent_pilot', 'target': 'y_validation_new_work_h5', 'brier_g2': 0.016317137880214595, 'brier_g4': 0.008330856377028389, 'wins_or_ties': True}
-  - {'source': 'swe_agent_pilot', 'target': 'y_submit_without_validation', 'brier_g2': 0.08478658305945336, 'brier_g4': 0.08012378174179058, 'wins_or_ties': True}
-  - {'source': 'tb_live', 'target': 'y_success_eventual', 'brier_g2': 1.0000000000000019e-06, 'brier_g4': 1.0000000000000019e-06, 'wins_or_ties': True}
-  - {'source': 'tb_live', 'target': 'y_future_progress_drop_h5', 'brier_g2': 0.13280946592119064, 'brier_g4': 0.09614838939749977, 'wins_or_ties': True}
-  - {'source': 'tb_live', 'target': 'y_validation_new_work_h5', 'brier_g2': 0.25383582398789756, 'brier_g4': 0.283888109329645, 'wins_or_ties': False}
-  - {'source': 'tb_live', 'target': 'y_submit_without_validation', 'brier_g2': 1e-06, 'brier_g4': 1e-06, 'wins_or_ties': True}
+| source | target | Brier G2 | Brier G4 | wins or ties |
+|---|---|---:|---:|:---:|
+| swe_agent_pilot | y_future_progress_drop_h5 | 0.142 | 0.039 | ✅ |
+| swe_agent_pilot | y_submit_without_validation | 0.085 | 0.080 | ✅ |
+| swe_agent_pilot | y_success_eventual | 0.283 | 0.291 | ❌ |
+| swe_agent_pilot | y_validation_new_work_h5 | 0.016 | 0.008 | ✅ |
+| tb_live | y_future_progress_drop_h5 | 0.133 | 0.096 | ✅ |
+| tb_live | y_submit_without_validation | 0.000 | 0.000 | ✅ |
+| tb_live | y_success_eventual | 0.000 | 0.000 | ✅ |
+| tb_live | y_validation_new_work_h5 | 0.254 | 0.284 | ❌ |
 
 ## P1.b — ECE_3bin (after isotonic) on tb_live LORO does not increase by > 0.05 from G2 to G4
 
@@ -53,20 +56,15 @@ Required conditions must all be `pass` for the overall verdict to be `pass`. Any
 
 ## P1.c — Combined-retrospective LORO: G4 beats G2 with 95% CI excluding zero
 
-- outcome: ❌ fail
+- outcome: ⚠️ indeterminate
 - required: yes
-- summary: Δ Brier (G2 − G4) = -0.009, 95% CI = [-0.050, +0.030]; CI INCLUDES zero
+- summary: hermes_pilot_h5_v2 labels not built into `datasets/labels_all.parquet` — combined retrospective is not testable as the plan defines it
 
 ### Evidence
 
-- `delta_brier_ci_high`: 0.030304287809465282
-- `delta_brier_ci_low`: -0.05002770406980162
-- `delta_brier_point`: -0.008620507648988418
-- `n_rows`: 599
-- `n_runs`: 20
-- `note`: hermes_pilot_h5_v2 labels not built; combined retrospective is currently swe_agent_pilot alone — plan assumed both
+- `missing_source_labels`: hermes_pilot_h5_v2
+- `note`: swe_agent_pilot-only result is available in the Workstream H baselines; do NOT promote that to the combined-retrospective gate
 - `target`: y_success_eventual
-- `train_sources`: ('swe_agent_pilot',)
 
 ## P1.d — LOSO->tb_live Brier ≤ within-source LORO Brier + 0.05
 
@@ -95,18 +93,20 @@ Required conditions must all be `pass` for the overall verdict to be `pass`. Any
 
 - outcome: ✅ pass
 - required: yes
-- summary: audited 128 (source, target, fold) cells; 0 have run-constant pairs
+- summary: audited 128 (source, target, fold) cells; 0 have run-constant pairs; skipped 120 cells (0 no labels, 120 empty join)
 
 ### Evidence
 
 - `audited_cells`: 128
 - `audits`: []
+- `skipped_empty_join`: 120
+- `skipped_no_labels`: 0
 
 ## P1.g — D5 behavioral leakage audit (Workstream M deferred)
 
 - outcome: ⚠️ indeterminate
 - required: yes
-- summary: D5 audit artifact not provided; Workstream M is deferred — re-evaluate this condition once D5 ships
+- summary: D5 audit artifact not provided; Workstream M is deferred — re-evaluate this condition once D5 ships with required fields ['schema_version', 'n_runs_audited', 'n_checkpoints_audited', 'findings', 'clean']
 
 ### Evidence
 
@@ -115,17 +115,17 @@ Required conditions must all be `pass` for the overall verdict to be `pass`. Any
 ## P1.h — Submit-without-validation caveat
 
 - outcome: ✅ pass
-- required: no
-- summary: winning cells span multiple targets — caveat optional
+- required: yes
+- summary: winning cells span multiple targets — caveat does not apply
 
 ### Evidence
 
 - `only_swv`: False
 - `winning_cells`:
-  - {'source': 'swe_agent_pilot', 'target': 'y_future_progress_drop_h5', 'brier_g2': 0.14162896462928085, 'brier_g4': 0.03933643964066982, 'wins_or_ties': True}
-  - {'source': 'swe_agent_pilot', 'target': 'y_validation_new_work_h5', 'brier_g2': 0.016317137880214595, 'brier_g4': 0.008330856377028389, 'wins_or_ties': True}
-  - {'source': 'swe_agent_pilot', 'target': 'y_submit_without_validation', 'brier_g2': 0.08478658305945336, 'brier_g4': 0.08012378174179058, 'wins_or_ties': True}
-  - {'source': 'tb_live', 'target': 'y_success_eventual', 'brier_g2': 1.0000000000000019e-06, 'brier_g4': 1.0000000000000019e-06, 'wins_or_ties': True}
-  - {'source': 'tb_live', 'target': 'y_future_progress_drop_h5', 'brier_g2': 0.13280946592119064, 'brier_g4': 0.09614838939749977, 'wins_or_ties': True}
-  - {'source': 'tb_live', 'target': 'y_submit_without_validation', 'brier_g2': 1e-06, 'brier_g4': 1e-06, 'wins_or_ties': True}
+  - brier_g2=0.14162896462928085, brier_g4=0.03933643964066982, source=swe_agent_pilot, target=y_future_progress_drop_h5, wins_or_ties=True
+  - brier_g2=0.016317137880214595, brier_g4=0.008330856377028389, source=swe_agent_pilot, target=y_validation_new_work_h5, wins_or_ties=True
+  - brier_g2=0.08478658305945336, brier_g4=0.08012378174179058, source=swe_agent_pilot, target=y_submit_without_validation, wins_or_ties=True
+  - brier_g2=1.0000000000000019e-06, brier_g4=1.0000000000000019e-06, source=tb_live, target=y_success_eventual, wins_or_ties=True
+  - brier_g2=0.13280946592119064, brier_g4=0.09614838939749977, source=tb_live, target=y_future_progress_drop_h5, wins_or_ties=True
+  - brier_g2=1e-06, brier_g4=1e-06, source=tb_live, target=y_submit_without_validation, wins_or_ties=True
 

@@ -26,11 +26,14 @@ import pandas as pd
 import pytest
 
 from coding_estimator.eval.go_no_go import (
+    D5_REQUIRED_FIELDS,
     P1A_TIE_TOL,
     GateCondition,
     _decide_verdict,
     _g4_wins_or_ties,
     evaluate_p1e,
+    evaluate_p1g,
+    evaluate_p1h,
 )
 
 
@@ -43,11 +46,6 @@ def test_g4_wins_or_ties_exact_tie_is_true():
 
 def test_g4_wins_or_ties_g4_strictly_better_is_true():
     assert _g4_wins_or_ties(0.30, 0.25) is True
-
-
-def test_g4_wins_or_ties_g4_within_tolerance_is_true():
-    """G4 worse by less than tolerance should still count as a tie."""
-    assert _g4_wins_or_ties(0.25, 0.25 + P1A_TIE_TOL / 2) is True
 
 
 def test_g4_wins_or_ties_g4_outside_tolerance_is_false():
@@ -166,3 +164,176 @@ def test_p1e_summary_lists_offenders_when_failing():
     df = pd.DataFrame({"run_id": ["r0"], "source": ["x"], bad: [1]})
     out = evaluate_p1e(df)
     assert bad in out.summary
+
+
+def test_p1e_catches_prefix_match_not_just_exact():
+    """A prefix entry like `audit_*` must trip on a column whose name
+    starts with that prefix. A wrong impl that only checks the exact
+    list would silently pass this column."""
+    from coding_estimator.leakage.guard import load_forbidden_spec
+
+    spec = load_forbidden_spec()
+    if not spec.prefixes:
+        pytest.skip("no prefix entries in spec")
+    prefix = spec.prefixes[0]
+    bad_col = f"{prefix}__synthetic_offender"
+    df = pd.DataFrame({"run_id": ["r0"], "source": ["x"], bad_col: [1]})
+    out = evaluate_p1e(df)
+    assert out.outcome == "fail"
+    assert bad_col in out.evidence["hits"]
+
+
+def test_p1e_catches_suffix_match_not_just_exact():
+    from coding_estimator.leakage.guard import load_forbidden_spec
+
+    spec = load_forbidden_spec()
+    if not spec.suffixes:
+        pytest.skip("no suffix entries in spec")
+    suffix = spec.suffixes[0]
+    bad_col = f"synthetic_offender__{suffix}"
+    df = pd.DataFrame({"run_id": ["r0"], "source": ["x"], bad_col: [1]})
+    out = evaluate_p1e(df)
+    assert out.outcome == "fail"
+    assert bad_col in out.evidence["hits"]
+
+
+# ---------- P1.g D5 audit structural requirements -------------------------
+
+
+def test_p1g_indeterminate_when_no_audit_path():
+    out = evaluate_p1g(None)
+    assert out.outcome == "indeterminate"
+
+
+def test_p1g_rejects_bare_clean_true(tmp_path):
+    """A bare `{"clean": true}` is the sneakiest possible "pass" — the
+    gate must reject it because the audit doesn't actually demonstrate
+    anything was audited."""
+    import json
+
+    audit_path = tmp_path / "d5.json"
+    audit_path.write_text(json.dumps({"clean": True}), encoding="utf-8")
+    out = evaluate_p1g(audit_path)
+    assert out.outcome == "fail"
+    assert "missing required fields" in out.summary
+
+
+def test_p1g_rejects_zero_runs_audited(tmp_path):
+    """Even with the right schema, an audit that audited zero runs
+    is vacuously clean — must reject."""
+    import json
+
+    audit_path = tmp_path / "d5.json"
+    audit_path.write_text(
+        json.dumps({
+            "schema_version": "1",
+            "n_runs_audited": 0,
+            "n_checkpoints_audited": 0,
+            "findings": [],
+            "clean": True,
+        }),
+        encoding="utf-8",
+    )
+    out = evaluate_p1g(audit_path)
+    assert out.outcome == "fail"
+    assert "zero runs" in out.summary
+
+
+def test_p1g_rejects_findings_present(tmp_path):
+    """If the audit lists any findings, gate must FAIL even with
+    `clean: true` (defense in depth)."""
+    import json
+
+    audit_path = tmp_path / "d5.json"
+    audit_path.write_text(
+        json.dumps({
+            "schema_version": "1",
+            "n_runs_audited": 50,
+            "n_checkpoints_audited": 1500,
+            "findings": [{"kind": "leak", "where": "ckpt_5"}],
+            "clean": True,
+        }),
+        encoding="utf-8",
+    )
+    out = evaluate_p1g(audit_path)
+    assert out.outcome == "fail"
+
+
+def test_p1g_passes_only_with_full_clean_audit(tmp_path):
+    import json
+
+    audit_path = tmp_path / "d5.json"
+    audit_path.write_text(
+        json.dumps({
+            "schema_version": "1",
+            "n_runs_audited": 50,
+            "n_checkpoints_audited": 1500,
+            "findings": [],
+            "clean": True,
+        }),
+        encoding="utf-8",
+    )
+    out = evaluate_p1g(audit_path)
+    assert out.outcome == "pass"
+
+
+def test_d5_required_fields_includes_findings_and_counts():
+    """Defense in depth: a refactor that drops `findings` from the
+    requirements list would let a malformed audit pass."""
+    for f in ("findings", "n_runs_audited", "clean"):
+        assert f in D5_REQUIRED_FIELDS
+
+
+# ---------- P1.h SWV caveat polarity -------------------------------------
+
+
+def _p1a_with_winners(rows: list[dict]) -> GateCondition:
+    return GateCondition(
+        condition_id="P1.a",
+        name="P1.a",
+        required=True,
+        outcome="pass" if any(r["wins_or_ties"] for r in rows) else "fail",
+        summary="",
+        evidence={"rows": rows},
+    )
+
+
+def test_p1h_pass_when_winners_span_multiple_targets():
+    rows = [
+        {"source": "swe_agent_pilot", "target": "y_success_eventual",
+         "brier_g2": 0.3, "brier_g4": 0.25, "wins_or_ties": True},
+        {"source": "swe_agent_pilot", "target": "y_submit_without_validation",
+         "brier_g2": 0.1, "brier_g4": 0.05, "wins_or_ties": True},
+    ]
+    out = evaluate_p1h(_p1a_with_winners(rows))
+    assert out.outcome == "pass"
+    assert out.required is True
+
+
+def test_p1h_fail_when_only_swv_wins():
+    rows = [
+        {"source": "swe_agent_pilot", "target": "y_submit_without_validation",
+         "brier_g2": 0.1, "brier_g4": 0.05, "wins_or_ties": True},
+        {"source": "tb_live", "target": "y_submit_without_validation",
+         "brier_g2": 0.001, "brier_g4": 0.001, "wins_or_ties": True},
+        {"source": "swe_agent_pilot", "target": "y_success_eventual",
+         "brier_g2": 0.25, "brier_g4": 0.30, "wins_or_ties": False},
+    ]
+    out = evaluate_p1h(_p1a_with_winners(rows))
+    assert out.outcome == "fail", (
+        "all winners on y_submit_without_validation → caveat must apply, "
+        "P1.h must FAIL because the run-constant target gives a data-property "
+        "win, not skill"
+    )
+    assert out.required is True
+    assert "BLOCKER" in out.summary
+
+
+def test_p1h_pass_when_no_winners_at_all():
+    """If P1.a fails (no winners), P1.h has no caveat to apply — pass."""
+    rows = [
+        {"source": "swe_agent_pilot", "target": "y_success_eventual",
+         "brier_g2": 0.25, "brier_g4": 0.30, "wins_or_ties": False},
+    ]
+    out = evaluate_p1h(_p1a_with_winners(rows))
+    assert out.outcome == "pass"

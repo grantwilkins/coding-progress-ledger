@@ -234,10 +234,22 @@ def evaluate_p1a(
 # ---------- P1.b ------------------------------------------------------------
 
 
+class InsufficientRunsForRecalibrationError(RuntimeError):
+    """Raised when run-disjoint isotonic recalibration is impossible
+    (< 2 unique runs). The caller must treat this as INDETERMINATE
+    rather than fall back to in-sample fitting — fitting on test data
+    would silently give the gate an artificially low ECE."""
+
+
 def _isotonic_recal_oof(predictions_df: pd.DataFrame) -> np.ndarray:
     """K-fold isotonic recalibration over run_ids. Mirrors
     `calibration.report.kfold_recalibrated_predictions` but kept local
-    to avoid a circular dependency with the report module."""
+    to avoid a circular dependency with the report module.
+
+    Raises `InsufficientRunsForRecalibrationError` when `< 2` unique
+    runs are present — P1.b's gate explicitly requires run-disjoint
+    recalibration; an in-sample fallback would corrupt the gate.
+    """
     if predictions_df.empty:
         return np.array([], dtype=float)
     runs = predictions_df["run_id"].astype(str).to_numpy()
@@ -245,9 +257,9 @@ def _isotonic_recal_oof(predictions_df: pd.DataFrame) -> np.ndarray:
     y_arr = predictions_df["_y"].astype(int).to_numpy()
     unique_runs = np.array(sorted(set(runs.tolist())))
     if len(unique_runs) < 2:
-        if len(np.unique(y_arr)) < 2:
-            return p_arr.copy()
-        return IsotonicRecalibrator().fit(p_arr, y_arr).transform(p_arr)
+        raise InsufficientRunsForRecalibrationError(
+            f"need ≥ 2 runs for run-disjoint recalibration, got {len(unique_runs)}"
+        )
     out = np.empty_like(p_arr)
     rng = np.random.default_rng(0)
     perm = rng.permutation(len(unique_runs))
@@ -323,8 +335,25 @@ def evaluate_p1b(
                 "g4_pos_rate": float(y4.mean()),
             },
         )
-    p2_iso = _isotonic_recal_oof(g2)
-    p4_iso = _isotonic_recal_oof(g4)
+    try:
+        p2_iso = _isotonic_recal_oof(g2)
+        p4_iso = _isotonic_recal_oof(g4)
+    except InsufficientRunsForRecalibrationError as exc:
+        return GateCondition(
+            condition_id="P1.b",
+            name=(
+                "ECE_3bin (after isotonic) on tb_live LORO does not "
+                "increase by > 0.05 from G2 to G4"
+            ),
+            required=True,
+            outcome="indeterminate",
+            summary=(
+                "tb_live LORO predictions span < 2 runs; run-disjoint "
+                "recalibration is impossible without falling back to "
+                "in-sample fitting (which would corrupt the gate)"
+            ),
+            evidence={"target": target, "exception": str(exc)},
+        )
     ece_g2 = expected_calibration_error(y2, p2_iso, n_bins=3)
     ece_g4 = expected_calibration_error(y4, p4_iso, n_bins=3)
     delta = float(ece_g4 - ece_g2)
@@ -386,18 +415,29 @@ def evaluate_p1c(
             evidence={"target": target},
         )
     if not has_hermes_labels:
-        # Fall back to swe_agent_pilot alone but report the gap
-        # explicitly. Plan assumed hermes labels would be built.
-        sub = sub[sub["source"] == "swe_agent_pilot"]
-        if sub.empty:
-            return GateCondition(
-                condition_id="P1.c",
-                name="Combined-retrospective LORO: G4 beats G2 with 95% CI excluding zero",
-                required=True,
-                outcome="indeterminate",
-                summary="hermes labels missing AND no swe_agent_pilot fallback",
-                evidence={"target": target},
-            )
+        # The plan's contract is `swe ∪ hermes`. With hermes labels
+        # missing the test is not the test the plan asked for —
+        # `indeterminate`, not a degraded fail/pass on swe alone.
+        return GateCondition(
+            condition_id="P1.c",
+            name="Combined-retrospective LORO: G4 beats G2 with 95% CI excluding zero",
+            required=True,
+            outcome="indeterminate",
+            summary=(
+                "hermes_pilot_h5_v2 labels not built into "
+                "`datasets/labels_all.parquet` — combined retrospective "
+                "is not testable as the plan defines it"
+            ),
+            evidence={
+                "target": target,
+                "missing_source_labels": "hermes_pilot_h5_v2",
+                "note": (
+                    "swe_agent_pilot-only result is available in the "
+                    "Workstream H baselines; do NOT promote that to "
+                    "the combined-retrospective gate"
+                ),
+            },
+        )
     if sub["run_id"].nunique() < 2:
         return GateCondition(
             condition_id="P1.c",
@@ -631,6 +671,8 @@ def evaluate_p1f(
     audits: list[dict[str, Any]] = []
     fail_count = 0
     total_count = 0
+    skipped_no_labels = 0
+    skipped_empty_join = 0
     for source in sorted(checkpoints_df["source"].unique()):
         sub = checkpoints_df[checkpoints_df["source"] == source]
         if sub["run_id"].nunique() < 2:
@@ -643,10 +685,12 @@ def evaluate_p1f(
                     & (~labels_df["is_masked"].astype(bool))
                 ][["run_id", "checkpoint_id", "label_value"]]
                 if lab.empty:
+                    skipped_no_labels += 1
                     continue
                 train = sub[sub["run_id"].isin(set(fold.train_run_ids))]
                 joined = train.merge(lab, on=["run_id", "checkpoint_id"], how="inner")
                 if joined.empty:
+                    skipped_empty_join += 1
                     continue
                 joined = joined.rename(columns={"label_value": "__target__"})
                 pairs = run_constancy_audit(
@@ -675,19 +719,38 @@ def evaluate_p1f(
         outcome=outcome,
         summary=(
             f"audited {total_count} (source, target, fold) cells; "
-            f"{fail_count} have run-constant pairs"
+            f"{fail_count} have run-constant pairs; "
+            f"skipped {skipped_no_labels + skipped_empty_join} cells "
+            f"({skipped_no_labels} no labels, {skipped_empty_join} empty join)"
         ),
-        evidence={"audits": audits, "audited_cells": total_count},
+        evidence={
+            "audits": audits,
+            "audited_cells": total_count,
+            "skipped_no_labels": skipped_no_labels,
+            "skipped_empty_join": skipped_empty_join,
+        },
     )
 
 
 # ---------- P1.g ------------------------------------------------------------
 
 
+D5_REQUIRED_FIELDS: tuple[str, ...] = (
+    "schema_version",
+    "n_runs_audited",
+    "n_checkpoints_audited",
+    "findings",
+    "clean",
+)
+
+
 def evaluate_p1g(d5_audit_path: Path | None) -> GateCondition:
-    """Online-vs-offline parity is deferred (Workstream M); replaced by
-    the D5 behavioral leakage audit. Pass iff D5 audit JSON exists and
-    declares clean."""
+    """Online-vs-offline parity is deferred (Workstream M); replaced
+    by the D5 behavioral leakage audit. Pass requires the audit JSON
+    to ship with structured content (`schema_version`,
+    `n_runs_audited`, `n_checkpoints_audited`, `findings`, `clean`),
+    `clean: true`, and `n_runs_audited > 0`. A bare `{"clean": true}`
+    is rejected — anyone could write that."""
     if d5_audit_path is None or not d5_audit_path.exists():
         return GateCondition(
             condition_id="P1.g",
@@ -695,25 +758,72 @@ def evaluate_p1g(d5_audit_path: Path | None) -> GateCondition:
             required=True,
             outcome="indeterminate",
             summary=(
-                "D5 audit artifact not provided; Workstream M is deferred — "
-                "re-evaluate this condition once D5 ships"
+                "D5 audit artifact not provided; Workstream M is "
+                "deferred — re-evaluate this condition once D5 ships "
+                f"with required fields {list(D5_REQUIRED_FIELDS)}"
             ),
             evidence={"d5_audit_path": str(d5_audit_path) if d5_audit_path else None},
         )
     import json
 
-    audit = json.loads(d5_audit_path.read_text(encoding="utf-8"))
+    try:
+        audit = json.loads(d5_audit_path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as exc:
+        return GateCondition(
+            condition_id="P1.g",
+            name="D5 behavioral leakage audit (Workstream M deferred)",
+            required=True,
+            outcome="fail",
+            summary=f"D5 audit at `{d5_audit_path}` is not valid JSON: {exc}",
+            evidence={"d5_audit_path": str(d5_audit_path)},
+        )
+    missing = [f for f in D5_REQUIRED_FIELDS if f not in audit]
+    if missing:
+        return GateCondition(
+            condition_id="P1.g",
+            name="D5 behavioral leakage audit (Workstream M deferred)",
+            required=True,
+            outcome="fail",
+            summary=(
+                f"D5 audit at `{d5_audit_path}` is missing required "
+                f"fields {missing}; a bare `{{\"clean\": true}}` is not "
+                "sufficient — see D5_REQUIRED_FIELDS"
+            ),
+            evidence={
+                "d5_audit_path": str(d5_audit_path),
+                "missing_fields": missing,
+                "present_keys": sorted(audit.keys()),
+            },
+        )
+    if int(audit.get("n_runs_audited", 0)) == 0:
+        return GateCondition(
+            condition_id="P1.g",
+            name="D5 behavioral leakage audit (Workstream M deferred)",
+            required=True,
+            outcome="fail",
+            summary="D5 audit reports zero runs audited — vacuous pass blocked",
+            evidence={"d5_audit_path": str(d5_audit_path)},
+        )
+    findings = audit.get("findings", [])
     clean = bool(audit.get("clean", False))
-    outcome: OutcomeT = "pass" if clean else "fail"
+    outcome: OutcomeT = "pass" if clean and not findings else "fail"
     return GateCondition(
         condition_id="P1.g",
         name="D5 behavioral leakage audit (Workstream M deferred)",
         required=True,
         outcome=outcome,
-        summary=("D5 audit clean" if clean else "D5 audit reports leakage"),
+        summary=(
+            f"D5 audit clean ({audit['n_runs_audited']} runs, "
+            f"{audit['n_checkpoints_audited']} checkpoints; 0 findings)"
+            if outcome == "pass"
+            else f"D5 audit reports {len(findings)} findings or `clean: false`"
+        ),
         evidence={
             "d5_audit_path": str(d5_audit_path),
-            "audit_keys": sorted(audit.keys()),
+            "schema_version": audit.get("schema_version"),
+            "n_runs_audited": audit.get("n_runs_audited"),
+            "n_checkpoints_audited": audit.get("n_checkpoints_audited"),
+            "n_findings": len(findings),
         },
     )
 
@@ -722,31 +832,40 @@ def evaluate_p1g(d5_audit_path: Path | None) -> GateCondition:
 
 
 def evaluate_p1h(p1a: GateCondition) -> GateCondition:
-    """If P1.a's only winning cell is on `y_submit_without_validation`,
-    the report must explicitly call out that this is a data property,
-    not skill."""
+    """If every P1.a winning cell is `y_submit_without_validation`, the
+    headline win is a data property (run-constant target) not skill, and
+    P1.h's caveat MUST be applied (verdict downgraded). This condition
+    is REQUIRED — only-SWV wins must block the gate. The condition
+    PASSES when the caveat is *not triggered* (winners span more than
+    one target) or when there are no winners at all (P1.a already
+    fails, so no caveat is needed)."""
     rows = p1a.evidence.get("rows", [])
     winning = [r for r in rows if r.get("wins_or_ties")]
     if not winning:
         return GateCondition(
             condition_id="P1.h",
             name="Submit-without-validation caveat",
-            required=False,
-            outcome="indeterminate",
-            summary="no winning cells in P1.a",
+            required=True,
+            outcome="pass",
+            summary=(
+                "P1.a has no winners ⇒ no submit-without-validation "
+                "caveat needed (the prior gate already does the work)"
+            ),
             evidence={"winning_cells": []},
         )
     only_swv = all(r["target"] == "y_submit_without_validation" for r in winning)
     return GateCondition(
         condition_id="P1.h",
         name="Submit-without-validation caveat",
-        required=False,
+        required=True,
         outcome="pass" if not only_swv else "fail",
         summary=(
-            "winning cells span multiple targets — caveat optional"
+            "winning cells span multiple targets — caveat does not apply"
             if not only_swv
-            else "WARNING: every P1.a winning cell is on `y_submit_without_validation`; "
-            "this is a data property (run-constant target), NOT model skill"
+            else "BLOCKER: every P1.a winning cell is on "
+            "`y_submit_without_validation`; that target is run-constant, "
+            "so a non-trivial AUROC at non-terminal t is a data property, "
+            "NOT model skill — gate must NOT pass on this evidence alone"
         ),
         evidence={"winning_cells": winning, "only_swv": only_swv},
     )
@@ -782,6 +901,69 @@ def _outcome_badge(o: OutcomeT) -> str:
     return {"pass": "✅ pass", "fail": "❌ fail", "indeterminate": "⚠️ indeterminate"}[o]
 
 
+def _executive_summary(report: GateReport) -> list[str]:
+    """At-a-glance: which required conditions blocked the verdict?"""
+    fails = [
+        c for c in report.conditions if c.required and c.outcome == "fail"
+    ]
+    indets = [
+        c for c in report.conditions
+        if c.required and c.outcome == "indeterminate"
+    ]
+    lines: list[str] = []
+    if report.verdict == "pass":
+        lines.append("**All required conditions PASS.**")
+    else:
+        chunks: list[str] = []
+        if fails:
+            chunks.append(
+                "FAIL on " + ", ".join(f"`{c.condition_id}`" for c in fails)
+            )
+        if indets:
+            chunks.append(
+                "INDETERMINATE on " + ", ".join(f"`{c.condition_id}`" for c in indets)
+            )
+        if chunks:
+            lines.append("**Blocked by:** " + "; ".join(chunks) + ".")
+        else:
+            lines.append("**Blocked.**")
+    return lines
+
+
+def _render_p1a_evidence(rows: list[dict]) -> list[str]:
+    out = [
+        "| source | target | Brier G2 | Brier G4 | wins or ties |",
+        "|---|---|---:|---:|:---:|",
+    ]
+    for r in sorted(rows, key=lambda r: (r.get("source", ""), r.get("target", ""))):
+        wins = "✅" if r.get("wins_or_ties") else "❌"
+        out.append(
+            f"| {r.get('source', '?')} | {r.get('target', '?')} | "
+            f"{r.get('brier_g2', float('nan')):.3f} | "
+            f"{r.get('brier_g4', float('nan')):.3f} | {wins} |"
+        )
+    return out
+
+
+def _render_evidence(condition_id: str, evidence: dict[str, Any]) -> list[str]:
+    """Per-condition evidence renderer. P1.a gets a markdown sub-table;
+    every other condition uses bullets."""
+    if condition_id == "P1.a":
+        rows = evidence.get("rows", [])
+        if rows:
+            return _render_p1a_evidence(rows)
+    out: list[str] = []
+    for k, v in sorted(evidence.items()):
+        if isinstance(v, list) and v and isinstance(v[0], dict):
+            out.append(f"- `{k}`:")
+            for item in v:
+                pretty = ", ".join(f"{ik}={iv}" for ik, iv in sorted(item.items()))
+                out.append(f"  - {pretty}")
+        else:
+            out.append(f"- `{k}`: {v}")
+    return out
+
+
 def render_gate_report(report: GateReport, *, summary: str | None = None) -> str:
     lines = [
         "# Estimator go/no-go gate (Workstream P)",
@@ -791,6 +973,8 @@ def render_gate_report(report: GateReport, *, summary: str | None = None) -> str
         f"## Overall verdict: {_outcome_badge(report.verdict).upper()}",
         "",
     ]
+    lines.extend(_executive_summary(report))
+    lines.append("")
     if summary:
         lines.extend([summary, ""])
     lines.extend(
@@ -819,13 +1003,7 @@ def render_gate_report(report: GateReport, *, summary: str | None = None) -> str
             lines.append("")
             lines.append("### Evidence")
             lines.append("")
-            for k, v in sorted(c.evidence.items()):
-                if isinstance(v, list) and v and isinstance(v[0], dict):
-                    lines.append(f"- `{k}`:")
-                    for item in v:
-                        lines.append(f"  - {item}")
-                else:
-                    lines.append(f"- `{k}`: {v}")
+            lines.extend(_render_evidence(c.condition_id, c.evidence))
         lines.append("")
     return "\n".join(lines) + "\n"
 
