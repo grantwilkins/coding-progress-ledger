@@ -1,0 +1,33 @@
+{"step":0,"event_type":"init","subtask_id":null,"payload":{"root_task":"toy coding task"},"reason":null}
+{"step":1,"event_type":"add_subtask","subtask_id":"S1","payload":{"description":"planner","parent_id":null,"weight":1.0,"category":"product","node_type":"llm_call","workflow_id":"toy_workflow_v1"},"reason":null}
+{"step":1,"event_type":"state_declare","subtask_id":null,"payload":{"state_id":"system_prefix","content_hash":"hash_system_prefix_v1","layer":"prompt_context","lifetime":"shared","tokens":200,"bytes":null,"producer_node_id":null},"reason":null}
+{"step":1,"event_type":"state_declare","subtask_id":null,"payload":{"state_id":"repo_context","content_hash":"hash_repo_context_v1","layer":"prompt_context","lifetime":"shared","tokens":8000,"bytes":null,"producer_node_id":null},"reason":null}
+{"step":1,"event_type":"state_read","subtask_id":null,"payload":{"state_id":"system_prefix","content_hash":"hash_system_prefix_v1","consumer_node_id":"S1","tokens":200},"reason":null}
+{"step":1,"event_type":"state_read","subtask_id":null,"payload":{"state_id":"repo_context","content_hash":"hash_repo_context_v1","consumer_node_id":"S1","tokens":8000},"reason":null}
+{"step":2,"event_type":"update_status","subtask_id":"S1","payload":{"status":"in_progress"},"reason":null}
+{"step":3,"event_type":"update_status","subtask_id":"S1","payload":{"status":"complete","evidence":["planner emitted plan"]},"reason":null}
+{"step":4,"event_type":"add_subtask","subtask_id":"S2","payload":{"description":"subagent_A","parent_id":"S1","weight":1.0,"category":"product","node_type":"subagent","workflow_id":"toy_workflow_v1","label":"A"},"reason":null}
+{"step":4,"event_type":"add_subtask","subtask_id":"S3","payload":{"description":"subagent_B","parent_id":"S1","weight":1.0,"category":"product","node_type":"subagent","workflow_id":"toy_workflow_v1","label":"B"},"reason":null}
+{"step":4,"event_type":"add_subtask","subtask_id":"S4","payload":{"description":"subagent_C","parent_id":"S1","weight":1.0,"category":"product","node_type":"subagent","workflow_id":"toy_workflow_v1","label":"C"},"reason":null}
+{"step":4,"event_type":"state_declare","subtask_id":null,"payload":{"state_id":"private_A","content_hash":"hash_private_A_v1","layer":"prompt_context","lifetime":"private","tokens":1500,"bytes":null,"producer_node_id":"S2"},"reason":null}
+{"step":4,"event_type":"state_declare","subtask_id":null,"payload":{"state_id":"private_B","content_hash":"hash_private_B_v1","layer":"prompt_context","lifetime":"private","tokens":12000,"bytes":null,"producer_node_id":"S3"},"reason":null}
+{"step":4,"event_type":"state_declare","subtask_id":null,"payload":{"state_id":"private_C","content_hash":"hash_private_C_v1","layer":"prompt_context","lifetime":"private","tokens":2000,"bytes":null,"producer_node_id":"S4"},"reason":null}
+{"step":4,"event_type":"state_declare","subtask_id":null,"payload":{"state_id":"workspace_AC","content_hash":"hash_workspace_AC_v1","layer":"workspace","lifetime":"shared","tokens":0,"bytes":4000000,"producer_node_id":"S2"},"reason":null}
+{"step":4,"event_type":"state_read","subtask_id":null,"payload":{"state_id":"system_prefix","content_hash":"hash_system_prefix_v1","consumer_node_id":"S2","tokens":200},"reason":null}
+{"step":4,"event_type":"state_read","subtask_id":null,"payload":{"state_id":"repo_context","content_hash":"hash_repo_context_v1","consumer_node_id":"S2","tokens":8000},"reason":null}
+{"step":4,"event_type":"state_read","subtask_id":null,"payload":{"state_id":"private_A","content_hash":"hash_private_A_v1","consumer_node_id":"S2","tokens":1500},"reason":null}
+{"step":4,"event_type":"state_read","subtask_id":null,"payload":{"state_id":"system_prefix","content_hash":"hash_system_prefix_v1","consumer_node_id":"S3","tokens":200},"reason":null}
+{"step":4,"event_type":"state_read","subtask_id":null,"payload":{"state_id":"repo_context","content_hash":"hash_repo_context_v1","consumer_node_id":"S3","tokens":8000},"reason":null}
+{"step":4,"event_type":"state_read","subtask_id":null,"payload":{"state_id":"private_B","content_hash":"hash_private_B_v1","consumer_node_id":"S3","tokens":12000},"reason":null}
+{"step":4,"event_type":"state_read","subtask_id":null,"payload":{"state_id":"system_prefix","content_hash":"hash_system_prefix_v1","consumer_node_id":"S4","tokens":200},"reason":null}
+{"step":4,"event_type":"state_read","subtask_id":null,"payload":{"state_id":"repo_context","content_hash":"hash_repo_context_v1","consumer_node_id":"S4","tokens":8000},"reason":null}
+{"step":4,"event_type":"state_read","subtask_id":null,"payload":{"state_id":"private_C","content_hash":"hash_private_C_v1","consumer_node_id":"S4","tokens":2000},"reason":null}
+{"step":4,"event_type":"state_read","subtask_id":null,"payload":{"state_id":"workspace_AC","content_hash":"hash_workspace_AC_v1","consumer_node_id":"S2","tokens":0},"reason":null}
+{"step":4,"event_type":"state_read","subtask_id":null,"payload":{"state_id":"workspace_AC","content_hash":"hash_workspace_AC_v1","consumer_node_id":"S4","tokens":0},"reason":null}
+{"step":4,"event_type":"state_write","subtask_id":null,"payload":{"state_id":"workspace_AC","content_hash":"hash_workspace_AC_v1","producer_node_id":"S4","tokens":0,"bytes":4000000},"reason":null}
+{"step":5,"event_type":"update_status","subtask_id":"S2","payload":{"status":"in_progress"},"reason":null}
+{"step":5,"event_type":"update_status","subtask_id":"S3","payload":{"status":"in_progress"},"reason":null}
+{"step":5,"event_type":"update_status","subtask_id":"S4","payload":{"status":"in_progress"},"reason":null}
+{"step":6,"event_type":"update_status","subtask_id":"S2","payload":{"status":"complete","evidence":["S2 returned"]},"reason":null}
+{"step":6,"event_type":"update_status","subtask_id":"S3","payload":{"status":"complete","evidence":["S3 returned"]},"reason":null}
+{"step":6,"event_type":"update_status","subtask_id":"S4","payload":{"status":"complete","evidence":["S4 returned"]},"reason":null}
