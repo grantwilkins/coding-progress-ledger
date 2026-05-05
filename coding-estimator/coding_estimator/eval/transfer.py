@@ -98,16 +98,13 @@ def evaluate_transfer(
         return rows
 
     configs: list[tuple[str, BaselineSpec, str | None]] = [
-        ("g2_time_only", _spec_for("g2_time_only", ()), None),
-    ]
-    configs[0] = (
-        "g2_time_only",
-        BaselineSpec(name="g2_time_only", feature_cols_for=lambda _s: ("elapsed_steps",)),
-        None,
-    )
-    configs.append(
+        (
+            "g2_time_only",
+            BaselineSpec(name="g2_time_only", feature_cols_for=lambda _s: ("elapsed_steps",)),
+            None,
+        ),
         ("g4_full", _spec_for("g4_full", LEDGER_GROUPS), None),
-    )
+    ]
     for group in LEDGER_GROUPS:
         rest = tuple(g for g in LEDGER_GROUPS if g != group)
         configs.append((f"g4_minus_{group}", _spec_for(f"g4_minus_{group}", rest), group))

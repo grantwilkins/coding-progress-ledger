@@ -1265,7 +1265,7 @@ lives in Workstream F so leakage and label profiling stay co-located.
 ## § Workstream E — Label construction
 
 ### E1. Terminal labels
-Status: not started
+Status: done
 
 Outputs:
 ```text
@@ -1292,7 +1292,7 @@ in the v0 headline set; tb_live is the only source that could populate
 them and N=12 is too thin.
 
 ### E4. Process-dynamics labels
-Status: not started
+Status: done
 
 v0 targets only: `y_future_progress_drop_h5`, `y_validation_new_work_h5`.
 Re-use upstream `scripts/build_q_labels.py` definitions; do not
@@ -1314,7 +1314,7 @@ Status: deferred (per § B2.bis). Conditional-regression targets are not
 v0; reintroduce when N > 100 runs.
 
 ### E6. Shape labels (slicing only)
-Status: not started
+Status: done
 
 Shape labels are NOT prediction targets in v0 (per § B2). They are
 attached to runs purely for evaluation slicing (H4) and case studies.
@@ -1334,7 +1334,7 @@ tests/test_shape_labels.py asserts shape labels agree with upstream
 ```
 
 ### E7. Combined label table
-Status: not started
+Status: done
 
 Goal: Long-form table `(run_id, checkpoint_id, target_name, target_value, target_horizon, target_units, label_available, label_source)`.
 
@@ -1351,7 +1351,7 @@ present, no row has both target_value=null and label_available=true.
 ```
 
 ### E8. Label balance audit
-Status: not started
+Status: done
 
 Outputs:
 ```text
@@ -1373,22 +1373,22 @@ Flag any (target, source) cell where positives < 5 or negatives < 5 — those ta
 This phase **must** complete before any modeling. It is the cheapest insurance against training on broken data.
 
 ### F1. Source-level profile
-Status: not started
+Status: done
 
 Outputs: `datasets/profiles/sources.md` covering every metric in plan § 6.1.
 
 ### F2. Checkpoint-distribution profile
-Status: not started
+Status: done
 
 Outputs: `datasets/profiles/checkpoints_distribution.md` covering plan § 6.2 (progress histogram, elapsed fraction, leaf counts, validation/blocked state distributions).
 
 ### F3. Label-balance profile
-Status: not started
+Status: done
 
 Outputs: `datasets/profiles/labels_balance.md`. Aggregates E8 into a single artifact.
 
 ### F4. Leakage profile
-Status: not started
+Status: done
 
 Outputs:
 ```text
@@ -1419,7 +1419,7 @@ Note: the original F5/F6/F7/F8/F9/F10 split was intentionally collapsed
 docs is more reading than the data supports.
 
 ### F11. Profiling go/no-go gate
-Status: not started
+Status: done
 
 Goal: Single rollup that says "the data is ready to train on" or "no, fix X first".
 
@@ -1681,71 +1681,70 @@ Defer until ledger-only ladder is calibrated; semantic features are bonus, not c
 ## § Workstream J — Calibration
 
 ### J1. Calibration metrics
-Status: not started
+Status: shipped
 
 Outputs: `coding_estimator/calibration/metrics.py`.
 
 API: `brier(y, p)`, `expected_calibration_error(y, p, n_bins)`, `reliability_table(y, p, n_bins)`.
 
 ### J2. Reliability diagrams
-Status: not started
+Status: shipped
 
-Plot rendering goes to `reports/calibration_<model>_<source>.md` (markdown table; no PNG dependency until later).
+Markdown reliability per (model, source) under
+`reports/calibration/calibration_<model>_<source>.md`. Driver:
+`scripts/run_calibration.py`. PNG rendering remains deferred.
 
 ### J3. Calibration slices
-Status: not started
+Status: shipped
 
-For each model, report calibration by:
-```text
-source, target_horizon, phase (early/middle/late), shape class,
-progress bucket, validation state.
-```
-
-Outputs: `reports/calibration_slices.md`.
+Output: `reports/calibration/calibration_slices.md`. Slice axes: source,
+target_horizon, phase (early/middle/late), shape class, progress
+bucket, validation state.
 
 ### J4. Recalibration methods
-Status: not started
+Status: shipped
 
-Outputs:
-```text
-coding_estimator/calibration/recalibrate.py
-```
-
-Methods:
-```text
-platt scaling
-isotonic regression
-source-specific isotonic
-```
+Outputs: `coding_estimator/calibration/recalibrate.py` —
+`PlattRecalibrator` (unregularized logit MLE), `IsotonicRecalibrator`,
+`SourceIsotonicRecalibrator` (per-source + global fallback).
+`kfold_recalibrated_predictions` in `calibration/report.py` does
+honest run-level k-fold so the recalibrator never trains on its own
+test row's run.
 
 ### J5. Calibration report
-Status: not started
+Status: shipped
 
-Outputs: `reports/calibration_v0.md`.
-
-Gate: any model whose ECE > 0.1 on the headline split is **not** ready for downstream consumption — annotate that in its model card.
+Output: `reports/calibration/calibration_v0.md`. Gate: any (model,
+source, target) with `ECE > 0.1` after isotonic recalibration is
+flagged `not_safe_for_control` in the rollup. Annotation propagates
+into model cards via the existing `render_model_card` machinery.
 
 ---
 
 ## § Workstream K — Live Terminal-Bench-specific evaluation
 
 ### K1. TB-only checkpoint evaluation
-Status: not started
+Status: shipped
 
-Run I1 with `loro` on tb_live alone. Report per-target metrics and calibration; compare against G2 (time-only) and G4 (ledger-basic). This feeds P1.b.
+Outputs: `reports/tb_live/tb_live_eval.md`,
+`reports/tb_live/tb_live_metrics.csv`. Driver:
+`scripts/run_tb_live_eval.py`. Per-target metrics for G2 and G4 on
+`tb_live` under LORO with run-level bootstrap CIs and `ECE_3bin`
+(10-bin unestimable at N=12). Single-class y is annotated.
 
 ### K2. TB online-feasibility test
 Status: deferred (depends on Workstream M, which is itself deferred).
 The D5 behavioral leakage audit covers v0's leakage gate — see P1.g.
 
 ### K3. TB qualitative rollup
-Status: not started
+Status: shipped
 
-Single artifact `reports/tb_live_qualitative.md` covering, per TB-12 task:
-phase/shape distribution, stuck-loop precursors (when visible and at
-which checkpoint), and validation timeline correlation with
-prediction-update magnitude. One report — three reports for 12 runs is
-overkill.
+Output: `reports/tb_live/tb_live_qualitative.md`. One artifact across
+the TB-12 cohort: phase/shape distribution, first stuck-loop precursor
+checkpoint (`no_progress_window_5 >= 5`), repeated-loop flag,
+validation timeline (first attempt / first success / first failure),
+and max prediction-jump step (using G4 predictions on
+`y_success_eventual`).
 
 ---
 
@@ -1761,11 +1760,13 @@ Status: deferred — descriptive doc, not gating. Reintroduce when L1
 unblocks.
 
 ### L3. Retrospective-vs-live model transfer (v0 headline)
-Status: not started
+Status: shipped
 
-Train I1 on `swe_agent_pilot` + `hermes_pilot_h5_v2`. Evaluate on `tb_live`. Report degradation and identify which feature groups drive it (ablation: remove one group at a time, retrain, re-evaluate).
-
-Outputs: `reports/retro_to_live_transfer.md`.
+Output: `reports/retro_to_live_transfer.md`. Driver:
+`scripts/run_retro_to_live.py`. Trains G4 on `swe_agent_pilot ∪
+hermes_pilot_h5_v2` and evaluates on `tb_live`, with per-group
+ablation (`g4_minus_{closure,frontier,instability,discovery}`) and a
+G2 reference. Annotation-leakage caveat from § C1 stamped on the report.
 
 ### L4. Source-specific calibration
 Status: deferred — at N=12, per-source isotonic on tb_live overfits.

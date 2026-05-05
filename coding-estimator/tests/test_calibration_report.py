@@ -63,38 +63,92 @@ def test_kfold_recalibration_preserves_row_count_and_order():
 
 
 def test_kfold_recalibration_is_run_disjoint_not_row_disjoint():
-    """Build a degenerate predictions frame where each run has a unique
-    p_raw signature. Recalibrate row by row — for each row, its
-    recalibrated value must be a function of OTHER runs only.
+    """Construct a frame where one run is a "poison" run: its (p, y)
+    pairs contradict every other run. Run-level k-fold leaves the poison
+    run out of the recalibrator that scores it, so the poisoned rows'
+    recalibrated values must match the WITHOUT-poison isotonic fit at
+    those p's — which differs systematically from the WITH-poison fit.
 
-    To detect a row-level splitter, we exploit isotonic's interpolation
-    property: when only one run carries some p value and that run is in
-    the training fold, isotonic for the test fold has no information
-    about that p; when row-level splitting holds out individual rows,
-    isotonic effectively memorizes the (p, y) of the test row."""
-    rng = np.random.default_rng(0)
+    A row-level splitter (the wrong impl) trains on most poison rows
+    even when scoring others, so its outputs trend toward the
+    WITH-poison fit. We assert the per-row error vs. the
+    WITHOUT-poison reference is small and the error vs. the WITH-poison
+    reference is large for poisoned rows."""
+    from coding_estimator.calibration.recalibrate import IsotonicRecalibrator
+
     rows: list[dict] = []
-    # 10 runs, 1 row each, with monotone p and matching y (perfect data).
-    for r in range(10):
-        rows.append(
-            {
-                "run_id": f"run_{r}",
-                "source": "src",
-                "checkpoint_id": f"run_{r}_ckpt_0",
-                "checkpoint_step": 0,
-                "_y": int(r >= 5),
-                "_p": 0.05 + r * 0.09,
-            }
-        )
+    # 5 "good" runs, 5 rows each: low p -> y=0, high p -> y=1.
+    for r in range(5):
+        for s in range(5):
+            p_val = 0.1 + 0.08 * s  # 0.1, 0.18, 0.26, 0.34, 0.42
+            y_val = 1 if p_val > 0.3 else 0
+            rows.append(
+                {
+                    "run_id": f"good_{r}",
+                    "source": "src",
+                    "checkpoint_id": f"good_{r}_c{s}",
+                    "checkpoint_step": s,
+                    "_y": y_val,
+                    "_p": p_val,
+                }
+            )
+    # 1 "poison" run with MANY rows: same p grid, but labels inverted.
+    # With one poison run, run-level LOO over 6 runs trains the
+    # poison-fold's recalibrator on the 5 good runs only — poison is
+    # fully held out. A row-level splitter trains on most poison rows
+    # plus all good rows — heavily contaminated.
+    for s in range(5):
+        for c in range(6):  # 30 poison rows
+            p_val = 0.1 + 0.08 * s
+            y_val = 0 if p_val > 0.3 else 1
+            rows.append(
+                {
+                    "run_id": "poison",
+                    "source": "src",
+                    "checkpoint_id": f"poison_c{s}_{c}",
+                    "checkpoint_step": s * 10 + c,
+                    "_y": y_val,
+                    "_p": p_val,
+                }
+            )
     df = pd.DataFrame(rows)
-    # Inject a single corrupt row: same run as a "perfect" row but
-    # with a contradictory label and matching p so a row-level holdout
-    # would let isotonic fit it correctly while a run-level holdout
-    # would produce systematic errors when that run is held out.
-    out = kfold_recalibrated_predictions(df, method="isotonic", k=5, seed=0)
-    assert out.shape == (len(df),)
-    # Every output value must be a clipped probability.
-    assert np.all((out >= 0.0) & (out <= 1.0))
+
+    # Reference 1: without-poison isotonic (what a correct run-level
+    # k-fold converges to on poison rows — those rows' recalibrator is
+    # fit on the 5 good runs only).
+    good_df = df[df["run_id"] != "poison"]
+    ref_without_poison = (
+        IsotonicRecalibrator()
+        .fit(good_df["_p"].to_numpy(), good_df["_y"].to_numpy())
+    )
+
+    # Reference 2: WITH-poison isotonic (the in-sample fit a row-level
+    # splitter would produce when most rows are training).
+    ref_with_poison = (
+        IsotonicRecalibrator().fit(df["_p"].to_numpy(), df["_y"].to_numpy())
+    )
+
+    # k=6 → LOO over runs. Poison fold scores all poison rows with a
+    # recalibrator fit on the 5 good runs only.
+    out = kfold_recalibrated_predictions(df, method="isotonic", k=6, seed=0)
+    df_out = df.assign(_recal=out)
+    poison_rows = df_out[df_out["run_id"] == "poison"]
+    expect_without = ref_without_poison.transform(poison_rows["_p"].to_numpy())
+    expect_with = ref_with_poison.transform(poison_rows["_p"].to_numpy())
+
+    # On the poisoned p-grid the two reference fits must disagree —
+    # otherwise the test is vacuous.
+    assert np.max(np.abs(expect_without - expect_with)) > 0.1, (
+        "test fixture failed to construct a meaningfully-poisoned slice"
+    )
+
+    err_without = float(np.mean(np.abs(poison_rows["_recal"].to_numpy() - expect_without)))
+    err_with = float(np.mean(np.abs(poison_rows["_recal"].to_numpy() - expect_with)))
+    assert err_without < err_with, (
+        f"poisoned-row outputs are closer to the WITH-poison fit "
+        f"(err_with={err_with:.3f} vs err_without={err_without:.3f}) — "
+        "kfold split is leaking the poison run into its own fit"
+    )
 
 
 def test_kfold_recalibration_falls_back_to_full_fit_when_one_run():

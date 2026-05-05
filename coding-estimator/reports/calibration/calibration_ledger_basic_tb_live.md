@@ -1,6 +1,6 @@
 # Calibration — ledger_basic on tb_live (LORO)
 
-_Generated 2026-05-05T02:50:49+00:00._
+_Generated 2026-05-05T03:06:52+00:00._
 
 - model: `ledger_basic`
 - source: `tb_live`
@@ -10,8 +10,8 @@ _Generated 2026-05-05T02:50:49+00:00._
 
 | metric | raw | platt | isotonic |
 |---|---:|---:|---:|
-| Brier | 0.096 | 0.170 | 0.142 |
-| ECE | 0.140 | 0.153 | 0.174 |
+| Brier | 0.096 | 0.183 | 0.142 |
+| ECE | 0.140 | 0.169 | 0.174 |
 | n | 23 | | |
 | positive rate | 0.130 | | |
 
@@ -82,8 +82,8 @@ _Generated 2026-05-05T02:50:49+00:00._
 
 | metric | raw | platt | isotonic |
 |---|---:|---:|---:|
-| Brier | 0.284 | 0.375 | 0.349 |
-| ECE | 0.406 | 0.461 | 0.283 |
+| Brier | 0.284 | 0.391 | 0.349 |
+| ECE | 0.406 | 0.430 | 0.283 |
 | n | 23 | | |
 | positive rate | 0.478 | | |
 

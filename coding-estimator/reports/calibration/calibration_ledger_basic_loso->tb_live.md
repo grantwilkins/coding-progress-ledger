@@ -1,6 +1,6 @@
 # Calibration — ledger_basic on tb_live (LOSO)
 
-_Generated 2026-05-05T02:50:50+00:00._
+_Generated 2026-05-05T03:06:52+00:00._
 
 - model: `ledger_basic`
 - source: `loso->tb_live`
@@ -10,8 +10,8 @@ _Generated 2026-05-05T02:50:50+00:00._
 
 | metric | raw | platt | isotonic |
 |---|---:|---:|---:|
-| Brier | 0.002 | 0.002 | 0.000 |
-| ECE | 0.020 | 0.022 | 0.003 |
+| Brier | 0.002 | 0.000 | 0.000 |
+| ECE | 0.020 | 0.001 | 0.003 |
 | n | 23 | | |
 | positive rate | 0.130 | | |
 
@@ -82,8 +82,8 @@ _Generated 2026-05-05T02:50:50+00:00._
 
 | metric | raw | platt | isotonic |
 |---|---:|---:|---:|
-| Brier | 0.422 | 0.271 | 0.312 |
-| ECE | 0.442 | 0.136 | 0.277 |
+| Brier | 0.422 | 0.274 | 0.312 |
+| ECE | 0.442 | 0.164 | 0.277 |
 | n | 23 | | |
 | positive rate | 0.478 | | |
 

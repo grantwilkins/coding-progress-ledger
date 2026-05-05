@@ -1,6 +1,6 @@
 # Calibration slices — v0
 
-_Generated 2026-05-05T02:50:50+00:00._
+_Generated 2026-05-05T03:06:52+00:00._
 
 Per-(model, source, target) calibration across J3 slice axes: source, target_horizon, phase (early/middle/late), shape class, progress bucket, validation state.
 

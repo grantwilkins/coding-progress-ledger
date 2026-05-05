@@ -1,6 +1,6 @@
 # Calibration — v0 headline
 
-_Generated 2026-05-05T02:50:50+00:00._
+_Generated 2026-05-05T03:06:52+00:00._
 
 Headline rollup for the v0 calibration gate. Cross-validated isotonic recalibration uses K-fold over run_ids.
 

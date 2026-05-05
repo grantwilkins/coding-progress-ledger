@@ -1,6 +1,6 @@
 # TB-live qualitative rollup (K3)
 
-_Generated 2026-05-05T02:55:05+00:00._
+_Generated 2026-05-05T03:06:54+00:00._
 
 K3 — one rollup across the TB-12 cohort. Stuck-loop precursor checkpoint = first step where `no_progress_window_5 >= 5`. Max Δp uses ledger_basic on `y_success_eventual` predictions.
 

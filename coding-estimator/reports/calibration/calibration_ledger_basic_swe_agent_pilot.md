@@ -1,6 +1,6 @@
 # Calibration — ledger_basic on swe_agent_pilot (LORO)
 
-_Generated 2026-05-05T02:50:49+00:00._
+_Generated 2026-05-05T03:06:52+00:00._
 
 - model: `ledger_basic`
 - source: `swe_agent_pilot`
@@ -83,7 +83,7 @@ _Generated 2026-05-05T02:50:49+00:00._
 | metric | raw | platt | isotonic |
 |---|---:|---:|---:|
 | Brier | 0.008 | 0.008 | 0.008 |
-| ECE | 0.003 | 0.001 | 0.001 |
+| ECE | 0.003 | 0.002 | 0.001 |
 | n | 499 | | |
 | positive rate | 0.008 | | |
 

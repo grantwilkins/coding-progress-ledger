@@ -1,6 +1,6 @@
 # Calibration — time_only on swe_agent_pilot (LORO)
 
-_Generated 2026-05-05T02:50:49+00:00._
+_Generated 2026-05-05T03:06:51+00:00._
 
 - model: `time_only`
 - source: `swe_agent_pilot`
@@ -10,8 +10,8 @@ _Generated 2026-05-05T02:50:49+00:00._
 
 | metric | raw | platt | isotonic |
 |---|---:|---:|---:|
-| Brier | 0.142 | 0.142 | 0.143 |
-| ECE | 0.029 | 0.036 | 0.052 |
+| Brier | 0.142 | 0.144 | 0.143 |
+| ECE | 0.029 | 0.048 | 0.052 |
 | n | 499 | | |
 | positive rate | 0.170 | | |
 
@@ -58,8 +58,8 @@ _Generated 2026-05-05T02:50:49+00:00._
 
 | metric | raw | platt | isotonic |
 |---|---:|---:|---:|
-| Brier | 0.283 | 0.229 | 0.269 |
-| ECE | 0.188 | 0.057 | 0.222 |
+| Brier | 0.283 | 0.230 | 0.269 |
+| ECE | 0.188 | 0.083 | 0.222 |
 | n | 599 | | |
 | positive rate | 0.467 | | |
 
@@ -83,7 +83,7 @@ _Generated 2026-05-05T02:50:49+00:00._
 | metric | raw | platt | isotonic |
 |---|---:|---:|---:|
 | Brier | 0.016 | 0.008 | 0.008 |
-| ECE | 0.018 | 0.003 | 0.001 |
+| ECE | 0.018 | 0.006 | 0.001 |
 | n | 499 | | |
 | positive rate | 0.008 | | |
 

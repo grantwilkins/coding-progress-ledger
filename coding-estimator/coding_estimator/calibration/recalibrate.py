@@ -52,7 +52,12 @@ class PlattRecalibrator:
             self._model = None
             return self
         x = _logit(p_arr).reshape(-1, 1)
-        self._model = LogisticRegression(max_iter=1000, random_state=0)
+        # Standard Platt scaling is the unregularized MLE on logit(p).
+        # sklearn's default C=1.0 shrinks the slope on small calibration
+        # sets; use C very large to approximate no penalty.
+        self._model = LogisticRegression(
+            max_iter=2000, random_state=0, C=1e10, solver="lbfgs"
+        )
         self._model.fit(x, y_arr)
         return self
 

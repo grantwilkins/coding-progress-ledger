@@ -1,6 +1,6 @@
 # TB-live only — checkpoint evaluation (K1)
 
-_Generated 2026-05-05T02:55:05+00:00._
+_Generated 2026-05-05T03:06:54+00:00._
 
 K1 — Logistic G4 (ledger_basic) and G2 (time_only) on `tb_live` alone under LORO. Run-level bootstrap CIs (B=1000).
 

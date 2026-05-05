@@ -1,6 +1,6 @@
 # Calibration — time_only on tb_live (LORO)
 
-_Generated 2026-05-05T02:50:49+00:00._
+_Generated 2026-05-05T03:06:52+00:00._
 
 - model: `time_only`
 - source: `tb_live`
@@ -10,8 +10,8 @@ _Generated 2026-05-05T02:50:49+00:00._
 
 | metric | raw | platt | isotonic |
 |---|---:|---:|---:|
-| Brier | 0.133 | 0.183 | 0.161 |
-| ECE | 0.117 | 0.152 | 0.168 |
+| Brier | 0.133 | 0.202 | 0.161 |
+| ECE | 0.117 | 0.156 | 0.168 |
 | n | 23 | | |
 | positive rate | 0.130 | | |
 
@@ -82,8 +82,8 @@ _Generated 2026-05-05T02:50:49+00:00._
 
 | metric | raw | platt | isotonic |
 |---|---:|---:|---:|
-| Brier | 0.254 | 0.320 | 0.296 |
-| ECE | 0.379 | 0.319 | 0.340 |
+| Brier | 0.254 | 0.321 | 0.296 |
+| ECE | 0.379 | 0.262 | 0.340 |
 | n | 23 | | |
 | positive rate | 0.478 | | |
 

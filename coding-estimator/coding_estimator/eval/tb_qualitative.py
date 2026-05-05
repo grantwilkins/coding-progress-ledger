@@ -129,12 +129,13 @@ def build_rollups(
 
         phase_at_no_progress = None
         if no_prog_step is not None:
-            phase_series = assign_phase(g.assign(checkpoint_step=g["checkpoint_step"]))
-            phase_at_no_progress = str(
-                phase_series.iloc[(g["checkpoint_step"] == no_prog_step).idxmax()]
-                if (g["checkpoint_step"] == no_prog_step).any()
-                else "early"
-            )
+            g_reset = g.reset_index(drop=True)
+            phase_series = assign_phase(g_reset).reset_index(drop=True)
+            mask = g_reset["checkpoint_step"].astype(int) == no_prog_step
+            if mask.any():
+                phase_at_no_progress = str(phase_series[mask].iloc[0])
+            else:
+                phase_at_no_progress = "early"
 
         max_jump: float | None = None
         max_jump_step: int | None = None
