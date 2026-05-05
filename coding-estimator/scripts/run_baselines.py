@@ -93,11 +93,20 @@ def _wide_targets(labels_df: pd.DataFrame, targets: tuple[str, ...]) -> pd.DataF
 
 
 def _shapes_lookup(sources: list[str]) -> pd.DataFrame:
+    import warnings
     frames: list[pd.DataFrame] = []
+    missing: list[str] = []
     for s in sources:
         rows = shape_rows_for_source(s)
         if rows:
             frames.append(pd.DataFrame(rows))
+        else:
+            missing.append(s)
+    if missing:
+        warnings.warn(
+            f"shape labels missing for {missing}; shape slice metrics will skip them",
+            stacklevel=2,
+        )
     if not frames:
         return pd.DataFrame()
     return pd.concat(frames, ignore_index=True)
@@ -144,9 +153,17 @@ def _per_source_within(
         wide_src = wide[wide["source"] == source]
         if ck_src.empty or wide_src.empty:
             continue
+        family_map = task_family_map(source)
+        # `compute_budget` for ltfo groups by `task_family`; without that
+        # column on `wide_src` the budget call would always declare ltfo
+        # infeasible. Attach the family map (run -> family) so the per-fold
+        # min/max counts are evaluated against the right groups.
+        wide_for_budget = wide_src.assign(task_family=wide_src["run_id"].map(family_map))
         budget = {
             (c.target, c.split_scheme): c
-            for c in compute_budget(wide_src, targets=V0_BINARY_TARGETS, schemes=("loro", "ltfo"))
+            for c in compute_budget(
+                wide_for_budget, targets=V0_BINARY_TARGETS, schemes=("loro", "ltfo")
+            )
         }
         if ck_src["run_id"].nunique() < 2:
             for target in V0_BINARY_TARGETS:
@@ -164,7 +181,6 @@ def _per_source_within(
         loro_split = loro(ck_src)
 
         ltfo_split: Split | None = None
-        family_map = task_family_map(source)
         if any(v is not None for v in family_map.values()):
             ck_with_fam = attach_task_family(ck_src, family_map).dropna(subset=["task_family"])
             if ck_with_fam["task_family"].nunique() >= 2:

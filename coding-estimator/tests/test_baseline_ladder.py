@@ -321,6 +321,48 @@ def _synthetic_frames(n_runs: int = 3, n_steps: int = 20) -> tuple[pd.DataFrame,
     return pd.DataFrame(rows), pd.DataFrame(labs)
 
 
+def test_run_baselines_ltfo_actually_trains_when_families_present(tmp_path, monkeypatch):
+    """Regression: budget(scheme='ltfo') needs the `task_family` column on
+    its input frame, otherwise it declares every cell infeasible and
+    LTFO degenerates into placeholder rows. With two non-empty families
+    and balanced labels per family, LTFO should yield at least one
+    `feasible=True` cell — not all rows feasible=False."""
+    import scripts.run_baselines as rb
+    rng = np.random.default_rng(0)
+    rows: list[dict] = []
+    labs: list[dict] = []
+    # 6 runs, 2 families × 3 runs each, 12 ckpts/run, label balanced
+    runs = [(f"r{i}", "fam_a" if i < 3 else "fam_b") for i in range(6)]
+    for rid, _fam in runs:
+        for t in range(1, 13):
+            cid = f"{rid}::{t}"
+            rows.append({"run_id": rid, "source": "swe_agent_pilot",
+                         "checkpoint_id": cid, "checkpoint_step": t,
+                         "elapsed_steps": t,
+                         "elapsed_wall_time": float(t),
+                         "fraction_timeout_consumed": 0.0})
+            for f in GROUPS["closure"] + GROUPS["frontier"] + GROUPS["instability"] + GROUPS["discovery"]:
+                if f.dtype in ("int", "float", "bool"):
+                    rows[-1][f.column_name] = float(rng.uniform())
+            labs.append({"run_id": rid, "source": "swe_agent_pilot",
+                         "checkpoint_id": cid,
+                         "target_name": "y_future_progress_drop_h5",
+                         "label_value": float((t + (0 if rid in ("r0", "r1", "r2") else 1)) % 2),
+                         "is_masked": False})
+    ck = pd.DataFrame(rows)
+    lab = pd.DataFrame(labs)
+    ck_path = tmp_path / "ck.parquet"
+    lab_path = tmp_path / "lab.parquet"
+    ck.to_parquet(ck_path)
+    lab.to_parquet(lab_path)
+    monkeypatch.setattr(rb, "task_family_map", lambda src: dict(runs))
+    monkeypatch.setattr(rb, "shape_rows_for_source", lambda s: [])
+    rb.run(checkpoints_path=ck_path, labels_path=lab_path, out_dir=tmp_path / "out")
+    out = pd.read_csv(tmp_path / "out" / "baseline_metrics.csv")
+    ltfo = out[(out["scheme"] == "ltfo") & (out["target"] == "y_future_progress_drop_h5")]
+    assert ltfo["feasible"].any(), "LTFO must have at least one feasible cell when families present"
+
+
 def test_run_baselines_smoke_emits_one_row_per_target_model_cell(tmp_path):
     ck, lab = _synthetic_frames()
     ck_path = tmp_path / "ck.parquet"
