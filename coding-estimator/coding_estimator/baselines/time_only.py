@@ -13,7 +13,10 @@ from coding_estimator.baselines.base import BaselineSpec
 def _cols(sources: tuple[str, ...]) -> tuple[str, ...]:
     base = ("elapsed_steps",)
     if sources and all(s == "tb_live" for s in sources):
-        return base + ("elapsed_wall_time", "fraction_timeout_consumed")
+        # `fraction_timeout_consumed` is reserved but not populated by the
+        # run-side artifact (see checkpoints/features/time_budget.py); add
+        # it back here once upstream fills it.
+        return base + ("elapsed_wall_time",)
     return base
 
 

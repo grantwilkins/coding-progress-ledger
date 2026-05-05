@@ -1540,7 +1540,7 @@ Acceptance: a single human predictor logs at least one prediction per held-out r
 ## § Workstream H — Splits and evaluation protocol
 
 ### H1. Split builder
-Status: not started
+Status: done
 
 Outputs: `coding_estimator/splits/builder.py`, `datasets/splits/<scheme>_<source>.json`.
 
@@ -1555,17 +1555,17 @@ For each scheme in B5, emit a JSON file:
 Tests: H1 ⇒ B5 disjointness invariant.
 
 ### H2. Within-source evaluation
-Status: not started
+Status: done
 
 Run v0 baselines (G1, G2, G4) under `loro` and `ltfo` per source; emit per-source result tables.
 
 ### H3. Cross-source evaluation
-Status: not started
+Status: done
 
 Run v0 baselines (G1, G2, G4) under `loso`. Headline cross-source test: train on `swe_agent_pilot` + `hermes_pilot_h5_v2`, test on `tb_live`.
 
 ### H4. Slice-specific evaluation
-Status: not started
+Status: done
 
 Slice every test fold by (a) phase (early/middle/late) and (b) shape
 class. Report per-slice AUROC, Brier, ECE. Slices with < 5 positives
@@ -1573,9 +1573,15 @@ or < 5 negatives in the test fold are emitted as "n/a (insufficient
 data)" rather than computed.
 
 ### H6. Reporting templates
-Status: not started
+Status: done
 
 Outputs: `reports/templates/eval_report.md.j2` (jinja), used by every model run.
+
+Next:
+- Wire upstream producer to populate `fraction_timeout_consumed` and
+  fully-fill `steps_since_*` counters at canonical fill semantics so
+  the eval-side `_apply_canonical_fills` shim can be retired.
+- I0 / I1 (model ladder) and J1+ (calibration metrics) now unblocked.
 
 ---
 

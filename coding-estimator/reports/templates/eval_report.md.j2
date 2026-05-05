@@ -1,0 +1,52 @@
+{# H6 — eval report template, used by every model run.
+   Inputs:
+     title          str
+     summary        str (optional)
+     headline_cells list[dict]   # ranked overall metrics rows
+     scheme_groups  list[dict]   # [{scheme, rows: [...]}]
+     slice_groups   list[dict]   # [{kind: phase|shape, rows: [...]}]
+   Each row dict matches the EvalCell / SliceCell asdict() shape. The
+   `_fmt`-equivalent is performed in the renderer; this template only
+   does layout. #}
+# {{ title }}
+{% if generated_at %}_Generated {{ generated_at }}._{% endif %}
+
+{% if summary %}{{ summary }}
+
+{% endif -%}
+
+## Headline metrics
+
+| scheme | source_slice | target | model | n_train | n_test | n_ckpts | pos_rate | AUROC | Brier | Brier 95% CI | log_loss | ECE |
+|---|---|---|---|---:|---:|---:|---:|---:|---:|---|---:|---:|
+{% for r in headline_cells -%}
+| {{ r.scheme }} | {{ r.source_slice }} | {{ r.target }} | {{ r.model }} | {{ r.n_runs_train }} | {{ r.n_runs_test }} | {{ r.n_checkpoints_test }} | {{ r.positive_rate_data }} | {{ r.auroc }} | {{ r.brier }} | {{ r.brier_ci }} | {{ r.log_loss }} | {{ r.ece }} |
+{% endfor %}
+
+{% for g in scheme_groups %}
+## Scheme: `{{ g.scheme }}`
+
+| source_slice | target | model | n_train | n_test | n_ckpts | pos_rate | AUROC | Brier | Brier 95% CI | log_loss | ECE |
+|---|---|---|---|---:|---:|---:|---:|---:|---:|---|---:|---:|
+{% for r in g.rows -%}
+| {{ r.source_slice }} | {{ r.target }} | {{ r.model }} | {{ r.n_runs_train }} | {{ r.n_runs_test }} | {{ r.n_checkpoints_test }} | {{ r.positive_rate_data }} | {{ r.auroc }} | {{ r.brier }} | {{ r.brier_ci }} | {{ r.log_loss }} | {{ r.ece }} |
+{% endfor %}
+
+{% endfor -%}
+
+{% if slice_groups %}
+## Slice-specific metrics
+
+Slices with `< {{ min_per_slice }}` positives or `< {{ min_per_slice }}` negatives are emitted as `n/a (insufficient data)`.
+
+{% for g in slice_groups %}
+### Slice kind: `{{ g.kind }}`
+
+| scheme | source_slice | target | model | slice | n_runs | n_ckpts | pos | neg | AUROC | Brier | ECE |
+|---|---|---|---|---|---:|---:|---:|---:|---:|---:|---:|
+{% for r in g.rows -%}
+| {{ r.scheme }} | {{ r.source_slice }} | {{ r.target }} | {{ r.model }} | {{ r.slice_value }} | {{ r.n_runs }} | {{ r.n_checkpoints }} | {{ r.positives }} | {{ r.negatives }} | {{ r.auroc }} | {{ r.brier }} | {{ r.ece }} |
+{% endfor %}
+
+{% endfor -%}
+{% endif -%}

@@ -147,10 +147,13 @@ def test_constant_baseline_handles_single_class_train_set():
 
 
 def test_time_only_adds_wallclock_cols_only_for_tb_live_alone():
+    # `fraction_timeout_consumed` is reserved but not yet populated by the
+    # tb_live producer; baseline currently includes only the wall-time
+    # column on top of `elapsed_steps`. Re-add the timeout column here once
+    # the producer fills it.
     assert TIME_ONLY.feature_cols_for(("tb_live",)) == (
         "elapsed_steps",
         "elapsed_wall_time",
-        "fraction_timeout_consumed",
     )
 
 
@@ -327,12 +330,15 @@ def test_run_baselines_smoke_emits_one_row_per_target_model_cell(tmp_path):
     out_dir = tmp_path / "reports"
     csv_path = run(checkpoints_path=ck_path, labels_path=lab_path, out_dir=out_dir)
     out = pd.read_csv(csv_path)
-    # One source × five binary targets × three baselines for LORO; LOSO
-    # to tb_live is skipped because there is only one source.
-    expected_rows = 5 * 3
+    # One source × 5 targets × 3 baselines per scheme; both `loro` and
+    # `ltfo` cells are emitted (ltfo is infeasible — tb_live has no
+    # task_family — so its rows carry feasible=False). LOSO is skipped
+    # because there is only one source.
+    expected_rows = 5 * 3 * 2
     assert len(out) == expected_rows
     assert set(out["model"]) == {"constant", "time_only", "ledger_basic"}
-    assert set(out["scheme"]) == {"loro"}
+    assert set(out["scheme"]) == {"loro", "ltfo"}
+    assert (~out[out["scheme"] == "ltfo"]["feasible"]).all()
     assert (out_dir / "baseline_results.md").exists()
     assert (out_dir / "baseline_calibration.md").exists()
 

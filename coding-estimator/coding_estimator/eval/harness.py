@@ -164,3 +164,44 @@ def evaluate_cell(
 
 def cells_to_frame(cells: list[EvalCell]) -> pd.DataFrame:
     return pd.DataFrame([asdict(c) for c in cells])
+
+
+def predict_cell(
+    *,
+    checkpoints_df: pd.DataFrame,
+    labels_df: pd.DataFrame,
+    target: str,
+    spec: BaselineSpec,
+    split: Split,
+    sources_in_train: tuple[str, ...],
+) -> pd.DataFrame:
+    """Return concatenated test-fold predictions as a long-form frame
+    with columns (run_id, source, checkpoint_id, checkpoint_step, _y, _p).
+    Run-disjoint (a run never appears across two test folds) is enforced
+    by the same guard `evaluate_cell` uses."""
+    j = _join(checkpoints_df, labels_df, target)
+    if j.empty:
+        return j
+
+    pieces: list[pd.DataFrame] = []
+    seen: set[str] = set()
+    keep_cols = ["run_id", "source", "checkpoint_id", "checkpoint_step", "_y"]
+    for fold in split.folds:
+        train = j[j["run_id"].isin(set(fold.train_run_ids))]
+        test = j[j["run_id"].isin(set(fold.test_run_ids))]
+        if train.empty or test.empty:
+            continue
+        y_train = train["_y"].astype(int).to_numpy()
+        fitted = fit_binary(spec, train, y_train, sources_in_train)
+        probs = fitted.predict_proba(test)
+        lo, hi = OUTPUT_CLIP
+        probs = np.clip(probs, lo, hi)
+        for rid in test["run_id"].unique():
+            if str(rid) in seen:
+                raise ValueError(f"run {rid} appears in two test folds; splits must be disjoint")
+            seen.add(str(rid))
+        pieces.append(test[keep_cols].assign(_p=probs))
+
+    if not pieces:
+        return pd.DataFrame(columns=[*keep_cols, "_p"])
+    return pd.concat(pieces, ignore_index=True)
