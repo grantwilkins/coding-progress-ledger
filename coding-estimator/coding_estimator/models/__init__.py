@@ -31,8 +31,8 @@ def assert_audit_clean(audit_path: Path | None = None) -> Path:
     if not path.is_file():
         raise AuditNotCleanError(
             f"checkpoint construction audit not found at {path}; run "
-            "`uv run python scripts/build_checkpoints.py` and emit the "
-            "audit before training."
+            "`uv run python scripts/prepare_training_artifacts.py` "
+            "before training."
         )
     text = path.read_text(encoding="utf-8")
     last_line = text.rstrip().splitlines()[-1] if text.rstrip() else ""
@@ -42,3 +42,6 @@ def assert_audit_clean(audit_path: Path | None = None) -> Path:
             f"'Overall: PASS' (last line: {last_line!r})"
         )
     return path
+
+
+__all__ = ["AuditNotCleanError", "assert_audit_clean"]

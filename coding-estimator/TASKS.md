@@ -1588,7 +1588,7 @@ Next:
 ## § Workstream I — Model ladder
 
 ### I0. Empirical-bin model
-Status: not started
+Status: done
 
 Goal: Smoke test labels and splits.
 
@@ -1598,7 +1598,7 @@ empirical positive rate on training fold, evaluate on test fold.
 ```
 
 ### I1. Logistic regression
-Status: not started
+Status: done
 
 Outputs:
 ```text
@@ -1618,6 +1618,27 @@ tests/test_logreg.py asserts feature-importance signs are
 plausible (e.g. `validation_complete` raises P(success), not
 lowers it).
 ```
+
+Hardenings (post sonnet-critic + research-test-creator pass):
+- `predict_proba` clips to `OUTPUT_CLIP=(0.001, 0.999)` on both models
+  so the pickled artifact behaves identically to the in-eval pipeline.
+- Empirical-bin: `checkpoint_fraction_timeout` short-circuits the
+  elapsed signal when fully finite (no priority-inversion ValueError);
+  NaN `coding_progress` at predict time hard-fails per AGENTS.md policy.
+- `evaluate_model_cell` annotates `EvalCell.note`:
+  `run_constant_target` for run-constant V0 headline targets (driven
+  by `V0_TARGETS[name].run_constant_flag`); a `single_class` substring
+  whenever any train fold collapses to a single class.
+- `save_model_bundle` keeps `calibration.json["targets"]` a strict
+  subset of the pickled model dict and propagates `cell.note`.
+- `calibration_source = "constant"` iff some holdout cell carries a
+  `single_class` note; infeasibility notes (e.g. `no joined rows`) do
+  not flip it. `render_model_card` tolerates infeasible cells.
+- Test coverage extended from 4 → 20 cases, including clipping
+  invariants, elapsed-signal priority, NaN hard-fail, registry-driven
+  run-constant flag, single-class fold annotation, calibration.json /
+  model.pkl alignment, and a single-driver coefficient-dominance check
+  to guard against column-shift bugs.
 
 ### I2. Calibrated GBM (deferred until N > 200)
 Status: deferred
