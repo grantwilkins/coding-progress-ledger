@@ -63,31 +63,43 @@ def _join(ck: pd.DataFrame, lab: pd.DataFrame, target: str) -> pd.DataFrame:
 
 
 def _bootstrap_predictions(
-    j: pd.DataFrame,
-    held_out: str,
+    train_pool: pd.DataFrame,
+    test_run: pd.DataFrame,
     spec,
     sources: tuple[str, ...],
     b: int,
     seed: int,
 ) -> tuple[np.ndarray, np.ndarray]:
-    """Return (steps, P[B, T]) for the held-out run, where each row of P
-    is a refit-on-bootstrap-train-resample prediction trajectory."""
-    train_ids = sorted(j[j["run_id"] != held_out]["run_id"].unique())
-    test = j[j["run_id"] == held_out].sort_values("checkpoint_step")
-    steps = test["checkpoint_step"].to_numpy()
+    """Return (steps, P[B, T]) for the test run. Each row of P is a
+    refit-on-bootstrap-train-resample prediction trajectory.
+
+    `train_pool` is the joined frame of training runs (already excluding
+    the test run, so this also covers LOSO where train is a different
+    source entirely)."""
+    train_ids = sorted(train_pool["run_id"].unique())
+    steps = test_run["checkpoint_step"].to_numpy()
     rng = np.random.default_rng(seed)
-    P = np.empty((b, len(test)), dtype=float)
+    P = np.empty((b, len(test_run)), dtype=float)
     lo, hi = OUTPUT_CLIP
     for i in range(b):
         boot_ids = rng.choice(train_ids, size=len(train_ids), replace=True)
-        train = j[j["run_id"].isin(boot_ids)]
+        train = train_pool[train_pool["run_id"].isin(boot_ids)]
         if train.empty:
             P[i] = (lo + hi) / 2
             continue
         y = train["_y"].to_numpy()
         fitted = fit_binary(spec, train, y, sources)
-        P[i] = np.clip(fitted.predict_proba(test), lo, hi)
+        P[i] = np.clip(fitted.predict_proba(test_run), lo, hi)
     return steps, P
+
+
+def _load(ck_path: Path, lab_path: Path, source: str, target: str) -> pd.DataFrame:
+    ck = pd.read_parquet(ck_path)
+    lab = pd.read_parquet(lab_path)
+    ck = ck[ck["source"] == source]
+    lab = lab[lab["source"] == source]
+    ck = _fill_canonical(ck, source)
+    return _join(ck, lab, target)
 
 
 def plot(
@@ -99,15 +111,27 @@ def plot(
     out_path: Path,
     b: int = 100,
     seed: int = 0,
+    train_checkpoints_path: Path | None = None,
+    train_labels_path: Path | None = None,
+    train_source: str | None = None,
 ) -> Path:
-    ck = pd.read_parquet(checkpoints_path)
-    lab = pd.read_parquet(labels_path)
-    ck = ck[ck["source"] == source]
-    lab = lab[lab["source"] == source]
-    ck = _fill_canonical(ck, source)
-    j = _join(ck, lab, target)
+    cross_source = train_source is not None and train_source != source
+    j = _load(checkpoints_path, labels_path, source, target)
     if j.empty:
         raise SystemExit(f"no joined rows for {source}/{target}")
+    if cross_source:
+        train_j = _load(
+            train_checkpoints_path or checkpoints_path,
+            train_labels_path or labels_path,
+            train_source,
+            target,
+        )
+        if train_j.empty:
+            raise SystemExit(f"no joined rows for {train_source}/{target}")
+        sources_in_train = (train_source,)
+    else:
+        train_j = j
+        sources_in_train = (source,)
     runs = sorted(j["run_id"].unique())
     n = len(runs)
     cols = 5
@@ -115,7 +139,6 @@ def plot(
     fig, axes = plt.subplots(rows, cols, figsize=(3.0 * cols, 2.4 * rows),
                               sharex=False, sharey=True)
     axes = np.atleast_2d(axes)
-    sources = (source,)
     specs = [(LEDGER_BASIC, "tab:blue", "G4 ledger-basic"),
              (TIME_ONLY, "tab:orange", "G2 time-only")]
     for k, run_id in enumerate(runs):
@@ -124,8 +147,14 @@ def plot(
         y_steps = run_rows["checkpoint_step"].to_numpy()
         y_vals = run_rows["_y"].to_numpy()
         run_constant = bool(np.all(y_vals == y_vals[0]))
+        if cross_source:
+            train_pool = train_j  # train pool excludes test source entirely
+        else:
+            train_pool = j[j["run_id"] != run_id]
         for spec, color, label in specs:
-            steps, P = _bootstrap_predictions(j, run_id, spec, sources, b, seed)
+            steps, P = _bootstrap_predictions(
+                train_pool, run_rows, spec, sources_in_train, b, seed,
+            )
             med = np.median(P, axis=0)
             lo_q = np.percentile(P, 2.5, axis=0)
             hi_q = np.percentile(P, 97.5, axis=0)
@@ -158,11 +187,17 @@ def plot(
         loc="upper center", ncol=3, fontsize=8, frameon=False,
         bbox_to_anchor=(0.5, 0.995),
     )
-    fig.suptitle(
-        f"LORO trajectory confidence — {source} / {target} "
-        f"(B={b} train-bootstrap refits)",
-        y=1.005, fontsize=10,
-    )
+    if cross_source:
+        suptitle = (
+            f"LOSO trajectory confidence — train: {train_source}, "
+            f"test: {source} / {target} (B={b} train-bootstrap refits)"
+        )
+    else:
+        suptitle = (
+            f"LORO trajectory confidence — {source} / {target} "
+            f"(B={b} train-bootstrap refits)"
+        )
+    fig.suptitle(suptitle, y=1.005, fontsize=10)
     fig.tight_layout(rect=(0, 0, 1, 0.97))
     out_path.parent.mkdir(parents=True, exist_ok=True)
     fig.savefig(out_path, dpi=150, bbox_inches="tight")
@@ -172,13 +207,21 @@ def plot(
 
 def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     p = argparse.ArgumentParser(description=__doc__)
-    p.add_argument("--checkpoints", type=Path, required=True)
-    p.add_argument("--labels", type=Path, required=True)
+    p.add_argument("--checkpoints", type=Path, required=True,
+                   help="test-side checkpoints parquet")
+    p.add_argument("--labels", type=Path, required=True,
+                   help="test-side labels parquet")
     p.add_argument("--target", required=True)
-    p.add_argument("--source", required=True)
+    p.add_argument("--source", required=True, help="test source id")
     p.add_argument("--out", type=Path, required=True)
     p.add_argument("--bootstrap", type=int, default=100)
     p.add_argument("--seed", type=int, default=0)
+    p.add_argument("--train-checkpoints", type=Path, default=None,
+                   help="LOSO mode: separate train-side checkpoints parquet")
+    p.add_argument("--train-labels", type=Path, default=None,
+                   help="LOSO mode: separate train-side labels parquet")
+    p.add_argument("--train-source", default=None,
+                   help="LOSO mode: train source id (different from --source)")
     return p.parse_args(argv)
 
 
@@ -192,6 +235,9 @@ def main(argv: list[str] | None = None) -> int:
         out_path=args.out,
         b=args.bootstrap,
         seed=args.seed,
+        train_checkpoints_path=args.train_checkpoints,
+        train_labels_path=args.train_labels,
+        train_source=args.train_source,
     )
     print(f"wrote {out}")
     return 0
