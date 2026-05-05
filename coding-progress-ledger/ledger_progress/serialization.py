@@ -8,9 +8,10 @@ from .core import EventType, Ledger, LedgerEvent, replay
 
 
 def event_to_dict(event: LedgerEvent) -> dict[str, Any]:
+    event_type_value = event.event_type.value if isinstance(event.event_type, EventType) else event.event_type
     out = {
         "step": event.step,
-        "event_type": event.event_type.value,
+        "event_type": event_type_value,
         "subtask_id": event.subtask_id,
         "payload": _jsonable(event.payload),
         "reason": event.reason,
@@ -23,7 +24,7 @@ def event_to_dict(event: LedgerEvent) -> dict[str, Any]:
 def event_from_dict(data: dict[str, Any]) -> LedgerEvent:
     return LedgerEvent(
         data["step"],
-        EventType(data["event_type"]),
+        data["event_type"],
         data.get("subtask_id"),
         data["payload"],
         data.get("reason"),

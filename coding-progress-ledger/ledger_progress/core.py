@@ -59,14 +59,14 @@ class Subtask:
 @dataclass
 class LedgerEvent:
     step: int
-    event_type: EventType
+    event_type: EventType | str
     subtask_id: str | None
     payload: dict[str, Any]
     reason: str | None = None
     timestamp: str | None = None
 
     def __post_init__(self) -> None:
-        self.event_type = EventType(self.event_type)
+        self.event_type = _coerce_event_type(self.event_type)
         if self.step < 0:
             raise ValueError("event step must be non-negative")
         if not isinstance(self.payload, dict):
@@ -109,7 +109,10 @@ def apply_event(ledger: Ledger, event: LedgerEvent) -> Ledger:
         EventType.INVALIDATE_SUBTASK: lambda l, e: _set_status(l, e, Status.INVALIDATED),
         EventType.DELETE_SUBTASK: lambda l, e: _set_status(l, e, Status.DELETED),
     }
-    if event.event_type not in handlers:
+    if isinstance(event.event_type, str):
+        ledger.events.append(event)
+        return ledger
+    if event.event_type is EventType.INIT:
         raise ValueError("init events are only valid as the first replay event")
     handlers[event.event_type](ledger, event)
     ledger.events.append(event)
@@ -117,7 +120,7 @@ def apply_event(ledger: Ledger, event: LedgerEvent) -> Ledger:
 
 
 def replay(events: list[LedgerEvent]) -> Ledger:
-    if not events or EventType(events[0].event_type) is not EventType.INIT:
+    if not events or events[0].event_type is not EventType.INIT:
         raise ValueError("first event must be init")
     root_task = events[0].payload.get("root_task")
     ledger = Ledger(root_task, events=[events[0]])
@@ -195,6 +198,17 @@ def _set_status(ledger: Ledger, event: LedgerEvent, status: Status) -> None:
     subtask = _subtask(ledger, event)
     subtask.status = status
     subtask.updated_at_step = event.step
+
+
+def _coerce_event_type(value: EventType | str) -> EventType | str:
+    if isinstance(value, EventType):
+        return value
+    if not isinstance(value, str) or not value:
+        raise ValueError("event_type must be EventType or a non-empty str")
+    try:
+        return EventType(value)
+    except ValueError:
+        return value
 
 
 def _status(value: str | Status) -> Status:
