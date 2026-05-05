@@ -1419,7 +1419,7 @@ If any criterion fails, halt at this gate and fix upstream.
 Each baseline trains on the combined checkpoint table and is evaluated under split schemes from B5. **v0 ships only G1, G2, G4** under loro per source plus loso to tb_live; G3, G5, G6 are kept as deferred for parity reporting only.
 
 ### G1. Constant baseline (v0 mandatory)
-Status: not started
+Status: done
 
 ```text
 predict training-set positive rate for each target.
@@ -1428,7 +1428,7 @@ predict training-set positive rate for each target.
 Outputs: `coding_estimator/baselines/constant.py`, `reports/baseline_constant.md`.
 
 ### G2. Time-only baseline (v0 mandatory)
-Status: not started
+Status: done
 
 Features: `elapsed_steps`, plus `elapsed_wall_time` and `fraction_timeout_consumed` only on tb_live where populated.
 
@@ -1439,7 +1439,7 @@ Status: deferred — diagnostic only; not on v0 critical path.
 Features: `coding_progress`, `validation_progress`, `product_progress`.
 
 ### G4. Ledger-basic baseline (v0 mandatory — the headline)
-Status: not started
+Status: done
 
 Features: closure + frontier + instability + discovery (no dynamics, no semantics, no source).
 This is the v0 headline model. Its no-regression vs G2 is the gate (§ Workstream P).
@@ -1453,7 +1453,7 @@ Status: deferred. Used only by O5 (source-leakage diagnostic), which is
 itself deferred. Not consumed by P1.
 
 ### G7. Evaluation harness (v0 mandatory)
-Status: not started
+Status: done (v0 binary targets only; continuous regression deferred)
 
 Outputs:
 ```text
