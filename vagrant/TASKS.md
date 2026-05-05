@@ -116,7 +116,7 @@ migration_end
 
 Each carries a payload schema documented in the module docstring. Workflow lifecycle, node lifecycle, subagent spawn/return, and invalidation reuse `ledger_progress` enums (`ADD_SUBTASK`, `UPDATE_STATUS`, `SPLIT_SUBTASK`, `REOPEN_SUBTASK`, `INVALIDATE_SUBTASK`).
 
-**A2 — Pass-through hook in ledger_progress** (`blocked` on user OK, upstream)
+**A2 — Pass-through hook in ledger_progress** (`done`, 2026-05-05, upstream — 18 invariant tests in coding-progress-ledger/tests/test_extension_events.py)
 Land a ~10-line change in `ledger_progress/core.py:apply_event` so unknown event_type values append to `ledger.events` without mutating subtasks. Coordinate with the ledger maintainer; this is the only upstream change required for the MVP.
 
 A2's definition of done is the four-test invariant set, all in `coding-progress-ledger/tests/`:
@@ -151,14 +151,14 @@ Helper that hashes text segments (or accepts pre-computed hashes when text is un
 
 For synthetic traces, hashes should be deterministic, symbolic, and inspectable — e.g., `hash_shared_repo_v1`, `hash_workspace_AC_v1`, `hash_private_B_v1`, `hash_system_prefix_v1`. The hashing helper still exists for real adapters; synthetic just bypasses it with stable strings.
 
-**A6 — Canonical toy trace** (`done` modulo A2, 2026-05-05 — file committed and regeneratable; replay-roundtrip test gated on A2)
+**A6 — Canonical toy trace** (`done`, 2026-05-05 — file committed, regeneratable, and round-trips through ledger_progress.replay)
 Commit `examples/traces/toy_subagent_trace.jsonl`: parent planner uses shared repo context; spawns 3 subagents A/B/C; A and C share workspace; B has large private context only.
 
 **Add one extra state object: a small shared system/tool prefix consumed by all four nodes** (`system_prefix_tokens` ≈ 200). Purpose: with `tau=1` (any sharing), this trivial prefix glues *everything* together and the policy collapses to a single component. Surfacing this immediately motivates `tau` as a real knob, not a default. Document the expected behavior at `tau=1` vs. `tau=1000` in `docs/toy_trace.md`.
 
 This is the single trace the MVP plot is computed against. **Adversarial by design**: it is constructed so a no-reuse baseline must duplicate. Showing the gap proves expressiveness, not the phenomenon.
 
-**Gate (A done).** `examples/traces/toy_subagent_trace.jsonl` exists, replays under `ledger_progress.replay()` without error, and a `pytest` roundtrip test passes. **Currently blocked on A2** (the file exists and a generator-determinism test passes; the replay-roundtrip test cannot pass until the upstream pass-through hook lands).
+**Gate (A done).** `examples/traces/toy_subagent_trace.jsonl` exists, replays under `ledger_progress.replay()` without error, and a `pytest` roundtrip test passes. ✅ **Workstream A gate met** as of 2026-05-05. A4 (`TraceSession` wrapper) deferred — pure ergonomics, not on the MVP critical path.
 
 ---
 
