@@ -244,7 +244,12 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     p.add_argument("--estimator-version", type=str, default="0.1.0")
     p.add_argument("--models-root", type=Path, default=Path("models"))
     p.add_argument("--reports-root", type=Path, default=Path("reports"))
-    p.add_argument("--d5-audit", type=Path, default=None)
+    p.add_argument(
+        "--d5-audit",
+        type=Path,
+        default=Path("reports/d5_audit.json"),
+        help="path to D5 audit JSON (default: reports/d5_audit.json)",
+    )
     return p.parse_args(argv)
 
 

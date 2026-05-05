@@ -1,0 +1,74 @@
+{
+  "clean": false,
+  "findings": [
+    {
+      "detail": "tb_live / y_validation_new_work_h5: mean AUROC on label-shuffled data is 0.167; |Δ from 0.5| > 0.1",
+      "kind": "shuffled_auroc_excursion",
+      "section": "shuffle",
+      "severity": "block"
+    }
+  ],
+  "n_checkpoints_audited": 1578,
+  "n_runs_audited": 62,
+  "schema_version": "1.0.0",
+  "sections": {
+    "prefix_truncation": {
+      "differing_runs": [],
+      "sampled_runs": 4,
+      "skipped_runs": 0
+    },
+    "run_constancy": {
+      "audited_cells": 96,
+      "offenders": []
+    },
+    "shuffle": {
+      "sources": {
+        "swe_agent_pilot": {
+          "y_future_progress_drop_h5": {
+            "auroc_mean": null,
+            "note": "single-class run-level y; shuffle test uninformative"
+          },
+          "y_success_eventual": {
+            "auroc_mean": 0.4847939063018604,
+            "auroc_seeds": [
+              0.6228860190903986,
+              0.3926559356136821,
+              0.43883976420150056
+            ],
+            "note": null
+          },
+          "y_validation_new_work_h5": {
+            "auroc_mean": null,
+            "note": "single-class run-level y; shuffle test uninformative"
+          }
+        },
+        "tb_live": {
+          "y_future_progress_drop_h5": {
+            "auroc_mean": null,
+            "note": "single-class run-level y; shuffle test uninformative"
+          },
+          "y_success_eventual": {
+            "auroc_mean": null,
+            "note": "single-class run-level y; shuffle test uninformative"
+          },
+          "y_validation_new_work_h5": {
+            "auroc_mean": 0.16666666666666666,
+            "auroc_seeds": [
+              0.0,
+              0.5,
+              0.0
+            ],
+            "note": null
+          }
+        }
+      },
+      "tolerance": 0.1
+    },
+    "structural": {
+      "forbidden_exact": 10,
+      "forbidden_prefix": 6,
+      "forbidden_suffix": 2,
+      "hits": []
+    }
+  }
+}

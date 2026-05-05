@@ -21,6 +21,86 @@ This repo is downstream of those artifacts. We **read** them; we do **not** rewr
 
 ---
 
+## § 0.0β v0 reality check — recentered (READ AFTER § 0.0)
+
+The v0 measurement is in (commit 6e12dfc / 96d6558 / and the post-feedback hardenings that follow). It is honest and informative: the pipeline tells the operator the estimator is not ready, and *why*. The publishable shape of the v0 result has been recentered:
+
+```text
+Primary v0 claim:
+  Prefix ledger features predict near-future progress dynamics
+  (y_future_progress_drop_h5, y_validation_new_work_h5).
+
+Secondary / negative v0 claim:
+  Prefix ledger features do not improve terminal success prediction
+  (y_success_eventual) over elapsed time on small retrospective data.
+
+Interpretation:
+  The observation channel measures work-frontier dynamics before it
+  becomes a reliable completion estimator.
+```
+
+Full evidence, with numbers: `reports/V0_FINDINGS.md`. Per-target G2/G4/G5 comparison: `reports/g5/g5_eval.md`.
+
+### What the next phase is
+
+In strict order. Do *not* re-run the entire pipeline before (1) and (2) land — the gate is currently bottlenecked on data, not models.
+
+```text
+1. Annotate the 30 hermes_pilot_h5_v2 runs upstream (currently
+   final_success: null, annotation_mode: not_annotated for all 30).
+   Diagnosis: reports/HERMES_LABEL_DIAGNOSIS.md.
+   Unblocks P1.c on ~50 retrospective runs.
+2. Collect tb_live_v2 with outcome diversity (≥ 30 runs / ≥ 10
+   failures / real wall-clock / same protocol). Without failures
+   tb_live cannot test any success-prediction gate. Unblocks
+   P1.b, P1.d, and the tb_live half of O7.
+3. Run the human baseline (scripts/run_human_baseline.py is
+   ready). One human reads 6 midpoint TB ledger prefixes and
+   predicts; the comparison answers whether the ledger is
+   readable as a belief signal.
+4. Re-run the full pipeline only after (1)–(3); regenerate every
+   report deterministically.
+5. Optionally: revisit G5 dynamics features once the data
+   defects are fixed. They already help on the dynamics targets;
+   the question is whether they help on the recentered headline
+   under more diverse data.
+```
+
+### What the next phase is NOT
+
+```text
+- Building a scheduler, controller, monitor, or online inference
+  surface (Workstreams M, R remain explicitly deferred).
+- Adding semantic / text features (Workstream Q remains deferred —
+  would help prediction but muddy the "ledger-native" claim).
+- Loosening the +0.02 O7 threshold to get a pass. The strict gate
+  is the informative gate; the failure is signal, not noise.
+- Promoting a tb_live result obtained on the all-success cohort.
+  Re-evaluate only against tb_live_v2.
+```
+
+### Workstreams added since the original plan
+
+```text
+G5 (ledger-dynamics, post-processing layer)
+   coding_estimator/checkpoints/dynamics.py — attach_g5_features
+   coding_estimator/baselines/ledger_dynamics.py — LEDGER_DYNAMICS
+   scripts/run_g5_eval.py → reports/g5/
+D5 audit (structured JSON)
+   coding_estimator/leakage/d5_audit.py — required by P1.g
+   scripts/run_d5_audit.py → reports/d5_audit.{md,json}
+Human baseline scaffolding
+   coding_estimator/eval/human_baseline.py
+   scripts/run_human_baseline.py prepare|compare → reports/human_baseline/
+V0 findings memo
+   reports/V0_FINDINGS.md
+   reports/REVIEWER_BRIEFING.md
+Hermes label-gap diagnosis
+   reports/HERMES_LABEL_DIAGNOSIS.md
+```
+
+---
+
 ## § 0. Project rules for all agents
 
 These rules apply to every workstream. They are stricter than the upstream ledger rules because the estimator is the most leakage-prone surface in the project.

@@ -130,12 +130,16 @@
     {
       "condition_id": "P1.g",
       "evidence": {
-        "d5_audit_path": null
+        "d5_audit_path": "reports/d5_audit.json",
+        "n_checkpoints_audited": 1578,
+        "n_findings": 1,
+        "n_runs_audited": 62,
+        "schema_version": "1.0.0"
       },
       "name": "D5 behavioral leakage audit (Workstream M deferred)",
-      "outcome": "indeterminate",
+      "outcome": "fail",
       "required": true,
-      "summary": "D5 audit artifact not provided; Workstream M is deferred — re-evaluate this condition once D5 ships with required fields ['schema_version', 'n_runs_audited', 'n_checkpoints_audited', 'findings', 'clean']"
+      "summary": "D5 audit reports 1 findings or `clean: false`"
     },
     {
       "condition_id": "P1.h",
@@ -192,5 +196,5 @@
       "summary": "winning cells span multiple targets — caveat does not apply"
     }
   ],
-  "verdict": "indeterminate"
+  "verdict": "fail"
 }

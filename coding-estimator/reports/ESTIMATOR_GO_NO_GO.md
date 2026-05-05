@@ -1,10 +1,10 @@
 # Estimator go/no-go gate (Workstream P)
 
-_Generated 2026-05-05T04:42:06+00:00._
+_Generated 2026-05-05T04:58:38+00:00._
 
-## Overall verdict: ⚠️ INDETERMINATE
+## Overall verdict: ❌ FAIL
 
-**Blocked by:** INDETERMINATE on `P1.b`, `P1.c`, `P1.d`, `P1.g`.
+**Blocked by:** FAIL on `P1.g`; INDETERMINATE on `P1.b`, `P1.c`, `P1.d`.
 
 Eight conditions from TASKS.md § Workstream P. The gate is intentionally a *no-regression* gate at v0 — see § P-future for the aspirational gate that requires CI exclusion on tb_live and ECE within plan.
 
@@ -20,7 +20,7 @@ Required conditions must all be `pass` for the overall verdict to be `pass`. Any
 | `P1.d` | yes | ⚠️ indeterminate | single-class y on tb_live for `y_success_eventual` |
 | `P1.e` | yes | ✅ pass | no forbidden columns in the checkpoints frame |
 | `P1.f` | yes | ✅ pass | audited 128 (source, target, fold) cells; 0 have run-constant pairs; skipped 120 cells (0 no labels, 120 empty join) |
-| `P1.g` | yes | ⚠️ indeterminate | D5 audit artifact not provided; Workstream M is deferred — re-evaluate this condition once D5 ships with required fields ['schema_version', 'n_runs_audited', 'n_checkpoints_audited', 'findings', 'clean'] |
+| `P1.g` | yes | ❌ fail | D5 audit reports 1 findings or `clean: false` |
 | `P1.h` | yes | ✅ pass | winning cells span multiple targets — caveat does not apply |
 
 ## P1.a — G4 ties or beats G2 on at least one (target, source) under LORO
@@ -104,13 +104,17 @@ Required conditions must all be `pass` for the overall verdict to be `pass`. Any
 
 ## P1.g — D5 behavioral leakage audit (Workstream M deferred)
 
-- outcome: ⚠️ indeterminate
+- outcome: ❌ fail
 - required: yes
-- summary: D5 audit artifact not provided; Workstream M is deferred — re-evaluate this condition once D5 ships with required fields ['schema_version', 'n_runs_audited', 'n_checkpoints_audited', 'findings', 'clean']
+- summary: D5 audit reports 1 findings or `clean: false`
 
 ### Evidence
 
-- `d5_audit_path`: None
+- `d5_audit_path`: reports/d5_audit.json
+- `n_checkpoints_audited`: 1578
+- `n_findings`: 1
+- `n_runs_audited`: 62
+- `schema_version`: 1.0.0
 
 ## P1.h — Submit-without-validation caveat
 

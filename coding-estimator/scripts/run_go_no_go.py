@@ -52,7 +52,12 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     p.add_argument("--checkpoints", type=Path, required=True)
     p.add_argument("--labels", type=Path, required=True)
     p.add_argument("--out", type=Path, required=True)
-    p.add_argument("--d5-audit", type=Path, default=None)
+    p.add_argument(
+        "--d5-audit",
+        type=Path,
+        default=Path("reports/d5_audit.json"),
+        help="path to D5 audit JSON (default: reports/d5_audit.json)",
+    )
     return p.parse_args(argv)
 
 

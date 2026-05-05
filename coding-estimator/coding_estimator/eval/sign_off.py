@@ -215,9 +215,22 @@ def render_sign_off_summary(
         f"## Headline verdict: {_outcome_badge(gate.verdict).upper()}",
         "",
         f"- gate report: `{gate_report_path}`",
+        f"- v0 findings memo: `reports/V0_FINDINGS.md` (recentered narrative)",
         f"- model bundle: `{bundle_dir}/`",
         f"- model_card.json: `{bundle_dir}/model_card.json` (validates against `schemas/model_card_schema.json`)",
         f"- not_safe_for_control: **{record['not_safe_for_control']}**",
+        "",
+        "## Recentered v0 framing",
+        "",
+        "**Primary headline.** Process-dynamics prediction "
+        "(`y_future_progress_drop_h5`, `y_validation_new_work_h5`).",
+        "",
+        "**Secondary / negative.** Terminal success "
+        "(`y_success_eventual`) — ledger features do not yet beat "
+        "elapsed time at this N.",
+        "",
+        "Per-target evidence is in `reports/g5/g5_eval.md` and the "
+        "per-cell P1.a evidence table below.",
         "",
         "## Required gate conditions",
         "",

@@ -975,6 +975,17 @@ def render_gate_report(report: GateReport, *, summary: str | None = None) -> str
     ]
     lines.extend(_executive_summary(report))
     lines.append("")
+    lines.append(
+        "**v0 framing (recentered).** The primary v0 headline is "
+        "**process-dynamics prediction** (`y_future_progress_drop_h5`, "
+        "`y_validation_new_work_h5`). Terminal success "
+        "(`y_success_eventual`) is reported as a secondary / negative "
+        "result: ledger features do not yet beat elapsed time on it at "
+        "this N. See `reports/V0_FINDINGS.md` for the publishable "
+        "story; this gate keeps its original P1.a–h structure so "
+        "no-regression on success is still measured."
+    )
+    lines.append("")
     if summary:
         lines.extend([summary, ""])
     lines.extend(
