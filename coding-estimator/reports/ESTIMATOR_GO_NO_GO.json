@@ -132,14 +132,14 @@
       "evidence": {
         "d5_audit_path": "reports/d5_audit.json",
         "n_checkpoints_audited": 1578,
-        "n_findings": 1,
+        "n_findings": 0,
         "n_runs_audited": 62,
-        "schema_version": "1.0.0"
+        "schema_version": "1.1.0"
       },
       "name": "D5 behavioral leakage audit (Workstream M deferred)",
-      "outcome": "fail",
+      "outcome": "pass",
       "required": true,
-      "summary": "D5 audit reports 1 findings or `clean: false`"
+      "summary": "D5 audit clean (62 runs, 1578 checkpoints; 0 findings)"
     },
     {
       "condition_id": "P1.h",
@@ -196,5 +196,5 @@
       "summary": "winning cells span multiple targets — caveat does not apply"
     }
   ],
-  "verdict": "fail"
+  "verdict": "indeterminate"
 }

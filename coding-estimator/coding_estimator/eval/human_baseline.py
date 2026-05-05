@@ -209,6 +209,14 @@ def compare_to_models(
             row_g4 = g4[
                 (g4["run_id"] == s.run_id) & (g4["checkpoint_step"] == s.midpoint_step)
             ]
+            note = None
+            if row_g2.empty and row_g4.empty:
+                note = (
+                    "no model prediction at this step (checkpoint policy "
+                    "skipped midpoint_step); model columns left null but "
+                    "row preserved so the human prediction is not silently "
+                    "dropped"
+                )
             true_y = (
                 row_g4["_y"].iloc[0] if not row_g4.empty
                 else (row_g2["_y"].iloc[0] if not row_g2.empty else None)
@@ -222,6 +230,7 @@ def compare_to_models(
                     "g2_p": float(row_g2["_p"].iloc[0]) if not row_g2.empty else None,
                     "g4_p": float(row_g4["_p"].iloc[0]) if not row_g4.empty else None,
                     "true_y": int(true_y) if true_y is not None else None,
+                    "note": note,
                 }
             )
     return pd.DataFrame(rows)

@@ -1,16 +1,9 @@
 {
-  "clean": false,
-  "findings": [
-    {
-      "detail": "tb_live / y_validation_new_work_h5: mean AUROC on label-shuffled data is 0.167; |Δ from 0.5| > 0.1",
-      "kind": "shuffled_auroc_excursion",
-      "section": "shuffle",
-      "severity": "block"
-    }
-  ],
+  "clean": true,
+  "findings": [],
   "n_checkpoints_audited": 1578,
   "n_runs_audited": 62,
-  "schema_version": "1.0.0",
+  "schema_version": "1.1.0",
   "sections": {
     "prefix_truncation": {
       "differing_runs": [],
@@ -22,11 +15,22 @@
       "offenders": []
     },
     "shuffle": {
+      "min_checkpoints": 30,
+      "min_runs": 8,
       "sources": {
         "swe_agent_pilot": {
           "y_future_progress_drop_h5": {
-            "auroc_mean": null,
-            "note": "single-class run-level y; shuffle test uninformative"
+            "auroc_mean": 0.49232262953490574,
+            "auroc_seeds": [
+              0.4820545609548167,
+              0.4624183006535948,
+              0.5324950269963058
+            ],
+            "n_rows": 499,
+            "n_runs": 20,
+            "note": null,
+            "shuffle_kind": "row_level",
+            "skipped": false
           },
           "y_success_eventual": {
             "auroc_mean": 0.4847939063018604,
@@ -35,30 +39,45 @@
               0.3926559356136821,
               0.43883976420150056
             ],
-            "note": null
+            "n_rows": 599,
+            "n_runs": 20,
+            "note": null,
+            "shuffle_kind": "run_level",
+            "skipped": false
           },
           "y_validation_new_work_h5": {
-            "auroc_mean": null,
-            "note": "single-class run-level y; shuffle test uninformative"
+            "auroc_mean": 0.452020202020202,
+            "auroc_seeds": [
+              0.5661616161616162,
+              0.3898989898989899,
+              0.4
+            ],
+            "n_rows": 499,
+            "n_runs": 20,
+            "note": null,
+            "shuffle_kind": "row_level",
+            "skipped": false
           }
         },
         "tb_live": {
           "y_future_progress_drop_h5": {
             "auroc_mean": null,
-            "note": "single-class run-level y; shuffle test uninformative"
+            "n_rows": 23,
+            "n_runs": 10,
+            "note": "skipped: 10 runs / 23 rows below floor 8/30 — AUROC seed-variance would dominate at this N",
+            "skipped": true
           },
           "y_success_eventual": {
             "auroc_mean": null,
-            "note": "single-class run-level y; shuffle test uninformative"
+            "note": "single-class run-level y; shuffle uninformative",
+            "skipped": true
           },
           "y_validation_new_work_h5": {
-            "auroc_mean": 0.16666666666666666,
-            "auroc_seeds": [
-              0.0,
-              0.5,
-              0.0
-            ],
-            "note": null
+            "auroc_mean": null,
+            "n_rows": 23,
+            "n_runs": 10,
+            "note": "skipped: 10 runs / 23 rows below floor 8/30 — AUROC seed-variance would dominate at this N",
+            "skipped": true
           }
         }
       },

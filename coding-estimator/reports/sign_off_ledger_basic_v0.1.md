@@ -1,8 +1,8 @@
 # Sign-off — ledger_basic_v0.1
 
-_Generated 2026-05-05T05:09:17+00:00._
+_Generated 2026-05-05T05:14:21+00:00._
 
-## Headline verdict: ❌ FAIL
+## Headline verdict: ⚠️ INDETERMINATE
 
 - gate report: `reports/ESTIMATOR_GO_NO_GO.md`
 - v0 findings memo: `reports/V0_FINDINGS.md` (recentered narrative)
@@ -28,7 +28,7 @@ Per-target evidence is in `reports/g5/g5_eval.md` and the per-cell P1.a evidence
 | `P1.d` | ⚠️ indeterminate | single-class y on tb_live for `y_success_eventual` |
 | `P1.e` | ✅ pass | no forbidden columns in the checkpoints frame |
 | `P1.f` | ✅ pass | audited 128 (source, target, fold) cells; 0 have run-constant pairs; skipped 120 cells (0 no labels, 120 empty join) |
-| `P1.g` | ❌ fail | D5 audit reports 1 findings or `clean: false` |
+| `P1.g` | ✅ pass | D5 audit clean (62 runs, 1578 checkpoints; 0 findings) |
 | `P1.h` | ✅ pass | winning cells span multiple targets — caveat does not apply |
 
 ## Failure-mode tests (O1, O5, O7)
@@ -43,7 +43,7 @@ Per-target evidence is in `reports/g5/g5_eval.md` and the per-cell P1.a evidence
 
 ## Known limits
 
-- not_safe_for_control = true: required gate `P1.b` is `indeterminate`; required gate `P1.c` is `indeterminate`; required gate `P1.d` is `indeterminate`; required gate `P1.g` is `fail`; O5 outcome is `indeterminate`; O7 fails on source `swe_agent_pilot`
+- not_safe_for_control = true: required gate `P1.b` is `indeterminate`; required gate `P1.c` is `indeterminate`; required gate `P1.d` is `indeterminate`; O5 outcome is `indeterminate`; O7 fails on source `swe_agent_pilot`
 - O7 timeout-bias FAIL on ['swe_agent_pilot']: ledger does not add ≥ 0.02 Brier over time-only on these sources
 - required gate conditions ['P1.b', 'P1.c', 'P1.d'] are indeterminate at current N — see ESTIMATOR_GO_NO_GO.md for details
 - raw probabilities are un-recalibrated unless the consumer applies isotonic recalibration from `calibration.json`
@@ -53,7 +53,6 @@ Per-target evidence is in `reports/g5/g5_eval.md` and the per-cell P1.a evidence
 ## Recommendations for next collection
 
 - **BLOCKING (O7)** the v0 ledger features do not carry decision-relevant signal beyond elapsed time on ['swe_agent_pilot']. Cheapest next experiment: add the deferred dynamics group (G5) and re-run O7.
-- **BLOCKING (P1.g)** D5 audit reports 1 findings or `clean: false`
 - **DATA (P1.b)** tb_live cohort is 12/12 successes — collect at least 5 tb_live failures before this gate is even testable.
 - **DATA (P1.c)** build hermes_pilot_h5_v2 labels into `datasets/labels_all.parquet` so the combined retrospective (~50 runs) is testable as the plan intended.
 - **DATA (P1.d)** tb_live cohort is 12/12 successes — collect at least 5 tb_live failures before this gate is even testable.

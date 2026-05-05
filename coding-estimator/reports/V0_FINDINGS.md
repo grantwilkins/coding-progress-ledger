@@ -34,9 +34,17 @@ checkpoints), `y_future_progress_drop_h5`:
 | G4 + G5         | 0.042 | 0.973 |       −0.100    |
 
 A ten-point Brier improvement over the elapsed-time baseline at AUROC
-0.977 is large for v0. It corroborates on `tb_live` (10 runs, 23
-labeled checkpoints, smaller absolute Briers) where G4 still beats G2
-by 0.037 Brier.
+0.977 is large for v0. G5 features alone also clear G2 by ~6 Brier
+points, but they do **not** stack additively with G4 — `g4_plus_g5`
+(0.042) is essentially `G4` (0.039), and on `tb_live` G5 alone is
+slightly worse than G4 alone (0.124 vs 0.096). Read this as: G4
+features dominate the dynamics signal; G5 carries an independent but
+smaller share of the same information rather than complementary
+information.
+
+The dynamics result corroborates on `tb_live` (10 runs, 23 labeled
+checkpoints, smaller absolute Briers) where G4 still beats G2 by
+0.037 Brier.
 
 `y_validation_new_work_h5` shows the same pattern at smaller absolute
 Briers (very rare positives on swe_agent_pilot; richer base rate on
@@ -58,12 +66,15 @@ Evidence: per-source LORO on `swe_agent_pilot`, `y_success_eventual`:
 | G5 dynamics     | 0.272 | 0.385 |       −0.010    |
 | G4 + G5         | 0.292 | 0.411 |       +0.010    |
 
-G4 is *worse* than G2 by 0.009. G5's dynamics features alone do
-slightly better (-0.010) but well within noise. Combining (G4+G5) sits
-back at G4. The strongest scientific gate (O7 in
-`coding_estimator/eval/failure_modes.py`) demands a +0.02 lift; none
-of the ledger configurations reaches that on the largest retrospective
-source.
+G4 is *worse* than G2 on `y_success_eventual` by 0.009. G5's
+dynamics features alone do slightly better than G2 (Δ −0.010 on
+`y_success_eventual`) but well within noise; combining (G4+G5) sits
+back at G4 (+0.010). The strongest scientific gate (O7 in
+`coding_estimator/eval/failure_modes.py`) demands a +0.02 Brier lift
+of G4 over G2; none of the ledger configurations reaches that on
+`y_success_eventual` on the largest retrospective source. Read this
+as: even with the dynamics feature group added, prefix-only ledger
+state does not unlock terminal-success prediction at this N.
 
 `tb_live` is uninformative for this target: 12/12 successes (single-
 class y).

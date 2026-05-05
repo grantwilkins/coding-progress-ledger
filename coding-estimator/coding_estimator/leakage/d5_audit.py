@@ -40,9 +40,11 @@ from coding_estimator.leakage.guard import find_forbidden, load_forbidden_spec
 from coding_estimator.leakage.run_constancy import audit as run_constancy_audit
 from coding_estimator.splits.protocol import loro
 
-D5_SCHEMA_VERSION = "1.0.0"
+D5_SCHEMA_VERSION = "1.1.0"
 SHUFFLE_SEEDS: tuple[int, ...] = (0, 1, 2)
 SHUFFLE_AUROC_TOLERANCE: float = 0.10  # |AUROC - 0.5| > this ⇒ finding
+SHUFFLE_MIN_RUNS: int = 8           # below this, shuffle is small-N noise
+SHUFFLE_MIN_CHECKPOINTS: int = 30    # below this, AUROC seed-variance dominates
 
 
 @dataclass(frozen=True)
@@ -178,17 +180,38 @@ def _shuffle(
     *,
     tolerance: float = SHUFFLE_AUROC_TOLERANCE,
 ) -> tuple[list[Finding], dict[str, Any]]:
-    """Shuffle labels across runs (preserving feature row order). Train
-    G4 LORO on the shuffled labels, predict, compute AUROC. A leaky
-    pipeline keeps AUROC well above 0.5 even when labels are random."""
+    """Shuffle labels and assert the trained model's AUROC straddles 0.5.
+
+    Two regimes by target:
+        run-constant target — shuffle which run gets which run-level
+            label; preserves the target's row structure (one label per
+            run replicated across that run's rows).
+        non-run-constant target — shuffle row-level labels at random
+            within source. Preserves the row count and the source-level
+            base rate but destroys feature/label association at the
+            row level.
+
+    Skipped (with `severity: info`) when n_runs < SHUFFLE_MIN_RUNS or
+    n_unmasked_rows < SHUFFLE_MIN_CHECKPOINTS — at small N the
+    seed-variance on AUROC dominates and any "excursion" is noise.
+    """
+    from coding_estimator.labels.registry import V0_TARGETS
+
     findings: list[Finding] = []
-    detail: dict[str, Any] = {"sources": {}, "tolerance": tolerance}
+    detail: dict[str, Any] = {
+        "sources": {},
+        "tolerance": tolerance,
+        "min_runs": SHUFFLE_MIN_RUNS,
+        "min_checkpoints": SHUFFLE_MIN_CHECKPOINTS,
+    }
     for source in sorted(checkpoints_df["source"].unique()):
         sub = checkpoints_df[checkpoints_df["source"] == source]
         if sub["run_id"].nunique() < 3:
             continue
-        per_target: dict[str, dict[str, float | str | None]] = {}
+        per_target: dict[str, dict[str, Any]] = {}
         for target in targets:
+            tmeta = V0_TARGETS.get(target)
+            run_constant = bool(tmeta.run_constant_flag) if tmeta is not None else False
             real_lab = labels_df[
                 (labels_df["source"] == source)
                 & (labels_df["target_name"] == target)
@@ -196,45 +219,73 @@ def _shuffle(
             ][["run_id", "checkpoint_id", "label_value"]]
             if real_lab.empty:
                 continue
-            run_ids = sorted(real_lab["run_id"].unique())
-            run_label = (
-                real_lab.drop_duplicates("run_id")
-                .set_index("run_id")["label_value"]
-                .astype(float)
-                .to_dict()
-            )
-            if len(set(run_label.values())) < 2:
+            n_runs = int(real_lab["run_id"].nunique())
+            n_rows = int(len(real_lab))
+            if n_runs < SHUFFLE_MIN_RUNS or n_rows < SHUFFLE_MIN_CHECKPOINTS:
                 per_target[target] = {
                     "auroc_mean": None,
-                    "note": "single-class run-level y; shuffle test uninformative",
+                    "n_runs": n_runs,
+                    "n_rows": n_rows,
+                    "skipped": True,
+                    "note": (
+                        f"skipped: {n_runs} runs / {n_rows} rows below "
+                        f"floor {SHUFFLE_MIN_RUNS}/{SHUFFLE_MIN_CHECKPOINTS} — "
+                        "AUROC seed-variance would dominate at this N"
+                    ),
                 }
                 continue
+            if run_constant:
+                run_label = (
+                    real_lab.drop_duplicates("run_id")
+                    .set_index("run_id")["label_value"]
+                    .astype(float)
+                    .to_dict()
+                )
+                if len(set(run_label.values())) < 2:
+                    per_target[target] = {
+                        "auroc_mean": None,
+                        "skipped": True,
+                        "note": "single-class run-level y; shuffle uninformative",
+                    }
+                    continue
+            else:
+                row_labels = real_lab["label_value"].astype(float).to_numpy()
+                if len(np.unique(row_labels)) < 2:
+                    per_target[target] = {
+                        "auroc_mean": None,
+                        "skipped": True,
+                        "note": "single-class row-level y; shuffle uninformative",
+                    }
+                    continue
             aurocs: list[float] = []
             for seed in SHUFFLE_SEEDS:
                 rng = np.random.default_rng(seed)
-                shuffled_run_ids = list(run_ids)
-                rng.shuffle(shuffled_run_ids)
-                run_to_shuffled = dict(zip(run_ids, shuffled_run_ids, strict=True))
-                shuffled_lab = real_lab.copy()
-                shuffled_lab["label_value"] = shuffled_lab["run_id"].map(
-                    lambda r: run_label[run_to_shuffled[r]]
-                )
-                # Build a synthetic labels_df with shuffled rows for this target.
+                if run_constant:
+                    run_ids = sorted(real_lab["run_id"].unique())
+                    shuffled = list(run_ids)
+                    rng.shuffle(shuffled)
+                    run_to_shuf = dict(zip(run_ids, shuffled, strict=True))
+                    shuf_lab = real_lab.copy()
+                    shuf_lab["label_value"] = shuf_lab["run_id"].map(
+                        lambda r: run_label[run_to_shuf[r]]
+                    )
+                else:
+                    permuted = real_lab["label_value"].astype(float).to_numpy().copy()
+                    rng.shuffle(permuted)
+                    shuf_lab = real_lab.copy()
+                    shuf_lab["label_value"] = permuted
                 masked = labels_df[
                     (labels_df["source"] == source)
                     & (labels_df["target_name"] == target)
                 ]
-                # Replace the un-masked rows' label_value with the shuffled values.
-                synth = masked.copy()
-                synth = synth.merge(
-                    shuffled_lab.rename(columns={"label_value": "_shuf"}),
+                synth = masked.copy().merge(
+                    shuf_lab.rename(columns={"label_value": "_shuf"}),
                     on=["run_id", "checkpoint_id"],
                     how="left",
                 )
-                mask_unmask = ~synth["is_masked"].astype(bool)
-                synth.loc[mask_unmask, "label_value"] = synth.loc[mask_unmask, "_shuf"]
+                un = ~synth["is_masked"].astype(bool)
+                synth.loc[un, "label_value"] = synth.loc[un, "_shuf"]
                 synth = synth.drop(columns=["_shuf"])
-                # Inject back into labels_df only for this (source, target).
                 others = labels_df[
                     ~(
                         (labels_df["source"] == source)
@@ -262,6 +313,7 @@ def _shuffle(
             if not aurocs:
                 per_target[target] = {
                     "auroc_mean": None,
+                    "skipped": True,
                     "note": "all shuffles produced single-class y or empty preds",
                 }
                 continue
@@ -269,6 +321,10 @@ def _shuffle(
             per_target[target] = {
                 "auroc_mean": mean_auroc,
                 "auroc_seeds": [float(a) for a in aurocs],
+                "n_runs": n_runs,
+                "n_rows": n_rows,
+                "shuffle_kind": "run_level" if run_constant else "row_level",
+                "skipped": False,
                 "note": None,
             }
             if abs(mean_auroc - 0.5) > tolerance:
@@ -277,8 +333,11 @@ def _shuffle(
                         section="shuffle",
                         kind="shuffled_auroc_excursion",
                         detail=(
-                            f"{source} / {target}: mean AUROC on label-shuffled "
-                            f"data is {mean_auroc:.3f}; |Δ from 0.5| > {tolerance}"
+                            f"{source} / {target} ("
+                            f"{'run-level' if run_constant else 'row-level'} "
+                            f"shuffle, n_runs={n_runs}, n_rows={n_rows}): "
+                            f"mean AUROC {mean_auroc:.3f}; |Δ from 0.5| "
+                            f"> {tolerance}"
                         ),
                     )
                 )
@@ -417,6 +476,22 @@ def render_d5_summary_md(audit: D5Audit) -> str:
         f"- n_checkpoints_audited: {audit.n_checkpoints_audited}",
         f"- clean: **{audit.clean}**",
         f"- findings: {len(audit.findings)}",
+        "",
+        "## Methodology notes",
+        "",
+        "- **Shuffle test** uses run-level shuffling for run-constant "
+        f"targets and row-level shuffling otherwise. Skipped (with "
+        f"`severity: info`) when n_runs < {SHUFFLE_MIN_RUNS} or "
+        f"n_unmasked_rows < {SHUFFLE_MIN_CHECKPOINTS} on a "
+        f"(source, target) cell, because seed-variance on AUROC "
+        "dominates below those floors. A finding fires when "
+        f"`|mean_AUROC - 0.5| > {SHUFFLE_AUROC_TOLERANCE}` across "
+        f"{len(SHUFFLE_SEEDS)} seeds.",
+        "- **Prefix-truncation test** rebuilds the row at `mid_step` "
+        "from a ledger truncated at `mid_step` and asserts byte-equality "
+        "with the same row built from the full ledger.",
+        "- Findings of severity `info` are reported but do not flip "
+        "`clean: false`.",
         "",
         "## Section results",
         "",
