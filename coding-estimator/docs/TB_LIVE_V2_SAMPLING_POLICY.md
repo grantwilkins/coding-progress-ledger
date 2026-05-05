@@ -32,32 +32,40 @@ rule.
 
 ### Two-arm collection
 
-| field | Arm A (degraded top model) | Arm B (mid-tier model) |
+Subagents are spawned via the Claude Code Agent tool. No upstream
+harness, no Docker, no direct API calls. See
+`docs/TB_LIVE_V2_RUNNER_SPEC.md` for the runner contract.
+
+| field | Arm A (top model) | Arm B (mid-tier model) |
 |---|---|---|
-| agent | `terminus` (TB harness) | `terminus` |
-| model | `claude-opus-4-7` (or `glm-5.1`) | `step-3.5-flash` (or `qwen3.5-27b`) |
-| `max_agent_timeout_sec` | 90 (TB2 default 180; deliberate cut) | 180 (TB2 default) |
-| `max_iter` | 20 (~33% cut) | 30 (default) |
-| network policy | per-task default | per-task default |
-| reuse shell history | false | false |
-| target task count | 50 TB2 tasks + 25 internal | 50 TB2 tasks + 25 internal |
-| expected pass rate | 0.40–0.55 | 0.40–0.55 |
+| subagent | Agent tool, `subagent_type: general-purpose` | same |
+| model | `claude-opus-4-7` | `claude-sonnet-4-6` |
+| `budget_lines` | 30 (soft cap, enforced by prompt + transcript count) | 20 |
+| isolation | fresh tempdir + fresh `python -m venv` | same |
+| target task count | 25 internal + a translated subset of TB2 (verifier-pytest only) | same |
+| expected pass rate | 0.45–0.60 | 0.30–0.50 |
 
-Total expected runs: ~150 (75 per arm). Failures expected: ~70 across
-both arms — well above the 25-failure floor.
+Total expected runs: ~100 across both arms (≈50 tasks × 2 arms; some
+tasks run only in Arm A if Arm B's smaller model fails to even attempt
+them). Failures expected: ~40–50 — well above the 25-failure floor.
 
-If runtime budget forces a cut, drop Arm B first (it is cleaner-shape
-but topically redundant with Arm A). Minimum viable: Arm A only,
-60 runs, ~25 failures.
+The Arm B model is **smaller**, not "degraded by budget cut", because
+the runner does not control wall-clock — it controls the action-budget
+through the prompt. Smaller-model is the cleaner outcome-diversity
+lever in this setup.
+
+If runtime budget forces a cut, drop Arm B first (Arm A alone delivers
+the failure floor with better trajectory variety).
 
 ### Source task pools
 
 | pool | rule | expected count contributed |
 |---|---|---|
-| Terminal-Bench 2.0 | sample stratified by category + difficulty (§ "Category balance" below). All 89 are eligible. | up to 50 per arm |
-| original Terminal-Bench | only used to fill the easy-difficulty slot (TB2 has only 3 easy tasks; we want ≥10). | ~7 per arm |
-| internal U3 tasks (`tasks/tb_live_v2/`) | designed in U3 for trajectory-shape diversity (progress drop, validation-new-work, stuck/blocked, high-progress failure, low-progress success). | 25 per arm |
+| internal U3 tasks (`tasks/tb_live_v2/`) | designed for trajectory-shape diversity. Primary pool — these are guaranteed verifier-pytest, no Docker, no GPU. | 25 per arm |
+| Terminal-Bench 2.0 (translated subset) | Only TB2 tasks with: pytest verifier in `tests/test_outputs.py`, no Docker-only setup, no GPU. Translate verbatim into `tasks/tb_live_v2/<id>/` (the directory shape is identical). | up to 25 per arm, after audit |
+| original Terminal-Bench | use to fill the easy-difficulty slot if the internal pool under-represents easy. | ~5 per arm |
 | Terminal-Bench Pro | **excluded from v2**. Re-evaluate after v2 lands. | 0 |
+| TB tasks that need Docker (apt-get, system services, multi-container) | flagged `requires_docker: true` in their `shape.yaml` and skipped. | 0 |
 
 ### Inclusion criteria (per task)
 
@@ -196,26 +204,23 @@ Required `run_manifest.json` fields:
   "task_family": "tb2 | tb_original | internal",
   "difficulty": "easy | medium | hard",
   "category": "software_engineering | ...",
-  "agent_scaffold": "terminus",
+  "subagent_type": "general-purpose",
   "model_name": "claude-opus-4-7",
-  "model_revision": "...",
   "arm": "A | B",
+  "budget_lines": 30,
   "start_time": "ISO-8601 UTC",
   "end_time": "ISO-8601 UTC",
-  "timeout_seconds": 90,
-  "max_iter": 20,
   "final_success": true | false,
-  "final_success_source": "tb_verifier",
-  "termination_reason": "verifier_pass | verifier_fail | timeout | iter_limit | infrastructure_failure",
+  "final_success_source": "internal_verifier",
+  "termination_reason": "verifier_pass | verifier_fail | no_done_record | subagent_limit | infrastructure_failure",
   "num_ledger_events": 0,
-  "has_real_wallclock": true,
-  "tb_dataset_version": "..."
+  "has_real_wallclock": true
 }
 ```
 
-`final_success_source = "tb_verifier"` is the value that distinguishes
-this corpus from Hermes — the verifier is deterministic, so the label
-is upstream-grounded, not annotated.
+`final_success_source = "internal_verifier"` is the value that
+distinguishes this corpus from Hermes — the pytest verifier exit is
+deterministic, so the label is upstream-grounded, not annotated.
 
 ## Acceptance (U2 gate)
 

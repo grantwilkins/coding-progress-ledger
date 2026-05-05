@@ -537,7 +537,7 @@ Every task has a category and expected difficulty.
 ```
 
 ### U4. Run tb_live_v2 in batches
-Status: plan shipped (2026-05-05) — `docs/TB_LIVE_V2_BATCH_PLAN.md` covers Batch 0/1/2/3 + reserve, per-batch loop, reproducibility artifacts, stop conditions, cost discipline, risk mitigations. Execution gated on harness install + cost sign-off + remaining 20 internal tasks (U3).
+Status: plan shipped (2026-05-05) — `docs/TB_LIVE_V2_BATCH_PLAN.md` + runner spec at `docs/TB_LIVE_V2_RUNNER_SPEC.md`. **No upstream harness, no Docker, no direct API.** Each run = one Agent-tool subagent (Opus 4.7 for Arm A, Sonnet 4.6 for Arm B) against a fresh tempdir + venv. Subagent emits per-action JSONL transcript; runner converts to events.jsonl and replays via the upstream sidecar to produce ledger.jsonl. Execution gated on the runner driver (`coding_estimator/runner/run_internal_task.py`), cost sign-off, and the remaining 20 internal tasks (U3).
 
 Batch plan:
 ```text

@@ -38,9 +38,9 @@ literature review: enough information to design `tb_live_v2`, no more._
 | task count | **89** |
 | difficulty | 3 easy / 57 medium / 29 hard |
 | categories (24 total) | software engineering (12), data science/processing (8), system administration (7), security (7), scientific computing (6), file operations (5), debugging (4), machine learning (4), mathematics (3), compilation/build tools (3), coding (3), + 16 other domains |
-| verifier | pytest in `tests/test_outputs.py`; pass = all assertions pass within `max_test_timeout_sec` (default 30s) |
-| environment | Ubuntu/Debian Docker; harness orchestrates multi-container; `tmux` + `asciinema` required |
-| harness | `tb run --agent <name> --model <id> --dataset-name terminal-bench-core` |
+| verifier | pytest in `tests/test_outputs.py`; pass = all assertions pass |
+| environment (upstream) | Ubuntu/Debian Docker; tmux + asciinema |
+| **how WE use it** | translate the verifier-pytest task subset into our `tasks/tb_live_v2/<id>/` shape and run on the host with a fresh tempdir + venv. Tasks needing apt/system services / GPU / multi-container are flagged `requires_docker: true` and skipped. |
 | license / use | public; tasks human-authored and triple-reviewed |
 | reference example tasks | `fix-git`, `prove-plus-comm`, `llm-inference-batching-scheduler`, `torch-pipeline-parallelism`, MuJoCo tuning, SPARQL knowledge-graph queries, protein assembly |
 
@@ -115,20 +115,26 @@ running a weak model on the same tasks because it stresses the
 
 ### 2.4 Recommendation
 
-`tb_live_v2` should be a **two-arm collection**:
+`tb_live_v2` is collected by **Claude Code Agent-tool subagents**, not
+by an external harness or direct API. Two arms:
 
-- **Arm A (primary, ~70 runs).** Top model (Claude Opus 4.7 or GLM-5.1)
-  with deliberate budget tightening. Produces high-progress failures,
-  late-recovery, and stuck/blocked patterns that the estimator most
-  needs to learn.
-- **Arm B (secondary, ~30 runs).** Mid-tier model (Step-3.5-Flash or
-  Qwen3.5-27B) at default settings. Produces clean failure shapes
-  and easier-to-grade success/failure signal.
+- **Arm A (primary).** Claude Opus 4.7 subagent with `budget_lines = 30`.
+  Wide topical reach + relatively strong success rate; failures here
+  carry interesting trajectory dynamics (high-progress failure,
+  late-recovery, stuck/blocked).
+- **Arm B (secondary).** Claude Sonnet 4.6 subagent with
+  `budget_lines = 20`. Smaller model + tighter action budget produces
+  cleaner failure shapes and a different mistake distribution.
 
-Both arms run on the same TB2 task set. Each task is run once per arm.
-Total runs: ~100 if both arms cover the same 50 tasks. Failures:
-expected ~30 in Arm A (degraded top model) + ~25 in Arm B
-(mid-tier model), well above the 25-failure floor.
+Both arms run on the same task set. Each task is run once per arm.
+Outcome diversity comes from two levers we control directly: model
+selection, and the action budget the prompt asserts.
+
+Open-weight models (Qwen, Step, etc.) are no longer the path because
+the host runner uses Claude Code subagents. The
+"40–60% pass-rate band" target now translates to "pick the model+budget
+combo whose pass rate on the internal task set lands in that band."
+Smoke this on the 5 internal scaffolds before kickoff.
 
 ## 3. Task-package format (canonical)
 
