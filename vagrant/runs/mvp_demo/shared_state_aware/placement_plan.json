@@ -1,0 +1,44 @@
+{
+  "policy": "shared_state_aware",
+  "meta": {
+    "tau": 1,
+    "components": [
+      [
+        "S1",
+        "S2",
+        "S3",
+        "S4"
+      ]
+    ]
+  },
+  "placements": [
+    {
+      "node_id": "S1",
+      "site": "seattle",
+      "cost_s": 0.5279466666666666,
+      "component_size": 4,
+      "reason": "grouped"
+    },
+    {
+      "node_id": "S2",
+      "site": "seattle",
+      "cost_s": 0.5279466666666666,
+      "component_size": 4,
+      "reason": "grouped"
+    },
+    {
+      "node_id": "S3",
+      "site": "seattle",
+      "cost_s": 0.5279466666666666,
+      "component_size": 4,
+      "reason": "grouped"
+    },
+    {
+      "node_id": "S4",
+      "site": "seattle",
+      "cost_s": 0.5279466666666666,
+      "component_size": 4,
+      "reason": "grouped"
+    }
+  ]
+}

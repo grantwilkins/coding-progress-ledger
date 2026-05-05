@@ -1,0 +1,85 @@
+{
+  "policy": "request_level_no_reuse",
+  "meta": {},
+  "materializations": [
+    {
+      "state_id": "system_prefix",
+      "content_hash": "hash_system_prefix_v1",
+      "site": "seattle",
+      "mode": "context_replay",
+      "cost_s": 0.0044444444444444444,
+      "materialization_count": 4,
+      "consumers": [
+        "S1",
+        "S2",
+        "S3",
+        "S4"
+      ],
+      "reason": "per_node_no_reuse"
+    },
+    {
+      "state_id": "repo_context",
+      "content_hash": "hash_repo_context_v1",
+      "site": "seattle",
+      "mode": "context_replay",
+      "cost_s": 0.17777777777777778,
+      "materialization_count": 4,
+      "consumers": [
+        "S1",
+        "S2",
+        "S3",
+        "S4"
+      ],
+      "reason": "per_node_no_reuse"
+    },
+    {
+      "state_id": "private_A",
+      "content_hash": "hash_private_A_v1",
+      "site": "seattle",
+      "mode": "context_replay",
+      "cost_s": 0.03333333333333333,
+      "materialization_count": 1,
+      "consumers": [
+        "S2"
+      ],
+      "reason": "per_node_no_reuse"
+    },
+    {
+      "state_id": "workspace_AC",
+      "content_hash": "hash_workspace_AC_v1",
+      "site": "seattle",
+      "mode": "artifact_copy",
+      "cost_s": 0.00128,
+      "materialization_count": 2,
+      "consumers": [
+        "S2",
+        "S4"
+      ],
+      "reason": "per_node_no_reuse"
+    },
+    {
+      "state_id": "private_B",
+      "content_hash": "hash_private_B_v1",
+      "site": "seattle",
+      "mode": "context_replay",
+      "cost_s": 0.26666666666666666,
+      "materialization_count": 1,
+      "consumers": [
+        "S3"
+      ],
+      "reason": "per_node_no_reuse"
+    },
+    {
+      "state_id": "private_C",
+      "content_hash": "hash_private_C_v1",
+      "site": "seattle",
+      "mode": "context_replay",
+      "cost_s": 0.044444444444444446,
+      "materialization_count": 1,
+      "consumers": [
+        "S4"
+      ],
+      "reason": "per_node_no_reuse"
+    }
+  ]
+}

@@ -211,10 +211,10 @@ JSON output with `nodes`, `state_objects`, `edges`. Schema documented in `docs/m
 
 **Goal.** Closed-form materialization cost. No queues, no capacity.
 
-**C1 — Model and site profile loaders** (`not started`)
+**C1 — Model and site profile loaders** (`done`, 2026-05-05)
 `vagrant_agent/profiles.py` reads `configs/model_profiles.yaml` and `configs/sites_2site.yaml`. MVP ships **one model** (e.g., `compact_kv`) and **two sites** (`phoenix`, `seattle`) with a single inter-site link.
 
-**C2 — Cost formulas** (`not started`)
+**C2 — Cost formulas** (`done`, 2026-05-05)
 `vagrant_agent/costs.py` implementing exactly four formulas from the plan, lines 479–484:
 
 ```text
@@ -226,7 +226,7 @@ artifact_copy_s  = 8 * artifact_bytes / link_bps
 
 **Important.** Token count `T` cancels in the kv-vs-replay comparison; **there is no crossover in `T`**. The crossover is in `link_bps`, `kv_bytes_per_token`, or `dest_prefill_tok_s`. Do not write tests that imply otherwise.
 
-**C3 — Cost crossover unit tests** (`not started`)
+**C3 — Cost crossover unit tests** (`done`, 2026-05-05)
 At least one test per formula. The crossover test must be in **bandwidth**, not token count:
 
 ```text
@@ -237,7 +237,7 @@ above B*: kv_transfer < context_replay (transfer wins on a fast link)
 
 Also test: holding `link_bps` fixed, varying `kv_bytes_per_token` and `dest_prefill_tok_s` produces the same crossover identity.
 
-**C4 — Materialization mode chooser** (`not started`)
+**C4 — Materialization mode chooser** (`done`, 2026-05-05 — first-in-tuple tie-break documented)
 
 ```python
 choose_min_cost_mode(state, src_site, dst_site, allowed_modes) -> (mode, cost_s)
@@ -253,17 +253,17 @@ Returns the cheapest feasible mode and its cost. Used by both policies in D, and
 
 **Goal.** Two policies. One closed-form rule each.
 
-**D1 — `request_level_no_reuse` baseline** (`not started`)
+**D1 — `request_level_no_reuse` baseline** (`done`, 2026-05-05)
 Each node placed independently at the site with lowest sum-of-cost across its required state objects. State materialization is paid **per node**, even if multiple nodes are colocated. This is a deliberately strawman baseline — its job is to make the duplication accounting visible, not to model a competitive system.
 
 **Naming discipline.** Use `request_level_no_reuse` everywhere; do not abbreviate to `request_level`. A future, more competitive baseline (`request_level_with_site_cache` — same per-node placement, but materialized state is reused across colocated nodes at a site) is a deferred policy in Workstream H.
 
-**D2 — `shared_state_aware` policy** (`not started`)
+**D2 — `shared_state_aware` policy** (`done`, 2026-05-05)
 Build the node-state-share graph (edge if two nodes share `> tau` tokens of state). For each connected component, place the whole component at the site with lowest sum-of-cost. Shared state is materialized **once per component-site**, not once per node.
 
 `tau` is a single config knob measured in tokens on shared-state edges. Default = 1 (any sharing groups). Expose `--tau` on `vagrant-bench` and `vagrant-plan` even in the MVP; the toy trace's small system prefix (§ A6) is intentionally chosen to motivate the knob.
 
-**D3 — Plan emission** (`not started`)
+**D3 — Plan emission** (`done`, 2026-05-05)
 Both policies emit two artifacts.
 
 `placement_plan.json`:
@@ -298,10 +298,10 @@ The `reason` field is human-readable provenance for paper figures and debugging.
 
 **Goal.** One end-to-end command, one plot, one audit CSV.
 
-**E1 — `vagrant-bench` CLI** (`not started`)
+**E1 — `vagrant-bench` CLI** (`done`, 2026-05-05)
 `vagrant-bench --trace <jsonl> --policies request_level_no_reuse,shared_state_aware --tau <int> --out <dir>`. Runs both, writes `results.csv`, `plots/duplication_factor.png`, and the per-state breakdown from E4.
 
-**E2 — Metrics** (`not started`)
+**E2 — Metrics** (`done`, 2026-05-05)
 `vagrant_agent/metrics.py` computing exactly:
 
 - `shared_state_duplication_factor` (cost-weighted, see below)
@@ -320,10 +320,10 @@ shared_state_duplication_factor =
 
 where `ideal_materialization_count_s` is the lower bound (one materialization per site that has at least one consumer). A token-weighted variant may also be reported as `shared_state_duplication_factor_tokens`, but the cost-weighted version is the one in the headline plot.
 
-**E3 — Plot** (`not started`)
+**E3 — Plot** (`done`, 2026-05-05)
 `plots/duplication_factor.png`: two bars, one per policy, on the toy trace. Matplotlib, no styling beyond defaults.
 
-**E4 — State materialization breakdown CSV** (`not started`)
+**E4 — State materialization breakdown CSV** (`done`, 2026-05-05 — incl. num_consumers + ideal_materialization_count columns; headline metric reproducible from CSV alone)
 `state_materialization_breakdown.csv` — one row per `(policy, state_id, site)`. Columns:
 
 ```text

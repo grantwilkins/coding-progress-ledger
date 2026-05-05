@@ -6,6 +6,8 @@ readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
   "coding-progress-ledger",
+  "pyyaml>=6",
+  "matplotlib>=3.7",
 ]
 
 [project.scripts]
