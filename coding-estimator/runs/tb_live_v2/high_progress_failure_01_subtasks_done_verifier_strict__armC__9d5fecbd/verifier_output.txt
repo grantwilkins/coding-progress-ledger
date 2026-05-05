@@ -1,0 +1,36 @@
+EEEE                                                                     [100%]
+==================================== ERRORS ====================================
+________________________ ERROR at setup of test_health _________________________
+/var/folders/3j/5n1r8yyx2d58jn87prrxs_lm0000gn/T/tb_live_v2_high_progress_failure_01_subtasks_done_verifier_strict__armC__9d5fecbd_v6a_ui7j/tests/test_outputs.py:59: in _server
+    assert APP.is_file(), f"{APP} not created"
+E   AssertionError: /var/folders/3j/5n1r8yyx2d58jn87prrxs_lm0000gn/T/tb_live_v2_high_progress_failure_01_subtasks_done_verifier_strict__armC__9d5fecbd_v6a_ui7j/server.py not created
+E   assert False
+E    +  where False = is_file()
+E    +    where is_file = PosixPath('/var/folders/3j/5n1r8yyx2d58jn87prrxs_lm0000gn/T/tb_live_v2_high_progress_failure_01_subtasks_done_verifier_strict__armC__9d5fecbd_v6a_ui7j/server.py').is_file
+________________________ ERROR at setup of test_version ________________________
+/var/folders/3j/5n1r8yyx2d58jn87prrxs_lm0000gn/T/tb_live_v2_high_progress_failure_01_subtasks_done_verifier_strict__armC__9d5fecbd_v6a_ui7j/tests/test_outputs.py:59: in _server
+    assert APP.is_file(), f"{APP} not created"
+E   AssertionError: /var/folders/3j/5n1r8yyx2d58jn87prrxs_lm0000gn/T/tb_live_v2_high_progress_failure_01_subtasks_done_verifier_strict__armC__9d5fecbd_v6a_ui7j/server.py not created
+E   assert False
+E    +  where False = is_file()
+E    +    where is_file = PosixPath('/var/folders/3j/5n1r8yyx2d58jn87prrxs_lm0000gn/T/tb_live_v2_high_progress_failure_01_subtasks_done_verifier_strict__armC__9d5fecbd_v6a_ui7j/server.py').is_file
+____________ ERROR at setup of test_items_sorted_and_blanks_ignored ____________
+/var/folders/3j/5n1r8yyx2d58jn87prrxs_lm0000gn/T/tb_live_v2_high_progress_failure_01_subtasks_done_verifier_strict__armC__9d5fecbd_v6a_ui7j/tests/test_outputs.py:59: in _server
+    assert APP.is_file(), f"{APP} not created"
+E   AssertionError: /var/folders/3j/5n1r8yyx2d58jn87prrxs_lm0000gn/T/tb_live_v2_high_progress_failure_01_subtasks_done_verifier_strict__armC__9d5fecbd_v6a_ui7j/server.py not created
+E   assert False
+E    +  where False = is_file()
+E    +    where is_file = PosixPath('/var/folders/3j/5n1r8yyx2d58jn87prrxs_lm0000gn/T/tb_live_v2_high_progress_failure_01_subtasks_done_verifier_strict__armC__9d5fecbd_v6a_ui7j/server.py').is_file
+_______________ ERROR at setup of test_post_persists_and_echoes ________________
+/var/folders/3j/5n1r8yyx2d58jn87prrxs_lm0000gn/T/tb_live_v2_high_progress_failure_01_subtasks_done_verifier_strict__armC__9d5fecbd_v6a_ui7j/tests/test_outputs.py:59: in _server
+    assert APP.is_file(), f"{APP} not created"
+E   AssertionError: /var/folders/3j/5n1r8yyx2d58jn87prrxs_lm0000gn/T/tb_live_v2_high_progress_failure_01_subtasks_done_verifier_strict__armC__9d5fecbd_v6a_ui7j/server.py not created
+E   assert False
+E    +  where False = is_file()
+E    +    where is_file = PosixPath('/var/folders/3j/5n1r8yyx2d58jn87prrxs_lm0000gn/T/tb_live_v2_high_progress_failure_01_subtasks_done_verifier_strict__armC__9d5fecbd_v6a_ui7j/server.py').is_file
+=========================== short test summary info ============================
+ERROR ../../../../../../../var/folders/3j/5n1r8yyx2d58jn87prrxs_lm0000gn/T/tb_live_v2_high_progress_failure_01_subtasks_done_verifier_strict__armC__9d5fecbd_v6a_ui7j/tests/test_outputs.py::test_health
+ERROR ../../../../../../../var/folders/3j/5n1r8yyx2d58jn87prrxs_lm0000gn/T/tb_live_v2_high_progress_failure_01_subtasks_done_verifier_strict__armC__9d5fecbd_v6a_ui7j/tests/test_outputs.py::test_version
+ERROR ../../../../../../../var/folders/3j/5n1r8yyx2d58jn87prrxs_lm0000gn/T/tb_live_v2_high_progress_failure_01_subtasks_done_verifier_strict__armC__9d5fecbd_v6a_ui7j/tests/test_outputs.py::test_items_sorted_and_blanks_ignored
+ERROR ../../../../../../../var/folders/3j/5n1r8yyx2d58jn87prrxs_lm0000gn/T/tb_live_v2_high_progress_failure_01_subtasks_done_verifier_strict__armC__9d5fecbd_v6a_ui7j/tests/test_outputs.py::test_post_persists_and_echoes
+4 errors in 0.04s

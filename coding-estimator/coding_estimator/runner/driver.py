@@ -38,8 +38,8 @@ from coding_estimator.runner.transcript_to_events import (
     write_events,
 )
 
-ARM_BUDGETS = {"A": 30, "B": 20}
-ARM_MODELS = {"A": "claude-opus-4-7", "B": "claude-sonnet-4-6"}
+ARM_BUDGETS = {"A": 30, "B": 20, "C": 20}
+ARM_MODELS = {"A": "claude-opus-4-7", "B": "claude-sonnet-4-6", "C": "claude-haiku-4-5"}
 
 
 def _utc_now() -> str:
@@ -249,10 +249,11 @@ def finalize(
 
 def _replay_sidecar(run_dir: Path) -> None:
     """Invoke ledger_progress.sidecar to convert events.jsonl → ledger.jsonl."""
+    abs_run_dir = run_dir.resolve()
     proc = subprocess.run(
         [sys.executable, "-m", "ledger_progress.sidecar",
-         "--run-dir", str(run_dir),
-         "--input-file", str(run_dir / "events.jsonl")],
+         "--run-dir", str(abs_run_dir),
+         "--input-file", str(abs_run_dir / "events.jsonl")],
         capture_output=True, text=True,
         cwd=str(Path(__file__).resolve().parents[2].parent / "coding-progress-ledger"),
     )

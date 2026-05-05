@@ -537,7 +537,7 @@ Every task has a category and expected difficulty.
 ```
 
 ### U4. Run tb_live_v2 in batches
-Status: plan shipped (2026-05-05) — `docs/TB_LIVE_V2_BATCH_PLAN.md` + runner spec at `docs/TB_LIVE_V2_RUNNER_SPEC.md`. **No upstream harness, no Docker, no direct API.** Each run = one Agent-tool subagent (Opus 4.7 for Arm A, Sonnet 4.6 for Arm B) against a fresh tempdir + venv. Subagent emits per-action JSONL transcript; runner converts to events.jsonl and replays via the upstream sidecar to produce ledger.jsonl. Execution gated on the runner driver (`coding_estimator/runner/run_internal_task.py`), cost sign-off, and the remaining 20 internal tasks (U3).
+Status: Batch 0 pilot shipped (2026-05-05) — 5 task scaffolds × 3 arms (A=opus, B=sonnet, C=haiku) = 15 runs. 10 pass / 5 fail / 0 unresolved. Outcome rate already in the 0.25–0.60 band on n=15. Sidecar replay bug fixed (relative path under `cwd=` of upstream repo). See `reports/TB_LIVE_V2_BATCH0_PILOT.md`. Arm C (haiku) added at user request alongside the original A/B (opus/sonnet) two-arm design; same budget as arm B (20 actions). Batches 1–3 still gated on U3 shipping the remaining 20 internal tasks plus TB2 task ingestion.
 
 Batch plan:
 ```text

@@ -1,0 +1,70 @@
+FFFFFF                                                                   [100%]
+=================================== FAILURES ===================================
+_______________________________ test_basic_week ________________________________
+/var/folders/3j/5n1r8yyx2d58jn87prrxs_lm0000gn/T/tb_live_v2_validation_new_work_01_test_reveals_edge_case__armC__642b2075_8xjc3zf0/tests/test_outputs.py:26: in test_basic_week
+    assert _load().days_until("2026-02-01", "2026-02-08") == 7
+           ^^^^^^^
+/var/folders/3j/5n1r8yyx2d58jn87prrxs_lm0000gn/T/tb_live_v2_validation_new_work_01_test_reveals_edge_case__armC__642b2075_8xjc3zf0/tests/test_outputs.py:17: in _load
+    assert APP.is_file(), f"{APP} not created"
+E   AssertionError: /var/folders/3j/5n1r8yyx2d58jn87prrxs_lm0000gn/T/tb_live_v2_validation_new_work_01_test_reveals_edge_case__armC__642b2075_8xjc3zf0/days_until.py not created
+E   assert False
+E    +  where False = is_file()
+E    +    where is_file = PosixPath('/var/folders/3j/5n1r8yyx2d58jn87prrxs_lm0000gn/T/tb_live_v2_validation_new_work_01_test_reveals_edge_case__armC__642b2075_8xjc3zf0/days_until.py').is_file
+_________________________ test_leap_year_feb_to_march __________________________
+/var/folders/3j/5n1r8yyx2d58jn87prrxs_lm0000gn/T/tb_live_v2_validation_new_work_01_test_reveals_edge_case__armC__642b2075_8xjc3zf0/tests/test_outputs.py:30: in test_leap_year_feb_to_march
+    assert _load().days_until("2024-02-01", "2024-03-01") == 29
+           ^^^^^^^
+/var/folders/3j/5n1r8yyx2d58jn87prrxs_lm0000gn/T/tb_live_v2_validation_new_work_01_test_reveals_edge_case__armC__642b2075_8xjc3zf0/tests/test_outputs.py:17: in _load
+    assert APP.is_file(), f"{APP} not created"
+E   AssertionError: /var/folders/3j/5n1r8yyx2d58jn87prrxs_lm0000gn/T/tb_live_v2_validation_new_work_01_test_reveals_edge_case__armC__642b2075_8xjc3zf0/days_until.py not created
+E   assert False
+E    +  where False = is_file()
+E    +    where is_file = PosixPath('/var/folders/3j/5n1r8yyx2d58jn87prrxs_lm0000gn/T/tb_live_v2_validation_new_work_01_test_reveals_edge_case__armC__642b2075_8xjc3zf0/days_until.py').is_file
+_______________________ test_non_leap_year_feb_to_march ________________________
+/var/folders/3j/5n1r8yyx2d58jn87prrxs_lm0000gn/T/tb_live_v2_validation_new_work_01_test_reveals_edge_case__armC__642b2075_8xjc3zf0/tests/test_outputs.py:34: in test_non_leap_year_feb_to_march
+    assert _load().days_until("2026-02-01", "2026-03-01") == 28
+           ^^^^^^^
+/var/folders/3j/5n1r8yyx2d58jn87prrxs_lm0000gn/T/tb_live_v2_validation_new_work_01_test_reveals_edge_case__armC__642b2075_8xjc3zf0/tests/test_outputs.py:17: in _load
+    assert APP.is_file(), f"{APP} not created"
+E   AssertionError: /var/folders/3j/5n1r8yyx2d58jn87prrxs_lm0000gn/T/tb_live_v2_validation_new_work_01_test_reveals_edge_case__armC__642b2075_8xjc3zf0/days_until.py not created
+E   assert False
+E    +  where False = is_file()
+E    +    where is_file = PosixPath('/var/folders/3j/5n1r8yyx2d58jn87prrxs_lm0000gn/T/tb_live_v2_validation_new_work_01_test_reveals_edge_case__armC__642b2075_8xjc3zf0/days_until.py').is_file
+__________________________ test_rejects_short_format ___________________________
+/var/folders/3j/5n1r8yyx2d58jn87prrxs_lm0000gn/T/tb_live_v2_validation_new_work_01_test_reveals_edge_case__armC__642b2075_8xjc3zf0/tests/test_outputs.py:39: in test_rejects_short_format
+    _load().days_until("2026-02", "2026-03")
+    ^^^^^^^
+/var/folders/3j/5n1r8yyx2d58jn87prrxs_lm0000gn/T/tb_live_v2_validation_new_work_01_test_reveals_edge_case__armC__642b2075_8xjc3zf0/tests/test_outputs.py:17: in _load
+    assert APP.is_file(), f"{APP} not created"
+E   AssertionError: /var/folders/3j/5n1r8yyx2d58jn87prrxs_lm0000gn/T/tb_live_v2_validation_new_work_01_test_reveals_edge_case__armC__642b2075_8xjc3zf0/days_until.py not created
+E   assert False
+E    +  where False = is_file()
+E    +    where is_file = PosixPath('/var/folders/3j/5n1r8yyx2d58jn87prrxs_lm0000gn/T/tb_live_v2_validation_new_work_01_test_reveals_edge_case__armC__642b2075_8xjc3zf0/days_until.py').is_file
+__________________________ test_rejects_invalid_month __________________________
+/var/folders/3j/5n1r8yyx2d58jn87prrxs_lm0000gn/T/tb_live_v2_validation_new_work_01_test_reveals_edge_case__armC__642b2075_8xjc3zf0/tests/test_outputs.py:44: in test_rejects_invalid_month
+    _load().days_until("2026-13-01", "2026-12-01")
+    ^^^^^^^
+/var/folders/3j/5n1r8yyx2d58jn87prrxs_lm0000gn/T/tb_live_v2_validation_new_work_01_test_reveals_edge_case__armC__642b2075_8xjc3zf0/tests/test_outputs.py:17: in _load
+    assert APP.is_file(), f"{APP} not created"
+E   AssertionError: /var/folders/3j/5n1r8yyx2d58jn87prrxs_lm0000gn/T/tb_live_v2_validation_new_work_01_test_reveals_edge_case__armC__642b2075_8xjc3zf0/days_until.py not created
+E   assert False
+E    +  where False = is_file()
+E    +    where is_file = PosixPath('/var/folders/3j/5n1r8yyx2d58jn87prrxs_lm0000gn/T/tb_live_v2_validation_new_work_01_test_reveals_edge_case__armC__642b2075_8xjc3zf0/days_until.py').is_file
+___________________________ test_rejects_invalid_day ___________________________
+/var/folders/3j/5n1r8yyx2d58jn87prrxs_lm0000gn/T/tb_live_v2_validation_new_work_01_test_reveals_edge_case__armC__642b2075_8xjc3zf0/tests/test_outputs.py:49: in test_rejects_invalid_day
+    _load().days_until("2026-02-30", "2026-03-01")
+    ^^^^^^^
+/var/folders/3j/5n1r8yyx2d58jn87prrxs_lm0000gn/T/tb_live_v2_validation_new_work_01_test_reveals_edge_case__armC__642b2075_8xjc3zf0/tests/test_outputs.py:17: in _load
+    assert APP.is_file(), f"{APP} not created"
+E   AssertionError: /var/folders/3j/5n1r8yyx2d58jn87prrxs_lm0000gn/T/tb_live_v2_validation_new_work_01_test_reveals_edge_case__armC__642b2075_8xjc3zf0/days_until.py not created
+E   assert False
+E    +  where False = is_file()
+E    +    where is_file = PosixPath('/var/folders/3j/5n1r8yyx2d58jn87prrxs_lm0000gn/T/tb_live_v2_validation_new_work_01_test_reveals_edge_case__armC__642b2075_8xjc3zf0/days_until.py').is_file
+=========================== short test summary info ============================
+FAILED ../../../../../../../var/folders/3j/5n1r8yyx2d58jn87prrxs_lm0000gn/T/tb_live_v2_validation_new_work_01_test_reveals_edge_case__armC__642b2075_8xjc3zf0/tests/test_outputs.py::test_basic_week
+FAILED ../../../../../../../var/folders/3j/5n1r8yyx2d58jn87prrxs_lm0000gn/T/tb_live_v2_validation_new_work_01_test_reveals_edge_case__armC__642b2075_8xjc3zf0/tests/test_outputs.py::test_leap_year_feb_to_march
+FAILED ../../../../../../../var/folders/3j/5n1r8yyx2d58jn87prrxs_lm0000gn/T/tb_live_v2_validation_new_work_01_test_reveals_edge_case__armC__642b2075_8xjc3zf0/tests/test_outputs.py::test_non_leap_year_feb_to_march
+FAILED ../../../../../../../var/folders/3j/5n1r8yyx2d58jn87prrxs_lm0000gn/T/tb_live_v2_validation_new_work_01_test_reveals_edge_case__armC__642b2075_8xjc3zf0/tests/test_outputs.py::test_rejects_short_format
+FAILED ../../../../../../../var/folders/3j/5n1r8yyx2d58jn87prrxs_lm0000gn/T/tb_live_v2_validation_new_work_01_test_reveals_edge_case__armC__642b2075_8xjc3zf0/tests/test_outputs.py::test_rejects_invalid_month
+FAILED ../../../../../../../var/folders/3j/5n1r8yyx2d58jn87prrxs_lm0000gn/T/tb_live_v2_validation_new_work_01_test_reveals_edge_case__armC__642b2075_8xjc3zf0/tests/test_outputs.py::test_rejects_invalid_day
+6 failed in 0.02s
