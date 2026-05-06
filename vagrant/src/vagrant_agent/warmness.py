@@ -129,15 +129,22 @@ class WarmnessMap:
 
     def lru_evict(self, site: str) -> tuple["WarmnessMap", str | None]:
         """Evict the oldest entry at `site`. Returns (new_map, evicted_state_id).
-        If no entries at site, returns (self, None)."""
-        candidates = [(key, e) for key, e in self.entries.items() if key[1] == site]
-        if not candidates:
+        If no entries at site, returns (self, None).
+
+        Ordering: primary by descending age_s (largest = oldest);
+        secondary tie-break by dict insertion order (earlier insertion =
+        older). Python 3.7+ preserves dict insertion order, so this is
+        deterministic.
+        """
+        # enumerate(items) gives insertion index; filter to entries at `site`.
+        indexed = [(idx, key, entry) for idx, (key, entry) in enumerate(self.entries.items())
+                   if key[1] == site]
+        if not indexed:
             return self, None
-        # Oldest first; ties broken by state_id for determinism.
-        candidates.sort(key=lambda kv: (-kv[1].age_s, kv[0][0]), reverse=True)
-        # Want max age_s -> oldest. Sort ascending by negative-age means
-        # oldest is at index 0 when reverse=True. Simpler:
-        oldest_key, _ = max(candidates, key=lambda kv: (kv[1].age_s, kv[0][0]))
+        # Sort by (-age_s, insertion_idx) ascending: largest age_s first;
+        # within ties, earliest insertion first.
+        indexed.sort(key=lambda x: (-x[2].age_s, x[0]))
+        _, oldest_key, _ = indexed[0]
         new_entries = dict(self.entries)
         del new_entries[oldest_key]
         return WarmnessMap(entries=new_entries), oldest_key[0]
