@@ -12,8 +12,12 @@ SITES = REPO / "configs" / "sites_2site.yaml"
 def test_load_model():
     m = load_model(MODELS, "compact_kv")
     assert m.name == "compact_kv"
-    assert m.kv_bytes_per_token == 70656
-    assert m.active_params_b == 49
+    # Kimi-K2.6 class MLA: 61 × (512+64) × 2 = 70,272 bytes/token.
+    assert m.kv_bytes_per_token == 70272
+    # Kimi-K2.6 active = 32B (1T total / 32B active per HF card).
+    assert m.active_params_b == 32
+    # Per-stream prefill at T=100k on 8×H100 dense bf16, MFU=0.35: ≈14,659 tok/s.
+    assert m.single_stream_prefill_tok_s == 14659
 
 
 def test_load_unknown_model_hard_fails():

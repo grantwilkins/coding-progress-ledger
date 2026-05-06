@@ -23,6 +23,7 @@ class ModelProfile:
     name: str
     active_params_b: float
     kv_bytes_per_token: int
+    single_stream_prefill_tok_s: float = 100_000.0  # T_ref=100k tok/s baseline; overridden per architecture
     notes: str = ""
 
 
@@ -72,6 +73,7 @@ def load_model(path: str | Path, name: str) -> ModelProfile:
         name=name,
         active_params_b=float(spec["active_params_b"]),
         kv_bytes_per_token=int(spec["kv_bytes_per_token"]),
+        single_stream_prefill_tok_s=float(spec.get("single_stream_prefill_tok_s", 100_000.0)),
         notes=spec.get("notes", ""),
     )
 
