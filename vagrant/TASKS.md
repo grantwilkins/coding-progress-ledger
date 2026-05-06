@@ -2,29 +2,39 @@
 
 This file is the working backlog for `vagrant-agent`. It is the authoritative plan; if reality diverges, update this file rather than the implementation plan.
 
-## Project status — calibration result (post-K7 gauntlet, 2026-05-05)
+## Project status — regime-discovery phase (post-Week-1, 2026-05-05)
 
-> **The K7 falsification gauntlet has failed.** T1 (correctness check) and T2 (prefill-stampede) pass; **T3 (multi-resource bottleneck) fails** — even with a load-aware bin-packing `mixed_min_pressure`, the herd-level planner beats best fixed-mode (`cache_reuse`) by only ~3.6%, below the 10% bar. `random_mode` matches `mixed_min_pressure` to within 0.4%, indicating the diversification heuristic is no better than chance on the canonical fixture. **The K-pivot is not earned**; the project's path is **Phase 3b — Workstream L (calibration paper)**.
+> **The Week 1 result is a regime signal, not a project failure.** A post-critic K7 rerun fixed budget/planner drift, concurrent shared-state dedup, workspace hydrate units, and T3 fixture coverage. Corrected K7 now passes: T1 collapses under infinite capacity, T2 exposes prefill stampede, and T3 shows `mixed_min_pressure` beating the best fixed-mode policy by about 49% on a single-source multi-resource evacuation fixture. This earns carrying mobility episodes forward, but it still does **not** justify a universal "our policy wins" claim.
 >
-> The honest framing of the project's contribution: for SWE-bench-class workloads at observed scales, L1 (per-site cache reuse + per-state intelligent mode dispatch) explains most of the state-locality benefit. Herd-level planning shows measurable but sub-threshold improvement on multi-resource fixtures, and is dominated by a smart per-state policy. The phenomenon claim requires either workloads above the regime-flip threshold (~50 MB minority-home cross-site bytes) OR explicit prefill-only saturation (T2 regime), neither of which is present in the SWE-bench shallow-clone setup.
+> The active next phase is **regime discovery**: map when per-site reuse is enough, when state locality matters, and when landing pressure requires mobility planning. The paper-level question becomes: **given an agentic workload and a mobility event, which regime is it in?**
 >
-> See `docs/K7_gauntlet_results.md` for the full breakdown and `docs/L1_calibration_paper_draft.md` for the calibration paper outline.
+> See `docs/WEEK1_REPORT.md` for the audit trail, `docs/K7_gauntlet_results.md` for the gauntlet numbers, `docs/K8_K9_regime_map_and_oracle.md` for the first regime map and oracle gap table, `docs/R4_regime_discovery_memo.md` for the current framing, `docs/L1_calibration_paper_draft.md` for the calibration-paper scaffold, and `kv-transfer-early-experiment/FINDINGS.md` for the architecture-dependent KV-vs-replay crossover result.
 
-The four-level conceptual hierarchy frames everything below:
+The current regime map hypothesis:
 
-| Level | Policy | Status today |
-| ----- | ------ | ------------ |
-| L0 | No-reuse baseline (D1) | Strawman; gap closes with L1 |
-| L1 | Per-site cache reuse (H1) | Important; often sufficient on observed traces |
-| L2 | Graph grouping (D2 / D3 / G1) | Conditional; collapses to L1 on every real fixture we hold |
-| L3 | Mobility episodes (Workstream K) | Hypothesis under test; pivot iff K7 gauntlet passes |
+| Regime | What dominates | Current evidence |
+| ------ | -------------- | ---------------- |
+| Reuse regime | state is small or already warm | H5b: real SWE-agent bytes collapse the grouping gap |
+| State-locality regime | large workspace/artifact/state transfer | H2/H5a: synthetic 1 GB workspaces produce large gaps |
+| Landing-pressure regime | many workflows reconstitute at once | T2: prefill-stampede sanity check; strong baselines can also avoid replay when network is free |
+| Multi-resource regime | network, prefill, workspace all finite | corrected T3: richer planner beats fixed modes on single-source evacuation |
+
+The four-level hierarchy remains useful, but not as a podium:
+
+| Level | Abstraction | Status today |
+| ----- | ----------- | ------------ |
+| L0 | No-reuse baseline (D1) | Strawman; keep only as a calibration floor |
+| L1 | Strong per-site reuse + per-state mode choice | First serious baseline; often sufficient on observed traces |
+| L2 | Graph grouping (D2 / D3 / G1) | Lateral abstraction; not proven better than L1 on real fixtures |
+| L3 | Mobility episodes / landing pressure | Useful in corrected T3; regime-dependent and still unmapped |
 
 **Repo grounding** (read these before starting any task):
 
 - `vagrant_agent_repo_implementation_plan.md` — original (longer) design doc; reference, not gospel.
 - `../coding-progress-ledger/ledger_progress/{core,session,serialization,queries,sidecar}.py` — vagrant rides on these.
 - `AGENTS.md` (this repo and sibling) — coding rules, identical in spirit.
-- `docs/TAKEAWAYS_FOR_REVIEW.md` — context for the K/L pivot.
+- `docs/WEEK1_REPORT.md` — latest audit trail and why the next step is regime discovery.
+- `docs/TAKEAWAYS_FOR_REVIEW.md` — pre-K7 context for the original K/L fork.
 
 Status markers on each task: `not started` · `in progress` · `blocked` · `done` · `deferred`.
 
@@ -42,13 +52,15 @@ Do not simulate per-request queues, admission control, schedulers, or routing.
   as a capacity with LRU eviction. No buffers, no FIFO, no priorities, no preemption.
 Do not invent a new event class for mobility episodes. Episodes are JSON
   files referencing manifests; they ride alongside the ledger.
-Do not score "winning policy" on a single episode. Workstream K's output
-  is a regime map, not a podium.
+Do not score "winning policy" on a single episode. The output is a
+  regime map, not a podium.
 Do not mutate a warmness map outside the K4 fluid simulator.
-Do not accept "mobility episodes" as the project's new thesis until
-  Workstream K's falsification gauntlet (K7) passes all three tests.
-  Until then, the pivot is provisional and Workstream L is a live
-  alternative outcome.
+Do not treat "mixed_min_pressure wins" as the project's thesis. K7 did
+  not earn that claim. The active thesis is regime discovery: identify
+  when strong per-site reuse is sufficient and when richer mobility
+  planning has a real ceiling.
+Do not tune one fixture until a policy wins. Run sweeps, report the map,
+  and keep `random_mode` in the comparison set.
 Do not score "semantic correctness" or model output quality.
 Do not abbreviate request_level_no_reuse to request_level. The "no_reuse"
   qualifier is load-bearing — it documents that the baseline is strawman.
@@ -67,7 +79,7 @@ If a task seems to require violating one of these rules, stop and escalate — d
 - Power/thermal modelling.
 - Online scheduler with admission control.
 - Semantic-quality scoring of outputs.
-- New harness adapters beyond F2 until after the K7 gauntlet.
+- Broad new harness adapters before the K8/K9 regime map and oracle exist.
 
 ## § 0.2 Reuse contract with `coding-progress-ledger`
 
@@ -127,108 +139,265 @@ reconstitution plan  = per-(workflow, state_object) reconstitution-mode assignme
 - **H5a** replaces s_07×3 with 5 distinct cached pilot trajectories; synthetic 1 GB workspaces; H1 < D2 by 3.2 s (= 2 × 1 GB cross-site at 5 Gbps).
 - **H5b — the load-bearing finding.** Same 5 distinct trajectories with **real working-tree byte sums** from upstream-repo HEADs (~33 MB total). At canonical config, **D2 ≡ H1 to numerical noise (gap < 1e-9)**; sensitivity grid 0% gap survival. The H1<D2 mechanism is real (a synthetic-1-GB recovery test inside `tests/test_h5b_real_bytes.py` reproduces the H5a 3.2 s gap exactly) but byte-magnitude-sensitive — sub-threshold for SWE-bench-class instances at HEAD against a 5 Gbps single-flow link. **This negative finding triggers Workstream K.** `shared_state_aware` reframed from "deprecate-pending" to "not strictly dominated at real-repo scale."
 
+**Workstream K (mobility episodes, audits, gauntlet).** A1-A4 audits, K0 definitions, K1-K6 substrate, and K7 gauntlet are `done`. The important result is not "K wins" but "single-cell K7 is insufficient": T2 shows a landing-pressure regime, T3 shows the richer planner has not earned a broad claim, and the next step is a sweep plus oracle.
+
 **Workstreams I, J (deferred).** Workstream K subsumes the capacity question fluidly without queue simulation; J (live KV migration / packet-level networking) stays deferred indefinitely.
 
 **Sensitivity tooling (`done`).** `vagrant-sensitivity` CLI + `run_sweep` helper grid-searches (kv_bytes, link_bps); `costs.py` carries a caveat block on load-bearing assumptions; `configs/sites_2site.yaml` uses a 5 Gbps single-flow inter-region link; 3 model profiles bracket the realistic 2025-2026 KV-per-token range.
 
 ---
 
-## § Workstream K — pre-pivot audits + falsification gauntlet
+## § Workstream K — completed audits, scaffolding, and gauntlet
 
-**Goal.** Determine whether the mobility-episode framing earns the project's pivot, with a binary gate at K7. Phase 1 audits resolve implementation-choice critiques against the *current* implementation; Phase 2 builds minimal mobility-episode scaffolding + the three falsification tests.
+**Status:** `done` through corrected K7. This workstream built the measurement substrate and now provides a positive single-cell mobility-episode result. It is still the base layer for regime discovery, not a substitute for the regime map.
 
-### Phase 1 — Pre-pivot audits
+**A1 — Workspace-payload decomposition** (`done`)
+`docs/A1_workspace_payload_audit.md` + `tests/test_a1_workspace_payload.py`. Eight layers measured: `repo_tree_bytes`, `git_diff_bytes`, `touched_file_bytes`, `read_file_bytes`, `tool_output_bytes`, `test_log_bytes`, `build_artifact_bytes`, `dependency_cache_bytes`. No measured shallow-clone layer flips H5b, but the production-relevant layers are undermeasured or zero.
 
-**A1 — Workspace-payload decomposition** (`not started`, ~1 day)
-`docs/A1_workspace_payload_audit.md` + `tests/test_a1_workspace_payload.py`. Decompose the workspace payload into 8 layers (`repo_tree_bytes`, `git_diff_bytes`, `touched_file_bytes`, `read_file_bytes`, `tool_output_bytes`, `test_log_bytes`, `build_artifact_bytes`, `dependency_cache_bytes`). Re-run H5b under each interpretation independently and as `(repo_tree, dependency_cache)`. Produce a sensitivity table: workspace-payload-interpretation × H1-vs-D2 gap. **Gate:** documented sensitivity table; informs gauntlet design. A row that flips the regime would mean H5b's "0% gap survival" was payload-definition-dependent.
+**A2 — Home-site premise audit** (`done`)
+`docs/A2_home_site_premise.md`. Existing multi-workflow fixtures are distributed-origin; single-source evacuation, fan-in, and regional-affinity are gaps.
 
-**A2 — Home-site premise audit** (`not started`, ~0.5 day)
-`docs/A2_home_site_premise.md`. Label H2/H5a/H5b explicitly under one of: distributed-origin (sessions already at distinct sites), single-source-evacuation (all workflows at one source), fan-in (subagents from different sites must merge), regional-affinity (storage/data-residency-bound). No new code; reframes existing results. **Gate:** all existing fixtures labeled; missing scenario class identified.
+**A3 — D3 edge-typed grouping policy** (`done`)
+`shared_state_aware_typed` landed. D3 is not strictly better than D2; on H5b it is worse because component-level dedup interacts with global prompt materialization. Load-bearing conclusion: reconstitution must charge per-(state, site), not per component.
 
-**A3 — D3 edge-typed grouping policy** (`not started`, ~1.5 days)
-`src/vagrant_agent/policies.py` extension (`shared_state_aware_typed`) + `tests/test_a3_edge_typed_policy.py`. Replace D2's connected-component grouping with edge-type-weighted grouping over 6 edge types (`global_replicated`, `workflow_shared`, `workspace_local`, `artifact_delta`, `private_context`, `kv_prefix`). **Gate:** D3 implemented; assertion `D3.total_cost_s ≤ D2.total_cost_s + 1e-9` on every fixture; report whether D3 < H1 anywhere. ~150 LOC.
+**A4 — Cost-model audit writeup** (`done`)
+`docs/A4_cost_model_audit.md`. Documents additive vs pipelined cost, faster-prefill bias under infinite capacity, omitted decode, and raw-bytes KV.
 
-**A4 — Cost-model audit writeup** (`not started`, ~0.5 day)
-`docs/A4_cost_model_audit.md`. Document (D) cost model rewards faster prefill too strongly under infinite capacity (resolved by K4); (E) additive vs `max(transfer, prefill)` pipelined (post-K). No code change. **Gate:** writeup exists; assumptions enumerated.
+**K0-K7 — Mobility episode substrate and gauntlet** (`done`)
+K0 definitions, K1 `MobilityEpisode`, K2 `WarmnessMap`, K3 `ResourceCost`/`ResourceBudget`, K4 `simulate_fluid`, K5 seven reconstitution policies, K6 herd fixtures, and K7 gauntlet are implemented. After the critic fixes, T1/T2/T3 pass. `runs/k7_gauntlet/gauntlet_results.csv` and `docs/K7_gauntlet_results.md` are the source of truth.
 
-### Phase 2 — Mobility-episode scaffolding + gauntlet
+**K8/K9 — First regime map and oracle** (`done`, 2026-05-06)
+`src/vagrant_agent/k8_regime.py` and `src/vagrant_agent/k9_oracle.py` landed with focused tests. `scripts/run_k8_k9.py` emits `runs/k8_regime_map/` and `runs/k9_oracle/`. The first K8 map covers all requested N × state-scale × prefill × bandwidth axes using an aggregate service-time estimator for large cells; exact K4 remains available for focused cells. K8 exact-vs-aggregate calibration on 36 sampled cells shows best-policy agreement in 24/36 cells and bottleneck-label agreement in 102/216 policy rows, so aggregate heatmaps are regime hypotheses rather than final timing evidence. K9 restricted exact search now covers four 4-workflow diagnostic cells and finds oracle gaps vs strong reuse from 50.3% to 96.7%.
 
-**K0 — Calibration writeup** (`not started`, ~0.5 day)
-`docs/K0_calibration.md`. Defines `episode`, `warmness_map`, `resource_vector` precisely. Includes (1) the 4-level hierarchy; (2) the mobility-episode usefulness map (6 useful + 6 not-useful scenarios); (3) the resource-vector consumption table (5 modes × 4 resources); (4) the three falsification tests stated precisely with pass/fail criteria. **Gate:** human review.
-
-**K1 — Mobility episode schema** (`not started`, ~0.5 day)
-`src/vagrant_agent/episode.py`. `MobilityEpisode(episode_id, source_sites, destination_sites, workflows, state_warmness, capacities, trigger_t_s, notes)`. `source_sites` distinguishes single-source-evacuation from distributed-origin. **Gate:** roundtrip test + adapter test (one F2 trace → 1-workflow episode). ~80 LOC.
-
-**K2 — Warmness map** (`not started`, ~0.5 day)
-`src/vagrant_agent/warmness.py`. `WarmnessMap.is_warm(state, site)`, `fraction_warm(manifest, site)`; age tracking for K4 LRU. **Gate:** unit tests at fraction 0.0/0.5/1.0. ~120 LOC.
-
-**K3 — Resource vector** (`not started`, ~0.5 day)
-`src/vagrant_agent/resources.py`. `ResourceCost(network_bytes, prefill_tokens, workspace_bytes, kv_resident_bytes, wallclock_s)`. `reconstitution_cost(state, mode, src, dst, bundle, warmness)` composes `costs.materialize_cost` for `wallclock_s`. **Gate:** crossover-parity with `costs.bandwidth_crossover_bps`; resource-conservation invariant. ~150 LOC.
-
-**K4 — Minimal fluid simulator** (`not started`, ~1.5 days)
-`src/vagrant_agent/fluid_sim.py`. Proportional-share fluid resources for network bps per link, prefill tok/s per site, workspace_hydrate bps per site. KV memory as a capacity with LRU eviction. `simulate_fluid(episode, plan, bundle, warmness, budget) → list[ActionTrace]`. Advance time to next event. **No queues, no admission, no scheduler.** **Gate:** (1) two-action-on-one-link → 2× slowdown; (2) resource-conservation invariant; (3) all-warm episode finishes in `min(prefill_tok_s)`; (4) deterministic given a seed. ~300 LOC.
-
-**K5 — Reconstitution policies** (`not started`, ~1 day)
-`src/vagrant_agent/reconstitution.py`. Six policies: `min_cost_independent`, `replay_all`, `kv_all`, `cache_reuse`, `workspace_sticky`, `mixed_min_pressure` (greedy fluid-aware oracle). Same registry shape as `policies.POLICIES`. **Gate:** each policy emits a valid plan; `mixed_min_pressure.makespan ≤ min(other 5)` within numerical noise on K6 fixtures. ~200 LOC.
-
-**K6 — Gauntlet fixtures** (`not started`, ~1 day)
-`src/vagrant_agent/adapters/herd.py` + 3 committed fixtures: `gauntlet_t1_infinite_capacity.json`, `gauntlet_t2_prefill_only.json`, `gauntlet_t3_multi_resource.json`. Each: N=100 workflows with state distributions sampled from F2/H5 traces. **Gate:** byte-deterministic regenerability; resource-budget envelope correctly carried. ~150 LOC.
-
-**K7 — Falsification gauntlet** (`not started`, ~0.5 day)
-`tests/test_k7_gauntlet.py`. Three pytest assertions:
-
-- **T1 — Capacity-free collapse.** Run K4 on `gauntlet_t1_infinite_capacity.json` under all six K5 policies. Assert `mixed_min_pressure.makespan == cache_reuse.makespan == H1.placement_total_cost` within 1e-6. **If T1 fails**, the K4 simulator is smuggling in an effect — model says capacity matters when it shouldn't.
-- **T2 — Prefill-stampede.** Run on `gauntlet_t2_prefill_only.json`. Assert `replay_all.p50_resume > kv_all.p50_resume` AND `mixed_min_pressure.p50_resume < replay_all.p50_resume - 10%`. **If T2 fails**, prefill capacity does not differentiate policies — herd idea is weak.
-- **T3 — Multi-resource bottleneck.** Run on `gauntlet_t3_multi_resource.json`. Assert `mixed_min_pressure.p50_resume < min(replay_all, kv_all, cache_reuse, workspace_sticky).p50_resume - 10%`. **If T3 fails**, fixed-mode policies are competitive even under saturation — mixed planning isn't earning the abstraction.
-
-**Gate:** all three tests pass. **K-decision-point follows.**
-
-### K-decision-point — manual review
-
-After K7, write `docs/K7_gauntlet_results.md` summarizing the three test outcomes with concrete numbers and CDF plots. **Decide explicitly:**
-
-- **All three pass** → proceed to Phase 3a (K-pivot, K8+).
-- **Any fail** → proceed to Phase 3b (Workstream L).
-
-The plan must not silently slide past the gate. The writeup is the artifact supporting the decision either way.
-
-### Phase 3a — K-pivot (conditional on gauntlet passing)
-
-**K8.** 27-cell herd benchmark (N ∈ {1, 10, 100, 1000} × workspace_dist ∈ {SWE-small, monorepo, data-agent, RAG-doc, browser-artifact, ML-checkpoint} × warm_fraction ∈ {0.0, 0.5, 1.0}). State sizes sampled from F2/H5 trace distributions. (`not started`, deferred until gate decision.)
-**K9.** Regime-map plot, time-to-useful-resume CDF, bottleneck-attribution stacked bars. (`not started`.)
-**K10.** SWE-agent anchor — lift H5a/H5b into K vocabulary; confirm Regime A landing. (`not started`.)
-**K11.** Phase-transition assertion: small N, `min_cost_independent` is fine; medium N, stampedes; large N, `mixed_min_pressure` wins. (`not started`.)
-**K12** *(deferred)* — offline ILP oracle for small-N exact upper bound.
-
-### Phase 3b — Workstream L: calibration paper (conditional on gauntlet failing)
-
-**L1 — Calibration paper draft** (`not started`)
-`docs/L1_calibration_paper_draft.md`. Structure: (1) thesis — for observed coding-agent traces, simple per-site cache reuse (L1) and ordinary independent placement explain most of the state-locality benefit; (2) the 4-level hierarchy as the contribution; (3) H5a → H5b drop as headline negative result; (4) Workstream K artifacts as evidence for what *would* be required to differentiate beyond L1; (5) the K0 usefulness map as positioning.
-
-**L2 — Cleanup.** Deprecate D2 explicitly; mark `vagrant-bench` headline as L1-vs-L0; keep `vagrant-fluid-bench` as exploratory tool.
-
-**L3 — Optional.** Note for OpenHands or LangGraph teams about A1 workspace-payload decomposition — may be more useful as a calibration tool for *other* harnesses than as a vagrant headline.
+**V1 — Exact validation of K8 claim cells** (`done`, 2026-05-06)
+`src/vagrant_agent/k8_validation.py` and `scripts/run_k8_validation.py` landed. `runs/k8_validation/` plus `docs/K8_exact_validation.md` rerun seven named claim cells through exact K4 and compare best-policy agreement, policy/cell bottleneck agreement, p50/p95 relative timing error, and a trust label. Current result: all seven selected cells are `needs_exact_k4`; aggregate K8 remains useful for discovering candidate regimes, but exact K4 is required before quoting timing or bottleneck claims.
 
 ---
 
-## Definition of done — gauntlet passed (Phase 2 → 3a)
+## § Workstream R — regime map (active next phase)
 
-> All three K7 tests (T1 capacity-free collapse, T2 prefill-stampede, T3 multi-resource bottleneck) pass on the committed fixtures, and the writeup at `docs/K7_gauntlet_results.md` documents the outcomes with concrete numbers. The pivot to mobility episodes is now earned; Phase 3a (K8–K11) begins.
+**Goal.** Turn Vagrant from "does our policy win?" into "which regime is this workload and mobility event in?" The main artifact is a sweep-backed map over workload size, state scale, prefill pressure, and link bandwidth, with policy winner and dominant bottleneck reported per cell.
 
-## Definition of done — calibration paper (Phase 2 → 3b)
+### R0 — Reframe and nomenclature cleanup
 
-> Any K7 test fails. `docs/K7_gauntlet_results.md` documents which test was inconclusive and why. `docs/L1_calibration_paper_draft.md` lands as a paper-shaped writeup of the negative result; D2 is explicitly marked experimental; Workstream K stays in the repo as the gauntlet-and-tooling contribution but the project headline becomes "for observed coding-agent traces at observed scales, L1 explains most of the state-locality benefit."
+**R0.1 — Retire H1/D2 as the central story** (`in progress`)
+Use "strong per-site reuse baseline vs richer mobility planning" in new writing. Keep old names in code and historical docs, but new docs should describe the strong baseline plainly: reuse any state already materialized at a site; for cold state choose the cheapest available materialization mode (replay, KV transfer, artifact copy, workspace hydrate, or warm reuse).
 
-Both definitions of done are real outcomes. The project does not silently coast past the gate.
+**B1 / R0.2 — Baseline naming audit** (`done`, 2026-05-06)
+`docs/strong_site_reuse_baseline.md` explains that `cache_reuse` is the K-level representative of the strong L1 baseline and already includes per-state mode choice plus per-workflow destination preference. `strong_site_reuse` is a paper-facing alias in `reconstitution.py`; `cache_reuse` remains for historical compatibility.
+
+### R1 — K8 regime-map sweep runner
+
+**R1 — Grid runner** (`done`, 2026-05-06)
+`src/vagrant_agent/k8_regime.py` plus `tests/test_k8_regime.py` run a deterministic grid and write `runs/k8_regime_map/regime_policy_metrics.csv` plus cell summaries.
+
+Initial axes:
+
+```text
+N workflows:              10, 100, 1000, 10000
+workspace/artifact scale: tiny, swe_bench, medium, monorepo, large_artifact
+prefill capacity:         loose, moderate, tight
+link bandwidth:           1, 5, 25, 100 Gbps
+```
+
+Implementation notes:
+- Existing `HerdSpec` supports the episode shape; K8 maps `swe_bench` and `large_artifact` explicitly in the sweep runner.
+- Exact K4 is too slow for the full 1K/10K grid. The emitted full map uses a deterministic aggregate service-time estimator and records that caveat in `runs/k8_regime_map/README.md`; `run_k8_cell(...)` remains the exact K4 path for focused validation cells.
+- The CSV includes best policy, p50/p90/makespan, dominant bottleneck, mixed-vs-strong gap, and enough axis metadata to regenerate the cell.
+
+Policies to include in every sweep cell:
+
+```text
+strong per-site reuse baseline (`cache_reuse` or alias)
+replay_all
+kv_all
+workspace_sticky
+random_mode
+mixed_min_pressure
+```
+
+### R2 — Heatmaps and bottleneck attribution
+
+**R2 — Plotting** (`done`, 2026-05-06)
+`write_k8_artifacts(...)` emits:
+
+```text
+x-axis: workspace/artifact scale
+y-axis: N workflows
+color: best policy or dominant bottleneck
+panels: loose/tight prefill × slow/fast link
+```
+
+Also emit a policy-gap table sorted by `winner_margin_vs_strong_reuse`; this prevents a colorful heatmap from hiding that the winner is only 1-3% better.
+
+Current first-pass summary: 240 cells, 1440 policy rows, 24 heatmaps. `mixed_min_pressure` is best in 233/240 aggregate-estimated cells; `random_diversification` narrowly wins 7 medium-state cells. Dominant bottlenecks split into network 119, workspace 72, prefill 49. Calibration caveat: sampled exact K4 agrees with aggregate best-policy labels in 24/36 cells and with aggregate bottleneck labels in 102/216 policy rows.
+
+### V1 — Exact validation of selected K8 cells
+
+**V1 — Claim-cell validation** (`done`, 2026-05-06)
+`scripts/run_k8_validation.py` emits `runs/k8_validation/claim_cell_policy_validation.csv`, `claim_cell_summary.csv`, and `docs/K8_exact_validation.md`.
+
+Selected cells:
+
+```text
+swe_bench_reuse_scale
+tiny_prefill_pressure
+tiny_slow_link
+medium_multi_resource
+monorepo_workspace_pressure
+large_artifact_slow_link
+large_artifact_fast_link
+```
+
+Current result: 7/7 selected cells are `needs_exact_k4`. Aggregate/exact best-policy labels agree in several selected cells, but p50 errors and bottleneck-label drift are too large for aggregate-only timing or bottleneck claims. This is the intended V1 outcome: K8 is a discovery map; K4 validates claim cells.
+
+### R3 — Model architecture profile axis
+
+**R3 — Reintegrate KV study** (`not started`, ~1 day)
+Translate `kv-transfer-early-experiment/FINDINGS.md` into model-profile presets for the regime sweep:
+
+```text
+heavy KV / cheap replay       (GLM-like)
+compact KV / expensive replay (DeepSeek-like MLA)
+hybrid                        (Qwen3-Next-like)
+vanilla GQA
+MLA-like
+```
+
+The claim to test: model architecture changes not just the single-request KV-vs-replay boundary, but which destination resource a migration herd stresses.
+
+### R4 — Revised memo
+
+**R4 — Regime-discovery memo** (`done`, 2026-05-06)
+`docs/R4_regime_discovery_memo.md` records the current four-claim framing:
+
+1. Agentic mobility is state reconstitution.
+2. Per-site reuse is the first serious baseline.
+3. Richer planning is regime-dependent.
+4. Vagrant maps the regime.
+
+Current answer: Path A is supported; Path B is opened but not yet earned. Workload anchors and exact validation remain required before planner-paper claims.
+
+---
+
+## § Workstream O — small-N oracle
+
+**Goal.** Before tuning `mixed_min_pressure`, measure the ceiling. The oracle is diagnostic and does not need to scale.
+
+**O1 — Offline oracle for small episodes** (`done`, 2026-05-06)
+`src/vagrant_agent/k9_oracle.py` implements exact simulator-backed search for small instances:
+
+```text
+N <= small exact limit initially (current artifact uses N=4; code rejects oversized requests explicitly)
+2-3 destination sites
+finite network / prefill / workspace resources
+same action modes as K5
+```
+
+It exhaustively enumerates workflow-level destination, prompt-mode, and workspace-mode choices. No external solver dependency was added.
+
+Output table: `runs/k9_oracle/oracle_gap_table.csv`. Four diagnostic cells now cover tiny prefill pressure, medium multi-resource pressure, monorepo workspace pressure, and slow-link network pressure. Oracle gaps vs strong reuse range from 50.3% to 96.7%; oracle gaps vs mixed range from 0.7% in the monorepo/workspace cell to 50.0% in the medium multi-resource cell. Candidate-space caveat: this is exact only over workflow-level destination, prompt-mode, and workspace-mode choices.
+
+Interpretation:
+- If oracle barely beats strong reuse, the ceiling is low in that regime.
+- If oracle beats strong reuse by 20-30%, inspect the oracle-vs-policy difference before tuning any heuristic.
+
+**O2 — Oracle-difference explanation** (`not started`, ~1 day)
+Use K9 for explanation before heuristic tuning. For each of the four diagnostic cells, emit a short oracle-vs-mixed plan-diff report:
+
+```text
+destination choices
+prompt modes
+workspace modes
+resource bottleneck trajectory
+oracle vs mixed gap
+oracle vs random gap
+strong reuse vs random gap
+```
+
+Goal: determine whether oracle beats `mixed_min_pressure` by simple destination/mode choices, by resource balancing that the heuristic misses, or by candidate-space choices outside the current heuristic. This is not a planner-tuning task; it is the diagnostic prerequisite for tuning.
+
+---
+
+## § Workstream S — workflow-local mobile state measurement
+
+**Goal.** Stop using repository size as a proxy for migration payload. Measure workflow-local mobile state and classify what must move, what can be rehydrated, and what can be discarded.
+
+**S1 — State-layer taxonomy update** (`not started`, ~0.5 day)
+Extend A1's taxonomy into the production-facing split:
+
+```text
+base repo checkout
+uncommitted diff
+files read
+files touched
+tool outputs
+test logs
+build artifacts
+dependency cache
+retrieved documents
+subagent transcripts
+summaries / compaction outputs
+```
+
+Each layer must be classified as `globally_available`, `cheaply_rehydratable`, `must_move`, `can_be_recomputed`, or `can_be_discarded`.
+
+**S2 — Mobile-state audit script** (`not started`, ~1.5 days)
+Add a small auditor for a captured workflow directory that reports the S1 layers and emits JSON/CSV. This is the bridge to Week 3 workload anchors.
+
+---
+
+## § Workstream W — workload anchors
+
+**Goal.** Anchor the synthetic regime map with non-SWE workload families chosen because they stress different state layers.
+
+**W1 — Large-repo coding fixture** (`done`, 2026-05-06)
+`src/vagrant_agent/workloads.py` introduces `WorkloadAnchor` + `W1_LARGE_REPO_CODING`. Per-workflow workspace ~1.03 GB (base repo 350 MB + dep cache 600 MB + build artifacts 80 MB + uncommitted diff 0.2 MB), with `tool_output_context` wired into per-workflow prompt-context tokens. `classify_regime` exercises strong reuse + mixed under K4 and labels the cell. The W1 hypothesis (`state_locality`) is asserted as a regression test under a 1 Gbps link cell.
+
+**W2 — Data/RAG/artifact-heavy fixture** (`not started`)
+Use CSV/parquet/PDF bundles, generated plots, cleaned intermediates, retrieved document bundles, or index shards. Test whether artifact movement dominates prompt/KV.
+
+**W3 — Multi-agent fanout/fanin fixture** (`not started`)
+Model parent planner, parallel subagents, shared task context, private transcripts, and merge/review. Test whether subagent structure creates grouping pressure beyond per-site cache reuse.
+
+Week 3 success criterion: each anchor has a state-layer breakdown and a regime classification.
+
+---
+
+## Current two-week target
+
+**Week 2 deliverables**
+
+1. R1 K8 regime-map sweep over N × state scale × prefill cap × link bandwidth. `done`
+2. R2 heatmaps of best policy and dominant bottleneck. `done`
+3. O1 small-N oracle. `done`
+4. Oracle-vs-baseline gap table. `done`
+5. R4 revised memo: where richer mobility planning matters. `done`
+
+**Week 3 deliverables**
+
+1. One large-repo coding fixture.
+2. One data/RAG/artifact-heavy fixture.
+3. One multi-agent fanout/fanin fixture.
+4. State-layer breakdown for each.
+5. Placement/mobility regime classification for each.
+
+**Definition of done for this phase**
+
+> We can say whether T3 was one unlucky cell or representative, and whether the current heuristic is weak or the strong reuse ceiling is low. The output is a regime map and oracle gap table, not a claim that one policy universally wins.
 
 ---
 
 ## Open questions
 
-- **Episode trigger explicit or implicit.** Default: explicit — episode JSON specifies `target_sites`; placement-policy is a consumer of episode setup, not the subject of K. (D2/H1/G1 stay relevant for placement; K is "what happens given the move.") Confirm or push back; consequential for K1/K4/K5.
+- **Sweep scope vs runtime.** Answer: exact K4 is too slow for the full 1K/10K grid; K8 now uses aggregate estimation for the full map and exact K4 for focused cells. V1 adds named exact claim-cell validation; aggregate-only regions remain exploratory until validated.
+- **Oracle formulation.** Current O1 exact enumeration over workflow-level mode/destination assignments is enough for the first ceiling check. Open follow-up: add pruning or solver-backed formulation only if larger N is required.
+- **Strong baseline label.** Keep `cache_reuse` as the code name, or add `strong_site_reuse` as an alias for paper clarity?
+- **Episode trigger explicit or implicit.** Default: explicit — episode JSON specifies `target_sites`; placement-policy is a consumer of episode setup, not the subject of K. (D2/H1/G1 stay relevant for placement; K is "what happens given the move.")
 - **"Useful resume" definition.** Default: first decoded token at destination. Per-workflow metric; episode-summary `time-to-50%-resume` configurable.
 - **Site = abstract resource pool or geographic region.** Default: abstract pool — Phoenix/Seattle/Austin become labels for capacity envelopes.
-- **Workspace payload for K.** Default: the union from A1's audit, not the current `compute_repo_bytes` default.
+- **Workspace payload for regime sweeps.** Default: use explicit distribution labels (`swe_bench`, `medium`, `monorepo`, `large_artifact`) and keep A1/S1 layer measurements as anchors.
+- **Model-profile axis size.** R3 should start with three architecture profiles, then expand only if the heatmap changes materially.
 - **`tau` choice.** MVP defaults to 1 token. Real workloads may need a higher threshold; A3's edge-typed policy partially supersedes the `tau` knob.
 - **Token counting at trace time.** Real harnesses may not give exact counts; estimate from text. F2 currently approximates.
 - **State-object identity across reopen/invalidate.** MVP treats invalidation as a new object; revisit if real traces make this ambiguous.
