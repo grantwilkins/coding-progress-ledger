@@ -430,11 +430,28 @@ session_sticky's only useful regime is "I have an external reason to keep a sess
 
 `SessionSpec.workspace_path` (in `swe_agent_multi.py`) now optionally accepts a directory path; when set, the workspace state's `bytes` field is computed from disk via the helper. Setting both `workspace_path` and a non-default `workspace_bytes` hard-fails (silent overrides are footguns).
 
-**Finding.** H4 closes the **synthetic-bytes integration gap** of H2: a 10 MB direction test (`test_real_workspace_bytes_preserve_h1_lt_d2_direction`) and a gated 1 GB pinned-numerical test (`VAGRANT_SLOW_TESTS=1`) prove the H1<D2 mechanism survives end-to-end when the workspace state is sourced from a real filesystem. The **synthetic-trajectory gap** remains: the canonical H2 fixture still reuses `swe_agent_pilot_s_07.json` three times rather than concatenating three independent SWE-bench rollouts. Closing the trajectory gap requires a real multi-instance trace corpus (~3-5 SWE-bench instances each with their final repo state captured), which is out of scope for this repo until F1 (OpenHands snapshot adapter) lands.
+**Finding.** H4 closes the **synthetic-bytes integration gap** of H2: a 10 MB direction test (`test_real_workspace_bytes_preserve_h1_lt_d2_direction`) and a gated 1 GB pinned-numerical test (`VAGRANT_SLOW_TESTS=1`) prove the H1<D2 mechanism survives end-to-end when the workspace state is sourced from a real filesystem. The **synthetic-trajectory gap** remains for H2 (closed by H5a below); the **real-bytes-on-real-trajectories gap** remains open (H5b).
 
-**H5 (deferred) — multi-instance SWE-agent trace corpus.** Capture 3-5 independent SWE-bench rollouts with their final repository directories preserved, run them through F2 + H2's multi-session adapter with `workspace_path` set, and verify the H1<D2 mechanism on real-trajectory + real-bytes data. Required to graduate the H2/H4 finding to "phenomenon demonstrated on real harness traces."
+**H5a — multi-trajectory SWE-agent fixture (real trajectories, synthetic bytes)** (`done`, 2026-05-05)
+Closes H2's trajectory-reuse gap by replacing `swe_agent_pilot_s_07.json × 3` with **5 distinct cached pilot-zero trajectories** (Melevir/cognitive_complexity, hsahovic/poke-env, lidatong/dataclasses-json, WIPACrepo/iceprod, asottile/setup-cfg-fmt) — distinct repos, mix of pass/fail outcomes. Reuses the existing `swe_agent_multi.py` adapter unchanged; the canonical fixture is `examples/traces/h5a_multi_trajectory_swe.jsonl`. Workspace bytes remain synthetic (1 GB per session, set by the fixture builder); workspace homes are asymmetric (`phoenix, seattle, phoenix, seattle, phoenix`) so 2 of 5 workspaces live at the minority site.
 
-**`shared_state_aware` status.** Marked **experimental** (NOT deprecated). On linear-session traces it is provably equivalent to H1; on multi-session asymmetric-workspace fixtures (synthetic or real-bytes via H4) it is strictly worse than H1. Final deprecation pending H5 — if a real multi-instance corpus also collapses, deprecate then.
+**Numerical findings** (`compact_kv` × `sites_2site.yaml`):
+
+| Policy | Total cost (s) | vs H2 |
+| ------ | -------------- | ----- |
+| D1 (`request_level_no_reuse`)        | 0.6545 | larger (5 sessions of per-consumer materialization) |
+| H1 (`request_level_with_site_cache`) | 0.2220 | per-session placement; 6 nodes phoenix, 4 nodes seattle |
+| D2 (`shared_state_aware`, τ=1)       | 3.4221 | colocates phoenix; pays 2× cross-site workspace = 3.2 s |
+| G1 (`g1_brute_force`)                | 0.2220 | oracle ≡ H1 (1024 enumerations) |
+| G2 (`g2_local_search`)               | 0.2220 | finds the same floor |
+
+**H1 strictly beats D2 by 3.2 s ≈ 15×** — exactly 2× the H2 gap, because 2 (vs 1) workspaces live at the minority site. Sensitivity grid passes 100% sign-consistent (same bytes-layer mechanism as H2). 21 tests in `tests/test_h5a_multi_trajectory.py` cover structural invariants (5 distinct issue_text content_hashes — proving real-trajectory variation, not s_07 × 5), placement asymmetry, mechanism (homes-all-equal collapses H1 == D2), enumeration cap, and byte-deterministic regenerability.
+
+**Honest framing — what H5a is and is not.** Trajectory text is now real (5 distinct SWE-bench instances), so the H1<D2 mechanism survives **trajectory variation**, not just s_07 replay. The load-bearing workspace bytes are still synthetic (1 GB integers from the fixture builder), so H5a graduates the H2 finding from "one-trajectory-replayed-N-times" to "N-distinct-trajectories", but **does not** close the real-bytes gap. To claim "phenomenon demonstrated on real harness traces" we need H5b.
+
+**H5b (deferred) — real workspace bytes on real trajectories.** Capture each H5a instance's repository at the issue's pre-fix commit (5× `git clone` from origin, ~few hours of network + disk; alternatively re-run SWE-agent and preserve the rollout dirs), then re-run H5a with `SessionSpec.workspace_path` set instead of `workspace_bytes`. The H4 helper (`compute_repo_bytes`) already handles this end-to-end; what's missing is the real-byte source. Required to graduate H5a from "real-trajectory + synthetic-bytes" to "phenomenon demonstrated on real harness traces with real-byte payloads".
+
+**`shared_state_aware` status.** Marked **experimental** (NOT deprecated). On linear-session traces it is provably equivalent to H1; on multi-session asymmetric-workspace fixtures (H2 with synthetic trajectories, H4 with real bytes on synthetic trajectories, **H5a with real trajectories and synthetic bytes**) it is strictly worse than H1. Final deprecation pending H5b — if real bytes on real trajectories also produce a strict gap, deprecate then.
 
 ## § Workstream I — Capacity, queues, multi-site (deferred)
 
