@@ -60,3 +60,18 @@ def state_layer_breakdown(plan: Plan, manifest: ServingGroupManifest) -> dict[st
         layer = manifest.state_objects[m.state_id].layer
         breakdown[layer] += m.total_cost_s
     return dict(breakdown)
+
+
+def non_trivial_shared_state_count(
+    manifest: ServingGroupManifest,
+    exclude: tuple[str, ...] = ("system_prompt", "issue_text"),
+) -> int:
+    """Count of state objects with >=2 consumers, excluding mandatory framework
+    states (system_prompt, issue_text). On a SWE-agent F2 manifest this should
+    be > 0; if it's 0, the trace has no non-trivial sharing structure beyond
+    the trivial "everyone reads the system prompt" floor and downstream
+    duplication-factor results will be uninformative."""
+    return sum(
+        1 for s in manifest.state_objects.values()
+        if len(s.consumers) >= 2 and s.state_id not in exclude
+    )

@@ -1,0 +1,25 @@
+{"step":0,"event_type":"init","subtask_id":null,"payload":{"root_task":"G demo: two components with cross-component shared state"},"reason":null}
+{"step":1,"event_type":"add_subtask","subtask_id":"S1","payload":{"description":"node_S1","parent_id":null,"weight":1.0,"category":"product","node_type":"llm_call","workflow_id":"g_demo_workflow_v1"},"reason":null}
+{"step":1,"event_type":"add_subtask","subtask_id":"S2","payload":{"description":"node_S2","parent_id":null,"weight":1.0,"category":"product","node_type":"llm_call","workflow_id":"g_demo_workflow_v1"},"reason":null}
+{"step":1,"event_type":"add_subtask","subtask_id":"S3","payload":{"description":"node_S3","parent_id":null,"weight":1.0,"category":"product","node_type":"llm_call","workflow_id":"g_demo_workflow_v1"},"reason":null}
+{"step":1,"event_type":"add_subtask","subtask_id":"S4","payload":{"description":"node_S4","parent_id":null,"weight":1.0,"category":"product","node_type":"llm_call","workflow_id":"g_demo_workflow_v1"},"reason":null}
+{"step":1,"event_type":"state_declare","subtask_id":null,"payload":{"state_id":"tiny_prefix","content_hash":"hash_tiny_prefix_v1","layer":"prompt_context","lifetime":"shared","tokens":100,"bytes":null,"producer_node_id":null,"home_site":null},"reason":null}
+{"step":1,"event_type":"state_declare","subtask_id":null,"payload":{"state_id":"private_X","content_hash":"hash_private_X_v1","layer":"prompt_context","lifetime":"shared","tokens":12000,"bytes":null,"producer_node_id":null,"home_site":"phoenix"},"reason":null}
+{"step":1,"event_type":"state_declare","subtask_id":null,"payload":{"state_id":"private_Y","content_hash":"hash_private_Y_v1","layer":"prompt_context","lifetime":"shared","tokens":12000,"bytes":null,"producer_node_id":null,"home_site":"seattle"},"reason":null}
+{"step":1,"event_type":"state_declare","subtask_id":null,"payload":{"state_id":"shared_xc","content_hash":"hash_shared_xc_v1","layer":"prompt_context","lifetime":"shared","tokens":4000,"bytes":null,"producer_node_id":null,"home_site":"phoenix"},"reason":null}
+{"step":1,"event_type":"state_read","subtask_id":null,"payload":{"state_id":"tiny_prefix","content_hash":"hash_tiny_prefix_v1","consumer_node_id":"S1","tokens":100},"reason":null}
+{"step":1,"event_type":"state_read","subtask_id":null,"payload":{"state_id":"tiny_prefix","content_hash":"hash_tiny_prefix_v1","consumer_node_id":"S2","tokens":100},"reason":null}
+{"step":1,"event_type":"state_read","subtask_id":null,"payload":{"state_id":"tiny_prefix","content_hash":"hash_tiny_prefix_v1","consumer_node_id":"S3","tokens":100},"reason":null}
+{"step":1,"event_type":"state_read","subtask_id":null,"payload":{"state_id":"tiny_prefix","content_hash":"hash_tiny_prefix_v1","consumer_node_id":"S4","tokens":100},"reason":null}
+{"step":1,"event_type":"state_read","subtask_id":null,"payload":{"state_id":"shared_xc","content_hash":"hash_shared_xc_v1","consumer_node_id":"S1","tokens":4000},"reason":null}
+{"step":1,"event_type":"state_read","subtask_id":null,"payload":{"state_id":"shared_xc","content_hash":"hash_shared_xc_v1","consumer_node_id":"S2","tokens":4000},"reason":null}
+{"step":1,"event_type":"state_read","subtask_id":null,"payload":{"state_id":"shared_xc","content_hash":"hash_shared_xc_v1","consumer_node_id":"S3","tokens":4000},"reason":null}
+{"step":1,"event_type":"state_read","subtask_id":null,"payload":{"state_id":"shared_xc","content_hash":"hash_shared_xc_v1","consumer_node_id":"S4","tokens":4000},"reason":null}
+{"step":1,"event_type":"state_read","subtask_id":null,"payload":{"state_id":"private_X","content_hash":"hash_private_X_v1","consumer_node_id":"S1","tokens":12000},"reason":null}
+{"step":1,"event_type":"state_read","subtask_id":null,"payload":{"state_id":"private_X","content_hash":"hash_private_X_v1","consumer_node_id":"S2","tokens":12000},"reason":null}
+{"step":1,"event_type":"state_read","subtask_id":null,"payload":{"state_id":"private_Y","content_hash":"hash_private_Y_v1","consumer_node_id":"S3","tokens":12000},"reason":null}
+{"step":1,"event_type":"state_read","subtask_id":null,"payload":{"state_id":"private_Y","content_hash":"hash_private_Y_v1","consumer_node_id":"S4","tokens":12000},"reason":null}
+{"step":2,"event_type":"update_status","subtask_id":"S1","payload":{"status":"complete","evidence":["S1 done"]},"reason":null}
+{"step":2,"event_type":"update_status","subtask_id":"S2","payload":{"status":"complete","evidence":["S2 done"]},"reason":null}
+{"step":2,"event_type":"update_status","subtask_id":"S3","payload":{"status":"complete","evidence":["S3 done"]},"reason":null}
+{"step":2,"event_type":"update_status","subtask_id":"S4","payload":{"status":"complete","evidence":["S4 done"]},"reason":null}

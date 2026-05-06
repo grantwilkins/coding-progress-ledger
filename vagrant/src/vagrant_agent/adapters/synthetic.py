@@ -50,7 +50,7 @@ def _subagent_label(i: int) -> str:
 
 
 def _state(state_id: str, layer: str, lifetime: str, tokens: int = 0, bytes_: int | None = None,
-           producer_node_id: str | None = None) -> dict:
+           producer_node_id: str | None = None, home_site: str | None = None) -> dict:
     return {
         "state_id": state_id,
         "content_hash": f"hash_{state_id}_v1",
@@ -59,6 +59,7 @@ def _state(state_id: str, layer: str, lifetime: str, tokens: int = 0, bytes_: in
         "tokens": tokens,
         "bytes": bytes_,
         "producer_node_id": producer_node_id,
+        "home_site": home_site,
     }
 
 

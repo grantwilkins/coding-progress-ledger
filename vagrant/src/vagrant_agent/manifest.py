@@ -47,6 +47,7 @@ class StateObject:
     producers: list[str] = field(default_factory=list)
     consumers: list[str] = field(default_factory=list)
     invalidated: bool = False
+    home_site: str | None = None
 
 
 @dataclass(frozen=True)
@@ -134,6 +135,7 @@ def _declare(state_objects: dict[str, StateObject], payload: dict) -> None:
         tokens=int(payload["tokens"]),
         bytes=payload.get("bytes"),
         producers=[producer] if producer else [],
+        home_site=payload.get("home_site"),
     )
 
 

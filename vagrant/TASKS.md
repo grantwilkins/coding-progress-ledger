@@ -370,19 +370,27 @@ runs/mvp_demo/plots/duplication_factor.png
 
 Only after E is green.
 
-**F1.** OpenHands adapter — translate session log → vagrant trace.
-**F2.** SWE-agent adapter — reuse the `coding-progress-ledger` SWE-agent retrospective pipeline.
-**F3.** LangGraph / CrewAI — only if F1 or F2 surfaces something the synthetic adapter missed.
+**F1.** OpenHands adapter — translate session log → vagrant trace. **(deferred — no OpenHands trajectories cached; F2 satisfies the gate.)**
+**F2.** SWE-agent adapter — reuse the `coding-progress-ledger` SWE-agent retrospective pipeline. **(`done`, 2026-05-05.)**
+**F3.** LangGraph / CrewAI — only if F1 or F2 surfaces something the synthetic adapter missed. **(deferred.)**
 
-**Gate (F done).** At least one real harness produces a trace that replays into a non-trivial manifest (≥ 5 nodes, ≥ 2 shared state objects).
+**Gate (F done).** At least one real harness produces a trace that replays into a non-trivial manifest (≥ 5 nodes, ≥ 2 shared state objects). ✅ **Met as of 2026-05-05** via F2 on `tests/fixtures/swe_agent_pilot_s_07.json`: 11 nodes, 10 state objects, 7 non-trivial shared (excl. `system_prompt` + `issue_text`). Accumulation model: tool output at turn N read by every subsequent ai turn.
+
+Pre-flight + code critic findings folded in: accumulation model (replaces "next-turn-only" reads), first-non-system-turn validation, dropped `update_status in_progress` ceremony (cuts ~33% events), cached `state_id → (hash, tokens)` to remove O(N²) scans, adversarial-trajectory tests (empty / ai-before-user / missing system_prompt / no-repeats), and the `non_trivial_shared_state_count` diagnostic with `exclude=` test.
+
+Phenomenon claim still pending H1 (`request_level_with_site_cache`) on real traces.
 
 ## § Workstream G — Optimization (deferred)
 
 Only after F1 or F2.
 
-**G1.** Offline ILP oracle on small instances (≤ 20 nodes).
-**G2.** Online heuristic: agglomerative merge by shared-state-cut cost.
-**G3.** Multi-objective weighting (the lambda terms from the plan, lines 519–525). **Tune at most two lambdas at a time** to keep results interpretable.
+**G1.** Offline brute-force oracle on small instances (≤ 16 nodes). **(`done`, 2026-05-05 — pure-Python enumeration over K^N placements; no solver dep. Hard-fails above G1_MAX_NODES.)**
+**G2.** Online heuristic: greedy single-node local search seeded from D1's per-node placement. **(`done`, 2026-05-05 — replaces the agglomerative-clustering framing per pre-flight critic; cleaner termination proof.)**
+**G3.** Multi-objective weighting. **(deferred — MVP cost model has one dimension (seconds); λ-weighting requires ≥2 dimensions, which arrive with Workstream I capacity / J semantic.)**
+
+**Per-state `home_site` enabler.** `StateObject.home_site: str | None` was added (default None → falls back to `bundle.home_site`) so per-state asymmetry can exist. Synthetic + multi_component adapters write it; SWE-agent adapter leaves None. The cost model is unchanged: same-site = `context_replay` (T/prefill); different-site = the existing four formulas.
+
+**Gate (G).** G1 ≤ D2 on every instance (optimizer is at-least-as-good); G1 strictly beats D2 at fragmenting tau via the `g_demo_trace` fixture (saves 12.7% by avoiding per-component bookkeeping duplication). G1 ≡ G2 on all current fixtures (no local-optima trap). All three properties asserted in tests.
 
 ## § Workstream H — Extra policies (deferred)
 
