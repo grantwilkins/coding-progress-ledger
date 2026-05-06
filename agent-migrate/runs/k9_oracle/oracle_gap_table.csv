@@ -1,0 +1,5 @@
+scenario,state_scale,prefill_capacity,link_gbps,n_workflows,min_candidates_per_workflow,max_candidates_per_workflow,enumerated_plans,objective,candidate_space,oracle_p50_resume_s,strong_reuse_p50_resume_s,mixed_p50_resume_s,oracle_p90_resume_s,oracle_makespan_s,oracle_vs_strong_gap_frac,oracle_vs_mixed_gap_frac
+tiny_prefill_pressure,tiny,tight,100,4,8,8,4096,"minimize(p50,p90,makespan)",workflow_level_dst_prompt_mode_workspace_mode_v1,0.0613090867,0.139877718,0.0942653338,0.414433333,0.414433333,0.561695117,0.349611524
+medium_multi_resource,medium,tight,5,4,8,8,4096,"minimize(p50,p90,makespan)",workflow_level_dst_prompt_mode_workspace_mode_v1,0.7349,3.79565556,1.46893333,2.83741353,2.83741353,0.806383907,0.499705001
+monorepo_workspace_pressure,monorepo,loose,100,4,8,8,4096,"minimize(p50,p90,makespan)",workflow_level_dst_prompt_mode_workspace_mode_v1,9.975155,20.0788322,10.04406,10.0251433,10.0251433,0.50320044,0.00686027316
+slow_link_network_pressure,medium,loose,1,4,8,8,4096,"minimize(p50,p90,makespan)",workflow_level_dst_prompt_mode_workspace_mode_v1,0.532553333,16.0525622,1.06208,14.1795668,14.1795668,0.966824403,0.498575123

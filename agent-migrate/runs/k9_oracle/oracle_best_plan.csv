@@ -1,0 +1,17 @@
+scenario,workflow_id,choice
+tiny_prefill_pressure,wf_0000,dst=seattle;prompt=context_replay;workspace=artifact_copy
+tiny_prefill_pressure,wf_0001,dst=seattle;prompt=kv_transfer;workspace=artifact_copy
+tiny_prefill_pressure,wf_0002,dst=austin;prompt=kv_transfer;workspace=artifact_copy
+tiny_prefill_pressure,wf_0003,dst=austin;prompt=context_replay;workspace=artifact_copy
+medium_multi_resource,wf_0000,dst=seattle;prompt=kv_transfer;workspace=workspace_hydrate
+medium_multi_resource,wf_0001,dst=seattle;prompt=context_replay;workspace=workspace_hydrate
+medium_multi_resource,wf_0002,dst=austin;prompt=kv_transfer;workspace=artifact_copy
+medium_multi_resource,wf_0003,dst=austin;prompt=context_replay;workspace=workspace_hydrate
+monorepo_workspace_pressure,wf_0000,dst=seattle;prompt=kv_transfer;workspace=artifact_copy
+monorepo_workspace_pressure,wf_0001,dst=austin;prompt=context_replay;workspace=artifact_copy
+monorepo_workspace_pressure,wf_0002,dst=austin;prompt=kv_transfer;workspace=artifact_copy
+monorepo_workspace_pressure,wf_0003,dst=seattle;prompt=context_replay;workspace=artifact_copy
+slow_link_network_pressure,wf_0000,dst=seattle;prompt=kv_transfer;workspace=workspace_hydrate
+slow_link_network_pressure,wf_0001,dst=seattle;prompt=context_replay;workspace=workspace_hydrate
+slow_link_network_pressure,wf_0002,dst=austin;prompt=kv_transfer;workspace=workspace_hydrate
+slow_link_network_pressure,wf_0003,dst=austin;prompt=context_replay;workspace=workspace_hydrate

@@ -1,0 +1,116 @@
+{
+  "total_cells": 24,
+  "best_policy_flips": 0,
+  "bottleneck_flips": 6,
+  "models": [
+    "compact_kv",
+    "vanilla_gqa_fp16",
+    "frontier_v4_fp8",
+    "glm_5_mla",
+    "qwen3_next_hybrid"
+  ],
+  "flip_cells": [
+    {
+      "cell_id": "n100_tiny_loose_100g",
+      "best_policy_by_model": {
+        "compact_kv": "mixed_min_pressure",
+        "frontier_v4_fp8": "mixed_min_pressure",
+        "glm_5_mla": "mixed_min_pressure",
+        "qwen3_next_hybrid": "mixed_min_pressure",
+        "vanilla_gqa_fp16": "mixed_min_pressure"
+      },
+      "bottleneck_by_model": {
+        "compact_kv": "prefill",
+        "frontier_v4_fp8": "workspace",
+        "glm_5_mla": "prefill",
+        "qwen3_next_hybrid": "workspace",
+        "vanilla_gqa_fp16": "prefill"
+      }
+    },
+    {
+      "cell_id": "n100_tiny_tight_100g",
+      "best_policy_by_model": {
+        "compact_kv": "mixed_min_pressure",
+        "frontier_v4_fp8": "mixed_min_pressure",
+        "glm_5_mla": "mixed_min_pressure",
+        "qwen3_next_hybrid": "mixed_min_pressure",
+        "vanilla_gqa_fp16": "mixed_min_pressure"
+      },
+      "bottleneck_by_model": {
+        "compact_kv": "network",
+        "frontier_v4_fp8": "workspace",
+        "glm_5_mla": "network",
+        "qwen3_next_hybrid": "workspace",
+        "vanilla_gqa_fp16": "network"
+      }
+    },
+    {
+      "cell_id": "n100_tiny_tight_1g",
+      "best_policy_by_model": {
+        "compact_kv": "mixed_min_pressure",
+        "frontier_v4_fp8": "mixed_min_pressure",
+        "glm_5_mla": "mixed_min_pressure",
+        "qwen3_next_hybrid": "mixed_min_pressure",
+        "vanilla_gqa_fp16": "mixed_min_pressure"
+      },
+      "bottleneck_by_model": {
+        "compact_kv": "prefill",
+        "frontier_v4_fp8": "network",
+        "glm_5_mla": "prefill",
+        "qwen3_next_hybrid": "network",
+        "vanilla_gqa_fp16": "prefill"
+      }
+    },
+    {
+      "cell_id": "n10_tiny_loose_100g",
+      "best_policy_by_model": {
+        "compact_kv": "mixed_min_pressure",
+        "frontier_v4_fp8": "mixed_min_pressure",
+        "glm_5_mla": "mixed_min_pressure",
+        "qwen3_next_hybrid": "mixed_min_pressure",
+        "vanilla_gqa_fp16": "mixed_min_pressure"
+      },
+      "bottleneck_by_model": {
+        "compact_kv": "prefill",
+        "frontier_v4_fp8": "workspace",
+        "glm_5_mla": "prefill",
+        "qwen3_next_hybrid": "workspace",
+        "vanilla_gqa_fp16": "prefill"
+      }
+    },
+    {
+      "cell_id": "n10_tiny_tight_100g",
+      "best_policy_by_model": {
+        "compact_kv": "mixed_min_pressure",
+        "frontier_v4_fp8": "mixed_min_pressure",
+        "glm_5_mla": "mixed_min_pressure",
+        "qwen3_next_hybrid": "mixed_min_pressure",
+        "vanilla_gqa_fp16": "mixed_min_pressure"
+      },
+      "bottleneck_by_model": {
+        "compact_kv": "network",
+        "frontier_v4_fp8": "workspace",
+        "glm_5_mla": "network",
+        "qwen3_next_hybrid": "workspace",
+        "vanilla_gqa_fp16": "network"
+      }
+    },
+    {
+      "cell_id": "n10_tiny_tight_1g",
+      "best_policy_by_model": {
+        "compact_kv": "mixed_min_pressure",
+        "frontier_v4_fp8": "mixed_min_pressure",
+        "glm_5_mla": "mixed_min_pressure",
+        "qwen3_next_hybrid": "mixed_min_pressure",
+        "vanilla_gqa_fp16": "mixed_min_pressure"
+      },
+      "bottleneck_by_model": {
+        "compact_kv": "prefill",
+        "frontier_v4_fp8": "network",
+        "glm_5_mla": "prefill",
+        "qwen3_next_hybrid": "network",
+        "vanilla_gqa_fp16": "prefill"
+      }
+    }
+  ]
+}
