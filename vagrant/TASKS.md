@@ -449,9 +449,37 @@ Closes H2's trajectory-reuse gap by replacing `swe_agent_pilot_s_07.json × 3` w
 
 **Honest framing — what H5a is and is not.** Trajectory text is now real (5 distinct SWE-bench instances), so the H1<D2 mechanism survives **trajectory variation**, not just s_07 replay. The load-bearing workspace bytes are still synthetic (1 GB integers from the fixture builder), so H5a graduates the H2 finding from "one-trajectory-replayed-N-times" to "N-distinct-trajectories", but **does not** close the real-bytes gap. To claim "phenomenon demonstrated on real harness traces" we need H5b.
 
-**H5b (deferred) — real workspace bytes on real trajectories.** Capture each H5a instance's repository at the issue's pre-fix commit (5× `git clone` from origin, ~few hours of network + disk; alternatively re-run SWE-agent and preserve the rollout dirs), then re-run H5a with `SessionSpec.workspace_path` set instead of `workspace_bytes`. The H4 helper (`compute_repo_bytes`) already handles this end-to-end; what's missing is the real-byte source. Required to graduate H5a from "real-trajectory + synthetic-bytes" to "phenomenon demonstrated on real harness traces with real-byte payloads".
+**H5b — real workspace bytes on the H5a trajectories** (`done`, 2026-05-05 — **honest negative finding**)
+Shallow-cloned the 5 H5a upstream repos at HEAD (`scripts/h5b/clone_repos.sh`, ~50 MB total network) and re-ran the H5a fixture with `SessionSpec.workspace_path` set per session in place of synthetic 1 GB `workspace_bytes`. Homes held identical to H5a (`phoenix, seattle, phoenix, seattle, phoenix`) so that the only variable changed is the byte source. Trace is generated dynamically per-environment, not committed (real bytes drift with HEAD).
 
-**`shared_state_aware` status.** Marked **experimental** (NOT deprecated). On linear-session traces it is provably equivalent to H1; on multi-session asymmetric-workspace fixtures (H2 with synthetic trajectories, H4 with real bytes on synthetic trajectories, **H5a with real trajectories and synthetic bytes**) it is strictly worse than H1. Final deprecation pending H5b — if real bytes on real trajectories also produce a strict gap, deprecate then.
+**Working-tree byte sizes at HEAD (excludes `.git`):**
+
+| sid | repo                          | bytes (snapshot) |
+| --- | ----------------------------- | ---------------- |
+| cog | Melevir/cognitive_complexity  | 21,922           |
+| pok | hsahovic/poke-env             | 21,588,279       |
+| dcj | lidatong/dataclasses-json     | 301,091          |
+| ice | WIPACrepo/iceprod             | 11,568,017       |
+| scf | asottile/setup-cfg-fmt        | 57,062           |
+
+**Numerical findings** (`compact_kv` × `sites_2site.yaml` @ 5 Gbps):
+
+| Policy | Total cost (s) | Note |
+| ------ | -------------- | ---- |
+| H1 (`request_level_with_site_cache`) | 0.148675 | per-session placement (6 phx, 4 sea) |
+| D2 (`shared_state_aware`, τ=1)        | 0.148675 | colocates **at seattle** (faster prefill) |
+
+**`D2 ≡ H1` to numerical noise (gap < 1e-9).** The H5a/H2 H1<D2 finding **does NOT survive at real byte magnitudes for these instances at HEAD**. Sensitivity grid: **0% gap survival** across the bracketing `kv_bytes ∈ {10K, 70656, 327680} × link_bps ∈ {5e9, 25e9, 100e9}` grid (sign-consistent at 0).
+
+**Why.** `shared_state_aware` is free to colocate the whole component at the *faster* site (seattle, 1.5× phoenix prefill). At synthetic 1 GB the workspace cross-site cost dominates and forcing colocation pays 2 × 1.6 s (the H5a result). At real HEAD-sized repos (10s of MB), the prompt-context replay savings from picking the faster site exactly cancel the cross-site workspace-transfer cost. The H1<D2 mechanism is real but byte-magnitude sensitive — sub-threshold for these particular instances at HEAD against this 5 Gbps link.
+
+**Mechanism is preserved (locked into tests).** `test_synthetic_1gb_recovers_h5a_gap` runs the same trajectories with synthetic 1 GB workspace_bytes and recovers H1 < D2 by 3.2 s exactly — the H5a result. Proves the gap is real, just byte-scale-sensitive. 13 tests in `tests/test_h5b_real_bytes.py`, env-var-gated on `VAGRANT_H5B_WORKSPACES` (default `/tmp/h5b_workspaces`); auto-skip when clones absent.
+
+**Caveat — HEAD vs `base_commit`.** The cached pilot trajectory JSON does not surface each instance's SWE-bench pre-fix `base_commit`, and we don't load the SWE-bench dataset metadata locally. HEAD-of-`main` is defensible as "real bytes from the same upstream repo at a real commit"; the H1<D2 mechanism is bytes-layer, so byte regime matters more than exact commit. A higher-fidelity H5b' would `git checkout` each instance's `base_commit` before the byte sum, but the qualitative finding (gap collapses at real-repo scale) does not depend on exact-commit fidelity.
+
+**Phenomenon-demonstrated gate status: NOT MET.** The gate (TASKS.md ~487-495) requires the H1<D2 gap to survive on at least one real-trace fixture *with* sensitivity-grid robustness. H5b is the strongest real-trace fixture vagrant currently has (real trajectories AND real bytes), and it produces a 0% survival rate. Paths forward: (a) larger upstream repos (monorepos at >100 MB), (b) a slower link (~1 Gbps), (c) a less prefill-asymmetric site config, or (d) accept the gap is byte-magnitude-sensitive and reframe what the headline claims. Each is a follow-on workstream, not a vagrant MVP item.
+
+**`shared_state_aware` status — revised.** Was: "experimental; provably worse than H1 on H2/H4/H5a, where 1 GB synthetic workspaces force the gap." Now: D2 is **not strictly dominated at real-repo scale on this fixture** — D2 ≡ H1 to within numerical noise on H5b at HEAD, courtesy of an exact cancellation between cross-site workspace transfer cost and seattle-side prefill savings. The "deprecate after H5b" plan from H4's writeup is **withdrawn**: parity at real bytes is not the strawman behavior the deprecation was based on. Whether D2 is *strictly better* than H1 on any real-trace fixture is still open — H5b shows parity, not advantage.
 
 ## § Workstream I — Capacity, queues, multi-site (deferred)
 
@@ -492,7 +520,7 @@ The cost-weighted duplication-factor gap **between `shared_state_aware` (D2) and
 
 The `request_level_no_reuse` (D1) baseline does **NOT** satisfy this gate; it is a strawman whose gap is closed by per-site caching alone.
 
-**Documented finding (not a regression).** On linear-session traces (toy, g_demo, F2 SWE-agent s_07), `H1 ≡ D2 ≡ G1` numerically to 1e-9 at every sensitivity grid point (`tests/test_sensitivity.py:test_gap_survival_rate_on_default_toy_at_realistic_link` asserts 0% survival on the toy, and D1 < H1 strict inequality at 100% of grid points). This is a real property of those fixtures, not a bug in either policy. The constructed-divergence test (`tests/test_h1_policy.py:test_h1_diverges_from_d2_on_constructed_fixture`) proves H1 ≠ D2 fixtures *exist*, and the H2 multi-session fixture (`examples/traces/h2_multi_session_swe.jsonl`) sustains a 100% sensitivity-robust H1<D2 gap — but the H2 workspace bytes are synthetic. A real-trace fixture exercising this case is still pending H4.
+**Documented finding (not a regression).** On linear-session traces (toy, g_demo, F2 SWE-agent s_07), `H1 ≡ D2 ≡ G1` numerically to 1e-9 at every sensitivity grid point (`tests/test_sensitivity.py:test_gap_survival_rate_on_default_toy_at_realistic_link` asserts 0% survival on the toy, and D1 < H1 strict inequality at 100% of grid points). This is a real property of those fixtures, not a bug in either policy. The constructed-divergence test (`tests/test_h1_policy.py:test_h1_diverges_from_d2_on_constructed_fixture`) proves H1 ≠ D2 fixtures *exist*, and the H2 multi-session fixture (`examples/traces/h2_multi_session_swe.jsonl`) and the H5a multi-trajectory fixture (`examples/traces/h5a_multi_trajectory_swe.jsonl`) both sustain a 100% sensitivity-robust H1<D2 gap — but **only at synthetic 1 GB workspace_bytes**. **H5b — real bytes on the same H5a trajectories at HEAD-sized upstream repos (~33 MB total) — closes that corner with a 0% survival rate**: the synthetic 1 GB scale was load-bearing for the gap, and at HEAD-sized real repos the prompt-context replay savings from picking the faster site exactly cancel the cross-site workspace-transfer cost. The phenomenon-demonstrated gate is therefore not met at the real-trace + real-bytes corner; what's required to close it is a fixture with workspace bytes well above the ~50 MB regime-flip threshold (monorepo-scale repos, slower link, or less prefill-asymmetric site config) — see the H5b writeup in Workstream H for the full breakdown.
 
 **Modeling-assumption caveats.** The cost model omits (a) KV compression à la CacheGen (3–4× factor on `kv_transfer_s`), (b) inter-state pipeline overlap (real systems compute `max(transfer, prefill)`, vagrant sums), (c) decode time (cancels in policy differences). See `costs.py` docstring for full caveat block. Any phenomenon claim must be robust to these omissions, or must explicitly justify why the omitted term doesn't flip the headline.
 
