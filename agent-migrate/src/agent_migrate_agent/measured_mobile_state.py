@@ -203,12 +203,21 @@ def read_snapshot_index(path: str | Path) -> list[SnapshotRow]:
         return [_snapshot_from_dict(row) for row in csv.DictReader(f)]
 
 
-def write_measured_artifacts(snapshots: list[SnapshotRow], out_dir: str | Path, repo_root: str | Path) -> None:
+def write_measured_artifacts(
+    snapshots: list[SnapshotRow],
+    out_dir: str | Path,
+    repo_root: str | Path,
+    source_root: str | Path | None = None,
+) -> None:
     out = Path(out_dir)
     out.mkdir(parents=True, exist_ok=True)
     _write_csv(out / "layer_distribution.csv", layer_distribution(snapshots))
     _write_csv(out / "mobile_state_thresholds.csv", threshold_rows(snapshots))
-    pressure, comparisons = measured_restart_pressure(snapshots, repo_root=repo_root)
+    pressure, comparisons = measured_restart_pressure(
+        snapshots,
+        repo_root=repo_root,
+        source_root=source_root,
+    )
     _write_csv(out / "exact_restart_pressure.csv", pressure)
     _write_csv(out / "policy_comparison_on_measured_state.csv", comparisons)
     _write_csv(out / "measured_restart_package_table.csv", measured_restart_packages(snapshots))
@@ -288,12 +297,13 @@ def measured_restart_pressure(
     snapshots: list[SnapshotRow],
     *,
     repo_root: str | Path,
+    source_root: str | Path | None = None,
     max_workflows: int = 20,
 ) -> tuple[list[RestartPressureRow], list[RestartPressureRow]]:
     selected = _select_pressure_snapshots(snapshots, max_workflows=max_workflows)
     if not selected:
         return [], []
-    episode, manifests = _episode_from_snapshots(selected)
+    episode, manifests = _episode_from_snapshots(selected, source_root=source_root)
     repo = Path(repo_root)
     bundle = load_bundle(
         repo / "configs" / "model_profiles.yaml",
@@ -405,13 +415,17 @@ def _select_pressure_snapshots(snapshots: list[SnapshotRow], *, max_workflows: i
     return retained[:max_workflows]
 
 
-def _episode_from_snapshots(snapshots: list[SnapshotRow]) -> tuple[MobilityEpisode, dict[str, ServingGroupManifest]]:
+def _episode_from_snapshots(
+    snapshots: list[SnapshotRow],
+    *,
+    source_root: str | Path | None = None,
+) -> tuple[MobilityEpisode, dict[str, ServingGroupManifest]]:
     workflows: list[Workflow] = []
     manifests: dict[str, ServingGroupManifest] = {}
     for idx, snapshot in enumerate(snapshots):
         wid = f"measured_{idx:04d}"
         workflows.append(Workflow(workflow_id=wid, manifest_path=f"<inline:measured:{wid}>", src_site="phoenix"))
-        manifests[wid] = _manifest_from_snapshot(wid, snapshot)
+        manifests[wid] = _manifest_from_snapshot(wid, snapshot, source_root=source_root)
     return MobilityEpisode(
         episode_id=f"measured_mobile_state_n{len(snapshots)}",
         source_sites=("phoenix",),
@@ -422,8 +436,13 @@ def _episode_from_snapshots(snapshots: list[SnapshotRow]) -> tuple[MobilityEpiso
     ), manifests
 
 
-def _manifest_from_snapshot(wid: str, snapshot: SnapshotRow) -> ServingGroupManifest:
-    tokens = max(1, _tokens_from_run_manifest(snapshot.run_dir))
+def _manifest_from_snapshot(
+    wid: str,
+    snapshot: SnapshotRow,
+    *,
+    source_root: str | Path | None = None,
+) -> ServingGroupManifest:
+    tokens = max(1, _tokens_from_run_manifest(snapshot.run_dir, source_root=source_root))
     states = {
         f"prompt_{wid}": StateObject(
             state_id=f"prompt_{wid}",
@@ -477,8 +496,11 @@ def _manifest_from_snapshot(wid: str, snapshot: SnapshotRow) -> ServingGroupMani
     )
 
 
-def _tokens_from_run_manifest(run_dir: str) -> int:
-    path = Path(run_dir) / "run_manifest.json"
+def _tokens_from_run_manifest(run_dir: str, *, source_root: str | Path | None = None) -> int:
+    run_path = Path(run_dir)
+    path = run_path / "run_manifest.json"
+    if not path.is_file() and source_root is not None and not run_path.is_absolute():
+        path = Path(source_root) / run_path / "run_manifest.json"
     if not path.is_file():
         return 2_000
     import json

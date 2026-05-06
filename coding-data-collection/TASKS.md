@@ -1373,9 +1373,9 @@ Shipped:
 
 Result:
 
-- Exported 50 retained Terminal-Bench-style run manifests to
-  `../agent-migrate/runs/measured_mobile_state/upstream_snapshots/raw_snapshot_index.csv`.
-- All 50 rows are usable by Agent Migrate after workspace-retention and
+- Exported 238 retained Terminal-Bench-style run manifests to
+  `../agent-migrate/runs/measured_mobile_state/raw_snapshot_index.csv`.
+- 232 rows are usable by Agent Migrate after workspace-retention and
   leakage/protected-artifact filtering.
 - The measured dirty/mobile payload is small in this corpus; the largest
   retained workspace is about 115 MB, but initial workspace manifests are

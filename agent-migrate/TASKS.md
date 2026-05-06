@@ -774,9 +774,9 @@ This is the next systems bottleneck. The current positive results are exact and 
 **Output artifacts.**
 
 - Upstream: `coding-data-collection` snapshot manifests.
-- Downstream: `agent-migrate/runs/measured_mobile_state/upstream_snapshots/raw_snapshot_index.csv`.
+- Downstream: `agent-migrate/runs/measured_mobile_state/raw_snapshot_index.csv`.
 
-**Result.** `coding-data-collection/src/coding_data_collection/mobile_state.py` now exports retained post-run workspace snapshots from the existing nested `runs/<batch>/<run>/` layout. It emits per-run `*.mobile_state.json` files and `raw_snapshot_index.csv` into `agent-migrate/runs/measured_mobile_state/upstream_snapshots/`. The first export covers 50 retained Terminal-Bench-style runs; all 50 rows are usable for claims after workspace retention and leakage/protected-artifact filtering. Byte semantics are explicit: `final_diff_bytes` is patch-file bytes, not touched-file payload; transcript tool output is a lower-bound snippet byte count; initial clean workspace bytes remain missing because the current upstream artifacts do not retain an initial workspace manifest. Symlinks are skipped and hardlinks are inode-deduped.
+**Result.** `coding-data-collection/src/coding_data_collection/mobile_state.py` now exports retained post-run workspace snapshots from the existing nested `runs/<batch>/<run>/` layout. It emits per-run `*.mobile_state.json` files and `raw_snapshot_index.csv` into `agent-migrate/runs/measured_mobile_state/`. The first export covers 238 retained Terminal-Bench-style runs; 232 rows are usable for claims after workspace retention and leakage/protected-artifact filtering. Byte semantics are explicit: `final_diff_bytes` is patch-file bytes, not touched-file payload; transcript tool output is a lower-bound snippet byte count; initial clean workspace bytes remain missing because the current upstream artifacts do not retain an initial workspace manifest. Symlinks are skipped and hardlinks are inode-deduped.
 
 **Success criteria.**
 
@@ -814,7 +814,7 @@ This is the next systems bottleneck. The current positive results are exact and 
 - `runs/measured_mobile_state/layer_distribution.csv`
 - `runs/measured_mobile_state/mobile_state_thresholds.csv`
 
-**Result.** The measured corpus does **not** show large mobile dirty state. Among the 50 claim-usable rows, dirty payload never exceeds 1 MB, dependency/build/cache never exceeds 100 MB, tool/test output never exceeds 10 MB, and no row crosses the SWE-bench/medium/monorepo/large-artifact thresholds. The largest full retained workspace snapshot is about 115 MB, but this is recorded as a representation cost, not the mobile-state headline, because initial clean workspace bytes are missing and unchanged base files cannot yet be separated. The current measured answer is: this corpus mostly lives in the reuse/small-dirty-state regime.
+**Result.** The measured corpus does **not** show large mobile dirty state. Among the 232 claim-usable rows, dirty payload never exceeds 1 MB, dependency/build/cache never exceeds 100 MB, tool/test output never exceeds 10 MB, and no row crosses the SWE-bench/medium/monorepo/large-artifact thresholds. The largest full retained workspace snapshot is about 115 MB, but this is recorded as a representation cost, not the mobile-state headline, because initial clean workspace bytes are missing and unchanged base files cannot yet be separated. The current measured answer is: this corpus mostly lives in the reuse/small-dirty-state regime.
 
 **Success criteria.**
 

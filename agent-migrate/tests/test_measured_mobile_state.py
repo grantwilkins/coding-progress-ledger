@@ -6,16 +6,17 @@ from pathlib import Path
 from agent_migrate_agent.measured_mobile_state import (
     layer_distribution,
     measured_restart_packages,
+    measured_restart_pressure,
     read_snapshot_index,
     threshold_rows,
 )
 
 
-def _write_index(path: Path) -> None:
+def _write_index(path: Path, *, clean_run_dir: str | None = None) -> None:
     rows = [
         {
             "run_id": "clean",
-            "run_dir": str(path.parent / "clean"),
+            "run_dir": clean_run_dir or str(path.parent / "clean"),
             "run_status": "completed_success",
             "final_success": "True",
             "eligible_for_l_gate": "True",
@@ -98,7 +99,7 @@ def _write_index(path: Path) -> None:
 
 def test_distribution_uses_claim_usable_rows_and_keeps_snapshot_as_representation_cost(tmp_path: Path) -> None:
     index = tmp_path / "raw_snapshot_index.csv"
-    _write_index(index)
+    _write_index(index, clean_run_dir="runs/batch/clean")
 
     snapshots = read_snapshot_index(index)
     rows = {row.layer: row for row in layer_distribution(snapshots)}
@@ -126,3 +127,28 @@ def test_measured_packages_compare_diff_against_full_snapshot_without_using_snap
     assert full.structurally_valid is True
     assert full.bytes_moved > diff.bytes_moved * 100_000
     assert ("quarantined", "full_workspace_snapshot") not in rows
+
+
+def test_restart_pressure_reads_tokens_from_upstream_relative_snapshot_paths(
+    tmp_path: Path,
+) -> None:
+    source_root = tmp_path / "coding-data-collection"
+    run_dir = source_root / "runs" / "batch" / "clean"
+    run_dir.mkdir(parents=True)
+    (run_dir / "run_manifest.json").write_text(
+        '{"metrics": {"total_model_calls": 2, "total_tokens_in": 80000}}',
+        encoding="utf-8",
+    )
+    index = tmp_path / "raw_snapshot_index.csv"
+    _write_index(index, clean_run_dir="runs/batch/clean")
+
+    snapshots = read_snapshot_index(index)
+    rows, _ = measured_restart_pressure(
+        snapshots,
+        repo_root=Path(__file__).resolve().parents[1],
+        source_root=source_root,
+        max_workflows=1,
+    )
+
+    cache = next(row for row in rows if row.policy == "cache_reuse")
+    assert cache.p50_resume_proxy_s > 0.2
