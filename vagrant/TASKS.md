@@ -354,11 +354,11 @@ Add a small auditor for a captured workflow directory that reports the S1 layers
 **W1 — Large-repo coding fixture** (`done`, 2026-05-06)
 `src/vagrant_agent/workloads.py` introduces `WorkloadAnchor` + `W1_LARGE_REPO_CODING`. Per-workflow workspace ~1.03 GB (base repo 350 MB + dep cache 600 MB + build artifacts 80 MB + uncommitted diff 0.2 MB), with `tool_output_context` wired into per-workflow prompt-context tokens. `classify_regime` exercises strong reuse + mixed under K4 and labels the cell. The W1 hypothesis (`state_locality`) is asserted as a regression test under a 1 Gbps link cell.
 
-**W2 — Data/RAG/artifact-heavy fixture** (`not started`)
-Use CSV/parquet/PDF bundles, generated plots, cleaned intermediates, retrieved document bundles, or index shards. Test whether artifact movement dominates prompt/KV.
+**W2 — Data/RAG/artifact-heavy fixture** (`done`, 2026-05-06)
+`W2_DATA_RAG_HEAVY` in `workloads.py`. Per-workflow must_move ~1.9 GB (retrieved docs + cleaned intermediates + generated plots), prompt_summaries wired into prompt-context tokens, and the two `globally_available` layers (base_data_bundle 500 MB + vector_index_shards 8 GB) are real `StateObject`s with initial warmness across every (source ∪ destination) site so a buggy policy that ignores warmness is falsifiable. Hypothesis-match regression test asserts `state_locality` under a 1 Gbps cell.
 
-**W3 — Multi-agent fanout/fanin fixture** (`not started`)
-Model parent planner, parallel subagents, shared task context, private transcripts, and merge/review. Test whether subagent structure creates grouping pressure beyond per-site cache reuse.
+**W3 — Multi-agent fanout/fanin fixture** (`done`, 2026-05-06)
+`W3_MULTI_AGENT_FANOUT` in `workloads.py`. Per-workflow shape: planner + 4 subagents + reviewer (the fanin step). Subagents share `shared_task_<wid>` (a structural test asserts cache_reuse emits one action per workflow for it, not K). Reviewer reads every private transcript + a `merge_<wid>` buffer state. `dependency_cache` is a real `globally_available` workspace state warmed at every site. Regime hypothesis is `landing_pressure` — N workflows × (K+2) llm_calls saturate prefill at the destination — and the canonical-cell hypothesis-match test pins it.
 
 Week 3 success criterion: each anchor has a state-layer breakdown and a regime classification.
 

@@ -337,8 +337,8 @@ _W2_LAYERS: tuple[StateLayer, ...] = (
     StateLayer(
         name="generated_plots",
         bytes_per_workflow=15_000_000,     # ~15 MB PNGs
-        mobility_class="cheaply_rehydratable",
-        notes="rebuildable from intermediates; small enough to ship",
+        mobility_class="must_move",
+        notes="agent's next step references the exact PNG; ship it",
     ),
     StateLayer(
         name="prompt_summaries",
@@ -355,6 +355,12 @@ _W2_LAYERS: tuple[StateLayer, ...] = (
 )
 
 
+_W2_GLOBAL_LAYER_TO_STATE: dict[str, str] = {
+    "base_data_bundle": "global_data_bundle",
+    "vector_index_shards": "global_vector_index",
+}
+
+
 def _build_w2_episode(
     anchor: WorkloadAnchor,
     n_workflows: int,
@@ -362,10 +368,14 @@ def _build_w2_episode(
     destination_sites: tuple[str, ...],
     seed: int,
 ) -> tuple[MobilityEpisode, dict[str, ServingGroupManifest]]:
-    # W2 differs from W1 in that the dominant cross-site bytes are
-    # `must_move`, not `cheaply_rehydratable`. We reflect this by sizing the
-    # workspace state to the must_move sum + cleaned-intermediates +
-    # retrieved docs.
+    # W2's dominant cross-site bytes are `must_move`, not
+    # `cheaply_rehydratable`. The workspace state carries the
+    # cleaned_intermediates + retrieved_documents + generated_plots sum;
+    # `prompt_summaries` rides as extra prompt-context tokens (parallel
+    # to how W1 handles tool_output_context); the two `globally_available`
+    # layers (base_data_bundle, vector_index_shards) become real state
+    # objects with initial warmness at every destination so K4 actually
+    # sees them as zero-cost (instead of being unfalsifiable paper rows).
     spec = HerdSpec(
         n_workflows=n_workflows,
         workspace_bytes_distribution="tiny",
@@ -380,32 +390,53 @@ def _build_w2_episode(
         destination_sites=destination_sites,
         episode_id=f"w2_dataartifact_n{n_workflows}_s{seed}",
     )
-    must_move_layers = {
-        "retrieved_documents",
-        "cleaned_intermediates",
-    }
-    workspace_bytes = sum(
-        layer.bytes_per_workflow
-        for layer in anchor.state_layers
-        if layer.name in must_move_layers
+    layers_by_name = {layer.name: layer for layer in anchor.state_layers}
+    workspace_must_move = (
+        layers_by_name["retrieved_documents"].bytes_per_workflow
+        + layers_by_name["cleaned_intermediates"].bytes_per_workflow
+        + layers_by_name["generated_plots"].bytes_per_workflow
     )
-    # Pre-warm the globally-available layers at every destination so the
-    # `globally_available` semantics translate into K4: the herd manifest
-    # only models a single workspace state per workflow, so we encode the
-    # presence of base_data_bundle / vector_index_shards as initial
-    # warmness on the prompt-context / system-prompt state.
-    state_warmness = dict(episode.state_warmness)
+    extra_prompt_tokens = _bytes_to_tokens(
+        layers_by_name["prompt_summaries"].bytes_per_workflow,
+    )
+    # Inject globally_available state objects as workspace-layer states
+    # with warmness at every destination + every source. They have real
+    # bytes, so a wrong policy that does NOT honor warmness would surface
+    # them as huge cross-site transfers (= falsifiable claim).
+    state_warmness: dict[str, tuple[str, ...]] = {
+        sid: tuple(sorted(set(destination_sites) | set(source_sites)))
+        for sid in _W2_GLOBAL_LAYER_TO_STATE.values()
+    }
+    src = source_sites[0]
     for manifest in manifests.values():
         for state in manifest.state_objects.values():
             if state.layer == "workspace":
-                state.bytes = workspace_bytes
+                state.bytes = workspace_must_move
                 state.content_hash = (
-                    f"{state.content_hash}:w2_dataartifact:{workspace_bytes}"
+                    f"{state.content_hash}:w2_dataartifact:{workspace_must_move}"
                 )
-            if state.state_id == "system_prompt":
-                # `globally_available` layers are reflected by warming the
-                # shared prompt at every destination.
-                state_warmness["system_prompt"] = tuple(destination_sites)
+            elif (
+                extra_prompt_tokens
+                and state.layer == "prompt_context"
+                and state.state_id != "system_prompt"
+            ):
+                state.tokens = state.tokens + extra_prompt_tokens
+                state.content_hash = (
+                    f"{state.content_hash}:w2_prompt_summaries:{extra_prompt_tokens}"
+                )
+        for layer_name, sid in _W2_GLOBAL_LAYER_TO_STATE.items():
+            manifest.state_objects[sid] = StateObject(
+                state_id=sid,
+                content_hash=f"hash_{sid}",
+                layer="workspace",
+                lifetime="persistent",
+                tokens=0,
+                bytes=layers_by_name[layer_name].bytes_per_workflow,
+                home_site=src,
+            )
+            for node in manifest.nodes.values():
+                if sid not in node.required_state:
+                    node.required_state.append(sid)
     return replace(
         episode,
         state_warmness=state_warmness,
@@ -447,25 +478,25 @@ W2_DATA_RAG_HEAVY = WorkloadAnchor(
 _W3_LAYERS: tuple[StateLayer, ...] = (
     StateLayer(
         name="shared_task_context",
-        bytes_per_workflow=2_500_000,      # ~2.5 MB / ~200K tokens
+        bytes_per_workflow=2_500_000,      # ~2.5 MB / ~600K tokens
         mobility_class="must_move",
         notes="planner's task context; shared across subagents",
     ),
     StateLayer(
         name="private_subagent_transcript",
-        bytes_per_workflow=1_200_000,      # ~1.2 MB / ~100K tokens
+        bytes_per_workflow=1_200_000,      # ~1.2 MB / ~300K tokens — per subagent
         mobility_class="must_move",
         notes="per-subagent prompt + tool output trace",
     ),
     StateLayer(
         name="subagent_workspace",
-        bytes_per_workflow=40_000_000,     # ~40 MB shallow checkout
+        bytes_per_workflow=4_000_000,      # ~4 MB shallow scratch per subagent
         mobility_class="cheaply_rehydratable",
-        notes="shallow clone per subagent; rebuildable",
+        notes="shallow scratch per subagent; rebuildable",
     ),
     StateLayer(
         name="merge_review_buffer",
-        bytes_per_workflow=600_000,        # ~600 KB summary buffer
+        bytes_per_workflow=600_000,        # ~600 KB / ~150K tokens summary buffer
         mobility_class="must_move",
         notes="reviewer's merge-context buffer",
     ),
@@ -478,6 +509,9 @@ _W3_LAYERS: tuple[StateLayer, ...] = (
 )
 
 _W3_SUBAGENTS_PER_WORKFLOW = 4
+_W3_GLOBAL_LAYER_TO_STATE: dict[str, str] = {
+    "dependency_cache": "global_dep_cache",
+}
 
 
 def _build_w3_episode(
@@ -511,11 +545,19 @@ def _build_w3_episode(
         )
     )
 
+    layers_by_name = {l.name: l for l in anchor.state_layers}
+    merge_tokens = _bytes_to_tokens(
+        layers_by_name["merge_review_buffer"].bytes_per_workflow,
+    )
+    dep_cache_bytes = layers_by_name["dependency_cache"].bytes_per_workflow
+
     workflows: list[Workflow] = []
     manifests: dict[str, ServingGroupManifest] = {}
     src = source_sites[0]
     for i in range(n_workflows):
         wid = f"wf_{i:04d}"
+        merge_sid = f"merge_{wid}"
+        dep_sid = _W3_GLOBAL_LAYER_TO_STATE["dependency_cache"]
         states: dict[str, StateObject] = {
             "system_prompt": StateObject(
                 state_id="system_prompt",
@@ -529,13 +571,28 @@ def _build_w3_episode(
                 layer="prompt_context", lifetime="shared",
                 tokens=shared_tokens, bytes=None, home_site=src,
             ),
+            merge_sid: StateObject(
+                state_id=merge_sid,
+                content_hash=f"hash_merge_{wid}",
+                layer="prompt_context", lifetime="shared",
+                tokens=merge_tokens, bytes=None, home_site=src,
+            ),
+            # globally_available dep cache as a real workspace state; warmed
+            # at every site so a wrong policy that ignores warmness would
+            # surface this as a dep_cache_bytes-sized cross-site transfer.
+            dep_sid: StateObject(
+                state_id=dep_sid,
+                content_hash="hash_global_dep_cache",
+                layer="workspace", lifetime="persistent",
+                tokens=0, bytes=dep_cache_bytes, home_site=src,
+            ),
         }
         nodes: dict[str, WorkNode] = {
             f"planner_{wid}": WorkNode(
                 node_id=f"planner_{wid}", node_type="llm_call",
                 parent_node_id=None, workflow_id=wid, label="planner",
                 status="complete",
-                required_state=["system_prompt", f"shared_task_{wid}"],
+                required_state=["system_prompt", f"shared_task_{wid}", dep_sid],
                 produced_state=[],
                 session_id=wid,
             ),
@@ -564,11 +621,24 @@ def _build_w3_episode(
                 workflow_id=wid, label=f"subagent_{k}",
                 status="complete",
                 required_state=[
-                    "system_prompt", f"shared_task_{wid}", sid_priv, sid_ws,
+                    "system_prompt", f"shared_task_{wid}", dep_sid,
+                    sid_priv, sid_ws,
                 ],
                 produced_state=[],
                 session_id=f"{wid}_s{k}",
             )
+        # Reviewer node closes the fanin: reads merge buffer, shared task,
+        # and every subagent's private transcript.
+        nodes[f"reviewer_{wid}"] = WorkNode(
+            node_id=f"reviewer_{wid}", node_type="llm_call",
+            parent_node_id=f"planner_{wid}",
+            workflow_id=wid, label="reviewer", status="complete",
+            required_state=[
+                "system_prompt", f"shared_task_{wid}", merge_sid,
+                *(f"private_{wid}_s{k}" for k in range(_W3_SUBAGENTS_PER_WORKFLOW)),
+            ],
+            produced_state=[], session_id=f"{wid}_review",
+        )
         manifests[wid] = ServingGroupManifest(
             workflow_id=wid, root_task=f"w3 fanout workflow {wid}",
             nodes=nodes, state_objects=states, edges=[],
@@ -578,10 +648,12 @@ def _build_w3_episode(
             src_site=src, deadline_s=None,
         ))
 
+    warm_sites = tuple(sorted(set(destination_sites) | set(source_sites)))
     state_warmness: dict[str, tuple[str, ...]] = {
-        # `globally_available` dependency_cache is reflected by warming the
-        # shared system_prompt across every destination.
-        "system_prompt": tuple(destination_sites),
+        # globally_available dep cache: warm at every site (real bytes,
+        # falsifiable claim — a policy ignoring warmness would surface
+        # dep_cache_bytes worth of cross-site transfer).
+        _W3_GLOBAL_LAYER_TO_STATE["dependency_cache"]: warm_sites,
     }
     episode = MobilityEpisode(
         episode_id=f"w3_fanout_n{n_workflows}_s{seed}",
@@ -602,20 +674,26 @@ def _build_w3_episode(
 W3_MULTI_AGENT_FANOUT = WorkloadAnchor(
     name="w3_multi_agent_fanout",
     description=(
-        f"Planner + {_W3_SUBAGENTS_PER_WORKFLOW} subagents per workflow with a "
-        "shared task context. Per-workflow must_move ~7 MB (shared 2.5 MB + "
-        f"{_W3_SUBAGENTS_PER_WORKFLOW}×private 1.2 MB + merge buffer 0.6 MB)."
+        f"Planner + {_W3_SUBAGENTS_PER_WORKFLOW} subagents + reviewer per "
+        "workflow with a shared task context and a fanin merge step. "
+        "Per-workflow must_move ~7 MB (shared 2.5 MB + "
+        f"{_W3_SUBAGENTS_PER_WORKFLOW}×private 1.2 MB + merge buffer 0.6 MB). "
+        "Workspace ~16 MB (4 MB shallow scratch × K subagents)."
     ),
     state_layers=_W3_LAYERS,
-    regime_hypothesis="reuse",
+    regime_hypothesis="landing_pressure",
     builder=_build_w3_episode,
     notes=(
-        "Hypothesis: shared_task_context is shared across subagents. Strong "
-        "per-site reuse already collapses the per-subagent cold reads to a "
-        "single materialization per (state, site) pair, so the regime is "
-        "'reuse'. If the strong baseline does NOT collapse the gap, that is a "
-        "sign the cache_reuse implementation is not honoring shared "
-        "lifetime — investigate before tuning a planner."
+        "Hypothesis: N workflows × (planner + K subagents + reviewer) "
+        "= N × (K+2) llm_calls competing for prefill at each destination "
+        "is the binding cost. Cache_reuse correctly collapses each shared "
+        "state to a single per-(workflow, dst) materialization — a "
+        "structural test asserts that — but the AGGREGATE prefill demand "
+        "across N workflows still dominates under any non-trivial cell. "
+        "If a cell instead lands on `reuse`, the herd is small enough that "
+        "the per-site cache cost is negligible and richer planning has no "
+        "headroom; if it lands on `state_locality`, the workspace bytes "
+        "drift indicates miscalibration."
     ),
 )
 
