@@ -54,7 +54,7 @@ def bench_main(argv: list[str] | None = None) -> int:
     parser.add_argument("--out", required=True, type=Path)
     parser.add_argument(
         "--policies",
-        default="request_level_no_reuse,shared_state_aware",
+        default="request_level_no_reuse,request_level_with_site_cache,shared_state_aware",
         help="comma-separated list of policy names",
     )
     parser.add_argument("--tau", type=int, default=1, help="shared_state_aware threshold in tokens")

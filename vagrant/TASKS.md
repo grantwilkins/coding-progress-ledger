@@ -396,10 +396,15 @@ Only after F1 or F2.
 
 The MVP baseline (`request_level_no_reuse`) is intentionally a strawman. Before any external claim, replace or supplement it with a competitive baseline.
 
-**H1 — `request_level_with_site_cache`** (most important)
-Same per-node placement as `request_level_no_reuse`, but materialized state is **reused across colocated nodes at the same site**. This is the fair baseline for the headline plot. If `shared_state_aware` still wins against this, the result is meaningful.
+**H1 — `request_level_with_site_cache`** (`done`, 2026-05-05)
+Same per-node placement as `request_level_no_reuse`, but materialized state is **reused across colocated nodes at the same site**. ~6 LOC delegating to existing `_plan_from_placement` + `_place_per_node_min_cost` helpers. Pre-flight + code+findings Opus critics. **Finding**: H1 numerically collapses to D2 and G1 on every existing fixture (linear-session structure puts every node at the same site); a constructed multi-private-state-different-homes fixture proves H1 ≠ D2 *can* happen but no real-trace fixture currently exercises it.
 
-**H2 — Other deferred policies.** `session_sticky`, `prefix_group`, `subagent_group`, `workspace_group`. Add only if H1 + a real trace surface a need for them.
+**H2 — Multi-session SWE-agent fixture** (next task — recommended by H1 findings critic)
+Concat 2-3 F2-style SWE-agent trajectories with a shared system_prompt state and disjoint per-trajectory workspaces (`home_site` set per trajectory). Smallest realistic fixture that puts D2 in its natural habitat (multiple components with private states pulling in different directions). Decides whether the project pivots to a "site-cache-reuse-is-everything" finding or sustains the original grouping thesis.
+
+**H3 — Other deferred policies.** `session_sticky`, `prefix_group`, `subagent_group`, `workspace_group`. Add only if H2 surfaces a need.
+
+**`shared_state_aware` status.** Marked **experimental** (NOT deprecated). On linear-session traces it is provably equivalent to H1; at fragmenting tau it is strictly worse than H1. Keep it pending H2 — if multi-session real traces also collapse, deprecate then.
 
 ## § Workstream I — Capacity, queues, multi-site (deferred)
 
@@ -427,12 +432,16 @@ Per the plan's own non-goals (lines 861–867). Out of scope for this repo.
 
 ## Definition of done — phenomenon demonstrated
 
-The cost-weighted duplication-factor gap must reproduce on **at least one of**:
+> **Gate revised 2026-05-05 (post-H1).** H1 (`request_level_with_site_cache`) collapsed numerically to D2 (`shared_state_aware`) and G1 (`g1_brute_force`) on every existing fixture (toy, g_demo at tau=1, SWE-agent F2 s_07). The previously-claimed 2× / 7.47× gaps between D1 and D2 are entirely explained by **per-site cache reuse** (H1's bookkeeping), not by shared-state-aware grouping. The original gate language conflated those two effects.
 
-- a real harness trace (Workstream F), or
-- a synthetic sweep where `shared_state_aware` faces a non-trivial tradeoff — i.e., colocating shared-state nodes forces a more expensive private-state materialization at one site, so the policy must actively decide rather than always winning.
+The cost-weighted duplication-factor gap **between `shared_state_aware` (D2) and `request_level_with_site_cache` (H1)** must reproduce on **at least one of**:
 
-Until one of these is green, no external claim about the phenomenon. The toy trace is adversarial by design and proves nothing about real workloads.
+- a real harness trace exercising **multiple sessions** OR multi-private-state-with-different-homes structure (i.e., a manifest where some nodes' per-node best-site differs from their component's best-site), or
+- a synthetic sweep where private-state homes pull individual nodes within a shared-state component toward different sites, so D2's grouping forces a more expensive private-state materialization that H1 avoids by splitting.
+
+The `request_level_no_reuse` (D1) baseline does **NOT** satisfy this gate; it is a strawman whose gap is closed by per-site caching alone.
+
+**Documented finding (not a regression).** On linear-session traces (toy, g_demo, F2 SWE-agent s_07), `H1 ≡ D2 ≡ G1` numerically to 1e-9. This is a real property of those fixtures, not a bug in either policy. The constructed-divergence test (`tests/test_h1_policy.py:test_h1_diverges_from_d2_on_constructed_fixture`) proves H1 ≠ D2 fixtures *exist*, but no real-trace fixture in the repo currently exercises that case.
 
 ## Definition of done — research result
 

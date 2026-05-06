@@ -118,8 +118,11 @@ def test_unknown_policy_hard_fails():
 
 def test_registry_keys_match_known_policies():
     assert set(POLICIES) == {
-        "request_level_no_reuse", "shared_state_aware",
-        "g1_brute_force", "g2_local_search",
+        "request_level_no_reuse",
+        "request_level_with_site_cache",
+        "shared_state_aware",
+        "g1_brute_force",
+        "g2_local_search",
     }
 
 

@@ -277,6 +277,42 @@ def _component_required_states(manifest: ServingGroupManifest, component: set[st
 # --------------------------------------------------------------------------- #
 
 # --------------------------------------------------------------------------- #
+# H1: request_level_with_site_cache — fair baseline
+# --------------------------------------------------------------------------- #
+
+
+def run_request_level_with_site_cache(
+    manifest: ServingGroupManifest, bundle: ProfileBundle,
+) -> Plan:
+    """Per-node placement (same as `request_level_no_reuse`), but state
+    materialized **once per (state, site)** where >=1 colocated consumer is
+    placed (per-site cache reuse).
+
+    Different from D1: D1 has materialization_count = #consumers per
+    (state, site); H1 has count = 1 always.
+    Different from D2: D2 places per-component; H1 places per-node.
+
+    On any single-component trace where every node's per-node best-site is the
+    same site, H1 == D2(tau=1) because both yield identical (state, site) sets.
+    The two diverge only when nodes within one component have different per-
+    node best-sites — i.e., on multi-private-state-with-different-homes
+    fixtures. The toy and the SWE-agent F2 fixture are both single-best-site,
+    so they collapse to equality with D2."""
+    _validate_state_homes(manifest, bundle)
+    placements = _place_per_node_min_cost(manifest, bundle)
+    placement_map = {p.node_id: p.site for p in placements}
+    return _plan_from_placement(
+        policy_name="request_level_with_site_cache",
+        placement=placement_map,
+        manifest=manifest,
+        bundle=bundle,
+        meta={},
+        materialization_reason="site_cache_reuse",
+        placement_reason="min_cost",
+    )
+
+
+# --------------------------------------------------------------------------- #
 # G1: brute-force optimizer (enumerate K^N placements; pick min total cost)
 # --------------------------------------------------------------------------- #
 
@@ -415,6 +451,8 @@ def _plan_from_placement(
     manifest: ServingGroupManifest,
     bundle: ProfileBundle,
     meta: dict,
+    materialization_reason: str = "shared_once_per_site",
+    placement_reason: str = "optimized",
 ) -> Plan:
     placements: list[PlacementDecision] = []
     by_state_site: dict[tuple[str, str], dict] = {}
@@ -429,7 +467,7 @@ def _plan_from_placement(
             node_cost += c
         placements.append(PlacementDecision(
             node_id=node_id, site=site, cost_s=node_cost,
-            component_size=1, reason="optimized",
+            component_size=1, reason=placement_reason,
         ))
         for state_id in node.required_state:
             state = manifest.state_objects[state_id]
@@ -454,7 +492,7 @@ def _plan_from_placement(
             cost_s=info["cost_s"],
             materialization_count=1,
             consumers=sorted(info["consumers"]),
-            reason="shared_once_per_site",
+            reason=materialization_reason,
         )
         for (sid, site), info in by_state_site.items()
     ]
@@ -468,6 +506,7 @@ def _plan_from_placement(
 
 POLICIES = {
     "request_level_no_reuse": run_request_level_no_reuse,
+    "request_level_with_site_cache": run_request_level_with_site_cache,
     "shared_state_aware": run_shared_state_aware,
     "g1_brute_force": run_g1_brute_force,
     "g2_local_search": run_g2_local_search,
@@ -492,8 +531,9 @@ __all__ = [
     "POLICIES",
     "run_policy",
     "run_request_level_no_reuse",
+    "run_request_level_with_site_cache",
     "run_shared_state_aware",
     "run_g1_brute_force",
     "run_g2_local_search",
-    "G1_MAX_NODES",
+    "G1_MAX_ENUMERATIONS",
 ]

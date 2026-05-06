@@ -5,6 +5,12 @@ request_level_no_reuse,private_A,hash_private_A_v1,prompt_context,seattle,contex
 request_level_no_reuse,workspace_AC,hash_workspace_AC_v1,workspace,seattle,artifact_copy,0,4000000,0.00128,2,1,0.00256,2,"S2,S4",per_node_no_reuse
 request_level_no_reuse,private_B,hash_private_B_v1,prompt_context,seattle,context_replay,12000,,0.266666667,1,1,0.266666667,1,S3,per_node_no_reuse
 request_level_no_reuse,private_C,hash_private_C_v1,prompt_context,seattle,context_replay,2000,,0.0444444444,1,1,0.0444444444,1,S4,per_node_no_reuse
+request_level_with_site_cache,system_prefix,hash_system_prefix_v1,prompt_context,seattle,context_replay,200,,0.00444444444,1,1,0.00444444444,4,"S1,S2,S3,S4",site_cache_reuse
+request_level_with_site_cache,repo_context,hash_repo_context_v1,prompt_context,seattle,context_replay,8000,,0.177777778,1,1,0.177777778,4,"S1,S2,S3,S4",site_cache_reuse
+request_level_with_site_cache,private_A,hash_private_A_v1,prompt_context,seattle,context_replay,1500,,0.0333333333,1,1,0.0333333333,1,S2,site_cache_reuse
+request_level_with_site_cache,workspace_AC,hash_workspace_AC_v1,workspace,seattle,artifact_copy,0,4000000,0.00128,1,1,0.00128,2,"S2,S4",site_cache_reuse
+request_level_with_site_cache,private_B,hash_private_B_v1,prompt_context,seattle,context_replay,12000,,0.266666667,1,1,0.266666667,1,S3,site_cache_reuse
+request_level_with_site_cache,private_C,hash_private_C_v1,prompt_context,seattle,context_replay,2000,,0.0444444444,1,1,0.0444444444,1,S4,site_cache_reuse
 shared_state_aware,private_A,hash_private_A_v1,prompt_context,seattle,context_replay,1500,,0.0333333333,1,1,0.0333333333,1,S2,shared_once_per_component_site
 shared_state_aware,private_B,hash_private_B_v1,prompt_context,seattle,context_replay,12000,,0.266666667,1,1,0.266666667,1,S3,shared_once_per_component_site
 shared_state_aware,private_C,hash_private_C_v1,prompt_context,seattle,context_replay,2000,,0.0444444444,1,1,0.0444444444,1,S4,shared_once_per_component_site

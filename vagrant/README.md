@@ -10,7 +10,9 @@ trace.jsonl  ──build_manifest──▶  manifest.json  ──run_policy─�
 
 ## Status
 
-MVP pipeline complete. The pipeline can express and measure shared-state duplication on a synthetic trace; this is **not** evidence that the duplication occurs at meaningful magnitude in real agent workloads. The baseline (`request_level_no_reuse`) is a deliberate strawman that materializes shared state once per consumer; the phenomenon is only claimed demonstrated when the gap reproduces against a competitive baseline (`request_level_with_site_cache`, Workstream H) on a real harness trace (Workstream F). See `TASKS.md` § 0 for framing rules.
+MVP pipeline complete; SWE-agent F2 adapter (real-trace) and G1/G2 optimizers landed. **Workstream H1 (`request_level_with_site_cache`, the fair baseline) revealed that the previously-claimed 2× / 7.47× duplication-factor gaps between `request_level_no_reuse` (D1) and `shared_state_aware` (D2) are entirely explained by per-site cache reuse (H1's bookkeeping), not by shared-state-aware grouping.** On every linear-session fixture (toy, g_demo at `tau=1`, SWE-agent F2 `s_07`), H1, D2, and G1 collapse to identical numbers.
+
+The original thesis ("agent workflow with shared state has a different optimal placement than treated as N independent requests") is **on life support, not refuted**: a constructed multi-private-state-with-different-homes fixture proves H1 ≠ D2 fixtures exist, but no real-trace fixture in the repo currently exercises the multi-component path. The next task (TASKS.md § Workstream H2) is a multi-session SWE-agent concat fixture that puts D2 in its natural habitat and decides whether the project pivots to a "site-cache-reuse-is-everything" finding or sustains the original grouping thesis.
 
 ## Clone → plot in under 10 minutes
 
@@ -41,14 +43,15 @@ runs/mvp_demo/
   plots/duplication_factor.png             # the headline plot
 ```
 
-Expected console output:
+Expected console output (toy trace):
 
 ```text
-request_level_no_reuse: total_cost_s=1.0759, dup_factor=2.0379
-shared_state_aware:     total_cost_s=0.5279, dup_factor=1.0000
+request_level_no_reuse:        total_cost_s=1.0759, dup_factor=2.0379
+request_level_with_site_cache: total_cost_s=0.5279, dup_factor=1.0000
+shared_state_aware:            total_cost_s=0.5279, dup_factor=1.0000
 ```
 
-The cost-weighted duplication factor is **`Σ(cost_s · materialization_count) / Σ(cost_s)`** — i.e., the cost the policy actually paid divided by the lower-bound cost of one materialization per `(state, site)`. `shared_state_aware` materializes each state exactly once per component-site, so its factor is 1.0 by construction; `request_level_no_reuse` materializes shared state once per consumer, so its factor exceeds 1.0 in proportion to how much sharing the trace contains. Reading the audit CSV is the definitive way to reconcile the metric with the per-row decisions.
+The cost-weighted duplication factor is **`Σ(cost_s · materialization_count) / Σ(cost_s)`** — i.e., the cost the policy actually paid divided by the lower-bound cost of one materialization per `(state, site)`. **The 2× gap belongs to per-site cache reuse (H1's bookkeeping), not to shared-state-aware grouping**: H1 and D2 produce numerically identical totals on this fixture and on every other linear-session fixture in the repo. Reading the audit CSV is the definitive way to reconcile the metric with the per-row decisions.
 
 ## What the toy trace exercises
 
