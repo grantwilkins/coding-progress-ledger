@@ -2,9 +2,13 @@
 
 This file is the working backlog for `vagrant-agent`. It is the authoritative plan; if reality diverges, update this file rather than the implementation plan.
 
-## Tentative thesis (under test)
+## Project status — calibration result (post-K7 gauntlet, 2026-05-05)
 
-> A **mobility episode** is a batch event in which N stateful agentic workflows must change placement and reconstitute their state at one or more destination resource pools, under finite network, prefill, workspace-hydration, and KV-memory budgets. **The hypothesis is that mobility episodes are the abstraction this project should be organized around.** Workstream K runs three falsification tests to determine whether the hypothesis earns the pivot. Until all three pass, the pivot is provisional and Workstream L (calibration paper) is a live alternative outcome. Either result is honest.
+> **The K7 falsification gauntlet has failed.** T1 (correctness check) and T2 (prefill-stampede) pass; **T3 (multi-resource bottleneck) fails** — even with a load-aware bin-packing `mixed_min_pressure`, the herd-level planner beats best fixed-mode (`cache_reuse`) by only ~3.6%, below the 10% bar. `random_mode` matches `mixed_min_pressure` to within 0.4%, indicating the diversification heuristic is no better than chance on the canonical fixture. **The K-pivot is not earned**; the project's path is **Phase 3b — Workstream L (calibration paper)**.
+>
+> The honest framing of the project's contribution: for SWE-bench-class workloads at observed scales, L1 (per-site cache reuse + per-state intelligent mode dispatch) explains most of the state-locality benefit. Herd-level planning shows measurable but sub-threshold improvement on multi-resource fixtures, and is dominated by a smart per-state policy. The phenomenon claim requires either workloads above the regime-flip threshold (~50 MB minority-home cross-site bytes) OR explicit prefill-only saturation (T2 regime), neither of which is present in the SWE-bench shallow-clone setup.
+>
+> See `docs/K7_gauntlet_results.md` for the full breakdown and `docs/L1_calibration_paper_draft.md` for the calibration paper outline.
 
 The four-level conceptual hierarchy frames everything below:
 
