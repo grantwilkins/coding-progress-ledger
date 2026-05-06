@@ -31,46 +31,52 @@ metric:
 
 This is **not** a per-request scheduler. It is not a routing decision. It does not migrate live KV across the wire (that's the deferred Workstream J). It is a model that lets us ask: *given that N workflows must move, what's the best plan, and which resource saturates?*
 
-## The 4-level hierarchy
+## The 4-level hierarchy (revised after audits + critic feedback)
 
-Adopting collaborator 2's framing (memo §10):
+Adopting collaborator 2's framing (memo §10), with one revision flagged by the audit-honesty critic: **L2 is not a strict middle rung. It is at best a lateral position with a worse failure mode than L1.**
 
 | Level | Policy class | Concrete representatives | What it captures |
 | ----- | ------------ | ------------------------ | ---------------- |
 | L0 | No-reuse baseline | D1 (`request_level_no_reuse`) | strawman; every consumer pays its own materialization |
 | L1 | Per-site cache reuse | H1 (`request_level_with_site_cache`) | per-(state, site) dedup; per-node placement |
-| L2 | Graph grouping | D2 (`shared_state_aware`), D3 (`shared_state_aware_typed`), G1 (`g1_brute_force`) | per-(component, site) dedup; component-level placement |
-| L3 | Mobility episodes | K5 reconstitution policies (`replay_all`, `kv_all`, `cache_reuse`, `workspace_sticky`, `mixed_min_pressure`) | resource-vector cost; fluid capacity; herd dynamics |
+| L2 *(lateral, not improvement)* | Graph grouping | D2 (`shared_state_aware`), D3 (`shared_state_aware_typed`), G1 (`g1_brute_force`) | per-(component, site) dedup; component-level placement |
+| L3 | Mobility episodes | K5 reconstitution policies (incl. `random_mode` sanity baseline) | resource-vector cost; fluid capacity; herd dynamics |
 
-Per A3 audit: **L2's component-level materialization accounting is structurally weaker than L1 in some regimes** (D3 > D2 on H5b real bytes by 108 ms). L1 ≤ L2 is not an invariant. The right characterization: L1 dominates L2 when colocation-at-one-site is correct; L2 dominates L1 when fragmentation creates real cost savings (which requires home asymmetry that aligns with byte mass, per A2).
+**Empirical status of L2 (per A3 audit):**
+- On every real-trace fixture vagrant holds, `G1 ≡ H1` (the L2 oracle finds nothing better than L1).
+- D3 (the edge-typed L2) is sometimes WORSE than D2 (basic L2): on H5b real bytes, D3 > D2 by 108 ms.
+- There is no fixture in which any L2 policy strictly beats L1.
+- **L2's value is pedagogical** (it shows what graph-grouping looks like) and as a stress-test counterexample, NOT as a competitive policy class.
 
-L3 introduces a different axis: **resource-vector cost under fluid capacity**, not just scalar wall-clock cost. K7 will determine whether L3 is meaningfully different from L1.
+L3 introduces a different axis: **resource-vector cost under fluid capacity**. K7 will determine whether L3 is meaningfully different from L1.
 
 ## Mobility-episode usefulness map
 
 From collaborator 2 §2, with scenario-class labels from A2:
 
-### Useful (6)
+### Useful (6, with honest qualifiers)
 
-| Use case | Scenario class | Why mobility episodes matter |
-| -------- | -------------- | ---------------------------- |
-| Capacity evacuation | single-source-evacuation | Many workflows leave one source within a window; reconstitution at destinations consumes shared resources. |
-| Regional failover | single-source-evacuation | A region degrades; sessions must resume elsewhere; herd by definition. |
-| Maintenance drain | single-source-evacuation | Cluster being drained; deadlines/slack differ by workload. |
-| Spot/preemptible capacity shift | single-source-evacuation | Cheap capacity disappears or appears; batch movement. |
-| Cross-site fanout/fanin | distributed-origin → fan-in | Subagents launched at different sites; merge point shares capacity. |
-| Large artifact/data workflows | distributed-origin or single-source | Workspaces are big enough that reconstitution mode actually matters. |
+| Use case | Scenario class | Why mobility episodes matter | Notes |
+| -------- | -------------- | ---------------------------- | ----- |
+| Capacity evacuation | single-source-evacuation | Many workflows leave one source within a window | strongest case |
+| Regional failover | single-source-evacuation | A region degrades; sessions must resume elsewhere | strong case (real production motivation) |
+| Maintenance drain | single-source-evacuation | Cluster being drained; deadlines/slack differ by workload | moderate |
+| Spot/preemptible capacity shift | single-source-evacuation | Cheap capacity disappears or appears | **weakest case**: spot preemption gives seconds-to-minutes notice; vagrant doesn't model pre-staged warmness, so the planner has to be standing infrastructure, not computed-at-eviction |
+| Cross-site fanout/fanin | distributed-origin → fan-in | Subagents from different sites merge | moderate |
+| Large artifact/data workflows | distributed-origin or single-source | Workspaces big enough that reconstitution mode matters | strongest case for non-evacuation; matches A1's recommendation |
 
 ### Not useful (6)
 
-| Use case | Why not |
-| -------- | ------- |
-| Stateless or short chat | Requests independent; no reconstitution needed. |
-| Linear small coding sessions | What H5b is; per-site cache reuse handles it. |
-| Workspaces in globally-accessible storage | "Home" is weak; every destination can hydrate cheaply. |
-| Sticky session security/correctness | Optimizer has no room. |
-| Very fast intra-region fabrics | Network ≈ free; no bottleneck unless herd is enormous. |
-| Heavy summarization/checkpointing | Mobility becomes a semantic-checkpoint problem. |
+| Use case | Why not | Production prevalence |
+| -------- | ------- | --------------------- |
+| Stateless or short chat | Requests independent; no reconstitution needed | very common |
+| Linear small coding sessions | What H5b is; per-site cache reuse handles it | common |
+| Workspaces in globally-accessible storage | "Home" is weak; every destination can hydrate cheaply | growing trend |
+| Sticky session security/correctness | Optimizer has no room | regulated environments |
+| Very fast intra-region fabrics | Network ≈ free; no bottleneck unless herd is enormous | **dominant production regime for LLM inference**: same-region, same-cluster routing, RDMA fabrics 200–400 Gbps |
+| Heavy summarization/checkpointing | Mobility becomes a semantic-checkpoint problem | growing trend |
+
+**Five-of-six 'not useful' scenarios are extremely common in production**, including the dominant LLM inference regime (intra-region fabrics). The "useful" cases (cross-region 5 Gbps, large workspaces) are real but a minority of production traffic. K's project value is primarily in the evacuation/failover/large-artifact regimes — vagrant should be honest that this is not most workloads.
 
 **Four out of six "useful" scenarios are single-source-evacuation, which vagrant has not modelled.** The K7 gauntlet's fixtures must include single-source-evacuation variants — see K6.
 
@@ -90,15 +96,19 @@ The L3 policies (K5) choose mode per-(workflow, state_object). The K4 fluid simu
 
 **Resource conservation invariant** (K3 + K4 will pin): for any episode and any plan, `sum(action.network_bytes) == manifest's total cross-site transferred bytes` — no double-counting, no leaks. Same for prefill_tokens, workspace_bytes, kv_resident_bytes.
 
-## The three falsification tests (T1/T2/T3)
+## The three gauntlet tests (T1/T2/T3)
 
 These are the pass/fail criteria for the K7 gauntlet. The tentative thesis (mobility episodes is the right project abstraction) is accepted iff **all three pass**.
 
-### T1 — Capacity-free collapse
+**Honest framing per audit-honesty critic:** T1 is a **simulator correctness check** (a tautology that fails only on implementation bug), NOT a hypothesis-falsification test. T2 and T3 use procedurally-generated K6 herd fixtures whose parameters we control — they are **falsification-of-design-intent** tests, not "the abstraction beats L1 on real workloads" tests. A real falsification claim would require independent fixtures (e.g., OpenHands traces sampled without post-hoc adjustment); K7's pass is necessary but not sufficient for the project's external claim.
+
+The tests still gate the pivot — if T1 fails the simulator is buggy; if T2/T3 fail the design intent doesn't hold even on fixtures designed for it.
+
+### T1 — Simulator correctness check (capacity-free collapse)
 
 **Fixture:** `examples/episodes/gauntlet_t1_infinite_capacity.json`. N=100 workflows, all four resource budgets set to `math.inf`, distributed-origin scenario with H5a-like home distribution.
 
-**Run:** all 6 K5 reconstitution policies on K4's fluid simulator.
+**Run:** all 7 K5 reconstitution policies on K4's fluid simulator.
 
 **Pass criterion:**
 ```
@@ -107,7 +117,7 @@ mixed_min_pressure.makespan == cache_reuse.makespan == H1.placement_total_cost  
 
 **Why:** under infinite capacity, the "L3 vs L1" distinction must vanish. There's no resource to saturate, no reason to balance bottlenecks, no advantage to mixing modes. If the simulator says L3 is better, **the simulator is smuggling in an effect** — most likely a bug in the cost computation (e.g., charging per-component instead of per-(state, site)).
 
-**Failure mode if violated:** if T1 fails (mixed > L1 OR mixed < L1 by > tolerance), the K4 simulator has a bug. **Resolve before evaluating T2/T3.**
+**Failure mode if violated:** the K4 simulator has a bug. **Resolve before evaluating T2/T3.**
 
 ### T2 — Prefill-stampede
 

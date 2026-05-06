@@ -7,13 +7,21 @@ N reconstitution plans concurrently under per-resource fluid capacity:
     (network bps per link, prefill tok/s per site, workspace_hydrate
     bps per site, kv_memory bytes per site).
   * At each event horizon, every resource's capacity is split
-    proportionally among in-flight actions that need it (max-min fair
-    share with per-action demand at the current step).
+    EQUALLY among in-flight actions that need it: each demander gets
+    `capacity / num_demanders`. **This is equal share, not true max-min
+    fair share** — an action bottlenecked on prefill does NOT release its
+    network share to a network-bottlenecked peer. The bias is
+    *conservative* for T3 (it overstates contention, making mixed
+    planning's win look smaller than it would under true max-min). Per
+    A4 audit, this matches the "additive cost" assumption of the
+    static cost model; a future M-workstream could refine.
   * Time advances to the next event (an action finishes, or a new
     action becomes eligible to start because its predecessor finished).
-  * KV memory is a CAPACITY (not bandwidth): when a finishing action
-    would push dst over kv_memory_bytes_per_site, the warmness map's
-    LRU evicts entries at that site until space is available.
+  * KV memory is a CAPACITY (not bandwidth): both at episode start
+    (initial warmness from `episode.state_warmness`) and after each
+    action completes, if a site's resident KV bytes exceed
+    `kv_memory_bytes_per_site`, LRU eviction runs on that site's
+    warmness entries until under cap.
   * No queues, no admission control, no scheduler. The fluid carve-out
     in CLAUDE.md is the only relaxation of the original "no capacity"
     rule.
@@ -24,7 +32,7 @@ three falsification properties (T1/T2/T3) using these traces.
 
 Determinism: action ordering within a single time step is deterministic
 in (workflow_id, state_id, mode) lex order. The simulator does not use
-random tie-breaks anywhere.
+random tie-breaks anywhere. Frozen-dataclass inputs are not mutated.
 
 Per CLAUDE.md hard rule: K4 is the ONLY module that mutates a warmness
 map. Returns a new map; never mutates in place.
@@ -158,7 +166,16 @@ def simulate_fluid(
     active: list[dict] = []
 
     # Mutable warmness (we'll thread through with_added/with_evicted).
+    # Enforce KV cap on the INITIAL warmness too: episode.state_warmness
+    # may already exceed dst capacity; if so, LRU evict at episode start
+    # (per-site) before any actions run. Fixes a correctness gap flagged
+    # in the K2/K3/K4 implementation review (initial warmness wasn't
+    # cap-checked).
     wm = warmness
+    for site in bundle.sites:
+        kv_cap = budget.kv_memory_bytes_per_site.get(site, math.inf)
+        if kv_cap < math.inf:
+            wm = _enforce_kv_capacity(wm, site, kv_cap, manifests, bundle)
 
     # Output traces.
     traces: list[ActionTrace] = []

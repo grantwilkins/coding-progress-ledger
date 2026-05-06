@@ -211,15 +211,23 @@ def mixed_min_pressure(
     bundle: ProfileBundle,
     warmness: WarmnessMap,
 ) -> dict[str, list[ReconstitutionAction]]:
-    """Greedy fluid-aware oracle (upfront approximation of an online
-    oracle). For prompt-context states, ROUND-ROBINS workflows across
+    """Static greedy heuristic (NOT a true oracle).
+
+    For prompt-context states, ROUND-ROBINS workflows across
     {CONTEXT_REPLAY, KV_TRANSFER} so neither resource is uniformly
     saturated. For workspace, distributes destinations across the
     available destination sites to avoid landing-pressure storms.
 
-    Not offline-optimal (that would be K9 deferred); empirically should
-    beat any single fixed-mode policy under multi-resource saturation
-    by intentionally diversifying."""
+    Honest framing per K-architectural-critic findings: this is a
+    diversification heuristic that is *load-unaware* (round-robin
+    ignores per-workflow demand magnitude) and routes workspace via
+    ARTIFACT_COPY without considering local hydration. A real oracle
+    would solve a bin-packing problem (K9, deferred). On gauntlet T2
+    (prefill-only) the round-robin's 50/50 mode split directly halves
+    prefill load, so the >=10% improvement claim is structurally
+    sound. On T3 (multi-resource) the win is partially attributable to
+    destination-load-balancing, NOT mode-mixing — interpret K7 results
+    accordingly."""
     plan: dict[str, list[ReconstitutionAction]] = {}
     workflows_sorted = sorted(episode.workflows, key=lambda w: w.workflow_id)
     n_dst = len(episode.destination_sites)
@@ -361,6 +369,50 @@ def _force_mode_per_layer_plan(
 # Registry
 # ---------------------------------------------------------------------------
 
+def random_mode(
+    episode: MobilityEpisode,
+    manifests: dict[str, ServingGroupManifest],
+    bundle: ProfileBundle,
+    warmness: WarmnessMap,
+    *,
+    seed: int = 0,
+) -> dict[str, list[ReconstitutionAction]]:
+    """Sanity-check baseline: assigns a random feasible mode per state.
+
+    A successful gauntlet must show that `mixed_min_pressure` strictly
+    beats `random_mode` — otherwise the diversification heuristic is no
+    better than chance and the K abstraction is not earning its keep.
+    Per K-architectural-critic finding: this is the missing baseline."""
+    import random as _random
+    rng = _random.Random(seed)
+    plan: dict[str, list[ReconstitutionAction]] = {}
+    for wf in sorted(episode.workflows, key=lambda w: w.workflow_id):
+        manifest = manifests[wf.workflow_id]
+        src = wf.src_site or episode.source_sites[0]
+        dst = rng.choice(list(episode.destination_sites))
+        actions: list[ReconstitutionAction] = []
+        for sid, state in sorted(manifest.state_objects.items()):
+            if warmness.is_warm(sid, dst):
+                actions.append(ReconstitutionAction(
+                    workflow_id=wf.workflow_id, state_id=sid, mode=WARM_REUSE,
+                    src_site=src, dst_site=dst, reason="warm_hit",
+                ))
+                continue
+            allowed = allowed_modes_for_state(state)
+            if not allowed:
+                continue
+            mode = rng.choice(list(allowed))
+            # Avoid infeasible same-site KV_TRANSFER (matches _force_mode_per_layer_plan).
+            if mode == KV_TRANSFER and src == dst:
+                mode = CONTEXT_REPLAY
+            actions.append(ReconstitutionAction(
+                workflow_id=wf.workflow_id, state_id=sid, mode=mode,
+                src_site=src, dst_site=dst, reason=f"random:{mode}",
+            ))
+        plan[wf.workflow_id] = actions
+    return plan
+
+
 RECONSTITUTION_POLICIES = {
     "min_cost_independent": min_cost_independent,
     "replay_all": replay_all,
@@ -368,6 +420,7 @@ RECONSTITUTION_POLICIES = {
     "cache_reuse": cache_reuse,
     "workspace_sticky": workspace_sticky,
     "mixed_min_pressure": mixed_min_pressure,
+    "random_mode": random_mode,
 }
 
 
