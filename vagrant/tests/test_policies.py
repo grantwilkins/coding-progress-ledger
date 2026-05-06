@@ -121,6 +121,7 @@ def test_registry_keys_match_known_policies():
         "request_level_no_reuse",
         "request_level_with_site_cache",
         "shared_state_aware",
+        "session_sticky",
         "g1_brute_force",
         "g2_local_search",
     }

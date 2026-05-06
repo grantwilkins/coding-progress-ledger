@@ -145,6 +145,7 @@ def swe_agent_to_events(traj_path: str | Path, workflow_id: str | None = None) -
                 "category": "product",
                 "node_type": "llm_call",
                 "workflow_id": workflow_id,
+                "session_id": instance_id,
             })
             for sid in ("system_prompt", "issue_text", *accumulated_output_state_ids):
                 meta = state_meta[sid]

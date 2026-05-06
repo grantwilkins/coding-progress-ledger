@@ -45,6 +45,7 @@ from pathlib import Path
 
 from .. import events as v_events
 from ..hashing import segment_hash
+from ..workspace import compute_repo_bytes
 
 
 def approx_tokens(text: str) -> int:
@@ -64,12 +65,20 @@ class SessionSpec:
     which dominates the prompt-context costs and produces the H1 < D2 gap.
     `max_ai_turns` truncates the trajectory to keep the total node count
     within G1's enumeration cap.
+
+    `workspace_path` (Workstream H4) optionally points at a real directory
+    on disk (e.g., an SWE-agent rollout repo); when set, the workspace state's
+    `bytes` field is computed from disk via `compute_repo_bytes`, and the
+    `workspace_bytes` argument is **ignored**. This is how the H2 mechanism
+    graduates from "synthetic workspace" to "real workspace" — the rest of
+    the trace structure is unchanged.
     """
     traj_path: str | Path
     session_id: str
     workspace_home_site: str
     workspace_bytes: int
     max_ai_turns: int | None = None
+    workspace_path: str | Path | None = None
 
 
 @dataclass(frozen=True)
@@ -89,6 +98,12 @@ def generate_events(config: MultiSessionConfig) -> list[dict]:
             raise ValueError(
                 f"session {spec.session_id!r}: max_ai_turns must be >=1 (or None for no truncation); "
                 f"got {spec.max_ai_turns}"
+            )
+        if spec.workspace_path is not None and spec.workspace_bytes != 0:
+            raise ValueError(
+                f"session {spec.session_id!r}: set EITHER workspace_path (real bytes from disk) "
+                f"OR workspace_bytes (synthetic int), not both. workspace_bytes default is 0; "
+                f"got workspace_path={spec.workspace_path!r}, workspace_bytes={spec.workspace_bytes}."
             )
 
     raw_trajs = [_load_traj(s.traj_path) for s in config.sessions]
@@ -147,13 +162,17 @@ def _emit_session(emit, spec: SessionSpec, traj: dict, sys_tokens: int, sys_hash
     })
 
     workspace_state_id = f"workspace_{sid}"
+    if spec.workspace_path is not None:
+        workspace_bytes = compute_repo_bytes(spec.workspace_path)
+    else:
+        workspace_bytes = int(spec.workspace_bytes)
     emit(v_events.STATE_DECLARE, None, {
         "state_id": workspace_state_id,
         "content_hash": f"hash_workspace_{sid}_v1",
         "layer": "workspace",
         "lifetime": "private",
         "tokens": 0,
-        "bytes": int(spec.workspace_bytes),
+        "bytes": workspace_bytes,
         "producer_node_id": None,
         "home_site": spec.workspace_home_site,
     })
@@ -216,6 +235,7 @@ def _emit_session(emit, spec: SessionSpec, traj: dict, sys_tokens: int, sys_hash
                 "category": "product",
                 "node_type": "llm_call",
                 "workflow_id": workflow_id,
+                "session_id": sid,
             })
             for state_id in ("system_prompt", issue_state_id, workspace_state_id,
                              *accumulated_output_state_ids):

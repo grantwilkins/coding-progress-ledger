@@ -313,6 +313,106 @@ def run_request_level_with_site_cache(
 
 
 # --------------------------------------------------------------------------- #
+# H3: session_sticky — colocate all nodes of the same session at one site
+# --------------------------------------------------------------------------- #
+
+
+SESSION_STICKY_DEFAULT = "_default_session"
+
+
+def run_session_sticky(manifest: ServingGroupManifest, bundle: ProfileBundle) -> Plan:
+    """Place each session as a unit at the lowest-cost site for that session's
+    required states. Materialize once per (state, site) where >=1 consumer is
+    placed (per-site cache reuse, like H1).
+
+    Session identity:
+      - WorkNode.session_id (set from add_subtask payload by the adapter).
+      - Nodes without a session_id collapse into a single sentinel session
+        ("_default_session"), which on a F2-style single-instance trace
+        means all nodes are placed together — equivalent to D2(tau=1) on
+        that fixture.
+
+    Difference vs H1: H1 places per-node; session_sticky constrains all
+    nodes of one session to the same site. On H2 they coincide because
+    each session's nodes already share a per-node best-site (the workspace
+    home). They diverge when intra-session nodes have private states with
+    different homes — session_sticky pays the cost to keep them together;
+    H1 splits them.
+
+    Difference vs D2: D2 groups by shared-state component (which on H2 is
+    one global component of all 6 nodes). session_sticky groups by session,
+    so on H2 it splits into 3 groups regardless of what `system_prompt`
+    does to the connectivity graph.
+    """
+    _validate_state_homes(manifest, bundle)
+    _validate_session_id_coverage(manifest)
+
+    sessions: dict[str, list[str]] = defaultdict(list)
+    for node_id, node in manifest.nodes.items():
+        sid = node.session_id if node.session_id is not None else SESSION_STICKY_DEFAULT
+        sessions[sid].append(node_id)
+
+    placement: dict[str, str] = {}
+    placement_reason: dict[str, str] = {}
+    for sid, node_ids in sessions.items():
+        required: set[str] = set()
+        for nid in node_ids:
+            required.update(manifest.nodes[nid].required_state)
+        best_site: str | None = None
+        best_cost = float("inf")
+        for site in bundle.sites:
+            total = 0.0
+            for state_id in required:
+                state = manifest.state_objects[state_id]
+                _, c = choose_min_cost_mode(state, _state_home(state, bundle), site, bundle)
+                total += c
+            if total < best_cost:
+                best_cost = total
+                best_site = site
+        assert best_site is not None
+        for nid in node_ids:
+            placement[nid] = best_site
+            placement_reason[nid] = f"session_sticky:{sid}"
+
+    plan = _plan_from_placement(
+        policy_name="session_sticky",
+        placement=placement,
+        manifest=manifest,
+        bundle=bundle,
+        meta={"sessions": {sid: sorted(nids) for sid, nids in sessions.items()}},
+        materialization_reason="site_cache_reuse",
+        placement_reason="session_sticky",
+    )
+    enriched_placements = [
+        PlacementDecision(
+            node_id=p.node_id, site=p.site, cost_s=p.cost_s,
+            component_size=p.component_size,
+            reason=placement_reason[p.node_id],
+        )
+        for p in plan.placements
+    ]
+    return Plan(policy=plan.policy, placements=enriched_placements,
+                materializations=plan.materializations, meta=plan.meta)
+
+
+def _validate_session_id_coverage(manifest: ServingGroupManifest) -> None:
+    """Hard-fail on a manifest where some nodes carry `session_id` and
+    others don't. Mixed presence would silently merge the unsessioned nodes
+    into a single sentinel session alongside the explicit ones, which is
+    almost never what the caller wanted. Either ALL nodes have a session_id
+    (multi-session adapter) or NONE do (the helper falls back to a single
+    sentinel session — the F2 / toy case)."""
+    have = [nid for nid, n in manifest.nodes.items() if n.session_id is not None]
+    miss = [nid for nid, n in manifest.nodes.items() if n.session_id is None]
+    if have and miss:
+        raise ValueError(
+            f"session_sticky requires uniform session_id presence; "
+            f"{len(have)} node(s) have session_id, {len(miss)} do not. "
+            f"missing={sorted(miss)[:3]}{'...' if len(miss) > 3 else ''}"
+        )
+
+
+# --------------------------------------------------------------------------- #
 # G1: brute-force optimizer (enumerate K^N placements; pick min total cost)
 # --------------------------------------------------------------------------- #
 
@@ -508,6 +608,7 @@ POLICIES = {
     "request_level_no_reuse": run_request_level_no_reuse,
     "request_level_with_site_cache": run_request_level_with_site_cache,
     "shared_state_aware": run_shared_state_aware,
+    "session_sticky": run_session_sticky,
     "g1_brute_force": run_g1_brute_force,
     "g2_local_search": run_g2_local_search,
 }
@@ -533,7 +634,9 @@ __all__ = [
     "run_request_level_no_reuse",
     "run_request_level_with_site_cache",
     "run_shared_state_aware",
+    "run_session_sticky",
     "run_g1_brute_force",
     "run_g2_local_search",
     "G1_MAX_ENUMERATIONS",
+    "SESSION_STICKY_DEFAULT",
 ]

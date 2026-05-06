@@ -34,6 +34,7 @@ class WorkNode:
     status: str
     required_state: list[str] = field(default_factory=list)
     produced_state: list[str] = field(default_factory=list)
+    session_id: str | None = None
 
 
 @dataclass
@@ -91,6 +92,7 @@ def build_manifest(ledger: Ledger) -> ServingGroupManifest:
                 workflow_id=wf,
                 label=payload.get("label"),
                 status=subtask.status.value,
+                session_id=payload.get("session_id"),
             )
         elif et == v_events.STATE_DECLARE:
             _declare(state_objects, payload)

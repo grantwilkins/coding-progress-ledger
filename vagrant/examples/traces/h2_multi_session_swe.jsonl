@@ -2,13 +2,13 @@
 {"step":1,"event_type":"state_declare","subtask_id":null,"payload":{"state_id":"system_prompt","content_hash":"h_cbb6b0428d8d287e","layer":"prompt_context","lifetime":"persistent","tokens":1218,"bytes":null,"producer_node_id":null},"reason":null}
 {"step":2,"event_type":"state_declare","subtask_id":null,"payload":{"state_id":"issue_text_sa","content_hash":"h_33d94f0d3af08172","layer":"prompt_context","lifetime":"shared","tokens":958,"bytes":null,"producer_node_id":null},"reason":null}
 {"step":3,"event_type":"state_declare","subtask_id":null,"payload":{"state_id":"workspace_sa","content_hash":"hash_workspace_sa_v1","layer":"workspace","lifetime":"private","tokens":0,"bytes":1000000000,"producer_node_id":null,"home_site":"phoenix"},"reason":null}
-{"step":4,"event_type":"add_subtask","subtask_id":"sa_S1","payload":{"description":"llm_call_sa_1","parent_id":null,"weight":1.0,"category":"product","node_type":"llm_call","workflow_id":"h2_multi_session_swe"},"reason":null}
+{"step":4,"event_type":"add_subtask","subtask_id":"sa_S1","payload":{"description":"llm_call_sa_1","parent_id":null,"weight":1.0,"category":"product","node_type":"llm_call","workflow_id":"h2_multi_session_swe","session_id":"sa"},"reason":null}
 {"step":5,"event_type":"state_read","subtask_id":null,"payload":{"state_id":"system_prompt","content_hash":"h_cbb6b0428d8d287e","consumer_node_id":"sa_S1","tokens":1218},"reason":null}
 {"step":6,"event_type":"state_read","subtask_id":null,"payload":{"state_id":"issue_text_sa","content_hash":"h_33d94f0d3af08172","consumer_node_id":"sa_S1","tokens":958},"reason":null}
 {"step":7,"event_type":"state_read","subtask_id":null,"payload":{"state_id":"workspace_sa","content_hash":"hash_workspace_sa_v1","consumer_node_id":"sa_S1","tokens":0},"reason":null}
 {"step":8,"event_type":"update_status","subtask_id":"sa_S1","payload":{"status":"complete","evidence":["sa_S1 response emitted"]},"reason":null}
 {"step":9,"event_type":"state_declare","subtask_id":null,"payload":{"state_id":"tool_output_sa_000","content_hash":"h_778641b5c0f2ca66","layer":"prompt_context","lifetime":"ephemeral","tokens":16,"bytes":null,"producer_node_id":null},"reason":null}
-{"step":10,"event_type":"add_subtask","subtask_id":"sa_S2","payload":{"description":"llm_call_sa_2","parent_id":null,"weight":1.0,"category":"product","node_type":"llm_call","workflow_id":"h2_multi_session_swe"},"reason":null}
+{"step":10,"event_type":"add_subtask","subtask_id":"sa_S2","payload":{"description":"llm_call_sa_2","parent_id":null,"weight":1.0,"category":"product","node_type":"llm_call","workflow_id":"h2_multi_session_swe","session_id":"sa"},"reason":null}
 {"step":11,"event_type":"state_read","subtask_id":null,"payload":{"state_id":"system_prompt","content_hash":"h_cbb6b0428d8d287e","consumer_node_id":"sa_S2","tokens":1218},"reason":null}
 {"step":12,"event_type":"state_read","subtask_id":null,"payload":{"state_id":"issue_text_sa","content_hash":"h_33d94f0d3af08172","consumer_node_id":"sa_S2","tokens":958},"reason":null}
 {"step":13,"event_type":"state_read","subtask_id":null,"payload":{"state_id":"workspace_sa","content_hash":"hash_workspace_sa_v1","consumer_node_id":"sa_S2","tokens":0},"reason":null}
@@ -16,13 +16,13 @@
 {"step":15,"event_type":"update_status","subtask_id":"sa_S2","payload":{"status":"complete","evidence":["sa_S2 response emitted"]},"reason":null}
 {"step":16,"event_type":"state_declare","subtask_id":null,"payload":{"state_id":"issue_text_sb","content_hash":"h_33d94f0d3af08172","layer":"prompt_context","lifetime":"shared","tokens":958,"bytes":null,"producer_node_id":null},"reason":null}
 {"step":17,"event_type":"state_declare","subtask_id":null,"payload":{"state_id":"workspace_sb","content_hash":"hash_workspace_sb_v1","layer":"workspace","lifetime":"private","tokens":0,"bytes":1000000000,"producer_node_id":null,"home_site":"seattle"},"reason":null}
-{"step":18,"event_type":"add_subtask","subtask_id":"sb_S1","payload":{"description":"llm_call_sb_1","parent_id":null,"weight":1.0,"category":"product","node_type":"llm_call","workflow_id":"h2_multi_session_swe"},"reason":null}
+{"step":18,"event_type":"add_subtask","subtask_id":"sb_S1","payload":{"description":"llm_call_sb_1","parent_id":null,"weight":1.0,"category":"product","node_type":"llm_call","workflow_id":"h2_multi_session_swe","session_id":"sb"},"reason":null}
 {"step":19,"event_type":"state_read","subtask_id":null,"payload":{"state_id":"system_prompt","content_hash":"h_cbb6b0428d8d287e","consumer_node_id":"sb_S1","tokens":1218},"reason":null}
 {"step":20,"event_type":"state_read","subtask_id":null,"payload":{"state_id":"issue_text_sb","content_hash":"h_33d94f0d3af08172","consumer_node_id":"sb_S1","tokens":958},"reason":null}
 {"step":21,"event_type":"state_read","subtask_id":null,"payload":{"state_id":"workspace_sb","content_hash":"hash_workspace_sb_v1","consumer_node_id":"sb_S1","tokens":0},"reason":null}
 {"step":22,"event_type":"update_status","subtask_id":"sb_S1","payload":{"status":"complete","evidence":["sb_S1 response emitted"]},"reason":null}
 {"step":23,"event_type":"state_declare","subtask_id":null,"payload":{"state_id":"tool_output_sb_000","content_hash":"h_778641b5c0f2ca66","layer":"prompt_context","lifetime":"ephemeral","tokens":16,"bytes":null,"producer_node_id":null},"reason":null}
-{"step":24,"event_type":"add_subtask","subtask_id":"sb_S2","payload":{"description":"llm_call_sb_2","parent_id":null,"weight":1.0,"category":"product","node_type":"llm_call","workflow_id":"h2_multi_session_swe"},"reason":null}
+{"step":24,"event_type":"add_subtask","subtask_id":"sb_S2","payload":{"description":"llm_call_sb_2","parent_id":null,"weight":1.0,"category":"product","node_type":"llm_call","workflow_id":"h2_multi_session_swe","session_id":"sb"},"reason":null}
 {"step":25,"event_type":"state_read","subtask_id":null,"payload":{"state_id":"system_prompt","content_hash":"h_cbb6b0428d8d287e","consumer_node_id":"sb_S2","tokens":1218},"reason":null}
 {"step":26,"event_type":"state_read","subtask_id":null,"payload":{"state_id":"issue_text_sb","content_hash":"h_33d94f0d3af08172","consumer_node_id":"sb_S2","tokens":958},"reason":null}
 {"step":27,"event_type":"state_read","subtask_id":null,"payload":{"state_id":"workspace_sb","content_hash":"hash_workspace_sb_v1","consumer_node_id":"sb_S2","tokens":0},"reason":null}
@@ -30,13 +30,13 @@
 {"step":29,"event_type":"update_status","subtask_id":"sb_S2","payload":{"status":"complete","evidence":["sb_S2 response emitted"]},"reason":null}
 {"step":30,"event_type":"state_declare","subtask_id":null,"payload":{"state_id":"issue_text_sc","content_hash":"h_33d94f0d3af08172","layer":"prompt_context","lifetime":"shared","tokens":958,"bytes":null,"producer_node_id":null},"reason":null}
 {"step":31,"event_type":"state_declare","subtask_id":null,"payload":{"state_id":"workspace_sc","content_hash":"hash_workspace_sc_v1","layer":"workspace","lifetime":"private","tokens":0,"bytes":1000000000,"producer_node_id":null,"home_site":"phoenix"},"reason":null}
-{"step":32,"event_type":"add_subtask","subtask_id":"sc_S1","payload":{"description":"llm_call_sc_1","parent_id":null,"weight":1.0,"category":"product","node_type":"llm_call","workflow_id":"h2_multi_session_swe"},"reason":null}
+{"step":32,"event_type":"add_subtask","subtask_id":"sc_S1","payload":{"description":"llm_call_sc_1","parent_id":null,"weight":1.0,"category":"product","node_type":"llm_call","workflow_id":"h2_multi_session_swe","session_id":"sc"},"reason":null}
 {"step":33,"event_type":"state_read","subtask_id":null,"payload":{"state_id":"system_prompt","content_hash":"h_cbb6b0428d8d287e","consumer_node_id":"sc_S1","tokens":1218},"reason":null}
 {"step":34,"event_type":"state_read","subtask_id":null,"payload":{"state_id":"issue_text_sc","content_hash":"h_33d94f0d3af08172","consumer_node_id":"sc_S1","tokens":958},"reason":null}
 {"step":35,"event_type":"state_read","subtask_id":null,"payload":{"state_id":"workspace_sc","content_hash":"hash_workspace_sc_v1","consumer_node_id":"sc_S1","tokens":0},"reason":null}
 {"step":36,"event_type":"update_status","subtask_id":"sc_S1","payload":{"status":"complete","evidence":["sc_S1 response emitted"]},"reason":null}
 {"step":37,"event_type":"state_declare","subtask_id":null,"payload":{"state_id":"tool_output_sc_000","content_hash":"h_778641b5c0f2ca66","layer":"prompt_context","lifetime":"ephemeral","tokens":16,"bytes":null,"producer_node_id":null},"reason":null}
-{"step":38,"event_type":"add_subtask","subtask_id":"sc_S2","payload":{"description":"llm_call_sc_2","parent_id":null,"weight":1.0,"category":"product","node_type":"llm_call","workflow_id":"h2_multi_session_swe"},"reason":null}
+{"step":38,"event_type":"add_subtask","subtask_id":"sc_S2","payload":{"description":"llm_call_sc_2","parent_id":null,"weight":1.0,"category":"product","node_type":"llm_call","workflow_id":"h2_multi_session_swe","session_id":"sc"},"reason":null}
 {"step":39,"event_type":"state_read","subtask_id":null,"payload":{"state_id":"system_prompt","content_hash":"h_cbb6b0428d8d287e","consumer_node_id":"sc_S2","tokens":1218},"reason":null}
 {"step":40,"event_type":"state_read","subtask_id":null,"payload":{"state_id":"issue_text_sc","content_hash":"h_33d94f0d3af08172","consumer_node_id":"sc_S2","tokens":958},"reason":null}
 {"step":41,"event_type":"state_read","subtask_id":null,"payload":{"state_id":"workspace_sc","content_hash":"hash_workspace_sc_v1","consumer_node_id":"sc_S2","tokens":0},"reason":null}
