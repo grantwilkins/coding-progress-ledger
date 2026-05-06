@@ -253,18 +253,18 @@ Current result: 7/7 selected cells are `needs_exact_k4`. Aggregate/exact best-po
 
 ### R3 — Model architecture profile axis
 
-**R3 — Reintegrate KV study** (`not started`, ~1 day)
-Translate `kv-transfer-early-experiment/FINDINGS.md` into model-profile presets for the regime sweep:
+**R3 — Reintegrate KV study** (`done`, 2026-05-06)
+`configs/model_profiles.yaml` now carries five profiles cross-checked against the corrected `kv-transfer-early-experiment/prefill-breakeven.py` (and HuggingFace config.json for each cited model):
 
 ```text
-heavy KV / cheap replay       (GLM-like)
-compact KV / expensive replay (DeepSeek-like MLA)
-hybrid                        (Qwen3-Next-like)
-vanilla GQA
-MLA-like
+compact_kv         Kimi-K2.6-class MLA   (kv_bpt 70,272;  prefill 14,659 tok/s)
+vanilla_gqa_fp16   Llama-3-70B GQA       (kv_bpt 327,680; prefill 10,221 tok/s)
+frontier_v4_fp8    DeepSeek-V4-Pro CSA   (kv_bpt 9,928;   prefill 5,607 tok/s)
+glm_5_mla          GLM-5 MLA + DSA       (kv_bpt 89,856;  prefill 8,244 tok/s)
+qwen3_next_hybrid  Qwen3-Next-80B-A3B    (kv_bpt 24,576;  prefill 175,316 tok/s)
 ```
 
-The claim to test: model architecture changes not just the single-request KV-vs-replay boundary, but which destination resource a migration herd stresses.
+`ModelProfile` carries `single_stream_prefill_tok_s` so architecture varies on BOTH knobs, and `src/vagrant_agent/r3_model_sweep.py` plus `scripts/run_r3_model_sweep.py` produce the per-profile K8 sweep with a model-aware budget that scales the K8 prefill capacity by the model's per-stream rate (link bandwidth held fixed). Pilot result over 24 cells × 5 profiles: 6 cells (25%) flip `dominant_bottleneck` across architectures even though `best_policy` does not. **Critic note (2026-05-06):** the earlier "GLM-5 full MHA, kv_bpt=1,277,952" figure from the original FINDINGS table was miscoded full-MHA arithmetic on a model that is in fact MLA; the corrected numbers come from the verified configs.
 
 ### R4 — Revised memo
 
@@ -322,27 +322,11 @@ Negative `strong vs random` is the K7 finding restated: in slow-link / large-sta
 
 **Goal.** Stop using repository size as a proxy for migration payload. Measure workflow-local mobile state and classify what must move, what can be rehydrated, and what can be discarded.
 
-**S1 — State-layer taxonomy update** (`not started`, ~0.5 day)
-Extend A1's taxonomy into the production-facing split:
+**S1 — State-layer taxonomy update** (`done`, 2026-05-06)
+`src/vagrant_agent/state_layers.py` enumerates 11 layers — `base_repo_checkout`, `uncommitted_diff`, `files_read`, `files_touched`, `tool_outputs`, `test_logs`, `build_artifacts`, `dependency_cache`, `retrieved_documents`, `subagent_transcripts`, `summaries_compaction` — each carrying one of `globally_available`, `cheaply_rehydratable`, `must_move`, `can_be_recomputed`, `can_be_discarded`. Mobility class assignments are domain claims (e.g. `dependency_cache` is `cheaply_rehydratable`, NOT `must_move`) pinned by tests in `tests/test_state_layers.py`.
 
-```text
-base repo checkout
-uncommitted diff
-files read
-files touched
-tool outputs
-test logs
-build artifacts
-dependency cache
-retrieved documents
-subagent transcripts
-summaries / compaction outputs
-```
-
-Each layer must be classified as `globally_available`, `cheaply_rehydratable`, `must_move`, `can_be_recomputed`, or `can_be_discarded`.
-
-**S2 — Mobile-state audit script** (`not started`, ~1.5 days)
-Add a small auditor for a captured workflow directory that reports the S1 layers and emits JSON/CSV. This is the bridge to Week 3 workload anchors.
+**S2 — Mobile-state audit script** (`done`, 2026-05-06)
+`audit_workflow_directory(...)` walks a workflow tree, classifies each regular file via `classify_file(rel_path)` (path-component prefix matching + extension), aggregates bytes per (layer, mobility_class), and `write_audit_artifacts(...)` emits JSON/CSV. Symlinks are not followed, hardlinks counted once. `scripts/run_s2_audit.py <workflow_dir> <out_dir>` is the CLI. Tests cover conservation of total bytes, no double-counting, classifier deep-tree dispatch (e.g., `.git/objects/pack/...`), and JSON round-trip.
 
 ---
 
@@ -360,6 +344,24 @@ Add a small auditor for a captured workflow directory that reports the S1 layers
 `W3_MULTI_AGENT_FANOUT` in `workloads.py`. Per-workflow shape: planner + 4 subagents + reviewer (the fanin step). Subagents share `shared_task_<wid>` (a structural test asserts cache_reuse emits one action per workflow for it, not K). Reviewer reads every private transcript + a `merge_<wid>` buffer state. `dependency_cache` is a real `globally_available` workspace state warmed at every site. Regime hypothesis is `landing_pressure` — N workflows × (K+2) llm_calls saturate prefill at the destination — and the canonical-cell hypothesis-match test pins it.
 
 Week 3 success criterion: each anchor has a state-layer breakdown and a regime classification.
+
+**W under R3 — Anchor regimes are profile-dependent** (`done`, 2026-05-06, NEGATIVE FINDING)
+`src/vagrant_agent/w_under_r3.py` cross-runs every (anchor × model × cell) and reports per-anchor regime flips relative to the `compact_kv` baseline. Across 45 rows (3 anchors × 5 profiles × 3 cells, model-aware R3 budget):
+
+  * **W1 (large-repo coding)**: 5/12 non-baseline rows flip — `state_locality` ↔ `multi_resource` ↔ `landing_pressure` depending on profile.
+  * **W2 (data RAG)**: 3/12 flip.
+  * **W3 (multi-agent fanout)**: 2/12 flip — DeepSeek-V4-Pro's compressed KV moves it from `landing_pressure` to `state_locality`.
+
+The implication: the anchor's `regime_hypothesis` field is profile-dependent, not a single label. Future writeups must qualify "W1 is state-locality" with which model architecture it was observed under. `runs/w_under_r3/` carries the artifacts; `scripts/run_w_under_r3.py` reproduces.
+
+## § Workstream P — heuristic policy improvements
+
+**P1 — One-step-lookahead policy** (`done`, 2026-05-06, NEGATIVE FINDING for P50)
+`mixed_lookahead` in `reconstitution.py` is a real one-step-lookahead extension of `mixed_min_pressure`: at workflow `w_i`, it scores each candidate by `max(immediate_max_pressure, post_next_workflow_max_pressure)` so a candidate that individually minimizes pressure but blocks the next workflow into a saturated dst is penalized.
+
+**Empirical finding:** on the four O2 diagnostic cells, `mixed_lookahead` does NOT close the 35-50% P50 oracle gap O2 reported. The reason is a metric mismatch: lookahead optimizes a max-pressure proxy that corresponds to MAKESPAN, while the oracle wins P50 by deliberately UNBALANCING the herd (2 fast workflows on KV, 2 slow on replay). Lookahead does improve makespan (e.g., on `tiny_prefill_pressure` makespan drops from 0.150s to 0.124s), but P50 stays flat or worsens. `tests/test_mixed_lookahead.py` pins this as a regression sentinel — a future change that closes ≥50% of the P50 gap will fail the test, forcing review.
+
+Follow-up if needed: a P50-aware scoring objective (e.g., quantile-aware finish-time estimator running K4 forward in the lookahead, scoring `np.percentile(per_workflow_finish, 50)` over the simulated forward state). Deferred — the negative finding here is itself an answer to "is one-step-lookahead-on-pressure the right tool for P50 closure?"
 
 ---
 
