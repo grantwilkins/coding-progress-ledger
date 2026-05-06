@@ -1,4 +1,4 @@
-# TASKS — Vagrant Agent: State-Mobility Layer for Agent Workflows
+# TASKS — Agent Migrate Agent: State-Mobility Layer for Agent Workflows
 
 This file is the working backlog for `agent-migrate-agent`. It is the authoritative plan; if reality diverges, update this file rather than the implementation plan.
 
@@ -6,11 +6,11 @@ This file is the working backlog for `agent-migrate-agent`. It is the authoritat
 
 > **The Week 1 result is a regime signal, not a project failure.** A post-critic K7 rerun fixed budget/planner drift, concurrent shared-state dedup, workspace hydrate units, and T3 fixture coverage. Corrected K7 now passes: T1 collapses under infinite capacity, T2 exposes prefill stampede, and T3 shows `mixed_min_pressure` beating the best fixed-mode policy by about 49% on a single-source multi-resource evacuation fixture. This earns carrying mobility episodes forward, but it still does **not** justify a universal "our policy wins" claim.
 >
-> The current phase is **regime discovery**: map when per-site reuse is enough, when state locality matters, and when landing pressure requires mobility planning. R1/R2 (sweep + heatmaps), R3 (model profile axis), V1 (claim-cell exact validation), O1/O2 (small-N oracle + diff), and W1/W2/W3 (workload anchors) are `done`.
+> The current phase is **finding-gated regime discovery**: map when per-site reuse is enough, when state locality matters, and when landing pressure requires mobility planning, but only promote claims that survive exact validation and workload anchoring. R1/R2 (sweep + heatmaps), R3 (model profile axis), V1 (claim-cell exact validation), O1/O2 (small-N oracle + diff), and W1/W2/W3 (workload anchors) produced useful substrate, but the next step is not more modules; it is to force the three empirical decisions in **Next empirical gates**.
 >
-> **The next phase that those tools were always pointing at is representation-aware restart.** LLM agents are restartable computations whose progress is split across model context, runtime state, tool observations, and environment side effects; the system question is *which representation of that progress to materialize at a destination* — copy, replay, hydrate, rebuild, refetch, reuse, or discard. The regime map remains the scale experiment: once valid restart packages exist, large restart episodes determine which resource becomes the bottleneck.
+> **Representation-aware restart remains provisional.** LLM agents are restartable computations whose progress is split across model context, runtime state, tool observations, and environment side effects; the system question is *which representation of that progress to materialize at a destination* — copy, replay, hydrate, rebuild, refetch, reuse, or discard. That framing is promoted only if Gate 3 shows a real bytes/time tradeoff on cut points, not because a broad validator or registry exists.
 >
-> This framing is **provisional** — it is adopted as the active language for new workstreams (C, M, E, KVA below) but does **not** yet replace regime discovery as the project's top-line claim. Promotion to top-line happens only after Workstream C and Workstream M produce evidence.
+> The project's current strongest claim is: **Agentic mobility is a state-reconstitution problem. Strong per-site reuse is the first serious baseline. Richer planning matters only in identifiable regimes: large state, architecture-dependent KV/replay tradeoffs, or landing pressure during mobility episodes.**
 >
 > See `docs/WEEK1_REPORT.md` for the audit trail, `docs/K7_gauntlet_results.md` for the gauntlet numbers, `docs/K8_K9_regime_map_and_oracle.md` for the first regime map and oracle gap table, `docs/R4_regime_discovery_memo.md` for the current framing, `docs/L1_calibration_paper_draft.md` for the calibration-paper scaffold, and `kv-transfer-early-experiment/FINDINGS.md` for the architecture-dependent KV-vs-replay crossover result.
 
@@ -72,7 +72,7 @@ Do not run real agent harnesses from inside agent-migrate. Resume validation is
   external test runner. If a workstream needs runtime evidence, route
   through coding-data-collection upstream.
 Decision (2026-05-06): do NOT relax this rule for a one-off F2
-  cut-and-resume as Vagrant evidence. A single real end-to-end smoke check
+  cut-and-resume as Agent Migrate evidence. A single real end-to-end smoke check
   may be run only upstream, after C4 exposes the static package table, and
   only to produce an integration-risk note: which structural assumptions
   failed, which missing bytes/setup steps were discovered, and which C/M/E
@@ -98,7 +98,7 @@ If a task seems to require violating one of these rules, stop and escalate — d
 
 ## § 0.2 Reuse contract with `coding-progress-ledger`
 
-Vagrant imports `ledger_progress` as a library. Permitted upstream additions, in order of preference:
+Agent Migrate imports `ledger_progress` as a library. Permitted upstream additions, in order of preference:
 
 1. **Zero changes** — use `LedgerEvent.payload` (already `dict[str, Any]`) to carry agent-migrate-specific fields (`state_id`, `tokens`, `content_hash`, `site`, `mode`).
 2. **Pass-through hook in `apply_event`** — landed (Workstream A2) so unknown `event_type` strings append to `ledger.events` without raising.
@@ -106,9 +106,9 @@ Vagrant imports `ledger_progress` as a library. Permitted upstream additions, in
 
 Anything bigger is a fork; do not do it. If a fourth need appears, escalate before coding.
 
-## § 0.3 Vagrant-to-ledger mapping
+## § 0.3 Agent Migrate-to-ledger mapping
 
-| Vagrant concept    | Ledger representation                                                                  |
+| Agent Migrate concept    | Ledger representation                                                                  |
 | ------------------ | -------------------------------------------------------------------------------------- |
 | workflow           | run directory + trace file. **Not** a subtask.                                         |
 | LLM call node      | `Subtask` with payload `node_type=llm_call`                                            |
@@ -120,7 +120,7 @@ Anything bigger is a fork; do not do it. If a fourth need appears, escalate befo
 | node start/end     | `UPDATE_STATUS` with `IN_PROGRESS` / `COMPLETE`.                                       |
 | state invalidation | agent-migrate `state_invalidate` event. Not `INVALIDATE_SUBTASK` unless the consuming node's work also invalidates. |
 
-`SPLIT_SUBTASK` / `REOPEN_SUBTASK` / `INVALIDATE_SUBTASK` carry **scoring semantics** in `ledger_progress`. Vagrant must not lean on them. Use ledger subtasks as **graph nodes**; do not use ledger progress scores as a agent-migrate signal.
+`SPLIT_SUBTASK` / `REOPEN_SUBTASK` / `INVALIDATE_SUBTASK` carry **scoring semantics** in `ledger_progress`. Agent Migrate must not lean on them. Use ledger subtasks as **graph nodes**; do not use ledger progress scores as a agent-migrate signal.
 
 ## § 0.4 Vocabulary
 
@@ -191,7 +191,7 @@ K0 definitions, K1 `MobilityEpisode`, K2 `WarmnessMap`, K3 `ResourceCost`/`Resou
 
 ## § Workstream R — regime map (recent phase, mostly `done`)
 
-**Goal.** Turn Vagrant from "does our policy win?" into "which regime is this workload and mobility event in?" The main artifact is a sweep-backed map over workload size, state scale, prefill pressure, and link bandwidth, with policy winner and dominant bottleneck reported per cell.
+**Goal.** Turn Agent Migrate from "does our policy win?" into "which regime is this workload and mobility event in?" The main artifact is a sweep-backed map over workload size, state scale, prefill pressure, and link bandwidth, with policy winner and dominant bottleneck reported per cell.
 
 ### R0 — Reframe and nomenclature cleanup
 
@@ -289,7 +289,7 @@ qwen3_next_hybrid  Qwen3-Next-80B-A3B    (kv_bpt 24,576;  prefill 175,316 tok/s)
 1. Agentic mobility is state reconstitution.
 2. Per-site reuse is the first serious baseline.
 3. Richer planning is regime-dependent.
-4. Vagrant maps the regime.
+4. Agent Migrate maps the regime.
 
 Current answer: Path A is supported; Path B is opened but not yet earned. Workload anchors and exact validation remain required before planner-paper claims.
 
@@ -331,8 +331,10 @@ Headline first-pass numbers (4 diagnostic cells, n=4):
 
 Negative `strong vs random` is the K7 finding restated: in slow-link / large-state cells, random_mode's diversification beats strong reuse's "everything via the cheapest cold mode at one site" choice. The `monorepo_workspace_pressure` row (oracle vs mixed = 0.7%) confirms `mixed_min_pressure` is already near-optimal when workspace bytes dominate; the other three rows show real headroom (35–50%) over `mixed`. The diff CSV identifies that the headroom comes primarily from per-workflow destination + prompt-mode choices, not workspace-mode.
 
-**O3 — Oracle decision-motif extraction** (`not started`)
+**O3 — Oracle decision-motif extraction** (`deferred`)
 For every cell where oracle beats `mixed_min_pressure` by >25%, summarize the oracle plan structure: count of workflows on replay vs KV, count of distinct destinations used, whether oracle deliberately unbalances P50 (variance of per-workflow finish times), and which resource it sacrifices to improve median. Output: `runs/o3_motifs/motif_table.csv` plus a one-paragraph natural-language pattern per cell. Explain the gap before tuning a heuristic against it.
+
+Deferred until Gate 1 and Gate 2 say which exact cells and workload anchors deserve oracle explanation.
 
 **O4 — Quantile-aware planner prototype** (`deferred`)
 A P50-aware scoring objective that runs K4 forward over a candidate partial plan and scores `np.percentile(finish_times, 50)` instead of max-pressure. P1 already pinned a regression sentinel for this gap; O4 should be picked up only after O3 makes the motif legible, and only on the four O2 diagnostic cells.
@@ -458,8 +460,10 @@ tool_outputs               copy-bytes | rerun-cmd | discard      validator: ref-
 
 `src/agent_migrate_agent/materialization_modes.py` now exposes `lookup_materialization_modes(...)`, `materialization_registry()`, and `validate_materialization_mode(...)`. The registry is keyed by `(state_layer, role_at_cut)`, not layer alone; role-sensitive cases are pinned by tests (e.g. correctness-critical `tool_outputs` cannot use `discard`, diagnostic `tool_outputs` can). Conditional representations such as `rerun-cmd`, `refetch-stable-uri`, and `rerun-setup-cmd` are explicitly marked `conditional=True`; M1 records their structural evidence requirements but does not claim static semantic equivalence. Tests also pin machine-known validator IDs, KV model/profile/session evidence, and warm-clone commit compatibility.
 
-**M2 — Representation ablation tests** (`not started`)
+**M2 — Representation ablation tests** (`deferred`)
 For each cut point × state object, compare equivalent representations and report bytes, latency (K4), and structural validity. Falsification target: **for ≥1 anchor × profile × cell, two materialization modes from M1 produce statistically indistinguishable resume cost despite >10× byte difference.** If the falsification target never fires, M is a tautology and the registry needs richer cells.
+
+Deferred until Gate 3's three-package table shows that representation choice matters at all.
 
 ---
 
@@ -477,10 +481,10 @@ The data lives upstream, not in agent-migrate. Extend `coding-data-collection` (
 - tool-output bytes
 - touched / read file bytes
 
-Vagrant consumes the resulting snapshot manifests through F2 ingest. **Vagrant does not run the harness.** If `coding-data-collection` does not currently retain post-run state, the upstream PR is a prerequisite — escalate before coding.
+Agent Migrate consumes the resulting snapshot manifests through F2 ingest. **Agent Migrate does not run the harness.** If `coding-data-collection` does not currently retain post-run state, the upstream PR is a prerequisite — escalate before coding.
 
 **E1.5 — Quarantined F2 cut-and-resume smoke check** (`deferred`)
-Run at most one real F2 cut-and-resume through `coding-data-collection`, not Vagrant, after C4 has produced the static ablation table for the same trajectory. Purpose: falsify hidden assumptions in the static package model, not produce a benchmark result. Output: `docs/E1_5_f2_smoke_check.md` with a blocker list only:
+Run at most one real F2 cut-and-resume through `coding-data-collection`, not Agent Migrate, after C4 has produced the static ablation table for the same trajectory. Purpose: falsify hidden assumptions in the static package model, not produce a benchmark result. Output: `docs/E1_5_f2_smoke_check.md` with a blocker list only:
 
 ```text
 cut_id
@@ -493,10 +497,10 @@ required TASKS.md follow-up
 
 Forbidden in this artifact: verifier/task success, semantic quality, policy ranking, and headline `task_resume_s`. If the smoke check tempts us to tune a package until the one trajectory resumes, stop and return to C4/M1/E1 coverage instead.
 
-**E2 — Dirty-workspace threshold study** (`not started`)
+**E2 — Dirty-workspace threshold study** (`deferred`)
 For each run snapshot from E1, compare four package shapes (full_workspace, base+diff, base+diff+selected_caches, base+rerun_setup) across bytes_moved and `task_resume_s` (M1 / C5). Plot when workspace bytes cross the K8 state-locality regime threshold.
 
-**E3 — Environment reproducibility check** (`not started`)
+**E3 — Environment reproducibility check** (`deferred`)
 Per workspace, tag dependencies and build artifacts as `reconstructable` / `ambiguous` / `must-copy` based on lockfile presence + registry stability + recorded setup command. Feeds S3 role assignments — promotes "domain claim" mobility classes (e.g. `dependency_cache → cheaply_rehydratable`) into evidence-backed assignments.
 
 ---
@@ -505,13 +509,15 @@ Per workspace, tag dependencies and build artifacts as `reconstructable` / `ambi
 
 **Goal.** Make the architecture-dependent KV-vs-replay crossover from `kv-transfer-early-experiment/FINDINGS.md` and R3 readable as one figure.
 
-**KVA1 — Phase plot** (`not started`)
+**KVA1 — Phase plot** (`deferred`)
 - x-axis: prefill throughput (tok/s)
 - y-axis: KV bytes/token
 - contour curves: fixed bandwidths (1, 5, 25, 100 Gbps) at the equal-time crossover
 - points: the five model profiles from `configs/model_profiles.yaml`
 
 Output: `runs/kva1/kv_replay_phase.{pdf,csv}`. Pure plotting from existing artifacts; no new sweep.
+
+Deferred unless Gate 1 or Gate 2 needs it as a specific figure for an architecture-dependent claim.
 
 **KVA2 — Architecture→regime bridge.** Subsumed by W-under-R3 (`done`, 2026-05-06). Cite, do not duplicate.
 
@@ -543,6 +549,8 @@ The implication: the anchor's `regime_hypothesis` field is profile-dependent, no
 
 ## § Workstream P — heuristic policy improvements
 
+**Status:** deferred after P1. Do not add large new policy work, heuristic tuning, or fixture-specific tuning until Gate 1 identifies an exact-K4 claim cell where richer planning matters and Gate 2 shows a plausible workload anchor occupying that regime.
+
 **P1 — One-step-lookahead policy** (`done`, 2026-05-06, NEGATIVE FINDING for P50)
 `mixed_lookahead` in `reconstitution.py` is a real one-step-lookahead extension of `mixed_min_pressure`: at workflow `w_i`, it scores each candidate by `max(immediate_max_pressure, post_next_workflow_max_pressure)` so a candidate that individually minimizes pressure but blocks the next workflow into a saturated dst is penalized.
 
@@ -554,7 +562,7 @@ Follow-up if needed: a P50-aware scoring objective (e.g., quantile-aware finish-
 
 ## § Workstream D — end-to-end restart episode (simulated)
 
-**D1 — Simulated restart episode demo** (`not started`)
+**D1 — Simulated restart episode demo** (`deferred`)
 After C, S3/S4, and M1 land, drive one illustrative end-to-end episode through K4 (no real harness, no verifier). Inputs:
 
 ```text
@@ -567,53 +575,178 @@ Metrics: `package_structurally_valid` (C3 result, NOT verifier_success), `bytes_
 
 ---
 
-## Current two-week target — Weeks 4-5 (representation-aware restart)
+## Next empirical gates
 
-Weeks 2-3 deliverables (R1/R2/R3, O1/O2, V1, W1/W2/W3) are `done` 2026-05-06. The new two-week window prioritizes the cut-and-resume + representation-equivalence stack so the restart-representation framing is earned by evidence.
+The next phase is organized around findings, not workstream completion. A task is in scope only if it directly produces one of the gate artifacts below or fixes a blocker needed to produce that artifact. Do not spend a week adding infrastructure unless the output answers one of these three empirical questions.
 
-**Week 4 (highest priority)**
+Core infrastructure to preserve and reuse:
 
-1. **C1** cut-point definitions over F2 traces.
-2. **C2** resume-package taxonomy module.
-3. **S3** state-role classification axis (orthogonal to S1 layers).
-4. **M1** materialization-mode registry.
-5. **C3** static resume validator (no model, no verifier, no tool execution).
+- trace → manifest;
+- state objects and state layers;
+- strong per-site reuse baseline (`cache_reuse` / `strong_site_reuse`);
+- exact K4 fluid simulator;
+- K8 aggregate map as exploratory only;
+- K9 oracle as a small-cell ceiling diagnostic;
+- `random_mode` / random diversification baseline;
+- state-materialization breakdown CSVs.
 
-**Week 5**
+Defer until the gates produce evidence:
 
-6. **C4** cut-and-resume ablation table.
-7. **S4** role × layer byte audit.
-8. **C5** two-level resume metric in result CSVs.
-9. **KVA1** phase-diagram figure (pure plotting, low risk).
-10. **O3** oracle decision-motif extraction.
-11. **E1** post-run workspace snapshots routed via `coding-data-collection` (escalate first if upstream PR needed).
+- broad materialization-mode registry expansion;
+- oracle decision-motif extraction;
+- quantile-aware planner prototype;
+- KVA plotting unless needed for a specific accepted figure;
+- simulated restart episode demo;
+- large new policy work;
+- heuristic tuning.
 
-**Deferred to Week 6+**
+### Gate 1 — Regime map trustworthiness (`done`, 2026-05-06)
 
-- **M2** representation ablation tests (depends on C3 + E1).
-- **D1** simulated restart episode (depends on C4 + S4 + M1).
-- **E2/E3** dirty-workspace threshold + reproducibility tagging (depends on E1 landing upstream).
-- **O4** quantile-aware planner prototype (depends on O3 motif legibility).
+**Question.** Can we trust the regime map enough to make claims about where strong reuse is enough and where richer mobility planning matters?
 
-**Definition of done for this phase**
+**Minimal tasks.**
 
-> A static resume validator exists, role × layer × bytes is measurable on at least one workflow, and the materialization-mode registry is populated with at least one falsifying-or-confirming ablation per major layer. The headline table the project should be able to produce by end of Week 5:
->
-> | Resume package        | Structurally valid? | Bytes moved | task_resume_s | Notes |
-> |-----------------------|--------------------:|-----------:|--------------:|-------|
-> | prompt only           | weak / no on edits  | tiny        | low model, high env | static-validator output |
-> | full workspace        | yes                 | huge        | low           | upper bound on safety |
-> | base + diff           | yes                 | small       | medium        | depends on lockfile reproducibility |
-> | agent-migrate minimal       | yes                 | small       | bounded       | S3 must-materialize set |
-> | agent-migrate + caches      | yes                 | medium      | low           | adds performance_critical layers |
->
-> The restart-representation framing is promoted to top-line only after this table is produced and peer-checked. Until then, regime discovery remains the project's headline claim.
+1. Select 6-10 exact claim cells representing the intended paper claims:
+   - small SWE-bench-style reuse regime;
+   - tiny/prefill-pressure regime;
+   - medium multi-resource regime;
+   - monorepo workspace regime;
+   - slow-link network regime;
+   - large-artifact regime.
+2. Run exact K4 on every selected cell.
+3. For each cell, report:
+   - best policy under exact K4;
+   - p50/p90/p99 `task_resume_s` or current closest K4 resume-time proxy, with any proxy caveat explicit;
+   - dominant bottleneck under exact K4;
+   - whether aggregate K8 agrees on best policy and bottleneck;
+   - whether `mixed_min_pressure` beats strong reuse;
+   - whether `mixed_min_pressure` beats random diversification.
+4. Do not use aggregate K8 timing for claims unless exact K4 validates the cell.
+
+**Output artifacts.**
+
+- `runs/claim_cells/exact_claim_cell_table.csv`
+- Optional short memo or README beside the CSV listing which claims are `safe`, `exploratory`, or `rejected`.
+
+**Result.** Seven exact claim cells were run through K4. Aggregate K8 is validated for the large workspace/artifact cells, but not for the smaller/prefill/network boundary cells. Exact K4 supports richer planning in five cells where `mixed_min_pressure` beats both strong reuse and random diversification; two cells are ambiguous because random diversification beats `mixed_min_pressure` even though `mixed_min_pressure` beats strong reuse. Timing columns are explicitly labeled `k4_reconstitution_proxy_not_c5_task_resume`, not C5 `task_resume_s`.
+
+**Success criteria.**
+
+- The table identifies which regime claims are safe and which remain exploratory.
+- Each safe claim has exact-K4 support for policy ordering and bottleneck label.
+- Any aggregate-only claim is explicitly marked exploratory.
+
+**Failure criteria.**
+
+- Exact K4 contradicts aggregate K8 on the intended claim cells often enough that the heatmap cannot support paper claims.
+- `mixed_min_pressure` only beats strong reuse in cells where random diversification is as good or better, making the richer-planning claim ambiguous.
+
+**Decision that follows.**
+
+- If successful: freeze the safe regime claims and use them as the only claim cells in writing.
+- If partially successful: narrow the thesis to the surviving cells and relabel the rest as hypotheses.
+- If unsuccessful: stop adding planner features and revise the regime map methodology before making claims.
+
+### Gate 2 — Workload anchors (`done`, 2026-05-06)
+
+**Question.** Do plausible workloads actually occupy the regimes where Vagrant matters?
+
+**Minimal tasks.**
+
+1. For each workload anchor — large-repo coding, data/RAG/artifact-heavy, and multi-agent fanout/fanin — produce a state-layer table with:
+   - prompt/context tokens;
+   - KV-equivalent bytes;
+   - workspace bytes;
+   - artifact bytes;
+   - dependency/build/cache bytes;
+   - retrieved document bytes;
+   - tool output bytes;
+   - transcript/subagent bytes.
+2. For each anchor, run exact K4 on at least one representative mobility episode.
+3. Classify each anchor into exactly one primary regime:
+   - reuse regime;
+   - state-locality regime;
+   - prefill-pressure regime;
+   - network-pressure regime;
+   - workspace-pressure regime;
+   - multi-resource regime.
+4. Explicitly state what is measured, trace-derived, estimated, and synthetic.
+
+**Output artifacts.**
+
+- `runs/workload_anchors/state_layer_table.csv`
+- `runs/workload_anchors/exact_anchor_regime_table.csv`
+- Optional `runs/workload_anchors/README.md` explaining measured vs synthetic fields.
+
+**Result.** All three anchors now emit state-layer and exact-K4 regime rows. The layer table marks all current anchor bytes as `hypothesis_fixture_synthetic_bytes`, with `measured_bytes=0`, `trace_derived_bytes=0`, and `estimated_bytes=0`; these anchors are stress-test fixtures, not yet workload evidence. Under the representative exact cell, W1 classifies as multi-resource, W2 as network-pressure, and W3 as prefill-pressure.
+
+**Success criteria.**
+
+- We can say which realistic-looking workload families populate which regimes.
+- Each anchor has an exact-K4 regime classification and a transparent byte/token provenance label.
+- Mostly synthetic anchors are labeled as hypothesis fixtures, not evidence.
+
+**Failure criteria.**
+
+- The anchors are too synthetic to support workload claims.
+- Exact K4 classifies all anchors into regimes where strong reuse is enough.
+- The layer table cannot distinguish workspace/artifact/cache/retrieved-document/transcript contributions.
+
+**Decision that follows.**
+
+- If successful: use the anchored regimes to decide which regime claims matter for the paper.
+- If anchors are hypothesis fixtures: keep them as stress tests, but do not cite them as realistic workload evidence.
+- If anchors do not occupy positive regimes: deprioritize richer planning and focus on explaining strong reuse sufficiency.
+
+### Gate 3 — Representation-aware restart (`done`, 2026-05-06)
+
+**Question.** Does choosing a different representation of workflow progress actually change bytes moved or time to resume enough to matter?
+
+**Minimal tasks.**
+
+1. Pick 3 real or trace-derived cut points.
+2. For each cut point, build only three packages:
+   - prompt/transcript only;
+   - base repo + diff;
+   - full workspace snapshot.
+3. For each package, report:
+   - structurally valid or not;
+   - bytes moved;
+   - lazy bytes required later;
+   - estimated `model_resume_s`;
+   - estimated `environment_resume_s`;
+   - estimated `task_resume_s`.
+4. Do not score semantic correctness, verifier success, or task success.
+5. Do not implement additional package types, broad materialization registry modes, or a full validator stack until this first table exists.
+
+**Output artifacts.**
+
+- `runs/restart_representation/minimal_package_table.csv`
+- Optional `runs/restart_representation/README.md` with cut-point provenance and structural-validity caveats.
+
+**Result.** Three trace-derived H5a cut points were evaluated with exactly the requested package shapes: prompt/transcript only, base repo + diff, and full workspace snapshot. Prompt-only fails structurally because the next call reads workspace state. Base+diff and full workspace are structurally valid in the static model and differ by >10x bytes moved (`212` bytes vs `1,000,000,044` bytes in the generated table), so representation-aware restart is earned as a real tradeoff for this synthetic fixture. This does not yet prove the tradeoff on dirty real workspaces.
+
+**Success criteria.**
+
+- At least one cut point shows a meaningful tradeoff: two packages are structurally valid but differ by >10x bytes moved or materially different `task_resume_s`.
+- The table separates model readiness from environment readiness and uses `task_resume_s = max(model_resume_s, environment_resume_s)` as the decision metric.
+
+**Failure criteria.**
+
+- All packages fail structurally.
+- Only one package is structurally valid at every cut.
+- Byte and resume-time differences are trivial, so representation-aware restart is not yet earned.
+
+**Decision that follows.**
+
+- If successful: promote representation-aware restart from provisional framing to an evidence-backed workstream, then consider minimal extensions such as selected cache packages or registry-backed alternatives.
+- If unsuccessful: pause C/M/S expansion and return to trace quality, dirty-workspace evidence, or workload selection before adding more static machinery.
 
 ---
 
 ## Open questions
 
-Resolved (kept here briefly for searchability): "useful resume definition" → C5; "tau choice" → S3 role classification supersedes; "state-object identity across reopen/invalidate" → S1 layers + S3 roles; "model-profile axis size" → R3; "relax § 0 for one F2 end-to-end cut-and-resume" → no relaxation for Vagrant evidence, only E1.5 upstream smoke check after C4.
+Resolved (kept here briefly for searchability): "useful resume definition" → C5; "tau choice" → S3 role classification supersedes; "state-object identity across reopen/invalidate" → S1 layers + S3 roles; "model-profile axis size" → R3; "relax § 0 for one F2 end-to-end cut-and-resume" → no relaxation for Agent Migrate evidence, only E1.5 upstream smoke check after C4.
 
 Live:
 
@@ -624,5 +757,5 @@ Live:
 - **Site = abstract resource pool or geographic region.** Default: abstract pool — Phoenix/Seattle/Austin become labels for capacity envelopes.
 - **Workspace payload for regime sweeps.** Default: use explicit distribution labels (`swe_bench`, `medium`, `monorepo`, `large_artifact`) and keep A1/S1 layer measurements as anchors.
 - **Token counting at trace time.** Real harnesses may not give exact counts; estimate from text. F2 currently approximates.
-- **Cut-point coverage discipline.** § 0 forbids single-episode podiums. C1 should require ≥3 trajectories × ≥3 cut points each before any C4 / D1 number is reported; revisit if F2's pool is too small to support that.
+- **Cut-point coverage discipline.** § 0 forbids single-episode podiums. Gate 3 is intentionally smaller: exactly three real or trace-derived cut points are enough for the first representation-tradeoff table, but not enough for a policy podium or broad restart claim. Any later C4 / D1-style result must return to ≥3 trajectories × ≥3 cut points.
 - **`coding-data-collection` upstream change for E1.** Whether post-run workspace snapshots are already retained, or whether the upstream collector needs extending. Escalate before coding E1.
