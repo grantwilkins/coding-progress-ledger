@@ -50,7 +50,7 @@ def test_load_sites_and_links():
     assert set(sites) == {"phoenix", "seattle"}
     assert sites["seattle"].prefill_tok_s == 45000
     assert ("phoenix", "seattle") in links
-    assert links["phoenix", "seattle"].effective_bps == 25_000_000_000
+    assert links["phoenix", "seattle"].effective_bps == 5_000_000_000
     assert home_site == "phoenix"
 
 

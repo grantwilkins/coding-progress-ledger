@@ -48,6 +48,73 @@ def trace_main(argv: list[str] | None = None) -> int:
     return 0
 
 
+def sensitivity_main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(
+        prog="vagrant-sensitivity",
+        description="Sweep over (kv_bytes_per_token, link_bps) and report whether "
+                    "the policy gap survives. Use to defend the headline against "
+                    "load-bearing-constants critique.",
+    )
+    parser.add_argument("--trace", required=True, type=Path)
+    parser.add_argument("--out", required=True, type=Path)
+    parser.add_argument("--model", default="compact_kv")
+    parser.add_argument("--model-config", type=Path,
+                        default=Path("configs/model_profiles.yaml"))
+    parser.add_argument("--sites-config", type=Path,
+                        default=Path("configs/sites_2site.yaml"))
+    parser.add_argument(
+        "--kv-bytes",
+        default="10000,70656,327680",
+        help="comma-separated kv_bytes_per_token grid; defaults bracket "
+             "frontier_v4_fp8 / DeepSeek-V3 MLA / Llama-3-70B FP16",
+    )
+    parser.add_argument(
+        "--link-bps",
+        default="5e9,25e9,100e9,400e9",
+        help="comma-separated link bandwidth (bps) grid; defaults bracket "
+             "single-flow inter-region / aggregate cross-region / 100 GbE / "
+             "RDMA-class",
+    )
+    parser.add_argument(
+        "--policies",
+        default="request_level_no_reuse,request_level_with_site_cache,shared_state_aware",
+        help="comma-separated list of policies to evaluate at each grid point",
+    )
+    parser.add_argument("--tau", type=int, default=1)
+    parser.add_argument("--reference-policy", default="request_level_with_site_cache")
+    parser.add_argument("--challenger-policy", default="shared_state_aware")
+    args = parser.parse_args(argv)
+
+    from .policies import POLICIES
+    from .sensitivity import gap_survival_rate, run_sweep
+
+    kv_bytes_grid = [int(float(x)) for x in args.kv_bytes.split(",") if x.strip()]
+    link_bps_grid = [float(x) for x in args.link_bps.split(",") if x.strip()]
+    requested = [p.strip() for p in args.policies.split(",") if p.strip()]
+    unknown = [p for p in requested if p not in POLICIES]
+    if unknown:
+        parser.error(f"unknown policy/policies: {unknown}; known: {sorted(POLICIES)}")
+
+    rows = run_sweep(
+        trace_path=args.trace,
+        out_dir=args.out,
+        model_path=args.model_config,
+        sites_path=args.sites_config,
+        model_name=args.model,
+        kv_bytes_grid=kv_bytes_grid,
+        link_bps_grid=link_bps_grid,
+        policies=requested,
+        tau=args.tau,
+        reference_policy=args.reference_policy,
+        challenger_policy=args.challenger_policy,
+    )
+    survival = gap_survival_rate(rows)
+    print(f"wrote {args.out}/sensitivity.csv ({len(rows)} rows)")
+    print(f"gap survival rate: {survival:.0%} of {len(kv_bytes_grid) * len(link_bps_grid)} grid points "
+          f"({args.challenger_policy} < {args.reference_policy})")
+    return 0
+
+
 def bench_main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="vagrant-bench", description="Run policies on a trace and emit results + plot.")
     parser.add_argument("--trace", required=True, type=Path)

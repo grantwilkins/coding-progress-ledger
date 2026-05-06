@@ -150,7 +150,8 @@ def test_materialize_cost_kv_transfer():
     s = StateObject(state_id="x", content_hash="h", layer="prompt_context",
                     lifetime="shared", tokens=8000, bytes=None)
     cost = materialize_cost(s, KV_TRANSFER, "phoenix", "seattle", bundle)
-    assert cost == pytest.approx(8 * 8000 * 70656 / 25_000_000_000)
+    expected = 8 * 8000 * bundle.model.kv_bytes_per_token / bundle.link("phoenix", "seattle").effective_bps
+    assert cost == pytest.approx(expected)
 
 
 def test_materialize_cost_context_replay_uses_dst_prefill():
@@ -210,9 +211,8 @@ def test_choose_min_cost_mode_picks_replay_for_small_state():
 
 def test_choose_min_cost_mode_picks_transfer_when_replay_slow():
     bundle = _bundle()
-    # Force the bundle's crossover by computing it: B* = 8 * 70656 * 45000 ~= 25.4 Gbps.
-    # 25 Gbps link is BELOW B*, so replay wins for prompt_context. But for workspace,
-    # only artifact_copy is allowed.
+    # workspace state has only one feasible mode (artifact_copy), so the
+    # mode choice is forced regardless of the kv-vs-replay crossover.
     s = StateObject(state_id="ws", content_hash="h", layer="workspace",
                     lifetime="shared", tokens=0, bytes=4_000_000)
     mode, cost = choose_min_cost_mode(s, "phoenix", "seattle", bundle)
@@ -233,7 +233,8 @@ def test_materialize_cost_text_transfer_dispatch():
     s = StateObject(state_id="m", content_hash="h", layer="memory",
                     lifetime="persistent", tokens=0, bytes=2_000_000)
     cost = materialize_cost(s, TEXT_TRANSFER, "phoenix", "seattle", bundle)
-    assert cost == pytest.approx(8 * 2_000_000 / 25_000_000_000)
+    expected = 8 * 2_000_000 / bundle.link("phoenix", "seattle").effective_bps
+    assert cost == pytest.approx(expected)
 
 
 def test_materialize_cost_text_transfer_requires_bytes():

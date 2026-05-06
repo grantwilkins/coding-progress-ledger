@@ -1,5 +1,38 @@
+# Model profiles. The single load-bearing knob is `kv_bytes_per_token`; it
+# scales the kv-vs-replay crossover bandwidth linearly:
+#   B* = 8 * kv_bytes_per_token * dst_prefill_tok_s
+#
+# Three profiles bracket the realistic 2025-2026 design space. The MVP bench
+# defaults to `compact_kv` (DeepSeek-V3 MLA, BF16); use the others for the
+# sensitivity sweep (`vagrant-sensitivity --models ...`).
+
 models:
   compact_kv:
     active_params_b: 49
     kv_bytes_per_token: 70656
-    notes: "DeepSeekV4Pro-like compact KV"
+    notes: >-
+      DeepSeek-V3 MLA, BF16. Source: DeepSeek-V3 Technical Report
+      (arXiv 2412.19437) and "Insights into DeepSeek-V3 Hardware"
+      (arXiv 2505.09343, Table 1) - paper value 70,272 bytes/token,
+      this profile carries +0.5% scale-factor overhead. NOT V4-class;
+      DeepSeek-V4 (vLLM blog, 2026-04) is ~10x more compact via tiered
+      compression.
+
+  vanilla_gqa_fp16:
+    active_params_b: 70
+    kv_bytes_per_token: 327680
+    notes: >-
+      Llama-3-70B class, FP16 GQA. 80 layers x 8 KV heads x 128 head_dim
+      x 2 (K+V) x 2 bytes = 327,680 bytes/token. Llama-3.1-405B is ~516K;
+      Qwen-2.5-72B is ~327K (same table as compact_kv). Use this profile
+      for the "still-deployed dense GQA" reference point in sensitivity
+      sweeps.
+
+  frontier_v4_fp8:
+    active_params_b: 49
+    kv_bytes_per_token: 10000
+    notes: >-
+      DeepSeek-V4-class compact KV (tiered c4a/c128a + FP8). vLLM blog
+      April 2026 reports V4 ~8.7x smaller than V3.2 (~40 KB/tok), putting
+      V4 at ~5K-12K bytes/token. Use 10K as a defensible mid estimate for
+      the frontier-compact regime.

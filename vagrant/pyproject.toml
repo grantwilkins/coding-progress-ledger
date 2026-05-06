@@ -14,6 +14,7 @@ dependencies = [
 vagrant-trace = "vagrant_agent.cli:trace_main"
 vagrant-manifest = "vagrant_agent.cli:manifest_main"
 vagrant-bench = "vagrant_agent.cli:bench_main"
+vagrant-sensitivity = "vagrant_agent.cli:sensitivity_main"
 
 [build-system]
 requires = ["setuptools>=68"]

@@ -19,6 +19,39 @@ The MVP allowed-modes per state layer:
 `warm_reuse` is intentionally NOT a formula here — it's a placement-state-aware
 concept handled in policy code (skip the cost call when the state is already
 materialized at dst by a prior placement decision).
+
+Caveats (load-bearing assumptions; document, do not silently absorb)
+-------------------------------------------------------------------
+
+1. **Linear-prefill validity**: `T / prefill_tok_s` assumes prefill is linear in
+   T. FlashAttention keeps memory at O(N) but arithmetic remains O(N^2); the
+   linear approximation holds up to ~32K tokens, then attention FLOPs dominate
+   and prefill rate falls. The toy trace lives in the linear regime.
+
+2. **Raw-bytes KV (no compression)**: `kv_transfer_s` charges raw KV bytes over
+   the wire. CacheGen (SIGCOMM '24, arXiv 2310.07240) reports 3.5-4.3x lossless
+   compression for KV cache. Treat the kv_transfer cost as an upper bound; a
+   compression-aware variant would shrink it 3-4x and shift the crossover B*
+   correspondingly.
+
+3. **No inter-state pipeline overlap**: real systems (Splitwise, Mooncake,
+   DistServe) overlap KV transfer with prefill / decode, computing
+   `max(transfer, prefill)` rather than `transfer + prefill`. Vagrant sums
+   per-state costs across a placement, which **overstates** the cost paid by
+   policies that move many states (i.e., `shared_state_aware` when it
+   co-locates several states). The model is therefore **conservative against**
+   the shared-state-aware policy: a positive headline survives this omission.
+
+4. **Decode time omitted**: agent workflows are decode-bound, but two policies
+   placing the same K nodes pay the same decode time. Decode cancels in the
+   policy difference, so omitting it does not bias relative comparisons on the
+   same trace.
+
+These caveats describe what the model does NOT capture. They explain WHY the
+absolute seconds the policies report are loose, even when relative orderings
+between policies on the same trace are sound. The headline metric
+(cost-weighted shared_state_duplication_factor) is robust to (1)-(4) for the
+purpose of comparing policies, but is NOT a wall-clock predictor.
 """
 from __future__ import annotations
 
