@@ -8,6 +8,8 @@ from agent_migrate_agent.adapters.swe_agent import swe_agent_to_trace
 from agent_migrate_agent.cut_points import find_cut_points, load_trace_jsonl
 from agent_migrate_agent.resume_packages import (
     StateEntry,
+    WorkspaceFileEntry,
+    build_agent_migrate_minimal,
     build_full_workspace_snapshot,
     build_prompt_only,
     build_transcript_plus_diff,
@@ -215,6 +217,7 @@ def test_harness_config_schema_violation(tmp_path: Path):
 def test_validation_reasons_are_documented():
     expected = {
         "transcript_prefix_mismatch", "missing_state_object", "content_hash_mismatch",
+        "unknown_state_entry", "workspace_digest_mismatch", "base_commit_mismatch",
         "diff_does_not_apply", "missing_diff_for_transcript_plus_diff",
         "missing_base_commit", "missing_base_repo_path", "dirty_base_repo",
         "harness_config_schema_violation", "harness_config_missing",
@@ -282,6 +285,75 @@ def test_dirty_worktree_refused(tmp_path: Path):
     res = validate_package(pkg, events, base_repo_path=repo)
     assert not res.valid
     assert "dirty_base_repo" in res.reasons
+
+
+@pytest.mark.skipif(not _git_available(), reason="git binary required")
+def test_diff_apply_requires_worktree_at_base_commit(tmp_path: Path):
+    events, cps = _events_and_cut(tmp_path)
+    repo, base, diff = _make_repo(tmp_path)
+    (repo / "x.py").write_text("x = 3\n")
+    _run(["git", "add", "x.py"], repo)
+    _run(["git", "commit", "-q", "-m", "second"], repo)
+    pkg = build_transcript_plus_diff(events, cps[0],
+                                     harness_config=_harness(),
+                                     base_commit=base, diff_blob=diff)
+    res = validate_package(pkg, events, base_repo_path=repo)
+    assert not res.valid
+    assert "base_commit_mismatch" in res.reasons
+
+
+def test_workspace_file_hash_mismatch_fails(tmp_path: Path):
+    from dataclasses import replace
+    events, cps = _events_and_cut(tmp_path)
+    pkg = build_full_workspace_snapshot(
+        events, cps[0],
+        harness_config=_harness(),
+        workspace_files=(WorkspaceFileEntry("src/x.py", 10, "h_good"),),
+    )
+    bad = replace(
+        pkg,
+        workspace_files=(WorkspaceFileEntry("src/x.py", 10, "h_bad"),),
+    )
+    res = validate_package(bad, events)
+    assert not res.valid
+    assert "workspace_digest_mismatch" in res.reasons
+
+
+def test_workspace_digest_state_entry_checked(tmp_path: Path):
+    from dataclasses import replace
+    events, cps = _events_and_cut(tmp_path)
+    pkg = build_agent_migrate_minimal(
+        events, cps[0],
+        harness_config=_harness(),
+        workspace_files=(WorkspaceFileEntry("uncommitted_diff.patch", 10, "h_diff"),),
+        workspace_layer_for_file={"uncommitted_diff.patch": "uncommitted_diff"},
+    )
+    entries = list(pkg.state_entries)
+    idx = next(i for i, e in enumerate(entries) if e.state_id == "workspace_layer:uncommitted_diff")
+    entries[idx] = replace(entries[idx], content_hash="h_tampered")
+    bad = replace(pkg, state_entries=tuple(entries))
+    res = validate_package(bad, events)
+    assert not res.valid
+    assert "workspace_digest_mismatch" in res.reasons
+
+
+def test_unknown_state_entry_fails_validation(tmp_path: Path):
+    from dataclasses import replace
+    events, cps = _events_and_cut(tmp_path)
+    pkg = build_prompt_only(events, cps[0])
+    bad = replace(pkg, state_entries=pkg.state_entries + (
+        StateEntry(
+            state_id="not_declared",
+            layer="prompt_context",
+            bytes=1,
+            content_hash="h_unknown",
+            materialization="included",
+            validator="digest",
+        ),
+    ))
+    res = validate_package(bad, events)
+    assert not res.valid
+    assert "unknown_state_entry" in res.reasons
 
 
 def test_lazy_rehydrate_does_not_satisfy_required_state(tmp_path: Path):
@@ -361,6 +433,36 @@ def test_post_complete_state_read_still_counted():
     cps = find_cut_points(events, trace_id="t")
     assert len(cps) == 1
     pkg = build_prompt_only(events, cps[0])
+    assert "p" in required_state_ids(pkg, events)
+
+
+def test_required_state_ids_interleaved_sessions_are_session_scoped():
+    events = [
+        {"step": 0, "event_type": "init", "subtask_id": None, "payload": {}, "reason": None},
+        {"step": 1, "event_type": "state_declare", "subtask_id": None,
+         "payload": {"state_id": "p", "content_hash": "h", "tokens": 1, "layer": "prompt_context",
+                     "lifetime": "persistent", "bytes": None, "producer_node_id": None}, "reason": None},
+        {"step": 2, "event_type": "add_subtask", "subtask_id": "A1",
+         "payload": {"node_type": "llm_call", "session_id": "A", "workflow_id": "w"}, "reason": None},
+        {"step": 3, "event_type": "update_status", "subtask_id": "A1",
+         "payload": {"status": "complete"}, "reason": None},
+        {"step": 4, "event_type": "add_subtask", "subtask_id": "B1",
+         "payload": {"node_type": "llm_call", "session_id": "B", "workflow_id": "w"}, "reason": None},
+        {"step": 5, "event_type": "update_status", "subtask_id": "B1",
+         "payload": {"status": "complete"}, "reason": None},
+        {"step": 6, "event_type": "add_subtask", "subtask_id": "A2",
+         "payload": {"node_type": "llm_call", "session_id": "A", "workflow_id": "w"}, "reason": None},
+        {"step": 7, "event_type": "add_subtask", "subtask_id": "B2",
+         "payload": {"node_type": "llm_call", "session_id": "B", "workflow_id": "w"}, "reason": None},
+        {"step": 8, "event_type": "state_read", "subtask_id": None,
+         "payload": {"state_id": "p", "content_hash": "h", "tokens": 1,
+                     "consumer_node_id": "A2"}, "reason": None},
+        {"step": 9, "event_type": "add_subtask", "subtask_id": "A3",
+         "payload": {"node_type": "llm_call", "session_id": "A", "workflow_id": "w"}, "reason": None},
+    ]
+    from agent_migrate_agent.cut_points import find_cut_points
+    cp = next(cp for cp in find_cut_points(events, trace_id="t") if cp.next_llm_call_id == "A2")
+    pkg = build_prompt_only(events, cp)
     assert "p" in required_state_ids(pkg, events)
 
 

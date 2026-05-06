@@ -269,8 +269,26 @@ def build_full_workspace_snapshot(
 ) -> ResumePackage:
     base = build_prompt_only(events, cut_point)
     files = tuple(sorted(workspace_files, key=lambda f: f.rel_path))
+    state_entries = list(base.state_entries)
+    if files:
+        payload = json.dumps(
+            [(f.rel_path, f.content_hash) for f in files],
+            separators=(",", ":"),
+        ).encode("utf_8")
+        digest = hashlib.sha256(payload).hexdigest()[:16]
+        state_entries.append(StateEntry(
+            state_id="workspace_layer:full_workspace_snapshot",
+            layer="workspace_snapshot",
+            bytes=sum(f.bytes for f in files),
+            content_hash="h_" + digest,
+            materialization="included",
+            validator="workspace_digest",
+            role_at_cut="correctness_critical",
+        ))
+        state_entries.sort(key=lambda s: s.state_id)
     return replace(base, package_type="full_workspace_snapshot",
                    harness_config=_normalize_harness(harness_config),
+                   state_entries=tuple(state_entries),
                    workspace_files=files)
 
 

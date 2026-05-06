@@ -389,7 +389,7 @@ agent-migrate_minimal     (S1-fallback today; FIXME(S3): replace with S3-classif
 Each package's `state_entries` is sorted by `state_id` for deterministic byte-identical builds; `harness_config` is recursively normalized (sorted keys, deepcopy) so caller insertion order doesn't perturb output. `agent-migrate_minimal` mobility-class mapping is now explicit per critic: `must_move → included`; `globally_available → globally_available`; `cheaply_rehydratable | can_be_recomputed → lazy_rehydrate`; `can_be_discarded → SKIPPED ENTIRELY` (no manifest entry). `ResumePackage.metrics()` returns a flat CSV-ready row (package_type, trace_id, session_id, event_index, phase, transcript_prefix_hash, n_state_entries, n_workspace_files, included_bytes, lazy_rehydrate_bytes, has_diff, has_harness) for C4 ablation. Determinism is pinned by a parametrized test across all five package types.
 
 **C3 — STATIC resume validator** (`done`, 2026-05-06)
-`src/agent_migrate_agent/resume_validator.py` (`validate_package`, `ValidationResult`, `required_state_ids`, `VALIDATION_REASONS`, `CHECKS`) and `tests/test_resume_validator.py` (22 tests). Signature: `validate_package(package, events, *, base_repo_path=None) -> ValidationResult` where `ValidationResult = (valid, reasons, checks_run)`. Failures accumulate (deduped); `checks_run` lets C4 distinguish "not validated" from "validated and passed."
+`src/agent_migrate_agent/resume_validator.py` (`validate_package`, `ValidationResult`, `required_state_ids`, `VALIDATION_REASONS`, `CHECKS`) and `tests/test_resume_validator.py` (31 tests). Signature: `validate_package(package, events, *, base_repo_path=None) -> ValidationResult` where `ValidationResult = (valid, reasons, checks_run)`. Failures accumulate (deduped); `checks_run` lets C4 distinguish "not validated" from "validated and passed."
 
 Checks:
 
@@ -417,8 +417,13 @@ Falsification target: `test_mutated_real_diff_fails_diff_does_not_apply` builds 
 
 Per-critic fixes from review: dropped early-return after first content_hash_mismatch; lookahead widened past `update_status complete`; consumer_node_id-missing fallback; `dirty_base_repo` reason added; `lazy_rehydrate` no longer satisfies tool-output coverage; `required_state_ids` exposed for C4 ablation; `checks_run` field added to `ValidationResult`.
 
-**C4 — Cut-and-resume ablation table** (`not started`)
-For each cut point × package, record `valid`, `bytes_moved`, `bytes_lazy_rehydrate_target`, `extra_setup_steps_recorded` (a count, not an execution), and dominant resource if K4 is run on the package. Output: `runs/c4_ablation/ablation.csv`.
+**C3.1 — Static-validator hardening before C4** (`done`, 2026-05-06)
+Critic reconciliation landed before C4: diff validation now refuses a clean repo checked out at a commit other than `base_commit` (`base_commit_mismatch`), included `workspace_digest` entries are checked against package workspace file digests, unknown declared-digest state entries fail as `unknown_state_entry`, and `required_state_ids(...)` is session-scoped for interleaved traces. Tests pin each failure mode plus the no-subprocess invariant for non-diff packages.
+
+**C4 — Cut-and-resume ablation table** (`done`, 2026-05-06)
+`src/agent_migrate_agent/resume_ablation.py` and `scripts/run_c4_ablation.py` landed. For each cut point × package, C4 records `valid`, `validation_reasons`, `checks_run`, `bytes_moved`, `bytes_lazy_rehydrate_target`, `extra_setup_steps_recorded` (count only; no execution), and K4 fields (`dominant_resource`, `k4_ran`) left blank/false unless simulation is explicitly wired later. Output artifact: `runs/c4_ablation/ablation.csv`.
+
+Current generated artifact uses `examples/traces/h5a_multi_trajectory_swe.jsonl` and emits 25 rows (5 cut points × 5 packages). All rows are currently structurally invalid because that trace's next-call reads are not covered by the package bytes supplied to the static builder; this is useful C4 signal, not a harness result. No model, verifier, tool, or real harness execution is involved.
 
 **C5 — Two-level resume metric** (`not started`)
 Replace the single "useful resume" definition with three explicit fields in result CSVs and demote the first one:

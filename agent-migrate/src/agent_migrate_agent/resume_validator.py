@@ -33,6 +33,8 @@ from __future__ import annotations
 import subprocess
 from dataclasses import dataclass
 from pathlib import Path
+import hashlib
+import json
 
 from .resume_packages import (
     HARNESS_REQUIRED_KEYS,
@@ -45,7 +47,10 @@ VALIDATION_REASONS: tuple[str, ...] = (
     "transcript_prefix_mismatch",
     "missing_state_object",
     "content_hash_mismatch",
+    "unknown_state_entry",
+    "workspace_digest_mismatch",
     "diff_does_not_apply",
+    "base_commit_mismatch",
     "missing_diff_for_transcript_plus_diff",
     "missing_base_commit",
     "missing_base_repo_path",
@@ -97,13 +102,16 @@ def validate_package(
 
     checks_run.append("content_hashes")
     for entry in package.state_entries:
-        if entry.validator != "digest":
-            continue
-        expected = declared_hashes.get(entry.state_id)
-        if expected is None:
-            continue
-        if expected != entry.content_hash:
-            reasons.append("content_hash_mismatch")
+        if entry.validator == "digest":
+            expected = declared_hashes.get(entry.state_id)
+            if expected is None:
+                reasons.append("unknown_state_entry")
+                continue
+            if expected != entry.content_hash:
+                reasons.append("content_hash_mismatch")
+        elif entry.validator == "workspace_digest" and entry.materialization == "included":
+            if _workspace_digest_for_entry(package, entry.state_id, entry.layer) != entry.content_hash:
+                reasons.append("workspace_digest_mismatch")
 
     checks_run.append("state_coverage")
     needed = required_state_ids(package, events)
@@ -130,6 +138,8 @@ def validate_package(
             repo = Path(base_repo_path)
             if not _worktree_clean(repo):
                 reasons.append("dirty_base_repo")
+            elif not _head_matches(repo, package.base_commit):
+                reasons.append("base_commit_mismatch")
             elif not _git_apply_check(repo, package.base_commit, package.diff_blob):
                 reasons.append("diff_does_not_apply")
 
@@ -186,11 +196,13 @@ def _next_llm_call_state_reads(events: list[dict], cut_index: int) -> set[str]:
     if head.get("event_type") != "add_subtask":
         return set()
     sid = head.get("subtask_id")
+    session_id = (head.get("payload") or {}).get("session_id")
 
     window: list[dict] = []
     for e in events[cut_index + 1:]:
         if e.get("event_type") == "add_subtask" \
-           and (e.get("payload") or {}).get("node_type") == "llm_call":
+           and (e.get("payload") or {}).get("node_type") == "llm_call" \
+           and (e.get("payload") or {}).get("session_id") == session_id:
             break
         window.append(e)
 
@@ -210,6 +222,28 @@ def _next_llm_call_state_reads(events: list[dict], cut_index: int) -> set[str]:
     return matched_by_consumer or all_reads
 
 
+def _workspace_digest_for_entry(package: ResumePackage, state_id: str, layer: str) -> str:
+    prefix = "workspace_layer:"
+    if not state_id.startswith(prefix):
+        return ""
+    target = state_id.removeprefix(prefix)
+    if target == "full_workspace_snapshot":
+        files = list(package.workspace_files)
+    else:
+        files = [f for f in package.workspace_files if _workspace_layer_for_rel_path(f.rel_path) == layer]
+    payload = json.dumps(
+        sorted((f.rel_path, f.content_hash) for f in files),
+        separators=(",", ":"),
+    ).encode("utf_8")
+    return "h_" + hashlib.sha256(payload).hexdigest()[:16]
+
+
+def _workspace_layer_for_rel_path(rel_path: str) -> str:
+    # Keep this import local to avoid a validator import cycle in tests that monkeypatch subprocess.
+    from .state_layers import classify_file
+    return classify_file(rel_path)
+
+
 def _worktree_clean(base_repo_path: Path) -> bool:
     if not base_repo_path.exists():
         return False
@@ -218,6 +252,16 @@ def _worktree_clean(base_repo_path: Path) -> bool:
         capture_output=True, text=True,
     )
     return proc.returncode == 0 and proc.stdout.strip() == ""
+
+
+def _head_matches(base_repo_path: Path, base_commit: str) -> bool:
+    proc = subprocess.run(
+        ["git", "-C", str(base_repo_path), "rev-parse", "HEAD"],
+        capture_output=True, text=True,
+    )
+    if proc.returncode != 0:
+        return False
+    return proc.stdout.strip() == base_commit
 
 
 def _git_apply_check(base_repo_path: Path, base_commit: str, diff_blob: str) -> bool:
