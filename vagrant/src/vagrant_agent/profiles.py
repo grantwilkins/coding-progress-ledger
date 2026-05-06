@@ -2,9 +2,16 @@
 
 MVP ships one model and two sites. The structure accommodates more.
 Links are symmetric and keyed by an unordered site pair (alphabetic).
+
+K-extension (Workstream K, 2026-05-05): SiteProfile carries optional
+fluid-capacity fields used by K4's simulator
+(`workspace_hydrate_bps`, `kv_memory_bytes`). Both default to math.inf
+so existing 2-site MVP configs continue to load unchanged — capacity
+is uncapped unless the YAML explicitly sets it.
 """
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -23,6 +30,8 @@ class ModelProfile:
 class SiteProfile:
     name: str
     prefill_tok_s: float
+    workspace_hydrate_bps: float = math.inf  # K4 fluid capacity (bytes/s for workspace bring-up); inf = uncapped (MVP)
+    kv_memory_bytes: float = math.inf        # K4 KV-resident capacity; inf = uncapped (MVP)
 
 
 @dataclass(frozen=True)
@@ -70,7 +79,12 @@ def load_model(path: str | Path, name: str) -> ModelProfile:
 def load_sites(path: str | Path) -> tuple[dict[str, SiteProfile], dict[tuple[str, str], LinkProfile], str]:
     raw = _load_yaml(path)
     sites = {
-        name: SiteProfile(name=name, prefill_tok_s=float(spec["prefill_tok_s"]))
+        name: SiteProfile(
+            name=name,
+            prefill_tok_s=float(spec["prefill_tok_s"]),
+            workspace_hydrate_bps=float(spec.get("workspace_hydrate_bps", math.inf)),
+            kv_memory_bytes=float(spec.get("kv_memory_bytes", math.inf)),
+        )
         for name, spec in raw.get("sites", {}).items()
     }
     if not sites:
