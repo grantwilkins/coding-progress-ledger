@@ -423,7 +423,7 @@ Critic reconciliation landed before C4: diff validation now refuses a clean repo
 **C4 — Cut-and-resume ablation table** (`done`, 2026-05-06)
 `src/agent_migrate_agent/resume_ablation.py` and `scripts/run_c4_ablation.py` landed. For each cut point × package, C4 records `valid`, `validation_reasons`, `checks_run`, `bytes_moved`, `bytes_lazy_rehydrate_target`, `extra_setup_steps_recorded` (count only; no execution), and K4 fields (`dominant_resource`, `k4_ran`) left blank/false unless simulation is explicitly wired later. Output artifact: `runs/c4_ablation/ablation.csv`.
 
-Current generated artifact uses `examples/traces/h5a_multi_trajectory_swe.jsonl` and emits 25 rows (5 cut points × 5 packages). All rows are currently structurally invalid because that trace's next-call reads are not covered by the package bytes supplied to the static builder; this is useful C4 signal, not a harness result. No model, verifier, tool, or real harness execution is involved.
+Current generated artifact uses `examples/traces/h5a_multi_trajectory_swe.jsonl` and emits 25 rows (5 cut points × 5 packages). `prompt_only`, `transcript_plus_harness_state`, and diff-without-diff rows fail because the next call reads workspace state; `full_workspace_snapshot` and `agent_migrate_minimal` validate and each charges the single 1 GB workspace required by that cut, not all previously declared session workspaces. No model, verifier, tool, or real harness execution is involved.
 
 **C5 — Two-level resume metric** (`not started`)
 Replace the single "useful resume" definition with three explicit fields in result CSVs and demote the first one:

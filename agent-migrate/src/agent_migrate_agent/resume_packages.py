@@ -208,6 +208,64 @@ def _collect_all_states(events: list[dict], cut_index: int) -> list[dict]:
     return out
 
 
+def _collect_declared_non_prompt_states(events: list[dict], cut_index: int) -> list[StateEntry]:
+    required = _next_call_read_ids(events, cut_index)
+    out: list[StateEntry] = []
+    for p in _collect_all_states(events, cut_index):
+        if p.get("state_id") not in required:
+            continue
+        layer = p.get("layer") or ""
+        if layer == "prompt_context":
+            continue
+        role = p.get("role_at_cut") or role_for_layer(layer)
+        materialization = materialization_for_role(role)
+        if materialization == "skipped":
+            continue
+        out.append(StateEntry(
+            state_id=p.get("state_id", ""),
+            layer=layer,
+            bytes=int(p.get("bytes") or 0),
+            content_hash=p.get("content_hash") or "",
+            materialization=materialization,
+            validator="digest",
+            role_at_cut=role,
+        ))
+    out.sort(key=lambda s: s.state_id)
+    return out
+
+
+def _next_call_read_ids(events: list[dict], cut_index: int) -> set[str]:
+    if cut_index >= len(events):
+        return set()
+    head = events[cut_index]
+    if head.get("event_type") != "add_subtask":
+        return set()
+    consumer = head.get("subtask_id")
+    session_id = (head.get("payload") or {}).get("session_id")
+    window: list[dict] = []
+    for e in events[cut_index + 1:]:
+        if (
+            e.get("event_type") == "add_subtask"
+            and (e.get("payload") or {}).get("node_type") == "llm_call"
+            and (e.get("payload") or {}).get("session_id") == session_id
+        ):
+            break
+        window.append(e)
+    matched: set[str] = set()
+    all_reads: set[str] = set()
+    for e in window:
+        if e.get("event_type") != "state_read":
+            continue
+        payload = e.get("payload") or {}
+        state_id = payload.get("state_id")
+        if not state_id:
+            continue
+        all_reads.add(state_id)
+        if payload.get("consumer_node_id") == consumer:
+            matched.add(state_id)
+    return matched or all_reads
+
+
 def _layer_mobility() -> dict[str, str]:
     return {layer.name: layer.mobility_class for layer in S1_LAYERS}
 
@@ -270,6 +328,8 @@ def build_full_workspace_snapshot(
     base = build_prompt_only(events, cut_point)
     files = tuple(sorted(workspace_files, key=lambda f: f.rel_path))
     state_entries = list(base.state_entries)
+    for entry in _collect_declared_non_prompt_states(events, cut_point.event_index):
+        state_entries.append(replace(entry, materialization="included"))
     if files:
         payload = json.dumps(
             [(f.rel_path, f.content_hash) for f in files],
@@ -314,6 +374,7 @@ def build_agent_migrate_minimal(
 
     included_files: list[WorkspaceFileEntry] = []
     summary_entries: list[StateEntry] = list(base.state_entries)
+    summary_entries.extend(_collect_declared_non_prompt_states(events, cut_point.event_index))
 
     if workspace_files:
         if workspace_layer_for_file is None:

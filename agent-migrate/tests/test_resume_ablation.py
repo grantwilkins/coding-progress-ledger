@@ -27,6 +27,7 @@ from agent_migrate_agent.resume_ablation import (
 from agent_migrate_agent.resume_packages import WorkspaceFileEntry, build_agent_migrate_minimal
 
 FIXTURE = Path(__file__).parent / "fixtures" / "swe_agent_pilot_s_07.json"
+H5A_TRACE = Path(__file__).parents[1] / "examples" / "traces" / "h5a_multi_trajectory_swe.jsonl"
 
 
 def _events_and_cuts(tmp_path: Path):
@@ -34,6 +35,13 @@ def _events_and_cuts(tmp_path: Path):
     swe_agent_to_trace(FIXTURE, out)
     events = load_trace_jsonl(out)
     cuts = find_cut_points(events, trace_id="s_07")
+    assert cuts
+    return events, cuts
+
+
+def _h5a_events_and_cuts():
+    events = load_trace_jsonl(H5A_TRACE)
+    cuts = find_cut_points(events, trace_id="h5a")
     assert cuts
     return events, cuts
 
@@ -95,6 +103,18 @@ def test_c4_bytes_do_not_double_count_minimal_workspace_summary(tmp_path: Path):
     )
     assert row.bytes_moved == pkg.included_bytes
     assert row.bytes_moved < pkg.included_bytes + 100
+
+
+def test_c4_workspace_bytes_are_cut_local_not_prior_session_prefix(tmp_path: Path):
+    events, cuts = _h5a_events_and_cuts()
+    rows = run_resume_ablation(events, cuts[:2], harness_config=_harness())
+    first = next(r for r in rows if r.event_index == cuts[0].event_index and r.package_type == "full_workspace_snapshot")
+    second = next(r for r in rows if r.event_index == cuts[1].event_index and r.package_type == "full_workspace_snapshot")
+    # Each H5a cut's next call reads one 1 GB workspace. A prefix-global package
+    # would charge 2 GB at the second cut.
+    assert first.bytes_moved > 1_000_000_000
+    assert second.bytes_moved == first.bytes_moved
+    assert second.bytes_moved < 2_000_000_000
 
 
 def test_c4_lazy_rehydrate_is_target_not_moved_bytes(tmp_path: Path):
