@@ -12,7 +12,11 @@ trace.jsonl  ──build_manifest──▶  manifest.json  ──run_policy─�
 
 MVP pipeline complete; SWE-agent F2 adapter (real-trace) and G1/G2 optimizers landed. **Workstream H1 (`request_level_with_site_cache`, the fair baseline) revealed that the previously-claimed 2× / 7.47× duplication-factor gaps between `request_level_no_reuse` (D1) and `shared_state_aware` (D2) are entirely explained by per-site cache reuse (H1's bookkeeping), not by shared-state-aware grouping.** On every linear-session fixture (toy, g_demo at `tau=1`, SWE-agent F2 `s_07`), H1, D2, and G1 collapse to identical numbers.
 
-The original thesis ("agent workflow with shared state has a different optimal placement than treated as N independent requests") is **on life support, not refuted**: a constructed multi-private-state-with-different-homes fixture proves H1 ≠ D2 fixtures exist, but no real-trace fixture in the repo currently exercises the multi-component path. The next task (TASKS.md § Workstream H2) is a multi-session SWE-agent concat fixture that puts D2 in its natural habitat and decides whether the project pivots to a "site-cache-reuse-is-everything" finding or sustains the original grouping thesis.
+**Workstream H2** (`examples/traces/h2_multi_session_swe.jsonl`) constructs the smallest multi-session fixture that puts D2 in its natural habitat and finds **H1 strictly beats D2 by ~11×** (0.154 s vs 1.738 s), with the gap surviving 9/9 of the kv_bytes × link_bps sensitivity grid. The mechanism: when shared state links sessions into one D2 component while private workspaces have asymmetric home_sites, D2's grouping forces a cross-site workspace transfer that H1's per-session placement avoids. The trajectory text is real (s_07 reused 3×); the per-session workspace bytes/home_sites are *synthetic*. H2 is therefore "**mechanism demonstrated on synthetic-but-structurally-realistic fixture**", not a real-trace phenomenon claim — graduating to the latter requires a real harness adapter that surfaces filesystem/workspace bytes (deferred as H4).
+
+The original thesis ("agent workflow with shared state has a different optimal placement than treated as N independent requests") **decomposes cleanly into two effects**: per-site cache reuse (H1's bookkeeping) and shared-state-aware grouping (D2's component-level placement). H2 shows the grouping effect is *real* but goes the *wrong way* — D2's component-level placement is strictly worse than H1's per-node placement when private states have asymmetric homes. Until H4 surfaces real workspace bytes, the project's claim is "we have a framework that distinguishes the two effects, and on the only fixture where they diverge, H1 wins."
+
+Vagrant Agent decomposes stateful workflow mobility into two effects: (1) per-site materialization reuse, and (2) graph-level grouping constraints. The project asks when the second effect exists in real agent traces after accounting for the first.
 
 ## Clone → plot in under 10 minutes
 
@@ -20,7 +24,7 @@ The original thesis ("agent workflow with shared state has a different optimal p
 git clone <this-repo>
 cd vagrant
 uv sync                                    # installs editable deps incl. ../coding-progress-ledger
-uv run pytest -q                           # 122 tests, ~1s
+uv run pytest -q                           # 179 tests, ~1s
 uv run vagrant-bench \
     --trace examples/traces/toy_subagent_trace.jsonl \
     --out runs/mvp_demo
@@ -43,15 +47,27 @@ runs/mvp_demo/
   plots/duplication_factor.png             # the headline plot
 ```
 
-Expected console output (toy trace):
+Expected console output (toy trace, default 5 Gbps single-flow inter-region link):
 
 ```text
-request_level_no_reuse:        total_cost_s=1.0759, dup_factor=2.0379
-request_level_with_site_cache: total_cost_s=0.5279, dup_factor=1.0000
-shared_state_aware:            total_cost_s=0.5279, dup_factor=1.0000
+request_level_no_reuse:        total_cost_s=1.0861, dup_factor=2.0375
+request_level_with_site_cache: total_cost_s=0.5331, dup_factor=1.0000
+shared_state_aware:            total_cost_s=0.5331, dup_factor=1.0000
 ```
 
 The cost-weighted duplication factor is **`Σ(cost_s · materialization_count) / Σ(cost_s)`** — i.e., the cost the policy actually paid divided by the lower-bound cost of one materialization per `(state, site)`. **The 2× gap belongs to per-site cache reuse (H1's bookkeeping), not to shared-state-aware grouping**: H1 and D2 produce numerically identical totals on this fixture and on every other linear-session fixture in the repo. Reading the audit CSV is the definitive way to reconcile the metric with the per-row decisions.
+
+### Sensitivity sweep (defending the gap against constants)
+
+The headline ratio depends on three load-bearing constants — `kv_bytes_per_token`, `dst_prefill_tok_s`, `link_bps` — each spanning >1 order of magnitude across plausible 2025–2026 deployments. Run:
+
+```bash
+uv run vagrant-sensitivity \
+    --trace examples/traces/toy_subagent_trace.jsonl \
+    --out runs/sensitivity_demo
+```
+
+That sweeps `kv_bytes ∈ {10K, 70K, 320K}` (V4-class compact / V3 MLA / Llama-3-70B GQA) × `link_bps ∈ {5, 25, 100, 400} Gbps` (AWS single-flow inter-region / aggregate / 100GbE / RDMA-class) and writes `sensitivity.csv` with a `gap_robust` column. On the toy trace the documented finding is **0% survival** for D2 vs H1 (linear-session collapses) and **100% survival** for H1 vs D1 (cache reuse always wins). The H2 multi-session fixture sustains **100% survival for H1 vs D2** (gap is bytes-layer, scales with `1/link_bps`, never inverts).
 
 ## What the toy trace exercises
 

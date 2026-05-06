@@ -399,12 +399,30 @@ The MVP baseline (`request_level_no_reuse`) is intentionally a strawman. Before 
 **H1 — `request_level_with_site_cache`** (`done`, 2026-05-05)
 Same per-node placement as `request_level_no_reuse`, but materialized state is **reused across colocated nodes at the same site**. ~6 LOC delegating to existing `_plan_from_placement` + `_place_per_node_min_cost` helpers. Pre-flight + code+findings Opus critics. **Finding**: H1 numerically collapses to D2 and G1 on every existing fixture (linear-session structure puts every node at the same site); a constructed multi-private-state-different-homes fixture proves H1 ≠ D2 *can* happen but no real-trace fixture currently exercises it.
 
-**H2 — Multi-session SWE-agent fixture** (next task — recommended by H1 findings critic)
-Concat 2-3 F2-style SWE-agent trajectories with a shared system_prompt state and disjoint per-trajectory workspaces (`home_site` set per trajectory). Smallest realistic fixture that puts D2 in its natural habitat (multiple components with private states pulling in different directions). Decides whether the project pivots to a "site-cache-reuse-is-everything" finding or sustains the original grouping thesis.
+**H2 — Multi-session SWE-style fixture (synthetic workspaces)** (`done`, 2026-05-05)
+Concatenates 3 F2-style SWE-agent sessions (reusing the cached `swe_agent_pilot_s_07.json` traj three times, truncated to 2 ai turns each) into one trace with a shared `system_prompt` state and **synthetic** per-session `workspace_<sid>` states whose `home_site` and `bytes` are assigned by the fixture builder. Adapter: `src/vagrant_agent/adapters/swe_agent_multi.py`. Canonical fixture: `examples/traces/h2_multi_session_swe.jsonl` (3 sessions, workspace_homes `[phoenix, seattle, phoenix]`, 1 GB each, 6 nodes total — fits G1's `K^N <= G1_MAX_ENUMERATIONS` cap). Pre-flight + code+findings Opus critics.
 
-**H3 — Other deferred policies.** `session_sticky`, `prefix_group`, `subagent_group`, `workspace_group`. Add only if H2 surfaces a need.
+**Numerical findings on the canonical fixture** (`compact_kv` × `sites_2site.yaml`):
 
-**`shared_state_aware` status.** Marked **experimental** (NOT deprecated). On linear-session traces it is provably equivalent to H1; at fragmenting tau it is strictly worse than H1. Keep it pending H2 — if multi-session real traces also collapse, deprecate then.
+| Policy | Total cost (s) | Notes |
+| ------ | -------------- | ----- |
+| D1 (`request_level_no_reuse`)       | 0.3883 | strawman; system_prompt paid per-consumer |
+| H1 (`request_level_with_site_cache`) | 0.1542 | per-node placement; sa,sc → phoenix, sb → seattle |
+| D2 (`shared_state_aware`, τ=1)       | 1.7380 | one component; all → phoenix; pays workspace_sb cross-site |
+| G1 (`g1_brute_force`)               | 0.1542 | oracle ≡ H1 (64 enumerations) |
+| G2 (`g2_local_search`)              | 0.1542 | seeded from D1; finds the same floor |
+
+**H1 strictly beats D2 by ~1.58 s ≈ 11×** on this fixture. Mechanism: D2 forces all 6 nodes to phoenix (single component linked by `system_prompt`); workspace_sb has `home_site=seattle`, so D2 pays `8 × 1 GB / 5 Gbps = 1.6 s` artifact_copy. H1's per-node placement keeps sb at seattle and the workspace stays local.
+
+**Sensitivity**: gap survives at **9/9 = 100%** of the `kv_bytes ∈ {10K, 70656, 327680} × link_bps ∈ {5e9, 25e9, 100e9}` grid (`tests/test_h2_multi_session.py:test_h1_d2_gap_survives_full_sensitivity_grid`). The gap is bytes-layer (`8*B/bps`), independent of `kv_bytes_per_token`, so it scales with `1/link_bps` but never inverts.
+
+**Honest framing — what H2 is and is not.** The trajectory text is real (s_07), but the load-bearing state for the gap is the synthetic per-session workspace that no F2 adapter currently surfaces. H2 is therefore "**mechanism demonstrated on synthetic-but-structurally-realistic fixture**", not a real-trace phenomenon claim. It satisfies the *synthetic-sweep* clause of the phenomenon-demonstrated gate (multi-private-state-with-different-homes, sensitivity-robust at 100%); it does **not** satisfy the *real-trace* clause, because the real workspace bytes that drive the gap come from the fixture builder, not from the trajectory. A future H4-or-F3 task — a real adapter that surfaces filesystem/workspace bytes from a harness trace — would be required to graduate from "mechanism demonstrated" to "phenomenon demonstrated on a real harness trace."
+
+**H3 — Other deferred policies.** `session_sticky`, `prefix_group`, `subagent_group`, `workspace_group`. Add only if a future workstream surfaces a need beyond H1/D2.
+
+**H4 (deferred) — real workspace-bytes adapter.** A harness adapter (OpenHands snapshot, SWE-agent rollout dir, or similar) that surfaces actual filesystem/workspace bytes per session, so the H2 mechanism can be validated end-to-end on a real trace. Requires either a re-run capture of an SWE-agent session with rollout-dir bytes preserved, or a snapshot-based harness like OpenHands.
+
+**`shared_state_aware` status.** Marked **experimental** (NOT deprecated). On linear-session traces it is provably equivalent to H1; at fragmenting tau and on H2-style multi-session-with-asymmetric-workspaces fixtures it is strictly worse than H1. Final deprecation pending whether H4 ever surfaces a real-trace fixture where D2 wins (none currently exists).
 
 ## § Workstream I — Capacity, queues, multi-site (deferred)
 
@@ -434,14 +452,20 @@ Per the plan's own non-goals (lines 861–867). Out of scope for this repo.
 
 > **Gate revised 2026-05-05 (post-H1).** H1 (`request_level_with_site_cache`) collapsed numerically to D2 (`shared_state_aware`) and G1 (`g1_brute_force`) on every existing fixture (toy, g_demo at tau=1, SWE-agent F2 s_07). The previously-claimed 2× / 7.47× gaps between D1 and D2 are entirely explained by **per-site cache reuse** (H1's bookkeeping), not by shared-state-aware grouping. The original gate language conflated those two effects.
 
+> **Gate revised 2026-05-05 (post-modeling-assumption audit).** The gap must be **sensitivity-robust** across the realistic 2025–2026 cost-model design space, not just a point estimate at fixed constants. The single constants `kv_bytes_per_token`, `dst_prefill_tok_s`, and `link_bps` each span >1 order of magnitude across plausible production deployments (V4-class compact KV ≈ 10K bytes/tok, DeepSeek-V3 MLA ≈ 70K, vanilla GQA FP16 ≈ 320K; H100 single-stream prefill 15K–60K tok/s; AWS single-flow inter-region ≈ 5 Gbps vs. RDMA-class ≈ 400+ Gbps). A claim that survives only at the 25 Gbps × 70K-bytes/tok point but flips elsewhere is not a phenomenon claim.
+
 The cost-weighted duplication-factor gap **between `shared_state_aware` (D2) and `request_level_with_site_cache` (H1)** must reproduce on **at least one of**:
 
 - a real harness trace exercising **multiple sessions** OR multi-private-state-with-different-homes structure (i.e., a manifest where some nodes' per-node best-site differs from their component's best-site), or
-- a synthetic sweep where private-state homes pull individual nodes within a shared-state component toward different sites, so D2's grouping forces a more expensive private-state materialization that H1 avoids by splitting.
+- a synthetic sweep where private-state homes pull individual nodes within a shared-state component toward different sites, so D2's grouping forces a more expensive private-state materialization that H1 avoids by splitting,
+
+**AND** the gap must survive the `vagrant-sensitivity` sweep across the bracketing grid `kv_bytes ∈ {10000, 70656, 327680}` × `link_bps ∈ {5e9, 25e9, 100e9}` (i.e., positive `gap_robust` at ≥ 50% of grid points, with sign consistency — not flips). A gap that exists only at one corner of the grid is not a phenomenon.
 
 The `request_level_no_reuse` (D1) baseline does **NOT** satisfy this gate; it is a strawman whose gap is closed by per-site caching alone.
 
-**Documented finding (not a regression).** On linear-session traces (toy, g_demo, F2 SWE-agent s_07), `H1 ≡ D2 ≡ G1` numerically to 1e-9. This is a real property of those fixtures, not a bug in either policy. The constructed-divergence test (`tests/test_h1_policy.py:test_h1_diverges_from_d2_on_constructed_fixture`) proves H1 ≠ D2 fixtures *exist*, but no real-trace fixture in the repo currently exercises that case.
+**Documented finding (not a regression).** On linear-session traces (toy, g_demo, F2 SWE-agent s_07), `H1 ≡ D2 ≡ G1` numerically to 1e-9 at every sensitivity grid point (`tests/test_sensitivity.py:test_gap_survival_rate_on_default_toy_at_realistic_link` asserts 0% survival on the toy, and D1 < H1 strict inequality at 100% of grid points). This is a real property of those fixtures, not a bug in either policy. The constructed-divergence test (`tests/test_h1_policy.py:test_h1_diverges_from_d2_on_constructed_fixture`) proves H1 ≠ D2 fixtures *exist*, and the H2 multi-session fixture (`examples/traces/h2_multi_session_swe.jsonl`) sustains a 100% sensitivity-robust H1<D2 gap — but the H2 workspace bytes are synthetic. A real-trace fixture exercising this case is still pending H4.
+
+**Modeling-assumption caveats.** The cost model omits (a) KV compression à la CacheGen (3–4× factor on `kv_transfer_s`), (b) inter-state pipeline overlap (real systems compute `max(transfer, prefill)`, vagrant sums), (c) decode time (cancels in policy differences). See `costs.py` docstring for full caveat block. Any phenomenon claim must be robust to these omissions, or must explicitly justify why the omitted term doesn't flip the headline.
 
 ## Definition of done — research result
 
