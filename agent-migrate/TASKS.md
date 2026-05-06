@@ -6,9 +6,9 @@ This file is the working backlog for `agent-migrate-agent`. It is the authoritat
 
 > **The Week 1 result is a regime signal, not a project failure.** A post-critic K7 rerun fixed budget/planner drift, concurrent shared-state dedup, workspace hydrate units, and T3 fixture coverage. Corrected K7 now passes: T1 collapses under infinite capacity, T2 exposes prefill stampede, and T3 shows `mixed_min_pressure` beating the best fixed-mode policy by about 49% on a single-source multi-resource evacuation fixture. This earns carrying mobility episodes forward, but it still does **not** justify a universal "our policy wins" claim.
 >
-> The current phase is **finding-gated regime discovery**: map when per-site reuse is enough, when state locality matters, and when landing pressure requires mobility planning, but only promote claims that survive exact validation and workload anchoring. R1/R2 (sweep + heatmaps), R3 (model profile axis), V1 (claim-cell exact validation), O1/O2 (small-N oracle + diff), and W1/W2/W3 (workload anchors) produced useful substrate, but the next step is not more modules; it is to force the three empirical decisions in **Next empirical gates**.
+> The current phase is **measured mobile-state discovery**. The three empirical gates are now closed: exact claim cells exist, workload anchors are labeled as synthetic stress fixtures, and the minimal restart table shows representation choice can matter on a trace-derived fixture. The next question is no longer "can we build the machinery?" It is: **in real agent runs, how much mobile state actually exists, and which resource becomes the bottleneck when many such runs restart together?**
 >
-> **Representation-aware restart remains provisional.** LLM agents are restartable computations whose progress is split across model context, runtime state, tool observations, and environment side effects; the system question is *which representation of that progress to materialize at a destination* — copy, replay, hydrate, rebuild, refetch, reuse, or discard. That framing is promoted only if Gate 3 shows a real bytes/time tradeoff on cut points, not because a broad validator or registry exists.
+> **Representation-aware restart is now earned as a mechanism, but not yet as a prevalence claim.** LLM agents are restartable computations whose progress is split across model context, runtime state, tool observations, and environment side effects; the system question is *which representation of that progress to materialize at a destination* — copy, replay, hydrate, rebuild, refetch, reuse, or discard. Gate 3 shows the mechanism can create orders-of-magnitude byte differences on a trace-derived fixture. Promotion to a top-line systems claim now depends on measured dirty-workspace evidence, not broader static machinery.
 >
 > The project's current strongest claim is: **Agentic mobility is a state-reconstitution problem. Strong per-site reuse is the first serious baseline. Richer planning matters only in identifiable regimes: large state, architecture-dependent KV/replay tradeoffs, or landing pressure during mobility episodes.**
 >
@@ -577,7 +577,7 @@ Metrics: `package_structurally_valid` (C3 result, NOT verifier_success), `bytes_
 
 ## Next empirical gates
 
-The next phase is organized around findings, not workstream completion. A task is in scope only if it directly produces one of the gate artifacts below or fixes a blocker needed to produce that artifact. Do not spend a week adding infrastructure unless the output answers one of these three empirical questions.
+These gates are complete as of 2026-05-06. They remain here as the evidence boundary: future work should cite these artifacts rather than rebuilding adjacent machinery.
 
 Core infrastructure to preserve and reuse:
 
@@ -649,7 +649,7 @@ Defer until the gates produce evidence:
 
 ### Gate 2 — Workload anchors (`done`, 2026-05-06)
 
-**Question.** Do plausible workloads actually occupy the regimes where Vagrant matters?
+**Question.** Do plausible workloads actually occupy the regimes where Agent Migrate matters?
 
 **Minimal tasks.**
 
@@ -744,6 +744,172 @@ Defer until the gates produce evidence:
 
 ---
 
+## Next empirical question — measured mobile state
+
+**Question.** In real agent runs, how much mobile state actually exists, and which resource becomes the bottleneck when many such runs restart together?
+
+This is the next systems bottleneck. The current positive results are exact and useful, but they are still driven by synthetic or trace-derived bytes. The project now needs measured post-run state from real trajectories before adding more planners, package types, registries, or demos.
+
+### MSE1 — Capture real post-run state snapshots upstream (`not started`)
+
+**Meaning.** Measure what an agent actually leaves behind: dirty diffs, touched files, read files, tool outputs, test logs, build artifacts, dependency caches, retrieved docs, and final workspace bytes.
+
+**Minimal tasks.**
+
+1. Inspect `coding-data-collection` to determine whether completed runs retain post-run workspaces.
+2. If retained, write a snapshot exporter there; if not retained, add collection at the upstream run boundary.
+3. For each completed run, emit a snapshot manifest with:
+   - clean repo bytes at base commit;
+   - final uncommitted diff bytes;
+   - touched file bytes;
+   - read file bytes;
+   - tool output bytes;
+   - test log bytes;
+   - build artifact bytes;
+   - dependency/cache bytes;
+   - retrieved document bytes when available;
+   - setup commands and lockfile hashes when available.
+4. Do not run new harnesses from Agent Migrate. Agent Migrate consumes exported manifests only.
+
+**Output artifacts.**
+
+- Upstream: `coding-data-collection` snapshot manifests.
+- Downstream: `agent-migrate/runs/measured_mobile_state/raw_snapshot_index.csv`.
+
+**Success criteria.**
+
+- At least 20 completed runs have measured byte-layer snapshots, or the upstream collector proves that such snapshots are unavailable and records exactly what must change.
+- Every byte column is labeled `measured`, `trace_derived`, `estimated`, `missing`, or `not_applicable`.
+
+**Failure criteria.**
+
+- Only repository size is measurable.
+- Dirty diffs, caches, logs, and artifacts cannot be separated.
+- The snapshot process requires running a model, verifier, or live harness from Agent Migrate.
+
+**Decision that follows.**
+
+- If snapshots exist: replace synthetic anchor bytes with measured distributions.
+- If snapshots do not exist: the next project task moves upstream; Agent Migrate should pause workload-prevalence claims.
+
+### MSE2 — Mobile-state distribution table (`not started`)
+
+**Meaning.** Convert snapshots into the empirical distribution that answers whether state movement is usually tiny, occasionally large, or routinely bottlenecking.
+
+**Minimal tasks.**
+
+1. Aggregate snapshot manifests by state layer and mobility class.
+2. Report p50/p75/p90/p95/max bytes per layer.
+3. Report the fraction of runs with:
+   - dirty diff > 1 MB, 10 MB, 100 MB;
+   - dependency/build/cache > 100 MB, 1 GB;
+   - tool/test output > 10 MB, 100 MB;
+   - total mobile state > SWE-bench, medium, monorepo, and large-artifact sweep thresholds.
+4. Split "must move now" from "can lazy rehydrate" and "can drop."
+
+**Output artifacts.**
+
+- `runs/measured_mobile_state/layer_distribution.csv`
+- `runs/measured_mobile_state/mobile_state_thresholds.csv`
+
+**Success criteria.**
+
+- We can say whether real runs mostly live in the reuse regime or whether a material fraction reaches state-locality / network-pressure regimes.
+- The table identifies which layers, not just total bytes, create the tail.
+
+**Failure criteria.**
+
+- The distribution cannot distinguish mobile state from globally available state.
+- Most important byte layers remain missing or estimated.
+
+**Decision that follows.**
+
+- If measured mobile state is usually small: make strong reuse sufficiency the main result and demote richer planning to rare-regime handling.
+- If measured mobile state has a meaningful tail: use those tail cells as the next exact K4 workload episodes.
+
+### MSE3 — Measured restart-pressure replay (`not started`)
+
+**Meaning.** Replay measured snapshot distributions through exact K4 to see which resource becomes the bottleneck when many real-derived runs restart together.
+
+**Minimal tasks.**
+
+1. Build restart episodes from measured snapshot rows, not synthetic layer constants.
+2. Run exact K4 for small/medium batches that are tractable; use aggregate K8 only as a search hint.
+3. Compare strong reuse, random diversification, and `mixed_min_pressure`.
+4. Report bottleneck prevalence across measured-derived episodes:
+   - reuse;
+   - prefill pressure;
+   - network pressure;
+   - workspace pressure;
+   - multi-resource pressure.
+
+**Output artifacts.**
+
+- `runs/measured_mobile_state/exact_restart_pressure.csv`
+- `runs/measured_mobile_state/policy_comparison_on_measured_state.csv`
+
+**Success criteria.**
+
+- We can say which resources bottleneck real-derived restart episodes.
+- We can say whether richer planning beats both strong reuse and random diversification on measured-derived state.
+
+**Failure criteria.**
+
+- Measured-derived episodes collapse to synthetic assumptions.
+- Aggregate estimates are used for claims without exact K4 validation.
+- Random diversification is not included.
+
+**Decision that follows.**
+
+- If measured-derived episodes show real pressure regimes: promote the regime-dependent richer-planning claim.
+- If they do not: the honest systems claim is that strong per-site reuse handles the measured workloads, while richer planning remains a stress-regime tool.
+
+### MSE4 — Representation tradeoff on measured dirty workspaces (`not started`)
+
+**Meaning.** Re-run the minimal three-package restart comparison on measured dirty workspaces, not the H5a 1 GB synthetic fixture.
+
+**Minimal tasks.**
+
+1. Pick 3-5 measured cut points with nontrivial dirty state.
+2. Compare only:
+   - prompt/transcript only;
+   - base repo + measured diff;
+   - full measured workspace snapshot.
+3. Report structural validity, bytes moved, lazy bytes, model resume estimate, environment resume estimate, and task resume estimate.
+4. Do not add registry-wide modes or extra package types until this measured table exists.
+
+**Output artifacts.**
+
+- `runs/measured_mobile_state/measured_restart_package_table.csv`
+
+**Success criteria.**
+
+- At least one measured cut point has two structurally valid representations with >10x byte difference or materially different resume time.
+
+**Failure criteria.**
+
+- The representation tradeoff only appears in synthetic fixtures.
+- Measured diffs are unavailable or structurally invalid in every case.
+
+**Decision that follows.**
+
+- If successful: representation-aware restart becomes a measured systems result.
+- If unsuccessful: keep it as a mechanism, not a top-line empirical claim.
+
+### Still deferred
+
+Do not resume these until MSE1-MSE4 determine whether real measured state creates pressure:
+
+- broad materialization-mode registry expansion;
+- oracle decision-motif extraction;
+- quantile-aware planner prototype;
+- KVA plotting unless needed for a measured-state figure;
+- simulated restart episode demo;
+- large new policy work;
+- heuristic tuning.
+
+---
+
 ## Open questions
 
 Resolved (kept here briefly for searchability): "useful resume definition" → C5; "tau choice" → S3 role classification supersedes; "state-object identity across reopen/invalidate" → S1 layers + S3 roles; "model-profile axis size" → R3; "relax § 0 for one F2 end-to-end cut-and-resume" → no relaxation for Agent Migrate evidence, only E1.5 upstream smoke check after C4.
@@ -758,4 +924,4 @@ Live:
 - **Workspace payload for regime sweeps.** Default: use explicit distribution labels (`swe_bench`, `medium`, `monorepo`, `large_artifact`) and keep A1/S1 layer measurements as anchors.
 - **Token counting at trace time.** Real harnesses may not give exact counts; estimate from text. F2 currently approximates.
 - **Cut-point coverage discipline.** § 0 forbids single-episode podiums. Gate 3 is intentionally smaller: exactly three real or trace-derived cut points are enough for the first representation-tradeoff table, but not enough for a policy podium or broad restart claim. Any later C4 / D1-style result must return to ≥3 trajectories × ≥3 cut points.
-- **`coding-data-collection` upstream change for E1.** Whether post-run workspace snapshots are already retained, or whether the upstream collector needs extending. Escalate before coding E1.
+- **`coding-data-collection` upstream change for measured mobile state.** Whether post-run workspace snapshots are already retained, or whether the upstream collector needs extending. This is now the primary next blocker; inspect upstream before adding more Agent Migrate machinery.
