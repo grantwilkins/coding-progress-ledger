@@ -1,0 +1,5 @@
+scenario,n_workflows,state_scale,prefill_capacity,link_gbps,oracle_p50_s,mixed_p50_s,random_p50_s,strong_reuse_p50_s,oracle_vs_mixed_gap_frac,oracle_vs_random_gap_frac,strong_vs_random_gap_frac,enumerated_oracle_plans
+tiny_prefill_pressure,4,tiny,tight,100,0.0613090867,0.0942653338,0.123056614,0.139877718,0.349611524,0.50178146,-0.13669402,4096
+medium_multi_resource,4,medium,tight,5,0.7349,1.46893333,3.73084419,3.79565556,0.499705001,0.803020452,-0.0173717708,4096
+monorepo_workspace_pressure,4,monorepo,loose,100,9.975155,10.04406,15.0344498,20.0788322,0.00686027316,0.336513467,-0.335521581,4096
+slow_link_network_pressure,4,medium,loose,1,0.532553333,1.06208,8.13248667,16.0525622,0.498575123,0.934515314,-0.973881161,4096

@@ -302,20 +302,19 @@ Interpretation:
 - If oracle barely beats strong reuse, the ceiling is low in that regime.
 - If oracle beats strong reuse by 20-30%, inspect the oracle-vs-policy difference before tuning any heuristic.
 
-**O2 — Oracle-difference explanation** (`not started`, ~1 day)
-Use K9 for explanation before heuristic tuning. For each of the four diagnostic cells, emit a short oracle-vs-mixed plan-diff report:
+**O2 — Oracle-difference explanation** (`done`, 2026-05-06)
+`src/vagrant_agent/oracle_diff.py` and `scripts/run_o2.py` emit `runs/o2_oracle_diff/`. Per-cell artifacts cover destination choices, prompt modes, workspace modes, per-policy bottleneck breakdown (with an `attr` sidebar reporting the fraction of makespan with an attributed bottleneck so a sparse breakdown is not misread), and the three gaps (oracle vs mixed, oracle vs random, strong-reuse vs random). The exhaustive enumeration is shared with `k9_oracle.run_small_n_oracle` via `enumerate_oracle_plans` so the two paths cannot drift on candidate space or objective; a parity test pins the byte-identical p50.
 
-```text
-destination choices
-prompt modes
-workspace modes
-resource bottleneck trajectory
-oracle vs mixed gap
-oracle vs random gap
-strong reuse vs random gap
-```
+Headline first-pass numbers (4 diagnostic cells, n=4):
 
-Goal: determine whether oracle beats `mixed_min_pressure` by simple destination/mode choices, by resource balancing that the heuristic misses, or by candidate-space choices outside the current heuristic. This is not a planner-tuning task; it is the diagnostic prerequisite for tuning.
+| cell | oracle vs mixed | oracle vs random | strong vs random |
+| ---- | --------------: | ---------------: | ---------------: |
+| tiny_prefill_pressure | 35.0% | 50.2% | -13.7% |
+| medium_multi_resource | 50.0% | 80.3% | -1.7% |
+| monorepo_workspace_pressure | 0.7% | 33.7% | -33.6% |
+| slow_link_network_pressure | 49.9% | 93.5% | -97.4% |
+
+Negative `strong vs random` is the K7 finding restated: in slow-link / large-state cells, random_mode's diversification beats strong reuse's "everything via the cheapest cold mode at one site" choice. The `monorepo_workspace_pressure` row (oracle vs mixed = 0.7%) confirms `mixed_min_pressure` is already near-optimal when workspace bytes dominate; the other three rows show real headroom (35–50%) over `mixed`. The diff CSV identifies that the headroom comes primarily from per-workflow destination + prompt-mode choices, not workspace-mode.
 
 ---
 
