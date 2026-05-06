@@ -1,0 +1,12 @@
+metric,threshold_bytes,n_runs,n_over_threshold,fraction_over_threshold,usable_for_claims_only
+dirty_payload_gt_1mb,1000000,50,0,0.0,True
+dirty_payload_gt_10mb,10000000,50,0,0.0,True
+dirty_payload_gt_100mb,100000000,50,0,0.0,True
+dependency_build_cache_gt_100mb,100000000,50,0,0.0,True
+dependency_build_cache_gt_1gb,1000000000,50,0,0.0,True
+tool_test_output_gt_10mb,10000000,50,0,0.0,True
+tool_test_output_gt_100mb,100000000,50,0,0.0,True
+total_mobile_state_gt_swe_bench,33000000,50,0,0.0,True
+total_mobile_state_gt_medium,500000000,50,0,0.0,True
+total_mobile_state_gt_monorepo,5000000000,50,0,0.0,True
+total_mobile_state_gt_large_artifact,20000000000,50,0,0.0,True

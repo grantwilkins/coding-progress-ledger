@@ -750,7 +750,7 @@ Defer until the gates produce evidence:
 
 This is the next systems bottleneck. The current positive results are exact and useful, but they are still driven by synthetic or trace-derived bytes. The project now needs measured post-run state from real trajectories before adding more planners, package types, registries, or demos.
 
-### MSE1 — Capture real post-run state snapshots upstream (`not started`)
+### MSE1 — Capture real post-run state snapshots upstream (`done`, 2026-05-06)
 
 **Meaning.** Measure what an agent actually leaves behind: dirty diffs, touched files, read files, tool outputs, test logs, build artifacts, dependency caches, retrieved docs, and final workspace bytes.
 
@@ -774,7 +774,9 @@ This is the next systems bottleneck. The current positive results are exact and 
 **Output artifacts.**
 
 - Upstream: `coding-data-collection` snapshot manifests.
-- Downstream: `agent-migrate/runs/measured_mobile_state/raw_snapshot_index.csv`.
+- Downstream: `agent-migrate/runs/measured_mobile_state/upstream_snapshots/raw_snapshot_index.csv`.
+
+**Result.** `coding-data-collection/src/coding_data_collection/mobile_state.py` now exports retained post-run workspace snapshots from the existing nested `runs/<batch>/<run>/` layout. It emits per-run `*.mobile_state.json` files and `raw_snapshot_index.csv` into `agent-migrate/runs/measured_mobile_state/upstream_snapshots/`. The first export covers 50 retained Terminal-Bench-style runs; all 50 rows are usable for claims after workspace retention and leakage/protected-artifact filtering. Byte semantics are explicit: `final_diff_bytes` is patch-file bytes, not touched-file payload; transcript tool output is a lower-bound snippet byte count; initial clean workspace bytes remain missing because the current upstream artifacts do not retain an initial workspace manifest. Symlinks are skipped and hardlinks are inode-deduped.
 
 **Success criteria.**
 
@@ -789,10 +791,10 @@ This is the next systems bottleneck. The current positive results are exact and 
 
 **Decision that follows.**
 
-- If snapshots exist: replace synthetic anchor bytes with measured distributions.
-- If snapshots do not exist: the next project task moves upstream; Agent Migrate should pause workload-prevalence claims.
+- Snapshots exist, so Agent Migrate can replace synthetic bytes for this corpus with measured distributions.
+- The measurement is still limited: final workspace size is not the mobile-state headline until initial/base workspace bytes are captured.
 
-### MSE2 — Mobile-state distribution table (`not started`)
+### MSE2 — Mobile-state distribution table (`done`, 2026-05-06)
 
 **Meaning.** Convert snapshots into the empirical distribution that answers whether state movement is usually tiny, occasionally large, or routinely bottlenecking.
 
@@ -812,6 +814,8 @@ This is the next systems bottleneck. The current positive results are exact and 
 - `runs/measured_mobile_state/layer_distribution.csv`
 - `runs/measured_mobile_state/mobile_state_thresholds.csv`
 
+**Result.** The measured corpus does **not** show large mobile dirty state. Among the 50 claim-usable rows, dirty payload never exceeds 1 MB, dependency/build/cache never exceeds 100 MB, tool/test output never exceeds 10 MB, and no row crosses the SWE-bench/medium/monorepo/large-artifact thresholds. The largest full retained workspace snapshot is about 115 MB, but this is recorded as a representation cost, not the mobile-state headline, because initial clean workspace bytes are missing and unchanged base files cannot yet be separated. The current measured answer is: this corpus mostly lives in the reuse/small-dirty-state regime.
+
 **Success criteria.**
 
 - We can say whether real runs mostly live in the reuse regime or whether a material fraction reaches state-locality / network-pressure regimes.
@@ -824,10 +828,10 @@ This is the next systems bottleneck. The current positive results are exact and 
 
 **Decision that follows.**
 
-- If measured mobile state is usually small: make strong reuse sufficiency the main result and demote richer planning to rare-regime handling.
-- If measured mobile state has a meaningful tail: use those tail cells as the next exact K4 workload episodes.
+- For this corpus, make strong reuse/reconstruct-base sufficiency the measured result.
+- Keep richer planning as a real stress-regime mechanism, but do not claim these measured runs populate the large-state regime.
 
-### MSE3 — Measured restart-pressure replay (`not started`)
+### MSE3 — Measured restart-pressure replay (`done`, 2026-05-06)
 
 **Meaning.** Replay measured snapshot distributions through exact K4 to see which resource becomes the bottleneck when many real-derived runs restart together.
 
@@ -848,6 +852,8 @@ This is the next systems bottleneck. The current positive results are exact and 
 - `runs/measured_mobile_state/exact_restart_pressure.csv`
 - `runs/measured_mobile_state/policy_comparison_on_measured_state.csv`
 
+**Result.** Exact K4 was run on the 20 claim-usable snapshots with the largest measured dirty payloads, using strong reuse, random diversification, and `mixed_min_pressure`. The measured bytes are too small to create state-locality or network pressure. The exact replay is dominated by prefill from trace-derived prompt tokens: `mixed_min_pressure` beats both strong reuse and random on p50 in this measured-derived episode, but this is a landing/prefill-pressure result, not evidence that measured workspace bytes are large.
+
 **Success criteria.**
 
 - We can say which resources bottleneck real-derived restart episodes.
@@ -861,10 +867,10 @@ This is the next systems bottleneck. The current positive results are exact and 
 
 **Decision that follows.**
 
-- If measured-derived episodes show real pressure regimes: promote the regime-dependent richer-planning claim.
-- If they do not: the honest systems claim is that strong per-site reuse handles the measured workloads, while richer planning remains a stress-regime tool.
+- Promote only the landing/prefill-pressure interpretation for this measured replay.
+- Do not use these measured rows as evidence for network/workspace/state-locality pressure.
 
-### MSE4 — Representation tradeoff on measured dirty workspaces (`not started`)
+### MSE4 — Representation tradeoff on measured dirty workspaces (`done`, 2026-05-06, negative/partial finding)
 
 **Meaning.** Re-run the minimal three-package restart comparison on measured dirty workspaces, not the H5a 1 GB synthetic fixture.
 
@@ -882,6 +888,8 @@ This is the next systems bottleneck. The current positive results are exact and 
 
 - `runs/measured_mobile_state/measured_restart_package_table.csv`
 
+**Result.** The three-package comparison was rerun on five claim-usable measured post-run snapshots. Prompt/transcript-only fails when dirty environment state exists. The measured corpus has no non-empty final diffs, so base repo + diff is not structurally valid for dirty-workspace restoration in this table. Full workspace snapshot is structurally valid and can cost up to about 115 MB for the largest retained rows. Representation choice therefore remains a mechanism, but this corpus does **not** yet provide the desired measured tradeoff where two structurally valid representations differ by >10x bytes or resume time.
+
 **Success criteria.**
 
 - At least one measured cut point has two structurally valid representations with >10x byte difference or materially different resume time.
@@ -893,8 +901,19 @@ This is the next systems bottleneck. The current positive results are exact and 
 
 **Decision that follows.**
 
-- If successful: representation-aware restart becomes a measured systems result.
-- If unsuccessful: keep it as a mechanism, not a top-line empirical claim.
+- Keep representation-aware restart as a mechanism, not a top-line measured result.
+- The next data need is upstream capture of initial/base workspace manifests and non-empty dirty diffs, not broader package machinery.
+
+### Next measured-state decision
+
+The current measured corpus supports a narrower systems claim: **real retained runs in this collection have small dirty mobile state; large-state mobility remains a stress-regime mechanism until upstream captures workloads with larger dirty workspaces, dependency caches, retrieved artifacts, or build products.** The next empirical bottleneck is upstream coverage, not planner tuning.
+
+Next tasks:
+
+1. Add initial-workspace or base-archive byte manifests upstream so unchanged base files can be separated from dirty mobile state instead of treating full workspace snapshots as representation costs.
+2. Capture full tool-output artifacts, not only transcript snippets, if they are retained by the runner.
+3. Sample or add workloads that plausibly create large dependency caches, build artifacts, retrieved documents, or generated outputs; otherwise report that the measured corpus is reuse-dominated.
+4. Re-run MSE2-MSE4 only after the upstream corpus contains larger or better-separated state layers.
 
 ### Still deferred
 

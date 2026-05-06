@@ -1,0 +1,15 @@
+layer,source_field,mobility_class,runs_with_measured_or_trace_bytes,runs_missing,p50_bytes,p75_bytes,p90_bytes,p95_bytes,max_bytes,provenance_summary
+clean_repo,clean_repo_bytes,globally_available,0,50,0,0,0,0,0,missing
+initial_workspace,initial_workspace_bytes,globally_available_if_reconstructable,0,50,0,0,0,0,0,missing
+full_workspace_snapshot,final_workspace_bytes,representation_cost_not_mobile_headline,50,0,1761,6895,11004,115353778,115353778,measured
+unchanged_initial_workspace,unchanged_initial_bytes,globally_available_if_reconstructable,50,0,0,0,0,0,0,missing_without_initial_workspace_manifest
+modified_files_patch,modified_file_bytes,must_move,42,8,0,0,0,0,0,missing;patch_file_bytes
+new_or_touched_files,new_file_bytes,must_move_upper_bound,18,32,0,150,1167,3587,3852,missing;trace_derived_touched_file_upper_bound
+uncommitted_diff,final_diff_bytes,must_move,42,8,0,0,0,0,0,measured;missing
+files_touched,touched_file_bytes,must_move,18,32,0,150,1167,3587,3852,missing;trace_derived
+files_read,read_file_bytes,cheaply_rehydratable,42,8,202,1333,6895,7554,7819,missing;trace_derived
+tool_outputs,tool_output_bytes,must_move,42,8,1635,3438,9494,11426,16283,lower_bound_transcript_snippet_bytes;missing
+test_logs,test_log_bytes,can_be_discarded,42,8,6302,14993,16639,30469,31942,measured;missing
+build_artifacts,build_artifact_bytes,can_be_recomputed,50,0,0,0,464,935,1022,measured
+dependency_cache,dependency_cache_bytes,cheaply_rehydratable,50,0,0,0,0,0,0,measured
+retrieved_documents,retrieved_document_bytes,must_move,50,0,0,0,202,202,230,measured
