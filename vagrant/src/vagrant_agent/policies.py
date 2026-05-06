@@ -273,6 +273,177 @@ def _component_required_states(manifest: ServingGroupManifest, component: set[st
 
 
 # --------------------------------------------------------------------------- #
+# D3: shared_state_aware_typed
+# --------------------------------------------------------------------------- #
+#
+# D3 is D2 with edge-type-weighted pair sums. D2 treats every shared-state
+# edge identically, which lets a tiny global prompt (a system_prompt with
+# 200 tokens, consumed by everyone) force overgrouping that erases per-
+# session structure. D3 replaces the per-edge weight `tokens` with
+# `tokens * EDGE_TYPE_WEIGHT[(layer, lifetime)]` so global-replicated state
+# (lifetime=persistent in prompt_context) gets multiplier 0 and never
+# contributes to grouping.
+#
+# Edge-type taxonomy (matches the A3 audit's six categories):
+#   global_replicated  (prompt_context + persistent)  -> 0.0   ignore
+#   workflow_shared    (prompt_context + shared)      -> 1.0   medium
+#   artifact_delta     (prompt_context + ephemeral)   -> 0.5   small/medium
+#   workspace_local    (workspace + any)              -> 10.0  strong home affinity
+#   private_context    (any layer + private)          -> 1.0   one consumer => no edge
+#   kv_prefix          (memory + persistent)          -> 0.5   architecture-conditional
+#
+# Defaults are conservative; callers may override via `edge_type_weights`.
+
+DEFAULT_EDGE_TYPE_WEIGHTS: dict[tuple[str, str], float] = {
+    ("prompt_context", "persistent"): 0.0,
+    ("prompt_context", "shared"): 1.0,
+    ("prompt_context", "ephemeral"): 0.5,
+    ("workspace", "private"): 10.0,
+    ("workspace", "shared"): 10.0,
+    ("workspace", "persistent"): 10.0,
+    ("workspace", "ephemeral"): 5.0,
+    ("memory", "persistent"): 0.5,
+}
+
+
+def _edge_type_weight(state_layer: str, state_lifetime: str,
+                      weights: dict[tuple[str, str], float]) -> float:
+    """Lookup multiplier; default 1.0 for any unspecified (layer, lifetime)."""
+    return weights.get((state_layer, state_lifetime), 1.0)
+
+
+def run_shared_state_aware_typed(
+    manifest: ServingGroupManifest,
+    bundle: ProfileBundle,
+    tau: float = 1.0,
+    edge_type_weights: dict[tuple[str, str], float] | None = None,
+) -> Plan:
+    """D3: edge-type-weighted variant of D2.
+
+    Same component-then-place algorithm as D2; only the edge weights used
+    in component formation differ. Materialization accounting is identical.
+
+    On every fixture, `D3.total_cost_s() <= D2.total_cost_s() + 1e-9` because
+    D3 has strictly weaker grouping (some edges are zeroed out, never merged).
+    Where D2 overgroups due to a tiny global prompt, D3 splits the component
+    and each sub-component lands at its own min-cost site — matching what H1
+    would do if H1's per-node placement happened to coincide.
+
+    `tau` is float (not int) so half-weight ephemeral state can still cross
+    the threshold; default 1.0 keeps tau=1 semantics for unweighted edges.
+    """
+    weights = edge_type_weights if edge_type_weights is not None else DEFAULT_EDGE_TYPE_WEIGHTS
+    _validate_state_homes(manifest, bundle)
+    components = _components_by_typed_shared_state(manifest, tau, weights)
+    placements: list[PlacementDecision] = []
+    by_state_site: dict[tuple[str, str], dict] = {}
+
+    for component in components:
+        required_states = _component_required_states(manifest, component)
+        best_site: str | None = None
+        best_cost = float("inf")
+        for site in bundle.sites:
+            total = 0.0
+            for state_id in required_states:
+                state = manifest.state_objects[state_id]
+                _, c = choose_min_cost_mode(state, _state_home(state, bundle), site, bundle)
+                total += c
+            if total < best_cost:
+                best_cost = total
+                best_site = site
+        assert best_site is not None
+        for node_id in sorted(component):
+            placements.append(PlacementDecision(
+                node_id=node_id, site=best_site,
+                cost_s=best_cost,
+                component_size=len(component),
+                reason="grouped_typed" if len(component) > 1 else "min_cost",
+            ))
+        for state_id in sorted(required_states):
+            state = manifest.state_objects[state_id]
+            consumers = sorted(c for c in component if state_id in manifest.nodes[c].required_state)
+            if not consumers:
+                continue
+            mode, cost = choose_min_cost_mode(state, _state_home(state, bundle), best_site, bundle)
+            key = (state_id, best_site)
+            if key not in by_state_site:
+                by_state_site[key] = {
+                    "content_hash": state.content_hash,
+                    "mode": mode,
+                    "cost_s": cost,
+                    "consumers": list(consumers),
+                    "materialization_count": 1,
+                }
+            else:
+                existing = by_state_site[key]["consumers"]
+                by_state_site[key]["consumers"] = sorted(set(existing) | set(consumers))
+                by_state_site[key]["materialization_count"] += 1
+
+    materializations = [
+        MaterializationDecision(
+            state_id=sid,
+            content_hash=info["content_hash"],
+            site=site,
+            mode=info["mode"],
+            cost_s=info["cost_s"],
+            materialization_count=info["materialization_count"],
+            consumers=info["consumers"],
+            reason="shared_once_per_typed_component_site",
+        )
+        for (sid, site), info in by_state_site.items()
+    ]
+    return Plan(
+        policy="shared_state_aware_typed",
+        placements=placements,
+        materializations=materializations,
+        meta={"tau": tau, "components": [sorted(c) for c in components],
+              "edge_type_weights": {f"{k[0]}|{k[1]}": v for k, v in weights.items()}},
+    )
+
+
+def _components_by_typed_shared_state(
+    manifest: ServingGroupManifest,
+    tau: float,
+    weights: dict[tuple[str, str], float],
+) -> list[set[str]]:
+    """Like _components_by_shared_state but each edge contributes
+    `tokens * weight[layer,lifetime]` instead of just `tokens`."""
+    pair_weight: dict[tuple[str, str], float] = defaultdict(float)
+    for edge in manifest.edges:
+        state = manifest.state_objects.get(edge.state_id)
+        if state is None:
+            mult = 1.0  # unknown state -> default weight
+        else:
+            mult = _edge_type_weight(state.layer, state.lifetime, weights)
+        if mult == 0.0:
+            continue  # skip globally-replicated edges entirely
+        a, b = sorted([edge.node_a, edge.node_b])
+        pair_weight[(a, b)] += edge.weight * mult
+
+    parent: dict[str, str] = {nid: nid for nid in manifest.nodes}
+
+    def find(x: str) -> str:
+        while parent[x] != x:
+            parent[x] = parent[parent[x]]
+            x = parent[x]
+        return x
+
+    def union(x: str, y: str) -> None:
+        rx, ry = find(x), find(y)
+        if rx != ry:
+            parent[rx] = ry
+
+    for (a, b), w in pair_weight.items():
+        if w > tau:
+            union(a, b)
+
+    groups: dict[str, set[str]] = defaultdict(set)
+    for nid in manifest.nodes:
+        groups[find(nid)].add(nid)
+    return list(groups.values())
+
+
+# --------------------------------------------------------------------------- #
 # Registry
 # --------------------------------------------------------------------------- #
 
@@ -608,6 +779,7 @@ POLICIES = {
     "request_level_no_reuse": run_request_level_no_reuse,
     "request_level_with_site_cache": run_request_level_with_site_cache,
     "shared_state_aware": run_shared_state_aware,
+    "shared_state_aware_typed": run_shared_state_aware_typed,
     "session_sticky": run_session_sticky,
     "g1_brute_force": run_g1_brute_force,
     "g2_local_search": run_g2_local_search,
@@ -620,6 +792,9 @@ def run_policy(name: str, manifest: ServingGroupManifest, bundle: ProfileBundle,
     fn = POLICIES[name]
     if name == "shared_state_aware":
         return fn(manifest, bundle, tau=kwargs.get("tau", 1))
+    if name == "shared_state_aware_typed":
+        return fn(manifest, bundle, tau=kwargs.get("tau", 1.0),
+                  edge_type_weights=kwargs.get("edge_type_weights"))
     if name == "g2_local_search":
         return fn(manifest, bundle, max_iterations=kwargs.get("max_iterations", 100))
     return fn(manifest, bundle)
@@ -634,6 +809,8 @@ __all__ = [
     "run_request_level_no_reuse",
     "run_request_level_with_site_cache",
     "run_shared_state_aware",
+    "run_shared_state_aware_typed",
+    "DEFAULT_EDGE_TYPE_WEIGHTS",
     "run_session_sticky",
     "run_g1_brute_force",
     "run_g2_local_search",
