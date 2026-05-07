@@ -48,13 +48,15 @@ As of the 2026-05-06 artifacts:
 - Clean cut points exist in recorded traces.
 - Static validation can filter structurally invalid packages.
 - A trace-derived fixture shows a >10x representation byte gap.
-- The retained measured corpus mostly has tiny dirty mobile state.
-- Measured-derived batch replay is dominated by prefill pressure, not
-  workspace or network bytes.
+- The retained measured coding-agent corpus mostly has tiny dirty mobile state.
+- Measured-derived batch replay currently reflects trace-derived prompt/context
+  tokens plus small dirty-state payloads; in that setting, pressure is
+  dominated by prefill/replay rather than workspace or network transfer.
 
-The negative measured-state result is central: for this retained coding-agent
-corpus, the dominant restart strategy may be strong reuse plus small
-correctness-critical deltas, not full environment migration.
+The negative measured-state result is central: in this retained corpus, restart
+is not primarily a full-environment-migration problem. It is mostly a
+reuse-and-small-delta problem, with batch pressure coming from replayed
+prompt/context work rather than large dirty workspace movement.
 
 ## Hard Rules
 
@@ -148,7 +150,7 @@ Package shapes:
 
 ```text
 prompt_transcript_only
-trace_plus_harness_state
+trace_plus_static_harness_config
 base_repo_plus_diff
 full_workspace_snapshot
 minimal_required_state
@@ -163,7 +165,7 @@ applicability. It does not claim semantic correctness.
 **Status:** `in progress`
 
 If two structurally valid packages differ by >10x in bytes or materially differ
-in restart time, representation-aware restart is real.
+in restart time, representation choice is a first-order restart-cost variable.
 
 Current evidence:
 
@@ -171,6 +173,16 @@ Current evidence:
   `full_workspace_snapshot` is about 1 GB.
 - Measured corpus: no non-empty final diffs, so the measured table does not yet
   show two valid representations with a >10x gap.
+
+Current claim boundary:
+
+```text
+Representation-aware restart is demonstrated on a trace-derived fixture.
+It is not yet demonstrated as a frequent measured-corpus phenomenon.
+The measured corpus currently supports a different claim: strong reuse plus
+small correctness-critical deltas is sufficient for many retained coding-agent
+runs.
+```
 
 Existing partial implementation:
 
@@ -335,6 +347,21 @@ How large is the byte gap?
 How large is the task_resume_s gap?
 ```
 
+Deliverables:
+
+```text
+runs/restart_packages/restart_package_summary.csv
+docs/restart_package_findings.md
+```
+
+The memo should answer:
+
+- which package types are structurally valid;
+- which state reads force invalidation;
+- where byte gaps appear;
+- where restart-time gaps appear;
+- what the measured corpus actually supports.
+
 ### Promote The Measured Small-State Result
 
 **Status:** `not started`
@@ -365,12 +392,31 @@ mixed_min_pressure
 
 Report restart pressure under measured package distributions, not planner wins.
 
+## Supporting Infrastructure
+
+Keep, but do not make these the public story:
+
+- trace -> manifest pipeline:
+  `events.py`, `manifest.py`, `manifest_io.py`, adapters;
+- state layers and roles:
+  `state_layers.py`, `workspace.py`;
+- materialization-mode registry:
+  `materialization_modes.py`;
+- strong site reuse baseline:
+  use `strong_site_reuse` in writing and keep `cache_reuse` for compatibility;
+- random diversification baseline:
+  keep `random_mode` in batch comparisons.
+
 ## Semantic Naming Cleanup Plan
 
 **Status:** planning `done`; implementation `not started`
 
 Subagents inspected the codebase. Land cleanup incrementally with compatibility
 wrappers.
+
+Naming cleanup is not on the scientific critical path. Do not start broad
+renames until the canonical restart-package table has restart-time fields and
+has been regenerated.
 
 Implementation order:
 
@@ -436,21 +482,6 @@ runs/r3_model_sweep_pilot/
 runs/o2_oracle_diff/
 runs/w_under_r3/
 ```
-
-## Supporting Infrastructure
-
-Keep, but do not make these the public story:
-
-- trace -> manifest pipeline:
-  `events.py`, `manifest.py`, `manifest_io.py`, adapters;
-- state layers and roles:
-  `state_layers.py`, `workspace.py`;
-- materialization-mode registry:
-  `materialization_modes.py`;
-- strong site reuse baseline:
-  use `strong_site_reuse` in writing and keep `cache_reuse` for compatibility;
-- random diversification baseline:
-  keep `random_mode` in batch comparisons.
 
 ## Exploratory Or Deferred
 
