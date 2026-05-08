@@ -1,0 +1,26 @@
+{
+  "analysis_inclusion": {
+    "artifact_quality": true,
+    "process_dynamics": false,
+    "terminal_success": false
+  },
+  "artifact_layout_version": "0.1.0",
+  "created_at": "2026-05-07T05:16:37.911005Z",
+  "final_success": null,
+  "metrics": {
+    "agent_backend": "model_tool_loop",
+    "agent_readiness_failed_checks": [
+      "hidden_image_artifacts_unreadable"
+    ],
+    "agent_readiness_manual_review_checks": [],
+    "agent_readiness_preflight_passed": false,
+    "eligible_for_L_gate": false,
+    "model_name": "gpt-5.4-mini",
+    "model_provider": "openai",
+    "pilot_type": "real_agent_pilot"
+  },
+  "run_id": "blind-maze-explorer-algorithm__gpt54mini",
+  "run_protocol_version": "0.1.0",
+  "run_status": "environment_setup_failure",
+  "termination_reason": "agent_readiness_preflight_failed"
+}

@@ -22,7 +22,6 @@ from coding_estimator.splits.builder import build_split
 from coding_estimator.splits.protocol import Fold, Split
 from scripts.run_baselines import _apply_canonical_fills
 
-
 # =============================================================================
 # 1) predict_cell — train-row leakage and run-disjoint guard
 # =============================================================================

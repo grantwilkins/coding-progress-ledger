@@ -1,0 +1,17 @@
+target_shape: progress_drop
+secondary_shapes: []
+expected_pass_rate: 0.55
+notes: |
+  Naive impl: `f"${cents/100:.2f}"`. Works for small positive
+  values. Verifier surfaces:
+    1. Float-rounding drift — `1234567/100` is `12345.67` exactly
+       but `1/100` is `0.01` exactly, while `0.30` may round
+       inconsistently. Solution: use integer arithmetic on cents.
+    2. Thousands separators required — `1234567` cents must be
+       `$12,345.67` not `$12345.67`.
+    3. Negative sign goes BEFORE the dollar — `-$1.50` not
+       `$-1.50`.
+
+  The progress_drop shape: agent writes naive impl, smoke-tests on
+  $1.50, declares done. Verifier reopens the implementation as the
+  thousands-separator and negative-sign cases bite.

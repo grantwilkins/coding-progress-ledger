@@ -1,0 +1,275 @@
+{
+  "active_coding_leaves_final": 44,
+  "active_overall_leaves_final": 44,
+  "category_active_weight_final": {
+    "artifact": 0,
+    "documentation": 0,
+    "environment": 0,
+    "investigation": 12.0,
+    "product": 3.0,
+    "validation": 29.0
+  },
+  "category_completed_weight_final": {
+    "artifact": 0,
+    "documentation": 0,
+    "environment": 0,
+    "investigation": 8.0,
+    "product": 3.0,
+    "validation": 6.0
+  },
+  "coding_categories": [
+    "product",
+    "validation",
+    "investigation"
+  ],
+  "coding_largest_drop": 0.16666666666666669,
+  "coding_nonmonotonic": true,
+  "completed_coding_leaves_final": 17,
+  "completed_overall_leaves_final": 17,
+  "evidence_audit_by_category": {
+    "investigation": {
+      "audited_completion_count": 8,
+      "status": "weak",
+      "weak_completion_evidence_count": 6,
+      "weak_subtask_ids": [
+        "investigation_4",
+        "investigation_6",
+        "investigation_13",
+        "investigation_15",
+        "investigation_19",
+        "investigation_34"
+      ]
+    },
+    "product": {
+      "audited_completion_count": 3,
+      "status": "weak",
+      "weak_completion_evidence_count": 1,
+      "weak_subtask_ids": [
+        "G44"
+      ]
+    },
+    "validation": {
+      "audited_completion_count": 6,
+      "status": "weak",
+      "weak_completion_evidence_count": 4,
+      "weak_subtask_ids": [
+        "validation_2",
+        "validation_23",
+        "validation_27",
+        "validation_41"
+      ]
+    }
+  },
+  "evidence_audit_status": "weak",
+  "evidence_audit_weak_categories": [
+    "product",
+    "validation",
+    "investigation"
+  ],
+  "excluded_active_weight_final": 0,
+  "excluded_categories": [
+    "artifact",
+    "documentation",
+    "environment"
+  ],
+  "excluded_categories_final": {
+    "artifact": {
+      "active": 0,
+      "complete": 0
+    },
+    "documentation": {
+      "active": 0,
+      "complete": 0
+    },
+    "environment": {
+      "active": 0,
+      "complete": 0
+    }
+  },
+  "excluded_completed_weight_final": 0,
+  "final_coding_active_weight": 44.0,
+  "final_coding_complete_weight": 17.0,
+  "final_coding_progress": 0.38636363636363635,
+  "final_overall_active_weight": 44.0,
+  "final_overall_complete_weight": 17.0,
+  "final_overall_progress": 0.38636363636363635,
+  "final_success": null,
+  "final_success_source": "absent",
+  "generator": "ledger_progress.sidecar",
+  "historical_subtasks_created": 44,
+  "largest_coding_drop": 0.16666666666666669,
+  "largest_coding_drop_category_contributions": {
+    "validation": 0.166666666667
+  },
+  "largest_coding_drop_detail": {
+    "amount": 0.16666666666666669,
+    "from_step": 2,
+    "to_step": 3
+  },
+  "largest_coding_drop_source": "validation",
+  "largest_overall_drop": 0.16666666666666669,
+  "largest_overall_drop_category_contributions": {
+    "validation": 0.166666666667
+  },
+  "largest_overall_drop_detail": {
+    "amount": 0.16666666666666669,
+    "from_step": 2,
+    "to_step": 3
+  },
+  "largest_overall_drop_mostly_excluded": false,
+  "largest_overall_drop_source": "validation",
+  "nonmonotonic_coding": true,
+  "nonmonotonic_overall": true,
+  "overall_largest_drop": 0.16666666666666669,
+  "overall_nonmonotonic": true,
+  "source_ledger_sha256": "d2822575790c3601ae919d69ce895d083f3364a1bdcb536bb78e85618acd8860",
+  "subtask_categories": {
+    "G44": "product",
+    "investigation_1": "investigation",
+    "investigation_10": "investigation",
+    "investigation_11": "investigation",
+    "investigation_13": "investigation",
+    "investigation_15": "investigation",
+    "investigation_19": "investigation",
+    "investigation_34": "investigation",
+    "investigation_38": "investigation",
+    "investigation_39": "investigation",
+    "investigation_4": "investigation",
+    "investigation_6": "investigation",
+    "investigation_7": "investigation",
+    "product_36": "product",
+    "product_8": "product",
+    "validation_12": "validation",
+    "validation_14": "validation",
+    "validation_16": "validation",
+    "validation_17": "validation",
+    "validation_18": "validation",
+    "validation_2": "validation",
+    "validation_20": "validation",
+    "validation_21": "validation",
+    "validation_22": "validation",
+    "validation_23": "validation",
+    "validation_24": "validation",
+    "validation_25": "validation",
+    "validation_26": "validation",
+    "validation_27": "validation",
+    "validation_28": "validation",
+    "validation_29": "validation",
+    "validation_3": "validation",
+    "validation_30": "validation",
+    "validation_31": "validation",
+    "validation_32": "validation",
+    "validation_33": "validation",
+    "validation_35": "validation",
+    "validation_37": "validation",
+    "validation_40": "validation",
+    "validation_41": "validation",
+    "validation_42": "validation",
+    "validation_43": "validation",
+    "validation_5": "validation",
+    "validation_9": "validation"
+  },
+  "task_id": "grid-pattern-transform__gpt54",
+  "weak_completion_evidence": [
+    {
+      "category": "validation",
+      "description": "read_file task.md",
+      "evidence_types": [
+        "contract_text"
+      ],
+      "step": 2,
+      "subtask_id": "validation_2"
+    },
+    {
+      "category": "investigation",
+      "description": "list_dir .",
+      "evidence_types": [
+        "contract_text"
+      ],
+      "step": 4,
+      "subtask_id": "investigation_4"
+    },
+    {
+      "category": "investigation",
+      "description": "find_files *",
+      "evidence_types": [
+        "contract_text"
+      ],
+      "step": 6,
+      "subtask_id": "investigation_6"
+    },
+    {
+      "category": "investigation",
+      "description": "shell tool",
+      "evidence_types": [
+        "manual_note"
+      ],
+      "step": 13,
+      "subtask_id": "investigation_13"
+    },
+    {
+      "category": "investigation",
+      "description": "shell tool",
+      "evidence_types": [
+        "manual_note"
+      ],
+      "step": 15,
+      "subtask_id": "investigation_15"
+    },
+    {
+      "category": "investigation",
+      "description": "shell tool",
+      "evidence_types": [
+        "manual_note"
+      ],
+      "step": 19,
+      "subtask_id": "investigation_19"
+    },
+    {
+      "category": "validation",
+      "description": "shell tool",
+      "evidence_types": [
+        "manual_note"
+      ],
+      "step": 23,
+      "subtask_id": "validation_23"
+    },
+    {
+      "category": "validation",
+      "description": "Run another explicit visible validation of the implemented solver.",
+      "evidence_types": [
+        "manual_note"
+      ],
+      "step": 27,
+      "subtask_id": "validation_27"
+    },
+    {
+      "category": "investigation",
+      "description": "list_dir .",
+      "evidence_types": [
+        "contract_text"
+      ],
+      "step": 34,
+      "subtask_id": "investigation_34"
+    },
+    {
+      "category": "validation",
+      "description": "Run fresh visible validation of grid_transform.solve via import and expected outputs.",
+      "evidence_types": [
+        "manual_note"
+      ],
+      "step": 41,
+      "subtask_id": "validation_41"
+    },
+    {
+      "category": "product",
+      "description": "Handle agent_step action at step 44",
+      "evidence_types": [
+        "manual_note"
+      ],
+      "step": 44,
+      "subtask_id": "G44"
+    }
+  ],
+  "weak_completion_evidence_count": 11
+}

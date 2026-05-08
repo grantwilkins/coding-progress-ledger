@@ -58,6 +58,22 @@ def test_hermes_pilot_h5_v2_loads(real_ledger: None) -> None:
     assert rec.model_name == "glm-5.1"
 
 
+def test_tb_live_v2_loads_with_manifest_wallclock_and_metadata(real_ledger: None) -> None:
+    rec = load_run(
+        "tb_live_v2",
+        "validation_new_work_05_quoted_field_in_tsv__armB__87f7ab5e",
+    )
+    assert rec.has_real_wallclock is True
+    assert rec.start_wall_time is not None and rec.end_wall_time is not None
+    assert rec.start_wall_time <= rec.end_wall_time
+    assert rec.task_id == "validation_new_work_05_quoted_field_in_tsv"
+    assert rec.task_family == "validation_new_work"
+    assert rec.arm == "B"
+    assert rec.difficulty == "medium"
+    assert rec.model_name == "claude-sonnet-4-6"
+    assert rec.agent_scaffold == "general-purpose"
+
+
 def test_missing_ledger_hard_fails(
     real_ledger: None, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

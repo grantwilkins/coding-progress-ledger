@@ -1,0 +1,96 @@
+FFFFFFF                                                                  [100%]
+=================================== FAILURES ===================================
+______________________________ test_module_exists ______________________________
+/Users/grantwilkins/houdini/coding-estimator/tasks/tb_live_v2/high_progress_failure_02_partial_solution_passes_smoke/tests/test_outputs.py:26: in test_module_exists
+    assert APP.is_file(), f"{APP} not present"
+E   AssertionError: /var/folders/3j/5n1r8yyx2d58jn87prrxs_lm0000gn/T/tb_live_v2_high_progress_failure_02_partial_solution_passes_smoke__armC__924a5795_l9aby7tm/parse_duration.py not present
+E   assert False
+E    +  where False = is_file()
+E    +    where is_file = PosixPath('/var/folders/3j/5n1r8yyx2d58jn87prrxs_lm0000gn/T/tb_live_v2_high_progress_failure_02_partial_solution_passes_smoke__armC__924a5795_l9aby7tm/parse_duration.py').is_file
+_______________________________ test_basic_units _______________________________
+/Users/grantwilkins/houdini/coding-estimator/tasks/tb_live_v2/high_progress_failure_02_partial_solution_passes_smoke/tests/test_outputs.py:30: in test_basic_units
+    p = _load().parse_duration
+        ^^^^^^^
+/Users/grantwilkins/houdini/coding-estimator/tasks/tb_live_v2/high_progress_failure_02_partial_solution_passes_smoke/tests/test_outputs.py:21: in _load
+    spec.loader.exec_module(mod)
+<frozen importlib._bootstrap_external>:995: in exec_module
+    ???
+<frozen importlib._bootstrap_external>:1132: in get_code
+    ???
+<frozen importlib._bootstrap_external>:1190: in get_data
+    ???
+E   FileNotFoundError: [Errno 2] No such file or directory: '/var/folders/3j/5n1r8yyx2d58jn87prrxs_lm0000gn/T/tb_live_v2_high_progress_failure_02_partial_solution_passes_smoke__armC__924a5795_l9aby7tm/parse_duration.py'
+______________________________ test_combinations _______________________________
+/Users/grantwilkins/houdini/coding-estimator/tasks/tb_live_v2/high_progress_failure_02_partial_solution_passes_smoke/tests/test_outputs.py:38: in test_combinations
+    p = _load().parse_duration
+        ^^^^^^^
+/Users/grantwilkins/houdini/coding-estimator/tasks/tb_live_v2/high_progress_failure_02_partial_solution_passes_smoke/tests/test_outputs.py:21: in _load
+    spec.loader.exec_module(mod)
+<frozen importlib._bootstrap_external>:995: in exec_module
+    ???
+<frozen importlib._bootstrap_external>:1132: in get_code
+    ???
+<frozen importlib._bootstrap_external>:1190: in get_data
+    ???
+E   FileNotFoundError: [Errno 2] No such file or directory: '/var/folders/3j/5n1r8yyx2d58jn87prrxs_lm0000gn/T/tb_live_v2_high_progress_failure_02_partial_solution_passes_smoke__armC__924a5795_l9aby7tm/parse_duration.py'
+______________________________ test_zero_bare_int ______________________________
+/Users/grantwilkins/houdini/coding-estimator/tasks/tb_live_v2/high_progress_failure_02_partial_solution_passes_smoke/tests/test_outputs.py:46: in test_zero_bare_int
+    assert _load().parse_duration("0") == 0
+           ^^^^^^^
+/Users/grantwilkins/houdini/coding-estimator/tasks/tb_live_v2/high_progress_failure_02_partial_solution_passes_smoke/tests/test_outputs.py:21: in _load
+    spec.loader.exec_module(mod)
+<frozen importlib._bootstrap_external>:995: in exec_module
+    ???
+<frozen importlib._bootstrap_external>:1132: in get_code
+    ???
+<frozen importlib._bootstrap_external>:1190: in get_data
+    ???
+E   FileNotFoundError: [Errno 2] No such file or directory: '/var/folders/3j/5n1r8yyx2d58jn87prrxs_lm0000gn/T/tb_live_v2_high_progress_failure_02_partial_solution_passes_smoke__armC__924a5795_l9aby7tm/parse_duration.py'
+________________________ test_whitespace_allowed_inside ________________________
+/Users/grantwilkins/houdini/coding-estimator/tasks/tb_live_v2/high_progress_failure_02_partial_solution_passes_smoke/tests/test_outputs.py:51: in test_whitespace_allowed_inside
+    assert _load().parse_duration("1h 30m") == 5400
+           ^^^^^^^
+/Users/grantwilkins/houdini/coding-estimator/tasks/tb_live_v2/high_progress_failure_02_partial_solution_passes_smoke/tests/test_outputs.py:21: in _load
+    spec.loader.exec_module(mod)
+<frozen importlib._bootstrap_external>:995: in exec_module
+    ???
+<frozen importlib._bootstrap_external>:1132: in get_code
+    ???
+<frozen importlib._bootstrap_external>:1190: in get_data
+    ???
+E   FileNotFoundError: [Errno 2] No such file or directory: '/var/folders/3j/5n1r8yyx2d58jn87prrxs_lm0000gn/T/tb_live_v2_high_progress_failure_02_partial_solution_passes_smoke__armC__924a5795_l9aby7tm/parse_duration.py'
+___________________________ test_out_of_order_raises ___________________________
+/Users/grantwilkins/houdini/coding-estimator/tasks/tb_live_v2/high_progress_failure_02_partial_solution_passes_smoke/tests/test_outputs.py:55: in test_out_of_order_raises
+    p = _load().parse_duration
+        ^^^^^^^
+/Users/grantwilkins/houdini/coding-estimator/tasks/tb_live_v2/high_progress_failure_02_partial_solution_passes_smoke/tests/test_outputs.py:21: in _load
+    spec.loader.exec_module(mod)
+<frozen importlib._bootstrap_external>:995: in exec_module
+    ???
+<frozen importlib._bootstrap_external>:1132: in get_code
+    ???
+<frozen importlib._bootstrap_external>:1190: in get_data
+    ???
+E   FileNotFoundError: [Errno 2] No such file or directory: '/var/folders/3j/5n1r8yyx2d58jn87prrxs_lm0000gn/T/tb_live_v2_high_progress_failure_02_partial_solution_passes_smoke__armC__924a5795_l9aby7tm/parse_duration.py'
+_____________________________ test_invalid_inputs ______________________________
+/Users/grantwilkins/houdini/coding-estimator/tasks/tb_live_v2/high_progress_failure_02_partial_solution_passes_smoke/tests/test_outputs.py:63: in test_invalid_inputs
+    p = _load().parse_duration
+        ^^^^^^^
+/Users/grantwilkins/houdini/coding-estimator/tasks/tb_live_v2/high_progress_failure_02_partial_solution_passes_smoke/tests/test_outputs.py:21: in _load
+    spec.loader.exec_module(mod)
+<frozen importlib._bootstrap_external>:995: in exec_module
+    ???
+<frozen importlib._bootstrap_external>:1132: in get_code
+    ???
+<frozen importlib._bootstrap_external>:1190: in get_data
+    ???
+E   FileNotFoundError: [Errno 2] No such file or directory: '/var/folders/3j/5n1r8yyx2d58jn87prrxs_lm0000gn/T/tb_live_v2_high_progress_failure_02_partial_solution_passes_smoke__armC__924a5795_l9aby7tm/parse_duration.py'
+=========================== short test summary info ============================
+FAILED ../../../../../../../var/folders/3j/5n1r8yyx2d58jn87prrxs_lm0000gn/T/tb_live_v2_high_progress_failure_02_partial_solution_passes_smoke__armC__924a5795_l9aby7tm/tests/test_outputs.py::test_module_exists
+FAILED ../../../../../../../var/folders/3j/5n1r8yyx2d58jn87prrxs_lm0000gn/T/tb_live_v2_high_progress_failure_02_partial_solution_passes_smoke__armC__924a5795_l9aby7tm/tests/test_outputs.py::test_basic_units
+FAILED ../../../../../../../var/folders/3j/5n1r8yyx2d58jn87prrxs_lm0000gn/T/tb_live_v2_high_progress_failure_02_partial_solution_passes_smoke__armC__924a5795_l9aby7tm/tests/test_outputs.py::test_combinations
+FAILED ../../../../../../../var/folders/3j/5n1r8yyx2d58jn87prrxs_lm0000gn/T/tb_live_v2_high_progress_failure_02_partial_solution_passes_smoke__armC__924a5795_l9aby7tm/tests/test_outputs.py::test_zero_bare_int
+FAILED ../../../../../../../var/folders/3j/5n1r8yyx2d58jn87prrxs_lm0000gn/T/tb_live_v2_high_progress_failure_02_partial_solution_passes_smoke__armC__924a5795_l9aby7tm/tests/test_outputs.py::test_whitespace_allowed_inside
+FAILED ../../../../../../../var/folders/3j/5n1r8yyx2d58jn87prrxs_lm0000gn/T/tb_live_v2_high_progress_failure_02_partial_solution_passes_smoke__armC__924a5795_l9aby7tm/tests/test_outputs.py::test_out_of_order_raises
+FAILED ../../../../../../../var/folders/3j/5n1r8yyx2d58jn87prrxs_lm0000gn/T/tb_live_v2_high_progress_failure_02_partial_solution_passes_smoke__armC__924a5795_l9aby7tm/tests/test_outputs.py::test_invalid_inputs
+7 failed in 0.03s

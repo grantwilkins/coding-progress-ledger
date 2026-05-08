@@ -1,0 +1,191 @@
+{
+  "analysis_inclusion": {
+    "artifact_quality": true,
+    "process_dynamics": true,
+    "terminal_success": true
+  },
+  "artifact_layout_version": "0.1.0",
+  "created_at": "2026-05-07T03:55:50.402862Z",
+  "final_success": true,
+  "metrics": {
+    "agent_backend": "model_tool_loop",
+    "agent_steps_used": 20,
+    "agent_termination_reason": "agent_done",
+    "allow_blocked_done": true,
+    "eligible_for_L_gate": true,
+    "estimated_cost_usd": null,
+    "fallback_call_count": 0,
+    "last_provider_call": {
+      "adapter": "openai_responses",
+      "base_url": "https://api.openai.com/v1/responses",
+      "fallback_models": [],
+      "fallback_used": false,
+      "model_alias_or_route_changed": false,
+      "provider_routing_policy": {
+        "allow_fallbacks": false
+      },
+      "requested_model": "gpt-5.3-codex",
+      "resolved_model": "gpt-5.3-codex",
+      "response_id": "resp_08ddf3e927f9cec20169fc0d3762388195a92e46f866b780e3"
+    },
+    "max_model_calls": 80,
+    "max_steps": 80,
+    "max_tokens_in": null,
+    "max_tokens_out": 2048,
+    "max_tool_calls": 80,
+    "max_tool_time_s": 120,
+    "max_wall_time_s": 1800,
+    "min_steps_before_done": 15,
+    "model_name": "gpt-5.3-codex",
+    "model_provider": "openai",
+    "pilot_type": "real_agent_pilot",
+    "provider_calls": [
+      {
+        "adapter": "openai_responses",
+        "base_url": "https://api.openai.com/v1/responses",
+        "fallback_models": [],
+        "fallback_used": false,
+        "model_alias_or_route_changed": false,
+        "provider_routing_policy": {
+          "allow_fallbacks": false
+        },
+        "requested_model": "gpt-5.3-codex",
+        "resolved_model": "gpt-5.3-codex",
+        "response_id": "resp_0d436ba20d2416630169fc0ce63ec08197a889ce03847f6125"
+      },
+      {
+        "adapter": "openai_responses",
+        "base_url": "https://api.openai.com/v1/responses",
+        "fallback_models": [],
+        "fallback_used": false,
+        "model_alias_or_route_changed": false,
+        "provider_routing_policy": {
+          "allow_fallbacks": false
+        },
+        "requested_model": "gpt-5.3-codex",
+        "resolved_model": "gpt-5.3-codex",
+        "response_id": "resp_08d11323ef0e0bbc0169fc0ce8b1bc819784737ee81933ac7b"
+      },
+      {
+        "adapter": "openai_responses",
+        "base_url": "https://api.openai.com/v1/responses",
+        "fallback_models": [],
+        "fallback_used": false,
+        "model_alias_or_route_changed": false,
+        "provider_routing_policy": {
+          "allow_fallbacks": false
+        },
+        "requested_model": "gpt-5.3-codex",
+        "resolved_model": "gpt-5.3-codex",
+        "response_id": "resp_02a27e7220a27ddc0169fc0ceacce88194a25e210098ccb38e"
+      },
+      {
+        "adapter": "openai_responses",
+        "base_url": "https://api.openai.com/v1/responses",
+        "fallback_models": [],
+        "fallback_used": false,
+        "model_alias_or_route_changed": false,
+        "provider_routing_policy": {
+          "allow_fallbacks": false
+        },
+        "requested_model": "gpt-5.3-codex",
+        "resolved_model": "gpt-5.3-codex",
+        "response_id": "resp_0662557cff84172e0169fc0d07a27481958c94b8168f1e0305"
+      },
+      {
+        "adapter": "openai_responses",
+        "base_url": "https://api.openai.com/v1/responses",
+        "fallback_models": [],
+        "fallback_used": false,
+        "model_alias_or_route_changed": false,
+        "provider_routing_policy": {
+          "allow_fallbacks": false
+        },
+        "requested_model": "gpt-5.3-codex",
+        "resolved_model": "gpt-5.3-codex",
+        "response_id": "resp_05926d4917e68c920169fc0d1ca7cc8196a5cd0b984c3675cd"
+      },
+      {
+        "adapter": "openai_responses",
+        "base_url": "https://api.openai.com/v1/responses",
+        "fallback_models": [],
+        "fallback_used": false,
+        "model_alias_or_route_changed": false,
+        "provider_routing_policy": {
+          "allow_fallbacks": false
+        },
+        "requested_model": "gpt-5.3-codex",
+        "resolved_model": "gpt-5.3-codex",
+        "response_id": "resp_0f37c72b18db0fe10169fc0d2379748193ab41870892bd8532"
+      },
+      {
+        "adapter": "openai_responses",
+        "base_url": "https://api.openai.com/v1/responses",
+        "fallback_models": [],
+        "fallback_used": false,
+        "model_alias_or_route_changed": false,
+        "provider_routing_policy": {
+          "allow_fallbacks": false
+        },
+        "requested_model": "gpt-5.3-codex",
+        "resolved_model": "gpt-5.3-codex",
+        "response_id": "resp_0787f69a9b97142d0169fc0d293aa88193bf588b9a21a9044a"
+      },
+      {
+        "adapter": "openai_responses",
+        "base_url": "https://api.openai.com/v1/responses",
+        "fallback_models": [],
+        "fallback_used": false,
+        "model_alias_or_route_changed": false,
+        "provider_routing_policy": {
+          "allow_fallbacks": false
+        },
+        "requested_model": "gpt-5.3-codex",
+        "resolved_model": "gpt-5.3-codex",
+        "response_id": "resp_0629dea363dab0fa0169fc0d2e0504819096431eb941010054"
+      },
+      {
+        "adapter": "openai_responses",
+        "base_url": "https://api.openai.com/v1/responses",
+        "fallback_models": [],
+        "fallback_used": false,
+        "model_alias_or_route_changed": false,
+        "provider_routing_policy": {
+          "allow_fallbacks": false
+        },
+        "requested_model": "gpt-5.3-codex",
+        "resolved_model": "gpt-5.3-codex",
+        "response_id": "resp_02cf76a86330d9d80169fc0d3246a88197b2f51260441ae905"
+      },
+      {
+        "adapter": "openai_responses",
+        "base_url": "https://api.openai.com/v1/responses",
+        "fallback_models": [],
+        "fallback_used": false,
+        "model_alias_or_route_changed": false,
+        "provider_routing_policy": {
+          "allow_fallbacks": false
+        },
+        "requested_model": "gpt-5.3-codex",
+        "resolved_model": "gpt-5.3-codex",
+        "response_id": "resp_08ddf3e927f9cec20169fc0d3762388195a92e46f866b780e3"
+      }
+    ],
+    "provider_route_preflight_passed": true,
+    "require_validation_before_done": true,
+    "resolved_models": [
+      "gpt-5.3-codex"
+    ],
+    "temperature": 0.0,
+    "tokens_in": 32716,
+    "tokens_out": 6093,
+    "total_cost_credits": null,
+    "total_model_calls": 10,
+    "total_tokens_in": 32716,
+    "total_tokens_out": 6093
+  },
+  "run_id": "grid-pattern-transform__gpt53codex",
+  "run_protocol_version": "0.1.0",
+  "run_status": "completed_success",
+  "termination_reason": "verifier_pass"
+}

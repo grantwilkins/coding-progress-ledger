@@ -1,0 +1,157 @@
+{
+  "artifact_completeness": {
+    "passed": true,
+    "run_count": 4,
+    "runs": [
+      {
+        "complete": true,
+        "missing_artifacts": [],
+        "passed": true,
+        "run_dir": "runs/d_smoke/noop_aimo",
+        "run_status": "completed_failure",
+        "validation_issues": []
+      },
+      {
+        "complete": true,
+        "missing_artifacts": [],
+        "passed": true,
+        "run_dir": "runs/d_smoke/oracle_aimo_airline_departures",
+        "run_status": "completed_success",
+        "validation_issues": []
+      },
+      {
+        "complete": true,
+        "missing_artifacts": [],
+        "passed": true,
+        "run_dir": "runs/d_smoke/oracle_grid_pattern_transform",
+        "run_status": "completed_success",
+        "validation_issues": []
+      },
+      {
+        "complete": true,
+        "missing_artifacts": [],
+        "passed": true,
+        "run_dir": "runs/d_smoke/oracle_hello_world",
+        "run_status": "completed_success",
+        "validation_issues": []
+      }
+    ]
+  },
+  "passed": true,
+  "redaction": {
+    "leakage_incidents": 0,
+    "passed": true,
+    "runs": [
+      {
+        "passed": true,
+        "redaction_hits": [],
+        "run_dir": "runs/d_smoke/noop_aimo"
+      },
+      {
+        "passed": true,
+        "redaction_hits": [],
+        "run_dir": "runs/d_smoke/oracle_aimo_airline_departures"
+      },
+      {
+        "passed": true,
+        "redaction_hits": [],
+        "run_dir": "runs/d_smoke/oracle_grid_pattern_transform"
+      },
+      {
+        "passed": true,
+        "redaction_hits": [],
+        "run_dir": "runs/d_smoke/oracle_hello_world"
+      }
+    ]
+  },
+  "run_count": 4,
+  "validation_attempt_precision": {
+    "likely_missed_validation_attempt_count": 0,
+    "likely_true_positive_count": 4,
+    "non_attempt_sample_size": 7,
+    "non_attempt_samples": [
+      {
+        "evidence_excerpt": "agent_phase  ",
+        "likely_missed_validation_attempt": false,
+        "run_dir": "runs/d_smoke/noop_aimo",
+        "step": 1
+      },
+      {
+        "evidence_excerpt": "agent_phase  ",
+        "likely_missed_validation_attempt": false,
+        "run_dir": "runs/d_smoke/oracle_aimo_airline_departures",
+        "step": 1
+      },
+      {
+        "evidence_excerpt": "oracle_phase Analysis complete. Output saved to results.txt\n ",
+        "likely_missed_validation_attempt": false,
+        "run_dir": "runs/d_smoke/oracle_aimo_airline_departures",
+        "step": 3
+      },
+      {
+        "evidence_excerpt": "agent_phase  ",
+        "likely_missed_validation_attempt": false,
+        "run_dir": "runs/d_smoke/oracle_grid_pattern_transform",
+        "step": 1
+      },
+      {
+        "evidence_excerpt": "oracle_phase  ",
+        "likely_missed_validation_attempt": false,
+        "run_dir": "runs/d_smoke/oracle_grid_pattern_transform",
+        "step": 3
+      },
+      {
+        "evidence_excerpt": "agent_phase  ",
+        "likely_missed_validation_attempt": false,
+        "run_dir": "runs/d_smoke/oracle_hello_world",
+        "step": 1
+      },
+      {
+        "evidence_excerpt": "oracle_phase  ",
+        "likely_missed_validation_attempt": false,
+        "run_dir": "runs/d_smoke/oracle_hello_world",
+        "step": 3
+      }
+    ],
+    "passed": true,
+    "recall_miss_rate": 0.0,
+    "run_count": 4,
+    "sample_precision": 1.0,
+    "sample_size": 4,
+    "samples": [
+      {
+        "evidence_excerpt": "verifier_phase f, mode='r', buffering=-1, encoding=None,\n             errors=None, newline=None):\n        \"\"\"\n        Open the file pointed to by this path and return a file object, as\n        the built-in open() function does.\n        \"\"\"\n",
+        "likely_true_positive": true,
+        "run_dir": "runs/d_smoke/noop_aimo",
+        "source_artifact": "verifier_output.txt",
+        "step": 3,
+        "visible_to_agent": false
+      },
+      {
+        "evidence_excerpt": "verifier_phase suffix (20230209.2326-1) ...\nSetting up libpsl5:arm64 (0.21.2-1) ...\nSetting up libnghttp2-14:arm64 (1.52.0-1+deb12u2) ...\nSetting up librtmp1:arm64 (2.4+20151223.gitfa8646d.1-2+b2) ...\nSetting up libssh2-1:arm64 (1.10.0-3+b1",
+        "likely_true_positive": true,
+        "run_dir": "runs/d_smoke/oracle_aimo_airline_departures",
+        "source_artifact": "verifier_output.txt",
+        "step": 4,
+        "visible_to_agent": false
+      },
+      {
+        "evidence_excerpt": "verifier_phase 52.0-1+deb12u2) ...\nSetting up libldap-common (2.5.13+dfsg-5) ...\nSetting up libsasl2-modules-db:arm64 (2.1.28+dfsg-10) ...\nSetting up librtmp1:arm64 (2.4+20151223.gitfa8646d.1-2+b2) ...\nSetting up libsasl2-2:arm64 (2.1.28+df",
+        "likely_true_positive": true,
+        "run_dir": "runs/d_smoke/oracle_grid_pattern_transform",
+        "source_artifact": "verifier_output.txt",
+        "step": 4,
+        "visible_to_agent": false
+      },
+      {
+        "evidence_excerpt": "verifier_phase modules:arm64 (2.1.28+dfsg-10) ...\nSetting up libnghttp2-14:arm64 (1.52.0-1+deb12u2) ...\nSetting up libldap-common (2.5.13+dfsg-5) ...\nSetting up libsasl2-modules-db:arm64 (2.1.28+dfsg-10) ...\nSetting up librtmp1:arm64 (2.4+2",
+        "likely_true_positive": true,
+        "run_dir": "runs/d_smoke/oracle_hello_world",
+        "source_artifact": "verifier_output.txt",
+        "step": 4,
+        "visible_to_agent": false
+      }
+    ],
+    "validation_attempt_count": 4
+  }
+}

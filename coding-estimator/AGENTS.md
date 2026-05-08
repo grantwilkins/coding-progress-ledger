@@ -115,3 +115,6 @@ is a regression even if all per-task tests pass.
    gate.** No baseline (Workstream G) starts until this report exists,
    covers every section in D5, and reports clean on the structural,
    prefix, forbidden-column, and run-constancy audits.
+
+
+DO NOT WRITE MARKDOWN FILES UNLESS EXPLICITLY TOLD TO DO SO.

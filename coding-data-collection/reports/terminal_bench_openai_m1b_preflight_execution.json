@@ -1,0 +1,258 @@
+{
+  "accepted_count": 12,
+  "attempt_count": 12,
+  "attempts": [
+    {
+      "arm": "gpt54",
+      "returncode": 0,
+      "run_dir": "runs/terminal_bench_openai_m1b_preflight/broken-python__gpt54",
+      "run_id": "broken-python__gpt54",
+      "task_id": "broken-python"
+    },
+    {
+      "arm": "gpt53codex",
+      "returncode": 0,
+      "run_dir": "runs/terminal_bench_openai_m1b_preflight/broken-python__gpt53codex",
+      "run_id": "broken-python__gpt53codex",
+      "task_id": "broken-python"
+    },
+    {
+      "arm": "gpt54mini",
+      "returncode": 0,
+      "run_dir": "runs/terminal_bench_openai_m1b_preflight/broken-python__gpt54mini",
+      "run_id": "broken-python__gpt54mini",
+      "task_id": "broken-python"
+    },
+    {
+      "arm": "gpt54",
+      "returncode": 0,
+      "run_dir": "runs/terminal_bench_openai_m1b_preflight/attention-mil__gpt54",
+      "run_id": "attention-mil__gpt54",
+      "task_id": "attention-mil"
+    },
+    {
+      "arm": "gpt53codex",
+      "returncode": 0,
+      "run_dir": "runs/terminal_bench_openai_m1b_preflight/attention-mil__gpt53codex",
+      "run_id": "attention-mil__gpt53codex",
+      "task_id": "attention-mil"
+    },
+    {
+      "arm": "gpt54mini",
+      "returncode": 0,
+      "run_dir": "runs/terminal_bench_openai_m1b_preflight/attention-mil__gpt54mini",
+      "run_id": "attention-mil__gpt54mini",
+      "task_id": "attention-mil"
+    },
+    {
+      "arm": "gpt54",
+      "returncode": 0,
+      "run_dir": "runs/terminal_bench_openai_m1b_preflight/grid-pattern-transform__gpt54",
+      "run_id": "grid-pattern-transform__gpt54",
+      "task_id": "grid-pattern-transform"
+    },
+    {
+      "arm": "gpt53codex",
+      "returncode": 0,
+      "run_dir": "runs/terminal_bench_openai_m1b_preflight/grid-pattern-transform__gpt53codex",
+      "run_id": "grid-pattern-transform__gpt53codex",
+      "task_id": "grid-pattern-transform"
+    },
+    {
+      "arm": "gpt54mini",
+      "returncode": 0,
+      "run_dir": "runs/terminal_bench_openai_m1b_preflight/grid-pattern-transform__gpt54mini",
+      "run_id": "grid-pattern-transform__gpt54mini",
+      "task_id": "grid-pattern-transform"
+    },
+    {
+      "arm": "gpt54",
+      "returncode": 0,
+      "run_dir": "runs/terminal_bench_openai_m1b_preflight/csv-to-parquet__gpt54",
+      "run_id": "csv-to-parquet__gpt54",
+      "task_id": "csv-to-parquet"
+    },
+    {
+      "arm": "gpt53codex",
+      "returncode": 0,
+      "run_dir": "runs/terminal_bench_openai_m1b_preflight/csv-to-parquet__gpt53codex",
+      "run_id": "csv-to-parquet__gpt53codex",
+      "task_id": "csv-to-parquet"
+    },
+    {
+      "arm": "gpt54mini",
+      "returncode": 0,
+      "run_dir": "runs/terminal_bench_openai_m1b_preflight/csv-to-parquet__gpt54mini",
+      "run_id": "csv-to-parquet__gpt54mini",
+      "task_id": "csv-to-parquet"
+    }
+  ],
+  "created_at": "2026-05-07T08:01:18.635577Z",
+  "final_gate_inputs": {
+    "eligible_run_count": 12,
+    "excluded_protocol_smoke_run_count": 0,
+    "high_progress_failure_or_disagreement_count": 13,
+    "leakage_incidents": 0,
+    "median_observation_events_per_run": 16.0,
+    "median_transcript_steps": 28.5,
+    "prefix_provenance_present": true,
+    "progress_drop_run_fraction": 1.0,
+    "run_count": 12,
+    "shell_exit_code_coverage": 1.0,
+    "shell_stderr_snippet_coverage": 1.0,
+    "shell_stdout_snippet_coverage": 1.0,
+    "terminal_failure_rate": 0.6666666666666666,
+    "total_run_count": 12,
+    "validation_attempt_run_fraction": 0.8333333333333334,
+    "validation_disagreement_run_fraction": 0.5833333333333334,
+    "validation_fail_observed_run_fraction": 0.3333333333333333,
+    "verifier_determinism_passed": false
+  },
+  "max_attempts": 12,
+  "passed": false,
+  "plan": "manifests/pilots/terminal_bench_openai_m1b_preflight_plan.json",
+  "planned_run_count": 12,
+  "provider_route_preflight": {
+    "arms": [
+      {
+        "issues": [],
+        "metrics": {
+          "fallback_call_count": 0,
+          "last_provider_call": {
+            "adapter": "openai_responses",
+            "base_url": "https://api.openai.com/v1/responses",
+            "fallback_models": [],
+            "fallback_used": false,
+            "model_alias_or_route_changed": true,
+            "provider_routing_policy": {
+              "allow_fallbacks": false
+            },
+            "requested_model": "gpt-5.4",
+            "resolved_model": "gpt-5.4-2026-03-05",
+            "response_id": "resp_0634377acc01154c0169fc3749624081978e4f9b30206fea86"
+          },
+          "provider_calls": [
+            {
+              "adapter": "openai_responses",
+              "base_url": "https://api.openai.com/v1/responses",
+              "fallback_models": [],
+              "fallback_used": false,
+              "model_alias_or_route_changed": true,
+              "provider_routing_policy": {
+                "allow_fallbacks": false
+              },
+              "requested_model": "gpt-5.4",
+              "resolved_model": "gpt-5.4-2026-03-05",
+              "response_id": "resp_0634377acc01154c0169fc3749624081978e4f9b30206fea86"
+            }
+          ],
+          "resolved_models": [
+            "gpt-5.4-2026-03-05"
+          ],
+          "total_model_calls": 1,
+          "total_tokens_in": 610,
+          "total_tokens_out": 175
+        },
+        "model": "gpt-5.4",
+        "model_command": "python3 scripts/openai_model_client.py --model gpt-5.4 --reasoning-effort low",
+        "model_provider": "openai",
+        "name": "gpt54",
+        "passed": true
+      },
+      {
+        "issues": [],
+        "metrics": {
+          "fallback_call_count": 0,
+          "last_provider_call": {
+            "adapter": "openai_responses",
+            "base_url": "https://api.openai.com/v1/responses",
+            "fallback_models": [],
+            "fallback_used": false,
+            "model_alias_or_route_changed": false,
+            "provider_routing_policy": {
+              "allow_fallbacks": false
+            },
+            "requested_model": "gpt-5.3-codex",
+            "resolved_model": "gpt-5.3-codex",
+            "response_id": "resp_06c363ef7f4a0ff90169fc374deda88194835a51ca24af69da"
+          },
+          "provider_calls": [
+            {
+              "adapter": "openai_responses",
+              "base_url": "https://api.openai.com/v1/responses",
+              "fallback_models": [],
+              "fallback_used": false,
+              "model_alias_or_route_changed": false,
+              "provider_routing_policy": {
+                "allow_fallbacks": false
+              },
+              "requested_model": "gpt-5.3-codex",
+              "resolved_model": "gpt-5.3-codex",
+              "response_id": "resp_06c363ef7f4a0ff90169fc374deda88194835a51ca24af69da"
+            }
+          ],
+          "resolved_models": [
+            "gpt-5.3-codex"
+          ],
+          "total_model_calls": 1,
+          "total_tokens_in": 610,
+          "total_tokens_out": 110
+        },
+        "model": "gpt-5.3-codex",
+        "model_command": "python3 scripts/openai_model_client.py --model gpt-5.3-codex --reasoning-effort low",
+        "model_provider": "openai",
+        "name": "gpt53codex",
+        "passed": true
+      },
+      {
+        "issues": [],
+        "metrics": {
+          "fallback_call_count": 0,
+          "last_provider_call": {
+            "adapter": "openai_responses",
+            "base_url": "https://api.openai.com/v1/responses",
+            "fallback_models": [],
+            "fallback_used": false,
+            "model_alias_or_route_changed": true,
+            "provider_routing_policy": {
+              "allow_fallbacks": false
+            },
+            "requested_model": "gpt-5.4-mini",
+            "resolved_model": "gpt-5.4-mini-2026-03-17",
+            "response_id": "resp_0db1d4decfa154220169fc3750d974819787becd0d21b4a6ad"
+          },
+          "provider_calls": [
+            {
+              "adapter": "openai_responses",
+              "base_url": "https://api.openai.com/v1/responses",
+              "fallback_models": [],
+              "fallback_used": false,
+              "model_alias_or_route_changed": true,
+              "provider_routing_policy": {
+                "allow_fallbacks": false
+              },
+              "requested_model": "gpt-5.4-mini",
+              "resolved_model": "gpt-5.4-mini-2026-03-17",
+              "response_id": "resp_0db1d4decfa154220169fc3750d974819787becd0d21b4a6ad"
+            }
+          ],
+          "resolved_models": [
+            "gpt-5.4-mini-2026-03-17"
+          ],
+          "total_model_calls": 1,
+          "total_tokens_in": 610,
+          "total_tokens_out": 199
+        },
+        "model": "gpt-5.4-mini",
+        "model_command": "python3 scripts/openai_model_client.py --model gpt-5.4-mini --reasoning-effort low",
+        "model_provider": "openai",
+        "name": "gpt54mini",
+        "passed": true
+      }
+    ],
+    "passed": true
+  },
+  "rejected_count": 0,
+  "target_eligible_runs": 12,
+  "target_eligible_runs_met": true
+}

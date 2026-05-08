@@ -22,7 +22,7 @@ The corrected K7 gauntlet now passes after fixing budget-aware planning, concurr
 
 **Workstream H4/H5** closes the real-byte calibration loop. H5a shows the H1<D2 mechanism with distinct trajectories and synthetic 1 GB workspaces; H5b replaces those bytes with real upstream working-tree byte sums and the gap collapses. This is the load-bearing evidence for the reuse regime.
 
-The original thesis ("agent workflow with shared state has a different optimal placement than treated as N independent requests") decomposes into per-site materialization reuse and graph-level grouping constraints. The current thesis is broader: Vagrant maps when strong reuse is sufficient and when state scale, model architecture, or landing pressure makes richer mobility planning useful.
+The original thesis ("agent workflow with shared state has a different optimal placement than treated as N independent requests") decomposes into per-site materialization reuse and graph-level grouping constraints. The current thesis is broader: Agent Migrate maps when strong reuse is sufficient and when state scale, model architecture, or landing pressure makes richer mobility planning useful.
 
 ## Clone → plot in under 10 minutes
 
@@ -83,7 +83,7 @@ The toy is **adversarial by design** — it is constructed so a no-reuse baselin
 
 ## Reuse contract
 
-Vagrant rides on the `coding-progress-ledger` framework: it imports `LedgerEvent`, `apply_event`, `replay`, `LedgerSession`, and the JSONL serializer. Vagrant-specific event types (`state_declare`, `state_read`, `state_write`, `state_invalidate`, `placement_decision`, `materialization_plan`, `migration_start`, `migration_end`) ride on `LedgerEvent.event_type` as plain strings via the upstream pass-through hook. See `CLAUDE.md` for the rule set and the four-test invariant set that protects the hook.
+Agent Migrate rides on the `coding-progress-ledger` framework: it imports `LedgerEvent`, `apply_event`, `replay`, `LedgerSession`, and the JSONL serializer. Agent Migrate-specific event types (`state_declare`, `state_read`, `state_write`, `state_invalidate`, `placement_decision`, `materialization_plan`, `migration_start`, `migration_end`) ride on `LedgerEvent.event_type` as plain strings via the upstream pass-through hook. See `CLAUDE.md` for the rule set and the four-test invariant set that protects the hook.
 
 ## Read first
 

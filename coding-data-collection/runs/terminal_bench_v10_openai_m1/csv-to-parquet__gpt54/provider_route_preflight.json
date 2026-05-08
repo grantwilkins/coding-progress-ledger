@@ -1,0 +1,38 @@
+{
+  "issues": [],
+  "metrics": {
+    "fallback_call_count": 0,
+    "last_provider_call": {
+      "adapter": "openai_responses",
+      "base_url": "https://api.openai.com/v1/responses",
+      "fallback_models": [],
+      "fallback_used": false,
+      "model_alias_or_route_changed": true,
+      "provider_routing_policy": {
+        "allow_fallbacks": false
+      },
+      "requested_model": "gpt-5.4",
+      "resolved_model": "gpt-5.4-2026-03-05",
+      "response_id": "resp_03f29e8a77700f650169fc11849cf081948a4d9d0f73cf76ea"
+    },
+    "provider_calls": [
+      {
+        "adapter": "openai_responses",
+        "base_url": "https://api.openai.com/v1/responses",
+        "fallback_models": [],
+        "fallback_used": false,
+        "model_alias_or_route_changed": true,
+        "provider_routing_policy": {
+          "allow_fallbacks": false
+        },
+        "requested_model": "gpt-5.4",
+        "resolved_model": "gpt-5.4-2026-03-05",
+        "response_id": "resp_03f29e8a77700f650169fc11849cf081948a4d9d0f73cf76ea"
+      }
+    ],
+    "resolved_models": [
+      "gpt-5.4-2026-03-05"
+    ]
+  },
+  "passed": true
+}

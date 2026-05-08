@@ -1,0 +1,258 @@
+{
+  "created_at": "2026-05-07T05:17:41.273014Z",
+  "runs": [
+    {
+      "accepted": true,
+      "arm": "gpt54",
+      "kind": "eligible_run",
+      "returncode": 0,
+      "run_dir": "runs/terminal_bench_v10_openai_m1/grid-pattern-transform__gpt54",
+      "run_id": "grid-pattern-transform__gpt54",
+      "run_status": "completed_success",
+      "task_id": "grid-pattern-transform",
+      "termination_reason": "verifier_pass"
+    },
+    {
+      "accepted": true,
+      "arm": "gpt53codex",
+      "kind": "eligible_run",
+      "returncode": 0,
+      "run_dir": "runs/terminal_bench_v10_openai_m1/grid-pattern-transform__gpt53codex",
+      "run_id": "grid-pattern-transform__gpt53codex",
+      "run_status": "completed_success",
+      "task_id": "grid-pattern-transform",
+      "termination_reason": "verifier_pass"
+    },
+    {
+      "accepted": true,
+      "arm": "gpt54mini",
+      "kind": "eligible_run",
+      "returncode": 0,
+      "run_dir": "runs/terminal_bench_v10_openai_m1/grid-pattern-transform__gpt54mini",
+      "run_id": "grid-pattern-transform__gpt54mini",
+      "run_status": "completed_failure",
+      "task_id": "grid-pattern-transform",
+      "termination_reason": "verifier_fail"
+    },
+    {
+      "accepted": true,
+      "arm": "gpt53codex",
+      "kind": "eligible_run",
+      "returncode": 0,
+      "run_dir": "runs/terminal_bench_v10_openai_m1/broken-python__gpt53codex",
+      "run_id": "broken-python__gpt53codex",
+      "run_status": "completed_success",
+      "task_id": "broken-python",
+      "termination_reason": "verifier_pass"
+    },
+    {
+      "accepted": true,
+      "arm": "gpt54mini",
+      "kind": "eligible_run",
+      "returncode": 0,
+      "run_dir": "runs/terminal_bench_v10_openai_m1/broken-python__gpt54mini",
+      "run_id": "broken-python__gpt54mini",
+      "run_status": "completed_success",
+      "task_id": "broken-python",
+      "termination_reason": "verifier_pass"
+    },
+    {
+      "accepted": true,
+      "arm": "gpt54",
+      "kind": "eligible_run",
+      "returncode": 0,
+      "run_dir": "runs/terminal_bench_v10_openai_m1/extract-safely__gpt54",
+      "run_id": "extract-safely__gpt54",
+      "run_status": "completed_success",
+      "task_id": "extract-safely",
+      "termination_reason": "verifier_pass"
+    },
+    {
+      "accepted": true,
+      "arm": "gpt53codex",
+      "kind": "eligible_run",
+      "returncode": 0,
+      "run_dir": "runs/terminal_bench_v10_openai_m1/extract-safely__gpt53codex",
+      "run_id": "extract-safely__gpt53codex",
+      "run_status": "completed_success",
+      "task_id": "extract-safely",
+      "termination_reason": "verifier_pass"
+    },
+    {
+      "accepted": true,
+      "arm": "gpt54mini",
+      "kind": "eligible_run",
+      "returncode": 0,
+      "run_dir": "runs/terminal_bench_v10_openai_m1/extract-safely__gpt54mini",
+      "run_id": "extract-safely__gpt54mini",
+      "run_status": "completed_success",
+      "task_id": "extract-safely",
+      "termination_reason": "verifier_pass"
+    },
+    {
+      "accepted": true,
+      "arm": "gpt54",
+      "kind": "eligible_run",
+      "returncode": 0,
+      "run_dir": "runs/terminal_bench_v10_openai_m1/attention-mil__gpt54",
+      "run_id": "attention-mil__gpt54",
+      "run_status": "completed_failure",
+      "task_id": "attention-mil",
+      "termination_reason": "verifier_fail"
+    },
+    {
+      "accepted": true,
+      "arm": "gpt53codex",
+      "kind": "eligible_run",
+      "returncode": 0,
+      "run_dir": "runs/terminal_bench_v10_openai_m1/attention-mil__gpt53codex",
+      "run_id": "attention-mil__gpt53codex",
+      "run_status": "completed_failure",
+      "task_id": "attention-mil",
+      "termination_reason": "verifier_fail"
+    },
+    {
+      "accepted": true,
+      "arm": "gpt54mini",
+      "kind": "eligible_run",
+      "returncode": 0,
+      "run_dir": "runs/terminal_bench_v10_openai_m1/attention-mil__gpt54mini",
+      "run_id": "attention-mil__gpt54mini",
+      "run_status": "completed_success",
+      "task_id": "attention-mil",
+      "termination_reason": "verifier_pass"
+    },
+    {
+      "accepted": true,
+      "arm": "gpt54",
+      "kind": "eligible_run",
+      "returncode": 0,
+      "run_dir": "runs/terminal_bench_v10_openai_m1/csv-to-parquet__gpt54",
+      "run_id": "csv-to-parquet__gpt54",
+      "run_status": "completed_failure",
+      "task_id": "csv-to-parquet",
+      "termination_reason": "verifier_fail"
+    },
+    {
+      "accepted": true,
+      "arm": "gpt53codex",
+      "kind": "eligible_run",
+      "returncode": 0,
+      "run_dir": "runs/terminal_bench_v10_openai_m1/csv-to-parquet__gpt53codex",
+      "run_id": "csv-to-parquet__gpt53codex",
+      "run_status": "completed_failure",
+      "task_id": "csv-to-parquet",
+      "termination_reason": "verifier_fail"
+    },
+    {
+      "accepted": true,
+      "arm": "gpt54mini",
+      "kind": "eligible_run",
+      "returncode": 0,
+      "run_dir": "runs/terminal_bench_v10_openai_m1/csv-to-parquet__gpt54mini",
+      "run_id": "csv-to-parquet__gpt54mini",
+      "run_status": "completed_failure",
+      "task_id": "csv-to-parquet",
+      "termination_reason": "verifier_fail"
+    },
+    {
+      "accepted": true,
+      "arm": "gpt54",
+      "kind": "eligible_run",
+      "returncode": 0,
+      "run_dir": "runs/terminal_bench_v10_openai_m1/fix-permissions__gpt54",
+      "run_id": "fix-permissions__gpt54",
+      "run_status": "completed_success",
+      "task_id": "fix-permissions",
+      "termination_reason": "verifier_pass"
+    },
+    {
+      "accepted": true,
+      "arm": "gpt53codex",
+      "kind": "eligible_run",
+      "returncode": 0,
+      "run_dir": "runs/terminal_bench_v10_openai_m1/fix-permissions__gpt53codex",
+      "run_id": "fix-permissions__gpt53codex",
+      "run_status": "completed_success",
+      "task_id": "fix-permissions",
+      "termination_reason": "verifier_pass"
+    },
+    {
+      "accepted": true,
+      "arm": "gpt54mini",
+      "kind": "eligible_run",
+      "returncode": 0,
+      "run_dir": "runs/terminal_bench_v10_openai_m1/fix-permissions__gpt54mini",
+      "run_id": "fix-permissions__gpt54mini",
+      "run_status": "completed_success",
+      "task_id": "fix-permissions",
+      "termination_reason": "verifier_pass"
+    },
+    {
+      "accepted": true,
+      "arm": "gpt54",
+      "kind": "eligible_run",
+      "returncode": 0,
+      "run_dir": "runs/terminal_bench_v10_openai_m1/aimo-airline-departures__gpt54",
+      "run_id": "aimo-airline-departures__gpt54",
+      "run_status": "completed_success",
+      "task_id": "aimo-airline-departures",
+      "termination_reason": "verifier_pass"
+    },
+    {
+      "accepted": true,
+      "arm": "gpt53codex",
+      "kind": "eligible_run",
+      "returncode": 0,
+      "run_dir": "runs/terminal_bench_v10_openai_m1/aimo-airline-departures__gpt53codex",
+      "run_id": "aimo-airline-departures__gpt53codex",
+      "run_status": "completed_success",
+      "task_id": "aimo-airline-departures",
+      "termination_reason": "verifier_pass"
+    },
+    {
+      "accepted": true,
+      "arm": "gpt54mini",
+      "kind": "eligible_run",
+      "returncode": 0,
+      "run_dir": "runs/terminal_bench_v10_openai_m1/aimo-airline-departures__gpt54mini",
+      "run_id": "aimo-airline-departures__gpt54mini",
+      "run_status": "completed_failure",
+      "task_id": "aimo-airline-departures",
+      "termination_reason": "verifier_fail"
+    },
+    {
+      "accepted": true,
+      "arm": "gpt54",
+      "kind": "eligible_run",
+      "returncode": 0,
+      "run_dir": "runs/terminal_bench_v10_openai_m1/count-dataset-tokens__gpt54",
+      "run_id": "count-dataset-tokens__gpt54",
+      "run_status": "completed_failure",
+      "task_id": "count-dataset-tokens",
+      "termination_reason": "verifier_fail"
+    },
+    {
+      "accepted": true,
+      "arm": "gpt53codex",
+      "kind": "eligible_run",
+      "returncode": 0,
+      "run_dir": "runs/terminal_bench_v10_openai_m1/count-dataset-tokens__gpt53codex",
+      "run_id": "count-dataset-tokens__gpt53codex",
+      "run_status": "completed_failure",
+      "task_id": "count-dataset-tokens",
+      "termination_reason": "verifier_fail"
+    },
+    {
+      "accepted": true,
+      "arm": "gpt54mini",
+      "kind": "eligible_run",
+      "returncode": 0,
+      "run_dir": "runs/terminal_bench_v10_openai_m1/count-dataset-tokens__gpt54mini",
+      "run_id": "count-dataset-tokens__gpt54mini",
+      "run_status": "completed_failure",
+      "task_id": "count-dataset-tokens",
+      "termination_reason": "verifier_fail"
+    }
+  ]
+}

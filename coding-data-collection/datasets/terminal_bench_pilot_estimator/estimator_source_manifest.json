@@ -1,0 +1,40 @@
+{
+  "artifact_contract": [
+    "checkpoints.parquet",
+    "labels.parquet",
+    "estimator_predictions.parquet",
+    "checkpoint_feature_manifest.json"
+  ],
+  "artifact_dir": "datasets/terminal_bench_pilot_estimator",
+  "corpus_id": "terminal_bench_pilot",
+  "producer": "coding-estimator",
+  "run_count": 24,
+  "run_ids": [
+    "adaptive-rejection-sampler__scout",
+    "adaptive-rejection-sampler__validation",
+    "aimo-airline-departures__scout",
+    "aimo-airline-departures__validation",
+    "attention-mil__scout",
+    "attention-mil__validation",
+    "blind-maze-explorer-algorithm__scout",
+    "blind-maze-explorer-algorithm__validation",
+    "broken-python__scout",
+    "broken-python__validation",
+    "classifier-debug__scout",
+    "classifier-debug__validation",
+    "count-dataset-tokens__scout",
+    "count-dataset-tokens__validation",
+    "csv-to-parquet__scout",
+    "csv-to-parquet__validation",
+    "extract-safely__scout",
+    "extract-safely__validation",
+    "fix-permissions__scout",
+    "fix-permissions__validation",
+    "grid-pattern-transform__scout",
+    "grid-pattern-transform__validation",
+    "nginx-request-logging__scout",
+    "nginx-request-logging__validation"
+  ],
+  "source_id": "terminal_bench_pilot",
+  "staged_runs_dir": "../coding-estimator/runs/terminal_bench_pilot"
+}

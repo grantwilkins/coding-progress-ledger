@@ -1,0 +1,64 @@
+{
+  "clean": true,
+  "findings": [],
+  "n_checkpoints_audited": 703,
+  "n_runs_audited": 102,
+  "schema_version": "1.1.0",
+  "sections": {
+    "prefix_truncation": {
+      "differing_runs": [],
+      "sampled_runs": 4,
+      "skipped_runs": 0
+    },
+    "run_constancy": {
+      "audited_cells": 306,
+      "offenders": []
+    },
+    "shuffle": {
+      "min_checkpoints": 30,
+      "min_runs": 8,
+      "sources": {
+        "tb_live_v2": {
+          "y_future_progress_drop_h5": {
+            "auroc_mean": 0.43306156209382013,
+            "auroc_seeds": [
+              0.4514356611130805,
+              0.4010102800425381,
+              0.4467387451258419
+            ],
+            "n_rows": 213,
+            "n_runs": 59,
+            "note": null,
+            "shuffle_kind": "row_level",
+            "skipped": false
+          },
+          "y_success_eventual": {
+            "auroc_mean": 0.4108403249523505,
+            "auroc_seeds": [
+              0.3524725274725275,
+              0.4298528292311596,
+              0.4501956181533646
+            ],
+            "n_rows": 703,
+            "n_runs": 102,
+            "note": null,
+            "shuffle_kind": "run_level",
+            "skipped": false
+          },
+          "y_validation_new_work_h5": {
+            "auroc_mean": null,
+            "note": "single-class row-level y; shuffle uninformative",
+            "skipped": true
+          }
+        }
+      },
+      "tolerance": 0.1
+    },
+    "structural": {
+      "forbidden_exact": 10,
+      "forbidden_prefix": 6,
+      "forbidden_suffix": 2,
+      "hits": []
+    }
+  }
+}

@@ -1,0 +1,38 @@
+{
+  "passed": true,
+  "run_count": 1,
+  "runs": [
+    {
+      "collection_run_valid": true,
+      "collection_validation_issues": [],
+      "event_count": 4,
+      "generated_artifacts": {
+        "ledger.jsonl": {
+          "bytes": 2050,
+          "exists": true
+        },
+        "progress.csv": {
+          "bytes": 188,
+          "exists": true
+        },
+        "progress_by_category.csv": {
+          "bytes": 1317,
+          "exists": true
+        },
+        "summary_by_category.json": {
+          "bytes": 3513,
+          "exists": true
+        }
+      },
+      "issues": [],
+      "ledger_event_count": 9,
+      "missing_collection_control_artifacts": [],
+      "passed": true,
+      "progress_by_category_rows": 4,
+      "progress_rows": 4,
+      "run_dir": "runs/g_sidecar/oracle_hello_world_replay",
+      "source_ledger_sha256_matches": true,
+      "summary_generator": "ledger_progress.sidecar"
+    }
+  ]
+}

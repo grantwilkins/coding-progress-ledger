@@ -1,0 +1,30 @@
+descriptions:
+  - key: base
+    description: |
+      Implement `url_encode.py` in the workspace exposing one
+      function:
+
+          def url_encode(s: str) -> str:
+              ...
+
+      Returns the percent-encoded form of `s` per RFC 3986.
+
+      Constraints:
+        - DO NOT call `urllib.parse.quote`, `urllib.parse.quote_plus`,
+          `urllib.parse.urlencode`, or any third-party percent-encoder.
+          The function must be implemented from scratch using only
+          string and byte primitives. The verifier inspects the
+          source.
+        - Use only the Python standard library.
+        - The function signature and module name are fixed.
+
+      Spec: every byte of `s` (UTF-8 encoded) is either passed
+      through unchanged (if it is an "unreserved" ASCII character)
+      or percent-encoded as `%XX`.
+author_email: estimator-team@coding-estimator.local
+difficulty: hard
+tags: [high_progress_failure, encoding, python]
+max_agent_timeout_sec: 90
+max_test_timeout_sec: 15
+test_scripts: [setup-uv-pytest.sh, run-uv-pytest.sh]
+run_tests_in_same_shell: true

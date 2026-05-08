@@ -25,25 +25,13 @@ import pandas as pd
 import pytest
 from sklearn.linear_model import LogisticRegression
 
-from coding_estimator.baselines import (
-    CONSTANT,
-    LEDGER_BASIC,
-    TIME_ONLY,
-    fit_binary,
-)
+from coding_estimator.baselines import CONSTANT, LEDGER_BASIC, TIME_ONLY, fit_binary
 from coding_estimator.checkpoints.features.registry import GROUPS
 from coding_estimator.eval.bootstrap import bootstrap_brier_ci, brier_per_run
 from coding_estimator.eval.harness import evaluate_cell
-from coding_estimator.eval.metrics import (
-    LOG_LOSS_CLIP,
-    OUTPUT_CLIP,
-    auroc,
-    brier,
-    ece,
-)
+from coding_estimator.eval.metrics import LOG_LOSS_CLIP, OUTPUT_CLIP, auroc, brier, ece
 from coding_estimator.splits.protocol import Fold, Split, loro
 from scripts.run_baselines import _wide_targets, run
-
 
 # --- (1) bootstrap really resamples runs, not rows -------------------------
 
@@ -146,12 +134,16 @@ def test_constant_baseline_handles_single_class_train_set():
 # --- (5) time-only feature columns vary correctly with source tuple -------
 
 
-def test_time_only_adds_wallclock_cols_only_for_tb_live_alone():
+def test_time_only_adds_wallclock_cols_for_live_wallclock_sources():
     # `fraction_timeout_consumed` is reserved but not yet populated by the
     # tb_live producer; baseline currently includes only the wall-time
     # column on top of `elapsed_steps`. Re-add the timeout column here once
     # the producer fills it.
     assert TIME_ONLY.feature_cols_for(("tb_live",)) == (
+        "elapsed_steps",
+        "elapsed_wall_time",
+    )
+    assert TIME_ONLY.feature_cols_for(("tb_live_v2",)) == (
         "elapsed_steps",
         "elapsed_wall_time",
     )
@@ -190,7 +182,7 @@ def test_ledger_basic_uses_only_closure_frontier_instability_discovery():
 
 def test_output_clip_matches_upstream_q_baselines_constant():
     assert OUTPUT_CLIP == (0.001, 0.999)
-    assert LOG_LOSS_CLIP < OUTPUT_CLIP[0]
+    assert OUTPUT_CLIP[0] > LOG_LOSS_CLIP
 
 
 def test_evaluate_cell_clips_predicted_positive_rate_at_lower_bound():
@@ -286,7 +278,10 @@ def test_evaluate_cell_returns_na_metrics_when_not_feasible():
 # --- (10) end-to-end smoke: run() over a synthetic 3-run frame -------------
 
 
-def _synthetic_frames(n_runs: int = 3, n_steps: int = 20) -> tuple[pd.DataFrame, pd.DataFrame]:
+def _synthetic_frames(
+    n_runs: int = 3,
+    n_steps: int = 20,
+) -> tuple[pd.DataFrame, pd.DataFrame]:
     rng = np.random.default_rng(0)
     rows: list[dict] = []
     labs: list[dict] = []
@@ -302,7 +297,12 @@ def _synthetic_frames(n_runs: int = 3, n_steps: int = 20) -> tuple[pd.DataFrame,
                 "elapsed_wall_time": float(t * 60),
                 "fraction_timeout_consumed": t / float(n_steps),
             }
-            for f in GROUPS["closure"] + GROUPS["frontier"] + GROUPS["instability"] + GROUPS["discovery"]:
+            for f in (
+                GROUPS["closure"]
+                + GROUPS["frontier"]
+                + GROUPS["instability"]
+                + GROUPS["discovery"]
+            ):
                 if f.dtype in ("int", "float", "bool"):
                     feats[f.column_name] = float(rng.uniform(0.0, 1.0))
             rows.append({**base, **feats})
@@ -321,7 +321,10 @@ def _synthetic_frames(n_runs: int = 3, n_steps: int = 20) -> tuple[pd.DataFrame,
     return pd.DataFrame(rows), pd.DataFrame(labs)
 
 
-def test_run_baselines_ltfo_actually_trains_when_families_present(tmp_path, monkeypatch):
+def test_run_baselines_ltfo_actually_trains_when_families_present(
+    tmp_path,
+    monkeypatch,
+):
     """Regression: budget(scheme='ltfo') needs the `task_family` column on
     its input frame, otherwise it declares every cell infeasible and
     LTFO degenerates into placeholder rows. With two non-empty families
@@ -341,7 +344,12 @@ def test_run_baselines_ltfo_actually_trains_when_families_present(tmp_path, monk
                          "elapsed_steps": t,
                          "elapsed_wall_time": float(t),
                          "fraction_timeout_consumed": 0.0})
-            for f in GROUPS["closure"] + GROUPS["frontier"] + GROUPS["instability"] + GROUPS["discovery"]:
+            for f in (
+                GROUPS["closure"]
+                + GROUPS["frontier"]
+                + GROUPS["instability"]
+                + GROUPS["discovery"]
+            ):
                 if f.dtype in ("int", "float", "bool"):
                     rows[-1][f.column_name] = float(rng.uniform())
             labs.append({"run_id": rid, "source": "swe_agent_pilot",

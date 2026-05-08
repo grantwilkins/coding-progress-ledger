@@ -42,6 +42,8 @@ class UnresolvableLabelError(RuntimeError):
 
 def _classify_upstream_source(label_source: str) -> FinalLabelSource:
     # Upstream emits a small set of strings. Map them onto our enum.
+    if label_source == "internal_verifier":
+        return "verifier_exit"
     if label_source.startswith("source_metadata"):
         return "swe_agent_target"
     if label_source.startswith("test_result"):
@@ -77,9 +79,37 @@ def _tb_live_fallback(run: RunRecord) -> FinalLabel | None:
     )
 
 
+def _run_manifest_fallback(run: RunRecord) -> FinalLabel | None:
+    manifest = run.raw_metadata.get("run_manifest") or {}
+    final_success = manifest.get("final_success")
+    if not isinstance(final_success, bool):
+        return None
+    source_str = str(manifest.get("final_success_source") or "run_manifest.final_success")
+    final_source: FinalLabelSource
+    if source_str in {"internal_verifier", "verifier_exit", "test_result.success"}:
+        final_source = "verifier_exit"
+    else:
+        final_source = "manual"
+    return FinalLabel(
+        final_success=final_success,
+        final_success_source=final_source,
+        finish_step=run.events[-1].step if run.events else None,
+        finish_seconds=(
+            (run.end_wall_time - run.start_wall_time).total_seconds()
+            if run.has_real_wallclock and run.start_wall_time and run.end_wall_time
+            else None
+        ),
+        timeout=False,
+        termination_reason=(
+            str(manifest["termination_reason"])
+            if manifest.get("termination_reason") is not None
+            else None
+        ),
+    )
+
+
 def load_final_label(run: RunRecord) -> FinalLabel:
     src = SOURCES[run.source]
-    run_dir = run.ledger_path.parent
 
     # Source-specific path lock-in: tb_live's authoritative signal is
     # live_instrumentation.verifier_pass. Use it BEFORE the upstream
@@ -92,7 +122,16 @@ def load_final_label(run: RunRecord) -> FinalLabel:
             f"tb_live run {run.run_id} has no live_instrumentation.verifier_pass"
         )
 
+    if src.label_field_path == "run_manifest.final_success":
+        fallback = _run_manifest_fallback(run)
+        if fallback is not None:
+            return fallback
+        raise UnresolvableLabelError(
+            f"{run.source} run {run.run_id} has no run_manifest.final_success"
+        )
+
     # Retrospective sources: defer to upstream.
+    run_dir = run.ledger_path.parent
     fs, source_str = resolve_final_success(run_dir)
     if not isinstance(fs, bool):
         raise UnresolvableLabelError(

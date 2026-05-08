@@ -1,0 +1,76 @@
+auroc,brier,brier_ci_high,brier_ci_low,ece,feasible,log_loss,model,n_checkpoints_test,n_runs_test,n_runs_train,note,positive_rate_data,predicted_positive_rate,scheme,source_slice,target
+0.3226484796817278,0.14254073326811478,0.1712694427693304,0.11246131423100533,0.0008882604401373728,True,0.4607788715884999,constant,499.0,20.0,20.0,,0.17034068136272545,0.16945242092258808,loro,swe_agent_pilot,y_future_progress_drop_h5
+0.9768968456947996,0.03933643964066982,0.062166248903801305,0.01928791333921981,0.03238968338341235,True,0.1380393041830883,ledger_basic,499.0,20.0,20.0,,0.17034068136272545,0.17603268313844114,loro,swe_agent_pilot,y_future_progress_drop_h5
+0.6255754475703325,0.14162896462928085,0.17241873587468853,0.11018479212185608,0.02851461804396877,True,0.4521018592828871,time_only,499.0,20.0,20.0,,0.17034068136272545,0.17870726511287127,loro,swe_agent_pilot,y_future_progress_drop_h5
+0.0,0.08615384166740915,0.19274840893447798,0.008889465105019891,0.0027273350012631953,True,0.33809680318583135,constant,599.0,20.0,20.0,,0.08848080133555926,0.09120813633682245,loro,swe_agent_pilot,y_submit_without_validation
+0.6764116386757896,0.08012378174179058,0.16729415550487264,0.016531865250916378,0.07785605204632706,True,0.2699740522852401,ledger_basic,599.0,20.0,20.0,,0.08848080133555926,0.09065564170211168,loro,swe_agent_pilot,y_submit_without_validation
+0.5727071670467897,0.08478658305945336,0.18496293661993504,0.01349919831401533,0.05250752877123918,True,0.3076529577408623,time_only,599.0,20.0,20.0,,0.08848080133555926,0.08924769511865847,loro,swe_agent_pilot,y_submit_without_validation
+0.0,0.2800195379670617,0.2954411241020299,0.26505371444000175,0.24734505055455425,True,0.7535145140080576,constant,599.0,20.0,20.0,,0.4674457429048414,0.47128383227937964,loro,swe_agent_pilot,y_success_eventual
+0.4103784146887595,0.2911810432855222,0.34012599693274487,0.24343309525256646,0.19603113058036073,True,0.8018607848014835,ledger_basic,599.0,20.0,20.0,,0.4674457429048414,0.4593247908541314,loro,swe_agent_pilot,y_success_eventual
+0.281180026869682,0.28256053563653377,0.30522719130921944,0.262896886038202,0.18756627930336336,True,0.7606476215887011,time_only,599.0,20.0,20.0,,0.4674457429048414,0.4788080376595256,loro,swe_agent_pilot,y_success_eventual
+,,,,,False,,constant,,,,insufficient data,,,loro,swe_agent_pilot,y_timeout
+,,,,,False,,ledger_basic,,,,insufficient data,,,loro,swe_agent_pilot,y_timeout
+,,,,,False,,time_only,,,,insufficient data,,,loro,swe_agent_pilot,y_timeout
+,,,,,False,,constant,,,,insufficient data,,,loro,swe_agent_pilot,y_validation_new_work_h5
+,,,,,False,,ledger_basic,,,,insufficient data,,,loro,swe_agent_pilot,y_validation_new_work_h5
+,,,,,False,,time_only,,,,insufficient data,,,loro,swe_agent_pilot,y_validation_new_work_h5
+,,,,,False,,constant,,,,insufficient data,,,loro,tb_live,y_future_progress_drop_h5
+,,,,,False,,ledger_basic,,,,insufficient data,,,loro,tb_live,y_future_progress_drop_h5
+,,,,,False,,time_only,,,,insufficient data,,,loro,tb_live,y_future_progress_drop_h5
+,,,,,False,,constant,,,,insufficient data,,,loro,tb_live,y_submit_without_validation
+,,,,,False,,ledger_basic,,,,insufficient data,,,loro,tb_live,y_submit_without_validation
+,,,,,False,,time_only,,,,insufficient data,,,loro,tb_live,y_submit_without_validation
+,,,,,False,,constant,,,,insufficient data,,,loro,tb_live,y_success_eventual
+,,,,,False,,ledger_basic,,,,insufficient data,,,loro,tb_live,y_success_eventual
+,,,,,False,,time_only,,,,insufficient data,,,loro,tb_live,y_success_eventual
+,,,,,False,,constant,,,,insufficient data,,,loro,tb_live,y_timeout
+,,,,,False,,ledger_basic,,,,insufficient data,,,loro,tb_live,y_timeout
+,,,,,False,,time_only,,,,insufficient data,,,loro,tb_live,y_timeout
+0.10984848484848485,0.2874983442676691,0.3024421939173935,0.2734926384386222,0.42043365990734416,True,0.7685702446906479,constant,23.0,10.0,10.0,,0.4782608695652174,0.4704566092437946,loro,tb_live,y_validation_new_work_h5
+0.49242424242424243,0.283888109329645,0.3858355981098055,0.19583020035468232,0.40639371490024095,True,0.7770832920988906,ledger_basic,23.0,10.0,10.0,,0.4782608695652174,0.4362092903190678,loro,tb_live,y_validation_new_work_h5
+0.4318181818181818,0.25383582398789756,0.3872393016668727,0.1545611038316283,0.3790338119261758,True,0.7189150812127261,time_only,23.0,10.0,10.0,,0.4782608695652174,0.4791279936247056,loro,tb_live,y_validation_new_work_h5
+0.5,0.1150140308498848,0.19857021755710005,0.029015947727117564,0.03990589875402975,True,0.3932463894046823,constant,23.0,10.0,20.0,,0.13043478260869565,0.1703406813627254,loso,loso->tb_live,y_future_progress_drop_h5
+1.0,0.002130312582154485,0.004129049227024434,4.443078016697691e-05,0.020423725657245335,True,0.021604277172450347,ledger_basic,23.0,10.0,20.0,,0.13043478260869565,0.12265384125281777,loso,loso->tb_live,y_future_progress_drop_h5
+0.9166666666666666,0.11247644606944412,0.21064333307812774,0.011036325675915023,0.02336147589560314,True,0.38227076439620034,time_only,23.0,10.0,20.0,,0.13043478260869565,0.10707330671309251,loso,loso->tb_live,y_future_progress_drop_h5
+,0.007828852204982709,0.00782885220498271,0.007828852204982707,0.08848080133555926,True,0.0926426223705443,constant,83.0,12.0,20.0,,0.0,0.08848080133555926,loso,loso->tb_live,y_submit_without_validation
+,0.209146134419854,0.3380096934844509,0.10156683406553632,0.35135359379876596,True,0.7336087544786374,ledger_basic,83.0,12.0,20.0,,0.0,0.3513535937987659,loso,loso->tb_live,y_submit_without_validation
+,0.03650557475707519,0.038593124342456,0.034489543178435784,0.18842661285731035,True,0.20953845477402408,time_only,83.0,12.0,20.0,,0.0,0.18842661285731035,loso,loso->tb_live,y_submit_without_validation
+,0.28361403675017627,0.28361403675017627,0.28361403675017627,0.5325542570951585,True,0.7604719949461999,constant,83.0,12.0,20.0,,1.0,0.4674457429048415,loso,loso->tb_live,y_success_eventual
+,0.14472469518685321,0.16762949008486594,0.12332523693233621,0.3369486102079112,True,0.44688246273596943,ledger_basic,83.0,12.0,20.0,,1.0,0.6630513897920888,loso,loso->tb_live,y_success_eventual
+,0.19848505359498902,0.20114667694849037,0.1957556389925834,0.44527789579162713,True,0.5896363113516354,time_only,83.0,12.0,20.0,,1.0,0.5547221042083729,loso,loso->tb_live,y_success_eventual
+,1e-06,1.0000000000000002e-06,9.999999999999997e-07,0.0010000000000000002,True,0.0010005003335835344,constant,83.0,12.0,20.0,,0.0,0.0010000000000000002,loso,loso->tb_live,y_timeout
+,1e-06,1.0000000000000002e-06,9.999999999999997e-07,0.0010000000000000002,True,0.0010005003335835344,ledger_basic,83.0,12.0,20.0,,0.0,0.0010000000000000002,loso,loso->tb_live,y_timeout
+,1e-06,1.0000000000000002e-06,9.999999999999997e-07,0.0010000000000000002,True,0.0010005003335835344,time_only,83.0,12.0,20.0,,0.0,0.0010000000000000002,loso,loso->tb_live,y_timeout
+0.5,0.4706576174043653,0.6970415446792048,0.20505757674333305,0.47024483750108914,True,2.312435177353994,constant,23.0,10.0,20.0,,0.4782608695652174,0.00801603206412826,loso,loso->tb_live,y_validation_new_work_h5
+0.7348484848484849,0.4217998594857758,0.6416479882468122,0.18195626439567267,0.44166240337394075,True,2.0904814416029915,ledger_basic,23.0,10.0,20.0,,0.4782608695652174,0.03659846619127658,loso,loso->tb_live,y_validation_new_work_h5
+0.7310606060606061,0.4751103554599353,0.7036960625461153,0.20697694248775317,0.47504898089834446,True,2.7347551657243447,time_only,23.0,10.0,20.0,,0.4782608695652174,0.003211888666872957,loso,loso->tb_live,y_validation_new_work_h5
+,,,,,False,,constant,,,,ltfo: no task_family on source,,,ltfo,swe_agent_pilot,y_future_progress_drop_h5
+,,,,,False,,ledger_basic,,,,ltfo: no task_family on source,,,ltfo,swe_agent_pilot,y_future_progress_drop_h5
+,,,,,False,,time_only,,,,ltfo: no task_family on source,,,ltfo,swe_agent_pilot,y_future_progress_drop_h5
+,,,,,False,,constant,,,,ltfo: no task_family on source,,,ltfo,swe_agent_pilot,y_submit_without_validation
+,,,,,False,,ledger_basic,,,,ltfo: no task_family on source,,,ltfo,swe_agent_pilot,y_submit_without_validation
+,,,,,False,,time_only,,,,ltfo: no task_family on source,,,ltfo,swe_agent_pilot,y_submit_without_validation
+,,,,,False,,constant,,,,ltfo: no task_family on source,,,ltfo,swe_agent_pilot,y_success_eventual
+,,,,,False,,ledger_basic,,,,ltfo: no task_family on source,,,ltfo,swe_agent_pilot,y_success_eventual
+,,,,,False,,time_only,,,,ltfo: no task_family on source,,,ltfo,swe_agent_pilot,y_success_eventual
+,,,,,False,,constant,,,,ltfo: no task_family on source,,,ltfo,swe_agent_pilot,y_timeout
+,,,,,False,,ledger_basic,,,,ltfo: no task_family on source,,,ltfo,swe_agent_pilot,y_timeout
+,,,,,False,,time_only,,,,ltfo: no task_family on source,,,ltfo,swe_agent_pilot,y_timeout
+,,,,,False,,constant,,,,ltfo: no task_family on source,,,ltfo,swe_agent_pilot,y_validation_new_work_h5
+,,,,,False,,ledger_basic,,,,ltfo: no task_family on source,,,ltfo,swe_agent_pilot,y_validation_new_work_h5
+,,,,,False,,time_only,,,,ltfo: no task_family on source,,,ltfo,swe_agent_pilot,y_validation_new_work_h5
+,,,,,False,,constant,,,,ltfo: no task_family on source,,,ltfo,tb_live,y_future_progress_drop_h5
+,,,,,False,,ledger_basic,,,,ltfo: no task_family on source,,,ltfo,tb_live,y_future_progress_drop_h5
+,,,,,False,,time_only,,,,ltfo: no task_family on source,,,ltfo,tb_live,y_future_progress_drop_h5
+,,,,,False,,constant,,,,ltfo: no task_family on source,,,ltfo,tb_live,y_submit_without_validation
+,,,,,False,,ledger_basic,,,,ltfo: no task_family on source,,,ltfo,tb_live,y_submit_without_validation
+,,,,,False,,time_only,,,,ltfo: no task_family on source,,,ltfo,tb_live,y_submit_without_validation
+,,,,,False,,constant,,,,ltfo: no task_family on source,,,ltfo,tb_live,y_success_eventual
+,,,,,False,,ledger_basic,,,,ltfo: no task_family on source,,,ltfo,tb_live,y_success_eventual
+,,,,,False,,time_only,,,,ltfo: no task_family on source,,,ltfo,tb_live,y_success_eventual
+,,,,,False,,constant,,,,ltfo: no task_family on source,,,ltfo,tb_live,y_timeout
+,,,,,False,,ledger_basic,,,,ltfo: no task_family on source,,,ltfo,tb_live,y_timeout
+,,,,,False,,time_only,,,,ltfo: no task_family on source,,,ltfo,tb_live,y_timeout
+,,,,,False,,constant,,,,ltfo: no task_family on source,,,ltfo,tb_live,y_validation_new_work_h5
+,,,,,False,,ledger_basic,,,,ltfo: no task_family on source,,,ltfo,tb_live,y_validation_new_work_h5
+,,,,,False,,time_only,,,,ltfo: no task_family on source,,,ltfo,tb_live,y_validation_new_work_h5

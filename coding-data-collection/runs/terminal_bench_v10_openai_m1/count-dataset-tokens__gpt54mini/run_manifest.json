@@ -1,0 +1,1101 @@
+{
+  "analysis_inclusion": {
+    "artifact_quality": true,
+    "process_dynamics": true,
+    "terminal_success": true
+  },
+  "artifact_layout_version": "0.1.0",
+  "created_at": "2026-05-07T05:14:20.021457Z",
+  "final_success": false,
+  "metrics": {
+    "agent_backend": "model_tool_loop",
+    "agent_steps_used": 161,
+    "agent_termination_reason": "budget_exhausted",
+    "allow_blocked_done": true,
+    "eligible_for_L_gate": true,
+    "estimated_cost_usd": null,
+    "fallback_call_count": 0,
+    "last_provider_call": {
+      "adapter": "openai_responses",
+      "base_url": "https://api.openai.com/v1/responses",
+      "fallback_models": [],
+      "fallback_used": false,
+      "model_alias_or_route_changed": true,
+      "provider_routing_policy": {
+        "allow_fallbacks": false
+      },
+      "requested_model": "gpt-5.4-mini",
+      "resolved_model": "gpt-5.4-mini-2026-03-17",
+      "response_id": "resp_06780803a78e34430169fc1f97f3cc81958370fe928dbe6e59"
+    },
+    "max_model_calls": 80,
+    "max_steps": 80,
+    "max_tokens_in": null,
+    "max_tokens_out": 2048,
+    "max_tool_calls": 80,
+    "max_tool_time_s": 120,
+    "max_wall_time_s": 1800,
+    "min_steps_before_done": 15,
+    "model_name": "gpt-5.4-mini",
+    "model_provider": "openai",
+    "pilot_type": "real_agent_pilot",
+    "provider_calls": [
+      {
+        "adapter": "openai_responses",
+        "base_url": "https://api.openai.com/v1/responses",
+        "fallback_models": [],
+        "fallback_used": false,
+        "model_alias_or_route_changed": true,
+        "provider_routing_policy": {
+          "allow_fallbacks": false
+        },
+        "requested_model": "gpt-5.4-mini",
+        "resolved_model": "gpt-5.4-mini-2026-03-17",
+        "response_id": "resp_08872321cfc5a9430169fc1e094380819686d5e3c723940837"
+      },
+      {
+        "adapter": "openai_responses",
+        "base_url": "https://api.openai.com/v1/responses",
+        "fallback_models": [],
+        "fallback_used": false,
+        "model_alias_or_route_changed": true,
+        "provider_routing_policy": {
+          "allow_fallbacks": false
+        },
+        "requested_model": "gpt-5.4-mini",
+        "resolved_model": "gpt-5.4-mini-2026-03-17",
+        "response_id": "resp_03a786ab5e9490360169fc1e0b1658819391b0d864098f5090"
+      },
+      {
+        "adapter": "openai_responses",
+        "base_url": "https://api.openai.com/v1/responses",
+        "fallback_models": [],
+        "fallback_used": false,
+        "model_alias_or_route_changed": true,
+        "provider_routing_policy": {
+          "allow_fallbacks": false
+        },
+        "requested_model": "gpt-5.4-mini",
+        "resolved_model": "gpt-5.4-mini-2026-03-17",
+        "response_id": "resp_038d7203f357626b0169fc1e158c688195918bd56c05de0b7c"
+      },
+      {
+        "adapter": "openai_responses",
+        "base_url": "https://api.openai.com/v1/responses",
+        "fallback_models": [],
+        "fallback_used": false,
+        "model_alias_or_route_changed": true,
+        "provider_routing_policy": {
+          "allow_fallbacks": false
+        },
+        "requested_model": "gpt-5.4-mini",
+        "resolved_model": "gpt-5.4-mini-2026-03-17",
+        "response_id": "resp_0d6a5858e2cc0b1b0169fc1e2550248195b2ef9b57fb906d05"
+      },
+      {
+        "adapter": "openai_responses",
+        "base_url": "https://api.openai.com/v1/responses",
+        "fallback_models": [],
+        "fallback_used": false,
+        "model_alias_or_route_changed": true,
+        "provider_routing_policy": {
+          "allow_fallbacks": false
+        },
+        "requested_model": "gpt-5.4-mini",
+        "resolved_model": "gpt-5.4-mini-2026-03-17",
+        "response_id": "resp_039df970b74d441d0169fc1e32bdcc8197b6b001d18ad773ea"
+      },
+      {
+        "adapter": "openai_responses",
+        "base_url": "https://api.openai.com/v1/responses",
+        "fallback_models": [],
+        "fallback_used": false,
+        "model_alias_or_route_changed": true,
+        "provider_routing_policy": {
+          "allow_fallbacks": false
+        },
+        "requested_model": "gpt-5.4-mini",
+        "resolved_model": "gpt-5.4-mini-2026-03-17",
+        "response_id": "resp_0609dd9f135edf1f0169fc1e38d0c88190bcff8c74ada1fec2"
+      },
+      {
+        "adapter": "openai_responses",
+        "base_url": "https://api.openai.com/v1/responses",
+        "fallback_models": [],
+        "fallback_used": false,
+        "model_alias_or_route_changed": true,
+        "provider_routing_policy": {
+          "allow_fallbacks": false
+        },
+        "requested_model": "gpt-5.4-mini",
+        "resolved_model": "gpt-5.4-mini-2026-03-17",
+        "response_id": "resp_05ae6002c90e84830169fc1e454dc481938fd7ba9f2687ea67"
+      },
+      {
+        "adapter": "openai_responses",
+        "base_url": "https://api.openai.com/v1/responses",
+        "fallback_models": [],
+        "fallback_used": false,
+        "model_alias_or_route_changed": true,
+        "provider_routing_policy": {
+          "allow_fallbacks": false
+        },
+        "requested_model": "gpt-5.4-mini",
+        "resolved_model": "gpt-5.4-mini-2026-03-17",
+        "response_id": "resp_0ce42fd8919c44780169fc1e4f83148194b10c1ceeb18713d6"
+      },
+      {
+        "adapter": "openai_responses",
+        "base_url": "https://api.openai.com/v1/responses",
+        "fallback_models": [],
+        "fallback_used": false,
+        "model_alias_or_route_changed": true,
+        "provider_routing_policy": {
+          "allow_fallbacks": false
+        },
+        "requested_model": "gpt-5.4-mini",
+        "resolved_model": "gpt-5.4-mini-2026-03-17",
+        "response_id": "resp_028ee7e560524cbc0169fc1e5ddb688195ae4d90e95162bcb2"
+      },
+      {
+        "adapter": "openai_responses",
+        "base_url": "https://api.openai.com/v1/responses",
+        "fallback_models": [],
+        "fallback_used": false,
+        "model_alias_or_route_changed": true,
+        "provider_routing_policy": {
+          "allow_fallbacks": false
+        },
+        "requested_model": "gpt-5.4-mini",
+        "resolved_model": "gpt-5.4-mini-2026-03-17",
+        "response_id": "resp_0422b9dc3fcee27e0169fc1e6ada108190875139a4a9d2049c"
+      },
+      {
+        "adapter": "openai_responses",
+        "base_url": "https://api.openai.com/v1/responses",
+        "fallback_models": [],
+        "fallback_used": false,
+        "model_alias_or_route_changed": true,
+        "provider_routing_policy": {
+          "allow_fallbacks": false
+        },
+        "requested_model": "gpt-5.4-mini",
+        "resolved_model": "gpt-5.4-mini-2026-03-17",
+        "response_id": "resp_02f4fe954fae4ae80169fc1e83dc788194b53540a09675d52c"
+      },
+      {
+        "adapter": "openai_responses",
+        "base_url": "https://api.openai.com/v1/responses",
+        "fallback_models": [],
+        "fallback_used": false,
+        "model_alias_or_route_changed": true,
+        "provider_routing_policy": {
+          "allow_fallbacks": false
+        },
+        "requested_model": "gpt-5.4-mini",
+        "resolved_model": "gpt-5.4-mini-2026-03-17",
+        "response_id": "resp_03ad920bf393749e0169fc1e8f9d4c8195b91795a0ac516f74"
+      },
+      {
+        "adapter": "openai_responses",
+        "base_url": "https://api.openai.com/v1/responses",
+        "fallback_models": [],
+        "fallback_used": false,
+        "model_alias_or_route_changed": true,
+        "provider_routing_policy": {
+          "allow_fallbacks": false
+        },
+        "requested_model": "gpt-5.4-mini",
+        "resolved_model": "gpt-5.4-mini-2026-03-17",
+        "response_id": "resp_0310782858fb32ed0169fc1e9f3f4c819395f79c7ebd176dd0"
+      },
+      {
+        "adapter": "openai_responses",
+        "base_url": "https://api.openai.com/v1/responses",
+        "fallback_models": [],
+        "fallback_used": false,
+        "model_alias_or_route_changed": true,
+        "provider_routing_policy": {
+          "allow_fallbacks": false
+        },
+        "requested_model": "gpt-5.4-mini",
+        "resolved_model": "gpt-5.4-mini-2026-03-17",
+        "response_id": "resp_07b184f3a613d7710169fc1eacbf3c81909786e023debe40af"
+      },
+      {
+        "adapter": "openai_responses",
+        "base_url": "https://api.openai.com/v1/responses",
+        "fallback_models": [],
+        "fallback_used": false,
+        "model_alias_or_route_changed": true,
+        "provider_routing_policy": {
+          "allow_fallbacks": false
+        },
+        "requested_model": "gpt-5.4-mini",
+        "resolved_model": "gpt-5.4-mini-2026-03-17",
+        "response_id": "resp_031e93ec20a0d2fd0169fc1eb87824819394f06fae137a5f57"
+      },
+      {
+        "adapter": "openai_responses",
+        "base_url": "https://api.openai.com/v1/responses",
+        "fallback_models": [],
+        "fallback_used": false,
+        "model_alias_or_route_changed": true,
+        "provider_routing_policy": {
+          "allow_fallbacks": false
+        },
+        "requested_model": "gpt-5.4-mini",
+        "resolved_model": "gpt-5.4-mini-2026-03-17",
+        "response_id": "resp_00aee502fd238e020169fc1ebe869881939db6f61932f1d0a5"
+      },
+      {
+        "adapter": "openai_responses",
+        "base_url": "https://api.openai.com/v1/responses",
+        "fallback_models": [],
+        "fallback_used": false,
+        "model_alias_or_route_changed": true,
+        "provider_routing_policy": {
+          "allow_fallbacks": false
+        },
+        "requested_model": "gpt-5.4-mini",
+        "resolved_model": "gpt-5.4-mini-2026-03-17",
+        "response_id": "resp_0867960ee1e0253c0169fc1ec130cc8190b29cca4bad914472"
+      },
+      {
+        "adapter": "openai_responses",
+        "base_url": "https://api.openai.com/v1/responses",
+        "fallback_models": [],
+        "fallback_used": false,
+        "model_alias_or_route_changed": true,
+        "provider_routing_policy": {
+          "allow_fallbacks": false
+        },
+        "requested_model": "gpt-5.4-mini",
+        "resolved_model": "gpt-5.4-mini-2026-03-17",
+        "response_id": "resp_036c17343092d0340169fc1ecb57388194a3066a69a48ef820"
+      },
+      {
+        "adapter": "openai_responses",
+        "base_url": "https://api.openai.com/v1/responses",
+        "fallback_models": [],
+        "fallback_used": false,
+        "model_alias_or_route_changed": true,
+        "provider_routing_policy": {
+          "allow_fallbacks": false
+        },
+        "requested_model": "gpt-5.4-mini",
+        "resolved_model": "gpt-5.4-mini-2026-03-17",
+        "response_id": "resp_08c4ae3973c8b5390169fc1ecf51b481959c9b5ad18178fb6f"
+      },
+      {
+        "adapter": "openai_responses",
+        "base_url": "https://api.openai.com/v1/responses",
+        "fallback_models": [],
+        "fallback_used": false,
+        "model_alias_or_route_changed": true,
+        "provider_routing_policy": {
+          "allow_fallbacks": false
+        },
+        "requested_model": "gpt-5.4-mini",
+        "resolved_model": "gpt-5.4-mini-2026-03-17",
+        "response_id": "resp_09f0a1e05229f43d0169fc1ed2dab081958fbf1a4601ca41ed"
+      },
+      {
+        "adapter": "openai_responses",
+        "base_url": "https://api.openai.com/v1/responses",
+        "fallback_models": [],
+        "fallback_used": false,
+        "model_alias_or_route_changed": true,
+        "provider_routing_policy": {
+          "allow_fallbacks": false
+        },
+        "requested_model": "gpt-5.4-mini",
+        "resolved_model": "gpt-5.4-mini-2026-03-17",
+        "response_id": "resp_0c853f68e348e90f0169fc1ed6edac8190b4d21efbfe658254"
+      },
+      {
+        "adapter": "openai_responses",
+        "base_url": "https://api.openai.com/v1/responses",
+        "fallback_models": [],
+        "fallback_used": false,
+        "model_alias_or_route_changed": true,
+        "provider_routing_policy": {
+          "allow_fallbacks": false
+        },
+        "requested_model": "gpt-5.4-mini",
+        "resolved_model": "gpt-5.4-mini-2026-03-17",
+        "response_id": "resp_035fb04042e9b20d0169fc1ed9b15c81939b791f8c6f9095d5"
+      },
+      {
+        "adapter": "openai_responses",
+        "base_url": "https://api.openai.com/v1/responses",
+        "fallback_models": [],
+        "fallback_used": false,
+        "model_alias_or_route_changed": true,
+        "provider_routing_policy": {
+          "allow_fallbacks": false
+        },
+        "requested_model": "gpt-5.4-mini",
+        "resolved_model": "gpt-5.4-mini-2026-03-17",
+        "response_id": "resp_022351a2ca3b6f760169fc1edc4c348195927ece39e26cd691"
+      },
+      {
+        "adapter": "openai_responses",
+        "base_url": "https://api.openai.com/v1/responses",
+        "fallback_models": [],
+        "fallback_used": false,
+        "model_alias_or_route_changed": true,
+        "provider_routing_policy": {
+          "allow_fallbacks": false
+        },
+        "requested_model": "gpt-5.4-mini",
+        "resolved_model": "gpt-5.4-mini-2026-03-17",
+        "response_id": "resp_0fa78170593445f80169fc1edea4cc8194986f2e7ad465df6c"
+      },
+      {
+        "adapter": "openai_responses",
+        "base_url": "https://api.openai.com/v1/responses",
+        "fallback_models": [],
+        "fallback_used": false,
+        "model_alias_or_route_changed": true,
+        "provider_routing_policy": {
+          "allow_fallbacks": false
+        },
+        "requested_model": "gpt-5.4-mini",
+        "resolved_model": "gpt-5.4-mini-2026-03-17",
+        "response_id": "resp_042e230e035ffbcb0169fc1ee34db88196b06f813aaca9482d"
+      },
+      {
+        "adapter": "openai_responses",
+        "base_url": "https://api.openai.com/v1/responses",
+        "fallback_models": [],
+        "fallback_used": false,
+        "model_alias_or_route_changed": true,
+        "provider_routing_policy": {
+          "allow_fallbacks": false
+        },
+        "requested_model": "gpt-5.4-mini",
+        "resolved_model": "gpt-5.4-mini-2026-03-17",
+        "response_id": "resp_079bae85087a02760169fc1ee9636481908472b63235526d98"
+      },
+      {
+        "adapter": "openai_responses",
+        "base_url": "https://api.openai.com/v1/responses",
+        "fallback_models": [],
+        "fallback_used": false,
+        "model_alias_or_route_changed": true,
+        "provider_routing_policy": {
+          "allow_fallbacks": false
+        },
+        "requested_model": "gpt-5.4-mini",
+        "resolved_model": "gpt-5.4-mini-2026-03-17",
+        "response_id": "resp_08650fa75706b7d40169fc1eed77388190ad8a724fe442b23b"
+      },
+      {
+        "adapter": "openai_responses",
+        "base_url": "https://api.openai.com/v1/responses",
+        "fallback_models": [],
+        "fallback_used": false,
+        "model_alias_or_route_changed": true,
+        "provider_routing_policy": {
+          "allow_fallbacks": false
+        },
+        "requested_model": "gpt-5.4-mini",
+        "resolved_model": "gpt-5.4-mini-2026-03-17",
+        "response_id": "resp_0536e0d8cf5b973b0169fc1eef512881969044245b8a8f94e6"
+      },
+      {
+        "adapter": "openai_responses",
+        "base_url": "https://api.openai.com/v1/responses",
+        "fallback_models": [],
+        "fallback_used": false,
+        "model_alias_or_route_changed": true,
+        "provider_routing_policy": {
+          "allow_fallbacks": false
+        },
+        "requested_model": "gpt-5.4-mini",
+        "resolved_model": "gpt-5.4-mini-2026-03-17",
+        "response_id": "resp_04005249579d679c0169fc1ef1615c819398d91758ff004ebf"
+      },
+      {
+        "adapter": "openai_responses",
+        "base_url": "https://api.openai.com/v1/responses",
+        "fallback_models": [],
+        "fallback_used": false,
+        "model_alias_or_route_changed": true,
+        "provider_routing_policy": {
+          "allow_fallbacks": false
+        },
+        "requested_model": "gpt-5.4-mini",
+        "resolved_model": "gpt-5.4-mini-2026-03-17",
+        "response_id": "resp_039b33717dbb1e400169fc1ef50c188194b85bd7baa0bb13bb"
+      },
+      {
+        "adapter": "openai_responses",
+        "base_url": "https://api.openai.com/v1/responses",
+        "fallback_models": [],
+        "fallback_used": false,
+        "model_alias_or_route_changed": true,
+        "provider_routing_policy": {
+          "allow_fallbacks": false
+        },
+        "requested_model": "gpt-5.4-mini",
+        "resolved_model": "gpt-5.4-mini-2026-03-17",
+        "response_id": "resp_062a4698e31b47310169fc1ef6f5ec81978e3f062d7b237694"
+      },
+      {
+        "adapter": "openai_responses",
+        "base_url": "https://api.openai.com/v1/responses",
+        "fallback_models": [],
+        "fallback_used": false,
+        "model_alias_or_route_changed": true,
+        "provider_routing_policy": {
+          "allow_fallbacks": false
+        },
+        "requested_model": "gpt-5.4-mini",
+        "resolved_model": "gpt-5.4-mini-2026-03-17",
+        "response_id": "resp_0a4be0701eae1f0b0169fc1f001f948190b70697b012d0aa5f"
+      },
+      {
+        "adapter": "openai_responses",
+        "base_url": "https://api.openai.com/v1/responses",
+        "fallback_models": [],
+        "fallback_used": false,
+        "model_alias_or_route_changed": true,
+        "provider_routing_policy": {
+          "allow_fallbacks": false
+        },
+        "requested_model": "gpt-5.4-mini",
+        "resolved_model": "gpt-5.4-mini-2026-03-17",
+        "response_id": "resp_044c571d323a7afb0169fc1f036ad08190a7d03cd2419839bc"
+      },
+      {
+        "adapter": "openai_responses",
+        "base_url": "https://api.openai.com/v1/responses",
+        "fallback_models": [],
+        "fallback_used": false,
+        "model_alias_or_route_changed": true,
+        "provider_routing_policy": {
+          "allow_fallbacks": false
+        },
+        "requested_model": "gpt-5.4-mini",
+        "resolved_model": "gpt-5.4-mini-2026-03-17",
+        "response_id": "resp_0e024c033da5c8d70169fc1f05368c8190a9c63ec8102429d5"
+      },
+      {
+        "adapter": "openai_responses",
+        "base_url": "https://api.openai.com/v1/responses",
+        "fallback_models": [],
+        "fallback_used": false,
+        "model_alias_or_route_changed": true,
+        "provider_routing_policy": {
+          "allow_fallbacks": false
+        },
+        "requested_model": "gpt-5.4-mini",
+        "resolved_model": "gpt-5.4-mini-2026-03-17",
+        "response_id": "resp_06b20fc6619fb76c0169fc1f08d6a8819382c6aff4f334f6cf"
+      },
+      {
+        "adapter": "openai_responses",
+        "base_url": "https://api.openai.com/v1/responses",
+        "fallback_models": [],
+        "fallback_used": false,
+        "model_alias_or_route_changed": true,
+        "provider_routing_policy": {
+          "allow_fallbacks": false
+        },
+        "requested_model": "gpt-5.4-mini",
+        "resolved_model": "gpt-5.4-mini-2026-03-17",
+        "response_id": "resp_09c8c251e4ec4c5c0169fc1f0b811881939589b1ffd99e862f"
+      },
+      {
+        "adapter": "openai_responses",
+        "base_url": "https://api.openai.com/v1/responses",
+        "fallback_models": [],
+        "fallback_used": false,
+        "model_alias_or_route_changed": true,
+        "provider_routing_policy": {
+          "allow_fallbacks": false
+        },
+        "requested_model": "gpt-5.4-mini",
+        "resolved_model": "gpt-5.4-mini-2026-03-17",
+        "response_id": "resp_0595f32165bfe1720169fc1f0ef4508197bc1c40126ef57ec2"
+      },
+      {
+        "adapter": "openai_responses",
+        "base_url": "https://api.openai.com/v1/responses",
+        "fallback_models": [],
+        "fallback_used": false,
+        "model_alias_or_route_changed": true,
+        "provider_routing_policy": {
+          "allow_fallbacks": false
+        },
+        "requested_model": "gpt-5.4-mini",
+        "resolved_model": "gpt-5.4-mini-2026-03-17",
+        "response_id": "resp_0d5e97982b3d27850169fc1f1187508194b0764443323bf720"
+      },
+      {
+        "adapter": "openai_responses",
+        "base_url": "https://api.openai.com/v1/responses",
+        "fallback_models": [],
+        "fallback_used": false,
+        "model_alias_or_route_changed": true,
+        "provider_routing_policy": {
+          "allow_fallbacks": false
+        },
+        "requested_model": "gpt-5.4-mini",
+        "resolved_model": "gpt-5.4-mini-2026-03-17",
+        "response_id": "resp_0a5974477ab2e0790169fc1f1386c0819483b35358c7757e51"
+      },
+      {
+        "adapter": "openai_responses",
+        "base_url": "https://api.openai.com/v1/responses",
+        "fallback_models": [],
+        "fallback_used": false,
+        "model_alias_or_route_changed": true,
+        "provider_routing_policy": {
+          "allow_fallbacks": false
+        },
+        "requested_model": "gpt-5.4-mini",
+        "resolved_model": "gpt-5.4-mini-2026-03-17",
+        "response_id": "resp_06dc0899298757b20169fc1f1583a081979ea06d7c85935fcb"
+      },
+      {
+        "adapter": "openai_responses",
+        "base_url": "https://api.openai.com/v1/responses",
+        "fallback_models": [],
+        "fallback_used": false,
+        "model_alias_or_route_changed": true,
+        "provider_routing_policy": {
+          "allow_fallbacks": false
+        },
+        "requested_model": "gpt-5.4-mini",
+        "resolved_model": "gpt-5.4-mini-2026-03-17",
+        "response_id": "resp_0e40eb76a35d21090169fc1f18f5cc8195b2282a0fe7055b26"
+      },
+      {
+        "adapter": "openai_responses",
+        "base_url": "https://api.openai.com/v1/responses",
+        "fallback_models": [],
+        "fallback_used": false,
+        "model_alias_or_route_changed": true,
+        "provider_routing_policy": {
+          "allow_fallbacks": false
+        },
+        "requested_model": "gpt-5.4-mini",
+        "resolved_model": "gpt-5.4-mini-2026-03-17",
+        "response_id": "resp_0511fdce772825750169fc1f1aecac81908bcb442e3f5fec4e"
+      },
+      {
+        "adapter": "openai_responses",
+        "base_url": "https://api.openai.com/v1/responses",
+        "fallback_models": [],
+        "fallback_used": false,
+        "model_alias_or_route_changed": true,
+        "provider_routing_policy": {
+          "allow_fallbacks": false
+        },
+        "requested_model": "gpt-5.4-mini",
+        "resolved_model": "gpt-5.4-mini-2026-03-17",
+        "response_id": "resp_012d046abb8519830169fc1f209c848193a6beda447cc273d8"
+      },
+      {
+        "adapter": "openai_responses",
+        "base_url": "https://api.openai.com/v1/responses",
+        "fallback_models": [],
+        "fallback_used": false,
+        "model_alias_or_route_changed": true,
+        "provider_routing_policy": {
+          "allow_fallbacks": false
+        },
+        "requested_model": "gpt-5.4-mini",
+        "resolved_model": "gpt-5.4-mini-2026-03-17",
+        "response_id": "resp_0b59731d9ccb875a0169fc1f2271708197b8d1f924a4fadb33"
+      },
+      {
+        "adapter": "openai_responses",
+        "base_url": "https://api.openai.com/v1/responses",
+        "fallback_models": [],
+        "fallback_used": false,
+        "model_alias_or_route_changed": true,
+        "provider_routing_policy": {
+          "allow_fallbacks": false
+        },
+        "requested_model": "gpt-5.4-mini",
+        "resolved_model": "gpt-5.4-mini-2026-03-17",
+        "response_id": "resp_0dda670a0988d7920169fc1f266e188195b867bb3544e7daa0"
+      },
+      {
+        "adapter": "openai_responses",
+        "base_url": "https://api.openai.com/v1/responses",
+        "fallback_models": [],
+        "fallback_used": false,
+        "model_alias_or_route_changed": true,
+        "provider_routing_policy": {
+          "allow_fallbacks": false
+        },
+        "requested_model": "gpt-5.4-mini",
+        "resolved_model": "gpt-5.4-mini-2026-03-17",
+        "response_id": "resp_059c5d03a3e6d8b60169fc1f282224819684b8ab030085fc6c"
+      },
+      {
+        "adapter": "openai_responses",
+        "base_url": "https://api.openai.com/v1/responses",
+        "fallback_models": [],
+        "fallback_used": false,
+        "model_alias_or_route_changed": true,
+        "provider_routing_policy": {
+          "allow_fallbacks": false
+        },
+        "requested_model": "gpt-5.4-mini",
+        "resolved_model": "gpt-5.4-mini-2026-03-17",
+        "response_id": "resp_0650427819dd4a170169fc1f2b6cf481969d5b05ff6cdd5cdf"
+      },
+      {
+        "adapter": "openai_responses",
+        "base_url": "https://api.openai.com/v1/responses",
+        "fallback_models": [],
+        "fallback_used": false,
+        "model_alias_or_route_changed": true,
+        "provider_routing_policy": {
+          "allow_fallbacks": false
+        },
+        "requested_model": "gpt-5.4-mini",
+        "resolved_model": "gpt-5.4-mini-2026-03-17",
+        "response_id": "resp_089372474b2006010169fc1f2dea188197a23b217193594d15"
+      },
+      {
+        "adapter": "openai_responses",
+        "base_url": "https://api.openai.com/v1/responses",
+        "fallback_models": [],
+        "fallback_used": false,
+        "model_alias_or_route_changed": true,
+        "provider_routing_policy": {
+          "allow_fallbacks": false
+        },
+        "requested_model": "gpt-5.4-mini",
+        "resolved_model": "gpt-5.4-mini-2026-03-17",
+        "response_id": "resp_0eb68dbda9f1ade10169fc1f31ea2081968914ef56a0c804c2"
+      },
+      {
+        "adapter": "openai_responses",
+        "base_url": "https://api.openai.com/v1/responses",
+        "fallback_models": [],
+        "fallback_used": false,
+        "model_alias_or_route_changed": true,
+        "provider_routing_policy": {
+          "allow_fallbacks": false
+        },
+        "requested_model": "gpt-5.4-mini",
+        "resolved_model": "gpt-5.4-mini-2026-03-17",
+        "response_id": "resp_0bb9eddc6c96985f0169fc1f358b8c8195884882e143a67fd7"
+      },
+      {
+        "adapter": "openai_responses",
+        "base_url": "https://api.openai.com/v1/responses",
+        "fallback_models": [],
+        "fallback_used": false,
+        "model_alias_or_route_changed": true,
+        "provider_routing_policy": {
+          "allow_fallbacks": false
+        },
+        "requested_model": "gpt-5.4-mini",
+        "resolved_model": "gpt-5.4-mini-2026-03-17",
+        "response_id": "resp_024d9e8cc63e304c0169fc1f37d3c48193ba90c9461a0e91ca"
+      },
+      {
+        "adapter": "openai_responses",
+        "base_url": "https://api.openai.com/v1/responses",
+        "fallback_models": [],
+        "fallback_used": false,
+        "model_alias_or_route_changed": true,
+        "provider_routing_policy": {
+          "allow_fallbacks": false
+        },
+        "requested_model": "gpt-5.4-mini",
+        "resolved_model": "gpt-5.4-mini-2026-03-17",
+        "response_id": "resp_001b92a86e93bed90169fc1f3bb6b881978697d51d113fc19a"
+      },
+      {
+        "adapter": "openai_responses",
+        "base_url": "https://api.openai.com/v1/responses",
+        "fallback_models": [],
+        "fallback_used": false,
+        "model_alias_or_route_changed": true,
+        "provider_routing_policy": {
+          "allow_fallbacks": false
+        },
+        "requested_model": "gpt-5.4-mini",
+        "resolved_model": "gpt-5.4-mini-2026-03-17",
+        "response_id": "resp_08c15165a67f4eaf0169fc1f3dbccc8194943cde98c5ef0f8d"
+      },
+      {
+        "adapter": "openai_responses",
+        "base_url": "https://api.openai.com/v1/responses",
+        "fallback_models": [],
+        "fallback_used": false,
+        "model_alias_or_route_changed": true,
+        "provider_routing_policy": {
+          "allow_fallbacks": false
+        },
+        "requested_model": "gpt-5.4-mini",
+        "resolved_model": "gpt-5.4-mini-2026-03-17",
+        "response_id": "resp_0a7e3823c5563a9b0169fc1f412218819787a082e95d91982a"
+      },
+      {
+        "adapter": "openai_responses",
+        "base_url": "https://api.openai.com/v1/responses",
+        "fallback_models": [],
+        "fallback_used": false,
+        "model_alias_or_route_changed": true,
+        "provider_routing_policy": {
+          "allow_fallbacks": false
+        },
+        "requested_model": "gpt-5.4-mini",
+        "resolved_model": "gpt-5.4-mini-2026-03-17",
+        "response_id": "resp_00b6d4cde966a2b60169fc1f439560819784ea1aa5d09eb720"
+      },
+      {
+        "adapter": "openai_responses",
+        "base_url": "https://api.openai.com/v1/responses",
+        "fallback_models": [],
+        "fallback_used": false,
+        "model_alias_or_route_changed": true,
+        "provider_routing_policy": {
+          "allow_fallbacks": false
+        },
+        "requested_model": "gpt-5.4-mini",
+        "resolved_model": "gpt-5.4-mini-2026-03-17",
+        "response_id": "resp_0deefab9e0e35ca80169fc1f4936fc819391bc1a6adacabf40"
+      },
+      {
+        "adapter": "openai_responses",
+        "base_url": "https://api.openai.com/v1/responses",
+        "fallback_models": [],
+        "fallback_used": false,
+        "model_alias_or_route_changed": true,
+        "provider_routing_policy": {
+          "allow_fallbacks": false
+        },
+        "requested_model": "gpt-5.4-mini",
+        "resolved_model": "gpt-5.4-mini-2026-03-17",
+        "response_id": "resp_017a61a868e6cdae0169fc1f4cb8c08196a41606992fbf08a7"
+      },
+      {
+        "adapter": "openai_responses",
+        "base_url": "https://api.openai.com/v1/responses",
+        "fallback_models": [],
+        "fallback_used": false,
+        "model_alias_or_route_changed": true,
+        "provider_routing_policy": {
+          "allow_fallbacks": false
+        },
+        "requested_model": "gpt-5.4-mini",
+        "resolved_model": "gpt-5.4-mini-2026-03-17",
+        "response_id": "resp_0bc14c5aa65588ab0169fc1f4f6b4c8194a156f7502038e25d"
+      },
+      {
+        "adapter": "openai_responses",
+        "base_url": "https://api.openai.com/v1/responses",
+        "fallback_models": [],
+        "fallback_used": false,
+        "model_alias_or_route_changed": true,
+        "provider_routing_policy": {
+          "allow_fallbacks": false
+        },
+        "requested_model": "gpt-5.4-mini",
+        "resolved_model": "gpt-5.4-mini-2026-03-17",
+        "response_id": "resp_0f01e42bf340cb520169fc1f5483488194aa9578e62d2f7b28"
+      },
+      {
+        "adapter": "openai_responses",
+        "base_url": "https://api.openai.com/v1/responses",
+        "fallback_models": [],
+        "fallback_used": false,
+        "model_alias_or_route_changed": true,
+        "provider_routing_policy": {
+          "allow_fallbacks": false
+        },
+        "requested_model": "gpt-5.4-mini",
+        "resolved_model": "gpt-5.4-mini-2026-03-17",
+        "response_id": "resp_00d7bc7ab6527a7a0169fc1f5766448190bb636daa7cfce5b6"
+      },
+      {
+        "adapter": "openai_responses",
+        "base_url": "https://api.openai.com/v1/responses",
+        "fallback_models": [],
+        "fallback_used": false,
+        "model_alias_or_route_changed": true,
+        "provider_routing_policy": {
+          "allow_fallbacks": false
+        },
+        "requested_model": "gpt-5.4-mini",
+        "resolved_model": "gpt-5.4-mini-2026-03-17",
+        "response_id": "resp_054ebcf59e627d000169fc1f5b7b088196b8d4ac4c28cc233a"
+      },
+      {
+        "adapter": "openai_responses",
+        "base_url": "https://api.openai.com/v1/responses",
+        "fallback_models": [],
+        "fallback_used": false,
+        "model_alias_or_route_changed": true,
+        "provider_routing_policy": {
+          "allow_fallbacks": false
+        },
+        "requested_model": "gpt-5.4-mini",
+        "resolved_model": "gpt-5.4-mini-2026-03-17",
+        "response_id": "resp_032ea4fa657c5efb0169fc1f5e5554819785e8348512cea7c4"
+      },
+      {
+        "adapter": "openai_responses",
+        "base_url": "https://api.openai.com/v1/responses",
+        "fallback_models": [],
+        "fallback_used": false,
+        "model_alias_or_route_changed": true,
+        "provider_routing_policy": {
+          "allow_fallbacks": false
+        },
+        "requested_model": "gpt-5.4-mini",
+        "resolved_model": "gpt-5.4-mini-2026-03-17",
+        "response_id": "resp_0bd6d30576fccf690169fc1f60544881978e4dce53c2fde3bf"
+      },
+      {
+        "adapter": "openai_responses",
+        "base_url": "https://api.openai.com/v1/responses",
+        "fallback_models": [],
+        "fallback_used": false,
+        "model_alias_or_route_changed": true,
+        "provider_routing_policy": {
+          "allow_fallbacks": false
+        },
+        "requested_model": "gpt-5.4-mini",
+        "resolved_model": "gpt-5.4-mini-2026-03-17",
+        "response_id": "resp_07a89238a83bb80c0169fc1f6528988193a114a57fe5a1d2a1"
+      },
+      {
+        "adapter": "openai_responses",
+        "base_url": "https://api.openai.com/v1/responses",
+        "fallback_models": [],
+        "fallback_used": false,
+        "model_alias_or_route_changed": true,
+        "provider_routing_policy": {
+          "allow_fallbacks": false
+        },
+        "requested_model": "gpt-5.4-mini",
+        "resolved_model": "gpt-5.4-mini-2026-03-17",
+        "response_id": "resp_02fbe15ab6dbcbbd0169fc1f66f8508193ad0bb563221b6f7a"
+      },
+      {
+        "adapter": "openai_responses",
+        "base_url": "https://api.openai.com/v1/responses",
+        "fallback_models": [],
+        "fallback_used": false,
+        "model_alias_or_route_changed": true,
+        "provider_routing_policy": {
+          "allow_fallbacks": false
+        },
+        "requested_model": "gpt-5.4-mini",
+        "resolved_model": "gpt-5.4-mini-2026-03-17",
+        "response_id": "resp_058c38693dc284150169fc1f6a7538819781bf825c2d3fc93d"
+      },
+      {
+        "adapter": "openai_responses",
+        "base_url": "https://api.openai.com/v1/responses",
+        "fallback_models": [],
+        "fallback_used": false,
+        "model_alias_or_route_changed": true,
+        "provider_routing_policy": {
+          "allow_fallbacks": false
+        },
+        "requested_model": "gpt-5.4-mini",
+        "resolved_model": "gpt-5.4-mini-2026-03-17",
+        "response_id": "resp_0b48e082c40d6f950169fc1f6eacf88195a4233cfb765b9395"
+      },
+      {
+        "adapter": "openai_responses",
+        "base_url": "https://api.openai.com/v1/responses",
+        "fallback_models": [],
+        "fallback_used": false,
+        "model_alias_or_route_changed": true,
+        "provider_routing_policy": {
+          "allow_fallbacks": false
+        },
+        "requested_model": "gpt-5.4-mini",
+        "resolved_model": "gpt-5.4-mini-2026-03-17",
+        "response_id": "resp_02ecf04766a988b50169fc1f70c4488195821be1c25f0b1980"
+      },
+      {
+        "adapter": "openai_responses",
+        "base_url": "https://api.openai.com/v1/responses",
+        "fallback_models": [],
+        "fallback_used": false,
+        "model_alias_or_route_changed": true,
+        "provider_routing_policy": {
+          "allow_fallbacks": false
+        },
+        "requested_model": "gpt-5.4-mini",
+        "resolved_model": "gpt-5.4-mini-2026-03-17",
+        "response_id": "resp_0eb6b1839ad9a3b90169fc1f733b108194930f17244f017d9c"
+      },
+      {
+        "adapter": "openai_responses",
+        "base_url": "https://api.openai.com/v1/responses",
+        "fallback_models": [],
+        "fallback_used": false,
+        "model_alias_or_route_changed": true,
+        "provider_routing_policy": {
+          "allow_fallbacks": false
+        },
+        "requested_model": "gpt-5.4-mini",
+        "resolved_model": "gpt-5.4-mini-2026-03-17",
+        "response_id": "resp_0afe211266138c7e0169fc1f777f388190bbecd184dbe9a047"
+      },
+      {
+        "adapter": "openai_responses",
+        "base_url": "https://api.openai.com/v1/responses",
+        "fallback_models": [],
+        "fallback_used": false,
+        "model_alias_or_route_changed": true,
+        "provider_routing_policy": {
+          "allow_fallbacks": false
+        },
+        "requested_model": "gpt-5.4-mini",
+        "resolved_model": "gpt-5.4-mini-2026-03-17",
+        "response_id": "resp_0b9d4d0e220413a30169fc1f79413c819581400eb740d71275"
+      },
+      {
+        "adapter": "openai_responses",
+        "base_url": "https://api.openai.com/v1/responses",
+        "fallback_models": [],
+        "fallback_used": false,
+        "model_alias_or_route_changed": true,
+        "provider_routing_policy": {
+          "allow_fallbacks": false
+        },
+        "requested_model": "gpt-5.4-mini",
+        "resolved_model": "gpt-5.4-mini-2026-03-17",
+        "response_id": "resp_0ea65066b9986d3f0169fc1f7d1bd48195bcbf32d5f2079979"
+      },
+      {
+        "adapter": "openai_responses",
+        "base_url": "https://api.openai.com/v1/responses",
+        "fallback_models": [],
+        "fallback_used": false,
+        "model_alias_or_route_changed": true,
+        "provider_routing_policy": {
+          "allow_fallbacks": false
+        },
+        "requested_model": "gpt-5.4-mini",
+        "resolved_model": "gpt-5.4-mini-2026-03-17",
+        "response_id": "resp_0c745df3f55f04540169fc1f8250b88194ac3e66ac5f7d7da7"
+      },
+      {
+        "adapter": "openai_responses",
+        "base_url": "https://api.openai.com/v1/responses",
+        "fallback_models": [],
+        "fallback_used": false,
+        "model_alias_or_route_changed": true,
+        "provider_routing_policy": {
+          "allow_fallbacks": false
+        },
+        "requested_model": "gpt-5.4-mini",
+        "resolved_model": "gpt-5.4-mini-2026-03-17",
+        "response_id": "resp_0f9ecb36282d33370169fc1f842b14819498b181bc38720b50"
+      },
+      {
+        "adapter": "openai_responses",
+        "base_url": "https://api.openai.com/v1/responses",
+        "fallback_models": [],
+        "fallback_used": false,
+        "model_alias_or_route_changed": true,
+        "provider_routing_policy": {
+          "allow_fallbacks": false
+        },
+        "requested_model": "gpt-5.4-mini",
+        "resolved_model": "gpt-5.4-mini-2026-03-17",
+        "response_id": "resp_0843427db1c7e7ec0169fc1f87ebbc8193980c6d350f83abcd"
+      },
+      {
+        "adapter": "openai_responses",
+        "base_url": "https://api.openai.com/v1/responses",
+        "fallback_models": [],
+        "fallback_used": false,
+        "model_alias_or_route_changed": true,
+        "provider_routing_policy": {
+          "allow_fallbacks": false
+        },
+        "requested_model": "gpt-5.4-mini",
+        "resolved_model": "gpt-5.4-mini-2026-03-17",
+        "response_id": "resp_02b3afb5fae42f740169fc1f8a17688193820879df9b89fe22"
+      },
+      {
+        "adapter": "openai_responses",
+        "base_url": "https://api.openai.com/v1/responses",
+        "fallback_models": [],
+        "fallback_used": false,
+        "model_alias_or_route_changed": true,
+        "provider_routing_policy": {
+          "allow_fallbacks": false
+        },
+        "requested_model": "gpt-5.4-mini",
+        "resolved_model": "gpt-5.4-mini-2026-03-17",
+        "response_id": "resp_0a5783c63cc6245e0169fc1f8c9a008195b189e78eb38c85cb"
+      },
+      {
+        "adapter": "openai_responses",
+        "base_url": "https://api.openai.com/v1/responses",
+        "fallback_models": [],
+        "fallback_used": false,
+        "model_alias_or_route_changed": true,
+        "provider_routing_policy": {
+          "allow_fallbacks": false
+        },
+        "requested_model": "gpt-5.4-mini",
+        "resolved_model": "gpt-5.4-mini-2026-03-17",
+        "response_id": "resp_06c093f0a2a4a9160169fc1f8eb8608195ad69ca8ca97d0db1"
+      },
+      {
+        "adapter": "openai_responses",
+        "base_url": "https://api.openai.com/v1/responses",
+        "fallback_models": [],
+        "fallback_used": false,
+        "model_alias_or_route_changed": true,
+        "provider_routing_policy": {
+          "allow_fallbacks": false
+        },
+        "requested_model": "gpt-5.4-mini",
+        "resolved_model": "gpt-5.4-mini-2026-03-17",
+        "response_id": "resp_0f167d7a9fa32f500169fc1f9440288193a9187c94c41eaeb8"
+      },
+      {
+        "adapter": "openai_responses",
+        "base_url": "https://api.openai.com/v1/responses",
+        "fallback_models": [],
+        "fallback_used": false,
+        "model_alias_or_route_changed": true,
+        "provider_routing_policy": {
+          "allow_fallbacks": false
+        },
+        "requested_model": "gpt-5.4-mini",
+        "resolved_model": "gpt-5.4-mini-2026-03-17",
+        "response_id": "resp_06780803a78e34430169fc1f97f3cc81958370fe928dbe6e59"
+      }
+    ],
+    "provider_route_preflight_passed": true,
+    "require_validation_before_done": true,
+    "resolved_models": [
+      "gpt-5.4-mini-2026-03-17"
+    ],
+    "temperature": 0.0,
+    "tokens_in": 752892,
+    "tokens_out": 47238,
+    "total_cost_credits": null,
+    "total_model_calls": 80,
+    "total_tokens_in": 752892,
+    "total_tokens_out": 47238
+  },
+  "run_id": "count-dataset-tokens__gpt54mini",
+  "run_protocol_version": "0.1.0",
+  "run_status": "completed_failure",
+  "termination_reason": "verifier_fail"
+}

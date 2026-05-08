@@ -1,0 +1,115 @@
+{
+  "gates": {
+    "exit_code_coverage": true,
+    "per_run_quality": true,
+    "stderr_snippet_coverage": true,
+    "stdout_snippet_coverage": true
+  },
+  "median_observation_events_per_run": 4.0,
+  "passed": true,
+  "pilot_gates": {
+    "median_observation_events_per_run_min": 10,
+    "median_observation_events_per_run_passed": false
+  },
+  "run_count": 4,
+  "runs": [
+    {
+      "event_counts": {
+        "agent_claims_done": 1,
+        "error_observed": 1,
+        "validation_attempt": 1,
+        "validation_fail_observed": 1,
+        "verifier_disagreement": 1,
+        "verifier_fail": 1
+      },
+      "hidden_phase_events_visible_to_agent": 0,
+      "missing_inputs": [],
+      "observation_event_count": 6,
+      "observation_schema_valid": true,
+      "observation_validation_issues": [],
+      "passed": true,
+      "run_dir": "runs/d_smoke/noop_aimo",
+      "shell_exit_code_coverage": 1.0,
+      "shell_rows": 2,
+      "shell_stderr_nonempty_fraction": 0.5,
+      "shell_stderr_snippet_coverage": 1.0,
+      "shell_stdout_nonempty_fraction": 0.5,
+      "shell_stdout_snippet_coverage": 1.0,
+      "terminal_event_count": 2,
+      "terminal_events_visible_to_agent": 0
+    },
+    {
+      "event_counts": {
+        "agent_claims_done": 1,
+        "validation_attempt": 1,
+        "validation_pass_observed": 1,
+        "verifier_pass": 1
+      },
+      "hidden_phase_events_visible_to_agent": 0,
+      "missing_inputs": [],
+      "observation_event_count": 4,
+      "observation_schema_valid": true,
+      "observation_validation_issues": [],
+      "passed": true,
+      "run_dir": "runs/d_smoke/oracle_hello_world",
+      "shell_exit_code_coverage": 1.0,
+      "shell_rows": 3,
+      "shell_stderr_nonempty_fraction": 0.3333333333333333,
+      "shell_stderr_snippet_coverage": 1.0,
+      "shell_stdout_nonempty_fraction": 0.3333333333333333,
+      "shell_stdout_snippet_coverage": 1.0,
+      "terminal_event_count": 1,
+      "terminal_events_visible_to_agent": 0
+    },
+    {
+      "event_counts": {
+        "agent_claims_done": 1,
+        "validation_attempt": 1,
+        "validation_pass_observed": 1,
+        "verifier_pass": 1
+      },
+      "hidden_phase_events_visible_to_agent": 0,
+      "missing_inputs": [],
+      "observation_event_count": 4,
+      "observation_schema_valid": true,
+      "observation_validation_issues": [],
+      "passed": true,
+      "run_dir": "runs/d_smoke/oracle_grid_pattern_transform",
+      "shell_exit_code_coverage": 1.0,
+      "shell_rows": 3,
+      "shell_stderr_nonempty_fraction": 0.3333333333333333,
+      "shell_stderr_snippet_coverage": 1.0,
+      "shell_stdout_nonempty_fraction": 0.3333333333333333,
+      "shell_stdout_snippet_coverage": 1.0,
+      "terminal_event_count": 1,
+      "terminal_events_visible_to_agent": 0
+    },
+    {
+      "event_counts": {
+        "agent_claims_done": 1,
+        "validation_attempt": 1,
+        "validation_pass_observed": 1,
+        "verifier_pass": 1
+      },
+      "hidden_phase_events_visible_to_agent": 0,
+      "missing_inputs": [],
+      "observation_event_count": 4,
+      "observation_schema_valid": true,
+      "observation_validation_issues": [],
+      "passed": true,
+      "run_dir": "runs/d_smoke/oracle_aimo_airline_departures",
+      "shell_exit_code_coverage": 1.0,
+      "shell_rows": 3,
+      "shell_stderr_nonempty_fraction": 0.3333333333333333,
+      "shell_stderr_snippet_coverage": 1.0,
+      "shell_stdout_nonempty_fraction": 0.6666666666666666,
+      "shell_stdout_snippet_coverage": 1.0,
+      "terminal_event_count": 1,
+      "terminal_events_visible_to_agent": 0
+    }
+  ],
+  "shell_exit_code_coverage": 1.0,
+  "shell_rows": 11,
+  "shell_stderr_snippet_coverage": 1.0,
+  "shell_stdout_snippet_coverage": 1.0
+}

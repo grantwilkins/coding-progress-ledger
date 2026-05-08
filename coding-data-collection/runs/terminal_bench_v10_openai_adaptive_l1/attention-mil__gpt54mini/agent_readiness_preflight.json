@@ -1,0 +1,31 @@
+{
+  "check_count": 2,
+  "failed_checks": [],
+  "image_tag": "cdc-tb-attention-mil__gpt54mini",
+  "manual_review_checks": [],
+  "network_policy": "disabled",
+  "passed": true,
+  "results": [
+    {
+      "check_id": "hidden_image_artifacts_unreadable",
+      "command": "bad=''; for p in /protected /oracle /verifier /gold /solution /tests /test; do if [ -e \"$p\" ]; then if [ -d \"$p\" ]; then ls \"$p\" >/dev/null 2>&1 && bad=\"$bad $p\"; else head -c 1 \"$p\" >/dev/null 2>&1 && bad=\"$bad $p\"; fi; fi; done; if [ -n \"$bad\" ]; then echo \"agent can read hidden image path(s):$bad\" >&2; exit 1; fi",
+      "exit_code": 0,
+      "expected": "exit_code_0",
+      "reason": "agent image must not expose hidden tests, protected files, oracle files, or verifier internals",
+      "status": "passed",
+      "stderr_snippet": "",
+      "stdout_snippet": ""
+    },
+    {
+      "check_id": "python_imports_available",
+      "command": "python3 - <<'PY'\nimport torch\nPY",
+      "exit_code": 0,
+      "expected": "exit_code_0",
+      "reason": "visible Python files import third-party modules needed for local validation",
+      "status": "passed",
+      "stderr_snippet": "",
+      "stdout_snippet": ""
+    }
+  ],
+  "schema_version": "0.1.0"
+}

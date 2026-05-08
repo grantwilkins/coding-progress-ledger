@@ -1,0 +1,286 @@
+{
+  "active_coding_leaves_final": 44,
+  "active_overall_leaves_final": 47,
+  "category_active_weight_final": {
+    "artifact": 0,
+    "documentation": 0,
+    "environment": 3.0,
+    "investigation": 36.0,
+    "product": 0,
+    "validation": 8.0
+  },
+  "category_completed_weight_final": {
+    "artifact": 0,
+    "documentation": 0,
+    "environment": 0,
+    "investigation": 11.0,
+    "product": 0,
+    "validation": 2.0
+  },
+  "coding_categories": [
+    "product",
+    "validation",
+    "investigation"
+  ],
+  "coding_largest_drop": 0.16666666666666669,
+  "coding_nonmonotonic": true,
+  "completed_coding_leaves_final": 13,
+  "completed_overall_leaves_final": 13,
+  "evidence_audit_by_category": {
+    "investigation": {
+      "audited_completion_count": 11,
+      "status": "weak",
+      "weak_completion_evidence_count": 9,
+      "weak_subtask_ids": [
+        "investigation_6",
+        "investigation_8",
+        "investigation_10",
+        "investigation_15",
+        "investigation_20",
+        "investigation_24",
+        "investigation_34",
+        "investigation_39",
+        "investigation_42"
+      ]
+    },
+    "product": {
+      "audited_completion_count": 0,
+      "status": "not_applicable",
+      "weak_completion_evidence_count": 0,
+      "weak_subtask_ids": []
+    },
+    "validation": {
+      "audited_completion_count": 3,
+      "status": "weak",
+      "weak_completion_evidence_count": 3,
+      "weak_subtask_ids": [
+        "validation_32",
+        "validation_44",
+        "validation_46"
+      ]
+    }
+  },
+  "evidence_audit_status": "weak",
+  "evidence_audit_weak_categories": [
+    "validation",
+    "investigation"
+  ],
+  "excluded_active_weight_final": 3.0,
+  "excluded_categories": [
+    "artifact",
+    "documentation",
+    "environment"
+  ],
+  "excluded_categories_final": {
+    "artifact": {
+      "active": 0,
+      "complete": 0
+    },
+    "documentation": {
+      "active": 0,
+      "complete": 0
+    },
+    "environment": {
+      "active": 3.0,
+      "complete": 0
+    }
+  },
+  "excluded_completed_weight_final": 0,
+  "final_coding_active_weight": 44.0,
+  "final_coding_complete_weight": 13.0,
+  "final_coding_progress": 0.29545454545454547,
+  "final_overall_active_weight": 47.0,
+  "final_overall_complete_weight": 13.0,
+  "final_overall_progress": 0.2765957446808511,
+  "final_success": null,
+  "final_success_source": "absent",
+  "generator": "ledger_progress.sidecar",
+  "historical_subtasks_created": 47,
+  "largest_coding_drop": 0.16666666666666669,
+  "largest_coding_drop_category_contributions": {
+    "investigation": 0.166666666667
+  },
+  "largest_coding_drop_detail": {
+    "amount": 0.16666666666666669,
+    "from_step": 2,
+    "to_step": 3
+  },
+  "largest_coding_drop_source": "investigation",
+  "largest_overall_drop": 0.16666666666666669,
+  "largest_overall_drop_category_contributions": {
+    "investigation": 0.166666666667
+  },
+  "largest_overall_drop_detail": {
+    "amount": 0.16666666666666669,
+    "from_step": 2,
+    "to_step": 3
+  },
+  "largest_overall_drop_mostly_excluded": false,
+  "largest_overall_drop_source": "investigation",
+  "nonmonotonic_coding": true,
+  "nonmonotonic_overall": true,
+  "overall_largest_drop": 0.16666666666666669,
+  "overall_nonmonotonic": true,
+  "source_ledger_sha256": "86201380cf09d64c3e808cb6b7dd0372a29ed7749867e758c55867021e4d3add",
+  "subtask_categories": {
+    "environment_26": "environment",
+    "environment_27": "environment",
+    "environment_40": "environment",
+    "investigation_1": "investigation",
+    "investigation_10": "investigation",
+    "investigation_11": "investigation",
+    "investigation_12": "investigation",
+    "investigation_13": "investigation",
+    "investigation_15": "investigation",
+    "investigation_16": "investigation",
+    "investigation_17": "investigation",
+    "investigation_18": "investigation",
+    "investigation_19": "investigation",
+    "investigation_2": "investigation",
+    "investigation_20": "investigation",
+    "investigation_21": "investigation",
+    "investigation_22": "investigation",
+    "investigation_23": "investigation",
+    "investigation_24": "investigation",
+    "investigation_25": "investigation",
+    "investigation_28": "investigation",
+    "investigation_29": "investigation",
+    "investigation_3": "investigation",
+    "investigation_30": "investigation",
+    "investigation_31": "investigation",
+    "investigation_33": "investigation",
+    "investigation_34": "investigation",
+    "investigation_36": "investigation",
+    "investigation_37": "investigation",
+    "investigation_38": "investigation",
+    "investigation_39": "investigation",
+    "investigation_4": "investigation",
+    "investigation_41": "investigation",
+    "investigation_42": "investigation",
+    "investigation_45": "investigation",
+    "investigation_5": "investigation",
+    "investigation_6": "investigation",
+    "investigation_7": "investigation",
+    "investigation_8": "investigation",
+    "terminal_verifier": "validation",
+    "validation_14": "validation",
+    "validation_32": "validation",
+    "validation_35": "validation",
+    "validation_43": "validation",
+    "validation_44": "validation",
+    "validation_46": "validation",
+    "validation_9": "validation"
+  },
+  "task_id": "csv-to-parquet__gpt53codex",
+  "weak_completion_evidence": [
+    {
+      "category": "investigation",
+      "description": "list_dir .",
+      "evidence_types": [
+        "contract_text"
+      ],
+      "step": 6,
+      "subtask_id": "investigation_6"
+    },
+    {
+      "category": "investigation",
+      "description": "read_file data.csv",
+      "evidence_types": [
+        "manual_note"
+      ],
+      "step": 8,
+      "subtask_id": "investigation_8"
+    },
+    {
+      "category": "investigation",
+      "description": "list_dir task-deps",
+      "evidence_types": [
+        "manual_note"
+      ],
+      "step": 10,
+      "subtask_id": "investigation_10"
+    },
+    {
+      "category": "investigation",
+      "description": "shell tool",
+      "evidence_types": [
+        "manual_note"
+      ],
+      "step": 15,
+      "subtask_id": "investigation_15"
+    },
+    {
+      "category": "investigation",
+      "description": "shell tool",
+      "evidence_types": [
+        "manual_note"
+      ],
+      "step": 20,
+      "subtask_id": "investigation_20"
+    },
+    {
+      "category": "investigation",
+      "description": "find_files *",
+      "evidence_types": [
+        "contract_text"
+      ],
+      "step": 24,
+      "subtask_id": "investigation_24"
+    },
+    {
+      "category": "validation",
+      "description": "shell tool",
+      "evidence_types": [
+        "manual_note"
+      ],
+      "step": 32,
+      "subtask_id": "validation_32"
+    },
+    {
+      "category": "investigation",
+      "description": "shell tool",
+      "evidence_types": [
+        "manual_note"
+      ],
+      "step": 34,
+      "subtask_id": "investigation_34"
+    },
+    {
+      "category": "investigation",
+      "description": "shell tool",
+      "evidence_types": [
+        "manual_note"
+      ],
+      "step": 39,
+      "subtask_id": "investigation_39"
+    },
+    {
+      "category": "investigation",
+      "description": "shell tool",
+      "evidence_types": [
+        "manual_note"
+      ],
+      "step": 42,
+      "subtask_id": "investigation_42"
+    },
+    {
+      "category": "validation",
+      "description": "shell tool",
+      "evidence_types": [
+        "manual_note"
+      ],
+      "step": 44,
+      "subtask_id": "validation_44"
+    },
+    {
+      "category": "validation",
+      "description": "Unable to create `data.parquet` in this environment due to missing required tooling. I verified `data.csv` is present, then attempted conversion via `python3` using `pandas`, `pyarrow`, and `duckdb`; all modules are missing. I then checked ",
+      "evidence_types": [
+        "manual_note"
+      ],
+      "step": 46,
+      "subtask_id": "validation_46"
+    }
+  ],
+  "weak_completion_evidence_count": 12
+}

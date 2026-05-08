@@ -1,0 +1,33 @@
+[project]
+name = "coding-data-collection"
+version = "0.1.0"
+description = "Experiment harness and data factory for long-horizon coding-agent traces."
+readme = "README.md"
+requires-python = ">=3.11,<3.13"
+dependencies = [
+    "coding-progress-ledger",
+    "coding-estimator",
+    "jsonschema>=4.21,<5",
+    "pandas>=2,<3",
+]
+
+[tool.uv.sources]
+coding-progress-ledger = { path = "../coding-progress-ledger", editable = true }
+coding-estimator = { path = "../coding-estimator", editable = true }
+
+[dependency-groups]
+dev = [
+    "pytest>=8",
+]
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+include = ["coding_data_collection*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+norecursedirs = ["runs", "datasets", ".venv", ".git"]

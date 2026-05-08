@@ -1,0 +1,28 @@
+{
+  "artifact_contract": [
+    "checkpoints.parquet",
+    "labels.parquet",
+    "estimator_predictions.parquet",
+    "checkpoint_feature_manifest.json"
+  ],
+  "artifact_dir": "datasets/terminal_bench_openai_m1b_preflight_estimator",
+  "corpus_id": "terminal_bench_openai_m1b_preflight_estimator",
+  "producer": "coding-estimator",
+  "run_count": 12,
+  "run_ids": [
+    "broken-python__gpt54",
+    "broken-python__gpt53codex",
+    "broken-python__gpt54mini",
+    "attention-mil__gpt54",
+    "attention-mil__gpt53codex",
+    "attention-mil__gpt54mini",
+    "grid-pattern-transform__gpt54",
+    "grid-pattern-transform__gpt53codex",
+    "grid-pattern-transform__gpt54mini",
+    "csv-to-parquet__gpt54",
+    "csv-to-parquet__gpt53codex",
+    "csv-to-parquet__gpt54mini"
+  ],
+  "source_id": "terminal_bench_pilot",
+  "staged_runs_dir": "../coding-estimator/runs/terminal_bench_pilot"
+}

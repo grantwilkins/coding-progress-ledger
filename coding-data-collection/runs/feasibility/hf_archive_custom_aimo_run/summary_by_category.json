@@ -1,0 +1,148 @@
+{
+  "active_coding_leaves_final": 4,
+  "active_overall_leaves_final": 5,
+  "category_active_weight_final": {
+    "artifact": 0,
+    "documentation": 0,
+    "environment": 1.0,
+    "investigation": 3.0,
+    "product": 0,
+    "validation": 1.0
+  },
+  "category_completed_weight_final": {
+    "artifact": 0,
+    "documentation": 0,
+    "environment": 1.0,
+    "investigation": 3.0,
+    "product": 0,
+    "validation": 1.0
+  },
+  "coding_categories": [
+    "product",
+    "validation",
+    "investigation"
+  ],
+  "coding_largest_drop": 0.0,
+  "coding_nonmonotonic": false,
+  "completed_coding_leaves_final": 4,
+  "completed_overall_leaves_final": 5,
+  "evidence_audit_by_category": {
+    "investigation": {
+      "audited_completion_count": 3,
+      "status": "weak",
+      "weak_completion_evidence_count": 3,
+      "weak_subtask_ids": [
+        "investigation_1",
+        "investigation_2",
+        "investigation_5"
+      ]
+    },
+    "product": {
+      "audited_completion_count": 0,
+      "status": "not_applicable",
+      "weak_completion_evidence_count": 0,
+      "weak_subtask_ids": []
+    },
+    "validation": {
+      "audited_completion_count": 1,
+      "status": "strong",
+      "weak_completion_evidence_count": 0,
+      "weak_subtask_ids": []
+    }
+  },
+  "evidence_audit_status": "weak",
+  "evidence_audit_weak_categories": [
+    "investigation"
+  ],
+  "excluded_active_weight_final": 1.0,
+  "excluded_categories": [
+    "artifact",
+    "documentation",
+    "environment"
+  ],
+  "excluded_categories_final": {
+    "artifact": {
+      "active": 0,
+      "complete": 0
+    },
+    "documentation": {
+      "active": 0,
+      "complete": 0
+    },
+    "environment": {
+      "active": 1.0,
+      "complete": 1.0
+    }
+  },
+  "excluded_completed_weight_final": 1.0,
+  "final_coding_active_weight": 4.0,
+  "final_coding_complete_weight": 4.0,
+  "final_coding_progress": 1.0,
+  "final_overall_active_weight": 5.0,
+  "final_overall_complete_weight": 5.0,
+  "final_overall_progress": 1.0,
+  "final_success": null,
+  "final_success_source": "absent",
+  "generator": "ledger_progress.sidecar",
+  "historical_subtasks_created": 5,
+  "largest_coding_drop": 0.0,
+  "largest_coding_drop_category_contributions": {},
+  "largest_coding_drop_detail": {
+    "amount": 0.0,
+    "from_step": null,
+    "to_step": null
+  },
+  "largest_coding_drop_source": "none",
+  "largest_overall_drop": 0.0,
+  "largest_overall_drop_category_contributions": {},
+  "largest_overall_drop_detail": {
+    "amount": 0.0,
+    "from_step": null,
+    "to_step": null
+  },
+  "largest_overall_drop_mostly_excluded": false,
+  "largest_overall_drop_source": "none",
+  "nonmonotonic_coding": false,
+  "nonmonotonic_overall": false,
+  "overall_largest_drop": 0.0,
+  "overall_nonmonotonic": false,
+  "source_ledger_sha256": "7e6877431c48350de2c6b17ae6a7d7e37008322a3c5520211ddc87610690627d",
+  "subtask_categories": {
+    "environment_3": "environment",
+    "investigation_1": "investigation",
+    "investigation_2": "investigation",
+    "investigation_5": "investigation",
+    "validation_4": "validation"
+  },
+  "task_id": "hf_archive_custom_aimo_run",
+  "weak_completion_evidence": [
+    {
+      "category": "investigation",
+      "description": "HF archive extraction succeeded and hidden/verifier files were identified.",
+      "evidence_types": [
+        "manual_note"
+      ],
+      "step": 1,
+      "subtask_id": "investigation_1"
+    },
+    {
+      "category": "investigation",
+      "description": "Custom agent workspace preparation hid oracle, verifier, and canary-bearing files.",
+      "evidence_types": [
+        "manual_note"
+      ],
+      "step": 2,
+      "subtask_id": "investigation_2"
+    },
+    {
+      "category": "investigation",
+      "description": "HF archive custom feasibility run completed.",
+      "evidence_types": [
+        "manual_note"
+      ],
+      "step": 5,
+      "subtask_id": "investigation_5"
+    }
+  ],
+  "weak_completion_evidence_count": 3
+}

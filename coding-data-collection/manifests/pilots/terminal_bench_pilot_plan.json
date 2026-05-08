@@ -1,0 +1,608 @@
+{
+  "arms": [
+    {
+      "agent_command": "pwd && ls -la && test -f /task/task.md && echo ready",
+      "name": "scout"
+    },
+    {
+      "agent_command": "pwd && ls -la && python -m pytest -q || true",
+      "name": "validation"
+    }
+  ],
+  "blockers": [],
+  "candidate_scores_path": "manifests/pilots/terminal_bench_candidate_scores.csv",
+  "expected_runs": 24,
+  "expected_tasks": 12,
+  "passed": true,
+  "planned_run_count": 24,
+  "planned_runs": [
+    {
+      "arm": "scout",
+      "command": [
+        "/Users/grantwilkins/houdini/coding-data-collection/.venv312/bin/python3",
+        "scripts/run_docker_substrate_smoke.py",
+        "--task-dir",
+        "/private/tmp/houdini_tb_hf/classifier-debug",
+        "--run-dir",
+        "runs/terminal_bench_pilot/classifier-debug__scout",
+        "--image-tag",
+        "cdc-tb-classifier-debug__scout",
+        "--agent-command",
+        "pwd && ls -la && test -f /task/task.md && echo ready",
+        "--verifier-command",
+        "bash /task/run-tests.sh",
+        "--expect-verifier-failure"
+      ],
+      "run_id": "classifier-debug__scout",
+      "task_dir": "/private/tmp/houdini_tb_hf/classifier-debug",
+      "task_id": "classifier-debug"
+    },
+    {
+      "arm": "validation",
+      "command": [
+        "/Users/grantwilkins/houdini/coding-data-collection/.venv312/bin/python3",
+        "scripts/run_docker_substrate_smoke.py",
+        "--task-dir",
+        "/private/tmp/houdini_tb_hf/classifier-debug",
+        "--run-dir",
+        "runs/terminal_bench_pilot/classifier-debug__validation",
+        "--image-tag",
+        "cdc-tb-classifier-debug__validation",
+        "--agent-command",
+        "pwd && ls -la && python -m pytest -q || true",
+        "--verifier-command",
+        "bash /task/run-tests.sh",
+        "--expect-verifier-failure"
+      ],
+      "run_id": "classifier-debug__validation",
+      "task_dir": "/private/tmp/houdini_tb_hf/classifier-debug",
+      "task_id": "classifier-debug"
+    },
+    {
+      "arm": "scout",
+      "command": [
+        "/Users/grantwilkins/houdini/coding-data-collection/.venv312/bin/python3",
+        "scripts/run_docker_substrate_smoke.py",
+        "--task-dir",
+        "/private/tmp/houdini_tb_hf/blind-maze-explorer-algorithm",
+        "--run-dir",
+        "runs/terminal_bench_pilot/blind-maze-explorer-algorithm__scout",
+        "--image-tag",
+        "cdc-tb-blind-maze-explorer-algorithm__scout",
+        "--agent-command",
+        "pwd && ls -la && test -f /task/task.md && echo ready",
+        "--verifier-command",
+        "bash /task/run-tests.sh",
+        "--expect-verifier-failure"
+      ],
+      "run_id": "blind-maze-explorer-algorithm__scout",
+      "task_dir": "/private/tmp/houdini_tb_hf/blind-maze-explorer-algorithm",
+      "task_id": "blind-maze-explorer-algorithm"
+    },
+    {
+      "arm": "validation",
+      "command": [
+        "/Users/grantwilkins/houdini/coding-data-collection/.venv312/bin/python3",
+        "scripts/run_docker_substrate_smoke.py",
+        "--task-dir",
+        "/private/tmp/houdini_tb_hf/blind-maze-explorer-algorithm",
+        "--run-dir",
+        "runs/terminal_bench_pilot/blind-maze-explorer-algorithm__validation",
+        "--image-tag",
+        "cdc-tb-blind-maze-explorer-algorithm__validation",
+        "--agent-command",
+        "pwd && ls -la && python -m pytest -q || true",
+        "--verifier-command",
+        "bash /task/run-tests.sh",
+        "--expect-verifier-failure"
+      ],
+      "run_id": "blind-maze-explorer-algorithm__validation",
+      "task_dir": "/private/tmp/houdini_tb_hf/blind-maze-explorer-algorithm",
+      "task_id": "blind-maze-explorer-algorithm"
+    },
+    {
+      "arm": "scout",
+      "command": [
+        "/Users/grantwilkins/houdini/coding-data-collection/.venv312/bin/python3",
+        "scripts/run_docker_substrate_smoke.py",
+        "--task-dir",
+        "/private/tmp/houdini_tb_hf/adaptive-rejection-sampler",
+        "--run-dir",
+        "runs/terminal_bench_pilot/adaptive-rejection-sampler__scout",
+        "--image-tag",
+        "cdc-tb-adaptive-rejection-sampler__scout",
+        "--agent-command",
+        "pwd && ls -la && test -f /task/task.md && echo ready",
+        "--verifier-command",
+        "bash /task/run-tests.sh",
+        "--expect-verifier-failure"
+      ],
+      "run_id": "adaptive-rejection-sampler__scout",
+      "task_dir": "/private/tmp/houdini_tb_hf/adaptive-rejection-sampler",
+      "task_id": "adaptive-rejection-sampler"
+    },
+    {
+      "arm": "validation",
+      "command": [
+        "/Users/grantwilkins/houdini/coding-data-collection/.venv312/bin/python3",
+        "scripts/run_docker_substrate_smoke.py",
+        "--task-dir",
+        "/private/tmp/houdini_tb_hf/adaptive-rejection-sampler",
+        "--run-dir",
+        "runs/terminal_bench_pilot/adaptive-rejection-sampler__validation",
+        "--image-tag",
+        "cdc-tb-adaptive-rejection-sampler__validation",
+        "--agent-command",
+        "pwd && ls -la && python -m pytest -q || true",
+        "--verifier-command",
+        "bash /task/run-tests.sh",
+        "--expect-verifier-failure"
+      ],
+      "run_id": "adaptive-rejection-sampler__validation",
+      "task_dir": "/private/tmp/houdini_tb_hf/adaptive-rejection-sampler",
+      "task_id": "adaptive-rejection-sampler"
+    },
+    {
+      "arm": "scout",
+      "command": [
+        "/Users/grantwilkins/houdini/coding-data-collection/.venv312/bin/python3",
+        "scripts/run_docker_substrate_smoke.py",
+        "--task-dir",
+        "/private/tmp/houdini_tb_hf/nginx-request-logging",
+        "--run-dir",
+        "runs/terminal_bench_pilot/nginx-request-logging__scout",
+        "--image-tag",
+        "cdc-tb-nginx-request-logging__scout",
+        "--agent-command",
+        "pwd && ls -la && test -f /task/task.md && echo ready",
+        "--verifier-command",
+        "bash /task/run-tests.sh",
+        "--expect-verifier-failure"
+      ],
+      "run_id": "nginx-request-logging__scout",
+      "task_dir": "/private/tmp/houdini_tb_hf/nginx-request-logging",
+      "task_id": "nginx-request-logging"
+    },
+    {
+      "arm": "validation",
+      "command": [
+        "/Users/grantwilkins/houdini/coding-data-collection/.venv312/bin/python3",
+        "scripts/run_docker_substrate_smoke.py",
+        "--task-dir",
+        "/private/tmp/houdini_tb_hf/nginx-request-logging",
+        "--run-dir",
+        "runs/terminal_bench_pilot/nginx-request-logging__validation",
+        "--image-tag",
+        "cdc-tb-nginx-request-logging__validation",
+        "--agent-command",
+        "pwd && ls -la && python -m pytest -q || true",
+        "--verifier-command",
+        "bash /task/run-tests.sh",
+        "--expect-verifier-failure"
+      ],
+      "run_id": "nginx-request-logging__validation",
+      "task_dir": "/private/tmp/houdini_tb_hf/nginx-request-logging",
+      "task_id": "nginx-request-logging"
+    },
+    {
+      "arm": "scout",
+      "command": [
+        "/Users/grantwilkins/houdini/coding-data-collection/.venv312/bin/python3",
+        "scripts/run_docker_substrate_smoke.py",
+        "--task-dir",
+        "/private/tmp/houdini_tb_d_smoke/extract-safely",
+        "--run-dir",
+        "runs/terminal_bench_pilot/extract-safely__scout",
+        "--image-tag",
+        "cdc-tb-extract-safely__scout",
+        "--agent-command",
+        "pwd && ls -la && test -f /task/task.md && echo ready",
+        "--verifier-command",
+        "bash /task/run-tests.sh",
+        "--expect-verifier-failure"
+      ],
+      "run_id": "extract-safely__scout",
+      "task_dir": "/private/tmp/houdini_tb_d_smoke/extract-safely",
+      "task_id": "extract-safely"
+    },
+    {
+      "arm": "validation",
+      "command": [
+        "/Users/grantwilkins/houdini/coding-data-collection/.venv312/bin/python3",
+        "scripts/run_docker_substrate_smoke.py",
+        "--task-dir",
+        "/private/tmp/houdini_tb_d_smoke/extract-safely",
+        "--run-dir",
+        "runs/terminal_bench_pilot/extract-safely__validation",
+        "--image-tag",
+        "cdc-tb-extract-safely__validation",
+        "--agent-command",
+        "pwd && ls -la && python -m pytest -q || true",
+        "--verifier-command",
+        "bash /task/run-tests.sh",
+        "--expect-verifier-failure"
+      ],
+      "run_id": "extract-safely__validation",
+      "task_dir": "/private/tmp/houdini_tb_d_smoke/extract-safely",
+      "task_id": "extract-safely"
+    },
+    {
+      "arm": "scout",
+      "command": [
+        "/Users/grantwilkins/houdini/coding-data-collection/.venv312/bin/python3",
+        "scripts/run_docker_substrate_smoke.py",
+        "--task-dir",
+        "/private/tmp/houdini_tb_d_smoke/broken-python",
+        "--run-dir",
+        "runs/terminal_bench_pilot/broken-python__scout",
+        "--image-tag",
+        "cdc-tb-broken-python__scout",
+        "--agent-command",
+        "pwd && ls -la && test -f /task/task.md && echo ready",
+        "--verifier-command",
+        "bash /task/run-tests.sh",
+        "--expect-verifier-failure"
+      ],
+      "run_id": "broken-python__scout",
+      "task_dir": "/private/tmp/houdini_tb_d_smoke/broken-python",
+      "task_id": "broken-python"
+    },
+    {
+      "arm": "validation",
+      "command": [
+        "/Users/grantwilkins/houdini/coding-data-collection/.venv312/bin/python3",
+        "scripts/run_docker_substrate_smoke.py",
+        "--task-dir",
+        "/private/tmp/houdini_tb_d_smoke/broken-python",
+        "--run-dir",
+        "runs/terminal_bench_pilot/broken-python__validation",
+        "--image-tag",
+        "cdc-tb-broken-python__validation",
+        "--agent-command",
+        "pwd && ls -la && python -m pytest -q || true",
+        "--verifier-command",
+        "bash /task/run-tests.sh",
+        "--expect-verifier-failure"
+      ],
+      "run_id": "broken-python__validation",
+      "task_dir": "/private/tmp/houdini_tb_d_smoke/broken-python",
+      "task_id": "broken-python"
+    },
+    {
+      "arm": "scout",
+      "command": [
+        "/Users/grantwilkins/houdini/coding-data-collection/.venv312/bin/python3",
+        "scripts/run_docker_substrate_smoke.py",
+        "--task-dir",
+        "/private/tmp/houdini_tb_d_smoke/grid-pattern-transform",
+        "--run-dir",
+        "runs/terminal_bench_pilot/grid-pattern-transform__scout",
+        "--image-tag",
+        "cdc-tb-grid-pattern-transform__scout",
+        "--agent-command",
+        "pwd && ls -la && test -f /task/task.md && echo ready",
+        "--verifier-command",
+        "bash /task/run-tests.sh",
+        "--expect-verifier-failure"
+      ],
+      "run_id": "grid-pattern-transform__scout",
+      "task_dir": "/private/tmp/houdini_tb_d_smoke/grid-pattern-transform",
+      "task_id": "grid-pattern-transform"
+    },
+    {
+      "arm": "validation",
+      "command": [
+        "/Users/grantwilkins/houdini/coding-data-collection/.venv312/bin/python3",
+        "scripts/run_docker_substrate_smoke.py",
+        "--task-dir",
+        "/private/tmp/houdini_tb_d_smoke/grid-pattern-transform",
+        "--run-dir",
+        "runs/terminal_bench_pilot/grid-pattern-transform__validation",
+        "--image-tag",
+        "cdc-tb-grid-pattern-transform__validation",
+        "--agent-command",
+        "pwd && ls -la && python -m pytest -q || true",
+        "--verifier-command",
+        "bash /task/run-tests.sh",
+        "--expect-verifier-failure"
+      ],
+      "run_id": "grid-pattern-transform__validation",
+      "task_dir": "/private/tmp/houdini_tb_d_smoke/grid-pattern-transform",
+      "task_id": "grid-pattern-transform"
+    },
+    {
+      "arm": "scout",
+      "command": [
+        "/Users/grantwilkins/houdini/coding-data-collection/.venv312/bin/python3",
+        "scripts/run_docker_substrate_smoke.py",
+        "--task-dir",
+        "/private/tmp/houdini_tb_d_smoke/fix-permissions",
+        "--run-dir",
+        "runs/terminal_bench_pilot/fix-permissions__scout",
+        "--image-tag",
+        "cdc-tb-fix-permissions__scout",
+        "--agent-command",
+        "pwd && ls -la && test -f /task/task.md && echo ready",
+        "--verifier-command",
+        "bash /task/run-tests.sh",
+        "--expect-verifier-failure"
+      ],
+      "run_id": "fix-permissions__scout",
+      "task_dir": "/private/tmp/houdini_tb_d_smoke/fix-permissions",
+      "task_id": "fix-permissions"
+    },
+    {
+      "arm": "validation",
+      "command": [
+        "/Users/grantwilkins/houdini/coding-data-collection/.venv312/bin/python3",
+        "scripts/run_docker_substrate_smoke.py",
+        "--task-dir",
+        "/private/tmp/houdini_tb_d_smoke/fix-permissions",
+        "--run-dir",
+        "runs/terminal_bench_pilot/fix-permissions__validation",
+        "--image-tag",
+        "cdc-tb-fix-permissions__validation",
+        "--agent-command",
+        "pwd && ls -la && python -m pytest -q || true",
+        "--verifier-command",
+        "bash /task/run-tests.sh",
+        "--expect-verifier-failure"
+      ],
+      "run_id": "fix-permissions__validation",
+      "task_dir": "/private/tmp/houdini_tb_d_smoke/fix-permissions",
+      "task_id": "fix-permissions"
+    },
+    {
+      "arm": "scout",
+      "command": [
+        "/Users/grantwilkins/houdini/coding-data-collection/.venv312/bin/python3",
+        "scripts/run_docker_substrate_smoke.py",
+        "--task-dir",
+        "/private/tmp/houdini_tb_hf/aimo-airline-departures",
+        "--run-dir",
+        "runs/terminal_bench_pilot/aimo-airline-departures__scout",
+        "--image-tag",
+        "cdc-tb-aimo-airline-departures__scout",
+        "--agent-command",
+        "pwd && ls -la && test -f /task/task.md && echo ready",
+        "--verifier-command",
+        "bash /task/run-tests.sh",
+        "--expect-verifier-failure"
+      ],
+      "run_id": "aimo-airline-departures__scout",
+      "task_dir": "/private/tmp/houdini_tb_hf/aimo-airline-departures",
+      "task_id": "aimo-airline-departures"
+    },
+    {
+      "arm": "validation",
+      "command": [
+        "/Users/grantwilkins/houdini/coding-data-collection/.venv312/bin/python3",
+        "scripts/run_docker_substrate_smoke.py",
+        "--task-dir",
+        "/private/tmp/houdini_tb_hf/aimo-airline-departures",
+        "--run-dir",
+        "runs/terminal_bench_pilot/aimo-airline-departures__validation",
+        "--image-tag",
+        "cdc-tb-aimo-airline-departures__validation",
+        "--agent-command",
+        "pwd && ls -la && python -m pytest -q || true",
+        "--verifier-command",
+        "bash /task/run-tests.sh",
+        "--expect-verifier-failure"
+      ],
+      "run_id": "aimo-airline-departures__validation",
+      "task_dir": "/private/tmp/houdini_tb_hf/aimo-airline-departures",
+      "task_id": "aimo-airline-departures"
+    },
+    {
+      "arm": "scout",
+      "command": [
+        "/Users/grantwilkins/houdini/coding-data-collection/.venv312/bin/python3",
+        "scripts/run_docker_substrate_smoke.py",
+        "--task-dir",
+        "/private/tmp/houdini_tb_d_smoke/csv-to-parquet",
+        "--run-dir",
+        "runs/terminal_bench_pilot/csv-to-parquet__scout",
+        "--image-tag",
+        "cdc-tb-csv-to-parquet__scout",
+        "--agent-command",
+        "pwd && ls -la && test -f /task/task.md && echo ready",
+        "--verifier-command",
+        "bash /task/run-tests.sh",
+        "--expect-verifier-failure"
+      ],
+      "run_id": "csv-to-parquet__scout",
+      "task_dir": "/private/tmp/houdini_tb_d_smoke/csv-to-parquet",
+      "task_id": "csv-to-parquet"
+    },
+    {
+      "arm": "validation",
+      "command": [
+        "/Users/grantwilkins/houdini/coding-data-collection/.venv312/bin/python3",
+        "scripts/run_docker_substrate_smoke.py",
+        "--task-dir",
+        "/private/tmp/houdini_tb_d_smoke/csv-to-parquet",
+        "--run-dir",
+        "runs/terminal_bench_pilot/csv-to-parquet__validation",
+        "--image-tag",
+        "cdc-tb-csv-to-parquet__validation",
+        "--agent-command",
+        "pwd && ls -la && python -m pytest -q || true",
+        "--verifier-command",
+        "bash /task/run-tests.sh",
+        "--expect-verifier-failure"
+      ],
+      "run_id": "csv-to-parquet__validation",
+      "task_dir": "/private/tmp/houdini_tb_d_smoke/csv-to-parquet",
+      "task_id": "csv-to-parquet"
+    },
+    {
+      "arm": "scout",
+      "command": [
+        "/Users/grantwilkins/houdini/coding-data-collection/.venv312/bin/python3",
+        "scripts/run_docker_substrate_smoke.py",
+        "--task-dir",
+        "/private/tmp/houdini_tb_hf/attention-mil",
+        "--run-dir",
+        "runs/terminal_bench_pilot/attention-mil__scout",
+        "--image-tag",
+        "cdc-tb-attention-mil__scout",
+        "--agent-command",
+        "pwd && ls -la && test -f /task/task.md && echo ready",
+        "--verifier-command",
+        "bash /task/run-tests.sh",
+        "--expect-verifier-failure"
+      ],
+      "run_id": "attention-mil__scout",
+      "task_dir": "/private/tmp/houdini_tb_hf/attention-mil",
+      "task_id": "attention-mil"
+    },
+    {
+      "arm": "validation",
+      "command": [
+        "/Users/grantwilkins/houdini/coding-data-collection/.venv312/bin/python3",
+        "scripts/run_docker_substrate_smoke.py",
+        "--task-dir",
+        "/private/tmp/houdini_tb_hf/attention-mil",
+        "--run-dir",
+        "runs/terminal_bench_pilot/attention-mil__validation",
+        "--image-tag",
+        "cdc-tb-attention-mil__validation",
+        "--agent-command",
+        "pwd && ls -la && python -m pytest -q || true",
+        "--verifier-command",
+        "bash /task/run-tests.sh",
+        "--expect-verifier-failure"
+      ],
+      "run_id": "attention-mil__validation",
+      "task_dir": "/private/tmp/houdini_tb_hf/attention-mil",
+      "task_id": "attention-mil"
+    },
+    {
+      "arm": "scout",
+      "command": [
+        "/Users/grantwilkins/houdini/coding-data-collection/.venv312/bin/python3",
+        "scripts/run_docker_substrate_smoke.py",
+        "--task-dir",
+        "/private/tmp/houdini_tb_d_smoke/count-dataset-tokens",
+        "--run-dir",
+        "runs/terminal_bench_pilot/count-dataset-tokens__scout",
+        "--image-tag",
+        "cdc-tb-count-dataset-tokens__scout",
+        "--agent-command",
+        "pwd && ls -la && test -f /task/task.md && echo ready",
+        "--verifier-command",
+        "bash /task/run-tests.sh",
+        "--expect-verifier-failure"
+      ],
+      "run_id": "count-dataset-tokens__scout",
+      "task_dir": "/private/tmp/houdini_tb_d_smoke/count-dataset-tokens",
+      "task_id": "count-dataset-tokens"
+    },
+    {
+      "arm": "validation",
+      "command": [
+        "/Users/grantwilkins/houdini/coding-data-collection/.venv312/bin/python3",
+        "scripts/run_docker_substrate_smoke.py",
+        "--task-dir",
+        "/private/tmp/houdini_tb_d_smoke/count-dataset-tokens",
+        "--run-dir",
+        "runs/terminal_bench_pilot/count-dataset-tokens__validation",
+        "--image-tag",
+        "cdc-tb-count-dataset-tokens__validation",
+        "--agent-command",
+        "pwd && ls -la && python -m pytest -q || true",
+        "--verifier-command",
+        "bash /task/run-tests.sh",
+        "--expect-verifier-failure"
+      ],
+      "run_id": "count-dataset-tokens__validation",
+      "task_dir": "/private/tmp/houdini_tb_d_smoke/count-dataset-tokens",
+      "task_id": "count-dataset-tokens"
+    }
+  ],
+  "run_root": "runs/terminal_bench_pilot",
+  "selected_task_count": 12,
+  "task_roots": [
+    "/private/tmp/houdini_tb_d_smoke",
+    "/private/tmp/houdini_tb_hf"
+  ],
+  "tasks": [
+    {
+      "issues": [],
+      "source": "terminal_bench_hf",
+      "task_dir": "/private/tmp/houdini_tb_hf/classifier-debug",
+      "task_id": "classifier-debug"
+    },
+    {
+      "issues": [],
+      "source": "terminal_bench_hf",
+      "task_dir": "/private/tmp/houdini_tb_hf/blind-maze-explorer-algorithm",
+      "task_id": "blind-maze-explorer-algorithm"
+    },
+    {
+      "issues": [],
+      "source": "terminal_bench_hf",
+      "task_dir": "/private/tmp/houdini_tb_hf/adaptive-rejection-sampler",
+      "task_id": "adaptive-rejection-sampler"
+    },
+    {
+      "issues": [],
+      "source": "terminal_bench_hf",
+      "task_dir": "/private/tmp/houdini_tb_hf/nginx-request-logging",
+      "task_id": "nginx-request-logging"
+    },
+    {
+      "issues": [],
+      "source": "terminal_bench_hf",
+      "task_dir": "/private/tmp/houdini_tb_d_smoke/extract-safely",
+      "task_id": "extract-safely"
+    },
+    {
+      "issues": [],
+      "source": "terminal_bench_hf",
+      "task_dir": "/private/tmp/houdini_tb_d_smoke/broken-python",
+      "task_id": "broken-python"
+    },
+    {
+      "issues": [],
+      "source": "terminal_bench_hf",
+      "task_dir": "/private/tmp/houdini_tb_d_smoke/grid-pattern-transform",
+      "task_id": "grid-pattern-transform"
+    },
+    {
+      "issues": [],
+      "source": "terminal_bench_hf",
+      "task_dir": "/private/tmp/houdini_tb_d_smoke/fix-permissions",
+      "task_id": "fix-permissions"
+    },
+    {
+      "issues": [],
+      "source": "terminal_bench_hf",
+      "task_dir": "/private/tmp/houdini_tb_hf/aimo-airline-departures",
+      "task_id": "aimo-airline-departures"
+    },
+    {
+      "issues": [],
+      "source": "terminal_bench_hf",
+      "task_dir": "/private/tmp/houdini_tb_d_smoke/csv-to-parquet",
+      "task_id": "csv-to-parquet"
+    },
+    {
+      "issues": [],
+      "source": "terminal_bench_hf",
+      "task_dir": "/private/tmp/houdini_tb_hf/attention-mil",
+      "task_id": "attention-mil"
+    },
+    {
+      "issues": [],
+      "source": "terminal_bench_hf",
+      "task_dir": "/private/tmp/houdini_tb_d_smoke/count-dataset-tokens",
+      "task_id": "count-dataset-tokens"
+    }
+  ],
+  "warnings": [
+    "attention-mil: large_download_or_build=true; verifier network/cache policy should be explicit",
+    "csv-to-parquet: large_download_or_build=true; verifier network/cache policy should be explicit"
+  ]
+}

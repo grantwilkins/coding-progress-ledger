@@ -1,0 +1,38 @@
+{
+  "issues": [],
+  "metrics": {
+    "fallback_call_count": 0,
+    "last_provider_call": {
+      "adapter": "openai_responses",
+      "base_url": "https://api.openai.com/v1/responses",
+      "fallback_models": [],
+      "fallback_used": false,
+      "model_alias_or_route_changed": false,
+      "provider_routing_policy": {
+        "allow_fallbacks": false
+      },
+      "requested_model": "gpt-5.3-codex",
+      "resolved_model": "gpt-5.3-codex",
+      "response_id": "resp_0cdeeae84df4deae0169fc13bc2cd0819491d3d60496ae4031"
+    },
+    "provider_calls": [
+      {
+        "adapter": "openai_responses",
+        "base_url": "https://api.openai.com/v1/responses",
+        "fallback_models": [],
+        "fallback_used": false,
+        "model_alias_or_route_changed": false,
+        "provider_routing_policy": {
+          "allow_fallbacks": false
+        },
+        "requested_model": "gpt-5.3-codex",
+        "resolved_model": "gpt-5.3-codex",
+        "response_id": "resp_0cdeeae84df4deae0169fc13bc2cd0819491d3d60496ae4031"
+      }
+    ],
+    "resolved_models": [
+      "gpt-5.3-codex"
+    ]
+  },
+  "passed": true
+}

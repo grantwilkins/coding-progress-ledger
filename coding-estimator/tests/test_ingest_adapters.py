@@ -78,6 +78,27 @@ def test_tb_live_resolves_via_verifier_pass(real_ledger: None) -> None:
         assert r.finish_seconds is not None and r.finish_seconds > 0
 
 
+def test_tb_live_v2_resolves_via_run_manifest(real_ledger: None) -> None:
+    rows = ingest_source("tb_live_v2")
+    assert len(rows) == 102
+    for r in rows:
+        assert r.final_success is not None, r
+        assert r.final_success_source == "verifier_exit"
+        assert r.has_real_wallclock is True
+        assert r.finish_seconds is not None and r.finish_seconds >= 0
+
+
+def test_tb_live_v2_resolves_via_run_manifest(real_ledger: None) -> None:
+    rows = ingest_source("tb_live_v2")
+    assert len(rows) == 102
+    assert any(r.final_success is False for r in rows)
+    for r in rows:
+        assert r.final_success is not None, r
+        assert r.final_success_source == "verifier_exit"
+        assert r.has_real_wallclock is True
+        assert r.finish_seconds is not None and r.finish_seconds >= 0
+
+
 def test_write_source_manifest_byte_stable(real_ledger: None, tmp_path: Path) -> None:
     a, _ = write_source_manifest("tb_live", tmp_path / "a")
     b, _ = write_source_manifest("tb_live", tmp_path / "b")
@@ -103,7 +124,11 @@ def test_malformed_and_unresolvable_use_different_note_prefixes(real_ledger: Non
 
 def test_canonical_sources_writes_three_manifests(real_ledger: None, tmp_path: Path) -> None:
     out = ingest_canonical_sources(tmp_path)
-    assert set(out) == {"swe_agent_pilot", "hermes_pilot_h5_v2", "tb_live"}
+    assert set(out) == {
+        "swe_agent_pilot",
+        "hermes_pilot_h5_v2",
+        "tb_live",
+    }
     for src in out:
         assert (tmp_path / f"{src}.csv").is_file()
     df = pd.read_csv(tmp_path / "tb_live.csv")

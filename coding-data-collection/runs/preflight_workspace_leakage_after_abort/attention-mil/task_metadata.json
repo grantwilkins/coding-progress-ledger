@@ -1,0 +1,35 @@
+{
+  "artifact_layout_version": "0.1.0",
+  "benchmark_adapter_version": "0.1.0",
+  "hidden_names": [
+    "Dockerfile",
+    "docker-compose.yaml",
+    "gold.patch",
+    "gold_patch",
+    "oracle",
+    "protected",
+    "run-tests.sh",
+    "solution.sh",
+    "solution.yaml",
+    "solution.yml",
+    "solution_reference",
+    "task.yaml",
+    "test_patch",
+    "tests",
+    "verifier.sh",
+    "verifier_tests"
+  ],
+  "run_protocol_version": "0.1.0",
+  "skipped_paths": [
+    "Dockerfile",
+    "docker-compose.yaml",
+    "run-tests.sh",
+    "solution.sh",
+    "task.yaml",
+    "tests",
+    "tests/run-uv-pytest.sh",
+    "tests/setup-uv-pytest.sh",
+    "tests/test_outputs.py"
+  ],
+  "task_dir": "/private/tmp/houdini_tb_hf/attention-mil"
+}

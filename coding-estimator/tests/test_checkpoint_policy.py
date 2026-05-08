@@ -43,6 +43,8 @@ def _fake_run(steps: list[int]) -> RunRecord:
         end_wall_time=None,
         task_id=None,
         task_family=None,
+        arm=None,
+        difficulty=None,
         agent_scaffold=None,
         model_name=None,
         raw_metadata={},

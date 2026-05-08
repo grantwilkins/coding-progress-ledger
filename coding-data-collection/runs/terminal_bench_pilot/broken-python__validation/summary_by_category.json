@@ -1,0 +1,130 @@
+{
+  "active_coding_leaves_final": 3,
+  "active_overall_leaves_final": 3,
+  "category_active_weight_final": {
+    "artifact": 0,
+    "documentation": 0,
+    "environment": 0,
+    "investigation": 1.0,
+    "product": 0,
+    "validation": 2.0
+  },
+  "category_completed_weight_final": {
+    "artifact": 0,
+    "documentation": 0,
+    "environment": 0,
+    "investigation": 1.0,
+    "product": 0,
+    "validation": 0
+  },
+  "coding_categories": [
+    "product",
+    "validation",
+    "investigation"
+  ],
+  "coding_largest_drop": 0.16666666666666669,
+  "coding_nonmonotonic": true,
+  "completed_coding_leaves_final": 1,
+  "completed_overall_leaves_final": 1,
+  "evidence_audit_by_category": {
+    "investigation": {
+      "audited_completion_count": 1,
+      "status": "weak",
+      "weak_completion_evidence_count": 1,
+      "weak_subtask_ids": [
+        "investigation_2"
+      ]
+    },
+    "product": {
+      "audited_completion_count": 0,
+      "status": "not_applicable",
+      "weak_completion_evidence_count": 0,
+      "weak_subtask_ids": []
+    },
+    "validation": {
+      "audited_completion_count": 0,
+      "status": "not_applicable",
+      "weak_completion_evidence_count": 0,
+      "weak_subtask_ids": []
+    }
+  },
+  "evidence_audit_status": "weak",
+  "evidence_audit_weak_categories": [
+    "investigation"
+  ],
+  "excluded_active_weight_final": 0,
+  "excluded_categories": [
+    "artifact",
+    "documentation",
+    "environment"
+  ],
+  "excluded_categories_final": {
+    "artifact": {
+      "active": 0,
+      "complete": 0
+    },
+    "documentation": {
+      "active": 0,
+      "complete": 0
+    },
+    "environment": {
+      "active": 0,
+      "complete": 0
+    }
+  },
+  "excluded_completed_weight_final": 0,
+  "final_coding_active_weight": 3.0,
+  "final_coding_complete_weight": 1.0,
+  "final_coding_progress": 0.3333333333333333,
+  "final_overall_active_weight": 3.0,
+  "final_overall_complete_weight": 1.0,
+  "final_overall_progress": 0.3333333333333333,
+  "final_success": null,
+  "final_success_source": "absent",
+  "generator": "ledger_progress.sidecar",
+  "historical_subtasks_created": 3,
+  "largest_coding_drop": 0.16666666666666669,
+  "largest_coding_drop_category_contributions": {
+    "validation": 0.166666666667
+  },
+  "largest_coding_drop_detail": {
+    "amount": 0.16666666666666669,
+    "from_step": 2,
+    "to_step": 3
+  },
+  "largest_coding_drop_source": "validation",
+  "largest_overall_drop": 0.16666666666666669,
+  "largest_overall_drop_category_contributions": {
+    "validation": 0.166666666667
+  },
+  "largest_overall_drop_detail": {
+    "amount": 0.16666666666666669,
+    "from_step": 2,
+    "to_step": 3
+  },
+  "largest_overall_drop_mostly_excluded": false,
+  "largest_overall_drop_source": "validation",
+  "nonmonotonic_coding": true,
+  "nonmonotonic_overall": true,
+  "overall_largest_drop": 0.16666666666666669,
+  "overall_nonmonotonic": true,
+  "source_ledger_sha256": "7b4cc781970cded98955b7298705e2dd87e6b87ce7869ddb9edf63bc78d990ef",
+  "subtask_categories": {
+    "investigation_2": "investigation",
+    "validation_1": "validation",
+    "validation_3": "validation"
+  },
+  "task_id": "broken-python__validation",
+  "weak_completion_evidence": [
+    {
+      "category": "investigation",
+      "description": "Agent phase complete; hidden oracle/verifier phases follow.",
+      "evidence_types": [
+        "manual_note"
+      ],
+      "step": 2,
+      "subtask_id": "investigation_2"
+    }
+  ],
+  "weak_completion_evidence_count": 1
+}

@@ -10,7 +10,10 @@ from __future__ import annotations
 import numpy as np
 
 
-def brier_per_run(y_by_run: dict[str, np.ndarray], p_by_run: dict[str, np.ndarray]) -> dict[str, tuple[np.ndarray, np.ndarray]]:
+def brier_per_run(
+    y_by_run: dict[str, np.ndarray],
+    p_by_run: dict[str, np.ndarray],
+) -> dict[str, tuple[np.ndarray, np.ndarray]]:
     """Bundle (y, p) per run_id for bootstrap consumption."""
     if set(y_by_run) != set(p_by_run):
         raise ValueError("y_by_run and p_by_run must cover the same runs")

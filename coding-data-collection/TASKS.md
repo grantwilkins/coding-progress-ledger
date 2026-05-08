@@ -663,9 +663,84 @@ Result:
 
 Status: V10 pre-pilot passed L; targeted sample still no-go on visible validation failures
 
+## K0. No-Spend Local Collection
+
+Status: not started
+
+Purpose:
+
+Collect useful local traces without spending provider credits or sending task
+state to external APIs.
+
+Scope:
+
+- Use isolated Terminal-Bench / HF local collection only, preferably through
+  the existing Docker-backed `hf_archive_custom` path.
+- Default architecture: host-side controller drives a Docker task sandbox.
+  Do not require an interactive login inside the container.
+- Run in fresh temp roots such as `/private/tmp/houdini_tb_local_*`; do not
+  reuse aborted, leaked, or provider-backed run roots.
+- Keep agent sandboxes network-disabled by default, with verifier-only network
+  exceptions recorded explicitly when unavoidable.
+- Treat scripted agents as the first no-spend trace producer. Treat Codex CLI
+  only as a separate feasibility question: it is acceptable only if provider
+  access is disabled and no credentials are copied into the task container.
+- Do not count hosted subagent traces as no-spend local collection unless the
+  runtime is explicitly confirmed to be local and non-provider-backed.
+
+Steps:
+
+- First run a one-task feasibility spike:
+  - extract one easy HF Terminal-Bench task into a temp root;
+  - build or reuse its Docker sandbox;
+  - run a host-side scripted controller that issues shell commands into the
+    container and records transcript-shaped observations;
+  - run visible checks from the agent workspace;
+  - run the hidden verifier from a clean verifier phase;
+  - build the smallest estimator-compatible artifact bundle.
+- Export or extract the Terminal-Bench HF task archives into a temp directory.
+- Prepare agent workspaces with `scripts/prepare_run.py`; verify hidden,
+  protected, verifier, oracle, gold, and canary-bearing files are absent from
+  the agent-visible workspace before any trace is collected.
+- Run no-API agents locally: scripted shell first; optionally local Codex CLI
+  only after the feasibility spike proves it can run without provider access,
+  without interactive container login, and without copying credentials into the
+  sandbox.
+- Capture transcript-shaped rows, observation events, ledger sidecar replay,
+  verifier output, and manifests into the existing run artifact layout whenever
+  possible.
+- Rerun visible checks from inside the agent workspace and preserve their
+  outputs as visible transcript evidence.
+- Rerun the hidden verifier from a clean verifier phase and run
+  `scripts/verify_verifier_determinism.py` on at least one representative run.
+- Build or convert outputs into the existing `runs/<batch>/<run_id>/` and
+  `datasets/<corpus>/` artifact layout when the required files are available.
+- Audit the local corpus with validation, leakage/redaction, observation
+  quality, ledger sidecar, and corpus artifact checks before using it for
+  analysis.
+
+Guardrails:
+
+- No OpenAI, OpenRouter, Anthropic, or other provider API calls.
+- No API keys, auth files, browser sessions, or provider credentials mounted
+  into task containers.
+- No interactive container login as a required collection step; collection must
+  be scriptable and reproducible from host commands.
+- No production training from M1/M1b or any local corpus that fails leakage,
+  artifact, prefix-safety, verifier-determinism, or gate checks.
+- Use temp directories for raw archives, workspaces, and intermediate files;
+  commit only redacted manifests, reports, or approved artifact outputs.
+- Verify visible checks are genuinely visible to the agent and hidden verifier
+  internals remain hidden.
+- Verify verifier determinism before treating labels as analysis-quality.
+- Prefer conversion into the existing artifact contract over inventing a new
+  local-only format.
+
 Plan:
 
 ```text
+phase 0: 1 task x 1 scripted arm = 1 run
+phase 1: 4 tasks x 1 scripted arm = 4 runs
 12 tasks
 2 arms
 24 runs
@@ -673,6 +748,8 @@ Plan:
 
 Acceptance:
 
+- Phase 0 proves host-side Docker control, visible-check capture, hidden
+  verifier replay, and estimator artifact conversion without provider access.
 - Every run emits required artifacts.
 - No run with leakage enters estimator training.
 - Pilot gate report is generated.
@@ -1203,6 +1280,161 @@ Result:
   The local tool runner blocked launching this direct-OpenAI collection because
   it would send task/workspace/transcript context to an external service. The
   plan is ready to run from a user terminal with `OPENAI_API_KEY`.
+- User ran the direct-OpenAI L1 collection from a terminal and completed the
+  audit/artifact/gate path:
+  ```text
+  reports/terminal_bench_v10_openai_l1_execution.json
+  reports/terminal_bench_v10_openai_l1_corpus_audit.json
+  reports/TERMINAL_BENCH_V10_OPENAI_L1_ESTIMATOR_REPORT.json
+  reports/TERMINAL_BENCH_V10_OPENAI_L1_GATE_REPORT.json
+  reports/TERMINAL_BENCH_V10_OPENAI_L1_FAILURE_ANALYSIS.md
+  datasets/terminal_bench_v10_openai_l1_estimator/
+  runs/terminal_bench_v10_openai_l1/
+  ```
+  Result after adding a verifier determinism rerun for
+  `grid-pattern-transform__gpt54mini`:
+  ```text
+  total_run_count=8
+  eligible_run_count=7
+  excluded_protocol_smoke_run_count=1
+  completed_success=2
+  completed_failure=5
+  environment_setup_failure=1
+  checkpoint_rows=172
+  prefix_provenance_complete=true
+  leakage_incidents=0
+  verifier_determinism_passed=true
+  median_transcript_steps=18
+  median_observation_events_per_run=9
+  validation_attempt_run_fraction=0.4285714286
+  validation_fail_observed_run_fraction=0.0
+  progress_drop_run_fraction=1.0
+  terminal_failure_rate=0.7142857143
+  high_progress_failure_or_disagreement_count=7
+  L gate passed=false
+  ```
+  Passed gates include artifact hardening, estimator artifacts, prefix safety,
+  zero leakage, verifier determinism, transcript depth, progress-drop coverage,
+  shell snippet/exit-code coverage, and high-progress failures/disagreements.
+  Remaining failed gates:
+  ```text
+  validation_attempt_coverage
+  validation_fail_observed_coverage
+  terminal_failure_rate
+  median_observation_events_per_run
+  ```
+  This is no longer an OpenRouter-style adapter collapse. It is a marginal
+  sample/trajectory-quality no-go: one fixed-model run failed closed at provider
+  route preflight, visible validation attempts were mostly successful smoke
+  checks rather than failing validation loops, terminal failure rate was just
+  above the upper bound, and median observation events missed by one event.
+- Added adaptive L1 completion rather than lowering gates:
+  ```text
+  scripts/run_adaptive_l1.py
+  manifests/pilots/terminal_bench_v10_openai_adaptive_l1_plan.json
+  run_root=runs/terminal_bench_v10_openai_adaptive_l1/
+  ```
+  Policy:
+  ```text
+  hard gates remain absolute: leakage, artifact validity, provider metadata,
+  prefix provenance, verifier determinism.
+  provider/agent readiness failures are rejected and replaced instead of
+  counted as eligible model trajectories.
+  composition gates are checked over the accepted eligible pool after each run.
+  stop when L passes or max_attempts is exhausted.
+  ```
+  This changes the collection control loop, not the L thresholds.
+- First adaptive attempt stopped after two runs because
+  `scripts/run_adaptive_l1.py` incorrectly treated validation-attempt precision
+  as a per-run hard safety gate. Fixed hard-safety classification so only
+  artifact completeness and redaction/leakage are fatal at per-run acceptance;
+  validation precision remains a corpus composition gate.
+- Completed the OpenAI adaptive L1 run through `max_attempts=14`:
+  ```text
+  reports/terminal_bench_v10_openai_adaptive_l1_execution.json
+  reports/terminal_bench_v10_openai_adaptive_l1_accepted.json
+  reports/terminal_bench_v10_openai_adaptive_l1_rejected.json
+  reports/TERMINAL_BENCH_V10_OPENAI_ADAPTIVE_L1_GATE_REPORT.json
+  reports/TERMINAL_BENCH_V10_OPENAI_ADAPTIVE_L1_FAILURE_ANALYSIS.md
+  datasets/terminal_bench_v10_openai_adaptive_l1_estimator/
+  ```
+  Result after verifier determinism rerun:
+  ```text
+  attempt_count=14
+  accepted_count=5
+  rejected_count=9
+  target_eligible_runs=8
+  target_eligible_runs_met=false
+  leakage_incidents=0
+  verifier_determinism_passed=true
+  median_transcript_steps=21
+  median_observation_events_per_run=18
+  validation_attempt_run_fraction=0.6
+  validation_fail_observed_run_fraction=0.6
+  progress_drop_run_fraction=1.0
+  terminal_failure_rate=0.4
+  high_progress_failure_or_disagreement_count=3
+  L gate passed=false
+  failed_gate=high_progress_failures_or_disagreements
+  ```
+  The nine rejected runs were replaceable provider/setup failures caused by
+  OpenAI `429 insufficient_quota` during per-run provider route preflight. This
+  is not an adapter-collapse or Docker-substrate failure. The accepted pool is
+  clean and passes artifact, leakage, estimator, prefix, observation-depth,
+  validation-attempt, validation-failure, terminal-failure-rate, and verifier
+  determinism gates, but it is too small to meet the target eligible-run count
+  or the high-progress/disagreement count.
+- Added adaptive resume behavior:
+  ```text
+  existing eligible runs are reused.
+  existing replaceable provider/setup failures are rerun by default.
+  --no-retry-replaceable-existing freezes old failures for audit/debug.
+  ```
+  Resume after OpenAI quota is restored with a larger attempt budget, e.g.
+  `--max-attempts 18`; the run should reuse the five accepted trajectories and
+  retry the quota-failed planned runs.
+- Resumed after OpenAI quota was restored with `--max-attempts 18`. The
+  adaptive run passed L1:
+  ```text
+  attempt_count=9
+  accepted_count=9
+  rejected_count=0
+  target_eligible_runs=8
+  target_eligible_runs_met=true
+  provider_route_preflight_passed=true
+  leakage_incidents=0
+  verifier_determinism_passed=true
+  checkpoint_rows=224
+  prefix_provenance_complete=true
+  median_transcript_steps=21
+  median_observation_events_per_run=12
+  validation_attempt_run_fraction=0.5555555556
+  validation_fail_observed_run_fraction=0.3333333333
+  progress_drop_run_fraction=1.0
+  terminal_failure_rate=0.4444444444
+  high_progress_failure_or_disagreement_count=5
+  L gate passed=true
+  ```
+  This confirms the earlier adaptive failure was quota/interrupted-collection
+  noise rather than an L1 gate architecture failure. The accepted corpus is now
+  suitable as the Terminal-Bench OpenAI L1 gate artifact.
+- Cleaned obsolete generated artifacts after the L1 pass. Kept the mission
+  critical adaptive L1 package:
+  ```text
+  runs/terminal_bench_v10_openai_adaptive_l1/
+  datasets/terminal_bench_v10_openai_adaptive_l1_estimator/
+  manifests/pilots/terminal_bench_v10_openai_adaptive_l1_plan.json
+  reports/TERMINAL_BENCH_V10_OPENAI_ADAPTIVE_L1_GATE_REPORT.json
+  reports/TERMINAL_BENCH_V10_OPENAI_ADAPTIVE_L1_FAILURE_ANALYSIS.md
+  reports/TERMINAL_BENCH_V10_OPENAI_ADAPTIVE_L1_ESTIMATOR_REPORT.json
+  reports/terminal_bench_v10_openai_adaptive_l1_execution.json
+  reports/terminal_bench_v10_openai_adaptive_l1_accepted.json
+  reports/terminal_bench_v10_openai_adaptive_l1_rejected.json
+  ```
+  Removed failed/debug direct-OpenAI L1, OpenRouter L1, preflight-only,
+  prepilot/targeted, and earlier real-model pilot iteration run/report/dataset
+  artifacts, plus local `.uv-cache` and the unused `.venv`. The retained
+  adaptive run root contains only the nine accepted eligible trajectories.
 - Ran the same OpenRouter L1 plan in no-provider preflight mode:
   ```text
   manifests/pilots/terminal_bench_v10_openrouter_l1_preflight_plan.json

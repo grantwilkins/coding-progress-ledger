@@ -1,0 +1,21 @@
+{
+  "check_count": 1,
+  "failed_checks": [],
+  "image_tag": "cdc-tb-aimo-airline-departures__gpt53codex",
+  "manual_review_checks": [],
+  "network_policy": "disabled",
+  "passed": true,
+  "results": [
+    {
+      "check_id": "hidden_image_artifacts_unreadable",
+      "command": "bad=''; for p in /protected /oracle /verifier /gold /solution /tests /test; do if [ -e \"$p\" ]; then if [ -d \"$p\" ]; then ls \"$p\" >/dev/null 2>&1 && bad=\"$bad $p\"; else head -c 1 \"$p\" >/dev/null 2>&1 && bad=\"$bad $p\"; fi; fi; done; if [ -n \"$bad\" ]; then echo \"agent can read hidden image path(s):$bad\" >&2; exit 1; fi",
+      "exit_code": 0,
+      "expected": "exit_code_0",
+      "reason": "agent image must not expose hidden tests, protected files, oracle files, or verifier internals",
+      "status": "passed",
+      "stderr_snippet": "",
+      "stdout_snippet": ""
+    }
+  ],
+  "schema_version": "0.1.0"
+}

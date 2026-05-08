@@ -12,7 +12,7 @@ At the end of each task, please update `TASKS.md` to reflect work that was compl
 
 ## Repo-specific addenda
 
-Vagrant imports `ledger_progress` from the sibling repo `../coding-progress-ledger/`. Do not fork it. The only permitted upstream change for the MVP is a ~10-line pass-through hook in `ledger_progress/core.py:apply_event` so unknown `event_type` strings append without raising. Anything bigger requires user approval.
+Agent Migrate imports `ledger_progress` from the sibling repo `../coding-progress-ledger/`. Do not fork it. The only permitted upstream change for the MVP is a ~10-line pass-through hook in `ledger_progress/core.py:apply_event` so unknown `event_type` strings append without raising. Anything bigger requires user approval.
 
 Do not invent a new event class, a second JSONL serializer, or a second replay engine. Ride on `LedgerEvent`, `serialization.to_jsonl`, and `core.replay`.
 

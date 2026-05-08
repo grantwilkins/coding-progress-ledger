@@ -11,8 +11,8 @@ from __future__ import annotations
 
 import json
 import warnings
+from collections.abc import Iterable
 from pathlib import Path
-from typing import Iterable
 
 import pandas as pd
 
@@ -32,17 +32,31 @@ SCHEMES: tuple[str, ...] = ("loro", "ltfo", "loso", "holdout", "temporal")
 COMBINED_TAG = "all"
 
 
+EXACT_TASK_LTFO_SOURCES: frozenset[str] = frozenset({"tb_live_v2"})
+
+
 def task_family_map(source: str) -> dict[str, str | None]:
-    """Run-id → task_family for every loadable run under `source`. Runs
-    whose ledger fails to load are skipped (the upstream tree may have
-    helper directories like `plots/` next to real run dirs)."""
+    """Run-id → generalization group for `ltfo`.
+
+    Most sources group by coarse `task_family`. For `tb_live_v2`, exact
+    `task_id` is the safer unit because the corpus deliberately contains
+    same-task multi-arm replications; leaving out only the coarse shape
+    family would let the model train on task X / arm A and test on task
+    X / arm B, which is the wrong generalization claim.
+
+    Runs whose ledger fails to load are skipped (the upstream tree may
+    have helper directories like `plots/` next to real run dirs).
+    """
     root = runs_root(source)
     out: dict[str, str | None] = {}
     for p in sorted(root.iterdir()):
         if not p.is_dir() or not (p / "ledger.jsonl").is_file():
             continue
         rec = load_run(source, p.name)
-        out[rec.run_id] = rec.task_family
+        if source in EXACT_TASK_LTFO_SOURCES and rec.task_id is not None:
+            out[rec.run_id] = rec.task_id
+        else:
+            out[rec.run_id] = rec.task_family
     return out
 
 

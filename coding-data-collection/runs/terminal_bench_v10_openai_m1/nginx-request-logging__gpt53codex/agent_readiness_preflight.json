@@ -1,0 +1,45 @@
+{
+  "check_count": 3,
+  "failed_checks": [
+    "nginx_available"
+  ],
+  "image_tag": "cdc-tb-nginx-request-logging__gpt53codex",
+  "manual_review_checks": [
+    "no_solve_time_network_install"
+  ],
+  "network_policy": "disabled",
+  "passed": false,
+  "results": [
+    {
+      "check_id": "hidden_image_artifacts_unreadable",
+      "command": "bad=''; for p in /protected /oracle /verifier /gold /solution /tests /test; do if [ -e \"$p\" ]; then if [ -d \"$p\" ]; then ls \"$p\" >/dev/null 2>&1 && bad=\"$bad $p\"; else head -c 1 \"$p\" >/dev/null 2>&1 && bad=\"$bad $p\"; fi; fi; done; if [ -n \"$bad\" ]; then echo \"agent can read hidden image path(s):$bad\" >&2; exit 1; fi",
+      "exit_code": 0,
+      "expected": "exit_code_0",
+      "reason": "agent image must not expose hidden tests, protected files, oracle files, or verifier internals",
+      "status": "passed",
+      "stderr_snippet": "",
+      "stdout_snippet": ""
+    },
+    {
+      "check_id": "nginx_available",
+      "command": "command -v nginx >/dev/null && nginx -v >/dev/null 2>&1",
+      "exit_code": 1,
+      "expected": "exit_code_0",
+      "reason": "task asks the agent to install/configure/start nginx while agent network is disabled",
+      "status": "failed",
+      "stderr_snippet": "",
+      "stdout_snippet": ""
+    },
+    {
+      "check_id": "no_solve_time_network_install",
+      "command": "test ! -f /etc/apt/sources.list || true",
+      "exit_code": null,
+      "expected": "manual_review",
+      "reason": "task text asks for package installation; no-network agent runs must bake dependencies or exclude the task",
+      "status": "manual_review",
+      "stderr_snippet": "task requires solve-time package installation under a no-network agent policy",
+      "stdout_snippet": ""
+    }
+  ],
+  "schema_version": "0.1.0"
+}

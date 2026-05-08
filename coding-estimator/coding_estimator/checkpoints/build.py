@@ -10,6 +10,7 @@ invariant 1: forbidden-column guard at every choke point).
 
 from __future__ import annotations
 
+import json
 import subprocess
 from pathlib import Path
 
@@ -21,6 +22,7 @@ from coding_estimator.checkpoints.features import (
     evidence,
     frontier,
     instability,
+    observation,
     stalling,
     time_budget,
     validation,
@@ -29,7 +31,7 @@ from coding_estimator.checkpoints.features.registry import all_features
 from coding_estimator.checkpoints.policy import p_step_checkpoints
 from coding_estimator.checkpoints.replay import prefix_replay
 from coding_estimator.ingest.run_record import RunRecord, load_run
-from coding_estimator.ingest.sources import SOURCES
+from coding_estimator.ingest.sources import SOURCES, canonical_sources
 from coding_estimator.io import write_parquet
 from coding_estimator.leakage.guard import assert_no_forbidden
 from coding_estimator.leakage.run_constancy import is_run_constant
@@ -54,6 +56,20 @@ def _builder_commit_sha() -> str:
         return "0000000"
 
 
+def _max_observation_step_used(run: RunRecord, checkpoint_step: int) -> int:
+    path = run.ledger_path.parent / "observation_events.jsonl"
+    if not path.is_file():
+        return 0
+    max_step = 0
+    for line in path.read_text(encoding="utf-8").splitlines():
+        if not line.strip():
+            continue
+        step = int((json.loads(line)).get("step", 0))
+        if step <= checkpoint_step:
+            max_step = max(max_step, step)
+    return max_step
+
+
 def build_run_rows(run: RunRecord) -> list[dict]:
     """Build all checkpoint rows for a single run."""
     src = SOURCES[run.source]
@@ -63,11 +79,14 @@ def build_run_rows(run: RunRecord) -> list[dict]:
     terminal = steps[-1]
     for t in steps:
         state = prefix_replay(run, t)
+        max_ledger_step = max((event.step for event in state.events_so_far), default=0)
         identity = {
             "run_id": run.run_id,
             "source": run.source,
             "checkpoint_id": f"{run.run_id}::{t}",
             "checkpoint_step": t,
+            "max_ledger_step_used": max_ledger_step,
+            "max_observation_step_used": _max_observation_step_used(run, t),
             "checkpoint_event_index": len(state.events_so_far) - 1
             if state.events_so_far
             else 0,
@@ -77,6 +96,12 @@ def build_run_rows(run: RunRecord) -> list[dict]:
             "schema_version": SCHEMA_VERSION,
             "builder_commit_sha": sha,
             "source_protocol_version": DEFAULT_SOURCE_PROTOCOL_VERSION,
+            "task_id": run.task_id,
+            "task_family": run.task_family,
+            "arm": run.arm,
+            "difficulty": run.difficulty,
+            "agent_scaffold": run.agent_scaffold,
+            "model_name": run.model_name,
         }
         # checkpoint_wall_time + checkpoint_elapsed_seconds populated only on
         # real-wallclock runs.
@@ -94,6 +119,7 @@ def build_run_rows(run: RunRecord) -> list[dict]:
         feats.update(validation.compute(state))
         feats.update(evidence.compute(state))
         feats.update(time_budget.compute(state, run))
+        feats.update(observation.compute(t, run))
 
         # Bring elapsed_wall_time forward into the identity slot too so
         # downstream consumers do not have to reach into features.
@@ -159,6 +185,15 @@ def apply_canonical_fills(df: pd.DataFrame) -> pd.DataFrame:
     return out
 
 
+def _source_ids_or_canonical(source_ids: list[str] | tuple[str, ...] | None) -> list[str]:
+    if source_ids is None:
+        return [s.source_id for s in canonical_sources()]
+    missing = [sid for sid in source_ids if sid not in SOURCES]
+    if missing:
+        raise KeyError(f"unknown source(s): {missing}")
+    return list(dict.fromkeys(source_ids))
+
+
 def write_source_checkpoints(
     source_id: str,
     out_path: Path,
@@ -181,6 +216,33 @@ def write_source_checkpoints(
         sort_by=["source", "run_id", "checkpoint_step"],
     )
     return csv_path, df
+
+
+def write_combined_checkpoints(
+    out_path: Path,
+    source_ids: list[str] | tuple[str, ...] | None = None,
+) -> tuple[Path, pd.DataFrame]:
+    """Build and write the combined checkpoint frame.
+
+    Defaults to the canonical v0 sources. Callers may pass an explicit
+    source list to build training artifacts that include non-canonical
+    live corpora such as `tb_live_v2`.
+    """
+    frames = [
+        frame
+        for source_id in _source_ids_or_canonical(source_ids)
+        if not (frame := build_source_frame(source_id)).empty
+    ]
+    df = pd.concat(frames, ignore_index=True) if frames else pd.DataFrame()
+    df = apply_canonical_fills(df)
+    assert_no_forbidden(df)
+    _maybe_warn_on_run_constancy(df)
+    path = write_parquet(
+        df,
+        out_path,
+        sort_by=["source", "run_id", "checkpoint_step"],
+    )
+    return path, df
 
 
 def _maybe_warn_on_run_constancy(df: pd.DataFrame) -> None:

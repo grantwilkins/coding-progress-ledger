@@ -32,6 +32,10 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from coding_estimator.runner.prompts import PROMPT_VERSION, render_prompt
+from coding_estimator.runner.observation_events import (
+    build_observation_events,
+    write_observation_events,
+)
 from coding_estimator.runner.transcript_to_events import (
     read_transcript,
     transcript_to_events,
@@ -244,6 +248,12 @@ def finalize(
         verifier_exit=verifier_exit,
     )
     _write_manifest(prep, task_dir, result, ended_at=_utc_now())
+    observation_events = build_observation_events(
+        run_dir=prep.run_dir,
+        run_id=prep.run_id,
+        task_id=prep.task_id,
+    )
+    write_observation_events(observation_events, prep.run_dir / "observation_events.jsonl")
     return result
 
 

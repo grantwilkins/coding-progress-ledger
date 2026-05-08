@@ -13,7 +13,7 @@ from collections.abc import Iterable
 
 from coding_estimator.ingest.sources import SOURCES, retrospective_source_ids
 
-LIVE_SOURCES: frozenset[str] = frozenset({"tb_live"})
+LIVE_SOURCES: frozenset[str] = frozenset({"tb_live", "tb_live_v2"})
 
 RETROSPECTIVE_CAVEAT = """\
 > ⚠️ **Retrospective annotation caveat.** This report draws on
@@ -25,11 +25,10 @@ RETROSPECTIVE_CAVEAT = """\
 """
 
 TB_LIVE_FRAMING = """\
-> ℹ️ **TB-12 framing.** `tb_live` measures **online realism**, not
-> model performance: 12 first-party live runs is too thin a benchmark
-> for a headline AUROC. Use this report to confirm the pipeline
-> produces honest online checkpoint features; do not optimize against
-> tb_live-only metrics.
+> ℹ️ **Live-source framing.** `tb_live` / `tb_live_v2` measure
+> **online realism**, not just model performance. Use live-source
+> reports to confirm the pipeline produces honest online checkpoint
+> features; do not optimize against a single live cohort in isolation.
 """
 
 
@@ -68,7 +67,7 @@ def assert_caveat_present(report_text: str, sources_used: Iterable[str]) -> None
     has_live = any(s in LIVE_SOURCES for s in sources_used)
     for fragment_marker in (
         "Retrospective annotation caveat" if has_retro else "",
-        "TB-12 framing" if has_live else "",
+        "Live-source framing" if has_live else "",
     ):
         if fragment_marker and fragment_marker not in report_text:
             raise AssertionError(

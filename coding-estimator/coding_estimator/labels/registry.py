@@ -115,6 +115,61 @@ V0_TARGETS: dict[str, Target] = {
         base_rate_estimate=0.10,
         compute=_NOT_IMPL,
     ),
+    "y_finish_step": Target(
+        name="y_finish_step",
+        family="success",
+        horizon_units="terminal",
+        horizon_value=None,
+        definition=(
+            "Terminal step index of the run (max ledger event step). "
+            "Continuous regression target. Run-constant; replicated to "
+            "every checkpoint. Used by the time-only baseline G2 and as "
+            "a sanity probe for elapsed-fraction features."
+        ),
+        window_kind="terminal",
+        source_signal="ledger.jsonl::final event step",
+        mask_rule="never_mask",
+        upstream_q_target_id=None,
+        run_constant_flag=True,
+        base_rate_estimate=None,
+        compute=_NOT_IMPL,
+    ),
+    "y_finish_seconds": Target(
+        name="y_finish_seconds",
+        family="success",
+        horizon_units="terminal",
+        horizon_value=None,
+        definition=(
+            "Terminal wall-clock duration in seconds (end_wall_time "
+            "- start_wall_time). NULL on sources without real wallclock "
+            "(label_available=false there). Run-constant when present."
+        ),
+        window_kind="terminal",
+        source_signal="run_record.start/end_wall_time",
+        mask_rule="null_when_no_wallclock",
+        upstream_q_target_id=None,
+        run_constant_flag=True,
+        base_rate_estimate=None,
+        compute=_NOT_IMPL,
+    ),
+    "y_timeout": Target(
+        name="y_timeout",
+        family="success",
+        horizon_units="terminal",
+        horizon_value=None,
+        definition=(
+            "1 iff the run terminated by hitting the source's "
+            "step/wall-clock budget rather than verifying. Sourced from "
+            "FinalLabel.timeout. Run-constant."
+        ),
+        window_kind="terminal",
+        source_signal="FinalLabel.timeout",
+        mask_rule="never_mask",
+        upstream_q_target_id=None,
+        run_constant_flag=True,
+        base_rate_estimate=None,
+        compute=_NOT_IMPL,
+    ),
 }
 
 
@@ -147,8 +202,6 @@ DEFERRED_TARGETS: dict[str, Target] = {
         ("y_success_by_h_seconds_runtimeout", "success", "seconds", None, "terminal", None),
         ("y_remaining_steps_if_success", "success", "steps", None, "regression", None),
         ("y_remaining_seconds_if_success", "success", "seconds", None, "regression", None),
-        ("y_finish_step", "success", "steps", None, "regression", None),
-        ("y_finish_seconds", "success", "seconds", None, "regression", None),
         ("y_product_reopen_h5", "progress_dynamics", "steps", 5, "strict-future",
          "product_reopened_after_completion"),
         ("y_stuck_loop_h5", "progress_dynamics", "steps", 5, "strict-future",

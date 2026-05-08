@@ -1,0 +1,137 @@
+{
+  "created_at": "2026-05-07T08:01:18.635872Z",
+  "runs": [
+    {
+      "accepted": true,
+      "arm": "gpt54",
+      "kind": "eligible_run",
+      "returncode": 0,
+      "run_dir": "runs/terminal_bench_openai_m1b_preflight/broken-python__gpt54",
+      "run_id": "broken-python__gpt54",
+      "run_status": "completed_success",
+      "task_id": "broken-python",
+      "termination_reason": "verifier_pass"
+    },
+    {
+      "accepted": true,
+      "arm": "gpt53codex",
+      "kind": "eligible_run",
+      "returncode": 0,
+      "run_dir": "runs/terminal_bench_openai_m1b_preflight/broken-python__gpt53codex",
+      "run_id": "broken-python__gpt53codex",
+      "run_status": "completed_success",
+      "task_id": "broken-python",
+      "termination_reason": "verifier_pass"
+    },
+    {
+      "accepted": true,
+      "arm": "gpt54mini",
+      "kind": "eligible_run",
+      "returncode": 0,
+      "run_dir": "runs/terminal_bench_openai_m1b_preflight/broken-python__gpt54mini",
+      "run_id": "broken-python__gpt54mini",
+      "run_status": "completed_success",
+      "task_id": "broken-python",
+      "termination_reason": "verifier_pass"
+    },
+    {
+      "accepted": true,
+      "arm": "gpt54",
+      "kind": "eligible_run",
+      "returncode": 0,
+      "run_dir": "runs/terminal_bench_openai_m1b_preflight/attention-mil__gpt54",
+      "run_id": "attention-mil__gpt54",
+      "run_status": "completed_failure",
+      "task_id": "attention-mil",
+      "termination_reason": "verifier_fail"
+    },
+    {
+      "accepted": true,
+      "arm": "gpt53codex",
+      "kind": "eligible_run",
+      "returncode": 0,
+      "run_dir": "runs/terminal_bench_openai_m1b_preflight/attention-mil__gpt53codex",
+      "run_id": "attention-mil__gpt53codex",
+      "run_status": "completed_failure",
+      "task_id": "attention-mil",
+      "termination_reason": "verifier_fail"
+    },
+    {
+      "accepted": true,
+      "arm": "gpt54mini",
+      "kind": "eligible_run",
+      "returncode": 0,
+      "run_dir": "runs/terminal_bench_openai_m1b_preflight/attention-mil__gpt54mini",
+      "run_id": "attention-mil__gpt54mini",
+      "run_status": "completed_failure",
+      "task_id": "attention-mil",
+      "termination_reason": "verifier_fail"
+    },
+    {
+      "accepted": true,
+      "arm": "gpt54",
+      "kind": "eligible_run",
+      "returncode": 0,
+      "run_dir": "runs/terminal_bench_openai_m1b_preflight/grid-pattern-transform__gpt54",
+      "run_id": "grid-pattern-transform__gpt54",
+      "run_status": "completed_success",
+      "task_id": "grid-pattern-transform",
+      "termination_reason": "verifier_pass"
+    },
+    {
+      "accepted": true,
+      "arm": "gpt53codex",
+      "kind": "eligible_run",
+      "returncode": 0,
+      "run_dir": "runs/terminal_bench_openai_m1b_preflight/grid-pattern-transform__gpt53codex",
+      "run_id": "grid-pattern-transform__gpt53codex",
+      "run_status": "completed_failure",
+      "task_id": "grid-pattern-transform",
+      "termination_reason": "verifier_fail"
+    },
+    {
+      "accepted": true,
+      "arm": "gpt54mini",
+      "kind": "eligible_run",
+      "returncode": 0,
+      "run_dir": "runs/terminal_bench_openai_m1b_preflight/grid-pattern-transform__gpt54mini",
+      "run_id": "grid-pattern-transform__gpt54mini",
+      "run_status": "completed_failure",
+      "task_id": "grid-pattern-transform",
+      "termination_reason": "verifier_fail"
+    },
+    {
+      "accepted": true,
+      "arm": "gpt54",
+      "kind": "eligible_run",
+      "returncode": 0,
+      "run_dir": "runs/terminal_bench_openai_m1b_preflight/csv-to-parquet__gpt54",
+      "run_id": "csv-to-parquet__gpt54",
+      "run_status": "completed_failure",
+      "task_id": "csv-to-parquet",
+      "termination_reason": "verifier_fail"
+    },
+    {
+      "accepted": true,
+      "arm": "gpt53codex",
+      "kind": "eligible_run",
+      "returncode": 0,
+      "run_dir": "runs/terminal_bench_openai_m1b_preflight/csv-to-parquet__gpt53codex",
+      "run_id": "csv-to-parquet__gpt53codex",
+      "run_status": "completed_failure",
+      "task_id": "csv-to-parquet",
+      "termination_reason": "verifier_fail"
+    },
+    {
+      "accepted": true,
+      "arm": "gpt54mini",
+      "kind": "eligible_run",
+      "returncode": 0,
+      "run_dir": "runs/terminal_bench_openai_m1b_preflight/csv-to-parquet__gpt54mini",
+      "run_id": "csv-to-parquet__gpt54mini",
+      "run_status": "completed_failure",
+      "task_id": "csv-to-parquet",
+      "termination_reason": "verifier_fail"
+    }
+  ]
+}

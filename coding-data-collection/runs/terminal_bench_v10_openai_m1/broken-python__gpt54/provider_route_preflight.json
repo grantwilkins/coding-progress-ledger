@@ -1,0 +1,14 @@
+{
+  "issues": [
+    "provider adapter exited 1",
+    "OpenAI HTTP 500: {\n  \"error\": {\n    \"message\": \"An error occurred while processing your request. You can retry your request, or contact us through our help center at help.openai.com if the error persists. Please include the request ID req_0c1c13d195034f49bf0e77fbdbb6e008 in your message.\",\n    \"type\": \"server_error\",\n    \"param\": null,\n    \"code\": \"server_error\"\n  }\n}\n",
+    "provider route did not record L-eligible metadata with nonzero usage and no fallback"
+  ],
+  "metrics": {
+    "fallback_call_count": 0,
+    "last_provider_call": null,
+    "provider_calls": [],
+    "resolved_models": []
+  },
+  "passed": false
+}

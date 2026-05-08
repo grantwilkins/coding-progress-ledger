@@ -1,0 +1,151 @@
+{
+  "deterministic": false,
+  "expected_signature": {
+    "collected": 2,
+    "error_tests": [],
+    "errors": 0,
+    "exit_code": 0,
+    "failed": 0,
+    "failed_tests": [],
+    "passed": 2,
+    "warnings": 1
+  },
+  "mismatches": [
+    {
+      "signature": {
+        "collected": null,
+        "error_tests": [],
+        "errors": 0,
+        "exit_code": 127,
+        "failed": 0,
+        "failed_tests": [],
+        "passed": 0,
+        "warnings": 0
+      },
+      "trial": 1
+    },
+    {
+      "signature": {
+        "collected": null,
+        "error_tests": [],
+        "errors": 0,
+        "exit_code": 127,
+        "failed": 0,
+        "failed_tests": [],
+        "passed": 0,
+        "warnings": 0
+      },
+      "trial": 2
+    }
+  ],
+  "observed_signatures": [
+    {
+      "collected": null,
+      "error_tests": [],
+      "errors": 0,
+      "exit_code": 127,
+      "failed": 0,
+      "failed_tests": [],
+      "passed": 0,
+      "warnings": 0
+    },
+    {
+      "collected": null,
+      "error_tests": [],
+      "errors": 0,
+      "exit_code": 127,
+      "failed": 0,
+      "failed_tests": [],
+      "passed": 0,
+      "warnings": 0
+    }
+  ],
+  "rerun_root": "runs/terminal_bench_openai_m1b_preflight/broken-python__gpt54/verifier_reruns",
+  "run_dir": "runs/terminal_bench_openai_m1b_preflight/broken-python__gpt54",
+  "run_id": "broken-python__gpt54",
+  "source_workspace": "runs/terminal_bench_openai_m1b_preflight/broken-python__gpt54/agent_workspace",
+  "task_dir": "/private/tmp/houdini_tb_d_smoke/broken-python",
+  "trial_records": [
+    {
+      "command_argv": [
+        "docker",
+        "run",
+        "--rm",
+        "--name",
+        "cdc-broken-python--gpt54-verifier-rerun-1",
+        "--cpus",
+        "1",
+        "--memory",
+        "2048m",
+        "-v",
+        "/Users/grantwilkins/houdini/coding-data-collection/runs/terminal_bench_openai_m1b_preflight/broken-python__gpt54/verifier_reruns/trial_1/workspace:/app:rw",
+        "-v",
+        "/private/tmp/houdini_tb_d_smoke/broken-python:/task:ro",
+        "-e",
+        "TEST_DIR=/task/tests",
+        "-w",
+        "/app",
+        "--entrypoint",
+        "bash",
+        "cdc-tb-broken-python__gpt54",
+        "-lc",
+        "bash /task/run-tests.sh"
+      ],
+      "exit_code": 127,
+      "signature": {
+        "collected": null,
+        "error_tests": [],
+        "errors": 0,
+        "exit_code": 127,
+        "failed": 0,
+        "failed_tests": [],
+        "passed": 0,
+        "warnings": 0
+      },
+      "stderr_tail": "Traceback (most recent call last):\n  File \"/usr/local/bin/pip\", line 5, in <module>\n    from pip._internal.cli.main import main\nModuleNotFoundError: No module named 'pip'\n/task/run-tests.sh: line 5: pytest: command not found\n",
+      "stdout_tail": "",
+      "trial": 1
+    },
+    {
+      "command_argv": [
+        "docker",
+        "run",
+        "--rm",
+        "--name",
+        "cdc-broken-python--gpt54-verifier-rerun-2",
+        "--cpus",
+        "1",
+        "--memory",
+        "2048m",
+        "-v",
+        "/Users/grantwilkins/houdini/coding-data-collection/runs/terminal_bench_openai_m1b_preflight/broken-python__gpt54/verifier_reruns/trial_2/workspace:/app:rw",
+        "-v",
+        "/private/tmp/houdini_tb_d_smoke/broken-python:/task:ro",
+        "-e",
+        "TEST_DIR=/task/tests",
+        "-w",
+        "/app",
+        "--entrypoint",
+        "bash",
+        "cdc-tb-broken-python__gpt54",
+        "-lc",
+        "bash /task/run-tests.sh"
+      ],
+      "exit_code": 127,
+      "signature": {
+        "collected": null,
+        "error_tests": [],
+        "errors": 0,
+        "exit_code": 127,
+        "failed": 0,
+        "failed_tests": [],
+        "passed": 0,
+        "warnings": 0
+      },
+      "stderr_tail": "Traceback (most recent call last):\n  File \"/usr/local/bin/pip\", line 5, in <module>\n    from pip._internal.cli.main import main\nModuleNotFoundError: No module named 'pip'\n/task/run-tests.sh: line 5: pytest: command not found\n",
+      "stdout_tail": "",
+      "trial": 2
+    }
+  ],
+  "trials": 2
+}

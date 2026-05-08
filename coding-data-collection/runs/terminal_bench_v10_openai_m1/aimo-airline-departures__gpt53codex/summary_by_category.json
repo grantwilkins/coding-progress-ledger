@@ -1,0 +1,285 @@
+{
+  "active_coding_leaves_final": 125,
+  "active_overall_leaves_final": 126,
+  "category_active_weight_final": {
+    "artifact": 0,
+    "documentation": 0,
+    "environment": 1.0,
+    "investigation": 36.0,
+    "product": 2.0,
+    "validation": 87.0
+  },
+  "category_completed_weight_final": {
+    "artifact": 0,
+    "documentation": 0,
+    "environment": 0,
+    "investigation": 33.0,
+    "product": 2.0,
+    "validation": 3.0
+  },
+  "coding_categories": [
+    "product",
+    "validation",
+    "investigation"
+  ],
+  "coding_largest_drop": 0.16666666666666669,
+  "coding_nonmonotonic": true,
+  "completed_coding_leaves_final": 38,
+  "completed_overall_leaves_final": 38,
+  "evidence_audit_by_category": {
+    "investigation": {
+      "audited_completion_count": 33,
+      "status": "weak",
+      "weak_completion_evidence_count": 3,
+      "weak_subtask_ids": [
+        "investigation_4",
+        "investigation_6",
+        "investigation_14"
+      ]
+    },
+    "product": {
+      "audited_completion_count": 2,
+      "status": "weak",
+      "weak_completion_evidence_count": 1,
+      "weak_subtask_ids": [
+        "G126"
+      ]
+    },
+    "validation": {
+      "audited_completion_count": 3,
+      "status": "strong",
+      "weak_completion_evidence_count": 0,
+      "weak_subtask_ids": []
+    }
+  },
+  "evidence_audit_status": "weak",
+  "evidence_audit_weak_categories": [
+    "product",
+    "investigation"
+  ],
+  "excluded_active_weight_final": 1.0,
+  "excluded_categories": [
+    "artifact",
+    "documentation",
+    "environment"
+  ],
+  "excluded_categories_final": {
+    "artifact": {
+      "active": 0,
+      "complete": 0
+    },
+    "documentation": {
+      "active": 0,
+      "complete": 0
+    },
+    "environment": {
+      "active": 1.0,
+      "complete": 0
+    }
+  },
+  "excluded_completed_weight_final": 0,
+  "final_coding_active_weight": 125.0,
+  "final_coding_complete_weight": 38.0,
+  "final_coding_progress": 0.304,
+  "final_overall_active_weight": 126.0,
+  "final_overall_complete_weight": 38.0,
+  "final_overall_progress": 0.30158730158730157,
+  "final_success": null,
+  "final_success_source": "absent",
+  "generator": "ledger_progress.sidecar",
+  "historical_subtasks_created": 126,
+  "largest_coding_drop": 0.16666666666666669,
+  "largest_coding_drop_category_contributions": {
+    "investigation": 0.166666666667
+  },
+  "largest_coding_drop_detail": {
+    "amount": 0.16666666666666669,
+    "from_step": 2,
+    "to_step": 3
+  },
+  "largest_coding_drop_source": "investigation",
+  "largest_overall_drop": 0.16666666666666669,
+  "largest_overall_drop_category_contributions": {
+    "investigation": 0.166666666667
+  },
+  "largest_overall_drop_detail": {
+    "amount": 0.16666666666666669,
+    "from_step": 2,
+    "to_step": 3
+  },
+  "largest_overall_drop_mostly_excluded": false,
+  "largest_overall_drop_source": "investigation",
+  "nonmonotonic_coding": true,
+  "nonmonotonic_overall": true,
+  "overall_largest_drop": 0.16666666666666669,
+  "overall_nonmonotonic": true,
+  "source_ledger_sha256": "491c751e4a04391b829957f76984585021f28ec2d40acbb2e45eca4dbe0d3d94",
+  "subtask_categories": {
+    "G126": "product",
+    "environment_121": "environment",
+    "investigation_1": "investigation",
+    "investigation_102": "investigation",
+    "investigation_106": "investigation",
+    "investigation_110": "investigation",
+    "investigation_114": "investigation",
+    "investigation_118": "investigation",
+    "investigation_12": "investigation",
+    "investigation_123": "investigation",
+    "investigation_14": "investigation",
+    "investigation_18": "investigation",
+    "investigation_22": "investigation",
+    "investigation_26": "investigation",
+    "investigation_3": "investigation",
+    "investigation_30": "investigation",
+    "investigation_34": "investigation",
+    "investigation_38": "investigation",
+    "investigation_4": "investigation",
+    "investigation_42": "investigation",
+    "investigation_46": "investigation",
+    "investigation_48": "investigation",
+    "investigation_52": "investigation",
+    "investigation_56": "investigation",
+    "investigation_58": "investigation",
+    "investigation_6": "investigation",
+    "investigation_62": "investigation",
+    "investigation_64": "investigation",
+    "investigation_68": "investigation",
+    "investigation_7": "investigation",
+    "investigation_72": "investigation",
+    "investigation_76": "investigation",
+    "investigation_78": "investigation",
+    "investigation_82": "investigation",
+    "investigation_86": "investigation",
+    "investigation_90": "investigation",
+    "investigation_94": "investigation",
+    "investigation_98": "investigation",
+    "product_8": "product",
+    "validation_10": "validation",
+    "validation_100": "validation",
+    "validation_101": "validation",
+    "validation_103": "validation",
+    "validation_104": "validation",
+    "validation_105": "validation",
+    "validation_107": "validation",
+    "validation_108": "validation",
+    "validation_109": "validation",
+    "validation_11": "validation",
+    "validation_111": "validation",
+    "validation_112": "validation",
+    "validation_113": "validation",
+    "validation_115": "validation",
+    "validation_116": "validation",
+    "validation_117": "validation",
+    "validation_119": "validation",
+    "validation_120": "validation",
+    "validation_122": "validation",
+    "validation_124": "validation",
+    "validation_125": "validation",
+    "validation_13": "validation",
+    "validation_15": "validation",
+    "validation_16": "validation",
+    "validation_17": "validation",
+    "validation_19": "validation",
+    "validation_2": "validation",
+    "validation_20": "validation",
+    "validation_21": "validation",
+    "validation_23": "validation",
+    "validation_24": "validation",
+    "validation_25": "validation",
+    "validation_27": "validation",
+    "validation_28": "validation",
+    "validation_29": "validation",
+    "validation_31": "validation",
+    "validation_32": "validation",
+    "validation_33": "validation",
+    "validation_35": "validation",
+    "validation_36": "validation",
+    "validation_37": "validation",
+    "validation_39": "validation",
+    "validation_40": "validation",
+    "validation_41": "validation",
+    "validation_43": "validation",
+    "validation_44": "validation",
+    "validation_45": "validation",
+    "validation_47": "validation",
+    "validation_49": "validation",
+    "validation_5": "validation",
+    "validation_50": "validation",
+    "validation_51": "validation",
+    "validation_53": "validation",
+    "validation_54": "validation",
+    "validation_55": "validation",
+    "validation_57": "validation",
+    "validation_59": "validation",
+    "validation_60": "validation",
+    "validation_61": "validation",
+    "validation_63": "validation",
+    "validation_65": "validation",
+    "validation_66": "validation",
+    "validation_67": "validation",
+    "validation_69": "validation",
+    "validation_70": "validation",
+    "validation_71": "validation",
+    "validation_73": "validation",
+    "validation_74": "validation",
+    "validation_75": "validation",
+    "validation_77": "validation",
+    "validation_79": "validation",
+    "validation_80": "validation",
+    "validation_81": "validation",
+    "validation_83": "validation",
+    "validation_84": "validation",
+    "validation_85": "validation",
+    "validation_87": "validation",
+    "validation_88": "validation",
+    "validation_89": "validation",
+    "validation_9": "validation",
+    "validation_91": "validation",
+    "validation_92": "validation",
+    "validation_93": "validation",
+    "validation_95": "validation",
+    "validation_96": "validation",
+    "validation_97": "validation",
+    "validation_99": "validation"
+  },
+  "task_id": "aimo-airline-departures__gpt53codex",
+  "weak_completion_evidence": [
+    {
+      "category": "investigation",
+      "description": "list_dir .",
+      "evidence_types": [
+        "contract_text"
+      ],
+      "step": 4,
+      "subtask_id": "investigation_4"
+    },
+    {
+      "category": "investigation",
+      "description": "shell tool",
+      "evidence_types": [
+        "manual_note"
+      ],
+      "step": 6,
+      "subtask_id": "investigation_6"
+    },
+    {
+      "category": "investigation",
+      "description": "shell tool",
+      "evidence_types": [
+        "manual_note"
+      ],
+      "step": 14,
+      "subtask_id": "investigation_14"
+    },
+    {
+      "category": "product",
+      "description": "Handle agent_step action at step 126",
+      "evidence_types": [
+        "manual_note"
+      ],
+      "step": 126,
+      "subtask_id": "G126"
+    }
+  ],
+  "weak_completion_evidence_count": 4
+}

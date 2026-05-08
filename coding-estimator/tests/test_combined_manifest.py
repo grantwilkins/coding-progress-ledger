@@ -40,8 +40,8 @@ def test_combined_covers_every_canonical_source(real_ledger: None, tmp_path: Pat
         "tb_live",
     }
     # Per-source counts: 21 dirs under swe_agent_pilot (one is `plots`),
-    # 30 under hermes_pilot_h5_v2, 12 under tb_live. The combined manifest
-    # records ALL of them, not just the resolvable ones.
+    # 30 under hermes_pilot_h5_v2, 12 under tb_live. The combined
+    # manifest records ALL of them, not just the resolvable ones.
     counts = df.groupby("source").size().to_dict()
     assert counts["tb_live"] == 12
     assert counts["swe_agent_pilot"] == 21
@@ -129,6 +129,8 @@ def test_csv_columns_match_spec(real_ledger: None, tmp_path: Path) -> None:
         "end_wall_time",
         "task_id",
         "task_family",
+        "arm",
+        "difficulty",
         "agent_scaffold",
         "model_name",
         "final_success",
@@ -136,6 +138,33 @@ def test_csv_columns_match_spec(real_ledger: None, tmp_path: Path) -> None:
         "timeout",
         "finish_step",
         "finish_seconds",
+        "termination_reason",
         "notes",
     }
     assert required.issubset(set(df.columns))
+
+
+def test_combined_manifest_can_target_tb_live_v2_only(
+    real_ledger: None,
+    tmp_path: Path,
+) -> None:
+    _, df = write_combined_manifest(tmp_path, source_ids=["tb_live_v2"])
+    assert set(df["source"].unique()) == {"tb_live_v2"}
+    assert len(df) == 102
+    assert set(df["final_success_source"].unique()) == {"verifier_exit"}
+
+
+def test_tb_live_v2_manifest_preserves_arm_and_difficulty_metadata(
+    real_ledger: None,
+    tmp_path: Path,
+) -> None:
+    _, df = write_combined_manifest(tmp_path, source_ids=["tb_live_v2"])
+    row = df.loc[
+        df["run_id"] == "validation_new_work_05_quoted_field_in_tsv__armB__87f7ab5e"
+    ].iloc[0]
+    assert row["task_id"] == "validation_new_work_05_quoted_field_in_tsv"
+    assert row["task_family"] == "validation_new_work"
+    assert row["arm"] == "B"
+    assert row["difficulty"] == "medium"
+    assert row["model_name"] == "claude-sonnet-4-6"
+    assert row["termination_reason"] == "verifier_fail"

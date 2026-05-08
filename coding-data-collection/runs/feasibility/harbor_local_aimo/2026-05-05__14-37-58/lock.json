@@ -1,0 +1,64 @@
+{
+    "schema_version": 1,
+    "created_at": "2026-05-05T21:37:59.095883Z",
+    "harbor": {
+        "version": "0.6.4",
+        "is_editable": false
+    },
+    "invocation": [
+        "/Users/grantwilkins/.cache/uv/archive-v0/J-AFxpaJFUFGEKZ5UjQ2_/bin/harbor",
+        "run",
+        "--path",
+        "/private/tmp/houdini_harbor_migrated/aimo-airline-departures",
+        "-a",
+        "oracle",
+        "-n",
+        "1",
+        "--jobs-dir",
+        "runs/feasibility/harbor_local_aimo",
+        "--yes",
+        "--debug"
+    ],
+    "n_concurrent_trials": 1,
+    "retry": {
+        "max_retries": 0,
+        "exclude_exceptions": [
+            "VerifierOutputParseError",
+            "VerifierTimeoutError",
+            "RewardFileEmptyError",
+            "AgentTimeoutError",
+            "RewardFileNotFoundError"
+        ],
+        "wait_multiplier": 1.0,
+        "min_wait_sec": 1.0,
+        "max_wait_sec": 60.0
+    },
+    "trials": [
+        {
+            "task": {
+                "name": "aimo-airline-departures",
+                "type": "local",
+                "digest": "sha256:66a6418464e3a8fd9cf351cee5a32428fc2890427628fc9fe1a4672bde8e01b4",
+                "path": "/private/tmp/houdini_harbor_migrated/aimo-airline-departures"
+            },
+            "timeout_multiplier": 1.0,
+            "agent": {
+                "name": "oracle",
+                "kwargs": {},
+                "env": {}
+            },
+            "environment": {
+                "type": "docker",
+                "force_build": false,
+                "delete": true,
+                "suppress_override_warnings": false,
+                "env": {},
+                "kwargs": {}
+            },
+            "verifier": {
+                "env": {},
+                "disable": false
+            }
+        }
+    ]
+}

@@ -31,6 +31,8 @@ class RunRecord:
     end_wall_time: datetime | None
     task_id: str | None
     task_family: str | None
+    arm: str | None
+    difficulty: str | None
     agent_scaffold: str | None
     model_name: str | None
     raw_metadata: dict[str, Any] = field(default_factory=dict)
@@ -69,9 +71,9 @@ def load_run(source_id: str, run_id: str) -> RunRecord:
     manifest = _read_json(rd / "run_manifest.json")
 
     timestamp_source = instr.get("timestamp_source")
-    has_real_wallclock = (
-        SOURCES[source_id].timestamp_quality == "real"
-        and timestamp_source == "wallclock"
+    manifest_has_real_wallclock = manifest.get("has_real_wallclock") is True
+    has_real_wallclock = SOURCES[source_id].timestamp_quality == "real" and (
+        timestamp_source == "wallclock" or manifest_has_real_wallclock
     )
 
     timestamps_present = [e.timestamp for e in events if e.timestamp]
@@ -82,10 +84,26 @@ def load_run(source_id: str, run_id: str) -> RunRecord:
         start_wall_time = None
         end_wall_time = None
 
-    task_id = instr.get("task_id") or src_meta.get("instance_id") or run_id
-    task_family = src_meta.get("category") or src_meta.get("subcategory")
+    task_id = (
+        instr.get("task_id")
+        or manifest.get("task_id")
+        or src_meta.get("instance_id")
+        or run_id
+    )
+    task_family = (
+        src_meta.get("category")
+        or src_meta.get("subcategory")
+        or manifest.get("category")
+        or manifest.get("target_shape")
+    )
+    arm = manifest.get("arm")
+    difficulty = src_meta.get("difficulty") or manifest.get("difficulty")
     model_name = src_meta.get("model_name") or manifest.get("model_name")
-    agent_scaffold = src_meta.get("source") or manifest.get("created_by")
+    agent_scaffold = (
+        src_meta.get("source")
+        or manifest.get("subagent_type")
+        or manifest.get("created_by")
+    )
 
     raw = {
         "run_manifest": manifest,
@@ -102,6 +120,8 @@ def load_run(source_id: str, run_id: str) -> RunRecord:
         end_wall_time=end_wall_time,
         task_id=str(task_id) if task_id is not None else None,
         task_family=str(task_family) if task_family is not None else None,
+        arm=str(arm) if arm is not None else None,
+        difficulty=str(difficulty) if difficulty is not None else None,
         agent_scaffold=str(agent_scaffold) if agent_scaffold is not None else None,
         model_name=str(model_name) if model_name is not None else None,
         raw_metadata=raw,

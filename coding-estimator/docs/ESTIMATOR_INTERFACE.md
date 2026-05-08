@@ -25,8 +25,8 @@ machine-readable form; this file is the prose.
 
 | column | populated_on | nullable_on |
 |---|---|---|
-| `checkpoint_wall_time` | tb_live, swe_agent_live_wallclock | swe_agent_pilot, hermes_pilot* |
-| `checkpoint_elapsed_seconds` | tb_live, *_wallclock | retrospective sources |
+| `checkpoint_wall_time` | tb_live, tb_live_v2, swe_agent_live_wallclock | swe_agent_pilot, hermes_pilot* |
+| `checkpoint_elapsed_seconds` | tb_live, tb_live_v2, *_wallclock | retrospective sources |
 | `checkpoint_fraction_timeout` | tb_live | else |
 | `timestamp_quality` | always | enum: real, synthetic, synthetic_backfill, missing |
 

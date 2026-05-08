@@ -36,6 +36,8 @@ class RunManifestRow:
     end_wall_time: str | None
     task_id: str | None
     task_family: str | None
+    arm: str | None
+    difficulty: str | None
     agent_scaffold: str | None
     model_name: str | None
     final_success: bool | None
@@ -43,6 +45,7 @@ class RunManifestRow:
     timeout: bool
     finish_step: int | None
     finish_seconds: float | None
+    termination_reason: str | None
     notes: str
 
 
@@ -62,6 +65,8 @@ def _row_for_run(source_id: str, run_id: str) -> RunManifestRow:
             end_wall_time=None,
             task_id=None,
             task_family=None,
+            arm=None,
+            difficulty=None,
             agent_scaffold=None,
             model_name=None,
             final_success=None,
@@ -69,6 +74,7 @@ def _row_for_run(source_id: str, run_id: str) -> RunManifestRow:
             timeout=False,
             finish_step=None,
             finish_seconds=None,
+            termination_reason=None,
             notes=f"malformed_run: {type(exc).__name__}: {exc}",
         )
     label: FinalLabel | None
@@ -88,6 +94,8 @@ def _row_for_run(source_id: str, run_id: str) -> RunManifestRow:
         end_wall_time=run.end_wall_time.isoformat() if run.end_wall_time else None,
         task_id=run.task_id,
         task_family=run.task_family,
+        arm=run.arm,
+        difficulty=run.difficulty,
         agent_scaffold=run.agent_scaffold,
         model_name=run.model_name,
         final_success=label.final_success if label else None,
@@ -95,6 +103,7 @@ def _row_for_run(source_id: str, run_id: str) -> RunManifestRow:
         timeout=label.timeout if label else False,
         finish_step=label.finish_step if label else None,
         finish_seconds=label.finish_seconds if label else None,
+        termination_reason=label.termination_reason if label else None,
         notes=note,
     )
 
@@ -126,6 +135,21 @@ def ingest_canonical_sources(out_dir: Path) -> dict[str, list[RunManifestRow]]:
     return out
 
 
+def ingest_selected_sources(
+    out_dir: Path,
+    source_ids: Iterable[str],
+) -> dict[str, list[RunManifestRow]]:
+    out: dict[str, list[RunManifestRow]] = {}
+    ordered = list(dict.fromkeys(source_ids))
+    missing = [sid for sid in ordered if sid not in SOURCES]
+    if missing:
+        raise KeyError(f"unknown source(s): {missing}")
+    for source_id in ordered:
+        _, rows = write_source_manifest(source_id, out_dir)
+        out[source_id] = rows
+    return out
+
+
 def to_frame(rows: Iterable[RunManifestRow]) -> pd.DataFrame:
     return pd.DataFrame([asdict(r) for r in rows])
 
@@ -135,10 +159,17 @@ FINAL_SUCCESS_SOURCE_ENUM = frozenset(
 )
 
 
-def write_combined_manifest(out_dir: Path) -> tuple[Path, pd.DataFrame]:
+def write_combined_manifest(
+    out_dir: Path,
+    source_ids: Iterable[str] | None = None,
+) -> tuple[Path, pd.DataFrame]:
     """Write datasets/manifests/all_runs.csv covering every canonical
     source. Validates the final_success_source enum on the way out."""
-    by_source = ingest_canonical_sources(out_dir)
+    by_source = (
+        ingest_canonical_sources(out_dir)
+        if source_ids is None
+        else ingest_selected_sources(out_dir, source_ids)
+    )
     all_rows: list[RunManifestRow] = []
     for rows in by_source.values():
         all_rows.extend(rows)

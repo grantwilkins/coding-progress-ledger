@@ -19,6 +19,7 @@ from coding_estimator.checkpoints.features.registry import (
 from coding_estimator.eval.bootstrap import bootstrap_brier_ci, brier_per_run
 from coding_estimator.eval.harness import EvalCell, cells_to_frame
 from coding_estimator.eval.metrics import OUTPUT_CLIP, auroc, brier, ece, log_loss
+from coding_estimator.ingest.sources import canonical_sources
 from coding_estimator.io import write_csv, write_json
 from coding_estimator.labels.registry import V0_TARGETS
 from coding_estimator.leakage.guard import assert_no_forbidden
@@ -399,6 +400,7 @@ def render_model_card(
     holdout_cells: list[EvalCell],
     known_limits: list[str],
 ) -> str:
+    canonical_source_ids = ", ".join(f"`{s.source_id}`" for s in canonical_sources())
     lines = [
         f"# {model_id}",
         "",
@@ -412,7 +414,7 @@ def render_model_card(
         "",
         "## Training data",
         "",
-        "- canonical sources: `swe_agent_pilot`, `hermes_pilot_h5_v2`, `tb_live`",
+        f"- canonical sources: {canonical_source_ids}",
         "- inputs: `datasets/checkpoints_all.parquet`, `datasets/labels_all.parquet`",
         f"- commit_sha: `{repo_commit_sha()}`",
         "",

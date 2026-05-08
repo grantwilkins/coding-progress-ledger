@@ -1,0 +1,223 @@
+{
+  "active_coding_leaves_final": 22,
+  "active_overall_leaves_final": 22,
+  "category_active_weight_final": {
+    "artifact": 0,
+    "documentation": 0,
+    "environment": 0,
+    "investigation": 10.0,
+    "product": 1.0,
+    "validation": 11.0
+  },
+  "category_completed_weight_final": {
+    "artifact": 0,
+    "documentation": 0,
+    "environment": 0,
+    "investigation": 4.0,
+    "product": 1.0,
+    "validation": 5.0
+  },
+  "coding_categories": [
+    "product",
+    "validation",
+    "investigation"
+  ],
+  "coding_largest_drop": 0.16666666666666669,
+  "coding_nonmonotonic": true,
+  "completed_coding_leaves_final": 10,
+  "completed_overall_leaves_final": 10,
+  "evidence_audit_by_category": {
+    "investigation": {
+      "audited_completion_count": 4,
+      "status": "weak",
+      "weak_completion_evidence_count": 3,
+      "weak_subtask_ids": [
+        "investigation_4",
+        "investigation_10",
+        "investigation_15"
+      ]
+    },
+    "product": {
+      "audited_completion_count": 1,
+      "status": "weak",
+      "weak_completion_evidence_count": 1,
+      "weak_subtask_ids": [
+        "G22"
+      ]
+    },
+    "validation": {
+      "audited_completion_count": 5,
+      "status": "weak",
+      "weak_completion_evidence_count": 4,
+      "weak_subtask_ids": [
+        "validation_6",
+        "validation_8",
+        "validation_17",
+        "validation_19"
+      ]
+    }
+  },
+  "evidence_audit_status": "weak",
+  "evidence_audit_weak_categories": [
+    "product",
+    "validation",
+    "investigation"
+  ],
+  "excluded_active_weight_final": 0,
+  "excluded_categories": [
+    "artifact",
+    "documentation",
+    "environment"
+  ],
+  "excluded_categories_final": {
+    "artifact": {
+      "active": 0,
+      "complete": 0
+    },
+    "documentation": {
+      "active": 0,
+      "complete": 0
+    },
+    "environment": {
+      "active": 0,
+      "complete": 0
+    }
+  },
+  "excluded_completed_weight_final": 0,
+  "final_coding_active_weight": 22.0,
+  "final_coding_complete_weight": 10.0,
+  "final_coding_progress": 0.45454545454545453,
+  "final_overall_active_weight": 22.0,
+  "final_overall_complete_weight": 10.0,
+  "final_overall_progress": 0.45454545454545453,
+  "final_success": null,
+  "final_success_source": "absent",
+  "generator": "ledger_progress.sidecar",
+  "historical_subtasks_created": 22,
+  "largest_coding_drop": 0.16666666666666669,
+  "largest_coding_drop_category_contributions": {
+    "investigation": 0.166666666667
+  },
+  "largest_coding_drop_detail": {
+    "amount": 0.16666666666666669,
+    "from_step": 2,
+    "to_step": 3
+  },
+  "largest_coding_drop_source": "investigation",
+  "largest_overall_drop": 0.16666666666666669,
+  "largest_overall_drop_category_contributions": {
+    "investigation": 0.166666666667
+  },
+  "largest_overall_drop_detail": {
+    "amount": 0.16666666666666669,
+    "from_step": 2,
+    "to_step": 3
+  },
+  "largest_overall_drop_mostly_excluded": false,
+  "largest_overall_drop_source": "investigation",
+  "nonmonotonic_coding": true,
+  "nonmonotonic_overall": true,
+  "overall_largest_drop": 0.16666666666666669,
+  "overall_nonmonotonic": true,
+  "source_ledger_sha256": "77abfced6b939eded2aa6a183081d72a08ea915755271f90a6e2324b5c863d66",
+  "subtask_categories": {
+    "G22": "product",
+    "investigation_1": "investigation",
+    "investigation_10": "investigation",
+    "investigation_14": "investigation",
+    "investigation_15": "investigation",
+    "investigation_2": "investigation",
+    "investigation_3": "investigation",
+    "investigation_4": "investigation",
+    "investigation_5": "investigation",
+    "investigation_7": "investigation",
+    "investigation_9": "investigation",
+    "validation_11": "validation",
+    "validation_12": "validation",
+    "validation_13": "validation",
+    "validation_16": "validation",
+    "validation_17": "validation",
+    "validation_18": "validation",
+    "validation_19": "validation",
+    "validation_20": "validation",
+    "validation_21": "validation",
+    "validation_6": "validation",
+    "validation_8": "validation"
+  },
+  "task_id": "broken-python__gpt54",
+  "weak_completion_evidence": [
+    {
+      "category": "investigation",
+      "description": "list_dir .",
+      "evidence_types": [
+        "contract_text"
+      ],
+      "step": 4,
+      "subtask_id": "investigation_4"
+    },
+    {
+      "category": "validation",
+      "description": "shell tool",
+      "evidence_types": [
+        "manual_note"
+      ],
+      "step": 6,
+      "subtask_id": "validation_6"
+    },
+    {
+      "category": "validation",
+      "description": "Reproduce pip version failure and inspect pip entrypoints",
+      "evidence_types": [
+        "manual_note"
+      ],
+      "step": 8,
+      "subtask_id": "validation_8"
+    },
+    {
+      "category": "investigation",
+      "description": "Inspect Python paths and installed packages before repair",
+      "evidence_types": [
+        "manual_note"
+      ],
+      "step": 10,
+      "subtask_id": "investigation_10"
+    },
+    {
+      "category": "investigation",
+      "description": "Inspect bundled pip wheel and leftover metadata",
+      "evidence_types": [
+        "manual_note"
+      ],
+      "step": 15,
+      "subtask_id": "investigation_15"
+    },
+    {
+      "category": "validation",
+      "description": "shell tool",
+      "evidence_types": [
+        "manual_note"
+      ],
+      "step": 17,
+      "subtask_id": "validation_17"
+    },
+    {
+      "category": "validation",
+      "description": "shell tool",
+      "evidence_types": [
+        "manual_note"
+      ],
+      "step": 19,
+      "subtask_id": "validation_19"
+    },
+    {
+      "category": "product",
+      "description": "Handle agent_step action at step 22",
+      "evidence_types": [
+        "manual_note"
+      ],
+      "step": 22,
+      "subtask_id": "G22"
+    }
+  ],
+  "weak_completion_evidence_count": 8
+}

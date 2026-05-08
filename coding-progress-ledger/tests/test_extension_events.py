@@ -1,16 +1,16 @@
-"""Pass-through behavior for extension event types (e.g. vagrant `state_*` events).
+"""Pass-through behavior for extension event types (e.g. agent-migrate `state_*` events).
 
 A LedgerEvent with an `event_type` value that is not a member of `EventType`
 must be preserved on the events list, must not mutate subtasks, must round-trip
 through JSONL, and must not change scoring or queries.
 """
+
 from __future__ import annotations
 
 import json
 from pathlib import Path
 
 import pytest
-
 from ledger_progress import (
     EventType,
     LedgerEvent,
@@ -32,8 +32,7 @@ from ledger_progress.queries import (
 )
 from ledger_progress.serialization import event_from_dict, event_to_dict
 
-
-EXT = "vagrant.state_read"
+EXT = "agent-migrate.state_read"
 
 
 def _ledger_with_two_subtasks() -> LedgerSession:
@@ -45,9 +44,12 @@ def _ledger_with_two_subtasks() -> LedgerSession:
 
 # ---- Invariant 1: event preserved ----
 
+
 def test_extension_event_preserved_in_events():
     s = _ledger_with_two_subtasks()
-    apply_event(s.ledger, LedgerEvent(2, EXT, None, {"state_id": "shared", "tokens": 100}))
+    apply_event(
+        s.ledger, LedgerEvent(2, EXT, None, {"state_id": "shared", "tokens": 100})
+    )
     types = [e.event_type for e in s.ledger.events]
     assert EXT in types
 
@@ -64,19 +66,26 @@ def test_extension_event_event_type_kept_as_str():
 def test_known_event_type_string_still_coerces_to_enum():
     """Strings that match an EventType value must still coerce, for backwards compat."""
     s = _ledger_with_two_subtasks()
-    e = LedgerEvent(2, "update_status", "S1", {"status": "complete", "evidence": ["done"]})
+    e = LedgerEvent(
+        2, "update_status", "S1", {"status": "complete", "evidence": ["done"]}
+    )
     assert e.event_type is EventType.UPDATE_STATUS
 
 
 # ---- Invariant 2: no subtask mutation ----
 
+
 def test_extension_event_does_not_mutate_subtasks():
     s = _ledger_with_two_subtasks()
-    before = {sid: (st.status, st.updated_at_step, list(st.evidence))
-              for sid, st in s.ledger.subtasks.items()}
+    before = {
+        sid: (st.status, st.updated_at_step, list(st.evidence))
+        for sid, st in s.ledger.subtasks.items()
+    }
     apply_event(s.ledger, LedgerEvent(2, EXT, "S1", {"state_id": "shared"}))
-    after = {sid: (st.status, st.updated_at_step, list(st.evidence))
-             for sid, st in s.ledger.subtasks.items()}
+    after = {
+        sid: (st.status, st.updated_at_step, list(st.evidence))
+        for sid, st in s.ledger.subtasks.items()
+    }
     assert before == after
 
 
@@ -87,6 +96,7 @@ def test_extension_event_with_unknown_subtask_id_does_not_raise():
 
 
 # ---- Invariant 3: JSONL round-trip ----
+
 
 def test_extension_event_round_trips_through_dict():
     e = LedgerEvent(3, EXT, None, {"state_id": "x", "tokens": 5})
@@ -99,10 +109,21 @@ def test_extension_event_round_trips_through_dict():
 
 def test_extension_event_round_trips_through_jsonl(tmp_path: Path):
     s = _ledger_with_two_subtasks()
-    apply_event(s.ledger, LedgerEvent(2, EXT, None, {"state_id": "shared", "tokens": 7}))
-    apply_event(s.ledger, LedgerEvent(2, "vagrant.state_write", None, {"state_id": "out"}))
-    apply_event(s.ledger, LedgerEvent(3, EventType.UPDATE_STATUS, "S1",
-                                      {"status": "complete", "evidence": ["done"]}))
+    apply_event(
+        s.ledger, LedgerEvent(2, EXT, None, {"state_id": "shared", "tokens": 7})
+    )
+    apply_event(
+        s.ledger, LedgerEvent(2, "agent-migrate.state_write", None, {"state_id": "out"})
+    )
+    apply_event(
+        s.ledger,
+        LedgerEvent(
+            3,
+            EventType.UPDATE_STATUS,
+            "S1",
+            {"status": "complete", "evidence": ["done"]},
+        ),
+    )
 
     path = str(tmp_path / "trace.jsonl")
     to_jsonl(s.ledger, path)
@@ -127,6 +148,7 @@ def test_extension_event_jsonl_format_is_plain_string():
 
 # ---- Invariant 4: scoring and queries unchanged ----
 
+
 def test_scoring_unchanged_by_extension_events():
     s_clean = LedgerSession("root")
     s_clean.add("alpha", step=1)
@@ -137,11 +159,23 @@ def test_scoring_unchanged_by_extension_events():
     s_ext = LedgerSession("root")
     s_ext.add("alpha", step=1)
     s_ext.add("beta", step=1)
-    apply_event(s_ext.ledger, LedgerEvent(1, EXT, None, {"state_id": "x", "tokens": 100}))
-    apply_event(s_ext.ledger, LedgerEvent(1, "vagrant.placement_decision", None,
-                                          {"node_id": "S1", "site": "phoenix"}))
+    apply_event(
+        s_ext.ledger, LedgerEvent(1, EXT, None, {"state_id": "x", "tokens": 100})
+    )
+    apply_event(
+        s_ext.ledger,
+        LedgerEvent(
+            1,
+            "agent-migrate.placement_decision",
+            None,
+            {"node_id": "S1", "site": "phoenix"},
+        ),
+    )
     s_ext.complete("S1", step=2, evidence=["done"])
-    apply_event(s_ext.ledger, LedgerEvent(2, "vagrant.state_invalidate", None, {"state_id": "x"}))
+    apply_event(
+        s_ext.ledger,
+        LedgerEvent(2, "agent-migrate.state_invalidate", None, {"state_id": "x"}),
+    )
     ext_score = score(s_ext.ledger)
 
     assert clean_score.complete_weight == ext_score.complete_weight
@@ -187,6 +221,7 @@ def test_last_validation_event_unchanged_by_extension():
 
 # ---- Negative checks: malformed extension events still hard-fail ----
 
+
 def test_empty_event_type_string_rejected():
     with pytest.raises(ValueError):
         LedgerEvent(1, "", None, {})
@@ -210,10 +245,15 @@ def test_replay_with_extension_events_after_init():
     s.add("alpha", step=1)
     apply_event(s.ledger, LedgerEvent(1, EXT, None, {"state_id": "x"}))
     s.complete("S1", step=2, evidence=["done"])
-    apply_event(s.ledger, LedgerEvent(3, "vagrant.migration_end", None, {"elapsed_s": 1.2}))
+    apply_event(
+        s.ledger,
+        LedgerEvent(3, "agent-migrate.migration_end", None, {"elapsed_s": 1.2}),
+    )
 
     rebuilt = replay(list(s.ledger.events))
-    assert [e.event_type for e in rebuilt.events] == [e.event_type for e in s.ledger.events]
+    assert [e.event_type for e in rebuilt.events] == [
+        e.event_type for e in s.ledger.events
+    ]
     assert rebuilt.subtasks["S1"].status.value == "complete"
 
 

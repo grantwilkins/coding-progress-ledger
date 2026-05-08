@@ -1,0 +1,20 @@
+{
+  "artifact_contract": [
+    "checkpoints.parquet",
+    "labels.parquet",
+    "estimator_predictions.parquet",
+    "checkpoint_feature_manifest.json"
+  ],
+  "artifact_dir": "datasets/d_smoke_estimator",
+  "corpus_id": "d_smoke_estimator",
+  "producer": "coding-estimator",
+  "run_count": 4,
+  "run_ids": [
+    "noop_aimo",
+    "oracle_hello_world",
+    "oracle_grid_pattern_transform",
+    "oracle_aimo_airline_departures"
+  ],
+  "source_id": "terminal_bench_pilot",
+  "staged_runs_dir": "../coding-estimator/runs/terminal_bench_pilot"
+}

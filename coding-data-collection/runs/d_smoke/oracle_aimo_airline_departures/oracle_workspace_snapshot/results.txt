@@ -1,0 +1,104 @@
+AIMO Problem 1: Airline Departure Analysis
+=========================================
+Problem: Three airline companies operate flights from Dodola island.
+The first company departs every 100 days, the second every 120 days,
+and the third every 150 days. What is the greatest positive integer d
+for which there will be d consecutive days without a flight from Dodola
+island, regardless of the departure times of the various airlines?
+
+Let's solve this problem with a mathematical proof and computational analysis:
+Step 1: Analyzing A100 and A150 only
+-------------------------------------
+We first prove that there is a period of 99 days after an A100
+departure during which no A150 plane takes off.
+
+As in the proof, consider a period of 301 days which starts with
+an A150 departure on Day 0, followed by departures on Day 150 and Day 300.
+
+Case (i): When the first A100 departure (Day x) is between 0 and 50:
+  If A100 departs on Day 0, next A150 departure is on Day 150
+  This gives a quiet period of 149 days
+  ✓ This confirms a quiet period of at least 99 days
+  If A100 departs on Day 25, next A150 departure is on Day 150
+  This gives a quiet period of 124 days
+  ✓ This confirms a quiet period of at least 99 days
+  If A100 departs on Day 50, next A150 departure is on Day 150
+  This gives a quiet period of 99 days
+  ✓ This confirms a quiet period of at least 99 days
+
+Case (ii): When the first A100 departure (Day x) is between 51 and 99:
+  If first A100 departs on Day 51, second A100 is on Day 151
+  Next A150 departure after second A100 is on Day 300
+  This gives a quiet period of 148 days
+  ✓ This confirms a quiet period of at least 99 days
+  If first A100 departs on Day 75, second A100 is on Day 175
+  Next A150 departure after second A100 is on Day 300
+  This gives a quiet period of 124 days
+  ✓ This confirms a quiet period of at least 99 days
+  If first A100 departs on Day 99, second A100 is on Day 199
+  Next A150 departure after second A100 is on Day 300
+  This gives a quiet period of 100 days
+  ✓ This confirms a quiet period of at least 99 days
+
+Conclusion: Regardless of when A100 and A150 start their schedules,
+there will always be a period of at least 99 consecutive days without
+any departure from either airline.
+
+Step 2: Adding A120 to the analysis
+----------------------------------
+We prove that there are 79 consecutive days on which no departure
+of any airline happens, including the A120 planes.
+
+As in the proof, we define Day 0 to be when an A100 flight departs
+and there is no A150 flight before Day 100.
+
+Case 1: When the first A120 departure (Day y) is ≤ 20 or ≥ 80:
+  If first A120 departure is on Day 20:
+  There are at least 79 days between this and the next departure (A100 on Day 100)
+  If first A120 departure is on Day 80:
+  There are at least 79 days between A100 departure on Day 0 and A120 on Day 80
+
+Case 2: When the first A120 departure (Day y) is between 20 and 60:
+  If first A120 departure is on Day 40:
+  There will be an A120 departure on Day 280 (= 280)
+  No A120 departure strictly between Day 300 and Day 380
+  This gives 79 consecutive quiet days between Day 301 and Day 379
+
+Case 3: When the first A120 departure (Day y) is between 61 and 80:
+  If first A120 departure is on Day 70:
+  There will be an A120 departure on Day 70+240 (= 310)
+  No subsequent departures before Day 400
+  This gives 79 consecutive quiet days ending on Day 309
+
+Conclusion: Regardless of when each airline starts its schedule,
+there will always be a period of at least 79 consecutive days without any departure.
+
+Step 3: Verifying that 79 is optimal
+----------------------------------
+We show that this bound can be attained with the following configuration:
+- A100 departs on Day 0
+- A120 departs on Day 80
+- A150 departs on Day 120
+
+The departure days are then:
+0, 80, 100, 120, 200&200, 270, 300, 320, 400, 420, 440, 500, 560, 570
+(modulo 600, i.e., it repeats every 600 days)
+
+Note: 200&200 indicates that both A100 and A120 depart on day 200.
+
+Longest run of consecutive days without flights: 79 days
+This is obtained 3 times in the 600-day cycle:
+- From Day 1 to Day 79
+- From Day 121 to Day 199
+- From Day 321 to Day 399
+
+✓ This confirms that 79 is the optimal answer.
+
+Summary:
+1. When considering only A100 and A150, there is always a period of
+   at least 99 consecutive days without departures.
+2. When A120 is added, this reduces to 79 consecutive days.
+3. We verified that 79 is attainable with the specific configuration
+   described in the solution.
+
+Therefore, the answer to the AIMO problem is \boxed{79}.

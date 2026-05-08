@@ -1,0 +1,159 @@
+{
+  "active_coding_leaves_final": 4,
+  "active_overall_leaves_final": 4,
+  "category_active_weight_final": {
+    "artifact": 0,
+    "documentation": 0,
+    "environment": 0,
+    "investigation": 3.0,
+    "product": 0,
+    "validation": 1.0
+  },
+  "category_completed_weight_final": {
+    "artifact": 0,
+    "documentation": 0,
+    "environment": 0,
+    "investigation": 3.0,
+    "product": 0,
+    "validation": 1.0
+  },
+  "coding_categories": [
+    "product",
+    "validation",
+    "investigation"
+  ],
+  "coding_largest_drop": 0.0,
+  "coding_nonmonotonic": false,
+  "completed_coding_leaves_final": 4,
+  "completed_overall_leaves_final": 4,
+  "evidence_audit_by_category": {
+    "investigation": {
+      "audited_completion_count": 3,
+      "status": "weak",
+      "weak_completion_evidence_count": 3,
+      "weak_subtask_ids": [
+        "investigation_1",
+        "investigation_2",
+        "investigation_4"
+      ]
+    },
+    "product": {
+      "audited_completion_count": 0,
+      "status": "not_applicable",
+      "weak_completion_evidence_count": 0,
+      "weak_subtask_ids": []
+    },
+    "validation": {
+      "audited_completion_count": 1,
+      "status": "weak",
+      "weak_completion_evidence_count": 1,
+      "weak_subtask_ids": [
+        "validation_3"
+      ]
+    }
+  },
+  "evidence_audit_status": "weak",
+  "evidence_audit_weak_categories": [
+    "validation",
+    "investigation"
+  ],
+  "excluded_active_weight_final": 0,
+  "excluded_categories": [
+    "artifact",
+    "documentation",
+    "environment"
+  ],
+  "excluded_categories_final": {
+    "artifact": {
+      "active": 0,
+      "complete": 0
+    },
+    "documentation": {
+      "active": 0,
+      "complete": 0
+    },
+    "environment": {
+      "active": 0,
+      "complete": 0
+    }
+  },
+  "excluded_completed_weight_final": 0,
+  "final_coding_active_weight": 4.0,
+  "final_coding_complete_weight": 4.0,
+  "final_coding_progress": 1.0,
+  "final_overall_active_weight": 4.0,
+  "final_overall_complete_weight": 4.0,
+  "final_overall_progress": 1.0,
+  "final_success": null,
+  "final_success_source": "absent",
+  "generator": "ledger_progress.sidecar",
+  "historical_subtasks_created": 4,
+  "largest_coding_drop": 0.0,
+  "largest_coding_drop_category_contributions": {},
+  "largest_coding_drop_detail": {
+    "amount": 0.0,
+    "from_step": null,
+    "to_step": null
+  },
+  "largest_coding_drop_source": "none",
+  "largest_overall_drop": 0.0,
+  "largest_overall_drop_category_contributions": {},
+  "largest_overall_drop_detail": {
+    "amount": 0.0,
+    "from_step": null,
+    "to_step": null
+  },
+  "largest_overall_drop_mostly_excluded": false,
+  "largest_overall_drop_source": "none",
+  "nonmonotonic_coding": false,
+  "nonmonotonic_overall": false,
+  "overall_largest_drop": 0.0,
+  "overall_nonmonotonic": false,
+  "source_ledger_sha256": "72637f143b8374ac5560dfedcb91ee24c539cb5502643adb2c7b570e1423a359",
+  "subtask_categories": {
+    "investigation_1": "investigation",
+    "investigation_2": "investigation",
+    "investigation_4": "investigation",
+    "validation_3": "validation"
+  },
+  "task_id": "harbor_native_aimo_run",
+  "weak_completion_evidence": [
+    {
+      "category": "investigation",
+      "description": "Migrated Terminal-Bench archive task into Harbor task format.",
+      "evidence_types": [
+        "manual_note"
+      ],
+      "step": 1,
+      "subtask_id": "investigation_1"
+    },
+    {
+      "category": "investigation",
+      "description": "Harbor oracle produced the expected result artifact.",
+      "evidence_types": [
+        "manual_note"
+      ],
+      "step": 2,
+      "subtask_id": "investigation_2"
+    },
+    {
+      "category": "validation",
+      "description": "Harbor verifier returned reward 1.0.",
+      "evidence_types": [
+        "manual_note"
+      ],
+      "step": 3,
+      "subtask_id": "validation_3"
+    },
+    {
+      "category": "investigation",
+      "description": "Harbor local oracle feasibility run completed.",
+      "evidence_types": [
+        "manual_note"
+      ],
+      "step": 4,
+      "subtask_id": "investigation_4"
+    }
+  ],
+  "weak_completion_evidence_count": 4
+}

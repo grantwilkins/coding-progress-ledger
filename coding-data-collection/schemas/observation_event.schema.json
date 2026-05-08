@@ -1,0 +1,57 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://houdini.local/coding-data-collection/observation_event.schema.json",
+  "title": "coding-data-collection observation_events.jsonl line",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "run_id",
+    "step",
+    "observed_ts",
+    "source_artifact",
+    "event_type",
+    "payload"
+  ],
+  "properties": {
+    "schema_version": { "const": "0.2.0" },
+    "run_id": { "type": "string", "minLength": 1 },
+    "step": { "type": "integer", "minimum": 0 },
+    "observed_ts": { "type": ["string", "null"] },
+    "source_artifact": { "type": "string", "minLength": 1 },
+    "event_type": {
+      "enum": [
+        "validation_attempt",
+        "validation_pass_observed",
+        "validation_fail_observed",
+        "error_observed",
+        "error_repeated",
+        "environment_blocked",
+        "network_blocked",
+        "dependency_missing",
+        "tool_output_truncated",
+        "repeated_file_inspection",
+        "chunked_file_read",
+        "product_file_written",
+        "product_file_edited",
+        "expected_file_missing",
+        "agent_claims_done",
+        "verifier_pass",
+        "verifier_fail",
+        "verifier_disagreement",
+        "oracle_artifact_read",
+        "model_parse_error",
+        "invalid_action",
+        "tool_denied",
+        "early_done_denied"
+      ]
+    },
+    "payload": {
+      "type": "object",
+      "required": ["visible_to_agent"],
+      "properties": {
+        "visible_to_agent": { "type": "boolean" }
+      }
+    }
+  }
+}

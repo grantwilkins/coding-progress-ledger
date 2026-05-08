@@ -1,0 +1,232 @@
+{
+  "active_coding_leaves_final": 19,
+  "active_overall_leaves_final": 21,
+  "category_active_weight_final": {
+    "artifact": 0,
+    "documentation": 0,
+    "environment": 2.0,
+    "investigation": 9.0,
+    "product": 1.0,
+    "validation": 9.0
+  },
+  "category_completed_weight_final": {
+    "artifact": 0,
+    "documentation": 0,
+    "environment": 1.0,
+    "investigation": 5.0,
+    "product": 1.0,
+    "validation": 4.0
+  },
+  "coding_categories": [
+    "product",
+    "validation",
+    "investigation"
+  ],
+  "coding_largest_drop": 0.16666666666666669,
+  "coding_nonmonotonic": true,
+  "completed_coding_leaves_final": 10,
+  "completed_overall_leaves_final": 11,
+  "evidence_audit_by_category": {
+    "investigation": {
+      "audited_completion_count": 5,
+      "status": "weak",
+      "weak_completion_evidence_count": 4,
+      "weak_subtask_ids": [
+        "investigation_4",
+        "investigation_6",
+        "investigation_14",
+        "investigation_16"
+      ]
+    },
+    "product": {
+      "audited_completion_count": 1,
+      "status": "weak",
+      "weak_completion_evidence_count": 1,
+      "weak_subtask_ids": [
+        "G21"
+      ]
+    },
+    "validation": {
+      "audited_completion_count": 4,
+      "status": "weak",
+      "weak_completion_evidence_count": 4,
+      "weak_subtask_ids": [
+        "validation_8",
+        "validation_12",
+        "validation_18",
+        "validation_20"
+      ]
+    }
+  },
+  "evidence_audit_status": "weak",
+  "evidence_audit_weak_categories": [
+    "product",
+    "validation",
+    "investigation"
+  ],
+  "excluded_active_weight_final": 2.0,
+  "excluded_categories": [
+    "artifact",
+    "documentation",
+    "environment"
+  ],
+  "excluded_categories_final": {
+    "artifact": {
+      "active": 0,
+      "complete": 0
+    },
+    "documentation": {
+      "active": 0,
+      "complete": 0
+    },
+    "environment": {
+      "active": 2.0,
+      "complete": 1.0
+    }
+  },
+  "excluded_completed_weight_final": 1.0,
+  "final_coding_active_weight": 19.0,
+  "final_coding_complete_weight": 10.0,
+  "final_coding_progress": 0.5263157894736842,
+  "final_overall_active_weight": 21.0,
+  "final_overall_complete_weight": 11.0,
+  "final_overall_progress": 0.5238095238095238,
+  "final_success": null,
+  "final_success_source": "absent",
+  "generator": "ledger_progress.sidecar",
+  "historical_subtasks_created": 21,
+  "largest_coding_drop": 0.16666666666666669,
+  "largest_coding_drop_category_contributions": {
+    "investigation": 0.166666666667
+  },
+  "largest_coding_drop_detail": {
+    "amount": 0.16666666666666669,
+    "from_step": 2,
+    "to_step": 3
+  },
+  "largest_coding_drop_source": "investigation",
+  "largest_overall_drop": 0.16666666666666669,
+  "largest_overall_drop_category_contributions": {
+    "investigation": 0.166666666667
+  },
+  "largest_overall_drop_detail": {
+    "amount": 0.16666666666666669,
+    "from_step": 2,
+    "to_step": 3
+  },
+  "largest_overall_drop_mostly_excluded": false,
+  "largest_overall_drop_source": "investigation",
+  "nonmonotonic_coding": true,
+  "nonmonotonic_overall": true,
+  "overall_largest_drop": 0.16666666666666669,
+  "overall_nonmonotonic": true,
+  "source_ledger_sha256": "0dee5c9509d4076dfa13e36b4897b8a60597dfa9d60af047827763ccc5d04b7b",
+  "subtask_categories": {
+    "G21": "product",
+    "environment_10": "environment",
+    "environment_13": "environment",
+    "investigation_1": "investigation",
+    "investigation_14": "investigation",
+    "investigation_15": "investigation",
+    "investigation_16": "investigation",
+    "investigation_2": "investigation",
+    "investigation_3": "investigation",
+    "investigation_4": "investigation",
+    "investigation_5": "investigation",
+    "investigation_6": "investigation",
+    "validation_11": "validation",
+    "validation_12": "validation",
+    "validation_17": "validation",
+    "validation_18": "validation",
+    "validation_19": "validation",
+    "validation_20": "validation",
+    "validation_7": "validation",
+    "validation_8": "validation",
+    "validation_9": "validation"
+  },
+  "task_id": "broken-python__gpt53codex",
+  "weak_completion_evidence": [
+    {
+      "category": "investigation",
+      "description": "list_dir .",
+      "evidence_types": [
+        "contract_text"
+      ],
+      "step": 4,
+      "subtask_id": "investigation_4"
+    },
+    {
+      "category": "investigation",
+      "description": "shell tool",
+      "evidence_types": [
+        "contract_text"
+      ],
+      "step": 6,
+      "subtask_id": "investigation_6"
+    },
+    {
+      "category": "validation",
+      "description": "shell tool",
+      "evidence_types": [
+        "manual_note"
+      ],
+      "step": 8,
+      "subtask_id": "validation_8"
+    },
+    {
+      "category": "validation",
+      "description": "shell tool",
+      "evidence_types": [
+        "manual_note"
+      ],
+      "step": 12,
+      "subtask_id": "validation_12"
+    },
+    {
+      "category": "investigation",
+      "description": "shell tool",
+      "evidence_types": [
+        "manual_note"
+      ],
+      "step": 14,
+      "subtask_id": "investigation_14"
+    },
+    {
+      "category": "investigation",
+      "description": "shell tool",
+      "evidence_types": [
+        "manual_note"
+      ],
+      "step": 16,
+      "subtask_id": "investigation_16"
+    },
+    {
+      "category": "validation",
+      "description": "shell tool",
+      "evidence_types": [
+        "manual_note"
+      ],
+      "step": 18,
+      "subtask_id": "validation_18"
+    },
+    {
+      "category": "validation",
+      "description": "Diagnosed and fixed system pip.\n\nRoot cause:\n- `/usr/local/bin/pip` and `/usr/local/bin/pip3` launchers existed, but `pip` package files were missing from `/usr/local/lib/python3.13/site-packages`.\n- Only `pip-24.3.1.dist-info` was present,",
+      "evidence_types": [
+        "manual_note"
+      ],
+      "step": 20,
+      "subtask_id": "validation_20"
+    },
+    {
+      "category": "product",
+      "description": "Handle agent_step action at step 21",
+      "evidence_types": [
+        "manual_note"
+      ],
+      "step": 21,
+      "subtask_id": "G21"
+    }
+  ],
+  "weak_completion_evidence_count": 9
+}

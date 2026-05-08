@@ -1,0 +1,33 @@
+{
+  "check_count": 2,
+  "failed_checks": [
+    "python_imports_available"
+  ],
+  "image_tag": "cdc-tb-classifier-debug__gpt53codex",
+  "manual_review_checks": [],
+  "network_policy": "disabled",
+  "passed": false,
+  "results": [
+    {
+      "check_id": "hidden_image_artifacts_unreadable",
+      "command": "bad=''; for p in /protected /oracle /verifier /gold /solution /tests /test; do if [ -e \"$p\" ]; then if [ -d \"$p\" ]; then ls \"$p\" >/dev/null 2>&1 && bad=\"$bad $p\"; else head -c 1 \"$p\" >/dev/null 2>&1 && bad=\"$bad $p\"; fi; fi; done; if [ -n \"$bad\" ]; then echo \"agent can read hidden image path(s):$bad\" >&2; exit 1; fi",
+      "exit_code": 0,
+      "expected": "exit_code_0",
+      "reason": "agent image must not expose hidden tests, protected files, oracle files, or verifier internals",
+      "status": "passed",
+      "stderr_snippet": "",
+      "stdout_snippet": ""
+    },
+    {
+      "check_id": "python_imports_available",
+      "command": "python3 - <<'PY'\nimport numpy; import torch\nPY",
+      "exit_code": 1,
+      "expected": "exit_code_0",
+      "reason": "visible Python files import third-party modules needed for local validation",
+      "status": "failed",
+      "stderr_snippet": "Traceback (most recent call last):\n  File \"<stdin>\", line 1, in <module>\nModuleNotFoundError: No module named 'numpy'\n",
+      "stdout_snippet": ""
+    }
+  ],
+  "schema_version": "0.1.0"
+}

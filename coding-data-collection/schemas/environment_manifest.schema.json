@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://houdini.local/coding-data-collection/environment_manifest.schema.json",
+  "title": "coding-data-collection environment_manifest.json",
+  "type": "object",
+  "additionalProperties": true,
+  "required": [
+    "run_protocol_version",
+    "artifact_layout_version",
+    "agent_workspace"
+  ],
+  "properties": {
+    "run_protocol_version": { "const": "0.1.0" },
+    "artifact_layout_version": { "const": "0.1.0" },
+    "agent_workspace": { "type": "string", "minLength": 1 },
+    "docker_image": { "type": ["string", "null"] },
+    "network_policy": { "type": ["string", "null"] }
+  }
+}

@@ -1,0 +1,7 @@
+target_shape: low_progress_success
+secondary_shapes: []
+expected_pass_rate: 0.85
+notes: |
+  Single-character fix: remove the single quotes around `*.txt` in
+  the for-loop so the shell expands the glob. The seed ships
+  `for f in '*.txt'; do ...; done`. The fix is `for f in *.txt;`.

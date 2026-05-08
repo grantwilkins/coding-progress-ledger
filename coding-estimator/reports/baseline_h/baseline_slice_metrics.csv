@@ -1,0 +1,325 @@
+auroc,brier,ece,feasible,model,n_checkpoints,n_runs,negatives,note,positives,scheme,slice_kind,slice_value,source_slice,target
+0.31960873521383076,0.08363812625688455,0.08758545479082497,True,constant,171,20,157,,14,loro,phase,early,swe_agent_pilot,y_future_progress_drop_h5
+0.3314146341463415,0.19327754695189786,0.07752226545108709,True,constant,166,20,125,,41,loro,phase,late,swe_agent_pilot,y_future_progress_drop_h5
+0.2970959595959596,0.15272613282004302,0.01575097940727882,True,constant,162,20,132,,30,loro,phase,middle,swe_agent_pilot,y_future_progress_drop_h5
+0.39778794813119756,0.17337190367036692,0.05334933494074859,True,constant,88,2,69,,19,loro,shape,hidden_work_gap,swe_agent_pilot,y_future_progress_drop_h5
+0.39952904238618525,0.1687089604756109,0.04540279563202568,True,constant,124,3,98,,26,loro,shape,high_progress_failure,swe_agent_pilot,y_future_progress_drop_h5
+,,,False,constant,12,1,12,insufficient data,0,loro,shape,low_progress_success,swe_agent_pilot,y_future_progress_drop_h5
+0.4064625850340136,0.10139603063079557,0.06380372471600544,True,constant,55,3,49,,6,loro,shape,no_validation_frontier,swe_agent_pilot,y_future_progress_drop_h5
+0.4751552795031056,0.18344699341091958,0.06712296797404341,True,constant,60,2,46,,14,loro,shape,nonmonotone_recovery,swe_agent_pilot,y_future_progress_drop_h5
+0.5,0.19474503528376025,0.08511777301927195,True,constant,32,1,24,,8,loro,shape,scope_discovery_after_high_progress,swe_agent_pilot,y_future_progress_drop_h5
+0.33052738336713994,0.15639390823694707,0.023173792076015637,True,constant,179,6,145,,34,loro,shape,stuck_loop,swe_agent_pilot,y_future_progress_drop_h5
+0.36147186147186144,0.12738581485708372,0.02156859693136437,True,constant,74,4,63,,11,loro,shape,submit_without_validation,swe_agent_pilot,y_future_progress_drop_h5
+0.4631746031746032,0.1736458664649859,0.051693575646124174,True,constant,96,3,75,,21,loro,shape,validation_induced_reopen,swe_agent_pilot,y_future_progress_drop_h5
+1.0,0.0013628713726517598,0.016849053363487396,True,ledger_basic,171,20,157,,14,loro,phase,early,swe_agent_pilot,y_future_progress_drop_h5
+0.9361951219512196,0.07954155815253379,0.05813221737778102,True,ledger_basic,166,20,125,,41,loro,phase,late,swe_agent_pilot,y_future_progress_drop_h5
+0.9734848484848485,0.03822181310277888,0.036155629861040234,True,ledger_basic,162,20,132,,30,loro,phase,middle,swe_agent_pilot,y_future_progress_drop_h5
+0.9664378337147216,0.06292688669912354,0.10235358552489794,True,ledger_basic,88,2,69,,19,loro,shape,hidden_work_gap,swe_agent_pilot,y_future_progress_drop_h5
+0.9748822605965463,0.05926996030531483,0.092055695059285,True,ledger_basic,124,3,98,,26,loro,shape,high_progress_failure,swe_agent_pilot,y_future_progress_drop_h5
+,,,False,ledger_basic,12,1,12,insufficient data,0,loro,shape,low_progress_success,swe_agent_pilot,y_future_progress_drop_h5
+1.0,0.002490090760388974,0.026566714981108738,True,ledger_basic,55,3,49,,6,loro,shape,no_validation_frontier,swe_agent_pilot,y_future_progress_drop_h5
+1.0,0.013074150986039297,0.06477611115771693,True,ledger_basic,60,2,46,,14,loro,shape,nonmonotone_recovery,swe_agent_pilot,y_future_progress_drop_h5
+1.0,0.021081963541749786,0.09115145249295528,True,ledger_basic,32,1,24,,8,loro,shape,scope_discovery_after_high_progress,swe_agent_pilot,y_future_progress_drop_h5
+0.9768762677484787,0.05160894841925552,0.06276881364802324,True,ledger_basic,179,6,145,,34,loro,shape,stuck_loop,swe_agent_pilot,y_future_progress_drop_h5
+0.9884559884559885,0.04935528761632646,0.052568187624391874,True,ledger_basic,74,4,63,,11,loro,shape,submit_without_validation,swe_agent_pilot,y_future_progress_drop_h5
+0.9898412698412699,0.02704539695310965,0.04068915805562625,True,ledger_basic,96,3,75,,21,loro,shape,validation_induced_reopen,swe_agent_pilot,y_future_progress_drop_h5
+0.6424021838034577,0.07632334854925703,0.03854720215486142,True,time_only,171,20,157,,14,loro,phase,early,swe_agent_pilot,y_future_progress_drop_h5
+0.45658536585365855,0.2016722688308093,0.09636344689323459,True,time_only,166,20,125,,41,loro,phase,late,swe_agent_pilot,y_future_progress_drop_h5
+0.5712121212121212,0.14903681556897433,0.021272553069869596,True,time_only,162,20,132,,30,loro,phase,middle,swe_agent_pilot,y_future_progress_drop_h5
+0.5957284515636918,0.18049994844254982,0.108488482216849,True,time_only,88,2,69,,19,loro,shape,hidden_work_gap,swe_agent_pilot,y_future_progress_drop_h5
+0.6224489795918368,0.17156197487599323,0.09542969009127245,True,time_only,124,3,98,,26,loro,shape,high_progress_failure,swe_agent_pilot,y_future_progress_drop_h5
+,,,False,time_only,12,1,12,insufficient data,0,loro,shape,low_progress_success,swe_agent_pilot,y_future_progress_drop_h5
+0.608843537414966,0.09728840722840082,0.03306108176854722,True,time_only,55,3,49,,6,loro,shape,no_validation_frontier,swe_agent_pilot,y_future_progress_drop_h5
+0.782608695652174,0.1717419696196794,0.0702386977883804,True,time_only,60,2,46,,14,loro,shape,nonmonotone_recovery,swe_agent_pilot,y_future_progress_drop_h5
+0.7291666666666666,0.1840720962623103,0.08338813164418105,True,time_only,32,1,24,,8,loro,shape,scope_discovery_after_high_progress,swe_agent_pilot,y_future_progress_drop_h5
+0.5643002028397566,0.16195674412786543,0.110633400618366,True,time_only,179,6,145,,34,loro,shape,stuck_loop,swe_agent_pilot,y_future_progress_drop_h5
+0.8080808080808081,0.11922777290996493,0.05565587598089093,True,time_only,74,4,63,,11,loro,shape,submit_without_validation,swe_agent_pilot,y_future_progress_drop_h5
+0.7517460317460317,0.16348132915478683,0.07680683561428403,True,time_only,96,3,75,,21,loro,shape,validation_induced_reopen,swe_agent_pilot,y_future_progress_drop_h5
+0.0,0.08943472881189556,0.0011636752156233554,True,constant,206,20,187,,19,loro,phase,early,swe_agent_pilot,y_submit_without_validation
+0.0,0.08668826091244275,0.002082441162140236,True,constant,202,20,184,,18,loro,phase,late,swe_agent_pilot,y_submit_without_validation
+0.0,0.08205009591211603,0.007605956258757818,True,constant,191,20,175,,16,loro,phase,middle,swe_agent_pilot,y_submit_without_validation
+,,,False,constant,98,2,98,insufficient data,0,loro,shape,hidden_work_gap,swe_agent_pilot,y_submit_without_validation
+,,,False,constant,139,3,139,insufficient data,0,loro,shape,high_progress_failure,swe_agent_pilot,y_submit_without_validation
+,,,False,constant,17,1,0,insufficient data,17,loro,shape,low_progress_success,swe_agent_pilot,y_submit_without_validation
+,,,False,constant,70,3,70,insufficient data,0,loro,shape,no_validation_frontier,swe_agent_pilot,y_submit_without_validation
+,,,False,constant,70,2,70,insufficient data,0,loro,shape,nonmonotone_recovery,swe_agent_pilot,y_submit_without_validation
+,,,False,constant,37,1,37,insufficient data,0,loro,shape,scope_discovery_after_high_progress,swe_agent_pilot,y_submit_without_validation
+,,,False,constant,209,6,209,insufficient data,0,loro,shape,stuck_loop,swe_agent_pilot,y_submit_without_validation
+0.0,0.5013988634765557,0.48817924340501767,True,constant,94,4,41,,53,loro,shape,submit_without_validation,swe_agent_pilot,y_submit_without_validation
+,,,False,constant,111,3,111,insufficient data,0,loro,shape,validation_induced_reopen,swe_agent_pilot,y_submit_without_validation
+0.26709822685054885,0.10044688304624293,0.11678407638924324,True,ledger_basic,206,20,187,,19,loro,phase,early,swe_agent_pilot,y_submit_without_validation
+0.9685990338164251,0.06507098473273448,0.0616088153624508,True,ledger_basic,202,20,184,,18,loro,phase,late,swe_agent_pilot,y_submit_without_validation
+0.7807142857142857,0.07412433738112122,0.07100815426032456,True,ledger_basic,191,20,175,,16,loro,phase,middle,swe_agent_pilot,y_submit_without_validation
+,,,False,ledger_basic,98,2,98,insufficient data,0,loro,shape,hidden_work_gap,swe_agent_pilot,y_submit_without_validation
+,,,False,ledger_basic,139,3,139,insufficient data,0,loro,shape,high_progress_failure,swe_agent_pilot,y_submit_without_validation
+,,,False,ledger_basic,17,1,0,insufficient data,17,loro,shape,low_progress_success,swe_agent_pilot,y_submit_without_validation
+,,,False,ledger_basic,70,3,70,insufficient data,0,loro,shape,no_validation_frontier,swe_agent_pilot,y_submit_without_validation
+,,,False,ledger_basic,70,2,70,insufficient data,0,loro,shape,nonmonotone_recovery,swe_agent_pilot,y_submit_without_validation
+,,,False,ledger_basic,37,1,37,insufficient data,0,loro,shape,scope_discovery_after_high_progress,swe_agent_pilot,y_submit_without_validation
+,,,False,ledger_basic,209,6,209,insufficient data,0,loro,shape,stuck_loop,swe_agent_pilot,y_submit_without_validation
+0.5710998619420157,0.4274926335393589,0.4744401046981454,True,ledger_basic,94,4,41,,53,loro,shape,submit_without_validation,swe_agent_pilot,y_submit_without_validation
+,,,False,ledger_basic,111,3,111,insufficient data,0,loro,shape,validation_induced_reopen,swe_agent_pilot,y_submit_without_validation
+0.29102167182662536,0.09669344368326507,0.07315337435420309,True,time_only,206,20,187,,19,loro,phase,early,swe_agent_pilot,y_submit_without_validation
+0.8360507246376812,0.0813155668710239,0.05855151746152512,True,time_only,202,20,184,,18,loro,phase,late,swe_agent_pilot,y_submit_without_validation
+0.6746428571428571,0.07561554631368124,0.038403764837938226,True,time_only,191,20,175,,16,loro,phase,middle,swe_agent_pilot,y_submit_without_validation
+,,,False,time_only,98,2,98,insufficient data,0,loro,shape,hidden_work_gap,swe_agent_pilot,y_submit_without_validation
+,,,False,time_only,139,3,139,insufficient data,0,loro,shape,high_progress_failure,swe_agent_pilot,y_submit_without_validation
+,,,False,time_only,17,1,0,insufficient data,17,loro,shape,low_progress_success,swe_agent_pilot,y_submit_without_validation
+,,,False,time_only,70,3,70,insufficient data,0,loro,shape,no_validation_frontier,swe_agent_pilot,y_submit_without_validation
+,,,False,time_only,70,2,70,insufficient data,0,loro,shape,nonmonotone_recovery,swe_agent_pilot,y_submit_without_validation
+,,,False,time_only,37,1,37,insufficient data,0,loro,shape,scope_discovery_after_high_progress,swe_agent_pilot,y_submit_without_validation
+,,,False,time_only,209,6,209,insufficient data,0,loro,shape,stuck_loop,swe_agent_pilot,y_submit_without_validation
+0.6626783248964565,0.47033484164112005,0.49434150567493823,True,time_only,94,4,41,,53,loro,shape,submit_without_validation,swe_agent_pilot,y_submit_without_validation
+,,,False,time_only,111,3,111,insufficient data,0,loro,shape,validation_induced_reopen,swe_agent_pilot,y_submit_without_validation
+0.0,0.2801511523145968,0.24825472238363588,True,constant,206,20,109,,97,loro,phase,early,swe_agent_pilot,y_success_eventual
+0.0,0.2798228475841666,0.24718749884238322,True,constant,202,20,108,,94,loro,phase,late,swe_agent_pilot,y_success_eventual
+0.0,0.2800856055155046,0.24653056390045874,True,constant,191,20,102,,89,loro,phase,middle,swe_agent_pilot,y_success_eventual
+,,,False,constant,98,2,98,insufficient data,0,loro,shape,hidden_work_gap,swe_agent_pilot,y_success_eventual
+,,,False,constant,139,3,139,insufficient data,0,loro,shape,high_progress_failure,swe_agent_pilot,y_success_eventual
+,,,False,constant,17,1,0,insufficient data,17,loro,shape,low_progress_success,swe_agent_pilot,y_success_eventual
+,,,False,constant,70,3,70,insufficient data,0,loro,shape,no_validation_frontier,swe_agent_pilot,y_success_eventual
+,,,False,constant,70,2,0,insufficient data,70,loro,shape,nonmonotone_recovery,swe_agent_pilot,y_success_eventual
+,,,False,constant,37,1,0,insufficient data,37,loro,shape,scope_discovery_after_high_progress,swe_agent_pilot,y_success_eventual
+,,,False,constant,209,6,209,insufficient data,0,loro,shape,stuck_loop,swe_agent_pilot,y_success_eventual
+0.0,0.2531239813461662,0.304326757849792,True,constant,94,4,77,,17,loro,shape,submit_without_validation,swe_agent_pilot,y_success_eventual
+0.0,0.29483773520736306,0.5421098737952089,True,constant,111,3,41,,70,loro,shape,validation_induced_reopen,swe_agent_pilot,y_success_eventual
+0.26274472713515556,0.2891456170831356,0.14330764764273504,True,ledger_basic,206,20,109,,97,loro,phase,early,swe_agent_pilot,y_success_eventual
+0.6418439716312057,0.24218177904427926,0.13706471004027387,True,ledger_basic,202,20,108,,94,loro,phase,late,swe_agent_pilot,y_success_eventual
+0.23132848645076007,0.3451975311097248,0.3443207708364302,True,ledger_basic,191,20,102,,89,loro,phase,middle,swe_agent_pilot,y_success_eventual
+,,,False,ledger_basic,98,2,98,insufficient data,0,loro,shape,hidden_work_gap,swe_agent_pilot,y_success_eventual
+,,,False,ledger_basic,139,3,139,insufficient data,0,loro,shape,high_progress_failure,swe_agent_pilot,y_success_eventual
+,,,False,ledger_basic,17,1,0,insufficient data,17,loro,shape,low_progress_success,swe_agent_pilot,y_success_eventual
+,,,False,ledger_basic,70,3,70,insufficient data,0,loro,shape,no_validation_frontier,swe_agent_pilot,y_success_eventual
+,,,False,ledger_basic,70,2,0,insufficient data,70,loro,shape,nonmonotone_recovery,swe_agent_pilot,y_success_eventual
+,,,False,ledger_basic,37,1,0,insufficient data,37,loro,shape,scope_discovery_after_high_progress,swe_agent_pilot,y_success_eventual
+,,,False,ledger_basic,209,6,209,insufficient data,0,loro,shape,stuck_loop,swe_agent_pilot,y_success_eventual
+0.24675324675324675,0.2803789316388693,0.39817430945455257,True,ledger_basic,94,4,77,,17,loro,shape,submit_without_validation,swe_agent_pilot,y_success_eventual
+0.4146341463414634,0.27952309965222555,0.26134141825148094,True,ledger_basic,111,3,41,,70,loro,shape,validation_induced_reopen,swe_agent_pilot,y_success_eventual
+0.1020523976165705,0.279466319058784,0.17707565071860926,True,time_only,206,20,109,,97,loro,phase,early,swe_agent_pilot,y_success_eventual
+0.2085303388494878,0.28724373484506205,0.22415406312276015,True,time_only,202,20,108,,94,loro,phase,late,swe_agent_pilot,y_success_eventual
+0.10586032165675259,0.2809448412642496,0.297014318689261,True,time_only,191,20,102,,89,loro,phase,middle,swe_agent_pilot,y_success_eventual
+,,,False,time_only,98,2,98,insufficient data,0,loro,shape,hidden_work_gap,swe_agent_pilot,y_success_eventual
+,,,False,time_only,139,3,139,insufficient data,0,loro,shape,high_progress_failure,swe_agent_pilot,y_success_eventual
+,,,False,time_only,17,1,0,insufficient data,17,loro,shape,low_progress_success,swe_agent_pilot,y_success_eventual
+,,,False,time_only,70,3,70,insufficient data,0,loro,shape,no_validation_frontier,swe_agent_pilot,y_success_eventual
+,,,False,time_only,70,2,0,insufficient data,70,loro,shape,nonmonotone_recovery,swe_agent_pilot,y_success_eventual
+,,,False,time_only,37,1,0,insufficient data,37,loro,shape,scope_discovery_after_high_progress,swe_agent_pilot,y_success_eventual
+,,,False,time_only,209,6,209,insufficient data,0,loro,shape,stuck_loop,swe_agent_pilot,y_success_eventual
+0.4140565317035905,0.2610746737017054,0.32702131521583605,True,time_only,94,4,77,,17,loro,shape,submit_without_validation,swe_agent_pilot,y_success_eventual
+0.3181184668989547,0.29545761004360044,0.22402133439466085,True,time_only,111,3,41,,70,loro,shape,validation_induced_reopen,swe_agent_pilot,y_success_eventual
+,,,False,constant,12,10,8,insufficient data,4,loro,phase,early,tb_live,y_validation_new_work_h5
+,,,False,constant,8,7,3,insufficient data,5,loro,phase,late,tb_live,y_validation_new_work_h5
+,,,False,constant,3,3,1,insufficient data,2,loro,phase,middle,tb_live,y_validation_new_work_h5
+,,,False,constant,0,0,0,no runs in shape,0,loro,shape,hidden_work_gap,tb_live,y_validation_new_work_h5
+,,,False,constant,0,0,0,no runs in shape,0,loro,shape,high_progress_failure,tb_live,y_validation_new_work_h5
+,,,False,constant,0,0,0,no runs in shape,0,loro,shape,low_progress_success,tb_live,y_validation_new_work_h5
+,,,False,constant,0,0,0,no runs in shape,0,loro,shape,no_validation_frontier,tb_live,y_validation_new_work_h5
+,,,False,constant,0,0,0,no runs in shape,0,loro,shape,nonmonotone_recovery,tb_live,y_validation_new_work_h5
+,,,False,constant,0,0,0,no runs in shape,0,loro,shape,scope_discovery_after_high_progress,tb_live,y_validation_new_work_h5
+,,,False,constant,0,0,0,no runs in shape,0,loro,shape,stuck_loop,tb_live,y_validation_new_work_h5
+,,,False,constant,0,0,0,no runs in shape,0,loro,shape,submit_without_validation,tb_live,y_validation_new_work_h5
+,,,False,constant,0,0,0,no runs in shape,0,loro,shape,validation_induced_reopen,tb_live,y_validation_new_work_h5
+,,,False,ledger_basic,12,10,8,insufficient data,4,loro,phase,early,tb_live,y_validation_new_work_h5
+,,,False,ledger_basic,8,7,3,insufficient data,5,loro,phase,late,tb_live,y_validation_new_work_h5
+,,,False,ledger_basic,3,3,1,insufficient data,2,loro,phase,middle,tb_live,y_validation_new_work_h5
+,,,False,ledger_basic,0,0,0,no runs in shape,0,loro,shape,hidden_work_gap,tb_live,y_validation_new_work_h5
+,,,False,ledger_basic,0,0,0,no runs in shape,0,loro,shape,high_progress_failure,tb_live,y_validation_new_work_h5
+,,,False,ledger_basic,0,0,0,no runs in shape,0,loro,shape,low_progress_success,tb_live,y_validation_new_work_h5
+,,,False,ledger_basic,0,0,0,no runs in shape,0,loro,shape,no_validation_frontier,tb_live,y_validation_new_work_h5
+,,,False,ledger_basic,0,0,0,no runs in shape,0,loro,shape,nonmonotone_recovery,tb_live,y_validation_new_work_h5
+,,,False,ledger_basic,0,0,0,no runs in shape,0,loro,shape,scope_discovery_after_high_progress,tb_live,y_validation_new_work_h5
+,,,False,ledger_basic,0,0,0,no runs in shape,0,loro,shape,stuck_loop,tb_live,y_validation_new_work_h5
+,,,False,ledger_basic,0,0,0,no runs in shape,0,loro,shape,submit_without_validation,tb_live,y_validation_new_work_h5
+,,,False,ledger_basic,0,0,0,no runs in shape,0,loro,shape,validation_induced_reopen,tb_live,y_validation_new_work_h5
+,,,False,time_only,12,10,8,insufficient data,4,loro,phase,early,tb_live,y_validation_new_work_h5
+,,,False,time_only,8,7,3,insufficient data,5,loro,phase,late,tb_live,y_validation_new_work_h5
+,,,False,time_only,3,3,1,insufficient data,2,loro,phase,middle,tb_live,y_validation_new_work_h5
+,,,False,time_only,0,0,0,no runs in shape,0,loro,shape,hidden_work_gap,tb_live,y_validation_new_work_h5
+,,,False,time_only,0,0,0,no runs in shape,0,loro,shape,high_progress_failure,tb_live,y_validation_new_work_h5
+,,,False,time_only,0,0,0,no runs in shape,0,loro,shape,low_progress_success,tb_live,y_validation_new_work_h5
+,,,False,time_only,0,0,0,no runs in shape,0,loro,shape,no_validation_frontier,tb_live,y_validation_new_work_h5
+,,,False,time_only,0,0,0,no runs in shape,0,loro,shape,nonmonotone_recovery,tb_live,y_validation_new_work_h5
+,,,False,time_only,0,0,0,no runs in shape,0,loro,shape,scope_discovery_after_high_progress,tb_live,y_validation_new_work_h5
+,,,False,time_only,0,0,0,no runs in shape,0,loro,shape,stuck_loop,tb_live,y_validation_new_work_h5
+,,,False,time_only,0,0,0,no runs in shape,0,loro,shape,submit_without_validation,tb_live,y_validation_new_work_h5
+,,,False,time_only,0,0,0,no runs in shape,0,loro,shape,validation_induced_reopen,tb_live,y_validation_new_work_h5
+,,,False,constant,12,10,12,insufficient data,0,loso,phase,early,loso->tb_live,y_future_progress_drop_h5
+,,,False,constant,8,7,6,insufficient data,2,loso,phase,late,loso->tb_live,y_future_progress_drop_h5
+,,,False,constant,3,3,2,insufficient data,1,loso,phase,middle,loso->tb_live,y_future_progress_drop_h5
+,,,False,constant,0,0,0,no runs in shape,0,loso,shape,hidden_work_gap,loso->tb_live,y_future_progress_drop_h5
+,,,False,constant,0,0,0,no runs in shape,0,loso,shape,high_progress_failure,loso->tb_live,y_future_progress_drop_h5
+,,,False,constant,0,0,0,no runs in shape,0,loso,shape,low_progress_success,loso->tb_live,y_future_progress_drop_h5
+,,,False,constant,0,0,0,no runs in shape,0,loso,shape,no_validation_frontier,loso->tb_live,y_future_progress_drop_h5
+,,,False,constant,0,0,0,no runs in shape,0,loso,shape,nonmonotone_recovery,loso->tb_live,y_future_progress_drop_h5
+,,,False,constant,0,0,0,no runs in shape,0,loso,shape,scope_discovery_after_high_progress,loso->tb_live,y_future_progress_drop_h5
+,,,False,constant,0,0,0,no runs in shape,0,loso,shape,stuck_loop,loso->tb_live,y_future_progress_drop_h5
+,,,False,constant,0,0,0,no runs in shape,0,loso,shape,submit_without_validation,loso->tb_live,y_future_progress_drop_h5
+,,,False,constant,0,0,0,no runs in shape,0,loso,shape,validation_induced_reopen,loso->tb_live,y_future_progress_drop_h5
+,,,False,ledger_basic,12,10,12,insufficient data,0,loso,phase,early,loso->tb_live,y_future_progress_drop_h5
+,,,False,ledger_basic,8,7,6,insufficient data,2,loso,phase,late,loso->tb_live,y_future_progress_drop_h5
+,,,False,ledger_basic,3,3,2,insufficient data,1,loso,phase,middle,loso->tb_live,y_future_progress_drop_h5
+,,,False,ledger_basic,0,0,0,no runs in shape,0,loso,shape,hidden_work_gap,loso->tb_live,y_future_progress_drop_h5
+,,,False,ledger_basic,0,0,0,no runs in shape,0,loso,shape,high_progress_failure,loso->tb_live,y_future_progress_drop_h5
+,,,False,ledger_basic,0,0,0,no runs in shape,0,loso,shape,low_progress_success,loso->tb_live,y_future_progress_drop_h5
+,,,False,ledger_basic,0,0,0,no runs in shape,0,loso,shape,no_validation_frontier,loso->tb_live,y_future_progress_drop_h5
+,,,False,ledger_basic,0,0,0,no runs in shape,0,loso,shape,nonmonotone_recovery,loso->tb_live,y_future_progress_drop_h5
+,,,False,ledger_basic,0,0,0,no runs in shape,0,loso,shape,scope_discovery_after_high_progress,loso->tb_live,y_future_progress_drop_h5
+,,,False,ledger_basic,0,0,0,no runs in shape,0,loso,shape,stuck_loop,loso->tb_live,y_future_progress_drop_h5
+,,,False,ledger_basic,0,0,0,no runs in shape,0,loso,shape,submit_without_validation,loso->tb_live,y_future_progress_drop_h5
+,,,False,ledger_basic,0,0,0,no runs in shape,0,loso,shape,validation_induced_reopen,loso->tb_live,y_future_progress_drop_h5
+,,,False,time_only,12,10,12,insufficient data,0,loso,phase,early,loso->tb_live,y_future_progress_drop_h5
+,,,False,time_only,8,7,6,insufficient data,2,loso,phase,late,loso->tb_live,y_future_progress_drop_h5
+,,,False,time_only,3,3,2,insufficient data,1,loso,phase,middle,loso->tb_live,y_future_progress_drop_h5
+,,,False,time_only,0,0,0,no runs in shape,0,loso,shape,hidden_work_gap,loso->tb_live,y_future_progress_drop_h5
+,,,False,time_only,0,0,0,no runs in shape,0,loso,shape,high_progress_failure,loso->tb_live,y_future_progress_drop_h5
+,,,False,time_only,0,0,0,no runs in shape,0,loso,shape,low_progress_success,loso->tb_live,y_future_progress_drop_h5
+,,,False,time_only,0,0,0,no runs in shape,0,loso,shape,no_validation_frontier,loso->tb_live,y_future_progress_drop_h5
+,,,False,time_only,0,0,0,no runs in shape,0,loso,shape,nonmonotone_recovery,loso->tb_live,y_future_progress_drop_h5
+,,,False,time_only,0,0,0,no runs in shape,0,loso,shape,scope_discovery_after_high_progress,loso->tb_live,y_future_progress_drop_h5
+,,,False,time_only,0,0,0,no runs in shape,0,loso,shape,stuck_loop,loso->tb_live,y_future_progress_drop_h5
+,,,False,time_only,0,0,0,no runs in shape,0,loso,shape,submit_without_validation,loso->tb_live,y_future_progress_drop_h5
+,,,False,time_only,0,0,0,no runs in shape,0,loso,shape,validation_induced_reopen,loso->tb_live,y_future_progress_drop_h5
+,,,False,constant,32,12,32,insufficient data,0,loso,phase,early,loso->tb_live,y_submit_without_validation
+,,,False,constant,27,12,27,insufficient data,0,loso,phase,late,loso->tb_live,y_submit_without_validation
+,,,False,constant,24,12,24,insufficient data,0,loso,phase,middle,loso->tb_live,y_submit_without_validation
+,,,False,constant,0,0,0,no runs in shape,0,loso,shape,hidden_work_gap,loso->tb_live,y_submit_without_validation
+,,,False,constant,0,0,0,no runs in shape,0,loso,shape,high_progress_failure,loso->tb_live,y_submit_without_validation
+,,,False,constant,0,0,0,no runs in shape,0,loso,shape,low_progress_success,loso->tb_live,y_submit_without_validation
+,,,False,constant,0,0,0,no runs in shape,0,loso,shape,no_validation_frontier,loso->tb_live,y_submit_without_validation
+,,,False,constant,0,0,0,no runs in shape,0,loso,shape,nonmonotone_recovery,loso->tb_live,y_submit_without_validation
+,,,False,constant,0,0,0,no runs in shape,0,loso,shape,scope_discovery_after_high_progress,loso->tb_live,y_submit_without_validation
+,,,False,constant,0,0,0,no runs in shape,0,loso,shape,stuck_loop,loso->tb_live,y_submit_without_validation
+,,,False,constant,0,0,0,no runs in shape,0,loso,shape,submit_without_validation,loso->tb_live,y_submit_without_validation
+,,,False,constant,0,0,0,no runs in shape,0,loso,shape,validation_induced_reopen,loso->tb_live,y_submit_without_validation
+,,,False,ledger_basic,32,12,32,insufficient data,0,loso,phase,early,loso->tb_live,y_submit_without_validation
+,,,False,ledger_basic,27,12,27,insufficient data,0,loso,phase,late,loso->tb_live,y_submit_without_validation
+,,,False,ledger_basic,24,12,24,insufficient data,0,loso,phase,middle,loso->tb_live,y_submit_without_validation
+,,,False,ledger_basic,0,0,0,no runs in shape,0,loso,shape,hidden_work_gap,loso->tb_live,y_submit_without_validation
+,,,False,ledger_basic,0,0,0,no runs in shape,0,loso,shape,high_progress_failure,loso->tb_live,y_submit_without_validation
+,,,False,ledger_basic,0,0,0,no runs in shape,0,loso,shape,low_progress_success,loso->tb_live,y_submit_without_validation
+,,,False,ledger_basic,0,0,0,no runs in shape,0,loso,shape,no_validation_frontier,loso->tb_live,y_submit_without_validation
+,,,False,ledger_basic,0,0,0,no runs in shape,0,loso,shape,nonmonotone_recovery,loso->tb_live,y_submit_without_validation
+,,,False,ledger_basic,0,0,0,no runs in shape,0,loso,shape,scope_discovery_after_high_progress,loso->tb_live,y_submit_without_validation
+,,,False,ledger_basic,0,0,0,no runs in shape,0,loso,shape,stuck_loop,loso->tb_live,y_submit_without_validation
+,,,False,ledger_basic,0,0,0,no runs in shape,0,loso,shape,submit_without_validation,loso->tb_live,y_submit_without_validation
+,,,False,ledger_basic,0,0,0,no runs in shape,0,loso,shape,validation_induced_reopen,loso->tb_live,y_submit_without_validation
+,,,False,time_only,32,12,32,insufficient data,0,loso,phase,early,loso->tb_live,y_submit_without_validation
+,,,False,time_only,27,12,27,insufficient data,0,loso,phase,late,loso->tb_live,y_submit_without_validation
+,,,False,time_only,24,12,24,insufficient data,0,loso,phase,middle,loso->tb_live,y_submit_without_validation
+,,,False,time_only,0,0,0,no runs in shape,0,loso,shape,hidden_work_gap,loso->tb_live,y_submit_without_validation
+,,,False,time_only,0,0,0,no runs in shape,0,loso,shape,high_progress_failure,loso->tb_live,y_submit_without_validation
+,,,False,time_only,0,0,0,no runs in shape,0,loso,shape,low_progress_success,loso->tb_live,y_submit_without_validation
+,,,False,time_only,0,0,0,no runs in shape,0,loso,shape,no_validation_frontier,loso->tb_live,y_submit_without_validation
+,,,False,time_only,0,0,0,no runs in shape,0,loso,shape,nonmonotone_recovery,loso->tb_live,y_submit_without_validation
+,,,False,time_only,0,0,0,no runs in shape,0,loso,shape,scope_discovery_after_high_progress,loso->tb_live,y_submit_without_validation
+,,,False,time_only,0,0,0,no runs in shape,0,loso,shape,stuck_loop,loso->tb_live,y_submit_without_validation
+,,,False,time_only,0,0,0,no runs in shape,0,loso,shape,submit_without_validation,loso->tb_live,y_submit_without_validation
+,,,False,time_only,0,0,0,no runs in shape,0,loso,shape,validation_induced_reopen,loso->tb_live,y_submit_without_validation
+,,,False,constant,32,12,0,insufficient data,32,loso,phase,early,loso->tb_live,y_success_eventual
+,,,False,constant,27,12,0,insufficient data,27,loso,phase,late,loso->tb_live,y_success_eventual
+,,,False,constant,24,12,0,insufficient data,24,loso,phase,middle,loso->tb_live,y_success_eventual
+,,,False,constant,0,0,0,no runs in shape,0,loso,shape,hidden_work_gap,loso->tb_live,y_success_eventual
+,,,False,constant,0,0,0,no runs in shape,0,loso,shape,high_progress_failure,loso->tb_live,y_success_eventual
+,,,False,constant,0,0,0,no runs in shape,0,loso,shape,low_progress_success,loso->tb_live,y_success_eventual
+,,,False,constant,0,0,0,no runs in shape,0,loso,shape,no_validation_frontier,loso->tb_live,y_success_eventual
+,,,False,constant,0,0,0,no runs in shape,0,loso,shape,nonmonotone_recovery,loso->tb_live,y_success_eventual
+,,,False,constant,0,0,0,no runs in shape,0,loso,shape,scope_discovery_after_high_progress,loso->tb_live,y_success_eventual
+,,,False,constant,0,0,0,no runs in shape,0,loso,shape,stuck_loop,loso->tb_live,y_success_eventual
+,,,False,constant,0,0,0,no runs in shape,0,loso,shape,submit_without_validation,loso->tb_live,y_success_eventual
+,,,False,constant,0,0,0,no runs in shape,0,loso,shape,validation_induced_reopen,loso->tb_live,y_success_eventual
+,,,False,ledger_basic,32,12,0,insufficient data,32,loso,phase,early,loso->tb_live,y_success_eventual
+,,,False,ledger_basic,27,12,0,insufficient data,27,loso,phase,late,loso->tb_live,y_success_eventual
+,,,False,ledger_basic,24,12,0,insufficient data,24,loso,phase,middle,loso->tb_live,y_success_eventual
+,,,False,ledger_basic,0,0,0,no runs in shape,0,loso,shape,hidden_work_gap,loso->tb_live,y_success_eventual
+,,,False,ledger_basic,0,0,0,no runs in shape,0,loso,shape,high_progress_failure,loso->tb_live,y_success_eventual
+,,,False,ledger_basic,0,0,0,no runs in shape,0,loso,shape,low_progress_success,loso->tb_live,y_success_eventual
+,,,False,ledger_basic,0,0,0,no runs in shape,0,loso,shape,no_validation_frontier,loso->tb_live,y_success_eventual
+,,,False,ledger_basic,0,0,0,no runs in shape,0,loso,shape,nonmonotone_recovery,loso->tb_live,y_success_eventual
+,,,False,ledger_basic,0,0,0,no runs in shape,0,loso,shape,scope_discovery_after_high_progress,loso->tb_live,y_success_eventual
+,,,False,ledger_basic,0,0,0,no runs in shape,0,loso,shape,stuck_loop,loso->tb_live,y_success_eventual
+,,,False,ledger_basic,0,0,0,no runs in shape,0,loso,shape,submit_without_validation,loso->tb_live,y_success_eventual
+,,,False,ledger_basic,0,0,0,no runs in shape,0,loso,shape,validation_induced_reopen,loso->tb_live,y_success_eventual
+,,,False,time_only,32,12,0,insufficient data,32,loso,phase,early,loso->tb_live,y_success_eventual
+,,,False,time_only,27,12,0,insufficient data,27,loso,phase,late,loso->tb_live,y_success_eventual
+,,,False,time_only,24,12,0,insufficient data,24,loso,phase,middle,loso->tb_live,y_success_eventual
+,,,False,time_only,0,0,0,no runs in shape,0,loso,shape,hidden_work_gap,loso->tb_live,y_success_eventual
+,,,False,time_only,0,0,0,no runs in shape,0,loso,shape,high_progress_failure,loso->tb_live,y_success_eventual
+,,,False,time_only,0,0,0,no runs in shape,0,loso,shape,low_progress_success,loso->tb_live,y_success_eventual
+,,,False,time_only,0,0,0,no runs in shape,0,loso,shape,no_validation_frontier,loso->tb_live,y_success_eventual
+,,,False,time_only,0,0,0,no runs in shape,0,loso,shape,nonmonotone_recovery,loso->tb_live,y_success_eventual
+,,,False,time_only,0,0,0,no runs in shape,0,loso,shape,scope_discovery_after_high_progress,loso->tb_live,y_success_eventual
+,,,False,time_only,0,0,0,no runs in shape,0,loso,shape,stuck_loop,loso->tb_live,y_success_eventual
+,,,False,time_only,0,0,0,no runs in shape,0,loso,shape,submit_without_validation,loso->tb_live,y_success_eventual
+,,,False,time_only,0,0,0,no runs in shape,0,loso,shape,validation_induced_reopen,loso->tb_live,y_success_eventual
+,,,False,constant,32,12,32,insufficient data,0,loso,phase,early,loso->tb_live,y_timeout
+,,,False,constant,27,12,27,insufficient data,0,loso,phase,late,loso->tb_live,y_timeout
+,,,False,constant,24,12,24,insufficient data,0,loso,phase,middle,loso->tb_live,y_timeout
+,,,False,constant,0,0,0,no runs in shape,0,loso,shape,hidden_work_gap,loso->tb_live,y_timeout
+,,,False,constant,0,0,0,no runs in shape,0,loso,shape,high_progress_failure,loso->tb_live,y_timeout
+,,,False,constant,0,0,0,no runs in shape,0,loso,shape,low_progress_success,loso->tb_live,y_timeout
+,,,False,constant,0,0,0,no runs in shape,0,loso,shape,no_validation_frontier,loso->tb_live,y_timeout
+,,,False,constant,0,0,0,no runs in shape,0,loso,shape,nonmonotone_recovery,loso->tb_live,y_timeout
+,,,False,constant,0,0,0,no runs in shape,0,loso,shape,scope_discovery_after_high_progress,loso->tb_live,y_timeout
+,,,False,constant,0,0,0,no runs in shape,0,loso,shape,stuck_loop,loso->tb_live,y_timeout
+,,,False,constant,0,0,0,no runs in shape,0,loso,shape,submit_without_validation,loso->tb_live,y_timeout
+,,,False,constant,0,0,0,no runs in shape,0,loso,shape,validation_induced_reopen,loso->tb_live,y_timeout
+,,,False,ledger_basic,32,12,32,insufficient data,0,loso,phase,early,loso->tb_live,y_timeout
+,,,False,ledger_basic,27,12,27,insufficient data,0,loso,phase,late,loso->tb_live,y_timeout
+,,,False,ledger_basic,24,12,24,insufficient data,0,loso,phase,middle,loso->tb_live,y_timeout
+,,,False,ledger_basic,0,0,0,no runs in shape,0,loso,shape,hidden_work_gap,loso->tb_live,y_timeout
+,,,False,ledger_basic,0,0,0,no runs in shape,0,loso,shape,high_progress_failure,loso->tb_live,y_timeout
+,,,False,ledger_basic,0,0,0,no runs in shape,0,loso,shape,low_progress_success,loso->tb_live,y_timeout
+,,,False,ledger_basic,0,0,0,no runs in shape,0,loso,shape,no_validation_frontier,loso->tb_live,y_timeout
+,,,False,ledger_basic,0,0,0,no runs in shape,0,loso,shape,nonmonotone_recovery,loso->tb_live,y_timeout
+,,,False,ledger_basic,0,0,0,no runs in shape,0,loso,shape,scope_discovery_after_high_progress,loso->tb_live,y_timeout
+,,,False,ledger_basic,0,0,0,no runs in shape,0,loso,shape,stuck_loop,loso->tb_live,y_timeout
+,,,False,ledger_basic,0,0,0,no runs in shape,0,loso,shape,submit_without_validation,loso->tb_live,y_timeout
+,,,False,ledger_basic,0,0,0,no runs in shape,0,loso,shape,validation_induced_reopen,loso->tb_live,y_timeout
+,,,False,time_only,32,12,32,insufficient data,0,loso,phase,early,loso->tb_live,y_timeout
+,,,False,time_only,27,12,27,insufficient data,0,loso,phase,late,loso->tb_live,y_timeout
+,,,False,time_only,24,12,24,insufficient data,0,loso,phase,middle,loso->tb_live,y_timeout
+,,,False,time_only,0,0,0,no runs in shape,0,loso,shape,hidden_work_gap,loso->tb_live,y_timeout
+,,,False,time_only,0,0,0,no runs in shape,0,loso,shape,high_progress_failure,loso->tb_live,y_timeout
+,,,False,time_only,0,0,0,no runs in shape,0,loso,shape,low_progress_success,loso->tb_live,y_timeout
+,,,False,time_only,0,0,0,no runs in shape,0,loso,shape,no_validation_frontier,loso->tb_live,y_timeout
+,,,False,time_only,0,0,0,no runs in shape,0,loso,shape,nonmonotone_recovery,loso->tb_live,y_timeout
+,,,False,time_only,0,0,0,no runs in shape,0,loso,shape,scope_discovery_after_high_progress,loso->tb_live,y_timeout
+,,,False,time_only,0,0,0,no runs in shape,0,loso,shape,stuck_loop,loso->tb_live,y_timeout
+,,,False,time_only,0,0,0,no runs in shape,0,loso,shape,submit_without_validation,loso->tb_live,y_timeout
+,,,False,time_only,0,0,0,no runs in shape,0,loso,shape,validation_induced_reopen,loso->tb_live,y_timeout
+,,,False,constant,12,10,8,insufficient data,4,loso,phase,early,loso->tb_live,y_validation_new_work_h5
+,,,False,constant,8,7,3,insufficient data,5,loso,phase,late,loso->tb_live,y_validation_new_work_h5
+,,,False,constant,3,3,1,insufficient data,2,loso,phase,middle,loso->tb_live,y_validation_new_work_h5
+,,,False,constant,0,0,0,no runs in shape,0,loso,shape,hidden_work_gap,loso->tb_live,y_validation_new_work_h5
+,,,False,constant,0,0,0,no runs in shape,0,loso,shape,high_progress_failure,loso->tb_live,y_validation_new_work_h5
+,,,False,constant,0,0,0,no runs in shape,0,loso,shape,low_progress_success,loso->tb_live,y_validation_new_work_h5
+,,,False,constant,0,0,0,no runs in shape,0,loso,shape,no_validation_frontier,loso->tb_live,y_validation_new_work_h5
+,,,False,constant,0,0,0,no runs in shape,0,loso,shape,nonmonotone_recovery,loso->tb_live,y_validation_new_work_h5
+,,,False,constant,0,0,0,no runs in shape,0,loso,shape,scope_discovery_after_high_progress,loso->tb_live,y_validation_new_work_h5
+,,,False,constant,0,0,0,no runs in shape,0,loso,shape,stuck_loop,loso->tb_live,y_validation_new_work_h5
+,,,False,constant,0,0,0,no runs in shape,0,loso,shape,submit_without_validation,loso->tb_live,y_validation_new_work_h5
+,,,False,constant,0,0,0,no runs in shape,0,loso,shape,validation_induced_reopen,loso->tb_live,y_validation_new_work_h5
+,,,False,ledger_basic,12,10,8,insufficient data,4,loso,phase,early,loso->tb_live,y_validation_new_work_h5
+,,,False,ledger_basic,8,7,3,insufficient data,5,loso,phase,late,loso->tb_live,y_validation_new_work_h5
+,,,False,ledger_basic,3,3,1,insufficient data,2,loso,phase,middle,loso->tb_live,y_validation_new_work_h5
+,,,False,ledger_basic,0,0,0,no runs in shape,0,loso,shape,hidden_work_gap,loso->tb_live,y_validation_new_work_h5
+,,,False,ledger_basic,0,0,0,no runs in shape,0,loso,shape,high_progress_failure,loso->tb_live,y_validation_new_work_h5
+,,,False,ledger_basic,0,0,0,no runs in shape,0,loso,shape,low_progress_success,loso->tb_live,y_validation_new_work_h5
+,,,False,ledger_basic,0,0,0,no runs in shape,0,loso,shape,no_validation_frontier,loso->tb_live,y_validation_new_work_h5
+,,,False,ledger_basic,0,0,0,no runs in shape,0,loso,shape,nonmonotone_recovery,loso->tb_live,y_validation_new_work_h5
+,,,False,ledger_basic,0,0,0,no runs in shape,0,loso,shape,scope_discovery_after_high_progress,loso->tb_live,y_validation_new_work_h5
+,,,False,ledger_basic,0,0,0,no runs in shape,0,loso,shape,stuck_loop,loso->tb_live,y_validation_new_work_h5
+,,,False,ledger_basic,0,0,0,no runs in shape,0,loso,shape,submit_without_validation,loso->tb_live,y_validation_new_work_h5
+,,,False,ledger_basic,0,0,0,no runs in shape,0,loso,shape,validation_induced_reopen,loso->tb_live,y_validation_new_work_h5
+,,,False,time_only,12,10,8,insufficient data,4,loso,phase,early,loso->tb_live,y_validation_new_work_h5
+,,,False,time_only,8,7,3,insufficient data,5,loso,phase,late,loso->tb_live,y_validation_new_work_h5
+,,,False,time_only,3,3,1,insufficient data,2,loso,phase,middle,loso->tb_live,y_validation_new_work_h5
+,,,False,time_only,0,0,0,no runs in shape,0,loso,shape,hidden_work_gap,loso->tb_live,y_validation_new_work_h5
+,,,False,time_only,0,0,0,no runs in shape,0,loso,shape,high_progress_failure,loso->tb_live,y_validation_new_work_h5
+,,,False,time_only,0,0,0,no runs in shape,0,loso,shape,low_progress_success,loso->tb_live,y_validation_new_work_h5
+,,,False,time_only,0,0,0,no runs in shape,0,loso,shape,no_validation_frontier,loso->tb_live,y_validation_new_work_h5
+,,,False,time_only,0,0,0,no runs in shape,0,loso,shape,nonmonotone_recovery,loso->tb_live,y_validation_new_work_h5
+,,,False,time_only,0,0,0,no runs in shape,0,loso,shape,scope_discovery_after_high_progress,loso->tb_live,y_validation_new_work_h5
+,,,False,time_only,0,0,0,no runs in shape,0,loso,shape,stuck_loop,loso->tb_live,y_validation_new_work_h5
+,,,False,time_only,0,0,0,no runs in shape,0,loso,shape,submit_without_validation,loso->tb_live,y_validation_new_work_h5
+,,,False,time_only,0,0,0,no runs in shape,0,loso,shape,validation_induced_reopen,loso->tb_live,y_validation_new_work_h5

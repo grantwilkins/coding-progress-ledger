@@ -204,3 +204,19 @@ def test_events_jsonl_emitted_in_wire_format(tmp_path):
     assert isinstance(e["step"], int)
     assert e["timestamp"].endswith("Z")
     assert isinstance(e["ledger_ops"], list)
+
+
+def test_finalize_writes_observation_events_jsonl(tmp_path):
+    task = _make_minimal_task(tmp_path, "t1", passing=True)
+    prep = prepare(task, "A", runs_root=tmp_path / "runs")
+    _simulate_subagent(prep.workspace, prep.run_dir, answer_text="42")
+    finalize(prep, task, skip_sidecar=True)
+    rows = [
+        json.loads(line)
+        for line in (prep.run_dir / "observation_events.jsonl").read_text().splitlines()
+        if line.strip()
+    ]
+    assert rows, "expected at least one observation event"
+    assert any(row["event_type"] == "product_file_written" for row in rows)
+    assert any(row["event_type"] == "agent_claims_done" for row in rows)
+    assert any(row["event_type"] == "verifier_pass" for row in rows)

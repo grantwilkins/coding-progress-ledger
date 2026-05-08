@@ -22,12 +22,19 @@ def test_label_schema_is_valid_jsonschema() -> None:
     jsonschema.Draft202012Validator.check_schema(LABEL_SCHEMA)
 
 
-def test_v0_has_exactly_four_targets() -> None:
+def test_v0_has_exactly_seven_targets() -> None:
+    """v0 ships seven targets per TASKS § E1: four binary headline
+    (success/dynamics/validation/submission) + three terminal
+    scalars (finish_step, finish_seconds, timeout). The seven
+    must match exactly what build.py emits."""
     assert set(V0_TARGETS) == {
         "y_success_eventual",
         "y_future_progress_drop_h5",
         "y_validation_new_work_h5",
         "y_submit_without_validation",
+        "y_finish_step",
+        "y_finish_seconds",
+        "y_timeout",
     }
 
 

@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from types import SimpleNamespace
 
 import jsonschema
 import pandas as pd
@@ -61,7 +62,7 @@ def _frame(*, with_families: bool = True) -> pd.DataFrame:
 
 def _families_from_frame(df: pd.DataFrame, src: str) -> dict[str, str | None]:
     sub = df[df["source"] == src][["run_id", "task_family"]].drop_duplicates()
-    return dict(zip(sub["run_id"], sub["task_family"]))
+    return dict(zip(sub["run_id"], sub["task_family"], strict=True))
 
 
 def test_build_split_loro_disjoint() -> None:
@@ -134,3 +135,51 @@ def test_loso_emitted_exactly_once(tmp_path: Path, monkeypatch) -> None:
     loso_files = [p for p in out if p.name.startswith("loso_")]
     assert len(loso_files) == 1
     assert loso_files[0].name == "loso_all.json"
+
+
+def test_tb_live_v2_ltfo_groups_by_exact_task_id_not_coarse_shape(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Claim:
+        `task_family_map("tb_live_v2")` uses exact `task_id`, so
+        same-task multi-arm replications stay in one LTFO group.
+
+    Plausible wrong implementations:
+        - return `rec.task_family` for tb_live_v2, collapsing all
+          `validation_new_work_*` tasks into one group
+        - return `run_id`, splitting different arms of the same task
+        - silently ignore the tb_live_v2 special case
+    """
+    runs_root = tmp_path / "tb_live_v2"
+    for rid in ("task_a__armA", "task_a__armB", "task_b__armA"):
+        run_dir = runs_root / rid
+        run_dir.mkdir(parents=True)
+        (run_dir / "ledger.jsonl").write_text("{}\n", encoding="utf-8")
+
+    fake_runs = {
+        "task_a__armA": SimpleNamespace(
+            run_id="task_a__armA",
+            task_id="task_a",
+            task_family="validation_new_work",
+        ),
+        "task_a__armB": SimpleNamespace(
+            run_id="task_a__armB",
+            task_id="task_a",
+            task_family="validation_new_work",
+        ),
+        "task_b__armA": SimpleNamespace(
+            run_id="task_b__armA",
+            task_id="task_b",
+            task_family="validation_new_work",
+        ),
+    }
+
+    monkeypatch.setattr(B, "runs_root", lambda _src: runs_root)
+    monkeypatch.setattr(B, "load_run", lambda _src, rid: fake_runs[rid])
+
+    groups = B.task_family_map("tb_live_v2")
+    assert groups["task_a__armA"] == "task_a"
+    assert groups["task_a__armB"] == "task_a"
+    assert groups["task_b__armA"] == "task_b"
+    assert len(set(groups.values())) == 2

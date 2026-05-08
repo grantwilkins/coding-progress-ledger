@@ -48,6 +48,18 @@ def test_tb_live_uses_verifier_pass(real_ledger: None) -> None:
     assert label.finish_step == run.events[-1].step
 
 
+def test_tb_live_v2_uses_run_manifest_verifier_label(real_ledger: None) -> None:
+    run = load_run(
+        "tb_live_v2",
+        "validation_new_work_05_quoted_field_in_tsv__armB__87f7ab5e",
+    )
+    label = load_final_label(run)
+    assert label.final_success is False
+    assert label.final_success_source == "verifier_exit"
+    assert label.finish_seconds is not None and label.finish_seconds > 0
+    assert label.termination_reason == "verifier_fail"
+
+
 def test_swe_agent_uses_source_metadata_target(real_ledger: None) -> None:
     run = load_run("swe_agent_pilot", "swe_agent_pilot_s_06")
     label = load_final_label(run)
@@ -81,6 +93,7 @@ def test_classify_upstream_source_for_each_emitted_string() -> None:
     cases = {
         "source_metadata.target": "swe_agent_target",
         "test_result.success": "verifier_exit",
+        "internal_verifier": "verifier_exit",
         "run_manifest.final_success": "manual",
         "summary.final_success": "hermes_resolved",
         "summary_by_category.final_success": "hermes_resolved",

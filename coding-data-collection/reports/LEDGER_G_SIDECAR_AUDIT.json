@@ -1,0 +1,134 @@
+{
+  "passed": true,
+  "run_count": 4,
+  "runs": [
+    {
+      "collection_run_valid": true,
+      "collection_validation_issues": [],
+      "event_count": 3,
+      "generated_artifacts": {
+        "ledger.jsonl": {
+          "bytes": 1574,
+          "exists": true
+        },
+        "progress.csv": {
+          "bytes": 168,
+          "exists": true
+        },
+        "progress_by_category.csv": {
+          "bytes": 1207,
+          "exists": true
+        },
+        "summary_by_category.json": {
+          "bytes": 3468,
+          "exists": true
+        }
+      },
+      "issues": [],
+      "ledger_event_count": 7,
+      "missing_collection_control_artifacts": [],
+      "passed": true,
+      "progress_by_category_rows": 3,
+      "progress_rows": 3,
+      "run_dir": "runs/d_smoke/noop_aimo",
+      "source_ledger_sha256_matches": true,
+      "summary_generator": "ledger_progress.sidecar"
+    },
+    {
+      "collection_run_valid": true,
+      "collection_validation_issues": [],
+      "event_count": 4,
+      "generated_artifacts": {
+        "ledger.jsonl": {
+          "bytes": 2050,
+          "exists": true
+        },
+        "progress.csv": {
+          "bytes": 188,
+          "exists": true
+        },
+        "progress_by_category.csv": {
+          "bytes": 1317,
+          "exists": true
+        },
+        "summary_by_category.json": {
+          "bytes": 3506,
+          "exists": true
+        }
+      },
+      "issues": [],
+      "ledger_event_count": 9,
+      "missing_collection_control_artifacts": [],
+      "passed": true,
+      "progress_by_category_rows": 4,
+      "progress_rows": 4,
+      "run_dir": "runs/d_smoke/oracle_hello_world",
+      "source_ledger_sha256_matches": true,
+      "summary_generator": "ledger_progress.sidecar"
+    },
+    {
+      "collection_run_valid": true,
+      "collection_validation_issues": [],
+      "event_count": 4,
+      "generated_artifacts": {
+        "ledger.jsonl": {
+          "bytes": 2061,
+          "exists": true
+        },
+        "progress.csv": {
+          "bytes": 188,
+          "exists": true
+        },
+        "progress_by_category.csv": {
+          "bytes": 1317,
+          "exists": true
+        },
+        "summary_by_category.json": {
+          "bytes": 3517,
+          "exists": true
+        }
+      },
+      "issues": [],
+      "ledger_event_count": 9,
+      "missing_collection_control_artifacts": [],
+      "passed": true,
+      "progress_by_category_rows": 4,
+      "progress_rows": 4,
+      "run_dir": "runs/d_smoke/oracle_grid_pattern_transform",
+      "source_ledger_sha256_matches": true,
+      "summary_generator": "ledger_progress.sidecar"
+    },
+    {
+      "collection_run_valid": true,
+      "collection_validation_issues": [],
+      "event_count": 4,
+      "generated_artifacts": {
+        "ledger.jsonl": {
+          "bytes": 2062,
+          "exists": true
+        },
+        "progress.csv": {
+          "bytes": 188,
+          "exists": true
+        },
+        "progress_by_category.csv": {
+          "bytes": 1317,
+          "exists": true
+        },
+        "summary_by_category.json": {
+          "bytes": 3518,
+          "exists": true
+        }
+      },
+      "issues": [],
+      "ledger_event_count": 9,
+      "missing_collection_control_artifacts": [],
+      "passed": true,
+      "progress_by_category_rows": 4,
+      "progress_rows": 4,
+      "run_dir": "runs/d_smoke/oracle_aimo_airline_departures",
+      "source_ledger_sha256_matches": true,
+      "summary_generator": "ledger_progress.sidecar"
+    }
+  ]
+}

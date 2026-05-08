@@ -1,0 +1,1250 @@
+{
+  "checkpoint_provenance_columns": [
+    "checkpoint_step",
+    "max_ledger_step_used",
+    "max_observation_step_used"
+  ],
+  "checkpoint_rows": 96,
+  "feature_columns": [
+    {
+      "column_name": "active_leaf_count",
+      "dtype": "int",
+      "group": "frontier",
+      "populated_on": [
+        "swe_agent_pilot",
+        "swe_agent_pilot_v3",
+        "swe_agent_live",
+        "swe_agent_live_wallclock",
+        "hermes_pilot",
+        "hermes_pilot_h5",
+        "hermes_pilot_h5_v2",
+        "tb_live",
+        "tb_live_v2",
+        "terminal_bench_pilot"
+      ],
+      "prefix_only": true,
+      "upstream_source": "build_estimator_checkpoints.py"
+    },
+    {
+      "column_name": "active_coding_leaf_count",
+      "dtype": "int",
+      "group": "frontier",
+      "populated_on": [
+        "swe_agent_pilot",
+        "swe_agent_pilot_v3",
+        "swe_agent_live",
+        "swe_agent_live_wallclock",
+        "hermes_pilot",
+        "hermes_pilot_h5",
+        "hermes_pilot_h5_v2",
+        "tb_live",
+        "tb_live_v2",
+        "terminal_bench_pilot"
+      ],
+      "prefix_only": true,
+      "upstream_source": "build_estimator_checkpoints.py"
+    },
+    {
+      "column_name": "active_validation_leaf_count",
+      "dtype": "int",
+      "group": "frontier",
+      "populated_on": [
+        "swe_agent_pilot",
+        "swe_agent_pilot_v3",
+        "swe_agent_live",
+        "swe_agent_live_wallclock",
+        "hermes_pilot",
+        "hermes_pilot_h5",
+        "hermes_pilot_h5_v2",
+        "tb_live",
+        "tb_live_v2",
+        "terminal_bench_pilot"
+      ],
+      "prefix_only": true,
+      "upstream_source": "build_estimator_checkpoints.py"
+    },
+    {
+      "column_name": "completed_leaf_count",
+      "dtype": "int",
+      "group": "closure",
+      "populated_on": [
+        "swe_agent_pilot",
+        "swe_agent_pilot_v3",
+        "swe_agent_live",
+        "swe_agent_live_wallclock",
+        "hermes_pilot",
+        "hermes_pilot_h5",
+        "hermes_pilot_h5_v2",
+        "tb_live",
+        "tb_live_v2",
+        "terminal_bench_pilot"
+      ],
+      "prefix_only": true,
+      "upstream_source": "build_estimator_checkpoints.py"
+    },
+    {
+      "column_name": "coding_progress",
+      "dtype": "float",
+      "group": "closure",
+      "populated_on": [
+        "swe_agent_pilot",
+        "swe_agent_pilot_v3",
+        "swe_agent_live",
+        "swe_agent_live_wallclock",
+        "hermes_pilot",
+        "hermes_pilot_h5",
+        "hermes_pilot_h5_v2",
+        "tb_live",
+        "tb_live_v2",
+        "terminal_bench_pilot"
+      ],
+      "prefix_only": true,
+      "upstream_source": "build_estimator_checkpoints.py"
+    },
+    {
+      "column_name": "validation_progress",
+      "dtype": "float",
+      "group": "closure",
+      "populated_on": [
+        "swe_agent_pilot",
+        "swe_agent_pilot_v3",
+        "swe_agent_live",
+        "swe_agent_live_wallclock",
+        "hermes_pilot",
+        "hermes_pilot_h5",
+        "hermes_pilot_h5_v2",
+        "tb_live",
+        "tb_live_v2",
+        "terminal_bench_pilot"
+      ],
+      "prefix_only": true,
+      "upstream_source": "build_estimator_checkpoints.py"
+    },
+    {
+      "column_name": "product_progress",
+      "dtype": "float",
+      "group": "closure",
+      "populated_on": [
+        "swe_agent_pilot",
+        "swe_agent_pilot_v3",
+        "swe_agent_live",
+        "swe_agent_live_wallclock",
+        "hermes_pilot",
+        "hermes_pilot_h5",
+        "hermes_pilot_h5_v2",
+        "tb_live",
+        "tb_live_v2",
+        "terminal_bench_pilot"
+      ],
+      "prefix_only": true,
+      "upstream_source": "build_estimator_checkpoints.py"
+    },
+    {
+      "column_name": "investigation_progress",
+      "dtype": "float",
+      "group": "closure",
+      "populated_on": [
+        "swe_agent_pilot",
+        "swe_agent_pilot_v3",
+        "swe_agent_live",
+        "swe_agent_live_wallclock",
+        "hermes_pilot",
+        "hermes_pilot_h5",
+        "hermes_pilot_h5_v2",
+        "tb_live",
+        "tb_live_v2",
+        "terminal_bench_pilot"
+      ],
+      "prefix_only": true,
+      "upstream_source": "build_estimator_checkpoints.py"
+    },
+    {
+      "column_name": "num_adds_so_far",
+      "dtype": "int",
+      "group": "discovery",
+      "populated_on": [
+        "swe_agent_pilot",
+        "swe_agent_pilot_v3",
+        "swe_agent_live",
+        "swe_agent_live_wallclock",
+        "hermes_pilot",
+        "hermes_pilot_h5",
+        "hermes_pilot_h5_v2",
+        "tb_live",
+        "tb_live_v2",
+        "terminal_bench_pilot"
+      ],
+      "prefix_only": true,
+      "upstream_source": "build_estimator_checkpoints.py"
+    },
+    {
+      "column_name": "num_splits_so_far",
+      "dtype": "int",
+      "group": "discovery",
+      "populated_on": [
+        "swe_agent_pilot",
+        "swe_agent_pilot_v3",
+        "swe_agent_live",
+        "swe_agent_live_wallclock",
+        "hermes_pilot",
+        "hermes_pilot_h5",
+        "hermes_pilot_h5_v2",
+        "tb_live",
+        "tb_live_v2",
+        "terminal_bench_pilot"
+      ],
+      "prefix_only": true,
+      "upstream_source": "build_estimator_checkpoints.py"
+    },
+    {
+      "column_name": "denominator_growth_so_far",
+      "dtype": "int",
+      "group": "discovery",
+      "populated_on": [
+        "swe_agent_pilot",
+        "swe_agent_pilot_v3",
+        "swe_agent_live",
+        "swe_agent_live_wallclock",
+        "hermes_pilot",
+        "hermes_pilot_h5",
+        "hermes_pilot_h5_v2",
+        "tb_live",
+        "tb_live_v2",
+        "terminal_bench_pilot"
+      ],
+      "prefix_only": true,
+      "upstream_source": "build_estimator_checkpoints.py"
+    },
+    {
+      "column_name": "steps_since_new_subtask",
+      "dtype": "int",
+      "group": "discovery",
+      "populated_on": [
+        "swe_agent_pilot",
+        "swe_agent_pilot_v3",
+        "swe_agent_live",
+        "swe_agent_live_wallclock",
+        "hermes_pilot",
+        "hermes_pilot_h5",
+        "hermes_pilot_h5_v2",
+        "tb_live",
+        "tb_live_v2",
+        "terminal_bench_pilot"
+      ],
+      "prefix_only": true,
+      "upstream_source": "build_estimator_checkpoints.py"
+    },
+    {
+      "column_name": "new_leaf_count_last_1_steps",
+      "dtype": "int",
+      "group": "discovery",
+      "populated_on": [
+        "swe_agent_pilot",
+        "swe_agent_pilot_v3",
+        "swe_agent_live",
+        "swe_agent_live_wallclock",
+        "hermes_pilot",
+        "hermes_pilot_h5",
+        "hermes_pilot_h5_v2",
+        "tb_live",
+        "tb_live_v2",
+        "terminal_bench_pilot"
+      ],
+      "prefix_only": true,
+      "upstream_source": null
+    },
+    {
+      "column_name": "new_leaf_count_last_3_steps",
+      "dtype": "int",
+      "group": "discovery",
+      "populated_on": [
+        "swe_agent_pilot",
+        "swe_agent_pilot_v3",
+        "swe_agent_live",
+        "swe_agent_live_wallclock",
+        "hermes_pilot",
+        "hermes_pilot_h5",
+        "hermes_pilot_h5_v2",
+        "tb_live",
+        "tb_live_v2",
+        "terminal_bench_pilot"
+      ],
+      "prefix_only": true,
+      "upstream_source": null
+    },
+    {
+      "column_name": "new_leaf_count_last_5_steps",
+      "dtype": "int",
+      "group": "discovery",
+      "populated_on": [
+        "swe_agent_pilot",
+        "swe_agent_pilot_v3",
+        "swe_agent_live",
+        "swe_agent_live_wallclock",
+        "hermes_pilot",
+        "hermes_pilot_h5",
+        "hermes_pilot_h5_v2",
+        "tb_live",
+        "tb_live_v2",
+        "terminal_bench_pilot"
+      ],
+      "prefix_only": true,
+      "upstream_source": null
+    },
+    {
+      "column_name": "num_reopens_so_far",
+      "dtype": "int",
+      "group": "instability",
+      "populated_on": [
+        "swe_agent_pilot",
+        "swe_agent_pilot_v3",
+        "swe_agent_live",
+        "swe_agent_live_wallclock",
+        "hermes_pilot",
+        "hermes_pilot_h5",
+        "hermes_pilot_h5_v2",
+        "tb_live",
+        "tb_live_v2",
+        "terminal_bench_pilot"
+      ],
+      "prefix_only": true,
+      "upstream_source": "build_estimator_checkpoints.py"
+    },
+    {
+      "column_name": "num_invalidations_so_far",
+      "dtype": "int",
+      "group": "instability",
+      "populated_on": [
+        "swe_agent_pilot",
+        "swe_agent_pilot_v3",
+        "swe_agent_live",
+        "swe_agent_live_wallclock",
+        "hermes_pilot",
+        "hermes_pilot_h5",
+        "hermes_pilot_h5_v2",
+        "tb_live",
+        "tb_live_v2",
+        "terminal_bench_pilot"
+      ],
+      "prefix_only": true,
+      "upstream_source": "build_estimator_checkpoints.py"
+    },
+    {
+      "column_name": "num_deletes_so_far",
+      "dtype": "int",
+      "group": "instability",
+      "populated_on": [
+        "swe_agent_pilot",
+        "swe_agent_pilot_v3",
+        "swe_agent_live",
+        "swe_agent_live_wallclock",
+        "hermes_pilot",
+        "hermes_pilot_h5",
+        "hermes_pilot_h5_v2",
+        "tb_live",
+        "tb_live_v2",
+        "terminal_bench_pilot"
+      ],
+      "prefix_only": true,
+      "upstream_source": "build_estimator_checkpoints.py"
+    },
+    {
+      "column_name": "largest_progress_drop_so_far",
+      "dtype": "float",
+      "group": "instability",
+      "populated_on": [
+        "swe_agent_pilot",
+        "swe_agent_pilot_v3",
+        "swe_agent_live",
+        "swe_agent_live_wallclock",
+        "hermes_pilot",
+        "hermes_pilot_h5",
+        "hermes_pilot_h5_v2",
+        "tb_live",
+        "tb_live_v2",
+        "terminal_bench_pilot"
+      ],
+      "prefix_only": true,
+      "upstream_source": "build_estimator_checkpoints.py"
+    },
+    {
+      "column_name": "num_progress_drops_so_far",
+      "dtype": "int",
+      "group": "instability",
+      "populated_on": [
+        "swe_agent_pilot",
+        "swe_agent_pilot_v3",
+        "swe_agent_live",
+        "swe_agent_live_wallclock",
+        "hermes_pilot",
+        "hermes_pilot_h5",
+        "hermes_pilot_h5_v2",
+        "tb_live",
+        "tb_live_v2",
+        "terminal_bench_pilot"
+      ],
+      "prefix_only": true,
+      "upstream_source": "build_estimator_checkpoints.py"
+    },
+    {
+      "column_name": "steps_since_last_drop",
+      "dtype": "int",
+      "group": "instability",
+      "populated_on": [
+        "swe_agent_pilot",
+        "swe_agent_pilot_v3",
+        "swe_agent_live",
+        "swe_agent_live_wallclock",
+        "hermes_pilot",
+        "hermes_pilot_h5",
+        "hermes_pilot_h5_v2",
+        "tb_live",
+        "tb_live_v2",
+        "terminal_bench_pilot"
+      ],
+      "prefix_only": true,
+      "upstream_source": "build_estimator_checkpoints.py"
+    },
+    {
+      "column_name": "blocked_leaf_count",
+      "dtype": "int",
+      "group": "stalling",
+      "populated_on": [
+        "swe_agent_pilot",
+        "swe_agent_pilot_v3",
+        "swe_agent_live",
+        "swe_agent_live_wallclock",
+        "hermes_pilot",
+        "hermes_pilot_h5",
+        "hermes_pilot_h5_v2",
+        "tb_live",
+        "tb_live_v2",
+        "terminal_bench_pilot"
+      ],
+      "prefix_only": true,
+      "upstream_source": "build_estimator_checkpoints.py"
+    },
+    {
+      "column_name": "blocked_coding_leaf_count",
+      "dtype": "int",
+      "group": "stalling",
+      "populated_on": [
+        "swe_agent_pilot",
+        "swe_agent_pilot_v3",
+        "swe_agent_live",
+        "swe_agent_live_wallclock",
+        "hermes_pilot",
+        "hermes_pilot_h5",
+        "hermes_pilot_h5_v2",
+        "tb_live",
+        "tb_live_v2",
+        "terminal_bench_pilot"
+      ],
+      "prefix_only": true,
+      "upstream_source": "build_estimator_checkpoints.py"
+    },
+    {
+      "column_name": "blocked_validation_leaf_count",
+      "dtype": "int",
+      "group": "stalling",
+      "populated_on": [
+        "swe_agent_pilot",
+        "swe_agent_pilot_v3",
+        "swe_agent_live",
+        "swe_agent_live_wallclock",
+        "hermes_pilot",
+        "hermes_pilot_h5",
+        "hermes_pilot_h5_v2",
+        "tb_live",
+        "tb_live_v2",
+        "terminal_bench_pilot"
+      ],
+      "prefix_only": true,
+      "upstream_source": "build_estimator_checkpoints.py"
+    },
+    {
+      "column_name": "steps_since_completion",
+      "dtype": "int",
+      "group": "stalling",
+      "populated_on": [
+        "swe_agent_pilot",
+        "swe_agent_pilot_v3",
+        "swe_agent_live",
+        "swe_agent_live_wallclock",
+        "hermes_pilot",
+        "hermes_pilot_h5",
+        "hermes_pilot_h5_v2",
+        "tb_live",
+        "tb_live_v2",
+        "terminal_bench_pilot"
+      ],
+      "prefix_only": true,
+      "upstream_source": "build_estimator_checkpoints.py"
+    },
+    {
+      "column_name": "steps_since_progress_increase",
+      "dtype": "int",
+      "group": "stalling",
+      "populated_on": [
+        "swe_agent_pilot",
+        "swe_agent_pilot_v3",
+        "swe_agent_live",
+        "swe_agent_live_wallclock",
+        "hermes_pilot",
+        "hermes_pilot_h5",
+        "hermes_pilot_h5_v2",
+        "tb_live",
+        "tb_live_v2",
+        "terminal_bench_pilot"
+      ],
+      "prefix_only": true,
+      "upstream_source": "build_estimator_checkpoints.py"
+    },
+    {
+      "column_name": "steps_since_status_change",
+      "dtype": "int",
+      "group": "stalling",
+      "populated_on": [
+        "swe_agent_pilot",
+        "swe_agent_pilot_v3",
+        "swe_agent_live",
+        "swe_agent_live_wallclock",
+        "hermes_pilot",
+        "hermes_pilot_h5",
+        "hermes_pilot_h5_v2",
+        "tb_live",
+        "tb_live_v2",
+        "terminal_bench_pilot"
+      ],
+      "prefix_only": true,
+      "upstream_source": "build_estimator_checkpoints.py"
+    },
+    {
+      "column_name": "steps_since_evidence",
+      "dtype": "int",
+      "group": "stalling",
+      "populated_on": [
+        "swe_agent_pilot",
+        "swe_agent_pilot_v3",
+        "swe_agent_live",
+        "swe_agent_live_wallclock",
+        "hermes_pilot",
+        "hermes_pilot_h5",
+        "hermes_pilot_h5_v2",
+        "tb_live",
+        "tb_live_v2",
+        "terminal_bench_pilot"
+      ],
+      "prefix_only": true,
+      "upstream_source": "build_estimator_checkpoints.py"
+    },
+    {
+      "column_name": "repeated_observation_loop_flag",
+      "dtype": "bool",
+      "group": "stalling",
+      "populated_on": [
+        "swe_agent_pilot",
+        "swe_agent_pilot_v3",
+        "swe_agent_live",
+        "swe_agent_live_wallclock",
+        "hermes_pilot",
+        "hermes_pilot_h5",
+        "hermes_pilot_h5_v2",
+        "tb_live",
+        "tb_live_v2",
+        "terminal_bench_pilot"
+      ],
+      "prefix_only": true,
+      "upstream_source": "build_estimator_checkpoints.py"
+    },
+    {
+      "column_name": "no_progress_window_5",
+      "dtype": "bool",
+      "group": "stalling",
+      "populated_on": [
+        "swe_agent_pilot",
+        "swe_agent_pilot_v3",
+        "swe_agent_live",
+        "swe_agent_live_wallclock",
+        "hermes_pilot",
+        "hermes_pilot_h5",
+        "hermes_pilot_h5_v2",
+        "tb_live",
+        "tb_live_v2",
+        "terminal_bench_pilot"
+      ],
+      "prefix_only": true,
+      "upstream_source": null
+    },
+    {
+      "column_name": "no_progress_window_10",
+      "dtype": "bool",
+      "group": "stalling",
+      "populated_on": [
+        "swe_agent_pilot",
+        "swe_agent_pilot_v3",
+        "swe_agent_live",
+        "swe_agent_live_wallclock",
+        "hermes_pilot",
+        "hermes_pilot_h5",
+        "hermes_pilot_h5_v2",
+        "tb_live",
+        "tb_live_v2",
+        "terminal_bench_pilot"
+      ],
+      "prefix_only": true,
+      "upstream_source": null
+    },
+    {
+      "column_name": "validation_leaf_exists",
+      "dtype": "bool",
+      "group": "validation",
+      "populated_on": [
+        "swe_agent_pilot",
+        "swe_agent_pilot_v3",
+        "swe_agent_live",
+        "swe_agent_live_wallclock",
+        "hermes_pilot",
+        "hermes_pilot_h5",
+        "hermes_pilot_h5_v2",
+        "tb_live",
+        "tb_live_v2",
+        "terminal_bench_pilot"
+      ],
+      "prefix_only": true,
+      "upstream_source": "build_estimator_checkpoints.py"
+    },
+    {
+      "column_name": "validation_started",
+      "dtype": "bool",
+      "group": "validation",
+      "populated_on": [
+        "swe_agent_pilot",
+        "swe_agent_pilot_v3",
+        "swe_agent_live",
+        "swe_agent_live_wallclock",
+        "hermes_pilot",
+        "hermes_pilot_h5",
+        "hermes_pilot_h5_v2",
+        "tb_live",
+        "tb_live_v2",
+        "terminal_bench_pilot"
+      ],
+      "prefix_only": true,
+      "upstream_source": "build_estimator_checkpoints.py"
+    },
+    {
+      "column_name": "validation_complete",
+      "dtype": "bool",
+      "group": "validation",
+      "populated_on": [
+        "swe_agent_pilot",
+        "swe_agent_pilot_v3",
+        "swe_agent_live",
+        "swe_agent_live_wallclock",
+        "hermes_pilot",
+        "hermes_pilot_h5",
+        "hermes_pilot_h5_v2",
+        "tb_live",
+        "tb_live_v2",
+        "terminal_bench_pilot"
+      ],
+      "prefix_only": true,
+      "upstream_source": "build_estimator_checkpoints.py"
+    },
+    {
+      "column_name": "validation_failed",
+      "dtype": "bool",
+      "group": "validation",
+      "populated_on": [
+        "swe_agent_pilot",
+        "swe_agent_pilot_v3",
+        "swe_agent_live",
+        "swe_agent_live_wallclock",
+        "hermes_pilot",
+        "hermes_pilot_h5",
+        "hermes_pilot_h5_v2",
+        "tb_live",
+        "tb_live_v2",
+        "terminal_bench_pilot"
+      ],
+      "prefix_only": true,
+      "upstream_source": "build_estimator_checkpoints.py"
+    },
+    {
+      "column_name": "validation_blocked",
+      "dtype": "bool",
+      "group": "validation",
+      "populated_on": [
+        "swe_agent_pilot",
+        "swe_agent_pilot_v3",
+        "swe_agent_live",
+        "swe_agent_live_wallclock",
+        "hermes_pilot",
+        "hermes_pilot_h5",
+        "hermes_pilot_h5_v2",
+        "tb_live",
+        "tb_live_v2",
+        "terminal_bench_pilot"
+      ],
+      "prefix_only": true,
+      "upstream_source": "build_estimator_checkpoints.py"
+    },
+    {
+      "column_name": "validation_in_progress",
+      "dtype": "bool",
+      "group": "validation",
+      "populated_on": [
+        "swe_agent_pilot",
+        "swe_agent_pilot_v3",
+        "swe_agent_live",
+        "swe_agent_live_wallclock",
+        "hermes_pilot",
+        "hermes_pilot_h5",
+        "hermes_pilot_h5_v2",
+        "tb_live",
+        "tb_live_v2",
+        "terminal_bench_pilot"
+      ],
+      "prefix_only": true,
+      "upstream_source": "build_estimator_checkpoints.py"
+    },
+    {
+      "column_name": "num_validation_attempts",
+      "dtype": "int",
+      "group": "validation",
+      "populated_on": [
+        "swe_agent_pilot",
+        "swe_agent_pilot_v3",
+        "swe_agent_live",
+        "swe_agent_live_wallclock",
+        "hermes_pilot",
+        "hermes_pilot_h5",
+        "hermes_pilot_h5_v2",
+        "tb_live",
+        "tb_live_v2",
+        "terminal_bench_pilot"
+      ],
+      "prefix_only": true,
+      "upstream_source": "build_estimator_checkpoints.py"
+    },
+    {
+      "column_name": "num_validation_failures",
+      "dtype": "int",
+      "group": "validation",
+      "populated_on": [
+        "swe_agent_pilot",
+        "swe_agent_pilot_v3",
+        "swe_agent_live",
+        "swe_agent_live_wallclock",
+        "hermes_pilot",
+        "hermes_pilot_h5",
+        "hermes_pilot_h5_v2",
+        "tb_live",
+        "tb_live_v2",
+        "terminal_bench_pilot"
+      ],
+      "prefix_only": true,
+      "upstream_source": "build_estimator_checkpoints.py"
+    },
+    {
+      "column_name": "num_validation_successes",
+      "dtype": "int",
+      "group": "validation",
+      "populated_on": [
+        "swe_agent_pilot",
+        "swe_agent_pilot_v3",
+        "swe_agent_live",
+        "swe_agent_live_wallclock",
+        "hermes_pilot",
+        "hermes_pilot_h5",
+        "hermes_pilot_h5_v2",
+        "tb_live",
+        "tb_live_v2",
+        "terminal_bench_pilot"
+      ],
+      "prefix_only": true,
+      "upstream_source": "build_estimator_checkpoints.py"
+    },
+    {
+      "column_name": "steps_since_last_validation",
+      "dtype": "int",
+      "group": "validation",
+      "populated_on": [
+        "swe_agent_pilot",
+        "swe_agent_pilot_v3",
+        "swe_agent_live",
+        "swe_agent_live_wallclock",
+        "hermes_pilot",
+        "hermes_pilot_h5",
+        "hermes_pilot_h5_v2",
+        "tb_live",
+        "tb_live_v2",
+        "terminal_bench_pilot"
+      ],
+      "prefix_only": true,
+      "upstream_source": "build_estimator_checkpoints.py"
+    },
+    {
+      "column_name": "submit_without_validation_so_far",
+      "dtype": "bool",
+      "group": "validation",
+      "populated_on": [
+        "swe_agent_pilot",
+        "swe_agent_pilot_v3",
+        "swe_agent_live",
+        "swe_agent_live_wallclock",
+        "hermes_pilot",
+        "hermes_pilot_h5",
+        "hermes_pilot_h5_v2",
+        "tb_live",
+        "tb_live_v2",
+        "terminal_bench_pilot"
+      ],
+      "prefix_only": true,
+      "upstream_source": null
+    },
+    {
+      "column_name": "strong_completion_count",
+      "dtype": "int",
+      "group": "evidence",
+      "populated_on": [
+        "swe_agent_pilot",
+        "swe_agent_pilot_v3",
+        "swe_agent_live",
+        "swe_agent_live_wallclock",
+        "hermes_pilot",
+        "hermes_pilot_h5",
+        "hermes_pilot_h5_v2",
+        "tb_live",
+        "tb_live_v2",
+        "terminal_bench_pilot"
+      ],
+      "prefix_only": true,
+      "upstream_source": "build_estimator_checkpoints.py"
+    },
+    {
+      "column_name": "manual_only_completion_count",
+      "dtype": "int",
+      "group": "evidence",
+      "populated_on": [
+        "swe_agent_pilot",
+        "swe_agent_pilot_v3",
+        "swe_agent_live",
+        "swe_agent_live_wallclock",
+        "hermes_pilot",
+        "hermes_pilot_h5",
+        "hermes_pilot_h5_v2",
+        "tb_live",
+        "tb_live_v2",
+        "terminal_bench_pilot"
+      ],
+      "prefix_only": true,
+      "upstream_source": "build_estimator_checkpoints.py"
+    },
+    {
+      "column_name": "weak_product_completion_count",
+      "dtype": "int",
+      "group": "evidence",
+      "populated_on": [
+        "swe_agent_pilot",
+        "swe_agent_pilot_v3",
+        "swe_agent_live",
+        "swe_agent_live_wallclock",
+        "hermes_pilot",
+        "hermes_pilot_h5",
+        "hermes_pilot_h5_v2",
+        "tb_live",
+        "tb_live_v2",
+        "terminal_bench_pilot"
+      ],
+      "prefix_only": true,
+      "upstream_source": "build_estimator_checkpoints.py"
+    },
+    {
+      "column_name": "strong_evidence_fraction",
+      "dtype": "float",
+      "group": "evidence",
+      "populated_on": [
+        "swe_agent_pilot",
+        "swe_agent_pilot_v3",
+        "swe_agent_live",
+        "swe_agent_live_wallclock",
+        "hermes_pilot",
+        "hermes_pilot_h5",
+        "hermes_pilot_h5_v2",
+        "tb_live",
+        "tb_live_v2",
+        "terminal_bench_pilot"
+      ],
+      "prefix_only": true,
+      "upstream_source": "build_estimator_checkpoints.py"
+    },
+    {
+      "column_name": "manual_only_evidence_fraction",
+      "dtype": "float",
+      "group": "evidence",
+      "populated_on": [
+        "swe_agent_pilot",
+        "swe_agent_pilot_v3",
+        "swe_agent_live",
+        "swe_agent_live_wallclock",
+        "hermes_pilot",
+        "hermes_pilot_h5",
+        "hermes_pilot_h5_v2",
+        "tb_live",
+        "tb_live_v2",
+        "terminal_bench_pilot"
+      ],
+      "prefix_only": true,
+      "upstream_source": "build_estimator_checkpoints.py"
+    },
+    {
+      "column_name": "latest_completion_evidence_type",
+      "dtype": "str",
+      "group": "evidence",
+      "populated_on": [
+        "swe_agent_pilot",
+        "swe_agent_pilot_v3",
+        "swe_agent_live",
+        "swe_agent_live_wallclock",
+        "hermes_pilot",
+        "hermes_pilot_h5",
+        "hermes_pilot_h5_v2",
+        "tb_live",
+        "tb_live_v2",
+        "terminal_bench_pilot"
+      ],
+      "prefix_only": true,
+      "upstream_source": "build_estimator_checkpoints.py"
+    },
+    {
+      "column_name": "obs_num_validation_attempts_so_far",
+      "dtype": "int",
+      "group": "observation",
+      "populated_on": [
+        "tb_live_v2",
+        "terminal_bench_pilot"
+      ],
+      "prefix_only": true,
+      "upstream_source": "observation_events.jsonl"
+    },
+    {
+      "column_name": "obs_num_validation_successes_so_far",
+      "dtype": "int",
+      "group": "observation",
+      "populated_on": [
+        "tb_live_v2",
+        "terminal_bench_pilot"
+      ],
+      "prefix_only": true,
+      "upstream_source": "observation_events.jsonl"
+    },
+    {
+      "column_name": "obs_num_validation_failures_so_far",
+      "dtype": "int",
+      "group": "observation",
+      "populated_on": [
+        "tb_live_v2",
+        "terminal_bench_pilot"
+      ],
+      "prefix_only": true,
+      "upstream_source": "observation_events.jsonl"
+    },
+    {
+      "column_name": "obs_num_error_observations_so_far",
+      "dtype": "int",
+      "group": "observation",
+      "populated_on": [
+        "tb_live_v2",
+        "terminal_bench_pilot"
+      ],
+      "prefix_only": true,
+      "upstream_source": "observation_events.jsonl"
+    },
+    {
+      "column_name": "obs_num_repeated_errors_so_far",
+      "dtype": "int",
+      "group": "observation",
+      "populated_on": [
+        "tb_live_v2",
+        "terminal_bench_pilot"
+      ],
+      "prefix_only": true,
+      "upstream_source": "observation_events.jsonl"
+    },
+    {
+      "column_name": "obs_num_environment_blocks_so_far",
+      "dtype": "int",
+      "group": "observation",
+      "populated_on": [
+        "tb_live_v2",
+        "terminal_bench_pilot"
+      ],
+      "prefix_only": true,
+      "upstream_source": "observation_events.jsonl"
+    },
+    {
+      "column_name": "obs_solution_oracle_read_so_far",
+      "dtype": "bool",
+      "group": "observation",
+      "populated_on": [
+        "tb_live_v2",
+        "terminal_bench_pilot"
+      ],
+      "prefix_only": true,
+      "upstream_source": "observation_events.jsonl"
+    },
+    {
+      "column_name": "obs_agent_claims_done_so_far",
+      "dtype": "bool",
+      "group": "observation",
+      "populated_on": [
+        "tb_live_v2",
+        "terminal_bench_pilot"
+      ],
+      "prefix_only": true,
+      "upstream_source": "observation_events.jsonl"
+    },
+    {
+      "column_name": "obs_done_without_validation_so_far",
+      "dtype": "bool",
+      "group": "observation",
+      "populated_on": [
+        "tb_live_v2",
+        "terminal_bench_pilot"
+      ],
+      "prefix_only": true,
+      "upstream_source": "observation_events.jsonl"
+    },
+    {
+      "column_name": "obs_verifier_disagreement_proxy_so_far",
+      "dtype": "bool",
+      "group": "observation",
+      "populated_on": [
+        "tb_live_v2",
+        "terminal_bench_pilot"
+      ],
+      "prefix_only": true,
+      "upstream_source": "observation_events.jsonl"
+    },
+    {
+      "column_name": "obs_validation_after_oracle_read_so_far",
+      "dtype": "bool",
+      "group": "observation",
+      "populated_on": [
+        "tb_live_v2",
+        "terminal_bench_pilot"
+      ],
+      "prefix_only": true,
+      "upstream_source": "observation_events.jsonl"
+    },
+    {
+      "column_name": "elapsed_steps",
+      "dtype": "int",
+      "group": "time_budget",
+      "populated_on": [
+        "swe_agent_pilot",
+        "swe_agent_pilot_v3",
+        "swe_agent_live",
+        "swe_agent_live_wallclock",
+        "hermes_pilot",
+        "hermes_pilot_h5",
+        "hermes_pilot_h5_v2",
+        "tb_live",
+        "tb_live_v2",
+        "terminal_bench_pilot"
+      ],
+      "prefix_only": true,
+      "upstream_source": "build_estimator_checkpoints.py"
+    },
+    {
+      "column_name": "elapsed_wall_time",
+      "dtype": "float",
+      "group": "time_budget",
+      "populated_on": [
+        "tb_live",
+        "tb_live_v2",
+        "terminal_bench_pilot",
+        "swe_agent_live_wallclock"
+      ],
+      "prefix_only": true,
+      "upstream_source": "build_estimator_checkpoints.py"
+    },
+    {
+      "column_name": "fraction_timeout_consumed",
+      "dtype": "float",
+      "group": "time_budget",
+      "populated_on": [
+        "tb_live"
+      ],
+      "prefix_only": true,
+      "upstream_source": "build_estimator_checkpoints.py"
+    },
+    {
+      "column_name": "remaining_timeout_budget",
+      "dtype": "float",
+      "group": "time_budget",
+      "populated_on": [
+        "tb_live"
+      ],
+      "prefix_only": true,
+      "upstream_source": "build_estimator_checkpoints.py"
+    },
+    {
+      "column_name": "completion_rate_recent_steps",
+      "dtype": "float",
+      "group": "time_budget",
+      "populated_on": [
+        "swe_agent_pilot",
+        "swe_agent_pilot_v3",
+        "swe_agent_live",
+        "swe_agent_live_wallclock",
+        "hermes_pilot",
+        "hermes_pilot_h5",
+        "hermes_pilot_h5_v2",
+        "tb_live",
+        "tb_live_v2",
+        "terminal_bench_pilot"
+      ],
+      "prefix_only": true,
+      "upstream_source": null
+    },
+    {
+      "column_name": "source",
+      "dtype": "str",
+      "group": "source_task",
+      "populated_on": [
+        "swe_agent_pilot",
+        "swe_agent_pilot_v3",
+        "swe_agent_live",
+        "swe_agent_live_wallclock",
+        "hermes_pilot",
+        "hermes_pilot_h5",
+        "hermes_pilot_h5_v2",
+        "tb_live",
+        "tb_live_v2",
+        "terminal_bench_pilot"
+      ],
+      "prefix_only": true,
+      "upstream_source": "build_estimator_checkpoints.py"
+    },
+    {
+      "column_name": "agent_scaffold",
+      "dtype": "str",
+      "group": "source_task",
+      "populated_on": [
+        "swe_agent_pilot",
+        "swe_agent_pilot_v3",
+        "swe_agent_live",
+        "swe_agent_live_wallclock",
+        "hermes_pilot",
+        "hermes_pilot_h5",
+        "hermes_pilot_h5_v2",
+        "tb_live",
+        "tb_live_v2",
+        "terminal_bench_pilot"
+      ],
+      "prefix_only": true,
+      "upstream_source": "build_estimator_checkpoints.py"
+    },
+    {
+      "column_name": "model_name",
+      "dtype": "str",
+      "group": "source_task",
+      "populated_on": [
+        "swe_agent_pilot",
+        "swe_agent_pilot_v3",
+        "swe_agent_live",
+        "swe_agent_live_wallclock",
+        "hermes_pilot",
+        "hermes_pilot_h5",
+        "hermes_pilot_h5_v2",
+        "tb_live",
+        "tb_live_v2",
+        "terminal_bench_pilot"
+      ],
+      "prefix_only": true,
+      "upstream_source": "build_estimator_checkpoints.py"
+    },
+    {
+      "column_name": "task_family_hash",
+      "dtype": "str",
+      "group": "source_task",
+      "populated_on": [
+        "swe_agent_pilot",
+        "swe_agent_pilot_v3",
+        "swe_agent_live",
+        "swe_agent_live_wallclock",
+        "hermes_pilot",
+        "hermes_pilot_h5",
+        "hermes_pilot_h5_v2",
+        "tb_live",
+        "tb_live_v2",
+        "terminal_bench_pilot"
+      ],
+      "prefix_only": true,
+      "upstream_source": "build_estimator_checkpoints.py"
+    },
+    {
+      "column_name": "repo_family_hash",
+      "dtype": "str",
+      "group": "source_task",
+      "populated_on": [
+        "swe_agent_pilot",
+        "swe_agent_pilot_v3",
+        "swe_agent_live",
+        "swe_agent_live_wallclock",
+        "hermes_pilot",
+        "hermes_pilot_h5",
+        "hermes_pilot_h5_v2",
+        "tb_live",
+        "tb_live_v2",
+        "terminal_bench_pilot"
+      ],
+      "prefix_only": true,
+      "upstream_source": "build_estimator_checkpoints.py"
+    },
+    {
+      "column_name": "initial_prompt_length",
+      "dtype": "int",
+      "group": "source_task",
+      "populated_on": [
+        "swe_agent_pilot",
+        "swe_agent_pilot_v3",
+        "swe_agent_live",
+        "swe_agent_live_wallclock",
+        "hermes_pilot",
+        "hermes_pilot_h5",
+        "hermes_pilot_h5_v2",
+        "tb_live",
+        "tb_live_v2",
+        "terminal_bench_pilot"
+      ],
+      "prefix_only": true,
+      "upstream_source": "build_estimator_checkpoints.py"
+    },
+    {
+      "column_name": "initial_files_count",
+      "dtype": "int",
+      "group": "source_task",
+      "populated_on": [
+        "swe_agent_pilot",
+        "swe_agent_pilot_v3",
+        "swe_agent_live",
+        "swe_agent_live_wallclock",
+        "hermes_pilot",
+        "hermes_pilot_h5",
+        "hermes_pilot_h5_v2",
+        "tb_live",
+        "tb_live_v2",
+        "terminal_bench_pilot"
+      ],
+      "prefix_only": true,
+      "upstream_source": "build_estimator_checkpoints.py"
+    }
+  ],
+  "generator": "coding_estimator.scripts.build_collection_artifacts",
+  "label_rows": 672,
+  "source": "terminal_bench_pilot"
+}

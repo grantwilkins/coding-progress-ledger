@@ -21,7 +21,7 @@ LabelFieldPath = Literal[
 @dataclass(frozen=True)
 class Source:
     source_id: str
-    runs_dir: str  # relative to ledger_root
+    runs_dir: str  # relative to the source's storage root
     timestamp_quality: TimestampQuality
     label_field_path: LabelFieldPath
     schema_version: str
@@ -129,6 +129,34 @@ SOURCES: dict[str, Source] = {
             "12 first-party live runs; verifier_pass is the canonical success signal",
             "summary_by_category.final_success is null on every run; do NOT use it",
         ),
+    ),
+    "tb_live_v2": Source(
+        source_id="tb_live_v2",
+        runs_dir="runs/tb_live_v2",
+        timestamp_quality="real",
+        label_field_path="run_manifest.final_success",
+        schema_version="0.1.0",
+        canonical_for_v0=False,
+        is_retrospective=False,
+        known_caveats=(
+            "102 first-party live runs managed in-repo under coding-estimator/runs/tb_live_v2",
+            "final_success is recorded in run_manifest.json from the internal pytest verifier",
+            "seed copy currently includes solution.sh, so success rate is optimistic until the driver excludes it",
+        ),
+    ),
+    "terminal_bench_pilot": Source(
+        source_id="terminal_bench_pilot",
+        runs_dir="runs/terminal_bench_pilot",
+        timestamp_quality="real",
+        label_field_path="run_manifest.final_success",
+        schema_version="0.1.0",
+        canonical_for_v0=False,
+        is_retrospective=False,
+        known_caveats=(
+            "first-party Terminal-Bench collection staged by coding-data-collection",
+            "final_success is recorded in run_manifest.json from the hidden verifier phase",
+        ),
+        protocol_doc="../coding-data-collection/docs",
     ),
 }
 

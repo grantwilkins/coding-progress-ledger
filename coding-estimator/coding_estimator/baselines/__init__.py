@@ -7,6 +7,7 @@ from coding_estimator.baselines.base import (
 )
 from coding_estimator.baselines.constant import CONSTANT
 from coding_estimator.baselines.ledger_basic import LEDGER_BASIC
+from coding_estimator.baselines.observation_basic import OBSERVATION_BASIC
 from coding_estimator.baselines.time_only import TIME_ONLY
 
 V0_BASELINES: tuple[BaselineSpec, ...] = (CONSTANT, TIME_ONLY, LEDGER_BASIC)
@@ -18,5 +19,6 @@ __all__ = [
     "CONSTANT",
     "TIME_ONLY",
     "LEDGER_BASIC",
+    "OBSERVATION_BASIC",
     "V0_BASELINES",
 ]

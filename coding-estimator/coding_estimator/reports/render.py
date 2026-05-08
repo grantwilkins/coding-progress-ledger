@@ -8,7 +8,7 @@ output into the dicts the template expects.
 from __future__ import annotations
 
 from dataclasses import asdict
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 import pandas as pd
@@ -124,7 +124,7 @@ def render_eval_report(
     return tpl.render(
         title=title,
         summary=summary,
-        generated_at=datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        generated_at=datetime.now(UTC).isoformat(timespec="seconds"),
         headline_cells=[_eval_row(c) for c in headline_cells],
         scheme_groups=scheme_groups,
         slice_groups=slice_groups,

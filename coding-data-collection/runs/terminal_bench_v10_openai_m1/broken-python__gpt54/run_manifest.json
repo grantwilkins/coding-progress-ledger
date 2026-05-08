@@ -1,0 +1,31 @@
+{
+  "analysis_inclusion": {
+    "artifact_quality": true,
+    "process_dynamics": false,
+    "terminal_success": false
+  },
+  "artifact_layout_version": "0.1.0",
+  "created_at": "2026-05-07T03:58:17.941576Z",
+  "final_success": null,
+  "metrics": {
+    "agent_backend": "model_tool_loop",
+    "eligible_for_L_gate": false,
+    "fallback_call_count": 0,
+    "last_provider_call": null,
+    "model_name": "gpt-5.4",
+    "model_provider": "openai",
+    "pilot_type": "real_agent_pilot",
+    "provider_calls": [],
+    "provider_route_preflight_issues": [
+      "provider adapter exited 1",
+      "OpenAI HTTP 500: {\n  \"error\": {\n    \"message\": \"An error occurred while processing your request. You can retry your request, or contact us through our help center at help.openai.com if the error persists. Please include the request ID req_0c1c13d195034f49bf0e77fbdbb6e008 in your message.\",\n    \"type\": \"server_error\",\n    \"param\": null,\n    \"code\": \"server_error\"\n  }\n}\n",
+      "provider route did not record L-eligible metadata with nonzero usage and no fallback"
+    ],
+    "provider_route_preflight_passed": false,
+    "resolved_models": []
+  },
+  "run_id": "broken-python__gpt54",
+  "run_protocol_version": "0.1.0",
+  "run_status": "environment_setup_failure",
+  "termination_reason": "provider_route_preflight_failed"
+}

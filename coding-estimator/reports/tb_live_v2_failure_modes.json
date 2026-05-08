@@ -1,0 +1,41 @@
+{
+  "O1": {
+    "detail": {
+      "high_progress_threshold": 0.8,
+      "n_failed_runs": 21,
+      "n_rows": 68
+    },
+    "metric_name": "median_p_success_on_high_progress_failures",
+    "metric_value": 0.8058317310581045,
+    "note": null,
+    "outcome": "fail",
+    "test_id": "O1",
+    "threshold": 0.7
+  },
+  "O5": {
+    "detail": {},
+    "metric_name": "loso_brier_delta_with_source_task",
+    "metric_value": null,
+    "note": "LOSO target source `tb_live_v2` not present",
+    "outcome": "indeterminate",
+    "test_id": "O5",
+    "threshold": 0.02
+  },
+  "O7": [
+    {
+      "detail": {
+        "brier_g2": 0.18952276448086244,
+        "brier_g4": 0.16984129040618468,
+        "n_checkpoints": 703,
+        "source": "tb_live_v2",
+        "target": "y_success_eventual"
+      },
+      "metric_name": "brier_g2_minus_brier_g4",
+      "metric_value": 0.01968147407467777,
+      "note": null,
+      "outcome": "fail",
+      "test_id": "O7",
+      "threshold": 0.02
+    }
+  ]
+}

@@ -48,6 +48,12 @@ class LabelRow:
     checkpoint_id: str
     checkpoint_step: int
     is_terminal_checkpoint: bool
+    task_id: str | None
+    task_family: str | None
+    arm: str | None
+    difficulty: str | None
+    agent_scaffold: str | None
+    model_name: str | None
     target_name: str
     target_family: str
     target_horizon_units: str
@@ -100,6 +106,12 @@ def _terminal_row(
         checkpoint_id=checkpoint_id,
         checkpoint_step=checkpoint_step,
         is_terminal_checkpoint=is_terminal,
+        task_id=run.task_id,
+        task_family=run.task_family,
+        arm=run.arm,
+        difficulty=run.difficulty,
+        agent_scaffold=run.agent_scaffold,
+        model_name=run.model_name,
         target_name=target_name,
         target_family=target_family,
         target_horizon_units="terminal",
@@ -129,6 +141,12 @@ def _dynamics_row(
         checkpoint_id=checkpoint_id,
         checkpoint_step=checkpoint_step,
         is_terminal_checkpoint=is_terminal,
+        task_id=run.task_id,
+        task_family=run.task_family,
+        arm=run.arm,
+        difficulty=run.difficulty,
+        agent_scaffold=run.agent_scaffold,
+        model_name=run.model_name,
         target_name=target_name,
         target_family=target_family,
         target_horizon_units="steps",
@@ -274,10 +292,23 @@ def write_source_labels(source_id: str, out_dir: Path) -> tuple[Path, SourceLabe
     return path, stats
 
 
-def write_combined_labels(out_dir: Path) -> tuple[Path, pd.DataFrame]:
+def _source_ids_or_canonical(source_ids: Iterable[str] | None) -> list[str]:
+    if source_ids is None:
+        return [s.source_id for s in canonical_sources()]
+    ordered = list(dict.fromkeys(source_ids))
+    missing = [sid for sid in ordered if sid not in SOURCES]
+    if missing:
+        raise KeyError(f"unknown source(s): {missing}")
+    return ordered
+
+
+def write_combined_labels(
+    out_dir: Path,
+    source_ids: Iterable[str] | None = None,
+) -> tuple[Path, pd.DataFrame]:
     frames: list[pd.DataFrame] = []
-    for s in canonical_sources():
-        df, stats = build_source_labels(s.source_id)
+    for source_id in _source_ids_or_canonical(source_ids):
+        df, stats = build_source_labels(source_id)
         stats.warn_if_empty()
         frames.append(df)
     df = pd.concat(frames, ignore_index=True) if frames else pd.DataFrame()

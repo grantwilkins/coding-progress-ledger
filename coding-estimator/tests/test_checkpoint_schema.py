@@ -16,6 +16,7 @@ def _schema() -> dict:
 
 
 def _row(source: str, **overrides: object) -> dict:
+    has_live_wallclock = source in {"tb_live", "tb_live_v2"}
     base: dict = {
         "run_id": "run-1",
         "source": source,
@@ -23,9 +24,9 @@ def _row(source: str, **overrides: object) -> dict:
         "checkpoint_step": 5,
         "checkpoint_event_index": 12,
         "is_terminal_checkpoint": False,
-        "timestamp_quality": "real" if source == "tb_live" else "missing",
-        "checkpoint_wall_time": "2026-05-04T10:00:00Z" if source == "tb_live" else None,
-        "checkpoint_elapsed_seconds": 42.0 if source == "tb_live" else None,
+        "timestamp_quality": "real" if has_live_wallclock else "missing",
+        "checkpoint_wall_time": "2026-05-04T10:00:00Z" if has_live_wallclock else None,
+        "checkpoint_elapsed_seconds": 42.0 if has_live_wallclock else None,
         "checkpoint_fraction_timeout": 0.05 if source == "tb_live" else None,
         "ledger_path": f"runs/{source}/run-1/ledger.jsonl",
         "schema_version": "0.1.0",
@@ -47,6 +48,7 @@ def _row(source: str, **overrides: object) -> dict:
         "hermes_pilot_h5",
         "hermes_pilot_h5_v2",
         "tb_live",
+        "tb_live_v2",
     ],
 )
 def test_row_validates(source: str) -> None:

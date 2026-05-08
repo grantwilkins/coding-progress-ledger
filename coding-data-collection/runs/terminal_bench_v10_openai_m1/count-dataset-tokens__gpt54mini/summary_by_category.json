@@ -1,0 +1,409 @@
+{
+  "active_coding_leaves_final": 162,
+  "active_overall_leaves_final": 162,
+  "category_active_weight_final": {
+    "artifact": 0,
+    "documentation": 0,
+    "environment": 0,
+    "investigation": 52.0,
+    "product": 0,
+    "validation": 110.0
+  },
+  "category_completed_weight_final": {
+    "artifact": 0,
+    "documentation": 0,
+    "environment": 0,
+    "investigation": 39.0,
+    "product": 0,
+    "validation": 0
+  },
+  "coding_categories": [
+    "product",
+    "validation",
+    "investigation"
+  ],
+  "coding_largest_drop": 0.16666666666666669,
+  "coding_nonmonotonic": true,
+  "completed_coding_leaves_final": 39,
+  "completed_overall_leaves_final": 39,
+  "evidence_audit_by_category": {
+    "investigation": {
+      "audited_completion_count": 40,
+      "status": "weak",
+      "weak_completion_evidence_count": 13,
+      "weak_subtask_ids": [
+        "investigation_4",
+        "investigation_6",
+        "investigation_8",
+        "investigation_10",
+        "investigation_12",
+        "investigation_14",
+        "investigation_16",
+        "investigation_18",
+        "investigation_20",
+        "investigation_22",
+        "investigation_30",
+        "investigation_34",
+        "investigation_161"
+      ]
+    },
+    "product": {
+      "audited_completion_count": 0,
+      "status": "not_applicable",
+      "weak_completion_evidence_count": 0,
+      "weak_subtask_ids": []
+    },
+    "validation": {
+      "audited_completion_count": 0,
+      "status": "not_applicable",
+      "weak_completion_evidence_count": 0,
+      "weak_subtask_ids": []
+    }
+  },
+  "evidence_audit_status": "weak",
+  "evidence_audit_weak_categories": [
+    "investigation"
+  ],
+  "excluded_active_weight_final": 0,
+  "excluded_categories": [
+    "artifact",
+    "documentation",
+    "environment"
+  ],
+  "excluded_categories_final": {
+    "artifact": {
+      "active": 0,
+      "complete": 0
+    },
+    "documentation": {
+      "active": 0,
+      "complete": 0
+    },
+    "environment": {
+      "active": 0,
+      "complete": 0
+    }
+  },
+  "excluded_completed_weight_final": 0,
+  "final_coding_active_weight": 162.0,
+  "final_coding_complete_weight": 39.0,
+  "final_coding_progress": 0.24074074074074073,
+  "final_overall_active_weight": 162.0,
+  "final_overall_complete_weight": 39.0,
+  "final_overall_progress": 0.24074074074074073,
+  "final_success": null,
+  "final_success_source": "absent",
+  "generator": "ledger_progress.sidecar",
+  "historical_subtasks_created": 162,
+  "largest_coding_drop": 0.16666666666666669,
+  "largest_coding_drop_category_contributions": {
+    "investigation": 0.166666666667
+  },
+  "largest_coding_drop_detail": {
+    "amount": 0.16666666666666669,
+    "from_step": 2,
+    "to_step": 3
+  },
+  "largest_coding_drop_source": "investigation",
+  "largest_overall_drop": 0.16666666666666669,
+  "largest_overall_drop_category_contributions": {
+    "investigation": 0.166666666667
+  },
+  "largest_overall_drop_detail": {
+    "amount": 0.16666666666666669,
+    "from_step": 2,
+    "to_step": 3
+  },
+  "largest_overall_drop_mostly_excluded": false,
+  "largest_overall_drop_source": "investigation",
+  "nonmonotonic_coding": true,
+  "nonmonotonic_overall": true,
+  "overall_largest_drop": 0.16666666666666669,
+  "overall_nonmonotonic": true,
+  "source_ledger_sha256": "820f2708a6ea33a67f0d8b08c365b84d12381aeb29d30c0b9e88b7dc1d21e9f1",
+  "subtask_categories": {
+    "investigation_1": "investigation",
+    "investigation_10": "investigation",
+    "investigation_102": "investigation",
+    "investigation_112": "investigation",
+    "investigation_116": "investigation",
+    "investigation_12": "investigation",
+    "investigation_120": "investigation",
+    "investigation_126": "investigation",
+    "investigation_130": "investigation",
+    "investigation_132": "investigation",
+    "investigation_138": "investigation",
+    "investigation_14": "investigation",
+    "investigation_142": "investigation",
+    "investigation_148": "investigation",
+    "investigation_15": "investigation",
+    "investigation_158": "investigation",
+    "investigation_16": "investigation",
+    "investigation_161": "investigation",
+    "investigation_17": "investigation",
+    "investigation_18": "investigation",
+    "investigation_19": "investigation",
+    "investigation_2": "investigation",
+    "investigation_20": "investigation",
+    "investigation_21": "investigation",
+    "investigation_22": "investigation",
+    "investigation_23": "investigation",
+    "investigation_24": "investigation",
+    "investigation_25": "investigation",
+    "investigation_26": "investigation",
+    "investigation_27": "investigation",
+    "investigation_28": "investigation",
+    "investigation_3": "investigation",
+    "investigation_30": "investigation",
+    "investigation_31": "investigation",
+    "investigation_34": "investigation",
+    "investigation_4": "investigation",
+    "investigation_40": "investigation",
+    "investigation_48": "investigation",
+    "investigation_5": "investigation",
+    "investigation_52": "investigation",
+    "investigation_58": "investigation",
+    "investigation_6": "investigation",
+    "investigation_62": "investigation",
+    "investigation_64": "investigation",
+    "investigation_68": "investigation",
+    "investigation_72": "investigation",
+    "investigation_8": "investigation",
+    "investigation_80": "investigation",
+    "investigation_84": "investigation",
+    "investigation_88": "investigation",
+    "investigation_9": "investigation",
+    "investigation_96": "investigation",
+    "terminal_verifier": "validation",
+    "validation_100": "validation",
+    "validation_101": "validation",
+    "validation_103": "validation",
+    "validation_104": "validation",
+    "validation_105": "validation",
+    "validation_106": "validation",
+    "validation_107": "validation",
+    "validation_108": "validation",
+    "validation_109": "validation",
+    "validation_11": "validation",
+    "validation_110": "validation",
+    "validation_111": "validation",
+    "validation_113": "validation",
+    "validation_114": "validation",
+    "validation_115": "validation",
+    "validation_117": "validation",
+    "validation_118": "validation",
+    "validation_119": "validation",
+    "validation_121": "validation",
+    "validation_122": "validation",
+    "validation_123": "validation",
+    "validation_124": "validation",
+    "validation_125": "validation",
+    "validation_127": "validation",
+    "validation_128": "validation",
+    "validation_129": "validation",
+    "validation_13": "validation",
+    "validation_131": "validation",
+    "validation_133": "validation",
+    "validation_134": "validation",
+    "validation_135": "validation",
+    "validation_136": "validation",
+    "validation_137": "validation",
+    "validation_139": "validation",
+    "validation_140": "validation",
+    "validation_141": "validation",
+    "validation_143": "validation",
+    "validation_144": "validation",
+    "validation_145": "validation",
+    "validation_146": "validation",
+    "validation_147": "validation",
+    "validation_149": "validation",
+    "validation_150": "validation",
+    "validation_151": "validation",
+    "validation_152": "validation",
+    "validation_153": "validation",
+    "validation_154": "validation",
+    "validation_155": "validation",
+    "validation_156": "validation",
+    "validation_157": "validation",
+    "validation_159": "validation",
+    "validation_160": "validation",
+    "validation_29": "validation",
+    "validation_32": "validation",
+    "validation_33": "validation",
+    "validation_35": "validation",
+    "validation_36": "validation",
+    "validation_37": "validation",
+    "validation_38": "validation",
+    "validation_39": "validation",
+    "validation_41": "validation",
+    "validation_42": "validation",
+    "validation_43": "validation",
+    "validation_44": "validation",
+    "validation_45": "validation",
+    "validation_46": "validation",
+    "validation_47": "validation",
+    "validation_49": "validation",
+    "validation_50": "validation",
+    "validation_51": "validation",
+    "validation_53": "validation",
+    "validation_54": "validation",
+    "validation_55": "validation",
+    "validation_56": "validation",
+    "validation_57": "validation",
+    "validation_59": "validation",
+    "validation_60": "validation",
+    "validation_61": "validation",
+    "validation_63": "validation",
+    "validation_65": "validation",
+    "validation_66": "validation",
+    "validation_67": "validation",
+    "validation_69": "validation",
+    "validation_7": "validation",
+    "validation_70": "validation",
+    "validation_71": "validation",
+    "validation_73": "validation",
+    "validation_74": "validation",
+    "validation_75": "validation",
+    "validation_76": "validation",
+    "validation_77": "validation",
+    "validation_78": "validation",
+    "validation_79": "validation",
+    "validation_81": "validation",
+    "validation_82": "validation",
+    "validation_83": "validation",
+    "validation_85": "validation",
+    "validation_86": "validation",
+    "validation_87": "validation",
+    "validation_89": "validation",
+    "validation_90": "validation",
+    "validation_91": "validation",
+    "validation_92": "validation",
+    "validation_93": "validation",
+    "validation_94": "validation",
+    "validation_95": "validation",
+    "validation_97": "validation",
+    "validation_98": "validation",
+    "validation_99": "validation"
+  },
+  "task_id": "count-dataset-tokens__gpt54mini",
+  "weak_completion_evidence": [
+    {
+      "category": "investigation",
+      "description": "list_dir .",
+      "evidence_types": [
+        "contract_text"
+      ],
+      "step": 4,
+      "subtask_id": "investigation_4"
+    },
+    {
+      "category": "investigation",
+      "description": "shell tool",
+      "evidence_types": [
+        "manual_note"
+      ],
+      "step": 6,
+      "subtask_id": "investigation_6"
+    },
+    {
+      "category": "investigation",
+      "description": "shell tool",
+      "evidence_types": [
+        "contract_text"
+      ],
+      "step": 8,
+      "subtask_id": "investigation_8"
+    },
+    {
+      "category": "investigation",
+      "description": "find_files *",
+      "evidence_types": [
+        "contract_text"
+      ],
+      "step": 10,
+      "subtask_id": "investigation_10"
+    },
+    {
+      "category": "investigation",
+      "description": "shell tool",
+      "evidence_types": [
+        "manual_note"
+      ],
+      "step": 12,
+      "subtask_id": "investigation_12"
+    },
+    {
+      "category": "investigation",
+      "description": "shell tool",
+      "evidence_types": [
+        "manual_note"
+      ],
+      "step": 14,
+      "subtask_id": "investigation_14"
+    },
+    {
+      "category": "investigation",
+      "description": "shell tool",
+      "evidence_types": [
+        "manual_note"
+      ],
+      "step": 16,
+      "subtask_id": "investigation_16"
+    },
+    {
+      "category": "investigation",
+      "description": "shell tool",
+      "evidence_types": [
+        "manual_note"
+      ],
+      "step": 18,
+      "subtask_id": "investigation_18"
+    },
+    {
+      "category": "investigation",
+      "description": "shell tool",
+      "evidence_types": [
+        "manual_note"
+      ],
+      "step": 20,
+      "subtask_id": "investigation_20"
+    },
+    {
+      "category": "investigation",
+      "description": "shell tool",
+      "evidence_types": [
+        "manual_note"
+      ],
+      "step": 22,
+      "subtask_id": "investigation_22"
+    },
+    {
+      "category": "investigation",
+      "description": "shell tool",
+      "evidence_types": [
+        "manual_note"
+      ],
+      "step": 30,
+      "subtask_id": "investigation_30"
+    },
+    {
+      "category": "investigation",
+      "description": "shell tool",
+      "evidence_types": [
+        "manual_note"
+      ],
+      "step": 34,
+      "subtask_id": "investigation_34"
+    },
+    {
+      "category": "investigation",
+      "description": "agent budget exhausted",
+      "evidence_types": [
+        "manual_note"
+      ],
+      "step": 161,
+      "subtask_id": "investigation_161"
+    }
+  ],
+  "weak_completion_evidence_count": 13
+}

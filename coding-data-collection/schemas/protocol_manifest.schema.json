@@ -1,0 +1,33 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://houdini.local/coding-data-collection/protocol_manifest.schema.json",
+  "title": "coding-data-collection protocol_manifest.json",
+  "type": "object",
+  "additionalProperties": true,
+  "required": [
+    "run_protocol_version",
+    "artifact_layout_version",
+    "observation_event_schema_version",
+    "ledger_wire_schema_version",
+    "checkpoint_schema_version",
+    "label_schema_version",
+    "estimator_feature_schema_version",
+    "benchmark_adapter_version",
+    "coding_progress_ledger_sha",
+    "coding_estimator_sha",
+    "coding_data_collection_sha"
+  ],
+  "properties": {
+    "run_protocol_version": { "const": "0.1.0" },
+    "artifact_layout_version": { "const": "0.1.0" },
+    "observation_event_schema_version": { "const": "0.2.0" },
+    "ledger_wire_schema_version": { "const": "1.0.0" },
+    "checkpoint_schema_version": { "const": "0.1.0" },
+    "label_schema_version": { "const": "0.1.0" },
+    "estimator_feature_schema_version": { "const": "0.1.0" },
+    "benchmark_adapter_version": { "const": "0.1.0" },
+    "coding_progress_ledger_sha": { "type": "string", "minLength": 1 },
+    "coding_estimator_sha": { "type": "string", "minLength": 1 },
+    "coding_data_collection_sha": { "type": "string", "minLength": 1 }
+  }
+}

@@ -1,0 +1,126 @@
+{
+  "deterministic": true,
+  "expected_signature": {
+    "collected": null,
+    "error_tests": [],
+    "errors": 0,
+    "exit_code": 127,
+    "failed": 0,
+    "failed_tests": [],
+    "passed": 0,
+    "warnings": 0
+  },
+  "mismatches": [],
+  "observed_signatures": [
+    {
+      "collected": null,
+      "error_tests": [],
+      "errors": 0,
+      "exit_code": 127,
+      "failed": 0,
+      "failed_tests": [],
+      "passed": 0,
+      "warnings": 0
+    },
+    {
+      "collected": null,
+      "error_tests": [],
+      "errors": 0,
+      "exit_code": 127,
+      "failed": 0,
+      "failed_tests": [],
+      "passed": 0,
+      "warnings": 0
+    }
+  ],
+  "rerun_root": "runs/terminal_bench_pilot/classifier-debug__scout/verifier_reruns",
+  "run_dir": "runs/terminal_bench_pilot/classifier-debug__scout",
+  "run_id": "classifier-debug__scout",
+  "source_workspace": "runs/terminal_bench_pilot/classifier-debug__scout/agent_workspace",
+  "task_dir": "/private/tmp/houdini_tb_hf/classifier-debug",
+  "trial_records": [
+    {
+      "command_argv": [
+        "docker",
+        "run",
+        "--rm",
+        "--name",
+        "cdc-classifier-debug--scout-verifier-rerun-1",
+        "--cpus",
+        "1",
+        "--memory",
+        "2048m",
+        "--network",
+        "none",
+        "-v",
+        "/Users/grantwilkins/houdini/coding-data-collection/runs/terminal_bench_pilot/classifier-debug__scout/verifier_reruns/trial_1/workspace:/app:rw",
+        "-v",
+        "/private/tmp/houdini_tb_hf/classifier-debug:/task:ro",
+        "-e",
+        "TEST_DIR=/task/tests",
+        "-w",
+        "/app",
+        "cdc-tb-classifier-debug__scout",
+        "bash",
+        "-lc",
+        "bash /task/run-tests.sh"
+      ],
+      "exit_code": 127,
+      "signature": {
+        "collected": null,
+        "error_tests": [],
+        "errors": 0,
+        "exit_code": 127,
+        "failed": 0,
+        "failed_tests": [],
+        "passed": 0,
+        "warnings": 0
+      },
+      "stderr_tail": "W: Failed to fetch http://ports.ubuntu.com/ubuntu-ports/dists/noble/InRelease  Temporary failure resolving 'ports.ubuntu.com'\nW: Failed to fetch http://ports.ubuntu.com/ubuntu-ports/dists/noble-updates/InRelease  Temporary failure resolving 'ports.ubuntu.com'\nW: Failed to fetch http://ports.ubuntu.com/ubuntu-ports/dists/noble-backports/InRelease  Temporary failure resolving 'ports.ubuntu.com'\nW: Failed to fetch http://ports.ubuntu.com/ubuntu-ports/dists/noble-security/InRelease  Temporary failure resolving 'ports.ubuntu.com'\nW: Some index files failed to download. They have been ignored, or old ones used instead.\nE: Unable to locate package curl\n/task/run-tests.sh: line 13: curl: command not found\n/task/run-tests.sh: line 15: /root/.local/bin/env: No such file or directory\n/task/run-tests.sh: line 23: uv: command not found\n/task/run-tests.sh: line 24: uv: command not found\n/task/run-tests.sh: line 29: uv: command not found\n",
+      "stdout_tail": "Ign:1 http://ports.ubuntu.com/ubuntu-ports noble InRelease\nIgn:2 http://ports.ubuntu.com/ubuntu-ports noble-updates InRelease\nIgn:3 http://ports.ubuntu.com/ubuntu-ports noble-backports InRelease\nIgn:4 http://ports.ubuntu.com/ubuntu-ports noble-security InRelease\nIgn:1 http://ports.ubuntu.com/ubuntu-ports noble InRelease\nIgn:2 http://ports.ubuntu.com/ubuntu-ports noble-updates InRelease\nIgn:3 http://ports.ubuntu.com/ubuntu-ports noble-backports InRelease\nIgn:4 http://ports.ubuntu.com/ubuntu-ports noble-security InRelease\nIgn:1 http://ports.ubuntu.com/ubuntu-ports noble InRelease\nIgn:2 http://ports.ubuntu.com/ubuntu-ports noble-updates InRelease\nIgn:3 http://ports.ubuntu.com/ubuntu-ports noble-backports InRelease\nIgn:4 http://ports.ubuntu.com/ubuntu-ports noble-security InRelease\nErr:1 http://ports.ubuntu.com/ubuntu-ports noble InRelease\n  Temporary failure resolving 'ports.ubuntu.com'\nErr:2 http://ports.ubuntu.com/ubuntu-ports noble-updates InRelease\n  Temporary failure resolving 'ports.ubuntu.com'\nErr:3 http://ports.ubuntu.com/ubuntu-ports noble-backports InRelease\n  Temporary failure resolving 'ports.ubuntu.com'\nErr:4 http://ports.ubuntu.com/ubuntu-ports noble-security InRelease\n  Temporary failure resolving 'ports.ubuntu.com'\nReading package lists...\nReading package lists...\nBuilding dependency tree...\nReading state information...\n",
+      "trial": 1
+    },
+    {
+      "command_argv": [
+        "docker",
+        "run",
+        "--rm",
+        "--name",
+        "cdc-classifier-debug--scout-verifier-rerun-2",
+        "--cpus",
+        "1",
+        "--memory",
+        "2048m",
+        "--network",
+        "none",
+        "-v",
+        "/Users/grantwilkins/houdini/coding-data-collection/runs/terminal_bench_pilot/classifier-debug__scout/verifier_reruns/trial_2/workspace:/app:rw",
+        "-v",
+        "/private/tmp/houdini_tb_hf/classifier-debug:/task:ro",
+        "-e",
+        "TEST_DIR=/task/tests",
+        "-w",
+        "/app",
+        "cdc-tb-classifier-debug__scout",
+        "bash",
+        "-lc",
+        "bash /task/run-tests.sh"
+      ],
+      "exit_code": 127,
+      "signature": {
+        "collected": null,
+        "error_tests": [],
+        "errors": 0,
+        "exit_code": 127,
+        "failed": 0,
+        "failed_tests": [],
+        "passed": 0,
+        "warnings": 0
+      },
+      "stderr_tail": "W: Failed to fetch http://ports.ubuntu.com/ubuntu-ports/dists/noble/InRelease  Temporary failure resolving 'ports.ubuntu.com'\nW: Failed to fetch http://ports.ubuntu.com/ubuntu-ports/dists/noble-updates/InRelease  Temporary failure resolving 'ports.ubuntu.com'\nW: Failed to fetch http://ports.ubuntu.com/ubuntu-ports/dists/noble-backports/InRelease  Temporary failure resolving 'ports.ubuntu.com'\nW: Failed to fetch http://ports.ubuntu.com/ubuntu-ports/dists/noble-security/InRelease  Temporary failure resolving 'ports.ubuntu.com'\nW: Some index files failed to download. They have been ignored, or old ones used instead.\nE: Unable to locate package curl\n/task/run-tests.sh: line 13: curl: command not found\n/task/run-tests.sh: line 15: /root/.local/bin/env: No such file or directory\n/task/run-tests.sh: line 23: uv: command not found\n/task/run-tests.sh: line 24: uv: command not found\n/task/run-tests.sh: line 29: uv: command not found\n",
+      "stdout_tail": "Ign:1 http://ports.ubuntu.com/ubuntu-ports noble InRelease\nIgn:2 http://ports.ubuntu.com/ubuntu-ports noble-updates InRelease\nIgn:3 http://ports.ubuntu.com/ubuntu-ports noble-backports InRelease\nIgn:4 http://ports.ubuntu.com/ubuntu-ports noble-security InRelease\nIgn:1 http://ports.ubuntu.com/ubuntu-ports noble InRelease\nIgn:2 http://ports.ubuntu.com/ubuntu-ports noble-updates InRelease\nIgn:3 http://ports.ubuntu.com/ubuntu-ports noble-backports InRelease\nIgn:4 http://ports.ubuntu.com/ubuntu-ports noble-security InRelease\nIgn:1 http://ports.ubuntu.com/ubuntu-ports noble InRelease\nIgn:2 http://ports.ubuntu.com/ubuntu-ports noble-updates InRelease\nIgn:3 http://ports.ubuntu.com/ubuntu-ports noble-backports InRelease\nIgn:4 http://ports.ubuntu.com/ubuntu-ports noble-security InRelease\nErr:1 http://ports.ubuntu.com/ubuntu-ports noble InRelease\n  Temporary failure resolving 'ports.ubuntu.com'\nErr:2 http://ports.ubuntu.com/ubuntu-ports noble-updates InRelease\n  Temporary failure resolving 'ports.ubuntu.com'\nErr:3 http://ports.ubuntu.com/ubuntu-ports noble-backports InRelease\n  Temporary failure resolving 'ports.ubuntu.com'\nErr:4 http://ports.ubuntu.com/ubuntu-ports noble-security InRelease\n  Temporary failure resolving 'ports.ubuntu.com'\nReading package lists...\nReading package lists...\nBuilding dependency tree...\nReading state information...\n",
+      "trial": 2
+    }
+  ],
+  "trials": 2
+}

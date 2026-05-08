@@ -86,7 +86,12 @@ def test_tb_live_only_features_isolated() -> None:
 
 def test_wallclock_features_isolated() -> None:
     f = feature_by_name("elapsed_wall_time")
-    assert f.populated_on == ("tb_live", "swe_agent_live_wallclock")
+    assert f.populated_on == (
+        "tb_live",
+        "tb_live_v2",
+        "terminal_bench_pilot",
+        "swe_agent_live_wallclock",
+    )
 
 
 def test_lookup_unknown_raises() -> None:

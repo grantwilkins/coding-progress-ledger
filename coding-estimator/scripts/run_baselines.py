@@ -154,10 +154,9 @@ def _per_source_within(
         if ck_src.empty or wide_src.empty:
             continue
         family_map = task_family_map(source)
-        # `compute_budget` for ltfo groups by `task_family`; without that
-        # column on `wide_src` the budget call would always declare ltfo
-        # infeasible. Attach the family map (run -> family) so the per-fold
-        # min/max counts are evaluated against the right groups.
+        # `compute_budget` for ltfo groups by a column named
+        # `task_family`; for tb_live_v2 the attached values are exact
+        # task_ids so same-task cross-arm replications stay in one fold.
         wide_for_budget = wide_src.assign(task_family=wide_src["run_id"].map(family_map))
         budget = {
             (c.target, c.split_scheme): c
@@ -232,16 +231,28 @@ def _loso_to_tb_live(
     sources = sorted(checkpoints_df["source"].unique())
     if LOSO_TEST_SOURCE not in sources or len(sources) < 2:
         return [], []
-    test_runs = tuple(sorted(
-        checkpoints_df.loc[checkpoints_df["source"] == LOSO_TEST_SOURCE, "run_id"].unique()
-    ))
-    train_runs = tuple(sorted(
-        checkpoints_df.loc[checkpoints_df["source"] != LOSO_TEST_SOURCE, "run_id"].unique()
-    ))
+    test_runs = tuple(
+        sorted(
+            checkpoints_df.loc[
+                checkpoints_df["source"] == LOSO_TEST_SOURCE, "run_id"
+            ].unique()
+        )
+    )
+    train_runs = tuple(
+        sorted(
+            checkpoints_df.loc[
+                checkpoints_df["source"] != LOSO_TEST_SOURCE, "run_id"
+            ].unique()
+        )
+    )
     train_sources = tuple(sorted(s for s in sources if s != LOSO_TEST_SOURCE))
     if not test_runs or not train_runs:
         return [], []
-    fold = Fold(fold_id=f"loso::{LOSO_TEST_SOURCE}", train_run_ids=train_runs, test_run_ids=test_runs)
+    fold = Fold(
+        fold_id=f"loso::{LOSO_TEST_SOURCE}",
+        train_run_ids=train_runs,
+        test_run_ids=test_runs,
+    )
     split = Split(scheme="loso", seed=0, folds=(fold,))
     cells: list[EvalCell] = []
     slices: list[SliceCell] = []

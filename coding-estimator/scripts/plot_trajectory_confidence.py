@@ -147,10 +147,7 @@ def plot(
         y_steps = run_rows["checkpoint_step"].to_numpy()
         y_vals = run_rows["_y"].to_numpy()
         run_constant = bool(np.all(y_vals == y_vals[0]))
-        if cross_source:
-            train_pool = train_j  # train pool excludes test source entirely
-        else:
-            train_pool = j[j["run_id"] != run_id]
+        train_pool = train_j if cross_source else j[j["run_id"] != run_id]
         for spec, color, label in specs:
             steps, P = _bootstrap_predictions(
                 train_pool, run_rows, spec, sources_in_train, b, seed,

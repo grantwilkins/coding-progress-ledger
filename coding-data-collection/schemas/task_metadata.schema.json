@@ -1,0 +1,31 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://houdini.local/coding-data-collection/task_metadata.schema.json",
+  "title": "coding-data-collection task_metadata.json",
+  "type": "object",
+  "additionalProperties": true,
+  "required": [
+    "run_protocol_version",
+    "artifact_layout_version",
+    "benchmark_adapter_version",
+    "task_dir",
+    "hidden_names",
+    "skipped_paths"
+  ],
+  "properties": {
+    "run_protocol_version": { "const": "0.1.0" },
+    "artifact_layout_version": { "const": "0.1.0" },
+    "benchmark_adapter_version": { "const": "0.1.0" },
+    "task_id": { "type": "string" },
+    "task_dir": { "type": "string" },
+    "source": { "type": "string" },
+    "hidden_names": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "skipped_paths": {
+      "type": "array",
+      "items": { "type": "string" }
+    }
+  }
+}

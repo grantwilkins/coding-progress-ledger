@@ -1,0 +1,52 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://houdini.local/coding-data-collection/run_manifest.schema.json",
+  "title": "coding-data-collection run_manifest.json",
+  "type": "object",
+  "additionalProperties": true,
+  "required": [
+    "run_protocol_version",
+    "artifact_layout_version",
+    "run_id",
+    "run_status",
+    "final_success",
+    "termination_reason",
+    "analysis_inclusion",
+    "created_at",
+    "metrics"
+  ],
+  "properties": {
+    "run_protocol_version": { "const": "0.1.0" },
+    "artifact_layout_version": { "const": "0.1.0" },
+    "run_id": { "type": "string", "minLength": 1 },
+    "run_status": {
+      "enum": [
+        "completed_success",
+        "completed_failure",
+        "agent_timeout",
+        "agent_crash",
+        "verifier_timeout",
+        "verifier_crash",
+        "docker_build_failure",
+        "environment_setup_failure",
+        "artifact_incomplete",
+        "infrastructure_failure",
+        "quarantined_leakage"
+      ]
+    },
+    "final_success": { "type": ["boolean", "null"] },
+    "termination_reason": { "type": "string", "minLength": 1 },
+    "analysis_inclusion": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["terminal_success", "process_dynamics", "artifact_quality"],
+      "properties": {
+        "terminal_success": { "type": "boolean" },
+        "process_dynamics": { "type": "boolean" },
+        "artifact_quality": { "type": "boolean" }
+      }
+    },
+    "created_at": { "type": "string", "minLength": 1 },
+    "metrics": { "type": "object" }
+  }
+}

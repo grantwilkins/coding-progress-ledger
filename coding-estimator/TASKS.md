@@ -4,7 +4,7 @@ This file is the working backlog for `coding-estimator`, the **belief-state laye
 
 The goal is **not** to redefine progress, replace the ledger, or build a controller. It is to answer one question, on live ledger histories, with calibration:
 
-> Given the prefix-only ledger history `H_t` of a long-horizon coding task at checkpoint `t`, output calibrated probabilities over (a) eventual success, (b) success-by-horizon, (c) remaining time conditional on success, and (d) near-future progress-dynamics events (drops, reopens, validation surprises, stuck loops, scope discovery).
+> Given the prefix-only ledger history `H_t` of a long-horizon coding task at checkpoint `t`, output calibrated probabilities over (a) eventual success, (b) success-by-horizon, (c) remaining time conditional on success, and (d) near-future progress-dynamics events.
 
 ---
 
@@ -16,24 +16,40 @@ v0 has established a measurement boundary.
 Positive result:
   Prefix-only ledger features predict near-future process dynamics.
   In particular, they predict progress drops within a short horizon
-  substantially better than elapsed time.
+  substantially better than elapsed time under exact-task holdout.
 
 Negative result:
   Prefix-only ledger features do not yet improve terminal success
-  prediction over elapsed time at the current sample size.
+  prediction over elapsed time on the current live substrate.
 
 Interpretation:
-  The observation channel measures work-frontier dynamics before it
-  becomes a reliable completion-risk estimator.
+  The current positive result is valid but bounded. On tb_live_v2,
+  LEDGER_BASIC is mostly predicting near-future denominator expansion in
+  the discovered-work frontier:
+    new subtask added -> denominator grows -> progress may drop
+    subtask completed -> numerator catches up -> progress rises
+  This validates the ledger as a work-frontier sensor, but it is not yet
+  a rich completion-risk estimator.
+
+Diagnosis:
+  The bottleneck is instrumentation, not model class. tb_live_v2's live
+  sidecar compresses a richer transcript into an extremely thin ledger
+  vocabulary, so the current estimator sees visible closure and frontier
+  geometry but not semantic correctness, validation structure, repeated
+  errors, blocked states, path mistakes, or verifier disagreement.
 
 Consequence:
-  The next phase is not model polish, online inference, semantic features,
-  or scheduling. The next phase is targeted data work:
-    1. collect a much larger, outcome-diverse live Terminal-Bench corpus
-       (tb_live_v2: 100+ verified runs, deliberately mixed outcomes);
-    2. use Hermes HF retrospectively for *process-dynamics* scaling only
-       (not for terminal-success gates — Hermes ships no verifier);
-    3. rerun the estimator only after those data foundations exist.
+  The next phase is not more same-schema tb_live_v2 evaluation, more
+  live collection under the same sidecar, or more model complexity. The
+  next phase is an observation-channel upgrade:
+    1. audit observation loss on the frozen tb_live_v2 corpus;
+    2. design tb_live_v3 observation schema;
+    3. emit observation_events.jsonl without changing ledger scoring or
+       progress semantics;
+    4. define OBSERVATION_BASIC;
+    5. rerun exact-task holdout with TIME_ONLY, LEDGER_BASIC, and
+       OBSERVATION_BASIC;
+    6. only then revisit terminal success, recovery, and richer labels.
 ```
 
 `not_safe_for_control = true` remains stamped on the v0 estimator. The v0 verdict is `indeterminate` because of data gaps, not leakage or code defects. Full evidence: `reports/V0_FINDINGS.md`, `reports/REVIEWER_BRIEFING.md`, `reports/ESTIMATOR_GO_NO_GO.md`, `reports/NOT_READY_FOR_SCHEDULING.md`.
@@ -44,27 +60,30 @@ Consequence:
 Primary v0 target family (process dynamics):
   near-future process dynamics:
     - y_future_progress_drop_h5
-    - y_validation_new_work_h5
+    - y_validation_new_work_h5  # deferred on tb_live_v2: no observed
+                                # validation transitions in the emitted ledger
     - later, if base rates permit:
       y_stuck_loop_h5, y_product_reopen_h5, y_blocked_within_h5
 
 Secondary / negative-control target:
-  y_success_eventual
+  y_success_eventual  # secondary / negative on tb_live_v2; do not expect
+                      # material improvement without observation features
 
 Audit / negative-control target:
   y_submit_without_validation
 ```
 
-The v0 headline is process-dynamics prediction. Terminal success is a secondary, currently negative target — re-tested only when the data can answer the question (Workstream X).
+The v0 headline is process-dynamics prediction. On tb_live_v2, the strongest supported target is `y_future_progress_drop_h5`. Terminal success is secondary and currently negative because the live ledger captures visible closure, not correctness.
 
 ### What the next phase is NOT
 
 ```text
 - Building a scheduler, controller, monitor, or online inference surface.
-- Adding semantic / text features (Workstream Q remains deferred).
+- Adding embeddings, LLM judges, or sequence models before the
+  observation channel is upgraded.
 - Loosening the +0.02 O7 threshold to get a pass.
 - Promoting a tb_live result obtained on the all-success cohort.
-- More modeling complexity before the data foundation lands.
+- More modeling complexity before the observation layer lands.
 ```
 
 ---
@@ -156,14 +175,16 @@ Status: done (2026-05-04)
 
 Outputs (shipped):
 ```text
-TASKS.md top banner — already states the four points (no edit needed).
+TASKS.md top banner — revised on 2026-05-05 to reflect the
+  instrumentation-limited diagnosis.
 README.md — rewritten with the v0-boundary paragraph and cross-links.
 reports/V0_FINDINGS.md — cross-linked from README.
 reports/NOT_READY_FOR_SCHEDULING.md — cross-linked from README.
 ```
 
 Acceptance: met. README now states the four points in one paragraph
-(positive, negative, not_safe_for_control, next phase = Hermes + tb_live_v2).
+(positive, negative, not_safe_for_control, next phase = observation
+upgrade rather than model complexity).
 
 ### S2. Make process dynamics the primary v0 target
 Status: done (2026-05-04)
@@ -537,7 +558,29 @@ Every task has a category and expected difficulty.
 ```
 
 ### U4. Run tb_live_v2 in batches
-Status: Batches 0 + 1A + 1B + 2 shipped (2026-05-05) — 20 task scaffolds × 3 arms = 60 runs. 51 pass / 9 fail / 0 unresolved (**15% failure rate; well below 0.25–0.60 sampling band**). Per-arm: A=20/20, B=16/20, C=15/20. Per-shape: lps 12/12, sb 12/12, hpf 10/12, pd 9/12, vnw 8/12. **Batch 2 used hidden traps and still hit 100% pass — the substrate (single-file Python tasks with deterministic verifiers) does not generate failures from current Claude lineup.** Reports: `reports/TB_LIVE_V2_BATCH0_PILOT.md`, `BATCH1A.md`, `BATCH1B.md`, `BATCH2.md`. Recommended next move: stop expanding tasks; rebuild checkpoints/labels on n=60 corpus and run process-dynamics evaluation. Further failures require switching substrate.
+Status: done (2026-05-05) — final corpus frozen at **102 runs** across **25 unique internal task scaffolds** and **3 arms**. Final outcome: **81 pass / 21 fail / 0 unresolved**. Per-arm: A=33/34, B=24/34, C=24/34. Final report: `reports/TB_LIVE_V2_FINAL_N102.md`.
+
+What the collection established:
+```text
+- The 100+ live-corpus target is met.
+- The minimum-failure requirement is met (21 fails), but the intended
+  25–60% failure band is NOT met.
+- Failures are concentrated in the weaker arms and a small subset of
+  exact tasks.
+- Current single-file internal Python scaffolds are near ceiling for the
+  strongest arm; adding more of the same substrate is low leverage.
+```
+
+Decision:
+```text
+Close collection on the current substrate.
+Do NOT spend more time extending the internal single-file task list.
+If more live failures are needed later, switch substrate:
+  - translated TB2 tasks,
+  - multi-file refactors,
+  - unfamiliar libraries,
+  - cross-cutting constraints.
+```
 
 Batch plan:
 ```text
@@ -548,22 +591,37 @@ Batch 3: 30 more tasks. Fill missing categories/failure modes.
 Final target: 100+ runs.
 ```
 
-Per-run required artifacts:
+Per-run observed artifacts on the frozen corpus:
 ```text
+runs/tb_live_v2/<run_id>/events.jsonl
+runs/tb_live_v2/<run_id>/final_diff.patch
 runs/tb_live_v2/<run_id>/ledger.jsonl
+runs/tb_live_v2/<run_id>/prompt.txt
 runs/tb_live_v2/<run_id>/progress.csv
 runs/tb_live_v2/<run_id>/progress_by_category.csv
 runs/tb_live_v2/<run_id>/summary_by_category.json
-runs/tb_live_v2/<run_id>/live_instrumentation.json
+runs/tb_live_v2/<run_id>/task.md
+runs/tb_live_v2/<run_id>/test_output.txt
+runs/tb_live_v2/<run_id>/transcript.jsonl
 runs/tb_live_v2/<run_id>/run_manifest.json
-runs/tb_live_v2/<run_id>/terminal_output.log
 runs/tb_live_v2/<run_id>/verifier_output.txt
 runs/tb_live_v2/<run_id>/run_notes.md
+runs/tb_live_v2/<run_id>/workspace_path.txt
+```
+
+Current schema note:
+```text
+tb_live_v2 does NOT emit live_instrumentation.json or terminal_output.log.
+The current live stack is:
+  transcript.jsonl -> events.jsonl -> ledger.jsonl/progress.csv/summary_by_category.json
+                                       +
+                                       run_manifest.json/verifier_output.txt
+test_output.txt exists on disk but is not the canonical final-success signal.
 ```
 
 Required metadata:
 ```text
-task_id, task_family, difficulty, agent_scaffold, model_name,
+task_id, task_family, arm, difficulty, agent_scaffold, model_name,
 start_time, end_time, timeout_seconds, final_success,
 final_success_source, termination_reason, num_ledger_events,
 has_real_wallclock = true
@@ -577,9 +635,40 @@ After each batch:
   - profile shape labels;
   - decide whether to continue, resample harder tasks, or stop.
 ```
+Acceptance: met. The stop decision is now "stop on this substrate; use
+the frozen corpus for evaluation."
 
-### U5. Build tb_live_v2 estimator artifacts
-Status: blocked on U4
+### U5. Prepare tb_live_v2 training artifacts and split semantics
+Status: done (2026-05-05)
+
+Shipped:
+```text
+- checkpoints / labels / manifest builds accept explicit source_ids so
+  tb_live_v2 can be prepared as a standalone training corpus;
+- run metadata now propagates through artifacts:
+  task_id, task_family, arm, difficulty, agent_scaffold, model_name;
+- tb_live_v2 LTFO grouping uses exact task_id rather than coarse shape,
+  so same-task multi-arm replications stay in one fold.
+```
+
+Why this matters:
+```text
+The multi-arm corpus cannot be evaluated honestly if the model trains on
+task X / arm A and tests on task X / arm B while claiming
+"leave-task-family-out" generalization. Exact-task grouping is the
+lowest-intrusion fix for that shortcut.
+```
+
+Acceptance:
+```text
+tb_live_v2 checkpoints, labels, and manifests preserve the exact
+task/model metadata needed for training analysis.
+Within-source generalization on tb_live_v2 can now be reported under an
+exact-task holdout instead of a coarse shape holdout.
+```
+
+### U6. Run tb_live_v2 estimator evaluation under exact-task holdout
+Status: done (2026-05-05)
 
 Commands:
 ```bash
@@ -604,11 +693,18 @@ reports/tb_live_v2_failure_modes.md
 
 Acceptance:
 ```text
-tb_live_v2 supports:
-  - process dynamics evaluation;
-  - terminal success evaluation;
-  - calibration slices by phase;
-  - failure-mode slices.
+Headline within-source result on tb_live_v2 uses exact-task holdout
+(same task withheld across all arms), not coarse shape holdout.
+
+The report separates:
+  - exact-task-holdout process-dynamics performance (headline);
+  - easier overlap-heavy splits (auxiliary only);
+  - terminal-success results as secondary and explicitly caveated by
+    arm concentration / ceiling effects / `solution.sh` optimism.
+
+No headline baseline is allowed to use source-task identifiers
+(`task_id`, `arm`, `model_name`, etc.) unless it is marked as a
+diagnostic sensitivity probe rather than the main estimator.
 ```
 
 ---
@@ -647,7 +743,7 @@ Report states:
 ```
 
 ### V2. Repeat human baseline on tb_live_v2
-Status: blocked on U4
+Status: not started
 
 Acceptance:
 ```text
@@ -662,7 +758,7 @@ Human baseline includes process-dynamics positives and negatives.
 This is the main evaluation package for the current observation channel.
 
 ### W1. Build trajectory case studies
-Status: not started
+Status: done (2026-05-05)
 
 Choose examples:
 ```text
@@ -695,9 +791,11 @@ Acceptance:
 At least 4 case studies exist.
 Each case uses prefix-only predictions.
 ```
+Acceptance: met. `reports/process_dynamics_case_studies.md` shipped with
+the current exact-task OOF examples.
 
 ### W2. Write process-dynamics summary
-Status: not started
+Status: done (2026-05-05)
 
 Outputs: `reports/PROCESS_DYNAMICS_RESULT.md`.
 
@@ -716,36 +814,48 @@ Acceptance:
 ```text
 A reader can understand the positive result without reading code.
 ```
+Acceptance: met. `reports/PROCESS_DYNAMICS_RESULT.md` states the exact
+claim, headline metrics, validation-new-work deferral, and the bounded
+interpretation of the current result.
 
 ---
 
 ## § Workstream X — Completion-risk re-test
 
-Do not keep rerunning terminal success on the same data and calling it progress.
+Do not keep rerunning terminal success on the same sparse ledger and calling it progress.
 
 ### X1. Define retest prerequisites
-Status: not started
+Status: done (2026-05-05) — numerical prereq met via tb_live_v2, but
+scientific unblock has NOT happened yet
 
 Retest terminal success only if at least one is true:
 ```text
-Hermes labels are annotated and combined retrospective pool has:
-  >= 45 labeled runs
-  >= 15 failures
+OBSERVATION_BASIC exists and exact-task evaluation can compare:
+  TIME_ONLY
+  LEDGER_BASIC
+  OBSERVATION_BASIC
 
-OR
+AND
 
-tb_live_v2 has:
-  >= 60 live runs
-  >= 15 failures
+the observation layer exposes at least some of:
+  validation attempts / outcomes
+  error observations / repeats
+  agent done claims
+  path-target mismatches
+  verifier disagreement proxies
 ```
 
 Acceptance:
 ```text
-TASKS.md says terminal-success retest is blocked until prerequisites hold.
+TASKS.md says terminal-success retest is blocked on observation richness,
+not just more rows from the same sparse sidecar.
 ```
+Acceptance: met. `tb_live_v2` currently has enough rows to show that the
+numerical gate alone is insufficient. The missing piece is observation
+signal, not sample count by itself.
 
 ### X2. Re-run O7 after prerequisites
-Status: blocked on X1
+Status: done (2026-05-05) — exact-task `tb_live_v2` completion-risk retest shipped in `reports/OBSERVATION_UPGRADE_EVAL.md`
 
 Compare:
 ```text
@@ -773,8 +883,16 @@ low-progress success slice
 
 Acceptance:
 ```text
-Completion-risk result is updated only when the dataset is large and
-diverse enough.
+Completion-risk result is updated only when the estimator sees the
+observation structure that distinguishes high-progress success from
+high-progress verifier failure.
+
+The terminal-success table must also include:
+  - exact-task-holdout results on tb_live_v2;
+  - per-arm descriptive outcome breakdown;
+  - the TIME_ONLY vs LEDGER_BASIC vs OBSERVATION_BASIC comparison;
+  - an explicit note that `model_name` / `arm` are NOT part of the
+    headline estimator unless the row is marked diagnostic-only.
 ```
 
 ---
@@ -796,10 +914,14 @@ Status: active guardrail
 
 ```text
 Do not add transcript embeddings, command text embeddings, LLM judges,
-or sequence models until:
-  - Hermes labels or tb_live_v2 lands;
-  - process-dynamics result is written;
-  - completion-risk retest prerequisites are defined.
+or sequence models until after the observation-channel upgrade is
+implemented and OBSERVATION_BASIC has been evaluated.
+
+Allowed now:
+  - structured transcript-derived observation events
+  - structured verifier-derived observation events
+  - observation features built from those structured events
+These are measurement-layer upgrades, not semantic-feature creep.
 ```
 
 ### Y3. Keep controller deferred
@@ -812,6 +934,168 @@ model-effort policy in this repo. This repo outputs belief estimates only.
 
 ---
 
+## § Workstream Z — Observation-channel upgrade
+
+This is the next phase. The current positive result is real, but it is a
+sparse frontier-sensor result produced by a lossy sidecar. The work now
+is to preserve more of the live observation channel without mutating
+ledger semantics.
+
+### Z1. Audit tb_live_v2 observation loss
+Status: done (2026-05-05)
+
+Goal: Quantify what the current `transcript.jsonl` and
+`verifier_output.txt` know that the emitted ledger discards.
+
+Outputs:
+```text
+scripts/audit_tb_live_v2_observation_loss.py
+reports/TB_LIVE_V2_OBSERVATION_LOSS.md
+```
+
+Required audit tables:
+```text
+- transcript shell commands that look like tests
+- shell commands with nonzero exit codes
+- commands containing pytest / python / curl / test / verifier-like checks
+- read_file events for solution.sh
+- done claims before verifier failure
+- write_file/edit_file paths not matching expected verifier paths
+- verifier failures by type
+- runs where ledger final progress = 1.0 but verifier failed
+```
+
+Acceptance:
+```text
+The report answers:
+  - what tb_live_v2 currently throws away;
+  - whether transcript-derived observation features appear likely to
+    improve terminal-success or recovery prediction;
+  - which missing signals require new live emission rather than backfill.
+```
+
+### Z2. Specify tb_live_v3 observation schema
+Status: done (2026-05-05)
+
+Goal: Preserve validation, error, self-claim, path-mismatch, and
+verifier-disagreement structure from the live trace without changing the
+append-only ledger or upstream progress scoring.
+
+Outputs:
+```text
+docs/TB_LIVE_V3_OBSERVATION_SCHEMA.md
+reports/TB_LIVE_V3_INSTRUMENTATION_PLAN.md
+```
+
+Required schema addition:
+```text
+New per-run file:
+  observation_events.jsonl
+```
+
+Acceptance:
+```text
+The schema document defines observation_events.jsonl as separate from
+ledger.jsonl and specifies event fields, source attribution, and the
+relationship to transcript.jsonl, verifier_output.txt, run_manifest.json,
+final_diff.patch, and task.md.
+```
+
+### Z3. Implement observation-event emission
+Status: done (2026-05-05)
+
+Output:
+```text
+coding_estimator/runner/observation_events.py
+```
+
+Required event types to support in the plan:
+```text
+validation_attempt
+validation_pass_observed
+validation_fail_observed
+error_observed
+error_repeated
+environment_blocked
+product_file_written
+expected_file_missing
+agent_claims_done
+verifier_pass
+verifier_fail
+verifier_disagreement
+solution_oracle_read
+```
+
+Acceptance:
+```text
+The observation emitter preserves append-only ledger semantics and does
+not redefine progress. observation_events.jsonl is additive.
+```
+
+### Z4. Define OBSERVATION_BASIC
+Status: done (2026-05-05)
+
+Goal: Add the first non-lossy measurement layer on top of the current
+ledger without introducing model-class complexity.
+
+Definition target:
+```text
+OBSERVATION_BASIC = LEDGER_BASIC
+                  + validation features
+                  + error features
+                  + self-claim features
+                  + verifier-disagreement preterminal proxies
+                  + path/workspace features
+                  + oracle-read features
+```
+
+Acceptance:
+```text
+The feature family is documented as a structured observation extension,
+not a semantic-modeling step.
+```
+
+### Z5. Re-evaluate with observation features
+Status: done (2026-05-05)
+
+Compare:
+```text
+TIME_ONLY
+LEDGER_BASIC
+OBSERVATION_BASIC
+```
+
+Focus targets:
+```text
+- terminal success
+- high-progress failure detection
+- recovery after progress drop
+- future validation/error labels once supported
+```
+
+Acceptance:
+```text
+The evaluation makes it possible to answer whether the bottleneck was
+instrumentation. If OBSERVATION_BASIC helps, do not jump to a richer
+model yet.
+```
+
+### Z6. Gate new live collection
+Status: active guardrail
+
+```text
+Do not collect more live data under the current tb_live_v2 observation
+schema.
+
+No more same-logging live collection.
+tb_live_v3 collection starts only after:
+  - the observation-loss audit lands;
+  - the tb_live_v3 observation schema ships;
+  - observation_events.jsonl emission is implemented.
+```
+
+---
+
 ## § 1. Recommended execution order (v1 next phase)
 
 Strict dependencies:
@@ -820,43 +1104,47 @@ Strict dependencies:
 S1 → S2                         done — framing locked
 T1                              done — verdict deferred (Hermes is not an outcome source)
 T2, T3                          DEFERRED — see Workstream T banner
-U1 → U2 → U3 → U4 → U5         tb_live_v2 collection (now the critical path)
+U1 → U2 → U3 → U4 → U5         done — tb_live_v2 corpus + artifact semantics shipped
+U6                              done — tb_live_v2 exact-task evaluation shipped
+Z1 → Z2 → Z3 → Z4 → Z5         next-phase critical path
+Z6                              active guardrail — no more same-schema collection
 V1                              human baseline on existing prompts, can run anytime
-V2                              blocked on U4
-W1, W2                          process dynamics package, can run after S2
-X1 → X2                         completion-risk retest, blocked on U5
+V2                              now unblocked
+W1, W2                          done — process dynamics package shipped
+X1                              done — observation-rich retest gate defined
+X2                              completion-risk retest, after Z5
 Y1, Y2, Y3                      active guardrails, no work — review-time only
 ```
 
 Parallelism windows:
 ```text
-- V1, W1, W2 can run in parallel with U work.
-- U1–U2 (research + sampling policy) and U3 (internal task design) can run
-  in parallel once U1 has produced the task-space review.
-- X1 can be defined as soon as S2 is done; X2 is gated on U5.
+- V1 can run in parallel with Z1.
+- Z2 planning can begin once the first observation-loss tables exist.
+- X2 can reuse the rebuilt artifacts from Z5, but should stay secondary
+  to proving whether observation richness fixes the current weakness.
 ```
 
 ---
 
 ## § 2. Final instruction to the coding agent
 
-The next phase should not make the estimator more complex. It should make the data more decisive.
+The next phase should not make the estimator more complex. It should make the observation channel less lossy.
 
 If you are tempted to add a model, ask:
 
-> "Would this still matter if Hermes labels and tb_live_v2 landed tomorrow?"
+> "Would this still matter if observation_events.jsonl already existed?"
 
 If the answer is no, do not build it.
 
 The immediate priority is:
-1. design and collect tb_live_v2 with 100+ outcome-diverse, **verified** tasks (Workstream U);
-2. use Hermes HF as a process-dynamics scaling source only — not for terminal-success gates (Workstream T deferred);
-3. run the human baseline (Workstream V);
-4. package the process-dynamics result (Workstream W);
-5. re-test completion risk only after the data can actually answer it (Workstream X).
+1. audit observation loss on frozen tb_live_v2 (Workstream Z1);
+2. specify tb_live_v3 observation schema (Workstream Z2);
+3. implement observation-event emission without changing ledger scoring (Workstream Z3);
+4. define and evaluate OBSERVATION_BASIC before any new model class (Workstreams Z4, Z5);
+5. treat terminal success as a post-observation re-test rather than the current headline question (Workstream X).
 
 ---
 
 ## § 3. Mission-aligned summary
 
-> The estimator is a belief layer over live coding-progress ledgers. The ledger records the evolution of visible discovered work: what the agent has found, attempted, completed, reopened, invalidated, blocked on, and validated. The estimator does not redefine progress and does not decide actions. At each checkpoint, it consumes prefix-only ledger features and outputs calibrated probabilities over successful completion by future horizons, remaining time, and near-future progress dynamics. v0 has shown that prefix-only ledger features predict near-future process dynamics but do not yet improve terminal success prediction over elapsed time. The next phase resolves that limitation through targeted data work — Hermes annotation and an outcome-diverse Terminal-Bench live v2 corpus — not through additional modeling.
+> The estimator is a belief layer over live coding-progress ledgers. It does not redefine progress and it does not decide actions. On the current tb_live_v2 substrate, the live sidecar preserves only a sparse discovered-work frontier, so the estimator mainly sees visible closure and denominator expansion rather than correctness, validation structure, or verifier disagreement. v0 has shown that prefix-only ledger features predict near-future progress dynamics, especially future denominator-expansion events, but do not yet improve terminal success prediction over elapsed time. The next phase is therefore an observation-channel upgrade: preserve validation, error, self-claim, path, and verifier-disagreement structure around the ledger; define OBSERVATION_BASIC; then re-test completion risk before considering richer model classes.

@@ -1,0 +1,14 @@
+services:
+  client:
+    image: ${T_BENCH_TASK_DOCKER_CLIENT_IMAGE_NAME}
+    container_name: ${T_BENCH_TASK_DOCKER_NAME_PREFIX}-client
+    build:
+      context: .
+      dockerfile: Dockerfile
+    environment:
+      T_BENCH_CONTAINER_LOGS_PATH: ${T_BENCH_CONTAINER_LOGS_PATH}
+      T_BENCH_TASK_LOGS_PATH: ${T_BENCH_TASK_LOGS_PATH}
+      T_BENCH_TEST_DIR: ${T_BENCH_TEST_DIR}
+    working_dir: /app
+    tty: true
+    stdin_open: true

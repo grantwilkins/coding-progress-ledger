@@ -27,6 +27,7 @@ import pytest
 from coding_estimator.checkpoints.build import (
     build_run_rows,
     build_source_frame,
+    write_combined_checkpoints,
     write_source_checkpoints,
 )
 from coding_estimator.ingest.run_record import load_run
@@ -159,3 +160,64 @@ def test_cli_smoke(real_ledger: None, tmp_path: Path) -> None:
     df = pd.read_parquet(out)
     assert len(df) > 0
     assert df["source"].unique().tolist() == ["tb_live"]
+
+
+def test_write_combined_checkpoints_emits_all_sources(
+    real_ledger: None,
+    tmp_path: Path,
+) -> None:
+    path, df = write_combined_checkpoints(tmp_path / "checkpoints_all.parquet")
+    assert path.name == "checkpoints_all.parquet"
+    assert path.is_file()
+    assert set(df["source"].unique()) == {
+        "hermes_pilot_h5_v2",
+        "swe_agent_pilot",
+        "tb_live",
+    }
+
+
+def test_cli_smoke_all(real_ledger: None, tmp_path: Path) -> None:
+    from scripts.build_checkpoints import main
+
+    out = tmp_path / "checkpoints_all.parquet"
+    rc = main(["--source", "all", "--out", str(out)])
+    assert rc == 0
+    df = pd.read_parquet(out)
+    assert set(df["source"].unique()) == {
+        "hermes_pilot_h5_v2",
+        "swe_agent_pilot",
+        "tb_live",
+    }
+
+
+def test_write_combined_checkpoints_can_target_tb_live_v2_only(
+    real_ledger: None,
+    tmp_path: Path,
+) -> None:
+    path, df = write_combined_checkpoints(
+        tmp_path / "checkpoints_tb_live_v2.parquet",
+        source_ids=["tb_live_v2"],
+    )
+    assert path.is_file()
+    assert set(df["source"].unique()) == {"tb_live_v2"}
+    assert df["elapsed_wall_time"].notna().any()
+
+
+def test_tb_live_v2_checkpoint_rows_preserve_task_and_model_metadata(
+    real_ledger: None,
+    tmp_path: Path,
+) -> None:
+    _, df = write_combined_checkpoints(
+        tmp_path / "checkpoints_tb_live_v2.parquet",
+        source_ids=["tb_live_v2"],
+    )
+    sub = df[
+        df["run_id"] == "validation_new_work_05_quoted_field_in_tsv__armB__87f7ab5e"
+    ]
+    assert not sub.empty
+    assert set(sub["task_id"].unique()) == {"validation_new_work_05_quoted_field_in_tsv"}
+    assert set(sub["task_family"].unique()) == {"validation_new_work"}
+    assert set(sub["arm"].unique()) == {"B"}
+    assert set(sub["difficulty"].unique()) == {"medium"}
+    assert set(sub["model_name"].unique()) == {"claude-sonnet-4-6"}
+    assert set(sub["agent_scaffold"].unique()) == {"general-purpose"}

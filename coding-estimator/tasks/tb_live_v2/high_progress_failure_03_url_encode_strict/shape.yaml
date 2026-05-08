@@ -1,0 +1,23 @@
+target_shape: high_progress_failure
+secondary_shapes: []
+expected_pass_rate: 0.35
+notes: |
+  Forbidding `urllib.parse.quote` removes the obvious one-liner.
+  Hand-rolled impl needs to know:
+    1. RFC 3986 unreserved set: A-Z a-z 0-9 - . _ ~ (only).
+    2. Hex must be UPPERCASE (`%2F` not `%2f`).
+    3. Non-ASCII must be UTF-8 encoded BEFORE percent-encoding
+       (so `é` → bytes `c3 a9` → `%C3%A9`).
+    4. Space must be `%20`, not `+` (that's `quote_plus` semantics,
+       not `quote`).
+
+  Common mistakes the verifier catches:
+    - Using lowercase hex.
+    - Treating non-ASCII as a single character (encoding the
+      Unicode codepoint instead of UTF-8 bytes).
+    - Encoding space as `+`.
+    - Allowing additional "safe" characters like `/` or `:`.
+
+  Spec deliberately doesn't enumerate the unreserved set in detail
+  beyond "RFC 3986". Agents who don't look it up get one of these
+  edges wrong.

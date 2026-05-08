@@ -1,0 +1,100 @@
+{
+  "agent_execution": {
+    "finished_at": "2026-05-05T21:38:38.328482Z",
+    "started_at": "2026-05-05T21:38:37.875463Z"
+  },
+  "agent_info": {
+    "model_info": null,
+    "name": "oracle",
+    "version": "1.0.0"
+  },
+  "agent_result": {
+    "cost_usd": null,
+    "metadata": null,
+    "n_cache_tokens": null,
+    "n_input_tokens": null,
+    "n_output_tokens": null,
+    "rollout_details": null
+  },
+  "agent_setup": {
+    "finished_at": "2026-05-05T21:38:37.875297Z",
+    "started_at": "2026-05-05T21:38:37.875220Z"
+  },
+  "config": {
+    "agent": {
+      "env": {},
+      "import_path": null,
+      "kwargs": {},
+      "max_timeout_sec": null,
+      "model_name": null,
+      "name": "oracle",
+      "override_setup_timeout_sec": null,
+      "override_timeout_sec": null
+    },
+    "agent_setup_timeout_multiplier": null,
+    "agent_timeout_multiplier": null,
+    "artifacts": [],
+    "environment": {
+      "delete": true,
+      "env": {},
+      "force_build": false,
+      "import_path": null,
+      "kwargs": {},
+      "mounts_json": null,
+      "override_cpus": null,
+      "override_gpus": null,
+      "override_memory_mb": null,
+      "override_storage_mb": null,
+      "suppress_override_warnings": false,
+      "type": "docker"
+    },
+    "environment_build_timeout_multiplier": null,
+    "job_id": "972ec305-f4ff-43b4-8aed-1284f183b97f",
+    "task": {
+      "download_dir": null,
+      "git_commit_id": null,
+      "git_url": null,
+      "name": null,
+      "overwrite": false,
+      "path": "/private/tmp/houdini_harbor_migrated/aimo-airline-departures",
+      "ref": null,
+      "source": null
+    },
+    "timeout_multiplier": 1.0,
+    "trial_name": "aimo-airline-departures__J3ghvoq",
+    "trials_dir": "runs/feasibility/harbor_local_aimo/2026-05-05__14-37-58",
+    "verifier": {
+      "disable": false,
+      "env": {},
+      "max_timeout_sec": null,
+      "override_timeout_sec": null
+    },
+    "verifier_timeout_multiplier": null
+  },
+  "environment_setup": {
+    "finished_at": "2026-05-05T21:38:37.875002Z",
+    "started_at": "2026-05-05T21:38:03.476293Z"
+  },
+  "exception_info": null,
+  "finished_at": "2026-05-05T21:38:55.652009Z",
+  "id": "edcb569b-2020-43ab-99a2-35957e711ae4",
+  "source": null,
+  "started_at": "2026-05-05T21:38:03.430202Z",
+  "step_results": null,
+  "task_checksum": "3810a19886063000361ce6c6cacdfb095917bd81639e6f92d611b2b0d8d70e60",
+  "task_id": {
+    "path": "/private/tmp/houdini_harbor_migrated/aimo-airline-departures"
+  },
+  "task_name": "aimo-airline-departures",
+  "trial_name": "aimo-airline-departures__J3ghvoq",
+  "trial_uri": "file:///Users/grantwilkins/houdini/coding-data-collection/runs/feasibility/harbor_local_aimo/2026-05-05__14-37-58/aimo-airline-departures__J3ghvoq",
+  "verifier": {
+    "finished_at": "2026-05-05T21:38:44.934399Z",
+    "started_at": "2026-05-05T21:38:38.468913Z"
+  },
+  "verifier_result": {
+    "rewards": {
+      "reward": 1.0
+    }
+  }
+}

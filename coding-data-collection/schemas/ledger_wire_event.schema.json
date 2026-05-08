@@ -1,0 +1,92 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://houdini.local/coding-data-collection/ledger_wire_event.schema.json",
+  "title": "coding-data-collection events.jsonl ledger wire line",
+  "type": "object",
+  "additionalProperties": true,
+  "required": ["schema_version", "run_id", "step", "timestamp"],
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "pattern": "^1\\."
+    },
+    "run_id": { "type": "string", "minLength": 1 },
+    "step": { "type": "integer", "minimum": 0 },
+    "timestamp": { "type": "string", "minLength": 1 },
+    "agent_step": { "type": "object" },
+    "ledger_ops": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/ledger_op" }
+    }
+  },
+  "anyOf": [
+    { "required": ["agent_step"] },
+    { "required": ["ledger_ops"] }
+  ],
+  "$defs": {
+    "ledger_op": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["op", "id"],
+      "properties": {
+        "op": {
+          "enum": [
+            "add",
+            "start",
+            "complete",
+            "block",
+            "reopen",
+            "invalidate",
+            "split",
+            "add_evidence"
+          ]
+        },
+        "id": { "type": "string", "minLength": 1 },
+        "description": { "type": "string", "minLength": 1 },
+        "category": { "type": "string", "minLength": 1 },
+        "evidence": {
+          "oneOf": [
+            { "type": "string", "minLength": 1 },
+            {
+              "type": "array",
+              "items": { "type": "string", "minLength": 1 }
+            }
+          ]
+        },
+        "reason": { "type": "string", "minLength": 1 },
+        "children": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "required": ["id", "description"],
+            "properties": {
+              "id": { "type": "string", "minLength": 1 },
+              "description": { "type": "string", "minLength": 1 },
+              "category": { "type": "string" },
+              "weight": { "type": "number" }
+            }
+          }
+        }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "op": { "const": "add" } }, "required": ["op"] },
+          "then": { "required": ["description", "category"] }
+        },
+        {
+          "if": { "properties": { "op": { "const": "complete" } }, "required": ["op"] },
+          "then": { "required": ["evidence"] }
+        },
+        {
+          "if": { "properties": { "op": { "const": "block" } }, "required": ["op"] },
+          "then": { "required": ["reason"] }
+        },
+        {
+          "if": { "properties": { "op": { "const": "split" } }, "required": ["op"] },
+          "then": { "required": ["reason", "children"] }
+        }
+      ]
+    }
+  }
+}

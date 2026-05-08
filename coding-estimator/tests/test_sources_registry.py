@@ -23,15 +23,14 @@ def real_ledger(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv("LEDGER_ROOT", raising=False)
 
 
-def test_source_count_locked_at_eight() -> None:
+def test_source_count_locked_at_nine() -> None:
     # Adding or removing a source is a non-trivial decision; surface it.
-    assert len(SOURCES) == 8
+    assert len(SOURCES) == 9
 
 
-def test_every_source_resolves_under_ledger_root(real_ledger: None) -> None:
-    root = paths.ledger_root()
+def test_every_source_resolves_via_paths(real_ledger: None) -> None:
     for s in SOURCES.values():
-        full = root / s.runs_dir
+        full = paths.runs_root(s.source_id)
         assert full.is_dir(), f"runs_dir does not exist: {full}"
         run_ids = [p.name for p in full.iterdir() if p.is_dir()]
         assert len(run_ids) >= 1, f"no runs found under {full}"
@@ -41,7 +40,7 @@ def test_canonical_for_v0_has_one_per_family() -> None:
     canonical = canonical_sources()
     swe_canonical = [s for s in canonical if s.source_id.startswith("swe_agent")]
     hermes_canonical = [s for s in canonical if s.source_id.startswith("hermes")]
-    live_canonical = [s for s in canonical if s.source_id == "tb_live"]
+    live_canonical = [s for s in canonical if s.source_id.startswith("tb_live")]
     assert len(swe_canonical) == 1, [s.source_id for s in swe_canonical]
     assert len(hermes_canonical) == 1, [s.source_id for s in hermes_canonical]
     assert len(live_canonical) == 1
@@ -66,6 +65,13 @@ def test_tb_live_label_field_is_verifier_pass() -> None:
     assert s.timestamp_quality == "real"
 
 
+def test_tb_live_v2_label_field_is_run_manifest() -> None:
+    s = SOURCES["tb_live_v2"]
+    assert s.label_field_path == "run_manifest.final_success"
+    assert s.timestamp_quality == "real"
+    assert s.canonical_for_v0 is False
+
+
 def test_swe_agent_pilot_label_field_is_source_metadata() -> None:
     s = SOURCES["swe_agent_pilot"]
     assert s.label_field_path == "source_metadata.final_success"
@@ -81,3 +87,4 @@ def test_sources_md_contains_leakage_note() -> None:
     md = (Path(__file__).resolve().parents[1] / "docs" / "SOURCES.md").read_text()
     assert LEAKAGE_NOTE_FRAGMENT in md
     assert "tb_live" in md and "verifier_pass" in md
+    assert "tb_live_v2" in md and "run_manifest.final_success" in md

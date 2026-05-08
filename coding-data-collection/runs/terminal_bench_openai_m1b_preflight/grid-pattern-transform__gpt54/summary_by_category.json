@@ -1,0 +1,664 @@
+{
+  "active_coding_leaves_final": 163,
+  "active_overall_leaves_final": 163,
+  "category_active_weight_final": {
+    "artifact": 0,
+    "documentation": 0,
+    "environment": 0,
+    "investigation": 42.0,
+    "product": 2.0,
+    "validation": 119.0
+  },
+  "category_completed_weight_final": {
+    "artifact": 0,
+    "documentation": 0,
+    "environment": 0,
+    "investigation": 37.0,
+    "product": 2.0,
+    "validation": 1.0
+  },
+  "coding_categories": [
+    "product",
+    "validation",
+    "investigation"
+  ],
+  "coding_largest_drop": 0.16666666666666669,
+  "coding_nonmonotonic": true,
+  "completed_coding_leaves_final": 40,
+  "completed_overall_leaves_final": 40,
+  "evidence_audit_by_category": {
+    "investigation": {
+      "audited_completion_count": 37,
+      "status": "weak",
+      "weak_completion_evidence_count": 36,
+      "weak_subtask_ids": [
+        "investigation_4",
+        "investigation_6",
+        "investigation_13",
+        "investigation_17",
+        "investigation_21",
+        "investigation_25",
+        "investigation_29",
+        "investigation_33",
+        "investigation_39",
+        "investigation_43",
+        "investigation_47",
+        "investigation_51",
+        "investigation_55",
+        "investigation_59",
+        "investigation_63",
+        "investigation_67",
+        "investigation_73",
+        "investigation_77",
+        "investigation_83",
+        "investigation_89",
+        "investigation_93",
+        "investigation_97",
+        "investigation_103",
+        "investigation_107",
+        "investigation_111",
+        "investigation_115",
+        "investigation_119",
+        "investigation_125",
+        "investigation_131",
+        "investigation_135",
+        "investigation_139",
+        "investigation_145",
+        "investigation_151",
+        "investigation_155",
+        "investigation_159",
+        "investigation_162"
+      ]
+    },
+    "product": {
+      "audited_completion_count": 2,
+      "status": "weak",
+      "weak_completion_evidence_count": 1,
+      "weak_subtask_ids": [
+        "G163"
+      ]
+    },
+    "validation": {
+      "audited_completion_count": 1,
+      "status": "weak",
+      "weak_completion_evidence_count": 1,
+      "weak_subtask_ids": [
+        "validation_2"
+      ]
+    }
+  },
+  "evidence_audit_status": "weak",
+  "evidence_audit_weak_categories": [
+    "product",
+    "validation",
+    "investigation"
+  ],
+  "excluded_active_weight_final": 0,
+  "excluded_categories": [
+    "artifact",
+    "documentation",
+    "environment"
+  ],
+  "excluded_categories_final": {
+    "artifact": {
+      "active": 0,
+      "complete": 0
+    },
+    "documentation": {
+      "active": 0,
+      "complete": 0
+    },
+    "environment": {
+      "active": 0,
+      "complete": 0
+    }
+  },
+  "excluded_completed_weight_final": 0,
+  "final_coding_active_weight": 163.0,
+  "final_coding_complete_weight": 40.0,
+  "final_coding_progress": 0.24539877300613497,
+  "final_overall_active_weight": 163.0,
+  "final_overall_complete_weight": 40.0,
+  "final_overall_progress": 0.24539877300613497,
+  "final_success": null,
+  "final_success_source": "absent",
+  "generator": "ledger_progress.sidecar",
+  "historical_subtasks_created": 163,
+  "largest_coding_drop": 0.16666666666666669,
+  "largest_coding_drop_category_contributions": {
+    "validation": 0.166666666667
+  },
+  "largest_coding_drop_detail": {
+    "amount": 0.16666666666666669,
+    "from_step": 2,
+    "to_step": 3
+  },
+  "largest_coding_drop_source": "validation",
+  "largest_overall_drop": 0.16666666666666669,
+  "largest_overall_drop_category_contributions": {
+    "validation": 0.166666666667
+  },
+  "largest_overall_drop_detail": {
+    "amount": 0.16666666666666669,
+    "from_step": 2,
+    "to_step": 3
+  },
+  "largest_overall_drop_mostly_excluded": false,
+  "largest_overall_drop_source": "validation",
+  "nonmonotonic_coding": true,
+  "nonmonotonic_overall": true,
+  "overall_largest_drop": 0.16666666666666669,
+  "overall_nonmonotonic": true,
+  "source_ledger_sha256": "907e0c133154bcf15ea6e7892ebf3fd742d2c3713408c57f84e5b06900c3cc19",
+  "subtask_categories": {
+    "G163": "product",
+    "investigation_1": "investigation",
+    "investigation_10": "investigation",
+    "investigation_103": "investigation",
+    "investigation_107": "investigation",
+    "investigation_11": "investigation",
+    "investigation_111": "investigation",
+    "investigation_115": "investigation",
+    "investigation_119": "investigation",
+    "investigation_125": "investigation",
+    "investigation_13": "investigation",
+    "investigation_131": "investigation",
+    "investigation_135": "investigation",
+    "investigation_139": "investigation",
+    "investigation_145": "investigation",
+    "investigation_15": "investigation",
+    "investigation_151": "investigation",
+    "investigation_155": "investigation",
+    "investigation_159": "investigation",
+    "investigation_162": "investigation",
+    "investigation_17": "investigation",
+    "investigation_21": "investigation",
+    "investigation_25": "investigation",
+    "investigation_29": "investigation",
+    "investigation_33": "investigation",
+    "investigation_39": "investigation",
+    "investigation_4": "investigation",
+    "investigation_43": "investigation",
+    "investigation_47": "investigation",
+    "investigation_5": "investigation",
+    "investigation_51": "investigation",
+    "investigation_55": "investigation",
+    "investigation_59": "investigation",
+    "investigation_6": "investigation",
+    "investigation_63": "investigation",
+    "investigation_67": "investigation",
+    "investigation_7": "investigation",
+    "investigation_73": "investigation",
+    "investigation_77": "investigation",
+    "investigation_83": "investigation",
+    "investigation_89": "investigation",
+    "investigation_93": "investigation",
+    "investigation_97": "investigation",
+    "product_8": "product",
+    "validation_100": "validation",
+    "validation_101": "validation",
+    "validation_102": "validation",
+    "validation_104": "validation",
+    "validation_105": "validation",
+    "validation_106": "validation",
+    "validation_108": "validation",
+    "validation_109": "validation",
+    "validation_110": "validation",
+    "validation_112": "validation",
+    "validation_113": "validation",
+    "validation_114": "validation",
+    "validation_116": "validation",
+    "validation_117": "validation",
+    "validation_118": "validation",
+    "validation_12": "validation",
+    "validation_120": "validation",
+    "validation_121": "validation",
+    "validation_122": "validation",
+    "validation_123": "validation",
+    "validation_124": "validation",
+    "validation_126": "validation",
+    "validation_127": "validation",
+    "validation_128": "validation",
+    "validation_129": "validation",
+    "validation_130": "validation",
+    "validation_132": "validation",
+    "validation_133": "validation",
+    "validation_134": "validation",
+    "validation_136": "validation",
+    "validation_137": "validation",
+    "validation_138": "validation",
+    "validation_14": "validation",
+    "validation_140": "validation",
+    "validation_141": "validation",
+    "validation_142": "validation",
+    "validation_143": "validation",
+    "validation_144": "validation",
+    "validation_146": "validation",
+    "validation_147": "validation",
+    "validation_148": "validation",
+    "validation_149": "validation",
+    "validation_150": "validation",
+    "validation_152": "validation",
+    "validation_153": "validation",
+    "validation_154": "validation",
+    "validation_156": "validation",
+    "validation_157": "validation",
+    "validation_158": "validation",
+    "validation_16": "validation",
+    "validation_160": "validation",
+    "validation_161": "validation",
+    "validation_18": "validation",
+    "validation_19": "validation",
+    "validation_2": "validation",
+    "validation_20": "validation",
+    "validation_22": "validation",
+    "validation_23": "validation",
+    "validation_24": "validation",
+    "validation_26": "validation",
+    "validation_27": "validation",
+    "validation_28": "validation",
+    "validation_3": "validation",
+    "validation_30": "validation",
+    "validation_31": "validation",
+    "validation_32": "validation",
+    "validation_34": "validation",
+    "validation_35": "validation",
+    "validation_36": "validation",
+    "validation_37": "validation",
+    "validation_38": "validation",
+    "validation_40": "validation",
+    "validation_41": "validation",
+    "validation_42": "validation",
+    "validation_44": "validation",
+    "validation_45": "validation",
+    "validation_46": "validation",
+    "validation_48": "validation",
+    "validation_49": "validation",
+    "validation_50": "validation",
+    "validation_52": "validation",
+    "validation_53": "validation",
+    "validation_54": "validation",
+    "validation_56": "validation",
+    "validation_57": "validation",
+    "validation_58": "validation",
+    "validation_60": "validation",
+    "validation_61": "validation",
+    "validation_62": "validation",
+    "validation_64": "validation",
+    "validation_65": "validation",
+    "validation_66": "validation",
+    "validation_68": "validation",
+    "validation_69": "validation",
+    "validation_70": "validation",
+    "validation_71": "validation",
+    "validation_72": "validation",
+    "validation_74": "validation",
+    "validation_75": "validation",
+    "validation_76": "validation",
+    "validation_78": "validation",
+    "validation_79": "validation",
+    "validation_80": "validation",
+    "validation_81": "validation",
+    "validation_82": "validation",
+    "validation_84": "validation",
+    "validation_85": "validation",
+    "validation_86": "validation",
+    "validation_87": "validation",
+    "validation_88": "validation",
+    "validation_9": "validation",
+    "validation_90": "validation",
+    "validation_91": "validation",
+    "validation_92": "validation",
+    "validation_94": "validation",
+    "validation_95": "validation",
+    "validation_96": "validation",
+    "validation_98": "validation",
+    "validation_99": "validation"
+  },
+  "task_id": "grid-pattern-transform__gpt54",
+  "weak_completion_evidence": [
+    {
+      "category": "validation",
+      "description": "read_file task.md",
+      "evidence_types": [
+        "contract_text"
+      ],
+      "step": 2,
+      "subtask_id": "validation_2"
+    },
+    {
+      "category": "investigation",
+      "description": "list_dir .",
+      "evidence_types": [
+        "contract_text"
+      ],
+      "step": 4,
+      "subtask_id": "investigation_4"
+    },
+    {
+      "category": "investigation",
+      "description": "find_files *",
+      "evidence_types": [
+        "contract_text"
+      ],
+      "step": 6,
+      "subtask_id": "investigation_6"
+    },
+    {
+      "category": "investigation",
+      "description": "shell tool",
+      "evidence_types": [
+        "manual_note"
+      ],
+      "step": 13,
+      "subtask_id": "investigation_13"
+    },
+    {
+      "category": "investigation",
+      "description": "shell tool",
+      "evidence_types": [
+        "manual_note"
+      ],
+      "step": 17,
+      "subtask_id": "investigation_17"
+    },
+    {
+      "category": "investigation",
+      "description": "shell tool",
+      "evidence_types": [
+        "manual_note"
+      ],
+      "step": 21,
+      "subtask_id": "investigation_21"
+    },
+    {
+      "category": "investigation",
+      "description": "shell tool",
+      "evidence_types": [
+        "manual_note"
+      ],
+      "step": 25,
+      "subtask_id": "investigation_25"
+    },
+    {
+      "category": "investigation",
+      "description": "shell tool",
+      "evidence_types": [
+        "manual_note"
+      ],
+      "step": 29,
+      "subtask_id": "investigation_29"
+    },
+    {
+      "category": "investigation",
+      "description": "shell tool",
+      "evidence_types": [
+        "manual_note"
+      ],
+      "step": 33,
+      "subtask_id": "investigation_33"
+    },
+    {
+      "category": "investigation",
+      "description": "shell tool",
+      "evidence_types": [
+        "manual_note"
+      ],
+      "step": 39,
+      "subtask_id": "investigation_39"
+    },
+    {
+      "category": "investigation",
+      "description": "shell tool",
+      "evidence_types": [
+        "manual_note"
+      ],
+      "step": 43,
+      "subtask_id": "investigation_43"
+    },
+    {
+      "category": "investigation",
+      "description": "shell tool",
+      "evidence_types": [
+        "manual_note"
+      ],
+      "step": 47,
+      "subtask_id": "investigation_47"
+    },
+    {
+      "category": "investigation",
+      "description": "shell tool",
+      "evidence_types": [
+        "manual_note"
+      ],
+      "step": 51,
+      "subtask_id": "investigation_51"
+    },
+    {
+      "category": "investigation",
+      "description": "shell tool",
+      "evidence_types": [
+        "manual_note"
+      ],
+      "step": 55,
+      "subtask_id": "investigation_55"
+    },
+    {
+      "category": "investigation",
+      "description": "shell tool",
+      "evidence_types": [
+        "manual_note"
+      ],
+      "step": 59,
+      "subtask_id": "investigation_59"
+    },
+    {
+      "category": "investigation",
+      "description": "shell tool",
+      "evidence_types": [
+        "manual_note"
+      ],
+      "step": 63,
+      "subtask_id": "investigation_63"
+    },
+    {
+      "category": "investigation",
+      "description": "shell tool",
+      "evidence_types": [
+        "manual_note"
+      ],
+      "step": 67,
+      "subtask_id": "investigation_67"
+    },
+    {
+      "category": "investigation",
+      "description": "shell tool",
+      "evidence_types": [
+        "manual_note"
+      ],
+      "step": 73,
+      "subtask_id": "investigation_73"
+    },
+    {
+      "category": "investigation",
+      "description": "shell tool",
+      "evidence_types": [
+        "manual_note"
+      ],
+      "step": 77,
+      "subtask_id": "investigation_77"
+    },
+    {
+      "category": "investigation",
+      "description": "shell tool",
+      "evidence_types": [
+        "manual_note"
+      ],
+      "step": 83,
+      "subtask_id": "investigation_83"
+    },
+    {
+      "category": "investigation",
+      "description": "shell tool",
+      "evidence_types": [
+        "manual_note"
+      ],
+      "step": 89,
+      "subtask_id": "investigation_89"
+    },
+    {
+      "category": "investigation",
+      "description": "shell tool",
+      "evidence_types": [
+        "manual_note"
+      ],
+      "step": 93,
+      "subtask_id": "investigation_93"
+    },
+    {
+      "category": "investigation",
+      "description": "shell tool",
+      "evidence_types": [
+        "manual_note"
+      ],
+      "step": 97,
+      "subtask_id": "investigation_97"
+    },
+    {
+      "category": "investigation",
+      "description": "shell tool",
+      "evidence_types": [
+        "manual_note"
+      ],
+      "step": 103,
+      "subtask_id": "investigation_103"
+    },
+    {
+      "category": "investigation",
+      "description": "shell tool",
+      "evidence_types": [
+        "manual_note"
+      ],
+      "step": 107,
+      "subtask_id": "investigation_107"
+    },
+    {
+      "category": "investigation",
+      "description": "shell tool",
+      "evidence_types": [
+        "manual_note"
+      ],
+      "step": 111,
+      "subtask_id": "investigation_111"
+    },
+    {
+      "category": "investigation",
+      "description": "shell tool",
+      "evidence_types": [
+        "manual_note"
+      ],
+      "step": 115,
+      "subtask_id": "investigation_115"
+    },
+    {
+      "category": "investigation",
+      "description": "shell tool",
+      "evidence_types": [
+        "manual_note"
+      ],
+      "step": 119,
+      "subtask_id": "investigation_119"
+    },
+    {
+      "category": "investigation",
+      "description": "shell tool",
+      "evidence_types": [
+        "manual_note"
+      ],
+      "step": 125,
+      "subtask_id": "investigation_125"
+    },
+    {
+      "category": "investigation",
+      "description": "shell tool",
+      "evidence_types": [
+        "manual_note"
+      ],
+      "step": 131,
+      "subtask_id": "investigation_131"
+    },
+    {
+      "category": "investigation",
+      "description": "shell tool",
+      "evidence_types": [
+        "manual_note"
+      ],
+      "step": 135,
+      "subtask_id": "investigation_135"
+    },
+    {
+      "category": "investigation",
+      "description": "shell tool",
+      "evidence_types": [
+        "manual_note"
+      ],
+      "step": 139,
+      "subtask_id": "investigation_139"
+    },
+    {
+      "category": "investigation",
+      "description": "shell tool",
+      "evidence_types": [
+        "manual_note"
+      ],
+      "step": 145,
+      "subtask_id": "investigation_145"
+    },
+    {
+      "category": "investigation",
+      "description": "shell tool",
+      "evidence_types": [
+        "manual_note"
+      ],
+      "step": 151,
+      "subtask_id": "investigation_151"
+    },
+    {
+      "category": "investigation",
+      "description": "shell tool",
+      "evidence_types": [
+        "manual_note"
+      ],
+      "step": 155,
+      "subtask_id": "investigation_155"
+    },
+    {
+      "category": "investigation",
+      "description": "shell tool",
+      "evidence_types": [
+        "manual_note"
+      ],
+      "step": 159,
+      "subtask_id": "investigation_159"
+    },
+    {
+      "category": "investigation",
+      "description": "agent budget exhausted",
+      "evidence_types": [
+        "manual_note"
+      ],
+      "step": 162,
+      "subtask_id": "investigation_162"
+    },
+    {
+      "category": "product",
+      "description": "Handle agent_step action at step 163",
+      "evidence_types": [
+        "manual_note"
+      ],
+      "step": 163,
+      "subtask_id": "G163"
+    }
+  ],
+  "weak_completion_evidence_count": 38
+}

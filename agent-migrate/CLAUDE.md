@@ -21,7 +21,7 @@ The single MVP claim it must demonstrate: shared state across nodes changes opti
 
 This repo lives under `/Users/grantwilkins/houdini/`. The siblings:
 
-- `coding-progress-ledger/` — the append-only ledger framework. **Vagrant imports from this; do not fork it.** See § Reuse contract below.
+- `coding-progress-ledger/` — the append-only ledger framework. **Agent Migrate imports from this; do not fork it.** See § Reuse contract below.
 - `coding-estimator/` — downstream consumer of ledger artifacts; predicts on-time finish from progress curves.
 - `coding-data-collection/` — upstream trace-collection scripts.
 
@@ -29,7 +29,7 @@ Coding rules across all four repos are intentionally identical. If you see a rul
 
 ## Reuse contract with `coding-progress-ledger`
 
-Vagrant rides on `ledger_progress`. Specifically:
+Agent Migrate rides on `ledger_progress`. Specifically:
 
 - `LedgerEvent` and its `payload: dict[str, Any]` carry agent-migrate-specific fields. Do not invent a new event class.
 - `apply_event` / `replay` are the replay engine. Do not write a second one.

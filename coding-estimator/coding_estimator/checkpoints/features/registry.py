@@ -31,6 +31,7 @@ Group = Literal[
     "stalling",
     "validation",
     "evidence",
+    "observation",
     "time_budget",
     "source_task",
 ]
@@ -69,9 +70,17 @@ _ALL_SOURCES: tuple[str, ...] = (
     "hermes_pilot_h5",
     "hermes_pilot_h5_v2",
     "tb_live",
+    "tb_live_v2",
+    "terminal_bench_pilot",
 )
 _TB_ONLY: tuple[str, ...] = ("tb_live",)
-_WALLCLOCK_SOURCES: tuple[str, ...] = ("tb_live", "swe_agent_live_wallclock")
+_OBS_SOURCES: tuple[str, ...] = ("tb_live_v2", "terminal_bench_pilot")
+_WALLCLOCK_SOURCES: tuple[str, ...] = (
+    "tb_live",
+    "tb_live_v2",
+    "terminal_bench_pilot",
+    "swe_agent_live_wallclock",
+)
 
 
 def _f(name: str, dtype, group, **kw) -> Feature:
@@ -165,6 +174,58 @@ EVIDENCE: list[Feature] = [
        missingness_semantic=Missingness.UNKNOWN_DUE_TO_MISSING_ARTIFACT),
 ]
 
+OBSERVATION: list[Feature] = [
+    _f("obs_num_validation_attempts_so_far", "int", "observation",
+       populated_on=_OBS_SOURCES,
+       upstream_source="observation_events.jsonl",
+       derivable_from="requires_transcript"),
+    _f("obs_num_validation_successes_so_far", "int", "observation",
+       populated_on=_OBS_SOURCES,
+       upstream_source="observation_events.jsonl",
+       derivable_from="requires_transcript"),
+    _f("obs_num_validation_failures_so_far", "int", "observation",
+       populated_on=_OBS_SOURCES,
+       upstream_source="observation_events.jsonl",
+       derivable_from="requires_transcript"),
+    _f("obs_num_error_observations_so_far", "int", "observation",
+       populated_on=_OBS_SOURCES,
+       upstream_source="observation_events.jsonl",
+       derivable_from="requires_transcript"),
+    _f("obs_num_repeated_errors_so_far", "int", "observation",
+       populated_on=_OBS_SOURCES,
+       upstream_source="observation_events.jsonl",
+       derivable_from="requires_transcript"),
+    _f("obs_num_environment_blocks_so_far", "int", "observation",
+       populated_on=_OBS_SOURCES,
+       upstream_source="observation_events.jsonl",
+       derivable_from="requires_transcript"),
+    _f("obs_solution_oracle_read_so_far", "bool", "observation",
+       populated_on=_OBS_SOURCES,
+       upstream_source="observation_events.jsonl",
+       derivable_from="requires_transcript",
+       missingness_semantic=Missingness.APPLICABLE_NEVER_OBSERVED_IN_RUN),
+    _f("obs_agent_claims_done_so_far", "bool", "observation",
+       populated_on=_OBS_SOURCES,
+       upstream_source="observation_events.jsonl",
+       derivable_from="requires_transcript",
+       missingness_semantic=Missingness.APPLICABLE_NEVER_OBSERVED_IN_RUN),
+    _f("obs_done_without_validation_so_far", "bool", "observation",
+       populated_on=_OBS_SOURCES,
+       upstream_source="observation_events.jsonl",
+       derivable_from="requires_transcript",
+       missingness_semantic=Missingness.APPLICABLE_NEVER_OBSERVED_IN_RUN),
+    _f("obs_verifier_disagreement_proxy_so_far", "bool", "observation",
+       populated_on=_OBS_SOURCES,
+       upstream_source="observation_events.jsonl",
+       derivable_from="requires_transcript",
+       missingness_semantic=Missingness.APPLICABLE_NEVER_OBSERVED_IN_RUN),
+    _f("obs_validation_after_oracle_read_so_far", "bool", "observation",
+       populated_on=_OBS_SOURCES,
+       upstream_source="observation_events.jsonl",
+       derivable_from="requires_transcript",
+       missingness_semantic=Missingness.APPLICABLE_NEVER_OBSERVED_IN_RUN),
+]
+
 TIME_BUDGET: list[Feature] = [
     _f("elapsed_steps", "int", "time_budget"),
     _f("elapsed_wall_time", "float", "time_budget", populated_on=_WALLCLOCK_SOURCES,
@@ -201,6 +262,7 @@ GROUPS: dict[str, list[Feature]] = {
     "stalling": STALLING,
     "validation": VALIDATION,
     "evidence": EVIDENCE,
+    "observation": OBSERVATION,
     "time_budget": TIME_BUDGET,
     "source_task": SOURCE_TASK,
 }

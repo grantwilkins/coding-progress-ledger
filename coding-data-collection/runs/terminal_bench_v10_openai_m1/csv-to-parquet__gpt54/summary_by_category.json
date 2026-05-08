@@ -1,0 +1,219 @@
+{
+  "active_coding_leaves_final": 25,
+  "active_overall_leaves_final": 32,
+  "category_active_weight_final": {
+    "artifact": 0,
+    "documentation": 0,
+    "environment": 7.0,
+    "investigation": 22.0,
+    "product": 0,
+    "validation": 3.0
+  },
+  "category_completed_weight_final": {
+    "artifact": 0,
+    "documentation": 0,
+    "environment": 0,
+    "investigation": 7.0,
+    "product": 0,
+    "validation": 0
+  },
+  "coding_categories": [
+    "product",
+    "validation",
+    "investigation"
+  ],
+  "coding_largest_drop": 0.16666666666666669,
+  "coding_nonmonotonic": true,
+  "completed_coding_leaves_final": 7,
+  "completed_overall_leaves_final": 7,
+  "evidence_audit_by_category": {
+    "investigation": {
+      "audited_completion_count": 8,
+      "status": "weak",
+      "weak_completion_evidence_count": 7,
+      "weak_subtask_ids": [
+        "investigation_7",
+        "investigation_9",
+        "investigation_14",
+        "investigation_16",
+        "investigation_18",
+        "investigation_20",
+        "investigation_28"
+      ]
+    },
+    "product": {
+      "audited_completion_count": 0,
+      "status": "not_applicable",
+      "weak_completion_evidence_count": 0,
+      "weak_subtask_ids": []
+    },
+    "validation": {
+      "audited_completion_count": 0,
+      "status": "not_applicable",
+      "weak_completion_evidence_count": 0,
+      "weak_subtask_ids": []
+    }
+  },
+  "evidence_audit_status": "weak",
+  "evidence_audit_weak_categories": [
+    "investigation"
+  ],
+  "excluded_active_weight_final": 7.0,
+  "excluded_categories": [
+    "artifact",
+    "documentation",
+    "environment"
+  ],
+  "excluded_categories_final": {
+    "artifact": {
+      "active": 0,
+      "complete": 0
+    },
+    "documentation": {
+      "active": 0,
+      "complete": 0
+    },
+    "environment": {
+      "active": 7.0,
+      "complete": 0
+    }
+  },
+  "excluded_completed_weight_final": 0,
+  "final_coding_active_weight": 25.0,
+  "final_coding_complete_weight": 7.0,
+  "final_coding_progress": 0.28,
+  "final_overall_active_weight": 32.0,
+  "final_overall_complete_weight": 7.0,
+  "final_overall_progress": 0.21875,
+  "final_success": null,
+  "final_success_source": "absent",
+  "generator": "ledger_progress.sidecar",
+  "historical_subtasks_created": 32,
+  "largest_coding_drop": 0.16666666666666669,
+  "largest_coding_drop_category_contributions": {
+    "investigation": 0.166666666667
+  },
+  "largest_coding_drop_detail": {
+    "amount": 0.16666666666666669,
+    "from_step": 3,
+    "to_step": 4
+  },
+  "largest_coding_drop_source": "investigation",
+  "largest_overall_drop": 0.08333333333333331,
+  "largest_overall_drop_category_contributions": {
+    "investigation": 0.083333333333
+  },
+  "largest_overall_drop_detail": {
+    "amount": 0.08333333333333331,
+    "from_step": 3,
+    "to_step": 4
+  },
+  "largest_overall_drop_mostly_excluded": false,
+  "largest_overall_drop_source": "investigation",
+  "nonmonotonic_coding": true,
+  "nonmonotonic_overall": true,
+  "overall_largest_drop": 0.08333333333333331,
+  "overall_nonmonotonic": true,
+  "source_ledger_sha256": "082a0e2abe9fb7aef08a4dc475d3b5c499ddb7aeac31cec15e79a8e3085a039f",
+  "subtask_categories": {
+    "environment_1": "environment",
+    "environment_21": "environment",
+    "environment_22": "environment",
+    "environment_26": "environment",
+    "environment_29": "environment",
+    "environment_30": "environment",
+    "environment_31": "environment",
+    "investigation_10": "investigation",
+    "investigation_11": "investigation",
+    "investigation_12": "investigation",
+    "investigation_13": "investigation",
+    "investigation_14": "investigation",
+    "investigation_16": "investigation",
+    "investigation_17": "investigation",
+    "investigation_18": "investigation",
+    "investigation_2": "investigation",
+    "investigation_20": "investigation",
+    "investigation_23": "investigation",
+    "investigation_24": "investigation",
+    "investigation_25": "investigation",
+    "investigation_27": "investigation",
+    "investigation_28": "investigation",
+    "investigation_3": "investigation",
+    "investigation_4": "investigation",
+    "investigation_5": "investigation",
+    "investigation_6": "investigation",
+    "investigation_7": "investigation",
+    "investigation_8": "investigation",
+    "investigation_9": "investigation",
+    "terminal_verifier": "validation",
+    "validation_15": "validation",
+    "validation_19": "validation"
+  },
+  "task_id": "csv-to-parquet__gpt54",
+  "weak_completion_evidence": [
+    {
+      "category": "investigation",
+      "description": "shell tool",
+      "evidence_types": [
+        "manual_note"
+      ],
+      "step": 7,
+      "subtask_id": "investigation_7"
+    },
+    {
+      "category": "investigation",
+      "description": "shell tool",
+      "evidence_types": [
+        "manual_note"
+      ],
+      "step": 9,
+      "subtask_id": "investigation_9"
+    },
+    {
+      "category": "investigation",
+      "description": "shell tool",
+      "evidence_types": [
+        "manual_note"
+      ],
+      "step": 14,
+      "subtask_id": "investigation_14"
+    },
+    {
+      "category": "investigation",
+      "description": "shell tool",
+      "evidence_types": [
+        "manual_note"
+      ],
+      "step": 16,
+      "subtask_id": "investigation_16"
+    },
+    {
+      "category": "investigation",
+      "description": "shell tool",
+      "evidence_types": [
+        "manual_note"
+      ],
+      "step": 18,
+      "subtask_id": "investigation_18"
+    },
+    {
+      "category": "investigation",
+      "description": "shell tool",
+      "evidence_types": [
+        "manual_note"
+      ],
+      "step": 20,
+      "subtask_id": "investigation_20"
+    },
+    {
+      "category": "investigation",
+      "description": "shell tool",
+      "evidence_types": [
+        "manual_note"
+      ],
+      "step": 28,
+      "subtask_id": "investigation_28"
+    }
+  ],
+  "weak_completion_evidence_count": 7
+}

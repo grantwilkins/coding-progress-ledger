@@ -131,6 +131,8 @@ def _prefix_truncation(
             end_wall_time=run.end_wall_time,
             task_id=run.task_id,
             task_family=run.task_family,
+            arm=run.arm,
+            difficulty=run.difficulty,
             agent_scaffold=run.agent_scaffold,
             model_name=run.model_name,
             raw_metadata=run.raw_metadata,

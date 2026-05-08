@@ -1,0 +1,29 @@
+{
+  "artifact_dir": "datasets/terminal_bench_v10_openai_adaptive_l1_estimator",
+  "artifacts": {
+    "checkpoint_feature_manifest.json": {
+      "bytes": 32662,
+      "exists": true
+    },
+    "checkpoints.parquet": {
+      "bytes": 56475,
+      "exists": true
+    },
+    "estimator_predictions.parquet": {
+      "bytes": 7115,
+      "exists": true
+    },
+    "labels.parquet": {
+      "bytes": 12900,
+      "exists": true
+    }
+  },
+  "checkpoint_rows": 125,
+  "corpus_id": "terminal_bench_v10_openai_adaptive_l1_estimator",
+  "issues": [],
+  "passed": true,
+  "prefix_provenance_complete": true,
+  "source_id": "terminal_bench_pilot",
+  "source_manifest": "datasets/terminal_bench_v10_openai_adaptive_l1_estimator/estimator_source_manifest.json",
+  "staged_runs_dir": "../coding-estimator/runs/terminal_bench_pilot"
+}

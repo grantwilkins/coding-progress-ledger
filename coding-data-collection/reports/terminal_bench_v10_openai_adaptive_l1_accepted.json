@@ -1,0 +1,104 @@
+{
+  "created_at": "2026-05-07T02:37:12.206871Z",
+  "runs": [
+    {
+      "accepted": true,
+      "arm": "gpt54",
+      "kind": "eligible_run",
+      "returncode": 0,
+      "run_dir": "runs/terminal_bench_v10_openai_adaptive_l1/grid-pattern-transform__gpt54",
+      "run_id": "grid-pattern-transform__gpt54",
+      "run_status": "completed_success",
+      "task_id": "grid-pattern-transform",
+      "termination_reason": "verifier_pass"
+    },
+    {
+      "accepted": true,
+      "arm": "gpt54mini",
+      "kind": "eligible_run",
+      "returncode": 0,
+      "run_dir": "runs/terminal_bench_v10_openai_adaptive_l1/grid-pattern-transform__gpt54mini",
+      "run_id": "grid-pattern-transform__gpt54mini",
+      "run_status": "completed_failure",
+      "task_id": "grid-pattern-transform",
+      "termination_reason": "verifier_fail"
+    },
+    {
+      "accepted": true,
+      "arm": "gpt54",
+      "kind": "eligible_run",
+      "returncode": 0,
+      "run_dir": "runs/terminal_bench_v10_openai_adaptive_l1/broken-python__gpt54",
+      "run_id": "broken-python__gpt54",
+      "run_status": "completed_success",
+      "task_id": "broken-python",
+      "termination_reason": "verifier_pass"
+    },
+    {
+      "accepted": true,
+      "arm": "gpt54mini",
+      "kind": "eligible_run",
+      "returncode": 0,
+      "run_dir": "runs/terminal_bench_v10_openai_adaptive_l1/broken-python__gpt54mini",
+      "run_id": "broken-python__gpt54mini",
+      "run_status": "completed_success",
+      "task_id": "broken-python",
+      "termination_reason": "verifier_pass"
+    },
+    {
+      "accepted": true,
+      "arm": "gpt54",
+      "kind": "eligible_run",
+      "returncode": 0,
+      "run_dir": "runs/terminal_bench_v10_openai_adaptive_l1/extract-safely__gpt54",
+      "run_id": "extract-safely__gpt54",
+      "run_status": "completed_failure",
+      "task_id": "extract-safely",
+      "termination_reason": "verifier_fail"
+    },
+    {
+      "accepted": true,
+      "arm": "gpt54mini",
+      "kind": "eligible_run",
+      "returncode": 0,
+      "run_dir": "runs/terminal_bench_v10_openai_adaptive_l1/extract-safely__gpt54mini",
+      "run_id": "extract-safely__gpt54mini",
+      "run_status": "completed_success",
+      "task_id": "extract-safely",
+      "termination_reason": "verifier_pass"
+    },
+    {
+      "accepted": true,
+      "arm": "gpt54",
+      "kind": "eligible_run",
+      "returncode": 0,
+      "run_dir": "runs/terminal_bench_v10_openai_adaptive_l1/attention-mil__gpt54",
+      "run_id": "attention-mil__gpt54",
+      "run_status": "completed_failure",
+      "task_id": "attention-mil",
+      "termination_reason": "verifier_fail"
+    },
+    {
+      "accepted": true,
+      "arm": "gpt54mini",
+      "kind": "eligible_run",
+      "returncode": 0,
+      "run_dir": "runs/terminal_bench_v10_openai_adaptive_l1/attention-mil__gpt54mini",
+      "run_id": "attention-mil__gpt54mini",
+      "run_status": "completed_success",
+      "task_id": "attention-mil",
+      "termination_reason": "verifier_pass"
+    },
+    {
+      "accepted": true,
+      "arm": "gpt54",
+      "kind": "eligible_run",
+      "returncode": 0,
+      "run_dir": "runs/terminal_bench_v10_openai_adaptive_l1/csv-to-parquet__gpt54",
+      "run_id": "csv-to-parquet__gpt54",
+      "run_status": "completed_failure",
+      "task_id": "csv-to-parquet",
+      "termination_reason": "verifier_fail"
+    }
+  ]
+}

@@ -1,0 +1,154 @@
+{
+  "conditions": [
+    {
+      "condition_id": "P1.a",
+      "evidence": {
+        "rows": [
+          {
+            "brier_g2": 0.18952276448086244,
+            "brier_g4": 0.16984129040618468,
+            "source": "tb_live_v2",
+            "target": "y_success_eventual",
+            "wins_or_ties": true
+          },
+          {
+            "brier_g2": 0.12434824102067528,
+            "brier_g4": 0.0038012112810254417,
+            "source": "tb_live_v2",
+            "target": "y_future_progress_drop_h5",
+            "wins_or_ties": true
+          },
+          {
+            "brier_g2": 1.0000000000000002e-06,
+            "brier_g4": 1.0000000000000002e-06,
+            "source": "tb_live_v2",
+            "target": "y_validation_new_work_h5",
+            "wins_or_ties": true
+          },
+          {
+            "brier_g2": 1.0000000000000002e-06,
+            "brier_g4": 1.0000000000000002e-06,
+            "source": "tb_live_v2",
+            "target": "y_submit_without_validation",
+            "wins_or_ties": true
+          }
+        ]
+      },
+      "name": "G4 ties or beats G2 on at least one (target, source) under LORO",
+      "outcome": "pass",
+      "required": true,
+      "summary": "G4 wins or ties G2 on 4 of 4 (target, source) cells."
+    },
+    {
+      "condition_id": "P1.b",
+      "evidence": {
+        "target": "y_success_eventual"
+      },
+      "name": "ECE_3bin (after isotonic) on tb_live LORO does not increase by > 0.05 from G2 to G4",
+      "outcome": "indeterminate",
+      "required": true,
+      "summary": "no LORO predictions on tb_live for y_success_eventual"
+    },
+    {
+      "condition_id": "P1.c",
+      "evidence": {
+        "target": "y_success_eventual"
+      },
+      "name": "Combined-retrospective LORO: G4 beats G2 with 95% CI excluding zero",
+      "outcome": "indeterminate",
+      "required": true,
+      "summary": "no retrospective sources present"
+    },
+    {
+      "condition_id": "P1.d",
+      "evidence": {
+        "target": "y_success_eventual"
+      },
+      "name": "LOSO->tb_live Brier ≤ within-source LORO Brier + 0.05",
+      "outcome": "indeterminate",
+      "required": true,
+      "summary": "missing within-source or LOSO predictions on tb_live"
+    },
+    {
+      "condition_id": "P1.e",
+      "evidence": {
+        "forbidden_exact_count": 10,
+        "forbidden_prefix_count": 6,
+        "forbidden_suffix_count": 2,
+        "hits": []
+      },
+      "name": "Forbidden-column audit: zero hits",
+      "outcome": "pass",
+      "required": true,
+      "summary": "no forbidden columns in the checkpoints frame"
+    },
+    {
+      "condition_id": "P1.f",
+      "evidence": {
+        "audited_cells": 408,
+        "audits": [],
+        "skipped_empty_join": 0,
+        "skipped_no_labels": 0
+      },
+      "name": "G4 training-fold run-constancy: zero joint (feature, target) pairs",
+      "outcome": "pass",
+      "required": true,
+      "summary": "audited 408 (source, target, fold) cells; 0 have run-constant pairs; skipped 0 cells (0 no labels, 0 empty join)"
+    },
+    {
+      "condition_id": "P1.g",
+      "evidence": {
+        "d5_audit_path": "reports/training_with_tb_live_v2/d5_audit.json",
+        "n_checkpoints_audited": 703,
+        "n_findings": 0,
+        "n_runs_audited": 102,
+        "schema_version": "1.1.0"
+      },
+      "name": "D5 behavioral leakage audit (Workstream M deferred)",
+      "outcome": "pass",
+      "required": true,
+      "summary": "D5 audit clean (102 runs, 703 checkpoints; 0 findings)"
+    },
+    {
+      "condition_id": "P1.h",
+      "evidence": {
+        "only_swv": false,
+        "winning_cells": [
+          {
+            "brier_g2": 0.18952276448086244,
+            "brier_g4": 0.16984129040618468,
+            "source": "tb_live_v2",
+            "target": "y_success_eventual",
+            "wins_or_ties": true
+          },
+          {
+            "brier_g2": 0.12434824102067528,
+            "brier_g4": 0.0038012112810254417,
+            "source": "tb_live_v2",
+            "target": "y_future_progress_drop_h5",
+            "wins_or_ties": true
+          },
+          {
+            "brier_g2": 1.0000000000000002e-06,
+            "brier_g4": 1.0000000000000002e-06,
+            "source": "tb_live_v2",
+            "target": "y_validation_new_work_h5",
+            "wins_or_ties": true
+          },
+          {
+            "brier_g2": 1.0000000000000002e-06,
+            "brier_g4": 1.0000000000000002e-06,
+            "source": "tb_live_v2",
+            "target": "y_submit_without_validation",
+            "wins_or_ties": true
+          }
+        ]
+      },
+      "name": "Submit-without-validation caveat",
+      "outcome": "pass",
+      "required": true,
+      "summary": "winning cells span multiple targets — caveat does not apply"
+    }
+  ],
+  "verdict": "indeterminate"
+}

@@ -63,12 +63,26 @@ def test_run_dir_returns_existing(tmp_path: Path, monkeypatch: pytest.MonkeyPatc
         paths.run_dir("tb_live", "nope")
 
 
+def test_tb_live_v2_resolves_from_repo_root(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    root = tmp_path / "repo"
+    runs = root / "runs" / "tb_live_v2"
+    (runs / "run_b").mkdir(parents=True)
+    (runs / "run_a").mkdir()
+    monkeypatch.setattr(paths, "REPO_ROOT", root)
+    assert paths.runs_root("tb_live_v2") == runs
+    assert paths.list_run_ids("tb_live_v2") == ["run_a", "run_b"]
+    assert paths.run_dir("tb_live_v2", "run_a") == runs / "run_a"
+
+
 def test_real_ledger_root_resolves(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv("LEDGER_ROOT", raising=False)
     real = paths.ledger_root()
     assert (real / "ledger_progress").is_dir()
-    # tb_live is the only first-party live source we ship; its presence is a
-    # strong signal that the upstream checkout is healthy.
+    # tb_live lives in the upstream checkout; its presence is a strong
+    # signal that the upstream checkout is healthy.
     assert (real / "runs" / "tb_live").is_dir()
     ids = paths.list_run_ids("tb_live")
     assert "markdown-to-html-cli" in ids

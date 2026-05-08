@@ -1,0 +1,28 @@
+descriptions:
+  - key: base
+    description: |
+      Implement `format_amount.py` in the workspace exposing one
+      function:
+
+          def format_amount(cents: int) -> str:
+              ...
+
+      Formats a USD amount given as integer cents into the canonical
+      string form. Examples:
+        format_amount(0)        -> "$0.00"
+        format_amount(150)      -> "$1.50"
+        format_amount(1234567)  -> "$12,345.67"
+
+      Constraints:
+        - The input is always an int (positive, zero, or negative).
+        - For negative values, prefix the entire string with `-`
+          (e.g., format_amount(-150) -> "-$1.50").
+        - Use only the Python standard library.
+        - The function signature and module name are fixed.
+author_email: estimator-team@coding-estimator.local
+difficulty: medium
+tags: [progress_drop, formatting, python]
+max_agent_timeout_sec: 90
+max_test_timeout_sec: 15
+test_scripts: [setup-uv-pytest.sh, run-uv-pytest.sh]
+run_tests_in_same_shell: true
