@@ -1073,3 +1073,45 @@ Next documentation tasks:
 - Add a generated index doc that maps every script in `scripts/` to input/output artifacts and owning workstream.
 - Add a reproducibility playbook (`docs/REPRODUCIBILITY.md`) with exact command sequences for SWE-agent and Hermes rebuild paths.
 - Add a concise changelog section to `IMPLEMENTATION_v0.md` that tracks protocol-breaking vs protocol-neutral edits.
+
+---
+
+## § 0.5 Trace shape exploration (2026-05-08)
+
+Status: done
+
+Pre-estimator descriptive analysis of ledger trajectories across the
+annotated cohort. Output: `reports/trace_shape_exploration/` with 13 PNGs
+(12 spec'd + 1 archetype panel) and `OBSERVATIONS.md`. Reproducible via
+`uv run python scripts/explore_trace_shapes.py`.
+
+Cohort: 67 latest-version annotated traces (`swe_agent_pilot` non-overlap +
+`swe_agent_pilot_v3` + `hermes_pilot_h5_v2` + `tb_live` + `live_validation`).
+Auto-imported `swe_agent_live*` corpora explicitly excluded — paired-event
+import policy yields trivially flat `B_t ≈ 1.0` trajectories that would have
+swamped the overlay plots; documented in OBSERVATIONS.md.
+
+Key findings:
+
+- Dominant shape is **sawtooth-to-1.0**: 67% of traces end at exactly 1.0,
+  but 87% have ≥3 discovery events along the way. Most "successful" traces
+  visibly oscillate en route.
+- Discovery is **mildly U-shaped** in t/T (not front-loaded as one might
+  expect): 25/52/23 events split across first/middle/last quintiles vs
+  uniform 20/60/20 — slight overrepresentation at both edges.
+- Drops at discovery events are **spread**, not small: 17/38/33% in
+  [0,0.1)/[0.1,0.3)/≥0.3. A handful of negative drops where a step both
+  adds a leaf and completes other leaves.
+- `T` and `D_T` correlate (r ≈ 0.58); `D_T` and `B_T` only weakly (r ≈ −0.18).
+- Median `T = 21`, median `D_T = 5`. `B_T` distribution is bimodal: heavy
+  mass at 1.0 plus a spread band in [0.5, 0.95).
+
+Possible follow-ups (not committed):
+
+- Sub-cohort analysis: hermes vs swe_agent vs tb_live shape comparisons.
+- Live-corpus characterization: confirm the auto-import lockstep behavior
+  is universal in `swe_agent_live*` and quantify how many would have any
+  shape signal at all.
+- Use the archetype picker as a stratifier for an annotation-quality audit.
+- Re-run after any future ledger schema change to detect regression in
+  trajectory richness.
