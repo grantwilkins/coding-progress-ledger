@@ -311,6 +311,86 @@ def plot_d_vs_b(traces: list[Trace]) -> None:
     save(f, p)
 
 
+LIVE_COHORT_SPECS = [
+    ("swe_agent_live", "*"),
+    ("swe_agent_live_wallclock", "*"),
+]
+
+
+def load_live_cohort() -> list[Trace]:
+    seen: set[str] = set()
+    out: list[Trace] = []
+    for corpus, glob_pat in LIVE_COHORT_SPECS:
+        corp_dir = RUNS / corpus
+        for sub in sorted(corp_dir.glob(glob_pat)):
+            if not sub.is_dir() or sub.name in seen:
+                continue
+            tr = load_trace(sub, corpus)
+            if tr is None:
+                continue
+            seen.add(sub.name)
+            out.append(tr)
+    return out
+
+
+def plot_overlay_n_raw_combined(annotated: list[Trace], live: list[Trace]) -> None:
+    """Raw N_t (forward-filled) over source step, both cohorts, coloured."""
+    f, p = fig("14_n_overlay_raw_combined.png")
+    ax = f.gca()
+    for tr in live:
+        ax.plot(np.arange(tr.T + 1), tr.N, alpha=0.20, color="C3",
+                linewidth=0.8, label="_nolegend_")
+    for tr in annotated:
+        ax.plot(np.arange(tr.T + 1), tr.N, alpha=0.30, color="C2",
+                linewidth=0.8, label="_nolegend_")
+    ax.plot([], [], color="C3", label=f"live auto-imported (n={len(live)})")
+    ax.plot([], [], color="C2", label=f"hand-annotated (n={len(annotated)})")
+    ax.set_xlabel("step t (forward-filled, dense)")
+    ax.set_ylabel("N_t (completed leaf count)")
+    ax.set_title("Raw N_t trajectories — full step axis, both cohorts")
+    ax.legend(loc="upper left")
+    save(f, p)
+
+
+def plot_overlay_d_raw_combined(annotated: list[Trace], live: list[Trace]) -> None:
+    """Raw D_t (forward-filled) over source step, both cohorts."""
+    f, p = fig("15_d_overlay_raw_combined.png")
+    ax = f.gca()
+    for tr in live:
+        ax.plot(np.arange(tr.T + 1), tr.D, alpha=0.20, color="C3",
+                linewidth=0.8, label="_nolegend_")
+    for tr in annotated:
+        ax.plot(np.arange(tr.T + 1), tr.D, alpha=0.30, color="C1",
+                linewidth=0.8, label="_nolegend_")
+    ax.plot([], [], color="C3", label=f"live auto-imported (n={len(live)})")
+    ax.plot([], [], color="C1", label=f"hand-annotated (n={len(annotated)})")
+    ax.set_xlabel("step t (forward-filled, dense)")
+    ax.set_ylabel("D_t (discovered leaf count)")
+    ax.set_title("Raw D_t trajectories — full step axis, both cohorts")
+    ax.legend(loc="upper left")
+    save(f, p)
+
+
+def plot_overlay_b_raw_combined(annotated: list[Trace], live: list[Trace]) -> None:
+    """Forward-filled B_t over source step, both cohorts. Shows monotone flat tails."""
+    f, p = fig("16_b_overlay_raw_combined.png")
+    ax = f.gca()
+    for tr in live:
+        ax.plot(np.arange(tr.T + 1), tr.B, alpha=0.20, color="C3",
+                linewidth=0.8, label="_nolegend_")
+    for tr in annotated:
+        ax.plot(np.arange(tr.T + 1), tr.B, alpha=0.30, color="C0",
+                linewidth=0.8, label="_nolegend_")
+    ax.plot([], [], color="C3", label=f"live auto-imported (n={len(live)})")
+    ax.plot([], [], color="C0", label=f"hand-annotated (n={len(annotated)})")
+    ax.set_xlabel("step t (forward-filled, dense)")
+    ax.set_ylabel("B_t = N_t / D_t")
+    ax.set_ylim(-0.02, 1.05)
+    ax.set_title("Raw B_t trajectories — full step axis, both cohorts")
+    ax.legend(loc="lower right")
+    save(f, p)
+
+
 def pick_archetypes(traces: list[Trace]) -> dict[str, Trace]:
     by_id = {tr.trace_id: tr for tr in traces}
     # 1. Steady-climb: B_T == 1.0, ≤1 discovery event after step 0, median T
@@ -365,7 +445,7 @@ def plot_archetypes(picks: dict[str, Trace]) -> None:
 
 
 def write_observations(traces: list[Trace], picks: dict[str, Trace],
-                       qa: dict) -> None:
+                       qa: dict, live: list[Trace] | None = None) -> None:
     Ts = np.array([tr.T for tr in traces])
     Ds = np.array([tr.D_T for tr in traces])
     Bs = np.array([tr.B_T for tr in traces if not np.isnan(tr.B_T)])
@@ -385,6 +465,45 @@ def write_observations(traces: list[Trace], picks: dict[str, Trace],
     by_corpus: dict[str, int] = {}
     for tr in traces:
         by_corpus[tr.corpus] = by_corpus.get(tr.corpus, 0) + 1
+
+    live_section = ""
+    if live:
+        live_Ts = np.array([tr.T for tr in live])
+        live_Ds = np.array([tr.D_T for tr in live])
+        live_Ns = np.array([tr.N_T for tr in live])
+        live_section = f"""
+## Combined-cohort raw plots (live + annotated)
+
+Plots 14–16 add the auto-imported live cohort back in for direct visual
+contrast. The live cohort here is {len(live)} unique traces (deduped across
+`runs/swe_agent_live/` and `runs/swe_agent_live_wallclock/`). Live traces are
+much longer (median `T = {int(np.median(live_Ts))}`, max `T = {int(live_Ts.max())}`) and have much
+larger leaf counts (median `D_T = {int(np.median(live_Ds))}`, max `D_T = {int(live_Ds.max())}`)
+because the importer creates a leaf per agent action — so e.g. `pyupgrade-933`
+yields ~250 leaves over ~500 source steps.
+
+What the combined plots show:
+
+- **Plot 14 (`14_n_overlay_raw_combined.png`)** — raw `N_t` (forward-filled)
+  over source step, live in red, annotated in green. Live trajectories are
+  long, near-linear ascending lines (each agent action increments `N`).
+  Annotated trajectories are tight, low, and short by comparison.
+- **Plot 15 (`15_d_overlay_raw_combined.png`)** — same axes, raw `D_t`.
+  Visually almost overlays Plot 14 for the live cohort because `N_t` and
+  `D_t` rise in lockstep (paired `add_subtask` + `complete` per step).
+  Annotated `D_t` lines are flat or step-shaped.
+- **Plot 16 (`16_b_overlay_raw_combined.png`)** — raw `B_t`. This is the
+  view that confirms the "500 steps, monotone for 400" intuition: live
+  traces sit at `B_t = 1.0` for nearly every step, with a small dip near
+  the end of a few traces (e.g. an unfinished trailing leaf). Annotated
+  traces take the visible drops we discussed in §1–§4.
+
+The live cohort is **not** included in the §1–§10 written observations
+above; those numbers are over the 67 annotated traces only. The live cohort
+is a measurement of what the auto-importer emits, not of what an agent's
+actual decomposition looks like.
+
+"""
 
     body = f"""# Trace Shape Exploration — Observations
 
@@ -434,7 +553,7 @@ cohort. They are excluded from the analysis here and would be characterized as
 - **Plot 13 (`13_archetype_traces.png`)** — three programmatic archetype
   picks (steady, stuck, high-churn), each with `N_t`, `D_t` on count axis
   and `B_t` on right axis.
-
+{live_section}
 ## Headline numbers
 
 - `T`: median **{int(np.median(Ts))}**, mean {Ts.mean():.1f}, max **{int(Ts.max())}**, min {int(Ts.min())}
@@ -711,10 +830,15 @@ def main() -> None:
     plot_b_terminal(traces)
     plot_t_vs_d(traces)
     plot_d_vs_b(traces)
+    live = load_live_cohort()
+    print(f"loaded {len(live)} live (auto-imported) traces for combined plots")
+    plot_overlay_n_raw_combined(traces, live)
+    plot_overlay_d_raw_combined(traces, live)
+    plot_overlay_b_raw_combined(traces, live)
     picks = pick_archetypes(traces)
     plot_archetypes(picks)
-    write_observations(traces, picks, qa)
-    print(f"wrote 13 PNGs and OBSERVATIONS.md to {OUT}")
+    write_observations(traces, picks, qa, live)
+    print(f"wrote 16 PNGs and OBSERVATIONS.md to {OUT}")
 
 
 if __name__ == "__main__":

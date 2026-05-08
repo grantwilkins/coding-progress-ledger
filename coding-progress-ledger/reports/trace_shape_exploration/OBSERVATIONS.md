@@ -51,6 +51,38 @@ cohort. They are excluded from the analysis here and would be characterized as
   picks (steady, stuck, high-churn), each with `N_t`, `D_t` on count axis
   and `B_t` on right axis.
 
+## Combined-cohort raw plots (live + annotated)
+
+Plots 14–16 add the auto-imported live cohort back in for direct visual
+contrast. The live cohort here is 20 unique traces (deduped across
+`runs/swe_agent_live/` and `runs/swe_agent_live_wallclock/`). Live traces are
+much longer (median `T = 32`, max `T = 508`) and have much
+larger leaf counts (median `D_T = 16`, max `D_T = 254`)
+because the importer creates a leaf per agent action — so e.g. `pyupgrade-933`
+yields ~250 leaves over ~500 source steps.
+
+What the combined plots show:
+
+- **Plot 14 (`14_n_overlay_raw_combined.png`)** — raw `N_t` (forward-filled)
+  over source step, live in red, annotated in green. Live trajectories are
+  long, near-linear ascending lines (each agent action increments `N`).
+  Annotated trajectories are tight, low, and short by comparison.
+- **Plot 15 (`15_d_overlay_raw_combined.png`)** — same axes, raw `D_t`.
+  Visually almost overlays Plot 14 for the live cohort because `N_t` and
+  `D_t` rise in lockstep (paired `add_subtask` + `complete` per step).
+  Annotated `D_t` lines are flat or step-shaped.
+- **Plot 16 (`16_b_overlay_raw_combined.png`)** — raw `B_t`. This is the
+  view that confirms the "500 steps, monotone for 400" intuition: live
+  traces sit at `B_t = 1.0` for nearly every step, with a small dip near
+  the end of a few traces (e.g. an unfinished trailing leaf). Annotated
+  traces take the visible drops we discussed in §1–§4.
+
+The live cohort is **not** included in the §1–§10 written observations
+above; those numbers are over the 67 annotated traces only. The live cohort
+is a measurement of what the auto-importer emits, not of what an agent's
+actual decomposition looks like.
+
+
 ## Headline numbers
 
 - `T`: median **21**, mean 23.3, max **85**, min 4
