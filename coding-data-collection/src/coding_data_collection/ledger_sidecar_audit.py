@@ -10,8 +10,11 @@ from .observation import read_jsonl
 from .validation import validate_run_dir
 
 
-SIDECAR_ARTIFACTS = (
+REQUIRED_LEDGER_ARTIFACTS = (
     "ledger.jsonl",
+)
+
+OPTIONAL_SIDECAR_ARTIFACTS = (
     "progress.csv",
     "progress_by_category.csv",
     "summary_by_category.json",
@@ -43,24 +46,27 @@ def ledger_sidecar_report(run_dir: Path) -> dict[str, Any]:
         for artifact in missing_collection_controls
     )
     generated = {}
-    for artifact in SIDECAR_ARTIFACTS:
+    for artifact in REQUIRED_LEDGER_ARTIFACTS + OPTIONAL_SIDECAR_ARTIFACTS:
         path = run_dir / artifact
         generated[artifact] = {
             "exists": path.is_file(),
             "bytes": path.stat().st_size if path.is_file() else 0,
         }
         if not path.is_file():
-            issues.append(f"{artifact}: missing")
-        elif path.stat().st_size == 0:
+            if artifact in REQUIRED_LEDGER_ARTIFACTS:
+                issues.append(f"{artifact}: missing")
+            continue
+        if path.stat().st_size == 0:
             issues.append(f"{artifact}: empty")
 
     summary = _read_json(run_dir / "summary_by_category.json")
     ledger_path = run_dir / "ledger.jsonl"
     ledger_sha = _sha256_file(ledger_path) if ledger_path.is_file() else None
-    if summary.get("generator") != "ledger_progress.sidecar":
-        issues.append("summary_by_category.json: generator is not ledger_progress.sidecar")
-    if ledger_sha and summary.get("source_ledger_sha256") != ledger_sha:
-        issues.append("summary_by_category.json: source_ledger_sha256 does not match ledger.jsonl")
+    if summary:
+        if summary.get("generator") != "ledger_progress.sidecar":
+            issues.append("summary_by_category.json: generator is not ledger_progress.sidecar")
+        if ledger_sha and summary.get("source_ledger_sha256") != ledger_sha:
+            issues.append("summary_by_category.json: source_ledger_sha256 does not match ledger.jsonl")
     if not events:
         issues.append("events.jsonl: no wire events")
 
@@ -70,12 +76,13 @@ def ledger_sidecar_report(run_dir: Path) -> dict[str, Any]:
 
     progress_rows = _read_csv(run_dir / "progress.csv")
     progress_by_category_rows = _read_csv(run_dir / "progress_by_category.csv")
-    if len(progress_rows) < 2:
+    if (run_dir / "progress.csv").is_file() and len(progress_rows) < 2:
         issues.append("progress.csv: no progress rows")
-    if len(progress_by_category_rows) < 2:
-        issues.append("progress_by_category.csv: no progress rows")
-    elif "coding_progress" not in progress_by_category_rows[0]:
-        issues.append("progress_by_category.csv: missing coding_progress column")
+    if (run_dir / "progress_by_category.csv").is_file():
+        if len(progress_by_category_rows) < 2:
+            issues.append("progress_by_category.csv: no progress rows")
+        elif "coding_progress" not in progress_by_category_rows[0]:
+            issues.append("progress_by_category.csv: missing coding_progress column")
 
     return {
         "run_dir": str(run_dir),

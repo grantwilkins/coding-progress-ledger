@@ -47,15 +47,11 @@ class ModelToolLoopBackend:
         model_client: ModelClient,
         *,
         model_name: str = "scripted",
-        force_pilot_eligible: bool = False,
-        eligible_for_l_gate: bool | None = None,
-        pilot_type: str | None = None,
+        collection_kind: str | None = None,
     ) -> None:
         self.model_client = model_client
         self.model_name = model_name
-        default_eligible = bool(model_client.provider_backed or force_pilot_eligible)
-        self.eligible_for_L_gate = default_eligible if eligible_for_l_gate is None else bool(eligible_for_l_gate)
-        self.pilot_type = pilot_type or ("real_agent_pilot" if self.eligible_for_L_gate else "provider_model_smoke" if model_client.provider_backed else "scripted_model_smoke")
+        self.collection_kind = collection_kind or ("model_agent" if model_client.provider_backed else "scripted_model")
 
     def run(
         self,

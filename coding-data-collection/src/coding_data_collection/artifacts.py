@@ -41,12 +41,10 @@ def write_protocol_manifest(
     *,
     collection_root: Path,
     ledger_root: Path,
-    estimator_root: Path,
     extra: dict[str, Any] | None = None,
 ) -> Path:
     payload = protocol_manifest_payload(
         coding_progress_ledger_sha=git_sha(ledger_root),
-        coding_estimator_sha=git_sha(estimator_root),
         coding_data_collection_sha=git_sha(collection_root),
         extra=extra,
     )
@@ -63,8 +61,14 @@ def write_run_manifest(
     final_success: bool | None,
     termination_reason: str,
     metrics: dict[str, Any] | None = None,
+    started_at: str | None = None,
+    ended_at: str | None = None,
+    wallclock_seconds: float | None = None,
 ) -> Path:
     status = RunStatus(run_status)
+    created_at = utc_now()
+    started_at = started_at or created_at
+    ended_at = ended_at or created_at
     payload = {
         "run_protocol_version": VERSIONS.run_protocol_version,
         "artifact_layout_version": VERSIONS.artifact_layout_version,
@@ -73,7 +77,10 @@ def write_run_manifest(
         "final_success": final_success,
         "termination_reason": termination_reason,
         "analysis_inclusion": analysis_inclusion(status),
-        "created_at": utc_now(),
+        "created_at": created_at,
+        "started_at": started_at,
+        "ended_at": ended_at,
+        "wallclock_seconds": 0.0 if wallclock_seconds is None else round(float(wallclock_seconds), 6),
         "metrics": metrics or {},
     }
     path = run_dir / "run_manifest.json"

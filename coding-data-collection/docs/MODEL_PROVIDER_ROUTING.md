@@ -77,9 +77,9 @@ response_id
 base_url
 ```
 
-## L Gate Policy
+## Comparable Route Policy
 
-Allowed for L-eligible comparable model arms:
+Allowed for comparable model-agent traces:
 
 ```text
 fixed model id
@@ -92,7 +92,7 @@ OpenRouter may resolve a stable model alias such as `baidu/cobuddy:free` to a
 dated slug. That is recorded as `model_alias_or_route_changed=true`; it is not
 counted as explicit fallback unless a configured fallback model is used.
 
-Use only for L-ineligible scouting/debug unless separately justified:
+Use only for scouting/debug unless separately justified:
 
 ```text
 openrouter/auto
@@ -102,4 +102,4 @@ unknown or changing resolved_model
 ```
 
 `baidu/cobuddy:free` is only for end-to-end smoke testing the adapter and
-controller path. It should not be used as a benchmark-quality pilot arm.
+controller path. It should not be used as a benchmark-quality collection route.

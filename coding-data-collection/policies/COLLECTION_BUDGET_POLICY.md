@@ -4,7 +4,7 @@ Collection uses scout, commit, and replicate phases.
 
 ## Scout
 
-Cheap protocol-valid task triage. Scout runs are not final estimator
+Cheap protocol-valid task triage. Scout runs are not final downstream
 evidence unless they follow the full run protocol.
 
 Record:
@@ -50,4 +50,3 @@ model/arm disagreement
 ```
 
 Do not replicate all tasks uniformly.
-

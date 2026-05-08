@@ -12,6 +12,7 @@ from coding_data_collection.observation import read_jsonl
 
 
 MODEL_METADATA_FIELDS = {
+    "collection_kind",
     "model_provider",
     "model_name",
     "temperature",
@@ -26,13 +27,13 @@ MODEL_METADATA_FIELDS = {
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description="Audit one provider-backed real model-agent run.")
+    parser = argparse.ArgumentParser(description="Audit one model-agent trace run.")
     parser.add_argument("run_dir", type=Path)
     parser.add_argument("--min-transcript-steps", type=int, default=5)
     parser.add_argument("--out", type=Path)
     args = parser.parse_args(argv)
 
-    report = audit_real_model_run(args.run_dir, min_transcript_steps=args.min_transcript_steps)
+    report = audit_trace_run(args.run_dir, min_transcript_steps=args.min_transcript_steps)
     text = json.dumps(report, indent=2, sort_keys=True) + "\n"
     if args.out:
         args.out.parent.mkdir(parents=True, exist_ok=True)
@@ -42,7 +43,7 @@ def main(argv: list[str] | None = None) -> int:
     return 0 if report["passed"] else 1
 
 
-def audit_real_model_run(run_dir: Path, *, min_transcript_steps: int = 5) -> dict[str, Any]:
+def audit_trace_run(run_dir: Path, *, min_transcript_steps: int = 5) -> dict[str, Any]:
     issues: list[str] = []
     manifest = read_json(run_dir / "run_manifest.json")
     metrics = manifest.get("metrics") if isinstance(manifest.get("metrics"), dict) else {}
@@ -52,14 +53,13 @@ def audit_real_model_run(run_dir: Path, *, min_transcript_steps: int = 5) -> dic
     ledger = read_jsonl(run_dir / "ledger.jsonl")
 
     _require(metrics.get("agent_backend") == "model_tool_loop", issues, "run_manifest.metrics.agent_backend != model_tool_loop")
-    _require(metrics.get("pilot_type") == "real_agent_pilot", issues, "run_manifest.metrics.pilot_type != real_agent_pilot")
-    _require(metrics.get("eligible_for_L_gate") is True, issues, "run_manifest.metrics.eligible_for_L_gate is not true")
+    _require(metrics.get("collection_kind") == "model_agent", issues, "run_manifest.metrics.collection_kind != model_agent")
+    for field in ("started_at", "ended_at", "wallclock_seconds"):
+        _require(field in manifest, issues, f"run_manifest.{field} missing")
     _require(len(transcript) >= min_transcript_steps, issues, f"transcript has fewer than {min_transcript_steps} rows")
     _require(bool(observations), issues, "observation_events.jsonl is missing or empty")
     _require(bool(events), issues, "events.jsonl is missing or empty")
     _require(bool(ledger), issues, "ledger.jsonl is missing or empty")
-    _require((run_dir / "progress.csv").is_file(), issues, "progress.csv missing")
-    _require((run_dir / "progress_by_category.csv").is_file(), issues, "progress_by_category.csv missing")
     _require((run_dir / "verifier_output.txt").is_file(), issues, "verifier_output.txt missing")
 
     final_agent_step = max(

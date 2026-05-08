@@ -13,6 +13,9 @@
     "termination_reason",
     "analysis_inclusion",
     "created_at",
+    "started_at",
+    "ended_at",
+    "wallclock_seconds",
     "metrics"
   ],
   "properties": {
@@ -47,6 +50,9 @@
       }
     },
     "created_at": { "type": "string", "minLength": 1 },
+    "started_at": { "type": "string", "minLength": 1 },
+    "ended_at": { "type": "string", "minLength": 1 },
+    "wallclock_seconds": { "type": "number", "minimum": 0 },
     "metrics": { "type": "object" }
   }
 }

@@ -31,7 +31,6 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--image-tag", required=True)
     parser.add_argument("--collection-root", default=".")
     parser.add_argument("--ledger-root", default="../coding-progress-ledger")
-    parser.add_argument("--estimator-root", default="../coding-estimator")
     parser.add_argument("--agent-command", default="true")
     parser.add_argument("--oracle-smoke", action="store_true")
     parser.add_argument("--oracle-command", default="bash /task/solution.sh")
@@ -64,8 +63,6 @@ def main(argv: list[str] | None = None) -> int:
             args.collection_root,
             "--ledger-root",
             args.ledger_root,
-            "--estimator-root",
-            args.estimator_root,
         ],
         text=True,
         capture_output=True,
@@ -124,7 +121,6 @@ def main(argv: list[str] | None = None) -> int:
         run_dir,
         collection_root=Path(args.collection_root),
         ledger_root=Path(args.ledger_root),
-        estimator_root=Path(args.estimator_root),
     )
 
     transcript: list[dict] = []
@@ -317,8 +313,7 @@ def _finalize_status(
         termination_reason=termination_reason,
         metrics={
             "agent_backend": "shell_command",
-            "pilot_type": "protocol_smoke",
-            "eligible_for_L_gate": False,
+            "collection_kind": "substrate_smoke",
         },
     )
     return 0

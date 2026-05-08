@@ -30,8 +30,7 @@ class AgentResult:
 
 class AgentBackend(Protocol):
     name: str
-    pilot_type: str
-    eligible_for_L_gate: bool
+    collection_kind: str
 
     def run(
         self,

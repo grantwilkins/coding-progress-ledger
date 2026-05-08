@@ -19,9 +19,7 @@ def _run_dirs_from_args(paths: list[str]) -> list[Path]:
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(
-        description="Audit corpus artifact completeness, redaction, and validation-attempt precision."
-    )
+    parser = argparse.ArgumentParser(description="Audit corpus artifact completeness and redaction safety.")
     parser.add_argument("paths", nargs="+", help="Run directories or corpus directories.")
     parser.add_argument("--out", required=True)
     args = parser.parse_args(argv)

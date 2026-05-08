@@ -52,8 +52,8 @@ Full raw exports belong under ignored local paths such as `datasets/raw/` or a
 run scratch directory. They are inputs to inspection and feasibility only, not
 committed collection artifacts.
 
-This repo may train and evaluate the estimator on derived telemetry and
-labels for internal measurement.
+Downstream systems may train or evaluate on derived telemetry. This repo only
+produces and audits trace artifacts.
 
 It must not train general-purpose language models on:
 

@@ -86,10 +86,6 @@ def corpus_observation_quality_report(run_dirs: list[Path]) -> dict[str, Any]:
         "shell_stdout_snippet_coverage": _ratio(weighted_stdout, shell_rows),
         "shell_stderr_snippet_coverage": _ratio(weighted_stderr, shell_rows),
         "median_observation_events_per_run": median(event_counts) if event_counts else 0,
-        "pilot_gates": {
-            "median_observation_events_per_run_min": 10,
-            "median_observation_events_per_run_passed": bool(event_counts and median(event_counts) >= 10),
-        },
         "passed": all(report["passed"] for report in reports),
         "runs": reports,
     }

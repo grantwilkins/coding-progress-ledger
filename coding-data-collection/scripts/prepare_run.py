@@ -39,7 +39,6 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--run-dir", required=True)
     parser.add_argument("--collection-root", default=".")
     parser.add_argument("--ledger-root", default="../coding-progress-ledger")
-    parser.add_argument("--estimator-root", default="../coding-estimator")
     args = parser.parse_args(argv)
 
     task_dir = Path(args.task_dir)
@@ -74,7 +73,6 @@ def main(argv: list[str] | None = None) -> int:
         run_dir,
         collection_root=Path(args.collection_root),
         ledger_root=Path(args.ledger_root),
-        estimator_root=Path(args.estimator_root),
     )
     print(str(workspace))
     return 0

@@ -4,8 +4,8 @@ The collection harness preserves the scientific boundary between visible
 agent-prefix evidence and post-run verifier/oracle information. Hidden
 benchmark materials must be detected if they enter the agent workspace,
 terminal verifier facts must remain post-terminal, unresolved verifier state
-must not become a model failure, and task scoring must prefer rich but
-operationally feasible trajectories.
+must not become a model failure, and trace artifacts must remain
+status-specific.
 
 Plausible wrong implementations:
 - Treat `tests/` as an ordinary workspace directory and miss hidden-test leakage.
@@ -14,7 +14,6 @@ Plausible wrong implementations:
 - Compare expected and written product paths without normalizing `./` prefixes.
 - Mark a run with no verifier result as `completed_failure`, contaminating
   terminal-success labels with infrastructure failures.
-- Let operational risk bonuses overwhelm trajectory-richness scoring.
 """
 
 from __future__ import annotations
@@ -33,7 +32,6 @@ from coding_data_collection.protocol import (
     RunStatus,
     required_artifacts_for_status,
 )
-from coding_data_collection.task_scoring import TaskScoreInput, score_task
 
 
 def _event_types(events: list[dict]) -> list[str]:
@@ -81,8 +79,6 @@ def test_prepare_run_excludes_nested_hidden_paths_and_symlinks(tmp_path: Path) -
             "--collection-root",
             str(Path(__file__).resolve().parents[1]),
             "--ledger-root",
-            str(tmp_path),
-            "--estimator-root",
             str(tmp_path),
         ],
         cwd=Path(__file__).resolve().parents[1],
@@ -275,65 +271,6 @@ def test_finalize_without_verifier_result_is_infrastructure_failure(tmp_path: Pa
     manifest = json.loads((run_dir / "run_manifest.json").read_text(encoding="utf-8"))
     assert manifest["run_status"] == "infrastructure_failure"
     assert manifest["analysis_inclusion"]["terminal_success"] is False
-
-
-def test_task_priority_increases_with_richness_but_decreases_with_equal_risk() -> None:
-    base = dict(
-        expected_runtime_bucket=3,
-        expected_validation_visibility=2,
-        expected_file_edit_complexity=2,
-        expected_environment_complexity=1,
-        expected_failure_modes=2,
-        oracle_test_leakage_risk=1,
-        docker_feasibility=4,
-        requires_internet=False,
-        large_download_or_build=False,
-    )
-    low_richness = score_task(TaskScoreInput(task_id="low", **base))
-    richer_same_risk = score_task(
-        TaskScoreInput(
-            task_id="rich",
-            **{
-                **base,
-                "expected_validation_visibility": 4,
-                "expected_failure_modes": 4,
-            },
-        )
-    )
-    same_richness_higher_risk = score_task(
-        TaskScoreInput(
-            task_id="risky",
-            **{
-                **base,
-                "oracle_test_leakage_risk": 3,
-                "requires_internet": True,
-            },
-        )
-    )
-
-    assert richer_same_risk.pilot_priority > low_richness.pilot_priority
-    assert same_richness_higher_risk.pilot_priority < low_richness.pilot_priority
-
-
-def test_task_scoring_exact_hand_checked_arithmetic() -> None:
-    score = score_task(
-        TaskScoreInput(
-            task_id="case",
-            expected_runtime_bucket=2,
-            expected_validation_visibility=3,
-            expected_file_edit_complexity=4,
-            expected_environment_complexity=5,
-            expected_failure_modes=1,
-            oracle_test_leakage_risk=2,
-            docker_feasibility=3,
-            requires_internet=True,
-            large_download_or_build=True,
-        )
-    )
-
-    assert score.trajectory_richness == 2 + 2 * 3 + 4 + 5 + 2 * 1
-    assert score.operational_risk == 3 * 2 + (5 - 3) + 3 + 2
-    assert score.pilot_priority == score.trajectory_richness - score.operational_risk
 
 
 def test_ledger_wire_events_preserve_sparse_steps_and_conservative_inferred_ops() -> None:

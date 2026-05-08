@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 import argparse
+import json
 import shutil
 import subprocess
 import sys
+import time
 from pathlib import Path
 
 from coding_data_collection.agents.base import AgentBudget
@@ -16,7 +18,7 @@ from coding_data_collection.agents.model_client import (
 from coding_data_collection.agents.model_tool_loop import ModelToolLoopBackend
 from coding_data_collection.agents.prompt_builder import SYSTEM_PROMPT, TOOL_SPECS
 from coding_data_collection.agent_preflight import run_agent_readiness_preflight, write_agent_readiness_report
-from coding_data_collection.artifacts import read_json, write_json, write_protocol_manifest, write_run_manifest
+from coding_data_collection.artifacts import utc_now, read_json, write_json, write_protocol_manifest, write_run_manifest
 from coding_data_collection.docker_substrate import (
     DockerResourceLimits,
     build_docker_image,
@@ -45,7 +47,6 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--max-tokens-out", type=int, default=2048)
     parser.add_argument("--collection-root", default=".")
     parser.add_argument("--ledger-root", default="../coding-progress-ledger")
-    parser.add_argument("--estimator-root", default="../coding-estimator")
     parser.add_argument("--verifier-command", default="bash /task/run-tests.sh")
     parser.add_argument("--cpus", type=int, default=1)
     parser.add_argument("--memory-mb", type=int, default=2048)
@@ -56,13 +57,13 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--min-steps-before-done",
         type=int,
-        default=15,
+        default=0,
         help="Reject done actions before this transcript step unless the run is genuinely blocked.",
     )
     parser.add_argument(
         "--require-validation-before-done",
         action=argparse.BooleanOptionalAction,
-        default=True,
+        default=False,
         help="Require a validation-like shell attempt before accepting done unless blocked.",
     )
     parser.add_argument(
@@ -93,21 +94,13 @@ def main(argv: list[str] | None = None) -> int:
     )
     parser.add_argument("--skip-build", action="store_true")
     parser.add_argument("--skip-sidecar", action="store_true")
-    parser.add_argument(
-        "--eligible-for-L-gate",
-        action=argparse.BooleanOptionalAction,
-        default=None,
-        help="Override L-gate eligibility for provider smoke/debug runs.",
-    )
-    parser.add_argument(
-        "--pilot-type",
-        help="Override pilot_type recorded in run manifests, e.g. openrouter_free_smoke.",
-    )
     args = parser.parse_args(argv)
 
     task_dir = Path(args.task_dir)
     run_dir = Path(args.run_dir)
     run_id = run_dir.name
+    run_started_at = utc_now()
+    run_start_monotonic = time.monotonic()
     run_dir.mkdir(parents=True, exist_ok=True)
     _write_task_md(task_dir, run_dir)
 
@@ -123,8 +116,6 @@ def main(argv: list[str] | None = None) -> int:
             args.collection_root,
             "--ledger-root",
             args.ledger_root,
-            "--estimator-root",
-            args.estimator_root,
         ],
         text=True,
         capture_output=True,
@@ -178,7 +169,6 @@ def main(argv: list[str] | None = None) -> int:
         run_dir,
         collection_root=Path(args.collection_root),
         ledger_root=Path(args.ledger_root),
-        estimator_root=Path(args.estimator_root),
     )
 
     container_name = _container_name(run_id, "agent")
@@ -211,14 +201,14 @@ def main(argv: list[str] | None = None) -> int:
                 termination_reason="agent_readiness_preflight_failed",
                 metrics={
                     "agent_backend": "model_tool_loop",
-                    "pilot_type": "real_agent_pilot" if args.client == "provider" else "scripted_model_smoke",
-                    "eligible_for_L_gate": False,
+                    "collection_kind": _collection_kind(args),
                     "model_provider": args.model_provider if args.client == "provider" else "scripted",
                     "model_name": args.model_name,
                     "agent_readiness_preflight_passed": False,
                     "agent_readiness_failed_checks": preflight["failed_checks"],
                     "agent_readiness_manual_review_checks": preflight["manual_review_checks"],
                 },
+                **_timing_kwargs(run_started_at, run_start_monotonic),
             )
             (run_dir / "run_notes.md").write_text(
                 "# Run Notes\n\n"
@@ -250,14 +240,14 @@ def main(argv: list[str] | None = None) -> int:
             termination_reason="agent_readiness_preflight_passed",
             metrics={
                 "agent_backend": "model_tool_loop",
-                "pilot_type": "preflight_only",
-                "eligible_for_L_gate": False,
+                "collection_kind": "preflight_only",
                 "model_provider": args.model_provider if args.client == "provider" else "scripted",
                 "model_name": args.model_name,
                 "agent_readiness_preflight_passed": True,
                 "agent_readiness_failed_checks": [],
                 "agent_readiness_manual_review_checks": [],
             },
+            **_timing_kwargs(run_started_at, run_start_monotonic),
         )
         (run_dir / "run_notes.md").write_text(
             "# Run Notes\n\n"
@@ -289,19 +279,19 @@ def main(argv: list[str] | None = None) -> int:
                 termination_reason="provider_route_preflight_failed",
                 metrics={
                     "agent_backend": "model_tool_loop",
-                    "pilot_type": "real_agent_pilot",
-                    "eligible_for_L_gate": False,
+                    "collection_kind": _collection_kind(args),
                     "model_provider": args.model_provider,
                     "model_name": args.model_name,
                     "provider_route_preflight_passed": False,
                     "provider_route_preflight_issues": preflight["issues"],
                     **_provider_metrics_for_manifest(model_client_metrics(preflight_client)),
                 },
+                **_timing_kwargs(run_started_at, run_start_monotonic),
             )
             (run_dir / "run_notes.md").write_text(
                 "# Run Notes\n\n"
                 "Run stopped before agent-loop collection because the provider route failed preflight. "
-                "Use a structured-output-capable fixed route or mark this arm L-ineligible.\n",
+                "Use a structured-output-capable fixed route before collecting traces.\n",
                 encoding="utf-8",
             )
             return 2
@@ -310,8 +300,7 @@ def main(argv: list[str] | None = None) -> int:
     backend = ModelToolLoopBackend(
         model_client,
         model_name=args.model_name,
-        eligible_for_l_gate=args.eligible_for_L_gate,
-        pilot_type=args.pilot_type,
+        collection_kind=_collection_kind(args),
     )
     result = None
     verifier_exit_code: int | None = None
@@ -358,6 +347,7 @@ def main(argv: list[str] | None = None) -> int:
             final_success=None,
             termination_reason="agent_image_commit_failed",
             metrics=_manifest_metrics(args, backend, result),
+            **_timing_kwargs(run_started_at, run_start_monotonic),
         )
         return 1
     committed_manifest = read_json(run_dir / "environment_manifest.json")
@@ -388,6 +378,7 @@ def main(argv: list[str] | None = None) -> int:
                 final_success=None,
                 termination_reason="sidecar_replay_failed",
                 metrics=_manifest_metrics(args, backend, result),
+                **_timing_kwargs(run_started_at, run_start_monotonic),
             )
             return sidecar.returncode
 
@@ -399,6 +390,7 @@ def main(argv: list[str] | None = None) -> int:
         final_success=final_success,
         termination_reason="verifier_pass" if final_success else "verifier_fail",
         metrics=_manifest_metrics(args, backend, result),
+        **_timing_kwargs(run_started_at, run_start_monotonic),
     )
     (run_dir / "run_notes.md").write_text(
         "# Run Notes\n\nHost-side model_tool_loop backend with Docker sandbox executor.\n",
@@ -519,13 +511,9 @@ def _run_verifier(
 def _manifest_metrics(args: argparse.Namespace, backend: ModelToolLoopBackend, result) -> dict:
     client_metrics = model_client_metrics(backend.model_client)
     provider_metrics = _provider_metrics_for_manifest(client_metrics)
-    eligible_for_l_gate = backend.eligible_for_L_gate
-    if args.client == "provider":
-        eligible_for_l_gate = eligible_for_l_gate and _provider_route_l_eligible(client_metrics)
     return {
         "agent_backend": backend.name,
-        "pilot_type": backend.pilot_type,
-        "eligible_for_L_gate": eligible_for_l_gate,
+        "collection_kind": backend.collection_kind,
         "model_provider": args.model_provider if args.client == "provider" else "scripted",
         "model_name": args.model_name,
         "temperature": args.temperature,
@@ -592,8 +580,8 @@ def _run_provider_route_preflight(model_client, *, task_md: str) -> dict:
             parse_model_action(json.loads(raw) if isinstance(raw, str) else raw)
         except (TypeError, ValueError, json.JSONDecodeError) as exc:
             issues.append(f"provider route did not return valid action JSON: {exc}")
-    if not _provider_route_l_eligible(metrics):
-        issues.append("provider route did not record L-eligible metadata with nonzero usage and no fallback")
+    if not _provider_route_has_usage(metrics):
+        issues.append("provider route did not record provider usage metadata with no fallback")
     return {
         "passed": not issues,
         "issues": issues,
@@ -601,7 +589,7 @@ def _run_provider_route_preflight(model_client, *, task_md: str) -> dict:
     }
 
 
-def _provider_route_l_eligible(metrics: dict) -> bool:
+def _provider_route_has_usage(metrics: dict) -> bool:
     return (
         bool(metrics.get("provider_calls"))
         and bool(metrics.get("resolved_models"))
@@ -617,6 +605,22 @@ def _provider_metrics_for_manifest(metrics: dict) -> dict:
         "last_provider_call": metrics.get("last_provider_call"),
         "fallback_call_count": metrics.get("fallback_call_count"),
         "resolved_models": metrics.get("resolved_models"),
+    }
+
+
+def _collection_kind(args: argparse.Namespace) -> str:
+    if args.preflight_only:
+        return "preflight_only"
+    if args.client == "scripted":
+        return "scripted_model"
+    return "model_agent"
+
+
+def _timing_kwargs(started_at: str, start_monotonic: float) -> dict:
+    return {
+        "started_at": started_at,
+        "ended_at": utc_now(),
+        "wallclock_seconds": time.monotonic() - start_monotonic,
     }
 
 

@@ -9,8 +9,7 @@ from coding_data_collection.sandbox.docker_executor import SandboxExecutor
 
 class ShellCommandBackend:
     name = "shell_command"
-    pilot_type = "protocol_smoke"
-    eligible_for_L_gate = False
+    collection_kind = "substrate_smoke"
 
     def __init__(self, command: str) -> None:
         self.command = command

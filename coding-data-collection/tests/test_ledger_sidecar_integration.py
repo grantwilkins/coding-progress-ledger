@@ -161,3 +161,17 @@ def test_ledger_sidecar_report_requires_collection_control_artifacts(tmp_path: P
     assert report["collection_run_valid"] is False
     assert "run_manifest.json" in report["missing_collection_control_artifacts"]
     assert "run_manifest.json: missing collection control artifact" in report["issues"]
+
+
+def test_ledger_sidecar_report_treats_progress_artifacts_as_optional(tmp_path: Path) -> None:
+    transcript = [{"step": 1, "kind": "shell", "command": "pytest -q", "summary": "run tests"}]
+    write_wire_events(tmp_path / "events.jsonl", transcript_to_wire_events(transcript, run_id="r1"))
+    (tmp_path / "ledger.jsonl").write_text('{"event_type":"init"}\n', encoding="utf-8")
+
+    report = ledger_sidecar_report(tmp_path)
+
+    assert report["generated_artifacts"]["progress.csv"]["exists"] is False
+    assert report["generated_artifacts"]["progress_by_category.csv"]["exists"] is False
+    assert report["generated_artifacts"]["summary_by_category.json"]["exists"] is False
+    assert not any(issue.startswith("progress.csv") for issue in report["issues"])
+    assert not any(issue.startswith("summary_by_category.json") for issue in report["issues"])

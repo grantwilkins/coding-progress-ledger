@@ -10,8 +10,9 @@ Each run has three phases:
    ledger artifacts, verifier outputs, manifests, and notes.
 
 The run protocol is intentionally a coordination layer. Ledger replay and
-progress scoring are delegated to `coding-progress-ledger`. Checkpoints,
-labels, and estimator predictions are delegated to `coding-estimator`.
+progress scoring are delegated to `coding-progress-ledger`. Downstream
+estimation consumes the trace tuple after this repository has finished
+collection and audits.
 
 ## Required Version Fields
 
@@ -22,17 +23,13 @@ run_protocol_version
 artifact_layout_version
 observation_event_schema_version
 ledger_wire_schema_version
-checkpoint_schema_version
-label_schema_version
-estimator_feature_schema_version
 benchmark_adapter_version
 coding_progress_ledger_sha
-coding_estimator_sha
 coding_data_collection_sha
 ```
 
 JSON artifacts are validated against committed schemas in `schemas/` before
-pilot collection. JSONL artifacts are validated line-by-line:
+trace collection. JSONL artifacts are validated line-by-line:
 
 ```text
 run_manifest.json              schemas/run_manifest.schema.json

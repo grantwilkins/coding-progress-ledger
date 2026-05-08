@@ -80,8 +80,7 @@ def test_model_tool_loop_records_real_multi_step_trajectory(tmp_path: Path) -> N
     recorder = RunRecorder(run_dir=tmp_path, run_id="run1")
     backend = ModelToolLoopBackend(ScriptedModelClient(actions))
 
-    assert backend.eligible_for_L_gate is False
-    assert backend.pilot_type == "scripted_model_smoke"
+    assert backend.collection_kind == "scripted_model"
 
     result = backend.run(
         run_id="run1",
@@ -103,6 +102,14 @@ def test_model_tool_loop_records_real_multi_step_trajectory(tmp_path: Path) -> N
     assert any(event["event_type"] == "validation_attempt" for event in observations)
     assert any(event["event_type"] == "validation_fail_observed" for event in observations)
     assert max(event["step"] for event in observations if event["event_type"] == "verifier_fail") == 11
+
+
+def test_agent_budget_defaults_accept_natural_done() -> None:
+    budget = AgentBudget()
+
+    assert budget.min_steps_before_done == 0
+    assert budget.require_validation_before_done is False
+    assert budget.allow_blocked_done is True
 
 
 def test_agent_preflight_fails_when_hidden_image_paths_are_readable(tmp_path: Path, monkeypatch) -> None:
@@ -409,7 +416,7 @@ def test_model_tool_loop_allows_blocked_done_before_depth(tmp_path: Path) -> Non
     assert [row["kind"] for row in transcript] == ["thought", "done"]
 
 
-def test_provider_model_client_is_pilot_eligible_and_records_usage(tmp_path: Path) -> None:
+def test_provider_model_client_defaults_to_model_agent_and_records_usage(tmp_path: Path) -> None:
     adapter = tmp_path / "adapter.py"
     adapter.write_text(
         "\n".join(
@@ -440,26 +447,11 @@ def test_provider_model_client_is_pilot_eligible_and_records_usage(tmp_path: Pat
         recorder=recorder,
     )
 
-    assert backend.eligible_for_L_gate is True
-    assert backend.pilot_type == "real_agent_pilot"
+    assert backend.collection_kind == "model_agent"
     assert result.completed is True
     assert result.tokens_in == 11
     assert result.tokens_out == 7
     assert result.estimated_cost_usd == 0.02
-
-
-def test_provider_model_client_can_be_forced_l_ineligible_for_smoke() -> None:
-    client = ScriptedModelClient([], model_name="fake-provider")
-    client.provider_backed = True
-    backend = ModelToolLoopBackend(
-        client,
-        model_name="fake-provider",
-        eligible_for_l_gate=False,
-        pilot_type="openrouter_free_smoke",
-    )
-
-    assert backend.eligible_for_L_gate is False
-    assert backend.pilot_type == "openrouter_free_smoke"
 
 
 def test_provider_model_client_records_provider_routing_metadata(tmp_path: Path) -> None:
@@ -574,8 +566,8 @@ def test_model_tool_loop_records_provider_adapter_error_as_typed_event(tmp_path:
     assert transcript[0]["stderr_snippet"] == "bad provider route"
 
 
-def test_run_model_agent_pilot_provider_route_l_eligibility_requires_metadata(tmp_path: Path) -> None:
-    module = _load_script_module("run_model_agent_pilot.py")
+def test_run_model_agent_trace_provider_route_preflight_requires_metadata(tmp_path: Path) -> None:
+    module = _load_script_module("run_model_agent_trace.py")
     adapter = tmp_path / "adapter.py"
     adapter.write_text(
         "\n".join(
@@ -599,12 +591,12 @@ def test_run_model_agent_pilot_provider_route_l_eligibility_requires_metadata(tm
     preflight = module._run_provider_route_preflight(client, task_md="Fix app.py")
 
     assert preflight["passed"] is True
-    assert module._provider_route_l_eligible(client.metrics()) is True
-    assert module._provider_route_l_eligible({"provider_calls": [], "total_tokens_in": 0}) is False
+    assert module._provider_route_has_usage(client.metrics()) is True
+    assert module._provider_route_has_usage({"provider_calls": [], "total_tokens_in": 0}) is False
 
 
-def test_run_model_agent_pilot_provider_route_preflight_rejects_adapter_error(tmp_path: Path) -> None:
-    module = _load_script_module("run_model_agent_pilot.py")
+def test_run_model_agent_trace_provider_route_preflight_rejects_adapter_error(tmp_path: Path) -> None:
+    module = _load_script_module("run_model_agent_trace.py")
     adapter = tmp_path / "adapter.py"
     adapter.write_text("import sys\nsys.stderr.write('HTTP 400 unsupported response_format')\nsys.exit(1)\n", encoding="utf-8")
     client = ProviderModelClient(
@@ -617,30 +609,6 @@ def test_run_model_agent_pilot_provider_route_preflight_rejects_adapter_error(tm
     assert preflight["passed"] is False
     assert any("provider adapter exited 1" in issue for issue in preflight["issues"])
     assert any("unsupported response_format" in issue for issue in preflight["issues"])
-
-
-def test_execute_pilot_plan_preflights_provider_arms_before_runs(tmp_path: Path) -> None:
-    module = _load_script_module("execute_pilot_plan_continue.py")
-    adapter = tmp_path / "adapter.py"
-    adapter.write_text("import sys\nsys.stderr.write('route unavailable')\nsys.exit(1)\n", encoding="utf-8")
-    plan = {
-        "arms": [
-            {
-                "name": "bad",
-                "backend": "model_tool_loop",
-                "client": "provider",
-                "model_provider": "openrouter",
-                "model": "bad-route",
-                "model_command": f"{sys.executable} {adapter}",
-            }
-        ]
-    }
-
-    report = module._preflight_provider_arms(plan)
-
-    assert report["passed"] is False
-    assert report["arms"][0]["name"] == "bad"
-    assert any("provider adapter exited 1" in issue for issue in report["arms"][0]["issues"])
 
 
 def test_openai_adapter_builds_structured_response_payload() -> None:
@@ -993,7 +961,7 @@ def test_openai_compatible_adapter_response_excerpt_for_bad_model_output() -> No
 
 
 def test_task_yaml_instruction_is_materialized_without_canary(tmp_path: Path) -> None:
-    module = _load_script_module("run_model_agent_pilot.py")
+    module = _load_script_module("run_model_agent_trace.py")
     task_yaml = tmp_path / "task.yaml"
     task_yaml.write_text(
         "\n".join(
@@ -1017,7 +985,7 @@ def test_task_yaml_instruction_is_materialized_without_canary(tmp_path: Path) ->
     assert "hidden" not in task_md
 
 
-def test_audit_real_model_run_passes_mocked_complete_provider_run(tmp_path: Path) -> None:
+def test_audit_trace_run_passes_mocked_complete_provider_run(tmp_path: Path) -> None:
     run_dir = tmp_path / "run"
     workspace = run_dir / "agent_workspace"
     workspace.mkdir(parents=True)
@@ -1059,10 +1027,12 @@ def test_audit_real_model_run_passes_mocked_complete_provider_run(tmp_path: Path
         {
             "run_status": "completed_failure",
             "final_success": False,
+            "started_at": "2026-05-05T00:00:00Z",
+            "ended_at": "2026-05-05T00:00:10Z",
+            "wallclock_seconds": 10.0,
             "metrics": {
                 "agent_backend": "model_tool_loop",
-                "pilot_type": "real_agent_pilot",
-                "eligible_for_L_gate": True,
+                "collection_kind": "model_agent",
                 "model_provider": "command",
                 "model_name": "real",
                 "temperature": 0.0,
@@ -1077,7 +1047,7 @@ def test_audit_real_model_run_passes_mocked_complete_provider_run(tmp_path: Path
         },
     )
 
-    script = Path(__file__).resolve().parents[1] / "scripts" / "audit_real_model_run.py"
+    script = Path(__file__).resolve().parents[1] / "scripts" / "audit_trace_run.py"
     proc = subprocess.run(
         [sys.executable, str(script), str(run_dir), "--min-transcript-steps", "5"],
         text=True,

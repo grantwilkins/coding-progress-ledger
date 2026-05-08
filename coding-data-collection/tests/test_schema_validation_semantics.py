@@ -1,7 +1,7 @@
 """
 Claim:
 The collection validator enforces protocol compatibility at the run-artifact
-boundary before pilot collection. Completed runs require terminal artifacts,
+boundary before trace collection. Completed runs require terminal artifacts,
 non-terminal infrastructure states cannot enter terminal-success analysis,
 post-terminal observations must stay after the transcript, and ledger wire
 events must match the sidecar's semantic op contract.
@@ -62,7 +62,6 @@ def _write_minimal_completed_run(run_dir: Path) -> None:
         {
             **VERSIONS.to_dict(),
             "coding_progress_ledger_sha": "ledger",
-            "coding_estimator_sha": "estimator",
             "coding_data_collection_sha": "collection",
         },
     )
@@ -102,7 +101,7 @@ def test_complete_run_validates_only_when_all_terminal_artifacts_and_versions_ma
     assert "verifier_output.txt: missing for status completed_success" in messages
 
 
-def test_schema_version_drift_is_rejected_before_pilot_collection(tmp_path: Path) -> None:
+def test_schema_version_drift_is_rejected_before_trace_collection(tmp_path: Path) -> None:
     _write_minimal_completed_run(tmp_path)
     protocol = json.loads((tmp_path / "protocol_manifest.json").read_text(encoding="utf-8"))
     protocol["observation_event_schema_version"] = "0.1.0"

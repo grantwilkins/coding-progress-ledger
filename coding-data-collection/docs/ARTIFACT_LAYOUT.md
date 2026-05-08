@@ -1,6 +1,6 @@
 # Artifact Layout
 
-Required for every completed run:
+Required for every completed trace run:
 
 ```text
 runs/<corpus>/<run_id>/
@@ -12,32 +12,24 @@ runs/<corpus>/<run_id>/
   observation_events.jsonl
   events.jsonl
   ledger.jsonl
-  progress.csv
-  progress_by_category.csv
-  summary_by_category.json
   run_manifest.json
   verifier_output.txt
-  run_notes.md
 ```
 
-Required after estimator build:
+Optional derived or byproduct artifacts:
 
 ```text
-checkpoints.parquet
-labels.parquet
-estimator_predictions.parquet
-checkpoint_feature_manifest.json
-```
-
-Conditional:
-
-```text
+progress.csv
+progress_by_category.csv
+summary_by_category.json
 final_diff.patch
 patch_predictions.json
 container_logs.txt
 docker_build.log
 harbor_job_metadata.json
 swe_bench_patch.json
+run_notes.md
+preflight reports
 ```
 
 Infrastructure failures still require:

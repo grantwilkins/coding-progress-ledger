@@ -12,9 +12,6 @@ class ProtocolVersions:
     artifact_layout_version: str = "0.1.0"
     observation_event_schema_version: str = "0.2.0"
     ledger_wire_schema_version: str = "1.0.0"
-    checkpoint_schema_version: str = "0.1.0"
-    label_schema_version: str = "0.1.0"
-    estimator_feature_schema_version: str = "0.1.0"
     benchmark_adapter_version: str = "0.1.0"
 
     def to_dict(self) -> dict[str, str]:
@@ -47,19 +44,8 @@ REQUIRED_RUN_ARTIFACTS = (
     "observation_events.jsonl",
     "events.jsonl",
     "ledger.jsonl",
-    "progress.csv",
-    "progress_by_category.csv",
-    "summary_by_category.json",
     "run_manifest.json",
     "verifier_output.txt",
-    "run_notes.md",
-)
-
-ESTIMATOR_STAGE_ARTIFACTS = (
-    "checkpoints.parquet",
-    "labels.parquet",
-    "estimator_predictions.parquet",
-    "checkpoint_feature_manifest.json",
 )
 
 CONDITIONAL_ARTIFACTS = (
@@ -95,9 +81,6 @@ PROCESS_DYNAMICS_REQUIRED_ARTIFACTS = (
     "observation_events.jsonl",
     "events.jsonl",
     "ledger.jsonl",
-    "progress.csv",
-    "progress_by_category.csv",
-    "summary_by_category.json",
     "run_manifest.json",
     "run_notes.md",
 )
@@ -139,14 +122,12 @@ def analysis_inclusion(status: RunStatus | str) -> dict[str, bool]:
 def protocol_manifest_payload(
     *,
     coding_progress_ledger_sha: str,
-    coding_estimator_sha: str,
     coding_data_collection_sha: str,
     extra: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     payload: dict[str, Any] = {
         **VERSIONS.to_dict(),
         "coding_progress_ledger_sha": coding_progress_ledger_sha,
-        "coding_estimator_sha": coding_estimator_sha,
         "coding_data_collection_sha": coding_data_collection_sha,
     }
     if extra:

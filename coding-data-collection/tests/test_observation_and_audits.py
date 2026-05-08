@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from coding_data_collection.audits import prefix_safety_report, scan_agent_workspace_for_leakage
+from coding_data_collection.audits import scan_agent_workspace_for_leakage
 from coding_data_collection.observation import build_observation_events
 
 
@@ -169,28 +169,3 @@ def test_leakage_scanner_detects_hidden_files(tmp_path: Path) -> None:
     report = scan_agent_workspace_for_leakage(tmp_path)
     assert report["passed"] is False
     assert "solution.sh" in report["leakage_hits"]
-
-
-def test_prefix_safety_requires_provenance_and_blocks_terminal_preterminal() -> None:
-    observation_events = [
-        {"step": 5, "event_type": "verifier_fail"},
-    ]
-    checkpoints = [
-        {
-            "checkpoint_step": 3,
-            "max_ledger_step_used": 3,
-            "max_observation_step_used": 3,
-            "is_terminal_checkpoint": False,
-        },
-        {
-            "checkpoint_step": 5,
-            "max_ledger_step_used": 5,
-            "max_observation_step_used": 5,
-            "is_terminal_checkpoint": True,
-        },
-    ]
-    assert prefix_safety_report(checkpoints, observation_events)["passed"]
-
-    bad = [dict(checkpoints[0], max_observation_step_used=5)]
-    report = prefix_safety_report(bad, observation_events)
-    assert report["passed"] is False

@@ -83,8 +83,8 @@ use the archive path for instrumented collection.
 
 Source: `ScaleAI/SWE-bench_Pro`.
 
-Inspect-only until Terminal-Bench gates pass. The adapter emits future
-command plans containing:
+Inspect-only until Terminal-Bench trace collection is mature enough to justify
+the extra substrate. The adapter emits future command plans containing:
 
 ```text
 repo

@@ -56,8 +56,8 @@ last transcript step, even if the JSON shape is otherwise valid.
 
 ## Quality Metrics
 
-`scripts/audit_observation_quality.py` computes pilot-gate metrics over one or
-more run directories:
+`scripts/audit_observation_quality.py` computes observation quality metrics
+over one or more run directories:
 
 ```text
 shell_exit_code_coverage
@@ -73,7 +73,5 @@ Snippet coverage is based on capture-field presence, not non-empty output. A
 command that produced no stdout still counts as covered if `stdout_snippet` or
 `obs_snippet` is present with an empty captured value.
 
-The audit reports the later pilot gate
-`median_observation_events_per_run >= 10` separately from smoke-quality pass
-status. The four-run smoke corpus is expected to exercise the metric surface,
-not to satisfy that pilot-scale density gate.
+The audit reports coverage and schema safety only. Density thresholds, when
+needed, belong to downstream analysis plans rather than this trace producer.
