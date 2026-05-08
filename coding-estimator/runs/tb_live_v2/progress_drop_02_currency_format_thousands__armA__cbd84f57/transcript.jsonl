@@ -1,4 +1,0 @@
-{"step": 1, "ts": "2026-05-05T16:47:07Z", "kind": "list_dir", "summary": "inspect workspace contents", "path": "/var/folders/3j/5n1r8yyx2d58jn87prrxs_lm0000gn/T/tb_live_v2_progress_drop_02_currency_format_thousands__armA__cbd84f57_ajmuns6k"}
-{"step": 2, "ts": "2026-05-05T16:47:13Z", "kind": "write_file", "summary": "create format_amount.py", "path": "/var/folders/3j/5n1r8yyx2d58jn87prrxs_lm0000gn/T/tb_live_v2_progress_drop_02_currency_format_thousands__armA__cbd84f57_ajmuns6k/format_amount.py"}
-{"step": 3, "ts": "2026-05-05T16:47:28Z", "kind": "shell", "summary": "verify format_amount with examples", "command": "python3 -c ..."}
-{"step": 4, "ts": "2026-05-05T16:47:43Z", "kind": "done", "summary": "format_amount.py implemented; manual checks for 0, 150, 1234567, -150, -1234567, 99, -99 all match canonical form"}

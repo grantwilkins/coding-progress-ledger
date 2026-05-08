@@ -1,3 +1,0 @@
-# Task
-
-low_progress_success_01_oneline_fix__armC__f928184b

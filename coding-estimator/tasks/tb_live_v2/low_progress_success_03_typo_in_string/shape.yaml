@@ -1,8 +1,0 @@
-target_shape: low_progress_success
-secondary_shapes: []
-expected_pass_rate: 0.90
-notes: |
-  One-character typo: change `terminl-bench` → `terminal-bench` in the
-  greet string. Agents that read first and edit second produce a
-  trajectory with very few discovered subtasks (one investigation,
-  one edit, one validation), giving a low-progress success shape.

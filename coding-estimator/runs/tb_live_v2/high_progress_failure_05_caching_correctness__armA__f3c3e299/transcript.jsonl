@@ -1,5 +1,0 @@
-{"step": 1, "ts": "2026-05-05T16:30:48.956279Z", "kind": "list_dir", "summary": "list workspace", "path": "/var/folders/3j/5n1r8yyx2d58jn87prrxs_lm0000gn/T/tb_live_v2_high_progress_failure_05_caching_correctness__armA__f3c3e299_ygm4kjk9"}
-{"step": 2, "ts": "2026-05-05T16:30:53.625411Z", "kind": "read_file", "summary": "inspect task.md", "path": "/var/folders/3j/5n1r8yyx2d58jn87prrxs_lm0000gn/T/tb_live_v2_high_progress_failure_05_caching_correctness__armA__f3c3e299_ygm4kjk9/task.md"}
-{"step": 3, "ts": "2026-05-05T16:31:01.411412Z", "kind": "write_file", "summary": "write lookup.py", "path": "/var/folders/3j/5n1r8yyx2d58jn87prrxs_lm0000gn/T/tb_live_v2_high_progress_failure_05_caching_correctness__armA__f3c3e299_ygm4kjk9/lookup.py"}
-{"step": 4, "ts": "2026-05-05T16:31:16.060540Z", "kind": "shell", "summary": "sanity test lookup", "command": "python3 -c ..."}
-{"step": 5, "ts": "2026-05-05T16:31:21.751927Z", "kind": "done", "summary": "implemented lookup.py using table.get(query.lower(),\"NONE\"); O(1) per call, correct under mutation and table replacement"}

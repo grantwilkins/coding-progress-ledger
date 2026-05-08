@@ -1,3 +1,0 @@
-# Task
-
-stuck_blocked_05_make_target_typo__armB__f294fda5

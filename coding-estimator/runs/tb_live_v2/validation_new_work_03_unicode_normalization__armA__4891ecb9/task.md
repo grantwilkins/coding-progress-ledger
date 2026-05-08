@@ -1,3 +1,0 @@
-# Task
-
-validation_new_work_03_unicode_normalization__armA__4891ecb9

@@ -1,3 +1,0 @@
-# Task
-
-progress_drop_02_currency_format_thousands__armA__cbd84f57

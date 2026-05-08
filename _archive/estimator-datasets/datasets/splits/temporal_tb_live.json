@@ -1,0 +1,26 @@
+{
+  "folds": [
+    {
+      "fold_id": "temporal",
+      "test_run_ids": [
+        "graph-tarjan-scc",
+        "xss-filter-bypass-then-fix",
+        "directory-watcher-log-rotator",
+        "b-tree-on-disk",
+        "recover-corrupted-sqlite"
+      ],
+      "train_run_ids": [
+        "markdown-to-html-cli",
+        "csv-streaming-dedup",
+        "tar-extract-with-traversal-guard",
+        "lru-cache-threadsafe",
+        "fix-broken-pyproject-build",
+        "decouple-state-from-controller",
+        "sliding-window-rate-limiter"
+      ]
+    }
+  ],
+  "schema_version": "0.1.0",
+  "scheme": "temporal",
+  "seed": 0
+}

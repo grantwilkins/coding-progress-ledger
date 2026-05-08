@@ -1,3 +1,0 @@
-# Task
-
-stuck_blocked_05_make_target_typo__armA__00a9053b

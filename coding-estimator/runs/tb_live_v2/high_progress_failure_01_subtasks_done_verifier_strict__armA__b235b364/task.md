@@ -1,3 +1,0 @@
-# Task
-
-high_progress_failure_01_subtasks_done_verifier_strict__armA__b235b364

@@ -1,0 +1,235 @@
+{
+  "folds": [
+    {
+      "fold_id": "loro::b-tree-on-disk",
+      "test_run_ids": [
+        "b-tree-on-disk"
+      ],
+      "train_run_ids": [
+        "csv-streaming-dedup",
+        "decouple-state-from-controller",
+        "directory-watcher-log-rotator",
+        "fix-broken-pyproject-build",
+        "graph-tarjan-scc",
+        "lru-cache-threadsafe",
+        "markdown-to-html-cli",
+        "recover-corrupted-sqlite",
+        "sliding-window-rate-limiter",
+        "tar-extract-with-traversal-guard",
+        "xss-filter-bypass-then-fix"
+      ]
+    },
+    {
+      "fold_id": "loro::csv-streaming-dedup",
+      "test_run_ids": [
+        "csv-streaming-dedup"
+      ],
+      "train_run_ids": [
+        "b-tree-on-disk",
+        "decouple-state-from-controller",
+        "directory-watcher-log-rotator",
+        "fix-broken-pyproject-build",
+        "graph-tarjan-scc",
+        "lru-cache-threadsafe",
+        "markdown-to-html-cli",
+        "recover-corrupted-sqlite",
+        "sliding-window-rate-limiter",
+        "tar-extract-with-traversal-guard",
+        "xss-filter-bypass-then-fix"
+      ]
+    },
+    {
+      "fold_id": "loro::decouple-state-from-controller",
+      "test_run_ids": [
+        "decouple-state-from-controller"
+      ],
+      "train_run_ids": [
+        "b-tree-on-disk",
+        "csv-streaming-dedup",
+        "directory-watcher-log-rotator",
+        "fix-broken-pyproject-build",
+        "graph-tarjan-scc",
+        "lru-cache-threadsafe",
+        "markdown-to-html-cli",
+        "recover-corrupted-sqlite",
+        "sliding-window-rate-limiter",
+        "tar-extract-with-traversal-guard",
+        "xss-filter-bypass-then-fix"
+      ]
+    },
+    {
+      "fold_id": "loro::directory-watcher-log-rotator",
+      "test_run_ids": [
+        "directory-watcher-log-rotator"
+      ],
+      "train_run_ids": [
+        "b-tree-on-disk",
+        "csv-streaming-dedup",
+        "decouple-state-from-controller",
+        "fix-broken-pyproject-build",
+        "graph-tarjan-scc",
+        "lru-cache-threadsafe",
+        "markdown-to-html-cli",
+        "recover-corrupted-sqlite",
+        "sliding-window-rate-limiter",
+        "tar-extract-with-traversal-guard",
+        "xss-filter-bypass-then-fix"
+      ]
+    },
+    {
+      "fold_id": "loro::fix-broken-pyproject-build",
+      "test_run_ids": [
+        "fix-broken-pyproject-build"
+      ],
+      "train_run_ids": [
+        "b-tree-on-disk",
+        "csv-streaming-dedup",
+        "decouple-state-from-controller",
+        "directory-watcher-log-rotator",
+        "graph-tarjan-scc",
+        "lru-cache-threadsafe",
+        "markdown-to-html-cli",
+        "recover-corrupted-sqlite",
+        "sliding-window-rate-limiter",
+        "tar-extract-with-traversal-guard",
+        "xss-filter-bypass-then-fix"
+      ]
+    },
+    {
+      "fold_id": "loro::graph-tarjan-scc",
+      "test_run_ids": [
+        "graph-tarjan-scc"
+      ],
+      "train_run_ids": [
+        "b-tree-on-disk",
+        "csv-streaming-dedup",
+        "decouple-state-from-controller",
+        "directory-watcher-log-rotator",
+        "fix-broken-pyproject-build",
+        "lru-cache-threadsafe",
+        "markdown-to-html-cli",
+        "recover-corrupted-sqlite",
+        "sliding-window-rate-limiter",
+        "tar-extract-with-traversal-guard",
+        "xss-filter-bypass-then-fix"
+      ]
+    },
+    {
+      "fold_id": "loro::lru-cache-threadsafe",
+      "test_run_ids": [
+        "lru-cache-threadsafe"
+      ],
+      "train_run_ids": [
+        "b-tree-on-disk",
+        "csv-streaming-dedup",
+        "decouple-state-from-controller",
+        "directory-watcher-log-rotator",
+        "fix-broken-pyproject-build",
+        "graph-tarjan-scc",
+        "markdown-to-html-cli",
+        "recover-corrupted-sqlite",
+        "sliding-window-rate-limiter",
+        "tar-extract-with-traversal-guard",
+        "xss-filter-bypass-then-fix"
+      ]
+    },
+    {
+      "fold_id": "loro::markdown-to-html-cli",
+      "test_run_ids": [
+        "markdown-to-html-cli"
+      ],
+      "train_run_ids": [
+        "b-tree-on-disk",
+        "csv-streaming-dedup",
+        "decouple-state-from-controller",
+        "directory-watcher-log-rotator",
+        "fix-broken-pyproject-build",
+        "graph-tarjan-scc",
+        "lru-cache-threadsafe",
+        "recover-corrupted-sqlite",
+        "sliding-window-rate-limiter",
+        "tar-extract-with-traversal-guard",
+        "xss-filter-bypass-then-fix"
+      ]
+    },
+    {
+      "fold_id": "loro::recover-corrupted-sqlite",
+      "test_run_ids": [
+        "recover-corrupted-sqlite"
+      ],
+      "train_run_ids": [
+        "b-tree-on-disk",
+        "csv-streaming-dedup",
+        "decouple-state-from-controller",
+        "directory-watcher-log-rotator",
+        "fix-broken-pyproject-build",
+        "graph-tarjan-scc",
+        "lru-cache-threadsafe",
+        "markdown-to-html-cli",
+        "sliding-window-rate-limiter",
+        "tar-extract-with-traversal-guard",
+        "xss-filter-bypass-then-fix"
+      ]
+    },
+    {
+      "fold_id": "loro::sliding-window-rate-limiter",
+      "test_run_ids": [
+        "sliding-window-rate-limiter"
+      ],
+      "train_run_ids": [
+        "b-tree-on-disk",
+        "csv-streaming-dedup",
+        "decouple-state-from-controller",
+        "directory-watcher-log-rotator",
+        "fix-broken-pyproject-build",
+        "graph-tarjan-scc",
+        "lru-cache-threadsafe",
+        "markdown-to-html-cli",
+        "recover-corrupted-sqlite",
+        "tar-extract-with-traversal-guard",
+        "xss-filter-bypass-then-fix"
+      ]
+    },
+    {
+      "fold_id": "loro::tar-extract-with-traversal-guard",
+      "test_run_ids": [
+        "tar-extract-with-traversal-guard"
+      ],
+      "train_run_ids": [
+        "b-tree-on-disk",
+        "csv-streaming-dedup",
+        "decouple-state-from-controller",
+        "directory-watcher-log-rotator",
+        "fix-broken-pyproject-build",
+        "graph-tarjan-scc",
+        "lru-cache-threadsafe",
+        "markdown-to-html-cli",
+        "recover-corrupted-sqlite",
+        "sliding-window-rate-limiter",
+        "xss-filter-bypass-then-fix"
+      ]
+    },
+    {
+      "fold_id": "loro::xss-filter-bypass-then-fix",
+      "test_run_ids": [
+        "xss-filter-bypass-then-fix"
+      ],
+      "train_run_ids": [
+        "b-tree-on-disk",
+        "csv-streaming-dedup",
+        "decouple-state-from-controller",
+        "directory-watcher-log-rotator",
+        "fix-broken-pyproject-build",
+        "graph-tarjan-scc",
+        "lru-cache-threadsafe",
+        "markdown-to-html-cli",
+        "recover-corrupted-sqlite",
+        "sliding-window-rate-limiter",
+        "tar-extract-with-traversal-guard"
+      ]
+    }
+  ],
+  "schema_version": "0.1.0",
+  "scheme": "loro",
+  "seed": 0
+}

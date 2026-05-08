@@ -1,5 +1,0 @@
-{"step":0,"event_type":"init","subtask_id":null,"payload":{"root_task":"stuck_blocked_02_ambiguous_path__armA__126864e6"},"reason":null,"timestamp":"2026-05-05T08:21:48.672240Z"}
-{"step":1,"event_type":"add_subtask","subtask_id":"S1","payload":{"description":"investigation: list workspace root","parent_id":null,"weight":1.0,"category":"investigation"},"reason":null,"timestamp":"2026-05-05T08:21:48.672240Z"}
-{"step":3,"event_type":"update_status","subtask_id":"S1","payload":{"status":"complete","evidence":["step 3 read_file: /var/folders/3j/5n1r8yyx2d58jn87prrxs_lm0000gn/T/tb_live_v2_stuck_blocked_02_ambiguous_path__armA__126864e6_0jzzj7or/reference/data.txt"]},"reason":null,"timestamp":"2026-05-05T08:22:03.758212Z"}
-{"step":4,"event_type":"add_subtask","subtask_id":"S2","payload":{"description":"product: point script at reference/data.txt","parent_id":null,"weight":1.0,"category":"product"},"reason":null,"timestamp":"2026-05-05T08:22:10.983876Z"}
-{"step":5,"event_type":"update_status","subtask_id":"S2","payload":{"status":"complete","evidence":["step 5 shell: cd <ws> && python3 count_words.py"]},"reason":null,"timestamp":"2026-05-05T08:22:20.834182Z"}

@@ -1,9 +1,0 @@
-target_shape: validation_new_work
-secondary_shapes: [progress_drop]
-expected_pass_rate: 0.50
-notes: |
-  Naive impl: split each line on `\t`, build dict from header. Verifier
-  fixture has a row whose value is `"a\tb"` (a quoted field containing
-  a literal tab); naive split corrupts it. Recovery requires using
-  `csv.reader(..., delimiter='\t', quotechar='"')` or hand-rolled
-  quote-aware parsing — surfacing as a validation_new_work shape.

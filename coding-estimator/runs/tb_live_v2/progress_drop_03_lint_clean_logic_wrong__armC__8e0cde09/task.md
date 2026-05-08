@@ -1,3 +1,0 @@
-# Task
-
-progress_drop_03_lint_clean_logic_wrong__armC__8e0cde09

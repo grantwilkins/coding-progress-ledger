@@ -1,3 +1,0 @@
-# Task
-
-stuck_blocked_02_ambiguous_path__armC__a536368b

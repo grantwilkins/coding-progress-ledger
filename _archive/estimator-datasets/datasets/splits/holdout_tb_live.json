@@ -1,0 +1,26 @@
+{
+  "folds": [
+    {
+      "fold_id": "holdout",
+      "test_run_ids": [
+        "decouple-state-from-controller",
+        "sliding-window-rate-limiter"
+      ],
+      "train_run_ids": [
+        "b-tree-on-disk",
+        "csv-streaming-dedup",
+        "directory-watcher-log-rotator",
+        "fix-broken-pyproject-build",
+        "graph-tarjan-scc",
+        "lru-cache-threadsafe",
+        "markdown-to-html-cli",
+        "recover-corrupted-sqlite",
+        "tar-extract-with-traversal-guard",
+        "xss-filter-bypass-then-fix"
+      ]
+    }
+  ],
+  "schema_version": "0.1.0",
+  "scheme": "holdout",
+  "seed": 0
+}

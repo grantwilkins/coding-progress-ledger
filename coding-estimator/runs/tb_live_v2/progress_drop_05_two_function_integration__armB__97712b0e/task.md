@@ -1,3 +1,0 @@
-# Task
-
-progress_drop_05_two_function_integration__armB__97712b0e

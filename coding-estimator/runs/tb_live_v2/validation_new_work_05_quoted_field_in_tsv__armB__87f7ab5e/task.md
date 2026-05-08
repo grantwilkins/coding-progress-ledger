@@ -1,3 +1,0 @@
-# Task
-
-validation_new_work_05_quoted_field_in_tsv__armB__87f7ab5e

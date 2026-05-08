@@ -1,3 +1,0 @@
-# Task
-
-stuck_blocked_02_ambiguous_path__armA__126864e6

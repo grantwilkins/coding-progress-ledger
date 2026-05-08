@@ -1,3 +1,0 @@
-# Task
-
-progress_drop_04_yaml_valid_schema_invalid__armA__df5e272e

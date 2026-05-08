@@ -1,9 +1,0 @@
-# Run notes — progress_drop_04_yaml_valid_schema_invalid__armB__c626a4d9
-
-- task_id: `progress_drop_04_yaml_valid_schema_invalid`
-- arm: `B` (model: `claude-sonnet-4-6`, budget_lines: 20)
-- final_success: `True`
-- termination_reason: `verifier_pass`
-- num_ledger_events: 2
-- verifier_exit: 0
-- workspace: `/var/folders/3j/5n1r8yyx2d58jn87prrxs_lm0000gn/T/tb_live_v2_progress_drop_04_yaml_valid_schema_invalid__armB__c626a4d9_p226ce0_`
