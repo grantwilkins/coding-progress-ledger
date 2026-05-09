@@ -1,0 +1,24 @@
+[project]
+name = "observation-channel"
+version = "0.1.0"
+description = "Deterministic observation-channel annotator for coding-agent traces"
+requires-python = ">=3.10"
+dependencies = [
+    "datasets>=3.0.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=9.0.3",
+]
+
+[project.scripts]
+observation-channel = "observation_channel.cli:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
