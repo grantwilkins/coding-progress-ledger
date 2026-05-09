@@ -1,3 +1,17 @@
+"""
+Claim:
+The online annotator opens and closes deterministic work units while marking a
+stuck episode only when three identical observations carry meaningful repeated
+failure evidence.
+
+Plausible wrong implementations:
+- Treat empty tool acknowledgements as stuck evidence.
+- Treat short success acknowledgements as stuck evidence.
+- Suppress genuine repeated error messages because they are short.
+- Suppress genuine repeated long observations because they do not contain an
+  error keyword.
+"""
+
 from observation_channel import Annotator, Category, Turn
 
 
@@ -34,6 +48,25 @@ def test_stuck_episode_is_done_on_finalize() -> None:
     assert summary.had_stuck_episode is True
     assert summary.final_total == 1
     assert summary.final_done == 1
+
+
+def test_empty_and_ack_observations_are_not_stuck_evidence() -> None:
+    annotator = Annotator(instance_id="acks")
+    annotator.feed(Turn(step=1, kind="action", tool="bash", command="pytest"))
+    for step, response in enumerate(["", "", "", '{"success": true}', '{"success": true}', '{"success": true}'], start=2):
+        annotator.feed(Turn(step=step, kind="observation", response=response))
+
+    assert annotator.finalize().had_stuck_episode is False
+
+
+def test_repeated_long_observation_is_stuck_without_error_keyword() -> None:
+    annotator = Annotator(instance_id="long")
+    repeated_body = "same diagnostic output " * 5
+    annotator.feed(Turn(step=1, kind="action", tool="bash", command="pytest"))
+    for step in range(2, 5):
+        annotator.feed(Turn(step=step, kind="observation", response=repeated_body))
+
+    assert annotator.finalize().had_stuck_episode is True
 
 
 def test_product_target_change_splits_units_but_missing_target_abstains() -> None:

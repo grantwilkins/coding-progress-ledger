@@ -7,6 +7,18 @@ from .models import Category, Row, Summary, Turn
 from .path_tracker import first_write_target
 
 
+STUCK_RESPONSE_MIN_CHARS = 80
+STUCK_ERROR_MARKERS = (
+    "error",
+    "exception",
+    "failed",
+    "failure",
+    "permission denied",
+    "returncode=1",
+    "traceback",
+)
+
+
 @dataclass
 class _Unit:
     category: Category
@@ -97,6 +109,7 @@ class Annotator:
             and current.status == "open"
             and len(self.recent_responses) == 3
             and self.recent_responses[0] == self.recent_responses[1] == self.recent_responses[2]
+            and _is_stuck_evidence(body)
         ):
             current.status = "stuck"
             self.had_stuck_episode = True
@@ -123,3 +136,11 @@ class Annotator:
 
     def _done_count(self) -> int:
         return sum(1 for unit in self.units if unit.status == "done")
+
+
+def _is_stuck_evidence(body: str) -> bool:
+    normalized = body.strip()
+    if len(normalized) >= STUCK_RESPONSE_MIN_CHARS:
+        return True
+    lowered = normalized.lower()
+    return any(marker in lowered for marker in STUCK_ERROR_MARKERS)
