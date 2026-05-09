@@ -11,6 +11,7 @@ from .models import Turn
 REDIRECT_RE = re.compile(r"(?:^|[^\d])>>?\s*([^\s;&|]+)")
 TEE_RE = re.compile(r"\btee\s+(?:-a\s+)?([^\s;&|]+)")
 TOUCH_RE = re.compile(r"\b(?:touch|mkdir|rm|mv|cp|chmod|chown)\s+([^\s;&|]+)")
+LINE_RANGE_RE = re.compile(r"^\d+(?::\d+)?$")
 
 
 def first_write_target(turn: Turn) -> str | None:
@@ -31,14 +32,30 @@ def first_write_target(turn: Turn) -> str | None:
             return _clean(parts[1])
     if tool in {"edit", "write_file", "edit_file", "create_file"}:
         parts = _split(command)
-        if len(parts) >= 2:
+        if len(parts) >= 2 and not LINE_RANGE_RE.fullmatch(parts[1]):
             return _clean(parts[1])
+        return None
 
-    for regex in (REDIRECT_RE, TEE_RE, TOUCH_RE):
+    for regex in (REDIRECT_RE, TEE_RE):
         match = regex.search(command)
         if match:
             return _clean(match.group(1))
-    return None
+    return _shell_write_target(command)
+
+
+def _shell_write_target(command: str) -> str | None:
+    parts = _split(command)
+    if not parts:
+        return None
+    cmd = parts[0]
+    if cmd not in {"touch", "mkdir", "rm", "mv", "cp", "chmod", "chown"}:
+        return None
+    operands = [part for part in parts[1:] if not part.startswith("-")]
+    if not operands:
+        return None
+    if cmd in {"mv", "cp"} and len(operands) >= 2:
+        return _clean(operands[-1])
+    return _clean(operands[0])
 
 
 def _split(command: str) -> list[str]:

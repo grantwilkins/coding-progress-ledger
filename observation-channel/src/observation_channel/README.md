@@ -14,3 +14,5 @@ Core modules:
 Readers should fail loudly on malformed source structure and must not use hidden thoughts as evidence.
 
 Stuck detection requires three identical observation bodies that are either non-trivial in length or carry an explicit error marker; empty tool acknowledgements and short success acks are ignored.
+
+Path tracking should abstain on editor line ranges and shell flags; it only returns concrete write paths.

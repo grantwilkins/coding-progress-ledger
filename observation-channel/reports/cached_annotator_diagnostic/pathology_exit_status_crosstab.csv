@@ -1,0 +1,22 @@
+rule,source,exit_status,severity,trace_count
+no_coalescing_every_action_new_unit,hermes,unknown,warning,477
+no_coalescing_every_action_new_unit,swe-agent,exit_context,warning,1
+no_coalescing_every_action_new_unit,swe-agent,submitted,warning,26
+no_coalescing_every_action_new_unit,swe-agent,submitted (exit_context),warning,2
+no_coalescing_every_action_new_unit,swe-agent,submitted_no_patch,warning,1
+no_coalescing_every_action_new_unit,terminalbench,reward=0,warning,89
+no_coalescing_every_action_new_unit,terminalbench,reward=1,warning,23
+parse_error,hermes,unknown,critical,2
+parse_error,terminalbench,reward=0,critical,168
+unexpected_terminal_category,swe-agent,submitted,warning,643
+unexpected_terminal_category,swe-agent,submitted (exit_context),warning,21026
+unexpected_terminal_category,swe-agent,submitted (exit_cost),warning,10
+unexpected_terminal_category,swe-agent,submitted (exit_format),warning,80
+very_long_stuck_continuation,swe-agent,early_exit,warning,85
+very_long_stuck_continuation,swe-agent,exit_context,warning,139
+very_long_stuck_continuation,swe-agent,submitted,warning,13
+very_long_stuck_continuation,swe-agent,submitted (exit_context),warning,648
+very_long_stuck_continuation,swe-agent,submitted (exit_cost),warning,1
+very_long_stuck_continuation,swe-agent,submitted (exit_format),warning,2
+very_long_stuck_continuation,terminalbench,reward=0,warning,43
+very_long_stuck_continuation,terminalbench,reward=1,warning,6
