@@ -17,6 +17,7 @@ from typing import Any, Callable, Iterable
 TURN_GRID = (1, 2, 4, 8, 16, 32, 64)
 FALLBACK_FIELDS = ("stuck", "age_bucket", "turn_bucket", "current_category", "total")
 COMFORTABLE_SUPPORT = 50
+RATE_BUCKETS = (0.1, 0.2, 0.3, 0.5)
 
 
 @dataclass(frozen=True)
@@ -371,6 +372,34 @@ def query_json(
     }
 
 
+def write_diagnostics(
+    heldout_csv: Path,
+    turns_csv: Path,
+    conditional_cohorts_csv: Path,
+    report_dir: Path,
+) -> dict[str, Any]:
+    report_dir.mkdir(parents=True, exist_ok=True)
+    categories = _turn_categories(turns_csv, _prediction_keys(heldout_csv))
+    reliability, category_bias, step_bias = _heldout_diagnostics(heldout_csv, categories)
+    rate_hist = _rate_bucket_conditional_histograms(conditional_cohorts_csv)
+    _write_csv(report_dir / "reliability_by_grid_offset.csv", reliability)
+    _write_csv(report_dir / "category_stratum_bias.csv", category_bias)
+    _write_csv(report_dir / "current_step_bias.csv", step_bias)
+    _write_csv(report_dir / "rate_bucket_conditional_histograms.csv", rate_hist)
+    _plot_grid_offset_reliability(report_dir / "reliability_by_grid_offset.png", reliability)
+    _plot_category_bias(report_dir / "category_stratum_bias.png", category_bias)
+    _plot_step_bias(report_dir / "current_step_bias.png", step_bias)
+    _plot_rate_histograms(report_dir / "rate_bucket_conditional_histograms.png", rate_hist)
+    _append_diagnostics_report(report_dir / "REPORT.md")
+    return {
+        "current_categories": len(categories),
+        "reliability_rows": len(reliability),
+        "category_bias_rows": len(category_bias),
+        "step_bias_rows": len(step_bias),
+        "rate_histogram_rows": len(rate_hist),
+    }
+
+
 def source_p90_thresholds(traces: Iterable[TraceMeta]) -> dict[str, int]:
     values: dict[str, list[int]] = defaultdict(list)
     for trace in traces:
@@ -436,7 +465,11 @@ def _prediction_rows(
                     "source": row.source,
                     "step": row.step,
                     "current_total": row.total,
+                    "current_category": row.current_category,
                     "threshold": threshold,
+                    "grid_offset": offset,
+                    "current_rate": row.total / row.step,
+                    "rate_bucket": _rate_bucket(row.total / row.step),
                     "predicted_p": prediction.cdf(threshold),
                     "outcome": int(trace.final_total <= threshold),
                     "fallback_depth": prediction.fallback_depth,
@@ -606,6 +639,108 @@ def _plot_reliability(path: Path, reliability: list[dict[str, Any]], bands: list
     plt.close(fig)
 
 
+def _plot_grid_offset_reliability(path: Path, rows: list[dict[str, Any]]) -> None:
+    import matplotlib
+
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+
+    by_key: dict[tuple[int, str], list[dict[str, Any]]] = defaultdict(list)
+    strata = sorted({str(row["source_length_tercile"]) for row in rows}, key=_stratum_sort_key)
+    offsets = [offset for offset in TURN_GRID if any(int(row["grid_offset"]) == offset for row in rows)]
+    for row in rows:
+        by_key[(int(row["grid_offset"]), str(row["source_length_tercile"]))].append(row)
+    fig, axes = plt.subplots(len(offsets), len(strata), figsize=(2.4 * len(strata), 1.9 * len(offsets)), squeeze=False)
+    for row_index, offset in enumerate(offsets):
+        for col_index, stratum in enumerate(strata):
+            axis = axes[row_index][col_index]
+            points = sorted(by_key.get((offset, stratum), []), key=lambda item: int(item["bin"]))
+            axis.plot([0, 1], [0, 1], color="0.75", linewidth=0.8)
+            axis.plot([row["mean_predicted_p"] for row in points], [row["observed_rate"] for row in points], marker=".", linewidth=1)
+            axis.set_xlim(0, 1)
+            axis.set_ylim(0, 1)
+            if row_index == 0:
+                axis.set_title(stratum, fontsize=8)
+            if col_index == 0:
+                axis.set_ylabel(f"+{offset}", fontsize=8)
+            axis.tick_params(labelsize=7)
+    fig.tight_layout()
+    fig.savefig(path, dpi=160)
+    plt.close(fig)
+
+
+def _plot_category_bias(path: Path, rows: list[dict[str, Any]]) -> None:
+    import matplotlib
+
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+
+    strata = sorted({str(row["source_length_tercile"]) for row in rows}, key=_stratum_sort_key)
+    fig, axes = plt.subplots(1, len(strata), figsize=(5 * max(1, len(strata)), 3), squeeze=False)
+    for axis, stratum in zip(axes.flat, strata):
+        items = sorted((row for row in rows if row["source_length_tercile"] == stratum), key=lambda row: abs(float(row["mean_bias"])), reverse=True)
+        axis.bar([row["current_category"] for row in items], [row["mean_bias"] for row in items])
+        axis.axhline(0, color="0.3", linewidth=0.8)
+        axis.set_title(stratum)
+        axis.tick_params(axis="x", rotation=35, labelsize=8)
+        axis.set_ylabel("predicted - observed")
+    fig.tight_layout()
+    fig.savefig(path, dpi=160)
+    plt.close(fig)
+
+
+def _plot_step_bias(path: Path, rows: list[dict[str, Any]]) -> None:
+    import matplotlib
+
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+
+    sources = sorted({str(row["source"]) for row in rows})
+    fig, axes = plt.subplots(1, len(sources), figsize=(5 * max(1, len(sources)), 3), squeeze=False)
+    for axis, source in zip(axes.flat, sources):
+        for length in ("short", "medium", "long"):
+            items = sorted(
+                (row for row in rows if row["source"] == source and row["length_tercile"] == length),
+                key=lambda row: int(row["current_step"]),
+            )
+            if items:
+                axis.plot([row["current_step"] for row in items], [row["mean_bias"] for row in items], label=length, linewidth=1)
+        axis.axhline(0, color="0.3", linewidth=0.8)
+        axis.set_title(source)
+        axis.set_xlabel("current_step")
+        axis.set_ylabel("predicted - observed")
+        axis.legend(fontsize=8)
+    fig.tight_layout()
+    fig.savefig(path, dpi=160)
+    plt.close(fig)
+
+
+def _plot_rate_histograms(path: Path, rows: list[dict[str, Any]]) -> None:
+    import matplotlib
+
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+
+    conditions = sorted({str(row["condition_id"]) for row in rows}, key=int)
+    fig, axes = plt.subplots(2, 2, figsize=(9, 6), squeeze=False)
+    for axis, condition in zip(axes.flat, conditions):
+        items = [row for row in rows if row["condition_id"] == condition]
+        for bucket in sorted({row["rate_bucket"] for row in items}):
+            xs = [int(row["final_total"]) for row in items if row["rate_bucket"] == bucket]
+            weights = [int(row["n"]) for row in items if row["rate_bucket"] == bucket]
+            axis.hist(xs, bins=30, weights=weights, alpha=0.6, label=bucket)
+        first = items[0]
+        axis.set_title(f"{condition}: step {first['selected_step']}, total {first['selected_total']}, {first['current_category']}")
+        axis.set_xlabel("final_total")
+        axis.set_ylabel("traces")
+        axis.legend(fontsize=8)
+    for axis in axes.flat[len(conditions) :]:
+        axis.axis("off")
+    fig.tight_layout()
+    fig.savefig(path, dpi=160)
+    plt.close(fig)
+
+
 def _write_report(path: Path, split_rows: list[dict[str, Any]], skipped: list[dict[str, Any]], resamples: int, seed: int) -> None:
     lines = [
         "# Empirical Bayes v1",
@@ -628,6 +763,26 @@ def _write_report(path: Path, split_rows: list[dict[str, Any]], skipped: list[di
     path.write_text("\n".join(lines), encoding="utf-8")
 
 
+def _append_diagnostics_report(path: Path) -> None:
+    marker = "## Follow-up Diagnostics"
+    addition = [
+        marker,
+        "",
+        "![Rate-bucket conditional histograms](rate_bucket_conditional_histograms.png)",
+        "",
+        "![Reliability by grid offset](reliability_by_grid_offset.png)",
+        "",
+        "![SWE-Agent category bias](category_stratum_bias.png)",
+        "",
+        "![Current-step bias](current_step_bias.png)",
+        "",
+    ]
+    text = path.read_text(encoding="utf-8") if path.exists() else "# Empirical Bayes v1\n\n"
+    if marker in text:
+        text = text[: text.index(marker)].rstrip() + "\n\n"
+    path.write_text(text.rstrip() + "\n\n" + "\n".join(addition), encoding="utf-8")
+
+
 def _write_csv(path: Path, rows: list[dict[str, Any]]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     if not rows:
@@ -637,6 +792,119 @@ def _write_csv(path: Path, rows: list[dict[str, Any]]) -> None:
         writer = csv.DictWriter(handle, fieldnames=list(rows[0]))
         writer.writeheader()
         writer.writerows(rows)
+
+
+def _prediction_keys(path: Path) -> set[tuple[str, int]]:
+    keys = set()
+    with path.open("r", encoding="utf-8", newline="") as handle:
+        for row in csv.DictReader(handle):
+            keys.add((row["trace_key"], int(row["step"])))
+    return keys
+
+
+def _turn_categories(path: Path, keys: set[tuple[str, int]]) -> dict[tuple[str, int], str]:
+    categories = {}
+    with path.open("r", encoding="utf-8", newline="") as handle:
+        for row in csv.DictReader(handle):
+            key = (row["trace_key"], int(row["step"]))
+            if key in keys:
+                categories[key] = row.get("current_category") or "NONE"
+    missing = keys - set(categories)
+    if missing:
+        raise ValueError(f"missing current_category for {len(missing)} prediction prefixes")
+    return categories
+
+
+def _heldout_diagnostics(
+    path: Path,
+    categories: dict[tuple[str, int], str],
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]], list[dict[str, Any]]]:
+    reliability: dict[tuple[str, int, int], list[float]] = defaultdict(lambda: [0, 0.0, 0.0])
+    category_bias: dict[tuple[str, str], list[float]] = defaultdict(lambda: [0, 0.0, 0.0])
+    step_bias: dict[tuple[str, str, int], list[float]] = defaultdict(lambda: [0, 0.0, 0.0])
+    with path.open("r", encoding="utf-8", newline="") as handle:
+        for row in csv.DictReader(handle):
+            step = int(row["step"])
+            predicted = float(row["predicted_p"])
+            outcome = int(row["outcome"])
+            offset = int(row.get("grid_offset") or int(row["threshold"]) - int(row["current_total"]))
+            source = row["source"]
+            length = row["length_tercile"]
+            stratum = row["source_length_tercile"]
+            bin_index = min(9, int(predicted * 10))
+            _add_diag(reliability[(stratum, offset, bin_index)], predicted, outcome)
+            _add_diag(step_bias[(source, length, step)], predicted, outcome)
+            if source == "swe-agent" and length in {"short", "long"}:
+                category = row.get("current_category") or categories[(row["trace_key"], step)]
+                _add_diag(category_bias[(stratum, category)], predicted, outcome)
+    return (
+        [
+            _diag_row(
+                {"source_length_tercile": key[0], "grid_offset": key[1], "bin": key[2]},
+                values,
+            )
+            for key, values in sorted(reliability.items())
+        ],
+        [
+            _diag_row({"source_length_tercile": key[0], "current_category": key[1]}, values)
+            for key, values in sorted(category_bias.items())
+        ],
+        [
+            _diag_row({"source": key[0], "length_tercile": key[1], "current_step": key[2]}, values)
+            for key, values in sorted(step_bias.items())
+        ],
+    )
+
+
+def _rate_bucket_conditional_histograms(path: Path) -> list[dict[str, Any]]:
+    counts: dict[tuple[str, str, str, str, float, int, str], int] = defaultdict(int)
+    with path.open("r", encoding="utf-8", newline="") as handle:
+        for row in csv.DictReader(handle):
+            if _bool(row["censored_right_tail"]):
+                continue
+            step = int(row["selected_step"])
+            total = int(row["selected_total"])
+            key = (
+                row["condition_id"],
+                row["selected_category"],
+                str(step),
+                str(total),
+                total / step,
+                int(row["final_total"]),
+                _rate_bucket(total / step),
+            )
+            counts[key] += 1
+    return [
+        {
+            "condition_id": key[0],
+            "current_category": key[1],
+            "selected_step": key[2],
+            "selected_total": key[3],
+            "current_rate": key[4],
+            "final_total": key[5],
+            "rate_bucket": key[6],
+            "n": count,
+        }
+        for key, count in sorted(counts.items())
+    ]
+
+
+def _add_diag(values: list[float], predicted: float, outcome: int) -> None:
+    values[0] += 1
+    values[1] += predicted
+    values[2] += outcome
+
+
+def _diag_row(prefix: dict[str, Any], values: list[float]) -> dict[str, Any]:
+    n, predicted, outcome = values
+    mean_predicted = predicted / n
+    observed = outcome / n
+    return prefix | {
+        "n": int(n),
+        "mean_predicted_p": mean_predicted,
+        "observed_rate": observed,
+        "mean_bias": mean_predicted - observed,
+    }
 
 
 def _progress(message: str, started: float) -> None:
@@ -700,6 +968,15 @@ def _percentile(values: list[float], probability: float) -> float | str:
     return values[max(0, min(len(values) - 1, math.ceil(probability * len(values)) - 1))]
 
 
+def _rate_bucket(rate: float) -> str:
+    lower = 0.0
+    for upper in RATE_BUCKETS:
+        if rate <= upper:
+            return f"{lower:.1f}-{upper:.1f}"
+        lower = upper
+    return f"{RATE_BUCKETS[-1]:.1f}+"
+
+
 def _bool(value: Any) -> bool:
     return str(value).strip().lower() in {"1", "true", "yes"}
 
@@ -721,6 +998,15 @@ def _all_strata(pairs: list[dict[str, Any]]) -> dict[str, list[dict[str, Any]]]:
         strata[str(row["source"])].append(row)
         strata[str(row["source_length_tercile"])].append(row)
     return strata
+
+
+def _stratum_sort_key(value: str) -> tuple[int, int, str]:
+    sources = {"hermes": 0, "swe-agent": 1, "terminalbench": 2}
+    lengths = {"short": 0, "medium": 1, "long": 2}
+    if " x " not in value:
+        return (sources.get(value, 99), 99, value)
+    source, length = value.split(" x ", 1)
+    return (sources.get(source, 99), lengths.get(length, 99), value)
 
 
 def _prefix_strata(rows: list[dict[str, Any]]) -> dict[str, list[dict[str, Any]]]:

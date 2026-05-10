@@ -10,6 +10,8 @@ Plausible wrong implementations:
 - Emit calibration pairs for thresholds beyond the bin's observed training tail.
 - Treat stuck as a one-row event instead of a monotone prefix state.
 - Split prefix rows independently instead of keeping whole traces together.
+- Compute follow-up bias diagnostics at the wrong grouping level or with the
+  observed-minus-predicted sign.
 """
 
 from pathlib import Path
@@ -20,7 +22,9 @@ from observation_channel.empirical_bayes import (
     Prediction,
     TraceMeta,
     _bootstrap_bands,
+    _heldout_diagnostics,
     _prediction_rows,
+    _rate_bucket_conditional_histograms,
     eligible_prefixes,
     read_prefixes_csv,
     read_traces_csv,
@@ -161,3 +165,53 @@ def test_bootstrap_bands_record_fixed_seed() -> None:
     assert bands
     assert {row["seed"] for row in bands} == {123}
     assert {row["bootstrap_resamples"] for row in bands} == {5}
+
+
+def test_heldout_diagnostics_use_grid_offset_category_and_predicted_minus_observed_bias(tmp_path: Path) -> None:
+    heldout = tmp_path / "heldout.csv"
+    heldout.write_text(
+        "trace_key,source,step,current_total,threshold,predicted_p,outcome,length_tercile,source_length_tercile\n"
+        "a,swe-agent,10,3,4,0.8,1,short,swe-agent x short\n"
+        "a,swe-agent,10,3,5,0.2,0,short,swe-agent x short\n"
+        "b,swe-agent,12,3,4,0.7,0,long,swe-agent x long\n"
+        "c,hermes,10,3,4,0.1,1,short,hermes x short\n",
+        encoding="utf-8",
+    )
+    categories = {("a", 10): "PRODUCT", ("b", 12): "INVESTIGATION", ("c", 10): "PRODUCT"}
+
+    reliability, category_bias, step_bias = _heldout_diagnostics(heldout, categories)
+
+    offset_one = next(row for row in reliability if row["source_length_tercile"] == "swe-agent x short" and row["grid_offset"] == 1)
+    assert offset_one["bin"] == 8
+    assert offset_one["mean_bias"] == -0.19999999999999996
+    short_product = next(row for row in category_bias if row["source_length_tercile"] == "swe-agent x short")
+    assert short_product["current_category"] == "PRODUCT"
+    assert short_product["n"] == 2
+    assert short_product["mean_bias"] == 0
+    assert any(row["source"] == "hermes" and row["length_tercile"] == "short" and row["current_step"] == 10 for row in step_bias)
+
+
+def test_rate_bucket_conditional_histograms_filter_censored_rows(tmp_path: Path) -> None:
+    cohorts = tmp_path / "conditional.csv"
+    cohorts.write_text(
+        "condition_id,requested_step,requested_total,requested_category,selected_step,selected_total,selected_category,support,trace_key,source,final_total,censored_right_tail\n"
+        "1,10,3,PRODUCT,10,3,PRODUCT,2,a,s,7,False\n"
+        "1,10,3,PRODUCT,10,3,PRODUCT,2,b,s,7,False\n"
+        "1,10,3,PRODUCT,10,3,PRODUCT,2,c,s,99,True\n",
+        encoding="utf-8",
+    )
+
+    rows = _rate_bucket_conditional_histograms(cohorts)
+
+    assert rows == [
+        {
+            "condition_id": "1",
+            "current_category": "PRODUCT",
+            "selected_step": "10",
+            "selected_total": "3",
+            "current_rate": 0.3,
+            "final_total": 7,
+            "rate_bucket": "0.2-0.3",
+            "n": 2,
+        }
+    ]

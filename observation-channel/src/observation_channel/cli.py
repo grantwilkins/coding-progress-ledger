@@ -5,7 +5,7 @@ import json
 import re
 from pathlib import Path
 
-from .empirical_bayes import EmpiricalBayesLookup, evaluate, query_json
+from .empirical_bayes import EmpiricalBayesLookup, evaluate, query_json, write_diagnostics
 from .hf import expand_sources, iter_hf_rows, load_hf_rows, read_raw_sample, write_raw_sample
 from .io import write_turns
 from .readers import rows_to_turns
@@ -57,6 +57,16 @@ def main(argv: list[str] | None = None) -> int:
     eb_eval.add_argument("--seed", type=int, default=1729)
     eb_eval.add_argument("--min-support", type=int, default=25)
 
+    eb_diag = subparsers.add_parser("empirical-bayes-diagnostics", help="write follow-up empirical-Bayes diagnostics")
+    eb_diag.add_argument("--heldout-csv", type=Path, default=PROJECT_ROOT / "reports" / "empirical_bayes_v1" / "heldout_predictions.csv")
+    eb_diag.add_argument("--turns-csv", type=Path, default=DATA_DIR / "diagnostics" / "cached_annotator" / "turns.csv")
+    eb_diag.add_argument(
+        "--conditional-cohorts-csv",
+        type=Path,
+        default=PROJECT_ROOT / "reports" / "cached_annotator_diagnostic" / "conditional_prefix_cohorts.csv",
+    )
+    eb_diag.add_argument("--report-dir", type=Path, default=PROJECT_ROOT / "reports" / "empirical_bayes_v1")
+
     eb_query = subparsers.add_parser("empirical-bayes-query", help="query a saved empirical-Bayes lookup")
     eb_query.add_argument("--bundle-path", type=Path, default=DATA_DIR / "estimators" / "empirical_bayes_v1" / "lookup.json")
     eb_query.add_argument("--source", required=True)
@@ -100,6 +110,10 @@ def main(argv: list[str] | None = None) -> int:
             current_unit_age=args.current_unit_age,
             had_stuck_episode=args.had_stuck_episode,
         )
+        print(json.dumps(result, sort_keys=True))
+        return 0
+    if args.command == "empirical-bayes-diagnostics":
+        result = write_diagnostics(args.heldout_csv, args.turns_csv, args.conditional_cohorts_csv, args.report_dir)
         print(json.dumps(result, sort_keys=True))
         return 0
     raise AssertionError(args.command)
