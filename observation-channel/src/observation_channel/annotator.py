@@ -60,6 +60,7 @@ class Annotator:
             done=self._done_count(),
             current_category=current_category,
             current_unit_age=age,
+            had_stuck_episode=self.had_stuck_episode,
             kind=turn.kind,
             tool=turn.tool or "",
         )

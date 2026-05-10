@@ -45,3 +45,45 @@ def test_preprocess_cli_from_raw_jsonl(tmp_path: Path) -> None:
     assert rc == 0
     turns = read_turns(out / "swe-agent" / "case.jsonl")
     assert [turn.kind for turn in turns] == ["action", "observation"]
+
+
+def test_empirical_bayes_eval_cli_writes_report_and_bundle(tmp_path: Path) -> None:
+    traces = tmp_path / "traces.csv"
+    turns = tmp_path / "turns.csv"
+    report_dir = tmp_path / "report"
+    bundle = tmp_path / "lookup.json"
+    traces.write_text(
+        "trace_key,source,final_total,total_turns,first_stuck_step,censored_right_tail,parse_error\n"
+        "a,s,5,3,,False,\n"
+        "b,s,5,3,,False,\n",
+        encoding="utf-8",
+    )
+    turns.write_text(
+        "trace_key,source,instance_id,step,total,done,current_category,current_unit_age,kind,tool\n"
+        "a,s,a,1,4,0,PRODUCT,1,action,bash\n"
+        "b,s,b,1,4,0,PRODUCT,1,action,bash\n",
+        encoding="utf-8",
+    )
+
+    rc = main(
+        [
+            "empirical-bayes-eval",
+            "--turns-csv",
+            str(turns),
+            "--traces-csv",
+            str(traces),
+            "--report-dir",
+            str(report_dir),
+            "--bundle-path",
+            str(bundle),
+            "--bootstrap-resamples",
+            "1",
+            "--min-support",
+            "1",
+        ]
+    )
+
+    assert rc == 0
+    assert bundle.exists()
+    assert (report_dir / "REPORT.md").exists()
+    assert (report_dir / "heldout_predictions.csv").exists()

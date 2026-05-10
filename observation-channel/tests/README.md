@@ -6,6 +6,7 @@ Tests cover semantic contracts, not snapshots:
 - classifier priority
 - product target splitting
 - stuck-unit accounting
+- empirical-Bayes support, fallback, censoring, and calibration-pair rules
 - CLI smoke paths
 - gated cached Hugging Face integration
 
@@ -20,4 +21,3 @@ Run cached HF integration with:
 ```sh
 OBSERVATION_CHANNEL_HF_CACHE=data/raw/hf_cache uv run --project observation-channel --extra dev pytest observation-channel/tests/test_hf_integration.py
 ```
-

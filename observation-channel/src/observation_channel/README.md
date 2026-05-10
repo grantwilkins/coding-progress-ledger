@@ -9,6 +9,7 @@ Core modules:
 - `readers.py`: source rows to canonical turns.
 - `hf.py`: Hugging Face loading and raw JSONL caching.
 - `runner.py`: annotate one file or a corpus.
+- `empirical_bayes.py`: empirical final-unit lookup and evaluation artifacts.
 - `cli.py`: `cache`, `preprocess`, `annotate`, `annotate-corpus`.
 
 Readers should fail loudly on malformed source structure and must not use hidden thoughts as evidence.

@@ -8,7 +8,7 @@ from typing import Iterable, Iterator
 from .models import Row, Summary, Turn
 
 
-ROW_FIELDS = ["step", "total", "done", "current_category", "current_unit_age", "kind", "tool"]
+ROW_FIELDS = ["step", "total", "done", "current_category", "current_unit_age", "had_stuck_episode", "kind", "tool"]
 SUMMARY_FIELDS = ["instance_id", "final_total", "final_done", "had_stuck_episode", "exit_status"]
 
 

@@ -53,6 +53,7 @@ class Row:
     done: int
     current_category: str
     current_unit_age: int
+    had_stuck_episode: bool
     kind: str
     tool: str
 
