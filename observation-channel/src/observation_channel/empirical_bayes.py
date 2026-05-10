@@ -18,6 +18,9 @@ TURN_GRID = (1, 2, 4, 8, 16, 32, 64)
 FALLBACK_FIELDS = ("stuck", "age_bucket", "turn_bucket", "current_category", "total")
 COMFORTABLE_SUPPORT = 50
 RATE_BUCKETS = (0.1, 0.2, 0.3, 0.5)
+DIAGNOSTIC_COHORT_STEP = 10
+DIAGNOSTIC_COHORT_TOTAL = 1
+NEAR_CAP_FINAL_TOTAL = 94
 
 
 @dataclass(frozen=True)
@@ -375,6 +378,7 @@ def query_json(
 def write_diagnostics(
     heldout_csv: Path,
     turns_csv: Path,
+    traces_csv: Path,
     conditional_cohorts_csv: Path,
     report_dir: Path,
 ) -> dict[str, Any]:
@@ -382,14 +386,30 @@ def write_diagnostics(
     categories = _turn_categories(turns_csv, _prediction_keys(heldout_csv))
     reliability, category_bias, step_bias = _heldout_diagnostics(heldout_csv, categories)
     rate_hist = _rate_bucket_conditional_histograms(conditional_cohorts_csv)
+    non_near_cap_rate_hist = _rate_bucket_conditional_histograms(conditional_cohorts_csv, non_near_cap=True)
+    traces = read_traces_csv(traces_csv)
+    train_keys, _, _ = source_stratified_split(traces.values())
+    cohort_hist, cohort_summary, support_summary = _prefix_followup_diagnostics(
+        turns_csv,
+        traces,
+        train_keys,
+        step=DIAGNOSTIC_COHORT_STEP,
+        total=DIAGNOSTIC_COHORT_TOTAL,
+    )
     _write_csv(report_dir / "reliability_by_grid_offset.csv", reliability)
     _write_csv(report_dir / "category_stratum_bias.csv", category_bias)
     _write_csv(report_dir / "current_step_bias.csv", step_bias)
     _write_csv(report_dir / "rate_bucket_conditional_histograms.csv", rate_hist)
+    _write_csv(report_dir / "rate_bucket_conditional_histograms_non_near_cap.csv", non_near_cap_rate_hist)
+    _write_csv(report_dir / "prefix_cohort_distribution.csv", cohort_hist)
+    _write_csv(report_dir / "prefix_cohort_distribution_summary.csv", cohort_summary)
+    _write_csv(report_dir / "fine_turn_bucket_support_summary.csv", support_summary)
     _plot_grid_offset_reliability(report_dir / "reliability_by_grid_offset.png", reliability)
     _plot_category_bias(report_dir / "category_stratum_bias.png", category_bias)
     _plot_step_bias(report_dir / "current_step_bias.png", step_bias)
     _plot_rate_histograms(report_dir / "rate_bucket_conditional_histograms.png", rate_hist)
+    _plot_rate_histograms(report_dir / "rate_bucket_conditional_histograms_non_near_cap.png", non_near_cap_rate_hist)
+    _plot_prefix_cohort_distribution(report_dir / "prefix_cohort_distribution.png", cohort_hist, cohort_summary[0])
     _append_diagnostics_report(report_dir / "REPORT.md")
     return {
         "current_categories": len(categories),
@@ -397,6 +417,9 @@ def write_diagnostics(
         "category_bias_rows": len(category_bias),
         "step_bias_rows": len(step_bias),
         "rate_histogram_rows": len(rate_hist),
+        "non_near_cap_rate_histogram_rows": len(non_near_cap_rate_hist),
+        "prefix_cohort_histogram_rows": len(cohort_hist),
+        "fine_turn_bucket_support_rows": len(support_summary),
     }
 
 
@@ -509,34 +532,115 @@ def _reliability_for_pairs(stratum: str, pairs: list[dict[str, Any]]) -> list[di
     return rows
 
 
-def _bootstrap_bands(pairs: list[dict[str, Any]], resamples: int, seed: int) -> list[dict[str, Any]]:
-    rng = random.Random(seed)
+def _bootstrap_bands(
+    pairs: list[dict[str, Any]],
+    resamples: int,
+    seed: int,
+    *,
+    chunk_size: int = 128,
+) -> list[dict[str, Any]]:
+    """
+    Trace-cluster bootstrap using preaggregated trace x reliability-bin counts.
+
+    This preserves the existing statistical object: sampled traces contribute
+    all of their calibration rows. The NumPy path uses NumPy's seeded generator,
+    so bands are reproducible for a fixed seed but not bit-identical to the old
+    random.Random row-list implementation.
+    """
+    try:
+        import numpy as np
+    except ImportError:
+        return _bootstrap_bands_preaggregated_python(pairs, resamples, seed)
+
+    rng = np.random.default_rng(seed)
     bands = []
     for stratum, stratum_pairs in _all_strata(pairs).items():
-        by_trace: dict[str, list[dict[str, Any]]] = defaultdict(list)
+        trace_index: dict[str, int] = {}
+        count_rows: list[list[int]] = []
+        outcome_rows: list[list[int]] = []
         for row in stratum_pairs:
-            by_trace[str(row["trace_key"])].append(row)
-        trace_keys = sorted(by_trace)
-        samples: dict[int, list[float]] = defaultdict(list)
-        if not trace_keys:
+            trace_key = str(row["trace_key"])
+            trace_i = trace_index.get(trace_key)
+            if trace_i is None:
+                trace_i = len(count_rows)
+                trace_index[trace_key] = trace_i
+                count_rows.append([0] * 10)
+                outcome_rows.append([0] * 10)
+            bin_i = min(9, int(float(row["predicted_p"]) * 10))
+            count_rows[trace_i][bin_i] += 1
+            outcome_rows[trace_i][bin_i] += int(row["outcome"])
+        n_traces = len(count_rows)
+        if not n_traces:
             continue
-        for _ in range(resamples):
-            resampled = []
-            for trace_key in rng.choices(trace_keys, k=len(trace_keys)):
-                resampled.extend(by_trace[trace_key])
-            for row in _reliability_for_pairs(stratum, resampled):
-                if row["n"]:
-                    samples[int(row["bin"])].append(float(row["observed_rate"]))
+        counts = np.asarray(count_rows, dtype=np.int64)
+        outcomes = np.asarray(outcome_rows, dtype=np.int64)
+        rates = np.full((resamples, 10), np.nan, dtype=np.float64)
+        probs = np.full(n_traces, 1.0 / n_traces, dtype=np.float64)
+        for start in range(0, resamples, chunk_size):
+            stop = min(start + chunk_size, resamples)
+            sample_weights = rng.multinomial(n_traces, probs, size=stop - start)
+            boot_counts = sample_weights @ counts
+            boot_outcomes = sample_weights @ outcomes
+            rates[start:stop, :] = np.divide(
+                boot_outcomes,
+                boot_counts,
+                out=np.full((stop - start, 10), np.nan, dtype=np.float64),
+                where=boot_counts > 0,
+            )
         for bin_index in range(10):
-            values = sorted(samples.get(bin_index, []))
+            values = rates[:, bin_index]
+            values = values[~np.isnan(values)]
             bands.append(
                 {
                     "stratum": stratum,
                     "bin": bin_index,
                     "bootstrap_resamples": resamples,
                     "seed": seed,
-                    "observed_low": _percentile(values, 0.025),
-                    "observed_high": _percentile(values, 0.975),
+                    "observed_low": _nearest_np_percentile(values, 0.025),
+                    "observed_high": _nearest_np_percentile(values, 0.975),
+                }
+            )
+    return bands
+
+
+def _bootstrap_bands_preaggregated_python(pairs: list[dict[str, Any]], resamples: int, seed: int) -> list[dict[str, Any]]:
+    rng = random.Random(seed)
+    bands = []
+    for stratum, stratum_pairs in _all_strata(pairs).items():
+        by_trace: dict[str, tuple[list[int], list[int]]] = {}
+        for row in stratum_pairs:
+            trace_key = str(row["trace_key"])
+            if trace_key not in by_trace:
+                by_trace[trace_key] = ([0] * 10, [0] * 10)
+            counts, outcomes = by_trace[trace_key]
+            bin_i = min(9, int(float(row["predicted_p"]) * 10))
+            counts[bin_i] += 1
+            outcomes[bin_i] += int(row["outcome"])
+        trace_keys = sorted(by_trace)
+        if not trace_keys:
+            continue
+        count_rows = [by_trace[key][0] for key in trace_keys]
+        outcome_rows = [by_trace[key][1] for key in trace_keys]
+        samples: list[list[float]] = [[] for _ in range(10)]
+        for _ in range(resamples):
+            boot_counts = [0] * 10
+            boot_outcomes = [0] * 10
+            for trace_i in rng.choices(range(len(trace_keys)), k=len(trace_keys)):
+                for bin_i in range(10):
+                    boot_counts[bin_i] += count_rows[trace_i][bin_i]
+                    boot_outcomes[bin_i] += outcome_rows[trace_i][bin_i]
+            for bin_i in range(10):
+                if boot_counts[bin_i]:
+                    samples[bin_i].append(boot_outcomes[bin_i] / boot_counts[bin_i])
+        for bin_index, values in enumerate(samples):
+            bands.append(
+                {
+                    "stratum": stratum,
+                    "bin": bin_index,
+                    "bootstrap_resamples": resamples,
+                    "seed": seed,
+                    "observed_low": _percentile(sorted(values), 0.025),
+                    "observed_high": _percentile(sorted(values), 0.975),
                 }
             )
     return bands
@@ -741,6 +845,32 @@ def _plot_rate_histograms(path: Path, rows: list[dict[str, Any]]) -> None:
     plt.close(fig)
 
 
+def _plot_prefix_cohort_distribution(path: Path, rows: list[dict[str, Any]], summary: dict[str, Any]) -> None:
+    import matplotlib
+
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+
+    fig, axis = plt.subplots(figsize=(7, 4))
+    for group in ("pooled_step", "exact_prefix"):
+        items = [row for row in rows if row["group"] == group]
+        axis.hist(
+            [int(row["final_total"]) for row in items],
+            bins=30,
+            weights=[int(row["n"]) for row in items],
+            alpha=0.55,
+            label=group,
+        )
+    axis.axvline(int(summary["current_total"]), color="0.25", linewidth=1, linestyle="--")
+    axis.set_title(f"step {summary['current_step']}, current_total {summary['current_total']}")
+    axis.set_xlabel("D_T")
+    axis.set_ylabel("prefixes")
+    axis.legend()
+    fig.tight_layout()
+    fig.savefig(path, dpi=160)
+    plt.close(fig)
+
+
 def _write_report(path: Path, split_rows: list[dict[str, Any]], skipped: list[dict[str, Any]], resamples: int, seed: int) -> None:
     lines = [
         "# Empirical Bayes v1",
@@ -775,6 +905,10 @@ def _append_diagnostics_report(path: Path) -> None:
         "![SWE-Agent category bias](category_stratum_bias.png)",
         "",
         "![Current-step bias](current_step_bias.png)",
+        "",
+        "![Exact prefix D_T distribution](prefix_cohort_distribution.png)",
+        "",
+        "![Non-near-cap rate-bucket conditional histograms](rate_bucket_conditional_histograms_non_near_cap.png)",
         "",
     ]
     text = path.read_text(encoding="utf-8") if path.exists() else "# Empirical Bayes v1\n\n"
@@ -856,11 +990,123 @@ def _heldout_diagnostics(
     )
 
 
-def _rate_bucket_conditional_histograms(path: Path) -> list[dict[str, Any]]:
+def _prefix_cohort_distribution(
+    prefixes: Iterable[PrefixRow],
+    traces: dict[str, TraceMeta],
+    *,
+    step: int,
+    total: int,
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    pooled: list[int] = []
+    cohort: list[int] = []
+    for row in prefixes:
+        if row.step != step:
+            continue
+        final_total = traces[row.trace_key].final_total
+        pooled.append(final_total)
+        if row.total == total:
+            cohort.append(final_total)
+    summary = _prefix_cohort_summary(step, total, pooled, cohort)
+    return _histogram_rows("pooled_step", pooled) + _histogram_rows("exact_prefix", cohort), [summary]
+
+
+def _finer_turn_bucket_support_rows(prefixes: list[PrefixRow], min_support: int = 25) -> list[dict[str, Any]]:
+    cell_traces: dict[tuple[int, tuple[Any, ...]], set[str]] = defaultdict(set)
+    cell_prefixes: dict[tuple[int, tuple[Any, ...]], int] = defaultdict(int)
+    for row in prefixes:
+        for depth in range(len(FALLBACK_FIELDS) + 1):
+            key = (depth, _fine_fallback_key(row, depth))
+            cell_traces[key].add(row.trace_key)
+            cell_prefixes[key] += 1
+    return _support_summary_rows(cell_traces, cell_prefixes, min_support)
+
+
+def _prefix_followup_diagnostics(
+    turns_csv: Path,
+    traces: dict[str, TraceMeta],
+    train_keys: set[str],
+    *,
+    step: int,
+    total: int,
+    min_support: int = 25,
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]], list[dict[str, Any]]]:
+    pooled: list[int] = []
+    cohort: list[int] = []
+    cell_traces: dict[tuple[int, tuple[Any, ...]], set[str]] = defaultdict(set)
+    cell_prefixes: dict[tuple[int, tuple[Any, ...]], int] = defaultdict(int)
+    with turns_csv.open("r", encoding="utf-8", newline="") as handle:
+        for row in csv.DictReader(handle):
+            trace = traces[row["trace_key"]]
+            current_step = int(row["step"])
+            if trace.parse_error or trace.censored_right_tail or current_step >= trace.total_turns:
+                continue
+            current_total = int(row["total"])
+            if current_step == step:
+                pooled.append(trace.final_total)
+                if current_total == total:
+                    cohort.append(trace.final_total)
+            if row["trace_key"] not in train_keys:
+                continue
+            stuck = trace.first_stuck_step is not None and current_step >= trace.first_stuck_step
+            for depth in range(len(FALLBACK_FIELDS) + 1):
+                key = (
+                    depth,
+                    _fine_fallback_key_values(
+                        row["source"],
+                        current_total,
+                        row.get("current_category") or "NONE",
+                        current_step,
+                        int(row["current_unit_age"]),
+                        stuck,
+                        depth,
+                    ),
+                )
+                cell_traces[key].add(row["trace_key"])
+                cell_prefixes[key] += 1
+    return (
+        _histogram_rows("pooled_step", pooled) + _histogram_rows("exact_prefix", cohort),
+        [_prefix_cohort_summary(step, total, pooled, cohort)],
+        _support_summary_rows(cell_traces, cell_prefixes, min_support),
+    )
+
+
+def _support_summary_rows(
+    cell_traces: dict[tuple[int, tuple[Any, ...]], set[str]],
+    cell_prefixes: dict[tuple[int, tuple[Any, ...]], int],
+    min_support: int,
+) -> list[dict[str, Any]]:
+    supports = {key: len(trace_keys) for key, trace_keys in cell_traces.items()}
+    rows = []
+    for depth in range(len(FALLBACK_FIELDS) + 1):
+        keys = [key for key in supports if key[0] == depth]
+        values = sorted(supports[key] for key in keys)
+        total_prefixes = sum(cell_prefixes[key] for key in keys)
+        supported_prefixes = sum(cell_prefixes[key] for key in keys if supports[key] >= min_support)
+        rows.append(
+            {
+                "fallback_depth": depth,
+                "retained_fields": ";".join(_retained_fields(depth)).replace("turn_bucket", "fine_turn_bucket"),
+                "min_support": min_support,
+                "cells": len(values),
+                "supported_cells": sum(1 for value in values if value >= min_support),
+                "supported_cell_rate": sum(1 for value in values if value >= min_support) / len(values) if values else "",
+                "prefixes": total_prefixes,
+                "supported_prefixes": supported_prefixes,
+                "supported_prefix_rate": supported_prefixes / total_prefixes if total_prefixes else "",
+                "p10_support": _percentile_int(values, 0.1),
+                "median_support": _percentile_int(values, 0.5),
+                "p90_support": _percentile_int(values, 0.9),
+                "max_support": values[-1] if values else "",
+            }
+        )
+    return rows
+
+
+def _rate_bucket_conditional_histograms(path: Path, *, non_near_cap: bool = False) -> list[dict[str, Any]]:
     counts: dict[tuple[str, str, str, str, float, int, str], int] = defaultdict(int)
     with path.open("r", encoding="utf-8", newline="") as handle:
         for row in csv.DictReader(handle):
-            if _bool(row["censored_right_tail"]):
+            if _bool(row["censored_right_tail"]) or (non_near_cap and _near_cap(row)):
                 continue
             step = int(row["selected_step"])
             total = int(row["selected_total"])
@@ -887,6 +1133,95 @@ def _rate_bucket_conditional_histograms(path: Path) -> list[dict[str, Any]]:
         }
         for key, count in sorted(counts.items())
     ]
+
+
+def _histogram_rows(group: str, values: list[int]) -> list[dict[str, Any]]:
+    counts: dict[int, int] = defaultdict(int)
+    for value in values:
+        counts[value] += 1
+    return [{"group": group, "final_total": value, "n": count} for value, count in sorted(counts.items())]
+
+
+def _prefix_cohort_summary(step: int, total: int, pooled: list[int], cohort: list[int]) -> dict[str, Any]:
+    pooled_width = _iqr(pooled)
+    cohort_width = _iqr(cohort)
+    return {
+        "current_step": step,
+        "current_total": total,
+        "pooled_step_n": len(pooled),
+        "exact_prefix_n": len(cohort),
+        "pooled_step_iqr": pooled_width,
+        "exact_prefix_iqr": cohort_width,
+        "pooled_step_p90_minus_p10": _quantile_width(pooled, 0.1, 0.9),
+        "exact_prefix_p90_minus_p10": _quantile_width(cohort, 0.1, 0.9),
+        "conditional_iqr_narrower": bool(cohort and pooled and cohort_width < pooled_width),
+    }
+
+
+def _iqr(values: list[int]) -> int | str:
+    return _quantile_width(values, 0.25, 0.75)
+
+
+def _quantile_width(values: list[int], low: float, high: float) -> int | str:
+    ordered = sorted(values)
+    return _quantile(ordered, high) - _quantile(ordered, low) if ordered else ""
+
+
+def _fine_turn_bucket(step: int) -> str:
+    for upper in (2, 4, 7, 11, 15, 23, 31, 47, 63, 95, 127, 191):
+        if step <= upper:
+            lower = 1 if upper == 2 else {4: 3, 7: 5, 11: 8, 15: 12, 23: 16, 31: 24, 47: 32, 63: 48, 95: 64, 127: 96, 191: 128}[upper]
+            return f"{lower}-{upper}"
+    return "192+"
+
+
+def _fine_fallback_key(row: PrefixRow, depth: int) -> tuple[Any, ...]:
+    return _fine_fallback_key_values(
+        row.source,
+        row.total,
+        row.current_category or "NONE",
+        row.step,
+        row.current_unit_age,
+        row.had_stuck_episode,
+        depth,
+    )
+
+
+def _fine_fallback_key_values(
+    source: str,
+    total: int,
+    current_category: str,
+    step: int,
+    current_unit_age: int,
+    had_stuck_episode: bool,
+    depth: int,
+) -> tuple[Any, ...]:
+    values = {
+        "source": source,
+        "total": total,
+        "current_category": current_category or "NONE",
+        "turn_bucket": _fine_turn_bucket(step),
+        "age_bucket": age_bucket(current_unit_age),
+        "stuck": had_stuck_episode,
+    }
+    for field in FALLBACK_FIELDS[:depth]:
+        values[field] = None
+    return (
+        values["source"],
+        values["total"],
+        values["current_category"],
+        values["turn_bucket"],
+        values["age_bucket"],
+        values["stuck"],
+    )
+
+
+def _percentile_int(values: list[int], probability: float) -> int | str:
+    return _quantile(values, probability) if values else ""
+
+
+def _near_cap(row: dict[str, Any]) -> bool:
+    return row["source"] == "swe-agent" and int(row["final_total"]) >= NEAR_CAP_FINAL_TOTAL
 
 
 def _add_diag(values: list[float], predicted: float, outcome: int) -> None:
@@ -966,6 +1301,15 @@ def _percentile(values: list[float], probability: float) -> float | str:
     if not values:
         return ""
     return values[max(0, min(len(values) - 1, math.ceil(probability * len(values)) - 1))]
+
+
+def _nearest_np_percentile(values: Any, probability: float) -> float | str:
+    if len(values) == 0:
+        return ""
+    ordered = values.copy()
+    ordered.sort()
+    index = max(0, min(len(ordered) - 1, math.ceil(probability * len(ordered)) - 1))
+    return float(ordered[index])
 
 
 def _rate_bucket(rate: float) -> str:

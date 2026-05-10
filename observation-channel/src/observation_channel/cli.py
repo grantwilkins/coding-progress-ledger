@@ -60,6 +60,7 @@ def main(argv: list[str] | None = None) -> int:
     eb_diag = subparsers.add_parser("empirical-bayes-diagnostics", help="write follow-up empirical-Bayes diagnostics")
     eb_diag.add_argument("--heldout-csv", type=Path, default=PROJECT_ROOT / "reports" / "empirical_bayes_v1" / "heldout_predictions.csv")
     eb_diag.add_argument("--turns-csv", type=Path, default=DATA_DIR / "diagnostics" / "cached_annotator" / "turns.csv")
+    eb_diag.add_argument("--traces-csv", type=Path, default=DATA_DIR / "diagnostics" / "cached_annotator" / "traces.csv")
     eb_diag.add_argument(
         "--conditional-cohorts-csv",
         type=Path,
@@ -113,7 +114,7 @@ def main(argv: list[str] | None = None) -> int:
         print(json.dumps(result, sort_keys=True))
         return 0
     if args.command == "empirical-bayes-diagnostics":
-        result = write_diagnostics(args.heldout_csv, args.turns_csv, args.conditional_cohorts_csv, args.report_dir)
+        result = write_diagnostics(args.heldout_csv, args.turns_csv, args.traces_csv, args.conditional_cohorts_csv, args.report_dir)
         print(json.dumps(result, sort_keys=True))
         return 0
     raise AssertionError(args.command)

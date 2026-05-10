@@ -27,3 +27,7 @@ Trace-level bootstrap uses B=1000 and seed=1729.
 ![SWE-Agent category bias](category_stratum_bias.png)
 
 ![Current-step bias](current_step_bias.png)
+
+![Exact prefix D_T distribution](prefix_cohort_distribution.png)
+
+![Non-near-cap rate-bucket conditional histograms](rate_bucket_conditional_histograms_non_near_cap.png)

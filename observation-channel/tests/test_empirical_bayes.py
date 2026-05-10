@@ -12,6 +12,8 @@ Plausible wrong implementations:
 - Split prefix rows independently instead of keeping whole traces together.
 - Compute follow-up bias diagnostics at the wrong grouping level or with the
   observed-minus-predicted sign.
+- Claim exact prefix cohorts are informative without comparing their width to
+  the pooled same-step marginal.
 """
 
 from pathlib import Path
@@ -22,8 +24,11 @@ from observation_channel.empirical_bayes import (
     Prediction,
     TraceMeta,
     _bootstrap_bands,
+    _bootstrap_bands_preaggregated_python,
+    _finer_turn_bucket_support_rows,
     _heldout_diagnostics,
     _prediction_rows,
+    _prefix_cohort_distribution,
     _rate_bucket_conditional_histograms,
     eligible_prefixes,
     read_prefixes_csv,
@@ -167,6 +172,22 @@ def test_bootstrap_bands_record_fixed_seed() -> None:
     assert {row["bootstrap_resamples"] for row in bands} == {5}
 
 
+def test_preaggregated_bootstrap_preserves_trace_cluster_resampling() -> None:
+    pairs = [
+        {"trace_key": "a", "source": "s", "source_length_tercile": "s x short", "predicted_p": 0.2, "outcome": 1},
+        {"trace_key": "a", "source": "s", "source_length_tercile": "s x short", "predicted_p": 0.2, "outcome": 1},
+        {"trace_key": "b", "source": "s", "source_length_tercile": "s x short", "predicted_p": 0.2, "outcome": 0},
+        {"trace_key": "b", "source": "s", "source_length_tercile": "s x short", "predicted_p": 0.2, "outcome": 0},
+    ]
+
+    bands = _bootstrap_bands_preaggregated_python(pairs, resamples=20, seed=1)
+
+    pooled_bin = next(row for row in bands if row["stratum"] == "pooled" and row["bin"] == 2)
+    assert pooled_bin["observed_low"] in {0.0, 0.5, 1.0}
+    assert pooled_bin["observed_high"] in {0.0, 0.5, 1.0}
+    assert pooled_bin["observed_low"] <= pooled_bin["observed_high"]
+
+
 def test_heldout_diagnostics_use_grid_offset_category_and_predicted_minus_observed_bias(tmp_path: Path) -> None:
     heldout = tmp_path / "heldout.csv"
     heldout.write_text(
@@ -215,3 +236,68 @@ def test_rate_bucket_conditional_histograms_filter_censored_rows(tmp_path: Path)
             "n": 2,
         }
     ]
+
+
+def test_exact_prefix_distribution_compares_width_to_same_step_marginal() -> None:
+    traces = {
+        "a": _trace("a", final_total=5),
+        "b": _trace("b", final_total=6),
+        "c": _trace("c", final_total=20),
+        "d": _trace("d", final_total=30),
+    }
+    prefixes = [
+        _prefix("a", step=10, total=2),
+        _prefix("b", step=10, total=2),
+        _prefix("c", step=10, total=8),
+        _prefix("d", step=10, total=9),
+    ]
+
+    hist, summary = _prefix_cohort_distribution(prefixes, traces, step=10, total=2)
+
+    assert summary == [
+        {
+            "current_step": 10,
+            "current_total": 2,
+            "pooled_step_n": 4,
+            "exact_prefix_n": 2,
+            "pooled_step_iqr": 15,
+            "exact_prefix_iqr": 1,
+            "pooled_step_p90_minus_p10": 25,
+            "exact_prefix_p90_minus_p10": 1,
+            "conditional_iqr_narrower": True,
+        }
+    ]
+    assert {"group": "exact_prefix", "final_total": 5, "n": 1} in hist
+
+
+def test_finer_turn_bucket_support_counts_trace_level_support_and_prefix_mass() -> None:
+    prefixes = [
+        _prefix("a", step=10, total=1, category="PRODUCT"),
+        _prefix("a", step=11, total=1, category="PRODUCT"),
+        _prefix("b", step=10, total=1, category="PRODUCT"),
+        _prefix("c", step=12, total=1, category="PRODUCT"),
+    ]
+
+    rows = _finer_turn_bucket_support_rows(prefixes, min_support=2)
+
+    full_key = rows[0]
+    assert full_key["fallback_depth"] == 0
+    assert full_key["supported_cells"] == 1
+    assert full_key["supported_prefixes"] == 3
+    assert full_key["max_support"] == 2
+
+
+def test_rate_bucket_conditional_histograms_can_exclude_near_cap_rows(tmp_path: Path) -> None:
+    cohorts = tmp_path / "conditional.csv"
+    cohorts.write_text(
+        "condition_id,requested_step,requested_total,requested_category,selected_step,selected_total,selected_category,support,trace_key,source,final_total,censored_right_tail\n"
+        "1,10,3,PRODUCT,10,3,PRODUCT,3,a,swe-agent,7,False\n"
+        "1,10,3,PRODUCT,10,3,PRODUCT,3,b,swe-agent,94,False\n"
+        "1,10,3,PRODUCT,10,3,PRODUCT,3,c,hermes,94,False\n",
+        encoding="utf-8",
+    )
+
+    rows = _rate_bucket_conditional_histograms(cohorts, non_near_cap=True)
+
+    assert {row["final_total"] for row in rows} == {7, 94}
+    assert sum(row["n"] for row in rows) == 2
