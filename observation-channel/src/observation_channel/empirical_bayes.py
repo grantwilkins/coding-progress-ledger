@@ -5,11 +5,13 @@ import hashlib
 import json
 import math
 import random
+import sys
+import time
 from collections import defaultdict
 from dataclasses import asdict, dataclass
 from pathlib import Path
 from statistics import median
-from typing import Any, Iterable
+from typing import Any, Callable, Iterable
 
 
 TURN_GRID = (1, 2, 4, 8, 16, 32, 64)
@@ -207,12 +209,16 @@ def read_traces_csv(path: Path) -> dict[str, TraceMeta]:
     return traces
 
 
-def read_prefixes_csv(path: Path, traces: dict[str, TraceMeta]) -> list[PrefixRow]:
+def read_prefixes_csv(
+    path: Path,
+    traces: dict[str, TraceMeta],
+    progress: Callable[[str], None] | None = None,
+) -> list[PrefixRow]:
     prefixes = []
     with path.open("r", encoding="utf-8", newline="") as handle:
         reader = csv.DictReader(handle)
         has_stuck = "had_stuck_episode" in (reader.fieldnames or ())
-        for row in reader:
+        for index, row in enumerate(reader, start=1):
             trace = traces[row["trace_key"]]
             step = int(row["step"])
             if has_stuck:
@@ -230,6 +236,8 @@ def read_prefixes_csv(path: Path, traces: dict[str, TraceMeta]) -> list[PrefixRo
                     had_stuck_episode=stuck,
                 )
             )
+            if progress and index % 1_000_000 == 0:
+                progress(f"loaded {index:,} prefix rows")
     return prefixes
 
 
@@ -279,25 +287,42 @@ def evaluate(
     seed: int = 1729,
     min_support: int = 25,
 ) -> dict[str, Any]:
+    started = time.monotonic()
+    progress = lambda message: _progress(message, started)
+    progress("loading trace metadata")
     traces = read_traces_csv(traces_csv)
-    prefixes = read_prefixes_csv(turns_csv, traces)
+    progress(f"loaded {len(traces):,} traces")
+    progress("loading prefix rows")
+    prefixes = read_prefixes_csv(turns_csv, traces, progress)
+    progress(f"loaded {len(prefixes):,} prefix rows")
+    progress("splitting traces")
     train_keys, eval_keys, split_rows = source_stratified_split(traces.values())
+    progress("filtering train/eval prefixes")
     train_prefixes = [row for row in eligible_prefixes(prefixes, traces) if row.trace_key in train_keys]
     eval_prefixes = [row for row in eligible_prefixes(prefixes, traces) if row.trace_key in eval_keys]
     train_traces = {key: trace for key, trace in traces.items() if key in train_keys and not trace.parse_error and not trace.censored_right_tail}
+    progress(f"building lookup from {len(train_prefixes):,} train prefixes")
     lookup = EmpiricalBayesLookup.build(train_prefixes, train_traces, min_support=min_support)
 
     report_dir.mkdir(parents=True, exist_ok=True)
+    progress(f"saving lookup with {len(lookup.cells):,} cells")
     lookup.save(bundle_path)
 
+    progress("assigning held-out trace length terciles")
     length_terciles = _length_terciles([traces[key] for key in eval_keys if not traces[key].censored_right_tail])
-    pairs, prefix_predictions = _prediction_rows(eval_prefixes, traces, lookup, length_terciles)
+    progress(f"generating held-out predictions from {len(eval_prefixes):,} eval prefixes")
+    pairs, prefix_predictions = _prediction_rows(eval_prefixes, traces, lookup, length_terciles, progress)
+    progress(f"generated {len(prefix_predictions):,} prefix predictions and {len(pairs):,} calibration pairs")
+    progress("computing reliability tables")
     reliability = _reliability_rows(pairs)
+    progress(f"bootstrapping reliability bands with B={bootstrap_resamples:,}, seed={seed}")
     bands = _bootstrap_bands(pairs, bootstrap_resamples, seed)
+    progress("computing sharpness, coverage, and censored summaries")
     sharpness = _sharpness_rows(prefix_predictions)
     coverage = _coverage_rows(prefix_predictions)
     skipped = _skipped_censored_rows(prefixes, traces, eval_keys, lookup)
 
+    progress("writing CSV and markdown artifacts")
     _write_csv(report_dir / "heldout_predictions.csv", pairs)
     _write_csv(report_dir / "prefix_predictions.csv", prefix_predictions)
     _write_csv(report_dir / "reliability.csv", reliability)
@@ -307,7 +332,9 @@ def evaluate(
     _write_csv(report_dir / "split_summary.csv", split_rows)
     _write_csv(report_dir / "censored_skipped_summary.csv", skipped)
     _write_report(report_dir / "REPORT.md", split_rows, skipped, bootstrap_resamples, seed)
+    progress("plotting reliability diagram")
     _plot_reliability(report_dir / "reliability.png", reliability, bands)
+    progress("done")
     return {
         "bundle_path": str(bundle_path),
         "report_dir": str(report_dir),
@@ -357,16 +384,29 @@ def _prediction_rows(
     traces: dict[str, TraceMeta],
     lookup: EmpiricalBayesLookup,
     length_terciles: dict[str, str],
+    progress: Callable[[str], None] | None = None,
 ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
     pairs = []
     prefix_predictions = []
-    for row in prefixes:
+    prediction_cache: dict[tuple[Any, ...], Prediction | None] = {}
+    for index, row in enumerate(prefixes, start=1):
+        if progress and index % 100_000 == 0:
+            progress(
+                f"processed {index:,} eval prefixes; "
+                f"{len(prefix_predictions):,} predictions; {len(pairs):,} calibration pairs; "
+                f"{len(prediction_cache):,} cached states"
+            )
         trace = traces[row.trace_key]
         if trace.censored_right_tail:
             continue
-        try:
-            prediction = lookup.predict(row)
-        except ValueError:
+        cache_key = _prefix_state_key(row)
+        if cache_key not in prediction_cache:
+            try:
+                prediction_cache[cache_key] = lookup.predict(row)
+            except ValueError:
+                prediction_cache[cache_key] = None
+        prediction = prediction_cache[cache_key]
+        if prediction is None:
             continue
         strata = _strata(row, length_terciles)
         prefix_predictions.append(
@@ -385,9 +425,10 @@ def _prediction_rows(
                 "interval80_width": prediction.quantile(0.9) - prediction.quantile(0.1),
             }
         )
+        max_supported = prediction.values[-1]
         for offset in TURN_GRID:
             threshold = row.total + offset
-            if max(prediction.values) < threshold:
+            if max_supported < threshold:
                 continue
             pairs.append(
                 {
@@ -598,14 +639,20 @@ def _write_csv(path: Path, rows: list[dict[str, Any]]) -> None:
         writer.writerows(rows)
 
 
+def _progress(message: str, started: float) -> None:
+    elapsed = time.monotonic() - started
+    print(f"[empirical-bayes {elapsed:8.1f}s] {message}", file=sys.stderr, flush=True)
+
+
 def _fallback_key(row: PrefixRow, depth: int) -> tuple[Any, ...]:
+    key = _prefix_state_key(row)
     values = {
-        "source": row.source,
-        "total": row.total,
-        "current_category": row.current_category or "NONE",
-        "turn_bucket": turn_bucket(row.step),
-        "age_bucket": age_bucket(row.current_unit_age),
-        "stuck": row.had_stuck_episode,
+        "source": key[0],
+        "total": key[1],
+        "current_category": key[2],
+        "turn_bucket": key[3],
+        "age_bucket": key[4],
+        "stuck": key[5],
     }
     for field in FALLBACK_FIELDS[:depth]:
         values[field] = None
@@ -616,6 +663,17 @@ def _fallback_key(row: PrefixRow, depth: int) -> tuple[Any, ...]:
         values["turn_bucket"],
         values["age_bucket"],
         values["stuck"],
+    )
+
+
+def _prefix_state_key(row: PrefixRow) -> tuple[Any, ...]:
+    return (
+        row.source,
+        row.total,
+        row.current_category or "NONE",
+        turn_bucket(row.step),
+        age_bucket(row.current_unit_age),
+        row.had_stuck_episode,
     )
 
 
