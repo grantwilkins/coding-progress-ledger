@@ -32,6 +32,8 @@ Trace-level bootstrap uses B=1000 and seed=1729.
 
 ![Progress tracking examples](progress_tracking_examples.png)
 
+![Interval width by trace position](interval_width_by_trace_position.png)
+
 ![Exact prefix D_T distribution](prefix_cohort_distribution.png)
 
 ![Non-near-cap rate-bucket conditional histograms](rate_bucket_conditional_histograms_non_near_cap.png)
