@@ -166,19 +166,7 @@ class EmpiricalBayesLookup:
 
 
 def turn_bucket(step: int) -> str:
-    if step <= 4:
-        return "0-4"
-    if step <= 9:
-        return "5-9"
-    if step <= 19:
-        return "10-19"
-    if step <= 39:
-        return "20-39"
-    if step <= 79:
-        return "40-79"
-    if step <= 159:
-        return "80-159"
-    return "160+"
+    return _fine_turn_bucket(step)
 
 
 def age_bucket(age: int) -> str:

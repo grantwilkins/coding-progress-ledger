@@ -34,6 +34,7 @@ from observation_channel.empirical_bayes import (
     read_prefixes_csv,
     read_traces_csv,
     source_stratified_split,
+    turn_bucket,
 )
 
 
@@ -102,6 +103,38 @@ def test_prediction_cdf_quantile_and_progress_interval_are_hand_checkable() -> N
     assert result.cdf(8) == 2 / 3
     assert result.quantile(0.5) == 8
     assert result.progress_interval(5) == (0.5, 5 / 6)
+
+
+def test_turn_bucket_uses_finer_geometric_support_scheme() -> None:
+    assert [turn_bucket(step) for step in (1, 2, 3, 4, 5, 7, 8, 11, 12, 15)] == [
+        "1-2",
+        "1-2",
+        "3-4",
+        "3-4",
+        "5-7",
+        "5-7",
+        "8-11",
+        "8-11",
+        "12-15",
+        "12-15",
+    ]
+    assert [turn_bucket(step) for step in (16, 23, 24, 31, 32, 47, 48, 63, 64, 95, 96, 127, 128, 191, 192)] == [
+        "16-23",
+        "16-23",
+        "24-31",
+        "24-31",
+        "32-47",
+        "32-47",
+        "48-63",
+        "48-63",
+        "64-95",
+        "64-95",
+        "96-127",
+        "96-127",
+        "128-191",
+        "128-191",
+        "192+",
+    ]
 
 
 def test_calibration_pairs_require_future_threshold_and_observed_tail_support() -> None:
