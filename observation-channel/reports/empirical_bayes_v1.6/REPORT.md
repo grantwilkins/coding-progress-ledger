@@ -32,4 +32,8 @@ Trace-level bootstrap uses B=1000 and seed=1729.
 
 ![Interval width by trace position](interval_width_by_trace_position.png)
 
+[Failure feature distributions](failure_feature_distributions.csv)
+
+[Five-read trace features](failure_five_read_trace_features.csv)
+
 ![Non-near-cap rate-bucket conditional histograms](rate_bucket_conditional_histograms_non_near_cap.png)

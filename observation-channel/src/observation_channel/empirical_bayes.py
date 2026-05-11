@@ -44,6 +44,36 @@ DIAGNOSTIC_COHORT_TOTAL = 1
 NEAR_CAP_FINAL_TOTAL = 94
 DEFAULT_BOOTSTRAP_RESAMPLES = 400
 TRACE_POSITION_BINS = 20
+ERROR_BUCKETS = ("clean", "mild", "moderate", "heavy")
+INVESTIGATION_RATIO_BUCKETS = ("low", "moderate", "high", "dominant")
+TRACE_POSITION_THIRDS = ("early", "middle", "late")
+FIVE_READ_TRACES = (
+    {
+        "trace_key": "swe-agent:001020:pydantic__pydantic-1989",
+        "requested_step": 30,
+        "human_read": "fake reproduction file despite active code-writing",
+    },
+    {
+        "trace_key": "swe-agent:011335:dwavesystems__dwave-cloud-client-338",
+        "requested_step": 30,
+        "human_read": "spent about 28 of 30 turns investigating",
+    },
+    {
+        "trace_key": "swe-agent:067060:pydantic__pydantic-4354",
+        "requested_step": 30,
+        "human_read": "repeated edit failures with identical indentation errors",
+    },
+    {
+        "trace_key": "swe-agent:068615:stephantul__reach-23",
+        "requested_step": 30,
+        "human_read": "repeated failed edits while operating on a fake reproduction script",
+    },
+    {
+        "trace_key": "swe-agent:064153:qiboteam__qibo-953",
+        "requested_step": 30,
+        "human_read": "repeated wrong-symbol searches; negative search results may not count as failures",
+    },
+)
 
 
 @dataclass(frozen=True)
@@ -394,6 +424,7 @@ def write_diagnostics(
     traces_csv: Path,
     conditional_cohorts_csv: Path,
     report_dir: Path,
+    bundle_path: Path | None = None,
 ) -> dict[str, Any]:
     report_dir.mkdir(parents=True, exist_ok=True)
     categories = _turn_categories(turns_csv, _prediction_keys(heldout_csv))
@@ -419,6 +450,16 @@ def write_diagnostics(
     _write_csv(report_dir / "fine_turn_bucket_support_summary.csv", support_summary)
     interval_width_rows = _interval_width_by_trace_position_rows(report_dir / "prefix_predictions.csv", traces)
     _write_csv(report_dir / "interval_width_by_trace_position.csv", interval_width_rows)
+    feature_distribution_rows = _feature_distribution_rows(turns_csv, traces, train_keys)
+    _write_csv(report_dir / "failure_feature_distributions.csv", feature_distribution_rows)
+    five_read_rows = []
+    if bundle_path is not None:
+        five_read_rows = _five_read_trace_feature_rows(
+            report_dir / "prefix_predictions.csv",
+            turns_csv,
+            EmpiricalBayesLookup.load(bundle_path),
+        )
+        _write_csv(report_dir / "failure_five_read_trace_features.csv", five_read_rows)
     _plot_grid_offset_reliability(report_dir / "reliability_by_grid_offset.png", reliability)
     _plot_category_bias(report_dir / "category_stratum_bias.png", category_bias)
     _plot_step_bias(report_dir / "current_step_bias.png", step_bias)
@@ -437,6 +478,8 @@ def write_diagnostics(
         "prefix_cohort_histogram_rows": len(cohort_hist),
         "fine_turn_bucket_support_rows": len(support_summary),
         "interval_width_rows": len(interval_width_rows),
+        "feature_distribution_rows": len(feature_distribution_rows),
+        "five_read_trace_rows": len(five_read_rows),
     }
 
 
@@ -956,6 +999,10 @@ def _append_diagnostics_report(path: Path) -> None:
         "",
         "![Interval width by trace position](interval_width_by_trace_position.png)",
         "",
+        "[Failure feature distributions](failure_feature_distributions.csv)",
+        "",
+        "[Five-read trace features](failure_five_read_trace_features.csv)",
+        "",
         "![Non-near-cap rate-bucket conditional histograms](rate_bucket_conditional_histograms_non_near_cap.png)",
         "",
     ]
@@ -1223,6 +1270,216 @@ def _interval_width_by_trace_position_rows(
                 }
             )
     return rows
+
+
+def _feature_distribution_rows(turns_csv: Path, traces: dict[str, TraceMeta], train_keys: set[str]) -> list[dict[str, Any]]:
+    recent_counts: dict[tuple[str, str], int] = defaultdict(int)
+    touched_counts: dict[tuple[str, str, str], int] = defaultdict(int)
+    investigation_bucket_counts: dict[tuple[str, str], int] = defaultdict(int)
+    recent_totals: dict[str, int] = defaultdict(int)
+    touched_totals: dict[tuple[str, str], int] = defaultdict(int)
+    investigation_bucket_totals: dict[str, int] = defaultdict(int)
+    action_counts: dict[str, int] = defaultdict(int)
+    investigation_action_counts: dict[str, int] = defaultdict(int)
+    corr_sums: dict[str, list[float]] = defaultdict(lambda: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0])
+
+    with turns_csv.open("r", encoding="utf-8", newline="") as handle:
+        for row in csv.DictReader(handle):
+            trace_key = row["trace_key"]
+            if row.get("kind") == "action":
+                action_counts[trace_key] += 1
+                investigation_action_counts[trace_key] += int(row.get("current_category") == "INVESTIGATION")
+
+            trace = traces[trace_key]
+            step = int(row["step"])
+            if trace_key not in train_keys or trace.parse_error or trace.censored_right_tail or step >= trace.total_turns:
+                continue
+
+            source = row["source"]
+            recent_bucket = row.get("recent_error_bucket") or "clean"
+            touched_source = str(_bool(row.get("touched_source", "")))
+            investigation_bucket = row.get("investigation_ratio_bucket") or "moderate"
+            position_third = _trace_position_third(step, trace.total_turns)
+            raw_ratio = investigation_action_counts[trace_key] / action_counts[trace_key] if action_counts[trace_key] else 0.0
+
+            recent_counts[(source, recent_bucket)] += 1
+            recent_totals[source] += 1
+            touched_counts[(source, position_third, touched_source)] += 1
+            touched_totals[(source, position_third)] += 1
+            investigation_bucket_counts[(source, investigation_bucket)] += 1
+            investigation_bucket_totals[source] += 1
+            _add_corr(corr_sums[source], raw_ratio, int(row["total"]))
+
+    rows = []
+    sources = sorted(set(recent_totals) | set(investigation_bucket_totals) | {source for source, _ in touched_totals}, key=_stratum_sort_key)
+    for source in sources:
+        for bucket in ERROR_BUCKETS:
+            rows.append(_distribution_row("recent_error_bucket", source, "", bucket, recent_counts[(source, bucket)], recent_totals[source]))
+        for third in TRACE_POSITION_THIRDS:
+            for value in ("False", "True"):
+                rows.append(
+                    _distribution_row(
+                        "touched_source_by_trace_third",
+                        source,
+                        third,
+                        value,
+                        touched_counts[(source, third, value)],
+                        touched_totals[(source, third)],
+                    )
+                )
+        for bucket in INVESTIGATION_RATIO_BUCKETS:
+            rows.append(
+                _distribution_row(
+                    "investigation_ratio_bucket",
+                    source,
+                    "",
+                    bucket,
+                    investigation_bucket_counts[(source, bucket)],
+                    investigation_bucket_totals[source],
+                )
+            )
+        rows.append(
+            {
+                "diagnostic": "investigation_ratio_current_total_correlation",
+                "source": source,
+                "position_third": "",
+                "value": "",
+                "n": int(corr_sums[source][0]),
+                "total": int(corr_sums[source][0]),
+                "fraction": "",
+                "pearson_current_total": _pearson_from_sums(corr_sums[source]),
+            }
+        )
+    return rows
+
+
+def _five_read_trace_feature_rows(
+    prefix_predictions_csv: Path,
+    turns_csv: Path,
+    lookup: EmpiricalBayesLookup,
+    targets: tuple[dict[str, Any], ...] = FIVE_READ_TRACES,
+) -> list[dict[str, Any]]:
+    target_by_key = {str(target["trace_key"]): target for target in targets}
+    selected_predictions: dict[str, dict[str, Any]] = {}
+    with prefix_predictions_csv.open("r", encoding="utf-8", newline="") as handle:
+        for row in csv.DictReader(handle):
+            target = target_by_key.get(row["trace_key"])
+            if target is None:
+                continue
+            current = selected_predictions.get(row["trace_key"])
+            score = (abs(int(row["step"]) - int(target["requested_step"])), int(row["step"]))
+            if current is None or score < current["_score"]:
+                selected_predictions[row["trace_key"]] = row | {"_score": score}
+
+    missing = set(target_by_key) - set(selected_predictions)
+    if missing:
+        raise ValueError(f"missing five-read prediction rows for {sorted(missing)}")
+
+    selected_steps = {(trace_key, int(row["step"])) for trace_key, row in selected_predictions.items()}
+    selected_prefixes, raw_ratios = _selected_turn_prefixes_and_ratios(turns_csv, selected_steps)
+    rows = []
+    for target in targets:
+        trace_key = str(target["trace_key"])
+        prediction_row = selected_predictions[trace_key]
+        step = int(prediction_row["step"])
+        prefix = selected_prefixes[(trace_key, step)]
+        prediction = lookup.predict(prefix)
+        rows.append(
+            {
+                "trace_key": trace_key,
+                "instance_id": trace_key.rsplit(":", 1)[-1],
+                "requested_step": int(target["requested_step"]),
+                "selected_step": step,
+                "step_distance": abs(step - int(target["requested_step"])),
+                "human_read": target["human_read"],
+                "recent_error_bucket": prediction_row["recent_error_bucket"],
+                "touched_source": prediction_row["touched_source"],
+                "investigation_ratio_bucket": prediction_row["investigation_ratio_bucket"],
+                "investigation_ratio_raw": raw_ratios[(trace_key, step)],
+                "current_total": int(prediction_row["current_total"]),
+                "p10": prediction.quantile(0.1),
+                "p50": prediction.quantile(0.5),
+                "p90": prediction.quantile(0.9),
+                "fallback_depth": int(prediction_row["fallback_depth"]),
+                "support_count": int(prediction_row["support_count"]),
+                "low_confidence_flags": prediction_row["low_confidence_flags"],
+            }
+        )
+    return rows
+
+
+def _selected_turn_prefixes_and_ratios(
+    turns_csv: Path,
+    selected_steps: set[tuple[str, int]],
+) -> tuple[dict[tuple[str, int], PrefixRow], dict[tuple[str, int], float]]:
+    action_counts: dict[str, int] = defaultdict(int)
+    investigation_action_counts: dict[str, int] = defaultdict(int)
+    prefixes = {}
+    raw_ratios = {}
+    with turns_csv.open("r", encoding="utf-8", newline="") as handle:
+        for row in csv.DictReader(handle):
+            trace_key = row["trace_key"]
+            if row.get("kind") == "action":
+                action_counts[trace_key] += 1
+                investigation_action_counts[trace_key] += int(row.get("current_category") == "INVESTIGATION")
+            key = (trace_key, int(row["step"]))
+            if key in selected_steps:
+                prefixes[key] = PrefixRow(
+                    trace_key=trace_key,
+                    source=row["source"],
+                    step=int(row["step"]),
+                    total=int(row["total"]),
+                    current_category=row.get("current_category") or "NONE",
+                    current_unit_age=int(row["current_unit_age"]),
+                    had_stuck_episode=_bool(row.get("had_stuck_episode", "")),
+                    recent_error_bucket=row.get("recent_error_bucket") or "clean",
+                    touched_source=_bool(row.get("touched_source", "")),
+                    investigation_ratio_bucket=row.get("investigation_ratio_bucket") or "moderate",
+                )
+                raw_ratios[key] = investigation_action_counts[trace_key] / action_counts[trace_key] if action_counts[trace_key] else 0.0
+
+    missing = selected_steps - set(prefixes)
+    if missing:
+        raise ValueError(f"missing turn rows for {sorted(missing)}")
+    return prefixes, raw_ratios
+
+
+def _distribution_row(diagnostic: str, source: str, position_third: str, value: str, n: int, total: int) -> dict[str, Any]:
+    return {
+        "diagnostic": diagnostic,
+        "source": source,
+        "position_third": position_third,
+        "value": value,
+        "n": n,
+        "total": total,
+        "fraction": n / total if total else "",
+        "pearson_current_total": "",
+    }
+
+
+def _trace_position_third(step: int, total_turns: int) -> str:
+    position = min(1.0, max(0.0, step / total_turns))
+    if position < 1 / 3:
+        return "early"
+    if position < 2 / 3:
+        return "middle"
+    return "late"
+
+
+def _add_corr(sums: list[float], x: float, y: float) -> None:
+    sums[0] += 1
+    sums[1] += x
+    sums[2] += y
+    sums[3] += x * x
+    sums[4] += y * y
+    sums[5] += x * y
+
+
+def _pearson_from_sums(sums: list[float]) -> float | str:
+    n, sum_x, sum_y, sum_xx, sum_yy, sum_xy = sums
+    numerator = n * sum_xy - sum_x * sum_y
+    denominator = math.sqrt((n * sum_xx - sum_x * sum_x) * (n * sum_yy - sum_y * sum_y))
+    return numerator / denominator if denominator else ""
 
 
 def _histogram_rows(group: str, values: list[int]) -> list[dict[str, Any]]:

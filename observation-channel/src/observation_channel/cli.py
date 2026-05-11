@@ -74,6 +74,7 @@ def main(argv: list[str] | None = None) -> int:
         default=PROJECT_ROOT / "reports" / "cached_annotator_diagnostic" / "conditional_prefix_cohorts.csv",
     )
     eb_diag.add_argument("--report-dir", type=Path, default=PROJECT_ROOT / "reports" / "empirical_bayes_v1")
+    eb_diag.add_argument("--bundle-path", type=Path, default=DATA_DIR / "estimators" / "empirical_bayes_v1" / "lookup.json")
 
     eb_query = subparsers.add_parser("empirical-bayes-query", help="query a saved empirical-Bayes lookup")
     eb_query.add_argument("--bundle-path", type=Path, default=DATA_DIR / "estimators" / "empirical_bayes_v1" / "lookup.json")
@@ -125,7 +126,14 @@ def main(argv: list[str] | None = None) -> int:
         print(json.dumps(result, sort_keys=True))
         return 0
     if args.command == "empirical-bayes-diagnostics":
-        result = write_diagnostics(args.heldout_csv, args.turns_csv, args.traces_csv, args.conditional_cohorts_csv, args.report_dir)
+        result = write_diagnostics(
+            args.heldout_csv,
+            args.turns_csv,
+            args.traces_csv,
+            args.conditional_cohorts_csv,
+            args.report_dir,
+            args.bundle_path,
+        )
         print(json.dumps(result, sort_keys=True))
         return 0
     raise AssertionError(args.command)

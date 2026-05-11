@@ -19,6 +19,8 @@ Plausible wrong implementations:
   the pooled same-step marginal.
 - Bin interval widths by raw step instead of normalized trace position, or pool
   sources before summarizing.
+- Count eval prefixes instead of training prefixes in feature diagnostics, or
+  correlate current_total with bucket labels instead of the raw action ratio.
 """
 
 from pathlib import Path
@@ -31,6 +33,8 @@ from observation_channel.empirical_bayes import (
     _bootstrap_bands,
     _bootstrap_bands_preaggregated_python,
     _finer_turn_bucket_support_rows,
+    _feature_distribution_rows,
+    _five_read_trace_feature_rows,
     _heldout_diagnostics,
     _interval_width_by_trace_position_rows,
     _prediction_rows,
@@ -381,6 +385,61 @@ def test_interval_width_by_trace_position_uses_normalized_position_and_source_bi
     assert source_half["p75_interval80_width"] == 12
     assert any(row["source"] == "s" and row["position_bin"] == 3 and row["n"] == 1 for row in rows)
     assert any(row["source"] == "other" and row["position_bin"] == 2 and row["n"] == 1 for row in rows)
+
+
+def test_feature_distribution_rows_use_training_prefixes_and_raw_action_ratio(tmp_path: Path) -> None:
+    turns = tmp_path / "turns.csv"
+    turns.write_text(
+        "trace_key,source,step,total,current_category,current_unit_age,had_stuck_episode,recent_error_bucket,touched_source,investigation_ratio_bucket,kind,tool\n"
+        "train,s,1,0,,0,False,clean,False,low,system,\n"
+        "train,s,2,2,INVESTIGATION,1,False,heavy,True,dominant,action,search_dir\n"
+        "eval,s,1,99,PRODUCT,1,False,heavy,True,low,action,edit\n",
+        encoding="utf-8",
+    )
+    traces = {"train": _trace("train", source="s", total_turns=6), "eval": _trace("eval", source="s", total_turns=6)}
+
+    rows = _feature_distribution_rows(turns, traces, {"train"})
+
+    clean = next(row for row in rows if row["diagnostic"] == "recent_error_bucket" and row["value"] == "clean")
+    heavy = next(row for row in rows if row["diagnostic"] == "recent_error_bucket" and row["value"] == "heavy")
+    touched_middle = next(
+        row
+        for row in rows
+        if row["diagnostic"] == "touched_source_by_trace_third" and row["position_third"] == "middle" and row["value"] == "True"
+    )
+    corr = next(row for row in rows if row["diagnostic"] == "investigation_ratio_current_total_correlation")
+    assert clean["n"] == 1
+    assert heavy["n"] == 1
+    assert touched_middle["fraction"] == 1
+    assert corr["pearson_current_total"] == 1
+
+
+def test_five_read_trace_rows_select_closest_prefix_and_compute_lookup_median(tmp_path: Path) -> None:
+    prefix_predictions = tmp_path / "prefix_predictions.csv"
+    prefix_predictions.write_text(
+        "trace_key,source,step,current_total,recent_error_bucket,touched_source,investigation_ratio_bucket,fallback_depth,support_count,retained_fields,low_confidence_flags,length_tercile,p10,p90,interval80_width\n"
+        "target,s,29,1,heavy,False,dominant,0,2,,,,10,20,10\n"
+        "target,s,31,1,clean,True,low,0,2,,,,10,20,10\n",
+        encoding="utf-8",
+    )
+    turns = tmp_path / "turns.csv"
+    turns.write_text(
+        "trace_key,source,step,total,current_category,current_unit_age,had_stuck_episode,recent_error_bucket,touched_source,investigation_ratio_bucket,kind,tool\n"
+        "target,s,29,1,INVESTIGATION,1,False,heavy,False,dominant,action,search_dir\n",
+        encoding="utf-8",
+    )
+    traces = {"a": _trace("a", source="s", final_total=10), "b": _trace("b", source="s", final_total=20)}
+    lookup = EmpiricalBayesLookup.build([_prefix("a", source="s", total=1), _prefix("b", source="s", total=1)], traces, min_support=1)
+    targets = ({"trace_key": "target", "requested_step": 30, "human_read": "hand checked"},)
+
+    rows = _five_read_trace_feature_rows(prefix_predictions, turns, lookup, targets)
+
+    assert rows[0]["selected_step"] == 29
+    assert rows[0]["recent_error_bucket"] == "heavy"
+    assert rows[0]["investigation_ratio_raw"] == 1
+    assert rows[0]["p10"] == 10
+    assert rows[0]["p50"] == 10
+    assert rows[0]["p90"] == 20
 
 
 def test_rate_bucket_conditional_histograms_filter_censored_rows(tmp_path: Path) -> None:

@@ -1,0 +1,6 @@
+trace_key,instance_id,requested_step,selected_step,step_distance,human_read,recent_error_bucket,touched_source,investigation_ratio_bucket,investigation_ratio_raw,current_total,p10,p50,p90,fallback_depth,support_count,low_confidence_flags
+swe-agent:001020:pydantic__pydantic-1989,pydantic__pydantic-1989,30,30,0,fake reproduction file despite active code-writing,moderate,False,low,0.14285714285714285,7,7,13,40,1,29,fallback_depth;thin_support
+swe-agent:011335:dwavesystems__dwave-cloud-client-338,dwavesystems__dwave-cloud-client-338,30,30,0,spent about 28 of 30 turns investigating,moderate,False,dominant,1.0,1,1,3,13,0,2231,
+swe-agent:067060:pydantic__pydantic-4354,pydantic__pydantic-4354,30,30,0,repeated edit failures with identical indentation errors,heavy,False,low,0.07142857142857142,11,14,17,50,0,62,
+swe-agent:068615:stephantul__reach-23,stephantul__reach-23,30,30,0,repeated failed edits while operating on a fake reproduction script,heavy,False,moderate,0.42857142857142855,4,4,4,8,0,355,
+swe-agent:064153:qiboteam__qibo-953,qiboteam__qibo-953,30,30,0,repeated wrong-symbol searches; negative search results may not count as failures,clean,False,high,0.5714285714285714,4,5,7,22,0,416,
