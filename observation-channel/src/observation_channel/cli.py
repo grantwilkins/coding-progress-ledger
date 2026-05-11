@@ -11,6 +11,7 @@ from .empirical_bayes import DEFAULT_BOOTSTRAP_RESAMPLES, EmpiricalBayesLookup, 
 from .gbm_trial import evaluate_gbm_trial, train_gbm_trial
 from .hf import expand_sources, iter_hf_rows, load_hf_rows, read_raw_sample, write_raw_sample
 from .io import ROW_FIELDS, read_jsonl, write_turns
+from .progress_label_audit import evaluate_progress_label_audit
 from .readers import rows_to_turns
 from .runner import annotate_corpus, annotate_file, annotate_turns
 
@@ -127,6 +128,15 @@ def main(argv: list[str] | None = None) -> int:
     filter_calibration.add_argument("--alphas", type=float, nargs="+", default=[0.02, 0.05, 0.10, 0.15, 0.20])
     filter_calibration.add_argument("--event-alpha", type=float, default=0.35)
 
+    label_audit = subparsers.add_parser("progress-label-audit", help="audit opened-unit progress as a remaining-work label")
+    label_audit.add_argument("--turns-csv", type=Path, default=DATA_DIR / "diagnostics" / "cached_annotator" / "turns.csv")
+    label_audit.add_argument("--traces-csv", type=Path, default=DATA_DIR / "diagnostics" / "cached_annotator" / "traces.csv")
+    label_audit.add_argument("--raw-dir", type=Path, default=DATA_DIR / "raw")
+    label_audit.add_argument("--report-dir", type=Path, default=PROJECT_ROOT / "reports" / "progress_label_audit")
+    label_audit.add_argument("--top-n", type=int, default=50)
+    label_audit.add_argument("--category-n", type=int, default=10)
+    label_audit.add_argument("--plot-limit", type=int, default=12)
+
     args = parser.parse_args(argv)
     if args.command == "cache":
         return _cache(args)
@@ -223,6 +233,18 @@ def main(argv: list[str] | None = None) -> int:
             min_support=args.min_support,
             alphas=tuple(args.alphas),
             event_alpha=args.event_alpha,
+        )
+        print(json.dumps(result, sort_keys=True))
+        return 0
+    if args.command == "progress-label-audit":
+        result = evaluate_progress_label_audit(
+            args.turns_csv,
+            args.traces_csv,
+            args.raw_dir,
+            args.report_dir,
+            top_n=args.top_n,
+            category_n=args.category_n,
+            plot_limit=args.plot_limit,
         )
         print(json.dumps(result, sort_keys=True))
         return 0

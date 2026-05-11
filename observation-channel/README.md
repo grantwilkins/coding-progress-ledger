@@ -17,6 +17,7 @@ uv run --project observation-channel observation-channel gbm-trial-train
 uv run --project observation-channel observation-channel gbm-trial-eval --bootstrap-resamples 1000
 uv run --project observation-channel observation-channel belief-tracker-eval
 uv run --project observation-channel observation-channel belief-filter-calibration
+uv run --project observation-channel observation-channel progress-label-audit
 uv run pytest observation-channel
 ```
 
@@ -28,3 +29,5 @@ The GBM trial trains LightGBM quantile regressors from those raw continuous feat
 The belief-tracker evaluator replays held-out prefixes with empirical-Bayes direct, empirical-Bayes filtered, GBM direct, and empirical-Bayes plus GBM filtered final-work beliefs. It requires the saved GBM model and empirical-Bayes v1.6 lookup, then writes `reports/belief_tracker/progress_beliefs.csv`, binned claim calibration rows, summary tables, trace plots, and `REPORT.md`.
 
 The belief-filter calibration evaluator runs EB-only alpha and event-gated filter sweeps against the same held-out split. It reuses the saved empirical-Bayes v1.6 lookup and writes the same artifact names under `reports/belief_filter_calibration/`; the large `progress_beliefs.csv` remains local and ignored.
+
+The progress-label audit is read-only. It checks whether opened-unit progress reaches 100% while a large fraction of the trace remains, compares opened-unit, closed-unit, and step progress on selected worst traces, and writes evidence under `reports/progress_label_audit/`.

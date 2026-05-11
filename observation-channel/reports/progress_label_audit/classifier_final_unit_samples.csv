@@ -1,0 +1,51 @@
+trace_key,source,total_steps,total_rows,final_opened_unit_count,first_step_where_opened_units_reach_final_count,first_row_index_where_opened_units_reach_final_count,steps_remaining_after_that_point,rows_remaining_after_that_point,fraction_of_trace_remaining_after_that_point,category_of_final_unit,age_of_final_unit_at_end,tail_steps_after_opened_100pct_category_change_count,tail_steps_after_opened_100pct_same_category_fraction,exit_status
+swe-agent:014566:joblib__joblib-1165,swe-agent,421,421,11,45,45,376,376,0.8931116389548693,ARTIFACT,377,0,1.0,exit_context
+swe-agent:014594:joblib__joblib-1165,swe-agent,379,379,15,45,45,334,334,0.8812664907651715,ARTIFACT,335,0,1.0,exit_context
+swe-agent:014603:joblib__joblib-1165,swe-agent,345,345,19,53,53,292,292,0.8463768115942029,ARTIFACT,293,0,1.0,exit_context
+swe-agent:014609:joblib__joblib-1165,swe-agent,241,241,19,63,63,178,178,0.7385892116182573,ARTIFACT,179,0,1.0,exit_context
+swe-agent:066165:briggySmalls__pyflipdot-5,swe-agent,195,195,12,39,39,156,156,0.8,ARTIFACT,157,0,1.0,exit_context
+swe-agent:036344:miurahr__aqtinstall-414,swe-agent,39,39,7,31,31,8,8,0.20512820512820512,ARTIFACT,9,0,1.0,early_exit
+swe-agent:005748:joke2k__django-environ-419,swe-agent,71,71,15,67,67,4,4,0.056338028169014086,ARTIFACT,5,0,1.0,early_exit
+swe-agent:074123:Textualize__textual-2038,swe-agent,11,11,3,9,9,2,2,0.18181818181818182,ARTIFACT,3,0,1.0,submitted
+swe-agent:007032:awdeorio__mailmerge-95,swe-agent,13,13,3,11,11,2,2,0.15384615384615385,ARTIFACT,3,0,1.0,submitted
+swe-agent:030116:certbot__certbot-5687,swe-agent,13,13,3,11,11,2,2,0.15384615384615385,ARTIFACT,3,0,1.0,submitted
+swe-agent:031457:Sceptre__sceptre-1296,swe-agent,367,367,8,27,27,340,340,0.9264305177111717,ENVIRONMENT,341,0,1.0,submitted (exit_context)
+swe-agent:016707:Textualize__textual-441,swe-agent,395,395,18,55,55,340,340,0.8607594936708861,ENVIRONMENT,341,0,1.0,submitted (exit_context)
+swe-agent:060583:pydantic__pydantic-5132,swe-agent,329,329,7,29,29,300,300,0.9118541033434651,ENVIRONMENT,301,0,1.0,early_exit
+swe-agent:027939:pydantic__pydantic-5449,swe-agent,295,295,3,9,9,286,286,0.9694915254237289,ENVIRONMENT,287,0,1.0,submitted (exit_context)
+swe-agent:068505:pypa__setuptools_scm-168,swe-agent,235,235,9,21,21,214,214,0.9106382978723404,ENVIRONMENT,215,0,1.0,submitted (exit_context)
+swe-agent:055618:iterative__dvc-6855,swe-agent,233,233,11,65,65,168,168,0.721030042918455,ENVIRONMENT,169,0,1.0,early_exit
+swe-agent:044269:lightstep__lightstep-tracer-python-106,swe-agent,169,169,3,9,9,160,160,0.9467455621301775,ENVIRONMENT,161,0,1.0,submitted (exit_context)
+swe-agent:036056:getnikola__nikola-3504,swe-agent,201,201,18,53,53,148,148,0.736318407960199,ENVIRONMENT,149,0,1.0,exit_context
+swe-agent:033469:facelessuser__pymdown-extensions-889,swe-agent,239,239,21,101,101,138,138,0.5774058577405857,ENVIRONMENT,139,0,1.0,submitted (exit_context)
+swe-agent:058978:vertica__vertica-python-372,swe-agent,145,145,5,15,15,130,130,0.896551724137931,ENVIRONMENT,131,0,1.0,submitted (exit_context)
+terminalbench:006232:train-fasttext,terminalbench,1408,1408,27,91,91,1317,1317,0.9353693181818182,INVESTIGATION,1318,0,1.0,reward=0
+terminalbench:003317:make-doom-for-mips,terminalbench,1361,1361,20,68,68,1293,1293,0.9500367376928729,INVESTIGATION,1294,0,1.0,reward=0
+swe-agent:050119:iterative__dvc-3729,swe-agent,817,817,1,3,3,814,814,0.996328029375765,INVESTIGATION,815,0,1.0,submitted (exit_context)
+swe-agent:014434:iterative__dvc-4125,swe-agent,789,789,1,3,3,786,786,0.9961977186311787,INVESTIGATION,787,0,1.0,early_exit
+swe-agent:044017:iterative__dvc-2298,swe-agent,787,787,1,3,3,784,784,0.9961880559085133,INVESTIGATION,785,0,1.0,exit_context
+swe-agent:044048:iterative__dvc-3329,swe-agent,761,761,2,5,5,756,756,0.9934296977660972,INVESTIGATION,757,0,1.0,exit_context
+swe-agent:047157:iterative__dvc-3406,swe-agent,757,757,1,3,3,754,754,0.9960369881109643,INVESTIGATION,755,0,1.0,submitted (exit_context)
+swe-agent:053062:iterative__dvc-4166,swe-agent,753,753,1,3,3,750,750,0.9960159362549801,INVESTIGATION,751,0,1.0,submitted (exit_context)
+swe-agent:022123:iterative__dvc-4435,swe-agent,747,747,3,9,9,738,738,0.9879518072289156,INVESTIGATION,739,0,1.0,submitted (exit_context)
+swe-agent:047156:iterative__dvc-3406,swe-agent,735,735,1,3,3,732,732,0.9959183673469387,INVESTIGATION,733,0,1.0,submitted (exit_context)
+terminalbench:004344:path-tracing,terminalbench,1095,1095,1,2,2,1093,1093,0.9981735159817352,PRODUCT,1094,0,1.0,reward=0
+terminalbench:004334:fa729aa3-0aff-486b-8674-c3649f0b1e53,terminalbench,1096,1096,1,3,3,1093,1093,0.9972627737226277,PRODUCT,1094,0,1.0,reward=0
+swe-agent:003061:iterative__dvc-7497,swe-agent,797,797,1,3,3,794,794,0.9962358845671268,PRODUCT,795,0,1.0,exit_context
+swe-agent:055473:iterative__dvc-3132,swe-agent,791,791,4,19,19,772,772,0.9759797724399494,PRODUCT,773,0,1.0,exit_context
+swe-agent:003948:iterative__dvc-9000,swe-agent,783,783,4,21,21,762,762,0.9731800766283525,PRODUCT,763,0,1.0,exit_context
+swe-agent:003058:iterative__dvc-7497,swe-agent,735,735,3,7,7,728,728,0.9904761904761905,PRODUCT,729,0,1.0,submitted (exit_context)
+swe-agent:030443:iterative__dvc-3315,swe-agent,719,719,3,9,9,710,710,0.9874826147426982,PRODUCT,711,0,1.0,early_exit
+swe-agent:029390:pydantic__pydantic-2265,swe-agent,727,727,7,37,37,690,690,0.9491059147180193,PRODUCT,691,0,1.0,early_exit
+swe-agent:022190:iterative__dvc-6519,swe-agent,683,683,4,13,13,670,670,0.9809663250366032,PRODUCT,671,0,1.0,exit_context
+swe-agent:028882:iterative__dvc-2525,swe-agent,677,677,9,29,29,648,648,0.9571639586410635,PRODUCT,649,0,1.0,submitted (exit_context)
+terminalbench:005340:regex-chess,terminalbench,751,751,45,101,101,650,650,0.8655126498002663,VALIDATION,651,0,1.0,reward=0
+swe-agent:053040:iterative__dvc-3246,swe-agent,557,557,7,25,25,532,532,0.9551166965888689,VALIDATION,533,0,1.0,submitted (exit_context)
+swe-agent:029778:Sceptre__sceptre-1277,swe-agent,513,513,2,7,7,506,506,0.98635477582846,VALIDATION,507,0,1.0,submitted (exit_context)
+swe-agent:049307:tox-dev__tox-conda-144,swe-agent,503,503,4,15,15,488,488,0.9701789264413518,VALIDATION,489,0,1.0,exit_context
+swe-agent:019532:alvinwan__TexSoup-141,swe-agent,499,499,7,19,19,480,480,0.9619238476953907,VALIDATION,481,0,1.0,submitted (exit_context)
+swe-agent:022858:xlab-si__xopera-opera-52,swe-agent,497,497,6,19,19,478,478,0.9617706237424547,VALIDATION,479,0,1.0,submitted (exit_context)
+swe-agent:073399:pypa__setuptools_scm-269,swe-agent,475,475,2,7,7,468,468,0.9852631578947368,VALIDATION,469,0,1.0,submitted (exit_context)
+swe-agent:045483:boxed__mutmut-239,swe-agent,475,475,5,15,15,460,460,0.968421052631579,VALIDATION,461,0,1.0,submitted (exit_context)
+swe-agent:004424:reata__sqllineage-38,swe-agent,461,461,5,23,23,438,438,0.9501084598698482,VALIDATION,439,0,1.0,submitted (exit_context)
+swe-agent:066363:eliben__pycparser-236,swe-agent,491,491,7,59,59,432,432,0.879837067209776,VALIDATION,433,0,1.0,submitted (exit_context)
