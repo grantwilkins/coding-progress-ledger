@@ -5,8 +5,8 @@ Tests cover semantic contracts, not snapshots:
 - reader extraction and hard-fail behavior
 - classifier priority
 - product target splitting
-- stuck-unit accounting
-- empirical-Bayes support, fallback, censoring, and calibration-pair rules
+- stuck-unit accounting and v1.6 prefix features
+- empirical-Bayes support, feature fallback, censoring, and calibration-pair rules
 - CLI smoke paths
 - gated cached Hugging Face integration
 

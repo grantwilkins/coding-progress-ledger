@@ -16,7 +16,27 @@ from typing import Any, Callable, Iterable
 
 
 TURN_GRID = (1, 2, 4, 8, 16, 32, 64)
-FALLBACK_FIELDS = ("stuck", "age_bucket", "turn_bucket", "current_category", "total")
+KEY_FIELDS = (
+    "source",
+    "recent_error_bucket",
+    "investigation_ratio_bucket",
+    "touched_source",
+    "total",
+    "current_category",
+    "turn_bucket",
+    "age_bucket",
+    "stuck",
+)
+FALLBACK_FIELDS = (
+    "recent_error_bucket",
+    "investigation_ratio_bucket",
+    "touched_source",
+    "stuck",
+    "age_bucket",
+    "turn_bucket",
+    "current_category",
+    "total",
+)
 COMFORTABLE_SUPPORT = 50
 RATE_BUCKETS = (0.1, 0.2, 0.3, 0.5)
 DIAGNOSTIC_COHORT_STEP = 10
@@ -45,6 +65,9 @@ class PrefixRow:
     current_category: str
     current_unit_age: int
     had_stuck_episode: bool
+    recent_error_bucket: str = "clean"
+    touched_source: bool = False
+    investigation_ratio_bucket: str = "moderate"
 
 
 @dataclass(frozen=True)
@@ -223,6 +246,9 @@ def read_prefixes_csv(
                     current_category=row.get("current_category") or "NONE",
                     current_unit_age=int(row["current_unit_age"]),
                     had_stuck_episode=stuck,
+                    recent_error_bucket=row.get("recent_error_bucket") or "clean",
+                    touched_source=_bool(row.get("touched_source", "")),
+                    investigation_ratio_bucket=row.get("investigation_ratio_bucket") or "moderate",
                 )
             )
             if progress and index % 1_000_000 == 0:
@@ -453,6 +479,9 @@ def _prediction_rows(
                 "source": row.source,
                 "step": row.step,
                 "current_total": row.total,
+                "recent_error_bucket": row.recent_error_bucket,
+                "touched_source": row.touched_source,
+                "investigation_ratio_bucket": row.investigation_ratio_bucket,
                 "fallback_depth": prediction.fallback_depth,
                 "support_count": prediction.support_count,
                 "retained_fields": ";".join(prediction.retained_fields),
@@ -475,6 +504,9 @@ def _prediction_rows(
                     "step": row.step,
                     "current_total": row.total,
                     "current_category": row.current_category,
+                    "recent_error_bucket": row.recent_error_bucket,
+                    "touched_source": row.touched_source,
+                    "investigation_ratio_bucket": row.investigation_ratio_bucket,
                     "threshold": threshold,
                     "grid_offset": offset,
                     "current_rate": row.total / row.step,
@@ -1041,6 +1073,9 @@ def _prefix_followup_diagnostics(
                         current_step,
                         int(row["current_unit_age"]),
                         stuck,
+                        row.get("recent_error_bucket") or "clean",
+                        _bool(row.get("touched_source", "")),
+                        row.get("investigation_ratio_bucket") or "moderate",
                         depth,
                     ),
                 )
@@ -1166,6 +1201,9 @@ def _fine_fallback_key(row: PrefixRow, depth: int) -> tuple[Any, ...]:
         row.step,
         row.current_unit_age,
         row.had_stuck_episode,
+        row.recent_error_bucket,
+        row.touched_source,
+        row.investigation_ratio_bucket,
         depth,
     )
 
@@ -1177,10 +1215,16 @@ def _fine_fallback_key_values(
     step: int,
     current_unit_age: int,
     had_stuck_episode: bool,
+    recent_error_bucket: str,
+    touched_source: bool,
+    investigation_ratio_bucket: str,
     depth: int,
 ) -> tuple[Any, ...]:
     values = {
         "source": source,
+        "recent_error_bucket": recent_error_bucket,
+        "investigation_ratio_bucket": investigation_ratio_bucket,
+        "touched_source": touched_source,
         "total": total,
         "current_category": current_category or "NONE",
         "turn_bucket": _fine_turn_bucket(step),
@@ -1189,14 +1233,7 @@ def _fine_fallback_key_values(
     }
     for field in FALLBACK_FIELDS[:depth]:
         values[field] = None
-    return (
-        values["source"],
-        values["total"],
-        values["current_category"],
-        values["turn_bucket"],
-        values["age_bucket"],
-        values["stuck"],
-    )
+    return tuple(values[field] for field in KEY_FIELDS)
 
 
 def _percentile_int(values: list[int], probability: float) -> int | str:
@@ -1232,29 +1269,18 @@ def _progress(message: str, started: float) -> None:
 
 def _fallback_key(row: PrefixRow, depth: int) -> tuple[Any, ...]:
     key = _prefix_state_key(row)
-    values = {
-        "source": key[0],
-        "total": key[1],
-        "current_category": key[2],
-        "turn_bucket": key[3],
-        "age_bucket": key[4],
-        "stuck": key[5],
-    }
+    values = dict(zip(KEY_FIELDS, key))
     for field in FALLBACK_FIELDS[:depth]:
         values[field] = None
-    return (
-        values["source"],
-        values["total"],
-        values["current_category"],
-        values["turn_bucket"],
-        values["age_bucket"],
-        values["stuck"],
-    )
+    return tuple(values[field] for field in KEY_FIELDS)
 
 
 def _prefix_state_key(row: PrefixRow) -> tuple[Any, ...]:
     return (
         row.source,
+        row.recent_error_bucket,
+        row.investigation_ratio_bucket,
+        row.touched_source,
         row.total,
         row.current_category or "NONE",
         turn_bucket(row.step),
@@ -1265,7 +1291,7 @@ def _prefix_state_key(row: PrefixRow) -> tuple[Any, ...]:
 
 def _retained_fields(depth: int) -> tuple[str, ...]:
     dropped = set(FALLBACK_FIELDS[:depth])
-    return tuple(field for field in ("source", "total", "current_category", "turn_bucket", "age_bucket", "stuck") if field not in dropped)
+    return tuple(field for field in KEY_FIELDS if field not in dropped)
 
 
 def _encode_key(key: tuple[Any, ...]) -> list[Any]:

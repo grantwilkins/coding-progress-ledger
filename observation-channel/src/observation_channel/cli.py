@@ -1,15 +1,16 @@
 from __future__ import annotations
 
 import argparse
+import csv
 import json
 import re
 from pathlib import Path
 
 from .empirical_bayes import DEFAULT_BOOTSTRAP_RESAMPLES, EmpiricalBayesLookup, evaluate, query_json, write_diagnostics
 from .hf import expand_sources, iter_hf_rows, load_hf_rows, read_raw_sample, write_raw_sample
-from .io import write_turns
+from .io import ROW_FIELDS, read_jsonl, write_turns
 from .readers import rows_to_turns
-from .runner import annotate_corpus, annotate_file
+from .runner import annotate_corpus, annotate_file, annotate_turns
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
@@ -47,6 +48,12 @@ def main(argv: list[str] | None = None) -> int:
     corpus_parser = subparsers.add_parser("annotate-corpus", help="annotate a directory of canonical turn JSONL files")
     corpus_parser.add_argument("turn_dir", type=Path)
     corpus_parser.add_argument("--out-dir", type=Path, default=DATA_DIR / "outputs")
+
+    cached_diag = subparsers.add_parser("cached-annotator-diagnostic", help="write combined cached annotator diagnostic CSVs")
+    cached_diag.add_argument("--source", default="all", choices=["all", "swe-agent", "hermes", "terminalbench"])
+    cached_diag.add_argument("--raw-dir", type=Path, default=DATA_DIR / "raw")
+    cached_diag.add_argument("--split", default="train")
+    cached_diag.add_argument("--out-dir", type=Path, default=DATA_DIR / "diagnostics" / "cached_annotator")
 
     eb_eval = subparsers.add_parser("empirical-bayes-eval", help="evaluate empirical-Bayes final-unit lookup")
     eb_eval.add_argument("--turns-csv", type=Path, default=DATA_DIR / "diagnostics" / "cached_annotator" / "turns.csv")
@@ -87,6 +94,10 @@ def main(argv: list[str] | None = None) -> int:
         return 0
     if args.command == "annotate-corpus":
         annotate_corpus(args.turn_dir, args.out_dir)
+        return 0
+    if args.command == "cached-annotator-diagnostic":
+        result = _cached_annotator_diagnostic(args)
+        print(json.dumps(result, sort_keys=True))
         return 0
     if args.command == "empirical-bayes-eval":
         result = evaluate(
@@ -157,6 +168,116 @@ def _preprocess(args: argparse.Namespace) -> int:
         suffix = "" if seen[safe] == 1 else f"__{seen[safe]}"
         write_turns(out_dir / f"{safe}{suffix}.jsonl", turns)
     return 0
+
+
+TRACE_FIELDS = [
+    "trace_key",
+    "source",
+    "raw_row_index",
+    "instance_id",
+    "model",
+    "agent",
+    "success_or_reward",
+    "exit_status",
+    "task",
+    "category",
+    "subcategory",
+    "final_total",
+    "final_done",
+    "had_stuck_episode",
+    "total_turns",
+    "action_turns",
+    "terminal_category",
+    "first_stuck_step",
+    "censored_right_tail",
+    "censor_reason",
+    "parse_error",
+]
+
+
+def _cached_annotator_diagnostic(args: argparse.Namespace) -> dict[str, int]:
+    args.out_dir.mkdir(parents=True, exist_ok=True)
+    trace_count = 0
+    turn_count = 0
+    with (args.out_dir / "turns.csv").open("w", encoding="utf-8", newline="") as turns_handle, (
+        args.out_dir / "traces.csv"
+    ).open("w", encoding="utf-8", newline="") as traces_handle:
+        turn_writer = csv.DictWriter(turns_handle, fieldnames=["trace_key", "source", "instance_id", *ROW_FIELDS])
+        trace_writer = csv.DictWriter(traces_handle, fieldnames=TRACE_FIELDS)
+        turn_writer.writeheader()
+        trace_writer.writeheader()
+        for source in expand_sources(args.source):
+            raw_path = args.raw_dir / source / f"{args.split}.jsonl"
+            for raw_index, raw in enumerate(read_jsonl(raw_path)):
+                trace_count += 1
+                try:
+                    [(instance_id, turns)] = list(rows_to_turns([raw], source=source))
+                    trace_key = f"{source}:{raw_index:06d}:{instance_id}"
+                    rows, summary = annotate_turns(turns, instance_id=instance_id, exit_status=str(turns[0].metadata.get("exit_status", "unknown")))
+                    for row in rows:
+                        turn_writer.writerow({"trace_key": trace_key, "source": source, "instance_id": instance_id} | row.to_csv_row())
+                    turn_count += len(rows)
+                    trace_writer.writerow(_trace_row(trace_key, source, raw_index, instance_id, raw, rows, summary))
+                except Exception as exc:
+                    instance_id = str(raw.get("instance_id") or raw.get("task_name") or f"{source}-{raw_index:06d}")
+                    trace_key = f"{source}:{raw_index:06d}:{instance_id}"
+                    trace_writer.writerow(_parse_error_trace_row(trace_key, source, raw_index, instance_id, raw, exc))
+    return {"traces": trace_count, "turns": turn_count}
+
+
+def _trace_row(trace_key: str, source: str, raw_index: int, instance_id: str, raw: dict, rows: list, summary: object) -> dict[str, object]:
+    terminal_category = next((row.current_category for row in reversed(rows) if row.current_category), "")
+    first_stuck_step = next((row.step for row in rows if row.had_stuck_episode), "")
+    censored = source == "swe-agent" and summary.final_total > 103
+    return {
+        "trace_key": trace_key,
+        "source": source,
+        "raw_row_index": raw_index,
+        "instance_id": instance_id,
+        "model": raw.get("model", ""),
+        "agent": raw.get("agent", ""),
+        "success_or_reward": raw.get("success", raw.get("reward", "")),
+        "exit_status": summary.exit_status,
+        "task": raw.get("task", raw.get("task_name", "")),
+        "category": raw.get("category", ""),
+        "subcategory": raw.get("subcategory", ""),
+        "final_total": summary.final_total,
+        "final_done": summary.final_done,
+        "had_stuck_episode": summary.had_stuck_episode,
+        "total_turns": rows[-1].step if rows else 0,
+        "action_turns": sum(1 for row in rows if row.kind == "action"),
+        "terminal_category": terminal_category,
+        "first_stuck_step": first_stuck_step,
+        "censored_right_tail": censored,
+        "censor_reason": "swe_agent_final_total_gt_103" if censored else "",
+        "parse_error": "",
+    }
+
+
+def _parse_error_trace_row(trace_key: str, source: str, raw_index: int, instance_id: str, raw: dict, exc: Exception) -> dict[str, object]:
+    return {
+        "trace_key": trace_key,
+        "source": source,
+        "raw_row_index": raw_index,
+        "instance_id": instance_id,
+        "model": raw.get("model", ""),
+        "agent": raw.get("agent", ""),
+        "success_or_reward": raw.get("success", raw.get("reward", "")),
+        "exit_status": raw.get("exit_status", "unknown"),
+        "task": raw.get("task", raw.get("task_name", "")),
+        "category": raw.get("category", ""),
+        "subcategory": raw.get("subcategory", ""),
+        "final_total": 0,
+        "final_done": 0,
+        "had_stuck_episode": False,
+        "total_turns": 0,
+        "action_turns": 0,
+        "terminal_category": "",
+        "first_stuck_step": "",
+        "censored_right_tail": False,
+        "censor_reason": "",
+        "parse_error": str(exc),
+    }
 
 
 def _safe_name(value: str) -> str:

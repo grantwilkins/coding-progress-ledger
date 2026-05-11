@@ -54,6 +54,9 @@ class Row:
     current_category: str
     current_unit_age: int
     had_stuck_episode: bool
+    recent_error_bucket: str
+    touched_source: bool
+    investigation_ratio_bucket: str
     kind: str
     tool: str
 

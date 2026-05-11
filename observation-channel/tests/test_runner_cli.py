@@ -47,6 +47,32 @@ def test_preprocess_cli_from_raw_jsonl(tmp_path: Path) -> None:
     assert [turn.kind for turn in turns] == ["action", "observation"]
 
 
+def test_cached_annotator_diagnostic_writes_v16_turn_columns(tmp_path: Path) -> None:
+    raw_dir = tmp_path / "raw"
+    out_dir = tmp_path / "diag"
+    write_jsonl(
+        raw_dir / "swe-agent" / "train.jsonl",
+        [
+            {
+                "instance_id": "case",
+                "trajectory": [
+                    {"role": "assistant", "content": "ls"},
+                    {"role": "user", "observation": "ok"},
+                    {"role": "assistant", "content": "cat <<'EOF' > src/app.py\nx=1\nEOF"},
+                    {"role": "user", "observation": "<returncode>1</returncode>"},
+                ],
+            }
+        ],
+    )
+
+    rc = main(["cached-annotator-diagnostic", "--source", "swe-agent", "--raw-dir", str(raw_dir), "--out-dir", str(out_dir)])
+
+    assert rc == 0
+    header = (out_dir / "turns.csv").read_text(encoding="utf-8").splitlines()[0].split(",")
+    assert {"recent_error_bucket", "touched_source", "investigation_ratio_bucket"} <= set(header)
+    assert (out_dir / "traces.csv").exists()
+
+
 def test_empirical_bayes_eval_cli_writes_report_and_bundle(tmp_path: Path) -> None:
     traces = tmp_path / "traces.csv"
     turns = tmp_path / "turns.csv"

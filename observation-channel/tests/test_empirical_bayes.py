@@ -2,12 +2,15 @@
 Claim:
 The empirical-Bayes estimator returns prefix-safe empirical distributions over
 final unit count, and evaluates only non-tautological, training-supported future
-thresholds.
+thresholds. V1.6 prefix features refine bins but fall back before the original
+v1 fields.
 
 Plausible wrong implementations:
 - Count final totals below the current prefix total after fallback.
 - Drop fallback fields in the wrong order or silently pool sources.
 - Emit calibration pairs for thresholds beyond the bin's observed training tail.
+- Drop old v1 fields before dropping the new v1.6 refinement features.
+- Lose v1.6 feature values when writing prediction artifacts.
 - Treat stuck as a one-row event instead of a monotone prefix state.
 - Split prefix rows independently instead of keeping whole traces together.
 - Compute follow-up bias diagnostics at the wrong grouping level or with the
@@ -31,6 +34,7 @@ from observation_channel.empirical_bayes import (
     _prefix_cohort_distribution,
     _rate_bucket_conditional_histograms,
     eligible_prefixes,
+    query_json,
     read_prefixes_csv,
     read_traces_csv,
     source_stratified_split,
@@ -51,6 +55,9 @@ def _prefix(
     step: int = 12,
     age: int = 3,
     stuck: bool = True,
+    recent_error_bucket: str = "clean",
+    touched_source: bool = False,
+    investigation_ratio_bucket: str = "moderate",
 ) -> PrefixRow:
     return PrefixRow(
         trace_key=key,
@@ -60,6 +67,9 @@ def _prefix(
         current_category=category,
         current_unit_age=age,
         had_stuck_episode=stuck,
+        recent_error_bucket=recent_error_bucket,
+        touched_source=touched_source,
+        investigation_ratio_bucket=investigation_ratio_bucket,
     )
 
 
@@ -84,10 +94,55 @@ def test_lookup_fallback_retains_source_and_filters_current_total_lower_bound() 
     prediction = lookup.predict(_prefix("live", stuck=True))
 
     assert prediction.values == (6, 7)
-    assert prediction.fallback_depth == 1
+    assert prediction.fallback_depth == 4
     assert prediction.retained_fields == ("source", "total", "current_category", "turn_bucket", "age_bucket")
     assert prediction.source_retained is True
     assert "fallback_depth" in prediction.low_confidence_reasons
+
+
+def test_lookup_drops_v16_refinements_before_v1_fields() -> None:
+    traces = {"a": _trace("a", final_total=6), "b": _trace("b", final_total=7)}
+    lookup = EmpiricalBayesLookup.build(
+        [
+            _prefix("a", recent_error_bucket="clean", investigation_ratio_bucket="low", touched_source=False),
+            _prefix("b", recent_error_bucket="heavy", investigation_ratio_bucket="dominant", touched_source=True),
+        ],
+        traces,
+        min_support=2,
+    )
+
+    prediction = lookup.predict(_prefix("live", recent_error_bucket="clean", investigation_ratio_bucket="low", touched_source=False))
+
+    assert prediction.values == (6, 7)
+    assert prediction.fallback_depth == 3
+    assert prediction.retained_fields == ("source", "total", "current_category", "turn_bucket", "age_bucket", "stuck")
+
+
+def test_query_json_uses_neutral_v16_defaults() -> None:
+    traces = {"a": _trace("a", final_total=6), "b": _trace("b", final_total=7)}
+    lookup = EmpiricalBayesLookup.build([_prefix("a"), _prefix("b")], traces, min_support=2)
+
+    result = query_json(
+        lookup,
+        source="s",
+        total=5,
+        current_category="PRODUCT",
+        step=12,
+        current_unit_age=3,
+        had_stuck_episode=True,
+    )
+
+    assert result["retained_fields"] == [
+        "source",
+        "recent_error_bucket",
+        "investigation_ratio_bucket",
+        "touched_source",
+        "total",
+        "current_category",
+        "turn_bucket",
+        "age_bucket",
+        "stuck",
+    ]
 
 
 def test_lookup_current_total_filter_keeps_equal_final_totals() -> None:
@@ -157,6 +212,24 @@ def test_calibration_pairs_require_future_threshold_and_observed_tail_support() 
     assert all(row["threshold"] > row["current_total"] for row in pairs)
 
 
+def test_prediction_artifacts_include_v16_features() -> None:
+    traces = {"a": _trace("a", final_total=6), "b": _trace("b", final_total=6)}
+    prefixes = [
+        _prefix("a", total=5, recent_error_bucket="heavy", touched_source=True, investigation_ratio_bucket="dominant"),
+        _prefix("b", total=5, recent_error_bucket="heavy", touched_source=True, investigation_ratio_bucket="dominant"),
+    ]
+    lookup = EmpiricalBayesLookup.build(prefixes, traces, min_support=2)
+
+    pairs, prefix_predictions = _prediction_rows([prefixes[0]], traces, lookup, {"a": "short"})
+
+    assert pairs[0]["recent_error_bucket"] == "heavy"
+    assert pairs[0]["touched_source"] is True
+    assert pairs[0]["investigation_ratio_bucket"] == "dominant"
+    assert prefix_predictions[0]["recent_error_bucket"] == "heavy"
+    assert prefix_predictions[0]["touched_source"] is True
+    assert prefix_predictions[0]["investigation_ratio_bucket"] == "dominant"
+
+
 def test_source_stratified_split_keeps_whole_traces_and_reports_counts() -> None:
     traces = [_trace(f"a{i}", source="a") for i in range(5)] + [_trace(f"b{i}", source="b") for i in range(5)]
 
@@ -188,6 +261,30 @@ def test_csv_prefix_loader_derives_monotone_stuck_state_from_first_stuck_step(tm
     prefixes = read_prefixes_csv(turns_csv, read_traces_csv(traces_csv))
 
     assert [row.had_stuck_episode for row in prefixes] == [False, True, True]
+    assert [(row.recent_error_bucket, row.touched_source, row.investigation_ratio_bucket) for row in prefixes] == [
+        ("clean", False, "moderate"),
+        ("clean", False, "moderate"),
+        ("clean", False, "moderate"),
+    ]
+
+
+def test_csv_prefix_loader_reads_v16_feature_columns(tmp_path: Path) -> None:
+    traces_csv = tmp_path / "traces.csv"
+    turns_csv = tmp_path / "turns.csv"
+    traces_csv.write_text(
+        "trace_key,source,final_total,total_turns,first_stuck_step,censored_right_tail,parse_error\n"
+        "t,s,9,5,,False,\n",
+        encoding="utf-8",
+    )
+    turns_csv.write_text(
+        "trace_key,source,instance_id,step,total,done,current_category,current_unit_age,had_stuck_episode,recent_error_bucket,touched_source,investigation_ratio_bucket,kind,tool\n"
+        "t,s,t,2,1,0,PRODUCT,1,False,heavy,True,dominant,action,bash\n",
+        encoding="utf-8",
+    )
+
+    row = read_prefixes_csv(turns_csv, read_traces_csv(traces_csv))[0]
+
+    assert (row.recent_error_bucket, row.touched_source, row.investigation_ratio_bucket) == ("heavy", True, "dominant")
 
 
 def test_censored_and_terminal_prefixes_are_excluded_from_eligible_training_rows() -> None:
