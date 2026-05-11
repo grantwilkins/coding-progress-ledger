@@ -1,0 +1,5 @@
+from observation_channel.together_replay_ensemble import main
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

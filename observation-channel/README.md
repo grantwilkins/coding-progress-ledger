@@ -18,6 +18,7 @@ uv run --project observation-channel observation-channel gbm-trial-eval --bootst
 uv run --project observation-channel observation-channel belief-tracker-eval
 uv run --project observation-channel observation-channel belief-filter-calibration
 uv run --project observation-channel observation-channel progress-label-audit
+TOGETHER_API_KEY=... uv run --project observation-channel python observation-channel/scripts/run_together_replay_ensemble.py --agents 40 --workers 40 --cache-dir observation-channel/data/raw/hf_cache
 uv run pytest observation-channel
 ```
 
@@ -31,3 +32,5 @@ The belief-tracker evaluator replays held-out prefixes with empirical-Bayes dire
 The belief-filter calibration evaluator runs EB-only alpha and event-gated filter sweeps against the same held-out split. It reuses the saved empirical-Bayes v1.6 lookup and writes the same artifact names under `reports/belief_filter_calibration/`; the large `progress_beliefs.csv` remains local and ignored.
 
 The progress-label audit is read-only. It checks whether opened-unit progress reaches 100% while a large fraction of the trace remains, compares opened-unit, closed-unit, and step progress on selected worst traces, and writes evidence under `reports/progress_label_audit/`.
+
+The Together replay ensemble replays one selected SWE-Agent trace turn by turn, dispatches all requested agents in parallel for each turn, prints the per-turn mean/distribution, and writes scalar progress estimates plus aggregate uncertainty under `reports/together_replay_ensemble/`. It requires `TOGETHER_API_KEY` and uses Together's OpenAI-compatible chat endpoint with `openai/gpt-oss-120b` by default.
