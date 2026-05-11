@@ -90,6 +90,15 @@ def test_lookup_fallback_retains_source_and_filters_current_total_lower_bound() 
     assert "fallback_depth" in prediction.low_confidence_reasons
 
 
+def test_lookup_current_total_filter_keeps_equal_final_totals() -> None:
+    traces = {"a": _trace("a", final_total=6), "b": _trace("b", final_total=7), "low": _trace("low", final_total=5)}
+    lookup = EmpiricalBayesLookup.build([_prefix(key, total=6) for key in traces], traces, min_support=2)
+
+    prediction = lookup.predict(_prefix("live", total=6))
+
+    assert prediction.values == (6, 7)
+
+
 def test_prediction_cdf_quantile_and_progress_interval_are_hand_checkable() -> None:
     result = Prediction(
         values=(6, 8, 10),

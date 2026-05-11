@@ -7,6 +7,7 @@ import math
 import random
 import sys
 import time
+from bisect import bisect_left, bisect_right
 from collections import defaultdict
 from dataclasses import asdict, dataclass
 from pathlib import Path
@@ -21,6 +22,7 @@ RATE_BUCKETS = (0.1, 0.2, 0.3, 0.5)
 DIAGNOSTIC_COHORT_STEP = 10
 DIAGNOSTIC_COHORT_TOTAL = 1
 NEAR_CAP_FINAL_TOTAL = 94
+DEFAULT_BOOTSTRAP_RESAMPLES = 400
 
 
 @dataclass(frozen=True)
@@ -57,13 +59,7 @@ class Prediction:
     def cdf(self, threshold: int) -> float:
         if not self.values:
             raise ValueError("prediction has no support")
-        count = 0
-        for value in self.values:
-            if value <= threshold:
-                count += 1
-            else:
-                break
-        return count / len(self.values)
+        return bisect_right(self.values, threshold) / len(self.values)
 
     def quantile(self, probability: float) -> int:
         if not 0 <= probability <= 1:
@@ -124,7 +120,8 @@ class EmpiricalBayesLookup:
     def predict(self, row: PrefixRow) -> Prediction:
         for depth in range(len(FALLBACK_FIELDS) + 1):
             key = _fallback_key(row, depth)
-            values = tuple(value for value in self.cells.get(key, ()) if value >= row.total)
+            cell_values = self.cells.get(key, ())
+            values = cell_values[bisect_left(cell_values, row.total) :]
             if len(values) >= self.min_support:
                 reasons = []
                 if depth:
@@ -275,7 +272,7 @@ def evaluate(
     report_dir: Path,
     bundle_path: Path,
     *,
-    bootstrap_resamples: int = 1000,
+    bootstrap_resamples: int = DEFAULT_BOOTSTRAP_RESAMPLES,
     seed: int = 1729,
     min_support: int = 25,
 ) -> dict[str, Any]:
@@ -290,8 +287,9 @@ def evaluate(
     progress("splitting traces")
     train_keys, eval_keys, split_rows = source_stratified_split(traces.values())
     progress("filtering train/eval prefixes")
-    train_prefixes = [row for row in eligible_prefixes(prefixes, traces) if row.trace_key in train_keys]
-    eval_prefixes = [row for row in eligible_prefixes(prefixes, traces) if row.trace_key in eval_keys]
+    eligible = eligible_prefixes(prefixes, traces)
+    train_prefixes = [row for row in eligible if row.trace_key in train_keys]
+    eval_prefixes = [row for row in eligible if row.trace_key in eval_keys]
     train_traces = {key: trace for key, trace in traces.items() if key in train_keys and not trace.parse_error and not trace.censored_right_tail}
     progress(f"building lookup from {len(train_prefixes):,} train prefixes")
     lookup = EmpiricalBayesLookup.build(train_prefixes, train_traces, min_support=min_support)
@@ -542,26 +540,10 @@ def _bootstrap_bands(
 
     rng = np.random.default_rng(seed)
     bands = []
-    for stratum, stratum_pairs in _all_strata(pairs).items():
-        trace_index: dict[str, int] = {}
-        count_rows: list[list[int]] = []
-        outcome_rows: list[list[int]] = []
-        for row in stratum_pairs:
-            trace_key = str(row["trace_key"])
-            trace_i = trace_index.get(trace_key)
-            if trace_i is None:
-                trace_i = len(count_rows)
-                trace_index[trace_key] = trace_i
-                count_rows.append([0] * 10)
-                outcome_rows.append([0] * 10)
-            bin_i = min(9, int(float(row["predicted_p"]) * 10))
-            count_rows[trace_i][bin_i] += 1
-            outcome_rows[trace_i][bin_i] += int(row["outcome"])
-        n_traces = len(count_rows)
-        if not n_traces:
-            continue
-        counts = np.asarray(count_rows, dtype=np.int64)
-        outcomes = np.asarray(outcome_rows, dtype=np.int64)
+    for stratum, trace_bins in _bootstrap_trace_bins(pairs).items():
+        n_traces = len(trace_bins)
+        counts = np.asarray([item[0] for item in trace_bins], dtype=np.int64)
+        outcomes = np.asarray([item[1] for item in trace_bins], dtype=np.int64)
         rates = np.full((resamples, 10), np.nan, dtype=np.float64)
         probs = np.full(n_traces, 1.0 / n_traces, dtype=np.float64)
         for start in range(0, resamples, chunk_size):
@@ -594,26 +576,14 @@ def _bootstrap_bands(
 def _bootstrap_bands_preaggregated_python(pairs: list[dict[str, Any]], resamples: int, seed: int) -> list[dict[str, Any]]:
     rng = random.Random(seed)
     bands = []
-    for stratum, stratum_pairs in _all_strata(pairs).items():
-        by_trace: dict[str, tuple[list[int], list[int]]] = {}
-        for row in stratum_pairs:
-            trace_key = str(row["trace_key"])
-            if trace_key not in by_trace:
-                by_trace[trace_key] = ([0] * 10, [0] * 10)
-            counts, outcomes = by_trace[trace_key]
-            bin_i = min(9, int(float(row["predicted_p"]) * 10))
-            counts[bin_i] += 1
-            outcomes[bin_i] += int(row["outcome"])
-        trace_keys = sorted(by_trace)
-        if not trace_keys:
-            continue
-        count_rows = [by_trace[key][0] for key in trace_keys]
-        outcome_rows = [by_trace[key][1] for key in trace_keys]
+    for stratum, trace_bins in _bootstrap_trace_bins(pairs).items():
+        count_rows = [counts for counts, _ in trace_bins]
+        outcome_rows = [outcomes for _, outcomes in trace_bins]
         samples: list[list[float]] = [[] for _ in range(10)]
         for _ in range(resamples):
             boot_counts = [0] * 10
             boot_outcomes = [0] * 10
-            for trace_i in rng.choices(range(len(trace_keys)), k=len(trace_keys)):
+            for trace_i in rng.choices(range(len(trace_bins)), k=len(trace_bins)):
                 for bin_i in range(10):
                     boot_counts[bin_i] += count_rows[trace_i][bin_i]
                     boot_outcomes[bin_i] += outcome_rows[trace_i][bin_i]
@@ -632,6 +602,31 @@ def _bootstrap_bands_preaggregated_python(pairs: list[dict[str, Any]], resamples
                 }
             )
     return bands
+
+
+def _bootstrap_trace_bins(pairs: list[dict[str, Any]]) -> dict[str, list[tuple[list[int], list[int]]]]:
+    by_trace: dict[str, tuple[str, str, list[int], list[int]]] = {}
+    for row in pairs:
+        trace_key = str(row["trace_key"])
+        source = str(row["source"])
+        source_length = str(row["source_length_tercile"])
+        trace = by_trace.get(trace_key)
+        if trace is None:
+            trace = (source, source_length, [0] * 10, [0] * 10)
+            by_trace[trace_key] = trace
+        elif trace[0] != source or trace[1] != source_length:
+            raise ValueError(f"inconsistent bootstrap strata for trace {trace_key}")
+        bin_i = min(9, int(float(row["predicted_p"]) * 10))
+        trace[2][bin_i] += 1
+        trace[3][bin_i] += int(row["outcome"])
+
+    strata: dict[str, list[tuple[list[int], list[int]]]] = defaultdict(list)
+    for source, source_length, counts, outcomes in by_trace.values():
+        trace_bins = (counts, outcomes)
+        strata["pooled"].append(trace_bins)
+        strata[source].append(trace_bins)
+        strata[source_length].append(trace_bins)
+    return {key: strata[key] for key in sorted(strata, key=_stratum_sort_key)}
 
 
 def _sharpness_rows(prefix_rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -1333,6 +1328,8 @@ def _all_strata(pairs: list[dict[str, Any]]) -> dict[str, list[dict[str, Any]]]:
 
 
 def _stratum_sort_key(value: str) -> tuple[int, int, str]:
+    if value == "pooled":
+        return (-1, -1, value)
     sources = {"hermes": 0, "swe-agent": 1, "terminalbench": 2}
     lengths = {"short": 0, "medium": 1, "long": 2}
     if " x " not in value:

@@ -5,7 +5,7 @@ import json
 import re
 from pathlib import Path
 
-from .empirical_bayes import EmpiricalBayesLookup, evaluate, query_json, write_diagnostics
+from .empirical_bayes import DEFAULT_BOOTSTRAP_RESAMPLES, EmpiricalBayesLookup, evaluate, query_json, write_diagnostics
 from .hf import expand_sources, iter_hf_rows, load_hf_rows, read_raw_sample, write_raw_sample
 from .io import write_turns
 from .readers import rows_to_turns
@@ -53,7 +53,7 @@ def main(argv: list[str] | None = None) -> int:
     eb_eval.add_argument("--traces-csv", type=Path, default=DATA_DIR / "diagnostics" / "cached_annotator" / "traces.csv")
     eb_eval.add_argument("--report-dir", type=Path, default=PROJECT_ROOT / "reports" / "empirical_bayes_v1")
     eb_eval.add_argument("--bundle-path", type=Path, default=DATA_DIR / "estimators" / "empirical_bayes_v1" / "lookup.json")
-    eb_eval.add_argument("--bootstrap-resamples", type=int, default=1000)
+    eb_eval.add_argument("--bootstrap-resamples", type=int, default=DEFAULT_BOOTSTRAP_RESAMPLES)
     eb_eval.add_argument("--seed", type=int, default=1729)
     eb_eval.add_argument("--min-support", type=int, default=25)
 

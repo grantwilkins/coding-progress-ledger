@@ -76,8 +76,6 @@ def test_empirical_bayes_eval_cli_writes_report_and_bundle(tmp_path: Path) -> No
             str(report_dir),
             "--bundle-path",
             str(bundle),
-            "--bootstrap-resamples",
-            "1",
             "--min-support",
             "1",
         ]
@@ -87,3 +85,4 @@ def test_empirical_bayes_eval_cli_writes_report_and_bundle(tmp_path: Path) -> No
     assert bundle.exists()
     assert (report_dir / "REPORT.md").exists()
     assert (report_dir / "heldout_predictions.csv").exists()
+    assert "B=400" in (report_dir / "REPORT.md").read_text(encoding="utf-8")
