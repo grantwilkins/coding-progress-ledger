@@ -460,6 +460,14 @@ def _write_gbm_diagnostics(report_dir: Path, turns_csv: Path, traces_csv: Path, 
             report_dir / "progress_tracking_examples.csv",
             report_dir / "progress_tracking_examples.png",
         )
+        write_best_progress_tracking_examples(
+            report_dir / "prefix_predictions.csv",
+            turns_csv,
+            traces_csv,
+            model_dir,
+            report_dir / "best_progress_tracking_examples.csv",
+            report_dir / "best_progress_tracking_examples.png",
+        )
     _append_gbm_diagnostics_report(report_dir / "REPORT.md")
 
 
@@ -512,6 +520,8 @@ def _append_gbm_diagnostics_report(path: Path) -> None:
         "",
         "![Progress tracking examples](progress_tracking_examples.png)",
         "",
+        "![Best progress tracking examples](best_progress_tracking_examples.png)",
+        "",
         "![Interval width by trace position](interval_width_by_trace_position.png)",
         "",
         "### Shared v1.6 context diagnostics",
@@ -551,6 +561,53 @@ def write_progress_tracking_examples(
     _write_csv(out_csv, rows)
     _plot_progress_tracking_examples(out_png, rows)
     return rows
+
+
+def write_best_progress_tracking_examples(
+    prefix_predictions_csv: Path,
+    turns_csv: Path,
+    traces_csv: Path,
+    model_dir: Path,
+    out_csv: Path,
+    out_png: Path,
+    *,
+    limit: int = 3,
+) -> list[dict[str, Any]]:
+    traces = read_traces_csv(traces_csv)
+    reference_rows = _best_progress_reference_rows(_progress_reference_rows(prefix_predictions_csv), limit)
+    selected_steps = {(row["trace_key"], int(row["step"])) for row in reference_rows}
+    prefixes = _selected_progress_prefixes(turns_csv, selected_steps)
+    bundle = GbmTrialBundle.load(model_dir)
+    ordered_prefixes = [prefixes[(row["trace_key"], int(row["step"]))] for row in reference_rows]
+    rows = _progress_tracking_rows(reference_rows, ordered_prefixes, traces, bundle.predict(ordered_prefixes))
+    _write_csv(out_csv, rows)
+    _plot_progress_tracking_examples(out_png, rows)
+    return rows
+
+
+def _best_progress_reference_rows(rows: list[dict[str, Any]], limit: int) -> list[dict[str, Any]]:
+    grouped: dict[str, list[dict[str, Any]]] = {}
+    for row in rows:
+        grouped.setdefault(row["trace_key"], []).append(row)
+    scored = []
+    for trace_key, items in grouped.items():
+        ordered = sorted(items, key=lambda row: int(row["step"]))
+        nonzero = [row for row in ordered if int(row["current_total"]) > 0]
+        if len(nonzero) < 5:
+            continue
+        early = nonzero[int(0.25 * (len(nonzero) - 1))]
+        late = ordered[-1]
+        early_width = _progress_band_width(early)
+        late_width = _progress_band_width(late)
+        shrink = early_width - late_width
+        if shrink > 0:
+            scored.append((shrink, -late_width, trace_key))
+    selected = [trace_key for _, _, trace_key in sorted(scored, reverse=True)[:limit]]
+    rows_by_trace = {trace_key: [] for trace_key in selected}
+    for row in rows:
+        if row["trace_key"] in rows_by_trace:
+            rows_by_trace[row["trace_key"]].append(row)
+    return [row for trace_key in selected for row in rows_by_trace[trace_key]]
 
 
 def _progress_tracking_rows(
@@ -660,6 +717,11 @@ def _plot_progress_tracking_examples(path: Path, rows: list[dict[str, Any]]) -> 
 
 def _progress_fraction(current_total: int, predicted_final_total: float) -> float:
     return current_total / max(1.0, predicted_final_total)
+
+
+def _progress_band_width(row: dict[str, Any]) -> float:
+    current_total = int(row["current_total"])
+    return _progress_fraction(current_total, float(row["p10"])) - _progress_fraction(current_total, float(row["p90"]))
 
 
 def _csv_bool(value: Any) -> bool:

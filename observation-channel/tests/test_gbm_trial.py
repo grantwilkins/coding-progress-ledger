@@ -12,6 +12,8 @@ Plausible wrong implementations:
   quantile handling.
 - Sort crossed quantiles silently without reporting how often or how much.
 - Fall back to bucket labels when raw continuous features are absent.
+- Pick "best" progress traces from zero-progress starts or absolute final-total
+  widths instead of the displayed progress-band shrink.
 """
 
 from pathlib import Path
@@ -21,6 +23,7 @@ import pytest
 from observation_channel.empirical_bayes import EmpiricalBayesLookup, PrefixRow, TraceMeta, _prediction_rows
 from observation_channel.gbm_trial import (
     GbmQuantilePrediction,
+    _best_progress_reference_rows,
     _progress_tracking_rows,
     gbm_prediction_rows,
     quantile_crossing_summary_rows,
@@ -149,3 +152,49 @@ def test_progress_tracking_rows_convert_final_quantiles_to_progress_fractions() 
             "p90_final_total": 50.0,
         }
     ]
+
+
+def test_best_progress_reference_rows_rank_by_nonzero_progress_band_shrink() -> None:
+    def row(trace_key: str, step: int, current_total: int, p10: float, p90: float) -> dict[str, str]:
+        return {
+            "trace_key": trace_key,
+            "source": "s",
+            "length_tercile": "long",
+            "step": str(step),
+            "current_total": str(current_total),
+            "p10": str(p10),
+            "p90": str(p90),
+        }
+
+    shrinking = [
+        row("shrinking", 1, 0, 1, 100),
+        row("shrinking", 2, 1, 1, 10),
+        row("shrinking", 3, 2, 2, 20),
+        row("shrinking", 4, 3, 3, 30),
+        row("shrinking", 5, 4, 4, 40),
+        row("shrinking", 6, 5, 5, 6),
+    ]
+    widening = [
+        row("widening", 1, 1, 1, 2),
+        row("widening", 2, 2, 2, 3),
+        row("widening", 3, 3, 3, 4),
+        row("widening", 4, 4, 4, 5),
+        row("widening", 5, 5, 1, 100),
+    ]
+    weaker_shrink = [
+        row("weaker", 1, 1, 1, 3),
+        row("weaker", 2, 2, 2, 4),
+        row("weaker", 3, 3, 3, 6),
+        row("weaker", 4, 4, 4, 8),
+        row("weaker", 5, 5, 5, 8),
+    ]
+    zero_start_trap = [
+        row("zero", 1, 0, 1, 100),
+        row("zero", 2, 0, 1, 100),
+        row("zero", 3, 0, 1, 100),
+        row("zero", 4, 1, 1, 2),
+    ]
+
+    selected = _best_progress_reference_rows(weaker_shrink + shrinking + widening + zero_start_trap, limit=2)
+
+    assert [item["trace_key"] for item in selected] == ["shrinking"] * 6 + ["weaker"] * 5

@@ -42,6 +42,8 @@ Trace-level bootstrap uses B=1000 and seed=1729.
 
 ![Progress tracking examples](progress_tracking_examples.png)
 
+![Best progress tracking examples](best_progress_tracking_examples.png)
+
 ![Interval width by trace position](interval_width_by_trace_position.png)
 
 ### Shared v1.6 context diagnostics
