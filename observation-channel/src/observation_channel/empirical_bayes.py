@@ -43,6 +43,7 @@ DIAGNOSTIC_COHORT_STEP = 10
 DIAGNOSTIC_COHORT_TOTAL = 1
 NEAR_CAP_FINAL_TOTAL = 94
 DEFAULT_BOOTSTRAP_RESAMPLES = 400
+TRACE_POSITION_BINS = 20
 
 
 @dataclass(frozen=True)
@@ -416,12 +417,15 @@ def write_diagnostics(
     _write_csv(report_dir / "prefix_cohort_distribution.csv", cohort_hist)
     _write_csv(report_dir / "prefix_cohort_distribution_summary.csv", cohort_summary)
     _write_csv(report_dir / "fine_turn_bucket_support_summary.csv", support_summary)
+    interval_width_rows = _interval_width_by_trace_position_rows(report_dir / "prefix_predictions.csv", traces)
+    _write_csv(report_dir / "interval_width_by_trace_position.csv", interval_width_rows)
     _plot_grid_offset_reliability(report_dir / "reliability_by_grid_offset.png", reliability)
     _plot_category_bias(report_dir / "category_stratum_bias.png", category_bias)
     _plot_step_bias(report_dir / "current_step_bias.png", step_bias)
     _plot_rate_histograms(report_dir / "rate_bucket_conditional_histograms.png", rate_hist)
     _plot_rate_histograms(report_dir / "rate_bucket_conditional_histograms_non_near_cap.png", non_near_cap_rate_hist)
     _plot_prefix_cohort_distribution(report_dir / "prefix_cohort_distribution.png", cohort_hist, cohort_summary[0])
+    _plot_interval_width_by_trace_position(report_dir / "interval_width_by_trace_position.png", interval_width_rows)
     _append_diagnostics_report(report_dir / "REPORT.md")
     return {
         "current_categories": len(categories),
@@ -432,6 +436,7 @@ def write_diagnostics(
         "non_near_cap_rate_histogram_rows": len(non_near_cap_rate_hist),
         "prefix_cohort_histogram_rows": len(cohort_hist),
         "fine_turn_bucket_support_rows": len(support_summary),
+        "interval_width_rows": len(interval_width_rows),
     }
 
 
@@ -886,6 +891,32 @@ def _plot_prefix_cohort_distribution(path: Path, rows: list[dict[str, Any]], sum
     plt.close(fig)
 
 
+def _plot_interval_width_by_trace_position(path: Path, rows: list[dict[str, Any]]) -> None:
+    import matplotlib
+
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+
+    fig, axis = plt.subplots(figsize=(7, 4))
+    for source in sorted({str(row["source"]) for row in rows}, key=_stratum_sort_key):
+        items = [row for row in rows if row["source"] == source]
+        xs = [float(row["position_midpoint"]) for row in items]
+        axis.plot(xs, [float(row["mean_interval80_width"]) for row in items], marker=".", linewidth=1.5, label=source)
+        axis.fill_between(
+            xs,
+            [float(row["p25_interval80_width"]) for row in items],
+            [float(row["p75_interval80_width"]) for row in items],
+            alpha=0.15,
+        )
+    axis.set_xlabel("trace position")
+    axis.set_ylabel("80% interval width")
+    axis.set_xlim(0, 1)
+    axis.legend()
+    fig.tight_layout()
+    fig.savefig(path, dpi=160)
+    plt.close(fig)
+
+
 def _write_report(path: Path, split_rows: list[dict[str, Any]], skipped: list[dict[str, Any]], resamples: int, seed: int) -> None:
     lines = [
         "# Empirical Bayes v1",
@@ -922,6 +953,8 @@ def _append_diagnostics_report(path: Path) -> None:
         "![Current-step bias](current_step_bias.png)",
         "",
         "![Exact prefix D_T distribution](prefix_cohort_distribution.png)",
+        "",
+        "![Interval width by trace position](interval_width_by_trace_position.png)",
         "",
         "![Non-near-cap rate-bucket conditional histograms](rate_bucket_conditional_histograms_non_near_cap.png)",
         "",
@@ -1151,6 +1184,45 @@ def _rate_bucket_conditional_histograms(path: Path, *, non_near_cap: bool = Fals
         }
         for key, count in sorted(counts.items())
     ]
+
+
+def _interval_width_by_trace_position_rows(
+    prefix_predictions_csv: Path,
+    traces: dict[str, TraceMeta],
+    bins: int = TRACE_POSITION_BINS,
+) -> list[dict[str, Any]]:
+    grouped: dict[tuple[str, int], list[int]] = defaultdict(list)
+    with prefix_predictions_csv.open("r", encoding="utf-8", newline="") as handle:
+        for row in csv.DictReader(handle):
+            trace = traces[row["trace_key"]]
+            if trace.total_turns <= 0:
+                raise ValueError(f"trace {trace.trace_key} has non-positive total_turns")
+            position = min(1.0, max(0.0, int(row["step"]) / trace.total_turns))
+            bin_index = min(bins - 1, int(position * bins))
+            grouped[(row["source"], bin_index)].append(int(row["interval80_width"]))
+
+    rows = []
+    for source in sorted({source for source, _ in grouped}, key=_stratum_sort_key):
+        for bin_index in range(bins):
+            values = sorted(grouped.get((source, bin_index), []))
+            if not values:
+                continue
+            low = bin_index / bins
+            high = (bin_index + 1) / bins
+            rows.append(
+                {
+                    "source": source,
+                    "position_bin": bin_index,
+                    "position_low": low,
+                    "position_high": high,
+                    "position_midpoint": (low + high) / 2,
+                    "n": len(values),
+                    "mean_interval80_width": _mean(values),
+                    "p25_interval80_width": _quantile(values, 0.25),
+                    "p75_interval80_width": _quantile(values, 0.75),
+                }
+            )
+    return rows
 
 
 def _histogram_rows(group: str, values: list[int]) -> list[dict[str, Any]]:

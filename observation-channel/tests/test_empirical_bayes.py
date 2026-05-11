@@ -17,6 +17,8 @@ Plausible wrong implementations:
   observed-minus-predicted sign.
 - Claim exact prefix cohorts are informative without comparing their width to
   the pooled same-step marginal.
+- Bin interval widths by raw step instead of normalized trace position, or pool
+  sources before summarizing.
 """
 
 from pathlib import Path
@@ -30,6 +32,7 @@ from observation_channel.empirical_bayes import (
     _bootstrap_bands_preaggregated_python,
     _finer_turn_bucket_support_rows,
     _heldout_diagnostics,
+    _interval_width_by_trace_position_rows,
     _prediction_rows,
     _prefix_cohort_distribution,
     _rate_bucket_conditional_histograms,
@@ -349,6 +352,35 @@ def test_heldout_diagnostics_use_grid_offset_category_and_predicted_minus_observ
     assert short_product["n"] == 2
     assert short_product["mean_bias"] == 0
     assert any(row["source"] == "hermes" and row["length_tercile"] == "short" and row["current_step"] == 10 for row in step_bias)
+
+
+def test_interval_width_by_trace_position_uses_normalized_position_and_source_bins(tmp_path: Path) -> None:
+    predictions = tmp_path / "prefix_predictions.csv"
+    predictions.write_text(
+        "trace_key,source,step,interval80_width\n"
+        "short,s,5,8\n"
+        "short,s,9,20\n"
+        "long,s,50,12\n"
+        "other,other,50,30\n",
+        encoding="utf-8",
+    )
+    traces = {
+        "short": _trace("short", source="s", total_turns=10),
+        "long": _trace("long", source="s", total_turns=100),
+        "other": _trace("other", source="other", total_turns=100),
+    }
+
+    rows = _interval_width_by_trace_position_rows(predictions, traces, bins=4)
+
+    source_half = next(row for row in rows if row["source"] == "s" and row["position_bin"] == 2)
+    assert source_half["position_low"] == 0.5
+    assert source_half["position_high"] == 0.75
+    assert source_half["n"] == 2
+    assert source_half["mean_interval80_width"] == 10
+    assert source_half["p25_interval80_width"] == 8
+    assert source_half["p75_interval80_width"] == 12
+    assert any(row["source"] == "s" and row["position_bin"] == 3 and row["n"] == 1 for row in rows)
+    assert any(row["source"] == "other" and row["position_bin"] == 2 and row["n"] == 1 for row in rows)
 
 
 def test_rate_bucket_conditional_histograms_filter_censored_rows(tmp_path: Path) -> None:
