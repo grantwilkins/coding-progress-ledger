@@ -21,6 +21,7 @@ import pytest
 from observation_channel.empirical_bayes import EmpiricalBayesLookup, PrefixRow, TraceMeta, _prediction_rows
 from observation_channel.gbm_trial import (
     GbmQuantilePrediction,
+    _progress_tracking_rows,
     gbm_prediction_rows,
     quantile_crossing_summary_rows,
     require_raw_feature_columns,
@@ -122,3 +123,29 @@ def test_quantile_crossing_summary_uses_crossed_rows_only_for_magnitude() -> Non
     assert row["crossing_rate"] == 2 / 3
     assert row["mean_reordering_magnitude_when_crossed"] == 2.5
     assert row["p95_reordering_magnitude_when_crossed"] == 4
+
+
+def test_progress_tracking_rows_convert_final_quantiles_to_progress_fractions() -> None:
+    traces = {"eval": _trace("eval", final_total=20)}
+    prefix = _prefix("eval", total=5, step=3)
+    prediction = GbmQuantilePrediction.from_raw((10, 12, 20, 25, 50), current_total=5)
+
+    rows = _progress_tracking_rows([{"trace_key": "eval", "step": "3", "length_tercile": "short"}], [prefix], traces, [prediction])
+
+    assert rows == [
+        {
+            "trace_key": "eval",
+            "source": "s",
+            "length_tercile": "short",
+            "step": 3,
+            "current_total": 5,
+            "final_total": 20,
+            "rho_actual": 0.25,
+            "rho_p10": 0.1,
+            "rho_p50": 0.25,
+            "rho_p90": 0.5,
+            "p10_final_total": 10.0,
+            "p50_final_total": 20.0,
+            "p90_final_total": 50.0,
+        }
+    ]

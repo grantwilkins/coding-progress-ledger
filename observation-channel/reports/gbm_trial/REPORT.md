@@ -40,6 +40,8 @@ Trace-level bootstrap uses B=1000 and seed=1729.
 
 ![Current-step bias](current_step_bias.png)
 
+![Progress tracking examples](progress_tracking_examples.png)
+
 ![Interval width by trace position](interval_width_by_trace_position.png)
 
 ### Shared v1.6 context diagnostics
