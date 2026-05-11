@@ -6,7 +6,7 @@ import json
 import re
 from pathlib import Path
 
-from .belief_tracker import evaluate_belief_tracker
+from .belief_tracker import evaluate_belief_tracker, evaluate_filter_calibration
 from .empirical_bayes import DEFAULT_BOOTSTRAP_RESAMPLES, EmpiricalBayesLookup, evaluate, query_json, write_diagnostics
 from .gbm_trial import evaluate_gbm_trial, train_gbm_trial
 from .hf import expand_sources, iter_hf_rows, load_hf_rows, read_raw_sample, write_raw_sample
@@ -118,6 +118,15 @@ def main(argv: list[str] | None = None) -> int:
     belief_eval.add_argument("--filter-alpha", type=float, default=0.35)
     belief_eval.add_argument("--gbm-weight", type=float, default=0.15)
 
+    filter_calibration = subparsers.add_parser("belief-filter-calibration", help="evaluate EB-only running-filter calibration sweeps")
+    filter_calibration.add_argument("--turns-csv", type=Path, default=DATA_DIR / "diagnostics" / "cached_annotator" / "turns.csv")
+    filter_calibration.add_argument("--traces-csv", type=Path, default=DATA_DIR / "diagnostics" / "cached_annotator" / "traces.csv")
+    filter_calibration.add_argument("--bundle-path", type=Path, default=DATA_DIR / "estimators" / "empirical_bayes_v1.6" / "lookup.json")
+    filter_calibration.add_argument("--report-dir", type=Path, default=PROJECT_ROOT / "reports" / "belief_filter_calibration")
+    filter_calibration.add_argument("--min-support", type=int, default=25)
+    filter_calibration.add_argument("--alphas", type=float, nargs="+", default=[0.02, 0.05, 0.10, 0.15, 0.20])
+    filter_calibration.add_argument("--event-alpha", type=float, default=0.35)
+
     args = parser.parse_args(argv)
     if args.command == "cache":
         return _cache(args)
@@ -202,6 +211,18 @@ def main(argv: list[str] | None = None) -> int:
             min_support=args.min_support,
             filter_alpha=args.filter_alpha,
             gbm_weight=args.gbm_weight,
+        )
+        print(json.dumps(result, sort_keys=True))
+        return 0
+    if args.command == "belief-filter-calibration":
+        result = evaluate_filter_calibration(
+            args.turns_csv,
+            args.traces_csv,
+            args.report_dir,
+            bundle_path=args.bundle_path,
+            min_support=args.min_support,
+            alphas=tuple(args.alphas),
+            event_alpha=args.event_alpha,
         )
         print(json.dumps(result, sort_keys=True))
         return 0

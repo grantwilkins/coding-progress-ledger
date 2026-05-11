@@ -15,6 +15,7 @@ from .empirical_bayes import (
     _progress,
     _write_csv,
     eligible_prefixes,
+    read_prefixes_csv,
     read_traces_csv,
     source_stratified_split,
 )
@@ -22,6 +23,21 @@ from .gbm_trial import GbmQuantilePrediction, GbmTrialBundle, read_gbm_prefixes_
 
 
 VARIANTS = ("eb_direct", "eb_filter", "gbm_direct", "eb_gbm_mixed_filter")
+FILTER_CALIBRATION_ALPHAS = (0.02, 0.05, 0.10, 0.15, 0.20)
+FILTER_CALIBRATION_VARIANTS = (
+    "eb_direct",
+    "eb_filter_alpha_0_02",
+    "eb_filter_alpha_0_05",
+    "eb_filter_alpha_0_10",
+    "eb_filter_alpha_0_15",
+    "eb_filter_alpha_0_20",
+    "eb_filter_event_alpha_0_35",
+    "eb_filter_event_alpha_0_02",
+    "eb_filter_event_alpha_0_05",
+    "eb_filter_event_alpha_0_10",
+    "eb_filter_event_alpha_0_15",
+    "eb_filter_event_alpha_0_20",
+)
 REMAINING_FRACTION_CLAIMS = (("remaining_le_25pct", 0.25), ("remaining_le_50pct", 0.50))
 FINISH_WITHIN_OFFSETS = (8, 16, 32)
 EPSILON = 1e-12
@@ -107,6 +123,13 @@ class _TraceState:
     mixed_filter_median: int | None = None
 
 
+@dataclass
+class _FilterCalibrationState:
+    beliefs: dict[str, FinalWorkBelief]
+    medians: dict[str, int]
+    previous_row: Any | None = None
+
+
 class BeliefTracker:
     def __init__(self, lookup: EmpiricalBayesLookup, config: BeliefTrackerConfig | None = None) -> None:
         self.lookup = lookup
@@ -181,6 +204,63 @@ class BeliefTracker:
         return output
 
 
+class EmpiricalBayesFilterCalibrationTracker:
+    def __init__(
+        self,
+        lookup: EmpiricalBayesLookup,
+        alphas: tuple[float, ...] = FILTER_CALIBRATION_ALPHAS,
+        event_alpha: float = 0.35,
+    ) -> None:
+        self.lookup = lookup
+        self.alphas = alphas
+        self.event_alpha = event_alpha
+        self.variants = _filter_calibration_variants(alphas, event_alpha)
+        self._states: dict[str, _FilterCalibrationState] = {}
+
+    def update(self, row: Any) -> dict[str, Any]:
+        state = self._states.setdefault(row.trace_key, _FilterCalibrationState({}, {}))
+        try:
+            prediction = self.lookup.predict(row)
+        except ValueError:
+            state.previous_row = row
+            output = {column: value for variant in self.variants for column, value in _blank_columns(variant).items()}
+            output["confidence_flags"] = "no_empirical_bayes_support"
+            return output
+
+        direct = FinalWorkBelief.from_prediction(prediction, row.total)
+        output = _belief_columns("eb_direct", row.total, direct, prediction.low_confidence_reasons)
+        changed = state.previous_row is None or _evidence_changed(state.previous_row, row)
+        for alpha in self.alphas:
+            variant = f"eb_filter_alpha_{_alpha_label(alpha)}"
+            belief, jump = _filter_update(state.beliefs.get(variant), direct, row.total, alpha, state.medians.get(variant))
+            _store_filter(state, variant, belief)
+            output.update(_belief_columns(variant, row.total, belief, prediction.low_confidence_reasons))
+            output.update(_filter_diagnostics(variant, belief, jump, True))
+
+        for variant, alpha in (
+            (f"eb_filter_event_alpha_{_alpha_label(self.event_alpha)}", self.event_alpha),
+            *((f"eb_filter_event_alpha_{_alpha_label(alpha)}", alpha) for alpha in self.alphas),
+        ):
+            previous = state.beliefs.get(variant)
+            if previous is None:
+                belief, jump = _filter_update(None, direct, row.total, alpha, None)
+                updated = True
+            elif changed:
+                belief, jump = _filter_update(previous, direct, row.total, alpha, state.medians.get(variant))
+                updated = True
+            else:
+                belief = previous.with_minimum(row.total)
+                jump = ""
+                updated = False
+            _store_filter(state, variant, belief)
+            flags = prediction.low_confidence_reasons if updated else (*prediction.low_confidence_reasons, "event_update_skipped")
+            output.update(_belief_columns(variant, row.total, belief, flags))
+            output.update(_filter_diagnostics(variant, belief, jump, updated))
+        output["confidence_flags"] = ";".join(prediction.low_confidence_reasons)
+        state.previous_row = row
+        return output
+
+
 def evaluate_belief_tracker(
     turns_csv: Path,
     traces_csv: Path,
@@ -231,20 +311,88 @@ def evaluate_belief_tracker(
         progress(f"replayed {len(rows):,} held-out prefixes")
 
     report_dir.mkdir(parents=True, exist_ok=True)
-    claim_rows = _claim_calibration_rows(rows)
-    summary = _belief_summary(rows, claim_rows)
+    claim_rows = _claim_calibration_rows(rows, VARIANTS)
+    summary = _belief_summary(rows, claim_rows, VARIANTS)
     _write_csv(report_dir / "progress_beliefs.csv", rows)
     _write_csv(report_dir / "belief_threshold_pairs.csv", claim_rows)
     _write_csv(report_dir / "belief_summary.csv", summary)
     _write_csv(report_dir / "split_summary.csv", split_rows)
-    _plot_trace_examples(report_dir / "trace_belief_examples.png", rows)
-    _write_report(report_dir / "REPORT.md", split_rows, summary)
+    _plot_trace_examples(report_dir / "trace_belief_examples.png", rows, VARIANTS)
+    _write_report(report_dir / "REPORT.md", split_rows, summary, title="Progress-Belief Tracker")
     progress("done")
     return {
         "model_dir": str(model_dir),
         "report_dir": str(report_dir),
         "prefix_rows": len(rows),
         "threshold_pairs": len(claim_rows),
+    }
+
+
+def evaluate_filter_calibration(
+    turns_csv: Path,
+    traces_csv: Path,
+    report_dir: Path,
+    *,
+    bundle_path: Path | None = None,
+    min_support: int = 25,
+    alphas: tuple[float, ...] = FILTER_CALIBRATION_ALPHAS,
+    event_alpha: float = 0.35,
+) -> dict[str, Any]:
+    started = time.monotonic()
+    progress = lambda message: _progress(message, started)
+    progress("loading trace metadata")
+    traces = read_traces_csv(traces_csv)
+    progress("loading prefix rows")
+    prefixes = read_prefixes_csv(turns_csv, traces, progress)
+    progress("splitting traces")
+    train_keys, eval_keys, split_rows = source_stratified_split(traces.values())
+    eligible = eligible_prefixes(prefixes, traces)
+    eval_prefixes = [row for row in eligible if row.trace_key in eval_keys]
+    if bundle_path is not None:
+        progress("loading empirical-Bayes lookup")
+        lookup = EmpiricalBayesLookup.load(bundle_path)
+    else:
+        train_prefixes = [row for row in eligible if row.trace_key in train_keys]
+        train_traces = {key: trace for key, trace in traces.items() if key in train_keys and not trace.parse_error and not trace.censored_right_tail}
+        progress("building empirical-Bayes lookup")
+        lookup = EmpiricalBayesLookup.build(train_prefixes, train_traces, min_support=min_support)
+    tracker = EmpiricalBayesFilterCalibrationTracker(lookup, alphas=alphas, event_alpha=event_alpha)
+    variants = tracker.variants
+    length_terciles = _length_terciles([traces[key] for key in eval_keys if not traces[key].censored_right_tail])
+    ordered_eval = sorted(eval_prefixes, key=lambda row: (row.trace_key, row.step))
+    rows = []
+    progress(f"replaying {len(ordered_eval):,} held-out prefixes")
+    for index, row in enumerate(ordered_eval, start=1):
+        trace = traces[row.trace_key]
+        result = _prefix_columns(row, trace, length_terciles.get(row.trace_key, "unknown"))
+        result.update(tracker.update(row))
+        rows.append(result)
+        if index % 200_000 == 0:
+            progress(f"replayed {index:,} held-out prefixes")
+    if len(ordered_eval) % 200_000:
+        progress(f"replayed {len(ordered_eval):,} held-out prefixes")
+
+    report_dir.mkdir(parents=True, exist_ok=True)
+    claim_rows = _claim_calibration_rows(rows, variants)
+    summary = _belief_summary(rows, claim_rows, variants)
+    _write_csv(report_dir / "progress_beliefs.csv", rows)
+    _write_csv(report_dir / "belief_threshold_pairs.csv", claim_rows)
+    _write_csv(report_dir / "belief_summary.csv", summary)
+    _write_csv(report_dir / "split_summary.csv", split_rows)
+    _plot_trace_examples(report_dir / "trace_belief_examples.png", rows, variants)
+    _write_report(
+        report_dir / "REPORT.md",
+        split_rows,
+        summary,
+        title="Empirical-Bayes Filter Calibration",
+        description="EB-only alpha and event-gated running-filter calibration pass.",
+    )
+    progress("done")
+    return {
+        "report_dir": str(report_dir),
+        "prefix_rows": len(rows),
+        "threshold_pairs": len(claim_rows),
+        "variants": len(variants),
     }
 
 
@@ -261,6 +409,31 @@ def _filter_update(
         belief = _log_pool(previous.with_minimum(current_total), observation.with_minimum(current_total), alpha)
     median = belief.quantile(0.5)
     return belief, abs(median - previous_median) if previous_median is not None else ""
+
+
+def _store_filter(state: _FilterCalibrationState, variant: str, belief: FinalWorkBelief) -> None:
+    state.beliefs[variant] = belief
+    state.medians[variant] = belief.quantile(0.5)
+
+
+def _filter_diagnostics(variant: str, belief: FinalWorkBelief, jump: int | str, updated: bool) -> dict[str, Any]:
+    return {
+        f"{variant}_posterior_entropy": belief.entropy(),
+        f"{variant}_posterior_median_jump": jump,
+        f"{variant}_event_updated": updated,
+    }
+
+
+def _evidence_changed(previous: Any, current: Any) -> bool:
+    return (
+        current.total != previous.total
+        or current.current_category != previous.current_category
+        or current.current_unit_age < previous.current_unit_age
+        or current.had_stuck_episode != previous.had_stuck_episode
+        or current.touched_source != previous.touched_source
+        or current.recent_error_bucket != previous.recent_error_bucket
+        or current.investigation_ratio_bucket != previous.investigation_ratio_bucket
+    )
 
 
 def _log_pool(previous: FinalWorkBelief, observation: FinalWorkBelief, alpha: float) -> FinalWorkBelief:
@@ -379,12 +552,12 @@ def _prefix_columns(row: Any, trace: Any, length_tercile: str) -> dict[str, Any]
     }
 
 
-def _claim_calibration_rows(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+def _claim_calibration_rows(rows: list[dict[str, Any]], variants: tuple[str, ...]) -> list[dict[str, Any]]:
     bins: dict[tuple[str, str, int], list[float]] = defaultdict(lambda: [0, 0.0, 0.0])
     for row in rows:
         current_total = int(row["current_total"])
         actual_final_work = int(row["actual_final_work"])
-        for variant in VARIANTS:
+        for variant in variants:
             for claim, fraction in REMAINING_FRACTION_CLAIMS:
                 predicted = row.get(f"{variant}_prob_remaining_work_le_{int(fraction * 100)}pct")
                 if predicted == "":
@@ -423,7 +596,7 @@ def _add_claim(
     values[2] += int(outcome)
 
 
-def _belief_summary(rows: list[dict[str, Any]], claim_rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+def _belief_summary(rows: list[dict[str, Any]], claim_rows: list[dict[str, Any]], variants: tuple[str, ...]) -> list[dict[str, Any]]:
     summary = []
     by_key: dict[tuple[str, str], list[dict[str, Any]]] = defaultdict(list)
     for row in claim_rows:
@@ -445,7 +618,7 @@ def _belief_summary(rows: list[dict[str, Any]], claim_rows: list[dict[str, Any]]
                 "median_interval80_width": "",
             }
         )
-    for variant in VARIANTS:
+    for variant in variants:
         medians = []
         widths = []
         for row in rows:
@@ -483,7 +656,7 @@ def _ece(items: list[dict[str, Any]]) -> float | str:
     )
 
 
-def _plot_trace_examples(path: Path, rows: list[dict[str, Any]], limit: int = 6) -> None:
+def _plot_trace_examples(path: Path, rows: list[dict[str, Any]], variants: tuple[str, ...], limit: int = 6) -> None:
     if not rows:
         path.write_text("", encoding="utf-8")
         return
@@ -502,7 +675,7 @@ def _plot_trace_examples(path: Path, rows: list[dict[str, Any]], limit: int = 6)
         xs = [int(row["step"]) for row in items]
         actual = [_progress_fraction(int(row["current_total"]), int(row["actual_final_work"])) for row in items]
         axis.plot(xs, actual, color="0.2", linestyle="--", linewidth=1.2, label="actual")
-        for variant in VARIANTS:
+        for variant in variants:
             ys = [
                 _progress_fraction(int(row["current_total"]), float(row[f"{variant}_estimated_final_work_p50"]))
                 if row.get(f"{variant}_estimated_final_work_p50") != ""
@@ -520,11 +693,18 @@ def _plot_trace_examples(path: Path, rows: list[dict[str, Any]], limit: int = 6)
     plt.close(fig)
 
 
-def _write_report(path: Path, split_rows: list[dict[str, Any]], summary: list[dict[str, Any]]) -> None:
+def _write_report(
+    path: Path,
+    split_rows: list[dict[str, Any]],
+    summary: list[dict[str, Any]],
+    *,
+    title: str,
+    description: str = "Replayable live estimator over final work using empirical Bayes, GBM, and filtered combinations.",
+) -> None:
     lines = [
-        "# Progress-Belief Tracker",
+        f"# {title}",
         "",
-        "Replayable live estimator over final work using empirical Bayes, GBM, and filtered combinations.",
+        description,
         "",
         "## Split Summary",
         "",
@@ -572,3 +752,16 @@ def _median(values: list[float]) -> float | str:
         return ""
     ordered = sorted(values)
     return ordered[len(ordered) // 2]
+
+
+def _filter_calibration_variants(alphas: tuple[float, ...], event_alpha: float) -> tuple[str, ...]:
+    return (
+        "eb_direct",
+        *(f"eb_filter_alpha_{_alpha_label(alpha)}" for alpha in alphas),
+        f"eb_filter_event_alpha_{_alpha_label(event_alpha)}",
+        *(f"eb_filter_event_alpha_{_alpha_label(alpha)}" for alpha in alphas),
+    )
+
+
+def _alpha_label(alpha: float) -> str:
+    return f"{alpha:.2f}".replace(".", "_")

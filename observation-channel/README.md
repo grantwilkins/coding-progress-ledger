@@ -16,6 +16,7 @@ uv run --project observation-channel observation-channel empirical-bayes-diagnos
 uv run --project observation-channel observation-channel gbm-trial-train
 uv run --project observation-channel observation-channel gbm-trial-eval --bootstrap-resamples 1000
 uv run --project observation-channel observation-channel belief-tracker-eval
+uv run --project observation-channel observation-channel belief-filter-calibration
 uv run pytest observation-channel
 ```
 
@@ -25,3 +26,5 @@ The empirical-Bayes evaluator reads cached diagnostic `turns.csv` and `traces.cs
 The GBM trial trains LightGBM quantile regressors from those raw continuous features, saves models under ignored `data/estimators/gbm_trial/`, and evaluates through the same held-out split and v1.6 support gate into `reports/gbm_trial/`. The report includes GBM progress-tracking examples and the three strongest uncertainty-shrinkage examples when the v1.5 reference examples and saved GBM models are available. The large GBM `heldout_predictions.csv` and `prefix_predictions.csv` files remain ignored; summary tables, plots, and `REPORT.md` are intended review artifacts.
 
 The belief-tracker evaluator replays held-out prefixes with empirical-Bayes direct, empirical-Bayes filtered, GBM direct, and empirical-Bayes plus GBM filtered final-work beliefs. It requires the saved GBM model and empirical-Bayes v1.6 lookup, then writes `reports/belief_tracker/progress_beliefs.csv`, binned claim calibration rows, summary tables, trace plots, and `REPORT.md`.
+
+The belief-filter calibration evaluator runs EB-only alpha and event-gated filter sweeps against the same held-out split. It reuses the saved empirical-Bayes v1.6 lookup and writes the same artifact names under `reports/belief_filter_calibration/`; the large `progress_beliefs.csv` remains local and ignored.

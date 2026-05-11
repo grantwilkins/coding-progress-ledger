@@ -22,9 +22,11 @@ import pytest
 from observation_channel.belief_tracker import (
     BeliefTracker,
     BeliefTrackerConfig,
+    EmpiricalBayesFilterCalibrationTracker,
     FinalWorkBelief,
     _log_pool,
     evaluate_belief_tracker,
+    evaluate_filter_calibration,
 )
 from observation_channel.cli import main
 from observation_channel.empirical_bayes import Prediction, PrefixRow
@@ -152,6 +154,57 @@ def test_unsupported_empirical_bayes_prefix_keeps_gbm_row_and_flags_no_support()
     assert row["eb_direct_estimated_final_work_p50"] == ""
     assert row["eb_gbm_mixed_filter_estimated_final_work_p50"] == ""
     assert row["confidence_flags"] == "no_empirical_bayes_support"
+
+
+def test_event_gated_filter_skips_repeated_prefix_evidence() -> None:
+    tracker = EmpiricalBayesFilterCalibrationTracker(
+        _Lookup(
+            {
+                ("a", 1): _prediction((10, 20)),
+                ("a", 2): _prediction((10, 10)),
+                ("a", 3): _prediction((10, 10)),
+            }
+        ),
+        alphas=(0.50,),
+        event_alpha=0.50,
+    )
+
+    first_row = tracker.update(_prefix("a", step=1, total=5))
+    repeated_row = tracker.update(_prefix("a", step=2, total=5))
+    changed_row = tracker.update(_prefix("a", step=3, total=6))
+
+    assert first_row["eb_filter_event_alpha_0_50_estimated_final_work_p50"] == 10
+    assert repeated_row["eb_filter_event_alpha_0_50_estimated_final_work_p50"] == 10
+    assert repeated_row["eb_filter_event_alpha_0_50_event_updated"] is False
+    assert "event_update_skipped" in repeated_row["eb_filter_event_alpha_0_50_confidence_flags"]
+    assert changed_row["eb_filter_event_alpha_0_50_event_updated"] is True
+
+
+def test_filter_calibration_eval_writes_eb_only_artifacts_without_gbm_columns(tmp_path: Path) -> None:
+    traces = tmp_path / "traces.csv"
+    turns = tmp_path / "turns.csv"
+    report_dir = tmp_path / "filter"
+    traces.write_text(
+        "trace_key,source,final_total,total_turns,first_stuck_step,censored_right_tail,parse_error\n"
+        "a,s,10,3,,False,\n"
+        "b,s,12,3,,False,\n",
+        encoding="utf-8",
+    )
+    turns.write_text(
+        "trace_key,source,instance_id,step,total,done,current_category,current_unit_age,kind,tool\n"
+        "a,s,a,1,5,0,PRODUCT,1,action,bash\n"
+        "b,s,b,1,5,0,PRODUCT,1,action,bash\n",
+        encoding="utf-8",
+    )
+
+    result = evaluate_filter_calibration(turns, traces, report_dir, min_support=1, alphas=(0.05,), event_alpha=0.35)
+    header = (report_dir / "progress_beliefs.csv").read_text(encoding="utf-8").splitlines()[0]
+
+    assert result["prefix_rows"] == 1
+    assert "eb_filter_alpha_0_05_estimated_final_work_p50" in header
+    assert "eb_filter_event_alpha_0_05_estimated_final_work_p50" in header
+    assert "gbm_direct" not in header
+    assert (report_dir / "belief_summary.csv").exists()
 
 
 def test_belief_tracker_eval_writes_artifacts_with_fake_gbm_bundle(tmp_path: Path) -> None:
