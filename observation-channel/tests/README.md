@@ -7,6 +7,7 @@ Tests cover semantic contracts, not snapshots:
 - product target splitting
 - stuck-unit accounting and v1.6 prefix features
 - empirical-Bayes support, feature fallback, censoring, and calibration-pair rules
+- running final-work belief tracking and remaining-work claim probabilities
 - CLI smoke paths
 - gated cached Hugging Face integration
 

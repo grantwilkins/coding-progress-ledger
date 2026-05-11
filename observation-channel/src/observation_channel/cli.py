@@ -6,6 +6,7 @@ import json
 import re
 from pathlib import Path
 
+from .belief_tracker import evaluate_belief_tracker
 from .empirical_bayes import DEFAULT_BOOTSTRAP_RESAMPLES, EmpiricalBayesLookup, evaluate, query_json, write_diagnostics
 from .gbm_trial import evaluate_gbm_trial, train_gbm_trial
 from .hf import expand_sources, iter_hf_rows, load_hf_rows, read_raw_sample, write_raw_sample
@@ -107,6 +108,15 @@ def main(argv: list[str] | None = None) -> int:
     gbm_eval.add_argument("--seed", type=int, default=1729)
     gbm_eval.add_argument("--min-support", type=int, default=25)
 
+    belief_eval = subparsers.add_parser("belief-tracker-eval", help="evaluate running final-work belief trackers")
+    belief_eval.add_argument("--turns-csv", type=Path, default=DATA_DIR / "diagnostics" / "cached_annotator" / "turns.csv")
+    belief_eval.add_argument("--traces-csv", type=Path, default=DATA_DIR / "diagnostics" / "cached_annotator" / "traces.csv")
+    belief_eval.add_argument("--model-dir", type=Path, default=DATA_DIR / "estimators" / "gbm_trial")
+    belief_eval.add_argument("--report-dir", type=Path, default=PROJECT_ROOT / "reports" / "belief_tracker")
+    belief_eval.add_argument("--min-support", type=int, default=25)
+    belief_eval.add_argument("--filter-alpha", type=float, default=0.35)
+    belief_eval.add_argument("--gbm-weight", type=float, default=0.15)
+
     args = parser.parse_args(argv)
     if args.command == "cache":
         return _cache(args)
@@ -178,6 +188,18 @@ def main(argv: list[str] | None = None) -> int:
             bootstrap_resamples=args.bootstrap_resamples,
             seed=args.seed,
             min_support=args.min_support,
+        )
+        print(json.dumps(result, sort_keys=True))
+        return 0
+    if args.command == "belief-tracker-eval":
+        result = evaluate_belief_tracker(
+            args.turns_csv,
+            args.traces_csv,
+            args.report_dir,
+            args.model_dir,
+            min_support=args.min_support,
+            filter_alpha=args.filter_alpha,
+            gbm_weight=args.gbm_weight,
         )
         print(json.dumps(result, sort_keys=True))
         return 0

@@ -10,6 +10,7 @@ Core modules:
 - `hf.py`: Hugging Face loading and raw JSONL caching.
 - `runner.py`: annotate one file or a corpus.
 - `empirical_bayes.py`: empirical final-unit lookup and evaluation artifacts.
+- `belief_tracker.py`: replayable live final-work belief tracker over empirical-Bayes and GBM predictions.
 - `cli.py`: cache, preprocessing, annotation, diagnostics, and empirical-Bayes commands.
 
 Readers should fail loudly on malformed source structure and must not use hidden thoughts as evidence.
