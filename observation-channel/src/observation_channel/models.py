@@ -55,8 +55,10 @@ class Row:
     current_unit_age: int
     had_stuck_episode: bool
     recent_error_bucket: str
+    recent_error_rate: float
     touched_source: bool
     investigation_ratio_bucket: str
+    investigation_ratio: float
     kind: str
     tool: str
 

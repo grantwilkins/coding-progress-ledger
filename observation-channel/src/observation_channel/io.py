@@ -16,8 +16,10 @@ ROW_FIELDS = [
     "current_unit_age",
     "had_stuck_episode",
     "recent_error_bucket",
+    "recent_error_rate",
     "touched_source",
     "investigation_ratio_bucket",
+    "investigation_ratio",
     "kind",
     "tool",
 ]

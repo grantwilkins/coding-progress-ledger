@@ -7,6 +7,7 @@ import re
 from pathlib import Path
 
 from .empirical_bayes import DEFAULT_BOOTSTRAP_RESAMPLES, EmpiricalBayesLookup, evaluate, query_json, write_diagnostics
+from .gbm_trial import evaluate_gbm_trial, train_gbm_trial
 from .hf import expand_sources, iter_hf_rows, load_hf_rows, read_raw_sample, write_raw_sample
 from .io import ROW_FIELDS, read_jsonl, write_turns
 from .readers import rows_to_turns
@@ -85,6 +86,27 @@ def main(argv: list[str] | None = None) -> int:
     eb_query.add_argument("--current-unit-age", type=int, required=True)
     eb_query.add_argument("--had-stuck-episode", action="store_true")
 
+    gbm_train = subparsers.add_parser("gbm-trial-train", help="train LightGBM quantile models for the GBM feasibility trial")
+    gbm_train.add_argument("--turns-csv", type=Path, default=DATA_DIR / "diagnostics" / "cached_annotator" / "turns.csv")
+    gbm_train.add_argument("--traces-csv", type=Path, default=DATA_DIR / "diagnostics" / "cached_annotator" / "traces.csv")
+    gbm_train.add_argument("--model-dir", type=Path, default=DATA_DIR / "estimators" / "gbm_trial")
+    gbm_train.add_argument("--seed", type=int, default=1729)
+    gbm_train.add_argument("--min-support", type=int, default=25)
+
+    gbm_eval = subparsers.add_parser("gbm-trial-eval", help="evaluate the GBM trial through the v1.6 calibration rig")
+    gbm_eval.add_argument("--turns-csv", type=Path, default=DATA_DIR / "diagnostics" / "cached_annotator" / "turns.csv")
+    gbm_eval.add_argument("--traces-csv", type=Path, default=DATA_DIR / "diagnostics" / "cached_annotator" / "traces.csv")
+    gbm_eval.add_argument("--model-dir", type=Path, default=DATA_DIR / "estimators" / "gbm_trial")
+    gbm_eval.add_argument("--report-dir", type=Path, default=PROJECT_ROOT / "reports" / "gbm_trial")
+    gbm_eval.add_argument(
+        "--conditional-cohorts-csv",
+        type=Path,
+        default=PROJECT_ROOT / "reports" / "cached_annotator_diagnostic" / "conditional_prefix_cohorts.csv",
+    )
+    gbm_eval.add_argument("--bootstrap-resamples", type=int, default=DEFAULT_BOOTSTRAP_RESAMPLES)
+    gbm_eval.add_argument("--seed", type=int, default=1729)
+    gbm_eval.add_argument("--min-support", type=int, default=25)
+
     args = parser.parse_args(argv)
     if args.command == "cache":
         return _cache(args)
@@ -133,6 +155,29 @@ def main(argv: list[str] | None = None) -> int:
             args.conditional_cohorts_csv,
             args.report_dir,
             args.bundle_path,
+        )
+        print(json.dumps(result, sort_keys=True))
+        return 0
+    if args.command == "gbm-trial-train":
+        result = train_gbm_trial(
+            args.turns_csv,
+            args.traces_csv,
+            args.model_dir,
+            seed=args.seed,
+            min_support=args.min_support,
+        )
+        print(json.dumps(result, sort_keys=True))
+        return 0
+    if args.command == "gbm-trial-eval":
+        result = evaluate_gbm_trial(
+            args.turns_csv,
+            args.traces_csv,
+            args.report_dir,
+            args.model_dir,
+            args.conditional_cohorts_csv,
+            bootstrap_resamples=args.bootstrap_resamples,
+            seed=args.seed,
+            min_support=args.min_support,
         )
         print(json.dumps(result, sort_keys=True))
         return 0

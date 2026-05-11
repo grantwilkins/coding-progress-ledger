@@ -65,6 +65,8 @@ class Annotator:
         current = self._current_unit()
         current_category = current.category.value if current else ""
         age = turn.step - current.opened_step + 1 if current else 0
+        recent_error_rate = self._recent_error_rate(turn.step)
+        investigation_ratio = self._investigation_ratio()
         return Row(
             step=turn.step,
             total=len(self.units),
@@ -72,9 +74,11 @@ class Annotator:
             current_category=current_category,
             current_unit_age=age,
             had_stuck_episode=self.had_stuck_episode,
-            recent_error_bucket=self._recent_error_bucket(turn.step),
+            recent_error_bucket=_error_bucket(recent_error_rate),
+            recent_error_rate=recent_error_rate,
             touched_source=self.touched_source,
-            investigation_ratio_bucket=self._investigation_ratio_bucket(),
+            investigation_ratio_bucket=_investigation_bucket(investigation_ratio),
+            investigation_ratio=investigation_ratio,
             kind=turn.kind,
             tool=turn.tool or "",
         )
@@ -157,20 +161,26 @@ class Annotator:
         return sum(1 for unit in self.units if unit.status == "done")
 
     def _recent_error_bucket(self, step: int) -> str:
+        return _error_bucket(self._recent_error_rate(step))
+
+    def _recent_error_rate(self, step: int) -> float:
         self._prune_recent_observations(step)
         if not self.recent_observations:
-            return "clean"
+            return 0.0
         failures = sum(int(failed) for _, failed in self.recent_observations)
-        return _error_bucket(failures / len(self.recent_observations))
+        return failures / len(self.recent_observations)
 
     def _prune_recent_observations(self, step: int) -> None:
         lower = step - RECENT_ERROR_WINDOW_STEPS
         self.recent_observations = [(obs_step, failed) for obs_step, failed in self.recent_observations if obs_step >= lower]
 
     def _investigation_ratio_bucket(self) -> str:
+        return _investigation_bucket(self._investigation_ratio())
+
+    def _investigation_ratio(self) -> float:
         if not self.action_count:
-            return "low"
-        return _investigation_bucket(self.investigation_action_count / self.action_count)
+            return 0.0
+        return self.investigation_action_count / self.action_count
 
 
 def _is_stuck_evidence(body: str) -> bool:

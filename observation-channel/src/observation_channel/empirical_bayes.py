@@ -97,8 +97,10 @@ class PrefixRow:
     current_unit_age: int
     had_stuck_episode: bool
     recent_error_bucket: str = "clean"
+    recent_error_rate: float = 0.0
     touched_source: bool = False
     investigation_ratio_bucket: str = "moderate"
+    investigation_ratio: float = 0.0
 
 
 @dataclass(frozen=True)
@@ -278,8 +280,10 @@ def read_prefixes_csv(
                     current_unit_age=int(row["current_unit_age"]),
                     had_stuck_episode=stuck,
                     recent_error_bucket=row.get("recent_error_bucket") or "clean",
+                    recent_error_rate=float(row.get("recent_error_rate") or 0.0),
                     touched_source=_bool(row.get("touched_source", "")),
                     investigation_ratio_bucket=row.get("investigation_ratio_bucket") or "moderate",
+                    investigation_ratio=float(row.get("investigation_ratio") or 0.0),
                 )
             )
             if progress and index % 1_000_000 == 0:
@@ -712,7 +716,7 @@ def _bootstrap_trace_bins(pairs: list[dict[str, Any]]) -> dict[str, list[tuple[l
 def _sharpness_rows(prefix_rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
     rows = []
     for stratum, items in _prefix_strata(prefix_rows).items():
-        widths = sorted(int(item["interval80_width"]) for item in items)
+        widths = sorted(float(item["interval80_width"]) for item in items)
         rows.append({"stratum": stratum, "n": len(items), "median_interval80_width": median(widths) if widths else ""})
     return rows
 
@@ -1238,7 +1242,7 @@ def _interval_width_by_trace_position_rows(
     traces: dict[str, TraceMeta],
     bins: int = TRACE_POSITION_BINS,
 ) -> list[dict[str, Any]]:
-    grouped: dict[tuple[str, int], list[int]] = defaultdict(list)
+    grouped: dict[tuple[str, int], list[float]] = defaultdict(list)
     with prefix_predictions_csv.open("r", encoding="utf-8", newline="") as handle:
         for row in csv.DictReader(handle):
             trace = traces[row["trace_key"]]
@@ -1246,7 +1250,7 @@ def _interval_width_by_trace_position_rows(
                 raise ValueError(f"trace {trace.trace_key} has non-positive total_turns")
             position = min(1.0, max(0.0, int(row["step"]) / trace.total_turns))
             bin_index = min(bins - 1, int(position * bins))
-            grouped[(row["source"], bin_index)].append(int(row["interval80_width"]))
+            grouped[(row["source"], bin_index)].append(float(row["interval80_width"]))
 
     rows = []
     for source in sorted({source for source, _ in grouped}, key=_stratum_sort_key):

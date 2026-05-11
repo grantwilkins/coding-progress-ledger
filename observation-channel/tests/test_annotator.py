@@ -13,6 +13,7 @@ Plausible wrong implementations:
 - Pad the recent-error denominator to 10 instead of using available observations.
 - Let scratch-file writes flip the source-modification flag.
 - Count observation turns in the investigation-overhead denominator.
+- Persist only bucket labels and lose the raw continuous GBM trial features.
 """
 
 from observation_channel import Annotator, Category, Turn
@@ -92,6 +93,7 @@ def test_recent_error_bucket_uses_available_observations_in_step_window() -> Non
     row = annotator.feed(Turn(step=3, kind="observation", response="<returncode>1</returncode>"))
 
     assert row.recent_error_bucket == "moderate"
+    assert row.recent_error_rate == 0.5
 
 
 def test_recent_error_bucket_detects_reader_normalized_returncode() -> None:
@@ -132,5 +134,8 @@ def test_investigation_ratio_uses_action_denominator_only() -> None:
     ]
 
     assert rows[0].investigation_ratio_bucket == "dominant"
+    assert rows[0].investigation_ratio == 1.0
     assert rows[1].investigation_ratio_bucket == "dominant"
+    assert rows[1].investigation_ratio == 1.0
     assert rows[2].investigation_ratio_bucket == "moderate"
+    assert rows[2].investigation_ratio == 0.5

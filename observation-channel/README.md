@@ -13,8 +13,12 @@ uv run --project observation-channel observation-channel annotate-corpus data/tu
 uv run --project observation-channel observation-channel cached-annotator-diagnostic
 uv run --project observation-channel observation-channel empirical-bayes-eval
 uv run --project observation-channel observation-channel empirical-bayes-diagnostics
+uv run --project observation-channel observation-channel gbm-trial-train
+uv run --project observation-channel observation-channel gbm-trial-eval --bootstrap-resamples 1000
 uv run pytest observation-channel
 ```
 
 `data/` is ignored. It holds downloaded Hugging Face cache files, canonical turns, and generated outputs.
-The empirical-Bayes evaluator reads cached diagnostic `turns.csv` and `traces.csv`, writes review tables and plots under `reports/empirical_bayes_v1/`, and stores the regenerated lookup bundle under ignored `data/estimators/`. Bootstrap bands use trace-level preaggregation with default `B=400`. V1.6 lookup features require regenerating cached annotations from canonical turn JSONL so `turns.csv` includes `recent_error_bucket`, `touched_source`, and `investigation_ratio_bucket`; old CSVs still load with neutral defaults but are not meaningful v1.6 training inputs. The diagnostics command adds grid-offset reliability, SWE-Agent category bias, current-step bias, exact-prefix cohort width checks, turn-bucket support counts, and rate-bucket conditional histograms from generated heldout predictions.
+The empirical-Bayes evaluator reads cached diagnostic `turns.csv` and `traces.csv`, writes review tables and plots under `reports/empirical_bayes_v1/`, and stores the regenerated lookup bundle under ignored `data/estimators/`. Bootstrap bands use trace-level preaggregation with default `B=400`. V1.6 lookup features require regenerating cached annotations from canonical turn JSONL so `turns.csv` includes `recent_error_bucket`, `recent_error_rate`, `touched_source`, `investigation_ratio_bucket`, and `investigation_ratio`; old CSVs still load with neutral defaults but are not meaningful v1.6 training inputs. The diagnostics command adds grid-offset reliability, SWE-Agent category bias, current-step bias, exact-prefix cohort width checks, turn-bucket support counts, and rate-bucket conditional histograms from generated heldout predictions.
+
+The GBM trial trains LightGBM quantile regressors from those raw continuous features, saves models under ignored `data/estimators/gbm_trial/`, and evaluates through the same held-out split and v1.6 support gate into `reports/gbm_trial/`. The large GBM `heldout_predictions.csv` and `prefix_predictions.csv` files remain ignored; summary tables, plots, and `REPORT.md` are intended review artifacts.
