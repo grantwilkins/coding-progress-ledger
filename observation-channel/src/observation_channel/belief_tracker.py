@@ -187,6 +187,7 @@ def evaluate_belief_tracker(
     report_dir: Path,
     model_dir: Path,
     *,
+    bundle_path: Path | None = None,
     min_support: int = 25,
     filter_alpha: float = 0.35,
     gbm_weight: float = 0.15,
@@ -203,32 +204,37 @@ def evaluate_belief_tracker(
     progress("splitting traces")
     train_keys, eval_keys, split_rows = source_stratified_split(traces.values())
     eligible = eligible_prefixes(prefixes, traces)
-    train_prefixes = [row for row in eligible if row.trace_key in train_keys]
     eval_prefixes = [row for row in eligible if row.trace_key in eval_keys]
-    train_traces = {key: trace for key, trace in traces.items() if key in train_keys and not trace.parse_error and not trace.censored_right_tail}
-    progress("building empirical-Bayes lookup")
-    lookup = EmpiricalBayesLookup.build(train_prefixes, train_traces, min_support=min_support)
+    if bundle_path is not None:
+        progress("loading empirical-Bayes lookup")
+        lookup = EmpiricalBayesLookup.load(bundle_path)
+    else:
+        train_prefixes = [row for row in eligible if row.trace_key in train_keys]
+        train_traces = {key: trace for key, trace in traces.items() if key in train_keys and not trace.parse_error and not trace.censored_right_tail}
+        progress("building empirical-Bayes lookup")
+        lookup = EmpiricalBayesLookup.build(train_prefixes, train_traces, min_support=min_support)
     tracker = BeliefTracker(lookup, BeliefTrackerConfig(filter_alpha=filter_alpha, gbm_weight=gbm_weight))
     length_terciles = _length_terciles([traces[key] for key in eval_keys if not traces[key].censored_right_tail])
 
     rows = []
-    by_trace: dict[str, list[Any]] = defaultdict(list)
-    for row in eval_prefixes:
-        by_trace[row.trace_key].append(row)
-    for trace_key in sorted(by_trace):
-        trace_rows = sorted(by_trace[trace_key], key=lambda row: row.step)
-        gbm_predictions = gbm_bundle.predict(trace_rows)
-        for row, gbm_prediction in zip(trace_rows, gbm_predictions):
+    ordered_eval = sorted(eval_prefixes, key=lambda row: (row.trace_key, row.step))
+    progress(f"replaying {len(ordered_eval):,} held-out prefixes")
+    chunk_size = 200_000
+    for start in range(0, len(ordered_eval), chunk_size):
+        chunk = ordered_eval[start : start + chunk_size]
+        gbm_predictions = gbm_bundle.predict(chunk)
+        for row, gbm_prediction in zip(chunk, gbm_predictions):
             trace = traces[row.trace_key]
             result = _prefix_columns(row, trace, length_terciles.get(row.trace_key, "unknown"))
             result.update(tracker.update(row, gbm_prediction))
             rows.append(result)
+        progress(f"replayed {len(rows):,} held-out prefixes")
 
     report_dir.mkdir(parents=True, exist_ok=True)
-    pairs = _threshold_pairs(rows)
-    summary = _belief_summary(rows, pairs)
+    claim_rows = _claim_calibration_rows(rows)
+    summary = _belief_summary(rows, claim_rows)
     _write_csv(report_dir / "progress_beliefs.csv", rows)
-    _write_csv(report_dir / "belief_threshold_pairs.csv", pairs)
+    _write_csv(report_dir / "belief_threshold_pairs.csv", claim_rows)
     _write_csv(report_dir / "belief_summary.csv", summary)
     _write_csv(report_dir / "split_summary.csv", split_rows)
     _plot_trace_examples(report_dir / "trace_belief_examples.png", rows)
@@ -238,7 +244,7 @@ def evaluate_belief_tracker(
         "model_dir": str(model_dir),
         "report_dir": str(report_dir),
         "prefix_rows": len(rows),
-        "threshold_pairs": len(pairs),
+        "threshold_pairs": len(claim_rows),
     }
 
 
@@ -373,8 +379,8 @@ def _prefix_columns(row: Any, trace: Any, length_tercile: str) -> dict[str, Any]
     }
 
 
-def _threshold_pairs(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    pairs = []
+def _claim_calibration_rows(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    bins: dict[tuple[str, str, int], list[float]] = defaultdict(lambda: [0, 0.0, 0.0])
     for row in rows:
         current_total = int(row["current_total"])
         actual_final_work = int(row["actual_final_work"])
@@ -383,45 +389,57 @@ def _threshold_pairs(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
                 predicted = row.get(f"{variant}_prob_remaining_work_le_{int(fraction * 100)}pct")
                 if predicted == "":
                     continue
-                pairs.append(_pair_row(row, variant, claim, predicted, _remaining_fraction(current_total, actual_final_work) <= fraction))
+                _add_claim(bins, variant, claim, float(predicted), _remaining_fraction(current_total, actual_final_work) <= fraction)
             for offset in FINISH_WITHIN_OFFSETS:
                 predicted = row.get(f"{variant}_prob_finish_within_{offset}_work_units")
                 if predicted == "":
                     continue
-                pairs.append(_pair_row(row, variant, f"finish_within_{offset}_work_units", predicted, actual_final_work <= current_total + offset))
-    return pairs
+                _add_claim(bins, variant, f"finish_within_{offset}_work_units", float(predicted), actual_final_work <= current_total + offset)
+    return [
+        {
+            "variant": variant,
+            "claim": claim,
+            "bin": bin_index,
+            "n": int(values[0]),
+            "mean_predicted_p": values[1] / values[0],
+            "observed_rate": values[2] / values[0],
+            "mean_bias": (values[1] - values[2]) / values[0],
+        }
+        for (variant, claim, bin_index), values in sorted(bins.items())
+        if values[0]
+    ]
 
 
-def _pair_row(row: dict[str, Any], variant: str, claim: str, predicted: Any, outcome: bool) -> dict[str, Any]:
-    return {
-        "variant": variant,
-        "claim": claim,
-        "trace_key": row["trace_key"],
-        "source": row["source"],
-        "length_tercile": row["length_tercile"],
-        "step": row["step"],
-        "current_total": row["current_total"],
-        "predicted_p": float(predicted),
-        "outcome": int(outcome),
-    }
+def _add_claim(
+    bins: dict[tuple[str, str, int], list[float]],
+    variant: str,
+    claim: str,
+    predicted: float,
+    outcome: bool,
+) -> None:
+    values = bins[(variant, claim, min(9, int(predicted * 10)))]
+    values[0] += 1
+    values[1] += predicted
+    values[2] += int(outcome)
 
 
-def _belief_summary(rows: list[dict[str, Any]], pairs: list[dict[str, Any]]) -> list[dict[str, Any]]:
+def _belief_summary(rows: list[dict[str, Any]], claim_rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
     summary = []
     by_key: dict[tuple[str, str], list[dict[str, Any]]] = defaultdict(list)
-    for pair in pairs:
-        by_key[(pair["variant"], pair["claim"])].append(pair)
+    for row in claim_rows:
+        by_key[(row["variant"], row["claim"])].append(row)
     for variant, claim in sorted(by_key):
         items = by_key[(variant, claim)]
+        n = sum(int(item["n"]) for item in items)
         summary.append(
             {
                 "summary_type": "claim_calibration",
                 "variant": variant,
                 "claim": claim,
-                "n": len(items),
-                "mean_predicted_p": _mean(float(item["predicted_p"]) for item in items),
-                "observed_rate": _mean(int(item["outcome"]) for item in items),
-                "mean_bias": _mean(float(item["predicted_p"]) - int(item["outcome"]) for item in items),
+                "n": n,
+                "mean_predicted_p": sum(int(item["n"]) * float(item["mean_predicted_p"]) for item in items) / n,
+                "observed_rate": sum(int(item["n"]) * float(item["observed_rate"]) for item in items) / n,
+                "mean_bias": sum(int(item["n"]) * float(item["mean_bias"]) for item in items) / n,
                 "ece": _ece(items),
                 "median_absolute_final_work_error": "",
                 "median_interval80_width": "",
@@ -458,14 +476,11 @@ def _belief_summary(rows: list[dict[str, Any]], pairs: list[dict[str, Any]]) -> 
 def _ece(items: list[dict[str, Any]]) -> float | str:
     if not items:
         return ""
-    total = 0.0
-    for bin_index in range(10):
-        bucket = [item for item in items if min(9, int(float(item["predicted_p"]) * 10)) == bin_index]
-        if bucket:
-            predicted = _mean(float(item["predicted_p"]) for item in bucket)
-            observed = _mean(int(item["outcome"]) for item in bucket)
-            total += len(bucket) / len(items) * abs(float(predicted) - float(observed))
-    return total
+    n = sum(int(item["n"]) for item in items)
+    return sum(
+        int(item["n"]) / n * abs(float(item["mean_predicted_p"]) - float(item["observed_rate"]))
+        for item in items
+    )
 
 
 def _plot_trace_examples(path: Path, rows: list[dict[str, Any]], limit: int = 6) -> None:

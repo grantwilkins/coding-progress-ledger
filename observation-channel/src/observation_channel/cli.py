@@ -112,6 +112,7 @@ def main(argv: list[str] | None = None) -> int:
     belief_eval.add_argument("--turns-csv", type=Path, default=DATA_DIR / "diagnostics" / "cached_annotator" / "turns.csv")
     belief_eval.add_argument("--traces-csv", type=Path, default=DATA_DIR / "diagnostics" / "cached_annotator" / "traces.csv")
     belief_eval.add_argument("--model-dir", type=Path, default=DATA_DIR / "estimators" / "gbm_trial")
+    belief_eval.add_argument("--bundle-path", type=Path, default=DATA_DIR / "estimators" / "empirical_bayes_v1.6" / "lookup.json")
     belief_eval.add_argument("--report-dir", type=Path, default=PROJECT_ROOT / "reports" / "belief_tracker")
     belief_eval.add_argument("--min-support", type=int, default=25)
     belief_eval.add_argument("--filter-alpha", type=float, default=0.35)
@@ -197,6 +198,7 @@ def main(argv: list[str] | None = None) -> int:
             args.traces_csv,
             args.report_dir,
             args.model_dir,
+            bundle_path=args.bundle_path,
             min_support=args.min_support,
             filter_alpha=args.filter_alpha,
             gbm_weight=args.gbm_weight,
