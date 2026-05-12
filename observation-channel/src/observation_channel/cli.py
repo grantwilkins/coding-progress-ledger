@@ -16,11 +16,9 @@ from .readers import rows_to_turns
 from .runner import annotate_corpus, annotate_file, annotate_turns
 from .together_replay_ensemble import (
     DEFAULT_AGENTS,
-    DEFAULT_CONTEXT_ABLATIONS,
-    DEFAULT_ENSEMBLE_ABLATIONS,
     DEFAULT_MODEL,
-    DEFAULT_PROMPT_ABLATIONS,
     DEFAULT_REPORT_DIR as DEFAULT_REPLAY_REPORT_DIR,
+    DEFAULT_WORKERS,
     main as together_replay_main,
 )
 
@@ -149,15 +147,12 @@ def main(argv: list[str] | None = None) -> int:
     replay_ablation = subparsers.add_parser(
         "together-replay-ensemble",
         aliases=["together-replay-ablation"],
-        help="run Together observer directional progress ablations",
+        help="run Together observer progress replay",
     )
     replay_ablation.add_argument("--raw-index", type=int, default=349)
     replay_ablation.add_argument("--model", default=DEFAULT_MODEL)
     replay_ablation.add_argument("--agents", type=int, default=DEFAULT_AGENTS)
-    replay_ablation.add_argument("--prompt-ablations", default=DEFAULT_PROMPT_ABLATIONS)
-    replay_ablation.add_argument("--ensemble-ablations", default=DEFAULT_ENSEMBLE_ABLATIONS)
-    replay_ablation.add_argument("--context-ablations", default=DEFAULT_CONTEXT_ABLATIONS)
-    replay_ablation.add_argument("--workers", type=int, default=40)
+    replay_ablation.add_argument("--workers", type=int, default=DEFAULT_WORKERS)
     replay_ablation.add_argument("--cache-dir", type=Path, default=DATA_DIR / "raw" / "hf_cache")
     replay_ablation.add_argument("--report-dir", type=Path, default=DEFAULT_REPLAY_REPORT_DIR)
     replay_ablation.add_argument("--api-key-env", default="TOGETHER_API_KEY")
@@ -285,12 +280,6 @@ def main(argv: list[str] | None = None) -> int:
             args.model,
             "--agents",
             str(args.agents),
-            "--prompt-ablations",
-            args.prompt_ablations,
-            "--ensemble-ablations",
-            args.ensemble_ablations,
-            "--context-ablations",
-            args.context_ablations,
             "--workers",
             str(args.workers),
             "--cache-dir",

@@ -116,8 +116,8 @@ def test_empirical_bayes_eval_cli_writes_report_and_bundle(tmp_path: Path) -> No
 
 def test_together_replay_ensemble_cli_validates_args_before_api_key() -> None:
     try:
-        main(["together-replay-ensemble", "--prompt-ablations", "unknown"])
+        main(["together-replay-ensemble", "--agents", "0"])
     except ValueError as exc:
-        assert "unknown prompt variants" in str(exc)
+        assert "agents must be positive" in str(exc)
     else:
-        raise AssertionError("invalid prompt variant should fail before API setup")
+        raise AssertionError("invalid replay args should fail before API setup")
