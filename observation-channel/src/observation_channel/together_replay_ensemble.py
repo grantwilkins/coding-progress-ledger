@@ -373,9 +373,11 @@ def parse_fraction(text: str) -> float:
     if not match:
         raise ValueError(f"no numeric fraction in response: {text!r}")
     value = float(match.group(0))
-    if not 0.0 <= value <= 1.0:
-        raise ValueError(f"fraction out of range: {value}")
-    return value
+    if 0.0 <= value <= 1.0:
+        return value
+    if value.is_integer() and 1.0 < value <= 100.0:
+        return value / 100.0
+    raise ValueError(f"fraction out of range: {value}")
 
 
 def aggregate(estimates: Iterable[Estimate]) -> list[dict[str, Any]]:

@@ -12,6 +12,8 @@ Plausible wrong implementations:
 - Extract the system prompt or a later observation instead of the first user task
   prompt from the raw trajectory.
 - Parse arbitrary prose or out-of-range values as valid fractions.
+- Reject unambiguous whole-number percentages like `90`, causing long live runs
+  to fail after the model answered on a percent scale.
 - Aggregate across the wrong level, such as across all turns instead of per turn.
 - Advance an agent history without recording the scalar response for that turn.
 - Treat remaining-work scores as progress instead of inverting them.
@@ -101,11 +103,15 @@ def test_context_variants_hide_task_and_skip_observations_for_commands_only() ->
 
 def test_parse_fraction_accepts_single_fraction_and_rejects_bad_values() -> None:
     assert parse_fraction("0.72") == 0.72
+    assert parse_fraction("90") == pytest.approx(0.9)
+    assert parse_fraction("100%") == pytest.approx(1.0)
 
     with pytest.raises(ValueError):
         parse_fraction("complete enough")
     with pytest.raises(ValueError):
         parse_fraction("1.2")
+    with pytest.raises(ValueError):
+        parse_fraction("90.5")
 
 
 def test_aggregate_is_per_turn_not_global() -> None:
