@@ -1,9 +1,9 @@
 """
 Claim:
 The Together replay ensemble asks independent agents for one scalar progress
-estimate per visible turn, dispatches agents in parallel within each turn, and
-aggregates their estimates into a mean and uncertainty band without leaking
-future turns or final labels.
+estimate per visible turn and ablation condition, dispatches agents in parallel
+within each turn, derives smaller ensemble-size views by agent subsetting, and
+aggregates progress values without leaking future turns or final labels.
 
 Plausible wrong implementations:
 - Include future turns, hidden evaluator results, or final trace status in the
@@ -14,6 +14,8 @@ Plausible wrong implementations:
 - Parse arbitrary prose or out-of-range values as valid fractions.
 - Aggregate across the wrong level, such as across all turns instead of per turn.
 - Advance an agent history without recording the scalar response for that turn.
+- Treat remaining-work scores as progress instead of inverting them.
+- Rerun model calls for every requested ensemble size instead of subsetting.
 """
 
 import pytest
@@ -21,14 +23,40 @@ import pytest
 from observation_channel.models import Turn
 from observation_channel.together_replay_ensemble import (
     Estimate,
+    agreement_matrix,
     aggregate,
     format_turn_distribution,
     original_task_prompt,
     parse_fraction,
+    run_ablation_grid,
     run_parallel_replay,
     system_prompt,
+    turn_evidence,
     turn_prompt,
+    validate_ablation_args,
 )
+
+
+def estimate(
+    *,
+    turn: int,
+    agent: int,
+    prompt_variant: str = "fraction_complete",
+    progress_value: float,
+    raw_value: float | None = None,
+) -> Estimate:
+    return Estimate(
+        trace_key="trace",
+        turn=turn,
+        agent=agent,
+        model="model",
+        prompt_variant=prompt_variant,
+        context_variant="task_and_trace",
+        ensemble_size=2,
+        raw_value=progress_value if raw_value is None else raw_value,
+        progress_value=progress_value,
+        raw=str(progress_value if raw_value is None else raw_value),
+    )
 
 
 def test_turn_prompt_contains_only_current_turn_evidence() -> None:
@@ -64,6 +92,13 @@ def test_system_prompt_contains_original_task_prompt_not_manual_summary() -> Non
     assert "biomedsheets" not in prompt
 
 
+def test_context_variants_hide_task_and_skip_observations_for_commands_only() -> None:
+    assert "Original task prompt:" in system_prompt("ISSUE:\nsecret", "fraction_complete", "task_and_trace")
+    assert "secret" not in system_prompt("ISSUE:\nsecret", "fraction_complete", "trace_only")
+    assert turn_evidence(Turn(step=1, kind="observation", response="output"), "commands_only") is None
+    assert "edit file.py" in (turn_evidence(Turn(step=2, kind="action", command="edit file.py"), "commands_only") or "")
+
+
 def test_parse_fraction_accepts_single_fraction_and_rejects_bad_values() -> None:
     assert parse_fraction("0.72") == 0.72
 
@@ -76,18 +111,33 @@ def test_parse_fraction_accepts_single_fraction_and_rejects_bad_values() -> None
 def test_aggregate_is_per_turn_not_global() -> None:
     rows = aggregate(
         [
-            Estimate(turn=1, agent=1, value=0.0, raw="0"),
-            Estimate(turn=1, agent=2, value=0.2, raw="0.2"),
-            Estimate(turn=2, agent=1, value=0.8, raw="0.8"),
-            Estimate(turn=2, agent=2, value=1.0, raw="1"),
+            estimate(turn=1, agent=1, progress_value=0.0),
+            estimate(turn=1, agent=2, progress_value=0.2),
+            estimate(turn=2, agent=1, progress_value=0.8),
+            estimate(turn=2, agent=2, progress_value=1.0),
         ]
     )
 
     assert [row["turn"] for row in rows] == [1, 2]
-    assert rows[0]["mean_fraction_complete"] == pytest.approx(0.1)
-    assert rows[0]["stdev"] == pytest.approx(0.1)
-    assert rows[1]["mean_fraction_complete"] == pytest.approx(0.9)
-    assert rows[1]["stdev"] == pytest.approx(0.1)
+    assert rows[0]["mean_progress"] == pytest.approx(0.1)
+    assert rows[0]["stdev_progress"] == pytest.approx(0.1)
+    assert rows[0]["median"] == pytest.approx(0.1)
+    assert rows[1]["mean_progress"] == pytest.approx(0.9)
+    assert rows[1]["stdev_progress"] == pytest.approx(0.1)
+
+
+def test_grouped_aggregation_separates_prompt_variants() -> None:
+    rows = aggregate(
+        [
+            estimate(turn=1, agent=1, prompt_variant="fraction_complete", progress_value=0.2),
+            estimate(turn=1, agent=2, prompt_variant="fraction_complete", progress_value=0.4),
+            estimate(turn=1, agent=1, prompt_variant="goal_closeness", progress_value=0.8),
+            estimate(turn=1, agent=2, prompt_variant="goal_closeness", progress_value=1.0),
+        ]
+    )
+
+    means = {row["prompt_variant"]: row["mean_progress"] for row in rows}
+    assert means == {"fraction_complete": pytest.approx(0.3), "goal_closeness": pytest.approx(0.9)}
 
 
 def test_parallel_replay_replays_only_turns_seen_so_far_and_records_each_turn() -> None:
@@ -102,6 +152,7 @@ def test_parallel_replay_replays_only_turns_seen_so_far_and_records_each_turn() 
             Turn(step=1, kind="user", response="issue text"),
             Turn(step=2, kind="action", tool="open", command="open file.py"),
         ],
+        trace_key="trace",
         agents=2,
         workers=2,
         model="m",
@@ -110,6 +161,8 @@ def test_parallel_replay_replays_only_turns_seen_so_far_and_records_each_turn() 
         max_tokens=8,
         temperature=0.0,
         task_prompt="ISSUE:\nFix the test case",
+        prompt_variant="fraction_complete",
+        context_variant="task_and_trace",
         progress=False,
         complete=complete,
     )
@@ -130,6 +183,7 @@ def test_parallel_replay_sends_original_task_prompt_to_every_agent_call() -> Non
 
     run_parallel_replay(
         [Turn(step=1, kind="action", tool="edit", command="edit file.py")],
+        trace_key="trace",
         agents=2,
         workers=2,
         model="m",
@@ -138,6 +192,8 @@ def test_parallel_replay_sends_original_task_prompt_to_every_agent_call() -> Non
         max_tokens=8,
         temperature=0.0,
         task_prompt="ISSUE:\nOriginal SWE issue",
+        prompt_variant="fraction_complete",
+        context_variant="task_and_trace",
         progress=False,
         complete=complete,
     )
@@ -145,6 +201,114 @@ def test_parallel_replay_sends_original_task_prompt_to_every_agent_call() -> Non
     assert len(system_messages) == 2
     assert all("Original SWE issue" in message for message in system_messages)
     assert all("High-level task:" not in message for message in system_messages)
+
+
+def test_prompt_variant_conversion_inverts_remaining_work() -> None:
+    def complete(messages, model, api_key, max_retries, max_tokens, temperature):
+        return "0.25"
+
+    fraction = run_parallel_replay(
+        [Turn(step=1, kind="action", command="edit")],
+        trace_key="trace",
+        agents=1,
+        workers=1,
+        model="m",
+        api_key="k",
+        max_retries=0,
+        max_tokens=8,
+        temperature=0.0,
+        task_prompt="ISSUE",
+        prompt_variant="fraction_complete",
+        context_variant="task_and_trace",
+        complete=complete,
+    )[0]
+    remaining = run_parallel_replay(
+        [Turn(step=1, kind="action", command="edit")],
+        trace_key="trace",
+        agents=1,
+        workers=1,
+        model="m",
+        api_key="k",
+        max_retries=0,
+        max_tokens=8,
+        temperature=0.0,
+        task_prompt="ISSUE",
+        prompt_variant="remaining_work",
+        context_variant="task_and_trace",
+        complete=complete,
+    )[0]
+
+    assert fraction.raw_value == pytest.approx(0.25)
+    assert fraction.progress_value == pytest.approx(0.25)
+    assert remaining.raw_value == pytest.approx(0.25)
+    assert remaining.progress_value == pytest.approx(0.75)
+
+
+def test_ablation_grid_subsets_ensemble_sizes_without_extra_calls() -> None:
+    calls = []
+
+    def complete(messages, model, api_key, max_retries, max_tokens, temperature):
+        calls.append(messages)
+        return "0.5"
+
+    estimates = run_ablation_grid(
+        [Turn(step=1, kind="action", command="edit")],
+        trace_key="trace",
+        task_prompt="ISSUE",
+        models=["m"],
+        prompt_variants=["fraction_complete"],
+        context_variants=["task_and_trace"],
+        ensemble_sizes=[1, 5, 10],
+        workers=10,
+        api_key="k",
+        max_retries=0,
+        max_tokens=8,
+        temperature=0.0,
+        progress=False,
+        agents=10,
+        complete=complete,
+    )
+
+    assert len(calls) == 10
+    assert {estimate.ensemble_size for estimate in estimates} == {1, 5, 10}
+    assert sum(1 for estimate in estimates if estimate.ensemble_size == 1) == 1
+    assert sum(1 for estimate in estimates if estimate.ensemble_size == 5) == 5
+    assert sum(1 for estimate in estimates if estimate.ensemble_size == 10) == 10
+
+
+def test_agreement_matrix_identical_and_different_curves() -> None:
+    identical = agreement_matrix(
+        [
+            {"model": "a", "prompt_variant": "p", "context_variant": "c", "ensemble_size": 1, "turn": 1, "mean_progress": 0.1},
+            {"model": "a", "prompt_variant": "p", "context_variant": "c", "ensemble_size": 1, "turn": 2, "mean_progress": 0.9},
+            {"model": "b", "prompt_variant": "p", "context_variant": "c", "ensemble_size": 1, "turn": 1, "mean_progress": 0.1},
+            {"model": "b", "prompt_variant": "p", "context_variant": "c", "ensemble_size": 1, "turn": 2, "mean_progress": 0.9},
+        ]
+    )
+    pair = next(row for row in identical if row["condition_a"].startswith("a |") and row["condition_b"].startswith("b |"))
+    assert pair["correlation"] == pytest.approx(1.0)
+    assert pair["mean_abs_difference"] == pytest.approx(0.0)
+
+    different = agreement_matrix(
+        [
+            {"model": "a", "prompt_variant": "p", "context_variant": "c", "ensemble_size": 1, "turn": 1, "mean_progress": 0.1},
+            {"model": "a", "prompt_variant": "p", "context_variant": "c", "ensemble_size": 1, "turn": 2, "mean_progress": 0.9},
+            {"model": "b", "prompt_variant": "p", "context_variant": "c", "ensemble_size": 1, "turn": 1, "mean_progress": 0.9},
+            {"model": "b", "prompt_variant": "p", "context_variant": "c", "ensemble_size": 1, "turn": 2, "mean_progress": 0.1},
+        ]
+    )
+    pair = next(row for row in different if row["condition_a"].startswith("a |") and row["condition_b"].startswith("b |"))
+    assert pair["correlation"] == pytest.approx(-1.0)
+    assert pair["mean_abs_difference"] > 0
+
+
+def test_invalid_ablation_args_fail_before_api_calls() -> None:
+    with pytest.raises(ValueError):
+        validate_ablation_args(["m"], ["bad"], ["task_and_trace"], [1], None)
+    with pytest.raises(ValueError):
+        validate_ablation_args(["m"], ["fraction_complete"], ["bad"], [1], None)
+    with pytest.raises(ValueError):
+        validate_ablation_args(["m"], ["fraction_complete"], ["task_and_trace"], [2], 1)
 
 
 def test_turn_distribution_print_includes_mean_quantiles_and_histogram() -> None:

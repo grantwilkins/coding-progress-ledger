@@ -112,3 +112,12 @@ def test_empirical_bayes_eval_cli_writes_report_and_bundle(tmp_path: Path) -> No
     assert (report_dir / "REPORT.md").exists()
     assert (report_dir / "heldout_predictions.csv").exists()
     assert "B=400" in (report_dir / "REPORT.md").read_text(encoding="utf-8")
+
+
+def test_together_replay_ablation_cli_validates_args_before_api_key() -> None:
+    try:
+        main(["together-replay-ablation", "--prompt-variants", "unknown"])
+    except ValueError as exc:
+        assert "unknown prompt variants" in str(exc)
+    else:
+        raise AssertionError("invalid prompt variant should fail before API setup")

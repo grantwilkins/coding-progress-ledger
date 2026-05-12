@@ -18,7 +18,7 @@ uv run --project observation-channel observation-channel gbm-trial-eval --bootst
 uv run --project observation-channel observation-channel belief-tracker-eval
 uv run --project observation-channel observation-channel belief-filter-calibration
 uv run --project observation-channel observation-channel progress-label-audit
-TOGETHER_API_KEY=... uv run --project observation-channel python observation-channel/scripts/run_together_replay_ensemble.py --agents 40 --workers 40 --cache-dir observation-channel/data/raw/hf_cache
+TOGETHER_API_KEY=... uv run --project observation-channel observation-channel together-replay-ablation --raw-index 349 --workers 40 --cache-dir observation-channel/data/raw/hf_cache
 uv run pytest observation-channel
 ```
 
@@ -33,4 +33,4 @@ The belief-filter calibration evaluator runs EB-only alpha and event-gated filte
 
 The progress-label audit is read-only. It checks whether opened-unit progress reaches 100% while a large fraction of the trace remains, compares opened-unit, closed-unit, and step progress on selected worst traces, and writes evidence under `reports/progress_label_audit/`.
 
-The Together replay ensemble replays one selected SWE-Agent trace turn by turn, gives each agent the original SWE-Agent task prompt from the raw trajectory, dispatches all requested agents in parallel for each turn, prints the per-turn mean/distribution, and writes scalar progress estimates plus aggregate and per-agent trajectory plots under `reports/together_replay_ensemble/`. It requires `TOGETHER_API_KEY` and uses Together's OpenAI-compatible chat endpoint with `openai/gpt-oss-120b` by default.
+The Together replay ablation replays one selected SWE-Agent trace turn by turn, varies observer model, scalar prompt wording, context visibility, and ensemble size, and writes explicit condition metadata plus stability plots under `reports/together_replay_ablation/`. Smaller ensemble-size conditions are derived by prefix-subsetting agent IDs from the max-agent run. It requires `TOGETHER_API_KEY` and uses Together's OpenAI-compatible chat endpoint.
