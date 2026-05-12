@@ -298,6 +298,35 @@ def test_parallel_replay_skips_single_failed_agent_but_fails_if_all_fail() -> No
         )
 
 
+def test_progress_print_uses_successful_agents_after_partial_failure(capsys: pytest.CaptureFixture[str]) -> None:
+    responses = iter(["0.25", "", "0.75"])
+
+    def partly_failing_complete(messages, model, api_key, max_retries, max_tokens, temperature):
+        return next(responses)
+
+    estimates = run_parallel_replay(
+        [Turn(step=1, kind="action", command="edit")],
+        trace_key="trace",
+        agents=3,
+        workers=1,
+        model="m",
+        api_key="k",
+        max_retries=0,
+        max_tokens=8,
+        temperature=0.0,
+        task_prompt="ISSUE",
+        prompt_variant="fraction_complete",
+        context_variant="task_and_trace",
+        progress=True,
+        complete=partly_failing_complete,
+    )
+
+    output = capsys.readouterr().out
+    assert len(estimates) == 2
+    assert "agent=2 failed" in output
+    assert "turn=1 n=2" in output
+
+
 def test_ablation_grid_subsets_ensemble_sizes_without_extra_calls() -> None:
     calls = []
 

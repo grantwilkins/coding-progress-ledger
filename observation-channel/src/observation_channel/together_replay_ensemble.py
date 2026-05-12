@@ -264,7 +264,7 @@ def run_parallel_replay(
         if progress:
             print(
                 f"{model} {prompt_variant} {context_variant} "
-                + format_turn_distribution(turn.step, [results[agent][2] for agent in range(1, agents + 1)]),
+                + format_turn_distribution(turn.step, [results[agent][2] for agent in sorted(results)]),
                 flush=True,
             )
     return estimates
