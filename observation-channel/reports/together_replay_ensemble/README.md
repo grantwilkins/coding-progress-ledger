@@ -18,3 +18,4 @@ Artifacts:
 - `agent_estimates.csv`: one scalar estimate per agent per turn.
 - `aggregate_progress.csv`: mean, standard deviation, and one-sigma band by turn.
 - `aggregate_progress.png`: aggregate progress curve.
+- `agent_trajectories.png`: one trajectory per agent with the mean overlaid.

@@ -52,6 +52,7 @@ def main(argv: list[str] | None = None) -> int:
         raise RuntimeError(f"{args.api_key_env} is not set")
     row = swe_agent_row(args.raw_index, args.cache_dir)
     [(_, turns)] = list(rows_to_turns([row], source="swe-agent"))
+    task_prompt = original_task_prompt(row)
     estimates = run_parallel_replay(
         turns,
         agents=args.agents,
@@ -61,6 +62,7 @@ def main(argv: list[str] | None = None) -> int:
         max_retries=args.max_retries,
         max_tokens=args.max_tokens,
         temperature=args.temperature,
+        task_prompt=task_prompt,
         progress=not args.quiet,
     )
     write_report(args.report_dir, estimates, row, args)
@@ -76,6 +78,15 @@ def swe_agent_row(raw_index: int, cache_dir: Path) -> dict[str, Any]:
     raise ValueError(f"raw index {raw_index} not found")
 
 
+def original_task_prompt(row: dict[str, Any]) -> str:
+    for item in row.get("trajectory") or []:
+        if str(item.get("role", "")).lower() in {"user", "human"}:
+            text = str(item.get("text") or item.get("content") or item.get("message") or "").strip()
+            if text:
+                return text
+    raise ValueError(f"{row.get('instance_id', '<unknown>')}: no original user task prompt found")
+
+
 def run_parallel_replay(
     turns: list[Turn],
     *,
@@ -86,6 +97,7 @@ def run_parallel_replay(
     max_retries: int,
     max_tokens: int,
     temperature: float,
+    task_prompt: str,
     progress: bool = False,
     complete: Callable[[list[dict[str, str]], str, str, int, int, float], str] | None = None,
 ) -> list[Estimate]:
@@ -100,7 +112,7 @@ def run_parallel_replay(
                 pool.submit(
                     _complete_with_retries,
                     complete,
-                    [{"role": "system", "content": system_prompt()}, {"role": "user", "content": prompt}],
+                    [{"role": "system", "content": system_prompt(task_prompt)}, {"role": "user", "content": prompt}],
                     model,
                     api_key,
                     max_retries,
@@ -126,13 +138,15 @@ def run_parallel_replay(
     return estimates
 
 
-def system_prompt() -> str:
+def system_prompt(task_prompt: str) -> str:
+    task_prompt = task_prompt.strip()
+    if not task_prompt:
+        raise ValueError("task_prompt is empty")
     return (
         "You are one member of a blind replay ensemble for a coding trace. "
         "You will receive one turn at a time. Use only the evidence received so far; "
         "do not assume future turns, final outcome, hidden tests, final trace length, or hidden labels.\n\n"
-        "High-level task: In biomedsheets, fix the germline TSV reader so hyphens are allowed in "
-        "SODAR sample sheet identifiers, especially patient/father/mother name columns where current validation rejects hyphens.\n\n"
+        f"Original task prompt:\n{task_prompt}\n\n"
         "After each turn, reply with only one number from 0 to 1: the fraction of work you estimate is complete. "
         "No words, no JSON."
     )
@@ -249,6 +263,7 @@ def write_report(report_dir: Path, estimates: list[Estimate], row: dict[str, Any
     aggregate_rows = aggregate(estimates)
     _write_rows(report_dir / "aggregate_progress.csv", aggregate_rows)
     _plot(report_dir / "aggregate_progress.png", aggregate_rows)
+    _plot_trajectories(report_dir / "agent_trajectories.png", estimates, aggregate_rows)
     _write_readme(report_dir, row, args, aggregate_rows)
 
 
@@ -333,6 +348,41 @@ def _plot(path: Path, rows: list[dict[str, Any]]) -> None:
     plt.close(fig)
 
 
+def _plot_trajectories(path: Path, estimates: list[Estimate], aggregate_rows: list[dict[str, Any]]) -> None:
+    import matplotlib
+
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+
+    by_agent: dict[int, list[Estimate]] = {}
+    for estimate in estimates:
+        by_agent.setdefault(estimate.agent, []).append(estimate)
+    fig, axis = plt.subplots(figsize=(8, 3.2))
+    for agent_estimates in by_agent.values():
+        ordered = sorted(agent_estimates, key=lambda estimate: estimate.turn)
+        axis.plot(
+            [estimate.turn for estimate in ordered],
+            [estimate.value for estimate in ordered],
+            color="#9B9B9B",
+            alpha=0.22,
+            linewidth=0.9,
+        )
+    axis.plot(
+        [int(row["turn"]) for row in aggregate_rows],
+        [float(row["mean_fraction_complete"]) for row in aggregate_rows],
+        color="#2E6B2E",
+        linewidth=2.2,
+    )
+    axis.set_ylim(0, 1)
+    axis.set_xlabel("turn")
+    axis.set_ylabel("fraction complete")
+    axis.set_title("Together replay agent trajectories")
+    axis.grid(True, alpha=0.25)
+    fig.tight_layout()
+    fig.savefig(path, dpi=160)
+    plt.close(fig)
+
+
 def _write_readme(report_dir: Path, row: dict[str, Any], args: argparse.Namespace, aggregate_rows: list[dict[str, Any]]) -> None:
     final = aggregate_rows[-1]
     (report_dir / "README.md").write_text(
@@ -358,6 +408,7 @@ def _write_readme(report_dir: Path, row: dict[str, Any], args: argparse.Namespac
                 "- `agent_estimates.csv`: one scalar estimate per agent per turn.",
                 "- `aggregate_progress.csv`: mean, standard deviation, and one-sigma band by turn.",
                 "- `aggregate_progress.png`: aggregate progress curve.",
+                "- `agent_trajectories.png`: one trajectory per agent with the mean overlaid.",
                 "",
             ]
         ),
