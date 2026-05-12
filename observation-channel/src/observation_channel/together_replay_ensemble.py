@@ -237,11 +237,15 @@ def run_parallel_replay(
                 try:
                     raw = future.result()
                 except Exception as exc:
-                    raise RuntimeError(f"turn {turn.step} agent {agent} failed") from exc
+                    if progress:
+                        print(f"{model} {prompt_variant} {context_variant} turn={turn.step} agent={agent} failed: {exc}", flush=True)
+                    continue
                 raw_value = parse_fraction(raw)
                 progress_value = to_progress_value(raw_value, prompt_variant)
                 results[agent] = (raw, raw_value, progress_value)
-        for agent in range(1, agents + 1):
+        if not results:
+            raise RuntimeError(f"turn {turn.step} all {agents} agents failed")
+        for agent in sorted(results):
             raw, raw_value, progress_value = results[agent]
             estimates.append(
                 Estimate(

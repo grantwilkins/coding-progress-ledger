@@ -18,6 +18,8 @@ Plausible wrong implementations:
 - Advance an agent history without recording the scalar response for that turn.
 - Treat remaining-work scores as progress instead of inverting them.
 - Rerun model calls for every requested ensemble size instead of subsetting.
+- Abort a long live run after one observer returns a blank or invalid response,
+  instead of dropping only that failed sample.
 """
 
 import pytest
@@ -248,6 +250,52 @@ def test_prompt_variant_conversion_inverts_remaining_work() -> None:
     assert fraction.progress_value == pytest.approx(0.25)
     assert remaining.raw_value == pytest.approx(0.25)
     assert remaining.progress_value == pytest.approx(0.75)
+
+
+def test_parallel_replay_skips_single_failed_agent_but_fails_if_all_fail() -> None:
+    responses = iter(["", "0.5"])
+
+    def partly_failing_complete(messages, model, api_key, max_retries, max_tokens, temperature):
+        return next(responses)
+
+    estimates = run_parallel_replay(
+        [Turn(step=1, kind="action", command="edit")],
+        trace_key="trace",
+        agents=2,
+        workers=1,
+        model="m",
+        api_key="k",
+        max_retries=0,
+        max_tokens=8,
+        temperature=0.0,
+        task_prompt="ISSUE",
+        prompt_variant="fraction_complete",
+        context_variant="task_and_trace",
+        complete=partly_failing_complete,
+    )
+
+    assert len(estimates) == 1
+    assert estimates[0].progress_value == pytest.approx(0.5)
+
+    def failing_complete(messages, model, api_key, max_retries, max_tokens, temperature):
+        return ""
+
+    with pytest.raises(RuntimeError, match="all 2 agents failed"):
+        run_parallel_replay(
+            [Turn(step=1, kind="action", command="edit")],
+            trace_key="trace",
+            agents=2,
+            workers=1,
+            model="m",
+            api_key="k",
+            max_retries=0,
+            max_tokens=8,
+            temperature=0.0,
+            task_prompt="ISSUE",
+            prompt_variant="fraction_complete",
+            context_variant="task_and_trace",
+            complete=failing_complete,
+        )
 
 
 def test_ablation_grid_subsets_ensemble_sizes_without_extra_calls() -> None:
