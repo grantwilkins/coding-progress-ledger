@@ -22,8 +22,7 @@ from .readers import rows_to_turns
 TOGETHER_CHAT_URL = "https://api.together.xyz/v1/chat/completions"
 DEFAULT_MODELS = (
     "openai/gpt-oss-20b,"
-    "openai/gpt-oss-120b,"
-    "Qwen/Qwen3-Coder-480B-A35B-Instruct"
+    "openai/gpt-oss-120b"
 )
 DEFAULT_PROMPT_VARIANTS = "fraction_complete,remaining_work,goal_closeness"
 DEFAULT_CONTEXTS = "task_and_trace"
