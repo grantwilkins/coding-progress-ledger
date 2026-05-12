@@ -18,6 +18,8 @@ Plausible wrong implementations:
 - Advance an agent history without recording the scalar response for that turn.
 - Treat remaining-work scores as progress instead of inverting them.
 - Rerun model calls for every requested ensemble size instead of subsetting.
+- Run a full model x prompt x context Cartesian grid instead of directional
+  single-axis ablations.
 - Abort a long live run after one observer returns a blank or invalid response,
   instead of dropping only that failed sample.
 """
@@ -29,6 +31,7 @@ from observation_channel.together_replay_ensemble import (
     Estimate,
     agreement_matrix,
     aggregate,
+    directional_conditions,
     format_turn_distribution,
     original_task_prompt,
     parse_fraction,
@@ -357,6 +360,55 @@ def test_ablation_grid_subsets_ensemble_sizes_without_extra_calls() -> None:
     assert sum(1 for estimate in estimates if estimate.ensemble_size == 1) == 1
     assert sum(1 for estimate in estimates if estimate.ensemble_size == 5) == 5
     assert sum(1 for estimate in estimates if estimate.ensemble_size == 10) == 10
+
+
+def test_directional_ablation_avoids_full_cartesian_grid() -> None:
+    conditions = directional_conditions(
+        ["m1", "m2"],
+        ["fraction_complete", "remaining_work"],
+        ["task_and_trace", "trace_only"],
+        [1, 5],
+    )
+
+    assert conditions == [
+        ("m1", "fraction_complete", "task_and_trace", [1, 5]),
+        ("m2", "fraction_complete", "task_and_trace", [5]),
+        ("m1", "remaining_work", "task_and_trace", [5]),
+    ]
+
+
+def test_directional_ablation_calls_each_unique_axis_condition_once() -> None:
+    calls = []
+
+    def complete(messages, model, api_key, max_retries, max_tokens, temperature):
+        calls.append((model, messages[0]["content"]))
+        return "0.5"
+
+    estimates = run_ablation_grid(
+        [Turn(step=1, kind="action", command="edit")],
+        trace_key="trace",
+        task_prompt="ISSUE",
+        models=["m1", "m2"],
+        prompt_variants=["fraction_complete", "remaining_work"],
+        context_variants=["task_and_trace", "trace_only"],
+        ensemble_sizes=[1, 5],
+        workers=5,
+        api_key="k",
+        max_retries=0,
+        max_tokens=8,
+        temperature=0.0,
+        progress=False,
+        agents=5,
+        complete=complete,
+    )
+
+    assert len(calls) == 15
+    assert {(estimate.model, estimate.prompt_variant, estimate.context_variant, estimate.ensemble_size) for estimate in estimates} == {
+        ("m1", "fraction_complete", "task_and_trace", 1),
+        ("m1", "fraction_complete", "task_and_trace", 5),
+        ("m2", "fraction_complete", "task_and_trace", 5),
+        ("m1", "remaining_work", "task_and_trace", 5),
+    }
 
 
 def test_agreement_matrix_identical_and_different_curves() -> None:

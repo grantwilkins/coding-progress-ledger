@@ -26,7 +26,7 @@ DEFAULT_MODELS = (
     "Qwen/Qwen3-Coder-480B-A35B-Instruct"
 )
 DEFAULT_PROMPT_VARIANTS = "fraction_complete,remaining_work,goal_closeness"
-DEFAULT_CONTEXTS = "task_and_trace,trace_only"
+DEFAULT_CONTEXTS = "task_and_trace"
 DEFAULT_ENSEMBLE_SIZES = "1,5,10,40"
 DEFAULT_REPORT_DIR = Path(__file__).resolve().parents[2] / "reports" / "together_replay_ablation"
 KNOWN_CONTEXTS = {"task_and_trace", "trace_only", "commands_only"}
@@ -295,43 +295,67 @@ def run_ablation_grid(
     complete: Callable[[list[dict[str, str]], str, str, int, int, float], str] | None = None,
 ) -> list[Estimate]:
     estimates: list[Estimate] = []
-    for model in models:
-        for prompt_variant in prompt_variants:
-            for context_variant in context_variants:
-                sampled = run_parallel_replay(
-                    turns,
-                    trace_key=trace_key,
-                    agents=agents,
-                    workers=workers,
-                    model=model,
-                    api_key=api_key,
-                    max_retries=max_retries,
-                    max_tokens=max_tokens,
-                    temperature=temperature,
-                    task_prompt=task_prompt,
-                    prompt_variant=prompt_variant,
-                    context_variant=context_variant,
-                    progress=progress,
-                    complete=complete,
+    for model, prompt_variant, context_variant, sizes in directional_conditions(
+        models, prompt_variants, context_variants, ensemble_sizes
+    ):
+        sampled = run_parallel_replay(
+            turns,
+            trace_key=trace_key,
+            agents=agents,
+            workers=workers,
+            model=model,
+            api_key=api_key,
+            max_retries=max_retries,
+            max_tokens=max_tokens,
+            temperature=temperature,
+            task_prompt=task_prompt,
+            prompt_variant=prompt_variant,
+            context_variant=context_variant,
+            progress=progress,
+            complete=complete,
+        )
+        for size in sizes:
+            estimates.extend(
+                Estimate(
+                    trace_key=estimate.trace_key,
+                    turn=estimate.turn,
+                    agent=estimate.agent,
+                    model=estimate.model,
+                    prompt_variant=estimate.prompt_variant,
+                    context_variant=estimate.context_variant,
+                    ensemble_size=size,
+                    raw_value=estimate.raw_value,
+                    progress_value=estimate.progress_value,
+                    raw=estimate.raw,
                 )
-                for size in ensemble_sizes:
-                    estimates.extend(
-                        Estimate(
-                            trace_key=estimate.trace_key,
-                            turn=estimate.turn,
-                            agent=estimate.agent,
-                            model=estimate.model,
-                            prompt_variant=estimate.prompt_variant,
-                            context_variant=estimate.context_variant,
-                            ensemble_size=size,
-                            raw_value=estimate.raw_value,
-                            progress_value=estimate.progress_value,
-                            raw=estimate.raw,
-                        )
-                        for estimate in sampled
-                        if estimate.agent <= size
-                    )
+                for estimate in sampled
+                if estimate.agent <= size
+            )
     return estimates
+
+
+def directional_conditions(
+    models: list[str],
+    prompt_variants: list[str],
+    context_variants: list[str],
+    ensemble_sizes: list[int],
+) -> list[tuple[str, str, str, list[int]]]:
+    main_model = "openai/gpt-oss-120b" if "openai/gpt-oss-120b" in models else models[0]
+    main_prompt = "fraction_complete" if "fraction_complete" in prompt_variants else prompt_variants[0]
+    main_context = "task_and_trace" if "task_and_trace" in context_variants else context_variants[0]
+    max_size = max(ensemble_sizes)
+    sizes_by_condition: dict[tuple[str, str, str], set[int]] = {}
+
+    def add(model: str, prompt_variant: str, context_variant: str, sizes: Iterable[int]) -> None:
+        sizes_by_condition.setdefault((model, prompt_variant, context_variant), set()).update(sizes)
+
+    for model in models:
+        add(model, main_prompt, main_context, [max_size])
+    for prompt_variant in prompt_variants:
+        add(main_model, prompt_variant, main_context, [max_size])
+    add(main_model, main_prompt, main_context, ensemble_sizes)
+
+    return [(model, prompt, context, sorted(sizes)) for (model, prompt, context), sizes in sizes_by_condition.items()]
 
 
 def system_prompt(task_prompt: str, prompt_variant: str = "fraction_complete", context_variant: str = "task_and_trace") -> str:
@@ -912,6 +936,8 @@ def _write_readme(
                 f"- max tokens: {args.max_tokens}",
                 f"- dataset target label: `{row.get('target', '')}`",
                 "",
+                "This report runs directional single-axis ablations, not a full Cartesian grid.",
+                "Model variants use the main prompt/context at the max ensemble size; prompt variants use the main model/context at the max ensemble size; ensemble-size variants use the main model/prompt/context.",
                 "Smaller ensemble sizes are derived by prefix-subsetting agent IDs from the max-agent run.",
                 "",
                 "These are observer-derived progress measurements, not ground-truth progress labels.",
