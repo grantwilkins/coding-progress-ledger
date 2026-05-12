@@ -15,12 +15,13 @@ from .progress_label_audit import evaluate_progress_label_audit
 from .readers import rows_to_turns
 from .runner import annotate_corpus, annotate_file, annotate_turns
 from .together_replay_ensemble import (
-    DEFAULT_CONTEXTS,
-    DEFAULT_ENSEMBLE_SIZES,
-    DEFAULT_MODELS,
-    DEFAULT_PROMPT_VARIANTS,
-    DEFAULT_REPORT_DIR as DEFAULT_REPLAY_ABLATION_REPORT_DIR,
-    main as together_replay_ablation_main,
+    DEFAULT_AGENTS,
+    DEFAULT_CONTEXT_ABLATIONS,
+    DEFAULT_ENSEMBLE_ABLATIONS,
+    DEFAULT_MODEL,
+    DEFAULT_PROMPT_ABLATIONS,
+    DEFAULT_REPORT_DIR as DEFAULT_REPLAY_REPORT_DIR,
+    main as together_replay_main,
 )
 
 
@@ -145,16 +146,20 @@ def main(argv: list[str] | None = None) -> int:
     label_audit.add_argument("--category-n", type=int, default=10)
     label_audit.add_argument("--plot-limit", type=int, default=12)
 
-    replay_ablation = subparsers.add_parser("together-replay-ablation", help="run Together observer progress ablations")
+    replay_ablation = subparsers.add_parser(
+        "together-replay-ensemble",
+        aliases=["together-replay-ablation"],
+        help="run Together observer directional progress ablations",
+    )
     replay_ablation.add_argument("--raw-index", type=int, default=349)
-    replay_ablation.add_argument("--models", default=DEFAULT_MODELS)
-    replay_ablation.add_argument("--prompt-variants", default=DEFAULT_PROMPT_VARIANTS)
-    replay_ablation.add_argument("--contexts", default=DEFAULT_CONTEXTS)
-    replay_ablation.add_argument("--ensemble-sizes", default=DEFAULT_ENSEMBLE_SIZES)
-    replay_ablation.add_argument("--agents", type=int, default=None)
+    replay_ablation.add_argument("--model", default=DEFAULT_MODEL)
+    replay_ablation.add_argument("--agents", type=int, default=DEFAULT_AGENTS)
+    replay_ablation.add_argument("--prompt-ablations", default=DEFAULT_PROMPT_ABLATIONS)
+    replay_ablation.add_argument("--ensemble-ablations", default=DEFAULT_ENSEMBLE_ABLATIONS)
+    replay_ablation.add_argument("--context-ablations", default=DEFAULT_CONTEXT_ABLATIONS)
     replay_ablation.add_argument("--workers", type=int, default=40)
     replay_ablation.add_argument("--cache-dir", type=Path, default=DATA_DIR / "raw" / "hf_cache")
-    replay_ablation.add_argument("--report-dir", type=Path, default=DEFAULT_REPLAY_ABLATION_REPORT_DIR)
+    replay_ablation.add_argument("--report-dir", type=Path, default=DEFAULT_REPLAY_REPORT_DIR)
     replay_ablation.add_argument("--api-key-env", default="TOGETHER_API_KEY")
     replay_ablation.add_argument("--max-retries", type=int, default=2)
     replay_ablation.add_argument("--max-tokens", type=int, default=256)
@@ -272,18 +277,20 @@ def main(argv: list[str] | None = None) -> int:
         )
         print(json.dumps(result, sort_keys=True))
         return 0
-    if args.command == "together-replay-ablation":
+    if args.command in {"together-replay-ensemble", "together-replay-ablation"}:
         argv = [
             "--raw-index",
             str(args.raw_index),
-            "--models",
-            args.models,
-            "--prompt-variants",
-            args.prompt_variants,
-            "--contexts",
-            args.contexts,
-            "--ensemble-sizes",
-            args.ensemble_sizes,
+            "--model",
+            args.model,
+            "--agents",
+            str(args.agents),
+            "--prompt-ablations",
+            args.prompt_ablations,
+            "--ensemble-ablations",
+            args.ensemble_ablations,
+            "--context-ablations",
+            args.context_ablations,
             "--workers",
             str(args.workers),
             "--cache-dir",
@@ -299,11 +306,9 @@ def main(argv: list[str] | None = None) -> int:
             "--temperature",
             str(args.temperature),
         ]
-        if args.agents is not None:
-            argv.extend(["--agents", str(args.agents)])
         if args.quiet:
             argv.append("--quiet")
-        return together_replay_ablation_main(argv)
+        return together_replay_main(argv)
     raise AssertionError(args.command)
 
 

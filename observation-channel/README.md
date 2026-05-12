@@ -18,7 +18,7 @@ uv run --project observation-channel observation-channel gbm-trial-eval --bootst
 uv run --project observation-channel observation-channel belief-tracker-eval
 uv run --project observation-channel observation-channel belief-filter-calibration
 uv run --project observation-channel observation-channel progress-label-audit
-TOGETHER_API_KEY=... uv run --project observation-channel observation-channel together-replay-ablation --raw-index 349 --workers 40 --cache-dir observation-channel/data/raw/hf_cache
+TOGETHER_API_KEY=... uv run --project observation-channel observation-channel together-replay-ensemble --raw-index 349 --model openai/gpt-oss-120b --agents 40 --prompt-ablations remaining_work,goal_closeness --ensemble-ablations 1,5,10,20 --cache-dir observation-channel/data/raw/hf_cache --report-dir observation-channel/reports/together_replay_directional
 uv run pytest observation-channel
 ```
 
@@ -33,4 +33,4 @@ The belief-filter calibration evaluator runs EB-only alpha and event-gated filte
 
 The progress-label audit is read-only. It checks whether opened-unit progress reaches 100% while a large fraction of the trace remains, compares opened-unit, closed-unit, and step progress on selected worst traces, and writes evidence under `reports/progress_label_audit/`.
 
-The Together replay ablation replays one selected SWE-Agent trace turn by turn and writes explicit condition metadata plus stability plots under `reports/together_replay_ablation/`. It runs directional single-axis ablations instead of a full grid: model sweep at the main prompt/context, prompt sweep on `openai/gpt-oss-120b`, and ensemble-size sweep on the same main condition. The default model sweep uses the serverless `openai/gpt-oss-20b` and `openai/gpt-oss-120b`; pass `--models` to use dedicated endpoint models. Smaller ensemble-size conditions are derived by prefix-subsetting agent IDs from the max-agent run. It requires `TOGETHER_API_KEY` and uses Together's OpenAI-compatible chat endpoint.
+The Together replay ensemble replays one selected SWE-Agent trace turn by turn and writes directional condition metadata plus stability plots under `reports/together_replay_directional/`. The fixed baseline is `openai/gpt-oss-120b`, `fraction_complete`, `task_and_trace`, and `n=40`; prompt, ensemble-size, and optional context ablations each change exactly one axis from that baseline. Smaller ensemble-size conditions are derived by prefix-subsetting agent IDs from the same max-agent observer run. It requires `TOGETHER_API_KEY` and uses Together's OpenAI-compatible chat endpoint.

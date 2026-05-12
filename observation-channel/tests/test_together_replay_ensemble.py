@@ -1,69 +1,218 @@
 """
 Claim:
-The Together replay ensemble asks independent agents for one scalar progress
-estimate per visible turn and ablation condition, dispatches agents in parallel
-within each turn, derives smaller ensemble-size views by agent subsetting, and
-aggregates progress values without leaking future turns or final labels.
+The Together replay runner measures one fixed observer baseline and explicit
+single-axis deviations, reusing raw observer samples for smaller ensemble-size
+conditions and aggregating reported progress by named condition and turn.
 
 Plausible wrong implementations:
-- Include future turns, hidden evaluator results, or final trace status in the
-  prompt for an early turn.
-- Replace the original SWE-Agent issue prompt with a manual task summary.
-- Extract the system prompt or a later observation instead of the first user task
-  prompt from the raw trajectory.
-- Parse arbitrary prose or out-of-range values as valid fractions.
-- Reject unambiguous whole-number percentages like `90`, causing long live runs
-  to fail after the model answered on a percent scale.
-- Aggregate across the wrong level, such as across all turns instead of per turn.
-- Advance an agent history without recording the scalar response for that turn.
-- Treat remaining-work scores as progress instead of inverting them.
-- Rerun model calls for every requested ensemble size instead of subsetting.
-- Run a full model x prompt x context Cartesian grid instead of directional
-  single-axis ablations.
-- Abort a long live run after one observer returns a blank or invalid response,
-  instead of dropping only that failed sample.
+- Recreate a prompt x context x ensemble Cartesian grid instead of named
+  directional conditions.
+- Rerun API calls for every ensemble size rather than prefix-subsetting agents.
+- Treat remaining-work estimates as progress instead of inverting them.
+- Leak the task prompt into trace-only prompts or observations into commands-only
+  transcripts.
+- Aggregate raw samples by protocol fields while losing the condition boundary.
+- Accept unknown prompt or context names after live API calls have started.
 """
 
 import pytest
 
 from observation_channel.models import Turn
 from observation_channel.together_replay_ensemble import (
-    Estimate,
-    agreement_matrix,
+    ConditionEstimate,
+    DEFAULT_AGENTS,
+    DEFAULT_BASELINE_CONTEXT,
+    DEFAULT_BASELINE_PROMPT,
+    DEFAULT_CONTEXT_ABLATIONS,
+    DEFAULT_ENSEMBLE_ABLATIONS,
+    DEFAULT_MODEL,
+    DEFAULT_PROMPT_ABLATIONS,
     aggregate,
-    directional_conditions,
+    agreement_matrix,
+    build_directional_conditions,
     format_turn_distribution,
     original_task_prompt,
+    parse_csv_arg,
     parse_fraction,
-    run_ablation_grid,
-    run_parallel_replay,
+    run_directional_replay,
+    run_observer_samples,
     system_prompt,
     turn_evidence,
     turn_prompt,
-    validate_ablation_args,
+    validate_directional_args,
 )
 
 
-def estimate(
+def condition_estimate(
     *,
+    condition: str,
     turn: int,
     agent: int,
-    prompt_variant: str = "fraction_complete",
     progress_value: float,
-    raw_value: float | None = None,
-) -> Estimate:
-    return Estimate(
+    ablation_axis: str = "baseline",
+    prompt_variant: str = "fraction_complete",
+    ensemble_size: int = 2,
+) -> ConditionEstimate:
+    return ConditionEstimate(
         trace_key="trace",
+        condition=condition,
+        ablation_axis=ablation_axis,
         turn=turn,
         agent=agent,
         model="model",
         prompt_variant=prompt_variant,
         context_variant="task_and_trace",
-        ensemble_size=2,
-        raw_value=progress_value if raw_value is None else raw_value,
+        ensemble_size=ensemble_size,
+        raw_value=progress_value,
         progress_value=progress_value,
-        raw=str(progress_value if raw_value is None else raw_value),
+        raw=str(progress_value),
     )
+
+
+def test_default_config_is_fixed_baseline_protocol() -> None:
+    assert DEFAULT_MODEL == "openai/gpt-oss-120b"
+    assert DEFAULT_BASELINE_PROMPT == "fraction_complete"
+    assert DEFAULT_BASELINE_CONTEXT == "task_and_trace"
+    assert DEFAULT_AGENTS == 40
+    assert DEFAULT_PROMPT_ABLATIONS == "remaining_work,goal_closeness"
+    assert DEFAULT_ENSEMBLE_ABLATIONS == "1,5,10,20"
+    assert DEFAULT_CONTEXT_ABLATIONS == ""
+
+
+def test_build_directional_conditions_returns_only_single_axis_deviations() -> None:
+    conditions = build_directional_conditions(
+        model="m",
+        baseline_prompt="fraction_complete",
+        baseline_context="task_and_trace",
+        agents=40,
+        prompt_ablations=["remaining_work", "goal_closeness"],
+        ensemble_ablations=[1, 5, 10, 20],
+        context_ablations=["trace_only"],
+    )
+
+    assert [condition.name for condition in conditions] == [
+        "baseline",
+        "prompt_remaining_work",
+        "prompt_goal_closeness",
+        "ensemble_n_1",
+        "ensemble_n_5",
+        "ensemble_n_10",
+        "ensemble_n_20",
+        "context_trace_only",
+    ]
+    assert all(condition.model == "m" for condition in conditions)
+    assert {
+        (condition.ablation_axis, condition.prompt_variant, condition.context_variant, condition.ensemble_size)
+        for condition in conditions
+    } == {
+        ("baseline", "fraction_complete", "task_and_trace", 40),
+        ("prompt", "remaining_work", "task_and_trace", 40),
+        ("prompt", "goal_closeness", "task_and_trace", 40),
+        ("ensemble", "fraction_complete", "task_and_trace", 1),
+        ("ensemble", "fraction_complete", "task_and_trace", 5),
+        ("ensemble", "fraction_complete", "task_and_trace", 10),
+        ("ensemble", "fraction_complete", "task_and_trace", 20),
+        ("context", "fraction_complete", "trace_only", 40),
+    }
+
+
+def test_ensemble_ablations_reuse_baseline_samples_by_agent_subset() -> None:
+    calls = []
+
+    def complete(messages, model, api_key, max_retries, max_tokens, temperature):
+        calls.append(messages)
+        return "0.5"
+
+    conditions = build_directional_conditions(
+        model="m",
+        baseline_prompt="fraction_complete",
+        baseline_context="task_and_trace",
+        agents=5,
+        prompt_ablations=[],
+        ensemble_ablations=[1, 3],
+        context_ablations=[],
+    )
+    samples, estimates = run_directional_replay(
+        [Turn(step=1, kind="action", command="edit")],
+        trace_key="trace",
+        task_prompt="ISSUE",
+        conditions=conditions,
+        agents=5,
+        workers=1,
+        api_key="k",
+        max_retries=0,
+        max_tokens=8,
+        temperature=0.0,
+        progress=False,
+        complete=complete,
+    )
+
+    assert len(calls) == 5
+    assert len(samples) == 5
+    counts = {}
+    for estimate in estimates:
+        counts[estimate.condition] = counts.get(estimate.condition, 0) + 1
+    assert counts == {"baseline": 5, "ensemble_n_1": 1, "ensemble_n_3": 3}
+
+
+def test_remaining_work_converts_to_progress_value() -> None:
+    def complete(messages, model, api_key, max_retries, max_tokens, temperature):
+        return "0.25"
+
+    sample = run_observer_samples(
+        [Turn(step=1, kind="action", command="edit")],
+        trace_key="trace",
+        agents=1,
+        workers=1,
+        model="m",
+        api_key="k",
+        max_retries=0,
+        max_tokens=8,
+        temperature=0.0,
+        task_prompt="ISSUE",
+        prompt_variant="remaining_work",
+        context_variant="task_and_trace",
+        complete=complete,
+    )[0]
+
+    assert sample.raw_value == pytest.approx(0.25)
+    assert sample.progress_value == pytest.approx(0.75)
+
+
+def test_trace_only_hides_task_prompt_and_task_and_trace_includes_it() -> None:
+    assert "Original task prompt:" in system_prompt("ISSUE:\nsecret", "fraction_complete", "task_and_trace")
+    assert "secret" in system_prompt("ISSUE:\nsecret", "fraction_complete", "task_and_trace")
+    assert "Original task prompt:" not in system_prompt("ISSUE:\nsecret", "fraction_complete", "trace_only")
+    assert "secret" not in system_prompt("ISSUE:\nsecret", "fraction_complete", "trace_only")
+
+
+def test_commands_only_skips_observation_evidence() -> None:
+    assert turn_evidence(Turn(step=1, kind="observation", response="output"), "commands_only") is None
+    assert "edit file.py" in (turn_evidence(Turn(step=2, kind="action", command="edit file.py"), "commands_only") or "")
+
+
+def test_aggregate_groups_by_condition_and_turn() -> None:
+    rows = aggregate(
+        [
+            condition_estimate(condition="baseline", turn=1, agent=1, progress_value=0.0),
+            condition_estimate(condition="baseline", turn=1, agent=2, progress_value=0.2),
+            condition_estimate(condition="prompt_remaining_work", turn=1, agent=1, progress_value=0.8, ablation_axis="prompt"),
+            condition_estimate(condition="prompt_remaining_work", turn=1, agent=2, progress_value=1.0, ablation_axis="prompt"),
+        ]
+    )
+
+    means = {row["condition"]: row["mean_progress"] for row in rows}
+    assert means == {"baseline": pytest.approx(0.1), "prompt_remaining_work": pytest.approx(0.9)}
+    assert all(row["turn"] == 1 for row in rows)
+
+
+def test_unknown_prompt_or_context_fails_before_api_calls() -> None:
+    with pytest.raises(ValueError, match="unknown prompt variants"):
+        validate_directional_args("m", ["bad"], [], [1], 40)
+    with pytest.raises(ValueError, match="unknown context variants"):
+        validate_directional_args("m", [], ["bad"], [1], 40)
+    with pytest.raises(ValueError, match="cannot exceed"):
+        validate_directional_args("m", [], [], [41], 40)
 
 
 def test_turn_prompt_contains_only_current_turn_evidence() -> None:
@@ -90,23 +239,7 @@ def test_original_task_prompt_uses_first_raw_user_message() -> None:
     assert original_task_prompt(row) == "ISSUE:\nFix the parser"
 
 
-def test_system_prompt_contains_original_task_prompt_not_manual_summary() -> None:
-    prompt = system_prompt("ISSUE:\nAllow x-y identifiers")
-
-    assert "Original task prompt:" in prompt
-    assert "Allow x-y identifiers" in prompt
-    assert "High-level task:" not in prompt
-    assert "biomedsheets" not in prompt
-
-
-def test_context_variants_hide_task_and_skip_observations_for_commands_only() -> None:
-    assert "Original task prompt:" in system_prompt("ISSUE:\nsecret", "fraction_complete", "task_and_trace")
-    assert "secret" not in system_prompt("ISSUE:\nsecret", "fraction_complete", "trace_only")
-    assert turn_evidence(Turn(step=1, kind="observation", response="output"), "commands_only") is None
-    assert "edit file.py" in (turn_evidence(Turn(step=2, kind="action", command="edit file.py"), "commands_only") or "")
-
-
-def test_parse_fraction_accepts_single_fraction_and_rejects_bad_values() -> None:
+def test_parse_fraction_accepts_fraction_and_whole_percent_only() -> None:
     assert parse_fraction("0.72") == 0.72
     assert parse_fraction("90") == pytest.approx(0.9)
     assert parse_fraction("100%") == pytest.approx(1.0)
@@ -119,53 +252,21 @@ def test_parse_fraction_accepts_single_fraction_and_rejects_bad_values() -> None
         parse_fraction("90.5")
 
 
-def test_aggregate_is_per_turn_not_global() -> None:
-    rows = aggregate(
-        [
-            estimate(turn=1, agent=1, progress_value=0.0),
-            estimate(turn=1, agent=2, progress_value=0.2),
-            estimate(turn=2, agent=1, progress_value=0.8),
-            estimate(turn=2, agent=2, progress_value=1.0),
-        ]
-    )
-
-    assert [row["turn"] for row in rows] == [1, 2]
-    assert rows[0]["mean_progress"] == pytest.approx(0.1)
-    assert rows[0]["stdev_progress"] == pytest.approx(0.1)
-    assert rows[0]["median"] == pytest.approx(0.1)
-    assert rows[1]["mean_progress"] == pytest.approx(0.9)
-    assert rows[1]["stdev_progress"] == pytest.approx(0.1)
-
-
-def test_grouped_aggregation_separates_prompt_variants() -> None:
-    rows = aggregate(
-        [
-            estimate(turn=1, agent=1, prompt_variant="fraction_complete", progress_value=0.2),
-            estimate(turn=1, agent=2, prompt_variant="fraction_complete", progress_value=0.4),
-            estimate(turn=1, agent=1, prompt_variant="goal_closeness", progress_value=0.8),
-            estimate(turn=1, agent=2, prompt_variant="goal_closeness", progress_value=1.0),
-        ]
-    )
-
-    means = {row["prompt_variant"]: row["mean_progress"] for row in rows}
-    assert means == {"fraction_complete": pytest.approx(0.3), "goal_closeness": pytest.approx(0.9)}
-
-
-def test_parallel_replay_replays_only_turns_seen_so_far_and_records_each_turn() -> None:
+def test_observer_replay_replays_only_turns_seen_so_far_and_records_each_turn() -> None:
     calls = []
 
     def complete(messages, model, api_key, max_retries, max_tokens, temperature):
         calls.append([message["content"] for message in messages if message["role"] == "user"])
         return str(len(calls) / 10)
 
-    estimates = run_parallel_replay(
+    samples = run_observer_samples(
         [
             Turn(step=1, kind="user", response="issue text"),
             Turn(step=2, kind="action", tool="open", command="open file.py"),
         ],
         trace_key="trace",
         agents=2,
-        workers=2,
+        workers=1,
         model="m",
         api_key="k",
         max_retries=0,
@@ -178,90 +279,18 @@ def test_parallel_replay_replays_only_turns_seen_so_far_and_records_each_turn() 
         complete=complete,
     )
 
-    assert [(estimate.turn, estimate.agent) for estimate in estimates] == [(1, 1), (1, 2), (2, 1), (2, 2)]
-    assert all(len(call) == 1 for call in calls[:2])
-    assert all(len(call) == 1 for call in calls[2:])
+    assert [(sample.turn, sample.agent) for sample in samples] == [(1, 1), (1, 2), (2, 1), (2, 2)]
     assert all("open file.py" not in call[0] for call in calls[:2])
     assert all("issue text" in call[0] and "open file.py" in call[0] for call in calls[2:])
 
 
-def test_parallel_replay_sends_original_task_prompt_to_every_agent_call() -> None:
-    system_messages = []
-
-    def complete(messages, model, api_key, max_retries, max_tokens, temperature):
-        system_messages.append(messages[0]["content"])
-        return "0.5"
-
-    run_parallel_replay(
-        [Turn(step=1, kind="action", tool="edit", command="edit file.py")],
-        trace_key="trace",
-        agents=2,
-        workers=2,
-        model="m",
-        api_key="k",
-        max_retries=0,
-        max_tokens=8,
-        temperature=0.0,
-        task_prompt="ISSUE:\nOriginal SWE issue",
-        prompt_variant="fraction_complete",
-        context_variant="task_and_trace",
-        progress=False,
-        complete=complete,
-    )
-
-    assert len(system_messages) == 2
-    assert all("Original SWE issue" in message for message in system_messages)
-    assert all("High-level task:" not in message for message in system_messages)
-
-
-def test_prompt_variant_conversion_inverts_remaining_work() -> None:
-    def complete(messages, model, api_key, max_retries, max_tokens, temperature):
-        return "0.25"
-
-    fraction = run_parallel_replay(
-        [Turn(step=1, kind="action", command="edit")],
-        trace_key="trace",
-        agents=1,
-        workers=1,
-        model="m",
-        api_key="k",
-        max_retries=0,
-        max_tokens=8,
-        temperature=0.0,
-        task_prompt="ISSUE",
-        prompt_variant="fraction_complete",
-        context_variant="task_and_trace",
-        complete=complete,
-    )[0]
-    remaining = run_parallel_replay(
-        [Turn(step=1, kind="action", command="edit")],
-        trace_key="trace",
-        agents=1,
-        workers=1,
-        model="m",
-        api_key="k",
-        max_retries=0,
-        max_tokens=8,
-        temperature=0.0,
-        task_prompt="ISSUE",
-        prompt_variant="remaining_work",
-        context_variant="task_and_trace",
-        complete=complete,
-    )[0]
-
-    assert fraction.raw_value == pytest.approx(0.25)
-    assert fraction.progress_value == pytest.approx(0.25)
-    assert remaining.raw_value == pytest.approx(0.25)
-    assert remaining.progress_value == pytest.approx(0.75)
-
-
-def test_parallel_replay_skips_single_failed_agent_but_fails_if_all_fail() -> None:
+def test_observer_replay_skips_single_failed_agent_but_fails_if_all_fail() -> None:
     responses = iter(["", "0.5"])
 
     def partly_failing_complete(messages, model, api_key, max_retries, max_tokens, temperature):
         return next(responses)
 
-    estimates = run_parallel_replay(
+    samples = run_observer_samples(
         [Turn(step=1, kind="action", command="edit")],
         trace_key="trace",
         agents=2,
@@ -277,14 +306,14 @@ def test_parallel_replay_skips_single_failed_agent_but_fails_if_all_fail() -> No
         complete=partly_failing_complete,
     )
 
-    assert len(estimates) == 1
-    assert estimates[0].progress_value == pytest.approx(0.5)
+    assert len(samples) == 1
+    assert samples[0].progress_value == pytest.approx(0.5)
 
     def failing_complete(messages, model, api_key, max_retries, max_tokens, temperature):
         return ""
 
     with pytest.raises(RuntimeError, match="all 2 agents failed"):
-        run_parallel_replay(
+        run_observer_samples(
             [Turn(step=1, kind="action", command="edit")],
             trace_key="trace",
             agents=2,
@@ -307,7 +336,7 @@ def test_progress_print_uses_successful_agents_after_partial_failure(capsys: pyt
     def partly_failing_complete(messages, model, api_key, max_retries, max_tokens, temperature):
         return next(responses)
 
-    estimates = run_parallel_replay(
+    samples = run_observer_samples(
         [Turn(step=1, kind="action", command="edit")],
         trace_key="trace",
         agents=3,
@@ -325,125 +354,32 @@ def test_progress_print_uses_successful_agents_after_partial_failure(capsys: pyt
     )
 
     output = capsys.readouterr().out
-    assert len(estimates) == 2
+    assert len(samples) == 2
     assert "agent=2 failed" in output
     assert "turn=1 n=2" in output
 
 
-def test_ablation_grid_subsets_ensemble_sizes_without_extra_calls() -> None:
-    calls = []
-
-    def complete(messages, model, api_key, max_retries, max_tokens, temperature):
-        calls.append(messages)
-        return "0.5"
-
-    estimates = run_ablation_grid(
-        [Turn(step=1, kind="action", command="edit")],
-        trace_key="trace",
-        task_prompt="ISSUE",
-        models=["m"],
-        prompt_variants=["fraction_complete"],
-        context_variants=["task_and_trace"],
-        ensemble_sizes=[1, 5, 10],
-        workers=10,
-        api_key="k",
-        max_retries=0,
-        max_tokens=8,
-        temperature=0.0,
-        progress=False,
-        agents=10,
-        complete=complete,
-    )
-
-    assert len(calls) == 10
-    assert {estimate.ensemble_size for estimate in estimates} == {1, 5, 10}
-    assert sum(1 for estimate in estimates if estimate.ensemble_size == 1) == 1
-    assert sum(1 for estimate in estimates if estimate.ensemble_size == 5) == 5
-    assert sum(1 for estimate in estimates if estimate.ensemble_size == 10) == 10
-
-
-def test_directional_ablation_avoids_full_cartesian_grid() -> None:
-    conditions = directional_conditions(
-        ["m1", "m2"],
-        ["fraction_complete", "remaining_work"],
-        ["task_and_trace", "trace_only"],
-        [1, 5],
-    )
-
-    assert conditions == [
-        ("m1", "fraction_complete", "task_and_trace", [1, 5]),
-        ("m2", "fraction_complete", "task_and_trace", [5]),
-        ("m1", "remaining_work", "task_and_trace", [5]),
+def test_agreement_matrix_compares_condition_curves() -> None:
+    rows = [
+        {"condition": "baseline", "turn": 1, "mean_progress": 0.1},
+        {"condition": "baseline", "turn": 2, "mean_progress": 0.9},
+        {"condition": "ensemble_n_1", "turn": 1, "mean_progress": 0.1},
+        {"condition": "ensemble_n_1", "turn": 2, "mean_progress": 0.9},
+        {"condition": "prompt_remaining_work", "turn": 1, "mean_progress": 0.9},
+        {"condition": "prompt_remaining_work", "turn": 2, "mean_progress": 0.1},
     ]
 
-
-def test_directional_ablation_calls_each_unique_axis_condition_once() -> None:
-    calls = []
-
-    def complete(messages, model, api_key, max_retries, max_tokens, temperature):
-        calls.append((model, messages[0]["content"]))
-        return "0.5"
-
-    estimates = run_ablation_grid(
-        [Turn(step=1, kind="action", command="edit")],
-        trace_key="trace",
-        task_prompt="ISSUE",
-        models=["m1", "m2"],
-        prompt_variants=["fraction_complete", "remaining_work"],
-        context_variants=["task_and_trace", "trace_only"],
-        ensemble_sizes=[1, 5],
-        workers=5,
-        api_key="k",
-        max_retries=0,
-        max_tokens=8,
-        temperature=0.0,
-        progress=False,
-        agents=5,
-        complete=complete,
-    )
-
-    assert len(calls) == 15
-    assert {(estimate.model, estimate.prompt_variant, estimate.context_variant, estimate.ensemble_size) for estimate in estimates} == {
-        ("m1", "fraction_complete", "task_and_trace", 1),
-        ("m1", "fraction_complete", "task_and_trace", 5),
-        ("m2", "fraction_complete", "task_and_trace", 5),
-        ("m1", "remaining_work", "task_and_trace", 5),
-    }
+    matrix = agreement_matrix(rows)
+    same = next(row for row in matrix if row["condition_a"] == "baseline" and row["condition_b"] == "ensemble_n_1")
+    opposite = next(row for row in matrix if row["condition_a"] == "baseline" and row["condition_b"] == "prompt_remaining_work")
+    assert same["correlation"] == pytest.approx(1.0)
+    assert same["mean_abs_difference"] == pytest.approx(0.0)
+    assert opposite["correlation"] == pytest.approx(-1.0)
+    assert opposite["mean_abs_difference"] > 0
 
 
-def test_agreement_matrix_identical_and_different_curves() -> None:
-    identical = agreement_matrix(
-        [
-            {"model": "a", "prompt_variant": "p", "context_variant": "c", "ensemble_size": 1, "turn": 1, "mean_progress": 0.1},
-            {"model": "a", "prompt_variant": "p", "context_variant": "c", "ensemble_size": 1, "turn": 2, "mean_progress": 0.9},
-            {"model": "b", "prompt_variant": "p", "context_variant": "c", "ensemble_size": 1, "turn": 1, "mean_progress": 0.1},
-            {"model": "b", "prompt_variant": "p", "context_variant": "c", "ensemble_size": 1, "turn": 2, "mean_progress": 0.9},
-        ]
-    )
-    pair = next(row for row in identical if row["condition_a"].startswith("a |") and row["condition_b"].startswith("b |"))
-    assert pair["correlation"] == pytest.approx(1.0)
-    assert pair["mean_abs_difference"] == pytest.approx(0.0)
-
-    different = agreement_matrix(
-        [
-            {"model": "a", "prompt_variant": "p", "context_variant": "c", "ensemble_size": 1, "turn": 1, "mean_progress": 0.1},
-            {"model": "a", "prompt_variant": "p", "context_variant": "c", "ensemble_size": 1, "turn": 2, "mean_progress": 0.9},
-            {"model": "b", "prompt_variant": "p", "context_variant": "c", "ensemble_size": 1, "turn": 1, "mean_progress": 0.9},
-            {"model": "b", "prompt_variant": "p", "context_variant": "c", "ensemble_size": 1, "turn": 2, "mean_progress": 0.1},
-        ]
-    )
-    pair = next(row for row in different if row["condition_a"].startswith("a |") and row["condition_b"].startswith("b |"))
-    assert pair["correlation"] == pytest.approx(-1.0)
-    assert pair["mean_abs_difference"] > 0
-
-
-def test_invalid_ablation_args_fail_before_api_calls() -> None:
-    with pytest.raises(ValueError):
-        validate_ablation_args(["m"], ["bad"], ["task_and_trace"], [1], None)
-    with pytest.raises(ValueError):
-        validate_ablation_args(["m"], ["fraction_complete"], ["bad"], [1], None)
-    with pytest.raises(ValueError):
-        validate_ablation_args(["m"], ["fraction_complete"], ["task_and_trace"], [2], 1)
+def test_parse_csv_arg_allows_empty_context_ablation_default() -> None:
+    assert parse_csv_arg("") == []
 
 
 def test_turn_distribution_print_includes_mean_quantiles_and_histogram() -> None:

@@ -114,9 +114,9 @@ def test_empirical_bayes_eval_cli_writes_report_and_bundle(tmp_path: Path) -> No
     assert "B=400" in (report_dir / "REPORT.md").read_text(encoding="utf-8")
 
 
-def test_together_replay_ablation_cli_validates_args_before_api_key() -> None:
+def test_together_replay_ensemble_cli_validates_args_before_api_key() -> None:
     try:
-        main(["together-replay-ablation", "--prompt-variants", "unknown"])
+        main(["together-replay-ensemble", "--prompt-ablations", "unknown"])
     except ValueError as exc:
         assert "unknown prompt variants" in str(exc)
     else:
