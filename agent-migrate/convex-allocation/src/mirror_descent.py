@@ -67,7 +67,7 @@ def solve_mirror_descent(
         y = y_new
         shed = shed_achieved(problem, y)
         violation = max(0.0, problem.B_shed - shed)
-        dual = max(0.0, dual + eta_l0 / np.sqrt(t) * (problem.B_shed - shed))
+        dual = max(0.0, dual + eta_l0 / np.sqrt(t) * (problem.B_shed - shed) / problem.B_shed)
         obj = objective(problem, coeffs, y)
         if violation <= 1e-3 and obj < best_obj:
             best_obj = obj
