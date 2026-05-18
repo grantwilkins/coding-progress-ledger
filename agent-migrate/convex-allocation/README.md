@@ -50,6 +50,9 @@ Outputs are written to `convex-allocation/outputs/sweep/`:
 - `safe_shed_frontier.csv`
 - `transition_coupled_queue_failure_breakdown.csv`
 - `transition_coupled_repaired_queue_table.csv`
+- `repair_summary.csv`
+- `repair_move_breakdown.csv`
+- `repair_budget_frontier.csv`
 
 `summary.csv` marks infeasible baselines as `INFEASIBLE` and includes shed
 target, shed violation, excess shed, capacity feasibility, mirror-descent
@@ -64,6 +67,8 @@ rate at most 1%, and has p95 delay divided by class slack at most 1.0.
 The failure diagnostic adds per-request queue tracing, missed-request breakdowns
 by class, destination, and action, and a one-request rounded local repair for the
 tight 0.25x and 0.5x slack settings.
+It also reports how much repair changes the rounded convex allocation, the move
+patterns used by repair, and 5%, 10%, and 20% repair-budget frontiers.
 
 The catalog is local and hard-coded from `kv-transfer-early-experiment/FINDINGS.md`.
 It does not import that directory.
