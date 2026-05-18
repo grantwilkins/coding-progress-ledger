@@ -43,6 +43,41 @@ def shed_action_mix(problem: ProblemData, y: np.ndarray) -> dict[str, float]:
     return {"replay_shed_frac": replay / total, "state_shed_frac": state / total}
 
 
+def shed_destination_mix(problem: ProblemData, y: np.ndarray) -> np.ndarray:
+    x = move_view(y, problem)
+    moved = np.sum(x, axis=2)
+    shed = problem.tau @ moved
+    total = float(np.sum(shed))
+    return shed / total if total > 0.0 else np.zeros(problem.K)
+
+
+def allocation_diagnostics(problem: ProblemData, coeffs: Coefficients, y: np.ndarray) -> dict[str, float]:
+    x = move_view(y, problem)
+    moved_by_class = np.sum(x, axis=(1, 2))
+    moved_by_dest = np.sum(x, axis=(0, 2))
+    dest_share = shed_destination_mix(problem, y)
+    action = shed_action_mix(problem, y)
+    action_share = np.array([action["replay_shed_frac"], action["state_shed_frac"]])
+    net_util, prefill_util = utilization(problem, coeffs, y)
+    return {
+        "active_classes_moved": float(np.sum(moved_by_class > 1e-8)),
+        "active_destinations_used": float(np.sum(moved_by_dest > 1e-8)),
+        "destination_entropy": _normalized_entropy(dest_share),
+        "action_entropy": _normalized_entropy(action_share),
+        "max_net_util": float(np.max(net_util)),
+        "max_prefill_util": float(np.max(prefill_util)),
+        "replay_shed_frac": action["replay_shed_frac"],
+        "state_shed_frac": action["state_shed_frac"],
+    }
+
+
+def _normalized_entropy(p: np.ndarray) -> float:
+    positive = p[p > 0.0]
+    if positive.size <= 1:
+        return 0.0
+    return float(-np.sum(positive * np.log(positive)) / np.log(p.size))
+
+
 def assert_feasible(problem: ProblemData, coeffs: Coefficients, y: np.ndarray, shed_tol: float) -> None:
     if not np.all(y >= -1e-8):
         raise AssertionError("allocation has negative entries")

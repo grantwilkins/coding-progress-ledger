@@ -54,7 +54,8 @@ def make_problem(
     T = WORKLOAD_T.copy()
     d = WORKLOAD_D.copy()
     slack = WORKLOAD_SLACK.copy()
-    gpu_count = np.array([8.0, 8.0, 8.0]) if gpu_count is None else np.asarray(gpu_count, dtype=float)
+    default_gpu_count = gpu_count is None
+    gpu_count = np.array([8.0, 8.0, 8.0]) if default_gpu_count else np.asarray(gpu_count, dtype=float)
 
     if regime == "bandwidth-spread":
         lambda_gbps = np.array([1.0, 10.0, 100.0])
@@ -72,6 +73,21 @@ def make_problem(
         prefill_frac = np.array([0.8, 0.5, 0.2])
         h = np.zeros((T.size, 3))
         h[T >= 8192, 2] = 0.5
+    elif regime == "transition-coupled":
+        if model.name != "GLM-5":
+            raise ValueError("transition-coupled is calibrated for GLM-5")
+        if default_gpu_count:
+            gpu_count = np.array([2.0, 2.0, 2.0])
+        lambda_gbps = np.array([4.0, 6.0, 9.0])
+        net_frac = np.array([0.35, 0.35, 0.35])
+        prefill_frac = np.array([0.45, 0.45, 0.45])
+        h = np.zeros((T.size, 3))
+        h_ctx = h.copy()
+        h_kv = h.copy()
+        h_ctx[1] = np.array([0.75, 0.25, 0.0])
+        h_ctx[4] = np.array([0.05, 0.80, 0.35])
+        h_kv[2] = np.array([0.05, 0.25, 0.85])
+        h_kv[5] = np.array([0.90, 0.55, 0.15])
     else:
         raise ValueError(f"unknown regime: {regime}")
 
@@ -94,8 +110,8 @@ def make_problem(
         C_prefill=C_prefill,
         ell_net=ell_net,
         ell_prefill=ell_prefill,
-        h_ctx=h.copy(),
-        h_kv=h.copy(),
+        h_ctx=h_ctx if regime == "transition-coupled" else h.copy(),
+        h_kv=h_kv if regime == "transition-coupled" else h.copy(),
         B_shed=B_shed,
         w=w,
     )

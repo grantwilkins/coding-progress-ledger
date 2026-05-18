@@ -11,17 +11,20 @@ Plausible wrong implementations:
 - Accept capacity or shed violations as solver success.
 - Mark a partial greedy baseline as feasible after it hits capacity.
 - Claim catalog action-mix conclusions from diagnostics instead of the CVXPY oracle.
+- Let the mixed greedy baseline ignore current destination load.
+- Let the crossover baseline quietly become another coupled-load greedy solver.
+- Accept a transition-coupled scenario that is single-destination or single-action.
 """
 
 from __future__ import annotations
 
 import numpy as np
 
-from baselines import solve_replay_only
-from catalog import ModelParams, catalog_models
-from coefficients import compute_coefficients
+from baselines import solve_crossover_greedy, solve_mixed_greedy, solve_replay_only
+from catalog import ModelParams, catalog_models, get_model
+from coefficients import REPLAY, STATE, compute_coefficients
 from cvxpy_solver import solve_cvxpy
-from metrics import assert_feasible, shed_achieved, shed_action_mix
+from metrics import allocation_diagnostics, assert_feasible, shed_achieved, shed_action_mix
 from mirror_descent import solve_mirror_descent
 from problem import ProblemData, make_problem
 
@@ -121,3 +124,55 @@ def test_replay_baseline_reports_infeasible_when_capacity_blocks_target():
     assert not result.feasible
     assert result.objective is None
     assert result.shed_achieved < problem.B_shed
+
+
+def loaded_two_dest_problem() -> ProblemData:
+    model = ModelParams("loaded", 4.0, 1e12, 10.0, 0.0)
+    return ProblemData(
+        model=model,
+        regime="loaded",
+        T=np.array([10.0]),
+        d=np.array([1.0]),
+        slack=np.array([1.0]),
+        lambda_Bps=np.array([1e12, 1e12]),
+        rho_prefill=np.array([10.0, 10.0]),
+        C_net=np.array([1e15, 1e15]),
+        C_prefill=np.array([100.0, 100.0]),
+        ell_net=np.array([0.0, 0.0]),
+        ell_prefill=np.array([99.0, 0.0]),
+        h_ctx=np.zeros((1, 2)),
+        h_kv=np.zeros((1, 2)),
+        B_shed=1.0,
+    )
+
+
+def test_mixed_greedy_uses_current_load_marginal_cost():
+    result = solve_mixed_greedy(loaded_two_dest_problem())
+    assert result.allocation[0, 2] > 0.99
+
+
+def test_crossover_greedy_ignores_current_load_until_capacity():
+    result = solve_crossover_greedy(loaded_two_dest_problem())
+    assert 0.09 < result.allocation[0, 0] < 0.11
+    assert result.allocation[0, 2] > 0.89
+
+
+def test_transition_coupled_scenario_quality_gate():
+    problem = make_problem(get_model("GLM-5"), "transition-coupled")
+    coeffs = compute_coefficients(problem)
+    cvx = solve_cvxpy(problem)
+    crossover = solve_crossover_greedy(problem)
+    diag = allocation_diagnostics(problem, coeffs, cvx.y)
+    gap = (crossover.objective - cvx.objective) / max(1.0, abs(cvx.objective))
+
+    assert np.any(problem.h_ctx != problem.h_kv)
+    assert np.max(problem.h_ctx[1]) > 0.5
+    assert np.max(problem.h_kv[2]) > 0.5
+    assert coeffs.R0[4, 1, REPLAY] < coeffs.R0[4, 1, STATE]
+    assert coeffs.R0[2, 2, STATE] < coeffs.R0[2, 2, REPLAY]
+    assert np.any(np.all((problem.h_ctx == 0.0) & (problem.h_kv == 0.0), axis=1))
+    assert diag["active_destinations_used"] >= 2
+    assert min(diag["replay_shed_frac"], diag["state_shed_frac"]) >= 0.05
+    assert max(diag["max_net_util"], diag["max_prefill_util"]) > 0.7
+    assert crossover.feasible
+    assert gap >= 0.05

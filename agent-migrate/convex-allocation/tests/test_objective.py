@@ -8,6 +8,7 @@ Plausible wrong implementations:
 - Collapse context-prefix locality and KV-state locality into one coefficient.
 - Clip the log-barrier domain and return finite objectives for infeasible loads.
 - Put the shed multiplier on the wrong sign in the Lagrangian gradient.
+- Report destination allocation with request weights instead of shed weights.
 """
 
 from __future__ import annotations
@@ -18,7 +19,7 @@ from numpy.testing import assert_allclose
 from catalog import ModelParams, catalog_models
 from coefficients import REPLAY, STATE, compute_coefficients
 from cvxpy_solver import solve_cvxpy
-from metrics import shed_action_mix
+from metrics import shed_action_mix, shed_destination_mix
 from objective import lagrangian_gradient, lagrangian_value, objective, objective_gradient
 from problem import ProblemData
 
@@ -120,6 +121,31 @@ def test_shed_action_mix_is_tau_weighted_not_request_weighted():
     )
     mix = shed_action_mix(problem, np.array([[1.0, 0.0, 0.0], [0.0, 1.0, 0.0]]))
     assert_allclose([mix["replay_shed_frac"], mix["state_shed_frac"]], [1 / 11, 10 / 11])
+
+
+def test_shed_destination_mix_is_tau_weighted_not_request_weighted():
+    model = ModelParams("toy", 4.0, 100.0, 10.0, 0.0)
+    problem = ProblemData(
+        model=model,
+        regime="toy",
+        T=np.array([10.0, 100.0]),
+        d=np.array([1.0, 1.0]),
+        slack=np.ones(2),
+        lambda_Bps=np.array([1_000.0, 1_000.0]),
+        rho_prefill=np.array([1_000.0, 1_000.0]),
+        C_net=np.array([1e9, 1e9]),
+        C_prefill=np.array([1e9, 1e9]),
+        ell_net=np.array([0.0, 0.0]),
+        ell_prefill=np.array([0.0, 0.0]),
+        h_ctx=np.zeros((2, 2)),
+        h_kv=np.zeros((2, 2)),
+        B_shed=0.0,
+    )
+    mix = shed_destination_mix(
+        problem,
+        np.array([[1.0, 0.0, 0.0, 0.0, 0.0], [0.0, 0.0, 1.0, 0.0, 0.0]]),
+    )
+    assert_allclose(mix, [1 / 11, 10 / 11])
 
 
 def test_objective_and_lagrangian_gradients_match_finite_difference():

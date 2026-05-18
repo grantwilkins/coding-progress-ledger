@@ -17,15 +17,28 @@ ROOT = Path(__file__).resolve().parents[1]
 SRC = ROOT / "src"
 sys.path.insert(0, str(SRC))
 
-from baselines import solve_replay_only, solve_state_only
-from catalog import catalog_models
+from baselines import (
+    solve_crossover_greedy,
+    solve_mixed_greedy,
+    solve_replay_only,
+    solve_state_only,
+)
+from catalog import catalog_models, get_model
 from coefficients import ACTIONS, compute_coefficients
 from cvxpy_solver import solve_cvxpy
-from metrics import action_mix, shed_achieved, shed_action_mix, utilization
+from metrics import (
+    allocation_diagnostics,
+    action_mix,
+    shed_achieved,
+    shed_action_mix,
+    shed_destination_mix,
+    utilization,
+)
 from mirror_descent import solve_mirror_descent
 from problem import make_problem, saturation_diagnostics
 
 REGIMES = ("bandwidth-spread", "prefill-spread", "background-load-spread")
+TRANSITION_REGIME = "transition-coupled"
 MODEL_LABELS = {
     "DeepSeek-V4-Pro": "DeepSeek",
     "GLM-5": "GLM-5",
@@ -45,6 +58,7 @@ DEST_LABELS = {
     "bandwidth-spread": ("1 Gbps", "10 Gbps", "100 Gbps"),
     "prefill-spread": ("20% prefill load", "50% prefill load", "80% prefill load"),
     "background-load-spread": ("low network load", "balanced load", "cached context"),
+    "transition-coupled": ("4 Gbps", "6 Gbps", "9 Gbps"),
 }
 ACTION_COLORS = {
     "replay_frac": "#4c78a8",
@@ -63,7 +77,8 @@ def _best_objective_gap(hist, cvx_obj):
 
 
 def _selected_mirror_descent(problem):
-    return solve_mirror_descent(problem)
+    eta_x0 = 500.0 if problem.regime == TRANSITION_REGIME else 10.0
+    return solve_mirror_descent(problem, eta_x0=eta_x0)
 
 
 def _policy_row(model, regime, policy, result, problem, coeffs, diagnostics, cvx_obj):
@@ -75,6 +90,7 @@ def _policy_row(model, regime, policy, result, problem, coeffs, diagnostics, cvx
     y = result.allocation if hasattr(result, "allocation") else result.y
     mix = action_mix(problem, y)
     shed_mix = shed_action_mix(problem, y)
+    alloc = allocation_diagnostics(problem, coeffs, y)
     shed = shed_achieved(problem, y)
     shed_violation = max(0.0, problem.B_shed - shed)
     excess_shed = max(0.0, shed - problem.B_shed)
@@ -87,12 +103,14 @@ def _policy_row(model, regime, policy, result, problem, coeffs, diagnostics, cvx
         and shed_violation <= 1e-5
         and capacity_feasible
     )
-    rel_gap = (objective - cvx_obj) / max(1.0, abs(cvx_obj)) if feasible else None
+    obj_gap = objective - cvx_obj if feasible else None
+    rel_gap = obj_gap / max(1.0, abs(cvx_obj)) if feasible else None
     return {
         "model": model,
         "regime": regime,
         "policy": policy,
         "objective": f"{objective:.10g}" if feasible else "INFEASIBLE",
+        "objective_gap_to_cvx": f"{max(0.0, obj_gap):.10g}" if feasible else "INFEASIBLE",
         "relative_gap_to_cvx": f"{max(0.0, rel_gap):.10g}" if feasible else "INFEASIBLE",
         "shed_achieved": f"{shed:.10g}",
         "shed_target": f"{problem.B_shed:.10g}",
@@ -104,6 +122,10 @@ def _policy_row(model, regime, policy, result, problem, coeffs, diagnostics, cvx
         "alpha": f"{getattr(result, 'alpha', np.nan):.10g}",
         "eta_x0": f"{getattr(result, 'eta_x0', np.nan):.10g}",
         "bisection_iterations": f"{getattr(result, 'bisection_iterations', np.nan):.10g}",
+        "active_classes_moved": f"{alloc['active_classes_moved']:.10g}",
+        "active_destinations_used": f"{alloc['active_destinations_used']:.10g}",
+        "destination_entropy": f"{alloc['destination_entropy']:.10g}",
+        "action_entropy": f"{alloc['action_entropy']:.10g}",
         **{key: f"{value:.10g}" for key, value in mix.items()},
         **{key: f"{value:.10g}" for key, value in shed_mix.items()},
         "replay_demand_over_capacity": f"{diagnostics[0]:.10g}",
@@ -182,6 +204,114 @@ def run_sweep():
     plot_policy_objectives(cells, out)
     plot_convergence(cells, out)
     plot_crossover(out)
+    run_transition_coupled(out)
+
+
+def run_transition_coupled(out):
+    model = get_model("GLM-5")
+    problem = make_problem(model, TRANSITION_REGIME)
+    coeffs = compute_coefficients(problem)
+    diagnostics = saturation_diagnostics(problem)
+    cvx = solve_cvxpy(problem)
+    md = _selected_mirror_descent(problem)
+    crossover = solve_crossover_greedy(problem)
+    results = {
+        "CVXPY": cvx,
+        "mirror-descent-best": md,
+        "crossover-greedy": crossover,
+        "mixed-greedy": solve_mixed_greedy(problem),
+        "replay-only": solve_replay_only(problem),
+        "state-only": solve_state_only(problem),
+    }
+    _require_transition_quality(problem, coeffs, cvx, crossover)
+    rows = [
+        _policy_row(
+            model.name,
+            TRANSITION_REGIME,
+            policy,
+            result,
+            problem,
+            coeffs,
+            diagnostics,
+            cvx.objective,
+        )
+        for policy, result in results.items()
+    ]
+    _write_rows(out / "transition_coupled_policy_table.csv", rows)
+    summary = _allocation_summary_rows(problem, results)
+    _write_rows(out / "transition_coupled_allocation_summary.csv", summary)
+    _print_transition_outputs(rows, summary)
+
+
+def _require_transition_quality(problem, coeffs, cvx, crossover):
+    diag = allocation_diagnostics(problem, coeffs, cvx.y)
+    gap = (
+        (crossover.objective - cvx.objective) / max(1.0, abs(cvx.objective))
+        if crossover.feasible
+        else np.inf
+    )
+    checks = {
+        "uses_two_destinations": diag["active_destinations_used"] >= 2.0,
+        "uses_both_actions": min(diag["replay_shed_frac"], diag["state_shed_frac"]) >= 0.05,
+        "resource_pressure": max(diag["max_net_util"], diag["max_prefill_util"]) > 0.7,
+        "crossover_gap": crossover.feasible and gap >= 0.05,
+    }
+    if not all(checks.values()):
+        raise RuntimeError(f"transition-coupled quality check failed: {checks}, gap={gap:.4g}")
+
+
+def _allocation_summary_rows(problem, results):
+    rows = []
+    labels = DEST_LABELS[problem.regime]
+    for policy, result in results.items():
+        y = result.allocation if hasattr(result, "allocation") else result.y
+        action = shed_action_mix(problem, y)
+        dest = shed_destination_mix(problem, y)
+        rows.append(
+            {
+                "policy": policy,
+                "replay_shed_frac": f"{action['replay_shed_frac']:.6g}",
+                "state_shed_frac": f"{action['state_shed_frac']:.6g}",
+                **{f"{label}_shed_frac": f"{share:.6g}" for label, share in zip(labels, dest)},
+            }
+        )
+    return rows
+
+
+def _write_rows(path, rows):
+    with path.open("w", newline="") as f:
+        writer = csv.DictWriter(f, fieldnames=list(rows[0].keys()), lineterminator="\n")
+        writer.writeheader()
+        writer.writerows(rows)
+
+
+def _print_transition_outputs(rows, summary):
+    policy_cols = [
+        "policy",
+        "objective",
+        "relative_gap_to_cvx",
+        "replay_shed_frac",
+        "state_shed_frac",
+        "active_classes_moved",
+        "active_destinations_used",
+        "destination_entropy",
+        "action_entropy",
+        "max_net_util",
+        "max_prefill_util",
+        "feasible",
+    ]
+    print("\ntransition-coupled policy table")
+    _print_table(rows, policy_cols)
+    print("\ntransition-coupled allocation summary")
+    _print_table(summary, list(summary[0].keys()))
+
+
+def _print_table(rows, cols):
+    widths = {col: max(len(col), *(len(str(row[col])) for row in rows)) for col in cols}
+    print(" | ".join(col.ljust(widths[col]) for col in cols))
+    print("-+-".join("-" * widths[col] for col in cols))
+    for row in rows:
+        print(" | ".join(str(row[col]).ljust(widths[col]) for col in cols))
 
 
 def plot_headline(cells, out):
