@@ -7,6 +7,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 SRC = ROOT / "src"
+sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(SRC))
 
 from baselines import (
@@ -16,21 +17,34 @@ from baselines import (
     solve_state_only,
 )
 from catalog import get_model
-from cvxpy_solver import solve_cvxpy
+from cvxpy_solver import solve_cvxpy, solve_deadline_aware_cvxpy
+from metrics import shed_achieved
 from mirror_descent import solve_mirror_descent
 from problem import make_problem
-from queueing import fractional_queue_load_proxy, queue_metrics
+from queueing import fractional_queue_load_proxy, queue_metrics, round_allocation
+from experiments.run_queue_failure_diagnostics import repair_rounded_allocation
 
 SHED_FRACTIONS = (0.20, 0.30, 0.40, 0.50, 0.60, 0.70)
 SLACK_MULTIPLIERS = (0.25, 0.50, 1.00, 2.00)
+DEADLINE_MARGINS = (0.8, 1.0)
+REPAIR_ORACLE_POLICY = "local-repair-oracle"
 POLICIES = (
     ("CVXPY-rounded", solve_cvxpy),
+    (
+        "deadline-aware-m0.8-rounded",
+        lambda problem: solve_deadline_aware_cvxpy(problem, 0.8, shed_cap=problem.B_shed),
+    ),
+    (
+        "deadline-aware-m1.0-rounded",
+        lambda problem: solve_deadline_aware_cvxpy(problem, 1.0, shed_cap=problem.B_shed),
+    ),
     ("mirror-descent-rounded", lambda problem: solve_mirror_descent(problem, eta_x0=500.0)),
     ("crossover-greedy", solve_crossover_greedy),
     ("mixed-greedy", solve_mixed_greedy),
     ("replay-only", solve_replay_only),
     ("state-only", solve_state_only),
 )
+FRONTIER_POLICIES = tuple(policy for policy, _ in POLICIES) + (REPAIR_ORACLE_POLICY,)
 SWEEP_COLUMNS = (
     "policy",
     "shed_fraction",
@@ -64,6 +78,8 @@ FRONTIER_COLUMNS = (
     "miss_rate_at_frontier",
     "max_net_busy_at_frontier",
     "max_prefill_busy_at_frontier",
+    "replay_shed_frac_at_frontier",
+    "state_shed_frac_at_frontier",
 )
 
 
@@ -82,6 +98,7 @@ def run_safe_shed_frontier():
             )
             for policy, solver in POLICIES:
                 rows.append(_policy_row(problem, policy, solver, shed_fraction, slack_multiplier))
+            rows.append(_repair_oracle_row(problem, shed_fraction, slack_multiplier))
 
     frontier = _frontier_rows(rows)
     _write_rows(out / "shed_slack_sweep.csv", rows, SWEEP_COLUMNS)
@@ -92,16 +109,7 @@ def run_safe_shed_frontier():
 
 
 def _policy_row(problem, policy, solver, shed_fraction, slack_multiplier):
-    base = {
-        "policy": policy,
-        "shed_fraction": shed_fraction,
-        "slack_multiplier": slack_multiplier,
-        "status": "INFEASIBLE",
-        "safe": False,
-        "failure_mode": "infeasible",
-        **{column: math.nan for column in SWEEP_COLUMNS[6:]},
-    }
-    base["rounded_shed_target"] = problem.B_shed
+    base = _empty_policy_row(policy, shed_fraction, slack_multiplier, problem.B_shed)
     try:
         result = solver(problem)
     except RuntimeError:
@@ -109,7 +117,7 @@ def _policy_row(problem, policy, solver, shed_fraction, slack_multiplier):
 
     y = result.allocation if hasattr(result, "allocation") else result.y
     base["objective"] = getattr(result, "objective", math.nan)
-    if not getattr(result, "feasible", True):
+    if not getattr(result, "feasible", True) or shed_achieved(problem, y) < problem.B_shed - 1e-5:
         return base
 
     proxy = fractional_queue_load_proxy(problem, y)
@@ -125,6 +133,41 @@ def _policy_row(problem, policy, solver, shed_fraction, slack_multiplier):
         base.update({"status": "ROUNDING_FAILED", "failure_mode": "rounding artifact"})
         return base
 
+    return _complete_policy_row(base, metrics)
+
+
+def _repair_oracle_row(problem, shed_fraction, slack_multiplier):
+    base = _empty_policy_row(REPAIR_ORACLE_POLICY, shed_fraction, slack_multiplier, problem.B_shed)
+    try:
+        rounded = round_allocation(problem, solve_cvxpy(problem).y)
+        repair = repair_rounded_allocation(problem, rounded.y)
+    except (RuntimeError, ValueError):
+        return base
+    proxy = fractional_queue_load_proxy(problem, repair.y)
+    base.update(
+        {
+            "fractional_max_net_busy_proxy": proxy["fractional_max_network_busy_window"],
+            "fractional_max_prefill_busy_proxy": proxy["fractional_max_prefill_busy_window"],
+        }
+    )
+    return _complete_policy_row(base, repair.metrics)
+
+
+def _empty_policy_row(policy, shed_fraction, slack_multiplier, shed_target):
+    row = {
+        "policy": policy,
+        "shed_fraction": shed_fraction,
+        "slack_multiplier": slack_multiplier,
+        "status": "INFEASIBLE",
+        "safe": False,
+        "failure_mode": "infeasible",
+        **{column: math.nan for column in SWEEP_COLUMNS[6:]},
+    }
+    row["rounded_shed_target"] = shed_target
+    return row
+
+
+def _complete_policy_row(base, metrics):
     base.update(
         {
             "rounded_shed_achieved": metrics["rounded_shed_achieved"],
@@ -170,7 +213,7 @@ def _failure_mode(row):
     return "unsafe"
 
 
-def _frontier_rows(rows, policies=tuple(policy for policy, _ in POLICIES), slack_multipliers=SLACK_MULTIPLIERS):
+def _frontier_rows(rows, policies=FRONTIER_POLICIES, slack_multipliers=SLACK_MULTIPLIERS):
     frontier = []
     for policy in policies:
         for slack_multiplier in slack_multipliers:
@@ -199,6 +242,8 @@ def _frontier_rows(rows, policies=tuple(policy for policy, _ in POLICIES), slack
                     "miss_rate_at_frontier": row["miss_rate"],
                     "max_net_busy_at_frontier": row["max_net_busy"],
                     "max_prefill_busy_at_frontier": row["max_prefill_busy"],
+                    "replay_shed_frac_at_frontier": row["replay_shed_frac"],
+                    "state_shed_frac_at_frontier": row["state_shed_frac"],
                 }
             )
     return frontier
@@ -225,7 +270,7 @@ def _print_latex_frontier(frontier):
     print("\\begin{tabular}{lrrrr}")
     print("policy & 0.25x & 0.5x & 1x & 2x \\\\")
     print("\\hline")
-    for policy, _ in POLICIES:
+    for policy in FRONTIER_POLICIES:
         cells = []
         for slack_multiplier in SLACK_MULTIPLIERS:
             value = _frontier_value(frontier, policy, slack_multiplier)
@@ -275,6 +320,39 @@ def _print_diagnostics(frontier, rows):
         )
     else:
         print("CVXPY-rounded does not exceed crossover-greedy or either single-action frontier.")
+    _print_deadline_diagnostics(frontier, rows)
+
+
+def _print_deadline_diagnostics(frontier, rows):
+    for margin in DEADLINE_MARGINS:
+        policy = f"deadline-aware-m{margin:.1f}-rounded"
+        wins = 0
+        losses = 0
+        ties = 0
+        for row in rows:
+            if row["policy"] != "CVXPY-rounded" or row["slack_multiplier"] not in (0.25, 0.5):
+                continue
+            other = next(
+                candidate
+                for candidate in rows
+                if candidate["policy"] == policy
+                and candidate["slack_multiplier"] == row["slack_multiplier"]
+                and candidate["shed_fraction"] == row["shed_fraction"]
+            )
+            if math.isnan(row["miss_rate"]) or math.isnan(other["miss_rate"]):
+                continue
+            delta = other["miss_rate"] - row["miss_rate"]
+            wins += delta < -1e-12
+            losses += delta > 1e-12
+            ties += abs(delta) <= 1e-12
+        frontier_values = [
+            _frontier_value(frontier, policy, slack_multiplier)
+            for slack_multiplier in SLACK_MULTIPLIERS
+        ]
+        print(
+            f"{policy} tight-slack miss-rate comparison vs CVXPY-rounded: "
+            f"{wins} lower, {ties} tied, {losses} higher; frontier={frontier_values}."
+        )
 
 
 def _cvx_failure_after_frontier(rows, cvx_frontier, slack_multiplier):

@@ -1,7 +1,8 @@
 """
 Claim:
 The CVXPY oracle and mirror descent with scalar bisection solve the same convex
-relaxation up to objective and feasibility tolerances.
+relaxation up to objective and feasibility tolerances. The deadline-aware CVXPY
+planner maximizes shed under cumulative per-destination slack capacity.
 
 Plausible wrong implementations:
 - Give mirror descent a penalty objective that differs from the CVXPY problem.
@@ -14,6 +15,9 @@ Plausible wrong implementations:
 - Let the mixed greedy baseline ignore current destination load.
 - Let the crossover baseline quietly become another coupled-load greedy solver.
 - Accept a transition-coupled scenario that is single-destination or single-action.
+- Use full window capacity instead of available deadline-rate capacity.
+- Enforce slack buckets as disjoint bins instead of cumulative thresholds.
+- Ignore the evaluation shed cap when scanning a safe-shed frontier.
 """
 
 from __future__ import annotations
@@ -23,7 +27,7 @@ import numpy as np
 from baselines import solve_crossover_greedy, solve_mixed_greedy, solve_replay_only
 from catalog import ModelParams, catalog_models, get_model
 from coefficients import REPLAY, STATE, compute_coefficients
-from cvxpy_solver import solve_cvxpy
+from cvxpy_solver import solve_cvxpy, solve_deadline_aware_cvxpy
 from metrics import allocation_diagnostics, assert_feasible, shed_achieved, shed_action_mix
 from mirror_descent import solve_mirror_descent
 from problem import ProblemData, make_problem
@@ -52,6 +56,26 @@ def small_problem() -> ProblemData:
     )
 
 
+def deadline_rate_problem() -> ProblemData:
+    model = ModelParams("deadline", 1.0, 1.0, 10.0, 0.0)
+    return ProblemData(
+        model=model,
+        regime="deadline",
+        T=np.array([10.0, 10.0]),
+        d=np.array([1.0, 1.0]),
+        slack=np.array([1.0, 100.0]),
+        lambda_Bps=np.array([10.0]),
+        rho_prefill=np.array([1_000_000.0]),
+        C_net=np.array([100.0]),
+        C_prefill=np.array([10_000_000.0]),
+        ell_net=np.array([0.0]),
+        ell_prefill=np.array([0.0]),
+        h_ctx=np.zeros((2, 1)),
+        h_kv=np.zeros((2, 1)),
+        B_shed=0.0,
+    )
+
+
 def test_cvxpy_and_mirror_descent_agree_on_small_instance():
     problem = small_problem()
     coeffs = compute_coefficients(problem)
@@ -71,6 +95,25 @@ def test_larger_alpha_moves_more_work_on_small_instance():
     high_alpha_shed = low.history["shed"][low.history["alpha"] == 1.0][-1]
     zero_alpha_shed = low.history["shed"][low.history["alpha"] == 0.0][-1]
     assert high_alpha_shed > zero_alpha_shed
+
+
+def test_deadline_aware_solver_uses_available_rate_by_cumulative_slack_threshold():
+    problem = deadline_rate_problem()
+
+    tight = solve_deadline_aware_cvxpy(problem, deadline_margin=0.5)
+    loose = solve_deadline_aware_cvxpy(problem, deadline_margin=1.0)
+    moved = np.sum(tight.y[:, : compute_coefficients(problem).M], axis=1)
+
+    np.testing.assert_allclose(moved, [0.5, 1.0], atol=1e-4)
+    np.testing.assert_allclose(tight.objective, 1.5, atol=1e-4)
+    np.testing.assert_allclose(loose.objective, 2.0, atol=1e-4)
+
+
+def test_deadline_aware_solver_respects_shed_cap_for_frontier_scans():
+    problem = deadline_rate_problem()
+    result = solve_deadline_aware_cvxpy(problem, deadline_margin=1.0, shed_cap=1.25)
+
+    np.testing.assert_allclose(shed_achieved(problem, result.y), 1.25, atol=1e-4)
 
 
 def test_mirror_descent_preserves_glm_transition_mix():

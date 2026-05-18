@@ -2,13 +2,14 @@
 Claim:
 The safe-shed frontier reports the largest rounded queue-safe shed fraction for
 each policy and slack multiplier, using the requested miss and normalized-delay
-safety definition.
+safety definition, and carries the replay/state shed share at the frontier.
 
 Plausible wrong implementations:
 - Treat raw p95 delay as the deadline-normalized p95 delay.
 - Ignore rounded under-shed when marking a row safe.
 - Report the first safe shed fraction instead of the largest safe fraction.
 - Classify rounded under-shed as a resource bottleneck instead of a rounding artifact.
+- Drop the action-mix diagnostics from the frontier row.
 """
 
 from __future__ import annotations
@@ -45,6 +46,8 @@ def test_frontier_uses_largest_safe_shed_fraction_and_marks_none_safe():
 
     assert frontier[0]["max_safe_shed_fraction"] == 0.4
     assert frontier[0]["p95_delay_at_frontier"] == 4.0
+    assert frontier[0]["replay_shed_frac_at_frontier"] == 0.25
+    assert frontier[0]["state_shed_frac_at_frontier"] == 0.75
     assert frontier[1]["max_safe_shed_fraction"] == "UNSAFE"
 
 
@@ -91,4 +94,6 @@ def _row(policy, slack_multiplier, shed_fraction, safe):
         "miss_rate": 0.0,
         "max_net_busy": 0.2,
         "max_prefill_busy": 0.3,
+        "replay_shed_frac": 0.25,
+        "state_shed_frac": 0.75,
     }

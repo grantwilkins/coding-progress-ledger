@@ -21,8 +21,8 @@ from baselines import (
 )
 from catalog import get_model
 from coefficients import ACTIONS, compute_coefficients
-from cvxpy_solver import solve_cvxpy
-from metrics import shed_action_mix, shed_destination_mix, utilization
+from cvxpy_solver import solve_cvxpy, solve_deadline_aware_cvxpy
+from metrics import shed_achieved, shed_action_mix, shed_destination_mix, utilization
 from mirror_descent import solve_mirror_descent
 from objective import objective
 from problem import make_problem
@@ -32,6 +32,14 @@ SHED_FRACTIONS = (0.20, 0.30, 0.40, 0.50, 0.60, 0.70)
 TIGHT_SLACK_MULTIPLIERS = (0.25, 0.50)
 REPAIR_BUDGET_FRACTIONS = (0.05, 0.10, 0.20)
 POLICIES = (
+    (
+        "deadline-aware-m0.8-rounded",
+        lambda problem: solve_deadline_aware_cvxpy(problem, 0.8, shed_cap=problem.B_shed),
+    ),
+    (
+        "deadline-aware-m1.0-rounded",
+        lambda problem: solve_deadline_aware_cvxpy(problem, 1.0, shed_cap=problem.B_shed),
+    ),
     ("mirror-descent-rounded", lambda problem: solve_mirror_descent(problem, eta_x0=500.0)),
     ("crossover-greedy", solve_crossover_greedy),
     ("mixed-greedy", solve_mixed_greedy),
@@ -298,6 +306,8 @@ def _solver_queue(policy, solver, problem, shed_fraction, slack_multiplier):
     if not getattr(result, "feasible", True):
         return base, ()
     y = result.allocation if hasattr(result, "allocation") else result.y
+    if shed_achieved(problem, y) < problem.B_shed - 1e-5:
+        return base, ()
     rounded = round_allocation(problem, y)
     metrics, trace = evaluate_rounded_queue_trace(problem, rounded.y)
     return _queue_row(policy, shed_fraction, slack_multiplier, "OK", metrics), trace
