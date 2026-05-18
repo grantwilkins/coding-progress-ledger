@@ -1,11 +1,12 @@
 """
 Claim:
-The CVXPY oracle and primal-dual mirror descent solve the same convex relaxation
-up to objective and feasibility tolerances.
+The CVXPY oracle and mirror descent with scalar bisection solve the same convex
+relaxation up to objective and feasibility tolerances.
 
 Plausible wrong implementations:
 - Give mirror descent a penalty objective that differs from the CVXPY problem.
-- Use the wrong shed-gradient sign, so the dual update rewards staying.
+- Use the wrong shed-gradient sign, so larger alpha rewards staying.
+- Update the wrong bisection bound and return an infeasible allocation.
 - Compare allocations entrywise even when equivalent optima can differ.
 - Accept capacity or shed violations as solver success.
 - Mark a partial greedy baseline as feasible after it hits capacity.
@@ -20,7 +21,7 @@ from baselines import solve_replay_only
 from catalog import ModelParams, catalog_models
 from coefficients import compute_coefficients
 from cvxpy_solver import solve_cvxpy
-from metrics import assert_feasible, shed_action_mix
+from metrics import assert_feasible, shed_achieved, shed_action_mix
 from mirror_descent import solve_mirror_descent
 from problem import ProblemData, make_problem
 
@@ -52,13 +53,34 @@ def test_cvxpy_and_mirror_descent_agree_on_small_instance():
     problem = small_problem()
     coeffs = compute_coefficients(problem)
     cvx = solve_cvxpy(problem)
-    md = solve_mirror_descent(problem, iterations=5000, eta_x0=2.0, eta_l0=0.2, max_backtracks=20)
+    md = solve_mirror_descent(problem, iterations=700, bisection_iterations=12)
     rel_gap = abs(md.objective - cvx.objective) / max(1.0, abs(cvx.objective))
     assert rel_gap < 1e-3
     assert_feasible(problem, coeffs, md.y, shed_tol=1e-3)
     infeasible = md.history["shed_violation"] > 1e-5
     assert np.all(np.isnan(md.history["feasible_objective"][infeasible]))
     assert np.all(np.diff(md.history["best_feasible_objective"]) <= 1e-12)
+
+
+def test_larger_alpha_moves_more_work_on_small_instance():
+    problem = small_problem()
+    low = solve_mirror_descent(problem, iterations=250, bisection_iterations=1)
+    high_alpha_shed = low.history["shed"][low.history["alpha"] == 1.0][-1]
+    zero_alpha_shed = low.history["shed"][low.history["alpha"] == 0.0][-1]
+    assert high_alpha_shed > zero_alpha_shed
+
+
+def test_mirror_descent_preserves_glm_transition_mix():
+    model = next(model for model in catalog_models() if model.name == "GLM-5")
+    problem = make_problem(model, "bandwidth-spread")
+    cvx = solve_cvxpy(problem)
+    md = solve_mirror_descent(problem, iterations=1000, bisection_iterations=12)
+    gap = max(0.0, (md.objective - cvx.objective) / max(1.0, abs(cvx.objective)))
+    cvx_mix = shed_action_mix(problem, cvx.y)
+    md_mix = shed_action_mix(problem, md.y)
+    assert gap < 2e-3
+    assert shed_achieved(problem, md.y) >= problem.B_shed - 1e-5
+    assert abs(md_mix["replay_shed_frac"] - cvx_mix["replay_shed_frac"]) < 0.08
 
 
 def test_cvxpy_catalog_action_mix_matches_final_claim():

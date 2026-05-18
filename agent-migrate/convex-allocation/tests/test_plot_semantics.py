@@ -1,35 +1,28 @@
 """
 Claim:
-Convergence plots report real feasibility residuals, with semilog views masking
-zero residuals instead of drawing artificial positive floors.
+Convergence plots report the best feasible original-objective gap to the CVXPY
+oracle, not a shed or capacity feasibility residual.
 
 Plausible wrong implementations:
-- Clip zero feasibility gaps to a fake positive value for semilog plotting.
-- Use only shed violation and ignore capacity violations.
-- Sum constraint violations instead of reporting the maximum normalized residual.
+- Plot the penalized objective instead of the original objective.
+- Turn infeasible or missing best-feasible values into finite plotted gaps.
+- Plot signed solver noise below the oracle as a negative objective gap.
 """
 
 from __future__ import annotations
 
-from types import SimpleNamespace
-
 import numpy as np
 
-from experiments.run_catalog_sweep import _feasibility_gap, _positive_for_semilog
+from experiments.run_catalog_sweep import _best_objective_gap
 
 
-def test_semilog_masks_nonpositive_values_without_changing_positive_gaps():
-    plotted = _positive_for_semilog(np.array([-1.0, 0.0, 1e-3]))
-    assert np.isnan(plotted[0])
-    assert np.isnan(plotted[1])
-    assert plotted[2] == 1e-3
+def test_best_objective_gap_keeps_missing_feasible_iterates_masked():
+    hist = {"best_feasible_objective": np.array([np.nan, 11.0])}
+    gap = _best_objective_gap(hist, 10.0)
+    assert np.isnan(gap[0])
+    assert gap[1] == 0.1
 
 
-def test_feasibility_gap_is_max_normalized_constraint_violation():
-    problem = SimpleNamespace(B_shed=10.0)
-    hist = {
-        "shed_violation": np.array([0.0, 2.0, 1.0]),
-        "max_net_util": np.array([0.9, 1.1, 0.8]),
-        "max_prefill_util": np.array([1.2, 0.95, 1.05]),
-    }
-    np.testing.assert_allclose(_feasibility_gap(problem, hist), [0.2, 0.2, 0.1])
+def test_best_objective_gap_clips_solver_noise_below_oracle():
+    hist = {"best_feasible_objective": np.array([9.999999, 10.5])}
+    np.testing.assert_allclose(_best_objective_gap(hist, 10.0), [0.0, 0.05])

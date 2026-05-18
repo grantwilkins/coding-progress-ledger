@@ -32,11 +32,19 @@ def objective_gradient(problem: ProblemData, coeffs: Coefficients, y: np.ndarray
     return grad
 
 
+def penalized_objective(problem: ProblemData, coeffs: Coefficients, y: np.ndarray, alpha: float) -> float:
+    return objective(problem, coeffs, y) - alpha * shed_achieved(problem, y)
+
+
+def penalized_gradient(problem: ProblemData, coeffs: Coefficients, y: np.ndarray, alpha: float) -> np.ndarray:
+    grad = objective_gradient(problem, coeffs, y)
+    grad[:, : coeffs.M] -= alpha * problem.tau[:, None]
+    return grad
+
+
 def lagrangian_value(problem: ProblemData, coeffs: Coefficients, y: np.ndarray, dual: float) -> float:
-    return objective(problem, coeffs, y) + dual * (problem.B_shed - shed_achieved(problem, y))
+    return penalized_objective(problem, coeffs, y, dual) + dual * problem.B_shed
 
 
 def lagrangian_gradient(problem: ProblemData, coeffs: Coefficients, y: np.ndarray, dual: float) -> np.ndarray:
-    grad = objective_gradient(problem, coeffs, y)
-    grad[:, : coeffs.M] -= dual * problem.tau[:, None]
-    return grad
+    return penalized_gradient(problem, coeffs, y, dual)

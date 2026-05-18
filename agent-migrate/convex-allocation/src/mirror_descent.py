@@ -5,7 +5,7 @@ from dataclasses import dataclass
 import numpy as np
 from coefficients import Coefficients, compute_coefficients
 from metrics import assert_feasible, resource_loads, shed_achieved, utilization
-from objective import lagrangian_gradient, objective
+from objective import objective, penalized_gradient
 from problem import ProblemData
 
 
@@ -13,15 +13,10 @@ from problem import ProblemData
 class MirrorDescentResult:
     y: np.ndarray
     objective: float
-    dual: float
+    alpha: float
     history: dict[str, np.ndarray]
-    current_y: np.ndarray
-    best_feasible_y: np.ndarray
-    average_y: np.ndarray
-    average_objective: float
-    average_feasible: bool
     eta_x0: float
-    eta_l0: float
+    bisection_iterations: int
     feasible: bool = True
 
 
@@ -29,6 +24,18 @@ def _softmax_rows(z: np.ndarray, d: np.ndarray) -> np.ndarray:
     z = z - np.max(z, axis=1, keepdims=True)
     p = np.exp(z)
     return d[:, None] * p / np.sum(p, axis=1, keepdims=True)
+
+
+def _interior_y(problem: ProblemData, coeffs: Coefficients) -> np.ndarray:
+    move_frac = 1e-3
+    for _ in range(12):
+        y = np.zeros((problem.G, coeffs.M + 1))
+        y[:, : coeffs.M] = problem.d[:, None] * move_frac / coeffs.M
+        y[:, -1] = problem.d * (1.0 - move_frac)
+        if np.isfinite(objective(problem, coeffs, y)):
+            return y
+        move_frac *= 0.1
+    raise RuntimeError("could not build an interior mirror-descent start")
 
 
 def _initial_y(problem: ProblemData, coeffs: Coefficients) -> np.ndarray:
@@ -83,110 +90,105 @@ def _stats(
     u_net, u_prefill = utilization(problem, coeffs, y)
     max_net = float(np.max(u_net))
     max_prefill = float(np.max(u_prefill))
-    return shed, violation, excess, max_net, max_prefill, violation <= shed_tol
+    return (
+        shed,
+        violation,
+        excess,
+        max_net,
+        max_prefill,
+        violation <= shed_tol and max_net < 1.0 and max_prefill < 1.0,
+    )
 
 
 def solve_mirror_descent(
     problem: ProblemData,
-    iterations: int = 10000,
-    eta_x0: float = 0.05,
-    eta_l0: float = 0.1,
-    max_backtracks: int = 10,
+    iterations: int = 1500,
+    eta_x0: float = 10.0,
+    max_backtracks: int = 30,
     shed_tol: float = 1e-5,
+    bisection_iterations: int = 16,
 ) -> MirrorDescentResult:
     coeffs = compute_coefficients(problem)
-    y = _initial_y(problem, coeffs)
-    dual = 0.0
-    best_y = y.copy()
+    start_y = _interior_y(problem, coeffs)
+    best_y = _initial_y(problem, coeffs)
     best_obj = objective(problem, coeffs, best_y)
-    avg_y = y.copy()
-    avg_obj = best_obj
-    avg_shed = shed_achieved(problem, avg_y)
-    obj_hist = []
-    feasible_obj_hist = []
-    best_feasible_hist = []
-    avg_obj_hist = []
-    avg_feasible_obj_hist = []
-    viol_hist = []
-    excess_hist = []
-    shed_hist = []
-    net_util_hist = []
-    prefill_util_hist = []
-    dual_hist = []
-    avg_viol_hist = []
-    avg_excess_hist = []
+    best_alpha = np.nan
+    hist: dict[str, list[float]] = {
+        "objective": [],
+        "feasible_objective": [],
+        "best_feasible_objective": [],
+        "shed_violation": [],
+        "excess_shed": [],
+        "shed": [],
+        "max_net_util": [],
+        "max_prefill_util": [],
+        "alpha": [],
+    }
 
-    for t in range(1, iterations + 1):
-        grad = lagrangian_gradient(problem, coeffs, y, dual)
-        base_step = eta_x0 / np.sqrt(t)
-        log_y = np.log(np.maximum(y, 1e-300))
-        for bt in range(max_backtracks + 1):
-            step = base_step / (2**bt)
-            y_new = _softmax_rows(log_y - step * grad, problem.d)
-            if np.isfinite(objective(problem, coeffs, y_new)):
-                break
-        else:
-            raise RuntimeError(
-                "mirror descent backtracking could not find a feasible step"
+    def run_alpha(alpha: float) -> float:
+        nonlocal best_alpha, best_obj, best_y
+        y = start_y.copy()
+        for t in range(1, iterations + 1):
+            grad = penalized_gradient(problem, coeffs, y, alpha)
+            log_y = np.log(np.maximum(y, 1e-300))
+            base_step = eta_x0 / np.sqrt(t)
+            for bt in range(max_backtracks + 1):
+                step = base_step / (2**bt)
+                y_new = _softmax_rows(log_y - step * grad, problem.d)
+                if np.isfinite(objective(problem, coeffs, y_new)):
+                    break
+            else:
+                raise RuntimeError("mirror descent could not find a feasible step")
+
+            y = y_new
+            obj = objective(problem, coeffs, y)
+            shed, violation, excess, max_net, max_prefill, feasible = _stats(
+                problem, coeffs, y, shed_tol
             )
+            if feasible and obj < best_obj:
+                best_y = y.copy()
+                best_obj = obj
+                best_alpha = alpha
 
-        y = y_new
-        avg_y += (y - avg_y) / (t + 1)
-        shed, violation, excess, max_net, max_prefill, feasible = _stats(
-            problem, coeffs, y, shed_tol
-        )
-        dual = max(
-            0.0, dual + eta_l0 / np.sqrt(t) * (problem.B_shed - shed) / problem.B_shed
-        )
-        obj = objective(problem, coeffs, y)
-        avg_obj = objective(problem, coeffs, avg_y)
-        avg_shed, avg_violation, avg_excess, _, _, avg_feasible = _stats(
-            problem, coeffs, avg_y, shed_tol
-        )
-        if feasible and obj < best_obj:
-            best_obj = obj
-            best_y = y.copy()
+            hist["objective"].append(obj)
+            hist["feasible_objective"].append(obj if feasible else np.nan)
+            hist["best_feasible_objective"].append(best_obj)
+            hist["shed_violation"].append(violation)
+            hist["excess_shed"].append(excess)
+            hist["shed"].append(shed)
+            hist["max_net_util"].append(max_net)
+            hist["max_prefill_util"].append(max_prefill)
+            hist["alpha"].append(alpha)
+        return shed_achieved(problem, y)
 
-        obj_hist.append(obj)
-        feasible_obj_hist.append(obj if feasible else np.nan)
-        best_feasible_hist.append(best_obj)
-        avg_obj_hist.append(avg_obj)
-        avg_feasible_obj_hist.append(avg_obj if avg_feasible else np.nan)
-        viol_hist.append(violation)
-        excess_hist.append(excess)
-        shed_hist.append(shed)
-        net_util_hist.append(max_net)
-        prefill_util_hist.append(max_prefill)
-        dual_hist.append(dual)
-        avg_viol_hist.append(avg_violation)
-        avg_excess_hist.append(avg_excess)
+    lo = 0.0
+    shed_lo = run_alpha(lo)
+    hi = 1.0
+    shed_hi = shed_lo
+    while shed_hi < problem.B_shed - shed_tol:
+        shed_hi = run_alpha(hi)
+        if shed_hi < problem.B_shed - shed_tol:
+            lo = hi
+            hi *= 2.0
+        if hi > 1e6:
+            raise RuntimeError("could not bracket shed target with scalar multiplier")
 
-    avg_feasible = avg_shed >= problem.B_shed - shed_tol and np.isfinite(avg_obj)
+    for _ in range(bisection_iterations):
+        alpha = 0.5 * (lo + hi)
+        shed = run_alpha(alpha)
+        if shed < problem.B_shed - shed_tol:
+            lo = alpha
+        else:
+            hi = alpha
+
+    if not np.isfinite(best_alpha):
+        best_alpha = hi
     assert_feasible(problem, coeffs, best_y, shed_tol=shed_tol)
     return MirrorDescentResult(
         best_y,
         best_obj,
-        dual,
-        {
-            "objective": np.asarray(obj_hist),
-            "feasible_objective": np.asarray(feasible_obj_hist),
-            "best_feasible_objective": np.asarray(best_feasible_hist),
-            "average_objective": np.asarray(avg_obj_hist),
-            "average_feasible_objective": np.asarray(avg_feasible_obj_hist),
-            "shed_violation": np.asarray(viol_hist),
-            "excess_shed": np.asarray(excess_hist),
-            "shed": np.asarray(shed_hist),
-            "max_net_util": np.asarray(net_util_hist),
-            "max_prefill_util": np.asarray(prefill_util_hist),
-            "dual": np.asarray(dual_hist),
-            "average_shed_violation": np.asarray(avg_viol_hist),
-            "average_excess_shed": np.asarray(avg_excess_hist),
-        },
-        y,
-        best_y,
-        avg_y,
-        avg_obj,
-        avg_feasible,
+        best_alpha,
+        {key: np.asarray(value) for key, value in hist.items()},
         eta_x0,
-        eta_l0,
+        bisection_iterations,
     )

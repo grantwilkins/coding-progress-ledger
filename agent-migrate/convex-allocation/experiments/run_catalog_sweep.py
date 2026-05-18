@@ -52,42 +52,18 @@ ACTION_COLORS = {
     "stay_frac": "#c9c2bd",
 }
 REGIME_XLABELS = ("bandwidth", "prefill load", "background load")
-MD_STEP_SIZES = ((0.5, 0.2), (1.0, 0.2), (2.0, 0.2), (1.0, 1.0))
 
 
 def _relative_gap(values, cvx_obj):
     return np.maximum((values - cvx_obj) / max(1.0, abs(cvx_obj)), 0.0)
 
 
-def _shed_residual(problem, shed):
-    return (shed - problem.B_shed) / problem.B_shed
-
-
-def _feasibility_gap(problem, hist):
-    shed_gap = hist["shed_violation"] / problem.B_shed
-    net_gap = np.maximum(hist["max_net_util"] - 1.0, 0.0)
-    prefill_gap = np.maximum(hist["max_prefill_util"] - 1.0, 0.0)
-    return np.maximum.reduce([shed_gap, net_gap, prefill_gap])
-
-
-def _positive_for_semilog(values):
-    positive = np.asarray(values, dtype=float).copy()
-    positive[positive <= 0.0] = np.nan
-    return positive
+def _best_objective_gap(hist, cvx_obj):
+    return _relative_gap(np.asarray(hist["best_feasible_objective"], dtype=float), cvx_obj)
 
 
 def _selected_mirror_descent(problem):
-    runs = [
-        solve_mirror_descent(
-            problem,
-            iterations=5000,
-            eta_x0=eta_x0,
-            eta_l0=eta_l0,
-            max_backtracks=20,
-        )
-        for eta_x0, eta_l0 in MD_STEP_SIZES
-    ]
-    return min(runs, key=lambda result: result.objective)
+    return solve_mirror_descent(problem)
 
 
 def _policy_row(model, regime, policy, result, problem, coeffs, diagnostics, cvx_obj):
@@ -125,9 +101,9 @@ def _policy_row(model, regime, policy, result, problem, coeffs, diagnostics, cvx
         "max_net_util": f"{float(np.max(net_util)):.10g}",
         "max_prefill_util": f"{float(np.max(prefill_util)):.10g}",
         "capacity_feasible": str(capacity_feasible),
-        "final_dual": f"{getattr(result, 'dual', np.nan):.10g}",
+        "alpha": f"{getattr(result, 'alpha', np.nan):.10g}",
         "eta_x0": f"{getattr(result, 'eta_x0', np.nan):.10g}",
-        "eta_l0": f"{getattr(result, 'eta_l0', np.nan):.10g}",
+        "bisection_iterations": f"{getattr(result, 'bisection_iterations', np.nan):.10g}",
         **{key: f"{value:.10g}" for key, value in mix.items()},
         **{key: f"{value:.10g}" for key, value in shed_mix.items()},
         "replay_demand_over_capacity": f"{diagnostics[0]:.10g}",
@@ -140,6 +116,8 @@ def _log_run(model, regime, problem, coeffs, diagnostics, cvx, md):
     net_util, prefill_util = utilization(problem, coeffs, md.y)
     gap = max(0.0, (md.objective - cvx.objective) / max(1.0, abs(cvx.objective)))
     shed = shed_achieved(problem, md.y)
+    md_mix = shed_action_mix(problem, md.y)
+    cvx_mix = shed_action_mix(problem, cvx.y)
     print(
         f"{model.name} / {regime}: diagnostics replay_demand/cap={diagnostics[0]:.3f}, "
         f"state_bytes/cap={diagnostics[1]:.3f}"
@@ -150,7 +128,8 @@ def _log_run(model, regime, problem, coeffs, diagnostics, cvx, md):
         f"relative_gap={gap:.3g}; shed={shed:.6g}/{problem.B_shed:.6g}; "
         f"max_net_util={float(np.max(net_util)):.3f}; "
         f"max_prefill_util={float(np.max(prefill_util)):.3f}; "
-        f"final_dual={md.dual:.3g}; eta=({md.eta_x0:g}, {md.eta_l0:g})"
+        f"alpha={md.alpha:.3g}; "
+        f"replay_shed MD/CVXPY={md_mix['replay_shed_frac']:.3f}/{cvx_mix['replay_shed_frac']:.3f}"
     )
 
 
@@ -202,8 +181,6 @@ def run_sweep():
     plot_utilization(cells, out)
     plot_policy_objectives(cells, out)
     plot_convergence(cells, out)
-    plot_convergence_grid(cells, out)
-    plot_semilog_feasibility_gap(cells, out)
     plot_crossover(out)
 
 
@@ -407,95 +384,24 @@ def plot_policy_objectives(cells, out):
 
 
 def plot_convergence(cells, out):
-    key = ("GLM-5", "prefill-spread")
-    problem, _, results = cells[key]
+    key = ("GLM-5", "bandwidth-spread")
+    _, _, results = cells[key]
     hist = results["mirror-descent-best"].history
     cvx_obj = results["CVXPY"].objective
-    t = np.arange(1, hist["shed"].size + 1)
-    current_gap = _relative_gap(hist["feasible_objective"], cvx_obj)
-    best_gap = _relative_gap(hist["best_feasible_objective"], cvx_obj)
-    shed_residual = _shed_residual(problem, hist["shed"])
-    fig, axes = plt.subplots(
-        2, 1, figsize=(8.8, 6.4), sharex=True, constrained_layout=True
-    )
-    axes[0].plot(
+    t = np.arange(1, hist["best_feasible_objective"].size + 1)
+    best_gap = _best_objective_gap(hist, cvx_obj)
+    fig, ax = plt.subplots(figsize=(8.8, 4.8), constrained_layout=True)
+    ax.plot(
         t,
-        current_gap,
+        best_gap,
         color=MODEL_COLORS[key[0]],
-        alpha=0.35,
-        linewidth=1.4,
-        label="current feasible",
+        linewidth=2.4,
     )
-    axes[0].plot(t, best_gap, color=MODEL_COLORS[key[0]], linewidth=2.4, label="best")
-    axes[0].set_ylabel("objective gap")
-    axes[0].set_title("Mirror descent diagnostics against the CVXPY oracle")
-    axes[0].legend(frameon=False)
-    axes[1].plot(t, shed_residual, color=MODEL_COLORS[key[0]], linewidth=2.0)
-    axes[1].axhline(0.0, color="black", linewidth=1, linestyle="--")
-    axes[1].set_xlabel("iteration")
-    axes[1].set_ylabel("(shed - target) / target")
+    ax.set_xlabel("gradient evaluations")
+    ax.set_ylabel("best feasible objective gap to CVXPY")
+    ax.set_title("Mirror descent with scalar search on the GLM-5 transition case")
+    ax.set_ylim(bottom=0.0)
     fig.savefig(out / "convergence_one_scenario.png", dpi=200)
-    plt.close(fig)
-
-
-def plot_convergence_grid(cells, out):
-    regime = "prefill-spread"
-    fig, axes = plt.subplots(
-        2, 1, figsize=(8, 6.2), sharex=True, constrained_layout=True
-    )
-    for model in catalog_models():
-        _, _, results = cells[(model.name, regime)]
-        cvx_obj = results["CVXPY"].objective
-        hist = results["mirror-descent-best"].history
-        gap = _relative_gap(hist["best_feasible_objective"], cvx_obj)
-        gap[~np.isfinite(gap)] = np.nan
-        axes[0].plot(
-            np.arange(1, gap.size + 1),
-            gap,
-            color=MODEL_COLORS[model.name],
-            linewidth=2.4,
-            label=MODEL_LABELS[model.name],
-        )
-        shed_residual = _shed_residual(cells[(model.name, regime)][0], hist["shed"])
-        axes[1].plot(
-            np.arange(1, shed_residual.size + 1),
-            shed_residual,
-            color=MODEL_COLORS[model.name],
-            linewidth=2.0,
-            label=MODEL_LABELS[model.name],
-        )
-    axes[0].set_ylabel("best feasible gap")
-    axes[0].set_title("Mirror descent is a preliminary first-order diagnostic")
-    axes[0].legend(frameon=False)
-    axes[1].axhline(0.0, color="black", linewidth=1, linestyle="--")
-    axes[1].set_xlabel("iteration")
-    axes[1].set_ylabel("(shed - target) / target")
-    fig.savefig(out / "convergence_grid.png", dpi=200)
-    fig.savefig(out / "convergence_grid.pdf", dpi=200)
-    plt.close(fig)
-
-
-def plot_semilog_feasibility_gap(cells, out):
-    regime = "prefill-spread"
-    fig, ax = plt.subplots(figsize=(8, 4.8), constrained_layout=True)
-    for model in catalog_models():
-        problem, _, results = cells[(model.name, regime)]
-        hist = results["mirror-descent-best"].history
-        gap = _positive_for_semilog(_feasibility_gap(problem, hist))
-        ax.semilogy(
-            np.arange(1, gap.size + 1),
-            gap,
-            color=MODEL_COLORS[model.name],
-            linewidth=2.0,
-            label=MODEL_LABELS[model.name],
-        )
-    ax.set_xlabel("iteration", fontsize=15)
-    ax.set_ylabel("feasibility gap", fontsize=15)
-    ax.set_title("Semilog feasibility gap by iteration", fontsize=18)
-    ax.tick_params(labelsize=12)
-    ax.legend(frameon=False, loc="upper right", fontsize=12)
-    fig.savefig(out / "convergence_semilog_feasibility_gap.png", dpi=200)
-    fig.savefig(out / "convergence_semilog_feasibility_gap.pdf", dpi=200)
     plt.close(fig)
 
 
