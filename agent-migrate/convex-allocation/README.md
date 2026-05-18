@@ -33,12 +33,15 @@ Outputs are written to `convex-allocation/outputs/sweep/`:
 - `summary.csv`
 - `transition_coupled_policy_table.csv`
 - `transition_coupled_allocation_summary.csv`
+- `transition_coupled_queue_table.csv`
 
 `summary.csv` marks infeasible baselines as `INFEASIBLE` and includes shed
 target, shed violation, excess shed, capacity feasibility, mirror-descent
 objective gap, selected scalar shed multiplier `alpha`, and bisection count.
 The transition-coupled CSVs compare CVXPY, mirror descent, crossover-greedy,
 mixed-greedy, replay-only, and state-only on the GLM-5 4/6/9 Gbps stress case.
+The queue table rounds fractional allocations into requests and reports static
+network-then-prefill EDF reconstruction delay metrics.
 
 The catalog is local and hard-coded from `kv-transfer-early-experiment/FINDINGS.md`.
 It does not import that directory.

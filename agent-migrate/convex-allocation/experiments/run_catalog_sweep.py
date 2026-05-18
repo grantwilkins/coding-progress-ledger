@@ -36,6 +36,7 @@ from metrics import (
 )
 from mirror_descent import solve_mirror_descent
 from problem import make_problem, saturation_diagnostics
+from queueing import queue_metrics
 
 REGIMES = ("bandwidth-spread", "prefill-spread", "background-load-spread")
 TRANSITION_REGIME = "transition-coupled"
@@ -240,7 +241,9 @@ def run_transition_coupled(out):
     _write_rows(out / "transition_coupled_policy_table.csv", rows)
     summary = _allocation_summary_rows(problem, results)
     _write_rows(out / "transition_coupled_allocation_summary.csv", summary)
-    _print_transition_outputs(rows, summary)
+    queue_rows = _transition_queue_rows(problem, results)
+    _write_rows(out / "transition_coupled_queue_table.csv", queue_rows)
+    _print_transition_outputs(rows, summary, queue_rows)
 
 
 def _require_transition_quality(problem, coeffs, cvx, crossover):
@@ -285,7 +288,40 @@ def _write_rows(path, rows):
         writer.writerows(rows)
 
 
-def _print_transition_outputs(rows, summary):
+def _transition_queue_rows(problem, results):
+    policies = (
+        ("CVXPY", "CVXPY-rounded"),
+        ("mirror-descent-best", "mirror-descent-rounded"),
+        ("crossover-greedy", "crossover-greedy"),
+        ("mixed-greedy", "mixed-greedy"),
+        ("replay-only", "replay-only"),
+        ("state-only", "state-only"),
+    )
+    rows = []
+    for source, policy in policies:
+        result = results[source]
+        y = result.allocation if hasattr(result, "allocation") else result.y
+        metrics = queue_metrics(problem, y)
+        rows.append(
+            {
+                "policy": policy,
+                "rounded_shed_achieved": f"{metrics['rounded_shed_achieved']:.10g}",
+                "rounded_shed_target": f"{metrics['rounded_shed_target']:.10g}",
+                "rounded_shed_ratio": f"{metrics['rounded_shed_ratio']:.10g}",
+                "mean_reconstruction_delay": f"{metrics['mean_reconstruction_delay']:.10g}",
+                "p50_reconstruction_delay": f"{metrics['p50_reconstruction_delay']:.10g}",
+                "p95_reconstruction_delay": f"{metrics['p95_reconstruction_delay']:.10g}",
+                "deadline_miss_rate": f"{metrics['deadline_miss_rate']:.10g}",
+                "max_network_busy_window": f"{metrics['max_network_busy_window']:.10g}",
+                "max_prefill_busy_window": f"{metrics['max_prefill_busy_window']:.10g}",
+                "replay_shed_frac": f"{metrics['replay_shed_frac']:.10g}",
+                "state_shed_frac": f"{metrics['state_shed_frac']:.10g}",
+            }
+        )
+    return rows
+
+
+def _print_transition_outputs(rows, summary, queue_rows):
     policy_cols = [
         "policy",
         "objective",
@@ -304,6 +340,10 @@ def _print_transition_outputs(rows, summary):
     _print_table(rows, policy_cols)
     print("\ntransition-coupled allocation summary")
     _print_table(summary, list(summary[0].keys()))
+    print("\ntransition-coupled queue table")
+    _print_table(queue_rows, list(queue_rows[0].keys()))
+    _print_queue_latex(queue_rows)
+    _print_queue_finding(queue_rows)
 
 
 def _print_table(rows, cols):
@@ -312,6 +352,50 @@ def _print_table(rows, cols):
     print("-+-".join("-" * widths[col] for col in cols))
     for row in rows:
         print(" | ".join(str(row[col]).ljust(widths[col]) for col in cols))
+
+
+def _print_queue_latex(rows):
+    print("\ntransition-coupled queue table (LaTeX)")
+    print("\\begin{tabular}{lrrrrrrrrr}")
+    print(
+        "policy & shed/target & mean & p50 & p95 & miss & net/H & prefill/H & replay & state \\\\"
+    )
+    print("\\hline")
+    for row in rows:
+        print(
+            f"{row['policy']} & {float(row['rounded_shed_ratio']):.3f} & "
+            f"{float(row['mean_reconstruction_delay']):.3f} & "
+            f"{float(row['p50_reconstruction_delay']):.3f} & "
+            f"{float(row['p95_reconstruction_delay']):.3f} & "
+            f"{float(row['deadline_miss_rate']):.3f} & "
+            f"{float(row['max_network_busy_window']):.3f} & "
+            f"{float(row['max_prefill_busy_window']):.3f} & "
+            f"{float(row['replay_shed_frac']):.3f} & "
+            f"{float(row['state_shed_frac']):.3f} \\\\"
+        )
+    print("\\end{tabular}")
+
+
+def _print_queue_finding(rows):
+    by_policy = {row["policy"]: row for row in rows}
+    cvx = by_policy["CVXPY-rounded"]
+    comparators = ("crossover-greedy", "replay-only", "state-only")
+    better_p95 = all(
+        float(cvx["p95_reconstruction_delay"])
+        < float(by_policy[policy]["p95_reconstruction_delay"])
+        for policy in comparators
+    )
+    better_miss = all(
+        float(cvx["deadline_miss_rate"]) < float(by_policy[policy]["deadline_miss_rate"])
+        for policy in comparators
+    )
+    if better_p95 or better_miss:
+        print("\nQueue finding: CVXPY-rounded improves p95 delay or deadline misses.")
+    else:
+        print(
+            "\nQueue finding: CVXPY-rounded does not improve p95 delay or "
+            "deadline misses over crossover-greedy and both single-action policies."
+        )
 
 
 def plot_headline(cells, out):
