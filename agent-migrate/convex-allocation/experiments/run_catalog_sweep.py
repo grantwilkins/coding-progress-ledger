@@ -21,7 +21,7 @@ from baselines import solve_replay_only, solve_state_only
 from catalog import catalog_models
 from coefficients import ACTIONS, compute_coefficients
 from cvxpy_solver import solve_cvxpy
-from metrics import action_mix, shed_action_mix, shed_achieved, utilization
+from metrics import action_mix, shed_achieved, shed_action_mix, utilization
 from mirror_descent import solve_mirror_descent
 from problem import make_problem, saturation_diagnostics
 
@@ -46,30 +46,91 @@ DEST_LABELS = {
     "prefill-spread": ("20% prefill load", "50% prefill load", "80% prefill load"),
     "background-load-spread": ("low network load", "balanced load", "cached context"),
 }
-ACTION_COLORS = {"replay_frac": "#4c78a8", "state_frac": "#f58518", "stay_frac": "#c9c2bd"}
+ACTION_COLORS = {
+    "replay_frac": "#4c78a8",
+    "state_frac": "#f58518",
+    "stay_frac": "#c9c2bd",
+}
 REGIME_XLABELS = ("bandwidth", "prefill load", "background load")
+MD_STEP_SIZES = ((0.5, 0.2), (1.0, 0.2), (2.0, 0.2), (1.0, 1.0))
 
 
-def _policy_row(model, regime, policy, result, problem, coeffs, diagnostics):
-    net_util, prefill_util = utilization(problem, coeffs, result.allocation if hasattr(result, "allocation") else result.y)
+def _selected_mirror_descent(problem):
+    runs = [
+        solve_mirror_descent(
+            problem,
+            iterations=5000,
+            eta_x0=eta_x0,
+            eta_l0=eta_l0,
+            max_backtracks=20,
+        )
+        for eta_x0, eta_l0 in MD_STEP_SIZES
+    ]
+    return min(runs, key=lambda result: result.objective)
+
+
+def _policy_row(model, regime, policy, result, problem, coeffs, diagnostics, cvx_obj):
+    net_util, prefill_util = utilization(
+        problem,
+        coeffs,
+        result.allocation if hasattr(result, "allocation") else result.y,
+    )
     y = result.allocation if hasattr(result, "allocation") else result.y
     mix = action_mix(problem, y)
     shed_mix = shed_action_mix(problem, y)
-    feasible = getattr(result, "feasible", True)
+    shed = shed_achieved(problem, y)
+    shed_violation = max(0.0, problem.B_shed - shed)
+    excess_shed = max(0.0, shed - problem.B_shed)
+    capacity_feasible = bool(np.max(net_util) < 1.0 and np.max(prefill_util) < 1.0)
+    objective = getattr(result, "objective", None)
+    feasible = bool(
+        getattr(result, "feasible", True)
+        and objective is not None
+        and np.isfinite(objective)
+        and shed_violation <= 1e-5
+        and capacity_feasible
+    )
+    rel_gap = (objective - cvx_obj) / max(1.0, abs(cvx_obj)) if feasible else None
     return {
         "model": model,
         "regime": regime,
         "policy": policy,
-        "objective": f"{result.objective:.10g}" if feasible else "INFEASIBLE",
-        "shed_achieved": f"{shed_achieved(problem, y):.10g}",
+        "objective": f"{objective:.10g}" if feasible else "INFEASIBLE",
+        "relative_gap_to_cvx": f"{max(0.0, rel_gap):.10g}" if feasible else "INFEASIBLE",
+        "shed_achieved": f"{shed:.10g}",
+        "shed_target": f"{problem.B_shed:.10g}",
+        "shed_violation": f"{shed_violation:.10g}",
+        "excess_shed": f"{excess_shed:.10g}",
         "max_net_util": f"{float(np.max(net_util)):.10g}",
         "max_prefill_util": f"{float(np.max(prefill_util)):.10g}",
+        "capacity_feasible": str(capacity_feasible),
+        "final_dual": f"{getattr(result, 'dual', np.nan):.10g}",
+        "eta_x0": f"{getattr(result, 'eta_x0', np.nan):.10g}",
+        "eta_l0": f"{getattr(result, 'eta_l0', np.nan):.10g}",
         **{key: f"{value:.10g}" for key, value in mix.items()},
         **{key: f"{value:.10g}" for key, value in shed_mix.items()},
         "replay_demand_over_capacity": f"{diagnostics[0]:.10g}",
         "state_bytes_over_capacity": f"{diagnostics[1]:.10g}",
         "feasible": str(bool(feasible)),
     }
+
+
+def _log_run(model, regime, problem, coeffs, diagnostics, cvx, md):
+    net_util, prefill_util = utilization(problem, coeffs, md.y)
+    gap = max(0.0, (md.objective - cvx.objective) / max(1.0, abs(cvx.objective)))
+    shed = shed_achieved(problem, md.y)
+    print(
+        f"{model.name} / {regime}: diagnostics replay_demand/cap={diagnostics[0]:.3f}, "
+        f"state_bytes/cap={diagnostics[1]:.3f}"
+    )
+    print(
+        "  CVXPY oracle objective="
+        f"{cvx.objective:.6g}; mirror best feasible objective={md.objective:.6g}; "
+        f"relative_gap={gap:.3g}; shed={shed:.6g}/{problem.B_shed:.6g}; "
+        f"max_net_util={float(np.max(net_util)):.3f}; "
+        f"max_prefill_util={float(np.max(prefill_util)):.3f}; "
+        f"final_dual={md.dual:.3g}; eta=({md.eta_x0:g}, {md.eta_l0:g})"
+    )
 
 
 def run_sweep():
@@ -83,9 +144,9 @@ def run_sweep():
             problem = make_problem(model, regime)
             coeffs = compute_coefficients(problem)
             diagnostics = saturation_diagnostics(problem)
-            print(f"{model.name} / {regime}: replay={diagnostics[0]:.3f}, state={diagnostics[1]:.3f}")
             cvx = solve_cvxpy(problem)
-            md = solve_mirror_descent(problem, iterations=5000, eta_x0=2.0, eta_l0=0.2, max_backtracks=20)
+            md = _selected_mirror_descent(problem)
+            _log_run(model, regime, problem, coeffs, diagnostics, cvx, md)
             replay = solve_replay_only(problem)
             state = solve_state_only(problem)
             results = {
@@ -95,7 +156,18 @@ def run_sweep():
                 "state-only": state,
             }
             for policy, result in results.items():
-                rows.append(_policy_row(model.name, regime, policy, result, problem, coeffs, diagnostics))
+                rows.append(
+                    _policy_row(
+                        model.name,
+                        regime,
+                        policy,
+                        result,
+                        problem,
+                        coeffs,
+                        diagnostics,
+                        cvx.objective,
+                    )
+                )
             cells[(model.name, regime)] = (problem, coeffs, results)
 
     summary = out / "summary.csv"
@@ -114,32 +186,62 @@ def run_sweep():
 
 
 def plot_headline(cells, out):
-    fig, ax = plt.subplots(figsize=(8.7, 5.2), constrained_layout=True)
-    x = np.arange(len(REGIMES))
-    for model in catalog_models():
-        replay_share = []
-        for regime in REGIMES:
+    models = list(catalog_models())
+    regimes = list(REGIMES)
+
+    data = np.zeros((len(models), len(regimes)))
+
+    for i, model in enumerate(models):
+        for j, regime in enumerate(regimes):
             problem, _, results = cells[(model.name, regime)]
-            replay_share.append(shed_action_mix(problem, results["CVXPY"].y)["replay_shed_frac"])
-        ax.plot(
-            x,
-            replay_share,
-            marker="o",
-            linewidth=2.6,
-            color=MODEL_COLORS[model.name],
-            label=MODEL_LABELS[model.name],
-        )
-    ax.axhline(0.5, color="black", linewidth=1, linestyle="--")
-    ax.fill_between([-0.15, len(REGIMES) - 0.85], 0, 0.5, color=ACTION_COLORS["state_frac"], alpha=0.08)
-    ax.fill_between([-0.15, len(REGIMES) - 0.85], 0.5, 1.0, color=ACTION_COLORS["replay_frac"], alpha=0.08)
-    ax.text(2.05, 0.82, "replay-heavy", ha="right", color=ACTION_COLORS["replay_frac"], fontsize=12)
-    ax.text(2.05, 0.18, "state-heavy", ha="right", color="#b25a00", fontsize=12)
-    ax.set_xticks(x, REGIME_XLABELS)
-    ax.set_ylim(-0.03, 1.03)
-    ax.set_ylabel("replay share of shed work")
-    ax.set_title("Replay share of shed work by regime")
-    ax.legend(frameon=False, loc="center left", bbox_to_anchor=(1.02, 0.5))
-    fig.savefig(out / "headline_action_mix.png", dpi=200)
+            mix = shed_action_mix(problem, results["CVXPY"].y)
+            data[i, j] = mix["replay_shed_frac"]
+
+    row_labels = [
+        f"{MODEL_LABELS[m.name]}\n{m.published_crossover_gbps:.1f} Gbps" for m in models
+    ]
+    col_labels = [
+        "Bandwidth\nvaries",
+        "Prefill load\nvaries",
+        "Background load\n+ cache",
+    ]
+
+    fig, ax = plt.subplots(figsize=(7.2, 3.8), constrained_layout=True)
+
+    im = ax.imshow(data, vmin=0, vmax=1, cmap="RdYlBu")
+
+    ax.set_xticks(np.arange(len(regimes)))
+    ax.set_xticklabels(col_labels)
+    ax.set_yticks(np.arange(len(models)))
+    ax.set_yticklabels(row_labels)
+
+    ax.set_title("Optimal replay share of shed work", pad=12)
+
+    for i in range(len(models)):
+        for j in range(len(regimes)):
+            value = data[i, j]
+            text_color = "white" if value < 0.25 or value > 0.75 else "black"
+            ax.text(
+                j,
+                i,
+                f"{value:.0%}",
+                ha="center",
+                va="center",
+                color=text_color,
+                fontsize=13,
+                fontweight="bold",
+            )
+
+    cbar = fig.colorbar(im, ax=ax, fraction=0.045, pad=0.03)
+    cbar.set_label("Replay fraction of shed work")
+    cbar.set_ticks([0, 0.5, 1.0])
+    cbar.set_ticklabels(["0%\nstate", "50%\nmix", "100%\nreplay"])
+
+    ax.tick_params(axis="both", length=0)
+    for spine in ax.spines.values():
+        spine.set_visible(False)
+
+    fig.savefig(out / "headline_action_mix.png", dpi=300)
     plt.close(fig)
 
 
@@ -147,15 +249,21 @@ def plot_heatmaps(cells, out):
     chosen = max(
         cells,
         key=lambda key: min(
-            shed_action_mix(cells[key][0], cells[key][2]["CVXPY"].y)["replay_shed_frac"],
+            shed_action_mix(cells[key][0], cells[key][2]["CVXPY"].y)[
+                "replay_shed_frac"
+            ],
             shed_action_mix(cells[key][0], cells[key][2]["CVXPY"].y)["state_shed_frac"],
         ),
     )
     model, regime = chosen
     problem, _, results = cells[chosen]
     data = results["CVXPY"].y / problem.d[:, None]
-    cols = [f"{dest}\n{action}" for dest in DEST_LABELS[regime] for action in ACTIONS] + ["Stay"]
-    rows = [f"{int(t):,} tokens\n{int(d)} requests" for t, d in zip(problem.T, problem.d)]
+    cols = [
+        f"{dest}\n{action}" for dest in DEST_LABELS[regime] for action in ACTIONS
+    ] + ["Stay"]
+    rows = [
+        f"{int(t):,} tokens\n{int(d)} requests" for t, d in zip(problem.T, problem.d)
+    ]
     fig, ax = plt.subplots(figsize=(10.5, 5.6), constrained_layout=True)
     sns.heatmap(
         data,
@@ -167,7 +275,9 @@ def plot_heatmaps(cells, out):
         yticklabels=rows,
         cbar_kws={"label": "fraction of class"},
     )
-    ax.set_title(f"Class allocation for the most mixed cell: {MODEL_LABELS[model]}, {REGIME_LABELS[regime]}")
+    ax.set_title(
+        f"Class allocation for the most mixed cell: {MODEL_LABELS[model]}, {REGIME_LABELS[regime]}"
+    )
     plt.setp(ax.get_xticklabels(), rotation=45, ha="right", fontsize=11)
     plt.setp(ax.get_yticklabels(), rotation=0, fontsize=11)
     ax.set_ylabel("workload class")
@@ -188,14 +298,35 @@ def plot_utilization(cells, out):
             net.append(float(np.max(u_net)))
             prefill.append(float(np.max(u_prefill)))
         color = MODEL_COLORS[model.name]
-        ax.plot(x, net, marker="o", color=color, linewidth=2.4, label=f"{MODEL_LABELS[model.name]} network")
-        ax.plot(x, prefill, marker="s", color=color, linewidth=2.4, linestyle="--", label=f"{MODEL_LABELS[model.name]} prefill")
+        ax.plot(
+            x,
+            net,
+            marker="o",
+            color=color,
+            linewidth=2.4,
+            label=f"{MODEL_LABELS[model.name]} network",
+        )
+        ax.plot(
+            x,
+            prefill,
+            marker="s",
+            color=color,
+            linewidth=2.4,
+            linestyle="--",
+            label=f"{MODEL_LABELS[model.name]} prefill",
+        )
     ax.axhline(1.0, color="black", linewidth=1, linestyle="--")
     ax.set_xticks(x, REGIME_XLABELS)
     ax.set_ylim(0.45, 1.03)
     ax.set_ylabel("max destination utilization")
     ax.set_title("Resource ceilings used by the convex optimum")
-    ax.legend(frameon=False, fontsize=10, ncol=1, loc="center left", bbox_to_anchor=(1.02, 0.5))
+    ax.legend(
+        frameon=False,
+        fontsize=10,
+        ncol=1,
+        loc="center left",
+        bbox_to_anchor=(1.02, 0.5),
+    )
     fig.savefig(out / "utilization_vs_policy.png", dpi=200)
     plt.close(fig)
 
@@ -209,17 +340,46 @@ def plot_policy_objectives(cells, out):
         for regime in REGIMES:
             _, _, results = cells[(model.name, regime)]
             cvx_obj = results["CVXPY"].objective
-            replay_ratio.append(results["replay-only"].objective / cvx_obj if results["replay-only"].feasible else np.nan)
-            state_ratio.append(results["state-only"].objective / cvx_obj if results["state-only"].feasible else np.nan)
+            replay_ratio.append(
+                results["replay-only"].objective / cvx_obj
+                if results["replay-only"].feasible
+                else np.nan
+            )
+            state_ratio.append(
+                results["state-only"].objective / cvx_obj
+                if results["state-only"].feasible
+                else np.nan
+            )
         color = MODEL_COLORS[model.name]
-        ax.plot(x, replay_ratio, marker="o", color=color, linewidth=2.4, label=f"{MODEL_LABELS[model.name]} replay greedy")
-        ax.plot(x, state_ratio, marker="s", color=color, linewidth=2.4, linestyle="--", label=f"{MODEL_LABELS[model.name]} state greedy")
+        ax.plot(
+            x,
+            replay_ratio,
+            marker="o",
+            color=color,
+            linewidth=2.4,
+            label=f"{MODEL_LABELS[model.name]} replay greedy",
+        )
+        ax.plot(
+            x,
+            state_ratio,
+            marker="s",
+            color=color,
+            linewidth=2.4,
+            linestyle="--",
+            label=f"{MODEL_LABELS[model.name]} state greedy",
+        )
     ax.axhline(1.0, color="black", linewidth=1, linestyle="--")
     ax.set_xticks(x, REGIME_XLABELS)
     ax.set_ylabel("objective / CVXPY optimum")
     ax.set_title("Greedy objective relative to CVXPY")
     ax.set_ylim(0.9, 5.4)
-    ax.legend(frameon=False, fontsize=10, ncol=1, loc="center left", bbox_to_anchor=(1.02, 0.5))
+    ax.legend(
+        frameon=False,
+        fontsize=10,
+        ncol=1,
+        loc="center left",
+        bbox_to_anchor=(1.02, 0.5),
+    )
     fig.savefig(out / "objective_vs_policy.png", dpi=200)
     plt.close(fig)
 
@@ -228,33 +388,69 @@ def plot_convergence(cells, out):
     key = ("Qwen3-Next-80B-A3B", "prefill-spread")
     problem, _, results = cells[key]
     hist = results["mirror-descent-best"].history
+    cvx_obj = results["CVXPY"].objective
     t = np.arange(1, hist["shed"].size + 1)
-    fig, ax = plt.subplots(figsize=(8.8, 5.2), constrained_layout=True)
-    ax.plot(t, hist["shed"] / problem.B_shed, color=MODEL_COLORS[key[0]], linewidth=2.6)
-    ax.axhline(1.0, color="black", linewidth=1, linestyle="--")
-    ax.set_xlabel("iteration")
-    ax.set_ylabel("shed achieved / target")
-    ax.set_title("Mirror descent reaches the shed constraint quickly")
+    gap = (hist["best_feasible_objective"] - cvx_obj) / max(1.0, abs(cvx_obj))
+    gap = np.maximum(gap, 1e-12)
+    fig, axes = plt.subplots(
+        2, 1, figsize=(8.8, 6.4), sharex=True, constrained_layout=True
+    )
+    axes[0].plot(t, gap, color=MODEL_COLORS[key[0]], linewidth=2.4)
+    axes[0].set_yscale("log")
+    axes[0].set_ylabel("best feasible gap")
+    axes[0].set_title("Mirror descent diagnostics against the CVXPY oracle")
+    axes[1].plot(
+        t, hist["shed"] / problem.B_shed, color=MODEL_COLORS[key[0]], linewidth=2.4
+    )
+    axes[1].axhline(1.0, color="black", linewidth=1, linestyle="--")
+    axes[1].set_xlabel("iteration")
+    axes[1].set_ylabel("shed / target")
     fig.savefig(out / "convergence_one_scenario.png", dpi=200)
     plt.close(fig)
 
 
 def plot_convergence_grid(cells, out):
     regime = "prefill-spread"
-    fig, ax = plt.subplots(figsize=(8.8, 5.2), constrained_layout=True)
+    fig, axes = plt.subplots(
+        2, 1, figsize=(8, 6.2), sharex=True, constrained_layout=True
+    )
     for model in catalog_models():
         _, _, results = cells[(model.name, regime)]
         cvx_obj = results["CVXPY"].objective
         hist = results["mirror-descent-best"].history
-        gap = np.maximum((hist["best_objective"] - cvx_obj) / max(1.0, abs(cvx_obj)), 1e-12)
+        gap = np.maximum(
+            (hist["best_feasible_objective"] - cvx_obj) / max(1.0, abs(cvx_obj)),
+            1e-12,
+        )
         gap[~np.isfinite(gap)] = np.nan
-        ax.plot(np.arange(1, gap.size + 1), gap, color=MODEL_COLORS[model.name], linewidth=2.4, label=MODEL_LABELS[model.name])
-    ax.set_yscale("log")
-    ax.set_xlabel("iteration")
-    ax.set_ylabel("best feasible relative objective gap")
-    ax.set_title("Mirror descent objective convergence in the prefill-load regime")
-    ax.legend(frameon=False)
+        axes[0].plot(
+            np.arange(1, gap.size + 1),
+            gap,
+            color=MODEL_COLORS[model.name],
+            linewidth=2.4,
+            label=MODEL_LABELS[model.name],
+        )
+        shed_violation = np.maximum(
+            hist["shed_violation"] / cells[(model.name, regime)][0].B_shed,
+            1e-12,
+        )
+        axes[1].plot(
+            np.arange(1, shed_violation.size + 1),
+            shed_violation,
+            color=MODEL_COLORS[model.name],
+            linewidth=2.0,
+            label=MODEL_LABELS[model.name],
+        )
+    axes[0].set_yscale("log")
+    axes[0].set_ylabel("best feasible gap")
+    axes[0].set_title("Mirror descent is a preliminary first-order diagnostic")
+    axes[0].legend(frameon=False)
+    axes[1].set_yscale("log")
+    axes[1].set_xlabel("iteration")
+    axes[1].set_ylabel("shed violation / target")
+    axes[1].set_ylim(1e-12, 1e0)
     fig.savefig(out / "convergence_grid.png", dpi=200)
+    fig.savefig(out / "convergence_grid.pdf", dpi=200)
     plt.close(fig)
 
 
@@ -264,10 +460,40 @@ def plot_crossover(out):
     for row, model in zip(y, catalog_models()):
         computed = model.crossover_gbps
         published = model.published_crossover_gbps
-        ax.hlines(row, 0.1, computed, color="#4c78a8", linewidth=6, alpha=0.75, label="replay faster" if row == 0 else None)
-        ax.hlines(row, computed, 220, color="#f58518", linewidth=6, alpha=0.75, label="state faster" if row == 0 else None)
-        ax.plot(computed, row, marker="o", color="black", markersize=5, label="computed crossover" if row == 0 else None)
-        ax.plot(published, row, marker="|", color="black", markersize=14, label="FINDINGS.md crossover" if row == 0 else None)
+        ax.hlines(
+            row,
+            0.1,
+            computed,
+            color="#4c78a8",
+            linewidth=6,
+            alpha=0.75,
+            label="replay faster" if row == 0 else None,
+        )
+        ax.hlines(
+            row,
+            computed,
+            220,
+            color="#f58518",
+            linewidth=6,
+            alpha=0.75,
+            label="state faster" if row == 0 else None,
+        )
+        ax.plot(
+            computed,
+            row,
+            marker="o",
+            color="black",
+            markersize=5,
+            label="computed crossover" if row == 0 else None,
+        )
+        ax.plot(
+            published,
+            row,
+            marker="|",
+            color="black",
+            markersize=14,
+            label="FINDINGS.md crossover" if row == 0 else None,
+        )
         ax.text(computed * 1.08, row + 0.13, f"{computed:.1f} Gbps", fontsize=8)
     ax.set_xscale("log")
     ax.set_xlim(0.1, 220)
