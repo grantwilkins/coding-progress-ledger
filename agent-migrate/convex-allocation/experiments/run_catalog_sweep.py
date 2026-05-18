@@ -55,6 +55,14 @@ REGIME_XLABELS = ("bandwidth", "prefill load", "background load")
 MD_STEP_SIZES = ((0.5, 0.2), (1.0, 0.2), (2.0, 0.2), (1.0, 1.0))
 
 
+def _relative_gap(values, cvx_obj):
+    return np.maximum((values - cvx_obj) / max(1.0, abs(cvx_obj)), 0.0)
+
+
+def _shed_residual(problem, shed):
+    return (shed - problem.B_shed) / problem.B_shed
+
+
 def _selected_mirror_descent(problem):
     runs = [
         solve_mirror_descent(
@@ -385,26 +393,33 @@ def plot_policy_objectives(cells, out):
 
 
 def plot_convergence(cells, out):
-    key = ("Qwen3-Next-80B-A3B", "prefill-spread")
+    key = ("GLM-5", "prefill-spread")
     problem, _, results = cells[key]
     hist = results["mirror-descent-best"].history
     cvx_obj = results["CVXPY"].objective
     t = np.arange(1, hist["shed"].size + 1)
-    gap = (hist["best_feasible_objective"] - cvx_obj) / max(1.0, abs(cvx_obj))
-    gap = np.maximum(gap, 1e-12)
+    current_gap = _relative_gap(hist["feasible_objective"], cvx_obj)
+    best_gap = _relative_gap(hist["best_feasible_objective"], cvx_obj)
+    shed_residual = _shed_residual(problem, hist["shed"])
     fig, axes = plt.subplots(
         2, 1, figsize=(8.8, 6.4), sharex=True, constrained_layout=True
     )
-    axes[0].plot(t, gap, color=MODEL_COLORS[key[0]], linewidth=2.4)
-    axes[0].set_yscale("log")
-    axes[0].set_ylabel("best feasible gap")
-    axes[0].set_title("Mirror descent diagnostics against the CVXPY oracle")
-    axes[1].plot(
-        t, hist["shed"] / problem.B_shed, color=MODEL_COLORS[key[0]], linewidth=2.4
+    axes[0].plot(
+        t,
+        current_gap,
+        color=MODEL_COLORS[key[0]],
+        alpha=0.35,
+        linewidth=1.4,
+        label="current feasible",
     )
-    axes[1].axhline(1.0, color="black", linewidth=1, linestyle="--")
+    axes[0].plot(t, best_gap, color=MODEL_COLORS[key[0]], linewidth=2.4, label="best")
+    axes[0].set_ylabel("objective gap")
+    axes[0].set_title("Mirror descent diagnostics against the CVXPY oracle")
+    axes[0].legend(frameon=False)
+    axes[1].plot(t, shed_residual, color=MODEL_COLORS[key[0]], linewidth=2.0)
+    axes[1].axhline(0.0, color="black", linewidth=1, linestyle="--")
     axes[1].set_xlabel("iteration")
-    axes[1].set_ylabel("shed / target")
+    axes[1].set_ylabel("(shed - target) / target")
     fig.savefig(out / "convergence_one_scenario.png", dpi=200)
     plt.close(fig)
 
@@ -418,10 +433,7 @@ def plot_convergence_grid(cells, out):
         _, _, results = cells[(model.name, regime)]
         cvx_obj = results["CVXPY"].objective
         hist = results["mirror-descent-best"].history
-        gap = np.maximum(
-            (hist["best_feasible_objective"] - cvx_obj) / max(1.0, abs(cvx_obj)),
-            1e-12,
-        )
+        gap = _relative_gap(hist["best_feasible_objective"], cvx_obj)
         gap[~np.isfinite(gap)] = np.nan
         axes[0].plot(
             np.arange(1, gap.size + 1),
@@ -430,25 +442,20 @@ def plot_convergence_grid(cells, out):
             linewidth=2.4,
             label=MODEL_LABELS[model.name],
         )
-        shed_violation = np.maximum(
-            hist["shed_violation"] / cells[(model.name, regime)][0].B_shed,
-            1e-12,
-        )
+        shed_residual = _shed_residual(cells[(model.name, regime)][0], hist["shed"])
         axes[1].plot(
-            np.arange(1, shed_violation.size + 1),
-            shed_violation,
+            np.arange(1, shed_residual.size + 1),
+            shed_residual,
             color=MODEL_COLORS[model.name],
             linewidth=2.0,
             label=MODEL_LABELS[model.name],
         )
-    axes[0].set_yscale("log")
     axes[0].set_ylabel("best feasible gap")
     axes[0].set_title("Mirror descent is a preliminary first-order diagnostic")
     axes[0].legend(frameon=False)
-    axes[1].set_yscale("log")
+    axes[1].axhline(0.0, color="black", linewidth=1, linestyle="--")
     axes[1].set_xlabel("iteration")
-    axes[1].set_ylabel("shed violation / target")
-    axes[1].set_ylim(1e-12, 1e0)
+    axes[1].set_ylabel("(shed - target) / target")
     fig.savefig(out / "convergence_grid.png", dpi=200)
     fig.savefig(out / "convergence_grid.pdf", dpi=200)
     plt.close(fig)
