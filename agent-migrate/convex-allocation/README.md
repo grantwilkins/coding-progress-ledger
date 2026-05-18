@@ -28,6 +28,12 @@ Run the safe-shed frontier sweep:
 uv run python experiments/run_safe_shed_frontier.py
 ```
 
+Diagnose tight-slack queue failures and rounded local repair:
+
+```bash
+uv run python experiments/run_queue_failure_diagnostics.py
+```
+
 Outputs are written to `convex-allocation/outputs/sweep/`:
 
 - `headline_action_mix.png`
@@ -42,6 +48,8 @@ Outputs are written to `convex-allocation/outputs/sweep/`:
 - `transition_coupled_queue_table.csv`
 - `shed_slack_sweep.csv`
 - `safe_shed_frontier.csv`
+- `transition_coupled_queue_failure_breakdown.csv`
+- `transition_coupled_repaired_queue_table.csv`
 
 `summary.csv` marks infeasible baselines as `INFEASIBLE` and includes shed
 target, shed violation, excess shed, capacity feasibility, mirror-descent
@@ -53,6 +61,9 @@ network-then-prefill EDF reconstruction delay metrics.
 The safe-shed frontier sweep uses the same GLM-5 transition-coupled scenario and
 marks a rounded policy safe only when it meets the shed target, has deadline miss
 rate at most 1%, and has p95 delay divided by class slack at most 1.0.
+The failure diagnostic adds per-request queue tracing, missed-request breakdowns
+by class, destination, and action, and a one-request rounded local repair for the
+tight 0.25x and 0.5x slack settings.
 
 The catalog is local and hard-coded from `kv-transfer-early-experiment/FINDINGS.md`.
 It does not import that directory.

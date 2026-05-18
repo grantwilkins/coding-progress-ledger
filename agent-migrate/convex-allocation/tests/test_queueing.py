@@ -17,7 +17,7 @@ import numpy as np
 from numpy.testing import assert_allclose
 
 from catalog import ModelParams
-from queueing import RequestRecord, evaluate_static_queue, round_allocation
+from queueing import RequestRecord, evaluate_static_queue, evaluate_static_queue_trace, round_allocation
 from problem import ProblemData
 
 
@@ -82,6 +82,7 @@ def test_static_queue_uses_network_then_prefill_with_edf():
     )
 
     metrics = evaluate_static_queue(problem, records)
+    _, trace = evaluate_static_queue_trace(problem, records)
 
     assert_allclose(metrics["mean_reconstruction_delay"], 3.5)
     assert_allclose(metrics["p50_reconstruction_delay"], 3.5)
@@ -93,3 +94,31 @@ def test_static_queue_uses_network_then_prefill_with_edf():
     assert_allclose(metrics["max_prefill_busy_window"], 0.3)
     assert_allclose(metrics["replay_shed_frac"], 0.5)
     assert_allclose(metrics["state_shed_frac"], 0.5)
+
+    state, replay = trace
+    assert replay.g == 0
+    assert replay.action == "replay"
+    assert_allclose(
+        [
+            replay.network_queue_wait,
+            replay.network_service_time,
+            replay.prefill_queue_wait,
+            replay.prefill_service_time,
+            replay.reconstruction_delay,
+        ],
+        [0.0, 1.0, 0.0, 3.0, 4.0],
+    )
+    assert replay.deadline_missed
+    assert state.g == 1
+    assert state.action == "state"
+    assert_allclose(
+        [
+            state.network_queue_wait,
+            state.network_service_time,
+            state.prefill_queue_wait,
+            state.prefill_service_time,
+            state.reconstruction_delay,
+        ],
+        [1.0, 2.0, 0.0, 0.0, 3.0],
+    )
+    assert not state.deadline_missed
