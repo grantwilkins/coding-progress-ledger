@@ -22,6 +22,12 @@ cd convex-allocation
 uv run python experiments/run_catalog_sweep.py
 ```
 
+Run the safe-shed frontier sweep:
+
+```bash
+uv run python experiments/run_safe_shed_frontier.py
+```
+
 Outputs are written to `convex-allocation/outputs/sweep/`:
 
 - `headline_action_mix.png`
@@ -34,6 +40,8 @@ Outputs are written to `convex-allocation/outputs/sweep/`:
 - `transition_coupled_policy_table.csv`
 - `transition_coupled_allocation_summary.csv`
 - `transition_coupled_queue_table.csv`
+- `shed_slack_sweep.csv`
+- `safe_shed_frontier.csv`
 
 `summary.csv` marks infeasible baselines as `INFEASIBLE` and includes shed
 target, shed violation, excess shed, capacity feasibility, mirror-descent
@@ -42,6 +50,9 @@ The transition-coupled CSVs compare CVXPY, mirror descent, crossover-greedy,
 mixed-greedy, replay-only, and state-only on the GLM-5 4/6/9 Gbps stress case.
 The queue table rounds fractional allocations into requests and reports static
 network-then-prefill EDF reconstruction delay metrics.
+The safe-shed frontier sweep uses the same GLM-5 transition-coupled scenario and
+marks a rounded policy safe only when it meets the shed target, has deadline miss
+rate at most 1%, and has p95 delay divided by class slack at most 1.0.
 
 The catalog is local and hard-coded from `kv-transfer-early-experiment/FINDINGS.md`.
 It does not import that directory.

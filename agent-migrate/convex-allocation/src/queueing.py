@@ -5,7 +5,7 @@ from heapq import heappop, heappush
 
 import numpy as np
 
-from coefficients import ACTIONS, REPLAY, compute_coefficients
+from coefficients import ACTIONS, REPLAY, compute_coefficients, move_view
 from problem import ProblemData
 
 
@@ -63,6 +63,8 @@ def evaluate_static_queue(problem: ProblemData, records: tuple[RequestRecord, ..
             "mean_reconstruction_delay": 0.0,
             "p50_reconstruction_delay": 0.0,
             "p95_reconstruction_delay": 0.0,
+            "p99_reconstruction_delay": 0.0,
+            "p95_normalized_reconstruction_delay": 0.0,
             "deadline_miss_rate": 0.0,
             "max_network_busy_window": 0.0,
             "max_prefill_busy_window": 0.0,
@@ -103,6 +105,8 @@ def evaluate_static_queue(problem: ProblemData, records: tuple[RequestRecord, ..
         "mean_reconstruction_delay": float(np.mean(delay)),
         "p50_reconstruction_delay": float(np.percentile(delay, 50)),
         "p95_reconstruction_delay": float(np.percentile(delay, 95)),
+        "p99_reconstruction_delay": float(np.percentile(delay, 99)),
+        "p95_normalized_reconstruction_delay": float(np.percentile(delay / slack, 95)),
         "deadline_miss_rate": float(np.mean(delay > slack)),
         "max_network_busy_window": float(np.max(net_busy) / H),
         "max_prefill_busy_window": float(np.max(prefill_busy) / H),
@@ -123,6 +127,18 @@ def queue_metrics(problem: ProblemData, y: np.ndarray) -> dict[str, float]:
         }
     )
     return metrics
+
+
+def fractional_queue_load_proxy(problem: ProblemData, y: np.ndarray) -> dict[str, float]:
+    coeffs = compute_coefficients(problem)
+    H, lambda_avail, rho_avail = _available_rates(problem)
+    x = move_view(y, problem)
+    net = np.sum(coeffs.b_net * x, axis=(0, 2)) / lambda_avail / H
+    prefill = np.sum(coeffs.b_prefill * x, axis=(0, 2)) / rho_avail / H
+    return {
+        "fractional_max_network_busy_window": float(np.max(net)),
+        "fractional_max_prefill_busy_window": float(np.max(prefill)),
+    }
 
 
 def _rounded_moved_counts(

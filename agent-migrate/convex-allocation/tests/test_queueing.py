@@ -86,6 +86,8 @@ def test_static_queue_uses_network_then_prefill_with_edf():
     assert_allclose(metrics["mean_reconstruction_delay"], 3.5)
     assert_allclose(metrics["p50_reconstruction_delay"], 3.5)
     assert_allclose(metrics["p95_reconstruction_delay"], 3.95)
+    assert_allclose(metrics["p99_reconstruction_delay"], 3.99)
+    assert_allclose(metrics["p95_normalized_reconstruction_delay"], 1.1007142857142855)
     assert_allclose(metrics["deadline_miss_rate"], 0.5)
     assert_allclose(metrics["max_network_busy_window"], 0.3)
     assert_allclose(metrics["max_prefill_busy_window"], 0.3)

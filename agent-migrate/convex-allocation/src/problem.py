@@ -47,13 +47,14 @@ def make_problem(
     model: ModelParams,
     regime: str,
     shed_fraction: float = 0.4,
+    slack_multiplier: float = 1.0,
     w: float = 1.0,
     window_s: float = 60.0,
     gpu_count: np.ndarray | None = None,
 ) -> ProblemData:
     T = WORKLOAD_T.copy()
     d = WORKLOAD_D.copy()
-    slack = WORKLOAD_SLACK.copy()
+    slack = WORKLOAD_SLACK.copy() * slack_multiplier
     default_gpu_count = gpu_count is None
     gpu_count = np.array([8.0, 8.0, 8.0]) if default_gpu_count else np.asarray(gpu_count, dtype=float)
 
