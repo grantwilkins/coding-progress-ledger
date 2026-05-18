@@ -30,6 +30,8 @@ Outputs are written to `convex-allocation/outputs/sweep/`:
 - `convergence_one_scenario.png`
 - `convergence_grid.png`
 - `convergence_grid.pdf`
+- `convergence_semilog_feasibility_gap.png`
+- `convergence_semilog_feasibility_gap.pdf`
 - `crossover_recovery.png`
 - `summary.csv`
 

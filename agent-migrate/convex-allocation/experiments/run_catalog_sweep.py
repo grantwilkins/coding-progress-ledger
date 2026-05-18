@@ -63,6 +63,19 @@ def _shed_residual(problem, shed):
     return (shed - problem.B_shed) / problem.B_shed
 
 
+def _feasibility_gap(problem, hist):
+    shed_gap = hist["shed_violation"] / problem.B_shed
+    net_gap = np.maximum(hist["max_net_util"] - 1.0, 0.0)
+    prefill_gap = np.maximum(hist["max_prefill_util"] - 1.0, 0.0)
+    return np.maximum.reduce([shed_gap, net_gap, prefill_gap])
+
+
+def _positive_for_semilog(values):
+    positive = np.asarray(values, dtype=float).copy()
+    positive[positive <= 0.0] = np.nan
+    return positive
+
+
 def _selected_mirror_descent(problem):
     runs = [
         solve_mirror_descent(
@@ -190,6 +203,7 @@ def run_sweep():
     plot_policy_objectives(cells, out)
     plot_convergence(cells, out)
     plot_convergence_grid(cells, out)
+    plot_semilog_feasibility_gap(cells, out)
     plot_crossover(out)
 
 
@@ -458,6 +472,30 @@ def plot_convergence_grid(cells, out):
     axes[1].set_ylabel("(shed - target) / target")
     fig.savefig(out / "convergence_grid.png", dpi=200)
     fig.savefig(out / "convergence_grid.pdf", dpi=200)
+    plt.close(fig)
+
+
+def plot_semilog_feasibility_gap(cells, out):
+    regime = "prefill-spread"
+    fig, ax = plt.subplots(figsize=(8, 4.8), constrained_layout=True)
+    for model in catalog_models():
+        problem, _, results = cells[(model.name, regime)]
+        hist = results["mirror-descent-best"].history
+        gap = _positive_for_semilog(_feasibility_gap(problem, hist))
+        ax.semilogy(
+            np.arange(1, gap.size + 1),
+            gap,
+            color=MODEL_COLORS[model.name],
+            linewidth=2.0,
+            label=MODEL_LABELS[model.name],
+        )
+    ax.set_xlabel("iteration", fontsize=15)
+    ax.set_ylabel("feasibility gap", fontsize=15)
+    ax.set_title("Semilog feasibility gap by iteration", fontsize=18)
+    ax.tick_params(labelsize=12)
+    ax.legend(frameon=False, loc="upper right", fontsize=12)
+    fig.savefig(out / "convergence_semilog_feasibility_gap.png", dpi=200)
+    fig.savefig(out / "convergence_semilog_feasibility_gap.pdf", dpi=200)
     plt.close(fig)
 
 
