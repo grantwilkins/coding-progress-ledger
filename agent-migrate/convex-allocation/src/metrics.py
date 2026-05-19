@@ -32,13 +32,17 @@ def utilization(problem: ProblemData, coeffs: Coefficients, y: np.ndarray) -> tu
     return L_net / problem.C_net, L_prefill / problem.C_prefill
 
 
-def relief_achieved_s(problem: ProblemData, y: np.ndarray) -> float:
+def source_load_moved_s(problem: ProblemData, y: np.ndarray) -> float:
     moved = np.sum(move_view(y, problem), axis=(1, 2))
     return float(np.dot(problem.tau, moved))
 
 
+def relief_achieved_s(problem: ProblemData, y: np.ndarray) -> float:
+    return source_load_moved_s(problem, y)
+
+
 def shed_achieved(problem: ProblemData, y: np.ndarray) -> float:
-    return relief_achieved_s(problem, y)
+    return source_load_moved_s(problem, y)
 
 
 def action_mix(problem: ProblemData, y: np.ndarray) -> dict[str, float]:
@@ -51,34 +55,46 @@ def action_mix(problem: ProblemData, y: np.ndarray) -> dict[str, float]:
     }
 
 
-def relief_action_mix(problem: ProblemData, y: np.ndarray) -> dict[str, float]:
+def source_load_action_mix(problem: ProblemData, y: np.ndarray) -> dict[str, float]:
     x = move_view(y, problem)
     replay = float(np.dot(problem.tau, np.sum(x[:, :, REPLAY], axis=1)))
     state = float(np.dot(problem.tau, np.sum(x[:, :, STATE], axis=1)))
     total = replay + state
     if total == 0.0:
-        return {"replay_relief_frac": 0.0, "state_relief_frac": 0.0}
-    return {"replay_relief_frac": replay / total, "state_relief_frac": state / total}
+        return {"replay_load_frac": 0.0, "state_load_frac": 0.0}
+    return {"replay_load_frac": replay / total, "state_load_frac": state / total}
 
 
-def shed_action_mix(problem: ProblemData, y: np.ndarray) -> dict[str, float]:
-    mix = relief_action_mix(problem, y)
+def relief_action_mix(problem: ProblemData, y: np.ndarray) -> dict[str, float]:
+    mix = source_load_action_mix(problem, y)
     return {
-        "replay_shed_frac": mix["replay_relief_frac"],
-        "state_shed_frac": mix["state_relief_frac"],
+        "replay_relief_frac": mix["replay_load_frac"],
+        "state_relief_frac": mix["state_load_frac"],
     }
 
 
-def relief_destination_mix(problem: ProblemData, y: np.ndarray) -> np.ndarray:
+def shed_action_mix(problem: ProblemData, y: np.ndarray) -> dict[str, float]:
+    mix = source_load_action_mix(problem, y)
+    return {
+        "replay_shed_frac": mix["replay_load_frac"],
+        "state_shed_frac": mix["state_load_frac"],
+    }
+
+
+def source_load_destination_mix(problem: ProblemData, y: np.ndarray) -> np.ndarray:
     x = move_view(y, problem)
     moved = np.sum(x, axis=2)
-    relief = problem.tau @ moved
-    total = float(np.sum(relief))
-    return relief / total if total > 0.0 else np.zeros(problem.K)
+    load = problem.tau @ moved
+    total = float(np.sum(load))
+    return load / total if total > 0.0 else np.zeros(problem.K)
+
+
+def relief_destination_mix(problem: ProblemData, y: np.ndarray) -> np.ndarray:
+    return source_load_destination_mix(problem, y)
 
 
 def shed_destination_mix(problem: ProblemData, y: np.ndarray) -> np.ndarray:
-    return relief_destination_mix(problem, y)
+    return source_load_destination_mix(problem, y)
 
 
 def deadline_load_ratios(
@@ -100,21 +116,21 @@ def deadline_load_ratios(
     return thresholds, net, prefill
 
 
-def deadline_debt_ratios(
+def deadline_overrun_ratios(
     problem: ProblemData, coeffs: Coefficients, y: np.ndarray, deadline_headroom: float
 ) -> np.ndarray:
     _, net, prefill = deadline_load_ratios(problem, coeffs, y)
     return np.maximum(np.r_[net.ravel(), prefill.ravel()] - deadline_headroom, 0.0)
 
 
-def deadline_debt_summary(
+def deadline_overrun_summary(
     problem: ProblemData, coeffs: Coefficients, y: np.ndarray, deadline_headroom: float
 ) -> dict[str, float]:
-    debt = deadline_debt_ratios(problem, coeffs, y, deadline_headroom)
+    overrun = deadline_overrun_ratios(problem, coeffs, y, deadline_headroom)
     return {
-        "deadline_debt_mean": float(np.mean(debt)),
-        "deadline_debt_p95": float(np.percentile(debt, 95)),
-        "deadline_debt_max": float(np.max(debt)),
+        "deadline_overrun_mean": float(np.mean(overrun)),
+        "deadline_overrun_p95": float(np.percentile(overrun, 95)),
+        "deadline_overrun_max": float(np.max(overrun)),
     }
 
 
@@ -122,9 +138,9 @@ def allocation_diagnostics(problem: ProblemData, coeffs: Coefficients, y: np.nda
     x = move_view(y, problem)
     moved_by_class = np.sum(x, axis=(1, 2))
     moved_by_dest = np.sum(x, axis=(0, 2))
-    dest_share = relief_destination_mix(problem, y)
-    action = relief_action_mix(problem, y)
-    action_share = np.array([action["replay_relief_frac"], action["state_relief_frac"]])
+    dest_share = source_load_destination_mix(problem, y)
+    action = source_load_action_mix(problem, y)
+    action_share = np.array([action["replay_load_frac"], action["state_load_frac"]])
     net_util, prefill_util = utilization(problem, coeffs, y)
     return {
         "active_classes_moved": float(np.sum(moved_by_class > 1e-8)),
@@ -133,10 +149,12 @@ def allocation_diagnostics(problem: ProblemData, coeffs: Coefficients, y: np.nda
         "action_entropy": _normalized_entropy(action_share),
         "max_net_util": float(np.max(net_util)),
         "max_prefill_util": float(np.max(prefill_util)),
-        "replay_relief_frac": action["replay_relief_frac"],
-        "state_relief_frac": action["state_relief_frac"],
-        "replay_shed_frac": action["replay_relief_frac"],
-        "state_shed_frac": action["state_relief_frac"],
+        "replay_load_frac": action["replay_load_frac"],
+        "state_load_frac": action["state_load_frac"],
+        "replay_relief_frac": action["replay_load_frac"],
+        "state_relief_frac": action["state_load_frac"],
+        "replay_shed_frac": action["replay_load_frac"],
+        "state_shed_frac": action["state_load_frac"],
     }
 
 
@@ -152,8 +170,8 @@ def assert_feasible(problem: ProblemData, coeffs: Coefficients, y: np.ndarray, s
         raise AssertionError("allocation has negative entries")
     if not np.allclose(np.sum(y, axis=1), problem.d):
         raise AssertionError("allocation rows do not sum to class demand")
-    if relief_achieved_s(problem, y) < problem.relief_target_s - shed_tol:
-        raise AssertionError("relief target not met")
+    if source_load_moved_s(problem, y) < problem.source_load_target_s - shed_tol:
+        raise AssertionError("source load target not met")
     net_util, prefill_util = utilization(problem, coeffs, y)
     if not (np.all(net_util < 1.0) and np.all(prefill_util < 1.0)):
         raise AssertionError("allocation is outside the barrier domain")

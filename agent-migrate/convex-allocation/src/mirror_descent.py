@@ -4,7 +4,7 @@ from dataclasses import dataclass
 
 import numpy as np
 from coefficients import Coefficients, compute_coefficients
-from metrics import assert_feasible, resource_loads, shed_achieved, utilization
+from metrics import assert_feasible, resource_loads, source_load_moved_s, utilization
 from objective import objective, penalized_gradient
 from problem import ProblemData
 
@@ -41,9 +41,9 @@ def _interior_y(problem: ProblemData, coeffs: Coefficients) -> np.ndarray:
 def _initial_y(problem: ProblemData, coeffs: Coefficients) -> np.ndarray:
     y = np.zeros((problem.G, coeffs.M + 1))
     y[:, -1] = problem.d
-    remaining_shed = problem.relief_target_s
+    remaining_source_load = problem.source_load_target_s
 
-    while remaining_shed > 1e-9:
+    while remaining_source_load > 1e-9:
         L_net, L_prefill = resource_loads(problem, coeffs, y)
         choices = []
         for g in range(problem.G):
@@ -59,7 +59,7 @@ def _initial_y(problem: ProblemData, coeffs: Coefficients) -> np.ndarray:
                 cap_net = np.inf if b_net == 0.0 else room_net / b_net
                 cap_prefill = np.inf if b_prefill == 0.0 else room_prefill / b_prefill
                 amount = min(
-                    y[g, -1], remaining_shed / problem.tau[g], cap_net, cap_prefill
+                    y[g, -1], remaining_source_load / problem.tau[g], cap_net, cap_prefill
                 )
                 if amount > 1e-12:
                     marginal = (
@@ -73,10 +73,10 @@ def _initial_y(problem: ProblemData, coeffs: Coefficients) -> np.ndarray:
         _, g, m, amount = min(choices, key=lambda item: item[0])
         y[g, m] += amount
         y[g, -1] -= amount
-        remaining_shed -= amount * problem.tau[g]
+        remaining_source_load -= amount * problem.tau[g]
 
-    if remaining_shed > 1e-7:
-        raise RuntimeError("mirror descent initializer could not meet shed target")
+    if remaining_source_load > 1e-7:
+        raise RuntimeError("mirror descent initializer could not meet source-load target")
     assert_feasible(problem, coeffs, y, shed_tol=1e-7)
     return y
 
@@ -84,14 +84,14 @@ def _initial_y(problem: ProblemData, coeffs: Coefficients) -> np.ndarray:
 def _stats(
     problem: ProblemData, coeffs: Coefficients, y: np.ndarray, shed_tol: float
 ) -> tuple[float, float, float, float, float, bool]:
-    shed = shed_achieved(problem, y)
-    violation = max(0.0, problem.relief_target_s - shed)
-    excess = max(0.0, shed - problem.relief_target_s)
+    source_load = source_load_moved_s(problem, y)
+    violation = max(0.0, problem.source_load_target_s - source_load)
+    excess = max(0.0, source_load - problem.source_load_target_s)
     u_net, u_prefill = utilization(problem, coeffs, y)
     max_net = float(np.max(u_net))
     max_prefill = float(np.max(u_prefill))
     return (
-        shed,
+        source_load,
         violation,
         excess,
         max_net,
@@ -117,9 +117,9 @@ def solve_mirror_descent(
         "objective": [],
         "feasible_objective": [],
         "best_feasible_objective": [],
-        "shed_violation": [],
-        "excess_shed": [],
-        "shed": [],
+        "source_load_shortfall_s": [],
+        "excess_source_load_s": [],
+        "source_load_moved_s": [],
         "max_net_util": [],
         "max_prefill_util": [],
         "alpha": [],
@@ -142,7 +142,7 @@ def solve_mirror_descent(
 
             y = y_new
             obj = objective(problem, coeffs, y)
-            shed, violation, excess, max_net, max_prefill, feasible = _stats(
+            source_load, violation, excess, max_net, max_prefill, feasible = _stats(
                 problem, coeffs, y, shed_tol
             )
             if feasible and obj < best_obj:
@@ -153,30 +153,30 @@ def solve_mirror_descent(
             hist["objective"].append(obj)
             hist["feasible_objective"].append(obj if feasible else np.nan)
             hist["best_feasible_objective"].append(best_obj)
-            hist["shed_violation"].append(violation)
-            hist["excess_shed"].append(excess)
-            hist["shed"].append(shed)
+            hist["source_load_shortfall_s"].append(violation)
+            hist["excess_source_load_s"].append(excess)
+            hist["source_load_moved_s"].append(source_load)
             hist["max_net_util"].append(max_net)
             hist["max_prefill_util"].append(max_prefill)
             hist["alpha"].append(alpha)
-        return shed_achieved(problem, y)
+        return source_load_moved_s(problem, y)
 
     lo = 0.0
-    shed_lo = run_alpha(lo)
+    source_load_lo = run_alpha(lo)
     hi = 1.0
-    shed_hi = shed_lo
-    while shed_hi < problem.relief_target_s - shed_tol:
-        shed_hi = run_alpha(hi)
-        if shed_hi < problem.relief_target_s - shed_tol:
+    source_load_hi = source_load_lo
+    while source_load_hi < problem.source_load_target_s - shed_tol:
+        source_load_hi = run_alpha(hi)
+        if source_load_hi < problem.source_load_target_s - shed_tol:
             lo = hi
             hi *= 2.0
         if hi > 1e6:
-            raise RuntimeError("could not bracket shed target with scalar multiplier")
+            raise RuntimeError("could not bracket source-load target with scalar multiplier")
 
     for _ in range(bisection_iterations):
         alpha = 0.5 * (lo + hi)
-        shed = run_alpha(alpha)
-        if shed < problem.relief_target_s - shed_tol:
+        source_load = run_alpha(alpha)
+        if source_load < problem.source_load_target_s - shed_tol:
             lo = alpha
         else:
             hi = alpha

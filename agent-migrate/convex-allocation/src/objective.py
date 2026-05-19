@@ -3,7 +3,7 @@ from __future__ import annotations
 import numpy as np
 
 from coefficients import Coefficients, move_view
-from metrics import resource_loads, shed_achieved
+from metrics import resource_loads, source_load_moved_s
 from problem import ProblemData
 
 
@@ -33,7 +33,7 @@ def objective_gradient(problem: ProblemData, coeffs: Coefficients, y: np.ndarray
 
 
 def penalized_objective(problem: ProblemData, coeffs: Coefficients, y: np.ndarray, alpha: float) -> float:
-    return objective(problem, coeffs, y) - alpha * shed_achieved(problem, y)
+    return objective(problem, coeffs, y) - alpha * source_load_moved_s(problem, y)
 
 
 def penalized_gradient(problem: ProblemData, coeffs: Coefficients, y: np.ndarray, alpha: float) -> np.ndarray:
@@ -43,7 +43,7 @@ def penalized_gradient(problem: ProblemData, coeffs: Coefficients, y: np.ndarray
 
 
 def lagrangian_value(problem: ProblemData, coeffs: Coefficients, y: np.ndarray, dual: float) -> float:
-    return penalized_objective(problem, coeffs, y, dual) + dual * problem.relief_target_s
+    return penalized_objective(problem, coeffs, y, dual) + dual * problem.source_load_target_s
 
 
 def lagrangian_gradient(problem: ProblemData, coeffs: Coefficients, y: np.ndarray, dual: float) -> np.ndarray:

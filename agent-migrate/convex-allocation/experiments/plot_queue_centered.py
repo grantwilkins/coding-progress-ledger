@@ -38,14 +38,14 @@ from catalog import get_model
 from cvxpy_solver import solve_cvxpy, solve_deadline_aware_cvxpy, solve_soft_deadline_cvxpy
 from evaluation import WorkloadConfig, parse_workload_config
 from experiments.run_queue_failure_diagnostics import repair_rounded_allocation
-from metrics import shed_achieved
+from metrics import source_load_moved_s
 from mirror_descent import solve_mirror_descent
 from problem import make_problem
 from queueing import evaluate_rounded_queue_trace, round_allocation
 
 MAIN_POLICIES = (
     "CVXPY-rounded",
-    "soft-deadline-rounded",
+    "deadline-penalty-rounded",
     "mirror-descent-rounded",
     "crossover-greedy",
     "mixed-greedy",
@@ -59,15 +59,15 @@ REFERENCE_POLICIES = (
 )
 PLOT_POLICIES = MAIN_POLICIES + REFERENCE_POLICIES
 OUTPUT_FILES = (
-    "safe_shed_frontier_lines.pdf",
-    "miss_rate_frontier_lines.pdf",
-    "delay_cdf_hard_case.pdf",
-    "queue_depth_hard_case.pdf",
-    "resource_pressure_scatter.pdf",
+    "source_load_frontier.pdf",
+    "deadline_miss_frontier.pdf",
+    "deadline_delay_cdf.pdf",
+    "queue_depth_example.pdf",
+    "network_prefill_busy_scatter.pdf",
 )
 POLICY_COLORS = {
     "CVXPY-rounded": "#0072B2",
-    "soft-deadline-rounded": "#000000",
+    "deadline-penalty-rounded": "#000000",
     "mirror-descent-rounded": "#E69F00",
     "crossover-greedy": "#009E73",
     "mixed-greedy": "#CC79A7",
@@ -79,7 +79,7 @@ POLICY_COLORS = {
 }
 POLICY_LABELS = {
     "CVXPY-rounded": "CVXPY",
-    "soft-deadline-rounded": "Soft deadline",
+    "deadline-penalty-rounded": "Deadline penalty",
     "mirror-descent-rounded": "Mirror descent",
     "crossover-greedy": "Crossover greedy",
     "mixed-greedy": "Mixed greedy",
@@ -93,30 +93,30 @@ POLICY_LABELS = {
 
 def plot_queue_centered(
     workload_config: WorkloadConfig = WorkloadConfig(),
-    hard_shed_fraction: float = 0.5,
-    hard_slack_multiplier: float = 0.5,
+    example_source_load_fraction: float = 0.5,
+    example_deadline_scale: float = 0.5,
 ) -> None:
     out = workload_config.output_dir(ROOT)
-    rows = _read_rows(out / "shed_slack_sweep.csv")
+    rows = _read_rows(out / "source_load_deadline_sweep.csv")
     _plot_frontier(
         rows,
-        "p95_normalized_delay",
+        "p95_delay_over_deadline",
         1.0,
-        out / "safe_shed_frontier_lines.pdf",
-        "p95 reconstruction delay / slack",
+        out / "source_load_frontier.pdf",
+        "p95 delay / deadline",
     )
     _plot_frontier(
         rows,
-        "miss_rate",
+        "deadline_miss_rate",
         0.01,
-        out / "miss_rate_frontier_lines.pdf",
+        out / "deadline_miss_frontier.pdf",
         "deadline miss rate",
     )
-    _plot_resource_pressure(rows, out / "resource_pressure_scatter.pdf")
+    _plot_busy_scatter(rows, out / "network_prefill_busy_scatter.pdf")
 
-    traces = _hard_case_traces(workload_config, hard_shed_fraction, hard_slack_multiplier)
-    _plot_delay_cdf(traces, out / "delay_cdf_hard_case.pdf")
-    _plot_queue_depth(traces, out / "queue_depth_hard_case.pdf")
+    traces = _example_traces(workload_config, example_source_load_fraction, example_deadline_scale)
+    _plot_delay_cdf(traces, out / "deadline_delay_cdf.pdf")
+    _plot_queue_depth(traces, out / "queue_depth_example.pdf")
 
 
 def _read_rows(path: Path) -> list[dict[str, str]]:
@@ -125,19 +125,19 @@ def _read_rows(path: Path) -> list[dict[str, str]]:
 
 
 def _plot_frontier(rows, y_key, threshold, path, ylabel):
-    slack_values = sorted({_as_float(row["slack_multiplier"]) for row in rows})
-    cols = min(2, len(slack_values))
-    rows_n = int(np.ceil(len(slack_values) / cols))
+    deadline_scales = sorted({_as_float(row["deadline_scale"]) for row in rows})
+    cols = min(2, len(deadline_scales))
+    rows_n = int(np.ceil(len(deadline_scales) / cols))
     fig, axes = plt.subplots(rows_n, cols, figsize=(3.35 * cols, 2.55 * rows_n), sharey=True)
     axes = np.atleast_1d(axes).ravel()
-    for ax, slack in zip(axes, slack_values):
+    for ax, deadline_scale in zip(axes, deadline_scales):
         for policy in PLOT_POLICIES:
             points = _policy_points(
                 rows,
                 policy,
-                "shed_fraction",
+                "source_load_fraction",
                 y_key,
-                {"slack_multiplier": slack},
+                {"deadline_scale": deadline_scale},
             )
             if points:
                 x, y = np.asarray(points).T
@@ -153,36 +153,36 @@ def _plot_frontier(rows, y_key, threshold, path, ylabel):
                 )
         ax.axhline(threshold, color="black", linestyle="--", linewidth=1.0)
         ax.text(0.98, threshold, f"{threshold:g}", ha="right", va="bottom", fontsize=7)
-        ax.set_title(f"slack = {slack:g}x")
-        ax.set_xlabel("shed fraction")
+        ax.set_title(f"deadline scale = {deadline_scale:g}x")
+        ax.set_xlabel("source load moved")
         ax.grid(True, axis="y", color="#e6e6e6", linewidth=0.7)
         ax.spines[["top", "right"]].set_visible(False)
-    for ax in axes[len(slack_values) :]:
+    for ax in axes[len(deadline_scales) :]:
         ax.set_visible(False)
     axes[0].set_ylabel(ylabel)
-    _legend(fig, axes[: len(slack_values)])
+    _legend(fig, axes[: len(deadline_scales)])
     fig.subplots_adjust(top=0.84, bottom=0.11, wspace=0.12, hspace=0.38)
     fig.savefig(path, bbox_inches="tight")
     plt.close(fig)
 
 
-def _plot_resource_pressure(rows, path):
+def _plot_busy_scatter(rows, path):
     fig, ax = plt.subplots(figsize=(5.5, 4.2), constrained_layout=True)
     for policy in PLOT_POLICIES:
         points = [
             row
             for row in rows
             if row["policy"] == policy
-            and _finite(row, "max_net_busy")
-            and _finite(row, "max_prefill_busy")
-            and _finite(row, "p95_normalized_delay")
+            and _finite(row, "max_network_busy_fraction")
+            and _finite(row, "max_prefill_busy_fraction")
+            and _finite(row, "p95_delay_over_deadline")
         ]
         if not points:
             continue
-        size = _scatter_sizes([_as_float(row["p95_normalized_delay"]) for row in points])
+        size = _scatter_sizes([_as_float(row["p95_delay_over_deadline"]) for row in points])
         ax.scatter(
-            [_as_float(row["max_net_busy"]) for row in points],
-            [_as_float(row["max_prefill_busy"]) for row in points],
+            [_as_float(row["max_network_busy_fraction"]) for row in points],
+            [_as_float(row["max_prefill_busy_fraction"]) for row in points],
             s=size,
             color=POLICY_COLORS[policy],
             alpha=0.72,
@@ -190,9 +190,9 @@ def _plot_resource_pressure(rows, path):
         )
     ax.axvline(1.0, color="black", linestyle="--", linewidth=1.0)
     ax.axhline(1.0, color="black", linestyle="--", linewidth=1.0)
-    ax.set_xlabel("max network busy window")
-    ax.set_ylabel("max prefill busy window")
-    ax.text(0.03, 0.97, "marker size = p95 delay / slack", transform=ax.transAxes, va="top")
+    ax.set_xlabel("network busy fraction")
+    ax.set_ylabel("GPU prefill busy fraction")
+    ax.text(0.03, 0.97, "marker size = p95 delay / deadline", transform=ax.transAxes, va="top")
     ax.grid(True, color="#e6e6e6", linewidth=0.7)
     ax.spines[["top", "right"]].set_visible(False)
     ax.legend(frameon=False, ncol=2, loc="lower right")
@@ -200,19 +200,19 @@ def _plot_resource_pressure(rows, path):
     plt.close(fig)
 
 
-def _hard_case_traces(workload_config, shed_fraction, slack_multiplier):
+def _example_traces(workload_config, source_load_fraction, deadline_scale):
     problem = make_problem(
         get_model("GLM-5"),
         "transition-coupled",
-        shed_fraction=shed_fraction,
-        slack_multiplier=slack_multiplier,
+        source_load_fraction=source_load_fraction,
+        deadline_scale=deadline_scale,
         **workload_config.problem_kwargs(),
     )
     traces = {}
     for policy in PLOT_POLICIES:
         try:
-            y = _hard_case_allocation(policy, problem)
-            if shed_achieved(problem, y) < problem.relief_target_s - 1e-5:
+            y = _example_allocation(policy, problem)
+            if source_load_moved_s(problem, y) < problem.source_load_target_s - 1e-5:
                 continue
             rounded = round_allocation(problem, y)
             _, trace = evaluate_rounded_queue_trace(problem, rounded.y)
@@ -222,10 +222,10 @@ def _hard_case_traces(workload_config, shed_fraction, slack_multiplier):
     return traces
 
 
-def _hard_case_allocation(policy, problem):
+def _example_allocation(policy, problem):
     if policy == "CVXPY-rounded":
         return solve_cvxpy(problem).y
-    if policy == "soft-deadline-rounded":
+    if policy == "deadline-penalty-rounded":
         return solve_soft_deadline_cvxpy(problem).y
     if policy == "mirror-descent-rounded":
         return solve_mirror_descent(problem, eta_x0=500.0).y
@@ -238,9 +238,9 @@ def _hard_case_allocation(policy, problem):
     if policy == "state-only":
         return solve_state_only(problem).allocation
     if policy == "deadline-aware-m0.8-rounded":
-        return solve_deadline_aware_cvxpy(problem, 0.8, shed_cap=problem.relief_target_s).y
+        return solve_deadline_aware_cvxpy(problem, 0.8, source_load_cap=problem.source_load_target_s).y
     if policy == "deadline-aware-m1.0-rounded":
-        return solve_deadline_aware_cvxpy(problem, 1.0, shed_cap=problem.relief_target_s).y
+        return solve_deadline_aware_cvxpy(problem, 1.0, source_load_cap=problem.source_load_target_s).y
     if policy == "local-repair-oracle":
         rounded = round_allocation(problem, solve_cvxpy(problem).y)
         return repair_rounded_allocation(problem, rounded.y).y
@@ -250,7 +250,7 @@ def _hard_case_allocation(policy, problem):
 def _plot_delay_cdf(traces, path):
     fig, ax = plt.subplots(figsize=(5.5, 4.0), constrained_layout=True)
     for policy, trace in traces.items():
-        values = [record.reconstruction_delay / record.slack for record in trace]
+        values = [record.reconstruction_delay / record.deadline_s for record in trace]
         points = _cdf_points(values)
         if points:
             x, y = np.asarray(points).T
@@ -264,7 +264,7 @@ def _plot_delay_cdf(traces, path):
             )
     ax.axvline(1.0, color="black", linestyle="--", linewidth=1.0)
     ax.text(1.02, 0.04, "deadline", rotation=90, va="bottom", fontsize=8)
-    ax.set_xlabel("reconstruction delay / slack")
+    ax.set_xlabel("reconstruction delay / deadline")
     ax.set_ylabel("empirical CDF")
     ax.grid(True, axis="y", color="#e6e6e6", linewidth=0.7)
     ax.spines[["top", "right"]].set_visible(False)
@@ -290,7 +290,7 @@ def _plot_queue_depth(traces, path):
                     label=POLICY_LABELS[policy],
                 )
         ax.set_title(f"{resource} queue")
-        ax.set_xlabel("time since shed event (s)")
+        ax.set_xlabel("time since source load change (s)")
         ax.grid(True, axis="y", color="#e6e6e6", linewidth=0.7)
         ax.spines[["top", "right"]].set_visible(False)
     axes[0].set_ylabel("max waiting queue depth")

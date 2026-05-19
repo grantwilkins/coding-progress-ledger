@@ -23,7 +23,7 @@ class ProblemData:
     ell_prefill: np.ndarray
     h_ctx: np.ndarray
     h_kv: np.ndarray
-    relief_target_s: float
+    source_load_target_s: float
     w: float = 1.0
 
     def __init__(
@@ -41,8 +41,9 @@ class ProblemData:
         ell_prefill: np.ndarray | None = None,
         h_ctx: np.ndarray | None = None,
         h_kv: np.ndarray | None = None,
-        relief_target_s: float | None = None,
+        source_load_target_s: float | None = None,
         w: float = 1.0,
+        relief_target_s: float | None = None,
         slack: np.ndarray | None = None,
         B_shed: float | None = None,
     ) -> None:
@@ -50,12 +51,16 @@ class ProblemData:
             deadline_s = slack
         elif slack is not None and not np.allclose(deadline_s, slack):
             raise ValueError("deadline_s and slack differ")
-        if relief_target_s is None:
-            relief_target_s = B_shed
-        elif B_shed is not None and not np.isclose(relief_target_s, B_shed):
+        if source_load_target_s is None:
+            source_load_target_s = relief_target_s
+        elif relief_target_s is not None and not np.isclose(source_load_target_s, relief_target_s):
+            raise ValueError("source_load_target_s and relief_target_s differ")
+        if source_load_target_s is None:
+            source_load_target_s = B_shed
+        elif B_shed is not None and not np.isclose(source_load_target_s, B_shed):
             raise ValueError("relief_target_s and B_shed differ")
-        if deadline_s is None or relief_target_s is None:
-            raise ValueError("deadline_s and relief_target_s are required")
+        if deadline_s is None or source_load_target_s is None:
+            raise ValueError("deadline_s and source_load_target_s are required")
         values = {
             "model": model,
             "regime": regime,
@@ -70,7 +75,7 @@ class ProblemData:
             "ell_prefill": ell_prefill,
             "h_ctx": h_ctx,
             "h_kv": h_kv,
-            "relief_target_s": relief_target_s,
+            "source_load_target_s": source_load_target_s,
             "w": w,
         }
         missing = [key for key, value in values.items() if value is None]
@@ -96,8 +101,12 @@ class ProblemData:
         return self.deadline_s
 
     @property
+    def relief_target_s(self) -> float:
+        return self.source_load_target_s
+
+    @property
     def B_shed(self) -> float:
-        return self.relief_target_s
+        return self.source_load_target_s
 
 
 WORKLOAD_T = np.array([512, 2048, 8192, 32768, 100000, 200000], dtype=float)
@@ -108,7 +117,7 @@ WORKLOAD_SLACK = np.array([2, 10, 30, 60, 120, 300], dtype=float)
 def make_problem(
     model: ModelParams,
     regime: str,
-    relief_fraction: float = 0.4,
+    source_load_fraction: float = 0.4,
     deadline_scale: float = 1.0,
     w: float = 1.0,
     window_s: float = 60.0,
@@ -117,12 +126,15 @@ def make_problem(
     workload_seed: int | None = None,
     workload_jobs: int = 1000,
     workload_classes: int = 12,
-    workload_profile: str = "shed_event_long_context",
+    workload_profile: str = "source_load_long_context",
+    relief_fraction: float | None = None,
     shed_fraction: float | None = None,
     slack_multiplier: float | None = None,
 ) -> ProblemData:
+    if relief_fraction is not None:
+        source_load_fraction = relief_fraction
     if shed_fraction is not None:
-        relief_fraction = shed_fraction
+        source_load_fraction = shed_fraction
     if slack_multiplier is not None:
         deadline_scale = slack_multiplier
     if workload_source == "fixed":
@@ -135,7 +147,7 @@ def make_problem(
         workload = generate_workload(3, workload_seed, workload_jobs, workload_classes, workload_profile)
         T = workload.T
         d = workload.d
-        deadline_s = workload.slack * deadline_scale
+        deadline_s = workload.deadline_s * deadline_scale
         h_ctx = workload.h_ctx
         h_kv = workload.h_kv
     else:
@@ -180,7 +192,7 @@ def make_problem(
     C_prefill = rho_prefill * window_s
     ell_net = net_frac * C_net
     ell_prefill = prefill_frac * C_prefill
-    relief_target_s = relief_fraction * float(np.dot(T / model.prefill_tok_s, d))
+    source_load_target_s = source_load_fraction * float(np.dot(T / model.prefill_tok_s, d))
     return ProblemData(
         model=model,
         regime=regime,
@@ -195,7 +207,7 @@ def make_problem(
         ell_prefill=ell_prefill,
         h_ctx=h_ctx.copy(),
         h_kv=h_kv.copy(),
-        relief_target_s=relief_target_s,
+        source_load_target_s=source_load_target_s,
         w=w,
     )
 

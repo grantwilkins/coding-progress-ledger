@@ -1,7 +1,8 @@
-policy,replay_shed_frac,state_shed_frac,4 Gbps_shed_frac,6 Gbps_shed_frac,9 Gbps_shed_frac
-CVXPY,0.466732,0.533268,0.288824,0.466732,0.244443
-mirror-descent-best,0.468174,0.531826,0.290094,0.468174,0.241733
-crossover-greedy,0.271901,0.728099,0.728099,0.271901,0
-mixed-greedy,0.728099,0.271901,0.271901,0.728099,0
+policy,replay_load_fraction,state_transfer_load_fraction,4 Gbps_load_fraction,6 Gbps_load_fraction,9 Gbps_load_fraction
+CVXPY,0.701771,0.298229,4.80535e-09,0.701771,0.298229
+deadline-penalty,0.701771,0.298229,1.74362e-10,0.701771,0.298229
+mirror-descent-best,0.701771,0.298229,0,0.701771,0.298229
+crossover-greedy,0.701771,0.298229,0,0.701771,0.298229
+mixed-greedy,0.701771,0.298229,0,0.701771,0.298229
 replay-only,1,0,0.111836,0.728099,0.160065
-state-only,0,1,0.728099,0,0.271901
+state-only,0,1,0.701771,0,0.298229

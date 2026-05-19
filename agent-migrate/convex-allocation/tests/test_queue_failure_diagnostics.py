@@ -167,7 +167,7 @@ def test_queue_diagnostics_reports_infeasible_cvx_rows_without_repair(monkeypatc
     monkeypatch.setattr(queue_diag, "SHED_FRACTIONS", (0.2,))
     monkeypatch.setattr(queue_diag, "POLICIES", ())
     monkeypatch.setattr(
-        queue_diag, "make_problem", lambda *args, **kwargs: SimpleNamespace(relief_target_s=1.0)
+        queue_diag, "make_problem", lambda *args, **kwargs: SimpleNamespace(source_load_target_s=1.0)
     )
     monkeypatch.setattr(queue_diag, "solve_cvxpy", fail_solve)
     monkeypatch.setattr(

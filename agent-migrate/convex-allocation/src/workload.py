@@ -9,9 +9,13 @@ import numpy as np
 class GeneratedWorkload:
     T: np.ndarray
     d: np.ndarray
-    slack: np.ndarray
+    deadline_s: np.ndarray
     h_ctx: np.ndarray
     h_kv: np.ndarray
+
+    @property
+    def slack(self) -> np.ndarray:
+        return self.deadline_s
 
 
 def generate_workload(
@@ -19,18 +23,18 @@ def generate_workload(
     seed: int | None = None,
     jobs: int = 1000,
     classes: int = 12,
-    profile: str = "shed_event_long_context",
+    profile: str = "source_load_long_context",
 ) -> GeneratedWorkload:
-    if profile != "shed_event_long_context":
+    if profile not in ("source_load_long_context", "shed_event_long_context"):
         raise ValueError(f"unknown workload profile: {profile}")
     if K <= 0 or jobs <= 0 or classes <= 0:
         raise ValueError("K, jobs, and classes must be positive")
 
     rng = np.random.default_rng(seed)
     T = _sample_context_tokens(rng, jobs)
-    slack = _sample_slack(rng, T)
+    deadline_s = _sample_deadline_s(rng, T)
     h_ctx, h_kv = _sample_locality(rng, jobs, K)
-    return _aggregate(T, slack, h_ctx, h_kv, min(classes, jobs))
+    return _aggregate(T, deadline_s, h_ctx, h_kv, min(classes, jobs))
 
 
 def workload_quality_diagnostics(
@@ -43,20 +47,20 @@ def workload_quality_diagnostics(
     util_threshold: float = 0.7,
 ) -> dict[str, float | bool]:
     from coefficients import compute_coefficients
-    from metrics import allocation_diagnostics, shed_action_mix, shed_destination_mix
+    from metrics import allocation_diagnostics, source_load_action_mix, source_load_destination_mix
 
     diag = allocation_diagnostics(problem, compute_coefficients(problem), cvx_y)
-    cvx_action = shed_action_mix(problem, cvx_y)
-    greedy_action = shed_action_mix(problem, crossover_y)
-    cvx_dest = shed_destination_mix(problem, cvx_y)
-    greedy_dest = shed_destination_mix(problem, crossover_y)
+    cvx_action = source_load_action_mix(problem, cvx_y)
+    greedy_action = source_load_action_mix(problem, crossover_y)
+    cvx_dest = source_load_destination_mix(problem, cvx_y)
+    greedy_dest = source_load_destination_mix(problem, crossover_y)
     gap = (
         (crossover_objective - cvx_objective) / max(1.0, abs(cvx_objective))
         if crossover_feasible and crossover_objective is not None
         else np.inf
     )
     mix_distance = float(
-        abs(cvx_action["replay_shed_frac"] - greedy_action["replay_shed_frac"])
+        abs(cvx_action["replay_load_frac"] - greedy_action["replay_load_frac"])
         + np.sum(np.abs(cvx_dest - greedy_dest))
     )
     return {
@@ -65,7 +69,7 @@ def workload_quality_diagnostics(
         "crossover_mix_distance": mix_distance,
         "uses_multiple_classes": diag["active_classes_moved"] > 1.0,
         "uses_multiple_destinations": diag["active_destinations_used"] > 1.0,
-        "uses_both_actions": min(diag["replay_shed_frac"], diag["state_shed_frac"]) >= 0.05,
+        "uses_both_actions": min(diag["replay_load_frac"], diag["state_load_frac"]) >= 0.05,
         "has_resource_pressure": max(diag["max_net_util"], diag["max_prefill_util"])
         > util_threshold,
         "crossover_differs": bool(crossover_feasible and (gap >= 0.02 or mix_distance >= 0.10)),
@@ -108,11 +112,11 @@ def _sample_context_tokens(rng: np.random.Generator, jobs: int) -> np.ndarray:
     return np.rint(T).astype(float)
 
 
-def _sample_slack(rng: np.random.Generator, T: np.ndarray) -> np.ndarray:
+def _sample_deadline_s(rng: np.random.Generator, T: np.ndarray) -> np.ndarray:
     x = (np.log(T) - np.log(256.0)) / (np.log(200_000.0) - np.log(256.0))
-    slack = np.exp(np.log(3.5) + 2.4 * x + rng.normal(0.0, 1.05, T.size))
-    slack *= rng.choice((0.45, 1.0, 1.8), size=T.size, p=(0.25, 0.60, 0.15))
-    return np.clip(slack, 1.0, 300.0)
+    deadline_s = np.exp(np.log(3.5) + 2.4 * x + rng.normal(0.0, 1.05, T.size))
+    deadline_s *= rng.choice((0.45, 1.0, 1.8), size=T.size, p=(0.25, 0.60, 0.15))
+    return np.clip(deadline_s, 1.0, 300.0)
 
 
 def _sample_locality(
@@ -141,14 +145,14 @@ def _sample_locality(
 
 
 def _aggregate(
-    T: np.ndarray, slack: np.ndarray, h_ctx: np.ndarray, h_kv: np.ndarray, cap: int
+    T: np.ndarray, deadline_s: np.ndarray, h_ctx: np.ndarray, h_kv: np.ndarray, cap: int
 ) -> GeneratedWorkload:
     buckets = []
-    for key in sorted({_bucket_key(T[i], slack[i], h_ctx[i], h_kv[i]) for i in range(T.size)}):
+    for key in sorted({_bucket_key(T[i], deadline_s[i], h_ctx[i], h_kv[i]) for i in range(T.size)}):
         idx = np.array(
-            [i for i in range(T.size) if _bucket_key(T[i], slack[i], h_ctx[i], h_kv[i]) == key]
+            [i for i in range(T.size) if _bucket_key(T[i], deadline_s[i], h_ctx[i], h_kv[i]) == key]
         )
-        buckets.append(_summary(idx, T, slack, h_ctx, h_kv))
+        buckets.append(_summary(idx, T, deadline_s, h_ctx, h_kv))
     while len(buckets) > cap:
         _, i, j = min(
             (_distance(buckets[i], buckets[j]), i, j)
@@ -169,9 +173,9 @@ def _aggregate(
     )
 
 
-def _bucket_key(T: float, slack: float, h_ctx: np.ndarray, h_kv: np.ndarray) -> tuple[int, int, int]:
+def _bucket_key(T: float, deadline_s: float, h_ctx: np.ndarray, h_kv: np.ndarray) -> tuple[int, int, int]:
     ctx = int(np.digitize(T, (2_048.0, 8_192.0, 32_768.0, 100_000.0)))
-    deadline = int(np.digitize(slack, (8.0, 30.0, 90.0)))
+    deadline = int(np.digitize(deadline_s, (8.0, 30.0, 90.0)))
     if np.max(h_kv) >= 0.55:
         locality = 1 + int(np.argmax(h_kv))
     elif np.max(h_ctx) >= 0.55:
@@ -181,11 +185,11 @@ def _bucket_key(T: float, slack: float, h_ctx: np.ndarray, h_kv: np.ndarray) -> 
     return ctx, deadline, locality
 
 
-def _summary(idx: np.ndarray, T, slack, h_ctx, h_kv):
+def _summary(idx: np.ndarray, T, deadline_s, h_ctx, h_kv):
     return (
         float(idx.size),
         float(np.mean(T[idx])),
-        float(np.mean(slack[idx])),
+        float(np.mean(deadline_s[idx])),
         np.mean(h_ctx[idx], axis=0),
         np.mean(h_kv[idx], axis=0),
     )

@@ -25,17 +25,32 @@ from experiments.plot_queue_centered import (
 
 def test_policy_points_omit_infeasible_and_rounding_failed_rows():
     rows = [
-        {"policy": "CVXPY-rounded", "slack_multiplier": "0.5", "shed_fraction": "0.2", "miss_rate": "0.4"},
-        {"policy": "CVXPY-rounded", "slack_multiplier": "0.5", "shed_fraction": "0.3", "miss_rate": "nan"},
-        {"policy": "replay-only", "slack_multiplier": "0.5", "shed_fraction": "0.2", "miss_rate": "0.0"},
+        {
+            "policy": "CVXPY-rounded",
+            "deadline_scale": "0.5",
+            "source_load_fraction": "0.2",
+            "deadline_miss_rate": "0.4",
+        },
+        {
+            "policy": "CVXPY-rounded",
+            "deadline_scale": "0.5",
+            "source_load_fraction": "0.3",
+            "deadline_miss_rate": "nan",
+        },
+        {
+            "policy": "replay-only",
+            "deadline_scale": "0.5",
+            "source_load_fraction": "0.2",
+            "deadline_miss_rate": "0.0",
+        },
     ]
 
     assert _policy_points(
         rows,
         "CVXPY-rounded",
-        "shed_fraction",
-        "miss_rate",
-        {"slack_multiplier": 0.5},
+        "source_load_fraction",
+        "deadline_miss_rate",
+        {"deadline_scale": 0.5},
     ) == [(0.2, 0.4)]
 
 
@@ -70,11 +85,11 @@ def test_requested_outputs_exclude_retired_png_artifacts():
         "crossover_recovery.png",
     }
     requested = {
-        "safe_shed_frontier_lines.pdf",
-        "miss_rate_frontier_lines.pdf",
-        "delay_cdf_hard_case.pdf",
-        "queue_depth_hard_case.pdf",
-        "resource_pressure_scatter.pdf",
+        "source_load_frontier.pdf",
+        "deadline_miss_frontier.pdf",
+        "deadline_delay_cdf.pdf",
+        "queue_depth_example.pdf",
+        "network_prefill_busy_scatter.pdf",
     }
 
     assert set(OUTPUT_FILES) == requested

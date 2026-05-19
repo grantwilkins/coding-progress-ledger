@@ -2,22 +2,22 @@
 Claim:
 The CVXPY oracle and mirror descent with scalar bisection solve the same convex
 relaxation up to objective and feasibility tolerances. The deadline-aware CVXPY
-planner maximizes shed under cumulative per-destination slack capacity.
+planner maximizes source load under cumulative per-destination deadline capacity.
 
 Plausible wrong implementations:
 - Give mirror descent a penalty objective that differs from the CVXPY problem.
-- Use the wrong shed-gradient sign, so larger alpha rewards staying.
+- Use the wrong load-gradient sign, so larger alpha rewards staying.
 - Update the wrong bisection bound and return an infeasible allocation.
 - Compare allocations entrywise even when equivalent optima can differ.
-- Accept capacity or shed violations as solver success.
+- Accept capacity or source-load violations as solver success.
 - Mark a partial greedy baseline as feasible after it hits capacity.
 - Claim catalog action-mix conclusions from diagnostics instead of the CVXPY oracle.
 - Let the mixed greedy baseline ignore current destination load.
 - Let the crossover baseline quietly become another coupled-load greedy solver.
 - Accept a transition-coupled scenario that is single-destination or single-action.
 - Use full window capacity instead of available deadline-rate capacity.
-- Enforce slack buckets as disjoint bins instead of cumulative thresholds.
-- Ignore the evaluation shed cap when scanning a safe-shed frontier.
+- Enforce deadline buckets as disjoint bins instead of cumulative thresholds.
+- Ignore the source-load cap when scanning a frontier.
 """
 
 from __future__ import annotations
@@ -28,7 +28,7 @@ from baselines import solve_crossover_greedy, solve_mixed_greedy, solve_replay_o
 from catalog import ModelParams, catalog_models, get_model
 from coefficients import REPLAY, STATE, compute_coefficients
 from cvxpy_solver import solve_cvxpy, solve_deadline_aware_cvxpy, solve_soft_deadline_cvxpy
-from metrics import allocation_diagnostics, assert_feasible, shed_achieved, shed_action_mix
+from metrics import allocation_diagnostics, assert_feasible, source_load_action_mix, source_load_moved_s
 from mirror_descent import solve_mirror_descent
 from problem import ProblemData, make_problem
 
@@ -37,13 +37,13 @@ def small_problem() -> ProblemData:
     model = ModelParams("small", 4.0, 120.0, 1_000.0, 0.0)
     T = np.array([80.0, 300.0])
     d = np.array([4.0, 3.0])
-    total_shed = float(np.dot(T / model.prefill_tok_s, d))
+    total_source_load_s = float(np.dot(T / model.prefill_tok_s, d))
     return ProblemData(
         model=model,
         regime="small",
         T=T,
         d=d,
-        slack=np.array([2.0, 9.0]),
+        deadline_s=np.array([2.0, 9.0]),
         lambda_Bps=np.array([25_000.0, 80_000.0]),
         rho_prefill=np.array([1_700.0, 2_300.0]),
         C_net=np.array([40_000.0, 55_000.0]),
@@ -52,7 +52,7 @@ def small_problem() -> ProblemData:
         ell_prefill=np.array([600.0, 1_200.0]),
         h_ctx=np.array([[0.0, 0.2], [0.1, 0.0]]),
         h_kv=np.array([[0.0, 0.1], [0.3, 0.0]]),
-        B_shed=0.35 * total_shed,
+        source_load_target_s=0.35 * total_source_load_s,
     )
 
 
@@ -63,7 +63,7 @@ def deadline_rate_problem() -> ProblemData:
         regime="deadline",
         T=np.array([10.0, 10.0]),
         d=np.array([1.0, 1.0]),
-        slack=np.array([1.0, 100.0]),
+        deadline_s=np.array([1.0, 100.0]),
         lambda_Bps=np.array([10.0]),
         rho_prefill=np.array([1_000_000.0]),
         C_net=np.array([100.0]),
@@ -72,7 +72,7 @@ def deadline_rate_problem() -> ProblemData:
         ell_prefill=np.array([0.0]),
         h_ctx=np.zeros((2, 1)),
         h_kv=np.zeros((2, 1)),
-        B_shed=0.0,
+        source_load_target_s=0.0,
     )
 
 
@@ -84,7 +84,7 @@ def test_cvxpy_and_mirror_descent_agree_on_small_instance():
     rel_gap = abs(md.objective - cvx.objective) / max(1.0, abs(cvx.objective))
     assert rel_gap < 1e-3
     assert_feasible(problem, coeffs, md.y, shed_tol=1e-3)
-    infeasible = md.history["shed_violation"] > 1e-5
+    infeasible = md.history["source_load_shortfall_s"] > 1e-5
     assert np.all(np.isnan(md.history["feasible_objective"][infeasible]))
     assert np.all(np.diff(md.history["best_feasible_objective"]) <= 1e-12)
 
@@ -92,12 +92,12 @@ def test_cvxpy_and_mirror_descent_agree_on_small_instance():
 def test_larger_alpha_moves_more_work_on_small_instance():
     problem = small_problem()
     low = solve_mirror_descent(problem, iterations=250, bisection_iterations=1)
-    high_alpha_shed = low.history["shed"][low.history["alpha"] == 1.0][-1]
-    zero_alpha_shed = low.history["shed"][low.history["alpha"] == 0.0][-1]
-    assert high_alpha_shed > zero_alpha_shed
+    high_alpha_load = low.history["source_load_moved_s"][low.history["alpha"] == 1.0][-1]
+    zero_alpha_load = low.history["source_load_moved_s"][low.history["alpha"] == 0.0][-1]
+    assert high_alpha_load > zero_alpha_load
 
 
-def test_deadline_aware_solver_uses_available_rate_by_cumulative_slack_threshold():
+def test_deadline_aware_solver_uses_available_rate_by_cumulative_deadline_threshold():
     problem = deadline_rate_problem()
 
     tight = solve_deadline_aware_cvxpy(problem, deadline_margin=0.5)
@@ -109,11 +109,11 @@ def test_deadline_aware_solver_uses_available_rate_by_cumulative_slack_threshold
     np.testing.assert_allclose(loose.objective, 2.0, atol=1e-4)
 
 
-def test_deadline_aware_solver_respects_shed_cap_for_frontier_scans():
+def test_deadline_aware_solver_respects_source_load_cap_for_frontier_scans():
     problem = deadline_rate_problem()
-    result = solve_deadline_aware_cvxpy(problem, deadline_margin=1.0, shed_cap=1.25)
+    result = solve_deadline_aware_cvxpy(problem, deadline_margin=1.0, source_load_cap=1.25)
 
-    np.testing.assert_allclose(shed_achieved(problem, result.y), 1.25, atol=1e-4)
+    np.testing.assert_allclose(source_load_moved_s(problem, result.y), 1.25, atol=1e-4)
 
 
 def test_mirror_descent_preserves_glm_transition_mix():
@@ -122,11 +122,11 @@ def test_mirror_descent_preserves_glm_transition_mix():
     cvx = solve_cvxpy(problem)
     md = solve_mirror_descent(problem, iterations=1000, bisection_iterations=12)
     gap = max(0.0, (md.objective - cvx.objective) / max(1.0, abs(cvx.objective)))
-    cvx_mix = shed_action_mix(problem, cvx.y)
-    md_mix = shed_action_mix(problem, md.y)
+    cvx_mix = source_load_action_mix(problem, cvx.y)
+    md_mix = source_load_action_mix(problem, md.y)
     assert gap < 2e-3
-    assert shed_achieved(problem, md.y) >= problem.relief_target_s - 1e-5
-    assert abs(md_mix["replay_shed_frac"] - cvx_mix["replay_shed_frac"]) < 0.08
+    assert source_load_moved_s(problem, md.y) >= problem.source_load_target_s - 1e-5
+    assert abs(md_mix["replay_load_frac"] - cvx_mix["replay_load_frac"]) < 0.08
 
 
 def test_cvxpy_catalog_action_mix_matches_final_claim():
@@ -137,7 +137,7 @@ def test_cvxpy_catalog_action_mix_matches_final_claim():
         for regime in regimes:
             problem = make_problem(model, regime)
             shares[model.name].append(
-                shed_action_mix(problem, solve_cvxpy(problem).y)["replay_shed_frac"]
+                source_load_action_mix(problem, solve_cvxpy(problem).y)["replay_load_frac"]
             )
     assert max(shares["DeepSeek-V4-Pro"]) < 0.05
     assert min(shares["Qwen3-Next-80B-A3B"]) > 0.95
@@ -152,7 +152,7 @@ def test_replay_baseline_reports_infeasible_when_capacity_blocks_target():
         regime="capacity",
         T=np.array([10.0]),
         d=np.array([1.0]),
-        slack=np.array([1.0]),
+        deadline_s=np.array([1.0]),
         lambda_Bps=np.array([1e9]),
         rho_prefill=np.array([1.0]),
         C_net=np.array([1e12]),
@@ -161,12 +161,12 @@ def test_replay_baseline_reports_infeasible_when_capacity_blocks_target():
         ell_prefill=np.array([0.0]),
         h_ctx=np.zeros((1, 1)),
         h_kv=np.zeros((1, 1)),
-        B_shed=1.0,
+        source_load_target_s=1.0,
     )
     result = solve_replay_only(problem)
     assert not result.feasible
     assert result.objective is None
-    assert result.shed_achieved < problem.relief_target_s
+    assert result.source_load_moved_s < problem.source_load_target_s
 
 
 def loaded_two_dest_problem() -> ProblemData:
@@ -176,7 +176,7 @@ def loaded_two_dest_problem() -> ProblemData:
         regime="loaded",
         T=np.array([10.0]),
         d=np.array([1.0]),
-        slack=np.array([1.0]),
+        deadline_s=np.array([1.0]),
         lambda_Bps=np.array([1e12, 1e12]),
         rho_prefill=np.array([10.0, 10.0]),
         C_net=np.array([1e15, 1e15]),
@@ -185,7 +185,7 @@ def loaded_two_dest_problem() -> ProblemData:
         ell_prefill=np.array([99.0, 0.0]),
         h_ctx=np.zeros((1, 2)),
         h_kv=np.zeros((1, 2)),
-        B_shed=1.0,
+        source_load_target_s=1.0,
     )
 
 
@@ -214,9 +214,9 @@ def test_transition_coupled_scenario_quality_gate():
     assert coeffs.R0[2, 2, STATE] < coeffs.R0[2, 2, REPLAY]
     assert np.any(np.all((problem.h_ctx == 0.0) & (problem.h_kv == 0.0), axis=1))
     assert diag["active_destinations_used"] >= 2
-    assert min(diag["replay_shed_frac"], diag["state_shed_frac"]) >= 0.05
+    assert min(diag["replay_load_frac"], diag["state_load_frac"]) >= 0.05
     assert max(diag["max_net_util"], diag["max_prefill_util"]) > 0.7
     assert crossover.feasible
-    assert shed_achieved(problem, soft.y) >= problem.relief_target_s - 1e-5
-    assert soft.diagnostics["deadline_debt_max"] == 0.0
+    assert source_load_moved_s(problem, soft.y) >= problem.source_load_target_s - 1e-5
+    assert soft.diagnostics["deadline_overrun_max"] == 0.0
     assert soft.diagnostics["deadline_load_max"] <= soft.diagnostics["deadline_headroom"] + 1e-5

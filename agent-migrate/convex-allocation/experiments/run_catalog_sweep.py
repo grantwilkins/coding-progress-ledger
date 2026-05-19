@@ -22,9 +22,9 @@ from evaluation import WorkloadConfig, parse_workload_config
 from metrics import (
     allocation_diagnostics,
     action_mix,
-    shed_achieved,
-    shed_action_mix,
-    shed_destination_mix,
+    source_load_action_mix,
+    source_load_destination_mix,
+    source_load_moved_s,
     utilization,
 )
 from mirror_descent import solve_mirror_descent
@@ -55,18 +55,18 @@ def _policy_row(model, regime, policy, result, problem, coeffs, diagnostics, cvx
     )
     y = result.allocation if hasattr(result, "allocation") else result.y
     mix = action_mix(problem, y)
-    shed_mix = shed_action_mix(problem, y)
+    source_load_mix = source_load_action_mix(problem, y)
     alloc = allocation_diagnostics(problem, coeffs, y)
-    shed = shed_achieved(problem, y)
-    shed_violation = max(0.0, problem.relief_target_s - shed)
-    excess_shed = max(0.0, shed - problem.relief_target_s)
+    source_load_moved = source_load_moved_s(problem, y)
+    source_load_shortfall = max(0.0, problem.source_load_target_s - source_load_moved)
+    excess_source_load = max(0.0, source_load_moved - problem.source_load_target_s)
     capacity_feasible = bool(np.max(net_util) < 1.0 and np.max(prefill_util) < 1.0)
     objective = getattr(result, "objective", None)
     feasible = bool(
         getattr(result, "feasible", True)
         and objective is not None
         and np.isfinite(objective)
-        and shed_violation <= 1e-5
+        and source_load_shortfall <= 1e-5
         and capacity_feasible
     )
     obj_gap = objective - cvx_obj if feasible else None
@@ -78,12 +78,10 @@ def _policy_row(model, regime, policy, result, problem, coeffs, diagnostics, cvx
         "objective": f"{objective:.10g}" if feasible else "INFEASIBLE",
         "objective_gap_to_cvx": f"{max(0.0, obj_gap):.10g}" if feasible else "INFEASIBLE",
         "relative_gap_to_cvx": f"{max(0.0, rel_gap):.10g}" if feasible else "INFEASIBLE",
-        "shed_achieved": f"{shed:.10g}",
-        "shed_target": f"{problem.relief_target_s:.10g}",
-        "relief_achieved_s": f"{shed:.10g}",
-        "relief_target_s": f"{problem.relief_target_s:.10g}",
-        "shed_violation": f"{shed_violation:.10g}",
-        "excess_shed": f"{excess_shed:.10g}",
+        "source_load_moved_s": f"{source_load_moved:.10g}",
+        "source_load_target_s": f"{problem.source_load_target_s:.10g}",
+        "source_load_shortfall_s": f"{source_load_shortfall:.10g}",
+        "excess_source_load_s": f"{excess_source_load:.10g}",
         "max_net_util": f"{float(np.max(net_util)):.10g}",
         "max_prefill_util": f"{float(np.max(prefill_util)):.10g}",
         "capacity_feasible": str(capacity_feasible),
@@ -95,12 +93,12 @@ def _policy_row(model, regime, policy, result, problem, coeffs, diagnostics, cvx
         "destination_entropy": f"{alloc['destination_entropy']:.10g}",
         "action_entropy": f"{alloc['action_entropy']:.10g}",
         **{key: f"{value:.10g}" for key, value in mix.items()},
-        **{key: f"{value:.10g}" for key, value in shed_mix.items()},
+        **{key: f"{value:.10g}" for key, value in source_load_mix.items()},
         "replay_demand_over_capacity": f"{diagnostics[0]:.10g}",
         "state_bytes_over_capacity": f"{diagnostics[1]:.10g}",
-        "deadline_debt_mean": f"{(getattr(result, 'diagnostics', None) or {}).get('deadline_debt_mean', np.nan):.10g}",
-        "deadline_debt_p95": f"{(getattr(result, 'diagnostics', None) or {}).get('deadline_debt_p95', np.nan):.10g}",
-        "deadline_debt_max": f"{(getattr(result, 'diagnostics', None) or {}).get('deadline_debt_max', np.nan):.10g}",
+        "deadline_overrun_mean": f"{(getattr(result, 'diagnostics', None) or {}).get('deadline_overrun_mean', np.nan):.10g}",
+        "deadline_overrun_p95": f"{(getattr(result, 'diagnostics', None) or {}).get('deadline_overrun_p95', np.nan):.10g}",
+        "deadline_overrun_max": f"{(getattr(result, 'diagnostics', None) or {}).get('deadline_overrun_max', np.nan):.10g}",
         "deadline_load_max": f"{(getattr(result, 'diagnostics', None) or {}).get('deadline_load_max', np.nan):.10g}",
         "feasible": str(bool(feasible)),
     }
@@ -109,9 +107,9 @@ def _policy_row(model, regime, policy, result, problem, coeffs, diagnostics, cvx
 def _log_run(model, regime, problem, coeffs, diagnostics, cvx, md):
     net_util, prefill_util = utilization(problem, coeffs, md.y)
     gap = max(0.0, (md.objective - cvx.objective) / max(1.0, abs(cvx.objective)))
-    shed = shed_achieved(problem, md.y)
-    md_mix = shed_action_mix(problem, md.y)
-    cvx_mix = shed_action_mix(problem, cvx.y)
+    source_load_moved = source_load_moved_s(problem, md.y)
+    md_mix = source_load_action_mix(problem, md.y)
+    cvx_mix = source_load_action_mix(problem, cvx.y)
     print(
         f"{model.name} / {regime}: diagnostics replay_demand/cap={diagnostics[0]:.3f}, "
         f"state_bytes/cap={diagnostics[1]:.3f}"
@@ -119,11 +117,11 @@ def _log_run(model, regime, problem, coeffs, diagnostics, cvx, md):
     print(
         "  CVXPY oracle objective="
         f"{cvx.objective:.6g}; mirror best feasible objective={md.objective:.6g}; "
-        f"relative_gap={gap:.3g}; shed={shed:.6g}/{problem.relief_target_s:.6g}; "
+        f"relative_gap={gap:.3g}; source_load={source_load_moved:.6g}/{problem.source_load_target_s:.6g}; "
         f"max_net_util={float(np.max(net_util)):.3f}; "
         f"max_prefill_util={float(np.max(prefill_util)):.3f}; "
         f"alpha={md.alpha:.3g}; "
-        f"replay_shed MD/CVXPY={md_mix['replay_shed_frac']:.3f}/{cvx_mix['replay_shed_frac']:.3f}"
+        f"replay_load MD/CVXPY={md_mix['replay_load_frac']:.3f}/{cvx_mix['replay_load_frac']:.3f}"
     )
 
 
@@ -182,7 +180,7 @@ def run_transition_coupled(out, workload_config: WorkloadConfig = WorkloadConfig
     crossover = solve_crossover_greedy(problem)
     results = {
         "CVXPY": cvx,
-        "soft-deadline": soft,
+        "deadline-penalty": soft,
         "mirror-descent-best": md,
         "crossover-greedy": crossover,
         "mixed-greedy": solve_mixed_greedy(problem),
@@ -227,14 +225,14 @@ def _allocation_summary_rows(problem, results):
     labels = DEST_LABELS[problem.regime]
     for policy, result in results.items():
         y = result.allocation if hasattr(result, "allocation") else result.y
-        action = shed_action_mix(problem, y)
-        dest = shed_destination_mix(problem, y)
+        action = source_load_action_mix(problem, y)
+        dest = source_load_destination_mix(problem, y)
         rows.append(
             {
                 "policy": policy,
-                "replay_shed_frac": f"{action['replay_shed_frac']:.6g}",
-                "state_shed_frac": f"{action['state_shed_frac']:.6g}",
-                **{f"{label}_shed_frac": f"{share:.6g}" for label, share in zip(labels, dest)},
+                "replay_load_fraction": f"{action['replay_load_frac']:.6g}",
+                "state_transfer_load_fraction": f"{action['state_load_frac']:.6g}",
+                **{f"{label}_load_fraction": f"{share:.6g}" for label, share in zip(labels, dest)},
             }
         )
     return rows
@@ -250,7 +248,7 @@ def _write_rows(path, rows):
 def _transition_queue_rows(problem, results):
     policies = (
         ("CVXPY", "CVXPY-rounded"),
-        ("soft-deadline", "soft-deadline-rounded"),
+        ("deadline-penalty", "deadline-penalty-rounded"),
         ("mirror-descent-best", "mirror-descent-rounded"),
         ("crossover-greedy", "crossover-greedy"),
         ("mixed-greedy", "mixed-greedy"),
@@ -264,7 +262,7 @@ def _transition_queue_rows(problem, results):
         result = results[source]
         y = result.allocation if hasattr(result, "allocation") else result.y
         row = _empty_transition_queue_row(policy)
-        if not getattr(result, "feasible", True) or shed_achieved(problem, y) < problem.relief_target_s - 1e-5:
+        if not getattr(result, "feasible", True) or source_load_moved_s(problem, y) < problem.source_load_target_s - 1e-5:
             rows.append(row)
             continue
         try:
@@ -276,17 +274,17 @@ def _transition_queue_rows(problem, results):
         row.update(
             {
                 "status": "OK",
-                "rounded_shed_achieved": f"{metrics['rounded_shed_achieved']:.10g}",
-                "rounded_shed_target": f"{metrics['rounded_shed_target']:.10g}",
-                "rounded_shed_ratio": f"{metrics['rounded_shed_ratio']:.10g}",
+                "source_load_moved_s": f"{metrics['source_load_moved_s']:.10g}",
+                "source_load_target_s": f"{metrics['source_load_target_s']:.10g}",
+                "source_load_ratio": f"{metrics['source_load_ratio']:.10g}",
                 "mean_reconstruction_delay": f"{metrics['mean_reconstruction_delay']:.10g}",
                 "p50_reconstruction_delay": f"{metrics['p50_reconstruction_delay']:.10g}",
                 "p95_reconstruction_delay": f"{metrics['p95_reconstruction_delay']:.10g}",
                 "deadline_miss_rate": f"{metrics['deadline_miss_rate']:.10g}",
                 "max_network_busy_window": f"{metrics['max_network_busy_window']:.10g}",
                 "max_prefill_busy_window": f"{metrics['max_prefill_busy_window']:.10g}",
-                "replay_shed_frac": f"{metrics['replay_shed_frac']:.10g}",
-                "state_shed_frac": f"{metrics['state_shed_frac']:.10g}",
+                "replay_load_fraction": f"{metrics['replay_load_frac']:.10g}",
+                "state_transfer_load_fraction": f"{metrics['state_load_frac']:.10g}",
             }
         )
         rows.append(row)
@@ -297,17 +295,17 @@ def _empty_transition_queue_row(policy):
     return {
         "policy": policy,
         "status": "INFEASIBLE",
-        "rounded_shed_achieved": "INFEASIBLE",
-        "rounded_shed_target": "INFEASIBLE",
-        "rounded_shed_ratio": "INFEASIBLE",
+        "source_load_moved_s": "INFEASIBLE",
+        "source_load_target_s": "INFEASIBLE",
+        "source_load_ratio": "INFEASIBLE",
         "mean_reconstruction_delay": "INFEASIBLE",
         "p50_reconstruction_delay": "INFEASIBLE",
         "p95_reconstruction_delay": "INFEASIBLE",
         "deadline_miss_rate": "INFEASIBLE",
         "max_network_busy_window": "INFEASIBLE",
         "max_prefill_busy_window": "INFEASIBLE",
-        "replay_shed_frac": "INFEASIBLE",
-        "state_shed_frac": "INFEASIBLE",
+        "replay_load_fraction": "INFEASIBLE",
+        "state_transfer_load_fraction": "INFEASIBLE",
     }
 
 
@@ -316,8 +314,8 @@ def _print_transition_outputs(rows, summary, queue_rows):
         "policy",
         "objective",
         "relative_gap_to_cvx",
-        "replay_shed_frac",
-        "state_shed_frac",
+        "replay_load_frac",
+        "state_load_frac",
         "active_classes_moved",
         "active_destinations_used",
         "destination_entropy",
@@ -348,7 +346,7 @@ def _print_queue_latex(rows):
     print("\ntransition-coupled queue table (LaTeX)")
     print("\\begin{tabular}{lrrrrrrrrr}")
     print(
-        "policy & shed/target & mean & p50 & p95 & miss & net/H & prefill/H & replay & state \\\\"
+        "policy & source load/target & mean & p50 & p95 & miss & net/H & prefill/H & replay & state \\\\"
     )
     print("\\hline")
     for row in rows:
@@ -356,15 +354,15 @@ def _print_queue_latex(rows):
             print(f"{row['policy']} & \\multicolumn{{9}}{{c}}{{{row['status']}}} \\\\")
             continue
         print(
-            f"{row['policy']} & {float(row['rounded_shed_ratio']):.3f} & "
+            f"{row['policy']} & {float(row['source_load_ratio']):.3f} & "
             f"{float(row['mean_reconstruction_delay']):.3f} & "
             f"{float(row['p50_reconstruction_delay']):.3f} & "
             f"{float(row['p95_reconstruction_delay']):.3f} & "
             f"{float(row['deadline_miss_rate']):.3f} & "
             f"{float(row['max_network_busy_window']):.3f} & "
             f"{float(row['max_prefill_busy_window']):.3f} & "
-            f"{float(row['replay_shed_frac']):.3f} & "
-            f"{float(row['state_shed_frac']):.3f} \\\\"
+            f"{float(row['replay_load_fraction']):.3f} & "
+            f"{float(row['state_transfer_load_fraction']):.3f} \\\\"
         )
     print("\\end{tabular}")
 

@@ -28,9 +28,17 @@ class RequestRecord:
 @dataclass(frozen=True)
 class RoundedAllocation:
     y: np.ndarray
-    shed_target: float
-    rounded_shed: float
+    source_load_target_s: float
+    source_load_moved_s: float
     records: tuple[RequestRecord, ...]
+
+    @property
+    def shed_target(self) -> float:
+        return self.source_load_target_s
+
+    @property
+    def rounded_shed(self) -> float:
+        return self.source_load_moved_s
 
 
 @dataclass(frozen=True)
@@ -73,7 +81,7 @@ def round_allocation(problem: ProblemData, y: np.ndarray) -> RoundedAllocation:
 
     return RoundedAllocation(
         rounded,
-        problem.relief_target_s,
+        problem.source_load_target_s,
         float(np.dot(problem.tau, moved)),
         _request_records(problem, rounded),
     )
@@ -99,7 +107,7 @@ def evaluate_rounded_queue_trace(
     y = _integer_allocation(problem, y)
     rounded_shed = float(np.dot(problem.tau, np.sum(y[:, : y.shape[1] - 1], axis=1)))
     metrics, trace = evaluate_static_queue_trace(problem, _request_records(problem, y))
-    _add_shed_metrics(metrics, problem.relief_target_s, rounded_shed)
+    _add_shed_metrics(metrics, problem.source_load_target_s, rounded_shed)
     return metrics, trace
 
 
@@ -170,6 +178,8 @@ def _evaluate_static_queue(
         "max_prefill_busy_window": float(np.max(prefill_busy) / H),
         "replay_shed_frac": float(replay_shed / total_shed),
         "state_shed_frac": float(state_shed / total_shed),
+        "replay_load_frac": float(replay_shed / total_shed),
+        "state_load_frac": float(state_shed / total_shed),
         "replay_relief_frac": float(replay_shed / total_shed),
         "state_relief_frac": float(state_shed / total_shed),
     }
@@ -214,7 +224,7 @@ def _rounded_moved_counts(
     problem: ProblemData, y: np.ndarray, d: np.ndarray, T: np.ndarray
 ) -> tuple[int, ...]:
     moved_float = np.sum(y[:, : y.shape[1] - 1], axis=1)
-    target = max(0, int(np.ceil(problem.relief_target_s * problem.model.prefill_tok_s - 1e-9)))
+    target = max(0, int(np.ceil(problem.source_load_target_s * problem.model.prefill_tok_s - 1e-9)))
     total = int(np.dot(d, T))
     if target > total:
         raise ValueError("shed target exceeds total class work")
@@ -286,6 +296,12 @@ def _add_shed_metrics(metrics: dict[str, float], target: float, achieved: float)
     ratio = np.nan if target == 0.0 else achieved / target
     metrics.update(
         {
+            "source_load_moved_s": achieved,
+            "source_load_target_s": target,
+            "source_load_ratio": ratio,
+            "load_moved_s": achieved,
+            "load_target_s": target,
+            "load_ratio": ratio,
             "rounded_shed_achieved": achieved,
             "rounded_shed_target": target,
             "rounded_shed_ratio": ratio,
