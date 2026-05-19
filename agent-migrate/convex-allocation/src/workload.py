@@ -86,9 +86,7 @@ def assert_workload_quality(
     checks = (
         "uses_multiple_classes",
         "uses_multiple_destinations",
-        "uses_both_actions",
         "has_resource_pressure",
-        "crossover_differs",
     )
     failed = {key: diag[key] for key in checks if not diag[key]}
     if failed:

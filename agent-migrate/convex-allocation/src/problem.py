@@ -8,13 +8,13 @@ from catalog import ModelParams
 from workload import generate_workload
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, init=False)
 class ProblemData:
     model: ModelParams
     regime: str
     T: np.ndarray
     d: np.ndarray
-    slack: np.ndarray
+    deadline_s: np.ndarray
     lambda_Bps: np.ndarray
     rho_prefill: np.ndarray
     C_net: np.ndarray
@@ -23,8 +23,61 @@ class ProblemData:
     ell_prefill: np.ndarray
     h_ctx: np.ndarray
     h_kv: np.ndarray
-    B_shed: float
+    relief_target_s: float
     w: float = 1.0
+
+    def __init__(
+        self,
+        model: ModelParams,
+        regime: str,
+        T: np.ndarray,
+        d: np.ndarray,
+        deadline_s: np.ndarray | None = None,
+        lambda_Bps: np.ndarray | None = None,
+        rho_prefill: np.ndarray | None = None,
+        C_net: np.ndarray | None = None,
+        C_prefill: np.ndarray | None = None,
+        ell_net: np.ndarray | None = None,
+        ell_prefill: np.ndarray | None = None,
+        h_ctx: np.ndarray | None = None,
+        h_kv: np.ndarray | None = None,
+        relief_target_s: float | None = None,
+        w: float = 1.0,
+        slack: np.ndarray | None = None,
+        B_shed: float | None = None,
+    ) -> None:
+        if deadline_s is None:
+            deadline_s = slack
+        elif slack is not None and not np.allclose(deadline_s, slack):
+            raise ValueError("deadline_s and slack differ")
+        if relief_target_s is None:
+            relief_target_s = B_shed
+        elif B_shed is not None and not np.isclose(relief_target_s, B_shed):
+            raise ValueError("relief_target_s and B_shed differ")
+        if deadline_s is None or relief_target_s is None:
+            raise ValueError("deadline_s and relief_target_s are required")
+        values = {
+            "model": model,
+            "regime": regime,
+            "T": T,
+            "d": d,
+            "deadline_s": deadline_s,
+            "lambda_Bps": lambda_Bps,
+            "rho_prefill": rho_prefill,
+            "C_net": C_net,
+            "C_prefill": C_prefill,
+            "ell_net": ell_net,
+            "ell_prefill": ell_prefill,
+            "h_ctx": h_ctx,
+            "h_kv": h_kv,
+            "relief_target_s": relief_target_s,
+            "w": w,
+        }
+        missing = [key for key, value in values.items() if value is None]
+        if missing:
+            raise ValueError(f"missing ProblemData fields: {missing}")
+        for key, value in values.items():
+            object.__setattr__(self, key, value)
 
     @property
     def G(self) -> int:
@@ -38,6 +91,14 @@ class ProblemData:
     def tau(self) -> np.ndarray:
         return self.T / self.model.prefill_tok_s
 
+    @property
+    def slack(self) -> np.ndarray:
+        return self.deadline_s
+
+    @property
+    def B_shed(self) -> float:
+        return self.relief_target_s
+
 
 WORKLOAD_T = np.array([512, 2048, 8192, 32768, 100000, 200000], dtype=float)
 WORKLOAD_D = np.array([200, 150, 100, 50, 20, 10], dtype=float)
@@ -47,8 +108,8 @@ WORKLOAD_SLACK = np.array([2, 10, 30, 60, 120, 300], dtype=float)
 def make_problem(
     model: ModelParams,
     regime: str,
-    shed_fraction: float = 0.4,
-    slack_multiplier: float = 1.0,
+    relief_fraction: float = 0.4,
+    deadline_scale: float = 1.0,
     w: float = 1.0,
     window_s: float = 60.0,
     gpu_count: np.ndarray | None = None,
@@ -57,18 +118,24 @@ def make_problem(
     workload_jobs: int = 1000,
     workload_classes: int = 12,
     workload_profile: str = "shed_event_long_context",
+    shed_fraction: float | None = None,
+    slack_multiplier: float | None = None,
 ) -> ProblemData:
+    if shed_fraction is not None:
+        relief_fraction = shed_fraction
+    if slack_multiplier is not None:
+        deadline_scale = slack_multiplier
     if workload_source == "fixed":
         T = WORKLOAD_T.copy()
         d = WORKLOAD_D.copy()
-        slack = WORKLOAD_SLACK.copy() * slack_multiplier
+        deadline_s = WORKLOAD_SLACK.copy() * deadline_scale
         h_ctx = np.zeros((T.size, 3))
         h_kv = np.zeros((T.size, 3))
     elif workload_source == "generated":
         workload = generate_workload(3, workload_seed, workload_jobs, workload_classes, workload_profile)
         T = workload.T
         d = workload.d
-        slack = workload.slack * slack_multiplier
+        deadline_s = workload.slack * deadline_scale
         h_ctx = workload.h_ctx
         h_kv = workload.h_kv
     else:
@@ -113,13 +180,13 @@ def make_problem(
     C_prefill = rho_prefill * window_s
     ell_net = net_frac * C_net
     ell_prefill = prefill_frac * C_prefill
-    B_shed = shed_fraction * float(np.dot(T / model.prefill_tok_s, d))
+    relief_target_s = relief_fraction * float(np.dot(T / model.prefill_tok_s, d))
     return ProblemData(
         model=model,
         regime=regime,
         T=T,
         d=d,
-        slack=slack,
+        deadline_s=deadline_s,
         lambda_Bps=lambda_Bps,
         rho_prefill=rho_prefill,
         C_net=C_net,
@@ -128,7 +195,7 @@ def make_problem(
         ell_prefill=ell_prefill,
         h_ctx=h_ctx.copy(),
         h_kv=h_kv.copy(),
-        B_shed=B_shed,
+        relief_target_s=relief_target_s,
         w=w,
     )
 

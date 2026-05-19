@@ -6,6 +6,7 @@ from heapq import heappop, heappush
 import numpy as np
 
 from coefficients import ACTIONS, REPLAY, compute_coefficients, move_view
+from metrics import available_rates
 from problem import ProblemData
 
 
@@ -15,9 +16,13 @@ class RequestRecord:
     k: int
     action: str
     T: float
-    slack: float
+    deadline_s: float
     network_demand: float
     prefill_demand: float
+
+    @property
+    def slack(self) -> float:
+        return self.deadline_s
 
 
 @dataclass(frozen=True)
@@ -33,13 +38,17 @@ class QueueTraceRecord:
     g: int
     k: int
     action: str
-    slack: float
+    deadline_s: float
     network_queue_wait: float
     network_service_time: float
     prefill_queue_wait: float
     prefill_service_time: float
     reconstruction_delay: float
     deadline_missed: bool
+
+    @property
+    def slack(self) -> float:
+        return self.deadline_s
 
 
 def round_allocation(problem: ProblemData, y: np.ndarray) -> RoundedAllocation:
@@ -64,7 +73,7 @@ def round_allocation(problem: ProblemData, y: np.ndarray) -> RoundedAllocation:
 
     return RoundedAllocation(
         rounded,
-        problem.B_shed,
+        problem.relief_target_s,
         float(np.dot(problem.tau, moved)),
         _request_records(problem, rounded),
     )
@@ -90,7 +99,7 @@ def evaluate_rounded_queue_trace(
     y = _integer_allocation(problem, y)
     rounded_shed = float(np.dot(problem.tau, np.sum(y[:, : y.shape[1] - 1], axis=1)))
     metrics, trace = evaluate_static_queue_trace(problem, _request_records(problem, y))
-    _add_shed_metrics(metrics, problem.B_shed, rounded_shed)
+    _add_shed_metrics(metrics, problem.relief_target_s, rounded_shed)
     return metrics, trace
 
 
@@ -118,7 +127,7 @@ def _evaluate_static_queue(
     net_busy = np.zeros(problem.K)
     for k in range(problem.K):
         jobs = [
-            (0.0, r.network_demand / lambda_avail[k], r.slack, (r.g, i), i)
+            (0.0, r.network_demand / lambda_avail[k], r.deadline_s, (r.g, i), i)
             for i, r in enumerate(records)
             if r.k == k
         ]
@@ -133,7 +142,7 @@ def _evaluate_static_queue(
     prefill_busy = np.zeros(problem.K)
     for k in range(problem.K):
         jobs = [
-            (net_done[i], r.prefill_demand / rho_avail[k], r.slack, (r.g, i), i)
+            (net_done[i], r.prefill_demand / rho_avail[k], r.deadline_s, (r.g, i), i)
             for i, r in enumerate(records)
             if r.k == k and r.action == ACTIONS[REPLAY]
         ]
@@ -146,31 +155,36 @@ def _evaluate_static_queue(
     state_shed = sum(problem.tau[r.g] for r in records if r.action != ACTIONS[REPLAY])
     total_shed = replay_shed + state_shed
     delay = np.asarray(complete, dtype=float)
-    slack = np.asarray([r.slack for r in records], dtype=float)
+    deadline_s = np.asarray([r.deadline_s for r in records], dtype=float)
+    p95_ratio = float(np.percentile(delay / deadline_s, 95))
+    miss_rate = float(np.mean(delay > deadline_s))
     metrics = {
         "mean_reconstruction_delay": float(np.mean(delay)),
         "p50_reconstruction_delay": float(np.percentile(delay, 50)),
         "p95_reconstruction_delay": float(np.percentile(delay, 95)),
         "p99_reconstruction_delay": float(np.percentile(delay, 99)),
-        "p95_normalized_reconstruction_delay": float(np.percentile(delay / slack, 95)),
-        "deadline_miss_rate": float(np.mean(delay > slack)),
+        "p95_normalized_reconstruction_delay": p95_ratio,
+        "p95_reconstruction_delay_ratio": p95_ratio,
+        "deadline_miss_rate": miss_rate,
         "max_network_busy_window": float(np.max(net_busy) / H),
         "max_prefill_busy_window": float(np.max(prefill_busy) / H),
         "replay_shed_frac": float(replay_shed / total_shed),
         "state_shed_frac": float(state_shed / total_shed),
+        "replay_relief_frac": float(replay_shed / total_shed),
+        "state_relief_frac": float(state_shed / total_shed),
     }
     trace = tuple(
         QueueTraceRecord(
             r.g,
             r.k,
             r.action,
-            r.slack,
+            r.deadline_s,
             float(net_wait[i]),
             float(net_service[i]),
             float(prefill_wait[i]),
             float(prefill_service[i]),
             float(delay[i]),
-            bool(delay[i] > r.slack),
+            bool(delay[i] > r.deadline_s),
         )
         for i, r in enumerate(records)
     )
@@ -200,7 +214,7 @@ def _rounded_moved_counts(
     problem: ProblemData, y: np.ndarray, d: np.ndarray, T: np.ndarray
 ) -> tuple[int, ...]:
     moved_float = np.sum(y[:, : y.shape[1] - 1], axis=1)
-    target = max(0, int(np.ceil(problem.B_shed * problem.model.prefill_tok_s - 1e-9)))
+    target = max(0, int(np.ceil(problem.relief_target_s * problem.model.prefill_tok_s - 1e-9)))
     total = int(np.dot(d, T))
     if target > total:
         raise ValueError("shed target exceeds total class work")
@@ -259,7 +273,7 @@ def _request_records(problem: ProblemData, y: np.ndarray) -> tuple[RequestRecord
                     k,
                     ACTIONS[action],
                     float(problem.T[g]),
-                    float(problem.slack[g]),
+                    float(problem.deadline_s[g]),
                     float(coeffs.b_net[g, k, action]),
                     float(coeffs.b_prefill[g, k, action]),
                 )
@@ -269,11 +283,15 @@ def _request_records(problem: ProblemData, y: np.ndarray) -> tuple[RequestRecord
 
 
 def _add_shed_metrics(metrics: dict[str, float], target: float, achieved: float) -> None:
+    ratio = np.nan if target == 0.0 else achieved / target
     metrics.update(
         {
             "rounded_shed_achieved": achieved,
             "rounded_shed_target": target,
-            "rounded_shed_ratio": np.nan if target == 0.0 else achieved / target,
+            "rounded_shed_ratio": ratio,
+            "rounded_relief_achieved_s": achieved,
+            "relief_target_s": target,
+            "relief_ratio": ratio,
         }
     )
 
@@ -289,17 +307,7 @@ def _integer_allocation(problem: ProblemData, y: np.ndarray) -> np.ndarray:
 
 
 def _available_rates(problem: ProblemData) -> tuple[float, np.ndarray, np.ndarray]:
-    windows = np.concatenate(
-        [problem.C_net / problem.lambda_Bps, problem.C_prefill / problem.rho_prefill]
-    )
-    if not np.allclose(windows, windows[0]):
-        raise ValueError("resource capacities imply inconsistent windows")
-    H = float(windows[0])
-    lambda_avail = (problem.C_net - problem.ell_net) / H
-    rho_avail = (problem.C_prefill - problem.ell_prefill) / H
-    if np.any(lambda_avail <= 0.0) or np.any(rho_avail <= 0.0):
-        raise ValueError("background load leaves nonpositive service rate")
-    return H, lambda_avail, rho_avail
+    return available_rates(problem)
 
 
 def _schedule(

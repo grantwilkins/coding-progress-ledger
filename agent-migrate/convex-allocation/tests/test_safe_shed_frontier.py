@@ -62,7 +62,7 @@ def test_failure_mode_separates_rounding_slack_and_resource_bottlenecks():
     }
     assert _failure_mode(row) == "rounding artifact"
 
-    assert _failure_mode({**row, "rounded_shed_achieved": 10.0, "miss_rate": 0.02}) == "slack misses"
+    assert _failure_mode({**row, "rounded_shed_achieved": 10.0, "miss_rate": 0.02}) == "deadline misses"
     assert (
         _failure_mode(
             {
@@ -79,7 +79,7 @@ def test_failure_mode_separates_rounding_slack_and_resource_bottlenecks():
 def test_make_problem_scales_slack_without_changing_workload():
     problem = make_problem(get_model("GLM-5"), "transition-coupled", slack_multiplier=0.5)
 
-    assert (problem.slack == 0.5 * WORKLOAD_SLACK).all()
+    assert (problem.deadline_s == 0.5 * WORKLOAD_SLACK).all()
     assert (problem.T == make_problem(get_model("GLM-5"), "transition-coupled").T).all()
 
 

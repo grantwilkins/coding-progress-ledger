@@ -35,11 +35,11 @@ REPAIR_BUDGET_FRACTIONS = (0.05, 0.10, 0.20)
 POLICIES = (
     (
         "deadline-aware-m0.8-rounded",
-        lambda problem: solve_deadline_aware_cvxpy(problem, 0.8, shed_cap=problem.B_shed),
+        lambda problem: solve_deadline_aware_cvxpy(problem, 0.8, shed_cap=problem.relief_target_s),
     ),
     (
         "deadline-aware-m1.0-rounded",
-        lambda problem: solve_deadline_aware_cvxpy(problem, 1.0, shed_cap=problem.B_shed),
+        lambda problem: solve_deadline_aware_cvxpy(problem, 1.0, shed_cap=problem.relief_target_s),
     ),
     ("mirror-descent-rounded", lambda problem: solve_mirror_descent(problem, eta_x0=500.0)),
     ("crossover-greedy", solve_crossover_greedy),
@@ -194,7 +194,7 @@ def run_queue_failure_diagnostics(workload_config: WorkloadConfig = WorkloadConf
             except (RuntimeError, ValueError):
                 queue_rows.append(
                     _empty_queue_row(
-                        "CVXPY-rounded", shed_fraction, slack_multiplier, problem.B_shed
+                        "CVXPY-rounded", shed_fraction, slack_multiplier, problem.relief_target_s
                     )
                 )
                 queue_rows.append(
@@ -202,7 +202,7 @@ def run_queue_failure_diagnostics(workload_config: WorkloadConfig = WorkloadConf
                         "repaired-CVXPY-rounded",
                         shed_fraction,
                         slack_multiplier,
-                        problem.B_shed,
+                        problem.relief_target_s,
                     )
                 )
             else:
@@ -222,7 +222,7 @@ def run_queue_failure_diagnostics(workload_config: WorkloadConfig = WorkloadConf
                         "repaired-CVXPY-rounded",
                         shed_fraction,
                         slack_multiplier,
-                        problem.B_shed,
+                        problem.relief_target_s,
                     )
                     repaired["status"] = "REPAIR_FAILED"
                     queue_rows.append(repaired)
@@ -329,7 +329,7 @@ def repair_rounded_allocation(problem, y, max_steps=1000, max_changes=None):
 
 
 def _solver_queue(policy, solver, problem, shed_fraction, slack_multiplier):
-    base = _empty_queue_row(policy, shed_fraction, slack_multiplier, problem.B_shed)
+    base = _empty_queue_row(policy, shed_fraction, slack_multiplier, problem.relief_target_s)
     try:
         result = solver(problem)
     except RuntimeError:
@@ -337,7 +337,7 @@ def _solver_queue(policy, solver, problem, shed_fraction, slack_multiplier):
     if not getattr(result, "feasible", True):
         return base, ()
     y = result.allocation if hasattr(result, "allocation") else result.y
-    if shed_achieved(problem, y) < problem.B_shed - 1e-5:
+    if shed_achieved(problem, y) < problem.relief_target_s - 1e-5:
         return base, ()
     try:
         rounded = round_allocation(problem, y)

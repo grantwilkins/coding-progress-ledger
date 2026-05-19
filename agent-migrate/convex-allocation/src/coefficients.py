@@ -55,7 +55,7 @@ def compute_coefficients(problem: ProblemData) -> Coefficients:
 
     R0[:, :, REPLAY] = b_net[:, :, REPLAY] / problem.lambda_Bps + b_prefill[:, :, REPLAY] / problem.rho_prefill
     R0[:, :, STATE] = b_net[:, :, STATE] / problem.lambda_Bps
-    q = R0 / problem.slack[:, None, None]
+    q = R0
 
     option_dest = np.repeat(np.arange(K), len(ACTIONS))
     option_action = np.tile(np.arange(len(ACTIONS)), K)

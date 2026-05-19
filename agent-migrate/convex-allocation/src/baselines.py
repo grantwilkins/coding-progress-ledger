@@ -38,7 +38,7 @@ def _solve_greedy(problem: ProblemData, actions: tuple[int, ...], use_load_cost:
     coeffs = compute_coefficients(problem)
     y = np.zeros((problem.G, coeffs.M + 1))
     y[:, -1] = problem.d
-    remaining_shed = problem.B_shed
+    remaining_shed = problem.relief_target_s
 
     while remaining_shed > 1e-12:
         L_net, L_prefill = resource_loads(problem, coeffs, y)
@@ -74,5 +74,5 @@ def _solve_greedy(problem: ProblemData, actions: tuple[int, ...], use_load_cost:
 
     achieved = shed_achieved(problem, y)
     obj = objective(problem, coeffs, y)
-    feasible = achieved >= problem.B_shed - 1e-8 and np.isfinite(obj)
+    feasible = achieved >= problem.relief_target_s - 1e-8 and np.isfinite(obj)
     return BaselineResult(feasible, obj if feasible else None, achieved, y)

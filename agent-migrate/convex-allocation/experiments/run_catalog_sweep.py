@@ -17,7 +17,7 @@ from baselines import (
 )
 from catalog import catalog_models, get_model
 from coefficients import compute_coefficients
-from cvxpy_solver import solve_cvxpy
+from cvxpy_solver import solve_cvxpy, solve_soft_deadline_cvxpy
 from evaluation import WorkloadConfig, parse_workload_config
 from metrics import (
     allocation_diagnostics,
@@ -58,8 +58,8 @@ def _policy_row(model, regime, policy, result, problem, coeffs, diagnostics, cvx
     shed_mix = shed_action_mix(problem, y)
     alloc = allocation_diagnostics(problem, coeffs, y)
     shed = shed_achieved(problem, y)
-    shed_violation = max(0.0, problem.B_shed - shed)
-    excess_shed = max(0.0, shed - problem.B_shed)
+    shed_violation = max(0.0, problem.relief_target_s - shed)
+    excess_shed = max(0.0, shed - problem.relief_target_s)
     capacity_feasible = bool(np.max(net_util) < 1.0 and np.max(prefill_util) < 1.0)
     objective = getattr(result, "objective", None)
     feasible = bool(
@@ -79,7 +79,9 @@ def _policy_row(model, regime, policy, result, problem, coeffs, diagnostics, cvx
         "objective_gap_to_cvx": f"{max(0.0, obj_gap):.10g}" if feasible else "INFEASIBLE",
         "relative_gap_to_cvx": f"{max(0.0, rel_gap):.10g}" if feasible else "INFEASIBLE",
         "shed_achieved": f"{shed:.10g}",
-        "shed_target": f"{problem.B_shed:.10g}",
+        "shed_target": f"{problem.relief_target_s:.10g}",
+        "relief_achieved_s": f"{shed:.10g}",
+        "relief_target_s": f"{problem.relief_target_s:.10g}",
         "shed_violation": f"{shed_violation:.10g}",
         "excess_shed": f"{excess_shed:.10g}",
         "max_net_util": f"{float(np.max(net_util)):.10g}",
@@ -96,6 +98,10 @@ def _policy_row(model, regime, policy, result, problem, coeffs, diagnostics, cvx
         **{key: f"{value:.10g}" for key, value in shed_mix.items()},
         "replay_demand_over_capacity": f"{diagnostics[0]:.10g}",
         "state_bytes_over_capacity": f"{diagnostics[1]:.10g}",
+        "deadline_debt_mean": f"{(getattr(result, 'diagnostics', None) or {}).get('deadline_debt_mean', np.nan):.10g}",
+        "deadline_debt_p95": f"{(getattr(result, 'diagnostics', None) or {}).get('deadline_debt_p95', np.nan):.10g}",
+        "deadline_debt_max": f"{(getattr(result, 'diagnostics', None) or {}).get('deadline_debt_max', np.nan):.10g}",
+        "deadline_load_max": f"{(getattr(result, 'diagnostics', None) or {}).get('deadline_load_max', np.nan):.10g}",
         "feasible": str(bool(feasible)),
     }
 
@@ -113,7 +119,7 @@ def _log_run(model, regime, problem, coeffs, diagnostics, cvx, md):
     print(
         "  CVXPY oracle objective="
         f"{cvx.objective:.6g}; mirror best feasible objective={md.objective:.6g}; "
-        f"relative_gap={gap:.3g}; shed={shed:.6g}/{problem.B_shed:.6g}; "
+        f"relative_gap={gap:.3g}; shed={shed:.6g}/{problem.relief_target_s:.6g}; "
         f"max_net_util={float(np.max(net_util)):.3f}; "
         f"max_prefill_util={float(np.max(prefill_util)):.3f}; "
         f"alpha={md.alpha:.3g}; "
@@ -171,17 +177,19 @@ def run_transition_coupled(out, workload_config: WorkloadConfig = WorkloadConfig
     coeffs = compute_coefficients(problem)
     diagnostics = saturation_diagnostics(problem)
     cvx = solve_cvxpy(problem)
+    soft = solve_soft_deadline_cvxpy(problem)
     md = _selected_mirror_descent(problem)
     crossover = solve_crossover_greedy(problem)
     results = {
         "CVXPY": cvx,
+        "soft-deadline": soft,
         "mirror-descent-best": md,
         "crossover-greedy": crossover,
         "mixed-greedy": solve_mixed_greedy(problem),
         "replay-only": solve_replay_only(problem),
         "state-only": solve_state_only(problem),
     }
-    _require_transition_quality(problem, coeffs, cvx, crossover)
+    _require_transition_quality(problem, coeffs, soft, crossover)
     rows = [
         _policy_row(
             model.name,
@@ -242,6 +250,7 @@ def _write_rows(path, rows):
 def _transition_queue_rows(problem, results):
     policies = (
         ("CVXPY", "CVXPY-rounded"),
+        ("soft-deadline", "soft-deadline-rounded"),
         ("mirror-descent-best", "mirror-descent-rounded"),
         ("crossover-greedy", "crossover-greedy"),
         ("mixed-greedy", "mixed-greedy"),
@@ -250,10 +259,12 @@ def _transition_queue_rows(problem, results):
     )
     rows = []
     for source, policy in policies:
+        if source not in results:
+            continue
         result = results[source]
         y = result.allocation if hasattr(result, "allocation") else result.y
         row = _empty_transition_queue_row(policy)
-        if not getattr(result, "feasible", True) or shed_achieved(problem, y) < problem.B_shed - 1e-5:
+        if not getattr(result, "feasible", True) or shed_achieved(problem, y) < problem.relief_target_s - 1e-5:
             rows.append(row)
             continue
         try:

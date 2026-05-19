@@ -41,7 +41,7 @@ def _interior_y(problem: ProblemData, coeffs: Coefficients) -> np.ndarray:
 def _initial_y(problem: ProblemData, coeffs: Coefficients) -> np.ndarray:
     y = np.zeros((problem.G, coeffs.M + 1))
     y[:, -1] = problem.d
-    remaining_shed = problem.B_shed
+    remaining_shed = problem.relief_target_s
 
     while remaining_shed > 1e-9:
         L_net, L_prefill = resource_loads(problem, coeffs, y)
@@ -85,8 +85,8 @@ def _stats(
     problem: ProblemData, coeffs: Coefficients, y: np.ndarray, shed_tol: float
 ) -> tuple[float, float, float, float, float, bool]:
     shed = shed_achieved(problem, y)
-    violation = max(0.0, problem.B_shed - shed)
-    excess = max(0.0, shed - problem.B_shed)
+    violation = max(0.0, problem.relief_target_s - shed)
+    excess = max(0.0, shed - problem.relief_target_s)
     u_net, u_prefill = utilization(problem, coeffs, y)
     max_net = float(np.max(u_net))
     max_prefill = float(np.max(u_prefill))
@@ -165,9 +165,9 @@ def solve_mirror_descent(
     shed_lo = run_alpha(lo)
     hi = 1.0
     shed_hi = shed_lo
-    while shed_hi < problem.B_shed - shed_tol:
+    while shed_hi < problem.relief_target_s - shed_tol:
         shed_hi = run_alpha(hi)
-        if shed_hi < problem.B_shed - shed_tol:
+        if shed_hi < problem.relief_target_s - shed_tol:
             lo = hi
             hi *= 2.0
         if hi > 1e6:
@@ -176,7 +176,7 @@ def solve_mirror_descent(
     for _ in range(bisection_iterations):
         alpha = 0.5 * (lo + hi)
         shed = run_alpha(alpha)
-        if shed < problem.B_shed - shed_tol:
+        if shed < problem.relief_target_s - shed_tol:
             lo = alpha
         else:
             hi = alpha

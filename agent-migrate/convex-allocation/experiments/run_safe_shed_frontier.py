@@ -5,6 +5,8 @@ import math
 import sys
 from pathlib import Path
 
+import numpy as np
+
 ROOT = Path(__file__).resolve().parents[1]
 SRC = ROOT / "src"
 sys.path.insert(0, str(ROOT))
@@ -17,7 +19,7 @@ from baselines import (
     solve_state_only,
 )
 from catalog import get_model
-from cvxpy_solver import solve_cvxpy, solve_deadline_aware_cvxpy
+from cvxpy_solver import solve_cvxpy, solve_deadline_aware_cvxpy, solve_soft_deadline_cvxpy
 from evaluation import WorkloadConfig, parse_workload_config
 from metrics import shed_achieved
 from mirror_descent import solve_mirror_descent
@@ -31,13 +33,14 @@ DEADLINE_MARGINS = (0.8, 1.0)
 REPAIR_ORACLE_POLICY = "local-repair-oracle"
 POLICIES = (
     ("CVXPY-rounded", solve_cvxpy),
+    ("soft-deadline-rounded", solve_soft_deadline_cvxpy),
     (
         "deadline-aware-m0.8-rounded",
-        lambda problem: solve_deadline_aware_cvxpy(problem, 0.8, shed_cap=problem.B_shed),
+        lambda problem: solve_deadline_aware_cvxpy(problem, 0.8, shed_cap=problem.relief_target_s),
     ),
     (
         "deadline-aware-m1.0-rounded",
-        lambda problem: solve_deadline_aware_cvxpy(problem, 1.0, shed_cap=problem.B_shed),
+        lambda problem: solve_deadline_aware_cvxpy(problem, 1.0, shed_cap=problem.relief_target_s),
     ),
     ("mirror-descent-rounded", lambda problem: solve_mirror_descent(problem, eta_x0=500.0)),
     ("crossover-greedy", solve_crossover_greedy),
@@ -50,9 +53,18 @@ SWEEP_COLUMNS = (
     "policy",
     "shed_fraction",
     "slack_multiplier",
+    "relief_fraction",
+    "deadline_scale",
     "status",
     "safe",
     "failure_mode",
+    "relief_target_s",
+    "relief_achieved_s",
+    "moved_request_frac",
+    "deadline_debt_mean",
+    "deadline_debt_p95",
+    "deadline_debt_max",
+    "deadline_load_max",
     "rounded_shed_achieved",
     "rounded_shed_target",
     "rounded_shed_ratio",
@@ -94,8 +106,8 @@ def run_safe_shed_frontier(workload_config: WorkloadConfig = WorkloadConfig()):
             problem = make_problem(
                 model,
                 "transition-coupled",
-                shed_fraction=shed_fraction,
-                slack_multiplier=slack_multiplier,
+                relief_fraction=shed_fraction,
+                deadline_scale=slack_multiplier,
                 **workload_config.problem_kwargs(),
             )
             for policy, solver in POLICIES:
@@ -111,7 +123,7 @@ def run_safe_shed_frontier(workload_config: WorkloadConfig = WorkloadConfig()):
 
 
 def _policy_row(problem, policy, solver, shed_fraction, slack_multiplier):
-    base = _empty_policy_row(policy, shed_fraction, slack_multiplier, problem.B_shed)
+    base = _empty_policy_row(policy, shed_fraction, slack_multiplier, problem.relief_target_s)
     try:
         result = solver(problem)
     except RuntimeError:
@@ -119,7 +131,8 @@ def _policy_row(problem, policy, solver, shed_fraction, slack_multiplier):
 
     y = result.allocation if hasattr(result, "allocation") else result.y
     base["objective"] = getattr(result, "objective", math.nan)
-    if not getattr(result, "feasible", True) or shed_achieved(problem, y) < problem.B_shed - 1e-5:
+    base.update(_semantic_solver_metrics(problem, y, getattr(result, "diagnostics", None)))
+    if not getattr(result, "feasible", True) or shed_achieved(problem, y) < problem.relief_target_s - 1e-5:
         return base
 
     proxy = fractional_queue_load_proxy(problem, y)
@@ -139,7 +152,7 @@ def _policy_row(problem, policy, solver, shed_fraction, slack_multiplier):
 
 
 def _repair_oracle_row(problem, shed_fraction, slack_multiplier):
-    base = _empty_policy_row(REPAIR_ORACLE_POLICY, shed_fraction, slack_multiplier, problem.B_shed)
+    base = _empty_policy_row(REPAIR_ORACLE_POLICY, shed_fraction, slack_multiplier, problem.relief_target_s)
     try:
         rounded = round_allocation(problem, solve_cvxpy(problem).y)
         repair = repair_rounded_allocation(problem, rounded.y)
@@ -160,12 +173,15 @@ def _empty_policy_row(policy, shed_fraction, slack_multiplier, shed_target):
         "policy": policy,
         "shed_fraction": shed_fraction,
         "slack_multiplier": slack_multiplier,
+        "relief_fraction": shed_fraction,
+        "deadline_scale": slack_multiplier,
         "status": "INFEASIBLE",
         "safe": False,
         "failure_mode": "infeasible",
-        **{column: math.nan for column in SWEEP_COLUMNS[6:]},
+        **{column: math.nan for column in SWEEP_COLUMNS[8:]},
     }
     row["rounded_shed_target"] = shed_target
+    row["relief_target_s"] = shed_target
     return row
 
 
@@ -206,13 +222,26 @@ def _failure_mode(row):
         return "rounding artifact"
     if row["miss_rate"] > 0.01 or row["p95_normalized_delay"] > 1.0:
         if max(row["max_net_busy"], row["max_prefill_busy"]) < 0.95:
-            return "slack misses"
+            return "deadline misses"
         return (
             "network bottleneck"
             if row["max_net_busy"] >= row["max_prefill_busy"]
             else "prefill bottleneck"
         )
     return "unsafe"
+
+
+def _semantic_solver_metrics(problem, y, diagnostics):
+    diagnostics = diagnostics or {}
+    return {
+        "relief_target_s": problem.relief_target_s,
+        "relief_achieved_s": shed_achieved(problem, y),
+        "moved_request_frac": float(np.sum(y[:, : y.shape[1] - 1]) / np.sum(problem.d)),
+        "deadline_debt_mean": diagnostics.get("deadline_debt_mean", math.nan),
+        "deadline_debt_p95": diagnostics.get("deadline_debt_p95", math.nan),
+        "deadline_debt_max": diagnostics.get("deadline_debt_max", math.nan),
+        "deadline_load_max": diagnostics.get("deadline_load_max", math.nan),
+    }
 
 
 def _frontier_rows(rows, policies=FRONTIER_POLICIES, slack_multipliers=SLACK_MULTIPLIERS):

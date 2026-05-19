@@ -35,7 +35,7 @@ from baselines import (
     solve_state_only,
 )
 from catalog import get_model
-from cvxpy_solver import solve_cvxpy, solve_deadline_aware_cvxpy
+from cvxpy_solver import solve_cvxpy, solve_deadline_aware_cvxpy, solve_soft_deadline_cvxpy
 from evaluation import WorkloadConfig, parse_workload_config
 from experiments.run_queue_failure_diagnostics import repair_rounded_allocation
 from metrics import shed_achieved
@@ -45,6 +45,7 @@ from queueing import evaluate_rounded_queue_trace, round_allocation
 
 MAIN_POLICIES = (
     "CVXPY-rounded",
+    "soft-deadline-rounded",
     "mirror-descent-rounded",
     "crossover-greedy",
     "mixed-greedy",
@@ -66,6 +67,7 @@ OUTPUT_FILES = (
 )
 POLICY_COLORS = {
     "CVXPY-rounded": "#0072B2",
+    "soft-deadline-rounded": "#000000",
     "mirror-descent-rounded": "#E69F00",
     "crossover-greedy": "#009E73",
     "mixed-greedy": "#CC79A7",
@@ -77,6 +79,7 @@ POLICY_COLORS = {
 }
 POLICY_LABELS = {
     "CVXPY-rounded": "CVXPY",
+    "soft-deadline-rounded": "Soft deadline",
     "mirror-descent-rounded": "Mirror descent",
     "crossover-greedy": "Crossover greedy",
     "mixed-greedy": "Mixed greedy",
@@ -209,7 +212,7 @@ def _hard_case_traces(workload_config, shed_fraction, slack_multiplier):
     for policy in PLOT_POLICIES:
         try:
             y = _hard_case_allocation(policy, problem)
-            if shed_achieved(problem, y) < problem.B_shed - 1e-5:
+            if shed_achieved(problem, y) < problem.relief_target_s - 1e-5:
                 continue
             rounded = round_allocation(problem, y)
             _, trace = evaluate_rounded_queue_trace(problem, rounded.y)
@@ -222,6 +225,8 @@ def _hard_case_traces(workload_config, shed_fraction, slack_multiplier):
 def _hard_case_allocation(policy, problem):
     if policy == "CVXPY-rounded":
         return solve_cvxpy(problem).y
+    if policy == "soft-deadline-rounded":
+        return solve_soft_deadline_cvxpy(problem).y
     if policy == "mirror-descent-rounded":
         return solve_mirror_descent(problem, eta_x0=500.0).y
     if policy == "crossover-greedy":
@@ -233,9 +238,9 @@ def _hard_case_allocation(policy, problem):
     if policy == "state-only":
         return solve_state_only(problem).allocation
     if policy == "deadline-aware-m0.8-rounded":
-        return solve_deadline_aware_cvxpy(problem, 0.8, shed_cap=problem.B_shed).y
+        return solve_deadline_aware_cvxpy(problem, 0.8, shed_cap=problem.relief_target_s).y
     if policy == "deadline-aware-m1.0-rounded":
-        return solve_deadline_aware_cvxpy(problem, 1.0, shed_cap=problem.B_shed).y
+        return solve_deadline_aware_cvxpy(problem, 1.0, shed_cap=problem.relief_target_s).y
     if policy == "local-repair-oracle":
         rounded = round_allocation(problem, solve_cvxpy(problem).y)
         return repair_rounded_allocation(problem, rounded.y).y

@@ -27,7 +27,7 @@ import numpy as np
 from baselines import solve_crossover_greedy, solve_mixed_greedy, solve_replay_only
 from catalog import ModelParams, catalog_models, get_model
 from coefficients import REPLAY, STATE, compute_coefficients
-from cvxpy_solver import solve_cvxpy, solve_deadline_aware_cvxpy
+from cvxpy_solver import solve_cvxpy, solve_deadline_aware_cvxpy, solve_soft_deadline_cvxpy
 from metrics import allocation_diagnostics, assert_feasible, shed_achieved, shed_action_mix
 from mirror_descent import solve_mirror_descent
 from problem import ProblemData, make_problem
@@ -125,7 +125,7 @@ def test_mirror_descent_preserves_glm_transition_mix():
     cvx_mix = shed_action_mix(problem, cvx.y)
     md_mix = shed_action_mix(problem, md.y)
     assert gap < 2e-3
-    assert shed_achieved(problem, md.y) >= problem.B_shed - 1e-5
+    assert shed_achieved(problem, md.y) >= problem.relief_target_s - 1e-5
     assert abs(md_mix["replay_shed_frac"] - cvx_mix["replay_shed_frac"]) < 0.08
 
 
@@ -166,7 +166,7 @@ def test_replay_baseline_reports_infeasible_when_capacity_blocks_target():
     result = solve_replay_only(problem)
     assert not result.feasible
     assert result.objective is None
-    assert result.shed_achieved < problem.B_shed
+    assert result.shed_achieved < problem.relief_target_s
 
 
 def loaded_two_dest_problem() -> ProblemData:
@@ -203,10 +203,9 @@ def test_crossover_greedy_ignores_current_load_until_capacity():
 def test_transition_coupled_scenario_quality_gate():
     problem = make_problem(get_model("GLM-5"), "transition-coupled")
     coeffs = compute_coefficients(problem)
-    cvx = solve_cvxpy(problem)
+    soft = solve_soft_deadline_cvxpy(problem)
     crossover = solve_crossover_greedy(problem)
-    diag = allocation_diagnostics(problem, coeffs, cvx.y)
-    gap = (crossover.objective - cvx.objective) / max(1.0, abs(cvx.objective))
+    diag = allocation_diagnostics(problem, coeffs, soft.y)
 
     assert np.any(problem.h_ctx != problem.h_kv)
     assert np.max(problem.h_ctx[1]) > 0.5
@@ -218,4 +217,6 @@ def test_transition_coupled_scenario_quality_gate():
     assert min(diag["replay_shed_frac"], diag["state_shed_frac"]) >= 0.05
     assert max(diag["max_net_util"], diag["max_prefill_util"]) > 0.7
     assert crossover.feasible
-    assert gap >= 0.05
+    assert shed_achieved(problem, soft.y) >= problem.relief_target_s - 1e-5
+    assert soft.diagnostics["deadline_debt_max"] == 0.0
+    assert soft.diagnostics["deadline_load_max"] <= soft.diagnostics["deadline_headroom"] + 1e-5

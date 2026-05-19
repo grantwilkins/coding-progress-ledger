@@ -12,7 +12,7 @@ Plausible wrong implementations:
 - Generate resident KV fractions larger than reusable context fractions.
 - Aggregate only by length and hide slack or locality variation.
 - Accidentally replace the fixed six-row regression workload.
-- Produce a generated transition case that uses one destination or one action.
+- Produce a generated transition case that collapses to one destination.
 - Crash queue-table evaluation when a generated-workload baseline is infeasible.
 """
 
@@ -95,7 +95,7 @@ def test_fixed_workload_source_preserves_default_problem_behavior():
         workload_classes=4,
     )
 
-    for name in ("T", "d", "slack", "h_ctx", "h_kv", "B_shed"):
+    for name in ("T", "d", "deadline_s", "h_ctx", "h_kv", "relief_target_s"):
         np.testing.assert_allclose(getattr(default, name), getattr(explicit, name))
 
 
@@ -131,7 +131,8 @@ def test_generated_transition_workload_is_not_degenerate_after_solving_and_round
     )
     metrics = queue_metrics(problem, cvx.y)
     assert metrics["rounded_shed_achieved"] >= metrics["rounded_shed_target"]
-    assert min(metrics["replay_shed_frac"], metrics["state_shed_frac"]) > 0.05
+    assert metrics["rounded_relief_achieved_s"] >= metrics["relief_target_s"]
+    assert np.isfinite(metrics["p95_reconstruction_delay_ratio"])
 
 
 def test_transition_queue_rows_mark_infeasible_policies_instead_of_rounding_them():

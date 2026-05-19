@@ -43,7 +43,7 @@ def penalized_gradient(problem: ProblemData, coeffs: Coefficients, y: np.ndarray
 
 
 def lagrangian_value(problem: ProblemData, coeffs: Coefficients, y: np.ndarray, dual: float) -> float:
-    return penalized_objective(problem, coeffs, y, dual) + dual * problem.B_shed
+    return penalized_objective(problem, coeffs, y, dual) + dual * problem.relief_target_s
 
 
 def lagrangian_gradient(problem: ProblemData, coeffs: Coefficients, y: np.ndarray, dual: float) -> np.ndarray:
