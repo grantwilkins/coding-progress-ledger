@@ -37,6 +37,7 @@ from metrics import (
 from mirror_descent import solve_mirror_descent
 from problem import make_problem, saturation_diagnostics
 from queueing import queue_metrics
+from workload import assert_workload_quality
 
 REGIMES = ("bandwidth-spread", "prefill-spread", "background-load-spread")
 TRANSITION_REGIME = "transition-coupled"
@@ -247,20 +248,14 @@ def run_transition_coupled(out):
 
 
 def _require_transition_quality(problem, coeffs, cvx, crossover):
-    diag = allocation_diagnostics(problem, coeffs, cvx.y)
-    gap = (
-        (crossover.objective - cvx.objective) / max(1.0, abs(cvx.objective))
-        if crossover.feasible
-        else np.inf
+    assert_workload_quality(
+        problem,
+        cvx.y,
+        crossover.allocation,
+        cvx.objective,
+        crossover.objective,
+        crossover.feasible,
     )
-    checks = {
-        "uses_two_destinations": diag["active_destinations_used"] >= 2.0,
-        "uses_both_actions": min(diag["replay_shed_frac"], diag["state_shed_frac"]) >= 0.05,
-        "resource_pressure": max(diag["max_net_util"], diag["max_prefill_util"]) > 0.7,
-        "crossover_gap": crossover.feasible and gap >= 0.05,
-    }
-    if not all(checks.values()):
-        raise RuntimeError(f"transition-coupled quality check failed: {checks}, gap={gap:.4g}")
 
 
 def _allocation_summary_rows(problem, results):

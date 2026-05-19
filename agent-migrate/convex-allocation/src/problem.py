@@ -5,6 +5,7 @@ from dataclasses import dataclass
 import numpy as np
 
 from catalog import ModelParams
+from workload import generate_workload
 
 
 @dataclass(frozen=True)
@@ -51,10 +52,27 @@ def make_problem(
     w: float = 1.0,
     window_s: float = 60.0,
     gpu_count: np.ndarray | None = None,
+    workload_source: str = "fixed",
+    workload_seed: int | None = None,
+    workload_jobs: int = 1000,
+    workload_classes: int = 12,
+    workload_profile: str = "shed_event_long_context",
 ) -> ProblemData:
-    T = WORKLOAD_T.copy()
-    d = WORKLOAD_D.copy()
-    slack = WORKLOAD_SLACK.copy() * slack_multiplier
+    if workload_source == "fixed":
+        T = WORKLOAD_T.copy()
+        d = WORKLOAD_D.copy()
+        slack = WORKLOAD_SLACK.copy() * slack_multiplier
+        h_ctx = np.zeros((T.size, 3))
+        h_kv = np.zeros((T.size, 3))
+    elif workload_source == "generated":
+        workload = generate_workload(3, workload_seed, workload_jobs, workload_classes, workload_profile)
+        T = workload.T
+        d = workload.d
+        slack = workload.slack * slack_multiplier
+        h_ctx = workload.h_ctx
+        h_kv = workload.h_kv
+    else:
+        raise ValueError(f"unknown workload source: {workload_source}")
     default_gpu_count = gpu_count is None
     gpu_count = np.array([8.0, 8.0, 8.0]) if default_gpu_count else np.asarray(gpu_count, dtype=float)
 
@@ -62,18 +80,17 @@ def make_problem(
         lambda_gbps = np.array([1.0, 10.0, 100.0])
         net_frac = np.array([0.5, 0.5, 0.5])
         prefill_frac = np.array([0.5, 0.5, 0.5])
-        h = np.zeros((T.size, 3))
     elif regime == "prefill-spread":
         lambda_gbps = np.array([25.0, 25.0, 25.0])
         net_frac = np.array([0.5, 0.5, 0.5])
         prefill_frac = np.array([0.2, 0.5, 0.8])
-        h = np.zeros((T.size, 3))
     elif regime == "background-load-spread":
         lambda_gbps = np.array([25.0, 25.0, 25.0])
         net_frac = np.array([0.2, 0.5, 0.8])
         prefill_frac = np.array([0.8, 0.5, 0.2])
-        h = np.zeros((T.size, 3))
-        h[T >= 8192, 2] = 0.5
+        if workload_source == "fixed":
+            h_ctx[T >= 8192, 2] = 0.5
+            h_kv[T >= 8192, 2] = 0.5
     elif regime == "transition-coupled":
         if model.name != "GLM-5":
             raise ValueError("transition-coupled is calibrated for GLM-5")
@@ -82,13 +99,11 @@ def make_problem(
         lambda_gbps = np.array([4.0, 6.0, 9.0])
         net_frac = np.array([0.35, 0.35, 0.35])
         prefill_frac = np.array([0.45, 0.45, 0.45])
-        h = np.zeros((T.size, 3))
-        h_ctx = h.copy()
-        h_kv = h.copy()
-        h_ctx[1] = np.array([0.75, 0.25, 0.0])
-        h_ctx[4] = np.array([0.05, 0.80, 0.35])
-        h_kv[2] = np.array([0.05, 0.25, 0.85])
-        h_kv[5] = np.array([0.90, 0.55, 0.15])
+        if workload_source == "fixed":
+            h_ctx[1] = np.array([0.75, 0.25, 0.0])
+            h_ctx[4] = np.array([0.05, 0.80, 0.35])
+            h_kv[2] = np.array([0.05, 0.25, 0.85])
+            h_kv[5] = np.array([0.90, 0.55, 0.15])
     else:
         raise ValueError(f"unknown regime: {regime}")
 
@@ -111,8 +126,8 @@ def make_problem(
         C_prefill=C_prefill,
         ell_net=ell_net,
         ell_prefill=ell_prefill,
-        h_ctx=h_ctx if regime == "transition-coupled" else h.copy(),
-        h_kv=h_kv if regime == "transition-coupled" else h.copy(),
+        h_ctx=h_ctx.copy(),
+        h_kv=h_kv.copy(),
         B_shed=B_shed,
         w=w,
     )

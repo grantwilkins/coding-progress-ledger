@@ -60,6 +60,11 @@ objective gap, selected scalar shed multiplier `alpha`, and bisection count.
 The transition-coupled CSVs compare fixed-shed CVXPY, deadline-aware CVXPY,
 mirror descent, crossover-greedy, mixed-greedy, replay-only, and state-only on
 the GLM-5 4/6/9 Gbps stress case.
+`make_problem(..., workload_source="fixed")` keeps the default six-row workload.
+`workload_source="generated"` opts into a seeded shed-event batch generator with
+long-context tails, slack variation, and fixed destination cache-locality
+snapshots. It aggregates jobs into capped classes and keeps `ProblemData`
+unchanged.
 The queue table rounds fractional allocations into requests and reports static
 network-then-prefill EDF reconstruction delay metrics.
 The safe-shed frontier sweep uses the same GLM-5 transition-coupled scenario and
