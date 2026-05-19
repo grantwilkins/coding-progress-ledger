@@ -16,6 +16,7 @@ from types import SimpleNamespace
 
 from experiments.plot_queue_centered import (
     OUTPUT_FILES,
+    POLICY_LABELS,
     _cdf_points,
     _max_waiting_depth_points,
     _policy_points,
@@ -78,6 +79,18 @@ def test_requested_outputs_exclude_retired_png_artifacts():
 
     assert set(OUTPUT_FILES) == requested
     assert retired.isdisjoint(OUTPUT_FILES)
+
+
+def test_policy_labels_are_short_enough_for_paper_legends():
+    assert set(POLICY_LABELS) >= {
+        "CVXPY-rounded",
+        "mirror-descent-rounded",
+        "crossover-greedy",
+        "mixed-greedy",
+        "replay-only",
+        "state-only",
+    }
+    assert max(len(label) for label in POLICY_LABELS.values()) <= 16
 
 
 def _record(k, network_wait, network_service):

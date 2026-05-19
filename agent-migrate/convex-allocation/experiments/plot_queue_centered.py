@@ -10,6 +10,19 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
 
+plt.rcParams.update(
+    {
+        "pdf.fonttype": 42,
+        "ps.fonttype": 42,
+        "font.size": 9,
+        "axes.labelsize": 9,
+        "axes.titlesize": 10,
+        "legend.fontsize": 7.5,
+        "xtick.labelsize": 8,
+        "ytick.labelsize": 8,
+    }
+)
+
 ROOT = Path(__file__).resolve().parents[1]
 SRC = ROOT / "src"
 sys.path.insert(0, str(ROOT))
@@ -52,15 +65,26 @@ OUTPUT_FILES = (
     "resource_pressure_scatter.pdf",
 )
 POLICY_COLORS = {
-    "CVXPY-rounded": "#1f77b4",
-    "mirror-descent-rounded": "#ff7f0e",
-    "crossover-greedy": "#2ca02c",
-    "mixed-greedy": "#9467bd",
-    "replay-only": "#8c564b",
-    "state-only": "#7f7f7f",
-    "local-repair-oracle": "#17becf",
-    "deadline-aware-m0.8-rounded": "#bcbd22",
-    "deadline-aware-m1.0-rounded": "#e377c2",
+    "CVXPY-rounded": "#0072B2",
+    "mirror-descent-rounded": "#E69F00",
+    "crossover-greedy": "#009E73",
+    "mixed-greedy": "#CC79A7",
+    "replay-only": "#D55E00",
+    "state-only": "#666666",
+    "local-repair-oracle": "#56B4E9",
+    "deadline-aware-m0.8-rounded": "#8C8C8C",
+    "deadline-aware-m1.0-rounded": "#4D4D4D",
+}
+POLICY_LABELS = {
+    "CVXPY-rounded": "CVXPY",
+    "mirror-descent-rounded": "Mirror descent",
+    "crossover-greedy": "Crossover greedy",
+    "mixed-greedy": "Mixed greedy",
+    "replay-only": "Replay only",
+    "state-only": "State only",
+    "local-repair-oracle": "Repair oracle",
+    "deadline-aware-m0.8-rounded": "Deadline 0.8",
+    "deadline-aware-m1.0-rounded": "Deadline 1.0",
 }
 
 
@@ -99,8 +123,10 @@ def _read_rows(path: Path) -> list[dict[str, str]]:
 
 def _plot_frontier(rows, y_key, threshold, path, ylabel):
     slack_values = sorted({_as_float(row["slack_multiplier"]) for row in rows})
-    fig, axes = plt.subplots(1, len(slack_values), figsize=(3.4 * len(slack_values), 3.0), sharey=True)
-    axes = np.atleast_1d(axes)
+    cols = min(2, len(slack_values))
+    rows_n = int(np.ceil(len(slack_values) / cols))
+    fig, axes = plt.subplots(rows_n, cols, figsize=(3.35 * cols, 2.55 * rows_n), sharey=True)
+    axes = np.atleast_1d(axes).ravel()
     for ax, slack in zip(axes, slack_values):
         for policy in PLOT_POLICIES:
             points = _policy_points(
@@ -120,15 +146,20 @@ def _plot_frontier(rows, y_key, threshold, path, ylabel):
                     linewidth=1.4,
                     color=POLICY_COLORS[policy],
                     linestyle=_linestyle(policy),
-                    label=policy,
+                    label=POLICY_LABELS[policy],
                 )
         ax.axhline(threshold, color="black", linestyle="--", linewidth=1.0)
-        ax.set_title(f"slack {slack:g}x")
+        ax.text(0.98, threshold, f"{threshold:g}", ha="right", va="bottom", fontsize=7)
+        ax.set_title(f"slack = {slack:g}x")
         ax.set_xlabel("shed fraction")
-        ax.grid(True, color="#dddddd", linewidth=0.7)
+        ax.grid(True, axis="y", color="#e6e6e6", linewidth=0.7)
+        ax.spines[["top", "right"]].set_visible(False)
+    for ax in axes[len(slack_values) :]:
+        ax.set_visible(False)
     axes[0].set_ylabel(ylabel)
-    _legend(fig, axes)
-    fig.savefig(path)
+    _legend(fig, axes[: len(slack_values)])
+    fig.subplots_adjust(top=0.84, bottom=0.11, wspace=0.12, hspace=0.38)
+    fig.savefig(path, bbox_inches="tight")
     plt.close(fig)
 
 
@@ -152,16 +183,17 @@ def _plot_resource_pressure(rows, path):
             s=size,
             color=POLICY_COLORS[policy],
             alpha=0.72,
-            label=policy,
+            label=POLICY_LABELS[policy],
         )
     ax.axvline(1.0, color="black", linestyle="--", linewidth=1.0)
     ax.axhline(1.0, color="black", linestyle="--", linewidth=1.0)
     ax.set_xlabel("max network busy window")
     ax.set_ylabel("max prefill busy window")
-    ax.grid(True, color="#dddddd", linewidth=0.7)
+    ax.text(0.03, 0.97, "marker size = p95 delay / slack", transform=ax.transAxes, va="top")
+    ax.grid(True, color="#e6e6e6", linewidth=0.7)
     ax.spines[["top", "right"]].set_visible(False)
-    ax.legend(frameon=False, fontsize=7)
-    fig.savefig(path)
+    ax.legend(frameon=False, ncol=2, loc="lower right")
+    fig.savefig(path, bbox_inches="tight")
     plt.close(fig)
 
 
@@ -223,20 +255,21 @@ def _plot_delay_cdf(traces, path):
                 color=POLICY_COLORS[policy],
                 linestyle=_linestyle(policy),
                 linewidth=1.5,
-                label=policy,
+                label=POLICY_LABELS[policy],
             )
     ax.axvline(1.0, color="black", linestyle="--", linewidth=1.0)
+    ax.text(1.02, 0.04, "deadline", rotation=90, va="bottom", fontsize=8)
     ax.set_xlabel("reconstruction delay / slack")
     ax.set_ylabel("empirical CDF")
-    ax.grid(True, color="#dddddd", linewidth=0.7)
+    ax.grid(True, axis="y", color="#e6e6e6", linewidth=0.7)
     ax.spines[["top", "right"]].set_visible(False)
-    ax.legend(frameon=False, fontsize=7)
-    fig.savefig(path)
+    ax.legend(frameon=False, loc="lower right")
+    fig.savefig(path, bbox_inches="tight")
     plt.close(fig)
 
 
 def _plot_queue_depth(traces, path):
-    fig, axes = plt.subplots(1, 2, figsize=(9.0, 3.8), sharey=True, constrained_layout=True)
+    fig, axes = plt.subplots(1, 2, figsize=(9.0, 3.8), sharey=True)
     for ax, resource in zip(axes, ("network", "prefill")):
         for policy, trace in traces.items():
             points = _max_waiting_depth_points(trace, resource)
@@ -249,15 +282,16 @@ def _plot_queue_depth(traces, path):
                     color=POLICY_COLORS[policy],
                     linestyle=_linestyle(policy),
                     linewidth=1.4,
-                    label=policy,
+                    label=POLICY_LABELS[policy],
                 )
         ax.set_title(f"{resource} queue")
         ax.set_xlabel("time since shed event (s)")
-        ax.grid(True, color="#dddddd", linewidth=0.7)
+        ax.grid(True, axis="y", color="#e6e6e6", linewidth=0.7)
         ax.spines[["top", "right"]].set_visible(False)
     axes[0].set_ylabel("max waiting queue depth")
-    axes[-1].legend(frameon=False, fontsize=7)
-    fig.savefig(path)
+    _legend(fig, axes)
+    fig.subplots_adjust(top=0.75, bottom=0.18, wspace=0.12)
+    fig.savefig(path, bbox_inches="tight")
     plt.close(fig)
 
 
