@@ -32,6 +32,7 @@ from queueing import evaluate_rounded_queue_trace, round_allocation
 SHED_FRACTIONS = (0.20, 0.30, 0.40, 0.50, 0.60, 0.70)
 TIGHT_SLACK_MULTIPLIERS = (0.25, 0.50)
 REPAIR_BUDGET_FRACTIONS = (0.05, 0.10, 0.20)
+DRAIN_WINDOW_S = 60.0
 POLICIES = (
     (
         "deadline-aware-m0.8-rounded",
@@ -62,8 +63,11 @@ QUEUE_COLUMNS = (
     "p99_delay",
     "p95_normalized_delay",
     "miss_rate",
-    "max_net_busy",
-    "max_prefill_busy",
+    "drain_window_s",
+    "source_load_removal_rate",
+    "drain_completion_s",
+    "network_capacity_pressure",
+    "prefill_capacity_pressure",
     "replay_shed_frac",
     "state_shed_frac",
     "repair_move_count",
@@ -285,10 +289,10 @@ def run_queue_failure_diagnostics(workload_config: WorkloadConfig = WorkloadConf
     return queue_rows, breakdown_rows, summary_rows
 
 
-def repair_rounded_allocation(problem, y, max_steps=1000, max_changes=None):
+def repair_rounded_allocation(problem, y, max_steps=1000, max_changes=None, drain_window_s=DRAIN_WINDOW_S):
     coeffs = compute_coefficients(problem)
     y = np.asarray(y, dtype=float)
-    metrics, trace = evaluate_rounded_queue_trace(problem, y)
+    metrics, trace = evaluate_rounded_queue_trace(problem, y, drain_window_s=drain_window_s)
     y = np.rint(y).astype(int)
     moves = []
 
@@ -310,7 +314,7 @@ def repair_rounded_allocation(problem, y, max_steps=1000, max_changes=None):
                     if not _capacity_feasible(problem, candidate):
                         continue
                     candidate_metrics, candidate_trace = evaluate_rounded_queue_trace(
-                        problem, candidate
+                        problem, candidate, drain_window_s=drain_window_s
                     )
                     candidate_key = _queue_key(candidate_metrics)
                     if candidate_key < best_key:
@@ -574,8 +578,11 @@ def _queue_row(policy, shed_fraction, slack_multiplier, status, metrics, moves=(
         "p99_delay": metrics["p99_reconstruction_delay"],
         "p95_normalized_delay": metrics["p95_normalized_reconstruction_delay"],
         "miss_rate": metrics["deadline_miss_rate"],
-        "max_net_busy": metrics["max_network_busy_window"],
-        "max_prefill_busy": metrics["max_prefill_busy_window"],
+        "drain_window_s": metrics["drain_window_s"],
+        "source_load_removal_rate": metrics["source_load_removal_rate"],
+        "drain_completion_s": metrics["drain_completion_s"],
+        "network_capacity_pressure": metrics["network_capacity_pressure"],
+        "prefill_capacity_pressure": metrics["prefill_capacity_pressure"],
         "replay_shed_frac": metrics["replay_shed_frac"],
         "state_shed_frac": metrics["state_shed_frac"],
         "repair_move_count": len(moves),
@@ -599,8 +606,11 @@ def _empty_queue_row(policy, shed_fraction, slack_multiplier, shed_target):
         "p99_delay": math.nan,
         "p95_normalized_delay": math.nan,
         "miss_rate": math.nan,
-        "max_net_busy": math.nan,
-        "max_prefill_busy": math.nan,
+        "drain_window_s": DRAIN_WINDOW_S,
+        "source_load_removal_rate": math.nan,
+        "drain_completion_s": math.nan,
+        "network_capacity_pressure": math.nan,
+        "prefill_capacity_pressure": math.nan,
         "replay_shed_frac": math.nan,
         "state_shed_frac": math.nan,
         "repair_move_count": 0,

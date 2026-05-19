@@ -57,6 +57,7 @@ REFERENCE_POLICIES = (
     "deadline-aware-m0.8-rounded",
     "deadline-aware-m1.0-rounded",
 )
+PLOT_DRAIN_WINDOW_S = 60.0
 PLOT_POLICIES = MAIN_POLICIES + REFERENCE_POLICIES
 OUTPUT_FILES = (
     "source_load_frontier.pdf",
@@ -97,7 +98,11 @@ def plot_queue_centered(
     example_deadline_scale: float = 0.5,
 ) -> None:
     out = workload_config.output_dir(ROOT)
-    rows = _read_rows(out / "source_load_deadline_sweep.csv")
+    rows = [
+        row
+        for row in _read_rows(out / "source_load_deadline_sweep.csv")
+        if _as_float(row["drain_window_s"]) == PLOT_DRAIN_WINDOW_S
+    ]
     _plot_frontier(
         rows,
         "p95_delay_over_deadline",
@@ -173,16 +178,16 @@ def _plot_busy_scatter(rows, path):
             row
             for row in rows
             if row["policy"] == policy
-            and _finite(row, "max_network_busy_fraction")
-            and _finite(row, "max_prefill_busy_fraction")
+            and _finite(row, "network_capacity_pressure")
+            and _finite(row, "prefill_capacity_pressure")
             and _finite(row, "p95_delay_over_deadline")
         ]
         if not points:
             continue
         size = _scatter_sizes([_as_float(row["p95_delay_over_deadline"]) for row in points])
         ax.scatter(
-            [_as_float(row["max_network_busy_fraction"]) for row in points],
-            [_as_float(row["max_prefill_busy_fraction"]) for row in points],
+            [_as_float(row["network_capacity_pressure"]) for row in points],
+            [_as_float(row["prefill_capacity_pressure"]) for row in points],
             s=size,
             color=POLICY_COLORS[policy],
             alpha=0.72,
@@ -190,8 +195,8 @@ def _plot_busy_scatter(rows, path):
         )
     ax.axvline(1.0, color="black", linestyle="--", linewidth=1.0)
     ax.axhline(1.0, color="black", linestyle="--", linewidth=1.0)
-    ax.set_xlabel("network busy fraction")
-    ax.set_ylabel("GPU prefill busy fraction")
+    ax.set_xlabel("network capacity pressure")
+    ax.set_ylabel("GPU prefill capacity pressure")
     ax.text(0.03, 0.97, "marker size = p95 delay / deadline", transform=ax.transAxes, va="top")
     ax.grid(True, color="#e6e6e6", linewidth=0.7)
     ax.spines[["top", "right"]].set_visible(False)
@@ -320,13 +325,14 @@ def _cdf_points(values):
 def _max_waiting_depth_points(trace, resource):
     events: dict[float, dict[int, int]] = {}
     for record in trace:
+        release = getattr(record, "release_time_s", 0.0)
         if resource == "network":
-            arrival = 0.0
-            start = record.network_queue_wait
+            arrival = release
+            start = arrival + record.network_queue_wait
         elif resource == "prefill":
             if record.prefill_service_time == 0.0:
                 continue
-            arrival = record.network_queue_wait + record.network_service_time
+            arrival = release + record.network_queue_wait + record.network_service_time
             start = arrival + record.prefill_queue_wait
         else:
             raise ValueError(resource)

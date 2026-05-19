@@ -25,16 +25,20 @@ from queueing import evaluate_rounded_queue_trace, round_allocation
 
 NETWORK_SCALES = (0.60, 0.80, 1.00, 1.25, 1.50, 2.00)
 SOURCE_LOAD_FRACTIONS = (0.20, 0.30, 0.40, 0.50, 0.60, 0.70)
+DRAIN_WINDOW_S = 60.0
 COLUMNS = (
     "network_bandwidth_scale",
+    "drain_window_s",
     "max_safe_source_load_fraction",
+    "source_load_removal_rate",
     "request_migration_fraction",
     "p95_delay_over_deadline",
     "deadline_miss_rate",
     "max_network_queue_depth",
     "max_prefill_queue_depth",
-    "network_busy_fraction",
-    "prefill_busy_fraction",
+    "network_capacity_pressure",
+    "prefill_capacity_pressure",
+    "drain_completion_s",
     "deadline_overrun_max",
     "replay_load_fraction",
     "state_transfer_load_fraction",
@@ -66,25 +70,28 @@ def _scale_row(scale: float, workload_config: WorkloadConfig) -> dict[str, float
         try:
             result = solve_soft_deadline_cvxpy(problem)
             rounded = round_allocation(problem, result.y)
-            metrics, trace = evaluate_rounded_queue_trace(problem, rounded.y)
+            metrics, trace = evaluate_rounded_queue_trace(problem, rounded.y, drain_window_s=DRAIN_WINDOW_S)
         except (RuntimeError, ValueError):
             continue
         if _safe(metrics):
             candidates.append((source_load_fraction, result, rounded, metrics, trace))
     if not candidates:
-        return {"network_bandwidth_scale": scale, **{key: math.nan for key in COLUMNS[1:]}}
+        return {"network_bandwidth_scale": scale, "drain_window_s": DRAIN_WINDOW_S, **{key: math.nan for key in COLUMNS[2:]}}
     source_load_fraction, result, rounded, metrics, trace = max(candidates, key=lambda item: item[0])
     diagnostics = result.diagnostics or {}
     return {
         "network_bandwidth_scale": scale,
+        "drain_window_s": DRAIN_WINDOW_S,
         "max_safe_source_load_fraction": source_load_fraction,
+        "source_load_removal_rate": metrics["source_load_removal_rate"],
         "request_migration_fraction": float(np.sum(rounded.y[:, :-1]) / np.sum(problem.d)),
         "p95_delay_over_deadline": metrics["p95_reconstruction_delay_ratio"],
         "deadline_miss_rate": metrics["deadline_miss_rate"],
         "max_network_queue_depth": _queue_depth(trace, "network"),
         "max_prefill_queue_depth": _queue_depth(trace, "prefill"),
-        "network_busy_fraction": metrics["max_network_busy_window"],
-        "prefill_busy_fraction": metrics["max_prefill_busy_window"],
+        "network_capacity_pressure": metrics["network_capacity_pressure"],
+        "prefill_capacity_pressure": metrics["prefill_capacity_pressure"],
+        "drain_completion_s": metrics["drain_completion_s"],
         "deadline_overrun_max": diagnostics.get("deadline_overrun_max", math.nan),
         "replay_load_fraction": metrics["replay_load_frac"],
         "state_transfer_load_fraction": metrics["state_load_frac"],

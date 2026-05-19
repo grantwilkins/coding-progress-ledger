@@ -1,14 +1,17 @@
 """
 Claim:
-The static queue evaluator turns fractional shed allocations into integer
-requests, preserves the shed target by minimum overshed, and computes
-nonpreemptive network-then-prefill EDF reconstruction delays.
+The queue evaluator turns fractional shed allocations into integer requests,
+preserves the shed target by minimum overshed, releases moved requests through
+a deterministic EDF drain, and computes nonpreemptive network-then-prefill
+reconstruction delays relative to request release time.
 
 Plausible wrong implementations:
 - Round to the nearest fractional counts and allow integer under-shed.
 - Tie-break shed-equivalent class counts without respecting fractional moved counts.
 - Treat replay requests as complete after network transfer instead of prefill.
 - Schedule by arrival or input order instead of earliest class deadline.
+- Count drain wait as reconstruction delay after choosing release-relative deadlines.
+- Drop the burst-at-zero baseline when drain_window_s is explicitly zero.
 """
 
 from __future__ import annotations
@@ -17,7 +20,7 @@ import numpy as np
 from numpy.testing import assert_allclose
 
 from catalog import ModelParams
-from queueing import RequestRecord, evaluate_static_queue, evaluate_static_queue_trace, round_allocation
+from queueing import RequestRecord, evaluate_static_queue, evaluate_static_queue_trace, queue_metrics, round_allocation
 from problem import ProblemData
 
 
@@ -81,8 +84,8 @@ def test_static_queue_uses_network_then_prefill_with_edf():
         RequestRecord(0, 0, "replay", 1.0, 3.5, 10.0, 15.0),
     )
 
-    metrics = evaluate_static_queue(problem, records)
-    _, trace = evaluate_static_queue_trace(problem, records)
+    metrics = evaluate_static_queue(problem, records, drain_window_s=0.0)
+    _, trace = evaluate_static_queue_trace(problem, records, drain_window_s=0.0)
 
     assert_allclose(metrics["mean_reconstruction_delay"], 3.5)
     assert_allclose(metrics["p50_reconstruction_delay"], 3.5)
@@ -90,8 +93,8 @@ def test_static_queue_uses_network_then_prefill_with_edf():
     assert_allclose(metrics["p99_reconstruction_delay"], 3.99)
     assert_allclose(metrics["p95_normalized_reconstruction_delay"], 1.1007142857142855)
     assert_allclose(metrics["deadline_miss_rate"], 0.5)
-    assert_allclose(metrics["max_network_busy_window"], 0.3)
-    assert_allclose(metrics["max_prefill_busy_window"], 0.3)
+    assert_allclose(metrics["network_capacity_pressure"], 0.3)
+    assert_allclose(metrics["prefill_capacity_pressure"], 0.3)
     assert_allclose(metrics["replay_shed_frac"], 0.5)
     assert_allclose(metrics["state_shed_frac"], 0.5)
 
@@ -122,3 +125,39 @@ def test_static_queue_uses_network_then_prefill_with_edf():
         [1.0, 2.0, 0.0, 0.0, 3.0],
     )
     assert not state.deadline_missed
+
+
+def test_default_queue_drains_requests_by_edf_release_order():
+    problem = queue_problem([1, 1], [1, 1], [3.5, 10.0], 0.0)
+    records = (
+        RequestRecord(1, 0, "state", 1.0, 10.0, 20.0, 0.0),
+        RequestRecord(0, 0, "replay", 1.0, 3.5, 10.0, 15.0),
+    )
+
+    metrics, trace = evaluate_static_queue_trace(problem, records, drain_window_s=60.0)
+
+    state, replay = trace
+    assert_allclose([replay.release_time_s, state.release_time_s], [0.0, 30.0])
+    assert_allclose(metrics["mean_reconstruction_delay"], 3.0)
+    assert_allclose(metrics["drain_completion_s"], 32.0)
+    assert_allclose(
+        [
+            replay.network_queue_wait,
+            replay.prefill_queue_wait,
+            replay.reconstruction_delay,
+            state.network_queue_wait,
+            state.reconstruction_delay,
+        ],
+        [0.0, 0.0, 4.0, 0.0, 2.0],
+    )
+    assert replay.deadline_missed
+    assert not state.deadline_missed
+
+
+def test_zero_window_zero_load_has_zero_removal_rate():
+    problem = queue_problem([1], [1], [3.5], 0.0)
+    y = np.array([[0, 0, 1]])
+
+    metrics = queue_metrics(problem, y, drain_window_s=0.0)
+
+    assert metrics["source_load_removal_rate"] == 0.0

@@ -19,6 +19,7 @@ class RequestRecord:
     deadline_s: float
     network_demand: float
     prefill_demand: float
+    release_time_s: float = 0.0
 
     @property
     def slack(self) -> float:
@@ -47,6 +48,7 @@ class QueueTraceRecord:
     k: int
     action: str
     deadline_s: float
+    release_time_s: float
     network_queue_wait: float
     network_service_time: float
     prefill_queue_wait: float
@@ -87,34 +89,57 @@ def round_allocation(problem: ProblemData, y: np.ndarray) -> RoundedAllocation:
     )
 
 
-def evaluate_static_queue(problem: ProblemData, records: tuple[RequestRecord, ...]) -> dict[str, float]:
-    return _evaluate_static_queue(problem, records)[0]
+def evaluate_static_queue(
+    problem: ProblemData,
+    records: tuple[RequestRecord, ...],
+    drain_window_s: float = 60.0,
+    release_policy: str = "edf",
+) -> dict[str, float]:
+    return _evaluate_static_queue(problem, records, drain_window_s, release_policy)[0]
 
 
 def evaluate_static_queue_trace(
-    problem: ProblemData, records: tuple[RequestRecord, ...]
+    problem: ProblemData,
+    records: tuple[RequestRecord, ...],
+    drain_window_s: float = 60.0,
+    release_policy: str = "edf",
 ) -> tuple[dict[str, float], tuple[QueueTraceRecord, ...]]:
-    return _evaluate_static_queue(problem, records)
+    return _evaluate_static_queue(problem, records, drain_window_s, release_policy)
 
 
-def evaluate_rounded_queue(problem: ProblemData, y: np.ndarray) -> dict[str, float]:
-    return evaluate_rounded_queue_trace(problem, y)[0]
+def evaluate_rounded_queue(
+    problem: ProblemData,
+    y: np.ndarray,
+    drain_window_s: float = 60.0,
+    release_policy: str = "edf",
+) -> dict[str, float]:
+    return evaluate_rounded_queue_trace(problem, y, drain_window_s, release_policy)[0]
 
 
 def evaluate_rounded_queue_trace(
-    problem: ProblemData, y: np.ndarray
+    problem: ProblemData,
+    y: np.ndarray,
+    drain_window_s: float = 60.0,
+    release_policy: str = "edf",
 ) -> tuple[dict[str, float], tuple[QueueTraceRecord, ...]]:
     y = _integer_allocation(problem, y)
     rounded_shed = float(np.dot(problem.tau, np.sum(y[:, : y.shape[1] - 1], axis=1)))
-    metrics, trace = evaluate_static_queue_trace(problem, _request_records(problem, y))
+    metrics, trace = evaluate_static_queue_trace(
+        problem, _request_records(problem, y), drain_window_s, release_policy
+    )
     _add_shed_metrics(metrics, problem.source_load_target_s, rounded_shed)
+    _add_drain_metrics(metrics, rounded_shed, drain_window_s)
     return metrics, trace
 
 
 def _evaluate_static_queue(
-    problem: ProblemData, records: tuple[RequestRecord, ...]
+    problem: ProblemData,
+    records: tuple[RequestRecord, ...],
+    drain_window_s: float,
+    release_policy: str,
 ) -> tuple[dict[str, float], tuple[QueueTraceRecord, ...]]:
     H, lambda_avail, rho_avail = _available_rates(problem)
+    records = _paced_records(records, drain_window_s, release_policy)
     if not records:
         return {
             "mean_reconstruction_delay": 0.0,
@@ -123,8 +148,9 @@ def _evaluate_static_queue(
             "p99_reconstruction_delay": 0.0,
             "p95_normalized_reconstruction_delay": 0.0,
             "deadline_miss_rate": 0.0,
-            "max_network_busy_window": 0.0,
-            "max_prefill_busy_window": 0.0,
+            "network_capacity_pressure": 0.0,
+            "prefill_capacity_pressure": 0.0,
+            "drain_completion_s": 0.0,
             "replay_shed_frac": 0.0,
             "state_shed_frac": 0.0,
         }, ()
@@ -135,7 +161,7 @@ def _evaluate_static_queue(
     net_busy = np.zeros(problem.K)
     for k in range(problem.K):
         jobs = [
-            (0.0, r.network_demand / lambda_avail[k], r.deadline_s, (r.g, i), i)
+            (r.release_time_s, r.network_demand / lambda_avail[k], r.deadline_s, (r.g, i), i)
             for i, r in enumerate(records)
             if r.k == k
         ]
@@ -162,7 +188,8 @@ def _evaluate_static_queue(
     replay_shed = sum(problem.tau[r.g] for r in records if r.action == ACTIONS[REPLAY])
     state_shed = sum(problem.tau[r.g] for r in records if r.action != ACTIONS[REPLAY])
     total_shed = replay_shed + state_shed
-    delay = np.asarray(complete, dtype=float)
+    release = np.asarray([r.release_time_s for r in records], dtype=float)
+    delay = np.asarray(complete, dtype=float) - release
     deadline_s = np.asarray([r.deadline_s for r in records], dtype=float)
     p95_ratio = float(np.percentile(delay / deadline_s, 95))
     miss_rate = float(np.mean(delay > deadline_s))
@@ -174,8 +201,9 @@ def _evaluate_static_queue(
         "p95_normalized_reconstruction_delay": p95_ratio,
         "p95_reconstruction_delay_ratio": p95_ratio,
         "deadline_miss_rate": miss_rate,
-        "max_network_busy_window": float(np.max(net_busy) / H),
-        "max_prefill_busy_window": float(np.max(prefill_busy) / H),
+        "network_capacity_pressure": float(np.max(net_busy) / H),
+        "prefill_capacity_pressure": float(np.max(prefill_busy) / H),
+        "drain_completion_s": float(np.max(complete)),
         "replay_shed_frac": float(replay_shed / total_shed),
         "state_shed_frac": float(state_shed / total_shed),
         "replay_load_frac": float(replay_shed / total_shed),
@@ -189,6 +217,7 @@ def _evaluate_static_queue(
             r.k,
             r.action,
             r.deadline_s,
+            r.release_time_s,
             float(net_wait[i]),
             float(net_service[i]),
             float(prefill_wait[i]),
@@ -201,10 +230,16 @@ def _evaluate_static_queue(
     return metrics, trace
 
 
-def queue_metrics(problem: ProblemData, y: np.ndarray) -> dict[str, float]:
+def queue_metrics(
+    problem: ProblemData,
+    y: np.ndarray,
+    drain_window_s: float = 60.0,
+    release_policy: str = "edf",
+) -> dict[str, float]:
     rounded = round_allocation(problem, y)
-    metrics = evaluate_static_queue(problem, rounded.records)
+    metrics = evaluate_static_queue(problem, rounded.records, drain_window_s, release_policy)
     _add_shed_metrics(metrics, rounded.shed_target, rounded.rounded_shed)
+    _add_drain_metrics(metrics, rounded.rounded_shed, drain_window_s)
     return metrics
 
 
@@ -215,8 +250,8 @@ def fractional_queue_load_proxy(problem: ProblemData, y: np.ndarray) -> dict[str
     net = np.sum(coeffs.b_net * x, axis=(0, 2)) / lambda_avail / H
     prefill = np.sum(coeffs.b_prefill * x, axis=(0, 2)) / rho_avail / H
     return {
-        "fractional_max_network_busy_window": float(np.max(net)),
-        "fractional_max_prefill_busy_window": float(np.max(prefill)),
+        "fractional_network_capacity_pressure": float(np.max(net)),
+        "fractional_prefill_capacity_pressure": float(np.max(prefill)),
     }
 
 
@@ -292,6 +327,35 @@ def _request_records(problem: ProblemData, y: np.ndarray) -> tuple[RequestRecord
     return tuple(records)
 
 
+def _paced_records(
+    records: tuple[RequestRecord, ...], drain_window_s: float, release_policy: str
+) -> tuple[RequestRecord, ...]:
+    if drain_window_s < 0.0:
+        raise ValueError("drain_window_s must be nonnegative")
+    if release_policy != "edf":
+        raise ValueError(f"unknown release policy: {release_policy}")
+    if not records:
+        return records
+    order = sorted(range(len(records)), key=lambda i: (records[i].deadline_s, records[i].g, i))
+    release = np.zeros(len(records))
+    if drain_window_s > 0.0:
+        for rank, i in enumerate(order):
+            release[i] = drain_window_s * rank / len(records)
+    return tuple(
+        RequestRecord(
+            record.g,
+            record.k,
+            record.action,
+            record.T,
+            record.deadline_s,
+            record.network_demand,
+            record.prefill_demand,
+            float(release[i]),
+        )
+        for i, record in enumerate(records)
+    )
+
+
 def _add_shed_metrics(metrics: dict[str, float], target: float, achieved: float) -> None:
     ratio = np.nan if target == 0.0 else achieved / target
     metrics.update(
@@ -310,6 +374,14 @@ def _add_shed_metrics(metrics: dict[str, float], target: float, achieved: float)
             "relief_ratio": ratio,
         }
     )
+
+
+def _add_drain_metrics(metrics: dict[str, float], achieved: float, drain_window_s: float) -> None:
+    metrics["drain_window_s"] = drain_window_s
+    if drain_window_s == 0.0:
+        metrics["source_load_removal_rate"] = np.inf if achieved > 0.0 else 0.0
+    else:
+        metrics["source_load_removal_rate"] = achieved / drain_window_s
 
 
 def _integer_allocation(problem: ProblemData, y: np.ndarray) -> np.ndarray:

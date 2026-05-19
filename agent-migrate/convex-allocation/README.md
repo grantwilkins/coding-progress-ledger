@@ -89,15 +89,18 @@ mixed-greedy, replay-only, and state-only on the GLM-5 4/6/9 Gbps stress case.
 with long-context tails, deadline variation, and fixed destination cache-locality
 snapshots. It aggregates jobs into capped classes and keeps `ProblemData`
 unchanged.
-The queue table rounds fractional allocations into requests and reports static
-network-then-prefill EDF reconstruction delay metrics.
+The queue table rounds fractional allocations into requests and reports
+network-then-prefill EDF reconstruction delay metrics under the default 60s
+drain.
 The source-load frontier sweep uses the same GLM-5 transition-coupled scenario
 and marks a rounded policy safe only when it meets the source-load target, has
 deadline miss rate at most 1%, and has p95 delay divided by class deadline at
-most 1.0. It reports deadline scale, source-load fraction, max network/prefill
-busy fraction, replay/state-transfer load shares, and deadline overrun at the
-frontier. The local repair oracle is included only as a post-hoc upper-bound
-diagnostic.
+most 1.0. It drains moved requests with deterministic EDF pacing over 60s for
+main plots and also writes burst/10s/30s sensitivity rows. It reports deadline
+scale, source-load fraction, network/prefill capacity pressure,
+replay/state-transfer load shares, drain completion time, and deadline overrun
+at the frontier. The local repair oracle is included only as a post-hoc
+upper-bound diagnostic.
 The failure diagnostic adds per-request queue tracing, missed-request breakdowns
 by class, destination, and action, and a one-request rounded local repair for the
 tight 0.25x and 0.5x deadline settings.

@@ -1,12 +1,14 @@
 """
 Claim:
 Queue-centered plots read finite queue metrics, omit infeasible points, use
-request-level hard-case CDFs, and derive waiting queue depth from queue traces.
+request-level hard-case CDFs, and derive waiting queue depth from release-time
+queue traces.
 
 Plausible wrong implementations:
 - Plot infeasible rows as zero and create false frontier points.
 - Build CDFs from aggregated classes instead of per-request trace records.
 - Count requests in service as waiting queue depth.
+- Plot drained requests as though every request arrived at time zero.
 - Keep emitting retired heatmap, objective-ratio, or summary plot artifacts.
 """
 
@@ -75,6 +77,12 @@ def test_queue_depth_counts_waiting_requests_not_requests_in_service():
     ]
 
 
+def test_queue_depth_uses_release_time_for_drained_requests():
+    trace = (_record(k=0, network_wait=2.0, network_service=1.0, release_time=10.0),)
+
+    assert _max_waiting_depth_points(trace, "network") == [(0.0, 0.0), (10.0, 1.0), (12.0, 0.0)]
+
+
 def test_requested_outputs_exclude_retired_png_artifacts():
     retired = {
         "headline_action_mix.png",
@@ -108,9 +116,10 @@ def test_policy_labels_are_short_enough_for_paper_legends():
     assert max(len(label) for label in POLICY_LABELS.values()) <= 16
 
 
-def _record(k, network_wait, network_service):
+def _record(k, network_wait, network_service, release_time=0.0):
     return SimpleNamespace(
         k=k,
+        release_time_s=release_time,
         network_queue_wait=network_wait,
         network_service_time=network_service,
         prefill_queue_wait=0.0,

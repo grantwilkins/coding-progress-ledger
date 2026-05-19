@@ -277,12 +277,15 @@ def _transition_queue_rows(problem, results):
                 "source_load_moved_s": f"{metrics['source_load_moved_s']:.10g}",
                 "source_load_target_s": f"{metrics['source_load_target_s']:.10g}",
                 "source_load_ratio": f"{metrics['source_load_ratio']:.10g}",
+                "drain_window_s": f"{metrics['drain_window_s']:.10g}",
+                "source_load_removal_rate": f"{metrics['source_load_removal_rate']:.10g}",
+                "drain_completion_s": f"{metrics['drain_completion_s']:.10g}",
                 "mean_reconstruction_delay": f"{metrics['mean_reconstruction_delay']:.10g}",
                 "p50_reconstruction_delay": f"{metrics['p50_reconstruction_delay']:.10g}",
                 "p95_reconstruction_delay": f"{metrics['p95_reconstruction_delay']:.10g}",
                 "deadline_miss_rate": f"{metrics['deadline_miss_rate']:.10g}",
-                "max_network_busy_window": f"{metrics['max_network_busy_window']:.10g}",
-                "max_prefill_busy_window": f"{metrics['max_prefill_busy_window']:.10g}",
+                "network_capacity_pressure": f"{metrics['network_capacity_pressure']:.10g}",
+                "prefill_capacity_pressure": f"{metrics['prefill_capacity_pressure']:.10g}",
                 "replay_load_fraction": f"{metrics['replay_load_frac']:.10g}",
                 "state_transfer_load_fraction": f"{metrics['state_load_frac']:.10g}",
             }
@@ -298,12 +301,15 @@ def _empty_transition_queue_row(policy):
         "source_load_moved_s": "INFEASIBLE",
         "source_load_target_s": "INFEASIBLE",
         "source_load_ratio": "INFEASIBLE",
+        "drain_window_s": "INFEASIBLE",
+        "source_load_removal_rate": "INFEASIBLE",
+        "drain_completion_s": "INFEASIBLE",
         "mean_reconstruction_delay": "INFEASIBLE",
         "p50_reconstruction_delay": "INFEASIBLE",
         "p95_reconstruction_delay": "INFEASIBLE",
         "deadline_miss_rate": "INFEASIBLE",
-        "max_network_busy_window": "INFEASIBLE",
-        "max_prefill_busy_window": "INFEASIBLE",
+        "network_capacity_pressure": "INFEASIBLE",
+        "prefill_capacity_pressure": "INFEASIBLE",
         "replay_load_fraction": "INFEASIBLE",
         "state_transfer_load_fraction": "INFEASIBLE",
     }
@@ -346,7 +352,7 @@ def _print_queue_latex(rows):
     print("\ntransition-coupled queue table (LaTeX)")
     print("\\begin{tabular}{lrrrrrrrrr}")
     print(
-        "policy & source load/target & mean & p50 & p95 & miss & net/H & prefill/H & replay & state \\\\"
+        "policy & source load/target & mean & p50 & p95 & miss & net pressure & prefill pressure & replay & state \\\\"
     )
     print("\\hline")
     for row in rows:
@@ -359,8 +365,8 @@ def _print_queue_latex(rows):
             f"{float(row['p50_reconstruction_delay']):.3f} & "
             f"{float(row['p95_reconstruction_delay']):.3f} & "
             f"{float(row['deadline_miss_rate']):.3f} & "
-            f"{float(row['max_network_busy_window']):.3f} & "
-            f"{float(row['max_prefill_busy_window']):.3f} & "
+            f"{float(row['network_capacity_pressure']):.3f} & "
+            f"{float(row['prefill_capacity_pressure']):.3f} & "
             f"{float(row['replay_load_fraction']):.3f} & "
             f"{float(row['state_transfer_load_fraction']):.3f} \\\\"
         )

@@ -3,12 +3,13 @@ Claim:
 The source-load frontier reports the largest rounded queue-safe source-load
 fraction for each policy and deadline scale, using the requested miss-rate and
 delay-over-deadline safety definition, and carries replay/state-transfer load
-shares at the frontier.
+shares at the 60s drain frontier.
 
 Plausible wrong implementations:
 - Treat raw p95 delay as delay divided by deadline.
 - Ignore rounded source-load shortfall when marking a row safe.
 - Report the first safe source-load fraction instead of the largest safe fraction.
+- Mix zero-window burst rows into the 60s drain frontier.
 - Classify rounded source-load shortfall as a resource bottleneck instead of rounding.
 - Drop the action-mix diagnostics from the frontier row.
 """
@@ -40,6 +41,7 @@ def test_frontier_uses_largest_safe_source_load_fraction_and_marks_none_safe():
         _row("policy-a", 1.0, 0.2, True),
         _row("policy-a", 1.0, 0.3, False),
         _row("policy-a", 1.0, 0.4, True),
+        _row("policy-a", 1.0, 0.7, True, drain_window_s=0.0),
         _row("policy-b", 1.0, 0.2, False),
     ]
 
@@ -47,6 +49,7 @@ def test_frontier_uses_largest_safe_source_load_fraction_and_marks_none_safe():
 
     assert frontier[0]["max_safe_source_load_fraction"] == 0.4
     assert frontier[0]["p95_delay_at_frontier"] == 4.0
+    assert frontier[0]["drain_window_s"] == 60.0
     assert frontier[0]["replay_load_fraction_at_frontier"] == 0.25
     assert frontier[0]["state_transfer_load_fraction_at_frontier"] == 0.75
     assert frontier[1]["max_safe_source_load_fraction"] == "UNSAFE"
@@ -58,8 +61,8 @@ def test_failure_mode_separates_rounding_deadline_and_resource_bottlenecks():
         "source_load_target_s": 10.0,
         "deadline_miss_rate": 0.0,
         "p95_delay_over_deadline": 0.5,
-        "max_network_busy_fraction": 0.1,
-        "max_prefill_busy_fraction": 0.1,
+        "network_capacity_pressure": 0.1,
+        "prefill_capacity_pressure": 0.1,
     }
     assert _failure_mode(row) == "rounding artifact"
 
@@ -70,7 +73,7 @@ def test_failure_mode_separates_rounding_deadline_and_resource_bottlenecks():
                 **row,
                 "source_load_moved_s": 10.0,
                 "p95_delay_over_deadline": 1.1,
-                "max_network_busy_fraction": 1.2,
+                "network_capacity_pressure": 1.2,
             }
         )
         == "network bottleneck"
@@ -84,17 +87,19 @@ def test_make_problem_scales_deadline_without_changing_workload():
     assert (problem.T == make_problem(get_model("GLM-5"), "transition-coupled").T).all()
 
 
-def _row(policy, deadline_scale, source_load_fraction, safe):
+def _row(policy, deadline_scale, source_load_fraction, safe, drain_window_s=60.0):
     return {
         "policy": policy,
         "deadline_scale": deadline_scale,
+        "drain_window_s": drain_window_s,
         "source_load_fraction": source_load_fraction,
         "safe": safe,
         "p95_delay_s": source_load_fraction * 10.0,
         "p95_delay_over_deadline": 0.9,
         "deadline_miss_rate": 0.0,
-        "max_network_busy_fraction": 0.2,
-        "max_prefill_busy_fraction": 0.3,
+        "network_capacity_pressure": 0.2,
+        "prefill_capacity_pressure": 0.3,
         "replay_load_fraction": 0.25,
         "state_transfer_load_fraction": 0.75,
+        "drain_completion_s": 61.0,
     }

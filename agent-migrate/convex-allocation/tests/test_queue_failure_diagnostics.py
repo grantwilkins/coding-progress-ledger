@@ -87,7 +87,9 @@ def test_local_repair_respects_zero_move_budget():
 
 def test_failure_breakdown_counts_misses_by_class_destination_and_action():
     problem = repair_problem()
-    metrics, trace = evaluate_rounded_queue_trace(problem, np.array([[0, 2, 0, 0, 0]]))
+    metrics, trace = evaluate_rounded_queue_trace(
+        problem, np.array([[0, 2, 0, 0, 0]]), drain_window_s=0.0
+    )
 
     rows = _failure_breakdown_rows("toy", problem, 0.2, 0.25, "OK", trace)
     by_group = {(row["group_type"], row["group"]): row for row in rows}
