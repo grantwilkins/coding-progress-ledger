@@ -1,13 +1,13 @@
 """
 Claim:
-The queue evaluator turns fractional shed allocations into integer requests,
-preserves the shed target by minimum overshed, releases moved requests through
-a deterministic EDF drain, and computes nonpreemptive network-then-prefill
-reconstruction delays relative to request release time.
+The queue evaluator turns fractional source-prefill allocations into integer
+requests, preserves the source-prefill target by minimum overshoot, releases
+moved requests through a deterministic EDF drain, and computes nonpreemptive
+network-then-prefill reconstruction delays relative to request release time.
 
 Plausible wrong implementations:
-- Round to the nearest fractional counts and allow integer under-shed.
-- Tie-break shed-equivalent class counts without respecting fractional moved counts.
+- Round to the nearest fractional counts and allow integer target shortfall.
+- Tie-break target-equivalent class counts without respecting fractional moved counts.
 - Treat replay requests as complete after network transfer instead of prefill.
 - Schedule by arrival or input order instead of earliest class deadline.
 - Count drain wait as reconstruction delay after choosing release-relative deadlines.
@@ -24,7 +24,7 @@ from queueing import RequestRecord, evaluate_static_queue, evaluate_static_queue
 from problem import ProblemData
 
 
-def queue_problem(T, d, slack, B_shed) -> ProblemData:
+def queue_problem(T, d, deadline_s, source_prefill_target_s) -> ProblemData:
     model = ModelParams("queue-test", 1.0, 1.0, 1.0, 0.0)
     K = 1
     return ProblemData(
@@ -32,7 +32,7 @@ def queue_problem(T, d, slack, B_shed) -> ProblemData:
         regime="queue-test",
         T=np.asarray(T, dtype=float),
         d=np.asarray(d, dtype=float),
-        slack=np.asarray(slack, dtype=float),
+        deadline_s=np.asarray(deadline_s, dtype=float),
         lambda_Bps=np.full(K, 10.0),
         rho_prefill=np.full(K, 5.0),
         C_net=np.full(K, 100.0),
@@ -41,11 +41,11 @@ def queue_problem(T, d, slack, B_shed) -> ProblemData:
         ell_prefill=np.zeros(K),
         h_ctx=np.zeros((len(T), K)),
         h_kv=np.zeros((len(T), K)),
-        B_shed=B_shed,
+        source_load_target_s=source_prefill_target_s,
     )
 
 
-def test_rounding_meets_target_with_minimum_overshed_before_deviation():
+def test_rounding_meets_target_with_minimum_overshoot_before_deviation():
     problem = queue_problem([6, 10], [2, 1], [1, 1], 10.0)
     y = np.array([[1.7, 0.0, 0.3], [0.0, 0.1, 0.9]])
 
@@ -95,8 +95,8 @@ def test_static_queue_uses_network_then_prefill_with_edf():
     assert_allclose(metrics["deadline_miss_rate"], 0.5)
     assert_allclose(metrics["network_capacity_pressure"], 0.3)
     assert_allclose(metrics["prefill_capacity_pressure"], 0.3)
-    assert_allclose(metrics["replay_shed_frac"], 0.5)
-    assert_allclose(metrics["state_shed_frac"], 0.5)
+    assert_allclose(metrics["replay_source_prefill_fraction"], 0.5)
+    assert_allclose(metrics["state_transfer_source_prefill_fraction"], 0.5)
 
     state, replay = trace
     assert replay.g == 0
@@ -127,7 +127,7 @@ def test_static_queue_uses_network_then_prefill_with_edf():
     assert not state.deadline_missed
 
 
-def test_default_queue_drains_requests_by_edf_release_order():
+def test_queue_drains_requests_by_edf_release_order():
     problem = queue_problem([1, 1], [1, 1], [3.5, 10.0], 0.0)
     records = (
         RequestRecord(1, 0, "state", 1.0, 10.0, 20.0, 0.0),
@@ -154,10 +154,22 @@ def test_default_queue_drains_requests_by_edf_release_order():
     assert not state.deadline_missed
 
 
+def test_default_drain_window_is_thirty_minutes():
+    problem = queue_problem([1, 1], [1, 1], [10.0, 20.0], 0.0)
+    records = (
+        RequestRecord(0, 0, "state", 1.0, 10.0, 0.0, 0.0),
+        RequestRecord(1, 0, "state", 1.0, 20.0, 0.0, 0.0),
+    )
+
+    _, trace = evaluate_static_queue_trace(problem, records)
+
+    assert_allclose([record.release_time_s for record in trace], [0.0, 900.0])
+
+
 def test_zero_window_zero_load_has_zero_removal_rate():
     problem = queue_problem([1], [1], [3.5], 0.0)
     y = np.array([[0, 0, 1]])
 
     metrics = queue_metrics(problem, y, drain_window_s=0.0)
 
-    assert metrics["source_load_removal_rate"] == 0.0
+    assert metrics["source_prefill_removal_rate_s_per_s"] == 0.0

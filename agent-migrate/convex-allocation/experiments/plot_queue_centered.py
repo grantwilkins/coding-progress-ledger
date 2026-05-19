@@ -48,7 +48,6 @@ MAIN_POLICIES = (
     "deadline-penalty-rounded",
     "mirror-descent-rounded",
     "crossover-greedy",
-    "mixed-greedy",
     "replay-only",
     "state-only",
 )
@@ -57,8 +56,8 @@ REFERENCE_POLICIES = (
     "deadline-aware-m0.8-rounded",
     "deadline-aware-m1.0-rounded",
 )
-PLOT_DRAIN_WINDOW_S = 60.0
-PLOT_POLICIES = MAIN_POLICIES + REFERENCE_POLICIES
+PLOT_DRAIN_WINDOW_S = 1800.0
+PLOT_POLICIES = MAIN_POLICIES
 OUTPUT_FILES = (
     "source_load_frontier.pdf",
     "deadline_miss_frontier.pdf",
@@ -85,16 +84,16 @@ POLICY_LABELS = {
     "crossover-greedy": "Crossover greedy",
     "mixed-greedy": "Mixed greedy",
     "replay-only": "Replay only",
-    "state-only": "State only",
+    "state-only": "State transfer",
     "local-repair-oracle": "Repair oracle",
-    "deadline-aware-m0.8-rounded": "Deadline 0.8",
-    "deadline-aware-m1.0-rounded": "Deadline 1.0",
+    "deadline-aware-m0.8-rounded": "Hard cap 0.8x",
+    "deadline-aware-m1.0-rounded": "Hard cap 1.0x",
 }
 
 
 def plot_queue_centered(
     workload_config: WorkloadConfig = WorkloadConfig(),
-    example_source_load_fraction: float = 0.5,
+    example_source_prefill_fraction: float = 0.5,
     example_deadline_scale: float = 0.5,
 ) -> None:
     out = workload_config.output_dir(ROOT)
@@ -119,7 +118,7 @@ def plot_queue_centered(
     )
     _plot_busy_scatter(rows, out / "network_prefill_busy_scatter.pdf")
 
-    traces = _example_traces(workload_config, example_source_load_fraction, example_deadline_scale)
+    traces = _example_traces(workload_config, example_source_prefill_fraction, example_deadline_scale)
     _plot_delay_cdf(traces, out / "deadline_delay_cdf.pdf")
     _plot_queue_depth(traces, out / "queue_depth_example.pdf")
 
@@ -140,7 +139,7 @@ def _plot_frontier(rows, y_key, threshold, path, ylabel):
             points = _policy_points(
                 rows,
                 policy,
-                "source_load_fraction",
+                "source_prefill_fraction",
                 y_key,
                 {"deadline_scale": deadline_scale},
             )
@@ -159,7 +158,7 @@ def _plot_frontier(rows, y_key, threshold, path, ylabel):
         ax.axhline(threshold, color="black", linestyle="--", linewidth=1.0)
         ax.text(0.98, threshold, f"{threshold:g}", ha="right", va="bottom", fontsize=7)
         ax.set_title(f"deadline scale = {deadline_scale:g}x")
-        ax.set_xlabel("source load moved")
+        ax.set_xlabel("source prefill fraction moved")
         ax.grid(True, axis="y", color="#e6e6e6", linewidth=0.7)
         ax.spines[["top", "right"]].set_visible(False)
     for ax in axes[len(deadline_scales) :]:
@@ -205,11 +204,11 @@ def _plot_busy_scatter(rows, path):
     plt.close(fig)
 
 
-def _example_traces(workload_config, source_load_fraction, deadline_scale):
+def _example_traces(workload_config, source_prefill_fraction, deadline_scale):
     problem = make_problem(
         get_model("GLM-5"),
         "transition-coupled",
-        source_load_fraction=source_load_fraction,
+        source_load_fraction=source_prefill_fraction,
         deadline_scale=deadline_scale,
         **workload_config.problem_kwargs(),
     )
@@ -220,7 +219,7 @@ def _example_traces(workload_config, source_load_fraction, deadline_scale):
             if source_load_moved_s(problem, y) < problem.source_load_target_s - 1e-5:
                 continue
             rounded = round_allocation(problem, y)
-            _, trace = evaluate_rounded_queue_trace(problem, rounded.y)
+            _, trace = evaluate_rounded_queue_trace(problem, rounded.y, drain_window_s=PLOT_DRAIN_WINDOW_S)
         except (RuntimeError, ValueError):
             continue
         traces[policy] = trace
@@ -295,7 +294,7 @@ def _plot_queue_depth(traces, path):
                     label=POLICY_LABELS[policy],
                 )
         ax.set_title(f"{resource} queue")
-        ax.set_xlabel("time since source load change (s)")
+        ax.set_xlabel("time since drain start (s)")
         ax.grid(True, axis="y", color="#e6e6e6", linewidth=0.7)
         ax.spines[["top", "right"]].set_visible(False)
     axes[0].set_ylabel("max waiting queue depth")

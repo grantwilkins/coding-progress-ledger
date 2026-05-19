@@ -5,11 +5,11 @@ request group, and the local repair pass only accepts one-request moves that
 improve miss rate, then p95 delay, then mean delay.
 
 Plausible wrong implementations:
-- Re-run fractional rounding during repair and change class shed counts.
+- Re-run fractional rounding during repair and change class source-prefill counts.
 - Accept a move that improves mean delay while leaving a higher miss rate.
-- Aggregate failures at the wrong level, such as shed-weighted instead of request-counted.
+- Aggregate failures at the wrong level, such as source-prefill-weighted instead of request-counted.
 - Attribute prefill wait to state-transfer requests.
-- Try to repair a CVXPY row after the generated workload makes that shed point infeasible.
+- Try to repair a CVXPY row after the generated workload makes that source-prefill point infeasible.
 """
 
 from __future__ import annotations
@@ -45,7 +45,7 @@ def repair_problem():
         regime="repair-test",
         T=np.array([10.0]),
         d=np.array([2.0]),
-        slack=np.array([4.0]),
+        deadline_s=np.array([4.0]),
         lambda_Bps=lambda_Bps,
         rho_prefill=rho_prefill,
         C_net=lambda_Bps * 10.0,
@@ -54,11 +54,11 @@ def repair_problem():
         ell_prefill=np.zeros(2),
         h_ctx=np.zeros((1, 2)),
         h_kv=np.zeros((1, 2)),
-        B_shed=20.0,
+        source_load_target_s=20.0,
     )
 
 
-def test_local_repair_improves_queue_key_without_changing_class_totals_or_shed():
+def test_local_repair_improves_queue_key_without_changing_class_totals_or_source_prefill():
     problem = repair_problem()
     y = np.array([[0, 2, 0, 0, 0]])
     original, _ = evaluate_rounded_queue_trace(problem, y)
@@ -67,7 +67,7 @@ def test_local_repair_improves_queue_key_without_changing_class_totals_or_shed()
 
     assert _queue_key(repair.metrics) < _queue_key(original)
     assert repair.metrics["deadline_miss_rate"] == 0.0
-    assert repair.metrics["rounded_shed_achieved"] == original["rounded_shed_achieved"]
+    assert repair.metrics["rounded_source_prefill_moved_s"] == original["rounded_source_prefill_moved_s"]
     assert repair.y[0, 1] < y[0, 1]
     assert repair.y.sum(axis=1).tolist() == y.sum(axis=1).tolist()
     assert repair.moves
@@ -120,9 +120,9 @@ def test_repair_summary_reports_net_changed_requests_and_destination_shift():
     assert row["repair_steps"] == 1
     assert row["net_changed_requests"] == 1
     assert row["fraction_moved_requests_changed"] == 0.5
-    assert row["original_k0_shed_frac"] == 1.0
-    assert row["repaired_k0_shed_frac"] == 0.5
-    assert row["k1_shed_frac_delta"] == 0.5
+    assert row["original_k0_source_prefill_fraction"] == 1.0
+    assert row["repaired_k0_source_prefill_fraction"] == 0.5
+    assert row["k1_source_prefill_fraction_delta"] == 0.5
     assert row["objective_delta"] != 0.0
 
 
@@ -165,8 +165,8 @@ def test_queue_diagnostics_reports_infeasible_cvx_rows_without_repair(monkeypatc
         raise RuntimeError("infeasible")
 
     monkeypatch.setattr(queue_diag, "ROOT", tmp_path)
-    monkeypatch.setattr(queue_diag, "TIGHT_SLACK_MULTIPLIERS", (0.25,))
-    monkeypatch.setattr(queue_diag, "SHED_FRACTIONS", (0.2,))
+    monkeypatch.setattr(queue_diag, "TIGHT_DEADLINE_SCALES", (0.25,))
+    monkeypatch.setattr(queue_diag, "SOURCE_PREFILL_FRACTIONS", (0.2,))
     monkeypatch.setattr(queue_diag, "POLICIES", ())
     monkeypatch.setattr(
         queue_diag, "make_problem", lambda *args, **kwargs: SimpleNamespace(source_load_target_s=1.0)
@@ -178,7 +178,7 @@ def test_queue_diagnostics_reports_infeasible_cvx_rows_without_repair(monkeypatc
         lambda path, rows, columns: captured.setdefault(path, rows),
     )
     monkeypatch.setattr(queue_diag, "_print_repair_summary", lambda rows: None)
-    monkeypatch.setattr(queue_diag, "_print_half_slack_latex", lambda rows: None)
+    monkeypatch.setattr(queue_diag, "_print_half_deadline_latex", lambda rows: None)
 
     queue_diag.run_queue_failure_diagnostics(WorkloadConfig(source="generated", seed=7))
 

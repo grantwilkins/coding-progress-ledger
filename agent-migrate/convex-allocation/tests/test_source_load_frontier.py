@@ -1,42 +1,48 @@
 """
 Claim:
-The source-load frontier reports the largest rounded queue-safe source-load
+The source-prefill frontier reports the largest rounded queue-safe source-prefill
 fraction for each policy and deadline scale, using the requested miss-rate and
-delay-over-deadline safety definition, and carries replay/state-transfer load
-shares at the 60s drain frontier.
+release-relative delay-over-deadline safety definition, and carries
+replay/state-transfer source-prefill shares at the 30m drain frontier.
 
 Plausible wrong implementations:
 - Treat raw p95 delay as delay divided by deadline.
-- Ignore rounded source-load shortfall when marking a row safe.
-- Report the first safe source-load fraction instead of the largest safe fraction.
-- Mix zero-window burst rows into the 60s drain frontier.
-- Classify rounded source-load shortfall as a resource bottleneck instead of rounding.
+- Ignore rounded source-prefill shortfall when marking a row safe.
+- Report the first safe source-prefill fraction instead of the largest safe fraction.
+- Mix zero-window burst rows into the 30m drain frontier.
+- Classify rounded source-prefill shortfall as a resource bottleneck instead of rounding.
 - Drop the action-mix diagnostics from the frontier row.
 """
 
 from __future__ import annotations
 
-from experiments.run_source_load_frontier import _failure_mode, _frontier_rows, _is_safe
+from experiments.run_source_load_frontier import (
+    DRAIN_WINDOWS_S,
+    PLOT_DRAIN_WINDOW_S,
+    _failure_mode,
+    _frontier_rows,
+    _is_safe,
+)
 from problem import WORKLOAD_SLACK, make_problem
 from catalog import get_model
 
 
 def test_safe_definition_uses_target_miss_and_normalized_p95_boundaries():
     metrics = {
-        "source_load_moved_s": 10.0,
-        "source_load_target_s": 10.0,
+        "source_prefill_moved_s": 10.0,
+        "source_prefill_target_s": 10.0,
         "deadline_miss_rate": 0.01,
         "p95_reconstruction_delay_ratio": 1.0,
     }
 
     assert _is_safe(metrics)
 
-    assert not _is_safe({**metrics, "source_load_moved_s": 9.99})
+    assert not _is_safe({**metrics, "source_prefill_moved_s": 9.99})
     assert not _is_safe({**metrics, "deadline_miss_rate": 0.011})
     assert not _is_safe({**metrics, "p95_reconstruction_delay_ratio": 1.001})
 
 
-def test_frontier_uses_largest_safe_source_load_fraction_and_marks_none_safe():
+def test_frontier_uses_largest_safe_source_prefill_fraction_and_marks_none_safe():
     rows = [
         _row("policy-a", 1.0, 0.2, True),
         _row("policy-a", 1.0, 0.3, False),
@@ -47,18 +53,18 @@ def test_frontier_uses_largest_safe_source_load_fraction_and_marks_none_safe():
 
     frontier = _frontier_rows(rows, policies=("policy-a", "policy-b"), deadline_scales=(1.0,))
 
-    assert frontier[0]["max_safe_source_load_fraction"] == 0.4
+    assert frontier[0]["max_safe_source_prefill_fraction"] == 0.4
     assert frontier[0]["p95_delay_at_frontier"] == 4.0
-    assert frontier[0]["drain_window_s"] == 60.0
-    assert frontier[0]["replay_load_fraction_at_frontier"] == 0.25
-    assert frontier[0]["state_transfer_load_fraction_at_frontier"] == 0.75
-    assert frontier[1]["max_safe_source_load_fraction"] == "UNSAFE"
+    assert frontier[0]["drain_window_s"] == 1800.0
+    assert frontier[0]["replay_source_prefill_fraction_at_frontier"] == 0.25
+    assert frontier[0]["state_transfer_source_prefill_fraction_at_frontier"] == 0.75
+    assert frontier[1]["max_safe_source_prefill_fraction"] == "UNSAFE"
 
 
 def test_failure_mode_separates_rounding_deadline_and_resource_bottlenecks():
     row = {
-        "source_load_moved_s": 9.0,
-        "source_load_target_s": 10.0,
+        "source_prefill_moved_s": 9.0,
+        "source_prefill_target_s": 10.0,
         "deadline_miss_rate": 0.0,
         "p95_delay_over_deadline": 0.5,
         "network_capacity_pressure": 0.1,
@@ -66,12 +72,12 @@ def test_failure_mode_separates_rounding_deadline_and_resource_bottlenecks():
     }
     assert _failure_mode(row) == "rounding artifact"
 
-    assert _failure_mode({**row, "source_load_moved_s": 10.0, "deadline_miss_rate": 0.02}) == "deadline misses"
+    assert _failure_mode({**row, "source_prefill_moved_s": 10.0, "deadline_miss_rate": 0.02}) == "deadline misses"
     assert (
         _failure_mode(
             {
                 **row,
-                "source_load_moved_s": 10.0,
+                "source_prefill_moved_s": 10.0,
                 "p95_delay_over_deadline": 1.1,
                 "network_capacity_pressure": 1.2,
             }
@@ -87,19 +93,24 @@ def test_make_problem_scales_deadline_without_changing_workload():
     assert (problem.T == make_problem(get_model("GLM-5"), "transition-coupled").T).all()
 
 
-def _row(policy, deadline_scale, source_load_fraction, safe, drain_window_s=60.0):
+def test_frontier_uses_realistic_grid_drain_windows_with_burst_reference():
+    assert DRAIN_WINDOWS_S == (0.0, 900.0, 1800.0, 3600.0)
+    assert PLOT_DRAIN_WINDOW_S == 1800.0
+
+
+def _row(policy, deadline_scale, source_prefill_fraction, safe, drain_window_s=1800.0):
     return {
         "policy": policy,
         "deadline_scale": deadline_scale,
         "drain_window_s": drain_window_s,
-        "source_load_fraction": source_load_fraction,
+        "source_prefill_fraction": source_prefill_fraction,
         "safe": safe,
-        "p95_delay_s": source_load_fraction * 10.0,
+        "p95_delay_s": source_prefill_fraction * 10.0,
         "p95_delay_over_deadline": 0.9,
         "deadline_miss_rate": 0.0,
         "network_capacity_pressure": 0.2,
         "prefill_capacity_pressure": 0.3,
-        "replay_load_fraction": 0.25,
-        "state_transfer_load_fraction": 0.75,
+        "replay_source_prefill_fraction": 0.25,
+        "state_transfer_source_prefill_fraction": 0.75,
         "drain_completion_s": 61.0,
     }

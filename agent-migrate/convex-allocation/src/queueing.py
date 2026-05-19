@@ -92,7 +92,7 @@ def round_allocation(problem: ProblemData, y: np.ndarray) -> RoundedAllocation:
 def evaluate_static_queue(
     problem: ProblemData,
     records: tuple[RequestRecord, ...],
-    drain_window_s: float = 60.0,
+    drain_window_s: float = 1800.0,
     release_policy: str = "edf",
 ) -> dict[str, float]:
     return _evaluate_static_queue(problem, records, drain_window_s, release_policy)[0]
@@ -101,7 +101,7 @@ def evaluate_static_queue(
 def evaluate_static_queue_trace(
     problem: ProblemData,
     records: tuple[RequestRecord, ...],
-    drain_window_s: float = 60.0,
+    drain_window_s: float = 1800.0,
     release_policy: str = "edf",
 ) -> tuple[dict[str, float], tuple[QueueTraceRecord, ...]]:
     return _evaluate_static_queue(problem, records, drain_window_s, release_policy)
@@ -110,7 +110,7 @@ def evaluate_static_queue_trace(
 def evaluate_rounded_queue(
     problem: ProblemData,
     y: np.ndarray,
-    drain_window_s: float = 60.0,
+    drain_window_s: float = 1800.0,
     release_policy: str = "edf",
 ) -> dict[str, float]:
     return evaluate_rounded_queue_trace(problem, y, drain_window_s, release_policy)[0]
@@ -119,7 +119,7 @@ def evaluate_rounded_queue(
 def evaluate_rounded_queue_trace(
     problem: ProblemData,
     y: np.ndarray,
-    drain_window_s: float = 60.0,
+    drain_window_s: float = 1800.0,
     release_policy: str = "edf",
 ) -> tuple[dict[str, float], tuple[QueueTraceRecord, ...]]:
     y = _integer_allocation(problem, y)
@@ -151,6 +151,8 @@ def _evaluate_static_queue(
             "network_capacity_pressure": 0.0,
             "prefill_capacity_pressure": 0.0,
             "drain_completion_s": 0.0,
+            "replay_source_prefill_fraction": 0.0,
+            "state_transfer_source_prefill_fraction": 0.0,
             "replay_shed_frac": 0.0,
             "state_shed_frac": 0.0,
         }, ()
@@ -204,6 +206,8 @@ def _evaluate_static_queue(
         "network_capacity_pressure": float(np.max(net_busy) / H),
         "prefill_capacity_pressure": float(np.max(prefill_busy) / H),
         "drain_completion_s": float(np.max(complete)),
+        "replay_source_prefill_fraction": float(replay_shed / total_shed),
+        "state_transfer_source_prefill_fraction": float(state_shed / total_shed),
         "replay_shed_frac": float(replay_shed / total_shed),
         "state_shed_frac": float(state_shed / total_shed),
         "replay_load_frac": float(replay_shed / total_shed),
@@ -233,7 +237,7 @@ def _evaluate_static_queue(
 def queue_metrics(
     problem: ProblemData,
     y: np.ndarray,
-    drain_window_s: float = 60.0,
+    drain_window_s: float = 1800.0,
     release_policy: str = "edf",
 ) -> dict[str, float]:
     rounded = round_allocation(problem, y)
@@ -360,6 +364,12 @@ def _add_shed_metrics(metrics: dict[str, float], target: float, achieved: float)
     ratio = np.nan if target == 0.0 else achieved / target
     metrics.update(
         {
+            "source_prefill_moved_s": achieved,
+            "source_prefill_target_s": target,
+            "source_prefill_ratio": ratio,
+            "rounded_source_prefill_moved_s": achieved,
+            "rounded_source_prefill_target_s": target,
+            "rounded_source_prefill_ratio": ratio,
             "source_load_moved_s": achieved,
             "source_load_target_s": target,
             "source_load_ratio": ratio,
@@ -379,9 +389,11 @@ def _add_shed_metrics(metrics: dict[str, float], target: float, achieved: float)
 def _add_drain_metrics(metrics: dict[str, float], achieved: float, drain_window_s: float) -> None:
     metrics["drain_window_s"] = drain_window_s
     if drain_window_s == 0.0:
-        metrics["source_load_removal_rate"] = np.inf if achieved > 0.0 else 0.0
+        rate = np.inf if achieved > 0.0 else 0.0
     else:
-        metrics["source_load_removal_rate"] = achieved / drain_window_s
+        rate = achieved / drain_window_s
+    metrics["source_prefill_removal_rate_s_per_s"] = rate
+    metrics["source_load_removal_rate"] = rate
 
 
 def _integer_allocation(problem: ProblemData, y: np.ndarray) -> np.ndarray:

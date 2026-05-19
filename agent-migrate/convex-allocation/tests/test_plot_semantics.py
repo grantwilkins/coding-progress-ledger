@@ -19,6 +19,7 @@ from types import SimpleNamespace
 from experiments.plot_queue_centered import (
     OUTPUT_FILES,
     POLICY_LABELS,
+    PLOT_POLICIES,
     _cdf_points,
     _max_waiting_depth_points,
     _policy_points,
@@ -30,19 +31,19 @@ def test_policy_points_omit_infeasible_and_rounding_failed_rows():
         {
             "policy": "CVXPY-rounded",
             "deadline_scale": "0.5",
-            "source_load_fraction": "0.2",
+            "source_prefill_fraction": "0.2",
             "deadline_miss_rate": "0.4",
         },
         {
             "policy": "CVXPY-rounded",
             "deadline_scale": "0.5",
-            "source_load_fraction": "0.3",
+            "source_prefill_fraction": "0.3",
             "deadline_miss_rate": "nan",
         },
         {
             "policy": "replay-only",
             "deadline_scale": "0.5",
-            "source_load_fraction": "0.2",
+            "source_prefill_fraction": "0.2",
             "deadline_miss_rate": "0.0",
         },
     ]
@@ -50,7 +51,7 @@ def test_policy_points_omit_infeasible_and_rounding_failed_rows():
     assert _policy_points(
         rows,
         "CVXPY-rounded",
-        "source_load_fraction",
+        "source_prefill_fraction",
         "deadline_miss_rate",
         {"deadline_scale": 0.5},
     ) == [(0.2, 0.4)]
@@ -114,6 +115,20 @@ def test_policy_labels_are_short_enough_for_paper_legends():
         "state-only",
     }
     assert max(len(label) for label in POLICY_LABELS.values()) <= 16
+
+
+def test_plot_legend_uses_only_main_unambiguous_policies():
+    assert len(PLOT_POLICIES) == 6
+    assert "deadline-aware-m0.8-rounded" not in PLOT_POLICIES
+    assert "deadline-aware-m1.0-rounded" not in PLOT_POLICIES
+    assert set(PLOT_POLICIES) == {
+        "CVXPY-rounded",
+        "deadline-penalty-rounded",
+        "mirror-descent-rounded",
+        "crossover-greedy",
+        "replay-only",
+        "state-only",
+    }
 
 
 def _record(k, network_wait, network_service, release_time=0.0):

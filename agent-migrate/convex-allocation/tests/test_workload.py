@@ -153,4 +153,4 @@ def test_transition_queue_rows_mark_infeasible_policies_instead_of_rounding_them
     )
 
     assert {row["status"] for row in rows} == {"INFEASIBLE"}
-    assert all(row["source_load_ratio"] == "INFEASIBLE" for row in rows)
+    assert all(row["source_prefill_ratio"] == "INFEASIBLE" for row in rows)
