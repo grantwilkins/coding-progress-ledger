@@ -22,6 +22,12 @@ cd convex-allocation
 uv run python experiments/run_catalog_sweep.py
 ```
 
+Run the generated workload sweep:
+
+```bash
+uv run python experiments/run_catalog_sweep.py --workload-source generated --workload-seed 7
+```
+
 Run the safe-shed frontier sweep:
 
 ```bash
@@ -35,6 +41,8 @@ uv run python experiments/run_queue_failure_diagnostics.py
 ```
 
 Outputs are written to `convex-allocation/outputs/sweep/`:
+generated workload runs write to a labeled subdirectory such as
+`outputs/sweep/generated_seed7_jobs1000_classes12/`.
 
 - `headline_action_mix.png`
 - `allocation_heatmap_per_scenario.png`

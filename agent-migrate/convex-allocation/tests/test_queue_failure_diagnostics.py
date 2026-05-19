@@ -9,13 +9,18 @@ Plausible wrong implementations:
 - Accept a move that improves mean delay while leaving a higher miss rate.
 - Aggregate failures at the wrong level, such as shed-weighted instead of request-counted.
 - Attribute prefill wait to state-transfer requests.
+- Try to repair a CVXPY row after the generated workload makes that shed point infeasible.
 """
 
 from __future__ import annotations
 
+from types import SimpleNamespace
+
 import numpy as np
 
+import experiments.run_queue_failure_diagnostics as queue_diag
 from catalog import ModelParams
+from evaluation import WorkloadConfig
 from experiments.run_queue_failure_diagnostics import (
     _failure_breakdown_rows,
     _move_type,
@@ -149,3 +154,38 @@ def test_repair_budget_rows_include_capped_and_unbounded_results():
     assert by_label["5%"]["budget_move_limit"] == 0
     assert by_label["20%"]["budget_move_limit"] == 0
     assert by_label["unbounded"]["repair_steps"] == len(full.moves)
+
+
+def test_queue_diagnostics_reports_infeasible_cvx_rows_without_repair(monkeypatch, tmp_path):
+    captured = {}
+
+    def fail_solve(problem):
+        raise RuntimeError("infeasible")
+
+    monkeypatch.setattr(queue_diag, "ROOT", tmp_path)
+    monkeypatch.setattr(queue_diag, "TIGHT_SLACK_MULTIPLIERS", (0.25,))
+    monkeypatch.setattr(queue_diag, "SHED_FRACTIONS", (0.2,))
+    monkeypatch.setattr(queue_diag, "POLICIES", ())
+    monkeypatch.setattr(
+        queue_diag, "make_problem", lambda *args, **kwargs: SimpleNamespace(B_shed=1.0)
+    )
+    monkeypatch.setattr(queue_diag, "solve_cvxpy", fail_solve)
+    monkeypatch.setattr(
+        queue_diag,
+        "_write_rows",
+        lambda path, rows, columns: captured.setdefault(path, rows),
+    )
+    monkeypatch.setattr(queue_diag, "_print_repair_summary", lambda rows: None)
+    monkeypatch.setattr(queue_diag, "_print_half_slack_latex", lambda rows: None)
+
+    queue_diag.run_queue_failure_diagnostics(WorkloadConfig(source="generated", seed=7))
+
+    queue_rows = next(
+        rows for path, rows in captured.items() if path.name.endswith("queue_table.csv")
+    )
+    assert [row["policy"] for row in queue_rows] == [
+        "CVXPY-rounded",
+        "repaired-CVXPY-rounded",
+    ]
+    assert {row["status"] for row in queue_rows} == {"INFEASIBLE"}
+    assert all("generated_seed7" in str(path) for path in captured)

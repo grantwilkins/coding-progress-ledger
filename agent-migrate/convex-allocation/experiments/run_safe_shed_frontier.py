@@ -18,6 +18,7 @@ from baselines import (
 )
 from catalog import get_model
 from cvxpy_solver import solve_cvxpy, solve_deadline_aware_cvxpy
+from evaluation import WorkloadConfig, parse_workload_config
 from metrics import shed_achieved
 from mirror_descent import solve_mirror_descent
 from problem import make_problem
@@ -83,8 +84,8 @@ FRONTIER_COLUMNS = (
 )
 
 
-def run_safe_shed_frontier():
-    out = ROOT / "outputs" / "sweep"
+def run_safe_shed_frontier(workload_config: WorkloadConfig = WorkloadConfig()):
+    out = workload_config.output_dir(ROOT)
     out.mkdir(parents=True, exist_ok=True)
     rows = []
     model = get_model("GLM-5")
@@ -95,6 +96,7 @@ def run_safe_shed_frontier():
                 "transition-coupled",
                 shed_fraction=shed_fraction,
                 slack_multiplier=slack_multiplier,
+                **workload_config.problem_kwargs(),
             )
             for policy, solver in POLICIES:
                 rows.append(_policy_row(problem, policy, solver, shed_fraction, slack_multiplier))
@@ -372,4 +374,4 @@ def _cvx_failure_after_frontier(rows, cvx_frontier, slack_multiplier):
 
 
 if __name__ == "__main__":
-    run_safe_shed_frontier()
+    run_safe_shed_frontier(parse_workload_config("Run safe-shed frontier sweep."))

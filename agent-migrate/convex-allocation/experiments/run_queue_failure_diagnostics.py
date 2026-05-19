@@ -22,6 +22,7 @@ from baselines import (
 from catalog import get_model
 from coefficients import ACTIONS, compute_coefficients
 from cvxpy_solver import solve_cvxpy, solve_deadline_aware_cvxpy
+from evaluation import WorkloadConfig, parse_workload_config
 from metrics import shed_achieved, shed_action_mix, shed_destination_mix, utilization
 from mirror_descent import solve_mirror_descent
 from objective import objective
@@ -166,8 +167,8 @@ class RepairResult:
     moves: tuple[RepairMove, ...]
 
 
-def run_queue_failure_diagnostics():
-    out = ROOT / "outputs" / "sweep"
+def run_queue_failure_diagnostics(workload_config: WorkloadConfig = WorkloadConfig()):
+    out = workload_config.output_dir(ROOT)
     out.mkdir(parents=True, exist_ok=True)
     queue_rows = []
     breakdown_rows = []
@@ -184,52 +185,82 @@ def run_queue_failure_diagnostics():
                 "transition-coupled",
                 shed_fraction=shed_fraction,
                 slack_multiplier=slack_multiplier,
+                **workload_config.problem_kwargs(),
             )
-            cvx = solve_cvxpy(problem)
-            rounded = round_allocation(problem, cvx.y)
-            metrics, trace = evaluate_rounded_queue_trace(problem, rounded.y)
-            queue_rows.append(
-                _queue_row("CVXPY-rounded", shed_fraction, slack_multiplier, "OK", metrics)
-            )
-            breakdown_rows.extend(
-                _failure_breakdown_rows(
-                    "CVXPY-rounded", problem, shed_fraction, slack_multiplier, "OK", trace
+            try:
+                cvx = solve_cvxpy(problem)
+                rounded = round_allocation(problem, cvx.y)
+                metrics, trace = evaluate_rounded_queue_trace(problem, rounded.y)
+            except (RuntimeError, ValueError):
+                queue_rows.append(
+                    _empty_queue_row(
+                        "CVXPY-rounded", shed_fraction, slack_multiplier, problem.B_shed
+                    )
                 )
-            )
+                queue_rows.append(
+                    _empty_queue_row(
+                        "repaired-CVXPY-rounded",
+                        shed_fraction,
+                        slack_multiplier,
+                        problem.B_shed,
+                    )
+                )
+            else:
+                queue_rows.append(
+                    _queue_row("CVXPY-rounded", shed_fraction, slack_multiplier, "OK", metrics)
+                )
+                breakdown_rows.extend(
+                    _failure_breakdown_rows(
+                        "CVXPY-rounded", problem, shed_fraction, slack_multiplier, "OK", trace
+                    )
+                )
 
-            repair = repair_rounded_allocation(problem, rounded.y)
-            queue_rows.append(
-                _queue_row(
-                    "repaired-CVXPY-rounded",
-                    shed_fraction,
-                    slack_multiplier,
-                    "OK",
-                    repair.metrics,
-                    repair.moves,
-                )
-            )
-            breakdown_rows.extend(
-                _failure_breakdown_rows(
-                    "repaired-CVXPY-rounded",
-                    problem,
-                    shed_fraction,
-                    slack_multiplier,
-                    "OK",
-                    repair.trace,
-                )
-            )
-            summary_rows.append(_summary_row(shed_fraction, slack_multiplier, metrics, repair))
-            repair_summary_rows.append(
-                _repair_summary_row(problem, rounded.y, metrics, repair, shed_fraction, slack_multiplier)
-            )
-            move_breakdown_rows.extend(
-                _repair_move_breakdown_rows(shed_fraction, slack_multiplier, repair.moves)
-            )
-            budget_rows.extend(
-                _repair_budget_rows(
-                    problem, rounded.y, metrics, repair, shed_fraction, slack_multiplier
-                )
-            )
+                try:
+                    repair = repair_rounded_allocation(problem, rounded.y)
+                except (RuntimeError, ValueError):
+                    repaired = _empty_queue_row(
+                        "repaired-CVXPY-rounded",
+                        shed_fraction,
+                        slack_multiplier,
+                        problem.B_shed,
+                    )
+                    repaired["status"] = "REPAIR_FAILED"
+                    queue_rows.append(repaired)
+                else:
+                    queue_rows.append(
+                        _queue_row(
+                            "repaired-CVXPY-rounded",
+                            shed_fraction,
+                            slack_multiplier,
+                            "OK",
+                            repair.metrics,
+                            repair.moves,
+                        )
+                    )
+                    breakdown_rows.extend(
+                        _failure_breakdown_rows(
+                            "repaired-CVXPY-rounded",
+                            problem,
+                            shed_fraction,
+                            slack_multiplier,
+                            "OK",
+                            repair.trace,
+                        )
+                    )
+                    summary_rows.append(_summary_row(shed_fraction, slack_multiplier, metrics, repair))
+                    repair_summary_rows.append(
+                        _repair_summary_row(
+                            problem, rounded.y, metrics, repair, shed_fraction, slack_multiplier
+                        )
+                    )
+                    move_breakdown_rows.extend(
+                        _repair_move_breakdown_rows(shed_fraction, slack_multiplier, repair.moves)
+                    )
+                    budget_rows.extend(
+                        _repair_budget_rows(
+                            problem, rounded.y, metrics, repair, shed_fraction, slack_multiplier
+                        )
+                    )
 
             for policy, solver in POLICIES:
                 row, trace = _solver_queue(policy, solver, problem, shed_fraction, slack_multiplier)
@@ -308,8 +339,12 @@ def _solver_queue(policy, solver, problem, shed_fraction, slack_multiplier):
     y = result.allocation if hasattr(result, "allocation") else result.y
     if shed_achieved(problem, y) < problem.B_shed - 1e-5:
         return base, ()
-    rounded = round_allocation(problem, y)
-    metrics, trace = evaluate_rounded_queue_trace(problem, rounded.y)
+    try:
+        rounded = round_allocation(problem, y)
+        metrics, trace = evaluate_rounded_queue_trace(problem, rounded.y)
+    except ValueError:
+        base["status"] = "ROUNDING_FAILED"
+        return base, ()
     return _queue_row(policy, shed_fraction, slack_multiplier, "OK", metrics), trace
 
 
@@ -687,6 +722,9 @@ def _summary_row(shed_fraction, slack_multiplier, original, repair):
 
 def _print_repair_summary(rows):
     print("\nconvex-rounded local repair summary")
+    if not rows:
+        print("no feasible CVXPY-rounded rows to repair")
+        return
     cols = (
         "slack_multiplier",
         "shed_fraction",
@@ -734,4 +772,4 @@ def _write_rows(path, rows, columns):
 
 
 if __name__ == "__main__":
-    run_queue_failure_diagnostics()
+    run_queue_failure_diagnostics(parse_workload_config("Run queue failure diagnostics."))

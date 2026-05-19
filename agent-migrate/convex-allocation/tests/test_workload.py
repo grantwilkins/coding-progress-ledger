@@ -13,15 +13,21 @@ Plausible wrong implementations:
 - Aggregate only by length and hide slack or locality variation.
 - Accidentally replace the fixed six-row regression workload.
 - Produce a generated transition case that uses one destination or one action.
+- Crash queue-table evaluation when a generated-workload baseline is infeasible.
 """
 
 from __future__ import annotations
+
+from pathlib import Path
+from types import SimpleNamespace
 
 import numpy as np
 
 from baselines import solve_crossover_greedy
 from catalog import get_model
 from cvxpy_solver import solve_cvxpy
+from evaluation import WorkloadConfig
+from experiments.run_catalog_sweep import _transition_queue_rows
 from problem import make_problem
 from queueing import queue_metrics
 from workload import assert_workload_quality, generate_workload
@@ -93,6 +99,18 @@ def test_fixed_workload_source_preserves_default_problem_behavior():
         np.testing.assert_allclose(getattr(default, name), getattr(explicit, name))
 
 
+def test_generated_evaluation_config_is_reproducible_and_separate_from_fixed_outputs():
+    root = Path("/analysis")
+    fixed = WorkloadConfig()
+    generated = WorkloadConfig(source="generated", seed=7)
+
+    assert fixed.output_dir(root) == root / "outputs" / "sweep"
+    assert generated.output_dir(root) == root / "outputs" / "sweep" / generated.label
+    assert generated.problem_kwargs()["workload_source"] == "generated"
+    assert generated.problem_kwargs()["workload_seed"] == 7
+    assert generated.problem_kwargs()["workload_jobs"] == 1000
+
+
 def test_generated_transition_workload_is_not_degenerate_after_solving_and_rounding():
     problem = make_problem(
         get_model("GLM-5"),
@@ -114,3 +132,25 @@ def test_generated_transition_workload_is_not_degenerate_after_solving_and_round
     metrics = queue_metrics(problem, cvx.y)
     assert metrics["rounded_shed_achieved"] >= metrics["rounded_shed_target"]
     assert min(metrics["replay_shed_frac"], metrics["state_shed_frac"]) > 0.05
+
+
+def test_transition_queue_rows_mark_infeasible_policies_instead_of_rounding_them():
+    problem = make_problem(get_model("GLM-5"), "transition-coupled")
+    y = np.zeros((problem.G, 2 * problem.K + 1))
+    y[:, -1] = problem.d
+    result = SimpleNamespace(allocation=y, feasible=False, objective=None)
+
+    rows = _transition_queue_rows(
+        problem,
+        {
+            "CVXPY": result,
+            "mirror-descent-best": result,
+            "crossover-greedy": result,
+            "mixed-greedy": result,
+            "replay-only": result,
+            "state-only": result,
+        },
+    )
+
+    assert {row["status"] for row in rows} == {"INFEASIBLE"}
+    assert all(row["rounded_shed_ratio"] == "INFEASIBLE" for row in rows)

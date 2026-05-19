@@ -26,6 +26,7 @@ from baselines import (
 from catalog import catalog_models, get_model
 from coefficients import ACTIONS, compute_coefficients
 from cvxpy_solver import solve_cvxpy
+from evaluation import WorkloadConfig, parse_workload_config
 from metrics import (
     allocation_diagnostics,
     action_mix,
@@ -157,15 +158,15 @@ def _log_run(model, regime, problem, coeffs, diagnostics, cvx, md):
     )
 
 
-def run_sweep():
-    out = ROOT / "outputs" / "sweep"
+def run_sweep(workload_config: WorkloadConfig = WorkloadConfig()):
+    out = workload_config.output_dir(ROOT)
     out.mkdir(parents=True, exist_ok=True)
     rows = []
     cells = {}
 
     for model in catalog_models():
         for regime in REGIMES:
-            problem = make_problem(model, regime)
+            problem = make_problem(model, regime, **workload_config.problem_kwargs())
             coeffs = compute_coefficients(problem)
             diagnostics = saturation_diagnostics(problem)
             cvx = solve_cvxpy(problem)
@@ -206,12 +207,12 @@ def run_sweep():
     plot_policy_objectives(cells, out)
     plot_convergence(cells, out)
     plot_crossover(out)
-    run_transition_coupled(out)
+    run_transition_coupled(out, workload_config)
 
 
-def run_transition_coupled(out):
+def run_transition_coupled(out, workload_config: WorkloadConfig = WorkloadConfig()):
     model = get_model("GLM-5")
-    problem = make_problem(model, TRANSITION_REGIME)
+    problem = make_problem(model, TRANSITION_REGIME, **workload_config.problem_kwargs())
     coeffs = compute_coefficients(problem)
     diagnostics = saturation_diagnostics(problem)
     cvx = solve_cvxpy(problem)
@@ -296,10 +297,19 @@ def _transition_queue_rows(problem, results):
     for source, policy in policies:
         result = results[source]
         y = result.allocation if hasattr(result, "allocation") else result.y
-        metrics = queue_metrics(problem, y)
-        rows.append(
+        row = _empty_transition_queue_row(policy)
+        if not getattr(result, "feasible", True) or shed_achieved(problem, y) < problem.B_shed - 1e-5:
+            rows.append(row)
+            continue
+        try:
+            metrics = queue_metrics(problem, y)
+        except ValueError:
+            row["status"] = "ROUNDING_FAILED"
+            rows.append(row)
+            continue
+        row.update(
             {
-                "policy": policy,
+                "status": "OK",
                 "rounded_shed_achieved": f"{metrics['rounded_shed_achieved']:.10g}",
                 "rounded_shed_target": f"{metrics['rounded_shed_target']:.10g}",
                 "rounded_shed_ratio": f"{metrics['rounded_shed_ratio']:.10g}",
@@ -313,7 +323,26 @@ def _transition_queue_rows(problem, results):
                 "state_shed_frac": f"{metrics['state_shed_frac']:.10g}",
             }
         )
+        rows.append(row)
     return rows
+
+
+def _empty_transition_queue_row(policy):
+    return {
+        "policy": policy,
+        "status": "INFEASIBLE",
+        "rounded_shed_achieved": "INFEASIBLE",
+        "rounded_shed_target": "INFEASIBLE",
+        "rounded_shed_ratio": "INFEASIBLE",
+        "mean_reconstruction_delay": "INFEASIBLE",
+        "p50_reconstruction_delay": "INFEASIBLE",
+        "p95_reconstruction_delay": "INFEASIBLE",
+        "deadline_miss_rate": "INFEASIBLE",
+        "max_network_busy_window": "INFEASIBLE",
+        "max_prefill_busy_window": "INFEASIBLE",
+        "replay_shed_frac": "INFEASIBLE",
+        "state_shed_frac": "INFEASIBLE",
+    }
 
 
 def _print_transition_outputs(rows, summary, queue_rows):
@@ -357,6 +386,9 @@ def _print_queue_latex(rows):
     )
     print("\\hline")
     for row in rows:
+        if row.get("status", "OK") != "OK":
+            print(f"{row['policy']} & \\multicolumn{{9}}{{c}}{{{row['status']}}} \\\\")
+            continue
         print(
             f"{row['policy']} & {float(row['rounded_shed_ratio']):.3f} & "
             f"{float(row['mean_reconstruction_delay']):.3f} & "
@@ -376,12 +408,13 @@ def _print_queue_finding(rows):
     cvx = by_policy["CVXPY-rounded"]
     comparators = ("crossover-greedy", "replay-only", "state-only")
     better_p95 = all(
-        float(cvx["p95_reconstruction_delay"])
-        < float(by_policy[policy]["p95_reconstruction_delay"])
+        _queue_metric(cvx, "p95_reconstruction_delay")
+        < _queue_metric(by_policy[policy], "p95_reconstruction_delay")
         for policy in comparators
     )
     better_miss = all(
-        float(cvx["deadline_miss_rate"]) < float(by_policy[policy]["deadline_miss_rate"])
+        _queue_metric(cvx, "deadline_miss_rate")
+        < _queue_metric(by_policy[policy], "deadline_miss_rate")
         for policy in comparators
     )
     if better_p95 or better_miss:
@@ -391,6 +424,10 @@ def _print_queue_finding(rows):
             "\nQueue finding: CVXPY-rounded does not improve p95 delay or "
             "deadline misses over crossover-greedy and both single-action policies."
         )
+
+
+def _queue_metric(row, key):
+    return float(row[key]) if row.get("status", "OK") == "OK" else np.inf
 
 
 def plot_headline(cells, out):
@@ -668,4 +705,4 @@ def plot_crossover(out):
 
 
 if __name__ == "__main__":
-    run_sweep()
+    run_sweep(parse_workload_config("Run catalog allocation sweep."))
