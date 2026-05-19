@@ -40,20 +40,25 @@ Diagnose tight-slack queue failures and rounded local repair:
 uv run python experiments/run_queue_failure_diagnostics.py
 ```
 
+Plot queue-centered results after the safe-shed and queue-failure CSVs exist:
+
+```bash
+uv run python experiments/plot_queue_centered.py
+```
+
 Outputs are written to `convex-allocation/outputs/sweep/`:
 generated workload runs write to a labeled subdirectory such as
 `outputs/sweep/generated_seed7_jobs1000_classes12/`.
 
-- `headline_action_mix.png`
-- `allocation_heatmap_per_scenario.png`
-- `utilization_vs_policy.png`
-- `objective_vs_policy.png`
-- `convergence_one_scenario.png`
-- `crossover_recovery.png`
 - `summary.csv`
 - `transition_coupled_policy_table.csv`
 - `transition_coupled_allocation_summary.csv`
 - `transition_coupled_queue_table.csv`
+- `safe_shed_frontier_lines.pdf`
+- `miss_rate_frontier_lines.pdf`
+- `delay_cdf_hard_case.pdf`
+- `queue_depth_hard_case.pdf`
+- `resource_pressure_scatter.pdf`
 - `shed_slack_sweep.csv`
 - `safe_shed_frontier.csv`
 - `transition_coupled_queue_failure_breakdown.csv`
