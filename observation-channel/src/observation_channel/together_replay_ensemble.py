@@ -187,7 +187,7 @@ def parse_time_estimate(text: str) -> tuple[float, float]:
 
 
 def time_error_seconds(estimate: Estimate) -> float:
-    return estimate.seconds_left * (1.0 - estimate.confidence_percent / 100.0)
+    return 100.0 - estimate.confidence_percent
 
 
 def together_complete(
@@ -353,7 +353,7 @@ def _write_readme(
                 "Artifacts:",
                 "",
                 "- `time_estimates.csv`: one time and confidence estimate per turn.",
-                "- `remaining_time.png`: seconds-left curve with confidence-derived error bars and confidence by turn.",
+                "- `remaining_time.png`: seconds-left curve with inverse-confidence error bars and confidence by turn.",
                 "",
             ]
         ),
