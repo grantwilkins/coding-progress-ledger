@@ -37,7 +37,18 @@ class RoundedAllocation:
     y: np.ndarray
     retained_prefill_target_s: float
     retained_prefill_moved_s: float
-    records: tuple[RequestRecord, ...]
+
+
+@dataclass(frozen=True)
+class _CountedRequest:
+    g: int
+    k: int
+    action: str
+    deadline_s: float
+    count: int
+    network_service_s: float
+    prefill_service_s: float
+    release_rank: int
 
 
 @dataclass(frozen=True)
@@ -79,7 +90,6 @@ def round_allocation(problem: ProblemData, y: np.ndarray) -> RoundedAllocation:
         rounded,
         problem.retained_prefill_target_s,
         float(np.dot(problem.tau, moved)),
-        _request_records(problem, rounded),
     )
 
 
@@ -107,7 +117,12 @@ def evaluate_rounded_queue(
     drain_window_s: float = 1800.0,
     release_policy: str = "edf",
 ) -> dict[str, float]:
-    return evaluate_rounded_queue_trace(problem, y, drain_window_s, release_policy)[0]
+    y = _integer_allocation(problem, y)
+    retained_prefill_moved = float(np.dot(problem.tau, np.sum(y[:, : y.shape[1] - 1], axis=1)))
+    metrics = _evaluate_counted_queue(problem, y, drain_window_s, release_policy)
+    _add_retained_metrics(metrics, problem, y, retained_prefill_moved)
+    _add_drain_metrics(metrics, retained_prefill_moved, drain_window_s)
+    return metrics
 
 
 def evaluate_rounded_allocation(
@@ -116,7 +131,7 @@ def evaluate_rounded_allocation(
     drain_window_s: float = 1800.0,
     release_policy: str = "edf",
 ) -> dict[str, float]:
-    metrics = evaluate_static_queue(problem, rounded.records, drain_window_s, release_policy)
+    metrics = _evaluate_counted_queue(problem, rounded.y, drain_window_s, release_policy)
     _add_retained_metrics(metrics, problem, rounded.y, rounded.retained_prefill_moved_s)
     _add_drain_metrics(metrics, rounded.retained_prefill_moved_s, drain_window_s)
     return metrics
@@ -232,6 +247,83 @@ def _evaluate_static_queue(
     return metrics, trace
 
 
+def _evaluate_counted_queue(
+    problem: ProblemData,
+    y: np.ndarray,
+    drain_window_s: float,
+    release_policy: str,
+) -> dict[str, float]:
+    records = _counted_requests(problem, y, drain_window_s, release_policy)
+    if not records:
+        return _empty_queue_metrics()
+
+    H, _, _ = _available_rates(problem)
+    total = sum(record.count for record in records)
+    release = [_release_times(record, total, drain_window_s) for record in records]
+    net_done: list[np.ndarray | None] = [None] * len(records)
+    complete: list[np.ndarray | None] = [None] * len(records)
+    net_busy = np.zeros(problem.K)
+    prefill_busy = np.zeros(problem.K)
+
+    for k in range(problem.K):
+        time = 0.0
+        for i, record in enumerate(records):
+            if record.k != k:
+                continue
+            done = _schedule_arrivals(release[i], time, record.network_service_s)
+            net_done[i] = done
+            complete[i] = done
+            net_busy[k] += record.network_service_s * record.count
+            time = float(done[-1])
+
+    for k in range(problem.K):
+        time = 0.0
+        for i, record in enumerate(records):
+            if record.k != k or record.action != ACTIONS[REPLAY]:
+                continue
+            done = _schedule_arrivals(net_done[i], time, record.prefill_service_s)
+            complete[i] = done
+            prefill_busy[k] += record.prefill_service_s * record.count
+            time = float(done[-1])
+
+    delay = np.concatenate([complete[i] - release[i] for i in range(len(records))])
+    deadline_s = np.concatenate([np.full(record.count, record.deadline_s) for record in records])
+    replay_work = sum(problem.tau[record.g] * record.count for record in records if record.action == ACTIONS[REPLAY])
+    state_work = sum(problem.tau[record.g] * record.count for record in records if record.action != ACTIONS[REPLAY])
+    total_work = replay_work + state_work
+    p95_ratio = float(np.percentile(delay / deadline_s, 95))
+    return {
+        "mean_reconstruction_delay": float(np.mean(delay)),
+        "p50_reconstruction_delay": float(np.percentile(delay, 50)),
+        "p95_reconstruction_delay": float(np.percentile(delay, 95)),
+        "p99_reconstruction_delay": float(np.percentile(delay, 99)),
+        "p95_normalized_reconstruction_delay": p95_ratio,
+        "p95_reconstruction_delay_ratio": p95_ratio,
+        "deadline_miss_rate": float(np.mean(delay > deadline_s)),
+        "network_capacity_pressure": float(np.max(net_busy) / H),
+        "prefill_capacity_pressure": float(np.max(prefill_busy) / H),
+        "drain_completion_s": float(max(np.max(done) for done in complete if done is not None)),
+        "replay_retained_prefill_fraction": float(replay_work / total_work),
+        "state_transfer_retained_prefill_fraction": float(state_work / total_work),
+    }
+
+
+def _empty_queue_metrics() -> dict[str, float]:
+    return {
+        "mean_reconstruction_delay": 0.0,
+        "p50_reconstruction_delay": 0.0,
+        "p95_reconstruction_delay": 0.0,
+        "p99_reconstruction_delay": 0.0,
+        "p95_normalized_reconstruction_delay": 0.0,
+        "deadline_miss_rate": 0.0,
+        "network_capacity_pressure": 0.0,
+        "prefill_capacity_pressure": 0.0,
+        "drain_completion_s": 0.0,
+        "replay_retained_prefill_fraction": 0.0,
+        "state_transfer_retained_prefill_fraction": 0.0,
+    }
+
+
 def queue_metrics(
     problem: ProblemData,
     y: np.ndarray,
@@ -241,10 +333,7 @@ def queue_metrics(
     if np.allclose(y, np.rint(y)):
         return evaluate_rounded_queue(problem, y, drain_window_s, release_policy)
     rounded = round_allocation(problem, y)
-    metrics = evaluate_static_queue(problem, rounded.records, drain_window_s, release_policy)
-    _add_retained_metrics(metrics, problem, rounded.y, rounded.retained_prefill_moved_s)
-    _add_drain_metrics(metrics, rounded.retained_prefill_moved_s, drain_window_s)
-    return metrics
+    return evaluate_rounded_allocation(problem, rounded, drain_window_s, release_policy)
 
 
 def fractional_queue_load_proxy(problem: ProblemData, y: np.ndarray) -> dict[str, float]:
@@ -333,6 +422,76 @@ def _apportion(total: int, weights: np.ndarray) -> np.ndarray:
         order = np.lexsort((np.arange(raw.size), -(raw - counts)))
         counts[order[:remaining]] += 1
     return counts
+
+
+def _counted_requests(
+    problem: ProblemData, y: np.ndarray, drain_window_s: float, release_policy: str
+) -> tuple[_CountedRequest, ...]:
+    if drain_window_s < 0.0:
+        raise ValueError("drain_window_s must be nonnegative")
+    if release_policy != "edf":
+        raise ValueError(f"unknown release policy: {release_policy}")
+    coeffs = compute_coefficients(problem)
+    _, lambda_avail, rho_avail = _available_rates(problem)
+    cells = []
+    record_index = 0
+    for g in range(problem.G):
+        for m, count in enumerate(y[g, : coeffs.M]):
+            count = int(count)
+            if count:
+                k = int(coeffs.option_dest[m])
+                action = int(coeffs.option_action[m])
+                cells.append(
+                    (
+                        float(problem.deadline_s[g]),
+                        int(g),
+                        record_index,
+                        _CountedRequest(
+                            int(g),
+                            k,
+                            ACTIONS[action],
+                            float(problem.deadline_s[g]),
+                            count,
+                            float(coeffs.b_net[g, k, action] / lambda_avail[k]),
+                            float(coeffs.b_prefill[g, k, action] / rho_avail[k]),
+                            0,
+                        ),
+                    )
+                )
+            record_index += count
+
+    rank = 0
+    records = []
+    for _, _, _, record in sorted(cells):
+        records.append(
+            _CountedRequest(
+                record.g,
+                record.k,
+                record.action,
+                record.deadline_s,
+                record.count,
+                record.network_service_s,
+                record.prefill_service_s,
+                rank,
+            )
+        )
+        rank += record.count
+    return tuple(records)
+
+
+def _release_times(record: _CountedRequest, total: int, drain_window_s: float) -> np.ndarray:
+    if drain_window_s == 0.0:
+        return np.zeros(record.count)
+    ranks = record.release_rank + np.arange(record.count)
+    return drain_window_s * ranks / total
+
+
+def _schedule_arrivals(arrivals: np.ndarray, time: float, service: float) -> np.ndarray:
+    i = np.arange(arrivals.size)
+    if service <= 0.0:
+        return np.maximum.accumulate(np.maximum(arrivals, time))
+    base = np.maximum.accumulate(arrivals - i * service)
+    return (i + 1.0) * service + np.maximum(base, time)
 
 
 def _request_records(problem: ProblemData, y: np.ndarray) -> tuple[RequestRecord, ...]:

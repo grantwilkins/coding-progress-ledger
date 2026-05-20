@@ -14,6 +14,8 @@ Plausible wrong implementations:
 - Count drain wait as reconstruction delay after choosing release-relative deadlines.
 - Drop the burst-at-zero baseline when drain_window_s is explicitly zero.
 - Re-round an already-integer online baseline allocation and erase its chosen requests.
+- Keep metric-only rounded queue evaluation dependent on per-request records.
+- Change percentile or EDF tie semantics while compressing counted requests.
 """
 
 from __future__ import annotations
@@ -21,8 +23,18 @@ from __future__ import annotations
 import numpy as np
 from numpy.testing import assert_allclose
 
+import queueing
 from catalog import ModelParams
-from queueing import RequestRecord, evaluate_static_queue, evaluate_static_queue_trace, queue_metrics, round_allocation
+from queueing import (
+    RequestRecord,
+    evaluate_rounded_allocation,
+    evaluate_rounded_queue,
+    evaluate_rounded_queue_trace,
+    evaluate_static_queue,
+    evaluate_static_queue_trace,
+    queue_metrics,
+    round_allocation,
+)
 from problem import ProblemData
 
 
@@ -88,6 +100,15 @@ def test_large_rounding_meets_target_without_zero_support_classes():
     assert 1000.0 <= rounded.retained_prefill_moved_s < 1008.0
     assert_allclose(np.sum(rounded.y, axis=1), problem.d)
     assert_allclose(np.sum(rounded.y[:, :2], axis=1)[2], 0)
+
+
+def test_rounding_does_not_materialize_request_records():
+    problem = queue_problem([5, 8, 13], [120, 120, 120], [1, 1, 1], 1000.0)
+    y = np.array([[60.4, 0.0, 59.6], [50.2, 0.0, 69.8], [0.0, 0.0, 120.0]])
+
+    rounded = round_allocation(problem, y)
+
+    assert not hasattr(rounded, "records")
 
 
 def test_static_queue_uses_network_then_prefill_with_edf():
@@ -165,6 +186,76 @@ def test_queue_drains_requests_by_edf_release_order():
     )
     assert replay.deadline_missed
     assert not state.deadline_missed
+
+
+def test_counted_rounded_metrics_match_expanded_trace_metrics():
+    problem = queue_problem([1, 1, 2], [3, 2, 4], [4.0, 8.0, 6.0], 0.0)
+    y = np.array(
+        [
+            [2, 1, 0],
+            [0, 2, 0],
+            [3, 0, 1],
+        ]
+    )
+
+    counted = evaluate_rounded_queue(problem, y, drain_window_s=12.0)
+    expanded, trace = evaluate_rounded_queue_trace(problem, y, drain_window_s=12.0)
+
+    assert len(trace) == 8
+    for key in (
+        "mean_reconstruction_delay",
+        "p50_reconstruction_delay",
+        "p95_reconstruction_delay",
+        "p99_reconstruction_delay",
+        "p95_normalized_reconstruction_delay",
+        "deadline_miss_rate",
+        "network_capacity_pressure",
+        "prefill_capacity_pressure",
+        "drain_completion_s",
+        "replay_retained_prefill_fraction",
+        "state_transfer_retained_prefill_fraction",
+        "retained_prefill_moved_s",
+        "retained_prefill_removal_rate_s_per_s",
+    ):
+        assert_allclose(counted[key], expanded[key])
+
+
+def test_counted_metrics_preserve_zero_window_edf_tie_order():
+    problem = queue_problem([1, 1, 1], [2, 2, 2], [5.0, 3.0, 5.0], 0.0)
+    y = np.array(
+        [
+            [2, 0, 0],
+            [2, 0, 0],
+            [2, 0, 0],
+        ]
+    )
+
+    counted = evaluate_rounded_queue(problem, y, drain_window_s=0.0)
+    expanded, trace = evaluate_rounded_queue_trace(problem, y, drain_window_s=0.0)
+
+    assert len(trace) == 6
+    assert_allclose(counted["p95_reconstruction_delay"], expanded["p95_reconstruction_delay"])
+    assert_allclose(counted["deadline_miss_rate"], expanded["deadline_miss_rate"])
+
+
+def test_metric_only_paths_do_not_build_request_records(monkeypatch):
+    problem = queue_problem([10, 6], [2, 2], [10.0, 10.0], 6.0)
+    integer = np.array([[1, 0, 1], [1, 0, 1]])
+    fractional = np.array([[1.2, 0.0, 0.8], [0.2, 0.0, 1.8]])
+
+    monkeypatch.setattr(
+        queueing,
+        "_request_records",
+        lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("expanded records")),
+    )
+
+    integer_metrics = queue_metrics(problem, integer, drain_window_s=0.0)
+    fractional_metrics = queue_metrics(problem, fractional, drain_window_s=0.0)
+    rounded_metrics = evaluate_rounded_allocation(problem, round_allocation(problem, fractional), drain_window_s=0.0)
+
+    assert integer_metrics["retained_prefill_moved_s"] == 16.0
+    assert fractional_metrics["retained_prefill_moved_s"] >= problem.retained_prefill_target_s
+    assert rounded_metrics["retained_prefill_moved_s"] == fractional_metrics["retained_prefill_moved_s"]
 
 
 def test_default_drain_window_is_thirty_minutes():

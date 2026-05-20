@@ -83,6 +83,8 @@ uv run python experiments/run_report_experiments.py
 Long CVXPY sweeps run independent grid points in a shared process pool. Set
 `CONVEX_ALLOCATION_WORKERS=1` for a sequential run, or to another positive
 integer to cap worker processes.
+Rounded queue metric paths use counted scheduling; trace-producing paths still
+return per-request records for diagnostics and plots.
 
 Outputs are written to `convex-allocation/outputs/sweep/`:
 generated workload runs write the same current report/network artifacts to a
