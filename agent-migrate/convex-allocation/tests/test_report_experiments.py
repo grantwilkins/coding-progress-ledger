@@ -11,6 +11,7 @@ Plausible wrong implementations:
 - Let repair change the retained-prefill target while improving queue metrics.
 - Rebuild the generated workload once per weight or frontier grid point.
 - Recompute claim frontiers even when the caller already passed them in.
+- Break real process-pool imports, pickling, ordering, or solver equivalence.
 """
 
 from __future__ import annotations
@@ -18,6 +19,7 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
+from evaluation import run_jobs
 from experiments.run_report_experiments import (
     _claim_row,
     _rounding_row,
@@ -97,7 +99,7 @@ def test_model_architecture_sweep_reuses_one_base_problem_per_model(monkeypatch)
         for key, _, _, problem in jobs:
             by_model.setdefault(key, set()).add(id(problem.T))
         assert all(len(ids) == 1 for ids in by_model.values())
-        return [(key, fraction, None, None) for key, fraction, *_ in jobs]
+        return [(key, fraction, None) for key, fraction, *_ in jobs]
 
     monkeypatch.setattr(report, "make_problem", make_problem)
     monkeypatch.setattr(report, "_run_jobs", run_jobs)
@@ -129,6 +131,27 @@ def test_claim_table_uses_precomputed_frontiers(monkeypatch):
     rows = claim_table(WorkloadConfig(), architecture_rows, frontiers)
 
     assert rows[1]["pass"] == "yes"
+
+
+def test_fixed_report_frontier_process_pool_matches_serial(monkeypatch):
+    spec = (("main", get_model("GLM-5"), "transition-coupled", report.SOFT_DEADLINE),)
+    captured = {}
+
+    def capture_run_jobs(label, jobs, fn):
+        captured[label] = run_jobs(label, jobs, fn)
+        return captured[label]
+
+    def frontiers(workers, label):
+        monkeypatch.setenv("CONVEX_ALLOCATION_WORKERS", str(workers))
+        return report._frontiers(spec, WorkloadConfig(source="fixed"), label), captured[label]
+
+    monkeypatch.setattr(report, "_run_jobs", capture_run_jobs)
+
+    serial, _ = frontiers(1, "serial fixed frontier")
+    pool, pool_points = frontiers(2, "pool fixed frontier")
+
+    assert [fraction for _, fraction, _ in pool_points] == list(report.RETAINED_PREFILL_FRACTIONS)
+    assert pool == serial
 
 
 def test_frontier_point_keeps_programming_value_errors_hard(monkeypatch):

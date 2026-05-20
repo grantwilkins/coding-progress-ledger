@@ -236,7 +236,7 @@ def _frontiers(specs, workload_config: WorkloadConfig, label: str) -> dict[str, 
 
 
 def _best_frontier(points, key):
-    rows = [row for point_key, _, row, _ in points if point_key == key and row is not None]
+    rows = [row for point_key, _, row in points if point_key == key and row is not None]
     return max(rows, key=lambda row: row["largest_tested_safe_retained_prefill_fraction"]) if rows else _unsafe_frontier()
 
 
@@ -259,13 +259,13 @@ def _frontier_point_job(job):
     return _frontier_point(*job)
 
 
-def _frontier_point(key, fraction, solver_name, problem, initial_y=None):
+def _frontier_point(key, fraction, solver_name, problem):
     try:
-        y, metrics = _rounded_metrics_named(problem, solver_name, REPORT_DRAIN_WINDOW_S, initial_y)
+        y, metrics = _rounded_metrics_named(problem, solver_name, REPORT_DRAIN_WINDOW_S)
     except RuntimeError:
-        return key, fraction, None, initial_y
+        return key, fraction, None
     if not _safe(metrics):
-        return key, fraction, None, y
+        return key, fraction, None
     mix = retained_prefill_action_mix(problem, y)
     bottleneck = "network" if metrics["network_capacity_pressure"] >= metrics["prefill_capacity_pressure"] else "prefill"
     return key, fraction, {
@@ -279,7 +279,7 @@ def _frontier_point(key, fraction, solver_name, problem, initial_y=None):
         "prefill_capacity_pressure": metrics["prefill_capacity_pressure"],
         "replay_fraction": mix["replay_retained_prefill_fraction"],
         "state_transfer_fraction": mix["state_transfer_retained_prefill_fraction"],
-    }, y
+    }
 
 
 def _rounded_metrics(problem, solver, drain_window_s):
@@ -289,16 +289,16 @@ def _rounded_metrics(problem, solver, drain_window_s):
     return rounded, evaluate_rounded_queue(problem, rounded, drain_window_s=drain_window_s)
 
 
-def _rounded_metrics_named(problem, solver_name, drain_window_s, initial_y=None):
-    result = _solve_named(problem, solver_name, initial_y)
+def _rounded_metrics_named(problem, solver_name, drain_window_s):
+    result = _solve_named(problem, solver_name)
     y = result.allocation if hasattr(result, "allocation") else result.y
     rounded = y if np.allclose(y, np.rint(y)) else round_allocation(problem, y).y
     return rounded, evaluate_rounded_queue(problem, rounded, drain_window_s=drain_window_s)
 
 
-def _solve_named(problem, solver_name, initial_y=None):
+def _solve_named(problem, solver_name):
     if solver_name == SOFT_DEADLINE:
-        return solve_soft_deadline_cvxpy(problem, initial_y=initial_y)
+        return solve_soft_deadline_cvxpy(problem)
     if solver_name == REPLAY_ONLY:
         return solve_replay_only(problem)
     raise ValueError(f"unknown solver: {solver_name}")
