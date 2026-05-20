@@ -58,7 +58,7 @@ uv run python experiments/run_queue_failure_diagnostics.py
 Plot queue-centered results after the retained-state frontier CSV exists:
 
 ```bash
-uv run python experiments/plot_queue_centered.py
+uv run python experiments/plot_queue_centered.py --workload-source fixed
 ```
 
 Plot the simple network-bandwidth pressure relationship:
@@ -81,11 +81,12 @@ generated workload runs write to a labeled subdirectory such as
 - `transition_coupled_policy_table.csv`
 - `transition_coupled_allocation_summary.csv`
 - `transition_coupled_queue_table.csv`
-- `retained_state_frontier.pdf`
-- `deadline_miss_frontier.pdf`
-- `deadline_delay_cdf.pdf`
-- `queue_depth_example.pdf`
-- `network_prefill_busy_scatter.pdf`
+- `h1_resource_pressure.pdf`
+- `h2_safe_frontier.pdf`
+- `h2_delay_cdf.pdf`
+- `h3_action_mix_by_model.pdf`
+- `h4_state_manifest_heatmap.pdf`
+- `integer_benchmark_summary.csv`
 - `network_bandwidth_tradeoff.csv`
 - `network_bandwidth_tradeoff.pdf`
 - `retained_state_deadline_sweep.csv`
@@ -118,9 +119,10 @@ sensitivity rows. It reports retained-prefill fraction, average-equivalent
 state target TB, actual evacuated state TB, network/prefill capacity pressure,
 replay/state-transfer retained-prefill shares, drain completion time, and
 deadline overrun. Main plots lead with deadline-penalty CVXPY and include plain
-CVXPY as the resource-cost oracle, plus mirror descent, crossover-greedy,
-least-loaded-destination, online-queue-greedy, replay-only, and
-state-transfer-only.
+CVXPY as the resource-cost oracle, plus online-queue-greedy, crossover-greedy,
+replay-only, and state-transfer-only. The report plot script writes one simple
+figure for resource pressure, safe frontier, delay CDF, architecture action mix,
+and state-manifest routing.
 The failure diagnostic adds per-request queue tracing, missed-request breakdowns
 by class, destination, and action, and a one-request rounded local repair for the
 tight 0.25x and 0.5x deadline settings.

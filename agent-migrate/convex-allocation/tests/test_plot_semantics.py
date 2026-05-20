@@ -1,67 +1,140 @@
 """
 Claim:
-Queue-centered plots read finite queue metrics, omit infeasible points, use
-request-level hard-case CDFs, and derive waiting queue depth from release-time
-queue traces.
+The report figure script emits exactly one simple artifact per hypothesis plus a
+compact integer benchmark table. The H1/H2 plots use queue safety from deadline
+miss rate and normalized p95 delay, the H2 CDF is request-level, and the H4
+heatmap exposes per-class state locality rather than only destination load.
 
 Plausible wrong implementations:
-- Plot infeasible rows as zero and create false frontier points.
-- Build CDFs from aggregated classes instead of per-request trace records.
-- Count requests in service as waiting queue depth.
-- Plot drained requests as though every request arrived at time zero.
-- Keep emitting retired heatmap, objective-ratio, or summary plot artifacts.
+- Reintroduce crowded diagnostic plots instead of the five report figures.
+- Mark a frontier point safe from one metric while ignoring the other.
+- Average class delays before building the CDF.
+- Keep unrelated integer policies in the compact summary table.
+- Drop context/KV locality from the manifest heatmap labels.
 """
 
 from __future__ import annotations
 
 from types import SimpleNamespace
 
+import pandas as pd
+
+from catalog import ModelParams
 from experiments.plot_queue_centered import (
+    INTEGER_TABLE_POLICIES,
     OUTPUT_FILES,
-    POLICY_LABELS,
-    PLOT_POLICIES,
+    REPORT_POLICIES,
+    _allocation_heatmap,
     _cdf_points,
+    _integer_summary_rows,
     _max_waiting_depth_points,
-    _policy_points,
+    _safe_frontier,
+    _safe_series,
 )
+from problem import ProblemData
+
+import numpy as np
 
 
-def test_policy_points_omit_infeasible_and_rounding_failed_rows():
+def test_report_outputs_are_one_plot_per_hypothesis_plus_summary_table():
+    assert set(OUTPUT_FILES) == {
+        "h1_resource_pressure.pdf",
+        "h2_safe_frontier.pdf",
+        "h2_delay_cdf.pdf",
+        "h3_action_mix_by_model.pdf",
+        "h4_state_manifest_heatmap.pdf",
+        "integer_benchmark_summary.csv",
+    }
+    assert not any("queue_depth" in path or "busy_scatter" in path for path in OUTPUT_FILES)
+
+
+def test_report_policies_are_small_enough_to_read_without_overplotting():
+    assert REPORT_POLICIES == (
+        "deadline-penalty-rounded",
+        "CVXPY-rounded",
+        "online-queue-greedy",
+        "crossover-greedy",
+        "replay-only",
+        "state-only",
+    )
+    assert len(REPORT_POLICIES) == 6
+
+
+def test_safe_series_requires_deadline_miss_and_normalized_delay_bounds():
+    df = pd.DataFrame(
+        {
+            "deadline_miss_rate": [0.01, 0.011, 0.0],
+            "p95_delay_over_deadline": [1.0, 0.5, 1.001],
+        }
+    )
+
+    assert _safe_series(df).tolist() == [True, False, False]
+
+
+def test_safe_frontier_uses_largest_safe_fraction_by_drain_window():
     rows = [
-        {
-            "policy": "CVXPY-rounded",
-            "deadline_scale": "0.5",
-            "actual_evacuated_state_tb": "2.0",
-            "deadline_miss_rate": "0.4",
-        },
-        {
-            "policy": "CVXPY-rounded",
-            "deadline_scale": "0.5",
-            "actual_evacuated_state_tb": "3.0",
-            "deadline_miss_rate": "nan",
-        },
-        {
-            "policy": "replay-only",
-            "deadline_scale": "0.5",
-            "actual_evacuated_state_tb": "2.0",
-            "deadline_miss_rate": "0.0",
-        },
+        _sweep_row("CVXPY-rounded", 900.0, 0.2, 0.0, 0.8),
+        _sweep_row("CVXPY-rounded", 900.0, 0.4, 0.0, 0.9),
+        _sweep_row("CVXPY-rounded", 900.0, 0.6, 0.2, 0.9),
+        _sweep_row("CVXPY-rounded", 1800.0, 0.6, 0.0, 0.9),
+        _sweep_row("replay-only", 900.0, 0.2, 0.0, 1.2),
     ]
 
-    assert _policy_points(
-        rows,
-        "CVXPY-rounded",
-        "actual_evacuated_state_tb",
-        "deadline_miss_rate",
-        {"deadline_scale": 0.5},
-    ) == [(2.0, 0.4)]
+    frontier = _safe_frontier(rows, deadline_scale=0.5)
+    by_policy_window = {
+        (row.policy, row.drain_window_s): row.max_safe_retained_prefill_fraction
+        for row in frontier.itertuples()
+    }
+
+    assert by_policy_window[("CVXPY-rounded", 900.0)] == 0.4
+    assert by_policy_window[("CVXPY-rounded", 1800.0)] == 0.6
+    assert ("replay-only", 900.0) not in by_policy_window
 
 
 def test_cdf_points_are_request_level_empirical_cdf():
     assert _cdf_points([3.0, 1.0, 3.0]) == [(1.0, 1 / 3), (3.0, 2 / 3), (3.0, 1.0)]
 
 
-def test_queue_depth_counts_waiting_requests_not_requests_in_service():
+def test_integer_summary_keeps_only_compact_methodology_rows():
+    rows = [
+        _integer_row("case-a", policy)
+        for policy in (*INTEGER_TABLE_POLICIES, "online-queue-greedy", "state-only")
+    ]
+
+    summary = _integer_summary_rows(rows)
+
+    assert [row["policy"] for row in summary] == list(INTEGER_TABLE_POLICIES)
+    assert set(summary[0]) == {"case", "policy", "integer_objective_gap_to_best", "p95_delay", "miss_rate"}
+
+
+def test_manifest_heatmap_labels_include_context_deadline_and_locality():
+    model = ModelParams("manifest", 1.0, 2.0, 1.0, 0.0)
+    problem = ProblemData(
+        model=model,
+        regime="manifest",
+        T=np.array([1000.0, 2000.0]),
+        d=np.array([2.0, 2.0]),
+        deadline_s=np.array([10.0, 5.0]),
+        lambda_Bps=np.array([10.0]),
+        rho_prefill=np.array([10.0]),
+        C_net=np.array([100.0]),
+        C_prefill=np.array([100.0]),
+        ell_net=np.zeros(1),
+        ell_prefill=np.zeros(1),
+        h_ctx=np.array([[0.2], [0.8]]),
+        h_kv=np.array([[0.1], [0.5]]),
+        retained_prefill_target_s=1.0,
+    )
+    allocation = np.array([[1.0, 0.0, 1.0], [0.0, 1.0, 1.0]])
+
+    heatmap, row_labels, col_labels = _allocation_heatmap(problem, allocation)
+
+    assert heatmap.shape == (2, 3)
+    assert col_labels == ["site 0\nreplay", "site 0\nstate", "stay"]
+    assert all("T=" in label and "ddl=" in label and "ctx=" in label and "kv=" in label for label in row_labels)
+
+
+def test_queue_depth_helper_still_counts_waiting_requests_for_bandwidth_plot():
     trace = (
         _record(k=0, network_wait=0.0, network_service=1.0),
         _record(k=0, network_wait=2.0, network_service=1.0),
@@ -78,71 +151,28 @@ def test_queue_depth_counts_waiting_requests_not_requests_in_service():
     ]
 
 
-def test_queue_depth_uses_release_time_for_drained_requests():
-    trace = (_record(k=0, network_wait=2.0, network_service=1.0, release_time=10.0),)
-
-    assert _max_waiting_depth_points(trace, "network") == [(0.0, 0.0), (10.0, 1.0), (12.0, 0.0)]
-
-
-def test_requested_outputs_exclude_retired_png_artifacts():
-    retired = {
-        "headline_action_mix.png",
-        "allocation_heatmap_per_scenario.png",
-        "utilization_vs_policy.png",
-        "objective_vs_policy.png",
-        "convergence_one_scenario.png",
-        "crossover_recovery.png",
-    }
-    requested = {
-        "retained_state_frontier.pdf",
-        "deadline_miss_frontier.pdf",
-        "deadline_delay_cdf.pdf",
-        "queue_depth_example.pdf",
-        "network_prefill_busy_scatter.pdf",
-    }
-
-    assert set(OUTPUT_FILES) == requested
-    assert retired.isdisjoint(OUTPUT_FILES)
-
-
-def test_policy_labels_are_short_enough_for_paper_legends():
-    assert set(POLICY_LABELS) == {
-        "CVXPY-rounded",
-        "deadline-penalty-rounded",
-        "mirror-descent-rounded",
-        "crossover-greedy",
-        "least-loaded-destination",
-        "online-queue-greedy",
-        "replay-only",
-        "state-only",
-    }
-    assert POLICY_LABELS["CVXPY-rounded"] == "CVXPY cost"
-    assert max(len(label) for label in POLICY_LABELS.values()) <= 16
-
-
-def test_plot_legend_leads_with_deadline_penalty_policy():
-    assert len(PLOT_POLICIES) == 8
-    assert "deadline-aware-m0.8-rounded" not in PLOT_POLICIES
-    assert "deadline-aware-m1.0-rounded" not in PLOT_POLICIES
-    assert PLOT_POLICIES[:2] == ("deadline-penalty-rounded", "CVXPY-rounded")
-    assert set(PLOT_POLICIES) == {
-        "CVXPY-rounded",
-        "deadline-penalty-rounded",
-        "mirror-descent-rounded",
-        "crossover-greedy",
-        "least-loaded-destination",
-        "online-queue-greedy",
-        "replay-only",
-        "state-only",
+def _sweep_row(policy, drain_window_s, retained_prefill_fraction, miss_rate, delay_ratio):
+    return {
+        "policy": policy,
+        "retained_prefill_fraction": str(retained_prefill_fraction),
+        "deadline_scale": "0.5",
+        "drain_window_s": str(drain_window_s),
+        "network_capacity_pressure": "0.5",
+        "prefill_capacity_pressure": "0.5",
+        "deadline_miss_rate": str(miss_rate),
+        "p95_delay_over_deadline": str(delay_ratio),
     }
 
 
-def test_plot_outputs_use_retained_state_names():
-    text = "\n".join(OUTPUT_FILES)
-
-    assert "retained_state_frontier.pdf" in OUTPUT_FILES
-    for stale in ("source_" + "load", "source_" + "prefill", "sh" + "ed"):
-        assert stale not in text
+def _integer_row(case, policy):
+    return {
+        "case": case,
+        "policy": policy,
+        "integer_objective_gap_to_best": "0.1",
+        "p95_delay": "2.0",
+        "miss_rate": "0.0",
+        "integer_objective": "1.0",
+    }
 
 
 def _record(k, network_wait, network_service, release_time=0.0):
