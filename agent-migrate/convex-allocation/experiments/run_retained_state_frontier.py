@@ -126,7 +126,7 @@ def run_retained_state_frontier(workload_config: WorkloadConfig = WorkloadConfig
     ]
     batches = _run_jobs("retained-state drain frontier", jobs, _frontier_job)
     rows = [row for sweep_rows, _ in batches for row in sweep_rows]
-    frontier = [frontier_row for _, frontier_row in batches]
+    frontier = _monotone_frontier([frontier_row for _, frontier_row in batches])
     _write_rows(out / "retained_state_drain_sweep.csv", rows, SWEEP_COLUMNS)
     _write_rows(out / "retained_state_drain_frontier.csv", frontier, FRONTIER_COLUMNS)
     _print_latex_frontier(frontier)
@@ -255,17 +255,17 @@ def _queue_fields(metrics):
 def _is_safe(metrics):
     return (
         metrics["retained_prefill_moved_s"] >= metrics["retained_prefill_target_s"] - 1e-9
-        and metrics["absolute_deadline_miss_rate"] <= 0.01
-        and metrics["absolute_p95_delay_over_deadline"] <= 1.0
+        and metrics["deadline_miss_rate"] <= 0.01
+        and metrics["p95_reconstruction_delay_ratio"] <= 1.0
     )
 
 
 def _failure_mode(row):
     if row["retained_prefill_moved_s"] < row["retained_prefill_target_s"] - 1e-9:
         return "target_not_met"
-    if row["absolute_deadline_miss_rate"] > 0.01:
+    if row["deadline_miss_rate"] > 0.01:
         return "deadline_miss"
-    if row["absolute_p95_delay_over_deadline"] > 1.0:
+    if row["p95_delay_over_deadline"] > 1.0:
         return "p95_delay"
     if row["network_capacity_pressure"] >= row["prefill_capacity_pressure"]:
         return "network_pressure"
@@ -313,6 +313,23 @@ def _frontier_row(policy, drain_window_s, safe, rows):
         "state_transfer_retained_prefill_fraction_at_frontier": best["state_transfer_retained_prefill_fraction"],
         "drain_completion_s_at_frontier": best["drain_completion_s"],
     }
+
+
+def _monotone_frontier(rows):
+    by_key = {(row["policy"], row["drain_window_s"]): row for row in rows}
+    out = []
+    for policy in FRONTIER_POLICIES:
+        best = None
+        for drain_window_s in DRAIN_WINDOWS_S:
+            row = by_key[(policy, drain_window_s)]
+            value = row["max_safe_retained_prefill_fraction"]
+            if value != "UNSAFE" and (best is None or float(value) > float(best["max_safe_retained_prefill_fraction"])):
+                best = row
+            if best is None:
+                out.append(row)
+            else:
+                out.append({**best, "drain_window_s": drain_window_s})
+    return out
 
 
 def _fraction(value):

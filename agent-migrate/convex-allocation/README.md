@@ -113,7 +113,8 @@ six-row smoke workload.
 The retained-state drain frontier writes `retained_state_drain_sweep.csv` and
 `retained_state_drain_frontier.csv`. It sweeps drain windows from 10s to 3600s,
 ties solver capacity with queue drain time, and reports the max safe
-retained-prefill fraction evacuated using explicit absolute-deadline metrics.
+retained-prefill fraction evacuated using release-relative reconstruction
+safety, with absolute event-start deadline metrics included as diagnostics.
 The network-bandwidth tradeoff sweeps network bandwidth and plots the largest
 tested source-state fraction that can be safely evacuated, request migration
 fraction, actual evacuated state TB, and max network/prefill queue depth.

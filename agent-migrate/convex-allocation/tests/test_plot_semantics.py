@@ -1,14 +1,15 @@
 """
 Claim:
 The report figure script emits exactly one simple artifact per hypothesis plus a
-compact integer benchmark table. The H1/H2 plots use queue safety from deadline
-miss rate and normalized p95 delay, with H2 preferring absolute deadline fields
-when present. The H2 CDF is request-level, and the H4 heatmap exposes per-class
-state locality rather than only destination load.
+compact integer benchmark table. The H1/H2 plots use queue safety from
+release-relative deadline miss rate and normalized p95 delay. The H2 CDF is
+request-level, and the H4 heatmap exposes per-class state locality rather than
+only destination load.
 
 Plausible wrong implementations:
 - Reintroduce crowded diagnostic plots instead of the five report figures.
-- Mark a frontier point safe from release-relative metrics in the drain frontier.
+- Mark a frontier point unsafe from absolute event-start diagnostics instead of
+  release-relative reconstruction safety.
 - Average class delays before building the CDF.
 - Keep unrelated integer policies in the compact summary table.
 - Drop context/KV locality from the manifest heatmap labels.
@@ -71,7 +72,7 @@ def test_safe_series_requires_deadline_miss_and_normalized_delay_bounds():
     assert _safe_series(df).tolist() == [True, False, False]
 
 
-def test_safe_series_prefers_absolute_deadline_fields_when_present():
+def test_safe_series_ignores_absolute_deadline_diagnostics_when_present():
     df = pd.DataFrame(
         {
             "deadline_miss_rate": [0.0],
@@ -81,7 +82,7 @@ def test_safe_series_prefers_absolute_deadline_fields_when_present():
         }
     )
 
-    assert _safe_series(df).tolist() == [False]
+    assert _safe_series(df).tolist() == [True]
 
 
 def test_safe_frontier_uses_largest_safe_fraction_by_drain_window():
@@ -90,6 +91,7 @@ def test_safe_frontier_uses_largest_safe_fraction_by_drain_window():
         _sweep_row("deadline-penalty-rounded", 900.0, 0.4, 0.0, 0.9),
         _sweep_row("deadline-penalty-rounded", 900.0, 0.6, 0.2, 0.9),
         _sweep_row("deadline-penalty-rounded", 1800.0, 0.6, 0.0, 0.9),
+        _sweep_row("deadline-penalty-rounded", 3600.0, 0.3, 0.0, 0.9),
         _sweep_row("replay-only", 900.0, 0.2, 0.0, 1.2),
     ]
 
@@ -101,6 +103,7 @@ def test_safe_frontier_uses_largest_safe_fraction_by_drain_window():
 
     assert by_policy_window[("deadline-penalty-rounded", 900.0)] == 0.4
     assert by_policy_window[("deadline-penalty-rounded", 1800.0)] == 0.6
+    assert by_policy_window[("deadline-penalty-rounded", 3600.0)] == 0.6
     assert ("replay-only", 900.0) not in by_policy_window
 
 

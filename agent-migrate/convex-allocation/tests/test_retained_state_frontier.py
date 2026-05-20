@@ -1,12 +1,13 @@
 """
 Claim:
 The retained-state drain frontier reports the largest rounded queue-safe
-retained-prefill fraction for each policy and drain window, using absolute
-event-start deadlines while tying solver capacity and queue drain horizons to
-the same x-value.
+retained-prefill fraction for each policy and drain window, using release-relative
+reconstruction deadlines while tying solver capacity and queue drain horizons to
+the same x-value. Absolute event-start deadline metrics are diagnostics only.
 
 Plausible wrong implementations:
-- Reuse release-relative queue safety and silently ignore drain pacing time.
+- Use absolute event-start deadline metrics for frontier safety and make longer
+  available windows look worse because releases are paced later.
 - Vary drain_window_s in queue simulation but leave make_problem(window_s) fixed.
 - Trust binary search monotonicity despite rounded nonmonotone safety.
 - Drop the least-loaded ordinary-routing baseline from the north-star plot.
@@ -27,6 +28,7 @@ from experiments.run_retained_state_frontier import (
     _failure_mode,
     _frontier_job,
     _is_safe,
+    _monotone_frontier,
 )
 from evaluation import WorkloadConfig
 
@@ -47,19 +49,19 @@ def test_frontier_policy_set_includes_least_loaded_baseline():
     )
 
 
-def test_safe_definition_uses_absolute_deadline_metrics_not_release_relative_metrics():
+def test_safe_definition_uses_release_relative_metrics_not_absolute_diagnostics():
     metrics = {
         "retained_prefill_moved_s": 10.0,
         "retained_prefill_target_s": 10.0,
         "deadline_miss_rate": 0.0,
-        "p95_reconstruction_delay_ratio": 0.2,
-        "absolute_deadline_miss_rate": 0.01,
-        "absolute_p95_delay_over_deadline": 1.0,
+        "p95_reconstruction_delay_ratio": 1.0,
+        "absolute_deadline_miss_rate": 0.5,
+        "absolute_p95_delay_over_deadline": 3.0,
     }
 
     assert _is_safe(metrics)
-    assert not _is_safe({**metrics, "absolute_deadline_miss_rate": 0.011})
-    assert not _is_safe({**metrics, "absolute_p95_delay_over_deadline": 1.001})
+    assert not _is_safe({**metrics, "deadline_miss_rate": 0.011})
+    assert not _is_safe({**metrics, "p95_reconstruction_delay_ratio": 1.001})
     assert not _is_safe({**metrics, "retained_prefill_moved_s": 9.99})
 
 
@@ -67,15 +69,15 @@ def test_failure_mode_uses_explicit_frontier_failure_names():
     row = {
         "retained_prefill_moved_s": 9.0,
         "retained_prefill_target_s": 10.0,
-        "absolute_deadline_miss_rate": 0.0,
-        "absolute_p95_delay_over_deadline": 0.5,
+        "deadline_miss_rate": 0.0,
+        "p95_delay_over_deadline": 0.5,
         "network_capacity_pressure": 0.1,
         "prefill_capacity_pressure": 0.1,
     }
 
     assert _failure_mode(row) == "target_not_met"
-    assert _failure_mode({**row, "retained_prefill_moved_s": 10.0, "absolute_deadline_miss_rate": 0.02}) == "deadline_miss"
-    assert _failure_mode({**row, "retained_prefill_moved_s": 10.0, "absolute_p95_delay_over_deadline": 1.1}) == "p95_delay"
+    assert _failure_mode({**row, "retained_prefill_moved_s": 10.0, "deadline_miss_rate": 0.02}) == "deadline_miss"
+    assert _failure_mode({**row, "retained_prefill_moved_s": 10.0, "p95_delay_over_deadline": 1.1}) == "p95_delay"
 
 
 def test_binary_search_validates_local_nonmonotone_safety(monkeypatch):
@@ -89,6 +91,21 @@ def test_binary_search_validates_local_nonmonotone_safety(monkeypatch):
     assert frontier["max_safe_retained_prefill_fraction"] == 0.49
     assert frontier["first_unsafe_retained_prefill_fraction"] == 0.5
     assert {row["retained_prefill_fraction"] for row in rows} >= {0.47, 0.48, 0.49, 0.5}
+
+
+def test_frontier_rows_are_monotone_available_window_envelope(monkeypatch):
+    monkeypatch.setattr(retained, "FRONTIER_POLICIES", ("policy",))
+    monkeypatch.setattr(retained, "DRAIN_WINDOWS_S", (10.0, 20.0, 40.0))
+    rows = [
+        _frontier("policy", 10.0, 0.2),
+        _frontier("policy", 20.0, 0.5),
+        _frontier("policy", 40.0, 0.3),
+    ]
+
+    frontier = _monotone_frontier(rows)
+
+    assert [row["max_safe_retained_prefill_fraction"] for row in frontier] == [0.2, 0.5, 0.5]
+    assert [row["drain_window_s"] for row in frontier] == [10.0, 20.0, 40.0]
 
 
 def test_run_pairs_problem_window_with_queue_drain_and_writes_drain_outputs(monkeypatch, tmp_path):
@@ -113,6 +130,7 @@ def test_run_pairs_problem_window_with_queue_drain_and_writes_drain_outputs(monk
     monkeypatch.setattr(retained, "ROOT", tmp_path)
     monkeypatch.setattr(retained, "DRAIN_WINDOWS_S", (10.0, 20.0))
     monkeypatch.setattr(retained, "POLICIES", (("policy", lambda problem: None),))
+    monkeypatch.setattr(retained, "FRONTIER_POLICIES", ("policy",))
     monkeypatch.setattr(retained, "make_problem", make_base)
     monkeypatch.setattr(retained, "_run_jobs", run_jobs)
     monkeypatch.setattr(retained, "_write_rows", lambda path, rows, columns: captured.setdefault(path.name, rows))

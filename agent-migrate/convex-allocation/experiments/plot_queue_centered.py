@@ -249,6 +249,8 @@ def _safe_frontier(rows: list[dict[str, str]]) -> pd.DataFrame:
     df["queue_safe"] = _safe_series(df)
     safe = df[df["queue_safe"]]
     grouped = safe.groupby(["policy", "drain_window_s"], as_index=False)["retained_prefill_fraction"].max()
+    grouped = grouped.sort_values(["policy", "drain_window_s"])
+    grouped["retained_prefill_fraction"] = grouped.groupby("policy")["retained_prefill_fraction"].cummax()
     return grouped.rename(columns={"retained_prefill_fraction": "max_safe_retained_prefill_fraction"})
 
 
@@ -433,9 +435,7 @@ def _frame(rows: list[dict[str, str]]) -> pd.DataFrame:
 
 
 def _safe_series(df: pd.DataFrame) -> pd.Series:
-    miss = "absolute_deadline_miss_rate" if "absolute_deadline_miss_rate" in df else "deadline_miss_rate"
-    p95 = "absolute_p95_delay_over_deadline" if "absolute_p95_delay_over_deadline" in df else "p95_delay_over_deadline"
-    return (df[miss] <= 0.01) & (df[p95] <= 1.0)
+    return (df["deadline_miss_rate"] <= 0.01) & (df["p95_delay_over_deadline"] <= 1.0)
 
 
 def _cdf_points(values) -> list[tuple[float, float]]:
