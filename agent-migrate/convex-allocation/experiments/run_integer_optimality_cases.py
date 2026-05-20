@@ -27,10 +27,13 @@ from experiments.run_queue_failure_diagnostics import repair_rounded_allocation
 COLUMNS = (
     "case",
     "policy",
-    "relaxed_objective",
+    "fractional_objective",
     "integer_objective",
+    "integer_objective_gap_to_best",
     "p95_delay",
+    "p95_gap_to_best_queue",
     "miss_rate",
+    "miss_rate_gap_to_best_queue",
     "movement_target_met",
 )
 DRAIN_WINDOW_S = 0.0
@@ -47,13 +50,14 @@ class Case:
 
 CASES = (
     Case("8req_2site", (1, 2), (5, 3), 0.55, (0.8, 1.4)),
-    Case("14req_2site", (1, 2, 3), (4, 5, 5), 0.50, (0.7, 1.2, 2.0)),
-    Case("20req_2site", (1, 3), (10, 10), 0.50, (0.8, 1.8)),
+    Case("14req_2site", (1, 3), (7, 7), 0.50, (0.7, 1.8)),
+    Case("20req_2site", (2,), (20,), 0.50, (1.4,)),
 )
 POLICIES = (
-    ("CVXPY-rounded", lambda problem: _rounded_pair(solve_cvxpy(problem).y, problem)),
+    ("CVXPY-rounded", True, lambda problem: _rounded_pair(solve_cvxpy(problem).y, problem)),
     (
         "deadline-aware-rounded",
+        True,
         lambda problem: _rounded_pair(
             solve_deadline_aware_cvxpy(
                 problem, deadline_margin=1.0, retained_prefill_cap=problem.retained_prefill_target_s
@@ -63,12 +67,13 @@ POLICIES = (
     ),
     (
         "repaired-CVXPY-rounded",
+        True,
         lambda problem: _repaired_cvxpy_pair(problem),
     ),
-    ("crossover-greedy", lambda problem: _rounded_pair(solve_crossover_greedy(problem).allocation, problem)),
-    ("mixed-greedy", lambda problem: _rounded_pair(solve_mixed_greedy(problem).allocation, problem)),
-    ("replay-only", lambda problem: _rounded_pair(solve_replay_only(problem).allocation, problem)),
-    ("state-only", lambda problem: _rounded_pair(solve_state_only(problem).allocation, problem)),
+    ("crossover-greedy", False, lambda problem: _rounded_pair(solve_crossover_greedy(problem).allocation, problem)),
+    ("mixed-greedy", False, lambda problem: _rounded_pair(solve_mixed_greedy(problem).allocation, problem)),
+    ("replay-only", False, lambda problem: _rounded_pair(solve_replay_only(problem).allocation, problem)),
+    ("state-only", False, lambda problem: _rounded_pair(solve_state_only(problem).allocation, problem)),
 )
 
 
@@ -83,11 +88,25 @@ def run_integer_optimality_cases() -> list[dict[str, str]]:
 
 def _case_rows(case: Case) -> list[dict[str, str]]:
     problem = make_case_problem(case)
-    exact = exact_integer_optimum(problem)
-    rows = [_row(case.name, "true-best-integer", exact.y, exact.y)]
-    for policy, solver in POLICIES:
+    objective_best = exact_integer_objective_optimum(problem)
+    queue_best = exact_integer_queue_optimum(problem)
+    queue_metrics = evaluate_rounded_queue(problem, queue_best.y, drain_window_s=DRAIN_WINDOW_S)
+    rows = [
+        _row(case.name, "best-integer-objective", None, objective_best.y, objective_best.objective, queue_metrics),
+        _row(case.name, "best-integer-queue", None, queue_best.y, objective_best.objective, queue_metrics),
+    ]
+    for policy, has_fractional_objective, solver in POLICIES:
         relaxed, integer = solver(problem)
-        rows.append(_row(case.name, policy, relaxed, integer))
+        rows.append(
+            _row(
+                case.name,
+                policy,
+                relaxed if has_fractional_objective else None,
+                integer,
+                objective_best.objective,
+                queue_metrics,
+            )
+        )
     return rows
 
 
@@ -98,14 +117,14 @@ class ExactResult:
 
 
 def exact_integer_optimum(problem: ProblemData) -> ExactResult:
+    return exact_integer_objective_optimum(problem)
+
+
+def exact_integer_objective_optimum(problem: ProblemData) -> ExactResult:
     coeffs = compute_coefficients(problem)
-    choices = tuple(_row_allocations(int(n), coeffs.M + 1) for n in problem.d)
     best_y = None
     best = math.inf
-    for rows in itertools.product(*choices):
-        y = np.asarray(rows, dtype=float)
-        if _retained_prefill_moved(problem, y) < problem.retained_prefill_target_s - 1e-9:
-            continue
+    for y in _target_feasible_integer_allocations(problem):
         value = objective(problem, coeffs, y)
         if value < best:
             best = value
@@ -113,6 +132,29 @@ def exact_integer_optimum(problem: ProblemData) -> ExactResult:
     if best_y is None:
         raise RuntimeError("no target-feasible integer allocation")
     return ExactResult(best_y, best)
+
+
+def exact_integer_queue_optimum(problem: ProblemData) -> ExactResult:
+    coeffs = compute_coefficients(problem)
+    best_y = None
+    best_key = None
+    best_objective = math.inf
+    for y in _target_feasible_integer_allocations(problem):
+        metrics = evaluate_rounded_queue(problem, y, drain_window_s=DRAIN_WINDOW_S)
+        value = objective(problem, coeffs, y)
+        key = (
+            metrics["deadline_miss_rate"],
+            metrics["p95_reconstruction_delay"],
+            metrics["mean_reconstruction_delay"],
+            value,
+        )
+        if best_key is None or key < best_key:
+            best_key = key
+            best_y = y
+            best_objective = value
+    if best_y is None:
+        raise RuntimeError("no target-feasible integer allocation")
+    return ExactResult(best_y, best_objective)
 
 
 def make_case_problem(case: Case) -> ProblemData:
@@ -138,19 +180,43 @@ def make_case_problem(case: Case) -> ProblemData:
     )
 
 
-def _row(case: str, policy: str, relaxed: np.ndarray, integer: np.ndarray) -> dict[str, str]:
+def _row(
+    case: str,
+    policy: str,
+    fractional: np.ndarray | None,
+    integer: np.ndarray,
+    best_objective: float,
+    best_queue_metrics: dict[str, float],
+) -> dict[str, str]:
     problem = make_case_problem(next(item for item in CASES if item.name == case))
     coeffs = compute_coefficients(problem)
     metrics = evaluate_rounded_queue(problem, integer, drain_window_s=DRAIN_WINDOW_S)
+    integer_objective = objective(problem, coeffs, integer)
     return {
         "case": case,
         "policy": policy,
-        "relaxed_objective": _fmt(objective(problem, coeffs, relaxed)),
-        "integer_objective": _fmt(objective(problem, coeffs, integer)),
+        "fractional_objective": "NA" if fractional is None else _fmt(objective(problem, coeffs, fractional)),
+        "integer_objective": _fmt(integer_objective),
+        "integer_objective_gap_to_best": _fmt(integer_objective - best_objective),
         "p95_delay": _fmt(metrics["p95_reconstruction_delay"]),
+        "p95_gap_to_best_queue": _fmt(
+            metrics["p95_reconstruction_delay"] - best_queue_metrics["p95_reconstruction_delay"]
+        ),
         "miss_rate": _fmt(metrics["deadline_miss_rate"]),
+        "miss_rate_gap_to_best_queue": _fmt(
+            metrics["deadline_miss_rate"] - best_queue_metrics["deadline_miss_rate"]
+        ),
         "movement_target_met": str(metrics["retained_prefill_moved_s"] >= metrics["retained_prefill_target_s"] - 1e-9),
     }
+
+
+def _target_feasible_integer_allocations(problem: ProblemData):
+    coeffs = compute_coefficients(problem)
+    choices = tuple(_row_allocations(int(n), coeffs.M + 1) for n in problem.d)
+    for rows in itertools.product(*choices):
+        y = np.asarray(rows, dtype=float)
+        if _retained_prefill_moved(problem, y) >= problem.retained_prefill_target_s - 1e-9:
+            yield y
 
 
 def _row_allocations(total: int, width: int) -> tuple[tuple[int, ...], ...]:

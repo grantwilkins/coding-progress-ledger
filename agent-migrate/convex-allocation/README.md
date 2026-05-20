@@ -127,9 +127,10 @@ patterns used by repair, and 5%, 10%, and 20% repair-budget frontiers.
 The network-bandwidth tradeoff sweeps network bandwidth and plots the largest
 queue-safe retained-prefill fraction, request migration fraction, actual
 evacuated state TB, and max network/prefill queue depth.
-The integer optimality cases exhaustively solve tiny 8/14/20-request problems
-and compare true integer optima with rounded relaxations, repaired CVXPY, and
-greedy baselines on objective, p95 delay, miss rate, and target feasibility.
+The integer optimality cases exhaustively solve tiny 8/14/20-request problems.
+They separate the best integer convex-objective allocation from the best integer
+queue schedule, then compare rounded relaxations, repaired CVXPY, and greedy
+baselines on objective gaps, p95 delay, miss rate, and target feasibility.
 
 The catalog is local and hard-coded from `kv-transfer-early-experiment/FINDINGS.md`.
 It does not import that directory.
