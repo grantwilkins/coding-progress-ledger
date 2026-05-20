@@ -23,13 +23,15 @@ from experiments.plot_queue_centered import _max_waiting_depth_points
 from problem import ProblemData, make_problem
 from queueing import evaluate_rounded_queue_trace, round_allocation
 
-NETWORK_SCALES = (0.60, 0.80, 1.00, 1.25, 1.50, 2.00)
-RETAINED_PREFILL_FRACTIONS = (0.20, 0.30, 0.40, 0.50, 0.60, 0.70, 0.80, 0.90)
+NETWORK_SCALES = (0.25, 0.40, 0.60, 0.80, 1.00, 1.25, 1.50, 2.00)
+RETAINED_PREFILL_FRACTIONS = (0.20, 0.30, 0.40, 0.50, 0.60, 0.70, 0.80, 0.90, 1.00)
 DRAIN_WINDOW_S = 1800.0
 COLUMNS = (
     "network_bandwidth_scale",
     "drain_window_s",
-    "max_safe_retained_prefill_fraction",
+    "largest_tested_safe_retained_prefill_fraction",
+    "largest_tested_safe_source_state_fraction",
+    "frontier_censored_by_grid",
     "actual_evacuated_state_tb",
     "actual_evacuated_nvl72_hbm_fraction",
     "retained_prefill_removal_rate_s_per_s",
@@ -84,7 +86,9 @@ def _scale_row(scale: float, workload_config: WorkloadConfig) -> dict[str, float
     return {
         "network_bandwidth_scale": scale,
         "drain_window_s": DRAIN_WINDOW_S,
-        "max_safe_retained_prefill_fraction": retained_prefill_fraction,
+        "largest_tested_safe_retained_prefill_fraction": retained_prefill_fraction,
+        "largest_tested_safe_source_state_fraction": metrics["actual_evacuated_state_tb"] / metrics["resident_state_tb"],
+        "frontier_censored_by_grid": retained_prefill_fraction == RETAINED_PREFILL_FRACTIONS[-1],
         "actual_evacuated_state_tb": metrics["actual_evacuated_state_tb"],
         "actual_evacuated_nvl72_hbm_fraction": metrics["actual_evacuated_nvl72_hbm_fraction"],
         "retained_prefill_removal_rate_s_per_s": metrics["retained_prefill_removal_rate_s_per_s"],
@@ -144,7 +148,7 @@ def _write_rows(path: Path, rows: list[dict[str, float | str]]) -> None:
 def _plot(rows, path: Path) -> None:
     x = np.array([row["network_bandwidth_scale"] for row in rows], dtype=float)
     fig, axes = plt.subplots(2, 1, figsize=(5.5, 4.8), sharex=True, constrained_layout=True)
-    _line(axes[0], x, rows, "max_safe_retained_prefill_fraction", "Retained prefill")
+    _line(axes[0], x, rows, "largest_tested_safe_source_state_fraction", "Source state evacuated")
     _line(axes[0], x, rows, "request_migration_fraction", "Requests moved")
     axes[0].set_ylabel("Fraction of workload")
     axes[0].set_ylim(bottom=0.0)

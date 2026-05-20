@@ -73,6 +73,13 @@ Run tiny exhaustive integer comparisons:
 uv run python experiments/run_integer_optimality_cases.py
 ```
 
+Run the report-facing claim, rounding-gap, sensitivity, architecture, and
+adversarial queue tables:
+
+```bash
+uv run python experiments/run_report_experiments.py
+```
+
 Outputs are written to `convex-allocation/outputs/sweep/`:
 generated workload runs write to a labeled subdirectory such as
 `outputs/sweep/generated_seed7_sessions10000_classes48/`.
@@ -97,6 +104,12 @@ generated workload runs write to a labeled subdirectory such as
 - `repair_move_breakdown.csv`
 - `repair_budget_frontier.csv`
 - `integer_optimality_cases.csv`
+- `claim_table.csv`
+- `rounding_gap_study.csv`
+- `rounding_gap_summary.csv`
+- `deadline_weight_sensitivity.csv`
+- `model_architecture_sweep.csv`
+- `adversarial_queue_case.csv`
 
 `summary.csv` marks infeasible baselines as `INFEASIBLE` and includes retained
 prefill target, retained prefill moved, resident-state TB, NVL72 HBM fraction,
@@ -129,13 +142,17 @@ tight 0.25x and 0.5x deadline settings.
 It also reports how much repair changes the rounded convex allocation, the move
 patterns used by repair, and 5%, 10%, and 20% repair-budget frontiers.
 The network-bandwidth tradeoff sweeps network bandwidth and plots the largest
-queue-safe retained-prefill fraction, request migration fraction, actual
-evacuated state TB, and max network/prefill queue depth.
+tested source-state fraction that can be safely evacuated, request migration
+fraction, actual evacuated state TB, and max network/prefill queue depth.
 The integer optimality cases exhaustively solve tiny 8/14/20-request problems.
 They separate the best integer convex-objective allocation from the best integer
 queue schedule, then compare rounded relaxations, repaired deadline-aware CVXPY,
 and greedy baselines on objective gaps, p95 delay, miss rate, and target
 feasibility.
+The report-facing experiment driver writes machine-checkable claim rows,
+rounding-gap rows for relaxed, exact, rounded, and repaired tiny cases,
+deadline-weight sensitivity rows, a model architecture frontier table, and a
+small adversarial rounding case.
 
 The catalog is local and hard-coded from `kv-transfer-early-experiment/FINDINGS.md`.
 It does not import that directory.

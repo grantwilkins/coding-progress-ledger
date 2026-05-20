@@ -1,0 +1,4 @@
+model,status,largest_tested_safe_retained_prefill_fraction,frontier_censored_by_grid,bottleneck_type,p95_delay_over_deadline,deadline_miss_rate,network_capacity_pressure,prefill_capacity_pressure,replay_fraction,state_transfer_fraction
+DeepSeek-V4-Pro,SAFE,1.0,True,network,0.0010560000000001916,0.0,0.006043136000000012,0.0,5.224564567031835e-12,0.9999999999947755
+GLM-5,SAFE,1.0,True,network,0.009589333333333344,0.0,0.05487655822222233,0.0,0.0,1.0
+Qwen3-Next-80B-A3B,SAFE,1.0,True,prefill,0.0009528076190470832,0.0,2.429656177777773e-06,0.005423339682539692,1.0,0.0
