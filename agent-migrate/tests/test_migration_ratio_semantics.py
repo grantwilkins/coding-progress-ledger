@@ -54,6 +54,16 @@ def test_glm5_context_grid_keeps_one_line_per_bandwidth():
 
 def test_glm5_bandwidth_surface_uses_many_linear_bandwidth_lines():
     bandwidths = migration_ratio.GLM5_CONTEXT_BANDWIDTHS_GBPS
-    assert len(bandwidths) >= 50
+    assert len(bandwidths) == 500
+    assert bandwidths[0] == pytest.approx(0.1)
+    assert bandwidths[-1] == pytest.approx(25)
     diffs = migration_ratio.np.diff(bandwidths)
     assert diffs.min() == pytest.approx(diffs.max())
+
+
+def test_glm5_surface_context_and_ratio_window_match_plot_contract():
+    contexts = migration_ratio.GLM5_CONTEXT_TOKENS
+    assert len(contexts) == 500
+    assert contexts[0] == pytest.approx(1_000)
+    assert contexts[-1] == pytest.approx(10_000_000)
+    assert migration_ratio.GLM5_CONTEXT_RATIO_YLIM == (1e-3, 1e3)

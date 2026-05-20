@@ -36,7 +36,7 @@ Above the crossover bandwidth, ship KV. Below it, replay.
 - Context length matters: replay has a quadratic attention term, so long contexts
   generally make KV transfer more attractive.
 - `glm5_context_ratio_bandwidths.{png,pdf}` shows the GLM-5 ratio from 1k to
-  1M tokens across a dense linear sweep of 0.25-32 Gbps links.
+  10M tokens across 500 linear-spaced 0.1-25 Gbps links.
 
 ## Files
 

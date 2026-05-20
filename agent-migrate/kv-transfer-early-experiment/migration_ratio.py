@@ -31,7 +31,9 @@ MFU       = 0.35
 EFF_FLOPS = N_GPUS * H100_BF16_DENSE_TFLOPS * 1e12 * MFU   # ~2.77 PFLOP/s
 
 BPE = 2   # bf16 bytes per element
-GLM5_CONTEXT_BANDWIDTHS_GBPS = np.linspace(0.25, 32, 64)
+GLM5_CONTEXT_BANDWIDTHS_GBPS = np.linspace(0.1, 25, 500)
+GLM5_CONTEXT_TOKENS = np.geomspace(1_000, 10_000_000, 500)
+GLM5_CONTEXT_RATIO_YLIM = (1e-3, 1e3)
 
 # ── Model specs ───────────────────────────────────────────────────────────────
 KVFn = Callable[[int], float]
@@ -149,8 +151,7 @@ def context_ratio_grid(label: str, bandwidths_gbps, contexts) -> pd.DataFrame:
     )
 
 def plot_glm5_context_ratio():
-    contexts = np.geomspace(1_000, 1_000_000, 500)
-    df = context_ratio_grid("GLM-5", GLM5_CONTEXT_BANDWIDTHS_GBPS, contexts)
+    df = context_ratio_grid("GLM-5", GLM5_CONTEXT_BANDWIDTHS_GBPS, GLM5_CONTEXT_TOKENS)
     norm = Normalize(GLM5_CONTEXT_BANDWIDTHS_GBPS.min(), GLM5_CONTEXT_BANDWIDTHS_GBPS.max())
     cmap = plt.colormaps["viridis"]
 
@@ -161,7 +162,8 @@ def plot_glm5_context_ratio():
     ax.axhline(1.0, color="k", lw=1.2, ls=":", alpha=0.6)
     ax.set_xscale("log")
     ax.set_yscale("log")
-    ax.set_xlim(1_000, 1_000_000)
+    ax.set_xlim(GLM5_CONTEXT_TOKENS.min(), GLM5_CONTEXT_TOKENS.max())
+    ax.set_ylim(*GLM5_CONTEXT_RATIO_YLIM)
     ax.set_xlabel("Context size (tokens)")
     ax.set_ylabel(r"TTFT / Time to Transfer KV")
     ax.set_title("GLM-5 by bandwidth")
