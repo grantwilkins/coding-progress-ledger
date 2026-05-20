@@ -30,15 +30,13 @@ sys.path.insert(0, str(SRC))
 
 from baselines import (
     solve_crossover_greedy,
-    solve_mixed_greedy,
     solve_replay_only,
     solve_state_only,
 )
 from catalog import get_model
-from cvxpy_solver import solve_cvxpy, solve_deadline_aware_cvxpy, solve_soft_deadline_cvxpy
+from cvxpy_solver import solve_cvxpy, solve_soft_deadline_cvxpy
 from evaluation import WorkloadConfig, parse_workload_config
-from experiments.run_queue_failure_diagnostics import repair_rounded_allocation
-from metrics import source_load_moved_s
+from metrics import retained_prefill_moved_s
 from mirror_descent import solve_mirror_descent
 from problem import make_problem
 from queueing import evaluate_rounded_queue_trace, round_allocation
@@ -51,15 +49,10 @@ MAIN_POLICIES = (
     "replay-only",
     "state-only",
 )
-REFERENCE_POLICIES = (
-    "local-repair-oracle",
-    "deadline-aware-m0.8-rounded",
-    "deadline-aware-m1.0-rounded",
-)
 PLOT_DRAIN_WINDOW_S = 1800.0
 PLOT_POLICIES = MAIN_POLICIES
 OUTPUT_FILES = (
-    "source_load_frontier.pdf",
+    "retained_state_frontier.pdf",
     "deadline_miss_frontier.pdf",
     "deadline_delay_cdf.pdf",
     "queue_depth_example.pdf",
@@ -70,43 +63,35 @@ POLICY_COLORS = {
     "deadline-penalty-rounded": "#000000",
     "mirror-descent-rounded": "#E69F00",
     "crossover-greedy": "#009E73",
-    "mixed-greedy": "#CC79A7",
     "replay-only": "#D55E00",
     "state-only": "#666666",
-    "local-repair-oracle": "#56B4E9",
-    "deadline-aware-m0.8-rounded": "#8C8C8C",
-    "deadline-aware-m1.0-rounded": "#4D4D4D",
 }
 POLICY_LABELS = {
     "CVXPY-rounded": "CVXPY",
     "deadline-penalty-rounded": "Deadline penalty",
     "mirror-descent-rounded": "Mirror descent",
     "crossover-greedy": "Crossover greedy",
-    "mixed-greedy": "Mixed greedy",
     "replay-only": "Replay only",
     "state-only": "State transfer",
-    "local-repair-oracle": "Repair oracle",
-    "deadline-aware-m0.8-rounded": "Hard cap 0.8x",
-    "deadline-aware-m1.0-rounded": "Hard cap 1.0x",
 }
 
 
 def plot_queue_centered(
     workload_config: WorkloadConfig = WorkloadConfig(),
-    example_source_prefill_fraction: float = 0.5,
+    example_source_working_set_fraction: float = 0.5,
     example_deadline_scale: float = 0.5,
 ) -> None:
     out = workload_config.output_dir(ROOT)
     rows = [
         row
-        for row in _read_rows(out / "source_load_deadline_sweep.csv")
+        for row in _read_rows(out / "retained_state_deadline_sweep.csv")
         if _as_float(row["drain_window_s"]) == PLOT_DRAIN_WINDOW_S
     ]
     _plot_frontier(
         rows,
         "p95_delay_over_deadline",
         1.0,
-        out / "source_load_frontier.pdf",
+        out / "retained_state_frontier.pdf",
         "p95 delay / deadline",
     )
     _plot_frontier(
@@ -118,7 +103,7 @@ def plot_queue_centered(
     )
     _plot_busy_scatter(rows, out / "network_prefill_busy_scatter.pdf")
 
-    traces = _example_traces(workload_config, example_source_prefill_fraction, example_deadline_scale)
+    traces = _example_traces(workload_config, example_source_working_set_fraction, example_deadline_scale)
     _plot_delay_cdf(traces, out / "deadline_delay_cdf.pdf")
     _plot_queue_depth(traces, out / "queue_depth_example.pdf")
 
@@ -139,7 +124,7 @@ def _plot_frontier(rows, y_key, threshold, path, ylabel):
             points = _policy_points(
                 rows,
                 policy,
-                "source_prefill_fraction",
+                "evacuated_state_tb",
                 y_key,
                 {"deadline_scale": deadline_scale},
             )
@@ -158,7 +143,7 @@ def _plot_frontier(rows, y_key, threshold, path, ylabel):
         ax.axhline(threshold, color="black", linestyle="--", linewidth=1.0)
         ax.text(0.98, threshold, f"{threshold:g}", ha="right", va="bottom", fontsize=7)
         ax.set_title(f"deadline scale = {deadline_scale:g}x")
-        ax.set_xlabel("source prefill fraction moved")
+        ax.set_xlabel("evacuated resident state (TB)")
         ax.grid(True, axis="y", color="#e6e6e6", linewidth=0.7)
         ax.spines[["top", "right"]].set_visible(False)
     for ax in axes[len(deadline_scales) :]:
@@ -204,11 +189,11 @@ def _plot_busy_scatter(rows, path):
     plt.close(fig)
 
 
-def _example_traces(workload_config, source_prefill_fraction, deadline_scale):
+def _example_traces(workload_config, source_working_set_fraction, deadline_scale):
     problem = make_problem(
         get_model("GLM-5"),
         "transition-coupled",
-        source_load_fraction=source_prefill_fraction,
+        source_working_set_fraction=source_working_set_fraction,
         deadline_scale=deadline_scale,
         **workload_config.problem_kwargs(),
     )
@@ -216,7 +201,7 @@ def _example_traces(workload_config, source_prefill_fraction, deadline_scale):
     for policy in PLOT_POLICIES:
         try:
             y = _example_allocation(policy, problem)
-            if source_load_moved_s(problem, y) < problem.source_load_target_s - 1e-5:
+            if retained_prefill_moved_s(problem, y) < problem.retained_prefill_target_s - 1e-5:
                 continue
             rounded = round_allocation(problem, y)
             _, trace = evaluate_rounded_queue_trace(problem, rounded.y, drain_window_s=PLOT_DRAIN_WINDOW_S)
@@ -235,19 +220,10 @@ def _example_allocation(policy, problem):
         return solve_mirror_descent(problem, eta_x0=500.0).y
     if policy == "crossover-greedy":
         return solve_crossover_greedy(problem).allocation
-    if policy == "mixed-greedy":
-        return solve_mixed_greedy(problem).allocation
     if policy == "replay-only":
         return solve_replay_only(problem).allocation
     if policy == "state-only":
         return solve_state_only(problem).allocation
-    if policy == "deadline-aware-m0.8-rounded":
-        return solve_deadline_aware_cvxpy(problem, 0.8, source_load_cap=problem.source_load_target_s).y
-    if policy == "deadline-aware-m1.0-rounded":
-        return solve_deadline_aware_cvxpy(problem, 1.0, source_load_cap=problem.source_load_target_s).y
-    if policy == "local-repair-oracle":
-        rounded = round_allocation(problem, solve_cvxpy(problem).y)
-        return repair_rounded_allocation(problem, rounded.y).y
     raise ValueError(policy)
 
 
@@ -364,7 +340,7 @@ def _as_float(value):
 
 
 def _linestyle(policy):
-    return "--" if policy in REFERENCE_POLICIES else "-"
+    return "-"
 
 
 def _scatter_sizes(values):

@@ -11,7 +11,7 @@ from metrics import (
     available_rates,
     deadline_overrun_summary,
     deadline_load_ratios,
-    source_load_moved_s,
+    retained_prefill_moved_s,
 )
 from objective import objective
 from problem import ProblemData
@@ -32,7 +32,7 @@ def solve_cvxpy(problem: ProblemData, eps: float = 1e-6) -> SolverResult:
     x = y[:, :M]
     constraints = [
         cp.sum(y, axis=1) == problem.d,
-        problem.tau @ cp.sum(x, axis=1) >= problem.source_load_target_s,
+        problem.tau @ cp.sum(x, axis=1) >= problem.retained_prefill_target_s,
     ]
 
     terms = [cp.sum(cp.multiply(coeffs.q_flat, x))]
@@ -66,7 +66,7 @@ def solve_cvxpy(problem: ProblemData, eps: float = 1e-6) -> SolverResult:
             y_value = np.maximum(np.asarray(y.value, dtype=float), 0.0)
             y_value *= (problem.d / np.sum(y_value, axis=1))[:, None]
             obj = objective(problem, coeffs, y_value)
-            assert_feasible(problem, coeffs, y_value, shed_tol=1e-5)
+            assert_feasible(problem, coeffs, y_value, target_tol=1e-5)
             return SolverResult(y_value, obj, prob.status)
         except (cp.SolverError, AssertionError, RuntimeError) as exc:
             last_error = exc
@@ -76,7 +76,7 @@ def solve_cvxpy(problem: ProblemData, eps: float = 1e-6) -> SolverResult:
 def solve_deadline_aware_cvxpy(
     problem: ProblemData,
     deadline_margin: float = 1.0,
-    source_load_cap: float | None = None,
+    retained_prefill_cap: float | None = None,
 ) -> SolverResult:
     if deadline_margin <= 0.0:
         raise ValueError("deadline_margin must be positive")
@@ -85,10 +85,10 @@ def solve_deadline_aware_cvxpy(
     M = coeffs.M
     y = cp.Variable((problem.G, M + 1), nonneg=True)
     x = y[:, :M]
-    source_load = problem.tau @ cp.sum(x, axis=1)
+    retained_prefill = problem.tau @ cp.sum(x, axis=1)
     constraints = [cp.sum(y, axis=1) == problem.d]
-    if source_load_cap is not None:
-        constraints.append(source_load <= source_load_cap)
+    if retained_prefill_cap is not None:
+        constraints.append(retained_prefill <= retained_prefill_cap)
 
     deadline_thresholds = np.unique(problem.deadline_s)
     for k in range(problem.K):
@@ -114,7 +114,7 @@ def solve_deadline_aware_cvxpy(
                 <= deadline_margin * rho_avail[k] * deadline_s,
             ]
 
-    prob = cp.Problem(cp.Maximize(source_load), constraints)
+    prob = cp.Problem(cp.Maximize(retained_prefill), constraints)
     last_error: Exception | None = None
     for solver, kwargs in (
         (cp.CLARABEL, {}),
@@ -126,8 +126,8 @@ def solve_deadline_aware_cvxpy(
                 raise RuntimeError(f"{solver} returned {prob.status}")
             y_value = np.maximum(np.asarray(y.value, dtype=float), 0.0)
             y_value *= (problem.d / np.sum(y_value, axis=1))[:, None]
-            _assert_deadline_feasible(problem, coeffs, y_value, deadline_margin, source_load_cap)
-            return SolverResult(y_value, source_load_moved_s(problem, y_value), prob.status)
+            _assert_deadline_feasible(problem, coeffs, y_value, deadline_margin, retained_prefill_cap)
+            return SolverResult(y_value, retained_prefill_moved_s(problem, y_value), prob.status)
         except (cp.SolverError, AssertionError, RuntimeError) as exc:
             last_error = exc
     raise RuntimeError(f"deadline-aware CVXPY solve failed: {last_error}")
@@ -152,7 +152,7 @@ def solve_soft_deadline_cvxpy(
     overrun_prefill = cp.Variable((problem.K, deadlines.size), nonneg=True)
     constraints = [
         cp.sum(y, axis=1) == problem.d,
-        problem.tau @ cp.sum(x, axis=1) >= problem.source_load_target_s,
+        problem.tau @ cp.sum(x, axis=1) >= problem.retained_prefill_target_s,
     ]
     terms = [cp.sum(cp.multiply(coeffs.q_flat, x))]
 
@@ -205,7 +205,7 @@ def solve_soft_deadline_cvxpy(
                 raise RuntimeError(f"{solver} returned {prob.status}")
             y_value = np.maximum(np.asarray(y.value, dtype=float), 0.0)
             y_value *= (problem.d / np.sum(y_value, axis=1))[:, None]
-            assert_feasible(problem, coeffs, y_value, shed_tol=1e-5)
+            assert_feasible(problem, coeffs, y_value, target_tol=1e-5)
             diagnostics = deadline_overrun_summary(problem, coeffs, y_value, deadline_headroom)
             _, net_load, prefill_load = deadline_load_ratios(problem, coeffs, y_value)
             diagnostics.update(
@@ -214,8 +214,8 @@ def solve_soft_deadline_cvxpy(
                     "deadline_headroom": deadline_headroom,
                     "deadline_overrun_linear_weight": overrun_linear_weight,
                     "deadline_overrun_quadratic_weight": overrun_quadratic_weight,
-                    "source_load_moved_s": source_load_moved_s(problem, y_value),
-                    "source_load_target_s": problem.source_load_target_s,
+                    "retained_prefill_moved_s": retained_prefill_moved_s(problem, y_value),
+                    "retained_prefill_target_s": problem.retained_prefill_target_s,
                 }
             )
             return SolverResult(y_value, float(prob.value), prob.status, diagnostics)
@@ -229,14 +229,14 @@ def _assert_deadline_feasible(
     coeffs: Coefficients,
     y: np.ndarray,
     deadline_margin: float,
-    source_load_cap: float | None,
+    retained_prefill_cap: float | None,
 ) -> None:
     if not np.all(y >= -1e-8):
         raise AssertionError("allocation has negative entries")
     if not np.allclose(np.sum(y, axis=1), problem.d, atol=1e-5):
         raise AssertionError("allocation rows do not sum to class demand")
-    if source_load_cap is not None and source_load_moved_s(problem, y) > source_load_cap + 1e-5:
-        raise AssertionError("source-load cap exceeded")
+    if retained_prefill_cap is not None and retained_prefill_moved_s(problem, y) > retained_prefill_cap + 1e-5:
+        raise AssertionError("retained-prefill cap exceeded")
     x = y[:, : coeffs.M]
     _, lambda_avail, rho_avail = available_rates(problem)
     for k in range(problem.K):

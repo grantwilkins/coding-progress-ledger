@@ -4,7 +4,7 @@ from dataclasses import dataclass
 
 import numpy as np
 from coefficients import Coefficients, compute_coefficients
-from metrics import assert_feasible, resource_loads, source_load_moved_s, utilization
+from metrics import assert_feasible, capacity_loads, retained_prefill_moved_s, utilization
 from objective import objective, penalized_gradient
 from problem import ProblemData
 
@@ -41,10 +41,10 @@ def _interior_y(problem: ProblemData, coeffs: Coefficients) -> np.ndarray:
 def _initial_y(problem: ProblemData, coeffs: Coefficients) -> np.ndarray:
     y = np.zeros((problem.G, coeffs.M + 1))
     y[:, -1] = problem.d
-    remaining_source_load = problem.source_load_target_s
+    remaining_retained_prefill = problem.retained_prefill_target_s
 
-    while remaining_source_load > 1e-9:
-        L_net, L_prefill = resource_loads(problem, coeffs, y)
+    while remaining_retained_prefill > 1e-9:
+        L_net, L_prefill = capacity_loads(problem, coeffs, y)
         choices = []
         for g in range(problem.G):
             if y[g, -1] <= 1e-12:
@@ -59,7 +59,7 @@ def _initial_y(problem: ProblemData, coeffs: Coefficients) -> np.ndarray:
                 cap_net = np.inf if b_net == 0.0 else room_net / b_net
                 cap_prefill = np.inf if b_prefill == 0.0 else room_prefill / b_prefill
                 amount = min(
-                    y[g, -1], remaining_source_load / problem.tau[g], cap_net, cap_prefill
+                    y[g, -1], remaining_retained_prefill / problem.tau[g], cap_net, cap_prefill
                 )
                 if amount > 1e-12:
                     marginal = (
@@ -73,30 +73,30 @@ def _initial_y(problem: ProblemData, coeffs: Coefficients) -> np.ndarray:
         _, g, m, amount = min(choices, key=lambda item: item[0])
         y[g, m] += amount
         y[g, -1] -= amount
-        remaining_source_load -= amount * problem.tau[g]
+        remaining_retained_prefill -= amount * problem.tau[g]
 
-    if remaining_source_load > 1e-7:
-        raise RuntimeError("mirror descent initializer could not meet source-load target")
-    assert_feasible(problem, coeffs, y, shed_tol=1e-7)
+    if remaining_retained_prefill > 1e-7:
+        raise RuntimeError("mirror descent initializer could not meet retained prefill target")
+    assert_feasible(problem, coeffs, y, target_tol=1e-7)
     return y
 
 
 def _stats(
-    problem: ProblemData, coeffs: Coefficients, y: np.ndarray, shed_tol: float
+    problem: ProblemData, coeffs: Coefficients, y: np.ndarray, target_tol: float
 ) -> tuple[float, float, float, float, float, bool]:
-    source_load = source_load_moved_s(problem, y)
-    violation = max(0.0, problem.source_load_target_s - source_load)
-    excess = max(0.0, source_load - problem.source_load_target_s)
+    retained_prefill = retained_prefill_moved_s(problem, y)
+    violation = max(0.0, problem.retained_prefill_target_s - retained_prefill)
+    excess = max(0.0, retained_prefill - problem.retained_prefill_target_s)
     u_net, u_prefill = utilization(problem, coeffs, y)
     max_net = float(np.max(u_net))
     max_prefill = float(np.max(u_prefill))
     return (
-        source_load,
+        retained_prefill,
         violation,
         excess,
         max_net,
         max_prefill,
-        violation <= shed_tol and max_net < 1.0 and max_prefill < 1.0,
+        violation <= target_tol and max_net < 1.0 and max_prefill < 1.0,
     )
 
 
@@ -105,7 +105,7 @@ def solve_mirror_descent(
     iterations: int = 1500,
     eta_x0: float = 10.0,
     max_backtracks: int = 30,
-    shed_tol: float = 1e-5,
+    target_tol: float = 1e-5,
     bisection_iterations: int = 16,
 ) -> MirrorDescentResult:
     coeffs = compute_coefficients(problem)
@@ -117,9 +117,9 @@ def solve_mirror_descent(
         "objective": [],
         "feasible_objective": [],
         "best_feasible_objective": [],
-        "source_load_shortfall_s": [],
-        "excess_source_load_s": [],
-        "source_load_moved_s": [],
+        "retained_prefill_shortfall_s": [],
+        "excess_retained_prefill_s": [],
+        "retained_prefill_moved_s": [],
         "max_net_util": [],
         "max_prefill_util": [],
         "alpha": [],
@@ -142,8 +142,8 @@ def solve_mirror_descent(
 
             y = y_new
             obj = objective(problem, coeffs, y)
-            source_load, violation, excess, max_net, max_prefill, feasible = _stats(
-                problem, coeffs, y, shed_tol
+            retained_prefill, violation, excess, max_net, max_prefill, feasible = _stats(
+                problem, coeffs, y, target_tol
             )
             if feasible and obj < best_obj:
                 best_y = y.copy()
@@ -153,37 +153,37 @@ def solve_mirror_descent(
             hist["objective"].append(obj)
             hist["feasible_objective"].append(obj if feasible else np.nan)
             hist["best_feasible_objective"].append(best_obj)
-            hist["source_load_shortfall_s"].append(violation)
-            hist["excess_source_load_s"].append(excess)
-            hist["source_load_moved_s"].append(source_load)
+            hist["retained_prefill_shortfall_s"].append(violation)
+            hist["excess_retained_prefill_s"].append(excess)
+            hist["retained_prefill_moved_s"].append(retained_prefill)
             hist["max_net_util"].append(max_net)
             hist["max_prefill_util"].append(max_prefill)
             hist["alpha"].append(alpha)
-        return source_load_moved_s(problem, y)
+        return retained_prefill_moved_s(problem, y)
 
     lo = 0.0
-    source_load_lo = run_alpha(lo)
+    retained_prefill_lo = run_alpha(lo)
     hi = 1.0
-    source_load_hi = source_load_lo
-    while source_load_hi < problem.source_load_target_s - shed_tol:
-        source_load_hi = run_alpha(hi)
-        if source_load_hi < problem.source_load_target_s - shed_tol:
+    retained_prefill_hi = retained_prefill_lo
+    while retained_prefill_hi < problem.retained_prefill_target_s - target_tol:
+        retained_prefill_hi = run_alpha(hi)
+        if retained_prefill_hi < problem.retained_prefill_target_s - target_tol:
             lo = hi
             hi *= 2.0
         if hi > 1e6:
-            raise RuntimeError("could not bracket source-load target with scalar multiplier")
+            raise RuntimeError("could not bracket retained prefill target with scalar multiplier")
 
     for _ in range(bisection_iterations):
         alpha = 0.5 * (lo + hi)
-        source_load = run_alpha(alpha)
-        if source_load < problem.source_load_target_s - shed_tol:
+        retained_prefill = run_alpha(alpha)
+        if retained_prefill < problem.retained_prefill_target_s - target_tol:
             lo = alpha
         else:
             hi = alpha
 
     if not np.isfinite(best_alpha):
         best_alpha = hi
-    assert_feasible(problem, coeffs, best_y, shed_tol=shed_tol)
+    assert_feasible(problem, coeffs, best_y, target_tol=target_tol)
     return MirrorDescentResult(
         best_y,
         best_obj,

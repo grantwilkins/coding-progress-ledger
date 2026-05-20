@@ -1,13 +1,14 @@
 """
 Claim:
-The queue evaluator turns fractional source-prefill allocations into integer
-requests, preserves the source-prefill target by minimum overshoot, releases
+The queue evaluator turns fractional retained-prefill allocations into integer
+requests, preserves the retained-prefill target by minimum overshoot, releases
 moved requests through a deterministic EDF drain, and computes nonpreemptive
 network-then-prefill reconstruction delays relative to request release time.
 
 Plausible wrong implementations:
 - Round to the nearest fractional counts and allow integer target shortfall.
 - Tie-break target-equivalent class counts without respecting fractional moved counts.
+- Let production-sized rounding hang or use classes with zero moved support.
 - Treat replay requests as complete after network transfer instead of prefill.
 - Schedule by arrival or input order instead of earliest class deadline.
 - Count drain wait as reconstruction delay after choosing release-relative deadlines.
@@ -24,7 +25,7 @@ from queueing import RequestRecord, evaluate_static_queue, evaluate_static_queue
 from problem import ProblemData
 
 
-def queue_problem(T, d, deadline_s, source_prefill_target_s) -> ProblemData:
+def queue_problem(T, d, deadline_s, retained_prefill_target_s) -> ProblemData:
     model = ModelParams("queue-test", 1.0, 1.0, 1.0, 0.0)
     K = 1
     return ProblemData(
@@ -41,7 +42,7 @@ def queue_problem(T, d, deadline_s, source_prefill_target_s) -> ProblemData:
         ell_prefill=np.zeros(K),
         h_ctx=np.zeros((len(T), K)),
         h_kv=np.zeros((len(T), K)),
-        source_load_target_s=source_prefill_target_s,
+        retained_prefill_target_s=retained_prefill_target_s,
     )
 
 
@@ -51,7 +52,7 @@ def test_rounding_meets_target_with_minimum_overshoot_before_deviation():
 
     rounded = round_allocation(problem, y)
 
-    assert rounded.rounded_shed == 10.0
+    assert rounded.retained_prefill_moved_s == 10.0
     assert_allclose(np.sum(rounded.y, axis=1), problem.d)
     assert_allclose(np.sum(rounded.y[:, :2], axis=1), [0, 1])
 
@@ -64,7 +65,7 @@ def test_rounding_tie_breaks_by_fractional_moved_counts_and_apportions_cells():
 
     assert_allclose(np.sum(rounded.y[:, :2], axis=1), [2, 0])
     assert_allclose(rounded.y[0], [1, 1, 0])
-    assert rounded.rounded_shed == 10.0
+    assert rounded.retained_prefill_moved_s == 10.0
 
 
 def test_rounding_does_not_invent_movement_for_zero_moved_classes():
@@ -73,8 +74,19 @@ def test_rounding_does_not_invent_movement_for_zero_moved_classes():
 
     rounded = round_allocation(problem, y)
 
-    assert rounded.rounded_shed == 12.0
+    assert rounded.retained_prefill_moved_s == 12.0
     assert_allclose(np.sum(rounded.y[:, :2], axis=1), [2, 0])
+
+
+def test_large_rounding_meets_target_without_zero_support_classes():
+    problem = queue_problem([5, 8, 13], [120, 120, 120], [1, 1, 1], 1000.0)
+    y = np.array([[60.4, 0.0, 59.6], [50.2, 0.0, 69.8], [0.0, 0.0, 120.0]])
+
+    rounded = round_allocation(problem, y)
+
+    assert 1000.0 <= rounded.retained_prefill_moved_s < 1008.0
+    assert_allclose(np.sum(rounded.y, axis=1), problem.d)
+    assert_allclose(np.sum(rounded.y[:, :2], axis=1)[2], 0)
 
 
 def test_static_queue_uses_network_then_prefill_with_edf():
@@ -95,8 +107,8 @@ def test_static_queue_uses_network_then_prefill_with_edf():
     assert_allclose(metrics["deadline_miss_rate"], 0.5)
     assert_allclose(metrics["network_capacity_pressure"], 0.3)
     assert_allclose(metrics["prefill_capacity_pressure"], 0.3)
-    assert_allclose(metrics["replay_source_prefill_fraction"], 0.5)
-    assert_allclose(metrics["state_transfer_source_prefill_fraction"], 0.5)
+    assert_allclose(metrics["replay_retained_prefill_fraction"], 0.5)
+    assert_allclose(metrics["state_transfer_retained_prefill_fraction"], 0.5)
 
     state, replay = trace
     assert replay.g == 0
@@ -172,4 +184,16 @@ def test_zero_window_zero_load_has_zero_removal_rate():
 
     metrics = queue_metrics(problem, y, drain_window_s=0.0)
 
-    assert metrics["source_prefill_removal_rate_s_per_s"] == 0.0
+    assert metrics["retained_prefill_removal_rate_s_per_s"] == 0.0
+
+
+def test_queue_metrics_report_resident_state_tb_and_nvl72_fraction():
+    problem = queue_problem([10, 30], [1, 1], [10.0, 10.0], 10.0)
+    y = np.array([[1, 0, 0], [0, 0, 1]])
+
+    metrics = queue_metrics(problem, y)
+
+    assert_allclose(metrics["resident_state_tb"], 40.0 / 1e12)
+    assert_allclose(metrics["retained_state_target_tb"], 10.0 / 1e12)
+    assert_allclose(metrics["evacuated_state_tb"], 10.0 / 1e12)
+    assert_allclose(metrics["evacuated_nvl72_hbm_fraction"], 10.0 / (13.4e12))

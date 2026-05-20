@@ -7,11 +7,11 @@ from pathlib import Path
 
 @dataclass(frozen=True)
 class WorkloadConfig:
-    source: str = "fixed"
+    source: str = "generated"
     seed: int = 7
-    jobs: int = 1000
-    classes: int = 12
-    profile: str = "shed_event_long_context"
+    jobs: int = 10_000
+    classes: int = 48
+    profile: str = "agentic_retained_sessions"
 
     def problem_kwargs(self) -> dict[str, int | str]:
         return {
@@ -28,16 +28,16 @@ class WorkloadConfig:
 
     @property
     def label(self) -> str:
-        return f"{self.source}_seed{self.seed}_jobs{self.jobs}_classes{self.classes}"
+        return f"{self.source}_seed{self.seed}_sessions{self.jobs}_classes{self.classes}"
 
 
 def parse_workload_config(description: str) -> WorkloadConfig:
     parser = argparse.ArgumentParser(description=description)
-    parser.add_argument("--workload-source", choices=("fixed", "generated"), default="fixed")
+    parser.add_argument("--workload-source", choices=("fixed", "generated"), default="generated")
     parser.add_argument("--workload-seed", type=int, default=7)
-    parser.add_argument("--workload-jobs", type=int, default=1000)
-    parser.add_argument("--workload-classes", type=int, default=12)
-    parser.add_argument("--workload-profile", default="shed_event_long_context")
+    parser.add_argument("--workload-jobs", type=int, default=10_000)
+    parser.add_argument("--workload-classes", type=int, default=48)
+    parser.add_argument("--workload-profile", default="agentic_retained_sessions")
     args = parser.parse_args()
     return WorkloadConfig(
         args.workload_source,

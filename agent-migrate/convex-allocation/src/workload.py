@@ -13,19 +13,15 @@ class GeneratedWorkload:
     h_ctx: np.ndarray
     h_kv: np.ndarray
 
-    @property
-    def slack(self) -> np.ndarray:
-        return self.deadline_s
-
 
 def generate_workload(
     K: int,
     seed: int | None = None,
-    jobs: int = 1000,
-    classes: int = 12,
-    profile: str = "source_load_long_context",
+    jobs: int = 10_000,
+    classes: int = 48,
+    profile: str = "agentic_retained_sessions",
 ) -> GeneratedWorkload:
-    if profile not in ("source_load_long_context", "shed_event_long_context"):
+    if profile != "agentic_retained_sessions":
         raise ValueError(f"unknown workload profile: {profile}")
     if K <= 0 or jobs <= 0 or classes <= 0:
         raise ValueError("K, jobs, and classes must be positive")
@@ -47,20 +43,23 @@ def workload_quality_diagnostics(
     util_threshold: float = 0.7,
 ) -> dict[str, float | bool]:
     from coefficients import compute_coefficients
-    from metrics import allocation_diagnostics, source_load_action_mix, source_load_destination_mix
+    from metrics import allocation_diagnostics, retained_prefill_action_mix, retained_prefill_destination_mix
 
     diag = allocation_diagnostics(problem, compute_coefficients(problem), cvx_y)
-    cvx_action = source_load_action_mix(problem, cvx_y)
-    greedy_action = source_load_action_mix(problem, crossover_y)
-    cvx_dest = source_load_destination_mix(problem, cvx_y)
-    greedy_dest = source_load_destination_mix(problem, crossover_y)
+    cvx_action = retained_prefill_action_mix(problem, cvx_y)
+    greedy_action = retained_prefill_action_mix(problem, crossover_y)
+    cvx_dest = retained_prefill_destination_mix(problem, cvx_y)
+    greedy_dest = retained_prefill_destination_mix(problem, crossover_y)
     gap = (
         (crossover_objective - cvx_objective) / max(1.0, abs(cvx_objective))
         if crossover_feasible and crossover_objective is not None
         else np.inf
     )
     mix_distance = float(
-        abs(cvx_action["replay_load_frac"] - greedy_action["replay_load_frac"])
+        abs(
+            cvx_action["replay_retained_prefill_fraction"]
+            - greedy_action["replay_retained_prefill_fraction"]
+        )
         + np.sum(np.abs(cvx_dest - greedy_dest))
     )
     return {
@@ -69,7 +68,11 @@ def workload_quality_diagnostics(
         "crossover_mix_distance": mix_distance,
         "uses_multiple_classes": diag["active_classes_moved"] > 1.0,
         "uses_multiple_destinations": diag["active_destinations_used"] > 1.0,
-        "uses_both_actions": min(diag["replay_load_frac"], diag["state_load_frac"]) >= 0.05,
+        "uses_both_actions": min(
+            diag["replay_retained_prefill_fraction"],
+            diag["state_transfer_retained_prefill_fraction"],
+        )
+        >= 0.05,
         "has_resource_pressure": max(diag["max_net_util"], diag["max_prefill_util"])
         > util_threshold,
         "crossover_differs": bool(crossover_feasible and (gap >= 0.02 or mix_distance >= 0.10)),
@@ -98,25 +101,25 @@ def assert_workload_quality(
 
 
 def _sample_context_tokens(rng: np.random.Generator, jobs: int) -> np.ndarray:
-    tier = rng.choice(4, size=jobs, p=(0.56, 0.30, 0.125, 0.015))
+    tier = rng.choice(4, size=jobs, p=(0.20, 0.45, 0.30, 0.05))
     T = np.empty(jobs)
     specs = (
-        (tier == 0, 1_536.0, 0.55, 256.0, 4_096.0),
-        (tier == 1, 8_192.0, 0.50, 2_048.0, 24_576.0),
-        (tier == 2, 32_768.0, 0.45, 12_288.0, 98_304.0),
+        (tier == 0, 12_288.0, 0.35, 4_096.0, 24_576.0),
+        (tier == 1, 32_768.0, 0.40, 12_288.0, 80_000.0),
+        (tier == 2, 80_000.0, 0.35, 40_000.0, 160_000.0),
     )
     for mask, median, sigma, lo, hi in specs:
         T[mask] = np.clip(rng.lognormal(np.log(median), sigma, int(np.sum(mask))), lo, hi)
     tail = tier == 3
-    T[tail] = rng.uniform(100_000.0, 200_000.0, int(np.sum(tail)))
+    T[tail] = rng.uniform(180_000.0, 256_000.0, int(np.sum(tail)))
     return np.rint(T).astype(float)
 
 
 def _sample_deadline_s(rng: np.random.Generator, T: np.ndarray) -> np.ndarray:
-    x = (np.log(T) - np.log(256.0)) / (np.log(200_000.0) - np.log(256.0))
-    deadline_s = np.exp(np.log(3.5) + 2.4 * x + rng.normal(0.0, 1.05, T.size))
+    x = (np.log(T) - np.log(4_096.0)) / (np.log(256_000.0) - np.log(4_096.0))
+    deadline_s = np.exp(np.log(12.0) + 2.2 * x + rng.normal(0.0, 0.95, T.size))
     deadline_s *= rng.choice((0.45, 1.0, 1.8), size=T.size, p=(0.25, 0.60, 0.15))
-    return np.clip(deadline_s, 1.0, 300.0)
+    return np.clip(deadline_s, 5.0, 600.0)
 
 
 def _sample_locality(
@@ -174,8 +177,8 @@ def _aggregate(
 
 
 def _bucket_key(T: float, deadline_s: float, h_ctx: np.ndarray, h_kv: np.ndarray) -> tuple[int, int, int]:
-    ctx = int(np.digitize(T, (2_048.0, 8_192.0, 32_768.0, 100_000.0)))
-    deadline = int(np.digitize(deadline_s, (8.0, 30.0, 90.0)))
+    ctx = int(np.digitize(T, (16_000.0, 48_000.0, 96_000.0, 180_000.0)))
+    deadline = int(np.digitize(deadline_s, (30.0, 90.0, 180.0)))
     if np.max(h_kv) >= 0.55:
         locality = 1 + int(np.argmax(h_kv))
     elif np.max(h_ctx) >= 0.55:

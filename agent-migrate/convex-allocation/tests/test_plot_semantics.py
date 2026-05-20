@@ -31,19 +31,19 @@ def test_policy_points_omit_infeasible_and_rounding_failed_rows():
         {
             "policy": "CVXPY-rounded",
             "deadline_scale": "0.5",
-            "source_prefill_fraction": "0.2",
+            "evacuated_state_tb": "2.0",
             "deadline_miss_rate": "0.4",
         },
         {
             "policy": "CVXPY-rounded",
             "deadline_scale": "0.5",
-            "source_prefill_fraction": "0.3",
+            "evacuated_state_tb": "3.0",
             "deadline_miss_rate": "nan",
         },
         {
             "policy": "replay-only",
             "deadline_scale": "0.5",
-            "source_prefill_fraction": "0.2",
+            "evacuated_state_tb": "2.0",
             "deadline_miss_rate": "0.0",
         },
     ]
@@ -51,10 +51,10 @@ def test_policy_points_omit_infeasible_and_rounding_failed_rows():
     assert _policy_points(
         rows,
         "CVXPY-rounded",
-        "source_prefill_fraction",
+        "evacuated_state_tb",
         "deadline_miss_rate",
         {"deadline_scale": 0.5},
-    ) == [(0.2, 0.4)]
+    ) == [(2.0, 0.4)]
 
 
 def test_cdf_points_are_request_level_empirical_cdf():
@@ -94,7 +94,7 @@ def test_requested_outputs_exclude_retired_png_artifacts():
         "crossover_recovery.png",
     }
     requested = {
-        "source_load_frontier.pdf",
+        "retained_state_frontier.pdf",
         "deadline_miss_frontier.pdf",
         "deadline_delay_cdf.pdf",
         "queue_depth_example.pdf",
@@ -106,11 +106,11 @@ def test_requested_outputs_exclude_retired_png_artifacts():
 
 
 def test_policy_labels_are_short_enough_for_paper_legends():
-    assert set(POLICY_LABELS) >= {
+    assert set(POLICY_LABELS) == {
         "CVXPY-rounded",
+        "deadline-penalty-rounded",
         "mirror-descent-rounded",
         "crossover-greedy",
-        "mixed-greedy",
         "replay-only",
         "state-only",
     }
@@ -129,6 +129,14 @@ def test_plot_legend_uses_only_main_unambiguous_policies():
         "replay-only",
         "state-only",
     }
+
+
+def test_plot_outputs_use_retained_state_names():
+    text = "\n".join(OUTPUT_FILES)
+
+    assert "retained_state_frontier.pdf" in OUTPUT_FILES
+    for stale in ("source_" + "load", "source_" + "prefill", "sh" + "ed"):
+        assert stale not in text
 
 
 def _record(k, network_wait, network_service, release_time=0.0):

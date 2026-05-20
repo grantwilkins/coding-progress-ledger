@@ -10,6 +10,7 @@ SRC = ROOT / "src"
 sys.path.insert(0, str(SRC))
 
 from baselines import (
+    BaselineResult,
     solve_crossover_greedy,
     solve_mixed_greedy,
     solve_replay_only,
@@ -22,9 +23,14 @@ from evaluation import WorkloadConfig, parse_workload_config
 from metrics import (
     allocation_diagnostics,
     action_mix,
-    source_load_action_mix,
-    source_load_destination_mix,
-    source_load_moved_s,
+    nvl72_hbm_fraction,
+    resident_state_bytes,
+    resident_state_moved_bytes,
+    resident_state_target_bytes,
+    retained_prefill_action_mix,
+    retained_prefill_destination_mix,
+    retained_prefill_moved_s,
+    state_tb,
     utilization,
 )
 from mirror_descent import solve_mirror_descent
@@ -47,6 +53,13 @@ def _selected_mirror_descent(problem):
     return solve_mirror_descent(problem, eta_x0=eta_x0)
 
 
+def _infeasible_result(problem):
+    coeffs = compute_coefficients(problem)
+    y = np.zeros((problem.G, coeffs.M + 1))
+    y[:, -1] = problem.d
+    return BaselineResult(False, None, 0.0, y)
+
+
 def _policy_row(model, regime, policy, result, problem, coeffs, diagnostics, cvx_obj):
     net_util, prefill_util = utilization(
         problem,
@@ -55,18 +68,19 @@ def _policy_row(model, regime, policy, result, problem, coeffs, diagnostics, cvx
     )
     y = result.allocation if hasattr(result, "allocation") else result.y
     mix = action_mix(problem, y)
-    source_load_mix = source_load_action_mix(problem, y)
+    retained_mix = retained_prefill_action_mix(problem, y)
     alloc = allocation_diagnostics(problem, coeffs, y)
-    source_prefill_moved = source_load_moved_s(problem, y)
-    source_prefill_shortfall = max(0.0, problem.source_load_target_s - source_prefill_moved)
-    excess_source_prefill = max(0.0, source_prefill_moved - problem.source_load_target_s)
+    retained_prefill_moved = retained_prefill_moved_s(problem, y)
+    retained_prefill_shortfall = max(0.0, problem.retained_prefill_target_s - retained_prefill_moved)
+    excess_retained_prefill = max(0.0, retained_prefill_moved - problem.retained_prefill_target_s)
+    moved_bytes = resident_state_moved_bytes(problem, y)
     capacity_feasible = bool(np.max(net_util) < 1.0 and np.max(prefill_util) < 1.0)
     objective = getattr(result, "objective", None)
     feasible = bool(
         getattr(result, "feasible", True)
         and objective is not None
         and np.isfinite(objective)
-        and source_prefill_shortfall <= 1e-5
+        and retained_prefill_shortfall <= 1e-5
         and capacity_feasible
     )
     obj_gap = objective - cvx_obj if feasible else None
@@ -78,10 +92,14 @@ def _policy_row(model, regime, policy, result, problem, coeffs, diagnostics, cvx
         "objective": f"{objective:.10g}" if feasible else "INFEASIBLE",
         "objective_gap_to_cvx": f"{max(0.0, obj_gap):.10g}" if feasible else "INFEASIBLE",
         "relative_gap_to_cvx": f"{max(0.0, rel_gap):.10g}" if feasible else "INFEASIBLE",
-        "source_prefill_moved_s": f"{source_prefill_moved:.10g}",
-        "source_prefill_target_s": f"{problem.source_load_target_s:.10g}",
-        "source_prefill_shortfall_s": f"{source_prefill_shortfall:.10g}",
-        "excess_source_prefill_s": f"{excess_source_prefill:.10g}",
+        "retained_prefill_moved_s": f"{retained_prefill_moved:.10g}",
+        "retained_prefill_target_s": f"{problem.retained_prefill_target_s:.10g}",
+        "retained_prefill_shortfall_s": f"{retained_prefill_shortfall:.10g}",
+        "excess_retained_prefill_s": f"{excess_retained_prefill:.10g}",
+        "resident_state_tb": f"{state_tb(resident_state_bytes(problem)):.10g}",
+        "retained_state_target_tb": f"{state_tb(resident_state_target_bytes(problem)):.10g}",
+        "evacuated_state_tb": f"{state_tb(moved_bytes):.10g}",
+        "evacuated_nvl72_hbm_fraction": f"{nvl72_hbm_fraction(moved_bytes):.10g}",
         "max_net_util": f"{float(np.max(net_util)):.10g}",
         "max_prefill_util": f"{float(np.max(prefill_util)):.10g}",
         "capacity_feasible": str(capacity_feasible),
@@ -93,8 +111,8 @@ def _policy_row(model, regime, policy, result, problem, coeffs, diagnostics, cvx
         "destination_entropy": f"{alloc['destination_entropy']:.10g}",
         "action_entropy": f"{alloc['action_entropy']:.10g}",
         **{key: f"{value:.10g}" for key, value in mix.items()},
-        "replay_source_prefill_frac": f"{source_load_mix['replay_load_frac']:.10g}",
-        "state_transfer_source_prefill_frac": f"{source_load_mix['state_load_frac']:.10g}",
+        "replay_retained_prefill_frac": f"{retained_mix['replay_retained_prefill_fraction']:.10g}",
+        "state_transfer_retained_prefill_frac": f"{retained_mix['state_transfer_retained_prefill_fraction']:.10g}",
         "replay_demand_over_capacity": f"{diagnostics[0]:.10g}",
         "state_bytes_over_capacity": f"{diagnostics[1]:.10g}",
         "deadline_overrun_mean": f"{(getattr(result, 'diagnostics', None) or {}).get('deadline_overrun_mean', np.nan):.10g}",
@@ -108,9 +126,9 @@ def _policy_row(model, regime, policy, result, problem, coeffs, diagnostics, cvx
 def _log_run(model, regime, problem, coeffs, diagnostics, cvx, md):
     net_util, prefill_util = utilization(problem, coeffs, md.y)
     gap = max(0.0, (md.objective - cvx.objective) / max(1.0, abs(cvx.objective)))
-    source_prefill_moved = source_load_moved_s(problem, md.y)
-    md_mix = source_load_action_mix(problem, md.y)
-    cvx_mix = source_load_action_mix(problem, cvx.y)
+    retained_prefill_moved = retained_prefill_moved_s(problem, md.y)
+    md_mix = retained_prefill_action_mix(problem, md.y)
+    cvx_mix = retained_prefill_action_mix(problem, cvx.y)
     print(
         f"{model.name} / {regime}: diagnostics replay_demand/cap={diagnostics[0]:.3f}, "
         f"state_bytes/cap={diagnostics[1]:.3f}"
@@ -118,11 +136,12 @@ def _log_run(model, regime, problem, coeffs, diagnostics, cvx, md):
     print(
         "  CVXPY oracle objective="
         f"{cvx.objective:.6g}; mirror best feasible objective={md.objective:.6g}; "
-        f"relative_gap={gap:.3g}; source_prefill={source_prefill_moved:.6g}/{problem.source_load_target_s:.6g}; "
+        f"relative_gap={gap:.3g}; retained_prefill={retained_prefill_moved:.6g}/{problem.retained_prefill_target_s:.6g}; "
         f"max_net_util={float(np.max(net_util)):.3f}; "
         f"max_prefill_util={float(np.max(prefill_util)):.3f}; "
         f"alpha={md.alpha:.3g}; "
-        f"replay_source_prefill MD/CVXPY={md_mix['replay_load_frac']:.3f}/{cvx_mix['replay_load_frac']:.3f}"
+        "replay retained-prefill MD/CVXPY="
+        f"{md_mix['replay_retained_prefill_fraction']:.3f}/{cvx_mix['replay_retained_prefill_fraction']:.3f}"
     )
 
 
@@ -177,7 +196,10 @@ def run_transition_coupled(out, workload_config: WorkloadConfig = WorkloadConfig
     diagnostics = saturation_diagnostics(problem)
     cvx = solve_cvxpy(problem)
     soft = solve_soft_deadline_cvxpy(problem)
-    md = _selected_mirror_descent(problem)
+    try:
+        md = _selected_mirror_descent(problem)
+    except RuntimeError:
+        md = _infeasible_result(problem)
     crossover = solve_crossover_greedy(problem)
     results = {
         "CVXPY": cvx,
@@ -188,7 +210,8 @@ def run_transition_coupled(out, workload_config: WorkloadConfig = WorkloadConfig
         "replay-only": solve_replay_only(problem),
         "state-only": solve_state_only(problem),
     }
-    _require_transition_quality(problem, coeffs, soft, crossover)
+    if workload_config.source == "generated":
+        _require_transition_quality(problem, coeffs, soft, crossover)
     rows = [
         _policy_row(
             model.name,
@@ -226,14 +249,14 @@ def _allocation_summary_rows(problem, results):
     labels = DEST_LABELS[problem.regime]
     for policy, result in results.items():
         y = result.allocation if hasattr(result, "allocation") else result.y
-        action = source_load_action_mix(problem, y)
-        dest = source_load_destination_mix(problem, y)
+        action = retained_prefill_action_mix(problem, y)
+        dest = retained_prefill_destination_mix(problem, y)
         rows.append(
             {
                 "policy": policy,
-                "replay_source_prefill_fraction": f"{action['replay_load_frac']:.6g}",
-                "state_transfer_source_prefill_fraction": f"{action['state_load_frac']:.6g}",
-                **{f"{label}_source_prefill_fraction": f"{share:.6g}" for label, share in zip(labels, dest)},
+                "replay_retained_prefill_fraction": f"{action['replay_retained_prefill_fraction']:.6g}",
+                "state_transfer_retained_prefill_fraction": f"{action['state_transfer_retained_prefill_fraction']:.6g}",
+                **{f"{label}_retained_prefill_fraction": f"{share:.6g}" for label, share in zip(labels, dest)},
             }
         )
     return rows
@@ -263,7 +286,7 @@ def _transition_queue_rows(problem, results):
         result = results[source]
         y = result.allocation if hasattr(result, "allocation") else result.y
         row = _empty_transition_queue_row(policy)
-        if not getattr(result, "feasible", True) or source_load_moved_s(problem, y) < problem.source_load_target_s - 1e-5:
+        if not getattr(result, "feasible", True) or retained_prefill_moved_s(problem, y) < problem.retained_prefill_target_s - 1e-5:
             rows.append(row)
             continue
         try:
@@ -275,11 +298,11 @@ def _transition_queue_rows(problem, results):
         row.update(
             {
                 "status": "OK",
-                "source_prefill_moved_s": f"{metrics['source_prefill_moved_s']:.10g}",
-                "source_prefill_target_s": f"{metrics['source_prefill_target_s']:.10g}",
-                "source_prefill_ratio": f"{metrics['source_prefill_ratio']:.10g}",
+                "retained_prefill_moved_s": f"{metrics['retained_prefill_moved_s']:.10g}",
+                "retained_prefill_target_s": f"{metrics['retained_prefill_target_s']:.10g}",
+                "retained_prefill_ratio": f"{metrics['retained_prefill_ratio']:.10g}",
                 "drain_window_s": f"{metrics['drain_window_s']:.10g}",
-                "source_prefill_removal_rate_s_per_s": f"{metrics['source_prefill_removal_rate_s_per_s']:.10g}",
+                "retained_prefill_removal_rate_s_per_s": f"{metrics['retained_prefill_removal_rate_s_per_s']:.10g}",
                 "drain_completion_s": f"{metrics['drain_completion_s']:.10g}",
                 "mean_reconstruction_delay": f"{metrics['mean_reconstruction_delay']:.10g}",
                 "p50_reconstruction_delay": f"{metrics['p50_reconstruction_delay']:.10g}",
@@ -287,8 +310,12 @@ def _transition_queue_rows(problem, results):
                 "deadline_miss_rate": f"{metrics['deadline_miss_rate']:.10g}",
                 "network_capacity_pressure": f"{metrics['network_capacity_pressure']:.10g}",
                 "prefill_capacity_pressure": f"{metrics['prefill_capacity_pressure']:.10g}",
-                "replay_source_prefill_fraction": f"{metrics['replay_source_prefill_fraction']:.10g}",
-                "state_transfer_source_prefill_fraction": f"{metrics['state_transfer_source_prefill_fraction']:.10g}",
+                "resident_state_tb": f"{metrics['resident_state_tb']:.10g}",
+                "retained_state_target_tb": f"{metrics['retained_state_target_tb']:.10g}",
+                "evacuated_state_tb": f"{metrics['evacuated_state_tb']:.10g}",
+                "evacuated_nvl72_hbm_fraction": f"{metrics['evacuated_nvl72_hbm_fraction']:.10g}",
+                "replay_retained_prefill_fraction": f"{metrics['replay_retained_prefill_fraction']:.10g}",
+                "state_transfer_retained_prefill_fraction": f"{metrics['state_transfer_retained_prefill_fraction']:.10g}",
             }
         )
         rows.append(row)
@@ -299,11 +326,11 @@ def _empty_transition_queue_row(policy):
     return {
         "policy": policy,
         "status": "INFEASIBLE",
-        "source_prefill_moved_s": "INFEASIBLE",
-        "source_prefill_target_s": "INFEASIBLE",
-        "source_prefill_ratio": "INFEASIBLE",
+        "retained_prefill_moved_s": "INFEASIBLE",
+        "retained_prefill_target_s": "INFEASIBLE",
+        "retained_prefill_ratio": "INFEASIBLE",
         "drain_window_s": "INFEASIBLE",
-        "source_prefill_removal_rate_s_per_s": "INFEASIBLE",
+        "retained_prefill_removal_rate_s_per_s": "INFEASIBLE",
         "drain_completion_s": "INFEASIBLE",
         "mean_reconstruction_delay": "INFEASIBLE",
         "p50_reconstruction_delay": "INFEASIBLE",
@@ -311,8 +338,12 @@ def _empty_transition_queue_row(policy):
         "deadline_miss_rate": "INFEASIBLE",
         "network_capacity_pressure": "INFEASIBLE",
         "prefill_capacity_pressure": "INFEASIBLE",
-        "replay_source_prefill_fraction": "INFEASIBLE",
-        "state_transfer_source_prefill_fraction": "INFEASIBLE",
+        "resident_state_tb": "INFEASIBLE",
+        "retained_state_target_tb": "INFEASIBLE",
+        "evacuated_state_tb": "INFEASIBLE",
+        "evacuated_nvl72_hbm_fraction": "INFEASIBLE",
+        "replay_retained_prefill_fraction": "INFEASIBLE",
+        "state_transfer_retained_prefill_fraction": "INFEASIBLE",
     }
 
 
@@ -321,8 +352,8 @@ def _print_transition_outputs(rows, summary, queue_rows):
         "policy",
         "objective",
         "relative_gap_to_cvx",
-        "replay_source_prefill_frac",
-        "state_transfer_source_prefill_frac",
+        "replay_retained_prefill_frac",
+        "state_transfer_retained_prefill_frac",
         "active_classes_moved",
         "active_destinations_used",
         "destination_entropy",
@@ -353,7 +384,7 @@ def _print_queue_latex(rows):
     print("\ntransition-coupled queue table (LaTeX)")
     print("\\begin{tabular}{lrrrrrrrrr}")
     print(
-        "policy & source prefill/target & mean & p50 & p95 & miss & net pressure & prefill pressure & replay & state \\\\"
+        "policy & retained prefill/target & mean & p50 & p95 & miss & net pressure & prefill pressure & replay & state \\\\"
     )
     print("\\hline")
     for row in rows:
@@ -361,15 +392,15 @@ def _print_queue_latex(rows):
             print(f"{row['policy']} & \\multicolumn{{9}}{{c}}{{{row['status']}}} \\\\")
             continue
         print(
-            f"{row['policy']} & {float(row['source_prefill_ratio']):.3f} & "
+            f"{row['policy']} & {float(row['retained_prefill_ratio']):.3f} & "
             f"{float(row['mean_reconstruction_delay']):.3f} & "
             f"{float(row['p50_reconstruction_delay']):.3f} & "
             f"{float(row['p95_reconstruction_delay']):.3f} & "
             f"{float(row['deadline_miss_rate']):.3f} & "
             f"{float(row['network_capacity_pressure']):.3f} & "
             f"{float(row['prefill_capacity_pressure']):.3f} & "
-            f"{float(row['replay_source_prefill_fraction']):.3f} & "
-            f"{float(row['state_transfer_source_prefill_fraction']):.3f} \\\\"
+            f"{float(row['replay_retained_prefill_fraction']):.3f} & "
+            f"{float(row['state_transfer_retained_prefill_fraction']):.3f} \\\\"
         )
     print("\\end{tabular}")
 

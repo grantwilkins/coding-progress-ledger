@@ -24,13 +24,15 @@ from problem import ProblemData, make_problem
 from queueing import evaluate_rounded_queue_trace, round_allocation
 
 NETWORK_SCALES = (0.60, 0.80, 1.00, 1.25, 1.50, 2.00)
-SOURCE_PREFILL_FRACTIONS = (0.20, 0.30, 0.40, 0.50, 0.60, 0.70)
+SOURCE_WORKING_SET_FRACTIONS = (0.20, 0.30, 0.40, 0.50, 0.60, 0.70, 0.80, 0.90)
 DRAIN_WINDOW_S = 1800.0
 COLUMNS = (
     "network_bandwidth_scale",
     "drain_window_s",
-    "max_safe_source_prefill_fraction",
-    "source_prefill_removal_rate_s_per_s",
+    "max_safe_source_working_set_fraction",
+    "evacuated_state_tb",
+    "evacuated_nvl72_hbm_fraction",
+    "retained_prefill_removal_rate_s_per_s",
     "request_migration_fraction",
     "p95_delay_over_deadline",
     "deadline_miss_rate",
@@ -40,8 +42,8 @@ COLUMNS = (
     "prefill_capacity_pressure",
     "drain_completion_s",
     "deadline_overrun_max",
-    "replay_source_prefill_fraction",
-    "state_transfer_source_prefill_fraction",
+    "replay_retained_prefill_fraction",
+    "state_transfer_retained_prefill_fraction",
 )
 
 
@@ -56,12 +58,12 @@ def run_network_bandwidth_tradeoff(workload_config: WorkloadConfig = WorkloadCon
 
 def _scale_row(scale: float, workload_config: WorkloadConfig) -> dict[str, float | str]:
     candidates = []
-    for source_prefill_fraction in SOURCE_PREFILL_FRACTIONS:
+    for source_working_set_fraction in SOURCE_WORKING_SET_FRACTIONS:
         problem = _scale_network(
             make_problem(
                 get_model("GLM-5"),
                 "transition-coupled",
-                source_load_fraction=source_prefill_fraction,
+                source_working_set_fraction=source_working_set_fraction,
                 deadline_scale=1.0,
                 **workload_config.problem_kwargs(),
             ),
@@ -74,16 +76,18 @@ def _scale_row(scale: float, workload_config: WorkloadConfig) -> dict[str, float
         except (RuntimeError, ValueError):
             continue
         if _safe(metrics):
-            candidates.append((source_prefill_fraction, result, rounded, metrics, trace))
+            candidates.append((source_working_set_fraction, result, rounded, metrics, trace))
     if not candidates:
         return {"network_bandwidth_scale": scale, "drain_window_s": DRAIN_WINDOW_S, **{key: math.nan for key in COLUMNS[2:]}}
-    source_prefill_fraction, result, rounded, metrics, trace = max(candidates, key=lambda item: item[0])
+    source_working_set_fraction, result, rounded, metrics, trace = max(candidates, key=lambda item: item[0])
     diagnostics = result.diagnostics or {}
     return {
         "network_bandwidth_scale": scale,
         "drain_window_s": DRAIN_WINDOW_S,
-        "max_safe_source_prefill_fraction": source_prefill_fraction,
-        "source_prefill_removal_rate_s_per_s": metrics["source_prefill_removal_rate_s_per_s"],
+        "max_safe_source_working_set_fraction": source_working_set_fraction,
+        "evacuated_state_tb": metrics["evacuated_state_tb"],
+        "evacuated_nvl72_hbm_fraction": metrics["evacuated_nvl72_hbm_fraction"],
+        "retained_prefill_removal_rate_s_per_s": metrics["retained_prefill_removal_rate_s_per_s"],
         "request_migration_fraction": float(np.sum(rounded.y[:, :-1]) / np.sum(problem.d)),
         "p95_delay_over_deadline": metrics["p95_reconstruction_delay_ratio"],
         "deadline_miss_rate": metrics["deadline_miss_rate"],
@@ -93,8 +97,8 @@ def _scale_row(scale: float, workload_config: WorkloadConfig) -> dict[str, float
         "prefill_capacity_pressure": metrics["prefill_capacity_pressure"],
         "drain_completion_s": metrics["drain_completion_s"],
         "deadline_overrun_max": diagnostics.get("deadline_overrun_max", math.nan),
-        "replay_source_prefill_fraction": metrics["replay_source_prefill_fraction"],
-        "state_transfer_source_prefill_fraction": metrics["state_transfer_source_prefill_fraction"],
+        "replay_retained_prefill_fraction": metrics["replay_retained_prefill_fraction"],
+        "state_transfer_retained_prefill_fraction": metrics["state_transfer_retained_prefill_fraction"],
     }
 
 
@@ -113,14 +117,14 @@ def _scale_network(problem: ProblemData, scale: float) -> ProblemData:
         ell_prefill=problem.ell_prefill,
         h_ctx=problem.h_ctx,
         h_kv=problem.h_kv,
-        source_load_target_s=problem.source_load_target_s,
+        retained_prefill_target_s=problem.retained_prefill_target_s,
         w=problem.w,
     )
 
 
 def _safe(metrics: dict[str, float]) -> bool:
     return (
-        metrics["source_load_moved_s"] >= metrics["source_load_target_s"] - 1e-9
+        metrics["retained_prefill_moved_s"] >= metrics["retained_prefill_target_s"] - 1e-9
         and metrics["deadline_miss_rate"] <= 0.01
         and metrics["p95_reconstruction_delay_ratio"] <= 1.0
     )
@@ -140,7 +144,7 @@ def _write_rows(path: Path, rows: list[dict[str, float | str]]) -> None:
 def _plot(rows, path: Path) -> None:
     x = np.array([row["network_bandwidth_scale"] for row in rows], dtype=float)
     fig, axes = plt.subplots(2, 1, figsize=(5.5, 4.8), sharex=True, constrained_layout=True)
-    _line(axes[0], x, rows, "max_safe_source_prefill_fraction", "Source prefill moved")
+    _line(axes[0], x, rows, "max_safe_source_working_set_fraction", "Source working set")
     _line(axes[0], x, rows, "request_migration_fraction", "Requests moved")
     axes[0].set_ylabel("Fraction of workload")
     axes[0].set_ylim(bottom=0.0)

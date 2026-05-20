@@ -5,6 +5,9 @@ import numpy as np
 from coefficients import REPLAY, STATE, Coefficients, move_view
 from problem import ProblemData
 
+BYTES_PER_TB = 1e12
+NVL72_HBM_BYTES = 13.4 * BYTES_PER_TB
+
 
 def available_rates(problem: ProblemData) -> tuple[float, np.ndarray, np.ndarray]:
     windows = np.concatenate(
@@ -20,7 +23,7 @@ def available_rates(problem: ProblemData) -> tuple[float, np.ndarray, np.ndarray
     return H, lambda_avail, rho_avail
 
 
-def resource_loads(problem: ProblemData, coeffs: Coefficients, y: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+def capacity_loads(problem: ProblemData, coeffs: Coefficients, y: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
     x = move_view(y, problem)
     L_net = problem.ell_net + np.sum(coeffs.b_net * x, axis=(0, 2))
     L_prefill = problem.ell_prefill + np.sum(coeffs.b_prefill * x, axis=(0, 2))
@@ -28,21 +31,39 @@ def resource_loads(problem: ProblemData, coeffs: Coefficients, y: np.ndarray) ->
 
 
 def utilization(problem: ProblemData, coeffs: Coefficients, y: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
-    L_net, L_prefill = resource_loads(problem, coeffs, y)
+    L_net, L_prefill = capacity_loads(problem, coeffs, y)
     return L_net / problem.C_net, L_prefill / problem.C_prefill
 
 
-def source_load_moved_s(problem: ProblemData, y: np.ndarray) -> float:
+def retained_prefill_moved_s(problem: ProblemData, y: np.ndarray) -> float:
     moved = np.sum(move_view(y, problem), axis=(1, 2))
     return float(np.dot(problem.tau, moved))
 
 
-def relief_achieved_s(problem: ProblemData, y: np.ndarray) -> float:
-    return source_load_moved_s(problem, y)
+def total_retained_prefill_s(problem: ProblemData) -> float:
+    return float(np.dot(problem.tau, problem.d))
 
 
-def shed_achieved(problem: ProblemData, y: np.ndarray) -> float:
-    return source_load_moved_s(problem, y)
+def resident_state_bytes(problem: ProblemData) -> float:
+    return float(np.dot(problem.d, problem.model.eta_bytes_per_tok * problem.T))
+
+
+def resident_state_moved_bytes(problem: ProblemData, y: np.ndarray) -> float:
+    moved = np.sum(move_view(y, problem), axis=(1, 2))
+    return float(np.dot(moved, problem.model.eta_bytes_per_tok * problem.T))
+
+
+def resident_state_target_bytes(problem: ProblemData) -> float:
+    total = total_retained_prefill_s(problem)
+    return resident_state_bytes(problem) * problem.retained_prefill_target_s / total if total > 0.0 else 0.0
+
+
+def state_tb(value_bytes: float) -> float:
+    return value_bytes / BYTES_PER_TB
+
+
+def nvl72_hbm_fraction(value_bytes: float) -> float:
+    return value_bytes / NVL72_HBM_BYTES
 
 
 def action_mix(problem: ProblemData, y: np.ndarray) -> dict[str, float]:
@@ -55,46 +76,25 @@ def action_mix(problem: ProblemData, y: np.ndarray) -> dict[str, float]:
     }
 
 
-def source_load_action_mix(problem: ProblemData, y: np.ndarray) -> dict[str, float]:
+def retained_prefill_action_mix(problem: ProblemData, y: np.ndarray) -> dict[str, float]:
     x = move_view(y, problem)
     replay = float(np.dot(problem.tau, np.sum(x[:, :, REPLAY], axis=1)))
     state = float(np.dot(problem.tau, np.sum(x[:, :, STATE], axis=1)))
     total = replay + state
     if total == 0.0:
-        return {"replay_load_frac": 0.0, "state_load_frac": 0.0}
-    return {"replay_load_frac": replay / total, "state_load_frac": state / total}
-
-
-def relief_action_mix(problem: ProblemData, y: np.ndarray) -> dict[str, float]:
-    mix = source_load_action_mix(problem, y)
+        return {"replay_retained_prefill_fraction": 0.0, "state_transfer_retained_prefill_fraction": 0.0}
     return {
-        "replay_relief_frac": mix["replay_load_frac"],
-        "state_relief_frac": mix["state_load_frac"],
+        "replay_retained_prefill_fraction": replay / total,
+        "state_transfer_retained_prefill_fraction": state / total,
     }
 
 
-def shed_action_mix(problem: ProblemData, y: np.ndarray) -> dict[str, float]:
-    mix = source_load_action_mix(problem, y)
-    return {
-        "replay_shed_frac": mix["replay_load_frac"],
-        "state_shed_frac": mix["state_load_frac"],
-    }
-
-
-def source_load_destination_mix(problem: ProblemData, y: np.ndarray) -> np.ndarray:
+def retained_prefill_destination_mix(problem: ProblemData, y: np.ndarray) -> np.ndarray:
     x = move_view(y, problem)
     moved = np.sum(x, axis=2)
     load = problem.tau @ moved
     total = float(np.sum(load))
     return load / total if total > 0.0 else np.zeros(problem.K)
-
-
-def relief_destination_mix(problem: ProblemData, y: np.ndarray) -> np.ndarray:
-    return source_load_destination_mix(problem, y)
-
-
-def shed_destination_mix(problem: ProblemData, y: np.ndarray) -> np.ndarray:
-    return source_load_destination_mix(problem, y)
 
 
 def deadline_load_ratios(
@@ -138,9 +138,14 @@ def allocation_diagnostics(problem: ProblemData, coeffs: Coefficients, y: np.nda
     x = move_view(y, problem)
     moved_by_class = np.sum(x, axis=(1, 2))
     moved_by_dest = np.sum(x, axis=(0, 2))
-    dest_share = source_load_destination_mix(problem, y)
-    action = source_load_action_mix(problem, y)
-    action_share = np.array([action["replay_load_frac"], action["state_load_frac"]])
+    dest_share = retained_prefill_destination_mix(problem, y)
+    action = retained_prefill_action_mix(problem, y)
+    action_share = np.array(
+        [
+            action["replay_retained_prefill_fraction"],
+            action["state_transfer_retained_prefill_fraction"],
+        ]
+    )
     net_util, prefill_util = utilization(problem, coeffs, y)
     return {
         "active_classes_moved": float(np.sum(moved_by_class > 1e-8)),
@@ -149,12 +154,7 @@ def allocation_diagnostics(problem: ProblemData, coeffs: Coefficients, y: np.nda
         "action_entropy": _normalized_entropy(action_share),
         "max_net_util": float(np.max(net_util)),
         "max_prefill_util": float(np.max(prefill_util)),
-        "replay_load_frac": action["replay_load_frac"],
-        "state_load_frac": action["state_load_frac"],
-        "replay_relief_frac": action["replay_load_frac"],
-        "state_relief_frac": action["state_load_frac"],
-        "replay_shed_frac": action["replay_load_frac"],
-        "state_shed_frac": action["state_load_frac"],
+        **action,
     }
 
 
@@ -165,13 +165,13 @@ def _normalized_entropy(p: np.ndarray) -> float:
     return float(-np.sum(positive * np.log(positive)) / np.log(p.size))
 
 
-def assert_feasible(problem: ProblemData, coeffs: Coefficients, y: np.ndarray, shed_tol: float) -> None:
+def assert_feasible(problem: ProblemData, coeffs: Coefficients, y: np.ndarray, target_tol: float) -> None:
     if not np.all(y >= -1e-8):
         raise AssertionError("allocation has negative entries")
     if not np.allclose(np.sum(y, axis=1), problem.d):
         raise AssertionError("allocation rows do not sum to class demand")
-    if source_load_moved_s(problem, y) < problem.source_load_target_s - shed_tol:
-        raise AssertionError("source load target not met")
+    if retained_prefill_moved_s(problem, y) < problem.retained_prefill_target_s - target_tol:
+        raise AssertionError("retained prefill target not met")
     net_util, prefill_util = utilization(problem, coeffs, y)
     if not (np.all(net_util < 1.0) and np.all(prefill_util < 1.0)):
         raise AssertionError("allocation is outside the barrier domain")
