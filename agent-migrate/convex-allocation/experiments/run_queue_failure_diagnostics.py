@@ -21,7 +21,7 @@ from baselines import (
 )
 from catalog import get_model
 from coefficients import ACTIONS, compute_coefficients
-from cvxpy_solver import solve_cvxpy, solve_deadline_aware_cvxpy
+from cvxpy_solver import solve_cvxpy, solve_deadline_aware_cvxpy, solve_soft_deadline_cvxpy
 from evaluation import WorkloadConfig, parse_workload_config
 from metrics import (
     retained_prefill_action_mix,
@@ -38,7 +38,10 @@ RETAINED_PREFILL_FRACTIONS = (0.20, 0.30, 0.40, 0.50, 0.60, 0.70, 0.80, 0.90)
 TIGHT_DEADLINE_SCALES = (0.25, 0.50)
 REPAIR_BUDGET_FRACTIONS = (0.05, 0.10, 0.20)
 DRAIN_WINDOW_S = 1800.0
+MAIN_POLICY = "deadline-penalty-rounded"
+REPAIRED_MAIN_POLICY = "repaired-deadline-penalty-rounded"
 POLICIES = (
+    ("CVXPY-rounded", solve_cvxpy),
     (
         "deadline-aware-m0.8-rounded",
         lambda problem: solve_deadline_aware_cvxpy(problem, 0.8, retained_prefill_cap=problem.retained_prefill_target_s),
@@ -197,18 +200,18 @@ def run_queue_failure_diagnostics(workload_config: WorkloadConfig = WorkloadConf
                 **workload_config.problem_kwargs(),
             )
             try:
-                cvx = solve_cvxpy(problem)
-                rounded = round_allocation(problem, cvx.y)
+                main = solve_soft_deadline_cvxpy(problem)
+                rounded = round_allocation(problem, main.y)
                 metrics, trace = evaluate_rounded_queue_trace(problem, rounded.y)
             except (RuntimeError, ValueError):
                 queue_rows.append(
                     _empty_queue_row(
-                        "CVXPY-rounded", retained_prefill_fraction, deadline_scale, problem.retained_prefill_target_s
+                        MAIN_POLICY, retained_prefill_fraction, deadline_scale, problem.retained_prefill_target_s
                     )
                 )
                 queue_rows.append(
                     _empty_queue_row(
-                        "repaired-CVXPY-rounded",
+                        REPAIRED_MAIN_POLICY,
                         retained_prefill_fraction,
                         deadline_scale,
                         problem.retained_prefill_target_s,
@@ -216,11 +219,11 @@ def run_queue_failure_diagnostics(workload_config: WorkloadConfig = WorkloadConf
                 )
             else:
                 queue_rows.append(
-                    _queue_row("CVXPY-rounded", retained_prefill_fraction, deadline_scale, "OK", metrics)
+                    _queue_row(MAIN_POLICY, retained_prefill_fraction, deadline_scale, "OK", metrics)
                 )
                 breakdown_rows.extend(
                     _failure_breakdown_rows(
-                        "CVXPY-rounded", problem, retained_prefill_fraction, deadline_scale, "OK", trace
+                        MAIN_POLICY, problem, retained_prefill_fraction, deadline_scale, "OK", trace
                     )
                 )
 
@@ -228,7 +231,7 @@ def run_queue_failure_diagnostics(workload_config: WorkloadConfig = WorkloadConf
                     repair = repair_rounded_allocation(problem, rounded.y)
                 except (RuntimeError, ValueError):
                     repaired = _empty_queue_row(
-                        "repaired-CVXPY-rounded",
+                        REPAIRED_MAIN_POLICY,
                         retained_prefill_fraction,
                         deadline_scale,
                         problem.retained_prefill_target_s,
@@ -238,7 +241,7 @@ def run_queue_failure_diagnostics(workload_config: WorkloadConfig = WorkloadConf
                 else:
                     queue_rows.append(
                         _queue_row(
-                            "repaired-CVXPY-rounded",
+                            REPAIRED_MAIN_POLICY,
                             retained_prefill_fraction,
                             deadline_scale,
                             "OK",
@@ -248,7 +251,7 @@ def run_queue_failure_diagnostics(workload_config: WorkloadConfig = WorkloadConf
                     )
                     breakdown_rows.extend(
                         _failure_breakdown_rows(
-                            "repaired-CVXPY-rounded",
+                            REPAIRED_MAIN_POLICY,
                             problem,
                             retained_prefill_fraction,
                             deadline_scale,
@@ -746,7 +749,7 @@ def _summary_row(retained_prefill_fraction, deadline_scale, original, repair):
 def _print_repair_summary(rows):
     print("\nconvex-rounded local repair summary")
     if not rows:
-        print("no feasible CVXPY-rounded rows to repair")
+        print(f"no feasible {MAIN_POLICY} rows to repair")
         return
     cols = (
         "deadline_scale",

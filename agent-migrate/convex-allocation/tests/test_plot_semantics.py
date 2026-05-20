@@ -114,13 +114,15 @@ def test_policy_labels_are_short_enough_for_paper_legends():
         "replay-only",
         "state-only",
     }
+    assert POLICY_LABELS["CVXPY-rounded"] == "CVXPY cost"
     assert max(len(label) for label in POLICY_LABELS.values()) <= 16
 
 
-def test_plot_legend_uses_only_main_unambiguous_policies():
+def test_plot_legend_leads_with_deadline_penalty_policy():
     assert len(PLOT_POLICIES) == 6
     assert "deadline-aware-m0.8-rounded" not in PLOT_POLICIES
     assert "deadline-aware-m1.0-rounded" not in PLOT_POLICIES
+    assert PLOT_POLICIES[:2] == ("deadline-penalty-rounded", "CVXPY-rounded")
     assert set(PLOT_POLICIES) == {
         "CVXPY-rounded",
         "deadline-penalty-rounded",

@@ -174,6 +174,7 @@ def test_transition_queue_rows_mark_infeasible_policies_instead_of_rounding_them
     rows = _transition_queue_rows(
         problem,
         {
+            "deadline-penalty": result,
             "CVXPY": result,
             "mirror-descent-best": result,
             "crossover-greedy": result,
@@ -184,6 +185,7 @@ def test_transition_queue_rows_mark_infeasible_policies_instead_of_rounding_them
     )
 
     assert {row["status"] for row in rows} == {"INFEASIBLE"}
+    assert [row["policy"] for row in rows[:2]] == ["deadline-penalty-rounded", "CVXPY-rounded"]
     assert all(row["retained_prefill_ratio"] == "INFEASIBLE" for row in rows)
 
 

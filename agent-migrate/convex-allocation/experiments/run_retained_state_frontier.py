@@ -37,9 +37,11 @@ RETAINED_PREFILL_FRACTIONS = (0.20, 0.30, 0.40, 0.50, 0.60, 0.70, 0.80, 0.90)
 DEADLINE_SCALES = (0.25, 0.50, 1.00, 2.00)
 DRAIN_WINDOWS_S = (0.0, 900.0, 1800.0, 3600.0)
 PLOT_DRAIN_WINDOW_S = 1800.0
+MAIN_POLICY = "deadline-penalty-rounded"
+ORACLE_POLICY = "CVXPY-rounded"
 POLICIES = (
-    ("CVXPY-rounded", solve_cvxpy),
     ("deadline-penalty-rounded", solve_soft_deadline_cvxpy),
+    ("CVXPY-rounded", solve_cvxpy),
     ("mirror-descent-rounded", lambda problem: solve_mirror_descent(problem, eta_x0=500.0)),
     ("crossover-greedy", solve_crossover_greedy),
     ("replay-only", solve_replay_only),
@@ -340,56 +342,58 @@ def _print_latex_frontier(frontier):
 
 def _print_diagnostics(frontier, rows):
     md_rounding = []
-    cvx_losses = []
+    main_losses = []
     support = []
     for deadline_scale in DEADLINE_SCALES:
-        cvx = _frontier_value(frontier, "CVXPY-rounded", deadline_scale)
+        main = _frontier_value(frontier, MAIN_POLICY, deadline_scale)
         md = _frontier_value(frontier, "mirror-descent-rounded", deadline_scale)
-        if not math.isnan(md) and (math.isnan(cvx) or md > cvx + 1e-12):
+        if not math.isnan(md) and (math.isnan(main) or md > main + 1e-12):
             md_rounding.append(deadline_scale)
 
         values = [_frontier_value(frontier, policy, deadline_scale) for policy, _ in POLICIES]
         best = max((value for value in values if not math.isnan(value)), default=math.nan)
-        if not math.isnan(best) and (math.isnan(cvx) or cvx < best - 1e-12):
-            cvx_losses.append((deadline_scale, _cvx_failure_after_frontier(rows, cvx, deadline_scale)))
+        if not math.isnan(best) and (math.isnan(main) or main < best - 1e-12):
+            main_losses.append(
+                (deadline_scale, _policy_failure_after_frontier(rows, MAIN_POLICY, main, deadline_scale))
+            )
 
         rivals = (
             _frontier_value(frontier, "crossover-greedy", deadline_scale),
             _frontier_value(frontier, "replay-only", deadline_scale),
             _frontier_value(frontier, "state-only", deadline_scale),
         )
-        if not math.isnan(cvx) and any(math.isnan(value) or cvx > value + 1e-12 for value in rivals):
+        if not math.isnan(main) and any(math.isnan(value) or main > value + 1e-12 for value in rivals):
             support.append(deadline_scale)
 
     if md_rounding:
         print(
-            "\nMirror-descent-rounded exceeds CVXPY-rounded at "
+            f"\nMirror-descent-rounded exceeds {MAIN_POLICY} at "
             f"{md_rounding}; this is a rounding effect, not an algorithmic win."
         )
     else:
-        print("\nMirror-descent-rounded does not beat CVXPY-rounded on the frontier.")
-    if cvx_losses:
-        print(f"CVXPY-rounded does not win at {cvx_losses}.")
+        print(f"\nMirror-descent-rounded does not beat {MAIN_POLICY} on the frontier.")
+    if main_losses:
+        print(f"{MAIN_POLICY} does not win at {main_losses}.")
     else:
-        print("CVXPY-rounded wins or ties the frontier at every deadline scale.")
+        print(f"{MAIN_POLICY} wins or ties the frontier at every deadline scale.")
     if support:
         print(
-            "CVXPY-rounded supports a larger safe retained-prefill fraction than crossover-greedy "
+            f"{MAIN_POLICY} supports a larger safe retained-prefill fraction than crossover-greedy "
             f"or a single-action policy at deadline scales {support}."
         )
     else:
-        print("CVXPY-rounded does not exceed crossover-greedy or either single-action frontier.")
+        print(f"{MAIN_POLICY} does not exceed crossover-greedy or either single-action frontier.")
 
 
-def _cvx_failure_after_frontier(rows, cvx_frontier, deadline_scale):
+def _policy_failure_after_frontier(rows, policy, frontier, deadline_scale):
     for row in sorted(
         (
             row
             for row in rows
-            if row["policy"] == "CVXPY-rounded"
+            if row["policy"] == policy
             and row["deadline_scale"] == deadline_scale
             and row["drain_window_s"] == PLOT_DRAIN_WINDOW_S
-            and (math.isnan(cvx_frontier) or row["retained_prefill_fraction"] > cvx_frontier)
+            and (math.isnan(frontier) or row["retained_prefill_fraction"] > frontier)
         ),
         key=lambda item: item["retained_prefill_fraction"],
     ):

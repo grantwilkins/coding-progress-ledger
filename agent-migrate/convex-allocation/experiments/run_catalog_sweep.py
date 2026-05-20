@@ -202,8 +202,8 @@ def run_transition_coupled(out, workload_config: WorkloadConfig = WorkloadConfig
         md = _infeasible_result(problem)
     crossover = solve_crossover_greedy(problem)
     results = {
-        "CVXPY": cvx,
         "deadline-penalty": soft,
+        "CVXPY": cvx,
         "mirror-descent-best": md,
         "crossover-greedy": crossover,
         "mixed-greedy": solve_mixed_greedy(problem),
@@ -271,8 +271,8 @@ def _write_rows(path, rows):
 
 def _transition_queue_rows(problem, results):
     policies = (
-        ("CVXPY", "CVXPY-rounded"),
         ("deadline-penalty", "deadline-penalty-rounded"),
+        ("CVXPY", "CVXPY-rounded"),
         ("mirror-descent-best", "mirror-descent-rounded"),
         ("crossover-greedy", "crossover-greedy"),
         ("mixed-greedy", "mixed-greedy"),
@@ -407,23 +407,23 @@ def _print_queue_latex(rows):
 
 def _print_queue_finding(rows):
     by_policy = {row["policy"]: row for row in rows}
-    cvx = by_policy["CVXPY-rounded"]
+    main = by_policy["deadline-penalty-rounded"]
     comparators = ("crossover-greedy", "replay-only", "state-only")
     better_p95 = all(
-        _queue_metric(cvx, "p95_reconstruction_delay")
+        _queue_metric(main, "p95_reconstruction_delay")
         < _queue_metric(by_policy[policy], "p95_reconstruction_delay")
         for policy in comparators
     )
     better_miss = all(
-        _queue_metric(cvx, "deadline_miss_rate")
+        _queue_metric(main, "deadline_miss_rate")
         < _queue_metric(by_policy[policy], "deadline_miss_rate")
         for policy in comparators
     )
     if better_p95 or better_miss:
-        print("\nQueue finding: CVXPY-rounded improves p95 delay or deadline misses.")
+        print("\nQueue finding: deadline-penalty-rounded improves p95 delay or deadline misses.")
     else:
         print(
-            "\nQueue finding: CVXPY-rounded does not improve p95 delay or "
+            "\nQueue finding: deadline-penalty-rounded does not improve p95 delay or "
             "deadline misses over crossover-greedy and both single-action policies."
         )
 

@@ -19,6 +19,9 @@ from __future__ import annotations
 
 from experiments.run_retained_state_frontier import (
     DRAIN_WINDOWS_S,
+    FRONTIER_POLICIES,
+    MAIN_POLICY,
+    ORACLE_POLICY,
     PLOT_DRAIN_WINDOW_S,
     _failure_mode,
     _frontier_rows,
@@ -108,6 +111,12 @@ def test_make_problem_scales_deadline_without_changing_workload():
 def test_frontier_uses_realistic_grid_drain_windows_with_burst_reference():
     assert DRAIN_WINDOWS_S == (0.0, 900.0, 1800.0, 3600.0)
     assert PLOT_DRAIN_WINDOW_S == 1800.0
+
+
+def test_frontier_leads_with_deadline_penalty_and_keeps_cvxpy_as_oracle():
+    assert MAIN_POLICY == "deadline-penalty-rounded"
+    assert ORACLE_POLICY == "CVXPY-rounded"
+    assert FRONTIER_POLICIES[:2] == (MAIN_POLICY, ORACLE_POLICY)
 
 
 def _row(policy, deadline_scale, retained_prefill_fraction, safe, drain_window_s=1800.0):

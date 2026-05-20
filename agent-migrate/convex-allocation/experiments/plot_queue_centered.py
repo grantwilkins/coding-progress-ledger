@@ -42,8 +42,8 @@ from problem import make_problem
 from queueing import evaluate_rounded_queue_trace, round_allocation
 
 MAIN_POLICIES = (
-    "CVXPY-rounded",
     "deadline-penalty-rounded",
+    "CVXPY-rounded",
     "mirror-descent-rounded",
     "crossover-greedy",
     "replay-only",
@@ -67,8 +67,8 @@ POLICY_COLORS = {
     "state-only": "#666666",
 }
 POLICY_LABELS = {
-    "CVXPY-rounded": "CVXPY",
     "deadline-penalty-rounded": "Deadline penalty",
+    "CVXPY-rounded": "CVXPY cost",
     "mirror-descent-rounded": "Mirror descent",
     "crossover-greedy": "Crossover greedy",
     "replay-only": "Replay only",

@@ -7,8 +7,9 @@ not stateless requests. The evacuation target is retained reconstruction work in
 prefill seconds; CSVs and plots also report resident state in TB and fractions
 of an NVIDIA GB200 NVL72 13.4 TB HBM rack.
 
-CVXPY provides the fixed-load relaxed oracle. The deadline-penalty CVXPY policy
-keeps physical capacity hard and penalizes deadline overrun. A second CVXPY LP
+The deadline-penalty CVXPY policy is the main rounded queue policy: it keeps
+physical capacity hard and penalizes deadline overrun. Plain CVXPY remains the
+fixed-load relaxed resource-cost oracle. A second CVXPY LP
 maximizes retained prefill under hard per-destination deadline-capacity
 constraints at deadline margins 0.8 and 1.0. Mirror descent with scalar
 bisection is a preliminary first-order method for the fixed-load objective.
@@ -107,9 +108,10 @@ divided by class deadline at most 1.0. It drains moved sessions with
 deterministic EDF pacing over 30m for main plots and also writes burst/15m/60m
 sensitivity rows. It reports retained-prefill fraction, average-equivalent
 state target TB, actual evacuated state TB, network/prefill capacity pressure,
-replay/state-transfer retained-prefill shares, drain completion time, and deadline overrun. Main plots show CVXPY,
-deadline-penalty CVXPY, mirror descent, crossover-greedy, replay-only, and
-state-transfer-only.
+replay/state-transfer retained-prefill shares, drain completion time, and
+deadline overrun. Main plots lead with deadline-penalty CVXPY and include plain
+CVXPY as the resource-cost oracle, plus mirror descent, crossover-greedy,
+replay-only, and state-transfer-only.
 The failure diagnostic adds per-request queue tracing, missed-request breakdowns
 by class, destination, and action, and a one-request rounded local repair for the
 tight 0.25x and 0.5x deadline settings.

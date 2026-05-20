@@ -9,7 +9,7 @@ Plausible wrong implementations:
 - Accept a move that improves mean delay while leaving a higher miss rate.
 - Aggregate failures at the wrong level, such as retained-prefill-weighted instead of request-counted.
 - Attribute prefill wait to state-transfer requests.
-- Try to repair a CVXPY row after the generated workload makes that retained-prefill point infeasible.
+- Try to repair a deadline-penalty row after the generated workload makes that retained-prefill point infeasible.
 """
 
 from __future__ import annotations
@@ -158,7 +158,7 @@ def test_repair_budget_rows_include_capped_and_unbounded_results():
     assert by_label["unbounded"]["repair_steps"] == len(full.moves)
 
 
-def test_queue_diagnostics_reports_infeasible_cvx_rows_without_repair(monkeypatch, tmp_path):
+def test_queue_diagnostics_reports_infeasible_deadline_penalty_rows_without_repair(monkeypatch, tmp_path):
     captured = {}
 
     def fail_solve(problem):
@@ -166,12 +166,12 @@ def test_queue_diagnostics_reports_infeasible_cvx_rows_without_repair(monkeypatc
 
     monkeypatch.setattr(queue_diag, "ROOT", tmp_path)
     monkeypatch.setattr(queue_diag, "TIGHT_DEADLINE_SCALES", (0.25,))
-    monkeypatch.setattr(queue_diag, "SOURCE_WORKING_SET_FRACTIONS", (0.2,))
+    monkeypatch.setattr(queue_diag, "RETAINED_PREFILL_FRACTIONS", (0.2,))
     monkeypatch.setattr(queue_diag, "POLICIES", ())
     monkeypatch.setattr(
         queue_diag, "make_problem", lambda *args, **kwargs: SimpleNamespace(retained_prefill_target_s=1.0)
     )
-    monkeypatch.setattr(queue_diag, "solve_cvxpy", fail_solve)
+    monkeypatch.setattr(queue_diag, "solve_soft_deadline_cvxpy", fail_solve)
     monkeypatch.setattr(
         queue_diag,
         "_write_rows",
@@ -186,8 +186,8 @@ def test_queue_diagnostics_reports_infeasible_cvx_rows_without_repair(monkeypatc
         rows for path, rows in captured.items() if path.name.endswith("queue_table.csv")
     )
     assert [row["policy"] for row in queue_rows] == [
-        "CVXPY-rounded",
-        "repaired-CVXPY-rounded",
+        "deadline-penalty-rounded",
+        "repaired-deadline-penalty-rounded",
     ]
     assert {row["status"] for row in queue_rows} == {"INFEASIBLE"}
     assert all("generated_seed7" in str(path) for path in captured)
