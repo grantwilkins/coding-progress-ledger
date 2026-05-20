@@ -81,29 +81,17 @@ uv run python experiments/run_report_experiments.py
 ```
 
 Outputs are written to `convex-allocation/outputs/sweep/`:
-generated workload runs write to a labeled subdirectory such as
+generated workload runs write the same current report/network artifacts to a
+labeled subdirectory such as
 `outputs/sweep/generated_seed7_sessions10000_classes48/`.
 
-- `summary.csv`
-- `transition_coupled_policy_table.csv`
-- `transition_coupled_allocation_summary.csv`
-- `transition_coupled_queue_table.csv`
 - `h1_resource_pressure.pdf`
 - `h2_safe_frontier.pdf`
 - `h2_delay_cdf.pdf`
 - `h3_action_mix_by_model.pdf`
 - `h4_state_manifest_heatmap.pdf`
-- `integer_benchmark_summary.csv`
 - `network_bandwidth_tradeoff.csv`
 - `network_bandwidth_tradeoff.pdf`
-- `retained_state_deadline_sweep.csv`
-- `retained_state_frontier.csv`
-- `transition_coupled_queue_failure_breakdown.csv`
-- `transition_coupled_repaired_queue_table.csv`
-- `repair_summary.csv`
-- `repair_move_breakdown.csv`
-- `repair_budget_frontier.csv`
-- `integer_optimality_cases.csv`
 - `claim_table.csv`
 - `rounding_gap_study.csv`
 - `rounding_gap_summary.csv`
@@ -111,48 +99,18 @@ generated workload runs write to a labeled subdirectory such as
 - `model_architecture_sweep.csv`
 - `adversarial_queue_case.csv`
 
-`summary.csv` marks infeasible baselines as `INFEASIBLE` and includes retained
-prefill target, retained prefill moved, resident-state TB, NVL72 HBM fraction,
-capacity feasibility, deadline overrun, mirror-descent objective gap, selected
-scalar load multiplier `alpha`, and bisection count. The transition-coupled CSVs
-compare fixed-load CVXPY, deadline-penalty CVXPY, mirror descent,
-crossover-greedy, least-loaded-destination, online-queue-greedy, mixed-greedy,
-replay-only, and state-only on the GLM-5 4/6/9 Gbps stress case.
 `make_problem(...)` defaults to the generated 10k active-session workload
 aggregated into 48 classes. `workload_source="fixed"` keeps the six-row smoke
 workload.
-The queue table rounds fractional allocations into requests and reports
-network-then-prefill EDF reconstruction delay metrics under the default 30m
-drain.
-The retained-state frontier sweep marks a rounded policy safe only when it meets
-the retained prefill target, has deadline miss rate at most 1%, and has p95 delay
-divided by class deadline at most 1.0. It drains moved sessions with
-deterministic EDF pacing over 30m for main plots and also writes burst/15m/60m
-sensitivity rows. It reports retained-prefill fraction, average-equivalent
-state target TB, actual evacuated state TB, network/prefill capacity pressure,
-replay/state-transfer retained-prefill shares, drain completion time, and
-deadline overrun. Main plots lead with deadline-penalty CVXPY and include plain
-CVXPY as the resource-cost oracle, plus online-queue-greedy, crossover-greedy,
-replay-only, and state-transfer-only. The report plot script writes one simple
-figure for resource pressure, safe frontier, delay CDF, architecture action mix,
-and state-manifest routing.
-The failure diagnostic adds per-request queue tracing, missed-request breakdowns
-by class, destination, and action, and a one-request rounded local repair for the
-tight 0.25x and 0.5x deadline settings.
-It also reports how much repair changes the rounded convex allocation, the move
-patterns used by repair, and 5%, 10%, and 20% repair-budget frontiers.
 The network-bandwidth tradeoff sweeps network bandwidth and plots the largest
 tested source-state fraction that can be safely evacuated, request migration
 fraction, actual evacuated state TB, and max network/prefill queue depth.
-The integer optimality cases exhaustively solve tiny 8/14/20-request problems.
-They separate the best integer convex-objective allocation from the best integer
-queue schedule, then compare rounded relaxations, repaired deadline-aware CVXPY,
-and greedy baselines on objective gaps, p95 delay, miss rate, and target
-feasibility.
 The report-facing experiment driver writes machine-checkable claim rows,
 rounding-gap rows for relaxed, exact, rounded, and repaired tiny cases,
 deadline-weight sensitivity rows, a model architecture frontier table, and a
 small adversarial rounding case.
+Legacy scripts still write their own diagnostic CSVs when run, but those stale
+generated CSV artifacts are no longer committed.
 
 The catalog is local and hard-coded from `kv-transfer-early-experiment/FINDINGS.md`.
 It does not import that directory.
