@@ -1,15 +1,17 @@
 """
 Claim:
-The Together replay runner asks one observer to estimate seconds remaining and
-confidence from the original task prompt plus the observed work prefix available
-at that turn.
+The Together replay runner asks each configured observer model to estimate
+seconds remaining and confidence from the original task prompt plus the observed
+work prefix available at that turn.
 
 Plausible wrong implementations:
 - Accept free-form or malformed model output that cannot be plotted as seconds.
 - Scale error bars by the estimate instead of using inverse confidence directly.
+- Mix estimates from different models under the wrong legend label.
 - Send only the current turn instead of all previous work seen so far.
 - Leak future turns into an earlier observer prompt.
 - Record a retried invalid response instead of the first valid estimate.
+- Fail to document that the selected SWE-Agent trace resolves successfully.
 """
 
 import pytest
@@ -20,9 +22,12 @@ from observation_channel.together_replay_ensemble import (
     original_task_prompt,
     parse_time_estimate,
     replay_prompt,
+    run_model_replays,
     run_replay,
+    swe_agent_success_evidence,
     system_prompt,
     time_error_seconds,
+    _streamed_content,
     turn_prompt,
     validate_replay_args,
 )
@@ -92,8 +97,29 @@ def test_run_replay_sends_original_task_and_only_seen_work_prefixes() -> None:
     assert "bug report" in user_prompts[1]
     assert "open parser.py" in user_prompts[1]
     assert estimates == [
-        Estimate(turn=1, seconds_left=10.0, confidence_percent=70.0, raw="{10s, 70%}"),
-        Estimate(turn=2, seconds_left=20.0, confidence_percent=70.0, raw="{20s, 70%}"),
+        Estimate("m", 1, 10.0, 70.0, "{10s, 70%}"),
+        Estimate("m", 2, 20.0, 70.0, "{20s, 70%}"),
+    ]
+
+
+def test_run_model_replays_preserves_model_labels() -> None:
+    def complete(messages, model, api_key, max_retries, max_tokens, temperature):
+        return "{10s, 70%}" if model == "small" else "{20s, 80%}"
+
+    estimates = run_model_replays(
+        [Turn(step=1, kind="user", response="bug report")],
+        models=["small", "large"],
+        api_key="k",
+        max_retries=0,
+        max_tokens=8,
+        temperature=0.0,
+        task_prompt="ISSUE",
+        complete=complete,
+    )
+
+    assert estimates == [
+        Estimate("small", 1, 10.0, 70.0, "{10s, 70%}"),
+        Estimate("large", 1, 20.0, 80.0, "{20s, 80%}"),
     ]
 
 
@@ -118,7 +144,7 @@ def test_run_replay_retries_nonsense_before_recording_estimate(monkeypatch) -> N
     )
 
     assert estimates == [
-        Estimate(turn=1, seconds_left=90.0, confidence_percent=60.0, raw="{90s, 60%}")
+        Estimate("m", 1, 90.0, 60.0, "{90s, 60%}")
     ]
 
 
@@ -147,13 +173,40 @@ def test_time_estimate_and_replay_arg_validation_fail_loudly() -> None:
     with pytest.raises(ValueError, match="task_prompt is empty"):
         replay_prompt("", ["Turn 1: USER.\nIssue"])
     with pytest.raises(ValueError, match="model is required"):
-        validate_replay_args("")
+        validate_replay_args([""])
+    with pytest.raises(ValueError, match="at least one model"):
+        validate_replay_args([])
+
+
+def test_streamed_content_collects_delta_content_only() -> None:
+    lines = [
+        b'data: {"choices":[{"delta":{"reasoning":"hidden","content":"{12"}}]}\n',
+        b'data: {"choices":[{"delta":{"content":"s, 80%"}}]}\n',
+        b'data: {"choices":[{"delta":{"content":"}"}}]}\n',
+        b"data: [DONE]\n",
+    ]
+
+    assert _streamed_content(lines) == "{12s, 80%}"
 
 
 def test_time_error_seconds_uses_inverse_confidence_points() -> None:
-    assert time_error_seconds(Estimate(1, 120.0, 75.0, "{120s, 75%}")) == pytest.approx(
+    assert time_error_seconds(Estimate("m", 1, 120.0, 75.0, "{120s, 75%}")) == pytest.approx(
         25.0
     )
-    assert time_error_seconds(Estimate(1, 120.0, 100.0, "{120s, 100%}")) == pytest.approx(
+    assert time_error_seconds(Estimate("m", 1, 120.0, 100.0, "{120s, 100%}")) == pytest.approx(
         0.0
     )
+
+
+def test_swe_agent_success_evidence_requires_target_and_passed_eval_logs() -> None:
+    row = {
+        "target": True,
+        "exit_status": "submitted",
+        "eval_logs": "tests/test_io_tsv_germline.py ....... [100%]\n7 passed",
+    }
+
+    assert swe_agent_success_evidence(row) == {
+        "target": True,
+        "exit_status": "submitted",
+        "eval_passed": True,
+    }

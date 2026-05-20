@@ -15,7 +15,7 @@ from .progress_label_audit import evaluate_progress_label_audit
 from .readers import rows_to_turns
 from .runner import annotate_corpus, annotate_file, annotate_turns
 from .together_replay_ensemble import (
-    DEFAULT_MODEL,
+    DEFAULT_MODELS,
     DEFAULT_REPORT_DIR as DEFAULT_REPLAY_REPORT_DIR,
     main as together_replay_main,
 )
@@ -148,7 +148,12 @@ def main(argv: list[str] | None = None) -> int:
         help="run Together observer time-remaining replay",
     )
     replay_ablation.add_argument("--raw-index", type=int, default=349)
-    replay_ablation.add_argument("--model", default=DEFAULT_MODEL)
+    replay_ablation.add_argument(
+        "--model",
+        action="append",
+        dest="models",
+        help="Together model id to run; repeat for multiple models",
+    )
     replay_ablation.add_argument("--cache-dir", type=Path, default=DATA_DIR / "raw" / "hf_cache")
     replay_ablation.add_argument("--report-dir", type=Path, default=DEFAULT_REPLAY_REPORT_DIR)
     replay_ablation.add_argument("--api-key-env", default="TOGETHER_API_KEY")
@@ -272,8 +277,6 @@ def main(argv: list[str] | None = None) -> int:
         argv = [
             "--raw-index",
             str(args.raw_index),
-            "--model",
-            args.model,
             "--cache-dir",
             str(args.cache_dir),
             "--report-dir",
@@ -287,6 +290,8 @@ def main(argv: list[str] | None = None) -> int:
             "--temperature",
             str(args.temperature),
         ]
+        for model in args.models or list(DEFAULT_MODELS):
+            argv.extend(["--model", model])
         if args.quiet:
             argv.append("--quiet")
         return together_replay_main(argv)

@@ -1,14 +1,23 @@
 # Together Replay Time Remaining
 
-Single-agent turn-by-turn estimates for one SWE-Agent trace.
+Turn-by-turn time-remaining estimates from multiple Together models for one SWE-Agent trace.
 
-- model: `openai/gpt-oss-120b`
+Trace:
+
 - raw row index: `349`
 - instance: `bihealth__biomedsheets-23`
-- final remaining seconds: 150
-- final confidence: 70%
+- dataset target success: `True`
+- exit status: `submitted`
+- evaluator log contains passed tests: `True`
+
+Models:
+
+- `deepseek-ai/DeepSeek-V4-Pro`
+- `Qwen/Qwen3.6-Plus`
+- `Qwen/Qwen3.5-9B`
+- `Qwen/Qwen2.5-7B-Instruct-Turbo`
 
 Artifacts:
 
-- `time_estimates.csv`: one time and confidence estimate per turn.
-- `remaining_time.png`: seconds-left curve with inverse-confidence error bars and confidence by turn.
+- `time_estimates.csv`: one time and confidence estimate per model per turn.
+- `remaining_time.png`: seconds-left curves with inverse-confidence error bars by model.

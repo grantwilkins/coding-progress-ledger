@@ -18,7 +18,7 @@ uv run --project observation-channel observation-channel gbm-trial-eval --bootst
 uv run --project observation-channel observation-channel belief-tracker-eval
 uv run --project observation-channel observation-channel belief-filter-calibration
 uv run --project observation-channel observation-channel progress-label-audit
-TOGETHER_API_KEY=... uv run --project observation-channel observation-channel together-replay-ensemble --raw-index 349 --model openai/gpt-oss-120b --cache-dir observation-channel/data/raw/hf_cache --report-dir observation-channel/reports/together_replay_time
+TOGETHER_API_KEY=... uv run --project observation-channel observation-channel together-replay-ensemble --raw-index 349 --cache-dir observation-channel/data/raw/hf_cache --report-dir observation-channel/reports/together_replay_time
 uv run pytest observation-channel
 ```
 
@@ -33,4 +33,4 @@ The belief-filter calibration evaluator runs EB-only alpha and event-gated filte
 
 The progress-label audit is read-only. It checks whether opened-unit progress reaches 100% while a large fraction of the trace remains, compares opened-unit, closed-unit, and step progress on selected worst traces, and writes evidence under `reports/progress_label_audit/`.
 
-The Together replay runs one observer over a selected SWE-Agent trace turn by turn and writes seconds-left estimates plus a remaining-time plot with inverse-confidence error bars under `reports/together_replay_time/`. Each observer call receives the original prompt and only the observed work prefix available at that turn. Invalid model responses are retried. It requires `TOGETHER_API_KEY` and uses Together's OpenAI-compatible chat endpoint.
+The Together replay runs several observer models over a selected solved SWE-Agent trace turn by turn and writes seconds-left estimates plus a remaining-time plot with inverse-confidence error bars under `reports/together_replay_time/`. Each observer call receives the original prompt and only the observed work prefix available at that turn. Invalid model responses are retried. It requires `TOGETHER_API_KEY` and uses Together's OpenAI-compatible chat endpoint.
