@@ -31,19 +31,19 @@ def test_policy_points_omit_infeasible_and_rounding_failed_rows():
         {
             "policy": "CVXPY-rounded",
             "deadline_scale": "0.5",
-            "evacuated_state_tb": "2.0",
+            "actual_evacuated_state_tb": "2.0",
             "deadline_miss_rate": "0.4",
         },
         {
             "policy": "CVXPY-rounded",
             "deadline_scale": "0.5",
-            "evacuated_state_tb": "3.0",
+            "actual_evacuated_state_tb": "3.0",
             "deadline_miss_rate": "nan",
         },
         {
             "policy": "replay-only",
             "deadline_scale": "0.5",
-            "evacuated_state_tb": "2.0",
+            "actual_evacuated_state_tb": "2.0",
             "deadline_miss_rate": "0.0",
         },
     ]
@@ -51,7 +51,7 @@ def test_policy_points_omit_infeasible_and_rounding_failed_rows():
     assert _policy_points(
         rows,
         "CVXPY-rounded",
-        "evacuated_state_tb",
+        "actual_evacuated_state_tb",
         "deadline_miss_rate",
         {"deadline_scale": 0.5},
     ) == [(2.0, 0.4)]

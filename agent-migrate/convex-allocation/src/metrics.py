@@ -53,7 +53,7 @@ def resident_state_moved_bytes(problem: ProblemData, y: np.ndarray) -> float:
     return float(np.dot(moved, problem.model.eta_bytes_per_tok * problem.T))
 
 
-def resident_state_target_bytes(problem: ProblemData) -> float:
+def average_equivalent_state_target_bytes(problem: ProblemData) -> float:
     total = total_retained_prefill_s(problem)
     return resident_state_bytes(problem) * problem.retained_prefill_target_s / total if total > 0.0 else 0.0
 

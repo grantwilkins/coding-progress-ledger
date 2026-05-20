@@ -194,6 +194,12 @@ def test_queue_metrics_report_resident_state_tb_and_nvl72_fraction():
     metrics = queue_metrics(problem, y)
 
     assert_allclose(metrics["resident_state_tb"], 40.0 / 1e12)
-    assert_allclose(metrics["retained_state_target_tb"], 10.0 / 1e12)
-    assert_allclose(metrics["evacuated_state_tb"], 10.0 / 1e12)
-    assert_allclose(metrics["evacuated_nvl72_hbm_fraction"], 10.0 / (13.4e12))
+    assert_allclose(metrics["average_equivalent_state_target_tb"], 10.0 / 1e12)
+    assert_allclose(metrics["actual_evacuated_state_tb"], 10.0 / 1e12)
+    assert_allclose(metrics["actual_evacuated_nvl72_hbm_fraction"], 10.0 / (13.4e12))
+    assert not {
+        "source_" + "working_set_fraction",
+        "source_" + "working_set_moved_fraction",
+        "retained_" + "state_target_tb",
+        "evacuated_" + "state_tb",
+    } & metrics.keys()

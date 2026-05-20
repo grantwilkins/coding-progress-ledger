@@ -105,9 +105,9 @@ The retained-state frontier sweep marks a rounded policy safe only when it meets
 the retained prefill target, has deadline miss rate at most 1%, and has p95 delay
 divided by class deadline at most 1.0. It drains moved sessions with
 deterministic EDF pacing over 30m for main plots and also writes burst/15m/60m
-sensitivity rows. It reports source working-set fraction, evacuated state TB,
-network/prefill capacity pressure, replay/state-transfer retained-prefill shares,
-drain completion time, and deadline overrun. Main plots show CVXPY,
+sensitivity rows. It reports retained-prefill fraction, average-equivalent
+state target TB, actual evacuated state TB, network/prefill capacity pressure,
+replay/state-transfer retained-prefill shares, drain completion time, and deadline overrun. Main plots show CVXPY,
 deadline-penalty CVXPY, mirror descent, crossover-greedy, replay-only, and
 state-transfer-only.
 The failure diagnostic adds per-request queue tracing, missed-request breakdowns
@@ -116,8 +116,8 @@ tight 0.25x and 0.5x deadline settings.
 It also reports how much repair changes the rounded convex allocation, the move
 patterns used by repair, and 5%, 10%, and 20% repair-budget frontiers.
 The network-bandwidth tradeoff sweeps network bandwidth and plots the largest
-queue-safe source working-set fraction, request migration fraction, and max
-network/prefill queue depth.
+queue-safe retained-prefill fraction, request migration fraction, actual
+evacuated state TB, and max network/prefill queue depth.
 
 The catalog is local and hard-coded from `kv-transfer-early-experiment/FINDINGS.md`.
 It does not import that directory.

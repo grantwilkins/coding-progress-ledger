@@ -24,7 +24,7 @@ from metrics import (
     nvl72_hbm_fraction,
     resident_state_bytes,
     resident_state_moved_bytes,
-    resident_state_target_bytes,
+    average_equivalent_state_target_bytes,
     retained_prefill_moved_s,
     state_tb,
     total_retained_prefill_s,
@@ -33,7 +33,7 @@ from mirror_descent import solve_mirror_descent
 from problem import make_problem
 from queueing import fractional_queue_load_proxy, queue_metrics
 
-SOURCE_WORKING_SET_FRACTIONS = (0.20, 0.30, 0.40, 0.50, 0.60, 0.70, 0.80, 0.90)
+RETAINED_PREFILL_FRACTIONS = (0.20, 0.30, 0.40, 0.50, 0.60, 0.70, 0.80, 0.90)
 DEADLINE_SCALES = (0.25, 0.50, 1.00, 2.00)
 DRAIN_WINDOWS_S = (0.0, 900.0, 1800.0, 3600.0)
 PLOT_DRAIN_WINDOW_S = 1800.0
@@ -48,7 +48,7 @@ POLICIES = (
 FRONTIER_POLICIES = tuple(policy for policy, _ in POLICIES)
 SWEEP_COLUMNS = (
     "policy",
-    "source_working_set_fraction",
+    "retained_prefill_fraction",
     "deadline_scale",
     "drain_window_s",
     "status",
@@ -57,10 +57,10 @@ SWEEP_COLUMNS = (
     "retained_prefill_target_s",
     "retained_prefill_moved_s",
     "resident_state_tb",
-    "retained_state_target_tb",
-    "evacuated_state_tb",
-    "source_working_set_moved_fraction",
-    "evacuated_nvl72_hbm_fraction",
+    "average_equivalent_state_target_tb",
+    "actual_evacuated_state_tb",
+    "retained_prefill_moved_fraction",
+    "actual_evacuated_nvl72_hbm_fraction",
     "retained_prefill_removal_rate_s_per_s",
     "request_migration_fraction",
     "deadline_overrun_mean",
@@ -86,10 +86,10 @@ FRONTIER_COLUMNS = (
     "policy",
     "deadline_scale",
     "drain_window_s",
-    "max_safe_source_working_set_fraction",
-    "target_state_tb_at_frontier",
-    "evacuated_state_tb_at_frontier",
-    "evacuated_nvl72_hbm_fraction_at_frontier",
+    "max_safe_retained_prefill_fraction",
+    "average_equivalent_state_target_tb_at_frontier",
+    "actual_evacuated_state_tb_at_frontier",
+    "actual_evacuated_nvl72_hbm_fraction_at_frontier",
     "p95_delay_at_frontier",
     "p95_delay_over_deadline_at_frontier",
     "deadline_miss_rate_at_frontier",
@@ -107,16 +107,16 @@ def run_retained_state_frontier(workload_config: WorkloadConfig = WorkloadConfig
     rows = []
     model = get_model("GLM-5")
     for deadline_scale in DEADLINE_SCALES:
-        for source_working_set_fraction in SOURCE_WORKING_SET_FRACTIONS:
+        for retained_prefill_fraction in RETAINED_PREFILL_FRACTIONS:
             problem = make_problem(
                 model,
                 "transition-coupled",
-                source_working_set_fraction=source_working_set_fraction,
+                retained_prefill_fraction=retained_prefill_fraction,
                 deadline_scale=deadline_scale,
                 **workload_config.problem_kwargs(),
             )
             for policy, solver in POLICIES:
-                rows.extend(_policy_rows(problem, policy, solver, source_working_set_fraction, deadline_scale))
+                rows.extend(_policy_rows(problem, policy, solver, retained_prefill_fraction, deadline_scale))
 
     frontier = _frontier_rows(rows)
     _write_rows(out / "retained_state_deadline_sweep.csv", rows, SWEEP_COLUMNS)
@@ -126,12 +126,12 @@ def run_retained_state_frontier(workload_config: WorkloadConfig = WorkloadConfig
     return rows, frontier
 
 
-def _policy_rows(problem, policy, solver, source_working_set_fraction, deadline_scale):
+def _policy_rows(problem, policy, solver, retained_prefill_fraction, deadline_scale):
     try:
         result = solver(problem)
     except RuntimeError:
         return [
-            _empty_policy_row(policy, source_working_set_fraction, deadline_scale, drain_window_s, problem.retained_prefill_target_s)
+            _empty_policy_row(policy, retained_prefill_fraction, deadline_scale, drain_window_s, problem.retained_prefill_target_s)
             for drain_window_s in DRAIN_WINDOWS_S
         ]
 
@@ -143,7 +143,7 @@ def _policy_rows(problem, policy, solver, source_working_set_fraction, deadline_
     )
     rows = []
     for drain_window_s in DRAIN_WINDOWS_S:
-        base = _empty_policy_row(policy, source_working_set_fraction, deadline_scale, drain_window_s, problem.retained_prefill_target_s)
+        base = _empty_policy_row(policy, retained_prefill_fraction, deadline_scale, drain_window_s, problem.retained_prefill_target_s)
         base["objective"] = getattr(result, "objective", math.nan)
         base.update(solver_metrics)
         if not feasible:
@@ -166,10 +166,10 @@ def _policy_rows(problem, policy, solver, source_working_set_fraction, deadline_
     return rows
 
 
-def _empty_policy_row(policy, source_working_set_fraction, deadline_scale, drain_window_s, retained_prefill_target_s):
+def _empty_policy_row(policy, retained_prefill_fraction, deadline_scale, drain_window_s, retained_prefill_target_s):
     row = {
         "policy": policy,
-        "source_working_set_fraction": source_working_set_fraction,
+        "retained_prefill_fraction": retained_prefill_fraction,
         "deadline_scale": deadline_scale,
         "drain_window_s": drain_window_s,
         "status": "INFEASIBLE",
@@ -195,10 +195,10 @@ def _complete_policy_row(base, metrics):
             "network_capacity_pressure": metrics["network_capacity_pressure"],
             "prefill_capacity_pressure": metrics["prefill_capacity_pressure"],
             "resident_state_tb": metrics["resident_state_tb"],
-            "retained_state_target_tb": metrics["retained_state_target_tb"],
-            "evacuated_state_tb": metrics["evacuated_state_tb"],
-            "source_working_set_moved_fraction": metrics["source_working_set_moved_fraction"],
-            "evacuated_nvl72_hbm_fraction": metrics["evacuated_nvl72_hbm_fraction"],
+            "average_equivalent_state_target_tb": metrics["average_equivalent_state_target_tb"],
+            "actual_evacuated_state_tb": metrics["actual_evacuated_state_tb"],
+            "retained_prefill_moved_fraction": metrics["retained_prefill_moved_fraction"],
+            "actual_evacuated_nvl72_hbm_fraction": metrics["actual_evacuated_nvl72_hbm_fraction"],
             "replay_retained_prefill_fraction": metrics["replay_retained_prefill_fraction"],
             "state_transfer_retained_prefill_fraction": metrics["state_transfer_retained_prefill_fraction"],
             "drain_completion_s": metrics["drain_completion_s"],
@@ -237,17 +237,17 @@ def _semantic_solver_metrics(problem, y, diagnostics):
     retained_prefill_moved = retained_prefill_moved_s(problem, y)
     total = total_retained_prefill_s(problem)
     moved_bytes = resident_state_moved_bytes(problem, y)
-    target_bytes = resident_state_target_bytes(problem)
+    average_equivalent_target_bytes = average_equivalent_state_target_bytes(problem)
     total_bytes = resident_state_bytes(problem)
     request_migration_fraction = float(np.sum(y[:, : y.shape[1] - 1]) / np.sum(problem.d))
     return {
         "retained_prefill_target_s": problem.retained_prefill_target_s,
         "retained_prefill_moved_s": retained_prefill_moved,
         "resident_state_tb": state_tb(total_bytes),
-        "retained_state_target_tb": state_tb(target_bytes),
-        "evacuated_state_tb": state_tb(moved_bytes),
-        "source_working_set_moved_fraction": retained_prefill_moved / total,
-        "evacuated_nvl72_hbm_fraction": nvl72_hbm_fraction(moved_bytes),
+        "average_equivalent_state_target_tb": state_tb(average_equivalent_target_bytes),
+        "actual_evacuated_state_tb": state_tb(moved_bytes),
+        "retained_prefill_moved_fraction": retained_prefill_moved / total,
+        "actual_evacuated_nvl72_hbm_fraction": nvl72_hbm_fraction(moved_bytes),
         "request_migration_fraction": request_migration_fraction,
         "deadline_overrun_mean": diagnostics.get("deadline_overrun_mean", math.nan),
         "deadline_overrun_p95": diagnostics.get("deadline_overrun_p95", math.nan),
@@ -283,16 +283,16 @@ def _frontier_rows(
                     }
                 )
                 continue
-            row = max(safe, key=lambda item: item["source_working_set_fraction"])
+            row = max(safe, key=lambda item: item["retained_prefill_fraction"])
             frontier.append(
                 {
                     "policy": policy,
                     "deadline_scale": deadline_scale,
                     "drain_window_s": drain_window_s,
-                    "max_safe_source_working_set_fraction": row["source_working_set_fraction"],
-                    "target_state_tb_at_frontier": row["retained_state_target_tb"],
-                    "evacuated_state_tb_at_frontier": row["evacuated_state_tb"],
-                    "evacuated_nvl72_hbm_fraction_at_frontier": row["evacuated_nvl72_hbm_fraction"],
+                    "max_safe_retained_prefill_fraction": row["retained_prefill_fraction"],
+                    "average_equivalent_state_target_tb_at_frontier": row["average_equivalent_state_target_tb"],
+                    "actual_evacuated_state_tb_at_frontier": row["actual_evacuated_state_tb"],
+                    "actual_evacuated_nvl72_hbm_fraction_at_frontier": row["actual_evacuated_nvl72_hbm_fraction"],
                     "p95_delay_at_frontier": row["p95_delay_s"],
                     "p95_delay_over_deadline_at_frontier": row["p95_delay_over_deadline"],
                     "deadline_miss_rate_at_frontier": row["deadline_miss_rate"],
@@ -317,7 +317,7 @@ def _write_rows(path, rows, columns):
 
 def _frontier_value(frontier, policy, deadline_scale):
     value = next(
-        row["max_safe_source_working_set_fraction"]
+        row["max_safe_retained_prefill_fraction"]
         for row in frontier
         if row["policy"] == policy and row["deadline_scale"] == deadline_scale
     )
@@ -374,7 +374,7 @@ def _print_diagnostics(frontier, rows):
         print("CVXPY-rounded wins or ties the frontier at every deadline scale.")
     if support:
         print(
-            "CVXPY-rounded supports a larger safe source working-set fraction than crossover-greedy "
+            "CVXPY-rounded supports a larger safe retained-prefill fraction than crossover-greedy "
             f"or a single-action policy at deadline scales {support}."
         )
     else:
@@ -389,9 +389,9 @@ def _cvx_failure_after_frontier(rows, cvx_frontier, deadline_scale):
             if row["policy"] == "CVXPY-rounded"
             and row["deadline_scale"] == deadline_scale
             and row["drain_window_s"] == PLOT_DRAIN_WINDOW_S
-            and (math.isnan(cvx_frontier) or row["source_working_set_fraction"] > cvx_frontier)
+            and (math.isnan(cvx_frontier) or row["retained_prefill_fraction"] > cvx_frontier)
         ),
-        key=lambda item: item["source_working_set_fraction"],
+        key=lambda item: item["retained_prefill_fraction"],
     ):
         if not row["safe"]:
             return row["failure_mode"]

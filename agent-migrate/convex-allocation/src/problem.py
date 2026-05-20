@@ -90,7 +90,7 @@ WORKLOAD_DEADLINE_S = np.array([2, 10, 30, 60, 120, 300], dtype=float)
 def make_problem(
     model: ModelParams,
     regime: str,
-    source_working_set_fraction: float = 0.4,
+    retained_prefill_fraction: float = 0.4,
     deadline_scale: float = 1.0,
     w: float = 1.0,
     window_s: float = 1800.0,
@@ -159,7 +159,7 @@ def make_problem(
     C_prefill = rho_prefill * window_s
     ell_net = net_frac * C_net
     ell_prefill = prefill_frac * C_prefill
-    retained_prefill_target_s = source_working_set_fraction * float(np.dot(T / model.prefill_tok_s, d))
+    retained_prefill_target_s = retained_prefill_fraction * float(np.dot(T / model.prefill_tok_s, d))
     return ProblemData(
         model=model,
         regime=regime,

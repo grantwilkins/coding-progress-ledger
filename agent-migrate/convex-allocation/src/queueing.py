@@ -11,7 +11,7 @@ from metrics import (
     nvl72_hbm_fraction,
     resident_state_bytes,
     resident_state_moved_bytes,
-    resident_state_target_bytes,
+    average_equivalent_state_target_bytes,
     state_tb,
     total_retained_prefill_s,
 )
@@ -378,7 +378,7 @@ def _add_retained_metrics(
     target = problem.retained_prefill_target_s
     total = total_retained_prefill_s(problem)
     moved_bytes = resident_state_moved_bytes(problem, y)
-    target_bytes = resident_state_target_bytes(problem)
+    average_equivalent_target_bytes = average_equivalent_state_target_bytes(problem)
     total_bytes = resident_state_bytes(problem)
     ratio = np.nan if target == 0.0 else achieved / target
     metrics.update(
@@ -389,14 +389,16 @@ def _add_retained_metrics(
             "rounded_retained_prefill_moved_s": achieved,
             "rounded_retained_prefill_target_s": target,
             "rounded_retained_prefill_ratio": ratio,
-            "source_working_set_fraction": 0.0 if total == 0.0 else target / total,
-            "source_working_set_moved_fraction": 0.0 if total == 0.0 else achieved / total,
+            "retained_prefill_fraction": 0.0 if total == 0.0 else target / total,
+            "retained_prefill_moved_fraction": 0.0 if total == 0.0 else achieved / total,
             "resident_state_tb": state_tb(total_bytes),
-            "retained_state_target_tb": state_tb(target_bytes),
-            "evacuated_state_tb": state_tb(moved_bytes),
+            "average_equivalent_state_target_tb": state_tb(average_equivalent_target_bytes),
+            "actual_evacuated_state_tb": state_tb(moved_bytes),
             "resident_state_nvl72_hbm_fraction": nvl72_hbm_fraction(total_bytes),
-            "target_nvl72_hbm_fraction": nvl72_hbm_fraction(target_bytes),
-            "evacuated_nvl72_hbm_fraction": nvl72_hbm_fraction(moved_bytes),
+            "average_equivalent_state_target_nvl72_hbm_fraction": nvl72_hbm_fraction(
+                average_equivalent_target_bytes
+            ),
+            "actual_evacuated_nvl72_hbm_fraction": nvl72_hbm_fraction(moved_bytes),
         }
     )
 

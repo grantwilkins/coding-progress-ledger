@@ -78,7 +78,7 @@ POLICY_LABELS = {
 
 def plot_queue_centered(
     workload_config: WorkloadConfig = WorkloadConfig(),
-    example_source_working_set_fraction: float = 0.5,
+    example_retained_prefill_fraction: float = 0.5,
     example_deadline_scale: float = 0.5,
 ) -> None:
     out = workload_config.output_dir(ROOT)
@@ -103,7 +103,7 @@ def plot_queue_centered(
     )
     _plot_busy_scatter(rows, out / "network_prefill_busy_scatter.pdf")
 
-    traces = _example_traces(workload_config, example_source_working_set_fraction, example_deadline_scale)
+    traces = _example_traces(workload_config, example_retained_prefill_fraction, example_deadline_scale)
     _plot_delay_cdf(traces, out / "deadline_delay_cdf.pdf")
     _plot_queue_depth(traces, out / "queue_depth_example.pdf")
 
@@ -124,7 +124,7 @@ def _plot_frontier(rows, y_key, threshold, path, ylabel):
             points = _policy_points(
                 rows,
                 policy,
-                "evacuated_state_tb",
+                "actual_evacuated_state_tb",
                 y_key,
                 {"deadline_scale": deadline_scale},
             )
@@ -189,11 +189,11 @@ def _plot_busy_scatter(rows, path):
     plt.close(fig)
 
 
-def _example_traces(workload_config, source_working_set_fraction, deadline_scale):
+def _example_traces(workload_config, retained_prefill_fraction, deadline_scale):
     problem = make_problem(
         get_model("GLM-5"),
         "transition-coupled",
-        source_working_set_fraction=source_working_set_fraction,
+        retained_prefill_fraction=retained_prefill_fraction,
         deadline_scale=deadline_scale,
         **workload_config.problem_kwargs(),
     )

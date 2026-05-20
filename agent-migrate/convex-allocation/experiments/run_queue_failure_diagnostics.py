@@ -34,7 +34,7 @@ from objective import objective
 from problem import make_problem
 from queueing import evaluate_rounded_queue_trace, round_allocation
 
-SOURCE_WORKING_SET_FRACTIONS = (0.20, 0.30, 0.40, 0.50, 0.60, 0.70, 0.80, 0.90)
+RETAINED_PREFILL_FRACTIONS = (0.20, 0.30, 0.40, 0.50, 0.60, 0.70, 0.80, 0.90)
 TIGHT_DEADLINE_SCALES = (0.25, 0.50)
 REPAIR_BUDGET_FRACTIONS = (0.05, 0.10, 0.20)
 DRAIN_WINDOW_S = 1800.0
@@ -55,7 +55,7 @@ POLICIES = (
 )
 QUEUE_COLUMNS = (
     "policy",
-    "source_working_set_fraction",
+    "retained_prefill_fraction",
     "deadline_scale",
     "status",
     "safe",
@@ -80,7 +80,7 @@ QUEUE_COLUMNS = (
 )
 BREAKDOWN_COLUMNS = (
     "policy",
-    "source_working_set_fraction",
+    "retained_prefill_fraction",
     "deadline_scale",
     "status",
     "group_type",
@@ -93,7 +93,7 @@ BREAKDOWN_COLUMNS = (
     "avg_missed_total_delay",
 )
 REPAIR_SUMMARY_COLUMNS = (
-    "source_working_set_fraction",
+    "retained_prefill_fraction",
     "deadline_scale",
     "moved_requests",
     "repair_steps",
@@ -132,7 +132,7 @@ REPAIR_SUMMARY_COLUMNS = (
     "k2_retained_prefill_fraction_delta",
 )
 MOVE_BREAKDOWN_COLUMNS = (
-    "source_working_set_fraction",
+    "retained_prefill_fraction",
     "deadline_scale",
     "move_type",
     "class",
@@ -143,7 +143,7 @@ MOVE_BREAKDOWN_COLUMNS = (
     "move_count",
 )
 BUDGET_COLUMNS = (
-    "source_working_set_fraction",
+    "retained_prefill_fraction",
     "deadline_scale",
     "budget_label",
     "budget_fraction",
@@ -188,11 +188,11 @@ def run_queue_failure_diagnostics(workload_config: WorkloadConfig = WorkloadConf
     model = get_model("GLM-5")
 
     for deadline_scale in TIGHT_DEADLINE_SCALES:
-        for source_working_set_fraction in SOURCE_WORKING_SET_FRACTIONS:
+        for retained_prefill_fraction in RETAINED_PREFILL_FRACTIONS:
             problem = make_problem(
                 model,
                 "transition-coupled",
-                source_working_set_fraction=source_working_set_fraction,
+                retained_prefill_fraction=retained_prefill_fraction,
                 deadline_scale=deadline_scale,
                 **workload_config.problem_kwargs(),
             )
@@ -203,24 +203,24 @@ def run_queue_failure_diagnostics(workload_config: WorkloadConfig = WorkloadConf
             except (RuntimeError, ValueError):
                 queue_rows.append(
                     _empty_queue_row(
-                        "CVXPY-rounded", source_working_set_fraction, deadline_scale, problem.retained_prefill_target_s
+                        "CVXPY-rounded", retained_prefill_fraction, deadline_scale, problem.retained_prefill_target_s
                     )
                 )
                 queue_rows.append(
                     _empty_queue_row(
                         "repaired-CVXPY-rounded",
-                        source_working_set_fraction,
+                        retained_prefill_fraction,
                         deadline_scale,
                         problem.retained_prefill_target_s,
                     )
                 )
             else:
                 queue_rows.append(
-                    _queue_row("CVXPY-rounded", source_working_set_fraction, deadline_scale, "OK", metrics)
+                    _queue_row("CVXPY-rounded", retained_prefill_fraction, deadline_scale, "OK", metrics)
                 )
                 breakdown_rows.extend(
                     _failure_breakdown_rows(
-                        "CVXPY-rounded", problem, source_working_set_fraction, deadline_scale, "OK", trace
+                        "CVXPY-rounded", problem, retained_prefill_fraction, deadline_scale, "OK", trace
                     )
                 )
 
@@ -229,7 +229,7 @@ def run_queue_failure_diagnostics(workload_config: WorkloadConfig = WorkloadConf
                 except (RuntimeError, ValueError):
                     repaired = _empty_queue_row(
                         "repaired-CVXPY-rounded",
-                        source_working_set_fraction,
+                        retained_prefill_fraction,
                         deadline_scale,
                         problem.retained_prefill_target_s,
                     )
@@ -239,7 +239,7 @@ def run_queue_failure_diagnostics(workload_config: WorkloadConfig = WorkloadConf
                     queue_rows.append(
                         _queue_row(
                             "repaired-CVXPY-rounded",
-                            source_working_set_fraction,
+                            retained_prefill_fraction,
                             deadline_scale,
                             "OK",
                             repair.metrics,
@@ -250,33 +250,33 @@ def run_queue_failure_diagnostics(workload_config: WorkloadConfig = WorkloadConf
                         _failure_breakdown_rows(
                             "repaired-CVXPY-rounded",
                             problem,
-                            source_working_set_fraction,
+                            retained_prefill_fraction,
                             deadline_scale,
                             "OK",
                             repair.trace,
                         )
                     )
-                    summary_rows.append(_summary_row(source_working_set_fraction, deadline_scale, metrics, repair))
+                    summary_rows.append(_summary_row(retained_prefill_fraction, deadline_scale, metrics, repair))
                     repair_summary_rows.append(
                         _repair_summary_row(
-                            problem, rounded.y, metrics, repair, source_working_set_fraction, deadline_scale
+                            problem, rounded.y, metrics, repair, retained_prefill_fraction, deadline_scale
                         )
                     )
                     move_breakdown_rows.extend(
-                        _repair_move_breakdown_rows(source_working_set_fraction, deadline_scale, repair.moves)
+                        _repair_move_breakdown_rows(retained_prefill_fraction, deadline_scale, repair.moves)
                     )
                     budget_rows.extend(
                         _repair_budget_rows(
-                            problem, rounded.y, metrics, repair, source_working_set_fraction, deadline_scale
+                            problem, rounded.y, metrics, repair, retained_prefill_fraction, deadline_scale
                         )
                     )
 
             for policy, solver in POLICIES:
-                row, trace = _solver_queue(policy, solver, problem, source_working_set_fraction, deadline_scale)
+                row, trace = _solver_queue(policy, solver, problem, retained_prefill_fraction, deadline_scale)
                 queue_rows.append(row)
                 breakdown_rows.extend(
                     _failure_breakdown_rows(
-                        policy, problem, source_working_set_fraction, deadline_scale, row["status"], trace
+                        policy, problem, retained_prefill_fraction, deadline_scale, row["status"], trace
                     )
                 )
 
@@ -337,8 +337,8 @@ def repair_rounded_allocation(problem, y, max_steps=1000, max_changes=None, drai
     raise RuntimeError("rounded local repair did not converge")
 
 
-def _solver_queue(policy, solver, problem, source_working_set_fraction, deadline_scale):
-    base = _empty_queue_row(policy, source_working_set_fraction, deadline_scale, problem.retained_prefill_target_s)
+def _solver_queue(policy, solver, problem, retained_prefill_fraction, deadline_scale):
+    base = _empty_queue_row(policy, retained_prefill_fraction, deadline_scale, problem.retained_prefill_target_s)
     try:
         result = solver(problem)
     except RuntimeError:
@@ -354,7 +354,7 @@ def _solver_queue(policy, solver, problem, source_working_set_fraction, deadline
     except ValueError:
         base["status"] = "ROUNDING_FAILED"
         return base, ()
-    return _queue_row(policy, source_working_set_fraction, deadline_scale, "OK", metrics), trace
+    return _queue_row(policy, retained_prefill_fraction, deadline_scale, "OK", metrics), trace
 
 
 def _queue_key(metrics):
@@ -381,7 +381,7 @@ def _repair_move(coeffs, g, source, target):
     )
 
 
-def _repair_summary_row(problem, original_y, original_metrics, repair, source_working_set_fraction, deadline_scale):
+def _repair_summary_row(problem, original_y, original_metrics, repair, retained_prefill_fraction, deadline_scale):
     coeffs = compute_coefficients(problem)
     original_obj = objective(problem, coeffs, original_y)
     repaired_obj = objective(problem, coeffs, repair.y)
@@ -392,7 +392,7 @@ def _repair_summary_row(problem, original_y, original_metrics, repair, source_wo
     original_dest = retained_prefill_destination_mix(problem, original_y)
     repaired_dest = retained_prefill_destination_mix(problem, repair.y)
     row = {
-        "source_working_set_fraction": source_working_set_fraction,
+        "retained_prefill_fraction": retained_prefill_fraction,
         "deadline_scale": deadline_scale,
         "moved_requests": moved_requests,
         "repair_steps": len(repair.moves),
@@ -437,12 +437,12 @@ def _repair_summary_row(problem, original_y, original_metrics, repair, source_wo
     return row
 
 
-def _repair_move_breakdown_rows(source_working_set_fraction, deadline_scale, moves):
+def _repair_move_breakdown_rows(retained_prefill_fraction, deadline_scale, moves):
     rows = []
     for key, count in Counter(moves).items():
         rows.append(
             {
-                "source_working_set_fraction": source_working_set_fraction,
+                "retained_prefill_fraction": retained_prefill_fraction,
                 "deadline_scale": deadline_scale,
                 "move_type": _move_type(key),
                 "class": key.g,
@@ -457,7 +457,7 @@ def _repair_move_breakdown_rows(source_working_set_fraction, deadline_scale, mov
         rows,
         key=lambda row: (
             row["deadline_scale"],
-            row["source_working_set_fraction"],
+            row["retained_prefill_fraction"],
             row["class"],
             row["source_destination"],
             row["source_action"],
@@ -468,7 +468,7 @@ def _repair_move_breakdown_rows(source_working_set_fraction, deadline_scale, mov
 
 
 def _repair_budget_rows(
-    problem, original_y, original_metrics, full_repair, source_working_set_fraction, deadline_scale
+    problem, original_y, original_metrics, full_repair, retained_prefill_fraction, deadline_scale
 ):
     moved = _moved_requests(original_y)
     rows = [
@@ -478,7 +478,7 @@ def _repair_budget_rows(
             original_y,
             original_metrics,
             (),
-            source_working_set_fraction,
+            retained_prefill_fraction,
             deadline_scale,
             "0%",
             0.0,
@@ -495,7 +495,7 @@ def _repair_budget_rows(
                 repair.y,
                 repair.metrics,
                 repair.moves,
-                source_working_set_fraction,
+                retained_prefill_fraction,
                 deadline_scale,
                 f"{budget_fraction:.0%}",
                 budget_fraction,
@@ -509,7 +509,7 @@ def _repair_budget_rows(
             full_repair.y,
             full_repair.metrics,
             full_repair.moves,
-            source_working_set_fraction,
+            retained_prefill_fraction,
             deadline_scale,
             "unbounded",
             math.nan,
@@ -525,7 +525,7 @@ def _budget_row(
     y,
     metrics,
     moves,
-    source_working_set_fraction,
+    retained_prefill_fraction,
     deadline_scale,
     budget_label,
     budget_fraction,
@@ -536,7 +536,7 @@ def _budget_row(
     moved = _moved_requests(original_y)
     net_changed = _net_changed_requests(original_y, y)
     return {
-        "source_working_set_fraction": source_working_set_fraction,
+        "retained_prefill_fraction": retained_prefill_fraction,
         "deadline_scale": deadline_scale,
         "budget_label": budget_label,
         "budget_fraction": budget_fraction,
@@ -575,10 +575,10 @@ def _move_type(move):
     raise ValueError("repair move did not change destination or action")
 
 
-def _queue_row(policy, source_working_set_fraction, deadline_scale, status, metrics, moves=()):
+def _queue_row(policy, retained_prefill_fraction, deadline_scale, status, metrics, moves=()):
     return {
         "policy": policy,
-        "source_working_set_fraction": source_working_set_fraction,
+        "retained_prefill_fraction": retained_prefill_fraction,
         "deadline_scale": deadline_scale,
         "status": status,
         "safe": _safe(metrics),
@@ -603,10 +603,10 @@ def _queue_row(policy, source_working_set_fraction, deadline_scale, status, metr
     }
 
 
-def _empty_queue_row(policy, source_working_set_fraction, deadline_scale, retained_prefill_target_s):
+def _empty_queue_row(policy, retained_prefill_fraction, deadline_scale, retained_prefill_target_s):
     return {
         "policy": policy,
-        "source_working_set_fraction": source_working_set_fraction,
+        "retained_prefill_fraction": retained_prefill_fraction,
         "deadline_scale": deadline_scale,
         "status": "INFEASIBLE",
         "safe": False,
@@ -658,12 +658,12 @@ def _move_summary(moves):
     )
 
 
-def _failure_breakdown_rows(policy, problem, source_working_set_fraction, deadline_scale, status, trace):
+def _failure_breakdown_rows(policy, problem, retained_prefill_fraction, deadline_scale, status, trace):
     if not trace:
         return [
             {
                 "policy": policy,
-                "source_working_set_fraction": source_working_set_fraction,
+                "retained_prefill_fraction": retained_prefill_fraction,
                 "deadline_scale": deadline_scale,
                 "status": status,
                 "group_type": "all",
@@ -693,7 +693,7 @@ def _failure_breakdown_rows(policy, problem, source_working_set_fraction, deadli
             rows.append(
                 _breakdown_row(
                     policy,
-                    source_working_set_fraction,
+                    retained_prefill_fraction,
                     deadline_scale,
                     status,
                     group_type,
@@ -704,11 +704,11 @@ def _failure_breakdown_rows(policy, problem, source_working_set_fraction, deadli
     return rows
 
 
-def _breakdown_row(policy, source_working_set_fraction, deadline_scale, status, group_type, group, records):
+def _breakdown_row(policy, retained_prefill_fraction, deadline_scale, status, group_type, group, records):
     missed = tuple(record for record in records if record.deadline_missed)
     return {
         "policy": policy,
-        "source_working_set_fraction": source_working_set_fraction,
+        "retained_prefill_fraction": retained_prefill_fraction,
         "deadline_scale": deadline_scale,
         "status": status,
         "group_type": group_type,
@@ -727,9 +727,9 @@ def _mean(values):
     return 0.0 if not values else float(np.mean(values))
 
 
-def _summary_row(source_working_set_fraction, deadline_scale, original, repair):
+def _summary_row(retained_prefill_fraction, deadline_scale, original, repair):
     return {
-        "source_working_set_fraction": source_working_set_fraction,
+        "retained_prefill_fraction": retained_prefill_fraction,
         "deadline_scale": deadline_scale,
         "original_miss_rate": original["deadline_miss_rate"],
         "repaired_miss_rate": repair.metrics["deadline_miss_rate"],
@@ -750,7 +750,7 @@ def _print_repair_summary(rows):
         return
     cols = (
         "deadline_scale",
-        "source_working_set_fraction",
+        "retained_prefill_fraction",
         "original_miss_rate",
         "repaired_miss_rate",
         "original_p95_delay",
@@ -768,12 +768,12 @@ def _print_repair_summary(rows):
 def _print_half_deadline_latex(rows):
     print("\n0.5x deadline miss-rate repair table (LaTeX)")
     print("\\begin{tabular}{rrrr}")
-    print("source working-set fraction & original miss & repaired miss & repair moves \\\\")
+    print("retained-prefill fraction & original miss & repaired miss & repair moves \\\\")
     print("\\hline")
     for row in rows:
         if row["deadline_scale"] == 0.50:
             print(
-                f"{row['source_working_set_fraction']:.2f} & "
+                f"{row['retained_prefill_fraction']:.2f} & "
                 f"{row['original_miss_rate']:.4f} & "
                 f"{row['repaired_miss_rate']:.4f} & "
                 f"{row['repair_moves']} \\\\"
