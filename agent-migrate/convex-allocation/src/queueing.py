@@ -169,6 +169,8 @@ def _evaluate_static_queue(
             "p99_reconstruction_delay": 0.0,
             "p95_normalized_reconstruction_delay": 0.0,
             "deadline_miss_rate": 0.0,
+            "absolute_p95_delay_over_deadline": 0.0,
+            "absolute_deadline_miss_rate": 0.0,
             "network_capacity_pressure": 0.0,
             "prefill_capacity_pressure": 0.0,
             "drain_completion_s": 0.0,
@@ -213,6 +215,7 @@ def _evaluate_static_queue(
     delay = np.asarray(complete, dtype=float) - release
     deadline_s = np.asarray([r.deadline_s for r in records], dtype=float)
     p95_ratio = float(np.percentile(delay / deadline_s, 95))
+    absolute_ratio = complete / deadline_s
     miss_rate = float(np.mean(delay > deadline_s))
     metrics = {
         "mean_reconstruction_delay": float(np.mean(delay)),
@@ -222,6 +225,8 @@ def _evaluate_static_queue(
         "p95_normalized_reconstruction_delay": p95_ratio,
         "p95_reconstruction_delay_ratio": p95_ratio,
         "deadline_miss_rate": miss_rate,
+        "absolute_p95_delay_over_deadline": float(np.percentile(absolute_ratio, 95)),
+        "absolute_deadline_miss_rate": float(np.mean(complete > deadline_s)),
         "network_capacity_pressure": float(np.max(net_busy) / H),
         "prefill_capacity_pressure": float(np.max(prefill_busy) / H),
         "drain_completion_s": float(np.max(complete)),
@@ -287,6 +292,7 @@ def _evaluate_counted_queue(
             time = float(done[-1])
 
     delay = np.concatenate([complete[i] - release[i] for i in range(len(records))])
+    event_complete = np.concatenate([complete[i] for i in range(len(records))])
     deadline_s = np.concatenate([np.full(record.count, record.deadline_s) for record in records])
     replay_work = sum(problem.tau[record.g] * record.count for record in records if record.action == ACTIONS[REPLAY])
     state_work = sum(problem.tau[record.g] * record.count for record in records if record.action != ACTIONS[REPLAY])
@@ -300,6 +306,8 @@ def _evaluate_counted_queue(
         "p95_normalized_reconstruction_delay": p95_ratio,
         "p95_reconstruction_delay_ratio": p95_ratio,
         "deadline_miss_rate": float(np.mean(delay > deadline_s)),
+        "absolute_p95_delay_over_deadline": float(np.percentile(event_complete / deadline_s, 95)),
+        "absolute_deadline_miss_rate": float(np.mean(event_complete > deadline_s)),
         "network_capacity_pressure": float(np.max(net_busy) / H),
         "prefill_capacity_pressure": float(np.max(prefill_busy) / H),
         "drain_completion_s": float(max(np.max(done) for done in complete if done is not None)),
@@ -316,6 +324,8 @@ def _empty_queue_metrics() -> dict[str, float]:
         "p99_reconstruction_delay": 0.0,
         "p95_normalized_reconstruction_delay": 0.0,
         "deadline_miss_rate": 0.0,
+        "absolute_p95_delay_over_deadline": 0.0,
+        "absolute_deadline_miss_rate": 0.0,
         "network_capacity_pressure": 0.0,
         "prefill_capacity_pressure": 0.0,
         "drain_completion_s": 0.0,

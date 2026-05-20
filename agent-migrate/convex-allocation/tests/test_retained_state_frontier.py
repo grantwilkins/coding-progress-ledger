@@ -1,18 +1,16 @@
 """
 Claim:
-The retained-state frontier reports the largest rounded queue-safe
-retained-prefill fraction for each policy and deadline scale, using the requested
-miss-rate and release-relative delay-over-deadline safety definition, and
-carries state-TB plus replay/state-transfer retained-prefill shares at the 30m
-drain frontier.
+The retained-state drain frontier reports the largest rounded queue-safe
+retained-prefill fraction for each policy and drain window, using absolute
+event-start deadlines while tying solver capacity and queue drain horizons to
+the same x-value.
 
 Plausible wrong implementations:
-- Treat raw p95 delay as delay divided by deadline.
-- Ignore rounded retained-prefill shortfall when marking a row safe.
-- Report the first safe retained-prefill fraction instead of the largest safe fraction.
-- Mix zero-window burst rows into the 30m drain frontier.
-- Classify rounded retained-prefill shortfall as a resource bottleneck instead of rounding.
-- Drop the action-mix diagnostics from the frontier row.
+- Reuse release-relative queue safety and silently ignore drain pacing time.
+- Vary drain_window_s in queue simulation but leave make_problem(window_s) fixed.
+- Trust binary search monotonicity despite rounded nonmonotone safety.
+- Drop the least-loaded ordinary-routing baseline from the north-star plot.
+- Keep writing the old deadline-scale frontier CSV names.
 """
 
 from __future__ import annotations
@@ -26,173 +24,165 @@ from experiments.run_retained_state_frontier import (
     DRAIN_WINDOWS_S,
     FRONTIER_POLICIES,
     MAIN_POLICY,
-    ORACLE_POLICY,
-    PLOT_DRAIN_WINDOW_S,
     _failure_mode,
-    _frontier_rows,
+    _frontier_job,
     _is_safe,
 )
-from catalog import ModelParams
 from evaluation import WorkloadConfig
-from problem import ProblemData
-from problem import WORKLOAD_DEADLINE_S, make_problem
-from catalog import get_model
 
 
-def test_safe_definition_uses_target_miss_and_normalized_p95_boundaries():
+def test_drain_windows_are_positive_log_plot_points():
+    assert DRAIN_WINDOWS_S == (10.0, 20.0, 40.0, 80.0, 160.0, 300.0, 600.0, 1200.0, 2400.0, 3600.0)
+    assert all(window > 0.0 for window in DRAIN_WINDOWS_S)
+
+
+def test_frontier_policy_set_includes_least_loaded_baseline():
+    assert MAIN_POLICY == "deadline-penalty-rounded"
+    assert FRONTIER_POLICIES == (
+        "deadline-penalty-rounded",
+        "online-queue-greedy",
+        "least-loaded-destination",
+        "replay-only",
+        "state-only",
+    )
+
+
+def test_safe_definition_uses_absolute_deadline_metrics_not_release_relative_metrics():
     metrics = {
         "retained_prefill_moved_s": 10.0,
         "retained_prefill_target_s": 10.0,
-        "deadline_miss_rate": 0.01,
-        "p95_reconstruction_delay_ratio": 1.0,
+        "deadline_miss_rate": 0.0,
+        "p95_reconstruction_delay_ratio": 0.2,
+        "absolute_deadline_miss_rate": 0.01,
+        "absolute_p95_delay_over_deadline": 1.0,
     }
 
     assert _is_safe(metrics)
-
+    assert not _is_safe({**metrics, "absolute_deadline_miss_rate": 0.011})
+    assert not _is_safe({**metrics, "absolute_p95_delay_over_deadline": 1.001})
     assert not _is_safe({**metrics, "retained_prefill_moved_s": 9.99})
-    assert not _is_safe({**metrics, "deadline_miss_rate": 0.011})
-    assert not _is_safe({**metrics, "p95_reconstruction_delay_ratio": 1.001})
 
 
-def test_frontier_uses_largest_safe_retained_prefill_fraction_and_marks_none_safe():
-    rows = [
-        _row("policy-a", 1.0, 0.2, True),
-        _row("policy-a", 1.0, 0.3, False),
-        _row("policy-a", 1.0, 0.4, True),
-        _row("policy-a", 1.0, 0.7, True, drain_window_s=0.0),
-        _row("policy-b", 1.0, 0.2, False),
-    ]
-
-    frontier = _frontier_rows(rows, policies=("policy-a", "policy-b"), deadline_scales=(1.0,))
-
-    assert frontier[0]["max_safe_retained_prefill_fraction"] == 0.4
-    assert frontier[0]["p95_delay_at_frontier"] == 4.0
-    assert frontier[0]["drain_window_s"] == 1800.0
-    assert frontier[0]["average_equivalent_state_target_tb_at_frontier"] == 3.0
-    assert frontier[0]["actual_evacuated_state_tb_at_frontier"] == 4.0
-    assert frontier[0]["actual_evacuated_nvl72_hbm_fraction_at_frontier"] == 4.0 / 13.4
-    assert frontier[0]["replay_retained_prefill_fraction_at_frontier"] == 0.25
-    assert frontier[0]["state_transfer_retained_prefill_fraction_at_frontier"] == 0.75
-    assert frontier[1]["max_safe_retained_prefill_fraction"] == "UNSAFE"
-
-
-def test_failure_mode_separates_rounding_deadline_and_resource_bottlenecks():
+def test_failure_mode_uses_explicit_frontier_failure_names():
     row = {
         "retained_prefill_moved_s": 9.0,
         "retained_prefill_target_s": 10.0,
-        "deadline_miss_rate": 0.0,
-        "p95_delay_over_deadline": 0.5,
+        "absolute_deadline_miss_rate": 0.0,
+        "absolute_p95_delay_over_deadline": 0.5,
         "network_capacity_pressure": 0.1,
         "prefill_capacity_pressure": 0.1,
     }
-    assert _failure_mode(row) == "rounding artifact"
 
-    assert _failure_mode({**row, "retained_prefill_moved_s": 10.0, "deadline_miss_rate": 0.02}) == "deadline misses"
-    assert (
-        _failure_mode(
-            {
-                **row,
-                "retained_prefill_moved_s": 10.0,
-                "p95_delay_over_deadline": 1.1,
-                "network_capacity_pressure": 1.2,
-            }
-        )
-        == "network bottleneck"
-    )
+    assert _failure_mode(row) == "target_not_met"
+    assert _failure_mode({**row, "retained_prefill_moved_s": 10.0, "absolute_deadline_miss_rate": 0.02}) == "deadline_miss"
+    assert _failure_mode({**row, "retained_prefill_moved_s": 10.0, "absolute_p95_delay_over_deadline": 1.1}) == "p95_delay"
 
 
-def test_make_problem_scales_deadline_without_changing_workload():
-    problem = make_problem(
-        get_model("GLM-5"),
-        "transition-coupled",
-        deadline_scale=0.5,
-        workload_source="fixed",
-    )
+def test_binary_search_validates_local_nonmonotone_safety(monkeypatch):
+    def policy_row(base, policy, solver, fraction, drain_window_s):
+        return _row(policy, drain_window_s, fraction, safe=fraction <= 0.47 or fraction == 0.49)
 
-    assert (problem.deadline_s == 0.5 * WORKLOAD_DEADLINE_S).all()
-    assert (
-        problem.T
-        == make_problem(get_model("GLM-5"), "transition-coupled", workload_source="fixed").T
-    ).all()
+    monkeypatch.setattr(retained, "_policy_row", policy_row)
+
+    rows, frontier = _frontier_job(("policy", object(), 10.0, object()))
+
+    assert frontier["max_safe_retained_prefill_fraction"] == 0.49
+    assert frontier["first_unsafe_retained_prefill_fraction"] == 0.5
+    assert {row["retained_prefill_fraction"] for row in rows} >= {0.47, 0.48, 0.49, 0.5}
 
 
-def test_frontier_uses_realistic_grid_drain_windows_with_burst_reference():
-    assert DRAIN_WINDOWS_S == (0.0, 900.0, 1800.0, 3600.0)
-    assert PLOT_DRAIN_WINDOW_S == 1800.0
-
-
-def test_frontier_leads_with_deadline_penalty_and_keeps_cvxpy_as_oracle():
-    assert MAIN_POLICY == "deadline-penalty-rounded"
-    assert ORACLE_POLICY == "CVXPY-rounded"
-    assert FRONTIER_POLICIES[:2] == (MAIN_POLICY, ORACLE_POLICY)
-
-
-def test_retained_state_frontier_reuses_one_base_problem_per_deadline_scale(monkeypatch, tmp_path):
+def test_run_pairs_problem_window_with_queue_drain_and_writes_drain_outputs(monkeypatch, tmp_path):
     built = []
     captured = {}
 
     def make_base(model, regime, **kwargs):
-        built.append((kwargs["deadline_scale"], kwargs["retained_prefill_fraction"]))
-        return _tiny_problem(kwargs["retained_prefill_fraction"])
+        built.append((kwargs["window_s"], kwargs["retained_prefill_fraction"]))
+        return SimpleNamespace(window_s=kwargs["window_s"])
 
     def run_jobs(label, jobs, fn):
-        assert label == "retained-state frontier"
-        assert len({id(problem.T) for _, _, problem in jobs}) == len(retained.DEADLINE_SCALES)
-        return [[_row("policy", deadline_scale, fraction, False)] for fraction, deadline_scale, _ in jobs]
+        assert label == "retained-state drain frontier"
+        assert [(job[2], job[3].window_s) for job in jobs] == [(10.0, 10.0), (20.0, 20.0)]
+        return [
+            (
+                [_row(policy, drain_window_s, 0.5, safe=True)],
+                _frontier(policy, drain_window_s, 0.5),
+            )
+            for policy, _, drain_window_s, _ in jobs
+        ]
 
     monkeypatch.setattr(retained, "ROOT", tmp_path)
-    monkeypatch.setattr(retained, "POLICIES", (("policy", lambda problem: SimpleNamespace(y=np.zeros((1, 3)))),))
-    monkeypatch.setattr(retained, "FRONTIER_POLICIES", ("policy",))
-    monkeypatch.setattr(retained, "DEADLINE_SCALES", (0.25, 0.5))
-    monkeypatch.setattr(retained, "RETAINED_PREFILL_FRACTIONS", (0.2, 0.4))
+    monkeypatch.setattr(retained, "DRAIN_WINDOWS_S", (10.0, 20.0))
+    monkeypatch.setattr(retained, "POLICIES", (("policy", lambda problem: None),))
     monkeypatch.setattr(retained, "make_problem", make_base)
     monkeypatch.setattr(retained, "_run_jobs", run_jobs)
     monkeypatch.setattr(retained, "_write_rows", lambda path, rows, columns: captured.setdefault(path.name, rows))
     monkeypatch.setattr(retained, "_print_latex_frontier", lambda rows: None)
-    monkeypatch.setattr(retained, "_print_diagnostics", lambda frontier, rows: None)
+    monkeypatch.setattr(retained, "_print_diagnostics", lambda rows: None)
 
-    rows, _ = retained.run_retained_state_frontier(WorkloadConfig(source="fixed"))
+    rows, frontier = retained.run_retained_state_frontier(WorkloadConfig(source="fixed"))
 
-    assert built == [(0.25, 1.0), (0.5, 1.0)]
-    assert [row["retained_prefill_fraction"] for row in rows] == [0.2, 0.4, 0.2, 0.4]
-    assert "retained_state_deadline_sweep.csv" in captured
+    assert built == [(10.0, 1.0), (20.0, 1.0)]
+    assert [row["drain_window_s"] for row in rows] == [10.0, 20.0]
+    assert [row["drain_window_s"] for row in frontier] == [10.0, 20.0]
+    assert set(captured) == {"retained_state_drain_sweep.csv", "retained_state_drain_frontier.csv"}
 
 
-def _row(policy, deadline_scale, retained_prefill_fraction, safe, drain_window_s=1800.0):
+def _row(policy, drain_window_s, retained_prefill_fraction, safe):
     return {
         "policy": policy,
-        "deadline_scale": deadline_scale,
         "drain_window_s": drain_window_s,
+        "deadline_scale": 1.0,
         "retained_prefill_fraction": retained_prefill_fraction,
+        "status": "SAFE" if safe else "UNSAFE",
         "safe": safe,
-        "p95_delay_s": retained_prefill_fraction * 10.0,
-        "p95_delay_over_deadline": 0.9,
+        "failure_mode": "" if safe else "p95_delay",
+        "retained_prefill_target_s": 10.0,
+        "retained_prefill_moved_s": 10.0,
+        "resident_state_tb": 1.0,
+        "average_equivalent_state_target_tb": 2.0,
+        "actual_evacuated_state_tb": 3.0,
+        "retained_prefill_moved_fraction": retained_prefill_fraction,
+        "actual_evacuated_nvl72_hbm_fraction": 3.0 / 13.4,
+        "retained_prefill_removal_rate_s_per_s": 10.0 / drain_window_s,
+        "request_migration_fraction": 0.2,
+        "mean_delay_s": 1.0,
+        "p50_delay_s": 1.0,
+        "p95_delay_s": 2.0,
+        "p99_delay_s": 2.0,
+        "p95_delay_over_deadline": 0.2,
         "deadline_miss_rate": 0.0,
+        "absolute_p95_delay_over_deadline": 0.9 if safe else 1.1,
+        "absolute_deadline_miss_rate": 0.0,
         "network_capacity_pressure": 0.2,
         "prefill_capacity_pressure": 0.3,
-        "average_equivalent_state_target_tb": 3.0,
-        "actual_evacuated_state_tb": 4.0,
-        "actual_evacuated_nvl72_hbm_fraction": 4.0 / 13.4,
         "replay_retained_prefill_fraction": 0.25,
         "state_transfer_retained_prefill_fraction": 0.75,
-        "drain_completion_s": 61.0,
+        "fractional_network_capacity_pressure": 0.2,
+        "fractional_prefill_capacity_pressure": 0.3,
+        "drain_completion_s": drain_window_s,
+        "objective": 1.0,
     }
 
 
-def _tiny_problem(retained_prefill_fraction):
-    return ProblemData(
-        model=ModelParams("tiny", 1.0, 10.0, 1.0, 0.0),
-        regime="transition-coupled",
-        T=np.array([1.0]),
-        d=np.array([1.0]),
-        deadline_s=np.array([1.0]),
-        lambda_Bps=np.ones(1),
-        rho_prefill=np.ones(1),
-        C_net=np.ones(1),
-        C_prefill=np.ones(1),
-        ell_net=np.zeros(1),
-        ell_prefill=np.zeros(1),
-        h_ctx=np.zeros((1, 1)),
-        h_kv=np.zeros((1, 1)),
-        retained_prefill_target_s=retained_prefill_fraction / 10.0,
-    )
+def _frontier(policy, drain_window_s, fraction):
+    return {
+        "policy": policy,
+        "drain_window_s": drain_window_s,
+        "deadline_scale": 1.0,
+        "max_safe_retained_prefill_fraction": fraction,
+        "frontier_censored_by_search": False,
+        "first_unsafe_retained_prefill_fraction": fraction + 0.01,
+        "first_unsafe_failure_mode": "p95_delay",
+        "absolute_p95_delay_over_deadline_at_frontier": 0.9,
+        "absolute_deadline_miss_rate_at_frontier": 0.0,
+        "p95_delay_over_deadline_at_frontier": 0.2,
+        "deadline_miss_rate_at_frontier": 0.0,
+        "network_capacity_pressure_at_frontier": 0.2,
+        "prefill_capacity_pressure_at_frontier": 0.3,
+        "average_equivalent_state_target_tb_at_frontier": 2.0,
+        "actual_evacuated_state_tb_at_frontier": 3.0,
+        "actual_evacuated_nvl72_hbm_fraction_at_frontier": 3.0 / 13.4,
+        "replay_retained_prefill_fraction_at_frontier": 0.25,
+        "state_transfer_retained_prefill_fraction_at_frontier": 0.75,
+        "drain_completion_s_at_frontier": drain_window_s,
+    }

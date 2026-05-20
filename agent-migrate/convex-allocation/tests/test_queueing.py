@@ -12,6 +12,7 @@ Plausible wrong implementations:
 - Treat replay requests as complete after network transfer instead of prefill.
 - Schedule by arrival or input order instead of earliest class deadline.
 - Count drain wait as reconstruction delay after choosing release-relative deadlines.
+- Reuse release-relative completion when reporting absolute deadline metrics.
 - Drop the burst-at-zero baseline when drain_window_s is explicitly zero.
 - Re-round an already-integer online baseline allocation and erase its chosen requests.
 - Keep metric-only rounded queue evaluation dependent on per-request records.
@@ -188,6 +189,21 @@ def test_queue_drains_requests_by_edf_release_order():
     assert not state.deadline_missed
 
 
+def test_absolute_deadline_metrics_count_late_release_time():
+    problem = queue_problem([1, 1], [1, 1], [10.0, 10.0], 0.0)
+    records = (
+        RequestRecord(0, 0, "state", 1.0, 10.0, 10.0, 0.0),
+        RequestRecord(1, 0, "state", 1.0, 10.0, 10.0, 0.0),
+    )
+
+    metrics = evaluate_static_queue(problem, records, drain_window_s=60.0)
+
+    assert metrics["deadline_miss_rate"] == 0.0
+    assert_allclose(metrics["p95_reconstruction_delay_ratio"], 0.1)
+    assert metrics["absolute_deadline_miss_rate"] == 0.5
+    assert metrics["absolute_p95_delay_over_deadline"] > 1.0
+
+
 def test_counted_rounded_metrics_match_expanded_trace_metrics():
     problem = queue_problem([1, 1, 2], [3, 2, 4], [4.0, 8.0, 6.0], 0.0)
     y = np.array(
@@ -209,6 +225,8 @@ def test_counted_rounded_metrics_match_expanded_trace_metrics():
         "p99_reconstruction_delay",
         "p95_normalized_reconstruction_delay",
         "deadline_miss_rate",
+        "absolute_p95_delay_over_deadline",
+        "absolute_deadline_miss_rate",
         "network_capacity_pressure",
         "prefill_capacity_pressure",
         "drain_completion_s",

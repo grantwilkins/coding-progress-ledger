@@ -2,12 +2,13 @@
 Claim:
 The report figure script emits exactly one simple artifact per hypothesis plus a
 compact integer benchmark table. The H1/H2 plots use queue safety from deadline
-miss rate and normalized p95 delay, the H2 CDF is request-level, and the H4
-heatmap exposes per-class state locality rather than only destination load.
+miss rate and normalized p95 delay, with H2 preferring absolute deadline fields
+when present. The H2 CDF is request-level, and the H4 heatmap exposes per-class
+state locality rather than only destination load.
 
 Plausible wrong implementations:
 - Reintroduce crowded diagnostic plots instead of the five report figures.
-- Mark a frontier point safe from one metric while ignoring the other.
+- Mark a frontier point safe from release-relative metrics in the drain frontier.
 - Average class delays before building the CDF.
 - Keep unrelated integer policies in the compact summary table.
 - Drop context/KV locality from the manifest heatmap labels.
@@ -51,13 +52,12 @@ def test_report_outputs_are_one_plot_per_hypothesis_plus_summary_table():
 def test_report_policies_are_small_enough_to_read_without_overplotting():
     assert REPORT_POLICIES == (
         "deadline-penalty-rounded",
-        "CVXPY-rounded",
         "online-queue-greedy",
-        "crossover-greedy",
+        "least-loaded-destination",
         "replay-only",
         "state-only",
     )
-    assert len(REPORT_POLICIES) == 6
+    assert len(REPORT_POLICIES) == 5
 
 
 def test_safe_series_requires_deadline_miss_and_normalized_delay_bounds():
@@ -71,23 +71,36 @@ def test_safe_series_requires_deadline_miss_and_normalized_delay_bounds():
     assert _safe_series(df).tolist() == [True, False, False]
 
 
+def test_safe_series_prefers_absolute_deadline_fields_when_present():
+    df = pd.DataFrame(
+        {
+            "deadline_miss_rate": [0.0],
+            "p95_delay_over_deadline": [0.1],
+            "absolute_deadline_miss_rate": [0.5],
+            "absolute_p95_delay_over_deadline": [3.0],
+        }
+    )
+
+    assert _safe_series(df).tolist() == [False]
+
+
 def test_safe_frontier_uses_largest_safe_fraction_by_drain_window():
     rows = [
-        _sweep_row("CVXPY-rounded", 900.0, 0.2, 0.0, 0.8),
-        _sweep_row("CVXPY-rounded", 900.0, 0.4, 0.0, 0.9),
-        _sweep_row("CVXPY-rounded", 900.0, 0.6, 0.2, 0.9),
-        _sweep_row("CVXPY-rounded", 1800.0, 0.6, 0.0, 0.9),
+        _sweep_row("deadline-penalty-rounded", 900.0, 0.2, 0.0, 0.8),
+        _sweep_row("deadline-penalty-rounded", 900.0, 0.4, 0.0, 0.9),
+        _sweep_row("deadline-penalty-rounded", 900.0, 0.6, 0.2, 0.9),
+        _sweep_row("deadline-penalty-rounded", 1800.0, 0.6, 0.0, 0.9),
         _sweep_row("replay-only", 900.0, 0.2, 0.0, 1.2),
     ]
 
-    frontier = _safe_frontier(rows, deadline_scale=0.5)
+    frontier = _safe_frontier(rows)
     by_policy_window = {
         (row.policy, row.drain_window_s): row.max_safe_retained_prefill_fraction
         for row in frontier.itertuples()
     }
 
-    assert by_policy_window[("CVXPY-rounded", 900.0)] == 0.4
-    assert by_policy_window[("CVXPY-rounded", 1800.0)] == 0.6
+    assert by_policy_window[("deadline-penalty-rounded", 900.0)] == 0.4
+    assert by_policy_window[("deadline-penalty-rounded", 1800.0)] == 0.6
     assert ("replay-only", 900.0) not in by_policy_window
 
 
@@ -161,6 +174,8 @@ def _sweep_row(policy, drain_window_s, retained_prefill_fraction, miss_rate, del
         "prefill_capacity_pressure": "0.5",
         "deadline_miss_rate": str(miss_rate),
         "p95_delay_over_deadline": str(delay_ratio),
+        "absolute_deadline_miss_rate": str(miss_rate),
+        "absolute_p95_delay_over_deadline": str(delay_ratio),
     }
 
 

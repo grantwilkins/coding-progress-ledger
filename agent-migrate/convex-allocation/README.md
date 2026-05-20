@@ -43,7 +43,7 @@ Run the fixed six-class smoke sweep:
 uv run python experiments/run_catalog_sweep.py --workload-source fixed
 ```
 
-Run the retained-state frontier sweep:
+Run the retained-state drain frontier sweep:
 
 ```bash
 uv run python experiments/run_retained_state_frontier.py
@@ -55,7 +55,7 @@ Diagnose tight-deadline queue failures and rounded local repair:
 uv run python experiments/run_queue_failure_diagnostics.py
 ```
 
-Plot queue-centered results after the retained-state frontier CSV exists:
+Plot queue-centered results after the retained-state drain CSV exists:
 
 ```bash
 uv run python experiments/plot_queue_centered.py --workload-source fixed
@@ -96,6 +96,8 @@ labeled subdirectory such as
 - `h2_delay_cdf.pdf`
 - `h3_action_mix_by_model.pdf`
 - `h4_state_manifest_heatmap.pdf`
+- `retained_state_drain_sweep.csv`
+- `retained_state_drain_frontier.csv`
 - `network_bandwidth_tradeoff.csv`
 - `network_bandwidth_tradeoff.pdf`
 - `claim_table.csv`
@@ -108,6 +110,10 @@ labeled subdirectory such as
 `make_problem(...)` defaults to the generated 10k active-session workload
 aggregated into 48 classes with seed 7. `workload_source="fixed"` keeps the
 six-row smoke workload.
+The retained-state drain frontier writes `retained_state_drain_sweep.csv` and
+`retained_state_drain_frontier.csv`. It sweeps drain windows from 10s to 3600s,
+ties solver capacity with queue drain time, and reports the max safe
+retained-prefill fraction evacuated using explicit absolute-deadline metrics.
 The network-bandwidth tradeoff sweeps network bandwidth and plots the largest
 tested source-state fraction that can be safely evacuated, request migration
 fraction, actual evacuated state TB, and max network/prefill queue depth.

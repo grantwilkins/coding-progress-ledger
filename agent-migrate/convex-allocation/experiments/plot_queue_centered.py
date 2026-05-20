@@ -19,6 +19,7 @@ sys.path.insert(0, str(SRC))
 
 from baselines import (
     solve_crossover_greedy,
+    solve_least_loaded_destination,
     solve_online_queue_greedy,
     solve_replay_only,
     solve_state_only,
@@ -34,22 +35,21 @@ from queueing import evaluate_rounded_queue_trace, round_allocation
 sns.set_theme(style="whitegrid", context="paper", font_scale=1.05)
 plt.rcParams.update({"pdf.fonttype": 42, "ps.fonttype": 42})
 
-REPORT_DEADLINE_SCALE = 0.5
+REPORT_DEADLINE_SCALE = 1.0
 REPORT_RETAINED_PREFILL_FRACTION = 0.5
-PLOT_DRAIN_WINDOW_S = 1800.0
+PLOT_DRAIN_WINDOW_S = 1200.0
 NETWORK_SCALES = (0.6, 1.0, 2.0)
 REPORT_POLICIES = (
     "deadline-penalty-rounded",
-    "CVXPY-rounded",
     "online-queue-greedy",
-    "crossover-greedy",
+    "least-loaded-destination",
     "replay-only",
     "state-only",
 )
 H1_POLICIES = (
     "deadline-penalty-rounded",
-    "CVXPY-rounded",
-    "crossover-greedy",
+    "online-queue-greedy",
+    "least-loaded-destination",
     "replay-only",
     "state-only",
 )
@@ -57,6 +57,7 @@ POLICY_LABELS = {
     "deadline-penalty-rounded": "Deadline-aware",
     "CVXPY-rounded": "CVXPY rounded",
     "online-queue-greedy": "Online queue",
+    "least-loaded-destination": "Least loaded",
     "crossover-greedy": "Crossover greedy",
     "replay-only": "Replay only",
     "state-only": "State transfer",
@@ -65,6 +66,7 @@ POLICY_COLORS = {
     "deadline-penalty-rounded": "#1b1b1b",
     "CVXPY-rounded": "#4c78a8",
     "online-queue-greedy": "#72b7b2",
+    "least-loaded-destination": "#54a24b",
     "crossover-greedy": "#54a24b",
     "replay-only": "#e45756",
     "state-only": "#b279a2",
@@ -91,9 +93,9 @@ def plot_queue_centered(
     report_retained_prefill_fraction: float = REPORT_RETAINED_PREFILL_FRACTION,
 ) -> None:
     out = workload_config.output_dir(ROOT)
-    sweep = _read_rows(out / "retained_state_deadline_sweep.csv")
+    sweep = _read_rows(out / "retained_state_drain_sweep.csv")
     _plot_resource_pressure(_h1_rows(sweep), out / "h1_resource_pressure.pdf", report_deadline_scale)
-    _plot_safe_frontier(sweep, out / "h2_safe_frontier.pdf", report_deadline_scale)
+    _plot_safe_frontier(sweep, out / "h2_safe_frontier.pdf")
     _plot_delay_cdf(workload_config, out / "h2_delay_cdf.pdf", report_retained_prefill_fraction, report_deadline_scale)
     _plot_action_mix_by_model(out / "h3_action_mix_by_model.pdf")
     _plot_state_manifest_heatmap(out / "h4_state_manifest_heatmap.pdf", report_retained_prefill_fraction, report_deadline_scale)
@@ -136,8 +138,8 @@ def _plot_resource_pressure(rows: list[dict[str, str]], path: Path, deadline_sca
     plt.close(fig)
 
 
-def _plot_safe_frontier(rows: list[dict[str, str]], path: Path, deadline_scale: float) -> None:
-    frontier = _safe_frontier(rows, deadline_scale)
+def _plot_safe_frontier(rows: list[dict[str, str]], path: Path) -> None:
+    frontier = _safe_frontier(rows)
     _require_policies(frontier, REPORT_POLICIES, "safe-frontier sweep")
     if not frontier.empty:
         frontier["Policy"] = frontier["policy"].map(POLICY_LABELS)
@@ -151,8 +153,9 @@ def _plot_safe_frontier(rows: list[dict[str, str]], path: Path, deadline_scale: 
         palette={POLICY_LABELS[k]: v for k, v in POLICY_COLORS.items()},
         ax=ax,
     )
+    ax.set_xscale("log")
     ax.set_xlabel("Drain window (s)")
-    ax.set_ylabel("Largest safe retained-prefill fraction")
+    ax.set_ylabel("Max safe retained-prefill fraction evacuated")
     ax.set_title("H2: safe evacuation frontier")
     ax.set_ylim(0.0, 1.0)
     _simple_legend(ax)
@@ -240,9 +243,9 @@ def _plot_state_manifest_heatmap(path: Path, retained_prefill_fraction: float, d
     plt.close(fig)
 
 
-def _safe_frontier(rows: list[dict[str, str]], deadline_scale: float) -> pd.DataFrame:
+def _safe_frontier(rows: list[dict[str, str]]) -> pd.DataFrame:
     df = _frame(rows)
-    df = df[(df["deadline_scale"] == deadline_scale) & df["policy"].isin(REPORT_POLICIES)].copy()
+    df = df[df["policy"].isin(REPORT_POLICIES)].copy()
     df["queue_safe"] = _safe_series(df)
     safe = df[df["queue_safe"]]
     grouped = safe.groupby(["policy", "drain_window_s"], as_index=False)["retained_prefill_fraction"].max()
@@ -311,6 +314,8 @@ def _example_allocation(policy: str, problem: ProblemData) -> np.ndarray:
         return solve_cvxpy(problem).y
     if policy == "online-queue-greedy":
         return solve_online_queue_greedy(problem).allocation
+    if policy == "least-loaded-destination":
+        return solve_least_loaded_destination(problem).allocation
     if policy == "crossover-greedy":
         return solve_crossover_greedy(problem).allocation
     if policy == "replay-only":
@@ -404,7 +409,7 @@ def _scaled_network_problem(problem: ProblemData, scale: float) -> ProblemData:
 
 
 def _h1_rows(fallback_rows: list[dict[str, str]]) -> list[dict[str, str]]:
-    generated = WorkloadConfig().output_dir(ROOT) / "retained_state_deadline_sweep.csv"
+    generated = WorkloadConfig().output_dir(ROOT) / "retained_state_drain_sweep.csv"
     return _read_rows(generated) if generated.exists() else fallback_rows
 
 
@@ -418,14 +423,19 @@ def _frame(rows: list[dict[str, str]]) -> pd.DataFrame:
         "prefill_capacity_pressure",
         "deadline_miss_rate",
         "p95_delay_over_deadline",
+        "absolute_deadline_miss_rate",
+        "absolute_p95_delay_over_deadline",
     )
     for column in numeric:
-        df[column] = pd.to_numeric(df[column], errors="coerce")
+        if column in df:
+            df[column] = pd.to_numeric(df[column], errors="coerce")
     return df
 
 
 def _safe_series(df: pd.DataFrame) -> pd.Series:
-    return (df["deadline_miss_rate"] <= 0.01) & (df["p95_delay_over_deadline"] <= 1.0)
+    miss = "absolute_deadline_miss_rate" if "absolute_deadline_miss_rate" in df else "deadline_miss_rate"
+    p95 = "absolute_p95_delay_over_deadline" if "absolute_p95_delay_over_deadline" in df else "p95_delay_over_deadline"
+    return (df[miss] <= 0.01) & (df[p95] <= 1.0)
 
 
 def _cdf_points(values) -> list[tuple[float, float]]:
