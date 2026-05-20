@@ -116,8 +116,8 @@ def test_empirical_bayes_eval_cli_writes_report_and_bundle(tmp_path: Path) -> No
 
 def test_together_replay_ensemble_cli_validates_args_before_api_key() -> None:
     try:
-        main(["together-replay-ensemble", "--agents", "0"])
+        main(["together-replay-ensemble", "--model", " "])
     except ValueError as exc:
-        assert "agents must be positive" in str(exc)
+        assert "model is required" in str(exc)
     else:
         raise AssertionError("invalid replay args should fail before API setup")

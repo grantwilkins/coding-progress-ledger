@@ -15,10 +15,8 @@ from .progress_label_audit import evaluate_progress_label_audit
 from .readers import rows_to_turns
 from .runner import annotate_corpus, annotate_file, annotate_turns
 from .together_replay_ensemble import (
-    DEFAULT_AGENTS,
     DEFAULT_MODEL,
     DEFAULT_REPORT_DIR as DEFAULT_REPLAY_REPORT_DIR,
-    DEFAULT_WORKERS,
     main as together_replay_main,
 )
 
@@ -147,18 +145,16 @@ def main(argv: list[str] | None = None) -> int:
     replay_ablation = subparsers.add_parser(
         "together-replay-ensemble",
         aliases=["together-replay-ablation"],
-        help="run Together observer progress replay",
+        help="run Together observer time-remaining replay",
     )
     replay_ablation.add_argument("--raw-index", type=int, default=349)
     replay_ablation.add_argument("--model", default=DEFAULT_MODEL)
-    replay_ablation.add_argument("--agents", type=int, default=DEFAULT_AGENTS)
-    replay_ablation.add_argument("--workers", type=int, default=DEFAULT_WORKERS)
     replay_ablation.add_argument("--cache-dir", type=Path, default=DATA_DIR / "raw" / "hf_cache")
     replay_ablation.add_argument("--report-dir", type=Path, default=DEFAULT_REPLAY_REPORT_DIR)
     replay_ablation.add_argument("--api-key-env", default="TOGETHER_API_KEY")
     replay_ablation.add_argument("--max-retries", type=int, default=2)
-    replay_ablation.add_argument("--max-tokens", type=int, default=256)
-    replay_ablation.add_argument("--temperature", type=float, default=0.2)
+    replay_ablation.add_argument("--max-tokens", type=int, default=1024)
+    replay_ablation.add_argument("--temperature", type=float, default=0.0)
     replay_ablation.add_argument("--quiet", action="store_true")
 
     args = parser.parse_args(argv)
@@ -278,10 +274,6 @@ def main(argv: list[str] | None = None) -> int:
             str(args.raw_index),
             "--model",
             args.model,
-            "--agents",
-            str(args.agents),
-            "--workers",
-            str(args.workers),
             "--cache-dir",
             str(args.cache_dir),
             "--report-dir",

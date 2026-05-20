@@ -3,13 +3,11 @@ from __future__ import annotations
 import argparse
 import csv
 import json
-import math
 import os
 import re
 import time
 import urllib.error
 import urllib.request
-from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable, Iterable
@@ -20,72 +18,57 @@ from .readers import rows_to_turns
 
 TOGETHER_CHAT_URL = "https://api.together.xyz/v1/chat/completions"
 DEFAULT_MODEL = "openai/gpt-oss-120b"
-DEFAULT_AGENTS = 10
-DEFAULT_WORKERS = 10
 DEFAULT_REPORT_DIR = (
-    Path(__file__).resolve().parents[2] / "reports" / "together_replay_ensemble"
+    Path(__file__).resolve().parents[2] / "reports" / "together_replay_time"
 )
 
 
 @dataclass(frozen=True)
 class Estimate:
     turn: int
-    agent: int
-    value: float
+    seconds_left: float
+    confidence_percent: float
     raw: str
 
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
-        description="Run a parallel Together replay ensemble on a SWE-Agent trace."
+        description="Run a single Together time-remaining replay on a SWE-Agent trace."
     )
     parser.add_argument("--raw-index", type=int, default=349)
-    parser.add_argument("--agents", type=int, default=DEFAULT_AGENTS)
-    parser.add_argument("--workers", type=int, default=DEFAULT_WORKERS)
     parser.add_argument("--model", default=DEFAULT_MODEL)
     parser.add_argument("--cache-dir", type=Path, default=Path("data/raw/hf_cache"))
     parser.add_argument("--report-dir", type=Path, default=DEFAULT_REPORT_DIR)
     parser.add_argument("--api-key-env", default="TOGETHER_API_KEY")
     parser.add_argument("--max-retries", type=int, default=2)
-    parser.add_argument("--max-tokens", type=int, default=256)
-    parser.add_argument("--temperature", type=float, default=0.2)
-    parser.add_argument(
-        "--quiet",
-        action="store_true",
-        help="suppress per-turn aggregate progress prints",
-    )
+    parser.add_argument("--max-tokens", type=int, default=1024)
+    parser.add_argument("--temperature", type=float, default=0.0)
+    parser.add_argument("--quiet", action="store_true")
     args = parser.parse_args(argv)
-    validate_replay_args(args.model, args.agents, args.workers)
+    validate_replay_args(args.model)
 
     api_key = os.environ.get(args.api_key_env)
     if not api_key:
         raise RuntimeError(f"{args.api_key_env} is not set")
     row = swe_agent_row(args.raw_index, args.cache_dir)
     [(_, turns)] = list(rows_to_turns([row], source="swe-agent"))
-    task_prompt = original_task_prompt(row)
-    estimates = run_parallel_replay(
+    estimates = run_replay(
         turns,
-        agents=args.agents,
-        workers=args.workers,
         model=args.model,
         api_key=api_key,
         max_retries=args.max_retries,
         max_tokens=args.max_tokens,
         temperature=args.temperature,
-        task_prompt=task_prompt,
+        task_prompt=original_task_prompt(row),
         progress=not args.quiet,
     )
     write_report(args.report_dir, estimates, row, args)
     return 0
 
 
-def validate_replay_args(model: str, agents: int, workers: int) -> None:
+def validate_replay_args(model: str) -> None:
     if not model.strip():
         raise ValueError("model is required")
-    if agents <= 0:
-        raise ValueError("agents must be positive")
-    if workers <= 0:
-        raise ValueError("workers must be positive")
 
 
 def swe_agent_row(raw_index: int, cache_dir: Path) -> dict[str, Any]:
@@ -116,11 +99,9 @@ def original_task_prompt(row: dict[str, Any]) -> str:
     )
 
 
-def run_parallel_replay(
+def run_replay(
     turns: list[Turn],
     *,
-    agents: int,
-    workers: int,
     model: str,
     api_key: str,
     max_retries: int,
@@ -136,45 +117,24 @@ def run_parallel_replay(
     estimates: list[Estimate] = []
     for turn in turns:
         transcript.append(turn_evidence(turn))
-        prompt = replay_prompt(task_prompt, transcript)
-        with ThreadPoolExecutor(max_workers=min(workers, agents)) as pool:
-            futures = {
-                pool.submit(
-                    _complete_with_retries,
-                    complete,
-                    [
-                        {"role": "system", "content": system_prompt()},
-                        {"role": "user", "content": prompt},
-                    ],
-                    model,
-                    api_key,
-                    max_retries,
-                    max_tokens,
-                    temperature,
-                ): agent
-                for agent in range(1, agents + 1)
-            }
-            results = {}
-            for future in as_completed(futures):
-                agent = futures[future]
-                try:
-                    raw = future.result()
-                except Exception as exc:
-                    raise RuntimeError(
-                        f"turn {turn.step} agent {agent} failed"
-                    ) from exc
-                value = parse_fraction(raw)
-                results[agent] = (raw, value)
-        for agent in range(1, agents + 1):
-            raw, value = results[agent]
-            estimates.append(
-                Estimate(turn=turn.step, agent=agent, value=value, raw=raw.strip())
-            )
+        raw = _complete_with_retries(
+            complete,
+            [
+                {"role": "system", "content": system_prompt()},
+                {"role": "user", "content": replay_prompt(task_prompt, transcript)},
+            ],
+            model,
+            api_key,
+            max_retries,
+            max_tokens,
+            temperature,
+        )
+        seconds_left, confidence = parse_time_estimate(raw)
+        estimate = Estimate(turn.step, seconds_left, confidence, raw.strip())
+        estimates.append(estimate)
         if progress:
             print(
-                format_turn_distribution(
-                    turn.step, [results[agent][1] for agent in range(1, agents + 1)]
-                ),
+                f"turn={estimate.turn} remaining={estimate.seconds_left:g}s confidence={estimate.confidence_percent:g}%",
                 flush=True,
             )
     return estimates
@@ -182,11 +142,8 @@ def run_parallel_replay(
 
 def system_prompt() -> str:
     return (
-        "You are one member of a blind replay ensemble for a coding trace. "
-        "Use only the original task prompt and observed work received so far; "
-        "do not assume future turns, final outcome, hidden tests, final trace length, or hidden labels. "
-        "After each turn, reply with only one number from 0 to 1: the fraction of work you estimate is complete. "
-        "No words, no JSON."
+        "Estimate time remaining for a coding trace from only the original prompt "
+        "and observed turns supplied by the user. Return only {XXs, YY%}."
     )
 
 
@@ -199,9 +156,14 @@ def replay_prompt(task_prompt: str, turns_so_far: list[str]) -> str:
     if not task_prompt:
         raise ValueError("task_prompt is empty")
     return (
-        f"Original task prompt:\n{task_prompt}\n\n"
-        "Observed work so far:\n\n" + "\n\n".join(turns_so_far) + "\n\n"
-        "On a scale of 0 to 1, what fraction of the work do you estimate is complete?"
+        f"Original prompt:\n{task_prompt}\n\n"
+        "State up until this point:\n\n"
+        + "\n\n".join(turns_so_far)
+        + "\n\n"
+        "Given the original prompt and the state up until this point, estimate "
+        "the time in seconds left to complete the task specified by this prompt "
+        "and give a percentage of your confidence in this estimate. Return only "
+        "{XXs, YY%} as your response."
     )
 
 
@@ -209,74 +171,19 @@ def turn_evidence(turn: Turn) -> str:
     return f"Turn {turn.step}: {turn.kind.upper()}{' via ' + turn.tool if turn.tool else ''}.\n{_turn_text(turn)}"
 
 
-def parse_fraction(text: str) -> float:
-    match = re.search(r"-?\d+(?:\.\d+)?", text)
+def parse_time_estimate(text: str) -> tuple[float, float]:
+    match = re.fullmatch(
+        r"\{\s*(\d+(?:\.\d+)?)\s*s\s*,\s*(\d+(?:\.\d+)?)\s*%\s*\}",
+        text.strip(),
+        flags=re.IGNORECASE,
+    )
     if not match:
-        raise ValueError(f"no numeric fraction in response: {text!r}")
-    value = float(match.group(0))
-    if not 0.0 <= value <= 1.0:
-        raise ValueError(f"fraction out of range: {value}")
-    return value
-
-
-def aggregate(estimates: Iterable[Estimate]) -> list[dict[str, Any]]:
-    by_turn: dict[int, list[float]] = {}
-    for estimate in estimates:
-        by_turn.setdefault(estimate.turn, []).append(estimate.value)
-    rows = []
-    for turn, values in sorted(by_turn.items()):
-        mean = sum(values) / len(values)
-        variance = sum((value - mean) ** 2 for value in values) / len(values)
-        stdev = math.sqrt(variance)
-        rows.append(
-            {
-                "turn": turn,
-                "n": len(values),
-                "mean_fraction_complete": mean,
-                "stdev": stdev,
-                "lower_1sd": max(0.0, mean - stdev),
-                "upper_1sd": min(1.0, mean + stdev),
-                "min": min(values),
-                "max": max(values),
-            }
-        )
-    return rows
-
-
-def format_turn_distribution(turn: int, values: list[float]) -> str:
-    if not values:
-        raise ValueError("cannot summarize empty values")
-    ordered = sorted(values)
-    mean = sum(ordered) / len(ordered)
-    variance = sum((value - mean) ** 2 for value in ordered) / len(ordered)
-    q1 = _quantile(ordered, 0.25)
-    median = _quantile(ordered, 0.5)
-    q3 = _quantile(ordered, 0.75)
-    bins = [0] * 10
-    for value in ordered:
-        bins[min(9, int(value * 10))] += 1
-    histogram = " ".join(
-        f"{i / 10:.1f}-{(i + 1) / 10:.1f}:{count}"
-        for i, count in enumerate(bins)
-        if count
-    )
-    return (
-        f"turn={turn} n={len(ordered)} mean={mean:.3f} sd={math.sqrt(variance):.3f} "
-        f"min={ordered[0]:.3f} q1={q1:.3f} median={median:.3f} q3={q3:.3f} max={ordered[-1]:.3f} "
-        f"hist={histogram}"
-    )
-
-
-def _quantile(ordered: list[float], p: float) -> float:
-    if not ordered:
-        raise ValueError("empty quantile")
-    index = (len(ordered) - 1) * p
-    lower = math.floor(index)
-    upper = math.ceil(index)
-    if lower == upper:
-        return ordered[lower]
-    weight = index - lower
-    return ordered[lower] * (1.0 - weight) + ordered[upper] * weight
+        raise ValueError(f"invalid time estimate response: {text!r}")
+    seconds_left = float(match.group(1))
+    confidence = float(match.group(2))
+    if confidence > 100.0:
+        raise ValueError(f"confidence out of range: {confidence}")
+    return seconds_left, confidence
 
 
 def together_complete(
@@ -315,12 +222,9 @@ def write_report(
     args: argparse.Namespace,
 ) -> None:
     report_dir.mkdir(parents=True, exist_ok=True)
-    _write_estimates(report_dir / "agent_estimates.csv", estimates)
-    aggregate_rows = aggregate(estimates)
-    _write_rows(report_dir / "aggregate_progress.csv", aggregate_rows)
-    _plot(report_dir / "aggregate_progress.png", aggregate_rows)
-    _plot_trajectories(report_dir / "agent_trajectories.png", estimates, aggregate_rows)
-    _write_readme(report_dir, row, args, aggregate_rows)
+    _write_estimates(report_dir / "time_estimates.csv", estimates)
+    _plot(report_dir / "remaining_time.png", estimates)
+    _write_readme(report_dir, row, args, estimates[-1])
 
 
 def _complete_with_retries(
@@ -337,7 +241,7 @@ def _complete_with_retries(
             raw = complete(
                 messages, model, api_key, max_retries, max_tokens, temperature
             )
-            parse_fraction(raw)
+            parse_time_estimate(raw)
             return raw
         except ValueError:
             if attempt == max_retries:
@@ -346,7 +250,7 @@ def _complete_with_retries(
                 *messages,
                 {
                     "role": "user",
-                    "content": "Your previous response was invalid. Reply with only one numeric value from 0 to 1, like 0.42.",
+                    "content": "Your previous response was invalid. Reply only in the form {XXs, YY%}, for example {120s, 80%}.",
                 },
             ]
             time.sleep(2**attempt)
@@ -382,61 +286,28 @@ def _write_rows(path: Path, rows: Iterable[dict[str, Any]]) -> None:
         writer.writerows(rows)
 
 
-def _plot(path: Path, rows: list[dict[str, Any]]) -> None:
+def _plot(path: Path, estimates: list[Estimate]) -> None:
     import matplotlib
 
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
 
-    x = [int(row["turn"]) for row in rows]
-    y = [float(row["mean_fraction_complete"]) for row in rows]
-    lo = [float(row["lower_1sd"]) for row in rows]
-    hi = [float(row["upper_1sd"]) for row in rows]
     fig, axis = plt.subplots(figsize=(8, 3.2))
-    axis.fill_between(x, lo, hi, alpha=0.2, color="#59A14F", linewidth=0)
-    axis.plot(x, y, color="#2E6B2E", linewidth=2)
-    axis.scatter(x, y, s=16, color="#2E6B2E")
-    axis.set_ylim(0, 1)
-    axis.set_xlabel("turn")
-    axis.set_ylabel("mean fraction complete")
-    axis.set_title("Together 40-agent replay ensemble")
-    axis.grid(True, alpha=0.25)
-    fig.tight_layout()
-    fig.savefig(path, dpi=160)
-    plt.close(fig)
-
-
-def _plot_trajectories(
-    path: Path, estimates: list[Estimate], aggregate_rows: list[dict[str, Any]]
-) -> None:
-    import matplotlib
-
-    matplotlib.use("Agg")
-    import matplotlib.pyplot as plt
-
-    by_agent: dict[int, list[Estimate]] = {}
-    for estimate in estimates:
-        by_agent.setdefault(estimate.agent, []).append(estimate)
-    fig, axis = plt.subplots(figsize=(8, 3.2))
-    for agent_estimates in by_agent.values():
-        ordered = sorted(agent_estimates, key=lambda estimate: estimate.turn)
-        axis.plot(
-            [estimate.turn for estimate in ordered],
-            [estimate.value for estimate in ordered],
-            color="#9B9B9B",
-            alpha=0.22,
-            linewidth=0.9,
-        )
     axis.plot(
-        [int(row["turn"]) for row in aggregate_rows],
-        [float(row["mean_fraction_complete"]) for row in aggregate_rows],
-        color="#2E6B2E",
-        linewidth=2.2,
+        [estimate.turn for estimate in estimates],
+        [estimate.seconds_left for estimate in estimates],
+        color="#276FBF",
+        linewidth=2,
     )
-    axis.set_ylim(0, 1)
+    axis.scatter(
+        [estimate.turn for estimate in estimates],
+        [estimate.seconds_left for estimate in estimates],
+        s=16,
+        color="#276FBF",
+    )
     axis.set_xlabel("turn")
-    axis.set_ylabel("fraction complete")
-    axis.set_title("Together replay agent trajectories")
+    axis.set_ylabel("seconds remaining")
+    axis.set_title("Together replay time remaining")
     axis.grid(True, alpha=0.25)
     fig.tight_layout()
     fig.savefig(path, dpi=160)
@@ -447,33 +318,25 @@ def _write_readme(
     report_dir: Path,
     row: dict[str, Any],
     args: argparse.Namespace,
-    aggregate_rows: list[dict[str, Any]],
+    final: Estimate,
 ) -> None:
-    final = aggregate_rows[-1]
     (report_dir / "README.md").write_text(
         "\n".join(
             [
-                "# Together Replay Ensemble",
+                "# Together Replay Time Remaining",
                 "",
-                "Blind turn-by-turn ensemble estimates for a solved SWE-Agent trace.",
+                "Single-agent turn-by-turn estimates for one SWE-Agent trace.",
                 "",
                 f"- model: `{args.model}`",
                 f"- raw row index: `{args.raw_index}`",
                 f"- instance: `{row.get('instance_id', '')}`",
-                f"- agents: {args.agents}",
-                f"- parallel workers per turn: {args.workers}",
-                f"- final mean fraction complete: {float(final['mean_fraction_complete']):.3f}",
-                f"- final one-sigma band: [{float(final['lower_1sd']):.3f}, {float(final['upper_1sd']):.3f}]",
-                f"- dataset target label: `{row.get('target', '')}`",
-                "",
-                "The target label and evaluator logs were used only for selecting and documenting the solved trace, not in the per-turn prompts.",
+                f"- final remaining seconds: {final.seconds_left:g}",
+                f"- final confidence: {final.confidence_percent:g}%",
                 "",
                 "Artifacts:",
                 "",
-                "- `agent_estimates.csv`: one scalar estimate per agent per turn.",
-                "- `aggregate_progress.csv`: mean, standard deviation, and one-sigma band by turn.",
-                "- `aggregate_progress.png`: aggregate progress curve.",
-                "- `agent_trajectories.png`: one trajectory per agent with the mean overlaid.",
+                "- `time_estimates.csv`: one time and confidence estimate per turn.",
+                "- `remaining_time.png`: seconds-left curve by turn.",
                 "",
             ]
         ),
