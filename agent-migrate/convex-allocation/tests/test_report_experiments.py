@@ -16,6 +16,7 @@ Plausible wrong implementations:
 from __future__ import annotations
 
 import numpy as np
+import pytest
 
 from experiments.run_report_experiments import (
     _claim_row,
@@ -128,6 +129,17 @@ def test_claim_table_uses_precomputed_frontiers(monkeypatch):
     rows = claim_table(WorkloadConfig(), architecture_rows, frontiers)
 
     assert rows[1]["pass"] == "yes"
+
+
+def test_frontier_point_keeps_programming_value_errors_hard(monkeypatch):
+    monkeypatch.setattr(
+        report,
+        "_rounded_metrics_named",
+        lambda *args, **kwargs: (_ for _ in ()).throw(ValueError("wrong shape")),
+    )
+
+    with pytest.raises(ValueError, match="wrong shape"):
+        report._frontier_point("frontier", 0.2, report.SOFT_DEADLINE, tiny_problem())
 
 
 def test_adversarial_rounding_misses_and_repair_fixes_without_shortfall():

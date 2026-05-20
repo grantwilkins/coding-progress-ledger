@@ -68,7 +68,6 @@ class ProblemData:
             raise ValueError(f"missing ProblemData fields: {missing}")
         for key, value in values.items():
             object.__setattr__(self, key, value)
-        object.__setattr__(self, "_cache", {})
 
     @property
     def G(self) -> int:
@@ -97,7 +96,7 @@ def make_problem(
     window_s: float = 1800.0,
     gpu_count: np.ndarray | None = None,
     workload_source: str = "generated",
-    workload_seed: int | None = None,
+    workload_seed: int | None = 7,
     workload_jobs: int = 10_000,
     workload_classes: int = 48,
     workload_profile: str = "agentic_retained_sessions",

@@ -25,7 +25,7 @@ from baselines import (
 from catalog import get_model
 from coefficients import ACTIONS, compute_coefficients
 from cvxpy_solver import solve_cvxpy, solve_deadline_aware_cvxpy, solve_soft_deadline_cvxpy
-from evaluation import WorkloadConfig, parse_workload_config
+from evaluation import WorkloadConfig, parse_workload_config, run_jobs as _run_jobs
 from metrics import (
     retained_prefill_action_mix,
     retained_prefill_destination_mix,
@@ -34,7 +34,7 @@ from metrics import (
 )
 from mirror_descent import solve_mirror_descent
 from objective import objective
-from problem import make_problem
+from problem import make_problem, with_retained_prefill_fraction
 from queueing import evaluate_rounded_queue_trace, round_allocation
 
 RETAINED_PREFILL_FRACTIONS = (0.20, 0.30, 0.40, 0.50, 0.60, 0.70, 0.80, 0.90)
@@ -189,106 +189,31 @@ class RepairResult:
 def run_queue_failure_diagnostics(workload_config: WorkloadConfig = WorkloadConfig()):
     out = workload_config.output_dir(ROOT)
     out.mkdir(parents=True, exist_ok=True)
-    queue_rows = []
-    breakdown_rows = []
-    summary_rows = []
-    repair_summary_rows = []
-    move_breakdown_rows = []
-    budget_rows = []
     model = get_model("GLM-5")
-
+    jobs = []
     for deadline_scale in TIGHT_DEADLINE_SCALES:
+        base = make_problem(
+            model,
+            "transition-coupled",
+            retained_prefill_fraction=1.0,
+            deadline_scale=deadline_scale,
+            **workload_config.problem_kwargs(),
+        )
         for retained_prefill_fraction in RETAINED_PREFILL_FRACTIONS:
-            problem = make_problem(
-                model,
-                "transition-coupled",
-                retained_prefill_fraction=retained_prefill_fraction,
-                deadline_scale=deadline_scale,
-                **workload_config.problem_kwargs(),
+            jobs.append(
+                (
+                    retained_prefill_fraction,
+                    deadline_scale,
+                    with_retained_prefill_fraction(base, retained_prefill_fraction),
+                )
             )
-            try:
-                main = solve_soft_deadline_cvxpy(problem)
-                rounded = round_allocation(problem, main.y)
-                metrics, trace = evaluate_rounded_queue_trace(problem, rounded.y)
-            except (RuntimeError, ValueError):
-                queue_rows.append(
-                    _empty_queue_row(
-                        MAIN_POLICY, retained_prefill_fraction, deadline_scale, problem.retained_prefill_target_s
-                    )
-                )
-                queue_rows.append(
-                    _empty_queue_row(
-                        REPAIRED_MAIN_POLICY,
-                        retained_prefill_fraction,
-                        deadline_scale,
-                        problem.retained_prefill_target_s,
-                    )
-                )
-            else:
-                queue_rows.append(
-                    _queue_row(MAIN_POLICY, retained_prefill_fraction, deadline_scale, "OK", metrics)
-                )
-                breakdown_rows.extend(
-                    _failure_breakdown_rows(
-                        MAIN_POLICY, problem, retained_prefill_fraction, deadline_scale, "OK", trace
-                    )
-                )
-
-                try:
-                    repair = repair_rounded_allocation(problem, rounded.y)
-                except (RuntimeError, ValueError):
-                    repaired = _empty_queue_row(
-                        REPAIRED_MAIN_POLICY,
-                        retained_prefill_fraction,
-                        deadline_scale,
-                        problem.retained_prefill_target_s,
-                    )
-                    repaired["status"] = "REPAIR_FAILED"
-                    queue_rows.append(repaired)
-                else:
-                    queue_rows.append(
-                        _queue_row(
-                            REPAIRED_MAIN_POLICY,
-                            retained_prefill_fraction,
-                            deadline_scale,
-                            "OK",
-                            repair.metrics,
-                            repair.moves,
-                        )
-                    )
-                    breakdown_rows.extend(
-                        _failure_breakdown_rows(
-                            REPAIRED_MAIN_POLICY,
-                            problem,
-                            retained_prefill_fraction,
-                            deadline_scale,
-                            "OK",
-                            repair.trace,
-                        )
-                    )
-                    summary_rows.append(_summary_row(retained_prefill_fraction, deadline_scale, metrics, repair))
-                    repair_summary_rows.append(
-                        _repair_summary_row(
-                            problem, rounded.y, metrics, repair, retained_prefill_fraction, deadline_scale
-                        )
-                    )
-                    move_breakdown_rows.extend(
-                        _repair_move_breakdown_rows(retained_prefill_fraction, deadline_scale, repair.moves)
-                    )
-                    budget_rows.extend(
-                        _repair_budget_rows(
-                            problem, rounded.y, metrics, repair, retained_prefill_fraction, deadline_scale
-                        )
-                    )
-
-            for policy, solver in POLICIES:
-                row, trace = _solver_queue(policy, solver, problem, retained_prefill_fraction, deadline_scale)
-                queue_rows.append(row)
-                breakdown_rows.extend(
-                    _failure_breakdown_rows(
-                        policy, problem, retained_prefill_fraction, deadline_scale, row["status"], trace
-                    )
-                )
+    batches = _run_jobs("queue failure diagnostics", jobs, _diagnostic_point_job)
+    queue_rows = [row for batch in batches for row in batch[0]]
+    breakdown_rows = [row for batch in batches for row in batch[1]]
+    summary_rows = [row for batch in batches for row in batch[2]]
+    repair_summary_rows = [row for batch in batches for row in batch[3]]
+    move_breakdown_rows = [row for batch in batches for row in batch[4]]
+    budget_rows = [row for batch in batches for row in batch[5]]
 
     _write_rows(out / "transition_coupled_repaired_queue_table.csv", queue_rows, QUEUE_COLUMNS)
     _write_rows(
@@ -302,6 +227,88 @@ def run_queue_failure_diagnostics(workload_config: WorkloadConfig = WorkloadConf
     _print_repair_summary(summary_rows)
     _print_half_deadline_latex(summary_rows)
     return queue_rows, breakdown_rows, summary_rows
+
+
+def _diagnostic_point_job(job):
+    retained_prefill_fraction, deadline_scale, problem = job
+    queue_rows = []
+    breakdown_rows = []
+    summary_rows = []
+    repair_summary_rows = []
+    move_breakdown_rows = []
+    budget_rows = []
+
+    try:
+        main = solve_soft_deadline_cvxpy(problem)
+    except RuntimeError:
+        queue_rows.append(
+            _empty_queue_row(MAIN_POLICY, retained_prefill_fraction, deadline_scale, problem.retained_prefill_target_s)
+        )
+        queue_rows.append(
+            _empty_queue_row(
+                REPAIRED_MAIN_POLICY,
+                retained_prefill_fraction,
+                deadline_scale,
+                problem.retained_prefill_target_s,
+            )
+        )
+    else:
+        rounded = round_allocation(problem, main.y)
+        metrics, trace = evaluate_rounded_queue_trace(problem, rounded.y)
+        queue_rows.append(_queue_row(MAIN_POLICY, retained_prefill_fraction, deadline_scale, "OK", metrics))
+        breakdown_rows.extend(
+            _failure_breakdown_rows(MAIN_POLICY, problem, retained_prefill_fraction, deadline_scale, "OK", trace)
+        )
+
+        try:
+            repair = repair_rounded_allocation(problem, rounded.y)
+        except RuntimeError:
+            repaired = _empty_queue_row(
+                REPAIRED_MAIN_POLICY,
+                retained_prefill_fraction,
+                deadline_scale,
+                problem.retained_prefill_target_s,
+            )
+            repaired["status"] = "REPAIR_FAILED"
+            queue_rows.append(repaired)
+        else:
+            queue_rows.append(
+                _queue_row(
+                    REPAIRED_MAIN_POLICY,
+                    retained_prefill_fraction,
+                    deadline_scale,
+                    "OK",
+                    repair.metrics,
+                    repair.moves,
+                )
+            )
+            breakdown_rows.extend(
+                _failure_breakdown_rows(
+                    REPAIRED_MAIN_POLICY,
+                    problem,
+                    retained_prefill_fraction,
+                    deadline_scale,
+                    "OK",
+                    repair.trace,
+                )
+            )
+            summary_rows.append(_summary_row(retained_prefill_fraction, deadline_scale, metrics, repair))
+            repair_summary_rows.append(
+                _repair_summary_row(problem, rounded.y, metrics, repair, retained_prefill_fraction, deadline_scale)
+            )
+            move_breakdown_rows.extend(
+                _repair_move_breakdown_rows(retained_prefill_fraction, deadline_scale, repair.moves)
+            )
+            budget_rows.extend(_repair_budget_rows(problem, rounded.y, metrics, repair, retained_prefill_fraction, deadline_scale))
+
+    for policy, solver in POLICIES:
+        row, trace = _solver_queue(policy, solver, problem, retained_prefill_fraction, deadline_scale)
+        queue_rows.append(row)
+        breakdown_rows.extend(
+            _failure_breakdown_rows(policy, problem, retained_prefill_fraction, deadline_scale, row["status"], trace)
+        )
+
+    return queue_rows, breakdown_rows, summary_rows, repair_summary_rows, move_breakdown_rows, budget_rows
 
 
 def repair_rounded_allocation(problem, y, max_steps=1000, max_changes=None, drain_window_s=DRAIN_WINDOW_S):

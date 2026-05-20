@@ -80,7 +80,7 @@ adversarial queue tables:
 uv run python experiments/run_report_experiments.py
 ```
 
-Long CVXPY sweeps run independent grid points in a process pool. Set
+Long CVXPY sweeps run independent grid points in a shared process pool. Set
 `CONVEX_ALLOCATION_WORKERS=1` for a sequential run, or to another positive
 integer to cap worker processes.
 
@@ -104,8 +104,8 @@ labeled subdirectory such as
 - `adversarial_queue_case.csv`
 
 `make_problem(...)` defaults to the generated 10k active-session workload
-aggregated into 48 classes. `workload_source="fixed"` keeps the six-row smoke
-workload.
+aggregated into 48 classes with seed 7. `workload_source="fixed"` keeps the
+six-row smoke workload.
 The network-bandwidth tradeoff sweeps network bandwidth and plots the largest
 tested source-state fraction that can be safely evacuated, request migration
 fraction, actual evacuated state TB, and max network/prefill queue depth.

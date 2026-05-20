@@ -2,9 +2,7 @@ from __future__ import annotations
 
 import csv
 import math
-import os
 import sys
-from concurrent.futures import ProcessPoolExecutor, as_completed
 from pathlib import Path
 
 import numpy as np
@@ -18,7 +16,7 @@ from baselines import solve_online_queue_greedy, solve_replay_only
 from catalog import ModelParams, catalog_models, get_model
 from coefficients import compute_coefficients
 from cvxpy_solver import solve_cvxpy, solve_deadline_aware_cvxpy, solve_soft_deadline_cvxpy
-from evaluation import WorkloadConfig, parse_workload_config
+from evaluation import WorkloadConfig, parse_workload_config, run_jobs as _run_jobs
 from experiments.run_integer_optimality_cases import (
     CASES,
     exact_integer_objective_optimum,
@@ -216,21 +214,9 @@ def _claim_frontiers(workload_config: WorkloadConfig) -> dict[str, dict[str, obj
 
 def _max_safe_fraction(model, regime, solver, workload_config):
     solver_name = _solver_name(solver)
-    workers = _worker_count(len(RETAINED_PREFILL_FRACTIONS))
-    if workers != 1:
-        return _frontiers((("frontier", model, regime, solver_name),), workload_config, "retained-prefill frontier")[
-            "frontier"
-        ]
-    best = None
-    warm_start = None
-    base = make_problem(model, regime, retained_prefill_fraction=1.0, **workload_config.problem_kwargs())
-    for fraction in RETAINED_PREFILL_FRACTIONS:
-        point = _frontier_point("frontier", fraction, solver_name, with_retained_prefill_fraction(base, fraction), warm_start)
-        warm_start = point[3]
-        if point[2] is None:
-            continue
-        best = point[2]
-    return best or _unsafe_frontier()
+    return _frontiers((("frontier", model, regime, solver_name),), workload_config, "retained-prefill frontier")[
+        "frontier"
+    ]
 
 
 def _frontiers(specs, workload_config: WorkloadConfig, label: str) -> dict[str, dict[str, object]]:
@@ -276,7 +262,7 @@ def _frontier_point_job(job):
 def _frontier_point(key, fraction, solver_name, problem, initial_y=None):
     try:
         y, metrics = _rounded_metrics_named(problem, solver_name, REPORT_DRAIN_WINDOW_S, initial_y)
-    except (RuntimeError, ValueError):
+    except RuntimeError:
         return key, fraction, None, initial_y
     if not _safe(metrics):
         return key, fraction, None, y
@@ -331,7 +317,7 @@ def _sensitivity_job(job):
     try:
         result = solve_soft_deadline_cvxpy(problem, headroom, linear, quadratic)
         rounded = round_allocation(problem, result.y)
-    except (RuntimeError, ValueError):
+    except RuntimeError:
         return [_empty_sensitivity_row(headroom, linear, quadratic, drain) for drain in DRAIN_WINDOWS_S]
     mix = retained_prefill_action_mix(problem, rounded.y)
     rows = []
@@ -353,35 +339,6 @@ def _sensitivity_job(job):
             }
         )
     return rows
-
-
-def _run_jobs(label, jobs, fn):
-    workers = _worker_count(len(jobs))
-    if workers == 1:
-        return [_progress(label, i + 1, len(jobs), fn(job)) for i, job in enumerate(jobs)]
-    results = [None] * len(jobs)
-    with ProcessPoolExecutor(max_workers=workers) as pool:
-        futures = {pool.submit(fn, job): i for i, job in enumerate(jobs)}
-        for done, future in enumerate(as_completed(futures), 1):
-            results[futures[future]] = future.result()
-            _log_progress(label, done, len(jobs))
-    return results
-
-
-def _progress(label, done, total, result):
-    _log_progress(label, done, total)
-    return result
-
-
-def _log_progress(label, done, total):
-    print(f"{label}: {done}/{total}", file=sys.stderr, flush=True)
-
-
-def _worker_count(job_count):
-    requested = int(os.environ.get("CONVEX_ALLOCATION_WORKERS", "0") or 0)
-    if requested <= 0:
-        requested = min(8, os.cpu_count() or 1)
-    return max(1, min(requested, job_count))
 
 
 def _claim_row(claim, metric, winner, baseline, winner_value, baseline_value, passed):

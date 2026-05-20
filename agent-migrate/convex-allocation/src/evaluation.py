@@ -1,6 +1,9 @@
 from __future__ import annotations
 
 import argparse
+import os
+import sys
+from concurrent.futures import ProcessPoolExecutor, as_completed
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -46,3 +49,35 @@ def parse_workload_config(description: str) -> WorkloadConfig:
         args.workload_classes,
         args.workload_profile,
     )
+
+
+def run_jobs(label, jobs, fn):
+    jobs = tuple(jobs)
+    if not jobs:
+        return []
+    workers = _worker_count(len(jobs))
+    if workers == 1:
+        return [_progress(label, i + 1, len(jobs), fn(job)) for i, job in enumerate(jobs)]
+    results = [None] * len(jobs)
+    with ProcessPoolExecutor(max_workers=workers) as pool:
+        futures = {pool.submit(fn, job): i for i, job in enumerate(jobs)}
+        for done, future in enumerate(as_completed(futures), 1):
+            results[futures[future]] = future.result()
+            _log_progress(label, done, len(jobs))
+    return results
+
+
+def _worker_count(job_count):
+    requested = int(os.environ.get("CONVEX_ALLOCATION_WORKERS", "0") or 0)
+    if requested <= 0:
+        requested = min(8, os.cpu_count() or 1)
+    return max(1, min(requested, job_count))
+
+
+def _progress(label, done, total, result):
+    _log_progress(label, done, total)
+    return result
+
+
+def _log_progress(label, done, total):
+    print(f"{label}: {done}/{total}", file=sys.stderr, flush=True)

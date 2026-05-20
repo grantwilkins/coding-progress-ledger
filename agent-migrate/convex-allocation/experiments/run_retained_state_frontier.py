@@ -21,7 +21,7 @@ from baselines import (
 )
 from catalog import get_model
 from cvxpy_solver import solve_cvxpy, solve_soft_deadline_cvxpy
-from evaluation import WorkloadConfig, parse_workload_config
+from evaluation import WorkloadConfig, parse_workload_config, run_jobs as _run_jobs
 from metrics import (
     nvl72_hbm_fraction,
     resident_state_bytes,
@@ -32,7 +32,7 @@ from metrics import (
     total_retained_prefill_s,
 )
 from mirror_descent import solve_mirror_descent
-from problem import make_problem
+from problem import make_problem, with_retained_prefill_fraction
 from queueing import fractional_queue_load_proxy, queue_metrics
 
 RETAINED_PREFILL_FRACTIONS = (0.20, 0.30, 0.40, 0.50, 0.60, 0.70, 0.80, 0.90)
@@ -110,26 +110,40 @@ FRONTIER_COLUMNS = (
 def run_retained_state_frontier(workload_config: WorkloadConfig = WorkloadConfig()):
     out = workload_config.output_dir(ROOT)
     out.mkdir(parents=True, exist_ok=True)
-    rows = []
     model = get_model("GLM-5")
+    jobs = []
     for deadline_scale in DEADLINE_SCALES:
+        base = make_problem(
+            model,
+            "transition-coupled",
+            retained_prefill_fraction=1.0,
+            deadline_scale=deadline_scale,
+            **workload_config.problem_kwargs(),
+        )
         for retained_prefill_fraction in RETAINED_PREFILL_FRACTIONS:
-            problem = make_problem(
-                model,
-                "transition-coupled",
-                retained_prefill_fraction=retained_prefill_fraction,
-                deadline_scale=deadline_scale,
-                **workload_config.problem_kwargs(),
+            jobs.append(
+                (
+                    retained_prefill_fraction,
+                    deadline_scale,
+                    with_retained_prefill_fraction(base, retained_prefill_fraction),
+                )
             )
-            for policy, solver in POLICIES:
-                rows.extend(_policy_rows(problem, policy, solver, retained_prefill_fraction, deadline_scale))
 
+    rows = [row for batch in _run_jobs("retained-state frontier", jobs, _sweep_point_job) for row in batch]
     frontier = _frontier_rows(rows)
     _write_rows(out / "retained_state_deadline_sweep.csv", rows, SWEEP_COLUMNS)
     _write_rows(out / "retained_state_frontier.csv", frontier, FRONTIER_COLUMNS)
     _print_latex_frontier(frontier)
     _print_diagnostics(frontier, rows)
     return rows, frontier
+
+
+def _sweep_point_job(job):
+    retained_prefill_fraction, deadline_scale, problem = job
+    rows = []
+    for policy, solver in POLICIES:
+        rows.extend(_policy_rows(problem, policy, solver, retained_prefill_fraction, deadline_scale))
+    return rows
 
 
 def _policy_rows(problem, policy, solver, retained_prefill_fraction, deadline_scale):

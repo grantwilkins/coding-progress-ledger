@@ -2,9 +2,7 @@ from __future__ import annotations
 
 import csv
 import math
-import os
 import sys
-from concurrent.futures import ProcessPoolExecutor, as_completed
 from pathlib import Path
 
 import matplotlib
@@ -20,7 +18,7 @@ sys.path.insert(0, str(SRC))
 
 from catalog import get_model
 from cvxpy_solver import solve_soft_deadline_cvxpy
-from evaluation import WorkloadConfig, parse_workload_config
+from evaluation import WorkloadConfig, parse_workload_config, run_jobs as _run_jobs
 from experiments.plot_queue_centered import _max_waiting_depth_points
 from problem import ProblemData, make_problem, with_retained_prefill_fraction
 from queueing import evaluate_rounded_queue_trace, round_allocation
@@ -70,7 +68,7 @@ def _scale_row(job) -> dict[str, float | str]:
             result = solve_soft_deadline_cvxpy(problem)
             rounded = round_allocation(problem, result.y)
             metrics, trace = evaluate_rounded_queue_trace(problem, rounded.y, drain_window_s=DRAIN_WINDOW_S)
-        except (RuntimeError, ValueError):
+        except RuntimeError:
             continue
         if _safe(metrics):
             candidates.append((retained_prefill_fraction, result, rounded, metrics, trace))
@@ -138,34 +136,6 @@ def _write_rows(path: Path, rows: list[dict[str, float | str]]) -> None:
         writer = csv.DictWriter(f, fieldnames=COLUMNS, lineterminator="\n")
         writer.writeheader()
         writer.writerows(rows)
-
-
-def _run_jobs(label, jobs, fn):
-    workers = _worker_count(len(jobs))
-    if workers == 1:
-        rows = []
-        for i, job in enumerate(jobs, 1):
-            rows.append(fn(job))
-            _log_progress(label, i, len(jobs))
-        return rows
-    results = [None] * len(jobs)
-    with ProcessPoolExecutor(max_workers=workers) as pool:
-        futures = {pool.submit(fn, job): i for i, job in enumerate(jobs)}
-        for done, future in enumerate(as_completed(futures), 1):
-            results[futures[future]] = future.result()
-            _log_progress(label, done, len(jobs))
-    return results
-
-
-def _worker_count(job_count):
-    requested = int(os.environ.get("CONVEX_ALLOCATION_WORKERS", "0") or 0)
-    if requested <= 0:
-        requested = min(8, os.cpu_count() or 1)
-    return max(1, min(requested, job_count))
-
-
-def _log_progress(label, done, total):
-    print(f"{label}: {done}/{total}", file=sys.stderr, flush=True)
 
 
 def _plot(rows, path: Path) -> None:

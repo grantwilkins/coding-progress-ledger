@@ -29,6 +29,7 @@ from coefficients import REPLAY, compute_coefficients
 from cvxpy_solver import solve_cvxpy
 from evaluation import WorkloadConfig
 from experiments.run_catalog_sweep import _infeasible_result, _transition_queue_rows, run_transition_coupled
+from metrics import available_rates
 from problem import make_problem
 from queueing import evaluate_rounded_queue
 from workload import assert_workload_quality, generate_workload
@@ -87,6 +88,7 @@ def test_joint_aggregation_preserves_length_deadline_and_locality_variation():
 def test_generated_retained_sessions_are_default_and_fixed_is_explicit():
     model = get_model("GLM-5")
     default = make_problem(model, "transition-coupled")
+    repeated = make_problem(model, "transition-coupled")
     fixed = make_problem(
         model,
         "transition-coupled",
@@ -98,8 +100,26 @@ def test_generated_retained_sessions_are_default_and_fixed_is_explicit():
 
     assert default.G == 48
     assert default.d.sum() == 10_000
+    np.testing.assert_allclose(default.T, repeated.T)
+    np.testing.assert_allclose(default.d, repeated.d)
+    np.testing.assert_allclose(default.h_ctx, repeated.h_ctx)
     assert fixed.G == 6
     assert not np.allclose(default.T[: fixed.G], fixed.T)
+
+
+def test_problem_derived_values_recompute_after_array_mutation():
+    problem = make_problem(get_model("GLM-5"), "transition-coupled", workload_source="fixed")
+    coeffs = compute_coefficients(problem)
+    _, lambda_avail, _ = available_rates(problem)
+
+    problem.h_ctx[0, 0] = 0.5
+    problem.ell_net[0] *= 0.5
+
+    changed_coeffs = compute_coefficients(problem)
+    _, changed_lambda_avail, _ = available_rates(problem)
+
+    assert changed_coeffs.b_net[0, 0, REPLAY] < coeffs.b_net[0, 0, REPLAY]
+    assert changed_lambda_avail[0] > lambda_avail[0]
 
 
 def test_generated_evaluation_config_is_reproducible_and_separate_from_fixed_outputs():

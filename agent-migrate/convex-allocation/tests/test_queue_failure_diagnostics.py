@@ -14,8 +14,6 @@ Plausible wrong implementations:
 
 from __future__ import annotations
 
-from types import SimpleNamespace
-
 import numpy as np
 
 import experiments.run_queue_failure_diagnostics as queue_diag
@@ -168,9 +166,7 @@ def test_queue_diagnostics_reports_infeasible_deadline_penalty_rows_without_repa
     monkeypatch.setattr(queue_diag, "TIGHT_DEADLINE_SCALES", (0.25,))
     monkeypatch.setattr(queue_diag, "RETAINED_PREFILL_FRACTIONS", (0.2,))
     monkeypatch.setattr(queue_diag, "POLICIES", ())
-    monkeypatch.setattr(
-        queue_diag, "make_problem", lambda *args, **kwargs: SimpleNamespace(retained_prefill_target_s=1.0)
-    )
+    monkeypatch.setattr(queue_diag, "make_problem", lambda *args, **kwargs: repair_problem())
     monkeypatch.setattr(queue_diag, "solve_soft_deadline_cvxpy", fail_solve)
     monkeypatch.setattr(
         queue_diag,
@@ -191,3 +187,34 @@ def test_queue_diagnostics_reports_infeasible_deadline_penalty_rows_without_repa
     ]
     assert {row["status"] for row in queue_rows} == {"INFEASIBLE"}
     assert all("generated_seed7" in str(path) for path in captured)
+
+
+def test_queue_diagnostics_reuses_one_base_problem_per_deadline_scale(monkeypatch, tmp_path):
+    built = []
+    captured = {}
+
+    def make_base(model, regime, **kwargs):
+        built.append((kwargs["deadline_scale"], kwargs["retained_prefill_fraction"]))
+        return repair_problem()
+
+    def run_jobs(label, jobs, fn):
+        assert label == "queue failure diagnostics"
+        assert len({id(problem.T) for _, _, problem in jobs}) == len(queue_diag.TIGHT_DEADLINE_SCALES)
+        return [([], [], [], [], [], []) for _ in jobs]
+
+    monkeypatch.setattr(queue_diag, "ROOT", tmp_path)
+    monkeypatch.setattr(queue_diag, "TIGHT_DEADLINE_SCALES", (0.25, 0.5))
+    monkeypatch.setattr(queue_diag, "RETAINED_PREFILL_FRACTIONS", (0.2, 0.4))
+    monkeypatch.setattr(queue_diag, "make_problem", make_base)
+    monkeypatch.setattr(queue_diag, "_run_jobs", run_jobs)
+    monkeypatch.setattr(queue_diag, "_write_rows", lambda path, rows, columns: captured.setdefault(path.name, rows))
+    monkeypatch.setattr(queue_diag, "_print_repair_summary", lambda rows: None)
+    monkeypatch.setattr(queue_diag, "_print_half_deadline_latex", lambda rows: None)
+
+    queue_rows, breakdown_rows, summary_rows = queue_diag.run_queue_failure_diagnostics(WorkloadConfig(source="fixed"))
+
+    assert built == [(0.25, 1.0), (0.5, 1.0)]
+    assert queue_rows == []
+    assert breakdown_rows == []
+    assert summary_rows == []
+    assert "transition_coupled_repaired_queue_table.csv" in captured
