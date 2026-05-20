@@ -1,11 +1,11 @@
 """
 Claim:
-GLM-5 fixed-bandwidth context sweeps report TTFT divided by KV transfer time,
-with transfer time using Gbps and KV bytes at the token level.
+GLM-5 context sweeps report TTFT divided by KV transfer time across fixed
+bandwidth lines, with transfer time using Gbps and KV bytes at the token level.
 
 Plausible wrong implementations:
 - Treat 1 Gbps as 1 GB/s or otherwise miss the bits-per-byte conversion.
-- Sweep all models or bandwidth while labeling the plot as fixed-bandwidth GLM-5.
+- Drop the dense linear bandwidth sweep or collapse it into one unlabeled series.
 - Use transfer/TTFT instead of TTFT/transfer.
 - Break the expected bandwidth or context scaling of the ratio.
 """
@@ -43,3 +43,17 @@ def test_glm5_context_ratio_increases_and_scales_with_bandwidth():
     one_gbps = migration_ratio.context_ratio_frame("GLM-5", 1.0, [100_000])["ratio"].iloc[0]
     two_gbps = migration_ratio.context_ratio_frame("GLM-5", 2.0, [100_000])["ratio"].iloc[0]
     assert two_gbps == pytest.approx(2 * one_gbps)
+
+
+def test_glm5_context_grid_keeps_one_line_per_bandwidth():
+    bandwidths = [0.5, 1.0, 2.0]
+    df = migration_ratio.context_ratio_grid("GLM-5", bandwidths, [1_000, 10_000])
+    assert set(df["bandwidth_gbps"]) == set(bandwidths)
+    assert df.groupby("bandwidth_gbps").size().to_dict() == {0.5: 2, 1.0: 2, 2.0: 2}
+
+
+def test_glm5_bandwidth_surface_uses_many_linear_bandwidth_lines():
+    bandwidths = migration_ratio.GLM5_CONTEXT_BANDWIDTHS_GBPS
+    assert len(bandwidths) >= 50
+    diffs = migration_ratio.np.diff(bandwidths)
+    assert diffs.min() == pytest.approx(diffs.max())

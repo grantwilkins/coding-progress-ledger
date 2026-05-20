@@ -18,6 +18,7 @@ from typing import Callable
 
 import matplotlib
 matplotlib.use("Agg")
+from matplotlib.colors import Normalize
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
@@ -30,6 +31,7 @@ MFU       = 0.35
 EFF_FLOPS = N_GPUS * H100_BF16_DENSE_TFLOPS * 1e12 * MFU   # ~2.77 PFLOP/s
 
 BPE = 2   # bf16 bytes per element
+GLM5_CONTEXT_BANDWIDTHS_GBPS = np.linspace(0.25, 32, 64)
 
 # ── Model specs ───────────────────────────────────────────────────────────────
 KVFn = Callable[[int], float]
@@ -137,27 +139,40 @@ def context_ratio_frame(label: str, bw_gbps: float, contexts) -> pd.DataFrame:
         for T in contexts
     )
 
+def context_ratio_grid(label: str, bandwidths_gbps, contexts) -> pd.DataFrame:
+    return pd.concat(
+        [
+            context_ratio_frame(label, float(bw), contexts).assign(bandwidth_gbps=float(bw))
+            for bw in bandwidths_gbps
+        ],
+        ignore_index=True,
+    )
+
 def plot_glm5_context_ratio():
-    bw_gbps = 1.0
     contexts = np.geomspace(1_000, 1_000_000, 500)
-    df = context_ratio_frame("GLM-5", bw_gbps, contexts)
+    df = context_ratio_grid("GLM-5", GLM5_CONTEXT_BANDWIDTHS_GBPS, contexts)
+    norm = Normalize(GLM5_CONTEXT_BANDWIDTHS_GBPS.min(), GLM5_CONTEXT_BANDWIDTHS_GBPS.max())
+    cmap = plt.colormaps["viridis"]
 
     sns.set_theme(style="whitegrid", context="talk")
     fig, ax = plt.subplots(figsize=(8, 4.5))
-    sns.lineplot(data=df, x="context_tokens", y="ratio", color=model("GLM-5").color, lw=2.4, ax=ax)
+    for bw, group in df.groupby("bandwidth_gbps", sort=True):
+        ax.plot(group["context_tokens"], group["ratio"], color=cmap(norm(bw)), lw=0.9, alpha=0.85)
     ax.axhline(1.0, color="k", lw=1.2, ls=":", alpha=0.6)
     ax.set_xscale("log")
     ax.set_yscale("log")
     ax.set_xlim(1_000, 1_000_000)
     ax.set_xlabel("Context size (tokens)")
     ax.set_ylabel(r"TTFT / Time to Transfer KV")
-    ax.set_title("GLM-5 at 1 Gbps")
+    ax.set_title("GLM-5 by bandwidth")
     ax.grid(True, which="both", alpha=0.15)
+    cbar = fig.colorbar(plt.cm.ScalarMappable(norm=norm, cmap=cmap), ax=ax)
+    cbar.set_label("Bandwidth (Gbps)")
     fig.tight_layout()
-    fig.savefig("glm5_context_ratio_1gbps.png", dpi=220, bbox_inches="tight")
-    fig.savefig("glm5_context_ratio_1gbps.pdf", bbox_inches="tight")
+    fig.savefig("glm5_context_ratio_bandwidths.png", dpi=220, bbox_inches="tight")
+    fig.savefig("glm5_context_ratio_bandwidths.pdf", bbox_inches="tight")
     plt.close(fig)
-    print("Wrote glm5_context_ratio_1gbps.png / .pdf")
+    print("Wrote glm5_context_ratio_bandwidths.png / .pdf")
 
 # ── Plot ──────────────────────────────────────────────────────────────────────
 def main():
