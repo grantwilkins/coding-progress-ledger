@@ -186,6 +186,10 @@ def parse_time_estimate(text: str) -> tuple[float, float]:
     return seconds_left, confidence
 
 
+def time_error_seconds(estimate: Estimate) -> float:
+    return estimate.seconds_left * (1.0 - estimate.confidence_percent / 100.0)
+
+
 def together_complete(
     messages: list[dict[str, str]],
     model: str,
@@ -292,23 +296,36 @@ def _plot(path: Path, estimates: list[Estimate]) -> None:
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
 
-    fig, axis = plt.subplots(figsize=(8, 3.2))
-    axis.plot(
-        [estimate.turn for estimate in estimates],
-        [estimate.seconds_left for estimate in estimates],
+    x = [estimate.turn for estimate in estimates]
+    seconds = [estimate.seconds_left for estimate in estimates]
+    confidence = [estimate.confidence_percent for estimate in estimates]
+    yerr = [time_error_seconds(estimate) for estimate in estimates]
+
+    fig, (axis, confidence_axis) = plt.subplots(
+        2, 1, figsize=(8, 4.8), sharex=True, height_ratios=[3, 1]
+    )
+    axis.errorbar(
+        x,
+        seconds,
+        yerr=yerr,
         color="#276FBF",
+        marker="o",
+        markersize=4,
         linewidth=2,
+        capsize=3,
     )
-    axis.scatter(
-        [estimate.turn for estimate in estimates],
-        [estimate.seconds_left for estimate in estimates],
-        s=16,
-        color="#276FBF",
-    )
+    axis.set_ylim(bottom=0)
     axis.set_xlabel("turn")
     axis.set_ylabel("seconds remaining")
-    axis.set_title("Together replay time remaining")
+    axis.set_title("Together replay time remaining with confidence")
     axis.grid(True, alpha=0.25)
+
+    confidence_axis.plot(x, confidence, color="#B35320", marker="o", markersize=3)
+    confidence_axis.set_ylim(0, 100)
+    confidence_axis.set_xlabel("turn")
+    confidence_axis.set_ylabel("confidence %")
+    confidence_axis.grid(True, alpha=0.25)
+
     fig.tight_layout()
     fig.savefig(path, dpi=160)
     plt.close(fig)
@@ -336,7 +353,7 @@ def _write_readme(
                 "Artifacts:",
                 "",
                 "- `time_estimates.csv`: one time and confidence estimate per turn.",
-                "- `remaining_time.png`: seconds-left curve by turn.",
+                "- `remaining_time.png`: seconds-left curve with confidence-derived error bars and confidence by turn.",
                 "",
             ]
         ),

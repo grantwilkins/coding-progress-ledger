@@ -6,6 +6,7 @@ at that turn.
 
 Plausible wrong implementations:
 - Accept free-form or malformed model output that cannot be plotted as seconds.
+- Invert confidence when deriving error bars from the estimate.
 - Send only the current turn instead of all previous work seen so far.
 - Leak future turns into an earlier observer prompt.
 - Record a retried invalid response instead of the first valid estimate.
@@ -21,6 +22,7 @@ from observation_channel.together_replay_ensemble import (
     replay_prompt,
     run_replay,
     system_prompt,
+    time_error_seconds,
     turn_prompt,
     validate_replay_args,
 )
@@ -146,3 +148,12 @@ def test_time_estimate_and_replay_arg_validation_fail_loudly() -> None:
         replay_prompt("", ["Turn 1: USER.\nIssue"])
     with pytest.raises(ValueError, match="model is required"):
         validate_replay_args("")
+
+
+def test_time_error_seconds_uses_missing_confidence_fraction() -> None:
+    assert time_error_seconds(Estimate(1, 120.0, 75.0, "{120s, 75%}")) == pytest.approx(
+        30.0
+    )
+    assert time_error_seconds(Estimate(1, 120.0, 100.0, "{120s, 100%}")) == pytest.approx(
+        0.0
+    )

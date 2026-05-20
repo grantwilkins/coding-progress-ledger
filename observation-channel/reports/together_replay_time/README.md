@@ -11,4 +11,4 @@ Single-agent turn-by-turn estimates for one SWE-Agent trace.
 Artifacts:
 
 - `time_estimates.csv`: one time and confidence estimate per turn.
-- `remaining_time.png`: seconds-left curve by turn.
+- `remaining_time.png`: seconds-left curve with confidence-derived error bars and confidence by turn.
