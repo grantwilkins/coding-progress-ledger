@@ -67,6 +67,12 @@ Plot the simple network-bandwidth pressure relationship:
 uv run python experiments/run_network_bandwidth_tradeoff.py
 ```
 
+Run tiny exhaustive integer comparisons:
+
+```bash
+uv run python experiments/run_integer_optimality_cases.py
+```
+
 Outputs are written to `convex-allocation/outputs/sweep/`:
 generated workload runs write to a labeled subdirectory such as
 `outputs/sweep/generated_seed7_sessions10000_classes48/`.
@@ -89,6 +95,7 @@ generated workload runs write to a labeled subdirectory such as
 - `repair_summary.csv`
 - `repair_move_breakdown.csv`
 - `repair_budget_frontier.csv`
+- `integer_optimality_cases.csv`
 
 `summary.csv` marks infeasible baselines as `INFEASIBLE` and includes retained
 prefill target, retained prefill moved, resident-state TB, NVL72 HBM fraction,
@@ -120,6 +127,9 @@ patterns used by repair, and 5%, 10%, and 20% repair-budget frontiers.
 The network-bandwidth tradeoff sweeps network bandwidth and plots the largest
 queue-safe retained-prefill fraction, request migration fraction, actual
 evacuated state TB, and max network/prefill queue depth.
+The integer optimality cases exhaustively solve tiny 8/14/20-request problems
+and compare true integer optima with rounded relaxations, repaired CVXPY, and
+greedy baselines on objective, p95 delay, miss rate, and target feasibility.
 
 The catalog is local and hard-coded from `kv-transfer-early-experiment/FINDINGS.md`.
 It does not import that directory.
