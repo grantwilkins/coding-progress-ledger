@@ -8,7 +8,8 @@ queue drain horizons to the same x-value.
 Plausible wrong implementations:
 - Keep using release-relative reconstruction safety after adding drain-order
   ablations.
-- Vary drain_window_s in queue simulation but leave make_problem(window_s) fixed.
+- Keep the old monotone available-window envelope after switching to absolute
+  event-start deadlines.
 - Trust binary search monotonicity despite rounded nonmonotone safety.
 - Drop the least-loaded ordinary-routing baseline from the north-star plot.
 - Collapse release-policy rows and hide EDF/order-oblivious differences.
@@ -102,7 +103,7 @@ def test_binary_search_validates_local_nonmonotone_safety(monkeypatch):
     assert {row["retained_prefill_fraction"] for row in rows} >= {0.47, 0.48, 0.49, 0.5}
 
 
-def test_frontier_rows_are_monotone_available_window_envelope(monkeypatch):
+def test_frontier_rows_keep_each_absolute_deadline_window(monkeypatch):
     monkeypatch.setattr(retained, "FRONTIER_POLICIES", ("policy",))
     monkeypatch.setattr(retained, "RELEASE_POLICIES", ("edf",))
     monkeypatch.setattr(retained, "DRAIN_WINDOWS_S", (10.0, 20.0, 40.0))
@@ -114,7 +115,7 @@ def test_frontier_rows_are_monotone_available_window_envelope(monkeypatch):
 
     frontier = _monotone_frontier(rows)
 
-    assert [row["max_safe_retained_prefill_fraction"] for row in frontier] == [0.2, 0.5, 0.5]
+    assert [row["max_safe_retained_prefill_fraction"] for row in frontier] == [0.2, 0.5, 0.3]
     assert [row["drain_window_s"] for row in frontier] == [10.0, 20.0, 40.0]
 
 
@@ -155,7 +156,7 @@ def test_run_pairs_problem_window_with_queue_drain_and_writes_drain_outputs(monk
 
     rows, frontier = retained.run_retained_state_frontier(WorkloadConfig(source="fixed"))
 
-    assert built == [(10.0, 1.0), (10.0, 1.0), (20.0, 1.0), (20.0, 1.0)]
+    assert built == [(10.0, 1.0), (20.0, 1.0)]
     assert [(row["release_policy"], row["drain_window_s"]) for row in rows] == [
         ("edf", 10.0),
         ("random", 10.0),

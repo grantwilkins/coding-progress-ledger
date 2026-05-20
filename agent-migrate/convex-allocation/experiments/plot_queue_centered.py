@@ -266,7 +266,6 @@ def _safe_frontier(rows: list[dict[str, str]]) -> pd.DataFrame:
         "retained_prefill_fraction"
     ].max()
     grouped = grouped.sort_values(["release_policy", "drain_window_s"])
-    grouped["retained_prefill_fraction"] = grouped.groupby("release_policy")["retained_prefill_fraction"].cummax()
     return grouped.rename(columns={"retained_prefill_fraction": "max_safe_retained_prefill_fraction"})
 
 

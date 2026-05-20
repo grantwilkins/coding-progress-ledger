@@ -10,6 +10,7 @@ Plausible wrong implementations:
 - Reintroduce crowded diagnostic plots instead of the five report figures.
 - Keep using release-relative reconstruction metrics after switching drain
   frontier safety to event-start deadlines.
+- Keep the old cumulative max frontier after switching to event-start deadlines.
 - Plot all allocation-policy by release-policy pairs in H2.
 - Average class delays before building the CDF.
 - Keep unrelated integer policies in the compact summary table.
@@ -109,7 +110,7 @@ def test_safe_frontier_uses_largest_safe_fraction_by_drain_window():
     assert FRONTIER_RELEASE_POLICIES == ("edf", "shortest-context-first", "random")
     assert by_release_window[("edf", 900.0)] == 0.4
     assert by_release_window[("edf", 1800.0)] == 0.6
-    assert by_release_window[("edf", 3600.0)] == 0.6
+    assert by_release_window[("edf", 3600.0)] == 0.3
     assert by_release_window[("random", 900.0)] == 0.3
     assert set(frontier["policy"]) == {"deadline-penalty-rounded"}
 

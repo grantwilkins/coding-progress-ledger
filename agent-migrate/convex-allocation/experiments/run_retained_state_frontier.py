@@ -111,6 +111,17 @@ def run_retained_state_frontier(workload_config: WorkloadConfig = WorkloadConfig
     out = workload_config.output_dir(ROOT)
     out.mkdir(parents=True, exist_ok=True)
     model = get_model("GLM-5")
+    base_by_window = {
+        drain_window_s: make_problem(
+            model,
+            "transition-coupled",
+            retained_prefill_fraction=1.0,
+            deadline_scale=DEADLINE_SCALE,
+            window_s=drain_window_s,
+            **workload_config.problem_kwargs(),
+        )
+        for drain_window_s in DRAIN_WINDOWS_S
+    }
     jobs = [
         (
             policy,
@@ -118,14 +129,7 @@ def run_retained_state_frontier(workload_config: WorkloadConfig = WorkloadConfig
             release_policy,
             DEFAULT_RELEASE_SEED,
             drain_window_s,
-            make_problem(
-                model,
-                "transition-coupled",
-                retained_prefill_fraction=1.0,
-                deadline_scale=DEADLINE_SCALE,
-                window_s=drain_window_s,
-                **workload_config.problem_kwargs(),
-            ),
+            base_by_window[drain_window_s],
         )
         for drain_window_s in DRAIN_WINDOWS_S
         for policy, solver in POLICIES
@@ -345,18 +349,8 @@ def _monotone_frontier(rows):
     out = []
     for policy in FRONTIER_POLICIES:
         for release_policy in RELEASE_POLICIES:
-            best = None
             for drain_window_s in DRAIN_WINDOWS_S:
-                row = by_key[(policy, release_policy, drain_window_s)]
-                value = row["max_safe_retained_prefill_fraction"]
-                if value != "UNSAFE" and (
-                    best is None or float(value) > float(best["max_safe_retained_prefill_fraction"])
-                ):
-                    best = row
-                if best is None:
-                    out.append(row)
-                else:
-                    out.append({**best, "drain_window_s": drain_window_s})
+                out.append(by_key[(policy, release_policy, drain_window_s)])
     return out
 
 
