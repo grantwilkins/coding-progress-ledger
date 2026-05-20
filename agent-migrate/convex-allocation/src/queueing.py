@@ -110,6 +110,18 @@ def evaluate_rounded_queue(
     return evaluate_rounded_queue_trace(problem, y, drain_window_s, release_policy)[0]
 
 
+def evaluate_rounded_allocation(
+    problem: ProblemData,
+    rounded: RoundedAllocation,
+    drain_window_s: float = 1800.0,
+    release_policy: str = "edf",
+) -> dict[str, float]:
+    metrics = evaluate_static_queue(problem, rounded.records, drain_window_s, release_policy)
+    _add_retained_metrics(metrics, problem, rounded.y, rounded.retained_prefill_moved_s)
+    _add_drain_metrics(metrics, rounded.retained_prefill_moved_s, drain_window_s)
+    return metrics
+
+
 def evaluate_rounded_queue_trace(
     problem: ProblemData,
     y: np.ndarray,

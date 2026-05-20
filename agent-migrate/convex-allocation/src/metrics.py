@@ -10,6 +10,9 @@ NVL72_HBM_BYTES = 13.4 * BYTES_PER_TB
 
 
 def available_rates(problem: ProblemData) -> tuple[float, np.ndarray, np.ndarray]:
+    cache = problem._cache
+    if "available_rates" in cache:
+        return cache["available_rates"]
     windows = np.concatenate(
         [problem.C_net / problem.lambda_Bps, problem.C_prefill / problem.rho_prefill]
     )
@@ -20,7 +23,8 @@ def available_rates(problem: ProblemData) -> tuple[float, np.ndarray, np.ndarray
     rho_avail = (problem.C_prefill - problem.ell_prefill) / H
     if np.any(lambda_avail <= 0.0) or np.any(rho_avail <= 0.0):
         raise ValueError("background load leaves nonpositive service rate")
-    return H, lambda_avail, rho_avail
+    cache["available_rates"] = (H, lambda_avail, rho_avail)
+    return cache["available_rates"]
 
 
 def capacity_loads(problem: ProblemData, coeffs: Coefficients, y: np.ndarray) -> tuple[np.ndarray, np.ndarray]:

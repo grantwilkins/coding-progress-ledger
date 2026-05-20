@@ -38,6 +38,9 @@ class Coefficients:
 
 
 def compute_coefficients(problem: ProblemData) -> Coefficients:
+    cache = problem._cache
+    if "coefficients" in cache:
+        return cache["coefficients"]
     G, K = problem.G, problem.K
     beta = problem.model.beta_bytes_per_tok
     eta = problem.model.eta_bytes_per_tok
@@ -59,7 +62,8 @@ def compute_coefficients(problem: ProblemData) -> Coefficients:
 
     option_dest = np.repeat(np.arange(K), len(ACTIONS))
     option_action = np.tile(np.arange(len(ACTIONS)), K)
-    return Coefficients(b_net, b_prefill, R0, q, option_dest, option_action)
+    cache["coefficients"] = Coefficients(b_net, b_prefill, R0, q, option_dest, option_action)
+    return cache["coefficients"]
 
 
 def move_view(y: np.ndarray, problem: ProblemData) -> np.ndarray:

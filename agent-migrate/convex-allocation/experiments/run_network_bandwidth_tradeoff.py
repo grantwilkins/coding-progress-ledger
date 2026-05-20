@@ -2,7 +2,9 @@ from __future__ import annotations
 
 import csv
 import math
+import os
 import sys
+from concurrent.futures import ProcessPoolExecutor, as_completed
 from pathlib import Path
 
 import matplotlib
@@ -20,7 +22,7 @@ from catalog import get_model
 from cvxpy_solver import solve_soft_deadline_cvxpy
 from evaluation import WorkloadConfig, parse_workload_config
 from experiments.plot_queue_centered import _max_waiting_depth_points
-from problem import ProblemData, make_problem
+from problem import ProblemData, make_problem, with_retained_prefill_fraction
 from queueing import evaluate_rounded_queue_trace, round_allocation
 
 NETWORK_SCALES = (0.25, 0.40, 0.60, 0.80, 1.00, 1.25, 1.50, 2.00)
@@ -52,25 +54,18 @@ COLUMNS = (
 def run_network_bandwidth_tradeoff(workload_config: WorkloadConfig = WorkloadConfig()):
     out = workload_config.output_dir(ROOT)
     out.mkdir(parents=True, exist_ok=True)
-    rows = [_scale_row(scale, workload_config) for scale in NETWORK_SCALES]
+    base = make_problem(get_model("GLM-5"), "transition-coupled", retained_prefill_fraction=1.0, **workload_config.problem_kwargs())
+    rows = _run_jobs("network bandwidth scale", [(scale, base) for scale in NETWORK_SCALES], _scale_row)
     _write_rows(out / "network_bandwidth_tradeoff.csv", rows)
     _plot(rows, out / "network_bandwidth_tradeoff.pdf")
     return rows
 
 
-def _scale_row(scale: float, workload_config: WorkloadConfig) -> dict[str, float | str]:
+def _scale_row(job) -> dict[str, float | str]:
+    scale, base = job
     candidates = []
     for retained_prefill_fraction in RETAINED_PREFILL_FRACTIONS:
-        problem = _scale_network(
-            make_problem(
-                get_model("GLM-5"),
-                "transition-coupled",
-                retained_prefill_fraction=retained_prefill_fraction,
-                deadline_scale=1.0,
-                **workload_config.problem_kwargs(),
-            ),
-            scale,
-        )
+        problem = _scale_network(with_retained_prefill_fraction(base, retained_prefill_fraction), scale)
         try:
             result = solve_soft_deadline_cvxpy(problem)
             rounded = round_allocation(problem, result.y)
@@ -143,6 +138,34 @@ def _write_rows(path: Path, rows: list[dict[str, float | str]]) -> None:
         writer = csv.DictWriter(f, fieldnames=COLUMNS, lineterminator="\n")
         writer.writeheader()
         writer.writerows(rows)
+
+
+def _run_jobs(label, jobs, fn):
+    workers = _worker_count(len(jobs))
+    if workers == 1:
+        rows = []
+        for i, job in enumerate(jobs, 1):
+            rows.append(fn(job))
+            _log_progress(label, i, len(jobs))
+        return rows
+    results = [None] * len(jobs)
+    with ProcessPoolExecutor(max_workers=workers) as pool:
+        futures = {pool.submit(fn, job): i for i, job in enumerate(jobs)}
+        for done, future in enumerate(as_completed(futures), 1):
+            results[futures[future]] = future.result()
+            _log_progress(label, done, len(jobs))
+    return results
+
+
+def _worker_count(job_count):
+    requested = int(os.environ.get("CONVEX_ALLOCATION_WORKERS", "0") or 0)
+    if requested <= 0:
+        requested = min(8, os.cpu_count() or 1)
+    return max(1, min(requested, job_count))
+
+
+def _log_progress(label, done, total):
+    print(f"{label}: {done}/{total}", file=sys.stderr, flush=True)
 
 
 def _plot(rows, path: Path) -> None:

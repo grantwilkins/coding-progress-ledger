@@ -2,7 +2,9 @@ from __future__ import annotations
 
 import csv
 import math
+import os
 import sys
+from concurrent.futures import ProcessPoolExecutor, as_completed
 from pathlib import Path
 
 import numpy as np
@@ -26,8 +28,8 @@ from experiments.run_integer_optimality_cases import (
 from experiments.run_queue_failure_diagnostics import repair_rounded_allocation
 from metrics import retained_prefill_action_mix, retained_prefill_moved_s
 from objective import objective
-from problem import ProblemData, make_problem
-from queueing import evaluate_rounded_queue, round_allocation
+from problem import ProblemData, make_problem, with_retained_prefill_fraction
+from queueing import evaluate_rounded_allocation, evaluate_rounded_queue, round_allocation
 
 RETAINED_PREFILL_FRACTIONS = (0.20, 0.30, 0.40, 0.50, 0.60, 0.70, 0.80, 0.90, 1.00)
 DEADLINE_HEADROOMS = (0.60, 0.75, 0.85, 1.00)
@@ -35,6 +37,8 @@ LINEAR_OVERRUN_WEIGHTS = (5.0, 25.0, 100.0)
 QUADRATIC_OVERRUN_WEIGHTS = (25.0, 100.0, 500.0)
 DRAIN_WINDOWS_S = (0.0, 900.0, 1800.0, 3600.0)
 REPORT_DRAIN_WINDOW_S = 1800.0
+SOFT_DEADLINE = "soft-deadline"
+REPLAY_ONLY = "replay-only"
 
 
 def run_report_experiments(workload_config: WorkloadConfig = WorkloadConfig()) -> None:
@@ -44,7 +48,7 @@ def run_report_experiments(workload_config: WorkloadConfig = WorkloadConfig()) -
     sensitivity_rows = deadline_weight_sensitivity(workload_config)
     architecture_rows = model_architecture_sweep(workload_config)
     adversarial_rows = adversarial_queue_case()
-    claim_rows = claim_table(workload_config, architecture_rows)
+    claim_rows = claim_table(workload_config, architecture_rows, _claim_frontiers(workload_config))
     _write_rows(out / "claim_table.csv", claim_rows)
     _write_rows(out / "rounding_gap_study.csv", rounding_rows)
     _write_rows(out / "rounding_gap_summary.csv", rounding_summary)
@@ -53,12 +57,17 @@ def run_report_experiments(workload_config: WorkloadConfig = WorkloadConfig()) -
     _write_rows(out / "adversarial_queue_case.csv", adversarial_rows)
 
 
-def claim_table(workload_config: WorkloadConfig, architecture_rows: list[dict[str, object]] | None = None):
+def claim_table(
+    workload_config: WorkloadConfig,
+    architecture_rows: list[dict[str, object]] | None = None,
+    frontiers: dict[str, dict[str, object]] | None = None,
+):
     transition = make_problem(get_model("GLM-5"), "transition-coupled", **workload_config.problem_kwargs())
     main = _rounded_metrics(transition, solve_soft_deadline_cvxpy, REPORT_DRAIN_WINDOW_S)[1]
     online = _rounded_metrics(transition, solve_online_queue_greedy, REPORT_DRAIN_WINDOW_S)[1]
-    main_frontier = _max_safe_fraction(get_model("GLM-5"), "transition-coupled", solve_soft_deadline_cvxpy, workload_config)
-    replay_frontier = _max_safe_fraction(get_model("GLM-5"), "transition-coupled", solve_replay_only, workload_config)
+    frontiers = frontiers or _claim_frontiers(workload_config)
+    main_frontier = frontiers["main"]
+    replay_frontier = frontiers["replay"]
     architecture_rows = architecture_rows or model_architecture_sweep(workload_config)
     replay_values = [float(row["replay_fraction"]) for row in architecture_rows if row["status"] == "SAFE"]
     action_range = max(replay_values) - min(replay_values) if replay_values else math.nan
@@ -123,52 +132,30 @@ def rounding_gap_study():
 
 
 def deadline_weight_sensitivity(workload_config: WorkloadConfig):
-    rows = []
     model = get_model("GLM-5")
-    for headroom in DEADLINE_HEADROOMS:
-        for linear in LINEAR_OVERRUN_WEIGHTS:
-            for quadratic in QUADRATIC_OVERRUN_WEIGHTS:
-                problem = make_problem(
-                    model,
-                    "transition-coupled",
-                    retained_prefill_fraction=0.90,
-                    deadline_scale=1.0,
-                    **workload_config.problem_kwargs(),
-                )
-                try:
-                    result = solve_soft_deadline_cvxpy(problem, headroom, linear, quadratic)
-                    y = round_allocation(problem, result.y).y
-                except (RuntimeError, ValueError):
-                    for drain in DRAIN_WINDOWS_S:
-                        rows.append(_empty_sensitivity_row(headroom, linear, quadratic, drain))
-                    continue
-                for drain in DRAIN_WINDOWS_S:
-                    metrics = evaluate_rounded_queue(problem, y, drain_window_s=drain)
-                    mix = retained_prefill_action_mix(problem, y)
-                    rows.append(
-                        {
-                            "deadline_headroom": headroom,
-                            "linear_overrun_weight": linear,
-                            "quadratic_overrun_weight": quadratic,
-                            "drain_window_s": drain,
-                            "status": "OK",
-                            "safe": _safe(metrics),
-                            "p95_delay_over_deadline": metrics["p95_reconstruction_delay_ratio"],
-                            "deadline_miss_rate": metrics["deadline_miss_rate"],
-                            "network_capacity_pressure": metrics["network_capacity_pressure"],
-                            "prefill_capacity_pressure": metrics["prefill_capacity_pressure"],
-                            **mix,
-                        }
-                    )
-    return rows
+    problem = make_problem(
+        model,
+        "transition-coupled",
+        retained_prefill_fraction=0.90,
+        deadline_scale=1.0,
+        **workload_config.problem_kwargs(),
+    )
+    jobs = [
+        (problem, headroom, linear, quadratic)
+        for headroom in DEADLINE_HEADROOMS
+        for linear in LINEAR_OVERRUN_WEIGHTS
+        for quadratic in QUADRATIC_OVERRUN_WEIGHTS
+    ]
+    return [row for rows in _run_jobs("deadline weight sensitivity", jobs, _sensitivity_job) for row in rows]
 
 
 def model_architecture_sweep(workload_config: WorkloadConfig):
-    rows = []
-    for model in catalog_models():
-        frontier = _max_safe_fraction(model, "bandwidth-spread", solve_soft_deadline_cvxpy, workload_config)
-        rows.append({"model": model.name, **frontier})
-    return rows
+    frontiers = _frontiers(
+        [(model.name, model, "bandwidth-spread", SOFT_DEADLINE) for model in catalog_models()],
+        workload_config,
+        "model architecture frontier",
+    )
+    return [{"model": model.name, **frontiers[model.name]} for model in catalog_models()]
 
 
 def adversarial_queue_case():
@@ -215,30 +202,60 @@ def adversarial_problem_and_relaxed_allocation():
     return problem, solve_cvxpy(problem).y
 
 
+def _claim_frontiers(workload_config: WorkloadConfig) -> dict[str, dict[str, object]]:
+    model = get_model("GLM-5")
+    return _frontiers(
+        (
+            ("main", model, "transition-coupled", SOFT_DEADLINE),
+            ("replay", model, "transition-coupled", REPLAY_ONLY),
+        ),
+        workload_config,
+        "claim frontier",
+    )
+
+
 def _max_safe_fraction(model, regime, solver, workload_config):
+    solver_name = _solver_name(solver)
+    workers = _worker_count(len(RETAINED_PREFILL_FRACTIONS))
+    if workers != 1:
+        return _frontiers((("frontier", model, regime, solver_name),), workload_config, "retained-prefill frontier")[
+            "frontier"
+        ]
     best = None
+    warm_start = None
+    base = make_problem(model, regime, retained_prefill_fraction=1.0, **workload_config.problem_kwargs())
     for fraction in RETAINED_PREFILL_FRACTIONS:
-        problem = make_problem(model, regime, retained_prefill_fraction=fraction, **workload_config.problem_kwargs())
-        try:
-            y, metrics = _rounded_metrics(problem, solver, REPORT_DRAIN_WINDOW_S)
-        except (RuntimeError, ValueError):
+        point = _frontier_point("frontier", fraction, solver_name, with_retained_prefill_fraction(base, fraction), warm_start)
+        warm_start = point[3]
+        if point[2] is None:
             continue
-        if _safe(metrics):
-            mix = retained_prefill_action_mix(problem, y)
-            bottleneck = "network" if metrics["network_capacity_pressure"] >= metrics["prefill_capacity_pressure"] else "prefill"
-            best = {
-                "status": "SAFE",
-                "largest_tested_safe_retained_prefill_fraction": fraction,
-                "frontier_censored_by_grid": fraction == RETAINED_PREFILL_FRACTIONS[-1],
-                "bottleneck_type": bottleneck,
-                "p95_delay_over_deadline": metrics["p95_reconstruction_delay_ratio"],
-                "deadline_miss_rate": metrics["deadline_miss_rate"],
-                "network_capacity_pressure": metrics["network_capacity_pressure"],
-                "prefill_capacity_pressure": metrics["prefill_capacity_pressure"],
-                "replay_fraction": mix["replay_retained_prefill_fraction"],
-                "state_transfer_fraction": mix["state_transfer_retained_prefill_fraction"],
-            }
-    return best or {
+        best = point[2]
+    return best or _unsafe_frontier()
+
+
+def _frontiers(specs, workload_config: WorkloadConfig, label: str) -> dict[str, dict[str, object]]:
+    jobs = []
+    bases = {}
+    for key, model, regime, solver_name in specs:
+        base_key = (model.name, regime)
+        if base_key not in bases:
+            bases[base_key] = make_problem(model, regime, retained_prefill_fraction=1.0, **workload_config.problem_kwargs())
+        base = bases[base_key]
+        jobs.extend(
+            (key, fraction, solver_name, with_retained_prefill_fraction(base, fraction))
+            for fraction in RETAINED_PREFILL_FRACTIONS
+        )
+    points = _run_jobs(label, jobs, _frontier_point_job)
+    return {key: _best_frontier(points, key) for key, *_ in specs}
+
+
+def _best_frontier(points, key):
+    rows = [row for point_key, _, row, _ in points if point_key == key and row is not None]
+    return max(rows, key=lambda row: row["largest_tested_safe_retained_prefill_fraction"]) if rows else _unsafe_frontier()
+
+
+def _unsafe_frontier():
+    return {
         "status": "UNSAFE",
         "largest_tested_safe_retained_prefill_fraction": math.nan,
         "frontier_censored_by_grid": False,
@@ -252,11 +269,119 @@ def _max_safe_fraction(model, regime, solver, workload_config):
     }
 
 
+def _frontier_point_job(job):
+    return _frontier_point(*job)
+
+
+def _frontier_point(key, fraction, solver_name, problem, initial_y=None):
+    try:
+        y, metrics = _rounded_metrics_named(problem, solver_name, REPORT_DRAIN_WINDOW_S, initial_y)
+    except (RuntimeError, ValueError):
+        return key, fraction, None, initial_y
+    if not _safe(metrics):
+        return key, fraction, None, y
+    mix = retained_prefill_action_mix(problem, y)
+    bottleneck = "network" if metrics["network_capacity_pressure"] >= metrics["prefill_capacity_pressure"] else "prefill"
+    return key, fraction, {
+        "status": "SAFE",
+        "largest_tested_safe_retained_prefill_fraction": fraction,
+        "frontier_censored_by_grid": fraction == RETAINED_PREFILL_FRACTIONS[-1],
+        "bottleneck_type": bottleneck,
+        "p95_delay_over_deadline": metrics["p95_reconstruction_delay_ratio"],
+        "deadline_miss_rate": metrics["deadline_miss_rate"],
+        "network_capacity_pressure": metrics["network_capacity_pressure"],
+        "prefill_capacity_pressure": metrics["prefill_capacity_pressure"],
+        "replay_fraction": mix["replay_retained_prefill_fraction"],
+        "state_transfer_fraction": mix["state_transfer_retained_prefill_fraction"],
+    }, y
+
+
 def _rounded_metrics(problem, solver, drain_window_s):
     result = solver(problem)
     y = result.allocation if hasattr(result, "allocation") else result.y
     rounded = y if np.allclose(y, np.rint(y)) else round_allocation(problem, y).y
     return rounded, evaluate_rounded_queue(problem, rounded, drain_window_s=drain_window_s)
+
+
+def _rounded_metrics_named(problem, solver_name, drain_window_s, initial_y=None):
+    result = _solve_named(problem, solver_name, initial_y)
+    y = result.allocation if hasattr(result, "allocation") else result.y
+    rounded = y if np.allclose(y, np.rint(y)) else round_allocation(problem, y).y
+    return rounded, evaluate_rounded_queue(problem, rounded, drain_window_s=drain_window_s)
+
+
+def _solve_named(problem, solver_name, initial_y=None):
+    if solver_name == SOFT_DEADLINE:
+        return solve_soft_deadline_cvxpy(problem, initial_y=initial_y)
+    if solver_name == REPLAY_ONLY:
+        return solve_replay_only(problem)
+    raise ValueError(f"unknown solver: {solver_name}")
+
+
+def _solver_name(solver):
+    if solver is solve_soft_deadline_cvxpy:
+        return SOFT_DEADLINE
+    if solver is solve_replay_only:
+        return REPLAY_ONLY
+    raise ValueError(f"unknown frontier solver: {solver}")
+
+
+def _sensitivity_job(job):
+    problem, headroom, linear, quadratic = job
+    try:
+        result = solve_soft_deadline_cvxpy(problem, headroom, linear, quadratic)
+        rounded = round_allocation(problem, result.y)
+    except (RuntimeError, ValueError):
+        return [_empty_sensitivity_row(headroom, linear, quadratic, drain) for drain in DRAIN_WINDOWS_S]
+    mix = retained_prefill_action_mix(problem, rounded.y)
+    rows = []
+    for drain in DRAIN_WINDOWS_S:
+        metrics = evaluate_rounded_allocation(problem, rounded, drain_window_s=drain)
+        rows.append(
+            {
+                "deadline_headroom": headroom,
+                "linear_overrun_weight": linear,
+                "quadratic_overrun_weight": quadratic,
+                "drain_window_s": drain,
+                "status": "OK",
+                "safe": _safe(metrics),
+                "p95_delay_over_deadline": metrics["p95_reconstruction_delay_ratio"],
+                "deadline_miss_rate": metrics["deadline_miss_rate"],
+                "network_capacity_pressure": metrics["network_capacity_pressure"],
+                "prefill_capacity_pressure": metrics["prefill_capacity_pressure"],
+                **mix,
+            }
+        )
+    return rows
+
+
+def _run_jobs(label, jobs, fn):
+    workers = _worker_count(len(jobs))
+    if workers == 1:
+        return [_progress(label, i + 1, len(jobs), fn(job)) for i, job in enumerate(jobs)]
+    results = [None] * len(jobs)
+    with ProcessPoolExecutor(max_workers=workers) as pool:
+        futures = {pool.submit(fn, job): i for i, job in enumerate(jobs)}
+        for done, future in enumerate(as_completed(futures), 1):
+            results[futures[future]] = future.result()
+            _log_progress(label, done, len(jobs))
+    return results
+
+
+def _progress(label, done, total, result):
+    _log_progress(label, done, total)
+    return result
+
+
+def _log_progress(label, done, total):
+    print(f"{label}: {done}/{total}", file=sys.stderr, flush=True)
+
+
+def _worker_count(job_count):
+    requested = int(os.environ.get("CONVEX_ALLOCATION_WORKERS", "0") or 0)
+    if requested <= 0:
+        requested = min(8, os.cpu_count() or 1)
+    return max(1, min(requested, job_count))
 
 
 def _claim_row(claim, metric, winner, baseline, winner_value, baseline_value, passed):

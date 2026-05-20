@@ -80,6 +80,10 @@ adversarial queue tables:
 uv run python experiments/run_report_experiments.py
 ```
 
+Long CVXPY sweeps run independent grid points in a process pool. Set
+`CONVEX_ALLOCATION_WORKERS=1` for a sequential run, or to another positive
+integer to cap worker processes.
+
 Outputs are written to `convex-allocation/outputs/sweep/`:
 generated workload runs write the same current report/network artifacts to a
 labeled subdirectory such as

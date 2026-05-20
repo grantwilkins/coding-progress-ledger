@@ -139,6 +139,7 @@ def solve_soft_deadline_cvxpy(
     overrun_linear_weight: float = 25.0,
     overrun_quadratic_weight: float = 100.0,
     eps: float = 1e-6,
+    initial_y: np.ndarray | None = None,
 ) -> SolverResult:
     if deadline_headroom <= 0.0:
         raise ValueError("deadline_headroom must be positive")
@@ -194,13 +195,17 @@ def solve_soft_deadline_cvxpy(
         / n_overrun,
     ]
     prob = cp.Problem(cp.Minimize(sum(terms)), constraints)
+    if initial_y is not None:
+        if initial_y.shape != (problem.G, M + 1):
+            raise ValueError("initial_y has wrong shape")
+        y.value = np.maximum(np.asarray(initial_y, dtype=float), 0.0)
     last_error: Exception | None = None
     for solver, kwargs in (
         (cp.CLARABEL, {}),
         (cp.SCS, {"eps": 1e-6, "max_iters": 100_000}),
     ):
         try:
-            prob.solve(solver=solver, **kwargs)
+            prob.solve(solver=solver, warm_start=initial_y is not None, **kwargs)
             if prob.status not in (cp.OPTIMAL, cp.OPTIMAL_INACCURATE) or y.value is None:
                 raise RuntimeError(f"{solver} returned {prob.status}")
             y_value = np.maximum(np.asarray(y.value, dtype=float), 0.0)

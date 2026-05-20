@@ -68,6 +68,7 @@ class ProblemData:
             raise ValueError(f"missing ProblemData fields: {missing}")
         for key, value in values.items():
             object.__setattr__(self, key, value)
+        object.__setattr__(self, "_cache", {})
 
     @property
     def G(self) -> int:
@@ -176,6 +177,26 @@ def make_problem(
         h_kv=h_kv.copy(),
         retained_prefill_target_s=retained_prefill_target_s,
         w=w,
+    )
+
+
+def with_retained_prefill_fraction(problem: ProblemData, fraction: float) -> ProblemData:
+    return ProblemData(
+        model=problem.model,
+        regime=problem.regime,
+        T=problem.T,
+        d=problem.d,
+        deadline_s=problem.deadline_s,
+        lambda_Bps=problem.lambda_Bps,
+        rho_prefill=problem.rho_prefill,
+        C_net=problem.C_net,
+        C_prefill=problem.C_prefill,
+        ell_net=problem.ell_net,
+        ell_prefill=problem.ell_prefill,
+        h_ctx=problem.h_ctx,
+        h_kv=problem.h_kv,
+        retained_prefill_target_s=fraction * float(np.dot(problem.tau, problem.d)),
+        w=problem.w,
     )
 
 
