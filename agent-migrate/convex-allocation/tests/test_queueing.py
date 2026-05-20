@@ -238,6 +238,17 @@ def test_counted_rounded_metrics_match_expanded_trace_metrics():
         assert_allclose(counted[key], expanded[key])
 
 
+def test_empty_queue_metrics_include_normalized_delay_aliases():
+    problem = queue_problem([1], [1], [10.0], 0.0)
+    y = np.array([[0, 0, 1]])
+
+    metrics = evaluate_rounded_queue(problem, y, drain_window_s=10.0)
+
+    assert metrics["p95_normalized_reconstruction_delay"] == 0.0
+    assert metrics["p95_reconstruction_delay_ratio"] == 0.0
+    assert metrics["absolute_p95_delay_over_deadline"] == 0.0
+
+
 def test_counted_metrics_preserve_zero_window_edf_tie_order():
     problem = queue_problem([1, 1, 1], [2, 2, 2], [5.0, 3.0, 5.0], 0.0)
     y = np.array(
