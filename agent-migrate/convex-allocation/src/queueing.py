@@ -226,6 +226,8 @@ def queue_metrics(
     drain_window_s: float = 1800.0,
     release_policy: str = "edf",
 ) -> dict[str, float]:
+    if np.allclose(y, np.rint(y)):
+        return evaluate_rounded_queue(problem, y, drain_window_s, release_policy)
     rounded = round_allocation(problem, y)
     metrics = evaluate_static_queue(problem, rounded.records, drain_window_s, release_policy)
     _add_retained_metrics(metrics, problem, rounded.y, rounded.retained_prefill_moved_s)

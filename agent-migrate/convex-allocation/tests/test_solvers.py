@@ -14,6 +14,8 @@ Plausible wrong implementations:
 - Claim catalog action-mix conclusions from diagnostics instead of the CVXPY oracle.
 - Let the mixed greedy baseline ignore current destination load.
 - Let the crossover baseline quietly become another coupled-load greedy solver.
+- Let the online queue baseline ignore prefill backlog when replay queues build.
+- Let the online queue baseline ignore network backlog when choosing destinations.
 - Accept a transition-coupled scenario that is single-destination or single-action.
 - Use full window capacity instead of available deadline-rate capacity.
 - Enforce deadline buckets as disjoint bins instead of cumulative thresholds.
@@ -24,7 +26,12 @@ from __future__ import annotations
 
 import numpy as np
 
-from baselines import solve_crossover_greedy, solve_mixed_greedy, solve_replay_only
+from baselines import (
+    solve_crossover_greedy,
+    solve_mixed_greedy,
+    solve_online_queue_greedy,
+    solve_replay_only,
+)
 from catalog import ModelParams, catalog_models, get_model
 from coefficients import REPLAY, STATE, compute_coefficients
 from cvxpy_solver import solve_cvxpy, solve_deadline_aware_cvxpy, solve_soft_deadline_cvxpy
@@ -187,6 +194,54 @@ def loaded_two_dest_problem() -> ProblemData:
         h_kv=np.zeros((1, 2)),
         retained_prefill_target_s=1.0,
     )
+
+
+def test_online_queue_greedy_uses_prefill_backlog_for_action_choice():
+    model = ModelParams("online-prefill", 0.0, 15.0, 1.0, 0.0)
+    problem = ProblemData(
+        model=model,
+        regime="online-prefill",
+        T=np.array([10.0]),
+        d=np.array([2.0]),
+        deadline_s=np.array([1.0]),
+        lambda_Bps=np.array([100.0]),
+        rho_prefill=np.array([10.0]),
+        C_net=np.array([10_000.0]),
+        C_prefill=np.array([1_000.0]),
+        ell_net=np.zeros(1),
+        ell_prefill=np.zeros(1),
+        h_ctx=np.zeros((1, 1)),
+        h_kv=np.zeros((1, 1)),
+        retained_prefill_target_s=20.0,
+    )
+
+    result = solve_online_queue_greedy(problem)
+
+    np.testing.assert_array_equal(result.allocation[0], [1, 1, 0])
+
+
+def test_online_queue_greedy_uses_network_backlog_for_destination_choice():
+    model = ModelParams("online-network", 20.0, 1.0, 1.0, 0.0)
+    problem = ProblemData(
+        model=model,
+        regime="online-network",
+        T=np.array([10.0]),
+        d=np.array([2.0]),
+        deadline_s=np.array([1.0]),
+        lambda_Bps=np.array([10.0, 10.0]),
+        rho_prefill=np.array([1_000.0, 1_000.0]),
+        C_net=np.array([10_000.0, 10_000.0]),
+        C_prefill=np.array([1_000_000.0, 1_000_000.0]),
+        ell_net=np.zeros(2),
+        ell_prefill=np.zeros(2),
+        h_ctx=np.zeros((1, 2)),
+        h_kv=np.zeros((1, 2)),
+        retained_prefill_target_s=20.0,
+    )
+
+    result = solve_online_queue_greedy(problem)
+
+    np.testing.assert_array_equal(result.allocation[0], [0, 1, 0, 1, 0])
 
 
 def test_mixed_greedy_uses_current_load_marginal_cost():

@@ -111,6 +111,8 @@ def test_policy_labels_are_short_enough_for_paper_legends():
         "deadline-penalty-rounded",
         "mirror-descent-rounded",
         "crossover-greedy",
+        "least-loaded-destination",
+        "online-queue-greedy",
         "replay-only",
         "state-only",
     }
@@ -119,7 +121,7 @@ def test_policy_labels_are_short_enough_for_paper_legends():
 
 
 def test_plot_legend_leads_with_deadline_penalty_policy():
-    assert len(PLOT_POLICIES) == 6
+    assert len(PLOT_POLICIES) == 8
     assert "deadline-aware-m0.8-rounded" not in PLOT_POLICIES
     assert "deadline-aware-m1.0-rounded" not in PLOT_POLICIES
     assert PLOT_POLICIES[:2] == ("deadline-penalty-rounded", "CVXPY-rounded")
@@ -128,6 +130,8 @@ def test_plot_legend_leads_with_deadline_penalty_policy():
         "deadline-penalty-rounded",
         "mirror-descent-rounded",
         "crossover-greedy",
+        "least-loaded-destination",
+        "online-queue-greedy",
         "replay-only",
         "state-only",
     }

@@ -14,8 +14,11 @@ SRC = ROOT / "src"
 sys.path.insert(0, str(SRC))
 
 from baselines import (
+    BaselineResult,
     solve_crossover_greedy,
+    solve_least_loaded_destination,
     solve_mixed_greedy,
+    solve_online_queue_greedy,
     solve_replay_only,
     solve_state_only,
 )
@@ -43,15 +46,19 @@ REPAIRED_MAIN_POLICY = "repaired-deadline-penalty-rounded"
 POLICIES = (
     ("CVXPY-rounded", solve_cvxpy),
     (
-        "deadline-aware-m0.8-rounded",
-        lambda problem: solve_deadline_aware_cvxpy(problem, 0.8, retained_prefill_cap=problem.retained_prefill_target_s),
+        "deadline-aware-CVXPY-rounded",
+        lambda problem: solve_deadline_aware_cvxpy(
+            problem, 1.0, retained_prefill_cap=problem.retained_prefill_target_s
+        ),
     ),
     (
-        "deadline-aware-m1.0-rounded",
-        lambda problem: solve_deadline_aware_cvxpy(problem, 1.0, retained_prefill_cap=problem.retained_prefill_target_s),
+        "repaired-deadline-aware-CVXPY-rounded",
+        lambda problem: solve_repaired_deadline_aware_cvxpy(problem),
     ),
     ("mirror-descent-rounded", lambda problem: solve_mirror_descent(problem, eta_x0=500.0)),
     ("crossover-greedy", solve_crossover_greedy),
+    ("least-loaded-destination", solve_least_loaded_destination),
+    ("online-queue-greedy", solve_online_queue_greedy),
     ("mixed-greedy", solve_mixed_greedy),
     ("replay-only", solve_replay_only),
     ("state-only", solve_state_only),
@@ -338,6 +345,19 @@ def repair_rounded_allocation(problem, y, max_steps=1000, max_changes=None, drai
         y, metrics, trace, move = best
         moves.append(move)
     raise RuntimeError("rounded local repair did not converge")
+
+
+def solve_repaired_deadline_aware_cvxpy(problem):
+    rounded = round_allocation(
+        problem,
+        solve_deadline_aware_cvxpy(problem, 1.0, retained_prefill_cap=problem.retained_prefill_target_s).y,
+    )
+    repair = repair_rounded_allocation(problem, rounded.y)
+    coeffs = compute_coefficients(problem)
+    obj = objective(problem, coeffs, repair.y)
+    moved = retained_prefill_moved_s(problem, repair.y)
+    feasible = moved >= problem.retained_prefill_target_s - 1e-8 and np.isfinite(obj)
+    return BaselineResult(feasible, obj if feasible else None, moved, repair.y)
 
 
 def _solver_queue(policy, solver, problem, retained_prefill_fraction, deadline_scale):

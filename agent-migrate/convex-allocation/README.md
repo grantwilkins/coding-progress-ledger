@@ -100,8 +100,9 @@ generated workload runs write to a labeled subdirectory such as
 `summary.csv` marks infeasible baselines as `INFEASIBLE` and includes retained
 prefill target, retained prefill moved, resident-state TB, NVL72 HBM fraction,
 capacity feasibility, deadline overrun, mirror-descent objective gap, selected
-scalar load multiplier `alpha`, and bisection count. The transition-coupled CSVs compare fixed-load CVXPY,
-deadline-penalty CVXPY, mirror descent, crossover-greedy, mixed-greedy,
+scalar load multiplier `alpha`, and bisection count. The transition-coupled CSVs
+compare fixed-load CVXPY, deadline-penalty CVXPY, mirror descent,
+crossover-greedy, least-loaded-destination, online-queue-greedy, mixed-greedy,
 replay-only, and state-only on the GLM-5 4/6/9 Gbps stress case.
 `make_problem(...)` defaults to the generated 10k active-session workload
 aggregated into 48 classes. `workload_source="fixed"` keeps the six-row smoke
@@ -118,7 +119,8 @@ state target TB, actual evacuated state TB, network/prefill capacity pressure,
 replay/state-transfer retained-prefill shares, drain completion time, and
 deadline overrun. Main plots lead with deadline-penalty CVXPY and include plain
 CVXPY as the resource-cost oracle, plus mirror descent, crossover-greedy,
-replay-only, and state-transfer-only.
+least-loaded-destination, online-queue-greedy, replay-only, and
+state-transfer-only.
 The failure diagnostic adds per-request queue tracing, missed-request breakdowns
 by class, destination, and action, and a one-request rounded local repair for the
 tight 0.25x and 0.5x deadline settings.
@@ -129,8 +131,9 @@ queue-safe retained-prefill fraction, request migration fraction, actual
 evacuated state TB, and max network/prefill queue depth.
 The integer optimality cases exhaustively solve tiny 8/14/20-request problems.
 They separate the best integer convex-objective allocation from the best integer
-queue schedule, then compare rounded relaxations, repaired CVXPY, and greedy
-baselines on objective gaps, p95 delay, miss rate, and target feasibility.
+queue schedule, then compare rounded relaxations, repaired deadline-aware CVXPY,
+and greedy baselines on objective gaps, p95 delay, miss rate, and target
+feasibility.
 
 The catalog is local and hard-coded from `kv-transfer-early-experiment/FINDINGS.md`.
 It does not import that directory.

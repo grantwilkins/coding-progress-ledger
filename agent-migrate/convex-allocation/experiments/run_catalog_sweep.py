@@ -12,7 +12,9 @@ sys.path.insert(0, str(SRC))
 from baselines import (
     BaselineResult,
     solve_crossover_greedy,
+    solve_least_loaded_destination,
     solve_mixed_greedy,
+    solve_online_queue_greedy,
     solve_replay_only,
     solve_state_only,
 )
@@ -206,6 +208,8 @@ def run_transition_coupled(out, workload_config: WorkloadConfig = WorkloadConfig
         "CVXPY": cvx,
         "mirror-descent-best": md,
         "crossover-greedy": crossover,
+        "least-loaded-destination": solve_least_loaded_destination(problem),
+        "online-queue-greedy": solve_online_queue_greedy(problem),
         "mixed-greedy": solve_mixed_greedy(problem),
         "replay-only": solve_replay_only(problem),
         "state-only": solve_state_only(problem),
@@ -275,6 +279,8 @@ def _transition_queue_rows(problem, results):
         ("CVXPY", "CVXPY-rounded"),
         ("mirror-descent-best", "mirror-descent-rounded"),
         ("crossover-greedy", "crossover-greedy"),
+        ("least-loaded-destination", "least-loaded-destination"),
+        ("online-queue-greedy", "online-queue-greedy"),
         ("mixed-greedy", "mixed-greedy"),
         ("replay-only", "replay-only"),
         ("state-only", "state-only"),
@@ -408,7 +414,13 @@ def _print_queue_latex(rows):
 def _print_queue_finding(rows):
     by_policy = {row["policy"]: row for row in rows}
     main = by_policy["deadline-penalty-rounded"]
-    comparators = ("crossover-greedy", "replay-only", "state-only")
+    comparators = (
+        "crossover-greedy",
+        "least-loaded-destination",
+        "online-queue-greedy",
+        "replay-only",
+        "state-only",
+    )
     better_p95 = all(
         _queue_metric(main, "p95_reconstruction_delay")
         < _queue_metric(by_policy[policy], "p95_reconstruction_delay")

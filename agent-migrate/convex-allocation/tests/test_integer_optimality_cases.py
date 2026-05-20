@@ -9,7 +9,7 @@ Plausible wrong implementations:
 - Present the best integer convex-objective allocation as the best queue schedule.
 - Compare queue metrics from fractional allocations instead of integer ones.
 - Let a rounded policy miss the retained-prefill movement target.
-- Omit the deadline-aware or repaired-CVXPY comparison row.
+- Omit the deadline-aware, repaired deadline-aware, or online baseline row.
 """
 
 from __future__ import annotations
@@ -73,9 +73,11 @@ def test_integer_optimality_rows_report_all_policy_metrics():
         "best-integer-objective",
         "best-integer-queue",
         "CVXPY-rounded",
-        "deadline-aware-rounded",
-        "repaired-CVXPY-rounded",
+        "deadline-aware-CVXPY-rounded",
+        "repaired-deadline-aware-CVXPY-rounded",
         "crossover-greedy",
+        "least-loaded-destination",
+        "online-queue-greedy",
         "mixed-greedy",
         "replay-only",
         "state-only",

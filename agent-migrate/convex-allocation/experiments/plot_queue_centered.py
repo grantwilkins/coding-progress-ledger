@@ -30,6 +30,8 @@ sys.path.insert(0, str(SRC))
 
 from baselines import (
     solve_crossover_greedy,
+    solve_least_loaded_destination,
+    solve_online_queue_greedy,
     solve_replay_only,
     solve_state_only,
 )
@@ -46,6 +48,8 @@ MAIN_POLICIES = (
     "CVXPY-rounded",
     "mirror-descent-rounded",
     "crossover-greedy",
+    "least-loaded-destination",
+    "online-queue-greedy",
     "replay-only",
     "state-only",
 )
@@ -63,6 +67,8 @@ POLICY_COLORS = {
     "deadline-penalty-rounded": "#000000",
     "mirror-descent-rounded": "#E69F00",
     "crossover-greedy": "#009E73",
+    "least-loaded-destination": "#CC79A7",
+    "online-queue-greedy": "#56B4E9",
     "replay-only": "#D55E00",
     "state-only": "#666666",
 }
@@ -71,6 +77,8 @@ POLICY_LABELS = {
     "CVXPY-rounded": "CVXPY cost",
     "mirror-descent-rounded": "Mirror descent",
     "crossover-greedy": "Crossover greedy",
+    "least-loaded-destination": "Least loaded",
+    "online-queue-greedy": "Online queue",
     "replay-only": "Replay only",
     "state-only": "State transfer",
 }
@@ -220,6 +228,10 @@ def _example_allocation(policy, problem):
         return solve_mirror_descent(problem, eta_x0=500.0).y
     if policy == "crossover-greedy":
         return solve_crossover_greedy(problem).allocation
+    if policy == "least-loaded-destination":
+        return solve_least_loaded_destination(problem).allocation
+    if policy == "online-queue-greedy":
+        return solve_online_queue_greedy(problem).allocation
     if policy == "replay-only":
         return solve_replay_only(problem).allocation
     if policy == "state-only":

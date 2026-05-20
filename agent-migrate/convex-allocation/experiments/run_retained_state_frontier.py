@@ -14,6 +14,8 @@ sys.path.insert(0, str(SRC))
 
 from baselines import (
     solve_crossover_greedy,
+    solve_least_loaded_destination,
+    solve_online_queue_greedy,
     solve_replay_only,
     solve_state_only,
 )
@@ -44,6 +46,8 @@ POLICIES = (
     ("CVXPY-rounded", solve_cvxpy),
     ("mirror-descent-rounded", lambda problem: solve_mirror_descent(problem, eta_x0=500.0)),
     ("crossover-greedy", solve_crossover_greedy),
+    ("least-loaded-destination", solve_least_loaded_destination),
+    ("online-queue-greedy", solve_online_queue_greedy),
     ("replay-only", solve_replay_only),
     ("state-only", solve_state_only),
 )
@@ -359,6 +363,8 @@ def _print_diagnostics(frontier, rows):
 
         rivals = (
             _frontier_value(frontier, "crossover-greedy", deadline_scale),
+            _frontier_value(frontier, "least-loaded-destination", deadline_scale),
+            _frontier_value(frontier, "online-queue-greedy", deadline_scale),
             _frontier_value(frontier, "replay-only", deadline_scale),
             _frontier_value(frontier, "state-only", deadline_scale),
         )
@@ -379,10 +385,10 @@ def _print_diagnostics(frontier, rows):
     if support:
         print(
             f"{MAIN_POLICY} supports a larger safe retained-prefill fraction than crossover-greedy "
-            f"or a single-action policy at deadline scales {support}."
+            f"or another online baseline at deadline scales {support}."
         )
     else:
-        print(f"{MAIN_POLICY} does not exceed crossover-greedy or either single-action frontier.")
+        print(f"{MAIN_POLICY} does not exceed the online or single-action frontiers.")
 
 
 def _policy_failure_after_frontier(rows, policy, frontier, deadline_scale):

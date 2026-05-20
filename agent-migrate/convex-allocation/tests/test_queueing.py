@@ -13,6 +13,7 @@ Plausible wrong implementations:
 - Schedule by arrival or input order instead of earliest class deadline.
 - Count drain wait as reconstruction delay after choosing release-relative deadlines.
 - Drop the burst-at-zero baseline when drain_window_s is explicitly zero.
+- Re-round an already-integer online baseline allocation and erase its chosen requests.
 """
 
 from __future__ import annotations
@@ -185,6 +186,15 @@ def test_zero_window_zero_load_has_zero_removal_rate():
     metrics = queue_metrics(problem, y, drain_window_s=0.0)
 
     assert metrics["retained_prefill_removal_rate_s_per_s"] == 0.0
+
+
+def test_queue_metrics_preserves_integer_allocations_without_rerounding():
+    problem = queue_problem([10, 6], [1, 1], [10.0, 10.0], 6.0)
+    y = np.array([[1, 0, 0], [1, 0, 0]])
+
+    metrics = queue_metrics(problem, y, drain_window_s=0.0)
+
+    assert metrics["retained_prefill_moved_s"] == 16.0
 
 
 def test_queue_metrics_report_resident_state_tb_and_nvl72_fraction():

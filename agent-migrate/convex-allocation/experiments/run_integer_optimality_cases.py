@@ -14,7 +14,14 @@ SRC = ROOT / "src"
 sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(SRC))
 
-from baselines import solve_crossover_greedy, solve_mixed_greedy, solve_replay_only, solve_state_only
+from baselines import (
+    solve_crossover_greedy,
+    solve_least_loaded_destination,
+    solve_mixed_greedy,
+    solve_online_queue_greedy,
+    solve_replay_only,
+    solve_state_only,
+)
 from catalog import ModelParams
 from coefficients import compute_coefficients
 from cvxpy_solver import solve_cvxpy, solve_deadline_aware_cvxpy
@@ -56,7 +63,7 @@ CASES = (
 POLICIES = (
     ("CVXPY-rounded", True, lambda problem: _rounded_pair(solve_cvxpy(problem).y, problem)),
     (
-        "deadline-aware-rounded",
+        "deadline-aware-CVXPY-rounded",
         True,
         lambda problem: _rounded_pair(
             solve_deadline_aware_cvxpy(
@@ -66,11 +73,21 @@ POLICIES = (
         ),
     ),
     (
-        "repaired-CVXPY-rounded",
+        "repaired-deadline-aware-CVXPY-rounded",
         True,
-        lambda problem: _repaired_cvxpy_pair(problem),
+        lambda problem: _repaired_deadline_aware_pair(problem),
     ),
     ("crossover-greedy", False, lambda problem: _rounded_pair(solve_crossover_greedy(problem).allocation, problem)),
+    (
+        "least-loaded-destination",
+        False,
+        lambda problem: _rounded_pair(solve_least_loaded_destination(problem).allocation, problem),
+    ),
+    (
+        "online-queue-greedy",
+        False,
+        lambda problem: _rounded_pair(solve_online_queue_greedy(problem).allocation, problem),
+    ),
     ("mixed-greedy", False, lambda problem: _rounded_pair(solve_mixed_greedy(problem).allocation, problem)),
     ("replay-only", False, lambda problem: _rounded_pair(solve_replay_only(problem).allocation, problem)),
     ("state-only", False, lambda problem: _rounded_pair(solve_state_only(problem).allocation, problem)),
@@ -237,8 +254,10 @@ def _rounded_pair(y: np.ndarray, problem: ProblemData) -> tuple[np.ndarray, np.n
     return y, y if np.allclose(y, np.rint(y)) else round_allocation(problem, y).y
 
 
-def _repaired_cvxpy_pair(problem: ProblemData) -> tuple[np.ndarray, np.ndarray]:
-    relaxed = solve_cvxpy(problem).y
+def _repaired_deadline_aware_pair(problem: ProblemData) -> tuple[np.ndarray, np.ndarray]:
+    relaxed = solve_deadline_aware_cvxpy(
+        problem, deadline_margin=1.0, retained_prefill_cap=problem.retained_prefill_target_s
+    ).y
     rounded = round_allocation(problem, relaxed).y
     return relaxed, repair_rounded_allocation(problem, rounded, drain_window_s=DRAIN_WINDOW_S).y
 

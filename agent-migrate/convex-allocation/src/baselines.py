@@ -5,7 +5,7 @@ from dataclasses import dataclass
 import numpy as np
 
 from coefficients import REPLAY, STATE, Coefficients, compute_coefficients
-from metrics import capacity_loads, retained_prefill_moved_s
+from metrics import available_rates, capacity_loads, retained_prefill_moved_s
 from objective import objective
 from problem import ProblemData
 
@@ -32,6 +32,14 @@ def solve_mixed_greedy(problem: ProblemData) -> BaselineResult:
 
 def solve_crossover_greedy(problem: ProblemData) -> BaselineResult:
     return _solve_greedy(problem, (REPLAY, STATE), False)
+
+
+def solve_least_loaded_destination(problem: ProblemData) -> BaselineResult:
+    return _solve_online(problem, "load")
+
+
+def solve_online_queue_greedy(problem: ProblemData) -> BaselineResult:
+    return _solve_online(problem, "queue")
 
 
 def _solve_greedy(problem: ProblemData, actions: tuple[int, ...], use_load_cost: bool) -> BaselineResult:
@@ -76,3 +84,68 @@ def _solve_greedy(problem: ProblemData, actions: tuple[int, ...], use_load_cost:
     obj = objective(problem, coeffs, y)
     feasible = achieved >= problem.retained_prefill_target_s - 1e-8 and np.isfinite(obj)
     return BaselineResult(feasible, obj if feasible else None, achieved, y)
+
+
+def _solve_online(problem: ProblemData, key: str) -> BaselineResult:
+    coeffs = compute_coefficients(problem)
+    _, lambda_avail, rho_avail = available_rates(problem)
+    y = np.zeros((problem.G, coeffs.M + 1), dtype=int)
+    y[:, -1] = _integer_array(problem.d, "class demand")
+    L_net = problem.ell_net.copy()
+    L_prefill = problem.ell_prefill.copy()
+    net_done = np.zeros(problem.K)
+    prefill_done = np.zeros(problem.K)
+    moved = 0.0
+
+    for g in _edf_requests(problem):
+        if moved >= problem.retained_prefill_target_s - 1e-12:
+            break
+        choices = []
+        for m, (k, action) in enumerate(zip(coeffs.option_dest, coeffs.option_action)):
+            k = int(k)
+            action = int(action)
+            b_net = coeffs.b_net[g, k, action]
+            b_prefill = coeffs.b_prefill[g, k, action]
+            if (
+                L_net[k] + b_net >= (1.0 - 1e-9) * problem.C_net[k]
+                or L_prefill[k] + b_prefill >= (1.0 - 1e-9) * problem.C_prefill[k]
+            ):
+                continue
+            net_complete = net_done[k] + b_net / lambda_avail[k]
+            prefill_complete = max(prefill_done[k], net_complete) + b_prefill / rho_avail[k]
+            completion = prefill_complete if action == REPLAY else net_complete
+            load = max((L_net[k] + b_net) / problem.C_net[k], (L_prefill[k] + b_prefill) / problem.C_prefill[k])
+            choices.append(((completion if key == "queue" else load), coeffs.q[g, k, action], k, action, m))
+        if not choices:
+            break
+
+        _, _, k, action, m = min(choices)
+        b_net = coeffs.b_net[g, k, action]
+        b_prefill = coeffs.b_prefill[g, k, action]
+        net_done[k] += b_net / lambda_avail[k]
+        if action == REPLAY:
+            prefill_done[k] = max(prefill_done[k], net_done[k]) + b_prefill / rho_avail[k]
+        L_net[k] += b_net
+        L_prefill[k] += b_prefill
+        y[g, m] += 1
+        y[g, -1] -= 1
+        moved += problem.tau[g]
+
+    achieved = retained_prefill_moved_s(problem, y)
+    obj = objective(problem, coeffs, y)
+    feasible = achieved >= problem.retained_prefill_target_s - 1e-8 and np.isfinite(obj)
+    return BaselineResult(feasible, obj if feasible else None, achieved, y)
+
+
+def _edf_requests(problem: ProblemData):
+    counts = _integer_array(problem.d, "class demand")
+    for g in sorted(range(problem.G), key=lambda g: (problem.deadline_s[g], g)):
+        for _ in range(int(counts[g])):
+            yield g
+
+
+def _integer_array(values: np.ndarray, name: str) -> np.ndarray:
+    rounded = np.rint(values).astype(int)
+    if np.any(rounded < 0) or not np.allclose(values, rounded):
+        raise ValueError(f"{name} must be nonnegative integer-valued")
+    return rounded
