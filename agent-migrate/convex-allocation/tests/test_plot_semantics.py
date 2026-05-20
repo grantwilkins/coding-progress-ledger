@@ -1,15 +1,16 @@
 """
 Claim:
 The report figure script emits exactly one simple artifact per hypothesis plus a
-compact integer benchmark table. The H1/H2 plots use queue safety from
-release-relative deadline miss rate and normalized p95 delay. The H2 CDF is
-request-level, and the H4 heatmap exposes per-class state locality rather than
-only destination load.
+compact integer benchmark table. The H1/H2 plots use queue safety from absolute
+event-start deadline metrics. The H2 frontier isolates release policy for the
+main allocation policy, the H2 CDF is request-level, and the H4 heatmap exposes
+per-class state locality rather than only destination load.
 
 Plausible wrong implementations:
 - Reintroduce crowded diagnostic plots instead of the five report figures.
-- Mark a frontier point unsafe from absolute event-start diagnostics instead of
-  release-relative reconstruction safety.
+- Keep using release-relative reconstruction metrics after switching drain
+  frontier safety to event-start deadlines.
+- Plot all allocation-policy by release-policy pairs in H2.
 - Average class delays before building the CDF.
 - Keep unrelated integer policies in the compact summary table.
 - Drop context/KV locality from the manifest heatmap labels.
@@ -23,6 +24,8 @@ import pandas as pd
 
 from catalog import ModelParams
 from experiments.plot_queue_centered import (
+    FRONTIER_POLICY,
+    FRONTIER_RELEASE_POLICIES,
     INTEGER_TABLE_POLICIES,
     OUTPUT_FILES,
     REPORT_POLICIES,
@@ -61,24 +64,24 @@ def test_report_policies_are_small_enough_to_read_without_overplotting():
     assert len(REPORT_POLICIES) == 5
 
 
-def test_safe_series_requires_deadline_miss_and_normalized_delay_bounds():
+def test_safe_series_requires_absolute_deadline_bounds():
     df = pd.DataFrame(
         {
-            "deadline_miss_rate": [0.01, 0.011, 0.0],
-            "p95_delay_over_deadline": [1.0, 0.5, 1.001],
+            "absolute_deadline_miss_rate": [0.01, 0.011, 0.0],
+            "absolute_p95_delay_over_deadline": [1.0, 0.5, 1.001],
         }
     )
 
     assert _safe_series(df).tolist() == [True, False, False]
 
 
-def test_safe_series_ignores_absolute_deadline_diagnostics_when_present():
+def test_safe_series_ignores_release_relative_deadline_metrics_when_present():
     df = pd.DataFrame(
         {
-            "deadline_miss_rate": [0.0],
-            "p95_delay_over_deadline": [0.1],
-            "absolute_deadline_miss_rate": [0.5],
-            "absolute_p95_delay_over_deadline": [3.0],
+            "deadline_miss_rate": [0.5],
+            "p95_delay_over_deadline": [3.0],
+            "absolute_deadline_miss_rate": [0.0],
+            "absolute_p95_delay_over_deadline": [0.1],
         }
     )
 
@@ -87,24 +90,28 @@ def test_safe_series_ignores_absolute_deadline_diagnostics_when_present():
 
 def test_safe_frontier_uses_largest_safe_fraction_by_drain_window():
     rows = [
-        _sweep_row("deadline-penalty-rounded", 900.0, 0.2, 0.0, 0.8),
-        _sweep_row("deadline-penalty-rounded", 900.0, 0.4, 0.0, 0.9),
-        _sweep_row("deadline-penalty-rounded", 900.0, 0.6, 0.2, 0.9),
-        _sweep_row("deadline-penalty-rounded", 1800.0, 0.6, 0.0, 0.9),
-        _sweep_row("deadline-penalty-rounded", 3600.0, 0.3, 0.0, 0.9),
-        _sweep_row("replay-only", 900.0, 0.2, 0.0, 1.2),
+        _sweep_row("deadline-penalty-rounded", "edf", 900.0, 0.2, 0.0, 0.8),
+        _sweep_row("deadline-penalty-rounded", "edf", 900.0, 0.4, 0.0, 0.9),
+        _sweep_row("deadline-penalty-rounded", "edf", 900.0, 0.6, 0.2, 0.9),
+        _sweep_row("deadline-penalty-rounded", "edf", 1800.0, 0.6, 0.0, 0.9),
+        _sweep_row("deadline-penalty-rounded", "edf", 3600.0, 0.3, 0.0, 0.9),
+        _sweep_row("deadline-penalty-rounded", "random", 900.0, 0.3, 0.0, 0.9),
+        _sweep_row("replay-only", "edf", 900.0, 0.9, 0.0, 0.9),
     ]
 
     frontier = _safe_frontier(rows)
-    by_policy_window = {
-        (row.policy, row.drain_window_s): row.max_safe_retained_prefill_fraction
+    by_release_window = {
+        (row.release_policy, row.drain_window_s): row.max_safe_retained_prefill_fraction
         for row in frontier.itertuples()
     }
 
-    assert by_policy_window[("deadline-penalty-rounded", 900.0)] == 0.4
-    assert by_policy_window[("deadline-penalty-rounded", 1800.0)] == 0.6
-    assert by_policy_window[("deadline-penalty-rounded", 3600.0)] == 0.6
-    assert ("replay-only", 900.0) not in by_policy_window
+    assert FRONTIER_POLICY == "deadline-penalty-rounded"
+    assert FRONTIER_RELEASE_POLICIES == ("edf", "shortest-context-first", "random")
+    assert by_release_window[("edf", 900.0)] == 0.4
+    assert by_release_window[("edf", 1800.0)] == 0.6
+    assert by_release_window[("edf", 3600.0)] == 0.6
+    assert by_release_window[("random", 900.0)] == 0.3
+    assert set(frontier["policy"]) == {"deadline-penalty-rounded"}
 
 
 def test_cdf_points_are_request_level_empirical_cdf():
@@ -167,9 +174,10 @@ def test_queue_depth_helper_still_counts_waiting_requests_for_bandwidth_plot():
     ]
 
 
-def _sweep_row(policy, drain_window_s, retained_prefill_fraction, miss_rate, delay_ratio):
+def _sweep_row(policy, release_policy, drain_window_s, retained_prefill_fraction, miss_rate, delay_ratio):
     return {
         "policy": policy,
+        "release_policy": release_policy,
         "retained_prefill_fraction": str(retained_prefill_fraction),
         "deadline_scale": "0.5",
         "drain_window_s": str(drain_window_s),

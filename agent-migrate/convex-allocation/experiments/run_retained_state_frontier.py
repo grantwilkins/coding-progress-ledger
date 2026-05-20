@@ -31,7 +31,7 @@ from metrics import (
     total_retained_prefill_s,
 )
 from problem import make_problem, with_retained_prefill_fraction
-from queueing import fractional_queue_load_proxy, queue_metrics
+from queueing import DEFAULT_RELEASE_SEED, RELEASE_POLICIES, fractional_queue_load_proxy, queue_metrics
 
 DRAIN_WINDOWS_S = (10.0, 20.0, 40.0, 80.0, 160.0, 300.0, 600.0, 1200.0, 2400.0, 3600.0)
 BINARY_TOLERANCE = 0.01
@@ -48,6 +48,8 @@ POLICIES = (
 FRONTIER_POLICIES = tuple(policy for policy, _ in POLICIES)
 SWEEP_COLUMNS = (
     "policy",
+    "release_policy",
+    "release_seed",
     "drain_window_s",
     "deadline_scale",
     "retained_prefill_fraction",
@@ -82,6 +84,8 @@ SWEEP_COLUMNS = (
 )
 FRONTIER_COLUMNS = (
     "policy",
+    "release_policy",
+    "release_seed",
     "drain_window_s",
     "deadline_scale",
     "max_safe_retained_prefill_fraction",
@@ -111,6 +115,8 @@ def run_retained_state_frontier(workload_config: WorkloadConfig = WorkloadConfig
         (
             policy,
             solver,
+            release_policy,
+            DEFAULT_RELEASE_SEED,
             drain_window_s,
             make_problem(
                 model,
@@ -123,6 +129,7 @@ def run_retained_state_frontier(workload_config: WorkloadConfig = WorkloadConfig
         )
         for drain_window_s in DRAIN_WINDOWS_S
         for policy, solver in POLICIES
+        for release_policy in RELEASE_POLICIES
     ]
     batches = _run_jobs("retained-state drain frontier", jobs, _frontier_job)
     rows = [row for sweep_rows, _ in batches for row in sweep_rows]
@@ -135,13 +142,15 @@ def run_retained_state_frontier(workload_config: WorkloadConfig = WorkloadConfig
 
 
 def _frontier_job(job):
-    policy, solver, drain_window_s, base = job
+    policy, solver, release_policy, release_seed, drain_window_s, base = job
     cache = {}
 
     def row_at(fraction):
         fraction = _fraction(fraction)
         if fraction not in cache:
-            cache[fraction] = _policy_row(base, policy, solver, fraction, drain_window_s)
+            cache[fraction] = _policy_row(
+                base, policy, solver, release_policy, release_seed, fraction, drain_window_s
+            )
         return cache[fraction]
 
     low, high = 0.0, 1.0
@@ -160,12 +169,16 @@ def _frontier_job(job):
     unsafe_fraction = 0.0 if frontier is None else frontier["retained_prefill_fraction"] + BINARY_TOLERANCE
     if unsafe_fraction <= 1.0:
         row_at(unsafe_fraction)
-    return list(cache.values()), _frontier_row(policy, drain_window_s, safe, cache.values())
+    return list(cache.values()), _frontier_row(
+        policy, release_policy, release_seed, drain_window_s, safe, cache.values()
+    )
 
 
-def _policy_row(base, policy, solver, retained_prefill_fraction, drain_window_s):
+def _policy_row(base, policy, solver, release_policy, release_seed, retained_prefill_fraction, drain_window_s):
     problem = with_retained_prefill_fraction(base, retained_prefill_fraction)
-    row = _empty_row(policy, retained_prefill_fraction, drain_window_s, problem.retained_prefill_target_s)
+    row = _empty_row(
+        policy, release_policy, release_seed, retained_prefill_fraction, drain_window_s, problem.retained_prefill_target_s
+    )
     try:
         result = solver(problem)
     except RuntimeError:
@@ -186,7 +199,13 @@ def _policy_row(base, policy, solver, retained_prefill_fraction, drain_window_s)
     proxy = fractional_queue_load_proxy(problem, y)
     row.update(proxy)
     try:
-        metrics = queue_metrics(problem, y, drain_window_s=drain_window_s)
+        metrics = queue_metrics(
+            problem,
+            y,
+            drain_window_s=drain_window_s,
+            release_policy=release_policy,
+            release_seed=release_seed,
+        )
     except ValueError:
         row["failure_mode"] = "target_not_met"
         return row
@@ -197,16 +216,18 @@ def _policy_row(base, policy, solver, retained_prefill_fraction, drain_window_s)
     return row
 
 
-def _empty_row(policy, retained_prefill_fraction, drain_window_s, retained_prefill_target_s):
+def _empty_row(policy, release_policy, release_seed, retained_prefill_fraction, drain_window_s, retained_prefill_target_s):
     row = {
         "policy": policy,
+        "release_policy": release_policy,
+        "release_seed": _release_seed_value(release_policy, release_seed),
         "drain_window_s": drain_window_s,
         "deadline_scale": DEADLINE_SCALE,
         "retained_prefill_fraction": retained_prefill_fraction,
         "status": "INFEASIBLE",
         "safe": False,
         "failure_mode": "solver_infeasible",
-        **{column: math.nan for column in SWEEP_COLUMNS[7:]},
+        **{column: math.nan for column in SWEEP_COLUMNS[9:]},
     }
     row["retained_prefill_target_s"] = retained_prefill_target_s
     return row
@@ -255,36 +276,38 @@ def _queue_fields(metrics):
 def _is_safe(metrics):
     return (
         metrics["retained_prefill_moved_s"] >= metrics["retained_prefill_target_s"] - 1e-9
-        and metrics["deadline_miss_rate"] <= 0.01
-        and metrics["p95_reconstruction_delay_ratio"] <= 1.0
+        and metrics["absolute_deadline_miss_rate"] <= 0.01
+        and metrics["absolute_p95_delay_over_deadline"] <= 1.0
     )
 
 
 def _failure_mode(row):
     if row["retained_prefill_moved_s"] < row["retained_prefill_target_s"] - 1e-9:
         return "target_not_met"
-    if row["deadline_miss_rate"] > 0.01:
-        return "deadline_miss"
-    if row["p95_delay_over_deadline"] > 1.0:
-        return "p95_delay"
+    if row["absolute_deadline_miss_rate"] > 0.01:
+        return "absolute_deadline_miss"
+    if row["absolute_p95_delay_over_deadline"] > 1.0:
+        return "absolute_p95_delay"
     if row["network_capacity_pressure"] >= row["prefill_capacity_pressure"]:
         return "network_pressure"
     return "prefill_pressure"
 
 
-def _frontier_row(policy, drain_window_s, safe, rows):
+def _frontier_row(policy, release_policy, release_seed, drain_window_s, safe, rows):
     rows = list(rows)
     if not safe:
         unsafe = min(rows, key=lambda row: row["retained_prefill_fraction"])
         return {
             "policy": policy,
+            "release_policy": release_policy,
+            "release_seed": _release_seed_value(release_policy, release_seed),
             "drain_window_s": drain_window_s,
             "deadline_scale": DEADLINE_SCALE,
             "max_safe_retained_prefill_fraction": "UNSAFE",
             "frontier_censored_by_search": False,
             "first_unsafe_retained_prefill_fraction": unsafe["retained_prefill_fraction"],
             "first_unsafe_failure_mode": unsafe["failure_mode"],
-            **{column: "UNSAFE" for column in FRONTIER_COLUMNS[7:]},
+            **{column: "UNSAFE" for column in FRONTIER_COLUMNS[9:]},
         }
     best = max(safe, key=lambda row: row["retained_prefill_fraction"])
     first_unsafe = min(
@@ -294,6 +317,8 @@ def _frontier_row(policy, drain_window_s, safe, rows):
     )
     return {
         "policy": policy,
+        "release_policy": release_policy,
+        "release_seed": _release_seed_value(release_policy, release_seed),
         "drain_window_s": drain_window_s,
         "deadline_scale": DEADLINE_SCALE,
         "max_safe_retained_prefill_fraction": best["retained_prefill_fraction"],
@@ -316,19 +341,22 @@ def _frontier_row(policy, drain_window_s, safe, rows):
 
 
 def _monotone_frontier(rows):
-    by_key = {(row["policy"], row["drain_window_s"]): row for row in rows}
+    by_key = {(row["policy"], row["release_policy"], row["drain_window_s"]): row for row in rows}
     out = []
     for policy in FRONTIER_POLICIES:
-        best = None
-        for drain_window_s in DRAIN_WINDOWS_S:
-            row = by_key[(policy, drain_window_s)]
-            value = row["max_safe_retained_prefill_fraction"]
-            if value != "UNSAFE" and (best is None or float(value) > float(best["max_safe_retained_prefill_fraction"])):
-                best = row
-            if best is None:
-                out.append(row)
-            else:
-                out.append({**best, "drain_window_s": drain_window_s})
+        for release_policy in RELEASE_POLICIES:
+            best = None
+            for drain_window_s in DRAIN_WINDOWS_S:
+                row = by_key[(policy, release_policy, drain_window_s)]
+                value = row["max_safe_retained_prefill_fraction"]
+                if value != "UNSAFE" and (
+                    best is None or float(value) > float(best["max_safe_retained_prefill_fraction"])
+                ):
+                    best = row
+                if best is None:
+                    out.append(row)
+                else:
+                    out.append({**best, "drain_window_s": drain_window_s})
     return out
 
 
@@ -347,7 +375,7 @@ def _frontier_value(frontier, policy, drain_window_s):
     value = next(
         row["max_safe_retained_prefill_fraction"]
         for row in frontier
-        if row["policy"] == policy and row["drain_window_s"] == drain_window_s
+        if row["policy"] == policy and row["release_policy"] == "edf" and row["drain_window_s"] == drain_window_s
     )
     return math.nan if value == "UNSAFE" else float(value)
 
@@ -381,6 +409,10 @@ def _print_diagnostics(frontier):
         print(f"\n{MAIN_POLICY} supports the largest frontier at drain windows {support}.")
     else:
         print(f"\n{MAIN_POLICY} does not exceed every baseline frontier.")
+
+
+def _release_seed_value(release_policy, release_seed):
+    return release_seed if release_policy == "random" else ""
 
 
 if __name__ == "__main__":

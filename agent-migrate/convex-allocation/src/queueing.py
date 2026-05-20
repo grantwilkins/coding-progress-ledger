@@ -18,6 +18,8 @@ from metrics import (
 from problem import ProblemData
 
 EXACT_ROUNDING_MAX_REQUESTS = 200
+DEFAULT_RELEASE_SEED = 7
+RELEASE_POLICIES = ("edf", "shortest-context-first", "random")
 
 
 @dataclass(frozen=True)
@@ -44,6 +46,7 @@ class _CountedRequest:
     g: int
     k: int
     action: str
+    T: float
     deadline_s: float
     count: int
     network_service_s: float
@@ -98,8 +101,9 @@ def evaluate_static_queue(
     records: tuple[RequestRecord, ...],
     drain_window_s: float = 1800.0,
     release_policy: str = "edf",
+    release_seed: int = DEFAULT_RELEASE_SEED,
 ) -> dict[str, float]:
-    return _evaluate_static_queue(problem, records, drain_window_s, release_policy)[0]
+    return _evaluate_static_queue(problem, records, drain_window_s, release_policy, release_seed)[0]
 
 
 def evaluate_static_queue_trace(
@@ -107,8 +111,9 @@ def evaluate_static_queue_trace(
     records: tuple[RequestRecord, ...],
     drain_window_s: float = 1800.0,
     release_policy: str = "edf",
+    release_seed: int = DEFAULT_RELEASE_SEED,
 ) -> tuple[dict[str, float], tuple[QueueTraceRecord, ...]]:
-    return _evaluate_static_queue(problem, records, drain_window_s, release_policy)
+    return _evaluate_static_queue(problem, records, drain_window_s, release_policy, release_seed)
 
 
 def evaluate_rounded_queue(
@@ -116,10 +121,11 @@ def evaluate_rounded_queue(
     y: np.ndarray,
     drain_window_s: float = 1800.0,
     release_policy: str = "edf",
+    release_seed: int = DEFAULT_RELEASE_SEED,
 ) -> dict[str, float]:
     y = _integer_allocation(problem, y)
     retained_prefill_moved = float(np.dot(problem.tau, np.sum(y[:, : y.shape[1] - 1], axis=1)))
-    metrics = _evaluate_counted_queue(problem, y, drain_window_s, release_policy)
+    metrics = _evaluate_counted_queue(problem, y, drain_window_s, release_policy, release_seed)
     _add_retained_metrics(metrics, problem, y, retained_prefill_moved)
     _add_drain_metrics(metrics, retained_prefill_moved, drain_window_s)
     return metrics
@@ -130,8 +136,9 @@ def evaluate_rounded_allocation(
     rounded: RoundedAllocation,
     drain_window_s: float = 1800.0,
     release_policy: str = "edf",
+    release_seed: int = DEFAULT_RELEASE_SEED,
 ) -> dict[str, float]:
-    metrics = _evaluate_counted_queue(problem, rounded.y, drain_window_s, release_policy)
+    metrics = _evaluate_counted_queue(problem, rounded.y, drain_window_s, release_policy, release_seed)
     _add_retained_metrics(metrics, problem, rounded.y, rounded.retained_prefill_moved_s)
     _add_drain_metrics(metrics, rounded.retained_prefill_moved_s, drain_window_s)
     return metrics
@@ -142,11 +149,12 @@ def evaluate_rounded_queue_trace(
     y: np.ndarray,
     drain_window_s: float = 1800.0,
     release_policy: str = "edf",
+    release_seed: int = DEFAULT_RELEASE_SEED,
 ) -> tuple[dict[str, float], tuple[QueueTraceRecord, ...]]:
     y = _integer_allocation(problem, y)
     retained_prefill_moved = float(np.dot(problem.tau, np.sum(y[:, : y.shape[1] - 1], axis=1)))
     metrics, trace = evaluate_static_queue_trace(
-        problem, _request_records(problem, y), drain_window_s, release_policy
+        problem, _request_records(problem, y), drain_window_s, release_policy, release_seed
     )
     _add_retained_metrics(metrics, problem, y, retained_prefill_moved)
     _add_drain_metrics(metrics, retained_prefill_moved, drain_window_s)
@@ -158,9 +166,10 @@ def _evaluate_static_queue(
     records: tuple[RequestRecord, ...],
     drain_window_s: float,
     release_policy: str,
+    release_seed: int,
 ) -> tuple[dict[str, float], tuple[QueueTraceRecord, ...]]:
     H, lambda_avail, rho_avail = _available_rates(problem)
-    records = _paced_records(records, drain_window_s, release_policy)
+    records = _paced_records(records, drain_window_s, release_policy, release_seed)
     if not records:
         return {
             "mean_reconstruction_delay": 0.0,
@@ -258,8 +267,9 @@ def _evaluate_counted_queue(
     y: np.ndarray,
     drain_window_s: float,
     release_policy: str,
+    release_seed: int,
 ) -> dict[str, float]:
-    records = _counted_requests(problem, y, drain_window_s, release_policy)
+    records = _counted_requests(problem, y, drain_window_s, release_policy, release_seed)
     if not records:
         return _empty_queue_metrics()
 
@@ -341,11 +351,12 @@ def queue_metrics(
     y: np.ndarray,
     drain_window_s: float = 1800.0,
     release_policy: str = "edf",
+    release_seed: int = DEFAULT_RELEASE_SEED,
 ) -> dict[str, float]:
     if np.allclose(y, np.rint(y)):
-        return evaluate_rounded_queue(problem, y, drain_window_s, release_policy)
+        return evaluate_rounded_queue(problem, y, drain_window_s, release_policy, release_seed)
     rounded = round_allocation(problem, y)
-    return evaluate_rounded_allocation(problem, rounded, drain_window_s, release_policy)
+    return evaluate_rounded_allocation(problem, rounded, drain_window_s, release_policy, release_seed)
 
 
 def fractional_queue_load_proxy(problem: ProblemData, y: np.ndarray) -> dict[str, float]:
@@ -437,16 +448,18 @@ def _apportion(total: int, weights: np.ndarray) -> np.ndarray:
 
 
 def _counted_requests(
-    problem: ProblemData, y: np.ndarray, drain_window_s: float, release_policy: str
+    problem: ProblemData,
+    y: np.ndarray,
+    drain_window_s: float,
+    release_policy: str,
+    release_seed: int,
 ) -> tuple[_CountedRequest, ...]:
     if drain_window_s < 0.0:
         raise ValueError("drain_window_s must be nonnegative")
-    if release_policy != "edf":
-        raise ValueError(f"unknown release policy: {release_policy}")
+    _validate_release_policy(release_policy)
     coeffs = compute_coefficients(problem)
     _, lambda_avail, rho_avail = _available_rates(problem)
     cells = []
-    record_index = 0
     for g in range(problem.G):
         for m, count in enumerate(y[g, : coeffs.M]):
             count = int(count)
@@ -455,13 +468,12 @@ def _counted_requests(
                 action = int(coeffs.option_action[m])
                 cells.append(
                     (
-                        float(problem.deadline_s[g]),
-                        int(g),
-                        record_index,
+                        _ReleaseBlock(int(g), float(problem.T[g]), float(problem.deadline_s[g]), len(cells)),
                         _CountedRequest(
                             int(g),
                             k,
                             ACTIONS[action],
+                            float(problem.T[g]),
                             float(problem.deadline_s[g]),
                             count,
                             float(coeffs.b_net[g, k, action] / lambda_avail[k]),
@@ -470,16 +482,16 @@ def _counted_requests(
                         ),
                     )
                 )
-            record_index += count
 
     rank = 0
     records = []
-    for _, _, _, record in sorted(cells):
+    for _, record in _ordered_blocks(cells, release_policy, release_seed):
         records.append(
             _CountedRequest(
                 record.g,
                 record.k,
                 record.action,
+                record.T,
                 record.deadline_s,
                 record.count,
                 record.network_service_s,
@@ -529,15 +541,32 @@ def _request_records(problem: ProblemData, y: np.ndarray) -> tuple[RequestRecord
 
 
 def _paced_records(
-    records: tuple[RequestRecord, ...], drain_window_s: float, release_policy: str
+    records: tuple[RequestRecord, ...],
+    drain_window_s: float,
+    release_policy: str,
+    release_seed: int,
 ) -> tuple[RequestRecord, ...]:
     if drain_window_s < 0.0:
         raise ValueError("drain_window_s must be nonnegative")
-    if release_policy != "edf":
-        raise ValueError(f"unknown release policy: {release_policy}")
+    _validate_release_policy(release_policy)
     if not records:
         return records
-    order = sorted(range(len(records)), key=lambda i: (records[i].deadline_s, records[i].g, i))
+    blocks: dict[tuple[int, int, str], list[int]] = {}
+    for i, record in enumerate(records):
+        blocks.setdefault((record.g, record.k, record.action), []).append(i)
+    block_rows = [
+        (
+            _ReleaseBlock(
+                records[idx[0]].g,
+                records[idx[0]].T,
+                records[idx[0]].deadline_s,
+                idx[0],
+            ),
+            idx,
+        )
+        for idx in blocks.values()
+    ]
+    order = [i for _, idx in _ordered_blocks(block_rows, release_policy, release_seed) for i in idx]
     release = np.zeros(len(records))
     if drain_window_s > 0.0:
         for rank, i in enumerate(order):
@@ -555,6 +584,28 @@ def _paced_records(
         )
         for i, record in enumerate(records)
     )
+
+
+@dataclass(frozen=True)
+class _ReleaseBlock:
+    g: int
+    T: float
+    deadline_s: float
+    first_index: int
+
+
+def _ordered_blocks(blocks, release_policy: str, release_seed: int):
+    if release_policy == "random":
+        order = np.random.default_rng(release_seed).permutation(len(blocks))
+        return [blocks[int(i)] for i in order]
+    if release_policy == "shortest-context-first":
+        return sorted(blocks, key=lambda item: (item[0].T, item[0].g, item[0].first_index))
+    return sorted(blocks, key=lambda item: (item[0].deadline_s, item[0].g, item[0].first_index))
+
+
+def _validate_release_policy(release_policy: str) -> None:
+    if release_policy not in RELEASE_POLICIES:
+        raise ValueError(f"unknown release policy: {release_policy}")
 
 
 def _add_retained_metrics(

@@ -2,8 +2,9 @@
 Claim:
 The queue evaluator turns fractional retained-prefill allocations into integer
 requests, preserves the retained-prefill target by minimum overshoot, releases
-moved requests through a deterministic EDF drain, and computes nonpreemptive
-network-then-prefill reconstruction delays relative to request release time.
+moved requests through deterministic release policies, and computes
+nonpreemptive network-then-prefill reconstruction delays relative to request
+release time.
 
 Plausible wrong implementations:
 - Round to the nearest fractional counts and allow integer target shortfall.
@@ -11,6 +12,8 @@ Plausible wrong implementations:
 - Let production-sized rounding hang or use classes with zero moved support.
 - Treat replay requests as complete after network transfer instead of prefill.
 - Schedule by arrival or input order instead of earliest class deadline.
+- Treat shortest-context-first as service-time shortest-job-first.
+- Make random release order unseeded or inconsistent between counted and trace paths.
 - Count drain wait as reconstruction delay after choosing release-relative deadlines.
 - Reuse release-relative completion when reporting absolute deadline metrics.
 - Drop the burst-at-zero baseline when drain_window_s is explicitly zero.
@@ -27,6 +30,7 @@ from numpy.testing import assert_allclose
 import queueing
 from catalog import ModelParams
 from queueing import (
+    RELEASE_POLICIES,
     RequestRecord,
     evaluate_rounded_allocation,
     evaluate_rounded_queue,
@@ -189,6 +193,40 @@ def test_queue_drains_requests_by_edf_release_order():
     assert not state.deadline_missed
 
 
+def test_queue_supports_shortest_context_first_release_order():
+    problem = queue_problem([100, 10, 20], [1, 1, 1], [30.0, 50.0, 40.0], 0.0)
+    records = (
+        RequestRecord(0, 0, "state", 100.0, 30.0, 0.0, 0.0),
+        RequestRecord(1, 0, "state", 10.0, 50.0, 0.0, 0.0),
+        RequestRecord(2, 0, "state", 20.0, 40.0, 0.0, 0.0),
+    )
+
+    _, trace = evaluate_static_queue_trace(
+        problem, records, drain_window_s=60.0, release_policy="shortest-context-first"
+    )
+
+    assert _release_order(trace) == [1, 2, 0]
+
+
+def test_random_release_order_is_seeded():
+    problem = queue_problem([1, 1, 1, 1], [1, 1, 1, 1], [10.0, 20.0, 30.0, 40.0], 0.0)
+    records = tuple(RequestRecord(g, 0, "state", 1.0, 10.0 * (g + 1), 0.0, 0.0) for g in range(4))
+
+    first = evaluate_static_queue_trace(
+        problem, records, drain_window_s=40.0, release_policy="random", release_seed=7
+    )[1]
+    repeat = evaluate_static_queue_trace(
+        problem, records, drain_window_s=40.0, release_policy="random", release_seed=7
+    )[1]
+    other = evaluate_static_queue_trace(
+        problem, records, drain_window_s=40.0, release_policy="random", release_seed=8
+    )[1]
+
+    assert _release_order(first) == [0, 2, 1, 3]
+    assert _release_order(repeat) == _release_order(first)
+    assert _release_order(other) != _release_order(first)
+
+
 def test_absolute_deadline_metrics_count_late_release_time():
     problem = queue_problem([1, 1], [1, 1], [10.0, 10.0], 0.0)
     records = (
@@ -214,28 +252,33 @@ def test_counted_rounded_metrics_match_expanded_trace_metrics():
         ]
     )
 
-    counted = evaluate_rounded_queue(problem, y, drain_window_s=12.0)
-    expanded, trace = evaluate_rounded_queue_trace(problem, y, drain_window_s=12.0)
+    for release_policy in RELEASE_POLICIES:
+        counted = evaluate_rounded_queue(
+            problem, y, drain_window_s=12.0, release_policy=release_policy, release_seed=8
+        )
+        expanded, trace = evaluate_rounded_queue_trace(
+            problem, y, drain_window_s=12.0, release_policy=release_policy, release_seed=8
+        )
 
-    assert len(trace) == 8
-    for key in (
-        "mean_reconstruction_delay",
-        "p50_reconstruction_delay",
-        "p95_reconstruction_delay",
-        "p99_reconstruction_delay",
-        "p95_normalized_reconstruction_delay",
-        "deadline_miss_rate",
-        "absolute_p95_delay_over_deadline",
-        "absolute_deadline_miss_rate",
-        "network_capacity_pressure",
-        "prefill_capacity_pressure",
-        "drain_completion_s",
-        "replay_retained_prefill_fraction",
-        "state_transfer_retained_prefill_fraction",
-        "retained_prefill_moved_s",
-        "retained_prefill_removal_rate_s_per_s",
-    ):
-        assert_allclose(counted[key], expanded[key])
+        assert len(trace) == 8
+        for key in (
+            "mean_reconstruction_delay",
+            "p50_reconstruction_delay",
+            "p95_reconstruction_delay",
+            "p99_reconstruction_delay",
+            "p95_normalized_reconstruction_delay",
+            "deadline_miss_rate",
+            "absolute_p95_delay_over_deadline",
+            "absolute_deadline_miss_rate",
+            "network_capacity_pressure",
+            "prefill_capacity_pressure",
+            "drain_completion_s",
+            "replay_retained_prefill_fraction",
+            "state_transfer_retained_prefill_fraction",
+            "retained_prefill_moved_s",
+            "retained_prefill_removal_rate_s_per_s",
+        ):
+            assert_allclose(counted[key], expanded[key])
 
 
 def test_empty_queue_metrics_include_normalized_delay_aliases():
@@ -333,3 +376,7 @@ def test_queue_metrics_report_resident_state_tb_and_nvl72_fraction():
         "retained_" + "state_target_tb",
         "evacuated_" + "state_tb",
     } & metrics.keys()
+
+
+def _release_order(trace):
+    return [record.g for record in sorted(trace, key=lambda record: record.release_time_s)]

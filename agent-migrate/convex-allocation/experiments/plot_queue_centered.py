@@ -30,7 +30,7 @@ from cvxpy_solver import solve_cvxpy, solve_soft_deadline_cvxpy
 from evaluation import WorkloadConfig, parse_workload_config
 from metrics import retained_prefill_action_mix, retained_prefill_moved_s
 from problem import ProblemData, make_problem
-from queueing import evaluate_rounded_queue_trace, round_allocation
+from queueing import RELEASE_POLICIES, evaluate_rounded_queue_trace, round_allocation
 
 sns.set_theme(style="whitegrid", context="paper", font_scale=1.05)
 plt.rcParams.update({"pdf.fonttype": 42, "ps.fonttype": 42})
@@ -46,6 +46,8 @@ REPORT_POLICIES = (
     "replay-only",
     "state-only",
 )
+FRONTIER_POLICY = "deadline-penalty-rounded"
+FRONTIER_RELEASE_POLICIES = RELEASE_POLICIES
 H1_POLICIES = (
     "deadline-penalty-rounded",
     "online-queue-greedy",
@@ -70,6 +72,16 @@ POLICY_COLORS = {
     "crossover-greedy": "#54a24b",
     "replay-only": "#e45756",
     "state-only": "#b279a2",
+}
+RELEASE_POLICY_LABELS = {
+    "edf": "EDF",
+    "shortest-context-first": "Shortest context",
+    "random": "Random",
+}
+RELEASE_POLICY_COLORS = {
+    "edf": "#1b1b1b",
+    "shortest-context-first": "#4c78a8",
+    "random": "#e45756",
 }
 OUTPUT_FILES = (
     "h1_resource_pressure.pdf",
@@ -109,6 +121,8 @@ def _plot_resource_pressure(rows: list[dict[str, str]], path: Path, deadline_sca
         & (df["deadline_scale"] == deadline_scale)
         & df["policy"].isin(H1_POLICIES)
     ].copy()
+    if "release_policy" in df:
+        df = df[df["release_policy"] == "edf"].copy()
     _require_policies(df, H1_POLICIES, "resource-pressure sweep")
     df = df.dropna(subset=["network_capacity_pressure", "prefill_capacity_pressure"])
     df["Policy"] = df["policy"].map(POLICY_LABELS)
@@ -140,23 +154,23 @@ def _plot_resource_pressure(rows: list[dict[str, str]], path: Path, deadline_sca
 
 def _plot_safe_frontier(rows: list[dict[str, str]], path: Path) -> None:
     frontier = _safe_frontier(rows)
-    _require_policies(frontier, REPORT_POLICIES, "safe-frontier sweep")
+    _require_keys(set(frontier["release_policy"]), FRONTIER_RELEASE_POLICIES, "safe-frontier sweep")
     if not frontier.empty:
-        frontier["Policy"] = frontier["policy"].map(POLICY_LABELS)
+        frontier["Release policy"] = frontier["release_policy"].map(RELEASE_POLICY_LABELS)
     fig, ax = plt.subplots(figsize=(5.8, 4.0), constrained_layout=True)
     sns.lineplot(
         frontier,
         x="drain_window_s",
         y="max_safe_retained_prefill_fraction",
-        hue="Policy",
+        hue="Release policy",
         marker="o",
-        palette={POLICY_LABELS[k]: v for k, v in POLICY_COLORS.items()},
+        palette={RELEASE_POLICY_LABELS[k]: v for k, v in RELEASE_POLICY_COLORS.items()},
         ax=ax,
     )
     ax.set_xscale("log")
     ax.set_xlabel("Drain window (s)")
     ax.set_ylabel("Max safe retained-prefill fraction evacuated")
-    ax.set_title("H2: safe evacuation frontier")
+    ax.set_title("H2: same allocation policy; only release order changes")
     ax.set_ylim(0.0, 1.0)
     _simple_legend(ax)
     fig.savefig(path, bbox_inches="tight")
@@ -245,12 +259,14 @@ def _plot_state_manifest_heatmap(path: Path, retained_prefill_fraction: float, d
 
 def _safe_frontier(rows: list[dict[str, str]]) -> pd.DataFrame:
     df = _frame(rows)
-    df = df[df["policy"].isin(REPORT_POLICIES)].copy()
+    df = df[df["policy"] == FRONTIER_POLICY].copy()
     df["queue_safe"] = _safe_series(df)
     safe = df[df["queue_safe"]]
-    grouped = safe.groupby(["policy", "drain_window_s"], as_index=False)["retained_prefill_fraction"].max()
-    grouped = grouped.sort_values(["policy", "drain_window_s"])
-    grouped["retained_prefill_fraction"] = grouped.groupby("policy")["retained_prefill_fraction"].cummax()
+    grouped = safe.groupby(["policy", "release_policy", "drain_window_s"], as_index=False)[
+        "retained_prefill_fraction"
+    ].max()
+    grouped = grouped.sort_values(["release_policy", "drain_window_s"])
+    grouped["retained_prefill_fraction"] = grouped.groupby("release_policy")["retained_prefill_fraction"].cummax()
     return grouped.rename(columns={"retained_prefill_fraction": "max_safe_retained_prefill_fraction"})
 
 
@@ -435,7 +451,7 @@ def _frame(rows: list[dict[str, str]]) -> pd.DataFrame:
 
 
 def _safe_series(df: pd.DataFrame) -> pd.Series:
-    return (df["deadline_miss_rate"] <= 0.01) & (df["p95_delay_over_deadline"] <= 1.0)
+    return (df["absolute_deadline_miss_rate"] <= 0.01) & (df["absolute_p95_delay_over_deadline"] <= 1.0)
 
 
 def _cdf_points(values) -> list[tuple[float, float]]:
