@@ -99,6 +99,7 @@ labeled subdirectory such as
 
 - `h1_fixed_target_stress.csv`
 - `h1_integer_oracle.csv`
+- `h1_integer_oracle_summary.csv`
 - `h2_safe_frontier.pdf`
 - `h2_delay_cdf.pdf`
 - `h3_action_mix_by_model.pdf`

@@ -25,6 +25,7 @@ from queueing import evaluate_rounded_queue, round_allocation
 DRAIN_WINDOW_S = 20.0
 RETAINED_PREFILL_FRACTION = 0.25
 RELEASE_POLICY = "edf"
+SEEDS = tuple(range(7))
 METHODS = (
     ("Deadline-aware", lambda problem: solve_soft_deadline_cvxpy(problem).y),
     ("Online queue", lambda problem: solve_online_queue_greedy(problem).allocation),
@@ -33,6 +34,7 @@ METHODS = (
     ("State only", lambda problem: solve_state_only(problem).allocation),
 )
 COLUMNS = (
+    "seed",
     "policy",
     "integer_classes",
     "integer_requests",
@@ -49,32 +51,56 @@ COLUMNS = (
     "runtime_s",
     "verdict",
 )
+SUMMARY_COLUMNS = (
+    "policy",
+    "cases",
+    "pass_rate_mean",
+    "pass_rate_stderr",
+    "target_moved_fraction_mean",
+    "target_moved_fraction_stderr",
+    "network_capacity_pressure_mean",
+    "network_capacity_pressure_stderr",
+    "prefill_capacity_pressure_mean",
+    "prefill_capacity_pressure_stderr",
+    "absolute_p95_delay_over_deadline_mean",
+    "absolute_p95_delay_over_deadline_stderr",
+    "absolute_deadline_miss_rate_mean",
+    "absolute_deadline_miss_rate_stderr",
+    "runtime_s_mean",
+    "runtime_s_stderr",
+)
 
 
-def run_h1_integer_oracle() -> list[dict[str, object]]:
-    problem = make_h1_integer_problem()
-    rows = h1_integer_rows(problem)
+def run_h1_integer_oracle(seeds: tuple[int, ...] = SEEDS) -> list[dict[str, object]]:
+    rows = [row for seed in seeds for row in h1_integer_rows(make_h1_integer_problem(seed), seed)]
+    summary = h1_integer_summary(rows)
     out = ROOT / "outputs" / "sweep"
     out.mkdir(parents=True, exist_ok=True)
     with (out / "h1_integer_oracle.csv").open("w", newline="") as f:
         writer = csv.DictWriter(f, COLUMNS, lineterminator="\n")
         writer.writeheader()
         writer.writerows(rows)
+    with (out / "h1_integer_oracle_summary.csv").open("w", newline="") as f:
+        writer = csv.DictWriter(f, SUMMARY_COLUMNS, lineterminator="\n")
+        writer.writeheader()
+        writer.writerows(summary)
     return rows
 
 
-def make_h1_integer_problem() -> ProblemData:
-    T = np.array([2.0, 4.0])
-    d = np.array([4.0, 4.0])
-    lambda_Bps = np.array([10.0, 10.0])
-    rho_prefill = np.array([3.0, 3.0])
-    capacity_window_s = 1.8
+def make_h1_integer_problem(seed: int = 0) -> ProblemData:
+    rng = np.random.default_rng(seed)
+    T = np.sort(rng.choice(np.array([2.0, 3.0, 4.0]), size=2, replace=False))
+    d = rng.integers(3, 6, size=2).astype(float)
+    lambda_Bps = rng.uniform(9.0, 12.0, size=2)
+    rho_prefill = rng.uniform(2.7, 3.4, size=2)
+    single_request_s = max(float(np.max(4.0 * T[:, None] / lambda_Bps)), float(np.max(T[:, None] / rho_prefill)))
+    capacity_window_s = rng.uniform(1.12, 1.28) * single_request_s
     return ProblemData(
         model=ModelParams("h1-integer-oracle", 1.0, 4.0, 1.0, 0.0),
         regime="h1-integer-oracle",
         T=T,
         d=d,
-        deadline_s=np.array([30.0, 35.0]),
+        deadline_s=np.sort(rng.uniform(30.0, 38.0, size=2)),
         lambda_Bps=lambda_Bps,
         rho_prefill=rho_prefill,
         C_net=lambda_Bps * capacity_window_s,
@@ -87,11 +113,14 @@ def make_h1_integer_problem() -> ProblemData:
     )
 
 
-def h1_integer_rows(problem: ProblemData) -> list[dict[str, object]]:
-    return [h1_integer_oracle_row(problem), *[h1_method_row(problem, policy, solver) for policy, solver in METHODS]]
+def h1_integer_rows(problem: ProblemData, seed: int = 0) -> list[dict[str, object]]:
+    return [
+        h1_integer_oracle_row(problem, seed),
+        *[h1_method_row(problem, seed, policy, solver) for policy, solver in METHODS],
+    ]
 
 
-def h1_integer_oracle_row(problem: ProblemData) -> dict[str, object]:
+def h1_integer_oracle_row(problem: ProblemData, seed: int = 0) -> dict[str, object]:
     coeffs = compute_coefficients(problem)
     best = None
     enumerated = 0
@@ -107,19 +136,20 @@ def h1_integer_oracle_row(problem: ProblemData) -> dict[str, object]:
         raise RuntimeError("no H1 integer oracle allocation")
 
     _, metrics, value = best
-    return _row(problem, "Integer feasibility oracle", enumerated, metrics, value, time.perf_counter() - start)
+    return _row(seed, problem, "Integer feasibility oracle", enumerated, metrics, value, time.perf_counter() - start)
 
 
-def h1_method_row(problem: ProblemData, policy: str, solver) -> dict[str, object]:
+def h1_method_row(problem: ProblemData, seed: int, policy: str, solver) -> dict[str, object]:
     coeffs = compute_coefficients(problem)
     start = time.perf_counter()
     y = solver(problem)
     integer_y = y if np.allclose(y, np.rint(y)) else round_allocation(problem, y).y
     metrics = evaluate_rounded_queue(problem, integer_y, DRAIN_WINDOW_S, RELEASE_POLICY)
-    return _row(problem, policy, "", metrics, objective(problem, coeffs, integer_y), time.perf_counter() - start)
+    return _row(seed, problem, policy, "", metrics, objective(problem, coeffs, integer_y), time.perf_counter() - start)
 
 
 def _row(
+    seed: int,
     problem: ProblemData,
     policy: str,
     enumerated: int | str,
@@ -129,6 +159,7 @@ def _row(
 ) -> dict[str, object]:
     target_moved_fraction = metrics["retained_prefill_moved_s"] / metrics["retained_prefill_target_s"]
     return {
+        "seed": seed,
         "policy": policy,
         "integer_classes": problem.G,
         "integer_requests": int(np.sum(problem.d)),
@@ -145,6 +176,35 @@ def _row(
         "runtime_s": runtime_s,
         "verdict": _verdict(metrics, target_moved_fraction),
     }
+
+
+def h1_integer_summary(rows: list[dict[str, object]]) -> list[dict[str, object]]:
+    summary = []
+    for policy in ("Integer feasibility oracle", *(name for name, _ in METHODS)):
+        policy_rows = [row for row in rows if row["policy"] == policy]
+        item = {"policy": policy, "cases": len(policy_rows)}
+        for column in (
+            "pass_rate",
+            "target_moved_fraction",
+            "network_capacity_pressure",
+            "prefill_capacity_pressure",
+            "absolute_p95_delay_over_deadline",
+            "absolute_deadline_miss_rate",
+            "runtime_s",
+        ):
+            values = (
+                np.array([row["verdict"] == "Pass" for row in policy_rows], dtype=float)
+                if column == "pass_rate"
+                else np.array([float(row[column]) for row in policy_rows], dtype=float)
+            )
+            item[f"{column}_mean"] = float(np.mean(values))
+            item[f"{column}_stderr"] = _stderr(values)
+        summary.append(item)
+    return summary
+
+
+def _stderr(values: np.ndarray) -> float:
+    return 0.0 if values.size <= 1 else float(np.std(values, ddof=1) / np.sqrt(values.size))
 
 
 def _oracle_key(metrics: dict[str, float], value: float) -> tuple[bool, bool, bool, bool, float, float, float, float]:
@@ -179,5 +239,6 @@ def _fmt(value: object) -> str:
 
 
 if __name__ == "__main__":
-    for row in run_h1_integer_oracle():
-        print(" | ".join(_fmt(row[column]) for column in COLUMNS))
+    rows = run_h1_integer_oracle()
+    for row in h1_integer_summary(rows):
+        print(" | ".join(_fmt(row[column]) for column in SUMMARY_COLUMNS))

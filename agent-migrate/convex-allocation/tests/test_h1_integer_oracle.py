@@ -11,6 +11,7 @@ Plausible wrong implementations:
 - Let a resource or deadline violation report as a pass.
 - Drop one of the H1 methods or report only the oracle row.
 - Report runtime for only the oracle or omit solve time from method rows.
+- Collapse a seeded ensemble into a single case while still reporting error bars.
 - Grow the oracle into a large sweep that is no longer a bounded sanity check.
 """
 
@@ -22,7 +23,9 @@ from experiments.run_h1_integer_oracle import (
     DRAIN_WINDOW_S,
     RELEASE_POLICY,
     RETAINED_PREFILL_FRACTION,
+    SEEDS,
     _verdict,
+    h1_integer_summary,
     h1_integer_rows,
     h1_integer_oracle_row,
     make_h1_integer_problem,
@@ -34,8 +37,8 @@ def test_h1_integer_oracle_is_small_discrete_and_passes_h1_criteria():
     row = h1_integer_oracle_row(problem)
 
     assert problem.G == 2
-    assert int(np.sum(problem.d)) == 8
-    assert row["enumerated_allocations"] <= 5000
+    assert int(np.sum(problem.d)) <= 10
+    assert row["enumerated_allocations"] <= 6000
     assert row["drain_window_s"] == DRAIN_WINDOW_S
     assert row["retained_prefill_fraction"] == RETAINED_PREFILL_FRACTION
     assert row["release_policy"] == RELEASE_POLICY
@@ -67,6 +70,25 @@ def test_h1_integer_table_includes_oracle_and_h1_methods_with_runtime():
         if policy != "Integer feasibility oracle":
             assert row["enumerated_allocations"] == ""
     assert any(row["verdict"] != "Pass" for row in rows)
+
+
+def test_h1_integer_summary_reports_seeded_error_bars_by_policy():
+    rows = [row for seed in SEEDS[:3] for row in h1_integer_rows(make_h1_integer_problem(seed), seed)]
+    summary = h1_integer_summary(rows)
+    by_policy = {row["policy"]: row for row in summary}
+
+    assert set(by_policy) == {
+        "Integer feasibility oracle",
+        "Deadline-aware",
+        "Online queue",
+        "Least loaded",
+        "Replay only",
+        "State only",
+    }
+    assert all(row["cases"] == 3 for row in summary)
+    assert all(0.0 <= row["pass_rate_mean"] <= 1.0 for row in summary)
+    assert all(row["runtime_s_mean"] >= 0.0 for row in summary)
+    assert any(row["network_capacity_pressure_stderr"] > 0.0 for row in summary)
 
 
 def test_h1_integer_oracle_verdict_uses_absolute_deadline_and_pressure_bounds():
