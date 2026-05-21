@@ -13,6 +13,7 @@ Plausible wrong implementations:
 - Trust binary search monotonicity despite rounded nonmonotone safety.
 - Drop the least-loaded ordinary-routing baseline from the north-star plot.
 - Collapse release-policy rows and hide EDF/order-oblivious differences.
+- Forget to sample the fixed H1 stress target when frontier search lands elsewhere.
 - Keep writing the old deadline-scale frontier CSV names.
 """
 
@@ -27,10 +28,12 @@ from experiments.run_retained_state_frontier import (
     DRAIN_WINDOWS_S,
     FRONTIER_POLICIES,
     MAIN_POLICY,
+    STRESS_FRACTIONS,
     _failure_mode,
     _frontier_job,
     _is_safe,
     _monotone_frontier,
+    _policy_row,
 )
 from evaluation import WorkloadConfig
 
@@ -49,6 +52,43 @@ def test_frontier_policy_set_includes_least_loaded_baseline():
         "replay-only",
         "state-only",
     )
+
+
+def test_h1_stress_fraction_is_sampled_independent_of_frontier():
+    assert STRESS_FRACTIONS == (0.25,)
+
+
+def test_target_shortfall_keeps_solver_moved_amount_while_reporting_queue_diagnostics(monkeypatch):
+    problem = SimpleNamespace(retained_prefill_target_s=10.0)
+    solver = lambda _: SimpleNamespace(feasible=False, allocation=np.zeros((1, 2)), objective=None)
+
+    monkeypatch.setattr(retained, "with_retained_prefill_fraction", lambda base, fraction: problem)
+    monkeypatch.setattr(
+        retained,
+        "_solver_metrics",
+        lambda problem, y: {
+            "retained_prefill_moved_s": 9.0,
+            "resident_state_tb": 1.0,
+            "average_equivalent_state_target_tb": 1.0,
+            "actual_evacuated_state_tb": 0.9,
+            "retained_prefill_moved_fraction": 0.09,
+            "actual_evacuated_nvl72_hbm_fraction": 0.01,
+            "request_migration_fraction": 0.2,
+        },
+    )
+    monkeypatch.setattr(
+        retained,
+        "fractional_queue_load_proxy",
+        lambda problem, y: {"fractional_network_capacity_pressure": 0.1, "fractional_prefill_capacity_pressure": 0.2},
+    )
+    monkeypatch.setattr(retained, "queue_metrics", lambda *args, **kwargs: _queue_metrics())
+
+    row = _policy_row(problem, "policy", solver, "edf", 7, 0.25, 20.0)
+
+    assert row["failure_mode"] == "target_not_met"
+    assert row["retained_prefill_moved_s"] == 9.0
+    assert row["network_capacity_pressure"] == 1.2
+    assert row["absolute_deadline_miss_rate"] == 0.4
 
 
 def test_safe_definition_uses_absolute_event_start_deadline_metrics():
@@ -234,4 +274,29 @@ def _frontier(policy, release_policy, release_seed, drain_window_s, fraction):
         "replay_retained_prefill_fraction_at_frontier": 0.25,
         "state_transfer_retained_prefill_fraction_at_frontier": 0.75,
         "drain_completion_s_at_frontier": drain_window_s,
+    }
+
+
+def _queue_metrics():
+    return {
+        "retained_prefill_moved_s": 11.0,
+        "retained_prefill_removal_rate_s_per_s": 0.5,
+        "mean_reconstruction_delay": 3.0,
+        "p50_reconstruction_delay": 3.0,
+        "p95_reconstruction_delay": 4.0,
+        "p99_reconstruction_delay": 4.0,
+        "p95_reconstruction_delay_ratio": 0.8,
+        "deadline_miss_rate": 0.0,
+        "absolute_p95_delay_over_deadline": 1.4,
+        "absolute_deadline_miss_rate": 0.4,
+        "network_capacity_pressure": 1.2,
+        "prefill_capacity_pressure": 0.3,
+        "resident_state_tb": 1.0,
+        "average_equivalent_state_target_tb": 1.0,
+        "actual_evacuated_state_tb": 1.1,
+        "retained_prefill_moved_fraction": 0.11,
+        "actual_evacuated_nvl72_hbm_fraction": 0.02,
+        "replay_retained_prefill_fraction": 1.0,
+        "state_transfer_retained_prefill_fraction": 0.0,
+        "drain_completion_s": 19.0,
     }

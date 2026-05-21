@@ -37,8 +37,10 @@ plt.rcParams.update({"pdf.fonttype": 42, "ps.fonttype": 42})
 
 REPORT_DEADLINE_SCALE = 1.0
 REPORT_RETAINED_PREFILL_FRACTION = 0.5
-H1_DRAIN_WINDOW_S = 20.0
 PLOT_DRAIN_WINDOW_S = 1200.0
+H1_DRAIN_WINDOW_S = 20.0
+H1_RETAINED_PREFILL_FRACTION = 0.25
+H1_RELEASE_POLICY = "edf"
 NETWORK_SCALES = (0.6, 1.0, 2.0)
 REPORT_POLICIES = (
     "deadline-penalty-rounded",
@@ -63,7 +65,7 @@ POLICY_LABELS = {
     "least-loaded-destination": "Least loaded",
     "crossover-greedy": "Crossover greedy",
     "replay-only": "Replay only",
-    "state-only": "State transfer",
+    "state-only": "State only",
 }
 POLICY_COLORS = {
     "deadline-penalty-rounded": "#1b1b1b",
@@ -85,12 +87,24 @@ RELEASE_POLICY_COLORS = {
     "random": "#e45756",
 }
 OUTPUT_FILES = (
-    "h1_resource_pressure.pdf",
+    "h1_fixed_target_stress.csv",
     "h2_safe_frontier.pdf",
     "h2_delay_cdf.pdf",
     "h3_action_mix_by_model.pdf",
     "h4_state_manifest_heatmap.pdf",
     "integer_benchmark_summary.csv",
+)
+H1_STRESS_COLUMNS = (
+    "policy",
+    "drain_window_s",
+    "retained_prefill_fraction",
+    "release_policy",
+    "target_moved_fraction",
+    "network_capacity_pressure",
+    "prefill_capacity_pressure",
+    "absolute_p95_delay_over_deadline",
+    "absolute_deadline_miss_rate",
+    "verdict",
 )
 INTEGER_TABLE_POLICIES = (
     "best-integer-objective",
@@ -107,8 +121,7 @@ def plot_queue_centered(
 ) -> None:
     out = workload_config.output_dir(ROOT)
     sweep = _read_rows(out / "retained_state_drain_sweep.csv")
-    frontier = _read_rows(out / "retained_state_drain_frontier.csv")
-    _plot_resource_pressure(frontier, out / "h1_resource_pressure.pdf", report_deadline_scale)
+    _write_h1_stress_table(sweep, out / "h1_fixed_target_stress.csv", report_deadline_scale)
     _plot_safe_frontier(sweep, out / "h2_safe_frontier.pdf")
     _plot_delay_cdf(workload_config, out / "h2_delay_cdf.pdf", report_retained_prefill_fraction, report_deadline_scale)
     _plot_action_mix_by_model(out / "h3_action_mix_by_model.pdf")
@@ -116,46 +129,58 @@ def plot_queue_centered(
     _write_integer_summary(ROOT / "outputs" / "sweep" / "integer_optimality_cases.csv", out / "integer_benchmark_summary.csv")
 
 
-def _plot_resource_pressure(rows: list[dict[str, str]], path: Path, deadline_scale: float) -> None:
-    df = _resource_pressure_frame(rows, deadline_scale)
-    _require_policies(df, H1_POLICIES, "resource-pressure sweep")
-    df["Policy"] = df["policy"].map(POLICY_LABELS)
-    df["Evacuation"] = np.where(df["max_safe_retained_prefill_fraction"] > 0.0, "Nonzero", "Zero")
-    fig, ax = plt.subplots(figsize=(5.8, 4.2), constrained_layout=True)
-    sns.scatterplot(
-        df,
-        x="network_capacity_pressure",
-        y="prefill_capacity_pressure",
-        hue="Policy",
-        style="Evacuation",
-        style_order=("Nonzero", "Zero"),
-        markers={"Nonzero": "o", "Zero": "X"},
-        palette={POLICY_LABELS[k]: v for k, v in POLICY_COLORS.items()},
-        s=62,
-        ax=ax,
-    )
-    ax.axvline(1.0, color="0.25", linestyle="--", linewidth=1.0)
-    ax.axhline(1.0, color="0.25", linestyle="--", linewidth=1.0)
-    ax.set_xlabel("Network pressure (1.0 = saturated)")
-    ax.set_ylabel("Prefill pressure (1.0 = saturated)")
-    ax.set_title(f"H1: resource pressure at safe frontier ({H1_DRAIN_WINDOW_S:g}s drain)")
-    _set_pressure_limits(ax, df)
-    _simple_legend(ax)
-    fig.savefig(path, bbox_inches="tight")
-    plt.close(fig)
+def _write_h1_stress_table(rows: list[dict[str, str]], path: Path, deadline_scale: float) -> None:
+    table = _h1_stress_rows(rows, deadline_scale)
+    with path.open("w", newline="") as f:
+        writer = csv.DictWriter(f, H1_STRESS_COLUMNS, lineterminator="\n")
+        writer.writeheader()
+        writer.writerows(table)
 
 
-def _resource_pressure_frame(rows: list[dict[str, str]], deadline_scale: float) -> pd.DataFrame:
+def _h1_stress_rows(rows: list[dict[str, str]], deadline_scale: float) -> list[dict[str, object]]:
     df = _frame(rows)
     df = df[
-        (df["drain_window_s"] == H1_DRAIN_WINDOW_S)
-        & (df["deadline_scale"] == deadline_scale)
-        & (df["release_policy"] == "edf")
+        (df["deadline_scale"] == deadline_scale)
+        & (df["release_policy"] == H1_RELEASE_POLICY)
+        & np.isclose(df["drain_window_s"], H1_DRAIN_WINDOW_S)
+        & np.isclose(df["retained_prefill_fraction"], H1_RETAINED_PREFILL_FRACTION)
         & df["policy"].isin(H1_POLICIES)
     ].copy()
-    df["network_capacity_pressure"] = df["network_capacity_pressure_at_frontier"]
-    df["prefill_capacity_pressure"] = df["prefill_capacity_pressure_at_frontier"]
-    return df.dropna(subset=["network_capacity_pressure", "prefill_capacity_pressure"])
+    _require_policies(df, H1_POLICIES, "H1 fixed-target stress table")
+    rows_by_policy = {row.policy: row for row in df.itertuples()}
+    table = []
+    for policy in H1_POLICIES:
+        row = rows_by_policy[policy]
+        target_moved_fraction = row.retained_prefill_moved_s / row.retained_prefill_target_s
+        table.append(
+            {
+                "policy": POLICY_LABELS[policy],
+                "drain_window_s": row.drain_window_s,
+                "retained_prefill_fraction": row.retained_prefill_fraction,
+                "release_policy": row.release_policy,
+                "target_moved_fraction": target_moved_fraction,
+                "network_capacity_pressure": row.network_capacity_pressure,
+                "prefill_capacity_pressure": row.prefill_capacity_pressure,
+                "absolute_p95_delay_over_deadline": row.absolute_p95_delay_over_deadline,
+                "absolute_deadline_miss_rate": row.absolute_deadline_miss_rate,
+                "verdict": _h1_verdict(row, target_moved_fraction),
+            }
+        )
+    return table
+
+
+def _h1_verdict(row, target_moved_fraction: float) -> str:
+    if target_moved_fraction < 1.0 - 1e-9:
+        return "Target shortfall"
+    if row.network_capacity_pressure > 1.0:
+        return "Network overload"
+    if row.prefill_capacity_pressure > 1.0:
+        return "Prefill overload"
+    if row.absolute_p95_delay_over_deadline > 1.0:
+        return "P95 deadline miss"
+    if row.absolute_deadline_miss_rate > 0.01:
+        return "Deadline miss rate"
+    return "Pass"
 
 
 def _plot_safe_frontier(rows: list[dict[str, str]], path: Path) -> None:
@@ -443,6 +468,8 @@ def _frame(rows: list[dict[str, str]]) -> pd.DataFrame:
         "p95_delay_over_deadline",
         "absolute_deadline_miss_rate",
         "absolute_p95_delay_over_deadline",
+        "retained_prefill_target_s",
+        "retained_prefill_moved_s",
         "max_safe_retained_prefill_fraction",
         "network_capacity_pressure_at_frontier",
         "prefill_capacity_pressure_at_frontier",
@@ -478,13 +505,6 @@ def _require_keys(values: dict, keys: tuple[str, ...], context: str) -> None:
     missing = [key for key in keys if key not in values]
     if missing:
         raise ValueError(f"{context} missing policies: {missing}")
-
-
-def _set_pressure_limits(ax, df: pd.DataFrame) -> None:
-    xmax = max(1.05, float(df["network_capacity_pressure"].max()) * 1.08)
-    ymax = max(1.05, float(df["prefill_capacity_pressure"].max()) * 1.08)
-    ax.set_xlim(0.0, xmax)
-    ax.set_ylim(0.0, ymax)
 
 
 def _simple_legend(ax) -> None:

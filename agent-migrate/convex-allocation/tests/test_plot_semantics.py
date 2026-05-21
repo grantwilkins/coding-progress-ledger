@@ -1,13 +1,15 @@
 """
 Claim:
 The report figure script emits exactly one simple artifact per hypothesis plus a
-compact integer benchmark table. The H1/H2 plots use queue safety from absolute
-event-start deadline metrics. The H2 frontier isolates release policy for the
-main allocation policy, the H2 CDF is request-level, and the H4 heatmap exposes
+compact integer benchmark table. The H1 table uses one fixed stress target and
+absolute event-start deadline metrics. The H2 frontier isolates release policy
+for the main allocation policy, the H2 CDF is request-level, and the H4 heatmap exposes
 per-class state locality rather than only destination load.
 
 Plausible wrong implementations:
 - Reintroduce crowded diagnostic plots instead of the five report figures.
+- Build H1 from frontier rows or mixed release policies instead of one target.
+- Let a target shortfall pass because pressure and delay are low.
 - Keep using release-relative reconstruction metrics after switching drain
   frontier safety to event-start deadlines.
 - Keep the old cumulative max frontier after switching to event-start deadlines.
@@ -32,9 +34,9 @@ from experiments.plot_queue_centered import (
     REPORT_POLICIES,
     _allocation_heatmap,
     _cdf_points,
+    _h1_stress_rows,
     _integer_summary_rows,
     _max_waiting_depth_points,
-    _resource_pressure_frame,
     _safe_frontier,
     _safe_series,
 )
@@ -45,7 +47,7 @@ import numpy as np
 
 def test_report_outputs_are_one_plot_per_hypothesis_plus_summary_table():
     assert set(OUTPUT_FILES) == {
-        "h1_resource_pressure.pdf",
+        "h1_fixed_target_stress.csv",
         "h2_safe_frontier.pdf",
         "h2_delay_cdf.pdf",
         "h3_action_mix_by_model.pdf",
@@ -116,25 +118,28 @@ def test_safe_frontier_uses_largest_safe_fraction_by_drain_window():
     assert set(frontier["policy"]) == {"deadline-penalty-rounded"}
 
 
-def test_resource_pressure_uses_frontier_rows_for_selected_workload():
+def test_h1_fixed_target_stress_table_uses_one_edf_target_row_per_policy():
     rows = [
-        _frontier_row("deadline-penalty-rounded", "edf", 20.0, 0.25, 0.8, 0.7),
-        _frontier_row("replay-only", "edf", 20.0, 0.13, 0.0, 1.1),
-        _frontier_row("state-only", "edf", 20.0, 0.27, 1.6, 0.0),
-        _frontier_row("online-queue-greedy", "edf", 20.0, 0.0, 0.0, 0.0),
-        _frontier_row("least-loaded-destination", "edf", 20.0, 0.0, 0.0, 0.0),
-        _frontier_row("deadline-penalty-rounded", "random", 20.0, 0.03, 0.2, 0.2),
-        _frontier_row("deadline-penalty-rounded", "edf", 1200.0, 0.0, 0.0, 0.0),
+        _h1_row("deadline-penalty-rounded", "edf", 20.0, 0.25, 10.0, 10.0, 0.8, 0.7, 0.9, 0.0),
+        _h1_row("online-queue-greedy", "edf", 20.0, 0.25, 8.0, 10.0, 0.2, 0.2, 0.4, 0.0),
+        _h1_row("least-loaded-destination", "edf", 20.0, 0.25, 7.0, 10.0, 0.1, 0.1, 0.2, 0.0),
+        _h1_row("replay-only", "edf", 20.0, 0.25, 9.0, 10.0, 0.0, 0.9, 0.8, 0.0),
+        _h1_row("state-only", "edf", 20.0, 0.25, 11.0, 10.0, 1.2, 0.0, 0.5, 0.0),
+        _h1_row("deadline-penalty-rounded", "random", 20.0, 0.25, 1.0, 10.0, 0.0, 0.0, 0.1, 0.0),
+        _h1_row("deadline-penalty-rounded", "edf", 40.0, 0.25, 1.0, 10.0, 0.0, 0.0, 0.1, 0.0),
+        _h1_row("deadline-penalty-rounded", "edf", 20.0, 0.5, 1.0, 10.0, 0.0, 0.0, 0.1, 0.0),
     ]
 
-    df = _resource_pressure_frame(rows, deadline_scale=1.0)
+    table = _h1_stress_rows(rows, deadline_scale=1.0)
+    by_policy = {row["policy"]: row for row in table}
 
-    assert set(df["policy"]) == set(REPORT_POLICIES)
-    assert set(df["release_policy"]) == {"edf"}
-    assert set(df["drain_window_s"]) == {20.0}
-    by_policy = {row.policy: row for row in df.itertuples()}
-    assert by_policy["deadline-penalty-rounded"].network_capacity_pressure == 0.8
-    assert by_policy["replay-only"].prefill_capacity_pressure == 1.1
+    assert [row["release_policy"] for row in table] == ["edf"] * 5
+    assert [row["drain_window_s"] for row in table] == [20.0] * 5
+    assert by_policy["Deadline-aware"]["verdict"] == "Pass"
+    assert by_policy["Online queue"]["verdict"] == "Target shortfall"
+    assert by_policy["Least loaded"]["verdict"] == "Target shortfall"
+    assert by_policy["Replay only"]["verdict"] == "Target shortfall"
+    assert by_policy["State only"]["verdict"] == "Network overload"
 
 
 def test_cdf_points_are_request_level_empirical_cdf():
@@ -213,15 +218,30 @@ def _sweep_row(policy, release_policy, drain_window_s, retained_prefill_fraction
     }
 
 
-def _frontier_row(policy, release_policy, drain_window_s, fraction, net, prefill):
+def _h1_row(
+    policy,
+    release_policy,
+    drain_window_s,
+    retained_prefill_fraction,
+    moved,
+    target,
+    net,
+    prefill,
+    p95,
+    miss,
+):
     return {
         "policy": policy,
         "release_policy": release_policy,
         "drain_window_s": str(drain_window_s),
         "deadline_scale": "1.0",
-        "max_safe_retained_prefill_fraction": str(fraction),
-        "network_capacity_pressure_at_frontier": str(net),
-        "prefill_capacity_pressure_at_frontier": str(prefill),
+        "retained_prefill_fraction": str(retained_prefill_fraction),
+        "retained_prefill_moved_s": str(moved),
+        "retained_prefill_target_s": str(target),
+        "network_capacity_pressure": str(net),
+        "prefill_capacity_pressure": str(prefill),
+        "absolute_p95_delay_over_deadline": str(p95),
+        "absolute_deadline_miss_rate": str(miss),
     }
 
 

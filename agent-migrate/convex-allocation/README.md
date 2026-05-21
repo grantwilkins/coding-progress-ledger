@@ -91,7 +91,7 @@ generated workload runs write the same current report/network artifacts to a
 labeled subdirectory such as
 `outputs/sweep/generated_seed7_sessions10000_classes48/`.
 
-- `h1_resource_pressure.pdf`
+- `h1_fixed_target_stress.csv`
 - `h2_safe_frontier.pdf`
 - `h2_delay_cdf.pdf`
 - `h3_action_mix_by_model.pdf`

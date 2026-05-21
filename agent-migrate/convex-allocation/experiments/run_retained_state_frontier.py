@@ -36,6 +36,7 @@ from queueing import DEFAULT_RELEASE_SEED, RELEASE_POLICIES, fractional_queue_lo
 DRAIN_WINDOWS_S = (10.0, 20.0, 40.0, 80.0, 160.0, 300.0, 600.0, 1200.0, 2400.0, 3600.0)
 BINARY_TOLERANCE = 0.01
 VALIDATION_OFFSETS = (-0.02, -0.01, 0.0, 0.01, 0.02)
+STRESS_FRACTIONS = (0.25,)
 DEADLINE_SCALE = 1.0
 MAIN_POLICY = "deadline-penalty-rounded"
 POLICIES = (
@@ -168,6 +169,8 @@ def _frontier_job(job):
     center = round(low, 2)
     for offset in VALIDATION_OFFSETS:
         row_at(center + offset)
+    for fraction in STRESS_FRACTIONS:
+        row_at(fraction)
     safe = [row for row in cache.values() if row["safe"]]
     frontier = max(safe, key=lambda row: row["retained_prefill_fraction"]) if safe else None
     unsafe_fraction = 0.0 if frontier is None else frontier["retained_prefill_fraction"] + BINARY_TOLERANCE
@@ -192,16 +195,11 @@ def _policy_row(base, policy, solver, release_policy, release_seed, retained_pre
     y = result.allocation if hasattr(result, "allocation") else result.y
     row["objective"] = getattr(result, "objective", math.nan)
     row.update(_solver_metrics(problem, y))
+    row.update(fractional_queue_load_proxy(problem, y))
     feasible = (
         getattr(result, "feasible", True)
         and row["retained_prefill_moved_s"] >= problem.retained_prefill_target_s - 1e-5
     )
-    if not feasible:
-        row["failure_mode"] = "target_not_met"
-        return row
-
-    proxy = fractional_queue_load_proxy(problem, y)
-    row.update(proxy)
     try:
         metrics = queue_metrics(
             problem,
@@ -210,14 +208,36 @@ def _policy_row(base, policy, solver, release_policy, release_seed, retained_pre
             release_policy=release_policy,
             release_seed=release_seed,
         )
+        row.update(_queue_fields(metrics) if feasible else _queue_diagnostic_fields(metrics))
     except ValueError:
+        pass
+    if not feasible:
         row["failure_mode"] = "target_not_met"
         return row
-    row.update(_queue_fields(metrics))
-    row["safe"] = _is_safe(metrics)
+
+    if math.isnan(row["network_capacity_pressure"]):
+        row["failure_mode"] = "target_not_met"
+        return row
+    row["safe"] = _is_safe(row)
     row["status"] = "SAFE" if row["safe"] else "UNSAFE"
     row["failure_mode"] = "" if row["safe"] else _failure_mode(row)
     return row
+
+
+def _queue_diagnostic_fields(metrics):
+    return {
+        key: value
+        for key, value in _queue_fields(metrics).items()
+        if key
+        not in {
+            "retained_prefill_moved_s",
+            "resident_state_tb",
+            "average_equivalent_state_target_tb",
+            "actual_evacuated_state_tb",
+            "retained_prefill_moved_fraction",
+            "actual_evacuated_nvl72_hbm_fraction",
+        }
+    }
 
 
 def _empty_row(policy, release_policy, release_seed, retained_prefill_fraction, drain_window_s, retained_prefill_target_s):
@@ -397,7 +417,7 @@ def _print_diagnostics(frontier):
             for policy in FRONTIER_POLICIES
             if policy != MAIN_POLICY
         ]
-        if not math.isnan(main) and any(math.isnan(value) or main > value + 1e-12 for value in rivals):
+        if not math.isnan(main) and all(math.isnan(value) or main > value + 1e-12 for value in rivals):
             support.append(drain_window_s)
     if support:
         print(f"\n{MAIN_POLICY} supports the largest frontier at drain windows {support}.")
