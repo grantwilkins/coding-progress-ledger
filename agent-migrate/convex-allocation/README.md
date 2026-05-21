@@ -73,6 +73,12 @@ Run tiny exhaustive integer comparisons:
 uv run python experiments/run_integer_optimality_cases.py
 ```
 
+Run the bounded H1 integer feasibility oracle:
+
+```bash
+uv run python experiments/run_h1_integer_oracle.py
+```
+
 Run the report-facing claim, rounding-gap, sensitivity, architecture, and
 adversarial queue tables:
 
@@ -92,6 +98,7 @@ labeled subdirectory such as
 `outputs/sweep/generated_seed7_sessions10000_classes48/`.
 
 - `h1_fixed_target_stress.csv`
+- `h1_integer_oracle.csv`
 - `h2_safe_frontier.pdf`
 - `h2_delay_cdf.pdf`
 - `h3_action_mix_by_model.pdf`
