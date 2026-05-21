@@ -102,6 +102,7 @@ labeled subdirectory such as
 - `h1_integer_oracle_summary.csv`
 - `h2_safe_frontier.pdf`
 - `h2_delay_cdf.pdf`
+- `h3_action_mix_by_model.csv`
 - `h3_action_mix_by_model.pdf`
 - `h4_state_manifest_heatmap.pdf`
 - `retained_state_drain_sweep.csv`
@@ -129,6 +130,9 @@ ordering.
 The network-bandwidth tradeoff sweeps network bandwidth and plots the largest
 tested source-state fraction that can be safely evacuated, request migration
 fraction, actual evacuated state TB, and max network/prefill queue depth.
+The H3 action-mix CSV and plot evaluate the single-request replay/state
+crossover from context bytes per token, KV bytes per token, prefill rate,
+network throughput, context length, and request count for each catalog model.
 The report-facing experiment driver writes machine-checkable claim rows,
 rounding-gap rows for relaxed, exact, rounded, and repaired tiny cases,
 deadline-weight sensitivity rows, a model architecture frontier table, and a

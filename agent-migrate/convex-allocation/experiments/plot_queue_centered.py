@@ -28,7 +28,7 @@ from catalog import catalog_models, get_model
 from coefficients import ACTIONS, compute_coefficients
 from cvxpy_solver import solve_cvxpy, solve_soft_deadline_cvxpy
 from evaluation import WorkloadConfig, parse_workload_config
-from metrics import retained_prefill_action_mix, retained_prefill_moved_s
+from metrics import retained_prefill_moved_s
 from problem import ProblemData, make_problem
 from queueing import RELEASE_POLICIES, evaluate_rounded_queue_trace, round_allocation
 
@@ -41,7 +41,8 @@ PLOT_DRAIN_WINDOW_S = 1200.0
 H1_DRAIN_WINDOW_S = 20.0
 H1_RETAINED_PREFILL_FRACTION = 0.25
 H1_RELEASE_POLICY = "edf"
-NETWORK_SCALES = (0.6, 1.0, 2.0)
+H3_CONTEXT_TOKENS = 128_000
+H3_REQUEST_COUNT = 1_000
 REPORT_POLICIES = (
     "deadline-penalty-rounded",
     "online-queue-greedy",
@@ -90,6 +91,7 @@ OUTPUT_FILES = (
     "h1_fixed_target_stress.csv",
     "h2_safe_frontier.pdf",
     "h2_delay_cdf.pdf",
+    "h3_action_mix_by_model.csv",
     "h3_action_mix_by_model.pdf",
     "h4_state_manifest_heatmap.pdf",
     "integer_benchmark_summary.csv",
@@ -124,6 +126,7 @@ def plot_queue_centered(
     _write_h1_stress_table(sweep, out / "h1_fixed_target_stress.csv", report_deadline_scale)
     _plot_safe_frontier(sweep, out / "h2_safe_frontier.pdf")
     _plot_delay_cdf(workload_config, out / "h2_delay_cdf.pdf", report_retained_prefill_fraction, report_deadline_scale)
+    _write_h3_action_table(out / "h3_action_mix_by_model.csv")
     _plot_action_mix_by_model(out / "h3_action_mix_by_model.pdf")
     _plot_state_manifest_heatmap(out / "h4_state_manifest_heatmap.pdf", report_retained_prefill_fraction, report_deadline_scale)
     _write_integer_summary(ROOT / "outputs" / "sweep" / "integer_optimality_cases.csv", out / "integer_benchmark_summary.csv")
@@ -235,26 +238,33 @@ def _plot_delay_cdf(
 
 def _plot_action_mix_by_model(path: Path) -> None:
     df = _architecture_action_mix()
-    models = [model.name for model in catalog_models()]
-    fig, axes = plt.subplots(1, len(NETWORK_SCALES), figsize=(8.6, 3.8), sharey=True, constrained_layout=True)
-    for ax, scale in zip(np.atleast_1d(axes), NETWORK_SCALES):
-        sub = df[df["network_bandwidth_scale"] == scale].set_index("model").reindex(models)
-        y = np.arange(len(models))
-        replay = sub["replay_retained_prefill_fraction"].to_numpy()
-        state = sub["state_transfer_retained_prefill_fraction"].to_numpy()
-        ax.barh(y, replay, color="#4c78a8", label="Replay")
-        ax.barh(y, state, left=replay, color="#f58518", label="State transfer")
-        ax.set_title(f"{scale:g}x baseline network")
-        ax.set_yticks(y)
-        ax.set_yticklabels(models)
-        ax.set_xlim(0.0, 1.0)
-        ax.set_xlabel("Action fraction")
-    axes[0].set_ylabel("")
-    handles, labels = axes[0].get_legend_handles_labels()
-    fig.legend(handles, labels, loc="lower center", ncol=2, frameon=False, bbox_to_anchor=(0.5, -0.04))
-    fig.suptitle("H3: model architecture changes replay/state mix")
+    fig, ax = plt.subplots(figsize=(5.8, 3.8), constrained_layout=True)
+    colors = dict(zip([model.name for model in catalog_models()], ("#4c78a8", "#1b1b1b", "#e45756")))
+    for model in catalog_models():
+        sub = df[df["model"] == model.name]
+        ax.step(
+            sub["network_throughput_gbps"],
+            sub["replay_fraction"],
+            where="post",
+            linewidth=2.0,
+            color=colors[model.name],
+            label=model.name,
+        )
+        ax.axvline(model.crossover_gbps, color=colors[model.name], linestyle=":", linewidth=1.1)
+    ax.set_xscale("log")
+    ax.set_xlabel("Network throughput (Gb/s)")
+    ax.set_ylabel("Replay share of moved requests")
+    ax.set_yticks([0.0, 1.0], ["state transfer", "replay"])
+    ax.set_ylim(-0.05, 1.05)
+    ax.set_title("H3: architecture shifts the replay/state crossover")
+    ax.text(0.98, 0.08, "dotted = crossover", transform=ax.transAxes, ha="right", fontsize=8)
+    ax.legend(frameon=False, title=None, loc="center left", bbox_to_anchor=(1.02, 0.5))
     fig.savefig(path, bbox_inches="tight")
     plt.close(fig)
+
+
+def _write_h3_action_table(path: Path) -> None:
+    _architecture_action_mix().to_csv(path, index=False)
 
 
 def _plot_state_manifest_heatmap(path: Path, retained_prefill_fraction: float, deadline_scale: float) -> None:
@@ -301,16 +311,51 @@ def _safe_frontier(rows: list[dict[str, str]]) -> pd.DataFrame:
 
 
 def _architecture_action_mix() -> pd.DataFrame:
+    return pd.DataFrame(
+        _h3_action_rows(
+            catalog_models(),
+            H3_CONTEXT_TOKENS,
+            H3_REQUEST_COUNT,
+            _h3_network_grid(),
+        )
+    )
+
+
+def _h3_network_grid() -> tuple[float, ...]:
+    values = list(np.geomspace(0.25, 100.0, 96))
+    values.extend((3.0, 20.0))
+    values.extend(model.crossover_gbps for model in catalog_models())
+    return tuple(sorted(set(float(value) for value in values)))
+
+
+def _h3_action_rows(models, context_tokens: int, request_count: int, network_gbps: tuple[float, ...]):
     rows = []
-    for scale in NETWORK_SCALES:
-        for model in catalog_models():
-            problem = _scaled_network_problem(
-                make_problem(model, "bandwidth-spread", retained_prefill_fraction=0.5, workload_source="fixed"),
-                scale,
+    for model in models:
+        for gbps in network_gbps:
+            network_Bps = gbps * 1e9 / 8.0
+            replay_s = request_count * (
+                context_tokens * model.beta_bytes_per_tok / network_Bps
+                + context_tokens / model.prefill_tok_s
             )
-            mix = retained_prefill_action_mix(problem, solve_cvxpy(problem).y)
-            rows.append({"model": model.name, "network_bandwidth_scale": scale, **mix})
-    return pd.DataFrame(rows)
+            state_s = request_count * context_tokens * model.eta_bytes_per_tok / network_Bps
+            replay_fraction = float(replay_s <= state_s + 1e-12)
+            rows.append(
+                {
+                    "model": model.name,
+                    "kv_bytes_per_token": model.eta_bytes_per_tok,
+                    "context_bytes_per_token": model.beta_bytes_per_tok,
+                    "prefill_tokens_per_s": model.prefill_tok_s,
+                    "context_tokens": context_tokens,
+                    "request_count": request_count,
+                    "network_throughput_gbps": gbps,
+                    "crossover_gbps": model.crossover_gbps,
+                    "replay_time_s": replay_s,
+                    "state_transfer_time_s": state_s,
+                    "replay_fraction": replay_fraction,
+                    "state_transfer_fraction": 1.0 - replay_fraction,
+                }
+            )
+    return rows
 
 
 def _allocation_heatmap(
@@ -434,26 +479,6 @@ def _max_waiting_depth_points(trace, resource):
             depth[dest] = depth.get(dest, 0) + delta
         points.append((float(time), float(max(depth.values(), default=0))))
     return points
-
-
-def _scaled_network_problem(problem: ProblemData, scale: float) -> ProblemData:
-    return ProblemData(
-        model=problem.model,
-        regime=problem.regime,
-        T=problem.T,
-        d=problem.d,
-        deadline_s=problem.deadline_s,
-        lambda_Bps=problem.lambda_Bps * scale,
-        rho_prefill=problem.rho_prefill,
-        C_net=problem.C_net * scale,
-        C_prefill=problem.C_prefill,
-        ell_net=problem.ell_net * scale,
-        ell_prefill=problem.ell_prefill,
-        h_ctx=problem.h_ctx,
-        h_kv=problem.h_kv,
-        retained_prefill_target_s=problem.retained_prefill_target_s,
-        w=problem.w,
-    )
 
 
 def _frame(rows: list[dict[str, str]]) -> pd.DataFrame:

@@ -4,7 +4,8 @@ The report figure script emits exactly one simple artifact per hypothesis plus a
 compact integer benchmark table. The H1 table uses one fixed stress target and
 absolute event-start deadline metrics. The H2 frontier isolates release policy
 for the main allocation policy, the H2 CDF is request-level, and the H4 heatmap exposes
-per-class state locality rather than only destination load.
+per-class state locality rather than only destination load. The H3 plot is the
+direct single-request replay/state crossover implied by model architecture.
 
 Plausible wrong implementations:
 - Reintroduce crowded diagnostic plots instead of the five report figures.
@@ -15,6 +16,8 @@ Plausible wrong implementations:
 - Keep the old cumulative max frontier after switching to event-start deadlines.
 - Plot all allocation-policy by release-policy pairs in H2.
 - Average class delays before building the CDF.
+- Flip the H3 crossover inequality, drop the bytes-to-bits conversion, or let
+  context length/request count change the replay-vs-state decision.
 - Keep unrelated integer policies in the compact summary table.
 - Drop context/KV locality from the manifest heatmap labels.
 """
@@ -29,11 +32,15 @@ from catalog import ModelParams
 from experiments.plot_queue_centered import (
     FRONTIER_POLICY,
     FRONTIER_RELEASE_POLICIES,
+    H3_CONTEXT_TOKENS,
+    H3_REQUEST_COUNT,
     INTEGER_TABLE_POLICIES,
     OUTPUT_FILES,
     REPORT_POLICIES,
     _allocation_heatmap,
+    _architecture_action_mix,
     _cdf_points,
+    _h3_action_rows,
     _h1_stress_rows,
     _integer_summary_rows,
     _max_waiting_depth_points,
@@ -50,6 +57,7 @@ def test_report_outputs_are_one_plot_per_hypothesis_plus_summary_table():
         "h1_fixed_target_stress.csv",
         "h2_safe_frontier.pdf",
         "h2_delay_cdf.pdf",
+        "h3_action_mix_by_model.csv",
         "h3_action_mix_by_model.pdf",
         "h4_state_manifest_heatmap.pdf",
         "integer_benchmark_summary.csv",
@@ -144,6 +152,40 @@ def test_h1_fixed_target_stress_table_uses_one_edf_target_row_per_policy():
 
 def test_cdf_points_are_request_level_empirical_cdf():
     assert _cdf_points([3.0, 1.0, 3.0]) == [(1.0, 1 / 3), (3.0, 2 / 3), (3.0, 1.0)]
+
+
+def test_h3_crossover_uses_model_bytes_prefill_and_network_units():
+    model = ModelParams("toy", beta_bytes_per_tok=4.0, eta_bytes_per_tok=1004.0, prefill_tok_s=125_000.0, reference_crossover_gbps=1.0)
+    rows = _h3_action_rows((model,), context_tokens=2_000, request_count=3, network_gbps=(0.5, 1.0, 2.0))
+    by_gbps = {row["network_throughput_gbps"]: row for row in rows}
+
+    assert by_gbps[0.5]["crossover_gbps"] == 1.0
+    assert by_gbps[0.5]["replay_time_s"] < by_gbps[0.5]["state_transfer_time_s"]
+    assert by_gbps[0.5]["replay_fraction"] == 1.0
+    assert by_gbps[1.0]["replay_fraction"] == 1.0
+    assert by_gbps[2.0]["state_transfer_time_s"] < by_gbps[2.0]["replay_time_s"]
+    assert by_gbps[2.0]["replay_fraction"] == 0.0
+
+
+def test_h3_context_and_request_count_scale_times_not_decisions():
+    model = ModelParams("toy", beta_bytes_per_tok=4.0, eta_bytes_per_tok=1004.0, prefill_tok_s=125_000.0, reference_crossover_gbps=1.0)
+    small = _h3_action_rows((model,), context_tokens=1_000, request_count=2, network_gbps=(0.5,))[0]
+    large = _h3_action_rows((model,), context_tokens=2_000, request_count=3, network_gbps=(0.5,))[0]
+
+    assert large["replay_time_s"] / small["replay_time_s"] == 3.0
+    assert large["state_transfer_time_s"] / small["state_transfer_time_s"] == 3.0
+    assert large["replay_fraction"] == small["replay_fraction"] == 1.0
+
+
+def test_h3_catalog_architectures_produce_different_actions_at_same_network():
+    df = _architecture_action_mix()
+    actions_at_3g = df[df["network_throughput_gbps"] == 3.0].set_index("model")["replay_fraction"].to_dict()
+    actions_at_20g = df[df["network_throughput_gbps"] == 20.0].set_index("model")["replay_fraction"].to_dict()
+
+    assert H3_CONTEXT_TOKENS == 128_000
+    assert H3_REQUEST_COUNT == 1_000
+    assert actions_at_3g == {"DeepSeek-V4-Pro": 0.0, "GLM-5": 1.0, "Qwen3-Next-80B-A3B": 1.0}
+    assert actions_at_20g == {"DeepSeek-V4-Pro": 0.0, "GLM-5": 0.0, "Qwen3-Next-80B-A3B": 1.0}
 
 
 def test_integer_summary_keeps_only_compact_methodology_rows():
