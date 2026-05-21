@@ -34,6 +34,7 @@ from experiments.plot_queue_centered import (
     _cdf_points,
     _integer_summary_rows,
     _max_waiting_depth_points,
+    _resource_pressure_frame,
     _safe_frontier,
     _safe_series,
 )
@@ -115,6 +116,27 @@ def test_safe_frontier_uses_largest_safe_fraction_by_drain_window():
     assert set(frontier["policy"]) == {"deadline-penalty-rounded"}
 
 
+def test_resource_pressure_uses_frontier_rows_for_selected_workload():
+    rows = [
+        _frontier_row("deadline-penalty-rounded", "edf", 20.0, 0.25, 0.8, 0.7),
+        _frontier_row("replay-only", "edf", 20.0, 0.13, 0.0, 1.1),
+        _frontier_row("state-only", "edf", 20.0, 0.27, 1.6, 0.0),
+        _frontier_row("online-queue-greedy", "edf", 20.0, 0.0, 0.0, 0.0),
+        _frontier_row("least-loaded-destination", "edf", 20.0, 0.0, 0.0, 0.0),
+        _frontier_row("deadline-penalty-rounded", "random", 20.0, 0.03, 0.2, 0.2),
+        _frontier_row("deadline-penalty-rounded", "edf", 1200.0, 0.0, 0.0, 0.0),
+    ]
+
+    df = _resource_pressure_frame(rows, deadline_scale=1.0)
+
+    assert set(df["policy"]) == set(REPORT_POLICIES)
+    assert set(df["release_policy"]) == {"edf"}
+    assert set(df["drain_window_s"]) == {20.0}
+    by_policy = {row.policy: row for row in df.itertuples()}
+    assert by_policy["deadline-penalty-rounded"].network_capacity_pressure == 0.8
+    assert by_policy["replay-only"].prefill_capacity_pressure == 1.1
+
+
 def test_cdf_points_are_request_level_empirical_cdf():
     assert _cdf_points([3.0, 1.0, 3.0]) == [(1.0, 1 / 3), (3.0, 2 / 3), (3.0, 1.0)]
 
@@ -188,6 +210,18 @@ def _sweep_row(policy, release_policy, drain_window_s, retained_prefill_fraction
         "p95_delay_over_deadline": str(delay_ratio),
         "absolute_deadline_miss_rate": str(miss_rate),
         "absolute_p95_delay_over_deadline": str(delay_ratio),
+    }
+
+
+def _frontier_row(policy, release_policy, drain_window_s, fraction, net, prefill):
+    return {
+        "policy": policy,
+        "release_policy": release_policy,
+        "drain_window_s": str(drain_window_s),
+        "deadline_scale": "1.0",
+        "max_safe_retained_prefill_fraction": str(fraction),
+        "network_capacity_pressure_at_frontier": str(net),
+        "prefill_capacity_pressure_at_frontier": str(prefill),
     }
 
 

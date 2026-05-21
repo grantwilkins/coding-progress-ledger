@@ -37,6 +37,7 @@ plt.rcParams.update({"pdf.fonttype": 42, "ps.fonttype": 42})
 
 REPORT_DEADLINE_SCALE = 1.0
 REPORT_RETAINED_PREFILL_FRACTION = 0.5
+H1_DRAIN_WINDOW_S = 20.0
 PLOT_DRAIN_WINDOW_S = 1200.0
 NETWORK_SCALES = (0.6, 1.0, 2.0)
 REPORT_POLICIES = (
@@ -106,7 +107,8 @@ def plot_queue_centered(
 ) -> None:
     out = workload_config.output_dir(ROOT)
     sweep = _read_rows(out / "retained_state_drain_sweep.csv")
-    _plot_resource_pressure(_h1_rows(sweep), out / "h1_resource_pressure.pdf", report_deadline_scale)
+    frontier = _read_rows(out / "retained_state_drain_frontier.csv")
+    _plot_resource_pressure(frontier, out / "h1_resource_pressure.pdf", report_deadline_scale)
     _plot_safe_frontier(sweep, out / "h2_safe_frontier.pdf")
     _plot_delay_cdf(workload_config, out / "h2_delay_cdf.pdf", report_retained_prefill_fraction, report_deadline_scale)
     _plot_action_mix_by_model(out / "h3_action_mix_by_model.pdf")
@@ -115,28 +117,19 @@ def plot_queue_centered(
 
 
 def _plot_resource_pressure(rows: list[dict[str, str]], path: Path, deadline_scale: float) -> None:
-    df = _frame(rows)
-    df = df[
-        (df["drain_window_s"] == PLOT_DRAIN_WINDOW_S)
-        & (df["deadline_scale"] == deadline_scale)
-        & df["policy"].isin(H1_POLICIES)
-    ].copy()
-    if "release_policy" in df:
-        df = df[df["release_policy"] == "edf"].copy()
+    df = _resource_pressure_frame(rows, deadline_scale)
     _require_policies(df, H1_POLICIES, "resource-pressure sweep")
-    df = df.dropna(subset=["network_capacity_pressure", "prefill_capacity_pressure"])
     df["Policy"] = df["policy"].map(POLICY_LABELS)
-    df["queue_safe"] = _safe_series(df)
-    df["Safety"] = np.where(df["queue_safe"], "Safe", "Unsafe")
+    df["Evacuation"] = np.where(df["max_safe_retained_prefill_fraction"] > 0.0, "Nonzero", "Zero")
     fig, ax = plt.subplots(figsize=(5.8, 4.2), constrained_layout=True)
     sns.scatterplot(
         df,
         x="network_capacity_pressure",
         y="prefill_capacity_pressure",
         hue="Policy",
-        style="Safety",
-        style_order=("Safe", "Unsafe"),
-        markers={"Safe": "o", "Unsafe": "X"},
+        style="Evacuation",
+        style_order=("Nonzero", "Zero"),
+        markers={"Nonzero": "o", "Zero": "X"},
         palette={POLICY_LABELS[k]: v for k, v in POLICY_COLORS.items()},
         s=62,
         ax=ax,
@@ -145,11 +138,24 @@ def _plot_resource_pressure(rows: list[dict[str, str]], path: Path, deadline_sca
     ax.axhline(1.0, color="0.25", linestyle="--", linewidth=1.0)
     ax.set_xlabel("Network pressure (1.0 = saturated)")
     ax.set_ylabel("Prefill pressure (1.0 = saturated)")
-    ax.set_title("H1: resource pressure under evacuation")
+    ax.set_title(f"H1: resource pressure at safe frontier ({H1_DRAIN_WINDOW_S:g}s drain)")
     _set_pressure_limits(ax, df)
     _simple_legend(ax)
     fig.savefig(path, bbox_inches="tight")
     plt.close(fig)
+
+
+def _resource_pressure_frame(rows: list[dict[str, str]], deadline_scale: float) -> pd.DataFrame:
+    df = _frame(rows)
+    df = df[
+        (df["drain_window_s"] == H1_DRAIN_WINDOW_S)
+        & (df["deadline_scale"] == deadline_scale)
+        & (df["release_policy"] == "edf")
+        & df["policy"].isin(H1_POLICIES)
+    ].copy()
+    df["network_capacity_pressure"] = df["network_capacity_pressure_at_frontier"]
+    df["prefill_capacity_pressure"] = df["prefill_capacity_pressure_at_frontier"]
+    return df.dropna(subset=["network_capacity_pressure", "prefill_capacity_pressure"])
 
 
 def _plot_safe_frontier(rows: list[dict[str, str]], path: Path) -> None:
@@ -425,11 +431,6 @@ def _scaled_network_problem(problem: ProblemData, scale: float) -> ProblemData:
     )
 
 
-def _h1_rows(fallback_rows: list[dict[str, str]]) -> list[dict[str, str]]:
-    generated = WorkloadConfig().output_dir(ROOT) / "retained_state_drain_sweep.csv"
-    return _read_rows(generated) if generated.exists() else fallback_rows
-
-
 def _frame(rows: list[dict[str, str]]) -> pd.DataFrame:
     df = pd.DataFrame(rows)
     numeric = (
@@ -442,6 +443,9 @@ def _frame(rows: list[dict[str, str]]) -> pd.DataFrame:
         "p95_delay_over_deadline",
         "absolute_deadline_miss_rate",
         "absolute_p95_delay_over_deadline",
+        "max_safe_retained_prefill_fraction",
+        "network_capacity_pressure_at_frontier",
+        "prefill_capacity_pressure_at_frontier",
     )
     for column in numeric:
         if column in df:
