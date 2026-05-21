@@ -1,2 +1,7 @@
-policy,integer_classes,integer_requests,enumerated_allocations,drain_window_s,retained_prefill_fraction,release_policy,target_moved_fraction,network_capacity_pressure,prefill_capacity_pressure,absolute_p95_delay_over_deadline,absolute_deadline_miss_rate,integer_objective,verdict
-Integer feasibility oracle,2,8,4881,20.0,0.25,edf,1.0,0.08,0.0,0.31619047619047613,0.0,2.5242036034593065,Pass
+policy,integer_classes,integer_requests,enumerated_allocations,drain_window_s,retained_prefill_fraction,release_policy,target_moved_fraction,network_capacity_pressure,prefill_capacity_pressure,absolute_p95_delay_over_deadline,absolute_deadline_miss_rate,integer_objective,runtime_s,verdict
+Integer feasibility oracle,2,8,4881,20.0,0.25,edf,1.0,0.888888888888889,0.0,0.31619047619047613,0.0,5.185011242238339,1.5775005829927977,Pass
+Deadline-aware,2,8,,20.0,0.25,edf,1.0,1.3333333333333335,0.0,0.31619047619047613,0.0,inf,0.02022266699350439,Network overload
+Online queue,2,8,,20.0,0.25,edf,1.0,0.888888888888889,0.0,0.4488888888888889,0.0,5.185011242238339,0.0004510830040089786,Pass
+Least loaded,2,8,,20.0,0.25,edf,1.0,0.5555555555555556,0.37037037037037035,0.45088888888888884,0.0,4.387293629102271,0.00045479199616238475,Pass
+Replay only,2,8,,20.0,0.25,edf,1.0,0.33333333333333337,1.1111111111111112,0.4511111111111111,0.0,inf,0.0004832920094486326,Prefill overload
+State only,2,8,,20.0,0.25,edf,1.0,0.888888888888889,0.0,0.4488888888888889,0.0,5.185011242238339,0.0004969170113326982,Pass
