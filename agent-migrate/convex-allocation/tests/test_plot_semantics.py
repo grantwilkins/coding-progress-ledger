@@ -3,9 +3,10 @@ Claim:
 The report figure script emits exactly one simple artifact per hypothesis plus a
 compact integer benchmark table. The H1 table uses one fixed stress target and
 absolute event-start deadline metrics. The H2 frontier compares allocation
-policies under EDF release with workload-seed error bars, the H2 CDF is
-request-level, and the H4 heatmap exposes per-class state locality rather than
-only destination load. The H3 plot is the direct single-request replay/state
+policies under EDF release with workload-seed error bars and independent
+drain-window points, the H2 CDF is request-level, and the H4 heatmap exposes
+per-class state locality from the same workload config rather than only
+destination load. The H3 plot is the direct single-request replay/state
 crossover implied by model architecture.
 
 Plausible wrong implementations:
@@ -14,7 +15,8 @@ Plausible wrong implementations:
 - Let a target shortfall pass because pressure and delay are low.
 - Keep using release-relative reconstruction metrics after switching drain
   frontier safety to event-start deadlines.
-- Drop the available-window frontier envelope and plot rounded nonmonotone dips.
+- Restore an available-window frontier envelope that hides independent
+  drain-window outcomes.
 - Drop allocation-policy lines from H2.
 - Use release-order seeds instead of varied workload seeds for H2 error bars.
 - Average class delays before building the CDF.
@@ -40,14 +42,17 @@ from experiments.plot_queue_centered import (
     REPORT_POLICIES,
     _allocation_heatmap,
     _architecture_action_mix,
+    _clear_outputs,
     _cdf_points,
     _h3_action_rows,
     _h1_stress_rows,
     _integer_summary_rows,
     _max_waiting_depth_points,
+    _plot_state_manifest_heatmap,
     _safe_frontier,
     _safe_series,
 )
+from evaluation import WorkloadConfig
 from problem import ProblemData
 
 import numpy as np
@@ -56,6 +61,7 @@ import numpy as np
 def test_report_outputs_are_one_plot_per_hypothesis_plus_summary_table():
     assert set(OUTPUT_FILES) == {
         "h1_fixed_target_stress.csv",
+        "h2_safe_frontier.csv",
         "h2_safe_frontier.pdf",
         "h2_delay_cdf.pdf",
         "h3_action_mix_by_model.csv",
@@ -82,6 +88,8 @@ def test_safe_series_requires_absolute_deadline_bounds():
         {
             "absolute_deadline_miss_rate": [0.01, 0.011, 0.0],
             "absolute_p95_delay_over_deadline": [1.0, 0.5, 1.001],
+            "retained_prefill_moved_s": [10.0, 10.0, 10.0],
+            "retained_prefill_target_s": [10.0, 10.0, 10.0],
         }
     )
 
@@ -95,10 +103,25 @@ def test_safe_series_ignores_release_relative_deadline_metrics_when_present():
             "p95_delay_over_deadline": [3.0],
             "absolute_deadline_miss_rate": [0.0],
             "absolute_p95_delay_over_deadline": [0.1],
+            "retained_prefill_moved_s": [10.0],
+            "retained_prefill_target_s": [10.0],
         }
     )
 
     assert _safe_series(df).tolist() == [True]
+
+
+def test_safe_series_rejects_target_shortfall_even_when_deadlines_pass():
+    df = pd.DataFrame(
+        {
+            "absolute_deadline_miss_rate": [0.0],
+            "absolute_p95_delay_over_deadline": [0.5],
+            "retained_prefill_moved_s": [9.0],
+            "retained_prefill_target_s": [10.0],
+        }
+    )
+
+    assert _safe_series(df).tolist() == [False]
 
 
 def test_safe_frontier_uses_largest_safe_fraction_by_drain_window():
@@ -121,13 +144,13 @@ def test_safe_frontier_uses_largest_safe_fraction_by_drain_window():
     assert FRONTIER_RELEASE_POLICY == "edf"
     assert by_policy_window[("deadline-penalty-rounded", 900.0)] == 0.4
     assert by_policy_window[("deadline-penalty-rounded", 1800.0)] == 0.6
-    assert by_policy_window[("deadline-penalty-rounded", 3600.0)] == 0.6
+    assert by_policy_window[("deadline-penalty-rounded", 3600.0)] == 0.3
     assert by_policy_window[("replay-only", 900.0)] == 0.9
     assert set(frontier["policy"]) == {"deadline-penalty-rounded", "replay-only"}
     assert set(frontier["max_safe_retained_prefill_fraction_std"]) == {0.0}
     assert frontier[frontier["policy"] == "deadline-penalty-rounded"][
         "max_safe_retained_prefill_fraction"
-    ].is_monotonic_increasing
+    ].tolist() == [0.4, 0.6, 0.3]
 
 
 def test_safe_frontier_averages_workload_seed_frontiers_and_reports_std():
@@ -248,6 +271,45 @@ def test_manifest_heatmap_labels_include_context_deadline_and_locality():
     assert all("T=" in label and "ddl=" in label and "ctx=" in label and "kv=" in label for label in row_labels)
 
 
+def test_h4_heatmap_uses_the_report_workload_config(monkeypatch, tmp_path):
+    captured = {}
+
+    def make_problem(*args, **kwargs):
+        captured.update(kwargs)
+        return object()
+
+    monkeypatch.setattr("experiments.plot_queue_centered.make_problem", make_problem)
+    monkeypatch.setattr("experiments.plot_queue_centered.solve_soft_deadline_cvxpy", lambda problem: SimpleNamespace(y=np.zeros((1, 1))))
+    monkeypatch.setattr(
+        "experiments.plot_queue_centered._allocation_heatmap",
+        lambda problem, allocation, max_rows=6: (np.ones((1, 1)), ["class"], ["stay"]),
+    )
+
+    _plot_state_manifest_heatmap(
+        WorkloadConfig(source="generated", seed=13, jobs=25, classes=5),
+        tmp_path / "h4.pdf",
+        retained_prefill_fraction=0.5,
+        deadline_scale=1.0,
+    )
+
+    assert captured["workload_source"] == "generated"
+    assert captured["workload_seed"] == 13
+    assert captured["workload_jobs"] == 25
+    assert captured["workload_classes"] == 5
+
+
+def test_plot_output_cleanup_removes_owned_artifacts_only(tmp_path):
+    owned = tmp_path / "h2_safe_frontier.csv"
+    unrelated = tmp_path / "notes.csv"
+    owned.write_text("stale")
+    unrelated.write_text("keep")
+
+    _clear_outputs(tmp_path)
+
+    assert not owned.exists()
+    assert unrelated.read_text() == "keep"
+
+
 def test_queue_depth_helper_still_counts_waiting_requests_for_bandwidth_plot():
     trace = (
         _record(k=0, network_wait=0.0, network_service=1.0),
@@ -279,6 +341,8 @@ def _sweep_row(policy, release_policy, drain_window_s, retained_prefill_fraction
         "p95_delay_over_deadline": str(delay_ratio),
         "absolute_deadline_miss_rate": str(miss_rate),
         "absolute_p95_delay_over_deadline": str(delay_ratio),
+        "retained_prefill_moved_s": "10.0",
+        "retained_prefill_target_s": "10.0",
     }
 
 

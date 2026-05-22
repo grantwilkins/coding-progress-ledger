@@ -88,6 +88,7 @@ RELEASE_POLICY_COLORS = {
 }
 OUTPUT_FILES = (
     "h1_fixed_target_stress.csv",
+    "h2_safe_frontier.csv",
     "h2_safe_frontier.pdf",
     "h2_delay_cdf.pdf",
     "h3_action_mix_by_model.csv",
@@ -116,18 +117,26 @@ INTEGER_TABLE_POLICIES = (
 
 
 def plot_queue_centered(
-    workload_config: WorkloadConfig = WorkloadConfig(source="fixed"),
+    workload_config: WorkloadConfig = WorkloadConfig(),
     report_deadline_scale: float = REPORT_DEADLINE_SCALE,
     report_retained_prefill_fraction: float = REPORT_RETAINED_PREFILL_FRACTION,
 ) -> None:
     out = workload_config.output_dir(ROOT)
+    _clear_outputs(out)
     sweep = _read_rows(out / "retained_state_drain_sweep.csv")
     _write_h1_stress_table(sweep, out / "h1_fixed_target_stress.csv", report_deadline_scale)
-    _plot_safe_frontier(sweep, out / "h2_safe_frontier.pdf")
+    frontier = _safe_frontier(sweep)
+    frontier.to_csv(out / "h2_safe_frontier.csv", index=False)
+    _plot_safe_frontier(frontier, out / "h2_safe_frontier.pdf")
     _plot_delay_cdf(workload_config, out / "h2_delay_cdf.pdf", report_retained_prefill_fraction, report_deadline_scale)
     _write_h3_action_table(out / "h3_action_mix_by_model.csv")
     _plot_action_mix_by_model(out / "h3_action_mix_by_model.pdf")
-    _plot_state_manifest_heatmap(out / "h4_state_manifest_heatmap.pdf", report_retained_prefill_fraction, report_deadline_scale)
+    _plot_state_manifest_heatmap(
+        workload_config,
+        out / "h4_state_manifest_heatmap.pdf",
+        report_retained_prefill_fraction,
+        report_deadline_scale,
+    )
     _write_integer_summary(ROOT / "outputs" / "sweep" / "integer_optimality_cases.csv", out / "integer_benchmark_summary.csv")
 
 
@@ -185,8 +194,7 @@ def _h1_verdict(row, target_moved_fraction: float) -> str:
     return "Pass"
 
 
-def _plot_safe_frontier(rows: list[dict[str, str]], path: Path) -> None:
-    frontier = _safe_frontier(rows)
+def _plot_safe_frontier(frontier: pd.DataFrame, path: Path) -> None:
     _require_keys(set(frontier["policy"]), REPORT_POLICIES, "safe-frontier sweep")
     fig, ax = plt.subplots(figsize=(5.8, 4.0), constrained_layout=True)
     for policy in REPORT_POLICIES:
@@ -267,13 +275,15 @@ def _write_h3_action_table(path: Path) -> None:
     _architecture_action_mix().to_csv(path, index=False)
 
 
-def _plot_state_manifest_heatmap(path: Path, retained_prefill_fraction: float, deadline_scale: float) -> None:
+def _plot_state_manifest_heatmap(
+    workload_config: WorkloadConfig, path: Path, retained_prefill_fraction: float, deadline_scale: float
+) -> None:
     problem = make_problem(
         get_model("GLM-5"),
         "transition-coupled",
         retained_prefill_fraction=retained_prefill_fraction,
         deadline_scale=deadline_scale,
-        workload_source="fixed",
+        **workload_config.problem_kwargs(),
     )
     allocation = solve_soft_deadline_cvxpy(problem).y
     heatmap, row_labels, col_labels = _allocation_heatmap(problem, allocation, max_rows=6)
@@ -309,10 +319,6 @@ def _safe_frontier(rows: list[dict[str, str]]) -> pd.DataFrame:
         ["policy", "workload_seed", "drain_window_s"], as_index=False
     )["retained_prefill_fraction"].max()
     per_seed = keys.merge(per_seed, how="left").fillna({"retained_prefill_fraction": 0.0})
-    per_seed = per_seed.sort_values(["policy", "workload_seed", "drain_window_s"])
-    per_seed["retained_prefill_fraction"] = per_seed.groupby(["policy", "workload_seed"])[
-        "retained_prefill_fraction"
-    ].cummax()
     grouped = per_seed.groupby(["policy", "drain_window_s"], as_index=False).agg(
         max_safe_retained_prefill_fraction=("retained_prefill_fraction", "mean"),
         max_safe_retained_prefill_fraction_std=("retained_prefill_fraction", "std"),
@@ -520,7 +526,11 @@ def _frame(rows: list[dict[str, str]]) -> pd.DataFrame:
 
 
 def _safe_series(df: pd.DataFrame) -> pd.Series:
-    return (df["absolute_deadline_miss_rate"] <= 0.01) & (df["absolute_p95_delay_over_deadline"] <= 1.0)
+    return (
+        (df["retained_prefill_moved_s"] >= df["retained_prefill_target_s"] - 1e-9)
+        & (df["absolute_deadline_miss_rate"] <= 0.01)
+        & (df["absolute_p95_delay_over_deadline"] <= 1.0)
+    )
 
 
 def _cdf_points(values) -> list[tuple[float, float]]:
@@ -531,6 +541,13 @@ def _cdf_points(values) -> list[tuple[float, float]]:
 def _read_rows(path: Path) -> list[dict[str, str]]:
     with path.open(newline="") as f:
         return list(csv.DictReader(f))
+
+
+def _clear_outputs(out: Path) -> None:
+    for name in OUTPUT_FILES:
+        path = out / name
+        if path.exists():
+            path.unlink()
 
 
 def _require_policies(df: pd.DataFrame, policies: tuple[str, ...], context: str) -> None:

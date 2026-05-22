@@ -58,7 +58,7 @@ uv run python experiments/run_queue_failure_diagnostics.py
 Plot queue-centered results after the retained-state drain CSV exists:
 
 ```bash
-uv run python experiments/plot_queue_centered.py --workload-source fixed
+uv run python experiments/plot_queue_centered.py
 ```
 
 Plot the simple network-bandwidth pressure relationship:
@@ -100,6 +100,7 @@ labeled subdirectory such as
 - `h1_fixed_target_stress.csv`
 - `h1_integer_oracle.csv`
 - `h1_integer_oracle_summary.csv`
+- `h2_safe_frontier.csv`
 - `h2_safe_frontier.pdf`
 - `h2_delay_cdf.pdf`
 - `h3_action_mix_by_model.csv`
@@ -124,11 +125,12 @@ The retained-state drain frontier writes `retained_state_drain_sweep.csv` and
 10s to 3600s, uses that window as the resource-capacity budget, and reports the
 max safe retained-prefill fraction evacuated using absolute event-start
 deadline safety under EDF release order. Generated-workload runs use workload
-seeds 0-15; H2 plots all allocation policies as monotone available-window
-envelopes with workload-seed mean and standard-deviation error bars. Release
-ordering is applied as event-start service priority at counted class/action
-block granularity for speed, which can make frontier cliffs sharper than
-per-request ordering.
+seeds 0-15; H2 writes and plots independent drain-window frontier points for
+all allocation policies with workload-seed mean and standard-deviation error
+bars. Release ordering is applied as event-start service priority at counted
+class/action block granularity for speed, which can make frontier cliffs sharper
+than per-request ordering. Report plotting removes its owned H1-H4 artifacts
+before regeneration so failed runs do not leave stale report outputs in place.
 The network-bandwidth tradeoff sweeps network bandwidth and plots the largest
 tested source-state fraction that can be safely evacuated, request migration
 fraction, actual evacuated state TB, and max network/prefill queue depth.
