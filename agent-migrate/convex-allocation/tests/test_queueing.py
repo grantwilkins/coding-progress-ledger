@@ -20,11 +20,16 @@ Plausible wrong implementations:
 - Re-round an already-integer online baseline allocation and erase its chosen requests.
 - Keep metric-only rounded queue evaluation dependent on per-request records.
 - Change percentile or EDF tie semantics while compressing counted requests.
+- Switch large allocations to a request-count heuristic that overshoots the
+  retained-prefill target when exact rounding is cheap.
+- Accept public RequestRecord release times that the evaluator will overwrite.
+- Treat misspelled actions as state-transfer requests.
 """
 
 from __future__ import annotations
 
 import numpy as np
+import pytest
 from numpy.testing import assert_allclose
 
 import queueing
@@ -105,6 +110,16 @@ def test_large_rounding_meets_target_without_zero_support_classes():
     assert 1000.0 <= rounded.retained_prefill_moved_s < 1008.0
     assert_allclose(np.sum(rounded.y, axis=1), problem.d)
     assert_allclose(np.sum(rounded.y[:, :2], axis=1)[2], 0)
+
+
+def test_large_rounding_uses_exact_minimum_overshoot_when_state_space_is_small():
+    problem = queue_problem([6, 10], [201, 1], [1, 1], 10.0)
+    y = np.array([[1.7, 0.0, 199.3], [0.1, 0.0, 0.9]])
+
+    rounded = round_allocation(problem, y)
+
+    assert rounded.retained_prefill_moved_s == 10.0
+    assert_allclose(np.sum(rounded.y[:, :2], axis=1), [0, 1])
 
 
 def test_rounding_does_not_materialize_request_records():
@@ -281,6 +296,22 @@ def test_counted_rounded_metrics_match_expanded_trace_metrics():
             assert_allclose(counted[key], expanded[key])
 
 
+def test_counted_metrics_match_expanded_edf_after_non_edf_release_inversion():
+    problem = queue_problem([10, 100], [3, 1], [10.0, 1.0], 0.0)
+    y = np.array([[3, 0, 0], [1, 0, 0]])
+
+    counted = evaluate_rounded_queue(
+        problem, y, drain_window_s=1.0, release_policy="shortest-context-first"
+    )
+    expanded, trace = evaluate_rounded_queue_trace(
+        problem, y, drain_window_s=1.0, release_policy="shortest-context-first"
+    )
+
+    assert [record.g for record in sorted(trace, key=lambda record: record.reconstruction_delay)] != [0, 0, 0, 1]
+    assert_allclose(counted["p95_reconstruction_delay"], expanded["p95_reconstruction_delay"])
+    assert_allclose(counted["deadline_miss_rate"], expanded["deadline_miss_rate"])
+
+
 def test_empty_queue_metrics_include_normalized_delay_aliases():
     problem = queue_problem([1], [1], [10.0], 0.0)
     y = np.array([[0, 0, 1]])
@@ -340,6 +371,22 @@ def test_default_drain_window_is_thirty_minutes():
     _, trace = evaluate_static_queue_trace(problem, records)
 
     assert_allclose([record.release_time_s for record in trace], [0.0, 900.0])
+
+
+def test_static_queue_rejects_preassigned_release_times():
+    problem = queue_problem([1], [1], [10.0], 0.0)
+    records = (RequestRecord(0, 0, "state", 1.0, 10.0, 0.0, 0.0, release_time_s=1.0),)
+
+    with pytest.raises(ValueError, match="assigns release times"):
+        evaluate_static_queue(problem, records)
+
+
+def test_static_queue_rejects_unknown_actions():
+    problem = queue_problem([1], [1], [10.0], 0.0)
+    records = (RequestRecord(0, 0, "typo", 1.0, 10.0, 0.0, 0.0),)
+
+    with pytest.raises(ValueError, match="unknown queue action"):
+        evaluate_static_queue(problem, records)
 
 
 def test_zero_window_zero_load_has_zero_removal_rate():

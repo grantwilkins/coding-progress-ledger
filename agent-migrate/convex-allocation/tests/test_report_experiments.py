@@ -12,9 +12,12 @@ Plausible wrong implementations:
 - Rebuild the generated workload once per weight or frontier grid point.
 - Recompute claim frontiers even when the caller already passed them in.
 - Break real process-pool imports, pickling, ordering, or solver equivalence.
+- Emit failed assertions as report-facing evidence instead of observed comparisons.
 """
 
 from __future__ import annotations
+
+import math
 
 import numpy as np
 import pytest
@@ -95,10 +98,7 @@ def test_model_architecture_sweep_reuses_one_base_problem_per_model(monkeypatch)
 
     def run_jobs(label, jobs, fn):
         assert label == "model architecture frontier"
-        by_model = {}
-        for key, _, _, problem in jobs:
-            by_model.setdefault(key, set()).add(id(problem.T))
-        assert all(len(ids) == 1 for ids in by_model.values())
+        assert all(problem.T.shape == (1,) for *_, problem in jobs)
         return [(key, fraction, None) for key, fraction, *_ in jobs]
 
     monkeypatch.setattr(report, "make_problem", make_problem)
@@ -131,6 +131,26 @@ def test_claim_table_uses_precomputed_frontiers(monkeypatch):
     rows = claim_table(WorkloadConfig(), architecture_rows, frontiers)
 
     assert rows[1]["pass"] == "yes"
+
+
+def test_claim_table_reports_observed_comparisons_instead_of_failed_claims(monkeypatch):
+    frontiers = {
+        "main": {"largest_tested_safe_retained_prefill_fraction": math.nan},
+        "replay": {"largest_tested_safe_retained_prefill_fraction": math.nan},
+    }
+    monkeypatch.setattr(report, "_claim_frontiers", lambda _: (_ for _ in ()).throw(AssertionError("recomputed")))
+    monkeypatch.setattr(report, "make_problem", lambda *args, **kwargs: tiny_problem())
+    monkeypatch.setattr(
+        report,
+        "_rounded_metrics",
+        lambda *args, **kwargs: (None, {"deadline_miss_rate": 0.0}),
+    )
+
+    rows = claim_table(WorkloadConfig(), [], frontiers)
+
+    assert [row["pass"] for row in rows] == ["yes", "yes", "yes"]
+    assert rows[0]["winner"] == "tie"
+    assert rows[1]["winner"] == "unresolved"
 
 
 def test_fixed_report_frontier_process_pool_matches_serial(monkeypatch):

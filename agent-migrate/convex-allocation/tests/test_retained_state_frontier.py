@@ -18,6 +18,7 @@ Plausible wrong implementations:
 - Drop EDF release from the frontier sweep.
 - Forget to sample the fixed H1 stress target when frontier search lands elsewhere.
 - Keep writing the old deadline-scale frontier CSV names.
+- Mark rows safe when they exceed physical pressure or the drain window.
 """
 
 from __future__ import annotations
@@ -119,7 +120,8 @@ def test_window_rescale_reuses_workload_and_preserves_background_load_fraction()
 
     scaled = _with_window(problem, 10.0)
 
-    assert scaled.T is problem.T
+    np.testing.assert_allclose(scaled.T, problem.T)
+    assert not np.shares_memory(scaled.T, problem.T)
     assert scaled.retained_prefill_target_s == 20.0
     assert np.allclose(scaled.C_net, [30.0])
     assert np.allclose(scaled.C_prefill, [40.0])
@@ -180,12 +182,19 @@ def test_safe_definition_uses_absolute_event_start_deadline_metrics():
         "p95_reconstruction_delay_ratio": 3.0,
         "absolute_deadline_miss_rate": 0.0,
         "absolute_p95_delay_over_deadline": 1.0,
+        "network_capacity_pressure": 1.0,
+        "prefill_capacity_pressure": 1.0,
+        "drain_completion_s": 10.0,
+        "drain_window_s": 10.0,
     }
 
     assert _is_safe(metrics)
     assert not _is_safe({**metrics, "absolute_deadline_miss_rate": 0.011})
     assert not _is_safe({**metrics, "absolute_p95_delay_over_deadline": 1.001})
     assert not _is_safe({**metrics, "retained_prefill_moved_s": 9.99})
+    assert not _is_safe({**metrics, "network_capacity_pressure": 1.0001})
+    assert not _is_safe({**metrics, "prefill_capacity_pressure": 1.0001})
+    assert not _is_safe({**metrics, "drain_completion_s": 10.0001})
 
 
 def test_failure_mode_uses_explicit_frontier_failure_names():
@@ -208,6 +217,12 @@ def test_failure_mode_uses_explicit_frontier_failure_names():
     assert (
         _failure_mode({**row, "retained_prefill_moved_s": 10.0, "absolute_p95_delay_over_deadline": 1.1})
         == "absolute_p95_delay"
+    )
+    assert _failure_mode({**row, "retained_prefill_moved_s": 10.0, "network_capacity_pressure": 1.1}) == "network_pressure"
+    assert _failure_mode({**row, "retained_prefill_moved_s": 10.0, "prefill_capacity_pressure": 1.1}) == "prefill_pressure"
+    assert (
+        _failure_mode({**row, "retained_prefill_moved_s": 10.0, "drain_completion_s": 11.0, "drain_window_s": 10.0})
+        == "drain_window_exceeded"
     )
 
 

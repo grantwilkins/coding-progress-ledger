@@ -14,6 +14,8 @@ Plausible wrong implementations:
 - Accidentally make the retained-session default look like the fixed six-row smoke workload.
 - Produce a generated transition case that collapses to one destination.
 - Crash queue-table evaluation when a generated-workload baseline is infeasible.
+- Store mutable arrays in frozen ProblemData objects.
+- Average deadlines inside aggregate buckets and hide tight-deadline subgroups.
 """
 
 from __future__ import annotations
@@ -29,10 +31,9 @@ from coefficients import REPLAY, compute_coefficients
 from cvxpy_solver import solve_cvxpy
 from evaluation import WorkloadConfig
 from experiments.run_catalog_sweep import _infeasible_result, _transition_queue_rows, run_transition_coupled
-from metrics import available_rates
-from problem import make_problem
+from problem import make_problem, with_retained_prefill_fraction
 from queueing import evaluate_rounded_queue
-from workload import assert_workload_quality, generate_workload
+from workload import _aggregate, assert_workload_quality, generate_workload
 
 
 def _weighted_log_correlation(x, y, weights):
@@ -107,19 +108,26 @@ def test_generated_retained_sessions_are_default_and_fixed_is_explicit():
     assert not np.allclose(default.T[: fixed.G], fixed.T)
 
 
-def test_problem_derived_values_recompute_after_array_mutation():
+def test_problem_data_arrays_are_immutable_and_fraction_copy_does_not_alias():
     problem = make_problem(get_model("GLM-5"), "transition-coupled", workload_source="fixed")
-    coeffs = compute_coefficients(problem)
-    _, lambda_avail, _ = available_rates(problem)
+    derived = with_retained_prefill_fraction(problem, 0.25)
 
-    problem.h_ctx[0, 0] = 0.5
-    problem.ell_net[0] *= 0.5
+    assert not np.shares_memory(problem.T, derived.T)
+    with np.testing.assert_raises(ValueError):
+        problem.h_ctx[0, 0] = 0.5
+    with np.testing.assert_raises(ValueError):
+        derived.ell_net[0] *= 0.5
 
-    changed_coeffs = compute_coefficients(problem)
-    _, changed_lambda_avail, _ = available_rates(problem)
 
-    assert changed_coeffs.b_net[0, 0, REPLAY] < coeffs.b_net[0, 0, REPLAY]
-    assert changed_lambda_avail[0] > lambda_avail[0]
+def test_aggregation_preserves_tightest_deadline_in_merged_buckets():
+    T = np.array([1024.0, 1024.0, 4096.0])
+    deadline_s = np.array([50.0, 5.0, 100.0])
+    h_ctx = np.zeros((3, 1))
+    h_kv = np.zeros((3, 1))
+
+    workload = _aggregate(T, deadline_s, h_ctx, h_kv, cap=1)
+
+    assert workload.deadline_s[0] == 5.0
 
 
 def test_generated_evaluation_config_is_reproducible_and_separate_from_fixed_outputs():

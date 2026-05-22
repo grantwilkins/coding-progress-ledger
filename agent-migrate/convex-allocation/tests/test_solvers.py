@@ -20,6 +20,8 @@ Plausible wrong implementations:
 - Use full window capacity instead of available deadline-rate capacity.
 - Enforce deadline buckets as disjoint bins instead of cumulative thresholds.
 - Ignore the retained-prefill cap when scanning a frontier.
+- Return different quantities through the shared SolverResult.objective field.
+- Report deadline-aware success below the requested retained-prefill target.
 """
 
 from __future__ import annotations
@@ -37,6 +39,7 @@ from coefficients import REPLAY, STATE, compute_coefficients
 from cvxpy_solver import solve_cvxpy, solve_deadline_aware_cvxpy, solve_soft_deadline_cvxpy
 from metrics import allocation_diagnostics, assert_feasible, retained_prefill_action_mix, retained_prefill_moved_s
 from mirror_descent import solve_mirror_descent
+from objective import objective
 from problem import ProblemData, make_problem
 
 
@@ -106,14 +109,17 @@ def test_larger_alpha_moves_more_work_on_small_instance():
 
 def test_deadline_aware_solver_uses_available_rate_by_cumulative_deadline_threshold():
     problem = deadline_rate_problem()
+    coeffs = compute_coefficients(problem)
 
     tight = solve_deadline_aware_cvxpy(problem, deadline_margin=0.5)
     loose = solve_deadline_aware_cvxpy(problem, deadline_margin=1.0)
     moved = np.sum(tight.y[:, : compute_coefficients(problem).M], axis=1)
 
     np.testing.assert_allclose(moved, [0.5, 1.0], atol=1e-4)
-    np.testing.assert_allclose(tight.objective, 1.5, atol=1e-4)
-    np.testing.assert_allclose(loose.objective, 2.0, atol=1e-4)
+    np.testing.assert_allclose(tight.diagnostics["retained_prefill_moved_s"], 1.5, atol=1e-4)
+    np.testing.assert_allclose(loose.diagnostics["retained_prefill_moved_s"], 2.0, atol=1e-4)
+    np.testing.assert_allclose(tight.objective, objective(problem, coeffs, tight.y), atol=1e-9)
+    np.testing.assert_allclose(loose.objective, objective(problem, coeffs, loose.y), atol=1e-9)
 
 
 def test_deadline_aware_solver_respects_retained_prefill_cap_for_frontier_scans():
@@ -121,6 +127,18 @@ def test_deadline_aware_solver_respects_retained_prefill_cap_for_frontier_scans(
     result = solve_deadline_aware_cvxpy(problem, deadline_margin=1.0, retained_prefill_cap=1.25)
 
     np.testing.assert_allclose(retained_prefill_moved_s(problem, result.y), 1.25, atol=1e-4)
+
+
+def test_deadline_aware_solver_hard_fails_when_target_cannot_be_met():
+    problem = ProblemData(
+        **{
+            **deadline_rate_problem().__dict__,
+            "retained_prefill_target_s": 2.0,
+        }
+    )
+
+    with np.testing.assert_raises(RuntimeError):
+        solve_deadline_aware_cvxpy(problem, deadline_margin=0.5)
 
 
 def test_mirror_descent_preserves_glm_transition_mix():

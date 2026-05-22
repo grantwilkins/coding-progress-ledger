@@ -199,7 +199,12 @@ def test_queue_diagnostics_reuses_one_base_problem_per_deadline_scale(monkeypatc
 
     def run_jobs(label, jobs, fn):
         assert label == "queue failure diagnostics"
-        assert len({id(problem.T) for _, _, problem in jobs}) == len(queue_diag.TIGHT_DEADLINE_SCALES)
+        assert [(fraction, scale) for fraction, scale, _ in jobs] == [
+            (0.2, 0.25),
+            (0.4, 0.25),
+            (0.2, 0.5),
+            (0.4, 0.5),
+        ]
         return [([], [], [], [], [], []) for _ in jobs]
 
     monkeypatch.setattr(queue_diag, "ROOT", tmp_path)

@@ -364,6 +364,9 @@ def _is_safe(metrics):
         metrics["retained_prefill_moved_s"] >= metrics["retained_prefill_target_s"] - 1e-9
         and metrics["absolute_deadline_miss_rate"] <= 0.01
         and metrics["absolute_p95_delay_over_deadline"] <= 1.0
+        and metrics["network_capacity_pressure"] <= 1.0
+        and metrics["prefill_capacity_pressure"] <= 1.0
+        and metrics["drain_completion_s"] <= metrics["drain_window_s"] + 1e-9
     )
 
 
@@ -374,6 +377,12 @@ def _failure_mode(row):
         return "absolute_deadline_miss"
     if row["absolute_p95_delay_over_deadline"] > 1.0:
         return "absolute_p95_delay"
+    if row["network_capacity_pressure"] > 1.0:
+        return "network_pressure"
+    if row["prefill_capacity_pressure"] > 1.0:
+        return "prefill_pressure"
+    if row["drain_completion_s"] > row["drain_window_s"] + 1e-9:
+        return "drain_window_exceeded"
     if row["network_capacity_pressure"] >= row["prefill_capacity_pressure"]:
         return "network_pressure"
     return "prefill_pressure"

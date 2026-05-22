@@ -17,7 +17,7 @@ from metrics import (
 )
 from problem import ProblemData
 
-EXACT_ROUNDING_MAX_REQUESTS = 200
+EXACT_ROUNDING_MAX_STATES = 2_000_000
 DEFAULT_RELEASE_SEED = 7
 RELEASE_POLICIES = ("edf", "shortest-context-first", "random")
 
@@ -282,25 +282,18 @@ def _evaluate_counted_queue(
     prefill_busy = np.zeros(problem.K)
 
     for k in range(problem.K):
-        time = 0.0
-        for i, record in enumerate(records):
-            if record.k != k:
-                continue
-            done = _schedule_arrivals(release[i], time, record.network_service_s)
+        idx = [i for i, record in enumerate(records) if record.k == k]
+        for i, done in _schedule_counted(records, release, idx, "network_service_s").items():
             net_done[i] = done
             complete[i] = done
-            net_busy[k] += record.network_service_s * record.count
-            time = float(done[-1])
+            net_busy[k] += records[i].network_service_s * records[i].count
 
     for k in range(problem.K):
-        time = 0.0
-        for i, record in enumerate(records):
-            if record.k != k or record.action != ACTIONS[REPLAY]:
-                continue
-            done = _schedule_arrivals(net_done[i], time, record.prefill_service_s)
+        arrivals = [np.array([]) if done is None else done for done in net_done]
+        idx = [i for i, record in enumerate(records) if record.k == k and record.action == ACTIONS[REPLAY]]
+        for i, done in _schedule_counted(records, arrivals, idx, "prefill_service_s").items():
             complete[i] = done
-            prefill_busy[k] += record.prefill_service_s * record.count
-            time = float(done[-1])
+            prefill_busy[k] += records[i].prefill_service_s * records[i].count
 
     delay = np.concatenate([complete[i] - release[i] for i in range(len(records))])
     event_complete = np.concatenate([complete[i] for i in range(len(records))])
@@ -379,7 +372,7 @@ def _rounded_moved_counts(
     total = int(np.dot(d, T))
     if target > total:
         raise ValueError("retained prefill target exceeds total class work")
-    if int(np.sum(d)) > EXACT_ROUNDING_MAX_REQUESTS:
+    if _rounding_state_count(T, target, total) > EXACT_ROUNDING_MAX_STATES:
         return _greedy_moved_counts(moved_float, d, T, target)
 
     cap = min(total, target + int(np.max(T)))
@@ -435,6 +428,10 @@ def _greedy_moved_counts(moved_float: np.ndarray, d: np.ndarray, T: np.ndarray, 
         counts[g] += 1
         used += int(T[g])
     return tuple(int(n) for n in counts)
+
+
+def _rounding_state_count(T: np.ndarray, target: int, total: int) -> int:
+    return min(total, target + int(np.max(T))) + 1
 
 
 def _apportion(total: int, weights: np.ndarray) -> np.ndarray:
@@ -510,12 +507,31 @@ def _release_times(record: _CountedRequest, total: int, drain_window_s: float) -
     return drain_window_s * ranks / total
 
 
-def _schedule_arrivals(arrivals: np.ndarray, time: float, service: float) -> np.ndarray:
-    i = np.arange(arrivals.size)
-    if service <= 0.0:
-        return np.maximum.accumulate(np.maximum(arrivals, time))
-    base = np.maximum.accumulate(arrivals - i * service)
-    return (i + 1.0) * service + np.maximum(base, time)
+def _schedule_counted(
+    records: tuple[_CountedRequest, ...],
+    arrivals: list[np.ndarray],
+    idx: list[int],
+    service_field: str,
+) -> dict[int, np.ndarray]:
+    done = {i: np.zeros(records[i].count) for i in idx}
+    pos = {i: 0 for i in idx}
+    pending = sorted((arrivals[i][0], i) for i in idx if records[i].count)
+    ready: list[tuple[float, int, int, int]] = []
+    time = 0.0
+    while pending or ready:
+        if not ready:
+            time = max(time, pending[0][0])
+        while pending and pending[0][0] <= time + 1e-12:
+            _, i = heappop(pending)
+            heappush(ready, (records[i].deadline_s, records[i].g, records[i].release_rank + pos[i], i))
+        _, _, _, i = heappop(ready)
+        j = pos[i]
+        time = max(time, arrivals[i][j]) + getattr(records[i], service_field)
+        done[i][j] = time
+        pos[i] += 1
+        if pos[i] < records[i].count:
+            heappush(pending, (arrivals[i][pos[i]], i))
+    return done
 
 
 def _request_records(problem: ProblemData, y: np.ndarray) -> tuple[RequestRecord, ...]:
@@ -551,6 +567,11 @@ def _paced_records(
     _validate_release_policy(release_policy)
     if not records:
         return records
+    if any(record.release_time_s != 0.0 for record in records):
+        raise ValueError("evaluate_static_queue assigns release times from drain_window_s and release_policy")
+    invalid = sorted({record.action for record in records if record.action not in ACTIONS})
+    if invalid:
+        raise ValueError(f"unknown queue action: {invalid[0]}")
     blocks: dict[tuple[int, int, str], list[int]] = {}
     for i, record in enumerate(records):
         blocks.setdefault((record.g, record.k, record.action), []).append(i)

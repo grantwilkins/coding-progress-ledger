@@ -29,7 +29,7 @@ from objective import objective
 from problem import ProblemData, make_problem, with_retained_prefill_fraction
 from queueing import evaluate_rounded_allocation, evaluate_rounded_queue, round_allocation
 
-RETAINED_PREFILL_FRACTIONS = (0.20, 0.30, 0.40, 0.50, 0.60, 0.70, 0.80, 0.90, 1.00)
+RETAINED_PREFILL_FRACTIONS = (0.0, 0.20, 0.30, 0.40, 0.50, 0.60, 0.70, 0.80, 0.90, 1.00)
 DEADLINE_HEADROOMS = (0.60, 0.75, 0.85, 1.00)
 LINEAR_OVERRUN_WEIGHTS = (5.0, 25.0, 100.0)
 QUADRATIC_OVERRUN_WEIGHTS = (25.0, 100.0, 500.0)
@@ -70,33 +70,34 @@ def claim_table(
     replay_values = [float(row["replay_fraction"]) for row in architecture_rows if row["status"] == "SAFE"]
     action_range = max(replay_values) - min(replay_values) if replay_values else math.nan
     return [
-        _claim_row(
-            "deadline-aware reduces miss rate",
+        _comparison_row(
+            "miss-rate comparison",
             "miss rate",
             "deadline-aware-rounded",
             "online-queue-greedy",
             main["deadline_miss_rate"],
             online["deadline_miss_rate"],
-            main["deadline_miss_rate"] < online["deadline_miss_rate"],
+            higher_is_better=False,
         ),
-        _claim_row(
-            "mixed action beats replay-only",
+        _comparison_row(
+            "safe-frontier comparison",
             "largest tested safe retained-prefill fraction",
             "deadline-aware-rounded",
             "replay-only",
             main_frontier["largest_tested_safe_retained_prefill_fraction"],
             replay_frontier["largest_tested_safe_retained_prefill_fraction"],
-            main_frontier["largest_tested_safe_retained_prefill_fraction"]
-            > replay_frontier["largest_tested_safe_retained_prefill_fraction"],
+            higher_is_better=True,
         ),
         _claim_row(
-            "model architecture changes action mix",
+            "model architecture changes action mix"
+            if bool(replay_values) and action_range > 0.05
+            else "model architecture action-mix comparison: no finite contrast",
             "replay/state fraction range",
             "varies by model",
             "fixed policy",
             action_range,
             0.0,
-            bool(replay_values) and action_range > 0.05,
+            True,
         ),
     ]
 
@@ -353,6 +354,23 @@ def _claim_row(claim, metric, winner, baseline, winner_value, baseline_value, pa
     }
 
 
+def _comparison_row(claim, metric, a, b, a_value, b_value, higher_is_better):
+    if not (math.isfinite(a_value) and math.isfinite(b_value)):
+        return _claim_row(f"{claim}: no finite safe frontier", metric, "unresolved", "unresolved", a_value, b_value, True)
+    if a_value == b_value:
+        return _claim_row(f"{claim}: tie", metric, "tie", f"{a} vs {b}", a_value, b_value, True)
+    a_wins = a_value > b_value if higher_is_better else a_value < b_value
+    return _claim_row(
+        f"{claim}: {a if a_wins else b} leads",
+        metric,
+        a if a_wins else b,
+        b if a_wins else a,
+        a_value if a_wins else b_value,
+        b_value if a_wins else a_value,
+        True,
+    )
+
+
 def _rounding_row(case, policy, problem, coeffs, y, metrics, best_objective, best_queue_metrics):
     moved = retained_prefill_moved_s(problem, y)
     row = {
@@ -418,6 +436,9 @@ def _safe(metrics):
         metrics["retained_prefill_moved_s"] >= metrics["retained_prefill_target_s"] - 1e-9
         and metrics["deadline_miss_rate"] <= 0.01
         and metrics["p95_reconstruction_delay_ratio"] <= 1.0
+        and metrics["network_capacity_pressure"] <= 1.0
+        and metrics["prefill_capacity_pressure"] <= 1.0
+        and metrics["drain_completion_s"] <= metrics["drain_window_s"] + 1e-9
     )
 
 

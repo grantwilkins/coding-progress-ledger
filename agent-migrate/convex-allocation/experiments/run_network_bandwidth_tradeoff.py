@@ -24,7 +24,7 @@ from problem import ProblemData, make_problem, with_retained_prefill_fraction
 from queueing import evaluate_rounded_queue_trace, round_allocation
 
 NETWORK_SCALES = (0.25, 0.40, 0.60, 0.80, 1.00, 1.25, 1.50, 2.00)
-RETAINED_PREFILL_FRACTIONS = (0.20, 0.30, 0.40, 0.50, 0.60, 0.70, 0.80, 0.90, 1.00)
+RETAINED_PREFILL_FRACTIONS = (0.0, 0.20, 0.30, 0.40, 0.50, 0.60, 0.70, 0.80, 0.90, 1.00)
 DRAIN_WINDOW_S = 1800.0
 COLUMNS = (
     "network_bandwidth_scale",
@@ -124,6 +124,9 @@ def _safe(metrics: dict[str, float]) -> bool:
         metrics["retained_prefill_moved_s"] >= metrics["retained_prefill_target_s"] - 1e-9
         and metrics["deadline_miss_rate"] <= 0.01
         and metrics["p95_reconstruction_delay_ratio"] <= 1.0
+        and metrics["network_capacity_pressure"] <= 1.0
+        and metrics["prefill_capacity_pressure"] <= 1.0
+        and metrics["drain_completion_s"] <= metrics["drain_window_s"] + 1e-9
     )
 
 

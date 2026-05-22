@@ -66,7 +66,23 @@ class ProblemData:
         missing = [key for key, value in values.items() if value is None]
         if missing:
             raise ValueError(f"missing ProblemData fields: {missing}")
+        array_fields = {
+            "T",
+            "d",
+            "deadline_s",
+            "lambda_Bps",
+            "rho_prefill",
+            "C_net",
+            "C_prefill",
+            "ell_net",
+            "ell_prefill",
+            "h_ctx",
+            "h_kv",
+        }
         for key, value in values.items():
+            if key in array_fields:
+                value = np.array(value, dtype=float, copy=True)
+                value.setflags(write=False)
             object.__setattr__(self, key, value)
 
     @property

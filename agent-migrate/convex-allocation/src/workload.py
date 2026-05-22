@@ -192,7 +192,7 @@ def _summary(idx: np.ndarray, T, deadline_s, h_ctx, h_kv):
     return (
         float(idx.size),
         float(np.mean(T[idx])),
-        float(np.mean(deadline_s[idx])),
+        float(np.min(deadline_s[idx])),
         np.mean(h_ctx[idx], axis=0),
         np.mean(h_kv[idx], axis=0),
     )
@@ -201,7 +201,7 @@ def _summary(idx: np.ndarray, T, deadline_s, h_ctx, h_kv):
 def _merge(a, b):
     n = a[0] + b[0]
     wa, wb = a[0] / n, b[0] / n
-    return n, wa * a[1] + wb * b[1], wa * a[2] + wb * b[2], wa * a[3] + wb * b[3], wa * a[4] + wb * b[4]
+    return n, wa * a[1] + wb * b[1], min(a[2], b[2]), wa * a[3] + wb * b[3], wa * a[4] + wb * b[4]
 
 
 def _distance(a, b) -> float:

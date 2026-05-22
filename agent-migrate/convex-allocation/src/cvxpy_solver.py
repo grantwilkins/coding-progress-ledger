@@ -87,7 +87,10 @@ def solve_deadline_aware_cvxpy(
     x = y[:, :M]
     retained_prefill = problem.tau @ cp.sum(x, axis=1)
     constraints = [cp.sum(y, axis=1) == problem.d]
+    constraints.append(retained_prefill >= problem.retained_prefill_target_s)
     if retained_prefill_cap is not None:
+        if retained_prefill_cap < problem.retained_prefill_target_s:
+            raise ValueError("retained_prefill_cap must be at least the retained-prefill target")
         constraints.append(retained_prefill <= retained_prefill_cap)
 
     deadline_thresholds = np.unique(problem.deadline_s)
@@ -127,7 +130,13 @@ def solve_deadline_aware_cvxpy(
             y_value = np.maximum(np.asarray(y.value, dtype=float), 0.0)
             y_value *= (problem.d / np.sum(y_value, axis=1))[:, None]
             _assert_deadline_feasible(problem, coeffs, y_value, deadline_margin, retained_prefill_cap)
-            return SolverResult(y_value, retained_prefill_moved_s(problem, y_value), prob.status)
+            moved = retained_prefill_moved_s(problem, y_value)
+            return SolverResult(
+                y_value,
+                objective(problem, coeffs, y_value),
+                prob.status,
+                {"retained_prefill_moved_s": moved, "retained_prefill_objective_s": moved},
+            )
         except (cp.SolverError, AssertionError, RuntimeError) as exc:
             last_error = exc
     raise RuntimeError(f"deadline-aware CVXPY solve failed: {last_error}")
@@ -223,7 +232,8 @@ def solve_soft_deadline_cvxpy(
                     "retained_prefill_target_s": problem.retained_prefill_target_s,
                 }
             )
-            return SolverResult(y_value, float(prob.value), prob.status, diagnostics)
+            diagnostics["soft_deadline_problem_value"] = float(prob.value)
+            return SolverResult(y_value, objective(problem, coeffs, y_value), prob.status, diagnostics)
         except (cp.SolverError, AssertionError, RuntimeError) as exc:
             last_error = exc
     raise RuntimeError(f"deadline-penalty CVXPY solve failed: {last_error}")
@@ -240,6 +250,8 @@ def _assert_deadline_feasible(
         raise AssertionError("allocation has negative entries")
     if not np.allclose(np.sum(y, axis=1), problem.d, atol=1e-5):
         raise AssertionError("allocation rows do not sum to class demand")
+    if retained_prefill_moved_s(problem, y) < problem.retained_prefill_target_s - 1e-5:
+        raise AssertionError("retained-prefill target not met")
     if retained_prefill_cap is not None and retained_prefill_moved_s(problem, y) > retained_prefill_cap + 1e-5:
         raise AssertionError("retained-prefill cap exceeded")
     x = y[:, : coeffs.M]

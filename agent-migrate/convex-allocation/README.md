@@ -7,12 +7,16 @@ not stateless requests. The evacuation target is retained reconstruction work in
 prefill seconds; CSVs and plots also report resident state in TB and fractions
 of an NVIDIA GB200 NVL72 13.4 TB HBM rack.
 
-The deadline-penalty CVXPY policy is the main rounded queue policy: it keeps
-physical capacity hard and penalizes deadline overrun. Plain CVXPY remains the
-fixed-load relaxed resource-cost oracle. A second CVXPY LP
-maximizes retained prefill under hard per-destination deadline-capacity
-constraints at deadline margins 0.8 and 1.0. Mirror descent with scalar
-bisection is a preliminary first-order method for the fixed-load objective.
+The deadline-penalty CVXPY policy is the main rounded queue policy: the solver
+keeps physical capacity hard and penalizes deadline overrun, while frontier
+safety also requires rounded queue pressure and drain completion to stay within
+the tested window. Plain CVXPY remains the fixed-load relaxed resource-cost
+oracle. A second CVXPY LP maximizes retained prefill under hard
+per-destination deadline-capacity constraints while enforcing the requested
+retained-prefill target. `SolverResult.objective` is always the fixed-load
+resource objective; solver-specific values live in diagnostics. Mirror descent
+with scalar bisection is a preliminary first-order method for the fixed-load
+objective.
 
 The retained-session workload is motivated by public stateful-serving evidence:
 Mooncake's KVCache-centric serving design, vLLM/Mooncake agentic traces with
@@ -133,16 +137,19 @@ than per-request ordering. Report plotting removes its owned H1-H4 artifacts
 before regeneration so failed runs do not leave stale report outputs in place.
 The network-bandwidth tradeoff sweeps network bandwidth and plots the largest
 tested source-state fraction that can be safely evacuated, request migration
-fraction, actual evacuated state TB, and max network/prefill queue depth.
+fraction, actual evacuated state TB, and max network/prefill queue depth. A
+zero-retained baseline is included so fully unsafe generated sweeps report an
+explicit zero frontier instead of all-NaN rows.
 The H3 action-mix CSV and plot evaluate the single-request replay/state
 crossover from context bytes per token, KV bytes per token, prefill rate,
 network throughput, context length, and request count for each catalog model.
-The report-facing experiment driver writes machine-checkable claim rows,
+The report-facing experiment driver writes machine-checkable comparison rows,
 rounding-gap rows for relaxed, exact, rounded, and repaired tiny cases,
 deadline-weight sensitivity rows, a model architecture frontier table, and a
 small adversarial rounding case.
-Legacy scripts still write their own diagnostic CSVs when run, but those stale
-generated CSV artifacts are no longer committed.
+Legacy scripts still write their own diagnostic CSVs when run. Generated
+diagnostic artifacts under `outputs/sweep/generated_*` are committed and should
+be regenerated with the matching workload label before report use.
 
 The catalog is local and hard-coded from `kv-transfer-early-experiment/FINDINGS.md`.
 It does not import that directory.
