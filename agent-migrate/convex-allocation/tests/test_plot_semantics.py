@@ -2,10 +2,11 @@
 Claim:
 The report figure script emits exactly one simple artifact per hypothesis plus a
 compact integer benchmark table. The H1 table uses one fixed stress target and
-absolute event-start deadline metrics. The H2 frontier isolates release policy
-for the main allocation policy, the H2 CDF is request-level, and the H4 heatmap exposes
-per-class state locality rather than only destination load. The H3 plot is the
-direct single-request replay/state crossover implied by model architecture.
+absolute event-start deadline metrics. The H2 frontier compares allocation
+policies under EDF release with workload-seed error bars, the H2 CDF is
+request-level, and the H4 heatmap exposes per-class state locality rather than
+only destination load. The H3 plot is the direct single-request replay/state
+crossover implied by model architecture.
 
 Plausible wrong implementations:
 - Reintroduce crowded diagnostic plots instead of the five report figures.
@@ -14,8 +15,8 @@ Plausible wrong implementations:
 - Keep using release-relative reconstruction metrics after switching drain
   frontier safety to event-start deadlines.
 - Drop the available-window frontier envelope and plot rounded nonmonotone dips.
-- Plot all allocation-policy by release-policy pairs in H2.
-- Collapse seeded random-order frontiers without exposing H2 error bars.
+- Drop allocation-policy lines from H2.
+- Use release-order seeds instead of varied workload seeds for H2 error bars.
 - Average class delays before building the CDF.
 - Flip the H3 crossover inequality, drop the bytes-to-bits conversion, or let
   context length/request count change the replay-vs-state decision.
@@ -31,8 +32,7 @@ import pandas as pd
 
 from catalog import ModelParams
 from experiments.plot_queue_centered import (
-    FRONTIER_POLICY,
-    FRONTIER_RELEASE_POLICIES,
+    FRONTIER_RELEASE_POLICY,
     H3_CONTEXT_TOKENS,
     H3_REQUEST_COUNT,
     INTEGER_TABLE_POLICIES,
@@ -113,37 +113,38 @@ def test_safe_frontier_uses_largest_safe_fraction_by_drain_window():
     ]
 
     frontier = _safe_frontier(rows)
-    by_release_window = {
-        (row.release_policy, row.drain_window_s): row.max_safe_retained_prefill_fraction
+    by_policy_window = {
+        (row.policy, row.drain_window_s): row.max_safe_retained_prefill_fraction
         for row in frontier.itertuples()
     }
 
-    assert FRONTIER_POLICY == "deadline-penalty-rounded"
-    assert FRONTIER_RELEASE_POLICIES == ("edf", "shortest-context-first", "random")
-    assert by_release_window[("edf", 900.0)] == 0.4
-    assert by_release_window[("edf", 1800.0)] == 0.6
-    assert by_release_window[("edf", 3600.0)] == 0.6
-    assert by_release_window[("random", 900.0)] == 0.3
-    assert set(frontier["policy"]) == {"deadline-penalty-rounded"}
+    assert FRONTIER_RELEASE_POLICY == "edf"
+    assert by_policy_window[("deadline-penalty-rounded", 900.0)] == 0.4
+    assert by_policy_window[("deadline-penalty-rounded", 1800.0)] == 0.6
+    assert by_policy_window[("deadline-penalty-rounded", 3600.0)] == 0.6
+    assert by_policy_window[("replay-only", 900.0)] == 0.9
+    assert set(frontier["policy"]) == {"deadline-penalty-rounded", "replay-only"}
     assert set(frontier["max_safe_retained_prefill_fraction_std"]) == {0.0}
-    assert frontier[frontier["release_policy"] == "edf"]["max_safe_retained_prefill_fraction"].is_monotonic_increasing
+    assert frontier[frontier["policy"] == "deadline-penalty-rounded"][
+        "max_safe_retained_prefill_fraction"
+    ].is_monotonic_increasing
 
 
-def test_safe_frontier_averages_seed_frontiers_and_reports_std():
+def test_safe_frontier_averages_workload_seed_frontiers_and_reports_std():
     rows = [
-        _sweep_row("deadline-penalty-rounded", "random", 900.0, 0.2, 0.0, 0.8, release_seed=1),
-        _sweep_row("deadline-penalty-rounded", "random", 900.0, 0.4, 0.0, 0.9, release_seed=1),
-        _sweep_row("deadline-penalty-rounded", "random", 900.0, 0.6, 0.2, 0.9, release_seed=1),
-        _sweep_row("deadline-penalty-rounded", "random", 900.0, 0.2, 0.0, 0.8, release_seed=2),
-        _sweep_row("deadline-penalty-rounded", "random", 900.0, 0.4, 0.2, 0.9, release_seed=2),
+        _sweep_row("deadline-penalty-rounded", "edf", 900.0, 0.2, 0.0, 0.8, workload_seed=1),
+        _sweep_row("deadline-penalty-rounded", "edf", 900.0, 0.4, 0.0, 0.9, workload_seed=1),
+        _sweep_row("deadline-penalty-rounded", "edf", 900.0, 0.6, 0.2, 0.9, workload_seed=1),
+        _sweep_row("deadline-penalty-rounded", "edf", 900.0, 0.2, 0.0, 0.8, workload_seed=2),
+        _sweep_row("deadline-penalty-rounded", "edf", 900.0, 0.4, 0.2, 0.9, workload_seed=2),
         _sweep_row("deadline-penalty-rounded", "edf", 900.0, 0.2, 0.0, 0.8),
     ]
 
-    row = _safe_frontier(rows).query("release_policy == 'random'").iloc[0]
+    row = _safe_frontier(rows).query("policy == 'deadline-penalty-rounded'").iloc[0]
 
-    assert np.isclose(row.max_safe_retained_prefill_fraction, 0.3)
-    assert row.seed_count == 2
-    assert np.isclose(row.max_safe_retained_prefill_fraction_std, np.sqrt(0.02))
+    assert np.isclose(row.max_safe_retained_prefill_fraction, (0.4 + 0.2 + 0.2) / 3)
+    assert row.seed_count == 3
+    assert row.max_safe_retained_prefill_fraction_std > 0.0
 
 
 def test_h1_fixed_target_stress_table_uses_one_edf_target_row_per_policy():
@@ -264,11 +265,11 @@ def test_queue_depth_helper_still_counts_waiting_requests_for_bandwidth_plot():
     ]
 
 
-def _sweep_row(policy, release_policy, drain_window_s, retained_prefill_fraction, miss_rate, delay_ratio, release_seed=""):
+def _sweep_row(policy, release_policy, drain_window_s, retained_prefill_fraction, miss_rate, delay_ratio, workload_seed=""):
     return {
         "policy": policy,
         "release_policy": release_policy,
-        "release_seed": str(release_seed),
+        "workload_seed": str(workload_seed),
         "retained_prefill_fraction": str(retained_prefill_fraction),
         "deadline_scale": "0.5",
         "drain_window_s": str(drain_window_s),

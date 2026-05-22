@@ -123,12 +123,12 @@ The retained-state drain frontier writes `retained_state_drain_sweep.csv` and
 `retained_state_drain_frontier.csv`. It sweeps a dense drain-window grid from
 10s to 3600s, uses that window as the resource-capacity budget, and reports the
 max safe retained-prefill fraction evacuated using absolute event-start
-deadline safety. Rows include release-order ablations for EDF,
-shortest-context-first, and random order with seeds 0-9; H2 plots the monotone
-available-window envelope with seed mean and standard-deviation error bars.
-Release ordering is applied as event-start service priority at counted
-class/action block granularity for speed, which can make frontier cliffs sharper
-than per-request ordering.
+deadline safety under EDF release order. Generated-workload runs use workload
+seeds 0-15; H2 plots all allocation policies as monotone available-window
+envelopes with workload-seed mean and standard-deviation error bars. Release
+ordering is applied as event-start service priority at counted class/action
+block granularity for speed, which can make frontier cliffs sharper than
+per-request ordering.
 The network-bandwidth tradeoff sweeps network bandwidth and plots the largest
 tested source-state fraction that can be safely evacuated, request migration
 fraction, actual evacuated state TB, and max network/prefill queue depth.

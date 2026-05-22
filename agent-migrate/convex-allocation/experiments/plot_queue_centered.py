@@ -30,7 +30,7 @@ from cvxpy_solver import solve_cvxpy, solve_soft_deadline_cvxpy
 from evaluation import WorkloadConfig, parse_workload_config
 from metrics import retained_prefill_moved_s
 from problem import ProblemData, make_problem
-from queueing import RELEASE_POLICIES, evaluate_rounded_queue_trace, round_allocation
+from queueing import evaluate_rounded_queue_trace, round_allocation
 
 sns.set_theme(style="whitegrid", context="paper", font_scale=1.05)
 plt.rcParams.update({"pdf.fonttype": 42, "ps.fonttype": 42})
@@ -50,8 +50,7 @@ REPORT_POLICIES = (
     "replay-only",
     "state-only",
 )
-FRONTIER_POLICY = "deadline-penalty-rounded"
-FRONTIER_RELEASE_POLICIES = RELEASE_POLICIES
+FRONTIER_RELEASE_POLICY = "edf"
 H1_POLICIES = (
     "deadline-penalty-rounded",
     "online-queue-greedy",
@@ -188,26 +187,24 @@ def _h1_verdict(row, target_moved_fraction: float) -> str:
 
 def _plot_safe_frontier(rows: list[dict[str, str]], path: Path) -> None:
     frontier = _safe_frontier(rows)
-    _require_keys(set(frontier["release_policy"]), FRONTIER_RELEASE_POLICIES, "safe-frontier sweep")
-    if not frontier.empty:
-        frontier["Release policy"] = frontier["release_policy"].map(RELEASE_POLICY_LABELS)
+    _require_keys(set(frontier["policy"]), REPORT_POLICIES, "safe-frontier sweep")
     fig, ax = plt.subplots(figsize=(5.8, 4.0), constrained_layout=True)
-    for release_policy in FRONTIER_RELEASE_POLICIES:
-        sub = frontier[frontier["release_policy"] == release_policy]
+    for policy in REPORT_POLICIES:
+        sub = frontier[frontier["policy"] == policy]
         ax.errorbar(
             sub["drain_window_s"],
             sub["max_safe_retained_prefill_fraction"],
             yerr=sub["max_safe_retained_prefill_fraction_std"],
-            color=RELEASE_POLICY_COLORS[release_policy],
+            color=POLICY_COLORS[policy],
             marker="o",
             linewidth=1.8,
             capsize=2.5,
-            label=RELEASE_POLICY_LABELS[release_policy],
+            label=POLICY_LABELS[policy],
         )
     ax.set_xscale("log")
     ax.set_xlabel("Drain window (s)")
     ax.set_ylabel("Max safe retained-prefill fraction evacuated")
-    ax.set_title("H2: same allocation policy; only release order changes")
+    ax.set_title("H2: policy frontier under EDF release")
     ax.set_ylim(0.0, 1.0)
     _simple_legend(ax)
     fig.savefig(path, bbox_inches="tight")
@@ -303,26 +300,27 @@ def _plot_state_manifest_heatmap(path: Path, retained_prefill_fraction: float, d
 
 def _safe_frontier(rows: list[dict[str, str]]) -> pd.DataFrame:
     df = _frame(rows)
-    df = df[df["policy"] == FRONTIER_POLICY].copy()
-    if "release_seed" not in df:
-        df["release_seed"] = ""
+    df = df[(df["release_policy"] == FRONTIER_RELEASE_POLICY) & df["policy"].isin(REPORT_POLICIES)].copy()
+    if "workload_seed" not in df:
+        df["workload_seed"] = ""
     df["queue_safe"] = _safe_series(df)
-    keys = df[["policy", "release_policy", "release_seed", "drain_window_s"]].drop_duplicates()
+    keys = df[["policy", "workload_seed", "drain_window_s"]].drop_duplicates()
     per_seed = df[df["queue_safe"]].groupby(
-        ["policy", "release_policy", "release_seed", "drain_window_s"], as_index=False
+        ["policy", "workload_seed", "drain_window_s"], as_index=False
     )["retained_prefill_fraction"].max()
     per_seed = keys.merge(per_seed, how="left").fillna({"retained_prefill_fraction": 0.0})
-    per_seed = per_seed.sort_values(["policy", "release_policy", "release_seed", "drain_window_s"])
-    per_seed["retained_prefill_fraction"] = per_seed.groupby(["policy", "release_policy", "release_seed"])[
+    per_seed = per_seed.sort_values(["policy", "workload_seed", "drain_window_s"])
+    per_seed["retained_prefill_fraction"] = per_seed.groupby(["policy", "workload_seed"])[
         "retained_prefill_fraction"
     ].cummax()
-    grouped = per_seed.groupby(["policy", "release_policy", "drain_window_s"], as_index=False).agg(
+    grouped = per_seed.groupby(["policy", "drain_window_s"], as_index=False).agg(
         max_safe_retained_prefill_fraction=("retained_prefill_fraction", "mean"),
         max_safe_retained_prefill_fraction_std=("retained_prefill_fraction", "std"),
-        seed_count=("release_seed", "count"),
+        seed_count=("workload_seed", "count"),
     )
     grouped["max_safe_retained_prefill_fraction_std"] = grouped["max_safe_retained_prefill_fraction_std"].fillna(0.0)
-    grouped = grouped.sort_values(["release_policy", "drain_window_s"])
+    grouped["release_policy"] = FRONTIER_RELEASE_POLICY
+    grouped = grouped.sort_values(["policy", "drain_window_s"])
     return grouped
 
 
