@@ -33,7 +33,37 @@ from metrics import (
 from problem import make_problem, with_retained_prefill_fraction
 from queueing import DEFAULT_RELEASE_SEED, RELEASE_POLICIES, fractional_queue_load_proxy, queue_metrics
 
-DRAIN_WINDOWS_S = (10.0, 20.0, 40.0, 80.0, 160.0, 300.0, 600.0, 1200.0, 2400.0, 3600.0)
+DRAIN_WINDOWS_S = (
+    10.0,
+    12.5,
+    16.0,
+    20.0,
+    25.0,
+    32.0,
+    40.0,
+    50.0,
+    63.0,
+    80.0,
+    100.0,
+    125.0,
+    160.0,
+    200.0,
+    250.0,
+    300.0,
+    400.0,
+    500.0,
+    600.0,
+    800.0,
+    1000.0,
+    1200.0,
+    1600.0,
+    2000.0,
+    2400.0,
+    3000.0,
+    3600.0,
+)
+RANDOM_RELEASE_SEEDS = tuple(range(10))
+QUEUE_RELEASE_SPAN_S = 0.0
 BINARY_TOLERANCE = 0.01
 VALIDATION_OFFSETS = (-0.02, -0.01, 0.0, 0.01, 0.02)
 STRESS_FRACTIONS = (0.25,)
@@ -128,13 +158,14 @@ def run_retained_state_frontier(workload_config: WorkloadConfig = WorkloadConfig
             policy,
             solver,
             release_policy,
-            DEFAULT_RELEASE_SEED,
+            release_seed,
             drain_window_s,
             base_by_window[drain_window_s],
         )
         for drain_window_s in DRAIN_WINDOWS_S
         for policy, solver in POLICIES
         for release_policy in RELEASE_POLICIES
+        for release_seed in _release_seeds(release_policy)
     ]
     batches = _run_jobs("retained-state drain frontier", jobs, _frontier_job)
     rows = [row for sweep_rows, _ in batches for row in sweep_rows]
@@ -204,11 +235,12 @@ def _policy_row(base, policy, solver, release_policy, release_seed, retained_pre
         metrics = queue_metrics(
             problem,
             y,
-            drain_window_s=drain_window_s,
+            drain_window_s=QUEUE_RELEASE_SPAN_S,
             release_policy=release_policy,
             release_seed=release_seed,
         )
-        row.update(_queue_fields(metrics) if feasible else _queue_diagnostic_fields(metrics))
+        fields = _queue_row_fields(metrics, drain_window_s)
+        row.update(fields if feasible else _queue_diagnostic_fields(fields))
     except ValueError:
         pass
     if not feasible:
@@ -224,10 +256,10 @@ def _policy_row(base, policy, solver, release_policy, release_seed, retained_pre
     return row
 
 
-def _queue_diagnostic_fields(metrics):
+def _queue_diagnostic_fields(fields):
     return {
         key: value
-        for key, value in _queue_fields(metrics).items()
+        for key, value in fields.items()
         if key
         not in {
             "retained_prefill_moved_s",
@@ -295,6 +327,16 @@ def _queue_fields(metrics):
         "state_transfer_retained_prefill_fraction": metrics["state_transfer_retained_prefill_fraction"],
         "drain_completion_s": metrics["drain_completion_s"],
     }
+
+
+def _queue_row_fields(metrics, drain_window_s):
+    fields = _queue_fields(metrics)
+    moved = fields["retained_prefill_moved_s"]
+    if drain_window_s == 0.0:
+        fields["retained_prefill_removal_rate_s_per_s"] = math.inf if moved > 0.0 else 0.0
+    else:
+        fields["retained_prefill_removal_rate_s_per_s"] = moved / drain_window_s
+    return fields
 
 
 def _is_safe(metrics):
@@ -365,12 +407,15 @@ def _frontier_row(policy, release_policy, release_seed, drain_window_s, safe, ro
 
 
 def _monotone_frontier(rows):
-    by_key = {(row["policy"], row["release_policy"], row["drain_window_s"]): row for row in rows}
+    by_key = {
+        (row["policy"], row["release_policy"], row["release_seed"], row["drain_window_s"]): row for row in rows
+    }
     out = []
     for policy in FRONTIER_POLICIES:
         for release_policy in RELEASE_POLICIES:
-            for drain_window_s in DRAIN_WINDOWS_S:
-                out.append(by_key[(policy, release_policy, drain_window_s)])
+            for release_seed in (_release_seed_value(release_policy, seed) for seed in _release_seeds(release_policy)):
+                for drain_window_s in DRAIN_WINDOWS_S:
+                    out.append(by_key[(policy, release_policy, release_seed, drain_window_s)])
     return out
 
 
@@ -396,8 +441,8 @@ def _frontier_value(frontier, policy, drain_window_s):
 
 def _print_latex_frontier(frontier):
     print("\nretained-state drain frontier (LaTeX)")
-    print("\\begin{tabular}{lrrrrrrrrrr}")
-    print("policy & 10s & 20s & 40s & 80s & 160s & 300s & 600s & 1200s & 2400s & 3600s \\\\")
+    print(f"\\begin{{tabular}}{{l{'r' * len(DRAIN_WINDOWS_S)}}}")
+    print("policy & " + " & ".join(f"{drain_window_s:g}s" for drain_window_s in DRAIN_WINDOWS_S) + " \\\\")
     print("\\hline")
     for policy in FRONTIER_POLICIES:
         cells = []
@@ -427,6 +472,10 @@ def _print_diagnostics(frontier):
 
 def _release_seed_value(release_policy, release_seed):
     return release_seed if release_policy == "random" else ""
+
+
+def _release_seeds(release_policy):
+    return RANDOM_RELEASE_SEEDS if release_policy == "random" else (DEFAULT_RELEASE_SEED,)
 
 
 if __name__ == "__main__":

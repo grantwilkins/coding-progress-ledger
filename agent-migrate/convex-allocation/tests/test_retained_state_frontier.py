@@ -3,14 +3,17 @@ Claim:
 The retained-state drain frontier reports the largest rounded queue-safe
 retained-prefill fraction for each allocation policy, release policy, and drain
 window, using absolute event-start deadlines while tying solver capacity and
-queue drain horizons to the same x-value.
+reported drain budgets to the same x-value.
 
 Plausible wrong implementations:
 - Keep using release-relative reconstruction safety after adding drain-order
   ablations.
+- Reuse the capacity horizon as a release delay and make larger windows miss
+  absolute event-start deadlines.
 - Keep the old monotone available-window envelope after switching to absolute
   event-start deadlines.
 - Trust binary search monotonicity despite rounded nonmonotone safety.
+- Collapse multiple random release seeds before preserving per-seed frontier rows.
 - Drop the least-loaded ordinary-routing baseline from the north-star plot.
 - Collapse release-policy rows and hide EDF/order-oblivious differences.
 - Forget to sample the fixed H1 stress target when frontier search lands elsewhere.
@@ -28,6 +31,8 @@ from experiments.run_retained_state_frontier import (
     DRAIN_WINDOWS_S,
     FRONTIER_POLICIES,
     MAIN_POLICY,
+    QUEUE_RELEASE_SPAN_S,
+    RANDOM_RELEASE_SEEDS,
     STRESS_FRACTIONS,
     _failure_mode,
     _frontier_job,
@@ -39,8 +44,41 @@ from evaluation import WorkloadConfig
 
 
 def test_drain_windows_are_positive_log_plot_points():
-    assert DRAIN_WINDOWS_S == (10.0, 20.0, 40.0, 80.0, 160.0, 300.0, 600.0, 1200.0, 2400.0, 3600.0)
+    assert DRAIN_WINDOWS_S == (
+        10.0,
+        12.5,
+        16.0,
+        20.0,
+        25.0,
+        32.0,
+        40.0,
+        50.0,
+        63.0,
+        80.0,
+        100.0,
+        125.0,
+        160.0,
+        200.0,
+        250.0,
+        300.0,
+        400.0,
+        500.0,
+        600.0,
+        800.0,
+        1000.0,
+        1200.0,
+        1600.0,
+        2000.0,
+        2400.0,
+        3000.0,
+        3600.0,
+    )
     assert all(window > 0.0 for window in DRAIN_WINDOWS_S)
+
+
+def test_random_release_policy_uses_many_seeds_for_error_bars():
+    assert RANDOM_RELEASE_SEEDS == tuple(range(10))
+    assert QUEUE_RELEASE_SPAN_S == 0.0
 
 
 def test_frontier_policy_set_includes_least_loaded_baseline():
@@ -61,6 +99,7 @@ def test_h1_stress_fraction_is_sampled_independent_of_frontier():
 def test_target_shortfall_keeps_solver_moved_amount_while_reporting_queue_diagnostics(monkeypatch):
     problem = SimpleNamespace(retained_prefill_target_s=10.0)
     solver = lambda _: SimpleNamespace(feasible=False, allocation=np.zeros((1, 2)), objective=None)
+    captured = {}
 
     monkeypatch.setattr(retained, "with_retained_prefill_fraction", lambda base, fraction: problem)
     monkeypatch.setattr(
@@ -81,12 +120,18 @@ def test_target_shortfall_keeps_solver_moved_amount_while_reporting_queue_diagno
         "fractional_queue_load_proxy",
         lambda problem, y: {"fractional_network_capacity_pressure": 0.1, "fractional_prefill_capacity_pressure": 0.2},
     )
-    monkeypatch.setattr(retained, "queue_metrics", lambda *args, **kwargs: _queue_metrics())
+    def queue_metrics(*args, **kwargs):
+        captured.update(kwargs)
+        return _queue_metrics()
+
+    monkeypatch.setattr(retained, "queue_metrics", queue_metrics)
 
     row = _policy_row(problem, "policy", solver, "edf", 7, 0.25, 20.0)
 
+    assert captured["drain_window_s"] == QUEUE_RELEASE_SPAN_S
     assert row["failure_mode"] == "target_not_met"
     assert row["retained_prefill_moved_s"] == 9.0
+    assert row["retained_prefill_removal_rate_s_per_s"] == 11.0 / 20.0
     assert row["network_capacity_pressure"] == 1.2
     assert row["absolute_deadline_miss_rate"] == 0.4
 
@@ -159,7 +204,22 @@ def test_frontier_rows_keep_each_absolute_deadline_window(monkeypatch):
     assert [row["drain_window_s"] for row in frontier] == [10.0, 20.0, 40.0]
 
 
-def test_run_pairs_problem_window_with_queue_drain_and_writes_drain_outputs(monkeypatch, tmp_path):
+def test_frontier_rows_preserve_random_release_seeds(monkeypatch):
+    monkeypatch.setattr(retained, "FRONTIER_POLICIES", ("policy",))
+    monkeypatch.setattr(retained, "RELEASE_POLICIES", ("random",))
+    monkeypatch.setattr(retained, "DRAIN_WINDOWS_S", (10.0,))
+    monkeypatch.setattr(retained, "RANDOM_RELEASE_SEEDS", (2, 3))
+    rows = [
+        _frontier("policy", "random", 2, 10.0, 0.2),
+        _frontier("policy", "random", 3, 10.0, 0.5),
+    ]
+
+    frontier = _monotone_frontier(rows)
+
+    assert [(row["release_seed"], row["max_safe_retained_prefill_fraction"]) for row in frontier] == [(2, 0.2), (3, 0.5)]
+
+
+def test_run_pairs_problem_window_with_output_frontier_and_writes_drain_outputs(monkeypatch, tmp_path):
     built = []
     captured = {}
 
@@ -169,16 +229,18 @@ def test_run_pairs_problem_window_with_queue_drain_and_writes_drain_outputs(monk
 
     def run_jobs(label, jobs, fn):
         assert label == "retained-state drain frontier"
-        assert [(job[2], job[4], job[5].window_s) for job in jobs] == [
-            ("edf", 10.0, 10.0),
-            ("random", 10.0, 10.0),
-            ("edf", 20.0, 20.0),
-            ("random", 20.0, 20.0),
+        assert [(job[2], job[3], job[4], job[5].window_s) for job in jobs] == [
+            ("edf", 7, 10.0, 10.0),
+            ("random", 2, 10.0, 10.0),
+            ("random", 3, 10.0, 10.0),
+            ("edf", 7, 20.0, 20.0),
+            ("random", 2, 20.0, 20.0),
+            ("random", 3, 20.0, 20.0),
         ]
         return [
             (
                 [_row(policy, release_policy, release_seed, drain_window_s, 0.5, safe=True)],
-                _frontier(policy, release_policy, 7 if release_policy == "random" else "", drain_window_s, 0.5),
+                _frontier(policy, release_policy, release_seed if release_policy == "random" else "", drain_window_s, 0.5),
             )
             for policy, _, release_policy, release_seed, drain_window_s, _ in jobs
         ]
@@ -186,6 +248,7 @@ def test_run_pairs_problem_window_with_queue_drain_and_writes_drain_outputs(monk
     monkeypatch.setattr(retained, "ROOT", tmp_path)
     monkeypatch.setattr(retained, "DRAIN_WINDOWS_S", (10.0, 20.0))
     monkeypatch.setattr(retained, "RELEASE_POLICIES", ("edf", "random"))
+    monkeypatch.setattr(retained, "RANDOM_RELEASE_SEEDS", (2, 3))
     monkeypatch.setattr(retained, "POLICIES", (("policy", lambda problem: None),))
     monkeypatch.setattr(retained, "FRONTIER_POLICIES", ("policy",))
     monkeypatch.setattr(retained, "make_problem", make_base)
@@ -200,14 +263,18 @@ def test_run_pairs_problem_window_with_queue_drain_and_writes_drain_outputs(monk
     assert [(row["release_policy"], row["drain_window_s"]) for row in rows] == [
         ("edf", 10.0),
         ("random", 10.0),
+        ("random", 10.0),
         ("edf", 20.0),
+        ("random", 20.0),
         ("random", 20.0),
     ]
-    assert [(row["release_policy"], row["drain_window_s"]) for row in frontier] == [
-        ("edf", 10.0),
-        ("edf", 20.0),
-        ("random", 10.0),
-        ("random", 20.0),
+    assert [(row["release_policy"], row["release_seed"], row["drain_window_s"]) for row in frontier] == [
+        ("edf", "", 10.0),
+        ("edf", "", 20.0),
+        ("random", 2, 10.0),
+        ("random", 2, 20.0),
+        ("random", 3, 10.0),
+        ("random", 3, 20.0),
     ]
     assert set(captured) == {"retained_state_drain_sweep.csv", "retained_state_drain_frontier.csv"}
 

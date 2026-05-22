@@ -192,15 +192,18 @@ def _plot_safe_frontier(rows: list[dict[str, str]], path: Path) -> None:
     if not frontier.empty:
         frontier["Release policy"] = frontier["release_policy"].map(RELEASE_POLICY_LABELS)
     fig, ax = plt.subplots(figsize=(5.8, 4.0), constrained_layout=True)
-    sns.lineplot(
-        frontier,
-        x="drain_window_s",
-        y="max_safe_retained_prefill_fraction",
-        hue="Release policy",
-        marker="o",
-        palette={RELEASE_POLICY_LABELS[k]: v for k, v in RELEASE_POLICY_COLORS.items()},
-        ax=ax,
-    )
+    for release_policy in FRONTIER_RELEASE_POLICIES:
+        sub = frontier[frontier["release_policy"] == release_policy]
+        ax.errorbar(
+            sub["drain_window_s"],
+            sub["max_safe_retained_prefill_fraction"],
+            yerr=sub["max_safe_retained_prefill_fraction_std"],
+            color=RELEASE_POLICY_COLORS[release_policy],
+            marker="o",
+            linewidth=1.8,
+            capsize=2.5,
+            label=RELEASE_POLICY_LABELS[release_policy],
+        )
     ax.set_xscale("log")
     ax.set_xlabel("Drain window (s)")
     ax.set_ylabel("Max safe retained-prefill fraction evacuated")
@@ -301,13 +304,26 @@ def _plot_state_manifest_heatmap(path: Path, retained_prefill_fraction: float, d
 def _safe_frontier(rows: list[dict[str, str]]) -> pd.DataFrame:
     df = _frame(rows)
     df = df[df["policy"] == FRONTIER_POLICY].copy()
+    if "release_seed" not in df:
+        df["release_seed"] = ""
     df["queue_safe"] = _safe_series(df)
-    safe = df[df["queue_safe"]]
-    grouped = safe.groupby(["policy", "release_policy", "drain_window_s"], as_index=False)[
+    keys = df[["policy", "release_policy", "release_seed", "drain_window_s"]].drop_duplicates()
+    per_seed = df[df["queue_safe"]].groupby(
+        ["policy", "release_policy", "release_seed", "drain_window_s"], as_index=False
+    )["retained_prefill_fraction"].max()
+    per_seed = keys.merge(per_seed, how="left").fillna({"retained_prefill_fraction": 0.0})
+    per_seed = per_seed.sort_values(["policy", "release_policy", "release_seed", "drain_window_s"])
+    per_seed["retained_prefill_fraction"] = per_seed.groupby(["policy", "release_policy", "release_seed"])[
         "retained_prefill_fraction"
-    ].max()
+    ].cummax()
+    grouped = per_seed.groupby(["policy", "release_policy", "drain_window_s"], as_index=False).agg(
+        max_safe_retained_prefill_fraction=("retained_prefill_fraction", "mean"),
+        max_safe_retained_prefill_fraction_std=("retained_prefill_fraction", "std"),
+        seed_count=("release_seed", "count"),
+    )
+    grouped["max_safe_retained_prefill_fraction_std"] = grouped["max_safe_retained_prefill_fraction_std"].fillna(0.0)
     grouped = grouped.sort_values(["release_policy", "drain_window_s"])
-    return grouped.rename(columns={"retained_prefill_fraction": "max_safe_retained_prefill_fraction"})
+    return grouped
 
 
 def _architecture_action_mix() -> pd.DataFrame:
