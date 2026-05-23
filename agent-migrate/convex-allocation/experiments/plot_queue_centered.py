@@ -128,7 +128,7 @@ def plot_queue_centered(
     frontier = _safe_frontier(sweep)
     frontier.to_csv(out / "h2_safe_frontier.csv", index=False)
     _plot_safe_frontier(frontier, out / "h2_safe_frontier.pdf")
-    _plot_delay_cdf(workload_config, out / "h2_delay_cdf.pdf", report_retained_prefill_fraction, report_deadline_scale)
+    _plot_delay_cdf(workload_config, out / "h2_delay_cdf.pdf", report_retained_prefill_fraction, report_deadline_scale, frontier)
     _write_h3_action_table(out / "h3_action_mix_by_model.csv")
     _plot_action_mix_by_model(out / "h3_action_mix_by_model.pdf")
     _plot_state_manifest_heatmap(
@@ -136,6 +136,7 @@ def plot_queue_centered(
         out / "h4_state_manifest_heatmap.pdf",
         report_retained_prefill_fraction,
         report_deadline_scale,
+        frontier,
     )
     _write_integer_summary(ROOT / "outputs" / "sweep" / "integer_optimality_cases.csv", out / "integer_benchmark_summary.csv")
 
@@ -224,15 +225,19 @@ def _plot_delay_cdf(
     path: Path,
     retained_prefill_fraction: float,
     deadline_scale: float,
+    frontier: pd.DataFrame,
 ) -> None:
-    traces = _example_traces(workload_config, retained_prefill_fraction, deadline_scale)
+    traces = _example_traces(workload_config, retained_prefill_fraction, deadline_scale, frontier)
     _require_keys(traces, REPORT_POLICIES, "delay CDF traces")
     fig, ax = plt.subplots(figsize=(5.8, 4.0), constrained_layout=True)
     for policy in REPORT_POLICIES:
         trace = traces.get(policy)
         if not trace:
             continue
-        x, y = np.asarray(_cdf_points(record.reconstruction_delay / record.deadline_s for record in trace)).T
+        points = _cdf_points(record.reconstruction_delay / record.deadline_s for record in trace)
+        if not points:
+            continue
+        x, y = np.asarray(points).T
         ax.plot(x, y, color=POLICY_COLORS[policy], linewidth=1.7, label=POLICY_LABELS[policy])
     ax.axvline(1.0, color="0.25", linestyle="--", linewidth=1.0)
     ax.set_xlabel("Reconstruction delay / deadline")
@@ -276,12 +281,17 @@ def _write_h3_action_table(path: Path) -> None:
 
 
 def _plot_state_manifest_heatmap(
-    workload_config: WorkloadConfig, path: Path, retained_prefill_fraction: float, deadline_scale: float
+    workload_config: WorkloadConfig,
+    path: Path,
+    retained_prefill_fraction: float,
+    deadline_scale: float,
+    frontier: pd.DataFrame,
 ) -> None:
+    safe_fraction = _frontier_capped_retained_fraction(frontier, "deadline-penalty-rounded", retained_prefill_fraction)
     problem = make_problem(
         get_model("GLM-5"),
         "transition-coupled",
-        retained_prefill_fraction=retained_prefill_fraction,
+        retained_prefill_fraction=safe_fraction,
         deadline_scale=deadline_scale,
         **workload_config.problem_kwargs(),
     )
@@ -398,17 +408,23 @@ def _allocation_heatmap(
     return y[order], row_labels, col_labels
 
 
-def _example_traces(workload_config: WorkloadConfig, retained_prefill_fraction: float, deadline_scale: float):
-    problem = make_problem(
-        get_model("GLM-5"),
-        "transition-coupled",
-        retained_prefill_fraction=retained_prefill_fraction,
-        deadline_scale=deadline_scale,
-        **workload_config.problem_kwargs(),
-    )
+def _example_traces(
+    workload_config: WorkloadConfig,
+    retained_prefill_fraction: float,
+    deadline_scale: float,
+    frontier: pd.DataFrame,
+):
     traces = {}
     for policy in REPORT_POLICIES:
         try:
+            safe_fraction = _frontier_capped_retained_fraction(frontier, policy, retained_prefill_fraction)
+            problem = make_problem(
+                get_model("GLM-5"),
+                "transition-coupled",
+                retained_prefill_fraction=safe_fraction,
+                deadline_scale=deadline_scale,
+                **workload_config.problem_kwargs(),
+            )
             y = _example_allocation(policy, problem)
             if retained_prefill_moved_s(problem, y) < problem.retained_prefill_target_s - 1e-5:
                 raise RuntimeError(f"{policy} missed the retained-prefill target")
@@ -418,6 +434,13 @@ def _example_traces(workload_config: WorkloadConfig, retained_prefill_fraction: 
             raise RuntimeError(f"cannot build delay CDF for {policy}") from exc
         traces[policy] = trace
     return traces
+
+
+def _frontier_capped_retained_fraction(frontier: pd.DataFrame, policy: str, requested: float) -> float:
+    sub = frontier[(frontier["policy"] == policy) & np.isclose(frontier["drain_window_s"], PLOT_DRAIN_WINDOW_S)]
+    if sub.empty:
+        return requested
+    return min(requested, float(sub["max_safe_retained_prefill_fraction"].max()))
 
 
 def _example_allocation(policy: str, problem: ProblemData) -> np.ndarray:
@@ -518,6 +541,7 @@ def _frame(rows: list[dict[str, str]]) -> pd.DataFrame:
         "max_safe_retained_prefill_fraction",
         "network_capacity_pressure_at_frontier",
         "prefill_capacity_pressure_at_frontier",
+        "drain_completion_s",
     )
     for column in numeric:
         if column in df:
@@ -530,6 +554,9 @@ def _safe_series(df: pd.DataFrame) -> pd.Series:
         (df["retained_prefill_moved_s"] >= df["retained_prefill_target_s"] - 1e-9)
         & (df["absolute_deadline_miss_rate"] <= 0.01)
         & (df["absolute_p95_delay_over_deadline"] <= 1.0)
+        & (df["network_capacity_pressure"] <= 1.0)
+        & (df["prefill_capacity_pressure"] <= 1.0)
+        & (df["drain_completion_s"] <= df["drain_window_s"] + 1e-9)
     )
 
 

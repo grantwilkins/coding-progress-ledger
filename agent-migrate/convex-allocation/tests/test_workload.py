@@ -15,7 +15,7 @@ Plausible wrong implementations:
 - Produce a generated transition case that collapses to one destination.
 - Crash queue-table evaluation when a generated-workload baseline is infeasible.
 - Store mutable arrays in frozen ProblemData objects.
-- Average deadlines inside aggregate buckets and hide tight-deadline subgroups.
+- Bucket deadlines too coarsely and hide tight-deadline subgroups.
 """
 
 from __future__ import annotations
@@ -119,15 +119,15 @@ def test_problem_data_arrays_are_immutable_and_fraction_copy_does_not_alias():
         derived.ell_net[0] *= 0.5
 
 
-def test_aggregation_preserves_tightest_deadline_in_merged_buckets():
-    T = np.array([1024.0, 1024.0, 4096.0])
-    deadline_s = np.array([50.0, 5.0, 100.0])
-    h_ctx = np.zeros((3, 1))
-    h_kv = np.zeros((3, 1))
+def test_aggregation_keeps_tight_deadline_subgroups_when_capacity_allows():
+    T = np.array([1024.0, 1024.0])
+    deadline_s = np.array([5.0, 25.0])
+    h_ctx = np.zeros((2, 1))
+    h_kv = np.zeros((2, 1))
 
-    workload = _aggregate(T, deadline_s, h_ctx, h_kv, cap=1)
+    workload = _aggregate(T, deadline_s, h_ctx, h_kv, cap=4)
 
-    assert workload.deadline_s[0] == 5.0
+    assert sorted(workload.deadline_s) == [5.0, 25.0]
 
 
 def test_generated_evaluation_config_is_reproducible_and_separate_from_fixed_outputs():

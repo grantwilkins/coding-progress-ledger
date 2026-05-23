@@ -19,6 +19,7 @@ Plausible wrong implementations:
   drain-window outcomes.
 - Drop allocation-policy lines from H2.
 - Use release-order seeds instead of varied workload seeds for H2 error bars.
+- Let H2 mark overloaded or over-window rows safe after frontier safety changes.
 - Average class delays before building the CDF.
 - Flip the H3 crossover inequality, drop the bytes-to-bits conversion, or let
   context length/request count change the replay-vs-state decision.
@@ -44,6 +45,7 @@ from experiments.plot_queue_centered import (
     _architecture_action_mix,
     _clear_outputs,
     _cdf_points,
+    _frontier_capped_retained_fraction,
     _h3_action_rows,
     _h1_stress_rows,
     _integer_summary_rows,
@@ -83,15 +85,43 @@ def test_report_policies_are_small_enough_to_read_without_overplotting():
     assert len(REPORT_POLICIES) == 5
 
 
+def test_cdf_example_fraction_is_capped_by_safe_frontier():
+    frontier = pd.DataFrame(
+        {
+            "policy": ["deadline-penalty-rounded", "deadline-penalty-rounded"],
+            "drain_window_s": [1000.0, 1200.0],
+            "max_safe_retained_prefill_fraction": [1.0, 0.25],
+        }
+    )
+
+    assert _frontier_capped_retained_fraction(frontier, "deadline-penalty-rounded", 0.5) == 0.25
+
+
+def test_cdf_example_fraction_keeps_requested_fraction_without_frontier_point():
+    frontier = pd.DataFrame(
+        {
+            "policy": ["deadline-penalty-rounded"],
+            "drain_window_s": [1000.0],
+            "max_safe_retained_prefill_fraction": [0.25],
+        }
+    )
+
+    assert _frontier_capped_retained_fraction(frontier, "deadline-penalty-rounded", 0.5) == 0.5
+
+
 def test_safe_series_requires_absolute_deadline_bounds():
     df = pd.DataFrame(
         {
             "absolute_deadline_miss_rate": [0.01, 0.011, 0.0],
-            "absolute_p95_delay_over_deadline": [1.0, 0.5, 1.001],
-            "retained_prefill_moved_s": [10.0, 10.0, 10.0],
-            "retained_prefill_target_s": [10.0, 10.0, 10.0],
-        }
-    )
+                "absolute_p95_delay_over_deadline": [1.0, 0.5, 1.001],
+                "retained_prefill_moved_s": [10.0, 10.0, 10.0],
+                "retained_prefill_target_s": [10.0, 10.0, 10.0],
+                "network_capacity_pressure": [1.0, 1.0, 1.0],
+                "prefill_capacity_pressure": [1.0, 1.0, 1.0],
+                "drain_completion_s": [10.0, 10.0, 10.0],
+                "drain_window_s": [10.0, 10.0, 10.0],
+            }
+        )
 
     assert _safe_series(df).tolist() == [True, False, False]
 
@@ -102,11 +132,15 @@ def test_safe_series_ignores_release_relative_deadline_metrics_when_present():
             "deadline_miss_rate": [0.5],
             "p95_delay_over_deadline": [3.0],
             "absolute_deadline_miss_rate": [0.0],
-            "absolute_p95_delay_over_deadline": [0.1],
-            "retained_prefill_moved_s": [10.0],
-            "retained_prefill_target_s": [10.0],
-        }
-    )
+                "absolute_p95_delay_over_deadline": [0.1],
+                "retained_prefill_moved_s": [10.0],
+                "retained_prefill_target_s": [10.0],
+                "network_capacity_pressure": [1.0],
+                "prefill_capacity_pressure": [1.0],
+                "drain_completion_s": [10.0],
+                "drain_window_s": [10.0],
+            }
+        )
 
     assert _safe_series(df).tolist() == [True]
 
@@ -115,11 +149,15 @@ def test_safe_series_rejects_target_shortfall_even_when_deadlines_pass():
     df = pd.DataFrame(
         {
             "absolute_deadline_miss_rate": [0.0],
-            "absolute_p95_delay_over_deadline": [0.5],
-            "retained_prefill_moved_s": [9.0],
-            "retained_prefill_target_s": [10.0],
-        }
-    )
+                "absolute_p95_delay_over_deadline": [0.5],
+                "retained_prefill_moved_s": [9.0],
+                "retained_prefill_target_s": [10.0],
+                "network_capacity_pressure": [1.0],
+                "prefill_capacity_pressure": [1.0],
+                "drain_completion_s": [10.0],
+                "drain_window_s": [10.0],
+            }
+        )
 
     assert _safe_series(df).tolist() == [False]
 
@@ -129,6 +167,8 @@ def test_safe_frontier_uses_largest_safe_fraction_by_drain_window():
         _sweep_row("deadline-penalty-rounded", "edf", 900.0, 0.2, 0.0, 0.8),
         _sweep_row("deadline-penalty-rounded", "edf", 900.0, 0.4, 0.0, 0.9),
         _sweep_row("deadline-penalty-rounded", "edf", 900.0, 0.6, 0.2, 0.9),
+        {**_sweep_row("deadline-penalty-rounded", "edf", 900.0, 0.8, 0.0, 0.9), "network_capacity_pressure": "1.1"},
+        {**_sweep_row("deadline-penalty-rounded", "edf", 900.0, 0.9, 0.0, 0.9), "drain_completion_s": "901.0"},
         _sweep_row("deadline-penalty-rounded", "edf", 1800.0, 0.6, 0.0, 0.9),
         _sweep_row("deadline-penalty-rounded", "edf", 3600.0, 0.3, 0.0, 0.9),
         _sweep_row("deadline-penalty-rounded", "random", 900.0, 0.3, 0.0, 0.9),
@@ -290,12 +330,20 @@ def test_h4_heatmap_uses_the_report_workload_config(monkeypatch, tmp_path):
         tmp_path / "h4.pdf",
         retained_prefill_fraction=0.5,
         deadline_scale=1.0,
+        frontier=pd.DataFrame(
+            {
+                "policy": ["deadline-penalty-rounded"],
+                "drain_window_s": [1200.0],
+                "max_safe_retained_prefill_fraction": [0.5],
+            }
+        ),
     )
 
     assert captured["workload_source"] == "generated"
     assert captured["workload_seed"] == 13
     assert captured["workload_jobs"] == 25
     assert captured["workload_classes"] == 5
+    assert captured["retained_prefill_fraction"] == 0.5
 
 
 def test_plot_output_cleanup_removes_owned_artifacts_only(tmp_path):
@@ -343,6 +391,7 @@ def _sweep_row(policy, release_policy, drain_window_s, retained_prefill_fraction
         "absolute_p95_delay_over_deadline": str(delay_ratio),
         "retained_prefill_moved_s": "10.0",
         "retained_prefill_target_s": "10.0",
+        "drain_completion_s": str(drain_window_s),
     }
 
 

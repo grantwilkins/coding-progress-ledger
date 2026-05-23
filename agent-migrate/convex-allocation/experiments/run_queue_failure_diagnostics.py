@@ -40,6 +40,7 @@ from queueing import evaluate_rounded_queue_trace, round_allocation
 RETAINED_PREFILL_FRACTIONS = (0.20, 0.30, 0.40, 0.50, 0.60, 0.70, 0.80, 0.90)
 TIGHT_DEADLINE_SCALES = (0.25, 0.50)
 REPAIR_BUDGET_FRACTIONS = (0.05, 0.10, 0.20)
+DIAGNOSTIC_REPAIR_MAX_STEPS = 64
 DRAIN_WINDOW_S = 1800.0
 MAIN_POLICY = "deadline-penalty-rounded"
 REPAIRED_MAIN_POLICY = "repaired-deadline-penalty-rounded"
@@ -261,7 +262,7 @@ def _diagnostic_point_job(job):
         )
 
         try:
-            repair = repair_rounded_allocation(problem, rounded.y)
+            repair = repair_rounded_allocation(problem, rounded.y, max_steps=DIAGNOSTIC_REPAIR_MAX_STEPS)
         except RuntimeError:
             repaired = _empty_queue_row(
                 REPAIRED_MAIN_POLICY,
@@ -359,7 +360,7 @@ def solve_repaired_deadline_aware_cvxpy(problem):
         problem,
         solve_deadline_aware_cvxpy(problem, 1.0, retained_prefill_cap=problem.retained_prefill_target_s).y,
     )
-    repair = repair_rounded_allocation(problem, rounded.y)
+    repair = repair_rounded_allocation(problem, rounded.y, max_steps=DIAGNOSTIC_REPAIR_MAX_STEPS)
     coeffs = compute_coefficients(problem)
     obj = objective(problem, coeffs, repair.y)
     moved = retained_prefill_moved_s(problem, repair.y)
@@ -517,7 +518,7 @@ def _repair_budget_rows(
     ]
     for budget_fraction in REPAIR_BUDGET_FRACTIONS:
         limit = int(math.floor(budget_fraction * moved))
-        repair = repair_rounded_allocation(problem, original_y, max_changes=limit)
+        repair = _repair_prefix(problem, original_y, full_repair, limit)
         rows.append(
             _budget_row(
                 problem,
@@ -547,6 +548,32 @@ def _repair_budget_rows(
         )
     )
     return rows
+
+
+def _repair_prefix(problem, original_y, full_repair, limit):
+    if limit >= len(full_repair.moves):
+        return full_repair
+    y = np.rint(original_y).astype(int).copy()
+    coeffs = compute_coefficients(problem)
+    moves = full_repair.moves[:limit]
+    for move in moves:
+        source = _move_option(coeffs, move.g, move.from_k, move.from_action)
+        target = _move_option(coeffs, move.g, move.to_k, move.to_action)
+        y[move.g, source] -= 1
+        y[move.g, target] += 1
+    metrics, trace = evaluate_rounded_queue_trace(problem, y, drain_window_s=DRAIN_WINDOW_S)
+    return RepairResult(y, metrics, trace, moves)
+
+
+def _move_option(coeffs, g, k, action):
+    matches = [
+        i
+        for i, (dest, code) in enumerate(zip(coeffs.option_dest, coeffs.option_action))
+        if int(dest) == k and ACTIONS[int(code)] == action
+    ]
+    if not matches:
+        raise ValueError(f"repair move references missing option for class {g}: {k}/{action}")
+    return matches[0]
 
 
 def _budget_row(

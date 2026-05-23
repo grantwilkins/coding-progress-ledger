@@ -1,4 +1,4 @@
 claim,metric,winner,best_baseline,winner_value,best_baseline_value,pass
 miss-rate comparison: tie,miss rate,tie,deadline-aware-rounded vs online-queue-greedy,0.0,0.0,yes
-safe-frontier comparison: tie,largest tested safe retained-prefill fraction,tie,deadline-aware-rounded vs replay-only,1.0,1.0,yes
+safe-frontier comparison: deadline-aware-rounded leads,largest tested safe retained-prefill fraction,deadline-aware-rounded,replay-only,0.8,0.3,yes
 model architecture changes action mix,replay/state fraction range,varies by model,fixed policy,1.0,0.0,yes

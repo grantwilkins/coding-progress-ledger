@@ -14,12 +14,15 @@ Plausible wrong implementations:
 
 from __future__ import annotations
 
+from types import SimpleNamespace
+
 import numpy as np
 
 import experiments.run_queue_failure_diagnostics as queue_diag
 from catalog import ModelParams
 from evaluation import WorkloadConfig
 from experiments.run_queue_failure_diagnostics import (
+    DIAGNOSTIC_REPAIR_MAX_STEPS,
     _failure_breakdown_rows,
     _move_type,
     _queue_key,
@@ -29,6 +32,7 @@ from experiments.run_queue_failure_diagnostics import (
     RepairMove,
     RepairResult,
     repair_rounded_allocation,
+    solve_repaired_deadline_aware_cvxpy,
 )
 from problem import ProblemData
 from queueing import evaluate_rounded_queue_trace
@@ -154,6 +158,45 @@ def test_repair_budget_rows_include_capped_and_unbounded_results():
     assert by_label["5%"]["budget_move_limit"] == 0
     assert by_label["20%"]["budget_move_limit"] == 0
     assert by_label["unbounded"]["repair_steps"] == len(full.moves)
+
+
+def test_repair_budget_rows_reuse_full_repair_when_budget_is_large(monkeypatch):
+    problem = repair_problem()
+    y = np.array([[0, 2, 0, 0, 0]])
+    original_metrics, _ = evaluate_rounded_queue_trace(problem, y)
+    full = repair_rounded_allocation(problem, y)
+
+    monkeypatch.setattr(queue_diag, "REPAIR_BUDGET_FRACTIONS", (1.0,))
+    monkeypatch.setattr(
+        queue_diag,
+        "repair_rounded_allocation",
+        lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("should reuse full repair")),
+    )
+
+    rows = _repair_budget_rows(problem, y, original_metrics, full, 0.2, 0.5)
+
+    assert {row["budget_label"] for row in rows} == {"0%", "100%", "unbounded"}
+    assert rows[1]["repair_steps"] == len(full.moves)
+
+
+def test_repaired_deadline_aware_policy_uses_bounded_repair(monkeypatch):
+    problem = repair_problem()
+    y = np.array([[0, 2, 0, 0, 0]])
+    metrics, trace = evaluate_rounded_queue_trace(problem, y)
+    captured = {}
+
+    monkeypatch.setattr(queue_diag, "solve_deadline_aware_cvxpy", lambda *args, **kwargs: SimpleNamespace(y=y))
+    monkeypatch.setattr(queue_diag, "round_allocation", lambda problem, allocation: SimpleNamespace(y=y))
+
+    def repair(problem, allocation, **kwargs):
+        captured.update(kwargs)
+        return RepairResult(y, metrics, trace, ())
+
+    monkeypatch.setattr(queue_diag, "repair_rounded_allocation", repair)
+
+    solve_repaired_deadline_aware_cvxpy(problem)
+
+    assert captured["max_steps"] == DIAGNOSTIC_REPAIR_MAX_STEPS
 
 
 def test_queue_diagnostics_reports_infeasible_deadline_penalty_rows_without_repair(monkeypatch, tmp_path):

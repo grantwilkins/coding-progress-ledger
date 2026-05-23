@@ -61,8 +61,8 @@ def claim_table(
     frontiers: dict[str, dict[str, object]] | None = None,
 ):
     transition = make_problem(get_model("GLM-5"), "transition-coupled", **workload_config.problem_kwargs())
-    main = _rounded_metrics(transition, solve_soft_deadline_cvxpy, REPORT_DRAIN_WINDOW_S)[1]
-    online = _rounded_metrics(transition, solve_online_queue_greedy, REPORT_DRAIN_WINDOW_S)[1]
+    main = _try_rounded_metrics(transition, solve_soft_deadline_cvxpy, REPORT_DRAIN_WINDOW_S)
+    online = _try_rounded_metrics(transition, solve_online_queue_greedy, REPORT_DRAIN_WINDOW_S)
     frontiers = frontiers or _claim_frontiers(workload_config)
     main_frontier = frontiers["main"]
     replay_frontier = frontiers["replay"]
@@ -75,8 +75,8 @@ def claim_table(
             "miss rate",
             "deadline-aware-rounded",
             "online-queue-greedy",
-            main["deadline_miss_rate"],
-            online["deadline_miss_rate"],
+            _metric(main, "deadline_miss_rate"),
+            _metric(online, "deadline_miss_rate"),
             higher_is_better=False,
         ),
         _comparison_row(
@@ -285,13 +285,28 @@ def _frontier_point(key, fraction, solver_name, problem):
 
 def _rounded_metrics(problem, solver, drain_window_s):
     result = solver(problem)
+    if not getattr(result, "feasible", True):
+        raise RuntimeError("solver returned infeasible allocation")
     y = result.allocation if hasattr(result, "allocation") else result.y
     rounded = y if np.allclose(y, np.rint(y)) else round_allocation(problem, y).y
     return rounded, evaluate_rounded_queue(problem, rounded, drain_window_s=drain_window_s)
 
 
+def _try_rounded_metrics(problem, solver, drain_window_s):
+    try:
+        return _rounded_metrics(problem, solver, drain_window_s)[1]
+    except RuntimeError:
+        return None
+
+
+def _metric(metrics, key):
+    return math.nan if metrics is None else metrics[key]
+
+
 def _rounded_metrics_named(problem, solver_name, drain_window_s):
     result = _solve_named(problem, solver_name)
+    if not getattr(result, "feasible", True):
+        raise RuntimeError("solver returned infeasible allocation")
     y = result.allocation if hasattr(result, "allocation") else result.y
     rounded = y if np.allclose(y, np.rint(y)) else round_allocation(problem, y).y
     return rounded, evaluate_rounded_queue(problem, rounded, drain_window_s=drain_window_s)
@@ -355,8 +370,20 @@ def _claim_row(claim, metric, winner, baseline, winner_value, baseline_value, pa
 
 
 def _comparison_row(claim, metric, a, b, a_value, b_value, higher_is_better):
-    if not (math.isfinite(a_value) and math.isfinite(b_value)):
+    a_finite = math.isfinite(a_value)
+    b_finite = math.isfinite(b_value)
+    if not (a_finite or b_finite):
         return _claim_row(f"{claim}: no finite safe frontier", metric, "unresolved", "unresolved", a_value, b_value, True)
+    if a_finite != b_finite:
+        return _claim_row(
+            f"{claim}: {a if a_finite else b} leads",
+            metric,
+            a if a_finite else b,
+            b if a_finite else a,
+            a_value if a_finite else b_value,
+            b_value if a_finite else a_value,
+            True,
+        )
     if a_value == b_value:
         return _claim_row(f"{claim}: tie", metric, "tie", f"{a} vs {b}", a_value, b_value, True)
     a_wins = a_value > b_value if higher_is_better else a_value < b_value

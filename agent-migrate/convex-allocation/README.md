@@ -147,6 +147,8 @@ The report-facing experiment driver writes machine-checkable comparison rows,
 rounding-gap rows for relaxed, exact, rounded, and repaired tiny cases,
 deadline-weight sensitivity rows, a model architecture frontier table, and a
 small adversarial rounding case.
+Queue diagnostics bound the local repair search and reuse prefixes of the full
+repair path for budget rows so generated-workload repairs finish predictably.
 Legacy scripts still write their own diagnostic CSVs when run. Generated
 diagnostic artifacts under `outputs/sweep/generated_*` are committed and should
 be regenerated with the matching workload label before report use.

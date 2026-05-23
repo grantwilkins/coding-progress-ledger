@@ -13,6 +13,8 @@ Plausible wrong implementations:
 - Recompute claim frontiers even when the caller already passed them in.
 - Break real process-pool imports, pickling, ordering, or solver equivalence.
 - Emit failed assertions as report-facing evidence instead of observed comparisons.
+- Round infeasible baseline allocations while scanning report frontiers.
+- Crash the claim table when a comparison baseline is infeasible.
 """
 
 from __future__ import annotations
@@ -25,6 +27,7 @@ import pytest
 from evaluation import run_jobs
 from experiments.run_report_experiments import (
     _claim_row,
+    _rounded_metrics,
     _rounding_row,
     claim_table,
     adversarial_problem_and_relaxed_allocation,
@@ -183,6 +186,39 @@ def test_frontier_point_keeps_programming_value_errors_hard(monkeypatch):
 
     with pytest.raises(ValueError, match="wrong shape"):
         report._frontier_point("frontier", 0.2, report.SOFT_DEADLINE, tiny_problem())
+
+
+def test_rounded_metrics_rejects_infeasible_baseline_before_rounding(monkeypatch):
+    y = np.array([[0.5, 0.5]])
+    result = type("Result", (), {"allocation": y, "feasible": False})()
+
+    monkeypatch.setattr(
+        report,
+        "round_allocation",
+        lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("rounded infeasible")),
+    )
+
+    with pytest.raises(RuntimeError, match="infeasible"):
+        _rounded_metrics(tiny_problem(), lambda _: result, 0.0)
+
+
+def test_claim_table_marks_infeasible_comparison_baseline_unavailable(monkeypatch):
+    frontiers = {
+        "main": {"largest_tested_safe_retained_prefill_fraction": 0.4},
+        "replay": {"largest_tested_safe_retained_prefill_fraction": math.nan},
+    }
+
+    monkeypatch.setattr(report, "make_problem", lambda *args, **kwargs: tiny_problem())
+    monkeypatch.setattr(
+        report,
+        "_try_rounded_metrics",
+        lambda problem, solver, drain: {"deadline_miss_rate": 0.0} if solver is report.solve_soft_deadline_cvxpy else None,
+    )
+
+    rows = claim_table(WorkloadConfig(), [], frontiers)
+
+    assert rows[0]["winner"] == "deadline-aware-rounded"
+    assert math.isnan(rows[0]["best_baseline_value"])
 
 
 def test_adversarial_rounding_misses_and_repair_fixes_without_shortfall():
