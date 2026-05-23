@@ -234,15 +234,14 @@ def _plot_delay_cdf(
         trace = traces.get(policy)
         if not trace:
             continue
-        points = _cdf_points(record.reconstruction_delay / record.deadline_s for record in trace)
+        points = _cdf_points(_delay_seconds(trace))
         if not points:
             continue
         x, y = np.asarray(points).T
         ax.plot(x, y, color=POLICY_COLORS[policy], linewidth=1.7, label=POLICY_LABELS[policy])
-    ax.axvline(1.0, color="0.25", linestyle="--", linewidth=1.0)
-    ax.set_xlabel("Reconstruction delay / deadline")
+    ax.set_xlabel("Reconstruction delay (s)")
     ax.set_ylabel("Fraction of moved requests")
-    ax.set_title("H2 detail: normalized delay tail")
+    ax.set_title("H2 detail: delay tail")
     ax.set_xlim(left=0.0)
     _simple_legend(ax)
     fig.savefig(path, bbox_inches="tight")
@@ -563,6 +562,10 @@ def _safe_series(df: pd.DataFrame) -> pd.Series:
 def _cdf_points(values) -> list[tuple[float, float]]:
     values = np.sort(np.asarray(list(values), dtype=float))
     return list(zip(values, np.arange(1, values.size + 1) / values.size)) if values.size else []
+
+
+def _delay_seconds(trace) -> list[float]:
+    return [record.reconstruction_delay for record in trace]
 
 
 def _read_rows(path: Path) -> list[dict[str, str]]:

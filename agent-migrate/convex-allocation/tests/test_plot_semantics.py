@@ -4,10 +4,10 @@ The report figure script emits exactly one simple artifact per hypothesis plus a
 compact integer benchmark table. The H1 table uses one fixed stress target and
 absolute event-start deadline metrics. The H2 frontier compares allocation
 policies under EDF release with workload-seed error bars and independent
-drain-window points, the H2 CDF is request-level, and the H4 heatmap exposes
-per-class state locality from the same workload config rather than only
-destination load. The H3 plot is the direct single-request replay/state
-crossover implied by model architecture.
+drain-window points, the H2 CDF is request-level in reconstruction-delay
+seconds, and the H4 heatmap exposes per-class state locality from the same
+workload config rather than only destination load. The H3 plot is the direct
+single-request replay/state crossover implied by model architecture.
 
 Plausible wrong implementations:
 - Reintroduce crowded diagnostic plots instead of the five report figures.
@@ -21,6 +21,7 @@ Plausible wrong implementations:
 - Use release-order seeds instead of varied workload seeds for H2 error bars.
 - Let H2 mark overloaded or over-window rows safe after frontier safety changes.
 - Average class delays before building the CDF.
+- Plot delay/deadline ratios after the CDF is supposed to use seconds.
 - Flip the H3 crossover inequality, drop the bytes-to-bits conversion, or let
   context length/request count change the replay-vs-state decision.
 - Keep unrelated integer policies in the compact summary table.
@@ -45,6 +46,7 @@ from experiments.plot_queue_centered import (
     _architecture_action_mix,
     _clear_outputs,
     _cdf_points,
+    _delay_seconds,
     _frontier_capped_retained_fraction,
     _h3_action_rows,
     _h1_stress_rows,
@@ -236,6 +238,15 @@ def test_h1_fixed_target_stress_table_uses_one_edf_target_row_per_policy():
 
 def test_cdf_points_are_request_level_empirical_cdf():
     assert _cdf_points([3.0, 1.0, 3.0]) == [(1.0, 1 / 3), (3.0, 2 / 3), (3.0, 1.0)]
+
+
+def test_delay_cdf_uses_seconds_not_deadline_normalized_ratios():
+    trace = [
+        SimpleNamespace(reconstruction_delay=8.0, deadline_s=4.0),
+        SimpleNamespace(reconstruction_delay=3.0, deadline_s=30.0),
+    ]
+
+    assert _cdf_points(_delay_seconds(trace)) == [(3.0, 0.5), (8.0, 1.0)]
 
 
 def test_h3_crossover_uses_model_bytes_prefill_and_network_units():
