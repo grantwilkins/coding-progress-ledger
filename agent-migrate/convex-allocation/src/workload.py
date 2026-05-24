@@ -21,7 +21,7 @@ def generate_workload(
     classes: int = 48,
     profile: str = "agentic_retained_sessions",
 ) -> GeneratedWorkload:
-    if profile != "agentic_retained_sessions":
+    if profile not in {"agentic_retained_sessions", "sampled_retained_sessions"}:
         raise ValueError(f"unknown workload profile: {profile}")
     if K <= 0 or jobs <= 0 or classes <= 0:
         raise ValueError("K, jobs, and classes must be positive")
@@ -30,6 +30,8 @@ def generate_workload(
     T = _sample_context_tokens(rng, jobs)
     deadline_s = _sample_deadline_s(rng, T)
     h_ctx, h_kv = _sample_locality(rng, jobs, K)
+    if profile == "sampled_retained_sessions":
+        return _sample_rows(rng, T, deadline_s, h_ctx, h_kv, min(classes, jobs))
     return _aggregate(T, deadline_s, h_ctx, h_kv, min(classes, jobs))
 
 
@@ -173,6 +175,26 @@ def _aggregate(
         np.array([b[2] for b in buckets], dtype=float),
         np.vstack([b[3] for b in buckets]),
         np.vstack([b[4] for b in buckets]),
+    )
+
+
+def _sample_rows(
+    rng: np.random.Generator,
+    T: np.ndarray,
+    deadline_s: np.ndarray,
+    h_ctx: np.ndarray,
+    h_kv: np.ndarray,
+    rows: int,
+) -> GeneratedWorkload:
+    idx = np.sort(rng.choice(T.size, size=rows, replace=False))
+    d = np.full(rows, T.size // rows, dtype=float)
+    d[: T.size % rows] += 1.0
+    return GeneratedWorkload(
+        T[idx].astype(float),
+        d,
+        deadline_s[idx].astype(float),
+        h_ctx[idx].copy(),
+        h_kv[idx].copy(),
     )
 
 

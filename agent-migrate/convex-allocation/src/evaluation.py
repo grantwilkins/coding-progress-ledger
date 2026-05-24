@@ -31,7 +31,8 @@ class WorkloadConfig:
 
     @property
     def label(self) -> str:
-        return f"{self.source}_seed{self.seed}_sessions{self.jobs}_classes{self.classes}"
+        label = f"{self.source}_seed{self.seed}_sessions{self.jobs}_classes{self.classes}"
+        return label if self.profile == "agentic_retained_sessions" else f"{label}_{self.profile}"
 
 
 def parse_workload_config(description: str) -> WorkloadConfig:

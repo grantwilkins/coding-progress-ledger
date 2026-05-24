@@ -37,6 +37,7 @@ plt.rcParams.update({"pdf.fonttype": 42, "ps.fonttype": 42})
 
 REPORT_DEADLINE_SCALE = 1.0
 REPORT_RETAINED_PREFILL_FRACTION = 0.5
+CDF_SAMPLE_CLASSES = 96
 PLOT_DRAIN_WINDOW_S = 1200.0
 H1_DRAIN_WINDOW_S = 20.0
 H1_RETAINED_PREFILL_FRACTION = 0.25
@@ -413,6 +414,7 @@ def _example_traces(
     deadline_scale: float,
     frontier: pd.DataFrame,
 ):
+    workload_config = _cdf_workload_config(workload_config)
     traces = {}
     for policy in REPORT_POLICIES:
         try:
@@ -433,6 +435,18 @@ def _example_traces(
             raise RuntimeError(f"cannot build delay CDF for {policy}") from exc
         traces[policy] = trace
     return traces
+
+
+def _cdf_workload_config(workload_config: WorkloadConfig) -> WorkloadConfig:
+    if workload_config.source != "generated":
+        return workload_config
+    return WorkloadConfig(
+        source=workload_config.source,
+        seed=workload_config.seed,
+        jobs=workload_config.jobs,
+        classes=max(workload_config.classes, min(CDF_SAMPLE_CLASSES, workload_config.jobs)),
+        profile="sampled_retained_sessions",
+    )
 
 
 def _frontier_capped_retained_fraction(frontier: pd.DataFrame, policy: str, requested: float) -> float:

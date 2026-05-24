@@ -135,6 +135,9 @@ bars. Release ordering is applied as event-start service priority at counted
 class/action block granularity for speed, which can make frontier cliffs sharper
 than per-request ordering. Report plotting removes its owned H1-H4 artifacts
 before regeneration so failed runs do not leave stale report outputs in place.
+The generated H2 delay CDF uses a sampled-session profile for its example
+traces so the detail plot shows request-scale delay variation instead of only
+the coarse frontier aggregation classes.
 The network-bandwidth tradeoff sweeps network bandwidth and plots the largest
 tested source-state fraction that can be safely evacuated, request migration
 fraction, actual evacuated state TB, and max network/prefill queue depth. A

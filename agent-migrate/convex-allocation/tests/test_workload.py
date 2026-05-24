@@ -16,6 +16,8 @@ Plausible wrong implementations:
 - Crash queue-table evaluation when a generated-workload baseline is infeasible.
 - Store mutable arrays in frozen ProblemData objects.
 - Bucket deadlines too coarsely and hide tight-deadline subgroups.
+- Smooth the CDF by relabeling an aggregate workload instead of using distinct
+  sampled sessions.
 """
 
 from __future__ import annotations
@@ -86,6 +88,17 @@ def test_joint_aggregation_preserves_length_deadline_and_locality_variation():
     assert np.unique(np.argmax(workload.h_ctx, axis=1)).size > 1
 
 
+def test_sampled_workload_profile_uses_distinct_sample_rows_and_preserves_count():
+    workload = generate_workload(3, seed=7, jobs=1000, classes=96, profile="sampled_retained_sessions")
+
+    assert workload.T.size == 96
+    assert workload.d.sum() == 1000
+    assert np.unique(workload.T).size > 80
+    assert np.unique(np.round(workload.deadline_s, 6)).size > 80
+    assert np.all(workload.d >= 10)
+    assert np.max(workload.d) - np.min(workload.d) <= 1
+
+
 def test_generated_retained_sessions_are_default_and_fixed_is_explicit():
     model = get_model("GLM-5")
     default = make_problem(model, "transition-coupled")
@@ -133,10 +146,13 @@ def test_aggregation_keeps_tight_deadline_subgroups_when_capacity_allows():
 def test_generated_evaluation_config_is_reproducible_and_separate_from_fixed_outputs():
     root = Path("/analysis")
     generated = WorkloadConfig()
+    sampled = WorkloadConfig(profile="sampled_retained_sessions")
     fixed = WorkloadConfig(source="fixed")
 
     assert fixed.output_dir(root) == root / "outputs" / "sweep"
     assert generated.output_dir(root) == root / "outputs" / "sweep" / generated.label
+    assert sampled.output_dir(root) == root / "outputs" / "sweep" / sampled.label
+    assert sampled.label.endswith("_sampled_retained_sessions")
     assert generated.problem_kwargs()["workload_source"] == "generated"
     assert generated.problem_kwargs()["workload_seed"] == 7
     assert generated.problem_kwargs()["workload_jobs"] == 10_000

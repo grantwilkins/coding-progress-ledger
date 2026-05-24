@@ -36,6 +36,7 @@ import pandas as pd
 
 from catalog import ModelParams
 from experiments.plot_queue_centered import (
+    CDF_SAMPLE_CLASSES,
     FRONTIER_RELEASE_POLICY,
     H3_CONTEXT_TOKENS,
     H3_REQUEST_COUNT,
@@ -46,6 +47,7 @@ from experiments.plot_queue_centered import (
     _architecture_action_mix,
     _clear_outputs,
     _cdf_points,
+    _cdf_workload_config,
     _delay_seconds,
     _frontier_capped_retained_fraction,
     _h3_action_rows,
@@ -109,6 +111,23 @@ def test_cdf_example_fraction_keeps_requested_fraction_without_frontier_point():
     )
 
     assert _frontier_capped_retained_fraction(frontier, "deadline-penalty-rounded", 0.5) == 0.5
+
+
+def test_generated_cdf_uses_sampled_session_rows_without_changing_frontier_config():
+    config = WorkloadConfig(source="generated", seed=7, jobs=1000, classes=48)
+
+    cdf = _cdf_workload_config(config)
+
+    assert config.profile == "agentic_retained_sessions"
+    assert cdf.profile == "sampled_retained_sessions"
+    assert cdf.jobs == config.jobs
+    assert cdf.classes == CDF_SAMPLE_CLASSES
+
+
+def test_fixed_cdf_keeps_fixed_smoke_workload():
+    config = WorkloadConfig(source="fixed")
+
+    assert _cdf_workload_config(config) == config
 
 
 def test_safe_series_requires_absolute_deadline_bounds():
