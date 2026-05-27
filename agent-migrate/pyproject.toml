@@ -13,7 +13,7 @@ dependencies = [
 ]
 
 [tool.pytest.ini_options]
-testpaths = ["tests", "convex-allocation/tests"]
+testpaths = ["tests", "convex-allocation/tests", "evacuation/tests"]
 norecursedirs = ["runs", ".venv", ".git", "dist", "build", "kv-transfer-early-experiment", "long-term-plans"]
 
 [dependency-groups]
