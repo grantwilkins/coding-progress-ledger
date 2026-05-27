@@ -5,11 +5,11 @@ request group, and the local repair pass only accepts one-request moves that
 improve miss rate, then p95 delay, then mean delay.
 
 Plausible wrong implementations:
-- Re-run fractional rounding during repair and change class shed counts.
+- Re-run fractional rounding during repair and change class retained-prefill counts.
 - Accept a move that improves mean delay while leaving a higher miss rate.
-- Aggregate failures at the wrong level, such as shed-weighted instead of request-counted.
+- Aggregate failures at the wrong level, such as retained-prefill-weighted instead of request-counted.
 - Attribute prefill wait to state-transfer requests.
-- Try to repair a CVXPY row after the generated workload makes that shed point infeasible.
+- Try to repair a deadline-penalty row after the generated workload makes that retained-prefill point infeasible.
 """
 
 from __future__ import annotations
@@ -22,6 +22,7 @@ import experiments.run_queue_failure_diagnostics as queue_diag
 from catalog import ModelParams
 from evaluation import WorkloadConfig
 from experiments.run_queue_failure_diagnostics import (
+    DIAGNOSTIC_REPAIR_MAX_STEPS,
     _failure_breakdown_rows,
     _move_type,
     _queue_key,
@@ -31,6 +32,7 @@ from experiments.run_queue_failure_diagnostics import (
     RepairMove,
     RepairResult,
     repair_rounded_allocation,
+    solve_repaired_deadline_aware_cvxpy,
 )
 from problem import ProblemData
 from queueing import evaluate_rounded_queue_trace
@@ -45,7 +47,7 @@ def repair_problem():
         regime="repair-test",
         T=np.array([10.0]),
         d=np.array([2.0]),
-        slack=np.array([4.0]),
+        deadline_s=np.array([4.0]),
         lambda_Bps=lambda_Bps,
         rho_prefill=rho_prefill,
         C_net=lambda_Bps * 10.0,
@@ -54,11 +56,11 @@ def repair_problem():
         ell_prefill=np.zeros(2),
         h_ctx=np.zeros((1, 2)),
         h_kv=np.zeros((1, 2)),
-        B_shed=20.0,
+        retained_prefill_target_s=20.0,
     )
 
 
-def test_local_repair_improves_queue_key_without_changing_class_totals_or_shed():
+def test_local_repair_improves_queue_key_without_changing_class_totals_or_retained_prefill():
     problem = repair_problem()
     y = np.array([[0, 2, 0, 0, 0]])
     original, _ = evaluate_rounded_queue_trace(problem, y)
@@ -67,7 +69,7 @@ def test_local_repair_improves_queue_key_without_changing_class_totals_or_shed()
 
     assert _queue_key(repair.metrics) < _queue_key(original)
     assert repair.metrics["deadline_miss_rate"] == 0.0
-    assert repair.metrics["rounded_shed_achieved"] == original["rounded_shed_achieved"]
+    assert repair.metrics["rounded_retained_prefill_moved_s"] == original["rounded_retained_prefill_moved_s"]
     assert repair.y[0, 1] < y[0, 1]
     assert repair.y.sum(axis=1).tolist() == y.sum(axis=1).tolist()
     assert repair.moves
@@ -87,7 +89,9 @@ def test_local_repair_respects_zero_move_budget():
 
 def test_failure_breakdown_counts_misses_by_class_destination_and_action():
     problem = repair_problem()
-    metrics, trace = evaluate_rounded_queue_trace(problem, np.array([[0, 2, 0, 0, 0]]))
+    metrics, trace = evaluate_rounded_queue_trace(
+        problem, np.array([[0, 2, 0, 0, 0]]), drain_window_s=0.0
+    )
 
     rows = _failure_breakdown_rows("toy", problem, 0.2, 0.25, "OK", trace)
     by_group = {(row["group_type"], row["group"]): row for row in rows}
@@ -118,9 +122,9 @@ def test_repair_summary_reports_net_changed_requests_and_destination_shift():
     assert row["repair_steps"] == 1
     assert row["net_changed_requests"] == 1
     assert row["fraction_moved_requests_changed"] == 0.5
-    assert row["original_k0_shed_frac"] == 1.0
-    assert row["repaired_k0_shed_frac"] == 0.5
-    assert row["k1_shed_frac_delta"] == 0.5
+    assert row["original_k0_retained_prefill_fraction"] == 1.0
+    assert row["repaired_k0_retained_prefill_fraction"] == 0.5
+    assert row["k1_retained_prefill_fraction_delta"] == 0.5
     assert row["objective_delta"] != 0.0
 
 
@@ -156,27 +160,64 @@ def test_repair_budget_rows_include_capped_and_unbounded_results():
     assert by_label["unbounded"]["repair_steps"] == len(full.moves)
 
 
-def test_queue_diagnostics_reports_infeasible_cvx_rows_without_repair(monkeypatch, tmp_path):
+def test_repair_budget_rows_reuse_full_repair_when_budget_is_large(monkeypatch):
+    problem = repair_problem()
+    y = np.array([[0, 2, 0, 0, 0]])
+    original_metrics, _ = evaluate_rounded_queue_trace(problem, y)
+    full = repair_rounded_allocation(problem, y)
+
+    monkeypatch.setattr(queue_diag, "REPAIR_BUDGET_FRACTIONS", (1.0,))
+    monkeypatch.setattr(
+        queue_diag,
+        "repair_rounded_allocation",
+        lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("should reuse full repair")),
+    )
+
+    rows = _repair_budget_rows(problem, y, original_metrics, full, 0.2, 0.5)
+
+    assert {row["budget_label"] for row in rows} == {"0%", "100%", "unbounded"}
+    assert rows[1]["repair_steps"] == len(full.moves)
+
+
+def test_repaired_deadline_aware_policy_uses_bounded_repair(monkeypatch):
+    problem = repair_problem()
+    y = np.array([[0, 2, 0, 0, 0]])
+    metrics, trace = evaluate_rounded_queue_trace(problem, y)
+    captured = {}
+
+    monkeypatch.setattr(queue_diag, "solve_deadline_aware_cvxpy", lambda *args, **kwargs: SimpleNamespace(y=y))
+    monkeypatch.setattr(queue_diag, "round_allocation", lambda problem, allocation: SimpleNamespace(y=y))
+
+    def repair(problem, allocation, **kwargs):
+        captured.update(kwargs)
+        return RepairResult(y, metrics, trace, ())
+
+    monkeypatch.setattr(queue_diag, "repair_rounded_allocation", repair)
+
+    solve_repaired_deadline_aware_cvxpy(problem)
+
+    assert captured["max_steps"] == DIAGNOSTIC_REPAIR_MAX_STEPS
+
+
+def test_queue_diagnostics_reports_infeasible_deadline_penalty_rows_without_repair(monkeypatch, tmp_path):
     captured = {}
 
     def fail_solve(problem):
         raise RuntimeError("infeasible")
 
     monkeypatch.setattr(queue_diag, "ROOT", tmp_path)
-    monkeypatch.setattr(queue_diag, "TIGHT_SLACK_MULTIPLIERS", (0.25,))
-    monkeypatch.setattr(queue_diag, "SHED_FRACTIONS", (0.2,))
+    monkeypatch.setattr(queue_diag, "TIGHT_DEADLINE_SCALES", (0.25,))
+    monkeypatch.setattr(queue_diag, "RETAINED_PREFILL_FRACTIONS", (0.2,))
     monkeypatch.setattr(queue_diag, "POLICIES", ())
-    monkeypatch.setattr(
-        queue_diag, "make_problem", lambda *args, **kwargs: SimpleNamespace(B_shed=1.0)
-    )
-    monkeypatch.setattr(queue_diag, "solve_cvxpy", fail_solve)
+    monkeypatch.setattr(queue_diag, "make_problem", lambda *args, **kwargs: repair_problem())
+    monkeypatch.setattr(queue_diag, "solve_soft_deadline_cvxpy", fail_solve)
     monkeypatch.setattr(
         queue_diag,
         "_write_rows",
         lambda path, rows, columns: captured.setdefault(path, rows),
     )
     monkeypatch.setattr(queue_diag, "_print_repair_summary", lambda rows: None)
-    monkeypatch.setattr(queue_diag, "_print_half_slack_latex", lambda rows: None)
+    monkeypatch.setattr(queue_diag, "_print_half_deadline_latex", lambda rows: None)
 
     queue_diag.run_queue_failure_diagnostics(WorkloadConfig(source="generated", seed=7))
 
@@ -184,8 +225,44 @@ def test_queue_diagnostics_reports_infeasible_cvx_rows_without_repair(monkeypatc
         rows for path, rows in captured.items() if path.name.endswith("queue_table.csv")
     )
     assert [row["policy"] for row in queue_rows] == [
-        "CVXPY-rounded",
-        "repaired-CVXPY-rounded",
+        "deadline-penalty-rounded",
+        "repaired-deadline-penalty-rounded",
     ]
     assert {row["status"] for row in queue_rows} == {"INFEASIBLE"}
     assert all("generated_seed7" in str(path) for path in captured)
+
+
+def test_queue_diagnostics_reuses_one_base_problem_per_deadline_scale(monkeypatch, tmp_path):
+    built = []
+    captured = {}
+
+    def make_base(model, regime, **kwargs):
+        built.append((kwargs["deadline_scale"], kwargs["retained_prefill_fraction"]))
+        return repair_problem()
+
+    def run_jobs(label, jobs, fn):
+        assert label == "queue failure diagnostics"
+        assert [(fraction, scale) for fraction, scale, _ in jobs] == [
+            (0.2, 0.25),
+            (0.4, 0.25),
+            (0.2, 0.5),
+            (0.4, 0.5),
+        ]
+        return [([], [], [], [], [], []) for _ in jobs]
+
+    monkeypatch.setattr(queue_diag, "ROOT", tmp_path)
+    monkeypatch.setattr(queue_diag, "TIGHT_DEADLINE_SCALES", (0.25, 0.5))
+    monkeypatch.setattr(queue_diag, "RETAINED_PREFILL_FRACTIONS", (0.2, 0.4))
+    monkeypatch.setattr(queue_diag, "make_problem", make_base)
+    monkeypatch.setattr(queue_diag, "_run_jobs", run_jobs)
+    monkeypatch.setattr(queue_diag, "_write_rows", lambda path, rows, columns: captured.setdefault(path.name, rows))
+    monkeypatch.setattr(queue_diag, "_print_repair_summary", lambda rows: None)
+    monkeypatch.setattr(queue_diag, "_print_half_deadline_latex", lambda rows: None)
+
+    queue_rows, breakdown_rows, summary_rows = queue_diag.run_queue_failure_diagnostics(WorkloadConfig(source="fixed"))
+
+    assert built == [(0.25, 1.0), (0.5, 1.0)]
+    assert queue_rows == []
+    assert breakdown_rows == []
+    assert summary_rows == []
+    assert "transition_coupled_repaired_queue_table.csv" in captured

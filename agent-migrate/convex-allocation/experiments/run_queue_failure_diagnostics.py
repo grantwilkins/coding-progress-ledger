@@ -14,65 +14,85 @@ SRC = ROOT / "src"
 sys.path.insert(0, str(SRC))
 
 from baselines import (
+    BaselineResult,
     solve_crossover_greedy,
+    solve_least_loaded_destination,
     solve_mixed_greedy,
+    solve_online_queue_greedy,
     solve_replay_only,
     solve_state_only,
 )
 from catalog import get_model
 from coefficients import ACTIONS, compute_coefficients
-from cvxpy_solver import solve_cvxpy, solve_deadline_aware_cvxpy
-from evaluation import WorkloadConfig, parse_workload_config
-from metrics import shed_achieved, shed_action_mix, shed_destination_mix, utilization
+from cvxpy_solver import solve_cvxpy, solve_deadline_aware_cvxpy, solve_soft_deadline_cvxpy
+from evaluation import WorkloadConfig, parse_workload_config, run_jobs as _run_jobs
+from metrics import (
+    retained_prefill_action_mix,
+    retained_prefill_destination_mix,
+    retained_prefill_moved_s,
+    utilization,
+)
 from mirror_descent import solve_mirror_descent
 from objective import objective
-from problem import make_problem
+from problem import make_problem, with_retained_prefill_fraction
 from queueing import evaluate_rounded_queue_trace, round_allocation
 
-SHED_FRACTIONS = (0.20, 0.30, 0.40, 0.50, 0.60, 0.70)
-TIGHT_SLACK_MULTIPLIERS = (0.25, 0.50)
+RETAINED_PREFILL_FRACTIONS = (0.20, 0.30, 0.40, 0.50, 0.60, 0.70, 0.80, 0.90)
+TIGHT_DEADLINE_SCALES = (0.25, 0.50)
 REPAIR_BUDGET_FRACTIONS = (0.05, 0.10, 0.20)
+DIAGNOSTIC_REPAIR_MAX_STEPS = 64
+DRAIN_WINDOW_S = 1800.0
+MAIN_POLICY = "deadline-penalty-rounded"
+REPAIRED_MAIN_POLICY = "repaired-deadline-penalty-rounded"
 POLICIES = (
+    ("CVXPY-rounded", solve_cvxpy),
     (
-        "deadline-aware-m0.8-rounded",
-        lambda problem: solve_deadline_aware_cvxpy(problem, 0.8, shed_cap=problem.B_shed),
+        "deadline-aware-CVXPY-rounded",
+        lambda problem: solve_deadline_aware_cvxpy(
+            problem, 1.0, retained_prefill_cap=problem.retained_prefill_target_s
+        ),
     ),
     (
-        "deadline-aware-m1.0-rounded",
-        lambda problem: solve_deadline_aware_cvxpy(problem, 1.0, shed_cap=problem.B_shed),
+        "repaired-deadline-aware-CVXPY-rounded",
+        lambda problem: solve_repaired_deadline_aware_cvxpy(problem),
     ),
     ("mirror-descent-rounded", lambda problem: solve_mirror_descent(problem, eta_x0=500.0)),
     ("crossover-greedy", solve_crossover_greedy),
+    ("least-loaded-destination", solve_least_loaded_destination),
+    ("online-queue-greedy", solve_online_queue_greedy),
     ("mixed-greedy", solve_mixed_greedy),
     ("replay-only", solve_replay_only),
     ("state-only", solve_state_only),
 )
 QUEUE_COLUMNS = (
     "policy",
-    "shed_fraction",
-    "slack_multiplier",
+    "retained_prefill_fraction",
+    "deadline_scale",
     "status",
     "safe",
-    "rounded_shed_achieved",
-    "rounded_shed_target",
-    "rounded_shed_ratio",
+    "rounded_retained_prefill_moved_s",
+    "rounded_retained_prefill_target_s",
+    "rounded_retained_prefill_ratio",
     "mean_delay",
     "p50_delay",
     "p95_delay",
     "p99_delay",
     "p95_normalized_delay",
     "miss_rate",
-    "max_net_busy",
-    "max_prefill_busy",
-    "replay_shed_frac",
-    "state_shed_frac",
+    "drain_window_s",
+    "retained_prefill_removal_rate_s_per_s",
+    "drain_completion_s",
+    "network_capacity_pressure",
+    "prefill_capacity_pressure",
+    "replay_retained_prefill_fraction",
+    "state_transfer_retained_prefill_fraction",
     "repair_move_count",
     "repair_move_summary",
 )
 BREAKDOWN_COLUMNS = (
     "policy",
-    "shed_fraction",
-    "slack_multiplier",
+    "retained_prefill_fraction",
+    "deadline_scale",
     "status",
     "group_type",
     "group",
@@ -84,8 +104,8 @@ BREAKDOWN_COLUMNS = (
     "avg_missed_total_delay",
 )
 REPAIR_SUMMARY_COLUMNS = (
-    "shed_fraction",
-    "slack_multiplier",
+    "retained_prefill_fraction",
+    "deadline_scale",
     "moved_requests",
     "repair_steps",
     "net_changed_requests",
@@ -106,25 +126,25 @@ REPAIR_SUMMARY_COLUMNS = (
     "original_p95_normalized_delay",
     "repaired_p95_normalized_delay",
     "p95_normalized_delay_delta",
-    "original_replay_shed_frac",
-    "repaired_replay_shed_frac",
-    "replay_shed_frac_delta",
-    "original_state_shed_frac",
-    "repaired_state_shed_frac",
-    "state_shed_frac_delta",
-    "original_k0_shed_frac",
-    "repaired_k0_shed_frac",
-    "k0_shed_frac_delta",
-    "original_k1_shed_frac",
-    "repaired_k1_shed_frac",
-    "k1_shed_frac_delta",
-    "original_k2_shed_frac",
-    "repaired_k2_shed_frac",
-    "k2_shed_frac_delta",
+    "original_replay_retained_prefill_fraction",
+    "repaired_replay_retained_prefill_fraction",
+    "replay_retained_prefill_fraction_delta",
+    "original_state_transfer_retained_prefill_fraction",
+    "repaired_state_transfer_retained_prefill_fraction",
+    "state_transfer_retained_prefill_fraction_delta",
+    "original_k0_retained_prefill_fraction",
+    "repaired_k0_retained_prefill_fraction",
+    "k0_retained_prefill_fraction_delta",
+    "original_k1_retained_prefill_fraction",
+    "repaired_k1_retained_prefill_fraction",
+    "k1_retained_prefill_fraction_delta",
+    "original_k2_retained_prefill_fraction",
+    "repaired_k2_retained_prefill_fraction",
+    "k2_retained_prefill_fraction_delta",
 )
 MOVE_BREAKDOWN_COLUMNS = (
-    "shed_fraction",
-    "slack_multiplier",
+    "retained_prefill_fraction",
+    "deadline_scale",
     "move_type",
     "class",
     "source_destination",
@@ -134,8 +154,8 @@ MOVE_BREAKDOWN_COLUMNS = (
     "move_count",
 )
 BUDGET_COLUMNS = (
-    "shed_fraction",
-    "slack_multiplier",
+    "retained_prefill_fraction",
+    "deadline_scale",
     "budget_label",
     "budget_fraction",
     "budget_move_limit",
@@ -170,106 +190,31 @@ class RepairResult:
 def run_queue_failure_diagnostics(workload_config: WorkloadConfig = WorkloadConfig()):
     out = workload_config.output_dir(ROOT)
     out.mkdir(parents=True, exist_ok=True)
-    queue_rows = []
-    breakdown_rows = []
-    summary_rows = []
-    repair_summary_rows = []
-    move_breakdown_rows = []
-    budget_rows = []
     model = get_model("GLM-5")
-
-    for slack_multiplier in TIGHT_SLACK_MULTIPLIERS:
-        for shed_fraction in SHED_FRACTIONS:
-            problem = make_problem(
-                model,
-                "transition-coupled",
-                shed_fraction=shed_fraction,
-                slack_multiplier=slack_multiplier,
-                **workload_config.problem_kwargs(),
+    jobs = []
+    for deadline_scale in TIGHT_DEADLINE_SCALES:
+        base = make_problem(
+            model,
+            "transition-coupled",
+            retained_prefill_fraction=1.0,
+            deadline_scale=deadline_scale,
+            **workload_config.problem_kwargs(),
+        )
+        for retained_prefill_fraction in RETAINED_PREFILL_FRACTIONS:
+            jobs.append(
+                (
+                    retained_prefill_fraction,
+                    deadline_scale,
+                    with_retained_prefill_fraction(base, retained_prefill_fraction),
+                )
             )
-            try:
-                cvx = solve_cvxpy(problem)
-                rounded = round_allocation(problem, cvx.y)
-                metrics, trace = evaluate_rounded_queue_trace(problem, rounded.y)
-            except (RuntimeError, ValueError):
-                queue_rows.append(
-                    _empty_queue_row(
-                        "CVXPY-rounded", shed_fraction, slack_multiplier, problem.B_shed
-                    )
-                )
-                queue_rows.append(
-                    _empty_queue_row(
-                        "repaired-CVXPY-rounded",
-                        shed_fraction,
-                        slack_multiplier,
-                        problem.B_shed,
-                    )
-                )
-            else:
-                queue_rows.append(
-                    _queue_row("CVXPY-rounded", shed_fraction, slack_multiplier, "OK", metrics)
-                )
-                breakdown_rows.extend(
-                    _failure_breakdown_rows(
-                        "CVXPY-rounded", problem, shed_fraction, slack_multiplier, "OK", trace
-                    )
-                )
-
-                try:
-                    repair = repair_rounded_allocation(problem, rounded.y)
-                except (RuntimeError, ValueError):
-                    repaired = _empty_queue_row(
-                        "repaired-CVXPY-rounded",
-                        shed_fraction,
-                        slack_multiplier,
-                        problem.B_shed,
-                    )
-                    repaired["status"] = "REPAIR_FAILED"
-                    queue_rows.append(repaired)
-                else:
-                    queue_rows.append(
-                        _queue_row(
-                            "repaired-CVXPY-rounded",
-                            shed_fraction,
-                            slack_multiplier,
-                            "OK",
-                            repair.metrics,
-                            repair.moves,
-                        )
-                    )
-                    breakdown_rows.extend(
-                        _failure_breakdown_rows(
-                            "repaired-CVXPY-rounded",
-                            problem,
-                            shed_fraction,
-                            slack_multiplier,
-                            "OK",
-                            repair.trace,
-                        )
-                    )
-                    summary_rows.append(_summary_row(shed_fraction, slack_multiplier, metrics, repair))
-                    repair_summary_rows.append(
-                        _repair_summary_row(
-                            problem, rounded.y, metrics, repair, shed_fraction, slack_multiplier
-                        )
-                    )
-                    move_breakdown_rows.extend(
-                        _repair_move_breakdown_rows(shed_fraction, slack_multiplier, repair.moves)
-                    )
-                    budget_rows.extend(
-                        _repair_budget_rows(
-                            problem, rounded.y, metrics, repair, shed_fraction, slack_multiplier
-                        )
-                    )
-
-            for policy, solver in POLICIES:
-                row, trace = _solver_queue(policy, solver, problem, shed_fraction, slack_multiplier)
-                queue_rows.append(row)
-                breakdown_rows.extend(
-                    _failure_breakdown_rows(
-                        policy, problem, shed_fraction, slack_multiplier, row["status"], trace
-                    )
-                )
+    batches = _run_jobs("queue failure diagnostics", jobs, _diagnostic_point_job)
+    queue_rows = [row for batch in batches for row in batch[0]]
+    breakdown_rows = [row for batch in batches for row in batch[1]]
+    summary_rows = [row for batch in batches for row in batch[2]]
+    repair_summary_rows = [row for batch in batches for row in batch[3]]
+    move_breakdown_rows = [row for batch in batches for row in batch[4]]
+    budget_rows = [row for batch in batches for row in batch[5]]
 
     _write_rows(out / "transition_coupled_repaired_queue_table.csv", queue_rows, QUEUE_COLUMNS)
     _write_rows(
@@ -281,14 +226,96 @@ def run_queue_failure_diagnostics(workload_config: WorkloadConfig = WorkloadConf
     _write_rows(out / "repair_move_breakdown.csv", move_breakdown_rows, MOVE_BREAKDOWN_COLUMNS)
     _write_rows(out / "repair_budget_frontier.csv", budget_rows, BUDGET_COLUMNS)
     _print_repair_summary(summary_rows)
-    _print_half_slack_latex(summary_rows)
+    _print_half_deadline_latex(summary_rows)
     return queue_rows, breakdown_rows, summary_rows
 
 
-def repair_rounded_allocation(problem, y, max_steps=1000, max_changes=None):
+def _diagnostic_point_job(job):
+    retained_prefill_fraction, deadline_scale, problem = job
+    queue_rows = []
+    breakdown_rows = []
+    summary_rows = []
+    repair_summary_rows = []
+    move_breakdown_rows = []
+    budget_rows = []
+
+    try:
+        main = solve_soft_deadline_cvxpy(problem)
+    except RuntimeError:
+        queue_rows.append(
+            _empty_queue_row(MAIN_POLICY, retained_prefill_fraction, deadline_scale, problem.retained_prefill_target_s)
+        )
+        queue_rows.append(
+            _empty_queue_row(
+                REPAIRED_MAIN_POLICY,
+                retained_prefill_fraction,
+                deadline_scale,
+                problem.retained_prefill_target_s,
+            )
+        )
+    else:
+        rounded = round_allocation(problem, main.y)
+        metrics, trace = evaluate_rounded_queue_trace(problem, rounded.y)
+        queue_rows.append(_queue_row(MAIN_POLICY, retained_prefill_fraction, deadline_scale, "OK", metrics))
+        breakdown_rows.extend(
+            _failure_breakdown_rows(MAIN_POLICY, problem, retained_prefill_fraction, deadline_scale, "OK", trace)
+        )
+
+        try:
+            repair = repair_rounded_allocation(problem, rounded.y, max_steps=DIAGNOSTIC_REPAIR_MAX_STEPS)
+        except RuntimeError:
+            repaired = _empty_queue_row(
+                REPAIRED_MAIN_POLICY,
+                retained_prefill_fraction,
+                deadline_scale,
+                problem.retained_prefill_target_s,
+            )
+            repaired["status"] = "REPAIR_FAILED"
+            queue_rows.append(repaired)
+        else:
+            queue_rows.append(
+                _queue_row(
+                    REPAIRED_MAIN_POLICY,
+                    retained_prefill_fraction,
+                    deadline_scale,
+                    "OK",
+                    repair.metrics,
+                    repair.moves,
+                )
+            )
+            breakdown_rows.extend(
+                _failure_breakdown_rows(
+                    REPAIRED_MAIN_POLICY,
+                    problem,
+                    retained_prefill_fraction,
+                    deadline_scale,
+                    "OK",
+                    repair.trace,
+                )
+            )
+            summary_rows.append(_summary_row(retained_prefill_fraction, deadline_scale, metrics, repair))
+            repair_summary_rows.append(
+                _repair_summary_row(problem, rounded.y, metrics, repair, retained_prefill_fraction, deadline_scale)
+            )
+            move_breakdown_rows.extend(
+                _repair_move_breakdown_rows(retained_prefill_fraction, deadline_scale, repair.moves)
+            )
+            budget_rows.extend(_repair_budget_rows(problem, rounded.y, metrics, repair, retained_prefill_fraction, deadline_scale))
+
+    for policy, solver in POLICIES:
+        row, trace = _solver_queue(policy, solver, problem, retained_prefill_fraction, deadline_scale)
+        queue_rows.append(row)
+        breakdown_rows.extend(
+            _failure_breakdown_rows(policy, problem, retained_prefill_fraction, deadline_scale, row["status"], trace)
+        )
+
+    return queue_rows, breakdown_rows, summary_rows, repair_summary_rows, move_breakdown_rows, budget_rows
+
+
+def repair_rounded_allocation(problem, y, max_steps=1000, max_changes=None, drain_window_s=DRAIN_WINDOW_S):
     coeffs = compute_coefficients(problem)
     y = np.asarray(y, dtype=float)
-    metrics, trace = evaluate_rounded_queue_trace(problem, y)
+    metrics, trace = evaluate_rounded_queue_trace(problem, y, drain_window_s=drain_window_s)
     y = np.rint(y).astype(int)
     moves = []
 
@@ -310,7 +337,7 @@ def repair_rounded_allocation(problem, y, max_steps=1000, max_changes=None):
                     if not _capacity_feasible(problem, candidate):
                         continue
                     candidate_metrics, candidate_trace = evaluate_rounded_queue_trace(
-                        problem, candidate
+                        problem, candidate, drain_window_s=drain_window_s
                     )
                     candidate_key = _queue_key(candidate_metrics)
                     if candidate_key < best_key:
@@ -328,8 +355,21 @@ def repair_rounded_allocation(problem, y, max_steps=1000, max_changes=None):
     raise RuntimeError("rounded local repair did not converge")
 
 
-def _solver_queue(policy, solver, problem, shed_fraction, slack_multiplier):
-    base = _empty_queue_row(policy, shed_fraction, slack_multiplier, problem.B_shed)
+def solve_repaired_deadline_aware_cvxpy(problem):
+    rounded = round_allocation(
+        problem,
+        solve_deadline_aware_cvxpy(problem, 1.0, retained_prefill_cap=problem.retained_prefill_target_s).y,
+    )
+    repair = repair_rounded_allocation(problem, rounded.y, max_steps=DIAGNOSTIC_REPAIR_MAX_STEPS)
+    coeffs = compute_coefficients(problem)
+    obj = objective(problem, coeffs, repair.y)
+    moved = retained_prefill_moved_s(problem, repair.y)
+    feasible = moved >= problem.retained_prefill_target_s - 1e-8 and np.isfinite(obj)
+    return BaselineResult(feasible, obj if feasible else None, moved, repair.y)
+
+
+def _solver_queue(policy, solver, problem, retained_prefill_fraction, deadline_scale):
+    base = _empty_queue_row(policy, retained_prefill_fraction, deadline_scale, problem.retained_prefill_target_s)
     try:
         result = solver(problem)
     except RuntimeError:
@@ -337,7 +377,7 @@ def _solver_queue(policy, solver, problem, shed_fraction, slack_multiplier):
     if not getattr(result, "feasible", True):
         return base, ()
     y = result.allocation if hasattr(result, "allocation") else result.y
-    if shed_achieved(problem, y) < problem.B_shed - 1e-5:
+    if retained_prefill_moved_s(problem, y) < problem.retained_prefill_target_s - 1e-5:
         return base, ()
     try:
         rounded = round_allocation(problem, y)
@@ -345,7 +385,7 @@ def _solver_queue(policy, solver, problem, shed_fraction, slack_multiplier):
     except ValueError:
         base["status"] = "ROUNDING_FAILED"
         return base, ()
-    return _queue_row(policy, shed_fraction, slack_multiplier, "OK", metrics), trace
+    return _queue_row(policy, retained_prefill_fraction, deadline_scale, "OK", metrics), trace
 
 
 def _queue_key(metrics):
@@ -372,19 +412,19 @@ def _repair_move(coeffs, g, source, target):
     )
 
 
-def _repair_summary_row(problem, original_y, original_metrics, repair, shed_fraction, slack_multiplier):
+def _repair_summary_row(problem, original_y, original_metrics, repair, retained_prefill_fraction, deadline_scale):
     coeffs = compute_coefficients(problem)
     original_obj = objective(problem, coeffs, original_y)
     repaired_obj = objective(problem, coeffs, repair.y)
     moved_requests = _moved_requests(original_y)
     net_changed = _net_changed_requests(original_y, repair.y)
-    original_action = shed_action_mix(problem, original_y)
-    repaired_action = shed_action_mix(problem, repair.y)
-    original_dest = shed_destination_mix(problem, original_y)
-    repaired_dest = shed_destination_mix(problem, repair.y)
+    original_action = retained_prefill_action_mix(problem, original_y)
+    repaired_action = retained_prefill_action_mix(problem, repair.y)
+    original_dest = retained_prefill_destination_mix(problem, original_y)
+    repaired_dest = retained_prefill_destination_mix(problem, repair.y)
     row = {
-        "shed_fraction": shed_fraction,
-        "slack_multiplier": slack_multiplier,
+        "retained_prefill_fraction": retained_prefill_fraction,
+        "deadline_scale": deadline_scale,
         "moved_requests": moved_requests,
         "repair_steps": len(repair.moves),
         "net_changed_requests": net_changed,
@@ -406,29 +446,35 @@ def _repair_summary_row(problem, original_y, original_metrics, repair, shed_frac
         "repaired_p95_normalized_delay": repair.metrics["p95_normalized_reconstruction_delay"],
         "p95_normalized_delay_delta": repair.metrics["p95_normalized_reconstruction_delay"]
         - original_metrics["p95_normalized_reconstruction_delay"],
-        "original_replay_shed_frac": original_action["replay_shed_frac"],
-        "repaired_replay_shed_frac": repaired_action["replay_shed_frac"],
-        "replay_shed_frac_delta": repaired_action["replay_shed_frac"]
-        - original_action["replay_shed_frac"],
-        "original_state_shed_frac": original_action["state_shed_frac"],
-        "repaired_state_shed_frac": repaired_action["state_shed_frac"],
-        "state_shed_frac_delta": repaired_action["state_shed_frac"]
-        - original_action["state_shed_frac"],
+        "original_replay_retained_prefill_fraction": original_action["replay_retained_prefill_fraction"],
+        "repaired_replay_retained_prefill_fraction": repaired_action["replay_retained_prefill_fraction"],
+        "replay_retained_prefill_fraction_delta": repaired_action["replay_retained_prefill_fraction"]
+        - original_action["replay_retained_prefill_fraction"],
+        "original_state_transfer_retained_prefill_fraction": original_action[
+            "state_transfer_retained_prefill_fraction"
+        ],
+        "repaired_state_transfer_retained_prefill_fraction": repaired_action[
+            "state_transfer_retained_prefill_fraction"
+        ],
+        "state_transfer_retained_prefill_fraction_delta": repaired_action[
+            "state_transfer_retained_prefill_fraction"
+        ]
+        - original_action["state_transfer_retained_prefill_fraction"],
     }
     for k in range(problem.K):
-        row[f"original_k{k}_shed_frac"] = original_dest[k]
-        row[f"repaired_k{k}_shed_frac"] = repaired_dest[k]
-        row[f"k{k}_shed_frac_delta"] = repaired_dest[k] - original_dest[k]
+        row[f"original_k{k}_retained_prefill_fraction"] = original_dest[k]
+        row[f"repaired_k{k}_retained_prefill_fraction"] = repaired_dest[k]
+        row[f"k{k}_retained_prefill_fraction_delta"] = repaired_dest[k] - original_dest[k]
     return row
 
 
-def _repair_move_breakdown_rows(shed_fraction, slack_multiplier, moves):
+def _repair_move_breakdown_rows(retained_prefill_fraction, deadline_scale, moves):
     rows = []
     for key, count in Counter(moves).items():
         rows.append(
             {
-                "shed_fraction": shed_fraction,
-                "slack_multiplier": slack_multiplier,
+                "retained_prefill_fraction": retained_prefill_fraction,
+                "deadline_scale": deadline_scale,
                 "move_type": _move_type(key),
                 "class": key.g,
                 "source_destination": key.from_k,
@@ -441,8 +487,8 @@ def _repair_move_breakdown_rows(shed_fraction, slack_multiplier, moves):
     return sorted(
         rows,
         key=lambda row: (
-            row["slack_multiplier"],
-            row["shed_fraction"],
+            row["deadline_scale"],
+            row["retained_prefill_fraction"],
             row["class"],
             row["source_destination"],
             row["source_action"],
@@ -452,7 +498,9 @@ def _repair_move_breakdown_rows(shed_fraction, slack_multiplier, moves):
     )
 
 
-def _repair_budget_rows(problem, original_y, original_metrics, full_repair, shed_fraction, slack_multiplier):
+def _repair_budget_rows(
+    problem, original_y, original_metrics, full_repair, retained_prefill_fraction, deadline_scale
+):
     moved = _moved_requests(original_y)
     rows = [
         _budget_row(
@@ -461,8 +509,8 @@ def _repair_budget_rows(problem, original_y, original_metrics, full_repair, shed
             original_y,
             original_metrics,
             (),
-            shed_fraction,
-            slack_multiplier,
+            retained_prefill_fraction,
+            deadline_scale,
             "0%",
             0.0,
             0,
@@ -470,7 +518,7 @@ def _repair_budget_rows(problem, original_y, original_metrics, full_repair, shed
     ]
     for budget_fraction in REPAIR_BUDGET_FRACTIONS:
         limit = int(math.floor(budget_fraction * moved))
-        repair = repair_rounded_allocation(problem, original_y, max_changes=limit)
+        repair = _repair_prefix(problem, original_y, full_repair, limit)
         rows.append(
             _budget_row(
                 problem,
@@ -478,8 +526,8 @@ def _repair_budget_rows(problem, original_y, original_metrics, full_repair, shed
                 repair.y,
                 repair.metrics,
                 repair.moves,
-                shed_fraction,
-                slack_multiplier,
+                retained_prefill_fraction,
+                deadline_scale,
                 f"{budget_fraction:.0%}",
                 budget_fraction,
                 limit,
@@ -492,8 +540,8 @@ def _repair_budget_rows(problem, original_y, original_metrics, full_repair, shed
             full_repair.y,
             full_repair.metrics,
             full_repair.moves,
-            shed_fraction,
-            slack_multiplier,
+            retained_prefill_fraction,
+            deadline_scale,
             "unbounded",
             math.nan,
             math.nan,
@@ -502,14 +550,40 @@ def _repair_budget_rows(problem, original_y, original_metrics, full_repair, shed
     return rows
 
 
+def _repair_prefix(problem, original_y, full_repair, limit):
+    if limit >= len(full_repair.moves):
+        return full_repair
+    y = np.rint(original_y).astype(int).copy()
+    coeffs = compute_coefficients(problem)
+    moves = full_repair.moves[:limit]
+    for move in moves:
+        source = _move_option(coeffs, move.g, move.from_k, move.from_action)
+        target = _move_option(coeffs, move.g, move.to_k, move.to_action)
+        y[move.g, source] -= 1
+        y[move.g, target] += 1
+    metrics, trace = evaluate_rounded_queue_trace(problem, y, drain_window_s=DRAIN_WINDOW_S)
+    return RepairResult(y, metrics, trace, moves)
+
+
+def _move_option(coeffs, g, k, action):
+    matches = [
+        i
+        for i, (dest, code) in enumerate(zip(coeffs.option_dest, coeffs.option_action))
+        if int(dest) == k and ACTIONS[int(code)] == action
+    ]
+    if not matches:
+        raise ValueError(f"repair move references missing option for class {g}: {k}/{action}")
+    return matches[0]
+
+
 def _budget_row(
     problem,
     original_y,
     y,
     metrics,
     moves,
-    shed_fraction,
-    slack_multiplier,
+    retained_prefill_fraction,
+    deadline_scale,
     budget_label,
     budget_fraction,
     budget_limit,
@@ -519,8 +593,8 @@ def _budget_row(
     moved = _moved_requests(original_y)
     net_changed = _net_changed_requests(original_y, y)
     return {
-        "shed_fraction": shed_fraction,
-        "slack_multiplier": slack_multiplier,
+        "retained_prefill_fraction": retained_prefill_fraction,
+        "deadline_scale": deadline_scale,
         "budget_label": budget_label,
         "budget_fraction": budget_fraction,
         "budget_move_limit": budget_limit,
@@ -558,51 +632,57 @@ def _move_type(move):
     raise ValueError("repair move did not change destination or action")
 
 
-def _queue_row(policy, shed_fraction, slack_multiplier, status, metrics, moves=()):
+def _queue_row(policy, retained_prefill_fraction, deadline_scale, status, metrics, moves=()):
     return {
         "policy": policy,
-        "shed_fraction": shed_fraction,
-        "slack_multiplier": slack_multiplier,
+        "retained_prefill_fraction": retained_prefill_fraction,
+        "deadline_scale": deadline_scale,
         "status": status,
         "safe": _safe(metrics),
-        "rounded_shed_achieved": metrics["rounded_shed_achieved"],
-        "rounded_shed_target": metrics["rounded_shed_target"],
-        "rounded_shed_ratio": metrics["rounded_shed_ratio"],
+        "rounded_retained_prefill_moved_s": metrics["rounded_retained_prefill_moved_s"],
+        "rounded_retained_prefill_target_s": metrics["rounded_retained_prefill_target_s"],
+        "rounded_retained_prefill_ratio": metrics["rounded_retained_prefill_ratio"],
         "mean_delay": metrics["mean_reconstruction_delay"],
         "p50_delay": metrics["p50_reconstruction_delay"],
         "p95_delay": metrics["p95_reconstruction_delay"],
         "p99_delay": metrics["p99_reconstruction_delay"],
         "p95_normalized_delay": metrics["p95_normalized_reconstruction_delay"],
         "miss_rate": metrics["deadline_miss_rate"],
-        "max_net_busy": metrics["max_network_busy_window"],
-        "max_prefill_busy": metrics["max_prefill_busy_window"],
-        "replay_shed_frac": metrics["replay_shed_frac"],
-        "state_shed_frac": metrics["state_shed_frac"],
+        "drain_window_s": metrics["drain_window_s"],
+        "retained_prefill_removal_rate_s_per_s": metrics["retained_prefill_removal_rate_s_per_s"],
+        "drain_completion_s": metrics["drain_completion_s"],
+        "network_capacity_pressure": metrics["network_capacity_pressure"],
+        "prefill_capacity_pressure": metrics["prefill_capacity_pressure"],
+        "replay_retained_prefill_fraction": metrics["replay_retained_prefill_fraction"],
+        "state_transfer_retained_prefill_fraction": metrics["state_transfer_retained_prefill_fraction"],
         "repair_move_count": len(moves),
         "repair_move_summary": _move_summary(moves),
     }
 
 
-def _empty_queue_row(policy, shed_fraction, slack_multiplier, shed_target):
+def _empty_queue_row(policy, retained_prefill_fraction, deadline_scale, retained_prefill_target_s):
     return {
         "policy": policy,
-        "shed_fraction": shed_fraction,
-        "slack_multiplier": slack_multiplier,
+        "retained_prefill_fraction": retained_prefill_fraction,
+        "deadline_scale": deadline_scale,
         "status": "INFEASIBLE",
         "safe": False,
-        "rounded_shed_achieved": math.nan,
-        "rounded_shed_target": shed_target,
-        "rounded_shed_ratio": math.nan,
+        "rounded_retained_prefill_moved_s": math.nan,
+        "rounded_retained_prefill_target_s": retained_prefill_target_s,
+        "rounded_retained_prefill_ratio": math.nan,
         "mean_delay": math.nan,
         "p50_delay": math.nan,
         "p95_delay": math.nan,
         "p99_delay": math.nan,
         "p95_normalized_delay": math.nan,
         "miss_rate": math.nan,
-        "max_net_busy": math.nan,
-        "max_prefill_busy": math.nan,
-        "replay_shed_frac": math.nan,
-        "state_shed_frac": math.nan,
+        "drain_window_s": DRAIN_WINDOW_S,
+        "retained_prefill_removal_rate_s_per_s": math.nan,
+        "drain_completion_s": math.nan,
+        "network_capacity_pressure": math.nan,
+        "prefill_capacity_pressure": math.nan,
+        "replay_retained_prefill_fraction": math.nan,
+        "state_transfer_retained_prefill_fraction": math.nan,
         "repair_move_count": 0,
         "repair_move_summary": "",
     }
@@ -610,7 +690,7 @@ def _empty_queue_row(policy, shed_fraction, slack_multiplier, shed_target):
 
 def _safe(metrics):
     return (
-        metrics["rounded_shed_achieved"] >= metrics["rounded_shed_target"] - 1e-9
+        metrics["rounded_retained_prefill_moved_s"] >= metrics["rounded_retained_prefill_target_s"] - 1e-9
         and metrics["deadline_miss_rate"] <= 0.01
         and metrics["p95_normalized_reconstruction_delay"] <= 1.0
     )
@@ -635,13 +715,13 @@ def _move_summary(moves):
     )
 
 
-def _failure_breakdown_rows(policy, problem, shed_fraction, slack_multiplier, status, trace):
+def _failure_breakdown_rows(policy, problem, retained_prefill_fraction, deadline_scale, status, trace):
     if not trace:
         return [
             {
                 "policy": policy,
-                "shed_fraction": shed_fraction,
-                "slack_multiplier": slack_multiplier,
+                "retained_prefill_fraction": retained_prefill_fraction,
+                "deadline_scale": deadline_scale,
                 "status": status,
                 "group_type": "all",
                 "group": status,
@@ -670,8 +750,8 @@ def _failure_breakdown_rows(policy, problem, shed_fraction, slack_multiplier, st
             rows.append(
                 _breakdown_row(
                     policy,
-                    shed_fraction,
-                    slack_multiplier,
+                    retained_prefill_fraction,
+                    deadline_scale,
                     status,
                     group_type,
                     group,
@@ -681,12 +761,12 @@ def _failure_breakdown_rows(policy, problem, shed_fraction, slack_multiplier, st
     return rows
 
 
-def _breakdown_row(policy, shed_fraction, slack_multiplier, status, group_type, group, records):
+def _breakdown_row(policy, retained_prefill_fraction, deadline_scale, status, group_type, group, records):
     missed = tuple(record for record in records if record.deadline_missed)
     return {
         "policy": policy,
-        "shed_fraction": shed_fraction,
-        "slack_multiplier": slack_multiplier,
+        "retained_prefill_fraction": retained_prefill_fraction,
+        "deadline_scale": deadline_scale,
         "status": status,
         "group_type": group_type,
         "group": group,
@@ -704,10 +784,10 @@ def _mean(values):
     return 0.0 if not values else float(np.mean(values))
 
 
-def _summary_row(shed_fraction, slack_multiplier, original, repair):
+def _summary_row(retained_prefill_fraction, deadline_scale, original, repair):
     return {
-        "shed_fraction": shed_fraction,
-        "slack_multiplier": slack_multiplier,
+        "retained_prefill_fraction": retained_prefill_fraction,
+        "deadline_scale": deadline_scale,
         "original_miss_rate": original["deadline_miss_rate"],
         "repaired_miss_rate": repair.metrics["deadline_miss_rate"],
         "original_p95_delay": original["p95_reconstruction_delay"],
@@ -723,11 +803,11 @@ def _summary_row(shed_fraction, slack_multiplier, original, repair):
 def _print_repair_summary(rows):
     print("\nconvex-rounded local repair summary")
     if not rows:
-        print("no feasible CVXPY-rounded rows to repair")
+        print(f"no feasible {MAIN_POLICY} rows to repair")
         return
     cols = (
-        "slack_multiplier",
-        "shed_fraction",
+        "deadline_scale",
+        "retained_prefill_fraction",
         "original_miss_rate",
         "repaired_miss_rate",
         "original_p95_delay",
@@ -742,15 +822,15 @@ def _print_repair_summary(rows):
         print(" | ".join(_fmt(row[col]).ljust(widths[col]) for col in cols))
 
 
-def _print_half_slack_latex(rows):
-    print("\n0.5x slack miss-rate repair table (LaTeX)")
+def _print_half_deadline_latex(rows):
+    print("\n0.5x deadline miss-rate repair table (LaTeX)")
     print("\\begin{tabular}{rrrr}")
-    print("shed fraction & original miss & repaired miss & repair moves \\\\")
+    print("retained-prefill fraction & original miss & repaired miss & repair moves \\\\")
     print("\\hline")
     for row in rows:
-        if row["slack_multiplier"] == 0.50:
+        if row["deadline_scale"] == 0.50:
             print(
-                f"{row['shed_fraction']:.2f} & "
+                f"{row['retained_prefill_fraction']:.2f} & "
                 f"{row['original_miss_rate']:.4f} & "
                 f"{row['repaired_miss_rate']:.4f} & "
                 f"{row['repair_moves']} \\\\"

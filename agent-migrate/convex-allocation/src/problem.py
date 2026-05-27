@@ -8,13 +8,13 @@ from catalog import ModelParams
 from workload import generate_workload
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, init=False)
 class ProblemData:
     model: ModelParams
     regime: str
     T: np.ndarray
     d: np.ndarray
-    slack: np.ndarray
+    deadline_s: np.ndarray
     lambda_Bps: np.ndarray
     rho_prefill: np.ndarray
     C_net: np.ndarray
@@ -23,8 +23,67 @@ class ProblemData:
     ell_prefill: np.ndarray
     h_ctx: np.ndarray
     h_kv: np.ndarray
-    B_shed: float
+    retained_prefill_target_s: float
     w: float = 1.0
+
+    def __init__(
+        self,
+        model: ModelParams,
+        regime: str,
+        T: np.ndarray,
+        d: np.ndarray,
+        deadline_s: np.ndarray | None = None,
+        lambda_Bps: np.ndarray | None = None,
+        rho_prefill: np.ndarray | None = None,
+        C_net: np.ndarray | None = None,
+        C_prefill: np.ndarray | None = None,
+        ell_net: np.ndarray | None = None,
+        ell_prefill: np.ndarray | None = None,
+        h_ctx: np.ndarray | None = None,
+        h_kv: np.ndarray | None = None,
+        retained_prefill_target_s: float | None = None,
+        w: float = 1.0,
+    ) -> None:
+        if deadline_s is None or retained_prefill_target_s is None:
+            raise ValueError("deadline_s and retained_prefill_target_s are required")
+        values = {
+            "model": model,
+            "regime": regime,
+            "T": T,
+            "d": d,
+            "deadline_s": deadline_s,
+            "lambda_Bps": lambda_Bps,
+            "rho_prefill": rho_prefill,
+            "C_net": C_net,
+            "C_prefill": C_prefill,
+            "ell_net": ell_net,
+            "ell_prefill": ell_prefill,
+            "h_ctx": h_ctx,
+            "h_kv": h_kv,
+            "retained_prefill_target_s": retained_prefill_target_s,
+            "w": w,
+        }
+        missing = [key for key, value in values.items() if value is None]
+        if missing:
+            raise ValueError(f"missing ProblemData fields: {missing}")
+        array_fields = {
+            "T",
+            "d",
+            "deadline_s",
+            "lambda_Bps",
+            "rho_prefill",
+            "C_net",
+            "C_prefill",
+            "ell_net",
+            "ell_prefill",
+            "h_ctx",
+            "h_kv",
+        }
+        for key, value in values.items():
+            if key in array_fields:
+                value = np.array(value, dtype=float, copy=True)
+                value.setflags(write=False)
+            object.__setattr__(self, key, value)
 
     @property
     def G(self) -> int:
@@ -41,40 +100,43 @@ class ProblemData:
 
 WORKLOAD_T = np.array([512, 2048, 8192, 32768, 100000, 200000], dtype=float)
 WORKLOAD_D = np.array([200, 150, 100, 50, 20, 10], dtype=float)
-WORKLOAD_SLACK = np.array([2, 10, 30, 60, 120, 300], dtype=float)
+WORKLOAD_DEADLINE_S = np.array([2, 10, 30, 60, 120, 300], dtype=float)
 
 
 def make_problem(
     model: ModelParams,
     regime: str,
-    shed_fraction: float = 0.4,
-    slack_multiplier: float = 1.0,
+    retained_prefill_fraction: float = 0.4,
+    deadline_scale: float = 1.0,
     w: float = 1.0,
-    window_s: float = 60.0,
+    window_s: float = 1800.0,
     gpu_count: np.ndarray | None = None,
-    workload_source: str = "fixed",
-    workload_seed: int | None = None,
-    workload_jobs: int = 1000,
-    workload_classes: int = 12,
-    workload_profile: str = "shed_event_long_context",
+    workload_source: str = "generated",
+    workload_seed: int | None = 7,
+    workload_jobs: int = 10_000,
+    workload_classes: int = 48,
+    workload_profile: str = "agentic_retained_sessions",
 ) -> ProblemData:
     if workload_source == "fixed":
         T = WORKLOAD_T.copy()
         d = WORKLOAD_D.copy()
-        slack = WORKLOAD_SLACK.copy() * slack_multiplier
+        deadline_s = WORKLOAD_DEADLINE_S.copy() * deadline_scale
         h_ctx = np.zeros((T.size, 3))
         h_kv = np.zeros((T.size, 3))
     elif workload_source == "generated":
         workload = generate_workload(3, workload_seed, workload_jobs, workload_classes, workload_profile)
         T = workload.T
         d = workload.d
-        slack = workload.slack * slack_multiplier
+        deadline_s = workload.deadline_s * deadline_scale
         h_ctx = workload.h_ctx
         h_kv = workload.h_kv
     else:
         raise ValueError(f"unknown workload source: {workload_source}")
     default_gpu_count = gpu_count is None
-    gpu_count = np.array([8.0, 8.0, 8.0]) if default_gpu_count else np.asarray(gpu_count, dtype=float)
+    if default_gpu_count:
+        gpu_count = np.full(3, 72.0 if workload_source == "generated" else 8.0)
+    else:
+        gpu_count = np.asarray(gpu_count, dtype=float)
 
     if regime == "bandwidth-spread":
         lambda_gbps = np.array([1.0, 10.0, 100.0])
@@ -95,7 +157,7 @@ def make_problem(
         if model.name != "GLM-5":
             raise ValueError("transition-coupled is calibrated for GLM-5")
         if default_gpu_count:
-            gpu_count = np.array([2.0, 2.0, 2.0])
+            gpu_count = np.array([1.0, 1.0, 1.0]) if workload_source == "generated" else np.array([2.0, 2.0, 2.0])
         lambda_gbps = np.array([4.0, 6.0, 9.0])
         net_frac = np.array([0.35, 0.35, 0.35])
         prefill_frac = np.array([0.45, 0.45, 0.45])
@@ -113,13 +175,13 @@ def make_problem(
     C_prefill = rho_prefill * window_s
     ell_net = net_frac * C_net
     ell_prefill = prefill_frac * C_prefill
-    B_shed = shed_fraction * float(np.dot(T / model.prefill_tok_s, d))
+    retained_prefill_target_s = retained_prefill_fraction * float(np.dot(T / model.prefill_tok_s, d))
     return ProblemData(
         model=model,
         regime=regime,
         T=T,
         d=d,
-        slack=slack,
+        deadline_s=deadline_s,
         lambda_Bps=lambda_Bps,
         rho_prefill=rho_prefill,
         C_net=C_net,
@@ -128,8 +190,28 @@ def make_problem(
         ell_prefill=ell_prefill,
         h_ctx=h_ctx.copy(),
         h_kv=h_kv.copy(),
-        B_shed=B_shed,
+        retained_prefill_target_s=retained_prefill_target_s,
         w=w,
+    )
+
+
+def with_retained_prefill_fraction(problem: ProblemData, fraction: float) -> ProblemData:
+    return ProblemData(
+        model=problem.model,
+        regime=problem.regime,
+        T=problem.T,
+        d=problem.d,
+        deadline_s=problem.deadline_s,
+        lambda_Bps=problem.lambda_Bps,
+        rho_prefill=problem.rho_prefill,
+        C_net=problem.C_net,
+        C_prefill=problem.C_prefill,
+        ell_net=problem.ell_net,
+        ell_prefill=problem.ell_prefill,
+        h_ctx=problem.h_ctx,
+        h_kv=problem.h_kv,
+        retained_prefill_target_s=fraction * float(np.dot(problem.tau, problem.d)),
+        w=problem.w,
     )
 
 

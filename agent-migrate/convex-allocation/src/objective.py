@@ -3,13 +3,13 @@ from __future__ import annotations
 import numpy as np
 
 from coefficients import Coefficients, move_view
-from metrics import resource_loads, shed_achieved
+from metrics import capacity_loads, retained_prefill_moved_s
 from problem import ProblemData
 
 
 def objective(problem: ProblemData, coeffs: Coefficients, y: np.ndarray) -> float:
     x = move_view(y, problem)
-    L_net, L_prefill = resource_loads(problem, coeffs, y)
+    L_net, L_prefill = capacity_loads(problem, coeffs, y)
     if np.any(L_net / problem.C_net >= 1.0) or np.any(L_prefill / problem.C_prefill >= 1.0):
         return float("inf")
     risk = float(np.sum(coeffs.q * x))
@@ -19,7 +19,7 @@ def objective(problem: ProblemData, coeffs: Coefficients, y: np.ndarray) -> floa
 
 
 def objective_gradient(problem: ProblemData, coeffs: Coefficients, y: np.ndarray) -> np.ndarray:
-    L_net, L_prefill = resource_loads(problem, coeffs, y)
+    L_net, L_prefill = capacity_loads(problem, coeffs, y)
     if np.any(L_net >= problem.C_net) or np.any(L_prefill >= problem.C_prefill):
         raise ValueError("gradient requested outside the barrier domain")
     grad_move = (
@@ -33,7 +33,7 @@ def objective_gradient(problem: ProblemData, coeffs: Coefficients, y: np.ndarray
 
 
 def penalized_objective(problem: ProblemData, coeffs: Coefficients, y: np.ndarray, alpha: float) -> float:
-    return objective(problem, coeffs, y) - alpha * shed_achieved(problem, y)
+    return objective(problem, coeffs, y) - alpha * retained_prefill_moved_s(problem, y)
 
 
 def penalized_gradient(problem: ProblemData, coeffs: Coefficients, y: np.ndarray, alpha: float) -> np.ndarray:
@@ -43,7 +43,7 @@ def penalized_gradient(problem: ProblemData, coeffs: Coefficients, y: np.ndarray
 
 
 def lagrangian_value(problem: ProblemData, coeffs: Coefficients, y: np.ndarray, dual: float) -> float:
-    return penalized_objective(problem, coeffs, y, dual) + dual * problem.B_shed
+    return penalized_objective(problem, coeffs, y, dual) + dual * problem.retained_prefill_target_s
 
 
 def lagrangian_gradient(problem: ProblemData, coeffs: Coefficients, y: np.ndarray, dual: float) -> np.ndarray:

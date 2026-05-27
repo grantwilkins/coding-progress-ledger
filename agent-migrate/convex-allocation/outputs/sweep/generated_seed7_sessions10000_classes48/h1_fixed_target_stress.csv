@@ -1,0 +1,6 @@
+policy,drain_window_s,retained_prefill_fraction,release_policy,target_moved_fraction,network_capacity_pressure,prefill_capacity_pressure,absolute_p95_delay_over_deadline,absolute_deadline_miss_rate,verdict
+Deadline-aware,20.0,0.25,edf,nan,nan,nan,nan,nan,Pass
+Online queue,20.0,0.25,edf,0.009042647165567455,0.9761552020665648,0.9028319123764708,3.091711728952657,0.8823529411764706,Target shortfall
+Least loaded,20.0,0.25,edf,0.00934212094084069,0.9622185582713196,0.9051177257693068,2.8257418528361247,0.9056603773584906,Target shortfall
+Replay only,20.0,0.25,edf,0.015268706184368134,nan,nan,nan,nan,Target shortfall
+State only,20.0,0.25,edf,0.009351611377594082,nan,nan,nan,nan,Target shortfall

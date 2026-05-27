@@ -9,7 +9,7 @@ class ModelParams:
     beta_bytes_per_tok: float
     eta_bytes_per_tok: float
     prefill_tok_s: float
-    published_crossover_gbps: float
+    reference_crossover_gbps: float
 
     @property
     def crossover_gbps(self) -> float:

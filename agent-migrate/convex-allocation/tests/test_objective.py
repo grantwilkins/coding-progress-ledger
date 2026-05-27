@@ -1,14 +1,14 @@
 """
 Claim:
 The convex allocation objective implements the stated replay/state resource costs,
-barrier domain, Lagrangian shed sign, and per-request crossover units.
+barrier domain, Lagrangian retained-prefill sign, and per-request crossover units.
 
 Plausible wrong implementations:
 - Use bits where bytes are required, or omit the beta correction in the crossover.
 - Collapse context-prefix locality and KV-state locality into one coefficient.
 - Clip the log-barrier domain and return finite objectives for infeasible loads.
-- Put the shed multiplier on the wrong sign in the Lagrangian gradient.
-- Report destination allocation with request weights instead of shed weights.
+- Put the retained-prefill multiplier on the wrong sign in the Lagrangian gradient.
+- Report destination allocation with request weights instead of retained-prefill weights.
 """
 
 from __future__ import annotations
@@ -19,7 +19,7 @@ from numpy.testing import assert_allclose
 from catalog import ModelParams, catalog_models
 from coefficients import REPLAY, STATE, compute_coefficients
 from cvxpy_solver import solve_cvxpy
-from metrics import shed_action_mix, shed_destination_mix
+from metrics import retained_prefill_action_mix, retained_prefill_destination_mix
 from objective import lagrangian_gradient, lagrangian_value, objective, objective_gradient
 from problem import ProblemData
 
@@ -32,7 +32,7 @@ def one_dest_problem(model: ModelParams, lambda_Bps: float) -> ProblemData:
         regime="isolated",
         T=T,
         d=d,
-        slack=np.array([1.0]),
+        deadline_s=np.array([1.0]),
         lambda_Bps=np.array([lambda_Bps]),
         rho_prefill=np.array([model.prefill_tok_s]),
         C_net=np.array([1e30]),
@@ -41,13 +41,13 @@ def one_dest_problem(model: ModelParams, lambda_Bps: float) -> ProblemData:
         ell_prefill=np.array([0.0]),
         h_ctx=np.zeros((1, 1)),
         h_kv=np.zeros((1, 1)),
-        B_shed=float(T[0] / model.prefill_tok_s),
+        retained_prefill_target_s=float(T[0] / model.prefill_tok_s),
     )
 
 
 def test_catalog_crossovers_round_trip_from_units():
     for model in catalog_models():
-        rel_err = abs(model.crossover_gbps - model.published_crossover_gbps) / model.published_crossover_gbps
+        rel_err = abs(model.crossover_gbps - model.reference_crossover_gbps) / model.reference_crossover_gbps
         assert rel_err < 0.03
 
 
@@ -58,7 +58,7 @@ def test_coefficients_keep_context_and_kv_locality_separate():
         regime="toy",
         T=np.array([10.0]),
         d=np.array([1.0]),
-        slack=np.array([2.0]),
+        deadline_s=np.array([2.0]),
         lambda_Bps=np.array([50.0]),
         rho_prefill=np.array([25.0]),
         C_net=np.array([1e6]),
@@ -67,7 +67,7 @@ def test_coefficients_keep_context_and_kv_locality_separate():
         ell_prefill=np.array([0.0]),
         h_ctx=np.array([[0.25]]),
         h_kv=np.array([[0.50]]),
-        B_shed=0.0,
+        retained_prefill_target_s=0.0,
     )
     coeffs = compute_coefficients(problem)
     assert coeffs.b_net[0, 0, REPLAY] == 4.0 * 10.0 * 0.75
@@ -85,7 +85,7 @@ def test_objective_returns_inf_at_capacity_boundary():
         regime="toy",
         T=np.array([10.0]),
         d=np.array([1.0]),
-        slack=np.array([1.0]),
+        deadline_s=np.array([1.0]),
         lambda_Bps=np.array([100.0]),
         rho_prefill=np.array([100.0]),
         C_net=np.array([40.0]),
@@ -94,21 +94,21 @@ def test_objective_returns_inf_at_capacity_boundary():
         ell_prefill=np.array([0.0]),
         h_ctx=np.zeros((1, 1)),
         h_kv=np.zeros((1, 1)),
-        B_shed=0.0,
+        retained_prefill_target_s=0.0,
     )
     coeffs = compute_coefficients(problem)
     assert np.isfinite(objective(problem, coeffs, np.array([[0.5, 0.0, 0.5]])))
     assert objective(problem, coeffs, np.array([[1.0, 0.0, 0.0]])) == float("inf")
 
 
-def test_shed_action_mix_is_tau_weighted_not_request_weighted():
+def test_retained_prefill_action_mix_is_tau_weighted_not_request_weighted():
     model = ModelParams("toy", 4.0, 100.0, 10.0, 0.0)
     problem = ProblemData(
         model=model,
         regime="toy",
         T=np.array([10.0, 100.0]),
         d=np.array([1.0, 1.0]),
-        slack=np.ones(2),
+        deadline_s=np.ones(2),
         lambda_Bps=np.array([1_000.0]),
         rho_prefill=np.array([1_000.0]),
         C_net=np.array([1e9]),
@@ -117,20 +117,20 @@ def test_shed_action_mix_is_tau_weighted_not_request_weighted():
         ell_prefill=np.array([0.0]),
         h_ctx=np.zeros((2, 1)),
         h_kv=np.zeros((2, 1)),
-        B_shed=0.0,
+        retained_prefill_target_s=0.0,
     )
-    mix = shed_action_mix(problem, np.array([[1.0, 0.0, 0.0], [0.0, 1.0, 0.0]]))
-    assert_allclose([mix["replay_shed_frac"], mix["state_shed_frac"]], [1 / 11, 10 / 11])
+    mix = retained_prefill_action_mix(problem, np.array([[1.0, 0.0, 0.0], [0.0, 1.0, 0.0]]))
+    assert_allclose([mix["replay_retained_prefill_fraction"], mix["state_transfer_retained_prefill_fraction"]], [1 / 11, 10 / 11])
 
 
-def test_shed_destination_mix_is_tau_weighted_not_request_weighted():
+def test_retained_prefill_destination_mix_is_tau_weighted_not_request_weighted():
     model = ModelParams("toy", 4.0, 100.0, 10.0, 0.0)
     problem = ProblemData(
         model=model,
         regime="toy",
         T=np.array([10.0, 100.0]),
         d=np.array([1.0, 1.0]),
-        slack=np.ones(2),
+        deadline_s=np.ones(2),
         lambda_Bps=np.array([1_000.0, 1_000.0]),
         rho_prefill=np.array([1_000.0, 1_000.0]),
         C_net=np.array([1e9, 1e9]),
@@ -139,9 +139,9 @@ def test_shed_destination_mix_is_tau_weighted_not_request_weighted():
         ell_prefill=np.array([0.0, 0.0]),
         h_ctx=np.zeros((2, 2)),
         h_kv=np.zeros((2, 2)),
-        B_shed=0.0,
+        retained_prefill_target_s=0.0,
     )
-    mix = shed_destination_mix(
+    mix = retained_prefill_destination_mix(
         problem,
         np.array([[1.0, 0.0, 0.0, 0.0, 0.0], [0.0, 0.0, 1.0, 0.0, 0.0]]),
     )
@@ -156,7 +156,7 @@ def test_objective_and_lagrangian_gradients_match_finite_difference():
         regime="grad",
         T=np.array([30.0, 70.0]),
         d=np.array([3.0, 2.0]),
-        slack=np.array([2.0, 5.0]),
+        deadline_s=np.array([2.0, 5.0]),
         lambda_Bps=np.array([2_000.0, 5_000.0]),
         rho_prefill=np.array([400.0, 600.0]),
         C_net=np.array([1e7, 1e7]),
@@ -165,7 +165,7 @@ def test_objective_and_lagrangian_gradients_match_finite_difference():
         ell_prefill=np.array([30.0, 40.0]),
         h_ctx=np.array([[0.0, 0.2], [0.3, 0.1]]),
         h_kv=np.array([[0.4, 0.1], [0.0, 0.2]]),
-        B_shed=1.0,
+        retained_prefill_target_s=1.0,
     )
     coeffs = compute_coefficients(problem)
     y = rng.uniform(0.05, 0.2, size=(problem.G, coeffs.M + 1))

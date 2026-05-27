@@ -12,7 +12,7 @@ Core modules:
 - `empirical_bayes.py`: empirical final-unit lookup and evaluation artifacts.
 - `belief_tracker.py`: replayable live final-work belief tracker over empirical-Bayes and GBM predictions.
 - `progress_label_audit.py`: read-only audit for opened-unit progress as a remaining-work label.
-- `together_replay_ensemble.py`: Together replay ensemble for one observer model over the original task prompt and observed work prefix.
+- `together_replay_ensemble.py`: Together multi-model replay for seconds-left estimates over the original task prompt and observed work prefix.
 - `cli.py`: cache, preprocessing, annotation, diagnostics, and empirical-Bayes commands.
 
 Readers should fail loudly on malformed source structure and must not use hidden thoughts as evidence.

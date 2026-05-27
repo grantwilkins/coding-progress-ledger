@@ -6,7 +6,13 @@ import cvxpy as cp
 import numpy as np
 
 from coefficients import REPLAY, Coefficients, compute_coefficients
-from metrics import assert_feasible, shed_achieved
+from metrics import (
+    assert_feasible,
+    available_rates,
+    deadline_overrun_summary,
+    deadline_load_ratios,
+    retained_prefill_moved_s,
+)
 from objective import objective
 from problem import ProblemData
 
@@ -16,6 +22,7 @@ class SolverResult:
     y: np.ndarray
     objective: float
     status: str
+    diagnostics: dict[str, float] | None = None
 
 
 def solve_cvxpy(problem: ProblemData, eps: float = 1e-6) -> SolverResult:
@@ -25,7 +32,7 @@ def solve_cvxpy(problem: ProblemData, eps: float = 1e-6) -> SolverResult:
     x = y[:, :M]
     constraints = [
         cp.sum(y, axis=1) == problem.d,
-        problem.tau @ cp.sum(x, axis=1) >= problem.B_shed,
+        problem.tau @ cp.sum(x, axis=1) >= problem.retained_prefill_target_s,
     ]
 
     terms = [cp.sum(cp.multiply(coeffs.q_flat, x))]
@@ -59,7 +66,7 @@ def solve_cvxpy(problem: ProblemData, eps: float = 1e-6) -> SolverResult:
             y_value = np.maximum(np.asarray(y.value, dtype=float), 0.0)
             y_value *= (problem.d / np.sum(y_value, axis=1))[:, None]
             obj = objective(problem, coeffs, y_value)
-            assert_feasible(problem, coeffs, y_value, shed_tol=1e-5)
+            assert_feasible(problem, coeffs, y_value, target_tol=1e-5)
             return SolverResult(y_value, obj, prob.status)
         except (cp.SolverError, AssertionError, RuntimeError) as exc:
             last_error = exc
@@ -69,21 +76,24 @@ def solve_cvxpy(problem: ProblemData, eps: float = 1e-6) -> SolverResult:
 def solve_deadline_aware_cvxpy(
     problem: ProblemData,
     deadline_margin: float = 1.0,
-    shed_cap: float | None = None,
+    retained_prefill_cap: float | None = None,
 ) -> SolverResult:
     if deadline_margin <= 0.0:
         raise ValueError("deadline_margin must be positive")
     coeffs = compute_coefficients(problem)
-    lambda_avail, rho_avail = _available_rates(problem)
+    _, lambda_avail, rho_avail = available_rates(problem)
     M = coeffs.M
     y = cp.Variable((problem.G, M + 1), nonneg=True)
     x = y[:, :M]
-    shed = problem.tau @ cp.sum(x, axis=1)
+    retained_prefill = problem.tau @ cp.sum(x, axis=1)
     constraints = [cp.sum(y, axis=1) == problem.d]
-    if shed_cap is not None:
-        constraints.append(shed <= shed_cap)
+    constraints.append(retained_prefill >= problem.retained_prefill_target_s)
+    if retained_prefill_cap is not None:
+        if retained_prefill_cap < problem.retained_prefill_target_s:
+            raise ValueError("retained_prefill_cap must be at least the retained-prefill target")
+        constraints.append(retained_prefill <= retained_prefill_cap)
 
-    slack_thresholds = np.unique(problem.slack)
+    deadline_thresholds = np.unique(problem.deadline_s)
     for k in range(problem.K):
         dest = coeffs.option_dest == k
         replay_dest = dest & (coeffs.option_action == REPLAY)
@@ -93,21 +103,21 @@ def solve_deadline_aware_cvxpy(
             cp.sum(cp.multiply(coeffs.b_prefill_flat * replay_dest[None, :], x))
             <= problem.C_prefill[k] - problem.ell_prefill[k],
         ]
-        for slack in slack_thresholds:
-            classes = problem.slack <= slack
+        for deadline_s in deadline_thresholds:
+            classes = problem.deadline_s <= deadline_s
             constraints += [
                 cp.sum(cp.multiply(coeffs.b_net_flat * classes[:, None] * dest[None, :], x))
-                <= deadline_margin * lambda_avail[k] * slack,
+                <= deadline_margin * lambda_avail[k] * deadline_s,
                 cp.sum(
                     cp.multiply(
                         coeffs.b_prefill_flat * classes[:, None] * replay_dest[None, :],
                         x,
                     )
                 )
-                <= deadline_margin * rho_avail[k] * slack,
+                <= deadline_margin * rho_avail[k] * deadline_s,
             ]
 
-    prob = cp.Problem(cp.Maximize(shed), constraints)
+    prob = cp.Problem(cp.Maximize(retained_prefill), constraints)
     last_error: Exception | None = None
     for solver, kwargs in (
         (cp.CLARABEL, {}),
@@ -119,25 +129,114 @@ def solve_deadline_aware_cvxpy(
                 raise RuntimeError(f"{solver} returned {prob.status}")
             y_value = np.maximum(np.asarray(y.value, dtype=float), 0.0)
             y_value *= (problem.d / np.sum(y_value, axis=1))[:, None]
-            _assert_deadline_feasible(problem, coeffs, y_value, deadline_margin, shed_cap)
-            return SolverResult(y_value, shed_achieved(problem, y_value), prob.status)
+            _assert_deadline_feasible(problem, coeffs, y_value, deadline_margin, retained_prefill_cap)
+            moved = retained_prefill_moved_s(problem, y_value)
+            return SolverResult(
+                y_value,
+                objective(problem, coeffs, y_value),
+                prob.status,
+                {"retained_prefill_moved_s": moved, "retained_prefill_objective_s": moved},
+            )
         except (cp.SolverError, AssertionError, RuntimeError) as exc:
             last_error = exc
     raise RuntimeError(f"deadline-aware CVXPY solve failed: {last_error}")
 
 
-def _available_rates(problem: ProblemData) -> tuple[np.ndarray, np.ndarray]:
-    windows = np.concatenate(
-        [problem.C_net / problem.lambda_Bps, problem.C_prefill / problem.rho_prefill]
-    )
-    if not np.allclose(windows, windows[0]):
-        raise ValueError("resource capacities imply inconsistent windows")
-    H = float(windows[0])
-    lambda_avail = (problem.C_net - problem.ell_net) / H
-    rho_avail = (problem.C_prefill - problem.ell_prefill) / H
-    if np.any(lambda_avail <= 0.0) or np.any(rho_avail <= 0.0):
-        raise ValueError("background load leaves nonpositive service rate")
-    return lambda_avail, rho_avail
+def solve_soft_deadline_cvxpy(
+    problem: ProblemData,
+    deadline_headroom: float = 0.85,
+    overrun_linear_weight: float = 25.0,
+    overrun_quadratic_weight: float = 100.0,
+    eps: float = 1e-6,
+    initial_y: np.ndarray | None = None,
+) -> SolverResult:
+    if deadline_headroom <= 0.0:
+        raise ValueError("deadline_headroom must be positive")
+    coeffs = compute_coefficients(problem)
+    _, lambda_avail, rho_avail = available_rates(problem)
+    deadlines = np.unique(problem.deadline_s)
+    M = coeffs.M
+    y = cp.Variable((problem.G, M + 1), nonneg=True)
+    x = y[:, :M]
+    overrun_net = cp.Variable((problem.K, deadlines.size), nonneg=True)
+    overrun_prefill = cp.Variable((problem.K, deadlines.size), nonneg=True)
+    constraints = [
+        cp.sum(y, axis=1) == problem.d,
+        problem.tau @ cp.sum(x, axis=1) >= problem.retained_prefill_target_s,
+    ]
+    terms = [cp.sum(cp.multiply(coeffs.q_flat, x))]
+
+    for k in range(problem.K):
+        dest = coeffs.option_dest == k
+        replay_dest = dest & (coeffs.option_action == REPLAY)
+        u_net = problem.ell_net[k] / problem.C_net[k] + cp.sum(
+            cp.multiply(coeffs.b_net_flat[:, dest] / problem.C_net[k], x[:, dest])
+        )
+        u_prefill = problem.ell_prefill[k] / problem.C_prefill[k] + cp.sum(
+            cp.multiply(coeffs.b_prefill_flat[:, replay_dest] / problem.C_prefill[k], x[:, replay_dest])
+        )
+        constraints += [u_net <= 1.0 - eps, u_prefill <= 1.0 - eps]
+        terms += [-problem.w * cp.log(1.0 - u_net), -problem.w * cp.log(1.0 - u_prefill)]
+        for j, deadline_s in enumerate(deadlines):
+            classes = problem.deadline_s <= deadline_s
+            net_ratio = cp.sum(
+                cp.multiply(
+                    coeffs.b_net_flat * classes[:, None] * dest[None, :],
+                    x,
+                )
+            ) / (lambda_avail[k] * deadline_s)
+            prefill_ratio = cp.sum(
+                cp.multiply(
+                    coeffs.b_prefill_flat * classes[:, None] * replay_dest[None, :],
+                    x,
+                )
+            ) / (rho_avail[k] * deadline_s)
+            constraints += [
+                net_ratio <= deadline_headroom + overrun_net[k, j],
+                prefill_ratio <= deadline_headroom + overrun_prefill[k, j],
+            ]
+
+    n_overrun = 2 * problem.K * deadlines.size
+    terms += [
+        overrun_linear_weight * (cp.sum(overrun_net) + cp.sum(overrun_prefill)) / n_overrun,
+        overrun_quadratic_weight
+        * (cp.sum_squares(overrun_net) + cp.sum_squares(overrun_prefill))
+        / n_overrun,
+    ]
+    prob = cp.Problem(cp.Minimize(sum(terms)), constraints)
+    if initial_y is not None:
+        if initial_y.shape != (problem.G, M + 1):
+            raise ValueError("initial_y has wrong shape")
+        y.value = np.maximum(np.asarray(initial_y, dtype=float), 0.0)
+    last_error: Exception | None = None
+    for solver, kwargs in (
+        (cp.CLARABEL, {}),
+        (cp.SCS, {"eps": 1e-6, "max_iters": 100_000}),
+    ):
+        try:
+            prob.solve(solver=solver, warm_start=initial_y is not None, **kwargs)
+            if prob.status not in (cp.OPTIMAL, cp.OPTIMAL_INACCURATE) or y.value is None:
+                raise RuntimeError(f"{solver} returned {prob.status}")
+            y_value = np.maximum(np.asarray(y.value, dtype=float), 0.0)
+            y_value *= (problem.d / np.sum(y_value, axis=1))[:, None]
+            assert_feasible(problem, coeffs, y_value, target_tol=1e-5)
+            diagnostics = deadline_overrun_summary(problem, coeffs, y_value, deadline_headroom)
+            _, net_load, prefill_load = deadline_load_ratios(problem, coeffs, y_value)
+            diagnostics.update(
+                {
+                    "deadline_load_max": float(max(np.max(net_load), np.max(prefill_load))),
+                    "deadline_headroom": deadline_headroom,
+                    "deadline_overrun_linear_weight": overrun_linear_weight,
+                    "deadline_overrun_quadratic_weight": overrun_quadratic_weight,
+                    "retained_prefill_moved_s": retained_prefill_moved_s(problem, y_value),
+                    "retained_prefill_target_s": problem.retained_prefill_target_s,
+                }
+            )
+            diagnostics["soft_deadline_problem_value"] = float(prob.value)
+            return SolverResult(y_value, objective(problem, coeffs, y_value), prob.status, diagnostics)
+        except (cp.SolverError, AssertionError, RuntimeError) as exc:
+            last_error = exc
+    raise RuntimeError(f"deadline-penalty CVXPY solve failed: {last_error}")
 
 
 def _assert_deadline_feasible(
@@ -145,16 +244,18 @@ def _assert_deadline_feasible(
     coeffs: Coefficients,
     y: np.ndarray,
     deadline_margin: float,
-    shed_cap: float | None,
+    retained_prefill_cap: float | None,
 ) -> None:
     if not np.all(y >= -1e-8):
         raise AssertionError("allocation has negative entries")
     if not np.allclose(np.sum(y, axis=1), problem.d, atol=1e-5):
         raise AssertionError("allocation rows do not sum to class demand")
-    if shed_cap is not None and shed_achieved(problem, y) > shed_cap + 1e-5:
-        raise AssertionError("shed cap exceeded")
+    if retained_prefill_moved_s(problem, y) < problem.retained_prefill_target_s - 1e-5:
+        raise AssertionError("retained-prefill target not met")
+    if retained_prefill_cap is not None and retained_prefill_moved_s(problem, y) > retained_prefill_cap + 1e-5:
+        raise AssertionError("retained-prefill cap exceeded")
     x = y[:, : coeffs.M]
-    lambda_avail, rho_avail = _available_rates(problem)
+    _, lambda_avail, rho_avail = available_rates(problem)
     for k in range(problem.K):
         dest = coeffs.option_dest == k
         replay_dest = dest & (coeffs.option_action == REPLAY)
@@ -166,18 +267,18 @@ def _assert_deadline_feasible(
             np.sum(coeffs.b_prefill_flat[:, replay_dest] * x[:, replay_dest]),
             problem.C_prefill[k] - problem.ell_prefill[k],
         )
-        for slack in np.unique(problem.slack):
-            classes = problem.slack <= slack
+        for deadline_s in np.unique(problem.deadline_s):
+            classes = problem.deadline_s <= deadline_s
             _assert_leq(
                 np.sum(coeffs.b_net_flat[np.ix_(classes, dest)] * x[np.ix_(classes, dest)]),
-                deadline_margin * lambda_avail[k] * slack,
+                deadline_margin * lambda_avail[k] * deadline_s,
             )
             _assert_leq(
                 np.sum(
                     coeffs.b_prefill_flat[np.ix_(classes, replay_dest)]
                     * x[np.ix_(classes, replay_dest)]
                 ),
-                deadline_margin * rho_avail[k] * slack,
+                deadline_margin * rho_avail[k] * deadline_s,
             )
 
 

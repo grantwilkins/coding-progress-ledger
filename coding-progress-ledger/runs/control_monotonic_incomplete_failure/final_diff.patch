@@ -1,6 +1,0 @@
-diff --git a/discounts.py b/discounts.py
---- a/discounts.py
-+++ b/discounts.py
-@@
--return price_cents - percent_off
-+return int(price_cents * (100 - percent_off) / 100)

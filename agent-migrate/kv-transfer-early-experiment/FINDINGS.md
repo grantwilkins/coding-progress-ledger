@@ -35,6 +35,8 @@ Above the crossover bandwidth, ship KV. Below it, replay.
 - Qwen3-Next has the highest crossover because replay is extremely fast.
 - Context length matters: replay has a quadratic attention term, so long contexts
   generally make KV transfer more attractive.
+- `glm5_context_ratio_bandwidths.{png,pdf}` shows the GLM-5 ratio from 1k to
+  10M tokens across 500 linear-spaced 0.1-25 Gbps links.
 
 ## Files
 
@@ -42,4 +44,6 @@ Above the crossover bandwidth, ship KV. Below it, replay.
 - `migration_sweep_corrected.csv`: generated sweep data.
 - `migration_times.{png,pdf}`: transfer vs replay time by model.
 - `crossover_bandwidth.{png,pdf}`: crossover summary.
-- `migration_ratio.py`: ratio plot for the same decision boundary.
+- `migration_ratio.py`: ratio plots for bandwidth and GLM-5 context sweeps.
+- `glm5_context_ratio_bandwidths.{png,pdf}`: GLM-5 TTFT/KV-transfer ratio vs
+  context size across fixed bandwidth lines.
