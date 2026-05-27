@@ -1,9 +1,0 @@
-diff --git a/discounts.py b/discounts.py
-index bdcdeff..c28c43b 100644
---- a/discounts.py
-+++ b/discounts.py
-@@ -1,2 +1,3 @@
- def final_price_cents(price_cents: int, percent_off: int) -> int:
--    return price_cents - percent_off
-+    discount_cents = round(price_cents * percent_off / 100)
-+    return max(price_cents - discount_cents, 1)

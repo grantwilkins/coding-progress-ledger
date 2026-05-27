@@ -1,3 +1,0 @@
-- first item
-- second **bold** item
-- third [linked](https://example.com) item
