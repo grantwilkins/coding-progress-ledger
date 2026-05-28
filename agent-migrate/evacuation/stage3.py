@@ -1,0 +1,136 @@
+"""Stage 3 of the staged evacuation program: minimize worst-class average
+reconstruction cost.
+
+LP form (Section 12, Stage 3 of `formulation.md`):
+
+    min  H
+    s.t. sum_l (x_R[q,l] + x_S[q,l]) + z_q = n_q          (conservation)
+         sum_q z_q == Z*                                    (Stage 1 link)
+         L_i(x) <= C_i                                      (base capacity)
+         L_i(x) <= phi* * C_i                               (Stage 2 ceiling)
+         r_q(x, z) <= H                                     (worst-class)
+         x_R, x_S, z >= 0; H >= 0
+
+with per-class reconstruction cost (Section 11):
+
+    r_q(x, z) = (1/n_q) * [ sum_l (c_R[q,l] x_R[q,l] + c_S[q,l] x_S[q,l])
+                            + d_miss * z_q ]
+
+When the optional `stage2b` is supplied, also enforce
+`0.5 * sum_i p_i(x)^2 <= psi*` (Stage 2b ceiling), which turns the LP into a
+QCP; CLARABEL is used in that case to match `stage2b.py`.
+"""
+
+from __future__ import annotations
+
+from dataclasses import dataclass
+
+import cvxpy as cp
+import numpy as np
+
+from instance import ProblemInstance
+from stage2 import Stage2Result
+from stage2b import Stage2bResult
+
+
+@dataclass(frozen=True)
+class Stage3Result:
+    x_R: np.ndarray
+    x_S: np.ndarray
+    z: np.ndarray
+    Z_star: float
+    phi_star: float
+    H_star: float
+    r_q: np.ndarray
+    status: str
+
+
+def recon_costs(inst: ProblemInstance) -> tuple[np.ndarray, np.ndarray]:
+    """Section 8 per-class unloaded reconstruction times (seconds), (Q, L)."""
+    T, beta, eta, rho = inst.T, inst.beta, inst.eta, inst.rho
+    lam, mu = inst.lambda_bps, inst.mu_ing
+    c_R = (beta * T)[:, None] / lam[None, :] + (T / rho)[:, None]
+    c_S = (eta * T)[:, None] / lam[None, :] + (eta * T)[:, None] / mu
+    return c_R, c_S
+
+
+def solve_stage3(inst: ProblemInstance,
+                 stage2: Stage2Result,
+                 stage2b: Stage2bResult | None = None) -> Stage3Result:
+    Q = inst.T.size
+    L = inst.lambda_bps.size
+    M = len(inst.M_names)
+
+    x_R = cp.Variable((Q, L), nonneg=True)
+    x_S = cp.Variable((Q, L), nonneg=True)
+    z = cp.Variable(Q, nonneg=True)
+    H = cp.Variable(nonneg=True)
+
+    C_net = inst.lambda_bps * inst.D
+    C_pfill = inst.W.T * inst.D
+    C_ing = inst.W.T * inst.mu_ing * inst.D
+
+    S_pfill = np.zeros((M, Q))
+    S_ing = np.zeros((M, Q))
+    for m in range(M):
+        mask = inst.model_idx == m
+        S_pfill[m, mask] = inst.T[mask] / inst.rho[mask]
+        S_ing[m, mask] = inst.eta[mask] * inst.T[mask]
+
+    b_net_R = inst.beta * inst.T
+    b_net_S = inst.eta * inst.T
+
+    L_net = b_net_R @ x_R + b_net_S @ x_S
+    L_pfill = S_pfill @ x_R
+    L_ing = S_ing @ x_S
+
+    inv_C_net = np.where(C_net > 0, 1.0 / np.where(C_net > 0, C_net, 1.0), 0.0)
+    inv_C_pfill = np.where(C_pfill > 0, 1.0 / np.where(C_pfill > 0, C_pfill, 1.0), 0.0)
+    inv_C_ing = np.where(C_ing > 0, 1.0 / np.where(C_ing > 0, C_ing, 1.0), 0.0)
+
+    c_R, c_S = recon_costs(inst)
+    r_expr = (cp.sum(cp.multiply(c_R, x_R), axis=1)
+              + cp.sum(cp.multiply(c_S, x_S), axis=1)
+              + inst.d_miss * z) / inst.n
+
+    phi_ceil = stage2.phi_star + 1e-7  # absorb Stage 2 solver tolerance
+    constraints = [
+        cp.sum(x_R, axis=1) + cp.sum(x_S, axis=1) + z == inst.n,
+        cp.sum(z) == stage2.Z_star,
+        L_net <= C_net,
+        L_pfill <= C_pfill,
+        L_ing <= C_ing,
+        cp.multiply(inv_C_net, L_net) <= phi_ceil,
+        cp.multiply(inv_C_pfill, L_pfill) <= phi_ceil,
+        cp.multiply(inv_C_ing, L_ing) <= phi_ceil,
+        r_expr <= H,
+    ]
+
+    if stage2b is not None:
+        p_net = cp.multiply(inv_C_net, L_net)
+        p_pfill = cp.multiply(inv_C_pfill, L_pfill)
+        p_ing = cp.multiply(inv_C_ing, L_ing)
+        psi_expr = 0.5 * (cp.sum_squares(p_net)
+                          + cp.sum_squares(p_pfill)
+                          + cp.sum_squares(p_ing))
+        constraints.append(psi_expr <= stage2b.psi_star + 1e-7)
+
+    prob = cp.Problem(cp.Minimize(H), constraints)
+    solver = cp.CLARABEL if stage2b is not None else cp.SCIPY
+    prob.solve(solver=solver)
+    if prob.status not in (cp.OPTIMAL, cp.OPTIMAL_INACCURATE):
+        raise RuntimeError(f"Stage 3 solver returned {prob.status}")
+
+    x_R_val = np.maximum(np.asarray(x_R.value, dtype=float), 0.0)
+    x_S_val = np.maximum(np.asarray(x_S.value, dtype=float), 0.0)
+    z_val = np.maximum(np.asarray(z.value, dtype=float), 0.0)
+
+    r_q_val = ((c_R * x_R_val).sum(axis=1)
+               + (c_S * x_S_val).sum(axis=1)
+               + inst.d_miss * z_val) / inst.n
+
+    return Stage3Result(
+        x_R=x_R_val, x_S=x_S_val, z=z_val,
+        Z_star=float(stage2.Z_star), phi_star=float(stage2.phi_star),
+        H_star=float(H.value), r_q=r_q_val, status=prob.status,
+    )
