@@ -8,10 +8,11 @@ QP form (Section 12, Stage 2b of `formulation.md`):
          L_i(x) <= C_i                                      (base capacity)
          x_R, x_S, z >= 0
 
-Formulation departure: the spec's optional `p_i(x) <= phi*` ceiling is
-intentionally dropped, so this is the unconstrained QP minimizer rather than
-a lex tie-breaker over Stage 2. The optimum satisfies the Section 15
-endogenous-crossover KKT identity directly.
+By default this is the unconstrained QP minimizer (the spec's optional
+`p_i(x) <= phi*` ceiling is dropped), so the optimum satisfies the Section
+15 endogenous-crossover KKT identity directly. Pass `stage2=<Stage2Result>`
+to opt in to the formulation Stage 2b: the phi* ceiling is added and the
+result is a lex-3 compatible tie-breaker.
 
 Implementation note: all coefficients are pre-normalized by capacity (so
 each entry is O(1)) before being handed to CVXPY. Without this, CLARABEL
@@ -29,6 +30,7 @@ import numpy as np
 
 from instance import ProblemInstance
 from stage1 import Stage1Result
+from stage2 import Stage2Result
 
 
 @dataclass(frozen=True)
@@ -42,7 +44,9 @@ class Stage2bResult:
     status: str
 
 
-def solve_stage2b(inst: ProblemInstance, stage1: Stage1Result) -> Stage2bResult:
+def solve_stage2b(inst: ProblemInstance,
+                  stage1: Stage1Result,
+                  stage2: Stage2Result | None = None) -> Stage2bResult:
     Q = inst.T.size
     L = inst.lambda_bps.size
     M = len(inst.M_names)
@@ -82,6 +86,11 @@ def solve_stage2b(inst: ProblemInstance, stage1: Stage1Result) -> Stage2bResult:
         p_pfill <= 1,
         p_ing <= 1,
     ]
+    if stage2 is not None:
+        phi_ceil = stage2.phi_star + 1e-7  # absorb Stage 2 solver tolerance
+        constraints += [p_net <= phi_ceil,
+                        p_pfill <= phi_ceil,
+                        p_ing <= phi_ceil]
 
     prob = cp.Problem(cp.Minimize(objective), constraints)
     prob.solve(solver=cp.CLARABEL)
