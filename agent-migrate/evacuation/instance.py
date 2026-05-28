@@ -89,6 +89,7 @@ class ProblemInstance:
     D: float               # deadline seconds
     M_names: tuple[str, ...]
     L_names: tuple[str, ...]
+    d_miss: float = 0.0    # seconds, unmoved-job reconstruction penalty (Section 2.4)
 
 
 def _log_interp(T: np.ndarray, anchor_T: np.ndarray, anchor_rho: np.ndarray) -> np.ndarray:
@@ -97,7 +98,8 @@ def _log_interp(T: np.ndarray, anchor_T: np.ndarray, anchor_rho: np.ndarray) -> 
 
 def build_instance(D: float = D_DEFAULT_S,
                    total_jobs: int = TOTAL_JOBS_DEFAULT,
-                   seed: int = SEED_DEFAULT) -> ProblemInstance:
+                   seed: int = SEED_DEFAULT,
+                   d_miss: float | None = None) -> ProblemInstance:
     rng = np.random.default_rng(seed)
     counts = np.array([round(total_jobs * m.job_fraction) for m in MODELS], dtype=int)
     Q = int(counts.sum())
@@ -124,4 +126,5 @@ def build_instance(D: float = D_DEFAULT_S,
         model_idx=model_idx, T=T, beta=beta, eta=eta, rho=rho, n=np.ones(Q),
         lambda_bps=lambda_bps, W=W, mu_ing=MU_ING_BYTES_PER_S, D=float(D),
         M_names=M_names, L_names=L_names,
+        d_miss=2.0 * float(D) if d_miss is None else float(d_miss),
     )
