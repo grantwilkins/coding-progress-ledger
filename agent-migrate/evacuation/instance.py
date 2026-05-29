@@ -99,31 +99,60 @@ def _log_interp(T: np.ndarray, anchor_T: np.ndarray, anchor_rho: np.ndarray) -> 
 def build_instance(D: float = D_DEFAULT_S,
                    total_jobs: int = TOTAL_JOBS_DEFAULT,
                    seed: int = SEED_DEFAULT,
-                   d_miss: float | None = None) -> ProblemInstance:
+                   d_miss: float | None = None,
+                   rho_scale: float = 1.0,
+                   sigma_scale: float = 1.0,
+                   lambda_scale: float = 1.0,
+                   W: np.ndarray | None = None,
+                   n_bins: int | None = None) -> ProblemInstance:
     rng = np.random.default_rng(seed)
     counts = np.array([round(total_jobs * m.job_fraction) for m in MODELS], dtype=int)
     Q = int(counts.sum())
     model_idx = np.repeat(np.arange(len(MODELS)), counts)
 
     T = np.empty(Q)
-    rho = np.empty(Q)
     for m_i, m in enumerate(MODELS):
         mask = model_idx == m_i
-        T[mask] = np.clip(rng.lognormal(m.lognormal_mu, m.lognormal_sigma, counts[m_i]),
-                          T_MIN, T_MAX)
+        T[mask] = np.clip(rng.lognormal(m.lognormal_mu, m.lognormal_sigma * sigma_scale,
+                                        counts[m_i]), T_MIN, T_MAX)
+
+    # Optional aggregation: merge jobs of one model in a log-T bin into a class
+    # with n_q = count and T = bin mean (exact for T-linear loads). Decouples
+    # solve cost from total_jobs, since Q <= len(MODELS) * n_bins.
+    if n_bins:
+        edges = np.logspace(np.log10(T_MIN), np.log10(T_MAX), n_bins + 1)
+        mi, Tc, nc = [], [], []
+        for m_i in range(len(MODELS)):
+            Tm = T[model_idx == m_i]
+            b = np.clip(np.digitize(Tm, edges) - 1, 0, n_bins - 1)
+            for k in range(n_bins):
+                sel = Tm[b == k]
+                if sel.size:
+                    mi.append(m_i); Tc.append(sel.mean()); nc.append(sel.size)
+        model_idx, T, n = np.array(mi), np.array(Tc), np.array(nc, float)
+    else:
+        n = np.ones(Q)
+
+    rho = np.empty(T.size)
+    for m_i, m in enumerate(MODELS):
+        mask = model_idx == m_i
         rho[mask] = _log_interp(T[mask], m.prefill_anchor_T, m.prefill_anchor_rho)
+    rho *= rho_scale
 
     eta = np.array([MODELS[i].eta_bytes_per_tok for i in model_idx])
     beta = np.array([MODELS[i].beta_bytes_per_tok for i in model_idx])
 
     M_names = tuple(m.name for m in MODELS)
     L_names = tuple(d.name for d in DESTINATIONS)
-    lambda_bps = np.array([d.lambda_bytes_per_s for d in DESTINATIONS])
-    W = np.array([[d.warm_instances[name] for name in M_names] for d in DESTINATIONS],
-                 dtype=float)
+    lambda_bps = np.array([d.lambda_bytes_per_s for d in DESTINATIONS]) * lambda_scale
+    if W is None:
+        W = np.array([[d.warm_instances[name] for name in M_names] for d in DESTINATIONS],
+                     dtype=float)
+    else:
+        W = np.asarray(W, dtype=float)
 
     return ProblemInstance(
-        model_idx=model_idx, T=T, beta=beta, eta=eta, rho=rho, n=np.ones(Q),
+        model_idx=model_idx, T=T, beta=beta, eta=eta, rho=rho, n=n,
         lambda_bps=lambda_bps, W=W, mu_ing=MU_ING_BYTES_PER_S, D=float(D),
         M_names=M_names, L_names=L_names,
         d_miss=2.0 * float(D) if d_miss is None else float(d_miss),
