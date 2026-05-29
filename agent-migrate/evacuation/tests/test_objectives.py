@@ -14,12 +14,15 @@ import numpy as np
 
 from instance import build_instance
 from objective_metrics import evac_fraction
-from stage1 import solve_stage1
+from stage1 import EPS, solve_stage1
 from stage2 import solve_stage2
 
 # Tight deadline so the objectives genuinely diverge (capacity binds).
 INST = build_instance(D=80.0, n_bins=3, total_jobs=2000, seed=1)
 RUNS = {o: solve_stage1(INST, o) for o in ("throughput", "max_min", "prop_fair")}
+# Full-load instance where prop_fair cannot clear everyone, so the two utility
+# weightings (w_q=n_q vs w_q=1) yield genuinely different fairness floors.
+TIGHT = build_instance(D=80.0, n_bins=5)
 
 
 def test_all_objectives_conserve():
@@ -62,3 +65,33 @@ def test_propfair_runs():
     assert u.min() > 1e-6  # no starvation
     # prop_fair total evacuation lies between max_min and throughput
     assert RUNS["max_min"].Z_star >= s1.Z_star - 1e-4 >= RUNS["throughput"].Z_star - 1e-4
+
+
+def _utility(inst, z, weights):
+    w = inst.n if weights == "population" else np.ones_like(inst.n)
+    return float((w * np.log(EPS + 1.0 - z / inst.n)).sum())
+
+
+def test_stage2_preserves_prop_fair_certificate_both_weights():
+    """Stage 2 must hold U(z; w) >= U* - delta with the SAME w Stage 1 used.
+
+    A Stage 2 that hardcodes one weighting enforces a constraint on the wrong
+    scale (class U* ~ -10 vs population U* ~ -1800), turning the other case
+    infeasible -- so merely solving both to optimality already exercises the
+    weight round-trip; the U check pins the certificate value.
+    """
+    for wk in ("population", "class"):
+        s1 = solve_stage1(TIGHT, "prop_fair", wk)
+        s2 = solve_stage2(TIGHT, s1)
+        assert s1.utility_weights == wk and s1.utility_epsilon == EPS
+        np.testing.assert_allclose(s2.z.sum(), s1.Z_star, atol=1e-3)
+        floor = s1.U_star - s1.utility_delta
+        assert _utility(TIGHT, s2.z, wk) >= floor - 1e-6 * abs(s1.U_star)
+
+
+def test_stage2_weight_tag_changes_placement():
+    """Guard against Stage 2 ignoring utility_weights: the two weightings carry
+    different fairness floors, so their pressure-optimal placements must differ."""
+    s2p = solve_stage2(TIGHT, solve_stage1(TIGHT, "prop_fair", "population"))
+    s2c = solve_stage2(TIGHT, solve_stage1(TIGHT, "prop_fair", "class"))
+    assert not np.allclose(s2p.z, s2c.z, atol=1e-3)
