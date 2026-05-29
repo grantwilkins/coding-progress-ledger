@@ -29,10 +29,16 @@ def evac_summary(inst, z):
     u = evac_fraction(inst, z)
     n = inst.n
     evac = float((n - z).sum())
+    # State-aware evacuation: jobs differ by orders of magnitude in context tokens
+    # (T) and KV bytes (eta*T), so weight the evacuated fraction by each.
+    tok = inst.T * n
+    kv = inst.eta * inst.T * n
     return {
         "total_evacuated": evac,
         "total_unmoved": float(z.sum()),
         "evacuated_fraction_total": evac / float(n.sum()),
+        "token_weighted_evacuation": float((inst.T * (n - z)).sum() / tok.sum()),
+        "kv_weighted_evacuation": float((inst.eta * inst.T * (n - z)).sum() / kv.sum()),
         "min_class_evacuated_fraction": float(u.min()),
         "p10_class_evacuated_fraction": float(np.percentile(u, 10)),
         "p50_class_evacuated_fraction": float(np.percentile(u, 50)),
