@@ -8,6 +8,8 @@
       "total_evacuated": 9644.926287271841,
       "total_unmoved": 355.07371272815925,
       "evacuated_fraction_total": 0.9644926287271841,
+      "token_weighted_evacuation": 0.6804261755753668,
+      "kv_weighted_evacuation": 0.4710492377049611,
       "min_class_evacuated_fraction": 0.0,
       "p10_class_evacuated_fraction": 0.3471332955565428,
       "p50_class_evacuated_fraction": 1.0,
@@ -18,6 +20,8 @@
       "total_evacuated": 9644.926287271841,
       "total_unmoved": 355.07371272815925,
       "evacuated_fraction_total": 0.9644926287271841,
+      "token_weighted_evacuation": 0.6804261755753668,
+      "kv_weighted_evacuation": 0.4710492377049611,
       "min_class_evacuated_fraction": 0.0,
       "p10_class_evacuated_fraction": 0.3471332955565428,
       "p50_class_evacuated_fraction": 1.0,
@@ -202,6 +206,8 @@
       "total_evacuated": 4468.541711240981,
       "total_unmoved": 5531.458288759019,
       "evacuated_fraction_total": 0.44685417112409814,
+      "token_weighted_evacuation": 0.4303125727309023,
+      "kv_weighted_evacuation": 0.42908217506691615,
       "min_class_evacuated_fraction": 0.42854309597875306,
       "p10_class_evacuated_fraction": 0.42854309597875306,
       "p50_class_evacuated_fraction": 0.4285430959787531,
@@ -212,6 +218,8 @@
       "total_evacuated": 4468.541711240981,
       "total_unmoved": 5531.4582887590195,
       "evacuated_fraction_total": 0.44685417112409814,
+      "token_weighted_evacuation": 0.43031184099405756,
+      "kv_weighted_evacuation": 0.4290813263290468,
       "min_class_evacuated_fraction": 0.4285421959787531,
       "p10_class_evacuated_fraction": 0.4285421959787531,
       "p50_class_evacuated_fraction": 0.4285421959787531,
@@ -387,7 +395,7 @@
       }
     }
   },
-  "prop_fair": {
+  "prop_fair_pop": {
     "objective": "prop_fair",
     "alpha_star": null,
     "U_star": -826.2804136465609,
@@ -396,6 +404,8 @@
       "total_evacuated": 9571.036875619338,
       "total_unmoved": 428.96312438066394,
       "evacuated_fraction_total": 0.9571036875619339,
+      "token_weighted_evacuation": 0.6354607416293278,
+      "kv_weighted_evacuation": 0.4710492376684314,
       "min_class_evacuated_fraction": 0.07104700844214107,
       "p10_class_evacuated_fraction": 0.2931387741182371,
       "p50_class_evacuated_fraction": 0.9999999999746788,
@@ -406,6 +416,8 @@
       "total_evacuated": 9571.036875619355,
       "total_unmoved": 428.9631243806451,
       "evacuated_fraction_total": 0.9571036875619354,
+      "token_weighted_evacuation": 0.6354607417017321,
+      "kv_weighted_evacuation": 0.4710492376643039,
       "min_class_evacuated_fraction": 0.07104707501330121,
       "p10_class_evacuated_fraction": 0.2931387270161589,
       "p50_class_evacuated_fraction": 0.9999999999823312,
@@ -577,6 +589,204 @@
           "total_state": 106.35623153128093,
           "replay_fraction": 0.009314782927369527,
           "state_fraction": 0.9906852170726305
+        }
+      }
+    }
+  },
+  "prop_fair_cls": {
+    "objective": "prop_fair",
+    "alpha_star": null,
+    "U_star": -5.727124274616092,
+    "Z_star": 588.8378947742173,
+    "evacuation_stage1": {
+      "total_evacuated": 9411.162105225783,
+      "total_unmoved": 588.8378947742173,
+      "evacuated_fraction_total": 0.9411162105225783,
+      "token_weighted_evacuation": 0.6620879515283513,
+      "kv_weighted_evacuation": 0.47104923770485946,
+      "min_class_evacuated_fraction": 0.1279814834854216,
+      "p10_class_evacuated_fraction": 0.492988989411458,
+      "p50_class_evacuated_fraction": 0.9999999999999059,
+      "p90_class_evacuated_fraction": 0.9999999999999255,
+      "num_starved_classes": 0
+    },
+    "evacuation_stage2": {
+      "total_evacuated": 9411.162105230454,
+      "total_unmoved": 588.8378947695462,
+      "evacuated_fraction_total": 0.9411162105230454,
+      "token_weighted_evacuation": 0.6620879515039994,
+      "kv_weighted_evacuation": 0.47104923770887974,
+      "min_class_evacuated_fraction": 0.12798148368137263,
+      "p10_class_evacuated_fraction": 0.49298898943038955,
+      "p50_class_evacuated_fraction": 0.9999999999991769,
+      "p90_class_evacuated_fraction": 0.9999999999993724,
+      "num_starved_classes": 0
+    },
+    "by_bucket": {
+      "1k-4k": {
+        "jobs_total": 2890.0,
+        "jobs_evacuated": 2889.999999999763,
+        "evacuated_fraction": 0.9999999999999181,
+        "mean_T": 1968.4023475449449
+      },
+      "4k-16k": {
+        "jobs_total": 3271.0,
+        "jobs_evacuated": 3270.99999999971,
+        "evacuated_fraction": 0.9999999999999113,
+        "mean_T": 8707.621642960816
+      },
+      "16k-64k": {
+        "jobs_total": 2425.0,
+        "jobs_evacuated": 2342.7627663318867,
+        "evacuated_fraction": 0.9660877386935616,
+        "mean_T": 32030.810501507494
+      },
+      "64k-256k": {
+        "jobs_total": 1058.0,
+        "jobs_evacuated": 741.6740225611507,
+        "evacuated_fraction": 0.701015144197685,
+        "mean_T": 121991.47894155221
+      },
+      "256k-1M": {
+        "jobs_total": 356.0,
+        "jobs_evacuated": 165.72531633327253,
+        "evacuated_fraction": 0.46552055149795657,
+        "mean_T": 528267.8315961702
+      }
+    },
+    "by_model": {
+      "DeepSeek V4 Pro": {
+        "jobs_total": 2500.0,
+        "jobs_evacuated": 2499.9999999997995,
+        "evacuated_fraction": 0.9999999999999197,
+        "replay_jobs": 1813.1850807714525,
+        "state_jobs": 686.8149192283474,
+        "unmoved_jobs": 2.002417269116394e-10
+      },
+      "Kimi K2.6": {
+        "jobs_total": 2500.0,
+        "jobs_evacuated": 2263.0529594174327,
+        "evacuated_fraction": 0.9052211837669731,
+        "replay_jobs": 1591.344308260366,
+        "state_jobs": 671.7086511570661,
+        "unmoved_jobs": 236.9470405825674
+      },
+      "GLM 5": {
+        "jobs_total": 1500.0,
+        "jobs_evacuated": 1499.99999999982,
+        "evacuated_fraction": 0.99999999999988,
+        "replay_jobs": 1236.8908929386598,
+        "state_jobs": 263.10910706116005,
+        "unmoved_jobs": 1.8005974420075343e-10
+      },
+      "Qwen3 235B": {
+        "jobs_total": 1500.0,
+        "jobs_evacuated": 1168.8011809294094,
+        "evacuated_fraction": 0.779200787286273,
+        "replay_jobs": 1100.7627663311512,
+        "state_jobs": 68.03841459825797,
+        "unmoved_jobs": 331.19881907059073
+      },
+      "Qwen3.5 397B": {
+        "jobs_total": 1500.0,
+        "jobs_evacuated": 1479.307964879367,
+        "evacuated_fraction": 0.9862053099195781,
+        "replay_jobs": 1221.4156176558033,
+        "state_jobs": 257.89234722356315,
+        "unmoved_jobs": 20.69203512063298
+      },
+      "Qwen3 Next 80B": {
+        "jobs_total": 500.0,
+        "jobs_evacuated": 499.9999999999542,
+        "evacuated_fraction": 0.9999999999999084,
+        "replay_jobs": 499.999999994466,
+        "state_jobs": 5.488230424149457e-09,
+        "unmoved_jobs": 4.580481663137008e-11
+      }
+    },
+    "pressure": {
+      "phi_star": 1.0000000696995353,
+      "max_net_pressure": 0.9999999999921448,
+      "max_pfill_pressure": 1.0000000000053146,
+      "max_ing_pressure": 0.03776849631670165,
+      "mean_pressure": 0.470026595567973,
+      "p90_pressure": 1.000000000000172
+    },
+    "action_mix": {
+      "overall": {
+        "total_replay": 7463.598665951899,
+        "total_state": 1947.5634392738828,
+        "replay_fraction": 0.7930581348511201,
+        "state_fraction": 0.20694186514887994
+      },
+      "by_model": {
+        "DeepSeek V4 Pro": {
+          "total_replay": 1813.1850807714525,
+          "total_state": 686.8149192283474,
+          "replay_fraction": 0.7252740323086391,
+          "state_fraction": 0.274725967691361
+        },
+        "Kimi K2.6": {
+          "total_replay": 1591.344308260366,
+          "total_state": 671.7086511570661,
+          "replay_fraction": 0.7031847406125302,
+          "state_fraction": 0.2968152593874697
+        },
+        "GLM 5": {
+          "total_replay": 1236.8908929386598,
+          "total_state": 263.10910706116005,
+          "replay_fraction": 0.8245939286258722,
+          "state_fraction": 0.17540607137412775
+        },
+        "Qwen3 235B": {
+          "total_replay": 1100.7627663311512,
+          "total_state": 68.03841459825797,
+          "replay_fraction": 0.9417878628902864,
+          "state_fraction": 0.05821213710971363
+        },
+        "Qwen3.5 397B": {
+          "total_replay": 1221.4156176558033,
+          "total_state": 257.89234722356315,
+          "replay_fraction": 0.8256668973964502,
+          "state_fraction": 0.1743331026035499
+        },
+        "Qwen3 Next 80B": {
+          "total_replay": 499.999999994466,
+          "total_state": 5.488230424149457e-09,
+          "replay_fraction": 0.9999999999890236,
+          "state_fraction": 1.0976460848299919e-11
+        }
+      },
+      "by_bucket": {
+        "1k-4k": {
+          "total_replay": 2889.999999948191,
+          "total_state": 5.157114031591469e-08,
+          "replay_fraction": 0.9999999999821554,
+          "state_fraction": 1.7844685230421777e-11
+        },
+        "4k-16k": {
+          "total_replay": 3270.999999986577,
+          "total_state": 1.313338656689267e-08,
+          "replay_fraction": 0.9999999999959849,
+          "state_fraction": 4.015098308435901e-12
+        },
+        "16k-64k": {
+          "total_replay": 1198.1830483525139,
+          "total_state": 1144.5797179793726,
+          "replay_fraction": 0.5114401959821714,
+          "state_fraction": 0.4885598040178287
+        },
+        "64k-256k": {
+          "total_replay": 103.41561766462524,
+          "total_state": 638.2584048965255,
+          "replay_fraction": 0.13943540493370682,
+          "state_fraction": 0.8605645950662932
+        },
+        "256k-1M": {
+          "total_replay": 0.9999999999920708,
+          "total_state": 164.72531633328046,
+          "replay_fraction": 0.006034081105514847,
+          "state_fraction": 0.9939659188944852
         }
       }
     }
