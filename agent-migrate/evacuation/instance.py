@@ -104,7 +104,8 @@ def build_instance(D: float = D_DEFAULT_S,
                    sigma_scale: float = 1.0,
                    lambda_scale: float = 1.0,
                    W: np.ndarray | None = None,
-                   n_bins: int | None = None) -> ProblemInstance:
+                   n_bins: int | None = None,
+                   n_dest: int | None = None) -> ProblemInstance:
     rng = np.random.default_rng(seed)
     counts = np.array([round(total_jobs * m.job_fraction) for m in MODELS], dtype=int)
     Q = int(counts.sum())
@@ -143,13 +144,27 @@ def build_instance(D: float = D_DEFAULT_S,
     beta = np.array([MODELS[i].beta_bytes_per_tok for i in model_idx])
 
     M_names = tuple(m.name for m in MODELS)
-    L_names = tuple(d.name for d in DESTINATIONS)
-    lambda_bps = np.array([d.lambda_bytes_per_s for d in DESTINATIONS]) * lambda_scale
-    if W is None:
-        W = np.array([[d.warm_instances[name] for name in M_names] for d in DESTINATIONS],
-                     dtype=float)
+    real_lambda = np.array([d.lambda_bytes_per_s for d in DESTINATIONS])
+    real_W = np.array([[d.warm_instances[name] for name in M_names] for d in DESTINATIONS],
+                      dtype=float)
+
+    if n_dest is None:
+        L_names = tuple(d.name for d in DESTINATIONS)
+        lambda_bps = real_lambda * lambda_scale
+        W = real_W if W is None else np.asarray(W, dtype=float)
     else:
-        W = np.asarray(W, dtype=float)
+        # Append synthetic sites drawn (independent stream) from the empirical
+        # distribution of the 3 real ones. Adds capacity, so Z* (ADMM's
+        # precondition) is preserved. Workload sampling above is untouched, so
+        # instances at different n_dest share the same jobs for a given seed.
+        assert n_dest >= len(DESTINATIONS) and W is None
+        drng = np.random.default_rng([seed, 99])
+        k = n_dest - len(DESTINATIONS)
+        syn_lambda = drng.choice(real_lambda, k) * drng.lognormal(0.0, 0.25, k)
+        syn_W = drng.poisson(real_W.mean(axis=0), (k, len(MODELS))).astype(float)
+        L_names = tuple(d.name for d in DESTINATIONS) + tuple(f"Synthetic {i+1}" for i in range(k))
+        lambda_bps = np.concatenate([real_lambda, syn_lambda]) * lambda_scale
+        W = np.vstack([real_W, syn_W])
 
     return ProblemInstance(
         model_idx=model_idx, T=T, beta=beta, eta=eta, rho=rho, n=n,

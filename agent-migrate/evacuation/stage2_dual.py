@@ -35,6 +35,8 @@ class Trajectory:
     iters: np.ndarray
     dual: np.ndarray      # D(pi_k, mu_k); lower bound on phi*
     primal: np.ndarray    # max pressure at averaged primal; upper bound on phi*
+    prices: np.ndarray | None = None  # (iters, |I|) per-iteration pi (subgradient only)
+    I_meta: list | None = None        # pressure-index metadata for `prices` columns
 
 
 def build_dual_structure(inst: ProblemInstance):
@@ -150,8 +152,9 @@ def subgradient(inst: ProblemInstance, stage1: Stage1Result, phi_star: float,
     # Ergodic primal recovery: weight iterate t by its step size alpha_t (Nedic-Ozdaglar).
     p_num = np.zeros(A.shape[0])
     alpha_sum = 0.0
-    D_traj, phi_traj = [], []
+    D_traj, phi_traj, pi_traj = [], [], []
     for k in range(1, max_iter + 1):
+        pi_traj.append(pi.copy())
         _, p, z_tot, cost_sum = per_class_assign(A, n, pi, mu, feasible)
         D = cost_sum - (mu * Z_star if use_mu else 0.0)
         gap = max(phi_star - D, 0.0)
@@ -172,7 +175,8 @@ def subgradient(inst: ProblemInstance, stage1: Stage1Result, phi_star: float,
         if use_mu:
             mu = mu + alpha * (z_tot - Z_star)
     iters = np.arange(1, len(D_traj) + 1)
-    return Trajectory(iters, np.array(D_traj), np.array(phi_traj))
+    return Trajectory(iters, np.array(D_traj), np.array(phi_traj),
+                      prices=np.array(pi_traj), I_meta=I_meta)
 
 
 def mirror_descent(inst: ProblemInstance, stage1: Stage1Result, phi_star: float,

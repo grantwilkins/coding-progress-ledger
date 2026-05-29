@@ -12,7 +12,7 @@ from __future__ import annotations
 import numpy as np
 
 from instance import ProblemInstance, build_instance
-from rounding import round_plan
+from rounding import round_plan, round_plan_naive, evaluate_plan
 from stage1 import solve_stage1
 from stage2 import solve_stage2
 from stage3 import solve_stage3
@@ -118,6 +118,41 @@ def test_capacity_respected_on_stage4_plan():
     assert np.all(L_net <= C_net + 1e-9)
     assert np.all(L_pfill <= C_pfill + 1e-9)
     assert np.all(L_ing <= C_ing + 1e-9)
+
+
+def test_naive_violates_where_repair_routes_around():
+    """Same toy as the capacity-rejection test: class 1's largest remainder is R,
+    but R prefill is already saturated. round_plan routes to S (no violation);
+    round_plan_naive takes R and overloads C_pfill."""
+    inst = ProblemInstance(
+        model_idx=np.array([0, 0]), T=np.array([1.0, 1.0]),
+        beta=np.array([1.0, 1.0]), eta=np.array([1.0, 1.0]),
+        rho=np.array([1.0, 1.0]), n=np.ones(2),
+        lambda_bps=np.array([100.0]), W=np.array([[1.0]]), mu_ing=10.0, D=1.0,
+        M_names=("toy",), L_names=("toy_dst",), d_miss=2.0,
+    )
+    x_R = np.array([[1.0], [0.5]])
+    x_S = np.array([[0.0], [0.3]])
+    z = np.array([0.0, 0.2])
+    xR_n, xS_n, z_n = round_plan_naive(inst, x_R, x_S, z)
+    assert xR_n.tolist() == [[1], [1]]                      # naive took R
+    assert evaluate_plan(inst, xR_n, xS_n, z_n)[1] > 0.0    # overloads prefill
+    xR_r, xS_r, z_r = round_plan(inst, x_R, x_S, z)
+    assert evaluate_plan(inst, xR_r, xS_r, z_r)[1] == 0.0   # repair stays feasible
+    # both conserve jobs per class
+    for xR_, xS_, z_ in ((xR_n, xS_n, z_n), (xR_r, xS_r, z_r)):
+        np.testing.assert_array_equal(xR_.sum(1) + xS_.sum(1) + z_, np.ones(2))
+
+
+def test_evaluate_plan_reproduces_lp_pressure():
+    """evaluate_plan on the fractional optimum recovers phi* and is feasible."""
+    inst = build_instance(total_jobs=500, seed=0)
+    s1 = solve_stage1(inst)
+    s2 = solve_stage2(inst, s1)
+    phi, viol, z_tot = evaluate_plan(inst, s2.x_R, s2.x_S, s2.z)
+    assert abs(phi - s2.phi_star) < 1e-6
+    assert viol < 1e-9
+    assert abs(z_tot - s2.Z_star) < 1e-6
 
 
 def test_round_of_integer_is_identity():
