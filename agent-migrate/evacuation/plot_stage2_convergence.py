@@ -33,9 +33,9 @@ OUT = Path(__file__).resolve().parent / "outputs"
 JSON = OUT / "stage2_convergence_dist.json"
 
 N_SEEDS = 50
-N_WORKERS = 8
+N_WORKERS = 10
 SUBGRAD_ITERS = 800
-ADMM_ITERS = 200
+ADMM_ITERS = 800  # full budget so every method spans the same iteration axis
 ADMM_RHO = 150.0
 COLORS = {"subgradient": "#3a7ca5", "mirror descent": "#e8943a", "ADMM": "#4a9b54"}
 
