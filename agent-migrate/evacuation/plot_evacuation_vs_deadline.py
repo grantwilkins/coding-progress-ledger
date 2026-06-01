@@ -42,18 +42,21 @@ def main() -> None:
         writer.writerow(["total_jobs", "D_s", "Z_star", "percent_evacuated"])
         writer.writerows(rows)
 
-    fig, ax = plt.subplots(figsize=(6.0, 3.8))
+    colors = {10_000: "#3a7ca5", 20_000: "#e8943a"}
+    fig, ax = plt.subplots(figsize=(6.5, 4.2))
     for jobs, pct in series.items():
-        ax.plot(D_SWEEP_S, pct, marker="o", label=f"{jobs:,} jobs", linewidth=1.5)
-    ax.set_xlabel("Deadline $D$ (s)")
-    ax.set_ylabel("Jobs evacuated (%)")
+        ax.plot(D_SWEEP_S, pct, marker="o", color=colors[jobs],
+                label=f"{jobs:,} jobs", linewidth=2.2, markersize=6)
+    ax.set_xlabel("Deadline $D$ (s)", fontsize=19)
+    ax.set_ylabel("Jobs evacuated (%)", fontsize=19)
     ax.set_ylim(0, 102)
     ax.set_xlim(0, max(D_SWEEP_S))
+    ax.tick_params(labelsize=16)
     ax.grid(True, alpha=0.3)
-    ax.legend()
+    ax.legend(fontsize=15, loc="lower right")
     fig.tight_layout()
-    fig.savefig(out / "percent_evacuated_vs_D.pdf")
-    fig.savefig(out / "percent_evacuated_vs_D.png", dpi=150)
+    fig.savefig(out / "percent_evacuated_vs_D.pdf", bbox_inches="tight")
+    fig.savefig(out / "percent_evacuated_vs_D.png", dpi=150, bbox_inches="tight")
     print(f"wrote {out / 'percent_evacuated_vs_D.pdf'}")
 
 
