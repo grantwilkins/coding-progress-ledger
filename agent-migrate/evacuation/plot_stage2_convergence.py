@@ -20,7 +20,7 @@ import numpy as np
 from instance import build_instance
 from stage1 import solve_stage1
 from stage2 import solve_stage2
-from stage2_dual import subgradient, mirror_descent, admm, build_dual_structure
+from stage2_dual import subgradient, mirror_descent, admm
 
 
 def main() -> None:
@@ -47,21 +47,17 @@ def main() -> None:
     out = Path(__file__).resolve().parent / "outputs"
     out.mkdir(exist_ok=True)
 
-    fig, ax = plt.subplots(figsize=(8.5, 4.4))
+    fig, ax = plt.subplots(figsize=(12, 5.6))
     colors = {"subgradient (Polyak)": "C0", "mirror descent (Polyak)": "C1", "ADMM": "C2"}
     for name, traj, pgap, dt in runs:
-        ax.semilogy(traj.iters, pgap, label=f"{name}   ({dt:.1f}s)", color=colors[name], lw=1.5)
-    ax.set_xlabel("iteration")
-    ax.set_ylabel(r"primal gap  $\phi_k - \phi^\star$")
-    n_I = build_dual_structure(inst)[0].shape[0]
-    ax.set_title("Stage 2 dual decomposition: per-class subproblems at given prices\n"
-                 f"$Q={inst.T.size}$ classes, $|\\mathcal{{I}}|={n_I}$ pressure indices, "
-                 f"$\\phi^\\star={phi_star:.4f}$ (CVXPY ground truth)")
+        ax.semilogy(traj.iters, pgap, label=f"{name}   ({dt:.1f}s)", color=colors[name], lw=2.6)
+    ax.set_xlabel("iteration", fontsize=17)
+    ax.set_ylabel(r"primal gap  $\phi_k - \phi^\star$", fontsize=17)
+    ax.tick_params(labelsize=14)
     ax.grid(True, which="both", alpha=0.3)
-    ax.legend()
-    fig.tight_layout()
-    fig.savefig(out / "stage2_convergence.pdf")
-    fig.savefig(out / "stage2_convergence.png", dpi=150)
+    ax.legend(fontsize=14, loc="upper right")
+    fig.savefig(out / "stage2_convergence.pdf", bbox_inches="tight")
+    fig.savefig(out / "stage2_convergence.png", dpi=150, bbox_inches="tight")
     print(f"wrote {out / 'stage2_convergence.pdf'}")
 
 

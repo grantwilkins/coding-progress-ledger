@@ -36,8 +36,10 @@ def per_model_split(x_R, x_S, model_idx, M):
 
 
 def main() -> None:
-    inst = build_instance()
-    s1 = solve_stage1(inst)
+    # Match the KV-evacuation figure: prop-fair objective on the (model, token-bucket)
+    # class grid (n_bins=5), so the action mix reflects the poster's headline method.
+    inst = build_instance(total_jobs=10_000, n_bins=5)
+    s1 = solve_stage1(inst, "prop_fair")
     s2 = solve_stage2(inst, s1)
     M = len(inst.M_names)
 
@@ -54,7 +56,7 @@ def main() -> None:
     out = Path(__file__).resolve().parent / "outputs"
     out.mkdir(exist_ok=True)
 
-    fig, ax = plt.subplots(figsize=(9.5, 4.6))
+    fig, ax = plt.subplots(figsize=(12, 5.6))
     x = np.arange(M)
     w = 0.38
     ax.bar(x - w/2, R1_pct, w, color="#3a7ca5", label="Stage 1 — replay")
@@ -65,22 +67,19 @@ def main() -> None:
     # Annotate replay% on top of the R segment of each bar
     for i in range(M):
         ax.text(x[i] - w/2, R1_pct[i] + 1, f"{R1_pct[i]:.0f}%",
-                ha="center", va="bottom", fontsize=8, color="white", fontweight="bold")
+                ha="center", va="bottom", fontsize=12, color="white", fontweight="bold")
         ax.text(x[i] + w/2, R2_pct[i] + 1, f"{R2_pct[i]:.0f}%",
-                ha="center", va="bottom", fontsize=8, color="white", fontweight="bold")
+                ha="center", va="bottom", fontsize=12, color="white", fontweight="bold")
 
     ax.set_xticks(x)
-    ax.set_xticklabels(inst.M_names, rotation=20, ha="right")
-    ax.set_ylabel("share of moved jobs (%)")
+    ax.set_xticklabels(inst.M_names, rotation=20, ha="right", fontsize=14)
+    ax.set_ylabel("share of moved jobs (%)", fontsize=17)
     ax.set_ylim(0, 108)
-    ax.set_title("Per-model action mix: Stage 1 vs Stage 2\n"
-                 f"replay (dark) / state-transfer (light);  "
-                 f"$\\phi^\\star={s2.phi_star:.4f}$")
-    ax.legend(ncol=4, loc="upper center", bbox_to_anchor=(0.5, -0.18), frameon=False)
+    ax.tick_params(axis="y", labelsize=14)
+    ax.legend(fontsize=14, ncol=4, loc="upper center", bbox_to_anchor=(0.5, -0.16), frameon=False)
     ax.grid(True, axis="y", alpha=0.3)
-    fig.tight_layout()
-    fig.savefig(out / "stage2_action_mix.pdf")
-    fig.savefig(out / "stage2_action_mix.png", dpi=150)
+    fig.savefig(out / "stage2_action_mix.pdf", bbox_inches="tight")
+    fig.savefig(out / "stage2_action_mix.png", dpi=150, bbox_inches="tight")
     print(f"wrote {out / 'stage2_action_mix.pdf'}")
 
 
