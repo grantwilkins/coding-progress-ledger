@@ -49,7 +49,6 @@ def main() -> None:
     ax.set_ylabel("Jobs evacuated (%)")
     ax.set_ylim(0, 102)
     ax.set_xlim(0, max(D_SWEEP_S))
-    ax.set_title("Stage 1: percent evacuated vs deadline")
     ax.grid(True, alpha=0.3)
     ax.legend()
     fig.tight_layout()

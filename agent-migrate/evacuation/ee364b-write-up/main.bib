@@ -1,0 +1,316 @@
+@inproceedings {yu2022orca,
+author = {Gyeong-In Yu and Joo Seong Jeong and Geon-Woo Kim and Soojeong Kim and Byung-Gon Chun},
+title = {Orca: A Distributed Serving System for {Transformer-Based} Generative Models},
+booktitle = {16th USENIX Symposium on Operating Systems Design and Implementation (OSDI 22)},
+year = {2022},
+isbn = {978-1-939133-28-1},
+address = {Carlsbad, CA},
+pages = {521--538},
+url = {https://www.usenix.org/conference/osdi22/presentation/yu},
+publisher = {USENIX Association},
+month = jul
+}
+
+
+
+@inproceedings{
+kwa2026measuring,
+title={Measuring {AI} Ability to Complete Long Software Tasks},
+author={Thomas Kwa and Ben West and Joel Becker and Amy Deng and Katharyn Garcia and Max Hasin and Sami Jawhar and Megan Kinniment and Nate Rush and Sydney Von Arx and Ryan Bloom and Thomas Broadley and Haoxing Du and Brian Goodrich and Nikola Jurkovic and Luke Harold Miles and Seraphina Nix and Tao Roa Lin and Neev Parikh and David Rein and Lucas Jun Koba Sato and Hjalmar Wijk and Daniel M Ziegler and Elizabeth Barnes and Lawrence Chan},
+booktitle={The Thirty-ninth Annual Conference on Neural Information Processing Systems},
+year={2026},
+url={https://openreview.net/forum?id=CGNJL6CeV0}
+}
+
+@inproceedings{zhen2025efficient,
+    title = "Taming the Titans: A Survey of Efficient {LLM} Inference Serving",
+    author = "Zhen, Ranran  and
+      Li, Juntao  and
+      Ji, Yixin  and
+      Yang, Zhenlin  and
+      Liu, Tong  and
+      Xia, Qingrong  and
+      Duan, Xinyu  and
+      Wang, Zhefeng  and
+      Huai, Baoxing  and
+      Zhang, Min",
+    editor = "Flek, Lucie  and
+      Narayan, Shashi  and
+      Phuong, Le Hong  and
+      Pei, Jiahuan",
+    booktitle = "Proceedings of the 18th International Natural Language Generation Conference",
+    month = oct,
+    year = "2025",
+    address = "Hanoi, Vietnam",
+    publisher = "Association for Computational Linguistics",
+    url = "https://aclanthology.org/2025.inlg-main.32/",
+    pages = "522--541",
+    abstract = "Large Language Models (LLMs) for Generative AI have achieved remarkable progress, evolving into sophisticated and versatile tools widely adopted across various domains and applications. However, the substantial memory overhead caused by their vast number of parameters, combined with the high computational demands of the attention mechanism, poses significant challenges in achieving low latency and high throughput for LLM inference services. Recent advancements, driven by groundbreaking research, have significantly accelerated progress in this field. This paper provides a comprehensive survey of these methods, covering fundamental instance-level approaches, in-depth cluster-level strategies, and emerging scenarios. At the instance level, we review model placement, request scheduling, decoding length prediction, storage management, and the disaggregation paradigm. At the cluster level, we explore GPU cluster deployment, multi-instance load balancing, and cloud service solutions. Additionally, we discuss specific tasks, modules, and auxiliary methods in emerging scenarios. Finally, we outline potential research directions to further advance the field of LLM inference serving."
+}
+
+@inproceedings {onewan,
+author = {Umesh Krishnaswamy and Rachee Singh and Paul Mattes and Paul-Andre C Bissonnette and Nikolaj Bj{\o}rner and Zahira Nasrin and Sonal Kothari and Prabhakar Reddy and John Abeln and Srikanth Kandula and Himanshu Raj and Luis Irun-Briz and Jamie Gaudette and Erica Lan},
+title = {{OneWAN} is better than two: Unifying a split {WAN} architecture},
+booktitle = {20th USENIX Symposium on Networked Systems Design and Implementation (NSDI 23)},
+year = {2023},
+isbn = {978-1-939133-33-5},
+address = {Boston, MA},
+pages = {515--529},
+url = {https://www.usenix.org/conference/nsdi23/presentation/krishnaswamy},
+publisher = {USENIX Association},
+month = apr
+}
+
+@inproceedings {dote,
+author = {Yarin Perry and Felipe Vieira Frujeri and Chaim Hoch and Srikanth Kandula and Ishai Menache and Michael Schapira and Aviv Tamar},
+title = {{DOTE}: Rethinking (Predictive) {WAN} Traffic Engineering},
+booktitle = {20th USENIX Symposium on Networked Systems Design and Implementation (NSDI 23)},
+year = {2023},
+isbn = {978-1-939133-33-5},
+address = {Boston, MA},
+pages = {1557--1581},
+url = {https://www.usenix.org/conference/nsdi23/presentation/perry},
+publisher = {USENIX Association},
+month = apr
+}
+
+@inproceedings{dcte,
+author = {Chen, Shawn Shuoshuo and He, Keqiang and Wang, Rui and Seshan, Srinivasan and Steenkiste, Peter},
+title = {Precise data center traffic engineering with constrained hardware resources},
+year = {2024},
+isbn = {978-1-939133-39-7},
+publisher = {USENIX Association},
+address = {USA},
+abstract = {Data center traffic engineering (TE) routes flows over a set of available paths following custom weight distributions to achieve optimal load balancing or flow throughput. However, as a result of hardware constraints, it is challenging, and often impossible for larger data center networks, to precisely implement the TE weight distributions on the data plane switches. The resulting precision loss in the TE implementation causes load imbalances that can result in congestion and traffic loss.Instead of treating all flows equally, we adapt the hardware resource allocation to a flow's traffic volume and its contribution to the overall precision loss. We intelligently prune select ports in weight distributions and merge identical distributions to free up hardware resources. Evaluation using realistic traffic loads shows that our techniques approximate ideal TE solutions under various scenarios within 7\% error, compared to a 67\% error for today's state-of-the-art approach. In addition, our design avoids traffic loss triggered by switch rule overflow. Finally, the execution time is 10\texttimes{} faster than the current approach.},
+booktitle = {Proceedings of the 21st USENIX Symposium on Networked Systems Design and Implementation},
+articleno = {37},
+numpages = {22},
+location = {Santa Clara, CA, USA},
+series = {NSDI'24}
+}
+
+@misc{pan2026measuringagentsproduction,
+      title={Measuring Agents in Production}, 
+      author={Melissa Z. Pan and Negar Arabzadeh and Riccardo Cogo and Yuxuan Zhu and Alexander Xiong and Lakshya A Agrawal and Huanzhi Mao and Emma Shen and Sid Pallerla and Liana Patel and Shu Liu and Tianneng Shi and Xiaoyuan Liu and Jared Quincy Davis and Emmanuele Lacavalla and Alessandro Basile and Shuyi Yang and Paul Castro and Daniel Kang and Joseph E. Gonzalez and Koushik Sen and Dawn Song and Ion Stoica and Matei Zaharia and Marquita Ellis},
+      year={2026},
+      eprint={2512.04123},
+      archivePrefix={arXiv},
+      primaryClass={cs.CY},
+      url={https://arxiv.org/abs/2512.04123}, 
+}
+
+@INPROCEEDINGS{dynamollm,
+  author={Stojkovic, Jovan and Zhang, Chaojie and Goiri, Íñigo and Torrellas, Josep and Choukse, Esha},
+  booktitle={2025 IEEE International Symposium on High Performance Computer Architecture (HPCA)}, 
+  title={DynamoLLM: Designing LLM Inference Clusters for Performance and Energy Efficiency}, 
+  year={2025},
+  volume={},
+  number={},
+  pages={1348-1362},
+  keywords={Fluctuations;Costs;Translation;Computational modeling;Large language models;Graphics processing units;Carbon dioxide;Organizations;Parallel processing;Energy efficiency;large language models;energy efficiency;gpus},
+  doi={10.1109/HPCA61900.2025.00102}}
+
+
+@misc{lmcache,
+      title={LMCache: An Efficient KV Cache Layer for Enterprise-Scale LLM Inference}, 
+      author={Yuhan Liu and Yihua Cheng and Jiayi Yao and Yuwei An and Xiaokun Chen and Shaoting Feng and Yuyang Huang and Samuel Shen and Rui Zhang and Kuntai Du and Junchen Jiang},
+      year={2025},
+      eprint={2510.09665},
+      archivePrefix={arXiv},
+      primaryClass={cs.LG},
+      url={https://arxiv.org/abs/2510.09665}, 
+}
+
+@inproceedings{xie2024osworld,
+ author = {Xie, Tianbao and Zhang, Danyang and Chen, Jixuan and Li, Xiaochuan and Zhao, Siheng and Cao, Ruisheng and Hua, Toh Jing and Cheng, Zhoujun and Shin, Dongchan and Lei, Fangyu and Liu, Yitao and Xu, Yiheng and Zhou, Shuyan and Savarese, Silvio and Xiong, Caiming and Zhong, Victor and Yu, Tao},
+ booktitle = {Advances in Neural Information Processing Systems},
+ doi = {10.52202/079017-1650},
+ editor = {A. Globerson and L. Mackey and D. Belgrave and A. Fan and U. Paquet and J. Tomczak and C. Zhang},
+ pages = {52040--52094},
+ publisher = {Curran Associates, Inc.},
+ title = {OSWorld: Benchmarking Multimodal Agents for Open-Ended Tasks in Real Computer Environments},
+ url = {https://proceedings.neurips.cc/paper_files/paper/2024/file/5d413e48f84dc61244b6be550f1cd8f5-Paper-Datasets_and_Benchmarks_Track.pdf},
+ volume = {37},
+ year = {2024}
+}
+
+@inproceedings{
+merrill2026terminal,
+title={Terminal-Bench: Benchmarking Agents on Hard, Realistic Tasks in Command Line Interfaces},
+author={Mike A Merrill and Alexander Glenn Shaw and Nicholas Carlini and Boxuan Li and Harsh Raj and Ivan Bercovich and Lin Shi and Jeong Yeon Shin and Thomas Walshe and E. Kelly Buchanan and Junhong Shen and Guanghao Ye and Haowei Lin and Jason Poulos and Maoyu Wang and Marianna Nezhurina and Di Lu and Orfeas Menis Mastromichalakis and Zhiwei Xu and Zizhao Chen and Yue Liu and Robert Zhang and Leon Liangyu Chen and Anurag Kashyap and Jan-Lucas Uslu and Jeffrey Li and Jianbo Wu and Minghao Yan and Song Bian and Vedang Sharma and Ke Sun and Steven Dillmann and Akshay Anand and Andrew Lanpouthakoun and Bardia Koopah and Changran Hu and Etash Kumar Guha and Gabriel H. S. Dreiman and Jiacheng Zhu and Karl Krauth and Li Zhong and Niklas Muennighoff and Robert Kwesi Amanfu and Shangyin Tan and Shreyas Pimpalgaonkar and Tushar Aggarwal and Xiangning Lin and Xin Lan and Xuandong Zhao and Yiqing Liang and Yuanli Wang and Zilong Wang and Changzhi Zhou and David Heineman and Hange Liu and Harsh Trivedi and John Yang and Junhong Lin and Manish Shetty and Michael Yang and Nabil Omi and Negin Raoof and Shanda Li and Terry Yue Zhuo and Wuwei Lin and Yiwei Dai and Yuxin Wang and Wenhao Chai and Shang Zhou and Dariush Wahdany and Ziyu She and Jiaming Hu and Zhikang Dong and Yuxuan Zhu and Sasha Cui and Ahson Saiyed and Arinbjorn Kolbeinsson and Christopher Michael Rytting and Ryan Marten and Yixin Wang and Jenia Jitsev and Alex Dimakis and Andy Konwinski and Ludwig Schmidt},
+booktitle={The Fourteenth International Conference on Learning Representations},
+year={2026},
+url={https://openreview.net/forum?id=a7Qa4CcHak}
+}
+
+@misc{yang2024sweagent,
+      title={SWE-agent: Agent-Computer Interfaces Enable Automated Software Engineering}, 
+      author={John Yang and Carlos E. Jimenez and Alexander Wettig and Kilian Lieret and Shunyu Yao and Karthik Narasimhan and Ofir Press},
+      year={2024},
+      eprint={2405.15793},
+      archivePrefix={arXiv},
+      primaryClass={cs.SE},
+      url={https://arxiv.org/abs/2405.15793}, 
+}
+
+@inproceedings{
+jimenez2024swebench,
+title={{SWE}-bench: Can Language Models Resolve Real-world Github Issues?},
+author={Carlos E Jimenez and John Yang and Alexander Wettig and Shunyu Yao and Kexin Pei and Ofir Press and Karthik R Narasimhan},
+booktitle={The Twelfth International Conference on Learning Representations},
+year={2024},
+url={https://openreview.net/forum?id=VTF8yNQM66}
+}
+
+@misc{li2024llmserving,
+      title={LLM Inference Serving: Survey of Recent Advances and Opportunities}, 
+      author={Baolin Li and Yankai Jiang and Vijay Gadepally and Devesh Tiwari},
+      year={2024},
+      eprint={2407.12391},
+      archivePrefix={arXiv},
+      primaryClass={cs.DC},
+      url={https://arxiv.org/abs/2407.12391}, 
+}
+
+@inproceedings {qiu2024muserve,
+author = {Haoran Qiu and Weichao Mao and Archit Patke and Shengkun Cui and Saurabh Jha and Chen Wang and Hubertus Franke and Zbigniew Kalbarczyk and Tamer Bacsar and Ravishankar K. Iyer},
+title = {Power-aware Deep Learning Model Serving with {$\mu$-Serve}},
+booktitle = {2024 USENIX Annual Technical Conference (USENIX ATC 24)},
+year = {2024},
+isbn = {978-1-939133-41-0},
+address = {Santa Clara, CA},
+pages = {75--93},
+url = {https://www.usenix.org/conference/atc24/presentation/qiu},
+publisher = {USENIX Association},
+month = jul
+}
+
+@misc{vidgen2026apexagents,
+      title={APEX-Agents}, 
+      author={Bertie Vidgen and Austin Mann and Abby Fennelly and John Wright Stanly and Lucas Rothman and Marco Burstein and Julien Benchek and David Ostrofsky and Anirudh Ravichandran and Debnil Sur and Neel Venugopal and Alannah Hsia and Isaac Robinson and Calix Huang and Olivia Varones and Daniyal Khan and Michael Haines and Austin Bridges and Jesse Boyle and Koby Twist and Zach Richards and Chirag Mahapatra and Brendan Foody and Osvald Nitski},
+      year={2026},
+      eprint={2601.14242},
+      archivePrefix={arXiv},
+      primaryClass={cs.CL},
+      url={https://arxiv.org/abs/2601.14242}, 
+}
+
+@misc{rapidserve2026,
+      title={RAPID-Serve: Resource-efficient and Accelerated P/D Intra-GPU Disaggregation}, 
+      author={Amna Masood and Pratishtha Gaur and Nuwan Jayasena},
+      year={2026},
+      eprint={2601.11822},
+      archivePrefix={arXiv},
+      primaryClass={cs.DC},
+      url={https://arxiv.org/abs/2601.11822}, 
+}
+
+@inproceedings{duan2024muxserve,
+author = {Duan, Jiangfei and Lu, Runyu and Duanmu, Haojie and Li, Xiuhong and Zhang, Xingcheng and Lin, Dahua and Stoica, Ion and Zhang, Hao},
+title = {MuxServe: flexible spatial-temporal multiplexing for multiple LLM serving},
+year = {2024},
+publisher = {JMLR.org},
+abstract = {Large language models (LLMs) have demonstrated remarkable performance, and organizations are racing to serve LLMs of varying sizes as endpoints for use-cases like chat, programming and search. However, efficiently serving multiple LLMs poses significant challenges for existing approaches due to varying popularity of LLMs. In the paper, we present MuxServe, a flexible spatial-temporal multiplexing system for efficient multiple LLM serving. The key insight behind is to colocate LLMs considering their popularity to multiplex memory resources, and leverage the characteristics of prefill and decoding phases to separate and flexibly colocate them to multiplex computation resources. MuxServe formally formulates the multiplexing problem, and proposes a novel placement algorithm and adaptive batch scheduling strategy to identify optimal colocations and maximize utilization. MuxServe designs a unified resource manager to enable flexible and efficient multiplexing. Evaluation results show that MuxServe can achieves up to 1.8\texttimes{} higher throughput or processes 2.9\texttimes{} more requests within 99\% SLO attainment. The code is available at: https://github.com/hao-ai-lab/MuxServe.},
+booktitle = {Proceedings of the 41st International Conference on Machine Learning},
+articleno = {473},
+numpages = {13},
+location = {Vienna, Austria},
+series = {ICML'24}
+}
+
+@inproceedings{patel2024splitwise,
+author = {Patel, Pratyush and Choukse, Esha and Zhang, Chaojie and Shah, Aashaka and Goiri, Inigo and Maleki, Saeed and Bianchini, Ricardo},
+title = {Splitwise: Efficient Generative LLM Inference Using Phase Splitting},
+year = {2025},
+isbn = {9798350326581},
+publisher = {IEEE Press},
+url = {https://doi.org/10.1109/ISCA59077.2024.00019},
+doi = {10.1109/ISCA59077.2024.00019},
+abstract = {Generative large language model (LLM) applications are growing rapidly, leading to large-scale deployments of expensive and power-hungry GPUs. Our characterization of LLM inference shows that each inference request undergoes two phases: a compute-intensive prompt computation phase and a memoryintensive token generation phase, each with distinct latency, throughput, memory, and power characteristics. Despite state-of-the-art batching and scheduling, the token generation phase underutilizes compute resources. Unlike prompt computation, token generation does not need the compute capability of the latest GPUs and can be run with lower power and cost.Based on these insights, we propose Splitwise, a model deployment and scheduling technique that splits the two phases of LLM inference requests on to separate machines. Splitwise enables phase-specific resource management using hardware that is well suited for each phase. Request state is transferred efficiently between machines using optimized network libraries on the fast back-plane interconnects available in today's GPU clusters. Using Splitwise, we design homogeneous and heterogeneous LLM inference clusters optimized for throughput, cost, and power. Compared to current designs, Splitwise clusters achieve up to 1.4\texttimes{} higher throughput at 20\% lower cost. Alternatively, they can deliver 2.35\texttimes{} more throughput under the same power and cost budgets.},
+booktitle = {Proceedings of the 51st Annual International Symposium on Computer Architecture},
+pages = {118–132},
+numpages = {15},
+location = {Buenos Aires, Argentina},
+series = {ISCA '24}
+}
+
+@inproceedings{zhong2024distserve,
+author = {Zhong, Yinmin and Liu, Shengyu and Chen, Junda and Hu, Jianbo and Zhu, Yibo and Liu, Xuanzhe and Jin, Xin and Zhang, Hao},
+title = {DistServe: disaggregating prefill and decoding for goodput-optimized large language model serving},
+year = {2024},
+isbn = {978-1-939133-40-3},
+publisher = {USENIX Association},
+address = {USA},
+abstract = {DistServe improves the performance of large language models (LLMs) serving by disaggregating the prefill and decoding computation. Existing LLM serving systems colocate the two phases and batch the computation of prefill and decoding across all users and requests. We find that this strategy not only leads to strong prefill-decoding interferences but also couples the resource allocation and parallelism plans for both phases. LLM applications often emphasize individual latency for each phase: time to first token (TTFT) for the prefill phase and time per output token (TPOT) of each request for the decoding phase. In the presence of stringent latency requirements, existing systems have to prioritize one latency over the other, or over-provision compute resources to meet both. DistServe assigns prefill and decoding computation to different GPUs, hence eliminating prefill-decoding interferences. Given the application's TTFT and TPOT requirements, Dist-Serve co-optimizes the resource allocation and parallelism strategy tailored for each phase. DistServe also places the two phases according to the serving cluster's bandwidth to minimize the communication caused by disaggregation. As a result, DistServe significantly improves LLM serving performance in terms of the maximum rate that can be served within both TTFT and TPOT constraints on each GPU. Our evaluations show that on various popular LLMs, applications, and latency requirements, DistServe can serve 7.4\texttimes{} more requests or 12.6\texttimes{} tighter SLO, compared to state-of-the-art systems, while staying within latency constraints for > 90\% of requests.},
+booktitle = {Proceedings of the 18th USENIX Conference on Operating Systems Design and Implementation},
+articleno = {11},
+numpages = {18},
+location = {Santa Clara, CA, USA},
+series = {OSDI'24}
+}
+
+@inproceedings {agrawal2024sarathi,
+author = {Amey Agrawal and Nitin Kedia and Ashish Panwar and Jayashree Mohan and Nipun Kwatra and Bhargav Gulavani and Alexey Tumanov and Ramachandran Ramjee},
+title = {Taming {Throughput-Latency} Tradeoff in {LLM} Inference with {Sarathi-Serve}},
+booktitle = {18th USENIX Symposium on Operating Systems Design and Implementation (OSDI 24)},
+year = {2024},
+isbn = {978-1-939133-40-3},
+address = {Santa Clara, CA},
+pages = {117--134},
+url = {https://www.usenix.org/conference/osdi24/presentation/agrawal},
+publisher = {USENIX Association},
+month = jul
+}
+
+@inproceedings{kwon2023efficient,
+author = {Kwon, Woosuk and Li, Zhuohan and Zhuang, Siyuan and Sheng, Ying and Zheng, Lianmin and Yu, Cody Hao and Gonzalez, Joseph and Zhang, Hao and Stoica, Ion},
+title = {Efficient Memory Management for Large Language Model Serving with PagedAttention},
+year = {2023},
+isbn = {9798400702297},
+publisher = {Association for Computing Machinery},
+address = {New York, NY, USA},
+url = {https://doi.org/10.1145/3600006.3613165},
+doi = {10.1145/3600006.3613165},
+abstract = {High throughput serving of large language models (LLMs) requires batching sufficiently many requests at a time. However, existing systems struggle because the key-value cache (KV cache) memory for each request is huge and grows and shrinks dynamically. When managed inefficiently, this memory can be significantly wasted by fragmentation and redundant duplication, limiting the batch size. To address this problem, we propose PagedAttention, an attention algorithm inspired by the classical virtual memory and paging techniques in operating systems. On top of it, we build vLLM, an LLM serving system that achieves (1) near-zero waste in KV cache memory and (2) flexible sharing of KV cache within and across requests to further reduce memory usage. Our evaluations show that vLLM improves the throughput of popular LLMs by 2--4\texttimes{} with the same level of latency compared to the state-of-the-art systems, such as FasterTransformer and Orca. The improvement is more pronounced with longer sequences, larger models, and more complex decoding algorithms. vLLM's source code is publicly available at https://github.com/vllm-project/vllm.},
+booktitle = {Proceedings of the 29th Symposium on Operating Systems Principles},
+pages = {611–626},
+numpages = {16},
+location = {Koblenz, Germany},
+series = {SOSP '23}
+}
+@article {diamond2016cvxpy,
+author = {Steven Diamond and Stephen Boyd},
+title = {{CVXPY}: A {Python}-Embedded Modeling Language for Convex Optimization},
+journal = {Journal of Machine Learning Research},
+volume = {17},
+number = {83},
+pages = {1--5},
+year = {2016}
+}
+
+@misc {clarabel,
+author = {Paul J. Goulart and Yuwen Chen},
+title = {{Clarabel}: An Interior-Point Solver for Conic Programs with Quadratic Objectives},
+year = {2024},
+note = {arXiv:2405.12762}
+}
+
+@article {beck2003mirror,
+author = {Amir Beck and Marc Teboulle},
+title = {Mirror Descent and Nonlinear Projected Subgradient Methods for Convex Optimization},
+journal = {Operations Research Letters},
+volume = {31},
+number = {3},
+pages = {167--175},
+year = {2003}
+}
+
+@article {boyd2011admm,
+author = {Stephen Boyd and Neal Parikh and Eric Chu and Borja Peleato and Jonathan Eckstein},
+title = {Distributed Optimization and Statistical Learning via the Alternating Direction Method of Multipliers},
+journal = {Foundations and Trends in Machine Learning},
+volume = {3},
+number = {1},
+pages = {1--122},
+year = {2011}
+}

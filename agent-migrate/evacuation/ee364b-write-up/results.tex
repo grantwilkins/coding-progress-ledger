@@ -1,0 +1,92 @@
+\section{Results}
+\label{sec:results}
+
+We ask three things of the program: does it choose sensible reconstruction
+actions, does it behave the way a deadline-constrained system should, and are its
+dual prices trustworthy. The first-order convergence study lives in
+Sec.~\ref{sec:methods}; here we report the exact solve.
+
+\paragraph{The action mix is sensible, and its crossover is endogenous.} At the
+realistic bandwidths of Table~\ref{tab:setup} the optimizer migrates everyone
+($Z^\star=0$, $\phi^\star=0.93$ at $D{=}300$s) and rebuilds $80$--$100\%$ of jobs by
+\emph{replay}: shipping the compact context and recomputing the KV cache is simply
+cheaper than moving tens of KiB/tok of state across the link. State transfer only
+becomes attractive when the network is abundant. Figure~\ref{fig:action} sweeps the
+bandwidth scale: the replay share falls from ${\sim}92\%$ to ${\sim}10\%$, crossing
+$50/50$ at about $16.7\times$ the default bandwidth, and halving the prefill rate
+slides that crossover down to $8.4\times$. This is the multi-session analogue of
+the single-session boundary $\lambda^\star=\rho(\eta-\beta)$ from
+Sec.~\ref{sec:formulation}: the same physics, but now set \emph{inside} the
+optimization by shared congestion rather than read off a per-session formula.
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\linewidth]{action_regime.pdf}
+\caption{Replay share $R/(R+S)$ of moved jobs vs network bandwidth scale, at
+default and halved prefill. Replay dominates at realistic bandwidth; state transfer
+takes over only well above it, and faster prefill pushes the $50/50$ crossover to
+higher bandwidth ($\Lambda\!\approx\!16.7\times$ vs $8.4\times$). The crossover is
+endogenous.}
+\label{fig:action}
+\end{figure}
+
+\paragraph{The deadline is the control that matters.} Figure~\ref{fig:feasible}
+sweeps $D$. Migration feasibility climbs sharply---from $29\%$ of jobs at $D{=}1$s
+to $91\%$ at $60$s and $100\%$ by $300$s for $10$k sessions---and doubling the load
+pushes the full-migration point out to ${\sim}600$s. The worst-class cost mirrors
+this: while any class is still stranded, the worst class \emph{is} a stranded one,
+so $H^\star$ rides the miss penalty $d^{\mathrm{miss}}=2D$ exactly; the moment full
+migration becomes feasible it collapses to the true worst-class rebuild cost,
+${\approx}11$s. Underneath, the diagnostic LP (forcing full migration at a tight
+deadline) reports network and prefill saturating together while ingest stays
+slack---exactly the regime the $\mu{=}512$\,GB/s ingest design was meant to
+produce.
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\linewidth]{percent_migrated_vs_D.pdf}
+\caption{Jobs migrated vs deadline, two workload sizes. The transition is sharp:
+at $N{=}10$k full migration is feasible by $D{\approx}300$s; doubling the load
+pushes that to ${\approx}600$s. The deadline, not spare capacity, is the dominant
+control.}
+\label{fig:feasible}
+\end{figure}
+
+\paragraph{The dual prices are trustworthy.} The Stage-2 prices $\pi_i$ name the
+binding resource and, because every capacity is linear in $D$, predict how the peak
+moves with the deadline. Figure~\ref{fig:envelope} (right) overlays the
+dual-predicted slope $-\tfrac1D\sum_i\pi_i r_i$ on the finite-difference slope of
+$\phi^\star(D)$: they agree closely wherever the program is interior (e.g.\ at
+$D{=}90$s, $-7.1\!\times\!10^{-3}$ predicted vs $-7.3\!\times\!10^{-3}$ measured;
+at $D{=}273$s, $-7.8\!\times\!10^{-4}$ vs $-8.0\!\times\!10^{-4}$), and separate
+once $D$ is short enough that $\phi^\star$ pins at $1$---there, extra deadline is
+absorbed by Stage 1 stranding fewer jobs, not by lower pressure, so the realized
+slope goes to zero while the price-based prediction does not. The left panel reads
+off which model is scarce: Qwen3-235B, with the tightest prefill supply relative to
+demand, carries the largest prefill price, and every price decays as the deadline
+loosens. A single LP solve thus yields both an allocation and a validated
+sensitivity model.
+
+\begin{figure*}[t]
+\centering
+\includegraphics[width=\textwidth]{dual_vs_deadline.pdf}
+\caption{Stage-2 duals vs the deadline ($N{=}2000$, chosen so $\phi^\star$ stays
+interior over the sweep). \emph{Left:} per-model prefill price
+$\frac1D\sum_\ell\pi^{\mathrm{pfill}}_{\ell m}r_{\ell m}$ decays with $D$;
+Qwen3-235B carries the most. \emph{Right:} the envelope-theorem prediction tracks
+the finite-difference slope of $\phi^\star(D)$ in the interior and separates once
+$\phi^\star=1$ and the deadline is absorbed by stranding instead of pressure.}
+\label{fig:envelope}
+\end{figure*}
+
+\section{Conclusion}
+
+We recast site power-down as a deadline-constrained migration of stateful LLM
+sessions and solved it as a short lexicographic stack of convex programs. The exact
+solve recovers structure that matches the physics---replay dominates at realistic
+bandwidth, with an endogenous crossover to state transfer---and its Stage-2 dual
+delivers interpretable congestion prices that pass an envelope-theorem sensitivity
+check. The first-order solvers reproduce the right qualitative ordering (mirror
+descent over subgradient) but are not yet accurate; tightening them, then rounding
+the fractional plan and validating it against a discrete-event queue, are the
+immediate next steps.

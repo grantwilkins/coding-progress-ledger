@@ -1,0 +1,101 @@
+\section{Solving the Program}
+\label{sec:methods}
+
+Each stage is a small convex program, but the pipeline has two implementation
+wrinkles worth stating before the dual structure that is the real analytical
+payoff.
+
+\paragraph{Backends.} We build every stage in CVXPY~\cite{diamond2016cvxpy}. The
+pure-LP stages (1, 3, 4) go to an LP solver; the proportional-fair variant of
+Stage 1 and the Stage-2b QP carry a $\log$-utility or quadratic term and go to the
+conic solver Clarabel~\cite{clarabel}. The log-utility
+$\sum_q n_q\log(1-z_q/n_q)$ needs tight tolerances: its gradient blows up as a
+class approaches full migration ($z_q\!\to\!0$), so a loose feasibility tolerance
+lets the iterate drift below the utility floor and breaks the fairness certificate
+handed to later stages.
+
+\paragraph{Preconditioning.} The raw coefficients span about twenty orders of
+magnitude---network terms are bytes ($\beta_q T_q,\,\eta_q T_q\sim10^{8\text{--}11}$),
+prefill terms are GPU-seconds ($T_q/\rho_q\sim10^0$). Left unscaled this wrecks the
+conditioning of both the LP and any first-order method. We normalize every capacity
+row to $O(1)$: dividing $L_i\le C_i$ by $C_i$ turns it into $p_i\le1$ with unit
+right-hand side, and writes the whole program directly in the pressures $p_i$ it
+already uses. This one rescaling is also what makes the first-order methods below
+even tractable.
+
+\paragraph{Lexicographic linking.} Each stage re-solves the full program with the
+earlier optima frozen in: Stage 2 adds $\sum_q z_q=Z^\star$; Stage 3 adds that plus
+$p_i\le\phi^\star$ for all $i$; and so on. The one subtlety is the proportional-fair
+certificate, carried as $U(z)\ge U^\star-\delta$ with a small $\delta$ so the floor
+survives finite solver accuracy instead of being tripped by a rounding-level slack.
+
+\subsection{The Stage-2 dual}
+
+Stage 2 is the interesting one. Dualize its pressure ceilings $p_i(x)\le\phi$ with
+multipliers $\pi_i\ge0$; the Lagrangian is
+$\phi\big(1-\sum_i\pi_i\big)+\sum_i\pi_i\,p_i(x)$, so minimizing over the free
+$\phi$ forces
+\[
+\sum_{i\in\mathcal{I}}\pi_i=1:
+\]
+the prices live on a simplex. With $\phi$ gone the inner problem is linear in $x$
+and \emph{separates by class}---each class sends its $n_q$ jobs to whichever
+$(\ell,a)$ is cheapest at the current prices,
+\[
+\begin{aligned}
+\mathrm{cost}^R_{q\ell}(\pi)&=\pi^{\mathrm{net}}_\ell\tfrac{\beta_q T_q}{C^{\mathrm{net}}_\ell}+\pi^{\mathrm{pfill}}_{\ell m}\tfrac{T_q/\rho_q}{C^{\mathrm{pfill}}_{\ell m}},\\
+\mathrm{cost}^S_{q\ell}(\pi)&=\pi^{\mathrm{net}}_\ell\tfrac{\eta_q T_q}{C^{\mathrm{net}}_\ell}+\pi^{\mathrm{ing}}_{\ell m}\tfrac{\eta_q T_q}{C^{\mathrm{ing}}_{\ell m}}.
+\end{aligned}
+\]
+So $\pi_i$ is the marginal congestion price of resource $i$---how much the peak
+moves if that resource is squeezed. CVXPY returns these prices exactly as the
+ceiling duals, and they are interpretable on their own: they name which resource
+binds, and by how much.
+
+\paragraph{An envelope-theorem check.} The prices also predict sensitivity. Every
+capacity is linear in the deadline, $C_i\propto D$, so the envelope identity
+$\partial\phi^\star/\partial C_i=-\pi_i$ composes to
+\[
+\frac{d\phi^\star}{dD}=-\frac{1}{D}\sum_{i\in\mathcal{I}}\pi_i\,r_i,
+\]
+with $r_i$ the realized pressures. This is a falsifiable prediction built from a
+single LP solve; Sec.~\ref{sec:results} shows it lands on the finite-difference
+slope of $\phi^\star(D)$ wherever the program is interior.
+
+\subsection{First-order methods: a status report}
+
+The per-class separation invites solving Stage 2 by ascending the dual instead of
+calling a general LP solver. We implemented three textbook methods and race them
+against the CVXPY $\phi^\star$ (Fig.~\ref{fig:convergence}). \emph{Projected
+subgradient} takes a Polyak step on $(\pi,\mu)$ and projects $\pi$ onto the simplex
+($\mu$ is the multiplier on the throughput link $\sum_q z_q=Z^\star$).
+\emph{Entropic mirror descent}~\cite{beck2003mirror} swaps the Euclidean projection
+for an exponentiated-gradient update---the natural geometry for the simplex, and a
+better match to the $\ell_\infty$ peak. \emph{ADMM}~\cite{boyd2011admm} splits the
+per-class assignments from the shared peak in a sharing form, alternating tiny
+per-class QPs with a prox-of-max.
+
+Honestly, none is competitive yet. At the end of their budget the median relative
+gap to $\phi^\star$ is still about $0.6$ (subgradient), $0.24$ (mirror descent),
+and above $1$ (ADMM): the \emph{ordering} is what the theory predicts---mirror
+beats subgradient, ADMM is cheap per iteration but loose---but the accuracy is not.
+Three things hurt. The dual objective is non-smooth (a max over pressures, so the
+subgradient is a single active constraint and the iterate chatters). The Polyak
+step starves whenever the throughput link is slack and $\mu$ rests at zero, leaving
+only the pressure subgradient to make progress. And even after row-normalization
+the per-class costs differ enough that one global step size serves them poorly.
+Iterate averaging, restarts, and a diagonal preconditioner on the prices are the
+obvious next moves; for the present report CVXPY is the solver, and the first-order
+methods are a study of the dual's geometry rather than a replacement.
+
+\begin{figure*}[t]
+\centering
+\includegraphics[width=\textwidth]{decomp_convergence_scaling.pdf}
+\caption{Stage-2 dual convergence against the CVXPY optimum (median and 25--75\%
+band over 30 seeds), at $L=3,6,10$ destinations ($|\mathcal{I}|=39,66,112$
+coupled pressure constraints). All three methods remain far from $\phi^\star$ at
+the end of their budget; mirror descent leads subgradient as the simplex geometry
+predicts, and ADMM is cheap per iteration but loose. Tightening these is the main
+open item.}
+\label{fig:convergence}
+\end{figure*}

@@ -70,7 +70,6 @@ def main() -> None:
     axl.set_yscale("log")
     axl.set_xlabel("deadline $D$ (s)")
     axl.set_ylabel(r"prefill deadline-sensitivity  $\frac{1}{D}\sum_\ell \pi^{pfill}_{\ell m} r_{\ell m}$")
-    axl.set_title("Per-model prefill scarcity decays with the deadline")
     axl.grid(True, which="both", alpha=0.3)
     axl.legend(fontsize=8)
 
@@ -85,12 +84,9 @@ def main() -> None:
     axr.set_xscale("log")
     axr.set_xlabel("deadline $D$ (s)")
     axr.set_ylabel(r"$d\phi^\star/dD$")
-    axr.set_title("Envelope theorem check  ($\\partial f^\\star/\\partial C=-\\pi$)")
     axr.grid(True, which="both", alpha=0.3)
     axr.legend(fontsize=8)
 
-    fig.suptitle(f"Stage 2 dual sensitivity to the deadline  —  $Q$ from "
-                 f"total_jobs={TOTAL_JOBS}", y=1.02)
     fig.tight_layout()
     out = Path(__file__).resolve().parent / "outputs"
     out.mkdir(exist_ok=True)

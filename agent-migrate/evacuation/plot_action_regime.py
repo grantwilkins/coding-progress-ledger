@@ -1,6 +1,6 @@
 """Action regime diagram: replay fraction vs bandwidth, at two prefill speeds.
 
-For each (lambda, rho) the staged pipeline picks an action mix; we plot the
+For each (lambda, rho) Stage 2 picks an action mix; we plot the
 replay fraction R / (R + S) of moved jobs. More bandwidth makes state transfer
 (KV-cache, network-heavy) cheaper and pushes the mix toward state; faster
 prefill makes replay cheaper and pushes it back up. The 50/50 crossover is the
@@ -23,7 +23,8 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 from instance import build_instance
-from pipeline import run_pipeline
+from stage1 import solve_stage1
+from stage2 import solve_stage2
 
 OUT = Path(__file__).resolve().parent / "outputs"
 LAM = np.logspace(np.log10(0.25), np.log10(64.0), 18)
@@ -34,8 +35,8 @@ def _replay_frac(rho_scale: float) -> np.ndarray:
     for lam in LAM:
         inst = build_instance(total_jobs=10_000, n_bins=160,
                               lambda_scale=float(lam), rho_scale=rho_scale)
-        s3 = run_pipeline(inst).s3
-        r, s = float(s3.x_R.sum()), float(s3.x_S.sum())
+        s2 = solve_stage2(inst, solve_stage1(inst))
+        r, s = float(s2.x_R.sum()), float(s2.x_S.sum())
         out.append(r / (r + s) if r + s > 0 else np.nan)
     return np.array(out)
 
@@ -65,7 +66,6 @@ def main() -> None:
     ax.set_xscale("log")
     ax.set_xlabel("bandwidth scale $\\Lambda$")
     ax.set_ylabel("replay share of moved jobs  $R/(R+S)$  (%)")
-    ax.set_title("Action regime: bandwidth sets the mix, prefill speed shifts the boundary")
     ax.grid(True, which="both", alpha=0.3)
     ax.legend(fontsize=9, loc="upper right")
     fig.tight_layout()

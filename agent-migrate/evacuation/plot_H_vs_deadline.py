@@ -63,7 +63,6 @@ def main() -> None:
     ax.set_yscale("log")
     ax.set_xlabel("Deadline $D$ (s)")
     ax.set_ylabel("Per-class avg. reconstruction cost (s)")
-    ax.set_title(f"Stage 3: worst-class $H^\\star$ vs deadline ({JOB_COUNTS[0]:,} jobs)")
     ax.grid(True, which="both", alpha=0.3)
     ax.legend(fontsize=8, loc="best")
     fig.tight_layout()
