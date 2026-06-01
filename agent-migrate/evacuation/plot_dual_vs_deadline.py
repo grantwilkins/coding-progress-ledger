@@ -61,31 +61,38 @@ def main() -> None:
             if kind == "pfill":
                 pfill_env[d_i, idx[1]] += v * r / D       # per-model envelope term
 
+    plt.rcParams.update({
+        "axes.labelsize": 17,
+        "xtick.labelsize": 14,
+        "ytick.labelsize": 14,
+        "legend.fontsize": 13,
+    })
     fig, (axl, axr) = plt.subplots(1, 2, figsize=(13, 4.4))
 
     for m, (name, c) in enumerate(zip(M_names, MODEL_COLORS)):
         if pfill_env[:, m].max() > 1e-6:
-            axl.plot(D_GRID, pfill_env[:, m], "o-", color=c, lw=1.6, ms=3.5, label=name)
+            axl.plot(D_GRID, pfill_env[:, m], "o-", color=c, lw=1.8, ms=4, label=name)
     axl.set_xscale("log")
     axl.set_yscale("log")
     axl.set_xlabel("deadline $D$ (s)")
-    axl.set_ylabel(r"prefill deadline-sensitivity  $\frac{1}{D}\sum_\ell \pi^{pfill}_{\ell m} r_{\ell m}$")
+    axl.set_ylabel("prefill price sensitivity\n"
+                   r"$\frac{1}{D}\sum_\ell \pi^{pfill}_{\ell m}\,\hat p_{\ell m}$")
     axl.grid(True, which="both", alpha=0.3)
-    axl.legend(fontsize=8)
+    axl.legend(loc="upper right", framealpha=0.9)
 
-    # finite-difference slope of phi*(D) vs dual-predicted -(1/D) sum pi_i r_i
+    # finite-difference slope of phi*(D) vs dual-predicted -(1/D) sum pi_i hat p_i
     dphi_dD = np.gradient(phi, D_GRID)
     pred = -pi_r / D_GRID
-    axr.plot(D_GRID, dphi_dD, "o-", color="#3a7ca5", lw=1.6, ms=3.5,
+    axr.axhline(0, color="0.75", lw=0.8, zorder=0)
+    axr.plot(D_GRID, dphi_dD, "o-", color="#3a7ca5", lw=1.8, ms=4, zorder=3,
              label=r"finite difference  $d\phi^\star/dD$")
-    axr.plot(D_GRID, pred, "s--", color="#c44536", lw=1.6, ms=3.5,
-             label=r"dual prediction  $-\frac{1}{D}\sum_i \pi_i r_i$")
-    axr.axhline(0, color="0.6", lw=0.8)
+    axr.plot(D_GRID, pred, "s--", color="#c44536", lw=1.8, ms=4, zorder=2,
+             label=r"dual prediction  $-\frac{1}{D}\sum_i \pi_i\,\hat p_i$")
     axr.set_xscale("log")
     axr.set_xlabel("deadline $D$ (s)")
     axr.set_ylabel(r"$d\phi^\star/dD$")
     axr.grid(True, which="both", alpha=0.3)
-    axr.legend(fontsize=8)
+    axr.legend(loc="lower right", framealpha=0.9)
 
     fig.tight_layout()
     out = Path(__file__).resolve().parent / "outputs"
@@ -93,10 +100,15 @@ def main() -> None:
     fig.savefig(out / "dual_vs_deadline.pdf", bbox_inches="tight")
     fig.savefig(out / "dual_vs_deadline.png", dpi=150, bbox_inches="tight")
 
-    print("  D     phi*    pred_slope  fd_slope")
+    print("  D     phi*    fd_slope    pred_slope")
     for d_i, D in enumerate(D_GRID):
-        print(f"{D:6.1f}  {phi[d_i]:.4f}   {pred[d_i]:+.2e}  {dphi_dD[d_i]:+.2e}")
-    print(f"wrote {out / 'dual_vs_deadline.pdf'}")
+        print(f"{D:6.1f}  {phi[d_i]:.4f}   {dphi_dD[d_i]:+.2e}  {pred[d_i]:+.2e}")
+
+    for target in (90.0, 273.0):
+        j = int(np.argmin(np.abs(D_GRID - target)))
+        print(f"\nnearest D={target:.0f}s -> D={D_GRID[j]:.1f}s: "
+              f"fd_slope={dphi_dD[j]:+.2e}  dual_pred={pred[j]:+.2e}")
+    print(f"\nwrote {out / 'dual_vs_deadline.pdf'}")
 
 
 if __name__ == "__main__":
