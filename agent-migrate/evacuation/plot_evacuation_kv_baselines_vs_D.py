@@ -81,7 +81,7 @@ def plot(rows):
     for method, _, D, pct in rows:
         data[method][D].append(pct)
 
-    fig, ax = plt.subplots(figsize=(7.0, 4.4))
+    fig, ax = plt.subplots(figsize=(12, 5))
     for method in ("ours", *DET, "random"):
         label, color, marker = STYLE[method]
         y = np.array([np.mean(data[method][D]) for D in D_SWEEP_S])
@@ -96,9 +96,8 @@ def plot(rows):
     ax.set_xlabel("Deadline $D$ (s)")
     ax.set_ylabel("KV-weighted jobs evacuated (%)")
     ax.set_ylim(0, 102)
-    ax.set_title("KV-weighted evacuation: proportional fairness vs. baselines (10k jobs)")
     ax.grid(True, which="both", alpha=0.3)
-    ax.legend(fontsize=8, loc="lower right")
+    ax.legend(fontsize=11, loc="upper right")
     fig.tight_layout()
     fig.savefig(OUT / "kv_evacuated_baselines_vs_D.pdf")
     fig.savefig(OUT / "kv_evacuated_baselines_vs_D.png", dpi=150)
