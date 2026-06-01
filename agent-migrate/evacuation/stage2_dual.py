@@ -312,3 +312,108 @@ def admm(inst: ProblemInstance, stage1: Stage1Result,
         phi_traj.append(float(x.sum(axis=0).max()))
 
     return Trajectory(np.arange(1, max_iter + 1), np.array(D_traj), np.array(phi_traj))
+
+
+def _project_perclass(Y: np.ndarray, feasible: np.ndarray) -> np.ndarray:
+    """Project each row of Y onto its per-class simplex over feasible options."""
+    out = np.zeros_like(Y)
+    for q in range(Y.shape[0]):
+        cols = np.nonzero(feasible[q])[0]
+        out[q, cols] = project_simplex(Y[q, cols])
+    return out
+
+
+def pdhg(inst: ProblemInstance, stage1: Stage1Result, phi_star: float | None = None,
+         max_iter: int = 800) -> Trajectory:
+    """Chambolle-Pock on the min-peak-pressure saddle (Section 16).
+
+    Stage 2 is the bilinear saddle  min_y max_{pi in simplex} <pi, B y>, where
+    y_q is class q's distribution over (dest, action) options and B[i,q,k] =
+    n_q * A[i,q,k] maps it to normalized pressure p_i. PDHG alternates a dual
+    ascent (project pi onto the price simplex) with a primal descent (project
+    each y_q onto its option simplex) plus over-relaxation, with steps
+    tau = sigma = 1/||B||. The ergodic primal gives the converging upper bound
+    on phi*. Specialized to Z* = 0 (no stay option), like ADMM.
+    """
+    if stage1.Z_star > 1e-6:
+        raise NotImplementedError("PDHG specialized to Z* = 0")
+    A, C, I_meta, feasible = build_dual_structure(inst)
+    n = inst.n
+    nI, Q, K = A.shape
+    B = A * n[None, :, None]
+    norm = np.linalg.norm((B * feasible[None, :, :]).reshape(nI, Q * K), 2)
+    tau = sigma = 1.0 / norm if norm > 0 else 1.0
+
+    y = feasible.astype(float)
+    y /= y.sum(axis=1, keepdims=True)
+    pi = np.full(nI, 1.0 / nI)
+    ybar = y.copy()
+    y_sum = np.zeros_like(y)
+
+    D_traj, primal_traj = [], []
+    for k in range(1, max_iter + 1):
+        pi = project_simplex(pi + sigma * np.einsum("iqk,qk->i", B, ybar))
+        y_prev = y
+        grad = np.einsum("i,iqk->qk", pi, B)
+        y = _project_perclass(y - tau * grad, feasible)
+        ybar = 2.0 * y - y_prev
+
+        y_sum += y
+        primal = float(np.einsum("iqk,qk->i", B, y_sum / k).max())
+        _, _, _, D = per_class_assign(A, n, pi, None, feasible)
+        D_traj.append(D)
+        primal_traj.append(primal)
+
+    return Trajectory(np.arange(1, max_iter + 1), np.array(D_traj), np.array(primal_traj))
+
+
+def bundle(inst: ProblemInstance, stage1: Stage1Result, phi_star: float | None = None,
+           max_iter: int = 120, prox_c: float = 1.0, m_serious: float = 0.1,
+           max_planes: int = 40) -> Trajectory:
+    """Proximal bundle method on the concave dual D(pi) (Section 16).
+
+    D(pi) = sum_q n_q min_k <pi, A[:,q,k]> is piecewise-linear concave with
+    supergradient p (the realized loads at the per-class argmin). Each step
+    maximizes the cutting-plane model under a proximal term centered at the
+    incumbent:  max_{pi in simplex, v}  v - (1/2t)||pi - center||^2  s.t.
+    v <= D_j + g_j.(pi - pi_j).  The plane multipliers give a convex primal whose
+    peak pressure is the converging upper bound on phi*. prox weight scales with
+    1/phi* since D ~ O(phi*). Z* = 0 only.
+    """
+    if stage1.Z_star > 1e-6:
+        raise NotImplementedError("bundle specialized to Z* = 0")
+    A, C, I_meta, feasible = build_dual_structure(inst)
+    n = inst.n
+    nI = A.shape[0]
+    prox_t = prox_c / max(phi_star, 1e-12) if phi_star else 50.0
+
+    pi = np.full(nI, 1.0 / nI)
+    _, p, _, D = per_class_assign(A, n, pi, None, feasible)
+    center, D_center = pi.copy(), D
+    planes = [(pi.copy(), D, p.copy())]
+
+    D_traj, primal_traj = [], []
+    for k in range(1, max_iter + 1):
+        var = cp.Variable(nI, nonneg=True)
+        v = cp.Variable()
+        plane_cons = [v <= Dj + gj @ (var - pj) for (pj, Dj, gj) in planes]
+        prob = cp.Problem(cp.Maximize(v - (1.0 / (2 * prox_t)) * cp.sum_squares(var - center)),
+                          [cp.sum(var) == 1] + plane_cons)
+        prob.solve(solver=cp.CLARABEL)
+
+        pi_new = np.maximum(np.asarray(var.value, dtype=float), 0.0)
+        pi_new /= pi_new.sum()
+        lam = np.array([max(float(c.dual_value), 0.0) for c in plane_cons])
+        G = np.array([g for (_, _, g) in planes])
+        primal = float(((lam / lam.sum()) @ G).max() if lam.sum() > 1e-12 else p.max())
+
+        _, p, _, D_new = per_class_assign(A, n, pi_new, None, feasible)
+        if D_new >= D_center + m_serious * (float(v.value) - D_center):
+            center, D_center = pi_new.copy(), D_new
+        planes.append((pi_new.copy(), D_new, p.copy()))
+        if len(planes) > max_planes:
+            planes = planes[-max_planes:]
+        D_traj.append(D_center)
+        primal_traj.append(primal)
+
+    return Trajectory(np.arange(1, max_iter + 1), np.array(D_traj), np.array(primal_traj))
