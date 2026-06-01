@@ -37,10 +37,8 @@ pushes the full-migration point out to ${\sim}600$s. The worst-class cost mirror
 this: while any class is still stranded, the worst class \emph{is} a stranded one,
 so $H^\star$ rides the miss penalty $d^{\mathrm{miss}}=2D$ exactly; the moment full
 migration becomes feasible it collapses to the true worst-class rebuild cost,
-${\approx}11$s. Underneath, the diagnostic LP (forcing full migration at a tight
-deadline) reports network and prefill saturating together while ingest stays
-slack---exactly the regime the $\mu{=}512$\,GB/s ingest design was meant to
-produce.
+${\approx}11$s. A diagnostic LP that forces full migration at a tight deadline
+confirms network and prefill saturate together while ingest stays slack.
 
 \begin{figure}[t]
 \centering
@@ -56,16 +54,13 @@ control.}
 binding resource and, because every capacity is linear in $D$, predict how the peak
 moves with the deadline. Figure~\ref{fig:envelope} (right) overlays the
 dual-predicted slope $-\tfrac1D\sum_i\pi_i r_i$ on the finite-difference slope of
-$\phi^\star(D)$: they agree closely wherever the program is interior (e.g.\ at
-$D{=}90$s, $-7.1\!\times\!10^{-3}$ predicted vs $-7.3\!\times\!10^{-3}$ measured;
-at $D{=}273$s, $-7.8\!\times\!10^{-4}$ vs $-8.0\!\times\!10^{-4}$), and separate
-once $D$ is short enough that $\phi^\star$ pins at $1$---there, extra deadline is
-absorbed by Stage 1 stranding fewer jobs, not by lower pressure, so the realized
-slope goes to zero while the price-based prediction does not. The left panel reads
-off which model is scarce: Qwen3-235B, with the tightest prefill supply relative to
-demand, carries the largest prefill price, and every price decays as the deadline
-loosens. A single LP solve thus yields both an allocation and a validated
-sensitivity model.
+$\phi^\star(D)$: they agree closely while the program is interior (at $D{=}90$s,
+$-7.1$ vs $-7.3\!\times\!10^{-3}$; at $D{=}273$s, $-7.8$ vs $-8.0\!\times\!10^{-4}$),
+and separate once $\phi^\star$ pins at $1$---there extra deadline is absorbed by
+Stage 1 stranding fewer jobs, not by lower pressure, so the realized slope falls to
+zero while the prediction does not. The left panel reads off the scarce model:
+Qwen3-235B, with the tightest prefill supply, carries the largest prefill price. One
+LP solve thus yields both an allocation and a validated sensitivity model.
 
 \begin{figure*}[t]
 \centering

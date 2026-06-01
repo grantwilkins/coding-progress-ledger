@@ -4,7 +4,17 @@
 We model a single migration event: a source site must move its active inference
 sessions to other sites before a deadline $D$ so that the source can shed power.
 The decision is per session---\emph{where} it lands and \emph{how} its serving
-state is rebuilt there.
+state is rebuilt there. We call the controller that plans and routes this migration
+\emph{Queue-Haul} (Fig.~\ref{fig:sites}).
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\linewidth]{queue-haul-sites.pdf}
+\caption{Queue-Haul in context. A source site (Site~0) under a $D$-second ramp-down
+egresses its stateful sessions to the controller, which routes them across
+available destination sites using per-datacenter resource telemetry.}
+\label{fig:sites}
+\end{figure}
 
 Sessions are grouped into classes $q\in\mathcal{Q}$ by model $m(q)$ and
 token-length bucket; class $q$ holds $n_q$ jobs of context length $T_q$. A job is
@@ -49,11 +59,11 @@ p_i(x)\le 1\ \ \forall i\in\mathcal{I}:
 \]
 conservation (every job moves or is stranded) and a window budget on every resource.
 
-\paragraph{Why staged, not weighted.} The goals---move the most work, spread the
-load, rebuild quickly, treat classes fairly---have different units and different
-priorities, and a single weighted objective would bury whichever one matters most.
-We instead minimize them \emph{lexicographically}: each stage optimizes one
-objective, then freezes its optimal value as a constraint for the next.
+\paragraph{Why staged, not weighted.} The goals---move the most work, spread load,
+rebuild quickly, treat classes fairly---have different units, and one weighted
+objective would bury whichever matters most. We minimize them
+\emph{lexicographically}: each stage optimizes one objective, then freezes its
+optimum as a constraint for the next.
 
 \smallskip\noindent\textbf{Stage 1 (migrate the most; LP).}
 \[
@@ -79,15 +89,13 @@ routing are actually decided, and its dual prices (Sec.~\ref{sec:methods}) are t
 analytical handle we lean on throughout.
 
 \smallskip\noindent\textbf{Lexicographic refinements.} Three further stages break
-ties without disturbing $Z^\star$ or $\phi^\star$. A QP tie-break minimizes the
-congestion potential $\tfrac12\sum_i p_i(x)^2$ (spreading load rather than only
-capping its peak). Then, with per-class average rebuild cost
-$r_q=\tfrac{1}{n_q}\big[\sum_\ell(c^R_{q\ell}x^R_{q\ell}+c^S_{q\ell}x^S_{q\ell})+d^{\mathrm{miss}}z_q\big]$,
-where $c^a_{q\ell}$ is the unloaded reconstruction time and $d^{\mathrm{miss}}\!=\!2D$
-penalizes a stranded job, Stage 3 minimizes the worst-class cost
-$H=\max_q r_q$ and Stage 4 the spread $V=\max_q|r_q-\bar r|$. Because each stage
-adds the prior optimum as a constraint, the Stage-1 fairness certificate survives
-intact into the final plan.
+ties without disturbing $Z^\star$ or $\phi^\star$: a QP tie-break minimizes the
+congestion potential $\tfrac12\sum_i p_i(x)^2$, then, with per-class rebuild cost
+$r_q=\tfrac{1}{n_q}\big[\sum_\ell(c^R_{q\ell}x^R_{q\ell}+c^S_{q\ell}x^S_{q\ell})+d^{\mathrm{miss}}z_q\big]$
+($c^a_{q\ell}$ the unloaded reconstruction time, $d^{\mathrm{miss}}\!=\!2D$ the
+stranded-job penalty), Stage 3 minimizes the worst-class cost $H=\max_q r_q$ and
+Stage 4 the spread $V=\max_q|r_q-\bar r|$. Each stage adds the prior optimum as a
+constraint, so the Stage-1 fairness certificate survives into the final plan.
 
 \paragraph{Convexity.} Every stage is convex. The feasible set is a polyhedron
 (affine conservation and capacity constraints, nonnegativity); the Stage-1, 3, and

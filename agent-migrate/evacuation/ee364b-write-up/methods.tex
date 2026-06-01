@@ -1,18 +1,27 @@
 \section{Solving the Program}
 \label{sec:methods}
 
-Each stage is a small convex program, but the pipeline has two implementation
-wrinkles worth stating before the dual structure that is the real analytical
-payoff.
+Queue-Haul (Fig.~\ref{fig:sites}) solves the staged program as a short
+lexicographic stack (Fig.~\ref{fig:pipeline}). Each stage is a small convex
+program; the pipeline has two implementation wrinkles worth stating before the dual
+structure that is the real payoff.
 
-\paragraph{Backends.} We build every stage in CVXPY~\cite{diamond2016cvxpy}. The
-pure-LP stages (1, 3, 4) go to an LP solver; the proportional-fair variant of
-Stage 1 and the Stage-2b QP carry a $\log$-utility or quadratic term and go to the
-conic solver Clarabel~\cite{clarabel}. The log-utility
-$\sum_q n_q\log(1-z_q/n_q)$ needs tight tolerances: its gradient blows up as a
-class approaches full migration ($z_q\!\to\!0$), so a loose feasibility tolerance
-lets the iterate drift below the utility floor and breaks the fairness certificate
-handed to later stages.
+\begin{figure}[t]
+\centering
+\includegraphics[width=\linewidth]{queue-haul-pipeline.pdf}
+\caption{The lexicographic program Queue-Haul solves (Sec.~\ref{sec:formulation}):
+a proportional-fair migration allocator, then refinements that minimize peak
+resource pressure, worst congestion cost, and cross-class variance. Each box fixes
+the previous one's optimum before optimizing its own objective.}
+\label{fig:pipeline}
+\end{figure}
+
+\paragraph{Backends.} We build every stage in CVXPY~\cite{diamond2016cvxpy}: the
+pure-LP stages use an LP solver, while the proportional-fair Stage~1 and the
+Stage-2b QP go to the conic solver Clarabel~\cite{clarabel}. The log-utility
+$\sum_q n_q\log(1-z_q/n_q)$ needs tight tolerances---its gradient blows up as
+$z_q\!\to\!0$, so a loose tolerance lets the iterate drift below the utility floor
+and breaks the certificate handed to later stages.
 
 \paragraph{Preconditioning.} The raw coefficients span about twenty orders of
 magnitude---network terms are bytes ($\beta_q T_q,\,\eta_q T_q\sim10^{8\text{--}11}$),
@@ -77,16 +86,14 @@ per-class QPs with a prox-of-max.
 
 Honestly, none is competitive yet. At the end of their budget the median relative
 gap to $\phi^\star$ is still about $0.6$ (subgradient), $0.24$ (mirror descent),
-and above $1$ (ADMM): the \emph{ordering} is what the theory predicts---mirror
-beats subgradient, ADMM is cheap per iteration but loose---but the accuracy is not.
-Three things hurt. The dual objective is non-smooth (a max over pressures, so the
-subgradient is a single active constraint and the iterate chatters). The Polyak
-step starves whenever the throughput link is slack and $\mu$ rests at zero, leaving
-only the pressure subgradient to make progress. And even after row-normalization
-the per-class costs differ enough that one global step size serves them poorly.
-Iterate averaging, restarts, and a diagonal preconditioner on the prices are the
-obvious next moves; for the present report CVXPY is the solver, and the first-order
-methods are a study of the dual's geometry rather than a replacement.
+and above $1$ (ADMM): the \emph{ordering} matches theory---mirror beats subgradient,
+ADMM is cheap per iteration but loose---but the accuracy does not. Three things
+hurt: the objective is non-smooth (a max over pressures, so the subgradient is one
+active constraint and the iterate chatters); the Polyak step starves when the
+throughput link is slack and $\mu$ rests at zero; and even after normalization one
+global step size fits the per-class costs poorly. Averaging, restarts, and a
+diagonal price preconditioner are the next moves; for now CVXPY is the solver and
+the first-order methods are a study of the dual's geometry.
 
 \begin{figure*}[t]
 \centering
