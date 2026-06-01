@@ -21,7 +21,7 @@ from stage1 import Stage1Result
 from stage3 import recon_costs
 
 R, S = 0, 1  # action indices
-BASELINES = ("random", "replay_only", "state_only", "least_loaded")
+BASELINES = ("random", "greedy", "round_robin", "replay_only", "state_only", "least_loaded")
 
 
 def _coeff(inst):
@@ -67,8 +67,27 @@ def _rank_least_loaded(inst):
     return rank
 
 
+def _rank_greedy(inst):
+    c = recon_costs(inst)  # (c_R, c_S), each (Q, L); cheapest (dest, action) first
+    comp = _compat(inst)
+    def rank(q, used):
+        return sorted([(l, a) for l in comp[q] for a in (R, S)], key=lambda la: c[la[1]][q, la[0]])
+    return rank
+
+
+def _rank_round_robin(inst):
+    c_R, c_S = recon_costs(inst)
+    comp, L = _compat(inst), inst.lambda_bps.size
+    def rank(q, used):  # cycle destinations starting at q % L; cheaper action per dest
+        order = sorted(comp[q], key=lambda l: (l - q) % L)
+        return [(l, R if c_R[q, l] <= c_S[q, l] else S) for l in order]
+    return rank
+
+
 def _build(inst, name, seed):
     if name == "random":        return _rank_random(inst, seed)
+    if name == "greedy":        return _rank_greedy(inst)
+    if name == "round_robin":   return _rank_round_robin(inst)
     if name == "replay_only":   return _rank_action(inst, R)
     if name == "state_only":    return _rank_action(inst, S)
     if name == "least_loaded":  return _rank_least_loaded(inst)
