@@ -10,33 +10,7 @@ their state to the destinations.
 
 \begin{figure}[t]
 \centering
-\resizebox{\linewidth}{!}{%
-\begin{tikzpicture}[
-  font=\sffamily, >=Stealth,
-  box/.style={draw, rounded corners=2pt, minimum height=8mm, align=center, semithick},
-  src/.style={box, fill=red!8, draw=red!55, minimum width=18mm},
-  ctrl/.style={box, fill=blue!10, draw=blue!60, minimum width=30mm, minimum height=9mm},
-  dst/.style={box, fill=black!5, draw=black!50, minimum width=15mm},
-]
-\node[src] (s0) {Site 0};
-\node[align=center, font=\footnotesize\itshape, text=red!60, left=14mm of s0] (pd)
-  {$D$-second\\ramp-down};
-\draw[->, semithick, dotted, red!55] (pd) -- (s0);
-\node[ctrl, below=11mm of s0] (qh) {Queue-Haul};
-\draw[->, line width=1pt] (s0) --
-  node[right=1mm, font=\footnotesize\itshape, text=black!70] {egress sessions} (qh);
-\node[dst, below=13mm of qh] (d2) {Site 2};
-\node[dst, left=8mm of d2] (d1) {Site 1};
-\node[right=6mm of d2, font=\large] (dots) {$\cdots$};
-\node[dst, right=6mm of dots] (dk) {Site $k$};
-\draw[->, line width=1pt] (qh) -- (d1);
-\draw[->, line width=1pt] (qh) -- (d2);
-\draw[->, line width=1pt] (qh) -- (dk);
-\draw[->, semithick, dashed, black!55] (dk.east) to[out=0, in=0, looseness=1.6]
-  node[right=1mm, font=\footnotesize\itshape, text=black!70, align=left] {resource\\telemetry}
-  (qh.east);
-\node[font=\footnotesize, text=black!55, below=2mm of d2] {available destinations};
-\end{tikzpicture}}
+\includegraphics[width=\linewidth]{queue-haul-sites.pdf}
 \caption{Queue-Haul in context. A source site (Site~0) under a $D$-second ramp-down
 egresses its stateful sessions to the controller, which routes them across
 available destination sites using per-datacenter resource telemetry.}
