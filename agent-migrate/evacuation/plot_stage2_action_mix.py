@@ -90,26 +90,29 @@ def main() -> None:
     fig, ax = plt.subplots(figsize=(12, 5.6))
     x = np.arange(M)
     w = 0.38
-    ax.bar(x - w/2, R1m, w, color="#3a7ca5", label="Stage 1 — replay")
-    ax.bar(x - w/2, 100 - R1m, w, bottom=R1m, color="#a5c8e1", label="Stage 1 — state")
-    ax.bar(x + w/2, R2m, w, color="#c44536", label="Stage 2 — replay")
-    ax.bar(x + w/2, 100 - R2m, w, bottom=R2m, color="#edaaa0", label="Stage 2 — state")
+    ax.bar(x - w/2, R1m, w, color="#3a7ca5", label="Stage 1: replay")
+    ax.bar(x - w/2, 100 - R1m, w, bottom=R1m, color="#a5c8e1", label="Stage 1: state transfer")
+    ax.bar(x + w/2, R2m, w, color="#c44536", label="Stage 2: replay")
+    ax.bar(x + w/2, 100 - R2m, w, bottom=R2m, color="#edaaa0", label="Stage 2: state transfer")
     # Error bars (+/-1 sd over instances) on the replay/state boundary of each bar.
-    ax.errorbar(x - w/2, R1m, yerr=R1s, fmt="none", ecolor="black", capsize=4, lw=1.4)
-    ax.errorbar(x + w/2, R2m, yerr=R2s, fmt="none", ecolor="black", capsize=4, lw=1.4)
+    ax.errorbar(x - w/2, R1m, yerr=R1s, fmt="none", ecolor="0.15", capsize=4, lw=1.4)
+    ax.errorbar(x + w/2, R2m, yerr=R2s, fmt="none", ecolor="0.15", capsize=4, lw=1.4)
+    # Replay share, centred inside each replay (lower) segment.
     for i in range(M):
-        ax.text(x[i] - w/2, R1m[i] + R1s[i] + 1, f"{R1m[i]:.0f}%",
-                ha="center", va="bottom", fontsize=12, color="#3a7ca5", fontweight="bold")
-        ax.text(x[i] + w/2, R2m[i] + R2s[i] + 1, f"{R2m[i]:.0f}%",
-                ha="center", va="bottom", fontsize=12, color="#c44536", fontweight="bold")
+        ax.text(x[i] - w/2, R1m[i] / 2, f"{R1m[i]:.0f}%", ha="center", va="center",
+                fontsize=13, color="white", fontweight="bold")
+        ax.text(x[i] + w/2, R2m[i] / 2, f"{R2m[i]:.0f}%", ha="center", va="center",
+                fontsize=13, color="white", fontweight="bold")
 
     ax.set_xticks(x)
-    ax.set_xticklabels(models, rotation=20, ha="right", fontsize=14)
-    ax.set_ylabel("share of moved jobs (%)", fontsize=17)
-    ax.set_ylim(0, 112)
+    ax.set_xticklabels(models, rotation=20, ha="right", fontsize=15)
+    ax.set_ylabel("Share of migrated jobs (%)", fontsize=18)
+    ax.set_ylim(0, 104)
     ax.tick_params(axis="y", labelsize=14)
-    ax.legend(fontsize=14, ncol=4, loc="upper center", bbox_to_anchor=(0.5, -0.16), frameon=False)
+    ax.legend(fontsize=14, ncol=2, loc="upper center", bbox_to_anchor=(0.5, -0.20),
+              frameon=False, columnspacing=3.0, handlelength=1.4)
     ax.grid(True, axis="y", alpha=0.3)
+    ax.set_axisbelow(True)
     fig.savefig(OUT / "stage2_action_mix.pdf", bbox_inches="tight")
     fig.savefig(OUT / "stage2_action_mix.png", dpi=150, bbox_inches="tight")
     print(f"wrote {OUT / 'stage2_action_mix.pdf'}  (error bars = +/-1 sd over {data['n_seeds']} instances)")
