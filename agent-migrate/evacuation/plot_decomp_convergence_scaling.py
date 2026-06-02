@@ -78,11 +78,29 @@ def compute() -> dict:
     return data
 
 
+plt.rcParams.update({
+    "axes.labelsize": 17,
+    "xtick.labelsize": 14,
+    "ytick.labelsize": 14,
+    "legend.fontsize": 14,
+})
+LABELS = {"subgradient": "subgradient", "mirror descent": "mirror descent",
+          "ADMM": f"ADMM ({ADMM_ITERS} iters)"}
+
+
 def main() -> None:
     if "--recompute" in sys.argv or not JSON.exists():
         data = compute()
     else:
         data = json.loads(JSON.read_text())
+
+    print("final median relative gap (phi_k - phi*)/phi*:")
+    for nd in N_DEST:
+        agg = data[str(nd)]
+        finals = {n: agg[n]["median"][-1] for n in COLORS}
+        n_it = {n: len(agg[n]["median"]) for n in COLORS}
+        print(f"  L={nd}, |I|={data['n_I'][str(nd)]}:  "
+              + "  ".join(f"{n} {finals[n]:.3f} (@{n_it[n]})" for n in COLORS))
 
     fig, axes = plt.subplots(1, 3, figsize=(13.5, 4.3), sharey=True)
     for ax, nd in zip(axes, N_DEST):
@@ -91,12 +109,20 @@ def main() -> None:
             med = np.array(agg[name]["median"])
             lo, hi = np.array(agg[name]["lo"]), np.array(agg[name]["hi"])
             it = np.arange(1, len(med) + 1)
-            ax.semilogy(it, med, color=c, lw=1.7, label=name)
+            ax.semilogy(it, med, color=c, lw=1.9, label=LABELS[name])
             ax.fill_between(it, lo, hi, color=c, alpha=0.18, lw=0)
+        # Honest end-cap: mark where ADMM's data actually stops (it is NOT converged).
+        amed = np.array(agg["ADMM"]["median"])
+        ax.plot(len(amed), amed[-1], "o", color=COLORS["ADMM"], ms=8,
+                mec="white", mew=1.2, zorder=5)
+        # Faint "good enough" reference so the reader can gauge distance to convergence.
+        ax.axhline(1e-2, color="0.45", lw=1.0, ls=":", zorder=0)
         ax.set_xlabel(f"iteration   ($L={nd}$,  $|\\mathcal{{I}}|={data['n_I'][str(nd)]}$)")
         ax.grid(True, which="both", alpha=0.3)
-    axes[0].set_ylabel(r"relative primal gap  $(\phi_k - \phi^\star)/\phi^\star$")
-    axes[0].legend(loc="upper right")
+    axes[-1].text(795, 1.2e-2, "good enough ($10^{-2}$)", fontsize=11,
+                  color="0.35", ha="right", va="bottom")
+    axes[0].set_ylabel(r"relative primal gap  $(\phi_k - \phi^\star)/\phi^\star$", labelpad=8)
+    axes[0].legend(loc="lower left", framealpha=0.95)
     fig.tight_layout()
     fig.savefig(OUT / "decomp_convergence_scaling.pdf", bbox_inches="tight")
     fig.savefig(OUT / "decomp_convergence_scaling.png", dpi=150, bbox_inches="tight")

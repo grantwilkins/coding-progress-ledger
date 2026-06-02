@@ -5,11 +5,38 @@ We model a single migration event: a source site must move its active inference
 sessions to other sites before a deadline $D$ so that the source can shed power.
 The decision is per session---\emph{where} it lands and \emph{how} its serving
 state is rebuilt there. We call the controller that plans and routes this migration
-\emph{Queue-Haul} (Fig.~\ref{fig:sites}).
+\emph{Queue-Haul} (Fig.~\ref{fig:sites}): it queues sessions at the source and hauls
+their state to the destinations.
 
 \begin{figure}[t]
 \centering
-\includegraphics[width=\linewidth]{queue-haul-sites.pdf}
+\resizebox{\linewidth}{!}{%
+\begin{tikzpicture}[
+  font=\sffamily, >=Stealth,
+  box/.style={draw, rounded corners=2pt, minimum height=8mm, align=center, semithick},
+  src/.style={box, fill=red!8, draw=red!55, minimum width=18mm},
+  ctrl/.style={box, fill=blue!10, draw=blue!60, minimum width=30mm, minimum height=9mm},
+  dst/.style={box, fill=black!5, draw=black!50, minimum width=15mm},
+]
+\node[src] (s0) {Site 0};
+\node[align=center, font=\footnotesize\itshape, text=red!60, left=14mm of s0] (pd)
+  {$D$-second\\ramp-down};
+\draw[->, semithick, dotted, red!55] (pd) -- (s0);
+\node[ctrl, below=11mm of s0] (qh) {Queue-Haul};
+\draw[->, line width=1pt] (s0) --
+  node[right=1mm, font=\footnotesize\itshape, text=black!70] {egress sessions} (qh);
+\node[dst, below=13mm of qh] (d2) {Site 2};
+\node[dst, left=8mm of d2] (d1) {Site 1};
+\node[right=6mm of d2, font=\large] (dots) {$\cdots$};
+\node[dst, right=6mm of dots] (dk) {Site $k$};
+\draw[->, line width=1pt] (qh) -- (d1);
+\draw[->, line width=1pt] (qh) -- (d2);
+\draw[->, line width=1pt] (qh) -- (dk);
+\draw[->, semithick, dashed, black!55] (dk.east) to[out=0, in=0, looseness=1.6]
+  node[right=1mm, font=\footnotesize\itshape, text=black!70, align=left] {resource\\telemetry}
+  (qh.east);
+\node[font=\footnotesize, text=black!55, below=2mm of d2] {available destinations};
+\end{tikzpicture}}
 \caption{Queue-Haul in context. A source site (Site~0) under a $D$-second ramp-down
 egresses its stateful sessions to the controller, which routes them across
 available destination sites using per-datacenter resource telemetry.}
@@ -25,9 +52,11 @@ $T_q/\rho_q$ GPU-seconds on a warm instance. \emph{State transfer} ($S$) ships t
 KV cache itself ($\eta_q T_q$ bytes, $\eta_q$ the per-token KV size) and skips
 prefill, paying instead to ingest that volume. The decision variables are the
 fractional job counts $x^R_{q\ell},x^S_{q\ell}\ge 0$ and the \emph{stranded} count
-$z_q\ge 0$ of jobs not rebuilt by the deadline. We relax $x,z$ to the reals: the
-program is a planning benchmark for how much work moves, where, and by which
-action. Integer rounding and discrete-event queue simulation are deferred.
+$z_q\ge 0$ of jobs not rebuilt by the deadline. We relax $x,z$ to the reals, so the
+program is a planning model for how much work moves, where, and by which action.
+The relaxation models fractional jobs whose loads are integrated over the window
+$[0,D]$; it does not model intra-window ordering or transient queueing. Integer
+rounding and discrete-event queue simulation are deferred.
 
 \paragraph{Resource model.} Each destination has three resources shared over the
 window $[0,D]$: network ingress $\Lambda_\ell$, and, per model, a warm-instance
@@ -84,18 +113,25 @@ p_i(x)\le\phi\ \forall i,\ \ \textstyle\sum_q z_q=Z^\star,\ \text{base constrain
 \]
 $\phi^\star$ is the lowest achievable peak utilization: $\phi^\star<1$ means the
 plan leaves slack, $\phi^\star=1$ means some resource is saturated. Stage 2 is the
-workhorse---it is where the action mix (replay vs.\ transfer) and the destination
+workhorse. It is where the action mix (replay vs.\ transfer) and the destination
 routing are actually decided, and its dual prices (Sec.~\ref{sec:methods}) are the
 analytical handle we lean on throughout.
 
 \smallskip\noindent\textbf{Lexicographic refinements.} Three further stages break
-ties without disturbing $Z^\star$ or $\phi^\star$: a QP tie-break minimizes the
-congestion potential $\tfrac12\sum_i p_i(x)^2$, then, with per-class rebuild cost
-$r_q=\tfrac{1}{n_q}\big[\sum_\ell(c^R_{q\ell}x^R_{q\ell}+c^S_{q\ell}x^S_{q\ell})+d^{\mathrm{miss}}z_q\big]$
-($c^a_{q\ell}$ the unloaded reconstruction time, $d^{\mathrm{miss}}\!=\!2D$ the
-stranded-job penalty), Stage 3 minimizes the worst-class cost $H=\max_q r_q$ and
-Stage 4 the spread $V=\max_q|r_q-\bar r|$. Each stage adds the prior optimum as a
-constraint, so the Stage-1 fairness certificate survives into the final plan.
+ties without disturbing $Z^\star$ or $\phi^\star$. They are scored by the per-class
+rebuild cost
+\[
+r_q=\tfrac{1}{n_q}\big[\textstyle\sum_\ell(c^R_{q\ell}x^R_{q\ell}+c^S_{q\ell}x^S_{q\ell})+d^{\mathrm{miss}}z_q\big],
+\]
+where $c^a_{q\ell}$ is the unloaded reconstruction time and $d^{\mathrm{miss}}\!=\!2D$
+the stranded-job penalty. The three stages are:
+\begin{itemize}
+\item \textbf{Stage 2b (QP):} minimize the congestion potential $\tfrac12\sum_i p_i(x)^2$.
+\item \textbf{Stage 3 (LP):} minimize the worst-class cost $H=\max_q r_q$.
+\item \textbf{Stage 4 (LP):} minimize the spread $V=\max_q|r_q-\bar r|$.
+\end{itemize}
+Each stage adds the prior optimum as a constraint, so the Stage-1 fairness
+certificate survives into the final plan.
 
 \paragraph{Convexity.} Every stage is convex. The feasible set is a polyhedron
 (affine conservation and capacity constraints, nonnegativity); the Stage-1, 3, and

@@ -96,7 +96,7 @@ def _crossover(frac, target=0.5):
 
 
 def main() -> None:
-    fig, ax = plt.subplots(figsize=(6.5, 6.4), constrained_layout=True)
+    fig, ax = plt.subplots(figsize=(6.5, 4.4), constrained_layout=True)
 
     curves = [(1.0, "#3a7ca5", r"$\rho$ default"),
               (0.5, "#c44536", r"$\rho \times 0.5$ (slow prefill)")]
@@ -117,7 +117,7 @@ def main() -> None:
 
     ax.set_xscale("log")
     ax.set_xlabel(r"bandwidth scale $\Lambda$", fontsize=19)
-    ax.set_ylabel(r"replay share of moved jobs  $R/(R+S)$  (%)", fontsize=19)
+    ax.set_ylabel(r"replay share  $R/(R+S)$  (%)", fontsize=19)
     ax.tick_params(axis="both", labelsize=16)
     ax.grid(True, which="both", alpha=0.3)
     ax.legend(fontsize=15, loc="lower left", framealpha=1.0).set_zorder(6)
