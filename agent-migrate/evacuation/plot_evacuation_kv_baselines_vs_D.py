@@ -94,12 +94,11 @@ def plot(rows):
 
     ax.set_xscale("log")
     ax.set_xlabel("Deadline $D$ (s)", fontsize=17)
-    ax.set_ylabel("KV Cache Bytes Migrated Successfully (%)", fontsize=15)
+    ax.set_ylabel("KV Cache Bytes Migrated Successfully (%)", fontsize=13)
     ax.set_ylim(0, 102)
     ax.tick_params(labelsize=15)
     ax.grid(True, which="both", alpha=0.3)
     ax.legend(fontsize=14, loc="upper left")
-    fig.tight_layout()
     fig.savefig(OUT / "kv_evacuated_baselines_vs_D.pdf", bbox_inches="tight")
     fig.savefig(OUT / "kv_evacuated_baselines_vs_D.png", dpi=150, bbox_inches="tight")
     print(f"wrote {OUT / 'kv_evacuated_baselines_vs_D.png'}")
