@@ -11,7 +11,7 @@ before we turn to the dual structure, which is where the payoff lies.
 \includegraphics[width=\linewidth]{queue-haul-pipeline.pdf}
 \caption{The ordered program Queue-Haul solves (Sec.~\ref{sec:formulation}).
 A proportional-fair migration allocator comes first, then refinements that minimize peak
-resource pressure, worst congestion cost, and cross-class variance. Each box fixes
+resource pressure, worst-class rebuild cost, and cross-class spread. Each box fixes
 the previous one's optimum before optimizing its own objective.}
 \label{fig:pipeline}
 \end{figure}
@@ -62,7 +62,7 @@ binds and by how much.
 
 \paragraph{An envelope-theorem check.} The prices also predict sensitivity. Every
 capacity is linear in the deadline, $C_i\propto D$, so the envelope identity
-$\partial\phi^\star/\partial C_i=-\pi_i$ composes to
+$\partial\phi^\star/\partial\ln C_i=-\pi_i\hat p_i$ composes to
 \[
 \frac{d\phi^\star}{dD}=-\frac{1}{D}\sum_{i\in\mathcal{I}}\pi_i\,\hat p_i,
 \]
@@ -112,7 +112,7 @@ reads the peak $\phi$ off the pooled loads. A dual ascent then corrects wherever
 band over $50$ random instances, $L=3$). The gradient methods plateau far from
 $\phi^\star$, mirror descent leading subgradient as the simplex geometry predicts.
 ADMM costs a per-class QP each step, but over the full budget it overtakes both near
-iteration $120$ and drives the gap to ${\sim}10^{-3}$.}
+iteration $120$ and drives the gap to ${\sim}2\times10^{-3}$.}
 \label{fig:convergence}
 \end{figure}
 

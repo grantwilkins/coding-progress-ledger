@@ -21,7 +21,7 @@ Sessions are grouped into classes $q\in\mathcal{Q}$ by model $m(q)$ and
 token-length bucket, and class $q$ holds $n_q$ jobs of context length $T_q$. A job is
 rebuilt at a destination $\ell\in\mathcal{L}$ by one of two actions.
 \emph{Replay} ($R$) ships the compact context ($\beta_q T_q$ bytes, with
-$\beta_q\!\approx\!4$\,B/tok) and recomputes the KV cache through prefill, costing
+$\beta_q\!=\!4$\,B/tok) and recomputes the KV cache through prefill, costing
 $T_q/\rho_q$ GPU-seconds on an instance already serving the model. \emph{State transfer} ($S$) ships the
 KV cache itself ($\eta_q T_q$ bytes, $\eta_q$ the per-token KV size) and skips
 prefill, paying instead to ingest that volume. The decision variables are the
@@ -105,7 +105,7 @@ r_q=\tfrac{1}{n_q}\big[\textstyle\sum_\ell(c^R_{q\ell}x^R_{q\ell}+c^S_{q\ell}x^S
 with $c^a_{q\ell}$ the unloaded reconstruction time and $d^{\mathrm{miss}}\!=\!2D$
 the stranded-job penalty. Stage 3 caps the worst class, $H=\max_q r_q$.
 
-\smallskip\noindent\textbf{Stage 4, minimize variance between classes (LP).}
+\smallskip\noindent\textbf{Stage 4, minimize spread between classes (LP).}
 Finally, we even the classes out by minimizing the spread $V=\max_q|r_q-\bar r|$, so no
 class sits far from the average. Each stage freezes the previous optimum, so the
 fair allocation and the balanced load both carry through to the end.

@@ -1,25 +1,20 @@
 \section{Results}
 \label{sec:results}
 
-We put the exact solve to two tests. Does the convex allocator beat the policies you
-would reach for by hand, and are the rebuild actions it picks sensible? (The dual
-analysis and first-order solvers are in Sec.~\ref{sec:methods}.)
-
-\paragraph{It beats the obvious heuristics, and the deadline is what decides.} The
-real test of a planner is whether it outperforms simple rules.
+\paragraph{Queue-Haul beats the obvious heuristics, and the deadline is what decides.} The
+real test of a planner is whether it outperforms simple baselines.
 Figure~\ref{fig:baselines} sweeps the deadline and plots the share of KV-cache
 \emph{bytes} that reach a destination in time, for our proportional-fair allocator
 against six fixed heuristics and random placement. We weight by KV bytes, not job
-count, on purpose. Those bytes are the serving state we are trying to save, and a
-plain count would hide a policy that rescues many cheap sessions while abandoning a
-few enormous ones. Our allocator evacuates everything by $D{\approx}300$s. The
+count, since those bytes are the serving state we are trying to save, and a
+plain count would hide a policy that helps many cheap sessions while abandoning enormous ones. Our allocator evacuates everything by $D{\approx}300$s. The
 flexible heuristics (greedy, round-robin, state-only, random) get there too, but
 only by ${\approx}600$s, twice the deadline. The two all-replay rules (replay-only
 and least-loaded) never finish. They pour every rebuild onto the GPUs, hit the
 prefill ceiling, and strand ${\sim}45\%$ of the KV cache even at $D{=}900$s.
 Greedy even trails random at $D{=}300$s ($76\%$ vs.\ $90\%$), because chasing the
 cheapest placement first hoards small sessions and leaves the expensive state
-behind, exactly what proportional fairness refuses to do.
+behind.
 
 \begin{figure}[t]
 \centering
@@ -47,8 +42,7 @@ where all-replay caps at $55\%$. Load balancing also \emph{sharpens} the choice.
 Stage 2 lifts the replay share above the fair allocation's (DeepSeek V4 Pro
 $45\%\!\to\!86\%$) and collapses its spread (wide Stage-1 error bars, tight Stage-2),
 because the fair stage leaves the mix loosely pinned and peak-pressure settles it on
-the network-sparing point. The exact split is model-specific, set by each model's KV
-size, prefill speed, and warm-pool headroom.
+the network-sparing point.
 
 \begin{figure}[t]
 \centering
@@ -60,10 +54,10 @@ the Stage-1 spread.}
 \label{fig:mix}
 \end{figure}
 
-\paragraph{Where the plan is sensitive.} The Stage-2 prices double as a sensitivity
-report. By the envelope theorem (Sec.~\ref{sec:methods}) each price $\pi_i$ equals
-$-\partial\phi^\star/\partial C_i$, so a single LP solve says which resource to grow
-to relieve the peak. Table~\ref{tab:sens} reads it off for the base instance. The
+\paragraph{Where the allocation is most sensitive.} The Stage-2 prices double as a sensitivity
+report. By the envelope theorem (Sec.~\ref{sec:methods}) each price gives a
+log-capacity sensitivity $\partial\phi^\star/\partial\ln C_i=-\pi_i\hat p_i$, so a
+single LP solve says which resource to grow to relieve the peak. Table~\ref{tab:sens} reads it off for the base instance. The
 inter-site network owns $81\%$ of the sensitivity, prefill the remaining $19\%$ (most
 of it on Qwen3-235B, the model with the tightest prefill supply), and state-ingest
 none at all, since its $512$\,GB/s pools sit so far from binding that adding more never
@@ -93,7 +87,7 @@ Resource & $\pi_i$ & $\partial\phi^\star/\partial\ln C_i$ \\
 \end{tabular}
 \caption{Sensitivity of the peak utilization $\phi^\star$ to each resource (base
 instance, $D{=}300$s, prop-fair Stage~1, $\phi^\star{=}0.93$). The dual price $\pi_i$
-(shares sum to $1$) equals $-\partial\phi^\star/\partial C_i$, and the last column
+(shares sum to $1$) is the marginal congestion price, and the last column
 $\partial\phi^\star/\partial\ln C_i=-\pi_i\hat p_i$ is the peak's response to a
 fractional capacity change. The network sets the peak, and ingest never binds.}
 \label{tab:sens}

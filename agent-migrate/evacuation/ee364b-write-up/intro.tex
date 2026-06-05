@@ -15,7 +15,7 @@ LLM serving increasingly manages persistent sessions rather than independent req
     \centering
     \includegraphics[width=0.85\linewidth]{glm5_context_ratio_bandwidths.pdf}
     \caption{
-    For GLM-5, the replay/transfer boundary shifts with context length and bandwidth. A clear surface emerges, where shorter contexts and higher bandwidths favor KV transfer and longer contexts and lower bandwidths favor replay. We trace the boundary across bandwidths from $1$ to $25$\,Gbps, showing how the decision moves with network conditions.
+    For GLM-5, the replay/transfer boundary shifts with context length and bandwidth. A clear surface emerges, where longer contexts and higher bandwidths favor KV transfer, and shorter contexts and lower bandwidths favor replay. We trace the boundary across bandwidths from $0.1$ to $25$\,Gbps, showing how the decision moves with network conditions.
     }
     \label{fig:glm5-context-ratio}
 \end{figure}
@@ -32,7 +32,7 @@ with crossover
 \]
 This calculation identifies the basic parameters, but it only describes an isolated session.
 
-The boundary also moves with context length and bandwidth. We show this for GLM-5 in Figure~\ref{fig:glm5-context-ratio}, where shorter contexts and higher bandwidths favor KV transfer and longer contexts and lower bandwidths favor replay. The nearly piecewise-linear shape comes from attention. KV cache size grows linearly with context length, while prefill time grows superlinearly because attention is quadratic, and that gap sets a sharp boundary in both context length and bandwidth. The boundary is the context length where replay (prefill) time meets KV-transfer time,
+The boundary also moves with context length and bandwidth. We show this for GLM-5 in Figure~\ref{fig:glm5-context-ratio}, where longer contexts and higher bandwidths favor KV transfer and shorter contexts and lower bandwidths favor replay. The nearly piecewise-linear shape comes from attention. KV cache size grows linearly with context length, while prefill time grows superlinearly because attention is quadratic, and that gap sets a sharp boundary in both context length and bandwidth. The boundary is the context length where replay (prefill) time meets KV-transfer time,
 \[
 \underbrace{\frac{2AT+\kappa T^2}{F}}_{\text{prefill (replay) time}}\;=\;\underbrace{\frac{\eta T}{\lambda}}_{\text{KV-transfer time}},
 \]
@@ -49,4 +49,4 @@ This project studies a convex relaxation of that allocation problem with a tool 
 
 Rather than collapse the competing goals into one weighted cost, we solve a short \emph{ordered} stack of convex programs. The stages first allocate the migration fairly, then minimize peak resource pressure, and finally refine the worst-class rebuild cost and cross-class fairness. The result is a continuous relaxation of the discrete placement problem. It does not model online scheduling or queueing, but it exposes the resource tradeoffs and gives a principled routing model. 
 
-We solve this stack exactly with CVXPY and then study the dual of the resource-pressure problem, where the congestion prices emerge. The dual yields prices that we put to work in two ways. One is an envelope-theorem sensitivity check. The other runs subgradient, mirror-descent, and ADMM solvers against the same dual. Our central finding is that the exact solve recovers sensible replay and state-transfer structure together with interpretable congestion prices. The first-order solvers are implemented but not yet tightly converged.
+We solve this stack exactly with CVXPY and then study the dual of the resource-pressure problem, where the congestion prices emerge. The dual yields prices that we put to work in two ways. One is an envelope-theorem sensitivity check. The other runs subgradient, mirror-descent, and ADMM solvers against the same dual. Our central finding is that the exact solve recovers sensible replay and state-transfer structure together with interpretable congestion prices.
