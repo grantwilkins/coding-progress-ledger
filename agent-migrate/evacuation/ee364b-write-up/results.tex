@@ -1,92 +1,104 @@
 \section{Results}
 \label{sec:results}
 
-We ask three things of the program. Does it choose sensible reconstruction actions?
-Does it behave the way a deadline-constrained system should? And do its dual prices
-predict sensitivity where the envelope identity applies? The first-order convergence
-study lives in Sec.~\ref{sec:methods}; here we report the exact solve.
+We put the exact solve to two tests. Does the convex allocator beat the policies you
+would reach for by hand, and are the rebuild actions it picks sensible? (The dual
+analysis and first-order solvers are in Sec.~\ref{sec:methods}.)
 
-\paragraph{The action mix is sensible, and its crossover is endogenous.} At the
-realistic bandwidths of Table~\ref{tab:setup} the optimizer migrates everyone
-($Z^\star=0$, $\phi^\star=0.93$ at $D{=}300$s) and rebuilds $80$--$100\%$ of jobs by
-\emph{replay}. The reason is cost: shipping the compact context and recomputing the
-KV cache is cheaper than moving tens of KiB/tok of state across the link. State
-transfer only becomes attractive when the network is abundant. Figure~\ref{fig:action}
-sweeps the bandwidth scale. The replay share falls steeply from ${\sim}92\%$,
-crossing $50/50$ at about $16.7\times$ the default bandwidth and yielding to state
-transfer beyond it. Halving the prefill rate is a separate sweep, and it slides that
-crossover down to $8.4\times$. This is the multi-session analogue of the single-session boundary
-$\lambda^\star=\rho(\eta-\beta)$ from Sec.~\ref{sec:formulation}: the same physics,
-but now set \emph{inside} the optimization by shared congestion rather than read off
-a per-session formula.
-
-\begin{figure}[t]
-\centering
-\includegraphics[width=\linewidth]{action_regime.pdf}
-\caption{Replay share $R/(R+S)$ of moved jobs vs network bandwidth scale, at
-default and halved prefill. Replay dominates at realistic bandwidth; state transfer
-takes over only well above it, and faster prefill pushes the $50/50$ crossover to
-higher bandwidth ($\Lambda\!\approx\!16.7\times$ vs $8.4\times$). The crossover is
-endogenous.}
-\label{fig:action}
-\end{figure}
-
-\paragraph{The deadline is the control that matters.} Figure~\ref{fig:feasible}
-sweeps $D$. Migration feasibility climbs sharply, from $29\%$ of jobs at $D{=}1$s to
-$91\%$ at $60$s and $100\%$ by $300$s for $10$k sessions, and doubling the load
-pushes the full-migration point out to ${\sim}600$s. Recall that $r_q$ is the
-per-class rebuild cost and $H^\star=\max_q r_q$ the worst-class cost. It mirrors the
-feasibility transition. While any class is still stranded, the
-worst class \emph{is} a stranded one, so $H^\star$ rides the miss penalty
-$d^{\mathrm{miss}}=2D$ exactly. The moment full migration becomes feasible, it
-collapses to the true worst-class rebuild cost, ${\approx}11$s. A diagnostic LP that
-forces full migration at a tight deadline confirms network and prefill saturate
-together while ingest stays slack.
+\paragraph{It beats the obvious heuristics, and the deadline is what decides.} The
+real test of a planner is whether it outperforms simple rules.
+Figure~\ref{fig:baselines} sweeps the deadline and plots the share of KV-cache
+\emph{bytes} that reach a destination in time, for our proportional-fair allocator
+against six fixed heuristics and random placement. We weight by KV bytes, not job
+count, on purpose. Those bytes are the serving state we are trying to save, and a
+plain count would hide a policy that rescues many cheap sessions while abandoning a
+few enormous ones. Our allocator evacuates everything by $D{\approx}300$s. The
+flexible heuristics (greedy, round-robin, state-only, random) get there too, but
+only by ${\approx}600$s, twice the deadline. The two all-replay rules (replay-only
+and least-loaded) never finish. They pour every rebuild onto the GPUs, hit the
+prefill ceiling, and strand ${\sim}45\%$ of the KV cache even at $D{=}900$s.
+Greedy even trails random at $D{=}300$s ($76\%$ vs.\ $90\%$), because chasing the
+cheapest placement first hoards small sessions and leaves the expensive state
+behind, exactly what proportional fairness refuses to do.
 
 \begin{figure}[t]
 \centering
-\includegraphics[width=\linewidth]{percent_migrated_vs_D.pdf}
-\caption{Jobs migrated vs deadline, two workload sizes. The transition is sharp:
-at $N{=}10$k full migration is feasible by $D{\approx}300$s; doubling the load
-pushes that to ${\approx}600$s. The deadline, not spare capacity, is the dominant
-control.}
-\label{fig:feasible}
+\includegraphics[width=\columnwidth]{kv_evacuated_baselines_vs_D.pdf}
+\caption{Share of KV-cache bytes evacuated before the deadline, for our proportional-fair
+allocator against six heuristics and random placement ($10$k sessions, band is
+$\pm1$\,sd over seeds). Ours reaches $100\%$ by $D{\approx}300$s, the flexible
+heuristics only by ${\approx}600$s, and the all-replay rules (replay-only,
+least-loaded) stay prefill-bound near $55\%$.}
+\label{fig:baselines}
 \end{figure}
 
-\paragraph{The dual-predicted slope matches finite differences in the interior.} The
-Stage-2 prices $\pi_i$ name the binding resource and, because every capacity is
-linear in $D$, predict how the peak moves with the deadline. Figure~\ref{fig:envelope}
-(right) overlays the dual-predicted slope $-\tfrac1D\sum_i\pi_i \hat p_i$ on the
-finite-difference slope of $\phi^\star(D)$. The two agree closely while the program
-is interior: at $D{=}90$s, $-7.1$ vs $-7.3\!\times\!10^{-3}$; at $D{=}273$s, $-7.8$
-vs $-8.0\!\times\!10^{-4}$. They separate once $\phi^\star$ pins at $1$, exactly
-where the envelope identity stops applying. There, extra deadline is absorbed by
-Stage 1, which strands fewer jobs, rather than by lower pressure, so the realized
-slope falls to zero while the prediction does not. The left panel reads off the
-scarce model: Qwen3-235B, with the tightest prefill supply, carries the largest
-prefill price. One LP solve thus yields both an allocation and a sensitivity model
-that holds wherever the program is interior.
+\paragraph{The rebuild mix is mostly replay, with a deliberate sliver of transfer.}
+How does the optimizer actually rebuild each session? Figure~\ref{fig:mix} gives the
+replay-versus-transfer split per model, for the fair allocation (Stage 1) and after
+load balancing (Stage 2). Replay dominates. Stage 2 rebuilds $81$--$100\%$ of every
+model's jobs by replay. Shipping $4$\,B/tok of context and recomputing is far lighter
+on the inter-site link than moving tens of KiB/tok of KV cache, so replay spares the
+network, the tight resource at these bandwidths. But the plan is never \emph{all}
+replay, and that is the point. All-replay is exactly the prefill-bound failure of
+Fig.~\ref{fig:baselines}. The optimizer keeps a minority of jobs on state
+transfer, which leans on the idle state-ingest path rather than the GPUs, to stay
+under the prefill ceiling. That small transfer band is what lets it reach $100\%$
+where all-replay caps at $55\%$. Load balancing also \emph{sharpens} the choice.
+Stage 2 lifts the replay share above the fair allocation's (DeepSeek V4 Pro
+$45\%\!\to\!86\%$) and collapses its spread (wide Stage-1 error bars, tight Stage-2),
+because the fair stage leaves the mix loosely pinned and peak-pressure settles it on
+the network-sparing point. The exact split is model-specific, set by each model's KV
+size, prefill speed, and warm-pool headroom.
 
-\begin{figure*}[t]
+\begin{figure}[t]
 \centering
-\includegraphics[width=\textwidth]{dual_vs_deadline.pdf}
-\caption{Stage-2 duals vs the deadline ($N{=}2000$, chosen so $\phi^\star$ stays
-interior over the sweep). \emph{Left:} per-model prefill price
-$\frac1D\sum_\ell\pi^{\mathrm{pfill}}_{\ell m}\hat p_{\ell m}$ decays with $D$;
-Qwen3-235B carries the most. \emph{Right:} the envelope-theorem prediction tracks
-the finite-difference slope of $\phi^\star(D)$ in the interior and separates once
-$\phi^\star=1$ and the deadline is absorbed by stranding instead of pressure.}
-\label{fig:envelope}
-\end{figure*}
+\includegraphics[width=\columnwidth]{stage2_action_mix.pdf}
+\caption{Replay vs.\ state-transfer share of migrated jobs, per model, for the fair
+allocation (Stage 1) and after peak-pressure balancing (Stage 2), with error bars
+$\pm1$\,sd over $50$ instances. Stage 2 rebuilds $81$--$100\%$ by replay and tightens
+the Stage-1 spread.}
+\label{fig:mix}
+\end{figure}
+
+\paragraph{Where the plan is sensitive.} The Stage-2 prices double as a sensitivity
+report. By the envelope theorem (Sec.~\ref{sec:methods}) each price $\pi_i$ equals
+$-\partial\phi^\star/\partial C_i$, so a single LP solve says which resource to grow
+to relieve the peak. Table~\ref{tab:sens} reads it off for the base instance. The
+inter-site network owns $81\%$ of the sensitivity, prefill the remaining $19\%$ (most
+of it on Qwen3-235B, the model with the tightest prefill supply), and state-ingest
+none at all, since its $512$\,GB/s pools sit so far from binding that adding more never
+moves the peak. One mild surprise sits inside the network. The price tracks
+\emph{capacity}, not scarcity, so the $50$\,GB/s Site~C, which the optimizer loads
+the heaviest, is the most sensitive of the three. A $1\%$ capacity bump shifts
+$\phi^\star$ by exactly the predicted amount (Site~C, $-0.431$ measured vs.\ $-0.430$
+from the price), and the entries sum to the deadline sensitivity
+$d\phi^\star/d\ln D=-\phi^\star$.
+
+\begin{table}[t]
+\centering
+\begin{tabular}{lrr}
+\hline
+Resource & $\pi_i$ & $\partial\phi^\star/\partial\ln C_i$ \\
+\hline
+\textbf{Network} & $0.81$ & \\
+\quad Site C ($50$\,GB/s) & $0.46$ & $-0.43$ \\
+\quad Site A ($25$\,GB/s) & $0.23$ & $-0.22$ \\
+\quad Site B ($12.5$\,GB/s) & $0.12$ & $-0.11$ \\
+\textbf{Prefill} & $0.19$ & \\
+\quad Qwen3 235B & $0.08$ & $-0.07$ \\
+\quad Kimi K2.6 & $0.06$ & $-0.06$ \\
+\quad other 4 models & $0.05$ & $-0.05$ \\
+\textbf{Ingest} & $0.00$ & $0$ \\
+\hline
+\end{tabular}
+\caption{Sensitivity of the peak utilization $\phi^\star$ to each resource (base
+instance, $D{=}300$s, prop-fair Stage~1, $\phi^\star{=}0.93$). The dual price $\pi_i$
+(shares sum to $1$) equals $-\partial\phi^\star/\partial C_i$, and the last column
+$\partial\phi^\star/\partial\ln C_i=-\pi_i\hat p_i$ is the peak's response to a
+fractional capacity change. The network sets the peak, and ingest never binds.}
+\label{tab:sens}
+\end{table}
 
 \section{Conclusion}
 
-We recast site power-down as a deadline-constrained migration of stateful LLM
-sessions and solved it as a short lexicographic stack of convex programs. The exact
-solve recovers structure that matches the physics: replay dominates at realistic
-bandwidth, with an endogenous crossover to state transfer. Its Stage-2 dual delivers
-interpretable congestion prices, whose envelope-theorem prediction matches finite
-differences wherever the program is interior. The first-order solvers reproduce the
-right qualitative ordering, mirror descent over subgradient, but are not yet
-accurate. Three steps follow immediately: tighten the first-order solvers, round the
-fractional plan, and validate it against a discrete-event queue.
+As the relationship between datacenters and the grid becomes more strained, the need for intelligent load shedding and migration grows. This project studies a convex relaxation of the session migration problem, where a source site must move its active inference sessions to other sites before a deadline. For each session the decision is where it lands and how its serving state is rebuilt there. We show that the solution is model-, resource-, and deadline-aware, and that the dual of the resource-pressure stage yields interpretable congestion prices that predict sensitivity. Future work includes an online receding-horizon scheduler that uses these prices for real-time decisions, and an extension of the model to richer resource interactions and scheduling dynamics such as queueing and stochastic resource availability.

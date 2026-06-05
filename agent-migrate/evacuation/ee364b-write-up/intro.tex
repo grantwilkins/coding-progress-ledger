@@ -1,17 +1,26 @@
 \section{Introduction}
 
-LLM serving increasingly manages persistent sessions rather than independent requests. A coding assistant, browser agent, or research copilot issues many model calls over minutes or hours, each depending on prior context, tool outputs, and intermediate state~\cite{yang2024sweagent,kwa2026measuring}. When a source cluster must shed load, whether for maintenance, failure, traffic shifting, or a power-shed command, the system must decide where future requests run and how their serving state is rebuilt at the destination. Prefill and decode stress different resources~\cite{zhong2024distserve,patel2024splitwise}, and the KV cache is large and central to serving performance~\cite{kwon2023efficient,lmcache}. Session movement therefore becomes a resource-allocation problem over compute, bandwidth, cache state, and time.
+LLM serving increasingly manages persistent sessions rather than independent requests. A coding assistant, browser agent, or research copilot issues many model calls over minutes or hours, each depending on prior context, tool outputs, and intermediate state~\cite{yang2024sweagent,kwa2026measuring}. When a source cluster must shed load, whether for maintenance, failure, traffic shifting, or a power-shed command, the system must decide where future requests run and how their serving state is rebuilt at the destination. Prefill and decode stress different resources~\cite{zhong2024distserve,patel2024splitwise}, and the KV cache is large and central to serving performance~\cite{kwon2023efficient,lmcache}. Session migration therefore becomes a resource-allocation problem over compute, bandwidth, cache state, and time.
 
 \begin{figure}[t]
     \centering
     \includegraphics[width=\linewidth]{migration_ratio.pdf}
     \caption{
-    Single-session replay/transfer boundary for a 100K-token context. The plot compares context replay against KV-cache transfer for several models. Values below the horizontal line indicate that transmitting context and recomputing KV through prefill is faster than transferring the KV cache. Values above the line indicate that KV transfer is faster.
+    Single-session replay/transfer boundary for a 100k-token context. The plot compares context replay against KV-cache transfer for several models. Values below the horizontal line indicate that transmitting context and recomputing KV through prefill is faster than transferring the KV cache. Values above the line indicate that KV transfer is faster.
     }
     \label{fig:migration-ratio}
 \end{figure}
 
-The simplest case is a single-session compute--communication tradeoff. A session can resume by transmitting its context and recomputing KV state through prefill, or by transmitting the KV cache and avoiding recomputation. Figure~\ref{fig:migration-ratio} plots this boundary for several models as inter-site bandwidth varies. Replay is preferable when bandwidth is limited or prefill is fast; KV transfer is preferable when bandwidth is high or prefill is expensive. For context length $T$, context size $\beta T$, KV size $\eta T$, prefill rate $\rho$, and bandwidth $\lambda$, replay is faster when
+\begin{figure}[t]
+    \centering
+    \includegraphics[width=0.85\linewidth]{glm5_context_ratio_bandwidths.pdf}
+    \caption{
+    For GLM-5, the replay/transfer boundary shifts with context length and bandwidth. A clear surface emerges, where shorter contexts and higher bandwidths favor KV transfer and longer contexts and lower bandwidths favor replay. We trace the boundary across bandwidths from $1$ to $25$\,Gbps, showing how the decision moves with network conditions.
+    }
+    \label{fig:glm5-context-ratio}
+\end{figure}
+
+\textbf{Single-session case.} The simplest case is a single-session compute-communication tradeoff. A session can resume by transmitting its context and recomputing KV state through prefill, or by transmitting the KV cache and avoiding recomputation. Figure~\ref{fig:migration-ratio} plots this boundary for several models as inter-site bandwidth varies. Replay is preferable when bandwidth is limited or prefill is fast. KV transfer wins when bandwidth is high or prefill is expensive. For context length $T$, context size $\beta T$, KV size $\eta T$, prefill rate $\rho$, and bandwidth $\lambda$, replay is faster when
 \[
     \underbrace{\frac{\beta T}{\lambda} + \frac{T}{\rho}}_{\text{context transfer and prefill}}
     <
@@ -23,10 +32,21 @@ with crossover
 \]
 This calculation identifies the basic parameters, but it only describes an isolated session.
 
-A site-level shed couples many sessions through shared destination resources: replaying everything overloads prefill, while transferring all KV state congests the inter-site links. The policy problem is to allocate sessions across destinations and reconstruction actions while respecting bandwidth, prefill capacity, state-ingest capacity, and the required source-load reduction.
+The boundary also moves with context length and bandwidth. We show this for GLM-5 in Figure~\ref{fig:glm5-context-ratio}, where shorter contexts and higher bandwidths favor KV transfer and longer contexts and lower bandwidths favor replay. The nearly piecewise-linear shape comes from attention. KV cache size grows linearly with context length, while prefill time grows superlinearly because attention is quadratic, and that gap sets a sharp boundary in both context length and bandwidth. The boundary is the context length where replay (prefill) time meets KV-transfer time,
+\[
+\underbrace{\frac{2AT+\kappa T^2}{F}}_{\text{prefill (replay) time}}\;=\;\underbrace{\frac{\eta T}{\lambda}}_{\text{KV-transfer time}},
+\]
+with $A$ the active parameter count, $\kappa$ the per-token attention cost (from layers, heads, and head dimension), $F$ the device throughput, $\eta$ the KV bytes per token, and $\lambda$ the bandwidth. The feed-forward term $2AT$ is linear in $T$, while the attention term $\kappa T^2$ makes prefill superlinear, so the constant rate $\rho$ used above is really $F/(2A+\kappa T)$ and slips as the context grows. Cancelling $T$, the crossover sits at
+\[
+T^\star=\frac{1}{\kappa}\Big(\frac{F\eta}{\lambda}-2A\Big),
+\]
+which shrinks as bandwidth $\lambda$ rises, pushing the boundary toward shorter contexts exactly as Fig.~\ref{fig:glm5-context-ratio} shows.
 
-This project studies a convex relaxation of that allocation problem. We group sessions into classes by model and context length. For each class the decision is the fractional number of jobs sent to each destination under each of two reconstruction actions, \emph{replay} and \emph{state transfer}, plus a \emph{stranded} count for jobs that miss the deadline. Replay is light on bandwidth but loads prefill; state transfer loads bandwidth and ingest but skips prefill. Both add reconstruction delay and deadline risk.
 
-Rather than collapse the competing goals into one weighted cost, we solve a short \emph{lexicographic} stack of convex programs: migrate the most work under the deadline, then minimize peak resource pressure, then refine worst-class rebuild cost and cross-class fairness. The result is a continuous relaxation of the discrete placement problem. It does not model online scheduling or queueing, but it exposes the resource tradeoffs and gives a principled routing model. We solve this stack exactly with CVXPY and then study the Stage-2 dual. The dual yields congestion prices that we put to work in two ways: an envelope-theorem sensitivity check, and subgradient, mirror-descent, and ADMM solvers run against the same dual.
+\textbf{Going to many sites.} A site-level shed couples many sessions through shared destination resources. Replaying everything overloads prefill, and transferring all KV state congests the inter-site links. The policy problem is to allocate sessions across destinations and reconstruction actions while respecting bandwidth, prefill capacity, state-ingest capacity, and the required source-load reduction.
 
-This is a progress report. Our central finding is that the exact solve recovers sensible replay and state-transfer structure together with interpretable congestion prices. The first-order solvers are implemented but not yet tightly converged.
+This project studies a convex relaxation of that allocation problem with a tool we call \emph{Queue-Haul}. We group sessions into classes by model and context length. For each class the decision is the fractional number of jobs sent to each destination under each of two reconstruction actions, \emph{replay} and \emph{state transfer}, plus a \emph{stranded} count for jobs that miss the deadline. Replay is light on bandwidth but loads prefill. State transfer loads bandwidth and ingest but skips prefill. Both add reconstruction delay and deadline risk.
+
+Rather than collapse the competing goals into one weighted cost, we solve a short \emph{ordered} stack of convex programs. The stages first allocate the migration fairly, then minimize peak resource pressure, and finally refine the worst-class rebuild cost and cross-class fairness. The result is a continuous relaxation of the discrete placement problem. It does not model online scheduling or queueing, but it exposes the resource tradeoffs and gives a principled routing model. 
+
+We solve this stack exactly with CVXPY and then study the dual of the resource-pressure problem, where the congestion prices emerge. The dual yields prices that we put to work in two ways. One is an envelope-theorem sensitivity check. The other runs subgradient, mirror-descent, and ADMM solvers against the same dual. Our central finding is that the exact solve recovers sensible replay and state-transfer structure together with interpretable congestion prices. The first-order solvers are implemented but not yet tightly converged.

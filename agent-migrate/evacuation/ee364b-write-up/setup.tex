@@ -6,15 +6,15 @@ instance. A source site runs $N$ stateful sessions drawn from six current
 open-weight models (Table~\ref{tab:models}). Each session's context length is
 sampled from a per-model log-normal fit, with medians $5$k--$20$k tokens clipped to
 $[10^3,10^6]$. We then group sessions into classes by model and log-token bucket.
-This grouping decouples the solve cost from $N$, exactly, since every load is linear
+This grouping decouples the solve cost from $N$ exactly, since every load is linear
 in $T_q$. The KV size $\eta_q$ comes from each model's published attention
 architecture, ranging from ${\sim}10$\,KiB/tok for MLA-compressed DeepSeek to
 $188$\,KiB/tok for GQA Qwen3-235B. The prefill rate $\rho_q$ is log-interpolated
 from benchmark anchors at $\{1,10,100,1000\}$k tokens, and context bytes are
 $\beta_q=4$\,B/tok (uint32 token ids).
 
-Three destination sites differ in both network and warm capacity: ingress
-$\Lambda_\ell\in\{12.5,25,50\}$\,GB/s, and warm pools $W_{\ell m}$ of one to three
+Three destination sites differ in both network and warm capacity, with ingress
+$\Lambda_\ell\in\{12.5,25,50\}$\,GB/s and warm pools $W_{\ell m}$ of one to three
 instances per model. The warm pools are partitioned per model, so a warm instance
 for one model cannot serve another. State ingest runs at $\mu=512$\,GB/s per
 instance (8 GPUs $\times\,64$\,GB/s PCIe Gen5, host-staged), so the network, not
@@ -26,7 +26,7 @@ specific production cluster.
 
 \begin{table}[t]
 \centering
-\resizebox{\columnwidth}{!}{
+\resizebox{0.8\columnwidth}{!}{
 \begin{tabular}{ll}
 \hline
 Quantity & Value \\
@@ -43,8 +43,7 @@ Context length $T_q$ & log-normal, clipped $[10^3,10^6]$\,tok \\
 Miss penalty $d^{\mathrm{miss}}$ & $2D$ \\
 \hline
 \end{tabular}}
-\caption{Migration instance parameters. Synthetic controlled regimes, not measured
-production values.}
+\caption{Migration instance parameters. Synthetic controlled values, informed by production.}
 \label{tab:setup}
 \end{table}
 
@@ -53,7 +52,7 @@ production values.}
 \resizebox{\columnwidth}{!}{
 \begin{tabular}{lrrr}
 \hline
-Model & $\eta$ (KiB/tok) & $\rho$@100k (tok/s) & crossover (Gbps) \\
+Model & $\eta$ (KiB/tok) & $\rho$@100k (tok/s) & Crossover (Gbps) \\
 \hline
 DeepSeek V4 Pro & $9.7$ & $13{,}900$ & $1.10$ \\
 Qwen3 Next 80B & $24.0$ & $175{,}000$ & $34.40$ \\
@@ -64,7 +63,7 @@ Qwen3 235B & $188.0$ & $14{,}000$ & $21.56$ \\
 \hline
 \end{tabular}}
 \caption{The six models, sorted by KV size $\eta$. Prefill $\rho$ is shown at
-$100$k tokens; the crossover is the single-session bandwidth
+$100$k tokens, and the crossover is the single-session bandwidth
 $\lambda^\star=\rho(\eta-\beta)$ at which replay and KV transfer tie
 (Fig.~\ref{fig:migration-ratio}). It depends on both $\eta$ and $\rho$, so it is
 not monotone in KV size.}

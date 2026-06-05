@@ -2,57 +2,52 @@
 \label{sec:methods}
 
 Queue-Haul (Fig.~\ref{fig:sites}) solves the staged program as a short
-lexicographic stack (Fig.~\ref{fig:pipeline}). Each stage is a small convex program.
+ordered stack (Fig.~\ref{fig:pipeline}). Each stage is a convex program.
 Two implementation details, backend choice and preconditioning, are worth stating
 before we turn to the dual structure, which is where the payoff lies.
 
 \begin{figure}[t]
 \centering
 \includegraphics[width=\linewidth]{queue-haul-pipeline.pdf}
-\caption{The lexicographic program Queue-Haul solves (Sec.~\ref{sec:formulation}):
-a proportional-fair migration allocator, then refinements that minimize peak
+\caption{The ordered program Queue-Haul solves (Sec.~\ref{sec:formulation}).
+A proportional-fair migration allocator comes first, then refinements that minimize peak
 resource pressure, worst congestion cost, and cross-class variance. Each box fixes
 the previous one's optimum before optimizing its own objective.}
 \label{fig:pipeline}
 \end{figure}
 
-\paragraph{Backends.} The proportional-fair Stage~1 variant carries a log-utility
-$\sum_q n_q\log(1-z_q/n_q)$ whose gradient blows up as $z_q\!\to\!0$, so it needs a
+\paragraph{Backends.} Stage~1's proportional-fair log-utility
+$\sum_q n_q\log(1-z_q/n_q)$ has a gradient that blows up as $z_q\!\to\!0$, so it needs a
 conic solver and tight tolerances. We build every stage in
-CVXPY~\cite{diamond2016cvxpy}: the pure-LP stages use an LP solver, while that
-Stage~1 variant and the Stage-2b QP go to the conic solver Clarabel~\cite{clarabel}.
+CVXPY~\cite{diamond2016cvxpy}. The pure-LP stages use an LP solver, while
+Stage~1 and the Stage-2 tie-breaking QP go to the conic solver Clarabel~\cite{clarabel}.
 A loose tolerance on the log-utility lets the iterate drift below the utility floor
-and breaks the certificate handed to later stages.
+and breaks the guarantee handed to later stages.
 
 \paragraph{Preconditioning.} The raw coefficients span about twenty orders of
-magnitude: network terms are bytes
+magnitude. Network terms are bytes
 ($\beta_q T_q,\,\eta_q T_q\sim10^{8\text{--}11}$), while prefill terms are
 GPU-seconds ($T_q/\rho_q\sim10^0$). Left unscaled, this spread wrecks the
 conditioning of both the LP and any first-order method. We normalize every capacity
 row to $O(1)$. Dividing $L_i\le C_i$ by $C_i$ turns it into $p_i\le1$ with unit
 right-hand side, and writes the whole program directly in the pressures $p_i$ it
-already uses. This one rescaling is also what makes the first-order methods below
-even tractable.
+already uses. This one rescaling is also what makes the first-order methods below tractable.
 
-\paragraph{Lexicographic linking.} Each stage re-solves the full program with the
-earlier optima frozen in. Stage 2 adds $\sum_q z_q=Z^\star$, Stage 3 adds that plus
-$p_i\le\phi^\star$ for all $i$, and so on. The one subtlety is the proportional-fair
-certificate. We carry it as $U(z)\ge U^\star-\delta$ with a small $\delta$, so the
-floor survives finite solver accuracy instead of being tripped by a rounding-level
-slack.
+\paragraph{Ordered-problem linking.} Each stage re-solves the full program with the
+earlier optima as a constraint. Stage 2 adds the fairness floor $U(z)\ge U^\star-\delta$, Stage 3 adds
+that plus $p_i\le\phi^\star$ for all $i$, and so on.
 
-\subsection{The Stage-2 dual}
-
-Stage 2 is where the duality is richest, because its peak-pressure objective turns
-the multipliers into congestion prices. Dualize its pressure ceilings
+\subsection{Resource-pressure and its dual}
+Stage 2 is where the meaning of duality is richest in our problem, because its peak-pressure objective turns
+the multipliers into congestion prices. We dualize the pressure ceilings
 $p_i(x)\le\phi$ with multipliers $\pi_i\ge0$. The Lagrangian is
 $\phi\big(1-\sum_i\pi_i\big)+\sum_i\pi_i\,p_i(x)$, so minimizing over the free
 $\phi$ forces
 \[
-\sum_{i\in\mathcal{I}}\pi_i=1:
+\sum_{i\in\mathcal{I}}\pi_i=1.
 \]
-the prices live on a simplex. With $\phi$ gone the inner problem is linear in $x$
-and \emph{separates by class}---each class sends its $n_q$ jobs to whichever
+With $\phi$ gone the inner problem is linear in $x$
+and \emph{separates by class}. Each class sends its $n_q$ jobs to whichever
 $(\ell,a)$ is cheapest at the current prices,
 \[
 \begin{aligned}
@@ -60,10 +55,10 @@ $(\ell,a)$ is cheapest at the current prices,
 \mathrm{cost}^S_{q\ell}(\pi)&=\pi^{\mathrm{net}}_\ell\tfrac{\eta_q T_q}{C^{\mathrm{net}}_\ell}+\pi^{\mathrm{ing}}_{\ell m}\tfrac{\eta_q T_q}{C^{\mathrm{ing}}_{\ell m}}.
 \end{aligned}
 \]
-So $\pi_i$ is the marginal congestion price of resource $i$---how much the peak
-moves if that resource is squeezed. CVXPY returns these prices exactly as the
-ceiling duals, and they are interpretable on their own: they name which resource
-binds, and by how much.
+So $\pi_i$ is the marginal congestion price of resource $i$, or how much the peak
+moves if that resource is throttled. CVXPY returns these prices exactly as the
+ceiling duals, and they are interpretable on their own, naming which resource
+binds and by how much.
 
 \paragraph{An envelope-theorem check.} The prices also predict sensitivity. Every
 capacity is linear in the deadline, $C_i\propto D$, so the envelope identity
@@ -71,46 +66,65 @@ $\partial\phi^\star/\partial C_i=-\pi_i$ composes to
 \[
 \frac{d\phi^\star}{dD}=-\frac{1}{D}\sum_{i\in\mathcal{I}}\pi_i\,\hat p_i,
 \]
-with $\hat p_i$ the realized pressures. This is a testable prediction built from a single
-LP solve. Sec.~\ref{sec:results} shows it lands on the finite-difference slope of
-$\phi^\star(D)$ wherever the program is interior.
+with $\hat p_i$ the realized pressures. Both predictions are testable from a single LP solve.
+Table~\ref{tab:sens} reports these per-resource sensitivities for the base instance
+and confirms each against a $1\%$ finite-difference perturbation.
 
-\subsection{First-order methods: a status report}
+\subsection{First-order methods for the dual}
 
-The per-class separation invites solving Stage 2 by ascending the dual instead of
-calling a general LP solver. We implemented three textbook methods and race them
-against the CVXPY $\phi^\star$ (Fig.~\ref{fig:convergence}). \emph{Projected
-subgradient} takes a Polyak step on $(\pi,\nu)$ and projects $\pi$ onto the simplex
-($\nu$ is the multiplier on the throughput link $\sum_q z_q=Z^\star$).
-\emph{Entropic mirror descent}~\cite{beck2003mirror} swaps the Euclidean projection
-for an exponentiated-gradient update---the natural geometry for the simplex, and a
-better match to the $\ell_\infty$ peak. \emph{ADMM}~\cite{boyd2011admm} splits the
-per-class assignments from the shared peak in a sharing form, alternating tiny
-per-class QPs with a prox-of-max.
+The per-class separation lends itself to ascending the dual of Stage 2 instead of calling a
+general LP solver. Two prices drive it, namely $\pi$ on the resource ceilings (confined to
+the simplex $\sum_i\pi_i=1$) and $\nu\ge0$ on the proportional-fair floor
+$U(z)\ge U^\star-\delta$. The dual function is
+\[
+g(\pi,\nu)=\nu(U^\star-\delta)+\min_{x,z\ge0}\Big[\sum_i\pi_i\,p_i(x)-\nu\,U(z)\Big],
+\]
+which we maximize. Each evaluation is cheap and separable. Every class routes its
+$n_q$ jobs to the cheapest $(\ell,a)$ at prices $\pi$, weighing migration against the
+proportional-fair penalty $-\nu\,n_q\log(1-z_q/n_q)$ on whatever it strands.
 
-None is competitive yet. At the end of their budget the median relative gap to
-$\phi^\star$ is still about $0.6$ (subgradient), $0.24$ (mirror descent), and above
-$1$ (ADMM). The \emph{ordering} matches theory, in that mirror descent beats
-subgradient, but the accuracy does not. ADMM is the most expensive method per
-iteration, since each iteration solves a small QP per class; we run it for fewer
-iterations than the others, so its curve is shorter and it remains far from
-$\phi^\star$. Three things hurt. First, the objective is non-smooth: it is a max over
-pressures, so the subgradient is one active constraint and the iterate chatters.
-Second, the Polyak step starves when the throughput link is slack and $\nu$ rests at
-zero. Third, even after normalization, one global step size fits the per-class costs
-poorly. Averaging, restarts, and a diagonal price preconditioner are the next moves.
-For now CVXPY is the solver, and the first-order methods are a study of the dual's
-geometry.
+\smallskip\noindent\textbf{Projected subgradient.} Step uphill, then project $\pi$
+back onto the simplex and clip $\nu$ at zero,
+\begin{align}
+\pi^{k+1}&=\Pi_\Delta\!\big(\pi^k+s_k\,\hat p^k\big),\\
+\nu^{k+1}&=\big(\nu^k+s_k\,[(U^\star-\delta)-U(\hat z^k)]\big)_+,
+\end{align}
+with a Polyak step $s_k=(\phi^\star-g^k)/\|\hat g^k\|^2$ off the known optimum.
 
-\begin{figure*}[t]
+\smallskip\noindent\textbf{Mirror descent.} We swap the Euclidean projection
+for a multiplicative, exponentiated-gradient step~\cite{beck2003mirror}, which
+respects the simplex geometry and better matches the $\ell_\infty$ peak,
+\[
+\pi_i^{k+1}\propto\pi_i^k\exp\!\big(s_k\,\hat p_i^k\big),\quad\text{renormalized},
+\]
+with $\nu$ stepped as above. The per-iteration cost is the same, with better constants and geometry.
+
+\smallskip\noindent\textbf{ADMM.} We give each class a private assignment
+and a consensus copy $\bar p$ of the per-resource loads, then
+alternate three updates~\cite{boyd2011admm}. A per-class QP routes or strands each class
+under the fairness penalty plus a quadratic pull toward $\bar p$. A prox-of-max
+reads the peak $\phi$ off the pooled loads. A dual ascent then corrects wherever the assignments and the consensus disagree.
+
+\begin{figure}[t]
 \centering
-\includegraphics[width=\textwidth]{decomp_convergence_scaling.pdf}
-\caption{Stage-2 dual convergence against the CVXPY optimum (median and 25--75\%
-band over 30 seeds), at $L=3,6,10$ destinations ($|\mathcal{I}|=39,66,112$
-coupled pressure constraints). All three methods remain far from $\phi^\star$ at
-the end of their budget. Mirror descent leads subgradient as the simplex geometry
-predicts. ADMM is the most expensive per iteration, solving a per-class QP each
-step, so it runs for fewer iterations and its curve stays far from $\phi^\star$.
-Tightening these is the main open item.}
+\includegraphics[width=\columnwidth]{stage2_convergence.pdf}
+\caption{First-order dual solvers converging to the CVXPY optimum (median and 25--75\%
+band over $50$ random instances, $L=3$). The gradient methods plateau far from
+$\phi^\star$, mirror descent leading subgradient as the simplex geometry predicts.
+ADMM costs a per-class QP each step, but over the full budget it overtakes both near
+iteration $120$ and drives the gap to ${\sim}10^{-3}$.}
 \label{fig:convergence}
-\end{figure*}
+\end{figure}
+
+Figure~\ref{fig:convergence} splits the three in two. The gradient methods plateau.
+At $800$ iterations the median relative gap to $\phi^\star$ is $0.60$ (subgradient)
+and $0.23$ (mirror descent), mirror ahead just as the simplex geometry predicts.
+ADMM starts worst, but over the full budget it overtakes both near iteration $120$
+and drives the gap to $2\times10^{-3}$. So the one method that truly converges is the
+one that pays a QP per step. The gradient methods stall for three reasons. The peak
+is non-smooth, so the subgradient is a single active constraint and the iterate
+chatters. The step starves when the fairness floor is slack and $\nu$ rests at zero.
+And one global step size fits the per-class prices poorly. ADMM sidesteps all three
+by solving each class exactly. For exact solves we still lean on CVXPY, but ADMM is
+the clear direction to build on.
+

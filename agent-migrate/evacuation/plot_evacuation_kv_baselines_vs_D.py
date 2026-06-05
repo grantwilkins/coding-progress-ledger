@@ -81,24 +81,24 @@ def plot(rows):
     for method, _, D, pct in rows:
         data[method][D].append(pct)
 
-    fig, ax = plt.subplots(figsize=(12, 5.6))
+    fig, ax = plt.subplots(figsize=(7.0, 4.6))
     for method in ("ours", *DET, "random"):
         label, color, marker = STYLE[method]
         y = np.array([np.mean(data[method][D]) for D in D_SWEEP_S])
         if method == "random":
             sd = np.array([np.std(data[method][D]) for D in D_SWEEP_S])
             ax.fill_between(D_SWEEP_S, y - sd, y + sd, color=color, alpha=0.2)
-        ax.plot(D_SWEEP_S, y, marker=marker, color=color, ms=5,
-                lw=2.4 if method == "ours" else 1.4,
+        ax.plot(D_SWEEP_S, y, marker=marker, color=color, ms=6,
+                lw=2.6 if method == "ours" else 1.6,
                 label=label, zorder=5 if method == "ours" else 2)
 
     ax.set_xscale("log")
-    ax.set_xlabel("Deadline $D$ (s)", fontsize=17)
-    ax.set_ylabel("KV Cache Bytes Migrated Successfully (%)", fontsize=17)
+    ax.set_xlabel("Deadline $D$ (s)", fontsize=20)
+    ax.set_ylabel("KV Cache Bytes Migrated Successfully (%)", fontsize=20)
     ax.set_ylim(0, 102)
-    ax.tick_params(labelsize=14)
+    ax.tick_params(labelsize=17)
     ax.grid(True, which="both", alpha=0.3)
-    ax.legend(fontsize=14, loc="upper left")
+    ax.legend(fontsize=16, loc="upper left")
     fig.tight_layout()
     fig.savefig(OUT / "kv_evacuated_baselines_vs_D.pdf", bbox_inches="tight")
     fig.savefig(OUT / "kv_evacuated_baselines_vs_D.png", dpi=150, bbox_inches="tight")
