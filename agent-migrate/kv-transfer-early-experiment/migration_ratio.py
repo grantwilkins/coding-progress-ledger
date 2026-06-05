@@ -12,25 +12,27 @@ Prefill: 2·A·T (dense FFN) + L·H_q·(d_qk + d_v)·T² (causal attention),
 """
 
 from __future__ import annotations
+
 import math
 from dataclasses import dataclass
 from typing import Callable
 
 import matplotlib
+
 matplotlib.use("Agg")
-from matplotlib.colors import Normalize
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import seaborn as sns
+from matplotlib.colors import Normalize
 
 # ── Hardware ──────────────────────────────────────────────────────────────────
-H100_BF16_DENSE_TFLOPS = 1_979 / 2          # dense = half of sparsity peak
-N_GPUS    = 8
-MFU       = 0.35
-EFF_FLOPS = N_GPUS * H100_BF16_DENSE_TFLOPS * 1e12 * MFU   # ~2.77 PFLOP/s
+H100_BF16_DENSE_TFLOPS = 1_979 / 2  # dense = half of sparsity peak
+N_GPUS = 8
+MFU = 0.35
+EFF_FLOPS = N_GPUS * H100_BF16_DENSE_TFLOPS * 1e12 * MFU  # ~2.77 PFLOP/s
 
-BPE = 2   # bf16 bytes per element
+BPE = 2  # bf16 bytes per element
 GLM5_CONTEXT_BANDWIDTHS_GBPS = np.linspace(0.1, 25, 500)
 GLM5_CONTEXT_TOKENS = np.geomspace(1_000, 10_000_000, 500)
 GLM5_CONTEXT_RATIO_YLIM = (1e-3, 1e3)
@@ -38,18 +40,20 @@ GLM5_CONTEXT_RATIO_YLIM = (1e-3, 1e3)
 # ── Model specs ───────────────────────────────────────────────────────────────
 KVFn = Callable[[int], float]
 
+
 @dataclass(frozen=True)
 class Model:
-    label: str               # display name
-    active_b: float          # active params (billions)
-    softmax_layers: int      # layers that produce per-token KV
+    label: str  # display name
+    active_b: float  # active params (billions)
+    softmax_layers: int  # layers that produce per-token KV
     query_heads: int
     qk_dim: int
     v_dim: int
-    kv_bytes: KVFn           # total bf16 KV bytes as f(tokens)
+    kv_bytes: KVFn  # total bf16 KV bytes as f(tokens)
     attn_scale: float = 1.0  # effective sequence compression for attention FLOPs
     color: str = "k"
     ls: str = "-"
+
 
 # ── KV size functions ─────────────────────────────────────────────────────────
 def gqa_kv(layers: int, kv_heads: int, head_dim: int) -> KVFn:
@@ -57,10 +61,12 @@ def gqa_kv(layers: int, kv_heads: int, head_dim: int) -> KVFn:
     per_tok = 2 * BPE * layers * kv_heads * head_dim
     return lambda T: T * per_tok
 
+
 def mla_kv(layers: int, kv_lora_rank: int = 512, rope_dim: int = 64) -> KVFn:
     """MLA: stores compressed latent + RoPE key per layer."""
     per_tok = BPE * layers * (kv_lora_rank + rope_dim)
     return lambda T: T * per_tok
+
 
 def dsv4_kv(T: int) -> float:
     """DeepSeek-V4 Pro CSA/HCA: 30 c4a layers + 31 c128a layers.
@@ -69,67 +75,101 @@ def dsv4_kv(T: int) -> float:
     128-entry sliding window per layer."""
     c4a, c128a, sw = 30, 31, 128
     entry_bytes = 512 * BPE
-    idx_bytes   = 128 * BPE
-    c4a_n   = math.ceil(T / 4)
+    idx_bytes = 128 * BPE
+    c4a_n = math.ceil(T / 4)
     c128a_n = math.ceil(T / 128)
-    return (c4a  * ((sw + c4a_n)   * entry_bytes + c4a_n * idx_bytes)
-          + c128a * ((sw + c128a_n) * entry_bytes))
+    return c4a * ((sw + c4a_n) * entry_bytes + c4a_n * idx_bytes) + c128a * (
+        (sw + c128a_n) * entry_bytes
+    )
+
 
 # ── Model catalogue ───────────────────────────────────────────────────────────
+# The six canonical models of the evacuation problem setup (instance.py /
+# Table 2), sorted by KV size. eta and prefill rho both fall out of these
+# architecture configs, so the figure and the table cannot drift apart.
 MODELS = [
-    Model("DeepSeek-V3",
-          active_b=37, softmax_layers=61, query_heads=128,
-          qk_dim=192, v_dim=128,
-          kv_bytes=mla_kv(61, 512, 64),
-          color="#1f77b4"),
-
-    Model("DeepSeek-V4 Pro",
-          active_b=49, softmax_layers=61, query_heads=128,
-          qk_dim=512, v_dim=512,
-          kv_bytes=dsv4_kv,
-          attn_scale=(30/4 + 31/128) / 61,
-          color="#d62728",),
-
-    Model("Qwen3 (235B)",
-          active_b=22, softmax_layers=94, query_heads=64,
-          qk_dim=128, v_dim=128,
-          kv_bytes=gqa_kv(94, 4, 128),
-          color="#2ca02c"),
-
-    Model("Qwen3.5 (397B)",
-          active_b=17, softmax_layers=15, query_heads=32,
-          qk_dim=256, v_dim=256,
-          kv_bytes=gqa_kv(15, 2, 256),
-          color="#9467bd"),
-
-    Model("Llama-3.1 (405B)",
-          active_b=405, softmax_layers=126, query_heads=128,
-          qk_dim=128, v_dim=128,
-          kv_bytes=gqa_kv(126, 8, 128),
-          color="#8c564b"),
-
-    Model("GLM-5",
-          active_b=40, softmax_layers=78, query_heads=64,
-          qk_dim=256, v_dim=256,
-          kv_bytes=mla_kv(78, 512, 64),
-          color="#e377c2"),
+    Model(
+        "DeepSeek V4 Pro",
+        active_b=49,
+        softmax_layers=61,
+        query_heads=128,
+        qk_dim=512,
+        v_dim=512,
+        kv_bytes=dsv4_kv,
+        attn_scale=(30 / 4 + 31 / 128) / 61,
+        color="#d62728",
+    ),
+    Model(
+        "Qwen3 Next 80B",
+        active_b=3,
+        softmax_layers=12,
+        query_heads=16,
+        qk_dim=256,
+        v_dim=256,
+        kv_bytes=gqa_kv(12, 2, 256),
+        color="#1f77b4",
+    ),
+    Model(
+        "Qwen3.5 397B",
+        active_b=17,
+        softmax_layers=15,
+        query_heads=32,
+        qk_dim=256,
+        v_dim=256,
+        kv_bytes=gqa_kv(15, 2, 256),
+        color="#9467bd",
+    ),
+    Model(
+        "Kimi K2.6",
+        active_b=32,
+        softmax_layers=61,
+        query_heads=64,
+        qk_dim=192,
+        v_dim=128,
+        kv_bytes=mla_kv(61, 512, 64),
+        color="#ff7f0e",
+    ),
+    Model(
+        "GLM 5",
+        active_b=40,
+        softmax_layers=78,
+        query_heads=64,
+        qk_dim=256,
+        v_dim=256,
+        kv_bytes=mla_kv(78, 512, 64),
+        color="#e377c2",
+    ),
+    Model(
+        "Qwen3 235B",
+        active_b=22,
+        softmax_layers=94,
+        query_heads=64,
+        qk_dim=128,
+        v_dim=128,
+        kv_bytes=gqa_kv(94, 4, 128),
+        color="#2ca02c",
+    ),
 ]
+
 
 # ── Cost model ────────────────────────────────────────────────────────────────
 def prefill_flops(m: Model, T: int) -> float:
-    ffn  = 2.0 * m.active_b * 1e9 * T
-    attn = (m.softmax_layers * m.query_heads
-            * (m.qk_dim + m.v_dim) * T**2 * m.attn_scale)
+    ffn = 2.0 * m.active_b * 1e9 * T
+    attn = m.softmax_layers * m.query_heads * (m.qk_dim + m.v_dim) * T**2 * m.attn_scale
     return ffn + attn
+
 
 def t_replay(m: Model, T: int) -> float:
     return prefill_flops(m, T) / EFF_FLOPS
 
+
 def t_transfer(m: Model, T: int, bw_gbps: float) -> float:
     return m.kv_bytes(T) * 8.0 / (bw_gbps * 1e9)
 
+
 def model(label: str) -> Model:
     return next(m for m in MODELS if m.label == label)
+
 
 def context_ratio_frame(label: str, bw_gbps: float, contexts) -> pd.DataFrame:
     m = model(label)
@@ -141,32 +181,63 @@ def context_ratio_frame(label: str, bw_gbps: float, contexts) -> pd.DataFrame:
         for T in contexts
     )
 
+
 def context_ratio_grid(label: str, bandwidths_gbps, contexts) -> pd.DataFrame:
     return pd.concat(
         [
-            context_ratio_frame(label, float(bw), contexts).assign(bandwidth_gbps=float(bw))
+            context_ratio_frame(label, float(bw), contexts).assign(
+                bandwidth_gbps=float(bw)
+            )
             for bw in bandwidths_gbps
         ],
         ignore_index=True,
     )
 
+
 def plot_glm5_context_ratio():
-    df = context_ratio_grid("GLM-5", GLM5_CONTEXT_BANDWIDTHS_GBPS, GLM5_CONTEXT_TOKENS)
-    norm = Normalize(GLM5_CONTEXT_BANDWIDTHS_GBPS.min(), GLM5_CONTEXT_BANDWIDTHS_GBPS.max())
+    df = context_ratio_grid("GLM 5", GLM5_CONTEXT_BANDWIDTHS_GBPS, GLM5_CONTEXT_TOKENS)
+    norm = Normalize(
+        GLM5_CONTEXT_BANDWIDTHS_GBPS.min(), GLM5_CONTEXT_BANDWIDTHS_GBPS.max()
+    )
     cmap = plt.colormaps["viridis"]
 
     sns.set_theme(style="whitegrid", context="talk")
     fig, ax = plt.subplots(figsize=(8, 4.5))
     for bw, group in df.groupby("bandwidth_gbps", sort=True):
-        ax.plot(group["context_tokens"], group["ratio"], color=cmap(norm(bw)), lw=0.9, alpha=0.85)
+        ax.plot(
+            group["context_tokens"],
+            group["ratio"],
+            color=cmap(norm(bw)),
+            lw=0.9,
+            alpha=0.85,
+        )
     ax.axhline(1.0, color="k", lw=1.2, ls=":", alpha=0.6)
     ax.set_xscale("log")
     ax.set_yscale("log")
+    yl = ax.get_ylim()
+    ax.fill_between(
+        GLM5_CONTEXT_TOKENS,
+        1.0,
+        1e3,
+        alpha=0.06,
+        color="#B1040E",
+        zorder=0,
+    )
+    ax.fill_between(
+        GLM5_CONTEXT_TOKENS,
+        1e-3,
+        1.0,
+        alpha=0.06,
+        color="#008566",
+        zorder=0,
+    )
+    ax.set_ylim(yl)
     ax.set_xlim(GLM5_CONTEXT_TOKENS.min(), GLM5_CONTEXT_TOKENS.max())
     ax.set_ylim(*GLM5_CONTEXT_RATIO_YLIM)
+    ax.text(2e3, 105.5, "Transfer KV cache", color="#B1040E", ha="left", style="italic")
+    ax.text(3e5, 0.005, "Transfer context", color="#008566", ha="left", style="italic")
     ax.set_xlabel("Context size (tokens)")
     ax.set_ylabel(r"TTFT / Time to Transfer KV")
-    ax.set_title("GLM-5 by bandwidth")
     ax.grid(True, which="both", alpha=0.15)
     cbar = fig.colorbar(plt.cm.ScalarMappable(norm=norm, cmap=cmap), ax=ax)
     cbar.set_label("Bandwidth (Gbps)")
@@ -176,16 +247,21 @@ def plot_glm5_context_ratio():
     plt.close(fig)
     print("Wrote glm5_context_ratio_bandwidths.png / .pdf")
 
+
 # ── Plot ──────────────────────────────────────────────────────────────────────
 def main():
-    T = 100_000                      # context length for the plot
-    bw = np.geomspace(0.1, 100, 500) # Gbps
+    T = 100_000  # context length for the plot
+    bw = np.geomspace(0.1, 100, 500)  # Gbps
 
     df = pd.DataFrame(
         [
-            {"Model": m.label, "bandwidth_gbps": b,
-             "ratio": t_replay(m, T) / t_transfer(m, T, b)}
-            for m in MODELS for b in bw
+            {
+                "Model": m.label,
+                "bandwidth_gbps": b,
+                "ratio": t_replay(m, T) / t_transfer(m, T, b),
+            }
+            for m in MODELS
+            for b in bw
         ]
     )
     palette = {m.label: m.color for m in MODELS}
@@ -194,8 +270,14 @@ def main():
 
     fig, ax = plt.subplots(figsize=(10, 4.5))
     sns.lineplot(
-        data=df, x="bandwidth_gbps", y="ratio", hue="Model",
-        palette=palette, linewidth=2.2, ax=ax,
+        data=df,
+        x="bandwidth_gbps",
+        y="ratio",
+        hue="Model",
+        hue_order=[m.label for m in MODELS],
+        palette=palette,
+        linewidth=2.2,
+        ax=ax,
     )
 
     ax.set_xscale("log")
@@ -206,15 +288,13 @@ def main():
     ax.fill_between(bw, yl[0], 1.0, alpha=0.06, color="#008566", zorder=0)
     ax.set_ylim(yl)
 
-    ax.text(0.2, 40.5, "Transfer KV cache",
-             color="#B1040E", ha="left", style="italic")
-    ax.text(8.0, 0.05, "Transfer context",
-     color="#008566", ha="left", style="italic")
+    ax.text(0.2, 15.5, "Transfer KV cache", color="#B1040E", ha="left", style="italic")
+    ax.text(3.0, 0.05, "Transfer context", color="#008566", ha="left", style="italic")
 
     ax.set_xlabel("Inter-site bandwidth (Gbps)")
     ax.set_ylabel(r"TTFT / Time to Transfer KV")
     ax.grid(True, which="both", alpha=0.15)
-    ax.set_xlim(1e-1,1e2)
+    ax.set_xlim(1e-1, 1e2)
     plt.legend(bbox_to_anchor=(1.05, 0.5), loc="center left", frameon=False)
 
     fig.tight_layout()
@@ -225,14 +305,17 @@ def main():
     plot_glm5_context_ratio()
 
     # ── summary table ──
-    print(f"\n{'Model':34s} {'KV KiB/tok':>11s} {'replay (s)':>10s} "
-          f"{'xover Gbps':>11s}")
+    print(
+        f"\n{'Model':34s} {'KV KiB/tok':>11s} {'replay (s)':>10s} "
+        f"{'xover Gbps':>11s}"
+    )
     print("-" * 70)
     for m in MODELS:
         rp = t_replay(m, T)
         kv = m.kv_bytes(T)
         xo = kv * 8 / rp / 1e9
         print(f"{m.label:34s} {kv/T/1024:9.1f}   {rp:9.2f}   {xo:9.2f}")
+
 
 if __name__ == "__main__":
     main()
