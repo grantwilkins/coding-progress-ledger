@@ -1,7 +1,16 @@
 """Workload + destination instance for the staged evacuation program.
 
-Constants are transcribed from `assumptions.md`. Each job is its own class
-(`n_q = 1`); the model is carried as a per-job tag for downstream grouping.
+The source site is a single provider serving one model family (Qwen3). The mix
+is specified by *token share* (fraction of served tokens per model, flagship-
+primary), not by job count: job counts are derived as share / mean-session-
+length, so a flagship with long sessions owns most tokens but only a minority of
+jobs. The fleet is sized in HBM: every warm instance is TP=8 (8x H100 = 640 GB),
+holding the model's resident BF16 weights plus KV headroom.
+
+Constants are transcribed from `assumptions.md`. KV size eta is exact from each
+model's published attention config (layers x KV-heads x head_dim x 2(K,V) x
+2 B, BF16); the linear-attention layers of Qwen3-Next carry no per-token KV.
+Each job is its own class (n_q = 1) unless aggregated into log-T bins.
 """
 
 from __future__ import annotations
@@ -17,9 +26,10 @@ GB = 1e9
 @dataclass(frozen=True)
 class Model:
     name: str
-    eta_bytes_per_tok: float
-    beta_bytes_per_tok: float
-    job_fraction: float
+    eta_bytes_per_tok: float   # KV-cache HBM per context token (BF16), from attention config
+    beta_bytes_per_tok: float  # context bytes/tok (uint32 token ids)
+    token_share: float         # share of served *tokens* (flagship-primary), summed to 1
+    weight_gb: float           # resident BF16 weight HBM (all experts), GB
     lognormal_mu: float
     lognormal_sigma: float
     prefill_anchor_T: np.ndarray
@@ -29,41 +39,43 @@ class Model:
 _ANCHOR_T = np.array([1_000.0, 10_000.0, 100_000.0, 1_000_000.0])
 
 
+# One provider's Qwen3 suite, ordered small -> flagship. eta is architecture-exact:
+#   235B-A22B: 94 layers x 4 KV-heads x 128 x 2(K,V) x 2 B = 188 KiB/tok
+#   32B dense: 64 x 8 x 128 x 2 x 2                          = 256 KiB/tok
+#   30B-A3B  : 48 x 4 x 128 x 2 x 2                          = 96 KiB/tok
+#   Next-80B : 12 full-attn layers x 2 x 256 x 2 x 2         = 24 KiB/tok (rest linear)
 MODELS: tuple[Model, ...] = (
-    Model("DeepSeek V4 Pro",  9.7 * KIB, 4.0, 0.25, float(np.log(8_000)),  1.5,
-          _ANCHOR_T, np.array([ 28_000.0,  25_600.0,  13_900.0,  2_500.0])),
-    Model("Kimi K2.6",       68.6 * KIB, 4.0, 0.25, float(np.log(12_000)), 1.8,
-          _ANCHOR_T, np.array([ 42_500.0,  36_200.0,  14_700.0,  2_100.0])),
-    Model("GLM 5",           87.8 * KIB, 4.0, 0.15, float(np.log(6_000)),  1.4,
-          _ANCHOR_T, np.array([ 33_600.0,  26_200.0,   8_300.0,  1_100.0])),
-    Model("Qwen3 235B",     188.0 * KIB, 4.0, 0.15, float(np.log(15_000)), 1.9,
-          _ANCHOR_T, np.array([ 60_800.0,  46_600.0,  14_000.0,  1_700.0])),
-    Model("Qwen3.5 397B",    30.0 * KIB, 4.0, 0.15, float(np.log(20_000)), 1.7,
-          _ANCHOR_T, np.array([ 80_900.0,  76_000.0,  47_300.0,  9_900.0])),
-    Model("Qwen3 Next 80B",  24.0 * KIB, 4.0, 0.05, float(np.log(5_000)),  1.3,
+    Model("Qwen3-30B-A3B",       96.0 * KIB, 4.0, 0.08,  60.0, float(np.log(5_000)),  1.3,
+          _ANCHOR_T, np.array([300_000.0, 240_000.0,  70_000.0,  9_000.0])),
+    Model("Qwen3-Next-80B-A3B",  24.0 * KIB, 4.0, 0.25, 160.0, float(np.log(8_000)),  1.5,
           _ANCHOR_T, np.array([454_300.0, 396_800.0, 175_000.0, 26_600.0])),
+    Model("Qwen3-32B",          256.0 * KIB, 4.0, 0.12,  64.0, float(np.log(6_000)),  1.4,
+          _ANCHOR_T, np.array([ 85_000.0,  65_000.0,  18_000.0,  2_400.0])),
+    Model("Qwen3-235B-A22B",    188.0 * KIB, 4.0, 0.55, 470.0, float(np.log(15_000)), 1.9,
+          _ANCHOR_T, np.array([ 60_800.0,  46_600.0,  14_000.0,  1_700.0])),
 )
+
+FLAGSHIP_IDX = int(np.argmax([m.weight_gb for m in MODELS]))  # Qwen3-235B-A22B
 
 
 @dataclass(frozen=True)
 class Destination:
     name: str
     lambda_bytes_per_s: float
-    warm_instances: dict[str, int]
+    warm_instances: dict[str, int]  # TP=8 instances per model (640 GB HBM each)
 
 
+# Destination warm pools are sized for each site's own steady (flagship-primary)
+# traffic, with site-specific specialization to keep routing non-trivial.
 DESTINATIONS: tuple[Destination, ...] = (
     Destination("Site A", 25.0 * GB, {
-        "DeepSeek V4 Pro": 2, "Kimi K2.6": 1, "GLM 5": 1,
-        "Qwen3 235B": 2, "Qwen3.5 397B": 1, "Qwen3 Next 80B": 1,
+        "Qwen3-30B-A3B": 1, "Qwen3-Next-80B-A3B": 2, "Qwen3-32B": 1, "Qwen3-235B-A22B": 3,
     }),
     Destination("Site B", 12.5 * GB, {
-        "DeepSeek V4 Pro": 1, "Kimi K2.6": 2, "GLM 5": 1,
-        "Qwen3 235B": 1, "Qwen3.5 397B": 3, "Qwen3 Next 80B": 1,
+        "Qwen3-30B-A3B": 1, "Qwen3-Next-80B-A3B": 1, "Qwen3-32B": 2, "Qwen3-235B-A22B": 2,
     }),
     Destination("Site C", 50.0 * GB, {
-        "DeepSeek V4 Pro": 1, "Kimi K2.6": 1, "GLM 5": 2,
-        "Qwen3 235B": 1, "Qwen3.5 397B": 1, "Qwen3 Next 80B": 2,
+        "Qwen3-30B-A3B": 2, "Qwen3-Next-80B-A3B": 2, "Qwen3-32B": 1, "Qwen3-235B-A22B": 4,
     }),
 )
 
@@ -96,6 +108,31 @@ def _log_interp(T: np.ndarray, anchor_T: np.ndarray, anchor_rho: np.ndarray) -> 
     return np.exp(np.interp(np.log(T), np.log(anchor_T), np.log(anchor_rho)))
 
 
+def model_token_shares(flagship_share: float | None = None) -> np.ndarray:
+    """Per-model token share. With flagship_share set, the flagship is pinned to
+    it and the rest are rescaled proportionally (the sensitivity sweep axis)."""
+    s = np.array([m.token_share for m in MODELS])
+    if flagship_share is not None:
+        rest = s.copy()
+        rest[FLAGSHIP_IDX] = 0.0
+        s = rest * (1.0 - flagship_share) / rest.sum()
+        s[FLAGSHIP_IDX] = flagship_share
+    return s / s.sum()
+
+
+def _job_counts(total_jobs: int, shares: np.ndarray, sigma_scale: float, seed: int) -> np.ndarray:
+    """Jobs per model from token share: n_m proportional to share_m / mean_T_m.
+    mean_T_m is the *clipped* log-normal mean (estimated from a deterministic
+    probe so the realized token share matches `shares`, not the analytic mean,
+    whose heavy tail is truncated at T_MAX). Tokens, not jobs, are the mix."""
+    prng = np.random.default_rng([seed, 7])
+    mean_T = np.array([np.clip(prng.lognormal(m.lognormal_mu, m.lognormal_sigma * sigma_scale,
+                                               100_000), T_MIN, T_MAX).mean()
+                       for m in MODELS])
+    w = shares / mean_T
+    return np.array([round(total_jobs * wi / w.sum()) for wi in w], dtype=int)
+
+
 def build_instance(D: float = D_DEFAULT_S,
                    total_jobs: int = TOTAL_JOBS_DEFAULT,
                    seed: int = SEED_DEFAULT,
@@ -103,11 +140,12 @@ def build_instance(D: float = D_DEFAULT_S,
                    rho_scale: float = 1.0,
                    sigma_scale: float = 1.0,
                    lambda_scale: float = 1.0,
+                   flagship_share: float | None = None,
                    W: np.ndarray | None = None,
                    n_bins: int | None = None,
                    n_dest: int | None = None) -> ProblemInstance:
     rng = np.random.default_rng(seed)
-    counts = np.array([round(total_jobs * m.job_fraction) for m in MODELS], dtype=int)
+    counts = _job_counts(total_jobs, model_token_shares(flagship_share), sigma_scale, seed)
     Q = int(counts.sum())
     model_idx = np.repeat(np.arange(len(MODELS)), counts)
 

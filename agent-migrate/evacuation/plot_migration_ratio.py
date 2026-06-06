@@ -6,7 +6,7 @@ ratio = replay_time / transfer_time at fixed context T=100k tokens:
 Crossover (ratio=1) at lambda* = rho*(eta - beta), matching Table 2.
 
 MODELS, eta, beta, rho all come from instance.py (single source of truth), so
-this figure can never drift from the paper's six canonical models again.
+this figure can never drift from the paper's Qwen3 suite again.
 
 Usage:
     cd evacuation && uv run python plot_migration_ratio.py
