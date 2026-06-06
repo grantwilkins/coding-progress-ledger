@@ -17,6 +17,8 @@ Methods:
   admm           - sharing-problem ADMM (Boyd 7.3) on per-class load contributions;
                    per-class update is a small simplex QP, aggregate update is the
                    prox of max(.) solved by sorting. Specialized to Z* = 0.
+  pdhg           - Chambolle-Pock on the min-peak-pressure bilinear saddle. Z* = 0.
+  bundle         - proximal bundle method on the concave dual D(pi). Z* = 0.
 """
 
 from __future__ import annotations
