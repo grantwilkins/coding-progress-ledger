@@ -13,11 +13,11 @@ LLM serving increasingly manages persistent sessions rather than independent req
 
 \begin{figure}[t]
     \centering
-    \includegraphics[width=0.85\linewidth]{glm5_context_ratio_bandwidths.pdf}
+    \includegraphics[width=0.85\linewidth]{qwen235b_context_ratio_bandwidths.pdf}
     \caption{
-    For GLM-5, the replay/transfer boundary shifts with context length and bandwidth. A clear surface emerges, where longer contexts and higher bandwidths favor KV transfer, and shorter contexts and lower bandwidths favor replay. We trace the boundary across bandwidths from $0.1$ to $25$\,Gbps, showing how the decision moves with network conditions.
+    For Qwen3-235B, the replay/transfer boundary shifts with context length and bandwidth. A clear surface emerges, where longer contexts and higher bandwidths favor KV transfer, and shorter contexts and lower bandwidths favor replay. We trace the boundary across bandwidths from $0.1$ to $25$\,Gbps, showing how the decision moves with network conditions.
     }
-    \label{fig:glm5-context-ratio}
+    \label{fig:context-ratio}
 \end{figure}
 
 \textbf{Single-session case.} The simplest case is a single-session compute-communication tradeoff. A session can resume by transmitting its context and recomputing KV state through prefill, or by transmitting the KV cache and avoiding recomputation. Figure~\ref{fig:migration-ratio} plots this boundary for several models as inter-site bandwidth varies. Replay is preferable when bandwidth is limited or prefill is fast. KV transfer wins when bandwidth is high or prefill is expensive. For context length $T$, context size $\beta T$, KV size $\eta T$, prefill rate $\rho$, and bandwidth $\lambda$, replay is faster when
@@ -32,7 +32,7 @@ with crossover
 \]
 This calculation identifies the basic parameters, but it only describes an isolated session.
 
-The boundary also moves with context length and bandwidth. We show this for GLM-5 in Figure~\ref{fig:glm5-context-ratio}, where longer contexts and higher bandwidths favor KV transfer and shorter contexts and lower bandwidths favor replay. The nearly piecewise-linear shape comes from attention. KV cache size grows linearly with context length, while prefill time grows superlinearly because attention is quadratic, and that gap sets a sharp boundary in both context length and bandwidth. The boundary is the context length where replay (prefill) time meets KV-transfer time,
+The boundary also moves with context length and bandwidth. We show this for Qwen3-235B in Figure~\ref{fig:context-ratio}, where longer contexts and higher bandwidths favor KV transfer and shorter contexts and lower bandwidths favor replay. The nearly piecewise-linear shape comes from attention. KV cache size grows linearly with context length, while prefill time grows superlinearly because attention is quadratic, and that gap sets a sharp boundary in both context length and bandwidth. The boundary is the context length where replay (prefill) time meets KV-transfer time,
 \[
 \underbrace{\frac{2AT+\kappa T^2}{F}}_{\text{prefill (replay) time}}\;=\;\underbrace{\frac{\eta T}{\lambda}}_{\text{KV-transfer time}},
 \]
@@ -40,7 +40,7 @@ with $A$ the active parameter count, $\kappa$ the per-token attention cost (from
 \[
 T^\star=\frac{1}{\kappa}\Big(\frac{F\eta}{\lambda}-2A\Big),
 \]
-which shrinks as bandwidth $\lambda$ rises, pushing the boundary toward shorter contexts exactly as Fig.~\ref{fig:glm5-context-ratio} shows.
+which shrinks as bandwidth $\lambda$ rises, pushing the boundary toward shorter contexts exactly as Fig.~\ref{fig:context-ratio} shows.
 
 
 \textbf{Going to many sites.} A site-level shed couples many sessions through shared destination resources. Replaying everything overloads prefill, and transferring all KV state congests the inter-site links. The policy problem is to allocate sessions across destinations and reconstruction actions while respecting bandwidth, prefill capacity, state-ingest capacity, and the required source-load reduction.

@@ -195,7 +195,7 @@ def context_ratio_grid(label: str, bandwidths_gbps, contexts) -> pd.DataFrame:
 
 
 def plot_glm5_context_ratio():
-    df = context_ratio_grid("GLM 5", GLM5_CONTEXT_BANDWIDTHS_GBPS, GLM5_CONTEXT_TOKENS)
+    df = context_ratio_grid("Qwen3 235B", GLM5_CONTEXT_BANDWIDTHS_GBPS, GLM5_CONTEXT_TOKENS)
     norm = Normalize(
         GLM5_CONTEXT_BANDWIDTHS_GBPS.min(), GLM5_CONTEXT_BANDWIDTHS_GBPS.max()
     )
@@ -242,10 +242,10 @@ def plot_glm5_context_ratio():
     cbar = fig.colorbar(plt.cm.ScalarMappable(norm=norm, cmap=cmap), ax=ax)
     cbar.set_label("Bandwidth (Gbps)")
     fig.tight_layout()
-    fig.savefig("glm5_context_ratio_bandwidths.png", dpi=220, bbox_inches="tight")
-    fig.savefig("glm5_context_ratio_bandwidths.pdf", bbox_inches="tight")
+    fig.savefig("qwen235b_context_ratio_bandwidths.png", dpi=220, bbox_inches="tight")
+    fig.savefig("qwen235b_context_ratio_bandwidths.pdf", bbox_inches="tight")
     plt.close(fig)
-    print("Wrote glm5_context_ratio_bandwidths.png / .pdf")
+    print("Wrote qwen235b_context_ratio_bandwidths.png / .pdf")
 
 
 # ── Plot ──────────────────────────────────────────────────────────────────────

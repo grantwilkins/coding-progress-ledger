@@ -30,27 +30,33 @@ least-loaded) stay prefill-bound near $55\%$.}
 \paragraph{The rebuild mix is mostly replay, with a deliberate sliver of transfer.}
 How does the optimizer actually rebuild each session? Figure~\ref{fig:mix} gives the
 replay-versus-transfer split per model, for the fair allocation (Stage 1) and after
-load balancing (Stage 2). Replay dominates. Stage 2 rebuilds $81$--$100\%$ of every
+load balancing (Stage 2). Replay dominates. Stage 2 rebuilds $84$--$100\%$ of every
 model's jobs by replay. Shipping $4$\,B/tok of context and recomputing is far lighter
 on the inter-site link than moving tens of KiB/tok of KV cache, so replay spares the
 network, the tight resource at these bandwidths. But the plan is never \emph{all}
 replay, and that is the point. All-replay is exactly the prefill-bound failure of
 Fig.~\ref{fig:baselines}. The optimizer keeps a minority of jobs on state
 transfer, which leans on the idle state-ingest path rather than the GPUs, to stay
-under the prefill ceiling. That small transfer band is what lets it reach $100\%$
-where all-replay caps at $55\%$. Load balancing also \emph{sharpens} the choice.
-Stage 2 lifts the replay share above the fair allocation's (DeepSeek V4 Pro
-$45\%\!\to\!86\%$) and collapses its spread (wide Stage-1 error bars, tight Stage-2),
-because the fair stage leaves the mix loosely pinned and peak-pressure settles it on
-the network-sparing point.
+under the prefill ceiling. \emph{Which} model gets that transfer band is the
+revealing part. It is not the cheap-to-ship low-$\eta$ tier: Qwen3-Next-80B prefills
+so fast ($175$k\,tok/s at $100$k) that replay is nearly free for it, so Stage 2 puts
+it at $100\%$ replay. The transfer band lands almost entirely on the
+\emph{flagship} Qwen3-235B ($84\%$ replay, $16\%$ transfer), the most
+prefill-pressured tier: slow prefill against the majority of the tokens. The
+optimizer ships its heavy KV over the network, expensive as that is, precisely
+because rebuilding it on the GPUs is even more expensive. Load balancing also
+\emph{sharpens} the choice. Stage 2 lifts the replay share above the fair
+allocation's (Qwen3-Next-80B $74\%\!\to\!100\%$) and collapses its spread (wide
+Stage-1 error bars, tight Stage-2), because the fair stage leaves the mix loosely
+pinned and peak-pressure settles it on the network-sparing point.
 
 \begin{figure}[t]
 \centering
 \includegraphics[width=\columnwidth]{stage2_action_mix.pdf}
 \caption{Replay vs.\ state-transfer share of migrated jobs, per model, for the fair
 allocation (Stage 1) and after peak-pressure balancing (Stage 2), with error bars
-$\pm1$\,sd over $50$ instances. Stage 2 rebuilds $81$--$100\%$ by replay and tightens
-the Stage-1 spread.}
+$\pm1$\,sd over $\sim50$ instances. Stage 2 rebuilds $84$--$100\%$ by replay; the
+transfer band concentrates on the prefill-bound Qwen3-235B flagship.}
 \label{fig:mix}
 \end{figure}
 
@@ -58,14 +64,14 @@ the Stage-1 spread.}
 report. By the envelope theorem (Sec.~\ref{sec:methods}) each price gives a
 log-capacity sensitivity $\partial\phi^\star/\partial\ln C_i=-\pi_i\hat p_i$, so a
 single LP solve says which resource to grow to relieve the peak. Table~\ref{tab:sens} reads it off for the base instance. The
-inter-site network owns $81\%$ of the sensitivity, prefill the remaining $19\%$ (most
-of it on Qwen3-235B, the model with the tightest prefill supply), and state-ingest
-none at all, since its $512$\,GB/s pools sit so far from binding that adding more never
-moves the peak. One mild surprise sits inside the network. The price tracks
-\emph{capacity}, not scarcity, so the $50$\,GB/s Site~C, which the optimizer loads
-the heaviest, is the most sensitive of the three. A $1\%$ capacity bump shifts
-$\phi^\star$ by exactly the predicted amount (Site~C, $-0.431$ measured vs.\ $-0.430$
-from the price), and the entries sum to the deadline sensitivity
+inter-site network owns $70\%$ of the sensitivity, prefill the remaining $30\%$
+(split between Qwen3-235B and the dense Qwen3-32B, the two slow-prefill tiers), and
+state-ingest none at all, since its $512$\,GB/s pools sit so far from binding that
+adding more never moves the peak. One mild surprise sits inside the network. The
+price tracks \emph{capacity}, not scarcity, so the $50$\,GB/s Site~C, which the
+optimizer loads the heaviest, is the most sensitive of the three. A $1\%$ capacity
+bump shifts $\phi^\star$ by exactly the predicted amount (Site~C, $-0.378$ measured
+vs.\ $-0.378$ from the price), and the entries sum to the deadline sensitivity
 $d\phi^\star/d\ln D=-\phi^\star$.
 
 \begin{table}[t]
@@ -74,19 +80,19 @@ $d\phi^\star/d\ln D=-\phi^\star$.
 \hline
 Resource & $\pi_i$ & $\partial\phi^\star/\partial\ln C_i$ \\
 \hline
-\textbf{Network} & $0.81$ & \\
-\quad Site C ($50$\,GB/s) & $0.46$ & $-0.43$ \\
-\quad Site A ($25$\,GB/s) & $0.23$ & $-0.22$ \\
-\quad Site B ($12.5$\,GB/s) & $0.12$ & $-0.11$ \\
-\textbf{Prefill} & $0.19$ & \\
-\quad Qwen3 235B & $0.08$ & $-0.07$ \\
-\quad Kimi K2.6 & $0.06$ & $-0.06$ \\
-\quad other 4 models & $0.05$ & $-0.05$ \\
+\textbf{Network} & $0.70$ & \\
+\quad Site C ($50$\,GB/s) & $0.40$ & $-0.38$ \\
+\quad Site A ($25$\,GB/s) & $0.20$ & $-0.19$ \\
+\quad Site B ($12.5$\,GB/s) & $0.10$ & $-0.09$ \\
+\textbf{Prefill} & $0.30$ & \\
+\quad Qwen3-235B-A22B & $0.16$ & $-0.15$ \\
+\quad Qwen3-32B & $0.14$ & $-0.14$ \\
+\quad Next-80B, 30B & $0.00$ & $0$ \\
 \textbf{Ingest} & $0.00$ & $0$ \\
 \hline
 \end{tabular}
 \caption{Sensitivity of the peak utilization $\phi^\star$ to each resource (base
-instance, $D{=}300$s, prop-fair Stage~1, $\phi^\star{=}0.93$). The dual price $\pi_i$
+instance, $D{=}300$s, prop-fair Stage~1, $\phi^\star{=}0.94$). The dual price $\pi_i$
 (shares sum to $1$) is the marginal congestion price, and the last column
 $\partial\phi^\star/\partial\ln C_i=-\pi_i\hat p_i$ is the peak's response to a
 fractional capacity change. The network sets the peak, and ingest never binds.}
