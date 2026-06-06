@@ -64,12 +64,12 @@ transfer band concentrates on the prefill-bound Qwen3-235B flagship.}
 A single provider does not get to choose its $\eta$ spread, but it does choose how
 much of its token budget runs on the flagship. Figure~\ref{fig:flagship} sweeps the
 flagship's token share from $30\%$ to $90\%$ and tracks two responses. The rebuild
-mix (left) leans steadily harder on state transfer, from $\sim$3\% to $\sim$10\% of
+mix (left) leans steadily harder on state transfer, from $\sim$5\% to $\sim$10\% of
 migrated jobs, because each extra point of flagship share adds heavy-$\eta$,
 slow-prefill tokens that the optimizer would rather ship than rebuild. The
 evacuation frontier (right) is the sharper effect: the minimum deadline to clear the
-site grows from $155$s to $808$s, a $5\times$ swing, almost all of it from the
-flagship's prefill cost. The base instance ($55\%$, $287$s) sits right at the
+site grows from $170$s to $798$s, a ${\sim}5\times$ swing, almost all of it from the
+flagship's prefill cost. The base instance ($55\%$, $296$s) sits right at the
 $D{\approx}300$s knee of Fig.~\ref{fig:baselines}, so a provider that shifts traffic
 onto its flagship must widen its evacuation window roughly in proportion.
 
@@ -88,14 +88,14 @@ sweep, set by the flagship's prefill cost.}
 report. By the envelope theorem (Sec.~\ref{sec:methods}) each price gives a
 log-capacity sensitivity $\partial\phi^\star/\partial\ln C_i=-\pi_i\hat p_i$, so a
 single LP solve says which resource to grow to relieve the peak. Table~\ref{tab:sens} reads it off for the base instance. The
-inter-site network owns $70\%$ of the sensitivity, prefill the remaining $30\%$
+inter-site network owns $71\%$ of the sensitivity, prefill the remaining $29\%$
 (split between Qwen3-235B and the dense Qwen3-32B, the two slow-prefill tiers), and
 state-ingest none at all, since its $512$\,GB/s pools sit so far from binding that
 adding more never moves the peak. One mild surprise sits inside the network. The
 price tracks \emph{capacity}, not scarcity, so the $50$\,GB/s Site~C, which the
 optimizer loads the heaviest, is the most sensitive of the three. A $1\%$ capacity
-bump shifts $\phi^\star$ by exactly the predicted amount (Site~C, $-0.378$ measured
-vs.\ $-0.378$ from the price), and the entries sum to the deadline sensitivity
+bump shifts $\phi^\star$ by exactly the predicted amount (Site~C, $-0.397$ measured
+vs.\ $-0.397$ from the price), and the entries sum to the deadline sensitivity
 $d\phi^\star/d\ln D=-\phi^\star$.
 
 \begin{table}[t]
@@ -104,19 +104,19 @@ $d\phi^\star/d\ln D=-\phi^\star$.
 \hline
 Resource & $\pi_i$ & $\partial\phi^\star/\partial\ln C_i$ \\
 \hline
-\textbf{Network} & $0.70$ & \\
-\quad Site C ($50$\,GB/s) & $0.40$ & $-0.38$ \\
-\quad Site A ($25$\,GB/s) & $0.20$ & $-0.19$ \\
-\quad Site B ($12.5$\,GB/s) & $0.10$ & $-0.09$ \\
-\textbf{Prefill} & $0.30$ & \\
+\textbf{Network} & $0.71$ & \\
+\quad Site C ($50$\,GB/s) & $0.40$ & $-0.40$ \\
+\quad Site A ($25$\,GB/s) & $0.20$ & $-0.20$ \\
+\quad Site B ($12.5$\,GB/s) & $0.10$ & $-0.10$ \\
+\textbf{Prefill} & $0.29$ & \\
 \quad Qwen3-235B-A22B & $0.16$ & $-0.15$ \\
-\quad Qwen3-32B & $0.14$ & $-0.14$ \\
+\quad Qwen3-32B & $0.13$ & $-0.13$ \\
 \quad Next-80B, 30B & $0.00$ & $0$ \\
 \textbf{Ingest} & $0.00$ & $0$ \\
 \hline
 \end{tabular}
 \caption{Sensitivity of the peak utilization $\phi^\star$ to each resource (base
-instance, $D{=}300$s, prop-fair Stage~1, $\phi^\star{=}0.94$). The dual price $\pi_i$
+instance, $D{=}300$s, prop-fair Stage~1, $\phi^\star{=}0.98$). The dual price $\pi_i$
 (shares sum to $1$) is the marginal congestion price, and the last column
 $\partial\phi^\star/\partial\ln C_i=-\pi_i\hat p_i$ is the peak's response to a
 fractional capacity change. The network sets the peak, and ingest never binds.}

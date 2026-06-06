@@ -9,9 +9,18 @@ The KV size $\eta_q$ is exact from each model's published attention config
 ($\eta = \text{layers}\times\text{KV-heads}\times d \times 2_{(K,V)}\times 2$\,B at
 BF16), spanning $24$\,KiB/tok for Next-80B (only its full-attention layers hold
 per-token KV) to $256$\,KiB/tok for the dense 32B, which is KV-heavier per token
-than even the 235B flagship. The prefill rate $\rho_q$ is log-interpolated from
-per-tier anchors at $\{1,10,100,1000\}$k tokens, and context bytes are
-$\beta_q=4$\,B/tok (uint32 token ids).
+than even the 235B flagship. The prefill rate $\rho_q$ is not hand-set but the FLOP
+roofline of one $8{\times}$H100 instance, $\rho(T)=\mathrm{EFF}/(2N_{\text{act}}+C\,T)$
+with attention coefficient $C=2L_{\text{attn}}H_q d_{\text{head}}$ and sustained
+compute $\mathrm{EFF}=8\cdot989.5\,\text{TFLOP/s}\cdot\text{MFU}$. We take
+$\text{MFU}{=}0.35$, which reproduces the published $8{\times}$H100 prefill rates for
+the 235B and Next-80B and is consistent with measured single-GPU A3B prefill peaks.
+This makes the \emph{prefill bound} explicit: below a crossover
+$T^\star{=}2N_{\text{act}}/C$ prefill is FFN-bound at a flat ceiling
+$\mathrm{EFF}/(2N_{\text{act}})$ ($63$k\,tok/s for the flagship), and above it
+attention-bound, decaying as $1/T$. The flagship's $T^\star$ is only $28.6$k tokens,
+so at the workload's long contexts it sits deep in the $1/T$ regime --- the binding
+prefill bound. Context bytes are $\beta_q=4$\,B/tok (uint32 token ids).
 
 We specify the workload by \emph{token share}, not job count, and the provider is
 flagship-primary: the 235B handles $55\%$ of served tokens. Each tier's context
@@ -70,9 +79,9 @@ Miss penalty $d^{\mathrm{miss}}$ & $2D$ \\
 Model & $\eta$ (KiB/tok) & $\rho$@100k (tok/s) & Token share & Crossover (Gbps) \\
 \hline
 Qwen3-Next-80B-A3B & $24.0$ & $175{,}000$ & $25\%$ & $34.40$ \\
-Qwen3-30B-A3B & $96.0$ & $70{,}000$ & $8\%$ & $55.05$ \\
-Qwen3-235B-A22B & $188.0$ & $14{,}000$ & $55\%$ & $21.56$ \\
-Qwen3-32B & $256.0$ & $18{,}000$ & $12\%$ & $37.75$ \\
+Qwen3-30B-A3B & $96.0$ & $61{,}100$ & $8\%$ & $48.07$ \\
+Qwen3-235B-A22B & $188.0$ & $14{,}000$ & $55\%$ & $21.55$ \\
+Qwen3-32B & $256.0$ & $16{,}400$ & $12\%$ & $34.41$ \\
 \hline
 \end{tabular}}
 \caption{The provider's Qwen3 suite, sorted by KV size $\eta$ (exact from each

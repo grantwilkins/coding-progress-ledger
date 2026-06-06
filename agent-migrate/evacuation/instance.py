@@ -19,6 +19,8 @@ from dataclasses import dataclass
 
 import numpy as np
 
+import prefill
+
 KIB = 1024.0
 GB = 1e9
 
@@ -36,7 +38,7 @@ class Model:
     prefill_anchor_rho: np.ndarray
 
 
-_ANCHOR_T = np.array([1_000.0, 10_000.0, 100_000.0, 1_000_000.0])
+_ANCHOR_T = prefill.ANCHOR_T
 
 
 # One provider's Qwen3 suite, ordered small -> flagship. eta is architecture-exact:
@@ -44,15 +46,17 @@ _ANCHOR_T = np.array([1_000.0, 10_000.0, 100_000.0, 1_000_000.0])
 #   32B dense: 64 x 8 x 128 x 2 x 2                          = 256 KiB/tok
 #   30B-A3B  : 48 x 4 x 128 x 2 x 2                          = 96 KiB/tok
 #   Next-80B : 12 full-attn layers x 2 x 256 x 2 x 2         = 24 KiB/tok (rest linear)
+# Prefill rho is the FLOP-roofline model of prefill.py (8x H100, BF16, MFU=0.35).
+def _m(name, eta_kib, share, weight_gb, median_T, sigma):
+    return Model(name, eta_kib * KIB, 4.0, share, weight_gb,
+                 float(np.log(median_T)), sigma, _ANCHOR_T, prefill.anchors(name))
+
+
 MODELS: tuple[Model, ...] = (
-    Model("Qwen3-30B-A3B",       96.0 * KIB, 4.0, 0.08,  60.0, float(np.log(5_000)),  1.3,
-          _ANCHOR_T, np.array([300_000.0, 240_000.0,  70_000.0,  9_000.0])),
-    Model("Qwen3-Next-80B-A3B",  24.0 * KIB, 4.0, 0.25, 160.0, float(np.log(8_000)),  1.5,
-          _ANCHOR_T, np.array([454_300.0, 396_800.0, 175_000.0, 26_600.0])),
-    Model("Qwen3-32B",          256.0 * KIB, 4.0, 0.12,  64.0, float(np.log(6_000)),  1.4,
-          _ANCHOR_T, np.array([ 85_000.0,  65_000.0,  18_000.0,  2_400.0])),
-    Model("Qwen3-235B-A22B",    188.0 * KIB, 4.0, 0.55, 470.0, float(np.log(15_000)), 1.9,
-          _ANCHOR_T, np.array([ 60_800.0,  46_600.0,  14_000.0,  1_700.0])),
+    _m("Qwen3-30B-A3B",       96.0, 0.08,  60.0,  5_000, 1.3),
+    _m("Qwen3-Next-80B-A3B",  24.0, 0.25, 160.0,  8_000, 1.5),
+    _m("Qwen3-32B",          256.0, 0.12,  64.0,  6_000, 1.4),
+    _m("Qwen3-235B-A22B",    188.0, 0.55, 470.0, 15_000, 1.9),
 )
 
 FLAGSHIP_IDX = int(np.argmax([m.weight_gb for m in MODELS]))  # Qwen3-235B-A22B

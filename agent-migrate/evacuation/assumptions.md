@@ -25,24 +25,48 @@ so the flagship's long agentic sessions make it a token *majority* (55%) but a j
 
 ---
 
-## Prefill Rate Table
+## Prefill Rate Model
 
-Single warm-instance prefill throughput (tok/s) at four context-length anchors. These capture both the model size effect (larger models are slower) and the context-length degradation (attention cost grows with sequence length).
+Prefill rate $\rho(T)$ is not hand-set; it is the **FLOP roofline** of one warm
+instance ($8{\times}$H100, TP=8). A prefill of $T$ tokens is itself a token batch, so
+prefill is compute-bound, and the per-instance rate (`prefill.py`) is
+$$ \rho(T) = \frac{\mathrm{EFF}}{2 N_{\text{act}} + C\,T}, \qquad C = 2\,L_{\text{attn}} H_q d_{\text{head}}, $$
+where $2 N_{\text{act}}$ FLOP/tok is the FFN/projection cost (active params, so MoE
+counts only the routed experts) and $C\,T$ FLOP/tok is the causal self-attention
+cost, which grows linearly in context because total attention is quadratic in $T$.
+$\mathrm{EFF} = G \cdot \text{peak} \cdot \text{MFU}$ is the sustained compute.
 
-| Model | $\rho$ @1k | $\rho$ @10k | $\rho$ @100k | $\rho$ @1M |
-|-------|----------:|-----------:|------------:|-----------:|
-| Qwen3-30B-A3B | 300,000 | 240,000 | 70,000 | 9,000 |
-| Qwen3-Next-80B-A3B | 454,300 | 396,800 | 175,000 | 26,600 |
-| Qwen3-32B | 85,000 | 65,000 | 18,000 | 2,400 |
-| Qwen3-235B-A22B | 60,800 | 46,600 | 14,000 | 1,700 |
+**Hardware / calibration.** $G=8$ H100 SXM, BF16 dense peak $989.5$\,TFLOP/s, and
+$\text{MFU}=0.35$, giving $\mathrm{EFF}\approx 2.77$\,PFLOP/s per instance. This MFU
+reproduces the published $8{\times}$H100 prefill rates for Qwen3-235B and Qwen3-Next
+(to within rounding) and is consistent with — slightly conservative against, since
+TP=8 pays inter-GPU comms — the measured single-GPU A3B prefill peaks of
+$45$--$57$k\,tok/s. Sources: gpustack Qwen3-235B/H100 and Qwen3-32B/H100 labs,
+Millstone single-H100/H200 A3B context sweeps, and the NVIDIA H100 datasheet peak.
+Measured isolated $8{\times}$H100 prefill-vs-context sweeps for these exact
+checkpoints are not public, so the roofline (not a deployment trace) is the source
+of truth; treat $\rho$ as an architecture-grounded scenario parameter.
 
-The MoE tiers (3B/22B active) prefill far faster than the dense 32B at equal context, and the hybrid-linear Next-80B is fastest of all because its linear-attention layers avoid the quadratic term.
+| Model | $\rho$ @1k | $\rho$ @100k | $\rho$ @1M | Ceiling (tok/s) | $T^\star$ (tok) |
+|-------|----------:|------------:|-----------:|----------------:|----------------:|
+| Qwen3-30B-A3B | 433,000 | 61,100 | 6,940 | 461,800 | 15,300 |
+| Qwen3-Next-80B-A3B | 454,300 | 175,000 | 26,600 | 461,800 | 61,000 |
+| Qwen3-32B | 42,600 | 16,400 | 2,490 | 43,300 | 61,000 |
+| Qwen3-235B-A22B | 60,800 | 14,000 | 1,749 | 63,000 | 28,600 |
 
-**Interpolation:** For a context length $T$ between anchors, $\rho(T)$ is computed by log-linear interpolation: $\log \rho = \text{interp}(\log T, \log T_{\text{anchors}}, \log \rho_{\text{anchors}})$. This assumes power-law degradation between anchors.
+**The prefill bound, per model.** Two regimes are separated by the crossover
+$T^\star = 2 N_{\text{act}} / C$, the context at which the attention term overtakes
+the FFN term:
+- $T < T^\star$: **FFN/params-bound**, a flat ceiling $\rho_{\max}=\mathrm{EFF}/(2 N_{\text{act}})$ set purely by active params ($63$k\,tok/s for the 235B flagship, $462$k for the 3B-active tiers);
+- $T > T^\star$: **attention-bound**, $\rho \approx \mathrm{EFF}/(C\,T)$, decaying as $1/T$.
 
-**Serving configuration assumed:** TP=8 on H100 SXM, single-instance (not pipeline-parallel), BF16 weights. These rates are per-instance, not per-GPU.
-
-**Source:** These values are estimates informed by public benchmarks and scaling analysis, not measured on a specific deployment. They should be treated as scenario parameters.
+The flagship's bound is the binding one: $63$k\,tok/s ceiling, crossover at only
+$28.6$k tokens, so at the workload's long agentic contexts it sits deep in the
+attention-bound regime. Qwen3-Next is the outlier — same $3$B active as Qwen3-30B
+and the same $H_q d_{\text{head}}$, but the $T^2$ term rides on only $12$ of its $48$
+layers, so its crossover is $4\times$ later and it prefills $\sim4\times$ faster at
+long context. **Interpolation:** between the four anchors the instance generator uses
+log-linear interpolation of $\rho$, which tracks the roofline closely.
 
 ---
 
