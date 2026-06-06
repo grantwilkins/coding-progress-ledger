@@ -60,6 +60,30 @@ transfer band concentrates on the prefill-bound Qwen3-235B flagship.}
 \label{fig:mix}
 \end{figure}
 
+\paragraph{The workload mix is the operator's knob, and it moves both the plan and the frontier.}
+A single provider does not get to choose its $\eta$ spread, but it does choose how
+much of its token budget runs on the flagship. Figure~\ref{fig:flagship} sweeps the
+flagship's token share from $30\%$ to $90\%$ and tracks two responses. The rebuild
+mix (left) leans steadily harder on state transfer, from $\sim$3\% to $\sim$10\% of
+migrated jobs, because each extra point of flagship share adds heavy-$\eta$,
+slow-prefill tokens that the optimizer would rather ship than rebuild. The
+evacuation frontier (right) is the sharper effect: the minimum deadline to clear the
+site grows from $155$s to $808$s, a $5\times$ swing, almost all of it from the
+flagship's prefill cost. The base instance ($55\%$, $287$s) sits right at the
+$D{\approx}300$s knee of Fig.~\ref{fig:baselines}, so a provider that shifts traffic
+onto its flagship must widen its evacuation window roughly in proportion.
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\columnwidth]{flagship_sensitivity.pdf}
+\caption{Sensitivity to the flagship's token share (bands $\pm1$\,sd over $8$ seeds).
+\emph{Left:} replay vs.\ state-transfer share of migrated jobs at $D{=}300$s; the
+transfer band widens as flagship tokens grow. \emph{Right:} minimum deadline to
+evacuate every session (Stage-1 feasibility frontier); it rises $5\times$ across the
+sweep, set by the flagship's prefill cost.}
+\label{fig:flagship}
+\end{figure}
+
 \paragraph{Where the allocation is most sensitive.} The Stage-2 prices double as a sensitivity
 report. By the envelope theorem (Sec.~\ref{sec:methods}) each price gives a
 log-capacity sensitivity $\partial\phi^\star/\partial\ln C_i=-\pi_i\hat p_i$, so a
