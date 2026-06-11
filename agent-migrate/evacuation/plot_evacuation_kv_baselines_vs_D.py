@@ -28,7 +28,9 @@ from stage1 import solve_stage1
 
 OUT = Path(__file__).resolve().parent / "outputs"
 CSV = OUT / "kv_baselines_D.csv"
-D_SWEEP_S = (15, 30, 60, 90, 120, 180, 240, 360, 600, 1200)
+# Capped at 600s: the curve saturates by ~240s and the prop-fair conic solve
+# degenerates (flat log utility) at very slack deadlines.
+D_SWEEP_S = (15, 30, 60, 90, 120, 180, 240, 360, 600)
 RANDOM_SEEDS = 30
 DET = ("greedy", "replay_only", "state_only")
 

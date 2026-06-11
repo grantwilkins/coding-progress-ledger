@@ -44,7 +44,9 @@ VARIANTS = (
     Variant("prop_fair_pop", "prop_fair", "population", "prop-fair $w_q{=}n_q$", "#4c9a52"),
     Variant("prop_fair_cls", "prop_fair", "class", "prop-fair $w_q{=}1$", "#8052a0"),
 )
-SWEEP_D = (30, 60, 120, 300, 600, 1200)
+# Capped at 240s (~the o=1 frontier): beyond it every objective saturates and
+# the prop-fair conic solve degenerates (flat log utility).
+SWEEP_D = (30, 60, 90, 120, 180, 240)
 OUT = Path(__file__).resolve().parent / "outputs"
 
 
