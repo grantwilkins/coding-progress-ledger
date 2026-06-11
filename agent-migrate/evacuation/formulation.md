@@ -41,10 +41,12 @@ $$\tau_q^{\text{pfill}} = \frac{T_q}{\rho_q} \quad \text{(GPU-seconds per job)}$
 
 | Symbol | Units | Description |
 |--------|-------|-------------|
-| $W_{\ell m}$ | instances | Available warm GPU-instances for model $m$ at destination $\ell$, already net of background load. These serve both replay (prefill) and state-transfer (ingest) for model $m$. |
+| $W_{\ell m}$ | instances | Available warm **prefill** instances for model $m$ at destination $\ell$, already net of background load (under PD disaggregation, the destination's prefill nodes). |
+| $W_{\ell m}^{\text{ing}}$ | instances | Available **decode** instances for model $m$ at destination $\ell$ — these ingest transferred state and hold the long-lived KV of evacuated sessions. |
 | $\mu_{\ell m}^{\text{ing}}$ | B/s | Per-instance state-ingest rate for model $m$ at destination $\ell$. For a PCIe host-staged path: $\mu_{\ell m}^{\text{ing}} = \text{TP}_{\ell m} \cdot \text{BW}_{\text{PCIe}}$, where $\text{TP}_{\ell m}$ is the tensor-parallel degree and $\text{BW}_{\text{PCIe}}$ is the per-GPU host-to-device bandwidth (~64 GB/s for H100 PCIe Gen5). |
+| $C_\ell^{\text{res}}$ | bytes | **Decode-HBM residency stock** at destination $\ell$: the KV headroom of its decode pool. A stock, not a rate — it does not scale with $D$. |
 
-Convention: $W_{\ell m}$ is the single source of capacity for both prefill and ingest. Background load is reserved before optimization by setting $W_{\ell m}$ to the effective available count. Do not apply additional utilization reductions to derived capacities.
+Convention: under PD disaggregation prefill capacity comes from $W_{\ell m}$ and ingest/residency from $W_{\ell m}^{\text{ing}}$. Background load is reserved before optimization by setting these to the effective available counts. Do not apply additional utilization reductions to derived capacities.
 
 ### 2.3 Per-destination network parameter
 
@@ -73,9 +75,11 @@ $$C_{\ell m}^{\text{pfill}} = W_{\ell m} \cdot D \quad \text{(GPU-seconds)}$$
 
 **State-ingest (per destination and model):**
 
-$$C_{\ell m}^{\text{ing}} = W_{\ell m} \cdot \mu_{\ell m}^{\text{ing}} \cdot D \quad \text{(bytes)}$$
+$$C_{\ell m}^{\text{ing}} = W_{\ell m}^{\text{ing}} \cdot \mu_{\ell m}^{\text{ing}} \cdot D \quad \text{(bytes)}$$
 
-All capacities are derived from $W_{\ell m}$, $\mu_{\ell m}^{\text{ing}}$, $\Lambda_\ell$, and $D$. No additional utilization fractions are applied.
+**Residency (per destination, a stock):** $C_\ell^{\text{res}}$ is given directly (decode nodes × per-node KV headroom) and does **not** scale with $D$.
+
+All rate capacities are derived from $W_{\ell m}$, $W_{\ell m}^{\text{ing}}$, $\mu_{\ell m}^{\text{ing}}$, $\Lambda_\ell$, and $D$. No additional utilization fractions are applied.
 
 ---
 
@@ -114,6 +118,10 @@ $$x_{q\ell}^a = 0$$
 At minimum:
 
 $$W_{\ell,\, m(q)} = 0 \implies x_{q\ell}^R = x_{q\ell}^S = 0$$
+
+**Replay-feasibility mask:** a job whose solo prefill time exceeds the window cannot be replayed by any single instance, even if aggregate prefill capacity admits it in the fluid relaxation:
+
+$$T_q / \rho_q > D \implies x_{q\ell}^R = 0 \quad \forall\, \ell$$
 
 This avoids divide-by-zero in pressure terms and makes model compatibility explicit.
 
@@ -171,6 +179,12 @@ $$L_{\ell m}^{\text{pfill}}(x) \leq C_{\ell m}^{\text{pfill}} \qquad \forall\, \
 
 $$L_{\ell m}^{\text{ing}}(x) \leq C_{\ell m}^{\text{ing}} \qquad \forall\, \ell \in \mathcal{L},\; m \in \mathcal{M}$$
 
+**Residency (per destination):** evacuated sessions occupy decode HBM at the destination regardless of how they arrived (replayed KV is recomputed into the same footprint state transfer ships):
+
+$$L_\ell^{\text{res}}(x) = \sum_{q \in \mathcal{Q}} \eta_q T_q \left(x_{q\ell}^R + x_{q\ell}^S\right) \leq C_\ell^{\text{res}} \qquad \forall\, \ell \in \mathcal{L}$$
+
+By conservation, $\sum_\ell L_\ell^{\text{res}} = \sum_q \eta_q T_q (n_q - z_q)$ depends only on $z$ — residency is a KV-knapsack on which jobs stay, invariant to action and placement.
+
 **Source egress (optional):** If the source has a shared outbound pipe with capacity $C_0^{\text{egress}}$:
 
 $$\sum_{\ell \in \mathcal{L}} L_\ell^{\text{net}}(x) \leq C_0^{\text{egress}}$$
@@ -194,6 +208,8 @@ For each index with positive capacity:
 $$p_\ell^{\text{net}}(x) = \frac{L_\ell^{\text{net}}(x)}{C_\ell^{\text{net}}}, \qquad p_{\ell m}^{\text{pfill}}(x) = \frac{L_{\ell m}^{\text{pfill}}(x)}{C_{\ell m}^{\text{pfill}}}, \qquad p_{\ell m}^{\text{ing}}(x) = \frac{L_{\ell m}^{\text{ing}}(x)}{C_{\ell m}^{\text{ing}}}$$
 
 Zero-capacity pairs are excluded from $\mathcal{I}$; the corresponding $x$ variables are zeroed by compatibility constraints. With $|\mathcal{L}|$ destinations and $|\mathcal{M}|$ models, $|\mathcal{I}| \leq |\mathcal{L}| + 2|\mathcal{L}||\mathcal{M}|$.
+
+**Residency is excluded from $\mathcal{I}$.** It is a stock (not $\propto D$), and its load is invariant to action/placement given $z$ (Section 9), so on the Stage-1 link set it is a constant: including it would pin $\phi^*$ at the occupancy level and destroy the rate-balancing signal. It is enforced as a base constraint and reported separately as residency utilization.
 
 ---
 
@@ -375,3 +391,6 @@ Report: $p_{50}$, $p_{90}$, $p_{99}$ completion times; deadline miss rate; queue
 15. **Unloaded reconstruction times are surrogates.** $c_{q\ell}^a$ uses the per-instance ingest rate $\mu_{\ell m}^{\text{ing}}$, not the aggregate rate. These are not queue completion-time guarantees.
 16. **Prefill rates are benchmark-derived scenario parameters.** The $\rho_q$ values are interpolated from measured or estimated per-model prefill curves. They should not be treated as universal constants.
 17. **Schedule validity is external.** The queue simulator evaluates serial stages, batching, queue order, and decode-side effects excluded from the convex model.
+18. **PD disaggregation is fixed (1P3D).** Each rack is 1 prefill + 3 decode nodes; prefill nodes hold no long-lived KV; the optimizer does not re-partition racks.
+19. **Single destination, batch-pause headroom.** $|\mathcal{L}| = 1$ in the experiments; the destination's spare racks exist because it paused its own deadline-elastic batch work (zero migration cost, no parameter).
+20. **Replay solo-feasibility is masked.** $T_q/\rho_q > D \Rightarrow x^R_{q\ell} = 0$ (Section 6), closing the fluid-relaxation loophole at small job counts.
