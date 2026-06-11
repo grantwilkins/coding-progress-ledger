@@ -19,7 +19,7 @@ from stage2_duals import ceiling_duals
 
 
 def test_duals_are_on_the_simplex():
-    inst = build_instance(total_jobs=200, seed=0)
+    inst = build_instance(occupancy=0.5,seed=0)
     s1 = solve_stage1(inst)
     pi, _ = ceiling_duals(inst, s1)
     vals = np.array(list(pi.values()))
@@ -28,7 +28,7 @@ def test_duals_are_on_the_simplex():
 
 
 def test_duals_recover_phi_star_through_decomposition():
-    inst = build_instance(total_jobs=200, seed=0)
+    inst = build_instance(occupancy=0.5,seed=0)
     s1 = solve_stage1(inst)
     assert s1.Z_star < 1e-6                       # mu = None branch
     s2 = solve_stage2(inst, s1)
@@ -41,7 +41,7 @@ def test_duals_recover_phi_star_through_decomposition():
 
 
 def test_pdhg_and_bundle_bound_and_converge_to_phi_star():
-    inst = build_instance(total_jobs=200, seed=0)
+    inst = build_instance(occupancy=0.5,seed=0)
     s1 = solve_stage1(inst)
     assert s1.Z_star < 1e-6
     phi = solve_stage2(inst, s1).phi_star
@@ -57,7 +57,7 @@ def test_pdhg_and_bundle_bound_and_converge_to_phi_star():
 
 
 def test_pdhg_and_bundle_require_full_evacuation():
-    inst = build_instance(D=1.0, total_jobs=200, seed=0)   # Z* > 0
+    inst = build_instance(D=1.0, occupancy=0.5,seed=0)   # Z* > 0
     s1 = solve_stage1(inst)
     assert s1.Z_star > 1e-6
     for solver in (pdhg, bundle):

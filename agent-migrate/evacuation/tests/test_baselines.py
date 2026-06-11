@@ -8,8 +8,6 @@ Targets believable errors in the rule/engine wiring:
   5. the throughput optimizer evacuates at least as much as any baseline
   6. greedy minimizes recon cost over BOTH actions (not collapsed to one action,
      not argmax) -- tested by the cost-domination invariant g <= replay, state
-  7. round_robin spreads a model's classes across distinct destinations (it
-     cycles with q) rather than concentrating them on one
 """
 
 from __future__ import annotations
@@ -25,8 +23,9 @@ from stage3 import recon_costs
 
 INST = build_instance(D=80.0, n_bins=5)
 TIGHT = build_instance(D=40.0, n_bins=5)  # tight enough that moving all overloads
-ABUNDANT = build_instance(D=1e7, n_bins=5)  # caps astronomically slack: each class
-#                                             lands fully on its first-choice (l, a)
+# Caps astronomically slack (o=0.5 keeps the residency stock slack too): each
+# class lands fully on its first-choice (l, a).
+ABUNDANT = build_instance(D=1e7, occupancy=0.5, n_bins=5)
 
 
 def _recon_cost(inst, s):
@@ -49,12 +48,13 @@ def test_soft_moves_all():
 
 
 def test_hard_respects_caps():
-    C_net, C_pfill, C_ing, S_pfill, S_ing, b_net_R, b_net_S = loads(INST)
+    C_net, C_pfill, C_ing, C_res, S_pfill, S_ing, b_net_R, b_net_S = loads(INST)
     for name in BASELINES:
         s = allocate(INST, name, hard=True)
         assert np.all(b_net_R @ s.x_R + b_net_S @ s.x_S <= C_net * (1 + 1e-9) + 1e-3)
         assert np.all(S_pfill @ s.x_R <= C_pfill * (1 + 1e-9) + 1e-3)
         assert np.all(S_ing @ s.x_S <= C_ing * (1 + 1e-9) + 1e-3)
+        assert np.all(b_net_S @ (s.x_R + s.x_S) <= C_res * (1 + 1e-9) + 1e-3)
 
 
 def test_action_isolation():
@@ -71,7 +71,7 @@ def test_random_seeding():
 
 
 def test_greedies_deterministic():
-    for name in ("greedy", "round_robin", "replay_only", "state_only", "least_loaded"):
+    for name in ("greedy", "replay_only", "state_only"):
         a, b = allocate(INST, name), allocate(INST, name)
         np.testing.assert_array_equal(a.x_R, b.x_R)
         np.testing.assert_array_equal(a.x_S, b.x_S)
@@ -87,20 +87,6 @@ def test_greedy_minimizes_recon_cost_over_both_actions():
     st = _recon_cost(ABUNDANT, allocate(ABUNDANT, "state_only"))
     assert g <= r + 1e-3 and g <= st + 1e-3
     assert min(r, st) > 0  # the comparison is non-vacuous
-
-
-def test_round_robin_spreads_across_destinations():
-    # Cycling the first choice with q must scatter a model's classes over several
-    # destinations; a non-cycling rule (always dest 0 / cheapest) concentrates them.
-    s = allocate(ABUNDANT, "round_robin")
-    moved = s.x_R + s.x_S  # (Q, L); abundant => one nonzero dest per class
-    spreads = {}
-    for m in range(len(ABUNDANT.M_names)):
-        q = ABUNDANT.model_idx == m
-        if (ABUNDANT.W[:, m] > 0).sum() >= 2 and q.sum() >= 2:
-            spreads[m] = int((moved[q].sum(0) > 0).sum())
-    assert spreads, "no multi-destination model to exercise round-robin"
-    assert max(spreads.values()) >= 2
 
 
 def test_optimizer_evacuates_at_least_as_much():

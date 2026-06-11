@@ -18,7 +18,7 @@ from stage1 import EPS, solve_stage1
 from stage2 import solve_stage2
 
 # Tight deadline so the objectives genuinely diverge (capacity binds).
-INST = build_instance(D=80.0, n_bins=3, total_jobs=2000, seed=1)
+INST = build_instance(D=80.0, n_bins=3, seed=1)
 RUNS = {o: solve_stage1(INST, o) for o in ("throughput", "max_min", "prop_fair")}
 # Full-load instance where prop_fair cannot clear everyone, so the two utility
 # weightings (w_q=n_q vs w_q=1) yield genuinely different fairness floors.

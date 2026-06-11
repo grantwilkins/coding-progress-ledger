@@ -36,7 +36,7 @@ def _evaluate_loads(inst, x_R, x_S):
     L_ing = S_ing @ x_S
     C_net = inst.lambda_bps * inst.D
     C_pfill = inst.W.T * inst.D
-    C_ing = inst.W.T * inst.mu_ing * inst.D
+    C_ing = inst.W_ing.T * inst.mu_ing * inst.D
     return L_net, L_pfill, L_ing, C_net, C_pfill, C_ing
 
 
@@ -50,7 +50,7 @@ def _psi(inst, x_R, x_S):
 
 
 def test_conservation():
-    inst = build_instance(total_jobs=500, seed=0)
+    inst = build_instance(seed=0)
     s1 = solve_stage1(inst)
     res = solve_stage2b(inst, s1)
     total = res.x_R.sum(axis=1) + res.x_S.sum(axis=1) + res.z
@@ -58,14 +58,14 @@ def test_conservation():
 
 
 def test_stage1_link():
-    inst = build_instance(total_jobs=500, seed=0)
+    inst = build_instance(seed=0)
     s1 = solve_stage1(inst)
     res = solve_stage2b(inst, s1)
     np.testing.assert_allclose(res.z.sum(), s1.Z_star, atol=1e-3)
 
 
 def test_qp_dominates_stage2():
-    inst = build_instance(total_jobs=500, seed=0)
+    inst = build_instance(seed=0)
     s1 = solve_stage1(inst)
     s2 = solve_stage2(inst, s1)
     s2b = solve_stage2b(inst, s1)
@@ -76,7 +76,7 @@ def test_qp_dominates_stage2():
 def test_psi_monotone_in_deadline():
     psi = []
     for D in (300.0, 600.0):
-        inst = build_instance(D=D, total_jobs=500, seed=1)
+        inst = build_instance(D=D, seed=1)
         s1 = solve_stage1(inst)
         psi.append(solve_stage2b(inst, s1).psi_star)
     assert psi[0] >= psi[1] - 1e-4
@@ -85,13 +85,13 @@ def test_psi_monotone_in_deadline():
 def test_kkt_active_pair_equality():
     """Section 15 KKT on a slack-capacity instance.
 
-    With D=3600s and 1000 jobs, Stage 1 evacuates everything (Z* = 0) and
+    With D=3600s and o=0.75 (residency slack), Stage 1 evacuates everything (Z* = 0) and
     base capacities sit comfortably below their limits. KKT stationarity
     then reduces to: for each class q, all active (action, destination)
     pairs share the same per-unit gradient, and inactive pairs have larger
     gradient.
     """
-    inst = build_instance(D=3600.0, total_jobs=1000, seed=42)
+    inst = build_instance(D=3600.0, occupancy=0.75, seed=42)
     s1 = solve_stage1(inst)
     np.testing.assert_allclose(s1.Z_star, 0.0, atol=1e-5)
     res = solve_stage2b(inst, s1)
