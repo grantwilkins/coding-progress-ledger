@@ -6,6 +6,8 @@ Base LP (Section 12, Stage 1 of `formulation.md`):
     L_net[l]      <= C_net[l]                         (per-destination network)
     L_pfill[m,l]  <= C_pfill[m,l]                     (per-(model, destination) prefill)
     L_ing[m,l]    <= C_ing[m,l]                       (per-(model, destination) state ingest)
+    L_res[l]      <= C_res[l]                         (per-destination decode-HBM residency)
+    x_R[q,:] == 0 where T_q / rho_q > D               (replay compatibility mask)
     x_R, x_S, z >= 0; z <= n
 
 Three objectives over the same base feasible set (u_q = 1 - z_q / n_q):
@@ -26,7 +28,7 @@ import cvxpy as cp
 import numpy as np
 
 from instance import ProblemInstance
-from loads import loads, norm_cap
+from loads import loads, norm_cap, replay_infeasible
 
 EPS = 1e-3  # log-utility numerical-stability floor
 
@@ -56,18 +58,23 @@ def _base(inst: ProblemInstance):
     x_S = cp.Variable((Q, L), nonneg=True)
     z = cp.Variable(Q, nonneg=True)
 
-    C_net, C_pfill, C_ing, S_pfill, S_ing, b_net_R, b_net_S = loads(inst)
+    C_net, C_pfill, C_ing, C_res, S_pfill, S_ing, b_net_R, b_net_S = loads(inst)
     # Normalized capacity form (coef*L <= rhs): mathematically identical to
     # L_i <= C_i but well-conditioned for the conic (CLARABEL) prop_fair solves,
     # whose coefficients otherwise span ~1e15 (network bytes vs GPU-seconds).
-    (a_net, r_net), (a_pf, r_pf), (a_in, r_in) = map(norm_cap, (C_net, C_pfill, C_ing))
+    (a_net, r_net), (a_pf, r_pf), (a_in, r_in), (a_res, r_res) = map(
+        norm_cap, (C_net, C_pfill, C_ing, C_res))
     cons = [
         cp.sum(x_R, axis=1) + cp.sum(x_S, axis=1) + z == inst.n,
         z <= inst.n,
         cp.multiply(a_net, b_net_R @ x_R + b_net_S @ x_S) <= r_net,
         cp.multiply(a_pf, S_pfill @ x_R) <= r_pf,
         cp.multiply(a_in, S_ing @ x_S) <= r_in,
+        cp.multiply(a_res, b_net_S @ (x_R + x_S)) <= r_res,
     ]
+    bad = replay_infeasible(inst)
+    if bad.any():
+        cons.append(x_R[bad, :] == 0)
     return x_R, x_S, z, cons
 
 

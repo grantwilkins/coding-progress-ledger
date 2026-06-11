@@ -8,10 +8,17 @@ LP/CP form (Section 12, Stage 2 of `formulation.md`):
          L_net[l]      <= C_net[l]                         (base capacity)
          L_pfill[m,l]  <= C_pfill[m,l]
          L_ing[m,l]    <= C_ing[m,l]
+         L_res[l]      <= C_res[l]                         (residency, base only)
          L_net[l]      <= phi * C_net[l]                   (pressure ceiling)
          L_pfill[m,l]  <= phi * C_pfill[m,l]
          L_ing[m,l]    <= phi * C_ing[m,l]
          x_R, x_S, z >= 0; phi >= 0
+
+Residency is a stock (decode-HBM bytes, not deadline-scaled) and its load
+depends only on z, not on the action/placement split, so it is excluded from
+the pressure index set I (it would pin phi* at the occupancy level); it is
+reported separately as `residency_utilization`. Replay-infeasible jobs
+(T/rho > D) carry the Stage 1 compatibility mask here too.
 
 The Stage 1 optimum is preserved by objective-specific link constraints:
   throughput : sum z == Z*
@@ -30,7 +37,7 @@ import cvxpy as cp
 import numpy as np
 
 from instance import ProblemInstance
-from loads import inv_cap, loads, norm_cap
+from loads import inv_cap, loads, norm_cap, replay_infeasible
 from stage1 import CLARABEL_OPTS, Stage1Result
 
 
@@ -42,6 +49,7 @@ class Stage2Result:
     Z_star: float
     phi_star: float
     pressures: dict[str, float]
+    residency_utilization: float
     status: str
 
 
@@ -51,18 +59,20 @@ def solve_stage2(inst: ProblemInstance, stage1: Stage1Result) -> Stage2Result:
     z = cp.Variable(inst.T.size, nonneg=True)
     phi = cp.Variable(nonneg=True)
 
-    C_net, C_pfill, C_ing, S_pfill, S_ing, b_net_R, b_net_S = loads(inst)
+    C_net, C_pfill, C_ing, C_res, S_pfill, S_ing, b_net_R, b_net_S = loads(inst)
 
     L_net = b_net_R @ x_R + b_net_S @ x_S
     L_pfill = S_pfill @ x_R
     L_ing = S_ing @ x_S
+    L_res = b_net_S @ (x_R + x_S)
 
     # Pressure form: L_i / C_i <= phi. inv_cap is 0 where C_i = 0 (W[l,m] = 0),
     # making those ceilings vacuous; the base norm_cap rows pin those loads to 0.
     p_net = cp.multiply(inv_cap(C_net), L_net)
     p_pfill = cp.multiply(inv_cap(C_pfill), L_pfill)
     p_ing = cp.multiply(inv_cap(C_ing), L_ing)
-    (a_net, r_net), (a_pf, r_pf), (a_in, r_in) = map(norm_cap, (C_net, C_pfill, C_ing))
+    (a_net, r_net), (a_pf, r_pf), (a_in, r_in), (a_res, r_res) = map(
+        norm_cap, (C_net, C_pfill, C_ing, C_res))
 
     constraints = [
         cp.sum(x_R, axis=1) + cp.sum(x_S, axis=1) + z == inst.n,
@@ -70,8 +80,12 @@ def solve_stage2(inst: ProblemInstance, stage1: Stage1Result) -> Stage2Result:
         cp.multiply(a_net, L_net) <= r_net,
         cp.multiply(a_pf, L_pfill) <= r_pf,
         cp.multiply(a_in, L_ing) <= r_in,
+        cp.multiply(a_res, L_res) <= r_res,
         p_net <= phi, p_pfill <= phi, p_ing <= phi,
     ]
+    bad = replay_infeasible(inst)
+    if bad.any():
+        constraints.append(x_R[bad, :] == 0)
 
     solver = cp.SCIPY
     if stage1.objective == "max_min":
@@ -106,8 +120,11 @@ def solve_stage2(inst: ProblemInstance, stage1: Stage1Result) -> Stage2Result:
             if C_ing[m, l] > 0:
                 pressures[f"ing|{lname}|{mname}"] = float(L_ing_val[m, l] / C_ing[m, l])
 
+    L_res_val = b_net_S @ (x_R_val + x_S_val)
     return Stage2Result(
         x_R=x_R_val, x_S=x_S_val, z=z_val,
         Z_star=float(stage1.Z_star), phi_star=float(phi.value),
-        pressures=pressures, status=prob.status,
+        pressures=pressures,
+        residency_utilization=float((L_res_val / C_res).max()),
+        status=prob.status,
     )
