@@ -75,9 +75,13 @@ class ContextDist:
         return float(self.sample(np.random.default_rng(7), 200_000).mean())
 
 
-# Placeholder pending the agentic-trace survey (see assumptions.md); replaced
-# by the fitted snapshot distribution in Step 7 of the redesign.
-CONTEXT_DIST = ContextDist("lognormal", (float(np.log(30_000.0)), 1.4))
+# Fitted in-flight snapshot distribution, synthesized from a three-way survey
+# of 2024-26 agentic traces (see assumptions.md "Context Length Distribution"
+# for sources and the synthesis rule). Body: standard agentic-coding sessions
+# (median ~24k); tail: long-resident large-context sessions (median ~94k),
+# over-represented in a snapshot because residency grows with context.
+CONTEXT_DIST = ContextDist("lognormal_mixture",
+                           ((0.70, 10.07, 1.0), (0.30, 11.45, 0.8)))
 
 
 def n_rack(dist: ContextDist = CONTEXT_DIST) -> int:
