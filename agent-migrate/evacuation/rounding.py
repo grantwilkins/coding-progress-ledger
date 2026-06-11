@@ -9,6 +9,7 @@ from __future__ import annotations
 import numpy as np
 
 from instance import ProblemInstance
+from loads import loads, replay_infeasible
 
 
 def round_plan(inst: ProblemInstance,
@@ -19,7 +20,6 @@ def round_plan(inst: ProblemInstance,
     deficit and respecting aggregate capacity at every resource index."""
     Q = inst.T.size
     L = inst.lambda_bps.size
-    M = len(inst.M_names)
 
     x_R_int = np.floor(x_R).astype(np.int64)
     x_S_int = np.floor(x_S).astype(np.int64)
@@ -29,23 +29,14 @@ def round_plan(inst: ProblemInstance,
     r_S = x_S - x_S_int
     r_z = z - z_int
 
-    C_net = inst.lambda_bps * inst.D                # (L,)
-    C_pfill = inst.W.T * inst.D                     # (M, L)
-    C_ing = inst.W.T * inst.mu_ing * inst.D         # (M, L)
+    C_net, C_pfill, C_ing, C_res, S_pfill, S_ing, b_net_R, b_net_S = loads(inst)
+    bad = replay_infeasible(inst)
 
     # Aggregate loads from the floored assignment (running totals).
-    b_net_R = inst.beta * inst.T
-    b_net_S = inst.eta * inst.T
     L_net = b_net_R @ x_R_int + b_net_S @ x_S_int   # (L,) float64
-
-    S_pfill = np.zeros((M, Q))
-    S_ing = np.zeros((M, Q))
-    for m in range(M):
-        mask = inst.model_idx == m
-        S_pfill[m, mask] = inst.T[mask] / inst.rho[mask]
-        S_ing[m, mask] = inst.eta[mask] * inst.T[mask]
     L_pfill = S_pfill @ x_R_int.astype(float)       # (M, L)
     L_ing = S_ing @ x_S_int.astype(float)
+    L_res = b_net_S @ (x_R_int + x_S_int).astype(float)  # (L,)
 
     n_int = np.round(inst.n).astype(np.int64)
 
@@ -78,6 +69,8 @@ def round_plan(inst: ProblemInstance,
                 continue
             assert l is not None
             if kind == "R":
+                if bad[q]:
+                    continue
                 d_net = beta_q * T_q
                 d_pfill = T_q / rho_q
                 d_ing = 0.0
@@ -85,8 +78,11 @@ def round_plan(inst: ProblemInstance,
                 d_net = eta_q * T_q
                 d_pfill = 0.0
                 d_ing = eta_q * T_q
+            d_res = eta_q * T_q  # destination decode-HBM, either action
 
             if L_net[l] + d_net > C_net[l] + tol:
+                continue
+            if L_res[l] + d_res > C_res[l] + tol:
                 continue
             if d_pfill > 0:
                 if C_pfill[m, l] == 0 or L_pfill[m, l] + d_pfill > C_pfill[m, l] + tol:
@@ -102,6 +98,7 @@ def round_plan(inst: ProblemInstance,
             L_net[l] += d_net
             L_pfill[m, l] += d_pfill
             L_ing[m, l] += d_ing
+            L_res[l] += d_res
             assigned += 1
 
         # Anything still unassigned falls back to z (no capacity).
@@ -144,27 +141,21 @@ def evaluate_plan(inst: ProblemInstance,
                   ) -> tuple[float, float, float]:
     """Return (phi, max_violation, z_total) for an integer plan.
 
-    phi = peak normalized pressure; max_violation = max_i max(0, L_i/C_i - 1)
-    over active indices (0 iff feasible); z_total = jobs left behind."""
-    Q, L, M = inst.T.size, inst.lambda_bps.size, len(inst.M_names)
-    C_net = inst.lambda_bps * inst.D
-    C_pfill = inst.W.T * inst.D
-    C_ing = inst.W.T * inst.mu_ing * inst.D
-
-    S_pfill = np.zeros((M, Q))
-    S_ing = np.zeros((M, Q))
-    for m in range(M):
-        mask = inst.model_idx == m
-        S_pfill[m, mask] = inst.T[mask] / inst.rho[mask]
-        S_ing[m, mask] = inst.eta[mask] * inst.T[mask]
+    phi = peak normalized pressure (rate resources; residency, a stock, is
+    excluded as in Stage 2); max_violation = max_i max(0, L_i/C_i - 1) over all
+    active indices including residency (0 iff feasible); z_total = jobs left
+    behind."""
+    C_net, C_pfill, C_ing, C_res, S_pfill, S_ing, b_net_R, b_net_S = loads(inst)
 
     xR, xS = x_R_int.astype(float), x_S_int.astype(float)
-    L_net = (inst.beta * inst.T) @ xR + (inst.eta * inst.T) @ xS
+    L_net = b_net_R @ xR + b_net_S @ xS
     L_pfill = S_pfill @ xR
     L_ing = S_ing @ xS
+    L_res = b_net_S @ (xR + xS)
 
     ratios = list(L_net[C_net > 0] / C_net[C_net > 0])
     ratios += list(L_pfill[C_pfill > 0] / C_pfill[C_pfill > 0])
     ratios += list(L_ing[C_ing > 0] / C_ing[C_ing > 0])
     r = np.array(ratios)
-    return float(r.max()), float(np.maximum(r - 1.0, 0.0).max()), float(z_int.sum())
+    all_r = np.concatenate([r, L_res[C_res > 0] / C_res[C_res > 0]])
+    return float(r.max()), float(np.maximum(all_r - 1.0, 0.0).max()), float(z_int.sum())
