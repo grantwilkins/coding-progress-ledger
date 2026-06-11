@@ -24,7 +24,7 @@ import numpy as np
 
 from instance import build_instance
 from objective_metrics import (BUCKET_LABELS, by_bucket, evac_fraction,
-                               evac_summary, metrics, model_token_grid)
+                               evac_summary, metrics)
 from stage1 import solve_stage1
 from stage2 import solve_stage2
 
@@ -44,13 +44,12 @@ VARIANTS = (
     Variant("prop_fair_pop", "prop_fair", "population", "prop-fair $w_q{=}n_q$", "#4c9a52"),
     Variant("prop_fair_cls", "prop_fair", "class", "prop-fair $w_q{=}1$", "#8052a0"),
 )
-N_BINS = 5
 SWEEP_D = (30, 60, 120, 300, 600, 1200)
 OUT = Path(__file__).resolve().parent / "outputs"
 
 
 def solve_all(D):
-    inst = build_instance(D=D, n_bins=N_BINS)
+    inst = build_instance(D=D)
     runs = {}
     for v in VARIANTS:
         s1 = solve_stage1(inst, v.objective, v.weights)
@@ -85,8 +84,6 @@ def write_artifacts(inst, runs):
                "phi_star": m["pressure"]["phi_star"]}
         for b, bv in m["by_bucket"].items():
             row[f"bucket_{b}"] = bv["evacuated_fraction"]
-        for mm, mv in m["by_model"].items():
-            row[f"model_{mm}"] = mv["evacuated_fraction"]
         rows.append(row)
     keys = list({k for r in rows for k in r})
     with (OUT / "objective_metrics.csv").open("w", newline="") as f:
@@ -173,32 +170,6 @@ def plot_evac_measures(inst, runs, D):
     _save(fig, "obj_evac_measures")
 
 
-def plot_model_token_heatmap(inst, runs, D):
-    """Per-(model, token-bucket) evacuated fraction -- finer than model-only bars."""
-    M, B = inst.M_names, BUCKET_LABELS
-    n = len(VARIANTS)
-    fig, axes = plt.subplots(1, n, figsize=(3.8 * n, 4.8))
-    for idx, (ax, v) in enumerate(zip(np.atleast_1d(axes), VARIANTS)):
-        g = model_token_grid(inst, runs[v.key][0].z)
-        im = ax.imshow(g, vmin=0, vmax=1, cmap="RdYlGn", aspect="auto")
-        ax.set_xticks(range(len(B))); ax.set_xticklabels(B, rotation=45, ha="right", fontsize=7)
-        if idx == 0:
-            ax.set_yticks(range(len(M))); ax.set_yticklabels(M, fontsize=7)
-        else:
-            ax.set_yticks([])
-        ax.set_title(v.label, fontsize=9)
-        for i in range(len(M)):
-            for j in range(len(B)):
-                if not np.isnan(g[i, j]):
-                    ax.text(j, i, f"{g[i, j]:.2f}", ha="center", va="center", fontsize=6)
-    fig.colorbar(im, ax=list(np.atleast_1d(axes)), fraction=0.02, pad=0.01,
-                 label="evacuated fraction")
-    fig.suptitle(f"Evacuated fraction by model x token length, $D={D}$s")
-    fig.savefig(OUT / "obj_model_token_heatmap.pdf", bbox_inches="tight")
-    fig.savefig(OUT / "obj_model_token_heatmap.png", dpi=150, bbox_inches="tight")
-    print(f"wrote {OUT/'obj_model_token_heatmap'}.pdf")
-
-
 def plot_tradeoff(inst, runs, D):
     fig, ax = plt.subplots(figsize=(6.5, 4.5))
     for v in VARIANTS:
@@ -274,7 +245,7 @@ def plot_sweep():
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--D", type=float, default=120.0,
-                    help="fixed deadline for the comparison plots (D>=300 is degenerate)")
+                    help="fixed deadline for the comparison plots (D>~250 is degenerate)")
     ap.add_argument("--sweep", action="store_true", help="also render the deadline sweep")
     args = ap.parse_args()
 
@@ -285,7 +256,6 @@ def main():
     plot_token_cdf(inst, runs, args.D)
     plot_buckets(inst, runs, args.D)
     plot_evac_measures(inst, runs, args.D)
-    plot_model_token_heatmap(inst, runs, args.D)
     plot_tradeoff(inst, runs, args.D)
     plot_pressure(inst, runs, args.D)
     plot_action_mix(inst, runs, args.D)

@@ -1,15 +1,15 @@
-"""Per-model action mix (replay/state-transfer split), Stage 1 vs Stage 2, as a
-distribution over random instances.
+"""Per-token-bucket action mix (replay/state-transfer split), Stage 1 vs
+Stage 2, as a distribution over random instances.
 
-For each model m, aggregate over its classes and destinations:
-    R_m = sum_{q in m, l} x_R[q, l]   (replay)
-    S_m = sum_{q in m, l} x_S[q, l]   (state transfer)
-and report replay's share of moved jobs, R_m / (R_m + S_m).
+For each log-T bucket b, aggregate over its jobs and destinations:
+    R_b = sum_{q in b, l} x_R[q, l]   (replay)
+    S_b = sum_{q in b, l} x_S[q, l]   (state transfer)
+and report replay's share of moved jobs, R_b / (R_b + S_b).
 
-Run N_SEEDS random instances in parallel (prop-fair objective on the
-(model, token-bucket) grid, matching the poster) and draw the mean replay share
-per model with error bars = +/-1 sd across instances. A shifted Stage 1 -> Stage 2
-pair means the peak-pressure stage traded state-ingest for prefill (or vice versa).
+Run N_SEEDS random instances in parallel (prop-fair objective, per-job
+classes) at a deadline near the o=1 evacuation frontier, where the
+prefill-vs-WAN tradeoff is active. A shifted Stage 1 -> Stage 2 pair means
+the peak-pressure stage traded state-ingest for prefill (or vice versa).
 
 Compute is cached to outputs/action_mix_dist.json. Re-run with --recompute.
 
@@ -29,6 +29,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 from instance import build_instance
+from objective_metrics import BUCKET_LABELS, bucket_idx
 from stage1 import solve_stage1
 from stage2 import solve_stage2
 
@@ -36,28 +37,28 @@ OUT = Path(__file__).resolve().parent / "outputs"
 JSON = OUT / "action_mix_dist.json"
 N_SEEDS = 50
 N_WORKERS = 8
+D_MIX = 300.0  # near the o=1 frontier: both resources active
 
 
-def per_model_split(x_R, x_S, model_idx, M):
-    R = np.array([x_R[model_idx == m].sum() for m in range(M)])
-    S = np.array([x_S[model_idx == m].sum() for m in range(M)])
+def per_bucket_split(x_R, x_S, b, B):
+    R = np.array([x_R[b == k].sum() for k in range(B)])
+    S = np.array([x_S[b == k].sum() for k in range(B)])
     moved = R + S
-    R_pct = 100.0 * np.where(moved > 0, R / moved, 0.0)
-    return R_pct  # state share is 100 - R_pct
+    return np.where(moved > 0, 100.0 * R / moved, np.nan)  # state share is 100 - R
 
 
 def _run_seed(seed: int):
     # The prop-fair conic solve is occasionally brittle on a random draw; drop
     # (and report) those seeds rather than letting one kill the distribution.
-    inst = build_instance(total_jobs=10_000, n_bins=5, seed=seed)
+    inst = build_instance(D=D_MIX, seed=seed)
     try:
         s1 = solve_stage1(inst, "prop_fair")
         s2 = solve_stage2(inst, s1)
     except (cp.error.SolverError, RuntimeError):
         return None
-    M = len(inst.M_names)
-    return (per_model_split(s1.x_R, s1.x_S, inst.model_idx, M).tolist(),
-            per_model_split(s2.x_R, s2.x_S, inst.model_idx, M).tolist())
+    b, B = bucket_idx(inst), len(BUCKET_LABELS)
+    return (per_bucket_split(s1.x_R, s1.x_S, b, B).tolist(),
+            per_bucket_split(s2.x_R, s2.x_S, b, B).tolist())
 
 
 def compute() -> dict:
@@ -67,28 +68,28 @@ def compute() -> dict:
     R1 = np.array([r[0] for r in res])
     R2 = np.array([r[1] for r in res])
     data = {
-        "models": list(build_instance(total_jobs=10_000, n_bins=5).M_names),
-        "R1_mean": R1.mean(0).tolist(), "R1_std": R1.std(0).tolist(),
-        "R2_mean": R2.mean(0).tolist(), "R2_std": R2.std(0).tolist(),
+        "buckets": list(BUCKET_LABELS),
+        "R1_mean": np.nanmean(R1, 0).tolist(), "R1_std": np.nanstd(R1, 0).tolist(),
+        "R2_mean": np.nanmean(R2, 0).tolist(), "R2_std": np.nanstd(R2, 0).tolist(),
         "n_seeds": len(res),
     }
     OUT.mkdir(exist_ok=True)
     JSON.write_text(json.dumps(data))
-    for m, name in enumerate(data["models"]):
-        print(f"{name:>20s}  S1 replay {data['R1_mean'][m]:5.1f}+/-{data['R1_std'][m]:.1f}%   "
-              f"S2 replay {data['R2_mean'][m]:5.1f}+/-{data['R2_std'][m]:.1f}%")
+    for k, name in enumerate(data["buckets"]):
+        print(f"{name:>10s}  S1 replay {data['R1_mean'][k]:5.1f}+/-{data['R1_std'][k]:.1f}%   "
+              f"S2 replay {data['R2_mean'][k]:5.1f}+/-{data['R2_std'][k]:.1f}%")
     return data
 
 
 def main() -> None:
     data = compute() if "--recompute" in sys.argv or not JSON.exists() else json.loads(JSON.read_text())
-    models = data["models"]
+    buckets = data["buckets"]
     R1m, R1s = np.array(data["R1_mean"]), np.array(data["R1_std"])
     R2m, R2s = np.array(data["R2_mean"]), np.array(data["R2_std"])
-    M = len(models)
+    B = len(buckets)
 
     fig, ax = plt.subplots(figsize=(12, 5.6))
-    x = np.arange(M)
+    x = np.arange(B)
     w = 0.38
     ax.bar(x - w/2, R1m, w, color="#3a7ca5", label="Stage 1: replay")
     ax.bar(x - w/2, 100 - R1m, w, bottom=R1m, color="#a5c8e1", label="Stage 1: state transfer")
@@ -98,14 +99,15 @@ def main() -> None:
     ax.errorbar(x - w/2, R1m, yerr=R1s, fmt="none", ecolor="0.15", capsize=4, lw=1.4)
     ax.errorbar(x + w/2, R2m, yerr=R2s, fmt="none", ecolor="0.15", capsize=4, lw=1.4)
     # Replay share, centred inside each replay (lower) segment.
-    for i in range(M):
+    for i in range(B):
         ax.text(x[i] - w/2, R1m[i] / 2, f"{R1m[i]:.0f}%", ha="center", va="center",
                 fontsize=13, color="white", fontweight="bold")
         ax.text(x[i] + w/2, R2m[i] / 2, f"{R2m[i]:.0f}%", ha="center", va="center",
                 fontsize=13, color="white", fontweight="bold")
 
     ax.set_xticks(x)
-    ax.set_xticklabels(models, rotation=20, ha="right", fontsize=15)
+    ax.set_xticklabels(buckets, fontsize=15)
+    ax.set_xlabel("Context length bucket (tokens)", fontsize=18)
     ax.set_ylabel("Share of migrated jobs (%)", fontsize=18)
     ax.set_ylim(0, 104)
     ax.tick_params(axis="y", labelsize=14)

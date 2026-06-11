@@ -46,10 +46,10 @@ def _run_seed(seed: int):
     Returns None if Z* > 0 (ADMM's precondition fails); such seeds are dropped
     from the aggregate, mirroring plot_decomp_convergence_scaling.
     """
-    # total_jobs=200 (n_q ~ O(1)) is the regime ADMM's rho is tuned for; larger
-    # n rescales the per-class loads and detunes ADMM. Relative gap below makes
-    # the comparison scale-free across the random instances.
-    inst = build_instance(D=300.0, total_jobs=200, seed=seed)
+    # o=0.75 keeps Z* = 0 at D=300 (the dual solvers' precondition; min-D at
+    # o=0.75 is ~210s) with per-job classes (n_q = 1), the regime ADMM's rho
+    # is tuned for. Relative gap below makes the comparison scale-free.
+    inst = build_instance(D=300.0, occupancy=0.75, seed=seed)
     s1 = solve_stage1(inst)
     if s1.Z_star > 1e-6:
         return None

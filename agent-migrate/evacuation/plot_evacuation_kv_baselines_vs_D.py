@@ -1,5 +1,5 @@
 """Sweep deadline D and plot KV-weighted % evacuated: the proportional-fairness
-optimizer vs heuristic baselines (10k jobs, model x token-bucket classes).
+optimizer vs heuristic baselines (8-rack pod at fitted occupancy, per-job classes).
 
 KV-weighted because count-greedy/cost-greedy heuristics hoard small-KV jobs and
 abandon large ones; weighting by eta_q*T_q surfaces that. prop-fair refuses to
@@ -28,21 +28,16 @@ from stage1 import solve_stage1
 
 OUT = Path(__file__).resolve().parent / "outputs"
 CSV = OUT / "kv_baselines_D.csv"
-D_SWEEP_S = (1, 2, 5, 10, 20, 30, 45, 60, 90, 120, 180, 300, 600, 900)
-# N_BINS=5 = the canonical (model, token-bucket) grid (objective_metrics.BUCKET_LABELS);
-# it is the poster's workload-class definition and the only granularity whose
-# prop-fair conic solve stays robust across the whole tight-to-slack deadline sweep.
-JOBS, N_BINS, RANDOM_SEEDS = 10_000, 5, 30
-DET = ("greedy", "round_robin", "replay_only", "state_only", "least_loaded")
+D_SWEEP_S = (15, 30, 60, 90, 120, 180, 240, 360, 600, 1200)
+RANDOM_SEEDS = 30
+DET = ("greedy", "replay_only", "state_only")
 
 # (label, color, marker); lines drawn ours -> deterministic baselines -> random.
 STYLE = {
     "ours":         ("Ours (prop-fair)",  "#3a7ca5", "o"),
     "greedy":       ("greedy (cheapest)", "#c44536", "s"),
-    "round_robin":  ("round-robin",       "#e8943a", "^"),
     "replay_only":  ("replay-only",       "#4a9b54", "v"),
     "state_only":   ("state-only",        "#6a4c93", "D"),
-    "least_loaded": ("least-loaded",      "#8a3122", "P"),
     "random":       ("random (mean±1sd)", "0.45", "x"),
 }
 
@@ -54,7 +49,7 @@ def _kv(inst, z):
 def compute():
     rows = []
     for D in D_SWEEP_S:
-        inst = build_instance(D=float(D), total_jobs=JOBS, n_bins=N_BINS)
+        inst = build_instance(D=float(D))
         ours = _kv(inst, solve_stage1(inst, "prop_fair").z)
         rows.append(("ours", -1, D, ours))
         for name in DET:
