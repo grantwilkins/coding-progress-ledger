@@ -39,6 +39,10 @@ def evac_summary(inst, z):
         "evacuated_fraction_total": evac / float(n.sum()),
         "token_weighted_evacuation": float((inst.T * (n - z)).sum() / tok.sum()),
         "kv_weighted_evacuation": float((inst.eta * inst.T * (n - z)).sum() / kv.sum()),
+        "kv_stranded_bytes": float((inst.eta * inst.T * z).sum()),
+        # < 1 iff the destination's decode-HBM stock cannot hold the pod's KV
+        # (occupancy > 1): the residency wall, independent of the deadline.
+        "residency_bound_fraction": float(min(1.0, inst.C_res.sum() / kv.sum())),
         "min_class_evacuated_fraction": float(u.min()),
         "p10_class_evacuated_fraction": float(np.percentile(u, 10)),
         "p50_class_evacuated_fraction": float(np.percentile(u, 50)),
@@ -63,24 +67,6 @@ def by_bucket(inst, z):
             "mean_T": float(np.average(inst.T[m], weights=inst.n[m])),
         }
     return out
-
-
-def model_token_grid(inst, z):
-    """(M, len(BUCKET_LABELS)) evacuated fraction per model x token bucket.
-
-    NaN where a (model, bucket) cell holds no jobs. At n_bins=len(BUCKET_LABELS)
-    each cell is one class, so the grid is u_q laid out on the model/length plane.
-    """
-    b = bucket_idx(inst)
-    M, B = len(inst.M_names), len(BUCKET_LABELS)
-    grid = np.full((M, B), np.nan)
-    for m in range(M):
-        for k in range(B):
-            sel = (inst.model_idx == m) & (b == k)
-            tot = inst.n[sel].sum()
-            if tot > 0:
-                grid[m, k] = float((inst.n[sel] - z[sel]).sum() / tot)
-    return grid
 
 
 def by_model(inst, s1):
@@ -111,6 +97,8 @@ def pressure_summary(s2):
         "max_ing_pressure": float(max(by_kind("ing|"), default=0.0)),
         "mean_pressure": float(vals.mean()),
         "p90_pressure": float(np.percentile(vals, 90)),
+        # Stock resource, excluded from phi (see stage2.py).
+        "residency_utilization": float(s2.residency_utilization),
     }
 
 
