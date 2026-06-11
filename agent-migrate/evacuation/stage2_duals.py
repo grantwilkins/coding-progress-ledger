@@ -12,6 +12,7 @@ import cvxpy as cp
 import numpy as np
 
 from instance import ProblemInstance
+from loads import replay_infeasible
 from stage1 import Stage1Result
 
 
@@ -29,7 +30,7 @@ def ceiling_duals(inst: ProblemInstance, stage1: Stage1Result) -> tuple[dict, fl
 
     C_net = inst.lambda_bps * inst.D
     C_pfill = inst.W.T * inst.D
-    C_ing = inst.W.T * inst.mu_ing * inst.D
+    C_ing = inst.W_ing.T * inst.mu_ing * inst.D
 
     S_pfill = np.zeros((M, Q))
     S_ing = np.zeros((M, Q))
@@ -51,12 +52,17 @@ def ceiling_duals(inst: ProblemInstance, stage1: Stage1Result) -> tuple[dict, fl
     r_pfill = cp.multiply(iCp, L_pfill)
     r_ing = cp.multiply(iCi, L_ing)
     c_net, c_pfill, c_ing = r_net <= phi, r_pfill <= phi, r_ing <= phi
+    # Residency: base constraint only (a stock, not a pressure index).
+    r_res = cp.multiply(1.0 / inst.C_res, (inst.eta * inst.T) @ (x_R + x_S))
     constraints = [
         cp.sum(x_R, axis=1) + cp.sum(x_S, axis=1) + z == inst.n,
         cp.sum(z) == stage1.Z_star,
-        r_net <= 1, r_pfill <= 1, r_ing <= 1,
+        r_net <= 1, r_pfill <= 1, r_ing <= 1, r_res <= 1,
         c_net, c_pfill, c_ing,
     ]
+    bad = replay_infeasible(inst)
+    if bad.any():
+        constraints.append(x_R[bad, :] == 0)
     prob = cp.Problem(cp.Minimize(phi), constraints)
     prob.solve(solver=cp.CLARABEL)
     if prob.status not in (cp.OPTIMAL, cp.OPTIMAL_INACCURATE):

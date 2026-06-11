@@ -29,6 +29,7 @@ import cvxpy as cp
 import numpy as np
 
 from instance import ProblemInstance
+from loads import replay_infeasible
 from stage1 import Stage1Result
 from stage2 import Stage2Result
 
@@ -57,7 +58,7 @@ def solve_stage2b(inst: ProblemInstance,
 
     C_net = inst.lambda_bps * inst.D                # (L,)
     C_pfill = inst.W.T * inst.D                     # (M, L)
-    C_ing = inst.W.T * inst.mu_ing * inst.D         # (M, L)
+    C_ing = inst.W_ing.T * inst.mu_ing * inst.D     # (M, L)
 
     inv_C_net = 1.0 / C_net
     inv_C_pfill = np.where(C_pfill > 0, 1.0 / np.where(C_pfill > 0, C_pfill, 1.0), 0.0)
@@ -79,13 +80,20 @@ def solve_stage2b(inst: ProblemInstance,
 
     objective = 0.5 * (cp.sum_squares(p_net) + cp.sum_squares(p_pfill) + cp.sum_squares(p_ing))
 
+    # Residency (decode-HBM stock): base constraint only, kept out of Psi —
+    # its load depends only on z, so it is constant on the Stage 1 link set.
+    a_res = eta_T[:, None] / inst.C_res[None, :]                                      # (Q, L)
     constraints = [
         cp.sum(x_R, axis=1) + cp.sum(x_S, axis=1) + z == inst.n,
         cp.sum(z) == stage1.Z_star,
         p_net <= 1,
         p_pfill <= 1,
         p_ing <= 1,
+        cp.sum(cp.multiply(a_res, x_R + x_S), axis=0) <= 1,
     ]
+    bad = replay_infeasible(inst)
+    if bad.any():
+        constraints.append(x_R[bad, :] == 0)
     if stage2 is not None:
         phi_ceil = stage2.phi_star + 1e-7  # absorb Stage 2 solver tolerance
         constraints += [p_net <= phi_ceil,

@@ -26,6 +26,7 @@ import cvxpy as cp
 import numpy as np
 
 from instance import ProblemInstance
+from loads import inv_cap, loads, replay_infeasible
 from stage2b import Stage2bResult
 from stage3 import Stage3Result, recon_costs
 
@@ -57,27 +58,14 @@ def solve_stage4(inst: ProblemInstance,
     V = cp.Variable(nonneg=True)
     r_bar = cp.Variable()  # aux: prevents dense expansion in |r_q - r_bar| <= V
 
-    C_net = inst.lambda_bps * inst.D
-    C_pfill = inst.W.T * inst.D
-    C_ing = inst.W.T * inst.mu_ing * inst.D
-
-    S_pfill = np.zeros((M, Q))
-    S_ing = np.zeros((M, Q))
-    for m in range(M):
-        mask = inst.model_idx == m
-        S_pfill[m, mask] = inst.T[mask] / inst.rho[mask]
-        S_ing[m, mask] = inst.eta[mask] * inst.T[mask]
-
-    b_net_R = inst.beta * inst.T
-    b_net_S = inst.eta * inst.T
+    C_net, C_pfill, C_ing, C_res, S_pfill, S_ing, b_net_R, b_net_S = loads(inst)
 
     L_net = b_net_R @ x_R + b_net_S @ x_S
     L_pfill = S_pfill @ x_R
     L_ing = S_ing @ x_S
+    L_res = b_net_S @ (x_R + x_S)
 
-    inv_C_net = np.where(C_net > 0, 1.0 / np.where(C_net > 0, C_net, 1.0), 0.0)
-    inv_C_pfill = np.where(C_pfill > 0, 1.0 / np.where(C_pfill > 0, C_pfill, 1.0), 0.0)
-    inv_C_ing = np.where(C_ing > 0, 1.0 / np.where(C_ing > 0, C_ing, 1.0), 0.0)
+    inv_C_net, inv_C_pfill, inv_C_ing = map(inv_cap, (C_net, C_pfill, C_ing))
 
     c_R, c_S = recon_costs(inst)
     r_expr = (cp.sum(cp.multiply(c_R, x_R), axis=1)
@@ -94,6 +82,7 @@ def solve_stage4(inst: ProblemInstance,
         L_net <= C_net,
         L_pfill <= C_pfill,
         L_ing <= C_ing,
+        L_res <= C_res,
         cp.multiply(inv_C_net, L_net) <= phi_ceil,
         cp.multiply(inv_C_pfill, L_pfill) <= phi_ceil,
         cp.multiply(inv_C_ing, L_ing) <= phi_ceil,
@@ -102,6 +91,9 @@ def solve_stage4(inst: ProblemInstance,
         r_expr - r_bar <= V,
         r_bar - r_expr <= V,
     ]
+    bad = replay_infeasible(inst)
+    if bad.any():
+        constraints.append(x_R[bad, :] == 0)
 
     if stage2b is not None:
         p_net = cp.multiply(inv_C_net, L_net)

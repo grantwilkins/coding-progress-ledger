@@ -19,6 +19,11 @@ Methods:
                    prox of max(.) solved by sorting. Specialized to Z* = 0.
   pdhg           - Chambolle-Pock on the min-peak-pressure bilinear saddle. Z* = 0.
   bundle         - proximal bundle method on the concave dual D(pi). Z* = 0.
+
+Residency (decode-HBM stock) is not a pressure index: its load depends only on
+z, which is fixed at Z* = 0 here, so it is a constant satisfied whenever
+occupancy <= 1 — the precondition for using these solvers. Replay-infeasible
+jobs (T/rho > D) are masked out of the replay options.
 """
 
 from __future__ import annotations
@@ -29,6 +34,7 @@ import cvxpy as cp
 import numpy as np
 
 from instance import ProblemInstance
+from loads import replay_infeasible
 from stage1 import Stage1Result
 
 
@@ -54,7 +60,7 @@ def build_dual_structure(inst: ProblemInstance):
 
     C_net = inst.lambda_bps * inst.D
     C_pfill = inst.W.T * inst.D                 # (M, L)
-    C_ing = inst.W.T * inst.mu_ing * inst.D     # (M, L)
+    C_ing = inst.W_ing.T * inst.mu_ing * inst.D # (M, L)
 
     I_meta = [("net", l, None) for l in range(L)]
     pfill_idx, ing_idx = {}, {}
@@ -89,6 +95,7 @@ def build_dual_structure(inst: ProblemInstance):
             A[pfill_idx[(l, m)], mask, l] = tau[mask] / C_pfill[m, l]
             A[ing_idx[(l, m)], mask, L + l] = eta_T[mask] / C_ing[m, l]
 
+    feasible[replay_infeasible(inst), :L] = False
     return A, C, I_meta, feasible
 
 
