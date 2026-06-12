@@ -2,6 +2,7 @@
 
 Power-first job dispatch: hit a grid shed target $S^\star$ by moving jobs, at least disruption.
 Static snapshot, one source pool → one destination pool, absolute watts via parameter sweep.
+**The math is in formulation.md** — tasks below implement it; values come from assumptions.md.
 
 **Order:** T0 first. T1 and T2 are independent. T3 needs T1+T2. T4 needs T3. T5–T8 need T4.
 
