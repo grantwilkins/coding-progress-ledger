@@ -10,9 +10,15 @@ from dataclasses import dataclass
 import numpy as np
 
 GB = 1e9
-ETA_BYTES_PER_TOK = 188 * 1024  # exact from attention config
+ETA_BYTES_PER_TOK = 188 * 1024  # KV bytes/tok, exact from attention config
+BETA_BYTES_PER_TOK = 4  # context bytes/tok, uint32 token IDs
 CAP_BF16_GB = 130.0  # 640 - 470 weights - 40
 CAP_FP8_GB = 365.0  # 640 - 235 weights - 40
+
+
+def congestion(u: float) -> float:
+    """M/M/1 queue-wait multiplier φ(u)=u/(1−u) at utilization u∈[0,1)."""
+    return u / (1 - u)
 
 # Prefill roofline (formulation.md §6). C uses QUERY heads (compute scales with H_q);
 # η above uses KV heads (cache size scales with H_kv). H_q gives T* ≈ 29k as stated.

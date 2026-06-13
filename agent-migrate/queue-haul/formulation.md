@@ -49,9 +49,11 @@ Load sets N when busy; held sessions set it when idle. When memory binds, the ma
 
 ## Per-job power impact
 
-$$\Delta P_j \in \big[\, s_{\text{plat}}\,\ell_j,\;\; \bar p_{\text{pre}} f_j/F + \bar p_{\text{dec}} g_j/G \,\big] \;\text{(load-bound)}, \qquad \Delta P_j = \mu\, m_j \;\text{(memory-bound)}$$
+$$\Delta P_j \in \big[\, s_{\text{plat}}\,\ell_j,\;\; \bar p_{\text{pre}} f_j/F + \bar p_{\text{dec}} g_j/G \,\big] \;\text{(load-bound)}, \qquad \Delta P_j = \mu\, \frac{m_j}{\bar m} = \mu\, \frac{T_j}{E[T]} \;\text{(memory-bound)}$$
 
 Low end guaranteed, high end expected (autoscaler drains within the hold). Both ends additive over a removed set. Ranking by ℓ is identical at either end — *which* jobs to move doesn't depend on autoscaler timing, only *how many*. Within one node type, ℓ ranks; across node types, p̄·ℓ (watts) ranks.
+
+**Memory-score units.** μ = P_idle/S_node is W *per held session*, so the memory-bound impact must measure m_j in session-equivalents: m_j/m̄ = T_j/E[T]. A job at E[T] sheds exactly μ; a 2×E[T] job sheds 2μ. (Writing μ·m_j with m_j in bytes is dimensionally not a power.) μ stays W/session; ranking by m_j is unchanged since m̄ is a constant, but the memory score spreads widely around μ because context is tail-heavy.
 
 ## Dispatch program
 
@@ -59,9 +61,11 @@ Grid command: shed S* by deadline D, held over [D, D+H]. Decisions: y_j ∈ [0,1
 
 $$\min_{y,a} \sum_j y_j\, c_j(a_j) \quad \text{s.t.} \quad \sum_j y_j\, \Delta P_j \ge S^\star$$
 
-**Disruption cost (downtime = ship + rebuild + destination queueing wait):**
+**Disruption cost (downtime = ship + rebuild × destination queue congestion):**
 
-$$c_j(R) = \frac{\beta T_j}{\Lambda} + \frac{T_j}{\rho_{\text{dest}}} + w_{\text{pre}}, \qquad c_j(S) = \frac{\eta T_j}{\Lambda} + \frac{\eta T_j}{\mu_{\text{in}}} + w_{\text{in}}$$
+$$c_j(R) = \frac{\beta T_j}{\Lambda} + (1+\varphi_{\text{pre}})\,\frac{T_j}{\rho_{\text{dest}}(T_j)}, \qquad c_j(S) = \frac{\eta T_j}{\Lambda} + (1+\varphi_{\text{in}})\,\frac{\eta T_j}{\mu_{\text{in}}}$$
+
+The queue wait enters as a congestion multiplier `(1+φ)` on the *rebuild* term, with `φ = u/(1−u)` the M/M/1 wait factor. Replay and transfer load **different** destination resources, so they carry **different** utilizations: `φ_pre` at the destination prefill/compute load, `φ_in` at the ingest load (≈0 when ingest is provisioned non-binding). The *ship* term carries no multiplier — the source uplink is treated as uncontended during the event, and its aggregate contention is the egress constraint below, not a per-job downtime.
 
 **Movement constraints:**
 

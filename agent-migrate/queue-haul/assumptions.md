@@ -145,7 +145,7 @@ binds, so the two never double-count.) **ρ_low is removed from the model.**
 | **ρ_dest(T) (prefill tok/s, a function)** | **see below** | derived-function | FLOP roofline of one 8×H100 node, not a constant |
 | **μ_in (ingest, per node)** | **512 GB/s** (center); sweep [256, 512] GB/s | sweep | host-staged PCIe Gen5 ×8; sweep covers staging overhead / contention |
 | **τ_src, τ_pre, τ_in (startup s)** | **2 / 5 / 3 s** (center) | sweep | conn ramp / batch-form / pipeline-fill; sweep each [0, 2×center] |
-| **w_pre, w_in (dest queueing wait s)** | derived from ρ*, knee via φ(p)=p/(1−p) | derived | convex congestion at destination load |
+| **φ_pre, φ_in (dest queue congestion)** | `(1+φ)` on rebuild; φ=u/(1−u) at `dest_prefill_util` **0.6** / `dest_ingest_util` **0** | derived | Replay queues against destination *prefill*, transfer against *ingest* — different resources, different utilizations (one shared φ would erase the action distinction). Both destination-side knobs, swept in T7. `dest_prefill_util`=0.6 from §5's ~0.4 destination spare; `dest_ingest_util`=0 (ingest non-binding by construction → φ_in≈0; network is the binding transfer resource). Ship term uncontended (φ_src=0); aggregate Λ_src contention is the T4 egress constraint, not a per-job downtime. |
 
 **ρ_dest is a function of context length, not a number.** The destination re-prefills the full
 context on replay, and the prefill rate slips as context grows because attention is quadratic. From

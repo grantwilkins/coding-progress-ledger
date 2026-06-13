@@ -24,10 +24,10 @@ Each task lists its **success criterion** — the one check that says it's done.
   *Needs: §1 Model constants, §3 Rate distributions.*
   **Success:** generated population reproduces the target `E[T]`, state mix, and agentic:chat split; no cold job has `ℓ_j > 0`; `(ℓ_pre, ℓ_dec)` returned separately, not pre-summed.
 
-- [ ] **T3 — Per-job impact & move costs** (`impact.py`)
-  ΔP_j bracket `[s_plat·ℓ_j, p̄·ℓ_j]` in **two-price form** (`p̄_pre·ℓ_pre + p̄_dec·ℓ_dec`), or `μ·m_j` in the memory regime; disruption costs `c_j(R)`, `c_j(S)`. **Replay rebuild cost uses `ρ_dest(T_j)`** — the prefill roofline *as a function of context length* (flat below `T*≈29k`, decaying `1/T` above), not a constant rate.
-  *Needs: **T1 prices** (`p̄, s_plat, μ, p̄_pre, p̄_dec`) + T2 loads + §6 Movement.*
-  **Success:** replay cost is flat for short-context jobs and rises ~`1/ρ_dest(T)` for long ones (not constant); two-price ΔP_j differs from single-price for phase-skewed (agentic) jobs and matches for chat.
+- [x] **T3 — Per-job impact & move costs** (`impact.py`)
+  ΔP_j bracket `[s_plat·ℓ_j, p̄·ℓ_j]` in **two-price form** (`p̄_pre·ℓ_pre + p̄_dec·ℓ_dec`), or `μ·m_j/m̄ = μ·T_j/E[T]` in the memory regime (μ stays W/session — m_j normalized to session-equivalents). Disruption costs `c_j(R)`, `c_j(S)` with the queue wait as a **split congestion multiplier** `(1+φ_pre)`/`(1+φ_in)` on the rebuild — replay against destination prefill load, transfer against ingest (φ_in≈0). **Replay rebuild cost uses `ρ_dest(T_j)`** — the prefill roofline *as a function of context length* (flat below `T*≈29k`, decaying `1/T` above), not a constant rate. T3 is a pure per-job calculator + the one pool-level `regime` flag (T4 picks the action); `b_j` egress bytes also produced here.
+  *Needs: **T1 prices** (`p̄, s_plat, μ, p̄_pre, p̄_dec`) + T2 loads (`mfu` stored on the population) + §6 Movement.*
+  **Success:** replay cost is flat for short-context jobs and rises ~`1/ρ_dest(T)` for long ones (not constant); two-price ΔP_j **deviates from single-price with opposite sign by phase skew** — prefill-skewed (non-reasoning agentic) below single, decode-skewed (chat, reasoning) above — and equals single only for a phase-balanced job (closure of T1's `(p̄_pre+p̄_dec)/2=p̄` split).
 
 - [ ] **T4 — Dispatch solver** (`dispatch.py`)
   **Two solves, not a branch.** Primary: LP over `y ∈ [0,1]` minimizing `Σ y_j·c_j` s.t. `Σ y_j·ΔP_j ≥ S*` + source egress + destination rebuild by `D` (prefill via `ρ_dest(T)`, ingest via `μ_in`) + destination headroom (load `≤ L̄_dest`, held sessions `≤ S̄_dest`). If infeasible: **re-solve** maximizing `Σ y_j·ΔP_j` with the `≥ S*` constraint dropped, report shortfall. Plus the bang-per-buck greedy (sort by `c_j/ΔP_j`).
@@ -47,7 +47,7 @@ Each task lists its **success criterion** — the one check that says it's done.
 
 - [ ] **T8 — Experiment: load vs memory regime**
   Walk the regime boundary two ways: (a) idle/cold fraction × γ, and **(b) the context-length mixture short→long** (long `T` is what makes `m_j` bind — the KV-size approach to the same transition).
-  **Success:** below the crossover, `ℓ`-ranking governs and `μ·m` is slack; above it, `μ·m`-ranking takes over; the switch occurs exactly at the `N = max(L/ρ*, S_held/S_node)` crossover, and approaches (a) and (b) agree on where.
+  **Success:** below the crossover, `ℓ`-ranking governs and `μ·m` is slack; above it, `μ·m`-ranking takes over; the switch occurs exactly at the `N = max(L/ρ*, S_held/S_node)` crossover, and approaches (a) and (b) agree on where. **Also certify ranking *stability* across the boundary** (not just crossover location): report the Spearman of the load-ranking (ΔP_expected) vs the memory-ranking (ΔP_memory) — at center it is ≈0 (T2 draws T independent of Δ/Y), so the regime flag genuinely reorders which jobs are shed, a substantive result.
 
 - [ ] **T9 — Tests**
   **Success (all pass):** (1) ranking invariant under `p̄` scaling; (2) regime switch lands at the `N = max(·,·)` crossover; (3) greedy = LP away from boundaries; (4) every solver output satisfies all constraints; (5) no cold job carries load; (6) BF16↔FP8 toggle shifts `S_node` ~2× and the memory threshold, leaving load-regime results unchanged.

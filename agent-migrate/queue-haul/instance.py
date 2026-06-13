@@ -49,6 +49,7 @@ class JobPopulation:
     ell_dec: np.ndarray  # g_j / G
     m: np.ndarray  # η·T_j (bytes)
     precision: str
+    mfu: float  # the MFU ρ_dest was built with; impact reads it so rebuild can't desync
 
     @property
     def ell(self) -> np.ndarray:
@@ -82,7 +83,7 @@ def _draw(rng, n: int, wl: Workload, precision: str) -> JobPopulation:
     ell_pre = (rate * delta * active) / rho_dest(T, wl.mfu)
     ell_dec = (rate * Y * active) / (wl.g_fp8 if precision == "fp8" else wl.g_bf16)
     m = ETA_BYTES_PER_TOK * T
-    return JobPopulation(klass, state, is_reasoning, T, ell_pre, ell_dec, m, precision)
+    return JobPopulation(klass, state, is_reasoning, T, ell_pre, ell_dec, m, precision, wl.mfu)
 
 
 def _mean_T(wl: Workload) -> float:
