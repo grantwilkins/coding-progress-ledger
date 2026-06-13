@@ -7,7 +7,7 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from power import CAP_FP8_GB, PoolPower
+from power import CAP_FP8_GB, C_ATTN, N_ACT, PoolPower, rho_dest
 
 
 def test_center_prices():
@@ -42,3 +42,12 @@ def test_regime_crossover():
     assert p.memory_bound(load, 1.01 * s_held_cross)
     assert p.node_count(load, 0.5 * s_held_cross) == pytest.approx(load / p.rho_star)
     assert p.node_count(load, 2 * s_held_cross) == pytest.approx(2 * load / p.rho_star)
+
+
+def test_rho_dest_landmarks():
+    t_star = 2 * N_ACT / C_ATTN
+    assert t_star == pytest.approx(29000, rel=0.02)  # query heads, not KV heads
+    assert 2 * N_ACT / (2 * 94 * 4 * 128) > 400_000  # H_kv would mislocate T* ~16x out
+    assert rho_dest(0.0) == pytest.approx(63000, rel=0.02)
+    assert rho_dest(t_star) == pytest.approx(rho_dest(0.0) / 2)  # half rate at T*
+    assert rho_dest(100_000) == pytest.approx(14000, rel=0.05)
