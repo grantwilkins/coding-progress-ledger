@@ -134,24 +134,46 @@ def solve(pop: JobPopulation, pool: PoolPower, imp: Impact, s_star: float,
 
 def greedy(pop: JobPopulation, pool: PoolPower, imp: Impact, s_star: float,
            event: Event = Event(), move: Movement = Movement()) -> Plan:
-    """Resource-blind bang-per-buck: cheaper action per job, sort by cost/ΔP, take
-    until Σ ΔP ≥ S* (last job fractional). Ignores movement limits — the T5
-    baseline the LP is compared against."""
+    """Decentralized first-fit baseline: each job self-selects its cheaper action
+    and the best-deal jobs (lowest downtime per watt) move first — but every move
+    draws down the SHARED movement budgets the deadline window allows (egress
+    bytes, rebuild node-seconds and ingest bytes, destination load and held), so it
+    cannot ship more than the links carry. A job whose cheaper action no longer
+    fits falls back to its other action, else waits. One myopic pass in priority
+    order, no global repacking — that repacking is exactly what the LP buys."""
     n = len(pop)
     dp = bind_dp(imp)
-    cost = np.minimum(imp.c_replay, imp.c_transfer)
+    reb = pop.T / rho_dest(pop.T, pop.mfu)
+    budget = {  # same RHS as the solve() constraints; consumed as jobs are accepted
+        "egress": move.lambda_src * (event.D - event.tau_src),
+        "prefill": event.W * (event.D - event.tau_pre),
+        "ingest": event.W * move.mu_in * (event.D - event.tau_in),
+        "load": event.l_dest(pool),
+        "held": event.s_dest(pool),
+    }
+    draw = {  # per-job resource a unit move consumes (same coefficients as the LP rows)
+        "R": [("egress", imp.b_replay), ("prefill", reb), ("load", pop.ell), ("held", np.ones(n))],
+        "S": [("egress", imp.b_transfer), ("ingest", imp.b_transfer), ("load", pop.ell), ("held", np.ones(n))],
+    }
+    cheaper = np.where(imp.c_replay <= imp.c_transfer, "R", "S")
     movable = dp > 0
     if event.pinned:
         movable &= ~np.isin(pop.job_type, event.pinned)
-    ratio = np.where(movable, cost / np.where(movable, dp, 1.0), np.inf)
-    y = np.zeros(n)
+    ratio = np.where(movable, np.minimum(imp.c_replay, imp.c_transfer) / np.where(movable, dp, 1.0), np.inf)
+
+    yR, yS = np.zeros(n), np.zeros(n)
     cum = 0.0
     for j in np.argsort(ratio):
         if not movable[j] or cum >= s_star:
             break
-        y[j] = min(1.0, (s_star - cum) / dp[j])
-        cum += y[j] * dp[j]
-    use_R = imp.c_replay <= imp.c_transfer
-    x = np.concatenate([np.where(use_R, y, 0.0), np.where(use_R, 0.0, y)])
-    return _plan(x, n, dp, imp, "greedy", imp.regime, s_star,
+        for a in (cheaper[j], "RS"[cheaper[j] == "R"]):  # try cheaper action, then fall back
+            fit = min([budget[r] / col[j] for r, col in draw[a] if col[j] > 0] + [1.0])
+            f = min(1.0, fit, (s_star - cum) / dp[j])
+            if f > 1e-12:
+                for r, col in draw[a]:
+                    budget[r] -= f * col[j]
+                (yR if a == "R" else yS)[j] = f
+                cum += f * dp[j]
+                break
+    return _plan(np.concatenate([yR, yS]), n, dp, imp, "greedy", imp.regime, s_star,
                  feasible=cum >= s_star - 1e-6 * max(s_star, 1.0))

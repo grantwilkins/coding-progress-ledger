@@ -87,6 +87,27 @@ def test_greedy_equals_lp_off_boundary():
     assert g.cost == pytest.approx(lp.cost, rel=1e-4)
 
 
+def test_greedy_respects_movement_budgets():
+    # The decentralized greedy draws down the SHARED budgets as it accepts jobs, so
+    # its plan must satisfy every movement constraint — it can never ship more than
+    # the links carry (the bug this fixes: a resource-blind greedy shipped >link).
+    pop, imp = _pop(n_nodes=8)
+    event, move = Event(dest_nodes=8, W=4), Movement()
+    plan = greedy(pop, POOL, imp, 0.30e6, event, move)  # S* beyond reach ⇒ budgets bind
+    assert not plan.feasible and plan.shortfall > 0  # links cap the shed
+    assert min(_violations(plan, pop, imp, event, move)) >= -1e-6  # but never over-subscribed
+
+
+def test_greedy_ceiling_at_most_lp_ceiling():
+    # Coordination value: the LP repacks to fit more shed under the same budgets, so
+    # the myopic greedy can never out-shed it.
+    pop, imp = _pop(n_nodes=8)
+    event, move = Event(dest_nodes=8, W=4), Movement()
+    g = greedy(pop, POOL, imp, 1e12, event, move)
+    lp = solve(pop, POOL, imp, 2 * bind_dp(imp).sum(), event, move)
+    assert g.shed_guaranteed <= lp.shed_guaranteed + 1e-6
+
+
 def test_lp_lower_bounds_milp():
     pop, imp = _pop(n_nodes=4)
     S = 0.3 * bind_dp(imp).sum()
