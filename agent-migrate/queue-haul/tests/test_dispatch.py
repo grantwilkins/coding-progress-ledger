@@ -7,7 +7,7 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from dispatch import Event, Plan, bind_dp, greedy, solve
+from dispatch import Event, Plan, bind_dp, greedy, random_dispatch, solve
 from impact import Movement, compute
 from instance import Workload, generate
 from power import PoolPower, rho_dest
@@ -106,6 +106,20 @@ def test_greedy_ceiling_at_most_lp_ceiling():
     g = greedy(pop, POOL, imp, 1e12, event, move)
     lp = solve(pop, POOL, imp, 2 * bind_dp(imp).sum(), event, move)
     assert g.shed_guaranteed <= lp.shed_guaranteed + 1e-6
+
+
+def test_random_respects_budgets_and_bounded_by_lp():
+    # The random floor uses the same budget-respecting engine: it can never
+    # over-subscribe a link, and the LP max-shed bounds it (as it bounds any policy).
+    pop, imp = _pop(n_nodes=8)
+    event, move = Event(dest_nodes=8, W=4), Movement()
+    r = random_dispatch(pop, POOL, imp, 0.30e6, event, move, seed=0)
+    assert min(_violations(r, pop, imp, event, move)) >= -1e-6
+    lp = solve(pop, POOL, imp, 2 * bind_dp(imp).sum(), event, move)
+    assert r.shed_guaranteed <= lp.shed_guaranteed + 1e-6
+    # deterministic for a fixed seed
+    r2 = random_dispatch(pop, POOL, imp, 0.30e6, event, move, seed=0)
+    assert np.array_equal(r.y, r2.y)
 
 
 def test_lp_lower_bounds_milp():

@@ -132,15 +132,18 @@ def solve(pop: JobPopulation, pool: PoolPower, imp: Impact, s_star: float,
     return _plan(r.x, n, dp, imp, method, imp.regime, s_star, feasible=False)
 
 
-def greedy(pop: JobPopulation, pool: PoolPower, imp: Impact, s_star: float,
-           event: Event = Event(), move: Movement = Movement()) -> Plan:
-    """Decentralized first-fit baseline: each job self-selects its cheaper action
-    and the best-deal jobs (lowest downtime per watt) move first — but every move
-    draws down the SHARED movement budgets the deadline window allows (egress
-    bytes, rebuild node-seconds and ingest bytes, destination load and held), so it
-    cannot ship more than the links carry. A job whose cheaper action no longer
-    fits falls back to its other action, else waits. One myopic pass in priority
-    order, no global repacking — that repacking is exactly what the LP buys."""
+def _movable(pop, dp, event) -> np.ndarray:
+    m = dp > 0  # idle jobs free no power: never worth moving
+    if event.pinned:
+        m &= ~np.isin(pop.job_type, event.pinned)
+    return m
+
+
+def _first_fit(pop, pool, imp, s_star, event, move, order, prefer, method) -> Plan:
+    """Myopic single pass: accept jobs in `order`, each via prefer[j] (then its
+    fallback action), drawing down the SHARED movement budgets the deadline window
+    allows until S* is met. No global repacking. Engine for the greedy and random
+    baselines; `order` already excludes idle/pinned jobs so dp[j] > 0."""
     n = len(pop)
     dp = bind_dp(imp)
     reb = pop.T / rho_dest(pop.T, pop.mfu)
@@ -155,18 +158,12 @@ def greedy(pop: JobPopulation, pool: PoolPower, imp: Impact, s_star: float,
         "R": [("egress", imp.b_replay), ("prefill", reb), ("load", pop.ell), ("held", np.ones(n))],
         "S": [("egress", imp.b_transfer), ("ingest", imp.b_transfer), ("load", pop.ell), ("held", np.ones(n))],
     }
-    cheaper = np.where(imp.c_replay <= imp.c_transfer, "R", "S")
-    movable = dp > 0
-    if event.pinned:
-        movable &= ~np.isin(pop.job_type, event.pinned)
-    ratio = np.where(movable, np.minimum(imp.c_replay, imp.c_transfer) / np.where(movable, dp, 1.0), np.inf)
-
     yR, yS = np.zeros(n), np.zeros(n)
     cum = 0.0
-    for j in np.argsort(ratio):
-        if not movable[j] or cum >= s_star:
+    for j in order:
+        if cum >= s_star:
             break
-        for a in (cheaper[j], "RS"[cheaper[j] == "R"]):  # try cheaper action, then fall back
+        for a in (prefer[j], "RS"[prefer[j] == "R"]):  # try preferred action, then fall back
             fit = min([budget[r] / col[j] for r, col in draw[a] if col[j] > 0] + [1.0])
             f = min(1.0, fit, (s_star - cum) / dp[j])
             if f > 1e-12:
@@ -175,5 +172,30 @@ def greedy(pop: JobPopulation, pool: PoolPower, imp: Impact, s_star: float,
                 (yR if a == "R" else yS)[j] = f
                 cum += f * dp[j]
                 break
-    return _plan(np.concatenate([yR, yS]), n, dp, imp, "greedy", imp.regime, s_star,
+    return _plan(np.concatenate([yR, yS]), n, dp, imp, method, imp.regime, s_star,
                  feasible=cum >= s_star - 1e-6 * max(s_star, 1.0))
+
+
+def greedy(pop: JobPopulation, pool: PoolPower, imp: Impact, s_star: float,
+           event: Event = Event(), move: Movement = Movement()) -> Plan:
+    """Decentralized first-fit: each job self-selects its cheaper action and the
+    best-deal jobs (lowest downtime per watt) move first, drawing down the shared
+    budgets in one myopic pass — no global repacking (that is what the LP buys)."""
+    dp = bind_dp(imp)
+    movable = _movable(pop, dp, event)
+    ratio = np.where(movable, np.minimum(imp.c_replay, imp.c_transfer) / np.where(movable, dp, 1.0), np.inf)
+    order = np.argsort(ratio)
+    order = order[movable[order]]  # movable jobs, best deal first
+    prefer = np.where(imp.c_replay <= imp.c_transfer, "R", "S")
+    return _first_fit(pop, pool, imp, s_star, event, move, order, prefer, "greedy")
+
+
+def random_dispatch(pop: JobPopulation, pool: PoolPower, imp: Impact, s_star: float,
+                    event: Event = Event(), move: Movement = Movement(), seed: int = 0) -> Plan:
+    """Random baseline: shuffle the movable jobs and pick each action by coin flip,
+    same budget-respecting first-fit. The floor any real policy should beat."""
+    dp = bind_dp(imp)
+    rng = np.random.default_rng(seed)
+    order = rng.permutation(np.flatnonzero(_movable(pop, dp, event)))
+    prefer = np.where(rng.random(len(pop)) < 0.5, "R", "S")
+    return _first_fit(pop, pool, imp, s_star, event, move, order, prefer, "random")
