@@ -10,7 +10,6 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 import numpy as np
-
 from power import CAP_BF16_GB, CAP_FP8_GB, ETA_BYTES_PER_TOK, PoolPower, rho_dest
 
 
@@ -41,7 +40,7 @@ class Workload:
 class JobPopulation:
     """Columnar; parallel arrays of length N."""
 
-    klass: np.ndarray  # 'agentic' | 'chat'
+    job_type: np.ndarray  # 'agentic' | 'chat'
     state: np.ndarray  # 'active' | 'idle' | 'cold'
     is_reasoning: np.ndarray  # bool
     T: np.ndarray  # context tokens
@@ -62,7 +61,7 @@ class JobPopulation:
 def _draw(rng, n: int, wl: Workload, precision: str) -> JobPopulation:
     """Sample n jobs (no sizing logic) — the testable unit."""
     agentic = rng.random(n) < wl.agentic_frac
-    klass = np.where(agentic, "agentic", "chat")
+    job_type = np.where(agentic, "agentic", "chat")
     state = rng.choice(("active", "idle", "cold"), size=n, p=wl.state_mix)
     is_reasoning = agentic & (rng.random(n) < wl.reasoning_frac)
 
@@ -76,14 +75,18 @@ def _draw(rng, n: int, wl: Workload, precision: str) -> JobPopulation:
     d_mu = np.where(agentic, wl.delta_agentic[0], wl.delta_chat[0])
     d_sig = np.where(agentic, wl.delta_agentic[1], wl.delta_chat[1])
     delta = rng.lognormal(d_mu, d_sig)
-    y_mean = np.where(is_reasoning, wl.y_reasoning, np.where(agentic, wl.y_agentic, wl.y_chat))
+    y_mean = np.where(
+        is_reasoning, wl.y_reasoning, np.where(agentic, wl.y_agentic, wl.y_chat)
+    )
     Y = rng.geometric(1.0 / y_mean)
 
     active = state == "active"
     ell_pre = (rate * delta * active) / rho_dest(T, wl.mfu)
     ell_dec = (rate * Y * active) / (wl.g_fp8 if precision == "fp8" else wl.g_bf16)
     m = ETA_BYTES_PER_TOK * T
-    return JobPopulation(klass, state, is_reasoning, T, ell_pre, ell_dec, m, precision, wl.mfu)
+    return JobPopulation(
+        job_type, state, is_reasoning, T, ell_pre, ell_dec, m, precision, wl.mfu
+    )
 
 
 def _mean_T(wl: Workload) -> float:
@@ -91,7 +94,9 @@ def _mean_T(wl: Workload) -> float:
     return sum(w * np.exp(mu + s**2 / 2) for w, mu, s in wl.t_mix)
 
 
-def generate(pool: PoolPower, wl: Workload = Workload(), n_nodes: int = 32, seed: int = 42) -> JobPopulation:
+def generate(
+    pool: PoolPower, wl: Workload = Workload(), n_nodes: int = 32, seed: int = 42
+) -> JobPopulation:
     """Draw exactly α·N_nodes·S_node jobs against a fixed pool; regime is then measured.
 
     The caller keeps pool.mean_context_tokens in sync with wl's E[T] (both move together
@@ -99,9 +104,13 @@ def generate(pool: PoolPower, wl: Workload = Workload(), n_nodes: int = 32, seed
     """
     precision = {CAP_BF16_GB: "bf16", CAP_FP8_GB: "fp8"}.get(pool.cap_gb)
     if precision is None:
-        raise ValueError(f"cap_gb={pool.cap_gb} is neither BF16 nor FP8; decode price G is undefined")
+        raise ValueError(
+            f"cap_gb={pool.cap_gb} is neither BF16 nor FP8; decode price G is undefined"
+        )
     if not 0.5 < _mean_T(wl) / pool.mean_context_tokens < 2.0:
-        raise ValueError("pool.mean_context_tokens must track the workload's E[T] (sweep them together)")
+        raise ValueError(
+            "pool.mean_context_tokens must track the workload's E[T] (sweep them together)"
+        )
     n_jobs = round(wl.alpha * n_nodes * pool.s_node)
     if n_jobs < 1:
         raise ValueError(f"n_jobs={n_jobs} < 1: α·N·S_node too small")

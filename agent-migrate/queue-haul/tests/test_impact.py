@@ -12,12 +12,29 @@ from instance import JobPopulation, Workload, _draw, generate
 from power import BETA_BYTES_PER_TOK, ETA_BYTES_PER_TOK, PoolPower, congestion, rho_dest
 
 
-def _pop(T, ell_pre=0.0, ell_dec=0.0, klass="agentic", state="active", reasoning=False, mfu=0.35):
+def _pop(
+    T,
+    ell_pre=0.0,
+    ell_dec=0.0,
+    job_type="agentic",
+    state="active",
+    reasoning=False,
+    mfu=0.35,
+):
     T = np.atleast_1d(np.asarray(T, float))
     n = len(T)
     col = lambda v: v if isinstance(v, np.ndarray) else np.full(n, v)
-    return JobPopulation(col(klass), col(state), col(reasoning), T, col(ell_pre), col(ell_dec),
-                         ETA_BYTES_PER_TOK * T, "bf16", mfu)
+    return JobPopulation(
+        col(job_type),
+        col(state),
+        col(reasoning),
+        T,
+        col(ell_pre),
+        col(ell_dec),
+        ETA_BYTES_PER_TOK * T,
+        "bf16",
+        mfu,
+    )
 
 
 def _spearman(a, b):
@@ -45,10 +62,14 @@ def test_two_price_opposite_sign_by_class():
     pop = _draw(np.random.default_rng(0), 40000, Workload(), "bf16")
     imp = compute(pop, PoolPower())
     act = pop.state == "active"
-    ag = act & (pop.klass == "agentic") & ~pop.is_reasoning  # prefill-skewed
-    ch = act & (pop.klass == "chat")  # decode-skewed
-    assert imp.dp_expected[ag].mean() < imp.dp_expected_single[ag].mean()  # prefill discount
-    assert imp.dp_expected[ch].mean() > imp.dp_expected_single[ch].mean()  # decode premium
+    ag = act & (pop.job_type == "agentic") & ~pop.is_reasoning  # prefill-skewed
+    ch = act & (pop.job_type == "chat")  # decode-skewed
+    assert (
+        imp.dp_expected[ag].mean() < imp.dp_expected_single[ag].mean()
+    )  # prefill discount
+    assert (
+        imp.dp_expected[ch].mean() > imp.dp_expected_single[ch].mean()
+    )  # decode premium
 
 
 def test_two_price_closure_for_balanced_phase():
@@ -59,10 +80,14 @@ def test_two_price_closure_for_balanced_phase():
 
 def test_memory_score():
     pool = PoolPower()
-    assert compute(_pop([pool.mean_context_tokens]), pool).dp_memory[0] == pytest.approx(pool.mu)
+    assert compute(_pop([pool.mean_context_tokens]), pool).dp_memory[
+        0
+    ] == pytest.approx(pool.mu)
     Ts = np.array([1e3, 9e4, 3e4, 2e5, 5e3])
     assert np.array_equal(np.argsort(compute(_pop(Ts), pool).dp_memory), np.argsort(Ts))
-    dm = compute(_draw(np.random.default_rng(0), 40000, Workload(), "bf16"), pool).dp_memory
+    dm = compute(
+        _draw(np.random.default_rng(0), 40000, Workload(), "bf16"), pool
+    ).dp_memory
     assert dm.std() / dm.mean() > 0.5  # tail-heavy T → wide spread around μ
 
 
@@ -80,18 +105,26 @@ def test_congestion_asymmetry_is_independent():
     base = compute(pop, pool, Movement())
     ship_s = ETA_BYTES_PER_TOK * pop.T / Movement().lambda_src
     ingest = ETA_BYTES_PER_TOK * pop.T / Movement().mu_in
-    assert np.allclose(base.c_transfer - ship_s, ingest)  # φ_in=0: no ingest congestion at default
+    assert np.allclose(
+        base.c_transfer - ship_s, ingest
+    )  # φ_in=0: no ingest congestion at default
     hi_in = compute(pop, pool, replace(Movement(), dest_ingest_util=0.5))
-    assert np.all(hi_in.c_transfer > base.c_transfer) and np.allclose(hi_in.c_replay, base.c_replay)
+    assert np.all(hi_in.c_transfer > base.c_transfer) and np.allclose(
+        hi_in.c_replay, base.c_replay
+    )
     hi_pre = compute(pop, pool, replace(Movement(), dest_prefill_util=0.8))
-    assert np.all(hi_pre.c_replay > base.c_replay) and np.allclose(hi_pre.c_transfer, base.c_transfer)
+    assert np.all(hi_pre.c_replay > base.c_replay) and np.allclose(
+        hi_pre.c_transfer, base.c_transfer
+    )
 
 
 def test_egress_bytes():
     imp = compute(_pop(np.array([1e3, 1e5])), PoolPower())
     assert np.allclose(imp.b_replay, BETA_BYTES_PER_TOK * np.array([1e3, 1e5]))
     assert np.allclose(imp.b_transfer, ETA_BYTES_PER_TOK * np.array([1e3, 1e5]))
-    assert ETA_BYTES_PER_TOK / BETA_BYTES_PER_TOK == pytest.approx(48128)  # transfer ships ~48k× more
+    assert ETA_BYTES_PER_TOK / BETA_BYTES_PER_TOK == pytest.approx(
+        48128
+    )  # transfer ships ~48k× more
 
 
 def test_regime_flag_matches_pool():
@@ -116,5 +149,10 @@ def test_units_seconds_and_watts():
     imp = compute(generate(PoolPower()), PoolPower())
     for c in (imp.c_replay, imp.c_transfer):
         assert np.all(np.isfinite(c)) and np.all(c > 0)  # seconds
-    for d in (imp.dp_guaranteed, imp.dp_expected, imp.dp_expected_single, imp.dp_memory):
+    for d in (
+        imp.dp_guaranteed,
+        imp.dp_expected,
+        imp.dp_expected_single,
+        imp.dp_memory,
+    ):
         assert np.all(np.isfinite(d)) and np.all(d >= 0)  # watts

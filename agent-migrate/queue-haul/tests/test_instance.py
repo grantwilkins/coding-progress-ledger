@@ -17,8 +17,8 @@ def test_marginals():
     assert pop.T.mean() == pytest.approx(65800, rel=0.10)
     for s, p in zip(("active", "idle", "cold"), wl.state_mix):
         assert (pop.state == s).mean() == pytest.approx(p, abs=0.02)
-    assert (pop.klass == "agentic").mean() == pytest.approx(0.5, abs=0.02)
-    agentic = pop.klass == "agentic"
+    assert (pop.job_type == "agentic").mean() == pytest.approx(0.5, abs=0.02)
+    agentic = pop.job_type == "agentic"
     assert pop.is_reasoning[agentic].mean() == pytest.approx(0.3, abs=0.03)
     assert not pop.is_reasoning[~agentic].any()
 
@@ -27,7 +27,7 @@ def test_within_class_load_heterogeneity():
     # Rate σ (plus Δ, Y spread) gives a continuous ℓ within one class, so greedy can
     # diverge from LP at constraint boundaries (T5/T7) instead of collapsing to a point.
     pop = _draw(np.random.default_rng(0), 40000, Workload(), "bf16")
-    sel = (pop.state == "active") & (pop.klass == "agentic") & ~pop.is_reasoning
+    sel = (pop.state == "active") & (pop.job_type == "agentic") & ~pop.is_reasoning
     ell = pop.ell[sel]
     assert ell.std() / ell.mean() > 0.2  # meaningful spread, not a point mass
 
