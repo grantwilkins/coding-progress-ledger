@@ -1,7 +1,7 @@
 """T8: load↔memory regime boundary, walked two ways.
 
 (a) idle/cold × γ at a fixed short context, (b) context E[T] short→long. Both push total
-load L across the constant threshold α·N·ρ* (pool-sized populations fix S_held/s_node = α·N).
+load L across the constant threshold occupancy·N·ρ* (pool-sized populations fix S_held/s_node = occupancy·N).
 Plotted vs the regime ratio R = (S_held/s_node)/(L/ρ*): the ranking that governs the shed
 plan switches at R=1, the two rankings are near-uncorrelated, and both walks agree on R=1.
 """

@@ -124,7 +124,7 @@ binds, so the two never double-count.) **ρ_low is removed from the model.**
 | Parameter | Value | Type | Source / rationale |
 |---|---:|---|---|
 | **Source pool size (nodes)** | **32** (center); sweep {16, 32, 64} | sweep | 32 nodes ≈ 0.27 MW full-serving; large enough that integer node-drain is fine-grained |
-| **Load factor α (population size)** | **1.2** (center); sweep [0.8, 1.5] | sweep | `n_jobs = α·N_nodes·S_node` held sessions; α>1 = oversubscribed source (the shed trigger), α<1 = slack. Size is an **input**; the operating regime is then a measured output, not packed in. |
+| **Occupancy (population size)** | **1.2** (center); sweep [0.8, 1.5] | sweep | sessions held ÷ node memory capacity: `n_jobs = occupancy·N_nodes·S_node` held sessions; >1 = oversubscribed source (the shed trigger), <1 = slack. Sets the memory side of the regime test (`S_held/S_node = occupancy·N`); the load side `L/ρ*` is the measured output. |
 | Pool full-serving power | ≈ 0.27 MW (at 32 nodes, P_busy) | derived | the **load-bound** shed ceiling (reached only when load, not memory, binds) |
 | **ρ\* setpoint band** | [0.55, 0.90], center 0.80 | sweep | = §2 row; between power and latency knees |
 | **Destination spare load L̄_dest** | **0.40·(dest nodes)·ρ\*** (center) | sweep | sweep spare∈[0.2, 0.6] of a dest node; headroom below its knee |
@@ -187,7 +187,7 @@ and **ρ_dest(T)** (a function, computed per session — also the prefill load n
 - *Power model:* P_idle, P_busy, power knee, latency knee, ρ*, bracket ratio, **G (decode ceiling)**.
 - *Workload:* **context-length mixture** (short/center/long — primary), state mix, turn rates + **σ spread**, Δ, Y, **reasoning sub-fraction**, agentic:chat split.
 - *Capacity:* γ.
-- *Event:* pool size, **load factor α**, S*, D, H, destination spare, W.
+- *Event:* pool size, **occupancy**, S*, D, H, destination spare, W.
 - *Movement:* Λ_src, μ_in, MFU (drives ρ_dest), startup latencies.
 
 **Eliminated:** ρ_low (the memory-regime node sits at P_idle by definition; μ = P_idle/S_node);

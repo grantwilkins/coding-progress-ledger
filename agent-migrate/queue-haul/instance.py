@@ -33,7 +33,7 @@ class Workload:
     mfu: float = 0.35  # drives ρ_dest
     t_mix: tuple = ((0.70, 10.07, 1.0), (0.30, 11.45, 0.8))  # (weight, μ, σ)
     t_clip: tuple = (1e3, 1e6)
-    alpha: float = 1.2  # load factor: n_jobs = α·N_nodes·S_node
+    occupancy: float = 1.2  # sessions held ÷ node memory capacity: n_jobs = occupancy·N_nodes·S_node
 
 
 @dataclass(frozen=True)
@@ -97,7 +97,7 @@ def _mean_T(wl: Workload) -> float:
 def generate(
     pool: PoolPower, wl: Workload = Workload(), n_nodes: int = 32, seed: int = 42
 ) -> JobPopulation:
-    """Draw exactly α·N_nodes·S_node jobs against a fixed pool; regime is then measured.
+    """Draw exactly occupancy·N_nodes·S_node jobs against a fixed pool; regime is then measured.
 
     The caller keeps pool.mean_context_tokens in sync with wl's E[T] (both move together
     across the context sweep), so S_node and the drawn KV footprints stay consistent.
@@ -111,7 +111,7 @@ def generate(
         raise ValueError(
             "pool.mean_context_tokens must track the workload's E[T] (sweep them together)"
         )
-    n_jobs = round(wl.alpha * n_nodes * pool.s_node)
+    n_jobs = round(wl.occupancy * n_nodes * pool.s_node)
     if n_jobs < 1:
-        raise ValueError(f"n_jobs={n_jobs} < 1: α·N·S_node too small")
+        raise ValueError(f"n_jobs={n_jobs} < 1: occupancy·N·S_node too small")
     return _draw(np.random.default_rng(seed), n_jobs, wl, precision)

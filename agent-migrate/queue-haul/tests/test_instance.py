@@ -48,8 +48,8 @@ def test_loads_returned_unsummed():
 def test_population_size_is_an_input():
     pool = PoolPower()
     wl = Workload()
-    assert len(generate(pool, wl)) == round(wl.alpha * 32 * pool.s_node)
-    doubled = generate(pool, replace(wl, alpha=2 * wl.alpha))
+    assert len(generate(pool, wl)) == round(wl.occupancy * 32 * pool.s_node)
+    doubled = generate(pool, replace(wl, occupancy=2 * wl.occupancy))
     assert len(doubled) == pytest.approx(2 * len(generate(pool, wl)), rel=0.01)
 
 

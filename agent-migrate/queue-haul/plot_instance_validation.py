@@ -3,7 +3,7 @@
 Left: the generated population in (load ℓ, memory m) space. Active jobs spread along
 ℓ>0 and sit in HBM; idle/cold pin to ℓ=0 yet still carry KV — the two axes the dispatch
 trades off. Right: the regime walk. Sweeping context short→long, the memory term
-S_held/S_node is pinned at α·N (we always pack α× capacity), while the *measured* load
+S_held/S_node is pinned at occupancy·N (we always pack the same occupancy), while the *measured* load
 term L/ρ* falls, so the binding constraint crosses load→memory. The crossover is an
 OUTPUT (L is measured from the drawn jobs), not something packed into the setup.
 """
@@ -21,8 +21,8 @@ from instance import Workload, generate
 from power import CAP_FP8_GB, GB, PoolPower
 
 N_NODES = 32
-ALPHA = Workload().alpha
-MEM_TERM = ALPHA * N_NODES  # S_held/S_node = α·N, precision-independent
+OCCUPANCY = Workload().occupancy
+MEM_TERM = OCCUPANCY * N_NODES  # S_held/S_node = occupancy·N, precision-independent
 
 fig, (axA, axB) = plt.subplots(1, 2, figsize=(11, 4.4))
 
@@ -34,12 +34,12 @@ for st, color in [("cold", "0.6"), ("idle", "tab:orange"), ("active", "tab:red")
                 label=f"{st} ({sel.sum()})")
 axA.set(xlabel="job load $\\ell_j$", ylabel="KV footprint $m_j$ (GB)", yscale="log",
         title=f"Population in (load, memory): N={len(pop)}, E[T]={pop.T.mean():,.0f}")
-axA.legend(loc="lower right", fontsize=8, title=f"BF16, α={ALPHA}")
+axA.legend(loc="lower right", fontsize=8, title=f"BF16, occupancy={OCCUPANCY}")
 
 # --- Panel B: regime walk over context ---
 ET, SIG = np.geomspace(3e3, 2e5, 25), 0.9
 axB.axhline(MEM_TERM, color="k", lw=1.3, ls="--",
-            label=f"memory-bound  $S_{{held}}/S_{{node}}=\\alpha N={MEM_TERM:.0f}$")
+            label=f"memory-bound  $S_{{held}}/S_{{node}}$ = occupancy·N = {MEM_TERM:.0f}")
 for base, name, color in [(PoolPower(), "BF16", "tab:blue"),
                           (replace(PoolPower(), cap_gb=CAP_FP8_GB), "FP8", "tab:orange")]:
     load = []

@@ -44,7 +44,7 @@ A drawn population of **591 sessions** at center (active 178 / idle 145 / cold 2
 tokens, mean active load `ℓ ≈ 0.045`. **Left panel:** active jobs spread along `ℓ > 0` and sit
 in HBM; idle/cold jobs pin to `ℓ ≈ 0` yet still carry their KV footprint `m` — the two axes the
 dispatch trades off. **Right panel (the key structural fact):** because the population is sized
-to the pool (`n_jobs = α·N·s_node`), the memory side `S_held/s_node = α·N` is **constant (≈38)**,
+to the pool (`n_jobs = occupancy·N·s_node`), the memory side `S_held/s_node = occupancy·N` is **constant (≈38)**,
 independent of precision and context. Sweeping context short→long, the *measured* load term
 `L/ρ*` falls through that constant line — the load→memory crossover is an **output** (BF16 ≈ 12k
 tokens, FP8 ≈ 35k), not something packed into the setup.
@@ -119,8 +119,8 @@ is zero.
 The structural payoff. The regime reduces to one inequality on total load:
 
 ```
-memory-bound  ⟺  L < α·N·ρ*        (because S_held/s_node = α·N is constant)
-R = (S_held/s_node)/(L/ρ*) = α·N/(L/ρ*),   crossover at R = 1.
+memory-bound  ⟺  L < occupancy·N·ρ*    (because S_held/s_node = occupancy·N is constant)
+R = (S_held/s_node)/(L/ρ*) = occupancy·N/(L/ρ*),   crossover at R = 1.
 ```
 
 Cross `R=1` two independent ways — **(a)** raise idle/cold fraction (× two γ curves) at a fixed
