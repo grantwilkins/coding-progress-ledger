@@ -13,8 +13,13 @@ not a triviality.
 
 Budgets are left slack so the largest feasible cut is set by the source pool's
 price-times-load, not by a destination limit — the same isolation the certify
-experiment uses. The deadline is therefore non-binding here (short-context replay
-ships only a few KB per job), so it is not a margin axis in this regime; omitted.
+experiment uses. The deadline is not a margin axis in this regime: it only widens
+the transfer-rate budgets (egress, re-prefill, ingest), and in the short-context
+load regime those stay far from binding — replay ships a few KB and re-prefills in
+sub-seconds, and the two move primitives route around whichever budget is tight —
+so the limit is destination capacity, which carries no deadline. The deadline binds
+only when moving the data is expensive (long context / big KV), i.e. the memory
+regime (T8), where it moves the ceiling several-fold.
 """
 
 import os
@@ -135,5 +140,6 @@ for (name, _, _, _, _, _), (ap, ad, cut) in zip(AXES, results):
     direction = "falls" if m[-1] < m[0] else "rises"
     print(f"{name:38s}  ordering agreement ≥ {min(ap.min(), ad.min()):.4f}  |  "
           f"reduction {direction} {span:.0f}% from one end of the range to the other")
-print("deadline omitted: non-binding in the load regime "
-      "(short-context replay ships only a few KB per job)")
+print("deadline omitted: it only widens the transfer-rate budgets (egress/re-prefill/ingest),")
+print("  which stay slack for cheap short-context moves — destination capacity binds instead.")
+print("  D moves the ceiling only for long-context/big-KV moves (memory regime, T8).")
