@@ -47,11 +47,11 @@ Each task lists its **success criterion** — the one check that says it's done.
   Sweep `ρ*`, MFU (drives `ρ_dest`), bracket ratio `p̄/s_plat`.
   **Success:** the *job ranking* is flat across all three sweeps; the *feasibility margin* moves monotonically with them. (Selection robust, absolute shed sensitive.)
 
-- [ ] **T8 — Experiment: load vs memory regime**
+- [x] **T8 — Experiment: load vs memory regime**
   Walk the regime boundary two ways: (a) idle/cold fraction × γ, and **(b) the context-length mixture short→long** (long `T` is what makes `m_j` bind — the KV-size approach to the same transition).
   **Success:** below the crossover, `ℓ`-ranking governs and `μ·m` is slack; above it, `μ·m`-ranking takes over; the switch occurs exactly at the `N = max(L/ρ*, S_held/S_node)` crossover, and approaches (a) and (b) agree on where. **Also certify ranking *stability* across the boundary** (not just crossover location): report the Spearman of the load-ranking (ΔP_expected) vs the memory-ranking (ΔP_memory) — at center it is ≈0 (T2 draws T independent of Δ/Y), so the regime flag genuinely reorders which jobs are shed, a substantive result.
 
-- [ ] **T9 — Tests**
+- [x] **T9 — Tests**
   **Success (all pass):** (1) ranking invariant under `p̄` scaling; (2) regime switch lands at the `N = max(·,·)` crossover; (3) greedy = LP away from boundaries; (4) every solver output satisfies all constraints; (5) no cold job carries load; (6) BF16↔FP8 toggle shifts `S_node` ~2× and the memory threshold, leaving load-regime results unchanged.
 
 ---
