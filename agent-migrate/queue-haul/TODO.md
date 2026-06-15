@@ -34,12 +34,12 @@ Each task lists its **success criterion** — the one check that says it's done.
   *Needs: T3 + §5 Pools & event.*
   **Success:** LP output satisfies every constraint; on a feasible `S*` it sheds exactly `S*` (no over-shed); on an infeasible `S*` it returns the max-shed plan and a correct shortfall.
 
-- [ ] **T5 — Experiment: random vs greedy vs LP**
+- [x] **T5 — Experiment: random vs greedy vs LP**
   Three policies, all respecting the same movement budgets (egress/rebuild/headroom drawn down over the deadline window): **random** (shuffle movable jobs, coin-flip action), **greedy** (decentralized first-fit — each job self-selects its cheaper action, best-deal jobs first), **LP/MILP** (coordinated optimum). The greedy is no longer resource-blind; it cannot ship more than the links carry.
   **Success:** where every policy is feasible, greedy lies exactly on the LP cost frontier (same shed, same downtime) and random sits above it (more downtime per watt). The policies separate by their **shed ceiling** — random < greedy < LP — because selection (greedy over random) and then global repacking transfers→replays (LP over greedy) each fit more shed under the same links.
   *Criterion revised: the greedy↔LP gap is the **value of central coordination** (≈2× shed at center), **not** "bounded by the one boundary-crossing job." That earlier bound assumed a single-constraint fractional knapsack; once the baseline respects all five resource budgets, the gap is a reach/ceiling gap that can exceed one job. LP max-shed bounds every policy.*
 
-- [ ] **T6 — Experiment: certify low, report high**
+- [x] **T6 — Experiment: certify low, report high**
   Feasibility under guaranteed prices (`s_plat`) vs expected shed under amortized prices (`p̄`), swept over `S*`.
   **Success:** every `S*` certified feasible under `s_plat` is also met under `p̄`; the reported gap between guaranteed and expected shed tracks the bracket ratio (≈30× dense center).
 
