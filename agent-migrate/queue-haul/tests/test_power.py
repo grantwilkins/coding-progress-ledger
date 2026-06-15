@@ -7,7 +7,9 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from power import CAP_FP8_GB, C_ATTN, N_ACT, PoolPower, rho_dest
+from impact import compute
+from instance import Workload, generate
+from power import CAP_BF16_GB, CAP_FP8_GB, C_ATTN, N_ACT, PoolPower, rho_dest
 
 
 def test_center_prices():
@@ -42,6 +44,24 @@ def test_regime_crossover():
     assert p.memory_bound(load, 1.01 * s_held_cross)
     assert p.node_count(load, 0.5 * s_held_cross) == pytest.approx(load / p.rho_star)
     assert p.node_count(load, 2 * s_held_cross) == pytest.approx(2 * load / p.rho_star)
+
+
+def test_precision_shifts_memory_threshold_not_load_regime():
+    # #6 consolidated: FP8 scales S_node by the cap ratio (365/130 ≈ 2.8×, NOT a literal
+    # 2×), which scales the held-session crossover by the same factor; a load-bound config
+    # stays load-bound either way (precision moves the memory threshold, not the load story).
+    bf16, fp8 = PoolPower(), replace(PoolPower(), cap_gb=CAP_FP8_GB)
+    assert fp8.s_node / bf16.s_node == pytest.approx(CAP_FP8_GB / CAP_BF16_GB)
+    load = 4.0
+    cross = lambda p: (load / p.rho_star) * p.s_node  # held sessions where memory binds
+    assert cross(fp8) / cross(bf16) == pytest.approx(CAP_FP8_GB / CAP_BF16_GB)
+    s_held = 0.5 * cross(bf16)  # below the smaller (bf16) crossover ⇒ load-bound for both
+    assert not bf16.memory_bound(load, s_held) and not fp8.memory_bound(load, s_held)
+    # end-to-end: a short-context (load-bound) population stays load-bound under FP8
+    swl = replace(Workload(), t_mix=((1.0, 8.0, 0.5),))  # E[T] ≈ 3378
+    sp = replace(PoolPower(), mean_context_tokens=3378.0)
+    assert compute(generate(sp, swl), sp).regime == "load"
+    assert compute(generate(replace(sp, cap_gb=CAP_FP8_GB), swl), replace(sp, cap_gb=CAP_FP8_GB)).regime == "load"
 
 
 def test_rho_dest_landmarks():
