@@ -43,7 +43,7 @@ Each task lists its **success criterion** — the one check that says it's done.
   Feasibility under guaranteed prices (`s_plat`) vs expected shed under amortized prices (`p̄`), swept over `S*`.
   **Success:** every `S*` certified feasible under `s_plat` is also met under `p̄`; the reported gap between guaranteed and expected shed tracks the bracket ratio (≈30× dense center).
 
-- [ ] **T7 — Experiment: §6.2 sensitivity sweeps**
+- [x] **T7 — Experiment: §6.2 sensitivity sweeps**
   Sweep `ρ*`, MFU (drives `ρ_dest`), bracket ratio `p̄/s_plat`.
   **Success:** the *job ranking* is flat across all three sweeps; the *feasibility margin* moves monotonically with them. (Selection robust, absolute shed sensitive.)
 
