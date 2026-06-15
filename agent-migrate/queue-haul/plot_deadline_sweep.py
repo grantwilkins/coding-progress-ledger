@@ -32,7 +32,8 @@ LONG_POOL = replace(PoolPower(), mean_context_tokens=130000)
 LONG_WL = replace(Workload(), t_mix=((0.5, 10.5, 1.0), (0.5, 12.0, 0.9)))
 N_NODES, SEEDS, kW = 4, range(8), 1e3
 MOVE = Movement()
-DEADLINES = np.linspace(1, 60, 30)
+# Dense early (startup floor + first rise), out to 300 s so the long-context line plateaus too.
+DEADLINES = np.unique(np.concatenate([np.linspace(1, 30, 25), np.linspace(30, 300, 28)]))
 STARTUP = max(Event().tau_src, Event().tau_pre, Event().tau_in)  # no move completes below this
 
 
@@ -74,7 +75,6 @@ for ext in ("pdf", "png"):
     fig.savefig(f"outputs/deadline_sweep.{ext}", dpi=150)
 
 for tag, (mean, _, _) in (("short", short), ("long", long)):
-    tail = mean[-1] - mean[DEADLINES >= 30][0]  # still rising in the back half?
-    print(f"{tag:5s} context: reduction at 60 s = {mean[-1]:5.2f} kW; "
-          f"from 30 s to 60 s it grows {tail:5.2f} kW "
-          f"({'still deadline-limited' if tail > 0.05 * max(mean[-1], 0.1) else 'plateaued — capacity-limited'})")
+    knee = DEADLINES[mean >= 0.99 * mean.max()][0]  # deadline at which it reaches its plateau
+    print(f"{tag:5s} context: levels off at {mean.max():5.2f} kW, "
+          f"plateauing by a ~{knee:.0f} s deadline")
