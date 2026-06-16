@@ -65,7 +65,9 @@ def simulate(pop: JobPopulation, pool, imp: Impact, plan: Plan, event: Event = E
     p1 = (plan.y_R * imp.b_replay + plan.y_S * imp.b_transfer) / move.lambda_src  # egress secs
     p2R = plan.y_R * pop.T / rho  # prefill work, 0 if not replayed
     p2S = plan.y_S * imp.b_transfer / move.mu_in  # ingest work, 0 if not transferred
-    dens = dp * plan.y / np.maximum(p1, 1e-300)  # watts banked per egress-second
+    # value density = dp·y/p1; for a mover p1=y·bytes/λ (≥4 B ⇒ p1≥4e-6s), so this reduces to
+    # dp·λ/bytes — finite, y cancels. The floor only guards the 0/0 of non-movers (never sorted).
+    dens = dp * plan.y / np.maximum(p1, 1e-300)
 
     order = _order(mv, p1, p2R + p2S, dens, discipline)
     es, ed = np.full(n, np.nan), np.full(n, np.nan)
@@ -76,7 +78,9 @@ def simulate(pop: JobPopulation, pool, imp: Impact, plan: Plan, event: Event = E
 
     rs, rd = np.full(n, np.nan), np.full(n, np.nan)
     pf, ig = np.full(event.W, event.tau_pre), np.full(event.W, event.tau_in)
-    floor = es if mode == "cutthrough" else ed  # cut-through starts on first chunk
+    # cut-through = optimistic earliest-overlap bound: rebuild may run from egress_start, but
+    # still completes no sooner than full byte arrival ed (the outer max below). sf waits for ed.
+    floor = es if mode == "cutthrough" else ed
     for j in order:  # split job rebuilds both pieces on their own resources, in egress order
         starts, done = [], ed[j]
         for srv, w, work in ((pf, plan.y_R[j], p2R[j]), (ig, plan.y_S[j], p2S[j])):

@@ -106,6 +106,10 @@ for ext in ("pdf", "png"):
 sf = simulate(POP, POOL, IMP, PLAN, EV, MOVE, mode="sf", discipline="johnson")
 ct = simulate(POP, POOL, IMP, PLAN, EV, MOVE, mode="cutthrough", discipline="johnson")
 print(f"regime={IMP.regime}  jobs={len(POP)}  transfer_frac={PLAN.y_S.sum()/PLAN.y.sum():.2f}  certified={certified/kW:.1f}kW")
+split = (PLAN.y_R > 1e-9) & (PLAN.y_S > 1e-9)  # a split job needs BOTH limbs ≤ D to reconstruct
+print(f"split jobs (both limbs must land by D): {int(split.sum())}  "
+      f"power share {(bind_dp(IMP)*PLAN.y)[split].sum()/certified:.1%}  "
+      f"— any realized↔reconstruction gap from these is split-penalty, not queueing")
 print(f"NULL pipeline-fill: S&F vs cut-through makespan spread = {abs(ct.makespan-sf.makespan)/sf.makespan:.1e} "
       f"(≈0: no two comparable sequential stages)")
 tight = EV.tau_src + 0.3 * egress

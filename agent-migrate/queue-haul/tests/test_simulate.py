@@ -170,6 +170,20 @@ def test_conservation(disc, mode):
     assert np.all(es[1:] >= ed[:-1] - 1e-9)
 
 
+@pytest.mark.parametrize("mode", ["sf", "cutthrough"])
+def test_mode_switch_pins_rebuild_start(mode):
+    # sf: rebuild can't start before egress completes; cut-through: not before egress starts.
+    # Pins the floor switch (would catch a "zeroth vs full chunk" regression).
+    pop, imp = _pop(n_nodes=8)
+    event, move = Event(dest_nodes=48, W=16), Movement()
+    plan = solve(pop, POOL, imp, 0.4 * bind_dp(imp).sum(), event, move)
+    s = simulate(pop, POOL, imp, plan, event, move, mode=mode, discipline="fifo")
+    mv = plan.y > 1e-9
+    floor = s.egress_start if mode == "cutthrough" else s.egress_done
+    assert np.all(s.rebuild_start[mv] >= floor[mv] - 1e-9)
+    assert np.all(s.rebuild_done[mv] >= s.egress_done[mv] - 1e-9)  # precedence: rebuild ≥ egress done
+
+
 def test_cutthrough_never_slower_than_store_and_forward():
     pop, imp = _pop(n_nodes=8)
     event, move = Event(dest_nodes=48, W=16), Movement()
