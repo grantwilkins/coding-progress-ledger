@@ -10,11 +10,16 @@ egress link clears only a prefix by D, and a few giant KV transfers dominate it.
 (longest first) ships those first and clears almost nothing; FIFO is arbitrary;
 power-density (PD) and Johnson both push the transfers last and bank the most watts —
 the cost of the LP being execution-order-blind.
-B/C — Service continuity: the prefill stage's P‖Cmax packing gap. The LP's prefill row
-budgets Σp2/W (perfect packing); the DES can't split the largest prefill across servers,
-so its makespan floors at the biggest job. The gap the volume row misses opens as W
-grows (job-bound, not work-bound) and as the CoV of prefill time T/ρ_dest(T) rises. The
-link is slacked here to isolate prefill; the DES sits inside the analytic envelope.
+B — Service continuity: the prefill stage's P‖Cmax packing gap. The LP's prefill row budgets
+τ_pre+Σp2/W (perfect packing); discrete jobs don't divide evenly across W servers, so the DES
+makespan exceeds it. Across the PHYSICAL pool W∈{4,8,16} (assumptions §5, center 8) the LP
+over-promises ~3–13% — small but NOT a null: the single-largest-job floor W*=Σp2/max_p2 (≈49
+here) sits far past the physical range, so this is pure list-scheduling loss (not a max-job
+effect) and it keeps growing past the pool (24% at W=32). Envelope containment lb≤makespan≤ub
+is enforced in the tests, not re-drawn here.
+C — The lever that worsens the gap WITHIN the physical pool is the context tail: at W=8 the
+packing gap rises with the CoV of prefill time T/ρ_dest(T). (The gap is NOT a function of W/W*
+alone — it depends on the full prefill-time distribution, so B and C don't collapse.)
 
 Note: raising transfer-fraction shifts the bottleneck from prefill-packing (B/C) to
 link-serialization (A) rather than cleanly shrinking either — the two gaps trade off.
@@ -51,16 +56,14 @@ Dgrid = EV.tau_src + np.linspace(0.05, 1.2, 24) * egress
 A = {d: np.array([simulate(POP, POOL, IMP, PLAN, replace(EV, D=D), MOVE, discipline=d).realized_shed
                   for D in Dgrid]) for d in DISC}
 
-# --- Panel B: prefill makespan vs W against the LP perfect-packing budget (link slacked) ---
+# --- Panel B: prefill packing gap (LP over-promise) vs W; physical pool {4,8,16} (§5) ---
 reb = POP.T / rho_dest(POP.T, POP.mfu)
 rmask = (PLAN.action == "R") & (PLAN.y > 1e-9)
 p2R = (PLAN.y_R * reb)[rmask]
+Wstar = p2R.sum() / p2R.max()  # W past which the single largest prefill becomes the binding floor
 Wgrid = np.array([1, 2, 4, 8, 16, 32, 64])
-mk, lb, ub, budget = ([] for _ in range(4))
-for w in Wgrid:
-    s = simulate(POP, POOL, IMP, PLAN, replace(EV, W=int(w)), MOVE_LS, discipline="johnson")
-    mk.append(s.makespan); lb.append(s.analytic_lb); ub.append(s.analytic_ub)
-    budget.append(EV.tau_pre + p2R.sum() / w)  # LP volume row: assumes the load splits across W
+gapB = np.array([simulate(POP, POOL, IMP, PLAN, replace(EV, W=int(w)), MOVE_LS, discipline="johnson").makespan
+                 / (EV.tau_pre + p2R.sum() / w) - 1 for w in Wgrid])  # DES finish vs LP volume-row promise
 
 # --- Panel C: packing gap vs prefill-time CoV (regenerate at fixed E[T], W=8) ---
 mu0 = np.log(POOL.mean_context_tokens)
@@ -86,16 +89,17 @@ axA.set(xlabel="deadline $D$ (s)", ylabel="realized shed (kW)",
         title="A · grid relief: order-blindness wastes shed")
 axA.legend(loc="lower right", fontsize=8)
 
-axB.fill_between(Wgrid, lb, ub, color="tab:blue", alpha=0.12, label="envelope [lb, ub]")
-axB.plot(Wgrid, mk, "o-", color="tab:red", lw=2, label="DES makespan (Johnson)")
-axB.plot(Wgrid, budget, "s--", color="tab:green", lw=1.5, label="LP perfect-packing budget")
-axB.set(xscale="log", xlabel="rebuild servers $W$", ylabel="prefill finish (s)",
-        title="B · $P\\Vert C_{max}$ gap opens as $W$ grows")
-axB.legend(loc="center left", fontsize=8)
+axB.axvspan(4, 16, color="tab:green", alpha=0.10, label="physical pool $W\\in\\{4,8,16\\}$")
+axB.axvline(Wstar, color="0.5", ls=":", lw=1)
+axB.text(Wstar, gapB.max() * 95, f"  $W^*$≈{Wstar:.0f}\n  (unphysical)", fontsize=7, va="top", color="0.4")
+axB.plot(Wgrid, gapB * 100, "o-", color="tab:red", lw=2)
+axB.set(xscale="log", xlabel="rebuild servers $W$", ylabel="LP prefill-row over-promise (%)",
+        title="B · packing gap: LP over-promises even in the physical pool")
+axB.legend(loc="upper left", fontsize=8)
 
 axC.plot(covs, np.array(gapC) * 100, "o-", color="tab:purple", lw=2)
-axC.set(xlabel="CoV of prefill time $T/\\rho_{dest}(T)$", ylabel="packing gap vs LP budget (%)",
-        title="C · gap grows with context heterogeneity ($W$=8)")
+axC.set(xlabel="CoV of prefill time $T/\\rho_{dest}(T)$", ylabel="packing gap at $W$=8 (%)",
+        title="C · tail heaviness worsens the gap at physical $W$=8")
 
 fig.tight_layout()
 os.makedirs("outputs", exist_ok=True)
@@ -116,5 +120,8 @@ tight = EV.tau_src + 0.3 * egress
 gr = {d: simulate(POP, POOL, IMP, PLAN, replace(EV, D=tight), MOVE, discipline=d).realized_shed / kW for d in DISC}
 print(f"@D={tight:.0f}s realized kW: " + "  ".join(f"{d}={v:.1f}" for d, v in gr.items())
       + f"  (certified {certified/kW:.1f}; LPT order-blindness costs {gr['pd']-gr['lpt']:.1f}kW vs PD)")
-print(f"prefill packing gap (link slacked): W=1 {mk[0]/budget[0]-1:+.0%}  W=8 {mk[3]/budget[3]-1:+.0%}  "
-      f"W=64 {mk[-1]/budget[-1]-1:+.0%}   CoV {covs[0]:.2f}→{covs[-1]:.2f}: gap {gapC[0]:.0%}→{gapC[-1]:.0%}")
+g = dict(zip(Wgrid.tolist(), gapB))
+print(f"prefill packing gap (link slacked, Johnson): physical pool W=4:{g[4]:+.0%} W=8:{g[8]:+.0%} W=16:{g[16]:+.0%}"
+      f"  | W*≈{Wstar:.0f} (unphysical) so this is packing loss, not the max-job floor"
+      f"  | beyond pool W=32:{g[32]:+.0%} W=64:{g[64]:+.0%}")
+print(f"  Panel C (W=8): CoV {covs[0]:.2f}→{covs[-1]:.2f} ⇒ gap {gapC[0]:.0%}→{gapC[-1]:.0%}  (tail-driven, not W/W*-collapsible)")
