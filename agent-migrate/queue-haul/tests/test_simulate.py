@@ -68,9 +68,27 @@ def test_ingest_isolation_matches_lp_budget():
     yS = np.zeros(len(pop)); yS[pick] = 1.0
     plan = _plan(np.zeros(len(pop)), yS)
     event = Event(W=1)  # equality regime: single serial ingest channel
-    s = simulate(pop, POOL, imp, plan, event, SLACK_L, discipline="fifo")
-    expected = event.tau_in + (imp.b_transfer[pick] / Movement().mu_in).sum()
+    move = replace(Movement(), lambda_src=1e18, mu_in=1e9)  # ingest work dominates τ_in
+    s = simulate(pop, POOL, imp, plan, event, move, discipline="fifo")
+    expected = event.tau_in + (imp.b_transfer[pick] / move.mu_in).sum()
+    assert expected - event.tau_in > 10 * event.tau_in  # the test isn't just measuring τ_in
     assert s.makespan == pytest.approx(expected, rel=1e-9)
+
+
+def test_split_job_charges_both_fractions():
+    # The LP can split a marginal job (y_R>0 AND y_S>0). The DES must rebuild BOTH pieces —
+    # prefill for y_R, ingest for y_S — not silently drop the minority action's work.
+    pop, imp = _pop()
+    j = int(np.argmax(pop.T))  # big context ⇒ prefill piece ≫ ingest piece
+    yR, yS = np.zeros(len(pop)), np.zeros(len(pop))
+    yR[j], yS[j] = 0.4, 0.6  # action() picks "S", yet the prefill (y_R) piece is far larger
+    event, move = Event(W=1), Movement()
+    s = simulate(pop, POOL, imp, _plan(yR, yS), event, move, discipline="fifo")
+    ed = event.tau_src + (yR[j] * imp.b_replay[j] + yS[j] * imp.b_transfer[j]) / move.lambda_src
+    p2R = yR[j] * pop.T[j] / rho_dest(pop.T[j], pop.mfu)
+    p2S = yS[j] * imp.b_transfer[j] / move.mu_in
+    assert p2R > p2S  # the dropped-fraction bug would have kept only the smaller ingest piece
+    assert s.makespan == pytest.approx(ed + max(p2R, p2S), rel=1e-9)  # both pieces from ed (W=1)
 
 
 # ---- Layer 2: hand-computed precedence cases (synthetic, round numbers) ----
@@ -163,15 +181,16 @@ def test_cutthrough_never_slower_than_store_and_forward():
         assert np.all(ct.rebuild_done[mv] <= sf.rebuild_done[mv] + 1e-9)
 
 
-def test_power_density_banks_most_realized_shed():
-    # Tight deadline ⇒ only a prefix of the serial link clears; PD (value-density first)
-    # banks more watts by D than the makespan-oriented disciplines (order-blindness cost).
+def test_discipline_sensitivity_only_when_link_binds():
+    # Realized shed is a knapsack-prefix problem on the serial link: order is irrelevant
+    # when D is slack (everything clears) and order-sensitive when D binds. No discipline is
+    # universally optimal — PD is a heuristic, not a dominant strategy.
     pop, imp = _pop(n_nodes=8)
     base, move = Event(dest_nodes=48, W=16), Movement()
     plan = solve(pop, POOL, imp, 0.5 * bind_dp(imp).sum(), base, move)
-    egress = (plan.y_R @ imp.b_replay + plan.y_S @ imp.b_transfer) / move.lambda_src
-    event = replace(base, D=base.tau_src + 0.5 * egress)  # cut the link mid-stream
-    pd = simulate(pop, POOL, imp, plan, event, move, discipline="pd").realized_shed
-    for disc in ("fifo", "lpt", "johnson"):
-        other = simulate(pop, POOL, imp, plan, event, move, discipline=disc).realized_shed
-        assert pd >= other - 1e-6
+    eg = (plan.y_R @ imp.b_replay + plan.y_S @ imp.b_transfer) / move.lambda_src
+    disc = ("fifo", "lpt", "johnson", "pd")
+    slack = [simulate(pop, POOL, imp, plan, replace(base, D=base.tau_src + 2 * eg), move, discipline=d).realized_shed for d in disc]
+    tight = [simulate(pop, POOL, imp, plan, replace(base, D=base.tau_src + 0.3 * eg), move, discipline=d).realized_shed for d in disc]
+    assert max(slack) - min(slack) < 1e-6  # slack link ⇒ order-invariant
+    assert max(tight) - min(tight) > 1e-6  # binding link ⇒ order matters
