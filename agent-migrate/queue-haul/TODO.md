@@ -65,18 +65,18 @@ W rebuild servers). In this parameterization the precedence/pipeline-fill gap is
 near-null (ingest non-binding, replay stage-1 tiny); the gaps that exist are the
 link-discipline realized-shed gap and the W-bound prefill packing gap.
 
-- [ ] **T10 — Reconstruction DES** (`simulate.py`)
+- [x] **T10 — Reconstruction DES** (`simulate.py`)
   A deterministic event-loop **checker** (no SimPy, no job selection): consume a solved `Plan` and replay it as a 2-machine flow shop — Stage 1 one shared egress link at `λ_src` serializing every moving job, Stage 2 `W` parallel prefill servers (replay, held `T_j/ρ_dest(T_j)`) and `W` ingest channels at `μ_in` (transfer). τ offsets enter as one-time per-stage availability (`link@τ_src`, `prefill@τ_pre`, `ingest@τ_in`) so a single-isolated-resource plan reproduces the LP budget at equality. Two pipeline modes (store-and-forward default, cut-through knob); four link disciplines — FIFO, LPT, Johnson, and **power-density-descending** (`bind_dp·y/p1`, realized-shed-optimal). Emit per-job egress/rebuild times, **two metrics** — realized shed (egress done ≤ D) and reconstruction success (rebuild done ≤ D) — makespan, and the analytic envelope `[lb, ub]`.
   *Stage-2 service uses the **bare** rates `T/ρ_dest` and `η·T/μ_in`, NOT the `(1+φ)`-inflated `c_replay`/`c_transfer` — the DES models contention explicitly via finite servers, so reusing `c_*` double-counts the queue wait.*
   *Needs: T4 `Plan` + §6 Movement + §5 Pools & event.*
   **Success:** on a single-isolated-resource plan the DES completion matches the LP budget at equality to `rel=1e-9`; on a `W=1` single-action path the makespan equals Johnson's-rule makespan; `lb ≤ makespan ≤ ub` always; realized shed ≤ certified `shed_guaranteed`.
 
-- [ ] **T11 — Experiment: realized vs certified shed** (`plot_simulate_validation.py`)
+- [x] **T11 — Experiment: realized vs certified shed** (`plot_simulate_validation.py`)
   Solve a feasible LP plan, replay it, and point the sweeps at the gaps that exist. **Primary (grid relief):** realized shed vs discipline {FIFO, LPT, Johnson, PD} as transfer-load on the shared link rises (transfer-fraction / `η·T` CoV) — show PD banks more watts by D because it refuses to let big transfers starve high-density replays. **Secondary (service continuity):** reconstruction shed and makespan vs **W** and **prefill-time CoV** (`T/ρ_dest(T)` among replays) — the `P||Cmax` packing gap, largest at small W and high CoV. **Companion:** makespan inside `[lb, ub]`, Johnson exact on the `W=1` single-action sub-sweep. Report the **nulls** honestly: S&F vs cut-through spread ≈0, and the reconstruction gap *shrinking* with transfer-fraction — each explained by the envelope.
   *Needs: T10 + T4.*
   **Success:** PD strictly dominates FIFO/LPT/Johnson on realized shed under link contention, quantifying watts left on the table by order-blindness; the reconstruction gap grows as W↓ and prefill-CoV↑ and is bracketed by `[lb, ub]`; the pipeline-fill spread is ≈0 with the envelope showing why. The result either cashes §10.2's exactness claim (gap null where stages don't overlap) or justifies widening `T_lat`/packing slack on the prefill row.
 
-- [ ] **T12 — DES tests** (`tests/test_simulate.py`)
+- [x] **T12 — DES tests** (`tests/test_simulate.py`)
   **Success (all pass):** (1) single-isolated-resource equality — egress-only, prefill-only (`W=1`), ingest-only plans each match the LP budget at equality to `rel=1e-9`; (2) 2–3-job hand-computed precedence cases (store-and-forward and cut-through); (3) conservation — `rebuild_done ≥ egress_done`, serial link never overlaps, `lb ≤ makespan ≤ ub` (corrected `ub=τ_src+Σp1+Σp2`), realized shed ≤ certified; (4) `Johnson makespan == DES makespan` on `W=1` single-action paths only; (5) cut-through ≤ store-and-forward completion per job; (6) PD ≥ FIFO/LPT/Johnson on realized shed under a link-contended plan.
 
 ---
