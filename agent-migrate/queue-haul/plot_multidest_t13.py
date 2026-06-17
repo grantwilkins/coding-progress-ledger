@@ -83,25 +83,32 @@ axC.legend(loc="center left", fontsize=8)
 axC2.legend(loc="upper right", fontsize=8)
 
 # --- D. heterogeneous dests: concentrate on cheapest-reachable, then spread ---
+# Saturation-band sizing: dest-0 cap (8 nodes) comfortably holds the small-S* session
+# demand so it RAMPS rather than starting maxed; the crossover lands mid-axis; combined
+# cap just covers the largest S*. dest 0 is cheaper (mfu 0.5 ⇒ larger ρ_ℓ ⇒ smaller c_R).
 popD = generate(POOL, n_nodes=8)
 MVD = Movement(lambda_src=1e10, mu_in=1e9)  # pricey transfer ⇒ jobs replay ⇒ per-dest ρ_ℓ drives routing
 impD = compute(popD, POOL, MVD)
-fD = lambda: DestFleet(np.array([8, 8]), np.array([1.5, 1.5]), np.array([0.5, 0.3]), np.array([0.6, 0.6]))
+fD = lambda: DestFleet(np.array([8, 8]), np.array([8.0, 2.0]), np.array([0.5, 0.3]), np.array([0.6, 0.6]))
+cap0 = 8.0 * POOL.s_node
 ceilD = solve(popD, POOL, impD, 2 * bind_dp(impD).sum(), move=MVD, fleet=fD()).shed_guaranteed
-Sd = np.linspace(0.05, 1.0, 18) * ceilD
+Sd = np.linspace(0.02, 1.0, 20) * ceilD
 m0, m1, ta0 = [], [], []
 for s in Sd:
     p = solve(popD, POOL, impD, s, move=MVD, fleet=fD())
     moved = (p.Y_R + p.Y_S).sum(0)
     m0.append(moved[0]); m1.append(moved[1]); ta0.append(p.theta_admit[0])
-axD.plot(Sd / kW, m0, "o-", color="tab:green", label="dest 0 (fast rebuild, mfu 0.5)")
-axD.plot(Sd / kW, m1, "s-", color="tab:purple", label="dest 1 (slow, mfu 0.3)")
-axD.set(xlabel="requested shed $S^\\star$ (kW)", ylabel="sessions routed (Σ y)",
+axD.axhline(cap0, color="tab:green", lw=0.8, ls=":", alpha=0.6)
+axD.text(Sd[1] / kW, cap0, " dest 0 cap $\\bar S_0$", color="tab:green", fontsize=7, va="bottom")
+axD.plot(Sd / kW, m0, "o-", color="tab:green", ms=5, label="dest 0 (fast rebuild, mfu 0.5)")
+axD.plot(Sd / kW, m1, "s-", color="tab:purple", ms=5, label="dest 1 (slow, mfu 0.3)")
+axD.set(xlabel="requested shed $S^\\star$ (kW)", ylabel="sessions routed ($\\Sigma\\,y$)",
         title="D. concentrate on cheapest-reachable, then spread")
-axD.legend(loc="upper left", fontsize=8)
+axD.legend(loc="center left", fontsize=8)
 axDt = axD.twinx()
-axDt.plot(Sd / kW, ta0, color="0.5", lw=1, ls=":", label="$\\theta_{admit,0}$")
-axDt.set_ylabel("$\\theta_{admit,0}$", color="0.5")
+axDt.plot(Sd / kW, ta0, color="0.4", lw=1.4, ls=":", label="$\\theta_{admit,0}$ (right)")
+axDt.set_ylabel("$\\theta_{admit,0}$", color="0.4")
+axDt.tick_params(axis="y", labelcolor="0.4")
 axDt.legend(loc="lower right", fontsize=8)
 
 fig.tight_layout()
