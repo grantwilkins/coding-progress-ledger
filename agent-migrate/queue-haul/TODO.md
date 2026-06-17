@@ -144,7 +144,7 @@ verification is per-destination volume conservation.
   **Success:** per-ℓ realized load never exceeds `L̄_dest,ℓ`; on a slack plan realized routing ==
   certified within by-D jobs; K=1 reproduces T10's single-dest DES to `rel=1e-9`; `lb ≤ makespan ≤ ub`.
 
-- [ ] **T16 — Figure 2: realized vs certified routing under uplink contention** (the headline)
+- [x] **T16 — Figure 2: realized vs certified routing under uplink contention** (the headline)
   (`plot_multidest_validation.py`)
   Replay each plan through the per-ℓ DES across the saturation band. Sweep: (1) K at fixed total
   demand (binding constraint migrates admission→egress, `θ_egress` rises, routing concentrates);
