@@ -59,3 +59,18 @@ def compute(pop: JobPopulation, pool: PoolPower, move: Movement = Movement()) ->
         b_transfer=eta_T,
         regime="memory" if pool.memory_bound(ell.sum(), len(pop)) else "load",
     )
+
+
+def move_costs(pop: JobPopulation, fleet, move: Movement = Movement()):
+    """Per-(job, destination) move costs for the multi-dest LP: replay c_R, transfer c_S,
+    prefill node-seconds reb — each (n, K). ρ_ℓ uses each destination's own MFU (decoupled
+    from pop.mfu, the source's), and φ_pre,ℓ its own prefill load. Transfer is destination-
+    independent (μ_in, φ_in shared) and just broadcasts over ℓ. K=1 from DestFleet.from_event
+    reproduces compute()'s c_replay/c_transfer exactly."""
+    T = pop.T[:, None]
+    ones = np.ones(len(fleet))
+    rho = rho_dest(T, np.asarray(fleet.mfu))  # (n, K)
+    eta_T = ETA_BYTES_PER_TOK * T
+    c_R = BETA_BYTES_PER_TOK * T / move.lambda_src + (1 + congestion(np.asarray(fleet.prefill_util))) * T / rho
+    c_S = (eta_T / move.lambda_src + (1 + congestion(move.dest_ingest_util)) * eta_T / move.mu_in) * ones
+    return c_R, c_S, T / rho

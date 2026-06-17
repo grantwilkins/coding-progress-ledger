@@ -94,7 +94,7 @@ and pipeline-fill stays the T11 near-null (the 3-stage downlink variant is defer
 fractional `y[j,ℓ]` reads as the routing *distribution* of a class-representative's sessions, so
 verification is per-destination volume conservation.
 
-- [ ] **T13 — Multi-destination dispatch** (`dispatch.py`, `impact.py`)
+- [x] **T13 — Multi-destination dispatch** (`dispatch.py`, `impact.py`)
   Re-index `y_R`, `y_S` by destination ℓ (`2·n·K` vars; uniform 2D `Plan`, `(n,K)`). Pairing
   blocks over ℓ (`Σ_ℓ (y_R+y_S)[j,ℓ] ≤ 1`); shed stays ℓ-free (`dp` broadcast); **ONE shared
   egress row** `Σ_{j,ℓ}(b_R·y_R+b_S·y_S)[j,ℓ] ≤ λ_src(D−τ_src)`; prefill/ingest/load/held block

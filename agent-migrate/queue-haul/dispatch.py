@@ -17,7 +17,7 @@ from dataclasses import dataclass
 import cvxpy as cp
 import numpy as np
 
-from impact import Impact, Movement
+from impact import Impact, Movement, move_costs
 from instance import JobPopulation
 from power import PoolPower, rho_dest
 
@@ -43,6 +43,27 @@ class Event:
 
 
 @dataclass(frozen=True)
+class DestFleet:
+    """§4 destination index: K sites the source sheds to, coupled only by the shared
+    source uplink. Each field a length-K parallel array. spare_ℓ is a spare node-count →
+    load headroom L̄_ℓ = spare_ℓ·ρ*, held headroom S̄_ℓ = spare_ℓ·s_node."""
+
+    W: np.ndarray  # rebuild servers per dest (prefill compute + ingest channels)
+    spare: np.ndarray  # spare node-count per dest
+    mfu: np.ndarray  # destination MFU → ρ_ℓ(T); decoupled from the source's pop.mfu
+    prefill_util: np.ndarray  # destination prefill load → φ_pre,ℓ
+
+    def __len__(self) -> int:
+        return len(np.atleast_1d(self.W))
+
+    @classmethod
+    def from_event(cls, event: "Event", move: Movement, pool: PoolPower, pop: JobPopulation) -> "DestFleet":
+        """The K=1 fleet that reproduces the single-dest Event/Movement headroom exactly."""
+        return cls(np.array([event.W]), np.array([event.spare_frac * event.dest_nodes]),
+                   np.array([pop.mfu]), np.array([move.dest_prefill_util]))
+
+
+@dataclass(frozen=True)
 class Plan:
     y_R: np.ndarray  # per-job replay fraction
     y_S: np.ndarray  # per-job transfer fraction
@@ -53,6 +74,10 @@ class Plan:
     shortfall: float  # max(0, S* − shed_guaranteed), >0 only when infeasible
     regime: str
     method: str  # 'lp' | 'milp' | 'greedy'
+    Y_R: np.ndarray = None  # (n,K) replay routing by destination; None for greedy/random
+    Y_S: np.ndarray = None  # (n,K) transfer routing; y_R/y_S are its Σ-over-ℓ aggregates
+    theta_egress: float = None  # shared-uplink dual (max-shed LP); None for milp/greedy
+    theta_admit: np.ndarray = None  # per-ℓ admission dual (load+held)
 
     @property
     def y(self) -> np.ndarray:
@@ -84,48 +109,74 @@ def _plan(x, n, dp, imp, method, regime, s_star, feasible) -> Plan:
                 0.0 if feasible else max(0.0, s_star - shed_g), regime, method)
 
 
-def _build(pop, pool, imp, event, move, integer):
-    """Variables + pairing (y_R+y_S≤1) and the five movement constraints (everything but shed)."""
-    n = len(pop)
+def _plan2(YR, YS, dp, imp, cost, method, s_star, feasible, duals) -> Plan:
+    """Build a Plan from the (n,K) routing: y_R/y_S are the Σ-over-ℓ aggregates."""
+    y_R, y_S = YR.sum(1), YS.sum(1)
+    y = y_R + y_S
+    shed_g = float(dp @ y)
+    te, ta = duals if duals else (None, None)
+    return Plan(y_R, y_S, shed_g, float(imp.dp_expected @ y), cost, feasible,
+                0.0 if feasible else max(0.0, s_star - shed_g), imp.regime, method, YR, YS, te, ta)
+
+
+def _build(pop, pool, imp, fleet, event, move, integer):
+    """Variables Y_R, Y_S (n,K) + pairing, the ONE shared egress row, and the per-ℓ movement
+    blocks (everything but shed). Returns the dual-carrying constraint handles too."""
+    n, K = len(pop), len(fleet)
     kw = {"boolean": True} if integer else {"nonneg": True}
-    yR, yS = cp.Variable(n, **kw), cp.Variable(n, **kw)
-    y = yR + yS
-    reb = pop.T / rho_dest(pop.T, pop.mfu)  # prefill node-seconds (replay)
+    YR, YS = cp.Variable((n, K), **kw), cp.Variable((n, K), **kw)
+    Y = YR + YS
+    reb = move_costs(pop, fleet, move)[2]  # prefill node-seconds at each dest's ρ_ℓ
+    bR, bS = imp.b_replay[:, None], imp.b_transfer[:, None]
+    W, spare = np.asarray(fleet.W), np.asarray(fleet.spare)
+    egress = cp.sum(cp.multiply(bR, YR) + cp.multiply(bS, YS)) <= move.lambda_src * (event.D - event.tau_src)
+    load = cp.sum(cp.multiply(pop.ell[:, None], Y), axis=0) <= spare * pool.rho_star
+    held = cp.sum(Y, axis=0) <= spare * pool.s_node
     cons = [
-        y <= 1,
-        imp.b_replay @ yR + imp.b_transfer @ yS <= move.lambda_src * (event.D - event.tau_src),
-        reb @ yR <= event.W * (event.D - event.tau_pre),
-        imp.b_transfer @ yS <= event.W * move.mu_in * (event.D - event.tau_in),
-        pop.ell @ y <= event.l_dest(pool),
-        cp.sum(y) <= event.s_dest(pool),
+        cp.sum(Y, axis=1) <= 1,  # pairing: each job moves at most once, across all destinations
+        egress,  # the single shared source uplink — the entire multi-dest coupling
+        cp.sum(cp.multiply(reb, YR), axis=0) <= W * (event.D - event.tau_pre),  # per-ℓ prefill
+        cp.sum(cp.multiply(bS, YS), axis=0) <= W * move.mu_in * (event.D - event.tau_in),  # per-ℓ ingest
+        load, held,  # per-ℓ destination headroom
     ]
     if event.pinned:
         pin = np.isin(pop.job_type, event.pinned)
-        cons += [yR[pin] == 0, yS[pin] == 0]
-    return n, yR, yS, cons
+        cons += [YR[pin] == 0, YS[pin] == 0]
+    return YR, YS, cons, egress, load, held
 
 
-def _run(obj, cons, solver) -> bool:
+def _run(obj, cons, solver):
     prob = cp.Problem(obj, cons)
     prob.solve(solver=solver)
     return prob.status, prob.status in ("optimal", "optimal_inaccurate")
 
 
 def solve(pop: JobPopulation, pool: PoolPower, imp: Impact, s_star: float,
-          event: Event = Event(), move: Movement = Movement(), integer: bool = False) -> Plan:
-    """Primary solve; on infeasibility re-solve to max shed and report shortfall."""
-    n, yR, yS, cons = _build(pop, pool, imp, event, move, integer)
+          event: Event = Event(), move: Movement = Movement(), integer: bool = False,
+          fleet: DestFleet = None) -> Plan:
+    """Primary solve; on infeasibility re-solve to max shed and report shortfall. fleet=None
+    ⇒ a single destination from Event/Movement using imp's frozen costs (the original program);
+    an explicit fleet recomputes per-ℓ costs (each dest's ρ_ℓ/φ_pre,ℓ)."""
+    multidest = fleet is not None
+    fleet = fleet or DestFleet.from_event(event, move, pool, pop)
+    YR, YS, cons, egress, load, held = _build(pop, pool, imp, fleet, event, move, integer)
     dp = bind_dp(imp)
     method, solver = ("milp" if integer else "lp"), cp.SCIPY  # HiGHS via cvxpy (scale-robust; CLARABEL is not)
-    obj = cp.Minimize(imp.c_replay @ yR + imp.c_transfer @ yS)
+    if multidest:
+        cR, cS, _ = move_costs(pop, fleet, move)
+        cost = cp.sum(cp.multiply(cR, YR) + cp.multiply(cS, YS))
+    else:
+        cost = imp.c_replay @ cp.sum(YR, axis=1) + imp.c_transfer @ cp.sum(YS, axis=1)
+    total = cp.sum(YR + YS, axis=1)
 
-    if _run(obj, cons + [dp @ (yR + yS) >= s_star], solver)[1]:
-        return _plan(np.concatenate([yR.value, yS.value]), n, dp, imp, method, imp.regime, s_star, True)
-
-    status, ok = _run(cp.Maximize(dp @ (yR + yS)), cons, solver)
-    if not ok:
-        raise RuntimeError(f"max-shed re-solve failed: status={status}")
-    return _plan(np.concatenate([yR.value, yS.value]), n, dp, imp, method, imp.regime, s_star, False)
+    status, feasible = _run(cp.Minimize(cost), cons + [dp @ total >= s_star], solver)
+    if not feasible:
+        status, ok = _run(cp.Maximize(dp @ total), cons, solver)  # S*-independent capacity prices
+        if not ok:
+            raise RuntimeError(f"max-shed re-solve failed: status={status}")
+    duals = None if integer else (float(egress.dual_value),
+                                  np.asarray(load.dual_value) + np.asarray(held.dual_value))
+    return _plan2(YR.value, YS.value, dp, imp, float(cost.value), method, s_star, feasible, duals)
 
 
 def _movable(pop, dp, event) -> np.ndarray:
