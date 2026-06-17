@@ -14,8 +14,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+import cvxpy as cp
 import numpy as np
-from scipy.optimize import Bounds, LinearConstraint, milp
 
 from impact import Impact, Movement
 from instance import JobPopulation
@@ -84,52 +84,48 @@ def _plan(x, n, dp, imp, method, regime, s_star, feasible) -> Plan:
                 0.0 if feasible else max(0.0, s_star - shed_g), regime, method)
 
 
-def _resource_constraints(pop, pool, imp, event, move):
-    """Pairing (y_R+y_S≤1) and the five movement constraints (everything but shed)."""
+def _build(pop, pool, imp, event, move, integer):
+    """Variables + pairing (y_R+y_S≤1) and the five movement constraints (everything but shed)."""
     n = len(pop)
-    z = np.zeros(n)
+    kw = {"boolean": True} if integer else {"nonneg": True}
+    yR, yS = cp.Variable(n, **kw), cp.Variable(n, **kw)
+    y = yR + yS
     reb = pop.T / rho_dest(pop.T, pop.mfu)  # prefill node-seconds (replay)
-    pair = LinearConstraint(np.hstack([np.eye(n), np.eye(n)]), 0, 1)
-    rows = np.array([
-        np.concatenate([imp.b_replay, imp.b_transfer]),  # egress bytes
-        np.concatenate([reb, z]),  # prefill node-seconds (replay only)
-        np.concatenate([z, imp.b_transfer]),  # ingest bytes (transfer only)
-        np.concatenate([pop.ell, pop.ell]),  # destination load
-        np.concatenate([np.ones(n), np.ones(n)]),  # destination held sessions
-    ])
-    ub = np.array([
-        move.lambda_src * (event.D - event.tau_src),
-        event.W * (event.D - event.tau_pre),
-        event.W * move.mu_in * (event.D - event.tau_in),
-        event.l_dest(pool),
-        event.s_dest(pool),
-    ])
-    hi = np.ones(2 * n)
+    cons = [
+        y <= 1,
+        imp.b_replay @ yR + imp.b_transfer @ yS <= move.lambda_src * (event.D - event.tau_src),
+        reb @ yR <= event.W * (event.D - event.tau_pre),
+        imp.b_transfer @ yS <= event.W * move.mu_in * (event.D - event.tau_in),
+        pop.ell @ y <= event.l_dest(pool),
+        cp.sum(y) <= event.s_dest(pool),
+    ]
     if event.pinned:
         pin = np.isin(pop.job_type, event.pinned)
-        hi[np.concatenate([pin, pin])] = 0.0
-    return n, pair, LinearConstraint(rows, -np.inf, ub), Bounds(np.zeros(2 * n), hi)
+        cons += [yR[pin] == 0, yS[pin] == 0]
+    return n, yR, yS, cons
+
+
+def _run(obj, cons, solver) -> bool:
+    prob = cp.Problem(obj, cons)
+    prob.solve(solver=solver)
+    return prob.status, prob.status in ("optimal", "optimal_inaccurate")
 
 
 def solve(pop: JobPopulation, pool: PoolPower, imp: Impact, s_star: float,
           event: Event = Event(), move: Movement = Movement(), integer: bool = False) -> Plan:
     """Primary solve; on infeasibility re-solve to max shed and report shortfall."""
-    n, pair, res, bounds = _resource_constraints(pop, pool, imp, event, move)
+    n, yR, yS, cons = _build(pop, pool, imp, event, move, integer)
     dp = bind_dp(imp)
-    dp2 = np.concatenate([dp, dp])
-    intg = np.full(2 * n, int(integer))
-    method = "milp" if integer else "lp"
+    method, solver = ("milp" if integer else "lp"), cp.SCIPY  # HiGHS via cvxpy (scale-robust; CLARABEL is not)
+    obj = cp.Minimize(imp.c_replay @ yR + imp.c_transfer @ yS)
 
-    shed = LinearConstraint(dp2, s_star, np.inf)
-    obj = np.concatenate([imp.c_replay, imp.c_transfer])
-    r = milp(c=obj, constraints=[pair, res, shed], integrality=intg, bounds=bounds)
-    if r.success:
-        return _plan(r.x, n, dp, imp, method, imp.regime, s_star, feasible=True)
+    if _run(obj, cons + [dp @ (yR + yS) >= s_star], solver)[1]:
+        return _plan(np.concatenate([yR.value, yS.value]), n, dp, imp, method, imp.regime, s_star, True)
 
-    r = milp(c=-dp2, constraints=[pair, res], integrality=intg, bounds=bounds)
-    if not r.success:
-        raise RuntimeError(f"max-shed re-solve failed: status={r.status} ({r.message})")
-    return _plan(r.x, n, dp, imp, method, imp.regime, s_star, feasible=False)
+    status, ok = _run(cp.Maximize(dp @ (yR + yS)), cons, solver)
+    if not ok:
+        raise RuntimeError(f"max-shed re-solve failed: status={status}")
+    return _plan(np.concatenate([yR.value, yS.value]), n, dp, imp, method, imp.regime, s_star, False)
 
 
 def _movable(pop, dp, event) -> np.ndarray:
