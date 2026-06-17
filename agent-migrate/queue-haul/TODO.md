@@ -157,7 +157,7 @@ verification is per-destination volume conservation.
   attributable to uplink contention. Null gap → certification robust, §4 routing exact; non-null
   under tight uplink → the contention result. Either outcome publishes.
 
-- [ ] **T17 — Multi-destination tests** (`tests/test_multidest.py`)
+- [x] **T17 — Multi-destination tests** (`tests/test_multidest.py`)
   **Success (all pass):** (1) K=1 reduces to single-dest solve at `rel=1e-9`; (2) homogeneous-
   destination split is cost-indifferent (any feasible routing optimal); (3) shed is invariant to
   routing (`Σ dp·y` unchanged across destination permutations); (4) `θ_egress=0` when uplink
