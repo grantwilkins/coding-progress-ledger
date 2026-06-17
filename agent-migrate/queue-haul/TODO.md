@@ -131,7 +131,7 @@ verification is per-destination volume conservation.
   `θ_egress` never goes positive across the band the coupling isn't biting — resize the fleet
   before spending any DES effort.
 
-- [ ] **T15 — Per-ℓ DES extension** (`simulate.py`)
+- [x] **T15 — Per-ℓ DES extension** (`simulate.py`)
   Extend the 2-stage flow shop: one shared egress link serializing **all** moving `(j,ℓ)`
   shipments regardless of destination (the coupling made executable), then K parallel rebuild
   clusters each running the existing `W_ℓ`-server prefill/ingest machinery with per-ℓ `ρ_ℓ`.

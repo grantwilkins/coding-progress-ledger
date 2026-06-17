@@ -1,12 +1,13 @@
 """Reconstruction DES (formulation.md §10.2 validation; replays a solved dispatch Plan).
 
-Deterministic flow-shop checker: a solved Plan moves jobs over one shared egress link
-(λ_src, serial) then W parallel rebuild servers — prefill (replay, T/ρ_dest) or ingest
-(transfer, η·T/μ_in, W channels). No job selection; replay the plan and report where
-realized shed (egress done by D) and reconstruction (rebuild done by D) fall short of
-what the LP certified. Stage-2 uses BARE rates — finite servers model the contention the
-LP folded into c_*'s (1+φ) factor, so feeding c_* in would double-count the queue wait.
-A split job (LP fractional y_R>0 AND y_S>0) rebuilds BOTH pieces, each on its own resource.
+Deterministic flow-shop checker: a solved Plan moves (j,ℓ) shipments over ONE shared egress
+link (λ_src, serial — the multi-dest coupling) then K parallel rebuild clusters, each ℓ with
+W_ℓ prefill servers (replay, T/ρ_ℓ) and W_ℓ ingest channels (transfer, η·T/μ_in). No job
+selection; replay the plan and report where realized shed (egress done by D), reconstruction
+(rebuild done by D), and per-ℓ realized load (§6.2 admission) fall short of the LP certificate.
+Stage-2 uses BARE rates — finite servers model the contention the LP folded into c_*'s (1+φ)
+factor, so feeding c_* in would double-count the queue wait. A split shipment (y_R>0 AND y_S>0)
+rebuilds BOTH pieces, each on its own resource. fleet=None ⇒ K=1, reproducing the single-dest DES.
 """
 
 from __future__ import annotations
@@ -15,7 +16,7 @@ from dataclasses import dataclass
 
 import numpy as np
 
-from dispatch import Event, Plan, bind_dp
+from dispatch import DestFleet, Event, Plan, bind_dp
 from impact import Impact, Movement
 from instance import JobPopulation
 from power import rho_dest
@@ -33,6 +34,9 @@ class SimResult:
     makespan: float
     analytic_lb: float
     analytic_ub: float
+    realized_load: np.ndarray  # (K,) Σ_j ℓ_j·y[j,ℓ] over shipments resident (rebuilt) by D
+    certified_load: np.ndarray  # (K,) Σ_j ℓ_j·y[j,ℓ], LP-certified routing (D-independent)
+    load_cap: np.ndarray  # (K,) L̄_dest,ℓ = spare_ℓ·ρ*; admission holds iff realized_load ≤ this
     discipline: str
     mode: str
 
@@ -57,51 +61,67 @@ def _stage_lb(off, p2s, w):
 
 
 def simulate(pop: JobPopulation, pool, imp: Impact, plan: Plan, event: Event = Event(),
-             move: Movement = Movement(), mode: str = "sf", discipline: str = "pd") -> SimResult:
+             move: Movement = Movement(), mode: str = "sf", discipline: str = "pd",
+             fleet: DestFleet = None) -> SimResult:
+    # fleet=None ⇒ the K=1 single-dest fleet (uses the y_R/y_S aggregates); an explicit fleet
+    # routes the (n,K) Y_R/Y_S over K clusters with per-ℓ ρ_ℓ. Shipments are flat (j,ℓ) indices:
+    # job = f//K, dest ℓ = f%K. One shared egress link serializes all of them.
     n = len(pop)
-    mv = np.flatnonzero(plan.y > 1e-9)
-    dp = bind_dp(imp)
-    rho = rho_dest(pop.T, pop.mfu)
-    p1 = (plan.y_R * imp.b_replay + plan.y_S * imp.b_transfer) / move.lambda_src  # egress secs
-    p2R = plan.y_R * pop.T / rho  # prefill work, 0 if not replayed
-    p2S = plan.y_S * imp.b_transfer / move.mu_in  # ingest work, 0 if not transferred
-    # value density = dp·y/p1; for a mover p1=y·bytes/λ (≥4 B ⇒ p1≥4e-6s), so this reduces to
-    # dp·λ/bytes — finite, y cancels. The floor only guards the 0/0 of non-movers (never sorted).
-    dens = dp * plan.y / np.maximum(p1, 1e-300)
+    multidest = fleet is not None
+    fleet = fleet or DestFleet.from_event(event, move, pool, pop)
+    K, W = len(fleet), np.atleast_1d(fleet.W)
+    YR, YS = (plan.Y_R, plan.Y_S) if multidest else (plan.y_R[:, None], plan.y_S[:, None])
+    Y, dp = YR + YS, bind_dp(imp)
+    rho = rho_dest(pop.T[:, None], np.asarray(fleet.mfu))  # (n,K) — per-ℓ MFU
+    p1 = (YR * imp.b_replay[:, None] + YS * imp.b_transfer[:, None]) / move.lambda_src  # egress secs
+    p2R = YR * pop.T[:, None] / rho  # bare prefill replay, 0 where not replayed
+    p2S = YS * imp.b_transfer[:, None] / move.mu_in  # bare KV ingest, 0 where not transferred
+    p1f, p2Rf, p2Sf, YRf, YSf = (a.ravel() for a in (p1, p2R, p2S, YR, YS))
+    shedf = (dp[:, None] * Y).ravel()
+    # value density dp·y/p1 → dp·λ/bytes for a mover (y cancels); floor only guards non-movers.
+    densf = shedf / np.maximum(p1f, 1e-300)
+    mv = np.flatnonzero(Y.ravel() > 1e-9)  # flat (j,ℓ) shipment indices
 
-    order = _order(mv, p1, p2R + p2S, dens, discipline)
-    es, ed = np.full(n, np.nan), np.full(n, np.nan)
+    order = _order(mv, p1f, p2Rf + p2Sf, densf, discipline)
+    es, ed = np.full(n * K, np.nan), np.full(n * K, np.nan)
     t = event.tau_src  # link available once at τ_src, then continuous
-    for j in order:  # serial link; egress_done is monotone along `order`
-        es[j], ed[j] = t, t + p1[j]
-        t = ed[j]
+    for f in order:  # serial link; egress_done is monotone along `order`
+        es[f], ed[f] = t, t + p1f[f]
+        t = ed[f]
 
-    rs, rd = np.full(n, np.nan), np.full(n, np.nan)
-    pf, ig = np.full(event.W, event.tau_pre), np.full(event.W, event.tau_in)
+    rs, rd = np.full(n * K, np.nan), np.full(n * K, np.nan)
+    pf = [np.full(int(W[l]), event.tau_pre) for l in range(K)]  # per-ℓ prefill servers
+    ig = [np.full(int(W[l]), event.tau_in) for l in range(K)]  # per-ℓ ingest channels
     # cut-through = optimistic earliest-overlap bound: rebuild may run from egress_start, but
     # still completes no sooner than full byte arrival ed (the outer max below). sf waits for ed.
     floor = es if mode == "cutthrough" else ed
-    for j in order:  # split job rebuilds both pieces on their own resources, in egress order
-        starts, done = [], ed[j]
-        for srv, w, work in ((pf, plan.y_R[j], p2R[j]), (ig, plan.y_S[j], p2S[j])):
+    for f in order:  # split shipment rebuilds both pieces on dest ℓ's resources, in egress order
+        l, starts, done = f % K, [], ed[f]
+        for srv, w, work in ((pf[l], YRf[f], p2Rf[f]), (ig[l], YSf[f], p2Sf[f])):
             if w <= 1e-9:
                 continue
             k = int(np.argmin(srv))
-            st = max(floor[j], srv[k])
-            srv[k] = max(ed[j], st + work)  # outer max = cut-through byte-arrival cap
+            st = max(floor[f], srv[k])
+            srv[k] = max(ed[f], st + work)  # outer max = cut-through byte-arrival cap
             starts.append(st); done = max(done, srv[k])
-        rs[j], rd[j] = (min(starts) if starts else ed[j]), done
+        rs[f], rd[f] = (min(starts) if starts else ed[f]), done
 
-    shed = dp * plan.y
     e_ok = np.where(np.isfinite(ed), ed, np.inf) <= event.D
     r_ok = np.where(np.isfinite(rd), rd, np.inf) <= event.D
+    ellY = pop.ell[:, None] * Y  # (n,K) load placed at each dest
+    resident = (np.where(np.isfinite(rd), rd, np.inf) <= event.D).reshape(n, K)  # rebuilt by D
+    realized_load = (ellY * resident).sum(0)  # §6.2 admission anchor: resident ⇒ consuming load
+    certified_load = ellY.sum(0)
+    load_cap = np.asarray(fleet.spare, float) * pool.rho_star  # L̄_dest,ℓ
     if mv.size:
-        lb = max(event.tau_src + p1[mv].sum(),
-                 _stage_lb(event.tau_pre, p2R[mv], event.W),
-                 _stage_lb(event.tau_in, p2S[mv], event.W))
-        ub = event.tau_src + p1[mv].sum() + p2R[mv].sum() + p2S[mv].sum()
+        lb = max(event.tau_src + p1f[mv].sum(),
+                 max(_stage_lb(event.tau_pre, p2R[:, l], int(W[l])) for l in range(K)),
+                 max(_stage_lb(event.tau_in, p2S[:, l], int(W[l])) for l in range(K)))
+        ub = event.tau_src + p1f[mv].sum() + p2Rf[mv].sum() + p2Sf[mv].sum()
         makespan = float(np.nanmax(rd))
     else:
         lb = ub = makespan = 0.0
-    return SimResult(es, ed, rs, rd, float(shed[e_ok].sum()), float(shed[r_ok].sum()),
-                     int(r_ok.sum()), makespan, float(lb), float(ub), discipline, mode)
+    sq = (lambda a: a.reshape(n, K)[:, 0]) if K == 1 else (lambda a: a.reshape(n, K))
+    return SimResult(sq(es), sq(ed), sq(rs), sq(rd), float(shedf[e_ok].sum()),
+                     float(shedf[r_ok].sum()), int(r_ok.sum()), makespan, float(lb), float(ub),
+                     realized_load, certified_load, load_cap, discipline, mode)
