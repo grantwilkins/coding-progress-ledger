@@ -116,7 +116,7 @@ verification is per-destination volume conservation.
   concentrates on cheapest-reachable until `θ_admit,ℓ>0`, then spreads; `θ_egress>0` exactly when
   `Σ_ℓ spare_ℓ` exceeds what the uplink can feed.
 
-- [ ] **T14 — Figure 1: θ_egress K-sweep (model validation, no DES — the gate)**
+- [x] **T14 — Figure 1: θ_egress K-sweep (model validation, no DES — the gate)**
   (`plot_multidest_dual.py`)
   Cheap — no DES, no MILP. K-sweep at fixed total shed-demand: as K grows, per-destination
   problems slacken but the shared uplink tightens. Show `θ_egress` (max-shed dual) rising and
