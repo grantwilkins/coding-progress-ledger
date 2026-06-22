@@ -19,17 +19,21 @@ implement; the DES in `simulate.py` (§10.2) replays a solved plan to check it u
 
 ## Job model (`instance.py`)
 
-Each session carries **two numbers**, measured over the hold window in its current state:
+Two numbers per session, both **time-averages over the hold window** in the session's current state — a **compute load** $\ell_j$ (one axis) and a **KV footprint** $m_j$ (the other axis).
 
-$$\ell_j = \underbrace{\frac{f_j}{\rho_{\text{dest}}(T_j)}}_{\ell^{\text{pre}}_j} + \underbrace{\frac{g_j}{G}}_{\ell^{\text{dec}}_j}\ \in[0,1], \qquad m_j = \eta\, T_j$$
+**Compute load.** The node is **colocated** (no prefill/decode disaggregation, `assumptions.md §2`), so prefill and decode *time-share one wall-clock budget*: $\ell^{\text{pre}}_j$ and $\ell^{\text{dec}}_j$ are both **busy-fractions of the same node**, which is why they **add** into one utilization under one ceiling:
 
-- $\ell_j$ — **compute load**, the fraction of one node a job would draw if running (`pop.ell`). Kept split into a prefill and a decode share, because they cost different watts (below).
-  - $f_j$ = expected **prefill** tok/s = turn rate × input tok/turn.
-  - $g_j$ = expected **decode** tok/s = turn rate × output tok/turn (reasoning inflates output via a fatter $Y$).
-  - $\rho_{\text{dest}}(T_j)$ = the **prefill roofline as a function of context length** (`rho_dest`): flat $\approx 63\text{k}$ tok/s below a knee $T^\star\approx 29\text{k}$, then decays $\sim 1/T$ as attention FLOPs dominate. Prefill is normalized by this *$T$-dependent* rate, **not** a constant — the same roofline the rebuild cost pays.
-  - $G$ = the node's sustained **decode** ceiling, a precision-keyed constant (BF16 4600, FP8 9200 tok/s). So $\ell=1$ is the operational knee.
-- $m_j$ — **KV footprint**, bytes of cache the session pins (`pop.m`). $\eta$ = KV bytes/token (188 KiB/tok, exact from the attention config); $T_j$ = context length.
-- **Idle / cold jobs** measure rate $\approx 0$, so $\ell_j\to 0$ automatically (no separate flag): simultaneously cheap to keep *and* cheap to move. Cold sessions sit in the paged tier ($\gamma$) and never carry a nonzero rate.
+$$\ell_j = \underbrace{\frac{f_j}{\rho(T_j)}}_{\text{prefill busy-frac}} + \underbrace{\frac{g_j}{G}}_{\text{decode busy-frac}},\qquad m_j = \eta\, T_j$$
+
+- $f_j$ = prefill tok/s demanded = turn rate × *new* input tok/turn (δ); $g_j$ = decode tok/s = turn rate × output tok/turn ($Y$; reasoning fattens $Y$).
+- $\rho(T_j)$ = the node's **prefill roofline** at context $T_j$ (`rho_dest`, here at the **source** MFU): flat $\approx 63\text{k}$ tok/s below $T^\star\approx 29\text{k}$, decaying $\sim 1/T$ above as attention FLOPs dominate. Prefill is **compute-bound**, so longer context costs throughput. *(Same function, at a destination's MFU, is the rebuild rate $\rho_\ell$ — hence the `dest` in the code name; in the source load it is the source's own rate.)*
+- $G$ = the **decode** ceiling, a precision-keyed constant (BF16 4600, FP8 9200 tok/s). Decode is **memory-bandwidth-bound**, so context taxes its *memory*, not its throughput — the $T$-dependence lands on $m_j$ instead. That asymmetry is deliberate: long context hits **prefill on compute** ($\rho(T)$) and **decode on memory** ($m_j$).
+
+**KV footprint.** $m_j = \eta\,T_j$ is the cache the session pins in HBM ($\eta$ = 188 KiB/tok, exact from the attention config) — the *capacity* axis, independent of whether the session computes.
+
+**How much fits on a node (two knees, one setpoint).** Power saturates at the **power knee** $\ell\approx 0.10$ (the node draws $\approx P_{\text{busy}}$ for any larger $\ell$ — why $s_{\text{plat}}$ is small); latency departs at the **latency knee** $\ell\approx 0.85$ ($\ell=1$ normalization). The autoscaler holds each node at the setpoint $\rho^\star\approx 0.80$ between them. So a node **runs** $\sum_{\text{on node}}\ell_j\le\rho^\star$ — at center $\approx 9$ active-agentic sessions ($\ell\approx 0.087$ each) or $\sim 240$ chat ($\ell\approx 0.003$) — and **holds** up to $S_{\text{node}}\approx 15$ sessions in memory. The binding axis sets the node count (the $N=\max(\cdot,\cdot)$ test below).
+
+**Idle / cold** sessions measure rate $\approx 0$, so $\ell_j\to 0$ automatically (no flag): cheap to keep *and* cheap to move. They still pin $m_j$ (cold at the $\gamma$ discount).
 
 ## Pool & power prices (`power.py`)
 
@@ -37,18 +41,18 @@ $$\ell_j = \underbrace{\frac{f_j}{\rho_{\text{dest}}(T_j)}}_{\ell^{\text{pre}}_j
 
 **Two prices for shed load** — what a removed unit of load is worth in watts:
 
-| symbol | code | watts per node-unit of load | meaning |
-|---|---|---|---|
-| $\bar p$ | `p_bar` | $P_{\text{busy}}/\rho^\star$ | **amortized**: load the autoscaler eventually turns into drained nodes (*expected*) |
+| symbol            | code     | watts per node-unit of load        | meaning                                                                                                       |
+| ----------------- | -------- | ---------------------------------- | ------------------------------------------------------------------------------------------------------------- |
+| $\bar p$          | `p_bar`  | $P_{\text{busy}}/\rho^\star$       | **amortized**: load the autoscaler eventually turns into drained nodes (*expected*)                           |
 | $s_{\text{plat}}$ | `s_plat` | $\bar p\,/\,\text{bracket\_ratio}$ | **plateau slope**: the marginal watts on a node that stays on (*guaranteed*, realized even if no node drains) |
 
 The **bracket** $\bar p/s_{\text{plat}}$ (swept $\sim 3\text{–}5\times$ MoE … $\sim 58\times$ dense 405B) is how much shed value *depends on nodes actually draining* — the central honesty knob of the whole result.
 
-**Two-price split** (the workload is phase-skewed agentic, so prefill and decode watts differ):
+**Two-price split** — a finer *pricing* on the *same* colocated load, **not** a second resource. Capacity stays the one budget above; only the watts-per-unit-ℓ split by phase, because per unit ℓ a decode busy-second carries $\sim 5\times$ a prefill one's energy (memory-bound tokens are individually dear). On phase-skewed agentic traffic that split is worth keeping:
 
 $$\bar p_{\text{pre}} = \frac{2\,\bar p}{1+r},\qquad \bar p_{\text{dec}} = r\,\bar p_{\text{pre}},\qquad r=\frac{\bar p_{\text{dec}}}{\bar p_{\text{pre}}}=5$$
 
-A decode busy-second costs $r=5\times$ a prefill one; the split closes back to the single price, $(\bar p_{\text{pre}}+\bar p_{\text{dec}})/2 = \bar p$.
+It closes back to the single price, $(\bar p_{\text{pre}}+\bar p_{\text{dec}})/2 = \bar p$. The **guaranteed** column stays single-price ($s_{\text{plat}}\cdot\ell_j$): on the plateau, node power is phase-blind, so the split only matters for the node-draining **expected** column.
 
 **Memory / capacity regime.** Per-node held sessions and the marginal price of holding one:
 
