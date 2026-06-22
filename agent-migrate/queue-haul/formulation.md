@@ -48,11 +48,13 @@ $$\ell_j = \underbrace{\frac{f_j}{\rho(T_j)}}_{\text{prefill busy-frac}} + \unde
 
 The **bracket** $\bar p/s_{\text{plat}}$ (swept $\sim 3\text{–}5\times$ MoE … $\sim 58\times$ dense 405B) is how much shed value *depends on nodes actually draining* — the central honesty knob of the whole result.
 
-**Two-price split** — a finer *pricing* on the *same* colocated load, **not** a second resource. Capacity stays the one budget above; only the watts-per-unit-ℓ split by phase, because per unit ℓ a decode busy-second carries $\sim 5\times$ a prefill one's energy (memory-bound tokens are individually dear). On phase-skewed agentic traffic that split is worth keeping:
+**Two-price split (measured per-token energy).** The expected shed is priced *per phase* by the **measured per-token energies** $c_1$ (J per prefill token) and $c_2$ (J per decode token), fit directly as the linear power law $P = c_0 + c_1 f + c_2 g$ in powertrace-sim ($R^2$ 0.83–0.99 across 25 node types):
 
-$$\bar p_{\text{pre}} = \frac{2\,\bar p}{1+r},\qquad \bar p_{\text{dec}} = r\,\bar p_{\text{pre}},\qquad r=\frac{\bar p_{\text{dec}}}{\bar p_{\text{pre}}}=5$$
+$$\Delta P^{\text{exp}} = c_1\, f + c_2\, g,\qquad \frac{c_2}{c_1}\approx 5\text{–}14\ \text{(measured)}$$
 
-It closes back to the single price, $(\bar p_{\text{pre}}+\bar p_{\text{dec}})/2 = \bar p$. The **guaranteed** column stays single-price ($s_{\text{plat}}\cdot\ell_j$): on the plateau, node power is phase-blind, so the split only matters for the node-draining **expected** column.
+**Decode is the power-dense phase** — but by the *average-power* argument, not instantaneous power. Prefill draws higher instantaneous power (compute-bound, 80–90% TDP) yet is *brief*; decode draws less (memory-bound, 40–60% TDP) yet runs for the whole generation, so **per token, and per session, decode integrates to more energy** ($c_2 \gg c_1$). This is the phase-*resolved* refinement of the single amortized price $\bar p$ (its phase-*average*); they differ precisely because $c_2/c_1 \ne \rho/G$. The **guaranteed** floor stays single-price ($s_{\text{plat}}\cdot\ell$): at the plateau the marginal is phase-blind, so the split only refines the node-draining expected column.
+
+**Empirical grounding (powertrace-sim — measured A100/H100 vLLM traces, [Wilkins et al. 2026](https://arxiv.org/abs/2603.18383)).** The ramp-then-plateau holds: a saturating node fit scores $R^2$ 0.91–0.99 vs 0.25 for a linear fit on dense 70B+, knee at $\ell\approx 0.09$ (dense; later, $\ell\approx 0.3$–$0.6$, for MoE). The bracket ratio $\bar p/s_{\text{plat}}$ is *read off the same traces* — **58× (405B), 30× (70B-A100), 17× (70B-H100), ~5× (MoE)** — and $c_1,c_2$ above are the fitted coefficients.
 
 **Memory / capacity regime.** Per-node held sessions and the marginal price of holding one:
 
@@ -68,9 +70,9 @@ Load sets node count $N$ when busy; held sessions set it when idle.
 
 **Watts freed by shedding job $j$** — three columns the solver reads:
 
-$$\Delta P_j^{\text{guar}} = s_{\text{plat}}\,\ell_j,\qquad \Delta P_j^{\text{exp}} = \bar p_{\text{pre}}\,\ell^{\text{pre}}_j + \bar p_{\text{dec}}\,\ell^{\text{dec}}_j,\qquad \Delta P_j^{\text{mem}} = \mu\,\frac{T_j}{E[T]}$$
+$$\Delta P_j^{\text{guar}} = s_{\text{plat}}\,\ell_j,\qquad \Delta P_j^{\text{exp}} = c_1\,f_j + c_2\,g_j,\qquad \Delta P_j^{\text{mem}} = \mu\,\frac{T_j}{E[T]}$$
 
-Low end **guaranteed**, high end **expected** (autoscaler drains within the hold); both additive over a shed set. The two-price $\Delta P^{\text{exp}}$ deviates from the single-price $\bar p\cdot\ell_j$ *by phase skew* — below it for prefill-skewed jobs, above for decode-skewed (reasoning, chat), equal only when balanced. In the **memory** regime, $m_j$ is normalized to session-equivalents ($T_j/E[T]$) so $\mu$ stays W/session; a job at $E[T]$ sheds exactly $\mu$, a $2\times$ context job sheds $2\mu$.
+Low end **guaranteed** (plateau, realized even if no node drains), high end **expected** (autoscaler drains within the hold). $\Delta P^{\text{exp}}$ uses the measured per-token energies directly, so a job's shed value tilts toward whichever phase it is skewed to: since $c_2\gg c_1$, **decode-heavy jobs (chat, reasoning) free the most watts**, prefill-heavy (agentic) the least. In the **memory** regime, $m_j$ is normalized to session-equivalents ($T_j/E[T]$) so $\mu$ stays W/session; a job at $E[T]$ sheds exactly $\mu$, a $2\times$ context job sheds $2\mu$.
 
 **Downtime of each move** (seconds = *ship* + *rebuild* × destination queue congestion):
 
@@ -103,7 +105,7 @@ subject to:
 
 $\tau_*$ are one-time ramps (egress connection setup, prefill batch-form, ingest pipeline-fill). Drop the single **egress** row and the program separates into $K$ independent single-destination dispatches — it is a **transportation LP with one global uplink knapsack**.
 
-**Certify low, report high (`bind_dp`).** The $\ge S^\star$ floor binds against the **guaranteed** column — $s_{\text{plat}}\,\ell_j$ in the load regime, $\mu\,T_j/E[T]$ in the memory regime — *never* the optimistic $\Delta P^{\text{exp}}$, or we'd promise the grid watts contingent on the autoscaler draining. The expected shed $\sum y\,\Delta P^{\text{exp}}$ ($\bar p$ prices) rides along on the plan as reported upside, not a commitment.
+**Certify low, report high (`bind_dp`).** The $\ge S^\star$ floor binds against the **guaranteed** column — $s_{\text{plat}}\,\ell_j$ in the load regime, $\mu\,T_j/E[T]$ in the memory regime — *never* the optimistic $\Delta P^{\text{exp}}$, or we'd promise the grid watts contingent on the autoscaler draining. The expected shed $\sum y\,\Delta P^{\text{exp}}$ (the $c_1 f + c_2 g$ energy prices) rides along on the plan as reported upside, not a commitment.
 
 **Two solves, not a branch.** Primary = min-downtime above. If infeasible, **re-solve** maximizing $\sum y\,\Delta P^{\text{bind}}$ (drop the $\ge S^\star$ row) and report $\text{shortfall} = S^\star - \text{shed}$. Solved both as a fractional **LP** ($y\in[0,1]$, the achievable target) and an integer **MILP** ($y\in\{0,1\}$, granularity cost); HiGHS via CVXPY.
 
