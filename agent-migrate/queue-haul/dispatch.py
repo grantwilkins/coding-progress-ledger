@@ -7,7 +7,7 @@ and a transfer var y_S with y_R+y_S≤1 — so the action choice needs no separa
 indicator. The same program is solved as a fractional LP (y∈[0,1]) and an integer
 MILP (y∈{0,1}); the gap is the granularity cost. Two solves, not a branch: if the
 primary is infeasible, a second solve maximizes shed and reports the shortfall.
-A resource-blind greedy (sort by cost per watt) is the T5 baseline.
+A budget-respecting greedy (sort by cost per watt) is the T5 baseline.
 """
 
 from __future__ import annotations
@@ -290,18 +290,17 @@ def _first_fit(pop, pool, imp, s_star, event, move, order, prefer, method) -> Pl
     for j in order:
         if cum >= s_star:
             break
-        for a in (
-            prefer[j],
-            "RS"[prefer[j] == "R"],
-        ):  # try preferred action, then fall back
+        acts = (prefer[j], "RS"[prefer[j] == "R"])
+        fs = []
+        for a in acts:
             fit = min([budget[r] / col[j] for r, col in draw[a] if col[j] > 0] + [1.0])
-            f = min(1.0, fit, (s_star - cum) / dp[j])
-            if f > 1e-12:
-                for r, col in draw[a]:
-                    budget[r] -= f * col[j]
-                (yR if a == "R" else yS)[j] = f
-                cum += f * dp[j]
-                break
+            fs.append(min(1.0, fit, (s_star - cum) / dp[j]))
+        a, f = (acts[1], fs[1]) if fs[1] > fs[0] else (acts[0], fs[0])
+        if f > 1e-12:
+            for r, col in draw[a]:
+                budget[r] -= f * col[j]
+            (yR if a == "R" else yS)[j] = f
+            cum += f * dp[j]
     return _plan(
         np.concatenate([yR, yS]),
         n,

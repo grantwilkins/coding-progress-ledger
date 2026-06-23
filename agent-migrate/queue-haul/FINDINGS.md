@@ -73,11 +73,12 @@ infeasibility it re-solves to max-shed and reports the shortfall. `bind_dp` comm
 ### T5 — random vs greedy vs LP (`outputs/dispatch_validation.png`)
 
 Three policies under the same movement budgets, isolated by active, cache-resident session
-class. Random under-fills every class. Greedy matches LP for ordinary chat, long chat/code,
-and reasoning chat under this budget, because the sorted first-fit order is already enough.
-Agentic tool loops are the class where coordination matters: **random / greedy / LP ceilings
-= 13.8 / 15.6 / 19.8 kW** on a 74-job memory-bound pool. The gap is not forced into every
-class; it appears where large, heterogeneous agentic sessions make action repacking useful.
+class. With budget-respecting fallback, the class-isolated **ceiling** gaps disappear:
+greedy and LP both reach the full class ceiling (**15.3, 15.3, 14.8, 19.8 kW** for
+ordinary chat, long chat/code, reasoning chat, and agentic tool loops). This plot is now
+mostly a sanity check. The earlier large agentic gap came from a baseline bug: greedy
+accepted a partial KV transfer instead of falling back to replay, even when replay could
+move the whole job.
 
 ### T6 — certify low, report high (`outputs/certify_report_validation.png`)
 
@@ -104,13 +105,14 @@ score). **Two-part result: selection is robust, absolute shed is sensitive.**
 
 ### Companion — deadline sweep by class (`outputs/deadline_sweep.png`)
 
-The deadline changes the coordination story mainly for agentic tool loops. Ordinary chat,
-long chat/code, and reasoning chat reach their full shed ceilings quickly because replay is
-cheap enough to move the whole active population: **15.3 kW by ~10 s**, **15.3 kW by ~13 s**,
-and **14.8 kW by ~13 s** respectively, with greedy and LP effectively identical. Agentic tool
-loops ramp more slowly and expose the shared-resource mistake: LP reaches **19.8 kW by ~60 s**,
-while greedy is lower over the middle and long-deadline range, with a max gap of **8.1 kW** at
-~60 s. Below the ~5 s migration startup floor, no move completes and the reduction is zero.
+The deadline changes the coordination story mainly for agentic tool loops. Ordinary chat and
+long chat/code reach their full shed ceilings quickly because replay is cheap enough to move
+the whole active population: **15.3 kW by ~10 s** and **15.3 kW by ~13 s**, with no meaningful
+greedy/LP gap. Reasoning chat reaches **14.8 kW by ~13 s** with only a tiny gap
+(LP-greedy **0.2 kW**, MILP-greedy **0.1 kW**). Agentic tool loops ramp more slowly:
+LP reaches **19.8 kW by ~60 s**, with a mid-deadline max LP-greedy gap of **1.7 kW**
+at **24.2 s** and a deployable MILP-greedy gap of **1.2 kW**. Below the ~5 s migration
+startup floor, no move completes and the reduction is zero.
 
 ### T8 — load vs memory regime (`outputs/regime_boundary.png`)
 
@@ -178,9 +180,9 @@ and both walks bracket `R=1` with the measured regime flipping exactly at the `N
   (`30× bracket` in the current single-price proxy) but only the `s_plat` floor is guaranteed
   (T6 left). Memory-bound: the saving *is* the freed memory; the load bracket does not transfer
   (T6 right).
-- **Coordination shows up where shared resources bite.** In the class-isolated dispatch plot,
-  greedy matches LP for ordinary chat, long chat/code, and reasoning under the chosen budget;
-  agentic loops show the gap, with greedy at **15.6 kW** and LP at **19.8 kW**.
+- **Coordination shows up only at tight shared-resource boundaries.** In the class-isolated
+  ceiling plot, greedy now matches LP for all four classes. In the deadline companion, agentic
+  loops retain a smaller mid-deadline gap: **1.2 kW** for MILP-greedy and **1.7 kW** for LP-greedy.
 - **The deadline binds only for big-KV moves** (T8/memory regime); cheap short-context moves are
   capacity-bound, not time-bound (deadline companion).
 - **Crossing `R=1` reorders the dispatch onto a different job set** in this synthetic draw,

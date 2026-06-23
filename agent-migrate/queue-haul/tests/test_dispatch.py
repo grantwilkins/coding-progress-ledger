@@ -9,6 +9,7 @@ Plausible wrong implementations:
 - Check only aggregate load, compare against 1.0, or silently clamp an oversized job.
 - Treat an unreachable tight-deadline target as a hard solver failure instead of
   returning the legal max-shed plan.
+- Accept a partial preferred move even when the fallback move fits the whole job.
 """
 
 import sys
@@ -21,8 +22,8 @@ import pytest
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from dispatch import Event, Plan, bind_dp, greedy, random_dispatch, solve
-from impact import Movement, compute
-from instance import Workload, _mean_T, class_workload, generate
+from impact import Impact, Movement, compute
+from instance import JobPopulation, Workload, _mean_T, class_workload, generate
 from power import PoolPower, rho_replay
 
 POOL = PoolPower()
@@ -128,7 +129,7 @@ def test_greedy_equals_lp_off_boundary():
 def test_greedy_respects_movement_budgets():
     # The decentralized greedy draws down the SHARED budgets as it accepts jobs, so
     # its plan must satisfy every movement constraint — it can never ship more than
-    # the links carry (the bug this fixes: a resource-blind greedy shipped >link).
+    # the links carry.
     pop, imp = _pop(n_nodes=8)
     event, move = Event(dest_nodes=8, W=4), Movement()
     plan = greedy(pop, POOL, imp, 0.30e6, event, move)  # S* beyond reach ⇒ budgets bind
@@ -136,9 +137,40 @@ def test_greedy_respects_movement_budgets():
     assert min(_violations(plan, pop, imp, event, move)) >= -1e-6  # but never over-subscribed
 
 
+def test_greedy_falls_back_from_partial_preferred_action():
+    pop = JobPopulation(
+        np.array(["agentic", "agentic"]),
+        np.array(["agentic_tool_loop", "agentic_tool_loop"]),
+        np.array(["active", "active"]),
+        np.array([False, False]),
+        np.array([1.0, 1.0]),
+        np.zeros(2),
+        np.zeros(2),
+        np.zeros(2),
+        np.zeros(2),
+        np.zeros(2),
+        np.array([True, True]),
+        np.array([0.01, 0.01]),
+        np.zeros(2),
+        np.ones(2),
+        "bf16",
+        0.35,
+    )
+    imp = Impact(
+        np.ones(2), np.ones(2), np.ones(2), np.ones(2),
+        np.full(2, 2.0), np.ones(2), np.ones(2), np.full(2, 100.0), "load"
+    )
+    event = Event(D=12, W=100, dest_nodes=1000, spare_frac=1.0)
+    move = replace(Movement(), lambda_src=0.2)
+    g = greedy(pop, POOL, imp, 3.0, event, move)
+    mi = solve(pop, POOL, imp, 3.0, event, move, integer=True)
+    assert np.array_equal(g.y_R, np.ones(2))
+    assert np.array_equal(g.y_S, np.zeros(2))
+    assert g.shed_guaranteed == pytest.approx(mi.shed_guaranteed)
+
+
 def test_greedy_ceiling_at_most_lp_ceiling():
-    # Coordination value: the LP repacks to fit more shed under the same budgets, so
-    # the myopic greedy can never out-shed it.
+    # LP max-shed is an upper bound on any budget-respecting first-fit policy.
     pop, imp = _pop(n_nodes=8)
     event, move = Event(dest_nodes=8, W=4), Movement()
     g = greedy(pop, POOL, imp, 1e12, event, move)

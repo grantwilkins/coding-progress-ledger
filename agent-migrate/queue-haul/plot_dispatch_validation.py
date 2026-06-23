@@ -2,8 +2,8 @@
 
 Each panel isolates one active, cache-resident session class. The policies see
 the same movement budgets: random, decentralized greedy, and coordinated LP.
-Ceilings separate because selection and action repacking fit different amounts
-of shed under the same shared link.
+The plot is a sanity check: after fallback accounting, ceiling gaps should only
+appear when shared-resource packing, not a partial-action artifact, limits greedy.
 """
 
 import os
