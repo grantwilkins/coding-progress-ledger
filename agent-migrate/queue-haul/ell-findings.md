@@ -153,18 +153,19 @@ If no Qwen trace exists yet:
 ## Code status
 
 The code now stores raw prefill and decode token rates, enforces the per-job
-`ell <= rho_star` cap in the solver, and reports the single-price future-impact
-proxy `p_bar * ell`. Token-energy work power is still a TODO because it needs
-calibrated coefficients for the model, hardware, precision, and serving stack.
+`ell <= rho_star` cap in the solver, and reports future impact as
+`base_w_per_load * ell + c_prefill * f + c_decode * g`. The default token-energy
+coefficients are H100 dense analogs and should be swept or refit for the target
+serving stack.
 
 Needed code changes:
 
 | file | change |
 |---|---|
-| `power.py` | replace `phase_ratio`, `p_pre`, and `p_dec` with measured token-energy fields and a calibrated base-load field |
+| `power.py` | done: measured token-energy fields plus a base-load field |
 | `instance.py` | done: stores raw `f` and `g` alongside `ell_pre` and `ell_dec` |
-| `impact.py` | compute `average_work` from `f` and `g`; compute `future_impact` as base-load plus work |
-| tests | assert that `ell` controls capacity while token energies control average work power |
+| `impact.py` | done: computes `future_impact` as base-load plus token work |
+| tests | done: assert that `ell` controls capacity while token energies control average work power |
 
 The paper-facing wording should be:
 

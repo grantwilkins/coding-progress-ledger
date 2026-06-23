@@ -76,17 +76,16 @@ at 0.8× the TDP ceiling, not the ceiling itself.
 | **p̄ = P_busy/ρ\*** | ≈ 10,500 W/node-unit | derived | amortized price (at center) |
 | **Bracket ratio p̄/s_plat** | **30×** (center); sweep [17, 58] | sweep | dense-70B-to-405B band (235B sits in it) |
 | **s_plat = p̄/ratio** | ≈ 350 W/node-unit | derived | fixed-node plateau slope (the guaranteed price) |
-| Token-energy c1/c2 (per token) | 0.10 center; sweep [0.04, 0.19] | sweep | calibrated trace average; prefill is cheaper per token, but the ratio is not fixed over time |
-| Work-power reporting | single-price proxy now; token-energy TODO | implementation | code stores raw `f_j,g_j`, but reports `p̄·ℓ_j` until token-energy coefficients are calibrated |
+| Token-energy c1, c2 | prefill 0.148 J/tok, decode 1.76 J/tok | sweep | H100 dense analog; calibrated trace averages, not constants of nature |
+| Work-power reporting | `P_idle/ρ* · ℓ_j + c1·f_j + c2·g_j` | implementation | `p̄·ℓ_j` is kept only as the single-price comparison column |
 | **G (decode tok/s ceiling)** | **BF16 4,600 / FP8 9,200** | sweep | the `ℓ_dec = g/G` normalizer, precision-keyed: Baseten 4×H100-FP8 ~4,600 tok/s anchor scaled to the 8×H100 node |
 | **F (prefill normalizer)** | **per-job `ρ_dest(T_j)`** | derived-fn | `ℓ_pre,j = f_j/ρ_dest(T_j)` uses the §6 roofline at each job's own context — **not a constant** (retires the median-vs-mean choice for E[T]) |
 
-**Token-energy coefficients:** if raw token rates are available, work power is
-`c1·f_j + c2·g_j`. These coefficients are calibrated averages for a measured
-model, hardware, precision, serving stack, batching policy, and workload mix;
-refit or sweep them when those change. The code stores raw `f_j,g_j`, but until
-those coefficients are calibrated it reports the single-price future-impact
-proxy `ΔP_j = p̄·ℓ_j`.
+**Token-energy coefficients:** work power is `c1·f_j + c2·g_j`. These
+coefficients are calibrated averages for a measured model, hardware, precision,
+serving stack, batching policy, and workload mix; refit or sweep them when those
+change. Future impact is the static node share plus token work:
+`ΔP_j = P_idle/ρ* · ℓ_j + c1·f_j + c2·g_j`.
 
 ---
 
@@ -227,7 +226,7 @@ constant F (prefill load normalized per-job by ρ_dest(T_j)).
 
 **Primary results to produce** (each a sweep over one axis with the rest at center):
 1. **Shed vs. S\*** — does dispatch hit the target; where does it become infeasible (vs. D), for BF16 and FP8.
-2. **Certify-vs-expect gap** — guaranteed (s_plat) vs. amortized (p̄) shed, vs. bracket ratio.
+2. **Certify-vs-expect gap** — guaranteed (`s_plat`) vs. base-load-plus-token-work shed, with the old `p̄` bracket as reference.
 3. **Ranking invariance** — job order vs. {ρ*, MFU, γ} (should be flat); feasibility margin vs. same (should move).
 4. **Greedy vs. LP** — bang-per-buck sort vs. the LP; agreement except at constraint boundaries.
 5. **Class mix** — class-isolated and mixed-population sweeps showing when ordinary chat, long chat/code, reasoning, or agentic loops set the bottleneck.

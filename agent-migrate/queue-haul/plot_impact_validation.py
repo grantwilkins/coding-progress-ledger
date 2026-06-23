@@ -2,9 +2,9 @@
 
 Left: replay rebuild cost vs context T. Full replay uses the average rate ρ_dest(T/2),
 so the cost is near-flat-rate for short jobs then steepens away from a constant-F line.
-Center: the code currently reports the single-price future proxy p̄·ℓ for every class;
-raw f/g are stored, but token-energy work power is not calibrated yet. Right: the
-memory-regime score μ·T/E[T] spreads widely around μ because context is tail-heavy.
+Center: future impact is static base load plus measured token work, with the old
+single-price p̄·ℓ kept as a comparison. Right: the memory-regime score μ·T/E[T]
+spreads widely around μ because context is tail-heavy.
 """
 
 import os
@@ -83,14 +83,16 @@ classes = [
     ("agentic loop", "agentic_tool_loop", "tab:red"),
 ]
 
-# --- Panel B: current future-impact proxy by class ---
+# --- Panel B: token-energy future impact by class ---
 proxy_max = 0.0
+future_max = 0.0
 for name, cls, color in classes:
     wl = class_workload(cls, state_mix=(1.0, 0.0, 0.0))
     pool = replace(POOL, mean_context_tokens=_mean_T(wl))
     pop = _draw(np.random.default_rng(0), 3000, wl, "bf16")
     imp_pop = compute(pop, pool)
     proxy_max = max(proxy_max, imp_pop.dp_expected_single.max())
+    future_max = max(future_max, imp_pop.dp_expected.max())
     axB.scatter(
         imp_pop.dp_expected_single,
         imp_pop.dp_expected,
@@ -99,14 +101,14 @@ for name, cls, color in classes:
         color=color,
         label=name,
     )
-lim = [0, max(proxy_max, 1)]
-axB.plot(lim, lim, "k-", lw=1, label="future proxy = p̄·ℓ")
+lim = [0, max(proxy_max, future_max, 1)]
+axB.plot(lim, lim, "k-", lw=1, label="single-price equality")
 axB.set(
     xlabel="single-price $\\bar p\\,\\ell_j$ (W)",
-    ylabel="reported future impact (W)",
+    ylabel="base load + token work (W)",
     xlim=lim,
     ylim=lim,
-    title="Current code reports the load-based future proxy",
+    title="Future impact separates capacity and work",
 )
 axB.legend(loc="upper left", fontsize=8)
 
@@ -137,7 +139,7 @@ print(
     f"regime={imp_pop.regime}  μ={POOL.mu:.0f} W  φ_pre={congestion(MOVE.dest_prefill_util):.2f}  "
     f"φ_in={congestion(MOVE.dest_ingest_util):.2f}"
 )
-print("future proxy: dp_expected == p_bar * ell for every class; raw f/g are stored for later calibration")
+print("future impact: dp_expected = P_idle/rho*·ell + c_prefill·f + c_decode·g")
 print(
     f"load↔memory Spearman (active) = {rho:+.3f}  memory-score CoV = {dm[act].std()/dm[act].mean():.2f}"
 )

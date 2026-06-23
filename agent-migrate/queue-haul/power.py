@@ -47,11 +47,12 @@ class PoolPower:
     gamma: float = 0.5  # §4 center, paged-out uplift
     cap_gb: float = CAP_BF16_GB  # §4, KV bytes/node after weights
     mean_context_tokens: float = 65800.0  # §1 center E[T]
-    phase_ratio: float = 5.0  # §2, p̄_dec/p̄_pre per busy-second
+    c_prefill_j_per_tok: float = 0.148  # measured H100 dense analog, J/token
+    c_decode_j_per_tok: float = 1.76  # measured H100 dense analog, J/token
 
     @property
     def p_bar(self) -> float:
-        """Amortized price, W per node-unit of load."""
+        """Single-price comparison, W per node-unit of load."""
         return self.p_busy_w / self.rho_star
 
     @property
@@ -60,13 +61,9 @@ class PoolPower:
         return self.p_bar / self.bracket_ratio
 
     @property
-    def p_pre(self) -> float:
-        """Prefill price; equal-phase closure (p_pre + p_dec)/2 = p_bar."""
-        return 2 * self.p_bar / (1 + self.phase_ratio)
-
-    @property
-    def p_dec(self) -> float:
-        return self.phase_ratio * self.p_pre
+    def base_w_per_load(self) -> float:
+        """Static node power, W per node-unit of load."""
+        return self.p_idle_w / self.rho_star
 
     @property
     def m_bar(self) -> float:

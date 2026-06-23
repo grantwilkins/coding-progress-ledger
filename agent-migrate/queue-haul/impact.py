@@ -31,8 +31,8 @@ class Impact:
     """Columnar; parallel arrays in pop order, plus the pool-level regime flag."""
 
     dp_guaranteed: np.ndarray  # s_plat·ℓ_j (guaranteed, single-price)
-    dp_expected: np.ndarray  # p̄·ℓ_j future-node proxy until token-energy work power is calibrated
-    dp_expected_single: np.ndarray  # same single-price load proxy kept for comparisons
+    dp_expected: np.ndarray  # base·ℓ_j + c_pre·f_j + c_dec·g_j future-node estimate
+    dp_expected_single: np.ndarray  # p̄·ℓ_j single-price comparison
     dp_memory: np.ndarray  # μ·T_j/E[T] (memory regime, watts)
     c_replay: np.ndarray  # c_j(R), seconds
     c_transfer: np.ndarray  # c_j(S), seconds
@@ -49,10 +49,11 @@ def compute(pop: JobPopulation, pool: PoolPower, move: Movement = Movement()) ->
     phi_in = congestion(move.dest_ingest_util)  # transfer queues against destination ingest
     rho = rho_replay(pop.T, pop.mfu)
     eta_T = ETA_BYTES_PER_TOK * pop.T
+    work_power = pool.c_prefill_j_per_tok * pop.f + pool.c_decode_j_per_tok * pop.g
 
     return Impact(
         dp_guaranteed=pool.s_plat * ell,
-        dp_expected=pool.p_bar * ell,
+        dp_expected=pool.base_w_per_load * ell + work_power,
         dp_expected_single=pool.p_bar * ell,
         dp_memory=pool.mu * cold_discount * pop.T / pool.mean_context_tokens,
         c_replay=active * (BETA_BYTES_PER_TOK * pop.T / move.lambda_src + (1 + phi_pre) * pop.T / rho),

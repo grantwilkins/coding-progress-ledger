@@ -5,13 +5,12 @@ the *guaranteed* floor (realized even if no node ever shuts off) and the *expect
 upside (realized once removed load lets idle nodes shut off). Two pools, plain English
 on every axis — no bare symbols.
 
-Left (compute-bound pool): the guaranteed floor is a small fraction of the current
-single-price expected proxy. The gap is exactly the bracket ratio (30×). There is no
-extra prefill/decode power adjustment in this plot; token-energy work power is not calibrated yet.
+Left (compute-bound pool): the guaranteed floor is a small fraction of the expected
+future impact. The dashed line keeps the old single-price bracket as a reference.
 
 Right (memory-bound pool, mirror image): the bottleneck is KV cache, so the certified
-price is the memory price (power freed by draining a full node). The load-only future
-proxy is not the certificate in this regime; the 30× load bracket does not transfer.
+price is the memory price (power freed by draining a full node). The future estimate is
+not the certificate in this regime; the 30× load bracket does not transfer.
 """
 
 import os
@@ -33,7 +32,7 @@ from power import PoolPower
 SLACK_E = Event(D=1e9, W=10**7, dest_nodes=10**7)
 SLACK_M = replace(Movement(), lambda_src=1e18, mu_in=1e18)
 kW = 1e3
-BR = PoolPower().bracket_ratio  # single-price bracket p̄/s_plat = 30×
+BR = PoolPower().bracket_ratio  # old single-price bracket p̄/s_plat = 30×
 
 
 def build(pool, wl, n_nodes, regime):
@@ -66,8 +65,8 @@ g, e, x = (np.array([p.shed_guaranteed for p in pl]) / kW,
 axL.fill_between(x, g, e, color="tab:blue", alpha=0.10)
 axL.plot(x, g, color="tab:blue", lw=2.4, label="power freed while nodes keep running (guaranteed)")
 axL.plot(x, e, color="tab:red", lw=2.4, label="power freed once idle nodes shut off (expected)")
-axL.plot(x, BR * g, color="0.4", lw=1.3, ls="--", label=f"single-price bracket ({BR:.0f}×)")
-axL.annotate(f"expected ≈ {rl.mean():.0f}× guaranteed\n(single-price bracket only)",
+axL.plot(x, BR * g, color="0.4", lw=1.3, ls="--", label=f"old single-price bracket ({BR:.0f}×)")
+axL.annotate(f"expected ≈ {rl.mean():.1f}× guaranteed\n(base load + token work)",
              xy=(0.50, 0.62), xycoords="axes fraction", fontsize=9, ha="center", color="0.2")
 axL.set(xlabel="requested power cut (kW)", ylabel="power freed (kW)")
 axL.set_title("Compute-bound pool: certified floor far below expected power freed", fontsize=10)
@@ -78,8 +77,8 @@ gm, em, xm = (np.array([p.shed_guaranteed for p in pm]) / kW,
               np.array([p.shed_expected for p in pm]) / kW, Sm / kW)
 axM.fill_between(xm, np.minimum(gm, em), np.maximum(gm, em), color="tab:gray", alpha=0.15)
 axM.plot(xm, gm, color="tab:blue", lw=2.4, label="power freed by draining full nodes (guaranteed)")
-axM.plot(xm, em, color="tab:red", lw=2.4, label="load-only future proxy (not the memory floor)")
-axM.annotate(f"30× load bracket does not transfer\nload proxy = {rm.min():.1f}–{rm.max():.1f}× memory floor",
+axM.plot(xm, em, color="tab:red", lw=2.4, label="future estimate (not the memory floor)")
+axM.annotate(f"30× load bracket does not transfer\nfuture estimate = {rm.min():.1f}–{rm.max():.1f}× memory floor",
              xy=(0.50, 0.40), xycoords="axes fraction", fontsize=9, ha="center", color="0.2")
 axM.set(xlabel="requested power cut (kW)", ylabel="power freed (kW)")
 axM.set_title("Memory-bound pool: memory floor is the certificate", fontsize=10)
@@ -91,7 +90,7 @@ for ext in ("pdf", "png"):
     fig.savefig(f"outputs/certify_report_validation.{ext}", dpi=150)
 
 contain = all(p.shed_expected >= p.shed_guaranteed - 1e-6 for p in pl if p.feasible)
-print(f"LOAD  pool: single-price gap = {BR:.0f}× (bracket ratio); "
+print(f"LOAD  pool: old single-price gap = {BR:.0f}× (bracket ratio); "
       f"expected/guaranteed = {rl.mean():.1f}×")
 print(f"MEM   pool: expected/guaranteed = {rm.mean():.1f}× "
       f"(range {rm.min():.1f}–{rm.max():.1f}); 30× bracket does NOT transfer")

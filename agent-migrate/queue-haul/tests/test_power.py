@@ -16,9 +16,10 @@ def test_center_prices():
     p = PoolPower()
     assert p.p_bar == pytest.approx(10500.0)
     assert p.s_plat == pytest.approx(350.0)
-    assert p.p_pre == pytest.approx(3500.0)
-    assert p.p_dec == pytest.approx(17500.0)
-    assert (p.p_pre + p.p_dec) / 2 == pytest.approx(p.p_bar)
+    assert p.base_w_per_load == pytest.approx(4000.0)
+    assert p.c_prefill_j_per_tok == pytest.approx(0.148)
+    assert p.c_decode_j_per_tok == pytest.approx(1.76)
+    assert p.c_decode_j_per_tok > 5 * p.c_prefill_j_per_tok
 
 
 def test_memory_price_by_precision():

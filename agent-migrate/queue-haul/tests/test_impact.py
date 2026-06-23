@@ -1,11 +1,13 @@
 """Claim:
 Impact uses the right accounting level: replay is full-context average prefill,
-cold memory is discounted, inactive moves use resources but carry no user downtime.
+cold memory is discounted, inactive moves use resources but carry no user downtime,
+and future power separates base load from token work.
 
 Plausible wrong implementations:
 - Charge full replay at the final-context marginal prefill rate.
 - Give cold sessions the same memory value as resident sessions.
 - Count idle/cold migration resource time as user-visible downtime.
+- Use normalized ell_pre/ell_dec as token rates, or omit one token-work phase.
 """
 
 import sys
@@ -76,11 +78,14 @@ def test_rebuild_flat_then_one_over_rho():
     assert pt[2] > 2 * pt[0]  # not constant: 100k far above 10k
 
 
-def test_expected_is_single_price_future_proxy():
-    pop = _pop([1e4, 5e4], ell_pre=np.array([0.2, 0.0]), ell_dec=np.array([0.0, 0.3]))
-    imp = compute(pop, PoolPower())
-    assert np.allclose(imp.dp_expected, PoolPower().p_bar * pop.ell)
-    assert np.array_equal(imp.dp_expected, imp.dp_expected_single)
+def test_expected_separates_base_load_and_token_work():
+    pop = _pop([1e4, 1e4], ell_pre=np.array([0.2, 0.0]), ell_dec=np.array([0.0, 0.2]))
+    pool = replace(PoolPower(), c_prefill_j_per_tok=2.0, c_decode_j_per_tok=3.0)
+    imp = compute(pop, pool)
+    expected = pool.base_w_per_load * pop.ell + 2.0 * pop.f + 3.0 * pop.g
+    assert np.allclose(imp.dp_expected, expected)
+    assert imp.dp_expected[0] != pytest.approx(imp.dp_expected[1])
+    assert np.allclose(imp.dp_expected_single, pool.p_bar * pop.ell)
 
 
 def test_memory_score():

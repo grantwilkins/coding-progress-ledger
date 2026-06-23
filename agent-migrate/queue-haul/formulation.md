@@ -57,9 +57,11 @@ $$P_j^{\text{work}} = c_1\, f_j + c_2\, g_j,\qquad \frac{c_2}{c_1}\approx 5\text
 
 The token-energy coefficients are calibrated averages, not fixed facts over time. They should be refit or swept when the model, hardware, precision, serving stack, batching policy, context mix, or traffic mix changes.
 
-The job's **future node-power impact** also includes the share of node base power attached to the node time it occupies. The code now stores raw $f,g$, but it does not yet have calibrated token-energy coefficients for this model/hardware stack, so it reports the single-price load proxy:
+The job's **future node-power impact** also includes the share of static node power attached to the node time it occupies:
 
-$$\Delta P_j^{\text{future}} = \bar p\,\ell_j$$
+$$\Delta P_j^{\text{future}} = \frac{P_{\text{idle}}}{\rho^\star}\ell_j + c_1 f_j + c_2 g_j$$
+
+The old single-price proxy $\bar p\ell_j$ is kept only as a comparison column.
 
 Decode is higher-energy per token, not higher instant power. Prefill can draw higher instant power for a short burst; decode draws lower power for longer.
 
@@ -79,7 +81,7 @@ Load sets node count $N$ when busy; held sessions set it when idle.
 
 **Watts freed by shedding job $j$** — three columns the solver reads:
 
-$$\Delta P_j^{\text{guar}} = s_{\text{plat}}\,\ell_j,\qquad \Delta P_j^{\text{future}} = \bar p\,\ell_j,\qquad \Delta P_j^{\text{mem}} = \mu\,w_j\,\frac{T_j}{E[T]}$$
+$$\Delta P_j^{\text{guar}} = s_{\text{plat}}\,\ell_j,\qquad \Delta P_j^{\text{future}} = \frac{P_{\text{idle}}}{\rho^\star}\ell_j + c_1 f_j + c_2 g_j,\qquad \Delta P_j^{\text{mem}} = \mu\,w_j\,\frac{T_j}{E[T]}$$
 
 Low end **guaranteed** (plateau, realized even if no node drains), high end **future** (autoscaler drains within the hold). In the **memory** regime, $m_j$ is normalized to session-equivalents ($T_j/E[T]$), with $w_j=1/(1+\gamma)$ for cold sessions and $w_j=1$ otherwise.
 

@@ -52,9 +52,8 @@ tokens, FP8 ≈ 35k), not something packed into the setup.
 - **A — replay cost is not constant-rate.** `ρ_dest(T)` is a function (flat ≈63k tok/s below
   `T*≈29k`, decaying `~1/T` above), so rebuild cost is near-flat for short jobs then steepens,
   diverging from the constant-F line a fixed prefill rate would predict.
-- **B — current future-impact reporting is single-price.** The code reports `p̄·ℓ` for every
-  class. Raw `f,g` are stored, but token-energy work power is not calibrated yet, so the
-  figure intentionally shows all classes on the single-price diagonal.
+- **B — future-impact reporting separates base load from token work.** The code reports
+  `P_idle/ρ*·ℓ + c1·f + c2·g`, with `p̄·ℓ` retained only as the single-price comparison.
 - **C — the memory score spreads widely** around `μ=208 W` (CoV **1.35**, tail-heavy context).
   The annotated load↔memory rank Spearman is measured from the synthetic draw; it is not assumed.
 
@@ -101,13 +100,11 @@ sweep. It shows two different stories:
 Read two prices off each plan: the guaranteed floor vs the expected upside (once removed load
 lets nodes shut off). Budgets slack to isolate the price story.
 
-- **Compute-bound pool:** the certified floor is a small slice of the current single-price
-  future proxy. The gap is exactly the **30× bracket**. Certifying against the floor never
-  over-promises.
-- **Memory-bound pool:** the certificate is the memory floor. The load-only future proxy is not
-  the certificate here: it is **0.0–0.9×** the memory floor on this fixture, so the 30× load
-  bracket **does not transfer**.
-- **Containment holds:** every `S*` certified feasible under `s_plat` is met under `p̄` (PASS).
+- **Compute-bound pool:** the certified floor is a small slice of the future-impact estimate.
+  The old **30× bracket** remains a single-price reference, not the token-energy estimate.
+- **Memory-bound pool:** the certificate is the memory floor. The load/token future estimate is
+  not the certificate here, so the 30× load bracket **does not transfer**.
+- **Containment holds:** every `S*` certified feasible under `s_plat` is met under the future estimate (PASS).
 
 ### T7 — sensitivity sweeps (`outputs/sensitivity_sweeps.png`)
 
@@ -193,7 +190,7 @@ and both walks bracket `R=1` with the measured regime flipping exactly at the `N
   scaling, `ρ*`, MFU, and the bracket ratio (T1 invariant, T7 ≥ 0.998 agreement); only the
   feasibility margin moves with them.
 - **Two regimes, two value stories.** Load-bound: the autoscaler-drain upside is large
-  (`30× bracket` in the current single-price proxy) but only the `s_plat` floor is guaranteed
+  (the old single-price reference has a `30× bracket`) but only the `s_plat` floor is guaranteed
   (T6 left). Memory-bound: the saving *is* the freed memory; the load bracket does not transfer
   (T6 right).
 - **Coordination shows up only at tight shared-resource boundaries.** In the class-isolated
