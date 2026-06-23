@@ -95,6 +95,24 @@ sweep. It shows two different stories:
   the ceiling grows to **468.1 kW** at **128 source nodes**, and the LP still cuts disruption
   intensity by about **9.6-11.0%** for **32-128 source nodes**.
 
+### Companion — DeepSeek-V4-Flash proxy (`outputs/dispatch_validation_deepseek_v4_flash.png`, `outputs/dispatch_expected_deepseek_v4_flash.png`)
+
+DeepSeek-V4-Pro does not fit the current single-node model abstraction: 1.6T total parameters
+need model-parallel weight placement before the source/destination node accounting is meaningful.
+The rerun therefore uses **DeepSeek-V4-Flash** as the single-node-compatible V4 proxy:
+**284B total / 13B active parameters**, **1M context**, compressed-attention KV, and a conservative
+FP8-sized weight footprint.
+
+Under the same **4 held-memory-node** event, the smaller KV footprint makes the held population much
+larger (agentic: **2001 sessions**). If every agentic session is active, that population is **33.0
+serving-node equivalents**, so this is not a 4-serving-node compute slice. It flips to **load-bound**.
+The LP still improves the normalized objective, but less than Qwen: **8.0%** disruption-intensity
+reduction at **5.1 kW** (`66.8 → 61.5 s/kW`).
+
+The small **5.1 kW** number is the certified grid floor, not the future-node proxy. On the same
+LP plan, the bounded node-drain proxy is **153.2 kW**. The additive token-work field is not plotted
+here because it can exceed the node-power envelope for this proxy configuration.
+
 ### T6 — certify low, report high (`outputs/certify_report_validation.png`)
 
 Read two prices off each plan: the guaranteed floor vs the expected upside (once removed load
