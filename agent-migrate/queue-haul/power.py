@@ -33,6 +33,11 @@ def rho_dest(T, mfu: float = 0.35):
     return PEAK_FLOPS * mfu / (2 * N_ACT + C_ATTN * np.asarray(T, dtype=float))
 
 
+def rho_replay(T, mfu: float = 0.35):
+    """Average full-context replay rate; rho_dest(T) is the marginal append rate."""
+    return rho_dest(np.asarray(T, dtype=float) / 2, mfu)
+
+
 @dataclass(frozen=True)
 class PoolPower:
     p_idle_w: float = 3200.0  # §2 center

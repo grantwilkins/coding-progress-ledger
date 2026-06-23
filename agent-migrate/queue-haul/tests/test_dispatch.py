@@ -1,3 +1,13 @@
+"""Claim:
+Dispatch constraints account for movement resources and destination admission in
+the same units as the LP rows.
+
+Plausible wrong implementations:
+- Charge held capacity as one session regardless of context size.
+- Forget cold-session discount in held capacity.
+- Use final-context marginal prefill time for full replay.
+"""
+
 import sys
 from dataclasses import replace
 from pathlib import Path
@@ -10,7 +20,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from dispatch import Event, Plan, bind_dp, greedy, random_dispatch, solve
 from impact import Movement, compute
 from instance import Workload, generate
-from power import PoolPower, rho_dest
+from power import PoolPower, rho_replay
 
 POOL = PoolPower()
 SLACK_E = Event(D=1e9, W=10**7, dest_nodes=10**7)  # no movement limit binds
@@ -25,14 +35,15 @@ def _pop(n_nodes=8):
 def _violations(plan: Plan, pop, imp, event, move, pool=POOL):
     """Recompute every movement constraint from the plan; return the slack list (all ≥ −tol)."""
     yR, yS, y = plan.y_R, plan.y_S, plan.y
-    reb = pop.T / rho_dest(pop.T, pop.mfu)
+    reb = pop.T / rho_replay(pop.T, pop.mfu)
+    held_w = (pop.T / pool.mean_context_tokens) * np.where(pop.state == "cold", 1 / (1 + pool.gamma), 1.0)
     return [
         1.0 - (yR + yS).max(),  # pairing y_R+y_S ≤ 1
         move.lambda_src * (event.D - event.tau_src) - (imp.b_replay @ yR + imp.b_transfer @ yS),
         event.W * (event.D - event.tau_pre) - reb @ yR,
         event.W * move.mu_in * (event.D - event.tau_in) - imp.b_transfer @ yS,
         event.l_dest(pool) - pop.ell @ y,
-        event.s_dest(pool) - y.sum(),
+        event.s_dest(pool) - held_w @ y,
     ]
 
 

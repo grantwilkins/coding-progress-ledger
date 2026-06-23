@@ -19,7 +19,7 @@ import numpy as np
 from dispatch import DestFleet, Event, Plan, bind_dp
 from impact import Impact, Movement
 from instance import JobPopulation
-from power import rho_dest
+from power import rho_replay
 
 
 @dataclass(frozen=True)
@@ -72,7 +72,7 @@ def simulate(pop: JobPopulation, pool, imp: Impact, plan: Plan, event: Event = E
     K, W = len(fleet), np.atleast_1d(fleet.W)
     YR, YS = (plan.Y_R, plan.Y_S) if multidest else (plan.y_R[:, None], plan.y_S[:, None])
     Y, dp = YR + YS, bind_dp(imp)
-    rho = rho_dest(pop.T[:, None], np.asarray(fleet.mfu))  # (n,K) — per-ℓ MFU
+    rho = rho_replay(pop.T[:, None], np.asarray(fleet.mfu))  # (n,K) — per-ℓ MFU
     p1 = (YR * imp.b_replay[:, None] + YS * imp.b_transfer[:, None]) / move.lambda_src  # egress secs
     p2R = YR * pop.T[:, None] / rho  # bare prefill replay, 0 where not replayed
     p2S = YS * imp.b_transfer[:, None] / move.mu_in  # bare KV ingest, 0 where not transferred
@@ -90,6 +90,7 @@ def simulate(pop: JobPopulation, pool, imp: Impact, plan: Plan, event: Event = E
         t = ed[f]
 
     rs, rd = np.full(n * K, np.nan), np.full(n * K, np.nan)
+    # TODO(background-util): if W is shared with serving, seed these servers with background load.
     pf = [np.full(int(W[l]), event.tau_pre) for l in range(K)]  # per-ℓ prefill servers
     ig = [np.full(int(W[l]), event.tau_in) for l in range(K)]  # per-ℓ ingest channels
     # cut-through = optimistic earliest-overlap bound: rebuild may run from egress_start, but
@@ -108,6 +109,7 @@ def simulate(pop: JobPopulation, pool, imp: Impact, plan: Plan, event: Event = E
 
     e_ok = np.where(np.isfinite(ed), ed, np.inf) <= event.D
     r_ok = np.where(np.isfinite(rd), rd, np.inf) <= event.D
+    # TODO(dest-load): recompute ell per destination when fleet hardware/precision differs.
     ellY = pop.ell[:, None] * Y  # (n,K) load placed at each dest
     resident = (np.where(np.isfinite(rd), rd, np.inf) <= event.D).reshape(n, K)  # rebuilt by D
     realized_load = (ellY * resident).sum(0)  # §6.2 admission anchor: resident ⇒ consuming load

@@ -28,7 +28,7 @@ class Workload:
     y_agentic: float = 600.0  # output tok/turn Geometric means
     y_chat: float = 800.0
     y_reasoning: float = 4000.0
-    g_bf16: float = 4600.0  # decode tok/s ceiling (precision-keyed)
+    g_bf16: float = 4600.0  # first-order constant decode tok/s; sweep for long-T sensitivity
     g_fp8: float = 9200.0
     mfu: float = 0.35  # drives ρ_dest
     t_mix: tuple = ((0.70, 10.07, 1.0), (0.30, 11.45, 0.8))  # (weight, μ, σ)

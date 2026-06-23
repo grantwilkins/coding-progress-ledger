@@ -18,7 +18,7 @@ here) sits far past the physical range, so this is pure list-scheduling loss (no
 effect) and it keeps growing past the pool (24% at W=32). Envelope containment lb≤makespan≤ub
 is enforced in the tests, not re-drawn here.
 C — The lever that worsens the gap WITHIN the physical pool is the context tail: at W=8 the
-packing gap rises with the CoV of prefill time T/ρ_dest(T). (The gap is NOT a function of W/W*
+packing gap rises with the CoV of full-replay prefill time T/ρ_dest(T/2). (The gap is NOT a function of W/W*
 alone — it depends on the full prefill-time distribution, so B and C don't collapse.)
 
 Note: raising transfer-fraction shifts the bottleneck from prefill-packing (B/C) to
@@ -37,7 +37,7 @@ import numpy as np
 from dispatch import Event, bind_dp, solve
 from impact import Movement, compute
 from instance import Workload, generate
-from power import PoolPower, rho_dest
+from power import PoolPower, rho_replay
 from simulate import simulate
 
 POOL, MOVE = PoolPower(), Movement()
@@ -57,7 +57,7 @@ A = {d: np.array([simulate(POP, POOL, IMP, PLAN, replace(EV, D=D), MOVE, discipl
                   for D in Dgrid]) for d in DISC}
 
 # --- Panel B: prefill packing gap (LP over-promise) vs W; physical pool {4,8,16} (§5) ---
-reb = POP.T / rho_dest(POP.T, POP.mfu)
+reb = POP.T / rho_replay(POP.T, POP.mfu)
 rmask = (PLAN.action == "R") & (PLAN.y > 1e-9)
 p2R = (PLAN.y_R * reb)[rmask]
 Wstar = p2R.sum() / p2R.max()  # W past which the single largest prefill becomes the binding floor
@@ -75,7 +75,7 @@ for sg in np.linspace(0.3, 1.4, 7):
     rm = (plan.action == "R") & (plan.y > 1e-9)
     if rm.sum() < 2:
         continue
-    r = pop.T[rm] / rho_dest(pop.T[rm], pop.mfu)
+    r = pop.T[rm] / rho_replay(pop.T[rm], pop.mfu)
     s = simulate(pop, POOL, imp, plan, replace(EV, W=8), MOVE_LS, discipline="johnson")
     covs.append(r.std() / r.mean())
     gapC.append(s.makespan / (EV.tau_pre + (plan.y_R[rm] * r).sum() / 8) - 1)

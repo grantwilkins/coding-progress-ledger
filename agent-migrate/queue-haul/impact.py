@@ -13,7 +13,7 @@ from dataclasses import dataclass
 import numpy as np
 
 from instance import JobPopulation
-from power import BETA_BYTES_PER_TOK, ETA_BYTES_PER_TOK, PoolPower, congestion, rho_dest
+from power import BETA_BYTES_PER_TOK, ETA_BYTES_PER_TOK, PoolPower, congestion, rho_replay
 
 
 @dataclass(frozen=True)
@@ -31,8 +31,8 @@ class Impact:
     """Columnar; parallel arrays in pop order, plus the pool-level regime flag."""
 
     dp_guaranteed: np.ndarray  # s_plat·ℓ_j (guaranteed, single-price)
-    dp_expected: np.ndarray  # p̄_pre·ℓ_pre + p̄_dec·ℓ_dec (expected, two-price)
-    dp_expected_single: np.ndarray  # p̄·ℓ_j (the two-price-vs-single comparison)
+    dp_expected: np.ndarray  # p̄·ℓ_j future-node proxy until raw f/g work power lands
+    dp_expected_single: np.ndarray  # same single-price load proxy kept for comparisons
     dp_memory: np.ndarray  # μ·T_j/E[T] (memory regime, watts)
     c_replay: np.ndarray  # c_j(R), seconds
     c_transfer: np.ndarray  # c_j(S), seconds
@@ -43,18 +43,20 @@ class Impact:
 
 def compute(pop: JobPopulation, pool: PoolPower, move: Movement = Movement()) -> Impact:
     ell = pop.ell
+    active = pop.state == "active"
+    cold_discount = np.where(pop.state == "cold", 1 / (1 + pool.gamma), 1.0)
     phi_pre = congestion(move.dest_prefill_util)  # replay queues against destination prefill
     phi_in = congestion(move.dest_ingest_util)  # transfer queues against destination ingest
-    rho = rho_dest(pop.T, pop.mfu)  # same MFU that built ℓ_pre — no desync
+    rho = rho_replay(pop.T, pop.mfu)
     eta_T = ETA_BYTES_PER_TOK * pop.T
 
     return Impact(
         dp_guaranteed=pool.s_plat * ell,
-        dp_expected=pool.p_pre * pop.ell_pre + pool.p_dec * pop.ell_dec,
+        dp_expected=pool.p_bar * ell,
         dp_expected_single=pool.p_bar * ell,
-        dp_memory=pool.mu * pop.T / pool.mean_context_tokens,
-        c_replay=BETA_BYTES_PER_TOK * pop.T / move.lambda_src + (1 + phi_pre) * pop.T / rho,
-        c_transfer=eta_T / move.lambda_src + (1 + phi_in) * eta_T / move.mu_in,
+        dp_memory=pool.mu * cold_discount * pop.T / pool.mean_context_tokens,
+        c_replay=active * (BETA_BYTES_PER_TOK * pop.T / move.lambda_src + (1 + phi_pre) * pop.T / rho),
+        c_transfer=active * (eta_T / move.lambda_src + (1 + phi_in) * eta_T / move.mu_in),
         b_replay=BETA_BYTES_PER_TOK * pop.T,
         b_transfer=eta_T,
         regime="memory" if pool.memory_bound(ell.sum(), len(pop)) else "load",
@@ -69,8 +71,9 @@ def move_costs(pop: JobPopulation, fleet, move: Movement = Movement()):
     reproduces compute()'s c_replay/c_transfer exactly."""
     T = pop.T[:, None]
     ones = np.ones(len(fleet))
-    rho = rho_dest(T, np.asarray(fleet.mfu))  # (n, K)
+    active = (pop.state == "active")[:, None]
+    rho = rho_replay(T, np.asarray(fleet.mfu))  # (n, K)
     eta_T = ETA_BYTES_PER_TOK * T
-    c_R = BETA_BYTES_PER_TOK * T / move.lambda_src + (1 + congestion(np.asarray(fleet.prefill_util))) * T / rho
-    c_S = (eta_T / move.lambda_src + (1 + congestion(move.dest_ingest_util)) * eta_T / move.mu_in) * ones
+    c_R = active * (BETA_BYTES_PER_TOK * T / move.lambda_src + (1 + congestion(np.asarray(fleet.prefill_util))) * T / rho)
+    c_S = active * (eta_T / move.lambda_src + (1 + congestion(move.dest_ingest_util)) * eta_T / move.mu_in) * ones
     return c_R, c_S, T / rho

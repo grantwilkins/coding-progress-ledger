@@ -27,7 +27,7 @@ $$\ell_j = \underbrace{\frac{f_j}{\rho(T_j)}}_{\text{prefill busy-frac}} + \unde
 
 - $f_j$ = prefill tok/s demanded = turn rate × *new* input tok/turn (δ); $g_j$ = decode tok/s = turn rate × output tok/turn ($Y$; reasoning fattens $Y$).
 - $\rho(T_j)$ = the node's **prefill roofline** at context $T_j$ (`rho_dest`, here at the **source** MFU): flat $\approx 63\text{k}$ tok/s below $T^\star\approx 29\text{k}$, decaying $\sim 1/T$ above as attention FLOPs dominate. Prefill is **compute-bound**, so longer context costs throughput. *(Same function, at a destination's MFU, is the rebuild rate $\rho_\ell$ — hence the `dest` in the code name; in the source load it is the source's own rate.)*
-- $G$ = the **decode** ceiling, a precision-keyed constant (BF16 4600, FP8 9200 tok/s). Decode is **memory-bandwidth-bound**, so context taxes its *memory*, not its throughput — the $T$-dependence lands on $m_j$ instead. That asymmetry is deliberate: long context hits **prefill on compute** ($\rho(T)$) and **decode on memory** ($m_j$).
+- $G$ = the **decode** ceiling, a precision-keyed constant (BF16 4600, FP8 9200 tok/s). This is a first-order approximation: long context taxes decode mainly through memory capacity here, and any $G(T)$ slowdown is a sensitivity knob, not in the base model.
 
 **KV footprint.** $m_j = \eta\,T_j$ is the cache the session pins in HBM ($\eta$ = 188 KiB/tok, exact from the attention config) — the *capacity* axis, independent of whether the session computes.
 
@@ -48,11 +48,15 @@ $$\ell_j = \underbrace{\frac{f_j}{\rho(T_j)}}_{\text{prefill busy-frac}} + \unde
 
 The **bracket** $\bar p/s_{\text{plat}}$ (swept $\sim 3\text{–}5\times$ MoE … $\sim 58\times$ dense 405B) is how much shed value *depends on nodes actually draining* — the central honesty knob of the whole result.
 
-**Two-price split (measured per-token energy).** The expected shed is priced *per phase* by the **measured per-token energies** $c_1$ (J per prefill token) and $c_2$ (J per decode token), fit directly as the linear power law $P = c_0 + c_1 f + c_2 g$ in powertrace-sim ($R^2$ 0.83–0.99 across 25 node types):
+**Average work power vs. future node impact.** Measured per-token energies estimate the job's **work power**:
 
-$$\Delta P^{\text{exp}} = c_1\, f + c_2\, g,\qquad \frac{c_2}{c_1}\approx 5\text{–}14\ \text{(measured)}$$
+$$P_j^{\text{work}} = c_1\, f_j + c_2\, g_j,\qquad \frac{c_2}{c_1}\approx 5\text{–}14\ \text{(measured)}$$
 
-**Decode is the power-dense phase** — but by the *average-power* argument, not instantaneous power. Prefill draws higher instantaneous power (compute-bound, 80–90% TDP) yet is *brief*; decode draws less (memory-bound, 40–60% TDP) yet runs for the whole generation, so **per token, and per session, decode integrates to more energy** ($c_2 \gg c_1$). This is the phase-*resolved* refinement of the single amortized price $\bar p$ (its phase-*average*); they differ precisely because $c_2/c_1 \ne \rho/G$. The **guaranteed** floor stays single-price ($s_{\text{plat}}\cdot\ell$): at the plateau the marginal is phase-blind, so the split only refines the node-draining expected column.
+The job's **future node-power impact** also includes the share of node base power attached to the node time it occupies. Until `instance.py` stores raw $f,g$, the code reports the single-price load proxy:
+
+$$\Delta P_j^{\text{future}} = \bar p\,\ell_j$$
+
+Decode is higher-energy per token, not higher instant power. Prefill can draw higher instant power for a short burst; decode draws lower power for longer.
 
 **Empirical grounding (powertrace-sim — measured A100/H100 vLLM traces, [Wilkins et al. 2026](https://arxiv.org/abs/2603.18383)).** The ramp-then-plateau holds: a saturating node fit scores $R^2$ 0.91–0.99 vs 0.25 for a linear fit on dense 70B+, knee at $\ell\approx 0.09$ (dense; later, $\ell\approx 0.3$–$0.6$, for MoE). The bracket ratio $\bar p/s_{\text{plat}}$ is *read off the same traces* — **58× (405B), 30× (70B-A100), 17× (70B-H100), ~5× (MoE)** — and $c_1,c_2$ above are the fitted coefficients.
 
@@ -70,13 +74,13 @@ Load sets node count $N$ when busy; held sessions set it when idle.
 
 **Watts freed by shedding job $j$** — three columns the solver reads:
 
-$$\Delta P_j^{\text{guar}} = s_{\text{plat}}\,\ell_j,\qquad \Delta P_j^{\text{exp}} = c_1\,f_j + c_2\,g_j,\qquad \Delta P_j^{\text{mem}} = \mu\,\frac{T_j}{E[T]}$$
+$$\Delta P_j^{\text{guar}} = s_{\text{plat}}\,\ell_j,\qquad \Delta P_j^{\text{future}} = \bar p\,\ell_j,\qquad \Delta P_j^{\text{mem}} = \mu\,w_j\,\frac{T_j}{E[T]}$$
 
-Low end **guaranteed** (plateau, realized even if no node drains), high end **expected** (autoscaler drains within the hold). $\Delta P^{\text{exp}}$ uses the measured per-token energies directly, so a job's shed value tilts toward whichever phase it is skewed to: since $c_2\gg c_1$, **decode-heavy jobs (chat, reasoning) free the most watts**, prefill-heavy (agentic) the least. In the **memory** regime, $m_j$ is normalized to session-equivalents ($T_j/E[T]$) so $\mu$ stays W/session; a job at $E[T]$ sheds exactly $\mu$, a $2\times$ context job sheds $2\mu$.
+Low end **guaranteed** (plateau, realized even if no node drains), high end **future** (autoscaler drains within the hold). In the **memory** regime, $m_j$ is normalized to session-equivalents ($T_j/E[T]$), with $w_j=1/(1+\gamma)$ for cold sessions and $w_j=1$ otherwise.
 
 **Downtime of each move** (seconds = *ship* + *rebuild* × destination queue congestion):
 
-$$c_j(R)=\underbrace{\frac{\beta T_j}{\lambda_{\text{src}}}}_{\text{ship IDs}}+\underbrace{(1+\varphi_{\text{pre}})\,\frac{T_j}{\rho_{\text{dest}}(T_j)}}_{\text{re-prefill}},\qquad c_j(S)=\underbrace{\frac{\eta T_j}{\lambda_{\text{src}}}}_{\text{ship KV}}+\underbrace{(1+\varphi_{\text{in}})\,\frac{\eta T_j}{\mu_{\text{in}}}}_{\text{ingest}}$$
+$$c_j(R)=\mathbf{1}_{\text{active}}\Big[\underbrace{\frac{\beta T_j}{\lambda_{\text{src}}}}_{\text{ship IDs}}+\underbrace{(1+\varphi_{\text{pre}})\,\frac{T_j}{\rho_{\text{dest}}(T_j/2)}}_{\text{full replay}}\Big],\qquad c_j(S)=\mathbf{1}_{\text{active}}\Big[\underbrace{\frac{\eta T_j}{\lambda_{\text{src}}}}_{\text{ship KV}}+\underbrace{(1+\varphi_{\text{in}})\,\frac{\eta T_j}{\mu_{\text{in}}}}_{\text{ingest}}\Big]$$
 
 - $\lambda_{\text{src}}$ = source WAN **egress** bandwidth (B/s); $\mu_{\text{in}}$ = destination host-staged **ingest** (B/s).
 - $\beta$ = 4 B/tok (replay ships uint32 token IDs); $\eta$ = 188 KiB/tok (transfer ships the whole KV cache). Replay sends $\sim\eta/\beta\approx 48\text{k}\times$ fewer bytes but pays re-prefill.
@@ -97,15 +101,15 @@ subject to:
 | shed | $\sum_{j,\ell} y_{j\ell}\,\Delta P^{\text{bind}}_j \ge S^\star$ | `dp @ total ≥ s_star` | meet the grid ask |
 | pairing | $\sum_\ell y_{j\ell}\le 1$ | `sum(Y,axis=1)≤1` | each job moves **at most once**, across all sites |
 | **egress** | $\sum_{j,\ell} b_j(R)\,y^R_{j\ell} + b_j(S)\,y^S_{j\ell} \le \lambda_{\text{src}}(D-\tau_{\text{src}})$ | `egress` | **ONE shared uplink** — the sole multi-destination coupling |
-| prefill | $\sum_j \tfrac{T_j}{\rho_\ell(T_j)}\,y^R_{j\ell}\le W_\ell(D-\tau_{\text{pre}})$ | per-$\ell$ | rebuild replays on $W_\ell$ prefill servers by $D$ |
+| prefill | $\sum_j \tfrac{T_j}{\rho_\ell(T_j/2)}\,y^R_{j\ell}\le W_\ell(D-\tau_{\text{pre}})$ | per-$\ell$ | rebuild replays on dedicated $W_\ell$ prefill servers by $D$ |
 | ingest | $\sum_j \eta T_j\,y^S_{j\ell}\le W_\ell\,\mu_{\text{in}}(D-\tau_{\text{in}})$ | per-$\ell$ | land KV on $W_\ell$ ingest channels by $D$ |
 | load | $\sum_j \ell_j\,y_{j\ell}\le \bar L_\ell = \text{spare}_\ell\,\rho^\star$ | `load` | destination stays below its knee |
-| held | $\sum_j y_{j\ell}\le \bar S_\ell = \text{spare}_\ell\,S_{\text{node}}$ | `held` | destination KV capacity (incl. $(1+\gamma)$ uplift) |
+| held | $\sum_j w_j\,\tfrac{T_j}{E[T]}\,y_{j\ell}\le \bar S_\ell = \text{spare}_\ell\,S_{\text{node}}$ | `held` | destination KV capacity (incl. cold discount and $(1+\gamma)$ uplift) |
 | floor | pinned classes get $y=0$ | `pinned` | optional service-level floor |
 
 $\tau_*$ are one-time ramps (egress connection setup, prefill batch-form, ingest pipeline-fill). Drop the single **egress** row and the program separates into $K$ independent single-destination dispatches — it is a **transportation LP with one global uplink knapsack**.
 
-**Certify low, report high (`bind_dp`).** The $\ge S^\star$ floor binds against the **guaranteed** column — $s_{\text{plat}}\,\ell_j$ in the load regime, $\mu\,T_j/E[T]$ in the memory regime — *never* the optimistic $\Delta P^{\text{exp}}$, or we'd promise the grid watts contingent on the autoscaler draining. The expected shed $\sum y\,\Delta P^{\text{exp}}$ (the $c_1 f + c_2 g$ energy prices) rides along on the plan as reported upside, not a commitment.
+**Certify low, report high (`bind_dp`).** The $\ge S^\star$ floor binds against the **guaranteed** column — $s_{\text{plat}}\,\ell_j$ in the load regime, $\mu\,w_jT_j/E[T]$ in the memory regime — never the future-impact proxy, or we'd promise the grid watts contingent on the autoscaler draining nodes.
 
 **Two solves, not a branch.** Primary = min-downtime above. If infeasible, **re-solve** maximizing $\sum y\,\Delta P^{\text{bind}}$ (drop the $\ge S^\star$ row) and report $\text{shortfall} = S^\star - \text{shed}$. Solved both as a fractional **LP** ($y\in[0,1]$, the achievable target) and an integer **MILP** ($y\in\{0,1\}$, granularity cost); HiGHS via CVXPY.
 

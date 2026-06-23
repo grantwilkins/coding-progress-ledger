@@ -1,3 +1,13 @@
+"""Claim:
+Impact uses the right accounting level: replay is full-context average prefill,
+cold memory is discounted, inactive moves use resources but carry no user downtime.
+
+Plausible wrong implementations:
+- Charge full replay at the final-context marginal prefill rate.
+- Give cold sessions the same memory value as resident sessions.
+- Count idle/cold migration resource time as user-visible downtime.
+"""
+
 import sys
 from dataclasses import replace
 from pathlib import Path
@@ -9,7 +19,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from impact import Movement, compute
 from instance import JobPopulation, Workload, _draw, generate
-from power import BETA_BYTES_PER_TOK, ETA_BYTES_PER_TOK, PoolPower, congestion, rho_dest
+from power import BETA_BYTES_PER_TOK, ETA_BYTES_PER_TOK, PoolPower, congestion, rho_replay
 
 
 def _pop(
@@ -49,33 +59,20 @@ def _rebuild_per_tok(T):
 
 
 def test_rebuild_flat_then_one_over_rho():
-    # ρ_dest(T) is a function: rebuild/tok ≈ flat below T*≈29k, steepens toward ∝T above.
+    # Full replay uses the average rate over 0..T, so it steepens less than final-token rho(T).
     pt = _rebuild_per_tok(np.array([1e4, 2e4, 1e5, 2e5]))
     short, long = pt[1] / pt[0], pt[3] / pt[2]  # per-tok response to doubling T
     assert short < 1.35  # short regime: rate ≈ flat, cost barely moves
-    assert long > 1.7  # long regime: rate decays ~1/T, doubling ~doubles cost
+    assert long > 1.5  # long regime: average replay rate still steepens materially
     assert long > 1.35 * short  # the regime contrast (steepening, not constant-F)
     assert pt[2] > 2 * pt[0]  # not constant: 100k far above 10k
 
 
-def test_two_price_opposite_sign_by_class():
-    pop = _draw(np.random.default_rng(0), 40000, Workload(), "bf16")
+def test_expected_is_single_price_future_proxy():
+    pop = _pop([1e4, 5e4], ell_pre=np.array([0.2, 0.0]), ell_dec=np.array([0.0, 0.3]))
     imp = compute(pop, PoolPower())
-    act = pop.state == "active"
-    ag = act & (pop.job_type == "agentic") & ~pop.is_reasoning  # prefill-skewed
-    ch = act & (pop.job_type == "chat")  # decode-skewed
-    assert (
-        imp.dp_expected[ag].mean() < imp.dp_expected_single[ag].mean()
-    )  # prefill discount
-    assert (
-        imp.dp_expected[ch].mean() > imp.dp_expected_single[ch].mean()
-    )  # decode premium
-
-
-def test_two_price_closure_for_balanced_phase():
-    # ℓ_pre == ℓ_dec ⇒ two-price == single, verifying T1's (p̄_pre+p̄_dec)/2 = p̄ split.
-    imp = compute(_pop([5e4], ell_pre=0.1, ell_dec=0.1), PoolPower())
-    assert imp.dp_expected[0] == pytest.approx(imp.dp_expected_single[0])
+    assert np.allclose(imp.dp_expected, PoolPower().p_bar * pop.ell)
+    assert np.array_equal(imp.dp_expected, imp.dp_expected_single)
 
 
 def test_memory_score():
@@ -83,6 +80,9 @@ def test_memory_score():
     assert compute(_pop([pool.mean_context_tokens]), pool).dp_memory[
         0
     ] == pytest.approx(pool.mu)
+    assert compute(_pop([pool.mean_context_tokens], state="cold"), pool).dp_memory[
+        0
+    ] == pytest.approx(pool.mu / (1 + pool.gamma))
     Ts = np.array([1e3, 9e4, 3e4, 2e5, 5e3])
     assert np.array_equal(np.argsort(compute(_pop(Ts), pool).dp_memory), np.argsort(Ts))
     dm = compute(
@@ -95,7 +95,7 @@ def test_congestion_only_on_rebuild():
     pool, move = PoolPower(), Movement()
     pop = _pop(np.array([1e3, 5e4, 2e5]))
     ship = BETA_BYTES_PER_TOK * pop.T / move.lambda_src
-    bare = pop.T / rho_dest(pop.T, pop.mfu)
+    bare = pop.T / rho_replay(pop.T, pop.mfu)
     reb = compute(pop, pool, move).c_replay - ship  # ship term carries no multiplier
     assert np.allclose(reb, (1 + congestion(move.dest_prefill_util)) * bare)
 
@@ -127,6 +127,14 @@ def test_egress_bytes():
     )  # transfer ships ~48k× more
 
 
+def test_inactive_moves_have_no_user_downtime_but_keep_bytes():
+    pop = _pop([1e4, 1e4, 1e4], state=np.array(["active", "idle", "cold"]))
+    imp = compute(pop, PoolPower())
+    assert imp.c_replay[0] > 0 and imp.c_transfer[0] > 0
+    assert np.all(imp.c_replay[1:] == 0) and np.all(imp.c_transfer[1:] == 0)
+    assert np.all(imp.b_replay > 0) and np.all(imp.b_transfer > 0)
+
+
 def test_regime_flag_matches_pool():
     pool = PoolPower()
     assert compute(generate(pool), pool).regime == "memory"
@@ -148,7 +156,7 @@ def test_ranking_diagnostic_is_finite_not_signed():
 def test_units_seconds_and_watts():
     imp = compute(generate(PoolPower()), PoolPower())
     for c in (imp.c_replay, imp.c_transfer):
-        assert np.all(np.isfinite(c)) and np.all(c > 0)  # seconds
+        assert np.all(np.isfinite(c)) and np.all(c >= 0)  # user-visible seconds
     for d in (
         imp.dp_guaranteed,
         imp.dp_expected,

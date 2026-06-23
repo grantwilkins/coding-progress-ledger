@@ -1,3 +1,12 @@
+"""Claim:
+The DES replays the solved plan with the same resource equations as dispatch.
+
+Plausible wrong implementations:
+- Use final-context marginal prefill rate instead of average full-replay rate.
+- Drop one side of a split replay/transfer shipment.
+- Let rebuild complete before full egress arrival.
+"""
+
 import sys
 from dataclasses import replace
 from pathlib import Path
@@ -10,7 +19,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from dispatch import Event, Plan, bind_dp, solve
 from impact import Impact, Movement, compute
 from instance import JobPopulation, generate
-from power import PoolPower, rho_dest
+from power import PoolPower, rho_replay
 
 POOL = PoolPower()
 SLACK_L = replace(Movement(), lambda_src=1e18)  # egress instantaneous
@@ -58,7 +67,7 @@ def test_prefill_isolation_matches_lp_budget():
     plan = _plan(yR, np.zeros(len(pop)))
     event = Event(W=1)  # equality regime: single serial prefill server
     s = simulate(pop, POOL, imp, plan, event, SLACK_L, discipline="fifo")
-    reb = pop.T / rho_dest(pop.T, pop.mfu)
+    reb = pop.T / rho_replay(pop.T, pop.mfu)
     assert s.makespan == pytest.approx(event.tau_pre + reb[pick].sum(), rel=1e-9)
 
 
@@ -85,7 +94,7 @@ def test_split_job_charges_both_fractions():
     event, move = Event(W=1), Movement()
     s = simulate(pop, POOL, imp, _plan(yR, yS), event, move, discipline="fifo")
     ed = event.tau_src + (yR[j] * imp.b_replay[j] + yS[j] * imp.b_transfer[j]) / move.lambda_src
-    p2R = yR[j] * pop.T[j] / rho_dest(pop.T[j], pop.mfu)
+    p2R = yR[j] * pop.T[j] / rho_replay(pop.T[j], pop.mfu)
     p2S = yS[j] * imp.b_transfer[j] / move.mu_in
     assert p2R > p2S  # the dropped-fraction bug would have kept only the smaller ingest piece
     assert s.makespan == pytest.approx(ed + max(p2R, p2S), rel=1e-9)  # both pieces from ed (W=1)
@@ -140,7 +149,7 @@ def test_w1_single_action_equals_recurrence_and_johnson_optimal():
     plan = _plan(yR, np.zeros(len(pop)))
     event, move = Event(W=1), Movement()
     p1 = yR * imp.b_replay / move.lambda_src
-    p2 = pop.T / rho_dest(pop.T, pop.mfu)
+    p2 = pop.T / rho_replay(pop.T, pop.mfu)
     mv = np.flatnonzero(plan.y > 1e-9)
     ms = {}
     for disc in ("fifo", "lpt", "johnson", "pd"):
