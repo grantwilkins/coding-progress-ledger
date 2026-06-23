@@ -191,7 +191,10 @@ def _build(pop, pool, imp, fleet, event, move, integer):
 
 def _run(obj, cons, solver):
     prob = cp.Problem(obj, cons)
-    prob.solve(solver=solver)
+    try:
+        prob.solve(solver=solver)
+    except cp.error.SolverError:
+        return "solver_error", False
     return prob.status, prob.status in ("optimal", "optimal_inaccurate")
 
 

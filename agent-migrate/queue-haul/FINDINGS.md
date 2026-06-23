@@ -105,14 +105,15 @@ score). **Two-part result: selection is robust, absolute shed is sensitive.**
 - **How much you can cut moves smoothly** — the largest guaranteed reduction (center ≈ **6 kW**)
   falls **39%** across the utilization range, **9%** across MFU, **71%** across the price ratio.
 
-### Companion — power vs deadline (`outputs/deadline_sweep.png`)
+### Companion — deadline sweep by class (`outputs/deadline_sweep.png`)
 
-A tighter deadline caps the achievable reduction **only when the data is large to move**.
-Short-context jobs finish moving almost instantly, so the limit is destination capacity (no
-deadline in it) — flat at **3.58 kW** beyond ~6 s. Long-context jobs throttle on transfer time,
-so the curve ramps to **16.61 kW**, plateauing by a ~140 s deadline. Below the ~5 s migration
-startup floor (connection ramp, batch form, pipeline fill), no move completes and the reduction
-is zero.
+The deadline changes the coordination story mainly for agentic tool loops. Ordinary chat,
+long chat/code, and reasoning chat reach their full shed ceilings quickly because replay is
+cheap enough to move the whole active population: **15.3 kW by ~10 s**, **15.3 kW by ~13 s**,
+and **14.8 kW by ~13 s** respectively, with greedy and LP effectively identical. Agentic tool
+loops ramp more slowly and expose the shared-resource mistake: LP reaches **19.8 kW by ~60 s**,
+while greedy is lower over the middle and long-deadline range, with a max gap of **8.1 kW** at
+~60 s. Below the ~5 s migration startup floor, no move completes and the reduction is zero.
 
 ### T8 — load vs memory regime (`outputs/regime_boundary.png`)
 

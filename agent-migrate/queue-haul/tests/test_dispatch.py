@@ -7,6 +7,8 @@ Plausible wrong implementations:
 - Forget cold-session discount in held capacity.
 - Use final-context marginal prefill time for full replay.
 - Check only aggregate load, compare against 1.0, or silently clamp an oversized job.
+- Treat an unreachable tight-deadline target as a hard solver failure instead of
+  returning the legal max-shed plan.
 """
 
 import sys
@@ -20,7 +22,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from dispatch import Event, Plan, bind_dp, greedy, random_dispatch, solve
 from impact import Movement, compute
-from instance import Workload, generate
+from instance import Workload, _mean_T, class_workload, generate
 from power import PoolPower, rho_replay
 
 POOL = PoolPower()
@@ -97,6 +99,18 @@ def test_infeasible_returns_max_shed_and_shortfall():
     assert plan.shortfall == pytest.approx(S - plan.shed_guaranteed)
     assert plan.shortfall > 0
     assert min(_violations(plan, pop, imp, Event(), Movement())) >= -1e-6  # still legal
+
+
+def test_tight_deadline_returns_max_shed_instead_of_crashing():
+    wl = class_workload("ordinary_chat", state_mix=(1.0, 0.0, 0.0), cache_hit=(1.0, 1.0, 1.0, 1.0))
+    pool = replace(POOL, mean_context_tokens=_mean_T(wl))
+    pop = generate(pool, wl, n_nodes=2)
+    imp = compute(pop, pool)
+    S = 2 * bind_dp(imp).sum()
+    tight = solve(pop, pool, imp, S, Event(D=8, dest_nodes=48, W=16), Movement())
+    loose = solve(pop, pool, imp, S, Event(D=30, dest_nodes=48, W=16), Movement())
+    assert not tight.feasible and tight.shed_guaranteed > 0
+    assert tight.shed_guaranteed <= loose.shed_guaranteed + 1e-6
 
 
 def test_greedy_equals_lp_off_boundary():
