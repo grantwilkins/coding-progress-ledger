@@ -13,12 +13,12 @@ the cost of the LP being execution-order-blind.
 B — Service continuity: the prefill stage's P‖Cmax packing gap. The LP's prefill row budgets
 τ_pre+Σp2/W (perfect packing); discrete jobs don't divide evenly across W servers, so the DES
 makespan exceeds it. Across the PHYSICAL pool W∈{4,8,16} (assumptions §5, center 8) the LP
-over-promises ~3–13% — small but NOT a null: the single-largest-job floor W*=Σp2/max_p2 (≈49
-here) sits far past the physical range, so this is pure list-scheduling loss (not a max-job
-effect) and it keeps growing past the pool (24% at W=32). Envelope containment lb≤makespan≤ub
+over-promises because discrete replay jobs do not divide evenly across servers. The reference
+point W*=Σp2/max_p2 marks where the single largest replay becomes the dominant lower bound;
+with corrected per-session occupation it can fall inside the physical range. Envelope containment lb≤makespan≤ub
 is enforced in the tests, not re-drawn here.
 C — The lever that worsens the gap WITHIN the physical pool is the context tail: at W=8 the
-packing gap rises with the CoV of full-replay prefill time T/ρ_dest(T/2). (The gap is NOT a function of W/W*
+packing gap rises with the CoV of full-replay prefill time T/ρ_replay(T). (The gap is NOT a function of W/W*
 alone — it depends on the full prefill-time distribution, so B and C don't collapse.)
 
 Note: raising transfer-fraction shifts the bottleneck from prefill-packing (B/C) to
@@ -91,14 +91,14 @@ axA.legend(loc="lower right", fontsize=8)
 
 axB.axvspan(4, 16, color="tab:green", alpha=0.10, label="physical pool $W\\in\\{4,8,16\\}$")
 axB.axvline(Wstar, color="0.5", ls=":", lw=1)
-axB.text(Wstar, gapB.max() * 95, f"  $W^*$≈{Wstar:.0f}\n  (unphysical)", fontsize=7, va="top", color="0.4")
+axB.text(Wstar, gapB.max() * 95, f"  $W^*$≈{Wstar:.0f}\n  largest-job floor", fontsize=7, va="top", color="0.4")
 axB.plot(Wgrid, gapB * 100, "o-", color="tab:red", lw=2)
 axB.set(xscale="log", xlabel="rebuild servers $W$", ylabel="LP prefill-row over-promise (%)",
         title="B · packing gap: LP over-promises even in the physical pool")
 axB.legend(loc="upper left", fontsize=8)
 
 axC.plot(covs, np.array(gapC) * 100, "o-", color="tab:purple", lw=2)
-axC.set(xlabel="CoV of prefill time $T/\\rho_{dest}(T)$", ylabel="packing gap at $W$=8 (%)",
+axC.set(xlabel="CoV of replay time $T/\\rho_{replay}(T)$", ylabel="packing gap at $W$=8 (%)",
         title="C · tail heaviness worsens the gap at physical $W$=8")
 
 fig.tight_layout()
@@ -122,6 +122,6 @@ print(f"@D={tight:.0f}s realized kW: " + "  ".join(f"{d}={v:.1f}" for d, v in gr
       + f"  (certified {certified/kW:.1f}; LPT order-blindness costs {gr['pd']-gr['lpt']:.1f}kW vs PD)")
 g = dict(zip(Wgrid.tolist(), gapB))
 print(f"prefill packing gap (link slacked, Johnson): physical pool W=4:{g[4]:+.0%} W=8:{g[8]:+.0%} W=16:{g[16]:+.0%}"
-      f"  | W*≈{Wstar:.0f} (unphysical) so this is packing loss, not the max-job floor"
+      f"  | W*≈{Wstar:.0f} marks where the largest replay dominates"
       f"  | beyond pool W=32:{g[32]:+.0%} W=64:{g[64]:+.0%}")
 print(f"  Panel C (W=8): CoV {covs[0]:.2f}→{covs[-1]:.2f} ⇒ gap {gapC[0]:.0%}→{gapC[-1]:.0%}  (tail-driven, not W/W*-collapsible)")

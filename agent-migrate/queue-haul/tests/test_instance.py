@@ -8,6 +8,7 @@ Plausible wrong implementations:
 - Treat cache misses as Delta-only prefill work.
 - Let idle/cold sessions keep nonzero current turn rate or load.
 - Let precision change prefill work instead of decode normalization only.
+- Let rare long turns make one session consume more than its occupation cap.
 """
 
 import sys
@@ -79,6 +80,13 @@ def test_raw_turn_accounting_and_cache_misses():
     assert np.allclose(miss.f, miss.turn_rate * miss.T)
 
 
+def test_long_turns_cap_effective_turn_rate():
+    wl = class_workload("agentic_tool_loop", state_mix=(1.0, 0.0, 0.0), max_ell=0.25)
+    pop = _draw(np.random.default_rng(0), 20000, wl, "bf16")
+    assert pop.ell.max() <= wl.max_ell + 1e-9
+    assert (pop.turn_rate < wl.rate_means[-1]).any()
+
+
 def test_cold_idle_carry_no_load_but_keep_kv():
     pop = generate(PoolPower())
     assert np.all(pop.turn_rate[pop.state != "active"] == 0)
@@ -124,7 +132,7 @@ def test_generate_hard_fails():
 
 
 def test_precision_toggle_shifts_only_decode():
-    wl = Workload()
+    wl = replace(Workload(), max_ell=1e9)
     bf16 = _draw(np.random.default_rng(1), 5000, wl, "bf16")
     fp8 = _draw(np.random.default_rng(1), 5000, wl, "fp8")
     assert np.array_equal(bf16.T, fp8.T)

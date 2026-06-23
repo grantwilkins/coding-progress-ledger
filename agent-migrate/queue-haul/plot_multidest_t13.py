@@ -94,15 +94,16 @@ cap0 = 8.0 * POOL.s_node
 ceilD = solve(popD, POOL, impD, 2 * bind_dp(impD).sum(), move=MVD, fleet=fD()).shed_guaranteed
 Sd = np.linspace(0.02, 1.0, 20) * ceilD
 m0, m1, ta0 = [], [], []
+held_wD = popD.T / POOL.mean_context_tokens
 for s in Sd:
     p = solve(popD, POOL, impD, s, move=MVD, fleet=fD())
-    moved = (p.Y_R + p.Y_S).sum(0)
+    moved = (held_wD[:, None] * (p.Y_R + p.Y_S)).sum(0)
     m0.append(moved[0]); m1.append(moved[1]); ta0.append(p.theta_admit[0])
 axD.axhline(cap0, color="tab:green", lw=0.8, ls=":", alpha=0.6)
 axD.text(Sd[1] / kW, cap0, " dest 0 cap $\\bar S_0$", color="tab:green", fontsize=7, va="bottom")
 axD.plot(Sd / kW, m0, "o-", color="tab:green", ms=5, label="dest 0 (fast rebuild, mfu 0.5)")
 axD.plot(Sd / kW, m1, "s-", color="tab:purple", ms=5, label="dest 1 (slow, mfu 0.3)")
-axD.set(xlabel="requested shed $S^\\star$ (kW)", ylabel="sessions routed ($\\Sigma\\,y$)",
+axD.set(xlabel="requested shed $S^\\star$ (kW)", ylabel="held-session equivalents routed",
         title="D. concentrate on cheapest-reachable, then spread")
 axD.legend(loc="center left", fontsize=8)
 axDt = axD.twinx()

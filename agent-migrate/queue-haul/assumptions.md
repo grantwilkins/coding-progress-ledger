@@ -31,6 +31,30 @@ significantly over time* — there is no single canonical distribution. So T's m
 an experimental axis: the short/center/long settings above bracket the regimes (load-bound →
 memory-bound), and m̄, S_node, and the memory/load boundary all move with them.
 
+**What the workload is.** Queue-Haul samples a one-time evacuation snapshot, not a full traffic
+trace. Each row is one held session on the source pool. A session may be active now, warm but
+between turns, or cold/paged out. Active sessions consume current serving time; warm and cold
+sessions keep memory but have zero current load. The default center is an agentic long-context
+stress point. It is not a generic chat mix.
+
+| setup | what it represents | why it exists |
+|---|---|---|
+| Default `Workload()` | 30% active, 25% idle-warm, 45% cold; all agentic tool-loop sessions | memory-heavy evacuation center |
+| Class-isolated plots | one class at a time, active-only, cache-hit | shows whether ordinary chat, long chat/code, reasoning, or agentic loops create different movement bottlenecks |
+| Short-context load-bound plots | short contexts with enough active work for load to bind | isolates load-price behavior without memory dominating |
+| Multi-destination plots | constructed pure-transfer or heterogeneous-destination cases | validates routing constraints; not meant to be a representative workload |
+
+**How population size is determined.** The generator does not choose a request arrival rate and run
+a queue. It chooses the number of held sessions from memory occupancy:
+
+```text
+n_jobs = round(occupancy * source_nodes * S_node)
+```
+
+where `S_node` is the held-session capacity of one node at the current context scale and precision.
+Then it draws each session's state, class, context, turn rate, appended input, output length, and
+cache-hit flag.
+
 ---
 
 ## 2. Node power — absolute watts, 8×H100 SXM node
@@ -53,15 +77,16 @@ at 0.8× the TDP ceiling, not the ceiling itself.
 | **Bracket ratio p̄/s_plat** | **30×** (center); sweep [17, 58] | sweep | dense-70B-to-405B band (235B sits in it) |
 | **s_plat = p̄/ratio** | ≈ 350 W/node-unit | derived | fixed-node plateau slope (the guaranteed price) |
 | Token-energy c1/c2 (per token) | 0.10 center; sweep [0.04, 0.19] | sweep | calibrated trace average; prefill is cheaper per token, but the ratio is not fixed over time |
-| Work-power reporting | single-price proxy now; token-energy TODO | implementation | code reports `p̄·ℓ_j` until raw `f_j,g_j` are stored |
+| Work-power reporting | single-price proxy now; token-energy TODO | implementation | code stores raw `f_j,g_j`, but reports `p̄·ℓ_j` until token-energy coefficients are calibrated |
 | **G (decode tok/s ceiling)** | **BF16 4,600 / FP8 9,200** | sweep | the `ℓ_dec = g/G` normalizer, precision-keyed: Baseten 4×H100-FP8 ~4,600 tok/s anchor scaled to the 8×H100 node |
 | **F (prefill normalizer)** | **per-job `ρ_dest(T_j)`** | derived-fn | `ℓ_pre,j = f_j/ρ_dest(T_j)` uses the §6 roofline at each job's own context — **not a constant** (retires the median-vs-mean choice for E[T]) |
 
 **Token-energy coefficients:** if raw token rates are available, work power is
 `c1·f_j + c2·g_j`. These coefficients are calibrated averages for a measured
 model, hardware, precision, serving stack, batching policy, and workload mix;
-refit or sweep them when those change. Until raw `f_j,g_j` are stored, the code
-reports the single-price future-impact proxy `ΔP_j = p̄·ℓ_j`.
+refit or sweep them when those change. The code stores raw `f_j,g_j`, but until
+those coefficients are calibrated it reports the single-price future-impact
+proxy `ΔP_j = p̄·ℓ_j`.
 
 ---
 
@@ -77,6 +102,7 @@ paged tier counted by γ (§4). Never assign a cold job a nonzero rate — that 
 | **Session classes** | ordinary chat / long chat-code / reasoning chat / agentic tool loop | sweep | default center is agentic; class-isolated plots use one class at a time |
 | **Turn rate, active jobs (turns/s)** | **0.01 chat/reasoning, 0.15 agentic** (per-class mean) | sweep | agentic ≈ tight loop (1 per ~7 s); chat/reasoning ≈ 1 per ~100 s |
 | **Turn-rate within-class spread σ** | **0.3** | sweep | per job `rate ~ LogN(log(mean)−σ²/2, σ)`, mean-preserving; gives within-class ℓ heterogeneity so greedy≠LP at boundaries |
+| **Per-session occupation cap** | **ℓ ≤ 0.50** | hard/sweep | a session cannot start turns faster than its own prefill+decode service time; long generated outputs reduce effective turn rate |
 | **Input tokens/turn Δ** | median: ordinary 150, long/reasoning 500; agentic Δ/Y=3.0 | sweep | Δ is appended input since cached prefix, not full context |
 | **Output tokens/turn Y (incl. reasoning)** | geometric mean: ordinary 300, long 1000, reasoning 3000, agentic 600 | sweep | decode length is geometric (memoryless EOS); reasoning fattens Y |
 | **Context T by class** | mean ≈ 3.4K / 17K / 22K / 66K | sweep | ordinary chat and agents no longer share one T distribution |
@@ -98,7 +124,9 @@ for Δ (bounded, mean is what matters for prefill load).
 
 The per-job load is `ℓ_j = f_j/ρ(T_j) + g_j/G`, with `f_j = turn_rate·Δ` on a
 cache hit and `f_j = turn_rate·T_j` on a cache miss. `g_j = turn_rate·Y`. Idle
-and cold jobs set current `turn_rate`, `f`, `g`, and `ℓ` to zero.
+and cold jobs set current `turn_rate`, `f`, `g`, and `ℓ` to zero. For active jobs,
+the sampled turn rate is capped by the per-turn service time so one session cannot
+occupy more than its configured share of a node.
 
 ---
 
@@ -189,7 +217,7 @@ and **ρ_dest(T)** (a function, computed per session — also the prefill load n
 **Swept (bespoke/uncertain) — these are the experiment's axes:**
 - *Precision:* **weights BF16 / FP8** (primary — run both end to end; shifts Cap, S_node, and **G** ~2×).
 - *Power model:* P_idle, P_busy, power knee, latency knee, ρ*, bracket ratio, **G (decode ceiling)**.
-- *Workload:* **context-length mixture** (short/center/long — primary), state mix, turn rates + **σ spread**, Δ, Y, **reasoning sub-fraction**, agentic:chat split.
+- *Workload:* session class mix, class-specific context distribution, state mix, turn rates + **σ spread**, occupation cap, Δ, Y, and cache-hit rate.
 - *Capacity:* γ.
 - *Event:* pool size, **occupancy**, S*, D, H, destination spare, W.
 - *Movement:* Λ_src, μ_in, MFU (drives ρ_dest), startup latencies.
@@ -202,7 +230,7 @@ constant F (prefill load normalized per-job by ρ_dest(T_j)).
 2. **Certify-vs-expect gap** — guaranteed (s_plat) vs. amortized (p̄) shed, vs. bracket ratio.
 3. **Ranking invariance** — job order vs. {ρ*, MFU, γ} (should be flat); feasibility margin vs. same (should move).
 4. **Greedy vs. LP** — bang-per-buck sort vs. the LP; agreement except at constraint boundaries.
-5. **Agentic:chat split** — single-price vs. two-price error as traffic skews (validates the two-price flag).
+5. **Class mix** — class-isolated and mixed-population sweeps showing when ordinary chat, long chat/code, reasoning, or agentic loops set the bottleneck.
 6. **Context-length regime** — short→long T mixture sweeping the load-bound → memory-bound transition; shows when the memory term (and γ) starts to matter.
 
 ---

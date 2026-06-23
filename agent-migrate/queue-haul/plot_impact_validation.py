@@ -2,14 +2,13 @@
 
 Left: replay rebuild cost vs context T. Full replay uses the average rate ρ_dest(T/2),
 so the cost is near-flat-rate for short jobs then steepens away from a constant-F line.
-Center: the current future-impact proxy is the single-price p̄·ℓ baseline; raw f/g
-token-energy work power is documented in ell-findings.md. Right: the memory-regime
-score μ·T/E[T] spreads widely around μ because context is tail-heavy; the
-annotation is the measured load-vs-memory rank correlation (near-zero ⇒ the regimes reorder
-shed priorities, the T8 finding).
+Center: the code currently reports the single-price future proxy p̄·ℓ for every class;
+raw f/g are stored, but token-energy work power is not calibrated yet. Right: the
+memory-regime score μ·T/E[T] spreads widely around μ because context is tail-heavy.
 """
 
 import os
+from dataclasses import replace
 
 import matplotlib
 
@@ -17,7 +16,8 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
 from impact import Movement, compute
-from instance import JobPopulation, Workload, _draw, generate
+
+from instance import JobPopulation, Workload, _draw, _mean_T, class_workload
 from power import BETA_BYTES_PER_TOK, ETA_BYTES_PER_TOK, PoolPower, congestion, rho_dest
 
 POOL, MOVE = PoolPower(), Movement()
@@ -76,25 +76,30 @@ axA.set(
 )
 axA.legend(loc="upper left", fontsize=8)
 
-# --- Panel B: future-impact proxy vs single-price load baseline ---
-pop = _draw(np.random.default_rng(0), 40000, Workload(), "bf16")
-imp_pop = compute(pop, POOL)
-act = pop.state == "active"
-groups = [
-    ("agentic", act & (pop.job_type == "agentic") & ~pop.is_reasoning, "tab:red"),
-    ("reasoning", act & pop.is_reasoning, "tab:purple"),
-    ("chat", act & (pop.job_type == "chat"), "tab:blue"),
+classes = [
+    ("ordinary chat", "ordinary_chat", "tab:blue"),
+    ("long chat/code", "long_chat_code", "tab:green"),
+    ("reasoning chat", "reasoning_chat", "tab:purple"),
+    ("agentic loop", "agentic_tool_loop", "tab:red"),
 ]
-for name, sel, color in groups:
+
+# --- Panel B: current future-impact proxy by class ---
+proxy_max = 0.0
+for name, cls, color in classes:
+    wl = class_workload(cls, state_mix=(1.0, 0.0, 0.0))
+    pool = replace(POOL, mean_context_tokens=_mean_T(wl))
+    pop = _draw(np.random.default_rng(0), 3000, wl, "bf16")
+    imp_pop = compute(pop, pool)
+    proxy_max = max(proxy_max, imp_pop.dp_expected_single.max())
     axB.scatter(
-        imp_pop.dp_expected_single[sel],
-        imp_pop.dp_expected[sel],
+        imp_pop.dp_expected_single,
+        imp_pop.dp_expected,
         s=7,
         alpha=0.35,
         color=color,
         label=name,
     )
-lim = [0, max(imp_pop.dp_expected_single[act].max(), 1)]
+lim = [0, max(proxy_max, 1)]
 axB.plot(lim, lim, "k-", lw=1, label="future proxy = p̄·ℓ")
 axB.set(
     xlabel="single-price $\\bar p\\,\\ell_j$ (W)",
@@ -104,6 +109,10 @@ axB.set(
     title="Current code reports the load-based future proxy",
 )
 axB.legend(loc="upper left", fontsize=8)
+
+pop = _draw(np.random.default_rng(0), 40000, Workload(), "bf16")
+imp_pop = compute(pop, POOL)
+act = pop.state == "active"
 
 # --- Panel C: memory score spread around μ ---
 dm = imp_pop.dp_memory
@@ -128,10 +137,7 @@ print(
     f"regime={imp_pop.regime}  μ={POOL.mu:.0f} W  φ_pre={congestion(MOVE.dest_prefill_util):.2f}  "
     f"φ_in={congestion(MOVE.dest_ingest_util):.2f}"
 )
-print(
-    f"future-proxy gap: agentic={np.mean(imp_pop.dp_expected[groups[0][1]] - imp_pop.dp_expected_single[groups[0][1]]):+.0f} W  "
-    f"chat={np.mean(imp_pop.dp_expected[groups[2][1]] - imp_pop.dp_expected_single[groups[2][1]]):+.1f} W"
-)
+print("future proxy: dp_expected == p_bar * ell for every class; raw f/g are stored for later calibration")
 print(
     f"load↔memory Spearman (active) = {rho:+.3f}  memory-score CoV = {dm[act].std()/dm[act].mean():.2f}"
 )

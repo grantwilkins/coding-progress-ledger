@@ -1,9 +1,9 @@
 # Queue-Haul — Findings
 
 Power-first job dispatch: hit a grid power-shed target `S*` by moving the *right* jobs off a
-source pool at least disruption. Static one-shot snapshot, one source pool → one destination
-pool, absolute watts via parameter sweep. The math is in `formulation.md`, the parameters in
-`assumptions.md`. Every figure is reproducible — run the matching `plot_*.py`, which writes
+source pool at least disruption. Static one-shot snapshot, one source pool with either one
+destination pool or a controlled multi-destination validation, absolute watts via parameter
+sweep. The math is in `formulation.md`, the parameters in `assumptions.md`. Every figure is reproducible — run the matching `plot_*.py`, which writes
 `outputs/<name>.{pdf,png}` and prints a one-paragraph console report. All center numbers below
 are from those reports (BF16, seed 42 unless a band is shown).
 
@@ -28,8 +28,6 @@ The node never appears as a curve in the solver; it appears as four prices. At c
   upside),
 - guaranteed plateau slope **`s_plat = p̄/30 = 350 W`** per node-unit (realized even if no node
   drains) — the **bracket ratio is 30×**,
-- two-price split `p̄_pre = 3.5 kW`, `p̄_dec = 17.5 kW` (decode is 5× prefill per busy-second,
-  closing to `(p̄_pre+p̄_dec)/2 = p̄`),
 - memory price **`μ = P_idle/S_node = 208 W/held session` (BF16)**, `74 W (FP8)`.
 
 The left panel confirms the prices are consistent with the (plot-only) ramp–plateau curve: the
@@ -40,8 +38,8 @@ crossover out by the cap ratio.
 
 ### T2 — population (`instance.py`, `outputs/instance_validation.png`)
 
-A drawn population of **591 sessions** at center (active 178 / idle 145 / cold 268), `E[T] ≈ 66k`
-tokens, mean active load `ℓ ≈ 0.045`. **Left panel:** active jobs spread along `ℓ > 0` and sit
+A drawn population of **591 sessions** at center (active 179 / idle 141 / cold 271), `E[T] ≈ 64k`
+tokens, mean active load `ℓ ≈ 0.053`. **Left panel:** active jobs spread along `ℓ > 0` and sit
 in HBM; idle/cold jobs pin to `ℓ ≈ 0` yet still carry their KV footprint `m` — the two axes the
 dispatch trades off. **Right panel (the key structural fact):** because the population is sized
 to the pool (`n_jobs = occupancy·N·s_node`), the memory side `S_held/s_node = occupancy·N` is **constant (≈38)**,
@@ -54,12 +52,11 @@ tokens, FP8 ≈ 35k), not something packed into the setup.
 - **A — replay cost is not constant-rate.** `ρ_dest(T)` is a function (flat ≈63k tok/s below
   `T*≈29k`, decaying `~1/T` above), so rebuild cost is near-flat for short jobs then steepens,
   diverging from the constant-F line a fixed prefill rate would predict.
-- **B — two-price has opposite-sign skew by class.** Prefill-skewed agentic jobs fall *below*
-  the single-price diagonal (mean gap **−144 W**, a prefill discount); decode-skewed chat and
-  reasoning rise *above* it (chat **+22 W**); only a phase-balanced job lands on the line.
+- **B — current future-impact reporting is single-price.** The code reports `p̄·ℓ` for every
+  class. Raw `f,g` are stored, but token-energy work power is not calibrated yet, so the
+  figure intentionally shows all classes on the single-price diagonal.
 - **C — the memory score spreads widely** around `μ=208 W` (CoV **1.35**, tail-heavy context).
-  The annotated **load↔memory rank Spearman ≈ +0.05** is the seed of T8: the two rankings are
-  essentially uncorrelated.
+  The annotated load↔memory rank Spearman is measured from the synthetic draw; it is not assumed.
 
 ### T4 — solver (`dispatch.py`)
 
@@ -87,12 +84,12 @@ class; it appears where large, heterogeneous agentic sessions make action repack
 Read two prices off each plan: the guaranteed floor vs the expected upside (once removed load
 lets nodes shut off). Budgets slack to isolate the price story.
 
-- **Compute-bound pool:** the certified floor is a small slice of what you deliver. Single-price
-  gap is exactly the **30× bracket**; the two-price expected runs to **≈45× guaranteed** because
-  the shed jobs are decode-skewed. Certifying against the floor never over-promises.
-- **Memory-bound pool (mirror image):** the shed jobs are already idle, so the node-shut-off
-  bonus collapses — the 30× bracket **does not transfer**, **expected ≈ guaranteed (1.3×, range
-  0.6–3.1×)**. The freed memory is itself the realized saving.
+- **Compute-bound pool:** the certified floor is a small slice of the current single-price
+  future proxy. The gap is exactly the **30× bracket**. Certifying against the floor never
+  over-promises.
+- **Memory-bound pool:** the certificate is the memory floor. The load-only future proxy is not
+  the certificate here: it is **0.0–0.9×** the memory floor on this fixture, so the 30× load
+  bracket **does not transfer**.
 - **Containment holds:** every `S*` certified feasible under `s_plat` is met under `p̄` (PASS).
 
 ### T7 — sensitivity sweeps (`outputs/sensitivity_sweeps.png`)
@@ -102,7 +99,7 @@ score). **Two-part result: selection is robust, absolute shed is sensitive.**
 
 - **Which jobs to move barely changes** — ordering agreement with baseline **≥ 0.998** across
   every sweep, by both orderings (power-freed and downtime-per-watt).
-- **How much you can cut moves smoothly** — the largest guaranteed reduction (center ≈ **6 kW**)
+- **How much you can cut moves smoothly** — the largest guaranteed reduction (center ≈ **4 kW**)
   falls **39%** across the utilization range, **9%** across MFU, **71%** across the price ratio.
 
 ### Companion — deadline sweep by class (`outputs/deadline_sweep.png`)
@@ -129,29 +126,29 @@ Cross `R=1` two independent ways — **(a)** raise idle/cold fraction (× two γ
 
 | series | R range | brackets R=1 | Jaccard @ R≈1 | feasible frac |
 |---|---|---|---|---|
-| (a) γ=0.5 | [0.48, 6.31] | yes | 0.00 | 0.47 |
-| (a) γ=1.0 | [0.34, 4.17] | yes | 0.03 | 0.33 |
-| (b) context | [0.38, 2.39] | yes | 0.01 | 0.53 |
+| (a) γ=0.5 | [0.58, 6.68] | yes | 0.00 | 0.60 |
+| (a) γ=1.0 | [0.44, 5.46] | yes | 0.00 | 0.45 |
+| (b) context | [0.50, 2.71] | yes | 0.00 | 0.66 |
 
-**Spearman(dp_expected, dp_memory) = +0.011 ± 0.013.**
+**Spearman(dp_expected, dp_memory) = +0.091 ± 0.025** on this synthetic draw.
 
 1. **Both walks bracket and agree at R=1** — the boundary is a property of `N`, reachable by
    idling jobs or by growing KV; `γ` only shifts *where along the active-fraction knob* you hit
    `R=1` (it delays the switch via population size, `n_jobs ∝ 1+γ`), not the `R=1` location.
 2. **The flip sheds a near-disjoint job set** (Jaccard ≈ 0 everywhere): the load-ranked and
    memory-ranked dispatch plans share almost no jobs.
-3. **Because the two rankings are independent** (`Spearman ≈ 0`) — context `T` is drawn
-   independently of the rate/token distributions that drive load. The regime flag genuinely
-   chooses *which jobs move*, not just how the same jobs are priced.
+3. **The load and memory rankings differ enough to matter** — `dp_expected` and `dp_memory`
+   are only weakly related in this draw. The regime flag genuinely chooses *which jobs move*,
+   not just how the same jobs are priced.
 4. **Caveat:** under realistic budgets ~33–53% of points are budget-infeasible (max-shed), and
-   the LP minimizes downtime, so the realized selection also reflects move-cost — in the memory
+   the LP minimizes downtime, so the realized selection also reflects move cost — in the memory
    regime the cheapest evictions are many small-KV jobs, so the shed-vs-ranking correlation panel
-   shows a step at `R=1` rather than a clean ℓ→memory crossover. The headline (Jaccard ≈ 0,
-   Spearman ≈ 0) is robust; the correlation panel is the honest, confounded one.
+   shows a step at `R=1` rather than a clean ℓ→memory crossover. The headline is the low Jaccard
+   near the boundary; the correlation panel is the honest, confounded one.
 
 ---
 
-## 3. Tests (T9 — `tests/`, 38 passing)
+## 3. Tests (T9 — `tests/`)
 
 | # | claim | test |
 |---|---|---|
@@ -161,12 +158,13 @@ Cross `R=1` two independent ways — **(a)** raise idle/cold fraction (× two γ
 | 4 | every solver output satisfies all constraints | `test_dispatch::test_every_constraint_satisfied` |
 | 5 | no cold job carries load | `test_instance::test_cold_idle_carry_no_load_but_keep_kv` |
 | 6 | BF16↔FP8 shifts S_node & threshold, load regime unchanged | `test_power::test_precision_shifts_memory_threshold_not_load_regime` |
+| 7 | long sampled turns cap effective turn rate instead of exceeding one-session occupation | `test_instance::test_long_turns_cap_effective_turn_rate` |
 
-T8's own results are tested in `tests/test_regime.py`: rankings uncorrelated at center
-(Spearman ≈ 0), the regime flip sheds a near-disjoint set (Jaccard < 0.3), and both walks bracket
-`R=1` with the measured regime flipping exactly at the `N=max` crossover.
+T8's own results are tested in `tests/test_regime.py`: the load and memory rankings are only
+weakly related in the synthetic draw, the regime flip sheds a near-disjoint set (Jaccard < 0.3),
+and both walks bracket `R=1` with the measured regime flipping exactly at the `N=max` crossover.
 
-**Correction (claim #6):** the TODO says FP8 shifts `S_node` "~2×", but the real cap ratio is
+**Correction (claim #6):** an earlier note said FP8 shifts `S_node` "~2×", but the real cap ratio is
 `365/130 ≈ 2.81×`; the test asserts the true value.
 
 ---
@@ -177,12 +175,13 @@ T8's own results are tested in `tests/test_regime.py`: rankings uncorrelated at 
   scaling, `ρ*`, MFU, and the bracket ratio (T1 invariant, T7 ≥ 0.998 agreement); only the
   feasibility margin moves with them.
 - **Two regimes, two value stories.** Load-bound: the autoscaler-drain upside is large
-  (`30× bracket × decode skew ≈ 45×`) but only the `s_plat` floor is guaranteed (T6 left).
-  Memory-bound: the saving *is* the freed memory; expected ≈ guaranteed, the bracket does not
-  transfer (T6 right).
-- **Coordination is worth ~2×** the shed ceiling over a decentralized greedy (T5).
+  (`30× bracket` in the current single-price proxy) but only the `s_plat` floor is guaranteed
+  (T6 left). Memory-bound: the saving *is* the freed memory; the load bracket does not transfer
+  (T6 right).
+- **Coordination shows up where shared resources bite.** In the class-isolated dispatch plot,
+  greedy matches LP for ordinary chat, long chat/code, and reasoning under the chosen budget;
+  agentic loops show the gap, with greedy at **15.6 kW** and LP at **19.8 kW**.
 - **The deadline binds only for big-KV moves** (T8/memory regime); cheap short-context moves are
   capacity-bound, not time-bound (deadline companion).
-- **Crossing `R=1` reorders the dispatch onto a disjoint job set**, because the load and memory
-  rankings are statistically independent (T8) — making the regime flag a real decision, not a
-  relabeling.
+- **Crossing `R=1` reorders the dispatch onto a different job set** in this synthetic draw,
+  making the regime flag a real decision, not a relabeling.

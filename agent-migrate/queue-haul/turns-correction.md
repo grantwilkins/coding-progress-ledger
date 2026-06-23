@@ -54,6 +54,7 @@ From `instance.py`:
 | reasoning chat | rate 0.01/s, Delta median 500, Y mean 3000, T mean 22K | reasoning fattens generated tokens |
 | agentic tool loop | rate 0.15/s, Delta/Y median 3.0, Y mean 600, T mean 66K | modern long-context agent setting |
 | cache hit by class | 0.99 / 0.95 / 0.90 / 0.95 | hit uses Delta; miss uses full T |
+| per-session occupation cap | ell <= 0.50 | long turns reduce effective turn rate instead of letting one session consume multiple nodes |
 
 NumPy's geometric draw has mean `1/p`, so `np.random.geometric(1 / y_mean)`
 has mean `y_mean`.

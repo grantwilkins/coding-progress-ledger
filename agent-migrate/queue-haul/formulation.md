@@ -57,7 +57,7 @@ $$P_j^{\text{work}} = c_1\, f_j + c_2\, g_j,\qquad \frac{c_2}{c_1}\approx 5\text
 
 The token-energy coefficients are calibrated averages, not fixed facts over time. They should be refit or swept when the model, hardware, precision, serving stack, batching policy, context mix, or traffic mix changes.
 
-The job's **future node-power impact** also includes the share of node base power attached to the node time it occupies. Until `instance.py` stores raw $f,g$, the code reports the single-price load proxy:
+The job's **future node-power impact** also includes the share of node base power attached to the node time it occupies. The code now stores raw $f,g$, but it does not yet have calibrated token-energy coefficients for this model/hardware stack, so it reports the single-price load proxy:
 
 $$\Delta P_j^{\text{future}} = \bar p\,\ell_j$$
 

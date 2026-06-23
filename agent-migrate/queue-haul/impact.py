@@ -31,7 +31,7 @@ class Impact:
     """Columnar; parallel arrays in pop order, plus the pool-level regime flag."""
 
     dp_guaranteed: np.ndarray  # s_plat·ℓ_j (guaranteed, single-price)
-    dp_expected: np.ndarray  # p̄·ℓ_j future-node proxy until raw f/g work power lands
+    dp_expected: np.ndarray  # p̄·ℓ_j future-node proxy until token-energy work power is calibrated
     dp_expected_single: np.ndarray  # same single-price load proxy kept for comparisons
     dp_memory: np.ndarray  # μ·T_j/E[T] (memory regime, watts)
     c_replay: np.ndarray  # c_j(R), seconds

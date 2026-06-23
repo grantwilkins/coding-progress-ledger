@@ -34,6 +34,7 @@ class Workload:
     agentic_append_output_ratio: float = 3.0
     append_output_ratio_sigma: float = 0.5
     cache_hit: tuple = (0.99, 0.95, 0.90, 0.95)
+    max_ell: float = 0.50  # per-session occupation cap; above this, turns queue behind themselves
     g_bf16: float = 4600.0  # first-order constant decode tok/s; sweep for long-T sensitivity
     g_fp8: float = 9200.0
     mfu: float = 0.35  # drives ρ_dest
@@ -93,7 +94,6 @@ def _draw(rng, n: int, wl: Workload, precision: str) -> JobPopulation:
     idx = np.array([SESSION_CLASSES.index(c) for c in session_class])
     rate_mean = np.asarray(wl.rate_means)[idx]
     raw_rate = rng.lognormal(np.log(rate_mean) - wl.rate_sigma**2 / 2, wl.rate_sigma)
-    turn_rate = raw_rate * (state == "active")
     y_mean = np.asarray(wl.y_means)[idx]
     Y = rng.geometric(1.0 / y_mean)
     delta = rng.lognormal(np.log(np.asarray(wl.delta_medians)[idx]), wl.delta_sigma)
@@ -103,10 +103,13 @@ def _draw(rng, n: int, wl: Workload, precision: str) -> JobPopulation:
     )
     cache_hit = rng.random(n) < np.asarray(wl.cache_hit)[idx]
 
+    G = wl.g_fp8 if precision == "fp8" else wl.g_bf16
+    work_per_turn = np.where(cache_hit, delta, T) / rho_dest(T, wl.mfu) + Y / G
+    turn_rate = np.minimum(raw_rate, wl.max_ell / work_per_turn) * (state == "active")
     f = turn_rate * np.where(cache_hit, delta, T)
     g = turn_rate * Y
     ell_pre = f / rho_dest(T, wl.mfu)
-    ell_dec = g / (wl.g_fp8 if precision == "fp8" else wl.g_bf16)
+    ell_dec = g / G
     m = ETA_BYTES_PER_TOK * T
     return JobPopulation(
         job_type, session_class, state, is_reasoning, T, turn_rate, delta, Y, f, g,

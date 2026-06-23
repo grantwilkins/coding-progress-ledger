@@ -3,7 +3,8 @@
 (a) idle/cold × γ at a fixed short context, (b) context E[T] short→long. Both push total
 load L across the constant threshold occupancy·N·ρ* (pool-sized populations fix S_held/s_node = occupancy·N).
 Plotted vs the regime ratio R = (S_held/s_node)/(L/ρ*): the ranking that governs the shed
-plan switches at R=1, the two rankings are near-uncorrelated, and both walks agree on R=1.
+plan switches at R=1. The load-vs-memory ranking relation is measured from the synthetic
+draw; it is not assumed by construction.
 """
 
 import os
@@ -100,7 +101,7 @@ ax1.set_ylabel("Spearman(shed set, ·)\n— load  / -- memory")
 ax2.set_ylabel("Spearman\n(dp_expected, dp_memory)")
 ax2.set_xlabel("regime ratio  R = (S_held/s_node)/(L/ρ*)")
 ax0.legend(fontsize=8)
-ax0.set_title("T8 — load↔memory boundary: shed set reorders at R=1, both walks agree")
+ax0.set_title("T8 — load↔memory boundary")
 fig.tight_layout()
 
 os.makedirs("outputs", exist_ok=True)
@@ -112,5 +113,5 @@ for lbl, (M, _) in SERIES:
     print(f"{lbl:12s}  R∈[{R.min():.2f},{R.max():.2f}] brackets 1: {R.min() < 1 < R.max()}"
           f"  Jaccard@R≈1={near[1]:.2f}  feasible frac={M[:, 5].mean():.2f}")
 rho = np.concatenate([M[:, 4] for _, (M, _) in SERIES])
-print(f"Spearman(dp_expected, dp_memory): mean={rho.mean():+.3f} std={rho.std():.3f}  (≈0 ⇒ rankings independent)")
-print("low Jaccard everywhere ⇒ the regime flip sheds a near-disjoint job set (the substantive result)")
+print(f"Spearman(dp_expected, dp_memory): mean={rho.mean():+.3f} std={rho.std():.3f}  (measured, not assumed)")
+print("low Jaccard near the boundary ⇒ the regime flip sheds a different job set")

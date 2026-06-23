@@ -11,7 +11,7 @@ multi-dest "certify low, report high." Tightening the execution window amplifies
 A · across the K-band: certified shed vs DES reconstruction at the planned D and a tight 0.5D, with
     θ_egress on a twin axis — the gap opens exactly where θ_egress turns positive (uplink binds).
 B · per-destination held admission at the most-binding K + tight D: realized (resident by D) vs
-    certified sessions vs the held cap spare_ℓ·S_node — under-fill lands on the last-egressed ℓ,
+    certified held-session equivalents vs the held cap spare_ℓ·S_node — under-fill lands on the last-egressed ℓ,
     and no destination is ever over-admitted (realized ≤ certified ≤ cap).
 """
 
@@ -90,15 +90,16 @@ DB = 0.5 * EV.D
 rB = simulate(pop, POOL, imp, pB, replace(EV, D=DB), MV, fleet=fB)
 Y = pB.Y_R + pB.Y_S
 order = np.argsort(-fB.spare)           # destinations sorted by spare (held cap)
-cert_sess = Y.sum(0)[order]
-resident = (np.where(np.isfinite(rB.rebuild_done), rB.rebuild_done, np.inf) <= DB)
-real_sess = (Y * resident).sum(0)[order]
+held_w = pop.T / POOL.mean_context_tokens
+cert_sess = (held_w[:, None] * Y).sum(0)[order]
+resident = np.where(np.isfinite(rB.rebuild_done), rB.rebuild_done, np.inf) <= DB
+real_sess = (held_w[:, None] * Y * resident).sum(0)[order]
 held_cap = (fB.spare * POOL.s_node)[order]
 x = np.arange(KB)
 axB.bar(x - 0.2, cert_sess, 0.4, color="tab:blue", alpha=0.55, label="certified (LP)")
 axB.bar(x + 0.2, real_sess, 0.4, color="tab:green", alpha=0.85, label=f"realized @ $0.5D$ (resident)")
 axB.plot(x, held_cap, "k_", ms=18, mew=2, label=r"held cap $spare_\ell\!\cdot\!S_{node}$")
-axB.set(xlabel=f"destination $\\ell$ (sorted by spare, $K={KB}$, tight $0.5D$)", ylabel="sessions",
+axB.set(xlabel=f"destination $\\ell$ (sorted by spare, $K={KB}$, tight $0.5D$)", ylabel="held-session equivalents",
         title="B · per-ℓ admission: under-fill, never over-admit")
 axB.set_xticks(x)
 axB.legend(loc="upper right", fontsize=8)

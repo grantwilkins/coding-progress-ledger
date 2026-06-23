@@ -68,12 +68,13 @@ K_B = 3
 fB = fleet(K_B)
 pB = solve(pop, POOL, imp, 1e15, EV, MV, fleet=fB)
 order = np.argsort(-fB.spare)
-routed = (pB.Y_R + pB.Y_S).sum(0)[order]
+held_w = pop.T / POOL.mean_context_tokens
+routed = (held_w[:, None] * (pB.Y_R + pB.Y_S)).sum(0)[order]
 cap = (fB.spare * POOL.s_node)[order]
 x = np.arange(K_B)
-axB.bar(x, routed, color="tab:green", alpha=0.8, label=r"routed $\Sigma_j y_{j\ell}$")
+axB.bar(x, routed, color="tab:green", alpha=0.8, label="routed held-session equivalents")
 axB.plot(x, cap, "k_", ms=22, mew=2, label=r"held cap $spare_\ell\!\cdot\!S_{node}$")
-axB.set(xlabel=f"destination $\\ell$ (sorted by spare, $K={K_B}$)", ylabel="sessions",
+axB.set(xlabel=f"destination $\\ell$ (sorted by spare, $K={K_B}$)", ylabel="held-session equivalents",
         title="B. admission-limited: routing pinned to graded spare")
 axB.set_xticks(x)
 axB.legend(loc="upper right", fontsize=8)
