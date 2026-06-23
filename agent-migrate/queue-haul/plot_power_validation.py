@@ -17,16 +17,11 @@ import numpy as np
 
 from power import CAP_FP8_GB, PoolPower
 
-POWER_KNEE = 0.10  # §2 center, plot-only
-LATENCY_KNEE = 0.85  # §2 center, plot-only
-
 p = PoolPower()
-pi_knee = p.p_busy_w - p.s_plat * (p.rho_star - POWER_KNEE)  # anchors pi(rho*) = P_busy
 
 
 def pi(ell):
-    ramp = p.p_idle_w + (pi_knee - p.p_idle_w) * ell / POWER_KNEE
-    return np.where(ell <= POWER_KNEE, ramp, pi_knee + p.s_plat * (ell - POWER_KNEE))
+    return p.node_power(ell)
 
 
 assert np.isclose(pi(p.rho_star), p.p_busy_w)
@@ -38,11 +33,11 @@ ell = np.linspace(0, 1, 500)
 ax1.plot(ell, pi(ell) / 1e3, "k", lw=2, label="node curve $\\pi(\\ell)$")
 ax1.plot([0, p.rho_star], [0, p.p_busy_w / 1e3], "--", color="tab:red",
          label=f"amortized $\\bar p$ = {p.p_bar / 1e3:.1f} kW/unit (origin secant)")
-ax1.plot([POWER_KNEE, 1], [pi_knee / 1e3, (pi_knee + p.s_plat * (1 - POWER_KNEE)) / 1e3],
+ax1.plot([p.power_knee, 1], [p.p_knee / 1e3, p.node_power(1.0) / 1e3],
          ":", color="tab:blue", lw=3,
          label=f"guaranteed $s_{{plat}}$ = {p.s_plat:.0f} W/unit (plateau slope)")
-for x, name in [(POWER_KNEE, "power knee"), (p.rho_star, "$\\rho^\\star$"),
-                (LATENCY_KNEE, "latency knee")]:
+for x, name in [(p.power_knee, "power knee"), (p.rho_star, "$\\rho^\\star$"),
+                (p.latency_knee, "latency knee")]:
     ax1.axvline(x, color="gray", lw=0.8, alpha=0.6)
     ax1.text(x, 11.3, name, rotation=90, ha="right", va="top", fontsize=8, color="gray")
 ax1.plot(p.rho_star, p.p_busy_w / 1e3, "o", color="tab:red")

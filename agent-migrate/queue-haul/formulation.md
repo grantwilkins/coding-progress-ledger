@@ -40,7 +40,7 @@ A single job also has to fit under the same setpoint. If $\ell_j>\rho^\star$, th
 
 ## Pool & power prices (`power.py`)
 
-**Node curve: ramp-then-plateau.** Power climbs from $P_{\text{idle}}$ to $P_{\text{busy}}$ as $\ell$ rises to the **power knee**, then is flat (dense models are near-step, not linear-in-load). The **latency knee** sits later; $\rho^\star$ sits just below it. *The solver never evaluates this curve — only the scalar prices below.*
+**Node curve: ramp-then-plateau.** Power climbs from $P_{\text{idle}}$ to $P_{\text{busy}}$ as $\ell$ rises to the **power knee**, then is flat (dense models are near-step, not linear-in-load). The **latency knee** sits later; $\rho^\star$ sits just below it. The canonical dispatch solver never evaluates this curve — only the scalar prices below. `node_knee.py` is a separate exploration path that evaluates the curve when source-node placement is explicit.
 
 **Two prices for shed load** — what a removed unit of load is worth in watts:
 
@@ -148,3 +148,18 @@ bound, because it depends on autoscaler/node-drain behavior.
 ## Deliberately cut (reattachable without changing the above)
 
 Prefill/decode disaggregation, session classes / Markov chains, lexicographic objectives, receding-horizon re-solve as the pool drains (the static snapshot freezes the pre-move regime), 3-stage per-destination downlink contention.
+
+## Node-knee exploration (`node_knee.py`)
+
+The additive dispatch path values moved jobs independently. The node-knee exploration instead requires an explicit `source_node` placement and evaluates modeled expected source shed by node:
+
+$$r_i=\sum_{j\in i}\ell_j y_j,\qquad F_i(r_i)=P(L_i)-P(L_i-r_i).$$
+
+For the ramp-then-plateau curve, $F_i$ is convex in removed load: concentrating removals can become more valuable once a node crosses the power knee. The exact target $\sum_iF_i(r_i)\ge S^\star$ is nonconvex, so `node_knee.py` keeps it out of the canonical solver and provides compact exploration methods:
+
+- sequential tangent LPs using global lower bounds of $F_i$,
+- active-knee LP candidates that force selected nodes below the power knee,
+- live and node-drain greedy baselines,
+- a tiny exact enumeration oracle for hand-checkable cases.
+
+Reported names are `node_expected_w` for modeled node-curve power and `active_floor_w` for the conservative active-work floor. Node-knee expected watts are model evidence, not a hard grid guarantee.

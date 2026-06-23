@@ -18,6 +18,7 @@ power.py  →  the scalar prices the dispatch consumes (no node curve is ever ev
 instance.py →  a sampled session population (load ℓ and KV footprint m per job)
 impact.py  →  per-job power freed ΔP_j and per-job move cost c_j (replay vs KV-transfer)
 dispatch.py →  LP / MILP that picks which jobs move and how, + greedy / random baselines
+node_knee.py →  optional source-placement exploration for expected ramp–plateau node shed
 ```
 
 ### T1 — prices (`power.py`, `outputs/power_validation.png`)
@@ -196,6 +197,11 @@ both walks bracket `R=1` with the measured regime flipping exactly at the `N=max
 
 **Correction (claim #6):** an earlier note said FP8 shifts `S_node` "~2×", but the real cap ratio is
 `365/130 ≈ 2.81×`; the test asserts the true value.
+
+`tests/test_node_knee.py` covers the separate node-knee exploration path: explicit source-node
+placement, convex removed-load value under the ramp–plateau curve, active-knee concentration cases,
+node-drain greedy, and the tiny exact oracle. This path reports modeled `node_expected_w`, not a hard
+grid guarantee.
 
 ---
 

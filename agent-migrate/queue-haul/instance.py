@@ -69,6 +69,7 @@ class JobPopulation:
     m: np.ndarray  # η·T_j (bytes)
     precision: str
     mfu: float  # the MFU ρ_dest was built with; impact reads it so rebuild can't desync
+    source_node: np.ndarray | None = None  # optional source-node placement for node-knee studies
 
     @property
     def ell(self) -> np.ndarray:

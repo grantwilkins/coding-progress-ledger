@@ -1,6 +1,6 @@
 """Pool & power model (formulation.md §Pool power model; values from assumptions.md §2/§4).
 
-Scalar prices the dispatch consumes — the solver never evaluates a node power curve.
+Scalar prices the canonical dispatch consumes; node_knee.py also uses the node curve.
 """
 
 from __future__ import annotations
@@ -42,6 +42,8 @@ def rho_replay(T, mfu: float = 0.35):
 class PoolPower:
     p_idle_w: float = 3200.0  # §2 center
     p_busy_w: float = 8400.0  # §2 center, 0.8x TDP
+    power_knee: float = 0.10  # §2 center
+    latency_knee: float = 0.85  # §2 center
     rho_star: float = 0.80  # §2 center
     bracket_ratio: float = 30.0  # §2 center, p̄/s_plat
     gamma: float = 0.5  # §4 center, paged-out uplift
@@ -84,6 +86,27 @@ class PoolPower:
     def mu(self) -> float:
         """Memory-regime marginal power, W per held session (node sits at idle)."""
         return self.p_idle_w / self.s_node
+
+    @property
+    def p_knee(self) -> float:
+        """Node power at the power knee, anchoring pi(rho*) = P_busy."""
+        return self.p_busy_w - self.s_plat * (self.rho_star - self.power_knee)
+
+    @property
+    def ramp_slope(self) -> float:
+        """Ramp slope below the power knee, W per node-unit."""
+        return (self.p_knee - self.p_idle_w) / self.power_knee
+
+    def node_power(self, load):
+        """Ramp-then-plateau node power at node load; plateau slope extends above rho*."""
+        load = np.asarray(load, dtype=float)
+        ramp = self.p_idle_w + self.ramp_slope * load
+        plat = self.p_knee + self.s_plat * (load - self.power_knee)
+        return np.where(load <= self.power_knee, ramp, plat)
+
+    def node_power_slope(self, load):
+        """A subgradient of node_power(load); choose the ramp slope at the knee."""
+        return np.where(np.asarray(load, dtype=float) <= self.power_knee, self.ramp_slope, self.s_plat)
 
     def node_count(self, load: float, s_held: float) -> float:
         return max(load / self.rho_star, s_held / self.s_node)
