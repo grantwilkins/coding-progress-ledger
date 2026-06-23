@@ -75,12 +75,14 @@ infeasibility it re-solves to max-shed and reports the shortfall. `bind_dp` comm
 
 ### T5 — random vs greedy vs LP (`outputs/dispatch_validation.png`)
 
-Three policies under the same movement budgets. **Ceilings separate as random < greedy < LP:
-17.8 / 32.8 / 63.5 kW** (memory-bound pool, 296 jobs). Selection (greedy over random) then global
-repacking transfers→replays (LP over greedy, the **~2× coordination gap**) each fit more shed
-under the same links. On the fair per-watt view, **greedy lies exactly on the LP/MILP cost
-frontier** (optimal where it can operate, just stops sooner) while random pays far more downtime
-per watt (at `S*=17.4 kW`: random cost 756 s / shed 10.1 kW / 12% feasible, vs greedy = LP = 502 s).
+Three policies under the same movement budgets, on the default workload conditioned on active
+sessions so idle/cold zero-downtime memory shed does not hide the action-choice problem.
+**Ceilings separate as random < greedy < LP: 20.5 / 47.8 / 61.4 kW** (memory-bound pool,
+296 active jobs). Selection (greedy over random) then global repacking transfers→replays
+(LP over greedy, +13.7 kW beyond greedy) each fit more shed under the same links. On the
+fair per-watt view, greedy lies on the LP/MILP cost frontier where it is feasible, then
+stops sooner; at `S*=24.0 kW`, random sheds only 10.4 kW on average, while greedy and LP
+both meet the target at 557 s.
 
 ### T6 — certify low, report high (`outputs/certify_report_validation.png`)
 

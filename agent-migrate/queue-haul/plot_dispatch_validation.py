@@ -1,19 +1,17 @@
 """Validation plot for dispatch.py (formulation.md §Dispatch program).
 
-Three policies, all respecting the same movement budgets the deadline window
-allows (source egress bytes, rebuild capacity, destination headroom): a random
-baseline (shuffle the movable jobs, pick each action by coin flip), the
-decentralized greedy (each job self-selects its cheaper action, best-deal jobs
-move first), and the coordinated LP/MILP. Left: achieved shed vs requested S*.
-Each tracks y=x while feasible, then flattens at its ceiling — random < greedy <
-LP, because selection (greedy over random) and then global repacking
-(transfers→replays, LP over greedy) each fit more shed under the same egress link.
-Right: total downtime vs *achieved* shed (the fair per-watt view). Greedy lies
-exactly on the LP/MILP cost frontier (optimal where it can operate, just stops
-sooner); random sits well above it — it pays more downtime per watt shed.
+Active-session validation for dispatch.py. Three policies respect the same
+movement budgets (source egress bytes, rebuild capacity, destination headroom):
+random, decentralized greedy, and coordinated LP/MILP. The population is the
+default workload conditioned on active sessions, so idle/cold zero-downtime
+memory shed does not hide the action-choice problem. Left: achieved shed vs
+requested S*. Ceilings separate as random < greedy < LP because selection
+(greedy over random) and global repacking (LP over greedy) fit more shed under
+the same shared link. Right: total downtime vs achieved shed.
 """
 
 import os
+from dataclasses import replace
 
 import matplotlib
 
@@ -23,12 +21,12 @@ import numpy as np
 
 from dispatch import Event, bind_dp, greedy, random_dispatch, solve
 from impact import Movement, compute
-from instance import generate
+from instance import Workload, generate
 from power import PoolPower
 
 POOL = PoolPower()
-# Destination headroom slack; the 1 GB/s source egress link is the binding budget.
-POP = generate(POOL, n_nodes=16)
+WL = replace(Workload(), state_mix=(1.0, 0.0, 0.0))  # active-session coordination slice
+POP = generate(POOL, WL, n_nodes=16)
 IMP = compute(POP, POOL)
 EVENT = Event(dest_nodes=48, W=16)
 MOVE = Movement()
@@ -59,7 +57,7 @@ xg = 0.92 * S.max() / kW
 axA.annotate("", xy=(xg, lp_ceil / kW), xytext=(xg, g_ceil / kW), arrowprops=dict(arrowstyle="<->", color="0.3"))
 axA.text(xg - 2, (g_ceil + lp_ceil) / 2 / kW, "coordination\ngap", fontsize=8, ha="right", va="center")
 axA.set(xlabel="requested shed $S^\\star$ (kW)", ylabel="achieved shed (kW)",
-        title="random < greedy < LP: selection then coordination")
+        title="LP raises the shed ceiling through coordination")
 axA.legend(loc="upper left", fontsize=8)
 
 # --- Panel B: total downtime vs ACHIEVED shed (fair per-watt view) ---
@@ -70,9 +68,9 @@ r_pts = [(p.shed_guaranteed / kW, p.cost) for row in rd for p in row if p.feasib
 axB.scatter(*zip(*r_pts), s=14, color="tab:gray", alpha=0.4, label="random (feasible runs)")
 axB.plot(*frontier(lp), color="tab:blue", lw=2, label="LP (coordinated)")
 axB.plot(*frontier(mi), color="tab:red", lw=1.2, ls="--", label="MILP")
-axB.plot(*frontier(gr), color="tab:orange", lw=4, alpha=0.5, label="greedy (on the optimum)")
+axB.plot(*frontier(gr), color="tab:orange", lw=4, alpha=0.5, label="greedy (decentralized)")
 axB.set(xlabel="achieved shed (kW)", ylabel="total downtime $\\Sigma\\,c$ (s)",
-        title="random pays more per watt; greedy = LP optimum where feasible")
+        title="Greedy is local; LP keeps going after the shared link binds")
 axB.legend(loc="upper left", fontsize=8)
 
 fig.tight_layout()
@@ -81,7 +79,7 @@ for ext in ("pdf", "png"):
     fig.savefig(f"outputs/dispatch_validation.{ext}", dpi=150)
 
 print(f"regime={IMP.regime}  jobs={len(POP)}  ceilings kW: "
-      f"random={r_shed.max(1).mean():.1f}  greedy={g_ceil/kW:.1f}  LP={lp_ceil/kW:.1f}")
+      f"random={r_shed.max():.1f}  greedy={g_ceil/kW:.1f}  LP={lp_ceil/kW:.1f}")
 k = np.searchsorted(S, 0.5 * g_ceil)
 print(f"@S*={S[k]/kW:.1f}kW: random cost={np.mean([rd[k][s].cost for s in SEEDS]):.0f} "
       f"(shed {np.mean([rd[k][s].shed_guaranteed for s in SEEDS])/kW:.1f}kW, feas "
