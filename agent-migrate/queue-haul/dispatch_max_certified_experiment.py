@@ -2,7 +2,7 @@
 
 from dataclasses import replace
 
-from dispatch import Event, bind_dp, solve
+from dispatch import Event, bind_dp, greedy, solve
 from impact import Movement, compute
 from instance import _mean_T, class_workload, generate
 from power import PoolPower
@@ -16,14 +16,15 @@ def run(cls):
     pool = replace(PoolPower(), mean_context_tokens=_mean_T(wl))
     pop = generate(pool, wl, n_nodes=N_NODES)
     imp = compute(pop, pool)
-    return cls, pop, imp, solve(pop, pool, imp, 2 * bind_dp(imp).sum(), EVENT, MOVE)
+    target = 2 * bind_dp(imp).sum()
+    return cls, pop, imp, solve(pop, pool, imp, target, EVENT, MOVE), greedy(pop, pool, imp, target, EVENT, MOVE)
 
 
 if __name__ == "__main__":
-    print("class               regime jobs max_cert_kW expected_kW moved cost_s")
-    for cls, pop, imp, plan in map(run, CASES):
+    print("class               regime jobs lp_cert_kW greedy_cert_kW gap_kW lp_cost_s greedy_cost_s")
+    for cls, pop, imp, lp, gr in map(run, CASES):
         print(
             f"{cls:19s} {imp.regime:6s} {len(pop):4d} "
-            f"{plan.shed_guaranteed/1e3:11.1f} {plan.shed_expected/1e3:11.1f} "
-            f"{plan.y.sum():5.1f} {plan.cost:6.1f}"
+            f"{lp.shed_guaranteed/1e3:10.1f} {gr.shed_guaranteed/1e3:14.1f} "
+            f"{(lp.shed_guaranteed - gr.shed_guaranteed)/1e3:6.1f} {lp.cost:9.1f} {gr.cost:13.1f}"
         )
