@@ -120,6 +120,8 @@ $\tau_*$ are one-time ramps (egress connection setup, prefill batch-form, ingest
 
 **Duals (shadow prices).** The LP returns $\theta_{\text{egress}}$ (watts per uplink byte — the value of the shared bottleneck) and $\theta_{\text{admit},\ell}$ = load-dual + held-dual per site (value of destination admission headroom) — the routing prices that say where the next watt of shed should go.
 
+**Reported disruption.** The solver minimizes aggregate session downtime. Plots report `cost / S*` in **seconds per certified kW** so comparisons are not driven by a larger requested shed or a larger synthetic population.
+
 **Baselines (`greedy`, `random_dispatch`).** Both are myopic single-pass first-fit drawing down the *same* five movement budgets:
 - **greedy** — decentralized **bang-per-buck**: jobs are considered best-deal-first by $\min(c_R,c_S)/\Delta P$ (seconds of downtime per watt). Each job tries its cheaper action, but if the alternate action fits more of the job under the remaining budgets, it takes the alternate. Equals the LP away from resource boundaries. When a gap appears, read it carefully: **MILP minus greedy** is deployable coordination; **LP minus MILP** is the fractional upper bound.
 - **random** — shuffle movable jobs, coin-flip the action: the floor any real policy should beat.

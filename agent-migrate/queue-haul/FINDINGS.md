@@ -72,13 +72,16 @@ infeasibility it re-solves to max-shed and reports the shortfall. `bind_dp` comm
 
 ### T5 — random vs greedy vs LP (`outputs/dispatch_validation.png`)
 
-Three policies under the same movement budgets, isolated by active, cache-resident session
-class. With budget-respecting fallback, the class-isolated **ceiling** gaps disappear:
-greedy and LP both reach the full class ceiling (**15.3, 15.3, 14.8, 19.8 kW** for
-ordinary chat, long chat/code, reasoning chat, and agentic tool loops). This plot is now
-mostly a sanity check. The earlier large agentic gap came from a baseline bug: greedy
-accepted a partial KV transfer instead of falling back to replay, even when replay could
-move the whole job.
+Two policies under the same movement budgets, isolated by active, cache-resident session
+class. The y-axis is **disruption intensity**: aggregate movement downtime divided by the
+requested certified shed (`s/kW`). This is the interpretable version of the LP objective:
+how many session-disruption seconds we spend per kW delivered.
+
+Ordinary chat, long chat/code, and reasoning chat collapse to the same sorted plan, so
+greedy and LP have the same disruption intensity. Agentic tool loops are the useful case:
+both policies meet the same certified power target, but LP cuts disruption intensity by
+up to **33.5%** at **17.4 kW** (`73.0 → 48.5 s/kW`) by choosing the lower-disruption action
+mix under the shared movement budgets.
 
 ### T6 — certify low, report high (`outputs/certify_report_validation.png`)
 

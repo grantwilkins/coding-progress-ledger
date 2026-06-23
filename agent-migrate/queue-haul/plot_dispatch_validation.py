@@ -1,9 +1,9 @@
 """Dispatch validation by workload class.
 
-Each panel isolates one active, cache-resident session class. The policies see
-the same movement budgets: random, decentralized greedy, and coordinated LP.
-The plot is a sanity check: after fallback accounting, ceiling gaps should only
-appear when shared-resource packing, not a partial-action artifact, limits greedy.
+Each panel isolates one active, cache-resident session class. Greedy and LP see
+the same movement budgets. The y-axis is aggregate downtime normalized by the
+requested certified shed, i.e. seconds of disruption per kW. Achieved-shed curves
+can hide the objective value whenever both policies meet the same target.
 """
 
 import os
@@ -15,14 +15,13 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
 
-from dispatch import Event, bind_dp, greedy, random_dispatch, solve
+from dispatch import Event, bind_dp, greedy, solve
 from impact import Movement, compute
 from instance import _mean_T, class_workload, generate
 from power import PoolPower
 
 EVENT = Event(dest_nodes=48, W=16)
 MOVE = Movement()
-SEEDS = range(4)
 N_NODES = 4
 CASES = (
     ("ordinary chat", "ordinary_chat"),
@@ -39,42 +38,46 @@ def case(label, cls):
     imp = compute(pop, pool)
     dp = bind_dp(imp)
     lp_ceil = solve(pop, pool, imp, 2 * dp.sum(), EVENT, MOVE).shed_guaranteed
-    S = np.linspace(0.04, 1.15, 18) * lp_ceil
+    S = np.linspace(0.04, 0.98, 20) * lp_ceil
     lp = [solve(pop, pool, imp, s, EVENT, MOVE) for s in S]
     gr = [greedy(pop, pool, imp, s, EVENT, MOVE) for s in S]
-    rd = [[random_dispatch(pop, pool, imp, s, EVENT, MOVE, seed=sd) for sd in SEEDS] for s in S]
-    return label, pop, imp, S, lp, gr, np.array([[p.shed_guaranteed for p in row] for row in rd]) / 1e3
+    return label, pop, imp, S, lp, gr
 
 
 results = [case(*c) for c in CASES]
 
 kW = 1e3
-fig, axs = plt.subplots(2, 2, figsize=(11, 7.2), sharex=False, sharey=False)
-for ax, (label, pop, imp, S, lp, gr, r_shed) in zip(axs.ravel(), results):
-    lp_ceil = max(p.shed_guaranteed for p in lp)
-    g_ceil = max(p.shed_guaranteed for p in gr)
-    ax.plot(S / kW, S / kW, "k--", lw=1, label="requested")
-    ax.fill_between(S / kW, r_shed.min(1), r_shed.max(1), color="tab:gray", alpha=0.2)
-    ax.plot(S / kW, r_shed.mean(1), color="tab:gray", lw=2, label="random")
-    ax.plot(S / kW, [p.shed_guaranteed / kW for p in gr], color="tab:orange", lw=2, label="greedy")
-    ax.plot(S / kW, [p.shed_guaranteed / kW for p in lp], color="tab:blue", lw=2, label="LP")
-    xg = 0.92 * S.max() / kW
-    if lp_ceil - g_ceil > 0.5 * kW:
-        ax.annotate("", xy=(xg, lp_ceil / kW), xytext=(xg, g_ceil / kW),
-                    arrowprops=dict(arrowstyle="<->", color="0.3"))
-        ax.text(xg, (g_ceil + lp_ceil) / (2 * kW), "gap", fontsize=8, ha="center", va="center")
+fig, axs = plt.subplots(2, 2, figsize=(11, 7.8), sharex=False, sharey=False)
+for ax, (label, pop, imp, S, lp, gr) in zip(axs.ravel(), results):
+    lp_cost = np.array([p.cost if p.feasible else np.nan for p in lp])
+    gr_cost = np.array([p.cost if p.feasible else np.nan for p in gr])
+    lp_norm, gr_norm = lp_cost / (S / kW), gr_cost / (S / kW)
+    save = np.divide(gr_norm - lp_norm, gr_norm, out=np.zeros_like(gr_norm), where=gr_norm > 0)
+    ax.plot(S / kW, gr_norm, color="tab:orange", lw=2, label="greedy")
+    ax.plot(S / kW, lp_norm, color="tab:blue", lw=2, label="LP")
+    if np.nanmax(save) > 0.01:
+        i = int(np.nanargmax(save))
+        ax.annotate(f"LP cuts disruption {100 * save[i]:.0f}%",
+                    xy=(S[i] / kW, lp_norm[i]), xytext=(S[i] / kW, 0.72 * gr_norm[i]),
+                    arrowprops=dict(arrowstyle="->", color="0.3"), fontsize=8, ha="center")
     else:
-        ax.text(xg, lp_ceil / kW, "greedy=LP", fontsize=8, ha="right", va="bottom", color="0.3")
+        ax.text(0.60 * S.max() / kW, 0.55 * np.nanmax(gr_norm), "same sorted plan",
+                fontsize=8, ha="center", color="0.3")
     ax.set(title=f"{label}: {imp.regime}, {len(pop)} jobs",
-           xlabel="requested shed $S^\\star$ (kW)", ylabel="achieved shed (kW)")
+           xlabel="requested shed $S^\\star$ (kW)", ylabel="disruption intensity (s/kW)")
 axs[0, 0].legend(loc="upper left", fontsize=8)
 
-fig.tight_layout()
+fig.subplots_adjust(left=0.08, right=0.98, bottom=0.08, top=0.94, wspace=0.28, hspace=0.38)
 os.makedirs("outputs", exist_ok=True)
 for ext in ("pdf", "png"):
     fig.savefig(f"outputs/dispatch_validation.{ext}", dpi=150)
 
-for label, pop, imp, _, lp, gr, r_shed in results:
-    print(f"{label:16s} regime={imp.regime:6s} jobs={len(pop):4d} ceilings kW: "
-          f"random={r_shed.max():5.1f} greedy={max(p.shed_guaranteed for p in gr)/kW:5.1f} "
-          f"LP={max(p.shed_guaranteed for p in lp)/kW:5.1f}")
+for label, pop, imp, S, lp, gr in results:
+    lp_cost = np.array([p.cost for p in lp])
+    gr_cost = np.array([p.cost for p in gr])
+    lp_norm, gr_norm = lp_cost / (S / kW), gr_cost / (S / kW)
+    save = np.divide(gr_norm - lp_norm, gr_norm, out=np.zeros_like(gr_norm), where=gr_norm > 0)
+    i = int(np.nanargmax(save))
+    print(f"{label:16s} regime={imp.regime:6s} jobs={len(pop):4d} "
+          f"max disruption cut={100 * save[i]:4.1f}% at S*={S[i]/kW:4.1f} kW "
+          f"({gr_norm[i]:.1f}->{lp_norm[i]:.1f} s/kW)")
