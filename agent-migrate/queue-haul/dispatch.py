@@ -100,14 +100,12 @@ class Plan:
 
 
 def bind_dp(imp: Impact) -> np.ndarray:
-    """Committed floor for the ≥S* constraint: dp_memory when memory binds (the
-    node holds idle sessions, sits at idle, so μ is realized), else dp_guaranteed
-    (plateau slope, realized even if no node drains). NEVER dp_expected — that
-    optimistic upside is reported on the plan, never bound, or we'd promise the
-    grid watts contingent on the autoscaler draining nodes. Pre-move regime
-    (static snapshot); tracking the regime as the pool drains is the deferred
-    receding-horizon re-solve, not an oversight here."""
-    return imp.dp_memory if imp.regime == "memory" else imp.dp_guaranteed
+    """Certified average source-power change from moving active work.
+
+    KV memory remains a capacity constraint, but held bytes do not create certified
+    watts unless a later node-drain model proves whole nodes can turn off by D.
+    """
+    return imp.dp_certified
 
 
 def _plan(x, n, dp, imp, method, regime, s_star, feasible) -> Plan:

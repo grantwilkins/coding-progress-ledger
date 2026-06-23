@@ -1,16 +1,15 @@
-"""Certify low, report high (T6; formulation.md §"Certify low, report high").
+"""Certify active work, report high (T6; formulation.md §"Certify active work").
 
 Sweep the grid's requested power cut and read two prices off each dispatch plan:
-the *guaranteed* floor (realized even if no node ever shuts off) and the *expected*
-upside (realized once removed load lets idle nodes shut off). Two pools, plain English
-on every axis — no bare symbols.
+the active-work certificate and the future node-drain upside. Two pools, plain
+English on every axis — no bare symbols.
 
-Left (compute-bound pool): the guaranteed floor is a small fraction of the expected
-future impact. The dashed line keeps the old single-price bracket as a reference.
+Left (compute-bound pool): the active-work certificate is below the future impact.
+The dashed line keeps the old single-price bracket as a reference.
 
-Right (memory-bound pool, mirror image): the bottleneck is KV cache, so the certified
-price is the memory price (power freed by draining a full node). The future estimate is
-not the certificate in this regime; the 30× load bracket does not transfer.
+Right (memory-bound pool): memory still limits feasibility, but held KV no longer
+creates certified watts. Idle/cold-only memory relief is future node-drain work,
+not a grid certificate.
 """
 
 import os
@@ -59,29 +58,29 @@ rl, rm = ratios(pl), ratios(pm)
 
 fig, (axL, axM) = plt.subplots(1, 2, figsize=(12, 4.8))
 
-# --- compute-bound pool: expected ≫ guaranteed ---
+# --- compute-bound pool: future > active-work certificate ---
 g, e, x = (np.array([p.shed_guaranteed for p in pl]) / kW,
            np.array([p.shed_expected for p in pl]) / kW, Sl / kW)
 axL.fill_between(x, g, e, color="tab:blue", alpha=0.10)
-axL.plot(x, g, color="tab:blue", lw=2.4, label="power freed while nodes keep running (guaranteed)")
+axL.plot(x, g, color="tab:blue", lw=2.4, label="active-work certificate")
 axL.plot(x, e, color="tab:red", lw=2.4, label="power freed once idle nodes shut off (expected)")
 axL.plot(x, BR * g, color="0.4", lw=1.3, ls="--", label=f"old single-price bracket ({BR:.0f}×)")
-axL.annotate(f"expected ≈ {rl.mean():.1f}× guaranteed\n(base load + token work)",
+axL.annotate(f"future ≈ {rl.mean():.1f}× certificate",
              xy=(0.50, 0.62), xycoords="axes fraction", fontsize=9, ha="center", color="0.2")
 axL.set(xlabel="requested power cut (kW)", ylabel="power freed (kW)")
-axL.set_title("Compute-bound pool: certified floor far below expected power freed", fontsize=10)
+axL.set_title("Compute-bound pool: active work vs future node proxy", fontsize=10)
 axL.legend(loc="upper left", fontsize=8)
 
-# --- memory-bound pool: the memory floor, not the load proxy, is the certificate ---
+# --- memory-bound pool: memory is not the certificate ---
 gm, em, xm = (np.array([p.shed_guaranteed for p in pm]) / kW,
               np.array([p.shed_expected for p in pm]) / kW, Sm / kW)
 axM.fill_between(xm, np.minimum(gm, em), np.maximum(gm, em), color="tab:gray", alpha=0.15)
-axM.plot(xm, gm, color="tab:blue", lw=2.4, label="power freed by draining full nodes (guaranteed)")
-axM.plot(xm, em, color="tab:red", lw=2.4, label="future estimate (not the memory floor)")
-axM.annotate(f"30× load bracket does not transfer\nfuture estimate = {rm.min():.1f}–{rm.max():.1f}× memory floor",
+axM.plot(xm, gm, color="tab:blue", lw=2.4, label="active-work certificate")
+axM.plot(xm, em, color="tab:red", lw=2.4, label="future node-drain proxy")
+axM.annotate(f"held KV is a constraint, not watts\nfuture proxy = {rm.min():.1f}–{rm.max():.1f}× certificate",
              xy=(0.50, 0.40), xycoords="axes fraction", fontsize=9, ha="center", color="0.2")
 axM.set(xlabel="requested power cut (kW)", ylabel="power freed (kW)")
-axM.set_title("Memory-bound pool: memory floor is the certificate", fontsize=10)
+axM.set_title("Memory-bound pool: no memory-only certificate", fontsize=10)
 axM.legend(loc="upper left", fontsize=8)
 
 fig.tight_layout()
@@ -91,7 +90,7 @@ for ext in ("pdf", "png"):
 
 contain = all(p.shed_expected >= p.shed_guaranteed - 1e-6 for p in pl if p.feasible)
 print(f"LOAD  pool: old single-price gap = {BR:.0f}× (bracket ratio); "
-      f"expected/guaranteed = {rl.mean():.1f}×")
-print(f"MEM   pool: expected/guaranteed = {rm.mean():.1f}× "
-      f"(range {rm.min():.1f}–{rm.max():.1f}); 30× bracket does NOT transfer")
+      f"future/certificate = {rl.mean():.1f}×")
+print(f"MEM   pool: future/certificate = {rm.mean():.1f}× "
+      f"(range {rm.min():.1f}–{rm.max():.1f}); held KV is not certified watts")
 print(f"containment (every feasible S* certified low is met high): {'PASS' if contain else 'FAIL'}")

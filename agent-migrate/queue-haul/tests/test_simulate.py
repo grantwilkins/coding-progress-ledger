@@ -113,7 +113,7 @@ def _toy(n):
 def _toy_imp(b_transfer):
     o = np.ones(len(b_transfer))
     z = np.zeros(len(b_transfer))
-    return Impact(o, o, o, o, z, z, z, np.asarray(b_transfer, float), "load")
+    return Impact(o, o, o, o, o, z, z, z, np.asarray(b_transfer, float), "load")
 
 
 def test_hand_computed_two_job_flow_shop():

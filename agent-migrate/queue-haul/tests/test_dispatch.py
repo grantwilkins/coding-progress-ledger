@@ -161,7 +161,7 @@ def test_greedy_falls_back_from_partial_preferred_action():
         0.35,
     )
     imp = Impact(
-        np.ones(2), np.ones(2), np.ones(2), np.ones(2),
+        np.ones(2), np.ones(2), np.ones(2), np.ones(2), np.ones(2),
         np.full(2, 2.0), np.ones(2), np.ones(2), np.full(2, 100.0), "load"
     )
     event = Event(D=12, W=100, dest_nodes=1000, spare_frac=1.0)
@@ -203,6 +203,7 @@ def test_dispatch_diagnostics_report_row_level_quantities():
         0.35,
     )
     imp = Impact(
+        np.array([1.0, 2.0, 3.0]),
         np.array([1.0, 2.0, 3.0]),
         np.array([1.0, 2.0, 3.0]),
         np.array([1.0, 2.0, 3.0]),
@@ -262,16 +263,18 @@ def test_lp_lower_bounds_milp():
     assert lp.cost <= mi.cost + 1e-6  # relaxation lower-bounds the integer optimum
 
 
-def test_bind_dp_picks_floor_by_regime():
+def test_bind_dp_uses_active_power_not_memory_regime():
     pop, imp = _pop()  # default population is memory-bound
     assert imp.regime == "memory"
-    assert np.array_equal(bind_dp(imp), imp.dp_memory)
+    assert np.array_equal(bind_dp(imp), imp.dp_certified)
 
     sp = replace(POOL, mean_context_tokens=3378)
     short = generate(sp, replace(Workload(), t_mix=((1.0, 8.0, 0.5),), rate_means=(0.01, 0.01, 0.01, 0.075)))
     impL = compute(short, sp)
     assert impL.regime == "load"
-    assert np.array_equal(bind_dp(impL), impL.dp_guaranteed)
+    assert np.array_equal(bind_dp(impL), impL.dp_certified)
+    cold = generate(POOL, replace(Workload(), state_mix=(0.0, 0.0, 1.0)))
+    assert bind_dp(compute(cold, POOL)).sum() == pytest.approx(0.0)
     # expected (amortized) ≥ guaranteed (plateau) on the same shed plan
     plan = solve(short, sp, impL, 0.3 * bind_dp(impL).sum(), SLACK_E, SLACK_M)
     assert plan.shed_expected >= plan.shed_guaranteed - 1e-6

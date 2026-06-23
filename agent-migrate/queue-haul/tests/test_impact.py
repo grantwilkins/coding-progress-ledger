@@ -1,12 +1,14 @@
 """Claim:
 Impact uses the right accounting level: replay is full-context average prefill,
 cold memory is discounted, inactive moves use resources but carry no user downtime,
-and future power separates base load from token work.
+certified power excludes memory-only occupancy, and future power separates base load
+from token work.
 
 Plausible wrong implementations:
 - Charge full replay at the final-context marginal prefill rate.
 - Give cold sessions the same memory value as resident sessions.
 - Count idle/cold migration resource time as user-visible downtime.
+- Count held KV as certified watts even when the session has no active work.
 - Use normalized ell_pre/ell_dec as token rates, or omit one token-work phase.
 """
 
@@ -82,6 +84,8 @@ def test_expected_separates_base_load_and_token_work():
     pop = _pop([1e4, 1e4], ell_pre=np.array([0.2, 0.0]), ell_dec=np.array([0.0, 0.2]))
     pool = replace(PoolPower(), c_prefill_j_per_tok=2.0, c_decode_j_per_tok=3.0)
     imp = compute(pop, pool)
+    work = 2.0 * pop.f + 3.0 * pop.g
+    assert np.allclose(imp.dp_certified, pool.s_plat * pop.ell + work)
     expected = pool.base_w_per_load * pop.ell + 2.0 * pop.f + 3.0 * pop.g
     assert np.allclose(imp.dp_expected, expected)
     assert imp.dp_expected[0] != pytest.approx(imp.dp_expected[1])
@@ -146,6 +150,8 @@ def test_inactive_moves_have_no_user_downtime_but_keep_bytes():
     assert imp.c_replay[0] > 0 and imp.c_transfer[0] > 0
     assert np.all(imp.c_replay[1:] == 0) and np.all(imp.c_transfer[1:] == 0)
     assert np.all(imp.b_replay > 0) and np.all(imp.b_transfer > 0)
+    assert np.all(imp.dp_certified[1:] == 0)
+    assert np.all(imp.dp_memory[1:] > 0)
 
 
 def test_regime_flag_matches_pool():
@@ -172,6 +178,7 @@ def test_units_seconds_and_watts():
         assert np.all(np.isfinite(c)) and np.all(c >= 0)  # user-visible seconds
     for d in (
         imp.dp_guaranteed,
+        imp.dp_certified,
         imp.dp_expected,
         imp.dp_expected_single,
         imp.dp_memory,

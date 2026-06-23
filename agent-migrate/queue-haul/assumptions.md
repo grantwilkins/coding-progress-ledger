@@ -77,7 +77,8 @@ at 0.8× the TDP ceiling, not the ceiling itself.
 | **Bracket ratio p̄/s_plat** | **30×** (center); sweep [17, 58] | sweep | dense-70B-to-405B band (235B sits in it) |
 | **s_plat = p̄/ratio** | ≈ 350 W/node-unit | derived | fixed-node plateau slope (the guaranteed price) |
 | Token-energy c1, c2 | prefill 0.148 J/tok, decode 1.76 J/tok | sweep | H100 dense analog; calibrated trace averages, not constants of nature |
-| Work-power reporting | `P_idle/ρ* · ℓ_j + c1·f_j + c2·g_j` | implementation | `p̄·ℓ_j` is kept only as the single-price comparison column |
+| Certified power | `s_plat·ℓ_j + c1·f_j + c2·g_j` | implementation | active serving work only; held KV is capacity, not certified watts |
+| Future node-drain proxy | `P_idle/ρ* · ℓ_j + c1·f_j + c2·g_j` | implementation | `p̄·ℓ_j` is kept only as the single-price comparison column |
 | **G (decode tok/s ceiling)** | **BF16 4,600 / FP8 9,200** | sweep | the `ℓ_dec = g/G` normalizer, precision-keyed: Baseten 4×H100-FP8 ~4,600 tok/s anchor scaled to the 8×H100 node |
 | **F (prefill normalizer)** | **per-job `ρ_dest(T_j)`** | derived-fn | `ℓ_pre,j = f_j/ρ_dest(T_j)` uses the §6 roofline at each job's own context — **not a constant** (retires the median-vs-mean choice for E[T]) |
 
@@ -86,6 +87,8 @@ coefficients are calibrated averages for a measured model, hardware, precision,
 serving stack, batching policy, and workload mix; refit or sweep them when those
 change. Future impact is the static node share plus token work:
 `ΔP_j = P_idle/ρ* · ℓ_j + c1·f_j + c2·g_j`.
+The dispatch certificate excludes held-KV memory credit and uses the active-work
+column `s_plat·ℓ_j + c1·f_j + c2·g_j`.
 
 ---
 
@@ -138,7 +141,7 @@ occupy more than its configured share of a node.
 | S_node^resident = Cap/m̄ | BF16 ≈ 10.3, FP8 ≈ 29 sessions | derived | what a node can actively serve |
 | **γ (paged-out uplift)** | **0.5** (center); sweep [0.5, 1.0] | sweep | cold/resident ratio; offload-tier size × cold fraction |
 | **S_node = (1+γ)·S_node^res** | BF16 ≈ 15.4, FP8 ≈ 43 held (center) | derived | total holdable incl. paged |
-| **μ = P_idle / S_node** | BF16 ≈ 208, FP8 ≈ 74 W/held-session | derived | **memory-regime marginal power — see note** |
+| **μ = P_idle / S_node** | BF16 ≈ 208, FP8 ≈ 74 W/held-session | derived | memory-pressure diagnostic; not a dispatch certificate |
 
 **Note on the memory regime (ρ_low eliminated).** A node is in the memory regime precisely when
 KV fills before compute does — which means the sessions it holds are mostly idle or cold (that is
@@ -146,7 +149,8 @@ KV fills before compute does — which means the sessions it holds are mostly id
 just `P_idle`. So the marginal power of a held session is `μ = P_idle / S_node` — there is no
 separate "utilization when memory binds" parameter to set. (Any residual active load on that node
 is already counted in the load-regime term; the `max()` over the two regimes in `N` picks whichever
-binds, so the two never double-count.) **ρ_low is removed from the model.**
+binds, so the two never double-count.) This is diagnostic accounting for future node-drain work,
+not a certifiable watt value for the current dispatch objective. **ρ_low is removed from the model.**
 
 ---
 
@@ -226,7 +230,7 @@ constant F (prefill load normalized per-job by ρ_dest(T_j)).
 
 **Primary results to produce** (each a sweep over one axis with the rest at center):
 1. **Shed vs. S\*** — does dispatch hit the target; where does it become infeasible (vs. D), for BF16 and FP8.
-2. **Certify-vs-expect gap** — guaranteed (`s_plat`) vs. base-load-plus-token-work shed, with the old `p̄` bracket as reference.
+2. **Certify-vs-expect gap** — active-work certificate vs. future node-drain proxy, with the old `p̄` bracket as reference.
 3. **Ranking invariance** — job order vs. {ρ*, MFU, γ} (should be flat); feasibility margin vs. same (should move).
 4. **Greedy vs. LP** — bang-per-buck sort vs. the LP; agreement except at constraint boundaries.
 5. **Class mix** — class-isolated and mixed-population sweeps showing when ordinary chat, long chat/code, reasoning, or agentic loops set the bottleneck.

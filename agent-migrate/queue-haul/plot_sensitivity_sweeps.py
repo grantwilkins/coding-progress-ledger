@@ -1,7 +1,7 @@
 """Sensitivity sweeps (T7; formulation.md §"Sensitivity claims").
 
 Sweep three uncertain parameters — operating utilization, compute efficiency
-(MFU), and the price ratio between the expected and guaranteed prices — and show
+(MFU), and the price ratio between the future and certified prices — and show
 the two halves of the claim. WHICH jobs to move is unchanged: each sweep leaves
 the job ordering essentially identical (selection is robust). HOW MUCH power can
 be cut moves smoothly with every parameter (the absolute amount is sensitive).
@@ -83,7 +83,7 @@ AXES = [
     ("compute efficiency (fraction of peak)", np.linspace(0.30, 0.50, 11), 0.35,
      lambda v: (LOAD_POOL, replace(LOAD_WL, mfu=v)), "tab:orange",
      "Higher efficiency, smaller reduction"),
-    ("price ratio (expected ÷ guaranteed)", np.linspace(17, 58, 11), 30.0,
+    ("price ratio (future ÷ floor)", np.linspace(17, 58, 11), 30.0,
      lambda v: (replace(LOAD_POOL, bracket_ratio=v), LOAD_WL), "tab:green",
      "Wider price ratio, smaller reduction"),
 ]
@@ -125,14 +125,14 @@ for key, (name, vals, _, _, color, title), (_, _, cut) in zip(
     ax[key].axhline(request, color="0.4", ls=":", lw=1.3, label="an example grid request")
     ax[key].set(xlabel=name, title=title, ylim=(0, cut.max() / kW * 1.12))
     ax[key].legend(loc="lower left", fontsize=8)
-ax["util"].set_ylabel("largest guaranteed power reduction (kW)")
+ax["util"].set_ylabel("largest certified power reduction (kW)")
 
 fig.tight_layout()
 os.makedirs("outputs", exist_ok=True)
 for ext in ("pdf", "png"):
     fig.savefig(f"outputs/sensitivity_sweeps.{ext}", dpi=150)
 
-print(f"center largest guaranteed reduction ≈ {center_cut:.0f} kW "
+print(f"center largest certified reduction ≈ {center_cut:.0f} kW "
       f"(example grid request drawn at {request:.0f} kW)")
 for (name, _, _, _, _, _), (ap, ad, cut) in zip(AXES, results):
     m = cut.mean(1) / kW
@@ -142,4 +142,4 @@ for (name, _, _, _, _, _), (ap, ad, cut) in zip(AXES, results):
           f"reduction {direction} {span:.0f}% from one end of the range to the other")
 print("deadline omitted: it only widens the transfer-rate budgets (egress/re-prefill/ingest),")
 print("  which stay slack for cheap short-context moves — destination capacity binds instead.")
-print("  D moves the ceiling only for long-context/big-KV moves (memory regime, T8).")
+print("  D moves the ceiling only when movement resources, not held-memory value, bind.")

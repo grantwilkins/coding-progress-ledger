@@ -119,7 +119,7 @@ def simulate(pop: JobPopulation, pool, imp: Impact, plan: Plan, event: Event = E
         lb = max(event.tau_src + p1f[mv].sum(),
                  max(_stage_lb(event.tau_pre, p2R[:, l], int(W[l])) for l in range(K)),
                  max(_stage_lb(event.tau_in, p2S[:, l], int(W[l])) for l in range(K)))
-        ub = event.tau_src + p1f[mv].sum() + p2Rf[mv].sum() + p2Sf[mv].sum()
+        ub = max(event.tau_src + p1f[mv].sum(), event.tau_pre, event.tau_in) + p2Rf[mv].sum() + p2Sf[mv].sum()
         makespan = float(np.nanmax(rd))
     else:
         lb = ub = makespan = 0.0

@@ -28,7 +28,8 @@ The node never appears as a curve in the solver; it appears as four prices. At c
   upside),
 - guaranteed plateau slope **`s_plat = p̄/30 = 350 W`** per node-unit (realized even if no node
   drains) — the **bracket ratio is 30×**,
-- memory price **`μ = P_idle/S_node = 208 W/held session` (BF16)**, `74 W (FP8)`.
+- memory pressure diagnostic **`μ = P_idle/S_node = 208 W/held session` (BF16)**, `74 W (FP8)`;
+  this is no longer a dispatch certificate.
 
 The left panel confirms the prices are consistent with the (plot-only) ramp–plateau curve: the
 curve passes `(ρ*, P_busy)`, so the origin secant has slope `p̄` and the plateau has slope
@@ -62,8 +63,9 @@ tokens, FP8 ≈ 35k), not something packed into the setup.
 LP over `y∈[0,1]` minimizing total downtime `Σ y·c` s.t. `Σ y·ΔP ≥ S*`, source egress,
 destination rebuild by the deadline, and destination headroom. **Two solves, not a branch:** on
 infeasibility it re-solves to max-shed and reports the shortfall. `bind_dp` commits the
-*guaranteed* floor — `dp_memory` when memory binds, else `dp_guaranteed`; never the optimistic
-`dp_expected`. Validated end-to-end in T5.
+active-work certificate — `s_plat·ell + c_prefill·f + c_decode·g` in every regime. `dp_memory`
+is kept as a memory-pressure diagnostic and destination/source-capacity signal, not as certified
+grid watts. Validated end-to-end in T5.
 
 ---
 
@@ -89,12 +91,12 @@ The 4-node agentic fixture is small, so this companion scales the **source** fro
 128 nodes** and measures the best LP cut in disruption intensity over a common feasible target
 sweep. It shows two different stories:
 
-- **Fixed destination (`48` destination nodes, `W=16`)**: the event ceiling saturates at
-  **61.4 kW** and the LP cut washes out by **32 source nodes**. This is not evidence that
-  coordination is useless; it says this fixed destination is the bottleneck.
+- **Fixed destination (`48` destination nodes, `W=16`)**: the event ceiling saturates and the
+  LP cut washes out as the source grows. This is not evidence that coordination is useless; it
+  says this fixed destination is the bottleneck.
 - **Scaled destination (same ratio as the 4-node fixture: `dest_nodes=12N`, `W=4N`)**:
-  the ceiling grows to **468.1 kW** at **128 source nodes**, and the LP still cuts disruption
-  intensity by about **9.6-11.0%** for **32-128 source nodes**.
+  the ceiling grows with the source, and the LP still cuts disruption intensity once the common
+  feasible target is high enough for resource choices to matter.
 
 ### Companion — DeepSeek-V4-Flash proxy (`outputs/dispatch_validation_deepseek_v4_flash.png`, `outputs/dispatch_expected_deepseek_v4_flash.png`)
 
@@ -107,23 +109,23 @@ FP8-sized weight footprint.
 Under the same **4 held-memory-node** event, the smaller KV footprint makes the held population much
 larger (agentic: **2001 sessions**). If every agentic session is active, that population is **33.0
 serving-node equivalents**, so this is not a 4-serving-node compute slice. It flips to **load-bound**.
-The LP still improves the normalized objective, but less than Qwen: **8.0%** disruption-intensity
-reduction at **5.1 kW** (`66.8 → 61.5 s/kW`).
+The LP still improves the normalized objective, but the exact magnitude depends on the active-work
+certificate and should be read from the regenerated script output.
 
-The small **5.1 kW** number is the certified grid floor, not the future-node proxy. On the same
-LP plan, the bounded node-drain proxy is **153.2 kW**. The additive token-work field is not plotted
-here because it can exceed the node-power envelope for this proxy configuration.
+The certified grid floor is the active-work certificate, not the future-node proxy. The additive
+future field should be treated as a reported proxy, not the dispatch certificate.
 
-### T6 — certify low, report high (`outputs/certify_report_validation.png`)
+### T6 — certify active work, report high (`outputs/certify_report_validation.png`)
 
-Read two prices off each plan: the guaranteed floor vs the expected upside (once removed load
-lets nodes shut off). Budgets slack to isolate the price story.
+Read two prices off each plan: the active-work certificate vs the future node-drain upside.
+Budgets slack to isolate the price story.
 
-- **Compute-bound pool:** the certified floor is a small slice of the future-impact estimate.
-  The old **30× bracket** remains a single-price reference, not the token-energy estimate.
-- **Memory-bound pool:** the certificate is the memory floor. The load/token future estimate is
-  not the certificate here, so the 30× load bracket **does not transfer**.
-- **Containment holds:** every `S*` certified feasible under `s_plat` is met under the future estimate (PASS).
+- **Compute-bound pool:** the certificate is active serving work on the source; the old **30×
+  bracket** remains a single-price reference, not the token-energy estimate.
+- **Memory-bound pool:** held KV is a capacity constraint and future node-drain opportunity, not a
+  certificate. Idle/cold-only memory relief now contributes **0 certified watts**.
+- **Containment holds:** every feasible `S*` under the active-work certificate is met under the
+  future estimate (PASS).
 
 ### T7 — sensitivity sweeps (`outputs/sensitivity_sweeps.png`)
 
@@ -132,21 +134,19 @@ score). **Two-part result: selection is robust, absolute shed is sensitive.**
 
 - **Which jobs to move barely changes** — ordering agreement with baseline **≥ 0.998** across
   every sweep, by both orderings (power-freed and downtime-per-watt).
-- **How much you can cut moves smoothly** — the largest guaranteed reduction (center ≈ **4 kW**)
-  falls **39%** across the utilization range, **9%** across MFU, **71%** across the price ratio.
+- **How much you can cut moves smoothly** — after switching to the active-work certificate, the
+  center short-context load-bound fixture reports a much larger certified ceiling and weaker
+  sensitivity to utilization/MFU/price-ratio than the old plateau-only floor. Read the current
+  values from `plot_sensitivity_sweeps.py`.
 
 ### Companion — deadline sweep by class (`outputs/deadline_sweep.png`)
 
-The deadline changes the coordination story mainly for agentic tool loops. Ordinary chat and
-long chat/code reach their full shed ceilings quickly because replay is cheap enough to move
-the whole active population: **15.3 kW by ~10 s** and **15.3 kW by ~13 s**, with no meaningful
-greedy/LP gap. Reasoning chat reaches **14.8 kW by ~13 s** with only a tiny gap
-(LP-greedy **0.2 kW**, MILP-greedy **0.1 kW**). Agentic tool loops ramp more slowly:
-LP reaches **19.8 kW by ~60 s**, with a mid-deadline max LP-greedy gap of **1.7 kW**
-at **24.2 s** and a deployable MILP-greedy gap of **1.2 kW**. Below the ~5 s migration
-startup floor, no move completes and the reduction is zero.
+The deadline changes the coordination story mainly when movement resources bind. Below the ~5 s
+migration startup floor, no move completes and the reduction is zero. Current kW ceilings should
+be read from the regenerated script output because the certificate is now active-work power, not
+memory occupancy.
 
-### T8 — load vs memory regime (`outputs/regime_boundary.png`)
+### T8 — load vs memory regime diagnostic (`outputs/regime_boundary.png`)
 
 The structural payoff. The regime reduces to one inequality on total load:
 
@@ -158,27 +158,23 @@ R = (S_held/s_node)/(L/ρ*) = occupancy·N/(L/ρ*),   crossover at R = 1.
 Cross `R=1` two independent ways — **(a)** raise idle/cold fraction (× two γ curves) at a fixed
 ~13k context, **(b)** lengthen context `E[T]` 5k→40k at center state-mix — and check they agree.
 
-| series | R range | brackets R=1 | Jaccard @ R≈1 | feasible frac |
+| series | R range | brackets R=1 | corr_cert @ R≈1 | corr_mem @ R≈1 |
 |---|---|---|---|---|
-| (a) γ=0.5 | [0.58, 6.68] | yes | 0.00 | 0.60 |
-| (a) γ=1.0 | [0.44, 5.46] | yes | 0.00 | 0.45 |
-| (b) context | [0.50, 2.71] | yes | 0.00 | 0.66 |
+| (a) γ=0.5 | [0.58, 6.68] | yes | +0.41 | -0.49 |
+| (a) γ=1.0 | [0.44, 5.46] | yes | +0.41 | -0.49 |
+| (b) context | [0.50, 2.71] | yes | +0.42 | -0.48 |
 
-**Spearman(dp_expected, dp_memory) = +0.091 ± 0.025** on this synthetic draw.
+**Spearman(certificate, dp_memory) = +0.022 ± 0.013** on this synthetic draw.
 
 1. **Both walks bracket and agree at R=1** — the boundary is a property of `N`, reachable by
    idling jobs or by growing KV; `γ` only shifts *where along the active-fraction knob* you hit
    `R=1` (it delays the switch via population size, `n_jobs ∝ 1+γ`), not the `R=1` location.
-2. **The flip sheds a near-disjoint job set** (Jaccard ≈ 0 everywhere): the load-ranked and
-   memory-ranked dispatch plans share almost no jobs.
-3. **The load and memory rankings differ enough to matter** — `dp_expected` and `dp_memory`
-   are only weakly related in this draw. The regime flag genuinely chooses *which jobs move*,
-   not just how the same jobs are priced.
-4. **Caveat:** under realistic budgets ~33–53% of points are budget-infeasible (max-shed), and
-   the LP minimizes downtime, so the realized selection also reflects move cost — in the memory
-   regime the cheapest evictions are many small-KV jobs, so the shed-vs-ranking correlation panel
-   shows a step at `R=1` rather than a clean ℓ→memory crossover. The headline is the low Jaccard
-   near the boundary; the correlation panel is the honest, confounded one.
+2. **The certified dispatch remains active-work driven across the boundary.** Near `R≈1`, the
+   shed set correlates positively with the active-work certificate and negatively with memory
+   pressure.
+3. **The load and memory rankings differ enough to be dangerous as a certificate** — the active
+   certificate and `dp_memory` are only weakly related in this draw. The regime flag is therefore
+   diagnostic and should not choose *which jobs move*.
 
 ---
 
@@ -195,8 +191,8 @@ Cross `R=1` two independent ways — **(a)** raise idle/cold fraction (× two γ
 | 7 | long sampled turns cap effective turn rate instead of exceeding one-session occupation | `test_instance::test_long_turns_cap_effective_turn_rate` |
 
 T8's own results are tested in `tests/test_regime.py`: the load and memory rankings are only
-weakly related in the synthetic draw, the regime flip sheds a near-disjoint set (Jaccard < 0.3),
-and both walks bracket `R=1` with the measured regime flipping exactly at the `N=max` crossover.
+weakly related in the synthetic draw, the regime flag no longer changes certified dispatch, and
+both walks bracket `R=1` with the measured regime flipping exactly at the `N=max` crossover.
 
 **Correction (claim #6):** an earlier note said FP8 shifts `S_node` "~2×", but the real cap ratio is
 `365/130 ≈ 2.81×`; the test asserts the true value.
@@ -208,14 +204,12 @@ and both walks bracket `R=1` with the measured regime flipping exactly at the `N
 - **Selection is robust; absolute shed is sensitive.** Which jobs to move is invariant to `p̄`
   scaling, `ρ*`, MFU, and the bracket ratio (T1 invariant, T7 ≥ 0.998 agreement); only the
   feasibility margin moves with them.
-- **Two regimes, two value stories.** Load-bound: the autoscaler-drain upside is large
-  (the old single-price reference has a `30× bracket`) but only the `s_plat` floor is guaranteed
-  (T6 left). Memory-bound: the saving *is* the freed memory; the load bracket does not transfer
-  (T6 right).
+- **Memory is a constraint, not watts.** Load-bound and memory-bound pools now certify the same
+  active-work column. Memory pressure still limits admission/held capacity and is reported as a
+  future node-drain diagnostic, but it no longer creates smooth per-session grid watts.
 - **Coordination shows up only at tight shared-resource boundaries.** The class-isolated
   dispatch plot now reports active rows and granularity diagnostics so a fractional LP win is not
-  mistaken for a resource-coupling win. In the deadline companion, agentic loops retain a smaller
-  mid-deadline gap: **1.2 kW** for MILP-greedy and **1.7 kW** for LP-greedy.
+  mistaken for a resource-coupling win.
 - **The deadline binds only for big-KV moves** (T8/memory regime); cheap short-context moves are
   capacity-bound, not time-bound (deadline companion).
 - **Crossing `R=1` reorders the dispatch onto a different job set** in this synthetic draw,

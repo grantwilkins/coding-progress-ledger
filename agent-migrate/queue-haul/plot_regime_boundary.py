@@ -1,10 +1,10 @@
-"""T8: load↔memory regime boundary, walked two ways.
+"""T8: load↔memory regime boundary diagnostic, walked two ways.
 
 (a) idle/cold × γ at a fixed short context, (b) context E[T] short→long. Both push total
 load L across the constant threshold occupancy·N·ρ* (pool-sized populations fix S_held/s_node = occupancy·N).
-Plotted vs the regime ratio R = (S_held/s_node)/(L/ρ*): the ranking that governs the shed
-plan switches at R=1. The load-vs-memory ranking relation is measured from the synthetic
-draw; it is not assumed by construction.
+Plotted vs the regime ratio R = (S_held/s_node)/(L/ρ*): memory still marks a capacity regime,
+but it no longer supplies certified watts. The dispatch uses active-work power in every regime;
+memory-pressure correlations are reported only as diagnostics.
 """
 
 import os
@@ -34,24 +34,21 @@ def shift_tmix(target):
 
 
 def point(pool, wl):
-    """Mean,std over seeds of (R, jaccard, corr_load, corr_mem, rho_div, feas)."""
+    """Mean,std over seeds of (R, corr_cert, corr_mem, rho_div, feas)."""
     rows = []
     for sd in SEEDS:
         pop = generate(pool, wl, n_nodes=N_NODES, seed=sd)
         imp = compute(pop, pool)
-        mv = bind_dp(imp) > 0
-        pL = solve(pop, pool, replace(imp, regime="load"), 0.3 * imp.dp_guaranteed.sum(), EVENT)
-        pM = solve(pop, pool, replace(imp, regime="memory"), 0.3 * imp.dp_memory.sum(), EVENT)
-        yL, yM = pL.y > 0.5, pM.y > 0.5
-        real = yM if imp.regime == "memory" else yL
-        union = (yL | yM).sum()
+        dp = bind_dp(imp)
+        mv = dp > 0
+        plan = solve(pop, pool, imp, 0.3 * dp.sum(), EVENT)
+        real = plan.y > 0.5
         rows.append((
             (len(pop) / pool.s_node) / (pop.ell.sum() / pool.rho_star),
-            (yL & yM).sum() / union if union else 1.0,
-            spearmanr(real[mv], imp.dp_expected[mv]).correlation,
+            spearmanr(real[mv], dp[mv]).correlation,
             spearmanr(real[mv], imp.dp_memory[mv]).correlation,
-            spearmanr(imp.dp_expected[mv], imp.dp_memory[mv]).correlation,
-            float((pM if imp.regime == "memory" else pL).feasible),
+            spearmanr(dp[mv], imp.dp_memory[mv]).correlation,
+            float(plan.feasible),
         ))
     a = np.array(rows)
     return a.mean(0), a.std(0)
@@ -59,7 +56,7 @@ def point(pool, wl):
 
 def walk(configs):
     M, S = zip(*(point(pool, wl) for pool, wl in configs))
-    return np.array(M), np.array(S)  # (n,6): R, jac, corr_load, corr_mem, rho_div, feas
+    return np.array(M), np.array(S)  # (n,5): R, corr_cert, corr_mem, rho_div, feas
 
 
 def walk_a(gamma):
@@ -87,21 +84,20 @@ colors = ("#1f77b4", "#ff7f0e", "#2ca02c")
 for (lbl, (M, S)), c in zip(SERIES, colors):
     o = np.argsort(M[:, 0])
     R = M[o, 0]
-    for ax, col in ((ax0, 1), (ax2, 4)):
+    for ax, col in ((ax0, 1), (ax2, 3)):
         ax.plot(R, M[o, col], "-o", ms=3, color=c, label=lbl)
         ax.fill_between(R, M[o, col] - S[o, col], M[o, col] + S[o, col], color=c, alpha=0.2)
-    ax1.plot(R, M[o, 2], "-o", ms=3, color=c, label=f"{lbl} load")
-    ax1.plot(R, M[o, 3], "--s", ms=3, color=c, label=f"{lbl} memory")
+    ax1.plot(R, M[o, 2], "--s", ms=3, color=c, label=lbl)
 
 for ax in (ax0, ax1, ax2):
     ax.axvline(1.0, color="k", lw=0.8, ls=":")
     ax.set_xscale("log")
-ax0.set_ylabel("forced-regime\nshed Jaccard")
-ax1.set_ylabel("Spearman(shed set, ·)\n— load  / -- memory")
-ax2.set_ylabel("Spearman\n(dp_expected, dp_memory)")
+ax0.set_ylabel("Spearman\n(shed set, certificate)")
+ax1.set_ylabel("Spearman\n(shed set, memory)")
+ax2.set_ylabel("Spearman\n(certificate, memory)")
 ax2.set_xlabel("regime ratio  R = (S_held/s_node)/(L/ρ*)")
 ax0.legend(fontsize=8)
-ax0.set_title("T8 — load↔memory boundary")
+ax0.set_title("T8 — memory regime is diagnostic, not certified watts")
 fig.tight_layout()
 
 os.makedirs("outputs", exist_ok=True)
@@ -111,7 +107,7 @@ for ext in ("pdf", "png"):
 for lbl, (M, _) in SERIES:
     R, near = M[:, 0], M[np.argmin(np.abs(M[:, 0] - 1))]
     print(f"{lbl:12s}  R∈[{R.min():.2f},{R.max():.2f}] brackets 1: {R.min() < 1 < R.max()}"
-          f"  Jaccard@R≈1={near[1]:.2f}  feasible frac={M[:, 5].mean():.2f}")
-rho = np.concatenate([M[:, 4] for _, (M, _) in SERIES])
-print(f"Spearman(dp_expected, dp_memory): mean={rho.mean():+.3f} std={rho.std():.3f}  (measured, not assumed)")
-print("low Jaccard near the boundary ⇒ the regime flip sheds a different job set")
+          f"  corr_cert@R≈1={near[1]:+.2f}  corr_mem@R≈1={near[2]:+.2f}  feasible frac={M[:, 4].mean():.2f}")
+rho = np.concatenate([M[:, 3] for _, (M, _) in SERIES])
+print(f"Spearman(certificate, dp_memory): mean={rho.mean():+.3f} std={rho.std():.3f}  (measured, not assumed)")
+print("memory pressure remains a constraint/diagnostic; it no longer changes bind_dp")

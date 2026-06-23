@@ -1,9 +1,9 @@
 """Per-job impact & move costs (formulation.md §Per-job impact / §Dispatch; §6 movement).
 
 Pure per-job calculator: turns T1 prices + T2 loads into the power freed by moving each
-job (ΔP_j bracket, plus the memory-regime value) and the downtime of each move primitive
-(replay c_j(R), KV transfer c_j(S)). T4 selects the regime column and the action; the
-one pool-level regime scalar is returned here since T3 holds both pop and pool.
+job (active-power certificate, future-node proxy, memory diagnostic) and the downtime of
+each move primitive (replay c_j(R), KV transfer c_j(S)). Memory is a constraint/diagnostic,
+not a certified-watt source.
 """
 
 from __future__ import annotations
@@ -31,6 +31,7 @@ class Impact:
     """Columnar; parallel arrays in pop order, plus the pool-level regime flag."""
 
     dp_guaranteed: np.ndarray  # s_plat·ℓ_j (guaranteed, single-price)
+    dp_certified: np.ndarray  # fixed-node load slope + measured token work; no memory credit
     dp_expected: np.ndarray  # base·ℓ_j + c_pre·f_j + c_dec·g_j future-node estimate
     dp_expected_single: np.ndarray  # p̄·ℓ_j single-price comparison
     dp_memory: np.ndarray  # μ·T_j/E[T] (memory regime, watts)
@@ -53,6 +54,7 @@ def compute(pop: JobPopulation, pool: PoolPower, move: Movement = Movement()) ->
 
     return Impact(
         dp_guaranteed=pool.s_plat * ell,
+        dp_certified=pool.s_plat * ell + work_power,
         dp_expected=pool.base_w_per_load * ell + work_power,
         dp_expected_single=pool.p_bar * ell,
         dp_memory=pool.mu * cold_discount * pop.T / pool.mean_context_tokens,

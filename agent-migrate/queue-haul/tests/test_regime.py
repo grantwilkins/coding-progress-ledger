@@ -8,7 +8,7 @@ import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from dispatch import solve
+from dispatch import bind_dp, solve
 from impact import compute
 from instance import Workload, _draw, _mean_T, generate
 from power import PoolPower
@@ -32,22 +32,23 @@ def _R(pool, pop):
 
 def test_rankings_uncorrelated_at_center():
     # T2 draws T independent of Δ/Y, so the load ranking (dp_expected) and the memory
-    # ranking (dp_memory) are near-uncorrelated — the substantive thing the flip exploits.
+    # ranking (dp_memory) are near-uncorrelated; that is why memory is diagnostic only.
     pop = _draw(np.random.default_rng(0), 40000, WL, "bf16")
     imp = compute(pop, PoolPower())
     act = pop.state == "active"
     assert abs(_spearman(imp.dp_expected[act], imp.dp_memory[act])) < 0.25
 
 
-def test_regime_flip_reorders_shed_set():
-    # Forcing the load vs memory ranking on one near-boundary population sheds a
-    # near-disjoint job set — the regime flip materially reorders the dispatch.
+def test_regime_flag_does_not_reorder_certified_dispatch():
+    # Memory remains a constraint/diagnostic, not a certified-watt source: forcing
+    # the regime flag must not switch the dispatch objective onto held-KV ranking.
     pool = replace(PoolPower(), mean_context_tokens=13000.0)
     pop = generate(pool, replace(WL, t_mix=_shift_tmix(13000.0)), n_nodes=8, seed=0)
     imp = compute(pop, pool)
-    yL = solve(pop, pool, replace(imp, regime="load"), 0.3 * imp.dp_guaranteed.sum()).y > 0.5
-    yM = solve(pop, pool, replace(imp, regime="memory"), 0.3 * imp.dp_memory.sum()).y > 0.5
-    assert (yL & yM).sum() / (yL | yM).sum() < 0.3
+    target = 0.3 * bind_dp(imp).sum()
+    yL = solve(pop, pool, replace(imp, regime="load"), target).y
+    yM = solve(pop, pool, replace(imp, regime="memory"), target).y
+    assert np.allclose(yL, yM)
 
 
 def test_crossover_at_memory_bound():

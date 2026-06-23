@@ -79,11 +79,18 @@ Load sets node count $N$ when busy; held sessions set it when idle.
 
 ## Per-job impact & move cost (`impact.py`)
 
-**Watts freed by shedding job $j$** — three columns the solver reads:
+**Watts freed by shedding job $j$** — columns the solver/reports read:
 
-$$\Delta P_j^{\text{guar}} = s_{\text{plat}}\,\ell_j,\qquad \Delta P_j^{\text{future}} = \frac{P_{\text{idle}}}{\rho^\star}\ell_j + c_1 f_j + c_2 g_j,\qquad \Delta P_j^{\text{mem}} = \mu\,w_j\,\frac{T_j}{E[T]}$$
+$$\Delta P_j^{\text{floor}} = s_{\text{plat}}\,\ell_j,\qquad
+\Delta P_j^{\text{cert}} = s_{\text{plat}}\,\ell_j + c_1 f_j + c_2 g_j,\qquad
+\Delta P_j^{\text{future}} = \frac{P_{\text{idle}}}{\rho^\star}\ell_j + c_1 f_j + c_2 g_j,\qquad
+\Delta P_j^{\text{mem}} = \mu\,w_j\,\frac{T_j}{E[T]}$$
 
-Low end **guaranteed** (plateau, realized even if no node drains), high end **future** (autoscaler drains within the hold). In the **memory** regime, $m_j$ is normalized to session-equivalents ($T_j/E[T]$), with $w_j=1/(1+\gamma)$ for cold sessions and $w_j=1$ otherwise.
+The dispatch certificate uses $\Delta P_j^{\text{cert}}$: fixed-node load slope plus measured
+average token work. It deliberately gives idle/cold sessions zero certified watts. The high end
+**future** estimate adds the static node share that is only justified once removed load lets nodes
+shut off. $\Delta P_j^{\text{mem}}$ is a memory-pressure diagnostic only: it normalizes held KV to
+session-equivalents ($T_j/E[T]$), with $w_j=1/(1+\gamma)$ for cold sessions and $w_j=1$ otherwise.
 
 **Downtime of each move** (seconds = *ship* + *rebuild* × destination queue congestion):
 
@@ -116,7 +123,11 @@ subject to:
 
 $\tau_*$ are one-time ramps (egress connection setup, prefill batch-form, ingest pipeline-fill). Drop the single **egress** row and the program separates into $K$ independent single-destination dispatches — it is a **transportation LP with one global uplink knapsack**.
 
-**Certify low, report high (`bind_dp`).** The $\ge S^\star$ floor binds against the **guaranteed** column — $s_{\text{plat}}\,\ell_j$ in the load regime, $\mu\,w_jT_j/E[T]$ in the memory regime — never the future-impact proxy, or we'd promise the grid watts contingent on the autoscaler draining nodes.
+**Certify active work, report high (`bind_dp`).** The $\ge S^\star$ floor binds against
+`dp_certified = s_plat·ℓ_j + c_1 f_j + c_2 g_j` in every regime. Memory remains a capacity
+constraint (`held`), but held KV does not create certified watts unless a later node-drain model
+proves whole source nodes can turn off by the deadline. The future-impact proxy is reported, not
+bound, because it depends on autoscaler/node-drain behavior.
 
 **Two solves, not a branch.** Primary = min-downtime above. If infeasible, **re-solve** maximizing $\sum y\,\Delta P^{\text{bind}}$ (drop the $\ge S^\star$ row) and report $\text{shortfall} = S^\star - \text{shed}$. Solved both as a fractional **LP** ($y\in[0,1]$, the achievable target) and an integer **MILP** ($y\in\{0,1\}$, granularity cost); HiGHS via CVXPY.
 
