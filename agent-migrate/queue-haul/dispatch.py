@@ -152,6 +152,7 @@ def _plan2(YR, YS, dp, imp, cost, method, s_star, feasible, duals) -> Plan:
 def _build(pop, pool, imp, fleet, event, move, integer):
     """Variables Y_R, Y_S (n,K) + pairing, the ONE shared egress row, and the per-ℓ movement
     blocks (everything but shed). Returns the dual-carrying constraint handles too."""
+    if np.any(pop.ell > pool.rho_star): raise ValueError("job ell exceeds rho_star; split the job or lower its offered load")
     n, K = len(pop), len(fleet)
     kw = {"boolean": True} if integer else {"nonneg": True}
     YR, YS = cp.Variable((n, K), **kw), cp.Variable((n, K), **kw)
@@ -254,6 +255,7 @@ def _first_fit(pop, pool, imp, s_star, event, move, order, prefer, method) -> Pl
     fallback action), drawing down the SHARED movement budgets the deadline window
     allows until S* is met. No global repacking. Engine for the greedy and random
     baselines; `order` already excludes idle/pinned jobs so dp[j] > 0."""
+    if np.any(pop.ell > pool.rho_star): raise ValueError("job ell exceeds rho_star; split the job or lower its offered load")
     n = len(pop)
     dp = bind_dp(imp)
     reb = pop.T / rho_replay(pop.T, pop.mfu)

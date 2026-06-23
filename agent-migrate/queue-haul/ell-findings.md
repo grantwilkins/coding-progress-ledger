@@ -16,6 +16,11 @@ It is a capacity number, not a power meter. It tells us how much serving time a
 job uses on a colocated node. That is the right input for placement, destination
 admission, and the load-vs-memory regime test.
 
+`ell` is capped by the node setpoint. A node should carry total `ell <=
+rho_star` (`0.80` in the default model). A single job with `ell_j > rho_star`
+does not fit this one-node placement model; the code now fails hard instead of
+quietly averaging or clipping it.
+
 Use a separate power estimate for the work the job causes:
 
 ```
@@ -91,9 +96,9 @@ Measured A100/H100 vLLM traces in `~/powertrace-sim/` support three plain claims
 1. A busy serving node reaches near-peak power early, then changes slowly with
    more load. This is why we keep a conservative `plateau_slope * ell` floor.
 2. Over a whole request, decode costs more energy per token than prefill.
-3. A single `c_prefill` value is an average over the measured trace mix. If the
-   workload has very long contexts, prefill energy should be context-aware or
-   clearly labeled as an average approximation.
+3. A single `c_prefill` or `c_decode` value is an average over the measured
+   trace mix. It is not fixed over time. Refit or sweep it when the model,
+   hardware, precision, serving stack, batching policy, or workload mix changes.
 
 The measured fits give useful analogs, not a final Qwen3-235B-A22B calibration:
 
@@ -104,7 +109,7 @@ The measured fits give useful analogs, not a final Qwen3-235B-A22B calibration:
 | llama-3-405b H100 TP8, dense | 0.290 | 1.52 | 5.3 |
 
 For Qwen3-235B-A22B, use these as labeled placeholders or sweep points until we
-fit a real trace.
+fit a real trace. Treat them as calibrated averages, not constants of nature.
 
 ## Recommended model
 
@@ -147,8 +152,9 @@ If no Qwen trace exists yet:
 
 ## Code status
 
-The formulation text already points in the right direction, but the code still
-uses the old `p_prefill` / `p_decode` split.
+The code now enforces the per-job `ell <= rho_star` cap and reports the
+single-price future-impact proxy `p_bar * ell`. Raw prefill and decode token
+rates are still not stored, so token-energy work power is still a TODO.
 
 Needed code changes:
 

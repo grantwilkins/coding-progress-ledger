@@ -33,6 +33,8 @@ $$\ell_j = \underbrace{\frac{f_j}{\rho(T_j)}}_{\text{prefill busy-frac}} + \unde
 
 **How much fits on a node (two knees, one setpoint).** Power saturates at the **power knee** $\ell\approx 0.10$ (the node draws $\approx P_{\text{busy}}$ for any larger $\ell$ — why $s_{\text{plat}}$ is small); latency departs at the **latency knee** $\ell\approx 0.85$ ($\ell=1$ normalization). The autoscaler holds each node at the setpoint $\rho^\star\approx 0.80$ between them. So a node **runs** $\sum_{\text{on node}}\ell_j\le\rho^\star$ — at center $\approx 9$ active-agentic sessions ($\ell\approx 0.087$ each) or $\sim 240$ chat ($\ell\approx 0.003$) — and **holds** up to $S_{\text{node}}\approx 15$ sessions in memory. The binding axis sets the node count (the $N=\max(\cdot,\cdot)$ test below).
 
+A single job also has to fit under the same setpoint. If $\ell_j>\rho^\star$, this one-node placement model rejects the job instead of averaging it into the pool or clipping it.
+
 **Idle / cold** sessions measure rate $\approx 0$, so $\ell_j\to 0$ automatically (no flag): cheap to keep *and* cheap to move. They still pin $m_j$ (cold at the $\gamma$ discount).
 
 ## Pool & power prices (`power.py`)
@@ -51,6 +53,8 @@ The **bracket** $\bar p/s_{\text{plat}}$ (swept $\sim 3\text{–}5\times$ MoE �
 **Average work power vs. future node impact.** Measured per-token energies estimate the job's **work power**:
 
 $$P_j^{\text{work}} = c_1\, f_j + c_2\, g_j,\qquad \frac{c_2}{c_1}\approx 5\text{–}14\ \text{(measured)}$$
+
+The token-energy coefficients are calibrated averages, not fixed facts over time. They should be refit or swept when the model, hardware, precision, serving stack, batching policy, context mix, or traffic mix changes.
 
 The job's **future node-power impact** also includes the share of node base power attached to the node time it occupies. Until `instance.py` stores raw $f,g$, the code reports the single-price load proxy:
 

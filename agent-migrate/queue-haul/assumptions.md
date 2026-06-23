@@ -52,15 +52,16 @@ at 0.8× the TDP ceiling, not the ceiling itself.
 | **p̄ = P_busy/ρ\*** | ≈ 10,500 W/node-unit | derived | amortized price (at center) |
 | **Bracket ratio p̄/s_plat** | **30×** (center); sweep [17, 58] | sweep | dense-70B-to-405B band (235B sits in it) |
 | **s_plat = p̄/ratio** | ≈ 350 W/node-unit | derived | fixed-node plateau slope (the guaranteed price) |
-| Phase price c1/c2 (per token) | 0.10 | hard | stable across 19 configs; prefill cheap per token |
-| Two-price flag | **on** | hard | agentic traffic is phase-skewed → keep both prices |
+| Token-energy c1/c2 (per token) | 0.10 center; sweep [0.04, 0.19] | sweep | calibrated trace average; prefill is cheaper per token, but the ratio is not fixed over time |
+| Work-power reporting | single-price proxy now; token-energy TODO | implementation | code reports `p̄·ℓ_j` until raw `f_j,g_j` are stored |
 | **G (decode tok/s ceiling)** | **BF16 4,600 / FP8 9,200** | sweep | the `ℓ_dec = g/G` normalizer, precision-keyed: Baseten 4×H100-FP8 ~4,600 tok/s anchor scaled to the 8×H100 node |
 | **F (prefill normalizer)** | **per-job `ρ_dest(T_j)`** | derived-fn | `ℓ_pre,j = f_j/ρ_dest(T_j)` uses the §6 roofline at each job's own context — **not a constant** (retires the median-vs-mean choice for E[T]) |
 
-**Two-price coefficients (derived from c1/c2 and the busy split):** if a single price is
-used, `ΔP_j = p̄·ℓ_j`; if two, `ΔP_j = p̄_pre·(f_j/F) + p̄_dec·(g_j/G)` with `p̄_dec ≈ 5×p̄_pre`
-per busy-second (the per-token 10× narrows to ~4–8× per busy-second). Default to two prices
-since the target workload is agentic.
+**Token-energy coefficients:** if raw token rates are available, work power is
+`c1·f_j + c2·g_j`. These coefficients are calibrated averages for a measured
+model, hardware, precision, serving stack, batching policy, and workload mix;
+refit or sweep them when those change. Until raw `f_j,g_j` are stored, the code
+reports the single-price future-impact proxy `ΔP_j = p̄·ℓ_j`.
 
 ---
 
@@ -176,7 +177,7 @@ boundary (Fig. 1/2 of the EE364b draft) already showed.
 
 ## 7. What's hard vs. swept — the one-glance summary
 
-**Hard (cited or exact), do not sweep:** η, β, c1/c2, the TDP ceiling, μ_in nominal, seed.
+**Hard (cited or exact), do not sweep:** η, β, the TDP ceiling, μ_in nominal, seed.
 
 **Derived, computed once (and re-derived per sweep point where they depend on a swept input):**
 E[T], m̄, S_node^resident, S_node, p̄, s_plat, **μ = P_idle/S_node**, pool power, S̄_dest, w_pre/w_in,

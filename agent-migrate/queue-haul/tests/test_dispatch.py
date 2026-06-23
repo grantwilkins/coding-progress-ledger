@@ -6,6 +6,7 @@ Plausible wrong implementations:
 - Charge held capacity as one session regardless of context size.
 - Forget cold-session discount in held capacity.
 - Use final-context marginal prefill time for full replay.
+- Check only aggregate load, compare against 1.0, or silently clamp an oversized job.
 """
 
 import sys
@@ -53,6 +54,18 @@ def test_lp_feasible_sheds_exactly():
     lp = solve(pop, POOL, imp, S, SLACK_E, SLACK_M)
     assert lp.feasible and lp.shortfall == 0.0
     assert lp.shed_guaranteed == pytest.approx(S, rel=1e-6)  # LP splits the last job
+
+
+def test_single_job_above_setpoint_hard_fails():
+    pop, imp = _pop(n_nodes=4)
+    pop.ell_pre[0], pop.ell_dec[0] = POOL.rho_star, 0.0
+    solve(pop, POOL, compute(pop, POOL), 1.0, SLACK_E, SLACK_M)
+    pop.ell_pre[0] = POOL.rho_star + 1e-6
+    imp = compute(pop, POOL)
+    with pytest.raises(ValueError, match="rho_star"):
+        solve(pop, POOL, imp, 1.0, SLACK_E, SLACK_M)
+    with pytest.raises(ValueError, match="rho_star"):
+        greedy(pop, POOL, imp, 1.0, SLACK_E, SLACK_M)
 
 
 def test_milp_feasible_sheds_at_least_with_bounded_overshoot():
@@ -147,7 +160,7 @@ def test_bind_dp_picks_floor_by_regime():
     assert np.array_equal(bind_dp(imp), imp.dp_memory)
 
     sp = replace(POOL, mean_context_tokens=3378)
-    short = generate(sp, replace(Workload(), t_mix=((1.0, 8.0, 0.5),)))
+    short = generate(sp, replace(Workload(), t_mix=((1.0, 8.0, 0.5),), rate_agentic=0.075, rate_chat=0.01))
     impL = compute(short, sp)
     assert impL.regime == "load"
     assert np.array_equal(bind_dp(impL), impL.dp_guaranteed)
