@@ -83,6 +83,19 @@ both policies meet the same certified power target, but LP cuts disruption inten
 up to **33.5%** at **17.4 kW** (`73.0 → 48.5 s/kW`) by choosing the lower-disruption action
 mix under the shared movement budgets.
 
+### Companion — source-size sweep (`outputs/dispatch_scale.png`)
+
+The 4-node agentic fixture is small, so this companion scales the **source** from **4 to
+128 nodes** and measures the best LP cut in disruption intensity over a common feasible target
+sweep. It shows two different stories:
+
+- **Fixed destination (`48` destination nodes, `W=16`)**: the event ceiling saturates at
+  **61.4 kW** and the LP cut washes out by **32 source nodes**. This is not evidence that
+  coordination is useless; it says this fixed destination is the bottleneck.
+- **Scaled destination (same ratio as the 4-node fixture: `dest_nodes=12N`, `W=4N`)**:
+  the ceiling grows to **468.1 kW** at **128 source nodes**, and the LP still cuts disruption
+  intensity by about **9.6-11.0%** for **32-128 source nodes**.
+
 ### T6 — certify low, report high (`outputs/certify_report_validation.png`)
 
 Read two prices off each plan: the guaranteed floor vs the expected upside (once removed load
