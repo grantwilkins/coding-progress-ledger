@@ -104,8 +104,9 @@ def test_split_job_charges_both_fractions():
 
 def _toy(n):
     z = np.zeros(n)
-    pop = JobPopulation(np.array(["chat"] * n), np.array(["active"] * n),
-                        np.zeros(n, bool), np.full(n, 1e4), z, z, z, "bf16", 0.35)
+    pop = JobPopulation(np.array(["chat"] * n), np.array(["ordinary_chat"] * n),
+                        np.array(["active"] * n), np.zeros(n, bool), np.full(n, 1e4),
+                        z, z, z, z, z, np.ones(n, bool), z, z, z, "bf16", 0.35)
     return pop
 
 

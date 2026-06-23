@@ -41,33 +41,22 @@ evicted.
 | Agentic AI Workload Characteristics, output makeup | Thinking tokens are 45.8-67.6% of Gemma Thinking output and 29.0-40.7% of Qwen Thinking output. Tool-call text dominates many instant-agent outputs: 87.8-98.2% for Gemma Instant and 70.4-81.6% for Qwen Instant. |
 | [Continuum, 2025/2026](https://arxiv.org/abs/2511.02230) | Agent workflows interleave model calls and tool calls. Tool pauses can cause KV eviction; retaining KV cache across turns is central to multi-turn agent performance. |
 
-## Current Queue-Haul Values
+## Implemented Queue-Haul Values
 
 From `instance.py`:
 
 | quantity | current value | interpretation |
 |---|---:|---|
 | active / idle / cold | 0.30 / 0.25 / 0.45 | reasonable as an evacuation snapshot, not a trace-wide traffic mix |
-| agentic fraction | 0.50 | reasonable sweep knob |
-| reasoning fraction within agentic | 0.30 | reasonable sweep knob |
-| agentic `turn_rate` | 0.15/s | one model call every 6.7 s |
-| chat `turn_rate` | 0.02/s | one model call every 50 s |
-| agentic `Delta` | LogN(8.0, 1.0) | median 2,981 tokens, mean 4,915 tokens |
-| chat `Delta` | LogN(5.5, 1.0) | median 245 tokens, mean 403 tokens |
-| agentic `Y` | geometric mean 600 | generated tokens per call |
-| chat `Y` | geometric mean 800 | high for ordinary chat; plausible for long chat/code |
-| reasoning `Y` | geometric mean 4,000 | stress value for hidden-reasoning output |
-| center `T` | mixture mean 66,058 tokens | plausible for agentic, too high for ordinary chat |
-| short sweep `T` | mixture mean 17,828 tokens | long for ordinary chat, useful for short-context stress |
-| load-bound fixture `T` | mean 3,378 tokens | good ordinary-chat/load-bound fixture |
-| long sweep `T` | mixture mean 151,946 tokens | aggressive long-agent / memory-pressure case |
+| default class mix | agentic tool loop | the center is no longer described as generic chat |
+| ordinary chat | rate 0.01/s, Delta median 150, Y mean 300, T mean 3.4K | source-backed load-bound baseline |
+| long chat / code | rate 0.01/s, Delta median 500, Y mean 1000, T mean 17K | production-relevant long-session class |
+| reasoning chat | rate 0.01/s, Delta median 500, Y mean 3000, T mean 22K | reasoning fattens generated tokens |
+| agentic tool loop | rate 0.15/s, Delta/Y median 3.0, Y mean 600, T mean 66K | modern long-context agent setting |
+| cache hit by class | 0.99 / 0.95 / 0.90 / 0.95 | hit uses Delta; miss uses full T |
 
-Two doc fixes:
-
-1. `Delta` values above are lognormal medians in prose if written as "~3k" and
-   "~250"; the means are 4.9K and 403.
-2. NumPy's geometric draw has mean `1/p`, so `np.random.geometric(1 / y_mean)`
-   has mean `y_mean`, not `(1-p)/p`.
+NumPy's geometric draw has mean `1/p`, so `np.random.geometric(1 / y_mean)`
+has mean `y_mean`.
 
 ## Corrected Workload Classes
 
@@ -124,14 +113,17 @@ Add the cache caveat:
 > If the KV cache is retained, prefill handles only `Delta`. If the cache is
 > evicted or the session is replayed cold, prefill handles the full context `T`.
 
-## Code Changes To Make Later
+## Code Status
 
-1. Store `rate`, `Delta`, `Y`, `f`, and `g` in `JobPopulation`; they are now
-   discarded after `ell_pre` and `ell_dec` are formed.
-2. Split `T` by class: ordinary chat should not draw from the same context
-   distribution as agents.
-3. Replace `delta_agentic=(8.0,1.0)` style fields with explicit median/mean
-   helpers or document them as log-space parameters.
-4. Add tests for sampled `turn_rate`, `Delta`, `Y`, and `T` marginals.
-5. Add a cache-hit knob for agentic workloads. With hit rate near 1, prefill
-   uses `Delta`; with eviction, prefill uses `T`.
+Implemented in `instance.py`:
+
+1. `JobPopulation` now stores `turn_rate`, `Delta`, `Y`, `f`, and `g`.
+2. `T` is split by session class: ordinary chat, long chat/code, reasoning
+   chat, and agentic tool loop no longer share one context distribution.
+3. `Delta` is specified with human-readable medians for chat classes; agentic
+   `Delta` is generated from an append/output ratio.
+4. Tests cover sampled class marginals, raw turn accounting, class-specific
+   context, cache hits, cache misses, and idle/cold zero-load behavior.
+5. Cache-hit rates are per class. A hit uses `Delta`; a miss uses full `T`.
+
+Still out of scope: stateless API/batch workloads and failed/retry agent tails.

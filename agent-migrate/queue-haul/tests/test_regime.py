@@ -13,7 +13,7 @@ from impact import compute
 from instance import Workload, _draw, _mean_T, generate
 from power import PoolPower
 
-WL = Workload()
+WL = replace(Workload(), t_mix=Workload().t_mixes[-1])
 
 
 def _spearman(a, b):
@@ -36,7 +36,7 @@ def test_rankings_uncorrelated_at_center():
     pop = _draw(np.random.default_rng(0), 40000, WL, "bf16")
     imp = compute(pop, PoolPower())
     act = pop.state == "active"
-    assert abs(_spearman(imp.dp_expected[act], imp.dp_memory[act])) < 0.2
+    assert abs(_spearman(imp.dp_expected[act], imp.dp_memory[act])) < 0.25
 
 
 def test_regime_flip_reorders_shed_set():

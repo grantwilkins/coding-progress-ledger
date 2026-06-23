@@ -25,7 +25,8 @@ Two numbers per session, both **time-averages over the hold window** in the sess
 
 $$\ell_j = \underbrace{\frac{f_j}{\rho(T_j)}}_{\text{prefill busy-frac}} + \underbrace{\frac{g_j}{G}}_{\text{decode busy-frac}},\qquad m_j = \eta\, T_j$$
 
-- $f_j$ = prefill tok/s demanded = turn rate × *new* input tok/turn (δ); $g_j$ = decode tok/s = turn rate × output tok/turn ($Y$; reasoning fattens $Y$).
+- $f_j$ = prefill tok/s demanded. With a retained KV cache, $f_j=\text{turn rate}\times\Delta_j$, where $\Delta_j$ is new appended input since the cached prefix. On a cache miss, $f_j=\text{turn rate}\times T_j$. $g_j=\text{turn rate}\times Y_j$, where $Y_j$ includes visible answer tokens, hidden reasoning, and tool-call text.
+- Sessions are drawn from explicit classes: ordinary chat, long chat/code, reasoning chat, and agentic tool loop. Each class has its own turn rate, $\Delta$, $Y$, context distribution, and cache-hit rate; idle/cold states set current $f_j,g_j,\ell_j$ to zero.
 - $\rho(T_j)$ = the node's **prefill roofline** at context $T_j$ (`rho_dest`, here at the **source** MFU): flat $\approx 63\text{k}$ tok/s below $T^\star\approx 29\text{k}$, decaying $\sim 1/T$ above as attention FLOPs dominate. Prefill is **compute-bound**, so longer context costs throughput. *(Same function, at a destination's MFU, is the rebuild rate $\rho_\ell$ — hence the `dest` in the code name; in the source load it is the source's own rate.)*
 - $G$ = the **decode** ceiling, a precision-keyed constant (BF16 4600, FP8 9200 tok/s). This is a first-order approximation: long context taxes decode mainly through memory capacity here, and any $G(T)$ slowdown is a sensitivity knob, not in the base model.
 

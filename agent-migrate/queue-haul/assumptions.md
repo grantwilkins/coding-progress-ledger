@@ -74,19 +74,21 @@ paged tier counted by γ (§4). Never assign a cold job a nonzero rate — that 
 | Parameter | Value | Type | Source / rationale |
 |---|---:|---|---|
 | **State mix (active / idle-warm / cold)** | **0.30 / 0.25 / 0.45** (center) | sweep | sweep active∈[0.15,0.50]; cold is the migration-cheap majority |
-| **Turn rate, active jobs (turns/s)** | **agentic 0.15, chat 0.02** (per-class mean) | sweep | agentic ≈ tight loop (1 per ~7 s); chat ≈ 1 per ~50 s; sweep agentic∈[0.05,0.3] |
+| **Session classes** | ordinary chat / long chat-code / reasoning chat / agentic tool loop | sweep | default center is agentic; class-isolated plots use one class at a time |
+| **Turn rate, active jobs (turns/s)** | **0.01 chat/reasoning, 0.15 agentic** (per-class mean) | sweep | agentic ≈ tight loop (1 per ~7 s); chat/reasoning ≈ 1 per ~100 s |
 | **Turn-rate within-class spread σ** | **0.3** | sweep | per job `rate ~ LogN(log(mean)−σ²/2, σ)`, mean-preserving; gives within-class ℓ heterogeneity so greedy≠LP at boundaries |
-| **Input tokens/turn Δ** | **agentic LogN(8.0, 1.0) (~3k); chat LogN(5.5, 1.0) (~250)** | sweep | grounded below; sweep agentic mean [1k, 10k] |
-| **Output tokens/turn Y (incl. reasoning)** | **Geometric, mean: agentic 600, chat 800, reasoning 4000** | sweep | decode length is geometric (memoryless EOS); sweep mean [200, 4000] |
-| **Reasoning sub-fraction (of agentic)** | **0.30** (center); sweep [0.0, 0.6] | sweep | agentic jobs with the long hidden-token tail: keep agentic rate/Δ but Y_mean=4000 (vs 600) |
+| **Input tokens/turn Δ** | median: ordinary 150, long/reasoning 500; agentic Δ/Y=3.0 | sweep | Δ is appended input since cached prefix, not full context |
+| **Output tokens/turn Y (incl. reasoning)** | geometric mean: ordinary 300, long 1000, reasoning 3000, agentic 600 | sweep | decode length is geometric (memoryless EOS); reasoning fattens Y |
+| **Context T by class** | mean ≈ 3.4K / 17K / 22K / 66K | sweep | ordinary chat and agents no longer share one T distribution |
+| **Cache hit by class** | 0.99 / 0.95 / 0.90 / 0.95 | sweep | hit: prefill Δ; miss: prefill full T |
 | Idle-warm job rate | ~0 (resident, between turns) | hard | warm but not generating |
 | Cold job rate | 0 (paged out) | hard | formulation §2: rate carries liveness |
-| Agentic : chat split | **0.5 : 0.5** (center) | sweep | sweep agentic∈[0.2,0.8]; this is the phase-skew knob |
+| Class mix | **agentic center** by default | sweep | mixed populations set `class_mix`; stateless API is out of scope for this session model |
 
 **Grounding for Δ and Y (from ServeGen + workload-profile characterizations).** Three empirical
 facts shape these: (i) **decode length follows a geometric distribution** — at each step the model
-emits EOS with roughly constant probability, so `Y ~ Geo(p)` with mean `(1−p)/p`; this is the
-memoryless tail, not a log-normal. (ii) **Input and output lengths are weakly correlated** — so Δ
+emits EOS with roughly constant probability, so NumPy's `geometric(p)` draw has mean `1/p`;
+this is the memoryless tail, not a log-normal. (ii) **Input and output lengths are weakly correlated** — so Δ
 and Y are sampled independently per turn, not jointly. (iii) **The parameters shift over time** —
 hence the wide sweep bands rather than point values. Concrete per-class anchors: persona/roleplay
 and agentic system prompts run 2k–10k input tokens; code-completion and chat inputs are shorter
@@ -94,8 +96,9 @@ and agentic system prompts run 2k–10k input tokens; code-completion and chat i
 case). Use the geometric form for Y so the synthetic decode tail matches production; use log-normal
 for Δ (bounded, mean is what matters for prefill load).
 
-The per-job load is `ℓ_j = f_j/F + g_j/G` with `f_j = turn_rate·Δ`, `g_j = turn_rate·Y`,
-gated to ~0 for idle/cold jobs.
+The per-job load is `ℓ_j = f_j/ρ(T_j) + g_j/G`, with `f_j = turn_rate·Δ` on a
+cache hit and `f_j = turn_rate·T_j` on a cache miss. `g_j = turn_rate·Y`. Idle
+and cold jobs set current `turn_rate`, `f`, `g`, and `ℓ` to zero.
 
 ---
 

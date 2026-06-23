@@ -75,14 +75,12 @@ infeasibility it re-solves to max-shed and reports the shortfall. `bind_dp` comm
 
 ### T5 — random vs greedy vs LP (`outputs/dispatch_validation.png`)
 
-Three policies under the same movement budgets, on the default workload conditioned on active
-sessions so idle/cold zero-downtime memory shed does not hide the action-choice problem.
-**Ceilings separate as random < greedy < LP: 20.5 / 47.8 / 61.4 kW** (memory-bound pool,
-296 active jobs). Selection (greedy over random) then global repacking transfers→replays
-(LP over greedy, +13.7 kW beyond greedy) each fit more shed under the same links. On the
-fair per-watt view, greedy lies on the LP/MILP cost frontier where it is feasible, then
-stops sooner; at `S*=24.0 kW`, random sheds only 10.4 kW on average, while greedy and LP
-both meet the target at 557 s.
+Three policies under the same movement budgets, isolated by active, cache-resident session
+class. Random under-fills every class. Greedy matches LP for ordinary chat, long chat/code,
+and reasoning chat under this budget, because the sorted first-fit order is already enough.
+Agentic tool loops are the class where coordination matters: **random / greedy / LP ceilings
+= 13.8 / 15.6 / 19.8 kW** on a 74-job memory-bound pool. The gap is not forced into every
+class; it appears where large, heterogeneous agentic sessions make action repacking useful.
 
 ### T6 — certify low, report high (`outputs/certify_report_validation.png`)
 

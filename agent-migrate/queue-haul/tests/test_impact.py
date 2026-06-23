@@ -19,7 +19,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from impact import Movement, compute
 from instance import JobPopulation, Workload, _draw, generate
-from power import BETA_BYTES_PER_TOK, ETA_BYTES_PER_TOK, PoolPower, congestion, rho_replay
+from power import BETA_BYTES_PER_TOK, ETA_BYTES_PER_TOK, PoolPower, congestion, rho_dest, rho_replay
 
 
 def _pop(
@@ -34,13 +34,21 @@ def _pop(
     T = np.atleast_1d(np.asarray(T, float))
     n = len(T)
     col = lambda v: v if isinstance(v, np.ndarray) else np.full(n, v)
+    ep, ed = col(ell_pre), col(ell_dec)
     return JobPopulation(
         col(job_type),
+        np.where(col(job_type) == "agentic", "agentic_tool_loop", "ordinary_chat"),
         col(state),
         col(reasoning),
         T,
-        col(ell_pre),
-        col(ell_dec),
+        np.where(col(state) == "active", 1.0, 0.0),
+        np.zeros(n),
+        np.zeros(n),
+        ep * rho_dest(T, mfu),
+        ed * 4600.0,
+        np.ones(n, bool),
+        ep,
+        ed,
         ETA_BYTES_PER_TOK * T,
         "bf16",
         mfu,

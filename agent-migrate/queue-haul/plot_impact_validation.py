@@ -35,9 +35,16 @@ fig, (axA, axB, axC) = plt.subplots(1, 3, figsize=(15, 4.4))
 T = np.geomspace(1e3, 5e5, 200)
 syn = JobPopulation(
     np.full(len(T), "agentic"),
+    np.full(len(T), "agentic_tool_loop"),
     np.full(len(T), "active"),
     np.zeros(len(T), bool),
     T,
+    np.zeros(len(T)),
+    np.zeros(len(T)),
+    np.zeros(len(T)),
+    np.zeros(len(T)),
+    np.zeros(len(T)),
+    np.ones(len(T), bool),
     np.zeros(len(T)),
     np.zeros(len(T)),
     ETA_BYTES_PER_TOK * T,

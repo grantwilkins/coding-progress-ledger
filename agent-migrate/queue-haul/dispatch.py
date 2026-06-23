@@ -184,7 +184,8 @@ def _build(pop, pool, imp, fleet, event, move, integer):
     ]
     if event.pinned:
         pin = np.isin(pop.job_type, event.pinned)
-        cons += [YR[pin] == 0, YS[pin] == 0]
+        if pin.any():
+            cons += [YR[pin] == 0, YS[pin] == 0]
     return YR, YS, cons, egress, load, held
 
 

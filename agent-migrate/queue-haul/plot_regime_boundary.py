@@ -21,7 +21,7 @@ from impact import compute
 from instance import Workload, _mean_T, generate
 from power import PoolPower
 
-POOL, WL, EVENT = PoolPower(), Workload(), Event()
+POOL, WL, EVENT = PoolPower(), replace(Workload(), t_mix=Workload().t_mixes[-1]), Event()
 SEEDS, N_NODES = range(8), 32
 ET_A = 13_000.0  # fixed context for (a): crossover lands mid active-sweep
 

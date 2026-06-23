@@ -83,7 +83,9 @@ def test_shed_invariant_to_routing_permutation():
 
 def test_theta_egress_zero_slack_positive_binding():
     pool = replace(POOL, mean_context_tokens=163000)  # long context ⇒ big η·T ⇒ uplink can bind
-    pop = generate(pool, Workload(state_mix=(1.0, 0.0, 0.0), t_mix=((1.0, 12.0, 0.2),)), n_nodes=8)
+    pop = generate(pool, Workload(state_mix=(1.0, 0.0, 0.0), t_mix=((1.0, 12.0, 0.2),),
+                                  rate_means=(0.01, 0.01, 0.01, 0.05),
+                                  cache_hit=(1.0, 1.0, 1.0, 1.0)), n_nodes=8)
     ev, mv = Event(D=300, tau_pre=300, W=8), Movement(lambda_src=1e9, mu_in=1e13)  # pure transfer
     imp = compute(pop, pool, mv)
     spare_bar = mv.lambda_src * (ev.D - ev.tau_src) / imp.b_transfer.mean() / (5 * pool.s_node)
