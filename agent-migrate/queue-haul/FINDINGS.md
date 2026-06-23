@@ -69,18 +69,19 @@ infeasibility it re-solves to max-shed and reports the shortfall. `bind_dp` comm
 
 ## 2. Experiments (T5–T8)
 
-### T5 — random vs greedy vs LP (`outputs/dispatch_validation.png`)
+### T5 — random vs integer greedy vs LP (`outputs/dispatch_validation.png`)
 
 Two policies under the same movement budgets, isolated by active, cache-resident session
 class. The y-axis is **disruption intensity**: aggregate movement downtime divided by the
 requested certified shed (`s/kW`). This is the interpretable version of the LP objective:
 how many session-disruption seconds we spend per kW delivered.
 
-Ordinary chat, long chat/code, and reasoning chat collapse to the same sorted plan, so
-greedy and LP have the same disruption intensity. Agentic tool loops are the useful case:
-both policies meet the same certified power target, but LP cuts disruption intensity by
-up to **33.5%** at **17.4 kW** (`73.0 → 48.5 s/kW`) by choosing the lower-disruption action
-mix under the shared movement budgets.
+The baseline is now true integer first-fit: it never splits the marginal job and can overshoot
+`S*` by one job. The validation script prints, for each panel, active resource rows, row duals,
+fractional LP variables, max job granularity (`max ΔP_j/S*`), max row granularity
+(`max_j a_{rj}/b_r`), and Spearman correlations between `ΔP` and the cost/resource columns.
+At the current class-isolated maxima the reported LP cuts are mostly granularity gaps:
+active rows are `none` and `frac_vars=1`.
 
 ### Companion — source-size sweep (`outputs/dispatch_scale.png`)
 
@@ -187,7 +188,7 @@ Cross `R=1` two independent ways — **(a)** raise idle/cold fraction (× two γ
 |---|---|---|
 | 1 | ranking invariant under `p̄` scaling | `test_power::test_ranking_invariant_under_p_bar_scaling` |
 | 2 | regime switch at the `N=max` crossover | `test_power::test_regime_crossover` |
-| 3 | greedy = LP away from boundaries | `test_dispatch::test_greedy_equals_lp_off_boundary` |
+| 3 | integer greedy is whole-job and LP lower-bounds it | `test_dispatch::test_integer_greedy_overshoots_off_boundary_and_lp_lower_bounds` |
 | 4 | every solver output satisfies all constraints | `test_dispatch::test_every_constraint_satisfied` |
 | 5 | no cold job carries load | `test_instance::test_cold_idle_carry_no_load_but_keep_kv` |
 | 6 | BF16↔FP8 shifts S_node & threshold, load regime unchanged | `test_power::test_precision_shifts_memory_threshold_not_load_regime` |
@@ -211,9 +212,10 @@ and both walks bracket `R=1` with the measured regime flipping exactly at the `N
   (the old single-price reference has a `30× bracket`) but only the `s_plat` floor is guaranteed
   (T6 left). Memory-bound: the saving *is* the freed memory; the load bracket does not transfer
   (T6 right).
-- **Coordination shows up only at tight shared-resource boundaries.** In the class-isolated
-  ceiling plot, greedy now matches LP for all four classes. In the deadline companion, agentic
-  loops retain a smaller mid-deadline gap: **1.2 kW** for MILP-greedy and **1.7 kW** for LP-greedy.
+- **Coordination shows up only at tight shared-resource boundaries.** The class-isolated
+  dispatch plot now reports active rows and granularity diagnostics so a fractional LP win is not
+  mistaken for a resource-coupling win. In the deadline companion, agentic loops retain a smaller
+  mid-deadline gap: **1.2 kW** for MILP-greedy and **1.7 kW** for LP-greedy.
 - **The deadline binds only for big-KV moves** (T8/memory regime); cheap short-context moves are
   capacity-bound, not time-bound (deadline companion).
 - **Crossing `R=1` reorders the dispatch onto a different job set** in this synthetic draw,

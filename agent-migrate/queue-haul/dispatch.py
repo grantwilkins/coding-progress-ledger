@@ -7,7 +7,7 @@ and a transfer var y_S with y_R+y_S≤1 — so the action choice needs no separa
 indicator. The same program is solved as a fractional LP (y∈[0,1]) and an integer
 MILP (y∈{0,1}); the gap is the granularity cost. Two solves, not a branch: if the
 primary is infeasible, a second solve maximizes shed and reports the shortfall.
-A budget-respecting greedy (sort by cost per watt) is the T5 baseline.
+A budget-respecting integer greedy (sort by cost per watt) is the T5 baseline.
 """
 
 from __future__ import annotations
@@ -87,6 +87,7 @@ class Plan:
     )
     theta_egress: float = None  # shared-uplink dual (max-shed LP); None for milp/greedy
     theta_admit: np.ndarray = None  # per-ℓ admission dual (load+held)
+    resource_duals: dict = None  # row duals: egress/prefill/ingest/load/held
 
     @property
     def y(self) -> np.ndarray:
@@ -131,7 +132,8 @@ def _plan2(YR, YS, dp, imp, cost, method, s_star, feasible, duals) -> Plan:
     y_R, y_S = YR.sum(1), YS.sum(1)
     y = y_R + y_S
     shed_g = float(dp @ y)
-    te, ta = duals if duals else (None, None)
+    te = float(np.max(np.atleast_1d(duals["egress"]))) if duals else None
+    ta = np.atleast_1d(duals["load"]) + np.atleast_1d(duals["held"]) if duals else None
     return Plan(
         y_R,
         y_S,
@@ -146,6 +148,7 @@ def _plan2(YR, YS, dp, imp, cost, method, s_star, feasible, duals) -> Plan:
         YS,
         te,
         ta,
+        duals,
     )
 
 
@@ -170,15 +173,15 @@ def _build(pop, pool, imp, fleet, event, move, integer):
         cp.sum(cp.multiply(held_w[:, None], Y), axis=0)
         <= spare * pool.s_node
     )
+    prefill = cp.sum(cp.multiply(reb, YR), axis=0) <= W * (event.D - event.tau_pre)
+    ingest = cp.sum(cp.multiply(bS, YS), axis=0) <= W * move.mu_in * (event.D - event.tau_in)
     cons = [
         cp.sum(Y, axis=1)
         <= 1,  # pairing: each job moves at most once, across all destinations
         egress,  # the single shared source uplink — the entire multi-dest coupling
         # TODO(background-util): if W is shared with serving, reduce this RHS by destination load.
-        cp.sum(cp.multiply(reb, YR), axis=0)
-        <= W * (event.D - event.tau_pre),  # per-ℓ prefill
-        cp.sum(cp.multiply(bS, YS), axis=0)
-        <= W * move.mu_in * (event.D - event.tau_in),  # per-ℓ ingest
+        prefill,  # per-ℓ prefill
+        ingest,  # per-ℓ ingest
         load,
         held,  # per-ℓ destination headroom
     ]
@@ -186,7 +189,13 @@ def _build(pop, pool, imp, fleet, event, move, integer):
         pin = np.isin(pop.job_type, event.pinned)
         if pin.any():
             cons += [YR[pin] == 0, YS[pin] == 0]
-    return YR, YS, cons, egress, load, held
+    return YR, YS, cons, {
+        "egress": egress,
+        "prefill": prefill,
+        "ingest": ingest,
+        "load": load,
+        "held": held,
+    }
 
 
 def _run(obj, cons, solver):
@@ -213,7 +222,7 @@ def solve(
     an explicit fleet recomputes per-ℓ costs (each dest's ρ_ℓ/φ_pre,ℓ)."""
     multidest = fleet is not None
     fleet = fleet or DestFleet.from_event(event, move, pool, pop)
-    YR, YS, cons, egress, load, held = _build(
+    YR, YS, cons, handles = _build(
         pop, pool, imp, fleet, event, move, integer
     )
     dp = bind_dp(imp)
@@ -234,14 +243,10 @@ def solve(
         )  # S*-independent capacity prices
         if not ok:
             raise RuntimeError(f"max-shed re-solve failed: status={status}")
-    duals = (
-        None
-        if integer
-        else (
-            float(egress.dual_value),
-            np.asarray(load.dual_value) + np.asarray(held.dual_value),
-        )
-    )
+    duals = None if integer else {
+        k: np.atleast_1d(np.asarray(v.dual_value, dtype=float))
+        for k, v in handles.items()
+    }
     return _plan2(
         YR.value, YS.value, dp, imp, float(cost.value), method, s_star, feasible, duals
     )
@@ -254,10 +259,77 @@ def _movable(pop, dp, event) -> np.ndarray:
     return m
 
 
+def _rank(a: np.ndarray) -> np.ndarray:
+    order = np.argsort(a, kind="mergesort")
+    out = np.empty(len(a), float)
+    vals = a[order]
+    cuts = np.r_[0, np.flatnonzero(vals[1:] != vals[:-1]) + 1, len(a)]
+    for lo, hi in zip(cuts[:-1], cuts[1:]):
+        out[order[lo:hi]] = 0.5 * (lo + hi - 1)
+    return out
+
+
+def _spearman(x, y) -> float:
+    x, y = np.asarray(x, float), np.asarray(y, float)
+    m = np.isfinite(x) & np.isfinite(y)
+    if m.sum() < 2 or np.all(x[m] == x[m][0]) or np.all(y[m] == y[m][0]):
+        return np.nan
+    return float(np.corrcoef(_rank(x[m]), _rank(y[m]))[0, 1])
+
+
+def dispatch_diagnostics(pop, pool, imp, plan, s_star, event=Event(), move=Movement()) -> dict:
+    """Row-level audit numbers for dispatch plots; all ratios use LP row coefficients."""
+    dp = bind_dp(imp)
+    reb = pop.T / rho_replay(pop.T, pop.mfu)
+    held_w = (pop.T / pool.mean_context_tokens) * np.where(pop.state == "cold", 1 / (1 + pool.gamma), 1.0)
+    budgets = {
+        "egress": move.lambda_src * (event.D - event.tau_src),
+        "prefill": event.W * (event.D - event.tau_pre),
+        "ingest": event.W * move.mu_in * (event.D - event.tau_in),
+        "load": event.l_dest(pool),
+        "held": event.s_dest(pool),
+    }
+    used = {
+        "egress": float(imp.b_replay @ plan.y_R + imp.b_transfer @ plan.y_S),
+        "prefill": float(reb @ plan.y_R),
+        "ingest": float(imp.b_transfer @ plan.y_S),
+        "load": float(pop.ell @ plan.y),
+        "held": float(held_w @ plan.y),
+    }
+    max_draw = {
+        "egress": float(np.maximum(imp.b_replay, imp.b_transfer).max()),
+        "prefill": float(reb.max()),
+        "ingest": float(imp.b_transfer.max()),
+        "load": float(pop.ell.max()),
+        "held": float(held_w.max()),
+    }
+    util = {k: used[k] / budgets[k] for k in budgets}
+    duals = {
+        k: float(np.nan if plan.resource_duals is None else np.max(np.atleast_1d(plan.resource_duals[k])))
+        for k in budgets
+    }
+    vals = np.concatenate([plan.Y_R.ravel(), plan.Y_S.ravel()]) if plan.Y_R is not None else np.concatenate([plan.y_R, plan.y_S])
+    return {
+        "active_constraints": tuple(k for k, v in util.items() if v >= 1 - 1e-6),
+        "utilization": util,
+        "duals": duals,
+        "fractional_variables": int(((vals > 1e-9) & (vals < 1 - 1e-9)).sum()),
+        "max_dp_over_s": float(dp.max() / s_star),
+        "max_resource_draw_over_budget": {k: max_draw[k] / budgets[k] for k in budgets},
+        "spearman": {
+            "cost": _spearman(dp, np.minimum(imp.c_replay, imp.c_transfer)),
+            "egress": _spearman(dp, np.maximum(imp.b_replay, imp.b_transfer)),
+            "prefill": _spearman(dp, reb),
+            "held": _spearman(dp, held_w),
+            "load": _spearman(dp, pop.ell),
+        },
+    }
+
+
 def _first_fit(pop, pool, imp, s_star, event, move, order, prefer, method) -> Plan:
     """Myopic single pass: accept jobs in `order`, each via prefer[j] (then its
-    fallback action), drawing down the SHARED movement budgets the deadline window
-    allows until S* is met. No global repacking. Engine for the greedy and random
+    fallback action), drawing down whole-job SHARED movement budgets the deadline window
+    allows until S* is met or no more jobs fit. No global repacking. Engine for the greedy and random
     baselines; `order` already excludes idle/pinned jobs so dp[j] > 0."""
     if np.any(pop.ell > pool.rho_star): raise ValueError("job ell exceeds rho_star; split the job or lower its offered load")
     n = len(pop)
@@ -291,16 +363,13 @@ def _first_fit(pop, pool, imp, s_star, event, move, order, prefer, method) -> Pl
         if cum >= s_star:
             break
         acts = (prefer[j], "RS"[prefer[j] == "R"])
-        fs = []
-        for a in acts:
-            fit = min([budget[r] / col[j] for r, col in draw[a] if col[j] > 0] + [1.0])
-            fs.append(min(1.0, fit, (s_star - cum) / dp[j]))
-        a, f = (acts[1], fs[1]) if fs[1] > fs[0] else (acts[0], fs[0])
-        if f > 1e-12:
-            for r, col in draw[a]:
-                budget[r] -= f * col[j]
-            (yR if a == "R" else yS)[j] = f
-            cum += f * dp[j]
+        a = next((a for a in acts if all(col[j] <= budget[r] + 1e-12 for r, col in draw[a])), None)
+        if a is None:
+            continue
+        for r, col in draw[a]:
+            budget[r] -= col[j]
+        (yR if a == "R" else yS)[j] = 1.0
+        cum += dp[j]
     return _plan(
         np.concatenate([yR, yS]),
         n,
@@ -321,7 +390,7 @@ def greedy(
     event: Event = Event(),
     move: Movement = Movement(),
 ) -> Plan:
-    """Decentralized first-fit: each job self-selects its cheaper action and the
+    """Decentralized integer first-fit: each job self-selects its cheaper action and the
     best-deal jobs (lowest downtime per watt) move first, drawing down the shared
     budgets in one myopic pass — no global repacking (that is what the LP buys)."""
     dp = bind_dp(imp)
@@ -347,7 +416,7 @@ def random_dispatch(
     seed: int = 0,
 ) -> Plan:
     """Random baseline: shuffle the movable jobs and pick each action by coin flip,
-    same budget-respecting first-fit. The floor any real policy should beat."""
+    same integer budget-respecting first-fit. The floor any real policy should beat."""
     dp = bind_dp(imp)
     rng = np.random.default_rng(seed)
     order = rng.permutation(np.flatnonzero(_movable(pop, dp, event)))

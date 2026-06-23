@@ -9,7 +9,8 @@ Plausible wrong implementations:
 - Check only aggregate load, compare against 1.0, or silently clamp an oversized job.
 - Treat an unreachable tight-deadline target as a hard solver failure instead of
   returning the legal max-shed plan.
-- Accept a partial preferred move even when the fallback move fits the whole job.
+- Split the marginal greedy job fractionally instead of taking whole jobs.
+- Report diagnostic ratios from consumed resources instead of LP row budgets.
 """
 
 import sys
@@ -21,7 +22,7 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from dispatch import Event, Plan, bind_dp, greedy, random_dispatch, solve
+from dispatch import Event, Plan, bind_dp, dispatch_diagnostics, greedy, random_dispatch, solve
 from impact import Impact, Movement, compute
 from instance import JobPopulation, Workload, _mean_T, class_workload, generate
 from power import PoolPower, rho_replay
@@ -114,16 +115,19 @@ def test_tight_deadline_returns_max_shed_instead_of_crashing():
     assert tight.shed_guaranteed <= loose.shed_guaranteed + 1e-6
 
 
-def test_greedy_equals_lp_off_boundary():
-    # No resource constraint binds ⇒ both pick the cheapest-per-watt set and split
-    # the last job, so they coincide (the T5 claim; greedy-vs-LP, not MILP).
+def test_integer_greedy_overshoots_off_boundary_and_lp_lower_bounds():
+    # No resource constraint binds: the LP can split the last job exactly, but the
+    # deployable greedy baseline must take whole jobs and can overshoot by at most one job.
     pop, imp = _pop()
     S = 0.3 * bind_dp(imp).sum()
     lp = solve(pop, POOL, imp, S, SLACK_E, SLACK_M)
     g = greedy(pop, POOL, imp, S, SLACK_E, SLACK_M)
+    dp = bind_dp(imp)
     assert g.feasible
-    assert g.shed_guaranteed == pytest.approx(lp.shed_guaranteed, rel=1e-6)
-    assert g.cost == pytest.approx(lp.cost, rel=1e-4)
+    assert np.allclose(g.y, np.round(g.y))
+    assert g.shed_guaranteed >= S - 1e-6
+    assert g.shed_guaranteed - S <= dp[g.y > 0.5].max() + 1e-6
+    assert lp.cost <= g.cost + 1e-6
 
 
 def test_greedy_respects_movement_budgets():
@@ -162,8 +166,8 @@ def test_greedy_falls_back_from_partial_preferred_action():
     )
     event = Event(D=12, W=100, dest_nodes=1000, spare_frac=1.0)
     move = replace(Movement(), lambda_src=0.2)
-    g = greedy(pop, POOL, imp, 3.0, event, move)
-    mi = solve(pop, POOL, imp, 3.0, event, move, integer=True)
+    g = greedy(pop, POOL, imp, 2.0, event, move)
+    mi = solve(pop, POOL, imp, 2.0, event, move, integer=True)
     assert np.array_equal(g.y_R, np.ones(2))
     assert np.array_equal(g.y_S, np.zeros(2))
     assert g.shed_guaranteed == pytest.approx(mi.shed_guaranteed)
@@ -176,6 +180,64 @@ def test_greedy_ceiling_at_most_lp_ceiling():
     g = greedy(pop, POOL, imp, 1e12, event, move)
     lp = solve(pop, POOL, imp, 2 * bind_dp(imp).sum(), event, move)
     assert g.shed_guaranteed <= lp.shed_guaranteed + 1e-6
+
+
+def test_dispatch_diagnostics_report_row_level_quantities():
+    n = 3
+    pop = JobPopulation(
+        np.array(["chat"] * n),
+        np.array(["ordinary_chat"] * n),
+        np.array(["active"] * n),
+        np.zeros(n, bool),
+        np.array([1.0, 2.0, 3.0]),
+        np.zeros(n),
+        np.zeros(n),
+        np.zeros(n),
+        np.zeros(n),
+        np.zeros(n),
+        np.ones(n, bool),
+        np.array([0.1, 0.2, 0.3]),
+        np.zeros(n),
+        np.ones(n),
+        "bf16",
+        0.35,
+    )
+    imp = Impact(
+        np.array([1.0, 2.0, 3.0]),
+        np.array([1.0, 2.0, 3.0]),
+        np.array([1.0, 2.0, 3.0]),
+        np.array([1.0, 2.0, 3.0]),
+        np.array([3.0, 2.0, 1.0]),
+        np.array([4.0, 5.0, 6.0]),
+        np.array([10.0, 20.0, 30.0]),
+        np.array([10.0, 20.0, 30.0]),
+        "load",
+    )
+    plan = Plan(
+        np.array([1.0, 0.5, 0.0]),
+        np.zeros(n),
+        2.0,
+        2.0,
+        4.0,
+        True,
+        0.0,
+        "load",
+        "lp",
+        resource_duals={k: np.array([v]) for k, v in {
+            "egress": 7.0, "prefill": 0.0, "ingest": 0.0, "load": 2.0, "held": 3.0
+        }.items()},
+    )
+    event = Event(D=12, W=100, dest_nodes=1000, spare_frac=1.0)
+    move = replace(Movement(), lambda_src=2.0)
+    d = dispatch_diagnostics(pop, POOL, imp, plan, 6.0, event, move)
+    assert d["active_constraints"] == ("egress",)
+    assert d["fractional_variables"] == 1
+    assert d["max_dp_over_s"] == pytest.approx(0.5)
+    assert d["max_resource_draw_over_budget"]["egress"] == pytest.approx(1.5)
+    assert d["duals"]["egress"] == pytest.approx(7.0)
+    assert d["spearman"]["cost"] == pytest.approx(-1.0)
+    assert d["spearman"]["egress"] == pytest.approx(1.0)
+    assert d["spearman"]["load"] == pytest.approx(1.0)
 
 
 def test_random_respects_budgets_and_bounded_by_lp():

@@ -124,13 +124,13 @@ $\tau_*$ are one-time ramps (egress connection setup, prefill batch-form, ingest
 
 **Reported disruption.** The solver minimizes aggregate session downtime. Plots report `cost / S*` in **seconds per certified kW** so comparisons are not driven by a larger requested shed or a larger synthetic population.
 
-**Baselines (`greedy`, `random_dispatch`).** Both are myopic single-pass first-fit drawing down the *same* five movement budgets:
-- **greedy** — decentralized **bang-per-buck**: jobs are considered best-deal-first by $\min(c_R,c_S)/\Delta P$ (seconds of downtime per watt). Each job tries its cheaper action, but if the alternate action fits more of the job under the remaining budgets, it takes the alternate. Equals the LP away from resource boundaries. When a gap appears, read it carefully: **MILP minus greedy** is deployable coordination; **LP minus MILP** is the fractional upper bound.
-- **random** — shuffle movable jobs, coin-flip the action: the floor any real policy should beat.
+**Baselines (`greedy`, `random_dispatch`).** Both are myopic integer first-fit policies drawing down the *same* five movement budgets:
+- **greedy** — decentralized **bang-per-buck**: jobs are considered best-deal-first by $\min(c_R,c_S)/\Delta P$ (seconds of downtime per watt). Each job tries its cheaper action, then the alternate, and moves only if the whole job fits. It may overshoot $S^\star$ by one job.
+- **random** — shuffle movable jobs, coin-flip the action, and move only whole jobs: the floor any real policy should beat.
 
 ## Solution structure & sensitivity
 
-- **Bang-per-buck.** Linear objective + target ⇒ take jobs by $c_j/\Delta P_j$ until $S^\star$ is met, deviating only where a movement constraint binds. LP relaxation, MILP, and greedy coincide away from resource boundaries; at boundaries, compare MILP and LP separately so relaxation value is not mistaken for policy value.
+- **Bang-per-buck.** Linear objective + target ⇒ the fractional LP takes jobs by $c_j/\Delta P_j$ until $S^\star$ is met, deviating only where a movement constraint binds. Integer greedy and MILP carry job-granularity overshoot; at boundaries, compare MILP and LP separately so relaxation value is not mistaken for deployable policy value.
 - **Ranking is robust, the margin is not.** Within-pool job order is invariant to $\rho^\star$, $F/G$, $\bar p$ (common scaling cancels — verified by scaling $\bar p$); only the cross-pool comparison and the absolute feasibility margin move with their values.
 - **Regime switch.** Idle/cold-heavy or long-context populations cross from $\ell$-ranking to $m$-ranking exactly at the $N=\max(\cdot,\cdot)$ boundary; $\gamma$ lowers $\mu$ and delays the switch. The two columns are $\approx$ uncorrelated at center, so the flip genuinely reorders *which* jobs are shed.
 
