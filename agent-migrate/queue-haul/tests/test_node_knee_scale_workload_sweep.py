@@ -5,7 +5,7 @@ node-expected target.
 
 Plausible wrong implementations:
 - Use a different target or population per method within one scenario.
-- Forget a scalable baseline, especially the random job/node baselines.
+- Forget one of the narrowed scalable baselines.
 - Scale the source nodes but leave destination capacity fixed by accident.
 - Report disruption cost for misses as if they hit the modeled target.
 """

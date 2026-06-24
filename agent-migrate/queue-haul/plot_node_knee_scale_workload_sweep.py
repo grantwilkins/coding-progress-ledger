@@ -21,10 +21,7 @@ from node_knee import (
     place_source_nodes,
     solve_active_knee_lp,
     solve_live_greedy,
-    solve_node_drain_greedy,
     solve_random_jobs,
-    solve_random_nodes,
-    solve_tangent_lp,
     with_source_nodes,
 )
 from power import PoolPower
@@ -38,12 +35,9 @@ BASE_EVENT = Event()
 STARTUP = max(BASE_EVENT.tau_src, BASE_EVENT.tau_pre, BASE_EVENT.tau_in)
 COLORS = {
     "additive LP": "0.45",
-    "tangent LP": "tab:blue",
     "active-knee LP": "tab:green",
     "live greedy": "tab:orange",
-    "node-drain greedy": "tab:red",
     "random jobs": "tab:purple",
-    "random nodes": "tab:brown",
 }
 
 
@@ -66,12 +60,9 @@ def additive_result(pop, pool, imp, target, event):
 def method_specs(pop, pool, imp, target):
     return (
         ("additive LP", lambda ev: additive_result(pop, pool, imp, target, ev)),
-        ("tangent LP", lambda ev: solve_tangent_lp(pop, pool, imp, target, ev, MOVE)),
         ("active-knee LP", lambda ev: solve_active_knee_lp(pop, pool, imp, target, ev, MOVE)),
         ("live greedy", lambda ev: solve_live_greedy(pop, pool, imp, target, ev, MOVE)),
-        ("node-drain greedy", lambda ev: solve_node_drain_greedy(pop, pool, imp, target, ev, MOVE)),
         ("random jobs", lambda ev: solve_random_jobs(pop, pool, imp, target, ev, MOVE, seed=0)),
-        ("random nodes", lambda ev: solve_random_nodes(pop, pool, imp, target, ev, MOVE, seed=0)),
     )
 
 

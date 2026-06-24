@@ -206,16 +206,21 @@ grid guarantee.
 `plot_node_knee_deadline_sweep.py` writes `outputs/node_knee_deadline_sweep.{pdf,png}`. On the
 current active-agentic fixture, the old additive LP never reaches the modeled node-expected target.
 Active-knee LP reaches it at the shortest tested post-startup deadline (`10 s`) with the lowest
-disruption intensity (`24.5 s/kW`). Random jobs are much worse (`16 s`, `59.2 s/kW`), while random
-nodes behave close to node-drain greedy (`12 s`, `40.3 s/kW`) because they still concentrate removal
-on one source node.
+disruption intensity (`24.5 s/kW`); live greedy reaches at `12 s` (`42.3 s/kW`), and random jobs
+at `16 s` (`59.2 s/kW`).
 
 `plot_node_knee_scale_workload_sweep.py` writes
 `outputs/node_knee_scale_workload_sweep.{csv,pdf,png}`. It sweeps `1/2/4` source nodes, all four
 active cached workload classes, deadlines `10/30/120 s`, and target fractions `25/45/65%` of full
-modeled node-expected removable power. Current median disruption intensities show the same pattern:
-random jobs are expensive (`27.6/28.6/39.6/45.6 s/kW` by class), random nodes track node-drain, and
-the additive LP misses every agentic node-expected target.
+modeled node-expected removable power. The plotted method set is now additive LP, active-knee LP,
+live greedy, and random jobs. Current medians show random jobs are expensive
+(`27.6/28.6/39.6/45.6 s/kW` by class), and the additive LP misses every agentic node-expected target.
+
+`plot_node_knee_target_sweep.py` writes `outputs/node_knee_target_sweep.{csv,pdf,png}`. It reruns
+the original fixed-deadline 4-node dispatch shape while sweeping requested modeled node shed from
+`5%` to `95%` of full removable node power. At `D=300 s`, active-knee LP hits every target in all
+four classes; random jobs also hit but with much higher median intensity (`39.4/42.3/44.8/119.0
+s/kW`), and additive LP only hits `21%` of agentic targets.
 
 ---
 
