@@ -203,6 +203,11 @@ placement, convex removed-load value under the ramp–plateau curve, active-knee
 node-drain greedy, and the tiny exact oracle. This path reports modeled `node_expected_w`, not a hard
 grid guarantee.
 
+`plot_node_knee_deadline_sweep.py` writes `outputs/node_knee_deadline_sweep.{pdf,png}`. On the
+current active-agentic fixture, the old additive LP never reaches the modeled node-expected target,
+while active-knee LP reaches it at the shortest tested post-startup deadline and at lower disruption
+than the tangent LP or greedy baselines.
+
 ---
 
 ## 4. Headline takeaways

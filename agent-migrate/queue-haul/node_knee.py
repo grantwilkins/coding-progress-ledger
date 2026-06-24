@@ -190,7 +190,10 @@ def solve_active_knee_lp(pop: JobPopulation, pool: PoolPower, imp: Impact, s_sta
         r0 = np.zeros_like(load)
         r0[list(active)] = np.maximum(0.0, load[list(active)] - pool.power_knee)
         w, b = _tangent(pop, pool, r0)
-        res = _lp(pop, pool, imp, s_star, w, b, r0, event, move, active_alpha, active, "active_knee_lp")
+        try:
+            res = _lp(pop, pool, imp, s_star, w, b, r0, event, move, active_alpha, active, "active_knee_lp")
+        except RuntimeError:
+            continue
         if best is None or (res.true_expected_feasible and res.cost < best.cost) or (
             not best.true_expected_feasible and res.node_expected_w > best.node_expected_w
         ):
