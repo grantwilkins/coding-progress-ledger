@@ -112,7 +112,7 @@ def _tangent(pop: JobPopulation, pool: PoolPower, r0):
 
 
 def _lp(pop, pool, imp, s_star, weights, intercept=0.0, r0=None, event=Event(),
-        move=Movement(), active_alpha=0.0, active_nodes=()) -> NodeKneeResult:
+        move=Movement(), active_alpha=0.0, active_nodes=(), method="node_lp") -> NodeKneeResult:
     fleet = DestFleet.from_event(event, move, pool, pop)
     YR, YS, cons, _ = _build(pop, pool, imp, fleet, event, move, False)
     total = cp.sum(YR + YS, axis=1)
@@ -133,7 +133,7 @@ def _lp(pop, pool, imp, s_star, weights, intercept=0.0, r0=None, event=Event(),
             raise RuntimeError(f"node-knee LP failed: status={status}")
     return _result(
         pop, pool, imp, YR.value.sum(1), YS.value.sum(1), cost.value,
-        "node_lp", s_star, surrogate_feasible
+        method, s_star, surrogate_feasible
     )
 
 
@@ -144,7 +144,7 @@ def solve_tangent_lp(pop: JobPopulation, pool: PoolPower, imp: Impact, s_star: f
     best = None
     for _ in range(max_iter):
         w, b = _tangent(pop, pool, r0)
-        res = _lp(pop, pool, imp, s_star, w, b, r0, event, move, active_alpha)
+        res = _lp(pop, pool, imp, s_star, w, b, r0, event, move, active_alpha, method="tangent_lp")
         if best is None or (res.true_expected_feasible and res.cost < best.cost) or (
             not best.true_expected_feasible and res.node_expected_w > best.node_expected_w
         ):
@@ -190,7 +190,7 @@ def solve_active_knee_lp(pop: JobPopulation, pool: PoolPower, imp: Impact, s_sta
         r0 = np.zeros_like(load)
         r0[list(active)] = np.maximum(0.0, load[list(active)] - pool.power_knee)
         w, b = _tangent(pop, pool, r0)
-        res = _lp(pop, pool, imp, s_star, w, b, r0, event, move, active_alpha, active)
+        res = _lp(pop, pool, imp, s_star, w, b, r0, event, move, active_alpha, active, "active_knee_lp")
         if best is None or (res.true_expected_feasible and res.cost < best.cost) or (
             not best.true_expected_feasible and res.node_expected_w > best.node_expected_w
         ):
