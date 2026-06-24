@@ -31,6 +31,8 @@ def test_target_sweep_fixes_setup_and_varies_modeled_power_request():
         assert r["deadline_s"] == EVENT.D
         assert np.isclose(r["target_kw"], r["target_frac"] * r["full_node_kw"])
         assert (r["hit"] and np.isfinite(r["cost_s"])) or ((not r["hit"]) and np.isnan(r["cost_s"]))
+        if r["hit"]:
+            assert np.isclose(r["requested_intensity_s_per_kw"], r["cost_s"] / r["target_kw"])
 
     for rs in by_target.values():
         assert {r["method"] for r in rs} == set(COLORS)

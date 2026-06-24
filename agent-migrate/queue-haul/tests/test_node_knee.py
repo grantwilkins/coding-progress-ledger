@@ -4,6 +4,7 @@ Node-knee exploration values source-node concentration with a conservative tange
 Plausible wrong implementations:
 - Treat node-knee shed as additive per job, losing increasing returns around the knee.
 - Use a tangent that is not a lower bound because the removed-load value is not convex.
+- Let fixed-region active-knee LPs cross inactive nodes with stale plateau slopes.
 - Infer node placement silently or ignore it when computing expected node shed.
 - Randomize at the wrong aggregation level or ignore budgets in a random baseline.
 - Compare heuristics without an exact tiny oracle on hand-checkable cases.
@@ -22,8 +23,13 @@ from dispatch import Event
 from impact import Impact, Movement
 from instance import JobPopulation
 from node_knee import (
+    _knee_candidates,
+    _lp,
+    _tangent,
     evaluate_node_expected_w,
+    node_loads,
     place_source_nodes,
+    removed_loads,
     solve_active_knee_lp,
     solve_exact_oracle,
     solve_live_greedy,
@@ -127,6 +133,28 @@ def test_active_knee_lp_finds_crossing_missed_by_initial_tangent():
     assert active.surrogate_feasible and active.true_expected_feasible
     assert active.cost < initial.cost
     assert pop.ell[:3].sum() - pop.ell[:3] @ active.y[:3] <= pool.power_knee + 1e-6
+
+
+def test_fixed_region_lp_keeps_inactive_nodes_above_knee():
+    pool = PoolPower()
+    pop = _pop([0.08, 0.08, 0.08, 0.08], [0, 0, 1, 1])
+    imp = _imp(pop, [100, 100, 1, 1])
+    load = node_loads(pop)
+    r0 = np.zeros_like(load)
+    r0[0] = load[0] - pool.power_knee
+    w, b = _tangent(pop, pool, r0)
+    res = _lp(pop, pool, imp, 900.0, w, b, r0, SLACK_E, SLACK_M,
+              active_nodes=(0,), method="test", region_consistent=True)
+    residual = load - removed_loads(pop, res.y)
+    assert residual[0] <= pool.power_knee + 1e-6
+    assert residual[1] >= pool.power_knee - 1e-6
+
+
+def test_active_knee_candidates_can_cover_all_four_nodes():
+    pool = PoolPower()
+    pop = _pop([0.08] * 8, [0, 0, 1, 1, 2, 2, 3, 3])
+    imp = _imp(pop, np.ones(8))
+    assert max(len(c) for c in _knee_candidates(pop, pool, imp)) == 4
 
 
 def test_node_drain_greedy_beats_live_marginal_on_knee_bundle_case():

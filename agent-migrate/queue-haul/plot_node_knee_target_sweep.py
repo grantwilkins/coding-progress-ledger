@@ -79,6 +79,7 @@ def _row(session_class, jobs, full_kw, frac, target_kw, method, result):
         "active_kw": float(result.active_floor_w / kW),
         "cost_s": float(cost),
         "intensity_s_per_kw": float(cost / node_kw) if hit and node_kw > 0 else np.nan,
+        "requested_intensity_s_per_kw": float(cost / target_kw) if hit else np.nan,
     }
 
 
@@ -109,23 +110,27 @@ def _median(xs):
 
 def plot(rows, path_base="outputs/node_knee_target_sweep"):
     workloads = list(dict.fromkeys(r["session_class"] for r in rows))
-    fig, axs = plt.subplots(2, len(workloads), figsize=(3.9 * len(workloads), 6.2), sharex=False, squeeze=False)
+    fig, axs = plt.subplots(3, len(workloads), figsize=(3.9 * len(workloads), 8.3), sharex=False, squeeze=False)
     for col, cls in enumerate(workloads):
         for method, color in COLORS.items():
             rs = [r for r in rows if r["session_class"] == cls and r["method"] == method]
             x = np.array([r["target_kw"] for r in rs])
             ratio = np.array([r["achieved_over_target"] for r in rs])
             intensity = np.array([r["intensity_s_per_kw"] for r in rs], float)
+            requested = np.array([r["requested_intensity_s_per_kw"] for r in rs], float)
             axs[0, col].plot(x, ratio, marker="o", lw=1.8, ms=3.5, color=color, label=method)
             axs[1, col].plot(x, intensity, marker="o", lw=1.8, ms=3.5, color=color)
+            axs[2, col].plot(x, requested, marker="o", lw=1.8, ms=3.5, color=color)
         axs[0, col].axhline(1.0, color="0.2", ls="--", lw=1)
         axs[0, col].set(title=cls.replace("_", " "), ylim=(0, None))
         axs[1, col].set_yscale("log")
-        axs[1, col].set_xlabel("requested modeled shed (kW)")
+        axs[2, col].set_yscale("log")
+        axs[2, col].set_xlabel("requested modeled shed (kW)")
         for ax in axs[:, col]:
             ax.grid(True, alpha=0.25)
     axs[0, 0].set_ylabel("modeled shed / request")
-    axs[1, 0].set_ylabel("disruption intensity (s/kW modeled)")
+    axs[1, 0].set_ylabel("cost / achieved kW")
+    axs[2, 0].set_ylabel("cost / requested kW")
     axs[0, 0].legend(fontsize=7, loc="upper left")
     fig.suptitle(f"4-node fixed-deadline node-knee target sweep (D={EVENT.D:.0f}s)", y=0.995)
     fig.tight_layout()

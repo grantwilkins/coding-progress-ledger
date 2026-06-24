@@ -112,7 +112,8 @@ def _tangent(pop: JobPopulation, pool: PoolPower, r0):
 
 
 def _lp(pop, pool, imp, s_star, weights, intercept=0.0, r0=None, event=Event(),
-        move=Movement(), active_alpha=0.0, active_nodes=(), method="node_lp") -> NodeKneeResult:
+        move=Movement(), active_alpha=0.0, active_nodes=(), method="node_lp",
+        region_consistent=False) -> NodeKneeResult:
     fleet = DestFleet.from_event(event, move, pool, pop)
     YR, YS, cons, _ = _build(pop, pool, imp, fleet, event, move, False)
     total = cp.sum(YR + YS, axis=1)
@@ -120,7 +121,11 @@ def _lp(pop, pool, imp, s_star, weights, intercept=0.0, r0=None, event=Event(),
     surrogate = intercept + weights @ total
     rexpr = _r_expr(pop, total)
     load = node_loads(pop)
-    cons += [load[i] - rexpr[i] <= pool.power_knee for i in active_nodes if load[i] > pool.power_knee]
+    active = set(active_nodes)
+    cons += [load[i] - rexpr[i] <= pool.power_knee for i in active if load[i] > pool.power_knee]
+    if region_consistent:
+        cons += [load[i] - rexpr[i] >= pool.power_knee for i in range(len(load))
+                 if i not in active and load[i] > pool.power_knee]
     if active_alpha:
         cons_target = cons + [imp.dp_certified @ total >= active_alpha * s_star, surrogate >= s_star]
     else:
@@ -160,7 +165,7 @@ def _job_cost(imp: Impact) -> np.ndarray:
     return np.minimum(imp.c_replay, imp.c_transfer)
 
 
-def _knee_candidates(pop: JobPopulation, pool: PoolPower, imp: Impact, k: int = 2) -> list[tuple[int, ...]]:
+def _knee_candidates(pop: JobPopulation, pool: PoolPower, imp: Impact, k: int = 4) -> list[tuple[int, ...]]:
     load, node, cost = node_loads(pop), _source_node(pop), _job_cost(imp)
     gap = np.maximum(0.0, load - pool.power_knee)
     rows = []
@@ -191,7 +196,8 @@ def solve_active_knee_lp(pop: JobPopulation, pool: PoolPower, imp: Impact, s_sta
         r0[list(active)] = np.maximum(0.0, load[list(active)] - pool.power_knee)
         w, b = _tangent(pop, pool, r0)
         try:
-            res = _lp(pop, pool, imp, s_star, w, b, r0, event, move, active_alpha, active, "active_knee_lp")
+            res = _lp(pop, pool, imp, s_star, w, b, r0, event, move, active_alpha,
+                      active, "active_knee_lp", region_consistent=True)
         except RuntimeError:
             continue
         if best is None or (res.true_expected_feasible and res.cost < best.cost) or (

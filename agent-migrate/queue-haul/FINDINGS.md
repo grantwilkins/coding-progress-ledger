@@ -218,9 +218,11 @@ live greedy, and random jobs. Current medians show random jobs are expensive
 
 `plot_node_knee_target_sweep.py` writes `outputs/node_knee_target_sweep.{csv,pdf,png}`. It reruns
 the original fixed-deadline 4-node dispatch shape while sweeping requested modeled node shed from
-`5%` to `95%` of full removable node power. At `D=300 s`, active-knee LP hits every target in all
-four classes; random jobs also hit but with much higher median intensity (`39.4/42.3/44.8/119.0
-s/kW`), and additive LP only hits `21%` of agentic targets.
+`5%` to `95%` of full removable node power. Active-knee LP now uses fixed-region candidates, so the
+agentic high-target overshoot cliff is gone: achieved/requested stays `1.00`, and median intensity
+falls from `36.5` to `20.8 s/kW`. At `D=300 s`, active-knee LP hits every target in all four classes;
+random jobs also hit but with much higher median intensity (`39.4/42.3/44.8/119.0 s/kW`), and
+additive LP only hits `21%` of agentic targets.
 
 ---
 

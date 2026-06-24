@@ -158,7 +158,7 @@ $$r_i=\sum_{j\in i}\ell_j y_j,\qquad F_i(r_i)=P(L_i)-P(L_i-r_i).$$
 For the ramp-then-plateau curve, $F_i$ is convex in removed load: concentrating removals can become more valuable once a node crosses the power knee. The exact target $\sum_iF_i(r_i)\ge S^\star$ is nonconvex, so `node_knee.py` keeps it out of the canonical solver and provides compact exploration methods:
 
 - sequential tangent LPs using global lower bounds of $F_i$,
-- active-knee LP candidates that force selected nodes below the power knee,
+- active-knee LP candidates that force selected nodes below the power knee and keep unselected above-knee nodes in the plateau region,
 - live and node-drain greedy baselines,
 - a tiny exact enumeration oracle for hand-checkable cases.
 
