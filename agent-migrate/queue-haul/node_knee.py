@@ -229,6 +229,25 @@ def _take(budget, draws, action, j):
         budget[r] -= col[j]
 
 
+def _action(budget, draws, imp, j, pref=None):
+    pref = pref or ("R" if imp.c_replay[j] <= imp.c_transfer[j] else "S")
+    return next((a for a in (pref, "RS"[pref == "R"]) if _fits(budget, draws, a, j)), None)
+
+
+def _move(budget, draws, yR, yS, action, j):
+    _take(budget, draws, action, j)
+    (yR if action == "R" else yS)[j] = 1.0
+
+
+def _knee_bundle(pop, pool, node, load, cost, i):
+    gap = max(0.0, load[i] - pool.power_knee)
+    if gap <= 0:
+        return []
+    js = np.flatnonzero(node == i)
+    order = js[np.argsort(cost[js] / np.maximum(pop.ell[js], 1e-12), kind="mergesort")]
+    return order[: np.searchsorted(np.cumsum(pop.ell[order]), gap, side="left") + 1]
+
+
 def _finish_live(pop, pool, imp, s_star, budget, draws, yR, yS, used):
     node = _source_node(pop)
     resid = node_loads(pop) - removed_loads(pop, yR + yS)
@@ -241,11 +260,9 @@ def _finish_live(pop, pool, imp, s_star, budget, draws, yR, yS, used):
             scores.append((-(val / max(cost[j], 1e-12)), j))
         moved = False
         for _, j in sorted(scores):
-            pref = "R" if imp.c_replay[j] <= imp.c_transfer[j] else "S"
-            act = next((a for a in (pref, "RS"[pref == "R"]) if _fits(budget, draws, a, j)), None)
+            act = _action(budget, draws, imp, j)
             if act:
-                _take(budget, draws, act, j)
-                (yR if act == "R" else yS)[j] = 1.0
+                _move(budget, draws, yR, yS, act, j)
                 resid[node[j]] -= pop.ell[j]
                 left.remove(j)
                 moved = True
@@ -263,16 +280,55 @@ def solve_live_greedy(pop: JobPopulation, pool: PoolPower, imp: Impact, s_star: 
     return _result(pop, pool, imp, yR, yS, float(imp.c_replay @ yR + imp.c_transfer @ yS), "live_greedy", s_star)
 
 
+def solve_random_jobs(pop: JobPopulation, pool: PoolPower, imp: Impact, s_star: float,
+                      event: Event = Event(), move: Movement = Movement(),
+                      seed: int = 0) -> NodeKneeResult:
+    rng = np.random.default_rng(seed)
+    budget, draws = _budgets(pop, pool, event, move), _draws(pop, pool, imp)
+    yR, yS = np.zeros(len(pop)), np.zeros(len(pop))
+    for j in rng.permutation(np.flatnonzero(pop.ell > 0)):
+        if evaluate_node_expected_w(pop, pool, yR + yS) >= s_star:
+            break
+        act = _action(budget, draws, imp, int(j), "R" if rng.random() < 0.5 else "S")
+        if act:
+            _move(budget, draws, yR, yS, act, int(j))
+    return _result(pop, pool, imp, yR, yS, float(imp.c_replay @ yR + imp.c_transfer @ yS), "random_jobs", s_star)
+
+
+def solve_random_nodes(pop: JobPopulation, pool: PoolPower, imp: Impact, s_star: float,
+                       event: Event = Event(), move: Movement = Movement(),
+                       seed: int = 0) -> NodeKneeResult:
+    node, load, cost = _source_node(pop), node_loads(pop), _job_cost(imp)
+    budget, draws = _budgets(pop, pool, event, move), _draws(pop, pool, imp)
+    yR, yS, used = np.zeros(len(pop)), np.zeros(len(pop)), set()
+    for i in np.random.default_rng(seed).permutation(len(load)):
+        if evaluate_node_expected_w(pop, pool, yR + yS) >= s_star:
+            break
+        picks, tmp = [], budget.copy()
+        for j in _knee_bundle(pop, pool, node, load, cost, int(i)):
+            act = _action(tmp, draws, imp, int(j))
+            if act is None:
+                picks = []
+                break
+            _take(tmp, draws, act, int(j))
+            picks.append((int(j), act))
+        for j, act in picks:
+            (yR if act == "R" else yS)[j] = 1.0
+            used.add(j)
+        if picks:
+            budget = tmp
+    yR, yS = _finish_live(pop, pool, imp, s_star, budget, draws, yR, yS, used)
+    return _result(pop, pool, imp, yR, yS, float(imp.c_replay @ yR + imp.c_transfer @ yS), "random_nodes", s_star)
+
+
 def solve_node_drain_greedy(pop: JobPopulation, pool: PoolPower, imp: Impact, s_star: float,
                             event: Event = Event(), move: Movement = Movement()) -> NodeKneeResult:
     node, load, cost = _source_node(pop), node_loads(pop), _job_cost(imp)
     budget, draws = _budgets(pop, pool, event, move), _draws(pop, pool, imp)
     yR, yS, used = np.zeros(len(pop)), np.zeros(len(pop)), set()
     bundles = []
-    for i, gap in enumerate(np.maximum(0.0, load - pool.power_knee)):
-        js = np.flatnonzero(node == i)
-        order = js[np.argsort(cost[js] / np.maximum(pop.ell[js], 1e-12), kind="mergesort")]
-        take = order[: np.searchsorted(np.cumsum(pop.ell[order]), gap, side="left") + 1] if gap > 0 else []
+    for i in range(len(load)):
+        take = _knee_bundle(pop, pool, node, load, cost, i)
         if len(take):
             val = pool.node_power(load[i]) - pool.node_power(load[i] - pop.ell[take].sum())
             bundles.append((-(val / max(cost[take].sum(), 1e-12)), take))
@@ -281,8 +337,7 @@ def solve_node_drain_greedy(pop: JobPopulation, pool: PoolPower, imp: Impact, s_
             break
         picks, tmp = [], budget.copy()
         for j in jobs:
-            pref = "R" if imp.c_replay[j] <= imp.c_transfer[j] else "S"
-            act = next((a for a in (pref, "RS"[pref == "R"]) if _fits(tmp, draws, a, j)), None)
+            act = _action(tmp, draws, imp, j)
             if act is None or j in used:
                 picks = []
                 break
@@ -334,6 +389,8 @@ def comparison_rows(pop: JobPopulation, pool: PoolPower, imp: Impact, s_star: fl
         solve_active_knee_lp(pop, pool, imp, s_star, event, move),
         solve_live_greedy(pop, pool, imp, s_star, event, move),
         solve_node_drain_greedy(pop, pool, imp, s_star, event, move),
+        solve_random_jobs(pop, pool, imp, s_star, event, move),
+        solve_random_nodes(pop, pool, imp, s_star, event, move),
     ]
     if len(pop) <= 14:
         results.append(solve_exact_oracle(pop, pool, imp, s_star, event, move))

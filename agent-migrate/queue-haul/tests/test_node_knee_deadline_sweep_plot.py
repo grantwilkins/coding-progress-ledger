@@ -6,6 +6,7 @@ Plausible wrong implementations:
 - Plot active-floor watts as if they were node-expected watts.
 - Count disruption cost even when the node-expected target is missed.
 - Regenerate placement or population per method/deadline.
+- Omit the job-random or node-random baselines from the dispatch graph.
 """
 
 import sys
@@ -21,6 +22,7 @@ from plot_node_knee_deadline_sweep import run_sweep
 def test_node_knee_deadline_sweep_uses_node_expected_target():
     _, target_kw, rows = run_sweep(deadlines=np.array([300.0]))
     by_method = {r["method"]: r for r in rows}
+    assert {"random jobs", "random nodes"} <= set(by_method)
     additive = by_method["additive LP"]
     active = by_method["active-knee LP"]
 

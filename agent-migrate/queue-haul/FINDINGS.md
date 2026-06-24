@@ -204,9 +204,11 @@ node-drain greedy, and the tiny exact oracle. This path reports modeled `node_ex
 grid guarantee.
 
 `plot_node_knee_deadline_sweep.py` writes `outputs/node_knee_deadline_sweep.{pdf,png}`. On the
-current active-agentic fixture, the old additive LP never reaches the modeled node-expected target,
-while active-knee LP reaches it at the shortest tested post-startup deadline and at lower disruption
-than the tangent LP or greedy baselines.
+current active-agentic fixture, the old additive LP never reaches the modeled node-expected target.
+Active-knee LP reaches it at the shortest tested post-startup deadline (`10 s`) with the lowest
+disruption intensity (`24.5 s/kW`). Random jobs are much worse (`16 s`, `59.2 s/kW`), while random
+nodes behave close to node-drain greedy (`12 s`, `40.3 s/kW`) because they still concentrate removal
+on one source node.
 
 ---
 

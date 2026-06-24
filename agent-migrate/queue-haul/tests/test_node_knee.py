@@ -5,6 +5,7 @@ Plausible wrong implementations:
 - Treat node-knee shed as additive per job, losing increasing returns around the knee.
 - Use a tangent that is not a lower bound because the removed-load value is not convex.
 - Infer node placement silently or ignore it when computing expected node shed.
+- Randomize at the wrong aggregation level or ignore budgets in a random baseline.
 - Compare heuristics without an exact tiny oracle on hand-checkable cases.
 """
 
@@ -27,9 +28,11 @@ from node_knee import (
     solve_exact_oracle,
     solve_live_greedy,
     solve_node_drain_greedy,
+    solve_random_jobs,
+    solve_random_nodes,
     solve_tangent_lp,
 )
-from power import ETA_BYTES_PER_TOK, PoolPower
+from power import ETA_BYTES_PER_TOK, PoolPower, rho_replay
 
 SLACK_E = Event(D=1e9, W=10**7, dest_nodes=10**7)
 SLACK_M = replace(Movement(), lambda_src=1e18, mu_in=1e18)
@@ -74,6 +77,18 @@ def _imp(pop, costs):
         np.zeros(n),
         "load",
     )
+
+
+def _movement_slacks(pop, pool, imp, res, event, move):
+    y = res.y
+    held = pop.T / pool.mean_context_tokens * np.where(pop.state == "cold", 1 / (1 + pool.gamma), 1.0)
+    return np.array([
+        move.lambda_src * (event.D - event.tau_src) - (imp.b_replay @ res.y_R + imp.b_transfer @ res.y_S),
+        event.W * (event.D - event.tau_pre) - (pop.T / rho_replay(pop.T, pop.mfu)) @ res.y_R,
+        event.W * move.mu_in * (event.D - event.tau_in) - imp.b_transfer @ res.y_S,
+        event.l_dest(pool) - pop.ell @ y,
+        event.s_dest(pool) - held @ y,
+    ])
 
 
 def test_removed_load_value_is_convex_for_ramp_plateau_curve():
@@ -131,6 +146,29 @@ def test_node_drain_bundle_respects_joint_resource_budget():
     event = Event(D=1e9, W=10**7, dest_nodes=1, spare_frac=0.125)
     drain = solve_node_drain_greedy(pop, pool, imp, 500.0, event, SLACK_M)
     assert pop.ell @ drain.y <= event.l_dest(pool) + 1e-9
+
+
+def test_random_baselines_randomize_at_declared_aggregation_level():
+    pool = PoolPower()
+    pop = _pop([0.08, 0.08, 0.08, 0.08], [0, 0, 1, 1])
+    imp = _imp(pop, [1, 100, 1, 100])
+    job = solve_random_jobs(pop, pool, imp, 900.0, SLACK_E, SLACK_M, seed=0)
+    node = solve_random_nodes(pop, pool, imp, 900.0, SLACK_E, SLACK_M, seed=0)
+    assert np.array_equal(job.y, np.array([0.0, 0.0, 1.0, 0.0]))
+    assert np.array_equal(node.y, np.array([1.0, 0.0, 0.0, 0.0]))
+
+
+def test_random_baselines_are_seeded_and_budget_respecting():
+    pool = PoolPower()
+    pop = _pop([0.08, 0.08, 0.08, 0.08], [0, 0, 1, 1])
+    imp = _imp(pop, [1, 2, 3, 4])
+    event = Event(D=1e9, W=10**7, dest_nodes=1, spare_frac=0.125)
+    for solver in (solve_random_jobs, solve_random_nodes):
+        a = solver(pop, pool, imp, 10_000.0, event, SLACK_M, seed=2)
+        b = solver(pop, pool, imp, 10_000.0, event, SLACK_M, seed=2)
+        assert np.array_equal(a.y_R, b.y_R)
+        assert np.array_equal(a.y_S, b.y_S)
+        assert _movement_slacks(pop, pool, imp, a, event, SLACK_M).min() >= -1e-9
 
 
 def test_exact_oracle_picks_cheapest_knee_crossing_bundle():

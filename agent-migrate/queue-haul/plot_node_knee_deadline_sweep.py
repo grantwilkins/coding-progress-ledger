@@ -26,6 +26,8 @@ from node_knee import (
     solve_active_knee_lp,
     solve_live_greedy,
     solve_node_drain_greedy,
+    solve_random_jobs,
+    solve_random_nodes,
     solve_tangent_lp,
     with_source_nodes,
 )
@@ -60,6 +62,8 @@ def run_sweep(deadlines=DEADLINES):
         ("active-knee LP", lambda ev: solve_active_knee_lp(pop, pool, imp, target, ev, MOVE), "tab:green"),
         ("live greedy", lambda ev: solve_live_greedy(pop, pool, imp, target, ev, MOVE), "tab:orange"),
         ("node-drain greedy", lambda ev: solve_node_drain_greedy(pop, pool, imp, target, ev, MOVE), "tab:red"),
+        ("random jobs", lambda ev: solve_random_jobs(pop, pool, imp, target, ev, MOVE, seed=0), "tab:purple"),
+        ("random nodes", lambda ev: solve_random_nodes(pop, pool, imp, target, ev, MOVE, seed=0), "tab:brown"),
     )
     rows = []
     for D in deadlines:
