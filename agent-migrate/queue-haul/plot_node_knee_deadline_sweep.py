@@ -87,7 +87,7 @@ def main():
         node = np.array([r["node_kw"] for r in rs])
         cost = np.array([r["cost_s"] for r in rs], float)
         ax1.plot(D, node, lw=2, label=method, color=colors[method])
-        ax2.plot(D, cost, lw=2, label=method, color=colors[method])
+        ax2.plot(D, cost / np.maximum(node, 1e-12), lw=2, label=method, color=colors[method])
     for ax in (ax1, ax2):
         ax.set_xscale("log")
         ax.axvline(STARTUP, color="0.5", ls=":", lw=1)
@@ -95,7 +95,7 @@ def main():
         ax.set_xlabel("deadline (seconds)")
     ax1.axhline(target_kw, color="0.2", ls="--", lw=1, label=f"target {target_kw:.1f} kW")
     ax1.set(ylabel="modeled node-expected shed (kW)", title=f"A. Power outcome, {len(pop)} jobs")
-    ax2.set(ylabel="disruption if target met (s)", title="B. Cost to meet node-expected target")
+    ax2.set(ylabel="disruption intensity (s/kW node-expected)", title="B. Cost normalized by modeled shed")
     ax1.legend(fontsize=8)
     fig.tight_layout()
     os.makedirs("outputs", exist_ok=True)
@@ -108,8 +108,8 @@ def main():
         hit = [r for r in rs if r["hit"]]
         first = min((r["deadline"] for r in hit), default=np.nan)
         best = max(r["node_kw"] for r in rs)
-        min_cost = min((r["cost_s"] for r in hit), default=np.nan)
-        print(f"{method:17s} first_hit_D={first:6.1f}s  max_node={best:6.1f} kW  min_cost={min_cost:7.1f}s")
+        min_intensity = min((r["cost_s"] / r["node_kw"] for r in hit), default=np.nan)
+        print(f"{method:17s} first_hit_D={first:6.1f}s  max_node={best:6.1f} kW  min_intensity={min_intensity:7.1f}s/kW")
 
 
 if __name__ == "__main__":
