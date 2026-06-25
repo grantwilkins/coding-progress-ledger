@@ -73,6 +73,37 @@ def evaluate_active_floor_w(imp: Impact, y) -> float:
     return float(imp.dp_certified @ np.asarray(y, float))
 
 
+def _plan_y(plan) -> np.ndarray:
+    return ((plan.y_R + plan.y_S)[:, None] if plan.Y_R is None or plan.Y_S is None
+            else plan.Y_R + plan.Y_S)
+
+
+def execution_realization_metrics(pop: JobPopulation, pool: PoolPower, imp: Impact,
+                                  plan, sim, D: float) -> dict:
+    """Selected vs deadline-realized node power for a replayed plan."""
+    Y = np.asarray(_plan_y(plan), float)
+    ed, rd = np.asarray(sim.egress_done), np.asarray(sim.rebuild_done)
+    ed = ed[:, None] if ed.ndim == 1 else ed
+    rd = rd[:, None] if rd.ndim == 1 else rd
+    if ed.shape != Y.shape or rd.shape != Y.shape:
+        raise ValueError("simulation completion arrays do not match plan routing")
+    masks = {
+        "selected": np.ones_like(Y, bool),
+        "egress_realized": np.isfinite(ed) & (ed <= D),
+        "rebuild_realized": np.isfinite(rd) & (rd <= D),
+    }
+    out = {}
+    for name, mask in masks.items():
+        y = (Y * mask).sum(1)
+        node = evaluate_node_expected_w(pop, pool, y)
+        active = evaluate_active_floor_w(imp, y)
+        out[f"{name}_node_expected_w"] = node
+        out[f"{name}_active_floor_w"] = active
+        out[f"{name}_node_s_per_kw"] = plan.cost / (node / 1e3) if node > 0 else np.nan
+        out[f"{name}_active_s_per_kw"] = plan.cost / (active / 1e3) if active > 0 else np.nan
+    return out
+
+
 @dataclass(frozen=True)
 class NodeKneeResult:
     y_R: np.ndarray

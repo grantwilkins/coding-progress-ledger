@@ -5,6 +5,7 @@ Plausible wrong implementations:
 - Use final-context marginal prefill rate instead of average full-replay rate.
 - Drop one side of a split replay/transfer shipment.
 - Let rebuild complete before full egress arrival.
+- Keep stale source-node marginal values in node-aware ordering.
 """
 
 import sys
@@ -110,6 +111,15 @@ def _toy(n):
     return pop
 
 
+def _node_value_toy():
+    z = np.zeros(3)
+    ell = np.array([0.10, 0.05, 0.05])
+    return JobPopulation(np.array(["chat"] * 3), np.array(["ordinary_chat"] * 3),
+                         np.array(["active"] * 3), np.zeros(3, bool), np.full(3, 1e4),
+                         z, z, z, z, z, np.ones(3, bool), ell, z, z, "bf16", 0.35,
+                         np.array([0, 0, 1]))
+
+
 def _toy_imp(b_transfer):
     o = np.ones(len(b_transfer))
     z = np.zeros(len(b_transfer))
@@ -140,6 +150,27 @@ def test_cutthrough_overlaps_egress():
     s = simulate(pop, POOL, imp, plan, event, move, mode="cutthrough", discipline="fifo")
     # rd0=max(ed0=2, rs0=0 +p2=2)=2; rd1=max(ed1=3, max(es1=2,rd0=2)+1=3)=3
     assert s.rebuild_done.tolist() == [2.0, 3.0]
+
+
+def test_node_marginal_pd_updates_residual_source_node_value():
+    # Node 0 starts above the power knee. Moving job 0 crosses into the high-slope ramp,
+    # so job 1's value jumps and should beat the equal-sized job on node 1 by stable tie-break.
+    pop = _node_value_toy()
+    imp = _toy_imp([1e9, 1e9, 1e9])
+    plan = _plan([0.0, 0.0, 0.0], [1.0, 1.0, 1.0])
+    event = Event(D=10.0, W=10, tau_src=0.0, tau_pre=0.0, tau_in=0.0)
+    move = replace(Movement(), lambda_src=1e9, mu_in=1e18)
+    s = simulate(pop, POOL, imp, plan, event, move, discipline="node_marginal_pd")
+    assert np.argsort(s.egress_start).tolist() == [0, 1, 2]
+
+
+def test_node_marginal_pd_requires_source_nodes():
+    pop = _toy(1)
+    imp = _toy_imp([1e9])
+    event = Event(D=10.0, W=10, tau_src=0.0, tau_pre=0.0, tau_in=0.0)
+    move = replace(Movement(), lambda_src=1e9)
+    with pytest.raises(ValueError, match="source_node"):
+        simulate(pop, POOL, imp, _plan([0.0], [1.0]), event, move, discipline="node_marginal_pd")
 
 
 # ---- Layer 3: conservation invariants + Johnson==DES at W=1 single-action ----

@@ -41,14 +41,41 @@ class SimResult:
     mode: str
 
 
-def _order(mv, p1, p2, dens, discipline):
+def _source_node(pop):
+    if pop.source_node is None:
+        raise ValueError("node_marginal_pd requires pop.source_node")
+    node = np.asarray(pop.source_node, int)
+    if len(node) != len(pop) or np.any(node < 0):
+        raise ValueError("source_node must assign every job to a nonnegative node")
+    return node
+
+
+def _node_marginal_order(pop, pool, Yf, p1, mv, K):
+    node = _source_node(pop)
+    resid = np.bincount(node, weights=pop.ell, minlength=int(node.max()) + 1)
+    todo, order = list(mv), []
+    while todo:
+        f = np.asarray(todo)
+        j = f // K
+        load = pop.ell[j] * Yf[f]
+        gain = pool.node_power(resid[node[j]]) - pool.node_power(resid[node[j]] - load)
+        k = int(np.argmax(gain / np.maximum(p1[f], 1e-300)))
+        pick = int(todo.pop(k))
+        order.append(pick)
+        resid[node[pick // K]] -= pop.ell[pick // K] * Yf[pick]
+    return np.asarray(order, int)
+
+
+def _order(mv, p1, p2, dens, discipline, pop=None, pool=None, Yf=None, K=1):
     """Order moving jobs at the shared egress link."""
     if discipline == "fifo":
         return mv
     if discipline == "lpt":
         return mv[np.argsort(-p1[mv])]
-    if discipline == "pd":  # power-density greedy: strong (not optimal) for realized shed
+    if discipline in ("pd", "certified_pd"):  # certified active-work density
         return mv[np.argsort(-dens[mv])]
+    if discipline == "node_marginal_pd":
+        return _node_marginal_order(pop, pool, Yf, p1, mv, K)
     if discipline == "johnson":  # 2-machine makespan-optimal (exact only at W=1, single-action)
         a, b = mv[p1[mv] <= p2[mv]], mv[p1[mv] > p2[mv]]
         return np.concatenate([a[np.argsort(p1[a])], b[np.argsort(-p2[b])]])
@@ -76,13 +103,13 @@ def simulate(pop: JobPopulation, pool, imp: Impact, plan: Plan, event: Event = E
     p1 = (YR * imp.b_replay[:, None] + YS * imp.b_transfer[:, None]) / move.lambda_src  # egress secs
     p2R = YR * pop.T[:, None] / rho  # bare prefill replay, 0 where not replayed
     p2S = YS * imp.b_transfer[:, None] / move.mu_in  # bare KV ingest, 0 where not transferred
-    p1f, p2Rf, p2Sf, YRf, YSf = (a.ravel() for a in (p1, p2R, p2S, YR, YS))
+    p1f, p2Rf, p2Sf, YRf, YSf, Yf = (a.ravel() for a in (p1, p2R, p2S, YR, YS, Y))
     shedf = (dp[:, None] * Y).ravel()
     # value density dp·y/p1 → dp·λ/bytes for a mover (y cancels); floor only guards non-movers.
     densf = shedf / np.maximum(p1f, 1e-300)
     mv = np.flatnonzero(Y.ravel() > 1e-9)  # flat (j,ℓ) shipment indices
 
-    order = _order(mv, p1f, p2Rf + p2Sf, densf, discipline)
+    order = _order(mv, p1f, p2Rf + p2Sf, densf, discipline, pop, pool, Yf, K)
     es, ed = np.full(n * K, np.nan), np.full(n * K, np.nan)
     t = event.tau_src  # link available once at τ_src, then continuous
     for f in order:  # serial link; egress_done is monotone along `order`

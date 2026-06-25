@@ -46,9 +46,10 @@ Run each script from `queue-haul/`.
 |---|---|---|
 | `plot_node_knee_target_sweep.py` | `outputs/node_knee_target_sweep.{csv,pdf,png}` | Fixed 4-node, `D=300s`, target sweep from `5%` to `95%` of full modeled removable node power. Both active-knee methods hit every target in all four active cached workload classes. |
 | `plot_node_knee_deadline_sweep.py` | `outputs/node_knee_deadline_sweep.{pdf,png}` | Agentic fixed target. Active-knee LP relaxation and MILP first hit at `10s` with `24.5` and `24.0 s/kW`; live greedy at `12s` with `35.1 s/kW`; random jobs at `16s` with `59.2 s/kW`; additive LP never hits the node target. |
+| `plot_node_knee_execution_validation.py` | `outputs/node_knee_execution_validation.{csv,pdf,png}` | Replays active-knee LP relaxation and MILP plans through the deterministic reconstruction simulator. On the fixed agentic deadline sweep, LP reaches egress-realized target at `12s` but rebuild-realized target at `91.4s`; MILP reaches egress at `10s` and rebuild at `28s`. |
 | `plot_node_knee_scale_workload_sweep.py` | `outputs/node_knee_scale_workload_sweep.{csv,pdf,png}` | Sweeps `1/2/4` source nodes, all four active cached classes, deadlines `10/30/120s`, and target fractions `25/45/65%`. Active-knee MILP exposes the whole-job gap; additive LP misses every agentic node-expected target. |
 
-Only these three plot scripts are canonical. Older validation and exploration plot scripts were removed from the active tree; their underlying model code remains covered by semantic tests.
+Only these four plot scripts are canonical. Older validation and exploration plot scripts were removed from the active tree; their underlying model code remains covered by semantic tests.
 
 Latest median disruption intensities from the fixed 4-node target sweep:
 
@@ -75,6 +76,7 @@ Current semantic tests cover:
 - seeded/budget-respecting random baselines,
 - fixed 4-node target-sweep semantics,
 - deadline-sweep modeled target semantics,
+- execution replay selected/egress/rebuild node-power semantics,
 - scale/workload/deadline sweep semantics.
 
 Run:
