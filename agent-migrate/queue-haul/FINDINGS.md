@@ -47,6 +47,8 @@ Run each script from `queue-haul/`.
 | `plot_node_knee_deadline_sweep.py` | `outputs/node_knee_deadline_sweep.{pdf,png}` | Agentic fixed target. Active-knee LP first hits at `10s` with `24.5 s/kW`; live greedy at `12s` with `42.3 s/kW`; random jobs at `16s` with `59.2 s/kW`; additive LP never hits the node target. |
 | `plot_node_knee_scale_workload_sweep.py` | `outputs/node_knee_scale_workload_sweep.{csv,pdf,png}` | Sweeps `1/2/4` source nodes, all four active cached classes, deadlines `10/30/120s`, and target fractions `25/45/65%`. Random jobs are consistently expensive; additive LP misses every agentic node-expected target. |
 
+Only these three plot scripts are canonical. Older validation and exploration plot scripts were removed from the active tree; their underlying model code remains covered by semantic tests.
+
 Latest median disruption intensities from the fixed 4-node target sweep:
 
 | workload | additive LP | active-knee LP | live greedy | random jobs |
@@ -68,6 +70,7 @@ Current semantic tests cover:
 - fixed-region active-knee constraints,
 - seeded/budget-respecting random baselines,
 - fixed 4-node target-sweep semantics,
+- deadline-sweep modeled target semantics,
 - scale/workload/deadline sweep semantics.
 
 Run:
@@ -76,4 +79,4 @@ Run:
 uv run pytest
 ```
 
-Last full run: `155 passed`, with the existing 5 CVXPY accuracy warnings in evacuation tests.
+Current verification after the plot cleanup: `154 passed`, with the existing 5 CVXPY accuracy warnings in evacuation tests.

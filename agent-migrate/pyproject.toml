@@ -1,7 +1,7 @@
 [project]
 name = "agent-migrate-agent"
 version = "0.1.0"
-description = "State-mobility layer between agent harnesses and serving backends."
+description = "Research experiments for LLM state migration, evacuation, and power-shed planning."
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
@@ -13,7 +13,7 @@ dependencies = [
 ]
 
 [tool.pytest.ini_options]
-testpaths = ["tests", "convex-allocation/tests", "evacuation/tests", "queue-haul/tests"]
+testpaths = ["tests", "evacuation/tests", "queue-haul/tests"]
 norecursedirs = ["runs", ".venv", ".git", "dist", "build", "kv-transfer-early-experiment", "long-term-plans"]
 
 [dependency-groups]
