@@ -18,7 +18,7 @@ import cvxpy as cp
 import numpy as np
 from impact import Impact, Movement, move_costs
 from instance import JobPopulation
-from power import PoolPower, rho_replay
+from power import PoolPower
 
 
 @dataclass(frozen=True)
@@ -108,6 +108,61 @@ def bind_dp(imp: Impact) -> np.ndarray:
     return imp.dp_certified
 
 
+def held_weight(pop: JobPopulation, pool: PoolPower) -> np.ndarray:
+    return (pop.T / pool.mean_context_tokens) * np.where(pop.state == "cold", 1 / (1 + pool.gamma), 1.0)
+
+
+def movement_budgets(pool: PoolPower, event: Event, move: Movement, fleet: DestFleet = None) -> dict:
+    W = np.array([event.W]) if fleet is None else np.asarray(fleet.W)
+    spare = np.array([event.spare_frac * event.dest_nodes]) if fleet is None else np.asarray(fleet.spare)
+    return {
+        "egress": move.lambda_src * (event.D - event.tau_src),
+        "prefill": W * (event.D - event.tau_pre),
+        "ingest": W * move.mu_in * (event.D - event.tau_in),
+        "load": spare * pool.rho_star,
+        "held": spare * pool.s_node,
+    }
+
+
+def single_movement_budgets(pool: PoolPower, event: Event, move: Movement) -> dict:
+    return {k: float(np.asarray(v, float).reshape(-1)[0]) for k, v in movement_budgets(pool, event, move).items()}
+
+
+def movement_columns(pop: JobPopulation, pool: PoolPower, imp: Impact, fleet: DestFleet,
+                     move: Movement = Movement()) -> dict:
+    cR, cS, reb = move_costs(pop, fleet, move)
+    hw = held_weight(pop, pool)[:, None]
+    return {
+        "cost_R": cR,
+        "cost_S": cS,
+        "R": {"egress": imp.b_replay[:, None], "prefill": reb, "load": pop.ell[:, None], "held": hw},
+        "S": {"egress": imp.b_transfer[:, None], "ingest": imp.b_transfer[:, None],
+              "load": pop.ell[:, None], "held": hw},
+    }
+
+
+def movement_draws(pop: JobPopulation, pool: PoolPower, imp: Impact, event: Event = Event(),
+                   move: Movement = Movement()) -> dict:
+    fleet = DestFleet.from_event(event, move, pool, pop)
+    cols = movement_columns(pop, pool, imp, fleet, move)
+    return {
+        action: {r: np.asarray(v, float)[:, 0] for r, v in cols[action].items()}
+        for action in ("R", "S")
+    }
+
+
+def movement_used(draws: dict, y_R, y_S) -> dict:
+    y_R, y_S = np.asarray(y_R, float), np.asarray(y_S, float)
+    resources = set(draws["R"]) | set(draws["S"])
+    return {
+        r: float(
+            (draws["R"][r] @ y_R if r in draws["R"] else 0.0)
+            + (draws["S"][r] @ y_S if r in draws["S"] else 0.0)
+        )
+        for r in resources
+    }
+
+
 def _plan(x, n, dp, imp, method, regime, s_star, feasible) -> Plan:
     y_R, y_S = x[:n], x[n:]
     y = y_R + y_S
@@ -158,21 +213,14 @@ def _build(pop, pool, imp, fleet, event, move, integer):
     kw = {"boolean": True} if integer else {"nonneg": True}
     YR, YS = cp.Variable((n, K), **kw), cp.Variable((n, K), **kw)
     Y = YR + YS
-    reb = move_costs(pop, fleet, move)[2]  # prefill node-seconds at each dest's ρ_ℓ
-    bR, bS = imp.b_replay[:, None], imp.b_transfer[:, None]
-    W, spare = np.asarray(fleet.W), np.asarray(fleet.spare)
-    egress = cp.sum(cp.multiply(bR, YR) + cp.multiply(bS, YS)) <= move.lambda_src * (
-        event.D - event.tau_src
-    )
+    cols = movement_columns(pop, pool, imp, fleet, move)
+    budgets = movement_budgets(pool, event, move, fleet)
+    egress = cp.sum(cp.multiply(cols["R"]["egress"], YR) + cp.multiply(cols["S"]["egress"], YS)) <= budgets["egress"]
     # TODO(dest-load): recompute ell per destination when fleet hardware/precision differs.
-    load = cp.sum(cp.multiply(pop.ell[:, None], Y), axis=0) <= spare * pool.rho_star
-    held_w = (pop.T / pool.mean_context_tokens) * np.where(pop.state == "cold", 1 / (1 + pool.gamma), 1.0)
-    held = (
-        cp.sum(cp.multiply(held_w[:, None], Y), axis=0)
-        <= spare * pool.s_node
-    )
-    prefill = cp.sum(cp.multiply(reb, YR), axis=0) <= W * (event.D - event.tau_pre)
-    ingest = cp.sum(cp.multiply(bS, YS), axis=0) <= W * move.mu_in * (event.D - event.tau_in)
+    load = cp.sum(cp.multiply(cols["R"]["load"], Y), axis=0) <= budgets["load"]
+    held = cp.sum(cp.multiply(cols["R"]["held"], Y), axis=0) <= budgets["held"]
+    prefill = cp.sum(cp.multiply(cols["R"]["prefill"], YR), axis=0) <= budgets["prefill"]
+    ingest = cp.sum(cp.multiply(cols["S"]["ingest"], YS), axis=0) <= budgets["ingest"]
     cons = [
         cp.sum(Y, axis=1)
         <= 1,  # pairing: each job moves at most once, across all destinations
@@ -278,28 +326,15 @@ def _spearman(x, y) -> float:
 def dispatch_diagnostics(pop, pool, imp, plan, s_star, event=Event(), move=Movement()) -> dict:
     """Row-level audit numbers for dispatch plots; all ratios use LP row coefficients."""
     dp = bind_dp(imp)
-    reb = pop.T / rho_replay(pop.T, pop.mfu)
-    held_w = (pop.T / pool.mean_context_tokens) * np.where(pop.state == "cold", 1 / (1 + pool.gamma), 1.0)
-    budgets = {
-        "egress": move.lambda_src * (event.D - event.tau_src),
-        "prefill": event.W * (event.D - event.tau_pre),
-        "ingest": event.W * move.mu_in * (event.D - event.tau_in),
-        "load": event.l_dest(pool),
-        "held": event.s_dest(pool),
-    }
-    used = {
-        "egress": float(imp.b_replay @ plan.y_R + imp.b_transfer @ plan.y_S),
-        "prefill": float(reb @ plan.y_R),
-        "ingest": float(imp.b_transfer @ plan.y_S),
-        "load": float(pop.ell @ plan.y),
-        "held": float(held_w @ plan.y),
-    }
+    budgets = single_movement_budgets(pool, event, move)
+    draws = movement_draws(pop, pool, imp, event, move)
+    used = movement_used(draws, plan.y_R, plan.y_S)
     max_draw = {
-        "egress": float(np.maximum(imp.b_replay, imp.b_transfer).max()),
-        "prefill": float(reb.max()),
-        "ingest": float(imp.b_transfer.max()),
-        "load": float(pop.ell.max()),
-        "held": float(held_w.max()),
+        "egress": float(np.maximum(draws["R"]["egress"], draws["S"]["egress"]).max()),
+        "prefill": float(draws["R"]["prefill"].max()),
+        "ingest": float(draws["S"]["ingest"].max()),
+        "load": float(draws["R"]["load"].max()),
+        "held": float(draws["R"]["held"].max()),
     }
     util = {k: used[k] / budgets[k] for k in budgets}
     duals = {
@@ -317,8 +352,8 @@ def dispatch_diagnostics(pop, pool, imp, plan, s_star, event=Event(), move=Movem
         "spearman": {
             "cost": _spearman(dp, np.minimum(imp.c_replay, imp.c_transfer)),
             "egress": _spearman(dp, np.maximum(imp.b_replay, imp.b_transfer)),
-            "prefill": _spearman(dp, reb),
-            "held": _spearman(dp, held_w),
+            "prefill": _spearman(dp, draws["R"]["prefill"]),
+            "held": _spearman(dp, draws["R"]["held"]),
             "load": _spearman(dp, pop.ell),
         },
     }
@@ -332,29 +367,9 @@ def _first_fit(pop, pool, imp, s_star, event, move, order, prefer, method) -> Pl
     if np.any(pop.ell > pool.rho_star): raise ValueError("job ell exceeds rho_star; split the job or lower its offered load")
     n = len(pop)
     dp = bind_dp(imp)
-    reb = pop.T / rho_replay(pop.T, pop.mfu)
-    held_w = (pop.T / pool.mean_context_tokens) * np.where(pop.state == "cold", 1 / (1 + pool.gamma), 1.0)
-    budget = {  # same RHS as the solve() constraints; consumed as jobs are accepted
-        "egress": move.lambda_src * (event.D - event.tau_src),
-        "prefill": event.W * (event.D - event.tau_pre),
-        "ingest": event.W * move.mu_in * (event.D - event.tau_in),
-        "load": event.l_dest(pool),
-        "held": event.s_dest(pool),
-    }
-    draw = {  # per-job resource a unit move consumes (same coefficients as the LP rows)
-        "R": [
-            ("egress", imp.b_replay),
-            ("prefill", reb),
-            ("load", pop.ell),
-            ("held", held_w),
-        ],
-        "S": [
-            ("egress", imp.b_transfer),
-            ("ingest", imp.b_transfer),
-            ("load", pop.ell),
-            ("held", held_w),
-        ],
-    }
+    budget = single_movement_budgets(pool, event, move)
+    draws = movement_draws(pop, pool, imp, event, move)
+    draw = {a: list(draws[a].items()) for a in ("R", "S")}
     yR, yS = np.zeros(n), np.zeros(n)
     cum = 0.0
     for j in order:

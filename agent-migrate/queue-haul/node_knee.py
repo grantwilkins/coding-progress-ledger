@@ -3,19 +3,25 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, replace
-from itertools import product
+from itertools import combinations, product
 
 import cvxpy as cp
 import numpy as np
 
-from dispatch import DestFleet, Event, _build, _run, solve
+from dispatch import (
+    DestFleet,
+    Event,
+    _build,
+    _run,
+    held_weight,
+    movement_draws,
+    movement_used,
+    single_movement_budgets,
+    solve,
+)
 from impact import Impact, Movement
 from instance import JobPopulation
-from power import PoolPower, rho_replay
-
-
-def held_weight(pop: JobPopulation, pool: PoolPower) -> np.ndarray:
-    return (pop.T / pool.mean_context_tokens) * np.where(pop.state == "cold", 1 / (1 + pool.gamma), 1.0)
+from power import PoolPower
 
 
 def place_source_nodes(pop: JobPopulation, pool: PoolPower, n_nodes: int, policy: str = "memory") -> np.ndarray:
@@ -75,7 +81,7 @@ class NodeKneeResult:
     method: str
     feasible: bool
     movement_feasible: bool
-    surrogate_feasible: bool
+    method_target_feasible: bool
     true_expected_feasible: bool
     active_floor_w: float
     node_expected_w: float
@@ -87,13 +93,28 @@ class NodeKneeResult:
         return self.y_R + self.y_S
 
 
-def _result(pop, pool, imp, y_R, y_S, cost, method, s_star, surrogate_feasible=True) -> NodeKneeResult:
+def _movement_feasible(pop, pool, imp, y_R, y_S, event, move) -> bool:
+    y_R, y_S = np.asarray(y_R, float), np.asarray(y_S, float)
+    y = y_R + y_S
+    tol = 1e-6
+    if np.any(y_R < -tol) or np.any(y_S < -tol) or np.any(y > 1 + tol):
+        return False
+    if event.pinned and np.any(y[np.isin(pop.job_type, event.pinned)] > tol):
+        return False
+    budgets = single_movement_budgets(pool, event, move)
+    used = movement_used(movement_draws(pop, pool, imp, event, move), y_R, y_S)
+    return all(used[r] <= budgets[r] + tol * max(1.0, abs(budgets[r])) for r in budgets)
+
+
+def _result(pop, pool, imp, y_R, y_S, cost, method, s_star, event=Event(), move=Movement(),
+            method_target_feasible=True) -> NodeKneeResult:
     y = y_R + y_S
     active = evaluate_active_floor_w(imp, y)
     expected = evaluate_node_expected_w(pop, pool, y)
     true = expected >= s_star - 1e-6 * max(s_star, 1.0)
+    movement = _movement_feasible(pop, pool, imp, y_R, y_S, event, move)
     return NodeKneeResult(
-        y_R, y_S, float(cost), method, true, True, surrogate_feasible, true,
+        y_R, y_S, float(cost), method, movement and true, movement, method_target_feasible, true,
         active, expected, max(0.0, s_star - expected), max(0.0, s_star - active)
     )
 
@@ -111,11 +132,25 @@ def _tangent(pop: JobPopulation, pool: PoolPower, r0):
     return g[node] * pop.ell, float(np.sum(f0 - g * r0))
 
 
+def _region_affine(pop: JobPopulation, pool: PoolPower, active_nodes):
+    load = node_loads(pop)
+    active = set(active_nodes)
+    slope = np.full(len(load), pool.ramp_slope)
+    intercept = 0.0
+    for i, L in enumerate(load):
+        if L > pool.power_knee and i not in active:
+            slope[i] = pool.s_plat
+        elif L > pool.power_knee:
+            gap = L - pool.power_knee
+            intercept += float(pool.node_power(L) - pool.node_power(pool.power_knee) - pool.ramp_slope * gap)
+    return slope[_source_node(pop)] * pop.ell, intercept
+
+
 def _lp(pop, pool, imp, s_star, weights, intercept=0.0, r0=None, event=Event(),
         move=Movement(), active_alpha=0.0, active_nodes=(), method="node_lp",
-        region_consistent=False) -> NodeKneeResult:
+        region_consistent=False, integer=False) -> NodeKneeResult:
     fleet = DestFleet.from_event(event, move, pool, pop)
-    YR, YS, cons, _ = _build(pop, pool, imp, fleet, event, move, False)
+    YR, YS, cons, _ = _build(pop, pool, imp, fleet, event, move, integer)
     total = cp.sum(YR + YS, axis=1)
     cost = imp.c_replay @ cp.sum(YR, axis=1) + imp.c_transfer @ cp.sum(YS, axis=1)
     surrogate = intercept + weights @ total
@@ -131,14 +166,14 @@ def _lp(pop, pool, imp, s_star, weights, intercept=0.0, r0=None, event=Event(),
     else:
         cons_target = cons + [surrogate >= s_star]
     status, ok = _run(cp.Minimize(cost), cons_target, cp.SCIPY)
-    surrogate_feasible = ok
+    method_target_feasible = ok
     if not ok:
         status, ok = _run(cp.Maximize(surrogate), cons, cp.SCIPY)
         if not ok:
             raise RuntimeError(f"node-knee LP failed: status={status}")
     return _result(
         pop, pool, imp, YR.value.sum(1), YS.value.sum(1), cost.value,
-        method, s_star, surrogate_feasible
+        method, s_star, event, move, method_target_feasible
     )
 
 
@@ -165,12 +200,21 @@ def _job_cost(imp: Impact) -> np.ndarray:
     return np.minimum(imp.c_replay, imp.c_transfer)
 
 
-def _knee_candidates(pop: JobPopulation, pool: PoolPower, imp: Impact, k: int = 4) -> list[tuple[int, ...]]:
+def _node_movable(pop: JobPopulation, event: Event) -> np.ndarray:
+    m = pop.ell > 0
+    if event.pinned:
+        m &= ~np.isin(pop.job_type, event.pinned)
+    return m
+
+
+def _knee_candidates(pop: JobPopulation, pool: PoolPower, imp: Impact, event: Event = Event(),
+                     k: int = 4) -> list[tuple[int, ...]]:
     load, node, cost = node_loads(pop), _source_node(pop), _job_cost(imp)
+    movable = _node_movable(pop, event)
     gap = np.maximum(0.0, load - pool.power_knee)
     rows = []
     for i, L in enumerate(load):
-        js = np.flatnonzero(node == i)
+        js = np.flatnonzero((node == i) & movable)
         order = js[np.argsort(cost[js] / np.maximum(pop.ell[js], 1e-12), kind="mergesort")]
         acc = np.cumsum(pop.ell[order])
         take = order[: np.searchsorted(acc, gap[i], side="left") + 1] if gap[i] > 0 and order.size else []
@@ -178,52 +222,49 @@ def _knee_candidates(pop: JobPopulation, pool: PoolPower, imp: Impact, k: int = 
         rmax = float(pop.ell[js].sum())
         bonus = float(pool.node_power(L) - pool.node_power(L - rmax) - pool.s_plat * rmax)
         rows.append((i, L, c, bonus, gap[i] / max(c, 1e-12), bonus / max(c, 1e-12)))
-    cand = set()
-    for col, rev in ((1, True), (2, False), (3, True), (4, False), (5, True)):
+    cand = {()}
+    for col, rev in ((1, True), (2, False), (3, True), (4, True), (5, True)):
         order = [r[0] for r in sorted(rows, key=lambda x: x[col], reverse=rev) if np.isfinite(r[2])]
+        top = order[:k]
         for m in range(1, min(k, len(order)) + 1):
             cand.add(tuple(sorted(order[:m])))
+        for m in (1, 2):
+            cand.update(tuple(sorted(c)) for c in combinations(top, m))
     return sorted(cand)
 
 
-def solve_active_knee_lp(pop: JobPopulation, pool: PoolPower, imp: Impact, s_star: float,
-                         event: Event = Event(), move: Movement = Movement(),
-                         active_alpha: float = 0.0) -> NodeKneeResult:
-    load = node_loads(pop)
+def _solve_active_knee(pop, pool, imp, s_star, event, move, active_alpha, integer, method):
     best = None
-    for active in _knee_candidates(pop, pool, imp):
-        r0 = np.zeros_like(load)
-        r0[list(active)] = np.maximum(0.0, load[list(active)] - pool.power_knee)
-        w, b = _tangent(pop, pool, r0)
+    for active in _knee_candidates(pop, pool, imp, event):
+        w, b = _region_affine(pop, pool, active)
         try:
-            res = _lp(pop, pool, imp, s_star, w, b, r0, event, move, active_alpha,
-                      active, "active_knee_lp", region_consistent=True)
+            res = _lp(pop, pool, imp, s_star, w, b, None, event, move, active_alpha,
+                      active, method, region_consistent=True, integer=integer)
         except RuntimeError:
             continue
         if best is None or (res.true_expected_feasible and res.cost < best.cost) or (
             not best.true_expected_feasible and res.node_expected_w > best.node_expected_w
         ):
             best = res
-    return best or solve_tangent_lp(pop, pool, imp, s_star, event, move, active_alpha=active_alpha)
+    if best is None:
+        if integer:
+            raise RuntimeError("active-knee MILP failed for every candidate")
+        return solve_tangent_lp(pop, pool, imp, s_star, event, move, active_alpha=active_alpha)
+    return best
 
 
-def _budgets(pop, pool, event, move):
-    return {
-        "egress": move.lambda_src * (event.D - event.tau_src),
-        "prefill": event.W * (event.D - event.tau_pre),
-        "ingest": event.W * move.mu_in * (event.D - event.tau_in),
-        "load": event.l_dest(pool),
-        "held": event.s_dest(pool),
-    }
+def solve_active_knee_lp(pop: JobPopulation, pool: PoolPower, imp: Impact, s_star: float,
+                         event: Event = Event(), move: Movement = Movement(),
+                         active_alpha: float = 0.0) -> NodeKneeResult:
+    return _solve_active_knee(pop, pool, imp, s_star, event, move, active_alpha, False,
+                              "active_knee_lp_relaxation")
 
 
-def _draws(pop, pool, imp):
-    reb = pop.T / rho_replay(pop.T, pop.mfu)
-    hw = held_weight(pop, pool)
-    return {
-        "R": {"egress": imp.b_replay, "prefill": reb, "load": pop.ell, "held": hw},
-        "S": {"egress": imp.b_transfer, "ingest": imp.b_transfer, "load": pop.ell, "held": hw},
-    }
+def solve_active_knee_milp(pop: JobPopulation, pool: PoolPower, imp: Impact, s_star: float,
+                           event: Event = Event(), move: Movement = Movement(),
+                           active_alpha: float = 0.0) -> NodeKneeResult:
+    return _solve_active_knee(pop, pool, imp, s_star, event, move, active_alpha, True,
+                              "active_knee_milp")
 
 
 def _fits(budget, draws, action, j) -> bool:
@@ -240,78 +281,88 @@ def _action(budget, draws, imp, j, pref=None):
     return next((a for a in (pref, "RS"[pref == "R"]) if _fits(budget, draws, a, j)), None)
 
 
+def _best_feasible_action(budget, draws, imp, j):
+    options = [(a, imp.c_replay[j] if a == "R" else imp.c_transfer[j])
+               for a in "RS" if _fits(budget, draws, a, j)]
+    return min(options, key=lambda x: x[1]) if options else (None, np.inf)
+
+
 def _move(budget, draws, yR, yS, action, j):
     _take(budget, draws, action, j)
     (yR if action == "R" else yS)[j] = 1.0
 
 
-def _knee_bundle(pop, pool, node, load, cost, i):
+def _knee_bundle(pop, pool, node, load, cost, movable, i):
     gap = max(0.0, load[i] - pool.power_knee)
     if gap <= 0:
         return []
-    js = np.flatnonzero(node == i)
+    js = np.flatnonzero((node == i) & movable)
     order = js[np.argsort(cost[js] / np.maximum(pop.ell[js], 1e-12), kind="mergesort")]
     return order[: np.searchsorted(np.cumsum(pop.ell[order]), gap, side="left") + 1]
 
 
-def _finish_live(pop, pool, imp, s_star, budget, draws, yR, yS, used):
+def _finish_live(pop, pool, imp, s_star, budget, draws, yR, yS, used, movable):
     node = _source_node(pop)
     resid = node_loads(pop) - removed_loads(pop, yR + yS)
-    cost = _job_cost(imp)
-    left = set(range(len(pop))) - set(used)
+    left = set(np.flatnonzero(movable)) - set(used)
     while left and evaluate_node_expected_w(pop, pool, yR + yS) < s_star:
         scores = []
-        for j in left:
-            val = float(pool.node_power(resid[node[j]]) - pool.node_power(resid[node[j]] - pop.ell[j]))
-            scores.append((-(val / max(cost[j], 1e-12)), j))
-        moved = False
-        for _, j in sorted(scores):
-            act = _action(budget, draws, imp, j)
-            if act:
-                _move(budget, draws, yR, yS, act, j)
-                resid[node[j]] -= pop.ell[j]
+        for j in tuple(left):
+            act, action_cost = _best_feasible_action(budget, draws, imp, j)
+            if act is None:
                 left.remove(j)
-                moved = True
-                break
-            left.remove(j)
-        if not moved:
+                continue
+            val = float(pool.node_power(resid[node[j]]) - pool.node_power(resid[node[j]] - pop.ell[j]))
+            scores.append((-(val / max(action_cost, 1e-12)), j, act))
+        if not scores:
             break
+        _, j, act = sorted(scores)[0]
+        _move(budget, draws, yR, yS, act, j)
+        resid[node[j]] -= pop.ell[j]
+        left.remove(j)
     return yR, yS
 
 
 def solve_live_greedy(pop: JobPopulation, pool: PoolPower, imp: Impact, s_star: float,
                       event: Event = Event(), move: Movement = Movement()) -> NodeKneeResult:
-    budget, draws = _budgets(pop, pool, event, move), _draws(pop, pool, imp)
-    yR, yS = _finish_live(pop, pool, imp, s_star, budget, draws, np.zeros(len(pop)), np.zeros(len(pop)), set())
-    return _result(pop, pool, imp, yR, yS, float(imp.c_replay @ yR + imp.c_transfer @ yS), "live_greedy", s_star)
+    budget = single_movement_budgets(pool, event, move)
+    draws = movement_draws(pop, pool, imp, event, move)
+    movable = _node_movable(pop, event)
+    yR, yS = _finish_live(pop, pool, imp, s_star, budget, draws, np.zeros(len(pop)), np.zeros(len(pop)), set(), movable)
+    return _result(pop, pool, imp, yR, yS, float(imp.c_replay @ yR + imp.c_transfer @ yS),
+                   "live_greedy", s_star, event, move)
 
 
 def solve_random_jobs(pop: JobPopulation, pool: PoolPower, imp: Impact, s_star: float,
                       event: Event = Event(), move: Movement = Movement(),
                       seed: int = 0) -> NodeKneeResult:
     rng = np.random.default_rng(seed)
-    budget, draws = _budgets(pop, pool, event, move), _draws(pop, pool, imp)
+    budget = single_movement_budgets(pool, event, move)
+    draws = movement_draws(pop, pool, imp, event, move)
     yR, yS = np.zeros(len(pop)), np.zeros(len(pop))
-    for j in rng.permutation(np.flatnonzero(pop.ell > 0)):
+    for j in rng.permutation(np.flatnonzero(_node_movable(pop, event))):
         if evaluate_node_expected_w(pop, pool, yR + yS) >= s_star:
             break
         act = _action(budget, draws, imp, int(j), "R" if rng.random() < 0.5 else "S")
         if act:
             _move(budget, draws, yR, yS, act, int(j))
-    return _result(pop, pool, imp, yR, yS, float(imp.c_replay @ yR + imp.c_transfer @ yS), "random_jobs", s_star)
+    return _result(pop, pool, imp, yR, yS, float(imp.c_replay @ yR + imp.c_transfer @ yS),
+                   "random_jobs", s_star, event, move)
 
 
 def solve_random_nodes(pop: JobPopulation, pool: PoolPower, imp: Impact, s_star: float,
                        event: Event = Event(), move: Movement = Movement(),
                        seed: int = 0) -> NodeKneeResult:
     node, load, cost = _source_node(pop), node_loads(pop), _job_cost(imp)
-    budget, draws = _budgets(pop, pool, event, move), _draws(pop, pool, imp)
+    budget = single_movement_budgets(pool, event, move)
+    draws = movement_draws(pop, pool, imp, event, move)
+    movable = _node_movable(pop, event)
     yR, yS, used = np.zeros(len(pop)), np.zeros(len(pop)), set()
     for i in np.random.default_rng(seed).permutation(len(load)):
         if evaluate_node_expected_w(pop, pool, yR + yS) >= s_star:
             break
         picks, tmp = [], budget.copy()
-        for j in _knee_bundle(pop, pool, node, load, cost, int(i)):
+        for j in _knee_bundle(pop, pool, node, load, cost, movable, int(i)):
             act = _action(tmp, draws, imp, int(j))
             if act is None:
                 picks = []
@@ -323,18 +374,21 @@ def solve_random_nodes(pop: JobPopulation, pool: PoolPower, imp: Impact, s_star:
             used.add(j)
         if picks:
             budget = tmp
-    yR, yS = _finish_live(pop, pool, imp, s_star, budget, draws, yR, yS, used)
-    return _result(pop, pool, imp, yR, yS, float(imp.c_replay @ yR + imp.c_transfer @ yS), "random_nodes", s_star)
+    yR, yS = _finish_live(pop, pool, imp, s_star, budget, draws, yR, yS, used, movable)
+    return _result(pop, pool, imp, yR, yS, float(imp.c_replay @ yR + imp.c_transfer @ yS),
+                   "random_nodes", s_star, event, move)
 
 
 def solve_node_drain_greedy(pop: JobPopulation, pool: PoolPower, imp: Impact, s_star: float,
                             event: Event = Event(), move: Movement = Movement()) -> NodeKneeResult:
     node, load, cost = _source_node(pop), node_loads(pop), _job_cost(imp)
-    budget, draws = _budgets(pop, pool, event, move), _draws(pop, pool, imp)
+    budget = single_movement_budgets(pool, event, move)
+    draws = movement_draws(pop, pool, imp, event, move)
+    movable = _node_movable(pop, event)
     yR, yS, used = np.zeros(len(pop)), np.zeros(len(pop)), set()
     bundles = []
     for i in range(len(load)):
-        take = _knee_bundle(pop, pool, node, load, cost, i)
+        take = _knee_bundle(pop, pool, node, load, cost, movable, i)
         if len(take):
             val = pool.node_power(load[i]) - pool.node_power(load[i] - pop.ell[take].sum())
             bundles.append((-(val / max(cost[take].sum(), 1e-12)), take))
@@ -354,8 +408,9 @@ def solve_node_drain_greedy(pop: JobPopulation, pool: PoolPower, imp: Impact, s_
             used.add(j)
         if picks:
             budget = tmp
-    yR, yS = _finish_live(pop, pool, imp, s_star, budget, draws, yR, yS, used)
-    return _result(pop, pool, imp, yR, yS, float(imp.c_replay @ yR + imp.c_transfer @ yS), "node_drain_greedy", s_star)
+    yR, yS = _finish_live(pop, pool, imp, s_star, budget, draws, yR, yS, used, movable)
+    return _result(pop, pool, imp, yR, yS, float(imp.c_replay @ yR + imp.c_transfer @ yS),
+                   "node_drain_greedy", s_star, event, move)
 
 
 def solve_exact_oracle(pop: JobPopulation, pool: PoolPower, imp: Impact, s_star: float,
@@ -363,9 +418,11 @@ def solve_exact_oracle(pop: JobPopulation, pool: PoolPower, imp: Impact, s_star:
                        max_jobs: int = 14) -> NodeKneeResult:
     if len(pop) > max_jobs:
         raise ValueError(f"exact oracle is limited to {max_jobs} jobs")
-    budget0, draws = _budgets(pop, pool, event, move), _draws(pop, pool, imp)
+    budget0 = single_movement_budgets(pool, event, move)
+    draws = movement_draws(pop, pool, imp, event, move)
+    choices = ["NRS" if m else "N" for m in _node_movable(pop, event)]
     best, best_short = None, None
-    for acts in product("NRS", repeat=len(pop)):
+    for acts in product(*choices):
         yR = np.array([a == "R" for a in acts], float)
         yS = np.array([a == "S" for a in acts], float)
         budget, ok = budget0.copy(), True
@@ -377,7 +434,8 @@ def solve_exact_oracle(pop: JobPopulation, pool: PoolPower, imp: Impact, s_star:
                 _take(budget, draws, a, j)
         if not ok:
             continue
-        res = _result(pop, pool, imp, yR, yS, float(imp.c_replay @ yR + imp.c_transfer @ yS), "exact_oracle", s_star)
+        res = _result(pop, pool, imp, yR, yS, float(imp.c_replay @ yR + imp.c_transfer @ yS),
+                      "exact_oracle", s_star, event, move)
         if res.true_expected_feasible:
             if best is None or res.cost < best.cost:
                 best = res
@@ -390,9 +448,11 @@ def comparison_rows(pop: JobPopulation, pool: PoolPower, imp: Impact, s_star: fl
                     event: Event = Event(), move: Movement = Movement()) -> list[dict]:
     base = solve(pop, pool, imp, s_star, event, move)
     results = [
-        _result(pop, pool, imp, base.y_R, base.y_S, base.cost, "additive_lp", s_star),
+        _result(pop, pool, imp, base.y_R, base.y_S, base.cost, "additive_lp", s_star,
+                event, move, base.feasible),
         solve_tangent_lp(pop, pool, imp, s_star, event, move),
         solve_active_knee_lp(pop, pool, imp, s_star, event, move),
+        solve_active_knee_milp(pop, pool, imp, s_star, event, move),
         solve_live_greedy(pop, pool, imp, s_star, event, move),
         solve_node_drain_greedy(pop, pool, imp, s_star, event, move),
         solve_random_jobs(pop, pool, imp, s_star, event, move),
@@ -401,7 +461,7 @@ def comparison_rows(pop: JobPopulation, pool: PoolPower, imp: Impact, s_star: fl
     if len(pop) <= 14:
         results.append(solve_exact_oracle(pop, pool, imp, s_star, event, move))
     fields = (
-        "method", "cost", "feasible", "movement_feasible", "surrogate_feasible",
+        "method", "cost", "feasible", "movement_feasible", "method_target_feasible",
         "true_expected_feasible", "active_floor_w", "node_expected_w",
         "expected_shortfall_w", "floor_shortfall_w",
     )

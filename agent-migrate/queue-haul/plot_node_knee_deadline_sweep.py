@@ -24,6 +24,7 @@ from node_knee import (
     _result,
     place_source_nodes,
     solve_active_knee_lp,
+    solve_active_knee_milp,
     solve_live_greedy,
     solve_random_jobs,
     with_source_nodes,
@@ -46,7 +47,8 @@ def population(policy: str = "memory"):
 
 def additive_result(pop, pool, imp, target, event):
     plan = solve(pop, pool, imp, target, event, MOVE)
-    return _result(pop, pool, imp, plan.y_R, plan.y_S, plan.cost, "additive LP", target)
+    return _result(pop, pool, imp, plan.y_R, plan.y_S, plan.cost, "additive LP", target,
+                   event, MOVE, plan.feasible)
 
 
 def run_sweep(deadlines=DEADLINES):
@@ -55,7 +57,8 @@ def run_sweep(deadlines=DEADLINES):
     target = 0.45 * imp.dp_certified.sum()
     methods = (
         ("additive LP", lambda ev: additive_result(pop, pool, imp, target, ev), "0.45"),
-        ("active-knee LP", lambda ev: solve_active_knee_lp(pop, pool, imp, target, ev, MOVE), "tab:green"),
+        ("active-knee LP relaxation", lambda ev: solve_active_knee_lp(pop, pool, imp, target, ev, MOVE), "tab:green"),
+        ("active-knee MILP", lambda ev: solve_active_knee_milp(pop, pool, imp, target, ev, MOVE), "tab:blue"),
         ("live greedy", lambda ev: solve_live_greedy(pop, pool, imp, target, ev, MOVE), "tab:orange"),
         ("random jobs", lambda ev: solve_random_jobs(pop, pool, imp, target, ev, MOVE, seed=0), "tab:purple"),
     )

@@ -18,7 +18,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from plot_node_knee_deadline_sweep import run_sweep
 
-METHODS = {"additive LP", "active-knee LP", "live greedy", "random jobs"}
+METHODS = {"additive LP", "active-knee LP relaxation", "active-knee MILP", "live greedy", "random jobs"}
 
 
 def test_node_knee_deadline_sweep_uses_node_expected_target():
@@ -26,7 +26,7 @@ def test_node_knee_deadline_sweep_uses_node_expected_target():
     by_method = {r["method"]: r for r in rows}
     assert set(by_method) == METHODS
     additive = by_method["additive LP"]
-    active = by_method["active-knee LP"]
+    active = by_method["active-knee LP relaxation"]
 
     assert additive["active_kw"] >= target_kw
     assert additive["node_kw"] < target_kw

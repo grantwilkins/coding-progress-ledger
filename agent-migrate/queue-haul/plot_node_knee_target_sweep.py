@@ -20,6 +20,7 @@ from node_knee import (
     evaluate_node_expected_w,
     place_source_nodes,
     solve_active_knee_lp,
+    solve_active_knee_milp,
     solve_live_greedy,
     solve_random_jobs,
     with_source_nodes,
@@ -33,7 +34,8 @@ MOVE = Movement()
 TARGET_FRACS = np.linspace(0.05, 0.95, 19)
 COLORS = {
     "additive LP": "0.45",
-    "active-knee LP": "tab:green",
+    "active-knee LP relaxation": "tab:green",
+    "active-knee MILP": "tab:blue",
     "live greedy": "tab:orange",
     "random jobs": "tab:purple",
 }
@@ -48,13 +50,15 @@ def population(session_class: str, seed: int = 42):
 
 def additive_result(pop, pool, imp, target):
     plan = solve(pop, pool, imp, target, EVENT, MOVE)
-    return _result(pop, pool, imp, plan.y_R, plan.y_S, plan.cost, "additive LP", target)
+    return _result(pop, pool, imp, plan.y_R, plan.y_S, plan.cost, "additive LP", target,
+                   EVENT, MOVE, plan.feasible)
 
 
 def method_specs(pop, pool, imp, target):
     return (
         ("additive LP", lambda: additive_result(pop, pool, imp, target)),
-        ("active-knee LP", lambda: solve_active_knee_lp(pop, pool, imp, target, EVENT, MOVE)),
+        ("active-knee LP relaxation", lambda: solve_active_knee_lp(pop, pool, imp, target, EVENT, MOVE)),
+        ("active-knee MILP", lambda: solve_active_knee_milp(pop, pool, imp, target, EVENT, MOVE)),
         ("live greedy", lambda: solve_live_greedy(pop, pool, imp, target, EVENT, MOVE)),
         ("random jobs", lambda: solve_random_jobs(pop, pool, imp, target, EVENT, MOVE, seed=0)),
     )

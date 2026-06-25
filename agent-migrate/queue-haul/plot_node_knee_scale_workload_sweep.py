@@ -20,6 +20,7 @@ from node_knee import (
     evaluate_node_expected_w,
     place_source_nodes,
     solve_active_knee_lp,
+    solve_active_knee_milp,
     solve_live_greedy,
     solve_random_jobs,
     with_source_nodes,
@@ -35,7 +36,8 @@ BASE_EVENT = Event()
 STARTUP = max(BASE_EVENT.tau_src, BASE_EVENT.tau_pre, BASE_EVENT.tau_in)
 COLORS = {
     "additive LP": "0.45",
-    "active-knee LP": "tab:green",
+    "active-knee LP relaxation": "tab:green",
+    "active-knee MILP": "tab:blue",
     "live greedy": "tab:orange",
     "random jobs": "tab:purple",
 }
@@ -54,13 +56,15 @@ def population(session_class: str, n_nodes: int, seed: int = 3):
 
 def additive_result(pop, pool, imp, target, event):
     plan = solve(pop, pool, imp, target, event, MOVE)
-    return _result(pop, pool, imp, plan.y_R, plan.y_S, plan.cost, "additive LP", target)
+    return _result(pop, pool, imp, plan.y_R, plan.y_S, plan.cost, "additive LP", target,
+                   event, MOVE, plan.feasible)
 
 
 def method_specs(pop, pool, imp, target):
     return (
         ("additive LP", lambda ev: additive_result(pop, pool, imp, target, ev)),
-        ("active-knee LP", lambda ev: solve_active_knee_lp(pop, pool, imp, target, ev, MOVE)),
+        ("active-knee LP relaxation", lambda ev: solve_active_knee_lp(pop, pool, imp, target, ev, MOVE)),
+        ("active-knee MILP", lambda ev: solve_active_knee_milp(pop, pool, imp, target, ev, MOVE)),
         ("live greedy", lambda ev: solve_live_greedy(pop, pool, imp, target, ev, MOVE)),
         ("random jobs", lambda ev: solve_random_jobs(pop, pool, imp, target, ev, MOVE, seed=0)),
     )

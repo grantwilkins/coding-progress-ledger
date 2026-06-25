@@ -5,6 +5,9 @@ Plausible wrong implementations:
 - Treat node-knee shed as additive per job, losing increasing returns around the knee.
 - Use a tangent that is not a lower bound because the removed-load value is not convex.
 - Let fixed-region active-knee LPs cross inactive nodes with stale plateau slopes.
+- Let node-knee methods move pinned jobs that the dispatch LP would block.
+- Report infeasible movement as feasible because the solver path usually enforces budgets.
+- Compare active-knee LP against whole-job baselines without an integer counterpart.
 - Infer node placement silently or ignore it when computing expected node shed.
 - Randomize at the wrong aggregation level or ignore budgets in a random baseline.
 - Compare heuristics without an exact tiny oracle on hand-checkable cases.
@@ -25,11 +28,15 @@ from instance import JobPopulation
 from node_knee import (
     _knee_candidates,
     _lp,
+    _region_affine,
+    _result,
     _tangent,
+    comparison_rows,
     evaluate_node_expected_w,
     node_loads,
     place_source_nodes,
     removed_loads,
+    solve_active_knee_milp,
     solve_active_knee_lp,
     solve_exact_oracle,
     solve_live_greedy,
@@ -129,10 +136,21 @@ def test_active_knee_lp_finds_crossing_missed_by_initial_tangent():
     target = 500.0
     initial = solve_tangent_lp(pop, pool, imp, target, SLACK_E, SLACK_M, max_iter=1)
     active = solve_active_knee_lp(pop, pool, imp, target, SLACK_E, SLACK_M)
-    assert not initial.surrogate_feasible
-    assert active.surrogate_feasible and active.true_expected_feasible
+    assert not initial.method_target_feasible
+    assert active.method_target_feasible and active.true_expected_feasible
     assert active.cost < initial.cost
     assert pop.ell[:3].sum() - pop.ell[:3] @ active.y[:3] <= pool.power_knee + 1e-6
+
+
+def test_active_knee_region_affine_is_exact_inside_fixed_regions():
+    pool = PoolPower()
+    pop = _pop([0.08, 0.08, 0.08, 0.08], [0, 0, 1, 1])
+    y = np.array([1.0, 0.0, 0.5, 0.0])
+    w, b = _region_affine(pop, pool, active_nodes=(0,))
+    residual = node_loads(pop) - removed_loads(pop, y)
+    assert residual[0] <= pool.power_knee
+    assert residual[1] >= pool.power_knee
+    assert b + w @ y == pytest.approx(evaluate_node_expected_w(pop, pool, y))
 
 
 def test_fixed_region_lp_keeps_inactive_nodes_above_knee():
@@ -154,7 +172,64 @@ def test_active_knee_candidates_can_cover_all_four_nodes():
     pool = PoolPower()
     pop = _pop([0.08] * 8, [0, 0, 1, 1, 2, 2, 3, 3])
     imp = _imp(pop, np.ones(8))
-    assert max(len(c) for c in _knee_candidates(pop, pool, imp)) == 4
+    cand = _knee_candidates(pop, pool, imp)
+    assert () in cand
+    assert (0, 2) in cand
+    assert max(len(c) for c in cand) == 4
+
+
+def test_active_knee_milp_is_whole_job_and_bounded_by_lp_relaxation():
+    pool = PoolPower()
+    pop = _pop([0.08, 0.08, 0.08, 0.08, 0.08, 0.08, 0.30], [0, 0, 0, 1, 1, 1, 1])
+    imp = _imp(pop, [10, 10, 10, 1, 1, 1, 1000])
+    lp = solve_active_knee_lp(pop, pool, imp, 500.0, SLACK_E, SLACK_M)
+    mi = solve_active_knee_milp(pop, pool, imp, 500.0, SLACK_E, SLACK_M)
+    assert mi.true_expected_feasible
+    assert np.allclose(mi.y, np.round(mi.y))
+    assert lp.cost <= mi.cost + 1e-6
+
+
+def test_result_reports_actual_movement_feasibility():
+    pool = PoolPower()
+    pop = _pop([0.08], [0])
+    imp = Impact(
+        np.zeros(1), pool.s_plat * pop.ell, pool.base_w_per_load * pop.ell,
+        pool.p_bar * pop.ell, np.zeros(1), np.ones(1), np.ones(1),
+        np.array([100.0]), np.zeros(1), "load"
+    )
+    event = Event(D=10, W=10**6, dest_nodes=10**6)
+    res = _result(pop, pool, imp, np.ones(1), np.zeros(1), 1.0, "test", 1.0,
+                  event, replace(Movement(), lambda_src=1.0))
+    assert not res.movement_feasible
+    assert not res.feasible
+
+
+def test_node_knee_methods_respect_pinned_jobs():
+    pool = PoolPower()
+    pop = _pop([0.08, 0.08, 0.08], [0, 0, 0])
+    imp = _imp(pop, [1, 1, 1])
+    event = replace(SLACK_E, pinned=("agentic",))
+    solvers = (
+        solve_active_knee_milp,
+        solve_live_greedy,
+        solve_node_drain_greedy,
+        solve_random_jobs,
+        solve_random_nodes,
+        solve_exact_oracle,
+    )
+    for solver in solvers:
+        res = solver(pop, pool, imp, 500.0, event, SLACK_M)
+        assert np.array_equal(res.y, np.zeros(len(pop)))
+        assert res.movement_feasible
+
+
+def test_comparison_rows_keep_additive_target_feasibility():
+    pool = PoolPower()
+    pop = _pop([0.08, 0.08], [0, 0])
+    imp = _imp(pop, [1, 1])
+    rows = comparison_rows(pop, pool, imp, 1e9, SLACK_E, SLACK_M)
+    additive = next(r for r in rows if r["method"] == "additive_lp")
+    assert not additive["method_target_feasible"]
 
 
 def test_node_drain_greedy_beats_live_marginal_on_knee_bundle_case():
