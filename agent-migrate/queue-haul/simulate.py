@@ -16,10 +16,9 @@ from dataclasses import dataclass
 
 import numpy as np
 
-from dispatch import DestFleet, Event, Plan, bind_dp
+from dispatch import DestFleet, Event, Plan, bind_dp, movement_columns
 from impact import Impact, Movement
 from instance import JobPopulation
-from power import rho_replay
 
 
 @dataclass(frozen=True)
@@ -99,10 +98,10 @@ def simulate(pop: JobPopulation, pool, imp: Impact, plan: Plan, event: Event = E
     K, W = len(fleet), np.atleast_1d(fleet.W)
     YR, YS = (plan.Y_R, plan.Y_S) if multidest else (plan.y_R[:, None], plan.y_S[:, None])
     Y, dp = YR + YS, bind_dp(imp)
-    rho = rho_replay(pop.T[:, None], np.asarray(fleet.mfu))  # (n,K) — per-ℓ MFU
-    p1 = (YR * imp.b_replay[:, None] + YS * imp.b_transfer[:, None]) / move.lambda_src  # egress secs
-    p2R = YR * pop.T[:, None] / rho  # bare prefill replay, 0 where not replayed
-    p2S = YS * imp.b_transfer[:, None] / move.mu_in  # bare KV ingest, 0 where not transferred
+    cols = movement_columns(pop, pool, imp, fleet, move)
+    p1 = (YR * cols["R"]["egress"] + YS * cols["S"]["egress"]) / move.lambda_src
+    p2R = YR * cols["R"]["prefill"]  # bare prefill replay, 0 where not replayed
+    p2S = YS * cols["S"]["ingest"] / move.mu_in  # bare KV ingest, 0 where not transferred
     p1f, p2Rf, p2Sf, YRf, YSf, Yf = (a.ravel() for a in (p1, p2R, p2S, YR, YS, Y))
     shedf = (dp[:, None] * Y).ravel()
     # value density dp·y/p1 → dp·λ/bytes for a mover (y cancels); floor only guards non-movers.

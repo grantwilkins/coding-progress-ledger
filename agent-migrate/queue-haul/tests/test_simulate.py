@@ -17,7 +17,7 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from dispatch import Event, Plan, bind_dp, solve
+from dispatch import DestFleet, Event, Plan, bind_dp, movement_columns, solve
 from impact import Impact, Movement, compute
 from instance import JobPopulation, generate
 from power import PoolPower, rho_replay
@@ -70,6 +70,19 @@ def test_prefill_isolation_matches_lp_budget():
     s = simulate(pop, POOL, imp, plan, event, SLACK_L, discipline="fifo")
     reb = pop.T / rho_replay(pop.T, pop.mfu)
     assert s.makespan == pytest.approx(event.tau_pre + reb[pick].sum(), rel=1e-9)
+
+
+def test_replay_stage_uses_dispatch_prefill_column():
+    pop, imp = _pop()
+    j = 0
+    yR = np.zeros(len(pop)); yR[j] = 1.0
+    fleet = DestFleet(np.array([1]), np.array([32.0]), np.array([0.47]), np.array([0.0]))
+    event = Event(W=1, tau_src=0.0, tau_pre=2.0, tau_in=0.0)
+    plan = Plan(yR, np.zeros(len(pop)), 0.0, 0.0, 0.0, True, 0.0, "load", "test",
+                yR[:, None], np.zeros((len(pop), 1)))
+    s = simulate(pop, POOL, imp, plan, event, SLACK_L, discipline="fifo", fleet=fleet)
+    expected = event.tau_pre + movement_columns(pop, POOL, imp, fleet, SLACK_L)["R"]["prefill"][j, 0]
+    assert s.makespan == pytest.approx(expected, rel=1e-9)
 
 
 def test_ingest_isolation_matches_lp_budget():

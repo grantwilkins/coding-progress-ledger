@@ -7,6 +7,8 @@ Plausible wrong implementations:
 - Use active-floor watts where node-expected watts are required.
 - Count rebuild-completed jobs in the egress subset or vice versa.
 - Drop the ordering dimension from the validation sweep.
+- Define the execution target from active-floor watts instead of full node-expected watts.
+- Re-solve inside the fixed-plan replay sweep.
 """
 
 import sys
@@ -21,7 +23,7 @@ from dispatch import Plan
 from impact import Impact
 from instance import JobPopulation
 from node_knee import evaluate_node_expected_w, execution_realization_metrics
-from plot_node_knee_execution_validation import ORDERS, VARIANTS, run_sweep
+from plot_node_knee_execution_validation import ORDERS, TARGET_FRAC, VARIANTS, run_fixed_plan_sweep, run_sweep
 from power import PoolPower
 from simulate import SimResult
 
@@ -72,8 +74,26 @@ def test_execution_validation_sweep_has_variants_orders_and_realization_levels()
         rs = [r for r in rows if r["variant"] == variant]
         assert len({r["selected_node_kw"] for r in rs}) == 1
         for r in rs:
+            assert r["target_basis"] == "full_node_expected"
+            assert r["target_kw"] == pytest.approx(TARGET_FRAC * r["full_node_kw"])
             assert r["egress_realized_node_kw"] <= r["selected_node_kw"] + 1e-9
             assert r["rebuild_realized_node_kw"] <= r["egress_realized_node_kw"] + 1e-9
             assert r["selected_over_target"] == pytest.approx(r["selected_node_kw"] / r["target_kw"])
             assert r["egress_realized_over_target"] == pytest.approx(r["egress_realized_node_kw"] / r["target_kw"])
             assert r["rebuild_realized_over_target"] == pytest.approx(r["rebuild_realized_node_kw"] / r["target_kw"])
+
+
+def test_fixed_plan_replay_is_monotone_and_uses_one_plan_deadline():
+    deadlines = np.array([6.0, 10.0, 30.0])
+    _, _, rows = run_fixed_plan_sweep(deadlines=deadlines)
+    assert {r["sweep"] for r in rows} == {"fixed_plan_replay"}
+    for variant in VARIANTS:
+        for order in ORDERS:
+            rs = [r for r in rows if r["variant"] == variant and r["ordering"] == order]
+            assert len({r["plan_deadline_s"] for r in rs}) == 1
+            assert len({r["cost_s"] for r in rs}) == 1
+            assert len({r["selected_node_kw"] for r in rs}) == 1
+            egress = np.array([r["egress_realized_node_kw"] for r in rs])
+            rebuild = np.array([r["rebuild_realized_node_kw"] for r in rs])
+            assert np.all(egress[1:] >= egress[:-1] - 1e-9)
+            assert np.all(rebuild[1:] >= rebuild[:-1] - 1e-9)
