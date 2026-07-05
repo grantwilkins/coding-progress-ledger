@@ -22,6 +22,7 @@ from impact import Movement, compute
 from instance import _mean_T, class_workload, generate
 from node_knee import (
     _result,
+    evaluate_node_expected_w,
     place_source_nodes,
     solve_active_knee_lp,
     solve_active_knee_milp,
@@ -51,10 +52,13 @@ def additive_result(pop, pool, imp, target, event):
                    event, MOVE, plan.feasible)
 
 
+TARGET_FRAC = 0.45  # of full node-expected removable power — the one basis all figures share
+
+
 def run_sweep(deadlines=DEADLINES):
     pool, pop = population()
     imp = compute(pop, pool)
-    target = 0.45 * imp.dp_certified.sum()
+    target = TARGET_FRAC * evaluate_node_expected_w(pop, pool, np.ones(len(pop)))
     methods = (
         ("additive LP", lambda ev: additive_result(pop, pool, imp, target, ev), "0.45"),
         ("active-knee LP relaxation", lambda ev: solve_active_knee_lp(pop, pool, imp, target, ev, MOVE), "tab:green"),
@@ -103,7 +107,8 @@ def main():
     for ext in ("pdf", "png"):
         fig.savefig(f"outputs/node_knee_deadline_sweep.{ext}", dpi=150)
 
-    print(f"target={target_kw:.1f} kW node-expected, jobs={len(pop)}")
+    print(f"target={target_kw:.1f} kW node-expected ({TARGET_FRAC:.0%} of full node model, "
+          f"basis=full_node_expected), jobs={len(pop)}")
     for method in methods:
         rs = [r for r in rows if r["method"] == method]
         hit = [r for r in rs if r["hit"]]

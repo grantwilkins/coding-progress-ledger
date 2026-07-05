@@ -16,6 +16,9 @@ def run(cls):
     pool = replace(PoolPower(), mean_context_tokens=_mean_T(wl))
     pop = generate(pool, wl, n_nodes=N_NODES)
     imp = compute(pop, pool)
+    # Deliberately exempt from the full_node_expected target basis: this probe exists to force
+    # solve()'s max-shed re-solve branch, and 2x the certified sum is infeasible BY CONSTRUCTION
+    # (shed <= sum(dp_certified) at y <= 1), which a node-expected basis cannot guarantee.
     target = 2 * bind_dp(imp).sum()
     return cls, pop, imp, solve(pop, pool, imp, target, EVENT, MOVE), greedy(pop, pool, imp, target, EVENT, MOVE)
 
