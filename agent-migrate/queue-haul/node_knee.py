@@ -179,9 +179,9 @@ def _region_affine(pop: JobPopulation, pool: PoolPower, active_nodes):
 
 def _lp(pop, pool, imp, s_star, weights, intercept=0.0, r0=None, event=Event(),
         move=Movement(), active_alpha=0.0, active_nodes=(), method="node_lp",
-        region_consistent=False, integer=False) -> NodeKneeResult:
+        region_consistent=False, integer=False, kappa=1.0) -> NodeKneeResult:
     fleet = DestFleet.from_event(event, move, pool, pop)
-    YR, YS, cons, _ = _build(pop, pool, imp, fleet, event, move, integer)
+    YR, YS, cons, _ = _build(pop, pool, imp, fleet, event, move, integer, kappa)
     total = cp.sum(YR + YS, axis=1)
     cost = imp.c_replay @ cp.sum(YR, axis=1) + imp.c_transfer @ cp.sum(YS, axis=1)
     surrogate = intercept + weights @ total
@@ -210,12 +210,13 @@ def _lp(pop, pool, imp, s_star, weights, intercept=0.0, r0=None, event=Event(),
 
 def solve_tangent_lp(pop: JobPopulation, pool: PoolPower, imp: Impact, s_star: float,
                      event: Event = Event(), move: Movement = Movement(),
-                     max_iter: int = 5, active_alpha: float = 0.0) -> NodeKneeResult:
+                     max_iter: int = 5, active_alpha: float = 0.0, kappa: float = 1.0) -> NodeKneeResult:
     r0 = np.zeros_like(node_loads(pop))
     best = None
     for _ in range(max_iter):
         w, b = _tangent(pop, pool, r0)
-        res = _lp(pop, pool, imp, s_star, w, b, r0, event, move, active_alpha, method="tangent_lp")
+        res = _lp(pop, pool, imp, s_star, w, b, r0, event, move, active_alpha, method="tangent_lp",
+                  kappa=kappa)
         if best is None or (res.true_expected_feasible and res.cost < best.cost) or (
             not best.true_expected_feasible and res.node_expected_w > best.node_expected_w
         ):
@@ -264,13 +265,13 @@ def _knee_candidates(pop: JobPopulation, pool: PoolPower, imp: Impact, event: Ev
     return sorted(cand)
 
 
-def _solve_active_knee(pop, pool, imp, s_star, event, move, active_alpha, integer, method):
+def _solve_active_knee(pop, pool, imp, s_star, event, move, active_alpha, integer, method, kappa=1.0):
     best = None
     for active in _knee_candidates(pop, pool, imp, event):
         w, b = _region_affine(pop, pool, active)
         try:
             res = _lp(pop, pool, imp, s_star, w, b, None, event, move, active_alpha,
-                      active, method, region_consistent=True, integer=integer)
+                      active, method, region_consistent=True, integer=integer, kappa=kappa)
         except RuntimeError:
             continue
         if best is None or (res.true_expected_feasible and res.cost < best.cost) or (
@@ -280,22 +281,23 @@ def _solve_active_knee(pop, pool, imp, s_star, event, move, active_alpha, intege
     if best is None:
         if integer:
             raise RuntimeError("active-knee MILP failed for every candidate")
-        return solve_tangent_lp(pop, pool, imp, s_star, event, move, active_alpha=active_alpha)
+        return solve_tangent_lp(pop, pool, imp, s_star, event, move, active_alpha=active_alpha,
+                                kappa=kappa)
     return best
 
 
 def solve_active_knee_lp(pop: JobPopulation, pool: PoolPower, imp: Impact, s_star: float,
                          event: Event = Event(), move: Movement = Movement(),
-                         active_alpha: float = 0.0) -> NodeKneeResult:
+                         active_alpha: float = 0.0, kappa: float = 1.0) -> NodeKneeResult:
     return _solve_active_knee(pop, pool, imp, s_star, event, move, active_alpha, False,
-                              "active_knee_lp_relaxation")
+                              "active_knee_lp_relaxation", kappa)
 
 
 def solve_active_knee_milp(pop: JobPopulation, pool: PoolPower, imp: Impact, s_star: float,
                            event: Event = Event(), move: Movement = Movement(),
-                           active_alpha: float = 0.0) -> NodeKneeResult:
+                           active_alpha: float = 0.0, kappa: float = 1.0) -> NodeKneeResult:
     return _solve_active_knee(pop, pool, imp, s_star, event, move, active_alpha, True,
-                              "active_knee_milp")
+                              "active_knee_milp", kappa)
 
 
 def _fits(budget, draws, action, j) -> bool:

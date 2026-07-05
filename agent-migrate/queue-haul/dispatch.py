@@ -122,13 +122,18 @@ def held_weight(pop: JobPopulation, pool: PoolPower) -> np.ndarray:
     return (pop.T / pool.mean_context_tokens) * np.where(pop.state == "cold", 1 / (1 + pool.gamma), 1.0)
 
 
-def movement_budgets(pool: PoolPower, event: Event, move: Movement, fleet: DestFleet = None) -> dict:
+def movement_budgets(pool: PoolPower, event: Event, move: Movement, fleet: DestFleet = None,
+                     kappa: float = 1.0) -> dict:
+    """kappa < 1 is the planner-side rebuild cushion (prefill/ingest RHS only); the DES
+    never sees it — pass kappa only from planner solves, never from feasibility audits."""
+    if not 0 < kappa <= 1:
+        raise ValueError(f"kappa must be in (0, 1], got {kappa}")
     spare = np.array([event.spare]) if fleet is None else np.asarray(fleet.spare)
     W = np.floor(spare + 1e-9)  # whole spare nodes; matches the DES server count exactly
     return {
         "egress": move.lambda_src * (event.D - event.tau_src),
-        "prefill": W * (event.D - event.tau_pre),
-        "ingest": W * move.mu_in * (event.D - event.tau_in),
+        "prefill": kappa * W * (event.D - event.tau_pre),
+        "ingest": kappa * W * move.mu_in * (event.D - event.tau_in),
         "load": spare * pool.rho_star,
         "held": spare * pool.s_node,
     }
@@ -215,7 +220,7 @@ def _plan2(YR, YS, dp, imp, cost, method, s_star, feasible, duals) -> Plan:
     )
 
 
-def _build(pop, pool, imp, fleet, event, move, integer):
+def _build(pop, pool, imp, fleet, event, move, integer, kappa=1.0):
     """Variables Y_R, Y_S (n,K) + pairing, the ONE shared egress row, and the per-ℓ movement
     blocks (everything but shed). Returns the dual-carrying constraint handles too."""
     if np.any(pop.ell > pool.rho_star): raise ValueError("job ell exceeds rho_star; split the job or lower its offered load")
@@ -224,7 +229,7 @@ def _build(pop, pool, imp, fleet, event, move, integer):
     YR, YS = cp.Variable((n, K), **kw), cp.Variable((n, K), **kw)
     Y = YR + YS
     cols = movement_columns(pop, pool, imp, fleet, move)
-    budgets = movement_budgets(pool, event, move, fleet)
+    budgets = movement_budgets(pool, event, move, fleet, kappa)
     egress = cp.sum(cp.multiply(cols["R"]["egress"], YR) + cp.multiply(cols["S"]["egress"], YS)) <= budgets["egress"]
     # TODO(dest-load): recompute ell per destination when fleet hardware/precision differs.
     load = cp.sum(cp.multiply(cols["R"]["load"], Y), axis=0) <= budgets["load"]
@@ -271,6 +276,7 @@ def solve(
     move: Movement = Movement(),
     integer: bool = False,
     fleet: DestFleet = None,
+    kappa: float = 1.0,
 ) -> Plan:
     """Primary solve; on infeasibility re-solve to max shed and report shortfall. fleet=None
     ⇒ a single destination from Event/Movement using imp's frozen costs (the original program);
@@ -278,7 +284,7 @@ def solve(
     multidest = fleet is not None
     fleet = fleet or DestFleet.from_event(event, move, pool, pop)
     YR, YS, cons, handles = _build(
-        pop, pool, imp, fleet, event, move, integer
+        pop, pool, imp, fleet, event, move, integer, kappa
     )
     dp = bind_dp(imp)
     method, solver = (

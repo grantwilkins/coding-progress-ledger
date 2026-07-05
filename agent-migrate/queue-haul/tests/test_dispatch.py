@@ -22,7 +22,8 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from dispatch import Event, Plan, bind_dp, dispatch_diagnostics, greedy, random_dispatch, solve
+from dispatch import (Event, Plan, bind_dp, dispatch_diagnostics, greedy, movement_draws,
+                      movement_used, random_dispatch, single_movement_budgets, solve)
 from impact import Impact, Movement, compute
 from instance import JobPopulation, Workload, _mean_T, class_workload, generate
 from power import PoolPower, rho_replay
@@ -253,6 +254,25 @@ def test_random_respects_budgets_and_bounded_by_lp():
     # deterministic for a fixed seed
     r2 = random_dispatch(pop, POOL, imp, 0.30e6, event, move, seed=0)
     assert np.array_equal(r.y, r2.y)
+
+
+def test_kappa_derates_planner_rebuild_rows_only():
+    # Pure-transfer, ingest-bound max-shed instance: at kappa=1 the plan fills the physical
+    # ingest budget; at kappa=0.5 it must stay inside half of it, and max shed can only drop.
+    pop, imp = _pop(n_nodes=4)
+    event = Event(D=8, dest_nodes=8, tau_pre=8.0)  # prefill window 0 ⇒ transfers only
+    move = replace(Movement(), lambda_src=1e18, mu_in=1e9)  # link slack, ingest binds
+    S = 1e15
+    budgets = single_movement_budgets(POOL, event, move)  # physical (kappa=1) budgets
+    full = solve(pop, POOL, imp, S, event, move)
+    cut = solve(pop, POOL, imp, S, event, move, kappa=0.5)
+    draws = movement_draws(pop, POOL, imp, event, move)
+    tol = 1e-6 * budgets["ingest"]
+    assert movement_used(draws, full.y_R, full.y_S)["ingest"] > 0.5 * budgets["ingest"] + tol
+    assert movement_used(draws, cut.y_R, cut.y_S)["ingest"] <= 0.5 * budgets["ingest"] + tol
+    assert cut.shed_guaranteed <= full.shed_guaranteed + 1e-6  # tighter RHS never gains shed
+    with pytest.raises(ValueError, match="kappa"):
+        solve(pop, POOL, imp, S, event, move, kappa=0.0)
 
 
 def test_lp_lower_bounds_milp():
