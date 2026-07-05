@@ -238,6 +238,24 @@ def test_mode_switch_pins_rebuild_start(mode):
     assert np.all(s.rebuild_done[mv] >= s.egress_done[mv] - 1e-9)  # precedence: rebuild ≥ egress done
 
 
+def test_ingest_drag_slows_concurrent_prefill():
+    # Job 0's KV ingest occupies the single channel; job 1's replay prefill starts inside
+    # that window and stretches by 1/(1 - alpha_in·u) with u = 1. alpha_in=0 recovers today.
+    pop = _toy(2)
+    imp = _toy_imp([1e9, 1e9])  # b_replay = 0 ⇒ job 1 egresses instantly after job 0
+    plan = _plan([0.0, 1.0], [1.0, 0.0])
+    event = Event(dest_nodes=1, spare_frac=1.0, tau_src=0.0, tau_pre=0.0, tau_in=0.0)
+    reb = float(pop.T[0] / rho_replay(pop.T[0], pop.mfu))
+    done = {}
+    for alpha in (0.0, 0.5):
+        move = replace(Movement(), lambda_src=1e9, mu_in=1e8, alpha_in=alpha)
+        done[alpha] = simulate(pop, POOL, imp, plan, event, move, discipline="fifo").rebuild_done[1]
+    assert done[0.0] == pytest.approx(1.0 + reb, rel=1e-9)  # st = ed0 = 1, no drag
+    assert done[0.5] == pytest.approx(1.0 + 2 * reb, rel=1e-9)  # u = 1 ⇒ prefill work doubles
+    with pytest.raises(ValueError, match="alpha_in"):
+        simulate(pop, POOL, imp, plan, event, replace(Movement(), alpha_in=1.0))
+
+
 def test_unknown_mode_raises():
     pop, imp = _pop()
     with pytest.raises(ValueError, match="unknown mode"):
@@ -245,8 +263,10 @@ def test_unknown_mode_raises():
 
 
 def test_cutthrough_never_slower_than_store_and_forward():
+    # Queueing-skeleton invariant: holds at alpha_in=0. With interference on, an earlier
+    # (cut-through) prefill start can land in a busier ingest window and legitimately lose.
     pop, imp = _pop(n_nodes=8)
-    event, move = Event(dest_nodes=48), Movement()
+    event, move = Event(dest_nodes=48), replace(Movement(), alpha_in=0.0)
     plan = solve(pop, POOL, imp, 0.3 * bind_dp(imp).sum(), event, move)
     mv = plan.y > 1e-9
     for disc in ("fifo", "lpt", "johnson", "pd"):

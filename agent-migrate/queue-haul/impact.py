@@ -24,6 +24,10 @@ class Movement:
     mu_in: float = 512e9  # host-staged ingest, B/s
     dest_prefill_util: float = 0.6  # destination prefill load (§5: ~0.4 spare → ~0.6 used)
     dest_ingest_util: float = 0.0  # ingest uncontended by construction
+    alpha_in: float = 0.10  # DES-only prefill slowdown per unit ingest-channel utilization.
+    # Conservative center between ~0 (pure-DMA copy engines) and ~6% (SM-copy path, vLLM
+    # KV-offloading blog 2026-01) / worse for sync loading; assumes async + uncompressed KV
+    # (see formulation.md). Track 1 measures the real value.
 
 
 @dataclass(frozen=True)

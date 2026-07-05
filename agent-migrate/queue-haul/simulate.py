@@ -95,6 +95,8 @@ def simulate(pop: JobPopulation, pool, imp: Impact, plan: Plan, event: Event = E
     # job = f//K, dest ℓ = f%K. One shared egress link serializes all of them.
     if mode not in ("sf", "cutthrough"):
         raise ValueError(f"unknown mode {mode!r}")
+    if not 0 <= move.alpha_in < 1:
+        raise ValueError(f"alpha_in must be in [0, 1), got {move.alpha_in}")
     n = len(pop)
     multidest = fleet is not None
     fleet = fleet or DestFleet.from_event(event, move, pool, pop)
@@ -126,11 +128,14 @@ def simulate(pop: JobPopulation, pool, imp: Impact, plan: Plan, event: Event = E
     floor = es if mode == "cutthrough" else ed
     for f in order:  # split shipment rebuilds both pieces on dest ℓ's resources, in egress order
         l, starts, done = f % K, [], ed[f]
-        for srv, w, work in ((pf[l], YRf[f], p2Rf[f]), (ig[l], YSf[f], p2Sf[f])):
+        for srv, w, work, drag in ((pf[l], YRf[f], p2Rf[f], move.alpha_in), (ig[l], YSf[f], p2Sf[f], 0.0)):
             if w <= 1e-9:
                 continue
             k = int(np.argmin(srv))
             st = max(floor[f], srv[k])
+            if drag:  # first-order interference: ingest-busy fraction at st slows prefill
+                # (sampled at start only; same-shipment ingest is assigned after R, so it never drags its own prefill)
+                work /= 1.0 - drag * (ig[l] > max(st, event.tau_in)).mean()
             srv[k] = max(ed[f], st + work)  # outer max = cut-through byte-arrival cap
             starts.append(st); done = max(done, srv[k])
         rs[f], rd[f] = (min(starts) if starts else ed[f]), done
@@ -147,7 +152,8 @@ def simulate(pop: JobPopulation, pool, imp: Impact, plan: Plan, event: Event = E
         lb = max(event.tau_src + p1f[mv].sum(),
                  max(_stage_lb(event.tau_pre, p2R[:, l], int(W[l])) for l in range(K)),
                  max(_stage_lb(event.tau_in, p2S[:, l], int(W[l])) for l in range(K)))
-        ub = max(event.tau_src + p1f[mv].sum(), event.tau_pre, event.tau_in) + p2Rf[mv].sum() + p2Sf[mv].sum()
+        ub = max(event.tau_src + p1f[mv].sum(), event.tau_pre, event.tau_in) \
+            + p2Rf[mv].sum() / (1 - move.alpha_in) + p2Sf[mv].sum()  # worst-case ingest drag
         makespan = float(np.nanmax(rd))
     else:
         lb = ub = makespan = 0.0
