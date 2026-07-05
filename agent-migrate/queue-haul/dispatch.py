@@ -26,34 +26,45 @@ class Event:
     """§5 pools & event + §6 timing the solver reads. Center defaults, all swept."""
 
     D: float = 300.0  # deadline (s)
-    W: int = 8  # dedicated rebuild servers; not the serving spare counted by dest_nodes
-    dest_nodes: int = 32  # whole destination pool: gates load/held headroom (≠ W)
-    spare_frac: float = 0.40  # spare per dest node, below its knee
+    dest_nodes: int = 32  # whole destination pool: spare_frac of it is the shared spare pool
+    spare_frac: float = 0.40  # spare per dest node; rebuild runs on floor(spare) of these nodes
     tau_src: float = 2.0  # egress connection ramp
     tau_pre: float = 5.0  # prefill batch-form
     tau_in: float = 3.0  # ingest pipeline-fill
     pinned: tuple = ()  # class names forced to y=0 (service floor)
 
+    @property
+    def spare(self) -> float:
+        return self.spare_frac * self.dest_nodes
+
     def l_dest(self, pool: PoolPower) -> float:
-        return self.spare_frac * self.dest_nodes * pool.rho_star
+        return self.spare * pool.rho_star
 
     def s_dest(self, pool: PoolPower) -> float:
-        return self.spare_frac * self.dest_nodes * pool.s_node
+        return self.spare * pool.s_node
 
 
 @dataclass(frozen=True)
 class DestFleet:
     """§4 destination index: K sites the source sheds to, coupled only by the shared
     source uplink. Each field a length-K parallel array. spare_ℓ is a spare node-count →
-    load headroom L̄_ℓ = spare_ℓ·ρ*, held headroom S̄_ℓ = spare_ℓ·s_node."""
+    load headroom L̄_ℓ = spare_ℓ·ρ*, held headroom S̄_ℓ = spare_ℓ·s_node, and rebuild
+    (prefill + ingest) runs on its ⌊spare_ℓ⌋ whole nodes — no dedicated rebuild hardware."""
 
-    W: np.ndarray  # rebuild servers per dest (prefill compute + ingest channels)
     spare: np.ndarray  # spare node-count per dest
     mfu: np.ndarray  # destination MFU → ρ_ℓ(T); decoupled from the source's pop.mfu
     prefill_util: np.ndarray  # destination prefill load → φ_pre,ℓ
 
+    def __post_init__(self):
+        if np.any(self.W < 1):
+            raise ValueError("floor(spare) < 1: destination has no whole spare node for rebuild")
+
+    @property
+    def W(self) -> np.ndarray:  # rebuild servers = whole spare nodes, shared with serving headroom
+        return np.floor(np.atleast_1d(self.spare) + 1e-9).astype(int)  # +1e-9 absorbs float wobble
+
     def __len__(self) -> int:
-        return len(np.atleast_1d(self.W))
+        return len(np.atleast_1d(self.spare))
 
     @classmethod
     def from_event(
@@ -61,8 +72,7 @@ class DestFleet:
     ) -> "DestFleet":
         """The K=1 fleet that reproduces the single-dest Event/Movement headroom exactly."""
         return cls(
-            np.array([event.W]),
-            np.array([event.spare_frac * event.dest_nodes]),
+            np.array([event.spare]),
             np.array([pop.mfu]),
             np.array([move.dest_prefill_util]),
         )
@@ -113,8 +123,8 @@ def held_weight(pop: JobPopulation, pool: PoolPower) -> np.ndarray:
 
 
 def movement_budgets(pool: PoolPower, event: Event, move: Movement, fleet: DestFleet = None) -> dict:
-    W = np.array([event.W]) if fleet is None else np.asarray(fleet.W)
-    spare = np.array([event.spare_frac * event.dest_nodes]) if fleet is None else np.asarray(fleet.spare)
+    spare = np.array([event.spare]) if fleet is None else np.asarray(fleet.spare)
+    W = np.floor(spare + 1e-9)  # whole spare nodes; matches the DES server count exactly
     return {
         "egress": move.lambda_src * (event.D - event.tau_src),
         "prefill": W * (event.D - event.tau_pre),
@@ -225,7 +235,6 @@ def _build(pop, pool, imp, fleet, event, move, integer):
         cp.sum(Y, axis=1)
         <= 1,  # pairing: each job moves at most once, across all destinations
         egress,  # the single shared source uplink — the entire multi-dest coupling
-        # TODO(background-util): if W is shared with serving, reduce this RHS by destination load.
         prefill,  # per-ℓ prefill
         ingest,  # per-ℓ ingest
         load,

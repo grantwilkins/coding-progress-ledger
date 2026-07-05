@@ -176,7 +176,7 @@ not a certifiable watt value for the current dispatch objective. **ρ_low is rem
 | Parameter | Value | Type | Source |
 |---|---:|---|---|
 | Λ_src (egress link) | **1 GB/s** (center); sweep [0.5, 10] GB/s | sweep | WAN-class; the drain-rate knob, swept since inter-site BW varies widely |
-| **W (destination prefill nodes)** | **8** (center); sweep {4, 8, 16} | sweep | rebuild-capacity knob (no-disagg: full nodes that also serve) |
+| **Rebuild nodes (per dest)** | **⌊spare⌋ = ⌊0.4·32⌋ = 12** (center) | derived | no dedicated pool: rebuild runs on the whole spare nodes that also absorb migrated serving; swept only via spare_frac/dest_nodes |
 | **ρ_dest(T) (prefill tok/s, a function)** | **see below** | derived-function | FLOP roofline of one 8×H100 node, not a constant |
 | **μ_in (ingest, per node)** | **512 GB/s** (center); sweep [256, 512] GB/s | sweep | host-staged PCIe Gen5 ×8; sweep covers staging overhead / contention |
 | **τ_src, τ_pre, τ_in (startup s)** | **2 / 5 / 3 s** (center) | sweep | conn ramp / batch-form / pipeline-fill; sweep each [0, 2×center] |
@@ -222,7 +222,7 @@ and **ρ_dest(T)** (a function, computed per session — also the prefill load n
 - *Power model:* P_idle, P_busy, power knee, latency knee, ρ*, bracket ratio, **G (decode ceiling)**.
 - *Workload:* session class mix, class-specific context distribution, state mix, turn rates + **σ spread**, occupation cap, Δ, Y, and cache-hit rate.
 - *Capacity:* γ.
-- *Event:* pool size, **occupancy**, S*, D, H, destination spare, W.
+- *Event:* pool size, **occupancy**, S*, D, H, destination spare (rebuild runs on its ⌊spare⌋ whole nodes).
 - *Movement:* Λ_src, μ_in, MFU (drives ρ_dest), startup latencies.
 
 **Eliminated:** ρ_low (the memory-regime node sits at P_idle by definition; μ = P_idle/S_node);
@@ -251,6 +251,7 @@ constant F (prefill load normalized per-job by ρ_dest(T_j)).
   context-dependent, matching the single-session boundary already in the draft.
 - **Context-length mixture is swept** because ServeGen shows these parameters drift over time; the
   short/center/long settings bracket the load-bound → memory-bound transition.
-- **Destination in the no-disagg setting:** "destination prefill nodes W" are full serving nodes that
-  rebuild *and* serve. Confirm the runtime-headroom constraint shares one node budget between rebuild
-  and post-rebuild serving (it currently assumes this).
+- **Destination in the no-disagg setting:** rebuild nodes are full serving nodes that rebuild *and*
+  serve — implemented: rebuild capacity is ⌊spare⌋ of the same pool that gates load/held admission
+  (no dedicated pool). Rebuild-vs-post-rebuild-serving overlap inside [0, D] remains an acknowledged
+  approximation (see formulation.md), to be covered by the planner cushion κ pending Track 1 calibration.

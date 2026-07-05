@@ -31,7 +31,7 @@ from node_knee import (
 )
 from power import PoolPower
 
-BASE_EVENT = Event(dest_nodes=48, W=16)
+BASE_EVENT = Event(dest_nodes=48)
 MOVE = Movement()
 N_NODES, kW = 4, 1e3
 STARTUP = max(BASE_EVENT.tau_src, BASE_EVENT.tau_pre, BASE_EVENT.tau_in)

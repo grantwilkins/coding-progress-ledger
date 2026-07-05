@@ -44,7 +44,7 @@ COLORS = {
 
 
 def scaled_event(n_nodes: int, deadline: float) -> Event:
-    return replace(BASE_EVENT, D=float(deadline), dest_nodes=12 * int(n_nodes), W=4 * int(n_nodes))
+    return replace(BASE_EVENT, D=float(deadline), dest_nodes=12 * int(n_nodes))
 
 
 def population(session_class: str, n_nodes: int, seed: int = 3):
@@ -83,7 +83,7 @@ def _row(session_class, n_nodes, jobs, full_kw, deadline, frac, target_kw, event
         "target_kw": float(target_kw),
         "full_node_kw": float(full_kw),
         "dest_nodes": int(event.dest_nodes),
-        "workers": int(event.W),
+        "workers": int(event.spare),
         "method": method,
         "hit": hit,
         "node_kw": float(node_kw),

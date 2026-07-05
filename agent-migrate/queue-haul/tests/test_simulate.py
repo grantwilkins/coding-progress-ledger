@@ -56,7 +56,7 @@ def test_egress_isolation_matches_lp_budget():
     yS = np.zeros(len(pop)); yS[pick] = 1.0
     plan = _plan(np.zeros(len(pop)), yS)
     move = SLACK_R  # only the λ_src=1e9 link binds
-    s = simulate(pop, POOL, imp, plan, Event(W=10**6), move, discipline="fifo")
+    s = simulate(pop, POOL, imp, plan, Event(), move, discipline="fifo")
     expected = Event().tau_src + (imp.b_transfer[pick] / move.lambda_src).sum()
     assert np.nanmax(s.egress_done) == pytest.approx(expected, rel=1e-9)
 
@@ -66,7 +66,7 @@ def test_prefill_isolation_matches_lp_budget():
     pick = np.arange(5)
     yR = np.zeros(len(pop)); yR[pick] = 1.0
     plan = _plan(yR, np.zeros(len(pop)))
-    event = Event(W=1)  # equality regime: single serial prefill server
+    event = Event(dest_nodes=1, spare_frac=1.0)  # equality regime: single serial prefill server
     s = simulate(pop, POOL, imp, plan, event, SLACK_L, discipline="fifo")
     reb = pop.T / rho_replay(pop.T, pop.mfu)
     assert s.makespan == pytest.approx(event.tau_pre + reb[pick].sum(), rel=1e-9)
@@ -76,8 +76,8 @@ def test_replay_stage_uses_dispatch_prefill_column():
     pop, imp = _pop()
     j = 0
     yR = np.zeros(len(pop)); yR[j] = 1.0
-    fleet = DestFleet(np.array([1]), np.array([32.0]), np.array([0.47]), np.array([0.0]))
-    event = Event(W=1, tau_src=0.0, tau_pre=2.0, tau_in=0.0)
+    fleet = DestFleet(np.array([32.0]), np.array([0.47]), np.array([0.0]))
+    event = Event(dest_nodes=1, spare_frac=1.0, tau_src=0.0, tau_pre=2.0, tau_in=0.0)
     plan = Plan(yR, np.zeros(len(pop)), 0.0, 0.0, 0.0, True, 0.0, "load", "test",
                 yR[:, None], np.zeros((len(pop), 1)))
     s = simulate(pop, POOL, imp, plan, event, SLACK_L, discipline="fifo", fleet=fleet)
@@ -90,7 +90,7 @@ def test_ingest_isolation_matches_lp_budget():
     pick = np.arange(5)
     yS = np.zeros(len(pop)); yS[pick] = 1.0
     plan = _plan(np.zeros(len(pop)), yS)
-    event = Event(W=1)  # equality regime: single serial ingest channel
+    event = Event(dest_nodes=1, spare_frac=1.0)  # equality regime: single serial ingest channel
     move = replace(Movement(), lambda_src=1e18, mu_in=1e9)  # ingest work dominates τ_in
     s = simulate(pop, POOL, imp, plan, event, move, discipline="fifo")
     expected = event.tau_in + (imp.b_transfer[pick] / move.mu_in).sum()
@@ -105,7 +105,7 @@ def test_split_job_charges_both_fractions():
     j = int(np.argmax(pop.T))  # big context ⇒ prefill piece ≫ ingest piece
     yR, yS = np.zeros(len(pop)), np.zeros(len(pop))
     yR[j], yS[j] = 0.4, 0.6  # action() picks "S", yet the prefill (y_R) piece is far larger
-    event, move = Event(W=1), Movement()
+    event, move = Event(dest_nodes=1, spare_frac=1.0), Movement()
     s = simulate(pop, POOL, imp, _plan(yR, yS), event, move, discipline="fifo")
     ed = event.tau_src + (yR[j] * imp.b_replay[j] + yS[j] * imp.b_transfer[j]) / move.lambda_src
     p2R = yR[j] * pop.T[j] / rho_replay(pop.T[j], pop.mfu)
@@ -144,7 +144,7 @@ def test_hand_computed_two_job_flow_shop():
     pop = _toy(2)
     imp = _toy_imp([2e9, 1e9])
     plan = _plan([0.0, 0.0], [1.0, 1.0])
-    event = Event(W=1, tau_src=0.0, tau_pre=0.0, tau_in=0.0)
+    event = Event(dest_nodes=1, spare_frac=1.0, tau_src=0.0, tau_pre=0.0, tau_in=0.0)
     move = replace(Movement(), lambda_src=1e9, mu_in=1e9)
     s = simulate(pop, POOL, imp, plan, event, move, discipline="fifo")
     # link: ed=[2,3]; ingest W=1: rd0=max(2,2)+2... = max(2,max(2,0)+2)=4; rd1=max(3,max(3,4)+1)=5
@@ -158,7 +158,7 @@ def test_cutthrough_overlaps_egress():
     pop = _toy(2)
     imp = _toy_imp([2e9, 1e9])
     plan = _plan([0.0, 0.0], [1.0, 1.0])
-    event = Event(W=1, tau_src=0.0, tau_pre=0.0, tau_in=0.0)
+    event = Event(dest_nodes=1, spare_frac=1.0, tau_src=0.0, tau_pre=0.0, tau_in=0.0)
     move = replace(Movement(), lambda_src=1e9, mu_in=1e9)
     s = simulate(pop, POOL, imp, plan, event, move, mode="cutthrough", discipline="fifo")
     # rd0=max(ed0=2, rs0=0 +p2=2)=2; rd1=max(ed1=3, max(es1=2,rd0=2)+1=3)=3
@@ -171,7 +171,7 @@ def test_node_marginal_pd_updates_residual_source_node_value():
     pop = _node_value_toy()
     imp = _toy_imp([1e9, 1e9, 1e9])
     plan = _plan([0.0, 0.0, 0.0], [1.0, 1.0, 1.0])
-    event = Event(D=10.0, W=10, tau_src=0.0, tau_pre=0.0, tau_in=0.0)
+    event = Event(D=10.0, dest_nodes=25, tau_src=0.0, tau_pre=0.0, tau_in=0.0)
     move = replace(Movement(), lambda_src=1e9, mu_in=1e18)
     s = simulate(pop, POOL, imp, plan, event, move, discipline="node_marginal_pd")
     assert np.argsort(s.egress_start).tolist() == [0, 1, 2]
@@ -180,7 +180,7 @@ def test_node_marginal_pd_updates_residual_source_node_value():
 def test_node_marginal_pd_requires_source_nodes():
     pop = _toy(1)
     imp = _toy_imp([1e9])
-    event = Event(D=10.0, W=10, tau_src=0.0, tau_pre=0.0, tau_in=0.0)
+    event = Event(D=10.0, dest_nodes=25, tau_src=0.0, tau_pre=0.0, tau_in=0.0)
     move = replace(Movement(), lambda_src=1e9)
     with pytest.raises(ValueError, match="source_node"):
         simulate(pop, POOL, imp, _plan([0.0], [1.0]), event, move, discipline="node_marginal_pd")
@@ -192,7 +192,7 @@ def test_w1_single_action_equals_recurrence_and_johnson_optimal():
     pop, imp = _pop()
     yR = np.ones(len(pop))
     plan = _plan(yR, np.zeros(len(pop)))
-    event, move = Event(W=1), Movement()
+    event, move = Event(dest_nodes=1, spare_frac=1.0), Movement()
     p1 = yR * imp.b_replay / move.lambda_src
     p2 = pop.T / rho_replay(pop.T, pop.mfu)
     mv = np.flatnonzero(plan.y > 1e-9)
@@ -210,7 +210,7 @@ def test_w1_single_action_equals_recurrence_and_johnson_optimal():
 @pytest.mark.parametrize("disc", ["fifo", "lpt", "johnson", "pd"])
 def test_conservation(disc, mode):
     pop, imp = _pop(n_nodes=8)
-    event, move = Event(dest_nodes=48, W=16), Movement()
+    event, move = Event(dest_nodes=48), Movement()
     plan = solve(pop, POOL, imp, 0.3 * bind_dp(imp).sum(), event, move)
     s = simulate(pop, POOL, imp, plan, event, move, mode=mode, discipline=disc)
     mv = plan.y > 1e-9
@@ -229,7 +229,7 @@ def test_mode_switch_pins_rebuild_start(mode):
     # sf: rebuild can't start before egress completes; cut-through: not before egress starts.
     # Pins the floor switch (would catch a "zeroth vs full chunk" regression).
     pop, imp = _pop(n_nodes=8)
-    event, move = Event(dest_nodes=48, W=16), Movement()
+    event, move = Event(dest_nodes=48), Movement()
     plan = solve(pop, POOL, imp, 0.4 * bind_dp(imp).sum(), event, move)
     s = simulate(pop, POOL, imp, plan, event, move, mode=mode, discipline="fifo")
     mv = plan.y > 1e-9
@@ -246,7 +246,7 @@ def test_unknown_mode_raises():
 
 def test_cutthrough_never_slower_than_store_and_forward():
     pop, imp = _pop(n_nodes=8)
-    event, move = Event(dest_nodes=48, W=16), Movement()
+    event, move = Event(dest_nodes=48), Movement()
     plan = solve(pop, POOL, imp, 0.3 * bind_dp(imp).sum(), event, move)
     mv = plan.y > 1e-9
     for disc in ("fifo", "lpt", "johnson", "pd"):
@@ -260,7 +260,7 @@ def test_discipline_sensitivity_only_when_link_binds():
     # when D is slack (everything clears) and order-sensitive when D binds. No discipline is
     # universally optimal — PD is a heuristic, not a dominant strategy.
     pop, imp = _pop(n_nodes=8)
-    base, move = Event(dest_nodes=48, W=16), Movement()
+    base, move = Event(dest_nodes=48), Movement()
     plan = solve(pop, POOL, imp, 0.5 * bind_dp(imp).sum(), base, move)
     eg = (plan.y_R @ imp.b_replay + plan.y_S @ imp.b_transfer) / move.lambda_src
     disc = ("fifo", "lpt", "johnson", "pd")

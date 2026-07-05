@@ -110,18 +110,20 @@ $$\min_{Y_R,Y_S}\ \sum_{j,\ell} y^R_{j\ell}\,c_j(R) + y^S_{j\ell}\,c_j(S)\quad\t
 
 subject to:
 
-| # | constraint | code | reads as |
-|---|---|---|---|
-| shed | $\sum_{j,\ell} y_{j\ell}\,\Delta P^{\text{bind}}_j \ge S^\star$ | `dp @ total ≥ s_star` | meet the grid ask |
-| pairing | $\sum_\ell y_{j\ell}\le 1$ | `sum(Y,axis=1)≤1` | each job moves **at most once**, across all sites |
-| **egress** | $\sum_{j,\ell} b_j(R)\,y^R_{j\ell} + b_j(S)\,y^S_{j\ell} \le \lambda_{\text{src}}(D-\tau_{\text{src}})$ | `egress` | **ONE shared uplink** — the sole multi-destination coupling |
-| prefill | $\sum_j \tfrac{T_j}{\rho_\ell(T_j/2)}\,y^R_{j\ell}\le W_\ell(D-\tau_{\text{pre}})$ | per-$\ell$ | rebuild replays on dedicated $W_\ell$ prefill servers by $D$ |
-| ingest | $\sum_j \eta T_j\,y^S_{j\ell}\le W_\ell\,\mu_{\text{in}}(D-\tau_{\text{in}})$ | per-$\ell$ | land KV on $W_\ell$ ingest channels by $D$ |
-| load | $\sum_j \ell_j\,y_{j\ell}\le \bar L_\ell = \text{spare}_\ell\,\rho^\star$ | `load` | destination stays below its knee |
-| held | $\sum_j w_j\,\tfrac{T_j}{E[T]}\,y_{j\ell}\le \bar S_\ell = \text{spare}_\ell\,S_{\text{node}}$ | `held` | destination KV capacity (incl. cold discount and $(1+\gamma)$ uplift) |
-| floor | pinned classes get $y=0$ | `pinned` | optional service-level floor |
+| #          | constraint                                                                                              | code                  | reads as                                                              |
+| ---------- | ------------------------------------------------------------------------------------------------------- | --------------------- | --------------------------------------------------------------------- |
+| shed       | $\sum_{j,\ell} y_{j\ell}\,\Delta P^{\text{bind}}_j \ge S^\star$                                         | `dp @ total ≥ s_star` | meet the grid ask                                                     |
+| pairing    | $\sum_\ell y_{j\ell}\le 1$                                                                              | `sum(Y,axis=1)≤1`     | each job moves **at most once**, across all sites                     |
+| **egress** | $\sum_{j,\ell} b_j(R)\,y^R_{j\ell} + b_j(S)\,y^S_{j\ell} \le \lambda_{\text{src}}(D-\tau_{\text{src}})$ | `egress`              | **ONE shared uplink** — the sole multi-destination coupling           |
+| prefill    | $\sum_j \tfrac{T_j}{\rho_\ell(T_j/2)}\,y^R_{j\ell}\le \lfloor\text{spare}_\ell\rfloor(D-\tau_{\text{pre}})$ | per-$\ell$        | rebuild replays on the $\lfloor\text{spare}_\ell\rfloor$ whole spare nodes by $D$ |
+| ingest     | $\sum_j \eta T_j\,y^S_{j\ell}\le \lfloor\text{spare}_\ell\rfloor\,\mu_{\text{in}}(D-\tau_{\text{in}})$  | per-$\ell$            | land KV on the same $\lfloor\text{spare}_\ell\rfloor$ spare nodes by $D$ |
+| load       | $\sum_j \ell_j\,y_{j\ell}\le \bar L_\ell = \text{spare}_\ell\,\rho^\star$                               | `load`                | destination stays below its knee                                      |
+| held       | $\sum_j w_j\,\tfrac{T_j}{E[T]}\,y_{j\ell}\le \bar S_\ell = \text{spare}_\ell\,S_{\text{node}}$          | `held`                | destination KV capacity (incl. cold discount and $(1+\gamma)$ uplift) |
+| floor      | pinned classes get $y=0$                                                                                | `pinned`              | optional service-level floor                                          |
 
 $\tau_*$ are one-time ramps (egress connection setup, prefill batch-form, ingest pipeline-fill). Drop the single **egress** row and the program separates into $K$ independent single-destination dispatches — it is a **transportation LP with one global uplink knapsack**.
+
+**No dedicated rebuild hardware.** Rebuild runs on the destination's spare pool ($\lfloor\text{spare}_\ell\rfloor$ whole nodes, the same pool that backs the load/held rows) — that is what the testbed physically is. Two acknowledged approximations, both pending Track 1 calibration: (a) prefill and ingest on a shared node are budgeted as overlapping (compute-bound vs copy-engine-bound); (b) sessions that finish rebuilding inside $[0,D]$ start consuming spare serving capacity, and neither the rows above nor the DES debit rebuild capacity for it. Note the removal of the dedicated pool *raises* rebuild capacity at the center parameters (8 dedicated servers → $\lfloor 0.4\cdot 32\rfloor = 12$ shared nodes); the forthcoming planner-side cushion $\kappa$ (sim-fix track) is the lever that covers both approximations.
 
 **Certify active work, report high (`bind_dp`).** The $\ge S^\star$ floor binds against
 `dp_certified = s_plat·ℓ_j + c_1 f_j + c_2 g_j` in every regime. Memory remains a capacity

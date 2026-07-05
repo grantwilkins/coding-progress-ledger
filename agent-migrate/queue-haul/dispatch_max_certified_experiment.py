@@ -7,7 +7,7 @@ from impact import Movement, compute
 from instance import _mean_T, class_workload, generate
 from power import PoolPower
 
-EVENT, MOVE, N_NODES = Event(dest_nodes=48, W=16), Movement(), 4
+EVENT, MOVE, N_NODES = Event(dest_nodes=48), Movement(), 4
 CASES = ("ordinary_chat", "long_chat_code", "reasoning_chat", "agentic_tool_loop")
 
 

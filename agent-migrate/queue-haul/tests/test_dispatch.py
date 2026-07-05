@@ -28,7 +28,7 @@ from instance import JobPopulation, Workload, _mean_T, class_workload, generate
 from power import PoolPower, rho_replay
 
 POOL = PoolPower()
-SLACK_E = Event(D=1e9, W=10**7, dest_nodes=10**7)  # no movement limit binds
+SLACK_E = Event(D=1e9, dest_nodes=10**7)  # no movement limit binds
 SLACK_M = replace(Movement(), lambda_src=1e18, mu_in=1e18)
 
 
@@ -45,8 +45,8 @@ def _violations(plan: Plan, pop, imp, event, move, pool=POOL):
     return [
         1.0 - (yR + yS).max(),  # pairing y_R+y_S ≤ 1
         move.lambda_src * (event.D - event.tau_src) - (imp.b_replay @ yR + imp.b_transfer @ yS),
-        event.W * (event.D - event.tau_pre) - reb @ yR,
-        event.W * move.mu_in * (event.D - event.tau_in) - imp.b_transfer @ yS,
+        np.floor(event.spare_frac * event.dest_nodes) * (event.D - event.tau_pre) - reb @ yR,
+        np.floor(event.spare_frac * event.dest_nodes) * move.mu_in * (event.D - event.tau_in) - imp.b_transfer @ yS,
         event.l_dest(pool) - pop.ell @ y,
         event.s_dest(pool) - held_w @ y,
     ]
@@ -109,8 +109,8 @@ def test_tight_deadline_returns_max_shed_instead_of_crashing():
     pop = generate(pool, wl, n_nodes=2)
     imp = compute(pop, pool)
     S = 2 * bind_dp(imp).sum()
-    tight = solve(pop, pool, imp, S, Event(D=8, dest_nodes=48, W=16), Movement())
-    loose = solve(pop, pool, imp, S, Event(D=30, dest_nodes=48, W=16), Movement())
+    tight = solve(pop, pool, imp, S, Event(D=8, dest_nodes=48), Movement())
+    loose = solve(pop, pool, imp, S, Event(D=30, dest_nodes=48), Movement())
     assert not tight.feasible and tight.shed_guaranteed > 0
     assert tight.shed_guaranteed <= loose.shed_guaranteed + 1e-6
 
@@ -135,7 +135,7 @@ def test_greedy_respects_movement_budgets():
     # its plan must satisfy every movement constraint — it can never ship more than
     # the links carry.
     pop, imp = _pop(n_nodes=8)
-    event, move = Event(dest_nodes=8, W=4), Movement()
+    event, move = Event(dest_nodes=8), Movement()
     plan = greedy(pop, POOL, imp, 0.30e6, event, move)  # S* beyond reach ⇒ budgets bind
     assert not plan.feasible and plan.shortfall > 0  # links cap the shed
     assert min(_violations(plan, pop, imp, event, move)) >= -1e-6  # but never over-subscribed
@@ -164,7 +164,7 @@ def test_greedy_falls_back_from_partial_preferred_action():
         np.ones(2), np.ones(2), np.ones(2), np.ones(2), np.ones(2),
         np.full(2, 2.0), np.ones(2), np.ones(2), np.full(2, 100.0), "load"
     )
-    event = Event(D=12, W=100, dest_nodes=1000, spare_frac=1.0)
+    event = Event(D=12, dest_nodes=1000, spare_frac=1.0)
     move = replace(Movement(), lambda_src=0.2)
     g = greedy(pop, POOL, imp, 2.0, event, move)
     mi = solve(pop, POOL, imp, 2.0, event, move, integer=True)
@@ -176,7 +176,7 @@ def test_greedy_falls_back_from_partial_preferred_action():
 def test_greedy_ceiling_at_most_lp_ceiling():
     # LP max-shed is an upper bound on any budget-respecting first-fit policy.
     pop, imp = _pop(n_nodes=8)
-    event, move = Event(dest_nodes=8, W=4), Movement()
+    event, move = Event(dest_nodes=8), Movement()
     g = greedy(pop, POOL, imp, 1e12, event, move)
     lp = solve(pop, POOL, imp, 2 * bind_dp(imp).sum(), event, move)
     assert g.shed_guaranteed <= lp.shed_guaranteed + 1e-6
@@ -228,7 +228,7 @@ def test_dispatch_diagnostics_report_row_level_quantities():
             "egress": 7.0, "prefill": 0.0, "ingest": 0.0, "load": 2.0, "held": 3.0
         }.items()},
     )
-    event = Event(D=12, W=100, dest_nodes=1000, spare_frac=1.0)
+    event = Event(D=12, dest_nodes=1000, spare_frac=1.0)
     move = replace(Movement(), lambda_src=2.0)
     d = dispatch_diagnostics(pop, POOL, imp, plan, 6.0, event, move)
     assert d["active_constraints"] == ("egress",)
@@ -245,7 +245,7 @@ def test_random_respects_budgets_and_bounded_by_lp():
     # The random floor uses the same budget-respecting engine: it can never
     # over-subscribe a link, and the LP max-shed bounds it (as it bounds any policy).
     pop, imp = _pop(n_nodes=8)
-    event, move = Event(dest_nodes=8, W=4), Movement()
+    event, move = Event(dest_nodes=8), Movement()
     r = random_dispatch(pop, POOL, imp, 0.30e6, event, move, seed=0)
     assert min(_violations(r, pop, imp, event, move)) >= -1e-3
     lp = solve(pop, POOL, imp, 2 * bind_dp(imp).sum(), event, move)

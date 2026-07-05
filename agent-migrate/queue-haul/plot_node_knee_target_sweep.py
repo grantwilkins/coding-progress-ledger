@@ -29,7 +29,7 @@ from power import PoolPower
 
 kW = 1e3
 N_NODES = 4
-EVENT = Event(dest_nodes=48, W=16)
+EVENT = Event(dest_nodes=48)
 MOVE = Movement()
 TARGET_FRACS = np.linspace(0.05, 0.95, 19)
 COLORS = {

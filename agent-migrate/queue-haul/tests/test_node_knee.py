@@ -47,7 +47,7 @@ from node_knee import (
 )
 from power import ETA_BYTES_PER_TOK, PoolPower, rho_replay
 
-SLACK_E = Event(D=1e9, W=10**7, dest_nodes=10**7)
+SLACK_E = Event(D=1e9, dest_nodes=10**7)
 SLACK_M = replace(Movement(), lambda_src=1e18, mu_in=1e18)
 
 
@@ -97,8 +97,8 @@ def _movement_slacks(pop, pool, imp, res, event, move):
     held = pop.T / pool.mean_context_tokens * np.where(pop.state == "cold", 1 / (1 + pool.gamma), 1.0)
     return np.array([
         move.lambda_src * (event.D - event.tau_src) - (imp.b_replay @ res.y_R + imp.b_transfer @ res.y_S),
-        event.W * (event.D - event.tau_pre) - (pop.T / rho_replay(pop.T, pop.mfu)) @ res.y_R,
-        event.W * move.mu_in * (event.D - event.tau_in) - imp.b_transfer @ res.y_S,
+        np.floor(event.spare_frac * event.dest_nodes) * (event.D - event.tau_pre) - (pop.T / rho_replay(pop.T, pop.mfu)) @ res.y_R,
+        np.floor(event.spare_frac * event.dest_nodes) * move.mu_in * (event.D - event.tau_in) - imp.b_transfer @ res.y_S,
         event.l_dest(pool) - pop.ell @ y,
         event.s_dest(pool) - held @ y,
     ])
@@ -197,7 +197,7 @@ def test_result_reports_actual_movement_feasibility():
         pool.p_bar * pop.ell, np.zeros(1), np.ones(1), np.ones(1),
         np.array([100.0]), np.zeros(1), "load"
     )
-    event = Event(D=10, W=10**6, dest_nodes=10**6)
+    event = Event(D=10, dest_nodes=10**6)
     res = _result(pop, pool, imp, np.ones(1), np.zeros(1), 1.0, "test", 1.0,
                   event, replace(Movement(), lambda_src=1.0))
     assert not res.movement_feasible
@@ -244,9 +244,9 @@ def test_node_drain_greedy_beats_live_marginal_on_knee_bundle_case():
 
 def test_node_drain_bundle_respects_joint_resource_budget():
     pool = PoolPower()
-    pop = _pop([0.08, 0.08, 0.08], [0, 0, 0])
+    pop = _pop([0.5, 0.5, 0.5], [0, 0, 0])  # one whole spare node admits 1 job (0.5 ≤ 0.8 < 1.0)
     imp = _imp(pop, [1, 1, 1])
-    event = Event(D=1e9, W=10**7, dest_nodes=1, spare_frac=0.125)
+    event = Event(D=1e9, dest_nodes=1, spare_frac=1.0)
     drain = solve_node_drain_greedy(pop, pool, imp, 500.0, event, SLACK_M)
     assert pop.ell @ drain.y <= event.l_dest(pool) + 1e-9
 
@@ -265,7 +265,7 @@ def test_random_baselines_are_seeded_and_budget_respecting():
     pool = PoolPower()
     pop = _pop([0.08, 0.08, 0.08, 0.08], [0, 0, 1, 1])
     imp = _imp(pop, [1, 2, 3, 4])
-    event = Event(D=1e9, W=10**7, dest_nodes=1, spare_frac=0.125)
+    event = Event(D=1e9, dest_nodes=1, spare_frac=1.0)
     for solver in (solve_random_jobs, solve_random_nodes):
         a = solver(pop, pool, imp, 10_000.0, event, SLACK_M, seed=2)
         b = solver(pop, pool, imp, 10_000.0, event, SLACK_M, seed=2)

@@ -2,7 +2,8 @@
 
 Deterministic flow-shop checker: a solved Plan moves (j,ℓ) shipments over ONE shared egress
 link (λ_src, serial — the multi-dest coupling) then K parallel rebuild clusters, each ℓ with
-W_ℓ prefill servers (replay, T/ρ_ℓ) and W_ℓ ingest channels (transfer, η·T/μ_in). No job
+⌊spare_ℓ⌋ prefill servers (replay, T/ρ_ℓ) and ⌊spare_ℓ⌋ ingest channels (transfer, η·T/μ_in) —
+the destination's own spare nodes, shared with serving headroom; no dedicated pool. No job
 selection; replay the plan and report where realized shed (egress done by D), reconstruction
 (rebuild done by D), and per-ℓ realized load (§6.2 admission) fall short of the LP certificate.
 Stage-2 uses BARE rates — finite servers model the contention the LP folded into c_*'s (1+φ)
@@ -118,7 +119,6 @@ def simulate(pop: JobPopulation, pool, imp: Impact, plan: Plan, event: Event = E
         t = ed[f]
 
     rs, rd = np.full(n * K, np.nan), np.full(n * K, np.nan)
-    # TODO(background-util): if W is shared with serving, seed these servers with background load.
     pf = [np.full(int(W[l]), event.tau_pre) for l in range(K)]  # per-ℓ prefill servers
     ig = [np.full(int(W[l]), event.tau_in) for l in range(K)]  # per-ℓ ingest channels
     # cut-through = optimistic earliest-overlap bound: rebuild may run from egress_start, but

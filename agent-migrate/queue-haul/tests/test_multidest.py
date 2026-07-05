@@ -30,15 +30,14 @@ def _setup(n_nodes=8):
 
 
 def _homog_fleet(K, ev, mv, pop, spare_each):
-    return DestFleet(np.full(K, ev.W), np.full(K, spare_each), np.full(K, pop.mfu),
-                     np.full(K, mv.dest_prefill_util))
+    return DestFleet(np.full(K, spare_each), np.full(K, pop.mfu), np.full(K, mv.dest_prefill_util))
 
 
 # (1) K=1 reduces to the single-dest solve at rel=1e-9 ----------------------------------------
 
 def test_k1_reduces_to_single_dest():
     pop, imp = _setup()
-    ev, mv = Event(dest_nodes=48, W=16), Movement()
+    ev, mv = Event(dest_nodes=48), Movement()
     sstar = 0.4 * bind_dp(imp).sum()
     base = solve(pop, POOL, imp, sstar, ev, mv)  # fleet=None ⇒ frozen imp costs
     k1 = solve(pop, POOL, imp, sstar, ev, mv, fleet=DestFleet.from_event(ev, mv, POOL, pop))
@@ -53,9 +52,9 @@ def test_k1_reduces_to_single_dest():
 
 def test_homogeneous_split_is_cost_indifferent():
     pop, imp = _setup()
-    ev, mv = Event(dest_nodes=48, W=16), Movement()
+    ev, mv = Event(dest_nodes=48), Movement()
     K = 3
-    fl = _homog_fleet(K, ev, mv, pop, spare_each=0.4 * ev.dest_nodes / K)  # same aggregate cap as single-dest
+    fl = _homog_fleet(K, ev, mv, pop, spare_each=0.4 * ev.dest_nodes / K)  # same aggregate load/held cap as single-dest (rebuild: 3·⌊6.4⌋ vs ⌊19.2⌋)
     plan = solve(pop, POOL, imp, 0.4 * bind_dp(imp).sum(), ev, mv, fleet=fl)
     assert plan.feasible
     cR, cS, _ = move_costs(pop, fl, mv)
@@ -69,9 +68,9 @@ def test_homogeneous_split_is_cost_indifferent():
 
 def test_shed_invariant_to_routing_permutation():
     pop, imp = _setup()
-    ev, mv = Event(dest_nodes=48, W=16), Movement()
+    ev, mv = Event(dest_nodes=48), Movement()
     K = 4
-    fl = DestFleet(np.full(K, ev.W), np.linspace(6, 14, K), np.linspace(0.3, 0.5, K),
+    fl = DestFleet(np.linspace(6, 14, K), np.linspace(0.3, 0.5, K),
                    np.full(K, mv.dest_prefill_util))
     plan = solve(pop, POOL, imp, 0.4 * bind_dp(imp).sum(), ev, mv, fleet=fl)
     dp, Y = bind_dp(imp), plan.Y_R + plan.Y_S
@@ -86,11 +85,14 @@ def test_theta_egress_zero_slack_positive_binding():
     pop = generate(pool, Workload(state_mix=(1.0, 0.0, 0.0), t_mix=((1.0, 12.0, 0.2),),
                                   rate_means=(0.01, 0.01, 0.01, 0.05),
                                   cache_hit=(1.0, 1.0, 1.0, 1.0)), n_nodes=8)
-    ev, mv = Event(D=300, tau_pre=300, W=8), Movement(lambda_src=1e9, mu_in=1e13)  # pure transfer
+    ev, mv = Event(D=300, tau_pre=300), Movement(lambda_src=1e9, mu_in=1e13)  # pure transfer
     imp = compute(pop, pool, mv)
-    spare_bar = mv.lambda_src * (ev.D - ev.tau_src) / imp.b_transfer.mean() / (5 * pool.s_node)
-    slack = solve(pop, pool, imp, 1e15, ev, mv, fleet=_homog_fleet(2, ev, mv, pop, 0.5 * spare_bar))
-    binding = solve(pop, pool, imp, 1e15, ev, mv, fleet=_homog_fleet(12, ev, mv, pop, spare_bar))
+    # uplink feeds 5 spare-nodes' worth of held sessions by D: 2 dest nodes ⇒ admission binds
+    # (held < uplink), 12 dest nodes ⇒ the shared uplink binds (held > uplink > jobs shipped).
+    lam = 5 * pool.s_node * imp.b_transfer.mean() / (ev.D - ev.tau_src)
+    mv = replace(mv, lambda_src=lam)
+    slack = solve(pop, pool, imp, 1e15, ev, mv, fleet=_homog_fleet(2, ev, mv, pop, 1.0))
+    binding = solve(pop, pool, imp, 1e15, ev, mv, fleet=_homog_fleet(12, ev, mv, pop, 1.0))
     assert slack.theta_egress == pytest.approx(0.0, abs=1e-12)  # admission binds, uplink slack
     assert binding.theta_egress > 1e-12                          # Σspare exceeds uplink feed
 
@@ -99,9 +101,9 @@ def test_theta_egress_zero_slack_positive_binding():
 
 def test_des_never_exceeds_load_cap():
     pop, imp = _setup(n_nodes=8)
-    ev, mv = Event(dest_nodes=48, W=16), Movement()
+    ev, mv = Event(dest_nodes=48), Movement()
     K = 4
-    fl = DestFleet(np.full(K, ev.W), np.linspace(8, 20, K), np.linspace(0.3, 0.5, K),
+    fl = DestFleet(np.linspace(8, 20, K), np.linspace(0.3, 0.5, K),
                    np.full(K, mv.dest_prefill_util))
     plan = solve(pop, POOL, imp, 0.5 * bind_dp(imp).sum(), ev, mv, fleet=fl)
     for D in (ev.D, 0.5 * ev.D, 0.3 * ev.D):  # realized ⊆ certified ⊆ cap at every deadline
@@ -114,11 +116,11 @@ def test_des_never_exceeds_load_cap():
 
 def test_slack_plan_realized_routing_matches_certified():
     pop, _ = _setup(n_nodes=8)
-    ev = Event(dest_nodes=48, W=64, D=1e6)
+    ev = Event(dest_nodes=48, D=1e6)
     mv = Movement(lambda_src=1e12, mu_in=1e14)  # links so fast everything rebuilds well before D
     imp = compute(pop, POOL, mv)
     K = 4
-    fl = DestFleet(np.full(K, ev.W), np.linspace(8, 20, K), np.linspace(0.3, 0.5, K),
+    fl = DestFleet(np.linspace(8, 20, K), np.linspace(0.3, 0.5, K),
                    np.full(K, mv.dest_prefill_util))
     plan = solve(pop, POOL, imp, 0.5 * bind_dp(imp).sum(), ev, mv, fleet=fl)
     r = simulate(pop, POOL, imp, plan, ev, mv, fleet=fl)
