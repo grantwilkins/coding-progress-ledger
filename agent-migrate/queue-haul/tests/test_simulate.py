@@ -238,6 +238,12 @@ def test_mode_switch_pins_rebuild_start(mode):
     assert np.all(s.rebuild_done[mv] >= s.egress_done[mv] - 1e-9)  # precedence: rebuild ≥ egress done
 
 
+def test_unknown_mode_raises():
+    pop, imp = _pop()
+    with pytest.raises(ValueError, match="unknown mode"):
+        simulate(pop, POOL, imp, _plan(np.zeros(len(pop)), np.zeros(len(pop))), mode="sd")
+
+
 def test_cutthrough_never_slower_than_store_and_forward():
     pop, imp = _pop(n_nodes=8)
     event, move = Event(dest_nodes=48, W=16), Movement()

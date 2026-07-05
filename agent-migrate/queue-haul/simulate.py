@@ -92,6 +92,8 @@ def simulate(pop: JobPopulation, pool, imp: Impact, plan: Plan, event: Event = E
     # fleet=None ⇒ the K=1 single-dest fleet (uses the y_R/y_S aggregates); an explicit fleet
     # routes the (n,K) Y_R/Y_S over K clusters with per-ℓ ρ_ℓ. Shipments are flat (j,ℓ) indices:
     # job = f//K, dest ℓ = f%K. One shared egress link serializes all of them.
+    if mode not in ("sf", "cutthrough"):
+        raise ValueError(f"unknown mode {mode!r}")
     n = len(pop)
     multidest = fleet is not None
     fleet = fleet or DestFleet.from_event(event, move, pool, pop)
