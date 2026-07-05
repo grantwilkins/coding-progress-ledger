@@ -120,6 +120,7 @@ subject to:
 | load       | $\sum_j \ell_j\,y_{j\ell}\le \bar L_\ell = \text{spare}_\ell\,\rho^\star$                               | `load`                | destination stays below its knee                                      |
 | held       | $\sum_j w_j\,\tfrac{T_j}{E[T]}\,y_{j\ell}\le \bar S_\ell = \text{spare}_\ell\,S_{\text{node}}$          | `held`                | destination KV capacity (incl. cold discount and $(1+\gamma)$ uplift) |
 | floor      | pinned classes get $y=0$                                                                                | `pinned`              | optional service-level floor                                          |
+| deadline   | $y^a_{j\ell}=0$ if the session's *no-wait* completion misses $D$                                        | `deadline_infeasible` | sole link access + a free rebuild server, per the DES timeline (sf: $\max(ed,\tau)+\text{reb}$; ct: $\max(ed,\max(\tau_{\text{src}},\tau)+\text{reb})$); whole-job basis, so it also bans fractional moves the DES could split — deliberate tightening of the LP (affects the LP-vs-MILP granularity reading). Applied to **all** policies (baselines see banned actions as infinitely priced), never to feasibility audits. |
 
 $\tau_*$ are one-time ramps (egress connection setup, prefill batch-form, ingest pipeline-fill). Drop the single **egress** row and the program separates into $K$ independent single-destination dispatches — it is a **transportation LP with one global uplink knapsack**.
 

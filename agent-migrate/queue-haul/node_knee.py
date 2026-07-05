@@ -15,6 +15,7 @@ from dispatch import (
     _run,
     held_weight,
     movement_draws,
+    movement_draws_filtered,
     movement_used,
     single_movement_budgets,
     solve,
@@ -359,7 +360,7 @@ def _finish_live(pop, pool, imp, s_star, budget, draws, yR, yS, used, movable):
 def solve_live_greedy(pop: JobPopulation, pool: PoolPower, imp: Impact, s_star: float,
                       event: Event = Event(), move: Movement = Movement()) -> NodeKneeResult:
     budget = single_movement_budgets(pool, event, move)
-    draws = movement_draws(pop, pool, imp, event, move)
+    draws = movement_draws_filtered(pop, pool, imp, event, move)
     movable = _node_movable(pop, event)
     yR, yS = _finish_live(pop, pool, imp, s_star, budget, draws, np.zeros(len(pop)), np.zeros(len(pop)), set(), movable)
     return _result(pop, pool, imp, yR, yS, float(imp.c_replay @ yR + imp.c_transfer @ yS),
@@ -371,7 +372,7 @@ def solve_random_jobs(pop: JobPopulation, pool: PoolPower, imp: Impact, s_star: 
                       seed: int = 0) -> NodeKneeResult:
     rng = np.random.default_rng(seed)
     budget = single_movement_budgets(pool, event, move)
-    draws = movement_draws(pop, pool, imp, event, move)
+    draws = movement_draws_filtered(pop, pool, imp, event, move)
     yR, yS = np.zeros(len(pop)), np.zeros(len(pop))
     for j in rng.permutation(np.flatnonzero(_node_movable(pop, event))):
         if evaluate_node_expected_w(pop, pool, yR + yS) >= s_star:
@@ -388,7 +389,7 @@ def solve_random_nodes(pop: JobPopulation, pool: PoolPower, imp: Impact, s_star:
                        seed: int = 0) -> NodeKneeResult:
     node, load, cost = _source_node(pop), node_loads(pop), _job_cost(imp)
     budget = single_movement_budgets(pool, event, move)
-    draws = movement_draws(pop, pool, imp, event, move)
+    draws = movement_draws_filtered(pop, pool, imp, event, move)
     movable = _node_movable(pop, event)
     yR, yS, used = np.zeros(len(pop)), np.zeros(len(pop)), set()
     for i in np.random.default_rng(seed).permutation(len(load)):
@@ -416,7 +417,7 @@ def solve_node_drain_greedy(pop: JobPopulation, pool: PoolPower, imp: Impact, s_
                             event: Event = Event(), move: Movement = Movement()) -> NodeKneeResult:
     node, load, cost = _source_node(pop), node_loads(pop), _job_cost(imp)
     budget = single_movement_budgets(pool, event, move)
-    draws = movement_draws(pop, pool, imp, event, move)
+    draws = movement_draws_filtered(pop, pool, imp, event, move)
     movable = _node_movable(pop, event)
     yR, yS, used = np.zeros(len(pop)), np.zeros(len(pop)), set()
     bundles = []
@@ -452,7 +453,7 @@ def solve_exact_oracle(pop: JobPopulation, pool: PoolPower, imp: Impact, s_star:
     if len(pop) > max_jobs:
         raise ValueError(f"exact oracle is limited to {max_jobs} jobs")
     budget0 = single_movement_budgets(pool, event, move)
-    draws = movement_draws(pop, pool, imp, event, move)
+    draws = movement_draws_filtered(pop, pool, imp, event, move)
     choices = ["NRS" if m else "N" for m in _node_movable(pop, event)]
     best, best_short = None, None
     for acts in product(*choices):

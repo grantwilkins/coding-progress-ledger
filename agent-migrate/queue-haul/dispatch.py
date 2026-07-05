@@ -166,6 +166,39 @@ def movement_draws(pop: JobPopulation, pool: PoolPower, imp: Impact, event: Even
     }
 
 
+def deadline_infeasible(pop, imp, fleet, event, move, mode="sf"):
+    """(n,K) per-action bans: the session misses D even with the link and a rebuild server
+    entirely to itself. Mirrors the single-session DES timeline (sf: rebuild after full byte
+    arrival; cutthrough: overlapped, capped by arrival). Whole-job (y=1) basis, so it also
+    prunes fractional moves the LP could otherwise split — a deliberate tightening."""
+    if mode not in ("sf", "cutthrough"):
+        raise ValueError(f"unknown mode {mode!r}")
+    edR = event.tau_src + imp.b_replay[:, None] / move.lambda_src
+    edS = event.tau_src + imp.b_transfer[:, None] / move.lambda_src
+    reb = move_costs(pop, fleet, move)[2]
+    ing = np.broadcast_to(imp.b_transfer[:, None] / move.mu_in, reb.shape)
+    if mode == "cutthrough":
+        doneR = np.maximum(edR, max(event.tau_src, event.tau_pre) + reb)
+        doneS = np.maximum(edS, max(event.tau_src, event.tau_in) + ing)
+    else:
+        doneR = np.maximum(edR, event.tau_pre) + reb
+        doneS = np.maximum(edS, event.tau_in) + ing
+    return doneR > event.D, doneS > event.D
+
+
+def movement_draws_filtered(pop, pool, imp, event, move, mode="sf"):
+    """Baseline-facing draws with deadline-banned actions priced infinite, so every
+    budget check (first-fit, node-knee bundles, exact oracle) rejects them for free.
+    Feasibility audits/diagnostics keep the raw movement_draws — the ban is planner
+    hygiene, not a physical budget."""
+    draws = movement_draws(pop, pool, imp, event, move)
+    fleet = DestFleet.from_event(event, move, pool, pop)
+    badR, badS = deadline_infeasible(pop, imp, fleet, event, move, mode)
+    draws["R"]["egress"] = np.where(badR[:, 0], np.inf, draws["R"]["egress"])
+    draws["S"]["egress"] = np.where(badS[:, 0], np.inf, draws["S"]["egress"])
+    return draws
+
+
 def movement_used(draws: dict, y_R, y_S) -> dict:
     y_R, y_S = np.asarray(y_R, float), np.asarray(y_S, float)
     resources = set(draws["R"]) | set(draws["S"])
@@ -220,7 +253,7 @@ def _plan2(YR, YS, dp, imp, cost, method, s_star, feasible, duals) -> Plan:
     )
 
 
-def _build(pop, pool, imp, fleet, event, move, integer, kappa=1.0):
+def _build(pop, pool, imp, fleet, event, move, integer, kappa=1.0, mode="sf"):
     """Variables Y_R, Y_S (n,K) + pairing, the ONE shared egress row, and the per-ℓ movement
     blocks (everything but shed). Returns the dual-carrying constraint handles too."""
     if np.any(pop.ell > pool.rho_star): raise ValueError("job ell exceeds rho_star; split the job or lower its offered load")
@@ -249,6 +282,10 @@ def _build(pop, pool, imp, fleet, event, move, integer, kappa=1.0):
         pin = np.isin(pop.job_type, event.pinned)
         if pin.any():
             cons += [YR[pin] == 0, YS[pin] == 0]
+    badR, badS = deadline_infeasible(pop, imp, fleet, event, move, mode)
+    for bad, V in ((badR, YR), (badS, YS)):  # nonneg/boolean vars ⇒ zero-sum pins elementwise
+        if bad.any():
+            cons.append(cp.sum(V[np.nonzero(bad)]) == 0)
     return YR, YS, cons, {
         "egress": egress,
         "prefill": prefill,
@@ -277,14 +314,16 @@ def solve(
     integer: bool = False,
     fleet: DestFleet = None,
     kappa: float = 1.0,
+    mode: str = "sf",
 ) -> Plan:
     """Primary solve; on infeasibility re-solve to max shed and report shortfall. fleet=None
     ⇒ a single destination from Event/Movement using imp's frozen costs (the original program);
-    an explicit fleet recomputes per-ℓ costs (each dest's ρ_ℓ/φ_pre,ℓ)."""
+    an explicit fleet recomputes per-ℓ costs (each dest's ρ_ℓ/φ_pre,ℓ). mode sets the
+    deadline pre-filter's timeline (sf bans a superset of cutthrough)."""
     multidest = fleet is not None
     fleet = fleet or DestFleet.from_event(event, move, pool, pop)
     YR, YS, cons, handles = _build(
-        pop, pool, imp, fleet, event, move, integer, kappa
+        pop, pool, imp, fleet, event, move, integer, kappa, mode
     )
     dp = bind_dp(imp)
     method, solver = (
@@ -383,7 +422,7 @@ def _first_fit(pop, pool, imp, s_star, event, move, order, prefer, method) -> Pl
     n = len(pop)
     dp = bind_dp(imp)
     budget = single_movement_budgets(pool, event, move)
-    draws = movement_draws(pop, pool, imp, event, move)
+    draws = movement_draws_filtered(pop, pool, imp, event, move)
     draw = {a: list(draws[a].items()) for a in ("R", "S")}
     yR, yS = np.zeros(n), np.zeros(n)
     cum = 0.0

@@ -22,8 +22,10 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from dispatch import (Event, Plan, bind_dp, dispatch_diagnostics, greedy, movement_draws,
-                      movement_used, random_dispatch, single_movement_budgets, solve)
+from dispatch import (DestFleet, Event, Plan, bind_dp, deadline_infeasible, dispatch_diagnostics,
+                      greedy, movement_draws, movement_used, random_dispatch,
+                      single_movement_budgets, solve)
+from simulate import simulate
 from impact import Impact, Movement, compute
 from instance import JobPopulation, Workload, _mean_T, class_workload, generate
 from power import PoolPower, rho_replay
@@ -259,8 +261,9 @@ def test_random_respects_budgets_and_bounded_by_lp():
 def test_kappa_derates_planner_rebuild_rows_only():
     # Pure-transfer, ingest-bound max-shed instance: at kappa=1 the plan fills the physical
     # ingest budget; at kappa=0.5 it must stay inside half of it, and max shed can only drop.
+    # D is wide enough that single sessions pass the deadline filter; the AGGREGATE row binds.
     pop, imp = _pop(n_nodes=4)
-    event = Event(D=8, dest_nodes=8, tau_pre=8.0)  # prefill window 0 ⇒ transfers only
+    event = Event(D=40, dest_nodes=8, tau_pre=40.0)  # prefill window 0 ⇒ transfers only
     move = replace(Movement(), lambda_src=1e18, mu_in=1e9)  # link slack, ingest binds
     S = 1e15
     budgets = single_movement_budgets(POOL, event, move)  # physical (kappa=1) budgets
@@ -273,6 +276,38 @@ def test_kappa_derates_planner_rebuild_rows_only():
     assert cut.shed_guaranteed <= full.shed_guaranteed + 1e-6  # tighter RHS never gains shed
     with pytest.raises(ValueError, match="kappa"):
         solve(pop, POOL, imp, S, event, move, kappa=0.0)
+
+
+@pytest.mark.parametrize("mode", ["sf", "cutthrough"])
+def test_deadline_filter_matches_single_session_des(mode):
+    # The filter's defining property, both directions: a session that passes completes by D
+    # when played ALONE through the DES in that mode; a banned session played alone misses D.
+    pop, imp = _pop(n_nodes=4)
+    event = Event(D=18, dest_nodes=8)
+    move = replace(Movement(), mu_in=1e9)  # slow ingest ⇒ long-context transfers get banned
+    badR, badS = deadline_infeasible(pop, imp, DestFleet.from_event(event, move, POOL, pop),
+                                     event, move, mode)
+    assert badR[:, 0].any() and badS[:, 0].any() and (~badS[:, 0]).any()  # non-vacuous both ways
+    z = np.zeros(len(pop))
+    for j in range(len(pop)):
+        for bad, (yR, yS) in ((badR[j, 0], (1.0, 0.0)), (badS[j, 0], (0.0, 1.0))):
+            one = z.copy(); one[j] = 1.0
+            plan = Plan(yR * one, yS * one, 0.0, 0.0, 0.0, True, 0.0, "load", "test")
+            s = simulate(pop, POOL, imp, plan, event, move, mode=mode, discipline="fifo")
+            assert (s.rebuild_done[j] > event.D) == bad
+
+
+def test_planner_and_greedy_never_pick_deadline_banned_sessions():
+    pop, imp = _pop(n_nodes=4)
+    event = Event(D=18, dest_nodes=8)
+    move = replace(Movement(), mu_in=1e9)
+    badR, badS = deadline_infeasible(pop, imp, DestFleet.from_event(event, move, POOL, pop),
+                                     event, move)
+    for plan in (solve(pop, POOL, imp, 1e15, event, move),
+                 greedy(pop, POOL, imp, 1e15, event, move),
+                 random_dispatch(pop, POOL, imp, 1e15, event, move)):
+        assert np.all(plan.y_R[badR[:, 0]] < 1e-9)
+        assert np.all(plan.y_S[badS[:, 0]] < 1e-9)
 
 
 def test_lp_lower_bounds_milp():
