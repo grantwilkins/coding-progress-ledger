@@ -81,4 +81,4 @@ def test_runbook_contains_decode_context_sweep_and_mixed_grid():
     assert "--prompt-len 256 --output-len 512" in text
     assert "--prompt-len 4096 --output-len 512" in text
     assert "mixed_grid.py" in text
-    assert "--n-points 16 --seed 0 --prefill-min 256 --prefill-max 16384 --output-len 512" in text
+    assert "--n-points 16 --seed 0 --prefill-min 256 --prefill-max 16384 --mixed-output-len 512" in text

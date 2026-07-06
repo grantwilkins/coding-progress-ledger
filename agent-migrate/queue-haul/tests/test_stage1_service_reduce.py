@@ -92,3 +92,20 @@ def test_malformed_bundle_hard_fails(tmp_path: Path):
 
     with pytest.raises(ValueError):
         r.read_rows(bundle)
+
+
+def test_service_scale_rows_normalize_rho_and_best_decode_G():
+    rows = [
+        {"probe_type": "prefill_staircase", "input_len": 100, "concurrency": 1, "input_tps": 50.0, "output_tps": 0.0, "power_mean_w": 10.0},
+        {"probe_type": "prefill_staircase", "input_len": 200, "concurrency": 1, "input_tps": 25.0, "output_tps": 0.0, "power_mean_w": 12.0},
+        {"probe_type": "decode_staircase", "input_len": 100, "concurrency": 1, "input_tps": 0.0, "output_tps": 100.0, "power_mean_w": 20.0},
+        {"probe_type": "decode_staircase", "input_len": 100, "concurrency": 2, "input_tps": 0.0, "output_tps": 150.0, "power_mean_w": 22.0},
+        {"probe_type": "decode_staircase", "input_len": 200, "concurrency": 1, "input_tps": 0.0, "output_tps": 75.0, "power_mean_w": 21.0},
+    ]
+
+    out = r.service_scale_rows(rows)
+
+    assert [(x["metric"], x["input_len"]) for x in out] == [("rho", 100), ("rho", 200), ("G", 100), ("G", 200)]
+    assert [x["throughput_tps"] for x in out] == pytest.approx([50.0, 25.0, 150.0, 75.0])
+    assert [x["scale_vs_short"] for x in out] == pytest.approx([1.0, 0.5, 1.0, 0.5])
+    assert out[2]["concurrency"] == 2

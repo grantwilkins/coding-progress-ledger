@@ -120,7 +120,7 @@ def mixed_cmd(args, out_root: Path, prefill_range: tuple[int, int]) -> str:
             prefill_range[0],
             "--prefill-max",
             prefill_range[1],
-            "--output-len",
+            "--mixed-output-len",
             args.mixed_output_len,
         ]
     )

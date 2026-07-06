@@ -140,6 +140,39 @@ def write_csv(path: Path, rows: list[dict]) -> None:
         w.writerows(rows)
 
 
+def _scale_rows(data: list[dict], metric: str, throughput_key: str) -> list[dict]:
+    data = sorted(data, key=lambda r: (r["input_len"], r["concurrency"]))
+    if not data:
+        raise ValueError(f"missing {metric} rows")
+    base = float(data[0][throughput_key])
+    if base <= 0:
+        raise ValueError(f"{metric} baseline throughput must be positive")
+    return [
+        {
+            "metric": metric,
+            "input_len": r["input_len"],
+            "concurrency": r["concurrency"],
+            "throughput_tps": r[throughput_key],
+            "scale_vs_short": float(r[throughput_key]) / base,
+            "power_mean_w": r["power_mean_w"],
+        }
+        for r in data
+    ]
+
+
+def service_scale_rows(rows: list[dict]) -> list[dict]:
+    prefill = [r for r in rows if r["probe_type"] == "prefill_staircase"]
+    decode_best = []
+    for T in sorted({r["input_len"] for r in rows if r["probe_type"] == "decode_staircase"}):
+        levels = [r for r in rows if r["probe_type"] == "decode_staircase" and r["input_len"] == T]
+        decode_best.append(max(levels, key=lambda r: r["output_tps"]))
+    return _scale_rows(prefill, "rho", "input_tps") + _scale_rows(decode_best, "G", "output_tps")
+
+
+def write_service_scale(rows: list[dict], out_stem: Path) -> None:
+    data = service_scale_rows(rows)
+    write_csv(out_stem.with_name(out_stem.name + "_service_scale.csv"), data)
+
 def write_prefill(rows: list[dict], out_stem: Path) -> None:
     data = sorted([r for r in rows if r["probe_type"] == "prefill_staircase"], key=lambda r: r["input_len"])
     if not data:
@@ -207,6 +240,7 @@ def main(argv: list[str] | None = None) -> None:
     write_prefill(rows, args.out_stem)
     write_decode(rows, args.out_stem)
     write_mixed(rows, args.out_stem)
+    write_service_scale(rows, args.out_stem)
     print(args.out_stem)
 
 

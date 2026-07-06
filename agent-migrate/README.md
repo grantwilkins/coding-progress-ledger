@@ -111,3 +111,4 @@ The reducer writes:
 - `queue-haul/outputs/stage1_gpt_oss_20b_a100_tp1_prefill_rho.{csv,pdf,png}`
 - `queue-haul/outputs/stage1_gpt_oss_20b_a100_tp1_decode_context.{csv,pdf,png}`
 - `queue-haul/outputs/stage1_gpt_oss_20b_a100_tp1_mixed_surface.{csv,pdf,png}`
+- `queue-haul/outputs/stage1_gpt_oss_20b_a100_tp1_service_scale.csv`
