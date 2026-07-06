@@ -18,6 +18,9 @@ CAP_FP8_GB = 365.0  # 640 - 235 weights - 40
 
 def congestion(u: float) -> float:
     """M/M/1 queue-wait multiplier φ(u)=u/(1−u) at utilization u∈[0,1)."""
+    u = np.asarray(u, dtype=float)
+    if np.any((u < 0) | (u >= 1)):
+        raise ValueError("utilization must be in [0, 1)")
     return u / (1 - u)
 
 # Prefill roofline (formulation.md §6). C uses QUERY heads (compute scales with H_q);

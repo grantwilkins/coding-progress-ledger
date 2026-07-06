@@ -114,15 +114,16 @@ subject to:
 | ---------- | ------------------------------------------------------------------------------------------------------- | --------------------- | --------------------------------------------------------------------- |
 | shed       | $\sum_{j,\ell} y_{j\ell}\,\Delta P^{\text{bind}}_j \ge S^\star$                                         | `dp @ total ≥ s_star` | meet the grid ask                                                     |
 | pairing    | $\sum_\ell y_{j\ell}\le 1$                                                                              | `sum(Y,axis=1)≤1`     | each job moves **at most once**, across all sites                     |
-| **egress** | $\sum_{j,\ell} b_j(R)\,y^R_{j\ell} + b_j(S)\,y^S_{j\ell} \le \lambda_{\text{src}}(D-\tau_{\text{src}})$ | `egress`              | **ONE shared uplink** — the sole multi-destination coupling           |
-| prefill    | $\sum_j \tfrac{T_j}{\rho_\ell(T_j/2)}\,y^R_{j\ell}\le \lfloor\text{spare}_\ell\rfloor(D-\tau_{\text{pre}})$ | per-$\ell$        | rebuild replays on the $\lfloor\text{spare}_\ell\rfloor$ whole spare nodes by $D$ |
-| ingest     | $\sum_j \eta T_j\,y^S_{j\ell}\le \lfloor\text{spare}_\ell\rfloor\,\mu_{\text{in}}(D-\tau_{\text{in}})$  | per-$\ell$            | land KV on the same $\lfloor\text{spare}_\ell\rfloor$ spare nodes by $D$ |
+| **egress** | $\sum_{j,\ell} b_j(R)\,y^R_{j\ell} + b_j(S)\,y^S_{j\ell} \le \lambda_{\text{src}}\max(0,D-\tau_{\text{src}})$ | `egress`              | **ONE shared uplink** — the sole multi-destination coupling           |
+| prefill    | $\sum_j \tfrac{T_j}{\rho_\ell(T_j/2)}\,y^R_{j\ell}\le \lfloor\text{spare}_\ell\rfloor\max(0,D-\tau_{\text{pre}})$ | per-$\ell$        | rebuild replays on the $\lfloor\text{spare}_\ell\rfloor$ whole spare nodes by $D$ |
+| ingest     | $\sum_j \eta T_j\,y^S_{j\ell}\le \lfloor\text{spare}_\ell\rfloor\,\mu_{\text{in}}\max(0,D-\tau_{\text{in}})$  | per-$\ell$            | land KV on the same $\lfloor\text{spare}_\ell\rfloor$ spare nodes by $D$ |
 | load       | $\sum_j \ell_j\,y_{j\ell}\le \bar L_\ell = \text{spare}_\ell\,\rho^\star$                               | `load`                | destination stays below its knee                                      |
 | held       | $\sum_j w_j\,\tfrac{T_j}{E[T]}\,y_{j\ell}\le \bar S_\ell = \text{spare}_\ell\,S_{\text{node}}$          | `held`                | destination KV capacity (incl. cold discount and $(1+\gamma)$ uplift) |
 | floor      | pinned classes get $y=0$                                                                                | `pinned`              | optional service-level floor                                          |
 | deadline   | $y^a_{j\ell}=0$ if the session's *no-wait* completion misses $D$                                        | `deadline_infeasible` | sole link access + a free rebuild server, per the DES timeline (sf: $\max(ed,\tau)+\text{reb}$; ct: $\max(ed,\max(\tau_{\text{src}},\tau)+\text{reb})$); whole-job basis, so it also bans fractional moves the DES could split — deliberate tightening of the LP (affects the LP-vs-MILP granularity reading). Applied to **all** policies (baselines see banned actions as infinitely priced), never to feasibility audits. |
 
 $\tau_*$ are one-time ramps (egress connection setup, prefill batch-form, ingest pipeline-fill). Drop the single **egress** row and the program separates into $K$ independent single-destination dispatches — it is a **transportation LP with one global uplink knapsack**.
+If $D$ is before a stage ramp, that stage has zero capacity rather than a negative budget.
 
 **No dedicated rebuild hardware.** Rebuild runs on the destination's spare pool ($\lfloor\text{spare}_\ell\rfloor$ whole nodes, the same pool that backs the load/held rows) — that is what the testbed physically is. Two acknowledged approximations, both pending Track 1 calibration: (a) prefill and ingest on a shared node are budgeted as overlapping (compute-bound vs copy-engine-bound; partially relaxed by $\alpha_{\text{in}}$ below); (b) sessions that finish rebuilding inside $[0,D]$ start consuming spare serving capacity, and neither the rows above nor the DES debit rebuild capacity for it. Note the removal of the dedicated pool *raises* rebuild capacity at the center parameters (8 dedicated servers → $\lfloor 0.4\cdot 32\rfloor = 12$ shared nodes); the planner-side cushion $\kappa$ (a `solve(..., kappa=)` derate on the prefill/ingest RHS only — never applied to the DES, diagnostics, or baselines) is the lever that covers both approximations.
 
@@ -138,7 +139,7 @@ bound, because it depends on autoscaler/node-drain behavior.
 
 **Duals (shadow prices).** The LP returns $\theta_{\text{egress}}$ (watts per uplink byte — the value of the shared bottleneck) and $\theta_{\text{admit},\ell}$ = load-dual + held-dual per site (value of destination admission headroom) — the routing prices that say where the next watt of shed should go.
 
-**Reported disruption.** The solver minimizes aggregate session downtime. Plots report `cost / S*` in **seconds per certified kW** so comparisons are not driven by a larger requested shed or a larger synthetic population.
+**Reported disruption.** The solver minimizes aggregate session downtime. Additive-dispatch diagnostics can report seconds per certified kW; current node-knee plots report `cost / S*` in seconds per requested modeled node-expected kW so comparisons are not driven by overshoot or population size.
 
 **Baselines (`greedy`, `random_dispatch`).** Both are myopic integer first-fit policies drawing down the *same* five movement budgets:
 - **greedy** — decentralized **bang-per-buck**: jobs are considered best-deal-first by $\min(c_R,c_S)/\Delta P$ (seconds of downtime per watt). Each job tries its cheaper action, then the alternate, and moves only if the whole job fits. It may overshoot $S^\star$ by one job.
@@ -163,7 +164,7 @@ $$r_i=\sum_{j\in i}\ell_j y_j,\qquad F_i(r_i)=P(L_i)-P(L_i-r_i).$$
 For the ramp-then-plateau curve, $F_i$ is convex in removed load: concentrating removals can become more valuable once a node crosses the power knee. The exact target $\sum_iF_i(r_i)\ge S^\star$ is nonconvex, so `node_knee.py` keeps it out of the canonical solver and provides compact exploration methods:
 
 - sequential tangent LPs using global lower bounds of $F_i$,
-- active-knee LP relaxation and MILP candidates that force selected nodes below the power knee, keep unselected above-knee nodes in the plateau region, and use the exact affine power expression inside each fixed region,
+- active-knee LP relaxation and MILP subproblems that exhaustively enumerate small active-node regions, force selected nodes below the power knee, keep unselected above-knee nodes in the plateau region, and use the exact affine power expression inside each fixed region,
 - live and node-drain greedy baselines,
 - a tiny exact enumeration oracle for hand-checkable cases.
 

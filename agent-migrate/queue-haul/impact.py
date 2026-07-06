@@ -29,6 +29,16 @@ class Movement:
     # KV-offloading blog 2026-01) / worse for sync loading; assumes async + uncompressed KV
     # (see formulation.md). Track 1 measures the real value.
 
+    def __post_init__(self):
+        if self.lambda_src <= 0:
+            raise ValueError("lambda_src must be positive")
+        if self.mu_in <= 0:
+            raise ValueError("mu_in must be positive")
+        for name in ("dest_prefill_util", "dest_ingest_util", "alpha_in"):
+            v = getattr(self, name)
+            if not 0 <= v < 1:
+                raise ValueError(f"{name} must be in [0, 1)")
+
 
 @dataclass(frozen=True)
 class Impact:

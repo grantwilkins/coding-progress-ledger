@@ -41,14 +41,21 @@ def run_sweep(kappas=KAPPAS, deadlines=DEADLINES):
             sim = simulate(pop, pool, imp, plan, event, MOVE, MODE, ORDERING)
             m = execution_realization_metrics(pop, pool, imp, plan, sim, event.D)
             movers = int((plan.y > 1e-9).sum())
+            selected = m["selected_node_expected_w"]
+            rebuild = m["rebuild_realized_node_expected_w"]
+            misses = movers - sim.reconstruction_success_count
             rows.append({
                 "deadline_s": float(D), "kappa": float(kappa), "mode": MODE, "ordering": ORDERING,
                 "target_basis": "full_node_expected", "target_kw": target / kW,
                 "jobs": len(pop), "movers": movers, "cost_s": res.cost,
-                "selected_node_kw": m["selected_node_expected_w"] / kW,
-                "rebuild_node_kw": m["rebuild_realized_node_expected_w"] / kW,
-                "rebuild_over_target": m["rebuild_realized_node_expected_w"] / target,
-                "miss_frac": 1.0 - sim.reconstruction_success_count / movers if movers else 0.0,
+                "selected_hit": selected >= target - 1e-6 * max(target, 1.0),
+                "rebuild_hit": rebuild >= target - 1e-6 * max(target, 1.0),
+                "planner_shortfall_w": max(0.0, target - selected),
+                "deadline_miss_count": misses,
+                "selected_node_kw": selected / kW,
+                "rebuild_node_kw": rebuild / kW,
+                "rebuild_over_target": rebuild / target,
+                "miss_frac": misses / movers if movers else 0.0,
             })
     return target / kW, rows
 

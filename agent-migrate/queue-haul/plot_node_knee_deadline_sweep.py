@@ -9,6 +9,7 @@ power on the same source placement.
 from __future__ import annotations
 
 import os
+import csv
 from dataclasses import replace
 
 import matplotlib
@@ -58,7 +59,8 @@ TARGET_FRAC = 0.45  # of full node-expected removable power — the one basis al
 def run_sweep(deadlines=DEADLINES):
     pool, pop = population()
     imp = compute(pop, pool)
-    target = TARGET_FRAC * evaluate_node_expected_w(pop, pool, np.ones(len(pop)))
+    full_node = evaluate_node_expected_w(pop, pool, np.ones(len(pop)))
+    target = TARGET_FRAC * full_node
     methods = (
         ("additive LP", lambda ev: additive_result(pop, pool, imp, target, ev), "0.45"),
         ("active-knee LP relaxation", lambda ev: solve_active_knee_lp(pop, pool, imp, target, ev, MOVE), "tab:green"),
@@ -70,15 +72,26 @@ def run_sweep(deadlines=DEADLINES):
     for D in deadlines:
         for name, fn, color in methods:
             if D <= STARTUP:
-                rows.append({"deadline": D, "method": name, "color": color, "node_kw": 0.0,
-                             "active_kw": 0.0, "cost_s": np.nan, "hit": False})
+                rows.append({"deadline": D, "method": name, "color": color,
+                             "target_basis": "full_node_expected", "target_frac": TARGET_FRAC,
+                             "target_kw": target / kW, "full_node_kw": full_node / kW,
+                             "node_kw": 0.0, "active_kw": 0.0, "cost_s": np.nan, "hit": False})
                 continue
             r = fn(replace(BASE_EVENT, D=float(D)))
             rows.append({"deadline": D, "method": name, "color": color,
+                         "target_basis": "full_node_expected", "target_frac": TARGET_FRAC,
+                         "target_kw": target / kW, "full_node_kw": full_node / kW,
                          "node_kw": r.node_expected_w / kW, "active_kw": r.active_floor_w / kW,
                          "cost_s": r.cost if r.true_expected_feasible else np.nan,
                          "hit": r.true_expected_feasible})
     return pop, target / kW, rows
+
+
+def write_csv(rows, path):
+    with open(path, "w", newline="") as f:
+        w = csv.DictWriter(f, fieldnames=rows[0].keys())
+        w.writeheader()
+        w.writerows(rows)
 
 
 def main():
@@ -106,6 +119,7 @@ def main():
     ax1.legend(fontsize=8)
     fig.tight_layout()
     os.makedirs("outputs", exist_ok=True)
+    write_csv(rows, "outputs/node_knee_deadline_sweep.csv")
     for ext in ("pdf", "png"):
         fig.savefig(f"outputs/node_knee_deadline_sweep.{ext}", dpi=150)
 

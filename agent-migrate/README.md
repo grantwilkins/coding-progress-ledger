@@ -29,15 +29,17 @@ uv run python plot_node_knee_deadline_sweep.py
 uv run python plot_node_knee_execution_validation.py
 uv run python plot_node_knee_agentic_des_sweep.py
 uv run python plot_node_knee_scale_workload_sweep.py
+uv run python plot_node_knee_kappa_sweep.py
 ```
 
 Canonical outputs are:
 
 - `outputs/node_knee_target_sweep.{csv,pdf,png}`
-- `outputs/node_knee_deadline_sweep.{pdf,png}`
+- `outputs/node_knee_deadline_sweep.{csv,pdf,png}`
 - `outputs/node_knee_execution_validation.{csv,pdf,png}`
 - `outputs/node_knee_fixed_plan_replay.{csv,pdf,png}`
 - `outputs/node_knee_agentic_des_sweep.{csv,pdf,png}`
 - `outputs/node_knee_scale_workload_sweep.{csv,pdf,png}`
+- `outputs/node_knee_kappa_sweep.{csv,pdf,png}`
 
 See `queue-haul/FINDINGS.md` for the current result summary.

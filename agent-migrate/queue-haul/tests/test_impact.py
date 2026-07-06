@@ -10,6 +10,7 @@ Plausible wrong implementations:
 - Count idle/cold migration resource time as user-visible downtime.
 - Count held KV as certified watts even when the session has no active work.
 - Use normalized ell_pre/ell_dec as token rates, or omit one token-work phase.
+- Accept invalid queue utilizations or bandwidths that make costs negative.
 """
 
 import sys
@@ -133,6 +134,21 @@ def test_congestion_asymmetry_is_independent():
     assert np.all(hi_pre.c_replay > base.c_replay) and np.allclose(
         hi_pre.c_transfer, base.c_transfer
     )
+
+
+def test_movement_parameters_hard_fail_outside_physical_domain():
+    with pytest.raises(ValueError, match="utilization"):
+        congestion(1.0)
+    with pytest.raises(ValueError, match="dest_prefill_util"):
+        Movement(dest_prefill_util=1.2)
+    with pytest.raises(ValueError, match="dest_ingest_util"):
+        Movement(dest_ingest_util=-0.1)
+    with pytest.raises(ValueError, match="alpha_in"):
+        Movement(alpha_in=1.0)
+    with pytest.raises(ValueError, match="lambda_src"):
+        Movement(lambda_src=0.0)
+    with pytest.raises(ValueError, match="mu_in"):
+        Movement(mu_in=0.0)
 
 
 def test_egress_bytes():

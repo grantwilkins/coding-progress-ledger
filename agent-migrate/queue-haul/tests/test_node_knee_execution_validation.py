@@ -38,9 +38,9 @@ def _pop():
 
 
 def _imp():
-    z = np.zeros(3)
     dp = np.array([10.0, 20.0, 30.0])
-    return Impact(z, dp, dp, dp, z, z, z, z, z, "load")
+    z = np.zeros(3)
+    return Impact(dp, dp, dp, dp, z, z, z, z, z, "load")
 
 
 def test_execution_realization_metrics_use_completion_subsets():

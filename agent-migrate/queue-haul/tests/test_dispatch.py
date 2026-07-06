@@ -9,6 +9,7 @@ Plausible wrong implementations:
 - Check only aggregate load, compare against 1.0, or silently clamp an oversized job.
 - Treat an unreachable tight-deadline target as a hard solver failure instead of
   returning the legal max-shed plan.
+- Turn an unavailable unused stage into a negative capacity row.
 - Split the marginal greedy job fractionally instead of taking whole jobs.
 - Report diagnostic ratios from consumed resources instead of LP row budgets.
 """
@@ -47,9 +48,9 @@ def _violations(plan: Plan, pop, imp, event, move, pool=POOL):
     held_w = (pop.T / pool.mean_context_tokens) * np.where(pop.state == "cold", 1 / (1 + pool.gamma), 1.0)
     return [
         1.0 - (yR + yS).max(),  # pairing y_R+y_S ≤ 1
-        move.lambda_src * (event.D - event.tau_src) - (imp.b_replay @ yR + imp.b_transfer @ yS),
-        np.floor(event.spare_frac * event.dest_nodes) * (event.D - event.tau_pre) - reb @ yR,
-        np.floor(event.spare_frac * event.dest_nodes) * move.mu_in * (event.D - event.tau_in) - imp.b_transfer @ yS,
+        move.lambda_src * max(0.0, event.D - event.tau_src) - (imp.b_replay @ yR + imp.b_transfer @ yS),
+        np.floor(event.spare_frac * event.dest_nodes) * max(0.0, event.D - event.tau_pre) - reb @ yR,
+        np.floor(event.spare_frac * event.dest_nodes) * move.mu_in * max(0.0, event.D - event.tau_in) - imp.b_transfer @ yS,
         event.l_dest(pool) - pop.ell @ y,
         event.s_dest(pool) - held_w @ y,
     ]
@@ -116,6 +117,18 @@ def test_tight_deadline_returns_max_shed_instead_of_crashing():
     loose = solve(pop, pool, imp, S, Event(D=30, dest_nodes=48), Movement())
     assert not tight.feasible and tight.shed_guaranteed > 0
     assert tight.shed_guaranteed <= loose.shed_guaranteed + 1e-6
+
+
+def test_unused_stage_before_ramp_has_zero_not_negative_capacity():
+    wl = class_workload("ordinary_chat", state_mix=(1.0, 0.0, 0.0), cache_hit=(1.0, 1.0, 1.0, 1.0))
+    pool = replace(POOL, mean_context_tokens=_mean_T(wl))
+    pop = generate(pool, wl, n_nodes=2)
+    imp = compute(pop, pool)
+    event = Event(D=4, dest_nodes=48, tau_src=0.0, tau_pre=5.0, tau_in=0.0)
+    plan = solve(pop, pool, imp, 0.1 * bind_dp(imp).sum(), event, SLACK_M)
+    assert plan.shed_guaranteed > 0
+    assert np.all(plan.y_R == 0.0)
+    assert min(_violations(plan, pop, imp, event, SLACK_M, pool)) >= -1e-6
 
 
 def test_integer_greedy_overshoots_off_boundary_and_lp_lower_bounds():

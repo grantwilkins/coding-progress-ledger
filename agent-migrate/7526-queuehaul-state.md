@@ -1,4 +1,4 @@
-# Queue-Haul State - 2026-07-05
+# Queue-Haul State - 2026-07-06
 
 ## Status
 
@@ -135,7 +135,7 @@ removed_i = sum_{j on node i} ell_j * moved_j
 node shed = sum_i P(L_i) - P(L_i - removed_i)
 ```
 
-The implementation enumerates active source-node knee regions and solves fixed-region LP/MILP subproblems.
+The implementation exhaustively enumerates active source-node knee regions for small source-node counts and solves fixed-region LP/MILP subproblems. It hard fails above the exhaustive cap rather than silently using a heuristic.
 
 - LP relaxation: fractional sessions allowed.
 - MILP: whole sessions only.
@@ -203,6 +203,7 @@ It updates residual source-node load as jobs are ordered, so the value of finish
 - `queue-haul/plot_node_knee_execution_validation.py`: selected vs egress vs rebuild validation.
 - `queue-haul/plot_node_knee_agentic_des_sweep.py`: agentic requested-shed DES disruption plot.
 - `queue-haul/plot_node_knee_scale_workload_sweep.py`: workload and source-node scale sweep.
+- `queue-haul/plot_node_knee_kappa_sweep.py`: planner rebuild-cushion sensitivity.
 
 ## Current Figures
 
@@ -214,6 +215,7 @@ Canonical outputs are in `queue-haul/outputs/`:
 - `node_knee_fixed_plan_replay.*`
 - `node_knee_agentic_des_sweep.*`
 - `node_knee_scale_workload_sweep.*`
+- `node_knee_kappa_sweep.*`
 
 ## Main Results
 
@@ -247,11 +249,11 @@ Interpretation: agentic workloads are the stress case. Additive LP can move acti
 Agentic fixed-target recomputation:
 
 ```text
-target = 6.253 kW
-active-knee LP relaxation first hit: 10s, 24.5 s/kW
-active-knee MILP first hit:          10s, 24.0 s/kW
-live greedy first hit:               12s, 35.1 s/kW
-random jobs first hit:               16s, 59.2 s/kW
+target = 9.213 kW, 45% of full node-expected removable power
+active-knee LP relaxation first hit: 45s, 27.9 s/kW requested
+active-knee MILP first hit:          45s, 28.5 s/kW requested
+live greedy first hit:               45s, 36.0 s/kW requested
+random jobs first hit:               45s, 54.2 s/kW requested
 additive LP:                         never hits
 ```
 
@@ -263,18 +265,18 @@ For active-knee plans replayed through DES:
 
 ```text
 operational re-solve, 45% full-node target:
-  active-knee MILP selected hit: 14s
-  active-knee MILP egress hit:   14s
+  active-knee MILP selected hit: 45s
+  active-knee MILP egress hit:   45s
   active-knee MILP rebuild hit:  45s
 
-  active-knee LP selected hit:   14s
-  active-knee LP egress hit:     14s
-  active-knee LP rebuild hit:    184.1s
+  active-knee LP selected hit:   45s
+  active-knee LP egress hit:     45s
+  active-knee LP rebuild hit:    45s
 ```
 
-Fixed-plan replay, solving once at `D_ref = 300s`, reaches egress and rebuild target at `184.1s`.
+Fixed-plan replay, solving once at `D_ref = 300s`, reaches egress and rebuild target at `184.1s` for MILP and `160.9s` for the LP relaxation.
 
-Interpretation: the LP relaxation can select fractional/spread movement that looks good as selected power but restores late. The MILP whole-job plan survives execution much better.
+Interpretation: after no-wait deadline filters, operational re-solves no longer certify plans that cannot rebuild by the active deadline. Fixed-plan replay still shows the gap between selected power and deadline-realized execution.
 
 ### Agentic DES Requested-Shed Sweep
 
@@ -320,10 +322,10 @@ Across 1/2/4 source nodes, 4 workloads, `D in {10,30,120}s`, and target fraction
 
 ```text
 additive LP:                 54/108 hits
-active-knee LP relaxation:  104/108 hits
-active-knee MILP:           101/108 hits
-live greedy:                 99/108 hits
-random jobs:                 86/108 hits
+active-knee LP relaxation:   97/108 hits
+active-knee MILP:            97/108 hits
+live greedy:                 96/108 hits
+random jobs:                 87/108 hits
 ```
 
 Agentic is again the stress case. Active-knee misses are concentrated at `D = 10s`.
@@ -332,7 +334,7 @@ Agentic is again the stress case. Active-knee misses are concentrated at `D = 10
 
 1. Source-node geometry matters. Session-additive shed is not enough.
 2. Active-knee selection is the right current mainline.
-3. Whole-job MILP is more execution-valid than the LP relaxation.
+3. Whole-job MILP is the deployable active-knee baseline; the LP relaxation is a lower bound.
 4. DES validation is necessary because aggregate rebuild budgets do not prove reconstruction by deadline.
 5. Egress-realized and rebuild-realized power answer different operational questions.
 
@@ -341,36 +343,31 @@ Agentic is again the stress case. Active-knee misses are concentrated at `D = 10
 1. This is not a stochastic queueing model.
 2. This is not a full online controller.
 3. This is not exact scheduling inside the optimization.
-4. This does not yet model background serving contention.
+4. This does not yet model detailed time-varying background serving contention.
 5. This does not yet model prefix sharing, novel state reuse, LMCache/Mooncake/vLLM block behavior, or KV compatibility failures.
 6. This does not prove that active in-flight decode migration is possible. Current semantics are future session reconstruction/resume.
 
 ## Critical Assumptions
 
-- `W` is treated in code as dedicated reconstruction capacity. If `W` actually shares GPUs with destination serving, current feasibility is optimistic and may double-count capacity.
+- Rebuild capacity uses the destination spare pool, not a dedicated reconstruction pool. The remaining approximation is time-varying contention between rebuild work and post-rebuild serving.
 - Destination active-load and held-capacity constraints are aggregate headroom constraints, not detailed time-varying admission.
 - LP/MILP prefill and ingest rows enforce total work budgets, not release-time-aware schedules.
 - Egress is modeled as one serial source link, so aggregate egress budget aligns more directly with DES than rebuild rows do.
 - Node power is modeled by a synthetic ramp-then-plateau curve.
 - Current workload distributions and model parameters are synthetic/proxy, not measured from a production trace.
-- The deadline sweep target basis currently differs from most node-knee sweeps: it uses a fraction of active certified power, while most newer plots use full node-expected removable power.
 - Seeds differ across some plots, so kW values across figure families are not one-to-one comparable.
 
 ## Subagent Critique Distilled
 
-The review agents found three issues that matter most:
+The Stage 0 review found and fixed these issues:
 
-1. Rebuild capacity semantics must be cleaned up. The implementation treats `W` as dedicated reconstruction servers, but some prose describes it like full serving nodes that also serve background work.
-2. The LP/MILP and DES now share movement columns, but aggregate rebuild rows still do not imply rebuild-by-deadline completion.
-3. Some documentation is stale: memory-regime ranking and dual-unit interpretations overclaim relative to the current implementation.
+1. `active_floor_w` now reports the true conservative floor `dp_guaranteed`, not the certified dispatch target.
+2. Active-knee LP/MILP now exhaustively enumerates small source-node active regions and hard fails above the exhaustive cap.
+3. Deadline resource windows clamp to zero before startup ramps.
+4. Invalid movement bandwidth/utilization parameters hard fail.
+5. Root docs and CSV metadata now reflect full-node target basis, shared spare-pool rebuild semantics, no-wait deadline filters, and `kappa` sensitivity.
 
-Secondary issues:
-
-- `simulate(mode=...)` should hard fail on unknown modes.
-- Active-knee candidate failures are currently too quiet.
-- Plot scripts are more cwd-sensitive than ideal.
-- Some plots emit CSVs while deadline sweep only emits figures.
-- Tests cover semantics well, but artifact writing/visual validity is not deeply tested.
+Remaining issues: exact rebuild-realized optimization is still a scheduling problem, and background-serving contention still needs measured testbed calibration.
 
 ## On Deadline-Realized Formulations
 
@@ -384,7 +381,7 @@ target uses node_expected(z)
 movement budgets use y
 ```
 
-This fixes the accounting only if `z` is constrained by actual realizability. Cheap next constraints:
+This fixes the accounting only if `z` is constrained by actual realizability. Current cheap constraints:
 
 - no-wait egress + rebuild lower-bound filters;
 - conservative rebuild capacity margin `kappa < 1`;
@@ -398,19 +395,16 @@ Near term:
 
 1. Make active-knee MILP plus DES the main result.
 2. Keep additive LP as a baseline showing why additive power is insufficient.
-3. Standardize target basis across figures.
-4. Clarify `W`: dedicated rebuild pool vs shared destination serving capacity.
-5. Add no-wait deadline filters before adding larger scheduling machinery.
-6. Add rebuild-capacity safety margin and report sensitivity.
-7. Make simulator modes hard fail on invalid input.
+3. Add prefix/novel-state manifest abstraction.
+4. Measure replay, state transfer, prefix reuse, and state materialization on a serving stack.
+5. Add background destination serving contention.
+6. Add chunked replay as a DES option.
+7. Add receding-horizon control only after static execution-aware accounting is stable.
 
 Then:
 
-1. Add prefix/novel-state manifest abstraction.
-2. Measure replay, state transfer, prefix reuse, and state materialization on a serving stack.
-3. Add background destination serving contention.
-4. Add chunked replay as a DES option.
-5. Add receding-horizon control only after static execution-aware accounting is stable.
+1. Re-parameterize the fleet simulator from measured curves.
+2. Build the online router and compare against static active-knee MILP as an oracle baseline.
 
 ## Paper Story So Far
 

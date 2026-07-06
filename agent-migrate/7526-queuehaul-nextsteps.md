@@ -1,4 +1,4 @@
-# Queue-Haul Next Steps - 2026-07-05
+# Queue-Haul Next Steps - 2026-07-06
 
 The static story is done enough: active-knee MILP selects the right source-node removals and the DES separates selected, egress-realized, and rebuild-realized relief. The next phase is experimental. Target venue: NSDI.
 
@@ -18,20 +18,22 @@ Settled 2026-07-05; do not relitigate without new information.
 | Power evidence | Per-GPU DCGM/nvidia-smi traces grouped by instance, plus per-phase power calibration. Node-knee claims stay model-side but calibrated. |
 | Workload | Synthetic session driver implementing the four assumptions.md classes. |
 
-## Track 0 - Gating Sim Fixes
+## Track 0 - Gating Sim Fixes - Done
 
-Only what corrupts the policy gym blocks other tracks.
+Implemented 2026-07-06. These no longer block Track 2.
 
-Gating:
+Landed:
 
-1. `W` semantics. Decide and implement: rebuild capacity shares GPUs with destination background serving (this is what the testbed will physically be). Remove the dedicated-pool optimism or make it an explicit flag.
-2. `simulate(mode=...)` hard fails on unknown modes.
+1. `W` semantics: rebuild capacity now uses the destination spare pool, not a dedicated reconstruction pool.
+2. `simulate(mode=...)` and planner deadline filters hard fail on unknown modes.
+3. Target basis is standardized to full node-expected removable power.
+4. Planner-side rebuild cushion `kappa < 1` has a sensitivity plot.
+5. No-wait egress + rebuild lower-bound deadline filters apply to LP/MILP and whole-job baselines.
+6. Stage windows before startup ramps clamp to zero, not negative capacity.
+7. Movement bandwidth and utilization parameters hard fail outside their physical domains.
+8. Active-knee LP/MILP exhaustively enumerates small source-node active regions and hard fails above the exhaustive cap.
 
-Opportunistic (land alongside, do not block):
-
-- Standardize target basis across all figures (full node-expected removable power).
-- Rebuild-capacity safety margin `kappa < 1` with sensitivity reporting.
-- No-wait egress + rebuild lower-bound deadline filters in the MILP.
+Remaining modeling caveat: rebuild and post-rebuild serving still share the same spare pool only through aggregate headroom rows and the DES admission check; detailed time-varying background serving contention is Track 3/4 work.
 
 ## Track 1 - Single-Instance Capability Validation (big model)
 

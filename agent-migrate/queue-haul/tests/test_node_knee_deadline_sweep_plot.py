@@ -22,17 +22,22 @@ METHODS = {"additive LP", "active-knee LP relaxation", "active-knee MILP", "live
 
 
 def test_node_knee_deadline_sweep_uses_node_expected_target():
-    # Target basis is full node-expected removable power (0.45·full ≈ 9.2 kW, still below the
-    # certified sum ≈ 13.9 kW, so the additive LP meets it in active watts yet misses in
-    # node-expected watts — the figure's point).
+    # Target basis is full node-expected removable power. The additive LP can satisfy its
+    # certified target while missing the source-node curve; active_kw here is only the
+    # conservative plateau floor, so it should not be used as the target proof.
     _, target_kw, rows = run_sweep(deadlines=np.array([300.0]))
     by_method = {r["method"]: r for r in rows}
     assert set(by_method) == METHODS
     additive = by_method["additive LP"]
     active = by_method["active-knee LP relaxation"]
 
-    assert additive["active_kw"] >= target_kw
+    for r in rows:
+        assert r["target_basis"] == "full_node_expected"
+        assert np.isclose(r["target_kw"], target_kw)
+        assert np.isclose(r["target_kw"], r["target_frac"] * r["full_node_kw"])
+
     assert additive["node_kw"] < target_kw
+    assert additive["active_kw"] < target_kw
     assert not additive["hit"] and np.isnan(additive["cost_s"])
 
     assert active["node_kw"] >= target_kw

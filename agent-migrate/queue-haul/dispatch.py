@@ -131,9 +131,9 @@ def movement_budgets(pool: PoolPower, event: Event, move: Movement, fleet: DestF
     spare = np.array([event.spare]) if fleet is None else np.asarray(fleet.spare)
     W = np.floor(spare + 1e-9)  # whole spare nodes; matches the DES server count exactly
     return {
-        "egress": move.lambda_src * (event.D - event.tau_src),
-        "prefill": kappa * W * (event.D - event.tau_pre),
-        "ingest": kappa * W * move.mu_in * (event.D - event.tau_in),
+        "egress": move.lambda_src * max(0.0, event.D - event.tau_src),
+        "prefill": kappa * W * max(0.0, event.D - event.tau_pre),
+        "ingest": kappa * W * move.mu_in * max(0.0, event.D - event.tau_in),
         "load": spare * pool.rho_star,
         "held": spare * pool.s_node,
     }

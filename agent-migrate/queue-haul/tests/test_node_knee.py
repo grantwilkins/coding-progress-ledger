@@ -8,6 +8,8 @@ Plausible wrong implementations:
 - Let node-knee methods move pinned jobs that the dispatch LP would block.
 - Report infeasible movement as feasible because the solver path usually enforces budgets.
 - Compare active-knee LP against whole-job baselines without an integer counterpart.
+- Search only a capped subset of active-node regions while calling the result a MILP.
+- Use the certified active-work target as the conservative active floor.
 - Infer node placement silently or ignore it when computing expected node shed.
 - Randomize at the wrong aggregation level or ignore budgets in a random baseline.
 - Compare heuristics without an exact tiny oracle on hand-checkable cases.
@@ -39,6 +41,7 @@ from node_knee import (
     solve_active_knee_milp,
     solve_active_knee_lp,
     solve_exact_oracle,
+    evaluate_active_floor_w,
     solve_live_greedy,
     solve_node_drain_greedy,
     solve_random_jobs,
@@ -176,6 +179,35 @@ def test_active_knee_candidates_can_cover_all_four_nodes():
     assert () in cand
     assert (0, 2) in cand
     assert max(len(c) for c in cand) == 4
+
+
+def test_active_knee_milp_exhausts_small_source_node_regions():
+    pool = PoolPower()
+    pop = _pop([0.08] * 10, [0, 0, 1, 1, 2, 2, 3, 3, 4, 4])
+    imp = _imp(pop, np.ones(10))
+    target = evaluate_node_expected_w(pop, pool, np.ones(len(pop)))
+    milp = solve_active_knee_milp(pop, pool, imp, target, SLACK_E, SLACK_M)
+    oracle = solve_exact_oracle(pop, pool, imp, target, SLACK_E, SLACK_M, max_jobs=14)
+    assert milp.true_expected_feasible
+    assert milp.node_expected_w == pytest.approx(target)
+    assert milp.cost == pytest.approx(oracle.cost)
+
+
+def test_active_knee_hard_fails_beyond_exhaustive_region_cap():
+    pool = PoolPower()
+    pop = _pop([0.16] * 9, np.arange(9))
+    imp = _imp(pop, np.ones(9))
+    with pytest.raises(ValueError, match="at most 8"):
+        solve_active_knee_milp(pop, pool, imp, 1.0, SLACK_E, SLACK_M)
+
+
+def test_active_floor_uses_guaranteed_not_certified_token_work():
+    imp = Impact(
+        np.array([1.0, 2.0]), np.array([10.0, 20.0]), np.zeros(2), np.zeros(2),
+        np.zeros(2), np.zeros(2), np.zeros(2), np.zeros(2), np.zeros(2), "load"
+    )
+    y = np.array([1.0, 0.5])
+    assert evaluate_active_floor_w(imp, y) == pytest.approx(2.0)
 
 
 def test_active_knee_milp_is_whole_job_and_bounded_by_lp_relaxation():

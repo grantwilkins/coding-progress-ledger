@@ -24,6 +24,8 @@ from impact import Impact, Movement
 from instance import JobPopulation
 from power import PoolPower
 
+MAX_EXHAUSTIVE_ACTIVE_NODES = 8
+
 
 def place_source_nodes(pop: JobPopulation, pool: PoolPower, n_nodes: int, policy: str = "memory") -> np.ndarray:
     """Deterministic source placement; source overload is allowed for stress fixtures."""
@@ -71,7 +73,7 @@ def evaluate_node_expected_w(pop: JobPopulation, pool: PoolPower, y) -> float:
 
 
 def evaluate_active_floor_w(imp: Impact, y) -> float:
-    return float(imp.dp_certified @ np.asarray(y, float))
+    return float(imp.dp_guaranteed @ np.asarray(y, float))
 
 
 def _plan_y(plan) -> np.ndarray:
@@ -242,28 +244,10 @@ def _node_movable(pop: JobPopulation, event: Event) -> np.ndarray:
 
 def _knee_candidates(pop: JobPopulation, pool: PoolPower, imp: Impact, event: Event = Event(),
                      k: int = 4) -> list[tuple[int, ...]]:
-    load, node, cost = node_loads(pop), _source_node(pop), _job_cost(imp)
-    movable = _node_movable(pop, event)
-    gap = np.maximum(0.0, load - pool.power_knee)
-    rows = []
-    for i, L in enumerate(load):
-        js = np.flatnonzero((node == i) & movable)
-        order = js[np.argsort(cost[js] / np.maximum(pop.ell[js], 1e-12), kind="mergesort")]
-        acc = np.cumsum(pop.ell[order])
-        take = order[: np.searchsorted(acc, gap[i], side="left") + 1] if gap[i] > 0 and order.size else []
-        c = float(cost[take].sum()) if len(take) and acc[min(len(take) - 1, len(acc) - 1)] >= gap[i] else np.inf
-        rmax = float(pop.ell[js].sum())
-        bonus = float(pool.node_power(L) - pool.node_power(L - rmax) - pool.s_plat * rmax)
-        rows.append((i, L, c, bonus, gap[i] / max(c, 1e-12), bonus / max(c, 1e-12)))
-    cand = {()}
-    for col, rev in ((1, True), (2, False), (3, True), (4, True), (5, True)):
-        order = [r[0] for r in sorted(rows, key=lambda x: x[col], reverse=rev) if np.isfinite(r[2])]
-        top = order[:k]
-        for m in range(1, min(k, len(order)) + 1):
-            cand.add(tuple(sorted(order[:m])))
-        for m in (1, 2):
-            cand.update(tuple(sorted(c)) for c in combinations(top, m))
-    return sorted(cand)
+    active = tuple(np.flatnonzero(node_loads(pop) > pool.power_knee))
+    if len(active) > MAX_EXHAUSTIVE_ACTIVE_NODES:
+        raise ValueError(f"active-knee exhaustive solve supports at most {MAX_EXHAUSTIVE_ACTIVE_NODES} active source nodes")
+    return [tuple(c) for m in range(len(active) + 1) for c in combinations(active, m)]
 
 
 def _solve_active_knee(pop, pool, imp, s_star, event, move, active_alpha, integer, method, kappa=1.0):
