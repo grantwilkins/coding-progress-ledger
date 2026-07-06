@@ -85,3 +85,29 @@ The Queue-Haul reducer writes:
 - `queue-haul/outputs/stage1_gpt_oss_20b_a100_tp1_window_sensitivity_summary.csv`
 - `queue-haul/outputs/stage1_gpt_oss_20b_a100_tp1_window_sensitivity_binned.csv`
 - `queue-haul/outputs/stage1_gpt_oss_20b_a100_tp1_window_sensitivity.{pdf,png}`
+
+## Queue-Haul Stage 1a Service Surface
+
+To measure `rho(T)`, context-dependent decode `G(T)`, and mixed prefill/decode
+interference on one A100 node, write the MVP runbook with:
+
+```bash
+uv run python queue-haul/stage1_service_surface.py \
+  --run-id gpt-oss-20b-a100-tp1-service-surface \
+  -- --async-scheduling
+```
+
+It writes `queue-haul/runs/stage1_service_surface/<run_id>/commands.sh`. Execute
+that script on the A100 node, using the same optional `APP='apptainer exec ...'`
+wrapper as above. After collection, reduce the emitted bundles with:
+
+```bash
+uv run python queue-haul/stage1_service_reduce.py \
+  --run-dir queue-haul/runs/stage1_service_surface/gpt-oss-20b-a100-tp1-service-surface/bundles
+```
+
+The reducer writes:
+
+- `queue-haul/outputs/stage1_gpt_oss_20b_a100_tp1_prefill_rho.{csv,pdf,png}`
+- `queue-haul/outputs/stage1_gpt_oss_20b_a100_tp1_decode_context.{csv,pdf,png}`
+- `queue-haul/outputs/stage1_gpt_oss_20b_a100_tp1_mixed_surface.{csv,pdf,png}`
