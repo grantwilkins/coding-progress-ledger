@@ -43,3 +43,20 @@ Canonical outputs are:
 - `outputs/node_knee_kappa_sweep.{csv,pdf,png}`
 
 See `queue-haul/FINDINGS.md` for the current result summary.
+
+## Queue-Haul Stage 1a Curves
+
+Stage 1a uses `powertrace-sim`'s existing vLLM probe stack. The local wrapper only
+builds a small runbook for decode, prefill, and mixed-grid curve probes:
+
+```bash
+uv run python queue-haul/stage1_curves.py \
+  --model openai/gpt-oss-120b \
+  --tp 8 \
+  --max-model-len 65536 \
+  --execute \
+  -- --trust-remote-code
+```
+
+Without `--execute`, it writes `queue-haul/runs/stage1/<run_id>/commands.sh`
+without launching GPUs.
