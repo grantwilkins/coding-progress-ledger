@@ -13,6 +13,7 @@ Plausible wrong implementations:
 from __future__ import annotations
 
 import json
+from datetime import datetime
 from pathlib import Path
 
 import pytest
@@ -60,6 +61,18 @@ def write_bundle(root: Path, probe_type: str = "prefill_staircase") -> Path:
     (bundle / "requests.json").write_text(json.dumps(requests))
     (bundle / "power.csv").write_text(power)
     return bundle
+
+
+def test_read_power_parses_nvidia_smi_local_wall_clock(tmp_path: Path):
+    epoch = 1783368731.25
+    stamp = datetime.fromtimestamp(epoch).strftime("%Y/%m/%d %H:%M:%S.%f")[:-3]
+    path = tmp_path / "power.csv"
+    path.write_text("timestamp, power.draw [W]" + chr(10) + f"{stamp}, 50 W" + chr(10))
+
+    ts, watts = r.read_power(path)
+
+    assert ts[0] == pytest.approx(epoch, abs=0.001)
+    assert watts[0] == pytest.approx(50.0)
 
 
 def test_level_row_uses_level_window_for_requests_power_and_rates(tmp_path: Path):

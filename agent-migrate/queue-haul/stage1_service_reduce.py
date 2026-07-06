@@ -4,7 +4,7 @@ import argparse
 import csv
 import json
 import re
-from datetime import datetime, timezone
+from datetime import datetime
 from pathlib import Path
 
 import matplotlib
@@ -31,7 +31,7 @@ def parse_ts(text: str) -> float | None:
         pass
     for fmt in ("%Y/%m/%d %H:%M:%S.%f", "%Y/%m/%d %H:%M:%S", "%Y-%m-%d %H:%M:%S.%f", "%Y-%m-%d %H:%M:%S"):
         try:
-            return datetime.strptime(text.strip(), fmt).replace(tzinfo=timezone.utc).timestamp()
+            return datetime.strptime(text.strip(), fmt).timestamp()
         except ValueError:
             pass
     return None
