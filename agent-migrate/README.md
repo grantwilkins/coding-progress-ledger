@@ -73,6 +73,7 @@ fit constants.
 ```bash
 (cd ../../powertrace-sim && uv run python scripts/eval/two_price_fit.py --configs gpt-oss-20b-a100 && uv run python scripts/eval/saturating_fit.py)
 uv run python queue-haul/stage1_profile.py
+uv run python queue-haul/stage1_window_sensitivity.py
 ```
 
 The Queue-Haul reducer writes:
@@ -81,3 +82,6 @@ The Queue-Haul reducer writes:
 - `queue-haul/outputs/stage1_gpt_oss_20b_a100_tp1_power_curve.csv`
 - `queue-haul/outputs/stage1_gpt_oss_20b_a100_tp1_constants.csv`
 - `queue-haul/outputs/stage1_gpt_oss_20b_a100_tp1.{pdf,png}`
+- `queue-haul/outputs/stage1_gpt_oss_20b_a100_tp1_window_sensitivity_summary.csv`
+- `queue-haul/outputs/stage1_gpt_oss_20b_a100_tp1_window_sensitivity_binned.csv`
+- `queue-haul/outputs/stage1_gpt_oss_20b_a100_tp1_window_sensitivity.{pdf,png}`
