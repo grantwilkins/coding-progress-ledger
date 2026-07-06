@@ -9,6 +9,7 @@ The current result is clear:
 - Additive session-power LP is the wrong main method for node-level grid relief.
 - Source-node-aware active-knee selection fixes the main power modeling error.
 - Whole-job active-knee MILP is the most credible method under DES validation.
+- Stage 1a gpt-oss-20b A100 TP1 traces show a stable concave/saturating power curve, but the absolute `ell` axis is a provisional colocated-load calibration.
 - The remaining hard issue is not source selection alone. It is whether selected sessions actually egress and rebuild by the deadline.
 
 ## Why This Matters
@@ -47,10 +48,12 @@ Each session/job has:
 - `T`: context tokens.
 - `f`: expected future prefill tokens or future prompt work.
 - `g`: expected future decode tokens.
-- `ell = f / rho_dest(T) + g / G`: active load.
+- `ell = f / rho_dest(T) + g / G`: colocated service-time load.
 - `m = eta * T`: KV memory/state size.
 - `source_node`: current source GPU node.
 - active/idle/cold state, with current canonical plots focused on active-agentic stress cases when testing migration.
+
+The scalar `ell` assumes prefill and decode time-share one colocated GPU budget. It is not automatically the right axis for disaggregated inference. If the measured service surface does not collapse to one scalar, the state should stay vector-valued: `(u_pre, u_dec, u_ing, m)`.
 
 The default model center is Qwen3-235B-A22B-like:
 
@@ -58,6 +61,8 @@ The default model center is Qwen3-235B-A22B-like:
 - `beta = 4 B/token` context transfer scale.
 - BF16, 8xH100-style node assumptions.
 - Node power is a ramp-then-plateau curve, not a per-session additive constant.
+
+The Stage 1a measured calibration is separate: gpt-oss-20b on one A100 with TP1. Its current role is to test the load/power shape and the stability of `rho(T)` and `G(T)`, not to replace every Queue-Haul fleet parameter yet.
 
 ## Actions
 
@@ -91,6 +96,8 @@ active floor watts
 ```
 
 The paper-facing result should primarily report node-expected shed for source-node relief and should explicitly state whether grid relief is counted at egress completion or rebuild completion.
+
+Stage 1a adds a fourth distinction: measured node power as a function of observed service rates. The 5s curve uses `ell = f/F + g/G` from raw rate windows and reaches `ell_max = 2.03`, beyond the simulator's per-node `rho*` placement ceiling. That does not break the formulation; it means the measurement x-axis is offered load under a probe, not a feasible admission state.
 
 ## Formulations
 
@@ -204,6 +211,10 @@ It updates residual source-node load as jobs are ordered, so the value of finish
 - `queue-haul/plot_node_knee_agentic_des_sweep.py`: agentic requested-shed DES disruption plot.
 - `queue-haul/plot_node_knee_scale_workload_sweep.py`: workload and source-node scale sweep.
 - `queue-haul/plot_node_knee_kappa_sweep.py`: planner rebuild-cushion sensitivity.
+- `queue-haul/stage1_profile.py`: rebuild measured gpt-oss-20b A100 TP1 `ell` and power curves from raw windows.
+- `queue-haul/stage1_window_sensitivity.py`: sweep rate/power window sizes and compare concave-fit stability.
+- `queue-haul/stage1_service_surface.py`: generate the A100 runbook for isolated `rho(T)`, `G(T)`, and mixed prefill/decode probes.
+- `queue-haul/stage1_service_reduce.py`: reduce completed service-surface probe bundles into CSV/PNG/PDF artifacts.
 
 ## Current Figures
 
@@ -216,6 +227,12 @@ Canonical outputs are in `queue-haul/outputs/`:
 - `node_knee_agentic_des_sweep.*`
 - `node_knee_scale_workload_sweep.*`
 - `node_knee_kappa_sweep.*`
+- `stage1_gpt_oss_20b_a100_tp1.{png,pdf}`
+- `stage1_gpt_oss_20b_a100_tp1_curve.csv`
+- `stage1_gpt_oss_20b_a100_tp1_constants.csv`
+- `stage1_gpt_oss_20b_a100_tp1_power_curve.csv`
+- `stage1_gpt_oss_20b_a100_tp1_window_sensitivity.*`
+- `stage1_gpt_oss_20b_a100_tp1_window_sensitivity_{summary,binned}.csv`
 
 ## Main Results
 
@@ -330,6 +347,36 @@ random jobs:                 87/108 hits
 
 Agentic is again the stress case. Active-knee misses are concentrated at `D = 10s`.
 
+### Stage 1a Power Calibration
+
+For gpt-oss-20b on one A100 with TP1, the measured `ell`-vs-power curve is distinctively concave/saturating. The separate saturating fit is the useful "power story"; the scalar x-axis is still a modeling hypothesis.
+
+Window sensitivity:
+
+```text
+window  saturating R2  linear R2  ell knee  rho*  ell max
+1s      0.975          0.792      1.17      0.44  2.44
+2s      0.984          0.812      1.50      0.52  2.22
+5s      0.990          0.846      2.05      0.53  2.03
+10s     0.993          0.874      2.53      0.62  2.01
+30s     0.997          0.903      3.12      0.59  1.90
+```
+
+Read: the concave shape is robust to windowing, but `F`, `G`, `rho*`, and the absolute `ell` knee are distributional/window-dependent normalizers. This supports careful positioning, not a universal utilization law.
+
+The next hardware run is the service surface:
+
+```text
+uv run python queue-haul/stage1_service_surface.py \
+  --run-id gpt-oss-20b-a100-tp1-service-surface \
+  -- --async-scheduling
+
+uv run python queue-haul/stage1_service_reduce.py \
+  --run-dir queue-haul/runs/stage1_service_surface/gpt-oss-20b-a100-tp1-service-surface/bundles
+```
+
+It measures isolated prefill `rho(T)`, decode `G(T)` across context, and the mixed prefill/decode interaction. Those outputs decide whether the simulator keeps a scalar `ell` or moves to a vector service model.
+
 ## What We Can Claim Now
 
 1. Source-node geometry matters. Session-additive shed is not enough.
@@ -337,6 +384,7 @@ Agentic is again the stress case. Active-knee misses are concentrated at `D = 10
 3. Whole-job MILP is the deployable active-knee baseline; the LP relaxation is a lower bound.
 4. DES validation is necessary because aggregate rebuild budgets do not prove reconstruction by deadline.
 5. Egress-realized and rebuild-realized power answer different operational questions.
+6. On the current gpt-oss-20b A100 TP1 trace, node power is better described by a concave/saturating curve than by a linear curve across 1/2/5/10/30s windows.
 
 ## What We Cannot Claim Yet
 
@@ -346,6 +394,8 @@ Agentic is again the stress case. Active-knee misses are concentrated at `D = 10
 4. This does not yet model detailed time-varying background serving contention.
 5. This does not yet model prefix sharing, novel state reuse, LMCache/Mooncake/vLLM block behavior, or KV compatibility failures.
 6. This does not prove that active in-flight decode migration is possible. Current semantics are future session reconstruction/resume.
+7. This does not prove that scalar `ell` generalizes to disaggregated inference.
+8. This does not yet provide measured `rho(T)`, context-dependent `G(T)`, or mixed-surface constants for the simulator; the runbook exists, but the A100 service-surface run still has to be executed.
 
 ## Critical Assumptions
 
@@ -355,6 +405,7 @@ Agentic is again the stress case. Active-knee misses are concentrated at `D = 10
 - Egress is modeled as one serial source link, so aggregate egress budget aligns more directly with DES than rebuild rows do.
 - Node power is modeled by a synthetic ramp-then-plateau curve.
 - Current workload distributions and model parameters are synthetic/proxy, not measured from a production trace.
+- `ell` is valid as a scalar only under colocated prefill/decode sharing. The measured Stage 1a `F`/`G` constants are distributional normalizers, not fixed physical constants.
 - Seeds differ across some plots, so kW values across figure families are not one-to-one comparable.
 
 ## Subagent Critique Distilled
@@ -396,10 +447,11 @@ Near term:
 1. Make active-knee MILP plus DES the main result.
 2. Keep additive LP as a baseline showing why additive power is insufficient.
 3. Add prefix/novel-state manifest abstraction.
-4. Measure replay, state transfer, prefix reuse, and state materialization on a serving stack.
-5. Add background destination serving contention.
-6. Add chunked replay as a DES option.
-7. Add receding-horizon control only after static execution-aware accounting is stable.
+4. Run the Stage 1a service-surface probes on the A100 node and reduce `rho(T)`, `G(T)`, and mixed interaction plots.
+5. Measure replay, state transfer, prefix reuse, and state materialization on a serving stack.
+6. Add background destination serving contention.
+7. Add chunked replay as a DES option.
+8. Add receding-horizon control only after static execution-aware accounting is stable.
 
 Then:
 
@@ -418,6 +470,7 @@ classical migration ideas do not directly apply to stateful LLM sessions
 -> active-knee LP/MILP selects the right source-node removals
 -> DES separates selected, egress-realized, and rebuild-realized relief
 -> whole-job active-knee MILP is the current execution-valid mainline
+-> measured Stage 1a traces motivate the concave node-power curve, while service-surface probes decide whether scalar ell is sufficient
 ```
 
 The paper should emphasize that Queue-Haul is not merely "move bytes elsewhere." The scarce resource is deadline-realized reconstruction of useful LLM state under a source-node power target.

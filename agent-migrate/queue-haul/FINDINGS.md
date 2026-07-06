@@ -38,6 +38,30 @@ target   achieved   active-knee cost   cost / achieved kW
 
 Before fixed-region active-knee candidates, the high-target case jumped to nearly full drain (`20.6 kW`) at much higher cost (`1313 s`). The current formulation tracks the requested modeled shed instead.
 
+## Stage 1a Calibration
+
+The gpt-oss-20b A100 TP1 measurement pass now recomputes:
+
+```text
+ell = f/F + g/G
+```
+
+from raw prefill/decode window rates, rather than trusting a saved upstream `ell` vector. On the current 5s windows, the observed axis reaches `ell_max = 2.03`; this is above the simulator's colocated `rho*` placement ceiling, so the plot should be read as an offered-load probe axis, not a feasible per-node admission state.
+
+The separate saturating power fit is the paper-interesting shape: power rises concavely and then flattens. Window sensitivity supports the shape but not a fixed absolute `ell` calibration:
+
+| window | saturating R2 | linear R2 | ell knee | rho* | ell max |
+|---:|---:|---:|---:|---:|---:|
+| `1s` | `0.975` | `0.792` | `1.17` | `0.44` | `2.44` |
+| `2s` | `0.984` | `0.812` | `1.50` | `0.52` | `2.22` |
+| `5s` | `0.990` | `0.846` | `2.05` | `0.53` | `2.03` |
+| `10s` | `0.993` | `0.874` | `2.53` | `0.62` | `2.01` |
+| `30s` | `0.997` | `0.903` | `3.12` | `0.59` | `1.90` |
+
+This makes `ell` useful as a colocated service-time load hypothesis, but not yet a universal x-axis. For disaggregated inference, the safer state is a vector such as `(u_pre, u_dec, u_ing, m)` unless the measured service surface collapses cleanly to one scalar.
+
+The MVP service-surface runbook is set up but not yet executed on the A100 node. It will measure isolated prefill `rho(T)`, context-dependent decode `G(T)`, and the mixed prefill/decode interaction surface needed to decide whether `G` is stable and whether scalar `ell` remains defensible.
+
 ## Reproducible Plots
 
 Run each script from `queue-haul/`.
@@ -51,7 +75,16 @@ Run each script from `queue-haul/`.
 | `plot_node_knee_scale_workload_sweep.py` | `outputs/node_knee_scale_workload_sweep.{csv,pdf,png}` | Sweeps `1/2/4` source nodes, all four active cached classes, deadlines `10/30/120s`, and target fractions `25/45/65%`. Hit counts are additive LP `54/108`, active-knee LP `97/108`, active-knee MILP `97/108`, live greedy `96/108`, random jobs `87/108`. |
 | `plot_node_knee_kappa_sweep.py` | `outputs/node_knee_kappa_sweep.{csv,pdf,png}` | Planner-side rebuild-cushion sensitivity. The CSV separates selected shortfall from deadline misses; for example `D=30s` has no deadline misses but still misses target by planner shortfall. |
 
-Only these six plot scripts are canonical. Older validation and exploration plot scripts were removed from the active tree; their underlying model code remains covered by semantic tests.
+Only these six node-knee plot scripts are canonical for the current dispatch result. Older validation and exploration plot scripts were removed from the active tree; their underlying model code remains covered by semantic tests.
+
+Stage 1a calibration artifacts:
+
+| script | output | current read |
+|---|---|---|
+| `stage1_profile.py` | `outputs/stage1_gpt_oss_20b_a100_tp1.{pdf,png}`, `outputs/stage1_gpt_oss_20b_a100_tp1_curve.csv`, `outputs/stage1_gpt_oss_20b_a100_tp1_constants.csv`, `outputs/stage1_gpt_oss_20b_a100_tp1_power_curve.csv` | Rebuilds `ell` from raw `f/g` rates and overlays the concave/saturating power curve. |
+| `stage1_window_sensitivity.py` | `outputs/stage1_gpt_oss_20b_a100_tp1_window_sensitivity.{pdf,png}`, `outputs/stage1_gpt_oss_20b_a100_tp1_window_sensitivity_{summary,binned}.csv` | Checks that the concave power shape survives `1/2/5/10/30s` windows while absolute `ell` constants drift. |
+| `stage1_service_surface.py` | `runs/stage1_service_surface/<run-id>/commands.sh` | Generates the single-node A100 probe runbook for `rho(T)`, `G(T)`, and mixed prefill/decode interaction. |
+| `stage1_service_reduce.py` | `outputs/stage1_gpt_oss_20b_a100_tp1_{prefill_rho,decode_context,mixed_surface}.{csv,pdf,png}` | Reduces completed service-surface probe bundles; outputs appear after the hardware run. |
 
 Latest median disruption intensities from the fixed 4-node target sweep:
 
@@ -85,7 +118,10 @@ Current semantic tests cover:
 - execution replay selected/egress/rebuild node-power semantics,
 - agentic requested-shed DES disruption semantics,
 - kappa sweep failure-cause semantics,
-- scale/workload/deadline sweep semantics.
+- scale/workload/deadline sweep semantics,
+- Stage 1a `ell` recomputation and concave power-knee semantics,
+- Stage 1a window-sensitivity semantics,
+- Stage 1a service-surface runbook and reducer semantics.
 
 Run:
 
@@ -93,4 +129,4 @@ Run:
 uv run pytest
 ```
 
-Current verification after the Stage 0 cleanup: `178 passed`, with the existing 5 CVXPY accuracy warnings in evacuation tests.
+Current verification after the Stage 1a updates: `196 passed`, with the existing 5 CVXPY accuracy warnings in evacuation tests.
