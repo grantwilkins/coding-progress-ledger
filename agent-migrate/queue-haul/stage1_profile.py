@@ -13,6 +13,7 @@ import numpy as np
 CONFIG = "gpt-oss-20b-a100_tp1"
 PTRACE = Path(__file__).resolve().parents[3] / "powertrace-sim" / "results" / "two_price_fit"
 OUT_STEM = Path(__file__).resolve().parent / "outputs" / "stage1_gpt_oss_20b_a100_tp1"
+POWER_KNEE_FRAC = 0.8
 CONSTANT_FIELDS = (
     "F_prefill_tps",
     "G_decode_tps",
@@ -39,6 +40,18 @@ def read_constants(path: Path, config: str) -> dict[str, float | str]:
             if row["config"] == config:
                 return {"config": config, **{k: float(row[k]) for k in CONSTANT_FIELDS}}
     raise ValueError(f"missing constants for {config} in {path}")
+
+
+def load_windows(path: Path, constants: dict[str, float | str]) -> dict[str, np.ndarray]:
+    windows = dict(np.load(path, allow_pickle=False))
+    missing = sorted({"P", "f", "g"} - windows.keys())
+    if missing:
+        raise ValueError(f"missing window fields: {', '.join(missing)}")
+    F, G = float(constants["F_prefill_tps"]), float(constants["G_decode_tps"])
+    if F <= 0 or G <= 0:
+        raise ValueError("F_prefill_tps and G_decode_tps must be positive")
+    windows["ell"] = np.asarray(windows["f"], float) / F + np.asarray(windows["g"], float) / G
+    return windows
 
 
 def binned_curve(ell, power, bins: int) -> list[dict[str, float | int]]:
@@ -68,6 +81,17 @@ def binned_curve(ell, power, bins: int) -> list[dict[str, float | int]]:
     return rows
 
 
+def concave_power_curve(constants: dict[str, float | str], max_ell: float, points: int = 200) -> list[dict[str, float]]:
+    p0, pmax = float(constants["P0_w"]), float(constants["P_max_w"])
+    knee = float(constants["ell_power_knee"])
+    if pmax <= p0 or knee <= 0:
+        raise ValueError("invalid concave power constants")
+    ell = np.linspace(0.0, max_ell, points)
+    w = (POWER_KNEE_FRAC / (1 - POWER_KNEE_FRAC)) * ell / knee
+    power = p0 + (pmax - p0) * w / (1 + w)
+    return [{"ell": float(x), "power_w": float(y)} for x, y in zip(ell, power)]
+
+
 def write_csv(path: Path, rows: list[dict], fieldnames) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("w", newline="") as fh:
@@ -76,7 +100,7 @@ def write_csv(path: Path, rows: list[dict], fieldnames) -> None:
         w.writerows(rows)
 
 
-def make_plot(windows, curve, constants, out_stem: Path) -> None:
+def make_plot(windows, curve, power_curve, constants, out_stem: Path) -> None:
     ell, power = windows["ell"], windows["P"]
     f_share = windows.get("f_share", np.zeros_like(ell))
     fig, ax = plt.subplots(figsize=(7.0, 4.7))
@@ -89,6 +113,14 @@ def make_plot(windows, curve, constants, out_stem: Path) -> None:
         ms=3,
         lw=1.5,
         label="binned average power",
+    )
+    ax.plot(
+        [r["ell"] for r in power_curve],
+        [r["power_w"] for r in power_curve],
+        color="green",
+        ls="--",
+        lw=1.2,
+        label="concave power curve",
     )
     ax.axvline(constants["ell_power_knee"], color="purple", ls=":", lw=1.2, label="power knee")
     ax.axvline(constants["rho_star"], color="red", ls="--", lw=1.2, label="rho*")
@@ -122,16 +154,22 @@ def parse_args(argv: list[str] | None = None):
 
 def main(argv: list[str] | None = None) -> None:
     args = parse_args(argv)
-    windows = dict(np.load(args.windows, allow_pickle=False))
     constants = read_constants(args.summary, args.config)
+    windows = load_windows(args.windows, constants)
     curve = binned_curve(windows["ell"], windows["P"], args.bins)
     write_csv(args.out_stem.with_name(args.out_stem.name + "_curve.csv"), curve, curve[0].keys())
+    power_curve = concave_power_curve(constants, float(np.nanmax(windows["ell"])))
+    write_csv(
+        args.out_stem.with_name(args.out_stem.name + "_power_curve.csv"),
+        power_curve,
+        power_curve[0].keys(),
+    )
     write_csv(
         args.out_stem.with_name(args.out_stem.name + "_constants.csv"),
         [constants],
         constants.keys(),
     )
-    make_plot(windows, curve, constants, args.out_stem)
+    make_plot(windows, curve, power_curve, constants, args.out_stem)
     print(args.out_stem)
 
 
