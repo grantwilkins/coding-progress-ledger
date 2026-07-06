@@ -46,17 +46,35 @@ See `queue-haul/FINDINGS.md` for the current result summary.
 
 ## Queue-Haul Stage 1a Curves
 
-Stage 1a uses `powertrace-sim`'s existing vLLM probe stack. The local wrapper only
-builds a small runbook for decode, prefill, and mixed-grid curve probes:
+Stage 1a uses `powertrace-sim`'s vLLM probe stack. For the single-A100
+gpt-oss-20b TP=1 collection, write the runbook with:
 
 ```bash
 uv run python queue-haul/stage1_curves.py \
-  --model openai/gpt-oss-120b \
-  --tp 8 \
-  --max-model-len 65536 \
-  --execute \
-  -- --trust-remote-code
+  --model openai/gpt-oss-20b \
+  --hardware A100 \
+  --tp 1 \
+  --gpus-per-node 1 \
+  --max-model-len 32768 \
+  --prefill-lens 256 1024 4096 16384 \
+  --run-id gpt-oss-20b-a100-tp1 \
+  -- --async-scheduling
 ```
 
 Without `--execute`, it writes `queue-haul/runs/stage1/<run_id>/commands.sh`
-without launching GPUs.
+without launching GPUs. Run it with `APP='apptainer exec --nv --bind $SCRATCH
+<sandbox>'` when the vLLM Apptainer image is needed.
+
+After collection, refresh the powertrace fit outputs and the Queue-Haul
+`ell`-vs-power plot:
+
+```bash
+(cd ../../powertrace-sim && uv run python scripts/eval/two_price_fit.py --configs gpt-oss-20b-a100 && uv run python scripts/eval/saturating_fit.py)
+uv run python queue-haul/stage1_profile.py
+```
+
+The Queue-Haul reducer writes:
+
+- `queue-haul/outputs/stage1_gpt_oss_20b_a100_tp1_curve.csv`
+- `queue-haul/outputs/stage1_gpt_oss_20b_a100_tp1_constants.csv`
+- `queue-haul/outputs/stage1_gpt_oss_20b_a100_tp1.{pdf,png}`
