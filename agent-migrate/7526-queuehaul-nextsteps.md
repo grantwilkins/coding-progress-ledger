@@ -37,22 +37,29 @@ Remaining modeling caveat: rebuild and post-rebuild serving still share the same
 
 ## Track 1 - Single-Instance Capability Validation (big model)
 
-Establishes the action space and measures the service curves. One vLLM+LMCache instance, whole node.
+Establishes the action space and measures the service curves. Main measurements use one whole-node vLLM+LMCache instance. Cross-instance KV reuse is a compatibility probe; run it serially or on smaller partitions if the big model cannot run twice on the node.
 
 Four action paths to validate:
 
-1. **Replay fidelity.** Resend full context, recompute KV via prefill; verify `R_original ~ R_replay` at several context sizes and turn depths.
-2. **Local prefix reuse.** Repeated turns to the same instance; measure automatic prefix-cache hit behavior and TTFT delta.
-3. **Cross-instance KV reuse.** KV produced by one instance, consumed by a second compatible instance via LMCache shared backend; verify next-token equivalence.
+1. **Replay fidelity.** Resend full context, recompute KV via prefill, and verify greedy next-token equivalence under fixed model/tokenizer/template/sampling config.
+2. **Local prefix reuse.** Repeated turns to the same instance; measure prefix-cache hits, misses, evictions, and TTFT delta.
+3. **Cross-instance KV reuse.** KV produced by one instance, consumed by a second compatible instance via LMCache shared backend; verify greedy next-token equivalence and hard failures for model, tokenizer, template, precision, KV-layout, missing-block, and corrupt-cache mismatches.
 4. **State materialization.** Cost to load cached state into the serving path: bytes/s ingest, time-to-decode-admission, at several KV sizes.
 
 Measured curves to extract (these replace synthetic constants in `power.py`/`impact.py`):
 
 - `rho_dest(T)`: prefill tok/s vs context, checked against the analytic roofline (flat ~63k below T*~29k, 1/T above).
 - `mu_in`: state ingest B/s, host-staged.
+- `alpha_in`: prefill slowdown while KV ingest is active.
 - TTFT vs context for replay and for KV-load paths.
-- Per-phase power: prefill/decode/idle per-GPU draw; refit `c1`, `c2`, `P_idle`, `P_busy`.
+- Per-phase power: prefill/decode/idle per-GPU draw; refit `c1`, `c2`, `P_idle`, `P_busy`, and node-curve knee parameters.
 - Startup ramps `tau_pre`, `tau_in`.
+
+Deliverables:
+
+- CSV/JSON curves plus raw trace paths for throughput, TTFT, ingest, admission, power, and `alpha_in`.
+- A constants patch to `power.py`/`impact.py` only after the measured artifacts exist.
+- A short pass/fail table for replay, local reuse, cross-instance reuse, and expected incompatibility failures.
 
 ## Track 2 - Online Router v0
 
