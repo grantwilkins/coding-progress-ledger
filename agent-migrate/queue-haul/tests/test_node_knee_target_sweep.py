@@ -7,6 +7,7 @@ Plausible wrong implementations:
 - Change source size, deadline, or population across methods in one scenario.
 - Keep stale additive/node-knee exploration methods in the narrowed comparison.
 - Count disruption cost for methods that miss the modeled node target.
+- Use a submaximal target when measuring max-request achieved shed by deadline.
 """
 
 import sys
@@ -16,7 +17,7 @@ import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from plot_node_knee_target_sweep import COLORS, EVENT, N_NODES, plot_rows, run_sweep
+from plot_node_knee_target_sweep import COLORS, EVENT, N_NODES, plot_rows, run_deadline_sweep, run_sweep
 
 
 def test_target_sweep_fixes_setup_and_varies_modeled_power_request():
@@ -60,3 +61,18 @@ def test_plot_rows_removes_additive_and_renames_methods():
     out = plot_rows(rows)
 
     assert [r["method"] for r in out] == ["LP relaxation", "MILP", "greedy", "random"]
+
+
+def test_deadline_sweep_uses_requested_deadlines_and_full_power_target():
+    deadlines = np.array([1.0, 300.0])
+    rows = run_deadline_sweep(workloads=("agentic_tool_loop",), deadlines=deadlines)
+
+    assert len(rows) == len(deadlines) * len(COLORS)
+    assert {r["method"] for r in rows} == set(COLORS)
+    assert {r["deadline_s"] for r in rows} == set(deadlines)
+    for r in rows:
+        assert r["source_nodes"] == N_NODES
+        assert r["target_frac"] == 1.0
+        assert np.isclose(r["target_kw"], r["full_node_kw"])
+        assert 0.0 <= r["node_kw"] <= r["full_node_kw"]
+        assert (r["hit"] and np.isfinite(r["cost_s"])) or ((not r["hit"]) and np.isnan(r["cost_s"]))
