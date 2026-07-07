@@ -213,12 +213,13 @@ def _lp(pop, pool, imp, s_star, weights, intercept=0.0, r0=None, event=Event(),
 
 def solve_tangent_lp(pop: JobPopulation, pool: PoolPower, imp: Impact, s_star: float,
                      event: Event = Event(), move: Movement = Movement(),
-                     max_iter: int = 5, active_alpha: float = 0.0, kappa: float = 1.0) -> NodeKneeResult:
+                     max_iter: int = 5, active_alpha: float = 0.0, kappa: float = 1.0,
+                     method: str = "tangent_lp") -> NodeKneeResult:
     r0 = np.zeros_like(node_loads(pop))
     best = None
     for _ in range(max_iter):
         w, b = _tangent(pop, pool, r0)
-        res = _lp(pop, pool, imp, s_star, w, b, r0, event, move, active_alpha, method="tangent_lp",
+        res = _lp(pop, pool, imp, s_star, w, b, r0, event, move, active_alpha, method=method,
                   kappa=kappa)
         if best is None or (res.true_expected_feasible and res.cost < best.cost) or (
             not best.true_expected_feasible and res.node_expected_w > best.node_expected_w
@@ -229,6 +230,13 @@ def solve_tangent_lp(pop: JobPopulation, pool: PoolPower, imp: Impact, s_star: f
             break
         r0 = r
     return best
+
+
+def solve_power_function_lp(pop: JobPopulation, pool: PoolPower, imp: Impact, s_star: float,
+                            event: Event = Event(), move: Movement = Movement(),
+                            active_alpha: float = 0.0, kappa: float = 1.0) -> NodeKneeResult:
+    return solve_tangent_lp(pop, pool, imp, s_star, event, move, active_alpha=active_alpha,
+                            kappa=kappa, method="power_function_lp_relaxation")
 
 
 def _job_cost(imp: Impact) -> np.ndarray:

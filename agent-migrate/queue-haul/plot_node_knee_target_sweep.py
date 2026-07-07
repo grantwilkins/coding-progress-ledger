@@ -21,6 +21,7 @@ from node_knee import (
     place_source_nodes,
     solve_active_knee_lp,
     solve_active_knee_milp,
+    solve_power_function_lp,
     solve_live_greedy,
     solve_random_jobs,
     with_source_nodes,
@@ -31,6 +32,8 @@ kW = 1e3
 N_NODES = 4
 EVENT = Event(dest_nodes=48)
 MOVE = Movement()
+POWER_CURVE = os.getenv("QUEUE_HAUL_POWER_CURVE", "knee")
+OUT_BASE = os.getenv("QUEUE_HAUL_TARGET_SWEEP_OUT", "outputs/node_knee_target_sweep")
 TARGET_FRACS = np.linspace(0.05, 0.95, 19)
 COLORS = {
     "additive LP": "0.45",
@@ -39,11 +42,12 @@ COLORS = {
     "live greedy": "tab:orange",
     "random jobs": "tab:purple",
 }
+PILOT_COLORS = {"power-function LP relaxation": "tab:green"}
 
 
 def population(session_class: str, seed: int = 42):
     wl = class_workload(session_class, state_mix=(1.0, 0.0, 0.0), cache_hit=(1.0, 1.0, 1.0, 1.0))
-    pool = replace(PoolPower(), mean_context_tokens=_mean_T(wl))
+    pool = replace(PoolPower(), mean_context_tokens=_mean_T(wl), power_curve=POWER_CURVE)
     pop = generate(pool, wl, n_nodes=N_NODES, seed=seed)
     return pool, with_source_nodes(pop, place_source_nodes(pop, pool, N_NODES, "memory"))
 
@@ -55,6 +59,13 @@ def additive_result(pop, pool, imp, target):
 
 
 def method_specs(pop, pool, imp, target):
+    if pool.power_curve == "log":
+        return (
+            ("additive LP", lambda: additive_result(pop, pool, imp, target)),
+            ("power-function LP relaxation", lambda: solve_power_function_lp(pop, pool, imp, target, EVENT, MOVE)),
+            ("live greedy", lambda: solve_live_greedy(pop, pool, imp, target, EVENT, MOVE)),
+            ("random jobs", lambda: solve_random_jobs(pop, pool, imp, target, EVENT, MOVE, seed=0)),
+        )
     return (
         ("additive LP", lambda: additive_result(pop, pool, imp, target)),
         ("active-knee LP relaxation", lambda: solve_active_knee_lp(pop, pool, imp, target, EVENT, MOVE)),
@@ -100,6 +111,15 @@ def run_sweep(workloads=SESSION_CLASSES, target_fracs=TARGET_FRACS):
     return rows
 
 
+def env_workloads():
+    return tuple(x for x in os.getenv("QUEUE_HAUL_WORKLOADS", "").split(",") if x) or SESSION_CLASSES
+
+
+def env_target_fracs():
+    text = os.getenv("QUEUE_HAUL_TARGET_FRACS", "")
+    return np.array([float(x) for x in text.split(",") if x]) if text else TARGET_FRACS
+
+
 def write_csv(rows, path):
     with open(path, "w", newline="") as f:
         w = csv.DictWriter(f, fieldnames=rows[0].keys())
@@ -112,11 +132,12 @@ def _median(xs):
     return float(np.median(xs)) if xs else np.nan
 
 
-def plot(rows, path_base="outputs/node_knee_target_sweep"):
+def plot(rows, path_base=OUT_BASE):
     workloads = list(dict.fromkeys(r["session_class"] for r in rows))
     fig, axs = plt.subplots(3, len(workloads), figsize=(3.9 * len(workloads), 8.3), sharex=False, squeeze=False)
     for col, cls in enumerate(workloads):
-        for method, color in COLORS.items():
+        for method in dict.fromkeys(r["method"] for r in rows):
+            color = {**COLORS, **PILOT_COLORS}[method]
             rs = [r for r in rows if r["session_class"] == cls and r["method"] == method]
             x = np.array([r["target_kw"] for r in rs])
             ratio = np.array([r["achieved_over_target"] for r in rs])
@@ -136,21 +157,23 @@ def plot(rows, path_base="outputs/node_knee_target_sweep"):
     axs[1, 0].set_ylabel("cost / achieved kW")
     axs[2, 0].set_ylabel("cost / requested kW")
     axs[0, 0].legend(fontsize=7, loc="upper left")
-    fig.suptitle(f"4-node fixed-deadline node-knee target sweep (D={EVENT.D:.0f}s)", y=0.995)
+    title = "node power-function" if POWER_CURVE == "log" else "node-knee"
+    fig.suptitle(f"4-node fixed-deadline {title} target sweep (D={EVENT.D:.0f}s)", y=0.995)
     fig.tight_layout()
     for ext in ("pdf", "png"):
         fig.savefig(f"{path_base}.{ext}", dpi=150)
 
 
 def main():
-    rows = run_sweep()
-    os.makedirs("outputs", exist_ok=True)
-    write_csv(rows, "outputs/node_knee_target_sweep.csv")
+    rows = run_sweep(env_workloads(), env_target_fracs())
+    os.makedirs(os.path.dirname(OUT_BASE), exist_ok=True)
+    write_csv(rows, f"{OUT_BASE}.csv")
     plot(rows)
-    print(f"rows={len(rows)} configs={len(rows) // len(COLORS)} deadline={EVENT.D:.0f}s source_nodes={N_NODES}")
-    for cls in SESSION_CLASSES:
+    methods = list(dict.fromkeys(r["method"] for r in rows))
+    print(f"rows={len(rows)} configs={len(rows) // len(methods)} deadline={EVENT.D:.0f}s source_nodes={N_NODES} power_curve={POWER_CURVE}")
+    for cls in dict.fromkeys(r["session_class"] for r in rows):
         print(cls)
-        for method in COLORS:
+        for method in methods:
             rs = [r for r in rows if r["session_class"] == cls and r["method"] == method]
             hit = [r for r in rs if r["hit"]]
             max_hit = max((r["target_kw"] for r in hit), default=np.nan)

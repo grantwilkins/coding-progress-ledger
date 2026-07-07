@@ -54,6 +54,8 @@ class PoolPower:
     mean_context_tokens: float = 65800.0  # §1 center E[T]
     c_prefill_j_per_tok: float = 0.148  # measured H100 dense analog, J/token
     c_decode_j_per_tok: float = 1.76  # measured H100 dense analog, J/token
+    power_curve: str = "knee"
+    log_shape: float = 8.55
 
     @property
     def p_bar(self) -> float:
@@ -101,15 +103,36 @@ class PoolPower:
         return (self.p_knee - self.p_idle_w) / self.power_knee
 
     def node_power(self, load):
-        """Ramp-then-plateau node power at node load; plateau slope extends above rho*."""
+        """Node power P(load): legacy knee curve or anchored log-concave pilot."""
         load = np.asarray(load, dtype=float)
+        if np.any(load < -1e-9):
+            raise ValueError("node load must be nonnegative")
+        load = np.maximum(load, 0.0)
+        if self.power_curve == "log":
+            if self.log_shape <= 0:
+                raise ValueError("log_shape must be positive")
+            z = np.log1p(self.log_shape * self.rho_star)
+            return self.p_idle_w + (self.p_busy_w - self.p_idle_w) * np.log1p(self.log_shape * load) / z
+        if self.power_curve != "knee":
+            raise ValueError(f"unknown power_curve {self.power_curve!r}")
         ramp = self.p_idle_w + self.ramp_slope * load
         plat = self.p_knee + self.s_plat * (load - self.power_knee)
         return np.where(load <= self.power_knee, ramp, plat)
 
     def node_power_slope(self, load):
         """A subgradient of node_power(load); choose the ramp slope at the knee."""
-        return np.where(np.asarray(load, dtype=float) <= self.power_knee, self.ramp_slope, self.s_plat)
+        load = np.asarray(load, dtype=float)
+        if np.any(load < -1e-9):
+            raise ValueError("node load must be nonnegative")
+        load = np.maximum(load, 0.0)
+        if self.power_curve == "log":
+            if self.log_shape <= 0:
+                raise ValueError("log_shape must be positive")
+            z = np.log1p(self.log_shape * self.rho_star)
+            return (self.p_busy_w - self.p_idle_w) * self.log_shape / ((1 + self.log_shape * load) * z)
+        if self.power_curve != "knee":
+            raise ValueError(f"unknown power_curve {self.power_curve!r}")
+        return np.where(load <= self.power_knee, self.ramp_slope, self.s_plat)
 
     def node_count(self, load: float, s_held: float) -> float:
         return max(load / self.rho_star, s_held / self.s_node)
