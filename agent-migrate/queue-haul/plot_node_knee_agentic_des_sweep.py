@@ -21,7 +21,7 @@ from node_knee import (
     solve_live_greedy,
     solve_random_jobs,
 )
-from plot_node_knee_target_sweep import COLORS, EVENT, MOVE, N_NODES, TARGET_FRACS, population
+from plot_node_knee_target_sweep import EVENT, MOVE, N_NODES, TARGET_FRACS, population
 from impact import compute
 from simulate import simulate
 
@@ -33,6 +33,13 @@ STAGES = {
     "selected": "selected plan",
     "egress_realized": "DES egress by D",
     "rebuild_realized": "DES rebuild by D",
+}
+COLORS = {
+    "additive LP": "0.45",
+    "active-knee LP relaxation": "tab:green",
+    "active-knee MILP": "tab:blue",
+    "live greedy": "tab:orange",
+    "random jobs": "tab:purple",
 }
 
 

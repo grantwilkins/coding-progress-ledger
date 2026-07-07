@@ -12,11 +12,10 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
 
-from dispatch import Event, solve
+from dispatch import Event
 from impact import Movement, compute
 from instance import SESSION_CLASSES, _mean_T, class_workload, generate
 from node_knee import (
-    _result,
     evaluate_node_expected_w,
     place_source_nodes,
     solve_active_knee_lp,
@@ -35,14 +34,20 @@ MOVE = Movement()
 POWER_CURVE = os.getenv("QUEUE_HAUL_POWER_CURVE", "knee")
 OUT_BASE = os.getenv("QUEUE_HAUL_TARGET_SWEEP_OUT", "outputs/node_knee_target_sweep")
 TARGET_FRACS = np.linspace(0.05, 0.95, 19)
-COLORS = {
-    "additive LP": "0.45",
-    "active-knee LP relaxation": "tab:green",
-    "active-knee MILP": "tab:blue",
-    "live greedy": "tab:orange",
-    "random jobs": "tab:purple",
+COLORS = {"LP relaxation": "tab:blue", "MILP": "tab:green", "greedy": "tab:orange", "random": "tab:purple"}
+METHOD_LABELS = {
+    "active-knee LP relaxation": "LP relaxation",
+    "active-knee MILP": "MILP",
+    "power-function LP relaxation": "LP relaxation",
+    "live greedy": "greedy",
+    "random jobs": "random",
+    **{k: k for k in COLORS},
 }
-PILOT_COLORS = {"power-function LP relaxation": "tab:green"}
+NUMERIC_FIELDS = (
+    "source_nodes", "jobs", "deadline_s", "target_frac", "target_kw", "full_node_kw",
+    "node_kw", "achieved_over_target", "active_kw", "cost_s",
+    "intensity_s_per_kw", "requested_intensity_s_per_kw",
+)
 
 
 def population(session_class: str, seed: int = 42):
@@ -52,26 +57,18 @@ def population(session_class: str, seed: int = 42):
     return pool, with_source_nodes(pop, place_source_nodes(pop, pool, N_NODES, "memory"))
 
 
-def additive_result(pop, pool, imp, target):
-    plan = solve(pop, pool, imp, target, EVENT, MOVE)
-    return _result(pop, pool, imp, plan.y_R, plan.y_S, plan.cost, "additive LP", target,
-                   EVENT, MOVE, plan.feasible)
-
-
 def method_specs(pop, pool, imp, target):
     if pool.power_curve == "log":
         return (
-            ("additive LP", lambda: additive_result(pop, pool, imp, target)),
-            ("power-function LP relaxation", lambda: solve_power_function_lp(pop, pool, imp, target, EVENT, MOVE)),
-            ("live greedy", lambda: solve_live_greedy(pop, pool, imp, target, EVENT, MOVE)),
-            ("random jobs", lambda: solve_random_jobs(pop, pool, imp, target, EVENT, MOVE, seed=0)),
+            ("LP relaxation", lambda: solve_power_function_lp(pop, pool, imp, target, EVENT, MOVE)),
+            ("greedy", lambda: solve_live_greedy(pop, pool, imp, target, EVENT, MOVE)),
+            ("random", lambda: solve_random_jobs(pop, pool, imp, target, EVENT, MOVE, seed=0)),
         )
     return (
-        ("additive LP", lambda: additive_result(pop, pool, imp, target)),
-        ("active-knee LP relaxation", lambda: solve_active_knee_lp(pop, pool, imp, target, EVENT, MOVE)),
-        ("active-knee MILP", lambda: solve_active_knee_milp(pop, pool, imp, target, EVENT, MOVE)),
-        ("live greedy", lambda: solve_live_greedy(pop, pool, imp, target, EVENT, MOVE)),
-        ("random jobs", lambda: solve_random_jobs(pop, pool, imp, target, EVENT, MOVE, seed=0)),
+        ("LP relaxation", lambda: solve_active_knee_lp(pop, pool, imp, target, EVENT, MOVE)),
+        ("MILP", lambda: solve_active_knee_milp(pop, pool, imp, target, EVENT, MOVE)),
+        ("greedy", lambda: solve_live_greedy(pop, pool, imp, target, EVENT, MOVE)),
+        ("random", lambda: solve_random_jobs(pop, pool, imp, target, EVENT, MOVE, seed=0)),
     )
 
 
@@ -127,6 +124,24 @@ def write_csv(rows, path):
         w.writerows(rows)
 
 
+def read_csv(path):
+    with open(path, newline="") as f:
+        return list(csv.DictReader(f))
+
+
+def plot_rows(rows):
+    out = []
+    for r in rows:
+        label = METHOD_LABELS.get(r["method"])
+        if label is None:
+            continue
+        row = {**r, "method": label, "hit": r["hit"] in (True, "True", "true", "1")}
+        row.update({k: float(row[k]) for k in NUMERIC_FIELDS})
+        row["source_nodes"], row["jobs"] = int(row["source_nodes"]), int(row["jobs"])
+        out.append(row)
+    return out
+
+
 def _median(xs):
     xs = [x for x in xs if np.isfinite(x)]
     return float(np.median(xs)) if xs else np.nan
@@ -134,28 +149,17 @@ def _median(xs):
 
 def plot(rows, path_base=OUT_BASE):
     workloads = list(dict.fromkeys(r["session_class"] for r in rows))
-    fig, axs = plt.subplots(3, len(workloads), figsize=(3.9 * len(workloads), 8.3), sharex=False, squeeze=False)
+    fig, axs = plt.subplots(1, len(workloads), figsize=(3.8 * len(workloads), 3.2), sharex=False, squeeze=False)
     for col, cls in enumerate(workloads):
         for method in dict.fromkeys(r["method"] for r in rows):
-            color = {**COLORS, **PILOT_COLORS}[method]
+            color = COLORS[method]
             rs = [r for r in rows if r["session_class"] == cls and r["method"] == method]
             x = np.array([r["target_kw"] for r in rs])
-            ratio = np.array([r["achieved_over_target"] for r in rs])
             intensity = np.array([r["intensity_s_per_kw"] for r in rs], float)
-            requested = np.array([r["requested_intensity_s_per_kw"] for r in rs], float)
-            axs[0, col].plot(x, ratio, marker="o", lw=1.8, ms=3.5, color=color, label=method)
-            axs[1, col].plot(x, intensity, marker="o", lw=1.8, ms=3.5, color=color)
-            axs[2, col].plot(x, requested, marker="o", lw=1.8, ms=3.5, color=color)
-        axs[0, col].axhline(1.0, color="0.2", ls="--", lw=1)
-        axs[0, col].set(title=cls.replace("_", " "), ylim=(0, None))
-        axs[1, col].set_yscale("log")
-        axs[2, col].set_yscale("log")
-        axs[2, col].set_xlabel("requested modeled shed (kW)")
-        for ax in axs[:, col]:
-            ax.grid(True, alpha=0.25)
-    axs[0, 0].set_ylabel("modeled shed / request")
-    axs[1, 0].set_ylabel("cost / achieved kW")
-    axs[2, 0].set_ylabel("cost / requested kW")
+            axs[0, col].plot(x, intensity, marker="o", lw=1.8, ms=3.5, color=color, label=method)
+        axs[0, col].set(title=cls.replace("_", " "), yscale="log", xlabel="requested modeled shed (kW)")
+        axs[0, col].grid(True, alpha=0.25)
+    axs[0, 0].set_ylabel("disruption (s/kW)")
     axs[0, 0].legend(fontsize=7, loc="upper left")
     title = "node power-function" if POWER_CURVE == "log" else "node-knee"
     fig.suptitle(f"4-node fixed-deadline {title} target sweep (D={EVENT.D:.0f}s)", y=0.995)
@@ -165,9 +169,10 @@ def plot(rows, path_base=OUT_BASE):
 
 
 def main():
-    rows = run_sweep(env_workloads(), env_target_fracs())
+    path = f"{OUT_BASE}.csv"
+    rows = plot_rows(read_csv(path)) if os.path.exists(path) and not os.getenv("QUEUE_HAUL_FORCE_RUN") else run_sweep(env_workloads(), env_target_fracs())
     os.makedirs(os.path.dirname(OUT_BASE), exist_ok=True)
-    write_csv(rows, f"{OUT_BASE}.csv")
+    write_csv(rows, path)
     plot(rows)
     methods = list(dict.fromkeys(r["method"] for r in rows))
     print(f"rows={len(rows)} configs={len(rows) // len(methods)} deadline={EVENT.D:.0f}s source_nodes={N_NODES} power_curve={POWER_CURVE}")

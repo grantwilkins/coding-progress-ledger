@@ -17,8 +17,8 @@ import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from plot_node_knee_agentic_des_sweep import EVENT, ORDERING, SESSION_CLASS, STAGES, run_sweep
-from plot_node_knee_target_sweep import COLORS, N_NODES
+from plot_node_knee_agentic_des_sweep import COLORS, EVENT, ORDERING, SESSION_CLASS, STAGES, run_sweep
+from plot_node_knee_target_sweep import N_NODES
 
 
 def test_agentic_des_sweep_reports_requested_shed_intensity():
