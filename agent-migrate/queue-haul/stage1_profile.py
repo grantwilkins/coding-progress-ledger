@@ -11,7 +11,9 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 CONFIG = "gpt-oss-20b-a100_tp1"
-PTRACE = Path(__file__).resolve().parents[3] / "powertrace-sim" / "results" / "two_price_fit"
+PTRACE = (
+    Path(__file__).resolve().parents[3] / "powertrace-sim" / "results" / "two_price_fit"
+)
 OUT_STEM = Path(__file__).resolve().parent / "outputs" / "stage1_gpt_oss_20b_a100_tp1"
 POWER_KNEE_FRAC = 0.8
 CONSTANT_FIELDS = (
@@ -42,7 +44,9 @@ def read_constants(path: Path, config: str) -> dict[str, float | str]:
     raise ValueError(f"missing constants for {config} in {path}")
 
 
-def load_windows(path: Path, constants: dict[str, float | str]) -> dict[str, np.ndarray]:
+def load_windows(
+    path: Path, constants: dict[str, float | str]
+) -> dict[str, np.ndarray]:
     windows = dict(np.load(path, allow_pickle=False))
     missing = sorted({"P", "f", "g"} - windows.keys())
     if missing:
@@ -50,7 +54,9 @@ def load_windows(path: Path, constants: dict[str, float | str]) -> dict[str, np.
     F, G = float(constants["F_prefill_tps"]), float(constants["G_decode_tps"])
     if F <= 0 or G <= 0:
         raise ValueError("F_prefill_tps and G_decode_tps must be positive")
-    windows["ell"] = np.asarray(windows["f"], float) / F + np.asarray(windows["g"], float) / G
+    windows["ell"] = (
+        np.asarray(windows["f"], float) / F + np.asarray(windows["g"], float) / G
+    )
     return windows
 
 
@@ -81,7 +87,9 @@ def binned_curve(ell, power, bins: int) -> list[dict[str, float | int]]:
     return rows
 
 
-def concave_power_curve(constants: dict[str, float | str], max_ell: float, points: int = 200) -> list[dict[str, float]]:
+def concave_power_curve(
+    constants: dict[str, float | str], max_ell: float, points: int = 200
+) -> list[dict[str, float]]:
     p0, pmax = float(constants["P0_w"]), float(constants["P_max_w"])
     knee = float(constants["ell_power_knee"])
     if pmax <= p0 or knee <= 0:
@@ -102,9 +110,8 @@ def write_csv(path: Path, rows: list[dict], fieldnames) -> None:
 
 def make_plot(windows, curve, power_curve, constants, out_stem: Path) -> None:
     ell, power = windows["ell"], windows["P"]
-    f_share = windows.get("f_share", np.zeros_like(ell))
     fig, ax = plt.subplots(figsize=(7.0, 4.7))
-    sc = ax.scatter(ell, power, c=f_share, s=7, alpha=0.25, cmap="coolwarm", vmin=0, vmax=1)
+    sc = ax.scatter(ell, power, s=7, alpha=0.25, vmin=0, vmax=1)
     ax.plot(
         [r["ell_mean"] for r in curve],
         [r["power_mean_w"] for r in curve],
@@ -122,20 +129,10 @@ def make_plot(windows, curve, power_curve, constants, out_stem: Path) -> None:
         lw=1.2,
         label="concave power curve",
     )
-    ax.axvline(constants["ell_power_knee"], color="purple", ls=":", lw=1.2, label="power knee")
-    ax.axvline(constants["rho_star"], color="red", ls="--", lw=1.2, label="rho*")
-    note = (
-        f"F={constants['F_prefill_tps']:.0f} tok/s, G={constants['G_decode_tps']:.0f} tok/s\n"
-        f"P0={constants['P0_w']:.0f} W, Pmax={constants['P_max_w']:.0f} W\n"
-        f"s_plat={constants['s_plat_w_per_ell']:.0f} W/ell, "
-        f"p_amort={constants['p_amort_w_per_ell']:.0f} W/ell"
-    )
-    ax.text(0.98, 0.05, note, transform=ax.transAxes, ha="right", va="bottom", fontsize=9)
     ax.set_xlabel("ell load = f/F + g/G")
     ax.set_ylabel("average node power [W]")
     ax.set_title("gpt-oss-20b on A100, TP=1")
     ax.legend(loc="upper left", fontsize=8)
-    fig.colorbar(sc, ax=ax, label="prefill token share")
     fig.tight_layout()
     fig.savefig(f"{out_stem}.png", dpi=160)
     fig.savefig(f"{out_stem}.pdf")
@@ -157,7 +154,11 @@ def main(argv: list[str] | None = None) -> None:
     constants = read_constants(args.summary, args.config)
     windows = load_windows(args.windows, constants)
     curve = binned_curve(windows["ell"], windows["P"], args.bins)
-    write_csv(args.out_stem.with_name(args.out_stem.name + "_curve.csv"), curve, curve[0].keys())
+    write_csv(
+        args.out_stem.with_name(args.out_stem.name + "_curve.csv"),
+        curve,
+        curve[0].keys(),
+    )
     power_curve = concave_power_curve(constants, float(np.nanmax(windows["ell"])))
     write_csv(
         args.out_stem.with_name(args.out_stem.name + "_power_curve.csv"),
