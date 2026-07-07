@@ -331,20 +331,23 @@ def _finish_live(pop, pool, imp, s_star, budget, draws, yR, yS, used, movable):
     node = _source_node(pop)
     resid = node_loads(pop) - removed_loads(pop, yR + yS)
     left = set(np.flatnonzero(movable)) - set(used)
-    while left and evaluate_node_expected_w(pop, pool, yR + yS) < s_star:
+    shed = evaluate_node_expected_w(pop, pool, yR + yS)
+    while left and shed < s_star:
         scores = []
-        for j in tuple(left):
+        js = np.array(tuple(left), int)
+        gains = pool.node_power(resid[node[js]]) - pool.node_power(resid[node[js]] - pop.ell[js])
+        for j, gain in zip(js, gains):
             act, action_cost = _best_feasible_action(budget, draws, imp, j)
             if act is None:
                 left.remove(j)
                 continue
-            val = float(pool.node_power(resid[node[j]]) - pool.node_power(resid[node[j]] - pop.ell[j]))
-            scores.append((-(val / max(action_cost, 1e-12)), j, act))
+            scores.append((-(float(gain) / max(action_cost, 1e-12)), j, act, float(gain)))
         if not scores:
             break
-        _, j, act = sorted(scores)[0]
+        _, j, act, gain = sorted(scores)[0]
         _move(budget, draws, yR, yS, act, j)
         resid[node[j]] -= pop.ell[j]
+        shed += gain
         left.remove(j)
     return yR, yS
 
