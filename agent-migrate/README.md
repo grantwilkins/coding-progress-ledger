@@ -141,8 +141,7 @@ $PY queue-haul/stage1b_drain_sink.py preflight --required-gpus 2
 $PY queue-haul/stage1b_drain_sink.py smoke2-live --mbps 1000 --run-root /tmp/qh-smoke2-live
 ```
 
-Stage 1c adds a tiny controller proof over the same two-instance stack. It uses a
-deterministic fixture only; workload design is intentionally out of scope.
+Stage 1c keeps the fixture proof as the fast source/sink controller check:
 
 ```bash
 $PY queue-haul/stage1c_controller.py plan
@@ -150,7 +149,28 @@ $PY queue-haul/stage1c_controller.py proof --mbps 1000 --run-root /tmp/qh-proof-
 $PY queue-haul/stage1c_controller.py check --run-root /tmp/qh-proof-live
 ```
 
-The live proof keeps LMCache, the shared 1Gbps throttle proxy, source vLLM on GPU
-0, and sink vLLM on GPU 1 up at the same time. It hard-fails unless source stays
-healthy while sink starts, cross-instance KV transfer works, replay works, and the
-controller produces and executes both replay and KV-transfer actions.
+For the production-shaped live controller, first build a local TraceLab-shaped
+session manifest from a pinned JSONL/JSONL.gz trace, then run the 4 Hz power trace
+and LP-ranked drain:
+
+```bash
+$PY queue-haul/stage1c_controller.py make-manifest \
+  --source tracelab \
+  --input /path/to/syfi_coding_trace.jsonl.gz \
+  --out /tmp/qh-live-sessions.json \
+  --sessions 8 \
+  --seed 0
+$PY queue-haul/stage1c_controller.py live-drain \
+  --manifest /tmp/qh-live-sessions.json \
+  --mbps 1000 \
+  --nvsmi-ms 250 \
+  --run-root /tmp/qh-live
+$PY queue-haul/stage1c_controller.py check-live --run-root /tmp/qh-live
+```
+
+`live-drain` keeps source vLLM on GPU 0 and sink vLLM on GPU 1 up together,
+runs Poisson turn loops from synthetic TraceLab-sized rolling transcripts, moves
+one session at a time by replay or KV transfer, and writes `gpu_power.csv`,
+`events.jsonl`, `controller_manifest.json`, `power_summary.csv`,
+`power_trace.png`, `source_power.png`, `sink_power.png`, `delay_summary.csv`, and
+`delay_summary.png`.

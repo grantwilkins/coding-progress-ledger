@@ -263,7 +263,32 @@ The successful live local run on 2026-07-08 used `/tmp/qh-proof-live`; it dispat
 `r0` as replay first and `k0` as KV second, and the KV action pulled
 `264243456` bytes over `kv/target_to_client`.
 
-### 5. Clean up and verify the node is idle
+### 5. Run the production-shaped live controller
+
+Build the session manifest from a local pinned TraceLab JSONL/JSONL.gz artifact,
+then run the LP-ranked live drain with 4 Hz `nvidia-smi` telemetry:
+
+```bash
+$PY queue-haul/stage1c_controller.py make-manifest \
+  --source tracelab \
+  --input /path/to/syfi_coding_trace.jsonl.gz \
+  --out /tmp/qh-live-sessions.json \
+  --sessions 8 \
+  --seed 0
+$PY queue-haul/stage1c_controller.py live-drain \
+  --manifest /tmp/qh-live-sessions.json \
+  --mbps 1000 \
+  --nvsmi-ms 250 \
+  --run-root /tmp/qh-live
+$PY queue-haul/stage1c_controller.py check-live --run-root /tmp/qh-live
+```
+
+The live controller writes `gpu_power.csv`, `events.jsonl`,
+`controller_manifest.json`, `power_summary.csv`, `power_trace.png`,
+`source_power.png`, `sink_power.png`, `delay_summary.csv`, and
+`delay_summary.png`. Power deltas are reported, not threshold-gated.
+
+### 6. Clean up and verify the node is idle
 
 The scripts stop their own children on normal exit. Verify anyway:
 

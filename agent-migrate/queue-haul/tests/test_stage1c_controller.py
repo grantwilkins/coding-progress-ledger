@@ -13,6 +13,11 @@ Plausible wrong implementations:
 
 from __future__ import annotations
 
+import csv
+import gzip
+import json
+from pathlib import Path
+
 import pytest
 
 import stage1c_controller as c
@@ -68,3 +73,134 @@ def test_manifest_check_requires_solver_mix_deadline_and_route_evidence():
     manifest["sessions"][1]["actual_start_s"] = 0.5
     with pytest.raises(ValueError, match="serial"):
         c.check_manifest(manifest)
+
+
+
+def _write_tracelab(path: Path) -> None:
+    rows = []
+    for sid, base in (("s0", 4096), ("s1", 8192)):
+        for i in range(3):
+            rows.append({
+                "session_id": sid,
+                "timestamp": 1000 + i * 60 + (0 if sid == "s0" else 10),
+                "input_tokens_total": base + i * 256,
+                "prefix_tokens": base - 128,
+                "newly_append_tokens": 128 + i,
+                "output_tokens": 32 + i,
+            })
+    with gzip.open(path, "wt") as f:
+        for row in rows:
+            f.write(json.dumps(row) + "\n")
+
+
+def test_tracelab_manifest_groups_clamps_and_preserves_turns(tmp_path: Path):
+    trace = tmp_path / "trace.jsonl.gz"
+    _write_tracelab(trace)
+
+    manifest = c.tracelab_manifest(trace, n_sessions=1, seed=0, max_model_len=4096, decode_margin=256, min_context_tokens=1024)
+    session = manifest["sessions"][0]
+
+    assert manifest["schema"] == c.MANIFEST_SCHEMA
+    assert manifest["source"]["type"] == "tracelab"
+    assert session["original_T"] > session["served_T"]
+    assert session["served_T"] == 3840
+    assert session["turn_rate_hz"] == pytest.approx(2 / 120)
+    assert [t["round"] for t in session["turns"]] == [0, 1, 2]
+    assert session["turns"][1]["gap_s"] == 60
+
+
+def test_tracelab_manifest_hard_fails_without_enough_long_sessions(tmp_path: Path):
+    trace = tmp_path / "trace.jsonl.gz"
+    _write_tracelab(trace)
+
+    with pytest.raises(ValueError, match="after filtering"):
+        c.tracelab_manifest(trace, n_sessions=3, seed=0, min_context_tokens=1024)
+
+
+def test_session_prompt_rolls_followups_and_cache_busts(tmp_path: Path):
+    trace = tmp_path / "trace.jsonl.gz"
+    _write_tracelab(trace)
+    session = c.tracelab_manifest(trace, 1, 0, max_model_len=4096, decode_margin=256, min_context_tokens=1024)["sessions"][0]
+
+    prompt = c.session_prompt(session, 2, replay_nonce="abc")
+
+    assert "Replay nonce abc" in prompt
+    assert "User follow-up 0" in prompt
+    assert "User follow-up 2" in prompt
+    assert session["id"] in prompt
+
+
+def test_live_manifest_validation_requires_controller_fields():
+    manifest = {"schema": c.MANIFEST_SCHEMA, "sessions": [{"id": "s"}]}
+
+    with pytest.raises(ValueError, match="missing served_T"):
+        c.live_sessions(manifest)
+
+
+def test_live_plan_uses_log_power_curve_and_dispatches_all(tmp_path: Path):
+    trace = tmp_path / "trace.jsonl.gz"
+    _write_tracelab(trace)
+    manifest = c.tracelab_manifest(trace, 2, 0, max_model_len=4096, decode_margin=256, min_context_tokens=1024)
+    manifest["deadline_s"] = 1e9
+    manifest["constants"]["lambda_src_bytes_per_s"] = 1e18
+    manifest["constants"]["mu_bytes_per_s"] = 1e18
+
+    summary = c.live_plan_summary(manifest)
+
+    assert summary["power_curve"]["name"] == "log"
+    assert len(summary["sessions"]) == 2
+    assert [s["dispatch_rank"] for s in summary["sessions"]] == [0, 1]
+    assert summary["sessions"][-1]["predicted_cumulative_source_drop_w"] == pytest.approx(summary["full_source_drop_w"])
+
+
+def test_nvsmi_command_uses_250ms_sampling():
+    assert c.nvsmi_cmd(250)[-2:] == ["-lms", "250"]
+
+
+def test_power_summary_rows_uses_named_windows(tmp_path: Path):
+    path = tmp_path / "gpu_power.csv"
+    with path.open("w", newline="") as f:
+        writer = csv.DictWriter(f, ["timestamp", "index", "power_w", "util_gpu", "memory_mib"])
+        writer.writeheader()
+        writer.writerows([
+            {"timestamp": 0, "index": 0, "power_w": 100, "util_gpu": 0, "memory_mib": 1},
+            {"timestamp": 1, "index": 0, "power_w": 200, "util_gpu": 0, "memory_mib": 1},
+            {"timestamp": 0, "index": 1, "power_w": 50, "util_gpu": 0, "memory_mib": 1},
+        ])
+
+    rows = c.power_summary_rows(path, {"baseline": (0, 1)})
+
+    by_gpu = {r["gpu"]: r for r in rows}
+    assert by_gpu[0]["power_mean_w"] == pytest.approx(150)
+    assert by_gpu[1]["power_mean_w"] == pytest.approx(50)
+
+
+def test_check_live_manifest_requires_files_and_route_evidence(tmp_path: Path):
+    for name in ("gpu_power.csv", "events.jsonl", "power_summary.csv", "power_trace.png", "source_power.png", "sink_power.png", "delay_summary.csv", "delay_summary.png"):
+        (tmp_path / name).write_text("x")
+    manifest = {
+        "schema": c.LIVE_SCHEMA,
+        "sessions": [
+            {"id": "r", "action": "R", "dispatch_rank": 0, "http_status": 200, "first_token_s": 0.1, "proxy_delta": {"api/client_to_target": 10}},
+            {"id": "s", "action": "S", "dispatch_rank": 1, "http_status": 200, "first_token_s": 0.2, "proxy_delta": {"kv/target_to_client": 10}},
+        ],
+    }
+
+    c.check_live_manifest(manifest, tmp_path)
+    manifest["sessions"][1]["proxy_delta"] = {}
+    with pytest.raises(ValueError, match="KV action"):
+        c.check_live_manifest(manifest, tmp_path)
+
+
+
+def test_delay_summary_writes_total_delay_csv_and_plot(tmp_path: Path):
+    rows = [
+        {"dispatch_rank": 0, "id": "s0", "action": "R", "first_token_s": 1.5, "completion_s": 2.5},
+        {"dispatch_rank": 1, "id": "s1", "action": "S", "first_token_s": 3.0, "completion_s": 4.0},
+    ]
+
+    delays = c.write_delay_summary(rows, tmp_path / "delay_summary.csv", tmp_path / "delay_summary.png")
+
+    assert sum(d["first_token_s"] for d in delays) == pytest.approx(4.5)
+    assert (tmp_path / "delay_summary.csv").read_text().splitlines()[0] == "dispatch_rank,id,action,first_token_s,completion_s"
+    assert (tmp_path / "delay_summary.png").exists()
