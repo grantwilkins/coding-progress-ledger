@@ -176,7 +176,7 @@ def test_power_summary_rows_uses_named_windows(tmp_path: Path):
 
 
 def test_check_live_manifest_requires_files_and_route_evidence(tmp_path: Path):
-    for name in ("gpu_power.csv", "events.jsonl", "power_summary.csv", "power_trace.png", "source_power.png", "sink_power.png", "delay_summary.csv", "delay_summary.png", "ell_power5s.csv", "ell_power5s.png"):
+    for name in ("gpu_power.csv", "events.jsonl", "power_summary.csv", "power_trace.png", "source_power.png", "sink_power.png", "delay_summary.csv", "delay_summary.png", "ell_power5s.csv", "ell_power5s.png", "request_counts.csv"):
         (tmp_path / name).write_text("x")
     manifest = {
         "schema": c.LIVE_SCHEMA,
@@ -250,6 +250,130 @@ def test_delay_summary_writes_total_delay_csv_and_plot(tmp_path: Path):
     assert sum(d["first_token_s"] for d in delays) == pytest.approx(4.5)
     assert (tmp_path / "delay_summary.csv").read_text().splitlines()[0] == "dispatch_rank,id,action,first_token_s,completion_s"
     assert (tmp_path / "delay_summary.png").exists()
+
+
+
+def _manifest_for_live_policy_tests(tmp_path: Path) -> dict:
+    trace = tmp_path / "trace.jsonl.gz"
+    _write_tracelab(trace)
+    manifest = c.tracelab_manifest(trace, 2, 0, max_model_len=4096, decode_margin=256, min_context_tokens=1024)
+    manifest["constants"]["lambda_src_bytes_per_s"] = 1e18
+    manifest["constants"]["mu_bytes_per_s"] = 1e18
+    return manifest
+
+
+def test_live_plan_supports_policy_deadline_and_target_fraction(tmp_path: Path):
+    manifest = _manifest_for_live_policy_tests(tmp_path)
+
+    summaries = [c.live_plan_summary(manifest, policy=p, deadline_s=30, target_frac=0.25, seed=3) for p in ("lp", "random", "greedy")]
+
+    assert {s["policy"] for s in summaries} == {"lp", "random", "greedy"}
+    for summary in summaries:
+        assert summary["deadline_s"] == 30
+        assert summary["target_frac"] == pytest.approx(0.25)
+        assert summary["target_w"] == pytest.approx(0.25 * summary["full_source_drop_w"])
+        assert summary["sessions"]
+        assert [r["dispatch_rank"] for r in summary["sessions"]] == list(range(len(summary["sessions"])))
+
+
+def test_random_live_plan_is_seed_reproducible(tmp_path: Path):
+    manifest = _manifest_for_live_policy_tests(tmp_path)
+
+    a = c.live_plan_summary(manifest, policy="random", target_frac=1.0, seed=7)
+    b = c.live_plan_summary(manifest, policy="random", target_frac=1.0, seed=7)
+
+    assert [(r["id"], r["action"]) for r in a["sessions"]] == [(r["id"], r["action"]) for r in b["sessions"]]
+
+
+def test_live_plan_records_target_miss_without_raising(tmp_path: Path):
+    manifest = _manifest_for_live_policy_tests(tmp_path)
+
+    summary = c.live_plan_summary(manifest, policy="greedy", target_frac=1.1)
+
+    assert summary["planned_hit"] is False
+    assert summary["planned_shortfall_w"] > 0
+
+
+def test_request_count_rows_groups_request_starts_by_phase_and_port(tmp_path: Path):
+    path = tmp_path / "events.jsonl"
+    path.write_text("\n".join([
+        json.dumps({"ts": 0.5, "kind": "request_start", "port": 8100}),
+        json.dumps({"ts": 1.5, "kind": "request_start", "port": 8400}),
+        json.dumps({"ts": 2.0, "kind": "request_end", "port": 8400}),
+    ]) + "\n")
+
+    rows = c.request_count_rows(path, {"baseline": (0, 1), "post": (1, 3)})
+
+    assert rows == [
+        {"phase": "baseline", "port": 8100, "requests": 1},
+        {"phase": "post", "port": 8400, "requests": 1},
+    ]
+
+
+def test_grid_summary_row_aggregates_power_and_delay(tmp_path: Path):
+    run = tmp_path / "r"
+    run.mkdir()
+    with (run / "power_summary.csv").open("w", newline="") as f:
+        writer = csv.DictWriter(f, ["phase", "gpu", "samples", "power_mean_w"])
+        writer.writeheader()
+        writer.writerows([
+            {"phase": "baseline", "gpu": 0, "samples": 1, "power_mean_w": 300},
+            {"phase": "baseline", "gpu": 1, "samples": 1, "power_mean_w": 80},
+            {"phase": "post", "gpu": 0, "samples": 1, "power_mean_w": 100},
+            {"phase": "post", "gpu": 1, "samples": 1, "power_mean_w": 220},
+        ])
+    (run / "controller_manifest.json").write_text(json.dumps({
+        "schema": c.LIVE_SCHEMA,
+        "policy": "lp",
+        "deadline_s": 30,
+        "target_frac": 0.45,
+        "target_w": 1000,
+        "full_source_drop_w": 2000,
+        "planned_source_drop_w": 900,
+        "planned_shortfall_w": 100,
+        "planned_hit": False,
+        "sessions": [{"first_token_s": 1.5, "completion_s": 2.5}],
+    }))
+
+    row = c.grid_summary_row(run)
+
+    assert row["measured_source_drop_w"] == pytest.approx(200)
+    assert row["measured_sink_rise_w"] == pytest.approx(140)
+    assert row["total_completion_s"] == pytest.approx(2.5)
+    assert row["planned_hit"] is False
+
+
+def test_write_grid_summary_writes_csv_and_plots(tmp_path: Path):
+    run = tmp_path / "r"
+    run.mkdir()
+    with (run / "power_summary.csv").open("w", newline="") as f:
+        writer = csv.DictWriter(f, ["phase", "gpu", "samples", "power_mean_w"])
+        writer.writeheader()
+        writer.writerows([
+            {"phase": "baseline", "gpu": 0, "samples": 1, "power_mean_w": 300},
+            {"phase": "baseline", "gpu": 1, "samples": 1, "power_mean_w": 80},
+            {"phase": "post", "gpu": 0, "samples": 1, "power_mean_w": 100},
+            {"phase": "post", "gpu": 1, "samples": 1, "power_mean_w": 220},
+        ])
+    (run / "controller_manifest.json").write_text(json.dumps({
+        "schema": c.LIVE_SCHEMA,
+        "policy": "greedy",
+        "deadline_s": 120,
+        "target_frac": 0.65,
+        "target_w": 1000,
+        "full_source_drop_w": 2000,
+        "planned_source_drop_w": 1000,
+        "planned_shortfall_w": 0,
+        "planned_hit": True,
+        "sessions": [{"first_token_s": 1.0, "completion_s": 2.0}],
+    }))
+
+    rows = c.write_grid_summary([run], tmp_path / "scenario_summary.csv", tmp_path / "grid_power_drop.png", tmp_path / "grid_delay.png")
+
+    assert rows[0]["policy"] == "greedy"
+    assert (tmp_path / "scenario_summary.csv").exists()
+    assert (tmp_path / "grid_power_drop.png").exists()
+    assert (tmp_path / "grid_delay.png").exists()
 
 
 def test_tracelab_manifest_skips_bad_token_rows(tmp_path: Path):
