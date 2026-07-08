@@ -272,15 +272,15 @@ then run the LP-ranked live drain with 4 Hz `nvidia-smi` telemetry:
 $PY queue-haul/stage1c_controller.py make-manifest \
   --source tracelab \
   --input /path/to/syfi_coding_trace.jsonl.gz \
-  --out /tmp/qh-live-sessions.json \
+  --out queue-haul/outputs/stage1c_live-sessions.json \
   --sessions 8 \
   --seed 0
 $PY queue-haul/stage1c_controller.py live-drain \
-  --manifest /tmp/qh-live-sessions.json \
+  --manifest queue-haul/outputs/stage1c_live-sessions.json \
   --mbps 1000 \
   --nvsmi-ms 250 \
-  --run-root /tmp/qh-live
-$PY queue-haul/stage1c_controller.py check-live --run-root /tmp/qh-live
+  --run-root queue-haul/outputs/stage1c_live
+$PY queue-haul/stage1c_controller.py check-live --run-root queue-haul/outputs/stage1c_live
 ```
 
 The live controller writes `gpu_power.csv`, `events.jsonl`,
