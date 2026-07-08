@@ -112,3 +112,24 @@ The reducer writes:
 - `queue-haul/outputs/stage1_gpt_oss_20b_a100_tp1_decode_context.{csv,pdf,png}`
 - `queue-haul/outputs/stage1_gpt_oss_20b_a100_tp1_mixed_surface.{csv,pdf,png}`
 - `queue-haul/outputs/stage1_gpt_oss_20b_a100_tp1_service_scale.csv`
+
+## Queue-Haul Stage 1b Source/Sink Smoke
+
+Stage 1b uses the validated old vLLM Apptainer sandbox with LMCache and a
+stdlib user-space proxy instead of Docker or privileged kernel `tc`. Generate the
+two-GPU source/sink startup commands with:
+
+```bash
+uv run python queue-haul/stage1b_drain_sink.py smoke2-plan
+uv run python queue-haul/stage1b_drain_sink.py drain-plan
+```
+
+On a one-GPU A100 node, run the same-instance LMCache gate with:
+
+```bash
+uv run python queue-haul/stage1b_drain_sink.py preflight
+uv run python queue-haul/stage1b_drain_sink.py smoke1
+```
+
+The generated two-GPU plan starts LMCache, the shared throttle proxy, source
+vLLM on GPU 0, and sink vLLM on GPU 1.
