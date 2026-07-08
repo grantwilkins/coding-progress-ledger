@@ -318,22 +318,31 @@ def _trace_tokens(row: dict) -> dict:
 
 def _words(tag: str, tokens: int) -> str:
     n = max(1, int(tokens * WORDS_PER_TOKEN))
-    return " ".join(f"{tag}_{i % 997}" for i in range(n))
+    return f"{tag} " + " ".join("x" for _ in range(n))
 
 
 def session_prompt(session: dict, turn_index: int, replay_nonce: str | None = None) -> str:
     turns = session.get("turns", [])
     upto = turns[: max(1, min(turn_index + 1, len(turns)))]
-    turn_tokens = sum(int(t["append_tokens"]) for t in upto)
     cap = int(session["served_T"])
-    profile_tokens = max(128, cap - turn_tokens - 128)
+    budget = max(256, cap - 1024)
+    selected = []
+    for i in range(len(upto) - 1, -1, -1):
+        take = min(int(upto[i]["append_tokens"]), budget)
+        if take <= 0:
+            break
+        selected.append((i, take))
+        budget -= take
+    selected.reverse()
+    turn_tokens = sum(t for _, t in selected)
+    profile_tokens = max(128, min(cap - turn_tokens - 512, cap // 2))
     parts = []
     if replay_nonce:
         parts.append(f"Replay nonce {replay_nonce}.")
     parts.append(f"Synthetic TraceLab-sized coding-agent session {session['id']}.")
     parts.append("Stable task state " + _words(f"state_{session['id']}", profile_tokens))
-    for i, turn in enumerate(upto):
-        parts.append(f"User follow-up {i}: " + _words(f"turn_{session['id']}_{i}", int(turn["append_tokens"])))
+    for i, tokens in selected:
+        parts.append(f"User follow-up {i}: " + _words(f"turn_{session['id']}_{i}", tokens))
     parts.append("Reply with one concise progress sentence.")
     return "\n".join(parts)
 
@@ -351,11 +360,18 @@ def tracelab_manifest(path: Path, n_sessions: int, seed: int, max_model_len: int
         rows = sorted(rows, key=lambda r: (_row_time(r), r.get("_line", 0)))
         if len(rows) < min_turns:
             continue
-        times = [_row_time(r) for r in rows]
+        good = []
+        for r in rows:
+            try:
+                good.append((r, _row_time(r), _trace_tokens(r)))
+            except ValueError:
+                pass
+        if len(good) < min_turns:
+            continue
+        rows, times, toks = zip(*good)
         span = times[-1] - times[0]
         if span <= 0:
             continue
-        toks = [_trace_tokens(r) for r in rows]
         original_T = max(t["total"] for t in toks)
         if original_T < min_context_tokens:
             continue
@@ -526,13 +542,17 @@ class JsonlLog:
         path.parent.mkdir(parents=True, exist_ok=True)
         self.handle = path.open("w", buffering=1)
         self.lock = threading.Lock()
+        self.closed = False
 
     def write(self, kind: str, **row) -> None:
         with self.lock:
-            self.handle.write(json.dumps({"ts": time.time(), "kind": kind, **row}, sort_keys=True) + "\n")
+            if not self.closed:
+                self.handle.write(json.dumps({"ts": time.time(), "kind": kind, **row}, sort_keys=True) + "\n")
 
     def close(self) -> None:
-        self.handle.close()
+        with self.lock:
+            self.closed = True
+            self.handle.close()
 
 
 class SessionWorker:
@@ -585,7 +605,8 @@ class SessionWorker:
             prompt = session_prompt(self.session, idx)
             self.log.write("request_start", session_id=self.session["id"], turn=idx, port=self.port)
             result = stream_chat(self.cfg, self.port, prompt, int(self.session["decode_tokens"]))
-            self.last_prompt = prompt
+            if result["status"] == 200:
+                self.last_prompt = prompt
             self.log.write("request_end", session_id=self.session["id"], turn=idx, port=self.port, status=result["status"], first_token_ts=result["first_token_ts"], end_ts=result["end_ts"])
             with self.cond:
                 self.in_flight = False

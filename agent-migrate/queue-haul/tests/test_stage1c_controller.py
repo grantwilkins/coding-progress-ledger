@@ -204,3 +204,20 @@ def test_delay_summary_writes_total_delay_csv_and_plot(tmp_path: Path):
     assert sum(d["first_token_s"] for d in delays) == pytest.approx(4.5)
     assert (tmp_path / "delay_summary.csv").read_text().splitlines()[0] == "dispatch_rank,id,action,first_token_s,completion_s"
     assert (tmp_path / "delay_summary.png").exists()
+
+
+def test_tracelab_manifest_skips_bad_token_rows(tmp_path: Path):
+    trace = tmp_path / "trace.jsonl.gz"
+    rows = [
+        {"session_id": "s", "timestamp": 0, "input_tokens_total": 4096, "prefix_tokens": 0, "newly_append_tokens": 100, "output_tokens": 10},
+        {"session_id": "s", "timestamp": 1, "input_tokens_total": 0, "prefix_tokens": 0, "newly_append_tokens": 100, "output_tokens": 10},
+        {"session_id": "s", "timestamp": 2, "input_tokens_total": 4200, "prefix_tokens": 4096, "newly_append_tokens": 100, "output_tokens": 10},
+        {"session_id": "s", "timestamp": 3, "input_tokens_total": 4300, "prefix_tokens": 4200, "newly_append_tokens": 100, "output_tokens": 10},
+    ]
+    with gzip.open(trace, "wt") as f:
+        for row in rows:
+            f.write(json.dumps(row) + "\n")
+
+    manifest = c.tracelab_manifest(trace, 1, 0, max_model_len=8192, min_context_tokens=1024)
+
+    assert len(manifest["sessions"][0]["turns"]) == 3
