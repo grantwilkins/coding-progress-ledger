@@ -282,12 +282,16 @@ $PY queue-haul/stage1c_controller.py live-drain \
   --run-root queue-haul/outputs/stage1c_live
 $PY queue-haul/stage1c_controller.py check-live --run-root queue-haul/outputs/stage1c_live
 $PY queue-haul/stage1c_controller.py plot-live --run-root queue-haul/outputs/stage1c_live
+$PY queue-haul/stage1c_controller.py live-grid \
+  --manifest queue-haul/outputs/stage1c_live-sessions.json \
+  --mbps 1000 \
+  --run-root queue-haul/outputs/stage1c_grid
 ```
 
 The live controller writes `gpu_power.csv`, `events.jsonl`,
 `controller_manifest.json`, `power_summary.csv`, `power_trace.png`,
 `source_power.png`, `sink_power.png`, `delay_summary.csv`,
-`delay_summary.png`, `ell_power5s.csv`, and `ell_power5s.png`. Power deltas
+`delay_summary.png`, `ell_power5s.csv`, `ell_power5s.png`, and `request_counts.csv`. `live-grid` also writes `scenario_summary.csv`, `grid_power_drop.png`, and `grid_delay.png`. Power deltas
 are reported, not threshold-gated.
 
 ### 6. Clean up and verify the node is idle

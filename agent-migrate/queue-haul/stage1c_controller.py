@@ -22,7 +22,7 @@ import stage1b_drain_sink as b
 from dispatch import Event, solve
 from impact import Movement, compute
 from instance import JobPopulation
-from node_knee import evaluate_node_expected_w, solve_power_function_lp
+from node_knee import evaluate_node_expected_w, solve_live_greedy, solve_power_function_lp, solve_random_jobs
 from power import BETA_BYTES_PER_TOK, ETA_BYTES_PER_TOK, PoolPower, rho_replay
 
 SCHEMA = "queue-haul-stage1c-v1"
@@ -31,7 +31,7 @@ MANIFEST_SCHEMA = "queue-haul-stage1c-session-manifest-v1"
 LIVE_ARTIFACTS = (
     "gpu_power.csv", "events.jsonl", "power_summary.csv", "power_trace.png",
     "source_power.png", "sink_power.png", "delay_summary.csv", "delay_summary.png",
-    "ell_power5s.csv", "ell_power5s.png",
+    "ell_power5s.csv", "ell_power5s.png", "request_counts.csv",
 )
 WORDS_PER_TOKEN = 0.75
 
@@ -461,7 +461,7 @@ def build_live_population(manifest: dict) -> JobPopulation:
     return build_population(patched)
 
 
-def live_plan_summary(manifest: dict) -> dict:
+def _live_model(manifest: dict, deadline_s: float | None = None, target_frac: float | None = None):
     sessions = live_sessions(manifest)
     pop = build_live_population(manifest)
     const = manifest["constants"]
@@ -473,17 +473,59 @@ def live_plan_summary(manifest: dict) -> dict:
         dest_ingest_util=0.0,
     )
     imp = compute(pop, pool, move)
-    event = Event(D=float(manifest["deadline_s"]), dest_nodes=1, spare_frac=1.0, tau_src=0.0, tau_pre=0.0, tau_in=0.0)
+    event = Event(D=float(manifest["deadline_s"] if deadline_s is None else deadline_s), dest_nodes=1, spare_frac=1.0, tau_src=0.0, tau_pre=0.0, tau_in=0.0)
     full_w = evaluate_node_expected_w(pop, pool, np.ones(len(pop)))
     target = manifest.get("target_w", "all")
-    target_w = full_w if target == "all" else float(target)
-    lp = solve_power_function_lp(pop, pool, imp, target_w, event, move)
-    rows = []
-    cumulative = np.zeros(len(pop))
-    for i in sorted(range(len(pop)), key=lambda j: (-(lp.y_R[j] + lp.y_S[j]), -pop.ell[j], j)):
-        action = "R" if lp.y_R[i] >= lp.y_S[i] else "S"
-        if lp.y_R[i] + lp.y_S[i] <= 1e-9:
-            action = "R" if imp.c_replay[i] <= imp.c_transfer[i] else "S"
+    target_w = float(target_frac) * full_w if target_frac is not None else full_w if target == "all" else float(target)
+    return sessions, pop, pool, move, imp, event, full_w, target_w
+
+
+def _policy_result(policy: str, pop: JobPopulation, pool: PoolPower, imp, target_w: float, event: Event, move: Movement, seed: int):
+    if policy == "lp":
+        return solve_power_function_lp(pop, pool, imp, target_w, event, move)
+    if policy == "random":
+        return solve_random_jobs(pop, pool, imp, target_w, event, move, seed=seed)
+    if policy == "greedy":
+        return solve_live_greedy(pop, pool, imp, target_w, event, move)
+    raise ValueError(f"unknown live policy {policy!r}")
+
+
+def _row_action(result, imp, i: int) -> str:
+    if result.y_R[i] + result.y_S[i] <= 1e-9:
+        return "R" if imp.c_replay[i] <= imp.c_transfer[i] else "S"
+    return "R" if result.y_R[i] >= result.y_S[i] else "S"
+
+
+def _policy_order(policy: str, result, pop: JobPopulation, pool: PoolPower, imp, seed: int) -> list[int]:
+    selected = set(np.flatnonzero(result.y > 1e-9))
+    if policy == "random":
+        return [int(i) for i in np.random.default_rng(seed).permutation(len(pop)) if i in selected]
+    if policy == "greedy":
+        y, out = np.zeros(len(pop)), []
+        while selected:
+            base = evaluate_node_expected_w(pop, pool, y)
+            scored = []
+            for i in selected:
+                yy = y.copy()
+                yy[i] = 1.0
+                action = _row_action(result, imp, int(i))
+                cost = imp.c_replay[i] if action == "R" else imp.c_transfer[i]
+                scored.append((-(evaluate_node_expected_w(pop, pool, yy) - base) / max(cost, 1e-12), int(i)))
+            i = sorted(scored)[0][1]
+            y[i] = 1.0
+            out.append(i)
+            selected.remove(i)
+        return out
+    return [int(i) for i in sorted(selected, key=lambda j: (-(result.y_R[j] + result.y_S[j]), -pop.ell[j], j))]
+
+
+def live_plan_summary(manifest: dict, policy: str = "lp", seed: int = 0,
+                      deadline_s: float | None = None, target_frac: float | None = None) -> dict:
+    sessions, pop, pool, move, imp, event, full_w, target_w = _live_model(manifest, deadline_s, target_frac)
+    result = _policy_result(policy, pop, pool, imp, target_w, event, move, seed)
+    rows, cumulative = [], np.zeros(len(pop))
+    for i in _policy_order(policy, result, pop, pool, imp, seed):
+        action = _row_action(result, imp, i)
         cumulative[i] = 1.0
         predicted = evaluate_node_expected_w(pop, pool, cumulative)
         rows.append({
@@ -491,22 +533,29 @@ def live_plan_summary(manifest: dict) -> dict:
             "fixture_index": i,
             "dispatch_rank": len(rows),
             "action": action,
-            "lp_y_R": float(lp.y_R[i]),
-            "lp_y_S": float(lp.y_S[i]),
+            "y_R": float(result.y_R[i]),
+            "y_S": float(result.y_S[i]),
             "planned_finish_s": float(imp.c_replay[i] if action == "R" else imp.c_transfer[i]),
             "predicted_cumulative_source_drop_w": float(predicted),
             "served_T": int(pop.T[i]),
         })
-        if target != "all" and predicted >= target_w:
+        if predicted >= target_w:
             break
+    planned_w = evaluate_node_expected_w(pop, pool, cumulative)
+    target_ratio = target_w / full_w if full_w > 0 else math.nan
     return {
         "schema": "queue-haul-stage1c-live-plan-v1",
+        "policy": policy,
         "deadline_s": event.D,
+        "target_frac": float(target_frac if target_frac is not None else target_ratio),
         "target_w": target_w,
         "full_source_drop_w": full_w,
+        "planned_source_drop_w": planned_w,
+        "planned_shortfall_w": max(0.0, target_w - planned_w),
+        "planned_hit": planned_w >= target_w - 1e-6 * max(target_w, 1.0),
         "power_curve": {"name": pool.power_curve, "log_shape": pool.log_shape, "p_idle_w": pool.p_idle_w, "p_busy_w": pool.p_busy_w, "rho_star": pool.rho_star},
         "movement": {"lambda_src_bytes_per_s": move.lambda_src, "mu_bytes_per_s": move.mu_in},
-        "solver": {"method": lp.method, "feasible": lp.true_expected_feasible, "shortfall_w": lp.expected_shortfall_w, "cost_s": lp.cost},
+        "solver": {"method": result.method, "feasible": result.true_expected_feasible, "shortfall_w": result.expected_shortfall_w, "cost_s": result.cost},
         "sessions": rows,
     }
 
@@ -802,6 +851,29 @@ def write_delay_summary(rows: list[dict], out_csv: Path, out_png: Path) -> list[
     return delays
 
 
+def request_count_rows(events_jsonl: Path, windows: dict[str, tuple[float, float]]) -> list[dict]:
+    counts: dict[tuple[str, int], int] = {}
+    with events_jsonl.open() as f:
+        for line in f:
+            row = json.loads(line)
+            if row.get("kind") != "request_start":
+                continue
+            phase = next((k for k, (lo, hi) in windows.items() if lo <= float(row["ts"]) <= hi), None)
+            if phase is not None:
+                key = (phase, int(row["port"]))
+                counts[key] = counts.get(key, 0) + 1
+    return [{"phase": p, "port": port, "requests": n} for (p, port), n in sorted(counts.items())]
+
+
+def write_request_counts(events_jsonl: Path, out_csv: Path, windows: dict[str, tuple[float, float]]) -> list[dict]:
+    rows = request_count_rows(events_jsonl, windows)
+    with out_csv.open("w", newline="") as f:
+        writer = csv.DictWriter(f, ["phase", "port", "requests"])
+        writer.writeheader()
+        writer.writerows(rows)
+    return rows
+
+
 def check_live_manifest(manifest: dict, run_root: Path) -> None:
     if manifest.get("schema") != LIVE_SCHEMA:
         raise ValueError("bad live schema")
@@ -824,7 +896,9 @@ def check_live_manifest(manifest: dict, run_root: Path) -> None:
             raise ValueError(f"replay action lacks API bytes: {row['id']}")
 
 
-def live_drain(cfg: b.Config, run_root: Path, manifest: dict, mbps: float, nvsmi_ms: int, extra: list[str]) -> Path:
+def live_drain(cfg: b.Config, run_root: Path, manifest: dict, mbps: float, nvsmi_ms: int, extra: list[str],
+               policy: str = "lp", seed: int = 0, deadline_s: float | None = None,
+               target_frac: float | None = None) -> Path:
     sessions = live_sessions(manifest)
     stack = b.start_stack(cfg, run_root, mbps, extra)
     events = JsonlLog(run_root / "events.jsonl")
@@ -846,7 +920,7 @@ def live_drain(cfg: b.Config, run_root: Path, manifest: dict, mbps: float, nvsmi
         baseline_start = time.time()
         time.sleep(float(manifest.get("baseline_s", 120.0)))
         drain_start = time.time()
-        summary = live_plan_summary(manifest)
+        summary = live_plan_summary(manifest, policy, seed, deadline_s, target_frac)
         rows = []
         for row in summary["sessions"]:
             worker = workers[row["id"]]
@@ -876,8 +950,9 @@ def live_drain(cfg: b.Config, run_root: Path, manifest: dict, mbps: float, nvsmi
         write_power_plot(run_root / "gpu_power.csv", run_root / "source_power.png", rows, gpu=0)
         write_power_plot(run_root / "gpu_power.csv", run_root / "sink_power.png", rows, gpu=1)
         delays = write_delay_summary(rows, run_root / "delay_summary.csv", run_root / "delay_summary.png")
+        request_counts = write_request_counts(run_root / "events.jsonl", run_root / "request_counts.csv", windows)
         write_ell_power5s(run_root / "gpu_power.csv", {**summary, "input_manifest": manifest, "sessions": rows, "windows": windows}, run_root / "ell_power5s.csv", run_root / "ell_power5s.png")
-        out = {**summary, "schema": LIVE_SCHEMA, "input_manifest": manifest, "sessions": rows, "delay_summary": delays, "windows": windows, "acceptance": {"ok": True, "power_threshold_gated": False}}
+        out = {**summary, "schema": LIVE_SCHEMA, "input_manifest": manifest, "sessions": rows, "delay_summary": delays, "request_counts": request_counts, "windows": windows, "acceptance": {"ok": True, "power_threshold_gated": False, "planned_hit": summary["planned_hit"]}}
         check_live_manifest(out, run_root)
         (run_root / "controller_manifest.json").write_text(json.dumps(out, indent=2, sort_keys=True))
     finally:
@@ -888,6 +963,86 @@ def live_drain(cfg: b.Config, run_root: Path, manifest: dict, mbps: float, nvsmi
         events.close()
         b.stop_stack(stack)
     return run_root
+
+
+
+def _fmt(x: float) -> str:
+    return f"{float(x):g}".replace(".", "p")
+
+
+def grid_run_name(policy: str, deadline_s: float, target_frac: float) -> str:
+    return f"{policy}_D{_fmt(deadline_s)}_T{_fmt(target_frac)}"
+
+
+def _power_summary_lookup(path: Path) -> dict[tuple[str, int], float]:
+    with path.open() as f:
+        return {(r["phase"], int(r["gpu"])): float(r["power_mean_w"]) for r in csv.DictReader(f)}
+
+
+def grid_summary_row(run_root: Path) -> dict:
+    manifest = json.loads((run_root / "controller_manifest.json").read_text())
+    power = _power_summary_lookup(run_root / "power_summary.csv")
+    delays = manifest.get("delay_summary") or manifest.get("sessions", [])
+    return {
+        "policy": manifest["policy"],
+        "deadline_s": float(manifest["deadline_s"]),
+        "target_frac": float(manifest["target_frac"]),
+        "target_w": float(manifest["target_w"]),
+        "full_source_drop_w": float(manifest["full_source_drop_w"]),
+        "planned_source_drop_w": float(manifest["planned_source_drop_w"]),
+        "planned_shortfall_w": float(manifest["planned_shortfall_w"]),
+        "planned_hit": bool(manifest["planned_hit"]),
+        "measured_source_drop_w": power.get(("baseline", 0), math.nan) - power.get(("post", 0), math.nan),
+        "measured_sink_rise_w": power.get(("post", 1), math.nan) - power.get(("baseline", 1), math.nan),
+        "total_first_token_s": float(sum(d["first_token_s"] for d in delays)),
+        "total_completion_s": float(sum(d["completion_s"] for d in delays)),
+        "max_completion_s": float(max((d["completion_s"] for d in delays), default=math.nan)),
+        "sessions": len(manifest.get("sessions", [])),
+        "run_root": str(run_root),
+    }
+
+
+def _write_grid_plot(rows: list[dict], out_png: Path, y_key: str, ylabel: str) -> None:
+    import matplotlib.pyplot as plt
+    fig, ax = plt.subplots(figsize=(7, 4))
+    for policy in dict.fromkeys(r["policy"] for r in rows):
+        part = [r for r in rows if r["policy"] == policy]
+        ax.scatter([r["target_frac"] for r in part], [r[y_key] for r in part], label=policy, alpha=0.8)
+    ax.set(xlabel="target fraction", ylabel=ylabel)
+    ax.legend()
+    fig.tight_layout()
+    fig.savefig(out_png)
+    plt.close(fig)
+
+
+def write_grid_summary(run_roots: list[Path], out_csv: Path, power_png: Path, delay_png: Path) -> list[dict]:
+    rows = [grid_summary_row(p) for p in run_roots]
+    out_csv.parent.mkdir(parents=True, exist_ok=True)
+    with out_csv.open("w", newline="") as f:
+        writer = csv.DictWriter(f, rows[0].keys())
+        writer.writeheader()
+        writer.writerows(rows)
+    _write_grid_plot(rows, power_png, "measured_source_drop_w", "measured source drop W")
+    _write_grid_plot(rows, delay_png, "total_completion_s", "total completion delay s")
+    return rows
+
+
+def live_grid(cfg: b.Config, run_root: Path, manifest: dict, policies: list[str], deadlines: list[float],
+              target_fracs: list[float], mbps: float, nvsmi_ms: int, baseline_s: float,
+              settle_s: float, seed: int, extra: list[str]) -> Path:
+    run_roots, base = [], {**manifest, "baseline_s": baseline_s, "settle_s": settle_s}
+    for policy in policies:
+        for D in deadlines:
+            for frac in target_fracs:
+                dst = run_root / grid_run_name(policy, D, frac)
+                live_drain(cfg, dst, base, mbps, nvsmi_ms, extra, policy, seed, D, frac)
+                run_roots.append(dst)
+    write_grid_summary(run_roots, run_root / "scenario_summary.csv", run_root / "grid_power_drop.png", run_root / "grid_delay.png")
+    return run_root
+
+
+def _csv_list(text: str, cast=str):
+    return [cast(x) for x in text.split(",") if x]
 
 
 def parse_args(argv: list[str] | None = None):
@@ -921,7 +1076,24 @@ def parse_args(argv: list[str] | None = None):
     live_p.add_argument("--run-root", type=Path, default=Path("queue-haul/outputs/stage1c_live"))
     live_p.add_argument("--mbps", type=float, default=1000.0)
     live_p.add_argument("--nvsmi-ms", type=int, default=250)
+    live_p.add_argument("--policy", choices=("lp", "random", "greedy"), default="lp")
+    live_p.add_argument("--deadline-s", type=float)
+    live_p.add_argument("--target-frac", type=float)
+    live_p.add_argument("--seed", type=int, default=0)
     live_p.add_argument("extra_vllm_args", nargs=argparse.REMAINDER)
+    grid_p = sub.add_parser("live-grid")
+    b.add_common(grid_p)
+    grid_p.add_argument("--manifest", type=Path, required=True)
+    grid_p.add_argument("--run-root", type=Path, default=Path("queue-haul/outputs/stage1c_grid"))
+    grid_p.add_argument("--mbps", type=float, default=1000.0)
+    grid_p.add_argument("--nvsmi-ms", type=int, default=250)
+    grid_p.add_argument("--policies", default="lp,random,greedy")
+    grid_p.add_argument("--deadlines", default="10,30,120")
+    grid_p.add_argument("--target-fracs", default="0.25,0.45,0.65")
+    grid_p.add_argument("--baseline-s", type=float, default=120.0)
+    grid_p.add_argument("--settle-s", type=float, default=120.0)
+    grid_p.add_argument("--seed", type=int, default=0)
+    grid_p.add_argument("extra_vllm_args", nargs=argparse.REMAINDER)
     check_live_p = sub.add_parser("check-live")
     check_live_p.add_argument("--run-root", type=Path, default=Path("queue-haul/outputs/stage1c_live"))
     check_live_p.add_argument("--manifest", type=Path)
@@ -954,7 +1126,11 @@ def main(argv: list[str] | None = None) -> None:
     elif args.cmd == "live-drain":
         cfg = b.config_from_args(args)
         extra = args.extra_vllm_args[1:] if args.extra_vllm_args[:1] == ["--"] else args.extra_vllm_args
-        print(live_drain(cfg, args.run_root, json.loads(args.manifest.read_text()), args.mbps, args.nvsmi_ms, extra))
+        print(live_drain(cfg, args.run_root, json.loads(args.manifest.read_text()), args.mbps, args.nvsmi_ms, extra, args.policy, args.seed, args.deadline_s, args.target_frac))
+    elif args.cmd == "live-grid":
+        cfg = b.config_from_args(args)
+        extra = args.extra_vllm_args[1:] if args.extra_vllm_args[:1] == ["--"] else args.extra_vllm_args
+        print(live_grid(cfg, args.run_root, json.loads(args.manifest.read_text()), _csv_list(args.policies), _csv_list(args.deadlines, float), _csv_list(args.target_fracs, float), args.mbps, args.nvsmi_ms, args.baseline_s, args.settle_s, args.seed, extra))
     elif args.cmd == "check-live":
         path = args.manifest or args.run_root / "controller_manifest.json"
         check_live_manifest(json.loads(path.read_text()), args.run_root)
@@ -963,6 +1139,7 @@ def main(argv: list[str] | None = None) -> None:
         path = args.manifest or args.run_root / "controller_manifest.json"
         manifest = json.loads(path.read_text())
         write_ell_power5s(args.run_root / "gpu_power.csv", manifest, args.run_root / "ell_power5s.csv", args.run_root / "ell_power5s.png", args.bucket_s)
+        write_request_counts(args.run_root / "events.jsonl", args.run_root / "request_counts.csv", manifest["windows"])
         check_live_manifest(manifest, args.run_root)
         print(args.run_root / "ell_power5s.png")
 
