@@ -176,7 +176,7 @@ def test_power_summary_rows_uses_named_windows(tmp_path: Path):
 
 
 def test_check_live_manifest_requires_files_and_route_evidence(tmp_path: Path):
-    for name in ("gpu_power.csv", "events.jsonl", "power_summary.csv", "power_trace.png", "source_power.png", "sink_power.png", "delay_summary.csv", "delay_summary.png"):
+    for name in ("gpu_power.csv", "events.jsonl", "power_summary.csv", "power_trace.png", "source_power.png", "sink_power.png", "delay_summary.csv", "delay_summary.png", "ell_power5s.csv", "ell_power5s.png"):
         (tmp_path / name).write_text("x")
     manifest = {
         "schema": c.LIVE_SCHEMA,
@@ -191,6 +191,52 @@ def test_check_live_manifest_requires_files_and_route_evidence(tmp_path: Path):
     with pytest.raises(ValueError, match="KV action"):
         c.check_live_manifest(manifest, tmp_path)
 
+
+
+def test_ell_power5s_rows_joins_power_to_live_ell(tmp_path: Path):
+    path = tmp_path / "gpu_power.csv"
+    with path.open("w", newline="") as f:
+        writer = csv.DictWriter(f, ["timestamp", "index", "power_w", "util_gpu", "memory_mib"])
+        writer.writeheader()
+        for ts, p0, p1 in ((0, 300, 80), (1, 320, 90), (6, 150, 200), (7, 170, 220)):
+            writer.writerow({"timestamp": ts, "index": 0, "power_w": p0, "util_gpu": 0, "memory_mib": 1})
+            writer.writerow({"timestamp": ts, "index": 1, "power_w": p1, "util_gpu": 0, "memory_mib": 1})
+    manifest = {
+        "input_manifest": {"sessions": [
+            {"id": "s0", "ell_pre": 0.1, "ell_dec": 0.05},
+            {"id": "s1", "ell_pre": 0.2, "ell_dec": 0.05},
+        ]},
+        "sessions": [{"id": "s0", "move_start_ts": 6.0}],
+        "windows": {"baseline": [0, 5], "drain": [5, 10]},
+    }
+
+    rows = c.ell_power5s_rows(path, manifest, bucket_s=5)
+
+    by_key = {(r["bucket"], r["gpu"]): r for r in rows}
+    assert by_key[(0, 0)]["ell"] == pytest.approx(0.4)
+    assert by_key[(0, 1)]["ell"] == pytest.approx(0.0)
+    assert by_key[(1, 0)]["ell"] == pytest.approx(0.25)
+    assert by_key[(1, 1)]["ell"] == pytest.approx(0.15)
+    assert by_key[(0, 0)]["power_mean_w"] == pytest.approx(310)
+    assert by_key[(1, 1)]["power_mean_w"] == pytest.approx(210)
+
+
+def test_write_ell_power5s_writes_csv_and_plot(tmp_path: Path):
+    path = tmp_path / "gpu_power.csv"
+    with path.open("w", newline="") as f:
+        writer = csv.DictWriter(f, ["timestamp", "index", "power_w", "util_gpu", "memory_mib"])
+        writer.writeheader()
+        writer.writerows([
+            {"timestamp": 0, "index": 0, "power_w": 100, "util_gpu": 0, "memory_mib": 1},
+            {"timestamp": 0, "index": 1, "power_w": 50, "util_gpu": 0, "memory_mib": 1},
+        ])
+    manifest = {"input_manifest": {"sessions": [{"id": "s", "ell_pre": 0.1, "ell_dec": 0.1}]}, "sessions": [], "windows": {"baseline": [0, 5]}}
+
+    rows = c.write_ell_power5s(path, manifest, tmp_path / "ell_power5s.csv", tmp_path / "ell_power5s.png")
+
+    assert rows[0]["ell"] == pytest.approx(0.2)
+    assert (tmp_path / "ell_power5s.csv").read_text().splitlines()[0] == "bucket,bucket_start_s,bucket_end_s,gpu,node,ell,power_mean_w,samples"
+    assert (tmp_path / "ell_power5s.png").exists()
 
 
 def test_delay_summary_writes_total_delay_csv_and_plot(tmp_path: Path):

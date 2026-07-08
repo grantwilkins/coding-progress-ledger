@@ -28,6 +28,11 @@ from power import BETA_BYTES_PER_TOK, ETA_BYTES_PER_TOK, PoolPower, rho_replay
 SCHEMA = "queue-haul-stage1c-v1"
 LIVE_SCHEMA = "queue-haul-stage1c-live-v1"
 MANIFEST_SCHEMA = "queue-haul-stage1c-session-manifest-v1"
+LIVE_ARTIFACTS = (
+    "gpu_power.csv", "events.jsonl", "power_summary.csv", "power_trace.png",
+    "source_power.png", "sink_power.png", "delay_summary.csv", "delay_summary.png",
+    "ell_power5s.csv", "ell_power5s.png",
+)
 WORDS_PER_TOKEN = 0.75
 
 
@@ -712,6 +717,72 @@ def write_power_plot(power_csv: Path, out_png: Path, dispatch_rows: list[dict], 
     plt.close(fig)
 
 
+def _live_ell_by_gpu(manifest: dict, ts: float) -> dict[int, float]:
+    per_session = {s["id"]: float(s["ell_pre"]) + float(s["ell_dec"]) for s in manifest["input_manifest"]["sessions"]}
+    moved = sum(per_session[r["id"]] for r in manifest.get("sessions", []) if float(r["move_start_ts"]) <= ts)
+    total = sum(per_session.values())
+    return {0: max(0.0, total - moved), 1: moved}
+
+
+def ell_power5s_rows(power_csv: Path, manifest: dict, bucket_s: float = 5.0) -> list[dict]:
+    if bucket_s <= 0:
+        raise ValueError("bucket_s must be positive")
+    points = _power_points(power_csv)
+    if not points:
+        raise ValueError("empty power trace")
+    windows = manifest.get("windows", {})
+    if windows:
+        lo = min(float(v[0]) for v in windows.values())
+        hi = max(float(v[1]) for v in windows.values())
+        points = [p for p in points if lo <= p[0] <= hi]
+    else:
+        lo, hi = min(p[0] for p in points), max(p[0] for p in points)
+    if not points:
+        raise ValueError("power trace has no samples inside live windows")
+    if hi <= lo:
+        hi = lo + bucket_s
+    grouped: dict[tuple[int, int], list[float]] = {}
+    for ts, gpu, power in points:
+        rel = min(max(ts, lo), hi - 1e-9) - lo
+        grouped.setdefault((int(rel // bucket_s), gpu), []).append(power)
+    rows = []
+    for (bucket, gpu), vals in sorted(grouped.items()):
+        start = lo + bucket * bucket_s
+        end = min(start + bucket_s, hi)
+        ell = _live_ell_by_gpu(manifest, start + (end - start) / 2).get(gpu, 0.0)
+        rows.append({
+            "bucket": bucket,
+            "bucket_start_s": start - lo,
+            "bucket_end_s": end - lo,
+            "gpu": gpu,
+            "node": "source" if gpu == 0 else "sink" if gpu == 1 else f"gpu{gpu}",
+            "ell": ell,
+            "power_mean_w": float(np.mean(vals)),
+            "samples": len(vals),
+        })
+    return rows
+
+
+def write_ell_power5s(power_csv: Path, manifest: dict, out_csv: Path, out_png: Path, bucket_s: float = 5.0) -> list[dict]:
+    import matplotlib.pyplot as plt
+    rows = ell_power5s_rows(power_csv, manifest, bucket_s)
+    with out_csv.open("w", newline="") as f:
+        writer = csv.DictWriter(f, ["bucket", "bucket_start_s", "bucket_end_s", "gpu", "node", "ell", "power_mean_w", "samples"])
+        writer.writeheader()
+        writer.writerows(rows)
+    fig, ax = plt.subplots(figsize=(6, 4))
+    for node in ("source", "sink"):
+        part = [r for r in rows if r["node"] == node]
+        if part:
+            ax.scatter([r["ell"] for r in part], [r["power_mean_w"] for r in part], s=18, alpha=0.75, label=node)
+    ax.set(xlabel="ell", ylabel="5s average power W")
+    ax.legend()
+    fig.tight_layout()
+    fig.savefig(out_png)
+    plt.close(fig)
+    return rows
+
+
 def write_delay_summary(rows: list[dict], out_csv: Path, out_png: Path) -> list[dict]:
     import matplotlib.pyplot as plt
     delays = [{"dispatch_rank": r["dispatch_rank"], "id": r["id"], "action": r["action"], "first_token_s": r["first_token_s"], "completion_s": r["completion_s"]} for r in rows]
@@ -734,7 +805,7 @@ def write_delay_summary(rows: list[dict], out_csv: Path, out_png: Path) -> list[
 def check_live_manifest(manifest: dict, run_root: Path) -> None:
     if manifest.get("schema") != LIVE_SCHEMA:
         raise ValueError("bad live schema")
-    for name in ("gpu_power.csv", "events.jsonl", "power_summary.csv", "power_trace.png", "source_power.png", "sink_power.png", "delay_summary.csv", "delay_summary.png"):
+    for name in LIVE_ARTIFACTS:
         if not (run_root / name).exists():
             raise ValueError(f"missing {name}")
     sessions = manifest.get("sessions", [])
@@ -805,6 +876,7 @@ def live_drain(cfg: b.Config, run_root: Path, manifest: dict, mbps: float, nvsmi
         write_power_plot(run_root / "gpu_power.csv", run_root / "source_power.png", rows, gpu=0)
         write_power_plot(run_root / "gpu_power.csv", run_root / "sink_power.png", rows, gpu=1)
         delays = write_delay_summary(rows, run_root / "delay_summary.csv", run_root / "delay_summary.png")
+        write_ell_power5s(run_root / "gpu_power.csv", {**summary, "input_manifest": manifest, "sessions": rows, "windows": windows}, run_root / "ell_power5s.csv", run_root / "ell_power5s.png")
         out = {**summary, "schema": LIVE_SCHEMA, "input_manifest": manifest, "sessions": rows, "delay_summary": delays, "windows": windows, "acceptance": {"ok": True, "power_threshold_gated": False}}
         check_live_manifest(out, run_root)
         (run_root / "controller_manifest.json").write_text(json.dumps(out, indent=2, sort_keys=True))
@@ -853,6 +925,10 @@ def parse_args(argv: list[str] | None = None):
     check_live_p = sub.add_parser("check-live")
     check_live_p.add_argument("--run-root", type=Path, default=Path("queue-haul/outputs/stage1c_live"))
     check_live_p.add_argument("--manifest", type=Path)
+    plot_live_p = sub.add_parser("plot-live")
+    plot_live_p.add_argument("--run-root", type=Path, default=Path("queue-haul/outputs/stage1c_live"))
+    plot_live_p.add_argument("--manifest", type=Path)
+    plot_live_p.add_argument("--bucket-s", type=float, default=5.0)
     return p.parse_args(argv)
 
 
@@ -883,6 +959,12 @@ def main(argv: list[str] | None = None) -> None:
         path = args.manifest or args.run_root / "controller_manifest.json"
         check_live_manifest(json.loads(path.read_text()), args.run_root)
         print(path)
+    elif args.cmd == "plot-live":
+        path = args.manifest or args.run_root / "controller_manifest.json"
+        manifest = json.loads(path.read_text())
+        write_ell_power5s(args.run_root / "gpu_power.csv", manifest, args.run_root / "ell_power5s.csv", args.run_root / "ell_power5s.png", args.bucket_s)
+        check_live_manifest(manifest, args.run_root)
+        print(args.run_root / "ell_power5s.png")
 
 
 if __name__ == "__main__":
