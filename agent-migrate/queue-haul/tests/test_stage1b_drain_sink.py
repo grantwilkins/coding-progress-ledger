@@ -2,14 +2,13 @@
 Claim:
 Stage 1b starts from the validated old Apptainer sandbox path, keeps source and
 sink vLLM instances separate, and replaces privileged kernel tc with one
-user-space bandwidth bucket shared by the KV and API proxy routes.
+user-space bandwidth bucket shared by the source-egress KV/API proxy routes.
 
 Plausible wrong implementations:
 - Reintroduce Docker/latest-cu129 or LMCacheMPConnector.
 - Start source/sink with colliding ports, long TMPDIRs, or shared cache dirs.
 - Shape each route independently instead of enforcing one shared link.
-- Generate a two-GPU plan that is not runnable as host orchestration around
-  Apptainer children.
+- Bill both directions instead of the simulated source-egress directions.
 """
 
 from __future__ import annotations
@@ -17,7 +16,6 @@ from __future__ import annotations
 import asyncio
 import csv
 import time
-from pathlib import Path
 
 import pytest
 
@@ -48,28 +46,34 @@ def test_vllm_commands_pin_validated_sandbox_flags_and_roles():
     assert "kv_both" in smoke and "engine_id\":\"e0" in smoke
     assert "LMCACHE_REMOTE_URL=lm://127.0.0.1:5655" in source
     assert "LMCACHE_REMOTE_URL=lm://127.0.0.1:8300" in sink
+    assert "LMCACHE_LMCACHE_INSTANCE_ID=stage1b_src" in source
+    assert "LMCACHE_LMCACHE_INSTANCE_ID=stage1b_sink" in sink
     assert "VLLM_USE_FLASHINFER_SAMPLER=0" in source
     assert "LMCACHE_MAX_LOCAL_CPU_SIZE=0.25" in source
-    assert "TMPDIR=/tmp/t" in source
+    assert "TMPDIR=/tmp/qh-src-" in source
+    assert "TMPDIR=/tmp/qh-sink-" in sink
+    assert "VLLM_RPC_BASE_PATH=/tmp/qh-src-" in source
+    assert "VLLM_RPC_BASE_PATH=/tmp/qh-sink-" in sink
     assert "--enforce-eager" in source
+    assert "--disable-frontend-multiprocessing" in source
     assert "--async-scheduling" not in source
     assert "stage1b-src" in source and "stage1b-sink" in sink
 
 
-def test_lmcache_and_plan_use_host_proxy_not_docker_or_tc():
+def test_lmcache_and_proxy_use_host_commands_not_docker_or_tc():
     cfg = s.Config()
 
     lmcache = cmd_text(s.lmcache_cmd(cfg))
-    text = s.plan_text(cfg, "smoke2", 100.0, [])
+    proxy = cmd_text(s.proxy_cmd(cfg, 1000.0))
 
     assert "python3 -m lmcache.v1.server 127.0.0.1 5655 cpu" in lmcache
     assert "lmcache server --host" not in lmcache
-    assert "stage1b smoke2: host orchestrator" in text
-    assert "stage1b_drain_sink.py proxy" in text
-    assert "--kv-listen 127.0.0.1:8300 --kv-target 127.0.0.1:5655" in text
-    assert "--api-listen 127.0.0.1:8400 --api-target 127.0.0.1:8200" in text
-    assert "docker" not in text.lower()
-    assert " tc " not in text.lower()
+    assert "stage1b_drain_sink.py proxy" in proxy
+    assert "--kv-listen 127.0.0.1:8300 --kv-target 127.0.0.1:5655" in proxy
+    assert "--api-listen 127.0.0.1:8400 --api-target 127.0.0.1:8200" in proxy
+    assert "--mbps 1000.0" in proxy
+    assert "docker" not in proxy.lower()
+    assert " tc " not in proxy.lower()
 
 
 def test_duplicate_ports_and_passthrough_overrides_hard_fail():
@@ -94,7 +98,14 @@ def test_token_bucket_reserves_one_shared_timeline():
     assert bucket.reserve(75, 2.0) == 0
 
 
-def test_proxy_relay_shapes_bytes_and_logs(tmp_path):
+def test_source_egress_billing_directions_only():
+    assert s.billable("api", "client_to_target")
+    assert s.billable("kv", "target_to_client")
+    assert not s.billable("api", "target_to_client")
+    assert not s.billable("kv", "client_to_target")
+
+
+def test_proxy_relay_shapes_billable_bytes_and_logs(tmp_path):
     async def run():
         payload = b"x" * 512
         got = asyncio.get_running_loop().create_future()
@@ -108,12 +119,12 @@ def test_proxy_relay_shapes_bytes_and_logs(tmp_path):
         target_port = target_server.sockets[0].getsockname()[1]
         log = tmp_path / "proxy.csv"
         servers, byte_log = await s.start_proxy(
-            [s.Route("kv", "127.0.0.1", 0, "127.0.0.1", target_port)],
+            [s.Route("api", "127.0.0.1", 0, "127.0.0.1", target_port)],
             rate_bps=2048.0,
             log=log,
         )
         proxy_port = servers[0].sockets[0].getsockname()[1]
-        reader, writer = await asyncio.open_connection("127.0.0.1", proxy_port)
+        _reader, writer = await asyncio.open_connection("127.0.0.1", proxy_port)
         t0 = time.monotonic()
         writer.write(payload)
         await writer.drain()
@@ -135,4 +146,5 @@ def test_proxy_relay_shapes_bytes_and_logs(tmp_path):
     assert elapsed >= 0.20
     rows = list(csv.DictReader(log.open()))
     assert sum(int(r["bytes"]) for r in rows if r["direction"] == "client_to_target") == 512
-    assert {r["route"] for r in rows} == {"kv"}
+    assert {r["route"] for r in rows} == {"api"}
+    assert {r["billed"] for r in rows} == {"1"}

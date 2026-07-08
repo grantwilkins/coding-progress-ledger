@@ -19,6 +19,14 @@ uv sync
 uv run pytest
 ```
 
+On the A100 cluster node used for the source-sink proof, `uv` is not on PATH;
+load the local runtime and run pytest directly:
+
+```bash
+module load gcc/14.2.0 openblas/0.3.28
+.venv/bin/python -m pytest
+```
+
 ## Queue-Haul Plots
 
 Run from `queue-haul/`:
@@ -113,23 +121,38 @@ The reducer writes:
 - `queue-haul/outputs/stage1_gpt_oss_20b_a100_tp1_mixed_surface.{csv,pdf,png}`
 - `queue-haul/outputs/stage1_gpt_oss_20b_a100_tp1_service_scale.csv`
 
-## Queue-Haul Stage 1b Source/Sink Smoke
+## Queue-Haul Stage 1b/1c Source-Sink Proof
+
+Load the host controller runtime before Queue-Haul commands that import NumPy or
+CVXPY:
+
+```bash
+module load gcc/14.2.0 openblas/0.3.28
+PY=.venv/bin/python
+```
 
 Stage 1b uses the validated old vLLM Apptainer sandbox with LMCache and a
-stdlib user-space proxy instead of Docker or privileged kernel `tc`. Generate the
-two-GPU source/sink startup commands with:
+stdlib user-space proxy instead of Docker or privileged kernel `tc`. The proxy
+applies one shared 1Gbps source-egress bucket to API replay bytes and KV-transfer
+bytes. On a two-GPU A100 node, run:
 
 ```bash
-uv run python queue-haul/stage1b_drain_sink.py smoke2-plan
-uv run python queue-haul/stage1b_drain_sink.py drain-plan
+$PY queue-haul/stage1b_drain_sink.py preflight --required-gpus 2
+$PY queue-haul/stage1b_drain_sink.py smoke2 --mbps 1000 --run-root /tmp/qh-smoke2
 ```
 
-On a one-GPU A100 node, run the same-instance LMCache gate with:
+Stage 1c adds a tiny controller proof over the same two-instance stack. It uses a
+deterministic fixture only; workload design is intentionally out of scope.
 
 ```bash
-uv run python queue-haul/stage1b_drain_sink.py preflight
-uv run python queue-haul/stage1b_drain_sink.py smoke1
+$PY queue-haul/stage1c_controller.py plan
+$PY queue-haul/stage1c_controller.py proof --mbps 1000 --run-root /tmp/qh-proof
+$PY queue-haul/stage1c_controller.py check --run-root /tmp/qh-proof
 ```
 
-The generated two-GPU plan starts LMCache, the shared throttle proxy, source
-vLLM on GPU 0, and sink vLLM on GPU 1.
+The proof keeps LMCache and the shared 1Gbps throttle proxy up for the whole run,
+starts source vLLM on GPU 0 to store KV, stops that source process, then starts
+sink vLLM on GPU 1 to replay one session and retrieve one prewarmed session's KV.
+This sequential source-then-sink flow is the working path for the old sandbox on
+this node. It hard-fails unless cross-instance KV transfer works and the
+controller produces and executes both replay and KV-transfer actions.

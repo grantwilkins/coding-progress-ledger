@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 import csv
+import hashlib
 import http.client
 import json
 import os
@@ -11,6 +12,7 @@ import shutil
 import signal
 import socket
 import subprocess
+import sys
 import time
 from dataclasses import dataclass
 from pathlib import Path
@@ -22,7 +24,6 @@ SANDBOX = Path("/scratch/users/gfw/ptsim/vllm-openai-v0.10.1.1.sandbox")
 HF_HOME = Path("/scratch/users/gfw/ptsim/hf")
 SCRATCH_BIND = Path("/scratch/users/gfw")
 CACHE_ROOT = Path("/scratch/users/gfw/ptsim/cache")
-TMPDIR = Path("/tmp/t")
 CHUNK = 65536
 TYPED_VLLM_FLAGS = {
     "--host",
@@ -36,7 +37,9 @@ TYPED_VLLM_FLAGS = {
     "--enable-chunked-prefill",
     "--enforce-eager",
     "--kv-transfer-config",
+    "--disable-frontend-multiprocessing",
 }
+BILLED_DIRECTIONS = {("api", "client_to_target"), ("kv", "target_to_client")}
 
 
 @dataclass(frozen=True)
@@ -65,6 +68,15 @@ class Route:
     listen_port: int
     target_host: str
     target_port: int
+
+
+@dataclass
+class Stack:
+    lmcache: subprocess.Popen
+    proxy: subprocess.Popen
+    source: subprocess.Popen | None
+    sink: subprocess.Popen | None
+    run_root: Path
 
 
 def reject_duplicate_extra(extra: list[str]) -> None:
@@ -101,13 +113,19 @@ def cache_dirs(cfg: Config, role: str) -> dict[str, Path]:
     }
 
 
-def kv_config(engine_id: str, kv_role: str) -> str:
+def tmpdir(role: str) -> Path:
+    tag = {"smoke1": "smk"}.get(role, role)
+    return Path(f"/tmp/qh-{tag}-{os.getpid()}")
+
+
+def kv_config(engine_id: str, kv_role: str, kv_port: int, rpc_port: str) -> str:
     return json.dumps(
         {
             "kv_connector": "LMCacheConnectorV1",
             "engine_id": engine_id,
             "kv_role": kv_role,
-            "kv_connector_extra_config": {"discard_partial_chunks": False},
+            "kv_port": kv_port,
+            "kv_connector_extra_config": {"discard_partial_chunks": False, "lmcache_rpc_port": rpc_port},
         },
         separators=(",", ":"),
     )
@@ -119,12 +137,14 @@ def vllm_exports(cfg: Config, role: str, remote_url: str) -> list[str]:
         "VLLM_EXECUTE_MODEL_TIMEOUT_SECONDS": "900",
         "VLLM_USE_FLASHINFER_SAMPLER": "0",
         "TORCH_CUDA_ARCH_LIST": "8.0",
-        "TMPDIR": str(TMPDIR),
+        "TMPDIR": str(tmpdir(role)),
+        "VLLM_RPC_BASE_PATH": str(tmpdir(role)),
         "HF_HOME": str(cfg.hf_home),
         "HF_HUB_OFFLINE": "1",
         "TRANSFORMERS_OFFLINE": "1",
         "LMCACHE_REMOTE_URL": remote_url,
         "LMCACHE_REMOTE_SERDE": "naive",
+        "LMCACHE_LMCACHE_INSTANCE_ID": f"stage1b_{role}",
         "LMCACHE_CHUNK_SIZE": "256",
         "LMCACHE_MAX_LOCAL_CPU_SIZE": "0.25",
         **{k: str(v) for k, v in cache_dirs(cfg, role).items()},
@@ -146,18 +166,18 @@ def lmcache_cmd(cfg: Config) -> list[str]:
 def vllm_cmd(cfg: Config, role: str, extra: list[str] | None = None) -> list[str]:
     reject_duplicate_extra(extra or [])
     if role == "source":
-        port, gpu, engine_id, kv_role = cfg.src_port, 0, "s0", "kv_producer"
+        port, gpu, engine_id, kv_role, kv_port, rpc_port = cfg.src_port, 0, "s0", "kv_producer", 14579, "src"
         remote_url, cache_role = f"lm://{cfg.host}:{cfg.lmc_port}", "src"
     elif role == "sink":
-        port, gpu, engine_id, kv_role = cfg.sink_port, 1, "d0", "kv_consumer"
+        port, gpu, engine_id, kv_role, kv_port, rpc_port = cfg.sink_port, 1, "d0", "kv_consumer", 14580, "sink"
         remote_url, cache_role = f"lm://{cfg.host}:{cfg.kv_proxy_port}", "sink"
     elif role == "smoke1":
-        port, gpu, engine_id, kv_role = cfg.smoke_port, 0, "e0", "kv_both"
+        port, gpu, engine_id, kv_role, kv_port, rpc_port = cfg.smoke_port, 0, "e0", "kv_both", 14579, "smk"
         remote_url, cache_role = f"lm://{cfg.host}:{cfg.lmc_port}", "smoke1"
     else:
         raise ValueError(f"unknown role: {role}")
 
-    dirs = " ".join(shlex.quote(str(p)) for p in [TMPDIR, *cache_dirs(cfg, cache_role).values()])
+    dirs = " ".join(shlex.quote(str(p)) for p in [tmpdir(cache_role), *cache_dirs(cfg, cache_role).values()])
     serve = [
         "vllm",
         "serve",
@@ -180,8 +200,9 @@ def vllm_cmd(cfg: Config, role: str, extra: list[str] | None = None) -> list[str
         "auto",
         "--enable-chunked-prefill",
         "--enforce-eager",
+        "--disable-frontend-multiprocessing",
         "--kv-transfer-config",
-        kv_config(engine_id, kv_role),
+        kv_config(engine_id, kv_role, kv_port, rpc_port),
         *(extra or []),
     ]
     script = "\n".join([f"mkdir -p {dirs}", *vllm_exports(cfg, cache_role, remote_url), shell(serve)])
@@ -195,9 +216,9 @@ def proxy_routes(cfg: Config) -> list[Route]:
     ]
 
 
-def proxy_cmd(cfg: Config, mbps: float = 100.0, log: Path | None = None) -> list[str]:
+def proxy_cmd(cfg: Config, mbps: float = 1000.0, log: Path | None = None) -> list[str]:
     cmd = [
-        "python3",
+        sys.executable,
         "queue-haul/stage1b_drain_sink.py",
         "proxy",
         "--kv-listen",
@@ -209,30 +230,11 @@ def proxy_cmd(cfg: Config, mbps: float = 100.0, log: Path | None = None) -> list
         "--api-target",
         f"{cfg.host}:{cfg.sink_port}",
         "--mbps",
-        mbps,
+        str(mbps),
     ]
     if log:
         cmd += ["--log", log]
     return cmd
-
-
-def plan_text(cfg: Config, mode: str, mbps: float, extra: list[str]) -> str:
-    lines = [
-        "#!/usr/bin/env bash",
-        "set -euo pipefail",
-        f"# stage1b {mode}: host orchestrator, Apptainer vLLM/LMCache children, user-space proxy",
-        "mkdir -p logs",
-        'start_bg() { local name="$1"; shift; "$@" > "logs/${name}.log" 2>&1 & echo $! > "logs/${name}.pid"; }',
-        f"start_bg lmcache {shell(lmcache_cmd(cfg))}",
-        f"start_bg proxy {shell(proxy_cmd(cfg, mbps, Path('proxy_bytes.csv')))}",
-        f"start_bg source {shell(vllm_cmd(cfg, 'source', extra))}",
-        f"curl --retry 360 --retry-delay 5 --retry-connrefused --max-time 5 -fsS http://{cfg.host}:{cfg.src_port}/health",
-        f"start_bg sink {shell(vllm_cmd(cfg, 'sink', extra))}",
-        f"curl --retry 360 --retry-delay 5 --retry-connrefused --max-time 5 -fsS http://{cfg.host}:{cfg.sink_port}/health",
-    ]
-    if mode == "drain":
-        lines.append("# Run the Stage 1b drain driver here after smoke2 passes on a two-GPU allocation.")
-    return "\n".join(lines) + "\n"
 
 
 def port_free(host: str, port: int) -> bool:
@@ -258,9 +260,11 @@ def preflight(cfg: Config, required_gpus: int = 1) -> list[str]:
     snapshots = model_snapshot_dir(cfg.hf_home, cfg.model)
     if not snapshots.exists() or not any(snapshots.iterdir()):
         failures.append(f"model snapshot missing: {snapshots}")
-    if len(str(TMPDIR)) > 20:
-        failures.append(f"TMPDIR too long for LMCache IPC: {TMPDIR}")
-    for port in [cfg.lmc_port, cfg.smoke_port] if required_gpus == 1 else [cfg.src_port, cfg.sink_port, cfg.lmc_port, cfg.kv_proxy_port, cfg.api_proxy_port]:
+    for path in [tmpdir("src"), tmpdir("sink"), tmpdir("smoke1")]:
+        if len(str(path)) > 20:
+            failures.append(f"TMPDIR too long for LMCache IPC: {path}")
+    ports = [cfg.lmc_port, cfg.smoke_port] if required_gpus == 1 else [cfg.src_port, cfg.sink_port, cfg.lmc_port, cfg.kv_proxy_port, cfg.api_proxy_port]
+    for port in ports:
         if not port_free(cfg.host, port):
             failures.append(f"port busy: {cfg.host}:{port}")
     seen_gpus = gpu_count()
@@ -312,27 +316,34 @@ class TokenBucket:
 
 class ByteLog:
     def __init__(self, path: Path):
+        path.parent.mkdir(parents=True, exist_ok=True)
         self.file = path.open("w", newline="", buffering=1)
         self.writer = csv.writer(self.file)
-        self.writer.writerow(["ts", "route", "direction", "bytes"])
+        self.writer.writerow(["ts", "route", "direction", "bytes", "billed"])
         self.lock = asyncio.Lock()
 
-    async def write(self, route: str, direction: str, nbytes: int) -> None:
+    async def write(self, route: str, direction: str, nbytes: int, billed: bool) -> None:
         async with self.lock:
-            self.writer.writerow([f"{time.time():.6f}", route, direction, nbytes])
+            self.writer.writerow([f"{time.time():.6f}", route, direction, nbytes, int(billed)])
 
     def close(self) -> None:
         self.file.close()
 
 
+def billable(route: str, direction: str) -> bool:
+    return (route, direction) in BILLED_DIRECTIONS
+
+
 async def relay(reader: asyncio.StreamReader, writer: asyncio.StreamWriter, bucket: TokenBucket, log: ByteLog | None, route: str, direction: str) -> None:
     try:
+        charged = billable(route, direction)
         while data := await reader.read(CHUNK):
-            await bucket.wait(len(data))
+            if charged:
+                await bucket.wait(len(data))
             writer.write(data)
             await writer.drain()
             if log:
-                await log.write(route, direction, len(data))
+                await log.write(route, direction, len(data), charged)
     finally:
         writer.close()
         await writer.wait_closed()
@@ -400,26 +411,46 @@ def wait_health(host: str, port: int, timeout_s: float) -> None:
     raise TimeoutError(f"timed out waiting for http://{host}:{port}/health")
 
 
-def chat_once(cfg: Config, port: int) -> str:
-    body = json.dumps(
-        {
-            "model": cfg.model,
-            "messages": [{"role": "user", "content": "Reply with exactly: OK"}],
-            "max_tokens": 128,
-            "temperature": 0,
-        }
-    )
-    conn = http.client.HTTPConnection(cfg.host, port, timeout=120)
+def prompt_text(session_id: str, words: int = 4096) -> str:
+    body = " ".join(f"{session_id}_{i % 97}" for i in range(words))
+    return f"Session {session_id}. {body}. Reply with exactly OK."
+
+
+def chat_payload(cfg: Config, prompt: str, max_tokens: int = 4) -> str:
+    return json.dumps({"model": cfg.model, "messages": [{"role": "user", "content": prompt}], "max_tokens": max_tokens, "temperature": 0})
+
+
+def post_chat(cfg: Config, port: int, prompt: str, max_tokens: int = 4) -> dict:
+    body = chat_payload(cfg, prompt, max_tokens)
+    t0 = time.time()
+    conn = http.client.HTTPConnection(cfg.host, port, timeout=600)
     conn.request("POST", "/v1/chat/completions", body, {"Content-Type": "application/json"})
     resp = conn.getresponse()
     text = resp.read().decode()
     conn.close()
-    if resp.status != 200:
-        raise RuntimeError(f"chat failed {resp.status}: {text}")
-    content = json.loads(text)["choices"][0]["message"]["content"]
-    if "OK" not in content:
-        raise RuntimeError(f"unexpected chat content: {content}")
-    return content
+    t1 = time.time()
+    content = ""
+    if resp.status == 200:
+        content = json.loads(text)["choices"][0]["message"].get("content") or ""
+    return {
+        "status": resp.status,
+        "content": content,
+        "elapsed_s": t1 - t0,
+        "start_ts": t0,
+        "end_ts": t1,
+        "prompt_sha256": hashlib.sha256(prompt.encode()).hexdigest(),
+        "request_bytes": len(body.encode()),
+        "response_text": text[:500] if resp.status != 200 else "",
+    }
+
+
+def chat_once(cfg: Config, port: int) -> str:
+    result = post_chat(cfg, port, "Reply with exactly: OK", 128)
+    if result["status"] != 200:
+        raise RuntimeError(f"chat failed {result['status']}: {result['response_text']}")
+    if "OK" not in result["content"]:
+        raise RuntimeError(f"unexpected chat content: {result['content']}")
+    return result["content"]
 
 
 def start_logged(cmd: list[str], log: Path) -> subprocess.Popen:
@@ -438,29 +469,202 @@ def stop_proc(proc: subprocess.Popen) -> None:
             proc.wait()
 
 
+def stop_stack(stack: Stack) -> None:
+    for proc in (stack.sink, stack.source, stack.proxy, stack.lmcache):
+        if proc:
+            stop_proc(proc)
+
+
+def read_text(path: Path) -> str:
+    return path.read_text(errors="ignore") if path.exists() else ""
+
+
+def count_needle(path: Path, needle: str) -> int:
+    return read_text(path).count(needle)
+
+
+def proxy_rows(path: Path) -> list[dict]:
+    if not path.exists():
+        return []
+    with path.open() as f:
+        return list(csv.DictReader(f))
+
+
+def proxy_counts(path: Path) -> dict[str, int]:
+    counts: dict[str, int] = {}
+    for row in proxy_rows(path):
+        key = f"{row['route']}/{row['direction']}"
+        counts[key] = counts.get(key, 0) + int(row["bytes"])
+    return counts
+
+
+def count_delta(before: dict[str, int], after: dict[str, int]) -> dict[str, int]:
+    return {k: after.get(k, 0) - before.get(k, 0) for k in sorted(set(before) | set(after))}
+
+
+def billed_window(rows: list[dict], route: str, direction: str) -> dict:
+    xs = [r for r in rows if r["route"] == route and r["direction"] == direction and r.get("billed") == "1"]
+    if not xs:
+        return {"bytes": 0, "window_s": 0.0, "bytes_per_s": 0.0}
+    ts = [float(r["ts"]) for r in xs]
+    window = max(ts) - min(ts)
+    nbytes = sum(int(r["bytes"]) for r in xs)
+    return {"bytes": nbytes, "window_s": window, "bytes_per_s": nbytes / window if window else 0.0}
+
+
+def start_stack(cfg: Config, run_root: Path, mbps: float, extra: list[str] | None = None) -> Stack:
+    preflight(cfg, required_gpus=2)
+    run_root.mkdir(parents=True, exist_ok=True)
+    lmc = start_logged(lmcache_cmd(cfg), run_root / "lmcache.log")
+    proxy = source = None
+    try:
+        wait_tcp(cfg.host, cfg.lmc_port, 60)
+        proxy = start_logged(proxy_cmd(cfg, mbps, run_root / "proxy_bytes.csv"), run_root / "proxy.log")
+        wait_tcp(cfg.host, cfg.kv_proxy_port, 60)
+        wait_tcp(cfg.host, cfg.api_proxy_port, 60)
+        source = start_logged(vllm_cmd(cfg, "source", extra or []), run_root / "source.log")
+        wait_health(cfg.host, cfg.src_port, 1800)
+        return Stack(lmc, proxy, source, None, run_root)
+    except Exception:
+        for proc in (source, proxy, lmc):
+            if proc:
+                stop_proc(proc)
+        raise
+
+
+def start_sink(stack: Stack, cfg: Config, extra: list[str] | None = None) -> None:
+    if stack.sink:
+        return
+    stack.sink = start_logged(vllm_cmd(cfg, "sink", extra or []), stack.run_root / "sink.log")
+    wait_health(cfg.host, cfg.sink_port, 1800)
+
+
+def check_chat(result: dict, label: str) -> None:
+    if result["status"] != 200:
+        raise RuntimeError(f"{label} failed {result['status']}: {result['response_text']}")
+
+
+def warm_source(cfg: Config, run_root: Path, prompt: str, label: str = "source warm") -> tuple[dict, int]:
+    source_log = run_root / "source.log"
+    stored0 = count_needle(source_log, "Stored")
+    source = post_chat(cfg, cfg.src_port, prompt, 4)
+    check_chat(source, label)
+    time.sleep(2)
+    if count_needle(source_log, "Stored") <= stored0:
+        raise RuntimeError(f"{label} did not store KV")
+    return source, stored0
+
+
+def run_smoke2_probe(cfg: Config, run_root: Path, mbps: float, words: int = 4096, prompt: str | None = None, prewarmed: tuple[dict, int] | None = None) -> dict:
+    proxy_log = run_root / "proxy_bytes.csv"
+    source_log = run_root / "source.log"
+    sink_log = run_root / "sink.log"
+    prompt = prompt or prompt_text("smoke2-kv", words)
+    replay_prompt = prompt_text(f"smoke2-replay-{int(time.time())}", min(words, 1024))
+
+    retrieved0 = count_needle(sink_log, "Retrieved")
+    before = proxy_counts(proxy_log)
+    if prewarmed:
+        source, stored0 = prewarmed
+    else:
+        source, stored0 = warm_source(cfg, run_root, prompt)
+
+    before_sink = proxy_counts(proxy_log)
+    sink = post_chat(cfg, cfg.api_proxy_port, prompt, 4)
+    check_chat(sink, "sink kv resume")
+    time.sleep(3)
+    kv_rows = proxy_rows(proxy_log)
+    kv_delta = count_delta(before_sink, proxy_counts(proxy_log))
+    kv_link = billed_window(kv_rows, "kv", "target_to_client")
+    if count_needle(sink_log, "Retrieved") <= retrieved0:
+        raise RuntimeError("sink did not retrieve KV")
+    if kv_delta.get("kv/target_to_client", 0) <= 0:
+        raise RuntimeError("KV route had no source-to-sink bytes")
+    link_bps = mbps * 1_000_000 / 8
+    expected = kv_delta["kv/target_to_client"] / link_bps
+    if expected > 0.5 and sink["elapsed_s"] + 0.5 < 0.2 * expected:
+        raise RuntimeError("sink KV elapsed time is implausibly short for throttled bytes")
+    if kv_link["window_s"] >= 0.5 and kv_link["bytes_per_s"] > 1.25 * link_bps:
+        raise RuntimeError("KV proxy exceeded 1Gbps envelope")
+
+    before_replay = proxy_counts(proxy_log)
+    replay = post_chat(cfg, cfg.api_proxy_port, replay_prompt, 4)
+    check_chat(replay, "sink replay")
+    replay_delta = count_delta(before_replay, proxy_counts(proxy_log))
+    if replay_delta.get("api/client_to_target", 0) <= 0:
+        raise RuntimeError("replay route had no API request bytes")
+    if replay_delta.get("kv/target_to_client", 0) > max(1_000_000, 0.25 * kv_delta["kv/target_to_client"]):
+        raise RuntimeError("replay unexpectedly pulled large KV bytes")
+
+    manifest = {
+        "schema": "queue-haul-stage1b-smoke2-v1",
+        "mbps": mbps,
+        "lambda_src_bytes_per_s": link_bps,
+        "endpoints": {"source": cfg.src_port, "sink": cfg.sink_port, "api_proxy": cfg.api_proxy_port, "kv_proxy": cfg.kv_proxy_port},
+        "source": source,
+        "sink_kv": sink,
+        "sink_replay": replay,
+        "proxy_total_delta": count_delta(before, proxy_counts(proxy_log)),
+        "kv_delta": kv_delta,
+        "replay_delta": replay_delta,
+        "kv_link": kv_link,
+        "evidence": {
+            "source_connector": "engine_id: s0" in read_text(source_log) or "engine_id=s0" in read_text(source_log),
+            "sink_connector": "engine_id: d0" in read_text(sink_log) or "engine_id=d0" in read_text(sink_log),
+            "source_stored": count_needle(source_log, "Stored") > stored0,
+            "sink_retrieved": count_needle(sink_log, "Retrieved") > retrieved0,
+            "kv_proxy_bytes": kv_delta.get("kv/target_to_client", 0),
+            "api_proxy_bytes": replay_delta.get("api/client_to_target", 0),
+        },
+    }
+    manifest["acceptance"] = {
+        "ok": all(manifest["evidence"].values()) and source["status"] == sink["status"] == replay["status"] == 200,
+        "kv_expected_link_s": expected,
+        "kv_elapsed_s": sink["elapsed_s"],
+        "kv_observed_bytes_per_s": kv_link["bytes_per_s"],
+        "source_warmed_before_sink": prewarmed is not None,
+    }
+    (run_root / "smoke2_manifest.json").write_text(json.dumps(manifest, indent=2, sort_keys=True))
+    if not manifest["acceptance"]["ok"]:
+        raise RuntimeError("smoke2 acceptance failed")
+    return manifest
+
+
+def smoke2(cfg: Config, run_root: Path, mbps: float, extra: list[str]) -> Path:
+    stack = start_stack(cfg, run_root, mbps, extra)
+    try:
+        prompt = prompt_text("smoke2-kv")
+        prewarmed = warm_source(cfg, run_root, prompt)
+        stop_proc(stack.source)
+        stack.source = None
+        start_sink(stack, cfg, extra)
+        run_smoke2_probe(cfg, run_root, mbps, prompt=prompt, prewarmed=prewarmed)
+    finally:
+        stop_stack(stack)
+    return run_root
+
 def smoke1(cfg: Config, run_root: Path, extra: list[str]) -> Path:
     preflight(cfg, required_gpus=1)
     run_root.mkdir(parents=True, exist_ok=True)
-    lmc_log = run_root / "lmcache.log"
-    vllm_log = run_root / "vllm.log"
-    lmc = start_logged(lmcache_cmd(cfg), lmc_log)
+    lmc = start_logged(lmcache_cmd(cfg), run_root / "lmcache.log")
     vllm = None
     try:
         wait_tcp(cfg.host, cfg.lmc_port, 60)
-        vllm = start_logged(vllm_cmd(cfg, "smoke1", extra), vllm_log)
+        vllm = start_logged(vllm_cmd(cfg, "smoke1", extra), run_root / "vllm.log")
         wait_health(cfg.host, cfg.smoke_port, 1800)
         chat_once(cfg, cfg.smoke_port)
         chat_once(cfg, cfg.smoke_port)
         time.sleep(3)
-        text = vllm_log.read_text(errors="ignore")
+        text = read_text(run_root / "vllm.log")
         for needle in ["Stored", "Retrieved"]:
             if needle not in text:
-                raise RuntimeError(f"missing LMCache proof in {vllm_log}: {needle}")
+                raise RuntimeError(f"missing LMCache proof in {run_root / 'vllm.log'}: {needle}")
     finally:
         if vllm:
             stop_proc(vllm)
         stop_proc(lmc)
     return run_root
+
 
 
 def config_from_args(args) -> Config:
@@ -504,16 +708,15 @@ def add_common(p: argparse.ArgumentParser) -> None:
 def parse_args(argv: list[str] | None = None):
     p = argparse.ArgumentParser(description="Queue-Haul Stage 1b source/sink LMCache smoke tooling")
     sub = p.add_subparsers(dest="cmd", required=True)
-    for name in ("preflight", "smoke1", "smoke2-plan", "drain-plan"):
+    for name in ("preflight", "smoke1", "smoke2"):
         sp = sub.add_parser(name)
         add_common(sp)
         if name == "preflight":
             sp.add_argument("--required-gpus", type=int, default=1)
-        if name == "smoke1":
-            sp.add_argument("--run-root", type=Path, default=Path("queue-haul/runs/stage1b/smoke1"))
-            sp.add_argument("extra_vllm_args", nargs=argparse.REMAINDER)
-        if name.endswith("plan"):
-            sp.add_argument("--mbps", type=float, default=100.0)
+        if name in ("smoke1", "smoke2"):
+            sp.add_argument("--run-root", type=Path, default=Path(f"queue-haul/runs/stage1b/{name}"))
+            if name == "smoke2":
+                sp.add_argument("--mbps", type=float, default=1000.0)
             sp.add_argument("extra_vllm_args", nargs=argparse.REMAINDER)
     sp = sub.add_parser("proxy")
     sp.add_argument("--kv-listen", default="127.0.0.1:8300")
@@ -532,10 +735,7 @@ def main(argv: list[str] | None = None) -> None:
         kv_target = parse_addr(args.kv_target)
         api_listen = parse_addr(args.api_listen)
         api_target = parse_addr(args.api_target)
-        routes = [
-            Route("kv", *kv_listen, *kv_target),
-            Route("api", *api_listen, *api_target),
-        ]
+        routes = [Route("kv", *kv_listen, *kv_target), Route("api", *api_listen, *api_target)]
         asyncio.run(run_proxy(routes, args.mbps * 1_000_000 / 8, args.log))
         return
 
@@ -545,9 +745,9 @@ def main(argv: list[str] | None = None) -> None:
     elif args.cmd == "smoke1":
         extra = args.extra_vllm_args[1:] if args.extra_vllm_args[:1] == ["--"] else args.extra_vllm_args
         print(smoke1(cfg, args.run_root, extra))
-    elif args.cmd in {"smoke2-plan", "drain-plan"}:
+    elif args.cmd == "smoke2":
         extra = args.extra_vllm_args[1:] if args.extra_vllm_args[:1] == ["--"] else args.extra_vllm_args
-        print(plan_text(cfg, args.cmd.removesuffix("-plan"), args.mbps, extra), end="")
+        print(smoke2(cfg, args.run_root, args.mbps, extra))
 
 
 if __name__ == "__main__":
