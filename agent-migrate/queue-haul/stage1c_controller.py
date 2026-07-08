@@ -220,20 +220,18 @@ def proof(cfg: b.Config, run_root: Path, fixture: dict, mbps: float, extra: list
     stack = b.start_stack(cfg, run_root, mbps, extra)
     try:
         summary = plan_summary(fixture)
+        b.start_sink(stack, cfg, extra)
         prewarmed = {}
         for row in summary["sessions"]:
             if row["action"] == "S":
                 prompt = b.prompt_text(f"stage1c-{row['id']}", row["words"])
                 prewarmed[row["id"]] = b.warm_source(cfg, run_root, prompt, f"source warm {row['id']}")[0]
-        b.stop_proc(stack.source)
-        stack.source = None
-        b.start_sink(stack, cfg, extra)
         deadline = float(fixture["deadline_s"])
         t0 = time.time()
         rows = []
         for row in summary["sessions"]:
             rows.append(run_selected_session(cfg, run_root, {**row, "deadline_s": deadline}, t0, prewarmed))
-        manifest = {**summary, "schema": SCHEMA, "smoke2": {"acceptance": {"ok": True, "covered_by_controller_sessions": True}}, "sessions": rows}
+        manifest = {**summary, "schema": SCHEMA, "smoke2": {"acceptance": {"ok": True, "covered_by_controller_sessions": True, "live_source_sink": True}}, "sessions": rows}
         manifest["acceptance"] = {
             "all_completed_by_deadline": all(r["deadline_met"] for r in rows),
             "actions": sorted({r["action"] for r in rows}),

@@ -26,15 +26,16 @@ source-egress directions used by this proof:
 - replay: API proxy `client_to_target`
 - KV transfer: KV proxy `target_to_client`
 
-The old sandbox is unstable when source and sink vLLM engines are kept up
-concurrently. The proven flow is therefore sequential while LMCache and the proxy
-stay up:
+A diagnosis run on 2026-07-08 showed live source+sink works with the current
+launcher settings. The monitor ruled out cgroup OOM (`memory.failcnt=0`), GPU
+cross-contamination (source PID only on GPU 0, sink PID only on GPU 1), Ray, and
+matching `/dev/shm` collisions. The proven live flow is:
 
 1. Start LMCache server on `127.0.0.1:5655`.
 2. Start the shared 1Gbps proxy on KV `8300 -> 5655` and API `8400 -> 8200`.
-3. Start source vLLM on GPU 0 / port 8100, warm selected prompts, and store KV.
-4. Stop source vLLM.
-5. Start sink vLLM on GPU 1 / port 8200.
+3. Start source vLLM on GPU 0 / port 8100.
+4. Start sink vLLM on GPU 1 / port 8200 while source remains healthy.
+5. Warm selected prompts on source and store KV while sink is live.
 6. Dispatch replay and KV-transfer sessions serially through the controller.
 
 The important vLLM/LMCache settings are hard-coded or tested: `LMCacheConnectorV1`,
@@ -49,7 +50,7 @@ module load gcc/14.2.0 openblas/0.3.28
 PY=.venv/bin/python
 
 $PY queue-haul/stage1b_drain_sink.py preflight --required-gpus 2
-$PY queue-haul/stage1b_drain_sink.py smoke2 --mbps 1000 --run-root /tmp/qh-smoke2
+$PY queue-haul/stage1b_drain_sink.py smoke2-live --mbps 1000 --run-root /tmp/qh-smoke2-live
 
 $PY queue-haul/stage1c_controller.py plan
 $PY queue-haul/stage1c_controller.py proof --mbps 1000 --run-root /tmp/qh-proof
@@ -82,7 +83,7 @@ A successful controller manifest has this shape:
 ## Not in this stage
 
 The workload generator, power logger/reducer, multi-destination routing, real
-kernel `tc`/network namespaces, concurrent source+sink old-sandbox serving, and
+kernel `tc`/network namespaces, and
 full queue-haul experiment driver are later work. The current code is only the
-minimum proof that the controller can choose an order and that replay/KV execution
+minimum proof that the controller can choose an order and that live replay/KV execution
 paths are observable over a shaped link.

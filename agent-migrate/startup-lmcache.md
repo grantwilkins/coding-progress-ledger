@@ -132,10 +132,9 @@ Retrieved 76 out of 76 out of total 76 tokens
 ## Source-sink proof runbook
 
 This is the proven end-to-end path for the Queue-Haul Stage 1b/1c proof. It uses
-two separate vLLM+LMCache instances on one A100 node, but the old sandbox is
-stable only when the source engine is stopped before the sink engine starts. The
-LMCache server and proxy stay up across both phases, so the sink retrieves KV
-written by the source instance.
+two live vLLM+LMCache instances on one A100 node. Source runs on GPU 0, sink runs
+on GPU 1, and the sink retrieves KV written by the source instance through the
+shared 1Gbps proxy.
 
 What this proves:
 
@@ -147,9 +146,12 @@ What this proves:
 - The proof uses a user-space 1Gbps token-bucket delay function shared by replay
   request bytes and KV-transfer bytes. This is not privileged kernel `tc`.
 
-What this does not prove yet: concurrent source and sink serving for the old
-sandbox, multi-destination routing, workload realism, power-down traces, or
-kernel/network-namespace traffic shaping.
+What this does not prove yet: multi-destination routing, workload realism,
+power-down traces, or kernel/network-namespace traffic shaping.
+
+A 2026-07-08 live diagnostic ruled out the likely false explanations for earlier
+failures on this allocation: cgroup OOM (`memory.failcnt=0`), sink allocation on
+GPU 0, Ray, and matching `/dev/shm` artifacts.
 
 ### 1. Start from a clean node
 
@@ -181,25 +183,27 @@ count, or ports are not usable.
 ### 3. Run Stage 1b smoke2
 
 ```bash
-$PY queue-haul/stage1b_drain_sink.py smoke2 \
+$PY queue-haul/stage1b_drain_sink.py smoke2-live \
   --mbps 1000 \
-  --run-root /tmp/qh-smoke2
+  --run-root /tmp/qh-smoke2-live
 ```
 
 The driver starts LMCache on `5655`, the proxy on `8300` and `8400`, source vLLM
-on GPU 0 / port `8100`, warms a long prompt, stops source vLLM, starts sink vLLM
-on GPU 1 / port `8200`, then performs one KV resume and one replay request.
+on GPU 0 / port `8100`, starts sink vLLM on GPU 1 / port `8200`, warms a long
+prompt on the live source, then performs one KV resume and one replay request on
+the live sink. It also checks that source still answers after sink work.
 
 Expected output is the run directory path. Check the manifest:
 
 ```bash
-$PY -c "import json; m=json.load(open('/tmp/qh-smoke2/smoke2_manifest.json')); print(json.dumps(m['acceptance'], indent=2, sort_keys=True)); print(json.dumps(m['evidence'], indent=2, sort_keys=True))"
+$PY -c "import json; m=json.load(open('/tmp/qh-smoke2-live/smoke2_manifest.json')); print(json.dumps(m['acceptance'], indent=2, sort_keys=True)); print(json.dumps(m['evidence'], indent=2, sort_keys=True))"
 ```
 
 Required evidence:
 
 - `acceptance.ok` is `true`.
-- `source_warmed_before_sink` is `true`.
+- `source_warmed_before_sink` is `false` for the live proof.
+- `live.source_poll` and `live.sink_poll` are null.
 - `source_stored` and `sink_retrieved` are `true`.
 - `kv_proxy_bytes` is positive on `kv/target_to_client`.
 - `api_proxy_bytes` is positive on `api/client_to_target`.
@@ -217,8 +221,9 @@ $PY queue-haul/stage1c_controller.py check --run-root /tmp/qh-proof
 ```
 
 The default fixture intentionally has one replay-cheaper session and one
-KV-cheaper session. The proof prewarms only the KV session on the source, stops
-source vLLM, starts sink vLLM, then dispatches sessions in controller order.
+KV-cheaper session. The proof starts source and sink, prewarms only the KV session
+on the live source, then dispatches sessions in controller order through the live
+sink.
 
 Inspect the result:
 

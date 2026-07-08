@@ -630,6 +630,23 @@ def run_smoke2_probe(cfg: Config, run_root: Path, mbps: float, words: int = 4096
     return manifest
 
 
+def smoke2_live(cfg: Config, run_root: Path, mbps: float, extra: list[str]) -> Path:
+    stack = start_stack(cfg, run_root, mbps, extra)
+    try:
+        start_sink(stack, cfg, extra)
+        manifest = run_smoke2_probe(cfg, run_root, mbps)
+        source_after = post_chat(cfg, cfg.src_port, "Reply with exactly: OK", 4)
+        check_chat(source_after, "source after live sink")
+        manifest["live"] = {"source_after_sink": source_after, "source_poll": stack.source.poll(), "sink_poll": stack.sink.poll()}
+        manifest["acceptance"]["ok"] = manifest["acceptance"]["ok"] and source_after["status"] == 200 and stack.source.poll() is None and stack.sink.poll() is None
+        (run_root / "smoke2_manifest.json").write_text(json.dumps(manifest, indent=2, sort_keys=True))
+        if not manifest["acceptance"]["ok"]:
+            raise RuntimeError("smoke2-live acceptance failed")
+    finally:
+        stop_stack(stack)
+    return run_root
+
+
 def smoke2(cfg: Config, run_root: Path, mbps: float, extra: list[str]) -> Path:
     stack = start_stack(cfg, run_root, mbps, extra)
     try:
@@ -708,14 +725,14 @@ def add_common(p: argparse.ArgumentParser) -> None:
 def parse_args(argv: list[str] | None = None):
     p = argparse.ArgumentParser(description="Queue-Haul Stage 1b source/sink LMCache smoke tooling")
     sub = p.add_subparsers(dest="cmd", required=True)
-    for name in ("preflight", "smoke1", "smoke2"):
+    for name in ("preflight", "smoke1", "smoke2", "smoke2-live"):
         sp = sub.add_parser(name)
         add_common(sp)
         if name == "preflight":
             sp.add_argument("--required-gpus", type=int, default=1)
-        if name in ("smoke1", "smoke2"):
+        if name in ("smoke1", "smoke2", "smoke2-live"):
             sp.add_argument("--run-root", type=Path, default=Path(f"queue-haul/runs/stage1b/{name}"))
-            if name == "smoke2":
+            if name.startswith("smoke2"):
                 sp.add_argument("--mbps", type=float, default=1000.0)
             sp.add_argument("extra_vllm_args", nargs=argparse.REMAINDER)
     sp = sub.add_parser("proxy")
@@ -748,6 +765,9 @@ def main(argv: list[str] | None = None) -> None:
     elif args.cmd == "smoke2":
         extra = args.extra_vllm_args[1:] if args.extra_vllm_args[:1] == ["--"] else args.extra_vllm_args
         print(smoke2(cfg, args.run_root, args.mbps, extra))
+    elif args.cmd == "smoke2-live":
+        extra = args.extra_vllm_args[1:] if args.extra_vllm_args[:1] == ["--"] else args.extra_vllm_args
+        print(smoke2_live(cfg, args.run_root, args.mbps, extra))
 
 
 if __name__ == "__main__":

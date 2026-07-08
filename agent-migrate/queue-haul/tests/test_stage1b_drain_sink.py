@@ -148,3 +148,11 @@ def test_proxy_relay_shapes_billable_bytes_and_logs(tmp_path):
     assert sum(int(r["bytes"]) for r in rows if r["direction"] == "client_to_target") == 512
     assert {r["route"] for r in rows} == {"api"}
     assert {r["billed"] for r in rows} == {"1"}
+
+
+def test_smoke2_live_cli_is_wired_with_1gbps_default():
+    args = s.parse_args(["smoke2-live", "--run-root", "/tmp/live-proof"])
+
+    assert args.cmd == "smoke2-live"
+    assert args.mbps == 1000.0
+    assert str(args.run_root) == "/tmp/live-proof"

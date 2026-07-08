@@ -138,7 +138,7 @@ bytes. On a two-GPU A100 node, run:
 
 ```bash
 $PY queue-haul/stage1b_drain_sink.py preflight --required-gpus 2
-$PY queue-haul/stage1b_drain_sink.py smoke2 --mbps 1000 --run-root /tmp/qh-smoke2
+$PY queue-haul/stage1b_drain_sink.py smoke2-live --mbps 1000 --run-root /tmp/qh-smoke2-live
 ```
 
 Stage 1c adds a tiny controller proof over the same two-instance stack. It uses a
@@ -150,9 +150,7 @@ $PY queue-haul/stage1c_controller.py proof --mbps 1000 --run-root /tmp/qh-proof
 $PY queue-haul/stage1c_controller.py check --run-root /tmp/qh-proof
 ```
 
-The proof keeps LMCache and the shared 1Gbps throttle proxy up for the whole run,
-starts source vLLM on GPU 0 to store KV, stops that source process, then starts
-sink vLLM on GPU 1 to replay one session and retrieve one prewarmed session's KV.
-This sequential source-then-sink flow is the working path for the old sandbox on
-this node. It hard-fails unless cross-instance KV transfer works and the
+The live proof keeps LMCache, the shared 1Gbps throttle proxy, source vLLM on GPU
+0, and sink vLLM on GPU 1 up at the same time. It hard-fails unless source stays
+healthy while sink starts, cross-instance KV transfer works, replay works, and the
 controller produces and executes both replay and KV-transfer actions.
