@@ -53,8 +53,8 @@ $PY queue-haul/stage1b_drain_sink.py preflight --required-gpus 2
 $PY queue-haul/stage1b_drain_sink.py smoke2-live --mbps 1000 --run-root /tmp/qh-smoke2-live
 
 $PY queue-haul/stage1c_controller.py plan
-$PY queue-haul/stage1c_controller.py proof --mbps 1000 --run-root /tmp/qh-proof
-$PY queue-haul/stage1c_controller.py check --run-root /tmp/qh-proof
+$PY queue-haul/stage1c_controller.py proof --mbps 1000 --run-root /tmp/qh-proof-live
+$PY queue-haul/stage1c_controller.py check --run-root /tmp/qh-proof-live
 ```
 
 `uv` is not on PATH on the current A100 node. Use `.venv/bin/python -m pytest`

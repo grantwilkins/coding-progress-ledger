@@ -1,6 +1,23 @@
-# Startup: old vLLM sandbox + LMCache
+# Guidebook: live vLLM source-sink with LMCache
 
-Use this path on the current A100 node. Do not use the `latest-cu129` LMCache image for `openai/gpt-oss-20b` on A100; it failed in MXFP4 Marlin/alternate MoE backends. The working path is the older vLLM sandbox with LMCache wrapped around it.
+Use this path on the current two-A100 node to start live source and sink vLLM+LMCache instances and prove both online KV transfer and online full-context replay through the 1Gbps proxy. Do not use the `latest-cu129` LMCache image for `openai/gpt-oss-20b` on A100; it failed in MXFP4 Marlin/alternate MoE backends. The working path is the older vLLM sandbox with LMCache wrapped around it.
+
+## On-demand command path
+
+```bash
+cd /home/groups/ramr/gfw/coding-progress-ledger/agent-migrate
+module load gcc/14.2.0 openblas/0.3.28
+PY=.venv/bin/python
+
+$PY queue-haul/stage1b_drain_sink.py preflight --required-gpus 2
+$PY queue-haul/stage1b_drain_sink.py smoke2-live --mbps 1000 --run-root /tmp/qh-smoke2-live
+
+$PY queue-haul/stage1c_controller.py plan
+$PY queue-haul/stage1c_controller.py proof --mbps 1000 --run-root /tmp/qh-proof-live
+$PY queue-haul/stage1c_controller.py check --run-root /tmp/qh-proof-live
+```
+
+Passing those commands proves the full end-to-end live path: source and sink are alive together, source stores KV, sink retrieves KV through the shaped KV proxy, sink replays full context through the shaped API proxy, and the controller orders replay and KV-transfer sessions under deadline.
 
 ## Fixed paths
 
@@ -30,9 +47,9 @@ lmcache /usr/local/lib/python3.12/dist-packages/lmcache/__init__.py
 cuda True NVIDIA A100-SXM4-80GB
 ```
 
-## Start LMCache server
+## Manual single-instance startup
 
-Use port `5655`; port `5555` may already be occupied.
+The commands below are for manual debugging of one vLLM+LMCache instance. The on-demand proof commands above start LMCache and vLLM automatically. Use port `5655`; port `5555` may already be occupied.
 
 ```bash
 apptainer exec --nv --bind /scratch/users/gfw:/scratch/users/gfw "$OLD" \
@@ -180,7 +197,7 @@ $PY queue-haul/stage1b_drain_sink.py preflight --required-gpus 2
 This hard-fails if the old sandbox, HF cache, Apptainer, required imports, GPU
 count, or ports are not usable.
 
-### 3. Run Stage 1b smoke2
+### 3. Run live Stage 1b smoke
 
 ```bash
 $PY queue-haul/stage1b_drain_sink.py smoke2-live \
@@ -216,8 +233,8 @@ Required evidence:
 $PY queue-haul/stage1c_controller.py plan
 $PY queue-haul/stage1c_controller.py proof \
   --mbps 1000 \
-  --run-root /tmp/qh-proof
-$PY queue-haul/stage1c_controller.py check --run-root /tmp/qh-proof
+  --run-root /tmp/qh-proof-live
+$PY queue-haul/stage1c_controller.py check --run-root /tmp/qh-proof-live
 ```
 
 The default fixture intentionally has one replay-cheaper session and one
@@ -228,7 +245,7 @@ sink.
 Inspect the result:
 
 ```bash
-$PY -c "import json; m=json.load(open('/tmp/qh-proof/controller_manifest.json')); print('schema', m['schema']); print('acceptance', m['acceptance']); [print(s['dispatch_rank'], s['id'], s['action'], s['http_status'], s['deadline_met'], s['proxy_delta']) for s in m['sessions']]"
+$PY -c "import json; m=json.load(open('/tmp/qh-proof-live/controller_manifest.json')); print('schema', m['schema']); print('acceptance', m['acceptance']); [print(s['dispatch_rank'], s['id'], s['action'], s['http_status'], s['deadline_met'], s['proxy_delta']) for s in m['sessions']]"
 ```
 
 Successful proof shape:
@@ -242,7 +259,7 @@ Successful proof shape:
 - The KV session has positive `kv/target_to_client` bytes.
 - Every session returns HTTP 200 before the fixture deadline.
 
-The successful local run on 2026-07-08 used `/tmp/qh-proof-seq3`; it dispatched
+The successful live local run on 2026-07-08 used `/tmp/qh-proof-live`; it dispatched
 `r0` as replay first and `k0` as KV second, and the KV action pulled
 `264243456` bytes over `kv/target_to_client`.
 
@@ -271,7 +288,7 @@ module load gcc/14.2.0 openblas/0.3.28
 .venv/bin/python -m pytest
 ```
 
-The latest verification after implementing this proof was `213 passed`.
+The latest verification after adding the live proof command was `214 passed`.
 
 ## Failure signatures
 
@@ -283,8 +300,8 @@ The latest verification after implementing this proof was `213 passed`.
 ## Ports and cleanup
 
 ```bash
-ss -ltnp | rg '5655|8120'
+ss -ltnp | rg '8100|8120|8200|8300|8400|5655'
 nvidia-smi
 ```
 
-Stop the vLLM process first, then the LMCache server. Do not kill unrelated user processes.
+The proof scripts stop their own children. If manual cleanup is needed, stop only this proof's vLLM, proxy, and LMCache PIDs. Do not kill unrelated user processes.

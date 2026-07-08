@@ -146,8 +146,8 @@ deterministic fixture only; workload design is intentionally out of scope.
 
 ```bash
 $PY queue-haul/stage1c_controller.py plan
-$PY queue-haul/stage1c_controller.py proof --mbps 1000 --run-root /tmp/qh-proof
-$PY queue-haul/stage1c_controller.py check --run-root /tmp/qh-proof
+$PY queue-haul/stage1c_controller.py proof --mbps 1000 --run-root /tmp/qh-proof-live
+$PY queue-haul/stage1c_controller.py check --run-root /tmp/qh-proof-live
 ```
 
 The live proof keeps LMCache, the shared 1Gbps throttle proxy, source vLLM on GPU
