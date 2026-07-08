@@ -286,6 +286,8 @@ $PY queue-haul/stage1c_controller.py live-grid \
   --manifest queue-haul/outputs/stage1c_live-sessions.json \
   --mbps 1000 \
   --run-root queue-haul/outputs/stage1c_grid
+# Or submit the unattended Slurm grid:
+sbatch queue-haul/stage1c_grid.sbatch
 ```
 
 The live controller writes `gpu_power.csv`, `events.jsonl`,
