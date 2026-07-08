@@ -128,6 +128,146 @@ LMCache hit tokens: 76
 Retrieved 76 out of 76 out of total 76 tokens
 ```
 
+
+## Source-sink proof runbook
+
+This is the proven end-to-end path for the Queue-Haul Stage 1b/1c proof. It uses
+two separate vLLM+LMCache instances on one A100 node, but the old sandbox is
+stable only when the source engine is stopped before the sink engine starts. The
+LMCache server and proxy stay up across both phases, so the sink retrieves KV
+written by the source instance.
+
+What this proves:
+
+- Source vLLM on GPU 0 can store KV for `openai/gpt-oss-20b` into LMCache.
+- Sink vLLM on GPU 1 can retrieve that stored KV through the proxy and continue.
+- The sink can also receive full context through the API proxy and replay/prefill.
+- A controller can choose a serial dispatch order containing both replay and KV
+  transfer actions.
+- The proof uses a user-space 1Gbps token-bucket delay function shared by replay
+  request bytes and KV-transfer bytes. This is not privileged kernel `tc`.
+
+What this does not prove yet: concurrent source and sink serving for the old
+sandbox, multi-destination routing, workload realism, power-down traces, or
+kernel/network-namespace traffic shaping.
+
+### 1. Start from a clean node
+
+```bash
+cd /home/groups/ramr/gfw/coding-progress-ledger/agent-migrate
+module load gcc/14.2.0 openblas/0.3.28
+PY=.venv/bin/python
+
+pgrep -af 'stage1|vllm|lmcache|proxy_bytes|api_server|EngineCore' || true
+ss -ltnp | rg '8100|8120|8200|8300|8400|5655' || true
+nvidia-smi --query-gpu=index,name,memory.used --format=csv,noheader
+```
+
+Expected before a run: no matching vLLM/LMCache/proxy processes, no listeners on
+`8100/8120/8200/8300/8400/5655`, and both GPUs near idle memory.
+
+If a previous run left only this proof's proxy or vLLM process behind, stop that
+specific PID. Do not kill unrelated user processes.
+
+### 2. Preflight the host and sandbox
+
+```bash
+$PY queue-haul/stage1b_drain_sink.py preflight --required-gpus 2
+```
+
+This hard-fails if the old sandbox, HF cache, Apptainer, required imports, GPU
+count, or ports are not usable.
+
+### 3. Run Stage 1b smoke2
+
+```bash
+$PY queue-haul/stage1b_drain_sink.py smoke2 \
+  --mbps 1000 \
+  --run-root /tmp/qh-smoke2
+```
+
+The driver starts LMCache on `5655`, the proxy on `8300` and `8400`, source vLLM
+on GPU 0 / port `8100`, warms a long prompt, stops source vLLM, starts sink vLLM
+on GPU 1 / port `8200`, then performs one KV resume and one replay request.
+
+Expected output is the run directory path. Check the manifest:
+
+```bash
+$PY -c "import json; m=json.load(open('/tmp/qh-smoke2/smoke2_manifest.json')); print(json.dumps(m['acceptance'], indent=2, sort_keys=True)); print(json.dumps(m['evidence'], indent=2, sort_keys=True))"
+```
+
+Required evidence:
+
+- `acceptance.ok` is `true`.
+- `source_warmed_before_sink` is `true`.
+- `source_stored` and `sink_retrieved` are `true`.
+- `kv_proxy_bytes` is positive on `kv/target_to_client`.
+- `api_proxy_bytes` is positive on `api/client_to_target`.
+- `kv_observed_bytes_per_s` is at or below the 1Gbps envelope, allowing test
+  tolerance.
+
+### 4. Run Stage 1c controller proof
+
+```bash
+$PY queue-haul/stage1c_controller.py plan
+$PY queue-haul/stage1c_controller.py proof \
+  --mbps 1000 \
+  --run-root /tmp/qh-proof
+$PY queue-haul/stage1c_controller.py check --run-root /tmp/qh-proof
+```
+
+The default fixture intentionally has one replay-cheaper session and one
+KV-cheaper session. The proof prewarms only the KV session on the source, stops
+source vLLM, starts sink vLLM, then dispatches sessions in controller order.
+
+Inspect the result:
+
+```bash
+$PY -c "import json; m=json.load(open('/tmp/qh-proof/controller_manifest.json')); print('schema', m['schema']); print('acceptance', m['acceptance']); [print(s['dispatch_rank'], s['id'], s['action'], s['http_status'], s['deadline_met'], s['proxy_delta']) for s in m['sessions']]"
+```
+
+Successful proof shape:
+
+- `schema` is `queue-haul-stage1c-v1`.
+- `acceptance.ok` is `true`.
+- The solver is feasible with `shortfall_w = 0`.
+- Dispatch ranks are contiguous and serial in time.
+- Both actions appear: `R` and `S`.
+- The replay session has positive `api/client_to_target` bytes.
+- The KV session has positive `kv/target_to_client` bytes.
+- Every session returns HTTP 200 before the fixture deadline.
+
+The successful local run on 2026-07-08 used `/tmp/qh-proof-seq3`; it dispatched
+`r0` as replay first and `k0` as KV second, and the KV action pulled
+`264243456` bytes over `kv/target_to_client`.
+
+### 5. Clean up and verify the node is idle
+
+The scripts stop their own children on normal exit. Verify anyway:
+
+```bash
+pgrep -af 'stage1|vllm|lmcache|proxy_bytes|api_server|EngineCore' || true
+ss -ltnp | rg '8100|8120|8200|8300|8400|5655' || true
+nvidia-smi --query-gpu=index,name,memory.used --format=csv,noheader
+```
+
+### 6. Run tests
+
+The repo standard command is:
+
+```bash
+uv run pytest
+```
+
+On the current A100 node `uv` is not on PATH, so use:
+
+```bash
+module load gcc/14.2.0 openblas/0.3.28
+.venv/bin/python -m pytest
+```
+
+The latest verification after implementing this proof was `213 passed`.
+
 ## Failure signatures
 
 - `ipc path ... is longer than 107 characters`: `TMPDIR` is too long or `engine_id` is too long. Use `TMPDIR=/tmp/t` and `engine_id=e0`.
