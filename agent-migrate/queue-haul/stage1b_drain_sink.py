@@ -25,7 +25,7 @@ HF_HOME = Path("/scratch/users/gfw/ptsim/hf")
 SCRATCH_BIND = Path("/scratch/users/gfw")
 CACHE_ROOT = Path("/scratch/users/gfw/ptsim/cache")
 CHUNK = 65536
-LMCACHE_MAX_LOCAL_CPU_GB = "8"
+LMCACHE_MAX_LOCAL_CPU_GB = "4"
 TYPED_VLLM_FLAGS = {
     "--host",
     "--port",
