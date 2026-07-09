@@ -132,7 +132,9 @@ PY=.venv/bin/python
 ```
 
 Stage 1b uses the validated old vLLM Apptainer sandbox with LMCache and a
-stdlib user-space proxy instead of Docker or privileged kernel `tc`. The proxy
+stdlib user-space proxy instead of Docker or privileged kernel `tc`. vLLM gets
+`LMCACHE_MAX_LOCAL_CPU_SIZE=8` so full session KV snapshots fit instead of
+repeated one-chunk partial stores. The proxy
 applies one shared 1Gbps source-egress bucket to API replay bytes and KV-transfer
 bytes. On a two-GPU A100 node, run:
 
@@ -187,4 +189,4 @@ writes `gpu_power.csv`, `events.jsonl`, `controller_manifest.json`,
 `power_summary.csv`, `power_trace.png`, `source_power.png`, `sink_power.png`,
 `delay_summary.csv`, `delay_summary.png`, `ell_power5s.csv`, `ell_power5s.png`,
 `request_counts.csv`, and `proxy_audit.csv`. `live-grid` also writes
-`scenario_summary.csv`, `grid_power_drop.png`, and `grid_delay.png`. Use `POLICIES=lp,all-r,all-s sbatch queue-haul/stage1c_quick.sbatch` for the quick policy/counterfactual comparison.
+`scenario_summary.csv`, `grid_power_drop.png`, and `grid_delay.png`. Use `POLICIES=lp,all-r,all-s sbatch queue-haul/stage1c_quick.sbatch` for the quick policy/counterfactual comparison; `all-r` cache-busts continued sink turns so it remains a replay baseline.

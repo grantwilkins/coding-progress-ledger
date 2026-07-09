@@ -49,7 +49,7 @@ def test_vllm_commands_pin_validated_sandbox_flags_and_roles():
     assert "LMCACHE_LMCACHE_INSTANCE_ID=stage1b_src" in source
     assert "LMCACHE_LMCACHE_INSTANCE_ID=stage1b_sink" in sink
     assert "VLLM_USE_FLASHINFER_SAMPLER=0" in source
-    assert "LMCACHE_MAX_LOCAL_CPU_SIZE=0.25" in source
+    assert "LMCACHE_MAX_LOCAL_CPU_SIZE=8" in source
     assert "TMPDIR=/tmp/qh-src-" in source
     assert "TMPDIR=/tmp/qh-sink-" in sink
     assert "VLLM_RPC_BASE_PATH=/tmp/qh-src-" in source

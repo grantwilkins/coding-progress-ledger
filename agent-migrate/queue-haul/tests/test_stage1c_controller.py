@@ -164,6 +164,7 @@ def test_run_live_moves_warms_sink_with_bounded_replay_and_overlapping_kv(tmp_pa
             self.pause_times = []
             self.resumed = False
             self.port = None
+            self.cache_busted = False
 
         def pause_boundary(self):
             self.pause_times.append(time.time())
@@ -174,11 +175,14 @@ def test_run_live_moves_warms_sink_with_bounded_replay_and_overlapping_kv(tmp_pa
         def resume(self):
             self.resumed = True
 
+        def cache_bust_on_sink(self):
+            self.cache_busted = True
+
     cfg = type("Cfg", (), {"api_proxy_port": 8400})()
     workers = {sid: Worker(sid) for sid in ("a", "b", "c")}
     sessions = [{"decode_tokens": 1}, {"decode_tokens": 1}, {"decode_tokens": 1}]
     rows = [
-        {"id": "a", "action": "R", "fixture_index": 0, "dispatch_rank": 0, "deadline_s": 2.0},
+        {"id": "a", "action": "R", "fixture_index": 0, "dispatch_rank": 0, "deadline_s": 2.0, "cache_bust_after_switch": True},
         {"id": "b", "action": "R", "fixture_index": 1, "dispatch_rank": 1, "deadline_s": 2.0},
         {"id": "c", "action": "S", "fixture_index": 2, "dispatch_rank": 2, "deadline_s": 2.0},
     ]
@@ -204,6 +208,7 @@ def test_run_live_moves_warms_sink_with_bounded_replay_and_overlapping_kv(tmp_pa
     assert [r["dispatch_rank"] for r in out] == [0, 1, 2]
     assert all(workers[sid].pause_times[0] >= ends[sid] for sid in workers)
     assert all(w.resumed and w.port == 8400 for w in workers.values())
+    assert workers["a"].cache_busted and not workers["b"].cache_busted
     assert all(r["warm_move"] and r["deadline_met"] and r["switch_downtime_s"] >= 0 for r in out)
     assert all(r["sink_warm_s"] <= r["completion_s"] for r in out)
 
@@ -392,7 +397,7 @@ def test_live_profile_costs_override_runtime_model(tmp_path: Path):
 
 
 
-def test_stored_session_kv_bytes_sums_session_state_chunks(tmp_path: Path):
+def test_stored_session_kv_bytes_uses_largest_session_snapshot(tmp_path: Path):
     log = tmp_path / "source.log"
     log.write_text("\n".join([
         "Storing KV cache for 8192 out of 8192 tokens for request req-a",
@@ -403,7 +408,7 @@ def test_stored_session_kv_bytes_sums_session_state_chunks(tmp_path: Path):
         "Stored 5376 out of total 8192 tokens. size: 0.1111 gb, cost 1 ms",
     ]))
 
-    assert c.stored_session_kv_bytes(log, "req-a") == 492_200_000
+    assert c.stored_session_kv_bytes(log, "req-a") == 246_100_000
 
 def test_proxy_audit_reports_user_space_link_rate(tmp_path: Path):
     proxy = tmp_path / "proxy.csv"

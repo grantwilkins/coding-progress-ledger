@@ -146,7 +146,7 @@ def vllm_exports(cfg: Config, role: str, remote_url: str) -> list[str]:
         "LMCACHE_REMOTE_SERDE": "naive",
         "LMCACHE_LMCACHE_INSTANCE_ID": f"stage1b_{role}",
         "LMCACHE_CHUNK_SIZE": "256",
-        "LMCACHE_MAX_LOCAL_CPU_SIZE": "0.25",
+        "LMCACHE_MAX_LOCAL_CPU_SIZE": "8",
         **{k: str(v) for k, v in cache_dirs(cfg, role).items()},
     }
     return [f"export {k}={shlex.quote(v)}" for k, v in env.items()]

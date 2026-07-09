@@ -766,16 +766,16 @@ def stream_chat(cfg: b.Config, port: int, prompt: str, max_tokens: int) -> dict:
 def stored_session_kv_bytes(log_path: Path, request_id: str | None) -> int:
     if not request_id or not log_path.exists():
         return 0
-    total, pending = 0.0, 0
+    best, pending = 0.0, 0
     for line in log_path.read_text(errors="ignore").splitlines():
         if request_id in line and "Storing KV cache" in line:
             pending += 1
         elif pending and "Stored " in line and "size:" in line:
             m = _STORED_SIZE_RE.search(line)
             if m:
-                total += float(m.group(1)) * 1_000_000_000
+                best = max(best, float(m.group(1)) * 1_000_000_000)
             pending -= 1
-    return int(total)
+    return int(best)
 
 
 def wait_session_kv_bytes(log_path: Path, request_id: str | None, timeout_s: float = 10.0) -> int:
@@ -821,6 +821,7 @@ class SessionWorker:
         self.last_prompt = session_prompt(session, 0)
         self.last_request_id = session.get("last_request_id")
         self.last_source_kv_bytes = int(session.get("session_kv_bytes", 0))
+        self.cache_bust_sink = False
         self.threads: list[threading.Thread] = []
 
     def start(self) -> None:
@@ -859,6 +860,8 @@ class SessionWorker:
                 port = self.port
                 self.in_flight = True
             prompt = session_prompt(self.session, idx)
+            if self.cache_bust_sink and port == self.cfg.api_proxy_port:
+                prompt = session_prompt(self.session, idx, replay_nonce=f"{self.session['id']} {idx} {time.time()}")
             self.log.write("request_start", session_id=self.session["id"], turn=idx, port=port)
             result = stream_chat(self.cfg, port, prompt, int(self.session["decode_tokens"]))
             if result["status"] == 200:
@@ -891,6 +894,10 @@ class SessionWorker:
     def switch_to(self, port: int) -> None:
         with self.cond:
             self.port = port
+
+    def cache_bust_on_sink(self) -> None:
+        with self.cond:
+            self.cache_bust_sink = True
 
     def resume(self) -> None:
         with self.cond:
@@ -1173,6 +1180,8 @@ def run_live_moves(cfg: b.Config, run_root: Path, sessions: list[dict], workers:
             worker.pause_boundary()
             boundary_ready_ts = time.time()
             worker.switch_to(cfg.api_proxy_port)
+            if row.get("cache_bust_after_switch"):
+                worker.cache_bust_on_sink()
             worker.resume()
             switch_end = time.time()
             if settle_s:
@@ -1238,7 +1247,7 @@ def live_drain(cfg: b.Config, run_root: Path, manifest: dict, mbps: float, nvsmi
         manifest = apply_live_profile(manifest, profile)
         sessions = live_sessions(manifest)
         summary = live_plan_summary(manifest, policy, seed, deadline_s, target_frac)
-        move_rows = [{**row, "deadline_s": summary["deadline_s"]} for row in summary["sessions"]]
+        move_rows = [{**row, "deadline_s": summary["deadline_s"], "cache_bust_after_switch": policy == "all-r"} for row in summary["sessions"]]
         rows = run_live_moves(cfg, run_root, sessions, workers, move_rows, replay_concurrency=replay_concurrency, kv_concurrency=kv_concurrency)
         drain_end = time.time()
         time.sleep(float(manifest.get("settle_s", 120.0)))
