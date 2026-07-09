@@ -133,8 +133,8 @@ PY=.venv/bin/python
 
 Stage 1b uses the validated old vLLM Apptainer sandbox with LMCache and a
 stdlib user-space proxy instead of Docker or privileged kernel `tc`. vLLM gets
-`LMCACHE_MAX_LOCAL_CPU_SIZE=8` so full session KV snapshots fit instead of
-repeated one-chunk partial stores. The proxy
+`LMCACHE_MAX_LOCAL_CPU_SIZE=4` so larger session KV snapshots fit while
+keeping two live instances under the 256G Slurm cgroup. The proxy
 applies one shared 1Gbps source-egress bucket to API replay bytes and KV-transfer
 bytes. On a two-GPU A100 node, run:
 
