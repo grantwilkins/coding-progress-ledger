@@ -192,7 +192,7 @@ def test_run_live_moves_warms_sink_with_bounded_replay_and_overlapping_kv(tmp_pa
         time.sleep(0.2)
         end = time.time()
         ends[sid] = end
-        return {"status": 200, "first_token_ts": start + 0.01, "start_ts": start, "end_ts": end, "prompt_sha256": "x", "response_text": ""}
+        return {"status": 200, "first_token_ts": start + 0.01, "start_ts": start, "end_ts": end, "prompt_sha256": "x", "request_id": f"req-{sid}", "response_text": ""}
 
     monkeypatch.setattr(c, "stream_chat", fake_stream_chat)
     t0 = time.time()
@@ -204,7 +204,8 @@ def test_run_live_moves_warms_sink_with_bounded_replay_and_overlapping_kv(tmp_pa
     assert [r["dispatch_rank"] for r in out] == [0, 1, 2]
     assert all(workers[sid].pause_times[0] >= ends[sid] for sid in workers)
     assert all(w.resumed and w.port == 8400 for w in workers.values())
-    assert all(r["warm_move"] and r["deadline_met"] and r["downtime_s"] >= 0 for r in out)
+    assert all(r["warm_move"] and r["deadline_met"] and r["switch_downtime_s"] >= 0 for r in out)
+    assert all(r["sink_warm_s"] <= r["completion_s"] for r in out)
 
 
 def test_nvsmi_command_uses_250ms_sampling():
@@ -302,7 +303,7 @@ def test_delay_summary_writes_total_delay_csv_and_plot(tmp_path: Path):
     delays = c.write_delay_summary(rows, tmp_path / "delay_summary.csv", tmp_path / "delay_summary.png")
 
     assert sum(d["first_token_s"] for d in delays) == pytest.approx(4.5)
-    assert (tmp_path / "delay_summary.csv").read_text().splitlines()[0] == "dispatch_rank,id,action,first_token_s,completion_s,downtime_s"
+    assert (tmp_path / "delay_summary.csv").read_text().splitlines()[0] == "dispatch_rank,id,action,first_token_s,sink_warm_s,completion_s,source_boundary_wait_s,switch_downtime_s"
     assert (tmp_path / "delay_summary.png").exists()
 
 
@@ -328,6 +329,18 @@ def test_live_plan_supports_policy_deadline_and_target_fraction(tmp_path: Path):
         assert summary["target_w"] == pytest.approx(0.25 * summary["full_source_drop_w"])
         assert summary["sessions"]
         assert [r["dispatch_rank"] for r in summary["sessions"]] == list(range(len(summary["sessions"])))
+
+
+def test_counterfactual_live_plans_force_single_action(tmp_path: Path):
+    manifest = _manifest_for_live_policy_tests(tmp_path)
+
+    all_r = c.live_plan_summary(manifest, policy="all-r", target_frac=1.0)
+    all_s = c.live_plan_summary(manifest, policy="all-s", target_frac=1.0)
+
+    assert {r["action"] for r in all_r["sessions"]} == {"R"}
+    assert {r["action"] for r in all_s["sessions"]} == {"S"}
+    assert all_r["solver"]["method"] == "all-r"
+    assert all_s["solver"]["method"] == "all-s"
 
 
 def test_random_live_plan_is_seed_reproducible(tmp_path: Path):
@@ -358,11 +371,13 @@ def test_live_profile_costs_override_runtime_model(tmp_path: Path):
         "points": [
             {"action": "R", "tokens": 3000, "completion_s": 30.0},
             {"action": "R", "tokens": 5000, "completion_s": 50.0},
-            {"action": "S", "tokens": 3000, "completion_s": 10.0},
-            {"action": "S", "tokens": 5000, "completion_s": 20.0},
+            {"action": "S", "tokens": 3000, "kv_bytes": 1000, "completion_s": 10.0},
+            {"action": "S", "tokens": 5000, "kv_bytes": 3000, "completion_s": 20.0},
         ],
     }
 
+    for i, session in enumerate(manifest["sessions"]):
+        session["session_kv_bytes"] = 1000 + 2000 * i
     patched = c.apply_live_profile(manifest, profile)
     sessions, _pop, _pool, _move, imp, *_ = c._live_model(patched)
     summary = c.live_plan_summary(patched, target_frac=0.25)
@@ -370,8 +385,25 @@ def test_live_profile_costs_override_runtime_model(tmp_path: Path):
     for i, session in enumerate(sessions):
         assert imp.c_replay[i] == pytest.approx(session["c_replay_s"])
         assert imp.c_transfer[i] == pytest.approx(session["c_transfer_s"])
+    assert sessions[0]["c_transfer_s"] == pytest.approx(10.0)
+    assert sessions[1]["c_transfer_s"] == pytest.approx(20.0)
     assert summary["profile"]["schema"] == c.PROFILE_SCHEMA
 
+
+
+
+def test_stored_session_kv_bytes_sums_session_state_chunks(tmp_path: Path):
+    log = tmp_path / "source.log"
+    log.write_text("\n".join([
+        "Storing KV cache for 8192 out of 8192 tokens for request req-a",
+        "Stored 5376 out of total 8192 tokens. size: 0.2461 gb, cost 1 ms",
+        "Storing KV cache for 16384 out of 16384 tokens for request req-a",
+        "Stored 5376 out of total 16384 tokens. size: 0.2461 gb, cost 1 ms",
+        "Storing KV cache for 8192 out of 8192 tokens for request req-b",
+        "Stored 5376 out of total 8192 tokens. size: 0.1111 gb, cost 1 ms",
+    ]))
+
+    assert c.stored_session_kv_bytes(log, "req-a") == 492_200_000
 
 def test_proxy_audit_reports_user_space_link_rate(tmp_path: Path):
     proxy = tmp_path / "proxy.csv"

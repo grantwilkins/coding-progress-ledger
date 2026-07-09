@@ -9,6 +9,7 @@ import http.client
 import json
 import math
 import random
+import re
 import signal
 import subprocess
 import threading
@@ -41,6 +42,8 @@ LIVE_A100_P_BUSY_W = 390.0
 LIVE_A100_LOG_SHAPE = 8.55
 LIVE_A100_C_PREFILL_J_PER_TOK = 0.028197803044670608
 LIVE_A100_C_DECODE_J_PER_TOK = 0.25745287802176875
+_TOKENIZER_CACHE = {}
+_STORED_SIZE_RE = re.compile(r"size:\s*([0-9.]+)\s*gb", re.IGNORECASE)
 
 
 def default_fixture() -> dict:
@@ -472,48 +475,76 @@ def profile_token_points(sessions: list[dict], max_points: int = 3) -> list[int]
     return [vals[int(i)] for i in dict.fromkeys(idxs)]
 
 
-def _profile_session(tokens: int) -> dict:
-    return {
-        "id": f"profile_{tokens}",
-        "served_T": int(tokens),
-        "decode_tokens": 1,
-        "turns": [{"append_tokens": max(1, int(tokens) - 1024)}],
-    }
+def _tokenizer(cfg: b.Config):
+    snaps = [p for p in b.model_snapshot_dir(cfg.hf_home, cfg.model).iterdir() if p.is_dir()]
+    if not snaps:
+        raise ValueError(f"no local tokenizer snapshot for {cfg.model}")
+    snap = str(max(snaps, key=lambda p: p.stat().st_mtime))
+    if snap not in _TOKENIZER_CACHE:
+        from transformers import AutoTokenizer
+        _TOKENIZER_CACHE[snap] = AutoTokenizer.from_pretrained(snap, local_files_only=True)
+    return _TOKENIZER_CACHE[snap]
 
 
-def _profile_row(action: str, tokens: int, result: dict, delta: dict) -> dict:
+def prompt_tokens(cfg: b.Config, prompt: str) -> int:
+    tok = _tokenizer(cfg)
+    msg = [{"role": "user", "content": prompt}]
+    if hasattr(tok, "apply_chat_template"):
+        return len(tok.apply_chat_template(msg, tokenize=True, add_generation_prompt=True))
+    return len(tok(prompt).input_ids)
+
+
+def profile_prompt(cfg: b.Config, target_tokens: int) -> tuple[str, int]:
+    words = max(64, int(target_tokens * WORDS_PER_TOKEN))
+    prompt, actual = "", 0
+    for _ in range(8):
+        body = " ".join(f"p{target_tokens}_{i}" for i in range(words))
+        prompt = f"Synthetic token-count calibration session. {body}. Reply with OK."
+        actual = prompt_tokens(cfg, prompt)
+        if actual and abs(actual - target_tokens) / max(target_tokens, 1) <= 0.03:
+            break
+        words = max(64, int(words * target_tokens / max(actual, 1)))
+    return prompt, actual
+
+
+def _profile_row(action: str, requested_tokens: int, actual_tokens: int, result: dict, delta: dict) -> dict:
     return {
         "action": action,
-        "tokens": int(tokens),
+        "requested_tokens": int(requested_tokens),
+        "tokens": int(actual_tokens),
         "first_token_s": float(result["first_token_ts"] - result["start_ts"]),
         "completion_s": float(result["end_ts"] - result["start_ts"]),
+        "api_request_bytes": int(delta.get("api/client_to_target", 0)),
+        "kv_bytes": int(delta.get("kv/target_to_client", 0)),
         "proxy_delta": delta,
     }
 
 
 def calibrate_live_profile(cfg: b.Config, run_root: Path, sessions: list[dict], mbps: float, max_points: int = 3) -> dict:
     rows, proxy_log = [], run_root / "proxy_bytes.csv"
-    for tokens in profile_token_points(sessions, max_points):
-        prompt = session_prompt(_profile_session(tokens), 0)
+    for target_tokens in profile_token_points(sessions, max_points):
+        prompt, actual_tokens = profile_prompt(cfg, target_tokens)
         before = b.proxy_counts(proxy_log)
-        replay = stream_chat(cfg, cfg.api_proxy_port, f"Replay profile {tokens} {time.time()}.\n{prompt}", 1)
+        replay_prompt = f"Replay profile {target_tokens} {time.time()}.\n{prompt}"
+        replay_tokens = prompt_tokens(cfg, replay_prompt)
+        replay = stream_chat(cfg, cfg.api_proxy_port, replay_prompt, 1)
         if replay["status"] != 200:
-            raise RuntimeError(f"profile replay failed for {tokens}: {replay['response_text']}")
+            raise RuntimeError(f"profile replay failed for {target_tokens}: {replay['response_text']}")
         delta = b.count_delta(before, b.proxy_counts(proxy_log))
         if delta.get("api/client_to_target", 0) <= 0:
-            raise RuntimeError(f"profile replay had no API bytes for {tokens}")
-        rows.append(_profile_row("R", tokens, replay, delta))
+            raise RuntimeError(f"profile replay had no API bytes for {target_tokens}")
+        rows.append(_profile_row("R", target_tokens, replay_tokens, replay, delta))
 
-        b.warm_source(cfg, run_root, prompt, f"profile source warm {tokens}")
+        b.warm_source(cfg, run_root, prompt, f"profile source warm {target_tokens}")
         before = b.proxy_counts(proxy_log)
         kv = stream_chat(cfg, cfg.api_proxy_port, prompt, 1)
         if kv["status"] != 200:
-            raise RuntimeError(f"profile KV failed for {tokens}: {kv['response_text']}")
+            raise RuntimeError(f"profile KV failed for {target_tokens}: {kv['response_text']}")
         time.sleep(2)
         delta = b.count_delta(before, b.proxy_counts(proxy_log))
         if delta.get("kv/target_to_client", 0) <= 0:
-            raise RuntimeError(f"profile KV had no KV bytes for {tokens}")
-        rows.append(_profile_row("S", tokens, kv, delta))
+            raise RuntimeError(f"profile KV had no KV bytes for {target_tokens}")
+        rows.append(_profile_row("S", target_tokens, actual_tokens, kv, delta))
     return {"schema": PROFILE_SCHEMA, "created_ts": time.time(), "mbps": mbps, "points": rows}
 
 
@@ -530,16 +561,28 @@ def ensure_live_profile(cfg: b.Config, run_root: Path, profile_path: Path | None
     return profile, path
 
 
-def _profile_cost(profile: dict, action: str, tokens: int) -> float:
-    pts = sorted((int(r["tokens"]), float(r["completion_s"])) for r in profile["points"] if r["action"] == action)
+def _interp(points: list[tuple[float, float]], x: float) -> float:
+    pts = sorted(points)
     if not pts:
-        raise ValueError(f"profile missing action {action}")
-    if len(pts) == 1 or tokens <= pts[0][0]:
+        raise ValueError("empty interpolation points")
+    if len(pts) == 1 or x <= pts[0][0]:
         return pts[0][1]
     for (x0, y0), (x1, y1) in zip(pts, pts[1:]):
-        if tokens <= x1:
-            return y0 + (y1 - y0) * (tokens - x0) / max(1, x1 - x0)
-    return pts[-1][1] * tokens / max(1, pts[-1][0])
+        if x <= x1:
+            return y0 + (y1 - y0) * (x - x0) / max(1e-12, x1 - x0)
+    return pts[-1][1] * x / max(1e-12, pts[-1][0])
+
+
+def _profile_cost(profile: dict, action: str, tokens: int) -> float:
+    return _interp([(float(r["tokens"]), float(r["completion_s"])) for r in profile["points"] if r["action"] == action], float(tokens))
+
+
+def _profile_transfer_cost(profile: dict, session: dict) -> float:
+    nbytes = float(session.get("session_kv_bytes") or session.get("source_kv_bytes") or 0)
+    pts = [(float(r.get("kv_bytes", 0)), float(r["completion_s"])) for r in profile["points"] if r["action"] == "S" and float(r.get("kv_bytes", 0)) > 0]
+    if nbytes > 0 and pts:
+        return _interp(pts, nbytes)
+    return _profile_cost(profile, "S", int(session["served_T"]))
 
 
 def apply_live_profile(manifest: dict, profile: dict) -> dict:
@@ -551,7 +594,7 @@ def apply_live_profile(manifest: dict, profile: dict) -> dict:
         sessions.append({
             **s,
             "c_replay_s": _profile_cost(profile, "R", tokens),
-            "c_transfer_s": _profile_cost(profile, "S", tokens),
+            "c_transfer_s": _profile_transfer_cost(profile, s),
         })
     return {**manifest, "sessions": sessions, "profile": {"schema": profile["schema"], "mbps": profile.get("mbps"), "points": profile["points"]}}
 
@@ -637,10 +680,21 @@ def _policy_order(policy: str, result, pop: JobPopulation, pool: PoolPower, imp,
 def live_plan_summary(manifest: dict, policy: str = "lp", seed: int = 0,
                       deadline_s: float | None = None, target_frac: float | None = None) -> dict:
     sessions, pop, pool, move, imp, event, full_w, target_w = _live_model(manifest, deadline_s, target_frac)
-    result = _policy_result(policy, pop, pool, imp, target_w, event, move, seed)
     rows, cumulative = [], np.zeros(len(pop))
-    for i in _policy_order(policy, result, pop, pool, imp, seed):
-        action = _row_action(result, imp, i)
+    if policy in {"all-r", "all-s"}:
+        action = "R" if policy == "all-r" else "S"
+        costs = imp.c_replay if action == "R" else imp.c_transfer
+        order = sorted(range(len(pop)), key=lambda i: (-(imp.dp_certified[i] / max(float(costs[i]), 1e-12)), i))
+        solver = {"method": policy, "feasible": True, "shortfall_w": 0.0, "cost_s": 0.0}
+        y_r = np.zeros(len(pop))
+        y_s = np.zeros(len(pop))
+    else:
+        result = _policy_result(policy, pop, pool, imp, target_w, event, move, seed)
+        order = _policy_order(policy, result, pop, pool, imp, seed)
+        solver = {"method": result.method, "feasible": result.true_expected_feasible, "shortfall_w": result.expected_shortfall_w, "cost_s": result.cost}
+        y_r, y_s = result.y_R, result.y_S
+    for i in order:
+        action = "R" if policy == "all-r" else "S" if policy == "all-s" else _row_action(result, imp, i)
         cumulative[i] = 1.0
         predicted = evaluate_node_expected_w(pop, pool, cumulative)
         rows.append({
@@ -648,11 +702,12 @@ def live_plan_summary(manifest: dict, policy: str = "lp", seed: int = 0,
             "fixture_index": i,
             "dispatch_rank": len(rows),
             "action": action,
-            "y_R": float(result.y_R[i]),
-            "y_S": float(result.y_S[i]),
+            "y_R": float(1.0 if policy == "all-r" else 0.0 if policy == "all-s" else y_r[i]),
+            "y_S": float(0.0 if policy == "all-r" else 1.0 if policy == "all-s" else y_s[i]),
             "planned_finish_s": float(imp.c_replay[i] if action == "R" else imp.c_transfer[i]),
             "predicted_cumulative_source_drop_w": float(predicted),
             "served_T": int(pop.T[i]),
+            "session_kv_bytes": int(sessions[i].get("session_kv_bytes", 0)),
         })
         if predicted >= target_w:
             break
@@ -671,7 +726,7 @@ def live_plan_summary(manifest: dict, policy: str = "lp", seed: int = 0,
         "power_curve": {"name": pool.power_curve, "log_shape": pool.log_shape, "p_idle_w": pool.p_idle_w, "p_busy_w": pool.p_busy_w, "rho_star": pool.rho_star},
         "movement": {"lambda_src_bytes_per_s": move.lambda_src, "mu_bytes_per_s": move.mu_in},
         "profile": manifest.get("profile"),
-        "solver": {"method": result.method, "feasible": result.true_expected_feasible, "shortfall_w": result.expected_shortfall_w, "cost_s": result.cost},
+        "solver": solver,
         "sessions": rows,
     }
 
@@ -682,11 +737,11 @@ def stream_chat(cfg: b.Config, port: int, prompt: str, max_tokens: int) -> dict:
     conn = http.client.HTTPConnection(cfg.host, port, timeout=900)
     conn.request("POST", "/v1/chat/completions", body, {"Content-Type": "application/json"})
     resp = conn.getresponse()
-    content, first = [], None
+    content, first, request_id = [], None, None
     if resp.status != 200:
         text = resp.read().decode(errors="ignore")
         conn.close()
-        return {"status": resp.status, "content": "", "start_ts": t0, "first_token_ts": None, "end_ts": time.time(), "prompt_sha256": hashlib.sha256(prompt.encode()).hexdigest(), "response_text": text[:500]}
+        return {"status": resp.status, "content": "", "start_ts": t0, "first_token_ts": None, "end_ts": time.time(), "prompt_sha256": hashlib.sha256(prompt.encode()).hexdigest(), "request_id": None, "response_text": text[:500]}
     while True:
         line = resp.readline()
         if not line:
@@ -698,13 +753,40 @@ def stream_chat(cfg: b.Config, port: int, prompt: str, max_tokens: int) -> dict:
         if data == b"[DONE]":
             break
         chunk = json.loads(data)
+        request_id = request_id or chunk.get("id")
         delta = chunk.get("choices", [{}])[0].get("delta", {}).get("content") or ""
         if delta and first is None:
             first = time.time()
         content.append(delta)
     conn.close()
     t1 = time.time()
-    return {"status": resp.status, "content": "".join(content), "start_ts": t0, "first_token_ts": first or t1, "end_ts": t1, "prompt_sha256": hashlib.sha256(prompt.encode()).hexdigest(), "response_text": ""}
+    return {"status": resp.status, "content": "".join(content), "start_ts": t0, "first_token_ts": first or t1, "end_ts": t1, "prompt_sha256": hashlib.sha256(prompt.encode()).hexdigest(), "request_id": request_id, "response_text": ""}
+
+
+def stored_session_kv_bytes(log_path: Path, request_id: str | None) -> int:
+    if not request_id or not log_path.exists():
+        return 0
+    total, pending = 0.0, 0
+    for line in log_path.read_text(errors="ignore").splitlines():
+        if request_id in line and "Storing KV cache" in line:
+            pending += 1
+        elif pending and "Stored " in line and "size:" in line:
+            m = _STORED_SIZE_RE.search(line)
+            if m:
+                total += float(m.group(1)) * 1_000_000_000
+            pending -= 1
+    return int(total)
+
+
+def wait_session_kv_bytes(log_path: Path, request_id: str | None, timeout_s: float = 10.0) -> int:
+    end = time.time() + timeout_s
+    nbytes = 0
+    while time.time() <= end:
+        nbytes = stored_session_kv_bytes(log_path, request_id)
+        if nbytes > 0:
+            return nbytes
+        time.sleep(0.25)
+    return nbytes
 
 
 class JsonlLog:
@@ -726,8 +808,9 @@ class JsonlLog:
 
 
 class SessionWorker:
-    def __init__(self, cfg: b.Config, session: dict, port: int, log: JsonlLog, seed: int):
+    def __init__(self, cfg: b.Config, session: dict, port: int, log: JsonlLog, seed: int, run_root: Path):
         self.cfg, self.session, self.port, self.log = cfg, session, port, log
+        self.source_log = run_root / "source.log"
         self.rng = random.Random(seed)
         self.cond = threading.Condition()
         self.pending = 0
@@ -736,6 +819,8 @@ class SessionWorker:
         self.stopped = False
         self.in_flight = False
         self.last_prompt = session_prompt(session, 0)
+        self.last_request_id = session.get("last_request_id")
+        self.last_source_kv_bytes = int(session.get("session_kv_bytes", 0))
         self.threads: list[threading.Thread] = []
 
     def start(self) -> None:
@@ -771,16 +856,26 @@ class SessionWorker:
                 self.pending = 0
                 idx = self.turn
                 self.turn += 1
+                port = self.port
                 self.in_flight = True
             prompt = session_prompt(self.session, idx)
-            self.log.write("request_start", session_id=self.session["id"], turn=idx, port=self.port)
-            result = stream_chat(self.cfg, self.port, prompt, int(self.session["decode_tokens"]))
+            self.log.write("request_start", session_id=self.session["id"], turn=idx, port=port)
+            result = stream_chat(self.cfg, port, prompt, int(self.session["decode_tokens"]))
             if result["status"] == 200:
-                self.last_prompt = prompt
-            self.log.write("request_end", session_id=self.session["id"], turn=idx, port=self.port, status=result["status"], first_token_ts=result["first_token_ts"], end_ts=result["end_ts"])
+                kv_bytes = wait_session_kv_bytes(self.source_log, result.get("request_id"), 2.0) if port == self.cfg.src_port else 0
+                with self.cond:
+                    self.last_prompt = prompt
+                    self.last_request_id = result.get("request_id")
+                    if kv_bytes:
+                        self.last_source_kv_bytes = kv_bytes
+            self.log.write("request_end", session_id=self.session["id"], turn=idx, port=port, status=result["status"], request_id=result.get("request_id"), session_kv_bytes=self.last_source_kv_bytes, first_token_ts=result["first_token_ts"], end_ts=result["end_ts"])
             with self.cond:
                 self.in_flight = False
                 self.cond.notify_all()
+
+    def snapshot(self) -> dict:
+        with self.cond:
+            return {"last_prompt": self.last_prompt, "last_request_id": self.last_request_id, "session_kv_bytes": self.last_source_kv_bytes}
 
     def pause_boundary(self, timeout_s: float = 900.0) -> None:
         deadline = time.monotonic() + timeout_s
@@ -950,16 +1045,17 @@ def write_ell_power5s(power_csv: Path, manifest: dict, out_csv: Path, out_png: P
 
 def write_delay_summary(rows: list[dict], out_csv: Path, out_png: Path) -> list[dict]:
     import matplotlib.pyplot as plt
-    delays = [{"dispatch_rank": r["dispatch_rank"], "id": r["id"], "action": r["action"], "first_token_s": r["first_token_s"], "completion_s": r["completion_s"], "downtime_s": r.get("downtime_s", r["completion_s"])} for r in rows]
+    delays = [{"dispatch_rank": r["dispatch_rank"], "id": r["id"], "action": r["action"], "first_token_s": r["first_token_s"], "sink_warm_s": r.get("sink_warm_s", r["completion_s"]), "completion_s": r["completion_s"], "source_boundary_wait_s": r.get("source_boundary_wait_s", 0.0), "switch_downtime_s": r.get("switch_downtime_s", r.get("downtime_s", r["completion_s"]))} for r in rows]
     with out_csv.open("w", newline="") as f:
-        writer = csv.DictWriter(f, ["dispatch_rank", "id", "action", "first_token_s", "completion_s", "downtime_s"])
+        writer = csv.DictWriter(f, ["dispatch_rank", "id", "action", "first_token_s", "sink_warm_s", "completion_s", "source_boundary_wait_s", "switch_downtime_s"])
         writer.writeheader()
         writer.writerows(delays)
     fig, ax = plt.subplots(figsize=(8, 3))
     xs = [d["dispatch_rank"] for d in delays]
-    ax.bar([x - 0.25 for x in xs], [d["first_token_s"] for d in delays], width=0.25, label="TTFT")
-    ax.bar(xs, [d["completion_s"] for d in delays], width=0.25, label="completion")
-    ax.bar([x + 0.25 for x in xs], [d["downtime_s"] for d in delays], width=0.25, label="downtime")
+    ax.bar([x - 0.3 for x in xs], [d["sink_warm_s"] for d in delays], width=0.2, label="sink warm")
+    ax.bar([x - 0.1 for x in xs], [d["completion_s"] for d in delays], width=0.2, label="completion")
+    ax.bar([x + 0.1 for x in xs], [d["source_boundary_wait_s"] for d in delays], width=0.2, label="boundary wait")
+    ax.bar([x + 0.3 for x in xs], [d["switch_downtime_s"] for d in delays], width=0.2, label="switch")
     ax.set(xlabel="dispatch rank", ylabel="seconds")
     ax.legend()
     fig.tight_layout()
@@ -1073,8 +1169,9 @@ def run_live_moves(cfg: b.Config, run_root: Path, sessions: list[dict], workers:
             result = stream_chat(cfg, cfg.api_proxy_port, prompt, int(sessions[row["fixture_index"]]["decode_tokens"]))
             if result["status"] != 200:
                 raise RuntimeError(f"sink move failed for {row['id']}: {result['response_text']}")
-            switch_start = time.time()
+            switch_request_ts = time.time()
             worker.pause_boundary()
+            boundary_ready_ts = time.time()
             worker.switch_to(cfg.api_proxy_port)
             worker.resume()
             switch_end = time.time()
@@ -1087,13 +1184,17 @@ def run_live_moves(cfg: b.Config, run_root: Path, sessions: list[dict], workers:
                 "warm_move": True,
                 "move_start_ts": move_start,
                 "sink_ready_ts": result["end_ts"],
-                "switch_start_ts": switch_start,
+                "switch_request_ts": switch_request_ts,
+                "boundary_ready_ts": boundary_ready_ts,
                 "switch_end_ts": switch_end,
                 "move_end_ts": switch_end,
                 "http_status": result["status"],
                 "first_token_s": result["first_token_ts"] - move_start,
+                "sink_warm_s": result["end_ts"] - move_start,
                 "completion_s": completion,
-                "downtime_s": switch_end - switch_start,
+                "source_boundary_wait_s": boundary_ready_ts - switch_request_ts,
+                "switch_downtime_s": switch_end - boundary_ready_ts,
+                "downtime_s": switch_end - boundary_ready_ts,
                 "deadline_met": completion <= float(row.get("deadline_s", math.inf)),
                 "prompt_sha256": result["prompt_sha256"],
                 "proxy_delta": delta,
@@ -1114,22 +1215,28 @@ def live_drain(cfg: b.Config, run_root: Path, manifest: dict, mbps: float, nvsmi
     try:
         b.start_sink(stack, cfg, extra)
         profile, used_profile_path = ensure_live_profile(cfg, run_root, profile_path, manifest, mbps)
-        manifest = apply_live_profile(manifest, profile)
-        sessions = live_sessions(manifest)
         nvsmi = start_nvsmi(run_root / "gpu_power.csv", nvsmi_ms)
         for i, session in enumerate(sessions):
             prompt = session_prompt(session, 0)
             result = stream_chat(cfg, cfg.src_port, prompt, int(session["decode_tokens"]))
             if result["status"] != 200:
                 raise RuntimeError(f"source prewarm failed for {session['id']}: {result['response_text']}")
-            events.write("prewarm", session_id=session["id"], status=result["status"])
-            worker = SessionWorker(cfg, session, cfg.src_port, events, int(manifest.get("source", {}).get("seed", 0)) + i)
+            request_id = result.get("request_id")
+            kv_bytes = wait_session_kv_bytes(run_root / "source.log", request_id)
+            events.write("prewarm", session_id=session["id"], status=result["status"], request_id=request_id, session_kv_bytes=kv_bytes)
+            session.update({"last_request_id": request_id, "session_kv_bytes": kv_bytes})
+            worker = SessionWorker(cfg, session, cfg.src_port, events, int(manifest.get("source", {}).get("seed", 0)) + i, run_root)
             worker.last_prompt = prompt
+            worker.last_request_id = request_id
+            worker.last_source_kv_bytes = kv_bytes
             worker.start()
             workers[session["id"]] = worker
         baseline_start = time.time()
         time.sleep(float(manifest.get("baseline_s", 120.0)))
         drain_start = time.time()
+        manifest = {**manifest, "sessions": [{**s, **workers[s["id"]].snapshot()} for s in sessions]}
+        manifest = apply_live_profile(manifest, profile)
+        sessions = live_sessions(manifest)
         summary = live_plan_summary(manifest, policy, seed, deadline_s, target_frac)
         move_rows = [{**row, "deadline_s": summary["deadline_s"]} for row in summary["sessions"]]
         rows = run_live_moves(cfg, run_root, sessions, workers, move_rows, replay_concurrency=replay_concurrency, kv_concurrency=kv_concurrency)
@@ -1284,7 +1391,7 @@ def parse_args(argv: list[str] | None = None):
     live_p.add_argument("--run-root", type=Path, default=Path("queue-haul/outputs/stage1c_live"))
     live_p.add_argument("--mbps", type=float, default=1000.0)
     live_p.add_argument("--nvsmi-ms", type=int, default=250)
-    live_p.add_argument("--policy", choices=("lp", "random", "greedy"), default="lp")
+    live_p.add_argument("--policy", choices=("lp", "random", "greedy", "all-r", "all-s"), default="lp")
     live_p.add_argument("--deadline-s", type=float)
     live_p.add_argument("--target-frac", type=float)
     live_p.add_argument("--seed", type=int, default=0)

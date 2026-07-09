@@ -187,4 +187,4 @@ writes `gpu_power.csv`, `events.jsonl`, `controller_manifest.json`,
 `power_summary.csv`, `power_trace.png`, `source_power.png`, `sink_power.png`,
 `delay_summary.csv`, `delay_summary.png`, `ell_power5s.csv`, `ell_power5s.png`,
 `request_counts.csv`, and `proxy_audit.csv`. `live-grid` also writes
-`scenario_summary.csv`, `grid_power_drop.png`, and `grid_delay.png`.
+`scenario_summary.csv`, `grid_power_drop.png`, and `grid_delay.png`. Use `POLICIES=lp,all-r,all-s sbatch queue-haul/stage1c_quick.sbatch` for the quick policy/counterfactual comparison.
