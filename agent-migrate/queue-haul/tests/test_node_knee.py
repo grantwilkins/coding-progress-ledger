@@ -43,6 +43,7 @@ from node_knee import (
     solve_exact_oracle,
     evaluate_active_floor_w,
     solve_live_greedy,
+    solve_node_aware_greedy,
     solve_node_drain_greedy,
     solve_random_jobs,
     solve_random_nodes,
@@ -244,6 +245,7 @@ def test_node_knee_methods_respect_pinned_jobs():
     solvers = (
         solve_active_knee_milp,
         solve_live_greedy,
+        solve_node_aware_greedy,
         solve_node_drain_greedy,
         solve_random_jobs,
         solve_random_nodes,
@@ -272,6 +274,56 @@ def test_node_drain_greedy_beats_live_marginal_on_knee_bundle_case():
     drain = solve_node_drain_greedy(pop, pool, imp, 500.0, SLACK_E, SLACK_M)
     assert live.true_expected_feasible and drain.true_expected_feasible
     assert drain.cost < live.cost
+
+
+def test_node_aware_greedy_uses_finite_difference_gain():
+    pool = PoolPower()
+    pop = _pop([0.08, 0.02], [0, 0])
+    imp = _imp(pop, [1, 100])
+    res = solve_node_aware_greedy(pop, pool, imp, 1.0, SLACK_E, SLACK_M)
+    j = res.order[0]
+    before = node_loads(pop)[0]
+    direct = pool.node_power(before) - pool.node_power(before - pop.ell[j])
+    assert res.node_expected_w == pytest.approx(direct)
+    assert np.array_equal(res.y, np.array([1.0, 0.0]))
+
+
+def test_node_aware_greedy_takes_knee_bundle_missed_by_marginal_greedy():
+    pool = PoolPower()
+    pop = _pop([0.08, 0.08, 0.08, 0.08, 0.08, 0.08, 0.30], [0, 0, 0, 1, 1, 1, 1])
+    imp = _imp(pop, [10, 10, 10, 1, 1, 1, 1000])
+    live = solve_live_greedy(pop, pool, imp, 500.0, SLACK_E, SLACK_M)
+    aware = solve_node_aware_greedy(pop, pool, imp, 500.0, SLACK_E, SLACK_M)
+    assert aware.true_expected_feasible
+    assert np.allclose(aware.y, np.round(aware.y))
+    assert aware.cost < live.cost
+    assert aware.order[:3] == (3, 4, 5)
+
+
+def test_node_aware_greedy_tries_replay_when_kv_does_not_fit():
+    pool = PoolPower()
+    pop = _pop([0.08], [0])
+    imp = replace(_imp(pop, [1]), c_replay=np.array([5.0]), c_transfer=np.array([1.0]),
+                  b_replay=np.array([1.0]), b_transfer=np.array([100.0]))
+    event = Event(D=20, dest_nodes=10**6, tau_src=0, tau_pre=0, tau_in=0)
+    move = replace(SLACK_M, lambda_src=0.1)
+    res = solve_node_aware_greedy(pop, pool, imp, 1.0, event, move)
+    assert np.array_equal(res.y_R, np.ones(1))
+    assert np.array_equal(res.y_S, np.zeros(1))
+    assert res.movement_feasible
+
+
+def test_node_aware_greedy_matches_tiny_oracle_and_is_deterministic():
+    pool = PoolPower()
+    pop = _pop([0.08, 0.08, 0.08], [0, 0, 0])
+    imp = _imp(pop, [100, 1, 1])
+    a = solve_node_aware_greedy(pop, pool, imp, 500.0, SLACK_E, SLACK_M)
+    b = solve_node_aware_greedy(pop, pool, imp, 500.0, SLACK_E, SLACK_M)
+    oracle = solve_exact_oracle(pop, pool, imp, 500.0, SLACK_E, SLACK_M)
+    assert a.cost == pytest.approx(oracle.cost)
+    assert np.array_equal(a.y, oracle.y)
+    assert a.order == b.order
+    assert np.array_equal(a.y_R, b.y_R) and np.array_equal(a.y_S, b.y_S)
 
 
 def test_node_drain_bundle_respects_joint_resource_budget():

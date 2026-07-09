@@ -121,6 +121,7 @@ class NodeKneeResult:
     node_expected_w: float
     expected_shortfall_w: float
     floor_shortfall_w: float
+    order: tuple[int, ...] = ()
 
     @property
     def y(self) -> np.ndarray:
@@ -141,7 +142,7 @@ def _movement_feasible(pop, pool, imp, y_R, y_S, event, move) -> bool:
 
 
 def _result(pop, pool, imp, y_R, y_S, cost, method, s_star, event=Event(), move=Movement(),
-            method_target_feasible=True) -> NodeKneeResult:
+            method_target_feasible=True, order=()) -> NodeKneeResult:
     y = y_R + y_S
     active = evaluate_active_floor_w(imp, y)
     expected = evaluate_node_expected_w(pop, pool, y)
@@ -149,7 +150,7 @@ def _result(pop, pool, imp, y_R, y_S, cost, method, s_star, event=Event(), move=
     movement = _movement_feasible(pop, pool, imp, y_R, y_S, event, move)
     return NodeKneeResult(
         y_R, y_S, float(cost), method, movement and true, movement, method_target_feasible, true,
-        active, expected, max(0.0, s_star - expected), max(0.0, s_star - active)
+        active, expected, max(0.0, s_star - expected), max(0.0, s_star - active), tuple(order)
     )
 
 
@@ -327,6 +328,86 @@ def _knee_bundle(pop, pool, node, load, cost, movable, i):
     return order[: np.searchsorted(np.cumsum(pop.ell[order]), gap, side="left") + 1]
 
 
+def _assign_candidate(budget, draws, imp, jobs):
+    tmp, picks, cost, egress = budget.copy(), [], 0.0, 0.0
+    for j in jobs:
+        act, c = _best_feasible_action(tmp, draws, imp, int(j))
+        if act is None:
+            return None
+        _take(tmp, draws, act, int(j))
+        picks.append((int(j), act))
+        cost += float(c)
+        egress += float(draws[act]["egress"][j]) if "egress" in draws[act] else 0.0
+    return picks, tmp, cost, egress
+
+
+def _bundle_jobs(pop, imp, budget, draws, node, movable, used, i):
+    jobs = [int(j) for j in np.flatnonzero((node == i) & movable) if int(j) not in used]
+    priced = []
+    for j in jobs:
+        act, c = _best_feasible_action(budget, draws, imp, j)
+        if act is None:
+            return []
+        priced.append((c / max(float(pop.ell[j]), 1e-12), j))
+    return [j for _, j in sorted(priced)]
+
+
+def _candidate_gain(pop, pool, resid, node, jobs):
+    i = int(node[jobs[0]])
+    removed = float(pop.ell[list(jobs)].sum())
+    return float(pool.node_power(resid[i]) - pool.node_power(max(0.0, resid[i] - removed)))
+
+
+def _node_aware_candidates(pop, pool, imp, budget, draws, y, used, movable):
+    node, resid = _source_node(pop), node_loads(pop) - removed_loads(pop, y)
+    for j in np.flatnonzero(movable):
+        if int(j) not in used:
+            yield "single", int(node[j]), (int(j),)
+    for i in range(len(resid)):
+        jobs = _bundle_jobs(pop, imp, budget, draws, node, movable, used, i)
+        if not jobs:
+            continue
+        if resid[i] > pool.power_knee:
+            need = resid[i] - pool.power_knee
+            csum = np.cumsum(pop.ell[jobs])
+            if csum[-1] >= need - 1e-12:
+                yield "knee", i, tuple(jobs[: int(np.searchsorted(csum, need, side="left")) + 1])
+        yield "drain", i, tuple(jobs)
+
+
+def solve_node_aware_greedy(pop: JobPopulation, pool: PoolPower, imp: Impact, s_star: float,
+                            event: Event = Event(), move: Movement = Movement()) -> NodeKneeResult:
+    budget = single_movement_budgets(pool, event, move)
+    draws = movement_draws_filtered(pop, pool, imp, event, move)
+    movable = _node_movable(pop, event)
+    node = _source_node(pop)
+    yR, yS, used, order = np.zeros(len(pop)), np.zeros(len(pop)), set(), []
+    while evaluate_node_expected_w(pop, pool, yR + yS) < s_star:
+        y = yR + yS
+        resid = node_loads(pop) - removed_loads(pop, y)
+        remaining = s_star - evaluate_node_expected_w(pop, pool, y)
+        candidates = []
+        for kind, i, jobs in _node_aware_candidates(pop, pool, imp, budget, draws, y, used, movable):
+            assigned = _assign_candidate(budget, draws, imp, jobs)
+            if assigned is None:
+                continue
+            picks, tmp, cost, egress = assigned
+            gain = _candidate_gain(pop, pool, resid, node, jobs)
+            useful = min(gain, remaining)
+            if useful <= 0:
+                continue
+            candidates.append((cost / useful, -gain, egress, cost, kind, i, jobs, picks, tmp))
+        if not candidates:
+            break
+        *_score, jobs, picks, budget = sorted(candidates)[0]
+        for j, act in picks:
+            (yR if act == "R" else yS)[j] = 1.0
+            used.add(j)
+        order.extend(jobs)
+    return _result(pop, pool, imp, yR, yS, float(imp.c_replay @ yR + imp.c_transfer @ yS),
+                   "node_aware_greedy", s_star, event, move, order=order)
+
+
 def _finish_live(pop, pool, imp, s_star, budget, draws, yR, yS, used, movable):
     node = _source_node(pop)
     resid = node_loads(pop) - removed_loads(pop, yR + yS)
@@ -479,6 +560,7 @@ def comparison_rows(pop: JobPopulation, pool: PoolPower, imp: Impact, s_star: fl
         solve_tangent_lp(pop, pool, imp, s_star, event, move),
         solve_active_knee_lp(pop, pool, imp, s_star, event, move),
         solve_active_knee_milp(pop, pool, imp, s_star, event, move),
+        solve_node_aware_greedy(pop, pool, imp, s_star, event, move),
         solve_live_greedy(pop, pool, imp, s_star, event, move),
         solve_node_drain_greedy(pop, pool, imp, s_star, event, move),
         solve_random_jobs(pop, pool, imp, s_star, event, move),
