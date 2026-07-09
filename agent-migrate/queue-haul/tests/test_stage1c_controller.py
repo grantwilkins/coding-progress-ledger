@@ -16,6 +16,7 @@ from __future__ import annotations
 import csv
 import gzip
 import json
+import time
 from pathlib import Path
 
 import pytest
@@ -148,9 +149,56 @@ def test_live_plan_uses_log_power_curve_and_dispatches_all(tmp_path: Path):
     summary = c.live_plan_summary(manifest)
 
     assert summary["power_curve"]["name"] == "log"
+    assert summary["power_curve"]["p_idle_w"] == pytest.approx(c.LIVE_A100_P_IDLE_W)
+    assert summary["power_curve"]["p_busy_w"] == pytest.approx(c.LIVE_A100_P_BUSY_W)
+    assert summary["full_source_drop_w"] <= c.LIVE_A100_P_BUSY_W - c.LIVE_A100_P_IDLE_W + 1e-6
     assert len(summary["sessions"]) == 2
     assert [s["dispatch_rank"] for s in summary["sessions"]] == [0, 1]
     assert summary["sessions"][-1]["predicted_cumulative_source_drop_w"] == pytest.approx(summary["full_source_drop_w"])
+
+
+def test_run_live_moves_launches_selected_moves_concurrently(tmp_path: Path, monkeypatch):
+    class Worker:
+        def __init__(self):
+            self.last_prompt = "prompt"
+            self.paused = False
+            self.resumed = False
+            self.port = None
+
+        def pause_boundary(self):
+            self.paused = True
+
+        def switch_to(self, port):
+            self.port = port
+
+        def resume(self):
+            self.resumed = True
+
+    cfg = type("Cfg", (), {"api_proxy_port": 8400})()
+    workers = {"a": Worker(), "b": Worker()}
+    sessions = [{"decode_tokens": 1}, {"decode_tokens": 1}]
+    rows = [
+        {"id": "a", "action": "R", "fixture_index": 0, "dispatch_rank": 0, "deadline_s": 1.0},
+        {"id": "b", "action": "R", "fixture_index": 1, "dispatch_rank": 1, "deadline_s": 1.0},
+    ]
+    starts = []
+
+    def fake_stream_chat(_cfg, _port, _prompt, _max_tokens):
+        start = time.time()
+        starts.append(start)
+        time.sleep(0.2)
+        end = time.time()
+        return {"status": 200, "first_token_ts": start + 0.01, "end_ts": end, "prompt_sha256": "x", "response_text": ""}
+
+    monkeypatch.setattr(c, "stream_chat", fake_stream_chat)
+    t0 = time.time()
+    out = c.run_live_moves(cfg, tmp_path, sessions, workers, rows, settle_s=0.0)
+
+    assert time.time() - t0 < 0.35
+    assert max(starts) - min(starts) < 0.1
+    assert [r["dispatch_rank"] for r in out] == [0, 1]
+    assert all(w.paused and w.resumed and w.port == 8400 for w in workers.values())
+    assert all(r["deadline_met"] for r in out)
 
 
 def test_nvsmi_command_uses_250ms_sampling():
@@ -341,6 +389,41 @@ def test_grid_summary_row_aggregates_power_and_delay(tmp_path: Path):
     assert row["measured_sink_rise_w"] == pytest.approx(140)
     assert row["total_completion_s"] == pytest.approx(2.5)
     assert row["planned_hit"] is False
+
+
+def test_grid_summary_row_uses_wall_clock_parallel_delay(tmp_path: Path):
+    run = tmp_path / "r"
+    run.mkdir()
+    with (run / "power_summary.csv").open("w", newline="") as f:
+        writer = csv.DictWriter(f, ["phase", "gpu", "samples", "power_mean_w"])
+        writer.writeheader()
+        writer.writerows([
+            {"phase": "baseline", "gpu": 0, "samples": 1, "power_mean_w": 300},
+            {"phase": "baseline", "gpu": 1, "samples": 1, "power_mean_w": 80},
+            {"phase": "post", "gpu": 0, "samples": 1, "power_mean_w": 100},
+            {"phase": "post", "gpu": 1, "samples": 1, "power_mean_w": 220},
+        ])
+    (run / "controller_manifest.json").write_text(json.dumps({
+        "schema": c.LIVE_SCHEMA,
+        "policy": "lp",
+        "deadline_s": 30,
+        "target_frac": 0.45,
+        "target_w": 100,
+        "full_source_drop_w": 200,
+        "planned_source_drop_w": 100,
+        "planned_shortfall_w": 0,
+        "planned_hit": True,
+        "sessions": [
+            {"first_token_s": 1.0, "completion_s": 5.0, "move_start_ts": 10.0, "move_end_ts": 15.0, "deadline_met": True},
+            {"first_token_s": 1.0, "completion_s": 3.0, "move_start_ts": 11.0, "move_end_ts": 14.0, "deadline_met": True},
+        ],
+    }))
+
+    row = c.grid_summary_row(run)
+
+    assert row["total_completion_s"] == pytest.approx(5.0)
+    assert row["total_first_token_s"] == pytest.approx(2.0)
+    assert row["deadline_hit"] is True
 
 
 def test_write_grid_summary_writes_csv_and_plots(tmp_path: Path):

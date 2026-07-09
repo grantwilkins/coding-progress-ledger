@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+from concurrent.futures import ThreadPoolExecutor
 import csv
 import gzip
 import hashlib
@@ -34,6 +35,11 @@ LIVE_ARTIFACTS = (
     "ell_power5s.csv", "ell_power5s.png", "request_counts.csv",
 )
 WORDS_PER_TOKEN = 0.75
+LIVE_A100_P_IDLE_W = 67.12041959182154
+LIVE_A100_P_BUSY_W = 390.0
+LIVE_A100_LOG_SHAPE = 8.55
+LIVE_A100_C_PREFILL_J_PER_TOK = 0.028197803044670608
+LIVE_A100_C_DECODE_J_PER_TOK = 0.25745287802176875
 
 
 def default_fixture() -> dict:
@@ -465,7 +471,17 @@ def _live_model(manifest: dict, deadline_s: float | None = None, target_frac: fl
     sessions = live_sessions(manifest)
     pop = build_live_population(manifest)
     const = manifest["constants"]
-    pool = PoolPower(mean_context_tokens=float(np.mean(pop.T)), power_curve=manifest.get("power_curve", "log"))
+    power = manifest.get("power", {})
+    pool = PoolPower(
+        p_idle_w=float(power.get("p_idle_w", LIVE_A100_P_IDLE_W)),
+        p_busy_w=float(power.get("p_busy_w", LIVE_A100_P_BUSY_W)),
+        rho_star=max(float(pop.ell.sum()), 1e-9),
+        mean_context_tokens=float(np.mean(pop.T)),
+        c_prefill_j_per_tok=float(power.get("c_prefill_j_per_tok", LIVE_A100_C_PREFILL_J_PER_TOK)),
+        c_decode_j_per_tok=float(power.get("c_decode_j_per_tok", LIVE_A100_C_DECODE_J_PER_TOK)),
+        power_curve=manifest.get("power_curve", "log"),
+        log_shape=float(power.get("log_shape", LIVE_A100_LOG_SHAPE)),
+    )
     move = Movement(
         lambda_src=float(const.get("lambda_src_bytes_per_s", 125_000_000.0)),
         mu_in=float(const.get("mu_bytes_per_s", 1_000_000_000.0)),
@@ -896,6 +912,41 @@ def check_live_manifest(manifest: dict, run_root: Path) -> None:
             raise ValueError(f"replay action lacks API bytes: {row['id']}")
 
 
+
+def run_live_moves(cfg: b.Config, run_root: Path, sessions: list[dict], workers: dict[str, SessionWorker],
+                   rows: list[dict], settle_s: float = 2.0) -> list[dict]:
+    for row in rows:
+        workers[row["id"]].pause_boundary()
+
+    def move(row: dict) -> dict:
+        worker = workers[row["id"]]
+        before = b.proxy_counts(run_root / "proxy_bytes.csv")
+        move_start = time.time()
+        prompt = worker.last_prompt if row["action"] == "S" else f"Replay cache bust {row['id']} {move_start}.\n{worker.last_prompt}"
+        result = stream_chat(cfg, cfg.api_proxy_port, prompt, int(sessions[row["fixture_index"]]["decode_tokens"]))
+        if settle_s:
+            time.sleep(settle_s)
+        delta = b.count_delta(before, b.proxy_counts(run_root / "proxy_bytes.csv"))
+        if result["status"] != 200:
+            raise RuntimeError(f"sink move failed for {row['id']}: {result['response_text']}")
+        completion = result["end_ts"] - move_start
+        worker.switch_to(cfg.api_proxy_port)
+        worker.resume()
+        return {
+            **row,
+            "move_start_ts": move_start,
+            "move_end_ts": result["end_ts"],
+            "http_status": result["status"],
+            "first_token_s": result["first_token_ts"] - move_start,
+            "completion_s": completion,
+            "deadline_met": completion <= float(row.get("deadline_s", math.inf)),
+            "prompt_sha256": result["prompt_sha256"],
+            "proxy_delta": delta,
+        }
+
+    with ThreadPoolExecutor(max_workers=max(1, len(rows))) as ex:
+        return [f.result() for f in [ex.submit(move, row) for row in rows]]
+
 def live_drain(cfg: b.Config, run_root: Path, manifest: dict, mbps: float, nvsmi_ms: int, extra: list[str],
                policy: str = "lp", seed: int = 0, deadline_s: float | None = None,
                target_frac: float | None = None) -> Path:
@@ -921,21 +972,8 @@ def live_drain(cfg: b.Config, run_root: Path, manifest: dict, mbps: float, nvsmi
         time.sleep(float(manifest.get("baseline_s", 120.0)))
         drain_start = time.time()
         summary = live_plan_summary(manifest, policy, seed, deadline_s, target_frac)
-        rows = []
-        for row in summary["sessions"]:
-            worker = workers[row["id"]]
-            worker.pause_boundary()
-            before = b.proxy_counts(run_root / "proxy_bytes.csv")
-            move_start = time.time()
-            prompt = worker.last_prompt if row["action"] == "S" else f"Replay cache bust {row['id']} {move_start}.\n{worker.last_prompt}"
-            result = stream_chat(cfg, cfg.api_proxy_port, prompt, int(sessions[row["fixture_index"]]["decode_tokens"]))
-            time.sleep(2)
-            delta = b.count_delta(before, b.proxy_counts(run_root / "proxy_bytes.csv"))
-            if result["status"] != 200:
-                raise RuntimeError(f"sink move failed for {row['id']}: {result['response_text']}")
-            worker.switch_to(cfg.api_proxy_port)
-            worker.resume()
-            rows.append({**row, "move_start_ts": move_start, "move_end_ts": result["end_ts"], "http_status": result["status"], "first_token_s": result["first_token_ts"] - move_start, "completion_s": result["end_ts"] - move_start, "prompt_sha256": result["prompt_sha256"], "proxy_delta": delta})
+        move_rows = [{**row, "deadline_s": summary["deadline_s"]} for row in summary["sessions"]]
+        rows = run_live_moves(cfg, run_root, sessions, workers, move_rows)
         drain_end = time.time()
         time.sleep(float(manifest.get("settle_s", 120.0)))
         post_end = time.time()
@@ -982,7 +1020,14 @@ def _power_summary_lookup(path: Path) -> dict[tuple[str, int], float]:
 def grid_summary_row(run_root: Path) -> dict:
     manifest = json.loads((run_root / "controller_manifest.json").read_text())
     power = _power_summary_lookup(run_root / "power_summary.csv")
-    delays = manifest.get("delay_summary") or manifest.get("sessions", [])
+    delays = manifest.get("sessions") or manifest.get("delay_summary") or []
+    if delays and all("move_start_ts" in d and "move_end_ts" in d for d in delays):
+        t0 = min(float(d["move_start_ts"]) for d in delays)
+        total_first = max(float(d["move_start_ts"]) + float(d["first_token_s"]) for d in delays) - t0
+        total_completion = max(float(d["move_end_ts"]) for d in delays) - t0
+    else:
+        total_first = sum(float(d["first_token_s"]) for d in delays)
+        total_completion = sum(float(d["completion_s"]) for d in delays)
     return {
         "policy": manifest["policy"],
         "deadline_s": float(manifest["deadline_s"]),
@@ -992,10 +1037,11 @@ def grid_summary_row(run_root: Path) -> dict:
         "planned_source_drop_w": float(manifest["planned_source_drop_w"]),
         "planned_shortfall_w": float(manifest["planned_shortfall_w"]),
         "planned_hit": bool(manifest["planned_hit"]),
+        "deadline_hit": all(bool(d.get("deadline_met", float(d["completion_s"]) <= float(manifest["deadline_s"]))) for d in delays),
         "measured_source_drop_w": power.get(("baseline", 0), math.nan) - power.get(("post", 0), math.nan),
         "measured_sink_rise_w": power.get(("post", 1), math.nan) - power.get(("baseline", 1), math.nan),
-        "total_first_token_s": float(sum(d["first_token_s"] for d in delays)),
-        "total_completion_s": float(sum(d["completion_s"] for d in delays)),
+        "total_first_token_s": float(total_first),
+        "total_completion_s": float(total_completion),
         "max_completion_s": float(max((d["completion_s"] for d in delays), default=math.nan)),
         "sessions": len(manifest.get("sessions", [])),
         "run_root": str(run_root),
