@@ -545,19 +545,21 @@ def calibrate_live_profile(cfg: b.Config, run_root: Path, sessions: list[dict], 
         if delta.get("kv/target_to_client", 0) <= 0:
             raise RuntimeError(f"profile KV had no KV bytes for {target_tokens}")
         rows.append(_profile_row("S", target_tokens, actual_tokens, kv, delta))
-    return {"schema": PROFILE_SCHEMA, "created_ts": time.time(), "mbps": mbps, "points": rows}
+    return {"schema": PROFILE_SCHEMA, "created_ts": time.time(), "mbps": mbps, "lmcache_max_local_cpu_gb": b.LMCACHE_MAX_LOCAL_CPU_GB, "points": rows}
 
 
 def ensure_live_profile(cfg: b.Config, run_root: Path, profile_path: Path | None, manifest: dict, mbps: float) -> tuple[dict, Path]:
     path = profile_path or run_root / "live_profile.json"
     if path.exists():
         profile = json.loads(path.read_text())
+        if profile.get("schema") != PROFILE_SCHEMA:
+            raise ValueError("bad live profile schema")
+        if profile.get("lmcache_max_local_cpu_gb") == b.LMCACHE_MAX_LOCAL_CPU_GB:
+            return profile, path
     else:
         path.parent.mkdir(parents=True, exist_ok=True)
-        profile = calibrate_live_profile(cfg, run_root, live_sessions(manifest), mbps)
-        path.write_text(json.dumps(profile, indent=2, sort_keys=True))
-    if profile.get("schema") != PROFILE_SCHEMA:
-        raise ValueError("bad live profile schema")
+    profile = calibrate_live_profile(cfg, run_root, live_sessions(manifest), mbps)
+    path.write_text(json.dumps(profile, indent=2, sort_keys=True))
     return profile, path
 
 
