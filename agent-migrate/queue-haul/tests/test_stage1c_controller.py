@@ -334,6 +334,8 @@ def test_live_plan_supports_policy_deadline_and_target_fraction(tmp_path: Path):
         assert summary["target_w"] == pytest.approx(0.25 * summary["full_source_drop_w"])
         assert summary["sessions"]
         assert [r["dispatch_rank"] for r in summary["sessions"]] == list(range(len(summary["sessions"])))
+    greedy = next(s for s in summaries if s["policy"] == "greedy")
+    assert greedy["solver"]["method"] == "node_aware_greedy"
 
 
 def test_counterfactual_live_plans_force_single_action(tmp_path: Path):

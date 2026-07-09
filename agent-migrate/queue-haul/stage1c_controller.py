@@ -24,7 +24,7 @@ import stage1b_drain_sink as b
 from dispatch import Event, solve
 from impact import Movement, compute
 from instance import JobPopulation
-from node_knee import evaluate_node_expected_w, solve_live_greedy, solve_power_function_lp, solve_random_jobs
+from node_knee import evaluate_node_expected_w, solve_node_aware_greedy, solve_power_function_lp, solve_random_jobs
 from power import BETA_BYTES_PER_TOK, ETA_BYTES_PER_TOK, PoolPower, rho_replay
 
 SCHEMA = "queue-haul-stage1c-v1"
@@ -646,7 +646,7 @@ def _policy_result(policy: str, pop: JobPopulation, pool: PoolPower, imp, target
     if policy == "random":
         return solve_random_jobs(pop, pool, imp, target_w, event, move, seed=seed)
     if policy == "greedy":
-        return solve_live_greedy(pop, pool, imp, target_w, event, move)
+        return solve_node_aware_greedy(pop, pool, imp, target_w, event, move)
     raise ValueError(f"unknown live policy {policy!r}")
 
 
@@ -660,26 +660,12 @@ def _policy_order(policy: str, result, pop: JobPopulation, pool: PoolPower, imp,
     selected = set(np.flatnonzero(result.y > 1e-9))
     if policy == "random":
         return [int(i) for i in np.random.default_rng(seed).permutation(len(pop)) if i in selected]
-    if policy == "greedy":
-        y, out = np.zeros(len(pop)), []
-        while selected:
-            base = evaluate_node_expected_w(pop, pool, y)
-            scored = []
-            for i in selected:
-                yy = y.copy()
-                yy[i] = 1.0
-                action = _row_action(result, imp, int(i))
-                cost = imp.c_replay[i] if action == "R" else imp.c_transfer[i]
-                scored.append((-(evaluate_node_expected_w(pop, pool, yy) - base) / max(cost, 1e-12), int(i)))
-            i = sorted(scored)[0][1]
-            y[i] = 1.0
-            out.append(i)
-            selected.remove(i)
-        return out
+    if policy == "greedy" and getattr(result, "order", ()):
+        return [i for i in result.order if i in selected]
     return [int(i) for i in sorted(selected, key=lambda j: (-(result.y_R[j] + result.y_S[j]), -pop.ell[j], j))]
 
 
-def live_plan_summary(manifest: dict, policy: str = "lp", seed: int = 0,
+def live_plan_summary(manifest: dict, policy: str = "greedy", seed: int = 0,
                       deadline_s: float | None = None, target_frac: float | None = None) -> dict:
     sessions, pop, pool, move, imp, event, full_w, target_w = _live_model(manifest, deadline_s, target_frac)
     rows, cumulative = [], np.zeros(len(pop))
@@ -1402,7 +1388,7 @@ def parse_args(argv: list[str] | None = None):
     live_p.add_argument("--run-root", type=Path, default=Path("queue-haul/outputs/stage1c_live"))
     live_p.add_argument("--mbps", type=float, default=1000.0)
     live_p.add_argument("--nvsmi-ms", type=int, default=250)
-    live_p.add_argument("--policy", choices=("lp", "random", "greedy", "all-r", "all-s"), default="lp")
+    live_p.add_argument("--policy", choices=("greedy", "random", "lp", "all-r", "all-s"), default="greedy")
     live_p.add_argument("--deadline-s", type=float)
     live_p.add_argument("--target-frac", type=float)
     live_p.add_argument("--seed", type=int, default=0)
@@ -1416,7 +1402,7 @@ def parse_args(argv: list[str] | None = None):
     grid_p.add_argument("--run-root", type=Path, default=Path("queue-haul/outputs/stage1c_grid"))
     grid_p.add_argument("--mbps", type=float, default=1000.0)
     grid_p.add_argument("--nvsmi-ms", type=int, default=250)
-    grid_p.add_argument("--policies", default="lp,random,greedy")
+    grid_p.add_argument("--policies", default="greedy,random,lp")
     grid_p.add_argument("--deadlines", default="10,30,120")
     grid_p.add_argument("--target-fracs", default="0.25,0.45,0.65")
     grid_p.add_argument("--baseline-s", type=float, default=120.0)

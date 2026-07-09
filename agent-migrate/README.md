@@ -143,7 +143,9 @@ $PY queue-haul/stage1b_drain_sink.py preflight --required-gpus 2
 $PY queue-haul/stage1b_drain_sink.py smoke2-live --mbps 1000 --run-root /tmp/qh-smoke2-live
 ```
 
-Stage 1c keeps the fixture proof as the fast source/sink controller check:
+Stage 1c keeps the fixture proof as the fast source/sink controller check. Its
+live controller uses node-aware greedy as the operational planner; LP remains an
+explicit benchmark policy:
 
 ```bash
 $PY queue-haul/stage1c_controller.py plan
@@ -182,11 +184,15 @@ sbatch queue-haul/stage1c_grid.sbatch
 
 `live-drain` keeps source vLLM on GPU 0 and sink vLLM on GPU 1 up together,
 runs Poisson turn loops from synthetic TraceLab-sized rolling transcripts, profiles
-replay/KV movement when `--profile` is missing or stamped with a different LMCache CPU size, warms the sink before switching
+replay/KV movement when `--profile` is missing or stamped with a different
+LMCache CPU size, warms the sink before switching
 the source session, bounds replay prefill concurrency to `--replay-concurrency`
 (default 1), overlaps KV transfers up to `--kv-concurrency` (0 means all), and
 writes `gpu_power.csv`, `events.jsonl`, `controller_manifest.json`,
 `power_summary.csv`, `power_trace.png`, `source_power.png`, `sink_power.png`,
 `delay_summary.csv`, `delay_summary.png`, `ell_power5s.csv`, `ell_power5s.png`,
 `request_counts.csv`, and `proxy_audit.csv`. `live-grid` also writes
-`scenario_summary.csv`, `grid_power_drop.png`, and `grid_delay.png`. Use `POLICIES=lp,all-r,all-s sbatch queue-haul/stage1c_quick.sbatch` for the quick policy/counterfactual comparison; `all-r` cache-busts continued sink turns so it remains a replay baseline.
+`scenario_summary.csv`, `grid_power_drop.png`, and `grid_delay.png`. Use
+`POLICIES=greedy,random,all-r,all-s sbatch queue-haul/stage1c_quick.sbatch`
+for the quick policy/counterfactual comparison; add `lp` as an offline benchmark.
+`all-r` cache-busts continued sink turns so it remains a replay baseline.
