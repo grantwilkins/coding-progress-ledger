@@ -182,7 +182,7 @@ sbatch queue-haul/stage1c_grid.sbatch
 
 `live-drain` keeps source vLLM on GPU 0 and sink vLLM on GPU 1 up together,
 runs Poisson turn loops from synthetic TraceLab-sized rolling transcripts, profiles
-replay/KV movement once when `--profile` is missing, warms the sink before switching
+replay/KV movement when `--profile` is missing or stamped with a different LMCache CPU size, warms the sink before switching
 the source session, bounds replay prefill concurrency to `--replay-concurrency`
 (default 1), overlaps KV transfers up to `--kv-concurrency` (0 means all), and
 writes `gpu_power.csv`, `events.jsonl`, `controller_manifest.json`,

@@ -25,6 +25,7 @@ HF_HOME = Path("/scratch/users/gfw/ptsim/hf")
 SCRATCH_BIND = Path("/scratch/users/gfw")
 CACHE_ROOT = Path("/scratch/users/gfw/ptsim/cache")
 CHUNK = 65536
+LMCACHE_MAX_LOCAL_CPU_GB = "8"
 TYPED_VLLM_FLAGS = {
     "--host",
     "--port",
@@ -146,7 +147,7 @@ def vllm_exports(cfg: Config, role: str, remote_url: str) -> list[str]:
         "LMCACHE_REMOTE_SERDE": "naive",
         "LMCACHE_LMCACHE_INSTANCE_ID": f"stage1b_{role}",
         "LMCACHE_CHUNK_SIZE": "256",
-        "LMCACHE_MAX_LOCAL_CPU_SIZE": "8",
+        "LMCACHE_MAX_LOCAL_CPU_SIZE": LMCACHE_MAX_LOCAL_CPU_GB,
         **{k: str(v) for k, v in cache_dirs(cfg, role).items()},
     }
     return [f"export {k}={shlex.quote(v)}" for k, v in env.items()]

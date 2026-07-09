@@ -395,6 +395,23 @@ def test_live_profile_costs_override_runtime_model(tmp_path: Path):
     assert summary["profile"]["schema"] == c.PROFILE_SCHEMA
 
 
+def test_live_profile_recalibrates_on_lmcache_runtime_change(tmp_path: Path, monkeypatch):
+    manifest = _manifest_for_live_policy_tests(tmp_path)
+    path = tmp_path / "profile.json"
+    path.write_text(json.dumps({"schema": c.PROFILE_SCHEMA, "lmcache_max_local_cpu_gb": "0.25", "points": []}))
+    calls = []
+
+    def fake_calibrate(_cfg, _run_root, sessions, mbps):
+        calls.append((len(sessions), mbps))
+        return {"schema": c.PROFILE_SCHEMA, "lmcache_max_local_cpu_gb": c.b.LMCACHE_MAX_LOCAL_CPU_GB, "mbps": mbps, "points": []}
+
+    monkeypatch.setattr(c, "calibrate_live_profile", fake_calibrate)
+    profile, used = c.ensure_live_profile(type("Cfg", (), {})(), tmp_path, path, manifest, 1000.0)
+
+    assert used == path
+    assert calls == [(2, 1000.0)]
+    assert profile["lmcache_max_local_cpu_gb"] == "8"
+
 
 
 def test_stored_session_kv_bytes_uses_largest_session_snapshot(tmp_path: Path):
