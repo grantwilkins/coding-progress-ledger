@@ -29,10 +29,11 @@ from power import BETA_BYTES_PER_TOK, ETA_BYTES_PER_TOK, PoolPower, rho_replay
 SCHEMA = "queue-haul-stage1c-v1"
 LIVE_SCHEMA = "queue-haul-stage1c-live-v1"
 MANIFEST_SCHEMA = "queue-haul-stage1c-session-manifest-v1"
+PROFILE_SCHEMA = "queue-haul-stage1c-live-profile-v1"
 LIVE_ARTIFACTS = (
     "gpu_power.csv", "events.jsonl", "power_summary.csv", "power_trace.png",
     "source_power.png", "sink_power.png", "delay_summary.csv", "delay_summary.png",
-    "ell_power5s.csv", "ell_power5s.png", "request_counts.csv",
+    "ell_power5s.csv", "ell_power5s.png", "request_counts.csv", "proxy_audit.csv",
 )
 WORDS_PER_TOKEN = 0.75
 LIVE_A100_P_IDLE_W = 67.12041959182154
@@ -461,6 +462,99 @@ def live_sessions(manifest: dict) -> list[dict]:
     return sessions
 
 
+
+
+def profile_token_points(sessions: list[dict], max_points: int = 3) -> list[int]:
+    vals = sorted({int(s["served_T"]) for s in sessions})
+    if len(vals) <= max_points:
+        return vals
+    idxs = np.linspace(0, len(vals) - 1, max_points).round().astype(int)
+    return [vals[int(i)] for i in dict.fromkeys(idxs)]
+
+
+def _profile_session(tokens: int) -> dict:
+    return {
+        "id": f"profile_{tokens}",
+        "served_T": int(tokens),
+        "decode_tokens": 1,
+        "turns": [{"append_tokens": max(1, int(tokens) - 1024)}],
+    }
+
+
+def _profile_row(action: str, tokens: int, result: dict, delta: dict) -> dict:
+    return {
+        "action": action,
+        "tokens": int(tokens),
+        "first_token_s": float(result["first_token_ts"] - result["start_ts"]),
+        "completion_s": float(result["end_ts"] - result["start_ts"]),
+        "proxy_delta": delta,
+    }
+
+
+def calibrate_live_profile(cfg: b.Config, run_root: Path, sessions: list[dict], mbps: float, max_points: int = 3) -> dict:
+    rows, proxy_log = [], run_root / "proxy_bytes.csv"
+    for tokens in profile_token_points(sessions, max_points):
+        prompt = session_prompt(_profile_session(tokens), 0)
+        before = b.proxy_counts(proxy_log)
+        replay = stream_chat(cfg, cfg.api_proxy_port, f"Replay profile {tokens} {time.time()}.\n{prompt}", 1)
+        if replay["status"] != 200:
+            raise RuntimeError(f"profile replay failed for {tokens}: {replay['response_text']}")
+        delta = b.count_delta(before, b.proxy_counts(proxy_log))
+        if delta.get("api/client_to_target", 0) <= 0:
+            raise RuntimeError(f"profile replay had no API bytes for {tokens}")
+        rows.append(_profile_row("R", tokens, replay, delta))
+
+        b.warm_source(cfg, run_root, prompt, f"profile source warm {tokens}")
+        before = b.proxy_counts(proxy_log)
+        kv = stream_chat(cfg, cfg.api_proxy_port, prompt, 1)
+        if kv["status"] != 200:
+            raise RuntimeError(f"profile KV failed for {tokens}: {kv['response_text']}")
+        time.sleep(2)
+        delta = b.count_delta(before, b.proxy_counts(proxy_log))
+        if delta.get("kv/target_to_client", 0) <= 0:
+            raise RuntimeError(f"profile KV had no KV bytes for {tokens}")
+        rows.append(_profile_row("S", tokens, kv, delta))
+    return {"schema": PROFILE_SCHEMA, "created_ts": time.time(), "mbps": mbps, "points": rows}
+
+
+def ensure_live_profile(cfg: b.Config, run_root: Path, profile_path: Path | None, manifest: dict, mbps: float) -> tuple[dict, Path]:
+    path = profile_path or run_root / "live_profile.json"
+    if path.exists():
+        profile = json.loads(path.read_text())
+    else:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        profile = calibrate_live_profile(cfg, run_root, live_sessions(manifest), mbps)
+        path.write_text(json.dumps(profile, indent=2, sort_keys=True))
+    if profile.get("schema") != PROFILE_SCHEMA:
+        raise ValueError("bad live profile schema")
+    return profile, path
+
+
+def _profile_cost(profile: dict, action: str, tokens: int) -> float:
+    pts = sorted((int(r["tokens"]), float(r["completion_s"])) for r in profile["points"] if r["action"] == action)
+    if not pts:
+        raise ValueError(f"profile missing action {action}")
+    if len(pts) == 1 or tokens <= pts[0][0]:
+        return pts[0][1]
+    for (x0, y0), (x1, y1) in zip(pts, pts[1:]):
+        if tokens <= x1:
+            return y0 + (y1 - y0) * (tokens - x0) / max(1, x1 - x0)
+    return pts[-1][1] * tokens / max(1, pts[-1][0])
+
+
+def apply_live_profile(manifest: dict, profile: dict) -> dict:
+    if profile.get("schema") != PROFILE_SCHEMA:
+        raise ValueError("bad live profile schema")
+    sessions = []
+    for s in live_sessions(manifest):
+        tokens = int(s["served_T"])
+        sessions.append({
+            **s,
+            "c_replay_s": _profile_cost(profile, "R", tokens),
+            "c_transfer_s": _profile_cost(profile, "S", tokens),
+        })
+    return {**manifest, "sessions": sessions, "profile": {"schema": profile["schema"], "mbps": profile.get("mbps"), "points": profile["points"]}}
+
 def build_live_population(manifest: dict) -> JobPopulation:
     sessions = live_sessions(manifest)
     patched = {**manifest, "sessions": [{**s, "T": s["served_T"]} for s in sessions]}
@@ -488,7 +582,12 @@ def _live_model(manifest: dict, deadline_s: float | None = None, target_frac: fl
         dest_prefill_util=0.0,
         dest_ingest_util=0.0,
     )
-    imp = compute(pop, pool, move)
+    base = compute(pop, pool, move)
+    imp = replace(
+        base,
+        c_replay=np.array([s.get("c_replay_s", base.c_replay[i]) for i, s in enumerate(sessions)], dtype=float),
+        c_transfer=np.array([s.get("c_transfer_s", base.c_transfer[i]) for i, s in enumerate(sessions)], dtype=float),
+    )
     event = Event(D=float(manifest["deadline_s"] if deadline_s is None else deadline_s), dest_nodes=1, spare_frac=1.0, tau_src=0.0, tau_pre=0.0, tau_in=0.0)
     full_w = evaluate_node_expected_w(pop, pool, np.ones(len(pop)))
     target = manifest.get("target_w", "all")
@@ -571,6 +670,7 @@ def live_plan_summary(manifest: dict, policy: str = "lp", seed: int = 0,
         "planned_hit": planned_w >= target_w - 1e-6 * max(target_w, 1.0),
         "power_curve": {"name": pool.power_curve, "log_shape": pool.log_shape, "p_idle_w": pool.p_idle_w, "p_busy_w": pool.p_busy_w, "rho_star": pool.rho_star},
         "movement": {"lambda_src_bytes_per_s": move.lambda_src, "mu_bytes_per_s": move.mu_in},
+        "profile": manifest.get("profile"),
         "solver": {"method": result.method, "feasible": result.true_expected_feasible, "shortfall_w": result.expected_shortfall_w, "cost_s": result.cost},
         "sessions": rows,
     }
@@ -784,7 +884,7 @@ def write_power_plot(power_csv: Path, out_png: Path, dispatch_rows: list[dict], 
 
 def _live_ell_by_gpu(manifest: dict, ts: float) -> dict[int, float]:
     per_session = {s["id"]: float(s["ell_pre"]) + float(s["ell_dec"]) for s in manifest["input_manifest"]["sessions"]}
-    moved = sum(per_session[r["id"]] for r in manifest.get("sessions", []) if float(r["move_start_ts"]) <= ts)
+    moved = sum(per_session[r["id"]] for r in manifest.get("sessions", []) if float(r.get("switch_end_ts", r.get("move_end_ts", r["move_start_ts"]))) <= ts)
     total = sum(per_session.values())
     return {0: max(0.0, total - moved), 1: moved}
 
@@ -850,15 +950,16 @@ def write_ell_power5s(power_csv: Path, manifest: dict, out_csv: Path, out_png: P
 
 def write_delay_summary(rows: list[dict], out_csv: Path, out_png: Path) -> list[dict]:
     import matplotlib.pyplot as plt
-    delays = [{"dispatch_rank": r["dispatch_rank"], "id": r["id"], "action": r["action"], "first_token_s": r["first_token_s"], "completion_s": r["completion_s"]} for r in rows]
+    delays = [{"dispatch_rank": r["dispatch_rank"], "id": r["id"], "action": r["action"], "first_token_s": r["first_token_s"], "completion_s": r["completion_s"], "downtime_s": r.get("downtime_s", r["completion_s"])} for r in rows]
     with out_csv.open("w", newline="") as f:
-        writer = csv.DictWriter(f, ["dispatch_rank", "id", "action", "first_token_s", "completion_s"])
+        writer = csv.DictWriter(f, ["dispatch_rank", "id", "action", "first_token_s", "completion_s", "downtime_s"])
         writer.writeheader()
         writer.writerows(delays)
     fig, ax = plt.subplots(figsize=(8, 3))
     xs = [d["dispatch_rank"] for d in delays]
-    ax.bar([x - 0.2 for x in xs], [d["first_token_s"] for d in delays], width=0.4, label="TTFT")
-    ax.bar([x + 0.2 for x in xs], [d["completion_s"] for d in delays], width=0.4, label="completion")
+    ax.bar([x - 0.25 for x in xs], [d["first_token_s"] for d in delays], width=0.25, label="TTFT")
+    ax.bar(xs, [d["completion_s"] for d in delays], width=0.25, label="completion")
+    ax.bar([x + 0.25 for x in xs], [d["downtime_s"] for d in delays], width=0.25, label="downtime")
     ax.set(xlabel="dispatch rank", ylabel="seconds")
     ax.legend()
     fig.tight_layout()
@@ -890,6 +991,47 @@ def write_request_counts(events_jsonl: Path, out_csv: Path, windows: dict[str, t
     return rows
 
 
+
+
+def proxy_audit_rows(proxy_log: Path, windows: dict[str, tuple[float, float]], mbps: float) -> list[dict]:
+    target = mbps * 1_000_000 / 8
+    rows = b.proxy_rows(proxy_log)
+    out = []
+    for phase, (lo, hi) in windows.items():
+        for route, direction in sorted(b.BILLED_DIRECTIONS):
+            xs = [r for r in rows if r["route"] == route and r["direction"] == direction and r.get("billed") == "1" and lo <= float(r["ts"]) <= hi]
+            if xs:
+                ts = [float(r["ts"]) for r in xs]
+                nbytes = sum(int(r["bytes"]) for r in xs)
+                window = max(ts) - min(ts)
+            else:
+                nbytes, window = 0, 0.0
+            rate = nbytes / window if window else 0.0
+            out.append({
+                "phase": phase,
+                "route": route,
+                "direction": direction,
+                "bytes": nbytes,
+                "window_s": window,
+                "bytes_per_s": rate,
+                "target_bytes_per_s": target,
+                "target_ratio": rate / target if target else math.nan,
+                "ok": int(window < 0.5 or rate <= 1.25 * target),
+            })
+    return out
+
+
+def write_proxy_audit(proxy_log: Path, out_csv: Path, windows: dict[str, tuple[float, float]], mbps: float) -> list[dict]:
+    rows = proxy_audit_rows(proxy_log, windows, mbps)
+    with out_csv.open("w", newline="") as f:
+        writer = csv.DictWriter(f, ["phase", "route", "direction", "bytes", "window_s", "bytes_per_s", "target_bytes_per_s", "target_ratio", "ok"])
+        writer.writeheader()
+        writer.writerows(rows)
+    bad = [r for r in rows if not r["ok"]]
+    if bad:
+        raise RuntimeError(f"proxy exceeded configured link: {bad[:2]}")
+    return rows
+
 def check_live_manifest(manifest: dict, run_root: Path) -> None:
     if manifest.get("schema") != LIVE_SCHEMA:
         raise ValueError("bad live schema")
@@ -914,42 +1056,56 @@ def check_live_manifest(manifest: dict, run_root: Path) -> None:
 
 
 def run_live_moves(cfg: b.Config, run_root: Path, sessions: list[dict], workers: dict[str, SessionWorker],
-                   rows: list[dict], settle_s: float = 2.0) -> list[dict]:
-    for row in rows:
-        workers[row["id"]].pause_boundary()
+                   rows: list[dict], settle_s: float = 2.0, replay_concurrency: int = 1,
+                   kv_concurrency: int | None = None) -> list[dict]:
+    if replay_concurrency <= 0:
+        raise ValueError("replay_concurrency must be positive")
+    if kv_concurrency is not None and kv_concurrency <= 0:
+        raise ValueError("kv_concurrency must be positive")
+    gates = {"R": threading.Semaphore(replay_concurrency), "S": threading.Semaphore(kv_concurrency or max(1, len(rows)))}
 
     def move(row: dict) -> dict:
-        worker = workers[row["id"]]
-        before = b.proxy_counts(run_root / "proxy_bytes.csv")
-        move_start = time.time()
-        prompt = worker.last_prompt if row["action"] == "S" else f"Replay cache bust {row['id']} {move_start}.\n{worker.last_prompt}"
-        result = stream_chat(cfg, cfg.api_proxy_port, prompt, int(sessions[row["fixture_index"]]["decode_tokens"]))
-        if settle_s:
-            time.sleep(settle_s)
-        delta = b.count_delta(before, b.proxy_counts(run_root / "proxy_bytes.csv"))
-        if result["status"] != 200:
-            raise RuntimeError(f"sink move failed for {row['id']}: {result['response_text']}")
-        completion = result["end_ts"] - move_start
-        worker.switch_to(cfg.api_proxy_port)
-        worker.resume()
-        return {
-            **row,
-            "move_start_ts": move_start,
-            "move_end_ts": result["end_ts"],
-            "http_status": result["status"],
-            "first_token_s": result["first_token_ts"] - move_start,
-            "completion_s": completion,
-            "deadline_met": completion <= float(row.get("deadline_s", math.inf)),
-            "prompt_sha256": result["prompt_sha256"],
-            "proxy_delta": delta,
-        }
+        with gates[row["action"]]:
+            worker = workers[row["id"]]
+            before = b.proxy_counts(run_root / "proxy_bytes.csv")
+            move_start = time.time()
+            prompt = worker.last_prompt if row["action"] == "S" else f"Replay cache bust {row['id']} {move_start}.\n{worker.last_prompt}"
+            result = stream_chat(cfg, cfg.api_proxy_port, prompt, int(sessions[row["fixture_index"]]["decode_tokens"]))
+            if result["status"] != 200:
+                raise RuntimeError(f"sink move failed for {row['id']}: {result['response_text']}")
+            switch_start = time.time()
+            worker.pause_boundary()
+            worker.switch_to(cfg.api_proxy_port)
+            worker.resume()
+            switch_end = time.time()
+            if settle_s:
+                time.sleep(settle_s)
+            delta = b.count_delta(before, b.proxy_counts(run_root / "proxy_bytes.csv"))
+            completion = switch_end - move_start
+            return {
+                **row,
+                "warm_move": True,
+                "move_start_ts": move_start,
+                "sink_ready_ts": result["end_ts"],
+                "switch_start_ts": switch_start,
+                "switch_end_ts": switch_end,
+                "move_end_ts": switch_end,
+                "http_status": result["status"],
+                "first_token_s": result["first_token_ts"] - move_start,
+                "completion_s": completion,
+                "downtime_s": switch_end - switch_start,
+                "deadline_met": completion <= float(row.get("deadline_s", math.inf)),
+                "prompt_sha256": result["prompt_sha256"],
+                "proxy_delta": delta,
+            }
 
     with ThreadPoolExecutor(max_workers=max(1, len(rows))) as ex:
         return [f.result() for f in [ex.submit(move, row) for row in rows]]
 
 def live_drain(cfg: b.Config, run_root: Path, manifest: dict, mbps: float, nvsmi_ms: int, extra: list[str],
                policy: str = "lp", seed: int = 0, deadline_s: float | None = None,
-               target_frac: float | None = None) -> Path:
+               target_frac: float | None = None, profile_path: Path | None = None,
+               replay_concurrency: int = 1, kv_concurrency: int | None = None) -> Path:
     sessions = live_sessions(manifest)
     stack = b.start_stack(cfg, run_root, mbps, extra)
     events = JsonlLog(run_root / "events.jsonl")
@@ -957,6 +1113,9 @@ def live_drain(cfg: b.Config, run_root: Path, manifest: dict, mbps: float, nvsmi
     workers: dict[str, SessionWorker] = {}
     try:
         b.start_sink(stack, cfg, extra)
+        profile, used_profile_path = ensure_live_profile(cfg, run_root, profile_path, manifest, mbps)
+        manifest = apply_live_profile(manifest, profile)
+        sessions = live_sessions(manifest)
         nvsmi = start_nvsmi(run_root / "gpu_power.csv", nvsmi_ms)
         for i, session in enumerate(sessions):
             prompt = session_prompt(session, 0)
@@ -973,7 +1132,7 @@ def live_drain(cfg: b.Config, run_root: Path, manifest: dict, mbps: float, nvsmi
         drain_start = time.time()
         summary = live_plan_summary(manifest, policy, seed, deadline_s, target_frac)
         move_rows = [{**row, "deadline_s": summary["deadline_s"]} for row in summary["sessions"]]
-        rows = run_live_moves(cfg, run_root, sessions, workers, move_rows)
+        rows = run_live_moves(cfg, run_root, sessions, workers, move_rows, replay_concurrency=replay_concurrency, kv_concurrency=kv_concurrency)
         drain_end = time.time()
         time.sleep(float(manifest.get("settle_s", 120.0)))
         post_end = time.time()
@@ -983,6 +1142,7 @@ def live_drain(cfg: b.Config, run_root: Path, manifest: dict, mbps: float, nvsmi
         if nvsmi:
             stop_nvsmi(*nvsmi)
             nvsmi = None
+        proxy_audit = write_proxy_audit(run_root / "proxy_bytes.csv", run_root / "proxy_audit.csv", windows, mbps)
         write_power_summary(run_root / "gpu_power.csv", run_root / "power_summary.csv", windows)
         write_power_plot(run_root / "gpu_power.csv", run_root / "power_trace.png", rows)
         write_power_plot(run_root / "gpu_power.csv", run_root / "source_power.png", rows, gpu=0)
@@ -990,7 +1150,7 @@ def live_drain(cfg: b.Config, run_root: Path, manifest: dict, mbps: float, nvsmi
         delays = write_delay_summary(rows, run_root / "delay_summary.csv", run_root / "delay_summary.png")
         request_counts = write_request_counts(run_root / "events.jsonl", run_root / "request_counts.csv", windows)
         write_ell_power5s(run_root / "gpu_power.csv", {**summary, "input_manifest": manifest, "sessions": rows, "windows": windows}, run_root / "ell_power5s.csv", run_root / "ell_power5s.png")
-        out = {**summary, "schema": LIVE_SCHEMA, "input_manifest": manifest, "sessions": rows, "delay_summary": delays, "request_counts": request_counts, "windows": windows, "acceptance": {"ok": True, "power_threshold_gated": False, "planned_hit": summary["planned_hit"]}}
+        out = {**summary, "schema": LIVE_SCHEMA, "input_manifest": manifest, "sessions": rows, "delay_summary": delays, "request_counts": request_counts, "proxy_audit": proxy_audit, "windows": windows, "profile_path": str(used_profile_path), "scheduler": {"warm_movement": True, "replay_concurrency": replay_concurrency, "kv_concurrency": kv_concurrency or max(1, len(move_rows))}, "acceptance": {"ok": True, "power_threshold_gated": False, "planned_hit": summary["planned_hit"], "proxy_audit_ok": all(r["ok"] for r in proxy_audit)}}
         check_live_manifest(out, run_root)
         (run_root / "controller_manifest.json").write_text(json.dumps(out, indent=2, sort_keys=True))
     finally:
@@ -1075,13 +1235,15 @@ def write_grid_summary(run_roots: list[Path], out_csv: Path, power_png: Path, de
 
 def live_grid(cfg: b.Config, run_root: Path, manifest: dict, policies: list[str], deadlines: list[float],
               target_fracs: list[float], mbps: float, nvsmi_ms: int, baseline_s: float,
-              settle_s: float, seed: int, extra: list[str]) -> Path:
+              settle_s: float, seed: int, extra: list[str], profile_path: Path | None = None,
+              replay_concurrency: int = 1, kv_concurrency: int | None = None) -> Path:
     run_roots, base = [], {**manifest, "baseline_s": baseline_s, "settle_s": settle_s}
+    profile_path = profile_path or run_root / "live_profile.json"
     for policy in policies:
         for D in deadlines:
             for frac in target_fracs:
                 dst = run_root / grid_run_name(policy, D, frac)
-                live_drain(cfg, dst, base, mbps, nvsmi_ms, extra, policy, seed, D, frac)
+                live_drain(cfg, dst, base, mbps, nvsmi_ms, extra, policy, seed, D, frac, profile_path, replay_concurrency, kv_concurrency)
                 run_roots.append(dst)
     write_grid_summary(run_roots, run_root / "scenario_summary.csv", run_root / "grid_power_drop.png", run_root / "grid_delay.png")
     return run_root
@@ -1126,6 +1288,9 @@ def parse_args(argv: list[str] | None = None):
     live_p.add_argument("--deadline-s", type=float)
     live_p.add_argument("--target-frac", type=float)
     live_p.add_argument("--seed", type=int, default=0)
+    live_p.add_argument("--profile", type=Path)
+    live_p.add_argument("--replay-concurrency", type=int, default=1)
+    live_p.add_argument("--kv-concurrency", type=int, default=0)
     live_p.add_argument("extra_vllm_args", nargs=argparse.REMAINDER)
     grid_p = sub.add_parser("live-grid")
     b.add_common(grid_p)
@@ -1139,6 +1304,9 @@ def parse_args(argv: list[str] | None = None):
     grid_p.add_argument("--baseline-s", type=float, default=120.0)
     grid_p.add_argument("--settle-s", type=float, default=120.0)
     grid_p.add_argument("--seed", type=int, default=0)
+    grid_p.add_argument("--profile", type=Path)
+    grid_p.add_argument("--replay-concurrency", type=int, default=1)
+    grid_p.add_argument("--kv-concurrency", type=int, default=0)
     grid_p.add_argument("extra_vllm_args", nargs=argparse.REMAINDER)
     check_live_p = sub.add_parser("check-live")
     check_live_p.add_argument("--run-root", type=Path, default=Path("queue-haul/outputs/stage1c_live"))
@@ -1172,11 +1340,11 @@ def main(argv: list[str] | None = None) -> None:
     elif args.cmd == "live-drain":
         cfg = b.config_from_args(args)
         extra = args.extra_vllm_args[1:] if args.extra_vllm_args[:1] == ["--"] else args.extra_vllm_args
-        print(live_drain(cfg, args.run_root, json.loads(args.manifest.read_text()), args.mbps, args.nvsmi_ms, extra, args.policy, args.seed, args.deadline_s, args.target_frac))
+        print(live_drain(cfg, args.run_root, json.loads(args.manifest.read_text()), args.mbps, args.nvsmi_ms, extra, args.policy, args.seed, args.deadline_s, args.target_frac, args.profile, args.replay_concurrency, args.kv_concurrency or None))
     elif args.cmd == "live-grid":
         cfg = b.config_from_args(args)
         extra = args.extra_vllm_args[1:] if args.extra_vllm_args[:1] == ["--"] else args.extra_vllm_args
-        print(live_grid(cfg, args.run_root, json.loads(args.manifest.read_text()), _csv_list(args.policies), _csv_list(args.deadlines, float), _csv_list(args.target_fracs, float), args.mbps, args.nvsmi_ms, args.baseline_s, args.settle_s, args.seed, extra))
+        print(live_grid(cfg, args.run_root, json.loads(args.manifest.read_text()), _csv_list(args.policies), _csv_list(args.deadlines, float), _csv_list(args.target_fracs, float), args.mbps, args.nvsmi_ms, args.baseline_s, args.settle_s, args.seed, extra, args.profile, args.replay_concurrency, args.kv_concurrency or None))
     elif args.cmd == "check-live":
         path = args.manifest or args.run_root / "controller_manifest.json"
         check_live_manifest(json.loads(path.read_text()), args.run_root)

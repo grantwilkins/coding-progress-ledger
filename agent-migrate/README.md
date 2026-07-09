@@ -164,20 +164,26 @@ $PY queue-haul/stage1c_controller.py live-drain \
   --manifest queue-haul/outputs/stage1c_live-sessions.json \
   --mbps 1000 \
   --nvsmi-ms 250 \
-  --run-root queue-haul/outputs/stage1c_live
+  --run-root queue-haul/outputs/stage1c_live \
+  --profile queue-haul/outputs/stage1c_live-profile.json
 $PY queue-haul/stage1c_controller.py check-live --run-root queue-haul/outputs/stage1c_live
 $PY queue-haul/stage1c_controller.py plot-live --run-root queue-haul/outputs/stage1c_live
 $PY queue-haul/stage1c_controller.py live-grid \
   --manifest queue-haul/outputs/stage1c_live-sessions.json \
   --mbps 1000 \
-  --run-root queue-haul/outputs/stage1c_grid
+  --run-root queue-haul/outputs/stage1c_grid \
+  --profile queue-haul/outputs/stage1c_grid/live_profile.json
 # Or submit the unattended Slurm grid:
 sbatch queue-haul/stage1c_grid.sbatch
 ```
 
 `live-drain` keeps source vLLM on GPU 0 and sink vLLM on GPU 1 up together,
-runs Poisson turn loops from synthetic TraceLab-sized rolling transcripts, moves
-one session at a time by replay or KV transfer, and writes `gpu_power.csv`,
-`events.jsonl`, `controller_manifest.json`, `power_summary.csv`,
-`power_trace.png`, `source_power.png`, `sink_power.png`, `delay_summary.csv`,
-`delay_summary.png`, `ell_power5s.csv`, `ell_power5s.png`, and `request_counts.csv`. `live-grid` also writes `scenario_summary.csv`, `grid_power_drop.png`, and `grid_delay.png`.
+runs Poisson turn loops from synthetic TraceLab-sized rolling transcripts, profiles
+replay/KV movement once when `--profile` is missing, warms the sink before switching
+the source session, bounds replay prefill concurrency to `--replay-concurrency`
+(default 1), overlaps KV transfers up to `--kv-concurrency` (0 means all), and
+writes `gpu_power.csv`, `events.jsonl`, `controller_manifest.json`,
+`power_summary.csv`, `power_trace.png`, `source_power.png`, `sink_power.png`,
+`delay_summary.csv`, `delay_summary.png`, `ell_power5s.csv`, `ell_power5s.png`,
+`request_counts.csv`, and `proxy_audit.csv`. `live-grid` also writes
+`scenario_summary.csv`, `grid_power_drop.png`, and `grid_delay.png`.
