@@ -21,6 +21,7 @@ module load gcc/14.2.0 openblas/0.3.28
 PY=${PY:-$REPO/.venv/bin/python}
 MANIFEST=${MANIFEST:-queue-haul/outputs/stage1c_live-sessions.json}
 RUN_ROOT=${RUN_ROOT:-queue-haul/outputs/stage1c_grid}
+PROFILE=${PROFILE:-$RUN_ROOT/live_profile.json}
 POLICIES=${POLICIES:-lp,random,greedy}
 DEADLINES=${DEADLINES:-10,30,120}
 TARGET_FRACS=${TARGET_FRACS:-0.25,0.45,0.65}
@@ -29,6 +30,8 @@ NVSMI_MS=${NVSMI_MS:-250}
 BASELINE_S=${BASELINE_S:-120}
 SETTLE_S=${SETTLE_S:-120}
 SEED=${SEED:-0}
+REPLAY_CONCURRENCY=${REPLAY_CONCURRENCY:-1}
+KV_CONCURRENCY=${KV_CONCURRENCY:-0}
 
 mkdir -p "$RUN_ROOT"
 
@@ -43,4 +46,7 @@ $PY queue-haul/stage1c_controller.py live-grid \
   --nvsmi-ms "$NVSMI_MS" \
   --baseline-s "$BASELINE_S" \
   --settle-s "$SETTLE_S" \
-  --seed "$SEED"
+  --seed "$SEED" \
+  --profile "$PROFILE" \
+  --replay-concurrency "$REPLAY_CONCURRENCY" \
+  --kv-concurrency "$KV_CONCURRENCY"

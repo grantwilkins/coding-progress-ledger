@@ -157,16 +157,16 @@ def test_live_plan_uses_log_power_curve_and_dispatches_all(tmp_path: Path):
     assert summary["sessions"][-1]["predicted_cumulative_source_drop_w"] == pytest.approx(summary["full_source_drop_w"])
 
 
-def test_run_live_moves_launches_selected_moves_concurrently(tmp_path: Path, monkeypatch):
+def test_run_live_moves_warms_sink_with_bounded_replay_and_overlapping_kv(tmp_path: Path, monkeypatch):
     class Worker:
-        def __init__(self):
-            self.last_prompt = "prompt"
-            self.paused = False
+        def __init__(self, sid):
+            self.last_prompt = f"prompt-{sid}"
+            self.pause_times = []
             self.resumed = False
             self.port = None
 
         def pause_boundary(self):
-            self.paused = True
+            self.pause_times.append(time.time())
 
         def switch_to(self, port):
             self.port = port
@@ -175,30 +175,36 @@ def test_run_live_moves_launches_selected_moves_concurrently(tmp_path: Path, mon
             self.resumed = True
 
     cfg = type("Cfg", (), {"api_proxy_port": 8400})()
-    workers = {"a": Worker(), "b": Worker()}
-    sessions = [{"decode_tokens": 1}, {"decode_tokens": 1}]
+    workers = {sid: Worker(sid) for sid in ("a", "b", "c")}
+    sessions = [{"decode_tokens": 1}, {"decode_tokens": 1}, {"decode_tokens": 1}]
     rows = [
-        {"id": "a", "action": "R", "fixture_index": 0, "dispatch_rank": 0, "deadline_s": 1.0},
-        {"id": "b", "action": "R", "fixture_index": 1, "dispatch_rank": 1, "deadline_s": 1.0},
+        {"id": "a", "action": "R", "fixture_index": 0, "dispatch_rank": 0, "deadline_s": 2.0},
+        {"id": "b", "action": "R", "fixture_index": 1, "dispatch_rank": 1, "deadline_s": 2.0},
+        {"id": "c", "action": "S", "fixture_index": 2, "dispatch_rank": 2, "deadline_s": 2.0},
     ]
-    starts = []
+    starts, ends = {"R": [], "S": []}, {}
 
-    def fake_stream_chat(_cfg, _port, _prompt, _max_tokens):
+    def fake_stream_chat(_cfg, _port, prompt, _max_tokens):
+        action = "R" if prompt.startswith("Replay cache bust") else "S"
+        sid = prompt.split()[3] if action == "R" else prompt.rsplit("-", 1)[1]
         start = time.time()
-        starts.append(start)
+        starts[action].append(start)
         time.sleep(0.2)
         end = time.time()
-        return {"status": 200, "first_token_ts": start + 0.01, "end_ts": end, "prompt_sha256": "x", "response_text": ""}
+        ends[sid] = end
+        return {"status": 200, "first_token_ts": start + 0.01, "start_ts": start, "end_ts": end, "prompt_sha256": "x", "response_text": ""}
 
     monkeypatch.setattr(c, "stream_chat", fake_stream_chat)
     t0 = time.time()
-    out = c.run_live_moves(cfg, tmp_path, sessions, workers, rows, settle_s=0.0)
+    out = c.run_live_moves(cfg, tmp_path, sessions, workers, rows, settle_s=0.0, replay_concurrency=1, kv_concurrency=2)
 
-    assert time.time() - t0 < 0.35
-    assert max(starts) - min(starts) < 0.1
-    assert [r["dispatch_rank"] for r in out] == [0, 1]
-    assert all(w.paused and w.resumed and w.port == 8400 for w in workers.values())
-    assert all(r["deadline_met"] for r in out)
+    assert time.time() - t0 < 0.55
+    assert starts["R"][1] - starts["R"][0] >= 0.18
+    assert starts["S"][0] - starts["R"][0] < 0.1
+    assert [r["dispatch_rank"] for r in out] == [0, 1, 2]
+    assert all(workers[sid].pause_times[0] >= ends[sid] for sid in workers)
+    assert all(w.resumed and w.port == 8400 for w in workers.values())
+    assert all(r["warm_move"] and r["deadline_met"] and r["downtime_s"] >= 0 for r in out)
 
 
 def test_nvsmi_command_uses_250ms_sampling():
@@ -224,7 +230,7 @@ def test_power_summary_rows_uses_named_windows(tmp_path: Path):
 
 
 def test_check_live_manifest_requires_files_and_route_evidence(tmp_path: Path):
-    for name in ("gpu_power.csv", "events.jsonl", "power_summary.csv", "power_trace.png", "source_power.png", "sink_power.png", "delay_summary.csv", "delay_summary.png", "ell_power5s.csv", "ell_power5s.png", "request_counts.csv"):
+    for name in ("gpu_power.csv", "events.jsonl", "power_summary.csv", "power_trace.png", "source_power.png", "sink_power.png", "delay_summary.csv", "delay_summary.png", "ell_power5s.csv", "ell_power5s.png", "request_counts.csv", "proxy_audit.csv"):
         (tmp_path / name).write_text("x")
     manifest = {
         "schema": c.LIVE_SCHEMA,
@@ -296,7 +302,7 @@ def test_delay_summary_writes_total_delay_csv_and_plot(tmp_path: Path):
     delays = c.write_delay_summary(rows, tmp_path / "delay_summary.csv", tmp_path / "delay_summary.png")
 
     assert sum(d["first_token_s"] for d in delays) == pytest.approx(4.5)
-    assert (tmp_path / "delay_summary.csv").read_text().splitlines()[0] == "dispatch_rank,id,action,first_token_s,completion_s"
+    assert (tmp_path / "delay_summary.csv").read_text().splitlines()[0] == "dispatch_rank,id,action,first_token_s,completion_s,downtime_s"
     assert (tmp_path / "delay_summary.png").exists()
 
 
@@ -341,6 +347,51 @@ def test_live_plan_records_target_miss_without_raising(tmp_path: Path):
     assert summary["planned_hit"] is False
     assert summary["planned_shortfall_w"] > 0
 
+
+
+
+def test_live_profile_costs_override_runtime_model(tmp_path: Path):
+    manifest = _manifest_for_live_policy_tests(tmp_path)
+    profile = {
+        "schema": c.PROFILE_SCHEMA,
+        "mbps": 1000.0,
+        "points": [
+            {"action": "R", "tokens": 3000, "completion_s": 30.0},
+            {"action": "R", "tokens": 5000, "completion_s": 50.0},
+            {"action": "S", "tokens": 3000, "completion_s": 10.0},
+            {"action": "S", "tokens": 5000, "completion_s": 20.0},
+        ],
+    }
+
+    patched = c.apply_live_profile(manifest, profile)
+    sessions, _pop, _pool, _move, imp, *_ = c._live_model(patched)
+    summary = c.live_plan_summary(patched, target_frac=0.25)
+
+    for i, session in enumerate(sessions):
+        assert imp.c_replay[i] == pytest.approx(session["c_replay_s"])
+        assert imp.c_transfer[i] == pytest.approx(session["c_transfer_s"])
+    assert summary["profile"]["schema"] == c.PROFILE_SCHEMA
+
+
+def test_proxy_audit_reports_user_space_link_rate(tmp_path: Path):
+    proxy = tmp_path / "proxy.csv"
+    with proxy.open("w", newline="") as f:
+        writer = csv.DictWriter(f, ["ts", "route", "direction", "bytes", "billed"])
+        writer.writeheader()
+        writer.writerows([
+            {"ts": 0.0, "route": "kv", "direction": "target_to_client", "bytes": 125_000_000, "billed": 1},
+            {"ts": 2.0, "route": "kv", "direction": "target_to_client", "bytes": 125_000_000, "billed": 1},
+            {"ts": 1.0, "route": "api", "direction": "client_to_target", "bytes": 1_000, "billed": 1},
+        ])
+
+    rows = c.write_proxy_audit(proxy, tmp_path / "proxy_audit.csv", {"drain": (0, 2)}, 1000.0)
+
+    kv = next(r for r in rows if r["route"] == "kv")
+    assert kv["bytes"] == 250_000_000
+    assert kv["target_bytes_per_s"] == pytest.approx(125_000_000)
+    assert kv["target_ratio"] == pytest.approx(1.0)
+    assert kv["ok"] == 1
+    assert (tmp_path / "proxy_audit.csv").exists()
 
 def test_request_count_rows_groups_request_starts_by_phase_and_port(tmp_path: Path):
     path = tmp_path / "events.jsonl"
