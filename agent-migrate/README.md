@@ -173,7 +173,8 @@ $PY queue-haul/stage1c_controller.py live-grid \
   --mbps 1000 \
   --run-root queue-haul/outputs/stage1c_grid \
   --profile queue-haul/outputs/stage1c_grid/live_profile.json
-# Or submit the unattended Slurm grid:
+# Or submit a one-scenario quick Slurm check, then the unattended grid:
+sbatch queue-haul/stage1c_quick.sbatch
 sbatch queue-haul/stage1c_grid.sbatch
 ```
 
