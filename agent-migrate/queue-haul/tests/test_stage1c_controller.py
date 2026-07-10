@@ -138,6 +138,18 @@ def test_live_manifest_validation_requires_controller_fields():
         c.live_sessions(manifest)
 
 
+def test_prompt_tokens_counts_batch_encoding_input_ids(monkeypatch):
+    class Tok:
+        def apply_chat_template(self, msg, tokenize, add_generation_prompt):
+            assert tokenize and add_generation_prompt
+            assert msg[0]["content"] == "x"
+            return {"input_ids": [1, 2, 3, 4], "attention_mask": [1, 1, 1, 1]}
+
+    monkeypatch.setattr(c, "_tokenizer", lambda _cfg: Tok())
+
+    assert c.prompt_tokens(type("Cfg", (), {})(), "x") == 4
+
+
 def test_live_plan_uses_log_power_curve_and_dispatches_all(tmp_path: Path):
     trace = tmp_path / "trace.jsonl.gz"
     _write_tracelab(trace)

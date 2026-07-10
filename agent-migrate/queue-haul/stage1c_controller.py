@@ -490,7 +490,8 @@ def prompt_tokens(cfg: b.Config, prompt: str) -> int:
     tok = _tokenizer(cfg)
     msg = [{"role": "user", "content": prompt}]
     if hasattr(tok, "apply_chat_template"):
-        return len(tok.apply_chat_template(msg, tokenize=True, add_generation_prompt=True))
+        out = tok.apply_chat_template(msg, tokenize=True, add_generation_prompt=True)
+        return len(out["input_ids"] if hasattr(out, "keys") and "input_ids" in out else out)
     return len(tok(prompt).input_ids)
 
 
