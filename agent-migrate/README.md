@@ -86,7 +86,6 @@ uv run python queue-haul/stage1_window_sensitivity.py
 
 The Queue-Haul reducer writes:
 
-- `queue-haul/outputs/stage1_gpt_oss_20b_a100_tp1_curve.csv`
 - `queue-haul/outputs/stage1_gpt_oss_20b_a100_tp1_power_curve.csv`
 - `queue-haul/outputs/stage1_gpt_oss_20b_a100_tp1_constants.csv`
 - `queue-haul/outputs/stage1_gpt_oss_20b_a100_tp1.{pdf,png}`
