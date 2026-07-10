@@ -229,6 +229,15 @@ def test_nvsmi_command_uses_250ms_sampling():
     assert c.nvsmi_cmd(250)[-2:] == ["-lms", "250"]
 
 
+def test_memlog_command_records_cgroup_and_top_rss():
+    cmd = " ".join(c.memlog_cmd(0.5))
+
+    assert "memory.current" in cmd
+    assert "memory.events" in cmd
+    assert "ps -u $USER" in cmd
+    assert "sleep 0.5" in cmd
+
+
 def test_power_summary_rows_uses_named_windows(tmp_path: Path):
     path = tmp_path / "gpu_power.csv"
     with path.open("w", newline="") as f:
@@ -248,7 +257,7 @@ def test_power_summary_rows_uses_named_windows(tmp_path: Path):
 
 
 def test_check_live_manifest_requires_files_and_route_evidence(tmp_path: Path):
-    for name in ("gpu_power.csv", "events.jsonl", "power_summary.csv", "power_trace.png", "source_power.png", "sink_power.png", "delay_summary.csv", "delay_summary.png", "ell_power5s.csv", "ell_power5s.png", "request_counts.csv", "proxy_audit.csv"):
+    for name in c.LIVE_ARTIFACTS:
         (tmp_path / name).write_text("x")
     manifest = {
         "schema": c.LIVE_SCHEMA,

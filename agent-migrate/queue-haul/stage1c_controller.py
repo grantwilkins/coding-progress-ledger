@@ -35,6 +35,7 @@ LIVE_ARTIFACTS = (
     "gpu_power.csv", "events.jsonl", "power_summary.csv", "power_trace.png",
     "source_power.png", "sink_power.png", "delay_summary.csv", "delay_summary.png",
     "ell_power5s.csv", "ell_power5s.png", "request_counts.csv", "proxy_audit.csv",
+    "host_mem.log",
 )
 WORDS_PER_TOKEN = 0.75
 LIVE_A100_P_IDLE_W = 67.12041959182154
@@ -905,11 +906,22 @@ def nvsmi_cmd(ms: int) -> list[str]:
     return ["nvidia-smi", "--query-gpu=timestamp,index,power.draw,utilization.gpu,memory.used", "--format=csv,noheader,nounits", "-lms", str(ms)]
 
 
+def memlog_cmd(interval_s: float = 1.0) -> list[str]:
+    script = f"cg=/sys/fs/cgroup$(awk -F: 'NR==1{{print $3}}' /proc/self/cgroup); while true; do date '+# %s.%N'; cat $cg/memory.current $cg/memory.events 2>/dev/null || true; ps -u $USER -o pid,ppid,rss,vsz,comm,args --sort=-rss | head -80; sleep {interval_s}; done"
+    return ["bash", "-lc", script]
+
+
 def start_nvsmi(path: Path, ms: int):
     path.parent.mkdir(parents=True, exist_ok=True)
     handle = path.open("w", buffering=1)
     handle.write("timestamp,index,power_w,util_gpu,memory_mib\n")
     return subprocess.Popen(nvsmi_cmd(ms), stdout=handle, stderr=subprocess.STDOUT, start_new_session=True), handle
+
+
+def start_memlog(path: Path):
+    path.parent.mkdir(parents=True, exist_ok=True)
+    handle = path.open("w", buffering=1)
+    return subprocess.Popen(memlog_cmd(), stdout=handle, stderr=subprocess.STDOUT, start_new_session=True), handle
 
 
 def stop_nvsmi(proc: subprocess.Popen, handle) -> None:
@@ -1209,6 +1221,7 @@ def live_drain(cfg: b.Config, run_root: Path, manifest: dict, mbps: float, nvsmi
     stack = b.start_stack(cfg, run_root, mbps, extra)
     events = JsonlLog(run_root / "events.jsonl")
     nvsmi = None
+    memlog = start_memlog(run_root / "host_mem.log")
     workers: dict[str, SessionWorker] = {}
     try:
         b.start_sink(stack, cfg, extra)
@@ -1263,6 +1276,7 @@ def live_drain(cfg: b.Config, run_root: Path, manifest: dict, mbps: float, nvsmi
             worker.stop()
         if nvsmi:
             stop_nvsmi(*nvsmi)
+        stop_nvsmi(*memlog)
         events.close()
         b.stop_stack(stack)
     return run_root
