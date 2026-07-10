@@ -363,9 +363,31 @@ def session_prompt(session: dict, turn_index: int, replay_nonce: str | None = No
     return "\n".join(parts)
 
 
+def _safe_name(text: str) -> str:
+    return re.sub(r"[^A-Za-z0-9_.-]+", "-", str(text)).strip("-") or "workload"
+
+
+def manifest_workload(manifest: dict) -> str:
+    workload = manifest.get("workload", {})
+    if isinstance(workload, dict) and workload.get("name"):
+        return str(workload["name"])
+    return str(manifest.get("source", {}).get("workload") or manifest.get("source", {}).get("type", "workload"))
+
+
+def _pick_tracelab_sessions(sessions: list[dict], n_sessions: int, seed: int, workload: str) -> list[dict]:
+    if workload == "mixed":
+        rng = random.Random(seed)
+        return rng.sample(sessions, n_sessions) if len(sessions) > n_sessions else sessions
+    if workload == "small":
+        return sorted(sessions, key=lambda s: (s["served_T"], s["turn_rate_hz"], s["id"]))[:n_sessions]
+    if workload == "large":
+        return sorted(sessions, key=lambda s: (-s["served_T"], -s["turn_rate_hz"], s["id"]))[:n_sessions]
+    raise ValueError(f"unknown workload: {workload}")
+
+
 def tracelab_manifest(path: Path, n_sessions: int, seed: int, max_model_len: int = 32768,
                       decode_margin: int = 512, min_turns: int = 3, min_context_tokens: int = 2048,
-                      baseline_s: float = 120.0, settle_s: float = 120.0) -> dict:
+                      baseline_s: float = 120.0, settle_s: float = 120.0, workload: str = "mixed") -> dict:
     groups: dict[str, list[dict]] = {}
     for row in _jsonl(path):
         sid = str(_field(row, "session_id", "session", "conversation_id", "trace_key"))
@@ -425,14 +447,14 @@ def tracelab_manifest(path: Path, n_sessions: int, seed: int, max_model_len: int
         })
     if len(sessions) < n_sessions:
         raise ValueError(f"need {n_sessions} TraceLab sessions after filtering, got {len(sessions)}")
-    rng = random.Random(seed)
-    picked = rng.sample(sessions, n_sessions) if len(sessions) > n_sessions else sessions
+    picked = _pick_tracelab_sessions(sessions, n_sessions, seed, workload)
     for i, s in enumerate(picked):
         s["source_node"] = 0
         s["manifest_rank"] = i
     return {
         "schema": MANIFEST_SCHEMA,
-        "source": {"type": "tracelab", "path": str(path), "seed": seed},
+        "source": {"type": "tracelab", "path": str(path), "seed": seed, "workload": workload},
+        "workload": {"name": workload, "selection": "served_T_quantile" if workload in ("small", "large") else "random"},
         "deadline_s": 300.0,
         "target_w": "all",
         "baseline_s": baseline_s,
@@ -1300,6 +1322,9 @@ def grid_summary_row(run_root: Path) -> dict:
     manifest = json.loads((run_root / "controller_manifest.json").read_text())
     power = _power_summary_lookup(run_root / "power_summary.csv")
     delays = manifest.get("sessions") or manifest.get("delay_summary") or []
+    input_manifest = manifest.get("input_manifest", {})
+    input_sessions = input_manifest.get("sessions", [])
+    served = [float(s.get("served_T", s.get("T", 0))) for s in input_sessions]
     if delays and all("move_start_ts" in d and "move_end_ts" in d for d in delays):
         t0 = min(float(d["move_start_ts"]) for d in delays)
         total_first = max(float(d["move_start_ts"]) + float(d["first_token_s"]) for d in delays) - t0
@@ -1307,16 +1332,20 @@ def grid_summary_row(run_root: Path) -> dict:
     else:
         total_first = sum(float(d["first_token_s"]) for d in delays)
         total_completion = sum(float(d["completion_s"]) for d in delays)
+    deadline = float(manifest["deadline_s"])
     return {
+        "workload": manifest_workload(input_manifest),
+        "input_sessions": len(input_sessions),
+        "median_served_T": float(np.median(served)) if served else math.nan,
         "policy": manifest["policy"],
-        "deadline_s": float(manifest["deadline_s"]),
+        "deadline_s": deadline,
         "target_frac": float(manifest["target_frac"]),
         "target_w": float(manifest["target_w"]),
         "full_source_drop_w": float(manifest["full_source_drop_w"]),
         "planned_source_drop_w": float(manifest["planned_source_drop_w"]),
         "planned_shortfall_w": float(manifest["planned_shortfall_w"]),
         "planned_hit": bool(manifest["planned_hit"]),
-        "deadline_hit": all(bool(d.get("deadline_met", float(d["completion_s"]) <= float(manifest["deadline_s"]))) for d in delays),
+        "deadline_hit": bool(total_completion <= deadline),
         "measured_source_drop_w": power.get(("baseline", 0), math.nan) - power.get(("post", 0), math.nan),
         "measured_sink_rise_w": power.get(("post", 1), math.nan) - power.get(("baseline", 1), math.nan),
         "total_first_token_s": float(total_first),
@@ -1330,11 +1359,13 @@ def grid_summary_row(run_root: Path) -> dict:
 def _write_grid_plot(rows: list[dict], out_png: Path, y_key: str, ylabel: str) -> None:
     import matplotlib.pyplot as plt
     fig, ax = plt.subplots(figsize=(7, 4))
-    for policy in dict.fromkeys(r["policy"] for r in rows):
-        part = [r for r in rows if r["policy"] == policy]
-        ax.scatter([r["target_frac"] for r in part], [r[y_key] for r in part], label=policy, alpha=0.8)
+    groups = dict.fromkeys((r.get("workload", "workload"), r["policy"]) for r in rows)
+    for workload, policy in groups:
+        part = [r for r in rows if r.get("workload", "workload") == workload and r["policy"] == policy]
+        label = policy if len({r.get("workload", "workload") for r in rows}) == 1 else f"{workload}/{policy}"
+        ax.scatter([r["target_frac"] for r in part], [r[y_key] for r in part], label=label, alpha=0.8)
     ax.set(xlabel="target fraction", ylabel=ylabel)
-    ax.legend()
+    ax.legend(fontsize=7)
     fig.tight_layout()
     fig.savefig(out_png)
     plt.close(fig)
@@ -1352,18 +1383,27 @@ def write_grid_summary(run_roots: list[Path], out_csv: Path, power_png: Path, de
     return rows
 
 
-def live_grid(cfg: b.Config, run_root: Path, manifest: dict, policies: list[str], deadlines: list[float],
+def live_grid(cfg: b.Config, run_root: Path, manifest: dict | list[dict], policies: list[str], deadlines: list[float],
               target_fracs: list[float], mbps: float, nvsmi_ms: int, baseline_s: float,
               settle_s: float, seed: int, extra: list[str], profile_path: Path | None = None,
               replay_concurrency: int = 1, kv_concurrency: int | None = None) -> Path:
-    run_roots, base = [], {**manifest, "baseline_s": baseline_s, "settle_s": settle_s}
-    profile_path = profile_path or run_root / "live_profile.json"
-    for policy in policies:
-        for D in deadlines:
-            for frac in target_fracs:
-                dst = run_root / grid_run_name(policy, D, frac)
-                live_drain(cfg, dst, base, mbps, nvsmi_ms, extra, policy, seed, D, frac, profile_path, replay_concurrency, kv_concurrency)
-                run_roots.append(dst)
+    manifests = manifest if isinstance(manifest, list) else [manifest]
+    multi = len(manifests) > 1
+    run_roots = []
+    for one in manifests:
+        workload = _safe_name(manifest_workload(one))
+        root = run_root / workload if multi else run_root
+        base = {**one, "baseline_s": baseline_s, "settle_s": settle_s}
+        if profile_path is None:
+            prof = root / "live_profile.json"
+        else:
+            prof = profile_path.parent / f"{profile_path.stem}_{workload}{profile_path.suffix}" if multi else profile_path
+        for policy in policies:
+            for D in deadlines:
+                for frac in target_fracs:
+                    dst = root / grid_run_name(policy, D, frac)
+                    live_drain(cfg, dst, base, mbps, nvsmi_ms, extra, policy, seed, D, frac, prof, replay_concurrency, kv_concurrency)
+                    run_roots.append(dst)
     write_grid_summary(run_roots, run_root / "scenario_summary.csv", run_root / "grid_power_drop.png", run_root / "grid_delay.png")
     return run_root
 
@@ -1397,6 +1437,7 @@ def parse_args(argv: list[str] | None = None):
     make_p.add_argument("--decode-margin", type=int, default=512)
     make_p.add_argument("--min-turns", type=int, default=3)
     make_p.add_argument("--min-context-tokens", type=int, default=2048)
+    make_p.add_argument("--workload", choices=("mixed", "small", "large"), default="mixed")
     live_p = sub.add_parser("live-drain")
     b.add_common(live_p)
     live_p.add_argument("--manifest", type=Path, required=True)
@@ -1413,7 +1454,8 @@ def parse_args(argv: list[str] | None = None):
     live_p.add_argument("extra_vllm_args", nargs=argparse.REMAINDER)
     grid_p = sub.add_parser("live-grid")
     b.add_common(grid_p)
-    grid_p.add_argument("--manifest", type=Path, required=True)
+    grid_p.add_argument("--manifest", type=Path)
+    grid_p.add_argument("--manifests")
     grid_p.add_argument("--run-root", type=Path, default=Path("queue-haul/outputs/stage1c_grid"))
     grid_p.add_argument("--mbps", type=float, default=1000.0)
     grid_p.add_argument("--nvsmi-ms", type=int, default=250)
@@ -1452,7 +1494,7 @@ def main(argv: list[str] | None = None) -> None:
         check_manifest(json.loads(path.read_text()))
         print(path)
     elif args.cmd == "make-manifest":
-        manifest = tracelab_manifest(args.input, args.sessions, args.seed, args.max_model_len, args.decode_margin, args.min_turns, args.min_context_tokens)
+        manifest = tracelab_manifest(args.input, args.sessions, args.seed, args.max_model_len, args.decode_margin, args.min_turns, args.min_context_tokens, workload=args.workload)
         args.out.parent.mkdir(parents=True, exist_ok=True)
         args.out.write_text(json.dumps(manifest, indent=2, sort_keys=True))
         print(args.out)
@@ -1463,7 +1505,11 @@ def main(argv: list[str] | None = None) -> None:
     elif args.cmd == "live-grid":
         cfg = b.config_from_args(args)
         extra = args.extra_vllm_args[1:] if args.extra_vllm_args[:1] == ["--"] else args.extra_vllm_args
-        print(live_grid(cfg, args.run_root, json.loads(args.manifest.read_text()), _csv_list(args.policies), _csv_list(args.deadlines, float), _csv_list(args.target_fracs, float), args.mbps, args.nvsmi_ms, args.baseline_s, args.settle_s, args.seed, extra, args.profile, args.replay_concurrency, args.kv_concurrency or None))
+        paths = [Path(x) for x in _csv_list(args.manifests)] if args.manifests else ([args.manifest] if args.manifest else [])
+        if not paths:
+            raise ValueError("live-grid requires --manifest or --manifests")
+        manifests = [json.loads(path.read_text()) for path in paths]
+        print(live_grid(cfg, args.run_root, manifests if len(manifests) > 1 else manifests[0], _csv_list(args.policies), _csv_list(args.deadlines, float), _csv_list(args.target_fracs, float), args.mbps, args.nvsmi_ms, args.baseline_s, args.settle_s, args.seed, extra, args.profile, args.replay_concurrency, args.kv_concurrency or None))
     elif args.cmd == "check-live":
         path = args.manifest or args.run_root / "controller_manifest.json"
         check_live_manifest(json.loads(path.read_text()), args.run_root)
