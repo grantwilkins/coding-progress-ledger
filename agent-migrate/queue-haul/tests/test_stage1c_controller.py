@@ -278,6 +278,22 @@ def test_power_summary_rows_uses_named_windows(tmp_path: Path):
     assert by_gpu[1]["power_mean_w"] == pytest.approx(50)
 
 
+def test_power_summary_rows_skips_nvidia_smi_na_samples(tmp_path: Path):
+    path = tmp_path / "gpu_power.csv"
+    with path.open("w", newline="") as f:
+        writer = csv.DictWriter(f, ["timestamp", "index", "power_w", "util_gpu", "memory_mib"])
+        writer.writeheader()
+        writer.writerows([
+            {"timestamp": 0, "index": 0, "power_w": 100, "util_gpu": 0, "memory_mib": 1},
+            {"timestamp": 0.5, "index": 0, "power_w": " [N/A]", "util_gpu": 0, "memory_mib": 1},
+            {"timestamp": 1, "index": 0, "power_w": 300, "util_gpu": 0, "memory_mib": 1},
+        ])
+
+    rows = c.power_summary_rows(path, {"baseline": (0, 1)})
+
+    assert rows == [{"phase": "baseline", "gpu": 0, "samples": 2, "power_mean_w": 200.0}]
+
+
 def test_check_live_manifest_requires_files_and_route_evidence(tmp_path: Path):
     for name in c.LIVE_ARTIFACTS:
         (tmp_path / name).write_text("x")
@@ -432,6 +448,16 @@ def test_live_grid_multi_manifest_uses_workload_dirs_and_profiles(tmp_path: Path
         (tmp_path / "small" / "greedy_D30_T0p45", "small", "greedy", 30.0, 0.45, tmp_path / "profile_small.json"),
         (tmp_path / "large" / "greedy_D30_T0p45", "large", "greedy", 30.0, 0.45, tmp_path / "profile_large.json"),
     ]
+
+
+def test_live_grid_skips_completed_scenarios(tmp_path: Path, monkeypatch):
+    dst = tmp_path / "greedy_D30_T0p45"
+    dst.mkdir()
+    (dst / "controller_manifest.json").write_text("{}")
+    monkeypatch.setattr(c, "live_drain", lambda *_args: pytest.fail("reran completed scenario"))
+    monkeypatch.setattr(c, "write_grid_summary", lambda roots, *_args: roots)
+
+    c.live_grid(type("Cfg", (), {})(), tmp_path, {"schema": c.MANIFEST_SCHEMA, "workload": {"name": "large"}, "sessions": [{"served_T": 32768}]}, ["greedy"], [30.0], [0.45], 1000.0, 250, 1.0, 1.0, 0, [], tmp_path / "profile.json")
 
 
 def test_live_profile_costs_override_runtime_model(tmp_path: Path):
