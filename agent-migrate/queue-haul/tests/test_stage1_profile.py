@@ -35,9 +35,15 @@ def test_plot_uses_actual_ell_and_normalizes_power(monkeypatch, tmp_path: Path):
         ax.collections[0].get_offsets(), [[0.25, 0.25], [1.0, 1.0]]
     )
     assert ax.collections[0].get_alpha() == pytest.approx(0.1)
+    assert ax.collections[0].get_label() == "Profiled Data"
+    assert ax.collections[0].get_sizes() == pytest.approx([14.0])
     assert ax.lines[0].get_ydata() == pytest.approx([0.0, 1.0])
-    assert ax.lines[0].get_label() == "Power Curve"
+    assert ax.lines[0].get_linewidth() == pytest.approx(2.4)
+    assert ax.lines[0].get_label() == "Fit Power Curve"
     assert ax.get_xlabel() == r"Load ($\ell$)"
+    assert ax.xaxis.label.get_fontsize() == pytest.approx(18.0)
+    assert ax.get_ylabel() == "Normalized Power"
+    assert ax.yaxis.label.get_fontsize() == pytest.approx(18.0)
     assert not ax.get_title()
 
 

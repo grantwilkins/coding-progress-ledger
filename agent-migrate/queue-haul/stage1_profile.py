@@ -111,19 +111,27 @@ def write_csv(path: Path, rows: list[dict], fieldnames) -> None:
 
 def make_plot(windows, power_curve, out_stem: Path) -> None:
     ell, power = windows["ell"], windows["P"]
-    fig, ax = plt.subplots(figsize=(7.0, 4.7))
-    ax.scatter(ell, power / POWER_NORMALIZATION_W, s=7, alpha=0.1)
+    fig, ax = plt.subplots(figsize=(8.4, 5.6))
+    ax.scatter(
+        ell,
+        power / POWER_NORMALIZATION_W,
+        s=14,
+        alpha=0.1,
+        linewidths=0.7,
+        label="Profiled Data",
+    )
     ax.plot(
         [r["ell"] for r in power_curve],
         [r["power_w"] / POWER_NORMALIZATION_W for r in power_curve],
         color="green",
         ls="--",
-        lw=1.2,
-        label="Power Curve",
+        lw=2.4,
+        label="Fit Power Curve",
     )
-    ax.set_xlabel(r"Load ($\ell$)")
-    ax.set_ylabel("Power / 400 W")
-    ax.legend(loc="upper left", fontsize=8)
+    ax.set_xlabel(r"Load ($\ell$)", fontsize=18)
+    ax.set_ylabel("Normalized Power", fontsize=18)
+    ax.tick_params(labelsize=15)
+    ax.legend(loc="upper left", fontsize=15)
     fig.tight_layout()
     fig.savefig(f"{out_stem}.png", dpi=160)
     fig.savefig(f"{out_stem}.pdf")
