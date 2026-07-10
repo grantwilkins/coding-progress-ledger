@@ -957,11 +957,23 @@ def stop_nvsmi(proc: subprocess.Popen, handle) -> None:
     handle.close()
 
 
-def power_summary_rows(path: Path, windows: dict[str, tuple[float, float]]) -> list[dict]:
+def _power_w(value: str) -> float | None:
+    text = value.strip()
+    return None if text in {"", "N/A", "[N/A]"} else float(text)
+
+
+def _power_points(power_csv: Path) -> list[tuple[float, int, float]]:
     rows = []
-    with path.open() as f:
-        for row in csv.DictReader(f):
-            rows.append({"ts": _parse_ts(row["timestamp"]), "gpu": int(row["index"]), "power_w": float(row["power_w"])})
+    with power_csv.open() as f:
+        for r in csv.DictReader(f):
+            power = _power_w(r["power_w"])
+            if power is not None:
+                rows.append((_parse_ts(r["timestamp"]), int(r["index"]), power))
+    return rows
+
+
+def power_summary_rows(path: Path, windows: dict[str, tuple[float, float]]) -> list[dict]:
+    rows = [{"ts": ts, "gpu": gpu, "power_w": power} for ts, gpu, power in _power_points(path)]
     out = []
     for phase, (lo, hi) in windows.items():
         for gpu in sorted({r["gpu"] for r in rows}):
@@ -977,11 +989,6 @@ def write_power_summary(power_csv: Path, out_csv: Path, windows: dict[str, tuple
         writer.writeheader()
         writer.writerows(rows)
     return rows
-
-
-def _power_points(power_csv: Path) -> list[tuple[float, int, float]]:
-    with power_csv.open() as f:
-        return [(_parse_ts(r["timestamp"]), int(r["index"]), float(r["power_w"])) for r in csv.DictReader(f)]
 
 
 def write_power_plot(power_csv: Path, out_png: Path, dispatch_rows: list[dict], gpu: int | None = None) -> None:
@@ -1402,7 +1409,8 @@ def live_grid(cfg: b.Config, run_root: Path, manifest: dict | list[dict], polici
             for D in deadlines:
                 for frac in target_fracs:
                     dst = root / grid_run_name(policy, D, frac)
-                    live_drain(cfg, dst, base, mbps, nvsmi_ms, extra, policy, seed, D, frac, prof, replay_concurrency, kv_concurrency)
+                    if not (dst / "controller_manifest.json").exists():
+                        live_drain(cfg, dst, base, mbps, nvsmi_ms, extra, policy, seed, D, frac, prof, replay_concurrency, kv_concurrency)
                     run_roots.append(dst)
     write_grid_summary(run_roots, run_root / "scenario_summary.csv", run_root / "grid_power_drop.png", run_root / "grid_delay.png")
     return run_root
