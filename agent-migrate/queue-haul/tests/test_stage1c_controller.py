@@ -110,6 +110,28 @@ def test_tracelab_manifest_groups_clamps_and_preserves_turns(tmp_path: Path):
     assert session["turns"][1]["gap_s"] == 60
 
 
+def test_tracelab_manifest_workload_selects_small_and_large(tmp_path: Path):
+    trace = tmp_path / "trace.jsonl.gz"
+    with gzip.open(trace, "wt") as f:
+        for sid, base in (("tiny", 1200), ("mid", 4096), ("big", 12000)):
+            for i in range(3):
+                f.write(json.dumps({
+                    "session_id": sid,
+                    "timestamp": i + 10 * base,
+                    "input_tokens_total": base + i * 100,
+                    "prefix_tokens": max(0, base - 100),
+                    "newly_append_tokens": 100,
+                    "output_tokens": 16,
+                }) + "\n")
+
+    small = c.tracelab_manifest(trace, 2, 0, min_context_tokens=1024, workload="small")
+    large = c.tracelab_manifest(trace, 2, 0, min_context_tokens=1024, workload="large")
+
+    assert small["workload"]["name"] == "small"
+    assert [s["id"] for s in small["sessions"]] == ["tiny", "mid"]
+    assert [s["id"] for s in large["sessions"]] == ["big", "mid"]
+
+
 def test_tracelab_manifest_hard_fails_without_enough_long_sessions(tmp_path: Path):
     trace = tmp_path / "trace.jsonl.gz"
     _write_tracelab(trace)
@@ -391,6 +413,27 @@ def test_live_plan_records_target_miss_without_raising(tmp_path: Path):
 
 
 
+def test_live_grid_multi_manifest_uses_workload_dirs_and_profiles(tmp_path: Path, monkeypatch):
+    calls = []
+
+    def fake_live_drain(_cfg, dst, manifest, _mbps, _nvsmi_ms, _extra, policy, _seed, D, frac, profile, _rc, _kc):
+        calls.append((dst, manifest["workload"]["name"], policy, D, frac, profile))
+
+    monkeypatch.setattr(c, "live_drain", fake_live_drain)
+    monkeypatch.setattr(c, "write_grid_summary", lambda roots, *_args: roots)
+    manifests = [
+        {"schema": c.MANIFEST_SCHEMA, "workload": {"name": "small"}, "sessions": [{"served_T": 1024}]},
+        {"schema": c.MANIFEST_SCHEMA, "workload": {"name": "large"}, "sessions": [{"served_T": 32768}]},
+    ]
+
+    c.live_grid(type("Cfg", (), {})(), tmp_path, manifests, ["greedy"], [30.0], [0.45], 1000.0, 250, 1.0, 1.0, 0, [], tmp_path / "profile.json")
+
+    assert calls == [
+        (tmp_path / "small" / "greedy_D30_T0p45", "small", "greedy", 30.0, 0.45, tmp_path / "profile_small.json"),
+        (tmp_path / "large" / "greedy_D30_T0p45", "large", "greedy", 30.0, 0.45, tmp_path / "profile_large.json"),
+    ]
+
+
 def test_live_profile_costs_override_runtime_model(tmp_path: Path):
     manifest = _manifest_for_live_policy_tests(tmp_path)
     profile = {
@@ -552,6 +595,44 @@ def test_grid_summary_row_uses_wall_clock_parallel_delay(tmp_path: Path):
     assert row["total_completion_s"] == pytest.approx(5.0)
     assert row["total_first_token_s"] == pytest.approx(2.0)
     assert row["deadline_hit"] is True
+
+
+def test_grid_summary_deadline_hit_uses_wall_clock_completion(tmp_path: Path):
+    run = tmp_path / "r"
+    run.mkdir()
+    with (run / "power_summary.csv").open("w", newline="") as f:
+        writer = csv.DictWriter(f, ["phase", "gpu", "samples", "power_mean_w"])
+        writer.writeheader()
+        writer.writerows([
+            {"phase": "baseline", "gpu": 0, "samples": 1, "power_mean_w": 300},
+            {"phase": "baseline", "gpu": 1, "samples": 1, "power_mean_w": 80},
+            {"phase": "post", "gpu": 0, "samples": 1, "power_mean_w": 100},
+            {"phase": "post", "gpu": 1, "samples": 1, "power_mean_w": 220},
+        ])
+    (run / "controller_manifest.json").write_text(json.dumps({
+        "schema": c.LIVE_SCHEMA,
+        "policy": "greedy",
+        "deadline_s": 4,
+        "target_frac": 0.45,
+        "target_w": 100,
+        "full_source_drop_w": 200,
+        "planned_source_drop_w": 100,
+        "planned_shortfall_w": 0,
+        "planned_hit": True,
+        "input_manifest": {"workload": {"name": "small"}, "sessions": [{"served_T": 1024}, {"served_T": 2048}]},
+        "sessions": [
+            {"first_token_s": 1.0, "completion_s": 3.0, "move_start_ts": 10.0, "move_end_ts": 13.0, "deadline_met": True},
+            {"first_token_s": 1.0, "completion_s": 3.0, "move_start_ts": 13.0, "move_end_ts": 16.0, "deadline_met": True},
+        ],
+    }))
+
+    row = c.grid_summary_row(run)
+
+    assert row["workload"] == "small"
+    assert row["input_sessions"] == 2
+    assert row["median_served_T"] == pytest.approx(1536)
+    assert row["total_completion_s"] == pytest.approx(6)
+    assert row["deadline_hit"] is False
 
 
 def test_write_grid_summary_writes_csv_and_plots(tmp_path: Path):
