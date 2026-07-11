@@ -30,7 +30,7 @@ from power import BETA_BYTES_PER_TOK, ETA_BYTES_PER_TOK, PoolPower, rho_replay
 SCHEMA = "queue-haul-stage1c-v1"
 LIVE_SCHEMA = "queue-haul-stage1c-live-v1"
 MANIFEST_SCHEMA = "queue-haul-stage1c-session-manifest-v1"
-PROFILE_SCHEMA = "queue-haul-stage1c-live-profile-v1"
+PROFILE_SCHEMA = "queue-haul-stage1c-live-profile-v2"
 LIVE_ARTIFACTS = (
     "gpu_power.csv", "events.jsonl", "power_summary.csv", "power_trace.png",
     "source_power.png", "sink_power.png", "delay_summary.csv", "delay_summary.png",
@@ -111,8 +111,9 @@ def build_plan(fixture: dict):
     sessions = active_sessions(fixture)
     pool = PoolPower(mean_context_tokens=float(np.mean([s["T"] for s in sessions])))
     const = fixture["constants"]
+    prof = fixture.get("profile") or {}
     move = Movement(
-        lambda_src=float(const.get("lambda_src_bytes_per_s", 125_000_000.0)),
+        lambda_src=min(float(const.get("lambda_src_bytes_per_s", 125_000_000.0)), float(prof.get("kv_bytes_per_s") or const.get("lambda_src_bytes_per_s", 125_000_000.0))),
         mu_in=float(const.get("mu_bytes_per_s", 1_000_000_000.0)),
         dest_prefill_util=0.0,
         dest_ingest_util=0.0,
@@ -120,13 +121,12 @@ def build_plan(fixture: dict):
     pop = build_population(fixture)
     base = compute(pop, pool, move)
     T = pop.T.astype(float)
-    eta = float(const.get("eta_bytes_per_tok", 4096.0))
     imp = replace(
         base,
         b_replay=BETA_BYTES_PER_TOK * T,
-        b_transfer=eta * T,
         c_replay=np.array([s.get("c_replay_s", base.c_replay[i]) for i, s in enumerate(sessions)], dtype=float),
         c_transfer=np.array([s.get("c_transfer_s", base.c_transfer[i]) for i, s in enumerate(sessions)], dtype=float),
+        b_transfer=np.array([s.get("profile_transfer_bytes", base.b_transfer[i]) for i, s in enumerate(sessions)], dtype=float),
     )
     event = Event(D=float(fixture["deadline_s"]), dest_nodes=1, spare_frac=1.0, tau_src=0.0, tau_pre=0.0, tau_in=0.0)
     target = fixture.get("target_w", "all")
@@ -531,8 +531,8 @@ def profile_prompt(cfg: b.Config, target_tokens: int) -> tuple[str, int]:
     return prompt, actual
 
 
-def _profile_row(action: str, requested_tokens: int, actual_tokens: int, result: dict, delta: dict) -> dict:
-    return {
+def _profile_row(action: str, requested_tokens: int, actual_tokens: int, result: dict, delta: dict, source_elapsed_s: float | None = None) -> dict:
+    row = {
         "action": action,
         "requested_tokens": int(requested_tokens),
         "tokens": int(actual_tokens),
@@ -542,6 +542,9 @@ def _profile_row(action: str, requested_tokens: int, actual_tokens: int, result:
         "kv_bytes": int(delta.get("kv/target_to_client", 0)),
         "proxy_delta": delta,
     }
+    if source_elapsed_s is not None:
+        row["source_elapsed_s"] = float(source_elapsed_s)
+    return row
 
 
 def calibrate_live_profile(cfg: b.Config, run_root: Path, sessions: list[dict], mbps: float, max_points: int = 3) -> dict:
@@ -559,7 +562,7 @@ def calibrate_live_profile(cfg: b.Config, run_root: Path, sessions: list[dict], 
             raise RuntimeError(f"profile replay had no API bytes for {target_tokens}")
         rows.append(_profile_row("R", target_tokens, replay_tokens, replay, delta))
 
-        b.warm_source(cfg, run_root, prompt, f"profile source warm {target_tokens}")
+        source, _stored0 = b.warm_source(cfg, run_root, prompt, f"profile source warm {target_tokens}")
         before = b.proxy_counts(proxy_log)
         kv = stream_chat(cfg, cfg.api_proxy_port, prompt, 1)
         if kv["status"] != 200:
@@ -568,18 +571,34 @@ def calibrate_live_profile(cfg: b.Config, run_root: Path, sessions: list[dict], 
         delta = b.count_delta(before, b.proxy_counts(proxy_log))
         if delta.get("kv/target_to_client", 0) <= 0:
             raise RuntimeError(f"profile KV had no KV bytes for {target_tokens}")
-        rows.append(_profile_row("S", target_tokens, actual_tokens, kv, delta))
-    return {"schema": PROFILE_SCHEMA, "created_ts": time.time(), "mbps": mbps, "lmcache_max_local_cpu_gb": b.LMCACHE_MAX_LOCAL_CPU_GB, "points": rows}
+        rows.append(_profile_row("S", target_tokens, actual_tokens, kv, delta, source["elapsed_s"]))
+    return _finalize_live_profile({"schema": PROFILE_SCHEMA, "created_ts": time.time(), "mbps": mbps, "lmcache_max_local_cpu_gb": b.LMCACHE_MAX_LOCAL_CPU_GB, "points": rows})
+
+
+def _median_positive(vals: list[float], default: float = 0.0) -> float:
+    xs = [float(v) for v in vals if float(v) > 0]
+    return float(np.median(xs)) if xs else default
+
+
+def _finalize_live_profile(profile: dict) -> dict:
+    pts = profile.get("points", [])
+    kv_rates = [float(r.get("kv_bytes", 0)) / float(r["completion_s"]) for r in pts if r.get("action") == "S" and float(r.get("kv_bytes", 0)) > 0 and float(r.get("completion_s", 0)) > 0]
+    kv_per_tok = [float(r.get("kv_bytes", 0)) / float(r["tokens"]) for r in pts if r.get("action") == "S" and float(r.get("kv_bytes", 0)) > 0 and float(r.get("tokens", 0)) > 0]
+    boundary = _median_positive([float(r.get("source_elapsed_s", 0)) for r in pts if r.get("action") == "S"])
+    return {
+        **profile,
+        "kv_bytes_per_s": _median_positive(kv_rates, float(profile.get("mbps", 1000.0)) * 125000.0),
+        "kv_bytes_per_token": _median_positive(kv_per_tok),
+        "source_boundary_s": boundary,
+    }
 
 
 def ensure_live_profile(cfg: b.Config, run_root: Path, profile_path: Path | None, manifest: dict, mbps: float) -> tuple[dict, Path]:
     path = profile_path or run_root / "live_profile.json"
     if path.exists():
         profile = json.loads(path.read_text())
-        if profile.get("schema") != PROFILE_SCHEMA:
-            raise ValueError("bad live profile schema")
-        if profile.get("lmcache_max_local_cpu_gb") == b.LMCACHE_MAX_LOCAL_CPU_GB:
-            return profile, path
+        if profile.get("schema") == PROFILE_SCHEMA and profile.get("lmcache_max_local_cpu_gb") == b.LMCACHE_MAX_LOCAL_CPU_GB:
+            return _finalize_live_profile(profile), path
     else:
         path.parent.mkdir(parents=True, exist_ok=True)
     profile = calibrate_live_profile(cfg, run_root, live_sessions(manifest), mbps)
@@ -603,8 +622,15 @@ def _profile_cost(profile: dict, action: str, tokens: int) -> float:
     return _interp([(float(r["tokens"]), float(r["completion_s"])) for r in profile["points"] if r["action"] == action], float(tokens))
 
 
+def _profile_transfer_bytes(profile: dict, session: dict) -> float:
+    tokens = int(session["served_T"])
+    profiled = float(profile.get("kv_bytes_per_token") or 0.0) * tokens
+    observed = float(session.get("session_kv_bytes") or session.get("source_kv_bytes") or 0)
+    return max(profiled, observed)
+
+
 def _profile_transfer_cost(profile: dict, session: dict) -> float:
-    nbytes = float(session.get("session_kv_bytes") or session.get("source_kv_bytes") or 0)
+    nbytes = _profile_transfer_bytes(profile, session)
     pts = [(float(r.get("kv_bytes", 0)), float(r["completion_s"])) for r in profile["points"] if r["action"] == "S" and float(r.get("kv_bytes", 0)) > 0]
     if nbytes > 0 and pts:
         return _interp(pts, nbytes)
@@ -614,6 +640,7 @@ def _profile_transfer_cost(profile: dict, session: dict) -> float:
 def apply_live_profile(manifest: dict, profile: dict) -> dict:
     if profile.get("schema") != PROFILE_SCHEMA:
         raise ValueError("bad live profile schema")
+    profile = _finalize_live_profile(profile)
     sessions = []
     for s in live_sessions(manifest):
         tokens = int(s["served_T"])
@@ -621,8 +648,9 @@ def apply_live_profile(manifest: dict, profile: dict) -> dict:
             **s,
             "c_replay_s": _profile_cost(profile, "R", tokens),
             "c_transfer_s": _profile_transfer_cost(profile, s),
+            "profile_transfer_bytes": _profile_transfer_bytes(profile, s),
         })
-    return {**manifest, "sessions": sessions, "profile": {"schema": profile["schema"], "mbps": profile.get("mbps"), "points": profile["points"]}}
+    return {**manifest, "sessions": sessions, "profile": {"schema": profile["schema"], "mbps": profile.get("mbps"), "points": profile["points"], "kv_bytes_per_s": profile.get("kv_bytes_per_s"), "kv_bytes_per_token": profile.get("kv_bytes_per_token"), "source_boundary_s": profile.get("source_boundary_s", 0.0)}}
 
 def build_live_population(manifest: dict) -> JobPopulation:
     sessions = live_sessions(manifest)
@@ -645,8 +673,9 @@ def _live_model(manifest: dict, deadline_s: float | None = None, target_frac: fl
         power_curve=manifest.get("power_curve", "log"),
         log_shape=float(power.get("log_shape", LIVE_A100_LOG_SHAPE)),
     )
+    prof = manifest.get("profile") or {}
     move = Movement(
-        lambda_src=float(const.get("lambda_src_bytes_per_s", 125_000_000.0)),
+        lambda_src=min(float(const.get("lambda_src_bytes_per_s", 125_000_000.0)), float(prof.get("kv_bytes_per_s") or const.get("lambda_src_bytes_per_s", 125_000_000.0))),
         mu_in=float(const.get("mu_bytes_per_s", 1_000_000_000.0)),
         dest_prefill_util=0.0,
         dest_ingest_util=0.0,
@@ -656,6 +685,7 @@ def _live_model(manifest: dict, deadline_s: float | None = None, target_frac: fl
         base,
         c_replay=np.array([s.get("c_replay_s", base.c_replay[i]) for i, s in enumerate(sessions)], dtype=float),
         c_transfer=np.array([s.get("c_transfer_s", base.c_transfer[i]) for i, s in enumerate(sessions)], dtype=float),
+        b_transfer=np.array([s.get("profile_transfer_bytes", base.b_transfer[i]) for i, s in enumerate(sessions)], dtype=float),
     )
     event = Event(D=float(manifest["deadline_s"] if deadline_s is None else deadline_s), dest_nodes=1, spare_frac=1.0, tau_src=0.0, tau_pre=0.0, tau_in=0.0)
     full_w = evaluate_node_expected_w(pop, pool, np.ones(len(pop)))
@@ -689,8 +719,30 @@ def _policy_order(policy: str, result, pop: JobPopulation, pool: PoolPower, imp,
     return [int(i) for i in sorted(selected, key=lambda j: (-(result.y_R[j] + result.y_S[j]), -pop.ell[j], j))]
 
 
+def _planned_wall_s(rows: list[dict], sessions: list[dict], profile: dict | None, replay_concurrency: int = 1, kv_concurrency: int | None = None) -> float:
+    if replay_concurrency <= 0:
+        raise ValueError("replay_concurrency must be positive")
+    profile = profile or {}
+    boundary = float(profile.get("source_boundary_s") or 0.0)
+    r_costs = [float(r["planned_finish_s"]) + boundary for r in rows if r["action"] == "R"]
+    r_wall = sum(r_costs) / replay_concurrency if r_costs else 0.0
+    s_rows = [r for r in rows if r["action"] == "S"]
+    if not s_rows:
+        return r_wall
+    kv_rate = float(profile.get("kv_bytes_per_s") or 0.0)
+    s_costs = [float(r["planned_finish_s"]) + boundary for r in s_rows]
+    if kv_rate > 0:
+        total_bytes = sum(float(r.get("planned_transfer_bytes", sessions[r["fixture_index"]].get("profile_transfer_bytes", sessions[r["fixture_index"]].get("session_kv_bytes", 0)))) for r in s_rows)
+        s_wall = total_bytes / kv_rate + boundary
+    else:
+        k = kv_concurrency or max(1, len(s_rows))
+        s_wall = sum(s_costs) / k
+    return max(r_wall, s_wall)
+
+
 def live_plan_summary(manifest: dict, policy: str = "greedy", seed: int = 0,
-                      deadline_s: float | None = None, target_frac: float | None = None) -> dict:
+                      deadline_s: float | None = None, target_frac: float | None = None,
+                      replay_concurrency: int = 1, kv_concurrency: int | None = None) -> dict:
     sessions, pop, pool, move, imp, event, full_w, target_w = _live_model(manifest, deadline_s, target_frac)
     rows, cumulative = [], np.zeros(len(pop))
     if policy in {"all-r", "all-s"}:
@@ -720,10 +772,14 @@ def live_plan_summary(manifest: dict, policy: str = "greedy", seed: int = 0,
             "predicted_cumulative_source_drop_w": float(predicted),
             "served_T": int(pop.T[i]),
             "session_kv_bytes": int(sessions[i].get("session_kv_bytes", 0)),
+            "planned_transfer_bytes": float(sessions[i].get("profile_transfer_bytes", sessions[i].get("session_kv_bytes", 0))),
         })
         if predicted >= target_w:
             break
     planned_w = evaluate_node_expected_w(pop, pool, cumulative)
+    planned_completion = _planned_wall_s(rows, sessions, manifest.get("profile"), replay_concurrency, kv_concurrency)
+    planned_power_hit = planned_w >= target_w - 1e-6 * max(target_w, 1.0)
+    planned_deadline_hit = planned_completion <= event.D
     target_ratio = target_w / full_w if full_w > 0 else math.nan
     return {
         "schema": "queue-haul-stage1c-live-plan-v1",
@@ -734,7 +790,10 @@ def live_plan_summary(manifest: dict, policy: str = "greedy", seed: int = 0,
         "full_source_drop_w": full_w,
         "planned_source_drop_w": planned_w,
         "planned_shortfall_w": max(0.0, target_w - planned_w),
-        "planned_hit": planned_w >= target_w - 1e-6 * max(target_w, 1.0),
+        "planned_power_hit": planned_power_hit,
+        "planned_deadline_hit": planned_deadline_hit,
+        "planned_completion_s": planned_completion,
+        "planned_hit": planned_power_hit and planned_deadline_hit,
         "power_curve": {"name": pool.power_curve, "log_shape": pool.log_shape, "p_idle_w": pool.p_idle_w, "p_busy_w": pool.p_busy_w, "rho_star": pool.rho_star},
         "movement": {"lambda_src_bytes_per_s": move.lambda_src, "mu_bytes_per_s": move.mu_in},
         "profile": manifest.get("profile"),
@@ -1277,7 +1336,7 @@ def live_drain(cfg: b.Config, run_root: Path, manifest: dict, mbps: float, nvsmi
         manifest = {**manifest, "sessions": [{**s, **workers[s["id"]].snapshot()} for s in sessions]}
         manifest = apply_live_profile(manifest, profile)
         sessions = live_sessions(manifest)
-        summary = live_plan_summary(manifest, policy, seed, deadline_s, target_frac)
+        summary = live_plan_summary(manifest, policy, seed, deadline_s, target_frac, replay_concurrency, kv_concurrency)
         move_rows = [{**row, "deadline_s": summary["deadline_s"], "cache_bust_after_switch": policy == "all-r"} for row in summary["sessions"]]
         rows = run_live_moves(cfg, run_root, sessions, workers, move_rows, replay_concurrency=replay_concurrency, kv_concurrency=kv_concurrency)
         drain_end = time.time()

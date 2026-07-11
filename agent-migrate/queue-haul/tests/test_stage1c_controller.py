@@ -482,9 +482,58 @@ def test_live_profile_costs_override_runtime_model(tmp_path: Path):
     for i, session in enumerate(sessions):
         assert imp.c_replay[i] == pytest.approx(session["c_replay_s"])
         assert imp.c_transfer[i] == pytest.approx(session["c_transfer_s"])
-    assert sessions[0]["c_transfer_s"] == pytest.approx(10.0)
+    assert sessions[0]["profile_transfer_bytes"] > manifest["sessions"][0]["session_kv_bytes"]
+    assert sessions[0]["c_transfer_s"] > 10.0
     assert sessions[1]["c_transfer_s"] == pytest.approx(20.0)
     assert summary["profile"]["schema"] == c.PROFILE_SCHEMA
+
+
+def test_live_profile_uses_profiled_transfer_bytes_and_rate(tmp_path: Path):
+    manifest = _manifest_for_live_policy_tests(tmp_path)
+    for i, session in enumerate(manifest["sessions"]):
+        session["session_kv_bytes"] = 1 if i == 0 else 50_000
+    profile = {
+        "schema": c.PROFILE_SCHEMA,
+        "mbps": 1000.0,
+        "points": [
+            {"action": "R", "tokens": 3000, "completion_s": 3.0},
+            {"action": "R", "tokens": 5000, "completion_s": 5.0},
+            {"action": "S", "tokens": 3000, "kv_bytes": 30_000, "completion_s": 30.0, "source_elapsed_s": 2.0},
+            {"action": "S", "tokens": 5000, "kv_bytes": 50_000, "completion_s": 50.0, "source_elapsed_s": 2.0},
+        ],
+    }
+
+    patched = c.apply_live_profile(manifest, profile)
+    sessions, _pop, _pool, move, imp, *_ = c._live_model(patched)
+
+    assert move.lambda_src == pytest.approx(1000.0)
+    assert sessions[0]["profile_transfer_bytes"] == pytest.approx(10.0 * sessions[0]["served_T"])
+    assert sessions[1]["profile_transfer_bytes"] == pytest.approx(50_000.0)
+    assert imp.b_transfer.tolist() == pytest.approx([s["profile_transfer_bytes"] for s in sessions])
+
+
+def test_live_plan_hit_requires_profiled_aggregate_deadline(tmp_path: Path):
+    manifest = _manifest_for_live_policy_tests(tmp_path)
+    manifest["deadline_s"] = 10.0
+    for session in manifest["sessions"]:
+        session["session_kv_bytes"] = 1
+    profile = {
+        "schema": c.PROFILE_SCHEMA,
+        "mbps": 1000.0,
+        "points": [
+            {"action": "R", "tokens": 3000, "completion_s": 1.0},
+            {"action": "R", "tokens": 5000, "completion_s": 1.0},
+            {"action": "S", "tokens": 3000, "kv_bytes": 30_000, "completion_s": 30.0, "source_elapsed_s": 2.0},
+            {"action": "S", "tokens": 5000, "kv_bytes": 50_000, "completion_s": 50.0, "source_elapsed_s": 2.0},
+        ],
+    }
+
+    summary = c.live_plan_summary(c.apply_live_profile(manifest, profile), policy="all-s", target_frac=1.0)
+
+    assert summary["planned_power_hit"] is True
+    assert summary["planned_deadline_hit"] is False
+    assert summary["planned_hit"] is False
+    assert summary["planned_completion_s"] > summary["deadline_s"]
 
 
 def test_live_profile_recalibrates_on_lmcache_runtime_change(tmp_path: Path, monkeypatch):
