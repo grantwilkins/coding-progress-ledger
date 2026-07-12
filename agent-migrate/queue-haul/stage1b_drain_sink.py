@@ -169,7 +169,9 @@ def vllm_exports(cfg: Config, role: str, remote_url: str) -> list[str]:
         "LMCACHE_MAX_LOCAL_CPU_SIZE": LMCACHE_MAX_LOCAL_CPU_GB,
         **{k: str(v) for k, v in cache_dirs(cfg, role).items()},
     }
-    return [f"export {k}={shlex.quote(v)}" for k, v in env.items()]
+    exports = [f"export {k}={shlex.quote(v)}" for k, v in env.items()]
+    exports.append("export LD_LIBRARY_PATH=/opt/venv/lib/python3.12/site-packages/nvidia/cu13/lib:/opt/venv/lib/python3.12/site-packages/nvidia/cuda_runtime/lib:/usr/local/cuda-12.9/targets/x86_64-linux/lib:/usr/local/cuda/targets/x86_64-linux/lib:${LD_LIBRARY_PATH:-}")
+    return exports
 
 
 def apptainer_cmd(cfg: Config, script: str, gpu: int | None = None, nv: bool = True) -> list[str]:
