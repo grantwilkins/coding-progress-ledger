@@ -353,6 +353,8 @@ def session_prompt(session: dict, turn_index: int, replay_nonce: str | None = No
     turn_tokens = sum(t for _, t in selected)
     profile_tokens = max(128, min(cap - turn_tokens - 512, cap // 2))
     parts = []
+    if session.get("scenario_nonce"):
+        parts.append(f"Scenario nonce {session['scenario_nonce']}.")
     if replay_nonce:
         parts.append(f"Replay nonce {replay_nonce}.")
     parts.append(f"Synthetic TraceLab-sized coding-agent session {session['id']}.")
@@ -1249,17 +1251,18 @@ def check_live_manifest(manifest: dict, run_root: Path) -> None:
 
 def run_live_moves(cfg: b.Config, run_root: Path, sessions: list[dict], workers: dict[str, SessionWorker],
                    rows: list[dict], settle_s: float = 2.0, replay_concurrency: int = 1,
-                   kv_concurrency: int | None = None) -> list[dict]:
+                   kv_concurrency: int | None = None, proxy_log: Path | None = None) -> list[dict]:
     if replay_concurrency <= 0:
         raise ValueError("replay_concurrency must be positive")
     if kv_concurrency is not None and kv_concurrency <= 0:
         raise ValueError("kv_concurrency must be positive")
     gates = {"R": threading.Semaphore(replay_concurrency), "S": threading.Semaphore(kv_concurrency or max(1, len(rows)))}
+    proxy_log = proxy_log or run_root / "proxy_bytes.csv"
 
     def move(row: dict) -> dict:
         with gates[row["action"]]:
             worker = workers[row["id"]]
-            before = b.proxy_counts(run_root / "proxy_bytes.csv")
+            before = b.proxy_counts(proxy_log)
             move_start = time.time()
             prompt = worker.last_prompt if row["action"] == "S" else f"Replay cache bust {row['id']} {move_start}.\n{worker.last_prompt}"
             result = stream_chat(cfg, cfg.api_proxy_port, prompt, int(sessions[row["fixture_index"]]["decode_tokens"]))
@@ -1275,7 +1278,7 @@ def run_live_moves(cfg: b.Config, run_root: Path, sessions: list[dict], workers:
             switch_end = time.time()
             if settle_s:
                 time.sleep(settle_s)
-            delta = b.count_delta(before, b.proxy_counts(run_root / "proxy_bytes.csv"))
+            delta = b.count_delta(before, b.proxy_counts(proxy_log))
             completion = switch_end - move_start
             return {
                 **row,
@@ -1301,30 +1304,65 @@ def run_live_moves(cfg: b.Config, run_root: Path, sessions: list[dict], workers:
     with ThreadPoolExecutor(max_workers=max(1, len(rows))) as ex:
         return [f.result() for f in [ex.submit(move, row) for row in rows]]
 
+def _scenario_nonce(run_root: Path) -> str:
+    return hashlib.sha256(str(run_root).encode()).hexdigest()[:16]
+
+
+def link_stack_logs(run_root: Path, stack_root: Path) -> None:
+    for name in ("source.log", "sink.log", "lmcache.log", "proxy.log"):
+        dst = run_root / name
+        if dst.exists():
+            continue
+        src = stack_root / name
+        if src.exists():
+            dst.symlink_to(os.path.relpath(src, run_root))
+
+
+def write_proxy_slice(src: Path, dst: Path, windows: dict[str, tuple[float, float]]) -> None:
+    dst.parent.mkdir(parents=True, exist_ok=True)
+    with src.open() as f, dst.open("w", newline="") as out:
+        reader = csv.DictReader(f)
+        writer = csv.DictWriter(out, reader.fieldnames or ["ts", "route", "direction", "bytes", "billed"])
+        writer.writeheader()
+        for row in reader:
+            ts = float(row["ts"])
+            if any(lo <= ts <= hi for lo, hi in windows.values()):
+                writer.writerow(row)
+
+
 def live_drain(cfg: b.Config, run_root: Path, manifest: dict, mbps: float, nvsmi_ms: int, extra: list[str],
                policy: str = "lp", seed: int = 0, deadline_s: float | None = None,
                target_frac: float | None = None, profile_path: Path | None = None,
-               replay_concurrency: int = 1, kv_concurrency: int | None = None) -> Path:
+               replay_concurrency: int = 1, kv_concurrency: int | None = None,
+               stack: b.Stack | None = None) -> Path:
+    owned_stack = stack is None
+    stack = stack or b.start_stack(cfg, run_root, mbps, extra)
+    stack_root = stack.run_root
+    nonce = _scenario_nonce(run_root)
+    manifest = {**manifest, "sessions": [{**s, "scenario_nonce": nonce} for s in live_sessions(manifest)]}
     sessions = live_sessions(manifest)
-    stack = b.start_stack(cfg, run_root, mbps, extra)
     events = JsonlLog(run_root / "events.jsonl")
     nvsmi = None
     memlog = start_memlog(run_root / "host_mem.log")
     workers: dict[str, SessionWorker] = {}
     try:
         b.start_sink(stack, cfg, extra)
-        profile, used_profile_path = ensure_live_profile(cfg, run_root, profile_path, manifest, mbps)
+        b.wait_health(cfg.host, cfg.src_port, 60)
+        b.wait_health(cfg.host, cfg.sink_port, 60)
+        profile, used_profile_path = ensure_live_profile(cfg, stack_root if not owned_stack else run_root, profile_path, manifest, mbps)
         nvsmi = start_nvsmi(run_root / "gpu_power.csv", nvsmi_ms)
+        source_log = stack_root / "source.log"
+        proxy_log = stack_root / "proxy_bytes.csv" if not owned_stack else run_root / "proxy_bytes.csv"
         for i, session in enumerate(sessions):
             prompt = session_prompt(session, 0)
             result = stream_chat(cfg, cfg.src_port, prompt, int(session["decode_tokens"]))
             if result["status"] != 200:
                 raise RuntimeError(f"source prewarm failed for {session['id']}: {result['response_text']}")
             request_id = result.get("request_id")
-            kv_bytes = wait_session_kv_bytes(run_root / "source.log", request_id)
+            kv_bytes = wait_session_kv_bytes(source_log, request_id)
             events.write("prewarm", session_id=session["id"], status=result["status"], request_id=request_id, session_kv_bytes=kv_bytes)
             session.update({"last_request_id": request_id, "session_kv_bytes": kv_bytes})
-            worker = SessionWorker(cfg, session, cfg.src_port, events, int(manifest.get("source", {}).get("seed", 0)) + i, run_root)
+            worker = SessionWorker(cfg, session, cfg.src_port, events, int(manifest.get("source", {}).get("seed", 0)) + i, stack_root)
             worker.last_prompt = prompt
             worker.last_request_id = request_id
             worker.last_source_kv_bytes = kv_bytes
@@ -1338,7 +1376,7 @@ def live_drain(cfg: b.Config, run_root: Path, manifest: dict, mbps: float, nvsmi
         sessions = live_sessions(manifest)
         summary = live_plan_summary(manifest, policy, seed, deadline_s, target_frac, replay_concurrency, kv_concurrency)
         move_rows = [{**row, "deadline_s": summary["deadline_s"], "cache_bust_after_switch": policy == "all-r"} for row in summary["sessions"]]
-        rows = run_live_moves(cfg, run_root, sessions, workers, move_rows, replay_concurrency=replay_concurrency, kv_concurrency=kv_concurrency)
+        rows = run_live_moves(cfg, run_root, sessions, workers, move_rows, replay_concurrency=replay_concurrency, kv_concurrency=kv_concurrency, proxy_log=proxy_log)
         drain_end = time.time()
         time.sleep(float(manifest.get("settle_s", 120.0)))
         post_end = time.time()
@@ -1348,6 +1386,9 @@ def live_drain(cfg: b.Config, run_root: Path, manifest: dict, mbps: float, nvsmi
         if nvsmi:
             stop_nvsmi(*nvsmi)
             nvsmi = None
+        if proxy_log != run_root / "proxy_bytes.csv":
+            write_proxy_slice(proxy_log, run_root / "proxy_bytes.csv", windows)
+            link_stack_logs(run_root, stack_root)
         proxy_audit = write_proxy_audit(run_root / "proxy_bytes.csv", run_root / "proxy_audit.csv", windows, mbps)
         write_power_summary(run_root / "gpu_power.csv", run_root / "power_summary.csv", windows)
         write_power_plot(run_root / "gpu_power.csv", run_root / "power_trace.png", rows)
@@ -1356,7 +1397,7 @@ def live_drain(cfg: b.Config, run_root: Path, manifest: dict, mbps: float, nvsmi
         delays = write_delay_summary(rows, run_root / "delay_summary.csv", run_root / "delay_summary.png")
         request_counts = write_request_counts(run_root / "events.jsonl", run_root / "request_counts.csv", windows)
         write_ell_power5s(run_root / "gpu_power.csv", {**summary, "input_manifest": manifest, "sessions": rows, "windows": windows}, run_root / "ell_power5s.csv", run_root / "ell_power5s.png")
-        out = {**summary, "schema": LIVE_SCHEMA, "input_manifest": manifest, "sessions": rows, "delay_summary": delays, "request_counts": request_counts, "proxy_audit": proxy_audit, "windows": windows, "profile_path": str(used_profile_path), "scheduler": {"warm_movement": True, "replay_concurrency": replay_concurrency, "kv_concurrency": kv_concurrency or max(1, len(move_rows))}, "acceptance": {"ok": True, "power_threshold_gated": False, "planned_hit": summary["planned_hit"], "proxy_audit_ok": all(r["ok"] for r in proxy_audit)}}
+        out = {**summary, "schema": LIVE_SCHEMA, "input_manifest": manifest, "sessions": rows, "delay_summary": delays, "request_counts": request_counts, "proxy_audit": proxy_audit, "windows": windows, "profile_path": str(used_profile_path), "scheduler": {"warm_movement": True, "replay_concurrency": replay_concurrency, "kv_concurrency": kv_concurrency or max(1, len(move_rows)), "persistent_stack": not owned_stack, "cache_isolation": "scenario_nonce"}, "acceptance": {"ok": True, "power_threshold_gated": False, "planned_hit": summary["planned_hit"], "proxy_audit_ok": all(r["ok"] for r in proxy_audit)}}
         check_live_manifest(out, run_root)
         (run_root / "controller_manifest.json").write_text(json.dumps(out, indent=2, sort_keys=True))
     finally:
@@ -1366,7 +1407,8 @@ def live_drain(cfg: b.Config, run_root: Path, manifest: dict, mbps: float, nvsmi
             stop_nvsmi(*nvsmi)
         stop_nvsmi(*memlog)
         events.close()
-        b.stop_stack(stack)
+        if owned_stack:
+            b.stop_stack(stack)
     return run_root
 
 
@@ -1460,17 +1502,20 @@ def live_grid(cfg: b.Config, run_root: Path, manifest: dict | list[dict], polici
         workload = _safe_name(manifest_workload(one))
         root = run_root / workload if multi else run_root
         base = {**one, "baseline_s": baseline_s, "settle_s": settle_s}
-        if profile_path is None:
-            prof = root / "live_profile.json"
-        else:
-            prof = profile_path.parent / f"{profile_path.stem}_{workload}{profile_path.suffix}" if multi else profile_path
-        for policy in policies:
-            for D in deadlines:
-                for frac in target_fracs:
-                    dst = root / grid_run_name(policy, D, frac)
-                    if not (dst / "controller_manifest.json").exists():
-                        live_drain(cfg, dst, base, mbps, nvsmi_ms, extra, policy, seed, D, frac, prof, replay_concurrency, kv_concurrency)
-                    run_roots.append(dst)
+        prof = root / "live_profile.json" if profile_path is None else profile_path.parent / f"{profile_path.stem}_{workload}{profile_path.suffix}" if multi else profile_path
+        jobs = [(root / grid_run_name(policy, D, frac), policy, D, frac) for policy in policies for D in deadlines for frac in target_fracs]
+        stack = None
+        try:
+            if any(not (dst / "controller_manifest.json").exists() for dst, _policy, _D, _frac in jobs):
+                stack = b.start_stack(cfg, root / "stack", mbps, extra)
+                b.start_sink(stack, cfg, extra)
+            for dst, policy, D, frac in jobs:
+                if not (dst / "controller_manifest.json").exists():
+                    live_drain(cfg, dst, base, mbps, nvsmi_ms, extra, policy, seed, D, frac, prof, replay_concurrency, kv_concurrency, stack)
+                run_roots.append(dst)
+        finally:
+            if stack:
+                b.stop_stack(stack)
     write_grid_summary(run_roots, run_root / "scenario_summary.csv", run_root / "grid_power_drop.png", run_root / "grid_delay.png")
     return run_root
 

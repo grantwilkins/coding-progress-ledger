@@ -144,9 +144,11 @@ def test_session_prompt_rolls_followups_and_cache_busts(tmp_path: Path):
     trace = tmp_path / "trace.jsonl.gz"
     _write_tracelab(trace)
     session = c.tracelab_manifest(trace, 1, 0, max_model_len=4096, decode_margin=256, min_context_tokens=1024)["sessions"][0]
+    session["scenario_nonce"] = "scenario-a"
 
     prompt = c.session_prompt(session, 2, replay_nonce="abc")
 
+    assert "Scenario nonce scenario-a" in prompt
     assert "Replay nonce abc" in prompt
     assert "User follow-up 0" in prompt
     assert "User follow-up 2" in prompt
@@ -429,12 +431,20 @@ def test_live_plan_records_target_miss_without_raising(tmp_path: Path):
 
 
 
-def test_live_grid_multi_manifest_uses_workload_dirs_and_profiles(tmp_path: Path, monkeypatch):
-    calls = []
+def test_live_grid_multi_manifest_uses_workload_dirs_profiles_and_one_stack_each(tmp_path: Path, monkeypatch):
+    calls, stacks, stopped = [], [], []
 
-    def fake_live_drain(_cfg, dst, manifest, _mbps, _nvsmi_ms, _extra, policy, _seed, D, frac, profile, _rc, _kc):
-        calls.append((dst, manifest["workload"]["name"], policy, D, frac, profile))
+    def fake_start_stack(_cfg, root, _mbps, _extra):
+        stack = type("Stack", (), {"run_root": root})()
+        stacks.append(root)
+        return stack
 
+    def fake_live_drain(_cfg, dst, manifest, _mbps, _nvsmi_ms, _extra, policy, _seed, D, frac, profile, _rc, _kc, stack):
+        calls.append((dst, manifest["workload"]["name"], policy, D, frac, profile, stack.run_root))
+
+    monkeypatch.setattr(c.b, "start_stack", fake_start_stack)
+    monkeypatch.setattr(c.b, "start_sink", lambda *_args: None)
+    monkeypatch.setattr(c.b, "stop_stack", lambda stack: stopped.append(stack.run_root))
     monkeypatch.setattr(c, "live_drain", fake_live_drain)
     monkeypatch.setattr(c, "write_grid_summary", lambda roots, *_args: roots)
     manifests = [
@@ -444,9 +454,11 @@ def test_live_grid_multi_manifest_uses_workload_dirs_and_profiles(tmp_path: Path
 
     c.live_grid(type("Cfg", (), {})(), tmp_path, manifests, ["greedy"], [30.0], [0.45], 1000.0, 250, 1.0, 1.0, 0, [], tmp_path / "profile.json")
 
+    assert stacks == [tmp_path / "small" / "stack", tmp_path / "large" / "stack"]
+    assert stopped == stacks
     assert calls == [
-        (tmp_path / "small" / "greedy_D30_T0p45", "small", "greedy", 30.0, 0.45, tmp_path / "profile_small.json"),
-        (tmp_path / "large" / "greedy_D30_T0p45", "large", "greedy", 30.0, 0.45, tmp_path / "profile_large.json"),
+        (tmp_path / "small" / "greedy_D30_T0p45", "small", "greedy", 30.0, 0.45, tmp_path / "profile_small.json", tmp_path / "small" / "stack"),
+        (tmp_path / "large" / "greedy_D30_T0p45", "large", "greedy", 30.0, 0.45, tmp_path / "profile_large.json", tmp_path / "large" / "stack"),
     ]
 
 
@@ -454,6 +466,7 @@ def test_live_grid_skips_completed_scenarios(tmp_path: Path, monkeypatch):
     dst = tmp_path / "greedy_D30_T0p45"
     dst.mkdir()
     (dst / "controller_manifest.json").write_text("{}")
+    monkeypatch.setattr(c.b, "start_stack", lambda *_args: pytest.fail("started stack for completed scenario"))
     monkeypatch.setattr(c, "live_drain", lambda *_args: pytest.fail("reran completed scenario"))
     monkeypatch.setattr(c, "write_grid_summary", lambda roots, *_args: roots)
 
@@ -567,6 +580,25 @@ def test_stored_session_kv_bytes_uses_largest_session_snapshot(tmp_path: Path):
     ]))
 
     assert c.stored_session_kv_bytes(log, "req-a") == 246_100_000
+
+
+
+def test_write_proxy_slice_filters_to_scenario_windows(tmp_path: Path):
+    src = tmp_path / "all_proxy.csv"
+    with src.open("w", newline="") as f:
+        writer = csv.DictWriter(f, ["ts", "route", "direction", "bytes", "billed"])
+        writer.writeheader()
+        writer.writerows([
+            {"ts": 1.0, "route": "kv", "direction": "target_to_client", "bytes": 1, "billed": 1},
+            {"ts": 5.0, "route": "kv", "direction": "target_to_client", "bytes": 2, "billed": 1},
+            {"ts": 9.0, "route": "kv", "direction": "target_to_client", "bytes": 3, "billed": 1},
+        ])
+
+    c.write_proxy_slice(src, tmp_path / "proxy_bytes.csv", {"drain": (4.0, 6.0)})
+
+    with (tmp_path / "proxy_bytes.csv").open() as f:
+        rows = list(csv.DictReader(f))
+    assert [int(r["bytes"]) for r in rows] == [2]
 
 def test_proxy_audit_reports_user_space_link_rate(tmp_path: Path):
     proxy = tmp_path / "proxy.csv"
