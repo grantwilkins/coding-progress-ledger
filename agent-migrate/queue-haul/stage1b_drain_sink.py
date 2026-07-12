@@ -182,7 +182,7 @@ def apptainer_cmd(cfg: Config, script: str, gpu: int | None = None, nv: bool = T
         cmd.insert(2, f"--{mode}")
     if gpu is None:
         return cmd
-    return ["env", f"APPTAINERENV_CUDA_VISIBLE_DEVICES={gpu}", *cmd]
+    return ["env", f"CUDA_VISIBLE_DEVICES={gpu}", f"APPTAINERENV_CUDA_VISIBLE_DEVICES={gpu}", f"NVIDIA_VISIBLE_DEVICES={gpu}", *cmd]
 
 
 def lmcache_cmd(cfg: Config) -> list[str]:

@@ -39,8 +39,11 @@ def test_vllm_commands_pin_validated_sandbox_flags_and_roles():
     smoke = cmd_text(s.vllm_cmd(cfg, "smoke1"))
 
     assert "vllm-openai-v0.10.1.1.sandbox" in source
+    assert "CUDA_VISIBLE_DEVICES=0" in source
     assert "APPTAINERENV_CUDA_VISIBLE_DEVICES=0" in source
+    assert "NVIDIA_VISIBLE_DEVICES=0" in source
     assert "APPTAINERENV_CUDA_VISIBLE_DEVICES=1" in sink
+    assert "NVIDIA_VISIBLE_DEVICES=1" in sink
     assert "--port 8100" in source
     assert "--port 8200" in sink
     assert "--port 8120" in smoke
