@@ -107,6 +107,17 @@ def test_cli_sandbox_default_honors_env(monkeypatch):
     assert str(args.sandbox) == "/tmp/qh-env.sif"
 
 
+def test_apptainer_gpu_mode_can_use_nvccli(monkeypatch):
+    monkeypatch.setenv("QH_APPTAINER_GPU_MODE", "nvccli")
+
+    cmd = s.vllm_cmd(s.Config(), "source")
+    assert "--nvccli" in cmd
+    assert "--nv" not in cmd
+    monkeypatch.setenv("QH_APPTAINER_GPU_MODE", "bad")
+    with pytest.raises(ValueError, match="unknown QH_APPTAINER_GPU_MODE"):
+        s.vllm_cmd(s.Config(), "source")
+
+
 def _free_port():
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
         sock.bind(("127.0.0.1", 0))

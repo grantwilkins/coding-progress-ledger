@@ -176,7 +176,10 @@ def vllm_exports(cfg: Config, role: str, remote_url: str) -> list[str]:
 def apptainer_cmd(cfg: Config, script: str, gpu: int | None = None, nv: bool = True) -> list[str]:
     cmd = ["apptainer", "exec", "--bind", f"{cfg.scratch_bind}:{cfg.scratch_bind}", cfg.sandbox, "bash", "-lc", script]
     if nv:
-        cmd.insert(2, "--nv")
+        mode = os.environ.get("QH_APPTAINER_GPU_MODE", "nv")
+        if mode not in {"nv", "nvccli"}:
+            raise ValueError(f"unknown QH_APPTAINER_GPU_MODE: {mode}")
+        cmd.insert(2, f"--{mode}")
     if gpu is None:
         return cmd
     return ["env", f"APPTAINERENV_CUDA_VISIBLE_DEVICES={gpu}", *cmd]
