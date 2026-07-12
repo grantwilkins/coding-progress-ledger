@@ -546,6 +546,24 @@ def wait_health(host: str, port: int, timeout_s: float) -> None:
     raise TimeoutError(f"timed out waiting for http://{host}:{port}/health")
 
 
+def wait_health_process(host: str, port: int, timeout_s: float, proc: subprocess.Popen, log: Path) -> None:
+    deadline = time.monotonic() + timeout_s
+    while time.monotonic() < deadline:
+        if proc.poll() is not None:
+            raise RuntimeError(f"process exited while waiting for http://{host}:{port}/health; log tail:\n{tail(log)}")
+        conn = http.client.HTTPConnection(host, port, timeout=5)
+        try:
+            conn.request("GET", "/health")
+            if conn.getresponse().status == 200:
+                return
+            time.sleep(5)
+        except OSError:
+            time.sleep(5)
+        finally:
+            conn.close()
+    raise TimeoutError(f"timed out waiting for http://{host}:{port}/health; process still running; log tail:\n{tail(log)}")
+
+
 def prompt_text(session_id: str, words: int = 4096) -> str:
     body = " ".join(f"{session_id}_{i % 97}" for i in range(words))
     return f"Session {session_id}. {body}. Reply with exactly OK."
@@ -665,7 +683,7 @@ def start_stack(cfg: Config, run_root: Path, mbps: float, extra: list[str] | Non
         wait_tcp(cfg.host, cfg.kv_proxy_port, 60)
         wait_tcp(cfg.host, cfg.api_proxy_port, 60)
         source = start_logged(vllm_cmd(cfg, "source", extra or []), run_root / "source.log")
-        wait_health(cfg.host, cfg.src_port, 1800)
+        wait_health_process(cfg.host, cfg.src_port, 1800, source, run_root / "source.log")
         return Stack(lmc, proxy, source, None, run_root)
     except Exception:
         for proc in (source, proxy, lmc):
@@ -678,7 +696,7 @@ def start_sink(stack: Stack, cfg: Config, extra: list[str] | None = None) -> Non
     if stack.sink:
         return
     stack.sink = start_logged(vllm_cmd(cfg, "sink", extra or []), stack.run_root / "sink.log")
-    wait_health(cfg.host, cfg.sink_port, 1800)
+    wait_health_process(cfg.host, cfg.sink_port, 1800, stack.sink, stack.run_root / "sink.log")
 
 
 def check_chat(result: dict, label: str) -> None:
@@ -810,7 +828,7 @@ def smoke1(cfg: Config, run_root: Path, extra: list[str]) -> Path:
     try:
         wait_tcp_process(cfg.host, cfg.lmc_port, 60, lmc, run_root / "lmcache.log")
         vllm = start_logged(vllm_cmd(cfg, "smoke1", extra), run_root / "vllm.log")
-        wait_health(cfg.host, cfg.smoke_port, 1800)
+        wait_health_process(cfg.host, cfg.smoke_port, 1800, vllm, run_root / "vllm.log")
         chat_once(cfg, cfg.smoke_port)
         chat_once(cfg, cfg.smoke_port)
         time.sleep(3)

@@ -97,6 +97,15 @@ def test_lmcache_wait_reports_process_exit_log(tmp_path):
         s.wait_tcp_process("127.0.0.1", 1, 5, proc, log)
 
 
+def test_lmcache_health_wait_reports_process_exit_log(tmp_path):
+    log = tmp_path / "vllm.log"
+    log.write_text("health died\n")
+    proc = subprocess.Popen(["false"])
+    proc.wait()
+    with pytest.raises(RuntimeError, match="health died"):
+        s.wait_health_process("127.0.0.1", 1, 5, proc, log)
+
+
 def test_custom_apptainer_image_path_is_wired():
     source = cmd_text(s.vllm_cmd(s.Config(sandbox="/tmp/qh.sif"), "source"))
 
