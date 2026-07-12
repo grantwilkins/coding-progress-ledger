@@ -45,7 +45,6 @@ TYPED_VLLM_FLAGS = {
     "--enable-chunked-prefill",
     "--enforce-eager",
     "--kv-transfer-config",
-    "--disable-frontend-multiprocessing",
 }
 BILLED_DIRECTIONS = {("api", "client_to_target"), ("kv", "target_to_client")}
 LMCACHE_MAX_KEY_LENGTH = 150
@@ -224,8 +223,7 @@ def vllm_cmd(cfg: Config, role: str, extra: list[str] | None = None) -> list[str
         "auto",
         "--enable-chunked-prefill",
         "--enforce-eager",
-        "--disable-frontend-multiprocessing",
-        "--kv-transfer-config",
+            "--kv-transfer-config",
         kv_config(engine_id, kv_role, kv_port, rpc_port),
         *(extra or []),
     ]

@@ -62,7 +62,7 @@ def test_vllm_commands_pin_validated_sandbox_flags_and_roles():
     assert "VLLM_RPC_BASE_PATH=/tmp/qh-src-" in source
     assert "VLLM_RPC_BASE_PATH=/tmp/qh-sink-" in sink
     assert "--enforce-eager" in source
-    assert "--disable-frontend-multiprocessing" in source
+    assert "--disable-frontend-multiprocessing" not in source
     assert "--async-scheduling" not in source
     assert "stage1b-src" in source and "stage1b-sink" in sink
 
