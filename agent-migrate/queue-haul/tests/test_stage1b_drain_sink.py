@@ -15,6 +15,11 @@ from __future__ import annotations
 
 import asyncio
 import csv
+import os
+import signal
+import socket
+import subprocess
+import sys
 import time
 
 import pytest
@@ -66,16 +71,69 @@ def test_lmcache_and_proxy_use_host_commands_not_docker_or_tc():
     lmcache = cmd_text(s.lmcache_cmd(cfg))
     proxy = cmd_text(s.proxy_cmd(cfg, 1000.0))
 
-    assert "python3 -m lmcache.v1.server 127.0.0.1 5655 cpu" in lmcache
+    assert "stage1b_drain_sink.py lmcache-server --host 127.0.0.1 --port 5655" in lmcache
+    assert "apptainer" not in lmcache
     assert "--nv" not in lmcache
     assert "APPTAINERENV_CUDA_VISIBLE_DEVICES" not in lmcache
-    assert "lmcache server --host" not in lmcache
+    assert "lmcache.v1.server" not in lmcache
     assert "stage1b_drain_sink.py proxy" in proxy
     assert "--kv-listen 127.0.0.1:8300 --kv-target 127.0.0.1:5655" in proxy
     assert "--api-listen 127.0.0.1:8400 --api-target 127.0.0.1:8200" in proxy
     assert "--mbps 1000.0" in proxy
     assert "docker" not in proxy.lower()
     assert " tc " not in proxy.lower()
+
+
+def test_lmcache_wait_reports_process_exit_log(tmp_path):
+    log = tmp_path / "lmcache.log"
+    log.write_text("first\nlast\n")
+    proc = subprocess.Popen(["false"])
+    with pytest.raises(RuntimeError, match="last"):
+        s.wait_tcp_process("127.0.0.1", 1, 5, proc, log)
+
+
+def test_custom_apptainer_image_path_is_wired():
+    source = cmd_text(s.vllm_cmd(s.Config(sandbox="/tmp/qh.sif"), "source"))
+
+    assert "/tmp/qh.sif" in source
+
+
+def _free_port():
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+        sock.bind(("127.0.0.1", 0))
+        return sock.getsockname()[1]
+
+
+def _lmc_request(port, command, key="k", data=b""):
+    with socket.create_connection(("127.0.0.1", port), timeout=5) as sock:
+        header = s.LMCACHE_CLIENT_META.pack(command, len(data), 4, 6, 0, len(data), 0, 0, 0, key.encode().ljust(s.LMCACHE_MAX_KEY_LENGTH))
+        sock.sendall(header + data)
+        if command == s.LMCACHE_CLIENT_PUT:
+            return b""
+        meta = sock.recv(s.LMCACHE_SERVER_META.size)
+        code, length, *_rest = s.LMCACHE_SERVER_META.unpack(meta)
+        body = sock.recv(length) if length else b""
+        return code, body
+
+
+def test_lite_lmcache_server_put_get_and_flush(tmp_path):
+    port = _free_port()
+    log = tmp_path / "lmcache.log"
+    proc = subprocess.Popen([sys.executable, "queue-haul/stage1b_drain_sink.py", "lmcache-server", "--host", "127.0.0.1", "--port", str(port)], stdout=log.open("w"), stderr=subprocess.STDOUT, start_new_session=True)
+    try:
+        s.wait_tcp_process("127.0.0.1", port, 5, proc, log)
+        _lmc_request(port, s.LMCACHE_CLIENT_PUT, data=b"abc")
+        for _ in range(20):
+            if _lmc_request(port, s.LMCACHE_CLIENT_GET) == (s.LMCACHE_SERVER_SUCCESS, b"abc"):
+                break
+            time.sleep(0.05)
+        else:
+            pytest.fail("PUT was not visible to GET")
+        os.kill(proc.pid, signal.SIGUSR1)
+        time.sleep(0.2)
+        assert _lmc_request(port, s.LMCACHE_CLIENT_GET) == (s.LMCACHE_SERVER_FAIL, b"")
+    finally:
+        s.stop_proc(proc)
 
 
 def test_duplicate_ports_and_passthrough_overrides_hard_fail():

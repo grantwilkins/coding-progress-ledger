@@ -4,6 +4,7 @@ import argparse
 import asyncio
 import csv
 import hashlib
+from collections import OrderedDict
 import http.client
 import json
 import os
@@ -11,8 +12,10 @@ import shlex
 import shutil
 import signal
 import socket
+import struct
 import subprocess
 import sys
+import threading
 import time
 from dataclasses import dataclass
 from pathlib import Path
@@ -41,12 +44,24 @@ TYPED_VLLM_FLAGS = {
     "--disable-frontend-multiprocessing",
 }
 BILLED_DIRECTIONS = {("api", "client_to_target"), ("kv", "target_to_client")}
+LMCACHE_MAX_KEY_LENGTH = 150
+LMCACHE_CLIENT_META = struct.Struct(f"iiiiiiiii{LMCACHE_MAX_KEY_LENGTH}s")
+LMCACHE_SERVER_META = struct.Struct("iiiiiiiii")
+LMCACHE_CLIENT_PUT = 1
+LMCACHE_CLIENT_GET = 2
+LMCACHE_CLIENT_EXIST = 3
+LMCACHE_CLIENT_HEALTH = 5
+LMCACHE_SERVER_SUCCESS = 200
+LMCACHE_SERVER_FAIL = 400
+LMCACHE_FAIL_PAYLOAD = (LMCACHE_SERVER_FAIL, 0, 1, 2, 0, 0, 0, 0, 0)
+LMCACHE_OK_PAYLOAD = (LMCACHE_SERVER_SUCCESS, 0, 1, 2, 0, 0, 0, 0, 0)
+LMCACHE_SERVER_MAX_BYTES = int(os.environ.get("QH_LMCACHE_SERVER_MAX_BYTES", "0"))
 
 
 @dataclass(frozen=True)
 class Config:
     model: str = MODEL
-    sandbox: Path = SANDBOX
+    sandbox: Path = Path(os.environ.get("QH_APPTAINER_IMAGE", SANDBOX))
     hf_home: Path = HF_HOME
     scratch_bind: Path = SCRATCH_BIND
     cache_root: Path = CACHE_ROOT
@@ -163,7 +178,7 @@ def apptainer_cmd(cfg: Config, script: str, gpu: int | None = None, nv: bool = T
 
 
 def lmcache_cmd(cfg: Config) -> list[str]:
-    return apptainer_cmd(cfg, f"python3 -m lmcache.v1.server {cfg.host} {cfg.lmc_port} cpu", nv=False)
+    return [sys.executable, "queue-haul/stage1b_drain_sink.py", "lmcache-server", "--host", cfg.host, "--port", str(cfg.lmc_port), "--max-bytes", str(LMCACHE_SERVER_MAX_BYTES)]
 
 
 def vllm_cmd(cfg: Config, role: str, extra: list[str] | None = None) -> list[str]:
@@ -337,6 +352,98 @@ def billable(route: str, direction: str) -> bool:
     return (route, direction) in BILLED_DIRECTIONS
 
 
+@dataclass
+class LMCacheEntry:
+    data: bytes
+    length: int
+    fmt: int
+    dtype: int
+    shape: tuple[int, int, int, int]
+    location: int
+
+
+class LiteLMCache:
+    def __init__(self, max_bytes: int = 0):
+        self.max_bytes = max_bytes
+        self.total_bytes = 0
+        self.items: OrderedDict[str, LMCacheEntry] = OrderedDict()
+        self.lock = threading.Lock()
+
+    def put(self, key: str, entry: LMCacheEntry) -> None:
+        with self.lock:
+            old = self.items.pop(key, None)
+            self.total_bytes -= old.length if old else 0
+            self.items[key] = entry
+            self.total_bytes += entry.length
+            while self.max_bytes and self.total_bytes > self.max_bytes and len(self.items) > 1:
+                _key, victim = self.items.popitem(last=False)
+                self.total_bytes -= victim.length
+
+    def get(self, key: str) -> LMCacheEntry | None:
+        with self.lock:
+            entry = self.items.get(key)
+            if entry:
+                self.items.move_to_end(key)
+            return entry
+
+    def clear(self) -> None:
+        with self.lock:
+            self.items.clear()
+            self.total_bytes = 0
+
+
+def _recv_all(sock: socket.socket, nbytes: int) -> bytes | None:
+    data = bytearray()
+    while len(data) < nbytes:
+        chunk = sock.recv(nbytes - len(data))
+        if not chunk:
+            return None
+        data.extend(chunk)
+    return bytes(data)
+
+
+def _send_meta(sock: socket.socket, payload: tuple[int, int, int, int, int, int, int, int, int]) -> None:
+    sock.sendall(LMCACHE_SERVER_META.pack(*payload))
+
+
+def handle_lmcache_client(sock: socket.socket, store: LiteLMCache) -> None:
+    with sock:
+        while header := _recv_all(sock, LMCACHE_CLIENT_META.size):
+            command, length, fmt, dtype, location, s0, s1, s2, s3, raw_key = LMCACHE_CLIENT_META.unpack(header)
+            key = raw_key.decode().strip(" \0")
+            if command == LMCACHE_CLIENT_PUT:
+                data = _recv_all(sock, length)
+                if data is None:
+                    return
+                store.put(key, LMCacheEntry(data, length, fmt, dtype, (s0, s1, s2, s3), location))
+            elif command == LMCACHE_CLIENT_GET:
+                entry = store.get(key)
+                if entry is None:
+                    _send_meta(sock, LMCACHE_FAIL_PAYLOAD)
+                else:
+                    _send_meta(sock, (LMCACHE_SERVER_SUCCESS, entry.length, entry.fmt, entry.dtype, *entry.shape, entry.location))
+                    sock.sendall(entry.data)
+            elif command == LMCACHE_CLIENT_EXIST:
+                _send_meta(sock, LMCACHE_OK_PAYLOAD if store.get(key) else LMCACHE_FAIL_PAYLOAD)
+            elif command == LMCACHE_CLIENT_HEALTH:
+                _send_meta(sock, LMCACHE_OK_PAYLOAD)
+            else:
+                raise ValueError(f"unsupported LMCache command: {command}")
+
+
+def run_lmcache_server(host: str, port: int, max_bytes: int = 0) -> None:
+    store = LiteLMCache(max_bytes)
+    signal.signal(signal.SIGUSR1, lambda _signum, _frame: store.clear())
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as server:
+        server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        server.bind((host, port))
+        server.listen()
+        print(f"LMCache lite server started at {host}:{port} max_bytes={max_bytes}", flush=True)
+        while True:
+            client, _addr = server.accept()
+            threading.Thread(target=handle_lmcache_client, args=(client, store), daemon=True).start()
+
+
 async def relay(reader: asyncio.StreamReader, writer: asyncio.StreamWriter, bucket: TokenBucket, log: ByteLog | None, route: str, direction: str) -> None:
     try:
         charged = billable(route, direction)
@@ -396,6 +503,24 @@ def wait_tcp(host: str, port: int, timeout_s: float) -> None:
                 return
         time.sleep(1)
     raise TimeoutError(f"timed out waiting for {host}:{port}")
+
+
+def tail(path: Path, lines: int = 40) -> str:
+    text = read_text(path).splitlines()
+    return "\n".join(text[-lines:])
+
+
+def wait_tcp_process(host: str, port: int, timeout_s: float, proc: subprocess.Popen, log: Path) -> None:
+    deadline = time.monotonic() + timeout_s
+    while time.monotonic() < deadline:
+        if proc.poll() is not None:
+            raise RuntimeError(f"process exited while waiting for {host}:{port}; log tail:\n{tail(log)}")
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+            sock.settimeout(1)
+            if sock.connect_ex((host, port)) == 0:
+                return
+        time.sleep(1)
+    raise TimeoutError(f"timed out waiting for {host}:{port}; process still running; log tail:\n{tail(log)}")
 
 
 def wait_health(host: str, port: int, timeout_s: float) -> None:
@@ -478,6 +603,13 @@ def stop_stack(stack: Stack) -> None:
             stop_proc(proc)
 
 
+def flush_lmcache(stack: Stack) -> None:
+    if stack.lmcache.poll() is not None:
+        raise RuntimeError("LMCache server is not running")
+    os.kill(stack.lmcache.pid, signal.SIGUSR1)
+    time.sleep(0.2)
+
+
 def read_text(path: Path) -> str:
     return path.read_text(errors="ignore") if path.exists() else ""
 
@@ -521,7 +653,7 @@ def start_stack(cfg: Config, run_root: Path, mbps: float, extra: list[str] | Non
     lmc = start_logged(lmcache_cmd(cfg), run_root / "lmcache.log")
     proxy = source = None
     try:
-        wait_tcp(cfg.host, cfg.lmc_port, 60)
+        wait_tcp_process(cfg.host, cfg.lmc_port, 60, lmc, run_root / "lmcache.log")
         proxy = start_logged(proxy_cmd(cfg, mbps, run_root / "proxy_bytes.csv"), run_root / "proxy.log")
         wait_tcp(cfg.host, cfg.kv_proxy_port, 60)
         wait_tcp(cfg.host, cfg.api_proxy_port, 60)
@@ -669,7 +801,7 @@ def smoke1(cfg: Config, run_root: Path, extra: list[str]) -> Path:
     lmc = start_logged(lmcache_cmd(cfg), run_root / "lmcache.log")
     vllm = None
     try:
-        wait_tcp(cfg.host, cfg.lmc_port, 60)
+        wait_tcp_process(cfg.host, cfg.lmc_port, 60, lmc, run_root / "lmcache.log")
         vllm = start_logged(vllm_cmd(cfg, "smoke1", extra), run_root / "vllm.log")
         wait_health(cfg.host, cfg.smoke_port, 1800)
         chat_once(cfg, cfg.smoke_port)
@@ -738,6 +870,10 @@ def parse_args(argv: list[str] | None = None):
             if name.startswith("smoke2"):
                 sp.add_argument("--mbps", type=float, default=1000.0)
             sp.add_argument("extra_vllm_args", nargs=argparse.REMAINDER)
+    sp = sub.add_parser("lmcache-server")
+    sp.add_argument("--host", default="127.0.0.1")
+    sp.add_argument("--port", type=int, default=5655)
+    sp.add_argument("--max-bytes", type=int, default=LMCACHE_SERVER_MAX_BYTES)
     sp = sub.add_parser("proxy")
     sp.add_argument("--kv-listen", default="127.0.0.1:8300")
     sp.add_argument("--kv-target", default="127.0.0.1:5655")
@@ -750,6 +886,9 @@ def parse_args(argv: list[str] | None = None):
 
 def main(argv: list[str] | None = None) -> None:
     args = parse_args(argv)
+    if args.cmd == "lmcache-server":
+        run_lmcache_server(args.host, args.port, args.max_bytes)
+        return
     if args.cmd == "proxy":
         kv_listen = parse_addr(args.kv_listen)
         kv_target = parse_addr(args.kv_target)

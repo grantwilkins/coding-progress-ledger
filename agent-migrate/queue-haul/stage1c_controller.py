@@ -1350,6 +1350,7 @@ def live_drain(cfg: b.Config, run_root: Path, manifest: dict, mbps: float, nvsmi
         b.wait_health(cfg.host, cfg.src_port, 60)
         b.wait_health(cfg.host, cfg.sink_port, 60)
         profile, used_profile_path = ensure_live_profile(cfg, stack_root if not owned_stack else run_root, profile_path, manifest, mbps)
+        b.flush_lmcache(stack)
         nvsmi = start_nvsmi(run_root / "gpu_power.csv", nvsmi_ms)
         source_log = stack_root / "source.log"
         proxy_log = stack_root / "proxy_bytes.csv" if not owned_stack else run_root / "proxy_bytes.csv"
