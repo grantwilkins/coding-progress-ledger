@@ -1310,12 +1310,12 @@ def _scenario_nonce(run_root: Path) -> str:
 
 def link_stack_logs(run_root: Path, stack_root: Path) -> None:
     for name in ("source.log", "sink.log", "lmcache.log", "proxy.log"):
-        dst = run_root / name
-        if dst.exists():
+        dst, src = run_root / name, stack_root / name
+        if not src.exists():
             continue
-        src = stack_root / name
-        if src.exists():
-            dst.symlink_to(os.path.relpath(src, run_root))
+        if dst.exists() or dst.is_symlink():
+            dst.unlink()
+        dst.symlink_to(os.path.relpath(src, run_root))
 
 
 def write_proxy_slice(src: Path, dst: Path, windows: dict[str, tuple[float, float]]) -> None:
