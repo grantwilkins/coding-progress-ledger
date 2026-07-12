@@ -98,6 +98,13 @@ def test_custom_apptainer_image_path_is_wired():
     assert "/tmp/qh.sif" in source
 
 
+def test_cli_sandbox_default_honors_env(monkeypatch):
+    monkeypatch.setenv("QH_APPTAINER_IMAGE", "/tmp/qh-env.sif")
+    args = s.parse_args(["preflight"])
+
+    assert str(args.sandbox) == "/tmp/qh-env.sif"
+
+
 def _free_port():
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
         sock.bind(("127.0.0.1", 0))

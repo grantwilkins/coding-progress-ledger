@@ -24,6 +24,10 @@ from stage1_curves import shell
 
 MODEL = "openai/gpt-oss-20b"
 SANDBOX = Path("/scratch/users/gfw/ptsim/vllm-openai-v0.10.1.1.sandbox")
+
+
+def apptainer_image_default() -> Path:
+    return Path(os.environ.get("QH_APPTAINER_IMAGE", SANDBOX))
 HF_HOME = Path("/scratch/users/gfw/ptsim/hf")
 SCRATCH_BIND = Path("/scratch/users/gfw")
 CACHE_ROOT = Path("/scratch/users/gfw/ptsim/cache")
@@ -61,7 +65,7 @@ LMCACHE_SERVER_MAX_BYTES = int(os.environ.get("QH_LMCACHE_SERVER_MAX_BYTES", "0"
 @dataclass(frozen=True)
 class Config:
     model: str = MODEL
-    sandbox: Path = Path(os.environ.get("QH_APPTAINER_IMAGE", SANDBOX))
+    sandbox: Path = apptainer_image_default()
     hf_home: Path = HF_HOME
     scratch_bind: Path = SCRATCH_BIND
     cache_root: Path = CACHE_ROOT
@@ -841,7 +845,7 @@ def config_from_args(args) -> Config:
 
 def add_common(p: argparse.ArgumentParser) -> None:
     p.add_argument("--model", default=MODEL)
-    p.add_argument("--sandbox", type=Path, default=SANDBOX)
+    p.add_argument("--sandbox", type=Path, default=apptainer_image_default())
     p.add_argument("--hf-home", type=Path, default=HF_HOME)
     p.add_argument("--scratch-bind", type=Path, default=SCRATCH_BIND)
     p.add_argument("--cache-root", type=Path, default=CACHE_ROOT)
