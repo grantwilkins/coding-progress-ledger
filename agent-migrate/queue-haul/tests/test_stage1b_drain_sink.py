@@ -67,6 +67,8 @@ def test_lmcache_and_proxy_use_host_commands_not_docker_or_tc():
     proxy = cmd_text(s.proxy_cmd(cfg, 1000.0))
 
     assert "python3 -m lmcache.v1.server 127.0.0.1 5655 cpu" in lmcache
+    assert "--nv" not in lmcache
+    assert "APPTAINERENV_CUDA_VISIBLE_DEVICES" not in lmcache
     assert "lmcache server --host" not in lmcache
     assert "stage1b_drain_sink.py proxy" in proxy
     assert "--kv-listen 127.0.0.1:8300 --kv-target 127.0.0.1:5655" in proxy

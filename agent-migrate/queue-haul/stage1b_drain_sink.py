@@ -153,15 +153,17 @@ def vllm_exports(cfg: Config, role: str, remote_url: str) -> list[str]:
     return [f"export {k}={shlex.quote(v)}" for k, v in env.items()]
 
 
-def apptainer_cmd(cfg: Config, script: str, gpu: int | None = None) -> list[str]:
-    cmd = ["apptainer", "exec", "--nv", "--bind", f"{cfg.scratch_bind}:{cfg.scratch_bind}", cfg.sandbox, "bash", "-lc", script]
+def apptainer_cmd(cfg: Config, script: str, gpu: int | None = None, nv: bool = True) -> list[str]:
+    cmd = ["apptainer", "exec", "--bind", f"{cfg.scratch_bind}:{cfg.scratch_bind}", cfg.sandbox, "bash", "-lc", script]
+    if nv:
+        cmd.insert(2, "--nv")
     if gpu is None:
         return cmd
     return ["env", f"APPTAINERENV_CUDA_VISIBLE_DEVICES={gpu}", *cmd]
 
 
 def lmcache_cmd(cfg: Config) -> list[str]:
-    return apptainer_cmd(cfg, f"python3 -m lmcache.v1.server {cfg.host} {cfg.lmc_port} cpu")
+    return apptainer_cmd(cfg, f"python3 -m lmcache.v1.server {cfg.host} {cfg.lmc_port} cpu", nv=False)
 
 
 def vllm_cmd(cfg: Config, role: str, extra: list[str] | None = None) -> list[str]:
