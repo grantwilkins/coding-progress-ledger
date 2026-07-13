@@ -683,6 +683,7 @@ def test_grid_sbatch_defaults_to_old_runtime():
     assert "QH_APPTAINER_IMAGE=${QH_APPTAINER_IMAGE:-/scratch/users/gfw/ptsim/vllm-openai-v0.10.1.1.sandbox}" in text
     assert "QH_APPTAINER_GPU_MODE=${QH_APPTAINER_GPU_MODE:-nv}" in text
     assert "QH_PORT_OFFSET=${QH_PORT_OFFSET:-$((SLURM_JOB_ID % 40000 + 1000))}" in text
+    assert 'SMART_ARGS=(--deadline-scales "$DEADLINE_SCALES" --random-seeds "$RANDOM_SEEDS")' in text
 
 
 def test_profile_prompt_has_cache_namespace(monkeypatch):

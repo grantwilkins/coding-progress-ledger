@@ -76,9 +76,9 @@ MANIFEST_ARG=(--manifest "$MANIFEST")
 if [[ -n "$MANIFESTS" ]]; then
   MANIFEST_ARG=(--manifests "$MANIFESTS")
 fi
-SMART_ARGS=()
+SMART_ARGS=(--deadline-scales "$DEADLINE_SCALES" --random-seeds "$RANDOM_SEEDS")
 if [[ "$SMART_SWEEP" == 1 ]]; then
-  SMART_ARGS=(--smart-sweep --deadline-scales "$DEADLINE_SCALES" --random-seeds "$RANDOM_SEEDS")
+  SMART_ARGS+=(--smart-sweep)
 fi
 
 $PY queue-haul/stage1b_drain_sink.py preflight --required-gpus 2
