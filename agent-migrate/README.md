@@ -189,8 +189,9 @@ profiling to finish, clears the shared remote KV store with an acknowledgement,
 resets both vLLM prefix caches, and assigns a unique cache namespace. LMCache
 0.3.3 cannot remotely deallocate its in-process 4 GB pools; they stay bounded and
 cannot hit across scenario namespaces. Each scenario starts and stops its own
-`nvidia-smi` process and records before/after `/metrics` snapshots for both vLLM
-servers. The batch sweep profiles each small/mixed/large workload once, derives
+`nvidia-smi` process, warms the workload for 30 seconds, and records before/after
+`/metrics` snapshots for both vLLM servers. Measured source power, not modeled
+committed load, determines power acceptance. The batch sweep profiles each small/mixed/large workload once, derives
 target-specific deadlines, runs greedy at `0.75x/1x/1.5x`, random at `1x` with
 three seeds, and each all-replay/all-KV baseline once per target. Set
 `SMART_SWEEP=0` for the legacy Cartesian grid.

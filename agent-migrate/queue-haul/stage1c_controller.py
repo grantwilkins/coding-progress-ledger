@@ -478,6 +478,7 @@ def tracelab_manifest(path: Path, n_sessions: int, seed: int, max_model_len: int
         "deadline_s": 300.0,
         "target_w": "all",
         "baseline_s": baseline_s,
+        "warmup_s": min(30.0, baseline_s),
         "settle_s": settle_s,
         "max_model_len": max_model_len,
         "decode_margin": decode_margin,
@@ -1170,6 +1171,11 @@ def write_power_summary(power_csv: Path, out_csv: Path, windows: dict[str, tuple
     return rows
 
 
+def source_power_drop_w(rows: list[dict]) -> float:
+    power = {(r["phase"], r["gpu"]): float(r["power_mean_w"]) for r in rows}
+    return power[("baseline", 0)] - power[("post", 0)]
+
+
 def write_power_plot(power_csv: Path, out_png: Path, dispatch_rows: list[dict], gpu: int | None = None) -> None:
     import matplotlib.pyplot as plt
     rows = _power_points(power_csv)
@@ -1590,6 +1596,7 @@ def live_drain(cfg: b.Config, run_root: Path, manifest: dict, mbps: float, nvsmi
             worker = SessionWorker(cfg, session, cfg.src_port, events, int(manifest.get("source", {}).get("seed", 0)) + i, stack_root)
             worker.start()
             workers[session["id"]] = worker
+        time.sleep(float(manifest.get("warmup_s", min(30.0, float(manifest.get("baseline_s", 120.0))))))
         baseline_start = time.time()
         time.sleep(float(manifest.get("baseline_s", 120.0)))
         drain_start = time.time()
@@ -1624,14 +1631,16 @@ def live_drain(cfg: b.Config, run_root: Path, manifest: dict, mbps: float, nvsmi
             write_proxy_slice(proxy_log, run_root / "proxy_bytes.csv", windows)
             link_stack_logs(run_root, stack_root)
         proxy_audit = write_proxy_audit(run_root / "proxy_bytes.csv", run_root / "proxy_audit.csv", windows, mbps)
-        write_power_summary(run_root / "gpu_power.csv", run_root / "power_summary.csv", windows)
+        power_rows = write_power_summary(run_root / "gpu_power.csv", run_root / "power_summary.csv", windows)
         write_power_plot(run_root / "gpu_power.csv", run_root / "power_trace.png", rows)
         write_power_plot(run_root / "gpu_power.csv", run_root / "source_power.png", rows, gpu=0)
         write_power_plot(run_root / "gpu_power.csv", run_root / "sink_power.png", rows, gpu=1)
         delays = write_delay_summary(rows, run_root / "delay_summary.csv", run_root / "delay_summary.png")
         request_counts = write_request_counts(run_root / "events.jsonl", run_root / "request_counts.csv", windows)
         write_ell_power5s(run_root / "gpu_power.csv", {**summary, "input_manifest": manifest, "sessions": rows, "windows": windows}, run_root / "ell_power5s.csv", run_root / "ell_power5s.png")
-        power_hit = committed_w >= summary["target_w"] - 1e-6 * max(summary["target_w"], 1.0)
+        modeled_power_hit = committed_w >= summary["target_w"] - 1e-6 * max(summary["target_w"], 1.0)
+        measured_source_drop_w = source_power_drop_w(power_rows)
+        measured_power_hit = measured_source_drop_w >= summary["target_w"]
         all_committed = all(r["commit_result"] == "committed" for r in rows)
         continued = [r for r in rows if r["first_sink_request_id"]]
         continuation_consistent = all(r["first_sink_context_match"] for r in continued)
@@ -1650,8 +1659,10 @@ def live_drain(cfg: b.Config, run_root: Path, manifest: dict, mbps: float, nvsmi
             "egress_realized_node_expected_w": summary["planned_source_drop_w"],
             "rebuild_realized_node_expected_w": committed_w,
             "committed_source_drop_w": committed_w,
+            "measured_source_drop_w": measured_source_drop_w,
+            "measured_power_error_w": measured_source_drop_w - summary["planned_source_drop_w"],
             "scheduler": {"warm_movement": True, "handoff": "append_only_delta", "source_request_p95_s": source_boundary_s, "staging_max_tokens": 1, "replay_concurrency": replay_concurrency, "kv_concurrency": kv_concurrency or max(1, len(move_rows)), "persistent_stack": not owned_stack, "cache_isolation": "remote_flush+vllm_prefix_reset+scenario_nonce"},
-            "acceptance": {"ok": all_committed and continuation_consistent and deadline_hit and power_hit and all(r["ok"] for r in proxy_audit), "all_committed": all_committed, "continuation_consistent": continuation_consistent, "continuation_observed_sessions": len(continued), "deadline_hit": deadline_hit, "power_hit": power_hit, "power_threshold_gated": False, "planned_hit": summary["planned_hit"], "proxy_audit_ok": all(r["ok"] for r in proxy_audit)},
+            "acceptance": {"ok": all_committed and continuation_consistent and deadline_hit and measured_power_hit and all(r["ok"] for r in proxy_audit), "all_committed": all_committed, "continuation_consistent": continuation_consistent, "continuation_observed_sessions": len(continued), "deadline_hit": deadline_hit, "power_hit": measured_power_hit, "modeled_power_hit": modeled_power_hit, "power_threshold_gated": False, "planned_hit": summary["planned_hit"], "proxy_audit_ok": all(r["ok"] for r in proxy_audit)},
         }
         check_live_manifest(out, run_root)
         (run_root / "controller_manifest.json").write_text(json.dumps(out, indent=2, sort_keys=True))
@@ -1718,7 +1729,7 @@ def grid_summary_row(run_root: Path) -> dict:
         "egress_realized_node_expected_w": float(manifest.get("egress_realized_node_expected_w", manifest["planned_source_drop_w"])),
         "rebuild_realized_node_expected_w": float(manifest.get("rebuild_realized_node_expected_w", manifest["planned_source_drop_w"])),
         "acceptance_ok": bool(manifest.get("acceptance", {}).get("ok", True)),
-        "deadline_hit": bool(total_completion <= deadline and manifest.get("acceptance", {}).get("ok", True)),
+        "deadline_hit": bool(total_completion <= deadline and manifest.get("acceptance", {}).get("deadline_hit", True)),
         "measured_source_drop_w": power.get(("baseline", 0), math.nan) - power.get(("post", 0), math.nan),
         "measured_sink_rise_w": power.get(("post", 1), math.nan) - power.get(("baseline", 1), math.nan),
         "total_first_token_s": float(total_first),

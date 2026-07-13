@@ -118,6 +118,7 @@ def test_tracelab_manifest_groups_clamps_and_preserves_turns(tmp_path: Path):
     session = manifest["sessions"][0]
 
     assert manifest["schema"] == c.MANIFEST_SCHEMA
+    assert manifest["warmup_s"] == 30
     assert manifest["source"]["type"] == "tracelab"
     assert session["original_T"] > session["served_T"]
     assert session["served_T"] == 3840
@@ -545,6 +546,12 @@ def test_power_summary_rows_skips_nvidia_smi_na_samples(tmp_path: Path):
     rows = c.power_summary_rows(path, {"baseline": (0, 1)})
 
     assert rows == [{"phase": "baseline", "gpu": 0, "samples": 2, "power_mean_w": 200.0}]
+
+
+def test_source_power_drop_uses_measured_windows():
+    rows = [{"phase": phase, "gpu": 0, "power_mean_w": power} for phase, power in (("baseline", 250), ("post", 170))]
+
+    assert c.source_power_drop_w(rows) == 80
 
 
 def test_check_live_manifest_requires_files_and_route_evidence(tmp_path: Path):
@@ -1015,6 +1022,7 @@ def test_grid_summary_row_uses_wall_clock_parallel_delay(tmp_path: Path):
         "planned_source_drop_w": 100,
         "planned_shortfall_w": 0,
         "planned_hit": True,
+        "acceptance": {"ok": False, "deadline_hit": True},
         "sessions": [
             {"first_token_s": 1.0, "completion_s": 5.0, "move_start_ts": 10.0, "move_end_ts": 15.0, "deadline_met": True},
             {"first_token_s": 1.0, "completion_s": 3.0, "move_start_ts": 11.0, "move_end_ts": 14.0, "deadline_met": True},
@@ -1026,6 +1034,7 @@ def test_grid_summary_row_uses_wall_clock_parallel_delay(tmp_path: Path):
     assert row["total_completion_s"] == pytest.approx(5.0)
     assert row["total_first_token_s"] == pytest.approx(2.0)
     assert row["deadline_hit"] is True
+    assert row["acceptance_ok"] is False
 
 
 def test_grid_summary_deadline_hit_uses_wall_clock_completion(tmp_path: Path):
