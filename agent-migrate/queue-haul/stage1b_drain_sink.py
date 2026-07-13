@@ -17,7 +17,7 @@ import subprocess
 import sys
 import threading
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
 from stage1_curves import shell
@@ -28,6 +28,19 @@ SANDBOX = Path("/scratch/users/gfw/ptsim/vllm-openai-v0.10.1.1.sandbox")
 
 def apptainer_image_default() -> Path:
     return Path(os.environ.get("QH_APPTAINER_IMAGE", SANDBOX))
+
+
+def port_offset() -> int:
+    offset = int(os.environ.get("QH_PORT_OFFSET", "0"))
+    if offset < 0 or offset > 50000:
+        raise ValueError(f"invalid QH_PORT_OFFSET: {offset}")
+    return offset
+
+
+def port_default(base: int) -> int:
+    return base + port_offset()
+
+
 HF_HOME = Path("/scratch/users/gfw/ptsim/hf")
 SCRATCH_BIND = Path("/scratch/users/gfw")
 CACHE_ROOT = Path("/scratch/users/gfw/ptsim/cache")
@@ -64,17 +77,17 @@ LMCACHE_SERVER_MAX_BYTES = int(os.environ.get("QH_LMCACHE_SERVER_MAX_BYTES", "0"
 @dataclass(frozen=True)
 class Config:
     model: str = MODEL
-    sandbox: Path = apptainer_image_default()
+    sandbox: Path = field(default_factory=apptainer_image_default)
     hf_home: Path = HF_HOME
     scratch_bind: Path = SCRATCH_BIND
     cache_root: Path = CACHE_ROOT
     host: str = "127.0.0.1"
-    src_port: int = 8100
-    sink_port: int = 8200
-    lmc_port: int = 5655
-    kv_proxy_port: int = 8300
-    api_proxy_port: int = 8400
-    smoke_port: int = 8120
+    src_port: int = field(default_factory=lambda: port_default(8100))
+    sink_port: int = field(default_factory=lambda: port_default(8200))
+    lmc_port: int = field(default_factory=lambda: port_default(5655))
+    kv_proxy_port: int = field(default_factory=lambda: port_default(8300))
+    api_proxy_port: int = field(default_factory=lambda: port_default(8400))
+    smoke_port: int = field(default_factory=lambda: port_default(8120))
     max_model_len: int = 32768
     max_num_seqs: int = 256
     max_num_batched_tokens: int = 8192
@@ -113,6 +126,9 @@ def parse_addr(text: str) -> tuple[str, int]:
 
 def validate_ports(cfg: Config) -> None:
     ports = [cfg.src_port, cfg.sink_port, cfg.lmc_port, cfg.kv_proxy_port, cfg.api_proxy_port, cfg.smoke_port]
+    bad = [p for p in ports if p <= 0 or p > 65535]
+    if bad:
+        raise ValueError(f"invalid ports: {bad}")
     dupes = sorted({p for p in ports if ports.count(p) > 1})
     if dupes:
         raise ValueError(f"duplicate ports: {dupes}")
@@ -871,12 +887,12 @@ def add_common(p: argparse.ArgumentParser) -> None:
     p.add_argument("--scratch-bind", type=Path, default=SCRATCH_BIND)
     p.add_argument("--cache-root", type=Path, default=CACHE_ROOT)
     p.add_argument("--host", default="127.0.0.1")
-    p.add_argument("--src-port", type=int, default=8100)
-    p.add_argument("--sink-port", type=int, default=8200)
-    p.add_argument("--lmc-port", type=int, default=5655)
-    p.add_argument("--kv-proxy-port", type=int, default=8300)
-    p.add_argument("--api-proxy-port", type=int, default=8400)
-    p.add_argument("--smoke-port", type=int, default=8120)
+    p.add_argument("--src-port", type=int, default=port_default(8100))
+    p.add_argument("--sink-port", type=int, default=port_default(8200))
+    p.add_argument("--lmc-port", type=int, default=port_default(5655))
+    p.add_argument("--kv-proxy-port", type=int, default=port_default(8300))
+    p.add_argument("--api-proxy-port", type=int, default=port_default(8400))
+    p.add_argument("--smoke-port", type=int, default=port_default(8120))
     p.add_argument("--max-model-len", type=int, default=32768)
     p.add_argument("--max-num-seqs", type=int, default=256)
     p.add_argument("--max-num-batched-tokens", type=int, default=8192)

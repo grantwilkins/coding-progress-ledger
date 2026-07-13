@@ -119,6 +119,27 @@ def test_cli_sandbox_default_honors_env(monkeypatch):
     assert str(args.sandbox) == "/tmp/qh-env.sif"
 
 
+def test_port_offset_honors_env_for_config_and_cli(monkeypatch):
+    monkeypatch.setenv("QH_PORT_OFFSET", "100")
+    cfg = s.Config()
+    args = s.parse_args(["preflight"])
+
+    assert cfg.src_port == 8200
+    assert cfg.sink_port == 8300
+    assert cfg.lmc_port == 5755
+    assert cfg.kv_proxy_port == 8400
+    assert cfg.api_proxy_port == 8500
+    assert cfg.smoke_port == 8220
+    assert args.src_port == 8200
+    assert args.lmc_port == 5755
+
+
+def test_port_offset_rejects_invalid_values(monkeypatch):
+    monkeypatch.setenv("QH_PORT_OFFSET", "60000")
+    with pytest.raises(ValueError, match="invalid QH_PORT_OFFSET"):
+        s.Config()
+
+
 def test_apptainer_gpu_mode_can_use_nvccli(monkeypatch):
     monkeypatch.setenv("QH_APPTAINER_GPU_MODE", "nvccli")
 
