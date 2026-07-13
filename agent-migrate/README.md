@@ -195,19 +195,28 @@ target-specific deadlines, runs greedy at `0.75x/1x/1.5x`, random at `1x` with
 three seeds, and each all-replay/all-KV baseline once per target. Set
 `SMART_SWEEP=0` for the legacy Cartesian grid.
 
-`live-drain` keeps both servers up together,
-runs Poisson turn loops from synthetic TraceLab-sized rolling transcripts, profiles
-replay/KV movement when `--profile` is missing or stamped with a different
-LMCache CPU size, warms the sink before switching
-the source session, bounds replay prefill concurrency to `--replay-concurrency`
-(default 1), overlaps KV transfers up to `--kv-concurrency` (0 means all), and
-writes `gpu_power.csv`, `events.jsonl`, `controller_manifest.json`,
+`live-drain` keeps both servers up together and runs Poisson turn loops whose
+canonical transcript includes every actual streamed assistant response. Once the
+planner selects a session, it stages that exact transcript on the sink with a
+one-token request while source turns continue. At the next turn boundary it
+checks the transcript generation; if it advanced, one bounded final-delta stage
+runs while paused before the atomic switch. Replay prefill is bounded by
+`--replay-concurrency` (default 1), KV stages overlap up to `--kv-concurrency`
+(0 means all), and every KV action must report at least a 90% LMCache token hit.
+The controller writes `gpu_power.csv`, `events.jsonl`, `controller_manifest.json`,
 `power_summary.csv`, `power_trace.png`, `source_power.png`, `sink_power.png`,
 `delay_summary.csv`, `delay_summary.png`, `ell_power5s.csv`, `ell_power5s.png`,
 `source_metrics_{before,after}.prom`, `sink_metrics_{before,after}.prom`,
-`request_counts.csv`, and `proxy_audit.csv`. `live-grid` also writes the exact
-`scenario_plan.json`, `scenario_summary.csv` (including profiled deadline and
-completion/reference ratio), `grid_power_drop.png`, and `grid_delay.png`. Use
+`request_counts.csv`, and `proxy_audit.csv`. Handoff rows separate selection
+queueing, initial staging, final delta, boundary wait, switch downtime, generation
+and context hashes, LMCache total/hit tokens, and the first naturally arriving
+sink turn when one occurs. The manifest reports
+`selected_node_expected_w`, `egress_realized_node_expected_w`, and
+`rebuild_realized_node_expected_w`; only committed sessions count in the last
+quantity. `live-grid` also writes the exact `scenario_plan.json`,
+`scenario_summary.csv` (including profiled deadline and completion/reference
+ratio), `grid_power_drop.png`, and `grid_delay.png`. Use
 `POLICIES=greedy,random,all-r,all-s sbatch queue-haul/stage1c_quick.sbatch`
 for the quick policy/counterfactual comparison; add `lp` as an offline benchmark.
-`all-r` cache-busts continued sink turns so it remains a replay baseline.
+`all-r` forces reconstruction only during handoff; normal sink turns then reuse
+the reconstructed prefix. `all-s` requires measured KV bytes and token hits.

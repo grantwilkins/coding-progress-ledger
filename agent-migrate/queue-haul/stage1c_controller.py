@@ -47,6 +47,7 @@ LIVE_A100_C_PREFILL_J_PER_TOK = 0.028197803044670608
 LIVE_A100_C_DECODE_J_PER_TOK = 0.25745287802176875
 _TOKENIZER_CACHE = {}
 _STORED_SIZE_RE = re.compile(r"size:\s*([0-9.]+)\s*gb", re.IGNORECASE)
+_LMCACHE_LOOKUP_RE = re.compile(r"Reqid:\s*([^,]+),\s*Total tokens\s*(\d+),\s*LMCache hit tokens:\s*(\d+)")
 
 
 def default_fixture() -> dict:
@@ -367,6 +368,17 @@ def session_prompt(session: dict, turn_index: int, replay_nonce: str | None = No
     return "\n".join(parts)
 
 
+def session_followup(session: dict, turn_index: int) -> str:
+    turn = session["turns"][turn_index % len(session["turns"])]
+    body = _words(f"turn_{session['id']}_{turn_index}", int(turn["append_tokens"]))
+    return f"User follow-up {turn_index}: {body}\nReply with one concise progress sentence."
+
+
+def messages_sha256(messages: list[dict]) -> str:
+    raw = json.dumps(messages, sort_keys=True, separators=(",", ":"))
+    return hashlib.sha256(raw.encode()).hexdigest()
+
+
 def _safe_name(text: str) -> str:
     return re.sub(r"[^A-Za-z0-9_.-]+", "-", str(text)).strip("-") or "workload"
 
@@ -513,13 +525,17 @@ def _tokenizer(cfg: b.Config):
     return _TOKENIZER_CACHE[snap]
 
 
-def prompt_tokens(cfg: b.Config, prompt: str) -> int:
+def chat_messages(value: str | list[dict]) -> list[dict]:
+    return [{"role": "user", "content": value}] if isinstance(value, str) else [dict(m) for m in value]
+
+
+def prompt_tokens(cfg: b.Config, prompt: str | list[dict]) -> int:
     tok = _tokenizer(cfg)
-    msg = [{"role": "user", "content": prompt}]
+    messages = chat_messages(prompt)
     if hasattr(tok, "apply_chat_template"):
-        out = tok.apply_chat_template(msg, tokenize=True, add_generation_prompt=True)
+        out = tok.apply_chat_template(messages, tokenize=True, add_generation_prompt=True)
         return len(out["input_ids"] if hasattr(out, "keys") and "input_ids" in out else out)
-    return len(tok(prompt).input_ids)
+    return len(tok("\n".join(m["content"] for m in messages)).input_ids)
 
 
 def profile_prompt(cfg: b.Config, target_tokens: int, namespace: str = "") -> tuple[str, int]:
@@ -572,7 +588,6 @@ def calibrate_live_profile(cfg: b.Config, run_root: Path, sessions: list[dict], 
         kv = stream_chat(cfg, cfg.api_proxy_port, prompt, 1)
         if kv["status"] != 200:
             raise RuntimeError(f"profile KV failed for {target_tokens}: {kv['response_text']}")
-        time.sleep(2)
         delta = b.count_delta(before, b.proxy_counts(proxy_log))
         if delta.get("kv/target_to_client", 0) <= 0:
             raise RuntimeError(f"profile KV had no KV bytes for {target_tokens}")
@@ -724,24 +739,31 @@ def _policy_order(policy: str, result, pop: JobPopulation, pool: PoolPower, imp,
     return [int(i) for i in sorted(selected, key=lambda j: (-(result.y_R[j] + result.y_S[j]), -pop.ell[j], j))]
 
 
+def _parallel_wall(costs: list[float], concurrency: int) -> float:
+    slots = [0.0] * concurrency
+    for cost in costs:
+        i = min(range(concurrency), key=slots.__getitem__)
+        slots[i] += cost
+    return max(slots, default=0.0)
+
+
 def _planned_wall_s(rows: list[dict], sessions: list[dict], profile: dict | None, replay_concurrency: int = 1, kv_concurrency: int | None = None) -> float:
     if replay_concurrency <= 0:
         raise ValueError("replay_concurrency must be positive")
     profile = profile or {}
     boundary = float(profile.get("source_boundary_s") or 0.0)
     r_costs = [float(r["planned_finish_s"]) + boundary for r in rows if r["action"] == "R"]
-    r_wall = sum(r_costs) / replay_concurrency if r_costs else 0.0
+    r_wall = _parallel_wall(r_costs, replay_concurrency)
     s_rows = [r for r in rows if r["action"] == "S"]
     if not s_rows:
         return r_wall
-    kv_rate = float(profile.get("kv_bytes_per_s") or 0.0)
+    k = kv_concurrency or len(s_rows)
     s_costs = [float(r["planned_finish_s"]) + boundary for r in s_rows]
+    s_wall = _parallel_wall(s_costs, k)
+    kv_rate = float(profile.get("kv_bytes_per_s") or 0.0)
     if kv_rate > 0:
         total_bytes = sum(float(r.get("planned_transfer_bytes", sessions[r["fixture_index"]].get("profile_transfer_bytes", sessions[r["fixture_index"]].get("session_kv_bytes", 0)))) for r in s_rows)
-        s_wall = total_bytes / kv_rate + boundary
-    else:
-        k = kv_concurrency or max(1, len(s_rows))
-        s_wall = sum(s_costs) / k
+        s_wall = max(s_wall, total_bytes / kv_rate + boundary)
     return max(r_wall, s_wall)
 
 
@@ -808,8 +830,10 @@ def live_plan_summary(manifest: dict, policy: str = "greedy", seed: int = 0,
     }
 
 
-def stream_chat(cfg: b.Config, port: int, prompt: str, max_tokens: int) -> dict:
-    body = json.dumps({"model": cfg.model, "messages": [{"role": "user", "content": prompt}], "max_tokens": max_tokens, "temperature": 0, "stream": True})
+def stream_chat(cfg: b.Config, port: int, prompt: str | list[dict], max_tokens: int) -> dict:
+    messages = chat_messages(prompt)
+    prompt_hash = messages_sha256(messages)
+    body = json.dumps({"model": cfg.model, "messages": messages, "max_tokens": max_tokens, "temperature": 0, "stream": True})
     t0 = time.time()
     conn = http.client.HTTPConnection(cfg.host, port, timeout=900)
     conn.request("POST", "/v1/chat/completions", body, {"Content-Type": "application/json"})
@@ -818,7 +842,7 @@ def stream_chat(cfg: b.Config, port: int, prompt: str, max_tokens: int) -> dict:
     if resp.status != 200:
         text = resp.read().decode(errors="ignore")
         conn.close()
-        return {"status": resp.status, "content": "", "start_ts": t0, "first_token_ts": None, "end_ts": time.time(), "prompt_sha256": hashlib.sha256(prompt.encode()).hexdigest(), "request_id": None, "response_text": text[:500]}
+        return {"status": resp.status, "content": "", "start_ts": t0, "first_token_ts": None, "end_ts": time.time(), "prompt_sha256": prompt_hash, "request_id": None, "response_text": text[:500]}
     while True:
         line = resp.readline()
         if not line:
@@ -837,7 +861,7 @@ def stream_chat(cfg: b.Config, port: int, prompt: str, max_tokens: int) -> dict:
         content.append(delta)
     conn.close()
     t1 = time.time()
-    return {"status": resp.status, "content": "".join(content), "start_ts": t0, "first_token_ts": first or t1, "end_ts": t1, "prompt_sha256": hashlib.sha256(prompt.encode()).hexdigest(), "request_id": request_id, "response_text": ""}
+    return {"status": resp.status, "content": "".join(content), "start_ts": t0, "first_token_ts": first or t1, "end_ts": t1, "prompt_sha256": prompt_hash, "request_id": request_id, "response_text": ""}
 
 
 def stored_session_kv_bytes(log_path: Path, request_id: str | None) -> int:
@@ -866,6 +890,23 @@ def wait_session_kv_bytes(log_path: Path, request_id: str | None, timeout_s: flo
     return nbytes
 
 
+def lmcache_lookup_tokens(log_path: Path, request_id: str | None) -> tuple[int, int] | None:
+    if not request_id or not log_path.exists():
+        return None
+    rows = [(int(m.group(2)), int(m.group(3))) for m in _LMCACHE_LOOKUP_RE.finditer(log_path.read_text(errors="ignore")) if m.group(1).strip() == request_id]
+    return rows[-1] if rows else None
+
+
+def wait_lmcache_lookup_tokens(log_path: Path, request_id: str | None, timeout_s: float = 10.0) -> tuple[int, int] | None:
+    end = time.time() + timeout_s
+    while time.time() <= end:
+        tokens = lmcache_lookup_tokens(log_path, request_id)
+        if tokens is not None:
+            return tokens
+        time.sleep(0.1)
+    return None
+
+
 class JsonlLog:
     def __init__(self, path: Path):
         path.parent.mkdir(parents=True, exist_ok=True)
@@ -887,18 +928,21 @@ class JsonlLog:
 class SessionWorker:
     def __init__(self, cfg: b.Config, session: dict, port: int, log: JsonlLog, seed: int, run_root: Path):
         self.cfg, self.session, self.port, self.log = cfg, session, port, log
-        self.source_log = run_root / "source.log"
+        self.source_log, self.sink_log = run_root / "source.log", run_root / "sink.log"
         self.rng = random.Random(seed)
         self.cond = threading.Condition()
         self.pending = 0
-        self.turn = 0
+        self.turn = int(session.get("generation", 1))
+        self.generation = int(session.get("generation", 1))
+        self.messages = chat_messages(session.get("messages", session_prompt(session, 0)))
         self.paused = False
         self.stopped = False
         self.in_flight = False
-        self.last_prompt = session_prompt(session, 0)
         self.last_request_id = session.get("last_request_id")
         self.last_source_kv_bytes = int(session.get("session_kv_bytes", 0))
-        self.cache_bust_sink = False
+        self.expected_sink_context_sha256: str | None = None
+        self.first_sink_proof: dict | None = None
+        self.error: RuntimeError | None = None
         self.threads: list[threading.Thread] = []
 
     def start(self) -> None:
@@ -925,6 +969,15 @@ class SessionWorker:
                     self.log.write("turn_arrival", session_id=self.session["id"])
                 self.cond.notify_all()
 
+    def _bounded(self, messages: list[dict]) -> list[dict]:
+        messages = chat_messages(messages)
+        while prompt_tokens(self.cfg, messages) > int(self.session["served_T"]):
+            start = int(messages[0].get("role") == "system")
+            if len(messages) - start <= 2:
+                raise RuntimeError(f"session {self.session['id']} cannot fit its context bound")
+            del messages[start:start + 2]
+        return messages
+
     def _serve(self) -> None:
         while True:
             with self.cond:
@@ -932,30 +985,36 @@ class SessionWorker:
                 if self.stopped:
                     return
                 self.pending = 0
-                idx = self.turn
+                idx, port = self.turn, self.port
                 self.turn += 1
-                port = self.port
+                base = chat_messages(self.messages)
+                context_hash = messages_sha256(base)
                 self.in_flight = True
-            prompt = session_prompt(self.session, idx)
-            if self.cache_bust_sink and port == self.cfg.api_proxy_port:
-                prompt = session_prompt(self.session, idx, replay_nonce=f"{self.session['id']} {idx} {time.time()}")
-            self.log.write("request_start", session_id=self.session["id"], turn=idx, port=port)
-            result = stream_chat(self.cfg, port, prompt, int(self.session["decode_tokens"]))
-            if result["status"] == 200:
-                kv_bytes = wait_session_kv_bytes(self.source_log, result.get("request_id"), 2.0) if port == self.cfg.src_port else 0
-                with self.cond:
-                    self.last_prompt = prompt
+            messages = self._bounded(base + [{"role": "user", "content": session_followup(self.session, idx)}])
+            self.log.write("request_start", session_id=self.session["id"], turn=idx, generation=self.generation, port=port, context_sha256=context_hash)
+            result = stream_chat(self.cfg, port, messages, int(self.session["decode_tokens"]))
+            kv_bytes = wait_session_kv_bytes(self.source_log, result.get("request_id"), 2.0) if result["status"] == 200 and port == self.cfg.src_port else 0
+            with self.cond:
+                if result["status"] == 200:
+                    self.messages = messages + [{"role": "assistant", "content": result["content"]}]
+                    self.generation += 1
                     self.last_request_id = result.get("request_id")
                     if kv_bytes:
                         self.last_source_kv_bytes = kv_bytes
-            self.log.write("request_end", session_id=self.session["id"], turn=idx, port=port, status=result["status"], request_id=result.get("request_id"), session_kv_bytes=self.last_source_kv_bytes, first_token_ts=result["first_token_ts"], end_ts=result["end_ts"])
-            with self.cond:
+                    if port == self.cfg.api_proxy_port and self.expected_sink_context_sha256 and self.first_sink_proof is None:
+                        self.first_sink_proof = {"request_id": result.get("request_id"), "context_sha256": context_hash, "context_match": context_hash == self.expected_sink_context_sha256}
+                else:
+                    self.error = RuntimeError(f"session {self.session['id']} request failed: {result['response_text']}")
                 self.in_flight = False
                 self.cond.notify_all()
+            self.log.write("request_end", session_id=self.session["id"], turn=idx, port=port, status=result["status"], request_id=result.get("request_id"), session_kv_bytes=self.last_source_kv_bytes, generation=self.generation, first_token_ts=result["first_token_ts"], end_ts=result["end_ts"])
 
     def snapshot(self) -> dict:
         with self.cond:
-            return {"last_prompt": self.last_prompt, "last_request_id": self.last_request_id, "session_kv_bytes": self.last_source_kv_bytes}
+            if self.error:
+                raise self.error
+            messages = chat_messages(self.messages)
+            return {"messages": messages, "generation": self.generation, "context_sha256": messages_sha256(messages), "last_request_id": self.last_request_id, "session_kv_bytes": self.last_source_kv_bytes}
 
     def pause_boundary(self, timeout_s: float = 900.0) -> None:
         deadline = time.monotonic() + timeout_s
@@ -968,18 +1027,27 @@ class SessionWorker:
                     raise TimeoutError(f"timed out pausing {self.session['id']}")
                 self.cond.wait(left)
 
-    def switch_to(self, port: int) -> None:
+    def commit_switch(self, expected_generation: int, port: int, messages: list[dict]) -> bool:
         with self.cond:
+            if self.generation != expected_generation:
+                return False
+            self.messages = chat_messages(messages)
             self.port = port
-
-    def cache_bust_on_sink(self) -> None:
-        with self.cond:
-            self.cache_bust_sink = True
+            self.expected_sink_context_sha256 = messages_sha256(self.messages)
+            return True
 
     def resume(self) -> None:
         with self.cond:
             self.paused = False
             self.cond.notify_all()
+
+    def handoff_proof(self) -> dict:
+        with self.cond:
+            proof = dict(self.first_sink_proof or {})
+        if proof:
+            lookup = wait_lmcache_lookup_tokens(self.sink_log, proof["request_id"], 1.0)
+            proof.update({"lmcache_total_tokens": lookup[0], "lmcache_hit_tokens": lookup[1]} if lookup else {})
+        return proof
 
     def stop(self) -> None:
         with self.cond:
@@ -1081,7 +1149,7 @@ def write_power_plot(power_csv: Path, out_png: Path, dispatch_rows: list[dict], 
 
 def _live_ell_by_gpu(manifest: dict, ts: float) -> dict[int, float]:
     per_session = {s["id"]: float(s["ell_pre"]) + float(s["ell_dec"]) for s in manifest["input_manifest"]["sessions"]}
-    moved = sum(per_session[r["id"]] for r in manifest.get("sessions", []) if float(r.get("switch_end_ts", r.get("move_end_ts", r["move_start_ts"]))) <= ts)
+    moved = sum(per_session[r["id"]] for r in manifest.get("sessions", []) if r.get("commit_result", "committed") == "committed" and float(r.get("switch_end_ts", r.get("move_end_ts", r["move_start_ts"]))) <= ts)
     total = sum(per_session.values())
     return {0: max(0.0, total - moved), 1: moved}
 
@@ -1147,9 +1215,9 @@ def write_ell_power5s(power_csv: Path, manifest: dict, out_csv: Path, out_png: P
 
 def write_delay_summary(rows: list[dict], out_csv: Path, out_png: Path) -> list[dict]:
     import matplotlib.pyplot as plt
-    delays = [{"dispatch_rank": r["dispatch_rank"], "id": r["id"], "action": r["action"], "first_token_s": r["first_token_s"], "sink_warm_s": r.get("sink_warm_s", r["completion_s"]), "completion_s": r["completion_s"], "source_boundary_wait_s": r.get("source_boundary_wait_s", 0.0), "switch_downtime_s": r.get("switch_downtime_s", r.get("downtime_s", r["completion_s"]))} for r in rows]
+    delays = [{"dispatch_rank": r["dispatch_rank"], "id": r["id"], "action": r["action"], "commit_result": r.get("commit_result", "committed"), "selection_to_stage_start_s": r.get("selection_to_stage_start_s", 0.0), "initial_staging_s": r.get("initial_staging_s", r.get("staging_s", r.get("sink_warm_s", r["completion_s"]))), "final_delta_s": r.get("final_delta_s", 0.0), "staging_s": r.get("staging_s", r.get("sink_warm_s", r["completion_s"])), "first_token_s": r["first_token_s"], "sink_warm_s": r.get("sink_warm_s", r["completion_s"]), "completion_s": r["completion_s"], "source_boundary_wait_s": r.get("source_boundary_wait_s", 0.0), "switch_downtime_s": r.get("switch_downtime_s", r.get("downtime_s", r["completion_s"]))} for r in rows]
     with out_csv.open("w", newline="") as f:
-        writer = csv.DictWriter(f, ["dispatch_rank", "id", "action", "first_token_s", "sink_warm_s", "completion_s", "source_boundary_wait_s", "switch_downtime_s"])
+        writer = csv.DictWriter(f, ["dispatch_rank", "id", "action", "commit_result", "selection_to_stage_start_s", "initial_staging_s", "final_delta_s", "staging_s", "first_token_s", "sink_warm_s", "completion_s", "source_boundary_wait_s", "switch_downtime_s"])
         writer.writeheader()
         writer.writerows(delays)
     fig, ax = plt.subplots(figsize=(8, 3))
@@ -1245,62 +1313,125 @@ def check_live_manifest(manifest: dict, run_root: Path) -> None:
     for row in sessions:
         if row["http_status"] != 200 or row.get("first_token_s") is None:
             raise ValueError(f"session failed: {row['id']}")
+        if row.get("prompt_sha256") != row.get("staged_context_sha256"):
+            raise ValueError(f"stage context hash mismatch: {row['id']}")
         delta = row.get("proxy_delta", {})
-        if row["action"] == "S" and delta.get("kv/target_to_client", 0) <= 0:
-            raise ValueError(f"KV action lacks KV bytes: {row['id']}")
+        total_tokens = row.get("stage_lmcache_total_tokens", 0)
+        if row["action"] == "S" and (delta.get("kv/target_to_client", 0) <= 0 or total_tokens <= 0 or row.get("stage_lmcache_hit_tokens", 0) / total_tokens < 0.9):
+            raise ValueError(f"KV action lacks KV evidence: {row['id']}")
         if row["action"] == "R" and delta.get("api/client_to_target", 0) <= 0:
             raise ValueError(f"replay action lacks API bytes: {row['id']}")
+        if row.get("commit_result") == "committed" and row.get("committed_context_sha256") != row.get("staged_context_sha256"):
+            raise ValueError(f"committed context mismatch: {row['id']}")
+        if row.get("commit_result") == "stale_aborted" and (row.get("committed_context_sha256") is not None or row.get("deadline_met")):
+            raise ValueError(f"stale handoff was counted: {row['id']}")
 
 
 
-def run_live_moves(cfg: b.Config, run_root: Path, sessions: list[dict], workers: dict[str, SessionWorker],
-                   rows: list[dict], settle_s: float = 2.0, replay_concurrency: int = 1,
-                   kv_concurrency: int | None = None, proxy_log: Path | None = None) -> list[dict]:
+def run_live_moves(cfg: b.Config, run_root: Path, workers: dict[str, SessionWorker], rows: list[dict],
+                   replay_concurrency: int = 1, kv_concurrency: int | None = None,
+                   proxy_log: Path | None = None) -> list[dict]:
     if replay_concurrency <= 0:
         raise ValueError("replay_concurrency must be positive")
     if kv_concurrency is not None and kv_concurrency <= 0:
         raise ValueError("kv_concurrency must be positive")
     gates = {"R": threading.Semaphore(replay_concurrency), "S": threading.Semaphore(kv_concurrency or max(1, len(rows)))}
     proxy_log = proxy_log or run_root / "proxy_bytes.csv"
+    selected_ts = time.time()
+    for row in rows:
+        workers[row["id"]].log.write("handoff_selected", session_id=row["id"], action=row["action"], dispatch_rank=row["dispatch_rank"])
 
     def move(row: dict) -> dict:
-        with gates[row["action"]]:
-            worker = workers[row["id"]]
-            before = b.proxy_counts(proxy_log)
-            move_start = time.time()
-            prompt = worker.last_prompt if row["action"] == "S" else f"Replay cache bust {row['id']} {move_start}.\n{worker.last_prompt}"
-            result = stream_chat(cfg, cfg.api_proxy_port, prompt, int(sessions[row["fixture_index"]]["decode_tokens"]))
+        worker = workers[row["id"]]
+
+        def staged_messages(snapshot: dict) -> list[dict]:
+            messages = chat_messages(snapshot["messages"])
+            if row["action"] == "R":
+                marker = f"Queue-Haul replay namespace {row['id']} {worker.session.get('scenario_nonce', '')}."
+                messages = [{"role": "system", "content": marker}] + messages
+            return messages
+
+        def stage(messages: list[dict], phase: str) -> tuple[dict, int, int, float, float]:
+            start = time.time()
+            worker.log.write("handoff_stage_start", session_id=row["id"], action=row["action"], phase=phase)
+            result = stream_chat(cfg, cfg.api_proxy_port, messages, 1)
             if result["status"] != 200:
-                raise RuntimeError(f"sink move failed for {row['id']}: {result['response_text']}")
+                raise RuntimeError(f"sink stage failed for {row['id']}: {result['response_text']}")
+            lookup = wait_lmcache_lookup_tokens(worker.sink_log, result.get("request_id"))
+            if lookup is None:
+                raise RuntimeError(f"sink stage lacks LMCache accounting for {row['id']}")
+            total_tokens, hit_tokens = lookup
+            if row["action"] == "S" and (total_tokens <= 0 or hit_tokens / total_tokens < 0.9):
+                raise RuntimeError(f"KV stage hit only {hit_tokens}/{total_tokens} tokens for {row['id']}")
+            end = time.time()
+            worker.log.write("handoff_staged", session_id=row["id"], action=row["action"], phase=phase, request_id=result.get("request_id"), lmcache_total_tokens=total_tokens, lmcache_hit_tokens=hit_tokens)
+            return result, total_tokens, hit_tokens, start, end
+
+        with gates[row["action"]]:
+            selected = worker.snapshot()
+            before = b.proxy_counts(proxy_log)
+            initial = stage(staged_messages(selected), "initial")
+            result, total_tokens, hit_tokens, stage_start, initial_stage_end = initial
             switch_request_ts = time.time()
             worker.pause_boundary()
             boundary_ready_ts = time.time()
-            worker.switch_to(cfg.api_proxy_port)
-            if row.get("cache_bust_after_switch"):
-                worker.cache_bust_on_sink()
+            current = worker.snapshot()
+            final_delta_s, attempts = 0.0, 1
+            messages = staged_messages(selected)
+            request_ids = [result.get("request_id")]
+            initial_total_tokens, initial_hit_tokens = total_tokens, hit_tokens
+            if current["generation"] != selected["generation"]:
+                messages = staged_messages(current)
+                result, total_tokens, hit_tokens, final_start, final_end = stage(messages, "final_delta")
+                final_delta_s, attempts = final_end - final_start, 2
+                request_ids.append(result.get("request_id"))
+            else:
+                final_end = initial_stage_end
+            committed = worker.commit_switch(current["generation"], cfg.api_proxy_port, messages)
             worker.resume()
             switch_end = time.time()
-            if settle_s:
-                time.sleep(settle_s)
+            commit_result = "committed" if committed else "stale_aborted"
+            worker.log.write("handoff_" + commit_result, session_id=row["id"], action=row["action"], selected_generation=selected["generation"], current_generation=current["generation"], staging_attempts=attempts)
             delta = b.count_delta(before, b.proxy_counts(proxy_log))
-            completion = switch_end - move_start
+            completion = switch_end - selected_ts
             return {
                 **row,
-                "warm_move": True,
-                "move_start_ts": move_start,
+                "warm_move": committed,
+                "move_start_ts": selected_ts,
+                "staging_start_ts": stage_start,
                 "sink_ready_ts": result["end_ts"],
+                "staging_end_ts": final_end,
                 "switch_request_ts": switch_request_ts,
                 "boundary_ready_ts": boundary_ready_ts,
                 "switch_end_ts": switch_end,
                 "move_end_ts": switch_end,
                 "http_status": result["status"],
-                "first_token_s": result["first_token_ts"] - move_start,
-                "sink_warm_s": result["end_ts"] - move_start,
+                "stage_request_id": result.get("request_id"),
+                "stage_request_ids": request_ids,
+                "stage_lmcache_total_tokens": total_tokens,
+                "stage_lmcache_hit_tokens": hit_tokens,
+                "stage_lmcache_hit_ratio": hit_tokens / total_tokens if total_tokens else 0.0,
+                "initial_stage_lmcache_total_tokens": initial_total_tokens,
+                "initial_stage_lmcache_hit_tokens": initial_hit_tokens,
+                "staging_attempts": attempts,
+                "selected_generation": selected["generation"],
+                "commit_generation": current["generation"],
+                "generation_delta": current["generation"] - selected["generation"],
+                "selected_context_sha256": selected["context_sha256"],
+                "staged_context_sha256": messages_sha256(messages),
+                "committed_context_sha256": messages_sha256(messages) if committed else None,
+                "commit_result": commit_result,
+                "first_token_s": initial[0]["first_token_ts"] - selected_ts,
+                "selection_to_stage_start_s": stage_start - selected_ts,
+                "initial_staging_s": initial_stage_end - stage_start,
+                "final_delta_s": final_delta_s,
+                "staging_s": initial_stage_end - stage_start + final_delta_s,
+                "sink_warm_s": final_end - selected_ts,
                 "completion_s": completion,
                 "source_boundary_wait_s": boundary_ready_ts - switch_request_ts,
                 "switch_downtime_s": switch_end - boundary_ready_ts,
                 "downtime_s": switch_end - boundary_ready_ts,
-                "deadline_met": completion <= float(row.get("deadline_s", math.inf)),
+                "deadline_met": committed and completion <= float(row.get("deadline_s", math.inf)),
                 "prompt_sha256": result["prompt_sha256"],
                 "proxy_delta": delta,
             }
@@ -1366,18 +1497,16 @@ def live_drain(cfg: b.Config, run_root: Path, manifest: dict, mbps: float, nvsmi
         source_log = stack_root / "source.log"
         proxy_log = stack_root / "proxy_bytes.csv" if not owned_stack else run_root / "proxy_bytes.csv"
         for i, session in enumerate(sessions):
-            prompt = session_prompt(session, 0)
-            result = stream_chat(cfg, cfg.src_port, prompt, int(session["decode_tokens"]))
+            messages = [{"role": "user", "content": session_prompt(session, 0)}]
+            result = stream_chat(cfg, cfg.src_port, messages, int(session["decode_tokens"]))
             if result["status"] != 200:
                 raise RuntimeError(f"source prewarm failed for {session['id']}: {result['response_text']}")
+            messages.append({"role": "assistant", "content": result["content"]})
             request_id = result.get("request_id")
             kv_bytes = wait_session_kv_bytes(source_log, request_id)
-            events.write("prewarm", session_id=session["id"], status=result["status"], request_id=request_id, session_kv_bytes=kv_bytes)
-            session.update({"last_request_id": request_id, "session_kv_bytes": kv_bytes})
+            events.write("prewarm", session_id=session["id"], status=result["status"], request_id=request_id, generation=1, context_sha256=messages_sha256(messages), session_kv_bytes=kv_bytes)
+            session.update({"messages": messages, "generation": 1, "last_request_id": request_id, "session_kv_bytes": kv_bytes})
             worker = SessionWorker(cfg, session, cfg.src_port, events, int(manifest.get("source", {}).get("seed", 0)) + i, stack_root)
-            worker.last_prompt = prompt
-            worker.last_request_id = request_id
-            worker.last_source_kv_bytes = kv_bytes
             worker.start()
             workers[session["id"]] = worker
         baseline_start = time.time()
@@ -1387,13 +1516,22 @@ def live_drain(cfg: b.Config, run_root: Path, manifest: dict, mbps: float, nvsmi
         manifest = apply_live_profile(manifest, profile)
         sessions = live_sessions(manifest)
         summary = live_plan_summary(manifest, policy, seed, deadline_s, target_frac, replay_concurrency, kv_concurrency)
-        move_rows = [{**row, "deadline_s": summary["deadline_s"], "cache_bust_after_switch": policy == "all-r"} for row in summary["sessions"]]
-        rows = run_live_moves(cfg, run_root, sessions, workers, move_rows, replay_concurrency=replay_concurrency, kv_concurrency=kv_concurrency, proxy_log=proxy_log)
+        move_rows = [{**row, "deadline_s": summary["deadline_s"]} for row in summary["sessions"]]
+        rows = run_live_moves(cfg, run_root, workers, move_rows, replay_concurrency=replay_concurrency, kv_concurrency=kv_concurrency, proxy_log=proxy_log)
         drain_end = time.time()
         time.sleep(float(manifest.get("settle_s", 120.0)))
         post_end = time.time()
         for worker in workers.values():
             worker.stop()
+        for worker in workers.values():
+            worker.snapshot()
+        rows = [{**row, "first_sink_request_id": proof.get("request_id"), "first_sink_context_sha256": proof.get("context_sha256"), "first_sink_context_match": bool(proof.get("context_match")), "first_sink_lmcache_total_tokens": proof.get("lmcache_total_tokens"), "first_sink_lmcache_hit_tokens": proof.get("lmcache_hit_tokens")} for row in rows for proof in [workers[row["id"]].handoff_proof()]]
+        _sessions, pop, pool, _move, _imp, _event, _full_w, _target_w = _live_model(manifest, summary["deadline_s"], summary["target_frac"])
+        committed_y = np.zeros(len(pop))
+        for row in rows:
+            if row["commit_result"] == "committed":
+                committed_y[row["fixture_index"]] = 1.0
+        committed_w = evaluate_node_expected_w(pop, pool, committed_y)
         write_vllm_metrics(cfg, run_root, "after")
         windows = {"baseline": (baseline_start, drain_start), "drain": (drain_start, drain_end), "post": (drain_end, post_end)}
         if nvsmi:
@@ -1410,7 +1548,28 @@ def live_drain(cfg: b.Config, run_root: Path, manifest: dict, mbps: float, nvsmi
         delays = write_delay_summary(rows, run_root / "delay_summary.csv", run_root / "delay_summary.png")
         request_counts = write_request_counts(run_root / "events.jsonl", run_root / "request_counts.csv", windows)
         write_ell_power5s(run_root / "gpu_power.csv", {**summary, "input_manifest": manifest, "sessions": rows, "windows": windows}, run_root / "ell_power5s.csv", run_root / "ell_power5s.png")
-        out = {**summary, "schema": LIVE_SCHEMA, "input_manifest": manifest, "sessions": rows, "delay_summary": delays, "request_counts": request_counts, "proxy_audit": proxy_audit, "windows": windows, "profile_path": str(used_profile_path), "scheduler": {"warm_movement": True, "replay_concurrency": replay_concurrency, "kv_concurrency": kv_concurrency or max(1, len(move_rows)), "persistent_stack": not owned_stack, "cache_isolation": "remote_flush+vllm_prefix_reset+scenario_nonce"}, "acceptance": {"ok": True, "power_threshold_gated": False, "planned_hit": summary["planned_hit"], "proxy_audit_ok": all(r["ok"] for r in proxy_audit)}}
+        power_hit = committed_w >= summary["target_w"] - 1e-6 * max(summary["target_w"], 1.0)
+        all_committed = all(r["commit_result"] == "committed" for r in rows)
+        continued = [r for r in rows if r["first_sink_request_id"]]
+        continuation_consistent = all(r["first_sink_context_match"] for r in continued)
+        deadline_hit = all(r["deadline_met"] for r in rows)
+        out = {
+            **summary,
+            "schema": LIVE_SCHEMA,
+            "input_manifest": manifest,
+            "sessions": rows,
+            "delay_summary": delays,
+            "request_counts": request_counts,
+            "proxy_audit": proxy_audit,
+            "windows": windows,
+            "profile_path": str(used_profile_path),
+            "selected_node_expected_w": summary["planned_source_drop_w"],
+            "egress_realized_node_expected_w": summary["planned_source_drop_w"],
+            "rebuild_realized_node_expected_w": committed_w,
+            "committed_source_drop_w": committed_w,
+            "scheduler": {"warm_movement": True, "handoff": "optimistic_generation", "staging_max_tokens": 1, "replay_concurrency": replay_concurrency, "kv_concurrency": kv_concurrency or max(1, len(move_rows)), "persistent_stack": not owned_stack, "cache_isolation": "remote_flush+vllm_prefix_reset+scenario_nonce"},
+            "acceptance": {"ok": all_committed and continuation_consistent and deadline_hit and power_hit and all(r["ok"] for r in proxy_audit), "all_committed": all_committed, "continuation_consistent": continuation_consistent, "continuation_observed_sessions": len(continued), "deadline_hit": deadline_hit, "power_hit": power_hit, "power_threshold_gated": False, "planned_hit": summary["planned_hit"], "proxy_audit_ok": all(r["ok"] for r in proxy_audit)},
+        }
         check_live_manifest(out, run_root)
         (run_root / "controller_manifest.json").write_text(json.dumps(out, indent=2, sort_keys=True))
     finally:
@@ -1472,7 +1631,11 @@ def grid_summary_row(run_root: Path) -> dict:
         "planned_source_drop_w": float(manifest["planned_source_drop_w"]),
         "planned_shortfall_w": float(manifest["planned_shortfall_w"]),
         "planned_hit": bool(manifest["planned_hit"]),
-        "deadline_hit": bool(total_completion <= deadline),
+        "selected_node_expected_w": float(manifest.get("selected_node_expected_w", manifest["planned_source_drop_w"])),
+        "egress_realized_node_expected_w": float(manifest.get("egress_realized_node_expected_w", manifest["planned_source_drop_w"])),
+        "rebuild_realized_node_expected_w": float(manifest.get("rebuild_realized_node_expected_w", manifest["planned_source_drop_w"])),
+        "acceptance_ok": bool(manifest.get("acceptance", {}).get("ok", True)),
+        "deadline_hit": bool(total_completion <= deadline and manifest.get("acceptance", {}).get("ok", True)),
         "measured_source_drop_w": power.get(("baseline", 0), math.nan) - power.get(("post", 0), math.nan),
         "measured_sink_rise_w": power.get(("post", 1), math.nan) - power.get(("baseline", 1), math.nan),
         "total_first_token_s": float(total_first),

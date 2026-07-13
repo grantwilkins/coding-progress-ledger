@@ -16,6 +16,7 @@ from __future__ import annotations
 import csv
 import gzip
 import json
+import threading
 import time
 from pathlib import Path
 
@@ -189,6 +190,33 @@ def test_prompt_tokens_counts_batch_encoding_input_ids(monkeypatch):
     assert c.prompt_tokens(type("Cfg", (), {})(), "x") == 4
 
 
+def test_session_worker_advances_canonical_transcript_with_actual_output(tmp_path: Path, monkeypatch):
+    class Log:
+        def write(self, *_args, **_kwargs):
+            pass
+
+    session = {"id": "s", "served_T": 1024, "decode_tokens": 8, "turn_rate_hz": 1.0, "turns": [{"append_tokens": 4}], "messages": [{"role": "user", "content": "u0"}, {"role": "assistant", "content": "a0"}], "generation": 1}
+    cfg = type("Cfg", (), {"src_port": 8100, "api_proxy_port": 8400})()
+    now = time.time()
+    monkeypatch.setattr(c, "prompt_tokens", lambda *_args: 10)
+    monkeypatch.setattr(c, "wait_session_kv_bytes", lambda *_args, **_kwargs: 0)
+    monkeypatch.setattr(c, "stream_chat", lambda *_args: {"status": 200, "content": "actual-a1", "first_token_ts": now, "start_ts": now, "end_ts": now, "prompt_sha256": "x", "request_id": "req", "response_text": ""})
+    worker = c.SessionWorker(cfg, session, cfg.src_port, Log(), 0, tmp_path)
+    thread = threading.Thread(target=worker._serve)
+    worker.threads = [thread]
+    thread.start()
+    with worker.cond:
+        worker.pending = 1
+        worker.cond.notify_all()
+        assert worker.cond.wait_for(lambda: worker.generation == 2, 2)
+    worker.stop()
+
+    snapshot = worker.snapshot()
+    assert snapshot["generation"] == 2
+    assert [m["role"] for m in snapshot["messages"]] == ["user", "assistant", "user", "assistant"]
+    assert snapshot["messages"][-1]["content"] == "actual-a1"
+
+
 def test_live_plan_uses_log_power_curve_and_dispatches_all(tmp_path: Path):
     trace = tmp_path / "trace.jsonl.gz"
     _write_tracelab(trace)
@@ -208,50 +236,61 @@ def test_live_plan_uses_log_power_curve_and_dispatches_all(tmp_path: Path):
     assert summary["sessions"][-1]["predicted_cumulative_source_drop_w"] == pytest.approx(summary["full_source_drop_w"])
 
 
-def test_run_live_moves_warms_sink_with_bounded_replay_and_overlapping_kv(tmp_path: Path, monkeypatch):
+def test_run_live_moves_stages_one_token_with_bounded_replay_and_overlapping_kv(tmp_path: Path, monkeypatch):
+    class Log:
+        def write(self, *_args, **_kwargs):
+            pass
+
     class Worker:
         def __init__(self, sid):
-            self.last_prompt = f"prompt-{sid}"
+            self.sid, self.generation = sid, 1
+            self.session = {"scenario_nonce": "test"}
+            self.messages = [{"role": "user", "content": f"prompt-{sid}"}]
             self.pause_times = []
             self.resumed = False
             self.port = None
-            self.cache_busted = False
+            self.log = Log()
+            self.sink_log = tmp_path / "sink.log"
+
+        def snapshot(self):
+            return {"messages": self.messages, "generation": self.generation, "context_sha256": c.messages_sha256(self.messages), "last_request_id": None, "session_kv_bytes": 1}
 
         def pause_boundary(self):
             self.pause_times.append(time.time())
 
-        def switch_to(self, port):
-            self.port = port
+        def commit_switch(self, expected_generation, port, messages):
+            assert expected_generation == self.generation
+            self.port, self.messages = port, messages
+            return True
 
         def resume(self):
             self.resumed = True
 
-        def cache_bust_on_sink(self):
-            self.cache_busted = True
-
     cfg = type("Cfg", (), {"api_proxy_port": 8400})()
     workers = {sid: Worker(sid) for sid in ("a", "b", "c")}
-    sessions = [{"decode_tokens": 1}, {"decode_tokens": 1}, {"decode_tokens": 1}]
+    sessions = [{"decode_tokens": 8}] * 3
     rows = [
-        {"id": "a", "action": "R", "fixture_index": 0, "dispatch_rank": 0, "deadline_s": 2.0, "cache_bust_after_switch": True},
+        {"id": "a", "action": "R", "fixture_index": 0, "dispatch_rank": 0, "deadline_s": 2.0},
         {"id": "b", "action": "R", "fixture_index": 1, "dispatch_rank": 1, "deadline_s": 2.0},
         {"id": "c", "action": "S", "fixture_index": 2, "dispatch_rank": 2, "deadline_s": 2.0},
     ]
     starts, ends = {"R": [], "S": []}, {}
 
-    def fake_stream_chat(_cfg, _port, prompt, _max_tokens):
-        action = "R" if prompt.startswith("Replay cache bust") else "S"
-        sid = prompt.split()[3] if action == "R" else prompt.rsplit("-", 1)[1]
+    def fake_stream_chat(_cfg, _port, messages, max_tokens):
+        assert max_tokens == 1
+        action = "R" if messages[0]["role"] == "system" else "S"
+        sid = messages[0]["content"].split()[3] if action == "R" else messages[0]["content"].rsplit("-", 1)[1]
         start = time.time()
         starts[action].append(start)
         time.sleep(0.2)
         end = time.time()
         ends[sid] = end
-        return {"status": 200, "first_token_ts": start + 0.01, "start_ts": start, "end_ts": end, "prompt_sha256": "x", "request_id": f"req-{sid}", "response_text": ""}
+        return {"status": 200, "content": "x", "first_token_ts": start + 0.01, "start_ts": start, "end_ts": end, "prompt_sha256": c.messages_sha256(messages), "request_id": f"req-{sid}", "response_text": ""}
 
     monkeypatch.setattr(c, "stream_chat", fake_stream_chat)
+    monkeypatch.setattr(c, "wait_lmcache_lookup_tokens", lambda _path, request_id, timeout_s=10: (10, 10) if request_id == "req-c" else (10, 0))
     t0 = time.time()
-    out = c.run_live_moves(cfg, tmp_path, sessions, workers, rows, settle_s=0.0, replay_concurrency=1, kv_concurrency=2)
+    out = c.run_live_moves(cfg, tmp_path, workers, rows, replay_concurrency=1, kv_concurrency=2)
 
     assert time.time() - t0 < 0.55
     assert starts["R"][1] - starts["R"][0] >= 0.18
@@ -259,10 +298,49 @@ def test_run_live_moves_warms_sink_with_bounded_replay_and_overlapping_kv(tmp_pa
     assert [r["dispatch_rank"] for r in out] == [0, 1, 2]
     assert all(workers[sid].pause_times[0] >= ends[sid] for sid in workers)
     assert all(w.resumed and w.port == 8400 for w in workers.values())
-    assert workers["a"].cache_busted and not workers["b"].cache_busted
-    assert all(r["warm_move"] and r["deadline_met"] and r["switch_downtime_s"] >= 0 for r in out)
-    assert all(r["sink_warm_s"] <= r["completion_s"] for r in out)
+    assert all(r["commit_result"] == "committed" and r["staging_attempts"] == 1 for r in out)
+    assert all(r["staging_s"] < r["completion_s"] and r["switch_downtime_s"] >= 0 for r in out)
 
+
+def test_run_live_moves_reconciles_stale_generation_with_final_delta(tmp_path: Path, monkeypatch):
+    class Log:
+        def write(self, *_args, **_kwargs):
+            pass
+
+    class Worker:
+        log = Log()
+        sink_log = tmp_path / "sink.log"
+
+        def __init__(self):
+            self.generation, self.port = 1, 8100
+            self.session = {"scenario_nonce": "test"}
+            self.messages = [{"role": "user", "content": "prompt"}]
+
+        def snapshot(self):
+            return {"messages": self.messages, "generation": self.generation, "context_sha256": c.messages_sha256(self.messages), "last_request_id": None, "session_kv_bytes": 1}
+
+        def pause_boundary(self):
+            self.generation += 1
+            self.messages = self.messages + [{"role": "assistant", "content": "new"}]
+
+        def commit_switch(self, expected_generation, port, messages):
+            return self.generation == expected_generation
+
+        def resume(self):
+            pass
+
+    now = time.time()
+    monkeypatch.setattr(c, "stream_chat", lambda *_args: {"status": 200, "content": "x", "first_token_ts": now, "start_ts": now, "end_ts": now, "prompt_sha256": c.messages_sha256(_args[2]), "request_id": "req", "response_text": ""})
+    monkeypatch.setattr(c, "wait_lmcache_lookup_tokens", lambda *_args, **_kwargs: (10, 0))
+    row = {"id": "a", "action": "R", "fixture_index": 0, "dispatch_rank": 0, "deadline_s": 2.0}
+
+    out = c.run_live_moves(type("Cfg", (), {"api_proxy_port": 8400})(), tmp_path, {"a": Worker()}, [row])
+
+    assert out[0]["commit_result"] == "committed"
+    assert out[0]["generation_delta"] == 1
+    assert out[0]["staging_attempts"] == 2
+    assert out[0]["final_delta_s"] >= 0
+    assert out[0]["committed_context_sha256"] == out[0]["staged_context_sha256"]
 
 def test_nvsmi_command_uses_250ms_sampling():
     assert c.nvsmi_cmd(250)[-2:] == ["-lms", "250"]
@@ -314,16 +392,17 @@ def test_power_summary_rows_skips_nvidia_smi_na_samples(tmp_path: Path):
 def test_check_live_manifest_requires_files_and_route_evidence(tmp_path: Path):
     for name in c.LIVE_ARTIFACTS:
         (tmp_path / name).write_text("x")
+    common = {"http_status": 200, "first_token_s": 0.1, "prompt_sha256": "hash", "staged_context_sha256": "hash", "committed_context_sha256": "hash", "commit_result": "committed", "deadline_met": True, "stage_lmcache_total_tokens": 10}
     manifest = {
         "schema": c.LIVE_SCHEMA,
         "sessions": [
-            {"id": "r", "action": "R", "dispatch_rank": 0, "http_status": 200, "first_token_s": 0.1, "proxy_delta": {"api/client_to_target": 10}},
-            {"id": "s", "action": "S", "dispatch_rank": 1, "http_status": 200, "first_token_s": 0.2, "proxy_delta": {"kv/target_to_client": 10}},
+            {**common, "id": "r", "action": "R", "dispatch_rank": 0, "stage_lmcache_hit_tokens": 0, "proxy_delta": {"api/client_to_target": 10}},
+            {**common, "id": "s", "action": "S", "dispatch_rank": 1, "stage_lmcache_hit_tokens": 10, "proxy_delta": {"kv/target_to_client": 10}},
         ],
     }
 
     c.check_live_manifest(manifest, tmp_path)
-    manifest["sessions"][1]["proxy_delta"] = {}
+    manifest["sessions"][1]["stage_lmcache_hit_tokens"] = 0
     with pytest.raises(ValueError, match="KV action"):
         c.check_live_manifest(manifest, tmp_path)
 
@@ -384,7 +463,7 @@ def test_delay_summary_writes_total_delay_csv_and_plot(tmp_path: Path):
     delays = c.write_delay_summary(rows, tmp_path / "delay_summary.csv", tmp_path / "delay_summary.png")
 
     assert sum(d["first_token_s"] for d in delays) == pytest.approx(4.5)
-    assert (tmp_path / "delay_summary.csv").read_text().splitlines()[0] == "dispatch_rank,id,action,first_token_s,sink_warm_s,completion_s,source_boundary_wait_s,switch_downtime_s"
+    assert (tmp_path / "delay_summary.csv").read_text().splitlines()[0] == "dispatch_rank,id,action,commit_result,selection_to_stage_start_s,initial_staging_s,final_delta_s,staging_s,first_token_s,sink_warm_s,completion_s,source_boundary_wait_s,switch_downtime_s"
     assert (tmp_path / "delay_summary.png").exists()
 
 
@@ -646,6 +725,18 @@ def test_stored_session_kv_bytes_uses_largest_session_snapshot(tmp_path: Path):
 
     assert c.stored_session_kv_bytes(log, "req-a") == 246_100_000
 
+
+
+def test_lmcache_lookup_tokens_matches_exact_request(tmp_path: Path):
+    log = tmp_path / "sink.log"
+    log.write_text("\n".join([
+        "Reqid: req-a, Total tokens 100, LMCache hit tokens: 96, need to load: 96",
+        "Reqid: req-b, Total tokens 100, LMCache hit tokens: 0, need to load: 0",
+    ]))
+
+    assert c.lmcache_lookup_tokens(log, "req-a") == (100, 96)
+    assert c.lmcache_lookup_tokens(log, "req-b") == (100, 0)
+    assert c.lmcache_lookup_tokens(log, "req") is None
 
 
 def test_write_proxy_slice_filters_to_scenario_windows(tmp_path: Path):
