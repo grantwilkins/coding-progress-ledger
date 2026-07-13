@@ -76,6 +76,21 @@ def test_manifest_check_requires_solver_mix_deadline_and_route_evidence():
         c.check_manifest(manifest)
 
 
+def test_link_stack_logs_uses_relative_symlinks(tmp_path: Path):
+    run_root = tmp_path / "run"
+    stack_root = run_root / "stack"
+    stack_root.mkdir(parents=True)
+    (stack_root / "source.log").write_text("ok")
+
+    c.link_stack_logs(run_root, stack_root)
+
+    link = run_root / "source.log"
+    assert link.is_symlink()
+    assert link.readlink() == Path("stack/source.log")
+    assert link.read_text() == "ok"
+
+
+
 
 def _write_tracelab(path: Path) -> None:
     rows = []
