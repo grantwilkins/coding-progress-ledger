@@ -182,7 +182,17 @@ sbatch queue-haul/stage1c_quick.sbatch
 sbatch queue-haul/stage1c_grid.sbatch
 ```
 
-`live-drain` keeps source vLLM on GPU 0 and sink vLLM on GPU 1 up together,
+The launcher pins the validated vLLM `0.10.1.1` / LMCache `0.3.3` sandbox and
+hard-fails on another package pair. `live-grid` starts source vLLM on GPU 0 and
+sink vLLM on GPU 1 once for the whole sweep. Before every scenario it waits for
+profiling to finish, clears the shared remote KV store with an acknowledgement,
+resets both vLLM prefix caches, and assigns a unique cache namespace. LMCache
+0.3.3 cannot remotely deallocate its in-process 4 GB pools; they stay bounded and
+cannot hit across scenario namespaces. Each scenario starts and stops its own
+`nvidia-smi` process and records before/after `/metrics` snapshots for both vLLM
+servers.
+
+`live-drain` keeps both servers up together,
 runs Poisson turn loops from synthetic TraceLab-sized rolling transcripts, profiles
 replay/KV movement when `--profile` is missing or stamped with a different
 LMCache CPU size, warms the sink before switching
@@ -191,6 +201,7 @@ the source session, bounds replay prefill concurrency to `--replay-concurrency`
 writes `gpu_power.csv`, `events.jsonl`, `controller_manifest.json`,
 `power_summary.csv`, `power_trace.png`, `source_power.png`, `sink_power.png`,
 `delay_summary.csv`, `delay_summary.png`, `ell_power5s.csv`, `ell_power5s.png`,
+`source_metrics_{before,after}.prom`, `sink_metrics_{before,after}.prom`,
 `request_counts.csv`, and `proxy_audit.csv`. `live-grid` also writes
 `scenario_summary.csv`, `grid_power_drop.png`, and `grid_delay.png`. Use
 `POLICIES=greedy,random,all-r,all-s sbatch queue-haul/stage1c_quick.sbatch`

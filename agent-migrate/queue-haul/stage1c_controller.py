@@ -36,7 +36,8 @@ LIVE_ARTIFACTS = (
     "gpu_power.csv", "events.jsonl", "power_summary.csv", "power_trace.png",
     "source_power.png", "sink_power.png", "delay_summary.csv", "delay_summary.png",
     "ell_power5s.csv", "ell_power5s.png", "request_counts.csv", "proxy_audit.csv",
-    "host_mem.log",
+    "host_mem.log", "source_metrics_before.prom", "source_metrics_after.prom",
+    "sink_metrics_before.prom", "sink_metrics_after.prom",
 )
 WORDS_PER_TOKEN = 0.75
 LIVE_A100_P_IDLE_W = 67.12041959182154
@@ -521,12 +522,12 @@ def prompt_tokens(cfg: b.Config, prompt: str) -> int:
     return len(tok(prompt).input_ids)
 
 
-def profile_prompt(cfg: b.Config, target_tokens: int) -> tuple[str, int]:
+def profile_prompt(cfg: b.Config, target_tokens: int, namespace: str = "") -> tuple[str, int]:
     words = max(64, int(target_tokens * WORDS_PER_TOKEN))
     prompt, actual = "", 0
     for _ in range(8):
         body = " ".join(f"p{target_tokens}_{i}" for i in range(words))
-        prompt = f"Synthetic token-count calibration session. {body}. Reply with OK."
+        prompt = f"Synthetic token-count calibration session {namespace}. {body}. Reply with OK."
         actual = prompt_tokens(cfg, prompt)
         if actual and abs(actual - target_tokens) / max(target_tokens, 1) <= 0.03:
             break
@@ -550,10 +551,11 @@ def _profile_row(action: str, requested_tokens: int, actual_tokens: int, result:
     return row
 
 
-def calibrate_live_profile(cfg: b.Config, run_root: Path, sessions: list[dict], mbps: float, max_points: int = 3) -> dict:
+def calibrate_live_profile(cfg: b.Config, run_root: Path, sessions: list[dict], mbps: float, namespace: str = "", max_points: int = 3) -> dict:
     rows, proxy_log = [], run_root / "proxy_bytes.csv"
+    namespace = hashlib.sha256(namespace.encode()).hexdigest()[:16]
     for target_tokens in profile_token_points(sessions, max_points):
-        prompt, actual_tokens = profile_prompt(cfg, target_tokens)
+        prompt, actual_tokens = profile_prompt(cfg, target_tokens, namespace)
         before = b.proxy_counts(proxy_log)
         replay_prompt = f"Replay profile {target_tokens} {time.time()}.\n{prompt}"
         replay_tokens = prompt_tokens(cfg, replay_prompt)
@@ -604,7 +606,7 @@ def ensure_live_profile(cfg: b.Config, run_root: Path, profile_path: Path | None
             return _finalize_live_profile(profile), path
     else:
         path.parent.mkdir(parents=True, exist_ok=True)
-    profile = calibrate_live_profile(cfg, run_root, live_sessions(manifest), mbps)
+    profile = calibrate_live_profile(cfg, run_root, live_sessions(manifest), mbps, str(path))
     path.write_text(json.dumps(profile, indent=2, sort_keys=True))
     return profile, path
 
@@ -1319,6 +1321,11 @@ def link_stack_logs(run_root: Path, stack_root: Path) -> None:
         dst.symlink_to(os.path.relpath(src, run_root))
 
 
+def write_vllm_metrics(cfg: b.Config, run_root: Path, suffix: str) -> None:
+    for role, port in (("source", cfg.src_port), ("sink", cfg.sink_port)):
+        (run_root / f"{role}_metrics_{suffix}.prom").write_text(b.http_text(cfg.host, port, "GET", "/metrics"))
+
+
 def write_proxy_slice(src: Path, dst: Path, windows: dict[str, tuple[float, float]]) -> None:
     dst.parent.mkdir(parents=True, exist_ok=True)
     with src.open() as f, dst.open("w", newline="") as out:
@@ -1352,6 +1359,8 @@ def live_drain(cfg: b.Config, run_root: Path, manifest: dict, mbps: float, nvsmi
         b.wait_health(cfg.host, cfg.sink_port, 60)
         profile, used_profile_path = ensure_live_profile(cfg, stack_root if not owned_stack else run_root, profile_path, manifest, mbps)
         b.flush_lmcache(stack)
+        b.reset_vllm_caches(cfg)
+        write_vllm_metrics(cfg, run_root, "before")
         nvsmi = start_nvsmi(run_root / "gpu_power.csv", nvsmi_ms)
         source_log = stack_root / "source.log"
         proxy_log = stack_root / "proxy_bytes.csv" if not owned_stack else run_root / "proxy_bytes.csv"
@@ -1384,6 +1393,7 @@ def live_drain(cfg: b.Config, run_root: Path, manifest: dict, mbps: float, nvsmi
         post_end = time.time()
         for worker in workers.values():
             worker.stop()
+        write_vllm_metrics(cfg, run_root, "after")
         windows = {"baseline": (baseline_start, drain_start), "drain": (drain_start, drain_end), "post": (drain_end, post_end)}
         if nvsmi:
             stop_nvsmi(*nvsmi)
@@ -1399,7 +1409,7 @@ def live_drain(cfg: b.Config, run_root: Path, manifest: dict, mbps: float, nvsmi
         delays = write_delay_summary(rows, run_root / "delay_summary.csv", run_root / "delay_summary.png")
         request_counts = write_request_counts(run_root / "events.jsonl", run_root / "request_counts.csv", windows)
         write_ell_power5s(run_root / "gpu_power.csv", {**summary, "input_manifest": manifest, "sessions": rows, "windows": windows}, run_root / "ell_power5s.csv", run_root / "ell_power5s.png")
-        out = {**summary, "schema": LIVE_SCHEMA, "input_manifest": manifest, "sessions": rows, "delay_summary": delays, "request_counts": request_counts, "proxy_audit": proxy_audit, "windows": windows, "profile_path": str(used_profile_path), "scheduler": {"warm_movement": True, "replay_concurrency": replay_concurrency, "kv_concurrency": kv_concurrency or max(1, len(move_rows)), "persistent_stack": not owned_stack, "cache_isolation": "scenario_nonce"}, "acceptance": {"ok": True, "power_threshold_gated": False, "planned_hit": summary["planned_hit"], "proxy_audit_ok": all(r["ok"] for r in proxy_audit)}}
+        out = {**summary, "schema": LIVE_SCHEMA, "input_manifest": manifest, "sessions": rows, "delay_summary": delays, "request_counts": request_counts, "proxy_audit": proxy_audit, "windows": windows, "profile_path": str(used_profile_path), "scheduler": {"warm_movement": True, "replay_concurrency": replay_concurrency, "kv_concurrency": kv_concurrency or max(1, len(move_rows)), "persistent_stack": not owned_stack, "cache_isolation": "remote_flush+vllm_prefix_reset+scenario_nonce"}, "acceptance": {"ok": True, "power_threshold_gated": False, "planned_hit": summary["planned_hit"], "proxy_audit_ok": all(r["ok"] for r in proxy_audit)}}
         check_live_manifest(out, run_root)
         (run_root / "controller_manifest.json").write_text(json.dumps(out, indent=2, sort_keys=True))
     finally:
@@ -1499,25 +1509,27 @@ def live_grid(cfg: b.Config, run_root: Path, manifest: dict | list[dict], polici
               replay_concurrency: int = 1, kv_concurrency: int | None = None) -> Path:
     manifests = manifest if isinstance(manifest, list) else [manifest]
     multi = len(manifests) > 1
-    run_roots = []
+    run_roots, workloads = [], []
     for one in manifests:
         workload = _safe_name(manifest_workload(one))
         root = run_root / workload if multi else run_root
         base = {**one, "baseline_s": baseline_s, "settle_s": settle_s}
         prof = root / "live_profile.json" if profile_path is None else profile_path.parent / f"{profile_path.stem}_{workload}{profile_path.suffix}" if multi else profile_path
         jobs = [(root / grid_run_name(policy, D, frac), policy, D, frac) for policy in policies for D in deadlines for frac in target_fracs]
-        stack = None
-        try:
-            if any(not (dst / "controller_manifest.json").exists() for dst, _policy, _D, _frac in jobs):
-                stack = b.start_stack(cfg, root / "stack", mbps, extra)
-                b.start_sink(stack, cfg, extra)
+        workloads.append((base, prof, jobs))
+    stack = None
+    try:
+        if any(not (dst / "controller_manifest.json").exists() for _base, _prof, jobs in workloads for dst, _policy, _D, _frac in jobs):
+            stack = b.start_stack(cfg, run_root / "stack", mbps, extra)
+            b.start_sink(stack, cfg, extra)
+        for base, prof, jobs in workloads:
             for dst, policy, D, frac in jobs:
                 if not (dst / "controller_manifest.json").exists():
                     live_drain(cfg, dst, base, mbps, nvsmi_ms, extra, policy, seed, D, frac, prof, replay_concurrency, kv_concurrency, stack)
                 run_roots.append(dst)
-        finally:
-            if stack:
-                b.stop_stack(stack)
+    finally:
+        if stack:
+            b.stop_stack(stack)
     write_grid_summary(run_roots, run_root / "scenario_summary.csv", run_root / "grid_power_drop.png", run_root / "grid_delay.png")
     return run_root
 

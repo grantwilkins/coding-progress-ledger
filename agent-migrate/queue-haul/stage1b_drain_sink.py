@@ -24,6 +24,8 @@ from stage1_curves import shell
 
 MODEL = "openai/gpt-oss-20b"
 SANDBOX = Path("/scratch/users/gfw/ptsim/vllm-openai-v0.10.1.1.sandbox")
+RUNTIME_VERSIONS = ("0.10.1.1", "0.3.3")
+LMCACHE_CLEAR_MARKER = "LMCache lite server cleared"
 
 
 def apptainer_image_default() -> Path:
@@ -170,6 +172,7 @@ def vllm_exports(cfg: Config, role: str, remote_url: str) -> list[str]:
     env = {
         "PYTHONHASHSEED": "0",
         "VLLM_EXECUTE_MODEL_TIMEOUT_SECONDS": "900",
+        "VLLM_SERVER_DEV_MODE": "1",
         "VLLM_USE_FLASHINFER_SAMPLER": "0",
         "TORCH_CUDA_ARCH_LIST": "8.0",
         "TMPDIR": str(tmpdir(role)),
@@ -291,6 +294,11 @@ def gpu_count() -> int:
     return sum(1 for line in out.splitlines() if line.startswith("GPU "))
 
 
+def runtime_versions(cfg: Config) -> tuple[str, str]:
+    vllm, lmcache = subprocess.check_output(apptainer_cmd(cfg, shell(["/usr/bin/python3", "-c", "from importlib.metadata import version; print(version('vllm'), version('lmcache'))"]), nv=False), text=True).split()
+    return vllm, lmcache
+
+
 def preflight(cfg: Config, required_gpus: int = 1) -> list[str]:
     validate_ports(cfg)
     failures = []
@@ -298,6 +306,10 @@ def preflight(cfg: Config, required_gpus: int = 1) -> list[str]:
         failures.append("apptainer not found")
     if not cfg.sandbox.exists():
         failures.append(f"sandbox missing: {cfg.sandbox}")
+    elif shutil.which("apptainer"):
+        versions = runtime_versions(cfg)
+        if versions != RUNTIME_VERSIONS:
+            failures.append(f"need vLLM/LMCache {RUNTIME_VERSIONS}, saw {versions}")
     snapshots = model_snapshot_dir(cfg.hf_home, cfg.model)
     if not snapshots.exists() or not any(snapshots.iterdir()):
         failures.append(f"model snapshot missing: {snapshots}")
@@ -319,6 +331,8 @@ def preflight(cfg: Config, required_gpus: int = 1) -> list[str]:
         f"docker_present={bool(shutil.which('docker'))}",
         "real_tc=disabled_no_cap_net_admin",
         f"sandbox={cfg.sandbox}",
+        f"vllm={RUNTIME_VERSIONS[0]}",
+        f"lmcache={RUNTIME_VERSIONS[1]}",
         f"model_snapshots={snapshots}",
     ]
 
@@ -456,7 +470,12 @@ def handle_lmcache_client(sock: socket.socket, store: LiteLMCache) -> None:
 
 def run_lmcache_server(host: str, port: int, max_bytes: int = 0) -> None:
     store = LiteLMCache(max_bytes)
-    signal.signal(signal.SIGUSR1, lambda _signum, _frame: store.clear())
+
+    def clear(_signum, _frame) -> None:
+        store.clear()
+        print(LMCACHE_CLEAR_MARKER, flush=True)
+
+    signal.signal(signal.SIGUSR1, clear)
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as server:
         server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         server.bind((host, port))
@@ -647,8 +666,35 @@ def stop_stack(stack: Stack) -> None:
 def flush_lmcache(stack: Stack) -> None:
     if stack.lmcache.poll() is not None:
         raise RuntimeError("LMCache server is not running")
+    log = stack.run_root / "lmcache.log"
+    cleared = count_needle(log, LMCACHE_CLEAR_MARKER)
     os.kill(stack.lmcache.pid, signal.SIGUSR1)
-    time.sleep(0.2)
+    deadline = time.monotonic() + 5
+    while time.monotonic() < deadline:
+        if count_needle(log, LMCACHE_CLEAR_MARKER) > cleared:
+            return
+        if stack.lmcache.poll() is not None:
+            raise RuntimeError("LMCache server exited while clearing")
+        time.sleep(0.05)
+    raise TimeoutError("LMCache clear was not acknowledged")
+
+
+def http_text(host: str, port: int, method: str, path: str) -> str:
+    conn = http.client.HTTPConnection(host, port, timeout=30)
+    try:
+        conn.request(method, path)
+        response = conn.getresponse()
+        body = response.read().decode(errors="ignore")
+    finally:
+        conn.close()
+    if response.status != 200:
+        raise RuntimeError(f"{method} http://{host}:{port}{path} failed {response.status}: {body[:500]}")
+    return body
+
+
+def reset_vllm_caches(cfg: Config) -> None:
+    for port in (cfg.src_port, cfg.sink_port):
+        http_text(cfg.host, port, "POST", "/reset_prefix_cache")
 
 
 def read_text(path: Path) -> str:

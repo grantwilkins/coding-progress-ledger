@@ -15,8 +15,6 @@ from __future__ import annotations
 
 import asyncio
 import csv
-import os
-import signal
 import socket
 import subprocess
 import sys
@@ -57,6 +55,7 @@ def test_vllm_commands_pin_validated_sandbox_flags_and_roles():
     assert "LMCACHE_LMCACHE_INSTANCE_ID=stage1b_src" in source
     assert "LMCACHE_LMCACHE_INSTANCE_ID=stage1b_sink" in sink
     assert "VLLM_USE_FLASHINFER_SAMPLER=0" in source
+    assert "VLLM_SERVER_DEV_MODE=1" in source
     assert "nvidia/cu13/lib" in source
     assert "${LD_LIBRARY_PATH:-}" in source
     assert "LMCACHE_MAX_LOCAL_CPU_SIZE=4" in source
@@ -182,11 +181,29 @@ def test_lite_lmcache_server_put_get_and_flush(tmp_path):
             time.sleep(0.05)
         else:
             pytest.fail("PUT was not visible to GET")
-        os.kill(proc.pid, signal.SIGUSR1)
-        time.sleep(0.2)
+        s.flush_lmcache(s.Stack(proc, None, None, None, tmp_path))
+        assert s.LMCACHE_CLEAR_MARKER in log.read_text()
         assert _lmc_request(port, s.LMCACHE_CLIENT_GET) == (s.LMCACHE_SERVER_FAIL, b"")
     finally:
         s.stop_proc(proc)
+
+
+def test_reset_vllm_caches_resets_both_gpus(monkeypatch):
+    calls = []
+    monkeypatch.setattr(s, "http_text", lambda host, port, method, path: calls.append((host, port, method, path)))
+
+    s.reset_vllm_caches(s.Config())
+
+    assert calls == [
+        ("127.0.0.1", 8100, "POST", "/reset_prefix_cache"),
+        ("127.0.0.1", 8200, "POST", "/reset_prefix_cache"),
+    ]
+
+
+def test_runtime_versions_are_pinned(monkeypatch):
+    monkeypatch.setattr(s.subprocess, "check_output", lambda *_args, **_kwargs: "0.10.1.1 0.3.3\n")
+
+    assert s.runtime_versions(s.Config()) == s.RUNTIME_VERSIONS
 
 
 def test_duplicate_ports_and_passthrough_overrides_hard_fail():

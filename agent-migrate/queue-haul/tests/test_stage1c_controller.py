@@ -446,7 +446,7 @@ def test_live_plan_records_target_miss_without_raising(tmp_path: Path):
 
 
 
-def test_live_grid_multi_manifest_uses_workload_dirs_profiles_and_one_stack_each(tmp_path: Path, monkeypatch):
+def test_live_grid_multi_manifest_uses_workload_dirs_profiles_and_one_stack(tmp_path: Path, monkeypatch):
     calls, stacks, stopped = [], [], []
 
     def fake_start_stack(_cfg, root, _mbps, _extra):
@@ -469,12 +469,22 @@ def test_live_grid_multi_manifest_uses_workload_dirs_profiles_and_one_stack_each
 
     c.live_grid(type("Cfg", (), {})(), tmp_path, manifests, ["greedy"], [30.0], [0.45], 1000.0, 250, 1.0, 1.0, 0, [], tmp_path / "profile.json")
 
-    assert stacks == [tmp_path / "small" / "stack", tmp_path / "large" / "stack"]
+    assert stacks == [tmp_path / "stack"]
     assert stopped == stacks
     assert calls == [
-        (tmp_path / "small" / "greedy_D30_T0p45", "small", "greedy", 30.0, 0.45, tmp_path / "profile_small.json", tmp_path / "small" / "stack"),
-        (tmp_path / "large" / "greedy_D30_T0p45", "large", "greedy", 30.0, 0.45, tmp_path / "profile_large.json", tmp_path / "large" / "stack"),
+        (tmp_path / "small" / "greedy_D30_T0p45", "small", "greedy", 30.0, 0.45, tmp_path / "profile_small.json", tmp_path / "stack"),
+        (tmp_path / "large" / "greedy_D30_T0p45", "large", "greedy", 30.0, 0.45, tmp_path / "profile_large.json", tmp_path / "stack"),
     ]
+
+
+def test_write_vllm_metrics_creates_fresh_role_snapshots(tmp_path: Path, monkeypatch):
+    cfg = type("Cfg", (), {"host": "127.0.0.1", "src_port": 1, "sink_port": 2})()
+    monkeypatch.setattr(c.b, "http_text", lambda _host, port, _method, _path: f"port {port}\n")
+
+    c.write_vllm_metrics(cfg, tmp_path, "before")
+
+    assert (tmp_path / "source_metrics_before.prom").read_text() == "port 1\n"
+    assert (tmp_path / "sink_metrics_before.prom").read_text() == "port 2\n"
 
 
 def test_live_grid_skips_completed_scenarios(tmp_path: Path, monkeypatch):
@@ -572,21 +582,29 @@ def test_grid_sbatch_defaults_to_old_runtime():
     assert "QH_PORT_OFFSET=${QH_PORT_OFFSET:-$((SLURM_JOB_ID % 40000 + 1000))}" in text
 
 
+def test_profile_prompt_has_cache_namespace(monkeypatch):
+    monkeypatch.setattr(c, "prompt_tokens", lambda _cfg, _prompt: 1024)
+
+    prompt, _tokens = c.profile_prompt(type("Cfg", (), {})(), 1024, "profile-a")
+
+    assert "calibration session profile-a" in prompt
+
+
 def test_live_profile_recalibrates_on_lmcache_runtime_change(tmp_path: Path, monkeypatch):
     manifest = _manifest_for_live_policy_tests(tmp_path)
     path = tmp_path / "profile.json"
     path.write_text(json.dumps({"schema": c.PROFILE_SCHEMA, "lmcache_max_local_cpu_gb": "0.25", "points": []}))
     calls = []
 
-    def fake_calibrate(_cfg, _run_root, sessions, mbps):
-        calls.append((len(sessions), mbps))
+    def fake_calibrate(_cfg, _run_root, sessions, mbps, namespace):
+        calls.append((len(sessions), mbps, namespace))
         return {"schema": c.PROFILE_SCHEMA, "lmcache_max_local_cpu_gb": c.b.LMCACHE_MAX_LOCAL_CPU_GB, "mbps": mbps, "points": []}
 
     monkeypatch.setattr(c, "calibrate_live_profile", fake_calibrate)
     profile, used = c.ensure_live_profile(type("Cfg", (), {})(), tmp_path, path, manifest, 1000.0)
 
     assert used == path
-    assert calls == [(2, 1000.0)]
+    assert calls == [(2, 1000.0, str(path))]
     assert profile["lmcache_max_local_cpu_gb"] == "4"
 
 
