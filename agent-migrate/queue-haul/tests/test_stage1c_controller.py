@@ -477,6 +477,30 @@ def test_live_grid_multi_manifest_uses_workload_dirs_profiles_and_one_stack(tmp_
     ]
 
 
+def test_smart_jobs_use_profile_deadlines_and_only_repeat_random_and_greedy(tmp_path: Path, monkeypatch):
+    monkeypatch.setattr(c, "apply_live_profile", lambda manifest, _profile: manifest)
+    monkeypatch.setattr(c, "live_plan_summary", lambda _manifest, _policy, **kwargs: {
+        "planned_completion_s": 100 * kwargs["target_frac"]
+    })
+
+    jobs = c._smart_jobs(tmp_path, {}, {}, ["greedy", "random", "all-r", "all-s"],
+                         [0.25, 0.65], [0.75, 1.0, 1.5], [0, 1, 2], 1, None)
+
+    assert len(jobs) == 16
+    assert [job[2] for job in jobs].count("greedy") == 6
+    assert [job[2] for job in jobs].count("random") == 6
+    assert [job[2] for job in jobs].count("all-r") == 2
+    assert [job[2] for job in jobs].count("all-s") == 2
+    assert {job[3] for job in jobs if job[2] == "random"} == {0, 1, 2}
+    assert {job[4] for job in jobs if job[5] == 0.25 and job[2] == "greedy"} == {18.75, 25.0, 37.5}
+    assert all(job[1]["scenario"]["reference_deadline_s"] == 25.0
+               for job in jobs if job[5] == 0.25)
+    assert len({job[0] for job in jobs}) == len(jobs)
+
+    with pytest.raises(ValueError, match="offline"):
+        c._smart_jobs(tmp_path, {}, {}, ["lp"], [0.25], [1.0], [0], 1, None)
+
+
 def test_write_vllm_metrics_creates_fresh_role_snapshots(tmp_path: Path, monkeypatch):
     cfg = type("Cfg", (), {"host": "127.0.0.1", "src_port": 1, "sink_port": 2})()
     monkeypatch.setattr(c.b, "http_text", lambda _host, port, _method, _path: f"port {port}\n")

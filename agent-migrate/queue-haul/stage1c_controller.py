@@ -789,6 +789,7 @@ def live_plan_summary(manifest: dict, policy: str = "greedy", seed: int = 0,
     return {
         "schema": "queue-haul-stage1c-live-plan-v1",
         "policy": policy,
+        "seed": seed,
         "deadline_s": event.D,
         "target_frac": float(target_frac if target_frac is not None else target_ratio),
         "target_w": target_w,
@@ -1429,8 +1430,9 @@ def _fmt(x: float) -> str:
     return f"{float(x):g}".replace(".", "p")
 
 
-def grid_run_name(policy: str, deadline_s: float, target_frac: float) -> str:
-    return f"{policy}_D{_fmt(deadline_s)}_T{_fmt(target_frac)}"
+def grid_run_name(policy: str, deadline_s: float, target_frac: float, seed: int | None = None) -> str:
+    suffix = f"_S{seed}" if seed is not None else ""
+    return f"{policy}{suffix}_D{_fmt(deadline_s)}_T{_fmt(target_frac)}"
 
 
 def _power_summary_lookup(path: Path) -> dict[tuple[str, int], float]:
@@ -1453,12 +1455,17 @@ def grid_summary_row(run_root: Path) -> dict:
         total_first = sum(float(d["first_token_s"]) for d in delays)
         total_completion = sum(float(d["completion_s"]) for d in delays)
     deadline = float(manifest["deadline_s"])
+    scenario = input_manifest.get("scenario", {})
+    reference = float(scenario.get("reference_deadline_s", deadline))
     return {
         "workload": manifest_workload(input_manifest),
         "input_sessions": len(input_sessions),
         "median_served_T": float(np.median(served)) if served else math.nan,
         "policy": manifest["policy"],
+        "seed": int(manifest.get("seed", 0)),
         "deadline_s": deadline,
+        "deadline_scale": float(scenario.get("deadline_scale", deadline / reference)),
+        "reference_deadline_s": reference,
         "target_frac": float(manifest["target_frac"]),
         "target_w": float(manifest["target_w"]),
         "full_source_drop_w": float(manifest["full_source_drop_w"]),
@@ -1470,6 +1477,7 @@ def grid_summary_row(run_root: Path) -> dict:
         "measured_sink_rise_w": power.get(("post", 1), math.nan) - power.get(("baseline", 1), math.nan),
         "total_first_token_s": float(total_first),
         "total_completion_s": float(total_completion),
+        "completion_to_reference": float(total_completion / reference),
         "max_completion_s": float(max((d["completion_s"] for d in delays), default=math.nan)),
         "sessions": len(manifest.get("sessions", [])),
         "run_root": str(run_root),
@@ -1503,29 +1511,76 @@ def write_grid_summary(run_roots: list[Path], out_csv: Path, power_png: Path, de
     return rows
 
 
+def _smart_jobs(root: Path, base: dict, profile: dict, policies: list[str], target_fracs: list[float],
+                deadline_scales: list[float], random_seeds: list[int], replay_concurrency: int,
+                kv_concurrency: int | None) -> list[tuple]:
+    if set(policies) - {"greedy", "random", "all-r", "all-s"}:
+        raise ValueError("smart sweep keeps LP offline; policies must be greedy,random,all-r,all-s")
+    jobs = []
+    profiled = apply_live_profile(base, profile)
+    for frac in target_fracs:
+        reference = live_plan_summary(profiled, "greedy", deadline_s=1e9, target_frac=frac,
+                                      replay_concurrency=replay_concurrency,
+                                      kv_concurrency=kv_concurrency)["planned_completion_s"]
+        if not math.isfinite(reference) or reference <= 0:
+            raise ValueError(f"invalid profiled completion time {reference} for target {frac}")
+        for policy in policies:
+            variants = ((scale, 0) for scale in deadline_scales) if policy == "greedy" else (
+                ((1.0, seed) for seed in random_seeds) if policy == "random" else ((1.0, 0),)
+            )
+            for scale, seed in variants:
+                D = reference * scale
+                scenario = {"deadline_scale": scale, "reference_deadline_s": reference}
+                dst = root / grid_run_name(policy, D, frac, seed if policy == "random" else None)
+                jobs.append((dst, {**base, "scenario": scenario}, policy, seed, D, frac))
+    return jobs
+
+
 def live_grid(cfg: b.Config, run_root: Path, manifest: dict | list[dict], policies: list[str], deadlines: list[float],
               target_fracs: list[float], mbps: float, nvsmi_ms: int, baseline_s: float,
               settle_s: float, seed: int, extra: list[str], profile_path: Path | None = None,
-              replay_concurrency: int = 1, kv_concurrency: int | None = None) -> Path:
+              replay_concurrency: int = 1, kv_concurrency: int | None = None,
+              smart_sweep: bool = False, deadline_scales: list[float] | None = None,
+              random_seeds: list[int] | None = None) -> Path:
     manifests = manifest if isinstance(manifest, list) else [manifest]
     multi = len(manifests) > 1
+    run_root.mkdir(parents=True, exist_ok=True)
     run_roots, workloads = [], []
     for one in manifests:
         workload = _safe_name(manifest_workload(one))
         root = run_root / workload if multi else run_root
         base = {**one, "baseline_s": baseline_s, "settle_s": settle_s}
         prof = root / "live_profile.json" if profile_path is None else profile_path.parent / f"{profile_path.stem}_{workload}{profile_path.suffix}" if multi else profile_path
-        jobs = [(root / grid_run_name(policy, D, frac), policy, D, frac) for policy in policies for D in deadlines for frac in target_fracs]
-        workloads.append((base, prof, jobs))
+        workloads.append((root, base, prof, []))
     stack = None
     try:
-        if any(not (dst / "controller_manifest.json").exists() for _base, _prof, jobs in workloads for dst, _policy, _D, _frac in jobs):
+        if smart_sweep:
             stack = b.start_stack(cfg, run_root / "stack", mbps, extra)
             b.start_sink(stack, cfg, extra)
-        for base, prof, jobs in workloads:
-            for dst, policy, D, frac in jobs:
+            for i, (root, base, prof, _jobs) in enumerate(workloads):
+                profile, _ = ensure_live_profile(cfg, stack.run_root, prof, base, mbps)
+                workloads[i] = (root, base, prof, _smart_jobs(root, base, profile, policies, target_fracs,
+                                deadline_scales or [0.75, 1.0, 1.5], random_seeds or [0, 1, 2],
+                                replay_concurrency, kv_concurrency))
+        else:
+            workloads = [(root, base, prof, [(root / grid_run_name(policy, D, frac), base, policy, seed, D, frac)
+                         for policy in policies for D in deadlines for frac in target_fracs])
+                         for root, base, prof, _jobs in workloads]
+        plan = [{"workload": manifest_workload(base), "run_root": str(dst), "policy": policy,
+                 "seed": job_seed, "deadline_s": D, "target_frac": frac,
+                 **job_manifest.get("scenario", {})}
+                for _root, base, _prof, jobs in workloads
+                for dst, job_manifest, policy, job_seed, D, frac in jobs]
+        (run_root / "scenario_plan.json").write_text(json.dumps(plan, indent=2, sort_keys=True))
+        if stack is None and any(not (dst / "controller_manifest.json").exists()
+                                 for _root, _base, _prof, jobs in workloads
+                                 for dst, _manifest, _policy, _seed, _D, _frac in jobs):
+            stack = b.start_stack(cfg, run_root / "stack", mbps, extra)
+            b.start_sink(stack, cfg, extra)
+        for _root, _base, prof, jobs in workloads:
+            for dst, job_manifest, policy, job_seed, D, frac in jobs:
                 if not (dst / "controller_manifest.json").exists():
-                    live_drain(cfg, dst, base, mbps, nvsmi_ms, extra, policy, seed, D, frac, prof, replay_concurrency, kv_concurrency, stack)
+                    live_drain(cfg, dst, job_manifest, mbps, nvsmi_ms, extra, policy, job_seed, D, frac, prof, replay_concurrency, kv_concurrency, stack)
                 run_roots.append(dst)
     finally:
         if stack:
@@ -1594,6 +1649,9 @@ def parse_args(argv: list[str] | None = None):
     grid_p.add_argument("--profile", type=Path)
     grid_p.add_argument("--replay-concurrency", type=int, default=1)
     grid_p.add_argument("--kv-concurrency", type=int, default=0)
+    grid_p.add_argument("--smart-sweep", action="store_true")
+    grid_p.add_argument("--deadline-scales", default="0.75,1,1.5")
+    grid_p.add_argument("--random-seeds", default="0,1,2")
     grid_p.add_argument("extra_vllm_args", nargs=argparse.REMAINDER)
     check_live_p = sub.add_parser("check-live")
     check_live_p.add_argument("--run-root", type=Path, default=Path("queue-haul/outputs/stage1c_live"))
@@ -1635,7 +1693,7 @@ def main(argv: list[str] | None = None) -> None:
         if not paths:
             raise ValueError("live-grid requires --manifest or --manifests")
         manifests = [json.loads(path.read_text()) for path in paths]
-        print(live_grid(cfg, args.run_root, manifests if len(manifests) > 1 else manifests[0], _csv_list(args.policies), _csv_list(args.deadlines, float), _csv_list(args.target_fracs, float), args.mbps, args.nvsmi_ms, args.baseline_s, args.settle_s, args.seed, extra, args.profile, args.replay_concurrency, args.kv_concurrency or None))
+        print(live_grid(cfg, args.run_root, manifests if len(manifests) > 1 else manifests[0], _csv_list(args.policies), _csv_list(args.deadlines, float), _csv_list(args.target_fracs, float), args.mbps, args.nvsmi_ms, args.baseline_s, args.settle_s, args.seed, extra, args.profile, args.replay_concurrency, args.kv_concurrency or None, args.smart_sweep, _csv_list(args.deadline_scales, float), _csv_list(args.random_seeds, int)))
     elif args.cmd == "check-live":
         path = args.manifest or args.run_root / "controller_manifest.json"
         check_live_manifest(json.loads(path.read_text()), args.run_root)

@@ -22,20 +22,23 @@ PY=${PY:-$REPO/.venv/bin/python}
 MANIFEST=${MANIFEST:-queue-haul/outputs/stage1c_live-sessions.json}
 MANIFESTS=${MANIFESTS:-}
 TRACE=${TRACE:-/scratch/users/gfw/ptsim/tracelab/syfi_coding_trace.jsonl.gz}
-WORKLOADS=${WORKLOADS:-}
+WORKLOADS=${WORKLOADS:-small,mixed,large}
 RUN_ROOT=${RUN_ROOT:-queue-haul/outputs/stage1c_grid}
 PROFILE=${PROFILE:-$RUN_ROOT/live_profile.json}
 export QH_APPTAINER_IMAGE=${QH_APPTAINER_IMAGE:-/scratch/users/gfw/ptsim/vllm-openai-v0.10.1.1.sandbox}
 export QH_APPTAINER_GPU_MODE=${QH_APPTAINER_GPU_MODE:-nv}
 export QH_PORT_OFFSET=${QH_PORT_OFFSET:-$((SLURM_JOB_ID % 40000 + 1000))}
-POLICIES=${POLICIES:-greedy,random,lp}
+POLICIES=${POLICIES:-greedy,random,all-r,all-s}
 DEADLINES=${DEADLINES:-10,30,120}
 TARGET_FRACS=${TARGET_FRACS:-0.25,0.45,0.65}
 MBPS=${MBPS:-1000}
 NVSMI_MS=${NVSMI_MS:-250}
-BASELINE_S=${BASELINE_S:-120}
-SETTLE_S=${SETTLE_S:-120}
+BASELINE_S=${BASELINE_S:-60}
+SETTLE_S=${SETTLE_S:-60}
 SEED=${SEED:-0}
+SMART_SWEEP=${SMART_SWEEP:-1}
+DEADLINE_SCALES=${DEADLINE_SCALES:-0.75,1,1.5}
+RANDOM_SEEDS=${RANDOM_SEEDS:-0,1,2}
 REPLAY_CONCURRENCY=${REPLAY_CONCURRENCY:-1}
 KV_CONCURRENCY=${KV_CONCURRENCY:-0}
 SMALL_SESSIONS=${SMALL_SESSIONS:-16}
@@ -73,6 +76,10 @@ MANIFEST_ARG=(--manifest "$MANIFEST")
 if [[ -n "$MANIFESTS" ]]; then
   MANIFEST_ARG=(--manifests "$MANIFESTS")
 fi
+SMART_ARGS=()
+if [[ "$SMART_SWEEP" == 1 ]]; then
+  SMART_ARGS=(--smart-sweep --deadline-scales "$DEADLINE_SCALES" --random-seeds "$RANDOM_SEEDS")
+fi
 
 $PY queue-haul/stage1b_drain_sink.py preflight --required-gpus 2
 $PY queue-haul/stage1c_controller.py live-grid \
@@ -88,4 +95,5 @@ $PY queue-haul/stage1c_controller.py live-grid \
   --seed "$SEED" \
   --profile "$PROFILE" \
   --replay-concurrency "$REPLAY_CONCURRENCY" \
-  --kv-concurrency "$KV_CONCURRENCY"
+  --kv-concurrency "$KV_CONCURRENCY" \
+  "${SMART_ARGS[@]}"

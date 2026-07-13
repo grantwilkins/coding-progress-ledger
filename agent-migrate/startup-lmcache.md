@@ -266,7 +266,7 @@ The successful live local run on 2026-07-08 used `/tmp/qh-proof-live`; it dispat
 ### 5. Run the production-shaped live controller
 
 Build the session manifest from a local pinned TraceLab JSONL/JSONL.gz artifact,
-then run the LP-ranked live drain with 4 Hz `nvidia-smi` telemetry:
+then run the greedy-ranked live drain with 4 Hz `nvidia-smi` telemetry:
 
 ```bash
 $PY queue-haul/stage1c_controller.py make-manifest \
@@ -293,7 +293,7 @@ sbatch queue-haul/stage1c_grid.sbatch
 The live controller writes `gpu_power.csv`, `events.jsonl`,
 `controller_manifest.json`, `power_summary.csv`, `power_trace.png`,
 `source_power.png`, `sink_power.png`, `delay_summary.csv`,
-`delay_summary.png`, `ell_power5s.csv`, `ell_power5s.png`, and `request_counts.csv`. `live-grid` also writes `scenario_summary.csv`, `grid_power_drop.png`, and `grid_delay.png`. Power deltas
+`delay_summary.png`, `ell_power5s.csv`, `ell_power5s.png`, and `request_counts.csv`. `live-grid` also writes `scenario_plan.json`, `scenario_summary.csv`, `grid_power_drop.png`, and `grid_delay.png`. Power deltas
 are reported, not threshold-gated.
 
 ### 6. Clean up and verify the node is idle

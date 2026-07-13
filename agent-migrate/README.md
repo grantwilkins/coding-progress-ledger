@@ -177,9 +177,9 @@ $PY queue-haul/stage1c_controller.py live-grid \
   --mbps 1000 \
   --run-root queue-haul/outputs/stage1c_grid \
   --profile queue-haul/outputs/stage1c_grid/live_profile.json
-# Or submit a one-scenario quick Slurm check, then the unattended grid:
+# Or submit a one-scenario check, then the adaptive 72-scenario sweep:
 sbatch queue-haul/stage1c_quick.sbatch
-sbatch queue-haul/stage1c_grid.sbatch
+RUN_ROOT=queue-haul/outputs/stage1c_smart_sweep sbatch queue-haul/stage1c_grid.sbatch
 ```
 
 The launcher pins the validated vLLM `0.10.1.1` / LMCache `0.3.3` sandbox and
@@ -190,7 +190,10 @@ resets both vLLM prefix caches, and assigns a unique cache namespace. LMCache
 0.3.3 cannot remotely deallocate its in-process 4 GB pools; they stay bounded and
 cannot hit across scenario namespaces. Each scenario starts and stops its own
 `nvidia-smi` process and records before/after `/metrics` snapshots for both vLLM
-servers.
+servers. The batch sweep profiles each small/mixed/large workload once, derives
+target-specific deadlines, runs greedy at `0.75x/1x/1.5x`, random at `1x` with
+three seeds, and each all-replay/all-KV baseline once per target. Set
+`SMART_SWEEP=0` for the legacy Cartesian grid.
 
 `live-drain` keeps both servers up together,
 runs Poisson turn loops from synthetic TraceLab-sized rolling transcripts, profiles
@@ -202,8 +205,9 @@ writes `gpu_power.csv`, `events.jsonl`, `controller_manifest.json`,
 `power_summary.csv`, `power_trace.png`, `source_power.png`, `sink_power.png`,
 `delay_summary.csv`, `delay_summary.png`, `ell_power5s.csv`, `ell_power5s.png`,
 `source_metrics_{before,after}.prom`, `sink_metrics_{before,after}.prom`,
-`request_counts.csv`, and `proxy_audit.csv`. `live-grid` also writes
-`scenario_summary.csv`, `grid_power_drop.png`, and `grid_delay.png`. Use
+`request_counts.csv`, and `proxy_audit.csv`. `live-grid` also writes the exact
+`scenario_plan.json`, `scenario_summary.csv` (including profiled deadline and
+completion/reference ratio), `grid_power_drop.png`, and `grid_delay.png`. Use
 `POLICIES=greedy,random,all-r,all-s sbatch queue-haul/stage1c_quick.sbatch`
 for the quick policy/counterfactual comparison; add `lp` as an offline benchmark.
 `all-r` cache-busts continued sink turns so it remains a replay baseline.
