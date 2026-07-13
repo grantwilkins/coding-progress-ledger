@@ -196,6 +196,10 @@ target-specific deadlines, runs greedy at `0.75x/1x/1.5x`, random at `1x` with
 three seeds, and each all-replay/all-KV baseline once per target. Set
 `SMART_SWEEP=0` for the legacy Cartesian grid.
 
+Live planning uses the checked-in 5-second A100 calibration: session load is
+`f/F + g/G`, `rho_star=0.534657` is fixed across workloads, and the matching
+saturating power curve is never renormalized to the current session population.
+
 `live-drain` keeps both servers up together and runs Poisson turn loops whose
 canonical transcript includes every actual streamed assistant response. Once the
 planner fixes every action and order, each selected session freezes an append-only

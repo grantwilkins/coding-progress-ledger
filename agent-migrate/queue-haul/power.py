@@ -103,11 +103,16 @@ class PoolPower:
         return (self.p_knee - self.p_idle_w) / self.power_knee
 
     def node_power(self, load):
-        """Node power P(load): legacy knee curve or anchored log-concave pilot."""
+        """Node power P(load): knee, log, or calibrated saturating curve."""
         load = np.asarray(load, dtype=float)
         if np.any(load < -1e-9):
             raise ValueError("node load must be nonnegative")
         load = np.maximum(load, 0.0)
+        if self.power_curve == "saturating":
+            if self.power_knee <= 0 or self.p_busy_w <= self.p_idle_w:
+                raise ValueError("invalid saturating power constants")
+            w = 4 * load / self.power_knee
+            return self.p_idle_w + (self.p_busy_w - self.p_idle_w) * w / (1 + w)
         if self.power_curve == "log":
             if self.log_shape <= 0:
                 raise ValueError("log_shape must be positive")
@@ -125,6 +130,11 @@ class PoolPower:
         if np.any(load < -1e-9):
             raise ValueError("node load must be nonnegative")
         load = np.maximum(load, 0.0)
+        if self.power_curve == "saturating":
+            if self.power_knee <= 0 or self.p_busy_w <= self.p_idle_w:
+                raise ValueError("invalid saturating power constants")
+            w = 4 * load / self.power_knee
+            return (self.p_busy_w - self.p_idle_w) * 4 / self.power_knee / (1 + w) ** 2
         if self.power_curve == "log":
             if self.log_shape <= 0:
                 raise ValueError("log_shape must be positive")

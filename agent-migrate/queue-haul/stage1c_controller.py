@@ -27,7 +27,7 @@ from dispatch import Event, solve
 from impact import Movement, compute
 from instance import JobPopulation
 from node_knee import evaluate_node_expected_w, solve_node_aware_greedy, solve_power_function_lp, solve_random_jobs
-from power import BETA_BYTES_PER_TOK, ETA_BYTES_PER_TOK, PoolPower, rho_replay
+from power import BETA_BYTES_PER_TOK, ETA_BYTES_PER_TOK, PoolPower
 
 SCHEMA = "queue-haul-stage1c-v1"
 LIVE_SCHEMA = "queue-haul-stage1c-live-v1"
@@ -42,7 +42,11 @@ LIVE_ARTIFACTS = (
 )
 WORDS_PER_TOKEN = 0.75
 LIVE_A100_P_IDLE_W = 67.12041959182154
-LIVE_A100_P_BUSY_W = 390.0
+LIVE_A100_P_BUSY_W = 424.44649546305266
+LIVE_A100_POWER_KNEE = 2.0527780176849793
+LIVE_A100_RHO_STAR = 0.534657100938009
+LIVE_A100_F_PREFILL_TPS = 1448.319999999999
+LIVE_A100_G_DECODE_TPS = 1260.3799999999999
 LIVE_A100_LOG_SHAPE = 8.55
 LIVE_A100_C_PREFILL_J_PER_TOK = 0.028197803044670608
 LIVE_A100_C_DECODE_J_PER_TOK = 0.25745287802176875
@@ -435,10 +439,11 @@ def tracelab_manifest(path: Path, n_sessions: int, seed: int, max_model_len: int
         served_T = min(original_T, served_cap)
         if served_T < min_context_tokens:
             continue
-        output = int(np.clip(np.median([t["output"] for t in toks]), 8, decode_margin))
+        steady = toks[1:] or toks
+        output = int(np.clip(np.median([t["output"] for t in steady]), 8, decode_margin))
         rate = max(1e-4, (len(rows) - 1) / span)
-        service_s = served_T / float(rho_replay(served_T)) + output / 80.0
-        ell = float(np.clip(rate * service_s, 0.005, 0.50))
+        ell_pre = rate * float(np.median([t["append"] for t in steady])) / LIVE_A100_F_PREFILL_TPS
+        ell_dec = rate * output / LIVE_A100_G_DECODE_TPS
         turns = []
         for i, (row, tok) in enumerate(zip(rows, toks)):
             turns.append({
@@ -459,8 +464,8 @@ def tracelab_manifest(path: Path, n_sessions: int, seed: int, max_model_len: int
             "original_T": original_T,
             "turn_rate_hz": rate,
             "decode_tokens": output,
-            "ell_pre": ell,
-            "ell_dec": min(0.50, ell / 2),
+            "ell_pre": ell_pre,
+            "ell_dec": ell_dec,
             "source_node": 0,
             "words": int(served_T * WORDS_PER_TOKEN),
             "turns": turns,
@@ -482,7 +487,9 @@ def tracelab_manifest(path: Path, n_sessions: int, seed: int, max_model_len: int
         "settle_s": settle_s,
         "max_model_len": max_model_len,
         "decode_margin": decode_margin,
-        "power_curve": "log",
+        "power_curve": "saturating",
+        "power": {"p_idle_w": LIVE_A100_P_IDLE_W, "p_busy_w": LIVE_A100_P_BUSY_W, "power_knee": LIVE_A100_POWER_KNEE, "rho_star": LIVE_A100_RHO_STAR},
+        "load_calibration": {"window_s": 5.0, "F_prefill_tps": LIVE_A100_F_PREFILL_TPS, "G_decode_tps": LIVE_A100_G_DECODE_TPS},
         "constants": {
             "eta_bytes_per_tok": ETA_BYTES_PER_TOK,
             "lambda_src_bytes_per_s": 125_000_000.0,
@@ -697,11 +704,12 @@ def _live_model(manifest: dict, deadline_s: float | None = None, target_frac: fl
     pool = PoolPower(
         p_idle_w=float(power.get("p_idle_w", LIVE_A100_P_IDLE_W)),
         p_busy_w=float(power.get("p_busy_w", LIVE_A100_P_BUSY_W)),
-        rho_star=max(float(pop.ell.sum()), 1e-9),
+        rho_star=float(power.get("rho_star", LIVE_A100_RHO_STAR)),
         mean_context_tokens=float(np.mean(pop.T)),
         c_prefill_j_per_tok=float(power.get("c_prefill_j_per_tok", LIVE_A100_C_PREFILL_J_PER_TOK)),
         c_decode_j_per_tok=float(power.get("c_decode_j_per_tok", LIVE_A100_C_DECODE_J_PER_TOK)),
-        power_curve=manifest.get("power_curve", "log"),
+        power_curve=manifest.get("power_curve", "saturating"),
+        power_knee=float(power.get("power_knee", LIVE_A100_POWER_KNEE)),
         log_shape=float(power.get("log_shape", LIVE_A100_LOG_SHAPE)),
     )
     prof = manifest.get("profile") or {}
@@ -833,7 +841,7 @@ def live_plan_summary(manifest: dict, policy: str = "greedy", seed: int = 0,
         "planned_deadline_hit": planned_deadline_hit,
         "planned_completion_s": planned_completion,
         "planned_hit": planned_power_hit and planned_deadline_hit,
-        "power_curve": {"name": pool.power_curve, "log_shape": pool.log_shape, "p_idle_w": pool.p_idle_w, "p_busy_w": pool.p_busy_w, "rho_star": pool.rho_star},
+        "power_curve": {"name": pool.power_curve, "log_shape": pool.log_shape, "p_idle_w": pool.p_idle_w, "p_busy_w": pool.p_busy_w, "power_knee": pool.power_knee, "rho_star": pool.rho_star},
         "movement": {"lambda_src_bytes_per_s": move.lambda_src, "mu_bytes_per_s": move.mu_in},
         "profile": manifest.get("profile"),
         "solver": solver,

@@ -37,6 +37,15 @@ def test_ranking_invariant_under_p_bar_scaling():
     assert np.array_equal(np.argsort(p.p_bar * ell), np.argsort(scaled.p_bar * ell))
 
 
+def test_saturating_curve_hits_eighty_percent_at_power_knee():
+    p = replace(PoolPower(), power_curve="saturating", p_idle_w=10, p_busy_w=110, power_knee=2)
+
+    assert p.node_power(0) == pytest.approx(10)
+    assert p.node_power(2) == pytest.approx(90)
+    assert p.node_power(1e9) < 110
+    assert p.node_power_slope(2) == pytest.approx(8)
+
+
 def test_regime_crossover():
     p = PoolPower()
     load = 4.0

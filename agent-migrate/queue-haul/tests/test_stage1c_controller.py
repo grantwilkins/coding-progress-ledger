@@ -124,6 +124,8 @@ def test_tracelab_manifest_groups_clamps_and_preserves_turns(tmp_path: Path):
     assert session["served_T"] == 3840
     assert session["context_limit"] == 3840
     assert session["turn_rate_hz"] == pytest.approx(2 / 120)
+    assert session["ell_pre"] == pytest.approx((2 / 120) * 129.5 / c.LIVE_A100_F_PREFILL_TPS)
+    assert session["ell_dec"] == pytest.approx((2 / 120) * 33 / c.LIVE_A100_G_DECODE_TPS)
     assert [t["round"] for t in session["turns"]] == [0, 1, 2]
     assert session["turns"][1]["gap_s"] == 60
 
@@ -300,7 +302,7 @@ def test_session_worker_surfaces_thread_failure(tmp_path: Path, monkeypatch):
         worker.snapshot()
 
 
-def test_live_plan_uses_log_power_curve_and_dispatches_all(tmp_path: Path):
+def test_live_plan_uses_calibrated_power_curve_and_dispatches_all(tmp_path: Path):
     trace = tmp_path / "trace.jsonl.gz"
     _write_tracelab(trace)
     manifest = c.tracelab_manifest(trace, 2, 0, max_model_len=4096, decode_margin=256, min_context_tokens=1024)
@@ -309,10 +311,14 @@ def test_live_plan_uses_log_power_curve_and_dispatches_all(tmp_path: Path):
     manifest["constants"]["mu_bytes_per_s"] = 1e18
 
     summary = c.live_plan_summary(manifest)
+    one_session = c.live_plan_summary({**manifest, "sessions": manifest["sessions"][:1]})
 
-    assert summary["power_curve"]["name"] == "log"
+    assert summary["power_curve"]["name"] == "saturating"
     assert summary["power_curve"]["p_idle_w"] == pytest.approx(c.LIVE_A100_P_IDLE_W)
     assert summary["power_curve"]["p_busy_w"] == pytest.approx(c.LIVE_A100_P_BUSY_W)
+    assert summary["power_curve"]["power_knee"] == pytest.approx(c.LIVE_A100_POWER_KNEE)
+    assert summary["power_curve"]["rho_star"] == pytest.approx(c.LIVE_A100_RHO_STAR)
+    assert one_session["power_curve"]["rho_star"] == summary["power_curve"]["rho_star"]
     assert summary["full_source_drop_w"] <= c.LIVE_A100_P_BUSY_W - c.LIVE_A100_P_IDLE_W + 1e-6
     assert len(summary["sessions"]) == 2
     assert [s["dispatch_rank"] for s in summary["sessions"]] == [0, 1]
