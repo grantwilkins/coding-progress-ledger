@@ -312,6 +312,7 @@ def test_live_plan_uses_calibrated_power_curve_and_dispatches_all(tmp_path: Path
 
     summary = c.live_plan_summary(manifest)
     one_session = c.live_plan_summary({**manifest, "sessions": manifest["sessions"][:1]})
+    mechanism = c.live_plan_summary({**manifest, "dest_load_budget_ell": 2.0})
 
     assert summary["power_curve"]["name"] == "saturating"
     assert summary["power_curve"]["p_idle_w"] == pytest.approx(c.LIVE_A100_P_IDLE_W)
@@ -319,6 +320,12 @@ def test_live_plan_uses_calibrated_power_curve_and_dispatches_all(tmp_path: Path
     assert summary["power_curve"]["power_knee"] == pytest.approx(c.LIVE_A100_POWER_KNEE)
     assert summary["power_curve"]["rho_star"] == pytest.approx(c.LIVE_A100_RHO_STAR)
     assert one_session["power_curve"]["rho_star"] == summary["power_curve"]["rho_star"]
+    assert summary["destination_load_budget_ell"] == summary["destination_admission_limit_ell"]
+    assert summary["experiment_mode"] == "admission"
+    assert mechanism["destination_load_budget_ell"] == 2.0
+    assert mechanism["destination_admission_limit_ell"] == summary["destination_admission_limit_ell"]
+    assert mechanism["experiment_mode"] == "mechanism_only"
+    assert mechanism["selected_destination_load_ell"] == pytest.approx(summary["selected_destination_load_ell"])
     assert summary["full_source_drop_w"] <= c.LIVE_A100_P_BUSY_W - c.LIVE_A100_P_IDLE_W + 1e-6
     assert len(summary["sessions"]) == 2
     assert [s["dispatch_rank"] for s in summary["sessions"]] == [0, 1]
@@ -863,7 +870,9 @@ def test_grid_sbatch_defaults_to_old_runtime():
     assert "QH_PORT_OFFSET=${QH_PORT_OFFSET:-$((SLURM_JOB_ID % 40000 + 1000))}" in text
     assert 'SMART_ARGS=(--deadline-scales "$DEADLINE_SCALES" --random-seeds "$RANDOM_SEEDS")' in text
     assert "KV_CONCURRENCY=${KV_CONCURRENCY:-2}" in text
+    assert "DEST_LOAD_BUDGET_ELL=${DEST_LOAD_BUDGET_ELL:-}" in text
     assert c.parse_args(["live-drain", "--manifest", "sessions.json"]).kv_concurrency == 2
+    assert c.parse_args(["live-grid", "--manifest", "sessions.json", "--dest-load-budget-ell", "2"]).dest_load_budget_ell == 2
 
 
 def test_profile_prompt_has_cache_namespace(monkeypatch):

@@ -76,6 +76,18 @@ def test_single_job_above_setpoint_hard_fails():
         greedy(pop, POOL, imp, 1.0, SLACK_E, SLACK_M)
 
 
+def test_destination_load_budget_changes_only_load_capacity():
+    base = single_movement_budgets(POOL, Event(D=40, dest_nodes=1, spare_frac=1), Movement())
+    event = Event(D=40, dest_nodes=1, spare_frac=1, dest_load_budget_ell=2.0)
+    changed = single_movement_budgets(POOL, event, Movement())
+
+    assert changed["load"] == 2.0
+    assert event.l_dest(POOL) == 2.0
+    assert {k: v for k, v in changed.items() if k != "load"} == {k: v for k, v in base.items() if k != "load"}
+    with pytest.raises(ValueError, match="positive"):
+        Event(dest_load_budget_ell=0)
+
+
 def test_milp_feasible_sheds_at_least_with_bounded_overshoot():
     pop, imp = _pop(n_nodes=4)  # smaller pop keeps the MIP fast
     dp = bind_dp(imp)

@@ -726,7 +726,7 @@ def _live_model(manifest: dict, deadline_s: float | None = None, target_frac: fl
         c_transfer=np.array([s.get("c_transfer_s", base.c_transfer[i]) for i, s in enumerate(sessions)], dtype=float),
         b_transfer=np.array([s.get("profile_transfer_bytes", base.b_transfer[i]) for i, s in enumerate(sessions)], dtype=float),
     )
-    event = Event(D=float(manifest["deadline_s"] if deadline_s is None else deadline_s), dest_nodes=1, spare_frac=1.0, tau_src=0.0, tau_pre=0.0, tau_in=0.0)
+    event = Event(D=float(manifest["deadline_s"] if deadline_s is None else deadline_s), dest_nodes=1, spare_frac=1.0, tau_src=0.0, tau_pre=0.0, tau_in=0.0, dest_load_budget_ell=manifest.get("dest_load_budget_ell"))
     full_w = evaluate_node_expected_w(pop, pool, np.ones(len(pop)))
     target = manifest.get("target_w", "all")
     target_w = float(target_frac) * full_w if target_frac is not None else full_w if target == "all" else float(target)
@@ -827,6 +827,8 @@ def live_plan_summary(manifest: dict, policy: str = "greedy", seed: int = 0,
     planned_power_hit = planned_w >= target_w - 1e-6 * max(target_w, 1.0)
     planned_deadline_hit = planned_completion <= event.D
     target_ratio = target_w / full_w if full_w > 0 else math.nan
+    admission_limit = event.spare * pool.rho_star
+    selected_load = sum(float(pop.ell[r["fixture_index"]]) for r in rows)
     return {
         "schema": "queue-haul-stage1c-live-plan-v1",
         "policy": policy,
@@ -842,6 +844,11 @@ def live_plan_summary(manifest: dict, policy: str = "greedy", seed: int = 0,
         "planned_completion_s": planned_completion,
         "planned_hit": planned_power_hit and planned_deadline_hit,
         "power_curve": {"name": pool.power_curve, "log_shape": pool.log_shape, "p_idle_w": pool.p_idle_w, "p_busy_w": pool.p_busy_w, "power_knee": pool.power_knee, "rho_star": pool.rho_star},
+        "destination_load_budget_ell": event.l_dest(pool),
+        "destination_admission_limit_ell": admission_limit,
+        "selected_destination_load_ell": selected_load,
+        "admission_feasible": selected_load <= admission_limit + 1e-9,
+        "experiment_mode": "mechanism_only" if event.l_dest(pool) > admission_limit else "admission",
         "movement": {"lambda_src_bytes_per_s": move.lambda_src, "mu_bytes_per_s": move.mu_in},
         "profile": manifest.get("profile"),
         "solver": solver,
@@ -1806,7 +1813,7 @@ def live_grid(cfg: b.Config, run_root: Path, manifest: dict | list[dict], polici
               settle_s: float, seed: int, extra: list[str], profile_path: Path | None = None,
               replay_concurrency: int = 1, kv_concurrency: int | None = None,
               smart_sweep: bool = False, deadline_scales: list[float] | None = None,
-              random_seeds: list[int] | None = None) -> Path:
+              random_seeds: list[int] | None = None, dest_load_budget_ell: float | None = None) -> Path:
     manifests = manifest if isinstance(manifest, list) else [manifest]
     multi = len(manifests) > 1
     run_root.mkdir(parents=True, exist_ok=True)
@@ -1815,6 +1822,8 @@ def live_grid(cfg: b.Config, run_root: Path, manifest: dict | list[dict], polici
         workload = _safe_name(manifest_workload(one))
         root = run_root / workload if multi else run_root
         base = {**one, "baseline_s": baseline_s, "settle_s": settle_s}
+        if dest_load_budget_ell is not None:
+            base["dest_load_budget_ell"] = dest_load_budget_ell
         prof = root / "live_profile.json" if profile_path is None else profile_path.parent / f"{profile_path.stem}_{workload}{profile_path.suffix}" if multi else profile_path
         workloads.append((root, base, prof, []))
     stack = None
@@ -1897,6 +1906,7 @@ def parse_args(argv: list[str] | None = None):
     live_p.add_argument("--profile", type=Path)
     live_p.add_argument("--replay-concurrency", type=int, default=1)
     live_p.add_argument("--kv-concurrency", type=int, default=2)
+    live_p.add_argument("--dest-load-budget-ell", type=float)
     live_p.add_argument("extra_vllm_args", nargs=argparse.REMAINDER)
     grid_p = sub.add_parser("live-grid")
     b.add_common(grid_p)
@@ -1914,6 +1924,7 @@ def parse_args(argv: list[str] | None = None):
     grid_p.add_argument("--profile", type=Path)
     grid_p.add_argument("--replay-concurrency", type=int, default=1)
     grid_p.add_argument("--kv-concurrency", type=int, default=2)
+    grid_p.add_argument("--dest-load-budget-ell", type=float)
     grid_p.add_argument("--smart-sweep", action="store_true")
     grid_p.add_argument("--deadline-scales", default="0.75,1,1.5")
     grid_p.add_argument("--random-seeds", default="0,1,2")
@@ -1950,7 +1961,10 @@ def main(argv: list[str] | None = None) -> None:
     elif args.cmd == "live-drain":
         cfg = b.config_from_args(args)
         extra = args.extra_vllm_args[1:] if args.extra_vllm_args[:1] == ["--"] else args.extra_vllm_args
-        print(live_drain(cfg, args.run_root, json.loads(args.manifest.read_text()), args.mbps, args.nvsmi_ms, extra, args.policy, args.seed, args.deadline_s, args.target_frac, args.profile, args.replay_concurrency, args.kv_concurrency or None))
+        manifest = json.loads(args.manifest.read_text())
+        if args.dest_load_budget_ell is not None:
+            manifest["dest_load_budget_ell"] = args.dest_load_budget_ell
+        print(live_drain(cfg, args.run_root, manifest, args.mbps, args.nvsmi_ms, extra, args.policy, args.seed, args.deadline_s, args.target_frac, args.profile, args.replay_concurrency, args.kv_concurrency or None))
     elif args.cmd == "live-grid":
         cfg = b.config_from_args(args)
         extra = args.extra_vllm_args[1:] if args.extra_vllm_args[:1] == ["--"] else args.extra_vllm_args
@@ -1958,7 +1972,7 @@ def main(argv: list[str] | None = None) -> None:
         if not paths:
             raise ValueError("live-grid requires --manifest or --manifests")
         manifests = [json.loads(path.read_text()) for path in paths]
-        print(live_grid(cfg, args.run_root, manifests if len(manifests) > 1 else manifests[0], _csv_list(args.policies), _csv_list(args.deadlines, float), _csv_list(args.target_fracs, float), args.mbps, args.nvsmi_ms, args.baseline_s, args.settle_s, args.seed, extra, args.profile, args.replay_concurrency, args.kv_concurrency or None, args.smart_sweep, _csv_list(args.deadline_scales, float), _csv_list(args.random_seeds, int)))
+        print(live_grid(cfg, args.run_root, manifests if len(manifests) > 1 else manifests[0], _csv_list(args.policies), _csv_list(args.deadlines, float), _csv_list(args.target_fracs, float), args.mbps, args.nvsmi_ms, args.baseline_s, args.settle_s, args.seed, extra, args.profile, args.replay_concurrency, args.kv_concurrency or None, args.smart_sweep, _csv_list(args.deadline_scales, float), _csv_list(args.random_seeds, int), args.dest_load_budget_ell))
     elif args.cmd == "check-live":
         path = args.manifest or args.run_root / "controller_manifest.json"
         check_live_manifest(json.loads(path.read_text()), args.run_root)

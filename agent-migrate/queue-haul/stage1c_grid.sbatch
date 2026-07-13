@@ -41,6 +41,7 @@ DEADLINE_SCALES=${DEADLINE_SCALES:-0.75,1,1.5}
 RANDOM_SEEDS=${RANDOM_SEEDS:-0,1,2}
 REPLAY_CONCURRENCY=${REPLAY_CONCURRENCY:-1}
 KV_CONCURRENCY=${KV_CONCURRENCY:-2}
+DEST_LOAD_BUDGET_ELL=${DEST_LOAD_BUDGET_ELL:-}
 SMALL_SESSIONS=${SMALL_SESSIONS:-16}
 MIXED_SESSIONS=${MIXED_SESSIONS:-8}
 LARGE_SESSIONS=${LARGE_SESSIONS:-8}
@@ -80,6 +81,10 @@ SMART_ARGS=(--deadline-scales "$DEADLINE_SCALES" --random-seeds "$RANDOM_SEEDS")
 if [[ "$SMART_SWEEP" == 1 ]]; then
   SMART_ARGS+=(--smart-sweep)
 fi
+DEST_LOAD_ARGS=()
+if [[ -n "$DEST_LOAD_BUDGET_ELL" ]]; then
+  DEST_LOAD_ARGS=(--dest-load-budget-ell "$DEST_LOAD_BUDGET_ELL")
+fi
 
 $PY queue-haul/stage1b_drain_sink.py preflight --required-gpus 2
 $PY queue-haul/stage1c_controller.py live-grid \
@@ -96,4 +101,5 @@ $PY queue-haul/stage1c_controller.py live-grid \
   --profile "$PROFILE" \
   --replay-concurrency "$REPLAY_CONCURRENCY" \
   --kv-concurrency "$KV_CONCURRENCY" \
+  "${DEST_LOAD_ARGS[@]}" \
   "${SMART_ARGS[@]}"

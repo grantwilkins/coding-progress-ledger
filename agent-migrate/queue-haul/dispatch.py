@@ -32,13 +32,18 @@ class Event:
     tau_pre: float = 5.0  # prefill batch-form
     tau_in: float = 3.0  # ingest pipeline-fill
     pinned: tuple = ()  # class names forced to y=0 (service floor)
+    dest_load_budget_ell: float | None = None
+
+    def __post_init__(self):
+        if self.dest_load_budget_ell is not None and self.dest_load_budget_ell <= 0:
+            raise ValueError("dest_load_budget_ell must be positive")
 
     @property
     def spare(self) -> float:
         return self.spare_frac * self.dest_nodes
 
     def l_dest(self, pool: PoolPower) -> float:
-        return self.spare * pool.rho_star
+        return self.spare * pool.rho_star if self.dest_load_budget_ell is None else self.dest_load_budget_ell
 
     def s_dest(self, pool: PoolPower) -> float:
         return self.spare * pool.s_node
@@ -129,12 +134,14 @@ def movement_budgets(pool: PoolPower, event: Event, move: Movement, fleet: DestF
     if not 0 < kappa <= 1:
         raise ValueError(f"kappa must be in (0, 1], got {kappa}")
     spare = np.array([event.spare]) if fleet is None else np.asarray(fleet.spare)
+    if event.dest_load_budget_ell is not None and len(spare) != 1:
+        raise ValueError("dest_load_budget_ell requires one aggregate destination")
     W = np.floor(spare + 1e-9)  # whole spare nodes; matches the DES server count exactly
     return {
         "egress": move.lambda_src * max(0.0, event.D - event.tau_src),
         "prefill": kappa * W * max(0.0, event.D - event.tau_pre),
         "ingest": kappa * W * move.mu_in * max(0.0, event.D - event.tau_in),
-        "load": spare * pool.rho_star,
+        "load": spare * pool.rho_star if event.dest_load_budget_ell is None else np.array([event.dest_load_budget_ell]),
         "held": spare * pool.s_node,
     }
 

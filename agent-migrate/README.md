@@ -199,6 +199,10 @@ three seeds, and each all-replay/all-KV baseline once per target. Set
 Live planning uses the checked-in 5-second A100 calibration: session load is
 `f/F + g/G`, `rho_star=0.534657` is fixed across workloads, and the matching
 saturating power curve is never renormalized to the current session population.
+By default `rho_star` is also the sink admission budget. For a two-GPU mechanism
+test, `DEST_LOAD_BUDGET_ELL=2.0 sbatch queue-haul/stage1c_grid.sbatch` changes
+only that load budget. Outputs label it `mechanism_only` and report whether the
+selected sink load is admission-feasible; it is not a production SLO claim.
 
 `live-drain` keeps both servers up together and runs Poisson turn loops whose
 canonical transcript includes every actual streamed assistant response. Once the
