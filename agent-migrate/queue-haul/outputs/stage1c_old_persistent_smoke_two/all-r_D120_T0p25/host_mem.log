@@ -1,0 +1,341 @@
+bash: warning: setlocale: LC_ALL: cannot change locale (C.UTF-8)
+/bin/sh: warning: setlocale: LC_ALL: cannot change locale (C.UTF-8)
+# 1783921317.409363282
+  PID  PPID   RSS    VSZ COMMAND         COMMAND
+27177 22639 6106312 104563752 VLLM::EngineCor VLLM::EngineCore
+32541 28026 6101216 104559868 VLLM::EngineCor VLLM::EngineCore
+22639 22622 1070072 9945244 vllm         /usr/bin/python3 /usr/local/bin/vllm serve openai/gpt-oss-20b --host 127.0.0.1 --port 40561 --served-model-name openai/gpt-oss-20b --tensor-parallel-size 1 --max-model-len 32768 --max-num-seqs 256 --max-num-batched-tokens 8192 --kv-cache-dtype auto --enable-chunked-prefill --enforce-eager --kv-transfer-config {"kv_connector":"LMCacheConnectorV1","engine_id":"s0","kv_role":"kv_producer","kv_port":14579,"kv_connector_extra_config":{"discard_partial_chunks":false,"lmcache_rpc_port":"src"}}
+28026 28009 1039876 9915708 vllm         /usr/bin/python3 /usr/local/bin/vllm serve openai/gpt-oss-20b --host 127.0.0.1 --port 40661 --served-model-name openai/gpt-oss-20b --tensor-parallel-size 1 --max-model-len 32768 --max-num-seqs 256 --max-num-batched-tokens 8192 --kv-cache-dtype auto --enable-chunked-prefill --enforce-eager --kv-transfer-config {"kv_connector":"LMCacheConnectorV1","engine_id":"d0","kv_role":"kv_consumer","kv_port":14580,"kv_connector_extra_config":{"discard_partial_chunks":false,"lmcache_rpc_port":"sink"}}
+22120 21553 249452 6017904 python        /home/groups/ramr/gfw/coding-progress-ledger/agent-migrate/.venv/bin/python queue-haul/stage1c_controller.py live-grid --manifests queue-haul/outputs/stage1c_old_persistent_smoke_two/manifests/small.json --run-root queue-haul/outputs/stage1c_old_persistent_smoke_two --policies greedy,all-r --deadlines 120 --target-fracs 0.25 --mbps 1000 --nvsmi-ms 500 --baseline-s 3 --settle-s 3 --seed 0 --profile queue-haul/outputs/stage1c_old_persistent_smoke/live_profile.json --replay-concurrency 1 --kv-concurrency 0
+22616 22120 168840 433052 python         /home/groups/ramr/gfw/coding-progress-ledger/agent-migrate/.venv/bin/python queue-haul/stage1b_drain_sink.py lmcache-server --host 127.0.0.1 --port 38116 --max-bytes 0
+22619 22120 24824 157232 python          /home/groups/ramr/gfw/coding-progress-ledger/agent-migrate/.venv/bin/python queue-haul/stage1b_drain_sink.py proxy --kv-listen 127.0.0.1:40761 --kv-target 127.0.0.1:38116 --api-listen 127.0.0.1:40861 --api-target 127.0.0.1:40661 --mbps 1000.0 --log queue-haul/outputs/stage1c_old_persistent_smoke_two/stack/proxy_bytes.csv
+28041 28009 17676  30768 fuse-overlayfs  /usr/libexec/apptainer/bin/fuse-overlayfs -f -o allow_other,lowerdir=/var/lib/apptainer/mnt/session/overlay-lowerdir:/var/lib/apptainer/mnt/session/rootfs,noacl /var/lib/apptainer/mnt/session/final
+22653 22622 17640  30640 fuse-overlayfs  /usr/libexec/apptainer/bin/fuse-overlayfs -f -o allow_other,lowerdir=/var/lib/apptainer/mnt/session/overlay-lowerdir:/var/lib/apptainer/mnt/session/rootfs,noacl /var/lib/apptainer/mnt/session/final
+33983 22120 15480  33036 nvidia-smi      nvidia-smi --query-gpu=timestamp,index,power.draw,utilization.gpu,memory.used --format=csv,noheader,nounits -lms 500
+28009 22120 13656 1527124 starter        Apptainer runtime parent: vllm-openai-v0.10.1.1.sandbox
+22622 22120 13400 1527124 starter        Apptainer runtime parent: vllm-openai-v0.10.1.1.sandbox
+27176 22639  8936  18612 python3         /usr/bin/python3 -c from multiprocessing.resource_tracker import main;main(29)
+32540 28026  8936  18612 python3         /usr/bin/python3 -c from multiprocessing.resource_tracker import main;main(29)
+33934 22120  4944 116576 bash            bash -lc cg=/sys/fs/cgroup$(awk -F: 'NR==1{print $3}' /proc/self/cgroup); while true; do date '+# %s.%N'; cat $cg/memory.current $cg/memory.events 2>/dev/null || true; ps -u $USER -o pid,ppid,rss,vsz,comm,args --sort=-rss | head -80; sleep 1.0; done
+34329 33934  1644 153600 ps              ps -u gfw -o pid,ppid,rss,vsz,comm,args --sort=-rss
+21553 21539  1620 113408 bash            bash /var/spool/slurmd/job33751461/slurm_script
+34330 33934   616 108068 head            head -80
+# 1783921318.429724528
+  PID  PPID   RSS    VSZ COMMAND         COMMAND
+27177 22639 6106292 104563752 VLLM::EngineCor VLLM::EngineCore
+32541 28026 6101216 104559868 VLLM::EngineCor VLLM::EngineCore
+22639 22622 1070072 9945244 vllm         /usr/bin/python3 /usr/local/bin/vllm serve openai/gpt-oss-20b --host 127.0.0.1 --port 40561 --served-model-name openai/gpt-oss-20b --tensor-parallel-size 1 --max-model-len 32768 --max-num-seqs 256 --max-num-batched-tokens 8192 --kv-cache-dtype auto --enable-chunked-prefill --enforce-eager --kv-transfer-config {"kv_connector":"LMCacheConnectorV1","engine_id":"s0","kv_role":"kv_producer","kv_port":14579,"kv_connector_extra_config":{"discard_partial_chunks":false,"lmcache_rpc_port":"src"}}
+28026 28009 1039876 9915708 vllm         /usr/bin/python3 /usr/local/bin/vllm serve openai/gpt-oss-20b --host 127.0.0.1 --port 40661 --served-model-name openai/gpt-oss-20b --tensor-parallel-size 1 --max-model-len 32768 --max-num-seqs 256 --max-num-batched-tokens 8192 --kv-cache-dtype auto --enable-chunked-prefill --enforce-eager --kv-transfer-config {"kv_connector":"LMCacheConnectorV1","engine_id":"d0","kv_role":"kv_consumer","kv_port":14580,"kv_connector_extra_config":{"discard_partial_chunks":false,"lmcache_rpc_port":"sink"}}
+22120 21553 249452 6017904 python        /home/groups/ramr/gfw/coding-progress-ledger/agent-migrate/.venv/bin/python queue-haul/stage1c_controller.py live-grid --manifests queue-haul/outputs/stage1c_old_persistent_smoke_two/manifests/small.json --run-root queue-haul/outputs/stage1c_old_persistent_smoke_two --policies greedy,all-r --deadlines 120 --target-fracs 0.25 --mbps 1000 --nvsmi-ms 500 --baseline-s 3 --settle-s 3 --seed 0 --profile queue-haul/outputs/stage1c_old_persistent_smoke/live_profile.json --replay-concurrency 1 --kv-concurrency 0
+22616 22120 207432 433052 python         /home/groups/ramr/gfw/coding-progress-ledger/agent-migrate/.venv/bin/python queue-haul/stage1b_drain_sink.py lmcache-server --host 127.0.0.1 --port 38116 --max-bytes 0
+22619 22120 24824 157232 python          /home/groups/ramr/gfw/coding-progress-ledger/agent-migrate/.venv/bin/python queue-haul/stage1b_drain_sink.py proxy --kv-listen 127.0.0.1:40761 --kv-target 127.0.0.1:38116 --api-listen 127.0.0.1:40861 --api-target 127.0.0.1:40661 --mbps 1000.0 --log queue-haul/outputs/stage1c_old_persistent_smoke_two/stack/proxy_bytes.csv
+28041 28009 17676  30768 fuse-overlayfs  /usr/libexec/apptainer/bin/fuse-overlayfs -f -o allow_other,lowerdir=/var/lib/apptainer/mnt/session/overlay-lowerdir:/var/lib/apptainer/mnt/session/rootfs,noacl /var/lib/apptainer/mnt/session/final
+22653 22622 17640  30640 fuse-overlayfs  /usr/libexec/apptainer/bin/fuse-overlayfs -f -o allow_other,lowerdir=/var/lib/apptainer/mnt/session/overlay-lowerdir:/var/lib/apptainer/mnt/session/rootfs,noacl /var/lib/apptainer/mnt/session/final
+33983 22120 15480  33036 nvidia-smi      nvidia-smi --query-gpu=timestamp,index,power.draw,utilization.gpu,memory.used --format=csv,noheader,nounits -lms 500
+28009 22120 13656 1527124 starter        Apptainer runtime parent: vllm-openai-v0.10.1.1.sandbox
+22622 22120 13400 1527124 starter        Apptainer runtime parent: vllm-openai-v0.10.1.1.sandbox
+27176 22639  8936  18612 python3         /usr/bin/python3 -c from multiprocessing.resource_tracker import main;main(29)
+32540 28026  8936  18612 python3         /usr/bin/python3 -c from multiprocessing.resource_tracker import main;main(29)
+33934 22120  4944 116576 bash            bash -lc cg=/sys/fs/cgroup$(awk -F: 'NR==1{print $3}' /proc/self/cgroup); while true; do date '+# %s.%N'; cat $cg/memory.current $cg/memory.events 2>/dev/null || true; ps -u $USER -o pid,ppid,rss,vsz,comm,args --sort=-rss | head -80; sleep 1.0; done
+34336 33934  1644 153600 ps              ps -u gfw -o pid,ppid,rss,vsz,comm,args --sort=-rss
+21553 21539  1620 113408 bash            bash /var/spool/slurmd/job33751461/slurm_script
+34337 33934   616 108068 head            head -80
+# 1783921319.448078757
+  PID  PPID   RSS    VSZ COMMAND         COMMAND
+27177 22639 6106292 104563752 VLLM::EngineCor VLLM::EngineCore
+32541 28026 6101216 104559868 VLLM::EngineCor VLLM::EngineCore
+22639 22622 1070072 9945244 vllm         /usr/bin/python3 /usr/local/bin/vllm serve openai/gpt-oss-20b --host 127.0.0.1 --port 40561 --served-model-name openai/gpt-oss-20b --tensor-parallel-size 1 --max-model-len 32768 --max-num-seqs 256 --max-num-batched-tokens 8192 --kv-cache-dtype auto --enable-chunked-prefill --enforce-eager --kv-transfer-config {"kv_connector":"LMCacheConnectorV1","engine_id":"s0","kv_role":"kv_producer","kv_port":14579,"kv_connector_extra_config":{"discard_partial_chunks":false,"lmcache_rpc_port":"src"}}
+28026 28009 1039876 9915708 vllm         /usr/bin/python3 /usr/local/bin/vllm serve openai/gpt-oss-20b --host 127.0.0.1 --port 40661 --served-model-name openai/gpt-oss-20b --tensor-parallel-size 1 --max-model-len 32768 --max-num-seqs 256 --max-num-batched-tokens 8192 --kv-cache-dtype auto --enable-chunked-prefill --enforce-eager --kv-transfer-config {"kv_connector":"LMCacheConnectorV1","engine_id":"d0","kv_role":"kv_consumer","kv_port":14580,"kv_connector_extra_config":{"discard_partial_chunks":false,"lmcache_rpc_port":"sink"}}
+22616 22120 330388 564124 python         /home/groups/ramr/gfw/coding-progress-ledger/agent-migrate/.venv/bin/python queue-haul/stage1b_drain_sink.py lmcache-server --host 127.0.0.1 --port 38116 --max-bytes 0
+22120 21553 249488 6018448 python        /home/groups/ramr/gfw/coding-progress-ledger/agent-migrate/.venv/bin/python queue-haul/stage1c_controller.py live-grid --manifests queue-haul/outputs/stage1c_old_persistent_smoke_two/manifests/small.json --run-root queue-haul/outputs/stage1c_old_persistent_smoke_two --policies greedy,all-r --deadlines 120 --target-fracs 0.25 --mbps 1000 --nvsmi-ms 500 --baseline-s 3 --settle-s 3 --seed 0 --profile queue-haul/outputs/stage1c_old_persistent_smoke/live_profile.json --replay-concurrency 1 --kv-concurrency 0
+22619 22120 24824 157232 python          /home/groups/ramr/gfw/coding-progress-ledger/agent-migrate/.venv/bin/python queue-haul/stage1b_drain_sink.py proxy --kv-listen 127.0.0.1:40761 --kv-target 127.0.0.1:38116 --api-listen 127.0.0.1:40861 --api-target 127.0.0.1:40661 --mbps 1000.0 --log queue-haul/outputs/stage1c_old_persistent_smoke_two/stack/proxy_bytes.csv
+28041 28009 17676  30768 fuse-overlayfs  /usr/libexec/apptainer/bin/fuse-overlayfs -f -o allow_other,lowerdir=/var/lib/apptainer/mnt/session/overlay-lowerdir:/var/lib/apptainer/mnt/session/rootfs,noacl /var/lib/apptainer/mnt/session/final
+22653 22622 17640  30640 fuse-overlayfs  /usr/libexec/apptainer/bin/fuse-overlayfs -f -o allow_other,lowerdir=/var/lib/apptainer/mnt/session/overlay-lowerdir:/var/lib/apptainer/mnt/session/rootfs,noacl /var/lib/apptainer/mnt/session/final
+33983 22120 15480  33036 nvidia-smi      nvidia-smi --query-gpu=timestamp,index,power.draw,utilization.gpu,memory.used --format=csv,noheader,nounits -lms 500
+28009 22120 13656 1527124 starter        Apptainer runtime parent: vllm-openai-v0.10.1.1.sandbox
+22622 22120 13400 1527124 starter        Apptainer runtime parent: vllm-openai-v0.10.1.1.sandbox
+27176 22639  8936  18612 python3         /usr/bin/python3 -c from multiprocessing.resource_tracker import main;main(29)
+32540 28026  8936  18612 python3         /usr/bin/python3 -c from multiprocessing.resource_tracker import main;main(29)
+33934 22120  4944 116576 bash            bash -lc cg=/sys/fs/cgroup$(awk -F: 'NR==1{print $3}' /proc/self/cgroup); while true; do date '+# %s.%N'; cat $cg/memory.current $cg/memory.events 2>/dev/null || true; ps -u $USER -o pid,ppid,rss,vsz,comm,args --sort=-rss | head -80; sleep 1.0; done
+34345 33934  1640 153600 ps              ps -u gfw -o pid,ppid,rss,vsz,comm,args --sort=-rss
+21553 21539  1620 113408 bash            bash /var/spool/slurmd/job33751461/slurm_script
+34346 33934   612 108068 head            head -80
+# 1783921320.463687178
+  PID  PPID   RSS    VSZ COMMAND         COMMAND
+27177 22639 6106292 104563752 VLLM::EngineCor VLLM::EngineCore
+32541 28026 6101216 104559868 VLLM::EngineCor VLLM::EngineCore
+22639 22622 1070072 9945244 vllm         /usr/bin/python3 /usr/local/bin/vllm serve openai/gpt-oss-20b --host 127.0.0.1 --port 40561 --served-model-name openai/gpt-oss-20b --tensor-parallel-size 1 --max-model-len 32768 --max-num-seqs 256 --max-num-batched-tokens 8192 --kv-cache-dtype auto --enable-chunked-prefill --enforce-eager --kv-transfer-config {"kv_connector":"LMCacheConnectorV1","engine_id":"s0","kv_role":"kv_producer","kv_port":14579,"kv_connector_extra_config":{"discard_partial_chunks":false,"lmcache_rpc_port":"src"}}
+28026 28009 1039876 9915708 vllm         /usr/bin/python3 /usr/local/bin/vllm serve openai/gpt-oss-20b --host 127.0.0.1 --port 40661 --served-model-name openai/gpt-oss-20b --tensor-parallel-size 1 --max-model-len 32768 --max-num-seqs 256 --max-num-batched-tokens 8192 --kv-cache-dtype auto --enable-chunked-prefill --enforce-eager --kv-transfer-config {"kv_connector":"LMCacheConnectorV1","engine_id":"d0","kv_role":"kv_consumer","kv_port":14580,"kv_connector_extra_config":{"discard_partial_chunks":false,"lmcache_rpc_port":"sink"}}
+22616 22120 354940 629660 python         /home/groups/ramr/gfw/coding-progress-ledger/agent-migrate/.venv/bin/python queue-haul/stage1b_drain_sink.py lmcache-server --host 127.0.0.1 --port 38116 --max-bytes 0
+22120 21553 249488 6018448 python        /home/groups/ramr/gfw/coding-progress-ledger/agent-migrate/.venv/bin/python queue-haul/stage1c_controller.py live-grid --manifests queue-haul/outputs/stage1c_old_persistent_smoke_two/manifests/small.json --run-root queue-haul/outputs/stage1c_old_persistent_smoke_two --policies greedy,all-r --deadlines 120 --target-fracs 0.25 --mbps 1000 --nvsmi-ms 500 --baseline-s 3 --settle-s 3 --seed 0 --profile queue-haul/outputs/stage1c_old_persistent_smoke/live_profile.json --replay-concurrency 1 --kv-concurrency 0
+22619 22120 24824 157232 python          /home/groups/ramr/gfw/coding-progress-ledger/agent-migrate/.venv/bin/python queue-haul/stage1b_drain_sink.py proxy --kv-listen 127.0.0.1:40761 --kv-target 127.0.0.1:38116 --api-listen 127.0.0.1:40861 --api-target 127.0.0.1:40661 --mbps 1000.0 --log queue-haul/outputs/stage1c_old_persistent_smoke_two/stack/proxy_bytes.csv
+28041 28009 17676  30768 fuse-overlayfs  /usr/libexec/apptainer/bin/fuse-overlayfs -f -o allow_other,lowerdir=/var/lib/apptainer/mnt/session/overlay-lowerdir:/var/lib/apptainer/mnt/session/rootfs,noacl /var/lib/apptainer/mnt/session/final
+22653 22622 17640  30640 fuse-overlayfs  /usr/libexec/apptainer/bin/fuse-overlayfs -f -o allow_other,lowerdir=/var/lib/apptainer/mnt/session/overlay-lowerdir:/var/lib/apptainer/mnt/session/rootfs,noacl /var/lib/apptainer/mnt/session/final
+33983 22120 15480  33036 nvidia-smi      nvidia-smi --query-gpu=timestamp,index,power.draw,utilization.gpu,memory.used --format=csv,noheader,nounits -lms 500
+28009 22120 13656 1527124 starter        Apptainer runtime parent: vllm-openai-v0.10.1.1.sandbox
+22622 22120 13400 1527124 starter        Apptainer runtime parent: vllm-openai-v0.10.1.1.sandbox
+27176 22639  8936  18612 python3         /usr/bin/python3 -c from multiprocessing.resource_tracker import main;main(29)
+32540 28026  8936  18612 python3         /usr/bin/python3 -c from multiprocessing.resource_tracker import main;main(29)
+33934 22120  4944 116576 bash            bash -lc cg=/sys/fs/cgroup$(awk -F: 'NR==1{print $3}' /proc/self/cgroup); while true; do date '+# %s.%N'; cat $cg/memory.current $cg/memory.events 2>/dev/null || true; ps -u $USER -o pid,ppid,rss,vsz,comm,args --sort=-rss | head -80; sleep 1.0; done
+34352 33934  1644 153600 ps              ps -u gfw -o pid,ppid,rss,vsz,comm,args --sort=-rss
+21553 21539  1620 113408 bash            bash /var/spool/slurmd/job33751461/slurm_script
+34353 33934   612 108068 head            head -80
+# 1783921321.481806089
+  PID  PPID   RSS    VSZ COMMAND         COMMAND
+27177 22639 6106292 104563752 VLLM::EngineCor VLLM::EngineCore
+32541 28026 6101216 104559868 VLLM::EngineCor VLLM::EngineCore
+22639 22622 1070072 9945244 vllm         /usr/bin/python3 /usr/local/bin/vllm serve openai/gpt-oss-20b --host 127.0.0.1 --port 40561 --served-model-name openai/gpt-oss-20b --tensor-parallel-size 1 --max-model-len 32768 --max-num-seqs 256 --max-num-batched-tokens 8192 --kv-cache-dtype auto --enable-chunked-prefill --enforce-eager --kv-transfer-config {"kv_connector":"LMCacheConnectorV1","engine_id":"s0","kv_role":"kv_producer","kv_port":14579,"kv_connector_extra_config":{"discard_partial_chunks":false,"lmcache_rpc_port":"src"}}
+28026 28009 1039876 9915708 vllm         /usr/bin/python3 /usr/local/bin/vllm serve openai/gpt-oss-20b --host 127.0.0.1 --port 40661 --served-model-name openai/gpt-oss-20b --tensor-parallel-size 1 --max-model-len 32768 --max-num-seqs 256 --max-num-batched-tokens 8192 --kv-cache-dtype auto --enable-chunked-prefill --enforce-eager --kv-transfer-config {"kv_connector":"LMCacheConnectorV1","engine_id":"d0","kv_role":"kv_consumer","kv_port":14580,"kv_connector_extra_config":{"discard_partial_chunks":false,"lmcache_rpc_port":"sink"}}
+22616 22120 379492 629660 python         /home/groups/ramr/gfw/coding-progress-ledger/agent-migrate/.venv/bin/python queue-haul/stage1b_drain_sink.py lmcache-server --host 127.0.0.1 --port 38116 --max-bytes 0
+22120 21553 249488 6018448 python        /home/groups/ramr/gfw/coding-progress-ledger/agent-migrate/.venv/bin/python queue-haul/stage1c_controller.py live-grid --manifests queue-haul/outputs/stage1c_old_persistent_smoke_two/manifests/small.json --run-root queue-haul/outputs/stage1c_old_persistent_smoke_two --policies greedy,all-r --deadlines 120 --target-fracs 0.25 --mbps 1000 --nvsmi-ms 500 --baseline-s 3 --settle-s 3 --seed 0 --profile queue-haul/outputs/stage1c_old_persistent_smoke/live_profile.json --replay-concurrency 1 --kv-concurrency 0
+22619 22120 24824 157232 python          /home/groups/ramr/gfw/coding-progress-ledger/agent-migrate/.venv/bin/python queue-haul/stage1b_drain_sink.py proxy --kv-listen 127.0.0.1:40761 --kv-target 127.0.0.1:38116 --api-listen 127.0.0.1:40861 --api-target 127.0.0.1:40661 --mbps 1000.0 --log queue-haul/outputs/stage1c_old_persistent_smoke_two/stack/proxy_bytes.csv
+28041 28009 17676  30768 fuse-overlayfs  /usr/libexec/apptainer/bin/fuse-overlayfs -f -o allow_other,lowerdir=/var/lib/apptainer/mnt/session/overlay-lowerdir:/var/lib/apptainer/mnt/session/rootfs,noacl /var/lib/apptainer/mnt/session/final
+22653 22622 17640  30640 fuse-overlayfs  /usr/libexec/apptainer/bin/fuse-overlayfs -f -o allow_other,lowerdir=/var/lib/apptainer/mnt/session/overlay-lowerdir:/var/lib/apptainer/mnt/session/rootfs,noacl /var/lib/apptainer/mnt/session/final
+33983 22120 15480  33036 nvidia-smi      nvidia-smi --query-gpu=timestamp,index,power.draw,utilization.gpu,memory.used --format=csv,noheader,nounits -lms 500
+28009 22120 13656 1527124 starter        Apptainer runtime parent: vllm-openai-v0.10.1.1.sandbox
+22622 22120 13400 1527124 starter        Apptainer runtime parent: vllm-openai-v0.10.1.1.sandbox
+27176 22639  8936  18612 python3         /usr/bin/python3 -c from multiprocessing.resource_tracker import main;main(29)
+32540 28026  8936  18612 python3         /usr/bin/python3 -c from multiprocessing.resource_tracker import main;main(29)
+33934 22120  4944 116576 bash            bash -lc cg=/sys/fs/cgroup$(awk -F: 'NR==1{print $3}' /proc/self/cgroup); while true; do date '+# %s.%N'; cat $cg/memory.current $cg/memory.events 2>/dev/null || true; ps -u $USER -o pid,ppid,rss,vsz,comm,args --sort=-rss | head -80; sleep 1.0; done
+34358 33934  1640 153600 ps              ps -u gfw -o pid,ppid,rss,vsz,comm,args --sort=-rss
+21553 21539  1620 113408 bash            bash /var/spool/slurmd/job33751461/slurm_script
+34359 33934   616 108068 head            head -80
+# 1783921322.500923149
+  PID  PPID   RSS    VSZ COMMAND         COMMAND
+27177 22639 6106292 104563752 VLLM::EngineCor VLLM::EngineCore
+32541 28026 6101216 104559868 VLLM::EngineCor VLLM::EngineCore
+22639 22622 1070072 9945244 vllm         /usr/bin/python3 /usr/local/bin/vllm serve openai/gpt-oss-20b --host 127.0.0.1 --port 40561 --served-model-name openai/gpt-oss-20b --tensor-parallel-size 1 --max-model-len 32768 --max-num-seqs 256 --max-num-batched-tokens 8192 --kv-cache-dtype auto --enable-chunked-prefill --enforce-eager --kv-transfer-config {"kv_connector":"LMCacheConnectorV1","engine_id":"s0","kv_role":"kv_producer","kv_port":14579,"kv_connector_extra_config":{"discard_partial_chunks":false,"lmcache_rpc_port":"src"}}
+28026 28009 1039876 9915708 vllm         /usr/bin/python3 /usr/local/bin/vllm serve openai/gpt-oss-20b --host 127.0.0.1 --port 40661 --served-model-name openai/gpt-oss-20b --tensor-parallel-size 1 --max-model-len 32768 --max-num-seqs 256 --max-num-batched-tokens 8192 --kv-cache-dtype auto --enable-chunked-prefill --enforce-eager --kv-transfer-config {"kv_connector":"LMCacheConnectorV1","engine_id":"d0","kv_role":"kv_consumer","kv_port":14580,"kv_connector_extra_config":{"discard_partial_chunks":false,"lmcache_rpc_port":"sink"}}
+22616 22120 379492 629660 python         /home/groups/ramr/gfw/coding-progress-ledger/agent-migrate/.venv/bin/python queue-haul/stage1b_drain_sink.py lmcache-server --host 127.0.0.1 --port 38116 --max-bytes 0
+22120 21553 249488 6018480 python        /home/groups/ramr/gfw/coding-progress-ledger/agent-migrate/.venv/bin/python queue-haul/stage1c_controller.py live-grid --manifests queue-haul/outputs/stage1c_old_persistent_smoke_two/manifests/small.json --run-root queue-haul/outputs/stage1c_old_persistent_smoke_two --policies greedy,all-r --deadlines 120 --target-fracs 0.25 --mbps 1000 --nvsmi-ms 500 --baseline-s 3 --settle-s 3 --seed 0 --profile queue-haul/outputs/stage1c_old_persistent_smoke/live_profile.json --replay-concurrency 1 --kv-concurrency 0
+22619 22120 24824 157232 python          /home/groups/ramr/gfw/coding-progress-ledger/agent-migrate/.venv/bin/python queue-haul/stage1b_drain_sink.py proxy --kv-listen 127.0.0.1:40761 --kv-target 127.0.0.1:38116 --api-listen 127.0.0.1:40861 --api-target 127.0.0.1:40661 --mbps 1000.0 --log queue-haul/outputs/stage1c_old_persistent_smoke_two/stack/proxy_bytes.csv
+28041 28009 17676  30768 fuse-overlayfs  /usr/libexec/apptainer/bin/fuse-overlayfs -f -o allow_other,lowerdir=/var/lib/apptainer/mnt/session/overlay-lowerdir:/var/lib/apptainer/mnt/session/rootfs,noacl /var/lib/apptainer/mnt/session/final
+22653 22622 17640  30640 fuse-overlayfs  /usr/libexec/apptainer/bin/fuse-overlayfs -f -o allow_other,lowerdir=/var/lib/apptainer/mnt/session/overlay-lowerdir:/var/lib/apptainer/mnt/session/rootfs,noacl /var/lib/apptainer/mnt/session/final
+33983 22120 15480  33036 nvidia-smi      nvidia-smi --query-gpu=timestamp,index,power.draw,utilization.gpu,memory.used --format=csv,noheader,nounits -lms 500
+28009 22120 13656 1527124 starter        Apptainer runtime parent: vllm-openai-v0.10.1.1.sandbox
+22622 22120 13400 1527124 starter        Apptainer runtime parent: vllm-openai-v0.10.1.1.sandbox
+27176 22639  8936  18612 python3         /usr/bin/python3 -c from multiprocessing.resource_tracker import main;main(29)
+32540 28026  8936  18612 python3         /usr/bin/python3 -c from multiprocessing.resource_tracker import main;main(29)
+33934 22120  4944 116576 bash            bash -lc cg=/sys/fs/cgroup$(awk -F: 'NR==1{print $3}' /proc/self/cgroup); while true; do date '+# %s.%N'; cat $cg/memory.current $cg/memory.events 2>/dev/null || true; ps -u $USER -o pid,ppid,rss,vsz,comm,args --sort=-rss | head -80; sleep 1.0; done
+34367 33934  1640 153600 ps              ps -u gfw -o pid,ppid,rss,vsz,comm,args --sort=-rss
+21553 21539  1620 113408 bash            bash /var/spool/slurmd/job33751461/slurm_script
+34368 33934   612 108068 head            head -80
+# 1783921323.519283508
+  PID  PPID   RSS    VSZ COMMAND         COMMAND
+27177 22639 6106292 104563752 VLLM::EngineCor VLLM::EngineCore
+32541 28026 6101216 104559868 VLLM::EngineCor VLLM::EngineCore
+22639 22622 1070072 9945244 vllm         /usr/bin/python3 /usr/local/bin/vllm serve openai/gpt-oss-20b --host 127.0.0.1 --port 40561 --served-model-name openai/gpt-oss-20b --tensor-parallel-size 1 --max-model-len 32768 --max-num-seqs 256 --max-num-batched-tokens 8192 --kv-cache-dtype auto --enable-chunked-prefill --enforce-eager --kv-transfer-config {"kv_connector":"LMCacheConnectorV1","engine_id":"s0","kv_role":"kv_producer","kv_port":14579,"kv_connector_extra_config":{"discard_partial_chunks":false,"lmcache_rpc_port":"src"}}
+28026 28009 1039876 9915708 vllm         /usr/bin/python3 /usr/local/bin/vllm serve openai/gpt-oss-20b --host 127.0.0.1 --port 40661 --served-model-name openai/gpt-oss-20b --tensor-parallel-size 1 --max-model-len 32768 --max-num-seqs 256 --max-num-batched-tokens 8192 --kv-cache-dtype auto --enable-chunked-prefill --enforce-eager --kv-transfer-config {"kv_connector":"LMCacheConnectorV1","engine_id":"d0","kv_role":"kv_consumer","kv_port":14580,"kv_connector_extra_config":{"discard_partial_chunks":false,"lmcache_rpc_port":"sink"}}
+22616 22120 379492 629660 python         /home/groups/ramr/gfw/coding-progress-ledger/agent-migrate/.venv/bin/python queue-haul/stage1b_drain_sink.py lmcache-server --host 127.0.0.1 --port 38116 --max-bytes 0
+22120 21553 249488 6018480 python        /home/groups/ramr/gfw/coding-progress-ledger/agent-migrate/.venv/bin/python queue-haul/stage1c_controller.py live-grid --manifests queue-haul/outputs/stage1c_old_persistent_smoke_two/manifests/small.json --run-root queue-haul/outputs/stage1c_old_persistent_smoke_two --policies greedy,all-r --deadlines 120 --target-fracs 0.25 --mbps 1000 --nvsmi-ms 500 --baseline-s 3 --settle-s 3 --seed 0 --profile queue-haul/outputs/stage1c_old_persistent_smoke/live_profile.json --replay-concurrency 1 --kv-concurrency 0
+22619 22120 24824 157232 python          /home/groups/ramr/gfw/coding-progress-ledger/agent-migrate/.venv/bin/python queue-haul/stage1b_drain_sink.py proxy --kv-listen 127.0.0.1:40761 --kv-target 127.0.0.1:38116 --api-listen 127.0.0.1:40861 --api-target 127.0.0.1:40661 --mbps 1000.0 --log queue-haul/outputs/stage1c_old_persistent_smoke_two/stack/proxy_bytes.csv
+28041 28009 17676  30768 fuse-overlayfs  /usr/libexec/apptainer/bin/fuse-overlayfs -f -o allow_other,lowerdir=/var/lib/apptainer/mnt/session/overlay-lowerdir:/var/lib/apptainer/mnt/session/rootfs,noacl /var/lib/apptainer/mnt/session/final
+22653 22622 17640  30640 fuse-overlayfs  /usr/libexec/apptainer/bin/fuse-overlayfs -f -o allow_other,lowerdir=/var/lib/apptainer/mnt/session/overlay-lowerdir:/var/lib/apptainer/mnt/session/rootfs,noacl /var/lib/apptainer/mnt/session/final
+33983 22120 15480  33036 nvidia-smi      nvidia-smi --query-gpu=timestamp,index,power.draw,utilization.gpu,memory.used --format=csv,noheader,nounits -lms 500
+28009 22120 13656 1527124 starter        Apptainer runtime parent: vllm-openai-v0.10.1.1.sandbox
+22622 22120 13400 1527124 starter        Apptainer runtime parent: vllm-openai-v0.10.1.1.sandbox
+27176 22639  8936  18612 python3         /usr/bin/python3 -c from multiprocessing.resource_tracker import main;main(29)
+32540 28026  8936  18612 python3         /usr/bin/python3 -c from multiprocessing.resource_tracker import main;main(29)
+33934 22120  4944 116576 bash            bash -lc cg=/sys/fs/cgroup$(awk -F: 'NR==1{print $3}' /proc/self/cgroup); while true; do date '+# %s.%N'; cat $cg/memory.current $cg/memory.events 2>/dev/null || true; ps -u $USER -o pid,ppid,rss,vsz,comm,args --sort=-rss | head -80; sleep 1.0; done
+34374 33934  1644 153600 ps              ps -u gfw -o pid,ppid,rss,vsz,comm,args --sort=-rss
+21553 21539  1620 113408 bash            bash /var/spool/slurmd/job33751461/slurm_script
+34375 33934   612 108068 head            head -80
+# 1783921324.537472529
+  PID  PPID   RSS    VSZ COMMAND         COMMAND
+27177 22639 6106292 104563752 VLLM::EngineCor VLLM::EngineCore
+32541 28026 6101216 104559868 VLLM::EngineCor VLLM::EngineCore
+22639 22622 1070072 9945244 vllm         /usr/bin/python3 /usr/local/bin/vllm serve openai/gpt-oss-20b --host 127.0.0.1 --port 40561 --served-model-name openai/gpt-oss-20b --tensor-parallel-size 1 --max-model-len 32768 --max-num-seqs 256 --max-num-batched-tokens 8192 --kv-cache-dtype auto --enable-chunked-prefill --enforce-eager --kv-transfer-config {"kv_connector":"LMCacheConnectorV1","engine_id":"s0","kv_role":"kv_producer","kv_port":14579,"kv_connector_extra_config":{"discard_partial_chunks":false,"lmcache_rpc_port":"src"}}
+28026 28009 1039876 9915708 vllm         /usr/bin/python3 /usr/local/bin/vllm serve openai/gpt-oss-20b --host 127.0.0.1 --port 40661 --served-model-name openai/gpt-oss-20b --tensor-parallel-size 1 --max-model-len 32768 --max-num-seqs 256 --max-num-batched-tokens 8192 --kv-cache-dtype auto --enable-chunked-prefill --enforce-eager --kv-transfer-config {"kv_connector":"LMCacheConnectorV1","engine_id":"d0","kv_role":"kv_consumer","kv_port":14580,"kv_connector_extra_config":{"discard_partial_chunks":false,"lmcache_rpc_port":"sink"}}
+22616 22120 379492 629660 python         /home/groups/ramr/gfw/coding-progress-ledger/agent-migrate/.venv/bin/python queue-haul/stage1b_drain_sink.py lmcache-server --host 127.0.0.1 --port 38116 --max-bytes 0
+22120 21553 249488 6018480 python        /home/groups/ramr/gfw/coding-progress-ledger/agent-migrate/.venv/bin/python queue-haul/stage1c_controller.py live-grid --manifests queue-haul/outputs/stage1c_old_persistent_smoke_two/manifests/small.json --run-root queue-haul/outputs/stage1c_old_persistent_smoke_two --policies greedy,all-r --deadlines 120 --target-fracs 0.25 --mbps 1000 --nvsmi-ms 500 --baseline-s 3 --settle-s 3 --seed 0 --profile queue-haul/outputs/stage1c_old_persistent_smoke/live_profile.json --replay-concurrency 1 --kv-concurrency 0
+22619 22120 24824 157232 python          /home/groups/ramr/gfw/coding-progress-ledger/agent-migrate/.venv/bin/python queue-haul/stage1b_drain_sink.py proxy --kv-listen 127.0.0.1:40761 --kv-target 127.0.0.1:38116 --api-listen 127.0.0.1:40861 --api-target 127.0.0.1:40661 --mbps 1000.0 --log queue-haul/outputs/stage1c_old_persistent_smoke_two/stack/proxy_bytes.csv
+28041 28009 17676  30768 fuse-overlayfs  /usr/libexec/apptainer/bin/fuse-overlayfs -f -o allow_other,lowerdir=/var/lib/apptainer/mnt/session/overlay-lowerdir:/var/lib/apptainer/mnt/session/rootfs,noacl /var/lib/apptainer/mnt/session/final
+22653 22622 17640  30640 fuse-overlayfs  /usr/libexec/apptainer/bin/fuse-overlayfs -f -o allow_other,lowerdir=/var/lib/apptainer/mnt/session/overlay-lowerdir:/var/lib/apptainer/mnt/session/rootfs,noacl /var/lib/apptainer/mnt/session/final
+33983 22120 15480  33036 nvidia-smi      nvidia-smi --query-gpu=timestamp,index,power.draw,utilization.gpu,memory.used --format=csv,noheader,nounits -lms 500
+28009 22120 13656 1527124 starter        Apptainer runtime parent: vllm-openai-v0.10.1.1.sandbox
+22622 22120 13400 1527124 starter        Apptainer runtime parent: vllm-openai-v0.10.1.1.sandbox
+27176 22639  8936  18612 python3         /usr/bin/python3 -c from multiprocessing.resource_tracker import main;main(29)
+32540 28026  8936  18612 python3         /usr/bin/python3 -c from multiprocessing.resource_tracker import main;main(29)
+33934 22120  4944 116576 bash            bash -lc cg=/sys/fs/cgroup$(awk -F: 'NR==1{print $3}' /proc/self/cgroup); while true; do date '+# %s.%N'; cat $cg/memory.current $cg/memory.events 2>/dev/null || true; ps -u $USER -o pid,ppid,rss,vsz,comm,args --sort=-rss | head -80; sleep 1.0; done
+34383 33934  1644 153600 ps              ps -u gfw -o pid,ppid,rss,vsz,comm,args --sort=-rss
+21553 21539  1620 113408 bash            bash /var/spool/slurmd/job33751461/slurm_script
+34384 33934   616 108068 head            head -80
+# 1783921325.553623283
+  PID  PPID   RSS    VSZ COMMAND         COMMAND
+27177 22639 6106312 104563752 VLLM::EngineCor VLLM::EngineCore
+32541 28026 6101336 104559868 VLLM::EngineCor VLLM::EngineCore
+22639 22622 1070072 9945244 vllm         /usr/bin/python3 /usr/local/bin/vllm serve openai/gpt-oss-20b --host 127.0.0.1 --port 40561 --served-model-name openai/gpt-oss-20b --tensor-parallel-size 1 --max-model-len 32768 --max-num-seqs 256 --max-num-batched-tokens 8192 --kv-cache-dtype auto --enable-chunked-prefill --enforce-eager --kv-transfer-config {"kv_connector":"LMCacheConnectorV1","engine_id":"s0","kv_role":"kv_producer","kv_port":14579,"kv_connector_extra_config":{"discard_partial_chunks":false,"lmcache_rpc_port":"src"}}
+28026 28009 1039876 9915708 vllm         /usr/bin/python3 /usr/local/bin/vllm serve openai/gpt-oss-20b --host 127.0.0.1 --port 40661 --served-model-name openai/gpt-oss-20b --tensor-parallel-size 1 --max-model-len 32768 --max-num-seqs 256 --max-num-batched-tokens 8192 --kv-cache-dtype auto --enable-chunked-prefill --enforce-eager --kv-transfer-config {"kv_connector":"LMCacheConnectorV1","engine_id":"d0","kv_role":"kv_consumer","kv_port":14580,"kv_connector_extra_config":{"discard_partial_chunks":false,"lmcache_rpc_port":"sink"}}
+22616 22120 379492 629660 python         /home/groups/ramr/gfw/coding-progress-ledger/agent-migrate/.venv/bin/python queue-haul/stage1b_drain_sink.py lmcache-server --host 127.0.0.1 --port 38116 --max-bytes 0
+22120 21553 250136 6027716 python        /home/groups/ramr/gfw/coding-progress-ledger/agent-migrate/.venv/bin/python queue-haul/stage1c_controller.py live-grid --manifests queue-haul/outputs/stage1c_old_persistent_smoke_two/manifests/small.json --run-root queue-haul/outputs/stage1c_old_persistent_smoke_two --policies greedy,all-r --deadlines 120 --target-fracs 0.25 --mbps 1000 --nvsmi-ms 500 --baseline-s 3 --settle-s 3 --seed 0 --profile queue-haul/outputs/stage1c_old_persistent_smoke/live_profile.json --replay-concurrency 1 --kv-concurrency 0
+22619 22120 24824 157232 python          /home/groups/ramr/gfw/coding-progress-ledger/agent-migrate/.venv/bin/python queue-haul/stage1b_drain_sink.py proxy --kv-listen 127.0.0.1:40761 --kv-target 127.0.0.1:38116 --api-listen 127.0.0.1:40861 --api-target 127.0.0.1:40661 --mbps 1000.0 --log queue-haul/outputs/stage1c_old_persistent_smoke_two/stack/proxy_bytes.csv
+28041 28009 17676  30768 fuse-overlayfs  /usr/libexec/apptainer/bin/fuse-overlayfs -f -o allow_other,lowerdir=/var/lib/apptainer/mnt/session/overlay-lowerdir:/var/lib/apptainer/mnt/session/rootfs,noacl /var/lib/apptainer/mnt/session/final
+22653 22622 17640  30640 fuse-overlayfs  /usr/libexec/apptainer/bin/fuse-overlayfs -f -o allow_other,lowerdir=/var/lib/apptainer/mnt/session/overlay-lowerdir:/var/lib/apptainer/mnt/session/rootfs,noacl /var/lib/apptainer/mnt/session/final
+33983 22120 15480  33036 nvidia-smi      nvidia-smi --query-gpu=timestamp,index,power.draw,utilization.gpu,memory.used --format=csv,noheader,nounits -lms 500
+28009 22120 13656 1527124 starter        Apptainer runtime parent: vllm-openai-v0.10.1.1.sandbox
+22622 22120 13400 1527124 starter        Apptainer runtime parent: vllm-openai-v0.10.1.1.sandbox
+27176 22639  8936  18612 python3         /usr/bin/python3 -c from multiprocessing.resource_tracker import main;main(29)
+32540 28026  8936  18612 python3         /usr/bin/python3 -c from multiprocessing.resource_tracker import main;main(29)
+33934 22120  4944 116576 bash            bash -lc cg=/sys/fs/cgroup$(awk -F: 'NR==1{print $3}' /proc/self/cgroup); while true; do date '+# %s.%N'; cat $cg/memory.current $cg/memory.events 2>/dev/null || true; ps -u $USER -o pid,ppid,rss,vsz,comm,args --sort=-rss | head -80; sleep 1.0; done
+34391 33934  1644 153600 ps              ps -u gfw -o pid,ppid,rss,vsz,comm,args --sort=-rss
+21553 21539  1620 113408 bash            bash /var/spool/slurmd/job33751461/slurm_script
+34392 33934   612 108068 head            head -80
+# 1783921326.569704559
+  PID  PPID   RSS    VSZ COMMAND         COMMAND
+27177 22639 6106312 104563752 VLLM::EngineCor VLLM::EngineCore
+32541 28026 6101340 104559868 VLLM::EngineCor VLLM::EngineCore
+22639 22622 1070072 9945244 vllm         /usr/bin/python3 /usr/local/bin/vllm serve openai/gpt-oss-20b --host 127.0.0.1 --port 40561 --served-model-name openai/gpt-oss-20b --tensor-parallel-size 1 --max-model-len 32768 --max-num-seqs 256 --max-num-batched-tokens 8192 --kv-cache-dtype auto --enable-chunked-prefill --enforce-eager --kv-transfer-config {"kv_connector":"LMCacheConnectorV1","engine_id":"s0","kv_role":"kv_producer","kv_port":14579,"kv_connector_extra_config":{"discard_partial_chunks":false,"lmcache_rpc_port":"src"}}
+28026 28009 1039876 9915708 vllm         /usr/bin/python3 /usr/local/bin/vllm serve openai/gpt-oss-20b --host 127.0.0.1 --port 40661 --served-model-name openai/gpt-oss-20b --tensor-parallel-size 1 --max-model-len 32768 --max-num-seqs 256 --max-num-batched-tokens 8192 --kv-cache-dtype auto --enable-chunked-prefill --enforce-eager --kv-transfer-config {"kv_connector":"LMCacheConnectorV1","engine_id":"d0","kv_role":"kv_consumer","kv_port":14580,"kv_connector_extra_config":{"discard_partial_chunks":false,"lmcache_rpc_port":"sink"}}
+22616 22120 379492 629660 python         /home/groups/ramr/gfw/coding-progress-ledger/agent-migrate/.venv/bin/python queue-haul/stage1b_drain_sink.py lmcache-server --host 127.0.0.1 --port 38116 --max-bytes 0
+22120 21553 250136 6027716 python        /home/groups/ramr/gfw/coding-progress-ledger/agent-migrate/.venv/bin/python queue-haul/stage1c_controller.py live-grid --manifests queue-haul/outputs/stage1c_old_persistent_smoke_two/manifests/small.json --run-root queue-haul/outputs/stage1c_old_persistent_smoke_two --policies greedy,all-r --deadlines 120 --target-fracs 0.25 --mbps 1000 --nvsmi-ms 500 --baseline-s 3 --settle-s 3 --seed 0 --profile queue-haul/outputs/stage1c_old_persistent_smoke/live_profile.json --replay-concurrency 1 --kv-concurrency 0
+22619 22120 24824 157232 python          /home/groups/ramr/gfw/coding-progress-ledger/agent-migrate/.venv/bin/python queue-haul/stage1b_drain_sink.py proxy --kv-listen 127.0.0.1:40761 --kv-target 127.0.0.1:38116 --api-listen 127.0.0.1:40861 --api-target 127.0.0.1:40661 --mbps 1000.0 --log queue-haul/outputs/stage1c_old_persistent_smoke_two/stack/proxy_bytes.csv
+28041 28009 17676  30768 fuse-overlayfs  /usr/libexec/apptainer/bin/fuse-overlayfs -f -o allow_other,lowerdir=/var/lib/apptainer/mnt/session/overlay-lowerdir:/var/lib/apptainer/mnt/session/rootfs,noacl /var/lib/apptainer/mnt/session/final
+22653 22622 17640  30640 fuse-overlayfs  /usr/libexec/apptainer/bin/fuse-overlayfs -f -o allow_other,lowerdir=/var/lib/apptainer/mnt/session/overlay-lowerdir:/var/lib/apptainer/mnt/session/rootfs,noacl /var/lib/apptainer/mnt/session/final
+33983 22120 15480  33036 nvidia-smi      nvidia-smi --query-gpu=timestamp,index,power.draw,utilization.gpu,memory.used --format=csv,noheader,nounits -lms 500
+28009 22120 13656 1527124 starter        Apptainer runtime parent: vllm-openai-v0.10.1.1.sandbox
+22622 22120 13400 1527124 starter        Apptainer runtime parent: vllm-openai-v0.10.1.1.sandbox
+27176 22639  8936  18612 python3         /usr/bin/python3 -c from multiprocessing.resource_tracker import main;main(29)
+32540 28026  8936  18612 python3         /usr/bin/python3 -c from multiprocessing.resource_tracker import main;main(29)
+33934 22120  4944 116576 bash            bash -lc cg=/sys/fs/cgroup$(awk -F: 'NR==1{print $3}' /proc/self/cgroup); while true; do date '+# %s.%N'; cat $cg/memory.current $cg/memory.events 2>/dev/null || true; ps -u $USER -o pid,ppid,rss,vsz,comm,args --sort=-rss | head -80; sleep 1.0; done
+34397 33934  1640 153600 ps              ps -u gfw -o pid,ppid,rss,vsz,comm,args --sort=-rss
+21553 21539  1620 113408 bash            bash /var/spool/slurmd/job33751461/slurm_script
+34398 33934   612 108068 head            head -80
+# 1783921327.587149858
+  PID  PPID   RSS    VSZ COMMAND         COMMAND
+27177 22639 6106312 104563752 VLLM::EngineCor VLLM::EngineCore
+32541 28026 6101340 104559868 VLLM::EngineCor VLLM::EngineCore
+22639 22622 1070072 9945244 vllm         /usr/bin/python3 /usr/local/bin/vllm serve openai/gpt-oss-20b --host 127.0.0.1 --port 40561 --served-model-name openai/gpt-oss-20b --tensor-parallel-size 1 --max-model-len 32768 --max-num-seqs 256 --max-num-batched-tokens 8192 --kv-cache-dtype auto --enable-chunked-prefill --enforce-eager --kv-transfer-config {"kv_connector":"LMCacheConnectorV1","engine_id":"s0","kv_role":"kv_producer","kv_port":14579,"kv_connector_extra_config":{"discard_partial_chunks":false,"lmcache_rpc_port":"src"}}
+28026 28009 1039876 9915708 vllm         /usr/bin/python3 /usr/local/bin/vllm serve openai/gpt-oss-20b --host 127.0.0.1 --port 40661 --served-model-name openai/gpt-oss-20b --tensor-parallel-size 1 --max-model-len 32768 --max-num-seqs 256 --max-num-batched-tokens 8192 --kv-cache-dtype auto --enable-chunked-prefill --enforce-eager --kv-transfer-config {"kv_connector":"LMCacheConnectorV1","engine_id":"d0","kv_role":"kv_consumer","kv_port":14580,"kv_connector_extra_config":{"discard_partial_chunks":false,"lmcache_rpc_port":"sink"}}
+22616 22120 379492 629660 python         /home/groups/ramr/gfw/coding-progress-ledger/agent-migrate/.venv/bin/python queue-haul/stage1b_drain_sink.py lmcache-server --host 127.0.0.1 --port 38116 --max-bytes 0
+22120 21553 250136 6027716 python        /home/groups/ramr/gfw/coding-progress-ledger/agent-migrate/.venv/bin/python queue-haul/stage1c_controller.py live-grid --manifests queue-haul/outputs/stage1c_old_persistent_smoke_two/manifests/small.json --run-root queue-haul/outputs/stage1c_old_persistent_smoke_two --policies greedy,all-r --deadlines 120 --target-fracs 0.25 --mbps 1000 --nvsmi-ms 500 --baseline-s 3 --settle-s 3 --seed 0 --profile queue-haul/outputs/stage1c_old_persistent_smoke/live_profile.json --replay-concurrency 1 --kv-concurrency 0
+22619 22120 24824 157232 python          /home/groups/ramr/gfw/coding-progress-ledger/agent-migrate/.venv/bin/python queue-haul/stage1b_drain_sink.py proxy --kv-listen 127.0.0.1:40761 --kv-target 127.0.0.1:38116 --api-listen 127.0.0.1:40861 --api-target 127.0.0.1:40661 --mbps 1000.0 --log queue-haul/outputs/stage1c_old_persistent_smoke_two/stack/proxy_bytes.csv
+28041 28009 17676  30768 fuse-overlayfs  /usr/libexec/apptainer/bin/fuse-overlayfs -f -o allow_other,lowerdir=/var/lib/apptainer/mnt/session/overlay-lowerdir:/var/lib/apptainer/mnt/session/rootfs,noacl /var/lib/apptainer/mnt/session/final
+22653 22622 17640  30640 fuse-overlayfs  /usr/libexec/apptainer/bin/fuse-overlayfs -f -o allow_other,lowerdir=/var/lib/apptainer/mnt/session/overlay-lowerdir:/var/lib/apptainer/mnt/session/rootfs,noacl /var/lib/apptainer/mnt/session/final
+33983 22120 15480  33036 nvidia-smi      nvidia-smi --query-gpu=timestamp,index,power.draw,utilization.gpu,memory.used --format=csv,noheader,nounits -lms 500
+28009 22120 13656 1527124 starter        Apptainer runtime parent: vllm-openai-v0.10.1.1.sandbox
+22622 22120 13400 1527124 starter        Apptainer runtime parent: vllm-openai-v0.10.1.1.sandbox
+27176 22639  8936  18612 python3         /usr/bin/python3 -c from multiprocessing.resource_tracker import main;main(29)
+32540 28026  8936  18612 python3         /usr/bin/python3 -c from multiprocessing.resource_tracker import main;main(29)
+33934 22120  4944 116576 bash            bash -lc cg=/sys/fs/cgroup$(awk -F: 'NR==1{print $3}' /proc/self/cgroup); while true; do date '+# %s.%N'; cat $cg/memory.current $cg/memory.events 2>/dev/null || true; ps -u $USER -o pid,ppid,rss,vsz,comm,args --sort=-rss | head -80; sleep 1.0; done
+34404 33934  1644 153600 ps              ps -u gfw -o pid,ppid,rss,vsz,comm,args --sort=-rss
+21553 21539  1620 113408 bash            bash /var/spool/slurmd/job33751461/slurm_script
+34405 33934   616 108068 head            head -80
+# 1783921328.604288471
+  PID  PPID   RSS    VSZ COMMAND         COMMAND
+27177 22639 6106312 104563752 VLLM::EngineCor VLLM::EngineCore
+32541 28026 6101340 104559868 VLLM::EngineCor VLLM::EngineCore
+22639 22622 1070072 9945244 vllm         /usr/bin/python3 /usr/local/bin/vllm serve openai/gpt-oss-20b --host 127.0.0.1 --port 40561 --served-model-name openai/gpt-oss-20b --tensor-parallel-size 1 --max-model-len 32768 --max-num-seqs 256 --max-num-batched-tokens 8192 --kv-cache-dtype auto --enable-chunked-prefill --enforce-eager --kv-transfer-config {"kv_connector":"LMCacheConnectorV1","engine_id":"s0","kv_role":"kv_producer","kv_port":14579,"kv_connector_extra_config":{"discard_partial_chunks":false,"lmcache_rpc_port":"src"}}
+28026 28009 1039876 9915708 vllm         /usr/bin/python3 /usr/local/bin/vllm serve openai/gpt-oss-20b --host 127.0.0.1 --port 40661 --served-model-name openai/gpt-oss-20b --tensor-parallel-size 1 --max-model-len 32768 --max-num-seqs 256 --max-num-batched-tokens 8192 --kv-cache-dtype auto --enable-chunked-prefill --enforce-eager --kv-transfer-config {"kv_connector":"LMCacheConnectorV1","engine_id":"d0","kv_role":"kv_consumer","kv_port":14580,"kv_connector_extra_config":{"discard_partial_chunks":false,"lmcache_rpc_port":"sink"}}
+22616 22120 379492 629660 python         /home/groups/ramr/gfw/coding-progress-ledger/agent-migrate/.venv/bin/python queue-haul/stage1b_drain_sink.py lmcache-server --host 127.0.0.1 --port 38116 --max-bytes 0
+22120 21553 250136 6027716 python        /home/groups/ramr/gfw/coding-progress-ledger/agent-migrate/.venv/bin/python queue-haul/stage1c_controller.py live-grid --manifests queue-haul/outputs/stage1c_old_persistent_smoke_two/manifests/small.json --run-root queue-haul/outputs/stage1c_old_persistent_smoke_two --policies greedy,all-r --deadlines 120 --target-fracs 0.25 --mbps 1000 --nvsmi-ms 500 --baseline-s 3 --settle-s 3 --seed 0 --profile queue-haul/outputs/stage1c_old_persistent_smoke/live_profile.json --replay-concurrency 1 --kv-concurrency 0
+22619 22120 24824 157232 python          /home/groups/ramr/gfw/coding-progress-ledger/agent-migrate/.venv/bin/python queue-haul/stage1b_drain_sink.py proxy --kv-listen 127.0.0.1:40761 --kv-target 127.0.0.1:38116 --api-listen 127.0.0.1:40861 --api-target 127.0.0.1:40661 --mbps 1000.0 --log queue-haul/outputs/stage1c_old_persistent_smoke_two/stack/proxy_bytes.csv
+28041 28009 17676  30768 fuse-overlayfs  /usr/libexec/apptainer/bin/fuse-overlayfs -f -o allow_other,lowerdir=/var/lib/apptainer/mnt/session/overlay-lowerdir:/var/lib/apptainer/mnt/session/rootfs,noacl /var/lib/apptainer/mnt/session/final
+22653 22622 17640  30640 fuse-overlayfs  /usr/libexec/apptainer/bin/fuse-overlayfs -f -o allow_other,lowerdir=/var/lib/apptainer/mnt/session/overlay-lowerdir:/var/lib/apptainer/mnt/session/rootfs,noacl /var/lib/apptainer/mnt/session/final
+33983 22120 15480  33036 nvidia-smi      nvidia-smi --query-gpu=timestamp,index,power.draw,utilization.gpu,memory.used --format=csv,noheader,nounits -lms 500
+28009 22120 13656 1527124 starter        Apptainer runtime parent: vllm-openai-v0.10.1.1.sandbox
+22622 22120 13400 1527124 starter        Apptainer runtime parent: vllm-openai-v0.10.1.1.sandbox
+27176 22639  8936  18612 python3         /usr/bin/python3 -c from multiprocessing.resource_tracker import main;main(29)
+32540 28026  8936  18612 python3         /usr/bin/python3 -c from multiprocessing.resource_tracker import main;main(29)
+33934 22120  4944 116576 bash            bash -lc cg=/sys/fs/cgroup$(awk -F: 'NR==1{print $3}' /proc/self/cgroup); while true; do date '+# %s.%N'; cat $cg/memory.current $cg/memory.events 2>/dev/null || true; ps -u $USER -o pid,ppid,rss,vsz,comm,args --sort=-rss | head -80; sleep 1.0; done
+34411 33934  1644 153600 ps              ps -u gfw -o pid,ppid,rss,vsz,comm,args --sort=-rss
+21553 21539  1620 113408 bash            bash /var/spool/slurmd/job33751461/slurm_script
+34412 33934   612 108068 head            head -80
+# 1783921329.624189312
+  PID  PPID   RSS    VSZ COMMAND         COMMAND
+27177 22639 6106532 104564776 VLLM::EngineCor VLLM::EngineCore
+32541 28026 6101616 104559868 VLLM::EngineCor VLLM::EngineCore
+22639 22622 1070072 9945244 vllm         /usr/bin/python3 /usr/local/bin/vllm serve openai/gpt-oss-20b --host 127.0.0.1 --port 40561 --served-model-name openai/gpt-oss-20b --tensor-parallel-size 1 --max-model-len 32768 --max-num-seqs 256 --max-num-batched-tokens 8192 --kv-cache-dtype auto --enable-chunked-prefill --enforce-eager --kv-transfer-config {"kv_connector":"LMCacheConnectorV1","engine_id":"s0","kv_role":"kv_producer","kv_port":14579,"kv_connector_extra_config":{"discard_partial_chunks":false,"lmcache_rpc_port":"src"}}
+28026 28009 1039876 9915708 vllm         /usr/bin/python3 /usr/local/bin/vllm serve openai/gpt-oss-20b --host 127.0.0.1 --port 40661 --served-model-name openai/gpt-oss-20b --tensor-parallel-size 1 --max-model-len 32768 --max-num-seqs 256 --max-num-batched-tokens 8192 --kv-cache-dtype auto --enable-chunked-prefill --enforce-eager --kv-transfer-config {"kv_connector":"LMCacheConnectorV1","engine_id":"d0","kv_role":"kv_consumer","kv_port":14580,"kv_connector_extra_config":{"discard_partial_chunks":false,"lmcache_rpc_port":"sink"}}
+22616 22120 391964 629660 python         /home/groups/ramr/gfw/coding-progress-ledger/agent-migrate/.venv/bin/python queue-haul/stage1b_drain_sink.py lmcache-server --host 127.0.0.1 --port 38116 --max-bytes 0
+22120 21553 250316 6027700 python        /home/groups/ramr/gfw/coding-progress-ledger/agent-migrate/.venv/bin/python queue-haul/stage1c_controller.py live-grid --manifests queue-haul/outputs/stage1c_old_persistent_smoke_two/manifests/small.json --run-root queue-haul/outputs/stage1c_old_persistent_smoke_two --policies greedy,all-r --deadlines 120 --target-fracs 0.25 --mbps 1000 --nvsmi-ms 500 --baseline-s 3 --settle-s 3 --seed 0 --profile queue-haul/outputs/stage1c_old_persistent_smoke/live_profile.json --replay-concurrency 1 --kv-concurrency 0
+22619 22120 24824 157232 python          /home/groups/ramr/gfw/coding-progress-ledger/agent-migrate/.venv/bin/python queue-haul/stage1b_drain_sink.py proxy --kv-listen 127.0.0.1:40761 --kv-target 127.0.0.1:38116 --api-listen 127.0.0.1:40861 --api-target 127.0.0.1:40661 --mbps 1000.0 --log queue-haul/outputs/stage1c_old_persistent_smoke_two/stack/proxy_bytes.csv
+28041 28009 17676  30768 fuse-overlayfs  /usr/libexec/apptainer/bin/fuse-overlayfs -f -o allow_other,lowerdir=/var/lib/apptainer/mnt/session/overlay-lowerdir:/var/lib/apptainer/mnt/session/rootfs,noacl /var/lib/apptainer/mnt/session/final
+22653 22622 17640  30640 fuse-overlayfs  /usr/libexec/apptainer/bin/fuse-overlayfs -f -o allow_other,lowerdir=/var/lib/apptainer/mnt/session/overlay-lowerdir:/var/lib/apptainer/mnt/session/rootfs,noacl /var/lib/apptainer/mnt/session/final
+33983 22120 15480  33036 nvidia-smi      nvidia-smi --query-gpu=timestamp,index,power.draw,utilization.gpu,memory.used --format=csv,noheader,nounits -lms 500
+28009 22120 13656 1527124 starter        Apptainer runtime parent: vllm-openai-v0.10.1.1.sandbox
+22622 22120 13400 1527124 starter        Apptainer runtime parent: vllm-openai-v0.10.1.1.sandbox
+27176 22639  8936  18612 python3         /usr/bin/python3 -c from multiprocessing.resource_tracker import main;main(29)
+32540 28026  8936  18612 python3         /usr/bin/python3 -c from multiprocessing.resource_tracker import main;main(29)
+33934 22120  4944 116576 bash            bash -lc cg=/sys/fs/cgroup$(awk -F: 'NR==1{print $3}' /proc/self/cgroup); while true; do date '+# %s.%N'; cat $cg/memory.current $cg/memory.events 2>/dev/null || true; ps -u $USER -o pid,ppid,rss,vsz,comm,args --sort=-rss | head -80; sleep 1.0; done
+34418 33934  1644 153600 ps              ps -u gfw -o pid,ppid,rss,vsz,comm,args --sort=-rss
+21553 21539  1620 113408 bash            bash /var/spool/slurmd/job33751461/slurm_script
+34419 33934   612 108068 head            head -80
+# 1783921330.642760019
+  PID  PPID   RSS    VSZ COMMAND         COMMAND
+27177 22639 6106532 104564776 VLLM::EngineCor VLLM::EngineCore
+32541 28026 6101644 104560892 VLLM::EngineCor VLLM::EngineCore
+22639 22622 1070072 9945244 vllm         /usr/bin/python3 /usr/local/bin/vllm serve openai/gpt-oss-20b --host 127.0.0.1 --port 40561 --served-model-name openai/gpt-oss-20b --tensor-parallel-size 1 --max-model-len 32768 --max-num-seqs 256 --max-num-batched-tokens 8192 --kv-cache-dtype auto --enable-chunked-prefill --enforce-eager --kv-transfer-config {"kv_connector":"LMCacheConnectorV1","engine_id":"s0","kv_role":"kv_producer","kv_port":14579,"kv_connector_extra_config":{"discard_partial_chunks":false,"lmcache_rpc_port":"src"}}
+28026 28009 1039876 9915708 vllm         /usr/bin/python3 /usr/local/bin/vllm serve openai/gpt-oss-20b --host 127.0.0.1 --port 40661 --served-model-name openai/gpt-oss-20b --tensor-parallel-size 1 --max-model-len 32768 --max-num-seqs 256 --max-num-batched-tokens 8192 --kv-cache-dtype auto --enable-chunked-prefill --enforce-eager --kv-transfer-config {"kv_connector":"LMCacheConnectorV1","engine_id":"d0","kv_role":"kv_consumer","kv_port":14580,"kv_connector_extra_config":{"discard_partial_chunks":false,"lmcache_rpc_port":"sink"}}
+22616 22120 401728 695196 python         /home/groups/ramr/gfw/coding-progress-ledger/agent-migrate/.venv/bin/python queue-haul/stage1b_drain_sink.py lmcache-server --host 127.0.0.1 --port 38116 --max-bytes 0
+22120 21553 250316 6027700 python        /home/groups/ramr/gfw/coding-progress-ledger/agent-migrate/.venv/bin/python queue-haul/stage1c_controller.py live-grid --manifests queue-haul/outputs/stage1c_old_persistent_smoke_two/manifests/small.json --run-root queue-haul/outputs/stage1c_old_persistent_smoke_two --policies greedy,all-r --deadlines 120 --target-fracs 0.25 --mbps 1000 --nvsmi-ms 500 --baseline-s 3 --settle-s 3 --seed 0 --profile queue-haul/outputs/stage1c_old_persistent_smoke/live_profile.json --replay-concurrency 1 --kv-concurrency 0
+22619 22120 24824 157232 python          /home/groups/ramr/gfw/coding-progress-ledger/agent-migrate/.venv/bin/python queue-haul/stage1b_drain_sink.py proxy --kv-listen 127.0.0.1:40761 --kv-target 127.0.0.1:38116 --api-listen 127.0.0.1:40861 --api-target 127.0.0.1:40661 --mbps 1000.0 --log queue-haul/outputs/stage1c_old_persistent_smoke_two/stack/proxy_bytes.csv
+28041 28009 17676  30768 fuse-overlayfs  /usr/libexec/apptainer/bin/fuse-overlayfs -f -o allow_other,lowerdir=/var/lib/apptainer/mnt/session/overlay-lowerdir:/var/lib/apptainer/mnt/session/rootfs,noacl /var/lib/apptainer/mnt/session/final
+22653 22622 17640  30640 fuse-overlayfs  /usr/libexec/apptainer/bin/fuse-overlayfs -f -o allow_other,lowerdir=/var/lib/apptainer/mnt/session/overlay-lowerdir:/var/lib/apptainer/mnt/session/rootfs,noacl /var/lib/apptainer/mnt/session/final
+33983 22120 15480  33036 nvidia-smi      nvidia-smi --query-gpu=timestamp,index,power.draw,utilization.gpu,memory.used --format=csv,noheader,nounits -lms 500
+28009 22120 13656 1527124 starter        Apptainer runtime parent: vllm-openai-v0.10.1.1.sandbox
+22622 22120 13400 1527124 starter        Apptainer runtime parent: vllm-openai-v0.10.1.1.sandbox
+27176 22639  8936  18612 python3         /usr/bin/python3 -c from multiprocessing.resource_tracker import main;main(29)
+32540 28026  8936  18612 python3         /usr/bin/python3 -c from multiprocessing.resource_tracker import main;main(29)
+33934 22120  4944 116576 bash            bash -lc cg=/sys/fs/cgroup$(awk -F: 'NR==1{print $3}' /proc/self/cgroup); while true; do date '+# %s.%N'; cat $cg/memory.current $cg/memory.events 2>/dev/null || true; ps -u $USER -o pid,ppid,rss,vsz,comm,args --sort=-rss | head -80; sleep 1.0; done
+34426 33934  1640 153600 ps              ps -u gfw -o pid,ppid,rss,vsz,comm,args --sort=-rss
+21553 21539  1620 113408 bash            bash /var/spool/slurmd/job33751461/slurm_script
+34427 33934   612 108068 head            head -80
+# 1783921331.663245043
+  PID  PPID   RSS    VSZ COMMAND         COMMAND
+27177 22639 6106616 104564776 VLLM::EngineCor VLLM::EngineCore
+32541 28026 6101856 104560892 VLLM::EngineCor VLLM::EngineCore
+22639 22622 1070072 9945244 vllm         /usr/bin/python3 /usr/local/bin/vllm serve openai/gpt-oss-20b --host 127.0.0.1 --port 40561 --served-model-name openai/gpt-oss-20b --tensor-parallel-size 1 --max-model-len 32768 --max-num-seqs 256 --max-num-batched-tokens 8192 --kv-cache-dtype auto --enable-chunked-prefill --enforce-eager --kv-transfer-config {"kv_connector":"LMCacheConnectorV1","engine_id":"s0","kv_role":"kv_producer","kv_port":14579,"kv_connector_extra_config":{"discard_partial_chunks":false,"lmcache_rpc_port":"src"}}
+28026 28009 1039876 9915708 vllm         /usr/bin/python3 /usr/local/bin/vllm serve openai/gpt-oss-20b --host 127.0.0.1 --port 40661 --served-model-name openai/gpt-oss-20b --tensor-parallel-size 1 --max-model-len 32768 --max-num-seqs 256 --max-num-batched-tokens 8192 --kv-cache-dtype auto --enable-chunked-prefill --enforce-eager --kv-transfer-config {"kv_connector":"LMCacheConnectorV1","engine_id":"d0","kv_role":"kv_consumer","kv_port":14580,"kv_connector_extra_config":{"discard_partial_chunks":false,"lmcache_rpc_port":"sink"}}
+22616 22120 404104 695196 python         /home/groups/ramr/gfw/coding-progress-ledger/agent-migrate/.venv/bin/python queue-haul/stage1b_drain_sink.py lmcache-server --host 127.0.0.1 --port 38116 --max-bytes 0
+22120 21553 250316 6027700 python        /home/groups/ramr/gfw/coding-progress-ledger/agent-migrate/.venv/bin/python queue-haul/stage1c_controller.py live-grid --manifests queue-haul/outputs/stage1c_old_persistent_smoke_two/manifests/small.json --run-root queue-haul/outputs/stage1c_old_persistent_smoke_two --policies greedy,all-r --deadlines 120 --target-fracs 0.25 --mbps 1000 --nvsmi-ms 500 --baseline-s 3 --settle-s 3 --seed 0 --profile queue-haul/outputs/stage1c_old_persistent_smoke/live_profile.json --replay-concurrency 1 --kv-concurrency 0
+22619 22120 24824 157232 python          /home/groups/ramr/gfw/coding-progress-ledger/agent-migrate/.venv/bin/python queue-haul/stage1b_drain_sink.py proxy --kv-listen 127.0.0.1:40761 --kv-target 127.0.0.1:38116 --api-listen 127.0.0.1:40861 --api-target 127.0.0.1:40661 --mbps 1000.0 --log queue-haul/outputs/stage1c_old_persistent_smoke_two/stack/proxy_bytes.csv
+28041 28009 17676  30768 fuse-overlayfs  /usr/libexec/apptainer/bin/fuse-overlayfs -f -o allow_other,lowerdir=/var/lib/apptainer/mnt/session/overlay-lowerdir:/var/lib/apptainer/mnt/session/rootfs,noacl /var/lib/apptainer/mnt/session/final
+22653 22622 17640  30640 fuse-overlayfs  /usr/libexec/apptainer/bin/fuse-overlayfs -f -o allow_other,lowerdir=/var/lib/apptainer/mnt/session/overlay-lowerdir:/var/lib/apptainer/mnt/session/rootfs,noacl /var/lib/apptainer/mnt/session/final
+33983 22120 15480  33036 nvidia-smi      nvidia-smi --query-gpu=timestamp,index,power.draw,utilization.gpu,memory.used --format=csv,noheader,nounits -lms 500
+28009 22120 13656 1527124 starter        Apptainer runtime parent: vllm-openai-v0.10.1.1.sandbox
+22622 22120 13400 1527124 starter        Apptainer runtime parent: vllm-openai-v0.10.1.1.sandbox
+27176 22639  8936  18612 python3         /usr/bin/python3 -c from multiprocessing.resource_tracker import main;main(29)
+32540 28026  8936  18612 python3         /usr/bin/python3 -c from multiprocessing.resource_tracker import main;main(29)
+33934 22120  4944 116576 bash            bash -lc cg=/sys/fs/cgroup$(awk -F: 'NR==1{print $3}' /proc/self/cgroup); while true; do date '+# %s.%N'; cat $cg/memory.current $cg/memory.events 2>/dev/null || true; ps -u $USER -o pid,ppid,rss,vsz,comm,args --sort=-rss | head -80; sleep 1.0; done
+34433 33934  1644 153600 ps              ps -u gfw -o pid,ppid,rss,vsz,comm,args --sort=-rss
+21553 21539  1620 113408 bash            bash /var/spool/slurmd/job33751461/slurm_script
+34434 33934   616 108068 head            head -80
+# 1783921332.680314767
+  PID  PPID   RSS    VSZ COMMAND         COMMAND
+27177 22639 6106616 104564776 VLLM::EngineCor VLLM::EngineCore
+32541 28026 6101872 104560892 VLLM::EngineCor VLLM::EngineCore
+22639 22622 1070072 9945244 vllm         /usr/bin/python3 /usr/local/bin/vllm serve openai/gpt-oss-20b --host 127.0.0.1 --port 40561 --served-model-name openai/gpt-oss-20b --tensor-parallel-size 1 --max-model-len 32768 --max-num-seqs 256 --max-num-batched-tokens 8192 --kv-cache-dtype auto --enable-chunked-prefill --enforce-eager --kv-transfer-config {"kv_connector":"LMCacheConnectorV1","engine_id":"s0","kv_role":"kv_producer","kv_port":14579,"kv_connector_extra_config":{"discard_partial_chunks":false,"lmcache_rpc_port":"src"}}
+28026 28009 1039876 9915708 vllm         /usr/bin/python3 /usr/local/bin/vllm serve openai/gpt-oss-20b --host 127.0.0.1 --port 40661 --served-model-name openai/gpt-oss-20b --tensor-parallel-size 1 --max-model-len 32768 --max-num-seqs 256 --max-num-batched-tokens 8192 --kv-cache-dtype auto --enable-chunked-prefill --enforce-eager --kv-transfer-config {"kv_connector":"LMCacheConnectorV1","engine_id":"d0","kv_role":"kv_consumer","kv_port":14580,"kv_connector_extra_config":{"discard_partial_chunks":false,"lmcache_rpc_port":"sink"}}
+22616 22120 404104 695196 python         /home/groups/ramr/gfw/coding-progress-ledger/agent-migrate/.venv/bin/python queue-haul/stage1b_drain_sink.py lmcache-server --host 127.0.0.1 --port 38116 --max-bytes 0
+22120 21553 250316 6027684 python        /home/groups/ramr/gfw/coding-progress-ledger/agent-migrate/.venv/bin/python queue-haul/stage1c_controller.py live-grid --manifests queue-haul/outputs/stage1c_old_persistent_smoke_two/manifests/small.json --run-root queue-haul/outputs/stage1c_old_persistent_smoke_two --policies greedy,all-r --deadlines 120 --target-fracs 0.25 --mbps 1000 --nvsmi-ms 500 --baseline-s 3 --settle-s 3 --seed 0 --profile queue-haul/outputs/stage1c_old_persistent_smoke/live_profile.json --replay-concurrency 1 --kv-concurrency 0
+22619 22120 24824 157232 python          /home/groups/ramr/gfw/coding-progress-ledger/agent-migrate/.venv/bin/python queue-haul/stage1b_drain_sink.py proxy --kv-listen 127.0.0.1:40761 --kv-target 127.0.0.1:38116 --api-listen 127.0.0.1:40861 --api-target 127.0.0.1:40661 --mbps 1000.0 --log queue-haul/outputs/stage1c_old_persistent_smoke_two/stack/proxy_bytes.csv
+28041 28009 17676  30768 fuse-overlayfs  /usr/libexec/apptainer/bin/fuse-overlayfs -f -o allow_other,lowerdir=/var/lib/apptainer/mnt/session/overlay-lowerdir:/var/lib/apptainer/mnt/session/rootfs,noacl /var/lib/apptainer/mnt/session/final
+22653 22622 17640  30640 fuse-overlayfs  /usr/libexec/apptainer/bin/fuse-overlayfs -f -o allow_other,lowerdir=/var/lib/apptainer/mnt/session/overlay-lowerdir:/var/lib/apptainer/mnt/session/rootfs,noacl /var/lib/apptainer/mnt/session/final
+33983 22120 15480  33036 nvidia-smi      nvidia-smi --query-gpu=timestamp,index,power.draw,utilization.gpu,memory.used --format=csv,noheader,nounits -lms 500
+28009 22120 13656 1527124 starter        Apptainer runtime parent: vllm-openai-v0.10.1.1.sandbox
+22622 22120 13400 1527124 starter        Apptainer runtime parent: vllm-openai-v0.10.1.1.sandbox
+27176 22639  8936  18612 python3         /usr/bin/python3 -c from multiprocessing.resource_tracker import main;main(29)
+32540 28026  8936  18612 python3         /usr/bin/python3 -c from multiprocessing.resource_tracker import main;main(29)
+33934 22120  4944 116576 bash            bash -lc cg=/sys/fs/cgroup$(awk -F: 'NR==1{print $3}' /proc/self/cgroup); while true; do date '+# %s.%N'; cat $cg/memory.current $cg/memory.events 2>/dev/null || true; ps -u $USER -o pid,ppid,rss,vsz,comm,args --sort=-rss | head -80; sleep 1.0; done
+34439 33934  1644 153600 ps              ps -u gfw -o pid,ppid,rss,vsz,comm,args --sort=-rss
+21553 21539  1620 113408 bash            bash /var/spool/slurmd/job33751461/slurm_script
+34440 33934   612 108068 head            head -80
+# 1783921333.697824355
+  PID  PPID   RSS    VSZ COMMAND         COMMAND
+27177 22639 6106616 104564776 VLLM::EngineCor VLLM::EngineCore
+32541 28026 6101944 104560892 VLLM::EngineCor VLLM::EngineCore
+22639 22622 1070072 9945244 vllm         /usr/bin/python3 /usr/local/bin/vllm serve openai/gpt-oss-20b --host 127.0.0.1 --port 40561 --served-model-name openai/gpt-oss-20b --tensor-parallel-size 1 --max-model-len 32768 --max-num-seqs 256 --max-num-batched-tokens 8192 --kv-cache-dtype auto --enable-chunked-prefill --enforce-eager --kv-transfer-config {"kv_connector":"LMCacheConnectorV1","engine_id":"s0","kv_role":"kv_producer","kv_port":14579,"kv_connector_extra_config":{"discard_partial_chunks":false,"lmcache_rpc_port":"src"}}
+28026 28009 1039876 9915708 vllm         /usr/bin/python3 /usr/local/bin/vllm serve openai/gpt-oss-20b --host 127.0.0.1 --port 40661 --served-model-name openai/gpt-oss-20b --tensor-parallel-size 1 --max-model-len 32768 --max-num-seqs 256 --max-num-batched-tokens 8192 --kv-cache-dtype auto --enable-chunked-prefill --enforce-eager --kv-transfer-config {"kv_connector":"LMCacheConnectorV1","engine_id":"d0","kv_role":"kv_consumer","kv_port":14580,"kv_connector_extra_config":{"discard_partial_chunks":false,"lmcache_rpc_port":"sink"}}
+22616 22120 404104 695196 python         /home/groups/ramr/gfw/coding-progress-ledger/agent-migrate/.venv/bin/python queue-haul/stage1b_drain_sink.py lmcache-server --host 127.0.0.1 --port 38116 --max-bytes 0
+22120 21553 250460 6018928 python        /home/groups/ramr/gfw/coding-progress-ledger/agent-migrate/.venv/bin/python queue-haul/stage1c_controller.py live-grid --manifests queue-haul/outputs/stage1c_old_persistent_smoke_two/manifests/small.json --run-root queue-haul/outputs/stage1c_old_persistent_smoke_two --policies greedy,all-r --deadlines 120 --target-fracs 0.25 --mbps 1000 --nvsmi-ms 500 --baseline-s 3 --settle-s 3 --seed 0 --profile queue-haul/outputs/stage1c_old_persistent_smoke/live_profile.json --replay-concurrency 1 --kv-concurrency 0
+22619 22120 24824 157232 python          /home/groups/ramr/gfw/coding-progress-ledger/agent-migrate/.venv/bin/python queue-haul/stage1b_drain_sink.py proxy --kv-listen 127.0.0.1:40761 --kv-target 127.0.0.1:38116 --api-listen 127.0.0.1:40861 --api-target 127.0.0.1:40661 --mbps 1000.0 --log queue-haul/outputs/stage1c_old_persistent_smoke_two/stack/proxy_bytes.csv
+28041 28009 17676  30768 fuse-overlayfs  /usr/libexec/apptainer/bin/fuse-overlayfs -f -o allow_other,lowerdir=/var/lib/apptainer/mnt/session/overlay-lowerdir:/var/lib/apptainer/mnt/session/rootfs,noacl /var/lib/apptainer/mnt/session/final
+22653 22622 17640  30640 fuse-overlayfs  /usr/libexec/apptainer/bin/fuse-overlayfs -f -o allow_other,lowerdir=/var/lib/apptainer/mnt/session/overlay-lowerdir:/var/lib/apptainer/mnt/session/rootfs,noacl /var/lib/apptainer/mnt/session/final
+28009 22120 13656 1527124 starter        Apptainer runtime parent: vllm-openai-v0.10.1.1.sandbox
+22622 22120 13400 1527124 starter        Apptainer runtime parent: vllm-openai-v0.10.1.1.sandbox
+27176 22639  8936  18612 python3         /usr/bin/python3 -c from multiprocessing.resource_tracker import main;main(29)
+32540 28026  8936  18612 python3         /usr/bin/python3 -c from multiprocessing.resource_tracker import main;main(29)
+33934 22120  4944 116576 bash            bash -lc cg=/sys/fs/cgroup$(awk -F: 'NR==1{print $3}' /proc/self/cgroup); while true; do date '+# %s.%N'; cat $cg/memory.current $cg/memory.events 2>/dev/null || true; ps -u $USER -o pid,ppid,rss,vsz,comm,args --sort=-rss | head -80; sleep 1.0; done
+34446 33934  1644 153600 ps              ps -u gfw -o pid,ppid,rss,vsz,comm,args --sort=-rss
+21553 21539  1620 113408 bash            bash /var/spool/slurmd/job33751461/slurm_script
+34447 33934   612 108068 head            head -80

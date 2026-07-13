@@ -1,0 +1,7 @@
+phase,route,direction,bytes,window_s,bytes_per_s,target_bytes_per_s,target_ratio,ok
+baseline,api,client_to_target,0,0.0,0.0,125000000.0,0.0,1
+baseline,kv,target_to_client,0,0.0,0.0,125000000.0,0.0,1
+drain,api,client_to_target,6621,0.0,0.0,125000000.0,0.0,1
+drain,kv,target_to_client,36,0.0,0.0,125000000.0,0.0,1
+post,api,client_to_target,13439,2.0836410522460938,6449.767336611658,125000000.0,5.159813869289326e-05,1
+post,kv,target_to_client,72,2.0827219486236572,34.57014511590487,125000000.0,2.76561160927239e-07,1
