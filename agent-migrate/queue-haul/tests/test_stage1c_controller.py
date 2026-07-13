@@ -237,9 +237,12 @@ def test_live_plan_uses_log_power_curve_and_dispatches_all(tmp_path: Path):
 
 
 def test_run_live_moves_stages_one_token_with_bounded_replay_and_overlapping_kv(tmp_path: Path, monkeypatch):
+    dispatches = []
+
     class Log:
-        def write(self, *_args, **_kwargs):
-            pass
+        def write(self, kind, **row):
+            if kind == "handoff_stage_start" and row["phase"] == "initial":
+                dispatches.append((row["action"], row["session_id"]))
 
     class Worker:
         def __init__(self, sid):
@@ -267,12 +270,13 @@ def test_run_live_moves_stages_one_token_with_bounded_replay_and_overlapping_kv(
             self.resumed = True
 
     cfg = type("Cfg", (), {"api_proxy_port": 8400})()
-    workers = {sid: Worker(sid) for sid in ("a", "b", "c")}
-    sessions = [{"decode_tokens": 8}] * 3
+    workers = {sid: Worker(sid) for sid in ("a", "b", "c", "d", "e")}
     rows = [
         {"id": "a", "action": "R", "fixture_index": 0, "dispatch_rank": 0, "deadline_s": 2.0},
         {"id": "b", "action": "R", "fixture_index": 1, "dispatch_rank": 1, "deadline_s": 2.0},
         {"id": "c", "action": "S", "fixture_index": 2, "dispatch_rank": 2, "deadline_s": 2.0},
+        {"id": "d", "action": "S", "fixture_index": 3, "dispatch_rank": 3, "deadline_s": 2.0},
+        {"id": "e", "action": "S", "fixture_index": 4, "dispatch_rank": 4, "deadline_s": 2.0},
     ]
     starts, ends = {"R": [], "S": []}, {}
 
@@ -288,14 +292,16 @@ def test_run_live_moves_stages_one_token_with_bounded_replay_and_overlapping_kv(
         return {"status": 200, "content": "x", "first_token_ts": start + 0.01, "start_ts": start, "end_ts": end, "prompt_sha256": c.messages_sha256(messages), "request_id": f"req-{sid}", "response_text": ""}
 
     monkeypatch.setattr(c, "stream_chat", fake_stream_chat)
-    monkeypatch.setattr(c, "wait_lmcache_lookup_tokens", lambda _path, request_id, timeout_s=10: (10, 10) if request_id == "req-c" else (10, 0))
+    monkeypatch.setattr(c, "wait_lmcache_lookup_tokens", lambda _path, request_id, timeout_s=10: (10, 10) if request_id in {"req-c", "req-d", "req-e"} else (10, 0))
     t0 = time.time()
     out = c.run_live_moves(cfg, tmp_path, workers, rows, replay_concurrency=1, kv_concurrency=2)
 
     assert time.time() - t0 < 0.55
     assert starts["R"][1] - starts["R"][0] >= 0.18
     assert starts["S"][0] - starts["R"][0] < 0.1
-    assert [r["dispatch_rank"] for r in out] == [0, 1, 2]
+    assert [sid for action, sid in dispatches if action == "S"] == ["c", "d", "e"]
+    assert starts["S"][2] - min(starts["S"][:2]) >= 0.18
+    assert [r["dispatch_rank"] for r in out] == [0, 1, 2, 3, 4]
     assert all(workers[sid].pause_times[0] >= ends[sid] for sid in workers)
     assert all(w.resumed and w.port == 8400 for w in workers.values())
     assert all(r["commit_result"] == "committed" and r["staging_attempts"] == 1 for r in out)
@@ -329,17 +335,25 @@ def test_run_live_moves_reconciles_stale_generation_with_final_delta(tmp_path: P
         def resume(self):
             pass
 
-    now = time.time()
-    monkeypatch.setattr(c, "stream_chat", lambda *_args: {"status": 200, "content": "x", "first_token_ts": now, "start_ts": now, "end_ts": now, "prompt_sha256": c.messages_sha256(_args[2]), "request_id": "req", "response_text": ""})
-    monkeypatch.setattr(c, "wait_lmcache_lookup_tokens", lambda *_args, **_kwargs: (10, 0))
-    row = {"id": "a", "action": "R", "fixture_index": 0, "dispatch_rank": 0, "deadline_s": 2.0}
+    now, actions = time.time(), []
+
+    def fake_stream(_cfg, _port, messages, _max_tokens):
+        action = "R" if messages[0]["role"] == "system" else "S"
+        actions.append(action)
+        return {"status": 200, "content": "x", "first_token_ts": now, "start_ts": now, "end_ts": now, "prompt_sha256": c.messages_sha256(messages), "request_id": f"req-{action}", "response_text": ""}
+
+    monkeypatch.setattr(c, "stream_chat", fake_stream)
+    monkeypatch.setattr(c, "wait_lmcache_lookup_tokens", lambda _path, request_id, timeout_s=10: (10, 10 if request_id == "req-S" else 0))
+    row = {"id": "a", "action": "S", "fixture_index": 0, "dispatch_rank": 0, "deadline_s": 2.0}
 
     out = c.run_live_moves(type("Cfg", (), {"api_proxy_port": 8400})(), tmp_path, {"a": Worker()}, [row])
 
+    assert actions == ["S", "R"]
     assert out[0]["commit_result"] == "committed"
     assert out[0]["generation_delta"] == 1
     assert out[0]["staging_attempts"] == 2
-    assert out[0]["final_delta_s"] >= 0
+    assert out[0]["effective_action"] == "S->R"
+    assert out[0]["final_delta_action"] == "R"
     assert out[0]["committed_context_sha256"] == out[0]["staged_context_sha256"]
 
 def test_nvsmi_command_uses_250ms_sampling():
@@ -624,8 +638,10 @@ def test_live_profile_costs_override_runtime_model(tmp_path: Path):
         assert imp.c_replay[i] == pytest.approx(session["c_replay_s"])
         assert imp.c_transfer[i] == pytest.approx(session["c_transfer_s"])
     assert sessions[0]["profile_transfer_bytes"] > manifest["sessions"][0]["session_kv_bytes"]
-    assert sessions[0]["c_transfer_s"] > 10.0
-    assert sessions[1]["c_transfer_s"] == pytest.approx(20.0)
+    for session in sessions:
+        assert session["c_transfer_s"] == pytest.approx(session["profile_transfer_stage_s"] + session["profile_dirty_probability"] * session["c_replay_s"])
+        assert 0 < session["profile_dirty_probability"] < 1
+    assert sessions[1]["c_transfer_s"] > 20.0
     assert summary["profile"]["schema"] == c.PROFILE_SCHEMA
 
 
@@ -684,6 +700,8 @@ def test_grid_sbatch_defaults_to_old_runtime():
     assert "QH_APPTAINER_GPU_MODE=${QH_APPTAINER_GPU_MODE:-nv}" in text
     assert "QH_PORT_OFFSET=${QH_PORT_OFFSET:-$((SLURM_JOB_ID % 40000 + 1000))}" in text
     assert 'SMART_ARGS=(--deadline-scales "$DEADLINE_SCALES" --random-seeds "$RANDOM_SEEDS")' in text
+    assert "KV_CONCURRENCY=${KV_CONCURRENCY:-2}" in text
+    assert c.parse_args(["live-drain", "--manifest", "sessions.json"]).kv_concurrency == 2
 
 
 def test_profile_prompt_has_cache_namespace(monkeypatch):

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 from concurrent.futures import ThreadPoolExecutor
+from contextlib import contextmanager
 import csv
 import gzip
 import hashlib
@@ -664,10 +665,15 @@ def apply_live_profile(manifest: dict, profile: dict) -> dict:
     sessions = []
     for s in live_sessions(manifest):
         tokens = int(s["served_T"])
+        replay_s = _profile_cost(profile, "R", tokens)
+        transfer_s = _profile_transfer_cost(profile, s)
+        dirty_p = 1.0 - math.exp(-float(s["turn_rate_hz"]) * transfer_s)
         sessions.append({
             **s,
-            "c_replay_s": _profile_cost(profile, "R", tokens),
-            "c_transfer_s": _profile_transfer_cost(profile, s),
+            "c_replay_s": replay_s,
+            "c_transfer_s": transfer_s + dirty_p * replay_s,
+            "profile_transfer_stage_s": transfer_s,
+            "profile_dirty_probability": dirty_p,
             "profile_transfer_bytes": _profile_transfer_bytes(profile, s),
         })
     return {**manifest, "sessions": sessions, "profile": {"schema": profile["schema"], "mbps": profile.get("mbps"), "points": profile["points"], "kv_bytes_per_s": profile.get("kv_bytes_per_s"), "kv_bytes_per_token": profile.get("kv_bytes_per_token"), "source_boundary_s": profile.get("source_boundary_s", 0.0)}}
@@ -1316,8 +1322,9 @@ def check_live_manifest(manifest: dict, run_root: Path) -> None:
         if row.get("prompt_sha256") != row.get("staged_context_sha256"):
             raise ValueError(f"stage context hash mismatch: {row['id']}")
         delta = row.get("proxy_delta", {})
-        total_tokens = row.get("stage_lmcache_total_tokens", 0)
-        if row["action"] == "S" and (delta.get("kv/target_to_client", 0) <= 0 or total_tokens <= 0 or row.get("stage_lmcache_hit_tokens", 0) / total_tokens < 0.9):
+        total_tokens = row.get("initial_stage_lmcache_total_tokens", row.get("stage_lmcache_total_tokens", 0))
+        hit_tokens = row.get("initial_stage_lmcache_hit_tokens", row.get("stage_lmcache_hit_tokens", 0))
+        if row["action"] == "S" and (delta.get("kv/target_to_client", 0) <= 0 or total_tokens <= 0 or hit_tokens / total_tokens < 0.9):
             raise ValueError(f"KV action lacks KV evidence: {row['id']}")
         if row["action"] == "R" and delta.get("api/client_to_target", 0) <= 0:
             raise ValueError(f"replay action lacks API bytes: {row['id']}")
@@ -1335,25 +1342,51 @@ def run_live_moves(cfg: b.Config, run_root: Path, workers: dict[str, SessionWork
         raise ValueError("replay_concurrency must be positive")
     if kv_concurrency is not None and kv_concurrency <= 0:
         raise ValueError("kv_concurrency must be positive")
-    gates = {"R": threading.Semaphore(replay_concurrency), "S": threading.Semaphore(kv_concurrency or max(1, len(rows)))}
+    limits = {"R": replay_concurrency, "S": kv_concurrency or max(1, len(rows))}
+    positions = {action: {row["id"]: i for i, row in enumerate(sorted((r for r in rows if r["action"] == action), key=lambda r: r["dispatch_rank"]))} for action in limits}
+    next_start = {action: 0 for action in limits}
+    active = {action: 0 for action in limits}
+    replay_stage_gate = threading.Semaphore(replay_concurrency)
+    start_cond = threading.Condition()
     proxy_log = proxy_log or run_root / "proxy_bytes.csv"
     selected_ts = time.time()
     for row in rows:
         workers[row["id"]].log.write("handoff_selected", session_id=row["id"], action=row["action"], dispatch_rank=row["dispatch_rank"])
 
+    @contextmanager
+    def ordered_gate(row: dict):
+        action = row["action"]
+        with start_cond:
+            start_cond.wait_for(lambda: positions[action][row["id"]] == next_start[action] and active[action] < limits[action])
+            active[action] += 1
+        try:
+            yield
+        finally:
+            with start_cond:
+                if positions[action][row["id"]] == next_start[action]:
+                    next_start[action] += 1
+                active[action] -= 1
+                start_cond.notify_all()
+
     def move(row: dict) -> dict:
         worker = workers[row["id"]]
 
-        def staged_messages(snapshot: dict) -> list[dict]:
+        def staged_messages(snapshot: dict, action: str) -> list[dict]:
             messages = chat_messages(snapshot["messages"])
-            if row["action"] == "R":
+            if action == "R":
                 marker = f"Queue-Haul replay namespace {row['id']} {worker.session.get('scenario_nonce', '')}."
                 messages = [{"role": "system", "content": marker}] + messages
             return messages
 
-        def stage(messages: list[dict], phase: str) -> tuple[dict, int, int, float, float]:
+        def stage(messages: list[dict], action: str, phase: str) -> tuple[dict, int, int, float, float]:
             start = time.time()
-            worker.log.write("handoff_stage_start", session_id=row["id"], action=row["action"], phase=phase)
+            if phase == "initial":
+                with start_cond:
+                    worker.log.write("handoff_stage_start", session_id=row["id"], action=row["action"], stage_action=action, phase=phase)
+                    next_start[row["action"]] += 1
+                    start_cond.notify_all()
+            else:
+                worker.log.write("handoff_stage_start", session_id=row["id"], action=row["action"], stage_action=action, phase=phase)
             result = stream_chat(cfg, cfg.api_proxy_port, messages, 1)
             if result["status"] != 200:
                 raise RuntimeError(f"sink stage failed for {row['id']}: {result['response_text']}")
@@ -1361,28 +1394,34 @@ def run_live_moves(cfg: b.Config, run_root: Path, workers: dict[str, SessionWork
             if lookup is None:
                 raise RuntimeError(f"sink stage lacks LMCache accounting for {row['id']}")
             total_tokens, hit_tokens = lookup
-            if row["action"] == "S" and (total_tokens <= 0 or hit_tokens / total_tokens < 0.9):
+            if action == "S" and (total_tokens <= 0 or hit_tokens / total_tokens < 0.9):
                 raise RuntimeError(f"KV stage hit only {hit_tokens}/{total_tokens} tokens for {row['id']}")
             end = time.time()
-            worker.log.write("handoff_staged", session_id=row["id"], action=row["action"], phase=phase, request_id=result.get("request_id"), lmcache_total_tokens=total_tokens, lmcache_hit_tokens=hit_tokens)
+            worker.log.write("handoff_staged", session_id=row["id"], action=row["action"], stage_action=action, phase=phase, request_id=result.get("request_id"), lmcache_total_tokens=total_tokens, lmcache_hit_tokens=hit_tokens)
             return result, total_tokens, hit_tokens, start, end
 
-        with gates[row["action"]]:
+        with ordered_gate(row):
             selected = worker.snapshot()
             before = b.proxy_counts(proxy_log)
-            initial = stage(staged_messages(selected), "initial")
+            if row["action"] == "R":
+                with replay_stage_gate:
+                    initial = stage(staged_messages(selected, row["action"]), row["action"], "initial")
+            else:
+                initial = stage(staged_messages(selected, row["action"]), row["action"], "initial")
             result, total_tokens, hit_tokens, stage_start, initial_stage_end = initial
             switch_request_ts = time.time()
             worker.pause_boundary()
             boundary_ready_ts = time.time()
             current = worker.snapshot()
-            final_delta_s, attempts = 0.0, 1
-            messages = staged_messages(selected)
+            final_delta_s, attempts, final_action = 0.0, 1, None
+            messages = staged_messages(selected, row["action"])
             request_ids = [result.get("request_id")]
             initial_total_tokens, initial_hit_tokens = total_tokens, hit_tokens
             if current["generation"] != selected["generation"]:
-                messages = staged_messages(current)
-                result, total_tokens, hit_tokens, final_start, final_end = stage(messages, "final_delta")
+                final_action = "R"
+                messages = staged_messages(current, final_action)
+                with replay_stage_gate:
+                    result, total_tokens, hit_tokens, final_start, final_end = stage(messages, final_action, "final_delta")
                 final_delta_s, attempts = final_end - final_start, 2
                 request_ids.append(result.get("request_id"))
             else:
@@ -1414,6 +1453,9 @@ def run_live_moves(cfg: b.Config, run_root: Path, workers: dict[str, SessionWork
                 "initial_stage_lmcache_total_tokens": initial_total_tokens,
                 "initial_stage_lmcache_hit_tokens": initial_hit_tokens,
                 "staging_attempts": attempts,
+                "initial_stage_action": row["action"],
+                "final_delta_action": final_action,
+                "effective_action": row["action"] if final_action is None else f"{row['action']}->{final_action}",
                 "selected_generation": selected["generation"],
                 "commit_generation": current["generation"],
                 "generation_delta": current["generation"] - selected["generation"],
@@ -1794,7 +1836,7 @@ def parse_args(argv: list[str] | None = None):
     live_p.add_argument("--seed", type=int, default=0)
     live_p.add_argument("--profile", type=Path)
     live_p.add_argument("--replay-concurrency", type=int, default=1)
-    live_p.add_argument("--kv-concurrency", type=int, default=0)
+    live_p.add_argument("--kv-concurrency", type=int, default=2)
     live_p.add_argument("extra_vllm_args", nargs=argparse.REMAINDER)
     grid_p = sub.add_parser("live-grid")
     b.add_common(grid_p)
@@ -1811,7 +1853,7 @@ def parse_args(argv: list[str] | None = None):
     grid_p.add_argument("--seed", type=int, default=0)
     grid_p.add_argument("--profile", type=Path)
     grid_p.add_argument("--replay-concurrency", type=int, default=1)
-    grid_p.add_argument("--kv-concurrency", type=int, default=0)
+    grid_p.add_argument("--kv-concurrency", type=int, default=2)
     grid_p.add_argument("--smart-sweep", action="store_true")
     grid_p.add_argument("--deadline-scales", default="0.75,1,1.5")
     grid_p.add_argument("--random-seeds", default="0,1,2")

@@ -199,10 +199,14 @@ three seeds, and each all-replay/all-KV baseline once per target. Set
 canonical transcript includes every actual streamed assistant response. Once the
 planner selects a session, it stages that exact transcript on the sink with a
 one-token request while source turns continue. At the next turn boundary it
-checks the transcript generation; if it advanced, one bounded final-delta stage
-runs while paused before the atomic switch. Replay prefill is bounded by
-`--replay-concurrency` (default 1), KV stages overlap up to `--kv-concurrency`
-(0 means all), and every KV action must report at least a 90% LMCache token hit.
+checks the transcript generation. If it advanced, replay uses one bounded final
+stage; a KV move falls back to one context reconstruction instead of fetching the
+full KV a second time. The planner prices that fallback from the session turn rate
+and profiled stage duration. Replay prefill is bounded by
+`--replay-concurrency` (default 1). Selected KV stages start in planner order
+with `--kv-concurrency=2`; `0` explicitly enables all-at-once ablations. Both
+actions share the audited 1 Gbps proxy, and every KV action must report at least
+a 90% LMCache token hit.
 The controller writes `gpu_power.csv`, `events.jsonl`, `controller_manifest.json`,
 `power_summary.csv`, `power_trace.png`, `source_power.png`, `sink_power.png`,
 `delay_summary.csv`, `delay_summary.png`, `ell_power5s.csv`, `ell_power5s.png`,
