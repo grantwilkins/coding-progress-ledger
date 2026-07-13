@@ -549,6 +549,14 @@ def test_live_plan_hit_requires_profiled_aggregate_deadline(tmp_path: Path):
     assert summary["planned_completion_s"] > summary["deadline_s"]
 
 
+def test_grid_sbatch_defaults_to_old_runtime():
+    text = Path("queue-haul/stage1c_grid.sbatch").read_text()
+
+    assert "QH_APPTAINER_IMAGE=${QH_APPTAINER_IMAGE:-/scratch/users/gfw/ptsim/vllm-openai-v0.10.1.1.sandbox}" in text
+    assert "QH_APPTAINER_GPU_MODE=${QH_APPTAINER_GPU_MODE:-nv}" in text
+    assert "QH_PORT_OFFSET=${QH_PORT_OFFSET:-$((SLURM_JOB_ID % 40000 + 1000))}" in text
+
+
 def test_live_profile_recalibrates_on_lmcache_runtime_change(tmp_path: Path, monkeypatch):
     manifest = _manifest_for_live_policy_tests(tmp_path)
     path = tmp_path / "profile.json"

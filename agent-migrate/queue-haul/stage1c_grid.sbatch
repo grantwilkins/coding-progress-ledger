@@ -25,6 +25,9 @@ TRACE=${TRACE:-/scratch/users/gfw/ptsim/tracelab/syfi_coding_trace.jsonl.gz}
 WORKLOADS=${WORKLOADS:-}
 RUN_ROOT=${RUN_ROOT:-queue-haul/outputs/stage1c_grid}
 PROFILE=${PROFILE:-$RUN_ROOT/live_profile.json}
+export QH_APPTAINER_IMAGE=${QH_APPTAINER_IMAGE:-/scratch/users/gfw/ptsim/vllm-openai-v0.10.1.1.sandbox}
+export QH_APPTAINER_GPU_MODE=${QH_APPTAINER_GPU_MODE:-nv}
+export QH_PORT_OFFSET=${QH_PORT_OFFSET:-$((SLURM_JOB_ID % 40000 + 1000))}
 POLICIES=${POLICIES:-greedy,random,lp}
 DEADLINES=${DEADLINES:-10,30,120}
 TARGET_FRACS=${TARGET_FRACS:-0.25,0.45,0.65}
@@ -46,6 +49,9 @@ MIXED_MIN_CONTEXT_TOKENS=${MIXED_MIN_CONTEXT_TOKENS:-2048}
 LARGE_MIN_CONTEXT_TOKENS=${LARGE_MIN_CONTEXT_TOKENS:-2048}
 
 mkdir -p "$RUN_ROOT"
+echo "QH_APPTAINER_IMAGE=$QH_APPTAINER_IMAGE"
+echo "QH_APPTAINER_GPU_MODE=$QH_APPTAINER_GPU_MODE"
+echo "QH_PORT_OFFSET=$QH_PORT_OFFSET"
 
 if [[ -z "$MANIFESTS" && -n "$WORKLOADS" ]]; then
   mkdir -p "$RUN_ROOT/manifests"
