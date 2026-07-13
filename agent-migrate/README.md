@@ -197,16 +197,17 @@ three seeds, and each all-replay/all-KV baseline once per target. Set
 
 `live-drain` keeps both servers up together and runs Poisson turn loops whose
 canonical transcript includes every actual streamed assistant response. Once the
-planner selects a session, it stages that exact transcript on the sink with a
-one-token request while source turns continue. At the next turn boundary it
-checks the transcript generation. If it advanced, replay uses one bounded final
-stage; a KV move falls back to one context reconstruction instead of fetching the
-full KV a second time. The planner prices that fallback from the session turn rate
-and profiled stage duration. Replay prefill is bounded by
-`--replay-concurrency` (default 1). Selected KV stages start in planner order
-with `--kv-concurrency=2`; `0` explicitly enables all-at-once ablations. Both
-actions share the audited 1 Gbps proxy, and every KV action must report at least
-a 90% LMCache token hit.
+planner fixes every action and order, each selected session freezes an append-only
+prefix and stages it on the sink while source turns continue. At the next source
+request boundary, only the suffix is staged under the original action: replay
+reuses vLLM's prefix or KV transfer reuses LMCache's copied chunks. Rewriting or
+trimming the transferred prefix is a hard failure. Staging slots are released
+before source-boundary waits, so those waits overlap across sessions. The plan
+adds the observed baseline source-request p95 once to the profiled staging wall
+time. Replay prefill is bounded by `--replay-concurrency` (default 1). Selected
+KV stages start in planner order with `--kv-concurrency=2`; `0` explicitly
+enables all-at-once ablations. Both actions share the audited 1 Gbps proxy, and
+every KV action must report at least a 90% LMCache token hit.
 The controller writes `gpu_power.csv`, `events.jsonl`, `controller_manifest.json`,
 `power_summary.csv`, `power_trace.png`, `source_power.png`, `sink_power.png`,
 `delay_summary.csv`, `delay_summary.png`, `ell_power5s.csv`, `ell_power5s.png`,

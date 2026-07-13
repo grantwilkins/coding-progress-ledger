@@ -370,7 +370,8 @@ def session_prompt(session: dict, turn_index: int, replay_nonce: str | None = No
 
 
 def session_followup(session: dict, turn_index: int) -> str:
-    turn = session["turns"][turn_index % len(session["turns"])]
+    turns = session["turns"][1:] or session["turns"]
+    turn = turns[(turn_index - 1) % len(turns)]
     body = _words(f"turn_{session['id']}_{turn_index}", int(turn["append_tokens"]))
     return f"User follow-up {turn_index}: {body}\nReply with one concise progress sentence."
 
@@ -453,6 +454,7 @@ def tracelab_manifest(path: Path, n_sessions: int, seed: int, max_model_len: int
             "state": "active",
             "T": served_T,
             "served_T": served_T,
+            "context_limit": served_cap,
             "original_T": original_T,
             "turn_rate_hz": rate,
             "decode_tokens": output,
@@ -605,7 +607,7 @@ def _finalize_live_profile(profile: dict) -> dict:
     pts = profile.get("points", [])
     kv_rates = [float(r.get("kv_bytes", 0)) / float(r["completion_s"]) for r in pts if r.get("action") == "S" and float(r.get("kv_bytes", 0)) > 0 and float(r.get("completion_s", 0)) > 0]
     kv_per_tok = [float(r.get("kv_bytes", 0)) / float(r["tokens"]) for r in pts if r.get("action") == "S" and float(r.get("kv_bytes", 0)) > 0 and float(r.get("tokens", 0)) > 0]
-    boundary = _median_positive([float(r.get("source_elapsed_s", 0)) for r in pts if r.get("action") == "S"])
+    boundary = max(float(profile.get("source_boundary_s", 0)), _median_positive([float(r.get("source_elapsed_s", 0)) for r in pts if r.get("action") == "S"]))
     return {
         **profile,
         "kv_bytes_per_s": _median_positive(kv_rates, float(profile.get("mbps", 1000.0)) * 125000.0),
@@ -667,13 +669,13 @@ def apply_live_profile(manifest: dict, profile: dict) -> dict:
         tokens = int(s["served_T"])
         replay_s = _profile_cost(profile, "R", tokens)
         transfer_s = _profile_transfer_cost(profile, s)
-        dirty_p = 1.0 - math.exp(-float(s["turn_rate_hz"]) * transfer_s)
+
         sessions.append({
             **s,
             "c_replay_s": replay_s,
-            "c_transfer_s": transfer_s + dirty_p * replay_s,
+            "c_transfer_s": transfer_s,
             "profile_transfer_stage_s": transfer_s,
-            "profile_dirty_probability": dirty_p,
+
             "profile_transfer_bytes": _profile_transfer_bytes(profile, s),
         })
     return {**manifest, "sessions": sessions, "profile": {"schema": profile["schema"], "mbps": profile.get("mbps"), "points": profile["points"], "kv_bytes_per_s": profile.get("kv_bytes_per_s"), "kv_bytes_per_token": profile.get("kv_bytes_per_token"), "source_boundary_s": profile.get("source_boundary_s", 0.0)}}
@@ -758,14 +760,14 @@ def _planned_wall_s(rows: list[dict], sessions: list[dict], profile: dict | None
         raise ValueError("replay_concurrency must be positive")
     profile = profile or {}
     boundary = float(profile.get("source_boundary_s") or 0.0)
-    r_costs = [float(r["planned_finish_s"]) + boundary for r in rows if r["action"] == "R"]
-    r_wall = _parallel_wall(r_costs, replay_concurrency)
+    r_costs = [float(r["planned_finish_s"]) for r in rows if r["action"] == "R"]
+    r_wall = _parallel_wall(r_costs, replay_concurrency) + (boundary if r_costs else 0.0)
     s_rows = [r for r in rows if r["action"] == "S"]
     if not s_rows:
         return r_wall
     k = kv_concurrency or len(s_rows)
-    s_costs = [float(r["planned_finish_s"]) + boundary for r in s_rows]
-    s_wall = _parallel_wall(s_costs, k)
+    s_costs = [float(r["planned_finish_s"]) for r in s_rows]
+    s_wall = _parallel_wall(s_costs, k) + boundary
     kv_rate = float(profile.get("kv_bytes_per_s") or 0.0)
     if kv_rate > 0:
         total_bytes = sum(float(r.get("planned_transfer_bytes", sessions[r["fixture_index"]].get("profile_transfer_bytes", sessions[r["fixture_index"]].get("session_kv_bytes", 0)))) for r in s_rows)
@@ -944,6 +946,8 @@ class SessionWorker:
         self.paused = False
         self.stopped = False
         self.in_flight = False
+        self.migrating = False
+        self.request_s: list[float] = []
         self.last_request_id = session.get("last_request_id")
         self.last_source_kv_bytes = int(session.get("session_kv_bytes", 0))
         self.expected_sink_context_sha256: str | None = None
@@ -977,7 +981,10 @@ class SessionWorker:
 
     def _bounded(self, messages: list[dict]) -> list[dict]:
         messages = chat_messages(messages)
-        while prompt_tokens(self.cfg, messages) > int(self.session["served_T"]):
+        limit = int(self.session.get("context_limit", self.session["served_T"]))
+        while prompt_tokens(self.cfg, messages) > limit:
+            if self.migrating:
+                raise RuntimeError(f"session {self.session['id']} exceeded its append-only migration limit")
             start = int(messages[0].get("role") == "system")
             if len(messages) - start <= 2:
                 raise RuntimeError(f"session {self.session['id']} cannot fit its context bound")
@@ -1001,6 +1008,7 @@ class SessionWorker:
             result = stream_chat(self.cfg, port, messages, int(self.session["decode_tokens"]))
             kv_bytes = wait_session_kv_bytes(self.source_log, result.get("request_id"), 2.0) if result["status"] == 200 and port == self.cfg.src_port else 0
             with self.cond:
+                self.request_s.append(float(result["end_ts"] - result["start_ts"]))
                 if result["status"] == 200:
                     self.messages = messages + [{"role": "assistant", "content": result["content"]}]
                     self.generation += 1
@@ -1022,6 +1030,11 @@ class SessionWorker:
             messages = chat_messages(self.messages)
             return {"messages": messages, "generation": self.generation, "context_sha256": messages_sha256(messages), "last_request_id": self.last_request_id, "session_kv_bytes": self.last_source_kv_bytes}
 
+    def begin_migration(self) -> dict:
+        with self.cond:
+            self.migrating = True
+        return self.snapshot()
+
     def pause_boundary(self, timeout_s: float = 900.0) -> None:
         deadline = time.monotonic() + timeout_s
         with self.cond:
@@ -1040,11 +1053,13 @@ class SessionWorker:
             self.messages = chat_messages(messages)
             self.port = port
             self.expected_sink_context_sha256 = messages_sha256(self.messages)
+            self.migrating = False
             return True
 
     def resume(self) -> None:
         with self.cond:
             self.paused = False
+            self.migrating = False
             self.cond.notify_all()
 
     def handoff_proof(self) -> dict:
@@ -1061,6 +1076,13 @@ class SessionWorker:
             self.cond.notify_all()
         for t in self.threads:
             t.join(timeout=5)
+
+
+def source_request_p95_s(workers: dict[str, SessionWorker]) -> float:
+    values = [x for worker in workers.values() for x in worker.request_s]
+    if not values:
+        raise RuntimeError("baseline produced no source request latency samples")
+    return float(np.quantile(values, 0.95))
 
 
 def nvsmi_cmd(ms: int) -> list[str]:
@@ -1346,33 +1368,37 @@ def run_live_moves(cfg: b.Config, run_root: Path, workers: dict[str, SessionWork
     positions = {action: {row["id"]: i for i, row in enumerate(sorted((r for r in rows if r["action"] == action), key=lambda r: r["dispatch_rank"]))} for action in limits}
     next_start = {action: 0 for action in limits}
     active = {action: 0 for action in limits}
-    replay_stage_gate = threading.Semaphore(replay_concurrency)
+    stage_gates = {action: threading.Semaphore(limit) for action, limit in limits.items()}
     start_cond = threading.Condition()
     proxy_log = proxy_log or run_root / "proxy_bytes.csv"
     selected_ts = time.time()
+    selected = {}
     for row in rows:
-        workers[row["id"]].log.write("handoff_selected", session_id=row["id"], action=row["action"], dispatch_rank=row["dispatch_rank"])
+        worker = workers[row["id"]]
+        selected[row["id"]] = worker.begin_migration() if hasattr(worker, "begin_migration") else worker.snapshot()
+        worker.log.write("handoff_selected", session_id=row["id"], action=row["action"], dispatch_rank=row["dispatch_rank"])
 
     @contextmanager
-    def ordered_gate(row: dict):
+    def initial_gate(row: dict):
         action = row["action"]
         with start_cond:
             start_cond.wait_for(lambda: positions[action][row["id"]] == next_start[action] and active[action] < limits[action])
             active[action] += 1
+            next_start[action] += 1
+            start_cond.notify_all()
         try:
             yield
         finally:
             with start_cond:
-                if positions[action][row["id"]] == next_start[action]:
-                    next_start[action] += 1
                 active[action] -= 1
                 start_cond.notify_all()
 
     def move(row: dict) -> dict:
         worker = workers[row["id"]]
+        snapshot = selected[row["id"]]
 
-        def staged_messages(snapshot: dict, action: str) -> list[dict]:
-            messages = chat_messages(snapshot["messages"])
+        def staged_messages(state: dict, action: str) -> list[dict]:
+            messages = chat_messages(state["messages"])
             if action == "R":
                 marker = f"Queue-Haul replay namespace {row['id']} {worker.session.get('scenario_nonce', '')}."
                 messages = [{"role": "system", "content": marker}] + messages
@@ -1380,13 +1406,7 @@ def run_live_moves(cfg: b.Config, run_root: Path, workers: dict[str, SessionWork
 
         def stage(messages: list[dict], action: str, phase: str) -> tuple[dict, int, int, float, float]:
             start = time.time()
-            if phase == "initial":
-                with start_cond:
-                    worker.log.write("handoff_stage_start", session_id=row["id"], action=row["action"], stage_action=action, phase=phase)
-                    next_start[row["action"]] += 1
-                    start_cond.notify_all()
-            else:
-                worker.log.write("handoff_stage_start", session_id=row["id"], action=row["action"], stage_action=action, phase=phase)
+            worker.log.write("handoff_stage_start", session_id=row["id"], action=row["action"], stage_action=action, phase=phase)
             result = stream_chat(cfg, cfg.api_proxy_port, messages, 1)
             if result["status"] != 200:
                 raise RuntimeError(f"sink stage failed for {row['id']}: {result['response_text']}")
@@ -1400,86 +1420,87 @@ def run_live_moves(cfg: b.Config, run_root: Path, workers: dict[str, SessionWork
             worker.log.write("handoff_staged", session_id=row["id"], action=row["action"], stage_action=action, phase=phase, request_id=result.get("request_id"), lmcache_total_tokens=total_tokens, lmcache_hit_tokens=hit_tokens)
             return result, total_tokens, hit_tokens, start, end
 
-        with ordered_gate(row):
-            selected = worker.snapshot()
-            before = b.proxy_counts(proxy_log)
-            if row["action"] == "R":
-                with replay_stage_gate:
-                    initial = stage(staged_messages(selected, row["action"]), row["action"], "initial")
-            else:
-                initial = stage(staged_messages(selected, row["action"]), row["action"], "initial")
-            result, total_tokens, hit_tokens, stage_start, initial_stage_end = initial
-            switch_request_ts = time.time()
-            worker.pause_boundary()
-            boundary_ready_ts = time.time()
-            current = worker.snapshot()
-            final_delta_s, attempts, final_action = 0.0, 1, None
-            messages = staged_messages(selected, row["action"])
-            request_ids = [result.get("request_id")]
-            initial_total_tokens, initial_hit_tokens = total_tokens, hit_tokens
-            if current["generation"] != selected["generation"]:
-                final_action = "R"
-                messages = staged_messages(current, final_action)
-                with replay_stage_gate:
-                    result, total_tokens, hit_tokens, final_start, final_end = stage(messages, final_action, "final_delta")
-                final_delta_s, attempts = final_end - final_start, 2
-                request_ids.append(result.get("request_id"))
-            else:
-                final_end = initial_stage_end
-            committed = worker.commit_switch(current["generation"], cfg.api_proxy_port, messages)
-            worker.resume()
-            switch_end = time.time()
-            commit_result = "committed" if committed else "stale_aborted"
-            worker.log.write("handoff_" + commit_result, session_id=row["id"], action=row["action"], selected_generation=selected["generation"], current_generation=current["generation"], staging_attempts=attempts)
-            delta = b.count_delta(before, b.proxy_counts(proxy_log))
-            completion = switch_end - selected_ts
-            return {
-                **row,
-                "warm_move": committed,
-                "move_start_ts": selected_ts,
-                "staging_start_ts": stage_start,
-                "sink_ready_ts": result["end_ts"],
-                "staging_end_ts": final_end,
-                "switch_request_ts": switch_request_ts,
-                "boundary_ready_ts": boundary_ready_ts,
-                "switch_end_ts": switch_end,
-                "move_end_ts": switch_end,
-                "http_status": result["status"],
-                "stage_request_id": result.get("request_id"),
-                "stage_request_ids": request_ids,
-                "stage_lmcache_total_tokens": total_tokens,
-                "stage_lmcache_hit_tokens": hit_tokens,
-                "stage_lmcache_hit_ratio": hit_tokens / total_tokens if total_tokens else 0.0,
-                "initial_stage_lmcache_total_tokens": initial_total_tokens,
-                "initial_stage_lmcache_hit_tokens": initial_hit_tokens,
-                "staging_attempts": attempts,
-                "initial_stage_action": row["action"],
-                "final_delta_action": final_action,
-                "effective_action": row["action"] if final_action is None else f"{row['action']}->{final_action}",
-                "selected_generation": selected["generation"],
-                "commit_generation": current["generation"],
-                "generation_delta": current["generation"] - selected["generation"],
-                "selected_context_sha256": selected["context_sha256"],
-                "staged_context_sha256": messages_sha256(messages),
-                "committed_context_sha256": messages_sha256(messages) if committed else None,
-                "commit_result": commit_result,
-                "first_token_s": initial[0]["first_token_ts"] - selected_ts,
-                "selection_to_stage_start_s": stage_start - selected_ts,
-                "initial_staging_s": initial_stage_end - stage_start,
-                "final_delta_s": final_delta_s,
-                "staging_s": initial_stage_end - stage_start + final_delta_s,
-                "sink_warm_s": final_end - selected_ts,
-                "completion_s": completion,
-                "source_boundary_wait_s": boundary_ready_ts - switch_request_ts,
-                "switch_downtime_s": switch_end - boundary_ready_ts,
-                "downtime_s": switch_end - boundary_ready_ts,
-                "deadline_met": committed and completion <= float(row.get("deadline_s", math.inf)),
-                "prompt_sha256": result["prompt_sha256"],
-                "proxy_delta": delta,
-            }
+        before = b.proxy_counts(proxy_log)
+        with initial_gate(row), stage_gates[row["action"]]:
+            initial = stage(staged_messages(snapshot, row["action"]), row["action"], "initial")
+        result, total_tokens, hit_tokens, stage_start, initial_stage_end = initial
+        switch_request_ts = time.time()
+        worker.pause_boundary()
+        boundary_ready_ts = time.time()
+        current = worker.snapshot()
+        final_delta_s, attempts, final_action = 0.0, 1, None
+        messages = staged_messages(snapshot, row["action"])
+        request_ids = [result.get("request_id")]
+        initial_total_tokens, initial_hit_tokens = total_tokens, hit_tokens
+        append_only = current["messages"][:len(snapshot["messages"])] == snapshot["messages"]
+        if current["generation"] != snapshot["generation"]:
+            if not append_only:
+                raise RuntimeError(f"session {row['id']} changed a transferred prefix")
+            final_action = row["action"]
+            messages = staged_messages(current, final_action)
+            with stage_gates[final_action]:
+                result, total_tokens, hit_tokens, final_start, final_end = stage(messages, final_action, "final_delta")
+            final_delta_s, attempts = final_end - final_start, 2
+            request_ids.append(result.get("request_id"))
+        else:
+            final_end = initial_stage_end
+        committed = worker.commit_switch(current["generation"], cfg.api_proxy_port, messages)
+        worker.resume()
+        switch_end = time.time()
+        commit_result = "committed" if committed else "stale_aborted"
+        worker.log.write("handoff_" + commit_result, session_id=row["id"], action=row["action"], selected_generation=snapshot["generation"], current_generation=current["generation"], staging_attempts=attempts)
+        delta = b.count_delta(before, b.proxy_counts(proxy_log))
+        completion = switch_end - selected_ts
+        effective = row["action"] if final_action is None else ("S+delta" if row["action"] == "S" else "R+suffix")
+        return {
+            **row,
+            "warm_move": committed,
+            "move_start_ts": selected_ts,
+            "staging_start_ts": stage_start,
+            "sink_ready_ts": result["end_ts"],
+            "staging_end_ts": final_end,
+            "switch_request_ts": switch_request_ts,
+            "boundary_ready_ts": boundary_ready_ts,
+            "switch_end_ts": switch_end,
+            "move_end_ts": switch_end,
+            "http_status": result["status"],
+            "stage_request_id": result.get("request_id"),
+            "stage_request_ids": request_ids,
+            "stage_lmcache_total_tokens": total_tokens,
+            "stage_lmcache_hit_tokens": hit_tokens,
+            "stage_lmcache_hit_ratio": hit_tokens / total_tokens if total_tokens else 0.0,
+            "initial_stage_lmcache_total_tokens": initial_total_tokens,
+            "initial_stage_lmcache_hit_tokens": initial_hit_tokens,
+            "staging_attempts": attempts,
+            "initial_stage_action": row["action"],
+            "final_delta_action": final_action,
+            "effective_action": effective,
+            "append_only_context": append_only,
+            "selected_generation": snapshot["generation"],
+            "commit_generation": current["generation"],
+            "generation_delta": current["generation"] - snapshot["generation"],
+            "selected_context_sha256": snapshot["context_sha256"],
+            "staged_context_sha256": messages_sha256(messages),
+            "committed_context_sha256": messages_sha256(messages) if committed else None,
+            "commit_result": commit_result,
+            "first_token_s": initial[0]["first_token_ts"] - selected_ts,
+            "selection_to_stage_start_s": stage_start - selected_ts,
+            "initial_staging_s": initial_stage_end - stage_start,
+            "final_delta_s": final_delta_s,
+            "staging_s": initial_stage_end - stage_start + final_delta_s,
+            "sink_warm_s": final_end - selected_ts,
+            "completion_s": completion,
+            "source_boundary_wait_s": boundary_ready_ts - switch_request_ts,
+            "switch_downtime_s": switch_end - boundary_ready_ts,
+            "downtime_s": switch_end - boundary_ready_ts,
+            "deadline_met": committed and completion <= float(row.get("deadline_s", math.inf)),
+            "prompt_sha256": result["prompt_sha256"],
+            "proxy_delta": delta,
+        }
 
     with ThreadPoolExecutor(max_workers=max(1, len(rows))) as ex:
         return [f.result() for f in [ex.submit(move, row) for row in rows]]
+
 
 def _scenario_nonce(run_root: Path) -> str:
     return hashlib.sha256(str(run_root).encode()).hexdigest()[:16]
@@ -1554,6 +1575,8 @@ def live_drain(cfg: b.Config, run_root: Path, manifest: dict, mbps: float, nvsmi
         baseline_start = time.time()
         time.sleep(float(manifest.get("baseline_s", 120.0)))
         drain_start = time.time()
+        source_boundary_s = source_request_p95_s(workers)
+        profile = _finalize_live_profile({**profile, "source_boundary_s": source_boundary_s})
         manifest = {**manifest, "sessions": [{**s, **workers[s["id"]].snapshot()} for s in sessions]}
         manifest = apply_live_profile(manifest, profile)
         sessions = live_sessions(manifest)
@@ -1609,7 +1632,7 @@ def live_drain(cfg: b.Config, run_root: Path, manifest: dict, mbps: float, nvsmi
             "egress_realized_node_expected_w": summary["planned_source_drop_w"],
             "rebuild_realized_node_expected_w": committed_w,
             "committed_source_drop_w": committed_w,
-            "scheduler": {"warm_movement": True, "handoff": "optimistic_generation", "staging_max_tokens": 1, "replay_concurrency": replay_concurrency, "kv_concurrency": kv_concurrency or max(1, len(move_rows)), "persistent_stack": not owned_stack, "cache_isolation": "remote_flush+vllm_prefix_reset+scenario_nonce"},
+            "scheduler": {"warm_movement": True, "handoff": "append_only_delta", "source_request_p95_s": source_boundary_s, "staging_max_tokens": 1, "replay_concurrency": replay_concurrency, "kv_concurrency": kv_concurrency or max(1, len(move_rows)), "persistent_stack": not owned_stack, "cache_isolation": "remote_flush+vllm_prefix_reset+scenario_nonce"},
             "acceptance": {"ok": all_committed and continuation_consistent and deadline_hit and power_hit and all(r["ok"] for r in proxy_audit), "all_committed": all_committed, "continuation_consistent": continuation_consistent, "continuation_observed_sessions": len(continued), "deadline_hit": deadline_hit, "power_hit": power_hit, "power_threshold_gated": False, "planned_hit": summary["planned_hit"], "proxy_audit_ok": all(r["ok"] for r in proxy_audit)},
         }
         check_live_manifest(out, run_root)

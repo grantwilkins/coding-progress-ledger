@@ -121,6 +121,7 @@ def test_tracelab_manifest_groups_clamps_and_preserves_turns(tmp_path: Path):
     assert manifest["source"]["type"] == "tracelab"
     assert session["original_T"] > session["served_T"]
     assert session["served_T"] == 3840
+    assert session["context_limit"] == 3840
     assert session["turn_rate_hz"] == pytest.approx(2 / 120)
     assert [t["round"] for t in session["turns"]] == [0, 1, 2]
     assert session["turns"][1]["gap_s"] == 60
@@ -171,6 +172,15 @@ def test_session_prompt_rolls_followups_and_cache_busts(tmp_path: Path):
     assert session["id"] in prompt
 
 
+def test_session_followup_does_not_replay_initial_turn(monkeypatch):
+    session = {"id": "s", "turns": [{"append_tokens": 1000}, {"append_tokens": 2}, {"append_tokens": 3}]}
+    monkeypatch.setattr(c, "_words", lambda tag, tokens: f"{tag}:{tokens}")
+
+    assert "turn_s_1:2" in c.session_followup(session, 1)
+    assert "turn_s_2:3" in c.session_followup(session, 2)
+    assert "turn_s_3:2" in c.session_followup(session, 3)
+
+
 def test_live_manifest_validation_requires_controller_fields():
     manifest = {"schema": c.MANIFEST_SCHEMA, "sessions": [{"id": "s"}]}
 
@@ -215,6 +225,24 @@ def test_session_worker_advances_canonical_transcript_with_actual_output(tmp_pat
     assert snapshot["generation"] == 2
     assert [m["role"] for m in snapshot["messages"]] == ["user", "assistant", "user", "assistant"]
     assert snapshot["messages"][-1]["content"] == "actual-a1"
+
+
+def test_session_worker_hard_fails_if_migration_would_trim_prefix(tmp_path: Path, monkeypatch):
+    session = {"id": "s", "served_T": 5, "context_limit": 10, "decode_tokens": 1, "turn_rate_hz": 1, "turns": [{"append_tokens": 1}], "messages": [{"role": "user", "content": "u"}], "generation": 1}
+    worker = c.SessionWorker(type("Cfg", (), {})(), session, 1, type("Log", (), {"write": lambda *_a, **_k: None})(), 0, tmp_path)
+    monkeypatch.setattr(c, "prompt_tokens", lambda *_args: 11)
+
+    worker.begin_migration()
+    with pytest.raises(RuntimeError, match="append-only migration limit"):
+        worker._bounded(worker.messages)
+
+
+def test_source_request_p95_uses_serving_telemetry():
+    workers = {"a": type("W", (), {"request_s": [1.0, 2.0]})(), "b": type("W", (), {"request_s": [3.0, 4.0]})()}
+
+    assert c.source_request_p95_s(workers) == pytest.approx(3.85)
+    with pytest.raises(RuntimeError, match="no source request"):
+        c.source_request_p95_s({"a": type("W", (), {"request_s": []})()})
 
 
 def test_live_plan_uses_log_power_curve_and_dispatches_all(tmp_path: Path):
@@ -348,13 +376,75 @@ def test_run_live_moves_reconciles_stale_generation_with_final_delta(tmp_path: P
 
     out = c.run_live_moves(type("Cfg", (), {"api_proxy_port": 8400})(), tmp_path, {"a": Worker()}, [row])
 
-    assert actions == ["S", "R"]
+    assert actions == ["S", "S"]
     assert out[0]["commit_result"] == "committed"
     assert out[0]["generation_delta"] == 1
     assert out[0]["staging_attempts"] == 2
-    assert out[0]["effective_action"] == "S->R"
-    assert out[0]["final_delta_action"] == "R"
+    assert out[0]["effective_action"] == "S+delta"
+    assert out[0]["final_delta_action"] == "S"
+    assert out[0]["append_only_context"] is True
     assert out[0]["committed_context_sha256"] == out[0]["staged_context_sha256"]
+
+
+def test_run_live_moves_releases_stage_slot_while_waiting_for_source(tmp_path: Path, monkeypatch):
+    second_started = threading.Event()
+    overlapped = []
+
+    class Worker:
+        log = type("Log", (), {"write": lambda *_a, **_k: None})()
+        sink_log = tmp_path / "sink.log"
+        session = {"scenario_nonce": "test"}
+
+        def __init__(self, sid):
+            self.sid, self.generation = sid, 1
+            self.messages = [{"role": "user", "content": sid}]
+
+        def snapshot(self):
+            return {"messages": self.messages, "generation": 1, "context_sha256": c.messages_sha256(self.messages), "last_request_id": None, "session_kv_bytes": 1}
+
+        def pause_boundary(self):
+            if self.sid == "a":
+                overlapped.append(second_started.wait(0.5))
+
+        def commit_switch(self, *_args):
+            return True
+
+        def resume(self):
+            pass
+
+    def stream(_cfg, _port, messages, _max_tokens):
+        sid = messages[0]["content"].split()[3]
+        if sid == "b":
+            second_started.set()
+        now = time.time()
+        return {"status": 200, "content": "x", "first_token_ts": now, "start_ts": now, "end_ts": now, "prompt_sha256": c.messages_sha256(messages), "request_id": sid, "response_text": ""}
+
+    monkeypatch.setattr(c, "stream_chat", stream)
+    monkeypatch.setattr(c, "wait_lmcache_lookup_tokens", lambda *_args, **_kwargs: (10, 0))
+    rows = [{"id": sid, "action": "R", "fixture_index": i, "dispatch_rank": i, "deadline_s": 2} for i, sid in enumerate(("a", "b"))]
+
+    c.run_live_moves(type("Cfg", (), {"api_proxy_port": 8400})(), tmp_path, {sid: Worker(sid) for sid in ("a", "b")}, rows, replay_concurrency=1)
+
+    assert overlapped == [True]
+
+
+def test_run_live_moves_rejects_rewritten_prefix(tmp_path: Path, monkeypatch):
+    worker = type("Worker", (), {})()
+    worker.log = type("Log", (), {"write": lambda *_a, **_k: None})()
+    worker.sink_log = tmp_path / "sink.log"
+    worker.session = {"scenario_nonce": "test"}
+    worker.generation = 1
+    worker.messages = [{"role": "user", "content": "old"}]
+    worker.snapshot = lambda: {"messages": worker.messages, "generation": worker.generation, "context_sha256": c.messages_sha256(worker.messages), "last_request_id": None, "session_kv_bytes": 1}
+    worker.pause_boundary = lambda: (setattr(worker, "generation", 2), setattr(worker, "messages", [{"role": "user", "content": "new"}]))
+    worker.resume = lambda: None
+    now = time.time()
+    monkeypatch.setattr(c, "stream_chat", lambda _cfg, _port, messages, _max: {"status": 200, "content": "x", "first_token_ts": now, "start_ts": now, "end_ts": now, "prompt_sha256": c.messages_sha256(messages), "request_id": "r", "response_text": ""})
+    monkeypatch.setattr(c, "wait_lmcache_lookup_tokens", lambda *_args, **_kwargs: (10, 0))
+
+    with pytest.raises(RuntimeError, match="changed a transferred prefix"):
+        c.run_live_moves(type("Cfg", (), {"api_proxy_port": 8400})(), tmp_path, {"a": worker}, [{"id": "a", "action": "R", "fixture_index": 0, "dispatch_rank": 0, "deadline_s": 2}])
+
 
 def test_nvsmi_command_uses_250ms_sampling():
     assert c.nvsmi_cmd(250)[-2:] == ["-lms", "250"]
@@ -639,10 +729,15 @@ def test_live_profile_costs_override_runtime_model(tmp_path: Path):
         assert imp.c_transfer[i] == pytest.approx(session["c_transfer_s"])
     assert sessions[0]["profile_transfer_bytes"] > manifest["sessions"][0]["session_kv_bytes"]
     for session in sessions:
-        assert session["c_transfer_s"] == pytest.approx(session["profile_transfer_stage_s"] + session["profile_dirty_probability"] * session["c_replay_s"])
-        assert 0 < session["profile_dirty_probability"] < 1
-    assert sessions[1]["c_transfer_s"] > 20.0
+        assert session["c_transfer_s"] == pytest.approx(session["profile_transfer_stage_s"])
+
     assert summary["profile"]["schema"] == c.PROFILE_SCHEMA
+
+
+def test_planned_wall_counts_parallel_source_boundary_once():
+    rows = [{"action": "R", "planned_finish_s": 1, "fixture_index": i} for i in range(2)]
+
+    assert c._planned_wall_s(rows, [{}, {}], {"source_boundary_s": 5}, replay_concurrency=1) == 7
 
 
 def test_live_profile_uses_profiled_transfer_bytes_and_rate(tmp_path: Path):
