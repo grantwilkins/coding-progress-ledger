@@ -1,0 +1,18 @@
+bash: warning: setlocale: LC_ALL: cannot change locale (C.UTF-8)
+Traceback (most recent call last):
+  File "/home/groups/ramr/gfw/coding-progress-ledger/agent-migrate/queue-haul/stage1c_controller.py", line 1527, in <module>
+    main()
+  File "/home/groups/ramr/gfw/coding-progress-ledger/agent-migrate/queue-haul/stage1c_controller.py", line 1512, in main
+    print(live_grid(cfg, args.run_root, manifests if len(manifests) > 1 else manifests[0], _csv_list(args.policies), _csv_list(args.deadlines, float), _csv_list(args.target_fracs, float), args.mbps, args.nvsmi_ms, args.baseline_s, args.settle_s, args.seed, extra, args.profile, args.replay_concurrency, args.kv_concurrency or None))
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/groups/ramr/gfw/coding-progress-ledger/agent-migrate/queue-haul/stage1c_controller.py", line 1405, in live_grid
+    live_drain(cfg, dst, base, mbps, nvsmi_ms, extra, policy, seed, D, frac, prof, replay_concurrency, kv_concurrency)
+  File "/home/groups/ramr/gfw/coding-progress-ledger/agent-migrate/queue-haul/stage1c_controller.py", line 1286, in live_drain
+    write_power_summary(run_root / "gpu_power.csv", run_root / "power_summary.csv", windows)
+  File "/home/groups/ramr/gfw/coding-progress-ledger/agent-migrate/queue-haul/stage1c_controller.py", line 974, in write_power_summary
+    rows = power_summary_rows(power_csv, windows)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/groups/ramr/gfw/coding-progress-ledger/agent-migrate/queue-haul/stage1c_controller.py", line 964, in power_summary_rows
+    rows.append({"ts": _parse_ts(row["timestamp"]), "gpu": int(row["index"]), "power_w": float(row["power_w"])})
+                                                                                         ^^^^^^^^^^^^^^^^^^^^^
+ValueError: could not convert string to float: ' [N/A]'

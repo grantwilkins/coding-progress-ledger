@@ -1,0 +1,19 @@
+/bin/sh: warning: setlocale: LC_ALL: cannot change locale (C.UTF-8)
++ LOCAL=/tmp/qh-apptainer-33693286
++ mkdir -p /tmp/qh-apptainer-33693286/cache /tmp/qh-apptainer-33693286/tmp
++ export APPTAINER_CACHEDIR=/tmp/qh-apptainer-33693286/cache
++ APPTAINER_CACHEDIR=/tmp/qh-apptainer-33693286/cache
++ export APPTAINER_TMPDIR=/tmp/qh-apptainer-33693286/tmp
++ APPTAINER_TMPDIR=/tmp/qh-apptainer-33693286/tmp
++ export TMPDIR=/tmp/qh-apptainer-33693286/tmp
++ TMPDIR=/tmp/qh-apptainer-33693286/tmp
++ apptainer version
++ apptainer pull --force /scratch/users/gfw/ptsim/lmcache-vllm-openai-latest-nightly-cu129.sif docker://lmcache/vllm-openai:latest-nightly-cu129
+INFO:    Converting OCI blobs to SIF format
+INFO:    Starting build...
+INFO:    Fetching OCI image...
+INFO:    Extracting OCI image...
+2026/07/12 11:16:15  warn rootless{usr/lib/x86_64-linux-gnu/gstreamer1.0/gstreamer-1.0/gst-ptp-helper} ignoring (usually) harmless EPERM on setxattr "security.capability"
+INFO:    Inserting Apptainer configuration...
+INFO:    Creating SIF file...
+FATAL:   While making image from oci registry: error fetching image to cache: while building SIF from layers: while creating squashfs: /usr/libexec/apptainer/bin/mksquashfs command failed: exit status 139: 

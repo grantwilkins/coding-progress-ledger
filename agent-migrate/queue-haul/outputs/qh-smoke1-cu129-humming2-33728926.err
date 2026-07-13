@@ -1,0 +1,70 @@
+/bin/sh: warning: setlocale: LC_ALL: cannot change locale (C.UTF-8)
++ cd /home/groups/ramr/gfw/coding-progress-ledger/agent-migrate
++ module load gcc/14.2.0 openblas/0.3.28
++ '[' -z '' ']'
++ case "$-" in
++ __lmod_sh_dbg=x
++ '[' -n x ']'
++ set +x
+Shell debugging temporarily silenced: export LMOD_SH_DBG_ON=1 for Lmod's output
+Shell debugging restarted
++ unset __lmod_sh_dbg
++ return 0
++ export QH_APPTAINER_IMAGE=/scratch/users/gfw/ptsim/lmcache-vllm-openai-latest-cu129.sif
++ QH_APPTAINER_IMAGE=/scratch/users/gfw/ptsim/lmcache-vllm-openai-latest-cu129.sif
++ export QH_APPTAINER_GPU_MODE=nvccli
++ QH_APPTAINER_GPU_MODE=nvccli
++ export QH_PORT_OFFSET=22000
++ QH_PORT_OFFSET=22000
++ .venv/bin/python queue-haul/stage1b_drain_sink.py smoke1 --run-root queue-haul/outputs/stage1b_smoke1_cu129_humming2 --max-model-len 8192 --max-num-seqs 16 --max-num-batched-tokens 2048 -- --moe-backend humming
+Traceback (most recent call last):
+  File "/home/groups/ramr/gfw/coding-progress-ledger/agent-migrate/queue-haul/stage1b_drain_sink.py", line 957, in <module>
+    main()
+  File "/home/groups/ramr/gfw/coding-progress-ledger/agent-migrate/queue-haul/stage1b_drain_sink.py", line 947, in main
+    print(smoke1(cfg, args.run_root, extra))
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/groups/ramr/gfw/coding-progress-ledger/agent-migrate/queue-haul/stage1b_drain_sink.py", line 847, in smoke1
+    wait_health_process(cfg.host, cfg.smoke_port, 1800, vllm, run_root / "vllm.log")
+  File "/home/groups/ramr/gfw/coding-progress-ledger/agent-migrate/queue-haul/stage1b_drain_sink.py", line 569, in wait_health_process
+    raise RuntimeError(f"process exited while waiting for http://{host}:{port}/health; log tail:\n{tail(log)}")
+RuntimeError: process exited while waiting for http://127.0.0.1:30120/health; log tail:
+(APIServer pid=64530)     await run_server_worker(listen_address, sock, args, **uvicorn_kwargs)
+(APIServer pid=64530)   File "/opt/venv/lib/python3.12/site-packages/vllm/entrypoints/openai/api_server.py", line 677, in run_server_worker
+(APIServer pid=64530)     async with build_async_engine_client(
+(APIServer pid=64530)   File "/usr/lib/python3.12/contextlib.py", line 210, in __aenter__
+(APIServer pid=64530)     return await anext(self.gen)
+(APIServer pid=64530)            ^^^^^^^^^^^^^^^^^^^^^
+(APIServer pid=64530)   File "/opt/venv/lib/python3.12/site-packages/vllm/entrypoints/openai/api_server.py", line 99, in build_async_engine_client
+(APIServer pid=64530)     async with build_async_engine_client_from_engine_args(
+(APIServer pid=64530)   File "/usr/lib/python3.12/contextlib.py", line 210, in __aenter__
+(APIServer pid=64530)     return await anext(self.gen)
+(APIServer pid=64530)            ^^^^^^^^^^^^^^^^^^^^^
+(APIServer pid=64530)   File "/opt/venv/lib/python3.12/site-packages/vllm/entrypoints/openai/api_server.py", line 135, in build_async_engine_client_from_engine_args
+(APIServer pid=64530)     async_llm = AsyncLLM.from_vllm_config(
+(APIServer pid=64530)                 ^^^^^^^^^^^^^^^^^^^^^^^^^^
+(APIServer pid=64530)   File "/opt/venv/lib/python3.12/site-packages/vllm/v1/engine/async_llm.py", line 217, in from_vllm_config
+(APIServer pid=64530)     return cls(
+(APIServer pid=64530)            ^^^^
+(APIServer pid=64530)   File "/opt/venv/lib/python3.12/site-packages/vllm/v1/engine/async_llm.py", line 146, in __init__
+(APIServer pid=64530)     self.engine_core = EngineCoreClient.make_async_mp_client(
+(APIServer pid=64530)                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+(APIServer pid=64530)   File "/opt/venv/lib/python3.12/site-packages/vllm/tracing/otel.py", line 178, in sync_wrapper
+(APIServer pid=64530)     return func(*args, **kwargs)
+(APIServer pid=64530)            ^^^^^^^^^^^^^^^^^^^^^
+(APIServer pid=64530)   File "/opt/venv/lib/python3.12/site-packages/vllm/v1/engine/core_client.py", line 132, in make_async_mp_client
+(APIServer pid=64530)     return AsyncMPClient(*client_args)
+(APIServer pid=64530)            ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+(APIServer pid=64530)   File "/opt/venv/lib/python3.12/site-packages/vllm/tracing/otel.py", line 178, in sync_wrapper
+(APIServer pid=64530)     return func(*args, **kwargs)
+(APIServer pid=64530)            ^^^^^^^^^^^^^^^^^^^^^
+(APIServer pid=64530)   File "/opt/venv/lib/python3.12/site-packages/vllm/v1/engine/core_client.py", line 963, in __init__
+(APIServer pid=64530)     super().__init__(
+(APIServer pid=64530)   File "/opt/venv/lib/python3.12/site-packages/vllm/v1/engine/core_client.py", line 573, in __init__
+(APIServer pid=64530)     with launch_core_engines(
+(APIServer pid=64530)   File "/usr/lib/python3.12/contextlib.py", line 144, in __exit__
+(APIServer pid=64530)     next(self.gen)
+(APIServer pid=64530)   File "/opt/venv/lib/python3.12/site-packages/vllm/v1/engine/utils.py", line 1213, in launch_core_engines
+(APIServer pid=64530)     wait_for_engine_startup(
+(APIServer pid=64530)   File "/opt/venv/lib/python3.12/site-packages/vllm/v1/engine/utils.py", line 1272, in wait_for_engine_startup
+(APIServer pid=64530)     raise RuntimeError(
+(APIServer pid=64530) RuntimeError: Engine core initialization failed. See root cause above. Failed core proc(s): {}

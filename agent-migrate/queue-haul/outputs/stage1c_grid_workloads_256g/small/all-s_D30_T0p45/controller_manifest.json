@@ -1,0 +1,1828 @@
+{
+  "acceptance": {
+    "ok": true,
+    "planned_hit": true,
+    "power_threshold_gated": false,
+    "proxy_audit_ok": true
+  },
+  "deadline_s": 30.0,
+  "delay_summary": [
+    {
+      "action": "S",
+      "completion_s": 37.15762448310852,
+      "dispatch_rank": 0,
+      "first_token_s": 35.14003658294678,
+      "id": "codex:a9de70aa-f71f-9b95-5469-d6b3ec0b3fd5",
+      "sink_warm_s": 35.179471492767334,
+      "source_boundary_wait_s": 1.9781172275543213,
+      "switch_downtime_s": 1.71661376953125e-05
+    },
+    {
+      "action": "S",
+      "completion_s": 37.28707504272461,
+      "dispatch_rank": 1,
+      "first_token_s": 36.78051471710205,
+      "id": "codex:362639e1-f680-4bda-bd1e-8f149f7717ab",
+      "sink_warm_s": 37.007176637649536,
+      "source_boundary_wait_s": 0.27980637550354004,
+      "switch_downtime_s": 2.9087066650390625e-05
+    },
+    {
+      "action": "S",
+      "completion_s": 33.991140842437744,
+      "dispatch_rank": 2,
+      "first_token_s": 33.99107646942139,
+      "id": "codex:e6744833-786a-9c87-c539-3a40cda50680",
+      "sink_warm_s": 33.99107646942139,
+      "source_boundary_wait_s": 2.1696090698242188e-05,
+      "switch_downtime_s": 5.4836273193359375e-06
+    },
+    {
+      "action": "S",
+      "completion_s": 35.82660174369812,
+      "dispatch_rank": 3,
+      "first_token_s": 35.48428988456726,
+      "id": "codex:e717fd54-aecf-8710-559b-8d23833866c4",
+      "sink_warm_s": 35.48428988456726,
+      "source_boundary_wait_s": 0.34227895736694336,
+      "switch_downtime_s": 1.1682510375976562e-05
+    },
+    {
+      "action": "S",
+      "completion_s": 35.15622138977051,
+      "dispatch_rank": 4,
+      "first_token_s": 34.94321799278259,
+      "id": "claude:3ab49446-c806-6a06-d8f3-51d00da9a76a",
+      "sink_warm_s": 35.15607666969299,
+      "source_boundary_wait_s": 2.4557113647460938e-05,
+      "switch_downtime_s": 4.5299530029296875e-06
+    },
+    {
+      "action": "S",
+      "completion_s": 32.89415526390076,
+      "dispatch_rank": 5,
+      "first_token_s": 32.894009590148926,
+      "id": "codex:e4fa4daa-9887-f50a-b110-c9378383c7b1",
+      "sink_warm_s": 32.894009590148926,
+      "source_boundary_wait_s": 3.504753112792969e-05,
+      "switch_downtime_s": 2.4080276489257812e-05
+    },
+    {
+      "action": "S",
+      "completion_s": 34.062485218048096,
+      "dispatch_rank": 6,
+      "first_token_s": 32.895911693573,
+      "id": "codex:1db326cd-3c43-ad82-b907-27bc1f12c287",
+      "sink_warm_s": 32.895911693573,
+      "source_boundary_wait_s": 1.166186809539795,
+      "switch_downtime_s": 2.002716064453125e-05
+    },
+    {
+      "action": "S",
+      "completion_s": 33.54724431037903,
+      "dispatch_rank": 7,
+      "first_token_s": 33.547146797180176,
+      "id": "claude:beb7fbf4-6556-b9f2-f2be-d69abc179398",
+      "sink_warm_s": 33.547146797180176,
+      "source_boundary_wait_s": 2.288818359375e-05,
+      "switch_downtime_s": 4.76837158203125e-06
+    }
+  ],
+  "full_source_drop_w": 322.87958040817847,
+  "input_manifest": {
+    "baseline_s": 30.0,
+    "constants": {
+      "eta_bytes_per_tok": 192512,
+      "lambda_src_bytes_per_s": 125000000.0,
+      "mu_bytes_per_s": 1000000000.0
+    },
+    "deadline_s": 300.0,
+    "decode_margin": 512,
+    "max_model_len": 8192,
+    "power_curve": "log",
+    "profile": {
+      "mbps": 1000.0,
+      "points": [
+        {
+          "action": "R",
+          "api_request_bytes": 9058,
+          "completion_s": 1.2231361865997314,
+          "first_token_s": 1.2231361865997314,
+          "kv_bytes": 36,
+          "proxy_delta": {
+            "api/client_to_target": 9058,
+            "api/target_to_client": 688,
+            "kv/client_to_target": 186,
+            "kv/target_to_client": 36
+          },
+          "requested_tokens": 4488,
+          "tokens": 4492
+        },
+        {
+          "action": "S",
+          "api_request_bytes": 9018,
+          "completion_s": 4.10386061668396,
+          "first_token_s": 4.10386061668396,
+          "kv_bytes": 220301208,
+          "proxy_delta": {
+            "api/client_to_target": 9018,
+            "api/target_to_client": 688,
+            "kv/client_to_target": 10044,
+            "kv/target_to_client": 220301208
+          },
+          "requested_tokens": 4488,
+          "tokens": 4478
+        },
+        {
+          "action": "R",
+          "api_request_bytes": 12437,
+          "completion_s": 0.5700247287750244,
+          "first_token_s": 0.5700247287750244,
+          "kv_bytes": 36,
+          "proxy_delta": {
+            "api/client_to_target": 12437,
+            "api/target_to_client": 688,
+            "kv/client_to_target": 186,
+            "kv/target_to_client": 36
+          },
+          "requested_tokens": 6146,
+          "tokens": 6280
+        },
+        {
+          "action": "S",
+          "api_request_bytes": 12397,
+          "completion_s": 5.602627277374268,
+          "first_token_s": 5.602627277374268,
+          "kv_bytes": 308185740,
+          "proxy_delta": {
+            "api/client_to_target": 12397,
+            "api/target_to_client": 688,
+            "kv/client_to_target": 13950,
+            "kv/target_to_client": 308185740
+          },
+          "requested_tokens": 6146,
+          "tokens": 6266
+        },
+        {
+          "action": "R",
+          "api_request_bytes": 14352,
+          "completion_s": 0.7174985408782959,
+          "first_token_s": 0.7174985408782959,
+          "kv_bytes": 36,
+          "proxy_delta": {
+            "api/client_to_target": 14352,
+            "api/target_to_client": 688,
+            "kv/client_to_target": 186,
+            "kv/target_to_client": 36
+          },
+          "requested_tokens": 7212,
+          "tokens": 7325
+        },
+        {
+          "action": "S",
+          "api_request_bytes": 14311,
+          "completion_s": 6.539128541946411,
+          "first_token_s": 6.539128541946411,
+          "kv_bytes": 359500860,
+          "proxy_delta": {
+            "api/client_to_target": 14311,
+            "api/target_to_client": 688,
+            "kv/client_to_target": 16182,
+            "kv/target_to_client": 359500860
+          },
+          "requested_tokens": 7212,
+          "tokens": 7310
+        }
+      ],
+      "schema": "queue-haul-stage1c-live-profile-v1"
+    },
+    "schema": "queue-haul-stage1c-session-manifest-v1",
+    "sessions": [
+      {
+        "T": 4488,
+        "c_replay_s": 1.2231361865997314,
+        "c_transfer_s": 4.10386061668396,
+        "decode_tokens": 97,
+        "ell_dec": 0.21890870720773567,
+        "ell_pre": 0.43781741441547134,
+        "id": "codex:e6744833-786a-9c87-c539-3a40cda50680",
+        "last_prompt": "Synthetic TraceLab-sized coding-agent session codex:e6744833-786a-9c87-c539-3a40cda50680.\nStable task state state_codex:e6744833-786a-9c87-c539-3a40cda50680 x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x\nUser follow-up 0: turn_codex:e6744833-786a-9c87-c539-3a40cda50680_0 x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x\nUser follow-up 1: turn_codex:e6744833-786a-9c87-c539-3a40cda50680_1 x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x\nUser follow-up 2: turn_codex:e6744833-786a-9c87-c539-3a40cda50680_2 x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x\nReply with one concise progress sentence.",
+        "last_request_id": "chatcmpl-7cf34ac89540411d9ad3a16ded2e94df",
+        "manifest_rank": 0,
+        "original_T": 4488,
+        "served_T": 4488,
+        "session_class": "agentic_tool_loop",
+        "session_kv_bytes": 147300000,
+        "source_node": 0,
+        "state": "active",
+        "turn_rate_hz": 0.3395585678062629,
+        "turns": [
+          {
+            "append_tokens": 4270,
+            "decode_tokens": 97,
+            "gap_s": 0.0,
+            "input_tokens_total": 4270,
+            "prefix_tokens": 0,
+            "round": 0
+          },
+          {
+            "append_tokens": 1207,
+            "decode_tokens": 58,
+            "gap_s": 3.8600001335144043,
+            "input_tokens_total": 4407,
+            "prefix_tokens": 3200,
+            "round": 1
+          },
+          {
+            "append_tokens": 136,
+            "decode_tokens": 1067,
+            "gap_s": 2.0299999713897705,
+            "input_tokens_total": 4488,
+            "prefix_tokens": 4352,
+            "round": 2
+          }
+        ],
+        "words": 3366
+      },
+      {
+        "T": 4884,
+        "c_replay_s": 1.079948439694091,
+        "c_transfer_s": 4.10386061668396,
+        "decode_tokens": 141,
+        "ell_dec": 0.018263291341188162,
+        "ell_pre": 0.036526582682376324,
+        "id": "codex:b759a30c-c03e-8e0e-1900-3ac8dd4c0130",
+        "last_prompt": "Synthetic TraceLab-sized coding-agent session codex:b759a30c-c03e-8e0e-1900-3ac8dd4c0130.\nStable task state state_codex:b759a30c-c03e-8e0e-1900-3ac8dd4c0130 x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x\nUser follow-up 0: turn_codex:b759a30c-c03e-8e0e-1900-3ac8dd4c0130_0 x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x\nReply with one concise progress sentence.",
+        "last_request_id": "chatcmpl-8b2b794cab9943c7a2bf4311c06915f9",
+        "manifest_rank": 1,
+        "original_T": 4884,
+        "served_T": 4884,
+        "session_class": "agentic_tool_loop",
+        "session_kv_bytes": 128899999,
+        "source_node": 0,
+        "state": "active",
+        "turn_rate_hz": 0.019779459029929964,
+        "turns": [
+          {
+            "append_tokens": 937,
+            "decode_tokens": 141,
+            "gap_s": 0.0,
+            "input_tokens_total": 3497,
+            "prefix_tokens": 2560,
+            "round": 0
+          },
+          {
+            "append_tokens": 420,
+            "decode_tokens": 44,
+            "gap_s": 98.0550000667572,
+            "input_tokens_total": 3748,
+            "prefix_tokens": 3328,
+            "round": 1
+          },
+          {
+            "append_tokens": 2324,
+            "decode_tokens": 209,
+            "gap_s": 3.059999942779541,
+            "input_tokens_total": 4884,
+            "prefix_tokens": 2560,
+            "round": 2
+          }
+        ],
+        "words": 3663
+      },
+      {
+        "T": 4890,
+        "c_replay_s": 1.0777567905067598,
+        "c_transfer_s": 4.10386061668396,
+        "decode_tokens": 149,
+        "ell_dec": 0.25,
+        "ell_pre": 0.5,
+        "id": "codex:a9de70aa-f71f-9b95-5469-d6b3ec0b3fd5",
+        "last_prompt": "Synthetic TraceLab-sized coding-agent session codex:a9de70aa-f71f-9b95-5469-d6b3ec0b3fd5.\nStable task state state_codex:a9de70aa-f71f-9b95-5469-d6b3ec0b3fd5 x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x\nUser follow-up 2: turn_codex:a9de70aa-f71f-9b95-5469-d6b3ec0b3fd5_2 x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x\nUser follow-up 3: turn_codex:a9de70aa-f71f-9b95-5469-d6b3ec0b3fd5_3 x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x\nReply with one concise progress sentence.",
+        "last_request_id": "chatcmpl-b0959d19518a47ffa32f48a8ce690a3b",
+        "manifest_rank": 2,
+        "original_T": 4890,
+        "served_T": 4890,
+        "session_class": "agentic_tool_loop",
+        "session_kv_bytes": 164100000,
+        "source_node": 0,
+        "state": "active",
+        "turn_rate_hz": 0.3554081276416417,
+        "turns": [
+          {
+            "append_tokens": 4211,
+            "decode_tokens": 151,
+            "gap_s": 0.0,
+            "input_tokens_total": 4211,
+            "prefix_tokens": 0,
+            "round": 0
+          },
+          {
+            "append_tokens": 252,
+            "decode_tokens": 147,
+            "gap_s": 2.6050000190734863,
+            "input_tokens_total": 4476,
+            "prefix_tokens": 4224,
+            "round": 1
+          },
+          {
+            "append_tokens": 4739,
+            "decode_tokens": 89,
+            "gap_s": 2.5859999656677246,
+            "input_tokens_total": 4739,
+            "prefix_tokens": 0,
+            "round": 2
+          },
+          {
+            "append_tokens": 410,
+            "decode_tokens": 1102,
+            "gap_s": 3.25,
+            "input_tokens_total": 4890,
+            "prefix_tokens": 4480,
+            "round": 3
+          }
+        ],
+        "words": 3667
+      },
+      {
+        "T": 4898,
+        "c_replay_s": 1.0748345915903181,
+        "c_transfer_s": 4.10386061668396,
+        "decode_tokens": 77,
+        "ell_dec": 0.0025,
+        "ell_pre": 0.005,
+        "id": "codex:ae694cc1-4887-7ade-f085-b22a801120db",
+        "last_prompt": "Synthetic TraceLab-sized coding-agent session codex:ae694cc1-4887-7ade-f085-b22a801120db.\nStable task state state_codex:ae694cc1-4887-7ade-f085-b22a801120db x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x\nUser follow-up 0: turn_codex:ae694cc1-4887-7ade-f085-b22a801120db_0 x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x\nReply with one concise progress sentence.",
+        "last_request_id": "chatcmpl-6334cb27a3444ea9a03d41ebf70ae1bd",
+        "manifest_rank": 3,
+        "original_T": 4898,
+        "served_T": 4898,
+        "session_class": "agentic_tool_loop",
+        "session_kv_bytes": 128899999,
+        "source_node": 0,
+        "state": "active",
+        "turn_rate_hz": 0.0010714255102522397,
+        "turns": [
+          {
+            "append_tokens": 1032,
+            "decode_tokens": 46,
+            "gap_s": 0.0,
+            "input_tokens_total": 4232,
+            "prefix_tokens": 3200,
+            "round": 0
+          },
+          {
+            "append_tokens": 730,
+            "decode_tokens": 77,
+            "gap_s": 3.7880001068115234,
+            "input_tokens_total": 4826,
+            "prefix_tokens": 4096,
+            "round": 1
+          },
+          {
+            "append_tokens": 802,
+            "decode_tokens": 79,
+            "gap_s": 1862.883999824524,
+            "input_tokens_total": 4898,
+            "prefix_tokens": 4096,
+            "round": 2
+          }
+        ],
+        "words": 3673
+      },
+      {
+        "T": 5235,
+        "c_replay_s": 0.9517369622352139,
+        "c_transfer_s": 4.10386061668396,
+        "decode_tokens": 239,
+        "ell_dec": 0.25,
+        "ell_pre": 0.5,
+        "id": "codex:362639e1-f680-4bda-bd1e-8f149f7717ab",
+        "last_prompt": "Synthetic TraceLab-sized coding-agent session codex:362639e1-f680-4bda-bd1e-8f149f7717ab.\nStable task state state_codex:362639e1-f680-4bda-bd1e-8f149f7717ab x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x\nUser follow-up 0: turn_codex:362639e1-f680-4bda-bd1e-8f149f7717ab_0 x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x\nUser follow-up 1: turn_codex:362639e1-f680-4bda-bd1e-8f149f7717ab_1 x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x\nUser follow-up 2: turn_codex:362639e1-f680-4bda-bd1e-8f149f7717ab_2 x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x\nUser follow-up 3: turn_codex:362639e1-f680-4bda-bd1e-8f149f7717ab_3 x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x\nUser follow-up 4: turn_codex:362639e1-f680-4bda-bd1e-8f149f7717ab_4 x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x\nUser follow-up 5: turn_codex:362639e1-f680-4bda-bd1e-8f149f7717ab_5 x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x\nReply with one concise progress sentence.",
+        "last_request_id": "chatcmpl-acb0f57a2072402b9a8ae051aa9e3ab7",
+        "manifest_rank": 4,
+        "original_T": 5235,
+        "served_T": 5235,
+        "session_class": "agentic_tool_loop",
+        "session_kv_bytes": 178100000,
+        "source_node": 0,
+        "state": "active",
+        "turn_rate_hz": 0.21827389173115297,
+        "turns": [
+          {
+            "append_tokens": 3235,
+            "decode_tokens": 204,
+            "gap_s": 0.0,
+            "input_tokens_total": 3235,
+            "prefix_tokens": 0,
+            "round": 0
+          },
+          {
+            "append_tokens": 458,
+            "decode_tokens": 90,
+            "gap_s": 3.197999954223633,
+            "input_tokens_total": 3786,
+            "prefix_tokens": 3328,
+            "round": 1
+          },
+          {
+            "append_tokens": 318,
+            "decode_tokens": 168,
+            "gap_s": 5.2799999713897705,
+            "input_tokens_total": 4030,
+            "prefix_tokens": 3712,
+            "round": 2
+          },
+          {
+            "append_tokens": 255,
+            "decode_tokens": 274,
+            "gap_s": 3.3269999027252197,
+            "input_tokens_total": 4351,
+            "prefix_tokens": 4096,
+            "round": 3
+          },
+          {
+            "append_tokens": 299,
+            "decode_tokens": 304,
+            "gap_s": 5.213000059127808,
+            "input_tokens_total": 4779,
+            "prefix_tokens": 4480,
+            "round": 4
+          },
+          {
+            "append_tokens": 243,
+            "decode_tokens": 1128,
+            "gap_s": 5.888999938964844,
+            "input_tokens_total": 5235,
+            "prefix_tokens": 4992,
+            "round": 5
+          }
+        ],
+        "words": 3926
+      },
+      {
+        "T": 5245,
+        "c_replay_s": 0.9480842135896619,
+        "c_transfer_s": 4.10386061668396,
+        "decode_tokens": 52,
+        "ell_dec": 0.0025,
+        "ell_pre": 0.005,
+        "id": "codex:7de80c9c-04b3-49a8-66a8-dedbd1acb80e",
+        "last_prompt": "Synthetic TraceLab-sized coding-agent session codex:7de80c9c-04b3-49a8-66a8-dedbd1acb80e.\nStable task state state_codex:7de80c9c-04b3-49a8-66a8-dedbd1acb80e x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x\nUser follow-up 0: turn_codex:7de80c9c-04b3-49a8-66a8-dedbd1acb80e_0 x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x\nReply with one concise progress sentence.",
+        "last_request_id": "chatcmpl-d8b07e30bd414d6fb636dc4d64c8e31e",
+        "manifest_rank": 5,
+        "original_T": 5245,
+        "served_T": 5245,
+        "session_class": "agentic_tool_loop",
+        "session_kv_bytes": 130600000,
+        "source_node": 0,
+        "state": "active",
+        "turn_rate_hz": 0.0038561888357185083,
+        "turns": [
+          {
+            "append_tokens": 932,
+            "decode_tokens": 53,
+            "gap_s": 0.0,
+            "input_tokens_total": 4132,
+            "prefix_tokens": 3200,
+            "round": 0
+          },
+          {
+            "append_tokens": 1622,
+            "decode_tokens": 66,
+            "gap_s": 4.0950000286102295,
+            "input_tokens_total": 4822,
+            "prefix_tokens": 3200,
+            "round": 1
+          },
+          {
+            "append_tokens": 1671,
+            "decode_tokens": 31,
+            "gap_s": 934.8239998817444,
+            "input_tokens_total": 4871,
+            "prefix_tokens": 3200,
+            "round": 2
+          },
+          {
+            "append_tokens": 1710,
+            "decode_tokens": 57,
+            "gap_s": 7.8470001220703125,
+            "input_tokens_total": 4910,
+            "prefix_tokens": 3200,
+            "round": 3
+          },
+          {
+            "append_tokens": 455,
+            "decode_tokens": 51,
+            "gap_s": 2.8589999675750732,
+            "input_tokens_total": 5191,
+            "prefix_tokens": 4736,
+            "round": 4
+          },
+          {
+            "append_tokens": 509,
+            "decode_tokens": 46,
+            "gap_s": 346.9920001029968,
+            "input_tokens_total": 5245,
+            "prefix_tokens": 4736,
+            "round": 5
+          }
+        ],
+        "words": 3933
+      },
+      {
+        "T": 5624,
+        "c_replay_s": 0.8096450399232391,
+        "c_transfer_s": 4.10386061668396,
+        "decode_tokens": 166,
+        "ell_dec": 0.21692013268431634,
+        "ell_pre": 0.4338402653686327,
+        "id": "codex:e717fd54-aecf-8710-559b-8d23833866c4",
+        "last_prompt": "Synthetic TraceLab-sized coding-agent session codex:e717fd54-aecf-8710-559b-8d23833866c4.\nStable task state state_codex:e717fd54-aecf-8710-559b-8d23833866c4 x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x\nUser follow-up 0: turn_codex:e717fd54-aecf-8710-559b-8d23833866c4_0 x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x\nUser follow-up 1: turn_codex:e717fd54-aecf-8710-559b-8d23833866c4_1 x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x\nUser follow-up 2: turn_codex:e717fd54-aecf-8710-559b-8d23833866c4_2 x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x\nUser follow-up 3: turn_codex:e717fd54-aecf-8710-559b-8d23833866c4_3 x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x\nUser follow-up 4: turn_codex:e717fd54-aecf-8710-559b-8d23833866c4_4 x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x\nUser follow-up 5: turn_codex:e717fd54-aecf-8710-559b-8d23833866c4_5 x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x\nReply with one concise progress sentence.",
+        "last_request_id": "chatcmpl-c0956735ec8740ad8b20489c41de2477",
+        "manifest_rank": 6,
+        "original_T": 5624,
+        "served_T": 5624,
+        "session_class": "agentic_tool_loop",
+        "session_kv_bytes": 190800000,
+        "source_node": 0,
+        "state": "active",
+        "turn_rate_hz": 0.19964064812803622,
+        "turns": [
+          {
+            "append_tokens": 3235,
+            "decode_tokens": 159,
+            "gap_s": 0.0,
+            "input_tokens_total": 3235,
+            "prefix_tokens": 0,
+            "round": 0
+          },
+          {
+            "append_tokens": 394,
+            "decode_tokens": 125,
+            "gap_s": 2.620999813079834,
+            "input_tokens_total": 3594,
+            "prefix_tokens": 3200,
+            "round": 1
+          },
+          {
+            "append_tokens": 335,
+            "decode_tokens": 114,
+            "gap_s": 3.248000144958496,
+            "input_tokens_total": 3919,
+            "prefix_tokens": 3584,
+            "round": 2
+          },
+          {
+            "append_tokens": 342,
+            "decode_tokens": 174,
+            "gap_s": 2.069999933242798,
+            "input_tokens_total": 4182,
+            "prefix_tokens": 3840,
+            "round": 3
+          },
+          {
+            "append_tokens": 285,
+            "decode_tokens": 966,
+            "gap_s": 2.684000015258789,
+            "input_tokens_total": 4509,
+            "prefix_tokens": 4224,
+            "round": 4
+          },
+          {
+            "append_tokens": 248,
+            "decode_tokens": 909,
+            "gap_s": 14.42199993133545,
+            "input_tokens_total": 5624,
+            "prefix_tokens": 5376,
+            "round": 5
+          }
+        ],
+        "words": 4218
+      },
+      {
+        "T": 5691,
+        "c_replay_s": 0.7851716239980403,
+        "c_transfer_s": 4.10386061668396,
+        "decode_tokens": 57,
+        "ell_dec": 0.1104900137404492,
+        "ell_pre": 0.2209800274808984,
+        "id": "codex:773fe603-6c37-a82b-eb79-8a2c5c0d1c8e",
+        "last_prompt": "Synthetic TraceLab-sized coding-agent session codex:773fe603-6c37-a82b-eb79-8a2c5c0d1c8e.\nStable task state state_codex:773fe603-6c37-a82b-eb79-8a2c5c0d1c8e x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x\nUser follow-up 0: turn_codex:773fe603-6c37-a82b-eb79-8a2c5c0d1c8e_0 x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x\nUser follow-up 1: turn_codex:773fe603-6c37-a82b-eb79-8a2c5c0d1c8e_1 x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x\nUser follow-up 2: turn_codex:773fe603-6c37-a82b-eb79-8a2c5c0d1c8e_2 x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x\nUser follow-up 3: turn_codex:773fe603-6c37-a82b-eb79-8a2c5c0d1c8e_3 x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x\nReply with one concise progress sentence.",
+        "last_request_id": "chatcmpl-5a2a3062f867478c903445821b152d6c",
+        "manifest_rank": 7,
+        "original_T": 5691,
+        "served_T": 5691,
+        "session_class": "agentic_tool_loop",
+        "session_kv_bytes": 191400000,
+        "source_node": 0,
+        "state": "active",
+        "turn_rate_hz": 0.2721829109641356,
+        "turns": [
+          {
+            "append_tokens": 928,
+            "decode_tokens": 50,
+            "gap_s": 0.0,
+            "input_tokens_total": 4128,
+            "prefix_tokens": 3200,
+            "round": 0
+          },
+          {
+            "append_tokens": 330,
+            "decode_tokens": 48,
+            "gap_s": 2.2749998569488525,
+            "input_tokens_total": 4298,
+            "prefix_tokens": 3968,
+            "round": 1
+          },
+          {
+            "append_tokens": 1053,
+            "decode_tokens": 344,
+            "gap_s": 1.7569999694824219,
+            "input_tokens_total": 5277,
+            "prefix_tokens": 4224,
+            "round": 2
+          },
+          {
+            "append_tokens": 955,
+            "decode_tokens": 64,
+            "gap_s": 6.990000009536743,
+            "input_tokens_total": 5691,
+            "prefix_tokens": 4736,
+            "round": 3
+          }
+        ],
+        "words": 4268
+      },
+      {
+        "T": 6146,
+        "c_replay_s": 0.6189715606254219,
+        "c_transfer_s": 4.10386061668396,
+        "decode_tokens": 258,
+        "ell_dec": 0.0034873287658920087,
+        "ell_pre": 0.006974657531784017,
+        "id": "codex:c55b5430-f5e1-56b7-a298-2db8c6581658",
+        "last_prompt": "Synthetic TraceLab-sized coding-agent session codex:c55b5430-f5e1-56b7-a298-2db8c6581658.\nStable task state state_codex:c55b5430-f5e1-56b7-a298-2db8c6581658 x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x\nUser follow-up 0: turn_codex:c55b5430-f5e1-56b7-a298-2db8c6581658_0 x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x\nReply with one concise progress sentence.",
+        "last_request_id": "chatcmpl-2c16f087f4844812b0d973eff5c6ce7a",
+        "manifest_rank": 8,
+        "original_T": 6146,
+        "served_T": 6146,
+        "session_class": "agentic_tool_loop",
+        "session_kv_bytes": 152300000,
+        "source_node": 0,
+        "state": "active",
+        "turn_rate_hz": 0.0020925416061368727,
+        "turns": [
+          {
+            "append_tokens": 950,
+            "decode_tokens": 51,
+            "gap_s": 0.0,
+            "input_tokens_total": 4150,
+            "prefix_tokens": 3200,
+            "round": 0
+          },
+          {
+            "append_tokens": 1161,
+            "decode_tokens": 347,
+            "gap_s": 6.958000183105469,
+            "input_tokens_total": 5257,
+            "prefix_tokens": 4096,
+            "round": 1
+          },
+          {
+            "append_tokens": 2402,
+            "decode_tokens": 192,
+            "gap_s": 597.6029999256134,
+            "input_tokens_total": 5602,
+            "prefix_tokens": 3200,
+            "round": 2
+          },
+          {
+            "append_tokens": 367,
+            "decode_tokens": 258,
+            "gap_s": 1277.7939999103546,
+            "input_tokens_total": 5871,
+            "prefix_tokens": 5504,
+            "round": 3
+          },
+          {
+            "append_tokens": 2946,
+            "decode_tokens": 5283,
+            "gap_s": 29.19600009918213,
+            "input_tokens_total": 6146,
+            "prefix_tokens": 3200,
+            "round": 4
+          }
+        ],
+        "words": 4609
+      },
+      {
+        "T": 6387,
+        "c_replay_s": 0.585124918148278,
+        "c_transfer_s": 4.10386061668396,
+        "decode_tokens": 53,
+        "ell_dec": 0.18278516338795647,
+        "ell_pre": 0.36557032677591295,
+        "id": "codex:e4fa4daa-9887-f50a-b110-c9378383c7b1",
+        "last_prompt": "Synthetic TraceLab-sized coding-agent session codex:e4fa4daa-9887-f50a-b110-c9378383c7b1.\nStable task state state_codex:e4fa4daa-9887-f50a-b110-c9378383c7b1 x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x\nUser follow-up 0: turn_codex:e4fa4daa-9887-f50a-b110-c9378383c7b1_0 x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x\nUser follow-up 1: turn_codex:e4fa4daa-9887-f50a-b110-c9378383c7b1_1 x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x\nUser follow-up 2: turn_codex:e4fa4daa-9887-f50a-b110-c9378383c7b1_2 x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x\nUser follow-up 3: turn_codex:e4fa4daa-9887-f50a-b110-c9378383c7b1_3 x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x\nUser follow-up 4: turn_codex:e4fa4daa-9887-f50a-b110-c9378383c7b1_4 x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x\nUser follow-up 5: turn_codex:e4fa4daa-9887-f50a-b110-c9378383c7b1_5 x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x\nUser follow-up 6: turn_codex:e4fa4daa-9887-f50a-b110-c9378383c7b1_6 x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x\nUser follow-up 7: turn_codex:e4fa4daa-9887-f50a-b110-c9378383c7b1_7 x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x\nReply with one concise progress sentence.",
+        "last_request_id": "chatcmpl-b0216d8998f64206940e417f10b31cc8",
+        "manifest_rank": 9,
+        "original_T": 6387,
+        "served_T": 6387,
+        "session_class": "agentic_tool_loop",
+        "session_kv_bytes": 219900000,
+        "source_node": 0,
+        "state": "active",
+        "turn_rate_hz": 0.4715392378921626,
+        "turns": [
+          {
+            "append_tokens": 918,
+            "decode_tokens": 61,
+            "gap_s": 0.0,
+            "input_tokens_total": 4118,
+            "prefix_tokens": 3200,
+            "round": 0
+          },
+          {
+            "append_tokens": 447,
+            "decode_tokens": 54,
+            "gap_s": 2.2269999980926514,
+            "input_tokens_total": 4415,
+            "prefix_tokens": 3968,
+            "round": 1
+          },
+          {
+            "append_tokens": 1742,
+            "decode_tokens": 52,
+            "gap_s": 1.7599999904632568,
+            "input_tokens_total": 4942,
+            "prefix_tokens": 3200,
+            "round": 2
+          },
+          {
+            "append_tokens": 305,
+            "decode_tokens": 52,
+            "gap_s": 2.0329999923706055,
+            "input_tokens_total": 5169,
+            "prefix_tokens": 4864,
+            "round": 3
+          },
+          {
+            "append_tokens": 849,
+            "decode_tokens": 53,
+            "gap_s": 2.184000015258789,
+            "input_tokens_total": 5585,
+            "prefix_tokens": 4736,
+            "round": 4
+          },
+          {
+            "append_tokens": 499,
+            "decode_tokens": 54,
+            "gap_s": 1.625,
+            "input_tokens_total": 6003,
+            "prefix_tokens": 5504,
+            "round": 5
+          },
+          {
+            "append_tokens": 217,
+            "decode_tokens": 53,
+            "gap_s": 1.7260000705718994,
+            "input_tokens_total": 6105,
+            "prefix_tokens": 5888,
+            "round": 6
+          },
+          {
+            "append_tokens": 371,
+            "decode_tokens": 129,
+            "gap_s": 3.2899999618530273,
+            "input_tokens_total": 6387,
+            "prefix_tokens": 6016,
+            "round": 7
+          }
+        ],
+        "words": 4790
+      },
+      {
+        "T": 6405,
+        "c_replay_s": 0.5876651369213488,
+        "c_transfer_s": 4.10386061668396,
+        "decode_tokens": 60,
+        "ell_dec": 0.04985195151086161,
+        "ell_pre": 0.09970390302172322,
+        "id": "codex:fdd895ad-51f8-486e-c57b-0cc8111eee93",
+        "last_prompt": "Synthetic TraceLab-sized coding-agent session codex:fdd895ad-51f8-486e-c57b-0cc8111eee93.\nStable task state state_codex:fdd895ad-51f8-486e-c57b-0cc8111eee93 x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x\nUser follow-up 0: turn_codex:fdd895ad-51f8-486e-c57b-0cc8111eee93_0 x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x\nUser follow-up 1: turn_codex:fdd895ad-51f8-486e-c57b-0cc8111eee93_1 x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x\nUser follow-up 2: turn_codex:fdd895ad-51f8-486e-c57b-0cc8111eee93_2 x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x\nUser follow-up 3: turn_codex:fdd895ad-51f8-486e-c57b-0cc8111eee93_3 x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x\nUser follow-up 4: turn_codex:fdd895ad-51f8-486e-c57b-0cc8111eee93_4 x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x\nReply with one concise progress sentence.",
+        "last_request_id": "chatcmpl-a5ff0d5b815a4c53aa0dcfecd16bc68e",
+        "manifest_rank": 10,
+        "original_T": 6405,
+        "served_T": 6405,
+        "session_class": "agentic_tool_loop",
+        "session_kv_bytes": 216100000,
+        "source_node": 0,
+        "state": "active",
+        "turn_rate_hz": 0.11551568128766541,
+        "turns": [
+          {
+            "append_tokens": 1068,
+            "decode_tokens": 65,
+            "gap_s": 0.0,
+            "input_tokens_total": 4268,
+            "prefix_tokens": 3200,
+            "round": 0
+          },
+          {
+            "append_tokens": 1174,
+            "decode_tokens": 58,
+            "gap_s": 2.4179999828338623,
+            "input_tokens_total": 4374,
+            "prefix_tokens": 3200,
+            "round": 1
+          },
+          {
+            "append_tokens": 487,
+            "decode_tokens": 60,
+            "gap_s": 2.061000108718872,
+            "input_tokens_total": 4583,
+            "prefix_tokens": 4096,
+            "round": 2
+          },
+          {
+            "append_tokens": 686,
+            "decode_tokens": 78,
+            "gap_s": 2.184000015258789,
+            "input_tokens_total": 5166,
+            "prefix_tokens": 4480,
+            "round": 3
+          },
+          {
+            "append_tokens": 1082,
+            "decode_tokens": 57,
+            "gap_s": 40.95599985122681,
+            "input_tokens_total": 5178,
+            "prefix_tokens": 4096,
+            "round": 4
+          },
+          {
+            "append_tokens": 263,
+            "decode_tokens": 60,
+            "gap_s": 1.9730000495910645,
+            "input_tokens_total": 5383,
+            "prefix_tokens": 5120,
+            "round": 5
+          },
+          {
+            "append_tokens": 3205,
+            "decode_tokens": 354,
+            "gap_s": 2.3489999771118164,
+            "input_tokens_total": 6405,
+            "prefix_tokens": 3200,
+            "round": 6
+          }
+        ],
+        "words": 4803
+      },
+      {
+        "T": 6653,
+        "c_replay_s": 0.6226637066836562,
+        "c_transfer_s": 4.10386061668396,
+        "decode_tokens": 73,
+        "ell_dec": 0.0025,
+        "ell_pre": 0.005,
+        "id": "codex:b3070edb-ef84-2a59-177e-4b7291e2aefe",
+        "last_prompt": "Synthetic TraceLab-sized coding-agent session codex:b3070edb-ef84-2a59-177e-4b7291e2aefe.\nStable task state state_codex:b3070edb-ef84-2a59-177e-4b7291e2aefe x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x\nUser follow-up 0: turn_codex:b3070edb-ef84-2a59-177e-4b7291e2aefe_0 x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x\nReply with one concise progress sentence.",
+        "last_request_id": "chatcmpl-c5a1e3a2e73e4483b91f08c156ecc41a",
+        "manifest_rank": 11,
+        "original_T": 6653,
+        "served_T": 6653,
+        "session_class": "agentic_tool_loop",
+        "session_kv_bytes": 157700000,
+        "source_node": 0,
+        "state": "active",
+        "turn_rate_hz": 0.0005466465188317228,
+        "turns": [
+          {
+            "append_tokens": 1031,
+            "decode_tokens": 28,
+            "gap_s": 0.0,
+            "input_tokens_total": 4231,
+            "prefix_tokens": 3200,
+            "round": 0
+          },
+          {
+            "append_tokens": 270,
+            "decode_tokens": 48,
+            "gap_s": 2.9070000648498535,
+            "input_tokens_total": 4366,
+            "prefix_tokens": 4096,
+            "round": 1
+          },
+          {
+            "append_tokens": 507,
+            "decode_tokens": 46,
+            "gap_s": 1.6659998893737793,
+            "input_tokens_total": 4731,
+            "prefix_tokens": 4224,
+            "round": 2
+          },
+          {
+            "append_tokens": 912,
+            "decode_tokens": 98,
+            "gap_s": 1.8930001258850098,
+            "input_tokens_total": 5520,
+            "prefix_tokens": 4608,
+            "round": 3
+          },
+          {
+            "append_tokens": 166,
+            "decode_tokens": 898,
+            "gap_s": 3.9739999771118164,
+            "input_tokens_total": 5670,
+            "prefix_tokens": 5504,
+            "round": 4
+          },
+          {
+            "append_tokens": 893,
+            "decode_tokens": 334,
+            "gap_s": 15.957000017166138,
+            "input_tokens_total": 6653,
+            "prefix_tokens": 5760,
+            "round": 5
+          },
+          {
+            "append_tokens": 3065,
+            "decode_tokens": 572,
+            "gap_s": 10896.62400007248,
+            "input_tokens_total": 6265,
+            "prefix_tokens": 3200,
+            "round": 6
+          },
+          {
+            "append_tokens": 394,
+            "decode_tokens": 38,
+            "gap_s": 1882.3289999961853,
+            "input_tokens_total": 6538,
+            "prefix_tokens": 6144,
+            "round": 7
+          }
+        ],
+        "words": 4989
+      },
+      {
+        "T": 7017,
+        "c_replay_s": 0.6740325752057528,
+        "c_transfer_s": 4.395460273693889,
+        "decode_tokens": 75,
+        "ell_dec": 0.14967113587796702,
+        "ell_pre": 0.29934227175593403,
+        "id": "claude:beb7fbf4-6556-b9f2-f2be-d69abc179398",
+        "last_prompt": "Synthetic TraceLab-sized coding-agent session claude:beb7fbf4-6556-b9f2-f2be-d69abc179398.\nStable task state state_claude:beb7fbf4-6556-b9f2-f2be-d69abc179398 x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x\nUser follow-up 3: turn_claude:beb7fbf4-6556-b9f2-f2be-d69abc179398_3 x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x\nUser follow-up 4: turn_claude:beb7fbf4-6556-b9f2-f2be-d69abc179398_4 x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x\nUser follow-up 5: turn_claude:beb7fbf4-6556-b9f2-f2be-d69abc179398_5 x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x\nUser follow-up 6: turn_claude:beb7fbf4-6556-b9f2-f2be-d69abc179398_6 x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x\nUser follow-up 7: turn_claude:beb7fbf4-6556-b9f2-f2be-d69abc179398_7 x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x\nReply with one concise progress sentence.",
+        "last_request_id": "chatcmpl-95d0853d67a7462892ddee105e86932c",
+        "manifest_rank": 12,
+        "original_T": 7017,
+        "served_T": 7017,
+        "session_class": "agentic_tool_loop",
+        "session_kv_bytes": 237400000,
+        "source_node": 0,
+        "state": "active",
+        "turn_rate_hz": 0.28170147718007305,
+        "turns": [
+          {
+            "append_tokens": 4314,
+            "decode_tokens": 122,
+            "gap_s": 0.0,
+            "input_tokens_total": 4314,
+            "prefix_tokens": 0,
+            "round": 0
+          },
+          {
+            "append_tokens": 2207,
+            "decode_tokens": 75,
+            "gap_s": 2.4790000915527344,
+            "input_tokens_total": 6518,
+            "prefix_tokens": 4311,
+            "round": 1
+          },
+          {
+            "append_tokens": 307,
+            "decode_tokens": 67,
+            "gap_s": 1.8409998416900635,
+            "input_tokens_total": 6824,
+            "prefix_tokens": 6517,
+            "round": 2
+          },
+          {
+            "append_tokens": 4316,
+            "decode_tokens": 122,
+            "gap_s": 1.6419999599456787,
+            "input_tokens_total": 4316,
+            "prefix_tokens": 0,
+            "round": 3
+          },
+          {
+            "append_tokens": 2207,
+            "decode_tokens": 75,
+            "gap_s": 4.391000032424927,
+            "input_tokens_total": 6520,
+            "prefix_tokens": 4313,
+            "round": 4
+          },
+          {
+            "append_tokens": 307,
+            "decode_tokens": 67,
+            "gap_s": 2.2239999771118164,
+            "input_tokens_total": 6826,
+            "prefix_tokens": 6519,
+            "round": 5
+          },
+          {
+            "append_tokens": 192,
+            "decode_tokens": 1,
+            "gap_s": 2.9760000705718994,
+            "input_tokens_total": 7015,
+            "prefix_tokens": 6823,
+            "round": 6
+          },
+          {
+            "append_tokens": 192,
+            "decode_tokens": 391,
+            "gap_s": 9.296000003814697,
+            "input_tokens_total": 7017,
+            "prefix_tokens": 6825,
+            "round": 7
+          }
+        ],
+        "words": 5262
+      },
+      {
+        "T": 7022,
+        "c_replay_s": 0.6747381915316057,
+        "c_transfer_s": 4.412514089952367,
+        "decode_tokens": 180,
+        "ell_dec": 0.22680401167885217,
+        "ell_pre": 0.45360802335770434,
+        "id": "claude:3ab49446-c806-6a06-d8f3-51d00da9a76a",
+        "last_prompt": "Synthetic TraceLab-sized coding-agent session claude:3ab49446-c806-6a06-d8f3-51d00da9a76a.\nStable task state state_claude:3ab49446-c806-6a06-d8f3-51d00da9a76a x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x\nUser follow-up 0: turn_claude:3ab49446-c806-6a06-d8f3-51d00da9a76a_0 x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x\nUser follow-up 1: turn_claude:3ab49446-c806-6a06-d8f3-51d00da9a76a_1 x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x\nUser follow-up 2: turn_claude:3ab49446-c806-6a06-d8f3-51d00da9a76a_2 x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x\nUser follow-up 3: turn_claude:3ab49446-c806-6a06-d8f3-51d00da9a76a_3 x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x\nUser follow-up 4: turn_claude:3ab49446-c806-6a06-d8f3-51d00da9a76a_4 x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x\nReply with one concise progress sentence.",
+        "last_request_id": "chatcmpl-1b96778947f540b5922ade13186ad4b0",
+        "manifest_rank": 13,
+        "original_T": 7022,
+        "served_T": 7022,
+        "session_class": "agentic_tool_loop",
+        "session_kv_bytes": 238400000,
+        "source_node": 0,
+        "state": "active",
+        "turn_rate_hz": 0.1909750638844904,
+        "turns": [
+          {
+            "append_tokens": 4466,
+            "decode_tokens": 186,
+            "gap_s": 0.0,
+            "input_tokens_total": 4466,
+            "prefix_tokens": 0,
+            "round": 0
+          },
+          {
+            "append_tokens": 334,
+            "decode_tokens": 121,
+            "gap_s": 3.109999895095825,
+            "input_tokens_total": 4797,
+            "prefix_tokens": 4463,
+            "round": 1
+          },
+          {
+            "append_tokens": 223,
+            "decode_tokens": 1,
+            "gap_s": 2.2690000534057617,
+            "input_tokens_total": 5019,
+            "prefix_tokens": 4796,
+            "round": 2
+          },
+          {
+            "append_tokens": 170,
+            "decode_tokens": 667,
+            "gap_s": 4.236999988555908,
+            "input_tokens_total": 5188,
+            "prefix_tokens": 5018,
+            "round": 3
+          },
+          {
+            "append_tokens": 753,
+            "decode_tokens": 63,
+            "gap_s": 11.6489999294281,
+            "input_tokens_total": 5940,
+            "prefix_tokens": 5187,
+            "round": 4
+          },
+          {
+            "append_tokens": 105,
+            "decode_tokens": 175,
+            "gap_s": 2.638000011444092,
+            "input_tokens_total": 6044,
+            "prefix_tokens": 5939,
+            "round": 5
+          },
+          {
+            "append_tokens": 244,
+            "decode_tokens": 683,
+            "gap_s": 5.4720001220703125,
+            "input_tokens_total": 6287,
+            "prefix_tokens": 6043,
+            "round": 6
+          },
+          {
+            "append_tokens": 736,
+            "decode_tokens": 325,
+            "gap_s": 7.2790000438690186,
+            "input_tokens_total": 7022,
+            "prefix_tokens": 6286,
+            "round": 7
+          }
+        ],
+        "words": 5266
+      },
+      {
+        "T": 7091,
+        "c_replay_s": 0.6844756968283767,
+        "c_transfer_s": 4.10386061668396,
+        "decode_tokens": 245,
+        "ell_dec": 0.0025,
+        "ell_pre": 0.005,
+        "id": "codex:41e93e85-eff7-106f-9736-224049baedb2",
+        "last_prompt": "Synthetic TraceLab-sized coding-agent session codex:41e93e85-eff7-106f-9736-224049baedb2.\nStable task state state_codex:41e93e85-eff7-106f-9736-224049baedb2 x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x\nUser follow-up 0: turn_codex:41e93e85-eff7-106f-9736-224049baedb2_0 x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x\nReply with one concise progress sentence.",
+        "last_request_id": "chatcmpl-bd89b018237b4aa39eaea2303ede6f9a",
+        "manifest_rank": 14,
+        "original_T": 7091,
+        "served_T": 7091,
+        "session_class": "agentic_tool_loop",
+        "session_kv_bytes": 166400000,
+        "source_node": 0,
+        "state": "active",
+        "turn_rate_hz": 0.000660701359267604,
+        "turns": [
+          {
+            "append_tokens": 1077,
+            "decode_tokens": 330,
+            "gap_s": 0.0,
+            "input_tokens_total": 4277,
+            "prefix_tokens": 3200,
+            "round": 0
+          },
+          {
+            "append_tokens": 1429,
+            "decode_tokens": 445,
+            "gap_s": 608.2869999408722,
+            "input_tokens_total": 4629,
+            "prefix_tokens": 3200,
+            "round": 1
+          },
+          {
+            "append_tokens": 1030,
+            "decode_tokens": 34,
+            "gap_s": 71.42000007629395,
+            "input_tokens_total": 5126,
+            "prefix_tokens": 4096,
+            "round": 2
+          },
+          {
+            "append_tokens": 1895,
+            "decode_tokens": 245,
+            "gap_s": 2945.1340000629425,
+            "input_tokens_total": 5095,
+            "prefix_tokens": 3200,
+            "round": 3
+          },
+          {
+            "append_tokens": 2293,
+            "decode_tokens": 182,
+            "gap_s": 2210.638000011444,
+            "input_tokens_total": 5493,
+            "prefix_tokens": 3200,
+            "round": 4
+          },
+          {
+            "append_tokens": 2633,
+            "decode_tokens": 379,
+            "gap_s": 645.316999912262,
+            "input_tokens_total": 5833,
+            "prefix_tokens": 3200,
+            "round": 5
+          },
+          {
+            "append_tokens": 922,
+            "decode_tokens": 256,
+            "gap_s": 33.13800001144409,
+            "input_tokens_total": 6298,
+            "prefix_tokens": 5376,
+            "round": 6
+          },
+          {
+            "append_tokens": 939,
+            "decode_tokens": 237,
+            "gap_s": 108.27300000190735,
+            "input_tokens_total": 6699,
+            "prefix_tokens": 5760,
+            "round": 7
+          },
+          {
+            "append_tokens": 947,
+            "decode_tokens": 70,
+            "gap_s": 5486.138000011444,
+            "input_tokens_total": 7091,
+            "prefix_tokens": 6144,
+            "round": 8
+          }
+        ],
+        "words": 5318
+      },
+      {
+        "T": 7212,
+        "c_replay_s": 0.7015516119140187,
+        "c_transfer_s": 4.47902397336043,
+        "decode_tokens": 53,
+        "ell_dec": 0.19823600728199134,
+        "ell_pre": 0.3964720145639827,
+        "id": "codex:1db326cd-3c43-ad82-b907-27bc1f12c287",
+        "last_prompt": "Synthetic TraceLab-sized coding-agent session codex:1db326cd-3c43-ad82-b907-27bc1f12c287.\nStable task state state_codex:1db326cd-3c43-ad82-b907-27bc1f12c287 x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x\nUser follow-up 0: turn_codex:1db326cd-3c43-ad82-b907-27bc1f12c287_0 x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x\nUser follow-up 1: turn_codex:1db326cd-3c43-ad82-b907-27bc1f12c287_1 x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x\nUser follow-up 2: turn_codex:1db326cd-3c43-ad82-b907-27bc1f12c287_2 x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x\nUser follow-up 3: turn_codex:1db326cd-3c43-ad82-b907-27bc1f12c287_3 x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x\nReply with one concise progress sentence.",
+        "last_request_id": "chatcmpl-c0afe79e9932420494b54d280c1ee400",
+        "manifest_rank": 15,
+        "original_T": 7212,
+        "served_T": 7212,
+        "session_class": "agentic_tool_loop",
+        "session_kv_bytes": 242300000,
+        "source_node": 0,
+        "state": "active",
+        "turn_rate_hz": 0.5009183633903704,
+        "turns": [
+          {
+            "append_tokens": 931,
+            "decode_tokens": 34,
+            "gap_s": 0.0,
+            "input_tokens_total": 4131,
+            "prefix_tokens": 3200,
+            "round": 0
+          },
+          {
+            "append_tokens": 180,
+            "decode_tokens": 53,
+            "gap_s": 1.6459999084472656,
+            "input_tokens_total": 4276,
+            "prefix_tokens": 4096,
+            "round": 1
+          },
+          {
+            "append_tokens": 2298,
+            "decode_tokens": 56,
+            "gap_s": 2.61299991607666,
+            "input_tokens_total": 5498,
+            "prefix_tokens": 3200,
+            "round": 2
+          },
+          {
+            "append_tokens": 1836,
+            "decode_tokens": 54,
+            "gap_s": 1.7300000190734863,
+            "input_tokens_total": 7212,
+            "prefix_tokens": 5376,
+            "round": 3
+          }
+        ],
+        "words": 5409
+      }
+    ],
+    "settle_s": 30.0,
+    "source": {
+      "path": "/scratch/users/gfw/ptsim/tracelab/syfi_coding_trace.jsonl.gz",
+      "seed": 0,
+      "type": "tracelab",
+      "workload": "small"
+    },
+    "target_w": "all",
+    "workload": {
+      "name": "small",
+      "selection": "served_T_quantile"
+    }
+  },
+  "movement": {
+    "lambda_src_bytes_per_s": 125000000.0,
+    "mu_bytes_per_s": 1000000000.0
+  },
+  "planned_hit": true,
+  "planned_shortfall_w": 0.0,
+  "planned_source_drop_w": 175.51973437417638,
+  "policy": "all-s",
+  "power_curve": {
+    "log_shape": 8.55,
+    "name": "log",
+    "p_busy_w": 390.0,
+    "p_idle_w": 67.12041959182154,
+    "rho_star": 5.656253230431631
+  },
+  "profile": {
+    "mbps": 1000.0,
+    "points": [
+      {
+        "action": "R",
+        "api_request_bytes": 9058,
+        "completion_s": 1.2231361865997314,
+        "first_token_s": 1.2231361865997314,
+        "kv_bytes": 36,
+        "proxy_delta": {
+          "api/client_to_target": 9058,
+          "api/target_to_client": 688,
+          "kv/client_to_target": 186,
+          "kv/target_to_client": 36
+        },
+        "requested_tokens": 4488,
+        "tokens": 4492
+      },
+      {
+        "action": "S",
+        "api_request_bytes": 9018,
+        "completion_s": 4.10386061668396,
+        "first_token_s": 4.10386061668396,
+        "kv_bytes": 220301208,
+        "proxy_delta": {
+          "api/client_to_target": 9018,
+          "api/target_to_client": 688,
+          "kv/client_to_target": 10044,
+          "kv/target_to_client": 220301208
+        },
+        "requested_tokens": 4488,
+        "tokens": 4478
+      },
+      {
+        "action": "R",
+        "api_request_bytes": 12437,
+        "completion_s": 0.5700247287750244,
+        "first_token_s": 0.5700247287750244,
+        "kv_bytes": 36,
+        "proxy_delta": {
+          "api/client_to_target": 12437,
+          "api/target_to_client": 688,
+          "kv/client_to_target": 186,
+          "kv/target_to_client": 36
+        },
+        "requested_tokens": 6146,
+        "tokens": 6280
+      },
+      {
+        "action": "S",
+        "api_request_bytes": 12397,
+        "completion_s": 5.602627277374268,
+        "first_token_s": 5.602627277374268,
+        "kv_bytes": 308185740,
+        "proxy_delta": {
+          "api/client_to_target": 12397,
+          "api/target_to_client": 688,
+          "kv/client_to_target": 13950,
+          "kv/target_to_client": 308185740
+        },
+        "requested_tokens": 6146,
+        "tokens": 6266
+      },
+      {
+        "action": "R",
+        "api_request_bytes": 14352,
+        "completion_s": 0.7174985408782959,
+        "first_token_s": 0.7174985408782959,
+        "kv_bytes": 36,
+        "proxy_delta": {
+          "api/client_to_target": 14352,
+          "api/target_to_client": 688,
+          "kv/client_to_target": 186,
+          "kv/target_to_client": 36
+        },
+        "requested_tokens": 7212,
+        "tokens": 7325
+      },
+      {
+        "action": "S",
+        "api_request_bytes": 14311,
+        "completion_s": 6.539128541946411,
+        "first_token_s": 6.539128541946411,
+        "kv_bytes": 359500860,
+        "proxy_delta": {
+          "api/client_to_target": 14311,
+          "api/target_to_client": 688,
+          "kv/client_to_target": 16182,
+          "kv/target_to_client": 359500860
+        },
+        "requested_tokens": 7212,
+        "tokens": 7310
+      }
+    ],
+    "schema": "queue-haul-stage1c-live-profile-v1"
+  },
+  "profile_path": "queue-haul/outputs/stage1c_grid_workloads_256g/live_profile_small.json",
+  "proxy_audit": [
+    {
+      "bytes": 0,
+      "bytes_per_s": 0.0,
+      "direction": "client_to_target",
+      "ok": 1,
+      "phase": "baseline",
+      "route": "api",
+      "target_bytes_per_s": 125000000.0,
+      "target_ratio": 0.0,
+      "window_s": 0.0
+    },
+    {
+      "bytes": 0,
+      "bytes_per_s": 0.0,
+      "direction": "target_to_client",
+      "ok": 1,
+      "phase": "baseline",
+      "route": "kv",
+      "target_bytes_per_s": 125000000.0,
+      "target_ratio": 0.0,
+      "window_s": 0.0
+    },
+    {
+      "bytes": 157895,
+      "bytes_per_s": 4110.183808595039,
+      "direction": "client_to_target",
+      "ok": 1,
+      "phase": "drain",
+      "route": "api",
+      "target_bytes_per_s": 125000000.0,
+      "target_ratio": 3.2881470468760316e-05,
+      "window_s": 38.41555690765381
+    },
+    {
+      "bytes": 1873988647,
+      "bytes_per_s": 47696095.33281102,
+      "direction": "target_to_client",
+      "ok": 1,
+      "phase": "drain",
+      "route": "kv",
+      "target_bytes_per_s": 125000000.0,
+      "target_ratio": 0.3815687626624882,
+      "window_s": 39.29018998146057
+    },
+    {
+      "bytes": 449196,
+      "bytes_per_s": 17079.236779945386,
+      "direction": "client_to_target",
+      "ok": 1,
+      "phase": "post",
+      "route": "api",
+      "target_bytes_per_s": 125000000.0,
+      "target_ratio": 0.00013663389423956309,
+      "window_s": 26.30070686340332
+    },
+    {
+      "bytes": 441128477,
+      "bytes_per_s": 15022010.03060597,
+      "direction": "target_to_client",
+      "ok": 1,
+      "phase": "post",
+      "route": "kv",
+      "target_bytes_per_s": 125000000.0,
+      "target_ratio": 0.12017608024484776,
+      "window_s": 29.36547613143921
+    }
+  ],
+  "request_counts": [
+    {
+      "phase": "baseline",
+      "port": 8100,
+      "requests": 71
+    },
+    {
+      "phase": "drain",
+      "port": 8100,
+      "requests": 87
+    },
+    {
+      "phase": "drain",
+      "port": 8400,
+      "requests": 9
+    },
+    {
+      "phase": "post",
+      "port": 8100,
+      "requests": 13
+    },
+    {
+      "phase": "post",
+      "port": 8400,
+      "requests": 49
+    }
+  ],
+  "scheduler": {
+    "kv_concurrency": 8,
+    "replay_concurrency": 1,
+    "warm_movement": true
+  },
+  "schema": "queue-haul-stage1c-live-v1",
+  "sessions": [
+    {
+      "action": "S",
+      "boundary_ready_ts": 1783665321.691734,
+      "cache_bust_after_switch": false,
+      "completion_s": 37.15762448310852,
+      "deadline_met": false,
+      "deadline_s": 30.0,
+      "dispatch_rank": 0,
+      "downtime_s": 1.71661376953125e-05,
+      "first_token_s": 35.14003658294678,
+      "fixture_index": 2,
+      "http_status": 200,
+      "id": "codex:a9de70aa-f71f-9b95-5469-d6b3ec0b3fd5",
+      "move_end_ts": 1783665321.6917512,
+      "move_start_ts": 1783665284.5341268,
+      "planned_finish_s": 4.10386061668396,
+      "predicted_cumulative_source_drop_w": 11.523406837507082,
+      "prompt_sha256": "7ea9207c4d89c31aa6db235519acc627a97a90df3763c4ca9b4d4fe51bfa7ec4",
+      "proxy_delta": {
+        "api/client_to_target": 157895,
+        "api/target_to_client": 288869,
+        "kv/client_to_target": 100812,
+        "kv/target_to_client": 1866583096
+      },
+      "served_T": 4890,
+      "session_kv_bytes": 164100000,
+      "sink_ready_ts": 1783665319.7135983,
+      "sink_warm_s": 35.179471492767334,
+      "source_boundary_wait_s": 1.9781172275543213,
+      "switch_downtime_s": 1.71661376953125e-05,
+      "switch_end_ts": 1783665321.6917512,
+      "switch_request_ts": 1783665319.7136168,
+      "warm_move": true,
+      "y_R": 0.0,
+      "y_S": 1.0
+    },
+    {
+      "action": "S",
+      "boundary_ready_ts": 1783665321.8226418,
+      "cache_bust_after_switch": false,
+      "completion_s": 37.28707504272461,
+      "deadline_met": false,
+      "deadline_s": 30.0,
+      "dispatch_rank": 1,
+      "downtime_s": 2.9087066650390625e-05,
+      "first_token_s": 36.78051471710205,
+      "fixture_index": 4,
+      "http_status": 200,
+      "id": "codex:362639e1-f680-4bda-bd1e-8f149f7717ab",
+      "move_end_ts": 1783665321.822671,
+      "move_start_ts": 1783665284.535596,
+      "planned_finish_s": 4.10386061668396,
+      "predicted_cumulative_source_drop_w": 24.913689057806664,
+      "prompt_sha256": "376fd87b256a837f3be17fa1ba5164495f49958da1e3d0e9b31d0f98b0d87327",
+      "proxy_delta": {
+        "api/client_to_target": 157895,
+        "api/target_to_client": 288869,
+        "kv/client_to_target": 100998,
+        "kv/target_to_client": 1873333287
+      },
+      "served_T": 5235,
+      "session_kv_bytes": 178100000,
+      "sink_ready_ts": 1783665321.5427725,
+      "sink_warm_s": 37.007176637649536,
+      "source_boundary_wait_s": 0.27980637550354004,
+      "switch_downtime_s": 2.9087066650390625e-05,
+      "switch_end_ts": 1783665321.822671,
+      "switch_request_ts": 1783665321.5428355,
+      "warm_move": true,
+      "y_R": 0.0,
+      "y_S": 1.0
+    },
+    {
+      "action": "S",
+      "boundary_ready_ts": 1783665318.5273132,
+      "cache_bust_after_switch": false,
+      "completion_s": 33.991140842437744,
+      "deadline_met": false,
+      "deadline_s": 30.0,
+      "dispatch_rank": 2,
+      "downtime_s": 5.4836273193359375e-06,
+      "first_token_s": 33.99107646942139,
+      "fixture_index": 0,
+      "http_status": 200,
+      "id": "codex:e6744833-786a-9c87-c539-3a40cda50680",
+      "move_end_ts": 1783665318.5273187,
+      "move_start_ts": 1783665284.5361779,
+      "planned_finish_s": 4.10386061668396,
+      "predicted_cumulative_source_drop_w": 38.73118861871603,
+      "prompt_sha256": "4ae2630e071702f4641d3e8009fabaa475574e4bb0baa38775f5e15a747632b9",
+      "proxy_delta": {
+        "api/client_to_target": 103323,
+        "api/target_to_client": 261794,
+        "kv/client_to_target": 91698,
+        "kv/target_to_client": 1754842452
+      },
+      "served_T": 4488,
+      "session_kv_bytes": 147300000,
+      "sink_ready_ts": 1783665318.5272543,
+      "sink_warm_s": 33.99107646942139,
+      "source_boundary_wait_s": 2.1696090698242188e-05,
+      "switch_downtime_s": 5.4836273193359375e-06,
+      "switch_end_ts": 1783665318.5273187,
+      "switch_request_ts": 1783665318.5272915,
+      "warm_move": true,
+      "y_R": 0.0,
+      "y_S": 1.0
+    },
+    {
+      "action": "S",
+      "boundary_ready_ts": 1783665320.3616886,
+      "cache_bust_after_switch": false,
+      "completion_s": 35.82660174369812,
+      "deadline_met": false,
+      "deadline_s": 30.0,
+      "dispatch_rank": 3,
+      "downtime_s": 1.1682510375976562e-05,
+      "first_token_s": 35.48428988456726,
+      "fixture_index": 6,
+      "http_status": 200,
+      "id": "codex:e717fd54-aecf-8710-559b-8d23833866c4",
+      "move_end_ts": 1783665320.3617003,
+      "move_start_ts": 1783665284.5350986,
+      "planned_finish_s": 4.10386061668396,
+      "predicted_cumulative_source_drop_w": 55.15862624110508,
+      "prompt_sha256": "913697d8d421e635a86305b3ead85cd3b2bb96703a2046e51412d0d6dae1c069",
+      "proxy_delta": {
+        "api/client_to_target": 131909,
+        "api/target_to_client": 288422,
+        "kv/client_to_target": 99696,
+        "kv/target_to_client": 1792527200
+      },
+      "served_T": 5624,
+      "session_kv_bytes": 190800000,
+      "sink_ready_ts": 1783665320.0193884,
+      "sink_warm_s": 35.48428988456726,
+      "source_boundary_wait_s": 0.34227895736694336,
+      "switch_downtime_s": 1.1682510375976562e-05,
+      "switch_end_ts": 1783665320.3617003,
+      "switch_request_ts": 1783665320.0194097,
+      "warm_move": true,
+      "y_R": 0.0,
+      "y_S": 1.0
+    },
+    {
+      "action": "S",
+      "boundary_ready_ts": 1783665319.6940653,
+      "cache_bust_after_switch": false,
+      "completion_s": 35.15622138977051,
+      "deadline_met": false,
+      "deadline_s": 30.0,
+      "dispatch_rank": 4,
+      "downtime_s": 4.5299530029296875e-06,
+      "first_token_s": 34.94321799278259,
+      "fixture_index": 13,
+      "http_status": 200,
+      "id": "claude:3ab49446-c806-6a06-d8f3-51d00da9a76a",
+      "move_end_ts": 1783665319.6940699,
+      "move_start_ts": 1783665284.5378485,
+      "planned_finish_s": 4.412514089952367,
+      "predicted_cumulative_source_drop_w": 76.73978265260831,
+      "prompt_sha256": "858216d6008b600540ecf90799ff7cdc7edef30aba178a8fac6415d22753291e",
+      "proxy_delta": {
+        "api/client_to_target": 113834,
+        "api/target_to_client": 288124,
+        "kv/client_to_target": 99324,
+        "kv/target_to_client": 1755237091
+      },
+      "served_T": 7022,
+      "session_kv_bytes": 238400000,
+      "sink_ready_ts": 1783665319.6939251,
+      "sink_warm_s": 35.15607666969299,
+      "source_boundary_wait_s": 2.4557113647460938e-05,
+      "switch_downtime_s": 4.5299530029296875e-06,
+      "switch_end_ts": 1783665319.6940699,
+      "switch_request_ts": 1783665319.6940408,
+      "warm_move": true,
+      "y_R": 0.0,
+      "y_S": 1.0
+    },
+    {
+      "action": "S",
+      "boundary_ready_ts": 1783665317.4329746,
+      "cache_bust_after_switch": false,
+      "completion_s": 32.89415526390076,
+      "deadline_met": false,
+      "deadline_s": 30.0,
+      "dispatch_rank": 5,
+      "downtime_s": 2.4080276489257812e-05,
+      "first_token_s": 32.894009590148926,
+      "fixture_index": 9,
+      "http_status": 200,
+      "id": "codex:e4fa4daa-9887-f50a-b110-c9378383c7b1",
+      "move_end_ts": 1783665317.4329987,
+      "move_start_ts": 1783665284.5388434,
+      "planned_finish_s": 4.10386061668396,
+      "predicted_cumulative_source_drop_w": 99.45949243748834,
+      "prompt_sha256": "8229d831f32ca7c8d89b6bcc493e8a2b2159c388f06198d1e1e6d1f3609d1787",
+      "proxy_delta": {
+        "api/client_to_target": 92320,
+        "api/target_to_client": 228537,
+        "kv/client_to_target": 87420,
+        "kv/target_to_client": 1751597592
+      },
+      "served_T": 6387,
+      "session_kv_bytes": 219900000,
+      "sink_ready_ts": 1783665317.432853,
+      "sink_warm_s": 32.894009590148926,
+      "source_boundary_wait_s": 3.504753112792969e-05,
+      "switch_downtime_s": 2.4080276489257812e-05,
+      "switch_end_ts": 1783665317.4329987,
+      "switch_request_ts": 1783665317.4329395,
+      "warm_move": true,
+      "y_R": 0.0,
+      "y_S": 1.0
+    },
+    {
+      "action": "S",
+      "boundary_ready_ts": 1783665318.599296,
+      "cache_bust_after_switch": false,
+      "completion_s": 34.062485218048096,
+      "deadline_met": false,
+      "deadline_s": 30.0,
+      "dispatch_rank": 6,
+      "downtime_s": 2.002716064453125e-05,
+      "first_token_s": 32.895911693573,
+      "fixture_index": 15,
+      "http_status": 200,
+      "id": "codex:1db326cd-3c43-ad82-b907-27bc1f12c287",
+      "move_end_ts": 1783665318.5993161,
+      "move_start_ts": 1783665284.536831,
+      "planned_finish_s": 4.47902397336043,
+      "predicted_cumulative_source_drop_w": 134.16702330229532,
+      "prompt_sha256": "fd3d55fe05f63b379ce145573192dad92d07ee95cbfa54eb4a7bef50cbd9e976",
+      "proxy_delta": {
+        "api/client_to_target": 103323,
+        "api/target_to_client": 263263,
+        "kv/client_to_target": 91698,
+        "kv/target_to_client": 1754842452
+      },
+      "served_T": 7212,
+      "session_kv_bytes": 242300000,
+      "sink_ready_ts": 1783665317.4327426,
+      "sink_warm_s": 32.895911693573,
+      "source_boundary_wait_s": 1.166186809539795,
+      "switch_downtime_s": 2.002716064453125e-05,
+      "switch_end_ts": 1783665318.5993161,
+      "switch_request_ts": 1783665317.4331093,
+      "warm_move": true,
+      "y_R": 0.0,
+      "y_S": 1.0
+    },
+    {
+      "action": "S",
+      "boundary_ready_ts": 1783665318.0872939,
+      "cache_bust_after_switch": false,
+      "completion_s": 33.54724431037903,
+      "deadline_met": false,
+      "deadline_s": 30.0,
+      "dispatch_rank": 7,
+      "downtime_s": 4.76837158203125e-06,
+      "first_token_s": 33.547146797180176,
+      "fixture_index": 12,
+      "http_status": 200,
+      "id": "claude:beb7fbf4-6556-b9f2-f2be-d69abc179398",
+      "move_end_ts": 1783665318.0872986,
+      "move_start_ts": 1783665284.5400543,
+      "planned_finish_s": 4.395460273693889,
+      "predicted_cumulative_source_drop_w": 175.51973437417638,
+      "prompt_sha256": "962ca248578ba4de0629fb9fa00a992f4ecc5e7dc19804c0dbbb6039c1ec7983",
+      "proxy_delta": {
+        "api/client_to_target": 69446,
+        "api/target_to_client": 253557,
+        "kv/client_to_target": 87420,
+        "kv/target_to_client": 1751597592
+      },
+      "served_T": 7017,
+      "session_kv_bytes": 237400000,
+      "sink_ready_ts": 1783665318.087201,
+      "sink_warm_s": 33.547146797180176,
+      "source_boundary_wait_s": 2.288818359375e-05,
+      "switch_downtime_s": 4.76837158203125e-06,
+      "switch_end_ts": 1783665318.0872986,
+      "switch_request_ts": 1783665318.087271,
+      "warm_move": true,
+      "y_R": 0.0,
+      "y_S": 1.0
+    }
+  ],
+  "solver": {
+    "cost_s": 0.0,
+    "feasible": true,
+    "method": "all-s",
+    "shortfall_w": 0.0
+  },
+  "target_frac": 0.45,
+  "target_w": 145.2958111836803,
+  "windows": {
+    "baseline": [
+      1783665254.52818,
+      1783665284.5282724
+    ],
+    "drain": [
+      1783665284.5282724,
+      1783665323.8750658
+    ],
+    "post": [
+      1783665323.8750658,
+      1783665353.8751464
+    ]
+  }
+}

@@ -1,0 +1,37 @@
+bash: warning: setlocale: LC_ALL: cannot change locale (C.UTF-8)
++ cd /home/groups/ramr/gfw/coding-progress-ledger/agent-migrate
++ module load gcc/14.2.0 openblas/0.3.28
++ '[' -z '' ']'
++ case "$-" in
++ __lmod_sh_dbg=x
++ '[' -n x ']'
++ set +x
+Shell debugging temporarily silenced: export LMOD_SH_DBG_ON=1 for Lmod's output
+Shell debugging restarted
++ unset __lmod_sh_dbg
++ return 0
++ export QH_APPTAINER_IMAGE=/scratch/users/gfw/ptsim/vllm-openai-v0.10.1.1.sandbox
++ QH_APPTAINER_IMAGE=/scratch/users/gfw/ptsim/vllm-openai-v0.10.1.1.sandbox
++ export QH_APPTAINER_GPU_MODE=nv
++ QH_APPTAINER_GPU_MODE=nv
++ export QH_PORT_OFFSET=26602
++ QH_PORT_OFFSET=26602
++ .venv/bin/python queue-haul/stage1b_drain_sink.py preflight --required-gpus 2
++ .venv/bin/python queue-haul/stage1b_drain_sink.py smoke2-live --run-root queue-haul/outputs/stage1b_old_smoke2_live_33745602 --mbps 1000 --max-model-len 8192 --max-num-seqs 8 --max-num-batched-tokens 1024
+Traceback (most recent call last):
+  File "/home/groups/ramr/gfw/coding-progress-ledger/agent-migrate/queue-haul/stage1b_drain_sink.py", line 957, in <module>
+    main()
+  File "/home/groups/ramr/gfw/coding-progress-ledger/agent-migrate/queue-haul/stage1b_drain_sink.py", line 953, in main
+    print(smoke2_live(cfg, args.run_root, args.mbps, extra))
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/groups/ramr/gfw/coding-progress-ledger/agent-migrate/queue-haul/stage1b_drain_sink.py", line 813, in smoke2_live
+    manifest = run_smoke2_probe(cfg, run_root, mbps)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/groups/ramr/gfw/coding-progress-ledger/agent-migrate/queue-haul/stage1b_drain_sink.py", line 746, in run_smoke2_probe
+    source, stored0 = warm_source(cfg, run_root, prompt)
+                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/groups/ramr/gfw/coding-progress-ledger/agent-migrate/queue-haul/stage1b_drain_sink.py", line 727, in warm_source
+    check_chat(source, label)
+  File "/home/groups/ramr/gfw/coding-progress-ledger/agent-migrate/queue-haul/stage1b_drain_sink.py", line 720, in check_chat
+    raise RuntimeError(f"{label} failed {result['status']}: {result['response_text']}")
+RuntimeError: source warm failed 400: {"error":{"message":"max_tokens must be at least 1, got -16467.","type":"BadRequestError","param":null,"code":400}}

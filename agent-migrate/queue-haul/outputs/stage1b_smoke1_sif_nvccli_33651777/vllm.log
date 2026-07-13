@@ -1,0 +1,220 @@
+INFO:    Setting 'NVIDIA_VISIBLE_DEVICES=all' to emulate legacy GPU binding.
+INFO:    Setting --writable-tmpfs (required by nvidia-container-cli)
+(APIServer pid=13972) INFO 07-12 09:50:38 [api_utils.py:339] 
+(APIServer pid=13972) INFO 07-12 09:50:38 [api_utils.py:339]        █     █     █▄   ▄█
+(APIServer pid=13972) INFO 07-12 09:50:38 [api_utils.py:339]  ▄▄ ▄█ █     █     █ ▀▄▀ █  version 0.24.0
+(APIServer pid=13972) INFO 07-12 09:50:38 [api_utils.py:339]   █▄█▀ █     █     █     █  model   openai/gpt-oss-20b
+(APIServer pid=13972) INFO 07-12 09:50:38 [api_utils.py:339]    ▀▀  ▀▀▀▀▀ ▀▀▀▀▀ ▀     ▀
+(APIServer pid=13972) INFO 07-12 09:50:38 [api_utils.py:339] 
+(APIServer pid=13972) INFO 07-12 09:50:38 [api_utils.py:273] non-default args: {'model_tag': 'openai/gpt-oss-20b', 'host': '127.0.0.1', 'port': 8120, 'model': 'openai/gpt-oss-20b', 'max_model_len': 8192, 'enforce_eager': True, 'served_model_name': ['openai/gpt-oss-20b'], 'max_num_batched_tokens': 2048, 'max_num_seqs': 16, 'enable_chunked_prefill': True, 'kv_transfer_config': KVTransferConfig(kv_connector='LMCacheConnectorV1', engine_id='e0', kv_buffer_device='cuda', kv_buffer_size=1000000000.0, kv_role='kv_both', kv_rank=None, kv_parallel_size=1, kv_ip='127.0.0.1', kv_port=14579, kv_connector_extra_config={'discard_partial_chunks': False, 'lmcache_rpc_port': 'smk'}, kv_connector_module_path=None, enable_permute_local_kv=False, kv_load_failure_policy='fail')}
+(APIServer pid=13972) INFO 07-12 09:50:38 [arg_utils.py:767] HF_HUB_OFFLINE is True, replace model_id [openai/gpt-oss-20b] to model_path [/scratch/users/gfw/ptsim/hf/hub/models--openai--gpt-oss-20b/snapshots/6cee5e81ee83917806bbde320786a8fb61efebee]
+(APIServer pid=13972) INFO 07-12 09:50:38 [model.py:598] Resolved architecture: GptOssForCausalLM
+(APIServer pid=13972) INFO 07-12 09:50:39 [model.py:1725] Using max model len 8192
+(APIServer pid=13972) INFO 07-12 09:50:40 [config.py:236] Overriding max cuda graph capture size to 1024 for performance.
+(APIServer pid=13972) INFO 07-12 09:50:40 [vllm.py:1006] Asynchronous scheduling is enabled.
+(APIServer pid=13972) WARNING 07-12 09:50:40 [vllm.py:1062] Enforce eager set, disabling torch.compile and CUDAGraphs. This is equivalent to setting -cc.mode=none -cc.cudagraph_mode=none
+(APIServer pid=13972) WARNING 07-12 09:50:40 [vllm.py:1110] Inductor compilation was disabled by user settings, optimizations settings that are only active during inductor compilation will be ignored.
+(APIServer pid=13972) INFO 07-12 09:50:40 [kernel.py:276] Final IR op priority after setting platform defaults: IrOpPriorityConfig(rms_norm=['vllm_c', 'native'], fused_add_rms_norm=['vllm_c', 'native'])
+(APIServer pid=13972) INFO 07-12 09:50:40 [vllm.py:1288] Cudagraph is disabled under eager mode
+(APIServer pid=13972) WARNING 07-12 09:50:40 [vllm.py:1505] Turning off hybrid kv cache manager because `--kv-transfer-config` selects a KV connector that does not support it. Impact: hybrid SSM models (e.g. Jamba, Bamba) require HMA and will fail at startup without it; models with sliding window attention will run with reduced performance. To add HMA support to a KV connector, subclass `SupportsHMA` defined in kv_connector/v1/base.py (for MultiConnector, all child connectors must support HMA).
+(APIServer pid=13972) INFO 07-12 09:50:40 [compilation.py:310] Enabled custom fusions: norm_quant, act_quant
+(EngineCore pid=14387) INFO 07-12 09:50:50 [core.py:114] Initializing a V1 LLM engine (v0.24.0) with config: model='/scratch/users/gfw/ptsim/hf/hub/models--openai--gpt-oss-20b/snapshots/6cee5e81ee83917806bbde320786a8fb61efebee', speculative_config=None, tokenizer='/scratch/users/gfw/ptsim/hf/hub/models--openai--gpt-oss-20b/snapshots/6cee5e81ee83917806bbde320786a8fb61efebee', skip_tokenizer_init=False, tokenizer_mode=auto, revision=None, tokenizer_revision=None, trust_remote_code=False, dtype=torch.bfloat16, max_seq_len=8192, download_dir=None, load_format=auto, tensor_parallel_size=1, pipeline_parallel_size=1, data_parallel_size=1, decode_context_parallel_size=1, dcp_comm_backend=ag_rs, disable_custom_all_reduce=False, quantization=gpt_oss_mxfp4, quantization_config=None, enforce_eager=True, enable_return_routed_experts=False, kv_cache_dtype=auto, device_config=cuda, structured_outputs_config=StructuredOutputsConfig(backend='auto', disable_any_whitespace=False, disable_additional_properties=False, reasoning_parser='openai_gptoss', reasoning_parser_plugin='', enable_in_reasoning=False), observability_config=ObservabilityConfig(show_hidden_metrics_for_version=None, otlp_traces_endpoint=None, collect_detailed_traces=None, kv_cache_metrics=False, kv_cache_metrics_sample=0.01, cudagraph_metrics=False, enable_layerwise_nvtx_tracing=False, enable_mfu_metrics=False, enable_mm_processor_stats=False, enable_logging_iteration_details=False, jit_monitor_verbose=False), seed=0, served_model_name=openai/gpt-oss-20b, enable_prefix_caching=True, enable_chunked_prefill=True, pooler_config=None, compilation_config={'mode': <CompilationMode.NONE: 0>, 'debug_dump_path': None, 'cache_dir': '', 'compile_cache_save_format': 'binary', 'backend': 'inductor', 'custom_ops': ['all'], 'ir_enable_torch_wrap': False, 'splitting_ops': [], 'compile_mm_encoder': False, 'cudagraph_mm_encoder': False, 'encoder_cudagraph_token_budgets': [], 'encoder_cudagraph_max_vision_items_per_batch': 0, 'encoder_cudagraph_max_frames_per_batch': None, 'compile_sizes': [], 'compile_ranges_endpoints': [2048], 'inductor_compile_config': {'enable_auto_functionalized_v2': False, 'size_asserts': False, 'alignment_asserts': False, 'scalar_asserts': False, 'combo_kernels': True, 'benchmark_combo_kernel': True}, 'inductor_passes': {}, 'cudagraph_mode': <CUDAGraphMode.NONE: 0>, 'cudagraph_num_of_warmups': 0, 'cudagraph_capture_sizes': [], 'cudagraph_copy_inputs': False, 'cudagraph_specialize_lora': True, 'use_inductor_graph_partition': False, 'pass_config': {'fuse_norm_quant': True, 'fuse_act_quant': True, 'fuse_attn_quant': False, 'enable_sp': False, 'fuse_gemm_comms': False, 'fuse_allreduce_rms': False, 'fuse_rope_kvcache_cat_mla': False, 'fuse_act_padding': False}, 'max_cudagraph_capture_size': 0, 'dynamic_shapes_config': {'type': <DynamicShapesType.BACKED: 'backed'>, 'evaluate_guards': False, 'assume_32_bit_indexing': False}, 'local_cache_dir': None, 'fast_moe_cold_start': False, 'static_all_moe_layers': []}, kernel_config=KernelConfig(ir_op_priority=IrOpPriorityConfig(rms_norm=['vllm_c', 'native'], fused_add_rms_norm=['vllm_c', 'native']), enable_flashinfer_autotune=True, moe_backend='auto', linear_backend='auto')
+(EngineCore pid=14387) INFO 07-12 09:50:50 [parallel_state.py:1588] world_size=1 rank=0 local_rank=0 distributed_init_method=tcp://10.19.11.16:35386 backend=nccl
+[W712 09:50:50.244452832 socket.cpp:764] [c10d] The client socket cannot be initialized to connect to [sh03-11n16.int]:35386 (errno: 97 - Address family not supported by protocol).
+(EngineCore pid=14387) INFO 07-12 09:50:50 [parallel_state.py:1923] rank 0 in world size 1 is assigned as DP rank 0, PP rank 0, PCP rank 0, TP rank 0, EP rank 0, EPLB rank N/A
+(EngineCore pid=14387) INFO 07-12 09:50:51 [topk_topp_sampler.py:39] FlashInfer top-p/top-k sampling disabled via VLLM_USE_FLASHINFER_SAMPLER=0.
+(EngineCore pid=14387) INFO 07-12 09:50:51 [gpu_model_runner.py:5160] Starting to load model /scratch/users/gfw/ptsim/hf/hub/models--openai--gpt-oss-20b/snapshots/6cee5e81ee83917806bbde320786a8fb61efebee...
+(EngineCore pid=14387) INFO 07-12 09:50:54 [cuda.py:480] Using TRITON_ATTN attention backend out of potential backends: ['TRITON_ATTN'].
+(EngineCore pid=14387) INFO 07-12 09:50:54 [mxfp4.py:513] Using 'MARLIN' Mxfp4 MoE backend.
+(EngineCore pid=14387) INFO 07-12 09:50:54 [weight_utils.py:849] Filesystem type for checkpoints: LUSTRE. Checkpoint size: 12.82 GiB. Available RAM: 474.63 GiB.
+(EngineCore pid=14387) INFO 07-12 09:50:54 [weight_utils.py:811] Prefetching checkpoint files into page cache started (in background, num_threads=8, block_size=16777216 bytes)
+(EngineCore pid=14387) Loading safetensors checkpoint shards:   0% Completed | 0/3 [00:00<?, ?it/s]
+(EngineCore pid=14387) INFO 07-12 09:50:54 [weight_utils.py:783] Prefetching checkpoint files: 10% (1/3)
+(EngineCore pid=14387) INFO 07-12 09:53:57 [weight_utils.py:783] Prefetching checkpoint files: 20% (2/3)
+(EngineCore pid=14387) Loading safetensors checkpoint shards:  33% Completed | 1/3 [03:03<06:06, 183.16s/it]
+(EngineCore pid=14387) INFO 07-12 10:02:14 [weight_utils.py:783] Prefetching checkpoint files: 30% (3/3)
+(EngineCore pid=14387) INFO 07-12 10:02:14 [weight_utils.py:806] Prefetching checkpoint files into page cache finished in 680.09s
+(EngineCore pid=14387) Loading safetensors checkpoint shards:  67% Completed | 2/3 [11:20<06:07, 367.76s/it]
+(EngineCore pid=14387) Loading safetensors checkpoint shards: 100% Completed | 3/3 [11:22<00:00, 200.85s/it]
+(EngineCore pid=14387) Loading safetensors checkpoint shards: 100% Completed | 3/3 [11:22<00:00, 227.45s/it]
+(EngineCore pid=14387) 
+(EngineCore pid=14387) INFO 07-12 10:02:16 [default_loader.py:430] Loading weights took 682.54 seconds
+(EngineCore pid=14387) ERROR 07-12 10:02:17 [core.py:1231] EngineCore failed to start.
+(EngineCore pid=14387) ERROR 07-12 10:02:17 [core.py:1231] Traceback (most recent call last):
+(EngineCore pid=14387) ERROR 07-12 10:02:17 [core.py:1231]   File "/opt/venv/lib/python3.12/site-packages/vllm/v1/engine/core.py", line 1200, in run_engine_core
+(EngineCore pid=14387) ERROR 07-12 10:02:17 [core.py:1231]     engine_core = EngineCoreProc(*args, engine_index=dp_rank, **kwargs)
+(EngineCore pid=14387) ERROR 07-12 10:02:17 [core.py:1231]                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+(EngineCore pid=14387) ERROR 07-12 10:02:17 [core.py:1231]   File "/opt/venv/lib/python3.12/site-packages/vllm/tracing/otel.py", line 178, in sync_wrapper
+(EngineCore pid=14387) ERROR 07-12 10:02:17 [core.py:1231]     return func(*args, **kwargs)
+(EngineCore pid=14387) ERROR 07-12 10:02:17 [core.py:1231]            ^^^^^^^^^^^^^^^^^^^^^
+(EngineCore pid=14387) ERROR 07-12 10:02:17 [core.py:1231]   File "/opt/venv/lib/python3.12/site-packages/vllm/v1/engine/core.py", line 966, in __init__
+(EngineCore pid=14387) ERROR 07-12 10:02:17 [core.py:1231]     super().__init__(
+(EngineCore pid=14387) ERROR 07-12 10:02:17 [core.py:1231]   File "/opt/venv/lib/python3.12/site-packages/vllm/v1/engine/core.py", line 123, in __init__
+(EngineCore pid=14387) ERROR 07-12 10:02:17 [core.py:1231]     self.model_executor = executor_class(vllm_config)
+(EngineCore pid=14387) ERROR 07-12 10:02:17 [core.py:1231]                           ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+(EngineCore pid=14387) ERROR 07-12 10:02:17 [core.py:1231]   File "/opt/venv/lib/python3.12/site-packages/vllm/tracing/otel.py", line 178, in sync_wrapper
+(EngineCore pid=14387) ERROR 07-12 10:02:17 [core.py:1231]     return func(*args, **kwargs)
+(EngineCore pid=14387) ERROR 07-12 10:02:17 [core.py:1231]            ^^^^^^^^^^^^^^^^^^^^^
+(EngineCore pid=14387) ERROR 07-12 10:02:17 [core.py:1231]   File "/opt/venv/lib/python3.12/site-packages/vllm/v1/executor/abstract.py", line 109, in __init__
+(EngineCore pid=14387) ERROR 07-12 10:02:17 [core.py:1231]     self._init_executor()
+(EngineCore pid=14387) ERROR 07-12 10:02:17 [core.py:1231]   File "/opt/venv/lib/python3.12/site-packages/vllm/v1/executor/uniproc_executor.py", line 68, in _init_executor
+(EngineCore pid=14387) ERROR 07-12 10:02:17 [core.py:1231]     self.driver_worker.load_model()
+(EngineCore pid=14387) ERROR 07-12 10:02:17 [core.py:1231]   File "/opt/venv/lib/python3.12/site-packages/vllm/v1/worker/gpu_worker.py", line 384, in load_model
+(EngineCore pid=14387) ERROR 07-12 10:02:17 [core.py:1231]     self.model_runner.load_model(load_dummy_weights=load_dummy_weights)
+(EngineCore pid=14387) ERROR 07-12 10:02:17 [core.py:1231]   File "/opt/venv/lib/python3.12/site-packages/vllm/tracing/otel.py", line 178, in sync_wrapper
+(EngineCore pid=14387) ERROR 07-12 10:02:17 [core.py:1231]     return func(*args, **kwargs)
+(EngineCore pid=14387) ERROR 07-12 10:02:17 [core.py:1231]            ^^^^^^^^^^^^^^^^^^^^^
+(EngineCore pid=14387) ERROR 07-12 10:02:17 [core.py:1231]   File "/opt/venv/lib/python3.12/site-packages/vllm/v1/worker/gpu_model_runner.py", line 5176, in load_model
+(EngineCore pid=14387) ERROR 07-12 10:02:17 [core.py:1231]     self.model = model_loader.load_model(
+(EngineCore pid=14387) ERROR 07-12 10:02:17 [core.py:1231]                  ^^^^^^^^^^^^^^^^^^^^^^^^
+(EngineCore pid=14387) ERROR 07-12 10:02:17 [core.py:1231]   File "/opt/venv/lib/python3.12/site-packages/vllm/tracing/otel.py", line 178, in sync_wrapper
+(EngineCore pid=14387) ERROR 07-12 10:02:17 [core.py:1231]     return func(*args, **kwargs)
+(EngineCore pid=14387) ERROR 07-12 10:02:17 [core.py:1231]            ^^^^^^^^^^^^^^^^^^^^^
+(EngineCore pid=14387) ERROR 07-12 10:02:17 [core.py:1231]   File "/opt/venv/lib/python3.12/site-packages/vllm/model_executor/model_loader/base_loader.py", line 80, in load_model
+(EngineCore pid=14387) ERROR 07-12 10:02:17 [core.py:1231]     process_weights_after_loading(model, model_config, target_device)
+(EngineCore pid=14387) ERROR 07-12 10:02:17 [core.py:1231]   File "/opt/venv/lib/python3.12/site-packages/vllm/model_executor/model_loader/utils.py", line 112, in process_weights_after_loading
+(EngineCore pid=14387) ERROR 07-12 10:02:17 [core.py:1231]     quant_method.process_weights_after_loading(module)
+(EngineCore pid=14387) ERROR 07-12 10:02:17 [core.py:1231]   File "/opt/venv/lib/python3.12/site-packages/vllm/model_executor/layers/quantization/mxfp4.py", line 391, in process_weights_after_loading
+(EngineCore pid=14387) ERROR 07-12 10:02:17 [core.py:1231]     self._setup_kernel(layer, w13, w2, w13_scale, w2_scale, w13_bias, w2_bias)
+(EngineCore pid=14387) ERROR 07-12 10:02:17 [core.py:1231]   File "/opt/venv/lib/python3.12/site-packages/vllm/model_executor/layers/quantization/mxfp4.py", line 331, in _setup_kernel
+(EngineCore pid=14387) ERROR 07-12 10:02:17 [core.py:1231]     convert_gpt_oss_weight_to_mxfp4_moe_kernel_format(
+(EngineCore pid=14387) ERROR 07-12 10:02:17 [core.py:1231]   File "/opt/venv/lib/python3.12/site-packages/vllm/model_executor/layers/fused_moe/oracle/mxfp4.py", line 733, in convert_gpt_oss_weight_to_mxfp4_moe_kernel_format
+(EngineCore pid=14387) ERROR 07-12 10:02:17 [core.py:1231]     return prepare_moe_mxfp4_layer_for_marlin(
+(EngineCore pid=14387) ERROR 07-12 10:02:17 [core.py:1231]            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+(EngineCore pid=14387) ERROR 07-12 10:02:17 [core.py:1231]   File "/opt/venv/lib/python3.12/site-packages/vllm/model_executor/layers/quantization/utils/marlin_utils_fp4.py", line 639, in prepare_moe_mxfp4_layer_for_marlin
+(EngineCore pid=14387) ERROR 07-12 10:02:17 [core.py:1231]     w13 = repack_weight(w13, "w13")
+(EngineCore pid=14387) ERROR 07-12 10:02:17 [core.py:1231]           ^^^^^^^^^^^^^^^^^^^^^^^^^
+(EngineCore pid=14387) ERROR 07-12 10:02:17 [core.py:1231]   File "/opt/venv/lib/python3.12/site-packages/vllm/model_executor/layers/quantization/utils/marlin_utils_fp4.py", line 628, in repack_weight
+(EngineCore pid=14387) ERROR 07-12 10:02:17 [core.py:1231]     marlin_qweight = ops.gptq_marlin_repack(
+(EngineCore pid=14387) ERROR 07-12 10:02:17 [core.py:1231]                      ^^^^^^^^^^^^^^^^^^^^^^^
+(EngineCore pid=14387) ERROR 07-12 10:02:17 [core.py:1231]   File "/opt/venv/lib/python3.12/site-packages/vllm/_custom_ops.py", line 1148, in gptq_marlin_repack
+(EngineCore pid=14387) ERROR 07-12 10:02:17 [core.py:1231]     return torch.ops._C.gptq_marlin_repack(
+(EngineCore pid=14387) ERROR 07-12 10:02:17 [core.py:1231]            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+(EngineCore pid=14387) ERROR 07-12 10:02:17 [core.py:1231]   File "/opt/venv/lib/python3.12/site-packages/torch/_ops.py", line 1269, in __call__
+(EngineCore pid=14387) ERROR 07-12 10:02:17 [core.py:1231]     return self._op(*args, **kwargs)
+(EngineCore pid=14387) ERROR 07-12 10:02:17 [core.py:1231]            ^^^^^^^^^^^^^^^^^^^^^^^^^
+(EngineCore pid=14387) ERROR 07-12 10:02:17 [core.py:1231] RuntimeError: gptq_marlin_repack, /workspace/csrc/libtorch_stable/quantization/marlin/gptq_marlin_repack.cu:344, 
+(EngineCore pid=14387) Process EngineCore:
+(EngineCore pid=14387) Traceback (most recent call last):
+(EngineCore pid=14387)   File "/usr/lib/python3.12/multiprocessing/process.py", line 314, in _bootstrap
+(EngineCore pid=14387)     self.run()
+(EngineCore pid=14387)   File "/usr/lib/python3.12/multiprocessing/process.py", line 108, in run
+(EngineCore pid=14387)     self._target(*self._args, **self._kwargs)
+(EngineCore pid=14387)   File "/opt/venv/lib/python3.12/site-packages/vllm/v1/engine/core.py", line 1235, in run_engine_core
+(EngineCore pid=14387)     raise e
+(EngineCore pid=14387)   File "/opt/venv/lib/python3.12/site-packages/vllm/v1/engine/core.py", line 1200, in run_engine_core
+(EngineCore pid=14387)     engine_core = EngineCoreProc(*args, engine_index=dp_rank, **kwargs)
+(EngineCore pid=14387)                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+(EngineCore pid=14387)   File "/opt/venv/lib/python3.12/site-packages/vllm/tracing/otel.py", line 178, in sync_wrapper
+(EngineCore pid=14387)     return func(*args, **kwargs)
+(EngineCore pid=14387)            ^^^^^^^^^^^^^^^^^^^^^
+(EngineCore pid=14387)   File "/opt/venv/lib/python3.12/site-packages/vllm/v1/engine/core.py", line 966, in __init__
+(EngineCore pid=14387)     super().__init__(
+(EngineCore pid=14387)   File "/opt/venv/lib/python3.12/site-packages/vllm/v1/engine/core.py", line 123, in __init__
+(EngineCore pid=14387)     self.model_executor = executor_class(vllm_config)
+(EngineCore pid=14387)                           ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+(EngineCore pid=14387)   File "/opt/venv/lib/python3.12/site-packages/vllm/tracing/otel.py", line 178, in sync_wrapper
+(EngineCore pid=14387)     return func(*args, **kwargs)
+(EngineCore pid=14387)            ^^^^^^^^^^^^^^^^^^^^^
+(EngineCore pid=14387)   File "/opt/venv/lib/python3.12/site-packages/vllm/v1/executor/abstract.py", line 109, in __init__
+(EngineCore pid=14387)     self._init_executor()
+(EngineCore pid=14387)   File "/opt/venv/lib/python3.12/site-packages/vllm/v1/executor/uniproc_executor.py", line 68, in _init_executor
+(EngineCore pid=14387)     self.driver_worker.load_model()
+(EngineCore pid=14387)   File "/opt/venv/lib/python3.12/site-packages/vllm/v1/worker/gpu_worker.py", line 384, in load_model
+(EngineCore pid=14387)     self.model_runner.load_model(load_dummy_weights=load_dummy_weights)
+(EngineCore pid=14387)   File "/opt/venv/lib/python3.12/site-packages/vllm/tracing/otel.py", line 178, in sync_wrapper
+(EngineCore pid=14387)     return func(*args, **kwargs)
+(EngineCore pid=14387)            ^^^^^^^^^^^^^^^^^^^^^
+(EngineCore pid=14387)   File "/opt/venv/lib/python3.12/site-packages/vllm/v1/worker/gpu_model_runner.py", line 5176, in load_model
+(EngineCore pid=14387)     self.model = model_loader.load_model(
+(EngineCore pid=14387)                  ^^^^^^^^^^^^^^^^^^^^^^^^
+(EngineCore pid=14387)   File "/opt/venv/lib/python3.12/site-packages/vllm/tracing/otel.py", line 178, in sync_wrapper
+(EngineCore pid=14387)     return func(*args, **kwargs)
+(EngineCore pid=14387)            ^^^^^^^^^^^^^^^^^^^^^
+(EngineCore pid=14387)   File "/opt/venv/lib/python3.12/site-packages/vllm/model_executor/model_loader/base_loader.py", line 80, in load_model
+(EngineCore pid=14387)     process_weights_after_loading(model, model_config, target_device)
+(EngineCore pid=14387)   File "/opt/venv/lib/python3.12/site-packages/vllm/model_executor/model_loader/utils.py", line 112, in process_weights_after_loading
+(EngineCore pid=14387)     quant_method.process_weights_after_loading(module)
+(EngineCore pid=14387)   File "/opt/venv/lib/python3.12/site-packages/vllm/model_executor/layers/quantization/mxfp4.py", line 391, in process_weights_after_loading
+(EngineCore pid=14387)     self._setup_kernel(layer, w13, w2, w13_scale, w2_scale, w13_bias, w2_bias)
+(EngineCore pid=14387)   File "/opt/venv/lib/python3.12/site-packages/vllm/model_executor/layers/quantization/mxfp4.py", line 331, in _setup_kernel
+(EngineCore pid=14387)     convert_gpt_oss_weight_to_mxfp4_moe_kernel_format(
+(EngineCore pid=14387)   File "/opt/venv/lib/python3.12/site-packages/vllm/model_executor/layers/fused_moe/oracle/mxfp4.py", line 733, in convert_gpt_oss_weight_to_mxfp4_moe_kernel_format
+(EngineCore pid=14387)     return prepare_moe_mxfp4_layer_for_marlin(
+(EngineCore pid=14387)            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+(EngineCore pid=14387)   File "/opt/venv/lib/python3.12/site-packages/vllm/model_executor/layers/quantization/utils/marlin_utils_fp4.py", line 639, in prepare_moe_mxfp4_layer_for_marlin
+(EngineCore pid=14387)     w13 = repack_weight(w13, "w13")
+(EngineCore pid=14387)           ^^^^^^^^^^^^^^^^^^^^^^^^^
+(EngineCore pid=14387)   File "/opt/venv/lib/python3.12/site-packages/vllm/model_executor/layers/quantization/utils/marlin_utils_fp4.py", line 628, in repack_weight
+(EngineCore pid=14387)     marlin_qweight = ops.gptq_marlin_repack(
+(EngineCore pid=14387)                      ^^^^^^^^^^^^^^^^^^^^^^^
+(EngineCore pid=14387)   File "/opt/venv/lib/python3.12/site-packages/vllm/_custom_ops.py", line 1148, in gptq_marlin_repack
+(EngineCore pid=14387)     return torch.ops._C.gptq_marlin_repack(
+(EngineCore pid=14387)            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+(EngineCore pid=14387)   File "/opt/venv/lib/python3.12/site-packages/torch/_ops.py", line 1269, in __call__
+(EngineCore pid=14387)     return self._op(*args, **kwargs)
+(EngineCore pid=14387)            ^^^^^^^^^^^^^^^^^^^^^^^^^
+(EngineCore pid=14387) RuntimeError: gptq_marlin_repack, /workspace/csrc/libtorch_stable/quantization/marlin/gptq_marlin_repack.cu:344, 
+[rank0]:[W712 10:02:17.635776078 ProcessGroupNCCL.cpp:1575] Warning: WARNING: destroy_process_group() was not called before program exit, which can leak resources. For more info, please see https://pytorch.org/docs/stable/distributed.html#shutdown (function operator())
+(APIServer pid=13972) Traceback (most recent call last):
+(APIServer pid=13972)   File "/opt/venv/bin/vllm", line 10, in <module>
+(APIServer pid=13972)     sys.exit(main())
+(APIServer pid=13972)              ^^^^^^
+(APIServer pid=13972)   File "/opt/venv/lib/python3.12/site-packages/vllm/entrypoints/cli/main.py", line 95, in main
+(APIServer pid=13972)     args.dispatch_function(args)
+(APIServer pid=13972)   File "/opt/venv/lib/python3.12/site-packages/vllm/entrypoints/cli/serve.py", line 148, in cmd
+(APIServer pid=13972)     uvloop.run(run_server(args))
+(APIServer pid=13972)   File "/opt/venv/lib/python3.12/site-packages/uvloop/__init__.py", line 96, in run
+(APIServer pid=13972)     return __asyncio.run(
+(APIServer pid=13972)            ^^^^^^^^^^^^^^
+(APIServer pid=13972)   File "/usr/lib/python3.12/asyncio/runners.py", line 194, in run
+(APIServer pid=13972)     return runner.run(main)
+(APIServer pid=13972)            ^^^^^^^^^^^^^^^^
+(APIServer pid=13972)   File "/usr/lib/python3.12/asyncio/runners.py", line 118, in run
+(APIServer pid=13972)     return self._loop.run_until_complete(task)
+(APIServer pid=13972)            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+(APIServer pid=13972)   File "uvloop/loop.pyx", line 1518, in uvloop.loop.Loop.run_until_complete
+(APIServer pid=13972)   File "/opt/venv/lib/python3.12/site-packages/uvloop/__init__.py", line 48, in wrapper
+(APIServer pid=13972)     return await main
+(APIServer pid=13972)            ^^^^^^^^^^
+(APIServer pid=13972)   File "/opt/venv/lib/python3.12/site-packages/vllm/entrypoints/openai/api_server.py", line 663, in run_server
+(APIServer pid=13972)     await run_server_worker(listen_address, sock, args, **uvicorn_kwargs)
+(APIServer pid=13972)   File "/opt/venv/lib/python3.12/site-packages/vllm/entrypoints/openai/api_server.py", line 677, in run_server_worker
+(APIServer pid=13972)     async with build_async_engine_client(
+(APIServer pid=13972)   File "/usr/lib/python3.12/contextlib.py", line 210, in __aenter__
+(APIServer pid=13972)     return await anext(self.gen)
+(APIServer pid=13972)            ^^^^^^^^^^^^^^^^^^^^^
+(APIServer pid=13972)   File "/opt/venv/lib/python3.12/site-packages/vllm/entrypoints/openai/api_server.py", line 99, in build_async_engine_client
+(APIServer pid=13972)     async with build_async_engine_client_from_engine_args(
+(APIServer pid=13972)   File "/usr/lib/python3.12/contextlib.py", line 210, in __aenter__
+(APIServer pid=13972)     return await anext(self.gen)
+(APIServer pid=13972)            ^^^^^^^^^^^^^^^^^^^^^
+(APIServer pid=13972)   File "/opt/venv/lib/python3.12/site-packages/vllm/entrypoints/openai/api_server.py", line 135, in build_async_engine_client_from_engine_args
+(APIServer pid=13972)     async_llm = AsyncLLM.from_vllm_config(
+(APIServer pid=13972)                 ^^^^^^^^^^^^^^^^^^^^^^^^^^
+(APIServer pid=13972)   File "/opt/venv/lib/python3.12/site-packages/vllm/v1/engine/async_llm.py", line 217, in from_vllm_config
+(APIServer pid=13972)     return cls(
+(APIServer pid=13972)            ^^^^
+(APIServer pid=13972)   File "/opt/venv/lib/python3.12/site-packages/vllm/v1/engine/async_llm.py", line 146, in __init__
+(APIServer pid=13972)     self.engine_core = EngineCoreClient.make_async_mp_client(
+(APIServer pid=13972)                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+(APIServer pid=13972)   File "/opt/venv/lib/python3.12/site-packages/vllm/tracing/otel.py", line 178, in sync_wrapper
+(APIServer pid=13972)     return func(*args, **kwargs)
+(APIServer pid=13972)            ^^^^^^^^^^^^^^^^^^^^^
+(APIServer pid=13972)   File "/opt/venv/lib/python3.12/site-packages/vllm/v1/engine/core_client.py", line 132, in make_async_mp_client
+(APIServer pid=13972)     return AsyncMPClient(*client_args)
+(APIServer pid=13972)            ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+(APIServer pid=13972)   File "/opt/venv/lib/python3.12/site-packages/vllm/tracing/otel.py", line 178, in sync_wrapper
+(APIServer pid=13972)     return func(*args, **kwargs)
+(APIServer pid=13972)            ^^^^^^^^^^^^^^^^^^^^^
+(APIServer pid=13972)   File "/opt/venv/lib/python3.12/site-packages/vllm/v1/engine/core_client.py", line 963, in __init__
+(APIServer pid=13972)     super().__init__(
+(APIServer pid=13972)   File "/opt/venv/lib/python3.12/site-packages/vllm/v1/engine/core_client.py", line 573, in __init__
+(APIServer pid=13972)     with launch_core_engines(
+(APIServer pid=13972)   File "/usr/lib/python3.12/contextlib.py", line 144, in __exit__
+(APIServer pid=13972)     next(self.gen)
+(APIServer pid=13972)   File "/opt/venv/lib/python3.12/site-packages/vllm/v1/engine/utils.py", line 1213, in launch_core_engines
+(APIServer pid=13972)     wait_for_engine_startup(
+(APIServer pid=13972)   File "/opt/venv/lib/python3.12/site-packages/vllm/v1/engine/utils.py", line 1272, in wait_for_engine_startup
+(APIServer pid=13972)     raise RuntimeError(
+(APIServer pid=13972) RuntimeError: Engine core initialization failed. See root cause above. Failed core proc(s): {}

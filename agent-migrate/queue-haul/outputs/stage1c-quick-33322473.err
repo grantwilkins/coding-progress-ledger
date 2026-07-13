@@ -1,0 +1,3 @@
+bash: warning: setlocale: LC_ALL: cannot change locale (C.UTF-8)
+/var/spool/slurmd/job33322473/slurm_script: line 39:  6537 Killed                  $PY queue-haul/stage1c_controller.py live-grid --manifest "$MANIFEST" --run-root "$RUN_ROOT" --policies "$POLICIES" --deadlines "$DEADLINES" --target-fracs "$TARGET_FRACS" --mbps "$MBPS" --nvsmi-ms "$NVSMI_MS" --baseline-s "$BASELINE_S" --settle-s "$SETTLE_S" --seed "$SEED" --profile "$PROFILE" --replay-concurrency "$REPLAY_CONCURRENCY" --kv-concurrency "$KV_CONCURRENCY"
+[2026-07-09T13:49:46.300] error: Detected 5 oom_kill events in StepId=33322473.batch. Some of the step tasks have been OOM Killed.

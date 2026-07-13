@@ -1,0 +1,15 @@
+/bin/sh: warning: setlocale: LC_ALL: cannot change locale (C.UTF-8)
++ export APPTAINERENV_CUDA_VISIBLE_DEVICES=0
++ APPTAINERENV_CUDA_VISIBLE_DEVICES=0
++ export CUDA_VISIBLE_DEVICES=0
++ CUDA_VISIBLE_DEVICES=0
++ apptainer exec --nv --writable --bind /scratch/users/gfw:/scratch/users/gfw /scratch/users/gfw/ptsim/vllm-openai-v0.10.1.1.sandbox bash -lc 'python3 - <<'\''PY'\''
+import torch, vllm
+print(cuda, torch.cuda.is_available())
+print(device, torch.cuda.get_device_name(0))
+print(torch, torch.__version__)
+print(vllm, vllm.__version__)
+PY'
+WARNING: nv files may not be bound with --writable
+WARNING: By using --writable, Apptainer can't create /dev destination automatically without overlay or underlay
+FATAL:   container creation failed: mount hook function failure: mount /dev->/dev error: while mounting /dev: destination /dev doesn't exist in container

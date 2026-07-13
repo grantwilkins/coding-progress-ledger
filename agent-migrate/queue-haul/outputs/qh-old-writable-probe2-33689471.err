@@ -1,0 +1,14 @@
+/bin/sh: warning: setlocale: LC_ALL: cannot change locale (C.UTF-8)
++ export APPTAINERENV_CUDA_VISIBLE_DEVICES=0
++ APPTAINERENV_CUDA_VISIBLE_DEVICES=0
++ export CUDA_VISIBLE_DEVICES=0
++ CUDA_VISIBLE_DEVICES=0
++ apptainer exec --nv --writable --bind /scratch/users/gfw:/scratch/users/gfw /scratch/users/gfw/ptsim/vllm-openai-v0.10.1.1.sandbox bash -lc 'python3 -c "import torch, vllm; print(\cuda\, torch.cuda.is_available()); print(\device\, torch.cuda.get_device_name(0)); print(\torch\, torch.__version__); print(\vllm\, vllm.__version__)"'
+WARNING: nv files may not be bound with --writable
+WARNING: Skipping mount /home/users [binds]: /home/users doesn't exist in container
+WARNING: Skipping mount /home/groups [binds]: /home/groups doesn't exist in container
+WARNING: Skipping mount /oak [binds]: /oak doesn't exist in container
+WARNING: Skipping mount /proc [kernel]: /proc doesn't exist in container
+WARNING: Skipping mount /sys [kernel]: /sys doesn't exist in container
+WARNING: By using --writable, Apptainer can't create /home destination automatically without overlay or underlay
+FATAL:   container creation failed: mount hook function failure: mount /var/lib/apptainer/mnt/session/home->/home error: while mounting /var/lib/apptainer/mnt/session/home: destination /home doesn't exist in container

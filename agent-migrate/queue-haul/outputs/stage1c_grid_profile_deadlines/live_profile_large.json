@@ -1,0 +1,42 @@
+{
+  "created_ts": 1783801969.2343159,
+  "kv_bytes_per_s": 55064140.739345364,
+  "kv_bytes_per_token": 49158.65863402879,
+  "lmcache_max_local_cpu_gb": "4",
+  "mbps": 1000.0,
+  "points": [
+    {
+      "action": "R",
+      "api_request_bytes": 64181,
+      "completion_s": 8.596166849136353,
+      "first_token_s": 8.596166849136353,
+      "kv_bytes": 36,
+      "proxy_delta": {
+        "api/client_to_target": 64181,
+        "api/target_to_client": 688,
+        "kv/client_to_target": 186,
+        "kv/target_to_client": 36
+      },
+      "requested_tokens": 32256,
+      "tokens": 31553
+    },
+    {
+      "action": "S",
+      "api_request_bytes": 64139,
+      "completion_s": 28.155633687973022,
+      "first_token_s": 28.155633687973022,
+      "kv_bytes": 1550365776,
+      "proxy_delta": {
+        "api/client_to_target": 64139,
+        "api/target_to_client": 688,
+        "kv/client_to_target": 69192,
+        "kv/target_to_client": 1550365776
+      },
+      "requested_tokens": 32256,
+      "source_elapsed_s": 8.993904113769531,
+      "tokens": 31538
+    }
+  ],
+  "schema": "queue-haul-stage1c-live-profile-v2",
+  "source_boundary_s": 8.993904113769531
+}

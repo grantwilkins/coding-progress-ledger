@@ -1,0 +1,93 @@
+{
+  "acceptance": {
+    "kv_elapsed_s": 21.17365598678589,
+    "kv_expected_link_s": 9.663759648,
+    "kv_observed_bytes_per_s": 59191015.91574813,
+    "ok": true,
+    "source_warmed_before_sink": false
+  },
+  "endpoints": {
+    "api_proxy": 35434,
+    "kv_proxy": 35334,
+    "sink": 35234,
+    "source": 35134
+  },
+  "evidence": {
+    "api_proxy_bytes": 28875,
+    "kv_proxy_bytes": 1207969956,
+    "sink_connector": true,
+    "sink_retrieved": true,
+    "source_connector": true,
+    "source_stored": true
+  },
+  "kv_delta": {
+    "api/client_to_target": 53116,
+    "api/target_to_client": 692,
+    "kv/client_to_target": 53754,
+    "kv/target_to_client": 1207969956
+  },
+  "kv_link": {
+    "bytes": 1207969956,
+    "bytes_per_s": 59191015.91574813,
+    "window_s": 20.407994985580444
+  },
+  "lambda_src_bytes_per_s": 125000000.0,
+  "live": {
+    "sink_poll": null,
+    "source_after_sink": {
+      "content": "",
+      "elapsed_s": 0.0839242935180664,
+      "end_ts": 1783916449.2188377,
+      "prompt_sha256": "d8adb66f9915732364edb6bad6a36db633ed580ae32a4edfa75d17ae3c1801e2",
+      "request_bytes": 135,
+      "response_text": "",
+      "start_ts": 1783916449.1349134,
+      "status": 200
+    },
+    "source_poll": null
+  },
+  "mbps": 1000.0,
+  "proxy_total_delta": {
+    "api/client_to_target": 81991,
+    "api/target_to_client": 1384,
+    "kv/client_to_target": 53940,
+    "kv/target_to_client": 1207969992
+  },
+  "replay_delta": {
+    "api/client_to_target": 28875,
+    "api/target_to_client": 692,
+    "kv/client_to_target": 186,
+    "kv/target_to_client": 36
+  },
+  "schema": "queue-haul-stage1b-smoke2-v1",
+  "sink_kv": {
+    "content": "",
+    "elapsed_s": 21.17365598678589,
+    "end_ts": 1783916444.4990757,
+    "prompt_sha256": "5893f544213c590c5f74c4932dab1e9b0cf78b8005289f6a2c5f5b97cd691385",
+    "request_bytes": 52973,
+    "response_text": "",
+    "start_ts": 1783916423.3254197,
+    "status": 200
+  },
+  "sink_replay": {
+    "content": "",
+    "elapsed_s": 1.4640934467315674,
+    "end_ts": 1783916449.0618246,
+    "prompt_sha256": "bfd4b5ee047d6ea1c75a497742fb1ea2350a6e726d0075e022089de4618e1663",
+    "request_bytes": 28732,
+    "response_text": "",
+    "start_ts": 1783916447.597731,
+    "status": 200
+  },
+  "source": {
+    "content": "",
+    "elapsed_s": 6.19390606880188,
+    "end_ts": 1783916421.317155,
+    "prompt_sha256": "5893f544213c590c5f74c4932dab1e9b0cf78b8005289f6a2c5f5b97cd691385",
+    "request_bytes": 52973,
+    "response_text": "",
+    "start_ts": 1783916415.1232488,
+    "status": 200
+  }
+}

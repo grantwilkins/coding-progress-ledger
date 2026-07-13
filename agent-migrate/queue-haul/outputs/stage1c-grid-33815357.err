@@ -1,0 +1,68 @@
+bash: warning: setlocale: LC_ALL: cannot change locale (C.UTF-8)
+Exception in thread Thread-4 (_serve):
+Exception in thread Thread-10 (_serve):
+Traceback (most recent call last):
+Exception in thread Thread-6 (_serve):
+Traceback (most recent call last):
+  File "/home/users/gfw/.local/share/uv/python/cpython-3.11.15-linux-x86_64-gnu/lib/python3.11/threading.py", line 1045, in _bootstrap_inner
+Traceback (most recent call last):
+  File "/home/users/gfw/.local/share/uv/python/cpython-3.11.15-linux-x86_64-gnu/lib/python3.11/threading.py", line 1045, in _bootstrap_inner
+  File "/home/users/gfw/.local/share/uv/python/cpython-3.11.15-linux-x86_64-gnu/lib/python3.11/threading.py", line 1045, in _bootstrap_inner
+    self.run()
+  File "/home/users/gfw/.local/share/uv/python/cpython-3.11.15-linux-x86_64-gnu/lib/python3.11/threading.py", line 982, in run
+    self.run()
+  File "/home/users/gfw/.local/share/uv/python/cpython-3.11.15-linux-x86_64-gnu/lib/python3.11/threading.py", line 982, in run
+    self.run()
+  File "/home/users/gfw/.local/share/uv/python/cpython-3.11.15-linux-x86_64-gnu/lib/python3.11/threading.py", line 982, in run
+    self._target(*self._args, **self._kwargs)
+  File "/home/groups/ramr/gfw/coding-progress-ledger/agent-migrate/queue-haul/stage1c_controller.py", line 1006, in _serve
+    self._target(*self._args, **self._kwargs)
+  File "/home/groups/ramr/gfw/coding-progress-ledger/agent-migrate/queue-haul/stage1c_controller.py", line 1006, in _serve
+    self._target(*self._args, **self._kwargs)
+  File "/home/groups/ramr/gfw/coding-progress-ledger/agent-migrate/queue-haul/stage1c_controller.py", line 1006, in _serve
+    messages = self._bounded(base + [{"role": "user", "content": session_followup(self.session, idx)}])
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/groups/ramr/gfw/coding-progress-ledger/agent-migrate/queue-haul/stage1c_controller.py", line 985, in _bounded
+    messages = self._bounded(base + [{"role": "user", "content": session_followup(self.session, idx)}])
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/groups/ramr/gfw/coding-progress-ledger/agent-migrate/queue-haul/stage1c_controller.py", line 985, in _bounded
+    while prompt_tokens(self.cfg, messages) > limit:
+    messages = self._bounded(base + [{"role": "user", "content": session_followup(self.session, idx)}])
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/groups/ramr/gfw/coding-progress-ledger/agent-migrate/queue-haul/stage1c_controller.py", line 536, in prompt_tokens
+  File "/home/groups/ramr/gfw/coding-progress-ledger/agent-migrate/queue-haul/stage1c_controller.py", line 985, in _bounded
+    while prompt_tokens(self.cfg, messages) > limit:
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/groups/ramr/gfw/coding-progress-ledger/agent-migrate/queue-haul/stage1c_controller.py", line 536, in prompt_tokens
+    tok = _tokenizer(cfg)
+          ^^^^^^^^^^^^^^^
+  File "/home/groups/ramr/gfw/coding-progress-ledger/agent-migrate/queue-haul/stage1c_controller.py", line 526, in _tokenizer
+    tok = _tokenizer(cfg)
+          ^^^^^^^^^^^^^^^
+  File "/home/groups/ramr/gfw/coding-progress-ledger/agent-migrate/queue-haul/stage1c_controller.py", line 526, in _tokenizer
+    while prompt_tokens(self.cfg, messages) > limit:
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/groups/ramr/gfw/coding-progress-ledger/agent-migrate/queue-haul/stage1c_controller.py", line 536, in prompt_tokens
+    from transformers import AutoTokenizer
+ImportError: cannot import name 'AutoTokenizer' from 'transformers' (/home/groups/ramr/gfw/coding-progress-ledger/agent-migrate/.venv/lib/python3.11/site-packages/transformers/__init__.py)
+    tok = _tokenizer(cfg)
+    from transformers import AutoTokenizer
+          ^^^^^^^^^^^^^^^
+ImportError: cannot import name 'AutoTokenizer' from 'transformers' (/home/groups/ramr/gfw/coding-progress-ledger/agent-migrate/.venv/lib/python3.11/site-packages/transformers/__init__.py)
+  File "/home/groups/ramr/gfw/coding-progress-ledger/agent-migrate/queue-haul/stage1c_controller.py", line 526, in _tokenizer
+    from transformers import AutoTokenizer
+ImportError: cannot import name 'AutoTokenizer' from 'transformers' (/home/groups/ramr/gfw/coding-progress-ledger/agent-migrate/.venv/lib/python3.11/site-packages/transformers/__init__.py)
+Exception in thread Thread-20 (_serve):
+Traceback (most recent call last):
+  File "/home/users/gfw/.local/share/uv/python/cpython-3.11.15-linux-x86_64-gnu/lib/python3.11/threading.py", line 1045, in _bootstrap_inner
+    self.run()
+  File "/home/users/gfw/.local/share/uv/python/cpython-3.11.15-linux-x86_64-gnu/lib/python3.11/threading.py", line 982, in run
+    self._target(*self._args, **self._kwargs)
+  File "/home/groups/ramr/gfw/coding-progress-ledger/agent-migrate/queue-haul/stage1c_controller.py", line 1006, in _serve
+    messages = self._bounded(base + [{"role": "user", "content": session_followup(self.session, idx)}])
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/groups/ramr/gfw/coding-progress-ledger/agent-migrate/queue-haul/stage1c_controller.py", line 987, in _bounded
+    raise RuntimeError(f"session {self.session['id']} exceeded its append-only migration limit")
+RuntimeError: session codex:e4fa4daa-9887-f50a-b110-c9378383c7b1 exceeded its append-only migration limit
+[2026-07-13T12:41:12.473] error: *** JOB 33815357 ON sh03-11n16 CANCELLED AT 2026-07-13T12:41:12 DUE to SIGNAL Terminated ***

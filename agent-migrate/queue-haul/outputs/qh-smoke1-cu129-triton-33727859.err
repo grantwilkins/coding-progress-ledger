@@ -1,0 +1,18 @@
+/bin/sh: warning: setlocale: LC_ALL: cannot change locale (C.UTF-8)
++ cd /home/groups/ramr/gfw/coding-progress-ledger/agent-migrate
++ module load gcc/14.2.0 openblas/0.3.28
++ '[' -z '' ']'
++ case "$-" in
++ __lmod_sh_dbg=x
++ '[' -n x ']'
++ set +x
+Shell debugging temporarily silenced: export LMOD_SH_DBG_ON=1 for Lmod's output
+Shell debugging restarted
++ unset __lmod_sh_dbg
++ return 0
++ export QH_APPTAINER_IMAGE=/scratch/users/gfw/ptsim/lmcache-vllm-openai-latest-cu129.sif
++ QH_APPTAINER_IMAGE=/scratch/users/gfw/ptsim/lmcache-vllm-openai-latest-cu129.sif
++ export QH_APPTAINER_GPU_MODE=nvccli
++ QH_APPTAINER_GPU_MODE=nvccli
++ .venv/bin/python queue-haul/stage1b_drain_sink.py smoke1 --run-root queue-haul/outputs/stage1b_smoke1_cu129_triton --max-model-len 8192 --max-num-seqs 16 --max-num-batched-tokens 2048 -- --moe-backend triton
+[2026-07-12T16:43:31.140] error: *** JOB 33727859 ON sh03-11n16 CANCELLED AT 2026-07-12T16:43:31 DUE to SIGNAL Terminated ***
