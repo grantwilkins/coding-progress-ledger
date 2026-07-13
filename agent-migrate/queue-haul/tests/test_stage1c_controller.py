@@ -871,6 +871,8 @@ def test_grid_sbatch_defaults_to_old_runtime():
     assert 'SMART_ARGS=(--deadline-scales "$DEADLINE_SCALES" --random-seeds "$RANDOM_SEEDS")' in text
     assert "KV_CONCURRENCY=${KV_CONCURRENCY:-2}" in text
     assert "DEST_LOAD_BUDGET_ELL=${DEST_LOAD_BUDGET_ELL:-}" in text
+    assert 'SMART_ARGS+=(--dest-load-budget-ell "$DEST_LOAD_BUDGET_ELL")' in text
+    assert "DEST_LOAD_ARGS" not in text
     assert c.parse_args(["live-drain", "--manifest", "sessions.json"]).kv_concurrency == 2
     assert c.parse_args(["live-grid", "--manifest", "sessions.json", "--dest-load-budget-ell", "2"]).dest_load_budget_ell == 2
 

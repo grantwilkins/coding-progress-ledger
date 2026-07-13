@@ -81,9 +81,8 @@ SMART_ARGS=(--deadline-scales "$DEADLINE_SCALES" --random-seeds "$RANDOM_SEEDS")
 if [[ "$SMART_SWEEP" == 1 ]]; then
   SMART_ARGS+=(--smart-sweep)
 fi
-DEST_LOAD_ARGS=()
 if [[ -n "$DEST_LOAD_BUDGET_ELL" ]]; then
-  DEST_LOAD_ARGS=(--dest-load-budget-ell "$DEST_LOAD_BUDGET_ELL")
+  SMART_ARGS+=(--dest-load-budget-ell "$DEST_LOAD_BUDGET_ELL")
 fi
 
 $PY queue-haul/stage1b_drain_sink.py preflight --required-gpus 2
@@ -101,5 +100,4 @@ $PY queue-haul/stage1c_controller.py live-grid \
   --profile "$PROFILE" \
   --replay-concurrency "$REPLAY_CONCURRENCY" \
   --kv-concurrency "$KV_CONCURRENCY" \
-  "${DEST_LOAD_ARGS[@]}" \
   "${SMART_ARGS[@]}"
