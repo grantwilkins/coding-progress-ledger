@@ -200,6 +200,32 @@ def test_prompt_tokens_counts_batch_encoding_input_ids(monkeypatch):
     assert c.prompt_tokens(type("Cfg", (), {})(), "x") == 4
 
 
+def test_tokenizer_initialization_is_thread_safe(tmp_path: Path, monkeypatch):
+    root = tmp_path / "model"
+    (root / "snapshot").mkdir(parents=True)
+    calls, tokens = [], []
+
+    class AutoTokenizer:
+        @staticmethod
+        def from_pretrained(*_args, **_kwargs):
+            calls.append(1)
+            time.sleep(0.02)
+            return object()
+
+    monkeypatch.setattr(c.b, "model_snapshot_dir", lambda *_args: root)
+    monkeypatch.setitem(__import__("sys").modules, "transformers", type("M", (), {"AutoTokenizer": AutoTokenizer}))
+    c._TOKENIZER_CACHE.clear()
+    threads = [threading.Thread(target=lambda: tokens.append(c._tokenizer(type("Cfg", (), {"hf_home": tmp_path, "model": "m"})()))) for _ in range(8)]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join()
+
+    assert len(calls) == 1
+    assert len({id(token) for token in tokens}) == 1
+    c._TOKENIZER_CACHE.clear()
+
+
 def test_session_worker_advances_canonical_transcript_with_actual_output(tmp_path: Path, monkeypatch):
     class Log:
         def write(self, *_args, **_kwargs):
@@ -243,6 +269,34 @@ def test_source_request_p95_uses_serving_telemetry():
     assert c.source_request_p95_s(workers) == pytest.approx(3.85)
     with pytest.raises(RuntimeError, match="no source request"):
         c.source_request_p95_s({"a": type("W", (), {"request_s": []})()})
+
+
+def test_begin_migration_pauses_and_snapshots_inflight_prompt(tmp_path: Path):
+    session = {"id": "s", "served_T": 10, "decode_tokens": 1, "turn_rate_hz": 1, "turns": [{"append_tokens": 1}], "messages": [{"role": "user", "content": "old"}], "generation": 1}
+    worker = c.SessionWorker(type("Cfg", (), {})(), session, 1, type("Log", (), {"write": lambda *_a, **_k: None})(), 0, tmp_path)
+    worker.in_flight = True
+    worker.in_flight_messages = worker.messages + [{"role": "user", "content": "pending"}]
+
+    snapshot = worker.begin_migration()
+
+    assert worker.paused and worker.migrating
+    assert snapshot["messages"][-1]["content"] == "pending"
+
+
+def test_session_worker_surfaces_thread_failure(tmp_path: Path, monkeypatch):
+    session = {"id": "s", "served_T": 10, "decode_tokens": 1, "turn_rate_hz": 1, "turns": [{"append_tokens": 1}], "messages": [{"role": "user", "content": "old"}], "generation": 1}
+    worker = c.SessionWorker(type("Cfg", (), {})(), session, 1, type("Log", (), {"write": lambda *_a, **_k: None})(), 0, tmp_path)
+    monkeypatch.setattr(c, "prompt_tokens", lambda *_args: (_ for _ in ()).throw(ValueError("broken tokenizer")))
+    thread = threading.Thread(target=worker._serve)
+    thread.start()
+    with worker.cond:
+        worker.pending = 1
+        worker.cond.notify_all()
+        assert worker.cond.wait_for(lambda: worker.error is not None, 1)
+    thread.join()
+
+    with pytest.raises(RuntimeError, match="broken tokenizer"):
+        worker.snapshot()
 
 
 def test_live_plan_uses_log_power_curve_and_dispatches_all(tmp_path: Path):

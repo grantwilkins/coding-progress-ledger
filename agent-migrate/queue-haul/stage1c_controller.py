@@ -47,6 +47,7 @@ LIVE_A100_LOG_SHAPE = 8.55
 LIVE_A100_C_PREFILL_J_PER_TOK = 0.028197803044670608
 LIVE_A100_C_DECODE_J_PER_TOK = 0.25745287802176875
 _TOKENIZER_CACHE = {}
+_TOKENIZER_LOCK = threading.Lock()
 _STORED_SIZE_RE = re.compile(r"size:\s*([0-9.]+)\s*gb", re.IGNORECASE)
 _LMCACHE_LOOKUP_RE = re.compile(r"Reqid:\s*([^,]+),\s*Total tokens\s*(\d+),\s*LMCache hit tokens:\s*(\d+)")
 
@@ -522,9 +523,10 @@ def _tokenizer(cfg: b.Config):
     if not snaps:
         raise ValueError(f"no local tokenizer snapshot for {cfg.model}")
     snap = str(max(snaps, key=lambda p: p.stat().st_mtime))
-    if snap not in _TOKENIZER_CACHE:
-        from transformers import AutoTokenizer
-        _TOKENIZER_CACHE[snap] = AutoTokenizer.from_pretrained(snap, local_files_only=True)
+    with _TOKENIZER_LOCK:
+        if snap not in _TOKENIZER_CACHE:
+            from transformers import AutoTokenizer
+            _TOKENIZER_CACHE[snap] = AutoTokenizer.from_pretrained(snap, local_files_only=True)
     return _TOKENIZER_CACHE[snap]
 
 
@@ -946,6 +948,7 @@ class SessionWorker:
         self.paused = False
         self.stopped = False
         self.in_flight = False
+        self.in_flight_messages: list[dict] | None = None
         self.migrating = False
         self.request_s: list[float] = []
         self.last_request_id = session.get("last_request_id")
@@ -993,20 +996,29 @@ class SessionWorker:
 
     def _serve(self) -> None:
         while True:
-            with self.cond:
-                self.cond.wait_for(lambda: self.stopped or (self.pending and not self.paused))
-                if self.stopped:
-                    return
-                self.pending = 0
-                idx, port = self.turn, self.port
-                self.turn += 1
-                base = chat_messages(self.messages)
-                context_hash = messages_sha256(base)
-                self.in_flight = True
-            messages = self._bounded(base + [{"role": "user", "content": session_followup(self.session, idx)}])
-            self.log.write("request_start", session_id=self.session["id"], turn=idx, generation=self.generation, port=port, context_sha256=context_hash)
-            result = stream_chat(self.cfg, port, messages, int(self.session["decode_tokens"]))
-            kv_bytes = wait_session_kv_bytes(self.source_log, result.get("request_id"), 2.0) if result["status"] == 200 and port == self.cfg.src_port else 0
+            try:
+                with self.cond:
+                    self.cond.wait_for(lambda: self.stopped or (self.pending and not self.paused))
+                    if self.stopped:
+                        return
+                    self.pending = 0
+                    idx, port = self.turn, self.port
+                    self.turn += 1
+                    base = chat_messages(self.messages)
+                    context_hash = messages_sha256(base)
+                    messages = self._bounded(base + [{"role": "user", "content": session_followup(self.session, idx)}])
+                    self.in_flight_messages = messages
+                    self.in_flight = True
+                self.log.write("request_start", session_id=self.session["id"], turn=idx, generation=self.generation, port=port, context_sha256=context_hash)
+                result = stream_chat(self.cfg, port, messages, int(self.session["decode_tokens"]))
+                kv_bytes = wait_session_kv_bytes(self.source_log, result.get("request_id"), 2.0) if result["status"] == 200 and port == self.cfg.src_port else 0
+            except Exception as exc:
+                with self.cond:
+                    self.error = RuntimeError(f"session {self.session['id']} worker failed: {exc}")
+                    self.in_flight = False
+                    self.in_flight_messages = None
+                    self.cond.notify_all()
+                return
             with self.cond:
                 self.request_s.append(float(result["end_ts"] - result["start_ts"]))
                 if result["status"] == 200:
@@ -1020,6 +1032,7 @@ class SessionWorker:
                 else:
                     self.error = RuntimeError(f"session {self.session['id']} request failed: {result['response_text']}")
                 self.in_flight = False
+                self.in_flight_messages = None
                 self.cond.notify_all()
             self.log.write("request_end", session_id=self.session["id"], turn=idx, port=port, status=result["status"], request_id=result.get("request_id"), session_kv_bytes=self.last_source_kv_bytes, generation=self.generation, first_token_ts=result["first_token_ts"], end_ts=result["end_ts"])
 
@@ -1032,8 +1045,13 @@ class SessionWorker:
 
     def begin_migration(self) -> dict:
         with self.cond:
+            if self.error:
+                raise self.error
             self.migrating = True
-        return self.snapshot()
+            self.paused = True
+            self.cond.notify_all()
+            messages = chat_messages(self.in_flight_messages or self.messages)
+            return {"messages": messages, "generation": self.generation, "context_sha256": messages_sha256(messages), "last_request_id": self.last_request_id, "session_kv_bytes": self.last_source_kv_bytes}
 
     def pause_boundary(self, timeout_s: float = 900.0) -> None:
         deadline = time.monotonic() + timeout_s

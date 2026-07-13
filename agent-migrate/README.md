@@ -198,8 +198,9 @@ three seeds, and each all-replay/all-KV baseline once per target. Set
 `live-drain` keeps both servers up together and runs Poisson turn loops whose
 canonical transcript includes every actual streamed assistant response. Once the
 planner fixes every action and order, each selected session freezes an append-only
-prefix and stages it on the sink while source turns continue. At the next source
-request boundary, only the suffix is staged under the original action: replay
+prefix and stages it on the sink while its in-flight source turn finishes. New
+source turns wait until the switch. At that request boundary, only the suffix is
+staged under the original action: replay
 reuses vLLM's prefix or KV transfer reuses LMCache's copied chunks. Rewriting or
 trimming the transferred prefix is a hard failure. Staging slots are released
 before source-boundary waits, so those waits overlap across sessions. The plan
