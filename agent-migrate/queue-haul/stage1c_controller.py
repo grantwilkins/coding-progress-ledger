@@ -1894,8 +1894,9 @@ def write_grid_summary(run_roots: list[Path], out_csv: Path, power_png: Path, de
 def _smart_jobs(root: Path, base: dict, profile: dict, policies: list[str], target_fracs: list[float],
                 deadline_scales: list[float], random_seeds: list[int], replay_concurrency: int,
                 kv_concurrency: int | None) -> list[tuple]:
-    if set(policies) - {"greedy", "random", "all-r", "all-s"}:
-        raise ValueError("smart sweep keeps LP offline; policies must be greedy,random,all-r,all-s")
+    allowed = {"greedy", "lp", "milp", "power-unaware", "random", "all-r", "all-s"}
+    if unknown := set(policies) - allowed:
+        raise ValueError(f"unknown policies: {sorted(unknown)}")
     jobs = []
     profiled = apply_live_profile(base, profile)
     for frac in target_fracs:
@@ -1905,14 +1906,13 @@ def _smart_jobs(root: Path, base: dict, profile: dict, policies: list[str], targ
         if not math.isfinite(reference) or reference <= 0:
             raise ValueError(f"invalid profiled completion time {reference} for target {frac}")
         for policy in policies:
-            variants = ((scale, 0) for scale in deadline_scales) if policy == "greedy" else (
-                ((1.0, seed) for seed in random_seeds) if policy == "random" else ((1.0, 0),)
-            )
+            variants = ((scale, seed) for scale in deadline_scales for seed in random_seeds)
             for scale, seed in variants:
                 D = reference * scale
                 scenario = {"deadline_scale": scale, "reference_deadline_s": reference}
-                dst = root / grid_run_name(policy, D, frac, seed if policy == "random" else None)
-                jobs.append((dst, {**base, "scenario": scenario}, policy, seed, D, frac))
+                dst = root / grid_run_name(policy, D, frac, seed)
+                job_manifest = {**base, "source": {**base.get("source", {}), "seed": seed}, "scenario": scenario}
+                jobs.append((dst, job_manifest, policy, seed, D, frac))
     return jobs
 
 
@@ -2000,14 +2000,14 @@ def parse_args(argv: list[str] | None = None):
     make_p.add_argument("--decode-margin", type=int, default=512)
     make_p.add_argument("--min-turns", type=int, default=3)
     make_p.add_argument("--min-context-tokens", type=int, default=2048)
-    make_p.add_argument("--workload", choices=("mixed", "small", "large"), default="mixed")
+    make_p.add_argument("--workload", choices=("mixed", "small", "large", "interactive_coding", "coding", "agentic_tool_loop"), default="mixed")
     live_p = sub.add_parser("live-drain")
     b.add_common(live_p)
     live_p.add_argument("--manifest", type=Path, required=True)
     live_p.add_argument("--run-root", type=Path, default=Path("queue-haul/outputs/stage1c_live"))
     live_p.add_argument("--mbps", type=float, default=1000.0)
     live_p.add_argument("--nvsmi-ms", type=int, default=250)
-    live_p.add_argument("--policy", choices=("greedy", "random", "lp", "all-r", "all-s"), default="greedy")
+    live_p.add_argument("--policy", choices=("greedy", "lp", "milp", "power-unaware", "random", "all-r", "all-s"), default="greedy")
     live_p.add_argument("--deadline-s", type=float)
     live_p.add_argument("--target-frac", type=float)
     live_p.add_argument("--seed", type=int, default=0)
@@ -2023,7 +2023,7 @@ def parse_args(argv: list[str] | None = None):
     grid_p.add_argument("--run-root", type=Path, default=Path("queue-haul/outputs/stage1c_grid"))
     grid_p.add_argument("--mbps", type=float, default=1000.0)
     grid_p.add_argument("--nvsmi-ms", type=int, default=250)
-    grid_p.add_argument("--policies", default="greedy,random,lp")
+    grid_p.add_argument("--policies", default="greedy,lp,milp,power-unaware,random")
     grid_p.add_argument("--deadlines", default="10,30,120")
     grid_p.add_argument("--target-fracs", default="0.25,0.45,0.65")
     grid_p.add_argument("--baseline-s", type=float, default=120.0)

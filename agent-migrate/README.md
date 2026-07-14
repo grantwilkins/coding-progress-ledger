@@ -143,8 +143,8 @@ $PY queue-haul/stage1b_drain_sink.py smoke2-live --mbps 1000 --run-root /tmp/qh-
 ```
 
 Stage 1c keeps the fixture proof as the fast source/sink controller check. Its
-live controller uses node-aware greedy as the operational planner; LP remains an
-explicit benchmark policy:
+live controller compares node-aware greedy with rounded LP, exact single-source
+MILP, power-unaware greedy, and random whole-session plans:
 
 ```bash
 $PY queue-haul/stage1c_controller.py plan
@@ -176,7 +176,7 @@ $PY queue-haul/stage1c_controller.py live-grid \
   --mbps 1000 \
   --run-root queue-haul/outputs/stage1c_grid \
   --profile queue-haul/outputs/stage1c_grid/live_profile.json
-# Or submit a one-scenario check, then the adaptive 72-scenario sweep:
+# Or submit a one-scenario check, then the resumable 90-scenario sweep:
 sbatch queue-haul/stage1c_quick.sbatch
 RUN_ROOT=queue-haul/outputs/stage1c_smart_sweep sbatch queue-haul/stage1c_grid.sbatch
 ```
@@ -190,10 +190,11 @@ resets both vLLM prefix caches, and assigns a unique cache namespace. LMCache
 cannot hit across scenario namespaces. Each scenario starts and stops its own
 `nvidia-smi` process, warms the workload for 30 seconds, and records before/after
 `/metrics` snapshots for both vLLM servers. Measured source power, not modeled
-committed load, determines power acceptance. The batch sweep profiles each small/mixed/large workload once, derives
-target-specific deadlines, runs greedy at `0.75x/1x/1.5x`, random at `1x` with
-three seeds, and each all-replay/all-KV baseline once per target. Set
-`SMART_SWEEP=0` for the legacy Cartesian grid.
+committed load, determines power acceptance. The batch sweep profiles each
+trace-derived interactive-coding, coding, and agentic-tool-loop workload once,
+derives target-specific deadlines, and runs each planner with three seeds at 50%
+and 100% of removable source power. Set `SMART_SWEEP=0` for the legacy Cartesian
+grid.
 
 Live planning uses the checked-in 5-second A100 calibration: session load is
 `f/F + g/G`, `rho_star=0.534657` is fixed across workloads, and the matching
@@ -230,10 +231,22 @@ sink turn when one occurs. The manifest reports
 quantity. `live-grid` also writes the exact `scenario_plan.json`,
 `scenario_summary.csv` (including profiled deadline and completion/reference
 ratio), `grid_power_drop.png`, and `grid_delay.png`. Use
-`POLICIES=greedy,random,all-r,all-s sbatch queue-haul/stage1c_quick.sbatch`
-for the quick policy/counterfactual comparison; add `lp` as an offline benchmark.
+`POLICIES=all-r,all-s sbatch queue-haul/stage1c_quick.sbatch`
+for the replay/KV counterfactual comparison.
 `all-r` forces reconstruction only during handoff; normal sink turns then reuse
 the reconstructed prefix. `all-s` requires measured KV bytes and token hits.
+The exact planners are not run at datacenter scale. The linearithmic offline
+experiment compares concentrated node draining, power-unaware session ordering,
+and random ordering for 10,000 sessions, then replays each plan over independent
+per-source links at 250 Mbps, 1 Gbps, and 10 Gbps with 10/40/80 ms RTT:
+
+```bash
+uv run python queue-haul/power_drain_experiment.py \
+  --out queue-haul/outputs/power_drain_offline
+```
+
+It writes `scale_results.csv`, `scale_policy_comparison.png`, and
+`scale_network_sensitivity.png`.
 
 Raw Stage 1b/1c run directories and scheduler logs are generated and ignored.
 The retained Stage 1c result is the final three-replicate paired validation:
