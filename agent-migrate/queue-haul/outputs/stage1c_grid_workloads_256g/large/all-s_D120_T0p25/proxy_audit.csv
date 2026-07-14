@@ -1,7 +1,0 @@
-phase,route,direction,bytes,window_s,bytes_per_s,target_bytes_per_s,target_ratio,ok
-baseline,api,client_to_target,0,0.0,0.0,125000000.0,0.0,1
-baseline,kv,target_to_client,0,0.0,0.0,125000000.0,0.0,1
-drain,api,client_to_target,544242,153.36081910133362,3548.7682133491376,125000000.0,2.83901457067931e-05,1
-drain,kv,target_to_client,6700143844,155.39183712005615,43117733.64789716,125000000.0,0.3449418691831773,1
-post,api,client_to_target,0,0.0,0.0,125000000.0,0.0,1
-post,kv,target_to_client,1184845652,26.643625020980835,44470136.89267055,125000000.0,0.3557610951413644,1

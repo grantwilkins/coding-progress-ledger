@@ -234,3 +234,18 @@ ratio), `grid_power_drop.png`, and `grid_delay.png`. Use
 for the quick policy/counterfactual comparison; add `lp` as an offline benchmark.
 `all-r` forces reconstruction only during handoff; normal sink turns then reuse
 the reconstructed prefix. `all-s` requires measured KV bytes and token hits.
+
+Raw Stage 1b/1c run directories and scheduler logs are generated and ignored.
+The retained Stage 1c result is the final three-replicate paired validation:
+
+```bash
+uv run python queue-haul/plot_stage1c_results.py
+```
+
+`queue-haul/outputs/stage1c_results.csv` keeps the baseline/post power means,
+sample counts, planner/target watts, admission status, and completion outcome.
+It generates `stage1c_power_change.{pdf,png}` and
+`stage1c_completion.{pdf,png}`. The admission-feasible runs shed
+`17.6-29.7 W`; the mechanism-only runs shed `160.5-165.9 W` but exceed the
+calibrated destination admission limit. All six finish within `120 s`, and
+none reaches the `182.0 W` measured-power target.
