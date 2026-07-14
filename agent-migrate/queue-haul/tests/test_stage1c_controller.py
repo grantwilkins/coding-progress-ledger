@@ -303,7 +303,7 @@ def test_source_request_p95_uses_serving_telemetry():
         c.source_request_p95_s({"a": type("W", (), {"request_s": []})()})
 
 
-def test_begin_migration_pauses_and_snapshots_inflight_prompt(tmp_path: Path):
+def test_begin_migration_keeps_serving_and_snapshots_inflight_prompt(tmp_path: Path):
     session = {"id": "s", "served_T": 10, "decode_tokens": 1, "turn_rate_hz": 1, "turns": [{"append_tokens": 1}], "messages": [{"role": "user", "content": "old"}], "generation": 1}
     worker = c.SessionWorker(type("Cfg", (), {})(), session, 1, type("Log", (), {"write": lambda *_a, **_k: None})(), 0, tmp_path)
     worker.in_flight = True
@@ -311,8 +311,28 @@ def test_begin_migration_pauses_and_snapshots_inflight_prompt(tmp_path: Path):
 
     snapshot = worker.begin_migration()
 
-    assert worker.paused and worker.migrating
+    assert not worker.paused and worker.migrating
     assert snapshot["messages"][-1]["content"] == "pending"
+
+
+def test_session_worker_queues_turns_and_hard_fails_on_overflow(tmp_path: Path):
+    class Log:
+        def __init__(self):
+            self.kinds = []
+        def write(self, kind, **_kwargs):
+            self.kinds.append(kind)
+
+    session = {"id": "s", "served_T": 10, "decode_tokens": 1, "turn_rate_hz": 1, "turns": [{"append_tokens": 1}], "messages": [{"role": "user", "content": "old"}], "generation": 1, "max_pending_turns": 2}
+    log = Log()
+    worker = c.SessionWorker(type("Cfg", (), {})(), session, 1, log, 0, tmp_path)
+
+    assert worker.queue_arrival(1.0)
+    assert worker.queue_arrival(2.0)
+    assert not worker.queue_arrival(3.0)
+    assert worker.pending == 2
+    assert "turn_drop" not in log.kinds
+    with pytest.raises(RuntimeError, match="exceeded 2 queued turns"):
+        worker.snapshot()
 
 
 def test_session_worker_surfaces_thread_failure(tmp_path: Path, monkeypatch):
@@ -587,7 +607,10 @@ def test_power_summary_rows_skips_nvidia_smi_na_samples(tmp_path: Path):
 
     rows = c.power_summary_rows(path, {"baseline": (0, 1)})
 
-    assert rows == [{"phase": "baseline", "gpu": 0, "samples": 2, "power_mean_w": 200.0}]
+    assert rows == [{"phase": "baseline", "gpu": 0, "samples": 2, "total_samples": 3, "coverage": pytest.approx(2 / 3), "power_mean_w": 200.0}]
+    with pytest.raises(RuntimeError, match="coverage"):
+        c.require_power_coverage(rows)
+    c.require_power_coverage(rows, 0.5)
 
 
 def test_source_power_drop_uses_measured_windows():
@@ -833,7 +856,8 @@ def test_live_profile_costs_override_runtime_model(tmp_path: Path):
     for i, session in enumerate(sessions):
         assert imp.c_replay[i] == pytest.approx(session["c_replay_s"])
         assert imp.c_transfer[i] == pytest.approx(session["c_transfer_s"])
-    assert sessions[0]["profile_transfer_bytes"] > manifest["sessions"][0]["session_kv_bytes"]
+    assert sessions[0]["profile_transfer_bytes"] == manifest["sessions"][0]["session_kv_bytes"]
+    assert all(s["profile_transfer_bytes_source"] == "measured_session" for s in sessions)
     for session in sessions:
         assert session["c_transfer_s"] == pytest.approx(session["profile_transfer_stage_s"])
 
@@ -865,7 +889,7 @@ def test_live_profile_uses_profiled_transfer_bytes_and_rate(tmp_path: Path):
     sessions, _pop, _pool, move, imp, *_ = c._live_model(patched)
 
     assert move.lambda_src == pytest.approx(1000.0)
-    assert sessions[0]["profile_transfer_bytes"] == pytest.approx(10.0 * sessions[0]["served_T"])
+    assert sessions[0]["profile_transfer_bytes"] == pytest.approx(1.0)
     assert sessions[1]["profile_transfer_bytes"] == pytest.approx(50_000.0)
     assert imp.b_transfer.tolist() == pytest.approx([s["profile_transfer_bytes"] for s in sessions])
 

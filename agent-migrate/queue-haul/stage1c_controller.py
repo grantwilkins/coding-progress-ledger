@@ -701,10 +701,12 @@ def _profile_cost(profile: dict, action: str, tokens: int) -> float:
 
 
 def _profile_transfer_bytes(profile: dict, session: dict) -> float:
+    observed = float(session.get("session_kv_bytes") or session.get("source_kv_bytes") or 0)
+    if observed > 0:
+        return observed
     tokens = int(session["served_T"])
     profiled = float(profile.get("kv_bytes_per_token") or 0.0) * tokens
-    observed = float(session.get("session_kv_bytes") or session.get("source_kv_bytes") or 0)
-    return max(profiled, observed)
+    return profiled
 
 
 def _profile_transfer_cost(profile: dict, session: dict) -> float:
@@ -732,6 +734,7 @@ def apply_live_profile(manifest: dict, profile: dict) -> dict:
             "profile_transfer_stage_s": transfer_s,
 
             "profile_transfer_bytes": _profile_transfer_bytes(profile, s),
+            "profile_transfer_bytes_source": "measured_session" if s.get("session_kv_bytes") else "profile_estimate",
         })
     return {**manifest, "sessions": sessions, "profile": {"schema": profile["schema"], "mbps": profile.get("mbps"), "points": profile["points"], "kv_bytes_per_s": profile.get("kv_bytes_per_s"), "kv_bytes_per_token": profile.get("kv_bytes_per_token"), "source_boundary_s": profile.get("source_boundary_s", 0.0)}}
 
@@ -1009,6 +1012,10 @@ class SessionWorker:
         self.rng = random.Random(seed)
         self.cond = threading.Condition()
         self.pending = 0
+        self.pending_arrivals: list[float] = []
+        self.max_pending = int(session.get("max_pending_turns", 64))
+        if self.max_pending < 1:
+            raise ValueError("max_pending_turns must be positive")
         self.turn = int(session.get("generation", 1))
         self.generation = int(session.get("generation", 1))
         self.messages = chat_messages(session.get("messages", session_prompt(session, 0)))
@@ -1018,6 +1025,7 @@ class SessionWorker:
         self.in_flight_messages: list[dict] | None = None
         self.migrating = False
         self.request_s: list[float] = []
+        self.source_ttft_s: list[float] = []
         self.last_request_id = session.get("last_request_id")
         self.last_source_kv_bytes = int(session.get("session_kv_bytes", 0))
         self.expected_sink_context_sha256: str | None = None
@@ -1030,10 +1038,29 @@ class SessionWorker:
         for t in self.threads:
             t.start()
 
+    def queue_arrival(self, ts: float | None = None) -> bool:
+        with self.cond:
+            if self.stopped:
+                return False
+            if self.pending >= self.max_pending:
+                self.error = RuntimeError(f"session {self.session['id']} exceeded {self.max_pending} queued turns")
+                self.stopped = True
+                self.log.write("turn_queue_overflow", session_id=self.session["id"], depth=self.pending)
+                self.cond.notify_all()
+                return False
+            self.pending += 1
+            self.pending_arrivals.append(time.time() if ts is None else ts)
+            self.log.write("turn_arrival", session_id=self.session["id"], queue_depth=self.pending)
+            self.cond.notify_all()
+            return True
+
     def _arrivals(self) -> None:
         rate = float(self.session["turn_rate_hz"])
+        gaps = [float(t.get("gap_s", 0)) for t in self.session["turns"][1:] if float(t.get("gap_s", 0)) > 0]
+        gaps = gaps or [1.0 / rate]
+        arrival = 0
         while True:
-            due = time.monotonic() + self.rng.expovariate(rate)
+            due = time.monotonic() + gaps[arrival % len(gaps)]
             with self.cond:
                 while not self.stopped:
                     left = due - time.monotonic()
@@ -1042,12 +1069,9 @@ class SessionWorker:
                     self.cond.wait(left)
                 if self.stopped:
                     return
-                if self.pending:
-                    self.log.write("turn_drop", session_id=self.session["id"])
-                else:
-                    self.pending = 1
-                    self.log.write("turn_arrival", session_id=self.session["id"])
-                self.cond.notify_all()
+            if not self.queue_arrival():
+                return
+            arrival += 1
 
     def _bounded(self, messages: list[dict]) -> list[dict]:
         messages = chat_messages(messages)
@@ -1068,7 +1092,8 @@ class SessionWorker:
                     self.cond.wait_for(lambda: self.stopped or (self.pending and not self.paused))
                     if self.stopped:
                         return
-                    self.pending = 0
+                    self.pending -= 1
+                    arrival_ts = self.pending_arrivals.pop(0) if self.pending_arrivals else time.time()
                     idx, port = self.turn, self.port
                     self.turn += 1
                     base = chat_messages(self.messages)
@@ -1076,7 +1101,7 @@ class SessionWorker:
                     messages = self._bounded(base + [{"role": "user", "content": session_followup(self.session, idx)}])
                     self.in_flight_messages = messages
                     self.in_flight = True
-                self.log.write("request_start", session_id=self.session["id"], turn=idx, generation=self.generation, port=port, context_sha256=context_hash)
+                self.log.write("request_start", session_id=self.session["id"], turn=idx, generation=self.generation, port=port, context_sha256=context_hash, arrival_ts=arrival_ts, queue_wait_s=time.time() - arrival_ts)
                 result = stream_chat(self.cfg, port, messages, int(self.session["decode_tokens"]))
                 kv_bytes = wait_session_kv_bytes(self.source_log, result.get("request_id"), 2.0) if result["status"] == 200 and port == self.cfg.src_port else 0
             except Exception as exc:
@@ -1086,8 +1111,11 @@ class SessionWorker:
                     self.in_flight_messages = None
                     self.cond.notify_all()
                 return
+            ttft_from_arrival = float(result["first_token_ts"] - arrival_ts)
             with self.cond:
                 self.request_s.append(float(result["end_ts"] - result["start_ts"]))
+                if result["status"] == 200 and port == self.cfg.src_port:
+                    self.source_ttft_s.append(ttft_from_arrival)
                 if result["status"] == 200:
                     self.messages = messages + [{"role": "assistant", "content": result["content"]}]
                     self.generation += 1
@@ -1095,13 +1123,13 @@ class SessionWorker:
                     if kv_bytes:
                         self.last_source_kv_bytes = kv_bytes
                     if port == self.cfg.api_proxy_port and self.expected_sink_context_sha256 and self.first_sink_proof is None:
-                        self.first_sink_proof = {"request_id": result.get("request_id"), "context_sha256": context_hash, "context_match": context_hash == self.expected_sink_context_sha256}
+                        self.first_sink_proof = {"request_id": result.get("request_id"), "context_sha256": context_hash, "context_match": context_hash == self.expected_sink_context_sha256, "arrival_to_first_token_s": ttft_from_arrival, "source_baseline_ttft_s": float(np.median(self.source_ttft_s)) if self.source_ttft_s else None}
                 else:
                     self.error = RuntimeError(f"session {self.session['id']} request failed: {result['response_text']}")
                 self.in_flight = False
                 self.in_flight_messages = None
                 self.cond.notify_all()
-            self.log.write("request_end", session_id=self.session["id"], turn=idx, port=port, status=result["status"], request_id=result.get("request_id"), session_kv_bytes=self.last_source_kv_bytes, generation=self.generation, first_token_ts=result["first_token_ts"], end_ts=result["end_ts"])
+            self.log.write("request_end", session_id=self.session["id"], turn=idx, port=port, status=result["status"], request_id=result.get("request_id"), session_kv_bytes=self.last_source_kv_bytes, generation=self.generation, first_token_ts=result["first_token_ts"], end_ts=result["end_ts"], arrival_to_first_token_s=ttft_from_arrival)
 
     def snapshot(self) -> dict:
         with self.cond:
@@ -1115,8 +1143,6 @@ class SessionWorker:
             if self.error:
                 raise self.error
             self.migrating = True
-            self.paused = True
-            self.cond.notify_all()
             messages = chat_messages(self.in_flight_messages or self.messages)
             return {"messages": messages, "generation": self.generation, "context_sha256": messages_sha256(messages), "last_request_id": self.last_request_id, "session_kv_bytes": self.last_source_kv_bytes}
 
@@ -1208,33 +1234,42 @@ def _power_w(value: str) -> float | None:
     return None if text in {"", "N/A", "[N/A]"} else float(text)
 
 
-def _power_points(power_csv: Path) -> list[tuple[float, int, float]]:
+def _power_records(power_csv: Path) -> list[tuple[float, int, float | None]]:
     rows = []
     with power_csv.open() as f:
         for r in csv.DictReader(f):
-            power = _power_w(r["power_w"])
-            if power is not None:
-                rows.append((_parse_ts(r["timestamp"]), int(r["index"]), power))
+            rows.append((_parse_ts(r["timestamp"]), int(r["index"]), _power_w(r["power_w"])))
     return rows
 
 
+def _power_points(power_csv: Path) -> list[tuple[float, int, float]]:
+    return [(ts, gpu, power) for ts, gpu, power in _power_records(power_csv) if power is not None]
+
+
 def power_summary_rows(path: Path, windows: dict[str, tuple[float, float]]) -> list[dict]:
-    rows = [{"ts": ts, "gpu": gpu, "power_w": power} for ts, gpu, power in _power_points(path)]
+    rows = [{"ts": ts, "gpu": gpu, "power_w": power} for ts, gpu, power in _power_records(path)]
     out = []
     for phase, (lo, hi) in windows.items():
         for gpu in sorted({r["gpu"] for r in rows}):
-            vals = [r["power_w"] for r in rows if r["gpu"] == gpu and lo <= r["ts"] <= hi]
-            out.append({"phase": phase, "gpu": gpu, "samples": len(vals), "power_mean_w": float(np.mean(vals)) if vals else math.nan})
+            selected = [r["power_w"] for r in rows if r["gpu"] == gpu and lo <= r["ts"] <= hi]
+            vals = [v for v in selected if v is not None]
+            out.append({"phase": phase, "gpu": gpu, "samples": len(vals), "total_samples": len(selected), "coverage": len(vals) / len(selected) if selected else 0.0, "power_mean_w": float(np.mean(vals)) if vals else math.nan})
     return out
 
 
 def write_power_summary(power_csv: Path, out_csv: Path, windows: dict[str, tuple[float, float]]) -> list[dict]:
     rows = power_summary_rows(power_csv, windows)
     with out_csv.open("w", newline="") as f:
-        writer = csv.DictWriter(f, ["phase", "gpu", "samples", "power_mean_w"])
+        writer = csv.DictWriter(f, ["phase", "gpu", "samples", "total_samples", "coverage", "power_mean_w"])
         writer.writeheader()
         writer.writerows(rows)
     return rows
+
+
+def require_power_coverage(rows: list[dict], minimum: float = 0.9) -> None:
+    bad = [(r["phase"], r["gpu"], r["coverage"]) for r in rows if r["coverage"] < minimum]
+    if bad:
+        raise RuntimeError(f"nvidia-smi power sample coverage below {minimum:.0%}: {bad}")
 
 
 def source_power_drop_w(rows: list[dict]) -> float:
@@ -1252,13 +1287,20 @@ def write_power_plot(power_csv: Path, out_png: Path, dispatch_rows: list[dict], 
     t0 = min(r[0] for r in rows)
     fig, ax = plt.subplots(figsize=(8, 3))
     for g in sorted({r[1] for r in rows}):
-        xs = [r[0] - t0 for r in rows if r[1] == g]
-        ys = [r[2] for r in rows if r[1] == g]
-        ax.plot(xs, ys, label=f"gpu{g}")
+        series = [(r[0], r[2]) for r in rows if r[1] == g]
+        xs, ys, left, total = [], [], 0, 0.0
+        for right, (ts, power) in enumerate(series):
+            total += power
+            while series[left][0] < ts - 5.0:
+                total -= series[left][1]
+                left += 1
+            xs.append(ts - t0)
+            ys.append(total / (right - left + 1))
+        ax.plot(xs, ys, label=f"gpu{g} 5s")
     for row in dispatch_rows:
         if "move_start_ts" in row:
             ax.axvline(row["move_start_ts"] - t0, color="k", alpha=0.25, linewidth=0.8)
-    ax.set(xlabel="seconds", ylabel="power W")
+    ax.set(xlabel="seconds", ylabel="5-second average power W")
     ax.legend()
     fig.tight_layout()
     fig.savefig(out_png)
@@ -1494,7 +1536,8 @@ def run_live_moves(cfg: b.Config, run_root: Path, workers: dict[str, SessionWork
                 messages = [{"role": "system", "content": marker}] + messages
             return messages
 
-        def stage(messages: list[dict], action: str, phase: str) -> tuple[dict, int, int, float, float]:
+        def stage(messages: list[dict], action: str, phase: str) -> tuple[dict, int, int, float, float, dict]:
+            phase_before = b.proxy_counts(proxy_log)
             start = time.time()
             worker.log.write("handoff_stage_start", session_id=row["id"], action=row["action"], stage_action=action, phase=phase)
             result = stream_chat(cfg, cfg.api_proxy_port, messages, 1)
@@ -1507,18 +1550,20 @@ def run_live_moves(cfg: b.Config, run_root: Path, workers: dict[str, SessionWork
             if action == "S" and (total_tokens <= 0 or hit_tokens / total_tokens < 0.9):
                 raise RuntimeError(f"KV stage hit only {hit_tokens}/{total_tokens} tokens for {row['id']}")
             end = time.time()
-            worker.log.write("handoff_staged", session_id=row["id"], action=row["action"], stage_action=action, phase=phase, request_id=result.get("request_id"), lmcache_total_tokens=total_tokens, lmcache_hit_tokens=hit_tokens)
-            return result, total_tokens, hit_tokens, start, end
+            phase_delta = b.count_delta(phase_before, b.proxy_counts(proxy_log))
+            worker.log.write("handoff_staged", session_id=row["id"], action=row["action"], stage_action=action, phase=phase, request_id=result.get("request_id"), lmcache_total_tokens=total_tokens, lmcache_hit_tokens=hit_tokens, proxy_delta=phase_delta)
+            return result, total_tokens, hit_tokens, start, end, phase_delta
 
         before = b.proxy_counts(proxy_log)
         with initial_gate(row), stage_gates[row["action"]]:
             initial = stage(staged_messages(snapshot, row["action"]), row["action"], "initial")
-        result, total_tokens, hit_tokens, stage_start, initial_stage_end = initial
+        result, total_tokens, hit_tokens, stage_start, initial_stage_end, initial_proxy_delta = initial
         switch_request_ts = time.time()
         worker.pause_boundary()
         boundary_ready_ts = time.time()
         current = worker.snapshot()
         final_delta_s, attempts, final_action = 0.0, 1, None
+        final_proxy_delta = {}
         messages = staged_messages(snapshot, row["action"])
         request_ids = [result.get("request_id")]
         initial_total_tokens, initial_hit_tokens = total_tokens, hit_tokens
@@ -1526,10 +1571,12 @@ def run_live_moves(cfg: b.Config, run_root: Path, workers: dict[str, SessionWork
         if current["generation"] != snapshot["generation"]:
             if not append_only:
                 raise RuntimeError(f"session {row['id']} changed a transferred prefix")
+            if current["context_sha256"] == snapshot["context_sha256"]:
+                raise RuntimeError(f"session {row['id']} attempted duplicate final staging")
             final_action = row["action"]
             messages = staged_messages(current, final_action)
             with stage_gates[final_action]:
-                result, total_tokens, hit_tokens, final_start, final_end = stage(messages, final_action, "final_delta")
+                result, total_tokens, hit_tokens, final_start, final_end, final_proxy_delta = stage(messages, final_action, "final_delta")
             final_delta_s, attempts = final_end - final_start, 2
             request_ids.append(result.get("request_id"))
         else:
@@ -1561,6 +1608,12 @@ def run_live_moves(cfg: b.Config, run_root: Path, workers: dict[str, SessionWork
             "stage_lmcache_hit_ratio": hit_tokens / total_tokens if total_tokens else 0.0,
             "initial_stage_lmcache_total_tokens": initial_total_tokens,
             "initial_stage_lmcache_hit_tokens": initial_hit_tokens,
+            "action_name": "context_replay" if row["action"] == "R" else "kv_transfer",
+            "initial_stage_proxy_delta": initial_proxy_delta,
+            "final_delta_proxy_delta": final_proxy_delta,
+            "selected_session_kv_bytes": int(snapshot.get("session_kv_bytes", 0)),
+            "final_session_kv_bytes": int(current.get("session_kv_bytes", 0)),
+            "session_kv_delta_bytes": max(0, int(current.get("session_kv_bytes", 0)) - int(snapshot.get("session_kv_bytes", 0))),
             "staging_attempts": attempts,
             "initial_stage_action": row["action"],
             "final_delta_action": final_action,
@@ -1669,6 +1722,9 @@ def live_drain(cfg: b.Config, run_root: Path, manifest: dict, mbps: float, nvsmi
         source_boundary_s = source_request_p95_s(workers)
         profile = _finalize_live_profile({**profile, "source_boundary_s": source_boundary_s})
         manifest = {**manifest, "sessions": [{**s, **workers[s["id"]].snapshot()} for s in sessions]}
+        missing_kv = [s["id"] for s in manifest["sessions"] if int(s.get("session_kv_bytes", 0)) <= 0]
+        if missing_kv:
+            raise RuntimeError(f"missing measured session KV bytes: {missing_kv}")
         manifest = apply_live_profile(manifest, profile)
         sessions = live_sessions(manifest)
         summary = live_plan_summary(manifest, policy, seed, deadline_s, target_frac, replay_concurrency, kv_concurrency)
@@ -1681,7 +1737,7 @@ def live_drain(cfg: b.Config, run_root: Path, manifest: dict, mbps: float, nvsmi
             worker.stop()
         for worker in workers.values():
             worker.snapshot()
-        rows = [{**row, "first_sink_request_id": proof.get("request_id"), "first_sink_context_sha256": proof.get("context_sha256"), "first_sink_context_match": bool(proof.get("context_match")), "first_sink_lmcache_total_tokens": proof.get("lmcache_total_tokens"), "first_sink_lmcache_hit_tokens": proof.get("lmcache_hit_tokens")} for row in rows for proof in [workers[row["id"]].handoff_proof()]]
+        rows = [{**row, "first_sink_request_id": proof.get("request_id"), "first_sink_context_sha256": proof.get("context_sha256"), "first_sink_context_match": bool(proof.get("context_match")), "first_sink_lmcache_total_tokens": proof.get("lmcache_total_tokens"), "first_sink_lmcache_hit_tokens": proof.get("lmcache_hit_tokens"), "source_baseline_ttft_s": proof.get("source_baseline_ttft_s"), "first_sink_arrival_to_first_token_s": proof.get("arrival_to_first_token_s"), "ttft_inflation_s": None if proof.get("arrival_to_first_token_s") is None or proof.get("source_baseline_ttft_s") is None else proof["arrival_to_first_token_s"] - proof["source_baseline_ttft_s"]} for row in rows for proof in [workers[row["id"]].handoff_proof()]]
         _sessions, pop, pool, _move, _imp, _event, _full_w, _target_w = _live_model(manifest, summary["deadline_s"], summary["target_frac"])
         committed_y = np.zeros(len(pop))
         for row in rows:
@@ -1698,6 +1754,7 @@ def live_drain(cfg: b.Config, run_root: Path, manifest: dict, mbps: float, nvsmi
             link_stack_logs(run_root, stack_root)
         proxy_audit = write_proxy_audit(run_root / "proxy_bytes.csv", run_root / "proxy_audit.csv", windows, mbps)
         power_rows = write_power_summary(run_root / "gpu_power.csv", run_root / "power_summary.csv", windows)
+        require_power_coverage(power_rows)
         write_power_plot(run_root / "gpu_power.csv", run_root / "power_trace.png", rows)
         write_power_plot(run_root / "gpu_power.csv", run_root / "source_power.png", rows, gpu=0)
         write_power_plot(run_root / "gpu_power.csv", run_root / "sink_power.png", rows, gpu=1)
