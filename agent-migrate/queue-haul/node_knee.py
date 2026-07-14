@@ -240,6 +240,64 @@ def solve_power_function_lp(pop: JobPopulation, pool: PoolPower, imp: Impact, s_
                             kappa=kappa, method="power_function_lp_relaxation")
 
 
+def round_lp_result(pop: JobPopulation, pool: PoolPower, imp: Impact, s_star: float,
+                    relaxed: NodeKneeResult, event: Event = Event(),
+                    move: Movement = Movement()) -> NodeKneeResult:
+    budget = single_movement_budgets(pool, event, move)
+    draws = movement_draws_filtered(pop, pool, imp, event, move)
+    mass = relaxed.y
+    order = sorted(np.flatnonzero(_node_movable(pop, event)), key=lambda j: (
+        -mass[j], -max(relaxed.y_R[j], relaxed.y_S[j]), j
+    ))
+    yR, yS, taken = np.zeros(len(pop)), np.zeros(len(pop)), []
+    for j in order:
+        if evaluate_node_expected_w(pop, pool, yR + yS) >= s_star:
+            break
+        pref = "R" if relaxed.y_R[j] >= relaxed.y_S[j] else "S"
+        if mass[j] <= 1e-9:
+            pref = "R" if imp.c_replay[j] <= imp.c_transfer[j] else "S"
+        action = _action(budget, draws, imp, int(j), pref)
+        if action:
+            _move(budget, draws, yR, yS, action, int(j))
+            taken.append(int(j))
+    return _result(pop, pool, imp, yR, yS, float(imp.c_replay @ yR + imp.c_transfer @ yS),
+                   "power_function_lp_rounded", s_star, event, move, order=taken)
+
+
+def solve_power_function_lp_rounded(pop: JobPopulation, pool: PoolPower, imp: Impact, s_star: float,
+                                    event: Event = Event(), move: Movement = Movement(),
+                                    active_alpha: float = 0.0, kappa: float = 1.0) -> NodeKneeResult:
+    relaxed = solve_power_function_lp(pop, pool, imp, s_star, event, move, active_alpha, kappa)
+    return round_lp_result(pop, pool, imp, s_star, relaxed, event, move)
+
+
+def solve_single_source_milp(pop: JobPopulation, pool: PoolPower, imp: Impact, s_star: float,
+                             event: Event = Event(), move: Movement = Movement()) -> NodeKneeResult:
+    if len(node_loads(pop)) != 1:
+        raise ValueError("single-source MILP requires one source node")
+    load = float(pop.ell.sum())
+    lo, hi = 0.0, load
+    for _ in range(60):
+        mid = (lo + hi) / 2
+        gain = float(pool.node_power(load) - pool.node_power(load - mid))
+        if gain >= s_star:
+            hi = mid
+        else:
+            lo = mid
+    fleet = DestFleet.from_event(event, move, pool, pop)
+    YR, YS, cons, _ = _build(pop, pool, imp, fleet, event, move, True, 1.0)
+    total = cp.sum(YR + YS, axis=1)
+    cost = imp.c_replay @ cp.sum(YR, axis=1) + imp.c_transfer @ cp.sum(YS, axis=1)
+    status, ok = _run(cp.Minimize(cost), cons + [pop.ell @ total >= hi], cp.SCIPY)
+    target_ok = ok
+    if not ok:
+        status, ok = _run(cp.Maximize(pop.ell @ total), cons, cp.SCIPY)
+        if not ok:
+            raise RuntimeError(f"single-source MILP failed: status={status}")
+    return _result(pop, pool, imp, YR.value.sum(1), YS.value.sum(1), cost.value,
+                   "single_source_milp", s_star, event, move, target_ok)
+
+
 def _job_cost(imp: Impact) -> np.ndarray:
     return np.minimum(imp.c_replay, imp.c_transfer)
 
@@ -441,6 +499,24 @@ def solve_live_greedy(pop: JobPopulation, pool: PoolPower, imp: Impact, s_star: 
     yR, yS = _finish_live(pop, pool, imp, s_star, budget, draws, np.zeros(len(pop)), np.zeros(len(pop)), set(), movable)
     return _result(pop, pool, imp, yR, yS, float(imp.c_replay @ yR + imp.c_transfer @ yS),
                    "live_greedy", s_star, event, move)
+
+
+def solve_power_unaware(pop: JobPopulation, pool: PoolPower, imp: Impact, s_star: float,
+                        event: Event = Event(), move: Movement = Movement()) -> NodeKneeResult:
+    budget = single_movement_budgets(pool, event, move)
+    draws = movement_draws_filtered(pop, pool, imp, event, move)
+    yR, yS, order = np.zeros(len(pop)), np.zeros(len(pop)), []
+    for j in sorted(np.flatnonzero(_node_movable(pop, event)), key=lambda j: (
+        min(imp.c_replay[j], imp.c_transfer[j]) / max(pop.ell[j], 1e-12), j
+    )):
+        if evaluate_node_expected_w(pop, pool, yR + yS) >= s_star:
+            break
+        action = _action(budget, draws, imp, int(j))
+        if action:
+            _move(budget, draws, yR, yS, action, int(j))
+            order.append(int(j))
+    return _result(pop, pool, imp, yR, yS, float(imp.c_replay @ yR + imp.c_transfer @ yS),
+                   "power_unaware", s_star, event, move, order=order)
 
 
 def solve_random_jobs(pop: JobPopulation, pool: PoolPower, imp: Impact, s_star: float,

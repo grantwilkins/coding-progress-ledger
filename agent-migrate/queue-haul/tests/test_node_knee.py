@@ -45,8 +45,11 @@ from node_knee import (
     solve_live_greedy,
     solve_node_aware_greedy,
     solve_node_drain_greedy,
+    solve_power_function_lp_rounded,
+    solve_power_unaware,
     solve_random_jobs,
     solve_random_nodes,
+    solve_single_source_milp,
     solve_tangent_lp,
 )
 from power import ETA_BYTES_PER_TOK, PoolPower, rho_replay
@@ -324,6 +327,40 @@ def test_node_aware_greedy_matches_tiny_oracle_and_is_deterministic():
     assert np.array_equal(a.y, oracle.y)
     assert a.order == b.order
     assert np.array_equal(a.y_R, b.y_R) and np.array_equal(a.y_S, b.y_S)
+
+
+def test_lp_rounding_is_whole_feasible_and_deterministic():
+    pool = PoolPower()
+    pop = _pop([0.08, 0.08, 0.08], [0, 0, 0])
+    imp = _imp(pop, [100, 1, 1])
+    a = solve_power_function_lp_rounded(pop, pool, imp, 500.0, SLACK_E, SLACK_M)
+    b = solve_power_function_lp_rounded(pop, pool, imp, 500.0, SLACK_E, SLACK_M)
+    assert a.true_expected_feasible and a.movement_feasible
+    assert np.allclose(a.y, np.round(a.y))
+    assert np.array_equal(a.y, b.y)
+    assert a.order == b.order
+
+
+def test_power_unaware_orders_by_disruption_per_removed_load():
+    pool = PoolPower()
+    pop = _pop([0.10, 0.20], [0, 1])
+    imp = _imp(pop, [1, 3])
+    result = solve_power_unaware(pop, pool, imp, 1.0, SLACK_E, SLACK_M)
+    assert result.order == (0,)
+    assert np.array_equal(result.y, np.array([1.0, 0.0]))
+    assert result.true_expected_feasible
+
+
+def test_single_source_milp_is_whole_and_matches_oracle():
+    pool = PoolPower(power_curve="saturating", p_idle_w=67.1, p_busy_w=424.4,
+                     power_knee=2.05, rho_star=0.535)
+    pop = _pop([0.08, 0.08, 0.08], [0, 0, 0])
+    imp = _imp(pop, [100, 1, 1])
+    target = 20.0
+    milp = solve_single_source_milp(pop, pool, imp, target, SLACK_E, SLACK_M)
+    oracle = solve_exact_oracle(pop, pool, imp, target, SLACK_E, SLACK_M)
+    assert np.array_equal(milp.y, oracle.y)
+    assert milp.cost == pytest.approx(oracle.cost)
 
 
 def test_node_drain_bundle_respects_joint_resource_budget():
