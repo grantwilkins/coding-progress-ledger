@@ -619,6 +619,15 @@ def test_source_power_drop_uses_measured_windows():
     assert c.source_power_drop_w(rows) == 80
 
 
+def test_source_sleeps_only_after_complete_committed_drain():
+    committed = [{"commit_result": "committed"}, {"commit_result": "committed"}]
+
+    assert c.source_fully_drained(committed, 2)
+    assert not c.source_fully_drained(committed[:1], 2)
+    assert not c.source_fully_drained([committed[0], {"commit_result": "stale_aborted"}], 2)
+    assert not c.source_fully_drained([], 0)
+
+
 def test_check_live_manifest_requires_files_and_route_evidence(tmp_path: Path):
     for name in c.LIVE_ARTIFACTS:
         (tmp_path / name).write_text("x")

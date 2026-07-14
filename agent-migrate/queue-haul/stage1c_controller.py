@@ -1676,6 +1676,10 @@ def write_proxy_slice(src: Path, dst: Path, windows: dict[str, tuple[float, floa
                 writer.writerow(row)
 
 
+def source_fully_drained(rows: list[dict], session_count: int) -> bool:
+    return session_count > 0 and len(rows) == session_count and all(row["commit_result"] == "committed" for row in rows)
+
+
 def live_drain(cfg: b.Config, run_root: Path, manifest: dict, mbps: float, nvsmi_ms: int, extra: list[str],
                policy: str = "lp", seed: int = 0, deadline_s: float | None = None,
                target_frac: float | None = None, profile_path: Path | None = None,
@@ -1691,8 +1695,10 @@ def live_drain(cfg: b.Config, run_root: Path, manifest: dict, mbps: float, nvsmi
     nvsmi = None
     memlog = start_memlog(run_root / "host_mem.log")
     workers: dict[str, SessionWorker] = {}
+    source_slept, source_sleep_s = False, 0.0
     try:
         b.start_sink(stack, cfg, extra)
+        b.set_source_sleep(cfg, False)
         b.wait_health(cfg.host, cfg.src_port, 60)
         b.wait_health(cfg.host, cfg.sink_port, 60)
         profile, used_profile_path = ensure_live_profile(cfg, stack_root if not owned_stack else run_root, profile_path, manifest, mbps)
@@ -1730,6 +1736,11 @@ def live_drain(cfg: b.Config, run_root: Path, manifest: dict, mbps: float, nvsmi
         summary = live_plan_summary(manifest, policy, seed, deadline_s, target_frac, replay_concurrency, kv_concurrency)
         move_rows = [{**row, "deadline_s": summary["deadline_s"]} for row in summary["sessions"]]
         rows = run_live_moves(cfg, run_root, workers, move_rows, replay_concurrency=replay_concurrency, kv_concurrency=kv_concurrency, proxy_log=proxy_log)
+        source_slept = source_fully_drained(rows, len(workers))
+        if source_slept:
+            sleep_start = time.time()
+            b.set_source_sleep(cfg, True)
+            source_sleep_s = time.time() - sleep_start
         drain_end = time.time()
         time.sleep(float(manifest.get("settle_s", 120.0)))
         post_end = time.time()
@@ -1784,7 +1795,7 @@ def live_drain(cfg: b.Config, run_root: Path, manifest: dict, mbps: float, nvsmi
             "committed_source_drop_w": committed_w,
             "measured_source_drop_w": measured_source_drop_w,
             "measured_power_error_w": measured_source_drop_w - summary["planned_source_drop_w"],
-            "scheduler": {"warm_movement": True, "handoff": "append_only_delta", "source_request_p95_s": source_boundary_s, "staging_max_tokens": 1, "replay_concurrency": replay_concurrency, "kv_concurrency": kv_concurrency or max(1, len(move_rows)), "persistent_stack": not owned_stack, "cache_isolation": "remote_flush+vllm_prefix_reset+scenario_nonce"},
+            "scheduler": {"warm_movement": True, "handoff": "append_only_delta", "source_request_p95_s": source_boundary_s, "staging_max_tokens": 1, "replay_concurrency": replay_concurrency, "kv_concurrency": kv_concurrency or max(1, len(move_rows)), "persistent_stack": not owned_stack, "source_slept": source_slept, "source_sleep_s": source_sleep_s, "cache_isolation": "remote_flush+vllm_prefix_reset+scenario_nonce"},
             "acceptance": {"ok": all_committed and continuation_consistent and deadline_hit and measured_power_hit and all(r["ok"] for r in proxy_audit), "all_committed": all_committed, "continuation_consistent": continuation_consistent, "continuation_observed_sessions": len(continued), "deadline_hit": deadline_hit, "power_hit": measured_power_hit, "modeled_power_hit": modeled_power_hit, "power_threshold_gated": False, "planned_hit": summary["planned_hit"], "proxy_audit_ok": all(r["ok"] for r in proxy_audit)},
         }
         check_live_manifest(out, run_root)

@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import asyncio
 import csv
+import json
 import socket
 import subprocess
 import sys
@@ -64,6 +65,9 @@ def test_vllm_commands_pin_validated_sandbox_flags_and_roles():
     assert "VLLM_RPC_BASE_PATH=/tmp/qh-src-" in source
     assert "VLLM_RPC_BASE_PATH=/tmp/qh-sink-" in sink
     assert "--enforce-eager" in source
+    assert "--enable-sleep-mode" in source
+    assert "--enable-sleep-mode" not in sink
+    assert "--enable-sleep-mode" not in smoke
     assert "--disable-frontend-multiprocessing" not in source
     assert "--async-scheduling" not in source
     assert "stage1b-src" in source and "stage1b-sink" in sink
@@ -198,6 +202,31 @@ def test_reset_vllm_caches_resets_both_gpus(monkeypatch):
         ("127.0.0.1", 8100, "POST", "/reset_prefix_cache"),
         ("127.0.0.1", 8200, "POST", "/reset_prefix_cache"),
     ]
+
+
+@pytest.mark.parametrize(("initial", "target", "path"), [(False, True, "/sleep?level=1"), (True, False, "/wake_up")])
+def test_source_sleep_transitions_are_verified(monkeypatch, initial, target, path):
+    states, calls = iter([initial, target]), []
+
+    def fake_http(host, port, method, path):
+        calls.append((host, port, method, path))
+        return json.dumps({"is_sleeping": next(states)}) if method == "GET" else ""
+
+    monkeypatch.setattr(s, "http_text", fake_http)
+    s.set_source_sleep(s.Config(), target)
+
+    assert calls == [
+        ("127.0.0.1", 8100, "GET", "/is_sleeping"),
+        ("127.0.0.1", 8100, "POST", path),
+        ("127.0.0.1", 8100, "GET", "/is_sleeping"),
+    ]
+
+
+def test_source_sleep_transition_hard_fails(monkeypatch):
+    monkeypatch.setattr(s, "http_text", lambda *_args: '{"is_sleeping": false}')
+
+    with pytest.raises(RuntimeError, match="sleeping"):
+        s.set_source_sleep(s.Config(), True)
 
 
 def test_runtime_versions_are_pinned(monkeypatch):

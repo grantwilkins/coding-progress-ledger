@@ -58,6 +58,7 @@ TYPED_VLLM_FLAGS = {
     "--max-num-batched-tokens",
     "--kv-cache-dtype",
     "--enable-chunked-prefill",
+    "--enable-sleep-mode",
     "--enforce-eager",
     "--kv-transfer-config",
 }
@@ -245,7 +246,8 @@ def vllm_cmd(cfg: Config, role: str, extra: list[str] | None = None) -> list[str
         "auto",
         "--enable-chunked-prefill",
         "--enforce-eager",
-            "--kv-transfer-config",
+        *(["--enable-sleep-mode"] if role == "source" else []),
+        "--kv-transfer-config",
         kv_config(engine_id, kv_role, kv_port, rpc_port),
         *(extra or []),
     ]
@@ -690,6 +692,17 @@ def http_text(host: str, port: int, method: str, path: str) -> str:
     if response.status != 200:
         raise RuntimeError(f"{method} http://{host}:{port}{path} failed {response.status}: {body[:500]}")
     return body
+
+
+def set_source_sleep(cfg: Config, sleeping: bool) -> None:
+    def state() -> bool:
+        return json.loads(http_text(cfg.host, cfg.src_port, "GET", "/is_sleeping"))["is_sleeping"]
+
+    if state() == sleeping:
+        return
+    http_text(cfg.host, cfg.src_port, "POST", "/sleep?level=1" if sleeping else "/wake_up")
+    if state() != sleeping:
+        raise RuntimeError(f"source failed to become {'sleeping' if sleeping else 'awake'}")
 
 
 def reset_vllm_caches(cfg: Config) -> None:

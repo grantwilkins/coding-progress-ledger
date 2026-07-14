@@ -19,6 +19,8 @@ $PY queue-haul/stage1c_controller.py check --run-root /tmp/qh-proof-live
 
 Passing those commands proves the full end-to-end live path: source and sink are alive together, source stores KV, sink retrieves KV through the shaped KV proxy, sink replays full context through the shaped API proxy, and the controller orders replay and KV-transfer sessions under deadline.
 
+Future live runs start the source with vLLM sleep mode enabled. A scenario wakes the source before cache reset and prewarm, and sleeps it at level 1 only after every session has committed to the sink. Partial or failed drains leave the source awake. Persistent grids then reuse the same server by waking it before the next scenario; `scheduler.source_slept` and `scheduler.source_sleep_s` record the transition.
+
 ## Fixed paths
 
 ```bash
