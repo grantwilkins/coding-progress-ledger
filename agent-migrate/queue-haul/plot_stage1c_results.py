@@ -76,6 +76,19 @@ def write_plots(rows: list[dict], output_dir: Path = OUTPUTS) -> list[Path]:
     fig.tight_layout()
     paths = _save(fig, output_dir / "stage1c_power_change")
 
+    fig, axes = plt.subplots(1, 2, figsize=(8, 4), sharey=True)
+    for ax, node in zip(axes, ("source", "sink")):
+        for condition, label, color in zip(CONDITIONS, LABELS, ("tab:blue", "tab:orange")):
+            for row in (row for row in rows if row["condition"] == condition):
+                ax.plot((0, 1), (row[f"{node}_baseline_w"], row[f"{node}_post_w"]),
+                        marker="o", color=color, alpha=0.75, label=label if row["replicate"] == 0 else None)
+        ax.set(xticks=(0, 1), xticklabels=("Baseline", "Post"), ylabel="Power (W)", title=f"{node.title()} GPU")
+        ax.grid(axis="y", alpha=0.25)
+    axes[0].legend(fontsize=8)
+    fig.suptitle("Most recent valid Stage 1c runs: power before and after")
+    fig.tight_layout()
+    paths += _save(fig, output_dir / "stage1c_power_levels")
+
     fig, ax = plt.subplots(figsize=(5, 4))
     _paired(ax, rows, "total_completion_s", "Total completion time (s, log scale)")
     ax.axhline(rows[0]["deadline_s"], color="tab:red", linestyle="--", label="deadline")
