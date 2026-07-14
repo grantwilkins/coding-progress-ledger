@@ -1162,6 +1162,7 @@ class SessionWorker:
         with self.cond:
             if self.error:
                 raise self.error
+            self.paused = True
             self.migrating = True
             messages = chat_messages(self.in_flight_messages or self.messages)
             return {"messages": messages, "generation": self.generation, "context_sha256": messages_sha256(messages), "last_request_id": self.last_request_id, "session_kv_bytes": self.last_source_kv_bytes}

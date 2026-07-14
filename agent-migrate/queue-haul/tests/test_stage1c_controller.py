@@ -315,7 +315,7 @@ def test_source_request_p95_uses_serving_telemetry():
         c.source_request_p95_s({"a": type("W", (), {"request_s": []})()})
 
 
-def test_begin_migration_keeps_serving_and_snapshots_inflight_prompt(tmp_path: Path):
+def test_begin_migration_pauses_new_turns_and_snapshots_inflight_prompt(tmp_path: Path):
     session = {"id": "s", "served_T": 10, "decode_tokens": 1, "turn_rate_hz": 1, "turns": [{"append_tokens": 1}], "messages": [{"role": "user", "content": "old"}], "generation": 1}
     worker = c.SessionWorker(type("Cfg", (), {})(), session, 1, type("Log", (), {"write": lambda *_a, **_k: None})(), 0, tmp_path)
     worker.in_flight = True
@@ -323,7 +323,7 @@ def test_begin_migration_keeps_serving_and_snapshots_inflight_prompt(tmp_path: P
 
     snapshot = worker.begin_migration()
 
-    assert not worker.paused and worker.migrating
+    assert worker.paused and worker.migrating
     assert snapshot["messages"][-1]["content"] == "pending"
 
 
