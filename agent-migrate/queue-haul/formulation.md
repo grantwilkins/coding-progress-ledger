@@ -4,9 +4,10 @@ The grid (or a power cap) asks an inference cluster for a **demand-response even
 by deadline $D$ and hold the reduction over $[D, D+H]$. We hit it by **migrating live sessions** off
 the source pool to other sites — replaying their context or shipping their KV cache — choosing *which*
 jobs and *how* to move them at **least disruption**. Static snapshot, one source pool → $K$
-destinations, coupled only by the source uplink. Power parameters swept in absolute watts
-(`assumptions.md`). This file is exactly what `power.py` / `instance.py` / `impact.py` / `dispatch.py`
-implement; the DES in `simulate.py` (§10.2) replays a solved plan to check it under execution.
+destinations, coupled only by the source uplink. Power parameters are swept in absolute watts
+(`assumptions.md`). `power.py` / `instance.py` / `impact.py` / `dispatch.py` implement the
+additive dispatch path; `node_knee.py` adds explicit source-node placement and power-function
+exploration; the DES in `simulate.py` replays solved plans under execution timing.
 
 ## Assumptions
 
@@ -16,6 +17,7 @@ implement; the DES in `simulate.py` (§10.2) replays a solved plan to check it u
 - **A4** Per-job loads add (first-order; the headroom $1-\rho^\star$ absorbs the error).
 - **A5** Held KV draws no power; it is a capacity constraint only. Cold (paged-out) sessions count toward held capacity at a discount via uplift $\gamma$.
 - **A6** Two move primitives: **replay** (ship context token-IDs, re-prefill at the destination) or **KV transfer** (ship KV bytes, skip prefill).
+- **A7** $\ell$ is node-time load, not a power meter. Node watts come from a curve $P(L)$ over aggregate source-node load $L=\sum_{j\in i}\ell_j$.
 
 ## Job model (`instance.py`)
 
@@ -29,6 +31,7 @@ $$\ell_j = \underbrace{\frac{f_j}{\rho(T_j)}}_{\text{prefill busy-frac}} + \unde
 - Sessions are drawn from explicit classes: ordinary chat, long chat/code, reasoning chat, and agentic tool loop. Each class has its own turn rate, $\Delta$, $Y$, context distribution, and cache-hit rate; idle/cold states set current $f_j,g_j,\ell_j$ to zero.
 - $\rho(T_j)$ = the node's **prefill roofline** at context $T_j$ (`rho_dest`, here at the **source** MFU): flat $\approx 63\text{k}$ tok/s below $T^\star\approx 29\text{k}$, decaying $\sim 1/T$ above as attention FLOPs dominate. Prefill is **compute-bound**, so longer context costs throughput. *(Same function, at a destination's MFU, is the rebuild rate $\rho_\ell$ — hence the `dest` in the code name; in the source load it is the source's own rate.)*
 - $G$ = the **decode** ceiling, a precision-keyed constant (BF16 4600, FP8 9200 tok/s). This is a first-order approximation: long context taxes decode mainly through memory capacity here, and any $G(T)$ slowdown is a sensitivity knob, not in the base model.
+- Stage 1a measurement scripts also use an offered-load axis $\ell=f/F+g/G$ from raw prefill/decode windows and fitted constants. That is a calibration probe, not a placed-node admission state; observed offered $\ell$ can exceed $\rho^\star$.
 
 **KV footprint.** $m_j = \eta\,T_j$ is the cache the session pins in HBM ($\eta$ = 188 KiB/tok, exact from the attention config) — the *capacity* axis, independent of whether the session computes.
 
@@ -40,7 +43,17 @@ A single job also has to fit under the same setpoint. If $\ell_j>\rho^\star$, th
 
 ## Pool & power prices (`power.py`)
 
-**Node curve: ramp-then-plateau.** Power climbs from $P_{\text{idle}}$ to $P_{\text{busy}}$ as $\ell$ rises to the **power knee**, then is flat (dense models are near-step, not linear-in-load). The **latency knee** sits later; $\rho^\star$ sits just below it. The canonical dispatch solver never evaluates this curve — only the scalar prices below. `node_knee.py` is a separate exploration path that evaluates the curve when source-node placement is explicit.
+**Node curves.** `PoolPower(power_curve="knee")` is the default ramp-then-plateau curve: power climbs from $P_{\text{idle}}$ to $P_{\text{knee}}=P_{\text{busy}}-s_{\text{plat}}(\rho^\star-\ell_{\text{knee}})$ at the **power knee**, then follows the small plateau slope $s_{\text{plat}}$ so $P(\rho^\star)=P_{\text{busy}}$. The **latency knee** sits later; $\rho^\star$ sits just below it. The canonical dispatch solver never evaluates this curve — only the scalar prices below.
+
+For explicit source-node studies, `PoolPower(power_curve="log")` is the current concave pilot:
+
+$$P_{\log}(L)=P_{\text{idle}}+(P_{\text{busy}}-P_{\text{idle}})\frac{\log(1+aL)}{\log(1+a\rho^\star)},\qquad a=\texttt{log\_shape}>0.$$
+
+Here $L$ is aggregate node load in $\ell$ units. The curve anchors $P_{\log}(0)=P_{\text{idle}}$ and $P_{\log}(\rho^\star)=P_{\text{busy}}$; its slope is
+
+$$P'_{\log}(L)=\frac{(P_{\text{busy}}-P_{\text{idle}})a}{(1+aL)\log(1+a\rho^\star)},\qquad P''_{\log}(L)<0.$$
+
+So marginal watts per added unit of $\ell$ decrease with load, while marginal watts saved by removing load increase as a node is drained.
 
 **Two prices for shed load** — what a removed unit of load is worth in watts:
 
@@ -66,6 +79,13 @@ The old single-price proxy $\bar p\ell_j$ is kept only as a comparison column.
 Decode is higher-energy per token, not higher instant power. Prefill can draw higher instant power for a short burst; decode draws lower power for longer.
 
 **Empirical grounding (powertrace-sim — measured A100/H100 vLLM traces, [Wilkins et al. 2026](https://arxiv.org/abs/2603.18383)).** The ramp-then-plateau holds: a saturating node fit scores $R^2$ 0.91–0.99 vs 0.25 for a linear fit on dense 70B+, knee at $\ell\approx 0.09$ (dense; later, $\ell\approx 0.3$–$0.6$, for MoE). The bracket ratio $\bar p/s_{\text{plat}}$ is *read off the same traces* — **58× (405B), 30× (70B-A100), 17× (70B-H100), ~5× (MoE)** — and $c_1,c_2$ above are the fitted coefficients.
+
+Stage 1a plots a measured saturating calibration curve over offered $\ell$:
+
+$$P_{\text{sat}}(\ell)=P_0+(P_{\max}-P_0)\frac{w(\ell)}{1+w(\ell)},\qquad
+w(\ell)=\frac{q}{1-q}\frac{\ell}{\ell_{\text{power-knee}}},\quad q=0.8.$$
+
+This curve is for measurement reduction and visualization (`stage1_profile.py` / `stage1_window_sensitivity.py`), not for the additive dispatch certificate.
 
 **Memory / capacity regime.** Per-node held sessions and the marginal price of holding one:
 
@@ -148,24 +168,24 @@ bound, because it depends on autoscaler/node-drain behavior.
 ## Solution structure & sensitivity
 
 - **Bang-per-buck.** Linear objective + target ⇒ the fractional LP takes jobs by $c_j/\Delta P_j$ until $S^\star$ is met, deviating only where a movement constraint binds. Integer greedy and MILP carry job-granularity overshoot; at boundaries, compare MILP and LP separately so relaxation value is not mistaken for deployable policy value.
-- **Ranking is robust, the margin is not.** Within-pool job order is invariant to $\rho^\star$, $F/G$, $\bar p$ (common scaling cancels — verified by scaling $\bar p$); only the cross-pool comparison and the absolute feasibility margin move with their values.
+- **Ranking depends on the power column.** The additive dispatch ranks jobs by downtime per certified watt, $\min(c_R,c_S)/(s_{\text{plat}}\ell_j+c_1f_j+c_2g_j)$. Node-power studies rank marginal source-node gains through $P(L_i)-P(L_i-r_i)$, so source placement can reorder jobs even when per-job $\ell$ and move costs are unchanged. Common watt scaling changes feasibility margins, not ranking.
 - **Regime switch.** Idle/cold-heavy or long-context populations cross from $\ell$-ranking to $m$-ranking exactly at the $N=\max(\cdot,\cdot)$ boundary; $\gamma$ lowers $\mu$ and delays the switch. The two columns are $\approx$ uncorrelated at center, so the flip genuinely reorders *which* jobs are shed.
 
 ## Deliberately cut (reattachable without changing the above)
 
-Prefill/decode disaggregation, session classes / Markov chains, lexicographic objectives, receding-horizon re-solve as the pool drains (the static snapshot freezes the pre-move regime), 3-stage per-destination downlink contention.
+Prefill/decode disaggregation, Markov state chains beyond the static state mix, lexicographic objectives, receding-horizon re-solve as the pool drains (the static snapshot freezes the pre-move regime), 3-stage per-destination downlink contention.
 
-## Node-knee exploration (`node_knee.py`)
+## Node-power exploration (`node_knee.py`)
 
-The additive dispatch path values moved jobs independently. The node-knee exploration instead requires an explicit `source_node` placement and evaluates modeled expected source shed by node:
+The additive dispatch path values moved jobs independently. The node-power exploration instead requires an explicit `source_node` placement and evaluates modeled expected source shed by node:
 
-$$r_i=\sum_{j\in i}\ell_j y_j,\qquad F_i(r_i)=P(L_i)-P(L_i-r_i).$$
+$$L_i=\sum_{j\in i}\ell_j,\qquad r_i=\sum_{j\in i}\ell_j y_j,\qquad F_i(r_i)=P(L_i)-P(L_i-r_i).$$
 
-For the ramp-then-plateau curve, $F_i$ is convex in removed load: concentrating removals can become more valuable once a node crosses the power knee. The exact target $\sum_iF_i(r_i)\ge S^\star$ is nonconvex, so `node_knee.py` keeps it out of the canonical solver and provides compact exploration methods:
+For both current source-node curves, $F_i$ is convex in removed load. With any increasing concave $P$, $F_i'(r)=P'(L_i-r)$ and $F_i''(r)=-P''(L_i-r)\ge0$; for the ramp-then-plateau curve, the same effect appears at the power knee. Concentrating removals can therefore be more valuable than spreading them. The exact target $\sum_iF_i(r_i)\ge S^\star$ is nonconvex, so `node_knee.py` keeps it out of the canonical additive solver and provides compact exploration methods:
 
-- sequential tangent LPs using global lower bounds of $F_i$,
-- active-knee LP relaxation and MILP subproblems that exhaustively enumerate small active-node regions, force selected nodes below the power knee, keep unselected above-knee nodes in the plateau region, and use the exact affine power expression inside each fixed region,
+- `solve_power_function_lp`: sequential tangent LPs using global lower bounds of $F_i$; this is the log-concave power-function path and the Stage 1c live-planner path,
+- active-knee LP relaxation and MILP subproblems for the ramp-then-plateau curve: exhaustively enumerate small active-node regions, force selected nodes below the power knee, keep unselected above-knee nodes in the plateau region, and use the exact affine power expression inside each fixed region,
 - live and node-drain greedy baselines,
 - a tiny exact enumeration oracle for hand-checkable cases.
 
-Reported names are `node_expected_w` for modeled node-curve power and `active_floor_w` for the conservative active-work floor. Node-knee expected watts are model evidence, not a hard grid guarantee.
+Reported names are `node_expected_w` for modeled node-curve power and `active_floor_w` for the conservative active-work floor. Node-power expected watts are model evidence, not a hard grid guarantee.

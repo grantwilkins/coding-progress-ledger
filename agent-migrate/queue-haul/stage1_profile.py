@@ -16,6 +16,7 @@ PTRACE = (
 )
 OUT_STEM = Path(__file__).resolve().parent / "outputs" / "stage1_gpt_oss_20b_a100_tp1"
 POWER_KNEE_FRAC = 0.8
+POWER_NORMALIZATION_W = 400.0
 CONSTANT_FIELDS = (
     "F_prefill_tps",
     "G_decode_tps",
@@ -108,31 +109,29 @@ def write_csv(path: Path, rows: list[dict], fieldnames) -> None:
         w.writerows(rows)
 
 
-def make_plot(windows, curve, power_curve, constants, out_stem: Path) -> None:
+def make_plot(windows, power_curve, out_stem: Path) -> None:
     ell, power = windows["ell"], windows["P"]
-    fig, ax = plt.subplots(figsize=(7.0, 4.7))
-    sc = ax.scatter(ell, power, s=7, alpha=0.25, vmin=0, vmax=1)
-    ax.plot(
-        [r["ell_mean"] for r in curve],
-        [r["power_mean_w"] for r in curve],
-        color="black",
-        marker="o",
-        ms=3,
-        lw=1.5,
-        label="binned average power",
+    fig, ax = plt.subplots(figsize=(8.4, 5.6))
+    ax.scatter(
+        ell,
+        power / POWER_NORMALIZATION_W,
+        s=14,
+        alpha=0.1,
+        linewidths=0.7,
+        label="Profiled Data",
     )
     ax.plot(
         [r["ell"] for r in power_curve],
-        [r["power_w"] for r in power_curve],
+        [r["power_w"] / POWER_NORMALIZATION_W for r in power_curve],
         color="green",
         ls="--",
-        lw=1.2,
-        label="concave power curve",
+        lw=2.4,
+        label="Fit Power Curve",
     )
-    ax.set_xlabel("ell load = f/F + g/G")
-    ax.set_ylabel("average node power [W]")
-    ax.set_title("gpt-oss-20b on A100, TP=1")
-    ax.legend(loc="upper left", fontsize=8)
+    ax.set_xlabel(r"Load ($\ell$)", fontsize=18)
+    ax.set_ylabel("Normalized Power", fontsize=18)
+    ax.tick_params(labelsize=15)
+    ax.legend(loc="upper left", fontsize=15)
     fig.tight_layout()
     fig.savefig(f"{out_stem}.png", dpi=160)
     fig.savefig(f"{out_stem}.pdf")
@@ -144,7 +143,6 @@ def parse_args(argv: list[str] | None = None):
     p.add_argument("--windows", type=Path, default=PTRACE / f"windows_{CONFIG}.npz")
     p.add_argument("--summary", type=Path, default=PTRACE / "saturating_summary.csv")
     p.add_argument("--config", default=CONFIG)
-    p.add_argument("--bins", type=int, default=24)
     p.add_argument("--out-stem", type=Path, default=OUT_STEM)
     return p.parse_args(argv)
 
@@ -153,12 +151,6 @@ def main(argv: list[str] | None = None) -> None:
     args = parse_args(argv)
     constants = read_constants(args.summary, args.config)
     windows = load_windows(args.windows, constants)
-    curve = binned_curve(windows["ell"], windows["P"], args.bins)
-    write_csv(
-        args.out_stem.with_name(args.out_stem.name + "_curve.csv"),
-        curve,
-        curve[0].keys(),
-    )
     power_curve = concave_power_curve(constants, float(np.nanmax(windows["ell"])))
     write_csv(
         args.out_stem.with_name(args.out_stem.name + "_power_curve.csv"),
@@ -170,7 +162,7 @@ def main(argv: list[str] | None = None) -> None:
         [constants],
         constants.keys(),
     )
-    make_plot(windows, curve, power_curve, constants, args.out_stem)
+    make_plot(windows, power_curve, args.out_stem)
     print(args.out_stem)
 
 

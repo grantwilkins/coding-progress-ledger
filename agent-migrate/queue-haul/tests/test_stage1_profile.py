@@ -21,13 +21,30 @@ import pytest
 import stage1_profile as sp
 
 
-def test_binned_curve_reports_average_power_by_ell_load():
-    rows = sp.binned_curve([0.1, 0.2, 0.9], [10.0, 30.0, 90.0], 2)
+def test_plot_uses_actual_ell_and_normalizes_power(monkeypatch, tmp_path: Path):
+    figures = []
+    monkeypatch.setattr(sp.plt, "close", figures.append)
+    sp.make_plot(
+        {"ell": np.array([0.25, 1.0]), "P": np.array([100.0, 400.0])},
+        [{"ell": 0.0, "power_w": 0.0}, {"ell": 1.0, "power_w": 400.0}],
+        tmp_path / "plot",
+    )
 
-    assert [r["n"] for r in rows] == [2, 1]
-    assert rows[0]["ell_mean"] == pytest.approx(0.15)
-    assert rows[0]["power_mean_w"] == pytest.approx(20.0)
-    assert rows[1]["power_mean_w"] == pytest.approx(90.0)
+    ax = figures[0].axes[0]
+    np.testing.assert_allclose(
+        ax.collections[0].get_offsets(), [[0.25, 0.25], [1.0, 1.0]]
+    )
+    assert ax.collections[0].get_alpha() == pytest.approx(0.1)
+    assert ax.collections[0].get_label() == "Profiled Data"
+    assert ax.collections[0].get_sizes() == pytest.approx([14.0])
+    assert ax.lines[0].get_ydata() == pytest.approx([0.0, 1.0])
+    assert ax.lines[0].get_linewidth() == pytest.approx(2.4)
+    assert ax.lines[0].get_label() == "Fit Power Curve"
+    assert ax.get_xlabel() == r"Load ($\ell$)"
+    assert ax.xaxis.label.get_fontsize() == pytest.approx(18.0)
+    assert ax.get_ylabel() == "Normalized Power"
+    assert ax.yaxis.label.get_fontsize() == pytest.approx(18.0)
+    assert not ax.get_title()
 
 
 def test_load_windows_recomputes_ell_from_rates(tmp_path: Path):
