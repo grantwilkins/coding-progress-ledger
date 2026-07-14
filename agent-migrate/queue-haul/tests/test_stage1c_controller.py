@@ -152,6 +152,35 @@ def test_tracelab_manifest_workload_selects_small_and_large(tmp_path: Path):
     assert [s["id"] for s in large["sessions"]] == ["big", "mid"]
 
 
+def test_tracelab_workload_partitions_are_disjoint_and_pinned(tmp_path: Path):
+    trace = tmp_path / "trace.jsonl.gz"
+    with gzip.open(trace, "wt") as f:
+        for group, gap in (("slow", 100), ("mid", 10), ("fast", 1)):
+            for session_index in range(4):
+                for turn in range(3):
+                    f.write(json.dumps({
+                        "session_id": f"{group}-{session_index}",
+                        "timestamp": turn * gap,
+                        "input_tokens_total": 2048 + turn * 100,
+                        "prefix_tokens": 1900,
+                        "newly_append_tokens": 100,
+                        "output_tokens": 16,
+                        "current_user_message_count": int(group == "slow"),
+                        "tools": [{"tool_name": "Bash"}] if group == "fast" else [],
+                    }) + "\n")
+
+    manifests = {
+        name: c.tracelab_manifest(trace, 2, 7, min_context_tokens=1024, workload=name)
+        for name in ("interactive_coding", "coding", "agentic_tool_loop")
+    }
+    selected = [{s["id"] for s in manifest["sessions"]} for manifest in manifests.values()]
+
+    assert not (selected[0] & selected[1] or selected[0] & selected[2] or selected[1] & selected[2])
+    assert all(s["workload_class"] == name for name, manifest in manifests.items() for s in manifest["sessions"])
+    assert {m["source"]["sha256"] for m in manifests.values()} == {c._file_sha256(trace)}
+    assert all(m["workload"]["selection"] == "trace_partition" for m in manifests.values())
+
+
 def test_tracelab_manifest_hard_fails_without_enough_long_sessions(tmp_path: Path):
     trace = tmp_path / "trace.jsonl.gz"
     _write_tracelab(trace)
@@ -658,9 +687,10 @@ def _manifest_for_live_policy_tests(tmp_path: Path) -> dict:
 def test_live_plan_supports_policy_deadline_and_target_fraction(tmp_path: Path):
     manifest = _manifest_for_live_policy_tests(tmp_path)
 
-    summaries = [c.live_plan_summary(manifest, policy=p, deadline_s=30, target_frac=0.25, seed=3) for p in ("lp", "random", "greedy")]
+    policies = ("lp", "milp", "power-unaware", "random", "greedy")
+    summaries = [c.live_plan_summary(manifest, policy=p, deadline_s=30, target_frac=0.25, seed=3) for p in policies]
 
-    assert {s["policy"] for s in summaries} == {"lp", "random", "greedy"}
+    assert {s["policy"] for s in summaries} == set(policies)
     for summary in summaries:
         assert summary["deadline_s"] == 30
         assert summary["target_frac"] == pytest.approx(0.25)
@@ -669,6 +699,8 @@ def test_live_plan_supports_policy_deadline_and_target_fraction(tmp_path: Path):
         assert [r["dispatch_rank"] for r in summary["sessions"]] == list(range(len(summary["sessions"])))
     greedy = next(s for s in summaries if s["policy"] == "greedy")
     assert greedy["solver"]["method"] == "node_aware_greedy"
+    assert next(s for s in summaries if s["policy"] == "lp")["solver"]["method"] == "power_function_lp_rounded"
+    assert next(s for s in summaries if s["policy"] == "milp")["solver"]["method"] == "single_source_milp"
 
 
 def test_counterfactual_live_plans_force_single_action(tmp_path: Path):

@@ -26,7 +26,15 @@ import stage1b_drain_sink as b
 from dispatch import Event, solve
 from impact import Movement, compute
 from instance import JobPopulation
-from node_knee import evaluate_node_expected_w, solve_node_aware_greedy, solve_power_function_lp, solve_random_jobs
+from node_knee import (
+    evaluate_node_expected_w,
+    solve_node_aware_greedy,
+    solve_power_function_lp,
+    solve_power_function_lp_rounded,
+    solve_power_unaware,
+    solve_random_jobs,
+    solve_single_source_milp,
+)
 from power import BETA_BYTES_PER_TOK, ETA_BYTES_PER_TOK, PoolPower
 
 SCHEMA = "queue-haul-stage1c-v1"
@@ -390,6 +398,34 @@ def _safe_name(text: str) -> str:
     return re.sub(r"[^A-Za-z0-9_.-]+", "-", str(text)).strip("-") or "workload"
 
 
+def _file_sha256(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as f:
+        for block in iter(lambda: f.read(1024 * 1024), b""):
+            digest.update(block)
+    return digest.hexdigest()
+
+
+def _tracelab_partition(sessions: list[dict]) -> dict:
+    rates = np.array([s["turn_rate_hz"] for s in sessions])
+    q25, q75 = np.quantile(rates, [0.25, 0.75])
+    for session in sessions:
+        if session["turn_rate_hz"] <= q25 and session["human_row_fraction"] >= 0.25:
+            label = "interactive_coding"
+        elif session["turn_rate_hz"] >= q75 and session["tool_row_fraction"] >= 0.95:
+            label = "agentic_tool_loop"
+        else:
+            label = "coding"
+        session["workload_class"] = label
+        session["session_class"] = label
+    return {
+        "turn_rate_q25_hz": float(q25),
+        "turn_rate_q75_hz": float(q75),
+        "interactive_min_human_row_fraction": 0.25,
+        "agentic_min_tool_row_fraction": 0.95,
+    }
+
+
 def manifest_workload(manifest: dict) -> str:
     workload = manifest.get("workload", {})
     if isinstance(workload, dict) and workload.get("name"):
@@ -405,6 +441,10 @@ def _pick_tracelab_sessions(sessions: list[dict], n_sessions: int, seed: int, wo
         return sorted(sessions, key=lambda s: (s["served_T"], s["turn_rate_hz"], s["id"]))[:n_sessions]
     if workload == "large":
         return sorted(sessions, key=lambda s: (-s["served_T"], -s["turn_rate_hz"], s["id"]))[:n_sessions]
+    if workload in {"interactive_coding", "coding", "agentic_tool_loop"}:
+        eligible = [s for s in sessions if s["workload_class"] == workload]
+        if len(eligible) >= n_sessions:
+            return random.Random(seed).sample(sorted(eligible, key=lambda s: s["id"]), n_sessions)
     raise ValueError(f"unknown workload: {workload}")
 
 
@@ -444,6 +484,8 @@ def tracelab_manifest(path: Path, n_sessions: int, seed: int, max_model_len: int
         rate = max(1e-4, (len(rows) - 1) / span)
         ell_pre = rate * float(np.median([t["append"] for t in steady])) / LIVE_A100_F_PREFILL_TPS
         ell_dec = rate * output / LIVE_A100_G_DECODE_TPS
+        human_fraction = float(np.mean([bool(r.get("current_user_message_count", 0)) for r in rows]))
+        tool_fraction = float(np.mean([bool(r.get("tools")) for r in rows]))
         turns = []
         for i, (row, tok) in enumerate(zip(rows, toks)):
             turns.append({
@@ -466,20 +508,23 @@ def tracelab_manifest(path: Path, n_sessions: int, seed: int, max_model_len: int
             "decode_tokens": output,
             "ell_pre": ell_pre,
             "ell_dec": ell_dec,
+            "human_row_fraction": human_fraction,
+            "tool_row_fraction": tool_fraction,
             "source_node": 0,
             "words": int(served_T * WORDS_PER_TOKEN),
             "turns": turns,
         })
     if len(sessions) < n_sessions:
         raise ValueError(f"need {n_sessions} TraceLab sessions after filtering, got {len(sessions)}")
+    thresholds = _tracelab_partition(sessions)
     picked = _pick_tracelab_sessions(sessions, n_sessions, seed, workload)
     for i, s in enumerate(picked):
         s["source_node"] = 0
         s["manifest_rank"] = i
     return {
         "schema": MANIFEST_SCHEMA,
-        "source": {"type": "tracelab", "path": str(path), "seed": seed, "workload": workload},
-        "workload": {"name": workload, "selection": "served_T_quantile" if workload in ("small", "large") else "random"},
+        "source": {"type": "tracelab", "path": str(path), "sha256": _file_sha256(path), "seed": seed, "workload": workload},
+        "workload": {"name": workload, "selection": "trace_partition" if workload in {"interactive_coding", "coding", "agentic_tool_loop"} else "served_T_quantile" if workload in ("small", "large") else "random", "thresholds": thresholds},
         "deadline_s": 300.0,
         "target_w": "all",
         "baseline_s": baseline_s,
@@ -735,7 +780,11 @@ def _live_model(manifest: dict, deadline_s: float | None = None, target_frac: fl
 
 def _policy_result(policy: str, pop: JobPopulation, pool: PoolPower, imp, target_w: float, event: Event, move: Movement, seed: int):
     if policy == "lp":
-        return solve_power_function_lp(pop, pool, imp, target_w, event, move)
+        return solve_power_function_lp_rounded(pop, pool, imp, target_w, event, move)
+    if policy == "milp":
+        return solve_single_source_milp(pop, pool, imp, target_w, event, move)
+    if policy == "power-unaware":
+        return solve_power_unaware(pop, pool, imp, target_w, event, move)
     if policy == "random":
         return solve_random_jobs(pop, pool, imp, target_w, event, move, seed=seed)
     if policy == "greedy":
@@ -753,7 +802,7 @@ def _policy_order(policy: str, result, pop: JobPopulation, pool: PoolPower, imp,
     selected = set(np.flatnonzero(result.y > 1e-9))
     if policy == "random":
         return [int(i) for i in np.random.default_rng(seed).permutation(len(pop)) if i in selected]
-    if policy == "greedy" and getattr(result, "order", ()):
+    if getattr(result, "order", ()):
         return [i for i in result.order if i in selected]
     return [int(i) for i in sorted(selected, key=lambda j: (-(result.y_R[j] + result.y_S[j]), -pop.ell[j], j))]
 
@@ -802,6 +851,8 @@ def live_plan_summary(manifest: dict, policy: str = "greedy", seed: int = 0,
         result = _policy_result(policy, pop, pool, imp, target_w, event, move, seed)
         order = _policy_order(policy, result, pop, pool, imp, seed)
         solver = {"method": result.method, "feasible": result.true_expected_feasible, "shortfall_w": result.expected_shortfall_w, "cost_s": result.cost}
+        if policy == "lp":
+            solver["fractional_lower_bound_s"] = solve_power_function_lp(pop, pool, imp, target_w, event, move).cost
         y_r, y_s = result.y_R, result.y_S
     for i in order:
         action = "R" if policy == "all-r" else "S" if policy == "all-s" else _row_action(result, imp, i)
