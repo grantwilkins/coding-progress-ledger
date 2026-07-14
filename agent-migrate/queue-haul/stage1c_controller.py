@@ -448,9 +448,23 @@ def _pick_tracelab_sessions(sessions: list[dict], n_sessions: int, seed: int, wo
     raise ValueError(f"unknown workload: {workload}")
 
 
+def _admit_source_load(sessions: list[dict], budget: float) -> tuple[float, float]:
+    if budget <= 0:
+        raise ValueError("source load budget must be positive")
+    offered = sum(s["ell_pre"] + s["ell_dec"] for s in sessions)
+    scale = min(1.0, budget / offered)
+    for session in sessions:
+        for key in ("turn_rate_hz", "ell_pre", "ell_dec"):
+            session[key] *= scale
+        for turn in session["turns"][1:]:
+            turn["gap_s"] /= scale
+    return offered, scale
+
+
 def tracelab_manifest(path: Path, n_sessions: int, seed: int, max_model_len: int = 32768,
                       decode_margin: int = 512, min_turns: int = 3, min_context_tokens: int = 2048,
-                      baseline_s: float = 120.0, settle_s: float = 120.0, workload: str = "mixed") -> dict:
+                      baseline_s: float = 120.0, settle_s: float = 120.0, workload: str = "mixed",
+                      source_load_budget_ell: float = LIVE_A100_RHO_STAR) -> dict:
     groups: dict[str, list[dict]] = {}
     for row in _jsonl(path):
         sid = str(_field(row, "session_id", "session", "conversation_id", "trace_key"))
@@ -518,12 +532,15 @@ def tracelab_manifest(path: Path, n_sessions: int, seed: int, max_model_len: int
         raise ValueError(f"need {n_sessions} TraceLab sessions after filtering, got {len(sessions)}")
     thresholds = _tracelab_partition(sessions)
     picked = _pick_tracelab_sessions(sessions, n_sessions, seed, workload)
+    offered_load_ell, load_scale = _admit_source_load(picked, source_load_budget_ell)
     for i, s in enumerate(picked):
         s["source_node"] = 0
         s["manifest_rank"] = i
     return {
         "schema": MANIFEST_SCHEMA,
-        "source": {"type": "tracelab", "path": str(path), "sha256": _file_sha256(path), "seed": seed, "workload": workload},
+        "source": {"type": "tracelab", "path": str(path), "sha256": _file_sha256(path), "seed": seed, "workload": workload,
+                   "load_budget_ell": source_load_budget_ell, "offered_load_ell": offered_load_ell,
+                   "admitted_load_ell": offered_load_ell * load_scale, "load_scale": load_scale},
         "workload": {"name": workload, "selection": "trace_partition" if workload in {"interactive_coding", "coding", "agentic_tool_loop"} else "served_T_quantile" if workload in ("small", "large") else "random", "thresholds": thresholds},
         "deadline_s": 300.0,
         "target_w": "all",
@@ -558,6 +575,9 @@ def live_sessions(manifest: dict) -> list[dict]:
             raise ValueError(f"session {s['id']} is not active")
         if len(s["turns"]) < 1:
             raise ValueError(f"session {s['id']} has no turns")
+    budget = manifest.get("source", {}).get("load_budget_ell")
+    if budget is not None and sum(s["ell_pre"] + s["ell_dec"] for s in sessions) > float(budget) + 1e-9:
+        raise ValueError("source load exceeds manifest budget")
     return sessions
 
 
@@ -2012,6 +2032,7 @@ def parse_args(argv: list[str] | None = None):
     make_p.add_argument("--min-turns", type=int, default=3)
     make_p.add_argument("--min-context-tokens", type=int, default=2048)
     make_p.add_argument("--workload", choices=("mixed", "small", "large", "interactive_coding", "coding", "agentic_tool_loop"), default="mixed")
+    make_p.add_argument("--source-load-budget-ell", type=float, default=LIVE_A100_RHO_STAR)
     live_p = sub.add_parser("live-drain")
     b.add_common(live_p)
     live_p.add_argument("--manifest", type=Path, required=True)
@@ -2073,7 +2094,7 @@ def main(argv: list[str] | None = None) -> None:
         check_manifest(json.loads(path.read_text()))
         print(path)
     elif args.cmd == "make-manifest":
-        manifest = tracelab_manifest(args.input, args.sessions, args.seed, args.max_model_len, args.decode_margin, args.min_turns, args.min_context_tokens, workload=args.workload)
+        manifest = tracelab_manifest(args.input, args.sessions, args.seed, args.max_model_len, args.decode_margin, args.min_turns, args.min_context_tokens, workload=args.workload, source_load_budget_ell=args.source_load_budget_ell)
         args.out.parent.mkdir(parents=True, exist_ok=True)
         args.out.write_text(json.dumps(manifest, indent=2, sort_keys=True))
         print(args.out)

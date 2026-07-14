@@ -199,6 +199,10 @@ grid.
 Live planning uses the checked-in 5-second A100 calibration: session load is
 `f/F + g/G`, `rho_star=0.534657` is fixed across workloads, and the matching
 saturating power curve is never renormalized to the current session population.
+Manifest generation preserves selected sessions and relative turn rates, but
+uniformly stretches their turn gaps when aggregate source load exceeds
+`rho_star`; the source budget, original load, admitted load, and scale are stored
+in the manifest.
 By default `rho_star` is also the sink admission budget. For a two-GPU mechanism
 test, `DEST_LOAD_BUDGET_ELL=2.0 sbatch queue-haul/stage1c_grid.sbatch` changes
 only that load budget. Outputs label it `mechanism_only` and report whether the

@@ -130,6 +130,18 @@ def test_tracelab_manifest_groups_clamps_and_preserves_turns(tmp_path: Path):
     assert session["turns"][1]["gap_s"] == 60
 
 
+def test_tracelab_manifest_admits_source_load(tmp_path: Path):
+    trace = tmp_path / "trace.jsonl.gz"
+    _write_tracelab(trace)
+    manifest = c.tracelab_manifest(trace, 1, 0, min_context_tokens=1024, source_load_budget_ell=1e-4)
+    session = manifest["sessions"][0]
+
+    assert manifest["source"]["offered_load_ell"] > 1e-4
+    assert session["ell_pre"] + session["ell_dec"] == pytest.approx(1e-4)
+    assert session["turn_rate_hz"] == pytest.approx((2 / 120) * manifest["source"]["load_scale"])
+    assert session["turns"][1]["gap_s"] == pytest.approx(60 / manifest["source"]["load_scale"])
+
+
 def test_tracelab_manifest_workload_selects_small_and_large(tmp_path: Path):
     trace = tmp_path / "trace.jsonl.gz"
     with gzip.open(trace, "wt") as f:
@@ -936,6 +948,7 @@ def test_grid_sbatch_defaults_to_old_runtime():
     assert "DEST_LOAD_ARGS" not in text
     assert c.parse_args(["live-drain", "--manifest", "sessions.json"]).kv_concurrency == 2
     assert c.parse_args(["live-grid", "--manifest", "sessions.json", "--dest-load-budget-ell", "2"]).dest_load_budget_ell == 2
+    assert c.parse_args(["make-manifest", "--source", "tracelab", "--input", "in", "--out", "out"]).source_load_budget_ell == c.LIVE_A100_RHO_STAR
 
 
 def test_profile_prompt_has_cache_namespace(monkeypatch):
