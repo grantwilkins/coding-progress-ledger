@@ -6,7 +6,10 @@ import argparse
 import csv
 import heapq
 import math
+from collections.abc import Iterable, Iterator
+from contextlib import ExitStack
 from dataclasses import dataclass
+from itertools import chain
 from pathlib import Path
 
 import matplotlib
@@ -36,6 +39,18 @@ class ExperimentRun:
     plan: PlanResult
     case_id: str
     result: ExecutionResult
+
+
+@dataclass(frozen=True)
+class PlotRun:
+    workload_id: str
+    deadline_s: float
+    power_limit_w: float
+    solver: str
+    power: tuple[tuple[float, float, float], ...]
+    pauses: tuple[float, ...]
+    network: tuple[tuple[float, float, str], ...]
+    requests: tuple[tuple[float, float], ...]
 
 
 def _requests(record, end_s: float, rng) -> tuple[SimRequest, ...]:
@@ -150,9 +165,9 @@ def run(model_path: Path = DEFAULT_MODEL, workload_paths=DEFAULT_WORKLOADS,
         sessions: int = 10_000, seed: int = 0, power_limits=(10_000.0,),
         deadlines=(120.0,), end_s: float = 180.0, solvers=SOLVERS,
         link_bytes_per_s: float = 125_000_000.0,
-        final_state: str = "awake", controller_delay_s: float = 0.0) -> list[ExperimentRun]:
+        final_state: str = "awake",
+        controller_delay_s: float = 0.0) -> Iterator[ExperimentRun]:
     profile = ModelProfile.load(model_path)
-    runs = []
     for workload_path in workload_paths:
         workload = WorkloadProfile.load(workload_path)
         for power_limit in power_limits:
@@ -167,10 +182,9 @@ def run(model_path: Path = DEFAULT_MODEL, workload_paths=DEFAULT_WORKLOADS,
                     for case_id in profile.cases:
                         result = execute(scenario, profile, planned.moves, case_id)
                         run_id = f"{workload.profile_id}:{power_limit:g}:{deadline:g}:{solver}:{case_id}:{seed}"
-                        runs.append(ExperimentRun(
+                        yield ExperimentRun(
                             run_id, workload.profile_id, scenario, planned, case_id, result
-                        ))
-    return runs
+                        )
 
 
 def excess_energy(power, start_s: float, end_s: float, limit_w: float) -> float:
@@ -245,63 +259,90 @@ def _summary(run: ExperimentRun) -> dict:
     }
 
 
-def _write_csv(path: Path, rows: list[dict], fields: tuple[str, ...]) -> None:
-    with path.open("w", newline="") as file:
-        writer = csv.DictWriter(file, fields)
-        writer.writeheader()
-        writer.writerows(rows)
+def _sample(rows, limit: int = 2_000):
+    rows = tuple(rows)
+    if len(rows) <= limit:
+        return rows
+    return tuple(rows[i] for i in np.linspace(0, len(rows) - 1, limit, dtype=int))
 
 
-def write(runs: list[ExperimentRun], out: Path) -> None:
-    if not runs:
-        raise ValueError("no experiment runs")
+def write(runs: Iterable[ExperimentRun], out: Path) -> int:
+    iterator = iter(runs)
+    try:
+        first = next(iterator)
+    except StopIteration:
+        raise ValueError("no experiment runs") from None
     out.mkdir(parents=True, exist_ok=True)
-    summaries = [_summary(run) for run in runs]
-    events, sessions, requests, network, power, plans = [], [], [], [], [], []
-    for run in runs:
-        base = {
-            "run_id": run.run_id, "model_profile": run.plan.profile_id,
-            "workload_profile": run.workload_id, "profile_case": run.case_id,
-            "solver": run.plan.solver, "seed": run.plan.seed,
-            "power_limit_w": run.scenario.power_limit_w,
-            "deadline_s": run.scenario.deadline_s, "end_s": run.scenario.end_s,
-            "final_state": run.scenario.final_state,
-            "controller_delay_s": run.scenario.controller_delay_s,
-        }
-        events += [{**base, "time_s": row.time_s, "event": row.event,
-                    "session_id": row.session_id, "node_id": row.node_id,
-                    "detail": row.detail} for row in run.result.events]
-        sessions += [{**base, **row.__dict__} for row in run.result.sessions]
-        requests += [{**base, **row.__dict__} for row in run.result.requests]
-        network += [{**base, **row.__dict__, "path": "|".join(row.path)}
-                    for row in run.result.network]
-        power += [{**base, "time_s": t, "modeled_source_power_w": source,
-                   "modeled_destination_power_w": destination}
-                  for t, source, destination in run.result.power]
-        plans += [{**base, "session_id": row.session_id,
-                   "destination_instance": row.destination_instance, "method": row.method,
-                   "order": row.order, "path": "|".join(row.path),
-                   "external_path": "|".join(row.external_path)} for row in run.plan.moves]
-    for name, rows in (("summary", summaries), ("events", events), ("sessions", sessions),
-                       ("requests", requests), ("network", network), ("power", power),
-                       ("plans", plans)):
-        fields = tuple(rows[0]) if rows else ("run_id",)
-        _write_csv(out / f"{name}.csv", rows, fields)
-    _plot(runs, summaries, out)
+    names = "summary", "events", "sessions", "requests", "network", "power", "plans"
+    summaries, plots, writers = [], [], {}
+    with ExitStack() as stack:
+        files = {name: stack.enter_context((out / f"{name}.csv").open("w", newline=""))
+                 for name in names}
+
+        def emit(name: str, rows) -> None:
+            for row in rows:
+                if name not in writers:
+                    writers[name] = csv.DictWriter(files[name], tuple(row))
+                    writers[name].writeheader()
+                writers[name].writerow(row)
+
+        for run in chain((first,), iterator):
+            summary = _summary(run)
+            summaries.append(summary)
+            base = {
+                "run_id": run.run_id, "model_profile": run.plan.profile_id,
+                "workload_profile": run.workload_id, "profile_case": run.case_id,
+                "solver": run.plan.solver, "seed": run.plan.seed,
+                "power_limit_w": run.scenario.power_limit_w,
+                "deadline_s": run.scenario.deadline_s, "end_s": run.scenario.end_s,
+                "final_state": run.scenario.final_state,
+                "controller_delay_s": run.scenario.controller_delay_s,
+            }
+            emit("summary", (summary,))
+            emit("events", ({**base, **row.__dict__} for row in run.result.events))
+            emit("sessions", ({**base, **row.__dict__} for row in run.result.sessions))
+            emit("requests", ({**base, **row.__dict__} for row in run.result.requests))
+            emit("network", ({**base, **row.__dict__, "path": "|".join(row.path)}
+                             for row in run.result.network))
+            emit("power", ({**base, "time_s": t, "modeled_source_power_w": source,
+                            "modeled_destination_power_w": destination}
+                           for t, source, destination in run.result.power))
+            emit("plans", ({**base, "session_id": row.session_id,
+                            "destination_instance": row.destination_instance,
+                            "method": row.method, "order": row.order,
+                            "path": "|".join(row.path),
+                            "external_path": "|".join(row.external_path)}
+                           for row in run.plan.moves))
+            if run.case_id == "central":
+                methods = {row.session_id: row.method for row in run.result.sessions}
+                plots.append(PlotRun(
+                    run.workload_id, run.scenario.deadline_s, run.scenario.power_limit_w,
+                    run.plan.solver, _sample(run.result.power),
+                    _sample(row.committed_s - row.pause_s for row in run.result.sessions
+                            if row.committed_s is not None and row.pause_s is not None),
+                    _sample((row.transferred_bytes / 1e6, row.end_s - row.start_s,
+                             f"{methods[row.session_id]}:{row.phase}")
+                            for row in run.result.network if row.end_s is not None),
+                    _sample((row.arrival_s, row.start_s - row.arrival_s)
+                            for row in run.result.requests),
+                ))
+        for name in set(names) - set(writers):
+            csv.DictWriter(files[name], ("run_id",)).writeheader()
+    _plot(plots, summaries, out)
+    return len(summaries)
 
 
-def _plot(runs: list[ExperimentRun], summaries: list[dict], out: Path) -> None:
-    central = [run for run in runs if run.case_id == "central"]
-    first = central[0]
-    same = [run for run in central if run.workload_id == first.workload_id
-            and run.scenario.deadline_s == first.scenario.deadline_s
-            and run.scenario.power_limit_w == first.scenario.power_limit_w]
+def _plot(runs: list[PlotRun], summaries: list[dict], out: Path) -> None:
+    first = runs[0]
+    same = [run for run in runs if run.workload_id == first.workload_id
+            and run.deadline_s == first.deadline_s
+            and run.power_limit_w == first.power_limit_w]
     fig, ax = plt.subplots(figsize=(7, 4))
     for run in same:
-        ax.step([p[0] for p in run.result.power], [p[1] for p in run.result.power], where="post",
-                label=run.plan.solver)
-    ax.axhline(first.scenario.power_limit_w, color="black", linestyle="--", label="power limit")
-    ax.axvline(first.scenario.deadline_s, color="black", linestyle=":", label="deadline")
+        ax.step([p[0] for p in run.power], [p[1] for p in run.power], where="post",
+                label=run.solver)
+    ax.axhline(first.power_limit_w, color="black", linestyle="--", label="power limit")
+    ax.axvline(first.deadline_s, color="black", linestyle=":", label="deadline")
     ax.set(xlabel="time (s)", ylabel="modeled expected source power (W)")
     ax.legend(fontsize=8)
     ax.grid(alpha=0.25)
@@ -311,8 +352,7 @@ def _plot(runs: list[ExperimentRun], summaries: list[dict], out: Path) -> None:
 
     phase = {solver: [] for solver in SOLVERS}
     for run in same:
-        phase[run.plan.solver] += [row.committed_s - row.pause_s for row in run.result.sessions
-                                   if row.committed_s is not None and row.pause_s is not None]
+        phase[run.solver] += run.pauses
     fig, ax = plt.subplots(figsize=(7, 4))
     labels = [solver for solver, values in phase.items() if values]
     ax.boxplot([phase[label] for label in labels], tick_labels=labels, showfliers=False)
@@ -325,15 +365,11 @@ def _plot(runs: list[ExperimentRun], summaries: list[dict], out: Path) -> None:
 
     fig, ax = plt.subplots(figsize=(6, 4))
     for run in same:
-        rows = [row for row in run.result.network if row.end_s is not None]
-        methods = {row.session_id: row.method for row in run.result.sessions}
-        for phase_name in sorted({row.phase for row in rows}):
-            selected = [row for row in rows if row.phase == phase_name]
-            labels = {methods[row.session_id] for row in selected}
+        for phase_name in sorted({row[2] for row in run.network}):
+            selected = [row for row in run.network if row[2] == phase_name]
             ax.scatter(
-                [row.transferred_bytes / 1e6 for row in selected],
-                [row.end_s - row.start_s for row in selected], s=10, alpha=0.4,
-                label=f"{run.plan.solver}:{'/'.join(sorted(labels))}:{phase_name}",
+                [row[0] for row in selected], [row[1] for row in selected],
+                s=10, alpha=0.4, label=f"{run.solver}:{phase_name}",
             )
     ax.set(xlabel="transfer size (MB)", ylabel="network time (s)")
     handles, labels = ax.get_legend_handles_labels()
@@ -347,11 +383,10 @@ def _plot(runs: list[ExperimentRun], summaries: list[dict], out: Path) -> None:
     fig, ax = plt.subplots(figsize=(6, 4))
     for run in same:
         ax.scatter(
-            [row.arrival_s for row in run.result.requests],
-            [row.start_s - row.arrival_s for row in run.result.requests],
-            s=10, alpha=0.5, label=run.plan.solver,
+            [row[0] for row in run.requests], [row[1] for row in run.requests],
+            s=10, alpha=0.5, label=run.solver,
         )
-    ax.axvline(first.scenario.deadline_s, color="black", linestyle=":", label="deadline")
+    ax.axvline(first.deadline_s, color="black", linestyle=":", label="deadline")
     ax.set(xlabel="request arrival (s)", ylabel="request wait (s)")
     handles, labels = ax.get_legend_handles_labels()
     unique = dict(zip(labels, handles))
@@ -416,8 +451,8 @@ def main() -> None:
         args.power_limit, args.deadline, args.end, args.solver or SOLVERS,
         args.link_bytes_per_s, args.final_state, args.controller_delay,
     )
-    write(runs, args.out)
-    print(f"runs={len(runs)} output={args.out}")
+    count = write(runs, args.out)
+    print(f"runs={count} output={args.out}")
 
 
 if __name__ == "__main__":

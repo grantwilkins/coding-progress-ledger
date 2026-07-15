@@ -66,16 +66,16 @@ def test_excess_energy_integrates_step_power_after_deadline():
 
 
 def test_small_run_reuses_plans_and_writes_raw_tables_and_plots(tmp_path: Path):
-    runs = experiment.run(
+    runs = list(experiment.run(
         workload_paths=(experiment.DEFAULT_WORKLOADS[2],), sessions=6, power_limits=(500,),
         deadlines=(5,), end_s=5, solvers=("load_only",), seed=3,
-    )
+    ))
     assert len(runs) == 3
     assert all(run.plan.moves == runs[0].plan.moves for run in runs)
     assert all(next(e for e in run.result.events if e.event == "plan_ready").time_s == 0
                for run in runs)
 
-    experiment.write(runs, tmp_path)
+    experiment.write(iter(runs), tmp_path)
     for name in ("summary.csv", "events.csv", "sessions.csv", "requests.csv", "network.csv",
                  "power.csv", "plans.csv", "power_timeline.png", "session_pause.png",
                  "network_time.png", "request_wait.png", "expected_vs_modeled_power.png",
