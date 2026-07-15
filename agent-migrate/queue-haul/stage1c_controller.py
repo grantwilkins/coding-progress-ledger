@@ -66,6 +66,8 @@ def field(row: dict, *names, default=None):
 def trace_time(row: dict) -> float:
     value = field(row, "timestamp", "ts", "created_at", "started_at", "start_time")
     if value is None:
+        value = next((event.get("timestamp") for event in row.get("timing_events", []) if event.get("timestamp") is not None), None)
+    if value is None:
         raise ValueError(f"trace row {row['_line']} has no timestamp")
     if isinstance(value, (int, float)):
         return float(value)

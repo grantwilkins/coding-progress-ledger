@@ -32,6 +32,7 @@ def write_trace(path: Path) -> None:
 
 def test_manifest_is_deterministic_and_uses_complete_trace_boundaries(tmp_path):
     trace = tmp_path / "trace.jsonl"; write_trace(trace)
+    assert c.trace_time({"_line": 1, "timing_events": [{"timestamp": "1970-01-01T00:00:01Z"}]}) == 1
 
     first = c.make_manifest(trace, "coding", 3, 7)
     second = c.make_manifest(trace, "coding", 3, 7)
