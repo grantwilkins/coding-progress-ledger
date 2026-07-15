@@ -37,45 +37,101 @@ def _ell(session: SimSession, case: ProfileCase) -> float:
     return session.expected_f / case.F + session.expected_g / case.G
 
 
+class _SourcePower:
+    def __init__(self, scenario: ExecutionScenario, profile: ModelProfile, case_id: str):
+        self.scenario, self.profile, self.case = scenario, profile, profile.case(case_id)
+        self.nodes = {n.node_id: n for n in scenario.nodes}
+        self.instances = {i.instance_id: i for i in scenario.instances}
+        self.sessions = {s.session_id: s for s in scenario.sessions}
+        loads = {i.instance_id: 0.0 for i in scenario.instances}
+        for session in scenario.sessions:
+            loads[session.source_instance] += _ell(session, self.case)
+        self.slots = {n.node_id: [0.0] * n.gpus for n in scenario.nodes}
+        used = {n.node_id: 0 for n in scenario.nodes}
+        self.instance_slots = {}
+        for instance in scenario.instances:
+            owned = []
+            for node_id in instance.gpu_nodes:
+                if used[node_id] == len(self.slots[node_id]):
+                    raise ValueError(f"serving instances exceed GPU capacity on {node_id!r}")
+                owned.append((node_id, used[node_id]))
+                used[node_id] += 1
+            self.instance_slots[instance.instance_id] = owned
+            for node_id, slot in owned:
+                self.slots[node_id][slot] = loads[instance.instance_id] / len(owned)
+        self.dependents = {
+            node_id: {
+                s.session_id for s in scenario.sessions
+                if node_id in self.instances[s.source_instance].gpu_nodes
+            } for node_id in self.nodes
+        }
+        self.state = {node_id: "awake" for node_id in self.nodes}
+        self.moved = set()
+        self.power = {node_id: self._node_power(node_id) for node_id in self.nodes}
+        self.total = sum(self.power.values())
+
+    def _node_power(self, node_id: str, slots=None, state=None) -> float:
+        node = self.nodes[node_id]
+        if not node.local:
+            return 0.0
+        state, slots = state or self.state[node_id], slots or self.slots[node_id]
+        if state == "off":
+            return 0.0
+        if state == "sleep":
+            return self.case.sleep_power_w * (node.gpus if self.profile.power_scope == "gpu" else 1)
+        if self.profile.power_scope == "gpu":
+            return sum(self.case.power_curve.power(load) for load in slots)
+        return self.case.power_curve.power(sum(slots))
+
+    def move(self, session_id: str) -> None:
+        if session_id in self.moved:
+            return
+        session = self.sessions[session_id]
+        owned = self.instance_slots[session.source_instance]
+        affected = {node_id for node_id, _slot in owned}
+        before = sum(self.power[node_id] for node_id in affected)
+        share = _ell(session, self.case) / len(owned)
+        for node_id, slot in owned:
+            self.slots[node_id][slot] -= share
+        self.moved.add(session_id)
+        for node_id in affected:
+            if self.dependents[node_id] <= self.moved:
+                self.state[node_id] = self.scenario.final_state
+            self.power[node_id] = self._node_power(node_id)
+        self.total += sum(self.power[node_id] for node_id in affected) - before
+
+    def marginal(self, session_id: str) -> float:
+        session = self.sessions[session_id]
+        owned = self.instance_slots[session.source_instance]
+        by_node = {}
+        share = _ell(session, self.case) / len(owned)
+        for node_id, slot in owned:
+            by_node.setdefault(node_id, list(self.slots[node_id]))[slot] -= share
+        gain = 0.0
+        for node_id, slots in by_node.items():
+            state = self.scenario.final_state if self.dependents[node_id] == {session_id} else "awake"
+            gain += self.power[node_id] - self._node_power(node_id, slots, state)
+        return gain
+
+    def drain_gain(self, session_ids) -> float:
+        affected = {
+            node_id for session_id in session_ids
+            for node_id, _slot in self.instance_slots[self.sessions[session_id].source_instance]
+        }
+        final = self.scenario.final_state
+        return sum(self.power[node_id] - self._node_power(
+            node_id, [0.0] * self.nodes[node_id].gpus, final
+        ) for node_id in affected)
+
+
 def source_power(scenario: ExecutionScenario, profile: ModelProfile, moved=(),
                  case_id: str = "central") -> float:
     """Expected local power after committed moves and the requested final node state."""
-    case, moved = profile.case(case_id), set(moved)
-    nodes = {n.node_id: n for n in scenario.nodes}
-    instances = {i.instance_id: i for i in scenario.instances}
-    loads = {i.instance_id: 0.0 for i in scenario.instances}
+    state, moved = _SourcePower(scenario, profile, case_id), set(moved)
     for session in scenario.sessions:
-        if session.session_id not in moved:
-            loads[session.source_instance] += _ell(session, case)
-    slots = {n.node_id: [0.0] * n.gpus for n in scenario.nodes}
-    used = {n.node_id: 0 for n in scenario.nodes}
-    for instance in scenario.instances:
-        share = loads[instance.instance_id] / len(instance.gpu_nodes)
-        for node_id in instance.gpu_nodes:
-            if used[node_id] == len(slots[node_id]):
-                raise ValueError(f"serving instances exceed GPU capacity on {node_id!r}")
-            slots[node_id][used[node_id]] += share
-            used[node_id] += 1
-    dependents = {
-        node_id: {
-            s.session_id for s in scenario.sessions
-            if node_id in instances[s.source_instance].gpu_nodes
-        } for node_id in nodes
-    }
-    total = 0.0
-    for node_id, node in nodes.items():
-        if not node.local:
-            continue
-        drained = bool(dependents[node_id]) and dependents[node_id] <= moved
-        if drained and scenario.final_state == "off":
-            continue
-        if drained and scenario.final_state == "sleep":
-            total += case.sleep_power_w * (node.gpus if profile.power_scope == "gpu" else 1)
-        elif profile.power_scope == "gpu":
-            total += sum(case.power_curve.power(load) for load in slots[node_id])
-        else:
-            total += case.power_curve.power(sum(slots[node_id]))
-    return total
+        if session.session_id in moved:
+            state.move(session.session_id)
+    return state.total
 
 
 def _duration(session: SimSession, method: MoveMethod, case: ProfileCase,
@@ -169,7 +225,8 @@ def plan(scenario: ExecutionScenario, profile: ModelProfile,
     destinations = [i for i in scenario.instances if all(not nodes[n].local for n in i.gpu_nodes)]
     if not destinations:
         raise ValueError("scenario has no destination instance")
-    initial = source_power(scenario, profile, case_id=case_id)
+    power_state = _SourcePower(scenario, profile, case_id)
+    initial = power_state.total
     if initial <= scenario.power_limit_w:
         return PlanResult(solver, (), initial, initial, True, perf_counter() - start, 0,
                           profile.profile_id, case_id, seed)
@@ -186,13 +243,11 @@ def plan(scenario: ExecutionScenario, profile: ModelProfile,
     best_method = np.argmin(np.where(valid, costs, np.inf), axis=1)
     best_cost = costs[np.arange(len(sessions)), best_method]
     groups = _drain_groups(scenario, sessions)
-    base_gain = np.array([initial - source_power(
-        scenario, profile, [s.session_id], case_id
-    ) for s in sessions])
+    base_gain = np.array([power_state.marginal(s.session_id) for s in sessions])
     gains = base_gain.copy()
     for group in groups:
         ids = [sessions[j].session_id for j in group]
-        bonus = initial - source_power(scenario, profile, ids, case_id) - base_gain[group].sum()
+        bonus = power_state.drain_gain(ids) - base_gain[group].sum()
         weight = np.array([_ell(sessions[j], case) for j in group])
         gains[group] += bonus * weight / weight.sum()
     rng, fractional = np.random.default_rng(seed), np.zeros_like(costs)
@@ -232,19 +287,20 @@ def plan(scenario: ExecutionScenario, profile: ModelProfile,
     if solver == "node_drain":
         ordered_groups = [[j for j in order if j in group] for group in groups]
         for group in ordered_groups:
-            if source_power(scenario, profile, [sessions[j].session_id for j in selected], case_id) \
-                    <= scenario.power_limit_w:
+            if power_state.total <= scenario.power_limit_w:
                 break
-            selected.extend(j for j in group if valid[j, METHODS.index(methods[j])])
+            for j in group:
+                if valid[j, METHODS.index(methods[j])]:
+                    selected.append(j)
+                    power_state.move(sessions[j].session_id)
     else:
         for j in order:
-            if source_power(scenario, profile, [sessions[i].session_id for i in selected], case_id) \
-                    <= scenario.power_limit_w:
+            if power_state.total <= scenario.power_limit_w:
                 break
             if valid[j, METHODS.index(methods[j])]:
                 selected.append(j)
-    moved_ids = [sessions[j].session_id for j in selected]
-    planned = source_power(scenario, profile, moved_ids, case_id)
+                power_state.move(sessions[j].session_id)
+    planned = power_state.total
     moves = _place(selected, sessions, scenario, profile, paths, methods, case_id)
     return PlanResult(
         solver, moves, initial, planned, planned <= scenario.power_limit_w,
