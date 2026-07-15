@@ -249,7 +249,7 @@ def test_source_sleep_transition_hard_fails(monkeypatch):
 
 def test_runtime_versions_are_pinned(monkeypatch):
     commands = []
-    monkeypatch.setattr(s.subprocess, "check_output", lambda command, **_kwargs: commands.append(command) or "0.10.1.1 0.3.3\n")
+    monkeypatch.setattr(s.subprocess, "check_output", lambda command, **_kwargs: commands.append(command) or "QH_RUNTIME_VERSIONS 0.10.1.1 0.3.3\n")
 
     assert s.runtime_versions(s.Config()) == s.RUNTIME_VERSIONS
     assert "LMCServerConnector._qh_patched" in s.shell(commands[0])
