@@ -23,7 +23,7 @@ import stage1c_controller as c
 
 def write_trace(path: Path) -> None:
     rows = []
-    for session, base, tools, human in (("a", 1024, [], 1), ("b", 2048, ["x"], 0), ("c", 4096, ["x"], 0)):
+    for session, base, tools, human in (("a", 1024, [], 0), ("b", 2048, [], 0), ("c", 4096, [], 0)):
         for turn in range(3):
             rows.append({"session_id": session, "timestamp": turn * (100 if session == "a" else 1), "input_tokens_total": base + 256 * turn, "prefix_tokens": base, "newly_append_tokens": 256, "output_tokens": 16, "tools": tools, "current_user_message_count": human})
     path.write_text("".join(json.dumps(row) + "\n" for row in rows))
@@ -32,8 +32,8 @@ def write_trace(path: Path) -> None:
 def test_manifest_is_deterministic_and_uses_complete_trace_boundaries(tmp_path):
     trace = tmp_path / "trace.jsonl"; write_trace(trace)
 
-    first = c.make_manifest(trace, "mixed", 3, 7)
-    second = c.make_manifest(trace, "mixed", 3, 7)
+    first = c.make_manifest(trace, "coding", 3, 7)
+    second = c.make_manifest(trace, "coding", 3, 7)
 
     assert first == second
     assert first["source"]["sha256"] == c.file_hash(trace)
@@ -48,7 +48,7 @@ def test_manifest_is_deterministic_and_uses_complete_trace_boundaries(tmp_path):
 
 def test_plan_keeps_same_order_across_concurrency_and_adds_controls(tmp_path):
     trace, manifest_path = tmp_path / "trace.jsonl", tmp_path / "manifest.json"
-    write_trace(trace); c.write_json(manifest_path, c.make_manifest(trace, "mixed", 3, 1))
+    write_trace(trace); c.write_json(manifest_path, c.make_manifest(trace, "coding", 3, 1))
 
     plan = c.make_plan(manifest_path, [2048], [1, 2], [1000], ["replay", "kv_transfer"], ["none"], 1, 9)
 
@@ -65,9 +65,11 @@ def test_plan_rejects_old_schema_and_too_few_sessions(tmp_path):
     with pytest.raises(ValueError, match="unsupported manifest"):
         c.validate_manifest({"schema": "old"})
     trace, manifest_path = tmp_path / "trace.jsonl", tmp_path / "manifest.json"
-    write_trace(trace); c.write_json(manifest_path, c.make_manifest(trace, "mixed", 2, 1))
+    write_trace(trace); c.write_json(manifest_path, c.make_manifest(trace, "coding", 2, 1))
     with pytest.raises(ValueError, match="at least 3"):
         c.make_plan(manifest_path, [1024], [3], [1000], ["replay"], ["none"], 1, 0)
+    with pytest.raises(ValueError, match="workload must"):
+        c.make_manifest(trace, "mixed", 2, 1)
 
 
 def test_summary_only_adds_tail_and_bootstrap_statistics_when_supported():

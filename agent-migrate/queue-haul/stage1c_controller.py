@@ -25,6 +25,7 @@ RESULT_SCHEMA = "queue-haul-migration-result-v2"
 RUN_SCHEMA = "queue-haul-migration-run-v2"
 METHODS = ("replay", "kv_transfer")
 ACTIVITIES = ("none", "one_turn")
+JOB_CLASSES = ("interactive_coding", "coding", "agentic_tool_loop")
 RESET_SUCCESS = "Successfully reset prefix cache"
 
 
@@ -91,6 +92,8 @@ def quantile(values: list[float], q: float) -> float:
 
 
 def make_manifest(input_path: Path, workload: str, sessions: int, seed: int) -> dict:
+    if workload not in JOB_CLASSES:
+        raise ValueError(f"workload must be one of {', '.join(JOB_CLASSES)}")
     groups: dict[str, list[dict]] = {}
     for row in read_rows(input_path):
         session_id = str(field(row, "session_id", "session", "conversation_id", "trace_key", default=""))
@@ -126,7 +129,7 @@ def make_manifest(input_path: Path, workload: str, sessions: int, seed: int) -> 
             else "coding"
         )
         row["state_code"] = hashlib.sha256(f"{seed}:{row['id']}".encode()).hexdigest()[:12].upper()
-    eligible = candidates if workload == "mixed" else [row for row in candidates if row["job_class"] == workload]
+    eligible = [row for row in candidates if row["job_class"] == workload]
     if len(eligible) < sessions:
         raise ValueError(f"need {sessions} {workload} sessions, found {len(eligible)}")
     selected = random.Random(seed).sample(sorted(eligible, key=lambda row: row["id"]), sessions)
@@ -174,6 +177,9 @@ def validate_manifest(manifest: dict) -> None:
         raise ValueError("unsupported manifest schema")
     if not manifest.get("sessions") or len({row["id"] for row in manifest["sessions"]}) != len(manifest["sessions"]):
         raise ValueError("manifest sessions must be nonempty and unique")
+    classes = {row["job_class"] for row in manifest["sessions"]}
+    if classes != {manifest.get("workload")} or not classes <= set(JOB_CLASSES):
+        raise ValueError("a manifest must contain one standard job class")
 
 
 def make_plan(manifest_path: Path, context_sizes: list[int], concurrency: list[int], bandwidth_mbps: list[float], methods: list[str], activity: list[str], repeats: int, seed: int, deadline_s: float = 300.0) -> dict:
