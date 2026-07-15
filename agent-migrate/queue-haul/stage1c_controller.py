@@ -344,13 +344,13 @@ class LiveSession:
         self.activity_times: tuple[int, int] | None = None
         self.cache_keys: set[str] = set()
 
-    def probe(self, messages: list[dict]) -> list[dict]:
-        return messages + [{"role": "user", "content": f"Reply with session state code {self.state_code}."}]
+    def probe(self, messages: list[dict], prompt: str | None = None) -> list[dict]:
+        return messages + [{"role": "user", "content": prompt or f"Reply with session state code {self.state_code}."}]
 
-    def request(self, port: int, messages: list[dict], label: str) -> tuple[RequestResult, str]:
+    def request(self, port: int, messages: list[dict], label: str, prompt: str | None = None) -> tuple[RequestResult, str]:
         context_hash = messages_hash(messages)
         self.event_log.write("request_start", session_id=self.session_id, request_id=label, route_port=port, context_hash=context_hash)
-        result, text = stream_chat(self.cfg, port, self.probe(messages), PROBE_MAX_TOKENS, context_hash, self.timeout_s)
+        result, text = stream_chat(self.cfg, port, self.probe(messages, prompt), PROBE_MAX_TOKENS, context_hash, self.timeout_s)
         self.event_log.write("request_end", session_id=self.session_id, request_id=result.request_id, route_port=port, status_code=result.status_code, context_hash=context_hash, first_byte_ns=result.first_byte_ns, chunks=[asdict(chunk) for chunk in result.stream_chunks])
         if result.status_code != 200 or self.state_code not in text:
             raise RuntimeError(f"{label} failed state check for {self.session_id}: HTTP {result.status_code}")
@@ -378,7 +378,7 @@ class LiveSession:
             with self.lock:
                 base = list(self.messages)
             user = {"role": "user", "content": f"Controlled turn for {self.state_code}. Return the code."}
-            result, text = self.request(self.cfg.src_port, base + [user], "controlled_turn")
+            result, text = self.request(self.cfg.src_port, base, "controlled_turn", user["content"])
             with self.lock:
                 self.messages = base + [user, {"role": "assistant", "content": text}]
                 self.generation += 1
@@ -401,7 +401,7 @@ class LiveSession:
                 raise RuntimeError(f"session {self.session_id} is paused")
             messages, port, generation = list(self.messages), self.route, self.generation
         user = {"role": "user", "content": f"Continuation for {self.state_code}. Return the code."}
-        result, text = self.request(port, messages + [user], "continuation")
+        result, text = self.request(port, messages, "continuation", user["content"])
         with self.lock:
             if generation != self.generation:
                 raise RuntimeError(f"session {self.session_id} changed during continuation")

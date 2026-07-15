@@ -97,6 +97,15 @@ def test_kv_bytes_come_from_logged_full_chunk_layout(tmp_path):
     assert c.kv_metrics(11_047, layout) == (44, 11_047 * 49_152)
 
 
+def test_session_probe_appends_one_final_instruction():
+    session = c.LiveSession.__new__(c.LiveSession)
+    session.state_code = "CODE"
+    base = [{"role": "system", "content": "state"}]
+
+    assert session.probe(base) == base + [{"role": "user", "content": "Reply with session state code CODE."}]
+    assert session.probe(base, "Continue CODE") == base + [{"role": "user", "content": "Continue CODE"}]
+
+
 def test_cli_only_exposes_new_commands():
     for command in ("make-manifest", "make-plan", "run", "reduce"):
         with pytest.raises(SystemExit) as error:
