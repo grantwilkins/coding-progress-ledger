@@ -17,22 +17,30 @@ beyond a profile's load, context, or concurrency range hard-fails. Only local
 source power is compared with the absolute limit; destination power is reported
 separately.
 
-The planner offers random, load-only, node-aware, node-drain, and rounded-LP
-selection. Destination placement is a separate balanced pass. Replay, KV
-transfer, and replay-on-request remain distinct methods. Expected wake
-probability is available to the planner; only sampled requests are visible to
-execution.
+The planner offers random, load-only, node-aware, and node-drain selection.
+Destination placement is a separate balanced pass. Replay, KV transfer, and
+replay-on-request remain distinct methods. Expected wake probability is
+available to the planner; only sampled requests are visible to execution. The
+redundant rounded LP was removed because it had no shared constraint and gave
+the same ordering as node-aware selection.
+
+Planning starts after a configured controller delay, never measured Python wall
+time. A selected plan is marked feasible only if a central-case execution with
+future requests hidden meets the transfer deadline and trailing power window.
 
 Execution follows background preparation, named shared links, destination work,
 pause, optional catch-up, route switch, commit, and optional sleep/off. Source
 power falls only at commit; sleep/off power applies only after its transition.
 Replay and KV destination work have separate measured concurrency limits, and
-unmeasured overlap queues.
+unmeasured overlap queues. Unmeasured serving overlap also queues at one request
+per instance. External logs use a destination-only path, while source-local
+state uses the source-to-destination path.
 
 Acceptance requires both the exact trailing fixed-window local power average at
-or below the limit and every planned session committed by the deadline. Excess
-joules after the deadline and unresumed session-seconds are also reported. The
-simulation end is explicit.
+or below the limit, every planned session committed by the deadline, and every
+request observed by the deadline started by the deadline. Excess joules,
+unresumed session-seconds, request wait, incomplete bytes, and destination power
+are reported separately. The simulation end is explicit.
 
 The legacy formulation below uses different costs and sweep axes. Do not combine
 its outputs with profile-driven tables.

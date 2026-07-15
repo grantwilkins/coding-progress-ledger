@@ -104,19 +104,15 @@ Units are seconds of disruption per kW of modeled node-expected shed. Misses are
 The new path has versioned model/workload profiles, whole-session planning,
 balanced placement, named shared links, deferred replay on observed requests,
 commit-gated source power, explicit incomplete rows, and raw event, session,
-network, power, and plan tables. It plans centrally once and replays that plan
-under faster and slower cases.
+request, network, power, and plan tables. It plans centrally once and replays
+that plan under faster and slower cases. A local six-session command-line smoke
+passes and produces seven nonempty tables plus power, pause, network, request,
+plan-validation, and policy plots.
 
-Local 10,000-session agentic smoke on the M1 MacBook Pro:
-
-| stage | time | peak process memory |
-|---|---:|---:|
-| build scenario | `0.066 s` | |
-| load-only plan | `1.76 s` | |
-| execute 75,850 events | `3.08 s` | `166 MB` |
-| rounded LP | `1.72 s` | `271 MB` |
-
-These are local smoke measurements, not paper performance claims.
+The checked-in GPT-OSS profile stops at 31.6k tokens. Long and 10,000-session
+workload windows now hard-fail before planning when sampled requests exceed that
+range. Scale timing and paper results require a profile measured over the
+requested context range; earlier scale smoke timings did not enforce this check.
 
 Current semantic tests cover:
 

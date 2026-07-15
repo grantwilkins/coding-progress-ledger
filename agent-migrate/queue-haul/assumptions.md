@@ -26,6 +26,15 @@ Targeted TODOs:
   testbed ground truth.
 - `TODO(routes)`: measure heterogeneous destination paths before optimizing
   destination-specific link cost.
+- `TODO(site-links)`: add shared rack and site limits after measuring them; the
+  current topology has only source egress and destination ingress limits.
+- `TODO(wake)`: replace the exponential first-request estimate with a fit from
+  complete session traces.
+- `TODO(load-cycle)`: include measured service time in expected request load.
+- `TODO(transition-power)`: replace the sleep/off step with its measured power
+  trace.
+- `TODO(workloads)`: replace the two- or three-record assumed workload profiles
+  with held-out complete session traces.
 
 ---
 

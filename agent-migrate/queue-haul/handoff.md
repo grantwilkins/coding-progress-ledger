@@ -165,6 +165,7 @@ Before the large GPU plan, run one local profile-driven smoke:
 uv run python queue-haul/power_drain_experiment.py \
   --workload-profile queue-haul/profiles/agentic_tool_loop.json \
   --sessions 6 \
+  --seed 3 \
   --power-limit 500 \
   --deadline 5 \
   --end 5 \
@@ -172,7 +173,10 @@ uv run python queue-haul/power_drain_experiment.py \
   --out queue-haul/outputs/profile_smoke
 ```
 
-Confirm that all six CSV tables are nonempty and the four plots are readable.
+Confirm that all seven CSV tables are nonempty. Inspect the six plots for source
+power, pause time, network phases, request wait, planned versus simulated power,
+and policy outcomes. Seed 3 keeps this short smoke within the checked-in 31.6k
+token profile; longer windows must hard-fail until `TODO(context)` is resolved.
 
 ## 6. Submit the large plan
 
