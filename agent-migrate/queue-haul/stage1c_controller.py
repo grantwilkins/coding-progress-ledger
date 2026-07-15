@@ -1,2130 +1,903 @@
 from __future__ import annotations
 
 import argparse
-from concurrent.futures import ThreadPoolExecutor
-from contextlib import contextmanager
 import csv
 import gzip
 import hashlib
 import http.client
 import json
-import math
-import os
 import random
-import re
-import signal
+import statistics
 import subprocess
 import threading
 import time
-from dataclasses import replace
-from datetime import datetime
+from concurrent.futures import ThreadPoolExecutor
+from dataclasses import asdict, dataclass, replace
 from pathlib import Path
 
-import numpy as np
-
 import stage1b_drain_sink as b
-from dispatch import Event, solve
-from impact import Movement, compute
-from instance import JobPopulation
-from node_knee import (
-    evaluate_node_expected_w,
-    solve_node_aware_greedy,
-    solve_power_function_lp,
-    solve_power_function_lp_rounded,
-    solve_power_unaware,
-    solve_random_jobs,
-    solve_single_source_milp,
-)
-from power import BETA_BYTES_PER_TOK, ETA_BYTES_PER_TOK, PoolPower
-
-SCHEMA = "queue-haul-stage1c-v1"
-LIVE_SCHEMA = "queue-haul-stage1c-live-v1"
-MANIFEST_SCHEMA = "queue-haul-stage1c-session-manifest-v1"
-PROFILE_SCHEMA = "queue-haul-stage1c-live-profile-v2"
-LIVE_ARTIFACTS = (
-    "gpu_power.csv", "events.jsonl", "power_summary.csv", "power_trace.png",
-    "source_power.png", "sink_power.png", "delay_summary.csv", "delay_summary.png",
-    "ell_power5s.csv", "ell_power5s.png", "request_counts.csv", "proxy_audit.csv",
-    "host_mem.log", "source_metrics_before.prom", "source_metrics_after.prom",
-    "sink_metrics_before.prom", "sink_metrics_after.prom",
-)
-WORDS_PER_TOKEN = 0.75
-LIVE_A100_P_IDLE_W = 67.12041959182154
-LIVE_A100_P_BUSY_W = 424.44649546305266
-LIVE_A100_POWER_KNEE = 2.0527780176849793
-LIVE_A100_RHO_STAR = 0.534657100938009
-LIVE_A100_F_PREFILL_TPS = 1448.319999999999
-LIVE_A100_G_DECODE_TPS = 1260.3799999999999
-LIVE_A100_LOG_SHAPE = 8.55
-LIVE_A100_C_PREFILL_J_PER_TOK = 0.028197803044670608
-LIVE_A100_C_DECODE_J_PER_TOK = 0.25745287802176875
-_TOKENIZER_CACHE = {}
-_TOKENIZER_LOCK = threading.Lock()
-_STORED_SIZE_RE = re.compile(r"size:\s*([0-9.]+)\s*gb", re.IGNORECASE)
-_LMCACHE_LOOKUP_RE = re.compile(r"Reqid:\s*([^,]+),\s*Total tokens\s*(\d+),\s*LMCache hit tokens:\s*(\d+)")
+from migration import MigrationController, Move, RequestResult, SessionState, StreamChunk
 
 
-def default_fixture() -> dict:
-    return {
-        "schema": "queue-haul-stage1c-fixture-v1",
-        "deadline_s": 60.0,
-        "target_w": "all",
-        "constants": {
-            "eta_bytes_per_tok": 4096.0,
-            "lambda_src_bytes_per_s": 125_000_000.0,
-            "mu_bytes_per_s": 1_000_000_000.0,
-        },
-        "sessions": [
-            {"id": "r0", "T": 1024, "ell_pre": 0.12, "ell_dec": 0.02, "c_replay_s": 2.0, "c_transfer_s": 12.0, "words": 768},
-            {"id": "k0", "T": 4096, "ell_pre": 0.13, "ell_dec": 0.02, "c_replay_s": 12.0, "c_transfer_s": 4.0, "words": 1024},
-        ],
-    }
+MANIFEST_SCHEMA = "queue-haul-migration-manifest-v2"
+PLAN_SCHEMA = "queue-haul-migration-plan-v2"
+RESULT_SCHEMA = "queue-haul-migration-result-v2"
+RUN_SCHEMA = "queue-haul-migration-run-v2"
+METHODS = ("replay", "kv_transfer")
+ACTIVITIES = ("none", "one_turn")
+RESET_SUCCESS = "Successfully reset prefix cache"
 
 
-def load_fixture(path: Path | None) -> dict:
-    return json.loads(path.read_text()) if path else default_fixture()
-
-
-def active_sessions(fixture: dict) -> list[dict]:
-    sessions = fixture["sessions"]
-    if not sessions:
-        raise ValueError("fixture has no sessions")
-    for s in sessions:
-        if s.get("state", "active") != "active":
-            raise ValueError("stage1c fixture sessions must all be active")
-    return sessions
-
-
-def build_population(fixture: dict) -> JobPopulation:
-    sessions = active_sessions(fixture)
-    n = len(sessions)
-    T = np.array([s["T"] for s in sessions], dtype=float)
-    ell_pre = np.array([s["ell_pre"] for s in sessions], dtype=float)
-    ell_dec = np.array([s["ell_dec"] for s in sessions], dtype=float)
-    eta = float(fixture["constants"].get("eta_bytes_per_tok", 4096.0))
-    classes = np.array([s.get("session_class", "agentic_tool_loop") for s in sessions], dtype=object)
-    return JobPopulation(
-        np.where(classes == "agentic_tool_loop", "agentic", "chat"),
-        classes,
-        np.array(["active"] * n, dtype=object),
-        classes == "reasoning_chat",
-        T,
-        np.zeros(n),
-        np.zeros(n),
-        np.zeros(n),
-        np.zeros(n),
-        np.zeros(n),
-        np.ones(n, dtype=bool),
-        ell_pre,
-        ell_dec,
-        eta * T,
-        "bf16",
-        0.35,
-        np.array([s.get("source_node", 0) for s in sessions], dtype=int),
-    )
-
-
-def build_plan(fixture: dict):
-    sessions = active_sessions(fixture)
-    pool = PoolPower(mean_context_tokens=float(np.mean([s["T"] for s in sessions])))
-    const = fixture["constants"]
-    prof = fixture.get("profile") or {}
-    move = Movement(
-        lambda_src=min(float(const.get("lambda_src_bytes_per_s", 125_000_000.0)), float(prof.get("kv_bytes_per_s") or const.get("lambda_src_bytes_per_s", 125_000_000.0))),
-        mu_in=float(const.get("mu_bytes_per_s", 1_000_000_000.0)),
-        dest_prefill_util=0.0,
-        dest_ingest_util=0.0,
-    )
-    pop = build_population(fixture)
-    base = compute(pop, pool, move)
-    T = pop.T.astype(float)
-    imp = replace(
-        base,
-        b_replay=BETA_BYTES_PER_TOK * T,
-        c_replay=np.array([s.get("c_replay_s", base.c_replay[i]) for i, s in enumerate(sessions)], dtype=float),
-        c_transfer=np.array([s.get("c_transfer_s", base.c_transfer[i]) for i, s in enumerate(sessions)], dtype=float),
-        b_transfer=np.array([s.get("profile_transfer_bytes", base.b_transfer[i]) for i, s in enumerate(sessions)], dtype=float),
-    )
-    event = Event(D=float(fixture["deadline_s"]), dest_nodes=1, spare_frac=1.0, tau_src=0.0, tau_pre=0.0, tau_in=0.0)
-    target = fixture.get("target_w", "all")
-    s_star = float(np.sum(imp.dp_certified)) if target == "all" else float(target)
-    plan = solve(pop, pool, imp, s_star, event, move, integer=True, mode="sf")
-    if not plan.feasible or plan.shortfall != 0:
-        raise RuntimeError(f"solver failed target: feasible={plan.feasible} shortfall={plan.shortfall}")
-    if not np.all(np.isclose(plan.y, np.round(plan.y))):
-        raise RuntimeError("non-integer plan returned for integer solve")
-    return pop, pool, imp, event, move, plan, s_star
-
-
-def planned_sessions(fixture: dict) -> list[dict]:
-    pop, _pool, imp, _event, _move, plan, s_star = build_plan(fixture)
-    sessions = active_sessions(fixture)
-    rows = []
-    for i, s in enumerate(sessions):
-        if plan.y[i] <= 0.5:
-            continue
-        action = "R" if plan.y_R[i] > plan.y_S[i] else "S"
-        planned = float(imp.c_replay[i] if action == "R" else imp.c_transfer[i])
-        density = float(imp.dp_certified[i] / planned)
-        rows.append({
-            "id": s["id"],
-            "action": action,
-            "fixture_index": i,
-            "T": float(pop.T[i]),
-            "planned_finish_s": planned,
-            "dp_certified_w": float(imp.dp_certified[i]),
-            "density": density,
-            "words": int(s.get("words", min(max(pop.T[i], 256), 2048))),
-        })
-    rows.sort(key=lambda r: (-r["density"], r["fixture_index"]))
-    actions = {r["action"] for r in rows}
-    if actions != {"R", "S"}:
-        raise RuntimeError(f"stage1c proof fixture must produce replay and KV actions, got {sorted(actions)}")
-    for rank, row in enumerate(rows):
-        row["dispatch_rank"] = rank
-    return rows
-
-
-def plan_summary(fixture: dict) -> dict:
-    _pop, _pool, imp, event, move, plan, s_star = build_plan(fixture)
-    return {
-        "schema": "queue-haul-stage1c-plan-v1",
-        "deadline_s": event.D,
-        "target_w": s_star,
-        "movement": {"lambda_src_bytes_per_s": move.lambda_src, "mu_bytes_per_s": move.mu_in},
-        "solver": {"method": plan.method, "feasible": plan.feasible, "shortfall_w": plan.shortfall, "shed_guaranteed_w": plan.shed_guaranteed},
-        "sessions": planned_sessions(fixture),
-        "costs": {"c_replay": imp.c_replay.tolist(), "c_transfer": imp.c_transfer.tolist()},
-    }
-
-
-def run_selected_session(cfg: b.Config, run_root: Path, row: dict, t0: float, prewarmed: dict[str, dict] | None = None) -> dict:
-    proxy_log = run_root / "proxy_bytes.csv"
-    source_log = run_root / "source.log"
-    sink_log = run_root / "sink.log"
-    prompt = b.prompt_text(f"stage1c-{row['id']}", row["words"])
-    before = b.proxy_counts(proxy_log)
-    retrieved0 = b.count_needle(sink_log, "Retrieved")
-    source = (prewarmed or {}).get(row["id"])
-    sink = b.post_chat(cfg, cfg.api_proxy_port, prompt, 4)
-    b.check_chat(sink, f"sink dispatch {row['id']}")
-    time.sleep(2)
-    delta = b.count_delta(before, b.proxy_counts(proxy_log))
-    if row["action"] == "S":
-        if b.count_needle(sink_log, "Retrieved") <= retrieved0:
-            raise RuntimeError(f"{row['id']} did not retrieve KV on sink")
-        if delta.get("kv/target_to_client", 0) <= 0:
-            raise RuntimeError(f"{row['id']} had no KV bytes")
-        if source and source["content"].strip() != sink["content"].strip():
-            raise RuntimeError(f"{row['id']} source/sink deterministic outputs differ")
-    else:
-        if delta.get("api/client_to_target", 0) <= 0:
-            raise RuntimeError(f"{row['id']} had no replay API bytes")
-        if delta.get("kv/target_to_client", 0) > 2_000_000:
-            raise RuntimeError(f"{row['id']} replay pulled too many KV bytes")
-    return {
-        **row,
-        "endpoint": f"http://{cfg.host}:{cfg.api_proxy_port}/v1/chat/completions",
-        "actual_start_s": sink["start_ts"] - t0,
-        "actual_end_s": sink["end_ts"] - t0,
-        "http_status": sink["status"],
-        "prompt_sha256": sink["prompt_sha256"],
-        "content": sink["content"],
-        "proxy_delta": delta,
-        "deadline_met": sink["end_ts"] - t0 <= row.get("deadline_s", float("inf")),
-    }
-
-
-def check_manifest(manifest: dict) -> None:
-    if manifest.get("schema") != SCHEMA:
-        raise ValueError("bad schema")
-    solver = manifest["solver"]
-    if not solver["feasible"] or solver["shortfall_w"] != 0:
-        raise ValueError("solver did not meet target")
-    sessions = manifest["sessions"]
-    if {s["action"] for s in sessions} != {"R", "S"}:
-        raise ValueError("proof must include replay and KV actions")
-    ranks = [s["dispatch_rank"] for s in sessions]
-    if ranks != list(range(len(ranks))):
-        raise ValueError("dispatch ranks are not contiguous")
-    starts = [s.get("actual_start_s", i) for i, s in enumerate(sessions)]
-    ends = [s.get("actual_end_s", starts[i]) for i, s in enumerate(sessions)]
-    if any(starts[i] < ends[i - 1] for i in range(1, len(sessions))):
-        raise ValueError("dispatch execution is not serial by rank")
-    for s in sessions:
-        if s["http_status"] != 200 or not s["deadline_met"]:
-            raise ValueError(f"session failed: {s['id']}")
-        delta = s["proxy_delta"]
-        if s["action"] == "S" and delta.get("kv/target_to_client", 0) <= 0:
-            raise ValueError(f"KV action lacks KV bytes: {s['id']}")
-        if s["action"] == "R" and delta.get("api/client_to_target", 0) <= 0:
-            raise ValueError(f"replay action lacks API bytes: {s['id']}")
-    if not manifest["smoke2"]["acceptance"]["ok"]:
-        raise ValueError("smoke2 gate failed")
-
-
-def proof(cfg: b.Config, run_root: Path, fixture: dict, mbps: float, extra: list[str]) -> Path:
-    stack = b.start_stack(cfg, run_root, mbps, extra)
-    try:
-        summary = plan_summary(fixture)
-        b.start_sink(stack, cfg, extra)
-        prewarmed = {}
-        for row in summary["sessions"]:
-            if row["action"] == "S":
-                prompt = b.prompt_text(f"stage1c-{row['id']}", row["words"])
-                prewarmed[row["id"]] = b.warm_source(cfg, run_root, prompt, f"source warm {row['id']}")[0]
-        deadline = float(fixture["deadline_s"])
-        t0 = time.time()
-        rows = []
-        for row in summary["sessions"]:
-            rows.append(run_selected_session(cfg, run_root, {**row, "deadline_s": deadline}, t0, prewarmed))
-        manifest = {**summary, "schema": SCHEMA, "smoke2": {"acceptance": {"ok": True, "covered_by_controller_sessions": True, "live_source_sink": True}}, "sessions": rows}
-        manifest["acceptance"] = {
-            "all_completed_by_deadline": all(r["deadline_met"] for r in rows),
-            "actions": sorted({r["action"] for r in rows}),
-            "ok": True,
-        }
-        check_manifest(manifest)
-        (run_root / "controller_manifest.json").write_text(json.dumps(manifest, indent=2, sort_keys=True))
-    finally:
-        b.stop_stack(stack)
-    return run_root
-
-
-def _jsonl(path: Path):
-    opener = gzip.open if path.suffix == ".gz" else open
-    with opener(path, "rt") as f:
-        for n, line in enumerate(f, 1):
-            if line.strip():
-                row = json.loads(line)
-                row["_line"] = n
-                yield row
-
-
-def _field(row: dict, *names: str, default=None):
-    for name in names:
-        if name in row and row[name] is not None:
-            return row[name]
-    if default is not None:
-        return default
-    raise ValueError(f"missing field; tried {names}; line={row.get('_line')}")
-
-
-def _num(row: dict, *names: str, default=None) -> float:
-    return float(_field(row, *names, default=default))
-
-
-def _parse_ts(value) -> float:
-    if isinstance(value, (int, float)):
-        return float(value)
-    text = str(value).strip()
-    for fmt in (None, "%Y/%m/%d %H:%M:%S.%f", "%Y/%m/%d %H:%M:%S"):
-        try:
-            if fmt is None:
-                return datetime.fromisoformat(text.replace("Z", "+00:00")).timestamp()
-            return datetime.strptime(text, fmt).timestamp()
-        except ValueError:
-            pass
-    return float(text)
-
-
-def _row_time(row: dict) -> float:
-    for key in ("timestamp", "ts", "created_at", "started_at", "start_time"):
-        if key in row and row[key] is not None:
-            return _parse_ts(row[key])
-    for ev in row.get("timing_events", []):
-        for key in ("timestamp", "ts", "time", "at", "emitted_at"):
-            if key in ev and ev[key] is not None:
-                return _parse_ts(ev[key])
-    raise ValueError(f"TraceLab row has no timestamp/timing_events time: line={row.get('_line')}")
-
-
-def _trace_tokens(row: dict) -> dict:
-    total = int(_num(row, "input_tokens_total", "input_tokens", "prompt_tokens", default=0))
-    prefix = int(_num(row, "prefix_tokens", "cached_input_tokens", "cache_read_input_tokens", default=0))
-    append = int(_num(row, "newly_append_tokens", "append_tokens", default=max(1, total - prefix)))
-    output = int(_num(row, "output_tokens", "completion_tokens", "generated_tokens", default=32))
-    if total <= 0:
-        raise ValueError(f"TraceLab row has no positive input token count: line={row.get('_line')}")
-    return {"total": total, "prefix": max(0, prefix), "append": max(1, append), "output": max(1, output)}
-
-
-def _words(tag: str, tokens: int) -> str:
-    n = max(1, int(tokens * WORDS_PER_TOKEN))
-    return f"{tag} " + " ".join("x" for _ in range(n))
-
-
-def session_prompt(session: dict, turn_index: int, replay_nonce: str | None = None) -> str:
-    turns = session.get("turns", [])
-    upto = turns[: max(1, min(turn_index + 1, len(turns)))]
-    cap = int(session["served_T"])
-    budget = max(256, cap - 1024)
-    selected = []
-    for i in range(len(upto) - 1, -1, -1):
-        take = min(int(upto[i]["append_tokens"]), budget)
-        if take <= 0:
-            break
-        selected.append((i, take))
-        budget -= take
-    selected.reverse()
-    turn_tokens = sum(t for _, t in selected)
-    profile_tokens = max(128, min(cap - turn_tokens - 512, cap // 2))
-    parts = []
-    if session.get("scenario_nonce"):
-        parts.append(f"Scenario nonce {session['scenario_nonce']}.")
-    if replay_nonce:
-        parts.append(f"Replay nonce {replay_nonce}.")
-    parts.append(f"Synthetic TraceLab-sized coding-agent session {session['id']}.")
-    parts.append("Stable task state " + _words(f"state_{session['id']}", profile_tokens))
-    for i, tokens in selected:
-        parts.append(f"User follow-up {i}: " + _words(f"turn_{session['id']}_{i}", tokens))
-    parts.append("Reply with one concise progress sentence.")
-    return "\n".join(parts)
-
-
-def session_followup(session: dict, turn_index: int) -> str:
-    turns = session["turns"][1:] or session["turns"]
-    turn = turns[(turn_index - 1) % len(turns)]
-    body = _words(f"turn_{session['id']}_{turn_index}", int(turn["append_tokens"]))
-    return f"User follow-up {turn_index}: {body}\nReply with one concise progress sentence."
-
-
-def messages_sha256(messages: list[dict]) -> str:
-    raw = json.dumps(messages, sort_keys=True, separators=(",", ":"))
-    return hashlib.sha256(raw.encode()).hexdigest()
-
-
-def _safe_name(text: str) -> str:
-    return re.sub(r"[^A-Za-z0-9_.-]+", "-", str(text)).strip("-") or "workload"
-
-
-def _file_sha256(path: Path) -> str:
+def file_hash(path: Path) -> str:
     digest = hashlib.sha256()
-    with path.open("rb") as f:
-        for block in iter(lambda: f.read(1024 * 1024), b""):
+    with path.open("rb") as handle:
+        for block in iter(lambda: handle.read(1 << 20), b""):
             digest.update(block)
     return digest.hexdigest()
 
 
-def _tracelab_partition(sessions: list[dict]) -> dict:
-    rates = np.array([s["turn_rate_hz"] for s in sessions])
-    q25, q75 = np.quantile(rates, [0.25, 0.75])
-    for session in sessions:
-        if session["turn_rate_hz"] <= q25 and session["human_row_fraction"] >= 0.25:
-            label = "interactive_coding"
-        elif session["turn_rate_hz"] >= q75 and session["tool_row_fraction"] >= 0.95:
-            label = "agentic_tool_loop"
-        else:
-            label = "coding"
-        session["workload_class"] = label
-        session["session_class"] = label
-    return {
-        "turn_rate_q25_hz": float(q25),
-        "turn_rate_q75_hz": float(q75),
-        "interactive_min_human_row_fraction": 0.25,
-        "agentic_min_tool_row_fraction": 0.95,
-    }
+def object_hash(value) -> str:
+    return hashlib.sha256(json.dumps(value, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
 
 
-def manifest_workload(manifest: dict) -> str:
-    workload = manifest.get("workload", {})
-    if isinstance(workload, dict) and workload.get("name"):
-        return str(workload["name"])
-    return str(manifest.get("source", {}).get("workload") or manifest.get("source", {}).get("type", "workload"))
+def write_json(path: Path, value) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(value, indent=2, sort_keys=True) + "\n")
 
 
-def _pick_tracelab_sessions(sessions: list[dict], n_sessions: int, seed: int, workload: str) -> list[dict]:
-    if workload == "mixed":
-        rng = random.Random(seed)
-        return rng.sample(sessions, n_sessions) if len(sessions) > n_sessions else sessions
-    if workload == "small":
-        return sorted(sessions, key=lambda s: (s["served_T"], s["turn_rate_hz"], s["id"]))[:n_sessions]
-    if workload == "large":
-        return sorted(sessions, key=lambda s: (-s["served_T"], -s["turn_rate_hz"], s["id"]))[:n_sessions]
-    if workload in {"interactive_coding", "coding", "agentic_tool_loop"}:
-        eligible = [s for s in sessions if s["workload_class"] == workload]
-        if len(eligible) >= n_sessions:
-            return random.Random(seed).sample(sorted(eligible, key=lambda s: s["id"]), n_sessions)
-    raise ValueError(f"unknown workload: {workload}")
+def read_rows(path: Path):
+    opener = gzip.open if path.suffix == ".gz" else open
+    with opener(path, "rt") as handle:
+        for line_number, line in enumerate(handle, 1):
+            if line.strip():
+                row = json.loads(line)
+                row["_line"] = line_number
+                yield row
 
 
-def _admit_source_load(sessions: list[dict], budget: float) -> tuple[float, float]:
-    if budget <= 0:
-        raise ValueError("source load budget must be positive")
-    offered = sum(s["ell_pre"] + s["ell_dec"] for s in sessions)
-    scale = min(1.0, budget / offered)
-    for session in sessions:
-        for key in ("turn_rate_hz", "ell_pre", "ell_dec"):
-            session[key] *= scale
-        for turn in session["turns"][1:]:
-            turn["gap_s"] /= scale
-    return offered, scale
+def field(row: dict, *names, default=None):
+    for name in names:
+        if row.get(name) is not None:
+            return row[name]
+    return default
 
 
-def tracelab_manifest(path: Path, n_sessions: int, seed: int, max_model_len: int = 32768,
-                      decode_margin: int = 512, min_turns: int = 3, min_context_tokens: int = 2048,
-                      baseline_s: float = 120.0, settle_s: float = 120.0, workload: str = "mixed",
-                      source_load_budget_ell: float = LIVE_A100_RHO_STAR) -> dict:
+def trace_time(row: dict) -> float:
+    value = field(row, "timestamp", "ts", "created_at", "started_at", "start_time")
+    if value is None:
+        raise ValueError(f"trace row {row['_line']} has no timestamp")
+    if isinstance(value, (int, float)):
+        return float(value)
+    return __import__("datetime").datetime.fromisoformat(str(value).replace("Z", "+00:00")).timestamp()
+
+
+def trace_tokens(row: dict) -> tuple[int, int, int]:
+    total = int(field(row, "input_tokens_total", "input_tokens", "prompt_tokens", default=0))
+    prefix = int(field(row, "prefix_tokens", "cached_input_tokens", "cache_read_input_tokens", default=0))
+    append = int(field(row, "newly_append_tokens", "append_tokens", default=max(1, total - prefix)))
+    output = int(field(row, "output_tokens", "completion_tokens", "generated_tokens", default=32))
+    if total < 1:
+        raise ValueError(f"trace row {row['_line']} has no input token count")
+    return total, max(1, append), max(1, output)
+
+
+def quantile(values: list[float], q: float) -> float:
+    ordered = sorted(values)
+    if not ordered:
+        raise ValueError("quantile needs data")
+    pos = (len(ordered) - 1) * q
+    lo, hi = int(pos), min(int(pos) + 1, len(ordered) - 1)
+    return ordered[lo] + (ordered[hi] - ordered[lo]) * (pos - lo)
+
+
+def make_manifest(input_path: Path, workload: str, sessions: int, seed: int) -> dict:
     groups: dict[str, list[dict]] = {}
-    for row in _jsonl(path):
-        sid = str(_field(row, "session_id", "session", "conversation_id", "trace_key"))
-        groups.setdefault(sid, []).append(row)
-    sessions = []
-    served_cap = max_model_len - decode_margin
-    for sid, rows in sorted(groups.items()):
-        rows = sorted(rows, key=lambda r: (_row_time(r), r.get("_line", 0)))
-        if len(rows) < min_turns:
-            continue
-        good = []
-        for r in rows:
+    for row in read_rows(input_path):
+        session_id = str(field(row, "session_id", "session", "conversation_id", "trace_key", default=""))
+        if not session_id:
+            raise ValueError(f"trace row {row['_line']} has no session id")
+        groups.setdefault(session_id, []).append(row)
+    candidates = []
+    for session_id, rows in sorted(groups.items()):
+        parsed = []
+        for row in sorted(rows, key=trace_time):
             try:
-                good.append((r, _row_time(r), _trace_tokens(r)))
+                parsed.append((trace_time(row), *trace_tokens(row), row))
             except ValueError:
-                pass
-        if len(good) < min_turns:
+                continue
+        if not parsed:
             continue
-        rows, times, toks = zip(*good)
-        span = times[-1] - times[0]
-        if span <= 0:
-            continue
-        original_T = max(t["total"] for t in toks)
-        if original_T < min_context_tokens:
-            continue
-        served_T = min(original_T, served_cap)
-        if served_T < min_context_tokens:
-            continue
-        steady = toks[1:] or toks
-        output = int(np.clip(np.median([t["output"] for t in steady]), 8, decode_margin))
-        rate = max(1e-4, (len(rows) - 1) / span)
-        ell_pre = rate * float(np.median([t["append"] for t in steady])) / LIVE_A100_F_PREFILL_TPS
-        ell_dec = rate * output / LIVE_A100_G_DECODE_TPS
-        human_fraction = float(np.mean([bool(r.get("current_user_message_count", 0)) for r in rows]))
-        tool_fraction = float(np.mean([bool(r.get("tools")) for r in rows]))
-        turns = []
-        for i, (row, tok) in enumerate(zip(rows, toks)):
-            turns.append({
-                "round": i,
-                "gap_s": 0.0 if i == 0 else max(0.0, times[i] - times[i - 1]),
-                "append_tokens": tok["append"],
-                "prefix_tokens": tok["prefix"],
-                "input_tokens_total": tok["total"],
-                "decode_tokens": tok["output"],
-            })
-        sessions.append({
-            "id": sid,
-            "session_class": "agentic_tool_loop",
-            "state": "active",
-            "T": served_T,
-            "served_T": served_T,
-            "context_limit": served_cap,
-            "original_T": original_T,
+        span = parsed[-1][0] - parsed[0][0]
+        rate = (len(parsed) - 1) / span if span > 0 else 0.0
+        candidates.append({
+            "id": session_id,
             "turn_rate_hz": rate,
-            "decode_tokens": output,
-            "ell_pre": ell_pre,
-            "ell_dec": ell_dec,
-            "human_row_fraction": human_fraction,
-            "tool_row_fraction": tool_fraction,
-            "source_node": 0,
-            "words": int(served_T * WORDS_PER_TOKEN),
-            "turns": turns,
+            "human_fraction": sum(bool(item[4].get("current_user_message_count")) for item in parsed) / len(parsed),
+            "tool_fraction": sum(bool(item[4].get("tools")) for item in parsed) / len(parsed),
+            "turns": [{"time_s": item[0], "input_tokens": item[1], "append_tokens": item[2], "output_tokens": item[3]} for item in parsed],
         })
-    if len(sessions) < n_sessions:
-        raise ValueError(f"need {n_sessions} TraceLab sessions after filtering, got {len(sessions)}")
-    thresholds = _tracelab_partition(sessions)
-    picked = _pick_tracelab_sessions(sessions, n_sessions, seed, workload)
-    offered_load_ell, load_scale = _admit_source_load(picked, source_load_budget_ell)
-    for i, s in enumerate(picked):
-        s["source_node"] = 0
-        s["manifest_rank"] = i
+    if not candidates:
+        raise ValueError("trace has no usable sessions")
+    q25, q75 = quantile([row["turn_rate_hz"] for row in candidates], .25), quantile([row["turn_rate_hz"] for row in candidates], .75)
+    for row in candidates:
+        row["job_class"] = (
+            "interactive_coding" if row["turn_rate_hz"] <= q25 and row["human_fraction"] >= .25
+            else "agentic_tool_loop" if row["turn_rate_hz"] >= q75 and row["tool_fraction"] >= .95
+            else "coding"
+        )
+        row["state_code"] = hashlib.sha256(f"{seed}:{row['id']}".encode()).hexdigest()[:12].upper()
+    eligible = candidates if workload == "mixed" else [row for row in candidates if row["job_class"] == workload]
+    if len(eligible) < sessions:
+        raise ValueError(f"need {sessions} {workload} sessions, found {len(eligible)}")
+    selected = random.Random(seed).sample(sorted(eligible, key=lambda row: row["id"]), sessions)
+    for rank, row in enumerate(selected):
+        row["rank"] = rank
     return {
         "schema": MANIFEST_SCHEMA,
-        "source": {"type": "tracelab", "path": str(path), "sha256": _file_sha256(path), "seed": seed, "workload": workload,
-                   "load_budget_ell": source_load_budget_ell, "offered_load_ell": offered_load_ell,
-                   "admitted_load_ell": offered_load_ell * load_scale, "load_scale": load_scale},
-        "workload": {"name": workload, "selection": "trace_partition" if workload in {"interactive_coding", "coding", "agentic_tool_loop"} else "served_T_quantile" if workload in ("small", "large") else "random", "thresholds": thresholds},
-        "deadline_s": 300.0,
-        "target_w": "all",
-        "baseline_s": baseline_s,
-        "warmup_s": min(30.0, baseline_s),
-        "settle_s": settle_s,
-        "max_model_len": max_model_len,
-        "decode_margin": decode_margin,
-        "power_curve": "saturating",
-        "power": {"p_idle_w": LIVE_A100_P_IDLE_W, "p_busy_w": LIVE_A100_P_BUSY_W, "power_knee": LIVE_A100_POWER_KNEE, "rho_star": LIVE_A100_RHO_STAR},
-        "load_calibration": {"window_s": 5.0, "F_prefill_tps": LIVE_A100_F_PREFILL_TPS, "G_decode_tps": LIVE_A100_G_DECODE_TPS},
-        "constants": {
-            "eta_bytes_per_tok": ETA_BYTES_PER_TOK,
-            "lambda_src_bytes_per_s": 125_000_000.0,
-            "mu_bytes_per_s": 1_000_000_000.0,
-        },
-        "sessions": picked,
-    }
-
-
-def live_sessions(manifest: dict) -> list[dict]:
-    if manifest.get("schema") != MANIFEST_SCHEMA:
-        raise ValueError("bad live session manifest schema")
-    sessions = manifest.get("sessions", [])
-    if not sessions:
-        raise ValueError("manifest has no sessions")
-    for s in sessions:
-        for key in ("id", "served_T", "ell_pre", "ell_dec", "turn_rate_hz", "turns"):
-            if key not in s:
-                raise ValueError(f"session {s.get('id')} missing {key}")
-        if s.get("state", "active") != "active":
-            raise ValueError(f"session {s['id']} is not active")
-        if len(s["turns"]) < 1:
-            raise ValueError(f"session {s['id']} has no turns")
-    budget = manifest.get("source", {}).get("load_budget_ell")
-    if budget is not None and sum(s["ell_pre"] + s["ell_dec"] for s in sessions) > float(budget) + 1e-9:
-        raise ValueError("source load exceeds manifest budget")
-    return sessions
-
-
-
-
-def profile_token_points(sessions: list[dict], max_points: int = 3) -> list[int]:
-    vals = sorted({int(s["served_T"]) for s in sessions})
-    if len(vals) <= max_points:
-        return vals
-    idxs = np.linspace(0, len(vals) - 1, max_points).round().astype(int)
-    return [vals[int(i)] for i in dict.fromkeys(idxs)]
-
-
-def _tokenizer(cfg: b.Config):
-    snaps = [p for p in b.model_snapshot_dir(cfg.hf_home, cfg.model).iterdir() if p.is_dir()]
-    if not snaps:
-        raise ValueError(f"no local tokenizer snapshot for {cfg.model}")
-    snap = str(max(snaps, key=lambda p: p.stat().st_mtime))
-    with _TOKENIZER_LOCK:
-        if snap not in _TOKENIZER_CACHE:
-            from transformers import AutoTokenizer
-            _TOKENIZER_CACHE[snap] = AutoTokenizer.from_pretrained(snap, local_files_only=True)
-    return _TOKENIZER_CACHE[snap]
-
-
-def chat_messages(value: str | list[dict]) -> list[dict]:
-    return [{"role": "user", "content": value}] if isinstance(value, str) else [dict(m) for m in value]
-
-
-def prompt_tokens(cfg: b.Config, prompt: str | list[dict]) -> int:
-    tok = _tokenizer(cfg)
-    messages = chat_messages(prompt)
-    if hasattr(tok, "apply_chat_template"):
-        out = tok.apply_chat_template(messages, tokenize=True, add_generation_prompt=True)
-        return len(out["input_ids"] if hasattr(out, "keys") and "input_ids" in out else out)
-    return len(tok("\n".join(m["content"] for m in messages)).input_ids)
-
-
-def profile_prompt(cfg: b.Config, target_tokens: int, namespace: str = "") -> tuple[str, int]:
-    words = max(64, int(target_tokens * WORDS_PER_TOKEN))
-    prompt, actual = "", 0
-    for _ in range(8):
-        body = " ".join(f"p{target_tokens}_{i}" for i in range(words))
-        prompt = f"Synthetic token-count calibration session {namespace}. {body}. Reply with OK."
-        actual = prompt_tokens(cfg, prompt)
-        if actual and abs(actual - target_tokens) / max(target_tokens, 1) <= 0.03:
-            break
-        words = max(64, int(words * target_tokens / max(actual, 1)))
-    return prompt, actual
-
-
-def _profile_row(action: str, requested_tokens: int, actual_tokens: int, result: dict, delta: dict, source_elapsed_s: float | None = None) -> dict:
-    row = {
-        "action": action,
-        "requested_tokens": int(requested_tokens),
-        "tokens": int(actual_tokens),
-        "first_token_s": float(result["first_token_ts"] - result["start_ts"]),
-        "completion_s": float(result["end_ts"] - result["start_ts"]),
-        "api_request_bytes": int(delta.get("api/client_to_target", 0)),
-        "kv_bytes": int(delta.get("kv/target_to_client", 0)),
-        "proxy_delta": delta,
-    }
-    if source_elapsed_s is not None:
-        row["source_elapsed_s"] = float(source_elapsed_s)
-    return row
-
-
-def calibrate_live_profile(cfg: b.Config, run_root: Path, sessions: list[dict], mbps: float, namespace: str = "", max_points: int = 3) -> dict:
-    rows, proxy_log = [], run_root / "proxy_bytes.csv"
-    namespace = hashlib.sha256(namespace.encode()).hexdigest()[:16]
-    for target_tokens in profile_token_points(sessions, max_points):
-        prompt, actual_tokens = profile_prompt(cfg, target_tokens, namespace)
-        before = b.proxy_counts(proxy_log)
-        replay_prompt = f"Replay profile {target_tokens} {time.time()}.\n{prompt}"
-        replay_tokens = prompt_tokens(cfg, replay_prompt)
-        replay = stream_chat(cfg, cfg.api_proxy_port, replay_prompt, 1)
-        if replay["status"] != 200:
-            raise RuntimeError(f"profile replay failed for {target_tokens}: {replay['response_text']}")
-        delta = b.count_delta(before, b.proxy_counts(proxy_log))
-        if delta.get("api/client_to_target", 0) <= 0:
-            raise RuntimeError(f"profile replay had no API bytes for {target_tokens}")
-        rows.append(_profile_row("R", target_tokens, replay_tokens, replay, delta))
-
-        source, _stored0 = b.warm_source(cfg, run_root, prompt, f"profile source warm {target_tokens}")
-        before = b.proxy_counts(proxy_log)
-        kv = stream_chat(cfg, cfg.api_proxy_port, prompt, 1)
-        if kv["status"] != 200:
-            raise RuntimeError(f"profile KV failed for {target_tokens}: {kv['response_text']}")
-        delta = b.count_delta(before, b.proxy_counts(proxy_log))
-        if delta.get("kv/target_to_client", 0) <= 0:
-            raise RuntimeError(f"profile KV had no KV bytes for {target_tokens}")
-        rows.append(_profile_row("S", target_tokens, actual_tokens, kv, delta, source["elapsed_s"]))
-    return _finalize_live_profile({"schema": PROFILE_SCHEMA, "created_ts": time.time(), "mbps": mbps, "lmcache_max_local_cpu_gb": b.LMCACHE_MAX_LOCAL_CPU_GB, "points": rows})
-
-
-def _median_positive(vals: list[float], default: float = 0.0) -> float:
-    xs = [float(v) for v in vals if float(v) > 0]
-    return float(np.median(xs)) if xs else default
-
-
-def _finalize_live_profile(profile: dict) -> dict:
-    pts = profile.get("points", [])
-    kv_rates = [float(r.get("kv_bytes", 0)) / float(r["completion_s"]) for r in pts if r.get("action") == "S" and float(r.get("kv_bytes", 0)) > 0 and float(r.get("completion_s", 0)) > 0]
-    kv_per_tok = [float(r.get("kv_bytes", 0)) / float(r["tokens"]) for r in pts if r.get("action") == "S" and float(r.get("kv_bytes", 0)) > 0 and float(r.get("tokens", 0)) > 0]
-    boundary = max(float(profile.get("source_boundary_s", 0)), _median_positive([float(r.get("source_elapsed_s", 0)) for r in pts if r.get("action") == "S"]))
-    return {
-        **profile,
-        "kv_bytes_per_s": _median_positive(kv_rates, float(profile.get("mbps", 1000.0)) * 125000.0),
-        "kv_bytes_per_token": _median_positive(kv_per_tok),
-        "source_boundary_s": boundary,
-    }
-
-
-def ensure_live_profile(cfg: b.Config, run_root: Path, profile_path: Path | None, manifest: dict, mbps: float) -> tuple[dict, Path]:
-    path = profile_path or run_root / "live_profile.json"
-    if path.exists():
-        profile = json.loads(path.read_text())
-        if profile.get("schema") == PROFILE_SCHEMA and profile.get("lmcache_max_local_cpu_gb") == b.LMCACHE_MAX_LOCAL_CPU_GB:
-            return _finalize_live_profile(profile), path
-    else:
-        path.parent.mkdir(parents=True, exist_ok=True)
-    profile = calibrate_live_profile(cfg, run_root, live_sessions(manifest), mbps, str(path))
-    path.write_text(json.dumps(profile, indent=2, sort_keys=True))
-    return profile, path
-
-
-def _interp(points: list[tuple[float, float]], x: float) -> float:
-    pts = sorted(points)
-    if not pts:
-        raise ValueError("empty interpolation points")
-    if len(pts) == 1 or x <= pts[0][0]:
-        return pts[0][1]
-    for (x0, y0), (x1, y1) in zip(pts, pts[1:]):
-        if x <= x1:
-            return y0 + (y1 - y0) * (x - x0) / max(1e-12, x1 - x0)
-    return pts[-1][1] * x / max(1e-12, pts[-1][0])
-
-
-def _profile_cost(profile: dict, action: str, tokens: int) -> float:
-    return _interp([(float(r["tokens"]), float(r["completion_s"])) for r in profile["points"] if r["action"] == action], float(tokens))
-
-
-def _profile_transfer_bytes(profile: dict, session: dict) -> float:
-    observed = float(session.get("session_kv_bytes") or session.get("source_kv_bytes") or 0)
-    if observed > 0:
-        return observed
-    tokens = int(session["served_T"])
-    profiled = float(profile.get("kv_bytes_per_token") or 0.0) * tokens
-    return profiled
-
-
-def _profile_transfer_cost(profile: dict, session: dict) -> float:
-    nbytes = _profile_transfer_bytes(profile, session)
-    pts = [(float(r.get("kv_bytes", 0)), float(r["completion_s"])) for r in profile["points"] if r["action"] == "S" and float(r.get("kv_bytes", 0)) > 0]
-    if nbytes > 0 and pts:
-        return _interp(pts, nbytes)
-    return _profile_cost(profile, "S", int(session["served_T"]))
-
-
-def apply_live_profile(manifest: dict, profile: dict) -> dict:
-    if profile.get("schema") != PROFILE_SCHEMA:
-        raise ValueError("bad live profile schema")
-    profile = _finalize_live_profile(profile)
-    sessions = []
-    for s in live_sessions(manifest):
-        tokens = int(s["served_T"])
-        replay_s = _profile_cost(profile, "R", tokens)
-        transfer_s = _profile_transfer_cost(profile, s)
-
-        sessions.append({
-            **s,
-            "c_replay_s": replay_s,
-            "c_transfer_s": transfer_s,
-            "profile_transfer_stage_s": transfer_s,
-
-            "profile_transfer_bytes": _profile_transfer_bytes(profile, s),
-            "profile_transfer_bytes_source": "measured_session" if s.get("session_kv_bytes") else "profile_estimate",
-        })
-    return {**manifest, "sessions": sessions, "profile": {"schema": profile["schema"], "mbps": profile.get("mbps"), "points": profile["points"], "kv_bytes_per_s": profile.get("kv_bytes_per_s"), "kv_bytes_per_token": profile.get("kv_bytes_per_token"), "source_boundary_s": profile.get("source_boundary_s", 0.0)}}
-
-def build_live_population(manifest: dict) -> JobPopulation:
-    sessions = live_sessions(manifest)
-    patched = {**manifest, "sessions": [{**s, "T": s["served_T"]} for s in sessions]}
-    return build_population(patched)
-
-
-def _live_model(manifest: dict, deadline_s: float | None = None, target_frac: float | None = None):
-    sessions = live_sessions(manifest)
-    pop = build_live_population(manifest)
-    const = manifest["constants"]
-    power = manifest.get("power", {})
-    pool = PoolPower(
-        p_idle_w=float(power.get("p_idle_w", LIVE_A100_P_IDLE_W)),
-        p_busy_w=float(power.get("p_busy_w", LIVE_A100_P_BUSY_W)),
-        rho_star=float(power.get("rho_star", LIVE_A100_RHO_STAR)),
-        mean_context_tokens=float(np.mean(pop.T)),
-        c_prefill_j_per_tok=float(power.get("c_prefill_j_per_tok", LIVE_A100_C_PREFILL_J_PER_TOK)),
-        c_decode_j_per_tok=float(power.get("c_decode_j_per_tok", LIVE_A100_C_DECODE_J_PER_TOK)),
-        power_curve=manifest.get("power_curve", "saturating"),
-        power_knee=float(power.get("power_knee", LIVE_A100_POWER_KNEE)),
-        log_shape=float(power.get("log_shape", LIVE_A100_LOG_SHAPE)),
-    )
-    prof = manifest.get("profile") or {}
-    move = Movement(
-        lambda_src=min(float(const.get("lambda_src_bytes_per_s", 125_000_000.0)), float(prof.get("kv_bytes_per_s") or const.get("lambda_src_bytes_per_s", 125_000_000.0))),
-        mu_in=float(const.get("mu_bytes_per_s", 1_000_000_000.0)),
-        dest_prefill_util=0.0,
-        dest_ingest_util=0.0,
-    )
-    base = compute(pop, pool, move)
-    imp = replace(
-        base,
-        c_replay=np.array([s.get("c_replay_s", base.c_replay[i]) for i, s in enumerate(sessions)], dtype=float),
-        c_transfer=np.array([s.get("c_transfer_s", base.c_transfer[i]) for i, s in enumerate(sessions)], dtype=float),
-        b_transfer=np.array([s.get("profile_transfer_bytes", base.b_transfer[i]) for i, s in enumerate(sessions)], dtype=float),
-    )
-    event = Event(D=float(manifest["deadline_s"] if deadline_s is None else deadline_s), dest_nodes=1, spare_frac=1.0, tau_src=0.0, tau_pre=0.0, tau_in=0.0, dest_load_budget_ell=manifest.get("dest_load_budget_ell"))
-    full_w = evaluate_node_expected_w(pop, pool, np.ones(len(pop)))
-    target = manifest.get("target_w", "all")
-    target_w = float(target_frac) * full_w if target_frac is not None else full_w if target == "all" else float(target)
-    return sessions, pop, pool, move, imp, event, full_w, target_w
-
-
-def _policy_result(policy: str, pop: JobPopulation, pool: PoolPower, imp, target_w: float, event: Event, move: Movement, seed: int):
-    if policy == "lp":
-        return solve_power_function_lp_rounded(pop, pool, imp, target_w, event, move)
-    if policy == "milp":
-        return solve_single_source_milp(pop, pool, imp, target_w, event, move)
-    if policy == "power-unaware":
-        return solve_power_unaware(pop, pool, imp, target_w, event, move)
-    if policy == "random":
-        return solve_random_jobs(pop, pool, imp, target_w, event, move, seed=seed)
-    if policy == "greedy":
-        return solve_node_aware_greedy(pop, pool, imp, target_w, event, move)
-    raise ValueError(f"unknown live policy {policy!r}")
-
-
-def _row_action(result, imp, i: int) -> str:
-    if result.y_R[i] + result.y_S[i] <= 1e-9:
-        return "R" if imp.c_replay[i] <= imp.c_transfer[i] else "S"
-    return "R" if result.y_R[i] >= result.y_S[i] else "S"
-
-
-def _policy_order(policy: str, result, pop: JobPopulation, pool: PoolPower, imp, seed: int) -> list[int]:
-    selected = set(np.flatnonzero(result.y > 1e-9))
-    if policy == "random":
-        return [int(i) for i in np.random.default_rng(seed).permutation(len(pop)) if i in selected]
-    if getattr(result, "order", ()):
-        return [i for i in result.order if i in selected]
-    return [int(i) for i in sorted(selected, key=lambda j: (-(result.y_R[j] + result.y_S[j]), -pop.ell[j], j))]
-
-
-def _parallel_wall(costs: list[float], concurrency: int) -> float:
-    slots = [0.0] * concurrency
-    for cost in costs:
-        i = min(range(concurrency), key=slots.__getitem__)
-        slots[i] += cost
-    return max(slots, default=0.0)
-
-
-def _planned_wall_s(rows: list[dict], sessions: list[dict], profile: dict | None, replay_concurrency: int = 1, kv_concurrency: int | None = None) -> float:
-    if replay_concurrency <= 0:
-        raise ValueError("replay_concurrency must be positive")
-    profile = profile or {}
-    boundary = float(profile.get("source_boundary_s") or 0.0)
-    r_costs = [float(r["planned_finish_s"]) for r in rows if r["action"] == "R"]
-    r_wall = _parallel_wall(r_costs, replay_concurrency) + (boundary if r_costs else 0.0)
-    s_rows = [r for r in rows if r["action"] == "S"]
-    if not s_rows:
-        return r_wall
-    k = kv_concurrency or len(s_rows)
-    s_costs = [float(r["planned_finish_s"]) for r in s_rows]
-    s_wall = _parallel_wall(s_costs, k) + boundary
-    kv_rate = float(profile.get("kv_bytes_per_s") or 0.0)
-    if kv_rate > 0:
-        total_bytes = sum(float(r.get("planned_transfer_bytes", sessions[r["fixture_index"]].get("profile_transfer_bytes", sessions[r["fixture_index"]].get("session_kv_bytes", 0)))) for r in s_rows)
-        s_wall = max(s_wall, total_bytes / kv_rate + boundary)
-    return max(r_wall, s_wall)
-
-
-def live_plan_summary(manifest: dict, policy: str = "greedy", seed: int = 0,
-                      deadline_s: float | None = None, target_frac: float | None = None,
-                      replay_concurrency: int = 1, kv_concurrency: int | None = None) -> dict:
-    sessions, pop, pool, move, imp, event, full_w, target_w = _live_model(manifest, deadline_s, target_frac)
-    rows, cumulative = [], np.zeros(len(pop))
-    if policy in {"all-r", "all-s"}:
-        action = "R" if policy == "all-r" else "S"
-        costs = imp.c_replay if action == "R" else imp.c_transfer
-        order = sorted(range(len(pop)), key=lambda i: (-(imp.dp_certified[i] / max(float(costs[i]), 1e-12)), i))
-        solver = {"method": policy, "feasible": True, "shortfall_w": 0.0, "cost_s": 0.0}
-        y_r = np.zeros(len(pop))
-        y_s = np.zeros(len(pop))
-    else:
-        result = _policy_result(policy, pop, pool, imp, target_w, event, move, seed)
-        order = _policy_order(policy, result, pop, pool, imp, seed)
-        solver = {"method": result.method, "feasible": result.true_expected_feasible, "shortfall_w": result.expected_shortfall_w, "cost_s": result.cost}
-        if policy == "lp":
-            solver["fractional_lower_bound_s"] = solve_power_function_lp(pop, pool, imp, target_w, event, move).cost
-        y_r, y_s = result.y_R, result.y_S
-    for i in order:
-        action = "R" if policy == "all-r" else "S" if policy == "all-s" else _row_action(result, imp, i)
-        cumulative[i] = 1.0
-        predicted = evaluate_node_expected_w(pop, pool, cumulative)
-        rows.append({
-            "id": sessions[i]["id"],
-            "fixture_index": i,
-            "dispatch_rank": len(rows),
-            "action": action,
-            "y_R": float(1.0 if policy == "all-r" else 0.0 if policy == "all-s" else y_r[i]),
-            "y_S": float(0.0 if policy == "all-r" else 1.0 if policy == "all-s" else y_s[i]),
-            "planned_finish_s": float(imp.c_replay[i] if action == "R" else imp.c_transfer[i]),
-            "predicted_cumulative_source_drop_w": float(predicted),
-            "served_T": int(pop.T[i]),
-            "session_kv_bytes": int(sessions[i].get("session_kv_bytes", 0)),
-            "planned_transfer_bytes": float(sessions[i].get("profile_transfer_bytes", sessions[i].get("session_kv_bytes", 0))),
-        })
-        if predicted >= target_w:
-            break
-    planned_w = evaluate_node_expected_w(pop, pool, cumulative)
-    planned_completion = _planned_wall_s(rows, sessions, manifest.get("profile"), replay_concurrency, kv_concurrency)
-    planned_power_hit = planned_w >= target_w - 1e-6 * max(target_w, 1.0)
-    planned_deadline_hit = planned_completion <= event.D
-    target_ratio = target_w / full_w if full_w > 0 else math.nan
-    admission_limit = event.spare * pool.rho_star
-    selected_load = sum(float(pop.ell[r["fixture_index"]]) for r in rows)
-    return {
-        "schema": "queue-haul-stage1c-live-plan-v1",
-        "policy": policy,
+        "source": {"path": str(input_path), "sha256": file_hash(input_path)},
         "seed": seed,
-        "deadline_s": event.D,
-        "target_frac": float(target_frac if target_frac is not None else target_ratio),
-        "target_w": target_w,
-        "full_source_drop_w": full_w,
-        "planned_source_drop_w": planned_w,
-        "planned_shortfall_w": max(0.0, target_w - planned_w),
-        "planned_power_hit": planned_power_hit,
-        "planned_deadline_hit": planned_deadline_hit,
-        "planned_completion_s": planned_completion,
-        "planned_hit": planned_power_hit and planned_deadline_hit,
-        "power_curve": {"name": pool.power_curve, "log_shape": pool.log_shape, "p_idle_w": pool.p_idle_w, "p_busy_w": pool.p_busy_w, "power_knee": pool.power_knee, "rho_star": pool.rho_star},
-        "destination_load_budget_ell": event.l_dest(pool),
-        "destination_admission_limit_ell": admission_limit,
-        "selected_destination_load_ell": selected_load,
-        "admission_feasible": selected_load <= admission_limit + 1e-9,
-        "experiment_mode": "mechanism_only" if event.l_dest(pool) > admission_limit else "admission",
-        "movement": {"lambda_src_bytes_per_s": move.lambda_src, "mu_bytes_per_s": move.mu_in},
-        "profile": manifest.get("profile"),
-        "solver": solver,
-        "sessions": rows,
+        "workload": workload,
+        "classification": {"turn_rate_q25_hz": q25, "turn_rate_q75_hz": q75},
+        "message_generator": "deterministic_trace_tokens_v1",
+        "sessions": selected,
     }
 
 
-def stream_chat(cfg: b.Config, port: int, prompt: str | list[dict], max_tokens: int) -> dict:
-    messages = chat_messages(prompt)
-    prompt_hash = messages_sha256(messages)
-    body = json.dumps({"model": cfg.model, "messages": messages, "max_tokens": max_tokens, "temperature": 0, "stream": True})
-    t0 = time.time()
-    conn = http.client.HTTPConnection(cfg.host, port, timeout=900)
-    conn.request("POST", "/v1/chat/completions", body, {"Content-Type": "application/json"})
-    resp = conn.getresponse()
-    content, first, request_id = [], None, None
-    if resp.status != 200:
-        text = resp.read().decode(errors="ignore")
-        conn.close()
-        return {"status": resp.status, "content": "", "start_ts": t0, "first_token_ts": None, "end_ts": time.time(), "prompt_sha256": prompt_hash, "request_id": None, "response_text": text[:500]}
-    while True:
-        line = resp.readline()
-        if not line:
-            break
-        line = line.strip()
-        if not line or not line.startswith(b"data:"):
-            continue
-        data = line[5:].strip()
-        if data == b"[DONE]":
-            break
-        chunk = json.loads(data)
-        request_id = request_id or chunk.get("id")
-        delta = chunk.get("choices", [{}])[0].get("delta", {}).get("content") or ""
-        if delta and first is None:
-            first = time.time()
-        content.append(delta)
-    conn.close()
-    t1 = time.time()
-    return {"status": resp.status, "content": "".join(content), "start_ts": t0, "first_token_ts": first or t1, "end_ts": t1, "prompt_sha256": prompt_hash, "request_id": request_id, "response_text": ""}
+def token_text(label: str, count: int) -> str:
+    return f"{label} " + "x " * max(1, count)
 
 
-def stored_session_kv_bytes(log_path: Path, request_id: str | None) -> int:
-    if not request_id or not log_path.exists():
-        return 0
-    best, pending = 0.0, 0
-    for line in log_path.read_text(errors="ignore").splitlines():
-        if request_id in line and "Storing KV cache" in line:
-            pending += 1
-        elif pending and "Stored " in line and "size:" in line:
-            m = _STORED_SIZE_RE.search(line)
-            if m:
-                best = max(best, float(m.group(1)) * 1_000_000_000)
-            pending -= 1
-    return int(best)
+def session_messages(session: dict, turn_index: int) -> list[dict]:
+    turns = session["turns"]
+    if turn_index < 0 or turn_index >= len(turns):
+        raise ValueError(f"invalid turn index for {session['id']}: {turn_index}")
+    code = session["state_code"]
+    messages = [{"role": "system", "content": f"Session state code {code}. Include {code} in every reply."}]
+    for index, turn in enumerate(turns[:turn_index + 1]):
+        user_tokens = turn["input_tokens"] if index == 0 else turn["append_tokens"]
+        messages.append({"role": "user", "content": token_text(f"{session['id']} user turn {index}", user_tokens)})
+        if index < turn_index:
+            messages.append({"role": "assistant", "content": token_text(f"{code} assistant turn {index}", turn["output_tokens"])})
+    return messages
 
 
-def wait_session_kv_bytes(log_path: Path, request_id: str | None, timeout_s: float = 10.0) -> int:
-    end = time.time() + timeout_s
-    nbytes = 0
-    while time.time() <= end:
-        nbytes = stored_session_kv_bytes(log_path, request_id)
-        if nbytes > 0:
-            return nbytes
-        time.sleep(0.25)
-    return nbytes
+def nearest_turn(session: dict, context_size: int) -> int:
+    return min(range(len(session["turns"])), key=lambda index: (abs(session["turns"][index]["input_tokens"] - context_size), index))
 
 
-def lmcache_lookup_tokens(log_path: Path, request_id: str | None) -> tuple[int, int] | None:
-    if not request_id or not log_path.exists():
-        return None
-    rows = [(int(m.group(2)), int(m.group(3))) for m in _LMCACHE_LOOKUP_RE.finditer(log_path.read_text(errors="ignore")) if m.group(1).strip() == request_id]
-    return rows[-1] if rows else None
+def stable_seed(*parts) -> int:
+    return int(hashlib.sha256(":".join(map(str, parts)).encode()).hexdigest()[:16], 16)
 
 
-def wait_lmcache_lookup_tokens(log_path: Path, request_id: str | None, timeout_s: float = 10.0) -> tuple[int, int] | None:
-    end = time.time() + timeout_s
-    while time.time() <= end:
-        tokens = lmcache_lookup_tokens(log_path, request_id)
-        if tokens is not None:
-            return tokens
-        time.sleep(0.1)
-    return None
+def validate_manifest(manifest: dict) -> None:
+    if manifest.get("schema") != MANIFEST_SCHEMA:
+        raise ValueError("unsupported manifest schema")
+    if not manifest.get("sessions") or len({row["id"] for row in manifest["sessions"]}) != len(manifest["sessions"]):
+        raise ValueError("manifest sessions must be nonempty and unique")
 
 
-class JsonlLog:
-    def __init__(self, path: Path):
-        path.parent.mkdir(parents=True, exist_ok=True)
+def make_plan(manifest_path: Path, context_sizes: list[int], concurrency: list[int], bandwidth_mbps: list[float], methods: list[str], activity: list[str], repeats: int, seed: int, deadline_s: float = 300.0) -> dict:
+    manifest = json.loads(manifest_path.read_text())
+    validate_manifest(manifest)
+    if not all(value > 0 for value in [*context_sizes, *concurrency, *bandwidth_mbps, repeats, deadline_s]):
+        raise ValueError("plan values must be positive")
+    if not set(methods) <= set(METHODS) or not set(activity) <= set(ACTIVITIES):
+        raise ValueError("unknown method or activity")
+    count = max(concurrency)
+    if len(manifest["sessions"]) < count:
+        raise ValueError(f"manifest needs at least {count} sessions")
+    scenarios = []
+    for method in methods:
+        for size in context_sizes:
+            for link in bandwidth_mbps:
+                for active in activity:
+                    for repeat in range(repeats):
+                        chosen = sorted(manifest["sessions"], key=lambda row: row["id"])
+                        random.Random(stable_seed(seed, method, size, link, active, repeat)).shuffle(chosen)
+                        chosen = chosen[:count]
+                        session_rows = [{"session_id": row["id"], "job_class": row["job_class"], "turn_index": nearest_turn(row, size), "order": order} for order, row in enumerate(chosen)]
+                        for width in concurrency:
+                            match_id = object_hash([method, size, link, active, repeat, width])[:16]
+                            base = {"match_id": match_id, "method": method, "context_size": size, "concurrency": width, "bandwidth_mbps": link, "activity": active, "repeat": repeat, "deadline_s": deadline_s, "sessions": session_rows}
+                            for kind in ("migration", "control"):
+                                scenario = {**base, "kind": kind, "scenario_id": f"{kind[0]}-{match_id}"}
+                                scenario["moves"] = [{**row, "method": method} for row in session_rows] if kind == "migration" else []
+                                scenarios.append(scenario)
+    random.Random(seed).shuffle(scenarios)
+    return {"schema": PLAN_SCHEMA, "manifest": {"path": str(manifest_path), "sha256": file_hash(manifest_path)}, "seed": seed, "scenarios": scenarios}
+
+
+def validate_plan(plan: dict, manifest: dict) -> None:
+    if plan.get("schema") != PLAN_SCHEMA:
+        raise ValueError("unsupported plan schema")
+    validate_manifest(manifest)
+    ids = {row["id"] for row in manifest["sessions"]}
+    scenario_ids = [row["scenario_id"] for row in plan.get("scenarios", [])]
+    if not scenario_ids or len(set(scenario_ids)) != len(scenario_ids):
+        raise ValueError("plan scenarios must be nonempty and unique")
+    for scenario in plan["scenarios"]:
+        rows = scenario["sessions"]
+        if not {row["session_id"] for row in rows} <= ids or len(rows) < scenario["concurrency"]:
+            raise ValueError(f"invalid sessions in {scenario['scenario_id']}")
+        if scenario["kind"] == "migration" and len(scenario["moves"]) != len(rows):
+            raise ValueError(f"migration {scenario['scenario_id']} does not move every selected session")
+        if len({row.get("method") for row in scenario["moves"]}) > 1:
+            pass  # Hand-authored mixed plans are valid; generated profiles use one method.
+
+
+class EventLog:
+    def __init__(self, path: Path, run_id: str, scenario_id: str):
         self.handle = path.open("w", buffering=1)
         self.lock = threading.Lock()
-        self.closed = False
+        self.fixed = {"run_id": run_id, "scenario_id": scenario_id}
 
-    def write(self, kind: str, **row) -> None:
+    def write(self, event: str, **fields) -> None:
+        row = {**self.fixed, "event": event, "monotonic_ns": time.monotonic_ns(), "wall_ns": time.time_ns(), **fields}
         with self.lock:
-            if not self.closed:
-                self.handle.write(json.dumps({"ts": time.time(), "kind": kind, **row}, sort_keys=True) + "\n")
+            self.handle.write(json.dumps(row, separators=(",", ":")) + "\n")
 
     def close(self) -> None:
+        self.handle.close()
+
+
+def messages_hash(messages: list[dict] | tuple[dict, ...]) -> str:
+    return object_hash(list(messages))
+
+
+def stream_chat(cfg: b.Config, port: int, messages: list[dict], max_tokens: int, context_hash: str, timeout_s: float) -> tuple[RequestResult, str]:
+    body = json.dumps({"model": cfg.model, "messages": messages, "max_tokens": max_tokens, "temperature": 0, "stream": True, "stream_options": {"include_usage": True}})
+    start = time.monotonic_ns()
+    conn = http.client.HTTPConnection(cfg.host, port, timeout=timeout_s)
+    conn.request("POST", "/v1/chat/completions", body, {"Content-Type": "application/json"})
+    response = conn.getresponse()
+    chunks, text, request_id, first, prompt_tokens, output_tokens = [], [], "", None, 0, 0
+    if response.status != 200:
+        error = response.read().decode(errors="ignore")
+        conn.close()
+        end = time.monotonic_ns()
+        return RequestResult("", response.status, context_hash, start, end), error
+    while line := response.readline():
+        now = time.monotonic_ns()
+        if not line.strip().startswith(b"data:"):
+            continue
+        chunks.append(StreamChunk(now, len(line)))
+        data = line.strip()[5:].strip()
+        if data == b"[DONE]":
+            break
+        item = json.loads(data)
+        request_id = request_id or item.get("id", "")
+        usage = item.get("usage") or {}
+        prompt_tokens = int(usage.get("prompt_tokens", prompt_tokens))
+        output_tokens = int(usage.get("completion_tokens", output_tokens))
+        content = (item.get("choices") or [{}])[0].get("delta", {}).get("content") or ""
+        if content and first is None:
+            first = now
+        text.append(content)
+    conn.close()
+    end = time.monotonic_ns()
+    return RequestResult(request_id, response.status, context_hash, start, end, first or end, prompt_tokens, output_tokens, stream_chunks=tuple(chunks)), "".join(text)
+
+
+def cache_operations(path: Path, start_ns: int = 0, end_ns: int = 2**63 - 1) -> list[dict]:
+    rows = []
+    if not path.exists():
+        return rows
+    for line in path.read_text(errors="ignore").splitlines():
+        if not line.startswith("{"):
+            continue
+        row = json.loads(line)
+        if start_ns <= int(row.get("monotonic_ns", 0)) <= end_ns and row.get("operation"):
+            rows.append(row)
+    return rows
+
+
+def kv_layout(path: Path, end_ns: int) -> dict:
+    rows = [row for row in cache_operations(path, end_ns=end_ns) if row["operation"] == "source_write" and int(row["bytes"]) > 0]
+    if not rows:
+        raise RuntimeError("no source KV layout was logged")
+    chunk_bytes = max(int(row["bytes"]) for row in rows)
+    full = [row for row in rows if int(row["bytes"]) == chunk_bytes]
+    layouts = {(row.get("dtype"), tuple(row.get("shape", []))) for row in full}
+    if len(layouts) != 1:
+        raise RuntimeError(f"inconsistent full KV chunk layouts: {layouts}")
+    dtype, shape = layouts.pop()
+    return {"chunk_tokens": 256, "chunk_bytes": chunk_bytes, "bytes_per_token": chunk_bytes / 256, "dtype": dtype, "shape": list(shape)}
+
+
+def lookup_tokens(path: Path, request_id: str) -> tuple[int, int]:
+    import re
+    pattern = re.compile(r"Reqid:\s*([^,]+),\s*Total tokens\s*(\d+),\s*LMCache hit tokens:\s*(\d+)")
+    deadline = time.monotonic() + 5
+    while time.monotonic() < deadline:
+        matches = [(int(match.group(2)), int(match.group(3))) for match in pattern.finditer(path.read_text(errors="ignore")) if match.group(1).strip() == request_id]
+        if matches:
+            return matches[-1]
+        time.sleep(.05)
+    raise RuntimeError(f"LMCache did not report request {request_id}")
+
+
+class LiveSession:
+    def __init__(self, cfg: b.Config, session: dict, turn_index: int, event_log: EventLog, source_log: Path, cache_log: Path, timeout_s: float):
+        self.cfg, self.row, self.event_log = cfg, session, event_log
+        self.source_log, self.cache_log, self.timeout_s = source_log, cache_log, timeout_s
+        self.session_id, self.state_code = session["id"], session["state_code"]
+        self.messages = session_messages(session, turn_index)
+        self.generation, self.route, self.paused = 0, cfg.src_port, False
+        self.lock = threading.Lock()
+        self.activity_thread: threading.Thread | None = None
+        self.activity_error: Exception | None = None
+        self.activity_times: tuple[int, int] | None = None
+        self.cache_keys: set[str] = set()
+
+    def probe(self, messages: list[dict]) -> list[dict]:
+        return messages + [{"role": "user", "content": f"Reply with session state code {self.state_code}."}]
+
+    def request(self, port: int, messages: list[dict], label: str) -> tuple[RequestResult, str]:
+        context_hash = messages_hash(messages)
+        self.event_log.write("request_start", session_id=self.session_id, request_id=label, route_port=port, context_hash=context_hash)
+        result, text = stream_chat(self.cfg, port, self.probe(messages), 8, context_hash, self.timeout_s)
+        self.event_log.write("request_end", session_id=self.session_id, request_id=result.request_id, route_port=port, status_code=result.status_code, context_hash=context_hash, first_byte_ns=result.first_byte_ns, chunks=[asdict(chunk) for chunk in result.stream_chunks])
+        if result.status_code != 200 or self.state_code not in text:
+            raise RuntimeError(f"{label} failed state check for {self.session_id}: HTTP {result.status_code}")
+        return result, text
+
+    def warm(self) -> None:
+        before = time.monotonic_ns()
+        self.request(self.cfg.src_port, list(self.messages), "source_warm")
+        after = time.monotonic_ns()
+        self.cache_keys |= {row["key_hash"] for row in cache_operations(self.cache_log, before, after) if row["operation"] == "source_write"}
+
+    def snapshot(self) -> SessionState:
         with self.lock:
-            self.closed = True
-            self.handle.close()
+            return SessionState(self.session_id, self.generation, tuple(self.messages), messages_hash(self.messages))
+
+    def start_activity(self) -> None:
+        if self.activity_thread:
+            return
+        self.activity_thread = threading.Thread(target=self._activity, daemon=True)
+        self.activity_thread.start()
+
+    def _activity(self) -> None:
+        start = time.monotonic_ns()
+        try:
+            with self.lock:
+                base = list(self.messages)
+            user = {"role": "user", "content": f"Controlled turn for {self.state_code}. Return the code."}
+            result, text = self.request(self.cfg.src_port, base + [user], "controlled_turn")
+            with self.lock:
+                self.messages = base + [user, {"role": "assistant", "content": text}]
+                self.generation += 1
+            self.cache_keys |= {row["key_hash"] for row in cache_operations(self.cache_log, start, result.end_ns) if row["operation"] == "source_write"}
+        except Exception as exc:
+            self.activity_error = exc
+        self.activity_times = start, time.monotonic_ns()
+
+    def wait_activity(self) -> None:
+        if self.activity_thread:
+            self.activity_thread.join(self.timeout_s)
+            if self.activity_thread.is_alive():
+                raise TimeoutError(f"activity timed out for {self.session_id}")
+        if self.activity_error:
+            raise self.activity_error
+
+    def continuation(self) -> RequestResult:
+        with self.lock:
+            if self.paused:
+                raise RuntimeError(f"session {self.session_id} is paused")
+            messages, port, generation = list(self.messages), self.route, self.generation
+        user = {"role": "user", "content": f"Continuation for {self.state_code}. Return the code."}
+        result, text = self.request(port, messages + [user], "continuation")
+        with self.lock:
+            if generation != self.generation:
+                raise RuntimeError(f"session {self.session_id} changed during continuation")
+            self.messages = messages + [user, {"role": "assistant", "content": text}]
+            self.generation += 1
+        return result
 
 
-class SessionWorker:
-    def __init__(self, cfg: b.Config, session: dict, port: int, log: JsonlLog, seed: int, run_root: Path):
-        self.cfg, self.session, self.port, self.log = cfg, session, port, log
-        self.source_log, self.sink_log = run_root / "source.log", run_root / "sink.log"
-        self.rng = random.Random(seed)
-        self.cond = threading.Condition()
-        self.pending = 0
-        self.pending_arrivals: list[float] = []
-        self.max_pending = int(session.get("max_pending_turns", 64))
-        if self.max_pending < 1:
-            raise ValueError("max_pending_turns must be positive")
-        self.turn = int(session.get("generation", 1))
-        self.generation = int(session.get("generation", 1))
-        self.messages = chat_messages(session.get("messages", session_prompt(session, 0)))
-        self.paused = False
-        self.stopped = False
-        self.in_flight = False
-        self.in_flight_messages: list[dict] | None = None
-        self.migrating = False
-        self.request_s: list[float] = []
-        self.source_ttft_s: list[float] = []
-        self.last_request_id = session.get("last_request_id")
-        self.last_source_kv_bytes = int(session.get("session_kv_bytes", 0))
-        self.expected_sink_context_sha256: str | None = None
-        self.first_sink_proof: dict | None = None
-        self.error: RuntimeError | None = None
-        self.threads: list[threading.Thread] = []
+class LiveRuntime:
+    def __init__(self, sessions: dict[str, LiveSession], cfg: b.Config, activity: str, sink_log: Path, cache_log: Path, event_log: EventLog, request_log: Path):
+        self.sessions, self.cfg, self.activity = sessions, cfg, activity
+        self.sink_log, self.cache_log, self.event_log = sink_log, cache_log, event_log
+        self.requests = request_log.open("w", buffering=1)
+        self.lock = threading.Lock()
+
+    def snapshot(self, move: Move) -> SessionState:
+        state = self.sessions[move.session_id].snapshot()
+        self.event_log.write("snapshot", move_id=move.order, session_id=move.session_id, generation=state.generation, context_hash=state.context_hash)
+        return state
+
+    def prepare(self, move: Move, state: SessionState, phase: str) -> RequestResult:
+        session = self.sessions[move.session_id]
+        if phase == "initial" and self.activity == "one_turn":
+            session.start_activity()
+        self.event_log.write("copy_start", move_id=move.order, session_id=move.session_id, method=move.method, phase=phase)
+        result, _text = session.request(self.cfg.api_proxy_port, list(state.messages), f"{move.method}_{phase}")
+        total, hit = lookup_tokens(self.sink_log, result.request_id)
+        expected = total // 256 * 256 if move.method == "kv_transfer" else 0
+        if hit != expected:
+            raise RuntimeError(f"{move.method} request {result.request_id} hit {hit} tokens, expected {expected}")
+        layout = kv_layout(self.cache_log, result.end_ns)
+        logical_bytes = hit // 256 * layout["chunk_bytes"]
+        result = replace(result, processed_tokens=total - hit, logical_kv_chunks=hit // 256, logical_kv_bytes=logical_bytes)
+        with self.lock:
+            self.requests.write(json.dumps({"move_id": move.order, "session_id": move.session_id, "method": move.method, "phase": phase, "kv_layout": layout, **asdict(result)}, separators=(",", ":")) + "\n")
+        self.event_log.write("copy_end", move_id=move.order, session_id=move.session_id, method=move.method, phase=phase, processed_tokens=result.processed_tokens, logical_kv_bytes=logical_bytes, logical_kv_chunks=result.logical_kv_chunks, kv_layout=layout)
+        return result
+
+    def pause(self, session_id: str) -> None:
+        session = self.sessions[session_id]
+        with session.lock:
+            session.paused = True
+        self.event_log.write("pause", session_id=session_id)
+
+    def wait_idle(self, session_id: str) -> SessionState:
+        session = self.sessions[session_id]
+        session.wait_activity()
+        state = session.snapshot()
+        self.event_log.write("idle", session_id=session_id, generation=state.generation, context_hash=state.context_hash)
+        return state
+
+    def commit(self, move: Move, state: SessionState) -> None:
+        session = self.sessions[move.session_id]
+        with session.lock:
+            if session.generation != state.generation or messages_hash(session.messages) != state.context_hash:
+                raise RuntimeError(f"session {move.session_id} changed before route switch")
+            session.messages = list(state.messages)
+            session.route = self.cfg.api_proxy_port
+            session.paused = False
+        self.event_log.write("route_switch", move_id=move.order, session_id=move.session_id, route_port=self.cfg.api_proxy_port, context_hash=state.context_hash)
+
+    def resume_source(self, session_id: str) -> None:
+        session = self.sessions[session_id]
+        with session.lock:
+            session.route, session.paused = self.cfg.src_port, False
+        self.event_log.write("resume_source", session_id=session_id)
+
+    def close(self) -> None:
+        self.requests.close()
+
+
+class PowerSampler:
+    def __init__(self, path: Path):
+        self.path, self.stop = path, threading.Event()
+        self.error: Exception | None = None
+        self.thread = threading.Thread(target=self._run, daemon=True)
 
     def start(self) -> None:
-        self.threads = [threading.Thread(target=self._arrivals, daemon=True), threading.Thread(target=self._serve, daemon=True)]
-        for t in self.threads:
-            t.start()
+        self.thread.start()
 
-    def queue_arrival(self, ts: float | None = None) -> bool:
-        with self.cond:
-            if self.stopped:
-                return False
-            if self.pending >= self.max_pending:
-                self.error = RuntimeError(f"session {self.session['id']} exceeded {self.max_pending} queued turns")
-                self.stopped = True
-                self.log.write("turn_queue_overflow", session_id=self.session["id"], depth=self.pending)
-                self.cond.notify_all()
-                return False
-            self.pending += 1
-            self.pending_arrivals.append(time.time() if ts is None else ts)
-            self.log.write("turn_arrival", session_id=self.session["id"], queue_depth=self.pending)
-            self.cond.notify_all()
-            return True
-
-    def _arrivals(self) -> None:
-        rate = float(self.session["turn_rate_hz"])
-        gaps = [float(t.get("gap_s", 0)) for t in self.session["turns"][1:] if float(t.get("gap_s", 0)) > 0]
-        gaps = gaps or [1.0 / rate]
-        arrival = 0
-        while True:
-            due = time.monotonic() + gaps[arrival % len(gaps)]
-            with self.cond:
-                while not self.stopped:
-                    left = due - time.monotonic()
-                    if left <= 0:
-                        break
-                    self.cond.wait(left)
-                if self.stopped:
-                    return
-            if not self.queue_arrival():
-                return
-            arrival += 1
-
-    def _bounded(self, messages: list[dict]) -> list[dict]:
-        messages = chat_messages(messages)
-        limit = int(self.session.get("context_limit", self.session["served_T"]))
-        while prompt_tokens(self.cfg, messages) > limit:
-            if self.migrating:
-                raise RuntimeError(f"session {self.session['id']} exceeded its append-only migration limit")
-            start = int(messages[0].get("role") == "system")
-            if len(messages) - start <= 2:
-                raise RuntimeError(f"session {self.session['id']} cannot fit its context bound")
-            del messages[start:start + 2]
-        return messages
-
-    def _serve(self) -> None:
-        while True:
-            try:
-                with self.cond:
-                    self.cond.wait_for(lambda: self.stopped or (self.pending and not self.paused))
-                    if self.stopped:
-                        return
-                    self.pending -= 1
-                    arrival_ts = self.pending_arrivals.pop(0) if self.pending_arrivals else time.time()
-                    idx, port = self.turn, self.port
-                    self.turn += 1
-                    base = chat_messages(self.messages)
-                    context_hash = messages_sha256(base)
-                    messages = self._bounded(base + [{"role": "user", "content": session_followup(self.session, idx)}])
-                    self.in_flight_messages = messages
-                    self.in_flight = True
-                self.log.write("request_start", session_id=self.session["id"], turn=idx, generation=self.generation, port=port, context_sha256=context_hash, arrival_ts=arrival_ts, queue_wait_s=time.time() - arrival_ts)
-                result = stream_chat(self.cfg, port, messages, int(self.session["decode_tokens"]))
-                kv_bytes = wait_session_kv_bytes(self.source_log, result.get("request_id"), 2.0) if result["status"] == 200 and port == self.cfg.src_port else 0
-            except Exception as exc:
-                with self.cond:
-                    self.error = RuntimeError(f"session {self.session['id']} worker failed: {exc}")
-                    self.in_flight = False
-                    self.in_flight_messages = None
-                    self.cond.notify_all()
-                return
-            ttft_from_arrival = float(result["first_token_ts"] - arrival_ts)
-            with self.cond:
-                self.request_s.append(float(result["end_ts"] - result["start_ts"]))
-                if result["status"] == 200 and port == self.cfg.src_port:
-                    self.source_ttft_s.append(ttft_from_arrival)
-                if result["status"] == 200:
-                    self.messages = messages + [{"role": "assistant", "content": result["content"]}]
-                    self.generation += 1
-                    self.last_request_id = result.get("request_id")
-                    if kv_bytes:
-                        self.last_source_kv_bytes = kv_bytes
-                    if port == self.cfg.api_proxy_port and self.expected_sink_context_sha256 and self.first_sink_proof is None:
-                        self.first_sink_proof = {"request_id": result.get("request_id"), "context_sha256": context_hash, "context_match": context_hash == self.expected_sink_context_sha256, "arrival_to_first_token_s": ttft_from_arrival, "source_baseline_ttft_s": float(np.median(self.source_ttft_s)) if self.source_ttft_s else None}
-                else:
-                    self.error = RuntimeError(f"session {self.session['id']} request failed: {result['response_text']}")
-                self.in_flight = False
-                self.in_flight_messages = None
-                self.cond.notify_all()
-            self.log.write("request_end", session_id=self.session["id"], turn=idx, port=port, status=result["status"], request_id=result.get("request_id"), session_kv_bytes=self.last_source_kv_bytes, generation=self.generation, first_token_ts=result["first_token_ts"], end_ts=result["end_ts"], arrival_to_first_token_s=ttft_from_arrival)
-
-    def snapshot(self) -> dict:
-        with self.cond:
-            if self.error:
-                raise self.error
-            messages = chat_messages(self.messages)
-            return {"messages": messages, "generation": self.generation, "context_sha256": messages_sha256(messages), "last_request_id": self.last_request_id, "session_kv_bytes": self.last_source_kv_bytes}
-
-    def begin_migration(self) -> dict:
-        with self.cond:
-            if self.error:
-                raise self.error
-            self.paused = True
-            self.migrating = True
-            messages = chat_messages(self.in_flight_messages or self.messages)
-            return {"messages": messages, "generation": self.generation, "context_sha256": messages_sha256(messages), "last_request_id": self.last_request_id, "session_kv_bytes": self.last_source_kv_bytes}
-
-    def pause_boundary(self, timeout_s: float = 900.0) -> None:
-        deadline = time.monotonic() + timeout_s
-        with self.cond:
-            self.paused = True
-            self.cond.notify_all()
-            while self.in_flight:
-                left = deadline - time.monotonic()
-                if left <= 0:
-                    raise TimeoutError(f"timed out pausing {self.session['id']}")
-                self.cond.wait(left)
-
-    def commit_switch(self, expected_generation: int, port: int, messages: list[dict]) -> bool:
-        with self.cond:
-            if self.generation != expected_generation:
-                return False
-            self.messages = chat_messages(messages)
-            self.port = port
-            self.expected_sink_context_sha256 = messages_sha256(self.messages)
-            self.migrating = False
-            return True
-
-    def resume(self) -> None:
-        with self.cond:
-            self.paused = False
-            self.migrating = False
-            self.cond.notify_all()
-
-    def handoff_proof(self) -> dict:
-        with self.cond:
-            proof = dict(self.first_sink_proof or {})
-        if proof:
-            lookup = wait_lmcache_lookup_tokens(self.sink_log, proof["request_id"], 1.0)
-            proof.update({"lmcache_total_tokens": lookup[0], "lmcache_hit_tokens": lookup[1]} if lookup else {})
-        return proof
-
-    def stop(self) -> None:
-        with self.cond:
-            self.stopped = True
-            self.cond.notify_all()
-        for t in self.threads:
-            t.join(timeout=5)
-
-
-def source_request_p95_s(workers: dict[str, SessionWorker]) -> float:
-    values = [x for worker in workers.values() for x in worker.request_s]
-    if not values:
-        raise RuntimeError("baseline produced no source request latency samples")
-    return float(np.quantile(values, 0.95))
-
-
-def nvsmi_cmd(ms: int) -> list[str]:
-    return ["nvidia-smi", "--query-gpu=timestamp,index,power.draw,utilization.gpu,memory.used", "--format=csv,noheader,nounits", "-lms", str(ms)]
-
-
-def memlog_cmd(interval_s: float = 1.0) -> list[str]:
-    script = f"cg=/sys/fs/cgroup$(awk -F: 'NR==1{{print $3}}' /proc/self/cgroup); while true; do date '+# %s.%N'; cat $cg/memory.current $cg/memory.events 2>/dev/null || true; ps -u $USER -o pid,ppid,rss,vsz,comm,args --sort=-rss | head -80; sleep {interval_s}; done"
-    return ["bash", "-lc", script]
-
-
-def start_nvsmi(path: Path, ms: int):
-    path.parent.mkdir(parents=True, exist_ok=True)
-    handle = path.open("w", buffering=1)
-    handle.write("timestamp,index,power_w,util_gpu,memory_mib\n")
-    return subprocess.Popen(nvsmi_cmd(ms), stdout=handle, stderr=subprocess.STDOUT, start_new_session=True), handle
-
-
-def start_memlog(path: Path):
-    path.parent.mkdir(parents=True, exist_ok=True)
-    handle = path.open("w", buffering=1)
-    return subprocess.Popen(memlog_cmd(), stdout=handle, stderr=subprocess.STDOUT, start_new_session=True), handle
-
-
-def stop_nvsmi(proc: subprocess.Popen, handle) -> None:
-    if proc.poll() is None:
+    def _run(self) -> None:
         try:
-            proc.send_signal(signal.SIGTERM)
-            proc.wait(timeout=10)
-        except subprocess.TimeoutExpired:
-            proc.kill()
-            proc.wait()
-    handle.close()
+            with self.path.open("w", newline="", buffering=1) as handle:
+                writer = csv.writer(handle)
+                writer.writerow(["monotonic_ns", "wall_ns", "gpu", "power_w", "utilization_pct", "memory_mib", "valid"])
+                while not self.stop.is_set():
+                    output = subprocess.check_output(["nvidia-smi", "--query-gpu=index,power.draw,utilization.gpu,memory.used", "--format=csv,noheader,nounits"], text=True)
+                    mono, wall = time.monotonic_ns(), time.time_ns()
+                    for line in output.splitlines():
+                        values = [value.strip() for value in line.split(",")]
+                        valid = all(value not in {"N/A", "[N/A]"} for value in values)
+                        writer.writerow([mono, wall, values[0], *values[1:], int(valid)])
+                    self.stop.wait(.25)
+        except Exception as exc:
+            self.error = exc
+
+    def close(self) -> None:
+        self.stop.set()
+        self.thread.join(5)
+        if self.thread.is_alive():
+            raise RuntimeError("power sampler did not stop")
+        if self.error:
+            raise self.error
 
 
-def _power_w(value: str) -> float | None:
-    text = value.strip()
-    return None if text in {"", "N/A", "[N/A]"} else float(text)
+def write_cache_slice(source: Path, destination: Path, start_ns: int, end_ns: int) -> None:
+    with destination.open("w") as handle:
+        for row in cache_operations(source, start_ns, end_ns):
+            handle.write(json.dumps(row, separators=(",", ":")) + "\n")
 
 
-def _power_records(power_csv: Path) -> list[tuple[float, int, float | None]]:
-    rows = []
-    with power_csv.open() as f:
-        for r in csv.DictReader(f):
-            rows.append((_parse_ts(r["timestamp"]), int(r["index"]), _power_w(r["power_w"])))
-    return rows
+def restart_proxy(stack: b.Stack, cfg: b.Config, scenario_root: Path, mbps: float) -> None:
+    b.stop_proc(stack.proxy)
+    stack.proxy = b.start_logged(b.proxy_cmd(cfg, mbps, scenario_root / "proxy_bytes.csv"), scenario_root / "proxy.log")
+    b.wait_tcp_process(cfg.host, cfg.kv_proxy_port, 30, stack.proxy, scenario_root / "proxy.log")
+    b.wait_tcp(cfg.host, cfg.api_proxy_port, 30)
 
 
-def _power_points(power_csv: Path) -> list[tuple[float, int, float]]:
-    return [(ts, gpu, power) for ts, gpu, power in _power_records(power_csv) if power is not None]
-
-
-def power_summary_rows(path: Path, windows: dict[str, tuple[float, float]]) -> list[dict]:
-    rows = [{"ts": ts, "gpu": gpu, "power_w": power} for ts, gpu, power in _power_records(path)]
-    out = []
-    for phase, (lo, hi) in windows.items():
-        for gpu in sorted({r["gpu"] for r in rows}):
-            selected = [r["power_w"] for r in rows if r["gpu"] == gpu and lo <= r["ts"] <= hi]
-            vals = [v for v in selected if v is not None]
-            out.append({"phase": phase, "gpu": gpu, "samples": len(vals), "total_samples": len(selected), "coverage": len(vals) / len(selected) if selected else 0.0, "power_mean_w": float(np.mean(vals)) if vals else math.nan})
-    return out
-
-
-def write_power_summary(power_csv: Path, out_csv: Path, windows: dict[str, tuple[float, float]]) -> list[dict]:
-    rows = power_summary_rows(power_csv, windows)
-    with out_csv.open("w", newline="") as f:
-        writer = csv.DictWriter(f, ["phase", "gpu", "samples", "total_samples", "coverage", "power_mean_w"])
-        writer.writeheader()
-        writer.writerows(rows)
-    return rows
-
-
-def require_power_coverage(rows: list[dict], minimum: float = 0.9) -> None:
-    bad = [(r["phase"], r["gpu"], r["coverage"]) for r in rows if r["coverage"] < minimum]
-    if bad:
-        raise RuntimeError(f"nvidia-smi power sample coverage below {minimum:.0%}: {bad}")
-
-
-def source_power_drop_w(rows: list[dict]) -> float:
-    power = {(r["phase"], r["gpu"]): float(r["power_mean_w"]) for r in rows}
-    return power[("baseline", 0)] - power[("post", 0)]
-
-
-def write_power_plot(power_csv: Path, out_png: Path, dispatch_rows: list[dict], gpu: int | None = None) -> None:
-    import matplotlib.pyplot as plt
-    rows = _power_points(power_csv)
-    if gpu is not None:
-        rows = [r for r in rows if r[1] == gpu]
-    if not rows:
-        raise ValueError("empty power trace")
-    t0 = min(r[0] for r in rows)
-    fig, ax = plt.subplots(figsize=(8, 3))
-    for g in sorted({r[1] for r in rows}):
-        series = [(r[0], r[2]) for r in rows if r[1] == g]
-        xs, ys, left, total = [], [], 0, 0.0
-        for right, (ts, power) in enumerate(series):
-            total += power
-            while series[left][0] < ts - 5.0:
-                total -= series[left][1]
-                left += 1
-            xs.append(ts - t0)
-            ys.append(total / (right - left + 1))
-        ax.plot(xs, ys, label=f"gpu{g} 5s")
-    for row in dispatch_rows:
-        if "move_start_ts" in row:
-            ax.axvline(row["move_start_ts"] - t0, color="k", alpha=0.25, linewidth=0.8)
-    ax.set(xlabel="seconds", ylabel="5-second average power W")
-    ax.legend()
-    fig.tight_layout()
-    fig.savefig(out_png)
-    plt.close(fig)
-
-
-def _live_ell_by_gpu(manifest: dict, ts: float) -> dict[int, float]:
-    per_session = {s["id"]: float(s["ell_pre"]) + float(s["ell_dec"]) for s in manifest["input_manifest"]["sessions"]}
-    moved = sum(per_session[r["id"]] for r in manifest.get("sessions", []) if r.get("commit_result", "committed") == "committed" and float(r.get("switch_end_ts", r.get("move_end_ts", r["move_start_ts"]))) <= ts)
-    total = sum(per_session.values())
-    return {0: max(0.0, total - moved), 1: moved}
-
-
-def ell_power5s_rows(power_csv: Path, manifest: dict, bucket_s: float = 5.0) -> list[dict]:
-    if bucket_s <= 0:
-        raise ValueError("bucket_s must be positive")
-    points = _power_points(power_csv)
-    if not points:
-        raise ValueError("empty power trace")
-    windows = manifest.get("windows", {})
-    if windows:
-        lo = min(float(v[0]) for v in windows.values())
-        hi = max(float(v[1]) for v in windows.values())
-        points = [p for p in points if lo <= p[0] <= hi]
-    else:
-        lo, hi = min(p[0] for p in points), max(p[0] for p in points)
-    if not points:
-        raise ValueError("power trace has no samples inside live windows")
-    if hi <= lo:
-        hi = lo + bucket_s
-    grouped: dict[tuple[int, int], list[float]] = {}
-    for ts, gpu, power in points:
-        rel = min(max(ts, lo), hi - 1e-9) - lo
-        grouped.setdefault((int(rel // bucket_s), gpu), []).append(power)
-    rows = []
-    for (bucket, gpu), vals in sorted(grouped.items()):
-        start = lo + bucket * bucket_s
-        end = min(start + bucket_s, hi)
-        ell = _live_ell_by_gpu(manifest, start + (end - start) / 2).get(gpu, 0.0)
-        rows.append({
-            "bucket": bucket,
-            "bucket_start_s": start - lo,
-            "bucket_end_s": end - lo,
-            "gpu": gpu,
-            "node": "source" if gpu == 0 else "sink" if gpu == 1 else f"gpu{gpu}",
-            "ell": ell,
-            "power_mean_w": float(np.mean(vals)),
-            "samples": len(vals),
-        })
-    return rows
-
-
-def write_ell_power5s(power_csv: Path, manifest: dict, out_csv: Path, out_png: Path, bucket_s: float = 5.0) -> list[dict]:
-    import matplotlib.pyplot as plt
-    rows = ell_power5s_rows(power_csv, manifest, bucket_s)
-    with out_csv.open("w", newline="") as f:
-        writer = csv.DictWriter(f, ["bucket", "bucket_start_s", "bucket_end_s", "gpu", "node", "ell", "power_mean_w", "samples"])
-        writer.writeheader()
-        writer.writerows(rows)
-    fig, ax = plt.subplots(figsize=(6, 4))
-    for node in ("source", "sink"):
-        part = [r for r in rows if r["node"] == node]
-        if part:
-            ax.scatter([r["ell"] for r in part], [r["power_mean_w"] for r in part], s=18, alpha=0.75, label=node)
-    ax.set(xlabel="ell", ylabel="5s average power W")
-    ax.legend()
-    fig.tight_layout()
-    fig.savefig(out_png)
-    plt.close(fig)
-    return rows
-
-
-def write_delay_summary(rows: list[dict], out_csv: Path, out_png: Path) -> list[dict]:
-    import matplotlib.pyplot as plt
-    delays = [{"dispatch_rank": r["dispatch_rank"], "id": r["id"], "action": r["action"], "commit_result": r.get("commit_result", "committed"), "selection_to_stage_start_s": r.get("selection_to_stage_start_s", 0.0), "initial_staging_s": r.get("initial_staging_s", r.get("staging_s", r.get("sink_warm_s", r["completion_s"]))), "final_delta_s": r.get("final_delta_s", 0.0), "staging_s": r.get("staging_s", r.get("sink_warm_s", r["completion_s"])), "first_token_s": r["first_token_s"], "sink_warm_s": r.get("sink_warm_s", r["completion_s"]), "completion_s": r["completion_s"], "source_boundary_wait_s": r.get("source_boundary_wait_s", 0.0), "switch_downtime_s": r.get("switch_downtime_s", r.get("downtime_s", r["completion_s"]))} for r in rows]
-    with out_csv.open("w", newline="") as f:
-        writer = csv.DictWriter(f, ["dispatch_rank", "id", "action", "commit_result", "selection_to_stage_start_s", "initial_staging_s", "final_delta_s", "staging_s", "first_token_s", "sink_warm_s", "completion_s", "source_boundary_wait_s", "switch_downtime_s"])
-        writer.writeheader()
-        writer.writerows(delays)
-    fig, ax = plt.subplots(figsize=(8, 3))
-    xs = [d["dispatch_rank"] for d in delays]
-    ax.bar([x - 0.3 for x in xs], [d["sink_warm_s"] for d in delays], width=0.2, label="sink warm")
-    ax.bar([x - 0.1 for x in xs], [d["completion_s"] for d in delays], width=0.2, label="completion")
-    ax.bar([x + 0.1 for x in xs], [d["source_boundary_wait_s"] for d in delays], width=0.2, label="boundary wait")
-    ax.bar([x + 0.3 for x in xs], [d["switch_downtime_s"] for d in delays], width=0.2, label="switch")
-    ax.set(xlabel="dispatch rank", ylabel="seconds")
-    ax.legend()
-    fig.tight_layout()
-    fig.savefig(out_png)
-    plt.close(fig)
-    return delays
-
-
-def request_count_rows(events_jsonl: Path, windows: dict[str, tuple[float, float]]) -> list[dict]:
-    counts: dict[tuple[str, int], int] = {}
-    with events_jsonl.open() as f:
-        for line in f:
-            row = json.loads(line)
-            if row.get("kind") != "request_start":
-                continue
-            phase = next((k for k, (lo, hi) in windows.items() if lo <= float(row["ts"]) <= hi), None)
-            if phase is not None:
-                key = (phase, int(row["port"]))
-                counts[key] = counts.get(key, 0) + 1
-    return [{"phase": p, "port": port, "requests": n} for (p, port), n in sorted(counts.items())]
-
-
-def write_request_counts(events_jsonl: Path, out_csv: Path, windows: dict[str, tuple[float, float]]) -> list[dict]:
-    rows = request_count_rows(events_jsonl, windows)
-    with out_csv.open("w", newline="") as f:
-        writer = csv.DictWriter(f, ["phase", "port", "requests"])
-        writer.writeheader()
-        writer.writerows(rows)
-    return rows
-
-
-
-
-def proxy_audit_rows(proxy_log: Path, windows: dict[str, tuple[float, float]], mbps: float) -> list[dict]:
-    target = mbps * 1_000_000 / 8
-    rows = b.proxy_rows(proxy_log)
-    out = []
-    for phase, (lo, hi) in windows.items():
-        for route, direction in sorted(b.BILLED_DIRECTIONS):
-            xs = [r for r in rows if r["route"] == route and r["direction"] == direction and r.get("billed") == "1" and lo <= float(r["ts"]) <= hi]
-            if xs:
-                ts = [float(r["ts"]) for r in xs]
-                nbytes = sum(int(r["bytes"]) for r in xs)
-                window = max(ts) - min(ts)
-            else:
-                nbytes, window = 0, 0.0
-            rate = nbytes / window if window else 0.0
-            out.append({
-                "phase": phase,
-                "route": route,
-                "direction": direction,
-                "bytes": nbytes,
-                "window_s": window,
-                "bytes_per_s": rate,
-                "target_bytes_per_s": target,
-                "target_ratio": rate / target if target else math.nan,
-                "ok": int(window < 0.5 or rate <= 1.25 * target),
-            })
-    return out
-
-
-def write_proxy_audit(proxy_log: Path, out_csv: Path, windows: dict[str, tuple[float, float]], mbps: float) -> list[dict]:
-    rows = proxy_audit_rows(proxy_log, windows, mbps)
-    with out_csv.open("w", newline="") as f:
-        writer = csv.DictWriter(f, ["phase", "route", "direction", "bytes", "window_s", "bytes_per_s", "target_bytes_per_s", "target_ratio", "ok"])
-        writer.writeheader()
-        writer.writerows(rows)
-    bad = [r for r in rows if not r["ok"]]
-    if bad:
-        raise RuntimeError(f"proxy exceeded configured link: {bad[:2]}")
-    return rows
-
-def check_live_manifest(manifest: dict, run_root: Path) -> None:
-    if manifest.get("schema") != LIVE_SCHEMA:
-        raise ValueError("bad live schema")
-    for name in LIVE_ARTIFACTS:
-        if not (run_root / name).exists():
-            raise ValueError(f"missing {name}")
-    sessions = manifest.get("sessions", [])
-    if not sessions:
-        raise ValueError("live manifest has no sessions")
-    ranks = [s["dispatch_rank"] for s in sessions]
-    if ranks != list(range(len(ranks))):
-        raise ValueError("dispatch ranks are not contiguous")
-    for row in sessions:
-        if row["http_status"] != 200 or row.get("first_token_s") is None:
-            raise ValueError(f"session failed: {row['id']}")
-        if row.get("prompt_sha256") != row.get("staged_context_sha256"):
-            raise ValueError(f"stage context hash mismatch: {row['id']}")
-        delta = row.get("proxy_delta", {})
-        total_tokens = row.get("initial_stage_lmcache_total_tokens", row.get("stage_lmcache_total_tokens", 0))
-        hit_tokens = row.get("initial_stage_lmcache_hit_tokens", row.get("stage_lmcache_hit_tokens", 0))
-        if row["action"] == "S" and (delta.get("kv/target_to_client", 0) <= 0 or total_tokens <= 0 or hit_tokens / total_tokens < 0.9):
-            raise ValueError(f"KV action lacks KV evidence: {row['id']}")
-        if row["action"] == "R" and delta.get("api/client_to_target", 0) <= 0:
-            raise ValueError(f"replay action lacks API bytes: {row['id']}")
-        if row.get("commit_result") == "committed" and row.get("committed_context_sha256") != row.get("staged_context_sha256"):
-            raise ValueError(f"committed context mismatch: {row['id']}")
-        if row.get("commit_result") == "stale_aborted" and (row.get("committed_context_sha256") is not None or row.get("deadline_met")):
-            raise ValueError(f"stale handoff was counted: {row['id']}")
-
-
-
-def run_live_moves(cfg: b.Config, run_root: Path, workers: dict[str, SessionWorker], rows: list[dict],
-                   replay_concurrency: int = 1, kv_concurrency: int | None = None,
-                   proxy_log: Path | None = None) -> list[dict]:
-    if replay_concurrency <= 0:
-        raise ValueError("replay_concurrency must be positive")
-    if kv_concurrency is not None and kv_concurrency <= 0:
-        raise ValueError("kv_concurrency must be positive")
-    limits = {"R": replay_concurrency, "S": kv_concurrency or max(1, len(rows))}
-    positions = {action: {row["id"]: i for i, row in enumerate(sorted((r for r in rows if r["action"] == action), key=lambda r: r["dispatch_rank"]))} for action in limits}
-    next_start = {action: 0 for action in limits}
-    active = {action: 0 for action in limits}
-    stage_gates = {action: threading.Semaphore(limit) for action, limit in limits.items()}
-    start_cond = threading.Condition()
-    proxy_log = proxy_log or run_root / "proxy_bytes.csv"
-    selected_ts = time.time()
-    selected = {}
-    for row in rows:
-        worker = workers[row["id"]]
-        selected[row["id"]] = worker.begin_migration() if hasattr(worker, "begin_migration") else worker.snapshot()
-        worker.log.write("handoff_selected", session_id=row["id"], action=row["action"], dispatch_rank=row["dispatch_rank"])
-
-    @contextmanager
-    def initial_gate(row: dict):
-        action = row["action"]
-        with start_cond:
-            start_cond.wait_for(lambda: positions[action][row["id"]] == next_start[action] and active[action] < limits[action])
-            active[action] += 1
-            next_start[action] += 1
-            start_cond.notify_all()
-        try:
-            yield
-        finally:
-            with start_cond:
-                active[action] -= 1
-                start_cond.notify_all()
-
-    def move(row: dict) -> dict:
-        worker = workers[row["id"]]
-        snapshot = selected[row["id"]]
-
-        def staged_messages(state: dict, action: str) -> list[dict]:
-            messages = chat_messages(state["messages"])
-            if action == "R":
-                marker = f"Queue-Haul replay namespace {row['id']} {worker.session.get('scenario_nonce', '')}."
-                messages = [{"role": "system", "content": marker}] + messages
-            return messages
-
-        def stage(messages: list[dict], action: str, phase: str) -> tuple[dict, int, int, float, float, dict]:
-            phase_before = b.proxy_counts(proxy_log)
-            start = time.time()
-            worker.log.write("handoff_stage_start", session_id=row["id"], action=row["action"], stage_action=action, phase=phase)
-            result = stream_chat(cfg, cfg.api_proxy_port, messages, 1)
-            if result["status"] != 200:
-                raise RuntimeError(f"sink stage failed for {row['id']}: {result['response_text']}")
-            lookup = wait_lmcache_lookup_tokens(worker.sink_log, result.get("request_id"))
-            if lookup is None:
-                raise RuntimeError(f"sink stage lacks LMCache accounting for {row['id']}")
-            total_tokens, hit_tokens = lookup
-            if action == "S" and (total_tokens <= 0 or hit_tokens / total_tokens < 0.9):
-                raise RuntimeError(f"KV stage hit only {hit_tokens}/{total_tokens} tokens for {row['id']}")
-            end = time.time()
-            phase_delta = b.count_delta(phase_before, b.proxy_counts(proxy_log))
-            worker.log.write("handoff_staged", session_id=row["id"], action=row["action"], stage_action=action, phase=phase, request_id=result.get("request_id"), lmcache_total_tokens=total_tokens, lmcache_hit_tokens=hit_tokens, proxy_delta=phase_delta)
-            return result, total_tokens, hit_tokens, start, end, phase_delta
-
-        before = b.proxy_counts(proxy_log)
-        with initial_gate(row), stage_gates[row["action"]]:
-            initial = stage(staged_messages(snapshot, row["action"]), row["action"], "initial")
-        result, total_tokens, hit_tokens, stage_start, initial_stage_end, initial_proxy_delta = initial
-        switch_request_ts = time.time()
-        worker.pause_boundary()
-        boundary_ready_ts = time.time()
-        current = worker.snapshot()
-        final_delta_s, attempts, final_action = 0.0, 1, None
-        final_proxy_delta = {}
-        messages = staged_messages(snapshot, row["action"])
-        request_ids = [result.get("request_id")]
-        initial_total_tokens, initial_hit_tokens = total_tokens, hit_tokens
-        append_only = current["messages"][:len(snapshot["messages"])] == snapshot["messages"]
-        if current["generation"] != snapshot["generation"]:
-            if not append_only:
-                raise RuntimeError(f"session {row['id']} changed a transferred prefix")
-            if current["context_sha256"] == snapshot["context_sha256"]:
-                raise RuntimeError(f"session {row['id']} attempted duplicate final staging")
-            final_action = row["action"]
-            messages = staged_messages(current, final_action)
-            with stage_gates[final_action]:
-                result, total_tokens, hit_tokens, final_start, final_end, final_proxy_delta = stage(messages, final_action, "final_delta")
-            final_delta_s, attempts = final_end - final_start, 2
-            request_ids.append(result.get("request_id"))
-        else:
-            final_end = initial_stage_end
-        committed = worker.commit_switch(current["generation"], cfg.api_proxy_port, messages)
-        worker.resume()
-        switch_end = time.time()
-        commit_result = "committed" if committed else "stale_aborted"
-        worker.log.write("handoff_" + commit_result, session_id=row["id"], action=row["action"], selected_generation=snapshot["generation"], current_generation=current["generation"], staging_attempts=attempts)
-        delta = b.count_delta(before, b.proxy_counts(proxy_log))
-        completion = switch_end - selected_ts
-        effective = row["action"] if final_action is None else ("S+delta" if row["action"] == "S" else "R+suffix")
-        return {
-            **row,
-            "warm_move": committed,
-            "move_start_ts": selected_ts,
-            "staging_start_ts": stage_start,
-            "sink_ready_ts": result["end_ts"],
-            "staging_end_ts": final_end,
-            "switch_request_ts": switch_request_ts,
-            "boundary_ready_ts": boundary_ready_ts,
-            "switch_end_ts": switch_end,
-            "move_end_ts": switch_end,
-            "http_status": result["status"],
-            "stage_request_id": result.get("request_id"),
-            "stage_request_ids": request_ids,
-            "stage_lmcache_total_tokens": total_tokens,
-            "stage_lmcache_hit_tokens": hit_tokens,
-            "stage_lmcache_hit_ratio": hit_tokens / total_tokens if total_tokens else 0.0,
-            "initial_stage_lmcache_total_tokens": initial_total_tokens,
-            "initial_stage_lmcache_hit_tokens": initial_hit_tokens,
-            "action_name": "context_replay" if row["action"] == "R" else "kv_transfer",
-            "initial_stage_proxy_delta": initial_proxy_delta,
-            "final_delta_proxy_delta": final_proxy_delta,
-            "selected_session_kv_bytes": int(snapshot.get("session_kv_bytes", 0)),
-            "final_session_kv_bytes": int(current.get("session_kv_bytes", 0)),
-            "session_kv_delta_bytes": max(0, int(current.get("session_kv_bytes", 0)) - int(snapshot.get("session_kv_bytes", 0))),
-            "staging_attempts": attempts,
-            "initial_stage_action": row["action"],
-            "final_delta_action": final_action,
-            "effective_action": effective,
-            "append_only_context": append_only,
-            "selected_generation": snapshot["generation"],
-            "commit_generation": current["generation"],
-            "generation_delta": current["generation"] - snapshot["generation"],
-            "selected_context_sha256": snapshot["context_sha256"],
-            "staged_context_sha256": messages_sha256(messages),
-            "committed_context_sha256": messages_sha256(messages) if committed else None,
-            "commit_result": commit_result,
-            "first_token_s": initial[0]["first_token_ts"] - selected_ts,
-            "selection_to_stage_start_s": stage_start - selected_ts,
-            "initial_staging_s": initial_stage_end - stage_start,
-            "final_delta_s": final_delta_s,
-            "staging_s": initial_stage_end - stage_start + final_delta_s,
-            "sink_warm_s": final_end - selected_ts,
-            "completion_s": completion,
-            "source_boundary_wait_s": boundary_ready_ts - switch_request_ts,
-            "switch_downtime_s": switch_end - boundary_ready_ts,
-            "downtime_s": switch_end - boundary_ready_ts,
-            "deadline_met": committed and completion <= float(row.get("deadline_s", math.inf)),
-            "prompt_sha256": result["prompt_sha256"],
-            "proxy_delta": delta,
-        }
-
-    with ThreadPoolExecutor(max_workers=max(1, len(rows))) as ex:
-        return [f.result() for f in [ex.submit(move, row) for row in rows]]
-
-
-def _scenario_nonce(run_root: Path) -> str:
-    return hashlib.sha256(str(run_root).encode()).hexdigest()[:16]
-
-
-def link_stack_logs(run_root: Path, stack_root: Path) -> None:
-    for name in ("source.log", "sink.log", "lmcache.log", "proxy.log"):
-        dst, src = run_root / name, stack_root / name
-        if not src.exists():
-            continue
-        if dst.exists() or dst.is_symlink():
-            dst.unlink()
-        dst.symlink_to(os.path.relpath(src, run_root))
-
-
-def write_vllm_metrics(cfg: b.Config, run_root: Path, suffix: str) -> None:
-    for role, port in (("source", cfg.src_port), ("sink", cfg.sink_port)):
-        (run_root / f"{role}_metrics_{suffix}.prom").write_text(b.http_text(cfg.host, port, "GET", "/metrics"))
-
-
-def write_proxy_slice(src: Path, dst: Path, windows: dict[str, tuple[float, float]]) -> None:
-    dst.parent.mkdir(parents=True, exist_ok=True)
-    with src.open() as f, dst.open("w", newline="") as out:
-        reader = csv.DictReader(f)
-        writer = csv.DictWriter(out, reader.fieldnames or ["ts", "route", "direction", "bytes", "billed"])
-        writer.writeheader()
-        for row in reader:
-            ts = float(row["ts"])
-            if any(lo <= ts <= hi for lo, hi in windows.values()):
-                writer.writerow(row)
-
-
-def source_fully_drained(rows: list[dict], session_count: int) -> bool:
-    return session_count > 0 and len(rows) == session_count and all(row["commit_result"] == "committed" for row in rows)
-
-
-def live_drain(cfg: b.Config, run_root: Path, manifest: dict, mbps: float, nvsmi_ms: int, extra: list[str],
-               policy: str = "lp", seed: int = 0, deadline_s: float | None = None,
-               target_frac: float | None = None, profile_path: Path | None = None,
-               replay_concurrency: int = 1, kv_concurrency: int | None = None,
-               stack: b.Stack | None = None) -> Path:
-    owned_stack = stack is None
-    stack = stack or b.start_stack(cfg, run_root, mbps, extra)
-    stack_root = stack.run_root
-    nonce = _scenario_nonce(run_root)
-    manifest = {**manifest, "sessions": [{**s, "scenario_nonce": nonce} for s in live_sessions(manifest)]}
-    sessions = live_sessions(manifest)
-    events = JsonlLog(run_root / "events.jsonl")
-    nvsmi = None
-    memlog = start_memlog(run_root / "host_mem.log")
-    workers: dict[str, SessionWorker] = {}
-    source_slept, source_sleep_s = False, 0.0
+def run_scenario(stack: b.Stack, cfg: b.Config, manifest: dict, scenario: dict, root: Path, run_id: str) -> dict:
+    root.mkdir(parents=True, exist_ok=True)
+    write_json(root / "scenario.json", scenario)
+    restart_proxy(stack, cfg, root, scenario["bandwidth_mbps"])
+    event_log = EventLog(root / "events.jsonl", run_id, scenario["scenario_id"])
+    sampler = PowerSampler(root / "power.csv")
+    sampler.start()
+    start_ns = time.monotonic_ns()
+    cache_log, source_log, sink_log = stack.run_root / "lmcache.log", stack.run_root / "source.log", stack.run_root / "sink.log"
+    cache_offset = cache_log.stat().st_size
+    runtime = None
+    sleeping = False
     try:
-        b.start_sink(stack, cfg, extra)
-        b.set_source_sleep(cfg, False)
-        b.wait_health(cfg.host, cfg.src_port, 60)
-        b.wait_health(cfg.host, cfg.sink_port, 60)
-        profile, used_profile_path = ensure_live_profile(cfg, stack_root if not owned_stack else run_root, profile_path, manifest, mbps)
-        b.flush_lmcache(stack)
-        b.reset_vllm_caches(cfg)
-        write_vllm_metrics(cfg, run_root, "before")
-        nvsmi = start_nvsmi(run_root / "gpu_power.csv", nvsmi_ms)
-        source_log = stack_root / "source.log"
-        proxy_log = stack_root / "proxy_bytes.csv" if not owned_stack else run_root / "proxy_bytes.csv"
-        for i, session in enumerate(sessions):
-            messages = [{"role": "user", "content": session_prompt(session, 0)}]
-            result = stream_chat(cfg, cfg.src_port, messages, int(session["decode_tokens"]))
-            if result["status"] != 200:
-                raise RuntimeError(f"source prewarm failed for {session['id']}: {result['response_text']}")
-            messages.append({"role": "assistant", "content": result["content"]})
-            request_id = result.get("request_id")
-            kv_bytes = wait_session_kv_bytes(source_log, request_id)
-            events.write("prewarm", session_id=session["id"], status=result["status"], request_id=request_id, generation=1, context_sha256=messages_sha256(messages), session_kv_bytes=kv_bytes)
-            session.update({"messages": messages, "generation": 1, "last_request_id": request_id, "session_kv_bytes": kv_bytes})
-            worker = SessionWorker(cfg, session, cfg.src_port, events, int(manifest.get("source", {}).get("seed", 0)) + i, stack_root)
-            worker.start()
-            workers[session["id"]] = worker
-        time.sleep(float(manifest.get("warmup_s", min(30.0, float(manifest.get("baseline_s", 120.0))))))
-        baseline_start = time.time()
-        time.sleep(float(manifest.get("baseline_s", 120.0)))
-        drain_start = time.time()
-        source_boundary_s = source_request_p95_s(workers)
-        profile = _finalize_live_profile({**profile, "source_boundary_s": source_boundary_s})
-        manifest = {**manifest, "sessions": [{**s, **workers[s["id"]].snapshot()} for s in sessions]}
-        missing_kv = [s["id"] for s in manifest["sessions"] if int(s.get("session_kv_bytes", 0)) <= 0]
-        if missing_kv:
-            raise RuntimeError(f"missing measured session KV bytes: {missing_kv}")
-        manifest = apply_live_profile(manifest, profile)
-        sessions = live_sessions(manifest)
-        summary = live_plan_summary(manifest, policy, seed, deadline_s, target_frac, replay_concurrency, kv_concurrency)
-        move_rows = [{**row, "deadline_s": summary["deadline_s"]} for row in summary["sessions"]]
-        rows = run_live_moves(cfg, run_root, workers, move_rows, replay_concurrency=replay_concurrency, kv_concurrency=kv_concurrency, proxy_log=proxy_log)
-        source_slept = source_fully_drained(rows, len(workers))
-        if source_slept:
-            sleep_start = time.time()
+        try:
+            b.flush_lmcache(stack)
+            b.reset_vllm_caches(cfg, (source_log, sink_log))
+        except Exception as exc:
+            raise ScenarioResetError(str(exc)) from exc
+        rows = {row["id"]: row for row in manifest["sessions"]}
+        sessions = {item["session_id"]: LiveSession(cfg, rows[item["session_id"]], item["turn_index"], event_log, source_log, cache_log, scenario["deadline_s"]) for item in scenario["sessions"]}
+        method_by_session = {row["session_id"]: row["method"] for row in scenario["moves"]} or {session_id: scenario["method"] for session_id in sessions}
+        replay = [session for session_id, session in sessions.items() if method_by_session[session_id] == "replay"]
+        kv = [session for session in sessions.values() if session not in replay]
+        for session in replay:
+            session.warm()
+        if replay:
+            b.flush_lmcache(stack)
+        for session in kv:
+            session.warm()
+        moves = [Move(row["session_id"], row["method"], row["order"]) for row in scenario["moves"]]
+        runtime = LiveRuntime(sessions, cfg, scenario["activity"], sink_log, cache_log, event_log, root / "requests.jsonl")
+        if scenario["kind"] == "migration":
+            migration_results = MigrationController(runtime, scenario["concurrency"]).run(moves)
+            if any(not row.succeeded for row in migration_results):
+                raise RuntimeError("; ".join(row.error for row in migration_results if row.error))
+        else:
+            migration_results = []
+            if scenario["activity"] == "one_turn":
+                with ThreadPoolExecutor(max_workers=scenario["concurrency"]) as pool:
+                    for session in sessions.values():
+                        session.start_activity()
+                    list(pool.map(lambda session: session.wait_activity(), sessions.values()))
+        full_drain = scenario["kind"] == "migration" and set(sessions) == {row["id"] for row in manifest["sessions"]} and all(row.succeeded for row in migration_results)
+        sleep_times = None
+        if full_drain:
+            sleep_start = time.monotonic_ns()
             b.set_source_sleep(cfg, True)
-            source_sleep_s = time.time() - sleep_start
-        drain_end = time.time()
-        time.sleep(float(manifest.get("settle_s", 120.0)))
-        post_end = time.time()
-        for worker in workers.values():
-            worker.stop()
-        for worker in workers.values():
-            worker.snapshot()
-        rows = [{**row, "first_sink_request_id": proof.get("request_id"), "first_sink_context_sha256": proof.get("context_sha256"), "first_sink_context_match": bool(proof.get("context_match")), "first_sink_lmcache_total_tokens": proof.get("lmcache_total_tokens"), "first_sink_lmcache_hit_tokens": proof.get("lmcache_hit_tokens"), "source_baseline_ttft_s": proof.get("source_baseline_ttft_s"), "first_sink_arrival_to_first_token_s": proof.get("arrival_to_first_token_s"), "ttft_inflation_s": None if proof.get("arrival_to_first_token_s") is None or proof.get("source_baseline_ttft_s") is None else proof["arrival_to_first_token_s"] - proof["source_baseline_ttft_s"]} for row in rows for proof in [workers[row["id"]].handoff_proof()]]
-        _sessions, pop, pool, _move, _imp, _event, _full_w, _target_w = _live_model(manifest, summary["deadline_s"], summary["target_frac"])
-        committed_y = np.zeros(len(pop))
-        for row in rows:
-            if row["commit_result"] == "committed":
-                committed_y[row["fixture_index"]] = 1.0
-        committed_w = evaluate_node_expected_w(pop, pool, committed_y)
-        write_vllm_metrics(cfg, run_root, "after")
-        windows = {"baseline": (baseline_start, drain_start), "drain": (drain_start, drain_end), "post": (drain_end, post_end)}
-        if nvsmi:
-            stop_nvsmi(*nvsmi)
-            nvsmi = None
-        if proxy_log != run_root / "proxy_bytes.csv":
-            write_proxy_slice(proxy_log, run_root / "proxy_bytes.csv", windows)
-            link_stack_logs(run_root, stack_root)
-        proxy_audit = write_proxy_audit(run_root / "proxy_bytes.csv", run_root / "proxy_audit.csv", windows, mbps)
-        power_rows = write_power_summary(run_root / "gpu_power.csv", run_root / "power_summary.csv", windows)
-        require_power_coverage(power_rows)
-        write_power_plot(run_root / "gpu_power.csv", run_root / "power_trace.png", rows)
-        write_power_plot(run_root / "gpu_power.csv", run_root / "source_power.png", rows, gpu=0)
-        write_power_plot(run_root / "gpu_power.csv", run_root / "sink_power.png", rows, gpu=1)
-        delays = write_delay_summary(rows, run_root / "delay_summary.csv", run_root / "delay_summary.png")
-        request_counts = write_request_counts(run_root / "events.jsonl", run_root / "request_counts.csv", windows)
-        write_ell_power5s(run_root / "gpu_power.csv", {**summary, "input_manifest": manifest, "sessions": rows, "windows": windows}, run_root / "ell_power5s.csv", run_root / "ell_power5s.png")
-        modeled_power_hit = committed_w >= summary["target_w"] - 1e-6 * max(summary["target_w"], 1.0)
-        measured_source_drop_w = source_power_drop_w(power_rows)
-        measured_power_hit = measured_source_drop_w >= summary["target_w"]
-        all_committed = all(r["commit_result"] == "committed" for r in rows)
-        continued = [r for r in rows if r["first_sink_request_id"]]
-        continuation_consistent = all(r["first_sink_context_match"] for r in continued)
-        deadline_hit = all(r["deadline_met"] for r in rows)
-        out = {
-            **summary,
-            "schema": LIVE_SCHEMA,
-            "input_manifest": manifest,
-            "sessions": rows,
-            "delay_summary": delays,
-            "request_counts": request_counts,
-            "proxy_audit": proxy_audit,
-            "windows": windows,
-            "profile_path": str(used_profile_path),
-            "selected_node_expected_w": summary["planned_source_drop_w"],
-            "egress_realized_node_expected_w": summary["planned_source_drop_w"],
-            "rebuild_realized_node_expected_w": committed_w,
-            "committed_source_drop_w": committed_w,
-            "measured_source_drop_w": measured_source_drop_w,
-            "measured_power_error_w": measured_source_drop_w - summary["planned_source_drop_w"],
-            "scheduler": {"warm_movement": True, "handoff": "append_only_delta", "source_request_p95_s": source_boundary_s, "staging_max_tokens": 1, "replay_concurrency": replay_concurrency, "kv_concurrency": kv_concurrency or max(1, len(move_rows)), "persistent_stack": not owned_stack, "source_slept": source_slept, "source_sleep_s": source_sleep_s, "cache_isolation": "remote_flush+vllm_prefix_reset+scenario_nonce"},
-            "acceptance": {"ok": all_committed and continuation_consistent and deadline_hit and measured_power_hit and all(r["ok"] for r in proxy_audit), "all_committed": all_committed, "continuation_consistent": continuation_consistent, "continuation_observed_sessions": len(continued), "deadline_hit": deadline_hit, "power_hit": measured_power_hit, "modeled_power_hit": modeled_power_hit, "power_threshold_gated": False, "planned_hit": summary["planned_hit"], "proxy_audit_ok": all(r["ok"] for r in proxy_audit)},
+            sleeping = True
+            sleep_end = time.monotonic_ns()
+            sleep_times = [sleep_start, sleep_end]
+            event_log.write("source_sleep", start_ns=sleep_start, end_ns=sleep_end)
+        continuations = []
+        for item in sorted(scenario["sessions"], key=lambda row: row["order"]):
+            session = sessions[item["session_id"]]
+            expected_port = cfg.api_proxy_port if scenario["kind"] == "migration" else cfg.src_port
+            if session.route != expected_port:
+                raise RuntimeError(f"wrong continuation route for {session.session_id}")
+            committed_hash = messages_hash(session.messages)
+            request = session.continuation()
+            continuations.append({"session_id": session.session_id, "route_port": session.route, "committed_context_hash": committed_hash, **asdict(request)})
+        activities = []
+        for session in sessions.values():
+            if not session.activity_times:
+                continue
+            activity_start, activity_end = session.activity_times
+            move_result = next((row for row in migration_results if row.move.session_id == session.session_id), None)
+            activities.append({
+                "session_id": session.session_id, "start_ns": activity_start, "end_ns": activity_end,
+                "overlapped_initial_copy": bool(move_result and activity_start < move_result.initial_end_ns and activity_end > move_result.initial_start_ns),
+                "overlapped_request_wait": bool(move_result and activity_start < move_result.idle_ns and activity_end > move_result.pause_start_ns),
+            })
+        elapsed_s = (time.monotonic_ns() - start_ns) / 1e9
+        result = {
+            "schema": RESULT_SCHEMA, "scenario_id": scenario["scenario_id"], "status": "complete",
+            "started_ns": start_ns, "ended_ns": time.monotonic_ns(), "elapsed_s": elapsed_s,
+            "deadline_s": scenario["deadline_s"], "deadline_met": elapsed_s <= scenario["deadline_s"],
+            "full_drain": full_drain, "source_sleep_ns": sleep_times,
+            "migrations": [asdict(row) for row in migration_results], "activities": activities, "continuations": continuations,
         }
-        check_live_manifest(out, run_root)
-        (run_root / "controller_manifest.json").write_text(json.dumps(out, indent=2, sort_keys=True))
     finally:
-        for worker in workers.values():
-            worker.stop()
-        if nvsmi:
-            stop_nvsmi(*nvsmi)
-        stop_nvsmi(*memlog)
-        events.close()
-        if owned_stack:
-            b.stop_stack(stack)
-    return run_root
+        if sleeping:
+            b.set_source_sleep(cfg, False)
+        if runtime:
+            runtime.close()
+        sampler.close()
+        time.sleep(.3)
+        event_log.close()
+        write_cache_slice(cache_log, root / "cache_operations.jsonl", start_ns, time.monotonic_ns())
+    result["wire_bytes"] = b.proxy_counts(root / "proxy_bytes.csv")
+    write_json(root / "result.json", result)
+    return result
 
 
-
-def _fmt(x: float) -> str:
-    return f"{float(x):g}".replace(".", "p")
-
-
-def grid_run_name(policy: str, deadline_s: float, target_frac: float, seed: int | None = None) -> str:
-    suffix = f"_S{seed}" if seed is not None else ""
-    return f"{policy}{suffix}_D{_fmt(deadline_s)}_T{_fmt(target_frac)}"
+def git_state(allow_dirty: bool) -> tuple[str, bool]:
+    sha = subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip()
+    dirty = bool(subprocess.check_output(["git", "status", "--porcelain", "--untracked-files=no"], text=True).strip())
+    if dirty and not allow_dirty:
+        raise RuntimeError("formal runs require a clean worktree; pass --allow-dirty for development")
+    return sha, dirty
 
 
-def _power_summary_lookup(path: Path) -> dict[tuple[str, int], float]:
-    with path.open() as f:
-        return {(r["phase"], int(r["gpu"])): float(r["power_mean_w"]) for r in csv.DictReader(f)}
+class ScenarioResetError(RuntimeError):
+    pass
 
 
-def grid_summary_row(run_root: Path) -> dict:
-    manifest = json.loads((run_root / "controller_manifest.json").read_text())
-    power = _power_summary_lookup(run_root / "power_summary.csv")
-    delays = manifest.get("sessions") or manifest.get("delay_summary") or []
-    input_manifest = manifest.get("input_manifest", {})
-    input_sessions = input_manifest.get("sessions", [])
-    served = [float(s.get("served_T", s.get("T", 0))) for s in input_sessions]
-    if delays and all("move_start_ts" in d and "move_end_ts" in d for d in delays):
-        t0 = min(float(d["move_start_ts"]) for d in delays)
-        total_first = max(float(d["move_start_ts"]) + float(d["first_token_s"]) for d in delays) - t0
-        total_completion = max(float(d["move_end_ts"]) for d in delays) - t0
-    else:
-        total_first = sum(float(d["first_token_s"]) for d in delays)
-        total_completion = sum(float(d["completion_s"]) for d in delays)
-    deadline = float(manifest["deadline_s"])
-    scenario = input_manifest.get("scenario", {})
-    reference = float(scenario.get("reference_deadline_s", deadline))
-    return {
-        "workload": manifest_workload(input_manifest),
-        "input_sessions": len(input_sessions),
-        "median_served_T": float(np.median(served)) if served else math.nan,
-        "policy": manifest["policy"],
-        "seed": int(manifest.get("seed", 0)),
-        "deadline_s": deadline,
-        "deadline_scale": float(scenario.get("deadline_scale", deadline / reference)),
-        "reference_deadline_s": reference,
-        "target_frac": float(manifest["target_frac"]),
-        "target_w": float(manifest["target_w"]),
-        "full_source_drop_w": float(manifest["full_source_drop_w"]),
-        "planned_source_drop_w": float(manifest["planned_source_drop_w"]),
-        "planned_shortfall_w": float(manifest["planned_shortfall_w"]),
-        "planned_hit": bool(manifest["planned_hit"]),
-        "selected_node_expected_w": float(manifest.get("selected_node_expected_w", manifest["planned_source_drop_w"])),
-        "egress_realized_node_expected_w": float(manifest.get("egress_realized_node_expected_w", manifest["planned_source_drop_w"])),
-        "rebuild_realized_node_expected_w": float(manifest.get("rebuild_realized_node_expected_w", manifest["planned_source_drop_w"])),
-        "acceptance_ok": bool(manifest.get("acceptance", {}).get("ok", True)),
-        "deadline_hit": bool(total_completion <= deadline and manifest.get("acceptance", {}).get("deadline_hit", True)),
-        "measured_source_drop_w": power.get(("baseline", 0), math.nan) - power.get(("post", 0), math.nan),
-        "measured_sink_rise_w": power.get(("post", 1), math.nan) - power.get(("baseline", 1), math.nan),
-        "total_first_token_s": float(total_first),
-        "total_completion_s": float(total_completion),
-        "completion_to_reference": float(total_completion / reference),
-        "max_completion_s": float(max((d["completion_s"] for d in delays), default=math.nan)),
-        "sessions": len(manifest.get("sessions", [])),
-        "run_root": str(run_root),
-    }
+def config_record(cfg: b.Config) -> dict:
+    return {key: str(value) if isinstance(value, Path) else value for key, value in asdict(cfg).items()}
 
 
-def _write_grid_plot(rows: list[dict], out_png: Path, y_key: str, ylabel: str) -> None:
-    import matplotlib.pyplot as plt
-    fig, ax = plt.subplots(figsize=(7, 4))
-    groups = dict.fromkeys((r.get("workload", "workload"), r["policy"]) for r in rows)
-    for workload, policy in groups:
-        part = [r for r in rows if r.get("workload", "workload") == workload and r["policy"] == policy]
-        label = policy if len({r.get("workload", "workload") for r in rows}) == 1 else f"{workload}/{policy}"
-        ax.scatter([r["target_frac"] for r in part], [r[y_key] for r in part], label=label, alpha=0.8)
-    ax.set(xlabel="target fraction", ylabel=ylabel)
-    ax.legend(fontsize=7)
-    fig.tight_layout()
-    fig.savefig(out_png)
-    plt.close(fig)
-
-
-def write_grid_summary(run_roots: list[Path], out_csv: Path, power_png: Path, delay_png: Path) -> list[dict]:
-    rows = [grid_summary_row(p) for p in run_roots]
-    out_csv.parent.mkdir(parents=True, exist_ok=True)
-    with out_csv.open("w", newline="") as f:
-        writer = csv.DictWriter(f, rows[0].keys())
-        writer.writeheader()
-        writer.writerows(rows)
-    _write_grid_plot(rows, power_png, "measured_source_drop_w", "measured source drop W")
-    _write_grid_plot(rows, delay_png, "total_completion_s", "total completion delay s")
-    return rows
-
-
-def _smart_jobs(root: Path, base: dict, profile: dict, policies: list[str], target_fracs: list[float],
-                deadline_scales: list[float], random_seeds: list[int], replay_concurrency: int,
-                kv_concurrency: int | None) -> list[tuple]:
-    allowed = {"greedy", "lp", "milp", "power-unaware", "random", "all-r", "all-s"}
-    if unknown := set(policies) - allowed:
-        raise ValueError(f"unknown policies: {sorted(unknown)}")
-    jobs = []
-    profiled = apply_live_profile(base, profile)
-    for frac in target_fracs:
-        reference = live_plan_summary(profiled, "greedy", deadline_s=1e9, target_frac=frac,
-                                      replay_concurrency=replay_concurrency,
-                                      kv_concurrency=kv_concurrency)["planned_completion_s"]
-        if not math.isfinite(reference) or reference <= 0:
-            raise ValueError(f"invalid profiled completion time {reference} for target {frac}")
-        for policy in policies:
-            variants = ((scale, seed) for scale in deadline_scales for seed in random_seeds)
-            for scale, seed in variants:
-                D = reference * scale
-                scenario = {"deadline_scale": scale, "reference_deadline_s": reference}
-                dst = root / grid_run_name(policy, D, frac, seed)
-                job_manifest = {**base, "source": {**base.get("source", {}), "seed": seed}, "scenario": scenario}
-                jobs.append((dst, job_manifest, policy, seed, D, frac))
-    return jobs
-
-
-def live_grid(cfg: b.Config, run_root: Path, manifest: dict | list[dict], policies: list[str], deadlines: list[float],
-              target_fracs: list[float], mbps: float, nvsmi_ms: int, baseline_s: float,
-              settle_s: float, seed: int, extra: list[str], profile_path: Path | None = None,
-              replay_concurrency: int = 1, kv_concurrency: int | None = None,
-              smart_sweep: bool = False, deadline_scales: list[float] | None = None,
-              random_seeds: list[int] | None = None, dest_load_budget_ell: float | None = None) -> Path:
-    manifests = manifest if isinstance(manifest, list) else [manifest]
-    multi = len(manifests) > 1
+def run_plan(plan_path: Path, run_root: Path, cfg: b.Config, allow_dirty: bool, extra: list[str]) -> None:
+    plan = json.loads(plan_path.read_text())
+    manifest_path = Path(plan["manifest"]["path"])
+    if file_hash(manifest_path) != plan["manifest"]["sha256"]:
+        raise RuntimeError("manifest hash changed after planning")
+    manifest = json.loads(manifest_path.read_text())
+    validate_plan(plan, manifest)
+    sha, dirty = git_state(allow_dirty)
+    metadata = {"schema": RUN_SCHEMA, "plan_sha256": file_hash(plan_path), "plan_object_sha256": object_hash(plan), "manifest_sha256": file_hash(manifest_path), "git_sha": sha, "dirty": dirty, "config": config_record(cfg), "extra_vllm_args": extra}
+    metadata_path = run_root / "run_metadata.json"
+    if metadata_path.exists() and json.loads(metadata_path.read_text()) != metadata:
+        raise RuntimeError("run metadata changed; resume requires the same code, plan, manifest, and settings")
     run_root.mkdir(parents=True, exist_ok=True)
-    run_roots, workloads = [], []
-    for one in manifests:
-        workload = _safe_name(manifest_workload(one))
-        root = run_root / workload if multi else run_root
-        base = {**one, "baseline_s": baseline_s, "settle_s": settle_s}
-        if dest_load_budget_ell is not None:
-            base["dest_load_budget_ell"] = dest_load_budget_ell
-        prof = root / "live_profile.json" if profile_path is None else profile_path.parent / f"{profile_path.stem}_{workload}{profile_path.suffix}" if multi else profile_path
-        workloads.append((root, base, prof, []))
-    stack = None
+    write_json(metadata_path, metadata)
+    write_json(run_root / "plan.json", plan)
+    failures, stack, attempt = [], None, 0
+
+    def start_stack(mbps: float):
+        nonlocal attempt
+        attempt += 1
+        debug = run_root / "debug" / f"testbed_{attempt}"
+        new_stack = b.start_stack(cfg, debug, mbps, extra)
+        b.start_sink(new_stack, cfg, extra)
+        return new_stack
+
     try:
-        if smart_sweep:
-            stack = b.start_stack(cfg, run_root / "stack", mbps, extra)
-            b.start_sink(stack, cfg, extra)
-            for i, (root, base, prof, _jobs) in enumerate(workloads):
-                profile, _ = ensure_live_profile(cfg, stack.run_root, prof, base, mbps)
-                workloads[i] = (root, base, prof, _smart_jobs(root, base, profile, policies, target_fracs,
-                                deadline_scales or [0.75, 1.0, 1.5], random_seeds or [0, 1, 2],
-                                replay_concurrency, kv_concurrency))
-        else:
-            workloads = [(root, base, prof, [(root / grid_run_name(policy, D, frac), base, policy, seed, D, frac)
-                         for policy in policies for D in deadlines for frac in target_fracs])
-                         for root, base, prof, _jobs in workloads]
-        plan = [{"workload": manifest_workload(base), "run_root": str(dst), "policy": policy,
-                 "seed": job_seed, "deadline_s": D, "target_frac": frac,
-                 **job_manifest.get("scenario", {})}
-                for _root, base, _prof, jobs in workloads
-                for dst, job_manifest, policy, job_seed, D, frac in jobs]
-        (run_root / "scenario_plan.json").write_text(json.dumps(plan, indent=2, sort_keys=True))
-        if stack is None and any(not (dst / "controller_manifest.json").exists()
-                                 for _root, _base, _prof, jobs in workloads
-                                 for dst, _manifest, _policy, _seed, _D, _frac in jobs):
-            stack = b.start_stack(cfg, run_root / "stack", mbps, extra)
-            b.start_sink(stack, cfg, extra)
-        for _root, _base, prof, jobs in workloads:
-            for dst, job_manifest, policy, job_seed, D, frac in jobs:
-                if not (dst / "controller_manifest.json").exists():
-                    live_drain(cfg, dst, job_manifest, mbps, nvsmi_ms, extra, policy, job_seed, D, frac, prof, replay_concurrency, kv_concurrency, stack)
-                run_roots.append(dst)
+        for scenario in plan["scenarios"]:
+            root = run_root / "scenarios" / scenario["scenario_id"]
+            if (root / "result.json").exists() and json.loads((root / "result.json").read_text()).get("status") == "complete":
+                continue
+            if stack is None:
+                stack = start_stack(scenario["bandwidth_mbps"])
+            for reset_attempt in range(2):
+                try:
+                    run_scenario(stack, cfg, manifest, scenario, root, metadata["plan_sha256"][:16])
+                    break
+                except ScenarioResetError:
+                    b.stop_stack(stack)
+                    stack = None
+                    if reset_attempt:
+                        raise
+                    stack = start_stack(scenario["bandwidth_mbps"])
+                except Exception as exc:
+                    failures.append(scenario["scenario_id"])
+                    write_json(root / "result.json", {"schema": RESULT_SCHEMA, "scenario_id": scenario["scenario_id"], "status": "failed", "error": f"{type(exc).__name__}: {exc}"})
+                    b.stop_stack(stack)
+                    stack = None
+                    break
     finally:
         if stack:
             b.stop_stack(stack)
-    write_grid_summary(run_roots, run_root / "scenario_summary.csv", run_root / "grid_power_drop.png", run_root / "grid_delay.png")
-    return run_root
+    if failures:
+        raise RuntimeError(f"failed scenarios: {', '.join(failures)}")
 
 
-def _csv_list(text: str, cast=str):
-    return [cast(x) for x in text.split(",") if x]
+def csv_value(value):
+    return json.dumps(value, separators=(",", ":")) if isinstance(value, (dict, list, tuple)) else value
+
+
+def write_csv(path: Path, rows: list[dict]) -> None:
+    fields = sorted({key for row in rows for key in row})
+    with path.open("w", newline="") as handle:
+        writer = csv.DictWriter(handle, fields)
+        writer.writeheader()
+        writer.writerows([{key: csv_value(value) for key, value in row.items()} for row in rows])
+
+
+def duration(start, end) -> float:
+    return (end - start) / 1e9 if start is not None and end is not None else 0.0
+
+
+def flatten_migration(scenario: dict, result: dict, row: dict) -> dict:
+    initial, catch_up = row.get("initial") or {}, row.get("catch_up") or {}
+    session = next(item for item in scenario["sessions"] if item["session_id"] == row["move"]["session_id"])
+    return {
+        "scenario_id": scenario["scenario_id"], "match_id": scenario["match_id"], "job_class": session.get("job_class", ""),
+        "session_id": row["move"]["session_id"], "method": row["move"]["method"], "order": row["move"]["order"],
+        "context_size": scenario["context_size"], "concurrency": scenario["concurrency"], "bandwidth_mbps": scenario["bandwidth_mbps"], "activity": scenario["activity"], "repeat": scenario["repeat"],
+        "success": not row.get("error"), "initial_copy_s": duration(row["initial_start_ns"], row["initial_end_ns"]),
+        "request_wait_s": duration(row["pause_start_ns"], row["idle_ns"]), "catch_up_s": duration(row.get("catch_up_start_ns"), row.get("catch_up_end_ns")),
+        "service_pause_s": duration(row["pause_start_ns"], row["switch_end_ns"]), "route_switch_s": duration(row["switch_start_ns"], row["switch_end_ns"]),
+        "processed_tokens": initial.get("processed_tokens", 0) + catch_up.get("processed_tokens", 0),
+        "logical_kv_chunks": initial.get("logical_kv_chunks", 0) + catch_up.get("logical_kv_chunks", 0),
+        "logical_kv_bytes": initial.get("logical_kv_bytes", 0) + catch_up.get("logical_kv_bytes", 0),
+        "initial_start_ns": row["initial_start_ns"], "initial_end_ns": row["initial_end_ns"], "pause_start_ns": row["pause_start_ns"], "idle_ns": row["idle_ns"], "catch_up_start_ns": row.get("catch_up_start_ns"), "catch_up_end_ns": row.get("catch_up_end_ns"), "switch_start_ns": row["switch_start_ns"], "switch_end_ns": row["switch_end_ns"],
+    }
+
+
+def summary(values: list[float], seed: int = 0) -> dict:
+    row = {"n": len(values), "median": statistics.median(values), "q25": quantile(values, .25), "q75": quantile(values, .75)}
+    if len(values) >= 20:
+        row["p95"] = quantile(values, .95)
+    if len(values) >= 10:
+        rng = random.Random(seed)
+        medians = [statistics.median(rng.choices(values, k=len(values))) for _ in range(1000)]
+        row.update({"median_ci_low": quantile(medians, .025), "median_ci_high": quantile(medians, .975)})
+    return row
+
+
+def plot_timeline(result: dict, path: Path) -> None:
+    import matplotlib.pyplot as plt
+    rows = result["migrations"]
+    fig, ax = plt.subplots(figsize=(10, max(2.5, .55 * len(rows))))
+    if rows:
+        base = min(row["queued_ns"] for row in rows)
+        colors = {"initial": "#4C78A8", "wait": "#F2CF5B", "catch": "#72B7B2", "switch": "#54A24B"}
+        for y, row in enumerate(rows):
+            spans = [(row["initial_start_ns"], row["initial_end_ns"], "initial"), (row["pause_start_ns"], row["idle_ns"], "wait"), (row.get("catch_up_start_ns"), row.get("catch_up_end_ns"), "catch"), (row["switch_start_ns"], row["switch_end_ns"], "switch")]
+            for start, end, label in spans:
+                if start is not None and end is not None:
+                    ax.barh(y, (end - start) / 1e9, left=(start - base) / 1e9, color=colors[label], label=label if y == 0 else None)
+            ax.barh(y, (row["switch_end_ns"] - row["pause_start_ns"]) / 1e9, left=(row["pause_start_ns"] - base) / 1e9, fill=False, edgecolor="red", linewidth=1.5)
+        ax.set_yticks(range(len(rows)), [row["move"]["session_id"] for row in rows])
+        for continuation in result.get("continuations", []):
+            ax.plot((continuation["start_ns"] - base) / 1e9, -.6, marker="|", color="black")
+    ax.set(xlabel="Seconds", ylabel="Session", title="Migration timeline")
+    if rows:
+        ax.legend(loc="best")
+    fig.tight_layout(); fig.savefig(path, dpi=180); plt.close(fig)
+
+
+def plot_resource(root: Path, result: dict) -> None:
+    import matplotlib.pyplot as plt
+    fig, axes = plt.subplots(3, 1, figsize=(10, 8), sharex=True)
+    proxy = b.proxy_rows(root / "proxy_bytes.csv")
+    if proxy:
+        base = min(int(row["monotonic_ns"]) for row in proxy)
+        for route in sorted({row["route"] for row in proxy}):
+            rows = [row for row in proxy if row["route"] == route and row["billed"] == "1"]
+            axes[0].step([(int(row["monotonic_ns"]) - base) / 1e9 for row in rows], [int(row["bytes"]) * 8 / int(row["interval_ns"]) * 1e3 for row in rows], where="post", label=route)
+        axes[0].legend(); axes[0].set_ylabel("Network (Mb/s)")
+    for method, color in (("replay", "#4C78A8"), ("kv_transfer", "#F58518")):
+        intervals = [(row["initial_start_ns"], row["switch_end_ns"]) for row in result["migrations"] if row["move"]["method"] == method]
+        if intervals:
+            points = sorted([(time_ns, delta) for start, end in intervals for time_ns, delta in ((start, 1), (end, -1))])
+            active, xs, ys = 0, [], []
+            base = min(start for start, _ in intervals)
+            for time_ns, delta in points:
+                active += delta; xs.append((time_ns - base) / 1e9); ys.append(active)
+            axes[1].step(xs, ys, where="post", label=method, color=color)
+    axes[1].legend(); axes[1].set_ylabel("Active moves")
+    power_path = root / "power.csv"
+    if power_path.exists():
+        power = list(csv.DictReader(power_path.open()))
+        if power:
+            base = min(int(row["monotonic_ns"]) for row in power)
+            for gpu in sorted({row["gpu"] for row in power}):
+                rows = [row for row in power if row["gpu"] == gpu and row["valid"] == "1"]
+                values = [float(row["power_w"]) for row in rows]
+                rolling = [statistics.median(values[max(0, index - 3):index + 1]) for index in range(len(values))]
+                axes[2].plot([(int(row["monotonic_ns"]) - base) / 1e9 for row in rows], values, alpha=.3)
+                axes[2].plot([(int(row["monotonic_ns"]) - base) / 1e9 for row in rows], rolling, label=f"GPU {gpu}")
+            axes[2].legend()
+    axes[2].set(xlabel="Seconds", ylabel="Power (W)")
+    fig.tight_layout(); fig.savefig(root / "resource_trace.png", dpi=180); plt.close(fig)
+
+
+def save_both(fig, base: Path) -> None:
+    fig.savefig(base.with_suffix(".png"), dpi=180)
+    fig.savefig(base.with_suffix(".pdf"))
+
+
+def cross_plots(root: Path, migrations: list[dict], scenarios: list[dict]) -> None:
+    import matplotlib.pyplot as plt
+    if not migrations:
+        return
+    methods, widths = sorted({row["method"] for row in migrations}), sorted({row["concurrency"] for row in migrations})
+    fig, axes = plt.subplots(len(widths), len(methods), figsize=(5 * len(methods), 3.5 * len(widths)), squeeze=False)
+    for i, width in enumerate(widths):
+        for j, method in enumerate(methods):
+            ax = axes[i][j]
+            rows = [row for row in migrations if row["concurrency"] == width and row["method"] == method]
+            xkey = "processed_tokens" if method == "replay" else "logical_kv_bytes"
+            for link in sorted({row["bandwidth_mbps"] for row in rows}):
+                data = [row for row in rows if row["bandwidth_mbps"] == link]
+                ax.scatter([row[xkey] for row in data], [row["initial_copy_s"] for row in data], alpha=.45, label=f"{link:g} Mb/s")
+                for size in sorted({row["context_size"] for row in data}):
+                    cell = [row for row in data if row["context_size"] == size]
+                    xs, ys = [row[xkey] for row in cell], [row["initial_copy_s"] for row in cell]
+                    ax.errorbar(statistics.median(xs), statistics.median(ys), yerr=[[statistics.median(ys) - quantile(ys, .25)], [quantile(ys, .75) - statistics.median(ys)]], fmt="o", color="black", capsize=3)
+            ax.set(title=f"{method}, concurrency {width}", xlabel=xkey.replace("_", " "), ylabel="Initial copy (s)"); ax.legend()
+    fig.tight_layout(); save_both(fig, root / "copy_time"); plt.close(fig)
+    fig, ax = plt.subplots(figsize=(6, 5))
+    groups: dict[tuple, list[dict]] = {}
+    for row in scenarios:
+        if row["kind"] == "migration" and row["status"] == "complete":
+            groups.setdefault((row["method"], row["context_size"], row["bandwidth_mbps"], row["activity"], row["repeat"], row["session_set"]), []).append(row)
+    for key, rows in groups.items():
+        by_width = {width: statistics.median([row["migration_time_s"] for row in rows if row["concurrency"] == width]) for width in {row["concurrency"] for row in rows}}
+        if 1 in by_width:
+            ax.plot(sorted(by_width), [by_width[1] / by_width[width] for width in sorted(by_width)], marker="o", alpha=.35)
+    limit = max(widths); ax.plot([1, limit], [1, limit], "k--", label="ideal"); ax.set(xlabel="Concurrency", ylabel="Speedup from concurrency 1", title="Concurrency scaling"); ax.legend()
+    fig.tight_layout(); save_both(fig, root / "concurrency_scaling"); plt.close(fig)
+    for link in sorted({row["bandwidth_mbps"] for row in migrations}):
+        fig, axes = plt.subplots(len(methods), 3, figsize=(13, 3.5 * len(methods)), squeeze=False)
+        for i, method in enumerate(methods):
+            rows = [row for row in migrations if row["method"] == method and row["bandwidth_mbps"] == link]
+            for j, (key, label) in enumerate((("catch_up_s", "Catch-up (s)"), ("service_pause_s", "Service pause (s)"))):
+                for active in sorted({row["activity"] for row in rows}):
+                    data = [row for row in rows if row["activity"] == active]
+                    axes[i][j].scatter([row["context_size"] for row in data], [row[key] for row in data], alpha=.4, label=active)
+                axes[i][j].set(xlabel="Trace context tokens", ylabel=label); axes[i][j].legend()
+            matched = [row for row in scenarios if row["method"] == method and row["bandwidth_mbps"] == link and row.get("continuation_difference_s") is not None]
+            axes[i][2].scatter([row["context_size"] for row in matched], [row["continuation_difference_s"] for row in matched], alpha=.4)
+            axes[i][2].set(xlabel="Trace context tokens", ylabel="Continuation difference (s)")
+        fig.tight_layout(); save_both(fig, root / f"service_effects_{link:g}mbps"); plt.close(fig)
+
+
+def reduce_run(run_root: Path) -> None:
+    metadata = json.loads((run_root / "run_metadata.json").read_text())
+    if metadata.get("schema") != RUN_SCHEMA:
+        raise ValueError("unsupported run schema")
+    plan = json.loads((run_root / "plan.json").read_text())
+    if object_hash(plan) != metadata.get("plan_object_sha256", object_hash(plan)):
+        raise RuntimeError("plan changed while reducing")
+    migrations, scenarios = [], []
+    results = {}
+    for scenario in plan["scenarios"]:
+        path = run_root / "scenarios" / scenario["scenario_id"] / "result.json"
+        if not path.exists():
+            raise RuntimeError(f"missing result for {scenario['scenario_id']}")
+        result = json.loads(path.read_text())
+        if result.get("schema") != RESULT_SCHEMA or result.get("scenario_id") != scenario["scenario_id"]:
+            raise ValueError(f"invalid result for {scenario['scenario_id']}")
+        results[scenario["scenario_id"]] = result
+        migration_rows = [flatten_migration(scenario, result, row) for row in result.get("migrations", [])]
+        migrations.extend(migration_rows)
+        continuation = [duration(row["start_ns"], row["first_byte_ns"]) for row in result.get("continuations", [])]
+        scenarios.append({**{key: scenario[key] for key in ("scenario_id", "match_id", "kind", "method", "context_size", "concurrency", "bandwidth_mbps", "activity", "repeat")}, "session_set": ",".join(item["session_id"] for item in scenario["sessions"]), "status": result["status"], "elapsed_s": result.get("elapsed_s"), "deadline_s": result.get("deadline_s"), "deadline_met": result.get("deadline_met"), "migration_time_s": max((row["switch_end_ns"] for row in result.get("migrations", [])), default=0) / 1e9 - min((row["initial_start_ns"] for row in result.get("migrations", [])), default=0) / 1e9, "continuation_ttft_s": statistics.median(continuation) if continuation else None, "wire_bytes": sum(result.get("wire_bytes", {}).values())})
+        if result["status"] == "complete":
+            plot_timeline(result, path.parent / "migration_timeline.png")
+            plot_resource(path.parent, result)
+    controls = {row["match_id"]: row for row in scenarios if row["kind"] == "control" and row["continuation_ttft_s"] is not None}
+    for row in scenarios:
+        control = controls.get(row["match_id"])
+        if row["kind"] == "migration" and control and row["continuation_ttft_s"] is not None:
+            row["continuation_difference_s"] = row["continuation_ttft_s"] - control["continuation_ttft_s"]
+    write_csv(run_root / "migrations.csv", migrations)
+    write_csv(run_root / "scenarios.csv", scenarios)
+    groups: dict[tuple, list[float]] = {}
+    for row in migrations:
+        key = tuple(row[name] for name in ("job_class", "method", "context_size", "concurrency", "bandwidth_mbps", "activity"))
+        groups.setdefault(key, []).append(row["initial_copy_s"])
+    benchmark = [{"job_class": key[0], "method": key[1], "context_size": key[2], "concurrency": key[3], "bandwidth_mbps": key[4], "activity": key[5], **summary(values, stable_seed(*key))} for key, values in sorted(groups.items())]
+    write_csv(run_root / "benchmark_summary.csv", benchmark)
+    cross_plots(run_root, migrations, scenarios)
+
+
+def csv_list(value: str, cast=str):
+    return [cast(item) for item in value.split(",") if item]
 
 
 def parse_args(argv: list[str] | None = None):
-    p = argparse.ArgumentParser(description="Queue-Haul Stage 1c controller proof")
-    sub = p.add_subparsers(dest="cmd", required=True)
-    sub.add_parser("fixture")
-    plan_p = sub.add_parser("plan")
-    plan_p.add_argument("--fixture", type=Path)
-    proof_p = sub.add_parser("proof")
-    b.add_common(proof_p)
-    proof_p.add_argument("--fixture", type=Path)
-    proof_p.add_argument("--run-root", type=Path, default=Path("queue-haul/runs/stage1c/proof"))
-    proof_p.add_argument("--mbps", type=float, default=1000.0)
-    proof_p.add_argument("extra_vllm_args", nargs=argparse.REMAINDER)
-    check_p = sub.add_parser("check")
-    check_p.add_argument("--run-root", type=Path, default=Path("queue-haul/runs/stage1c/proof"))
-    check_p.add_argument("--manifest", type=Path)
-    make_p = sub.add_parser("make-manifest")
-    make_p.add_argument("--source", choices=("tracelab",), required=True)
-    make_p.add_argument("--input", type=Path, required=True)
-    make_p.add_argument("--out", type=Path, required=True)
-    make_p.add_argument("--sessions", type=int, default=8)
-    make_p.add_argument("--seed", type=int, default=0)
-    make_p.add_argument("--max-model-len", type=int, default=32768)
-    make_p.add_argument("--decode-margin", type=int, default=512)
-    make_p.add_argument("--min-turns", type=int, default=3)
-    make_p.add_argument("--min-context-tokens", type=int, default=2048)
-    make_p.add_argument("--workload", choices=("mixed", "small", "large", "interactive_coding", "coding", "agentic_tool_loop"), default="mixed")
-    make_p.add_argument("--source-load-budget-ell", type=float, default=LIVE_A100_RHO_STAR)
-    live_p = sub.add_parser("live-drain")
-    b.add_common(live_p)
-    live_p.add_argument("--manifest", type=Path, required=True)
-    live_p.add_argument("--run-root", type=Path, default=Path("queue-haul/outputs/stage1c_live"))
-    live_p.add_argument("--mbps", type=float, default=1000.0)
-    live_p.add_argument("--nvsmi-ms", type=int, default=250)
-    live_p.add_argument("--policy", choices=("greedy", "lp", "milp", "power-unaware", "random", "all-r", "all-s"), default="greedy")
-    live_p.add_argument("--deadline-s", type=float)
-    live_p.add_argument("--target-frac", type=float)
-    live_p.add_argument("--seed", type=int, default=0)
-    live_p.add_argument("--profile", type=Path)
-    live_p.add_argument("--replay-concurrency", type=int, default=1)
-    live_p.add_argument("--kv-concurrency", type=int, default=2)
-    live_p.add_argument("--dest-load-budget-ell", type=float)
-    live_p.add_argument("extra_vllm_args", nargs=argparse.REMAINDER)
-    grid_p = sub.add_parser("live-grid")
-    b.add_common(grid_p)
-    grid_p.add_argument("--manifest", type=Path)
-    grid_p.add_argument("--manifests")
-    grid_p.add_argument("--run-root", type=Path, default=Path("queue-haul/outputs/stage1c_grid"))
-    grid_p.add_argument("--mbps", type=float, default=1000.0)
-    grid_p.add_argument("--nvsmi-ms", type=int, default=250)
-    grid_p.add_argument("--policies", default="greedy,lp,milp,power-unaware,random")
-    grid_p.add_argument("--deadlines", default="10,30,120")
-    grid_p.add_argument("--target-fracs", default="0.25,0.45,0.65")
-    grid_p.add_argument("--baseline-s", type=float, default=120.0)
-    grid_p.add_argument("--settle-s", type=float, default=120.0)
-    grid_p.add_argument("--seed", type=int, default=0)
-    grid_p.add_argument("--profile", type=Path)
-    grid_p.add_argument("--replay-concurrency", type=int, default=1)
-    grid_p.add_argument("--kv-concurrency", type=int, default=2)
-    grid_p.add_argument("--dest-load-budget-ell", type=float)
-    grid_p.add_argument("--smart-sweep", action="store_true")
-    grid_p.add_argument("--deadline-scales", default="0.75,1,1.5")
-    grid_p.add_argument("--random-seeds", default="0,1,2")
-    grid_p.add_argument("extra_vllm_args", nargs=argparse.REMAINDER)
-    check_live_p = sub.add_parser("check-live")
-    check_live_p.add_argument("--run-root", type=Path, default=Path("queue-haul/outputs/stage1c_live"))
-    check_live_p.add_argument("--manifest", type=Path)
-    plot_live_p = sub.add_parser("plot-live")
-    plot_live_p.add_argument("--run-root", type=Path, default=Path("queue-haul/outputs/stage1c_live"))
-    plot_live_p.add_argument("--manifest", type=Path)
-    plot_live_p.add_argument("--bucket-s", type=float, default=5.0)
-    return p.parse_args(argv)
+    parser = argparse.ArgumentParser(description="Profile live session migration")
+    sub = parser.add_subparsers(dest="command", required=True)
+    command = sub.add_parser("make-manifest")
+    command.add_argument("--input", type=Path, required=True); command.add_argument("--out", type=Path, required=True)
+    command.add_argument("--workload", required=True); command.add_argument("--sessions", type=int, required=True); command.add_argument("--seed", type=int, required=True)
+    command = sub.add_parser("make-plan")
+    command.add_argument("--manifest", type=Path, required=True); command.add_argument("--out", type=Path, required=True)
+    command.add_argument("--context-sizes", type=lambda value: csv_list(value, int), required=True)
+    command.add_argument("--concurrency", type=lambda value: csv_list(value, int), required=True)
+    command.add_argument("--bandwidth-mbps", type=lambda value: csv_list(value, float), required=True)
+    command.add_argument("--methods", type=lambda value: csv_list(value), default=list(METHODS))
+    command.add_argument("--activity", type=lambda value: csv_list(value), default=list(ACTIVITIES))
+    command.add_argument("--repeats", type=int, required=True); command.add_argument("--seed", type=int, required=True); command.add_argument("--deadline-s", type=float, default=300)
+    command = sub.add_parser("run")
+    command.add_argument("--plan", type=Path, required=True); command.add_argument("--run-root", type=Path, required=True); command.add_argument("--allow-dirty", action="store_true")
+    b.add_common(command); command.add_argument("extra_vllm_args", nargs=argparse.REMAINDER)
+    command = sub.add_parser("reduce"); command.add_argument("--run-root", type=Path, required=True)
+    return parser.parse_args(argv)
 
 
 def main(argv: list[str] | None = None) -> None:
     args = parse_args(argv)
-    if args.cmd == "fixture":
-        print(json.dumps(default_fixture(), indent=2, sort_keys=True))
-    elif args.cmd == "plan":
-        print(json.dumps(plan_summary(load_fixture(args.fixture)), indent=2, sort_keys=True))
-    elif args.cmd == "proof":
-        cfg = b.config_from_args(args)
+    if args.command == "make-manifest":
+        write_json(args.out, make_manifest(args.input, args.workload, args.sessions, args.seed))
+    elif args.command == "make-plan":
+        write_json(args.out, make_plan(args.manifest, args.context_sizes, args.concurrency, args.bandwidth_mbps, args.methods, args.activity, args.repeats, args.seed, args.deadline_s))
+    elif args.command == "run":
         extra = args.extra_vllm_args[1:] if args.extra_vllm_args[:1] == ["--"] else args.extra_vllm_args
-        print(proof(cfg, args.run_root, load_fixture(args.fixture), args.mbps, extra))
-    elif args.cmd == "check":
-        path = args.manifest or args.run_root / "controller_manifest.json"
-        check_manifest(json.loads(path.read_text()))
-        print(path)
-    elif args.cmd == "make-manifest":
-        manifest = tracelab_manifest(args.input, args.sessions, args.seed, args.max_model_len, args.decode_margin, args.min_turns, args.min_context_tokens, workload=args.workload, source_load_budget_ell=args.source_load_budget_ell)
-        args.out.parent.mkdir(parents=True, exist_ok=True)
-        args.out.write_text(json.dumps(manifest, indent=2, sort_keys=True))
-        print(args.out)
-    elif args.cmd == "live-drain":
-        cfg = b.config_from_args(args)
-        extra = args.extra_vllm_args[1:] if args.extra_vllm_args[:1] == ["--"] else args.extra_vllm_args
-        manifest = json.loads(args.manifest.read_text())
-        if args.dest_load_budget_ell is not None:
-            manifest["dest_load_budget_ell"] = args.dest_load_budget_ell
-        print(live_drain(cfg, args.run_root, manifest, args.mbps, args.nvsmi_ms, extra, args.policy, args.seed, args.deadline_s, args.target_frac, args.profile, args.replay_concurrency, args.kv_concurrency or None))
-    elif args.cmd == "live-grid":
-        cfg = b.config_from_args(args)
-        extra = args.extra_vllm_args[1:] if args.extra_vllm_args[:1] == ["--"] else args.extra_vllm_args
-        paths = [Path(x) for x in _csv_list(args.manifests)] if args.manifests else ([args.manifest] if args.manifest else [])
-        if not paths:
-            raise ValueError("live-grid requires --manifest or --manifests")
-        manifests = [json.loads(path.read_text()) for path in paths]
-        print(live_grid(cfg, args.run_root, manifests if len(manifests) > 1 else manifests[0], _csv_list(args.policies), _csv_list(args.deadlines, float), _csv_list(args.target_fracs, float), args.mbps, args.nvsmi_ms, args.baseline_s, args.settle_s, args.seed, extra, args.profile, args.replay_concurrency, args.kv_concurrency or None, args.smart_sweep, _csv_list(args.deadline_scales, float), _csv_list(args.random_seeds, int), args.dest_load_budget_ell))
-    elif args.cmd == "check-live":
-        path = args.manifest or args.run_root / "controller_manifest.json"
-        check_live_manifest(json.loads(path.read_text()), args.run_root)
-        print(path)
-    elif args.cmd == "plot-live":
-        path = args.manifest or args.run_root / "controller_manifest.json"
-        manifest = json.loads(path.read_text())
-        write_ell_power5s(args.run_root / "gpu_power.csv", manifest, args.run_root / "ell_power5s.csv", args.run_root / "ell_power5s.png", args.bucket_s)
-        write_request_counts(args.run_root / "events.jsonl", args.run_root / "request_counts.csv", manifest["windows"])
-        check_live_manifest(manifest, args.run_root)
-        print(args.run_root / "ell_power5s.png")
+        run_plan(args.plan, args.run_root, b.config_from_args(args), args.allow_dirty, extra)
+    else:
+        reduce_run(args.run_root)
 
 
 if __name__ == "__main__":

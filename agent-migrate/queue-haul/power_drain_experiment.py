@@ -18,15 +18,14 @@ from impact import Movement, compute
 from instance import _draw, _mean_T, class_workload
 from node_knee import evaluate_node_expected_w, node_loads, with_source_nodes
 from power import PoolPower
-from stage1c_controller import (
-    LIVE_A100_F_PREFILL_TPS,
-    LIVE_A100_G_DECODE_TPS,
-    LIVE_A100_LOG_SHAPE,
-    LIVE_A100_P_BUSY_W,
-    LIVE_A100_P_IDLE_W,
-    LIVE_A100_POWER_KNEE,
-    LIVE_A100_RHO_STAR,
-)
+
+LIVE_A100_P_IDLE_W = 67.12041959182154
+LIVE_A100_P_BUSY_W = 424.44649546305266
+LIVE_A100_POWER_KNEE = 2.0527780176849793
+LIVE_A100_RHO_STAR = 0.534657100938009
+LIVE_A100_F_PREFILL_TPS = 1448.319999999999
+LIVE_A100_G_DECODE_TPS = 1260.3799999999999
+LIVE_A100_LOG_SHAPE = 8.55
 
 WORKLOADS = {
     "interactive_coding": "ordinary_chat",
