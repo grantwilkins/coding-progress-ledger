@@ -154,7 +154,9 @@ declare power/deadline acceptance. Build a deterministic manifest from a pinned
 TraceLab JSONL or JSONL.gz file. Rows without usable timing or token counts are
 excluded, and manifest creation fails if too few eligible sessions remain. Timing
 (including nested events), token counts, turn boundaries, job class, and the source hash are retained. Message text is generated because
-the trace does not contain it. State probes allow reasoning models enough output
+the trace does not contain it. A drop in cumulative input tokens starts a new
+synthetic session segment, and plans reject prompts that exceed the model limit
+after reserving the state probe budget. State probes allow reasoning models enough output
 budget to emit the required code:
 
 ```bash

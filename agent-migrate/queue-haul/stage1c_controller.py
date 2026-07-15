@@ -28,6 +28,7 @@ ACTIVITIES = ("none", "one_turn")
 JOB_CLASSES = ("interactive_coding", "coding", "agentic_tool_loop")
 RESET_SUCCESS = "Successfully reset prefix cache"
 PROBE_MAX_TOKENS = 128
+MAX_MODEL_TOKENS = 32768
 
 
 def file_hash(path: Path) -> str:
@@ -121,7 +122,7 @@ def make_manifest(input_path: Path, workload: str, sessions: int, seed: int) -> 
             "turn_rate_hz": rate,
             "human_fraction": sum(bool(item[4].get("current_user_message_count")) for item in parsed) / len(parsed),
             "tool_fraction": sum(bool(item[4].get("tools")) for item in parsed) / len(parsed),
-            "turns": [{"time_s": item[0], "input_tokens": item[1], "append_tokens": item[2], "output_tokens": item[3]} for item in parsed],
+            "turns": [{"time_s": item[0], "input_tokens": item[1], "append_tokens": item[2], "output_tokens": item[3], "reset": index > 0 and item[1] < parsed[index - 1][1]} for index, item in enumerate(parsed)],
         })
     if not candidates:
         raise ValueError("trace has no usable sessions")
@@ -145,7 +146,7 @@ def make_manifest(input_path: Path, workload: str, sessions: int, seed: int) -> 
         "seed": seed,
         "workload": workload,
         "classification": {"turn_rate_q25_hz": q25, "turn_rate_q75_hz": q75},
-        "message_generator": "deterministic_trace_tokens_v1",
+        "message_generator": "deterministic_trace_tokens_v2",
         "sessions": selected,
     }
 
@@ -160,12 +161,19 @@ def session_messages(session: dict, turn_index: int) -> list[dict]:
         raise ValueError(f"invalid turn index for {session['id']}: {turn_index}")
     code = session["state_code"]
     messages = [{"role": "system", "content": f"Session state code {code}. Include {code} in every reply."}]
-    for index, turn in enumerate(turns[:turn_index + 1]):
-        user_tokens = turn["input_tokens"] if index == 0 else turn["append_tokens"]
+    start = max((index for index in range(turn_index + 1) if turns[index].get("reset")), default=0)
+    for index in range(start, turn_index + 1):
+        turn = turns[index]
+        user_tokens = turn["input_tokens"] if index == start else turn["append_tokens"]
         messages.append({"role": "user", "content": token_text(f"{session['id']} user turn {index}", user_tokens)})
         if index < turn_index:
             messages.append({"role": "assistant", "content": token_text(f"{code} assistant turn {index}", turn["output_tokens"])})
     return messages
+
+
+def estimated_prompt_tokens(session: dict, turn_index: int) -> int:
+    messages = session_messages(session, turn_index)
+    return sum(len(row["content"].split()) for row in messages) + 64 * len(messages) + PROBE_MAX_TOKENS
 
 
 def nearest_turn(session: dict, context_size: int) -> int:
@@ -221,7 +229,8 @@ def validate_plan(plan: dict, manifest: dict) -> None:
     if plan.get("schema") != PLAN_SCHEMA:
         raise ValueError("unsupported plan schema")
     validate_manifest(manifest)
-    ids = {row["id"] for row in manifest["sessions"]}
+    sessions = {row["id"]: row for row in manifest["sessions"]}
+    ids = set(sessions)
     scenario_ids = [row["scenario_id"] for row in plan.get("scenarios", [])]
     if not scenario_ids or len(set(scenario_ids)) != len(scenario_ids):
         raise ValueError("plan scenarios must be nonempty and unique")
@@ -233,6 +242,10 @@ def validate_plan(plan: dict, manifest: dict) -> None:
             raise ValueError(f"migration {scenario['scenario_id']} does not move every selected session")
         if len({row.get("method") for row in scenario["moves"]}) > 1:
             pass  # Hand-authored mixed plans are valid; generated profiles use one method.
+        for row in rows:
+            tokens = estimated_prompt_tokens(sessions[row["session_id"]], row["turn_index"])
+            if tokens > MAX_MODEL_TOKENS:
+                raise ValueError(f"scenario {scenario['scenario_id']} prompt estimate {tokens} exceeds {MAX_MODEL_TOKENS}")
 
 
 class EventLog:

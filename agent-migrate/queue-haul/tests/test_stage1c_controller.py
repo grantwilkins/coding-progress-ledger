@@ -49,6 +49,19 @@ def test_manifest_is_deterministic_and_uses_complete_trace_boundaries(tmp_path):
     assert session["state_code"] in messages[0]["content"]
 
 
+def test_context_drop_starts_a_new_synthetic_session_segment(tmp_path):
+    trace = tmp_path / "trace.jsonl"; write_trace(trace)
+    with trace.open("a") as handle:
+        for turn, total in enumerate((5000, 1000, 1500), 3):
+            handle.write(json.dumps({"session_id": "b", "timestamp": turn, "input_tokens_total": total, "newly_append_tokens": 500, "output_tokens": 16}) + "\n")
+    session = next(row for row in c.make_manifest(trace, "coding", 3, 7)["sessions"] if row["id"] == "b")
+
+    assert session["turns"][4]["reset"]
+    messages = c.session_messages(session, 5)
+    assert not any("turn 3" in row["content"] for row in messages)
+    assert any("turn 4" in row["content"] for row in messages)
+
+
 def test_plan_keeps_same_order_across_concurrency_and_adds_controls(tmp_path):
     trace, manifest_path = tmp_path / "trace.jsonl", tmp_path / "manifest.json"
     write_trace(trace); c.write_json(manifest_path, c.make_manifest(trace, "coding", 3, 1))
@@ -73,6 +86,13 @@ def test_plan_rejects_old_schema_and_too_few_sessions(tmp_path):
         c.make_plan(manifest_path, [1024], [3], [1000], ["replay"], ["none"], 1, 0)
     with pytest.raises(ValueError, match="workload must"):
         c.make_manifest(trace, "mixed", 2, 1)
+    manifest = c.make_manifest(trace, "coding", 2, 1)
+    for session in manifest["sessions"]:
+        session["turns"][0]["input_tokens"] = c.MAX_MODEL_TOKENS
+    c.write_json(manifest_path, manifest)
+    plan = c.make_plan(manifest_path, [1024], [1], [1000], ["replay"], ["none"], 1, 0)
+    with pytest.raises(ValueError, match="prompt estimate"):
+        c.validate_plan(plan, manifest)
 
 
 def test_summary_only_adds_tail_and_bootstrap_statistics_when_supported():
