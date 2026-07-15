@@ -63,8 +63,8 @@ def test_power_curve_is_concave_and_never_extrapolates(tmp_path):
 def test_rate_range_concurrency_and_kv_rounding_are_explicit(tmp_path):
     case = ModelProfile.load(write(tmp_path, profile())).case()
     assert case.prefill.rate(500.5, 1) == pytest.approx(75)
-    assert case.kv_transfer.blocks(11) == 2
-    assert case.kv_transfer.bytes(11) == 200
+    assert case.kv_transfer.blocks(11) == 3
+    assert case.kv_transfer.bytes(11) == 300
     with pytest.raises(ValueError, match="unsupported concurrency"):
         case.prefill.rate(10, 3)
     with pytest.raises(ValueError, match="outside"):

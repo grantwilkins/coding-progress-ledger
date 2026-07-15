@@ -16,7 +16,7 @@ import pytest
 
 from profiles import ModelProfile
 from simulate import (ExecutionScenario, NetworkLink, PlannedMove, PowerNode, ServingInstance,
-                      SimRequest, SimSession, execute, fair_link_rates)
+                      SimRequest, SimSession, execute, fair_link_rates, step_average)
 
 
 def model(tmp_path, switch=1, block_s=0, shutdown=2):
@@ -57,6 +57,12 @@ def test_fair_rates_redistribute_capacity_across_two_bottlenecks():
     assert rates == pytest.approx({0: 90, 1: 10, 2: 10})
     assert rates[0] + rates[1] == pytest.approx(100)
     assert rates[1] + rates[2] == pytest.approx(20)
+
+
+def test_deadline_power_is_an_exact_trailing_window_average():
+    points = ((0, 100, 0), (4, 20, 0))
+    assert step_average(points, 5, 5) == pytest.approx(84)
+    assert step_average(points, 5, 1) == pytest.approx(20)
 
 
 def test_parallel_transfer_and_power_credit_at_commit(tmp_path):

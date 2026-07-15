@@ -338,6 +338,21 @@ def fair_link_rates(paths: dict[int, tuple[str, ...]], links: dict[str, float]) 
     return rates
 
 
+def step_average(points, end_s: float, window_s: float, column: int = 1) -> float:
+    """Average a stepwise signal over [end_s - window_s, end_s]."""
+    start = end_s - window_s
+    if window_s <= 0 or not points or points[0][0] > start:
+        raise ValueError("power points must cover a positive averaging window")
+    area, value, cursor = 0.0, points[0][column], start
+    for point in points:
+        if point[0] <= start:
+            value = point[column]
+        elif point[0] <= end_s:
+            area += (point[0] - cursor) * value
+            cursor, value = point[0], point[column]
+    return (area + (end_s - cursor) * value) / window_s
+
+
 class ExecutionSimulator:
     def __init__(self, scenario: ExecutionScenario, profile: ModelProfile,
                  moves: tuple[PlannedMove, ...], case_id: str = "central"):
@@ -372,6 +387,8 @@ class ExecutionSimulator:
         self.request_runs: list[tuple[str, float, float, float, int, int]] = []
 
     def _validate(self):
+        if self.scenario.deadline_s < self.profile.power_window_s:
+            raise ValueError("deadline must cover the profile power window")
         if len(self.nodes) != len(self.scenario.nodes) or len(self.instances) != len(self.scenario.instances) \
                 or len(self.sessions) != len(self.scenario.sessions):
             raise ValueError("node, instance, and session ids must be unique")
@@ -591,6 +608,7 @@ class ExecutionSimulator:
         self.time = target
 
     def run(self) -> ExecutionResult:
+        self._record_power()
         self.time = self.scenario.solver_s
         self._event("plan_ready")
         for session in self.sessions.values():
@@ -637,9 +655,8 @@ class ExecutionSimulator:
                 s.idle, s.catch_start, s.catch_ready, s.switch, s.committed,
             ) for s in self.states if s.committed
         )
-        at_deadline = next(
-            (point[1] for point in reversed(self.power) if point[0] <= self.scenario.deadline_s),
-            self.power[0][1],
+        at_deadline = step_average(
+            self.power, self.scenario.deadline_s, self.profile.power_window_s
         )
         makespan = max((s.committed_s for s in completed), default=self.scenario.solver_s)
         return ExecutionResult(

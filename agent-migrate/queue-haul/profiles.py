@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import math
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -109,7 +110,7 @@ class KVTransfer:
         return value
 
     def blocks(self, tokens: int) -> int:
-        return max(0, int(tokens) // self.block_tokens)
+        return max(0, math.ceil(int(tokens) / self.block_tokens))
 
     def bytes(self, tokens: int) -> int:
         return self.blocks(tokens) * self.block_bytes
