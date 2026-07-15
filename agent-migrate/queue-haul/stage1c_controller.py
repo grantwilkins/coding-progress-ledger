@@ -27,7 +27,7 @@ METHODS = ("replay", "kv_transfer")
 ACTIVITIES = ("none", "one_turn")
 JOB_CLASSES = ("interactive_coding", "coding", "agentic_tool_loop")
 RESET_SUCCESS = "Successfully reset prefix cache"
-PROBE_MAX_TOKENS = 128
+PROBE_MAX_TOKENS = 256
 MAX_MODEL_TOKENS = 32768
 
 
