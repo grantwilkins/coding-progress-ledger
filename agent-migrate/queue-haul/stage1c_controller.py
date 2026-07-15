@@ -377,7 +377,7 @@ class LiveSession:
         try:
             with self.lock:
                 base = list(self.messages)
-            user = {"role": "user", "content": f"Controlled turn for {self.state_code}. Return the code."}
+            user = {"role": "user", "content": f"Controlled turn: reply only with session state code {self.state_code}."}
             result, text = self.request(self.cfg.src_port, base, "controlled_turn", user["content"])
             with self.lock:
                 self.messages = base + [user, {"role": "assistant", "content": text}]
@@ -400,7 +400,7 @@ class LiveSession:
             if self.paused:
                 raise RuntimeError(f"session {self.session_id} is paused")
             messages, port, generation = list(self.messages), self.route, self.generation
-        user = {"role": "user", "content": f"Continuation for {self.state_code}. Return the code."}
+        user = {"role": "user", "content": f"Continuation: reply only with session state code {self.state_code}."}
         result, text = self.request(port, messages, "continuation", user["content"])
         with self.lock:
             if generation != self.generation:
