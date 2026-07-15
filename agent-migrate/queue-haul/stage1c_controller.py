@@ -103,11 +103,12 @@ def make_manifest(input_path: Path, workload: str, sessions: int, seed: int) -> 
     candidates = []
     for session_id, rows in sorted(groups.items()):
         parsed = []
-        for row in sorted(rows, key=trace_time):
+        for row in rows:
             try:
                 parsed.append((trace_time(row), *trace_tokens(row), row))
             except ValueError:
                 continue
+        parsed.sort(key=lambda item: item[0])
         if not parsed:
             continue
         span = parsed[-1][0] - parsed[0][0]

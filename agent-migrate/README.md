@@ -143,7 +143,9 @@ $PY queue-haul/stage1b_drain_sink.py smoke2-live --mbps 1000 --run-root /tmp/qh-
 
 Stage 1c profiles migration mechanisms; it does not choose a power policy or
 declare power/deadline acceptance. Build a deterministic manifest from a pinned
-TraceLab JSONL or JSONL.gz file. Trace timing, token counts, turn boundaries,
+TraceLab JSONL or JSONL.gz file. Rows without usable timing or token counts are
+excluded, and manifest creation fails if too few eligible sessions remain. Trace timing, token counts,
+turn boundaries,
 job class, and the source hash are retained. Message text is generated because
 the trace does not contain it:
 

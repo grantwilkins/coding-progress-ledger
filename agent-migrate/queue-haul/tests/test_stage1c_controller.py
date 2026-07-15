@@ -26,6 +26,7 @@ def write_trace(path: Path) -> None:
     for session, base, tools, human in (("a", 1024, [], 0), ("b", 2048, [], 0), ("c", 4096, [], 0)):
         for turn in range(3):
             rows.append({"session_id": session, "timestamp": turn * (100 if session == "a" else 1), "input_tokens_total": base + 256 * turn, "prefix_tokens": base, "newly_append_tokens": 256, "output_tokens": 16, "tools": tools, "current_user_message_count": human})
+    rows.append({"session_id": "a"})
     path.write_text("".join(json.dumps(row) + "\n" for row in rows))
 
 
