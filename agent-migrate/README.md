@@ -138,7 +138,8 @@ The pinned LMCache 0.3.3 connector is patched at process startup to read exact
 metadata lengths, serialize complete socket transactions, and reconnect after
 protocol errors before retrying once. This is a correctness baseline, not a
 parallel KV connection pool. KV accounting includes the partial final chunk and
-requires every prompt token to hit. Semantic probes append one deterministic
+requires every initially staged prompt token to hit; catch-up replays only its
+unstaged final partial chunk. Semantic probes append one deterministic
 final instruction. On a two-GPU A100 node, check the pinned vLLM `0.10.1.1`
 and LMCache `0.3.3` setup:
 

@@ -319,6 +319,12 @@ def kv_metrics(hit: int, layout: dict) -> tuple[int, int]:
     return (hit + tokens - 1) // tokens, hit * layout["chunk_bytes"] // tokens
 
 
+def expected_hits(method: str, phase: str, total: int) -> int:
+    if method != "kv_transfer":
+        return 0
+    return total if phase == "initial" else total // 256 * 256
+
+
 def lookup_tokens(path: Path, request_id: str) -> tuple[int, int]:
     import re
     pattern = re.compile(r"Reqid:\s*([^,]+),\s*Total tokens\s*(\d+),\s*LMCache hit tokens:\s*(\d+)")
@@ -429,7 +435,7 @@ class LiveRuntime:
         self.event_log.write("copy_start", move_id=move.order, session_id=move.session_id, method=move.method, phase=phase)
         result, _text = session.request(self.cfg.api_proxy_port, list(state.messages), f"{move.method}_{phase}")
         total, hit = lookup_tokens(self.sink_log, result.request_id)
-        expected = total if move.method == "kv_transfer" else 0
+        expected = expected_hits(move.method, phase, total)
         if hit != expected:
             raise RuntimeError(f"{move.method} request {result.request_id} hit {hit} tokens, expected {expected}")
         layout = kv_layout(self.cache_log, result.end_ns)
