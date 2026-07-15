@@ -434,6 +434,7 @@ class ExecutionSimulator:
         self.sequence = 0
         self.flows: dict[int, _Flow] = {}
         self.next_flow = 0
+        self.flow_version = 0
         self.states = [_MoveState(m) for m in self.moves]
         self.move_index = {state.move.session_id: i for i, state in enumerate(self.states)}
         self.by_source: dict[str, list[int]] = {}
@@ -449,13 +450,10 @@ class ExecutionSimulator:
         self.serving_waiting: dict[str, deque[tuple[str, int, float]]] = {}
         self.quiescing = set()
         self.paused = set()
-        self.moved = set()
-        self.route = {s.session_id: s.source_instance for s in scenario.sessions}
         self.power_model = ExpectedPower(scenario, profile, case_id)
         self.node_state = {n.node_id: "awake" for n in scenario.nodes}
         self.active_actions: dict[object, tuple[str, bool]] = {}
         self.action_power = {True: 0.0, False: 0.0}
-        self.node_actions: dict[str, str] = {}
         self.deferred = set()
         self.waking = set()
         self.pending_requests: dict[str, tuple[int, float]] = {}
@@ -586,6 +584,7 @@ class ExecutionSimulator:
             )
             self.next_flow += 1
             self.flows[flow.flow_id] = flow
+            self.flow_version += 1
             self._event("network_start", state.move.session_id, detail=f"{phase}:{byte_count}")
         else:
             self._endpoint(index, phase, detail)
@@ -681,8 +680,6 @@ class ExecutionSimulator:
         state, session_id = self.states[index], self.states[index].move.session_id
         state.committed = self.time
         self.power_model.move(session_id, state.move.destination_instance)
-        self.route[session_id] = state.move.destination_instance
-        self.moved.add(session_id)
         self.quiescing.discard(session_id)
         self.paused.discard(session_id)
         if state.move.method == "replay_on_request":
@@ -698,11 +695,10 @@ class ExecutionSimulator:
             if self.node_state[node_id] != "awake":
                 continue
             dependents = self.power_model.dependents[node_id]
-            if dependents <= self.moved and self.scenario.final_state != "awake":
+            if dependents <= self.power_model.removed and self.scenario.final_state != "awake":
                 # TODO(transition-power): replace the step change with a measured trace shape.
                 duration = self.case.sleep_s if self.scenario.final_state == "sleep" else self.case.shutdown_s
                 self.node_state[node_id] = "transition"
-                self.node_actions[node_id] = self.scenario.final_state
                 self._start_action(("node", node_id), self.scenario.final_state, node=node_id)
                 self._event(f"{self.scenario.final_state}_start", node=node_id)
                 self._schedule(self.time + duration, "node_state", node_id)
@@ -726,7 +722,7 @@ class ExecutionSimulator:
                 self._prepare(index, "wake")
             return
         request = session.requests[request_index]
-        instance = self.route[session_id]
+        instance = self.power_model.route[session_id]
         if instance in self.serving_active:
             self.serving_waiting.setdefault(instance, deque()).append(
                 (session_id, request_index, arrival_s)
@@ -780,8 +776,11 @@ class ExecutionSimulator:
         for source in self.by_source:
             self._start_available(source)
         self._record_power()
+        rates, rate_version = {}, -1
         while (self.heap or self.flows) and self.time <= self.scenario.end_s:
-            rates = fair_link_rates({i: f.path for i, f in self.flows.items()}, self.links)
+            if rate_version != self.flow_version:
+                rates = fair_link_rates({i: f.path for i, f in self.flows.items()}, self.links)
+                rate_version = self.flow_version
             flow_time = min(
                 (self.time + flow.remaining / rates[i] for i, flow in self.flows.items()),
                 default=np.inf,
@@ -801,6 +800,7 @@ class ExecutionSimulator:
                     ))
                     self._event("network_done", state.move.session_id, detail=flow.phase)
                     self._endpoint(flow.move_index, flow.phase)
+                self.flow_version += 1
             else:
                 while self.heap and self.heap[0][0] <= self.time + 1e-12:
                     _, _, kind, payload = heapq.heappop(self.heap)
@@ -819,7 +819,6 @@ class ExecutionSimulator:
                     elif kind == "node_state":
                         self.node_state[payload] = self.scenario.final_state
                         self.power_model.set_state(payload, self.scenario.final_state)
-                        self.node_actions.pop(payload)
                         self._stop_action(("node", payload))
                         self._event(f"{self.scenario.final_state}_done", node=payload)
                     else:

@@ -6,7 +6,7 @@ requests, and keep destination placement separate from selection.
 Plausible wrong implementations:
 - Give a planner sampled request times that are unavailable when it acts.
 - Treat source and destination power as one shared budget.
-- Round fractional sessions or stop halfway through a node-drain group.
+- Stop halfway through a node-drain group.
 - Place every selected session on the first destination.
 """
 
@@ -68,13 +68,6 @@ def test_node_drain_counts_sleep_only_after_the_whole_node_is_selected(tmp_path)
     result = plan(shared, model(tmp_path, tp=1), PATHS, "node_drain")
     assert {move.session_id for move in result.moves} == {"a", "b"}
     assert result.feasible
-
-
-def test_rounded_lp_returns_only_whole_moves(tmp_path):
-    result = plan(problem(), model(tmp_path, tp=1), PATHS, "rounded_lp")
-    assert result.moves
-    assert len({move.session_id for move in result.moves}) == len(result.moves)
-    assert all(isinstance(move.order, int) for move in result.moves)
 
 
 def test_random_skips_sessions_that_cannot_finish_by_the_deadline(tmp_path):

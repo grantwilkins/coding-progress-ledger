@@ -7,7 +7,6 @@ import heapq
 from time import perf_counter
 from typing import Callable
 
-import cvxpy as cp
 import numpy as np
 
 from profiles import ModelProfile, ProfileCase
@@ -16,7 +15,7 @@ from simulate import ExecutionScenario, MoveMethod, PlannedMove, SimSession, exe
 
 
 METHODS: tuple[MoveMethod, ...] = ("replay", "kv_transfer", "replay_on_request")
-SOLVERS = ("random", "load_only", "node_aware", "node_drain", "rounded_lp")
+SOLVERS = ("random", "load_only", "node_aware", "node_drain")
 Routes = dict[tuple[str, str], tuple[str, ...]] | Callable[[str, str], tuple[str, ...]]
 
 
@@ -28,7 +27,6 @@ class PlanResult:
     planned_source_power_w: float
     feasible: bool
     solve_s: float
-    fractional_variables: int
     profile_id: str
     profile_case: str
     seed: int
@@ -85,17 +83,20 @@ def _local_sessions(scenario: ExecutionScenario) -> list[SimSession]:
 
 def _drain_groups(scenario: ExecutionScenario, sessions: list[SimSession]) -> list[list[int]]:
     instances = {i.instance_id: set(i.gpu_nodes) for i in scenario.instances}
+    by_node: dict[str, set[int]] = {}
+    for j, session in enumerate(sessions):
+        for node in instances[session.source_instance]:
+            by_node.setdefault(node, set()).add(j)
     remaining = set(range(len(sessions)))
     groups = []
     while remaining:
-        group, nodes, changed = set(), set(), True
-        group.add(remaining.pop())
-        while changed:
-            nodes |= set().union(*(instances[sessions[j].source_instance] for j in group))
-            add = {j for j in remaining if instances[sessions[j].source_instance] & nodes}
-            changed = bool(add)
-            group |= add
-            remaining -= add
+        group, pending = set(), [remaining.pop()]
+        while pending:
+            j = pending.pop()
+            group.add(j)
+            linked = set().union(*(by_node[node] for node in instances[sessions[j].source_instance]))
+            pending.extend(linked & remaining)
+            remaining -= linked
         groups.append(sorted(group))
     return groups
 
@@ -152,7 +153,7 @@ def plan(scenario: ExecutionScenario, profile: ModelProfile,
     power_state = ExpectedPower(scenario, profile, case_id)
     initial = power_state.power(True)
     if initial <= scenario.power_limit_w:
-        return PlanResult(solver, (), initial, initial, True, perf_counter() - start, 0,
+        return PlanResult(solver, (), initial, initial, True, perf_counter() - start,
                           profile.profile_id, case_id, seed)
     horizon = scenario.deadline_s - scenario.controller_delay_s
     valid = np.zeros((len(sessions), len(METHODS)), bool)
@@ -174,7 +175,7 @@ def plan(scenario: ExecutionScenario, profile: ModelProfile,
         bonus = power_state.drain_gain(ids) - base_gain[group].sum()
         weight = np.array([_ell(sessions[j], case) for j in group])
         gains[group] += bonus * weight / weight.sum()
-    rng, fractional = np.random.default_rng(seed), np.zeros_like(costs)
+    rng = np.random.default_rng(seed)
     if solver == "random":
         order = list(rng.permutation(np.flatnonzero(available)))
         methods = [METHODS[int(rng.choice(np.flatnonzero(valid[j])))] if available[j]
@@ -191,22 +192,6 @@ def plan(scenario: ExecutionScenario, profile: ModelProfile,
         groups.sort(key=lambda group: best_cost[group].sum() / max(gains[group].sum(), 1e-12))
         order = [j for group in groups for j in sorted(group, key=lambda j: best_cost[j])]
         methods = [METHODS[k] for k in best_method]
-    else:
-        x = cp.Variable(costs.shape, nonneg=True)
-        objective_cost = np.where(valid, costs, 0.0)
-        problem = cp.Problem(cp.Minimize(cp.sum(cp.multiply(objective_cost, x))), [
-            x <= valid, cp.sum(x, axis=1) <= 1,
-            gains @ cp.sum(x, axis=1) >= initial - scenario.power_limit_w,
-        ])
-        problem.solve(solver=cp.SCIPY)
-        if problem.status not in {"optimal", "optimal_inaccurate"}:
-            fractional[:, :] = valid * np.eye(len(METHODS))[best_method]
-        else:
-            fractional = np.asarray(x.value)
-        mass = fractional.sum(1)
-        order = list(np.lexsort((best_cost / np.maximum(gains, 1e-12), -mass)))
-        methods = [METHODS[int(np.argmax(fractional[j]))] if mass[j] > 1e-9
-                   else METHODS[best_method[j]] for j in range(len(sessions))]
     selected = []
     if solver == "node_drain":
         ordered_groups = [[j for j in order if j in group] for group in groups]
@@ -237,6 +222,5 @@ def plan(scenario: ExecutionScenario, profile: ModelProfile,
     )
     return PlanResult(
         solver, moves, initial, planned, feasible,
-        perf_counter() - start, int(((fractional > 1e-9) & (fractional < 1 - 1e-9)).sum()),
-        profile.profile_id, case_id, seed,
+        perf_counter() - start, profile.profile_id, case_id, seed,
     )

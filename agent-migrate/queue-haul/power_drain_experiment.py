@@ -214,7 +214,6 @@ def _summary(run: ExperimentRun) -> dict:
         "end_s": scenario.end_s, "controller_delay_s": scenario.controller_delay_s,
         "solve_s": run.plan.solve_s,
         "planned_moves": len(run.plan.moves), "plan_feasible": run.plan.feasible,
-        "fractional_variables": run.plan.fractional_variables,
         "planned_source_power_w": run.plan.planned_source_power_w,
         "source_power_at_deadline_w": result.source_power_at_deadline_w,
         "power_met": result.deadline_met, "moves_committed_by_deadline": resumed,
