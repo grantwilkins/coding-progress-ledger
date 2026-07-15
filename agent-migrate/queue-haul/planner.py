@@ -125,7 +125,10 @@ def _place(selected: list[int], sessions: list[SimSession], scenario: ExecutionS
         path = _route(routes, session.source_instance, destination)
         load[destination] += ell
         heapq.heappush(heap, (load[destination] / size, destination))
-        moves.append(PlannedMove(session.session_id, destination, methods[j], order, path))
+        # TODO(external-path): replace the destination-ingress assumption with measured topology.
+        moves.append(PlannedMove(
+            session.session_id, destination, methods[j], order, path, path[-1:]
+        ))
     return tuple(moves)
 
 
