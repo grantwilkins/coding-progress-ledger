@@ -223,10 +223,12 @@ class SimSession:
     log_external: bool = True
     requests: tuple[SimRequest, ...] = ()
     movable: bool = True
+    wake_probability: float = 0.0
 
     def __post_init__(self):
         if not self.session_id or not self.source_instance or self.context_tokens < 1 \
-                or min(self.expected_f, self.expected_g) < 0 or self.log_bytes < 1:
+                or min(self.expected_f, self.expected_g) < 0 or self.log_bytes < 1 \
+                or not 0 <= self.wake_probability <= 1:
             raise ValueError("invalid session")
 
 
