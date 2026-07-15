@@ -47,18 +47,16 @@ def test_fragmented_metadata_and_concurrent_operations_are_serialized(calls):
     asyncio.run(run())
 
 
-def test_protocol_eof_recovers_connection_for_the_next_operation():
+def test_protocol_eof_reconnects_and_retries_the_operation():
     async def run():
-        sockets = [FragmentedSocket({b"bad": b"x"}), FragmentedSocket({b"ok": b"YES"})]
+        sockets = [FragmentedSocket({b"get": b"x"}), FragmentedSocket({b"get": b"YES"})]
         current = 0
 
         def recover():
             nonlocal current
             current += 1
 
-        with pytest.raises(ConnectionError, match="missing"):
-            await transaction(asyncio.Lock(), lambda: sockets[current], recover, b"bad", 3, bytes)
-        assert await transaction(asyncio.Lock(), lambda: sockets[current], recover, b"ok", 3, bytes) == b"YES"
+        assert await transaction(asyncio.Lock(), lambda: sockets[current], recover, b"get", 3, bytes) == b"YES"
         assert current == 1
 
     asyncio.run(run())

@@ -16,13 +16,15 @@ def recv_exact(sock, size: int) -> bytes:
 
 async def transaction(lock, socket_getter, recover, request: bytes, header_size: int, parse, receive=lambda meta: meta):
     async with lock:
-        try:
-            sock = socket_getter()
-            sock.sendall(request)
-            return receive(parse(recv_exact(sock, header_size)))
-        except Exception:
-            recover()
-            raise
+        for attempt in range(2):
+            try:
+                sock = socket_getter()
+                sock.sendall(request)
+                return receive(parse(recv_exact(sock, header_size)))
+            except Exception:
+                recover()
+                if attempt:
+                    raise
 
 
 def patch_lmcache() -> None:
