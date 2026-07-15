@@ -143,34 +143,180 @@ def write(out: Path) -> None:
         writer.writeheader()
         writer.writerows(rows)
 
-    fig, axes = plt.subplots(2, 1, figsize=(7, 6), sharex=True)
+    background = "#FAFAF7"
+    copy_color, switch_color, power_color = "#2F80ED", "#F2C94C", "#176B52"
+    fig = plt.figure(figsize=(11, 6), facecolor=background)
+    grid = fig.add_gridspec(
+        2,
+        2,
+        left=0.08,
+        right=0.96,
+        top=0.82,
+        bottom=0.12,
+        width_ratios=(2.3, 1),
+        hspace=0.38,
+        wspace=0.28,
+    )
+    axes = (fig.add_subplot(grid[0, 0]), fig.add_subplot(grid[1, 0]))
+    sessions = {row.session_id: row for row in result.sessions}
     for y, row in enumerate(result.network):
-        axes[0].barh(y, row.end_s - row.start_s, left=row.start_s, height=0.5)
-        axes[0].scatter(row.end_s, y, color="black", zorder=3)
-    axes[0].axvline(2, color="black", linestyle="--", label="expected completion")
+        session = sessions[row.session_id]
+        axes[0].barh(
+            y,
+            row.end_s - row.start_s,
+            left=row.start_s,
+            height=0.55,
+            color=copy_color,
+        )
+        axes[0].barh(
+            y,
+            session.committed_s - session.switch_s,
+            left=session.switch_s,
+            height=0.55,
+            color=switch_color,
+        )
+        axes[0].scatter(
+            session.committed_s,
+            y,
+            marker=">",
+            s=90,
+            color=power_color,
+            zorder=3,
+        )
+        if y == 1:
+            axes[0].text(1, y, "Copy cache", ha="center", va="center", color="white")
+            axes[0].text(2.5, y, "Switch route", ha="center", va="center")
+            axes[0].text(
+                3.15, y, "Ready at destination", va="center", color=power_color
+            )
+    axes[0].axvline(2, color=copy_color, linestyle=":", linewidth=1.5)
     axes[0].set(
         yticks=range(2),
-        yticklabels=["session 0", "session 1"],
-        ylabel="session",
-        title="Two 100 B transfers share one 100 B/s link",
+        yticklabels=["Session A", "Session B"],
+        ylabel="",
+        title="1. Copy together, then switch",
+        xlim=(0, 5),
     )
-    axes[0].legend()
 
     time = [point[0] for point in result.power]
     power = [point[1] for point in result.power]
-    axes[1].step(time, power, where="post", linewidth=2, label="simulated")
     axes[1].step(
-        [0, 3, 5], [30, 10, 10], where="post", linestyle="--", label="hand calculation"
+        [0, 3, 5],
+        [30, 10, 10],
+        where="post",
+        color="#CBD2D9",
+        linewidth=7,
+        label="Calculated",
     )
-    axes[1].axvline(3, color="black", linestyle=":", label="commit")
-    axes[1].set(xlabel="time (s)", ylabel="modeled source power (W)")
-    axes[1].legend()
+    axes[1].step(
+        time,
+        power,
+        where="post",
+        color=power_color,
+        linewidth=3,
+        label="Simulator",
+    )
+    axes[1].fill_between([3, 5], 10, 30, color="#D8F3DC", alpha=0.7)
+    axes[1].axvline(3, color=power_color, linestyle=":", linewidth=1.5)
+    axes[1].annotate(
+        "Both routes switched\n20 W lower",
+        xy=(3, 10),
+        xytext=(3.35, 19),
+        arrowprops={"arrowstyle": "->", "color": power_color},
+        color=power_color,
+        fontweight="bold",
+    )
+    axes[1].set(
+        xlabel="Time (seconds)",
+        ylabel="Source power in simulation (W)",
+        title="2. Source power falls only after both moves finish",
+        xlim=(0, 5),
+        ylim=(8, 32),
+    )
+    axes[1].legend(frameon=False, ncol=2, loc="upper right")
     for ax in axes:
-        ax.grid(alpha=0.25)
-    fig.suptitle("Simulator validation: shared link and commit-gated power")
-    fig.tight_layout()
-    fig.savefig(out / "simulator_validation.png", dpi=180)
-    fig.savefig(out / "simulator_validation.pdf")
+        ax.set_facecolor(background)
+        ax.grid(axis="x", alpha=0.2)
+        ax.spines[["top", "right"]].set_visible(False)
+
+    checks = fig.add_subplot(grid[:, 1])
+    checks.set_facecolor("#F1F5F3")
+    checks.set_xticks([])
+    checks.set_yticks([])
+    for side in checks.spines.values():
+        side.set_visible(False)
+    checks.text(
+        0.08, 0.92, "EXACT CHECK", fontsize=11, color="#667085", fontweight="bold"
+    )
+    checks.text(
+        0.08,
+        0.82,
+        "Copy both sessions",
+        fontsize=13,
+        fontweight="bold",
+        color="#1F2937",
+    )
+    checks.text(0.08, 0.72, "2 × 100 B ÷ 100 B/s = 2 s", fontsize=11, color="#475467")
+    checks.text(
+        0.08,
+        0.60,
+        "Switch both routes",
+        fontsize=13,
+        fontweight="bold",
+        color="#1F2937",
+    )
+    checks.text(0.08, 0.50, "2 s + 1 s = 3 s", fontsize=11, color="#475467")
+    checks.text(
+        0.08,
+        0.38,
+        "Lower source power",
+        fontsize=13,
+        fontweight="bold",
+        color="#1F2937",
+    )
+    checks.text(0.08, 0.28, "30 W → 10 W at 3 s", fontsize=11, color="#475467")
+    checks.text(
+        0.08,
+        0.13,
+        "✓  Simulator matches",
+        fontsize=12,
+        color=power_color,
+        fontweight="bold",
+    )
+    checks.text(
+        0.16,
+        0.08,
+        "every checked value",
+        fontsize=12,
+        color=power_color,
+        fontweight="bold",
+    )
+
+    fig.suptitle(
+        "Two sessions move together, then source power falls",
+        x=0.08,
+        y=0.96,
+        ha="left",
+        fontsize=20,
+        fontweight="bold",
+        color="#172B4D",
+    )
+    fig.text(
+        0.08,
+        0.89,
+        "Exact simulator check using calculated values — not hardware measurements",
+        fontsize=11,
+        color="#667085",
+    )
+    fig.savefig(
+        out / "simulator_validation.png",
+        dpi=180,
+        facecolor=background,
+        transparent=False,
+    )
+    fig.savefig(
+        out / "simulator_validation.pdf", facecolor=background, transparent=False
+    )
     plt.close(fig)
 
 

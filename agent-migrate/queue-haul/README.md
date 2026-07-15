@@ -23,6 +23,7 @@ uv run python queue-haul/plot_simulator_validation.py
 The earlier additive model is frozen in `_archive/queue-haul-additive-v0`.
 
 `outputs/simulator_validation.{csv,png,pdf}` compares a two-session simulation
-with exact shared-link, commit-time, and source-power calculations. It validates
-equal link sharing and commit-time power accounting, not A100 calibration.
-Generation hard-fails if any checked value differs.
+with exact transfer, route-switch, and source-power calculations. It checks that
+equal transfers share the link and source power falls only after both routes
+switch. It does not validate A100 timing or power calibration. Generation
+hard-fails if any checked value differs.
