@@ -1,5 +1,34 @@
 # Queue-Haul Assumptions (filled)
 
+## Current profile rules
+
+New simulation results take inputs from `profiles/*.json`; the constants below
+document older analytical studies unless a profile cites them.
+
+- Main experiment axes are the absolute local source power limit and deadline.
+- Workloads sample complete records: context, appended prompt, output, request
+  gap, tool delay, state, log bytes, and log location stay together.
+- KV size rounds each session up to whole cache blocks, never across sessions.
+- GPT-OSS/A100 is currently `estimated`, not validated. Its power curve and
+  concurrency-1 phases are measured; transitions and longer contexts are not.
+
+Targeted TODOs:
+
+- `TODO(profile)`: measure source and destination action power by phase, route
+  switch, sleep, and shutdown.
+- `TODO(concurrency)`: repair the LMCache 0.3.3 concurrency-2 connector failure,
+  then measure replay and KV service at each supported concurrency.
+- `TODO(context)`: collect request and replay rates beyond 31.6k tokens before
+  treating long GPT-OSS runs as validated.
+- `TODO(public profiles)`: add a public-benchmark reducer that records citation,
+  model/hardware/precision, fits only published ranges, emits uncertainty cases,
+  and rejects unsupported extrapolation. Public data supports exploration, not
+  testbed ground truth.
+- `TODO(routes)`: measure heterogeneous destination paths before optimizing
+  destination-specific link cost.
+
+---
+
 **Setup fixed for these experiments:** Qwen3-235B-A22B served on a single colocated pool
 of 8×H100 SXM nodes, TP=8, BF16, **no prefill/decode disaggregation**. One pool, one model.
 

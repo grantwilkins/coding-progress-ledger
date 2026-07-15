@@ -1,5 +1,10 @@
 # GPU validation before the profiling run
 
+The LMCache 0.3.3 concurrency-2 metadata-read failure remains a blocker. Do not
+submit `stage1c_benchmark.sbatch` until simultaneous sink lookups complete and
+the reducer reports all 16 scenarios as complete. Concurrency-1 smoke data do
+not validate concurrency-2 behavior.
+
 Run from the `agent-migrate` repository root. Do not submit the large profiling
 plan until every check below passes.
 
@@ -146,6 +151,28 @@ Open at least one replay and one KV scenario for each activity setting. Confirm:
   source writes and destination reads have key hashes, sizes, and timestamps.
 
 Do not use power values or `deadline_met` as acceptance criteria in this test.
+
+After all 16 scenarios succeed, update
+`profiles/gpt_oss_20b_a100_tp1.json` from reduced tables. Replace every
+`TODO(profile)` assumption with measured phase power and transition timing.
+Increase destination concurrency limits only for tested levels. Keep the profile
+`estimated` until held-out live scenarios meet timing and fixed-window power
+error thresholds.
+
+Before the large GPU plan, run one local profile-driven smoke:
+
+```bash
+uv run python queue-haul/power_drain_experiment.py \
+  --workload-profile queue-haul/profiles/coding.json \
+  --sessions 100 \
+  --power-limit 550 \
+  --deadline 30 \
+  --end 60 \
+  --solver load_only \
+  --out queue-haul/outputs/profile_smoke
+```
+
+Confirm that all six CSV tables are nonempty and the four plots are readable.
 
 ## 6. Submit the large plan
 

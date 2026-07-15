@@ -1,6 +1,43 @@
 # Queue-Haul Dispatch — Formulation
 
-The grid (or a power cap) asks an inference cluster for a **demand-response event**: shed $S^\star$ watts
+## Current profile-driven model
+
+The operational path is `profiles.py` → `planner.py` → `simulate.py` →
+`power_drain_experiment.py`. The older additive formulation remains below for
+comparison plots; it is not the timing or acceptance model for new results.
+
+Each model profile names the model, hardware, precision, tensor parallel size,
+valid range, uncertainty, and source for power, service, replay, KV transfer,
+and transitions. Planning uses the central case once; execution reuses that
+whole-session plan in every faster/slower case.
+
+The measured load coordinate is $\ell_j=f_j/F+g_j/G$. It drives both placement
+and the concave per-GPU or per-server curve $P(\ell)$. Runtime extrapolation
+beyond a profile's load, context, or concurrency range hard-fails. Only local
+source power is compared with the absolute limit; destination power is reported
+separately.
+
+The planner offers random, load-only, node-aware, node-drain, and rounded-LP
+selection. Destination placement is a separate balanced pass. Replay, KV
+transfer, and replay-on-request remain distinct methods. Expected wake
+probability is available to the planner; only sampled requests are visible to
+execution.
+
+Execution follows background preparation, named shared links, destination work,
+pause, optional catch-up, route switch, commit, and optional sleep/off. Source
+power falls only at commit; sleep/off power applies only after its transition.
+Replay and KV destination work have separate measured concurrency limits, and
+unmeasured overlap queues.
+
+Acceptance requires both the exact trailing fixed-window local power average at
+or below the limit and every planned session committed by the deadline. Excess
+joules after the deadline and unresumed session-seconds are also reported. The
+simulation end is explicit.
+
+The legacy formulation below uses different costs and sweep axes. Do not combine
+its outputs with profile-driven tables.
+
+The legacy grid model asks an inference cluster for a **demand-response event**: shed $S^\star$ watts
 by deadline $D$ and hold the reduction over $[D, D+H]$. We hit it by **migrating live sessions** off
 the source pool to other sites — replaying their context or shipping their KV cache — choosing *which*
 jobs and *how* to move them at **least disruption**. Static snapshot, one source pool → $K$
