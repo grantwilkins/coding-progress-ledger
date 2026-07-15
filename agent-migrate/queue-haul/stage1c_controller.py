@@ -341,10 +341,14 @@ def kv_metrics(hit: int, layout: dict) -> tuple[int, int]:
     return (hit + tokens - 1) // tokens, hit * layout["chunk_bytes"] // tokens
 
 
-def expected_hits(method: str, phase: str, total: int) -> int:
+def expected_hits(method: str, phase: str, total: int, source_prompt_tokens: int | None = None) -> int:
     if method != "kv_transfer":
         return 0
-    return total if phase == "initial" else total // 256 * 256
+    if phase == "initial":
+        return total
+    if source_prompt_tokens is None:
+        raise ValueError("catch-up requires measured source prompt tokens")
+    return source_prompt_tokens // 256 * 256
 
 
 def lookup_tokens(path: Path, request_id: str) -> tuple[int, int]:
@@ -371,6 +375,7 @@ class LiveSession:
         self.activity_error: Exception | None = None
         self.activity_times: tuple[int, int] | None = None
         self.cache_keys: set[str] = set()
+        self.activity_prompt_tokens: int | None = None
 
     def probe(self, messages: list[dict], prompt: str | None = None) -> list[dict]:
         return messages + [{"role": "user", "content": prompt or f"Reply with session state code {self.state_code}."}]
@@ -409,6 +414,7 @@ class LiveSession:
             result, text = self.request(self.cfg.src_port, base, "controlled_turn", user["content"])
             with self.lock:
                 self.messages = base + [user, {"role": "assistant", "content": text}]
+                self.activity_prompt_tokens = result.prompt_tokens
                 self.generation += 1
             self.cache_keys |= {row["key_hash"] for row in cache_operations(self.cache_log, start, result.end_ns) if row["operation"] == "source_write"}
         except Exception as exc:
@@ -457,7 +463,7 @@ class LiveRuntime:
         self.event_log.write("copy_start", move_id=move.order, session_id=move.session_id, method=move.method, phase=phase)
         result, _text = session.request(self.cfg.api_proxy_port, list(state.messages), f"{move.method}_{phase}", bypass_lmcache=move.method == "replay")
         total, hit = lookup_tokens(self.sink_log, result.request_id)
-        expected = expected_hits(move.method, phase, total)
+        expected = expected_hits(move.method, phase, total, session.activity_prompt_tokens)
         if hit != expected:
             raise RuntimeError(f"{move.method} request {result.request_id} hit {hit} tokens, expected {expected}")
         layout = kv_layout(self.cache_log, result.end_ns)
