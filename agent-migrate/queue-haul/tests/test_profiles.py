@@ -11,6 +11,7 @@ Plausible wrong implementations:
 """
 
 import json
+from pathlib import Path
 
 import pytest
 
@@ -107,3 +108,16 @@ def test_workload_sampling_preserves_complete_records(tmp_path):
     a, b = w.sample(50, 7), w.sample(50, 7)
     assert a == b
     assert {(r.context_tokens, r.request_gap_s, r.log_external) for r in a} <= observed
+
+
+def test_checked_in_profiles_load_with_uncertainty_and_provenance():
+    root = Path(__file__).parents[1] / "profiles"
+    model = ModelProfile.load(root / "gpt_oss_20b_a100_tp1.json")
+    workloads = [WorkloadProfile.load(path) for path in root.glob("*.json")
+                 if path.name != "gpt_oss_20b_a100_tp1.json"]
+    assert model.status == "estimated"
+    assert set(model.cases) == {"central", "faster", "slower"}
+    assert model.sources["transitions"].kind == "assumed"
+    assert {w.records[0].job_type for w in workloads} == {
+        "interactive_coding", "coding", "agentic_tool_loop"
+    }

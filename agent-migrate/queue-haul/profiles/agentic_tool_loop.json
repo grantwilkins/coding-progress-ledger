@@ -1,0 +1,10 @@
+{
+  "schema": "queue-haul-workload-profile-v1",
+  "profile_id": "agentic-tool-loop-live-20260714",
+  "source": {"kind": "assumed", "reference": "outputs/power_drain_live_20260714/live_profile_agentic_tool_loop.json plus assumptions.md request sizes", "valid_range": [14042, 31547], "relative_error": 0.5},
+  "records": [
+    {"job_type": "agentic_tool_loop", "state": "active", "context_tokens": 14042, "prompt_tokens": 1800, "output_tokens": 600, "request_gap_s": 6.67, "tool_delay_s": 2, "log_bytes": 29159, "log_external": true},
+    {"job_type": "agentic_tool_loop", "state": "active", "context_tokens": 30785, "prompt_tokens": 1800, "output_tokens": 600, "request_gap_s": 6.67, "tool_delay_s": 2, "log_bytes": 62675, "log_external": true},
+    {"job_type": "agentic_tool_loop", "state": "active", "context_tokens": 31547, "prompt_tokens": 1800, "output_tokens": 600, "request_gap_s": 6.67, "tool_delay_s": 2, "log_bytes": 64199, "log_external": true}
+  ]
+}
