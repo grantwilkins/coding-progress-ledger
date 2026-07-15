@@ -168,6 +168,8 @@ class ModelProfile:
     power_window_s: float
     max_ell: float
     max_parallel_moves: int
+    max_parallel_replay: int
+    max_parallel_kv: int
     sources: dict[str, Source]
     cases: dict[str, ProfileCase]
 
@@ -188,7 +190,8 @@ class ModelProfile:
             raw["profile_id"], raw["status"], raw["model"], raw["hardware"],
             raw["precision"], int(raw["tensor_parallel"]), int(raw["gpus_per_node"]),
             raw["power_scope"], float(raw["power_window_s"]), float(raw["max_ell"]),
-            int(raw["max_parallel_moves"]), sources, cases,
+            int(raw["max_parallel_moves"]), int(raw["max_parallel_replay"]),
+            int(raw["max_parallel_kv"]), sources, cases,
         )
         if value.status not in {"fitted", "validated", "estimated"}:
             raise ValueError(f"unknown profile status {value.status!r}")
@@ -197,6 +200,8 @@ class ModelProfile:
         if not value.profile_id or value.tensor_parallel < 1 or value.gpus_per_node < 1 \
                 or value.power_window_s <= 0 or value.max_ell <= 0 or value.max_parallel_moves < 1:
             raise ValueError("invalid profile identity or limits")
+        if min(value.max_parallel_replay, value.max_parallel_kv) < 1:
+            raise ValueError("destination concurrency limits must be positive")
         for case in cases.values():
             if value.max_ell > case.power_curve.ell[-1]:
                 raise ValueError("max_ell exceeds the calibrated power curve")

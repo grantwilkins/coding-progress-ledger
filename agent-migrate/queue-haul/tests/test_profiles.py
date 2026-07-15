@@ -39,6 +39,7 @@ def profile():
         "model": "m", "hardware": "h", "precision": "bf16", "tensor_parallel": 1,
         "gpus_per_node": 8, "power_scope": "gpu", "power_window_s": 5,
         "max_ell": 1, "max_parallel_moves": 2,
+        "max_parallel_replay": 1, "max_parallel_kv": 1,
         "sources": {k: source(k) for k in ("power", "service", "replay", "kv_transfer", "transitions")},
         "cases": {"central": case},
     }

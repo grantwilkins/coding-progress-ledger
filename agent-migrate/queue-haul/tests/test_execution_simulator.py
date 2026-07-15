@@ -27,6 +27,7 @@ def model(tmp_path, switch=1, block_s=0, shutdown=2):
         "model": "m", "hardware": "h", "precision": "bf16", "tensor_parallel": 1,
         "gpus_per_node": 2, "power_scope": "gpu", "power_window_s": 1,
         "max_ell": 1, "max_parallel_moves": 2,
+        "max_parallel_replay": 1, "max_parallel_kv": 1,
         "sources": {k: source for k in ("power", "service", "replay", "kv_transfer", "transitions")},
         "cases": {"central": {
             "F": 100, "G": 100, "power_curve": [[0, 10], [0.5, 30], [1, 40]],
@@ -143,3 +144,12 @@ def test_incomplete_moves_remain_visible(tmp_path):
     assert result.sessions[0].committed_s is None
     assert result.completed_sessions == 0
     assert result.network[0].end_s is None
+
+
+def test_unmeasured_destination_concurrency_queues_instead_of_overlapping(tmp_path):
+    sessions = tuple(SimSession(str(i), "source", 10, 0, 0, 1) for i in range(2))
+    moves = tuple(PlannedMove(str(i), "dest", "replay", i, ("wan",)) for i in range(2))
+    result = execute(scenario(sessions), model(tmp_path), moves)
+    ready = sorted(row.initial_ready_s for row in result.sessions)
+    assert ready == pytest.approx([0.12, 0.22])
+    assert sum(event.event == "endpoint_queued" for event in result.events) == 1

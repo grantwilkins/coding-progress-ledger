@@ -409,6 +409,8 @@ class ExecutionSimulator:
         self.deferred = set()
         self.waking = set()
         self.pending_requests: dict[str, int] = {}
+        self.endpoint_active: dict[tuple[str, str], int] = {}
+        self.endpoint_waiting: dict[tuple[str, str], list[tuple[int, str, tuple[int, int]]]] = {}
         self.events: list[ExecutionEvent] = []
         self.power: list[tuple[float, float, float]] = []
         self.request_runs: list[tuple[str, float, float, float, int, int]] = []
@@ -543,11 +545,20 @@ class ExecutionSimulator:
         replay = state.move.method == "replay" or (
             state.move.method == "replay_on_request" and phase == "wake"
         )
+        kind = "replay" if replay else "kv_transfer" if state.move.method == "kv_transfer" else ""
+        key = state.move.destination_instance, kind
+        if kind:
+            limit = (self.profile.max_parallel_replay if replay
+                     else self.profile.max_parallel_kv)
+            if self.endpoint_active.get(key, 0) >= limit:
+                self.endpoint_waiting.setdefault(key, []).append((index, phase, (replay_tokens, blocks)))
+                self._event("endpoint_queued", state.move.session_id, detail=kind)
+                return
+            self.endpoint_active[key] = self.endpoint_active.get(key, 0) + 1
         if replay:
             destination = state.move.destination_instance
-            active = 1 + sum(
-                e.event == "replay_start" and e.detail == destination for e in self.events
-            ) - sum(e.event == "replay_done" and e.detail == destination for e in self.events)
+            active = self.endpoint_active[key]
+            # TODO(concurrency): update running replay rates when validated limits exceed one.
             duration = replay_tokens / self.case.replay.rate(replay_tokens, active)
             self._event("replay_start", state.move.session_id, detail=destination)
         elif state.move.method == "kv_transfer":
@@ -564,6 +575,16 @@ class ExecutionSimulator:
     def _ready(self, index: int, phase: str):
         state, session_id = self.states[index], self.states[index].move.session_id
         self.active_actions.pop((index, phase, "destination"), None)
+        replay = state.move.method == "replay" or (
+            state.move.method == "replay_on_request" and phase == "wake"
+        )
+        kind = "replay" if replay else "kv_transfer" if state.move.method == "kv_transfer" else ""
+        if kind:
+            key = state.move.destination_instance, kind
+            self.endpoint_active[key] -= 1
+            waiting = self.endpoint_waiting.get(key, [])
+            if waiting:
+                self._endpoint(*waiting.pop(0))
         if state.move.method == "replay" or phase == "wake":
             self._event("replay_done", session_id, detail=state.move.destination_instance)
         if phase == "wake":
