@@ -4,7 +4,7 @@ import asyncio
 
 import pytest
 
-from lmcache_compat.connector_patch import recv_exact, transaction
+from lmcache_compat.connector_patch import bypass_lmcache, recv_exact, transaction
 
 
 class FragmentedSocket:
@@ -23,6 +23,12 @@ class FragmentedSocket:
         view[:count] = self.pending[:count]
         del self.pending[:count]
         return count
+
+
+def test_replay_bypass_is_explicit():
+    request = type("Request", (), {"kv_transfer_params": {"qh_bypass_lmcache": True}})()
+    assert bypass_lmcache(request)
+    assert not bypass_lmcache(type("Request", (), {"kv_transfer_params": None})())
 
 
 @pytest.mark.parametrize("calls", [((b"c", False), (b"x", False)), ((b"g", True), (b"h", True)), ((b"c", False), (b"g", True), (b"x", False), (b"h", True))])

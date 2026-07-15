@@ -107,6 +107,7 @@ def test_session_probe_appends_one_final_instruction():
 
     assert session.probe(base) == base + [{"role": "user", "content": "Reply with session state code CODE."}]
     assert session.probe(base, "Continue CODE") == base + [{"role": "user", "content": "Continue CODE"}]
+    assert c.chat_payload(c.b.Config(), base, 1, True)["kv_transfer_params"] == {"qh_bypass_lmcache": True}
 
 
 def test_cli_only_exposes_new_commands():

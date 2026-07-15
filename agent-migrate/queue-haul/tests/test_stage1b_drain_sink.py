@@ -253,6 +253,7 @@ def test_runtime_versions_are_pinned(monkeypatch):
 
     assert s.runtime_versions(s.Config()) == s.RUNTIME_VERSIONS
     assert "LMCServerConnector._qh_patched" in s.shell(commands[0])
+    assert "LMCacheConnectorV1Impl._qh_bypass_patched" in s.shell(commands[0])
 
 
 def test_duplicate_ports_and_passthrough_overrides_hard_fail():

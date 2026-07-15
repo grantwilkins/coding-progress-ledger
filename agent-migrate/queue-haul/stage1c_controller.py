@@ -254,8 +254,15 @@ def messages_hash(messages: list[dict] | tuple[dict, ...]) -> str:
     return object_hash(list(messages))
 
 
-def stream_chat(cfg: b.Config, port: int, messages: list[dict], max_tokens: int, context_hash: str, timeout_s: float) -> tuple[RequestResult, str]:
-    body = json.dumps({"model": cfg.model, "messages": messages, "max_tokens": max_tokens, "temperature": 0, "stream": True, "stream_options": {"include_usage": True}})
+def chat_payload(cfg: b.Config, messages: list[dict], max_tokens: int, bypass_lmcache: bool = False) -> dict:
+    payload = {"model": cfg.model, "messages": messages, "max_tokens": max_tokens, "temperature": 0, "stream": True, "stream_options": {"include_usage": True}}
+    if bypass_lmcache:
+        payload["kv_transfer_params"] = {"qh_bypass_lmcache": True}
+    return payload
+
+
+def stream_chat(cfg: b.Config, port: int, messages: list[dict], max_tokens: int, context_hash: str, timeout_s: float, bypass_lmcache: bool = False) -> tuple[RequestResult, str]:
+    body = json.dumps(chat_payload(cfg, messages, max_tokens, bypass_lmcache))
     start = time.monotonic_ns()
     conn = http.client.HTTPConnection(cfg.host, port, timeout=timeout_s)
     conn.request("POST", "/v1/chat/completions", body, {"Content-Type": "application/json"})
@@ -353,10 +360,10 @@ class LiveSession:
     def probe(self, messages: list[dict], prompt: str | None = None) -> list[dict]:
         return messages + [{"role": "user", "content": prompt or f"Reply with session state code {self.state_code}."}]
 
-    def request(self, port: int, messages: list[dict], label: str, prompt: str | None = None) -> tuple[RequestResult, str]:
+    def request(self, port: int, messages: list[dict], label: str, prompt: str | None = None, bypass_lmcache: bool = False) -> tuple[RequestResult, str]:
         context_hash = messages_hash(messages)
         self.event_log.write("request_start", session_id=self.session_id, request_id=label, route_port=port, context_hash=context_hash)
-        result, text = stream_chat(self.cfg, port, self.probe(messages, prompt), PROBE_MAX_TOKENS, context_hash, self.timeout_s)
+        result, text = stream_chat(self.cfg, port, self.probe(messages, prompt), PROBE_MAX_TOKENS, context_hash, self.timeout_s, bypass_lmcache)
         self.event_log.write("request_end", session_id=self.session_id, request_id=result.request_id, route_port=port, status_code=result.status_code, context_hash=context_hash, first_byte_ns=result.first_byte_ns, chunks=[asdict(chunk) for chunk in result.stream_chunks])
         if result.status_code != 200 or self.state_code not in text:
             raise RuntimeError(f"{label} failed state check for {self.session_id}: HTTP {result.status_code}")
@@ -433,7 +440,7 @@ class LiveRuntime:
         if phase == "initial" and self.activity == "one_turn":
             session.start_activity()
         self.event_log.write("copy_start", move_id=move.order, session_id=move.session_id, method=move.method, phase=phase)
-        result, _text = session.request(self.cfg.api_proxy_port, list(state.messages), f"{move.method}_{phase}")
+        result, _text = session.request(self.cfg.api_proxy_port, list(state.messages), f"{move.method}_{phase}", bypass_lmcache=move.method == "replay")
         total, hit = lookup_tokens(self.sink_log, result.request_id)
         expected = expected_hits(move.method, phase, total)
         if hit != expected:

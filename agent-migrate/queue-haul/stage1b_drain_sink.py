@@ -300,7 +300,7 @@ def gpu_count() -> int:
 
 
 def runtime_versions(cfg: Config) -> tuple[str, str]:
-    check = "from importlib.metadata import version; from lmcache.v1.storage_backend.connector.lm_connector import LMCServerConnector; assert LMCServerConnector._qh_patched; print(version('vllm'), version('lmcache'))"
+    check = "from importlib.metadata import version; from lmcache.v1.storage_backend.connector.lm_connector import LMCServerConnector; from lmcache.integration.vllm.vllm_v1_adapter import LMCacheConnectorV1Impl; assert LMCServerConnector._qh_patched and LMCacheConnectorV1Impl._qh_bypass_patched; print(version('vllm'), version('lmcache'))"
     script = "\n".join([f"export PYTHONPATH={shlex.quote(str(LMCACHE_COMPAT))}", shell(["/usr/bin/python3", "-c", check])])
     vllm, lmcache = subprocess.check_output(apptainer_cmd(cfg, script, nv=False), text=True).split()
     return vllm, lmcache

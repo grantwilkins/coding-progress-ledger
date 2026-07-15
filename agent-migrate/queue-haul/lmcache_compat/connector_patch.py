@@ -3,6 +3,10 @@ from __future__ import annotations
 import socket
 
 
+def bypass_lmcache(request) -> bool:
+    return bool((getattr(request, "kv_transfer_params", None) or {}).get("qh_bypass_lmcache"))
+
+
 def recv_exact(sock, size: int) -> bytes:
     data = bytearray(size)
     view = memoryview(data)
@@ -29,6 +33,7 @@ async def transaction(lock, socket_getter, recover, request: bytes, header_size:
 
 def patch_lmcache() -> None:
     import torch
+    from lmcache.integration.vllm.vllm_v1_adapter import LMCacheConnectorV1Impl, logger
     from lmcache.v1.memory_management import MemoryFormat
     from lmcache.v1.protocol import ClientMetaMessage, Constants, ServerMetaMessage
     from lmcache.v1.storage_backend.connector.lm_connector import LMCServerConnector
@@ -36,6 +41,7 @@ def patch_lmcache() -> None:
     if getattr(LMCServerConnector, "_qh_patched", False):
         return
     original_init = LMCServerConnector.__init__
+    original_lookup = LMCacheConnectorV1Impl.get_num_new_matched_tokens
 
     def initialize(self, host, port, loop, local_cpu_backend):
         original_init(self, host, port, loop, local_cpu_backend)
@@ -85,7 +91,20 @@ def patch_lmcache() -> None:
             receive,
         )
 
+    def lookup(self, request, num_computed_tokens):
+        if not bypass_lmcache(request):
+            return original_lookup(self, request, num_computed_tokens)
+        logger.info(
+            "Reqid: %s, Total tokens %d, LMCache hit tokens: 0, need to load: %d",
+            request.request_id,
+            request.num_tokens,
+            -num_computed_tokens,
+        )
+        return 0
+
     LMCServerConnector.__init__ = initialize
     LMCServerConnector.exists = exists
     LMCServerConnector.get = get
     LMCServerConnector._qh_patched = True
+    LMCacheConnectorV1Impl.get_num_new_matched_tokens = lookup
+    LMCacheConnectorV1Impl._qh_bypass_patched = True
