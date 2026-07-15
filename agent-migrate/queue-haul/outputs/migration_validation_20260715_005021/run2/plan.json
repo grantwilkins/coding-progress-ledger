@@ -1,0 +1,562 @@
+{
+  "manifest": {
+    "path": "queue-haul/outputs/migration_validation_20260715_005021/manifest.json",
+    "sha256": "060a98720d0d9ef47d5161672567f7202c4440f44e64f952ab425f1ea95e07b7"
+  },
+  "scenarios": [
+    {
+      "activity": "none",
+      "bandwidth_mbps": 1000.0,
+      "concurrency": 2,
+      "context_size": 2048,
+      "deadline_s": 300,
+      "kind": "migration",
+      "match_id": "94c719b3982005d4",
+      "method": "kv_transfer",
+      "moves": [
+        {
+          "job_class": "coding",
+          "method": "kv_transfer",
+          "order": 0,
+          "session_id": "claude:d822a508-dc39-797d-a37d-fa6552fdb8bb",
+          "turn_index": 0
+        },
+        {
+          "job_class": "coding",
+          "method": "kv_transfer",
+          "order": 1,
+          "session_id": "codex:e381cc89-38ef-e67e-79b9-4b800369b4f5",
+          "turn_index": 0
+        }
+      ],
+      "repeat": 0,
+      "scenario_id": "m-94c719b3982005d4",
+      "sessions": [
+        {
+          "job_class": "coding",
+          "order": 0,
+          "session_id": "claude:d822a508-dc39-797d-a37d-fa6552fdb8bb",
+          "turn_index": 0
+        },
+        {
+          "job_class": "coding",
+          "order": 1,
+          "session_id": "codex:e381cc89-38ef-e67e-79b9-4b800369b4f5",
+          "turn_index": 0
+        }
+      ]
+    },
+    {
+      "activity": "one_turn",
+      "bandwidth_mbps": 1000.0,
+      "concurrency": 2,
+      "context_size": 2048,
+      "deadline_s": 300,
+      "kind": "migration",
+      "match_id": "d57675dc5ba25d65",
+      "method": "kv_transfer",
+      "moves": [
+        {
+          "job_class": "coding",
+          "method": "kv_transfer",
+          "order": 0,
+          "session_id": "codex:e381cc89-38ef-e67e-79b9-4b800369b4f5",
+          "turn_index": 0
+        },
+        {
+          "job_class": "coding",
+          "method": "kv_transfer",
+          "order": 1,
+          "session_id": "claude:d822a508-dc39-797d-a37d-fa6552fdb8bb",
+          "turn_index": 0
+        }
+      ],
+      "repeat": 0,
+      "scenario_id": "m-d57675dc5ba25d65",
+      "sessions": [
+        {
+          "job_class": "coding",
+          "order": 0,
+          "session_id": "codex:e381cc89-38ef-e67e-79b9-4b800369b4f5",
+          "turn_index": 0
+        },
+        {
+          "job_class": "coding",
+          "order": 1,
+          "session_id": "claude:d822a508-dc39-797d-a37d-fa6552fdb8bb",
+          "turn_index": 0
+        }
+      ]
+    },
+    {
+      "activity": "one_turn",
+      "bandwidth_mbps": 1000.0,
+      "concurrency": 1,
+      "context_size": 2048,
+      "deadline_s": 300,
+      "kind": "control",
+      "match_id": "8e1bcc62dd79cc38",
+      "method": "replay",
+      "moves": [],
+      "repeat": 0,
+      "scenario_id": "c-8e1bcc62dd79cc38",
+      "sessions": [
+        {
+          "job_class": "coding",
+          "order": 0,
+          "session_id": "codex:e381cc89-38ef-e67e-79b9-4b800369b4f5",
+          "turn_index": 0
+        },
+        {
+          "job_class": "coding",
+          "order": 1,
+          "session_id": "claude:d822a508-dc39-797d-a37d-fa6552fdb8bb",
+          "turn_index": 0
+        }
+      ]
+    },
+    {
+      "activity": "none",
+      "bandwidth_mbps": 1000.0,
+      "concurrency": 1,
+      "context_size": 2048,
+      "deadline_s": 300,
+      "kind": "control",
+      "match_id": "b9294556cdb60362",
+      "method": "replay",
+      "moves": [],
+      "repeat": 0,
+      "scenario_id": "c-b9294556cdb60362",
+      "sessions": [
+        {
+          "job_class": "coding",
+          "order": 0,
+          "session_id": "codex:e381cc89-38ef-e67e-79b9-4b800369b4f5",
+          "turn_index": 0
+        },
+        {
+          "job_class": "coding",
+          "order": 1,
+          "session_id": "claude:d822a508-dc39-797d-a37d-fa6552fdb8bb",
+          "turn_index": 0
+        }
+      ]
+    },
+    {
+      "activity": "none",
+      "bandwidth_mbps": 1000.0,
+      "concurrency": 1,
+      "context_size": 2048,
+      "deadline_s": 300,
+      "kind": "control",
+      "match_id": "02a7cab30bfa866e",
+      "method": "kv_transfer",
+      "moves": [],
+      "repeat": 0,
+      "scenario_id": "c-02a7cab30bfa866e",
+      "sessions": [
+        {
+          "job_class": "coding",
+          "order": 0,
+          "session_id": "claude:d822a508-dc39-797d-a37d-fa6552fdb8bb",
+          "turn_index": 0
+        },
+        {
+          "job_class": "coding",
+          "order": 1,
+          "session_id": "codex:e381cc89-38ef-e67e-79b9-4b800369b4f5",
+          "turn_index": 0
+        }
+      ]
+    },
+    {
+      "activity": "none",
+      "bandwidth_mbps": 1000.0,
+      "concurrency": 2,
+      "context_size": 2048,
+      "deadline_s": 300,
+      "kind": "migration",
+      "match_id": "05f899d30cac3a5e",
+      "method": "replay",
+      "moves": [
+        {
+          "job_class": "coding",
+          "method": "replay",
+          "order": 0,
+          "session_id": "codex:e381cc89-38ef-e67e-79b9-4b800369b4f5",
+          "turn_index": 0
+        },
+        {
+          "job_class": "coding",
+          "method": "replay",
+          "order": 1,
+          "session_id": "claude:d822a508-dc39-797d-a37d-fa6552fdb8bb",
+          "turn_index": 0
+        }
+      ],
+      "repeat": 0,
+      "scenario_id": "m-05f899d30cac3a5e",
+      "sessions": [
+        {
+          "job_class": "coding",
+          "order": 0,
+          "session_id": "codex:e381cc89-38ef-e67e-79b9-4b800369b4f5",
+          "turn_index": 0
+        },
+        {
+          "job_class": "coding",
+          "order": 1,
+          "session_id": "claude:d822a508-dc39-797d-a37d-fa6552fdb8bb",
+          "turn_index": 0
+        }
+      ]
+    },
+    {
+      "activity": "none",
+      "bandwidth_mbps": 1000.0,
+      "concurrency": 2,
+      "context_size": 2048,
+      "deadline_s": 300,
+      "kind": "control",
+      "match_id": "05f899d30cac3a5e",
+      "method": "replay",
+      "moves": [],
+      "repeat": 0,
+      "scenario_id": "c-05f899d30cac3a5e",
+      "sessions": [
+        {
+          "job_class": "coding",
+          "order": 0,
+          "session_id": "codex:e381cc89-38ef-e67e-79b9-4b800369b4f5",
+          "turn_index": 0
+        },
+        {
+          "job_class": "coding",
+          "order": 1,
+          "session_id": "claude:d822a508-dc39-797d-a37d-fa6552fdb8bb",
+          "turn_index": 0
+        }
+      ]
+    },
+    {
+      "activity": "none",
+      "bandwidth_mbps": 1000.0,
+      "concurrency": 2,
+      "context_size": 2048,
+      "deadline_s": 300,
+      "kind": "control",
+      "match_id": "94c719b3982005d4",
+      "method": "kv_transfer",
+      "moves": [],
+      "repeat": 0,
+      "scenario_id": "c-94c719b3982005d4",
+      "sessions": [
+        {
+          "job_class": "coding",
+          "order": 0,
+          "session_id": "claude:d822a508-dc39-797d-a37d-fa6552fdb8bb",
+          "turn_index": 0
+        },
+        {
+          "job_class": "coding",
+          "order": 1,
+          "session_id": "codex:e381cc89-38ef-e67e-79b9-4b800369b4f5",
+          "turn_index": 0
+        }
+      ]
+    },
+    {
+      "activity": "one_turn",
+      "bandwidth_mbps": 1000.0,
+      "concurrency": 1,
+      "context_size": 2048,
+      "deadline_s": 300,
+      "kind": "control",
+      "match_id": "eaee1faf100318d9",
+      "method": "kv_transfer",
+      "moves": [],
+      "repeat": 0,
+      "scenario_id": "c-eaee1faf100318d9",
+      "sessions": [
+        {
+          "job_class": "coding",
+          "order": 0,
+          "session_id": "codex:e381cc89-38ef-e67e-79b9-4b800369b4f5",
+          "turn_index": 0
+        },
+        {
+          "job_class": "coding",
+          "order": 1,
+          "session_id": "claude:d822a508-dc39-797d-a37d-fa6552fdb8bb",
+          "turn_index": 0
+        }
+      ]
+    },
+    {
+      "activity": "one_turn",
+      "bandwidth_mbps": 1000.0,
+      "concurrency": 2,
+      "context_size": 2048,
+      "deadline_s": 300,
+      "kind": "control",
+      "match_id": "e9057ec36f3b6713",
+      "method": "replay",
+      "moves": [],
+      "repeat": 0,
+      "scenario_id": "c-e9057ec36f3b6713",
+      "sessions": [
+        {
+          "job_class": "coding",
+          "order": 0,
+          "session_id": "codex:e381cc89-38ef-e67e-79b9-4b800369b4f5",
+          "turn_index": 0
+        },
+        {
+          "job_class": "coding",
+          "order": 1,
+          "session_id": "claude:d822a508-dc39-797d-a37d-fa6552fdb8bb",
+          "turn_index": 0
+        }
+      ]
+    },
+    {
+      "activity": "none",
+      "bandwidth_mbps": 1000.0,
+      "concurrency": 1,
+      "context_size": 2048,
+      "deadline_s": 300,
+      "kind": "migration",
+      "match_id": "02a7cab30bfa866e",
+      "method": "kv_transfer",
+      "moves": [
+        {
+          "job_class": "coding",
+          "method": "kv_transfer",
+          "order": 0,
+          "session_id": "claude:d822a508-dc39-797d-a37d-fa6552fdb8bb",
+          "turn_index": 0
+        },
+        {
+          "job_class": "coding",
+          "method": "kv_transfer",
+          "order": 1,
+          "session_id": "codex:e381cc89-38ef-e67e-79b9-4b800369b4f5",
+          "turn_index": 0
+        }
+      ],
+      "repeat": 0,
+      "scenario_id": "m-02a7cab30bfa866e",
+      "sessions": [
+        {
+          "job_class": "coding",
+          "order": 0,
+          "session_id": "claude:d822a508-dc39-797d-a37d-fa6552fdb8bb",
+          "turn_index": 0
+        },
+        {
+          "job_class": "coding",
+          "order": 1,
+          "session_id": "codex:e381cc89-38ef-e67e-79b9-4b800369b4f5",
+          "turn_index": 0
+        }
+      ]
+    },
+    {
+      "activity": "one_turn",
+      "bandwidth_mbps": 1000.0,
+      "concurrency": 1,
+      "context_size": 2048,
+      "deadline_s": 300,
+      "kind": "migration",
+      "match_id": "8e1bcc62dd79cc38",
+      "method": "replay",
+      "moves": [
+        {
+          "job_class": "coding",
+          "method": "replay",
+          "order": 0,
+          "session_id": "codex:e381cc89-38ef-e67e-79b9-4b800369b4f5",
+          "turn_index": 0
+        },
+        {
+          "job_class": "coding",
+          "method": "replay",
+          "order": 1,
+          "session_id": "claude:d822a508-dc39-797d-a37d-fa6552fdb8bb",
+          "turn_index": 0
+        }
+      ],
+      "repeat": 0,
+      "scenario_id": "m-8e1bcc62dd79cc38",
+      "sessions": [
+        {
+          "job_class": "coding",
+          "order": 0,
+          "session_id": "codex:e381cc89-38ef-e67e-79b9-4b800369b4f5",
+          "turn_index": 0
+        },
+        {
+          "job_class": "coding",
+          "order": 1,
+          "session_id": "claude:d822a508-dc39-797d-a37d-fa6552fdb8bb",
+          "turn_index": 0
+        }
+      ]
+    },
+    {
+      "activity": "none",
+      "bandwidth_mbps": 1000.0,
+      "concurrency": 1,
+      "context_size": 2048,
+      "deadline_s": 300,
+      "kind": "migration",
+      "match_id": "b9294556cdb60362",
+      "method": "replay",
+      "moves": [
+        {
+          "job_class": "coding",
+          "method": "replay",
+          "order": 0,
+          "session_id": "codex:e381cc89-38ef-e67e-79b9-4b800369b4f5",
+          "turn_index": 0
+        },
+        {
+          "job_class": "coding",
+          "method": "replay",
+          "order": 1,
+          "session_id": "claude:d822a508-dc39-797d-a37d-fa6552fdb8bb",
+          "turn_index": 0
+        }
+      ],
+      "repeat": 0,
+      "scenario_id": "m-b9294556cdb60362",
+      "sessions": [
+        {
+          "job_class": "coding",
+          "order": 0,
+          "session_id": "codex:e381cc89-38ef-e67e-79b9-4b800369b4f5",
+          "turn_index": 0
+        },
+        {
+          "job_class": "coding",
+          "order": 1,
+          "session_id": "claude:d822a508-dc39-797d-a37d-fa6552fdb8bb",
+          "turn_index": 0
+        }
+      ]
+    },
+    {
+      "activity": "one_turn",
+      "bandwidth_mbps": 1000.0,
+      "concurrency": 2,
+      "context_size": 2048,
+      "deadline_s": 300,
+      "kind": "migration",
+      "match_id": "e9057ec36f3b6713",
+      "method": "replay",
+      "moves": [
+        {
+          "job_class": "coding",
+          "method": "replay",
+          "order": 0,
+          "session_id": "codex:e381cc89-38ef-e67e-79b9-4b800369b4f5",
+          "turn_index": 0
+        },
+        {
+          "job_class": "coding",
+          "method": "replay",
+          "order": 1,
+          "session_id": "claude:d822a508-dc39-797d-a37d-fa6552fdb8bb",
+          "turn_index": 0
+        }
+      ],
+      "repeat": 0,
+      "scenario_id": "m-e9057ec36f3b6713",
+      "sessions": [
+        {
+          "job_class": "coding",
+          "order": 0,
+          "session_id": "codex:e381cc89-38ef-e67e-79b9-4b800369b4f5",
+          "turn_index": 0
+        },
+        {
+          "job_class": "coding",
+          "order": 1,
+          "session_id": "claude:d822a508-dc39-797d-a37d-fa6552fdb8bb",
+          "turn_index": 0
+        }
+      ]
+    },
+    {
+      "activity": "one_turn",
+      "bandwidth_mbps": 1000.0,
+      "concurrency": 2,
+      "context_size": 2048,
+      "deadline_s": 300,
+      "kind": "control",
+      "match_id": "d57675dc5ba25d65",
+      "method": "kv_transfer",
+      "moves": [],
+      "repeat": 0,
+      "scenario_id": "c-d57675dc5ba25d65",
+      "sessions": [
+        {
+          "job_class": "coding",
+          "order": 0,
+          "session_id": "codex:e381cc89-38ef-e67e-79b9-4b800369b4f5",
+          "turn_index": 0
+        },
+        {
+          "job_class": "coding",
+          "order": 1,
+          "session_id": "claude:d822a508-dc39-797d-a37d-fa6552fdb8bb",
+          "turn_index": 0
+        }
+      ]
+    },
+    {
+      "activity": "one_turn",
+      "bandwidth_mbps": 1000.0,
+      "concurrency": 1,
+      "context_size": 2048,
+      "deadline_s": 300,
+      "kind": "migration",
+      "match_id": "eaee1faf100318d9",
+      "method": "kv_transfer",
+      "moves": [
+        {
+          "job_class": "coding",
+          "method": "kv_transfer",
+          "order": 0,
+          "session_id": "codex:e381cc89-38ef-e67e-79b9-4b800369b4f5",
+          "turn_index": 0
+        },
+        {
+          "job_class": "coding",
+          "method": "kv_transfer",
+          "order": 1,
+          "session_id": "claude:d822a508-dc39-797d-a37d-fa6552fdb8bb",
+          "turn_index": 0
+        }
+      ],
+      "repeat": 0,
+      "scenario_id": "m-eaee1faf100318d9",
+      "sessions": [
+        {
+          "job_class": "coding",
+          "order": 0,
+          "session_id": "codex:e381cc89-38ef-e67e-79b9-4b800369b4f5",
+          "turn_index": 0
+        },
+        {
+          "job_class": "coding",
+          "order": 1,
+          "session_id": "claude:d822a508-dc39-797d-a37d-fa6552fdb8bb",
+          "turn_index": 0
+        }
+      ]
+    }
+  ],
+  "schema": "queue-haul-migration-plan-v2",
+  "seed": 0
+}

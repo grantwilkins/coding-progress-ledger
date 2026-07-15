@@ -1,0 +1,26 @@
+{
+  "config": {
+    "api_proxy_port": 38710,
+    "cache_root": "/scratch/users/gfw/ptsim/cache",
+    "hf_home": "/scratch/users/gfw/ptsim/hf",
+    "host": "127.0.0.1",
+    "kv_proxy_port": 38610,
+    "lmc_port": 35965,
+    "max_model_len": 32768,
+    "max_num_batched_tokens": 8192,
+    "max_num_seqs": 256,
+    "model": "openai/gpt-oss-20b",
+    "sandbox": "/scratch/users/gfw/ptsim/vllm-openai-v0.10.1.1.sandbox",
+    "scratch_bind": "/scratch/users/gfw",
+    "sink_port": 38510,
+    "smoke_port": 38430,
+    "src_port": 38410
+  },
+  "dirty": false,
+  "extra_vllm_args": [],
+  "git_sha": "14603a3dec60e8e2ac1e4229f5da3eef31804a83",
+  "manifest_sha256": "060a98720d0d9ef47d5161672567f7202c4440f44e64f952ab425f1ea95e07b7",
+  "plan_object_sha256": "806d47351c52769b562a7e30673a3333c3b9bda672f1c8d31b2c03464ba0e4bb",
+  "plan_sha256": "3b3951b574a05151c180874eb1214a46ca00c633b2d65ea4b533ad14c706f9f6",
+  "schema": "queue-haul-migration-run-v2"
+}
