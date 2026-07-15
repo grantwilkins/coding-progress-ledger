@@ -130,7 +130,7 @@ class ProfileCase:
     sleep_power_w: float
     sleep_s: float
     shutdown_s: float
-    action_power_w: dict[str, float]
+    action_power_w: dict[str, tuple[float, float]]
 
     @classmethod
     def parse(cls, case_id: str, raw: dict) -> "ProfileCase":
@@ -141,13 +141,15 @@ class ProfileCase:
             RateCurve.parse(raw["replay_tps"]), KVTransfer.parse(raw["kv_transfer"]),
             float(raw["switch_s"]), float(raw["sleep_power_w"]),
             float(raw["sleep_s"]), float(raw["shutdown_s"]),
-            {str(k): float(v) for k, v in raw["action_power_w"].items()},
+            {str(k): tuple(map(float, v)) for k, v in raw["action_power_w"].items()},
         )
         if set(value.action_power_w) != ACTION_POWER:
             raise ValueError(f"action_power_w fields must be {sorted(ACTION_POWER)}")
+        if any(len(v) != 2 for v in value.action_power_w.values()):
+            raise ValueError("action power requires [source_w, destination_w]")
         if value.F <= 0 or value.G <= 0 or min(
             value.switch_s, value.sleep_power_w, value.sleep_s, value.shutdown_s,
-            *value.action_power_w.values(),
+            *(v for pair in value.action_power_w.values() for v in pair),
         ) < 0:
             raise ValueError("rates, times, and power must be nonnegative; F and G must be positive")
         return value

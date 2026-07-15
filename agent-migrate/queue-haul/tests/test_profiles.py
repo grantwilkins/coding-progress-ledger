@@ -29,8 +29,9 @@ def profile():
         "kv_transfer": {"block_tokens": 4, "block_bytes": 100, "setup_s": 1,
                         "block_processing_s": 0.5, "sync_s": 0.25},
         "switch_s": 0.1, "sleep_power_w": 2, "sleep_s": 3, "shutdown_s": 4,
-        "action_power_w": {"replay": 1, "kv_transfer": 2, "replay_on_request": 1,
-                           "catch_up": 1, "sleep": 1, "off": 1},
+        "action_power_w": {"replay": [1, 2], "kv_transfer": [2, 3],
+                           "replay_on_request": [1, 2], "catch_up": [1, 2],
+                           "sleep": [1, 0], "off": [1, 0]},
     }
     return {
         "schema": "queue-haul-model-profile-v1", "profile_id": "p", "status": "fitted",
@@ -65,6 +66,7 @@ def test_rate_range_concurrency_and_kv_rounding_are_explicit(tmp_path):
     assert case.prefill.rate(500.5, 1) == pytest.approx(75)
     assert case.kv_transfer.blocks(11) == 3
     assert case.kv_transfer.bytes(11) == 300
+    assert case.action_power_w["replay"] == (1, 2)
     with pytest.raises(ValueError, match="unsupported concurrency"):
         case.prefill.rate(10, 3)
     with pytest.raises(ValueError, match="outside"):

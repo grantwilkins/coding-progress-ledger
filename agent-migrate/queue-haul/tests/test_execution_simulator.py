@@ -34,8 +34,9 @@ def model(tmp_path, switch=1, block_s=0, shutdown=2):
             "kv_transfer": {"block_tokens": 10, "block_bytes": 100, "setup_s": 0,
                             "block_processing_s": block_s, "sync_s": 0},
             "switch_s": switch, "sleep_power_w": 2, "sleep_s": 1, "shutdown_s": shutdown,
-            "action_power_w": {"replay": 0, "kv_transfer": 0, "replay_on_request": 0,
-                               "catch_up": 0, "sleep": 0, "off": 0},
+            "action_power_w": {"replay": [0, 0], "kv_transfer": [0, 0],
+                               "replay_on_request": [0, 0], "catch_up": [0, 0],
+                               "sleep": [0, 0], "off": [0, 0]},
         }},
     }
     path = tmp_path / "profile.json"
@@ -113,3 +114,19 @@ def test_deferred_replay_copies_only_source_local_log(tmp_path):
     rows = {row.session_id: row for row in result.sessions}
     assert rows["external"].initial_ready_s == 0
     assert rows["local"].initial_ready_s == pytest.approx(1)
+
+
+def test_deferred_replay_waits_for_an_observed_request(tmp_path):
+    session = SimSession(
+        "external", "source", 10, 0, 0, 100, True,
+        requests=(SimRequest(0.5, 10, 0),), wake_probability=0.9,
+    )
+    move = PlannedMove("external", "dest", "replay_on_request", 0, ("wan",))
+    result = execute(scenario((session,)), model(tmp_path), (move,))
+    row = result.sessions[0]
+    request_start = [e.time_s for e in result.events if e.event == "request_start"]
+
+    assert row.committed_s == pytest.approx(1)
+    assert row.wake_start_s == pytest.approx(1)
+    assert row.wake_ready_s == pytest.approx(2.1)  # 100 B / 100 B/s + 10 tok / 100 tok/s
+    assert request_start == pytest.approx([2.1])

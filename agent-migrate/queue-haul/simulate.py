@@ -280,6 +280,8 @@ class SessionExecution:
     catch_up_ready_s: float | None
     switch_s: float
     committed_s: float
+    wake_start_s: float | None
+    wake_ready_s: float | None
 
 
 @dataclass(frozen=True)
@@ -313,6 +315,8 @@ class _MoveState:
     catch_ready: float | None = None
     switch: float = 0
     committed: float = 0
+    wake_start: float | None = None
+    wake_ready: float | None = None
     phase: str = "initial"
 
 
@@ -383,7 +387,11 @@ class ExecutionSimulator:
         self.moved = set()
         self.route = {s.session_id: s.source_instance for s in scenario.sessions}
         self.node_state = {n.node_id: "awake" for n in scenario.nodes}
-        self.active_actions: dict[int, tuple[float, str]] = {}
+        self.active_actions: dict[tuple[int, str, str], tuple[str, str]] = {}
+        self.node_actions: dict[str, str] = {}
+        self.deferred = set()
+        self.waking = set()
+        self.pending_requests: dict[str, int] = {}
         self.events: list[ExecutionEvent] = []
         self.power: list[tuple[float, float, float]] = []
         self.request_runs: list[tuple[str, float, float, float, int, int]] = []
@@ -448,10 +456,13 @@ class ExecutionSimulator:
                 total += sum(self.case.power_curve.power(load) for load in gpu_loads[node_id])
             else:
                 total += self.case.power_curve.power(sum(gpu_loads[node_id]))
-        for index, (_start, action) in self.active_actions.items():
-            source = self.sessions[self.states[index].move.session_id].source_instance
-            if self.nodes[self.instances[source].gpu_nodes[0]].local == local:
-                total += self.case.action_power_w[action]
+        side = 0 if local else 1
+        for action, instance in self.active_actions.values():
+            if self.nodes[self.instances[instance].gpu_nodes[0]].local == local:
+                total += self.case.action_power_w[action][side]
+        for node_id, action in self.node_actions.items():
+            if self.nodes[node_id].local == local:
+                total += self.case.action_power_w[action][side]
         return total
 
     def _record_power(self):
@@ -469,7 +480,6 @@ class ExecutionSimulator:
             state = self.states[index]
             state.snapshot_tokens = self.context[state.move.session_id]
             state.initial_start = self.time
-            self.active_actions[index] = (self.time, state.move.method)
             self._event("initial_start", state.move.session_id, detail=state.move.method)
             setup = self.case.kv_transfer.setup_s if state.move.method == "kv_transfer" else 0.0
             self._schedule(self.time + setup, "prepare", (index, "initial"))
@@ -481,10 +491,8 @@ class ExecutionSimulator:
             ratio = session.log_bytes / session.context_tokens
             return max(1, round(tokens * ratio)), tokens, 0
         if state.move.method == "replay_on_request":
-            if session.log_external:
-                return 0, 0, 0
-            ratio = session.log_bytes / session.context_tokens
-            return max(1, round(tokens * ratio)), 0, 0
+            byte_count = session.log_bytes if session.log_external == (phase == "wake") else 0
+            return byte_count, tokens if phase == "wake" else 0, 0
         blocks = self.case.kv_transfer.blocks(tokens)
         if phase == "catch_up":
             blocks -= self.case.kv_transfer.blocks(state.snapshot_tokens)
@@ -496,6 +504,11 @@ class ExecutionSimulator:
         byte_count, replay_tokens, blocks = self._payload(index, phase)
         detail = (replay_tokens, blocks)
         if byte_count:
+            source = self.sessions[state.move.session_id].source_instance
+            if state.move.method == "kv_transfer" or not self.sessions[state.move.session_id].log_external:
+                self.active_actions[index, phase, "source"] = (
+                    "catch_up" if phase == "catch_up" else state.move.method, source
+                )
             flow = _Flow(self.next_flow, index, phase, float(byte_count), state.move.path)
             self.next_flow += 1
             self.flows[flow.flow_id] = flow
@@ -506,7 +519,10 @@ class ExecutionSimulator:
     def _endpoint(self, index: int, phase: str, detail: tuple[int, int] | None = None):
         state = self.states[index]
         replay_tokens, blocks = detail or self._payload(index, phase)[1:]
-        if state.move.method == "replay":
+        replay = state.move.method == "replay" or (
+            state.move.method == "replay_on_request" and phase == "wake"
+        )
+        if replay:
             destination = state.move.destination_instance
             active = 1 + sum(
                 e.event == "replay_start" and e.detail == destination for e in self.events
@@ -517,13 +533,25 @@ class ExecutionSimulator:
             duration = blocks * self.case.kv_transfer.block_processing_s + self.case.kv_transfer.sync_s
         else:
             duration = 0.0
+        if duration:
+            action = "catch_up" if phase == "catch_up" else state.move.method
+            self.active_actions[index, phase, "destination"] = (
+                action, state.move.destination_instance
+            )
         self._schedule(self.time + duration, "ready", (index, phase))
 
     def _ready(self, index: int, phase: str):
         state, session_id = self.states[index], self.states[index].move.session_id
-        if state.move.method == "replay":
+        self.active_actions.pop((index, phase, "destination"), None)
+        if state.move.method == "replay" or phase == "wake":
             self._event("replay_done", session_id, detail=state.move.destination_instance)
-        if phase == "initial":
+        if phase == "wake":
+            state.wake_ready = self.time
+            self.deferred.remove(session_id)
+            self.waking.remove(session_id)
+            self._event("wake_ready", session_id)
+            self._schedule(self.time, "request_start", (session_id, self.pending_requests.pop(session_id)))
+        elif phase == "initial":
             state.initial_ready = state.pause = self.time
             self.paused.add(session_id)
             self._event("initial_ready", session_id)
@@ -558,8 +586,13 @@ class ExecutionSimulator:
         self.route[session_id] = state.move.destination_instance
         self.moved.add(session_id)
         self.paused.discard(session_id)
-        self.active_actions.pop(index)
+        if state.move.method == "replay_on_request":
+            self.deferred.add(session_id)
         self._event("commit", session_id)
+        if session_id in self.pending_requests:
+            self._schedule(self.time, "request_start", (
+                session_id, self.pending_requests.pop(session_id)
+            ))
         source = self.sessions[session_id].source_instance
         self.running[source] -= 1
         self._start_available(source)
@@ -573,13 +606,24 @@ class ExecutionSimulator:
             if dependents <= self.moved and self.scenario.final_state != "awake":
                 duration = self.case.sleep_s if self.scenario.final_state == "sleep" else self.case.shutdown_s
                 self.node_state[node_id] = "transition"
+                self.node_actions[node_id] = self.scenario.final_state
                 self._event(f"{self.scenario.final_state}_start", node=node_id)
                 self._schedule(self.time + duration, "node_state", node_id)
 
     def _request_start(self, session_id: str, request_index: int):
         session = self.sessions[session_id]
         if session_id in self.paused:
-            self._schedule(self.time + 1e-9, "request_start", (session_id, request_index))
+            self.pending_requests[session_id] = request_index
+            return
+        if session_id in self.deferred:
+            self.pending_requests[session_id] = request_index
+            if session_id not in self.waking:
+                self.waking.add(session_id)
+                index = next(i for i, state in enumerate(self.states)
+                             if state.move.session_id == session_id)
+                self.states[index].wake_start = self.time
+                self._event("wake_start", session_id)
+                self._prepare(index, "wake")
             return
         request = session.requests[request_index]
         instance = self.route[session_id]
@@ -633,6 +677,7 @@ class ExecutionSimulator:
                 for flow_id in done:
                     flow = self.flows.pop(flow_id)
                     state = self.states[flow.move_index]
+                    self.active_actions.pop((flow.move_index, flow.phase, "source"), None)
                     self._event("network_done", state.move.session_id, detail=flow.phase)
                     self._endpoint(flow.move_index, flow.phase)
             else:
@@ -646,6 +691,7 @@ class ExecutionSimulator:
                     elif kind == "request_done": self._request_done(*payload)
                     elif kind == "node_state":
                         self.node_state[payload] = self.scenario.final_state
+                        self.node_actions.pop(payload)
                         self._event(f"{self.scenario.final_state}_done", node=payload)
                     else: raise RuntimeError(f"unknown event {kind!r}")
             self._record_power()
@@ -655,6 +701,7 @@ class ExecutionSimulator:
             SessionExecution(
                 s.move.session_id, s.move.method, s.initial_start, s.initial_ready, s.pause,
                 s.idle, s.catch_start, s.catch_ready, s.switch, s.committed,
+                s.wake_start, s.wake_ready,
             ) for s in self.states if s.committed
         )
         at_deadline = step_average(
