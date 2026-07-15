@@ -50,7 +50,8 @@ def source_power(scenario: ExecutionScenario, profile: ModelProfile, moved=(),
 
 def _duration(session: SimSession, method: MoveMethod, case: ProfileCase,
               path: tuple[str, ...], links: dict[str, float]) -> float:
-    link_s = lambda size: size / min(links[link] for link in path)
+    def link_s(size):
+        return size / min(links[link] for link in path)
     replay_s = session.context_tokens / case.replay.rate(session.context_tokens, 1)
     if method == "replay":
         return link_s(session.log_bytes) + replay_s + case.switch_s
@@ -134,7 +135,8 @@ def plan(scenario: ExecutionScenario, profile: ModelProfile,
     if solver not in SOLVERS:
         raise ValueError(f"unknown solver {solver!r}")
     start, case = perf_counter(), profile.case(case_id)
-    sessions, links = _local_sessions(scenario), {l.link_id: l.bytes_per_s for l in scenario.links}
+    sessions = _local_sessions(scenario)
+    links = {link.link_id: link.bytes_per_s for link in scenario.links}
     nodes = {n.node_id: n for n in scenario.nodes}
     destinations = [i for i in scenario.instances if all(not nodes[n].local for n in i.gpu_nodes)]
     if not destinations:

@@ -52,7 +52,8 @@ def test_destination_placement_balances_whole_sessions(tmp_path):
     assert {move.session_id for move in result.moves} == {"a", "b"}
     assert all(move.method in METHODS for move in result.moves)
 
-    route = lambda source, destination: PATHS[source, destination]
+    def route(source, destination):
+        return PATHS[source, destination]
     assert plan(problem(limit=0), model(tmp_path), route, "load_only").moves == result.moves
 
 

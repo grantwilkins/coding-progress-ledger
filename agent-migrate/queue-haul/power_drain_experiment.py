@@ -242,8 +242,11 @@ def _plot(runs: list[ExperimentRun], summaries: list[dict], out: Path) -> None:
     ax.axhline(first.scenario.power_limit_w, color="black", linestyle="--", label="power limit")
     ax.axvline(first.scenario.deadline_s, color="black", linestyle=":", label="deadline")
     ax.set(xlabel="time (s)", ylabel="local source power (W)")
-    ax.legend(fontsize=8); ax.grid(alpha=0.25); fig.tight_layout()
-    fig.savefig(out / "power_timeline.png", dpi=160); plt.close(fig)
+    ax.legend(fontsize=8)
+    ax.grid(alpha=0.25)
+    fig.tight_layout()
+    fig.savefig(out / "power_timeline.png", dpi=160)
+    plt.close(fig)
 
     phase = {solver: [] for solver in SOLVERS}
     for run in central:
@@ -252,9 +255,12 @@ def _plot(runs: list[ExperimentRun], summaries: list[dict], out: Path) -> None:
     fig, ax = plt.subplots(figsize=(7, 4))
     labels = [solver for solver, values in phase.items() if values]
     ax.boxplot([phase[label] for label in labels], tick_labels=labels, showfliers=False)
-    ax.set(ylabel="session pause (s)"); ax.tick_params(axis="x", rotation=25)
-    ax.grid(axis="y", alpha=0.25); fig.tight_layout()
-    fig.savefig(out / "session_pause.png", dpi=160); plt.close(fig)
+    ax.set(ylabel="session pause (s)")
+    ax.tick_params(axis="x", rotation=25)
+    ax.grid(axis="y", alpha=0.25)
+    fig.tight_layout()
+    fig.savefig(out / "session_pause.png", dpi=160)
+    plt.close(fig)
 
     fig, ax = plt.subplots(figsize=(6, 4))
     for run in central:
@@ -263,9 +269,12 @@ def _plot(runs: list[ExperimentRun], summaries: list[dict], out: Path) -> None:
                    s=10, alpha=0.4, label=run.plan.solver)
     ax.set(xlabel="transfer size (MB)", ylabel="network time (s)")
     handles, labels = ax.get_legend_handles_labels()
-    unique = dict(zip(labels, handles)); ax.legend(unique.values(), unique.keys(), fontsize=8)
-    ax.grid(alpha=0.25); fig.tight_layout()
-    fig.savefig(out / "network_time.png", dpi=160); plt.close(fig)
+    unique = dict(zip(labels, handles))
+    ax.legend(unique.values(), unique.keys(), fontsize=8)
+    ax.grid(alpha=0.25)
+    fig.tight_layout()
+    fig.savefig(out / "network_time.png", dpi=160)
+    plt.close(fig)
 
     fig, axes = plt.subplots(1, 2, figsize=(9, 4))
     labels = sorted({row["solver"] for row in summaries})
@@ -273,10 +282,14 @@ def _plot(runs: list[ExperimentRun], summaries: list[dict], out: Path) -> None:
                          for label in labels])
     axes[1].bar(labels, [np.median([r["excess_energy_j"] for r in summaries
                                     if r["solver"] == label]) / 1000 for label in labels])
-    axes[0].set(ylabel="accepted fraction"); axes[1].set(ylabel="excess energy after deadline (kJ)")
+    axes[0].set(ylabel="accepted fraction")
+    axes[1].set(ylabel="excess energy after deadline (kJ)")
     for ax in axes:
-        ax.tick_params(axis="x", rotation=25); ax.grid(axis="y", alpha=0.25)
-    fig.tight_layout(); fig.savefig(out / "policy_outcomes.png", dpi=160); plt.close(fig)
+        ax.tick_params(axis="x", rotation=25)
+        ax.grid(axis="y", alpha=0.25)
+    fig.tight_layout()
+    fig.savefig(out / "policy_outcomes.png", dpi=160)
+    plt.close(fig)
 
 
 def main() -> None:

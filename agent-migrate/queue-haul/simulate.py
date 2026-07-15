@@ -125,23 +125,25 @@ def simulate(pop: JobPopulation, pool, imp: Impact, plan: Plan, event: Event = E
         t = ed[f]
 
     rs, rd = np.full(n * K, np.nan), np.full(n * K, np.nan)
-    pf = [np.full(int(W[l]), event.tau_pre) for l in range(K)]  # per-ℓ prefill servers
-    ig = [np.full(int(W[l]), event.tau_in) for l in range(K)]  # per-ℓ ingest channels
+    pf = [np.full(int(W[dest]), event.tau_pre) for dest in range(K)]
+    ig = [np.full(int(W[dest]), event.tau_in) for dest in range(K)]
     # cut-through = optimistic earliest-overlap bound: rebuild may run from egress_start, but
     # still completes no sooner than full byte arrival ed (the outer max below). sf waits for ed.
     floor = es if mode == "cutthrough" else ed
     for f in order:  # split shipment rebuilds both pieces on dest ℓ's resources, in egress order
-        l, starts, done = f % K, [], ed[f]
-        for srv, w, work, drag in ((pf[l], YRf[f], p2Rf[f], move.alpha_in), (ig[l], YSf[f], p2Sf[f], 0.0)):
+        dest, starts, done = f % K, [], ed[f]
+        for srv, w, work, drag in ((pf[dest], YRf[f], p2Rf[f], move.alpha_in),
+                                   (ig[dest], YSf[f], p2Sf[f], 0.0)):
             if w <= 1e-9:
                 continue
             k = int(np.argmin(srv))
             st = max(floor[f], srv[k])
             if drag:  # first-order interference: ingest-busy fraction at st slows prefill
                 # (sampled at start only; same-shipment ingest is assigned after R, so it never drags its own prefill)
-                work /= 1.0 - drag * (ig[l] > max(st, event.tau_in)).mean()
+                work /= 1.0 - drag * (ig[dest] > max(st, event.tau_in)).mean()
             srv[k] = max(ed[f], st + work)  # outer max = cut-through byte-arrival cap
-            starts.append(st); done = max(done, srv[k])
+            starts.append(st)
+            done = max(done, srv[k])
         rs[f], rd[f] = (min(starts) if starts else ed[f]), done
 
     e_ok = np.where(np.isfinite(ed), ed, np.inf) <= event.D
@@ -154,8 +156,8 @@ def simulate(pop: JobPopulation, pool, imp: Impact, plan: Plan, event: Event = E
     load_cap = np.asarray(fleet.spare, float) * pool.rho_star  # L̄_dest,ℓ
     if mv.size:
         lb = max(event.tau_src + p1f[mv].sum(),
-                 max(_stage_lb(event.tau_pre, p2R[:, l], int(W[l])) for l in range(K)),
-                 max(_stage_lb(event.tau_in, p2S[:, l], int(W[l])) for l in range(K)))
+                 max(_stage_lb(event.tau_pre, p2R[:, dest], int(W[dest])) for dest in range(K)),
+                 max(_stage_lb(event.tau_in, p2S[:, dest], int(W[dest])) for dest in range(K)))
         ub = max(event.tau_src + p1f[mv].sum(), event.tau_pre, event.tau_in) \
             + p2Rf[mv].sum() / (1 - move.alpha_in) + p2Sf[mv].sum()  # worst-case ingest drag
         makespan = float(np.nanmax(rd))
@@ -389,7 +391,7 @@ class ExecutionSimulator:
         self.nodes = {n.node_id: n for n in scenario.nodes}
         self.instances = {i.instance_id: i for i in scenario.instances}
         self.sessions = {s.session_id: s for s in scenario.sessions}
-        self.links = {l.link_id: l.bytes_per_s for l in scenario.links}
+        self.links = {link.link_id: link.bytes_per_s for link in scenario.links}
         self.moves = tuple(sorted(moves, key=lambda m: m.order))
         self._validate()
         self.time = 0.0
@@ -718,19 +720,26 @@ class ExecutionSimulator:
             else:
                 while self.heap and self.heap[0][0] <= self.time + 1e-12:
                     _, _, kind, payload = heapq.heappop(self.heap)
-                    if kind == "prepare": self._prepare(*payload)
-                    elif kind == "ready": self._ready(*payload)
-                    elif kind == "idle": self._idle(payload)
-                    elif kind == "commit": self._commit(payload)
-                    elif kind == "request_start": self._request_start(*payload)
-                    elif kind == "request_done": self._request_done(*payload)
+                    if kind == "prepare":
+                        self._prepare(*payload)
+                    elif kind == "ready":
+                        self._ready(*payload)
+                    elif kind == "idle":
+                        self._idle(payload)
+                    elif kind == "commit":
+                        self._commit(payload)
+                    elif kind == "request_start":
+                        self._request_start(*payload)
+                    elif kind == "request_done":
+                        self._request_done(*payload)
                     elif kind == "node_state":
                         self.node_state[payload] = self.scenario.final_state
                         self.power_model.set_state(payload, self.scenario.final_state)
                         self.node_actions.pop(payload)
                         self._stop_action(("node", payload))
                         self._event(f"{self.scenario.final_state}_done", node=payload)
-                    else: raise RuntimeError(f"unknown event {kind!r}")
+                    else:
+                        raise RuntimeError(f"unknown event {kind!r}")
             self._record_power()
             if target == self.scenario.end_s:
                 break
