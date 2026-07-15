@@ -7,7 +7,7 @@ Plausible wrong implementations:
 - Regenerate different conversations for repeats or split a trace turn.
 - Change the selected session set when concurrency changes.
 - Pool replay and KV bytes or omit matched no-migration controls.
-- Count response chunks as tokens or accept partial KV chunk hits.
+- Count response chunks as tokens or accept fewer hit tokens than the request.
 - Reduce incomplete, stale, or old-schema runs.
 """
 
@@ -94,6 +94,7 @@ def test_kv_bytes_come_from_logged_full_chunk_layout(tmp_path):
     assert layout["chunk_bytes"] == 12_582_912
     assert layout["bytes_per_token"] == 49_152
     assert layout["chunk_tokens"] == 256
+    assert c.kv_metrics(11_047, layout) == (44, 11_047 * 49_152)
 
 
 def test_cli_only_exposes_new_commands():

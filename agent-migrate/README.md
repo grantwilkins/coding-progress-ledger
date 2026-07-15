@@ -137,7 +137,9 @@ retaining the 4 GB pinned staging allocator required by the remote connector.
 The pinned LMCache 0.3.3 connector is patched at process startup to read exact
 metadata lengths, serialize complete socket transactions, and reconnect after
 protocol errors before retrying once. This is a correctness baseline, not a
-parallel KV connection pool. On a two-GPU A100 node, check the pinned vLLM `0.10.1.1`
+parallel KV connection pool. KV accounting includes the partial final chunk and
+requires every prompt token to hit. On a two-GPU A100 node, check the pinned
+vLLM `0.10.1.1`
 and LMCache `0.3.3` setup:
 
 ```bash
