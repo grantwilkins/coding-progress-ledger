@@ -23,6 +23,7 @@ from dispatch import DestFleet, Event, Plan, bind_dp, movement_columns
 from impact import Impact, Movement
 from instance import JobPopulation
 from profiles import ModelProfile
+from power_model import ExpectedPower
 
 
 @dataclass(frozen=True)
@@ -344,20 +345,25 @@ def fair_link_rates(paths: dict[int, tuple[str, ...]], links: dict[str, float]) 
     for path in paths.values():
         if not path or len(set(path)) != len(path) or any(link not in links for link in path):
             raise ValueError("every flow requires a valid path without duplicate links")
-    rates = {flow: 0.0 for flow in paths}
-    residual = dict(links)
-    active = set(paths)
+    rates, residual, active = {flow: 0.0 for flow in paths}, dict(links), set(paths)
+    members = {link: set() for link in links}
+    for flow, path in paths.items():
+        for link in path:
+            members[link].add(flow)
+    counts = {link: len(flows) for link, flows in members.items()}
     while active:
         share, bottleneck = min(
-            (residual[link] / sum(link in paths[f] for f in active), link)
-            for link in links if any(link in paths[f] for f in active)
+            (residual[link] / count, link) for link, count in counts.items() if count
         )
         for flow in active:
             rates[flow] += share
-        for link in links:
-            residual[link] -= share * sum(link in paths[f] for f in active)
-        blocked = {f for f in active if bottleneck in paths[f]}
+        for link, count in counts.items():
+            residual[link] -= share * count
+        blocked = members[bottleneck] & active
         active -= blocked
+        for flow in blocked:
+            for link in paths[flow]:
+                counts[link] -= 1
     return rates
 
 
@@ -392,6 +398,7 @@ class ExecutionSimulator:
         self.flows: dict[int, _Flow] = {}
         self.next_flow = 0
         self.states = [_MoveState(m) for m in self.moves]
+        self.move_index = {state.move.session_id: i for i, state in enumerate(self.states)}
         self.by_source: dict[str, list[int]] = {}
         for i, state in enumerate(self.states):
             source = self.sessions[state.move.session_id].source_instance
@@ -403,8 +410,10 @@ class ExecutionSimulator:
         self.paused = set()
         self.moved = set()
         self.route = {s.session_id: s.source_instance for s in scenario.sessions}
+        self.power_model = ExpectedPower(scenario, profile, case_id)
         self.node_state = {n.node_id: "awake" for n in scenario.nodes}
-        self.active_actions: dict[tuple[int, str, str], tuple[str, str]] = {}
+        self.active_actions: dict[object, tuple[str, bool]] = {}
+        self.action_power = {True: 0.0, False: 0.0}
         self.node_actions: dict[str, str] = {}
         self.deferred = set()
         self.waking = set()
@@ -451,39 +460,20 @@ class ExecutionSimulator:
     def _event(self, name: str, session: str = "", node: str = "", detail: str = ""):
         self.events.append(ExecutionEvent(self.time, name, session, node, detail))
 
+    def _start_action(self, key, action: str, instance: str | None = None,
+                      node: str | None = None):
+        local = self.nodes[node].local if node else self.nodes[self.instances[instance].gpu_nodes[0]].local
+        self.active_actions[key] = action, local
+        self.action_power[local] += self.case.action_power_w[action][0 if local else 1]
+
+    def _stop_action(self, key):
+        value = self.active_actions.pop(key, None)
+        if value:
+            action, local = value
+            self.action_power[local] -= self.case.action_power_w[action][0 if local else 1]
+
     def _node_power(self, local: bool) -> float:
-        total = 0.0
-        ell_by_instance = {i: 0.0 for i in self.instances}
-        for session in self.sessions.values():
-            instance = self.route[session.session_id]
-            ell_by_instance[instance] += session.expected_f / self.case.F + session.expected_g / self.case.G
-        gpu_loads = {node: [0.0] * value.gpus for node, value in self.nodes.items()}
-        filled = {node: 0 for node in self.nodes}
-        for instance_id, instance in self.instances.items():
-            share = ell_by_instance[instance_id] / len(instance.gpu_nodes)
-            for node in instance.gpu_nodes:
-                gpu_loads[node][filled[node]] += share
-                filled[node] += 1
-        for node_id, node in self.nodes.items():
-            if node.local != local:
-                continue
-            state = self.node_state[node_id]
-            if state == "off":
-                continue
-            if state == "sleep":
-                total += self.case.sleep_power_w * (node.gpus if self.profile.power_scope == "gpu" else 1)
-            elif self.profile.power_scope == "gpu":
-                total += sum(self.case.power_curve.power(load) for load in gpu_loads[node_id])
-            else:
-                total += self.case.power_curve.power(sum(gpu_loads[node_id]))
-        side = 0 if local else 1
-        for action, instance in self.active_actions.values():
-            if self.nodes[self.instances[instance].gpu_nodes[0]].local == local:
-                total += self.case.action_power_w[action][side]
-        for node_id, action in self.node_actions.items():
-            if self.nodes[node_id].local == local:
-                total += self.case.action_power_w[action][side]
-        return total
+        return self.power_model.power(local) + self.action_power[local]
 
     def _record_power(self):
         point = (self.time, self._node_power(True), self._node_power(False))
@@ -526,8 +516,9 @@ class ExecutionSimulator:
         if byte_count:
             source = self.sessions[state.move.session_id].source_instance
             if state.move.method == "kv_transfer" or not self.sessions[state.move.session_id].log_external:
-                self.active_actions[index, phase, "source"] = (
-                    "catch_up" if phase == "catch_up" else state.move.method, source
+                self._start_action(
+                    (index, phase, "source"),
+                    "catch_up" if phase == "catch_up" else state.move.method, source,
                 )
             flow = _Flow(
                 self.next_flow, index, phase, float(byte_count), state.move.path,
@@ -567,14 +558,14 @@ class ExecutionSimulator:
             duration = 0.0
         if duration:
             action = "catch_up" if phase == "catch_up" else state.move.method
-            self.active_actions[index, phase, "destination"] = (
-                action, state.move.destination_instance
+            self._start_action(
+                (index, phase, "destination"), action, state.move.destination_instance
             )
         self._schedule(self.time + duration, "ready", (index, phase))
 
     def _ready(self, index: int, phase: str):
         state, session_id = self.states[index], self.states[index].move.session_id
-        self.active_actions.pop((index, phase, "destination"), None)
+        self._stop_action((index, phase, "destination"))
         replay = state.move.method == "replay" or (
             state.move.method == "replay_on_request" and phase == "wake"
         )
@@ -625,6 +616,7 @@ class ExecutionSimulator:
     def _commit(self, index: int):
         state, session_id = self.states[index], self.states[index].move.session_id
         state.committed = self.time
+        self.power_model.move(session_id, state.move.destination_instance)
         self.route[session_id] = state.move.destination_instance
         self.moved.add(session_id)
         self.paused.discard(session_id)
@@ -641,14 +633,12 @@ class ExecutionSimulator:
         for node_id in self.instances[source].gpu_nodes:
             if self.node_state[node_id] != "awake":
                 continue
-            dependents = {
-                session.session_id for session in self.sessions.values()
-                if node_id in self.instances[session.source_instance].gpu_nodes
-            }
+            dependents = self.power_model.dependents[node_id]
             if dependents <= self.moved and self.scenario.final_state != "awake":
                 duration = self.case.sleep_s if self.scenario.final_state == "sleep" else self.case.shutdown_s
                 self.node_state[node_id] = "transition"
                 self.node_actions[node_id] = self.scenario.final_state
+                self._start_action(("node", node_id), self.scenario.final_state, node=node_id)
                 self._event(f"{self.scenario.final_state}_start", node=node_id)
                 self._schedule(self.time + duration, "node_state", node_id)
 
@@ -661,8 +651,7 @@ class ExecutionSimulator:
             self.pending_requests[session_id] = request_index
             if session_id not in self.waking:
                 self.waking.add(session_id)
-                index = next(i for i, state in enumerate(self.states)
-                             if state.move.session_id == session_id)
+                index = self.move_index[session_id]
                 self.states[index].wake_start = self.time
                 self._event("wake_start", session_id)
                 self._prepare(index, "wake")
@@ -719,7 +708,7 @@ class ExecutionSimulator:
                 for flow_id in done:
                     flow = self.flows.pop(flow_id)
                     state = self.states[flow.move_index]
-                    self.active_actions.pop((flow.move_index, flow.phase, "source"), None)
+                    self._stop_action((flow.move_index, flow.phase, "source"))
                     self.network.append(NetworkExecution(
                         state.move.session_id, flow.phase, flow.bytes, flow.path,
                         flow.start, self.time,
@@ -737,7 +726,9 @@ class ExecutionSimulator:
                     elif kind == "request_done": self._request_done(*payload)
                     elif kind == "node_state":
                         self.node_state[payload] = self.scenario.final_state
+                        self.power_model.set_state(payload, self.scenario.final_state)
                         self.node_actions.pop(payload)
+                        self._stop_action(("node", payload))
                         self._event(f"{self.scenario.final_state}_done", node=payload)
                     else: raise RuntimeError(f"unknown event {kind!r}")
             self._record_power()
