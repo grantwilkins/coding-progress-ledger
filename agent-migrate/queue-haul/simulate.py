@@ -272,14 +272,14 @@ class ExecutionEvent:
 class SessionExecution:
     session_id: str
     method: MoveMethod
-    initial_start_s: float
-    initial_ready_s: float
-    pause_s: float
-    idle_s: float
+    initial_start_s: float | None
+    initial_ready_s: float | None
+    pause_s: float | None
+    idle_s: float | None
     catch_up_start_s: float | None
     catch_up_ready_s: float | None
-    switch_s: float
-    committed_s: float
+    switch_s: float | None
+    committed_s: float | None
     wake_start_s: float | None
     wake_ready_s: float | None
 
@@ -292,6 +292,10 @@ class ExecutionResult:
     source_power_at_deadline_w: float
     deadline_met: bool
     makespan_s: float
+
+    @property
+    def completed_sessions(self) -> int:
+        return sum(row.committed_s is not None for row in self.sessions)
 
 
 @dataclass
@@ -307,14 +311,14 @@ class _Flow:
 class _MoveState:
     move: PlannedMove
     snapshot_tokens: int = 0
-    initial_start: float = 0
-    initial_ready: float = 0
-    pause: float = 0
-    idle: float = 0
+    initial_start: float | None = None
+    initial_ready: float | None = None
+    pause: float | None = None
+    idle: float | None = None
     catch_start: float | None = None
     catch_ready: float | None = None
-    switch: float = 0
-    committed: float = 0
+    switch: float | None = None
+    committed: float | None = None
     wake_start: float | None = None
     wake_ready: float | None = None
     phase: str = "initial"
@@ -697,19 +701,20 @@ class ExecutionSimulator:
             self._record_power()
             if target == self.scenario.end_s:
                 break
-        completed = tuple(
+        sessions = tuple(
             SessionExecution(
                 s.move.session_id, s.move.method, s.initial_start, s.initial_ready, s.pause,
                 s.idle, s.catch_start, s.catch_ready, s.switch, s.committed,
                 s.wake_start, s.wake_ready,
-            ) for s in self.states if s.committed
+            ) for s in self.states
         )
         at_deadline = step_average(
             self.power, self.scenario.deadline_s, self.profile.power_window_s
         )
-        makespan = max((s.committed_s for s in completed), default=self.scenario.solver_s)
+        makespan = max((s.committed_s for s in sessions if s.committed_s is not None),
+                       default=self.scenario.solver_s)
         return ExecutionResult(
-            tuple(self.events), completed, tuple(self.power), at_deadline,
+            tuple(self.events), sessions, tuple(self.power), at_deadline,
             at_deadline <= self.scenario.power_limit_w, makespan,
         )
 

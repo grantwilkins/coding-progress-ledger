@@ -130,3 +130,12 @@ def test_deferred_replay_waits_for_an_observed_request(tmp_path):
     assert row.wake_start_s == pytest.approx(1)
     assert row.wake_ready_s == pytest.approx(2.1)  # 100 B / 100 B/s + 10 tok / 100 tok/s
     assert request_start == pytest.approx([2.1])
+
+
+def test_incomplete_moves_remain_visible(tmp_path):
+    session = SimSession("slow", "source", 10, 0, 0, 100)
+    move = PlannedMove("slow", "dest", "kv_transfer", 0, ("wan",))
+    result = execute(scenario((session,), deadline=1, end=1), model(tmp_path), (move,))
+    assert len(result.sessions) == 1
+    assert result.sessions[0].committed_s is None
+    assert result.completed_sessions == 0
