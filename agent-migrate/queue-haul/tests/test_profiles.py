@@ -94,9 +94,11 @@ def test_workload_sampling_preserves_complete_records(tmp_path):
     raw = {
         "schema": "queue-haul-workload-profile-v1", "profile_id": "w", "source": source("trace"),
         "records": [
-            {"job_type": "human", "state": "idle", "context_tokens": 10, "output_tokens": 1,
+            {"job_type": "human", "state": "idle", "context_tokens": 10,
+             "prompt_tokens": 2, "output_tokens": 1,
              "request_gap_s": 100, "tool_delay_s": 0, "log_bytes": 40, "log_external": True},
-            {"job_type": "agent", "state": "active", "context_tokens": 100, "output_tokens": 10,
+            {"job_type": "agent", "state": "active", "context_tokens": 100,
+             "prompt_tokens": 20, "output_tokens": 10,
              "request_gap_s": 1, "tool_delay_s": 2, "log_bytes": 400, "log_external": False},
         ],
     }

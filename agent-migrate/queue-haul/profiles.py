@@ -214,6 +214,7 @@ class WorkloadRecord:
     job_type: str
     state: str
     context_tokens: int
+    prompt_tokens: int
     output_tokens: int
     request_gap_s: float
     tool_delay_s: float
@@ -224,11 +225,12 @@ class WorkloadRecord:
     def parse(cls, raw: dict) -> "WorkloadRecord":
         value = cls(
             raw["job_type"], raw["state"], int(raw["context_tokens"]),
-            int(raw["output_tokens"]), float(raw["request_gap_s"]),
+            int(raw["prompt_tokens"]), int(raw["output_tokens"]), float(raw["request_gap_s"]),
             float(raw["tool_delay_s"]), int(raw["log_bytes"]), bool(raw["log_external"]),
         )
         if value.state not in {"active", "idle", "cold"} or value.context_tokens < 1 \
-                or value.output_tokens < 0 or min(value.request_gap_s, value.tool_delay_s) < 0 \
+                or value.prompt_tokens < 1 or value.output_tokens < 0 \
+                or min(value.request_gap_s, value.tool_delay_s) < 0 \
                 or value.log_bytes < 1:
             raise ValueError("invalid workload record")
         return value
