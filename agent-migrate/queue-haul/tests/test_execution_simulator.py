@@ -75,6 +75,9 @@ def test_parallel_transfer_and_power_credit_at_commit(tmp_path):
     assert rows["0"].initial_ready_s == pytest.approx(2)  # 100 B each over one 100 B/s link
     assert rows["1"].initial_ready_s == pytest.approx(2)
     assert rows["0"].committed_s == pytest.approx(3)
+    assert {(row.bytes, row.start_s, row.end_s) for row in result.network} == {
+        (100, 0, 2)
+    }
     before = [p for p in result.power if p[0] < 3]
     after = [p for p in result.power if p[0] >= 3]
     assert len({p[1] for p in before}) == 1
@@ -133,9 +136,10 @@ def test_deferred_replay_waits_for_an_observed_request(tmp_path):
 
 
 def test_incomplete_moves_remain_visible(tmp_path):
-    session = SimSession("slow", "source", 10, 0, 0, 100)
+    session = SimSession("slow", "source", 20, 0, 0, 100)
     move = PlannedMove("slow", "dest", "kv_transfer", 0, ("wan",))
     result = execute(scenario((session,), deadline=1, end=1), model(tmp_path), (move,))
     assert len(result.sessions) == 1
     assert result.sessions[0].committed_s is None
     assert result.completed_sessions == 0
+    assert result.network[0].end_s is None

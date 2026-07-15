@@ -285,9 +285,20 @@ class SessionExecution:
 
 
 @dataclass(frozen=True)
+class NetworkExecution:
+    session_id: str
+    phase: str
+    bytes: int
+    path: tuple[str, ...]
+    start_s: float
+    end_s: float | None
+
+
+@dataclass(frozen=True)
 class ExecutionResult:
     events: tuple[ExecutionEvent, ...]
     sessions: tuple[SessionExecution, ...]
+    network: tuple[NetworkExecution, ...]
     power: tuple[tuple[float, float, float], ...]
     source_power_at_deadline_w: float
     deadline_met: bool
@@ -305,6 +316,8 @@ class _Flow:
     phase: str
     remaining: float
     path: tuple[str, ...]
+    bytes: int
+    start: float
 
 
 @dataclass
@@ -399,6 +412,7 @@ class ExecutionSimulator:
         self.events: list[ExecutionEvent] = []
         self.power: list[tuple[float, float, float]] = []
         self.request_runs: list[tuple[str, float, float, float, int, int]] = []
+        self.network: list[NetworkExecution] = []
 
     def _validate(self):
         if self.scenario.deadline_s < self.profile.power_window_s:
@@ -513,7 +527,10 @@ class ExecutionSimulator:
                 self.active_actions[index, phase, "source"] = (
                     "catch_up" if phase == "catch_up" else state.move.method, source
                 )
-            flow = _Flow(self.next_flow, index, phase, float(byte_count), state.move.path)
+            flow = _Flow(
+                self.next_flow, index, phase, float(byte_count), state.move.path,
+                byte_count, self.time,
+            )
             self.next_flow += 1
             self.flows[flow.flow_id] = flow
             self._event("network_start", state.move.session_id, detail=f"{phase}:{byte_count}")
@@ -682,6 +699,10 @@ class ExecutionSimulator:
                     flow = self.flows.pop(flow_id)
                     state = self.states[flow.move_index]
                     self.active_actions.pop((flow.move_index, flow.phase, "source"), None)
+                    self.network.append(NetworkExecution(
+                        state.move.session_id, flow.phase, flow.bytes, flow.path,
+                        flow.start, self.time,
+                    ))
                     self._event("network_done", state.move.session_id, detail=flow.phase)
                     self._endpoint(flow.move_index, flow.phase)
             else:
@@ -713,8 +734,14 @@ class ExecutionSimulator:
         )
         makespan = max((s.committed_s for s in sessions if s.committed_s is not None),
                        default=self.scenario.solver_s)
+        network = self.network + [
+            NetworkExecution(
+                self.states[flow.move_index].move.session_id, flow.phase, flow.bytes,
+                flow.path, flow.start, None,
+            ) for flow in self.flows.values()
+        ]
         return ExecutionResult(
-            tuple(self.events), sessions, tuple(self.power), at_deadline,
+            tuple(self.events), sessions, tuple(network), tuple(self.power), at_deadline,
             at_deadline <= self.scenario.power_limit_w, makespan,
         )
 
