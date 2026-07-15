@@ -52,6 +52,9 @@ def test_destination_placement_balances_whole_sessions(tmp_path):
     assert {move.session_id for move in result.moves} == {"a", "b"}
     assert all(move.method in METHODS for move in result.moves)
 
+    route = lambda source, destination: PATHS[source, destination]
+    assert plan(problem(limit=0), model(tmp_path), route, "load_only").moves == result.moves
+
 
 def test_node_drain_counts_sleep_only_after_the_whole_node_is_selected(tmp_path):
     scenario = problem(limit=5, final="sleep")

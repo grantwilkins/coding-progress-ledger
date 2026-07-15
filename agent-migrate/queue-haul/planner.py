@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import heapq
 from time import perf_counter
+from typing import Callable
 
 import cvxpy as cp
 import numpy as np
@@ -14,6 +16,7 @@ from simulate import ExecutionScenario, MoveMethod, PlannedMove, SimSession
 
 METHODS: tuple[MoveMethod, ...] = ("replay", "kv_transfer", "replay_on_request")
 SOLVERS = ("random", "load_only", "node_aware", "node_drain", "rounded_lp")
+Routes = dict[tuple[str, str], tuple[str, ...]] | Callable[[str, str], tuple[str, ...]]
 
 
 @dataclass(frozen=True)
@@ -121,42 +124,51 @@ def _drain_groups(scenario: ExecutionScenario, sessions: list[SimSession]) -> li
     return groups
 
 
+def _route(routes: Routes, source: str, destination: str) -> tuple[str, ...]:
+    return routes(source, destination) if callable(routes) else routes[(source, destination)]
+
+
 def _place(selected: list[int], sessions: list[SimSession], scenario: ExecutionScenario,
-           profile: ModelProfile, paths: dict[tuple[str, str], tuple[str, ...]],
+           profile: ModelProfile, routes: Routes,
            methods: list[MoveMethod], case_id: str) -> tuple[PlannedMove, ...]:
     case = profile.case(case_id)
     nodes = {n.node_id: n for n in scenario.nodes}
     destinations = [
         i for i in scenario.instances if all(not nodes[n].local for n in i.gpu_nodes)
     ]
+    if not destinations or len({len(i.gpu_nodes) for i in destinations}) != 1:
+        raise ValueError("destination instances must exist and use one tensor-parallel size")
     load = {i.instance_id: 0.0 for i in destinations}
     for session in scenario.sessions:
         if session.source_instance in load:
             load[session.source_instance] += _ell(session, case)
+    size = len(destinations[0].gpu_nodes)
+    heap = [(value / size, key) for key, value in load.items()]
+    heapq.heapify(heap)
     moves = []
     for order, j in enumerate(selected):
         session, ell = sessions[j], _ell(sessions[j], case)
-        choices = [
-            i for i in destinations
-            if (session.source_instance, i.instance_id) in paths
-            and load[i.instance_id] / len(i.gpu_nodes) + ell / len(i.gpu_nodes) <= profile.max_ell
-        ]
-        if not choices:
+        current, destination = heapq.heappop(heap)
+        if current + ell / size > profile.max_ell:
             raise ValueError(f"no destination capacity or path for session {session.session_id!r}")
-        dest = min(choices, key=lambda i: (load[i.instance_id] / len(i.gpu_nodes), i.instance_id))
-        load[dest.instance_id] += ell
-        path = paths[(session.source_instance, dest.instance_id)]
-        moves.append(PlannedMove(session.session_id, dest.instance_id, methods[j], order, path))
+        path = _route(routes, session.source_instance, destination)
+        load[destination] += ell
+        heapq.heappush(heap, (load[destination] / size, destination))
+        moves.append(PlannedMove(session.session_id, destination, methods[j], order, path))
     return tuple(moves)
 
 
 def plan(scenario: ExecutionScenario, profile: ModelProfile,
-         paths: dict[tuple[str, str], tuple[str, ...]], solver: str,
+         paths: Routes, solver: str,
          case_id: str = "central", seed: int = 0) -> PlanResult:
     if solver not in SOLVERS:
         raise ValueError(f"unknown solver {solver!r}")
     start, case = perf_counter(), profile.case(case_id)
     sessions, links = _local_sessions(scenario), {l.link_id: l.bytes_per_s for l in scenario.links}
+    nodes = {n.node_id: n for n in scenario.nodes}
+    destinations = [i for i in scenario.instances if all(not nodes[n].local for n in i.gpu_nodes)]
+    if not destinations:
+        raise ValueError("scenario has no destination instance")
     initial = source_power(scenario, profile, case_id=case_id)
     if initial <= scenario.power_limit_w:
         return PlanResult(solver, (), initial, initial, True, perf_counter() - start, 0,
@@ -165,13 +177,10 @@ def plan(scenario: ExecutionScenario, profile: ModelProfile,
     valid = np.zeros((len(sessions), len(METHODS)), bool)
     costs = np.full(valid.shape, np.inf)
     for j, session in enumerate(sessions):
-        candidate_paths = [path for (source, _dest), path in paths.items()
-                           if source == session.source_instance]
-        if not candidate_paths:
-            raise ValueError(f"no destination path for source {session.source_instance!r}")
+        # TODO(routes): measure heterogeneous destination links before optimizing over them.
+        candidate_path = _route(paths, session.source_instance, destinations[0].instance_id)
         for k, method in enumerate(METHODS):
-            costs[j, k] = min(_duration(session, method, case, path, links)
-                              for path in candidate_paths)
+            costs[j, k] = _duration(session, method, case, candidate_path, links)
             valid[j, k] = costs[j, k] <= horizon
     available = valid.any(1)
     best_method = np.argmin(np.where(valid, costs, np.inf), axis=1)
