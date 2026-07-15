@@ -9,6 +9,8 @@ Plausible wrong implementations:
 - Start source/sink with colliding ports, long TMPDIRs, or shared cache dirs.
 - Shape each route independently instead of enforcing one shared link.
 - Bill both directions instead of the simulated source-egress directions.
+- Trust reset HTTP 200 after vLLM logged that the reset failed.
+- Hide transfers in a private CPU cache or log every socket read as a sample.
 """
 
 from __future__ import annotations
@@ -59,7 +61,8 @@ def test_vllm_commands_pin_validated_sandbox_flags_and_roles():
     assert "VLLM_SERVER_DEV_MODE=1" in source
     assert "nvidia/cu13/lib" in source
     assert "${LD_LIBRARY_PATH:-}" in source
-    assert "LMCACHE_MAX_LOCAL_CPU_SIZE=4" in source
+    assert "LMCACHE_LOCAL_CPU=False" in source
+    assert "LMCACHE_MAX_LOCAL_CPU_SIZE=0" in source
     assert "TMPDIR=/tmp/qh-src-" in source
     assert "TMPDIR=/tmp/qh-sink-" in sink
     assert "VLLM_RPC_BASE_PATH=/tmp/qh-src-" in source
@@ -192,16 +195,30 @@ def test_lite_lmcache_server_put_get_and_flush(tmp_path):
         s.stop_proc(proc)
 
 
-def test_reset_vllm_caches_resets_both_gpus(monkeypatch):
+def test_reset_vllm_caches_requires_success_from_both_logs(monkeypatch, tmp_path):
     calls = []
-    monkeypatch.setattr(s, "http_text", lambda host, port, method, path: calls.append((host, port, method, path)))
+    logs = tmp_path / "source.log", tmp_path / "sink.log"
+    for log in logs:
+        log.write_text("")
 
-    s.reset_vllm_caches(s.Config())
+    def reset(host, port, method, path):
+        calls.append((host, port, method, path))
+        logs[port == 8200].write_text("Successfully reset prefix cache\n")
+
+    monkeypatch.setattr(s, "http_text", reset)
+
+    s.reset_vllm_caches(s.Config(), logs)
 
     assert calls == [
         ("127.0.0.1", 8100, "POST", "/reset_prefix_cache"),
         ("127.0.0.1", 8200, "POST", "/reset_prefix_cache"),
     ]
+
+
+def test_reset_result_rejects_failed_http_200_log():
+    assert s.reset_result("Failed to reset prefix cache because blocks remain") is False
+    assert s.reset_result("Successfully reset prefix cache") is True
+    assert s.reset_result("POST /reset_prefix_cache 200 OK") is None
 
 
 @pytest.mark.parametrize(("initial", "target", "path"), [(False, True, "/sleep?level=1"), (True, False, "/wake_up")])
@@ -297,7 +314,7 @@ def test_proxy_relay_shapes_billable_bytes_and_logs(tmp_path):
             await server.wait_closed()
         target_server.close()
         await target_server.wait_closed()
-        byte_log.close()
+        await byte_log.close()
         return elapsed, log
 
     elapsed, log = asyncio.run(run())
@@ -307,6 +324,10 @@ def test_proxy_relay_shapes_billable_bytes_and_logs(tmp_path):
     assert sum(int(r["bytes"]) for r in rows if r["direction"] == "client_to_target") == 512
     assert {r["route"] for r in rows} == {"api"}
     assert {r["billed"] for r in rows} == {"1"}
+    assert len(rows) <= 2
+    connections = list(csv.DictReader((tmp_path / "proxy_connections.csv").open()))
+    assert len(connections) == 1
+    assert int(connections[0]["client_to_target_bytes"]) == 512
 
 
 def test_smoke2_live_cli_is_wired_with_1gbps_default():

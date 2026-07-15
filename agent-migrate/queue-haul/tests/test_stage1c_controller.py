@@ -974,7 +974,7 @@ def test_live_profile_recalibrates_on_lmcache_runtime_change(tmp_path: Path, mon
 
     assert used == path
     assert calls == [(2, 1000.0, str(path))]
-    assert profile["lmcache_max_local_cpu_gb"] == "4"
+    assert profile["lmcache_max_local_cpu_gb"] == "0"
 
 
 

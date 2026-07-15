@@ -25,7 +25,7 @@ from stage1_curves import shell
 MODEL = "openai/gpt-oss-20b"
 SANDBOX = Path("/scratch/users/gfw/ptsim/vllm-openai-v0.10.1.1.sandbox")
 RUNTIME_VERSIONS = ("0.10.1.1", "0.3.3")
-LMCACHE_CLEAR_MARKER = "LMCache lite server cleared"
+LMCACHE_CLEAR_MARKER = '"operation":"clear"'
 
 
 def apptainer_image_default() -> Path:
@@ -47,7 +47,7 @@ HF_HOME = Path("/scratch/users/gfw/ptsim/hf")
 SCRATCH_BIND = Path("/scratch/users/gfw")
 CACHE_ROOT = Path("/scratch/users/gfw/ptsim/cache")
 CHUNK = 65536
-LMCACHE_MAX_LOCAL_CPU_GB = "4"
+LMCACHE_MAX_LOCAL_CPU_GB = "0"
 TYPED_VLLM_FLAGS = {
     "--host",
     "--port",
@@ -185,7 +185,8 @@ def vllm_exports(cfg: Config, role: str, remote_url: str) -> list[str]:
         "LMCACHE_REMOTE_SERDE": "naive",
         "LMCACHE_LMCACHE_INSTANCE_ID": f"stage1b_{role}",
         "LMCACHE_CHUNK_SIZE": "256",
-        "LMCACHE_MAX_LOCAL_CPU_SIZE": LMCACHE_MAX_LOCAL_CPU_GB,
+        "LMCACHE_LOCAL_CPU": "False",
+        "LMCACHE_MAX_LOCAL_CPU_SIZE": "0",
         **{k: str(v) for k, v in cache_dirs(cfg, role).items()},
     }
     exports = [f"export {k}={shlex.quote(v)}" for k, v in env.items()]
@@ -372,19 +373,64 @@ class TokenBucket:
 
 
 class ByteLog:
+    interval_ns = 250_000_000
+
     def __init__(self, path: Path):
         path.parent.mkdir(parents=True, exist_ok=True)
         self.file = path.open("w", newline="", buffering=1)
         self.writer = csv.writer(self.file)
-        self.writer.writerow(["ts", "route", "direction", "bytes", "billed"])
+        self.writer.writerow(["monotonic_ns", "wall_ns", "interval_ns", "route", "direction", "bytes", "billed"])
+        connections = path.with_name("proxy_connections.csv")
+        self.connections = connections.open("w", newline="", buffering=1)
+        self.connection_writer = csv.writer(self.connections)
+        self.connection_writer.writerow(["connection_id", "route", "start_ns", "end_ns", "client_to_target_bytes", "target_to_client_bytes"])
+        self.buckets: dict[tuple[int, str, str, bool], int] = {}
         self.lock = asyncio.Lock()
+        self.task: asyncio.Task | None = None
+        self.active = 0
+        self.idle = asyncio.Event()
+        self.idle.set()
 
-    async def write(self, route: str, direction: str, nbytes: int, billed: bool) -> None:
+    async def start(self) -> None:
+        self.task = asyncio.create_task(self._flush_loop())
+
+    async def add(self, route: str, direction: str, nbytes: int, billed: bool) -> None:
         async with self.lock:
-            self.writer.writerow([f"{time.time():.6f}", route, direction, nbytes, int(billed)])
+            bucket = time.monotonic_ns() // self.interval_ns * self.interval_ns
+            key = bucket, route, direction, billed
+            self.buckets[key] = self.buckets.get(key, 0) + nbytes
 
-    def close(self) -> None:
+    async def opened(self) -> None:
+        async with self.lock:
+            self.active += 1
+            self.idle.clear()
+
+    async def connection(self, connection_id: str, route: str, start_ns: int, counts: tuple[int, int]) -> None:
+        async with self.lock:
+            self.connection_writer.writerow([connection_id, route, start_ns, time.monotonic_ns(), *counts])
+            self.active -= 1
+            if not self.active:
+                self.idle.set()
+
+    async def _flush_loop(self) -> None:
+        while True:
+            await asyncio.sleep(self.interval_ns / 1e9)
+            await self.flush()
+
+    async def flush(self, all_rows: bool = False) -> None:
+        cutoff = time.monotonic_ns() // self.interval_ns * self.interval_ns
+        async with self.lock:
+            keys = [key for key in self.buckets if all_rows or key[0] < cutoff]
+            for bucket, route, direction, billed in sorted(keys):
+                self.writer.writerow([bucket, time.time_ns(), self.interval_ns, route, direction, self.buckets.pop((bucket, route, direction, billed)), int(billed)])
+
+    async def close(self) -> None:
+        await self.idle.wait()
+        if self.task:
+            self.task.cancel()
+        await self.flush(all_rows=True)
         self.file.close()
+        self.connections.close()
 
 
 def billable(route: str, direction: str) -> bool:
@@ -430,6 +476,20 @@ class LiteLMCache:
             self.items.clear()
             self.total_bytes = 0
 
+    def stats(self) -> tuple[int, int]:
+        with self.lock:
+            return len(self.items), self.total_bytes
+
+
+def cache_event(operation: str, key: str = "", **fields) -> None:
+    print(json.dumps({
+        "monotonic_ns": time.monotonic_ns(),
+        "wall_ns": time.time_ns(),
+        "operation": operation,
+        "key_hash": hashlib.sha256(key.encode()).hexdigest() if key else "",
+        **fields,
+    }, separators=(",", ":")), flush=True)
+
 
 def _recv_all(sock: socket.socket, nbytes: int) -> bytes | None:
     data = bytearray()
@@ -451,17 +511,21 @@ def handle_lmcache_client(sock: socket.socket, store: LiteLMCache) -> None:
             command, length, fmt, dtype, location, s0, s1, s2, s3, raw_key = LMCACHE_CLIENT_META.unpack(header)
             key = raw_key.decode().strip(" \0")
             if command == LMCACHE_CLIENT_PUT:
+                start = time.monotonic_ns()
                 data = _recv_all(sock, length)
                 if data is None:
                     return
                 store.put(key, LMCacheEntry(data, length, fmt, dtype, (s0, s1, s2, s3), location))
+                cache_event("source_write", key, bytes=length, start_ns=start, end_ns=time.monotonic_ns(), format=fmt, dtype=dtype, shape=[s0, s1, s2, s3])
             elif command == LMCACHE_CLIENT_GET:
+                start = time.monotonic_ns()
                 entry = store.get(key)
                 if entry is None:
                     _send_meta(sock, LMCACHE_FAIL_PAYLOAD)
                 else:
                     _send_meta(sock, (LMCACHE_SERVER_SUCCESS, entry.length, entry.fmt, entry.dtype, *entry.shape, entry.location))
                     sock.sendall(entry.data)
+                cache_event("destination_read", key, bytes=entry.length if entry else 0, start_ns=start, end_ns=time.monotonic_ns(), hit=bool(entry))
             elif command == LMCACHE_CLIENT_EXIST:
                 _send_meta(sock, LMCACHE_OK_PAYLOAD if store.get(key) else LMCACHE_FAIL_PAYLOAD)
             elif command == LMCACHE_CLIENT_HEALTH:
@@ -475,7 +539,8 @@ def run_lmcache_server(host: str, port: int, max_bytes: int = 0) -> None:
 
     def clear(_signum, _frame) -> None:
         store.clear()
-        print(LMCACHE_CLEAR_MARKER, flush=True)
+        entries, nbytes = store.stats()
+        cache_event("clear", entries=entries, bytes=nbytes)
 
     signal.signal(signal.SIGUSR1, clear)
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as server:
@@ -488,7 +553,8 @@ def run_lmcache_server(host: str, port: int, max_bytes: int = 0) -> None:
             threading.Thread(target=handle_lmcache_client, args=(client, store), daemon=True).start()
 
 
-async def relay(reader: asyncio.StreamReader, writer: asyncio.StreamWriter, bucket: TokenBucket, log: ByteLog | None, route: str, direction: str) -> None:
+async def relay(reader: asyncio.StreamReader, writer: asyncio.StreamWriter, bucket: TokenBucket, log: ByteLog | None, route: str, direction: str) -> int:
+    total = 0
     try:
         charged = billable(route, direction)
         while data := await reader.read(CHUNK):
@@ -496,24 +562,37 @@ async def relay(reader: asyncio.StreamReader, writer: asyncio.StreamWriter, buck
                 await bucket.wait(len(data))
             writer.write(data)
             await writer.drain()
+            total += len(data)
             if log:
-                await log.write(route, direction, len(data), charged)
+                await log.add(route, direction, len(data), charged)
     finally:
         writer.close()
         await writer.wait_closed()
+    return total
 
 
 async def handle_proxy(client_r: asyncio.StreamReader, client_w: asyncio.StreamWriter, route: Route, bucket: TokenBucket, log: ByteLog | None) -> None:
+    start = time.monotonic_ns()
+    connection_id = hashlib.sha256(f"{route.name}:{start}".encode()).hexdigest()[:16]
     target_r, target_w = await asyncio.open_connection(route.target_host, route.target_port)
-    await asyncio.gather(
-        relay(client_r, target_w, bucket, log, route.name, "client_to_target"),
-        relay(target_r, client_w, bucket, log, route.name, "target_to_client"),
-    )
+    if log:
+        await log.opened()
+    counts = (0, 0)
+    try:
+        counts = tuple(await asyncio.gather(
+            relay(client_r, target_w, bucket, log, route.name, "client_to_target"),
+            relay(target_r, client_w, bucket, log, route.name, "target_to_client"),
+        ))
+    finally:
+        if log:
+            await log.connection(connection_id, route.name, start, counts)
 
 
 async def start_proxy(routes: list[Route], rate_bps: float, log: Path | None = None) -> tuple[list[asyncio.AbstractServer], ByteLog | None]:
     bucket = TokenBucket(rate_bps)
     byte_log = ByteLog(log) if log else None
+    if byte_log:
+        await byte_log.start()
     servers = []
     for route in routes:
         servers.append(
@@ -535,7 +614,7 @@ async def run_proxy(routes: list[Route], rate_bps: float, log: Path | None = Non
             server.close()
             await server.wait_closed()
         if byte_log:
-            byte_log.close()
+            await byte_log.close()
 
 
 def wait_tcp(host: str, port: int, timeout_s: float) -> None:
@@ -674,6 +753,9 @@ def flush_lmcache(stack: Stack) -> None:
     deadline = time.monotonic() + 5
     while time.monotonic() < deadline:
         if count_needle(log, LMCACHE_CLEAR_MARKER) > cleared:
+            event = next(json.loads(line) for line in reversed(read_text(log).splitlines()) if LMCACHE_CLEAR_MARKER in line)
+            if event["entries"] or event["bytes"]:
+                raise RuntimeError(f"LMCache clear left data: {event}")
             return
         if stack.lmcache.poll() is not None:
             raise RuntimeError("LMCache server exited while clearing")
@@ -705,9 +787,30 @@ def set_source_sleep(cfg: Config, sleeping: bool) -> None:
         raise RuntimeError(f"source failed to become {'sleeping' if sleeping else 'awake'}")
 
 
-def reset_vllm_caches(cfg: Config) -> None:
-    for port in (cfg.src_port, cfg.sink_port):
+def reset_result(text: str) -> bool | None:
+    if "Failed to reset prefix cache" in text:
+        return False
+    if "Successfully reset prefix cache" in text:
+        return True
+    return None
+
+
+def reset_vllm_caches(cfg: Config, logs: tuple[Path, Path]) -> None:
+    for port, log in zip((cfg.src_port, cfg.sink_port), logs):
+        offset = log.stat().st_size
         http_text(cfg.host, port, "POST", "/reset_prefix_cache")
+        deadline = time.monotonic() + 10
+        while time.monotonic() < deadline:
+            with log.open(errors="ignore") as handle:
+                handle.seek(offset)
+                result = reset_result(handle.read())
+            if result is not None:
+                if not result:
+                    raise RuntimeError(f"vLLM prefix cache reset failed on port {port}")
+                break
+            time.sleep(0.05)
+        else:
+            raise TimeoutError(f"vLLM prefix cache reset was not logged on port {port}")
 
 
 def read_text(path: Path) -> str:
@@ -722,7 +825,10 @@ def proxy_rows(path: Path) -> list[dict]:
     if not path.exists():
         return []
     with path.open() as f:
-        return list(csv.DictReader(f))
+        rows = list(csv.DictReader(f))
+    for row in rows:
+        row["ts"] = str(int(row["wall_ns"]) / 1e9) if "wall_ns" in row else row["ts"]
+    return rows
 
 
 def proxy_counts(path: Path) -> dict[str, int]:
