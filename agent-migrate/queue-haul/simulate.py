@@ -14,12 +14,15 @@ rebuilds BOTH pieces, each on its own resource. fleet=None ⇒ K=1, reproducing 
 from __future__ import annotations
 
 from dataclasses import dataclass
+import heapq
+from typing import Literal
 
 import numpy as np
 
 from dispatch import DestFleet, Event, Plan, bind_dp, movement_columns
 from impact import Impact, Movement
 from instance import JobPopulation
+from profiles import ModelProfile
 
 
 @dataclass(frozen=True)
@@ -161,3 +164,490 @@ def simulate(pop: JobPopulation, pool, imp: Impact, plan: Plan, event: Event = E
     return SimResult(sq(es), sq(ed), sq(rs), sq(rd), float(shedf[e_ok].sum()),
                      float(shedf[r_ok].sum()), int(r_ok.sum()), makespan, float(lb), float(ub),
                      realized_load, certified_load, load_cap, discipline, mode)
+
+
+MoveMethod = Literal["replay", "kv_transfer", "replay_on_request"]
+FinalState = Literal["awake", "sleep", "off"]
+
+
+@dataclass(frozen=True)
+class NetworkLink:
+    link_id: str
+    bytes_per_s: float
+
+    def __post_init__(self):
+        if not self.link_id or self.bytes_per_s <= 0:
+            raise ValueError("network links require an id and positive capacity")
+
+
+@dataclass(frozen=True)
+class PowerNode:
+    node_id: str
+    gpus: int = 8
+    local: bool = True
+
+    def __post_init__(self):
+        if not self.node_id or self.gpus < 1:
+            raise ValueError("power nodes require an id and at least one GPU")
+
+
+@dataclass(frozen=True)
+class ServingInstance:
+    instance_id: str
+    gpu_nodes: tuple[str, ...]
+
+    def __post_init__(self):
+        if not self.instance_id or not self.gpu_nodes:
+            raise ValueError("serving instances require an id and assigned GPUs")
+
+
+@dataclass(frozen=True)
+class SimRequest:
+    gap_s: float
+    prompt_tokens: int
+    output_tokens: int
+
+    def __post_init__(self):
+        if self.gap_s < 0 or self.prompt_tokens < 1 or self.output_tokens < 0:
+            raise ValueError("invalid request")
+
+
+@dataclass(frozen=True)
+class SimSession:
+    session_id: str
+    source_instance: str
+    context_tokens: int
+    expected_f: float
+    expected_g: float
+    log_bytes: int
+    log_external: bool = True
+    requests: tuple[SimRequest, ...] = ()
+    movable: bool = True
+
+    def __post_init__(self):
+        if not self.session_id or not self.source_instance or self.context_tokens < 1 \
+                or min(self.expected_f, self.expected_g) < 0 or self.log_bytes < 1:
+            raise ValueError("invalid session")
+
+
+@dataclass(frozen=True)
+class PlannedMove:
+    session_id: str
+    destination_instance: str
+    method: MoveMethod
+    order: int
+    path: tuple[str, ...]
+
+
+@dataclass(frozen=True)
+class ExecutionScenario:
+    deadline_s: float
+    end_s: float
+    power_limit_w: float
+    final_state: FinalState
+    solver_s: float
+    nodes: tuple[PowerNode, ...]
+    instances: tuple[ServingInstance, ...]
+    sessions: tuple[SimSession, ...]
+    links: tuple[NetworkLink, ...]
+
+    def __post_init__(self):
+        if self.deadline_s <= 0 or self.end_s < self.deadline_s or self.power_limit_w < 0 \
+                or self.solver_s < 0 or self.final_state not in {"awake", "sleep", "off"}:
+            raise ValueError("invalid execution scenario")
+
+
+@dataclass(frozen=True)
+class ExecutionEvent:
+    time_s: float
+    event: str
+    session_id: str = ""
+    node_id: str = ""
+    detail: str = ""
+
+
+@dataclass(frozen=True)
+class SessionExecution:
+    session_id: str
+    method: MoveMethod
+    initial_start_s: float
+    initial_ready_s: float
+    pause_s: float
+    idle_s: float
+    catch_up_start_s: float | None
+    catch_up_ready_s: float | None
+    switch_s: float
+    committed_s: float
+
+
+@dataclass(frozen=True)
+class ExecutionResult:
+    events: tuple[ExecutionEvent, ...]
+    sessions: tuple[SessionExecution, ...]
+    power: tuple[tuple[float, float, float], ...]
+    source_power_at_deadline_w: float
+    deadline_met: bool
+    makespan_s: float
+
+
+@dataclass
+class _Flow:
+    flow_id: int
+    move_index: int
+    phase: str
+    remaining: float
+    path: tuple[str, ...]
+
+
+@dataclass
+class _MoveState:
+    move: PlannedMove
+    snapshot_tokens: int = 0
+    initial_start: float = 0
+    initial_ready: float = 0
+    pause: float = 0
+    idle: float = 0
+    catch_start: float | None = None
+    catch_ready: float | None = None
+    switch: float = 0
+    committed: float = 0
+    phase: str = "initial"
+
+
+def fair_link_rates(paths: dict[int, tuple[str, ...]], links: dict[str, float]) -> dict[int, float]:
+    """Equal-share active flows at every bottleneck, redistributing unused capacity."""
+    if not paths:
+        return {}
+    for path in paths.values():
+        if not path or len(set(path)) != len(path) or any(link not in links for link in path):
+            raise ValueError("every flow requires a valid path without duplicate links")
+    rates = {flow: 0.0 for flow in paths}
+    residual = dict(links)
+    active = set(paths)
+    while active:
+        share, bottleneck = min(
+            (residual[link] / sum(link in paths[f] for f in active), link)
+            for link in links if any(link in paths[f] for f in active)
+        )
+        for flow in active:
+            rates[flow] += share
+        for link in links:
+            residual[link] -= share * sum(link in paths[f] for f in active)
+        blocked = {f for f in active if bottleneck in paths[f]}
+        active -= blocked
+    return rates
+
+
+class ExecutionSimulator:
+    def __init__(self, scenario: ExecutionScenario, profile: ModelProfile,
+                 moves: tuple[PlannedMove, ...], case_id: str = "central"):
+        self.scenario, self.profile, self.case = scenario, profile, profile.case(case_id)
+        self.nodes = {n.node_id: n for n in scenario.nodes}
+        self.instances = {i.instance_id: i for i in scenario.instances}
+        self.sessions = {s.session_id: s for s in scenario.sessions}
+        self.links = {l.link_id: l.bytes_per_s for l in scenario.links}
+        self.moves = tuple(sorted(moves, key=lambda m: m.order))
+        self._validate()
+        self.time = 0.0
+        self.heap: list[tuple[float, int, str, object]] = []
+        self.sequence = 0
+        self.flows: dict[int, _Flow] = {}
+        self.next_flow = 0
+        self.states = [_MoveState(m) for m in self.moves]
+        self.by_source: dict[str, list[int]] = {}
+        for i, state in enumerate(self.states):
+            source = self.sessions[state.move.session_id].source_instance
+            self.by_source.setdefault(source, []).append(i)
+        self.running = {source: 0 for source in self.by_source}
+        self.next_by_source = {source: 0 for source in self.by_source}
+        self.context = {s.session_id: s.context_tokens for s in scenario.sessions}
+        self.active_request_end = {s.session_id: 0.0 for s in scenario.sessions}
+        self.paused = set()
+        self.moved = set()
+        self.route = {s.session_id: s.source_instance for s in scenario.sessions}
+        self.node_state = {n.node_id: "awake" for n in scenario.nodes}
+        self.active_actions: dict[int, tuple[float, str]] = {}
+        self.events: list[ExecutionEvent] = []
+        self.power: list[tuple[float, float, float]] = []
+        self.request_runs: list[tuple[str, float, float, float, int, int]] = []
+
+    def _validate(self):
+        if len(self.nodes) != len(self.scenario.nodes) or len(self.instances) != len(self.scenario.instances) \
+                or len(self.sessions) != len(self.scenario.sessions):
+            raise ValueError("node, instance, and session ids must be unique")
+        used = {node: 0 for node in self.nodes}
+        for instance in self.instances.values():
+            for node in instance.gpu_nodes:
+                if node not in used:
+                    raise ValueError(f"unknown node {node!r}")
+                used[node] += 1
+        if any(used[n] > self.nodes[n].gpus for n in used):
+            raise ValueError("serving instances exceed GPU capacity")
+        if len({m.session_id for m in self.moves}) != len(self.moves) \
+                or len({m.order for m in self.moves}) != len(self.moves):
+            raise ValueError("moves require unique sessions and orders")
+        for move in self.moves:
+            if move.session_id not in self.sessions or move.destination_instance not in self.instances:
+                raise ValueError("move references an unknown session or destination")
+            if not self.sessions[move.session_id].movable:
+                raise ValueError(f"session {move.session_id!r} cannot move")
+            if move.method == "replay_on_request" and not self.sessions[move.session_id].log_external \
+                    and self.sessions[move.session_id].log_bytes <= 0:
+                raise ValueError("replay_on_request requires a durable session log")
+            if not move.path or any(link not in self.links for link in move.path):
+                raise ValueError("move path contains an unknown link")
+
+    def _schedule(self, when: float, kind: str, payload=None):
+        self.sequence += 1
+        heapq.heappush(self.heap, (when, self.sequence, kind, payload))
+
+    def _event(self, name: str, session: str = "", node: str = "", detail: str = ""):
+        self.events.append(ExecutionEvent(self.time, name, session, node, detail))
+
+    def _node_power(self, local: bool) -> float:
+        total = 0.0
+        ell_by_instance = {i: 0.0 for i in self.instances}
+        for session in self.sessions.values():
+            instance = self.route[session.session_id]
+            ell_by_instance[instance] += session.expected_f / self.case.F + session.expected_g / self.case.G
+        gpu_loads = {node: [0.0] * value.gpus for node, value in self.nodes.items()}
+        filled = {node: 0 for node in self.nodes}
+        for instance_id, instance in self.instances.items():
+            share = ell_by_instance[instance_id] / len(instance.gpu_nodes)
+            for node in instance.gpu_nodes:
+                gpu_loads[node][filled[node]] += share
+                filled[node] += 1
+        for node_id, node in self.nodes.items():
+            if node.local != local:
+                continue
+            state = self.node_state[node_id]
+            if state == "off":
+                continue
+            if state == "sleep":
+                total += self.case.sleep_power_w * (node.gpus if self.profile.power_scope == "gpu" else 1)
+            elif self.profile.power_scope == "gpu":
+                total += sum(self.case.power_curve.power(load) for load in gpu_loads[node_id])
+            else:
+                total += self.case.power_curve.power(sum(gpu_loads[node_id]))
+        for index, (_start, action) in self.active_actions.items():
+            source = self.sessions[self.states[index].move.session_id].source_instance
+            if self.nodes[self.instances[source].gpu_nodes[0]].local == local:
+                total += self.case.action_power_w[action]
+        return total
+
+    def _record_power(self):
+        point = (self.time, self._node_power(True), self._node_power(False))
+        if not self.power or point[1:] != self.power[-1][1:]:
+            self.power.append(point)
+
+    def _start_available(self, source: str):
+        queue = self.by_source[source]
+        while self.running[source] < self.profile.max_parallel_moves \
+                and self.next_by_source[source] < len(queue):
+            index = queue[self.next_by_source[source]]
+            self.next_by_source[source] += 1
+            self.running[source] += 1
+            state = self.states[index]
+            state.snapshot_tokens = self.context[state.move.session_id]
+            state.initial_start = self.time
+            self.active_actions[index] = (self.time, state.move.method)
+            self._event("initial_start", state.move.session_id, detail=state.move.method)
+            setup = self.case.kv_transfer.setup_s if state.move.method == "kv_transfer" else 0.0
+            self._schedule(self.time + setup, "prepare", (index, "initial"))
+
+    def _payload(self, index: int, phase: str) -> tuple[int, int, int]:
+        state, session = self.states[index], self.sessions[self.states[index].move.session_id]
+        tokens = self.context[session.session_id]
+        if state.move.method == "replay":
+            ratio = session.log_bytes / session.context_tokens
+            return max(1, round(tokens * ratio)), tokens, 0
+        if state.move.method == "replay_on_request":
+            if session.log_external:
+                return 0, 0, 0
+            ratio = session.log_bytes / session.context_tokens
+            return max(1, round(tokens * ratio)), 0, 0
+        blocks = self.case.kv_transfer.blocks(tokens)
+        if phase == "catch_up":
+            blocks -= self.case.kv_transfer.blocks(state.snapshot_tokens)
+        return max(0, blocks) * self.case.kv_transfer.block_bytes, 0, max(0, blocks)
+
+    def _prepare(self, index: int, phase: str):
+        state = self.states[index]
+        state.phase = phase
+        byte_count, replay_tokens, blocks = self._payload(index, phase)
+        detail = (replay_tokens, blocks)
+        if byte_count:
+            flow = _Flow(self.next_flow, index, phase, float(byte_count), state.move.path)
+            self.next_flow += 1
+            self.flows[flow.flow_id] = flow
+            self._event("network_start", state.move.session_id, detail=f"{phase}:{byte_count}")
+        else:
+            self._endpoint(index, phase, detail)
+
+    def _endpoint(self, index: int, phase: str, detail: tuple[int, int] | None = None):
+        state = self.states[index]
+        replay_tokens, blocks = detail or self._payload(index, phase)[1:]
+        if state.move.method == "replay":
+            destination = state.move.destination_instance
+            active = 1 + sum(
+                e.event == "replay_start" and e.detail == destination for e in self.events
+            ) - sum(e.event == "replay_done" and e.detail == destination for e in self.events)
+            duration = replay_tokens / self.case.replay.rate(replay_tokens, active)
+            self._event("replay_start", state.move.session_id, detail=destination)
+        elif state.move.method == "kv_transfer":
+            duration = blocks * self.case.kv_transfer.block_processing_s + self.case.kv_transfer.sync_s
+        else:
+            duration = 0.0
+        self._schedule(self.time + duration, "ready", (index, phase))
+
+    def _ready(self, index: int, phase: str):
+        state, session_id = self.states[index], self.states[index].move.session_id
+        if state.move.method == "replay":
+            self._event("replay_done", session_id, detail=state.move.destination_instance)
+        if phase == "initial":
+            state.initial_ready = state.pause = self.time
+            self.paused.add(session_id)
+            self._event("initial_ready", session_id)
+            self._event("pause", session_id)
+            idle = max(self.time, self.active_request_end[session_id])
+            self._schedule(idle, "idle", index)
+        else:
+            state.catch_ready = self.time
+            self._event("catch_up_ready", session_id)
+            self._begin_switch(index)
+
+    def _idle(self, index: int):
+        state, session_id = self.states[index], self.states[index].move.session_id
+        state.idle = self.time
+        self._event("idle", session_id)
+        if self.context[session_id] != state.snapshot_tokens:
+            state.catch_start = self.time
+            self._event("catch_up_start", session_id)
+            self._prepare(index, "catch_up")
+        else:
+            self._begin_switch(index)
+
+    def _begin_switch(self, index: int):
+        state = self.states[index]
+        state.switch = self.time
+        self._event("switch_start", state.move.session_id)
+        self._schedule(self.time + self.case.switch_s, "commit", index)
+
+    def _commit(self, index: int):
+        state, session_id = self.states[index], self.states[index].move.session_id
+        state.committed = self.time
+        self.route[session_id] = state.move.destination_instance
+        self.moved.add(session_id)
+        self.paused.discard(session_id)
+        self.active_actions.pop(index)
+        self._event("commit", session_id)
+        source = self.sessions[session_id].source_instance
+        self.running[source] -= 1
+        self._start_available(source)
+        for node_id in self.instances[source].gpu_nodes:
+            if self.node_state[node_id] != "awake":
+                continue
+            dependents = {
+                session.session_id for session in self.sessions.values()
+                if node_id in self.instances[session.source_instance].gpu_nodes
+            }
+            if dependents <= self.moved and self.scenario.final_state != "awake":
+                duration = self.case.sleep_s if self.scenario.final_state == "sleep" else self.case.shutdown_s
+                self.node_state[node_id] = "transition"
+                self._event(f"{self.scenario.final_state}_start", node=node_id)
+                self._schedule(self.time + duration, "node_state", node_id)
+
+    def _request_start(self, session_id: str, request_index: int):
+        session = self.sessions[session_id]
+        if session_id in self.paused:
+            self._schedule(self.time + 1e-9, "request_start", (session_id, request_index))
+            return
+        request = session.requests[request_index]
+        instance = self.route[session_id]
+        context = self.context[session_id]
+        prefill_s = request.prompt_tokens / self.case.prefill.rate(context, 1)
+        decode_s = request.output_tokens / self.case.decode.rate(context + request.prompt_tokens, 1) \
+            if request.output_tokens else 0.0
+        end = self.time + prefill_s + decode_s
+        self.active_request_end[session_id] = end
+        self.request_runs.append((instance, self.time, self.time + prefill_s, end,
+                                  request.prompt_tokens, request.output_tokens))
+        self._event("request_start", session_id)
+        self._schedule(end, "request_done", (session_id, request_index))
+
+    def _request_done(self, session_id: str, request_index: int):
+        request = self.sessions[session_id].requests[request_index]
+        self.context[session_id] += request.prompt_tokens + request.output_tokens
+        self.active_request_end[session_id] = self.time
+        self._event("request_done", session_id)
+        if request_index + 1 < len(self.sessions[session_id].requests):
+            gap = self.sessions[session_id].requests[request_index + 1].gap_s
+            self._schedule(self.time + gap, "request_start", (session_id, request_index + 1))
+
+    def _advance(self, target: float, rates: dict[int, float]):
+        elapsed = target - self.time
+        for flow_id, rate in rates.items():
+            self.flows[flow_id].remaining -= rate * elapsed
+        self.time = target
+
+    def run(self) -> ExecutionResult:
+        self.time = self.scenario.solver_s
+        self._event("plan_ready")
+        for session in self.sessions.values():
+            if session.requests:
+                self._schedule(self.time + session.requests[0].gap_s, "request_start", (session.session_id, 0))
+        for source in self.by_source:
+            self._start_available(source)
+        self._record_power()
+        while (self.heap or self.flows) and self.time <= self.scenario.end_s:
+            rates = fair_link_rates({i: f.path for i, f in self.flows.items()}, self.links)
+            flow_time = min(
+                (self.time + flow.remaining / rates[i] for i, flow in self.flows.items()),
+                default=np.inf,
+            )
+            event_time = self.heap[0][0] if self.heap else np.inf
+            target = min(flow_time, event_time, self.scenario.end_s)
+            self._advance(target, rates)
+            if flow_time <= event_time and flow_time <= self.scenario.end_s:
+                done = [i for i, flow in self.flows.items() if flow.remaining <= 1e-7]
+                for flow_id in done:
+                    flow = self.flows.pop(flow_id)
+                    state = self.states[flow.move_index]
+                    self._event("network_done", state.move.session_id, detail=flow.phase)
+                    self._endpoint(flow.move_index, flow.phase)
+            else:
+                while self.heap and self.heap[0][0] <= self.time + 1e-12:
+                    _, _, kind, payload = heapq.heappop(self.heap)
+                    if kind == "prepare": self._prepare(*payload)
+                    elif kind == "ready": self._ready(*payload)
+                    elif kind == "idle": self._idle(payload)
+                    elif kind == "commit": self._commit(payload)
+                    elif kind == "request_start": self._request_start(*payload)
+                    elif kind == "request_done": self._request_done(*payload)
+                    elif kind == "node_state":
+                        self.node_state[payload] = self.scenario.final_state
+                        self._event(f"{self.scenario.final_state}_done", node=payload)
+                    else: raise RuntimeError(f"unknown event {kind!r}")
+            self._record_power()
+            if target == self.scenario.end_s:
+                break
+        completed = tuple(
+            SessionExecution(
+                s.move.session_id, s.move.method, s.initial_start, s.initial_ready, s.pause,
+                s.idle, s.catch_start, s.catch_ready, s.switch, s.committed,
+            ) for s in self.states if s.committed
+        )
+        at_deadline = next(
+            (point[1] for point in reversed(self.power) if point[0] <= self.scenario.deadline_s),
+            self.power[0][1],
+        )
+        makespan = max((s.committed_s for s in completed), default=self.scenario.solver_s)
+        return ExecutionResult(
+            tuple(self.events), completed, tuple(self.power), at_deadline,
+            at_deadline <= self.scenario.power_limit_w, makespan,
+        )
+
+
+def execute(scenario: ExecutionScenario, profile: ModelProfile,
+            moves: tuple[PlannedMove, ...], case_id: str = "central") -> ExecutionResult:
+    return ExecutionSimulator(scenario, profile, moves, case_id).run()

@@ -12,6 +12,7 @@ import numpy as np
 PROFILE_SCHEMA = "queue-haul-model-profile-v1"
 WORKLOAD_SCHEMA = "queue-haul-workload-profile-v1"
 SOURCE_SECTIONS = ("power", "service", "replay", "kv_transfer", "transitions")
+ACTION_POWER = {"replay", "kv_transfer", "replay_on_request", "catch_up", "sleep", "off"}
 
 
 @dataclass(frozen=True)
@@ -141,6 +142,8 @@ class ProfileCase:
             float(raw["sleep_s"]), float(raw["shutdown_s"]),
             {str(k): float(v) for k, v in raw["action_power_w"].items()},
         )
+        if set(value.action_power_w) != ACTION_POWER:
+            raise ValueError(f"action_power_w fields must be {sorted(ACTION_POWER)}")
         if value.F <= 0 or value.G <= 0 or min(
             value.switch_s, value.sleep_power_w, value.sleep_s, value.shutdown_s,
             *value.action_power_w.values(),

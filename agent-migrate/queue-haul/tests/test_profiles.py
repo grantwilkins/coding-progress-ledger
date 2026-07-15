@@ -29,7 +29,8 @@ def profile():
         "kv_transfer": {"block_tokens": 4, "block_bytes": 100, "setup_s": 1,
                         "block_processing_s": 0.5, "sync_s": 0.25},
         "switch_s": 0.1, "sleep_power_w": 2, "sleep_s": 3, "shutdown_s": 4,
-        "action_power_w": {"replay": 1, "kv_transfer": 2, "catch_up": 1, "sleep": 1, "off": 1},
+        "action_power_w": {"replay": 1, "kv_transfer": 2, "replay_on_request": 1,
+                           "catch_up": 1, "sleep": 1, "off": 1},
     }
     return {
         "schema": "queue-haul-model-profile-v1", "profile_id": "p", "status": "fitted",
@@ -80,6 +81,11 @@ def test_missing_source_and_estimated_bounds_hard_fail(tmp_path):
     raw["status"] = "estimated"
     with pytest.raises(ValueError, match="profile cases"):
         ModelProfile.load(write(tmp_path, raw, "estimated.json"))
+
+    raw = profile()
+    del raw["cases"]["central"]["action_power_w"]["replay_on_request"]
+    with pytest.raises(ValueError, match="action_power_w fields"):
+        ModelProfile.load(write(tmp_path, raw, "action.json"))
 
 
 def test_workload_sampling_preserves_complete_records(tmp_path):
