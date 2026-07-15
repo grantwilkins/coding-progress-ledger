@@ -1,10 +1,11 @@
 from __future__ import annotations
 
 import asyncio
+import builtins
 
 import pytest
 
-from lmcache_compat.connector_patch import bypass_lmcache, recv_exact, transaction
+from lmcache_compat.connector_patch import bypass_lmcache, patch_on_import, recv_exact, transaction
 
 
 class FragmentedSocket:
@@ -29,6 +30,18 @@ def test_replay_bypass_is_explicit():
     request = type("Request", (), {"kv_transfer_params": {"qh_bypass_lmcache": True}})()
     assert bypass_lmcache(request)
     assert not bypass_lmcache(type("Request", (), {"kv_transfer_params": None})())
+
+
+def test_adapter_patch_is_deferred_until_import():
+    original = builtins.__import__
+    calls = []
+    try:
+        patch_on_import("json", lambda: calls.append(True))
+        assert not calls
+        __import__("json")
+        assert calls and builtins.__import__ is original
+    finally:
+        builtins.__import__ = original
 
 
 @pytest.mark.parametrize("calls", [((b"c", False), (b"x", False)), ((b"g", True), (b"h", True)), ((b"c", False), (b"g", True), (b"x", False), (b"h", True))])
