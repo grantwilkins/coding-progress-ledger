@@ -17,6 +17,12 @@ uv run python queue-haul/power_drain_experiment.py \
   --workload-profile queue-haul/profiles/agentic_tool_loop.json \
   --sessions 6 --seed 3 --power-limit 500 --deadline 5 --end 5 \
   --solver load_only --out queue-haul/outputs/profile_smoke
+uv run python queue-haul/plot_simulator_validation.py
 ```
 
 The earlier additive model is frozen in `_archive/queue-haul-additive-v0`.
+
+`outputs/simulator_validation.{csv,png,pdf}` compares a two-session simulation
+with exact shared-link, commit-time, and source-power calculations. It validates
+equal link sharing and commit-time power accounting, not A100 calibration.
+Generation hard-fails if any checked value differs.
