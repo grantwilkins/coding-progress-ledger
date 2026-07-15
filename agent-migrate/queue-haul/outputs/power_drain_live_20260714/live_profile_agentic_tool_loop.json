@@ -1,0 +1,104 @@
+{
+  "created_ts": 1784051177.4395669,
+  "kv_bytes_per_s": 58843469.81469737,
+  "kv_bytes_per_token": 49158.81097937307,
+  "lmcache_max_local_cpu_gb": "4",
+  "mbps": 1000.0,
+  "points": [
+    {
+      "action": "R",
+      "api_request_bytes": 29159,
+      "completion_s": 1.9815559387207031,
+      "first_token_s": 1.9815559387207031,
+      "kv_bytes": 36,
+      "proxy_delta": {
+        "api/client_to_target": 29159,
+        "api/target_to_client": 688,
+        "kv/client_to_target": 186,
+        "kv/target_to_client": 36
+      },
+      "requested_tokens": 13979,
+      "tokens": 14042
+    },
+    {
+      "action": "S",
+      "api_request_bytes": 29117,
+      "completion_s": 12.36771297454834,
+      "first_token_s": 12.36771297454834,
+      "kv_bytes": 689657652,
+      "proxy_delta": {
+        "api/client_to_target": 29117,
+        "api/target_to_client": 688,
+        "kv/client_to_target": 30690,
+        "kv/target_to_client": 689657652
+      },
+      "requested_tokens": 13979,
+      "source_elapsed_s": 2.2220101356506348,
+      "tokens": 14027
+    },
+    {
+      "action": "R",
+      "api_request_bytes": 62675,
+      "completion_s": 7.797720432281494,
+      "first_token_s": 7.797720432281494,
+      "kv_bytes": 36,
+      "proxy_delta": {
+        "api/client_to_target": 62675,
+        "api/target_to_client": 688,
+        "kv/client_to_target": 186,
+        "kv/target_to_client": 36
+      },
+      "requested_tokens": 31499,
+      "tokens": 30800
+    },
+    {
+      "action": "S",
+      "api_request_bytes": 62633,
+      "completion_s": 25.68399453163147,
+      "first_token_s": 25.68399453163147,
+      "kv_bytes": 1513353996,
+      "proxy_delta": {
+        "api/client_to_target": 62633,
+        "api/target_to_client": 688,
+        "kv/client_to_target": 67518,
+        "kv/target_to_client": 1513353996
+      },
+      "requested_tokens": 31499,
+      "source_elapsed_s": 8.253802061080933,
+      "tokens": 30785
+    },
+    {
+      "action": "R",
+      "api_request_bytes": 64199,
+      "completion_s": 8.144827842712402,
+      "first_token_s": 8.144827842712402,
+      "kv_bytes": 36,
+      "proxy_delta": {
+        "api/client_to_target": 64199,
+        "api/target_to_client": 688,
+        "kv/client_to_target": 186,
+        "kv/target_to_client": 36
+      },
+      "requested_tokens": 32256,
+      "tokens": 31562
+    },
+    {
+      "action": "S",
+      "api_request_bytes": 64157,
+      "completion_s": 26.354804515838623,
+      "first_token_s": 26.354804515838623,
+      "kv_bytes": 1550808144,
+      "proxy_delta": {
+        "api/client_to_target": 64157,
+        "api/target_to_client": 688,
+        "kv/client_to_target": 69192,
+        "kv/target_to_client": 1550808144
+      },
+      "requested_tokens": 32256,
+      "source_elapsed_s": 8.609268426895142,
+      "tokens": 31547
+    }
+  ],
+  "schema": "queue-haul-stage1c-live-profile-v2",
+  "source_boundary_s": 8.253802061080933
+}
