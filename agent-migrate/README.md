@@ -146,7 +146,8 @@ declare power/deadline acceptance. Build a deterministic manifest from a pinned
 TraceLab JSONL or JSONL.gz file. Rows without usable timing or token counts are
 excluded, and manifest creation fails if too few eligible sessions remain. Timing
 (including nested events), token counts, turn boundaries, job class, and the source hash are retained. Message text is generated because
-the trace does not contain it:
+the trace does not contain it. State probes allow reasoning models enough output
+budget to emit the required code:
 
 ```bash
 $PY queue-haul/stage1c_controller.py make-manifest \

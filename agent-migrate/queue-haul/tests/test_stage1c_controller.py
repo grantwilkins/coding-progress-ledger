@@ -37,6 +37,7 @@ def test_manifest_is_deterministic_and_uses_complete_trace_boundaries(tmp_path):
     first = c.make_manifest(trace, "coding", 3, 7)
     second = c.make_manifest(trace, "coding", 3, 7)
 
+    assert c.PROBE_MAX_TOKENS == 128
     assert first == second
     assert first["source"]["sha256"] == c.file_hash(trace)
     assert len({row["state_code"] for row in first["sessions"]}) == 3

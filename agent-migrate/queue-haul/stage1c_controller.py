@@ -27,6 +27,7 @@ METHODS = ("replay", "kv_transfer")
 ACTIVITIES = ("none", "one_turn")
 JOB_CLASSES = ("interactive_coding", "coding", "agentic_tool_loop")
 RESET_SUCCESS = "Successfully reset prefix cache"
+PROBE_MAX_TOKENS = 128
 
 
 def file_hash(path: Path) -> str:
@@ -344,7 +345,7 @@ class LiveSession:
     def request(self, port: int, messages: list[dict], label: str) -> tuple[RequestResult, str]:
         context_hash = messages_hash(messages)
         self.event_log.write("request_start", session_id=self.session_id, request_id=label, route_port=port, context_hash=context_hash)
-        result, text = stream_chat(self.cfg, port, self.probe(messages), 8, context_hash, self.timeout_s)
+        result, text = stream_chat(self.cfg, port, self.probe(messages), PROBE_MAX_TOKENS, context_hash, self.timeout_s)
         self.event_log.write("request_end", session_id=self.session_id, request_id=result.request_id, route_port=port, status_code=result.status_code, context_hash=context_hash, first_byte_ns=result.first_byte_ns, chunks=[asdict(chunk) for chunk in result.stream_chunks])
         if result.status_code != 200 or self.state_code not in text:
             raise RuntimeError(f"{label} failed state check for {self.session_id}: HTTP {result.status_code}")
