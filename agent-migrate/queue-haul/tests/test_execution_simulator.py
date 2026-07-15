@@ -45,9 +45,10 @@ def model(tmp_path, switch=1, block_s=0, shutdown=2, setup=0, tp=2):
     return ModelProfile.load(path)
 
 
-def scenario(sessions, deadline=20, end=30, final="awake", tp=2, links=None):
+def scenario(sessions, deadline=20, end=30, final="awake", tp=2, links=None,
+             controller_delay=0):
     return ExecutionScenario(
-        deadline, end, 0, final, 0,
+        deadline, end, 0, final, controller_delay,
         (PowerNode("src", 2, True), PowerNode("dst", 2, False)),
         (ServingInstance("source", ("src",) * tp), ServingInstance("dest", ("dst",) * tp)),
         tuple(sessions), tuple(links or (NetworkLink("wan", 100),)),
@@ -177,6 +178,33 @@ def test_initial_kv_uses_snapshot_and_catch_up_uses_only_new_blocks(tmp_path):
     ]
 
 
+def test_kv_catch_up_resends_a_changed_partial_block(tmp_path):
+    session = SimSession(
+        "active", "source", 11, 0, 0, 1, requests=(SimRequest(0, 4, 0),)
+    )
+    result = execute(
+        scenario((session,)), model(tmp_path),
+        (PlannedMove("active", "dest", "kv_transfer", 0, ("wan",)),),
+    )
+    assert [(row.phase, row.bytes) for row in result.network] == [
+        ("initial", 200), ("catch_up", 100)
+    ]
+
+
+def test_replay_catch_up_processes_only_tokens_after_snapshot(tmp_path):
+    session = SimSession(
+        "active", "source", 10, 0, 0, 100, False,
+        requests=(SimRequest(0, 10, 0),),
+    )
+    result = execute(
+        scenario((session,)), model(tmp_path),
+        (PlannedMove("active", "dest", "replay", 0, ("wan",)),),
+    )
+    assert [(row.phase, row.bytes) for row in result.network] == [
+        ("initial", 100), ("catch_up", 100)
+    ]
+
+
 def test_pause_begins_after_active_request_finishes(tmp_path):
     session = SimSession(
         "active", "source", 10, 0, 0, 1, requests=(SimRequest(0, 200, 0),)
@@ -198,6 +226,35 @@ def test_unmeasured_serving_concurrency_queues_at_one(tmp_path):
     result = execute(scenario(sessions), model(tmp_path), ())
     assert [row.start_s for row in result.requests] == pytest.approx([0, 1])
     assert sum(event.event == "serving_queued" for event in result.events) == 1
+
+
+def test_requests_continue_while_controller_is_planning(tmp_path):
+    session = SimSession(
+        "active", "source", 10, 0, 0, 1, requests=(SimRequest(0, 10, 0),)
+    )
+    result = execute(
+        scenario((session,), controller_delay=1), model(tmp_path),
+        (PlannedMove("active", "dest", "kv_transfer", 0, ("wan",)),),
+    )
+    assert result.requests[0].start_s == 0
+    assert result.network[0].start_s == 1
+    assert result.network[0].bytes == 200
+
+
+def test_queued_request_uses_destination_after_commit(tmp_path):
+    sessions = (
+        SimSession("busy", "source", 10, 0, 0, 1,
+                   requests=(SimRequest(0, 1000, 0),)),
+        SimSession("moving", "source", 10, 0, 0, 1,
+                   requests=(SimRequest(0, 10, 0),)),
+    )
+    result = execute(
+        scenario(sessions), model(tmp_path),
+        (PlannedMove("moving", "dest", "kv_transfer", 0, ("wan",)),),
+    )
+    request = next(row for row in result.requests if row.session_id == "moving")
+    assert request.instance_id == "dest"
+    assert request.start_s == pytest.approx(2)
 
 
 def test_external_replay_avoids_source_egress(tmp_path):

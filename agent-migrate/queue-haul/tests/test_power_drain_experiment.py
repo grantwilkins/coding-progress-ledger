@@ -12,6 +12,7 @@ Plausible wrong implementations:
 
 from pathlib import Path
 import math
+from dataclasses import replace
 
 import pytest
 
@@ -52,6 +53,13 @@ def test_profile_range_is_checked_before_a_long_run():
         experiment.build_scenario(workload, model, 6, 0, 500, 120, 180)
 
 
+def test_scenario_builder_hard_fails_unmodeled_tensor_parallel_topology():
+    model = replace(ModelProfile.load(experiment.DEFAULT_MODEL), tensor_parallel=2)
+    workload = WorkloadProfile.load(experiment.DEFAULT_WORKLOADS[2])
+    with pytest.raises(ValueError, match="tensor parallel size 1"):
+        experiment.build_scenario(workload, model, 6, 3, 500, 5, 5)
+
+
 def test_excess_energy_integrates_step_power_after_deadline():
     power = ((0, 100, 0), (6, 40, 0), (8, 20, 0))
     assert experiment.excess_energy(power, 5, 10, 30) == pytest.approx(90)
@@ -70,6 +78,6 @@ def test_small_run_reuses_plans_and_writes_raw_tables_and_plots(tmp_path: Path):
     experiment.write(runs, tmp_path)
     for name in ("summary.csv", "events.csv", "sessions.csv", "requests.csv", "network.csv",
                  "power.csv", "plans.csv", "power_timeline.png", "session_pause.png",
-                 "network_time.png", "request_wait.png", "planned_vs_simulated_power.png",
+                 "network_time.png", "request_wait.png", "expected_vs_modeled_power.png",
                  "policy_outcomes.png"):
         assert (tmp_path / name).exists()

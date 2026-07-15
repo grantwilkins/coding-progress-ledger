@@ -315,7 +315,7 @@ class ExecutionResult:
     requests: tuple["RequestExecution", ...]
     network: tuple[NetworkExecution, ...]
     power: tuple[tuple[float, float, float], ...]
-    source_power_at_deadline_w: float
+    modeled_source_power_at_deadline_w: float
     deadline_met: bool
     makespan_s: float
 
@@ -518,10 +518,8 @@ class ExecutionSimulator:
         self.action_power[local] += self.case.action_power_w[action][0 if local else 1]
 
     def _stop_action(self, key):
-        value = self.active_actions.pop(key, None)
-        if value:
-            action, local = value
-            self.action_power[local] -= self.case.action_power_w[action][0 if local else 1]
+        action, local = self.active_actions.pop(key)
+        self.action_power[local] -= self.case.action_power_w[action][0 if local else 1]
 
     def _node_power(self, local: bool) -> float:
         return self.power_model.power(local) + self.action_power[local]
@@ -549,6 +547,8 @@ class ExecutionSimulator:
         state, session = self.states[index], self.sessions[self.states[index].move.session_id]
         tokens = state.snapshot_tokens if phase == "initial" else self.context[session.session_id]
         if state.move.method == "replay":
+            if phase == "catch_up":
+                tokens -= state.snapshot_tokens
             ratio = session.log_bytes / session.context_tokens
             return max(1, round(tokens * ratio)), tokens, 0
         if state.move.method == "replay_on_request":
@@ -556,7 +556,7 @@ class ExecutionSimulator:
             return byte_count, tokens if phase == "wake" else 0, 0
         blocks = self.case.kv_transfer.blocks(tokens)
         if phase == "catch_up":
-            blocks -= self.case.kv_transfer.blocks(state.snapshot_tokens)
+            blocks -= state.snapshot_tokens // self.case.kv_transfer.block_tokens
         return max(0, blocks) * self.case.kv_transfer.block_bytes, 0, max(0, blocks)
 
     def _path(self, state: _MoveState, phase: str) -> tuple[str, ...]:
@@ -626,7 +626,9 @@ class ExecutionSimulator:
 
     def _ready(self, index: int, phase: str):
         state, session_id = self.states[index], self.states[index].move.session_id
-        self._stop_action((index, phase, "destination"))
+        action = index, phase, "destination"
+        if action in self.active_actions:
+            self._stop_action(action)
         replay = state.move.method == "replay" or (
             state.move.method == "replay_on_request" and phase == "wake"
         )
@@ -685,6 +687,15 @@ class ExecutionSimulator:
         if state.move.method == "replay_on_request":
             self.deferred.add(session_id)
         self._event("commit", session_id)
+        for instance, waiting in self.serving_waiting.items():
+            kept = deque()
+            while waiting:
+                request = waiting.popleft()
+                if request[0] == session_id:
+                    self._schedule(self.time, "request_start", request)
+                else:
+                    kept.append(request)
+            self.serving_waiting[instance] = kept
         if session_id in self.pending_requests:
             request_index, arrival = self.pending_requests.pop(session_id)
             self._schedule(self.time, "request_start", (session_id, request_index, arrival))
@@ -730,6 +741,7 @@ class ExecutionSimulator:
             self._event("serving_queued", session_id, detail=instance)
             return
         context = self.context[session_id]
+        # TODO(request-power): fit request-level power before varying power with sampled service.
         prefill_s = request.prompt_tokens / self.case.prefill.rate(context, 1)
         decode_s = request.output_tokens / self.case.decode.rate(context + request.prompt_tokens, 1) \
             if request.output_tokens else 0.0
@@ -767,15 +779,11 @@ class ExecutionSimulator:
 
     def run(self) -> ExecutionResult:
         self._record_power()
-        self.time = self.scenario.controller_delay_s
-        self._event("plan_ready")
         for session in self.sessions.values():
             if session.requests:
-                arrival = self.time + session.requests[0].gap_s
+                arrival = session.requests[0].gap_s
                 self._schedule(arrival, "request_start", (session.session_id, 0, arrival))
-        for source in self.by_source:
-            self._start_available(source)
-        self._record_power()
+        self._schedule(self.scenario.controller_delay_s, "plan_ready")
         rates, rate_version = {}, -1
         while (self.heap or self.flows) and self.time <= self.scenario.end_s:
             if rate_version != self.flow_version:
@@ -793,7 +801,9 @@ class ExecutionSimulator:
                 for flow_id in done:
                     flow = self.flows.pop(flow_id)
                     state = self.states[flow.move_index]
-                    self._stop_action((flow.move_index, flow.phase, "source"))
+                    action = flow.move_index, flow.phase, "source"
+                    if action in self.active_actions:
+                        self._stop_action(action)
                     self.network.append(NetworkExecution(
                         state.move.session_id, flow.phase, flow.bytes, flow.bytes, 0, flow.path,
                         flow.start, self.time,
@@ -821,6 +831,10 @@ class ExecutionSimulator:
                         self.power_model.set_state(payload, self.scenario.final_state)
                         self._stop_action(("node", payload))
                         self._event(f"{self.scenario.final_state}_done", node=payload)
+                    elif kind == "plan_ready":
+                        self._event("plan_ready")
+                        for source in self.by_source:
+                            self._start_available(source)
                     else:
                         raise RuntimeError(f"unknown event {kind!r}")
             self._record_power()

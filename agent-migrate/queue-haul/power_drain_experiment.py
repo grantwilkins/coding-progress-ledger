@@ -73,6 +73,9 @@ def build_scenario(workload: WorkloadProfile, profile: ModelProfile, sessions: i
                    power_limit_w: float, deadline_s: float, end_s: float,
                    link_bytes_per_s: float = 125_000_000.0,
                    final_state: str = "awake", controller_delay_s: float = 0.0):
+    # TODO(tp-topology): construct measured multi-GPU instance and network layouts.
+    if profile.tensor_parallel != 1:
+        raise ValueError("scenario builder currently supports tensor parallel size 1")
     # TODO(workloads): replace the small assumed record sets with held-out traces.
     records, case = workload.sample(sessions, seed), profile.case()
     cycles = np.array([r.request_gap_s + r.tool_delay_s for r in records])
@@ -110,7 +113,7 @@ def build_scenario(workload: WorkloadProfile, profile: ModelProfile, sessions: i
         for i in range(gpu_count)
     )
     rng = np.random.default_rng(seed + 1)
-    request_horizon = end_s - controller_delay_s
+    request_horizon = end_s
     wake_horizon = max(0.0, deadline_s - controller_delay_s)
     # TODO(wake): fit the first-request distribution from complete session traces.
     sampled = tuple(
@@ -215,7 +218,8 @@ def _summary(run: ExperimentRun) -> dict:
         "solve_s": run.plan.solve_s,
         "planned_moves": len(run.plan.moves), "plan_feasible": run.plan.feasible,
         "planned_source_power_w": run.plan.planned_source_power_w,
-        "source_power_at_deadline_w": result.source_power_at_deadline_w,
+        "expected_source_power_at_deadline_w": run.plan.expected_source_power_at_deadline_w,
+        "modeled_source_power_at_deadline_w": result.modeled_source_power_at_deadline_w,
         "power_met": result.deadline_met, "moves_committed_by_deadline": resumed,
         "requests_started_by_deadline": requests_started,
         "accepted": result.deadline_met and resumed and requests_started,
@@ -271,8 +275,8 @@ def write(runs: list[ExperimentRun], out: Path) -> None:
         requests += [{**base, **row.__dict__} for row in run.result.requests]
         network += [{**base, **row.__dict__, "path": "|".join(row.path)}
                     for row in run.result.network]
-        power += [{**base, "time_s": t, "source_power_w": source,
-                   "destination_power_w": destination}
+        power += [{**base, "time_s": t, "modeled_source_power_w": source,
+                   "modeled_destination_power_w": destination}
                   for t, source, destination in run.result.power]
         plans += [{**base, "session_id": row.session_id,
                    "destination_instance": row.destination_instance, "method": row.method,
@@ -298,7 +302,7 @@ def _plot(runs: list[ExperimentRun], summaries: list[dict], out: Path) -> None:
                 label=run.plan.solver)
     ax.axhline(first.scenario.power_limit_w, color="black", linestyle="--", label="power limit")
     ax.axvline(first.scenario.deadline_s, color="black", linestyle=":", label="deadline")
-    ax.set(xlabel="time (s)", ylabel="local source power (W)")
+    ax.set(xlabel="time (s)", ylabel="modeled expected source power (W)")
     ax.legend(fontsize=8)
     ax.grid(alpha=0.25)
     fig.tight_layout()
@@ -361,16 +365,18 @@ def _plot(runs: list[ExperimentRun], summaries: list[dict], out: Path) -> None:
     fig, ax = plt.subplots(figsize=(5, 5))
     for solver in sorted({row["solver"] for row in central_summaries}):
         rows = [row for row in central_summaries if row["solver"] == solver]
-        ax.scatter([row["planned_source_power_w"] for row in rows],
-                   [row["source_power_at_deadline_w"] for row in rows], label=solver)
+        ax.scatter([row["expected_source_power_at_deadline_w"] for row in rows],
+                   [row["modeled_source_power_at_deadline_w"] for row in rows], label=solver)
     values = [row[key] for row in central_summaries
-              for key in ("planned_source_power_w", "source_power_at_deadline_w")]
+              for key in ("expected_source_power_at_deadline_w",
+                          "modeled_source_power_at_deadline_w")]
     ax.plot([min(values), max(values)], [min(values), max(values)], "k--", label="equal")
-    ax.set(xlabel="planned source power (W)", ylabel="simulated source power (W)")
+    ax.set(xlabel="expected deadline-window power (W)",
+           ylabel="modeled deadline-window power (W)")
     ax.legend(fontsize=8)
     ax.grid(alpha=0.25)
     fig.tight_layout()
-    fig.savefig(out / "planned_vs_simulated_power.png", dpi=160)
+    fig.savefig(out / "expected_vs_modeled_power.png", dpi=160)
     plt.close(fig)
 
     fig, axes = plt.subplots(1, 2, figsize=(9, 4))

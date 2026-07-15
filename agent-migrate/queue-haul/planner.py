@@ -25,6 +25,7 @@ class PlanResult:
     moves: tuple[PlannedMove, ...]
     initial_source_power_w: float
     planned_source_power_w: float
+    expected_source_power_at_deadline_w: float
     feasible: bool
     solve_s: float
     profile_id: str
@@ -153,7 +154,7 @@ def plan(scenario: ExecutionScenario, profile: ModelProfile,
     power_state = ExpectedPower(scenario, profile, case_id)
     initial = power_state.power(True)
     if initial <= scenario.power_limit_w:
-        return PlanResult(solver, (), initial, initial, True, perf_counter() - start,
+        return PlanResult(solver, (), initial, initial, initial, True, perf_counter() - start,
                           profile.profile_id, case_id, seed)
     horizon = scenario.deadline_s - scenario.controller_delay_s
     valid = np.zeros((len(sessions), len(METHODS)), bool)
@@ -221,6 +222,6 @@ def plan(scenario: ExecutionScenario, profile: ModelProfile,
         for row in expected.sessions
     )
     return PlanResult(
-        solver, moves, initial, planned, feasible,
+        solver, moves, initial, planned, expected.modeled_source_power_at_deadline_w, feasible,
         perf_counter() - start, profile.profile_id, case_id, seed,
     )
