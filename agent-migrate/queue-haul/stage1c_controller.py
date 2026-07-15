@@ -222,7 +222,9 @@ def make_plan(manifest_path: Path, context_sizes: list[int], concurrency: list[i
                                 scenario["moves"] = [{**row, "method": method} for row in session_rows] if kind == "migration" else []
                                 scenarios.append(scenario)
     random.Random(seed).shuffle(scenarios)
-    return {"schema": PLAN_SCHEMA, "manifest": {"path": str(manifest_path), "sha256": file_hash(manifest_path)}, "seed": seed, "scenarios": scenarios}
+    plan = {"schema": PLAN_SCHEMA, "manifest": {"path": str(manifest_path), "sha256": file_hash(manifest_path)}, "seed": seed, "scenarios": scenarios}
+    validate_plan(plan, manifest)
+    return plan
 
 
 def validate_plan(plan: dict, manifest: dict) -> None:

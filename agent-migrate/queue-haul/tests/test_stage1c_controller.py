@@ -90,9 +90,8 @@ def test_plan_rejects_old_schema_and_too_few_sessions(tmp_path):
     for session in manifest["sessions"]:
         session["turns"][0]["input_tokens"] = c.MAX_MODEL_TOKENS
     c.write_json(manifest_path, manifest)
-    plan = c.make_plan(manifest_path, [1024], [1], [1000], ["replay"], ["none"], 1, 0)
     with pytest.raises(ValueError, match="prompt estimate"):
-        c.validate_plan(plan, manifest)
+        c.make_plan(manifest_path, [1024], [1], [1000], ["replay"], ["none"], 1, 0)
 
 
 def test_summary_only_adds_tail_and_bootstrap_statistics_when_supported():
