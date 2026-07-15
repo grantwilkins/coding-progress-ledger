@@ -59,6 +59,7 @@ def test_vllm_commands_pin_validated_sandbox_flags_and_roles():
     assert "LMCACHE_LMCACHE_INSTANCE_ID=stage1b_sink" in sink
     assert "VLLM_USE_FLASHINFER_SAMPLER=0" in source
     assert "VLLM_SERVER_DEV_MODE=1" in source
+    assert "PYTHONPATH=" in source and "lmcache_compat" in source
     assert "nvidia/cu13/lib" in source
     assert "${LD_LIBRARY_PATH:-}" in source
     assert "LMCACHE_LOCAL_CPU=False" in source
@@ -247,9 +248,11 @@ def test_source_sleep_transition_hard_fails(monkeypatch):
 
 
 def test_runtime_versions_are_pinned(monkeypatch):
-    monkeypatch.setattr(s.subprocess, "check_output", lambda *_args, **_kwargs: "0.10.1.1 0.3.3\n")
+    commands = []
+    monkeypatch.setattr(s.subprocess, "check_output", lambda command, **_kwargs: commands.append(command) or "0.10.1.1 0.3.3\n")
 
     assert s.runtime_versions(s.Config()) == s.RUNTIME_VERSIONS
+    assert "LMCServerConnector._qh_patched" in s.shell(commands[0])
 
 
 def test_duplicate_ports_and_passthrough_overrides_hard_fail():

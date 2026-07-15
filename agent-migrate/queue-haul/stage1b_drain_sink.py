@@ -46,6 +46,7 @@ def port_default(base: int) -> int:
 HF_HOME = Path("/scratch/users/gfw/ptsim/hf")
 SCRATCH_BIND = Path("/scratch/users/gfw")
 CACHE_ROOT = Path("/scratch/users/gfw/ptsim/cache")
+LMCACHE_COMPAT = Path(__file__).with_name("lmcache_compat").resolve()
 CHUNK = 65536
 LMCACHE_MAX_LOCAL_CPU_GB = "4"
 TYPED_VLLM_FLAGS = {
@@ -172,6 +173,7 @@ def kv_config(engine_id: str, kv_role: str, kv_port: int, rpc_port: str) -> str:
 def vllm_exports(cfg: Config, role: str, remote_url: str) -> list[str]:
     env = {
         "PYTHONHASHSEED": "0",
+        "PYTHONPATH": str(LMCACHE_COMPAT),
         "VLLM_EXECUTE_MODEL_TIMEOUT_SECONDS": "900",
         "VLLM_SERVER_DEV_MODE": "1",
         "VLLM_USE_FLASHINFER_SAMPLER": "0",
@@ -298,7 +300,9 @@ def gpu_count() -> int:
 
 
 def runtime_versions(cfg: Config) -> tuple[str, str]:
-    vllm, lmcache = subprocess.check_output(apptainer_cmd(cfg, shell(["/usr/bin/python3", "-c", "from importlib.metadata import version; print(version('vllm'), version('lmcache'))"]), nv=False), text=True).split()
+    check = "from importlib.metadata import version; from lmcache.v1.storage_backend.connector.lm_connector import LMCServerConnector; assert LMCServerConnector._qh_patched; print(version('vllm'), version('lmcache'))"
+    script = "\n".join([f"export PYTHONPATH={shlex.quote(str(LMCACHE_COMPAT))}", shell(["/usr/bin/python3", "-c", check])])
+    vllm, lmcache = subprocess.check_output(apptainer_cmd(cfg, script, nv=False), text=True).split()
     return vllm, lmcache
 
 

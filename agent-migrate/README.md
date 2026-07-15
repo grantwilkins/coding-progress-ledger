@@ -133,8 +133,12 @@ PY=.venv/bin/python
 Stage 1b runs source vLLM on GPU 0, destination vLLM on GPU 1, a shared remote
 LMCache server, and one user-space bandwidth limit shared by replay and KV
 traffic. Each vLLM process has its private LMCache CPU tier disabled while
-retaining the 4 GB pinned staging allocator required by the remote connector. On a
-two-GPU A100 node, check the pinned vLLM `0.10.1.1` and LMCache `0.3.3` setup:
+retaining the 4 GB pinned staging allocator required by the remote connector.
+The pinned LMCache 0.3.3 connector is patched at process startup to read exact
+metadata lengths, serialize complete socket transactions, and reconnect after
+protocol errors. This is a correctness baseline, not a parallel KV connection
+pool. On a two-GPU A100 node, check the pinned vLLM `0.10.1.1`
+and LMCache `0.3.3` setup:
 
 ```bash
 $PY queue-haul/stage1b_drain_sink.py preflight --required-gpus 2
