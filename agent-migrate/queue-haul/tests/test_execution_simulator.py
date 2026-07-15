@@ -76,6 +76,7 @@ def test_parallel_transfer_and_power_credit_at_commit(tmp_path):
     assert rows["0"].initial_ready_s == pytest.approx(2)  # 100 B each over one 100 B/s link
     assert rows["1"].initial_ready_s == pytest.approx(2)
     assert rows["0"].committed_s == pytest.approx(3)
+    assert result.power[-1][0] == 30
     assert {(row.bytes, row.start_s, row.end_s) for row in result.network} == {
         (100, 0, 2)
     }

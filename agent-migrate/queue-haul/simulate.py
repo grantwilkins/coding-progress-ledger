@@ -477,9 +477,9 @@ class ExecutionSimulator:
     def _node_power(self, local: bool) -> float:
         return self.power_model.power(local) + self.action_power[local]
 
-    def _record_power(self):
+    def _record_power(self, force: bool = False):
         point = (self.time, self._node_power(True), self._node_power(False))
-        if not self.power or point[1:] != self.power[-1][1:]:
+        if not self.power or point[1:] != self.power[-1][1:] or force:
             self.power.append(point)
 
     def _start_available(self, source: str):
@@ -743,6 +743,9 @@ class ExecutionSimulator:
             self._record_power()
             if target == self.scenario.end_s:
                 break
+        if self.power[-1][0] != self.scenario.end_s:
+            self.time = self.scenario.end_s
+            self._record_power(force=True)
         sessions = tuple(
             SessionExecution(
                 s.move.session_id, s.move.method, s.initial_start, s.initial_ready, s.pause,
