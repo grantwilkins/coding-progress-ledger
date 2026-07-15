@@ -163,11 +163,11 @@ Before the large GPU plan, run one local profile-driven smoke:
 
 ```bash
 uv run python queue-haul/power_drain_experiment.py \
-  --workload-profile queue-haul/profiles/coding.json \
-  --sessions 100 \
-  --power-limit 550 \
-  --deadline 30 \
-  --end 60 \
+  --workload-profile queue-haul/profiles/agentic_tool_loop.json \
+  --sessions 6 \
+  --power-limit 500 \
+  --deadline 5 \
+  --end 5 \
   --solver load_only \
   --out queue-haul/outputs/profile_smoke
 ```

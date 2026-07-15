@@ -85,9 +85,9 @@ class PowerCurve:
         return cls(ell, watts)
 
     def power(self, ell: float) -> float:
-        if not self.ell[0] <= ell <= self.ell[-1]:
+        if ell < self.ell[0] - 1e-12 or ell > self.ell[-1] + 1e-12:
             raise ValueError(f"ell {ell} outside [{self.ell[0]}, {self.ell[-1]}]")
-        return float(np.interp(ell, self.ell, self.watts))
+        return float(np.interp(np.clip(ell, self.ell[0], self.ell[-1]), self.ell, self.watts))
 
 
 @dataclass(frozen=True)

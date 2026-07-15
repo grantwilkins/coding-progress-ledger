@@ -54,6 +54,7 @@ def write(tmp_path, value, name="profile.json"):
 def test_power_curve_is_concave_and_never_extrapolates(tmp_path):
     p = ModelProfile.load(write(tmp_path, profile()))
     assert p.case().power_curve.power(0.75) == pytest.approx(35)
+    assert p.case().power_curve.power(-1e-14) == pytest.approx(10)
     with pytest.raises(ValueError, match="outside"):
         p.case().power_curve.power(1.01)
 
