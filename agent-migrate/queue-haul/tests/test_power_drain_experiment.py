@@ -68,7 +68,8 @@ def test_small_run_reuses_plans_and_writes_raw_tables_and_plots(tmp_path: Path):
                for run in runs)
 
     experiment.write(runs, tmp_path)
-    for name in ("summary.csv", "events.csv", "sessions.csv", "network.csv", "power.csv",
-                 "plans.csv", "power_timeline.png", "session_pause.png", "network_time.png",
+    for name in ("summary.csv", "events.csv", "sessions.csv", "requests.csv", "network.csv",
+                 "power.csv", "plans.csv", "power_timeline.png", "session_pause.png",
+                 "network_time.png", "request_wait.png", "planned_vs_simulated_power.png",
                  "policy_outcomes.png"):
         assert (tmp_path / name).exists()

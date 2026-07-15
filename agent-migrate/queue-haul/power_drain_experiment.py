@@ -59,7 +59,8 @@ def _validate_contexts(sessions: tuple[SimSession, ...], profile: ModelProfile) 
                 case.replay.rate(context, 1)
                 for request in session.requests:
                     case.prefill.rate(context, 1)
-                    case.decode.rate(context + request.prompt_tokens, 1)
+                    if request.output_tokens:
+                        case.decode.rate(context + request.prompt_tokens, 1)
                     context += request.prompt_tokens + request.output_tokens
                     case.replay.rate(context, 1)
             except ValueError as exc:
@@ -72,6 +73,7 @@ def build_scenario(workload: WorkloadProfile, profile: ModelProfile, sessions: i
                    power_limit_w: float, deadline_s: float, end_s: float,
                    link_bytes_per_s: float = 125_000_000.0,
                    final_state: str = "awake", controller_delay_s: float = 0.0):
+    # TODO(workloads): replace the small assumed record sets with held-out traces.
     records, case = workload.sample(sessions, seed), profile.case()
     cycles = np.array([r.request_gap_s + r.tool_delay_s for r in records])
     if any(r.state == "active" and cycle <= 0 for r, cycle in zip(records, cycles)):
@@ -110,6 +112,7 @@ def build_scenario(workload: WorkloadProfile, profile: ModelProfile, sessions: i
     rng = np.random.default_rng(seed + 1)
     request_horizon = end_s - controller_delay_s
     wake_horizon = max(0.0, deadline_s - controller_delay_s)
+    # TODO(wake): fit the first-request distribution from complete session traces.
     sampled = tuple(
         SimSession(
             str(j), f"source-{assignment[j]}", r.context_tokens,
@@ -122,6 +125,7 @@ def build_scenario(workload: WorkloadProfile, profile: ModelProfile, sessions: i
         ) for j, (r, cycle) in enumerate(zip(records, cycles))
     )
     _validate_contexts(sampled, profile)
+    # TODO(site-links): add shared site limits after they are measured.
     links = tuple(NetworkLink(f"source-node-{i}-egress", link_bytes_per_s)
                   for i in range(node_count)) + tuple(
         NetworkLink(f"dest-node-{i}-ingress", link_bytes_per_s) for i in range(node_count)
@@ -187,7 +191,13 @@ def _summary(run: ExperimentRun) -> dict:
     pauses = [row.committed_s - row.pause_s for row in completed if row.pause_s is not None]
     wakes = [row.wake_ready_s - row.wake_start_s for row in result.sessions
              if row.wake_ready_s is not None]
-    network = [row for row in result.network if row.end_s is not None]
+    arrivals = {
+        (event.session_id, int(event.detail)): event.time_s for event in result.events
+        if event.event == "request_arrival"
+    }
+    starts = {(row.session_id, row.request_index): row.start_s for row in result.requests}
+    request_waits = [starts[key] - arrival for key, arrival in arrivals.items() if key in starts]
+    requests_started = result.requests_started_by(scenario.deadline_s)
     unresumed = sum(
         max(0.0, min(scenario.end_s, row.committed_s or scenario.end_s)
             - max(scenario.deadline_s, row.pause_s or scenario.end_s))
@@ -207,15 +217,25 @@ def _summary(run: ExperimentRun) -> dict:
         "fractional_variables": run.plan.fractional_variables,
         "planned_source_power_w": run.plan.planned_source_power_w,
         "source_power_at_deadline_w": result.source_power_at_deadline_w,
-        "power_met": result.deadline_met, "resumed_by_deadline": resumed,
-        "accepted": result.deadline_met and resumed,
+        "power_met": result.deadline_met, "moves_committed_by_deadline": resumed,
+        "requests_started_by_deadline": requests_started,
+        "accepted": result.deadline_met and resumed and requests_started,
         "completed_by_end": result.completed_sessions, "makespan_s": result.makespan_s,
         "total_pause_s": sum(pauses),
         "p95_pause_s": float(np.quantile(pauses, 0.95)) if pauses else 0.0,
         "total_wake_s": sum(wakes), "unresumed_after_deadline_s": unresumed,
-        "network_bytes": sum(row.bytes for row in result.network),
-        "network_duration_s": max((row.end_s for row in network), default=0.0)
-                              - min((row.start_s for row in network), default=0.0),
+        "deferred_sessions": sum(row.method == "replay_on_request" for row in result.sessions),
+        "request_arrivals": len(arrivals),
+        "requests_completed_by_end": sum(row.end_s <= scenario.end_s for row in result.requests),
+        "unfinished_requests": len(arrivals) - sum(
+            row.end_s <= scenario.end_s for row in result.requests
+        ),
+        "total_request_wait_s": sum(request_waits),
+        "p95_request_wait_s": float(np.quantile(request_waits, 0.95)) if request_waits else 0.0,
+        "network_bytes": sum(row.transferred_bytes for row in result.network),
+        "network_duration_s": max(
+            (row.end_s or scenario.end_s for row in result.network), default=0.0
+        ) - min((row.start_s for row in result.network), default=0.0),
         "excess_energy_j": excess_energy(
             result.power, scenario.deadline_s, scenario.end_s, scenario.power_limit_w
         ),
@@ -234,13 +254,22 @@ def write(runs: list[ExperimentRun], out: Path) -> None:
         raise ValueError("no experiment runs")
     out.mkdir(parents=True, exist_ok=True)
     summaries = [_summary(run) for run in runs]
-    events, sessions, network, power, plans = [], [], [], [], []
+    events, sessions, requests, network, power, plans = [], [], [], [], [], []
     for run in runs:
-        base = {"run_id": run.run_id, "solver": run.plan.solver, "profile_case": run.case_id}
+        base = {
+            "run_id": run.run_id, "model_profile": run.plan.profile_id,
+            "workload_profile": run.workload_id, "profile_case": run.case_id,
+            "solver": run.plan.solver, "seed": run.plan.seed,
+            "power_limit_w": run.scenario.power_limit_w,
+            "deadline_s": run.scenario.deadline_s, "end_s": run.scenario.end_s,
+            "final_state": run.scenario.final_state,
+            "controller_delay_s": run.scenario.controller_delay_s,
+        }
         events += [{**base, "time_s": row.time_s, "event": row.event,
                     "session_id": row.session_id, "node_id": row.node_id,
                     "detail": row.detail} for row in run.result.events]
         sessions += [{**base, **row.__dict__} for row in run.result.sessions]
+        requests += [{**base, **row.__dict__} for row in run.result.requests]
         network += [{**base, **row.__dict__, "path": "|".join(row.path)}
                     for row in run.result.network]
         power += [{**base, "time_s": t, "source_power_w": source,
@@ -248,9 +277,11 @@ def write(runs: list[ExperimentRun], out: Path) -> None:
                   for t, source, destination in run.result.power]
         plans += [{**base, "session_id": row.session_id,
                    "destination_instance": row.destination_instance, "method": row.method,
-                   "order": row.order, "path": "|".join(row.path)} for row in run.plan.moves]
+                   "order": row.order, "path": "|".join(row.path),
+                   "external_path": "|".join(row.external_path)} for row in run.plan.moves]
     for name, rows in (("summary", summaries), ("events", events), ("sessions", sessions),
-                       ("network", network), ("power", power), ("plans", plans)):
+                       ("requests", requests), ("network", network), ("power", power),
+                       ("plans", plans)):
         fields = tuple(rows[0]) if rows else ("run_id",)
         _write_csv(out / f"{name}.csv", rows, fields)
     _plot(runs, summaries, out)
@@ -276,7 +307,7 @@ def _plot(runs: list[ExperimentRun], summaries: list[dict], out: Path) -> None:
     plt.close(fig)
 
     phase = {solver: [] for solver in SOLVERS}
-    for run in central:
+    for run in same:
         phase[run.plan.solver] += [row.committed_s - row.pause_s for row in run.result.sessions
                                    if row.committed_s is not None and row.pause_s is not None]
     fig, ax = plt.subplots(figsize=(7, 4))
@@ -290,10 +321,17 @@ def _plot(runs: list[ExperimentRun], summaries: list[dict], out: Path) -> None:
     plt.close(fig)
 
     fig, ax = plt.subplots(figsize=(6, 4))
-    for run in central:
+    for run in same:
         rows = [row for row in run.result.network if row.end_s is not None]
-        ax.scatter([row.bytes / 1e6 for row in rows], [row.end_s - row.start_s for row in rows],
-                   s=10, alpha=0.4, label=run.plan.solver)
+        methods = {row.session_id: row.method for row in run.result.sessions}
+        for phase_name in sorted({row.phase for row in rows}):
+            selected = [row for row in rows if row.phase == phase_name]
+            labels = {methods[row.session_id] for row in selected}
+            ax.scatter(
+                [row.transferred_bytes / 1e6 for row in selected],
+                [row.end_s - row.start_s for row in selected], s=10, alpha=0.4,
+                label=f"{run.plan.solver}:{'/'.join(sorted(labels))}:{phase_name}",
+            )
     ax.set(xlabel="transfer size (MB)", ylabel="network time (s)")
     handles, labels = ax.get_legend_handles_labels()
     unique = dict(zip(labels, handles))
@@ -303,11 +341,45 @@ def _plot(runs: list[ExperimentRun], summaries: list[dict], out: Path) -> None:
     fig.savefig(out / "network_time.png", dpi=160)
     plt.close(fig)
 
+    fig, ax = plt.subplots(figsize=(6, 4))
+    for run in same:
+        ax.scatter(
+            [row.arrival_s for row in run.result.requests],
+            [row.start_s - row.arrival_s for row in run.result.requests],
+            s=10, alpha=0.5, label=run.plan.solver,
+        )
+    ax.axvline(first.scenario.deadline_s, color="black", linestyle=":", label="deadline")
+    ax.set(xlabel="request arrival (s)", ylabel="request wait (s)")
+    handles, labels = ax.get_legend_handles_labels()
+    unique = dict(zip(labels, handles))
+    ax.legend(unique.values(), unique.keys(), fontsize=8)
+    ax.grid(alpha=0.25)
+    fig.tight_layout()
+    fig.savefig(out / "request_wait.png", dpi=160)
+    plt.close(fig)
+
+    central_summaries = [row for row in summaries if row["profile_case"] == "central"]
+    fig, ax = plt.subplots(figsize=(5, 5))
+    for solver in sorted({row["solver"] for row in central_summaries}):
+        rows = [row for row in central_summaries if row["solver"] == solver]
+        ax.scatter([row["planned_source_power_w"] for row in rows],
+                   [row["source_power_at_deadline_w"] for row in rows], label=solver)
+    values = [row[key] for row in central_summaries
+              for key in ("planned_source_power_w", "source_power_at_deadline_w")]
+    ax.plot([min(values), max(values)], [min(values), max(values)], "k--", label="equal")
+    ax.set(xlabel="planned source power (W)", ylabel="simulated source power (W)")
+    ax.legend(fontsize=8)
+    ax.grid(alpha=0.25)
+    fig.tight_layout()
+    fig.savefig(out / "planned_vs_simulated_power.png", dpi=160)
+    plt.close(fig)
+
     fig, axes = plt.subplots(1, 2, figsize=(9, 4))
-    labels = sorted({row["solver"] for row in summaries})
-    axes[0].bar(labels, [np.mean([r["accepted"] for r in summaries if r["solver"] == label])
+    labels = sorted({row["solver"] for row in central_summaries})
+    axes[0].bar(labels, [np.mean([r["accepted"] for r in central_summaries
+                                 if r["solver"] == label])
                          for label in labels])
-    axes[1].bar(labels, [np.median([r["excess_energy_j"] for r in summaries
+    axes[1].bar(labels, [np.median([r["excess_energy_j"] for r in central_summaries
                                     if r["solver"] == label]) / 1000 for label in labels])
     axes[0].set(ylabel="accepted fraction")
     axes[1].set(ylabel="excess energy after deadline (kJ)")

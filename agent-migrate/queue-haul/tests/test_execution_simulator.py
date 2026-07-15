@@ -137,6 +137,8 @@ def test_deferred_replay_waits_for_an_observed_request(tmp_path):
     assert row.wake_start_s == pytest.approx(1)
     assert row.wake_ready_s == pytest.approx(2.1)  # 100 B / 100 B/s + 10 tok / 100 tok/s
     assert request_start == pytest.approx([2.1])
+    assert not result.requests_started_by(2)
+    assert result.requests_started_by(2.1)
 
 
 def test_incomplete_moves_remain_visible(tmp_path):

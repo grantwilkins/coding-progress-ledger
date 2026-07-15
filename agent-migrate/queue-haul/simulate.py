@@ -323,6 +323,17 @@ class ExecutionResult:
     def completed_sessions(self) -> int:
         return sum(row.committed_s is not None for row in self.sessions)
 
+    def requests_started_by(self, deadline_s: float) -> bool:
+        arrived = {
+            (event.session_id, int(event.detail)) for event in self.events
+            if event.event == "request_arrival" and event.time_s <= deadline_s
+        }
+        started = {
+            (request.session_id, request.request_index) for request in self.requests
+            if request.start_s <= deadline_s
+        }
+        return arrived <= started
+
 
 @dataclass
 class _Flow:
@@ -688,6 +699,7 @@ class ExecutionSimulator:
                 continue
             dependents = self.power_model.dependents[node_id]
             if dependents <= self.moved and self.scenario.final_state != "awake":
+                # TODO(transition-power): replace the step change with a measured trace shape.
                 duration = self.case.sleep_s if self.scenario.final_state == "sleep" else self.case.shutdown_s
                 self.node_state[node_id] = "transition"
                 self.node_actions[node_id] = self.scenario.final_state
