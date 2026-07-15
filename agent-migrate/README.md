@@ -132,7 +132,8 @@ PY=.venv/bin/python
 
 Stage 1b runs source vLLM on GPU 0, destination vLLM on GPU 1, a shared remote
 LMCache server, and one user-space bandwidth limit shared by replay and KV
-traffic. Each vLLM process has its private LMCache CPU tier disabled. On a
+traffic. Each vLLM process has its private LMCache CPU tier disabled while
+retaining the 4 GB pinned staging allocator required by the remote connector. On a
 two-GPU A100 node, check the pinned vLLM `0.10.1.1` and LMCache `0.3.3` setup:
 
 ```bash
@@ -189,7 +190,8 @@ failure restarts the testbed and retries once, then stops the run.
 Run and reduce separately. Formal runs require a clean worktree; `--allow-dirty`
 is available for development. Resume requires the same commit, plan, manifest,
 and settings. A failed scenario is saved, the testbed is restarted, independent
-scenarios continue, and the final command exits nonzero:
+scenarios continue, and the final command exits nonzero. The Slurm launcher
+always invokes reduction and preserves the run status:
 
 ```bash
 $PY queue-haul/stage1c_controller.py run \

@@ -25,5 +25,7 @@ export QH_APPTAINER_GPU_MODE=${QH_APPTAINER_GPU_MODE:-nv}
 export QH_PORT_OFFSET=${QH_PORT_OFFSET:-$((SLURM_JOB_ID % 40000 + 1000))}
 
 $PY queue-haul/stage1b_drain_sink.py preflight --required-gpus 2
-$PY queue-haul/stage1c_controller.py run --plan "$PLAN" --run-root "$RUN_ROOT"
+RUN_STATUS=0
+$PY queue-haul/stage1c_controller.py run --plan "$PLAN" --run-root "$RUN_ROOT" || RUN_STATUS=$?
 $PY queue-haul/stage1c_controller.py reduce --run-root "$RUN_ROOT"
+exit "$RUN_STATUS"

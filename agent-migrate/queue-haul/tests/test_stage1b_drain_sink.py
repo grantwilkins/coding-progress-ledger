@@ -62,7 +62,7 @@ def test_vllm_commands_pin_validated_sandbox_flags_and_roles():
     assert "nvidia/cu13/lib" in source
     assert "${LD_LIBRARY_PATH:-}" in source
     assert "LMCACHE_LOCAL_CPU=False" in source
-    assert "LMCACHE_MAX_LOCAL_CPU_SIZE=0" in source
+    assert "LMCACHE_MAX_LOCAL_CPU_SIZE=4" in source
     assert "TMPDIR=/tmp/qh-src-" in source
     assert "TMPDIR=/tmp/qh-sink-" in sink
     assert "VLLM_RPC_BASE_PATH=/tmp/qh-src-" in source
