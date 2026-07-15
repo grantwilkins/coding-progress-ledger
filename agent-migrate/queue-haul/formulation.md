@@ -33,14 +33,19 @@ pause, optional catch-up, route switch, commit, and optional sleep/off. Source
 power falls only at commit; sleep/off power applies only after its transition.
 Replay and KV destination work have separate measured concurrency limits, and
 unmeasured overlap queues. Unmeasured serving overlap also queues at one request
-per instance. External logs use a destination-only path, while source-local
-state uses the source-to-destination path.
+per instance. The current topology assumes an external log enters through the
+destination link only; source-local state uses the source-to-destination path.
 
 Acceptance requires both the exact trailing fixed-window local power average at
 or below the limit, every planned session committed by the deadline, and every
-request observed by the deadline started by the deadline. Excess joules,
+request observed by the deadline started by the deadline. Request start is a
+routing-readiness check, not a request-latency objective. Excess joules,
 unresumed session-seconds, request wait, incomplete bytes, and destination power
 are reported separately. The simulation end is explicit.
+
+Request events change context and migration timing but do not change the power
+curve during a run. Power columns are therefore labeled modeled expected power;
+`TODO(request-power)` marks the missing request-level calibration.
 
 The legacy formulation below uses different costs and sweep axes. Do not combine
 its outputs with profile-driven tables.

@@ -107,7 +107,8 @@ commit-gated source power, explicit incomplete rows, and raw event, session,
 request, network, power, and plan tables. It plans centrally once and replays
 that plan under faster and slower cases. A local six-session command-line smoke
 passes and produces seven nonempty tables plus power, pause, network, request,
-plan-validation, and policy plots.
+deadline-window power validation, and policy plots. Raw tables stream to disk
+one run at a time; plots retain at most 2,000 points per quantity and run.
 
 The checked-in GPT-OSS profile stops at 31.6k tokens. Long and 10,000-session
 workload windows now hard-fail before planning when sampled requests exceed that

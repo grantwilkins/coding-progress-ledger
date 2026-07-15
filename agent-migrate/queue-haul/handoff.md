@@ -174,9 +174,10 @@ uv run python queue-haul/power_drain_experiment.py \
 ```
 
 Confirm that all seven CSV tables are nonempty. Inspect the six plots for source
-power, pause time, network phases, request wait, planned versus simulated power,
-and policy outcomes. Seed 3 keeps this short smoke within the checked-in 31.6k
-token profile; longer windows must hard-fail until `TODO(context)` is resolved.
+power, pause time, network phases, request wait, expected versus modeled power,
+and policy outcomes. The power comparison uses trailing-window values. Seed 3
+keeps this short smoke within the checked-in 31.6k token profile; longer windows
+must hard-fail until `TODO(context)` is resolved.
 
 ## 6. Submit the large plan
 

@@ -35,8 +35,14 @@ Targeted TODOs:
   trace.
 - `TODO(workloads)`: replace the two- or three-record assumed workload profiles
   with held-out complete session traces.
+- `TODO(tp-topology)`: construct and validate multi-GPU instance and network
+  layouts before using profiles with tensor parallel size above one.
+- `TODO(request-power)`: measure whether sampled request phases require dynamic
+  power updates instead of the current expected-load curve.
 
 ---
+
+## Legacy Qwen/H100 analytical assumptions
 
 **Setup fixed for these experiments:** Qwen3-235B-A22B served on a single colocated pool
 of 8×H100 SXM nodes, TP=8, BF16, **no prefill/decode disaggregation**. One pool, one model.
