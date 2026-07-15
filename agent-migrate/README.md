@@ -120,7 +120,7 @@ The reducer writes:
 - `queue-haul/outputs/stage1_gpt_oss_20b_a100_tp1_mixed_surface.{csv,pdf,png}`
 - `queue-haul/outputs/stage1_gpt_oss_20b_a100_tp1_service_scale.csv`
 
-## Queue-Haul Stage 1b/1c Source-Sink Proof
+## Queue-Haul live migration profiling
 
 Load the host controller runtime before Queue-Haul commands that import NumPy or
 CVXPY:
@@ -130,119 +130,96 @@ module load gcc/14.2.0 openblas/0.3.28
 PY=.venv/bin/python
 ```
 
-Stage 1b uses the validated old vLLM Apptainer sandbox with LMCache and a
-stdlib user-space proxy instead of Docker or privileged kernel `tc`. vLLM gets
-`LMCACHE_MAX_LOCAL_CPU_SIZE=4` so larger session KV snapshots fit while
-keeping two live instances under the 256G Slurm cgroup. The proxy
-applies one shared 1Gbps source-egress bucket to API replay bytes and KV-transfer
-bytes. On a two-GPU A100 node, run:
+Stage 1b runs source vLLM on GPU 0, destination vLLM on GPU 1, a shared remote
+LMCache server, and one user-space bandwidth limit shared by replay and KV
+traffic. Each vLLM process has its private LMCache CPU tier disabled. On a
+two-GPU A100 node, check the pinned vLLM `0.10.1.1` and LMCache `0.3.3` setup:
 
 ```bash
 $PY queue-haul/stage1b_drain_sink.py preflight --required-gpus 2
 $PY queue-haul/stage1b_drain_sink.py smoke2-live --mbps 1000 --run-root /tmp/qh-smoke2-live
 ```
 
-Stage 1c keeps the fixture proof as the fast source/sink controller check. Its
-live controller compares node-aware greedy with rounded LP, exact single-source
-MILP, power-unaware greedy, and random whole-session plans:
-
-```bash
-$PY queue-haul/stage1c_controller.py plan
-$PY queue-haul/stage1c_controller.py proof --mbps 1000 --run-root /tmp/qh-proof-live
-$PY queue-haul/stage1c_controller.py check --run-root /tmp/qh-proof-live
-```
-
-For the production-shaped live controller, first build a local TraceLab-shaped
-session manifest from a pinned JSONL/JSONL.gz trace, then run the 4 Hz power trace
-and policy-ranked drain:
+Stage 1c profiles migration mechanisms; it does not choose a power policy or
+declare power/deadline acceptance. Build a deterministic manifest from a pinned
+TraceLab JSONL or JSONL.gz file. Trace timing, token counts, turn boundaries,
+job class, and the source hash are retained. Message text is generated because
+the trace does not contain it:
 
 ```bash
 $PY queue-haul/stage1c_controller.py make-manifest \
-  --source tracelab \
-  --input /path/to/syfi_coding_trace.jsonl.gz \
-  --out queue-haul/outputs/stage1c_live-sessions.json \
+  --input /path/to/trace.jsonl.gz \
+  --out queue-haul/outputs/coding-manifest.json \
+  --workload coding \
   --sessions 8 \
   --seed 0
-$PY queue-haul/stage1c_controller.py live-drain \
-  --manifest queue-haul/outputs/stage1c_live-sessions.json \
-  --mbps 1000 \
-  --nvsmi-ms 250 \
-  --run-root queue-haul/outputs/stage1c_live \
-  --profile queue-haul/outputs/stage1c_live-profile.json
-$PY queue-haul/stage1c_controller.py check-live --run-root queue-haul/outputs/stage1c_live
-$PY queue-haul/stage1c_controller.py plot-live --run-root queue-haul/outputs/stage1c_live
-$PY queue-haul/stage1c_controller.py live-grid \
-  --manifest queue-haul/outputs/stage1c_live-sessions.json \
-  --mbps 1000 \
-  --run-root queue-haul/outputs/stage1c_grid \
-  --profile queue-haul/outputs/stage1c_grid/live_profile.json
-# Or submit a one-scenario check, then the resumable 90-scenario sweep:
-sbatch queue-haul/stage1c_quick.sbatch
-RUN_ROOT=queue-haul/outputs/stage1c_smart_sweep sbatch queue-haul/stage1c_grid.sbatch
 ```
 
-The launcher pins the validated vLLM `0.10.1.1` / LMCache `0.3.3` sandbox and
-hard-fails on another package pair. `live-grid` starts source vLLM on GPU 0 and
-sink vLLM on GPU 1 once for the whole sweep. Before every scenario it waits for
-profiling to finish, clears the shared remote KV store with an acknowledgement,
-resets both vLLM prefix caches, and assigns a unique cache namespace. LMCache
-0.3.3 cannot remotely deallocate its in-process 4 GB pools; they stay bounded and
-cannot hit across scenario namespaces. Each scenario starts and stops its own
-`nvidia-smi` process, warms the workload for 30 seconds, and records before/after
-`/metrics` snapshots for both vLLM servers. Measured source power, not modeled
-committed load, determines power acceptance. The batch sweep profiles each
-trace-derived interactive-coding, coding, and agentic-tool-loop workload once,
-derives target-specific deadlines, and runs each planner with three seeds at 50%
-and 100% of removable source power. Set `SMART_SWEEP=0` for the legacy Cartesian
-grid.
+Expand the manifest into randomized migration scenarios and matched
+no-migration controls. Generated profiling scenarios use one method at a time;
+the plan schema also permits moves with different methods:
 
-Live planning uses the checked-in 5-second A100 calibration: session load is
-`f/F + g/G`, `rho_star=0.534657` is fixed across workloads, and the matching
-saturating power curve is never renormalized to the current session population.
-Manifest generation preserves selected sessions and relative turn rates, but
-uniformly stretches their turn gaps when aggregate source load exceeds
-`rho_star`; the source budget, original load, admitted load, and scale are stored
-in the manifest.
-By default `rho_star` is also the sink admission budget. For a two-GPU mechanism
-test, `DEST_LOAD_BUDGET_ELL=2.0 sbatch queue-haul/stage1c_grid.sbatch` changes
-only that load budget. Outputs label it `mechanism_only` and report whether the
-selected sink load is admission-feasible; it is not a production SLO claim.
+```bash
+$PY queue-haul/stage1c_controller.py make-plan \
+  --manifest queue-haul/outputs/coding-manifest.json \
+  --out queue-haul/outputs/coding-plan.json \
+  --context-sizes 2048,8192,16384 \
+  --concurrency 1,2,4 \
+  --bandwidth-mbps 250,1000,10000 \
+  --methods replay,kv_transfer \
+  --activity none,one_turn \
+  --repeats 3 \
+  --seed 0
+```
 
-`live-drain` keeps both servers up together and runs Poisson turn loops whose
-canonical transcript includes every actual streamed assistant response. Once the
-planner fixes every action and order, each selected session freezes an append-only
-prefix and stages it on the sink while its in-flight source turn finishes. New
-source turns wait until the switch. At that request boundary, only the suffix is
-staged under the original action: replay
-reuses vLLM's prefix or KV transfer reuses LMCache's copied chunks. Rewriting or
-trimming the transferred prefix is a hard failure. Staging slots are released
-before source-boundary waits, so those waits overlap across sessions. The plan
-adds the observed baseline source-request p95 once to the profiled staging wall
-time. Replay prefill is bounded by `--replay-concurrency` (default 1). Selected
-KV stages start in planner order with `--kv-concurrency=2`; `0` explicitly
-enables all-at-once ablations. Both actions share the audited 1 Gbps proxy, and
-every KV action must report at least a 90% LMCache token hit.
-The controller writes `gpu_power.csv`, `events.jsonl`, `controller_manifest.json`,
-`power_summary.csv`, `power_trace.png`, `source_power.png`, `sink_power.png`,
-`delay_summary.csv`, `delay_summary.png`, `ell_power5s.csv`, `ell_power5s.png`,
-`source_metrics_{before,after}.prom`, `sink_metrics_{before,after}.prom`,
-`request_counts.csv`, and `proxy_audit.csv`. Handoff rows separate selection
-queueing, initial staging, final delta, boundary wait, switch downtime, generation
-and context hashes, LMCache total/hit tokens, and the first naturally arriving
-sink turn when one occurs. The manifest reports
-`selected_node_expected_w`, `egress_realized_node_expected_w`, and
-`rebuild_realized_node_expected_w`; only committed sessions count in the last
-quantity. `live-grid` also writes the exact `scenario_plan.json`,
-`scenario_summary.csv` (including profiled deadline and completion/reference
-ratio), `grid_power_drop.png`, and `grid_delay.png`. Use
-`POLICIES=all-r,all-s sbatch queue-haul/stage1c_quick.sbatch`
-for the replay/KV counterfactual comparison.
-`all-r` forces reconstruction only during handoff; normal sink turns then reuse
-the reconstructed prefix. `all-s` requires measured KV bytes and token hits.
-The exact planners are not run at datacenter scale. The linearithmic offline
-experiment compares concentrated node draining, power-unaware session ordering,
-and random ordering for 10,000 sessions, then replays each plan over independent
-per-source links at 250 Mbps, 1 Gbps, and 10 Gbps with 10/40/80 ms RTT:
+For each move, the source keeps serving during the initial destination copy.
+The controller then pauses that session, waits for its active request, copies
+the complete updated conversation once if it changed, verifies the destination,
+switches the route, and resumes queued work there. One total concurrency limit
+covers replay and KV moves from initial copy through route switch. A failure
+before the switch resumes the source route.
+
+Before each scenario, the controller verifies that the remote cache is empty
+and requires both vLLM logs to report a successful prefix-cache reset; HTTP 200
+alone is insufficient. Replay sessions are warmed before the remote cache is
+cleared. KV sessions are warmed afterward. Replay requests must report zero KV
+hit tokens. KV requests must hit exactly the complete 256-token chunks. A reset
+failure restarts the testbed and retries once, then stops the run.
+
+Run and reduce separately. Formal runs require a clean worktree; `--allow-dirty`
+is available for development. Resume requires the same commit, plan, manifest,
+and settings. A failed scenario is saved, the testbed is restarted, independent
+scenarios continue, and the final command exits nonzero:
+
+```bash
+$PY queue-haul/stage1c_controller.py run \
+  --plan queue-haul/outputs/coding-plan.json \
+  --run-root queue-haul/outputs/coding-run
+$PY queue-haul/stage1c_controller.py reduce \
+  --run-root queue-haul/outputs/coding-run
+# On Sherlock:
+PLAN=queue-haul/outputs/coding-plan.json \
+RUN_ROOT=queue-haul/outputs/coding-run \
+sbatch queue-haul/stage1c_benchmark.sbatch
+```
+
+Each scenario records controller events, every streamed response chunk, prompt
+and output token totals, structured cache operations, 250 ms link totals,
+per-connection byte totals, and 250 ms GPU power/utilization/memory samples.
+Per-session KV work uses exact complete chunks and bytes derived from the logged
+KV layout; concurrent shared-wire bytes remain scenario totals. Source sleep is
+attempted only after every active session commits, and its timing is separate
+from migration time.
+
+`reduce` validates the raw run and writes `migrations.csv`, `scenarios.csv`, and
+`benchmark_summary.csv`. Each scenario gets `migration_timeline.png` and
+`resource_trace.png`. Cross-scenario copy-time, concurrency-scaling, and service
+effect plots are written as PNG and PDF. Power and deadline fields are
+diagnostics, not acceptance criteria. Cells keep job class, context size, link,
+method, and activity separate; p95 appears only with at least 20 samples and a
+bootstrap median interval only with at least 10.
+
+The separate offline 10,000-session power-drain experiment is unchanged:
 
 ```bash
 uv run python queue-haul/power_drain_experiment.py \
@@ -252,17 +229,4 @@ uv run python queue-haul/power_drain_experiment.py \
 It writes `scale_results.csv`, `scale_policy_comparison.png`, and
 `scale_network_sensitivity.png`.
 
-Raw Stage 1b/1c run directories and scheduler logs are generated and ignored.
-The retained Stage 1c result is the final three-replicate paired validation:
-
-```bash
-uv run python queue-haul/plot_stage1c_results.py
-```
-
-`queue-haul/outputs/stage1c_results.csv` keeps the baseline/post power means,
-sample counts, planner/target watts, admission status, and completion outcome.
-It generates `stage1c_power_levels.{pdf,png}`, `stage1c_power_change.{pdf,png}`,
-and `stage1c_completion.{pdf,png}`. The admission-feasible runs shed
-`17.6-29.7 W`; the mechanism-only runs shed `160.5-165.9 W` but exceed the
-calibrated destination admission limit. All six finish within `120 s`, and
-none reaches the `182.0 W` measured-power target.
+Raw live run directories and scheduler logs are generated and ignored.
