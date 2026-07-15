@@ -1,50 +1,50 @@
-"""Tests for the offline 10k-session experiment mechanics."""
+"""
+Claim:
+The experiment samples complete sessions, uses absolute local power limits, plans
+once centrally, and preserves raw execution evidence for every uncertainty case.
 
-import sys
+Plausible wrong implementations:
+- Resample independent workload fields and create impossible sessions.
+- Re-plan the faster/slower cases and hide plan sensitivity.
+- Test the last power sample instead of integrating the deadline window.
+- Emit only a summary and make timing or network claims impossible to audit.
+"""
+
 from pathlib import Path
-from types import SimpleNamespace
 
-import numpy as np
+import pytest
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-
-import power_drain_experiment as e
-from node_knee import node_loads
+import power_drain_experiment as experiment
+from planner import source_power
+from profiles import ModelProfile, WorkloadProfile
 
 
-def test_a100_population_is_active_and_compute_packed():
-    pool, pop = e.a100_population("agentic_tool_loop", 100, 0)
+def test_build_scenario_packs_calibrated_sessions_and_named_links():
+    model = ModelProfile.load(experiment.DEFAULT_MODEL)
+    workload = WorkloadProfile.load(experiment.DEFAULT_WORKLOADS[2])
+    scenario, route = experiment.build_scenario(workload, model, 12, 0, 500, 5, 5)
 
-    assert len(pop) == 100
-    assert set(pop.state) == {"active"}
-    assert node_loads(pop).max() <= pool.rho_star + 1e-9
+    assert len(scenario.sessions) == 12
+    assert source_power(scenario, model) > 500
+    assert all(len(route(f"source-{i}", "dest-0")) == 2
+               for i in range(len(scenario.instances) // 2))
 
 
-def test_completion_times_gives_each_source_an_independent_link():
-    class Pop:
-        source_node = np.array([0, 0, 1])
+def test_excess_energy_integrates_step_power_after_deadline():
+    power = ((0, 100, 0), (6, 40, 0), (8, 20, 0))
+    assert experiment.excess_energy(power, 5, 10, 30) == pytest.approx(90)
 
-        def __len__(self):
-            return 3
 
-    imp = SimpleNamespace(
-        c_replay=np.array([2.0, 2.0, 2.0]),
-        c_transfer=np.array([3.0, 3.0, 3.0]),
-        b_replay=np.array([125_000_000.0] * 3),
-        b_transfer=np.array([250_000_000.0] * 3),
+def test_small_run_reuses_plans_and_writes_raw_tables_and_plots(tmp_path: Path):
+    runs = experiment.run(
+        workload_paths=(experiment.DEFAULT_WORKLOADS[2],), sessions=6, power_limits=(500,),
+        deadlines=(5,), end_s=5, solvers=("load_only",),
     )
+    assert len(runs) == 3
+    assert all(run.plan.moves == runs[0].plan.moves for run in runs)
 
-    done = e.completion_times(Pop(), imp, np.array([0, 1, 2]), 1000, 40)
-
-    assert np.allclose(done, [2.04, 3.04, 2.04])
-
-
-def test_small_sweep_writes_canonical_outputs(tmp_path: Path):
-    rows = e.run(100, target_fracs=(0.5,), bandwidths=(1000.0,), rtts=(40.0,))
-    e.write(rows, tmp_path)
-
-    assert len(rows) == len(e.WORKLOADS) * len(e.POLICIES)
-    assert all(r["selected_w"] >= r["target_w"] for r in rows)
-    assert (tmp_path / "scale_results.csv").exists()
-    assert (tmp_path / "scale_policy_comparison.png").exists()
-    assert (tmp_path / "scale_network_sensitivity.png").exists()
+    experiment.write(runs, tmp_path)
+    for name in ("summary.csv", "events.csv", "sessions.csv", "network.csv", "power.csv",
+                 "plans.csv", "power_timeline.png", "session_pause.png", "network_time.png",
+                 "policy_outcomes.png"):
+        assert (tmp_path / name).exists()
