@@ -258,7 +258,7 @@ class ExecutionScenario:
     end_s: float
     power_limit_w: float
     final_state: FinalState
-    solver_s: float
+    controller_delay_s: float
     nodes: tuple[PowerNode, ...]
     instances: tuple[ServingInstance, ...]
     sessions: tuple[SimSession, ...]
@@ -266,7 +266,8 @@ class ExecutionScenario:
 
     def __post_init__(self):
         if self.deadline_s <= 0 or self.end_s < self.deadline_s or self.power_limit_w < 0 \
-                or self.solver_s < 0 or self.final_state not in {"awake", "sleep", "off"}:
+                or not 0 <= self.controller_delay_s <= self.deadline_s \
+                or self.final_state not in {"awake", "sleep", "off"}:
             raise ValueError("invalid execution scenario")
 
 
@@ -758,7 +759,7 @@ class ExecutionSimulator:
 
     def run(self) -> ExecutionResult:
         self._record_power()
-        self.time = self.scenario.solver_s
+        self.time = self.scenario.controller_delay_s
         self._event("plan_ready")
         for session in self.sessions.values():
             if session.requests:
@@ -828,7 +829,7 @@ class ExecutionSimulator:
             self.power, self.scenario.deadline_s, self.profile.power_window_s
         )
         makespan = max((s.committed_s for s in sessions if s.committed_s is not None),
-                       default=self.scenario.solver_s)
+                       default=self.scenario.controller_delay_s)
         network = self.network + [
             NetworkExecution(
                 self.states[flow.move_index].move.session_id, flow.phase, flow.bytes,

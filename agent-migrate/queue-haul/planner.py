@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 import heapq
 from time import perf_counter
 from typing import Callable
@@ -12,7 +12,7 @@ import numpy as np
 
 from profiles import ModelProfile, ProfileCase
 from power_model import ExpectedPower
-from simulate import ExecutionScenario, MoveMethod, PlannedMove, SimSession
+from simulate import ExecutionScenario, MoveMethod, PlannedMove, SimSession, execute
 
 
 METHODS: tuple[MoveMethod, ...] = ("replay", "kv_transfer", "replay_on_request")
@@ -52,16 +52,21 @@ def _duration(session: SimSession, method: MoveMethod, case: ProfileCase,
               path: tuple[str, ...], links: dict[str, float]) -> float:
     def link_s(size):
         return size / min(links[link] for link in path)
+    def external_link_s(size):
+        # TODO(external-path): replace the destination-ingress assumption with measured topology.
+        return size / links[path[-1]]
     replay_s = session.context_tokens / case.replay.rate(session.context_tokens, 1)
     if method == "replay":
-        return link_s(session.log_bytes) + replay_s + case.switch_s
+        transfer_s = external_link_s(session.log_bytes) if session.log_external \
+            else link_s(session.log_bytes)
+        return transfer_s + replay_s + case.switch_s
     if method == "kv_transfer":
         blocks = case.kv_transfer.blocks(session.context_tokens)
         return (case.kv_transfer.setup_s + link_s(blocks * case.kv_transfer.block_bytes)
                 + blocks * case.kv_transfer.block_processing_s + case.kv_transfer.sync_s
                 + case.switch_s)
     initial_s = 0.0 if session.log_external else link_s(session.log_bytes)
-    wake_s = (link_s(session.log_bytes) if session.log_external else 0.0) + replay_s
+    wake_s = (external_link_s(session.log_bytes) if session.log_external else 0.0) + replay_s
     return initial_s + case.switch_s + session.wake_probability * wake_s
 
 
@@ -149,7 +154,7 @@ def plan(scenario: ExecutionScenario, profile: ModelProfile,
     if initial <= scenario.power_limit_w:
         return PlanResult(solver, (), initial, initial, True, perf_counter() - start, 0,
                           profile.profile_id, case_id, seed)
-    horizon = scenario.deadline_s - scenario.solver_s
+    horizon = scenario.deadline_s - scenario.controller_delay_s
     valid = np.zeros((len(sessions), len(METHODS)), bool)
     costs = np.full(valid.shape, np.inf)
     for j, session in enumerate(sessions):
@@ -221,8 +226,17 @@ def plan(scenario: ExecutionScenario, profile: ModelProfile,
                 power_state.remove(sessions[j].session_id)
     planned = power_state.power(True)
     moves = _place(selected, sessions, scenario, profile, paths, methods, case_id)
+    expected = execute(
+        replace(scenario, sessions=tuple(replace(session, requests=())
+                                         for session in scenario.sessions)),
+        profile, moves, case_id,
+    )
+    feasible = planned <= scenario.power_limit_w and expected.deadline_met and all(
+        row.committed_s is not None and row.committed_s <= scenario.deadline_s
+        for row in expected.sessions
+    )
     return PlanResult(
-        solver, moves, initial, planned, planned <= scenario.power_limit_w,
+        solver, moves, initial, planned, feasible,
         perf_counter() - start, int(((fractional > 1e-9) & (fractional < 1 - 1e-9)).sum()),
         profile.profile_id, case_id, seed,
     )

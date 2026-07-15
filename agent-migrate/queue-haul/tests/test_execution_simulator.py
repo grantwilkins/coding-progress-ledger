@@ -19,12 +19,12 @@ from simulate import (ExecutionScenario, NetworkLink, PlannedMove, PowerNode, Se
                       SimRequest, SimSession, execute, fair_link_rates, step_average)
 
 
-def model(tmp_path, switch=1, block_s=0, shutdown=2, setup=0):
+def model(tmp_path, switch=1, block_s=0, shutdown=2, setup=0, tp=2):
     source = {"kind": "measured", "reference": "hand", "valid_range": [1, 1000], "relative_error": 0}
     rate = {"1": [[1, 100], [1000, 100]], "2": [[1, 50], [1000, 50]]}
     raw = {
         "schema": "queue-haul-model-profile-v1", "profile_id": "hand", "status": "fitted",
-        "model": "m", "hardware": "h", "precision": "bf16", "tensor_parallel": 2,
+        "model": "m", "hardware": "h", "precision": "bf16", "tensor_parallel": tp,
         "gpus_per_node": 2, "power_scope": "gpu", "power_window_s": 1,
         "max_ell": 1, "max_parallel_moves": 2,
         "max_parallel_replay": 1, "max_parallel_kv": 1,

@@ -37,7 +37,7 @@ PATHS = {(source, dest): ("wan",) for source in ("s0", "s1") for dest in ("t0", 
 
 
 def test_plan_does_not_read_sampled_future_requests(tmp_path):
-    profile = model(tmp_path)
+    profile = model(tmp_path, tp=1)
     a = plan(problem(), profile, PATHS, "load_only")
     b = plan(problem((SimRequest(0, 10, 0),)), profile, PATHS, "load_only")
     assert [(m.session_id, m.method) for m in a.moves] == [
@@ -47,14 +47,14 @@ def test_plan_does_not_read_sampled_future_requests(tmp_path):
 
 
 def test_destination_placement_balances_whole_sessions(tmp_path):
-    result = plan(problem(limit=0), model(tmp_path), PATHS, "load_only")
+    result = plan(problem(limit=0), model(tmp_path, tp=1), PATHS, "load_only")
     assert {move.destination_instance for move in result.moves} == {"t0", "t1"}
     assert {move.session_id for move in result.moves} == {"a", "b"}
     assert all(move.method in METHODS for move in result.moves)
 
     def route(source, destination):
         return PATHS[source, destination]
-    assert plan(problem(limit=0), model(tmp_path), route, "load_only").moves == result.moves
+    assert plan(problem(limit=0), model(tmp_path, tp=1), route, "load_only").moves == result.moves
 
 
 def test_node_drain_counts_sleep_only_after_the_whole_node_is_selected(tmp_path):
@@ -65,19 +65,27 @@ def test_node_drain_counts_sleep_only_after_the_whole_node_is_selected(tmp_path)
         ServingInstance("s0", ("n0",)), ServingInstance("s1", ("n0",)),
         ServingInstance("t0", ("d0",)), ServingInstance("t1", ("d1",)),
     ))
-    result = plan(shared, model(tmp_path), PATHS, "node_drain")
+    result = plan(shared, model(tmp_path, tp=1), PATHS, "node_drain")
     assert {move.session_id for move in result.moves} == {"a", "b"}
     assert result.feasible
 
 
 def test_rounded_lp_returns_only_whole_moves(tmp_path):
-    result = plan(problem(), model(tmp_path), PATHS, "rounded_lp")
+    result = plan(problem(), model(tmp_path, tp=1), PATHS, "rounded_lp")
     assert result.moves
     assert len({move.session_id for move in result.moves}) == len(result.moves)
     assert all(isinstance(move.order, int) for move in result.moves)
 
 
 def test_random_skips_sessions_that_cannot_finish_by_the_deadline(tmp_path):
-    result = plan(replace(problem(), deadline_s=1), model(tmp_path), PATHS, "random")
+    result = plan(replace(problem(), deadline_s=1), model(tmp_path, tp=1), PATHS, "random")
     assert result.moves == ()
+    assert not result.feasible
+
+
+def test_collective_link_contention_can_make_a_plan_infeasible(tmp_path):
+    result = plan(
+        replace(problem(limit=0), deadline_s=2.5), model(tmp_path, tp=1), PATHS, "load_only"
+    )
+    assert len(result.moves) == 2
     assert not result.feasible
