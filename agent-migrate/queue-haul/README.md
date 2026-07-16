@@ -16,10 +16,15 @@ uv run pytest
 uv run python queue-haul/power_drain_experiment.py \
   --workload-profile queue-haul/profiles/agentic_tool_loop.json \
   --sessions 6 --seed 3 --power-limit 500 --deadline 5 --end 5 \
-  --solver load_only --out queue-haul/outputs/profile_smoke
+  --solver load_only --workers 2 --out queue-haul/outputs/profile_smoke
 uv run python queue-haul/plot_simulator_validation.py
 uv run python queue-haul/plot_simulator_evaluation.py
 ```
+
+`--workers` runs independent workload, power-limit, deadline, and solver groups
+in separate processes while preserving serial result order. It defaults to one
+so batch allocations are never oversubscribed implicitly. Planner predictions
+skip audit records; experiment executions retain complete evidence tables.
 
 The earlier additive model is frozen in `_archive/queue-haul-additive-v0`.
 
