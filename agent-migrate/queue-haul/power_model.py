@@ -38,6 +38,10 @@ class ExpectedPower:
         self.route = {s.session_id: s.source_instance for s in scenario.sessions}
         self.state = {node_id: "awake" for node_id in self.nodes}
         self.removed = set()
+        self.slot_power = {
+            node_id: [self.case.power_curve.power(load) for load in loads]
+            for node_id, loads in self.slots.items()
+        } if self.profile.power_scope == "gpu" else {}
         self.node_power = {node_id: self._power(node_id) for node_id in self.nodes}
         self.total = {
             local: sum(self.node_power[n.node_id] for n in scenario.nodes if n.local == local)
@@ -46,13 +50,16 @@ class ExpectedPower:
 
     def _power(self, node_id: str, slots=None, state=None) -> float:
         node = self.nodes[node_id]
-        state, slots = state or self.state[node_id], slots or self.slots[node_id]
+        state = self.state[node_id] if state is None else state
         if state == "off":
             return 0.0
         if state == "sleep":
             return self.case.sleep_power_w * (node.gpus if self.profile.power_scope == "gpu" else 1)
         if self.profile.power_scope == "gpu":
+            if slots is None:
+                return sum(self.slot_power[node_id])
             return sum(self.case.power_curve.power(load) for load in slots)
+        slots = self.slots[node_id] if slots is None else slots
         return self.case.power_curve.power(sum(slots))
 
     def power(self, local: bool) -> float:
@@ -75,6 +82,10 @@ class ExpectedPower:
         self.instance_load[instance_id] += delta
         for node_id, slot in owned:
             self.slots[node_id][slot] += delta / len(owned)
+            if self.profile.power_scope == "gpu":
+                self.slot_power[node_id][slot] = self.case.power_curve.power(
+                    self.slots[node_id][slot]
+                )
 
     def remove(self, session_id: str) -> None:
         if session_id in self.removed:

@@ -7,6 +7,7 @@ Plausible wrong implementations:
 - Credit source power when bytes finish instead of when the route switches.
 - Serialize simultaneous transfers or exceed a shared link.
 - Stall when shared rates leave a small floating-point byte remainder.
+- Change or retain the wrong GPU slot load when one session moves.
 - Enter sleep/off before the final source session commits.
 - Skip catch-up when a request changes state during background preparation.
 """
@@ -137,6 +138,33 @@ def test_shared_source_node_stays_awake_until_every_instance_moves(tmp_path):
     assert commits["short"] < commits["long"]
     assert off_start == commits["long"]
     assert next(power for time, power, _ in result.power if time == commits["short"]) > 0
+
+
+def test_moving_one_session_updates_only_its_gpu_power(tmp_path):
+    sessions = (
+        SimSession("light", "source-a", 10, 25, 0, 40),
+        SimSession("heavy", "source-b", 10, 50, 0, 40),
+    )
+    topology = ExecutionScenario(
+        20, 30, 0, "awake", 0,
+        (PowerNode("src", 2, True), PowerNode("dst", 2, False)),
+        (
+            ServingInstance("source-a", ("src",)),
+            ServingInstance("source-b", ("src",)),
+            ServingInstance("dest-a", ("dst",)),
+            ServingInstance("dest-b", ("dst",)),
+        ),
+        sessions, (NetworkLink("wan", 100),),
+    )
+    result = execute(
+        topology, model(tmp_path, tp=1),
+        (PlannedMove("light", "dest-a", "kv_transfer", 0, ("wan",)),),
+    )
+    committed = result.sessions[0].committed_s
+
+    assert result.power[0][1] == pytest.approx(50)  # P(.25) + P(.5) = 20 + 30
+    assert next(power for time, power, _ in result.power if time == committed) \
+        == pytest.approx(40)  # P(0) + P(.5) = 10 + 30
 
 
 def test_deferred_replay_copies_only_source_local_log(tmp_path):
