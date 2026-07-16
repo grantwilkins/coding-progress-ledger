@@ -110,6 +110,35 @@ def test_catch_up_and_off_wait_for_last_session(tmp_path):
     assert off_done == pytest.approx(off_start + 2)
 
 
+def test_shared_source_node_stays_awake_until_every_instance_moves(tmp_path):
+    sessions = (
+        SimSession("short", "source-a", 10, 25, 0, 40),
+        SimSession("long", "source-b", 20, 25, 0, 40),
+    )
+    topology = ExecutionScenario(
+        20, 30, 0, "off", 0,
+        (PowerNode("src", 2, True), PowerNode("dst", 2, False)),
+        (
+            ServingInstance("source-a", ("src",)),
+            ServingInstance("source-b", ("src",)),
+            ServingInstance("dest-a", ("dst",)),
+            ServingInstance("dest-b", ("dst",)),
+        ),
+        sessions, (NetworkLink("wan", 100),),
+    )
+    moves = (
+        PlannedMove("short", "dest-a", "kv_transfer", 0, ("wan",)),
+        PlannedMove("long", "dest-b", "kv_transfer", 1, ("wan",)),
+    )
+    result = execute(topology, model(tmp_path, tp=1), moves)
+    commits = {row.session_id: row.committed_s for row in result.sessions}
+    off_start = next(event.time_s for event in result.events if event.event == "off_start")
+
+    assert commits["short"] < commits["long"]
+    assert off_start == commits["long"]
+    assert next(power for time, power, _ in result.power if time == commits["short"]) > 0
+
+
 def test_deferred_replay_copies_only_source_local_log(tmp_path):
     sessions = (
         SimSession("external", "source", 10, 0, 0, 100, True),

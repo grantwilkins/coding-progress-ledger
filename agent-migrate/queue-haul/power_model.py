@@ -31,12 +31,10 @@ class ExpectedPower:
             self.instance_slots[instance.instance_id] = owned
             for node_id, slot in owned:
                 self.slots[node_id][slot] = self.instance_load[instance.instance_id] / len(owned)
-        self.dependents = {
-            node_id: {
-                s.session_id for s in scenario.sessions
-                if node_id in self.instances[s.source_instance].gpu_nodes
-            } for node_id in self.nodes
-        }
+        self.dependents = {node_id: set() for node_id in self.nodes}
+        for session in scenario.sessions:
+            for node_id in self.instances[session.source_instance].gpu_nodes:
+                self.dependents[node_id].add(session.session_id)
         self.route = {s.session_id: s.source_instance for s in scenario.sessions}
         self.state = {node_id: "awake" for node_id in self.nodes}
         self.removed = set()
