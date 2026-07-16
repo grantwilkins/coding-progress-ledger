@@ -1,0 +1,36 @@
+{
+  "created_utc": "2026-07-16T23:32:15.063738+00:00",
+  "git_sha": "12f39a9f5dcd55c59aa7bab8f35ff72752390526",
+  "model_profile": "gpt-oss-20b-a100-tp1-20260716",
+  "profile_status": "estimated",
+  "workload_profile": "coding-live-20260714",
+  "session_counts": [
+    1,
+    3,
+    10,
+    32,
+    100,
+    316,
+    1000,
+    3162,
+    10000,
+    31623,
+    100000
+  ],
+  "solvers": [
+    "node_aware",
+    "node_drain"
+  ],
+  "requests_enabled": false,
+  "final_state": "awake",
+  "bandwidth_gbps_per_node": 1,
+  "deadline_s": 120.0,
+  "end_s": 180.0,
+  "target_fraction_of_removable_power": 0.5,
+  "metric_notes": {
+    "makespan_s": "last completed route switch; incomplete moves are counted separately",
+    "p95_migration_time_s": "initial migration start to route switch; excludes source queue wait",
+    "p95_service_pause_ms": "pause to route switch",
+    "modeled_source_drop_at_deadline_w": "five-second trailing average at the deadline"
+  }
+}
