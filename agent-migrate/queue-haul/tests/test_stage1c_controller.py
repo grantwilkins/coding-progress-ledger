@@ -6,8 +6,11 @@ and continuation quantities without power or deadline acceptance rules.
 Plausible wrong implementations:
 - Regenerate different conversations for repeats or split a trace turn.
 - Change the selected session set when concurrency changes.
-- Pool replay and KV bytes or omit matched no-migration controls.
-- Count response chunks as tokens or accept fewer hit tokens than the request.
+- Add catch-up cache hits to KV bytes transferred over the network.
+- Label requested context sizes as measured prompt tokens.
+- Count API or unbilled traffic as transferred KV, or compare raw rather than
+  baseline-adjusted power.
+- Include response generation in time to first response.
 - Reduce incomplete, stale, or old-schema runs.
 """
 
@@ -15,6 +18,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -158,11 +162,90 @@ def fake_result(scenario: dict, migration: bool) -> dict:
         "pause_start_ns": 2_000_000_000, "idle_ns": 2_100_000_000,
         "catch_up_start_ns": None, "catch_up_end_ns": None,
         "switch_start_ns": 2_100_000_000, "switch_end_ns": 2_200_000_000,
-        "initial": {"processed_tokens": 100, "logical_kv_chunks": 0, "logical_kv_bytes": 0}, "catch_up": None,
+        "initial": {"start_ns": 1_000_000_000, "end_ns": 2_000_000_000,
+                    "first_byte_ns": 1_700_000_000, "stream_chunks": [{"monotonic_ns": 1_600_000_000}],
+                    "prompt_tokens": 120, "output_tokens": 5, "processed_tokens": 100,
+                    "logical_kv_chunks": 0, "logical_kv_bytes": 0},
+        "catch_up": None,
         "committed_state": {}, "error": None,
     }
     continuation = {"session_id": "a", "route_port": 1, "committed_context_hash": "h", "request_id": "r", "status_code": 200, "context_hash": "h", "start_ns": 3_000_000_000, "end_ns": 3_200_000_000, "first_byte_ns": 3_100_000_000, "prompt_tokens": 1, "output_tokens": 1, "processed_tokens": 0, "logical_kv_chunks": 0, "logical_kv_bytes": 0, "wire_bytes": 0, "stream_chunks": []}
     return {"schema": c.RESULT_SCHEMA, "scenario_id": scenario["scenario_id"], "status": "complete", "elapsed_s": 3, "deadline_s": 10, "deadline_met": True, "migrations": [row] if migration else [], "continuations": [continuation], "wire_bytes": {"api/client_to_target": 5}}
+
+
+def test_reduction_separates_transferred_kv_from_catch_up_cache_hits():
+    scenario = {"sessions": [{"session_id": "a", "job_class": "coding"}],
+                "scenario_id": "m", "match_id": "p", "method": "kv_transfer",
+                "concurrency": 1, "bandwidth_mbps": 1000, "activity": "one_turn", "repeat": 0}
+    result = fake_result(scenario, True)
+    move = result["migrations"][0]
+    move["initial"].update({"processed_tokens": 0, "logical_kv_chunks": 2,
+                            "logical_kv_bytes": 2000})
+    move["catch_up_start_ns"], move["catch_up_end_ns"] = 2_100_000_000, 2_500_000_000
+    move["switch_start_ns"], move["switch_end_ns"] = 2_500_000_000, 2_600_000_000
+    move["catch_up"] = {
+        "start_ns": 2_100_000_000, "end_ns": 2_500_000_000,
+        "first_byte_ns": 2_350_000_000, "stream_chunks": [{"monotonic_ns": 2_300_000_000}],
+        "prompt_tokens": 130, "output_tokens": 5, "processed_tokens": 10,
+        "logical_kv_chunks": 2, "logical_kv_bytes": 2000,
+    }
+
+    row = c.flatten_migration(scenario, result, move)
+
+    assert row["measured_kv_bytes"] == 2000
+    assert row["catch_up_cache_hit_bytes"] == 2000
+    assert row["measured_prompt_tokens"] == 120
+    assert row["measured_processed_tokens"] == 0
+    assert row["catch_up_new_tokens"] == 10
+    assert row["initial_time_to_first_response_s"] == pytest.approx(.6)
+    assert row["initial_response_s"] == pytest.approx(.4)
+
+
+def test_network_and_power_measurements_use_measured_scopes(tmp_path):
+    proxy = tmp_path / "proxy.csv"
+    proxy.write_text(
+        "monotonic_ns,wall_ns,interval_ns,route,direction,bytes,billed\n"
+        "1000000000,0,250000000,kv,target_to_client,1000000,1\n"
+        "1250000000,0,250000000,kv,target_to_client,2000000,1\n"
+        "1250000000,0,250000000,api,client_to_target,9000000,1\n"
+        "1250000000,0,250000000,kv,target_to_client,7000000,0\n"
+    )
+    network = c.network_measurements(proxy)
+    assert network == {"measured_kv_wire_bytes": 3_000_000,
+                       "kv_network_window_s": .5,
+                       "measured_kv_throughput_mbps": 48.0}
+
+    power = tmp_path / "power.csv"
+    power.write_text(
+        "monotonic_ns,wall_ns,gpu,power_w,utilization_pct,memory_mib,valid\n"
+        "0,0,0,80,0,0,1\n0,0,1,100,0,0,1\n"
+        "1000000000,0,0,90,0,0,1\n1000000000,0,1,130,0,0,1\n"
+        "2000000000,0,0,110,0,0,1\n2000000000,0,1,150,0,0,1\n"
+        "2000000000,0,1,999,0,0,0\n"
+    )
+    measured = c.power_measurements(power, 1_000_000_000, 2_000_000_000)
+    assert measured["source_baseline_power_w"] == 80
+    assert measured["destination_baseline_power_w"] == 100
+    assert measured["source_mean_power_w"] == 100
+    assert measured["destination_mean_power_w"] == 140
+    assert measured["total_added_energy_j"] == 60
+
+
+def test_model_check_uses_measured_work_and_stays_in_its_valid_range():
+    case = SimpleNamespace(
+        kv_transfer=SimpleNamespace(setup_s=.2, block_processing_s=.5, sync_s=.3),
+        replay=SimpleNamespace(rate=lambda _tokens, _concurrency: 500),
+    )
+    source = SimpleNamespace(valid_range=(100, 2000))
+    profile = SimpleNamespace(sources={"kv_transfer": source, "replay": source}, case=lambda: case)
+    base = {"concurrency": 1, "activity": "none", "measured_prompt_tokens": 1000,
+            "bandwidth_mbps": 8, "measured_kv_bytes": 1_000_000,
+            "measured_kv_chunks": 2, "measured_processed_tokens": 1000}
+
+    assert c.current_model_time({**base, "method": "kv_transfer"}, profile) == pytest.approx(2.5)
+    assert c.current_model_time({**base, "method": "replay"}, profile) == pytest.approx(2)
+    assert c.current_model_time({**base, "method": "replay", "concurrency": 2}, profile) is None
+    assert c.current_model_time({**base, "method": "replay", "measured_prompt_tokens": 99}, profile) is None
 
 
 def test_reduce_validates_and_writes_interpretable_tables_and_plots(tmp_path, monkeypatch):
@@ -176,9 +259,23 @@ def test_reduce_validates_and_writes_interpretable_tables_and_plots(tmp_path, mo
     for scenario in plan["scenarios"]:
         root = tmp_path / "scenarios" / scenario["scenario_id"]; root.mkdir(parents=True)
         c.write_json(root / "result.json", fake_result(scenario, scenario["kind"] == "migration"))
+        if scenario["kind"] == "migration":
+            (root / "proxy_bytes.csv").write_text(
+                "monotonic_ns,wall_ns,interval_ns,route,direction,bytes,billed\n"
+                "1000000000,0,250000000,api,client_to_target,5,1\n")
+            (root / "power.csv").write_text(
+                "monotonic_ns,wall_ns,gpu,power_w,utilization_pct,memory_mib,valid\n"
+                "0,0,0,80,0,0,1\n0,0,1,100,0,0,1\n"
+                "1000000000,0,0,90,0,0,1\n1000000000,0,1,110,0,0,1\n"
+                "2200000000,0,0,90,0,0,1\n2200000000,0,1,110,0,0,1\n")
 
     c.reduce_run(tmp_path)
 
-    for name in ("migrations.csv", "scenarios.csv", "benchmark_summary.csv", "copy_time.png", "copy_time.pdf", "concurrency_scaling.png", "concurrency_scaling.pdf"):
+    for name in ("migrations.csv", "scenarios.csv", "benchmark_summary.csv",
+                 "initial_time.png", "throughput.png", "concurrency_scaling.png",
+                 "service_effects.png", "power_energy.png"):
         assert (tmp_path / name).exists()
-    assert "continuation_difference_s" in (tmp_path / "scenarios.csv").read_text()
+    table = (tmp_path / "scenarios.csv").read_text()
+    assert "continuation_difference_s" in table
+    assert "measured_prompt_tokens" in table
+    assert "context_size" not in table

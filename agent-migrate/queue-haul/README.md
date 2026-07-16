@@ -21,6 +21,15 @@ uv run python queue-haul/plot_simulator_validation.py
 uv run python queue-haul/plot_simulator_evaluation.py
 ```
 
+Stage 1C reduction reports measured prompt, processed, and new tokens; initial
+KV payload bytes; catch-up cache hits; exact proxy KV-route bytes; request
+timing; and power relative to a measured idle baseline. It does not group or
+plot by requested context size.
+`initial_time`, `throughput`, `concurrency_scaling`, `service_effects`,
+`power_energy`, and `model_check` show the direct relationships. Concurrency
+comparisons are paired; method and bandwidth observations are not paired and
+must not be connected or interpreted as isolated effects.
+
 `--workers` runs independent workload, power-limit, deadline, and solver groups
 in separate processes while preserving serial result order. It defaults to one
 so batch allocations are never oversubscribed implicitly. Planner predictions

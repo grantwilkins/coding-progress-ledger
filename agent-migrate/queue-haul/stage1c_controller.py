@@ -12,7 +12,7 @@ import subprocess
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
-from dataclasses import asdict, dataclass, replace
+from dataclasses import asdict, replace
 from pathlib import Path
 
 import stage1b_drain_sink as b
@@ -563,7 +563,6 @@ def run_scenario(stack: b.Stack, cfg: b.Config, manifest: dict, scenario: dict, 
     sampler.start()
     start_ns = time.monotonic_ns()
     cache_log, source_log, sink_log = stack.run_root / "lmcache.log", stack.run_root / "source.log", stack.run_root / "sink.log"
-    cache_offset = cache_log.stat().st_size
     runtime = None
     sleeping = False
     try:
@@ -739,7 +738,7 @@ def csv_value(value):
 def write_csv(path: Path, rows: list[dict]) -> None:
     fields = sorted({key for row in rows for key in row})
     with path.open("w", newline="") as handle:
-        writer = csv.DictWriter(handle, fields)
+        writer = csv.DictWriter(handle, fields, lineterminator="\n")
         writer.writeheader()
         writer.writerows([{key: csv_value(value) for key, value in row.items()} for row in rows])
 
@@ -748,21 +747,96 @@ def duration(start, end) -> float:
     return (end - start) / 1e9 if start is not None and end is not None else 0.0
 
 
+def first_stream_ns(request: dict) -> int:
+    chunks = request.get("stream_chunks") or []
+    return int(chunks[0]["monotonic_ns"] if chunks else request.get("first_byte_ns", request["end_ns"]))
+
+
+def request_measurements(prefix: str, request: dict | None, controller_end_ns: int | None) -> dict:
+    if not request:
+        return {
+            f"{prefix}_prompt_tokens": 0, f"{prefix}_processed_tokens": 0,
+            f"{prefix}_kv_chunks": 0, f"{prefix}_kv_bytes": 0,
+            f"{prefix}_request_s": 0.0, f"{prefix}_time_to_first_response_s": 0.0,
+            f"{prefix}_response_s": 0.0, f"{prefix}_validation_s": 0.0,
+        }
+    first = first_stream_ns(request)
+    return {
+        f"{prefix}_prompt_tokens": int(request.get("prompt_tokens", 0)),
+        f"{prefix}_processed_tokens": int(request.get("processed_tokens", 0)),
+        f"{prefix}_kv_chunks": int(request.get("logical_kv_chunks", 0)),
+        f"{prefix}_kv_bytes": int(request.get("logical_kv_bytes", 0)),
+        f"{prefix}_request_s": duration(request["start_ns"], request["end_ns"]),
+        f"{prefix}_time_to_first_response_s": duration(request["start_ns"], first),
+        f"{prefix}_response_s": duration(first, request["end_ns"]),
+        f"{prefix}_validation_s": duration(request["end_ns"], controller_end_ns),
+    }
+
+
 def flatten_migration(scenario: dict, result: dict, row: dict) -> dict:
     initial, catch_up = row.get("initial") or {}, row.get("catch_up") or {}
     session = next(item for item in scenario["sessions"] if item["session_id"] == row["move"]["session_id"])
+    initial_metrics = request_measurements("initial", initial, row["initial_end_ns"])
+    catch_up_metrics = request_measurements("catch_up", catch_up, row.get("catch_up_end_ns"))
+    catch_up_metrics.pop("catch_up_processed_tokens")
     return {
         "scenario_id": scenario["scenario_id"], "match_id": scenario["match_id"], "job_class": session.get("job_class", ""),
         "session_id": row["move"]["session_id"], "method": row["move"]["method"], "order": row["move"]["order"],
-        "context_size": scenario["context_size"], "concurrency": scenario["concurrency"], "bandwidth_mbps": scenario["bandwidth_mbps"], "activity": scenario["activity"], "repeat": scenario["repeat"],
-        "success": not row.get("error"), "initial_copy_s": duration(row["initial_start_ns"], row["initial_end_ns"]),
+        "concurrency": scenario["concurrency"], "bandwidth_mbps": scenario["bandwidth_mbps"], "activity": scenario["activity"], "repeat": scenario["repeat"],
+        "success": not row.get("error"),
         "request_wait_s": duration(row["pause_start_ns"], row["idle_ns"]), "catch_up_s": duration(row.get("catch_up_start_ns"), row.get("catch_up_end_ns")),
         "service_pause_s": duration(row["pause_start_ns"], row["switch_end_ns"]), "route_switch_s": duration(row["switch_start_ns"], row["switch_end_ns"]),
-        "processed_tokens": initial.get("processed_tokens", 0) + catch_up.get("processed_tokens", 0),
-        "logical_kv_chunks": initial.get("logical_kv_chunks", 0) + catch_up.get("logical_kv_chunks", 0),
-        "logical_kv_bytes": initial.get("logical_kv_bytes", 0) + catch_up.get("logical_kv_bytes", 0),
+        "measured_prompt_tokens": initial_metrics.pop("initial_prompt_tokens"),
+        "measured_processed_tokens": initial_metrics.pop("initial_processed_tokens"),
+        "measured_kv_chunks": initial_metrics.pop("initial_kv_chunks"),
+        "measured_kv_bytes": initial_metrics.pop("initial_kv_bytes"),
+        "catch_up_prompt_tokens": catch_up_metrics.pop("catch_up_prompt_tokens"),
+        "catch_up_new_tokens": max(0, catch_up.get("prompt_tokens", 0) - initial.get("prompt_tokens", 0)),
+        "catch_up_cache_hit_chunks": catch_up_metrics.pop("catch_up_kv_chunks"),
+        "catch_up_cache_hit_bytes": catch_up_metrics.pop("catch_up_kv_bytes"),
+        **initial_metrics, **catch_up_metrics,
         "initial_start_ns": row["initial_start_ns"], "initial_end_ns": row["initial_end_ns"], "pause_start_ns": row["pause_start_ns"], "idle_ns": row["idle_ns"], "catch_up_start_ns": row.get("catch_up_start_ns"), "catch_up_end_ns": row.get("catch_up_end_ns"), "switch_start_ns": row["switch_start_ns"], "switch_end_ns": row["switch_end_ns"],
     }
+
+
+def network_measurements(path: Path) -> dict:
+    rows = [row for row in b.proxy_rows(path) if row.get("billed") == "1" and row["route"] == "kv"
+            and row["direction"] == "target_to_client" and int(row["bytes"]) > 0]
+    if not rows:
+        return {"measured_kv_wire_bytes": 0, "kv_network_window_s": 0.0,
+                "measured_kv_throughput_mbps": 0.0}
+    start = min(int(row["monotonic_ns"]) for row in rows)
+    end = max(int(row["monotonic_ns"]) + int(row["interval_ns"]) for row in rows)
+    nbytes, window = sum(int(row["bytes"]) for row in rows), duration(start, end)
+    return {"measured_kv_wire_bytes": nbytes, "kv_network_window_s": window,
+            "measured_kv_throughput_mbps": nbytes * 8 / window / 1e6}
+
+
+def power_rows(path: Path) -> list[dict]:
+    with path.open() as handle:
+        return [{**row, "monotonic_ns": int(row["monotonic_ns"]), "gpu": int(row["gpu"]),
+                 "power_w": float(row["power_w"]), "utilization_pct": float(row["utilization_pct"])}
+                for row in csv.DictReader(handle) if row["valid"] == "1"]
+
+
+def power_measurements(path: Path, start_ns: int, end_ns: int,
+                       baselines: tuple[float, float] | None = None) -> dict:
+    rows, values = power_rows(path), {}
+    gpus = sorted({row["gpu"] for row in rows})
+    if len(gpus) != 2:
+        raise RuntimeError(f"expected two measured GPUs in {path}, found {gpus}")
+    for role, gpu, baseline in zip(("source", "destination"), gpus, baselines or (None, None)):
+        before = [row["power_w"] for row in rows if row["gpu"] == gpu and row["monotonic_ns"] < start_ns]
+        active = [row["power_w"] for row in rows if row["gpu"] == gpu and start_ns <= row["monotonic_ns"] <= end_ns]
+        if not before or not active:
+            raise RuntimeError(f"power samples do not cover migration window in {path}")
+        baseline = statistics.median(before) if baseline is None else baseline
+        mean = statistics.fmean(active)
+        values.update({f"{role}_baseline_power_w": baseline, f"{role}_mean_power_w": mean,
+                       f"{role}_added_power_w": mean - baseline,
+                       f"{role}_added_energy_j": (mean - baseline) * duration(start_ns, end_ns)})
+    values["total_added_energy_j"] = values["source_added_energy_j"] + values["destination_added_energy_j"]
+    return values
 
 
 def summary(values: list[float], seed: int = 0) -> dict:
@@ -817,7 +891,9 @@ def plot_resource(root: Path, result: dict) -> None:
             for time_ns, delta in points:
                 active += delta; xs.append((time_ns - base) / 1e9); ys.append(active)
             axes[1].step(xs, ys, where="post", label=method, color=color)
-    axes[1].legend(); axes[1].set_ylabel("Active moves")
+    if axes[1].get_legend_handles_labels()[0]:
+        axes[1].legend()
+    axes[1].set_ylabel("Active moves")
     power_path = root / "power.csv"
     if power_path.exists():
         power = list(csv.DictReader(power_path.open()))
@@ -839,50 +915,181 @@ def save_both(fig, base: Path) -> None:
     fig.savefig(base.with_suffix(".pdf"))
 
 
+def style_maps(rows: list[dict]) -> tuple[dict, dict]:
+    colors = ("#4C78A8", "#F58518", "#54A24B", "#E45756", "#72B7B2")
+    markers = ("o", "s", "^", "D", "P")
+    links, widths = sorted({row["bandwidth_mbps"] for row in rows}), sorted({row["concurrency"] for row in rows})
+    return ({value: colors[i % len(colors)] for i, value in enumerate(links)},
+            {value: markers[i % len(markers)] for i, value in enumerate(widths)})
+
+
+def add_legend(ax) -> None:
+    if ax.get_legend_handles_labels()[0]:
+        ax.legend(fontsize=8)
+
+
 def cross_plots(root: Path, migrations: list[dict], scenarios: list[dict]) -> None:
     import matplotlib.pyplot as plt
     if not migrations:
         return
-    methods, widths = sorted({row["method"] for row in migrations}), sorted({row["concurrency"] for row in migrations})
-    fig, axes = plt.subplots(len(widths), len(methods), figsize=(5 * len(methods), 3.5 * len(widths)), squeeze=False)
-    for i, width in enumerate(widths):
+    links, widths = style_maps(migrations)
+    methods, activities = ("kv_transfer", "replay"), sorted({row["activity"] for row in migrations})
+
+    fig, axes = plt.subplots(len(activities), 2, figsize=(12, 4.5 * len(activities)), squeeze=False)
+    for i, activity in enumerate(activities):
         for j, method in enumerate(methods):
             ax = axes[i][j]
-            rows = [row for row in migrations if row["concurrency"] == width and row["method"] == method]
-            xkey = "processed_tokens" if method == "replay" else "logical_kv_bytes"
-            for link in sorted({row["bandwidth_mbps"] for row in rows}):
-                data = [row for row in rows if row["bandwidth_mbps"] == link]
-                ax.scatter([row[xkey] for row in data], [row["initial_copy_s"] for row in data], alpha=.45, label=f"{link:g} Mb/s")
-                for size in sorted({row["context_size"] for row in data}):
-                    cell = [row for row in data if row["context_size"] == size]
-                    xs, ys = [row[xkey] for row in cell], [row["initial_copy_s"] for row in cell]
-                    ax.errorbar(statistics.median(xs), statistics.median(ys), yerr=[[statistics.median(ys) - quantile(ys, .25)], [quantile(ys, .75) - statistics.median(ys)]], fmt="o", color="black", capsize=3)
-            ax.set(title=f"{method}, concurrency {width}", xlabel=xkey.replace("_", " "), ylabel="Initial copy (s)"); ax.legend()
-    fig.tight_layout(); save_both(fig, root / "copy_time"); plt.close(fig)
-    fig, ax = plt.subplots(figsize=(6, 5))
-    groups: dict[tuple, list[dict]] = {}
-    for row in scenarios:
-        if row["kind"] == "migration" and row["status"] == "complete":
-            groups.setdefault((row["method"], row["context_size"], row["bandwidth_mbps"], row["activity"], row["repeat"], row["session_set"]), []).append(row)
-    for key, rows in groups.items():
-        by_width = {width: statistics.median([row["migration_time_s"] for row in rows if row["concurrency"] == width]) for width in {row["concurrency"] for row in rows}}
-        if 1 in by_width:
-            ax.plot(sorted(by_width), [by_width[1] / by_width[width] for width in sorted(by_width)], marker="o", alpha=.35)
-    limit = max(widths); ax.plot([1, limit], [1, limit], "k--", label="ideal"); ax.set(xlabel="Concurrency", ylabel="Speedup from concurrency 1", title="Concurrency scaling"); ax.legend()
+            rows = [row for row in migrations if row["activity"] == activity and row["method"] == method]
+            xkey, scale, xlabel = (("measured_kv_bytes", 1e9, "Measured initial KV bytes (GB)") if method == "kv_transfer"
+                                  else ("measured_processed_tokens", 1e3, "Measured initial processed tokens (thousands)"))
+            for link in sorted(links):
+                for width in sorted(widths):
+                    data = [row for row in rows if row["bandwidth_mbps"] == link and row["concurrency"] == width]
+                    if data:
+                        ax.scatter([row[xkey] / scale for row in data], [row["initial_time_to_first_response_s"] for row in data],
+                                   color=links[link], marker=widths[width], alpha=.55, label=f"{link:g} Mb/s, {width} concurrent")
+            ax.set(title=f"{method.replace('_', ' ')}, {activity.replace('_', ' ')}", xlabel=xlabel,
+                   ylabel="Request to first streamed response (s)")
+            add_legend(ax)
+    fig.tight_layout(); save_both(fig, root / "initial_time"); plt.close(fig)
+
+    migration = [row for row in scenarios if row["kind"] == "migration"]
+    fig, axes = plt.subplots(1, 2, figsize=(12, 4.5))
+    kv = [row for row in migration if row["method"] == "kv_transfer" and row["measured_kv_throughput_mbps"] > 0]
+    for width in sorted(widths):
+        for activity, marker in zip(activities, ("o", "x")):
+            data = [row for row in kv if row["concurrency"] == width and row["activity"] == activity]
+            if data:
+                axes[0].scatter([row["bandwidth_mbps"] for row in data], [row["measured_kv_throughput_mbps"] for row in data],
+                                marker=marker, alpha=.55, label=f"{width} concurrent, {activity.replace('_', ' ')}")
+    if kv:
+        bounds = [min(row["bandwidth_mbps"] for row in kv), max(row["bandwidth_mbps"] for row in kv)]
+        axes[0].plot(bounds, bounds, "k--", label="configured rate")
+        axes[0].set_xscale("log"); axes[0].set_yscale("log")
+    axes[0].set(xlabel="Configured bandwidth (Mb/s)", ylabel="Measured KV throughput (Mb/s)", title="KV network rate")
+    add_legend(axes[0])
+    replay = [row for row in migration if row["method"] == "replay" and row["measured_replay_throughput_tokens_s"] > 0]
+    offsets = {link: offset for link, offset in zip(sorted(links), (-.08, 0, .08, .16, -.16))}
+    for link in sorted(links):
+        for activity, marker in zip(activities, ("o", "x")):
+            data = [row for row in replay if row["bandwidth_mbps"] == link and row["activity"] == activity]
+            if data:
+                axes[1].scatter([row["concurrency"] + offsets[link] for row in data],
+                                [row["measured_replay_throughput_tokens_s"] for row in data],
+                                color=links[link], marker=marker, alpha=.55, label=f"{link:g} Mb/s, {activity.replace('_', ' ')}")
+    axes[1].set(xlabel="Concurrent requests", ylabel="Measured processed tokens/s", title="Replay processing rate")
+    add_legend(axes[1]); fig.tight_layout(); save_both(fig, root / "throughput"); plt.close(fig)
+
+    paired: dict[tuple, dict[int, list[float]]] = {}
+    for row in migration:
+        key = (row["method"], row["bandwidth_mbps"], row["activity"], row["repeat"],
+               row["session_set"], row["measured_prompt_tokens"])
+        paired.setdefault(key, {}).setdefault(row["concurrency"], []).append(row["migration_s"])
+    fig, axes = plt.subplots(1, 2, figsize=(12, 4.5), sharey=True)
+    for ax, method in zip(axes, methods):
+        for key, by_width in paired.items():
+            if key[0] != method or 1 not in by_width:
+                continue
+            base = statistics.median(by_width[1])
+            for width, values in by_width.items():
+                if width > 1:
+                    ax.scatter(width, base / statistics.median(values), color=links[key[1]], alpha=.5)
+        limit = max(widths); ax.plot([1, limit], [1, limit], "k--", label="ideal")
+        ax.axhline(1, color="grey", linewidth=1); ax.set(title=method.replace("_", " "), xlabel="Concurrency",
+                                                          ylabel="Speedup from concurrency 1")
+    axes[1].legend(handles=[plt.Line2D([], [], color=color, marker="o", linestyle="", label=f"{link:g} Mb/s")
+                            for link, color in links.items()] + [plt.Line2D([], [], color="black", linestyle="--", label="ideal")], fontsize=8)
     fig.tight_layout(); save_both(fig, root / "concurrency_scaling"); plt.close(fig)
-    for link in sorted({row["bandwidth_mbps"] for row in migrations}):
-        fig, axes = plt.subplots(len(methods), 3, figsize=(13, 3.5 * len(methods)), squeeze=False)
-        for i, method in enumerate(methods):
-            rows = [row for row in migrations if row["method"] == method and row["bandwidth_mbps"] == link]
-            for j, (key, label) in enumerate((("catch_up_s", "Catch-up (s)"), ("service_pause_s", "Service pause (s)"))):
-                for active in sorted({row["activity"] for row in rows}):
-                    data = [row for row in rows if row["activity"] == active]
-                    axes[i][j].scatter([row["context_size"] for row in data], [row[key] for row in data], alpha=.4, label=active)
-                axes[i][j].set(xlabel="Trace context tokens", ylabel=label); axes[i][j].legend()
-            matched = [row for row in scenarios if row["method"] == method and row["bandwidth_mbps"] == link and row.get("continuation_difference_s") is not None]
-            axes[i][2].scatter([row["context_size"] for row in matched], [row["continuation_difference_s"] for row in matched], alpha=.4)
-            axes[i][2].set(xlabel="Trace context tokens", ylabel="Continuation difference (s)")
-        fig.tight_layout(); save_both(fig, root / f"service_effects_{link:g}mbps"); plt.close(fig)
+
+    fig, axes = plt.subplots(3, 2, figsize=(12, 13), squeeze=False)
+    for j, method in enumerate(methods):
+        active = [row for row in migrations if row["method"] == method and row["activity"] == "one_turn"]
+        for width in sorted(widths):
+            data = [row for row in active if row["concurrency"] == width]
+            axes[0][j].scatter([row["catch_up_new_tokens"] for row in data],
+                               [row["catch_up_time_to_first_response_s"] for row in data], marker=widths[width], alpha=.5,
+                               label=f"{width} concurrent")
+            axes[1][j].scatter([row["catch_up_new_tokens"] for row in data], [row["service_pause_s"] for row in data],
+                               marker=widths[width], alpha=.5, label=f"{width} concurrent")
+        matched = [row for row in migration if row["method"] == method and row.get("continuation_difference_s") is not None]
+        for activity in activities:
+            data = [row for row in matched if row["activity"] == activity]
+            axes[2][j].scatter([row["measured_prompt_tokens"] for row in data], [row["continuation_difference_s"] for row in data],
+                               alpha=.5, label=activity.replace("_", " "))
+        axes[0][j].set(title=method.replace("_", " "), xlabel="Measured new prompt tokens",
+                       ylabel="Catch-up to first response (s)")
+        axes[1][j].set(xlabel="Measured new prompt tokens", ylabel="Service pause (s)")
+        axes[2][j].axhline(0, color="grey", linewidth=1)
+        axes[2][j].set(xlabel="Measured initial prompt tokens", ylabel="Continuation time difference (s)")
+        for ax in axes[:, j]:
+            add_legend(ax)
+    fig.tight_layout(); save_both(fig, root / "service_effects"); plt.close(fig)
+
+    fig, axes = plt.subplots(1, 3, figsize=(16, 4.5))
+    method_colors = {"kv_transfer": "#F58518", "replay": "#4C78A8"}
+    for method in methods:
+        for width in sorted(widths):
+            data = [row for row in migration if row["method"] == method and row["concurrency"] == width]
+            axes[0].scatter([row["migration_s"] for row in data], [row["total_added_energy_j"] / 1000 for row in data],
+                            color=method_colors[method], marker=widths[width], alpha=.5,
+                            label=f"{method.replace('_', ' ')}, {width} concurrent")
+    axes[0].set(xlabel="Migration time (s)", ylabel="Baseline-adjusted GPU energy (kJ)", title="Time and measured GPU energy")
+    add_legend(axes[0])
+    for ax, method, xkey, xlabel in ((axes[1], "kv_transfer", "measured_kv_throughput_mbps", "Measured KV throughput (Mb/s)"),
+                                     (axes[2], "replay", "measured_replay_throughput_tokens_s", "Measured processed tokens/s")):
+        for width in sorted(widths):
+            data = [row for row in migration if row["method"] == method and row["concurrency"] == width and row[xkey] > 0]
+            ax.scatter([row[xkey] for row in data], [row["destination_added_power_w"] for row in data],
+                       marker=widths[width], alpha=.5, label=f"{width} concurrent")
+        ax.set(xlabel=xlabel, ylabel="Baseline-adjusted destination power (W)", title=method.replace("_", " ")); add_legend(ax)
+    fig.tight_layout(); save_both(fig, root / "power_energy"); plt.close(fig)
+
+    checked = [row for row in migrations if row.get("current_model_time_s") is not None]
+    fig, ax = plt.subplots(figsize=(6, 5))
+    for method in methods:
+        data = [row for row in checked if row["method"] == method]
+        ax.scatter([row["current_model_time_s"] for row in data], [row["initial_time_to_first_response_s"] for row in data],
+                   color=method_colors[method], alpha=.6, label=method.replace("_", " "))
+    if checked:
+        limit = max(max(row["current_model_time_s"], row["initial_time_to_first_response_s"]) for row in checked)
+        ax.plot([0, limit], [0, limit], "k--", label="equal")
+    ax.set(xlabel="Current timing equation (s)", ylabel="Measured request to first response (s)",
+           title="Concurrency 1, no activity, recorded valid range")
+    add_legend(ax); fig.tight_layout(); save_both(fig, root / "model_check"); plt.close(fig)
+
+
+def pooled_power_baselines(run_root: Path, plan: dict, results: dict[str, dict]) -> tuple[float, float]:
+    pooled = ([], [])
+    for scenario in plan["scenarios"]:
+        moves = results[scenario["scenario_id"]].get("migrations", [])
+        if not moves:
+            continue
+        start = min(row["initial_start_ns"] for row in moves)
+        rows = power_rows(run_root / "scenarios" / scenario["scenario_id"] / "power.csv")
+        gpus = sorted({row["gpu"] for row in rows})
+        if len(gpus) != 2:
+            raise RuntimeError(f"expected two measured GPUs for {scenario['scenario_id']}")
+        for values, gpu in zip(pooled, gpus):
+            values.extend(row["power_w"] for row in rows if row["gpu"] == gpu
+                          and row["monotonic_ns"] < start and row["utilization_pct"] == 0)
+    if not all(pooled):
+        raise RuntimeError("no idle power samples before migrations")
+    return tuple(statistics.median(values) for values in pooled)
+
+
+def current_model_time(row: dict, profile) -> float | None:
+    if row["concurrency"] != 1 or row["activity"] != "none":
+        return None
+    source = profile.sources[row["method"]]
+    if not source.valid_range[0] <= row["measured_prompt_tokens"] <= source.valid_range[1]:
+        return None
+    case = profile.case()
+    if row["method"] == "kv_transfer":
+        transfer = row["measured_kv_bytes"] / (row["bandwidth_mbps"] * 1e6 / 8)
+        return (case.kv_transfer.setup_s + transfer
+                + row["measured_kv_chunks"] * case.kv_transfer.block_processing_s
+                + case.kv_transfer.sync_s)
+    return row["measured_processed_tokens"] / case.replay.rate(row["measured_prompt_tokens"], 1)
 
 
 def reduce_run(run_root: Path) -> None:
@@ -892,7 +1099,6 @@ def reduce_run(run_root: Path) -> None:
     plan = json.loads((run_root / "plan.json").read_text())
     if object_hash(plan) != metadata.get("plan_object_sha256", object_hash(plan)):
         raise RuntimeError("plan changed while reducing")
-    migrations, scenarios = [], []
     results = {}
     for scenario in plan["scenarios"]:
         path = run_root / "scenarios" / scenario["scenario_id"] / "result.json"
@@ -902,25 +1108,76 @@ def reduce_run(run_root: Path) -> None:
         if result.get("schema") != RESULT_SCHEMA or result.get("scenario_id") != scenario["scenario_id"]:
             raise ValueError(f"invalid result for {scenario['scenario_id']}")
         results[scenario["scenario_id"]] = result
+    baselines = pooled_power_baselines(run_root, plan, results)
+    migrations, scenarios = [], []
+    for scenario in plan["scenarios"]:
+        path = run_root / "scenarios" / scenario["scenario_id"] / "result.json"
+        result = results[scenario["scenario_id"]]
         migration_rows = [flatten_migration(scenario, result, row) for row in result.get("migrations", [])]
         migrations.extend(migration_rows)
         continuation = [duration(row["start_ns"], row["first_byte_ns"]) for row in result.get("continuations", [])]
-        scenarios.append({**{key: scenario[key] for key in ("scenario_id", "match_id", "kind", "method", "context_size", "concurrency", "bandwidth_mbps", "activity", "repeat")}, "session_set": ",".join(item["session_id"] for item in scenario["sessions"]), "status": result["status"], "elapsed_s": result.get("elapsed_s"), "deadline_s": result.get("deadline_s"), "deadline_met": result.get("deadline_met"), "migration_time_s": max((row["switch_end_ns"] for row in result.get("migrations", [])), default=0) / 1e9 - min((row["initial_start_ns"] for row in result.get("migrations", [])), default=0) / 1e9, "continuation_ttft_s": statistics.median(continuation) if continuation else None, "wire_bytes": sum(result.get("wire_bytes", {}).values())})
+        row = {**{key: scenario[key] for key in ("scenario_id", "match_id", "kind", "method", "concurrency", "bandwidth_mbps", "activity", "repeat")},
+               "session_set": ",".join(item["session_id"] for item in scenario["sessions"]),
+               "status": result["status"], "elapsed_s": result.get("elapsed_s"),
+               "deadline_s": result.get("deadline_s"), "deadline_met": result.get("deadline_met"),
+               "continuation_ttft_s": statistics.median(continuation) if continuation else None,
+               "measured_prompt_tokens": sum(item["measured_prompt_tokens"] for item in migration_rows),
+               "measured_processed_tokens": sum(item["measured_processed_tokens"] for item in migration_rows),
+               "measured_kv_payload_bytes": sum(item["measured_kv_bytes"] for item in migration_rows),
+               "catch_up_new_tokens": sum(item["catch_up_new_tokens"] for item in migration_rows),
+               "median_service_pause_s": statistics.median([item["service_pause_s"] for item in migration_rows]) if migration_rows else 0.0}
+        if migration_rows:
+            start = min(item["initial_start_ns"] for item in migration_rows)
+            initial_end = max(item["initial_end_ns"] for item in migration_rows)
+            first_end = max(first_stream_ns(item["initial"]) for item in result["migrations"])
+            end = max(item["switch_end_ns"] for item in migration_rows)
+            row.update({"migration_s": duration(start, end), "initial_requests_s": duration(start, initial_end),
+                        "initial_time_to_first_responses_s": duration(start, first_end),
+                        **network_measurements(path.parent / "proxy_bytes.csv"),
+                        **power_measurements(path.parent / "power.csv", start, end, baselines)})
+            row["measured_replay_throughput_tokens_s"] = (
+                row["measured_processed_tokens"] / row["initial_time_to_first_responses_s"]
+                if row["method"] == "replay" else 0.0)
+        else:
+            row.update({"migration_s": 0.0, "initial_requests_s": 0.0,
+                        "initial_time_to_first_responses_s": 0.0, "measured_kv_wire_bytes": 0,
+                        "kv_network_window_s": 0.0, "measured_kv_throughput_mbps": 0.0,
+                        "measured_replay_throughput_tokens_s": 0.0})
+        scenarios.append(row)
         if result["status"] == "complete":
-            plot_timeline(result, path.parent / "migration_timeline.png")
-            plot_resource(path.parent, result)
+            if not (path.parent / "migration_timeline.png").exists():
+                plot_timeline(result, path.parent / "migration_timeline.png")
+            if not (path.parent / "resource_trace.png").exists():
+                plot_resource(path.parent, result)
     controls = {row["match_id"]: row for row in scenarios if row["kind"] == "control" and row["continuation_ttft_s"] is not None}
     for row in scenarios:
         control = controls.get(row["match_id"])
         if row["kind"] == "migration" and control and row["continuation_ttft_s"] is not None:
             row["continuation_difference_s"] = row["continuation_ttft_s"] - control["continuation_ttft_s"]
+    from profiles import ModelProfile
+    profile = ModelProfile.load(Path(__file__).with_name("profiles") / "gpt_oss_20b_a100_tp1.json")
+    for row in migrations:
+        row["current_model_time_s"] = current_model_time(row, profile)
     write_csv(run_root / "migrations.csv", migrations)
     write_csv(run_root / "scenarios.csv", scenarios)
-    groups: dict[tuple, list[float]] = {}
-    for row in migrations:
-        key = tuple(row[name] for name in ("job_class", "method", "context_size", "concurrency", "bandwidth_mbps", "activity"))
-        groups.setdefault(key, []).append(row["initial_copy_s"])
-    benchmark = [{"job_class": key[0], "method": key[1], "context_size": key[2], "concurrency": key[3], "bandwidth_mbps": key[4], "activity": key[5], **summary(values, stable_seed(*key))} for key, values in sorted(groups.items())]
+    groups: dict[tuple, list[dict]] = {}
+    for row in scenarios:
+        if row["kind"] == "migration":
+            key = tuple(row[name] for name in ("method", "concurrency", "bandwidth_mbps", "activity"))
+            groups.setdefault(key, []).append(row)
+    metrics = ("migration_s", "initial_time_to_first_responses_s", "measured_kv_throughput_mbps",
+               "measured_replay_throughput_tokens_s", "median_service_pause_s", "total_added_energy_j")
+    benchmark = []
+    for key, rows in sorted(groups.items()):
+        for metric in metrics:
+            if metric == "measured_kv_throughput_mbps" and key[0] != "kv_transfer" \
+                    or metric == "measured_replay_throughput_tokens_s" and key[0] != "replay":
+                continue
+            values = [row[metric] for row in rows if row.get(metric) is not None and
+                      (row[metric] > 0 or metric in {"median_service_pause_s", "total_added_energy_j"})]
+            if values:
+                benchmark.append({"method": key[0], "concurrency": key[1], "bandwidth_mbps": key[2],
+                                  "activity": key[3], "measurement": metric, **summary(values, stable_seed(*key, metric))})
     write_csv(run_root / "benchmark_summary.csv", benchmark)
     cross_plots(run_root, migrations, scenarios)
 

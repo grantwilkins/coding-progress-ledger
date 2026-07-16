@@ -3,9 +3,14 @@
 The checked-in GPT-OSS-20B/A100 profile is estimated, not validated. It is
 usable only over its recorded context, load, and concurrency ranges.
 
-- `TODO(profile)`: measure action power, route switch, sleep, and shutdown.
-- `TODO(concurrency)`: fix LMCache 0.3.3 concurrency-2 metadata reads, then
-  measure replay and KV concurrency.
+- `TODO(profile)`: fit action power and timing from the corrected Stage 1C
+  tables; still measure sleep and shutdown.
+- `TODO(profile-datasets)`: collect exact-size prompt datasets only if the
+  measured trace range is insufficient for the simulator or paper.
+- `TODO(pairing)`: pair identical sessions across methods or bandwidths only if
+  those effects must be separated rather than reported as associations.
+- `TODO(parallel-kv)`: determine whether the paper requires simultaneous KV
+  traffic; if it does, profile independent connector connections.
 - `TODO(context)`: measure request and replay rates beyond 31.6k tokens.
 - `TODO(public-profiles)`: add a cited public-benchmark importer for scaled and
   sensitivity-only model profiles.
