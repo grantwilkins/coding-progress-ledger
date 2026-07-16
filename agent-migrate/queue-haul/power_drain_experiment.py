@@ -231,9 +231,16 @@ def _summary(run: ExperimentRun) -> dict:
         "end_s": scenario.end_s, "controller_delay_s": scenario.controller_delay_s,
         "solve_s": run.plan.solve_s,
         "planned_moves": len(run.plan.moves), "plan_feasible": run.plan.feasible,
+        "initial_source_power_w": run.plan.initial_source_power_w,
+        "requested_source_drop_w": max(
+            0.0, run.plan.initial_source_power_w - scenario.power_limit_w
+        ),
         "planned_source_power_w": run.plan.planned_source_power_w,
         "expected_source_power_at_deadline_w": run.plan.expected_source_power_at_deadline_w,
         "modeled_source_power_at_deadline_w": result.modeled_source_power_at_deadline_w,
+        "modeled_source_drop_at_deadline_w": max(
+            0.0, run.plan.initial_source_power_w - result.modeled_source_power_at_deadline_w
+        ),
         "power_met": result.deadline_met, "moves_committed_by_deadline": resumed,
         "requests_started_by_deadline": requests_started,
         "accepted": result.deadline_met and resumed and requests_started,

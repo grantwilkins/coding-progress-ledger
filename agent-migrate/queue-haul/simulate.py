@@ -454,7 +454,9 @@ class ExecutionSimulator:
             destination = state.move.destination_instance
             active = self.endpoint_active[key]
             # TODO(concurrency): update running replay rates when validated limits exceed one.
-            duration = replay_tokens / self.case.replay.rate(replay_tokens, active)
+            # TODO(catch-up-rate): replace this full-context rate with measured incremental replay.
+            rate_context = self.context[state.move.session_id] if phase == "catch_up" else replay_tokens
+            duration = replay_tokens / self.case.replay.rate(rate_context, active)
             self._event("replay_start", state.move.session_id, detail=destination)
         elif state.move.method == "kv_transfer":
             duration = blocks * self.case.kv_transfer.block_processing_s + self.case.kv_transfer.sync_s
@@ -632,15 +634,15 @@ class ExecutionSimulator:
             if rate_version != self.flow_version:
                 rates = fair_link_rates({i: f.path for i, f in self.flows.items()}, self.links)
                 rate_version = self.flow_version
-            flow_time = min(
-                (self.time + flow.remaining / rates[i] for i, flow in self.flows.items()),
-                default=np.inf,
-            )
+            finishes = {
+                i: self.time + flow.remaining / rates[i] for i, flow in self.flows.items()
+            }
+            flow_time = min(finishes.values(), default=np.inf)
             event_time = self.heap[0][0] if self.heap else np.inf
             target = min(flow_time, event_time, self.scenario.end_s)
             self._advance(target, rates)
             if flow_time <= event_time and flow_time <= self.scenario.end_s:
-                done = [i for i, flow in self.flows.items() if flow.remaining <= 1e-7]
+                done = [i for i, end in finishes.items() if end <= flow_time + 1e-12]
                 for flow_id in done:
                     flow = self.flows.pop(flow_id)
                     state = self.states[flow.move_index]

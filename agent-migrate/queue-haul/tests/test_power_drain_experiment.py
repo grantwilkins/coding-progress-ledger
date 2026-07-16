@@ -65,6 +65,21 @@ def test_excess_energy_integrates_step_power_after_deadline():
     assert experiment.excess_energy(power, 5, 10, 30) == pytest.approx(90)
 
 
+def test_agentic_shared_transfers_finish_without_floating_stall():
+    model = ModelProfile.load(experiment.DEFAULT_MODEL)
+    full = WorkloadProfile.load(experiment.DEFAULT_WORKLOADS[2])
+    workload = replace(full, records=full.records[:1])
+    scenario, routes = experiment.build_scenario(workload, model, 10, 3, 0, 10, 15)
+    initial = source_power(scenario, model)
+    minimum = source_power(
+        scenario, model, (session.session_id for session in scenario.sessions)
+    )
+    scenario = replace(scenario, power_limit_w=(initial + minimum) / 2)
+    planned = experiment.plan(scenario, model, routes, "node_drain", seed=3)
+    result = experiment.execute(scenario, model, planned.moves)
+    assert result.completed_sessions == len(planned.moves)
+
+
 def test_small_run_reuses_plans_and_writes_raw_tables_and_plots(tmp_path: Path):
     runs = list(experiment.run(
         workload_paths=(experiment.DEFAULT_WORKLOADS[2],), sessions=6, power_limits=(500,),
@@ -74,6 +89,16 @@ def test_small_run_reuses_plans_and_writes_raw_tables_and_plots(tmp_path: Path):
     assert all(run.plan.moves == runs[0].plan.moves for run in runs)
     assert all(next(e for e in run.result.events if e.event == "plan_ready").time_s == 0
                for run in runs)
+
+    summary = experiment._summary(runs[0])
+    assert summary["initial_source_power_w"] == runs[0].plan.initial_source_power_w
+    assert summary["requested_source_drop_w"] == pytest.approx(
+        runs[0].plan.initial_source_power_w - runs[0].scenario.power_limit_w
+    )
+    assert summary["modeled_source_drop_at_deadline_w"] == pytest.approx(
+        runs[0].plan.initial_source_power_w
+        - runs[0].result.modeled_source_power_at_deadline_w
+    )
 
     experiment.write(iter(runs), tmp_path)
     for name in ("summary.csv", "events.csv", "sessions.csv", "requests.csv", "network.csv",

@@ -18,6 +18,7 @@ uv run python queue-haul/power_drain_experiment.py \
   --sessions 6 --seed 3 --power-limit 500 --deadline 5 --end 5 \
   --solver load_only --out queue-haul/outputs/profile_smoke
 uv run python queue-haul/plot_simulator_validation.py
+uv run python queue-haul/plot_simulator_evaluation.py
 ```
 
 The earlier additive model is frozen in `_archive/queue-haul-additive-v0`.
@@ -27,3 +28,7 @@ with exact transfer, route-switch, and source-power calculations. It checks that
 equal transfers share the link and source power falls only after both routes
 switch. It does not validate A100 timing or power calibration. Generation
 hard-fails if any checked value differs.
+
+`outputs/simulator_evaluation.{csv,png,pdf}` shows requested versus simulated
+source-power reduction, route-switch completion, and request wait for a
+controlled 50-session sweep.

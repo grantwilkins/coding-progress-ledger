@@ -6,6 +6,7 @@ state while overlapping transfers share every bottleneck.
 Plausible wrong implementations:
 - Credit source power when bytes finish instead of when the route switches.
 - Serialize simultaneous transfers or exceed a shared link.
+- Stall when shared rates leave a small floating-point byte remainder.
 - Enter sleep/off before the final source session commits.
 - Skip catch-up when a request changes state during background preparation.
 """
@@ -19,7 +20,7 @@ from simulate import (ExecutionScenario, NetworkLink, PlannedMove, PowerNode, Se
                       SimRequest, SimSession, execute, fair_link_rates, step_average)
 
 
-def model(tmp_path, switch=1, block_s=0, shutdown=2, setup=0, tp=2):
+def model(tmp_path, switch=1, block_s=0, shutdown=2, setup=0, tp=2, replay_rate=None):
     source = {"kind": "measured", "reference": "hand", "valid_range": [1, 1000], "relative_error": 0}
     rate = {"1": [[1, 100], [1000, 100]], "2": [[1, 50], [1000, 50]]}
     raw = {
@@ -31,7 +32,7 @@ def model(tmp_path, switch=1, block_s=0, shutdown=2, setup=0, tp=2):
         "sources": {k: source for k in ("power", "service", "replay", "kv_transfer", "transitions")},
         "cases": {"central": {
             "F": 100, "G": 100, "power_curve": [[0, 10], [0.5, 30], [1, 40]],
-            "prefill_tps": rate, "decode_tps": rate, "replay_tps": rate,
+            "prefill_tps": rate, "decode_tps": rate, "replay_tps": replay_rate or rate,
             "kv_transfer": {"block_tokens": 10, "block_bytes": 100, "setup_s": setup,
                             "block_processing_s": block_s, "sync_s": 0},
             "switch_s": switch, "sleep_power_w": 2, "sleep_s": 1, "shutdown_s": shutdown,
@@ -203,6 +204,21 @@ def test_replay_catch_up_processes_only_tokens_after_snapshot(tmp_path):
     assert [(row.phase, row.bytes) for row in result.network] == [
         ("initial", 100), ("catch_up", 100)
     ]
+
+
+def test_replay_catch_up_rates_new_tokens_at_full_context(tmp_path):
+    replay_rate = {"1": [[1, 100], [10, 100], [20, 10], [1000, 10]],
+                   "2": [[1, 50], [1000, 50]]}
+    session = SimSession(
+        "active", "source", 10, 0, 0, 100, False,
+        requests=(SimRequest(0, 10, 0),),
+    )
+    result = execute(
+        scenario((session,)), model(tmp_path, replay_rate=replay_rate),
+        (PlannedMove("active", "dest", "replay", 0, ("wan",)),),
+    )
+    catch_up = next(row for row in result.network if row.phase == "catch_up")
+    assert result.sessions[0].catch_up_ready_s - catch_up.end_s == pytest.approx(1)
 
 
 def test_pause_begins_after_active_request_finishes(tmp_path):
