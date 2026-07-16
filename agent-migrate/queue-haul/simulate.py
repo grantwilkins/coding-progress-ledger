@@ -14,7 +14,12 @@ from power_model import ExpectedPower
 
 
 MoveMethod = Literal["replay", "kv_transfer", "replay_on_request"]
+SessionState = Literal["active", "cold"]
 FinalState = Literal["awake", "sleep", "off"]
+MOVE_METHODS_BY_STATE: dict[SessionState, tuple[MoveMethod, ...]] = {
+    "active": ("replay", "kv_transfer"),
+    "cold": ("replay_on_request",),
+}
 
 
 @dataclass(frozen=True)
@@ -71,11 +76,14 @@ class SimSession:
     requests: tuple[SimRequest, ...] = ()
     movable: bool = True
     wake_probability: float = 0.0
+    state: SessionState = "active"
 
     def __post_init__(self):
         if not self.session_id or not self.source_instance or self.context_tokens < 1 \
                 or min(self.expected_f, self.expected_g) < 0 or self.log_bytes < 1 \
-                or not 0 <= self.wake_probability <= 1:
+                or not 0 <= self.wake_probability <= 1 or self.state not in MOVE_METHODS_BY_STATE \
+                or self.state == "cold" and (self.expected_f or self.expected_g) \
+                or self.state == "active" and self.wake_probability:
             raise ValueError("invalid session")
 
 
@@ -340,6 +348,8 @@ class ExecutionSimulator:
                 raise ValueError("a move requires different source and destination instances")
             if not self.sessions[move.session_id].movable:
                 raise ValueError(f"session {move.session_id!r} cannot move")
+            if move.method not in MOVE_METHODS_BY_STATE[session.state]:
+                raise ValueError(f"{move.method} is invalid for a {session.state} session")
             if move.method == "replay_on_request" and not self.sessions[move.session_id].log_external \
                     and self.sessions[move.session_id].log_bytes <= 0:
                 raise ValueError("replay_on_request requires a durable session log")

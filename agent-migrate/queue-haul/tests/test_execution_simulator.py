@@ -11,6 +11,7 @@ Plausible wrong implementations:
 - Change or retain the wrong GPU slot load when one session moves.
 - Enter sleep/off before the final source session commits.
 - Skip catch-up when a request changes state during background preparation.
+- Transfer nonexistent cold KV or defer replay for GPU-resident active KV.
 """
 
 import json
@@ -235,8 +236,8 @@ def test_moving_one_session_updates_only_its_gpu_power(tmp_path):
 
 def test_deferred_replay_copies_only_source_local_log(tmp_path):
     sessions = (
-        SimSession("external", "source", 10, 0, 0, 100, True),
-        SimSession("local", "source", 10, 0, 0, 100, False),
+        SimSession("external", "source", 10, 0, 0, 100, True, state="cold"),
+        SimSession("local", "source", 10, 0, 0, 100, False, state="cold"),
     )
     moves = (
         PlannedMove("external", "dest", "replay_on_request", 0, ("wan",), ("wan",)),
@@ -251,7 +252,7 @@ def test_deferred_replay_copies_only_source_local_log(tmp_path):
 def test_deferred_replay_waits_for_an_observed_request(tmp_path):
     session = SimSession(
         "external", "source", 10, 0, 0, 100, True,
-        requests=(SimRequest(0.5, 10, 0),), wake_probability=0.9,
+        requests=(SimRequest(0.5, 10, 0),), wake_probability=0.9, state="cold",
     )
     move = PlannedMove("external", "dest", "replay_on_request", 0, ("wan",), ("wan",))
     result = execute(scenario((session,)), model(tmp_path), (move,))
@@ -399,7 +400,7 @@ def test_queued_request_uses_destination_after_commit(tmp_path):
 def test_external_replay_avoids_source_egress(tmp_path):
     session = SimSession(
         "external", "source", 10, 0, 0, 100, True,
-        requests=(SimRequest(0.5, 10, 0),),
+        requests=(SimRequest(0.5, 10, 0),), state="cold",
     )
     links = (NetworkLink("source-egress", 100), NetworkLink("dest-ingress", 100))
     move = PlannedMove(
@@ -419,3 +420,14 @@ def test_invalid_move_and_tensor_parallel_mismatch_hard_fail(tmp_path):
         )
     with pytest.raises(ValueError, match="tensor parallelism"):
         execute(scenario((session,), tp=1), model(tmp_path), ())
+
+
+@pytest.mark.parametrize(("state", "method"), (
+    ("active", "replay_on_request"), ("cold", "replay"), ("cold", "kv_transfer"),
+))
+def test_move_method_must_match_gpu_residency(tmp_path, state, method):
+    session = SimSession("s", "source", 10, 0, 0, 1, state=state)
+    move = PlannedMove("s", "dest", method, 0, ("wan",), ("wan",))
+
+    with pytest.raises(ValueError, match=f"invalid for a {state} session"):
+        execute(scenario((session,)), model(tmp_path), (move,))

@@ -11,7 +11,8 @@ import numpy as np
 
 from profiles import ModelProfile, ProfileCase
 from power_model import ExpectedPower
-from simulate import ExecutionScenario, MoveMethod, PlannedMove, SimSession, predict
+from simulate import (MOVE_METHODS_BY_STATE, ExecutionScenario, MoveMethod, PlannedMove,
+                      SimSession, predict)
 
 
 METHODS: tuple[MoveMethod, ...] = ("replay", "kv_transfer", "replay_on_request")
@@ -164,7 +165,8 @@ def plan(scenario: ExecutionScenario, profile: ModelProfile,
         candidate_path = _route(paths, session.source_instance, destinations[0].instance_id)
         for k, method in enumerate(METHODS):
             costs[j, k] = _duration(session, method, case, candidate_path, links)
-            valid[j, k] = costs[j, k] <= horizon
+            valid[j, k] = method in MOVE_METHODS_BY_STATE[session.state] \
+                and costs[j, k] <= horizon
     available = valid.any(1)
     best_method = np.argmin(np.where(valid, costs, np.inf), axis=1)
     best_cost = costs[np.arange(len(sessions)), best_method]
@@ -175,7 +177,7 @@ def plan(scenario: ExecutionScenario, profile: ModelProfile,
         ids = [sessions[j].session_id for j in group]
         bonus = power_state.drain_gain(ids) - base_gain[group].sum()
         weight = np.array([_ell(sessions[j], case) for j in group])
-        gains[group] += bonus * weight / weight.sum()
+        gains[group] += bonus * (weight / weight.sum() if weight.any() else 1 / len(group))
     rng = np.random.default_rng(seed)
     if solver == "random":
         order = list(rng.permutation(np.flatnonzero(available)))

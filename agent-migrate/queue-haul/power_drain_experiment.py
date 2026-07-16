@@ -139,9 +139,10 @@ def build_scenario(workload: WorkloadProfile, profile: ModelProfile, sessions: i
             r.prompt_tokens / cycle if r.state == "active" else 0.0,
             r.output_tokens / cycle if r.state == "active" else 0.0,
             r.log_bytes, r.log_external, _requests(r, request_horizon, rng), True,
-            0.0 if r.state != "active" or wake_horizon <= r.tool_delay_s else
+            0.0 if r.state != "cold" or wake_horizon <= r.tool_delay_s else
             1.0 if r.request_gap_s == 0 else
             1 - math.exp(-(wake_horizon - r.tool_delay_s) / r.request_gap_s),
+            state=r.state,
         ) for j, (r, cycle) in enumerate(zip(records, cycles))
     )
     _validate_contexts(sampled, profile)

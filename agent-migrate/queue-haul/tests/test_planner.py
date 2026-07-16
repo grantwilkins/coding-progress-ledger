@@ -1,7 +1,7 @@
 """
 Claim:
 Planners move whole sessions, use local node power, do not inspect sampled future
-requests, and keep destination placement separate from selection.
+requests, restrict methods by GPU residency, and keep placement separate from selection.
 
 Plausible wrong implementations:
 - Give a planner sampled request times that are unavailable when it acts.
@@ -9,6 +9,7 @@ Plausible wrong implementations:
 - Stop halfway through a node-drain group.
 - Reorder sessions while reconstructing an already ordered node-drain group.
 - Place every selected session on the first destination.
+- Defer replay for an active session or transfer nonexistent KV for a cold session.
 """
 
 from dataclasses import replace
@@ -21,8 +22,8 @@ from test_execution_simulator import model
 
 def problem(requests=(), limit=20, final="awake"):
     sessions = (
-        SimSession("a", "s0", 10, 25, 0, 100, requests=requests, wake_probability=0.1),
-        SimSession("b", "s1", 10, 25, 0, 100, wake_probability=0.1),
+        SimSession("a", "s0", 10, 25, 0, 100, requests=requests),
+        SimSession("b", "s1", 10, 25, 0, 100),
     )
     return ExecutionScenario(
         10, 20, limit, final, 0,
@@ -58,6 +59,18 @@ def test_destination_placement_balances_whole_sessions(tmp_path):
     assert plan(problem(limit=0), model(tmp_path, tp=1), route, "load_only").moves == result.moves
 
 
+def test_planner_only_transfers_active_kv_and_defers_cold_replay(tmp_path):
+    topology = replace(problem(limit=0, final="off"), sessions=(
+        SimSession("a", "s0", 10, 25, 0, 100),
+        SimSession("b", "s1", 10, 0, 0, 100, wake_probability=1, state="cold"),
+    ))
+    result = plan(topology, model(tmp_path, tp=1), PATHS, "node_drain")
+
+    assert {move.session_id: move.method for move in result.moves} == {
+        "a": "kv_transfer", "b": "replay_on_request",
+    }
+
+
 def test_node_drain_counts_sleep_only_after_the_whole_node_is_selected(tmp_path):
     scenario = problem(limit=5, final="sleep")
     shared = replace(scenario, nodes=(
@@ -73,9 +86,9 @@ def test_node_drain_counts_sleep_only_after_the_whole_node_is_selected(tmp_path)
 
 def test_node_drain_orders_groups_then_sessions_by_move_time(tmp_path):
     sessions = (
-        SimSession("a", "s0", 10, 25, 0, 100, wake_probability=1),
-        SimSession("b", "s1", 20, 25, 0, 100, wake_probability=1),
-        SimSession("c", "s2", 30, 25, 0, 100, wake_probability=1),
+        SimSession("a", "s0", 10, 25, 0, 100),
+        SimSession("b", "s1", 20, 25, 0, 100),
+        SimSession("c", "s2", 30, 25, 0, 100),
     )
     scenario = ExecutionScenario(
         10, 20, 6, "sleep", 0,

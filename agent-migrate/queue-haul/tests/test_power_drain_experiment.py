@@ -9,6 +9,7 @@ Plausible wrong implementations:
 - Reorder or resample scenarios when worker processes execute them.
 - Test the last power sample instead of integrating the deadline window.
 - Emit only a summary and make timing or network claims impossible to audit.
+- Drop active/cold GPU residency while constructing simulator sessions.
 """
 
 from pathlib import Path
@@ -33,7 +34,7 @@ def test_build_scenario_packs_calibrated_sessions_and_named_links():
                for i in range(len(scenario.instances) // 2))
 
 
-def test_expected_load_and_wake_probability_match_sampled_request_timing():
+def test_active_load_does_not_use_cold_reactivation_probability():
     model = ModelProfile.load(experiment.DEFAULT_MODEL)
     workload = WorkloadProfile.load(experiment.DEFAULT_WORKLOADS[2])
     records = workload.sample(6, 3)
@@ -43,8 +44,23 @@ def test_expected_load_and_wake_probability_match_sampled_request_timing():
     for session, record in zip(scenario.sessions, records):
         cycle = record.request_gap_s + record.tool_delay_s
         assert session.expected_f == pytest.approx(record.prompt_tokens / cycle)
-        expected = 1 - math.exp(-(4 - record.tool_delay_s) / record.request_gap_s)
-        assert session.wake_probability == pytest.approx(expected)
+        assert session.wake_probability == 0
+
+
+def test_scenario_preserves_cold_sessions_without_gpu_load():
+    model = ModelProfile.load(experiment.DEFAULT_MODEL)
+    workload = WorkloadProfile.load(experiment.DEFAULT_WORKLOADS[2])
+    workload = replace(workload, records=(replace(workload.records[0], state="cold"),))
+    scenario, _ = experiment.build_scenario(workload, model, 1, 3, 500, 5, 5)
+    session = scenario.sessions[0]
+
+    assert session.state == "cold"
+    assert session.expected_f == session.expected_g == 0
+    assert session.requests == ()
+    assert session.wake_probability == pytest.approx(
+        1 - math.exp(-(5 - workload.records[0].tool_delay_s)
+                     / workload.records[0].request_gap_s)
+    )
 
 
 def test_profile_range_is_checked_before_a_long_run():

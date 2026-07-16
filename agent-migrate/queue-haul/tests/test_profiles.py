@@ -1,13 +1,14 @@
 """
 Claim:
 Profiles preserve one measured load coordinate, reject unsupported extrapolation,
-and resample complete workload records rather than independent fields.
+and resample complete active or cold workload records rather than independent fields.
 
 Plausible wrong implementations:
 - Accept a convex or decreasing power curve that violates the controller model.
 - Extrapolate a rate or power curve outside its measured range.
 - Accept measured values without a source and error range.
 - Sample workload columns independently and create records absent from the trace.
+- Accept an idle state whose GPU residency is undefined.
 """
 
 import json
@@ -97,7 +98,7 @@ def test_workload_sampling_preserves_complete_records(tmp_path):
     raw = {
         "schema": "queue-haul-workload-profile-v1", "profile_id": "w", "source": source("trace"),
         "records": [
-            {"job_type": "human", "state": "idle", "context_tokens": 10,
+            {"job_type": "human", "state": "cold", "context_tokens": 10,
              "prompt_tokens": 2, "output_tokens": 1,
              "request_gap_s": 100, "tool_delay_s": 0, "log_bytes": 40, "log_external": True},
             {"job_type": "agent", "state": "active", "context_tokens": 100,
@@ -110,6 +111,10 @@ def test_workload_sampling_preserves_complete_records(tmp_path):
     a, b = w.sample(50, 7), w.sample(50, 7)
     assert a == b
     assert {(r.context_tokens, r.request_gap_s, r.log_external) for r in a} <= observed
+
+    raw["records"][0]["state"] = "idle"
+    with pytest.raises(ValueError, match="invalid workload record"):
+        WorkloadProfile.load(write(tmp_path, raw, "idle.json"))
 
 
 def test_checked_in_profiles_load_with_uncertainty_and_provenance():
