@@ -340,7 +340,7 @@ class ExecutionSimulator:
         ] = {}
         self.kv_active: dict[str, int] = {}
         self.kv_waiting: dict[
-            str, deque[tuple[int, str, tuple[int, int], QueueExecution]]
+            str, deque[tuple[int, str, tuple[int, int], int, QueueExecution | None]]
         ] = {}
         self.kv_waiting_bytes: dict[str, int] = {}
         self.kv_records: dict[tuple[int, str], QueueExecution] = {}
@@ -488,28 +488,30 @@ class ExecutionSimulator:
             destination = state.move.destination_instance
             waiting = self.kv_waiting.setdefault(destination, deque())
             queued = self.kv_active.get(destination, 0) >= self.profile.max_parallel_kv
+            queued_bytes = self.kv_waiting_bytes.get(destination, 0) + byte_count
             record = QueueExecution(
                 state.move.session_id, phase, destination, byte_count, self.time, None, None,
-                len(waiting) + 1 if queued else 0,
-                self.kv_waiting_bytes.get(destination, 0) + byte_count if queued else 0,
-            )
-            self.queues.append(record)
-            self.kv_records[index, phase] = record
+                len(waiting) + 1 if queued else 0, queued_bytes if queued else 0,
+            ) if self.detailed else None
+            if record:
+                self.queues.append(record)
+                self.kv_records[index, phase] = record
             if queued:
-                waiting.append((index, phase, detail, record))
-                self.kv_waiting_bytes[destination] = record.bytes_at_arrival
+                waiting.append((index, phase, detail, byte_count, record))
+                self.kv_waiting_bytes[destination] = queued_bytes
                 self._event("kv_queued", state.move.session_id, detail=destination)
                 return
-            self._start_kv(index, phase, detail, record)
+            self._start_kv(index, phase, detail, byte_count, record)
             return
         self._transfer(index, phase, byte_count, detail)
 
-    def _start_kv(self, index: int, phase: str, detail: tuple[int, int],
-                  record: QueueExecution):
-        destination = record.destination_instance
+    def _start_kv(self, index: int, phase: str, detail: tuple[int, int], byte_count: int,
+                  record: QueueExecution | None):
+        destination = self.states[index].move.destination_instance
         self.kv_active[destination] = self.kv_active.get(destination, 0) + 1
-        record.start_s = self.time
-        self._transfer(index, phase, record.bytes, detail)
+        if record:
+            record.start_s = self.time
+        self._transfer(index, phase, byte_count, detail)
 
     def _transfer(self, index: int, phase: str, byte_count: int, detail: tuple[int, int]):
         state = self.states[index]
@@ -589,12 +591,13 @@ class ExecutionSimulator:
                 self._endpoint(*waiting.popleft())
         elif state.move.method == "kv_transfer":
             destination = state.move.destination_instance
-            self.kv_records[index, phase].end_s = self.time
+            if self.detailed:
+                self.kv_records[index, phase].end_s = self.time
             self.kv_active[destination] -= 1
             waiting = self.kv_waiting[destination]
             if waiting:
                 queued = waiting.popleft()
-                self.kv_waiting_bytes[destination] -= queued[3].bytes
+                self.kv_waiting_bytes[destination] -= queued[3]
                 self._start_kv(*queued)
         if state.move.method == "replay" or phase == "wake":
             self._event("replay_done", session_id, detail=state.move.destination_instance)
@@ -844,7 +847,8 @@ class ExecutionSimulator:
             if not processed:
                 raise RuntimeError(f"simulator made no progress at {self.time}")
             self._record_power()
-            if target == self.scenario.end_s:
+            if target == self.scenario.end_s \
+                    and (not self.heap or self.heap[0][0] > target + 1e-12):
                 break
         if self.power[-1][0] != self.scenario.end_s:
             self.time = self.scenario.end_s

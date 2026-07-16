@@ -226,6 +226,27 @@ def excess_energy(power, start_s: float, end_s: float, limit_w: float) -> float:
     return area + (end_s - cursor) * max(0.0, value - limit_w)
 
 
+def queue_summary(rows, end_s: float) -> dict:
+    rows = tuple(rows)
+    pending = [row for row in rows if row.start_s is None]
+    waits = [(row.start_s if row.start_s is not None else end_s) - row.arrival_s
+             for row in rows]
+    return {
+        "destination_kv_queue_operations": len(rows),
+        "destination_kv_queue_max_depth": max(
+            (row.depth_at_arrival for row in rows), default=0
+        ),
+        "destination_kv_queue_max_bytes": max(
+            (row.bytes_at_arrival for row in rows), default=0
+        ),
+        "destination_kv_queue_pending_at_end": len(pending),
+        "destination_kv_queue_pending_bytes_at_end": sum(row.bytes for row in pending),
+        "destination_kv_queue_total_observed_wait_s": sum(waits),
+        "destination_kv_queue_p95_observed_wait_s": float(np.quantile(waits, 0.95))
+        if waits else 0.0,
+    }
+
+
 def _summary(run: ExperimentRun) -> dict:
     scenario, result = run.scenario, run.result
     nodes = {node.node_id: node for node in scenario.nodes}
@@ -249,8 +270,6 @@ def _summary(run: ExperimentRun) -> dict:
     }
     starts = {(row.session_id, row.request_index): row.start_s for row in result.requests}
     request_waits = [starts[key] - arrival for key, arrival in arrivals.items() if key in starts]
-    queue_waits = [row.start_s - row.arrival_s for row in result.queues
-                   if row.start_s is not None]
     requests_started = result.requests_started_by(scenario.deadline_s)
     unresumed = sum(
         max(0.0, min(scenario.end_s, row.committed_s or scenario.end_s)
@@ -300,16 +319,7 @@ def _summary(run: ExperimentRun) -> dict:
         "network_duration_s": max(
             (row.end_s or scenario.end_s for row in result.network), default=0.0
         ) - min((row.start_s for row in result.network), default=0.0),
-        "destination_kv_queue_operations": len(result.queues),
-        "destination_kv_queue_max_depth": max(
-            (row.depth_at_arrival for row in result.queues), default=0
-        ),
-        "destination_kv_queue_max_bytes": max(
-            (row.bytes_at_arrival for row in result.queues), default=0
-        ),
-        "destination_kv_queue_total_wait_s": sum(queue_waits),
-        "destination_kv_queue_p95_wait_s": float(np.quantile(queue_waits, 0.95))
-        if queue_waits else 0.0,
+        **queue_summary(result.queues, scenario.end_s),
         "excess_energy_j": excess_energy(
             result.power, scenario.deadline_s, scenario.end_s, scenario.power_limit_w
         ),
@@ -362,8 +372,10 @@ def write(runs: Iterable[ExperimentRun], out: Path) -> int:
             emit("network", ({**base, **row.__dict__, "path": "|".join(row.path)}
                              for row in run.result.network))
             emit("queues", ({**base, **row.__dict__,
-                             "wait_s": None if row.start_s is None
-                             else row.start_s - row.arrival_s}
+                             "observed_wait_s": (
+                                 row.start_s if row.start_s is not None else run.scenario.end_s
+                             ) - row.arrival_s,
+                             "pending_at_end": row.start_s is None}
                             for row in run.result.queues))
             emit("power", ({**base, "time_s": t, "modeled_source_power_w": source,
                             "modeled_destination_power_w": destination}

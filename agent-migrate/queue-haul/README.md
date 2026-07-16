@@ -25,7 +25,8 @@ The model profile uses exact measured KV bytes. KV loading overlaps network
 transfer, so serial KV time is setup plus the slower of network transfer and
 destination KV loading, followed by synchronization and route switching.
 Destination KV copies enter a FIFO per destination before moving bytes;
-`queues.csv` records their arrival, start, completion, depth, bytes, and wait.
+`queues.csv` records arrival, start, completion, depth, bytes, observed wait,
+and whether a copy is still pending at the simulation cutoff.
 Action power is stored as total added power for each measured concurrency, not
 as power per session. Fit the serial coding data with repeats 0–1 and evaluate
 repeat 2 with:

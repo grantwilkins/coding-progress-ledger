@@ -14,6 +14,7 @@ Plausible wrong implementations:
 - Omit destination KV queue evidence needed to explain migration time.
 """
 
+import csv
 from pathlib import Path
 import math
 from dataclasses import replace
@@ -23,6 +24,7 @@ import pytest
 import power_drain_experiment as experiment
 from planner import source_power
 from profiles import ModelProfile, WorkloadProfile
+from simulate import QueueExecution
 
 
 def test_build_scenario_packs_calibrated_sessions_and_named_links():
@@ -101,6 +103,22 @@ def test_excess_energy_integrates_step_power_after_deadline():
     assert experiment.excess_energy(power, 5, 10, 30) == pytest.approx(90)
 
 
+def test_queue_summary_counts_pending_wait_through_the_cutoff():
+    rows = (
+        QueueExecution("active", "initial", "dest", 100, 0, 0, 1, 0, 0),
+        QueueExecution("pending", "initial", "dest", 100, 0, None, None, 1, 100),
+    )
+    assert experiment.queue_summary(rows, 1) == {
+        "destination_kv_queue_operations": 2,
+        "destination_kv_queue_max_depth": 1,
+        "destination_kv_queue_max_bytes": 100,
+        "destination_kv_queue_pending_at_end": 1,
+        "destination_kv_queue_pending_bytes_at_end": 100,
+        "destination_kv_queue_total_observed_wait_s": 1,
+        "destination_kv_queue_p95_observed_wait_s": pytest.approx(0.95),
+    }
+
+
 def test_agentic_shared_transfers_finish_without_floating_stall():
     model = ModelProfile.load(experiment.DEFAULT_MODEL)
     full = WorkloadProfile.load(experiment.DEFAULT_WORKLOADS[2])
@@ -120,6 +138,7 @@ def test_small_run_reuses_plans_and_writes_raw_tables_and_plots(tmp_path: Path):
     runs = list(experiment.run(
         workload_paths=(experiment.DEFAULT_WORKLOADS[2],), sessions=6, power_limits=(500,),
         deadlines=(5,), end_s=5, solvers=("load_only",), seed=3,
+        link_bytes_per_s=1_250_000_000,
     ))
     assert len(runs) == 3
     assert all(run.plan.moves == runs[0].plan.moves for run in runs)
@@ -145,6 +164,19 @@ def test_small_run_reuses_plans_and_writes_raw_tables_and_plots(tmp_path: Path):
                  "network_time.png", "request_wait.png", "expected_vs_modeled_power.png",
                  "policy_outcomes.png"):
         assert (tmp_path / name).exists()
+    queue_rows = list(csv.DictReader((tmp_path / "queues.csv").open()))
+    expected = {
+        (run.run_id, row.session_id, row.phase):
+        (row, (row.start_s if row.start_s is not None else run.scenario.end_s) - row.arrival_s)
+        for run in runs for row in run.result.queues
+    }
+    assert len(queue_rows) == len(expected)
+    for row in queue_rows:
+        queue, wait = expected[row["run_id"], row["session_id"], row["phase"]]
+        assert float(row["observed_wait_s"]) == pytest.approx(wait)
+        assert int(row["depth_at_arrival"]) == queue.depth_at_arrival
+        assert int(row["bytes_at_arrival"]) == queue.bytes_at_arrival
+        assert row["pending_at_end"] == str(queue.start_s is None)
 
 
 def test_worker_processes_preserve_scenario_order_and_results():

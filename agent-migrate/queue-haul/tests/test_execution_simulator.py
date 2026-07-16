@@ -17,6 +17,8 @@ Plausible wrong implementations:
 - Admit destination KV copies after rather than before their bytes move.
 - Apply a destination queue globally instead of once per destination instance.
 - Report queue depth or bytes without the newly queued transfer.
+- Drop zero-delay completion events exactly at the simulation cutoff.
+- Allocate queue audit records during summary-only prediction.
 """
 
 import json
@@ -28,18 +30,20 @@ import simulate
 from profiles import ModelProfile
 from simulate import (ExecutionScenario, ExecutionSimulator, NetworkLink, PlannedMove,
                       PowerNode, ServingInstance, SimRequest, SimSession, execute,
-                      fair_link_rates, predict, step_average)
+                      fair_link_rates, step_average)
 
 
 def model(tmp_path, switch=1, destination_rate=1e12, shutdown=2, setup=0, tp=2,
-          replay_rate=None, kv_capacity=10_000, kv_action_power=(0, 0), parallel_kv=1):
+          replay_rate=None, kv_capacity=10_000, kv_action_power=(0, 0), parallel_kv=1,
+          parallel_moves=2):
     source = {"kind": "measured", "reference": "hand", "valid_range": [1, 1000], "relative_error": 0}
     rate = {"1": [[1, 100], [1000, 100]], "2": [[1, 50], [1000, 50]]}
     raw = {
         "schema": "queue-haul-model-profile-v2", "profile_id": "hand", "status": "fitted",
         "model": "m", "hardware": "h", "precision": "bf16", "tensor_parallel": tp,
         "gpus_per_node": 2, "power_scope": "gpu", "power_window_s": 1,
-        "max_ell": 1, "kv_capacity_tokens": kv_capacity, "max_parallel_moves": 2,
+        "max_ell": 1, "kv_capacity_tokens": kv_capacity,
+        "max_parallel_moves": parallel_moves,
         "max_parallel_replay": 1, "max_parallel_kv": parallel_kv,
         "sources": {k: source for k in (
             "power", "service", "capacity", "replay", "kv_transfer", "transitions"
@@ -163,6 +167,45 @@ def test_destination_kv_queue_blocks_bytes_until_slot_free(tmp_path):
     ]
 
 
+def test_destination_kv_queue_refills_concurrency_two(tmp_path):
+    sessions = tuple(SimSession(str(i), "source", 10, 0, 0, 1) for i in range(3))
+    moves = tuple(
+        PlannedMove(str(i), "dest", "kv_transfer", i, ("wan",)) for i in range(3)
+    )
+    result = execute(
+        scenario(sessions, links=(NetworkLink("wan", 1000),)),
+        model(tmp_path, switch=0, destination_rate=100, parallel_kv=2, parallel_moves=3),
+        moves,
+    )
+
+    assert [row.initial_ready_s for row in result.sessions] == pytest.approx([2, 2, 3])
+    assert [(row.session_id, row.start_s, row.depth_at_arrival, row.bytes_at_arrival)
+            for row in result.queues] == [
+        ("0", 0, 0, 0), ("1", 0, 0, 0), ("2", 2, 1, 100),
+    ]
+
+
+def test_kv_catch_up_waits_behind_an_earlier_destination_copy(tmp_path):
+    sessions = (
+        SimSession("growing", "source", 10, 0, 0, 1,
+                   requests=(SimRequest(0, 10, 0),)),
+        SimSession("waiting", "source", 10, 0, 0, 1),
+    )
+    moves = tuple(
+        PlannedMove(session.session_id, "dest", "kv_transfer", i, ("wan",))
+        for i, session in enumerate(sessions)
+    )
+    result = execute(
+        scenario(sessions, links=(NetworkLink("wan", 1000),)),
+        model(tmp_path, switch=0, destination_rate=100), moves,
+    )
+
+    catch_up = next(row for row in result.queues if row.phase == "catch_up")
+    assert catch_up.session_id == "growing"
+    assert (catch_up.arrival_s, catch_up.start_s, catch_up.depth_at_arrival) \
+        == pytest.approx((1, 2, 1))
+
+
 def test_configured_parallel_kv_copy_shares_destination_capacity(tmp_path):
     sessions = tuple(SimSession(str(i), "source", 10, 0, 0, 1) for i in range(2))
     moves = tuple(
@@ -208,9 +251,12 @@ def test_prediction_preserves_results_without_audit_records(tmp_path):
     )
     topology, profile = scenario(sessions), model(tmp_path)
     detailed = execute(topology, profile, moves)
-    summary = predict(topology, profile, moves)
+    simulator = ExecutionSimulator(topology, profile, moves, detailed=False)
+    summary = simulator.run()
 
     assert summary.events == summary.requests == summary.network == summary.queues == ()
+    assert simulator.queues == []
+    assert simulator.kv_records == {}
     assert summary.sessions == detailed.sessions
     assert summary.power == detailed.power
     assert summary.modeled_source_power_at_deadline_w \
@@ -337,6 +383,18 @@ def test_incomplete_moves_remain_visible(tmp_path):
     assert result.network[0].end_s is None
     assert result.network[0].transferred_bytes == 100
     assert result.network[0].remaining_bytes == 100
+
+
+def test_zero_delay_completion_at_end_is_processed(tmp_path):
+    session = SimSession("exact", "source", 10, 0, 0, 1)
+    result = execute(
+        scenario((session,), deadline=1, end=1), model(tmp_path, switch=0),
+        (PlannedMove("exact", "dest", "kv_transfer", 0, ("wan",)),),
+    )
+
+    assert result.network[0].end_s == 1
+    assert result.queues[0].end_s == 1
+    assert result.sessions[0].initial_ready_s == result.sessions[0].committed_s == 1
 
 
 def test_unmeasured_destination_concurrency_queues_instead_of_overlapping(tmp_path):
