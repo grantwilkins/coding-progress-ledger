@@ -10,7 +10,7 @@ from pathlib import Path
 import numpy as np
 
 
-PROFILE_SCHEMA = "queue-haul-model-profile-v1"
+PROFILE_SCHEMA = "queue-haul-model-profile-v2"
 WORKLOAD_SCHEMA = "queue-haul-workload-profile-v1"
 SOURCE_SECTIONS = ("power", "service", "capacity", "replay", "kv_transfer", "transitions")
 ACTION_POWER = {"replay", "kv_transfer", "replay_on_request", "catch_up", "sleep", "off"}
@@ -92,21 +92,47 @@ class PowerCurve:
 
 
 @dataclass(frozen=True)
+class ActionPower:
+    concurrency: np.ndarray
+    source_w: np.ndarray
+    destination_w: np.ndarray
+
+    @classmethod
+    def parse(cls, raw: dict) -> "ActionPower":
+        points = sorted((int(key), *map(float, value)) for key, value in raw.items())
+        if not points or any(len(value) != 2 for value in raw.values()):
+            raise ValueError("action power requires concurrency: [source_w, destination_w]")
+        concurrency, source, destination = map(np.asarray, zip(*points))
+        if concurrency[0] != 1 or np.any(np.diff(concurrency) <= 0) \
+                or min(*source, *destination) < 0 \
+                or np.any(np.diff(source) < 0) or np.any(np.diff(destination) < 0):
+            raise ValueError("action power must start at concurrency one and be nondecreasing")
+        return cls(concurrency, source, destination)
+
+    def power(self, concurrency: int, local: bool) -> float:
+        if not 1 <= concurrency <= self.concurrency[-1]:
+            raise ValueError(f"unsupported concurrency {concurrency}")
+        return float(np.interp(concurrency, self.concurrency,
+                               self.source_w if local else self.destination_w))
+
+
+@dataclass(frozen=True)
 class KVTransfer:
     block_tokens: int
     block_bytes: int
     setup_s: float
-    block_processing_s: float
+    destination_bytes_per_s: float
     sync_s: float
 
     @classmethod
     def parse(cls, raw: dict) -> "KVTransfer":
         value = cls(int(raw["block_tokens"]), int(raw["block_bytes"]),
-                    float(raw["setup_s"]), float(raw["block_processing_s"]),
+                    float(raw["setup_s"]), float(raw["destination_bytes_per_s"]),
                     float(raw["sync_s"]))
-        if value.block_tokens < 1 or value.block_bytes < 1 or min(
-            value.setup_s, value.block_processing_s, value.sync_s
-        ) < 0:
+        if value.block_tokens < 1 or value.block_bytes < 1 \
+                or value.block_bytes % value.block_tokens \
+                or min(value.setup_s, value.sync_s) < 0 \
+                or value.destination_bytes_per_s <= 0:
             raise ValueError("invalid KV transfer parameters")
         return value
 
@@ -114,7 +140,7 @@ class KVTransfer:
         return max(0, math.ceil(int(tokens) / self.block_tokens))
 
     def bytes(self, tokens: int) -> int:
-        return self.blocks(tokens) * self.block_bytes
+        return max(0, int(tokens)) * self.block_bytes // self.block_tokens
 
 
 @dataclass(frozen=True)
@@ -131,7 +157,7 @@ class ProfileCase:
     sleep_power_w: float
     sleep_s: float
     shutdown_s: float
-    action_power_w: dict[str, tuple[float, float]]
+    action_power_w: dict[str, ActionPower]
 
     @classmethod
     def parse(cls, case_id: str, raw: dict) -> "ProfileCase":
@@ -142,15 +168,12 @@ class ProfileCase:
             RateCurve.parse(raw["replay_tps"]), KVTransfer.parse(raw["kv_transfer"]),
             float(raw["switch_s"]), float(raw["sleep_power_w"]),
             float(raw["sleep_s"]), float(raw["shutdown_s"]),
-            {str(k): tuple(map(float, v)) for k, v in raw["action_power_w"].items()},
+            {str(k): ActionPower.parse(v) for k, v in raw["action_power_w"].items()},
         )
         if set(value.action_power_w) != ACTION_POWER:
             raise ValueError(f"action_power_w fields must be {sorted(ACTION_POWER)}")
-        if any(len(v) != 2 for v in value.action_power_w.values()):
-            raise ValueError("action power requires [source_w, destination_w]")
         if value.F <= 0 or value.G <= 0 or min(
             value.switch_s, value.sleep_power_w, value.sleep_s, value.shutdown_s,
-            *(v for pair in value.action_power_w.values() for v in pair),
         ) < 0:
             raise ValueError("rates, times, and power must be nonnegative; F and G must be positive")
         return value

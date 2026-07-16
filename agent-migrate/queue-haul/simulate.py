@@ -193,6 +193,7 @@ class _Flow:
     phase: str
     remaining: float
     path: tuple[str, ...]
+    rate_path: tuple[object, ...]
     bytes: int
     start: float
 
@@ -241,7 +242,8 @@ def fair_link_rates(paths: dict[int, tuple[str, ...]], links: dict[str, float]) 
     counts = {link: len(flows) for link, flows in members.items()}
     while active:
         share, bottleneck = min(
-            (residual[link] / count, link) for link, count in counts.items() if count
+            ((residual[link] / count, link) for link, count in counts.items() if count),
+            key=lambda item: item[0],
         )
         for flow in active:
             rates[flow] += share
@@ -280,6 +282,14 @@ class ExecutionSimulator:
         self.instances = {i.instance_id: i for i in scenario.instances}
         self.sessions = {s.session_id: s for s in scenario.sessions}
         self.links = {link.link_id: link.bytes_per_s for link in scenario.links}
+        self.kv_links = {
+            instance: ("kv_destination", instance) for instance in self.instances
+        }
+        self.rate_links = {
+            **self.links,
+            **{link: self.case.kv_transfer.destination_bytes_per_s
+               for link in self.kv_links.values()},
+        }
         self.moves = tuple(sorted(moves, key=lambda m: m.order))
         self._validate()
         self.time = 0.0
@@ -287,8 +297,8 @@ class ExecutionSimulator:
         self.sequence = 0
         self.flows: dict[int, _Flow] = {}
         self.next_flow = 0
-        self.link_flows = {link: set() for link in self.links}
-        self.changed_links: set[str] = set()
+        self.link_flows = {link: set() for link in self.rate_links}
+        self.changed_links: set[object] = set()
         self.states = [_MoveState(m) for m in self.moves]
         self.move_index = {state.move.session_id: i for i, state in enumerate(self.states)}
         self.by_source: dict[str, list[int]] = {}
@@ -306,8 +316,7 @@ class ExecutionSimulator:
         self.paused = set()
         self.power_model = ExpectedPower(scenario, profile, case_id)
         self.node_state = {n.node_id: "awake" for n in scenario.nodes}
-        self.active_actions: dict[object, tuple[str, bool]] = {}
-        self.action_power = {True: 0.0, False: 0.0}
+        self.active_actions: dict[object, tuple[str, bool, str]] = {}
         self.deferred = set()
         self.waking = set()
         self.pending_requests: dict[str, tuple[int, float]] = {}
@@ -386,16 +395,25 @@ class ExecutionSimulator:
 
     def _start_action(self, key, action: str, instance: str | None = None,
                       node: str | None = None):
+        if (instance is None) == (node is None) or key in self.active_actions:
+            raise RuntimeError("an action requires one unused key and one resource")
+        resource = node or instance
         local = self.nodes[node].local if node else self.nodes[self.instances[instance].gpu_nodes[0]].local
-        self.active_actions[key] = action, local
-        self.action_power[local] += self.case.action_power_w[action][0 if local else 1]
+        self.active_actions[key] = action, local, resource
 
     def _stop_action(self, key):
-        action, local = self.active_actions.pop(key)
-        self.action_power[local] -= self.case.action_power_w[action][0 if local else 1]
+        self.active_actions.pop(key)
+
+    def _action_power(self, local: bool) -> float:
+        counts: dict[tuple[str, str], int] = {}
+        for action, action_local, resource in self.active_actions.values():
+            if action_local == local:
+                counts[action, resource] = counts.get((action, resource), 0) + 1
+        return sum(self.case.action_power_w[action].power(count, local)
+                   for (action, _), count in counts.items())
 
     def _node_power(self, local: bool) -> float:
-        return self.power_model.power(local) + self.action_power[local]
+        return self.power_model.power(local) + self._action_power(local)
 
     def _record_power(self, force: bool = False):
         point = (self.time, self._node_power(True), self._node_power(False))
@@ -430,7 +448,8 @@ class ExecutionSimulator:
         blocks = self.case.kv_transfer.blocks(tokens)
         if phase == "catch_up":
             blocks -= state.snapshot_tokens // self.case.kv_transfer.block_tokens
-        return max(0, blocks) * self.case.kv_transfer.block_bytes, 0, max(0, blocks)
+            return max(0, blocks) * self.case.kv_transfer.block_bytes, 0, max(0, blocks)
+        return self.case.kv_transfer.bytes(tokens), 0, blocks
 
     def _path(self, state: _MoveState, phase: str) -> tuple[str, ...]:
         session = self.sessions[state.move.session_id]
@@ -446,19 +465,25 @@ class ExecutionSimulator:
         detail = (replay_tokens, blocks)
         if byte_count:
             source = self.sessions[state.move.session_id].source_instance
+            action = "catch_up" if phase == "catch_up" else state.move.method
             if state.move.method == "kv_transfer" or not self.sessions[state.move.session_id].log_external:
+                self._start_action((index, phase, "source"), action, source)
+            path = self._path(state, phase)
+            rate_path: tuple[object, ...] = path
+            if state.move.method == "kv_transfer":
                 self._start_action(
-                    (index, phase, "source"),
-                    "catch_up" if phase == "catch_up" else state.move.method, source,
+                    (index, phase, "destination"), action,
+                    state.move.destination_instance,
                 )
+                rate_path += (self.kv_links[state.move.destination_instance],)
             flow = _Flow(
-                self.next_flow, index, phase, float(byte_count), self._path(state, phase),
+                self.next_flow, index, phase, float(byte_count), path, rate_path,
                 byte_count, self.time,
             )
             self.next_flow += 1
             self.flows[flow.flow_id] = flow
-            self.changed_links.update(flow.path)
-            for link in flow.path:
+            self.changed_links.update(flow.rate_path)
+            for link in flow.rate_path:
                 self.link_flows[link].add(flow.flow_id)
             self._event("network_start", state.move.session_id, detail=f"{phase}:{byte_count}")
         else:
@@ -491,10 +516,10 @@ class ExecutionSimulator:
             duration = replay_tokens / self.case.replay.rate(rate_context, active)
             self._event("replay_start", state.move.session_id, detail=destination)
         elif state.move.method == "kv_transfer":
-            duration = blocks * self.case.kv_transfer.block_processing_s + self.case.kv_transfer.sync_s
+            duration = self.case.kv_transfer.sync_s
         else:
             duration = 0.0
-        if duration:
+        if duration and (index, phase, "destination") not in self.active_actions:
             action = "catch_up" if phase == "catch_up" else state.move.method
             self._start_action(
                 (index, phase, "destination"), action, state.move.destination_instance
@@ -677,14 +702,14 @@ class ExecutionSimulator:
         while pending:
             for flow_id in self.link_flows[pending.pop()] - affected:
                 affected.add(flow_id)
-                for link in self.flows[flow_id].path:
+                for link in self.flows[flow_id].rate_path:
                     if link not in links:
                         links.add(link)
                         pending.append(link)
         rates = {flow_id: rate for flow_id, rate in rates.items() if flow_id in self.flows}
         rates.update(fair_link_rates(
-            {flow_id: self.flows[flow_id].path for flow_id in sorted(affected)},
-            {link: self.links[link] for link in links},
+            {flow_id: self.flows[flow_id].rate_path for flow_id in sorted(affected)},
+            {link: self.rate_links[link] for link in links},
         ))
         self.changed_links.clear()
         return rates
@@ -718,8 +743,8 @@ class ExecutionSimulator:
                 processed |= bool(done)
                 for flow_id in done:
                     flow = self.flows.pop(flow_id)
-                    self.changed_links.update(flow.path)
-                    for link in flow.path:
+                    self.changed_links.update(flow.rate_path)
+                    for link in flow.rate_path:
                         self.link_flows[link].remove(flow_id)
                     state = self.states[flow.move_index]
                     action = flow.move_index, flow.phase, "source"

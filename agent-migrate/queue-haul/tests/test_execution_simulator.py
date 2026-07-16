@@ -1,7 +1,7 @@
 """
 Claim:
 Execution follows background copy, pause, catch-up, route switch, and final node
-state while overlapping transfers share every bottleneck.
+state while overlapping transfers share network and destination capacity.
 
 Plausible wrong implementations:
 - Credit source power when bytes finish instead of when the route switches.
@@ -12,6 +12,8 @@ Plausible wrong implementations:
 - Enter sleep/off before the final source session commits.
 - Skip catch-up when a request changes state during background preparation.
 - Transfer nonexistent cold KV or defer replay for GPU-resident active KV.
+- Add network and destination KV time even though ingestion is pipelined.
+- Charge measured total concurrent action power once for every session.
 """
 
 import json
@@ -26,12 +28,12 @@ from simulate import (ExecutionScenario, ExecutionSimulator, NetworkLink, Planne
                       fair_link_rates, predict, step_average)
 
 
-def model(tmp_path, switch=1, block_s=0, shutdown=2, setup=0, tp=2, replay_rate=None,
-          kv_capacity=10_000):
+def model(tmp_path, switch=1, destination_rate=1e12, shutdown=2, setup=0, tp=2,
+          replay_rate=None, kv_capacity=10_000, kv_action_power=(0, 0)):
     source = {"kind": "measured", "reference": "hand", "valid_range": [1, 1000], "relative_error": 0}
     rate = {"1": [[1, 100], [1000, 100]], "2": [[1, 50], [1000, 50]]}
     raw = {
-        "schema": "queue-haul-model-profile-v1", "profile_id": "hand", "status": "fitted",
+        "schema": "queue-haul-model-profile-v2", "profile_id": "hand", "status": "fitted",
         "model": "m", "hardware": "h", "precision": "bf16", "tensor_parallel": tp,
         "gpus_per_node": 2, "power_scope": "gpu", "power_window_s": 1,
         "max_ell": 1, "kv_capacity_tokens": kv_capacity, "max_parallel_moves": 2,
@@ -43,11 +45,16 @@ def model(tmp_path, switch=1, block_s=0, shutdown=2, setup=0, tp=2, replay_rate=
             "F": 100, "G": 100, "power_curve": [[0, 10], [0.5, 30], [1, 40]],
             "prefill_tps": rate, "decode_tps": rate, "replay_tps": replay_rate or rate,
             "kv_transfer": {"block_tokens": 10, "block_bytes": 100, "setup_s": setup,
-                            "block_processing_s": block_s, "sync_s": 0},
+                            "destination_bytes_per_s": destination_rate, "sync_s": 0},
             "switch_s": switch, "sleep_power_w": 2, "sleep_s": 1, "shutdown_s": shutdown,
-            "action_power_w": {"replay": [0, 0], "kv_transfer": [0, 0],
-                               "replay_on_request": [0, 0], "catch_up": [0, 0],
-                               "sleep": [0, 0], "off": [0, 0]},
+            "action_power_w": {
+                "replay": {"1": [0, 0], "2": [0, 0]},
+                "kv_transfer": {"1": [0, kv_action_power[0]],
+                                "2": [0, kv_action_power[1]]},
+                "replay_on_request": {"1": [0, 0], "2": [0, 0]},
+                "catch_up": {"1": [0, 0], "2": [0, 0]},
+                "sleep": {"1": [0, 0]}, "off": {"1": [0, 0]},
+            },
         }},
     }
     path = tmp_path / "profile.json"
@@ -95,7 +102,10 @@ def test_rate_changes_stay_within_connected_links(tmp_path, monkeypatch):
     original = simulate.fair_link_rates
 
     def record(active, links):
-        calls.append((tuple(sorted(active.values())), tuple(sorted(links))))
+        physical = set("abc")
+        calls.append((tuple(sorted(tuple(link for link in path if link in physical)
+                                  for path in active.values())),
+                      tuple(sorted(link for link in links if link in physical))))
         return original(active, links)
 
     monkeypatch.setattr(simulate, "fair_link_rates", record)
@@ -131,6 +141,32 @@ def test_parallel_transfer_and_power_credit_at_commit(tmp_path):
     after = [p for p in result.power if p[0] >= 3]
     assert len({p[1] for p in before}) == 1
     assert after[-1][1] < before[0][1]
+
+
+def test_parallel_kv_copy_shares_pipelined_destination_capacity(tmp_path):
+    sessions = tuple(SimSession(str(i), "source", 10, 0, 0, 1) for i in range(2))
+    moves = tuple(
+        PlannedMove(str(i), "dest", "kv_transfer", i, ("wan",)) for i in range(2)
+    )
+    result = execute(
+        scenario(sessions, links=(NetworkLink("wan", 1000),)),
+        model(tmp_path, switch=0, destination_rate=100), moves,
+    )
+
+    assert [row.initial_ready_s for row in result.sessions] == pytest.approx([2, 2])
+
+
+def test_action_power_is_total_for_concurrent_actions(tmp_path):
+    sessions = tuple(SimSession(str(i), "source", 10, 0, 0, 1) for i in range(2))
+    moves = tuple(
+        PlannedMove(str(i), "dest", "kv_transfer", i, ("wan",)) for i in range(2)
+    )
+    result = execute(
+        scenario(sessions), model(tmp_path, kv_action_power=(10, 15)), moves,
+    )
+
+    baseline = result.power[0][2]
+    assert max(point[2] for point in result.power) - baseline == pytest.approx(15)
 
 
 def test_event_loop_hard_fails_if_time_does_not_advance(tmp_path, monkeypatch):
@@ -316,7 +352,7 @@ def test_kv_catch_up_resends_a_changed_partial_block(tmp_path):
         (PlannedMove("active", "dest", "kv_transfer", 0, ("wan",)),),
     )
     assert [(row.phase, row.bytes) for row in result.network] == [
-        ("initial", 200), ("catch_up", 100)
+        ("initial", 110), ("catch_up", 100)
     ]
 
 

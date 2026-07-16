@@ -14,6 +14,7 @@ import matplotlib.pyplot as plt
 from profiles import (
     ACTION_POWER,
     SOURCE_SECTIONS,
+    ActionPower,
     KVTransfer,
     ModelProfile,
     PowerCurve,
@@ -42,12 +43,13 @@ def _profile() -> ModelProfile:
         rate,
         rate,
         rate,
-        KVTransfer(10, 100, 0, 0, 0),
+        KVTransfer(10, 100, 0, 100, 0),
         1,
         2,
         1,
         2,
-        {action: (0, 0) for action in ACTION_POWER},
+        {action: ActionPower.parse({"1": [0, 0], "2": [0, 0]})
+         for action in ACTION_POWER},
     )
     source = Source("calculated", "hand-checkable validation", (0, 1000), 0)
     return ModelProfile(

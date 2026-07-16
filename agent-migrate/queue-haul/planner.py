@@ -110,10 +110,10 @@ def _duration(session: SimSession, method: MoveMethod, case: ProfileCase,
             else link_s(session.log_bytes)
         return transfer_s + replay_s + case.switch_s
     if method == "kv_transfer":
-        blocks = case.kv_transfer.blocks(session.context_tokens)
-        return (case.kv_transfer.setup_s + link_s(blocks * case.kv_transfer.block_bytes)
-                + blocks * case.kv_transfer.block_processing_s + case.kv_transfer.sync_s
-                + case.switch_s)
+        size = case.kv_transfer.bytes(session.context_tokens)
+        return (case.kv_transfer.setup_s
+                + max(link_s(size), size / case.kv_transfer.destination_bytes_per_s)
+                + case.kv_transfer.sync_s + case.switch_s)
     initial_s = 0.0 if session.log_external else link_s(session.log_bytes)
     wake_s = (external_link_s(session.log_bytes) if session.log_external else 0.0) + replay_s
     return initial_s + case.switch_s + session.wake_probability * wake_s

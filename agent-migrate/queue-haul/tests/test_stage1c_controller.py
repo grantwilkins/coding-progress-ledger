@@ -233,16 +233,19 @@ def test_network_and_power_measurements_use_measured_scopes(tmp_path):
 
 def test_model_check_uses_measured_work_and_stays_in_its_valid_range():
     case = SimpleNamespace(
-        kv_transfer=SimpleNamespace(setup_s=.2, block_processing_s=.5, sync_s=.3),
+        kv_transfer=SimpleNamespace(setup_s=.2, destination_bytes_per_s=1_000_000, sync_s=.3),
         replay=SimpleNamespace(rate=lambda _tokens, _concurrency: 500),
     )
-    source = SimpleNamespace(valid_range=(100, 2000))
-    profile = SimpleNamespace(sources={"kv_transfer": source, "replay": source}, case=lambda: case)
+    profile = SimpleNamespace(
+        sources={"kv_transfer": SimpleNamespace(valid_range=(500_000, 2_000_000)),
+                 "replay": SimpleNamespace(valid_range=(100, 2000))},
+        case=lambda: case,
+    )
     base = {"concurrency": 1, "activity": "none", "measured_prompt_tokens": 1000,
             "bandwidth_mbps": 8, "measured_kv_bytes": 1_000_000,
             "measured_kv_chunks": 2, "measured_processed_tokens": 1000}
 
-    assert c.current_model_time({**base, "method": "kv_transfer"}, profile) == pytest.approx(2.5)
+    assert c.current_model_time({**base, "method": "kv_transfer"}, profile) == pytest.approx(1.5)
     assert c.current_model_time({**base, "method": "replay"}, profile) == pytest.approx(2)
     assert c.current_model_time({**base, "method": "replay", "concurrency": 2}, profile) is None
     assert c.current_model_time({**base, "method": "replay", "measured_prompt_tokens": 99}, profile) is None

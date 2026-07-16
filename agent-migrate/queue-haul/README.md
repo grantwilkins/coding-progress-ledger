@@ -21,6 +21,25 @@ uv run python queue-haul/plot_simulator_validation.py
 uv run python queue-haul/plot_simulator_evaluation.py
 ```
 
+The model profile uses exact measured KV bytes. KV loading overlaps network
+transfer, so serial KV time is setup plus the slower of network transfer and
+destination KV loading, followed by synchronization and route switching.
+Action power is stored as total added power for each measured concurrency, not
+as power per session. Fit the serial coding data with repeats 0–1 and evaluate
+repeat 2 with:
+
+```bash
+uv run python queue-haul/stage1c_profile_fit.py \
+  --run-root queue-haul/outputs/queue-haul/outputs/coding-run \
+  --profile queue-haul/profiles/gpt_oss_20b_a100_tp1.json
+```
+
+The checked profile remains `estimated`. It has not been validated for larger
+catch-up work, interactive or agentic jobs, eight-session drains, sleep or
+shutdown, paired method and bandwidth comparisons, or parallel KV connections.
+The new coding fit and the earlier live replay points occupy separate token
+ranges in the profile; the earlier range retains its 30% error bound.
+
 Stage 1C reduction reports measured prompt, processed, and new tokens; initial
 KV payload bytes; catch-up cache hits; exact proxy KV-route bytes; request
 timing; and power relative to a measured idle baseline. It does not group or

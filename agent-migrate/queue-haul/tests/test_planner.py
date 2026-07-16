@@ -11,13 +11,14 @@ Plausible wrong implementations:
 - Place every selected session on the first destination.
 - Defer replay for an active session or transfer nonexistent KV for a cold session.
 - Admit active KV that fits source instances but overfills a destination.
+- Add pipelined destination ingestion time to network transfer time.
 """
 
 from dataclasses import replace
 
 import pytest
 
-from planner import METHODS, plan
+from planner import METHODS, _duration, plan
 from simulate import (ExecutionScenario, NetworkLink, PowerNode, ServingInstance, SimRequest,
                       SimSession)
 from test_execution_simulator import model
@@ -39,6 +40,14 @@ def problem(requests=(), limit=20, final="awake"):
 
 
 PATHS = {(source, dest): ("wan",) for source in ("s0", "s1") for dest in ("t0", "t1")}
+
+
+def test_kv_duration_uses_the_slower_pipeline_stage(tmp_path):
+    profile = model(tmp_path, switch=0, tp=1, destination_rate=50)
+    session = SimSession("a", "s0", 10, 0, 0, 1)
+
+    assert _duration(session, "kv_transfer", profile.case(), ("wan",), {"wan": 100}) \
+        == pytest.approx(2)
 
 
 def test_plan_does_not_read_sampled_future_requests(tmp_path):

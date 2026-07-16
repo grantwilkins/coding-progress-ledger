@@ -1,7 +1,7 @@
 """
 Claim:
-Profiles preserve one measured load coordinate, reject unsupported extrapolation,
-and resample complete active or cold workload records rather than independent fields.
+Profiles preserve measured ranges, exact partial KV bytes, destination ingestion
+capacity, and total action power by concurrency.
 
 Plausible wrong implementations:
 - Accept a convex or decreasing power curve that violates the controller model.
@@ -10,6 +10,8 @@ Plausible wrong implementations:
 - Accept a nonpositive resident KV capacity.
 - Sample workload columns independently and create records absent from the trace.
 - Treat a legacy idle record as active or retain it as a third internal state.
+- Round every initial KV payload up to a full allocator block.
+- Multiply total concurrent action power once per session.
 """
 
 import json
@@ -30,14 +32,16 @@ def profile():
         "F": 100, "G": 80, "power_curve": [[0, 10], [0.5, 30], [1, 40]],
         "prefill_tps": rate, "decode_tps": rate, "replay_tps": rate,
         "kv_transfer": {"block_tokens": 4, "block_bytes": 100, "setup_s": 1,
-                        "block_processing_s": 0.5, "sync_s": 0.25},
+                        "destination_bytes_per_s": 50, "sync_s": 0.25},
         "switch_s": 0.1, "sleep_power_w": 2, "sleep_s": 3, "shutdown_s": 4,
-        "action_power_w": {"replay": [1, 2], "kv_transfer": [2, 3],
-                           "replay_on_request": [1, 2], "catch_up": [1, 2],
-                           "sleep": [1, 0], "off": [1, 0]},
+        "action_power_w": {"replay": {"1": [1, 2], "2": [1.5, 3]},
+                           "kv_transfer": {"1": [2, 3]},
+                           "replay_on_request": {"1": [1, 2]},
+                           "catch_up": {"1": [1, 2]},
+                           "sleep": {"1": [1, 0]}, "off": {"1": [1, 0]}},
     }
     return {
-        "schema": "queue-haul-model-profile-v1", "profile_id": "p", "status": "fitted",
+        "schema": "queue-haul-model-profile-v2", "profile_id": "p", "status": "fitted",
         "model": "m", "hardware": "h", "precision": "bf16", "tensor_parallel": 1,
         "gpus_per_node": 8, "power_scope": "gpu", "power_window_s": 5,
         "max_ell": 1, "kv_capacity_tokens": 1000, "max_parallel_moves": 2,
@@ -68,12 +72,15 @@ def test_power_curve_is_concave_and_never_extrapolates(tmp_path):
         ModelProfile.load(write(tmp_path, raw, "convex.json"))
 
 
-def test_rate_range_concurrency_and_kv_rounding_are_explicit(tmp_path):
+def test_rate_range_exact_kv_bytes_and_action_power_are_explicit(tmp_path):
     case = ModelProfile.load(write(tmp_path, profile())).case()
     assert case.prefill.rate(500.5, 1) == pytest.approx(75)
     assert case.kv_transfer.blocks(11) == 3
-    assert case.kv_transfer.bytes(11) == 300
-    assert case.action_power_w["replay"] == (1, 2)
+    assert case.kv_transfer.bytes(11) == 275
+    assert case.action_power_w["replay"].power(1, False) == 2
+    assert case.action_power_w["replay"].power(2, False) == 3
+    with pytest.raises(ValueError, match="unsupported concurrency"):
+        case.action_power_w["replay"].power(3, False)
     with pytest.raises(ValueError, match="unsupported concurrency"):
         case.prefill.rate(10, 3)
     with pytest.raises(ValueError, match="outside"):

@@ -1081,14 +1081,15 @@ def current_model_time(row: dict, profile) -> float | None:
     if row["concurrency"] != 1 or row["activity"] != "none":
         return None
     source = profile.sources[row["method"]]
-    if not source.valid_range[0] <= row["measured_prompt_tokens"] <= source.valid_range[1]:
+    work = row["measured_kv_bytes"] if row["method"] == "kv_transfer" \
+        else row["measured_prompt_tokens"]
+    if not source.valid_range[0] <= work <= source.valid_range[1]:
         return None
     case = profile.case()
     if row["method"] == "kv_transfer":
         transfer = row["measured_kv_bytes"] / (row["bandwidth_mbps"] * 1e6 / 8)
-        return (case.kv_transfer.setup_s + transfer
-                + row["measured_kv_chunks"] * case.kv_transfer.block_processing_s
-                + case.kv_transfer.sync_s)
+        ingestion = row["measured_kv_bytes"] / case.kv_transfer.destination_bytes_per_s
+        return case.kv_transfer.setup_s + max(transfer, ingestion) + case.kv_transfer.sync_s
     return row["measured_processed_tokens"] / case.replay.rate(row["measured_prompt_tokens"], 1)
 
 
