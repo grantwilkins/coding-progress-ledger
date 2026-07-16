@@ -277,7 +277,8 @@ class ExecutionSimulator:
         self.sequence = 0
         self.flows: dict[int, _Flow] = {}
         self.next_flow = 0
-        self.flow_version = 0
+        self.link_flows = {link: set() for link in self.links}
+        self.changed_links: set[str] = set()
         self.states = [_MoveState(m) for m in self.moves]
         self.move_index = {state.move.session_id: i for i, state in enumerate(self.states)}
         self.by_source: dict[str, list[int]] = {}
@@ -427,7 +428,9 @@ class ExecutionSimulator:
             )
             self.next_flow += 1
             self.flows[flow.flow_id] = flow
-            self.flow_version += 1
+            self.changed_links.update(flow.path)
+            for link in flow.path:
+                self.link_flows[link].add(flow.flow_id)
             self._event("network_start", state.move.session_id, detail=f"{phase}:{byte_count}")
         else:
             self._endpoint(index, phase, detail)
@@ -622,6 +625,22 @@ class ExecutionSimulator:
             self.flows[flow_id].remaining -= rate * elapsed
         self.time = target
 
+    def _update_rates(self, rates: dict[int, float]) -> dict[int, float]:
+        pending, links, affected = list(self.changed_links), set(self.changed_links), set()
+        while pending:
+            for flow_id in self.link_flows[pending.pop()] - affected:
+                affected.add(flow_id)
+                for link in self.flows[flow_id].path:
+                    if link not in links:
+                        links.add(link)
+                        pending.append(link)
+        rates = {flow_id: rate for flow_id, rate in rates.items() if flow_id in self.flows}
+        rates.update(fair_link_rates(
+            {flow_id: self.flows[flow_id].path for flow_id in sorted(affected)}, self.links
+        ))
+        self.changed_links.clear()
+        return rates
+
     def run(self) -> ExecutionResult:
         self._record_power()
         for session in self.sessions.values():
@@ -629,11 +648,10 @@ class ExecutionSimulator:
                 arrival = session.requests[0].gap_s
                 self._schedule(arrival, "request_start", (session.session_id, 0, arrival))
         self._schedule(self.scenario.controller_delay_s, "plan_ready")
-        rates, rate_version = {}, -1
+        rates = {}
         while (self.heap or self.flows) and self.time <= self.scenario.end_s:
-            if rate_version != self.flow_version:
-                rates = fair_link_rates({i: f.path for i, f in self.flows.items()}, self.links)
-                rate_version = self.flow_version
+            if self.changed_links:
+                rates = self._update_rates(rates)
             finishes = {
                 i: self.time + flow.remaining / rates[i] for i, flow in self.flows.items()
             }
@@ -645,6 +663,9 @@ class ExecutionSimulator:
                 done = [i for i, end in finishes.items() if end <= flow_time + 1e-12]
                 for flow_id in done:
                     flow = self.flows.pop(flow_id)
+                    self.changed_links.update(flow.path)
+                    for link in flow.path:
+                        self.link_flows[link].remove(flow_id)
                     state = self.states[flow.move_index]
                     action = flow.move_index, flow.phase, "source"
                     if action in self.active_actions:
@@ -655,7 +676,6 @@ class ExecutionSimulator:
                     ))
                     self._event("network_done", state.move.session_id, detail=flow.phase)
                     self._endpoint(flow.move_index, flow.phase)
-                self.flow_version += 1
             else:
                 while self.heap and self.heap[0][0] <= self.time + 1e-12:
                     _, _, kind, payload = heapq.heappop(self.heap)

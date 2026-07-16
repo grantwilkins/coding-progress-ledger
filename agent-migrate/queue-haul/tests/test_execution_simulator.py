@@ -6,6 +6,7 @@ state while overlapping transfers share every bottleneck.
 Plausible wrong implementations:
 - Credit source power when bytes finish instead of when the route switches.
 - Serialize simultaneous transfers or exceed a shared link.
+- Recalculate unrelated transfers or miss a transfer connected through a second link.
 - Stall when shared rates leave a small floating-point byte remainder.
 - Change or retain the wrong GPU slot load when one session moves.
 - Enter sleep/off before the final source session commits.
@@ -16,6 +17,7 @@ import json
 
 import pytest
 
+import simulate
 from profiles import ModelProfile
 from simulate import (ExecutionScenario, NetworkLink, PlannedMove, PowerNode, ServingInstance,
                       SimRequest, SimSession, execute, fair_link_rates, step_average)
@@ -62,6 +64,40 @@ def test_fair_rates_redistribute_capacity_across_two_bottlenecks():
     assert rates == pytest.approx({0: 90, 1: 10, 2: 10})
     assert rates[0] + rates[1] == pytest.approx(100)
     assert rates[1] + rates[2] == pytest.approx(20)
+
+
+def test_rate_changes_stay_within_connected_links(tmp_path, monkeypatch):
+    paths = (("a",), ("a", "b"), ("b",), ("c",), ("c",))
+    contexts = (40, 10, 40, 10, 20)
+    sessions = tuple(
+        SimSession(str(i), f"source-{i}", context, 0, 0, 1)
+        for i, context in enumerate(contexts)
+    )
+    topology = ExecutionScenario(
+        20, 30, 0, "awake", 0,
+        (PowerNode("src", 5, True), PowerNode("dst", 5, False)),
+        tuple(ServingInstance(f"source-{i}", ("src",)) for i in range(5))
+        + tuple(ServingInstance(f"dest-{i}", ("dst",)) for i in range(5)),
+        sessions,
+        (NetworkLink("a", 100), NetworkLink("b", 100), NetworkLink("c", 200)),
+    )
+    moves = tuple(
+        PlannedMove(str(i), f"dest-{i}", "kv_transfer", i, path)
+        for i, path in enumerate(paths)
+    )
+    calls = []
+    original = simulate.fair_link_rates
+
+    def record(active, links):
+        calls.append(tuple(sorted(active.values())))
+        return original(active, links)
+
+    monkeypatch.setattr(simulate, "fair_link_rates", record)
+    result = execute(topology, model(tmp_path, tp=1), moves)
+    finished = {row.session_id: row.end_s for row in result.network}
+
+    assert (("c",),) in calls
+    assert finished == pytest.approx({"0": 5, "1": 2, "2": 5, "3": 1, "4": 1.5})
 
 
 def test_deadline_power_is_an_exact_trailing_window_average():
