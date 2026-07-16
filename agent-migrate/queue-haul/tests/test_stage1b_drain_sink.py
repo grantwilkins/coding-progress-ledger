@@ -278,6 +278,14 @@ def test_token_bucket_reserves_one_shared_timeline():
     assert bucket.reserve(75, 2.0) == 0
 
 
+def test_token_bucket_credits_scheduler_overshoot():
+    bucket = s.TokenBucket(rate_bps=1_000_000.0)
+    bucket.updated = 0.0
+
+    assert bucket.reserve(100, 0.0) == pytest.approx(0.0001)
+    assert bucket.reserve(100, 0.001) == 0
+
+
 def test_source_egress_billing_directions_only():
     assert s.billable("api", "client_to_target")
     assert s.billable("kv", "target_to_client")

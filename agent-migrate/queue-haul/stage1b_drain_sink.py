@@ -346,7 +346,7 @@ def preflight(cfg: Config, required_gpus: int = 1) -> list[str]:
 
 
 class TokenBucket:
-    def __init__(self, rate_bps: float, burst_s: float = 0.0):
+    def __init__(self, rate_bps: float, burst_s: float = 0.01):
         if rate_bps <= 0:
             raise ValueError("rate_bps must be positive")
         self.rate = rate_bps
