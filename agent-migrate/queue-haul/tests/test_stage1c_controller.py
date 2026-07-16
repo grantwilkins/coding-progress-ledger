@@ -37,7 +37,7 @@ def test_manifest_is_deterministic_and_uses_complete_trace_boundaries(tmp_path):
     first = c.make_manifest(trace, "coding", 3, 7)
     second = c.make_manifest(trace, "coding", 3, 7)
 
-    assert c.PROBE_MAX_TOKENS == 256
+    assert c.PROBE_MAX_TOKENS == 512
     assert first == second
     assert first["source"]["sha256"] == c.file_hash(trace)
     assert len({row["state_code"] for row in first["sessions"]}) == 3
@@ -138,6 +138,17 @@ def test_cli_only_exposes_new_commands():
         assert error.value.code == 0
     with pytest.raises(SystemExit):
         c.parse_args(["live-grid"])
+
+
+def test_resume_records_explicit_code_change():
+    old = {"plan": "p", "git_sha": "old", "git_shas": ["older", "old"]}
+    new = {"plan": "p", "git_sha": "new", "git_shas": ["new"]}
+
+    with pytest.raises(RuntimeError, match="--resume-from-git-sha old"):
+        c.merge_run_metadata(new.copy(), old, None)
+    assert c.merge_run_metadata(new.copy(), old, "old")["git_shas"] == ["older", "old", "new"]
+    with pytest.raises(RuntimeError, match="same plan"):
+        c.merge_run_metadata({**new, "plan": "other"}, old, "old")
 
 
 def fake_result(scenario: dict, migration: bool) -> dict:

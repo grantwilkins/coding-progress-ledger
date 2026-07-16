@@ -201,8 +201,9 @@ hit tokens. KV requests must hit exactly the complete 256-token chunks. A reset
 failure restarts the testbed and retries once, then stops the run.
 
 Run and reduce separately. Formal runs require a clean worktree; `--allow-dirty`
-is available for development. Resume requires the same commit, plan, manifest,
-and settings. A failed scenario is saved, the testbed is restarted, independent
+is available for development. Resume requires the same plan, manifest, and settings. A compatible code change
+requires explicit `--resume-from-git-sha` authorization and records every
+commit. A failed scenario is saved, the testbed is restarted, independent
 scenarios continue, and the final command exits nonzero. The Slurm launcher
 always invokes reduction and preserves the run status:
 

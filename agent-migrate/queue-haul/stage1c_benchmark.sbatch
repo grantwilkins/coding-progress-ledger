@@ -26,6 +26,7 @@ export QH_PORT_OFFSET=${QH_PORT_OFFSET:-$((SLURM_JOB_ID % 40000 + 1000))}
 
 $PY queue-haul/stage1b_drain_sink.py preflight --required-gpus 2
 RUN_STATUS=0
-$PY queue-haul/stage1c_controller.py run --plan "$PLAN" --run-root "$RUN_ROOT" || RUN_STATUS=$?
+RESUME_ARGS=${RESUME_FROM_GIT_SHA:+--resume-from-git-sha $RESUME_FROM_GIT_SHA}
+$PY queue-haul/stage1c_controller.py run --plan "$PLAN" --run-root "$RUN_ROOT" $RESUME_ARGS || RUN_STATUS=$?
 $PY queue-haul/stage1c_controller.py reduce --run-root "$RUN_ROOT"
 exit "$RUN_STATUS"

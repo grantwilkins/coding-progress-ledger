@@ -27,7 +27,7 @@ METHODS = ("replay", "kv_transfer")
 ACTIVITIES = ("none", "one_turn")
 JOB_CLASSES = ("interactive_coding", "coding", "agentic_tool_loop")
 RESET_SUCCESS = "Successfully reset prefix cache"
-PROBE_MAX_TOKENS = 256
+PROBE_MAX_TOKENS = 512
 MAX_MODEL_TOKENS = 32768
 
 
@@ -663,7 +663,21 @@ def config_record(cfg: b.Config) -> dict:
     return {key: str(value) if isinstance(value, Path) else value for key, value in asdict(cfg).items()}
 
 
-def run_plan(plan_path: Path, run_root: Path, cfg: b.Config, allow_dirty: bool, extra: list[str]) -> None:
+def merge_run_metadata(current: dict, previous: dict | None, resume_from: str | None) -> dict:
+    if previous is None:
+        return current
+    provenance = {"git_sha", "git_shas"}
+    core = lambda row: {key: value for key, value in row.items() if key not in provenance}
+    if core(previous) != core(current):
+        raise RuntimeError("run metadata changed; resume requires the same plan, manifest, and settings")
+    prior = previous["git_sha"]
+    if prior != current["git_sha"] and resume_from != prior:
+        raise RuntimeError(f"run code changed; resume requires --resume-from-git-sha {prior}")
+    current["git_shas"] = list(dict.fromkeys(previous.get("git_shas", [prior]) + current["git_shas"]))
+    return current
+
+
+def run_plan(plan_path: Path, run_root: Path, cfg: b.Config, allow_dirty: bool, extra: list[str], resume_from: str | None = None) -> None:
     plan = json.loads(plan_path.read_text())
     manifest_path = Path(plan["manifest"]["path"])
     if file_hash(manifest_path) != plan["manifest"]["sha256"]:
@@ -671,10 +685,10 @@ def run_plan(plan_path: Path, run_root: Path, cfg: b.Config, allow_dirty: bool, 
     manifest = json.loads(manifest_path.read_text())
     validate_plan(plan, manifest)
     sha, dirty = git_state(allow_dirty)
-    metadata = {"schema": RUN_SCHEMA, "plan_sha256": file_hash(plan_path), "plan_object_sha256": object_hash(plan), "manifest_sha256": file_hash(manifest_path), "git_sha": sha, "dirty": dirty, "config": config_record(cfg), "extra_vllm_args": extra}
+    metadata = {"schema": RUN_SCHEMA, "plan_sha256": file_hash(plan_path), "plan_object_sha256": object_hash(plan), "manifest_sha256": file_hash(manifest_path), "git_sha": sha, "git_shas": [sha], "dirty": dirty, "config": config_record(cfg), "extra_vllm_args": extra}
     metadata_path = run_root / "run_metadata.json"
-    if metadata_path.exists() and json.loads(metadata_path.read_text()) != metadata:
-        raise RuntimeError("run metadata changed; resume requires the same code, plan, manifest, and settings")
+    previous = json.loads(metadata_path.read_text()) if metadata_path.exists() else None
+    metadata = merge_run_metadata(metadata, previous, resume_from)
     run_root.mkdir(parents=True, exist_ok=True)
     write_json(metadata_path, metadata)
     write_json(run_root / "plan.json", plan)
@@ -930,7 +944,7 @@ def parse_args(argv: list[str] | None = None):
     command.add_argument("--activity", type=lambda value: csv_list(value), default=list(ACTIVITIES))
     command.add_argument("--repeats", type=int, required=True); command.add_argument("--seed", type=int, required=True); command.add_argument("--deadline-s", type=float, default=300)
     command = sub.add_parser("run")
-    command.add_argument("--plan", type=Path, required=True); command.add_argument("--run-root", type=Path, required=True); command.add_argument("--allow-dirty", action="store_true")
+    command.add_argument("--plan", type=Path, required=True); command.add_argument("--run-root", type=Path, required=True); command.add_argument("--allow-dirty", action="store_true"); command.add_argument("--resume-from-git-sha")
     b.add_common(command); command.add_argument("extra_vllm_args", nargs=argparse.REMAINDER)
     command = sub.add_parser("reduce"); command.add_argument("--run-root", type=Path, required=True)
     return parser.parse_args(argv)
@@ -944,7 +958,7 @@ def main(argv: list[str] | None = None) -> None:
         write_json(args.out, make_plan(args.manifest, args.context_sizes, args.concurrency, args.bandwidth_mbps, args.methods, args.activity, args.repeats, args.seed, args.deadline_s))
     elif args.command == "run":
         extra = args.extra_vllm_args[1:] if args.extra_vllm_args[:1] == ["--"] else args.extra_vllm_args
-        run_plan(args.plan, args.run_root, b.config_from_args(args), args.allow_dirty, extra)
+        run_plan(args.plan, args.run_root, b.config_from_args(args), args.allow_dirty, extra, args.resume_from_git_sha)
     else:
         reduce_run(args.run_root)
 
