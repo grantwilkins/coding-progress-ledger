@@ -44,7 +44,7 @@
     },
     "replay": {
       "kind": "measured",
-      "reference": "outputs/queue-haul/outputs/coding-run/migrations.csv repeats 0-1 through 21546 tokens; outputs/power_drain_live_20260714/live_profile_*.json above that range",
+      "reference": "outputs/coding-run/migrations.csv repeats 0-1 through 21546 tokens; outputs/power_drain_live_20260714/live_profile_*.json above that range",
       "valid_range": [
         3473.0,
         31562
@@ -53,7 +53,7 @@
     },
     "kv_transfer": {
       "kind": "measured",
-      "reference": "outputs/queue-haul/outputs/coding-run/migrations.csv repeats 0-1",
+      "reference": "outputs/coding-run/migrations.csv repeats 0-1",
       "valid_range": [
         170704896.0,
         1059028992.0
@@ -62,7 +62,7 @@
     },
     "transitions": {
       "kind": "assumed",
-      "reference": "outputs/queue-haul/outputs/coding-run/migrations.csv and scenarios.csv for route switch and action power; TODO measure catch-up, sleep, and shutdown",
+      "reference": "outputs/coding-run/migrations.csv and scenarios.csv for route switch and action power; TODO measure catch-up, sleep, and shutdown",
       "valid_range": [
         0.0,
         300.0

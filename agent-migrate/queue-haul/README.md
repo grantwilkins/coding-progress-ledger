@@ -30,7 +30,7 @@ repeat 2 with:
 
 ```bash
 uv run python queue-haul/stage1c_profile_fit.py \
-  --run-root queue-haul/outputs/queue-haul/outputs/coding-run \
+  --run-root queue-haul/outputs/coding-run \
   --profile queue-haul/profiles/gpt_oss_20b_a100_tp1.json
 ```
 
