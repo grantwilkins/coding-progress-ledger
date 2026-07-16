@@ -159,12 +159,26 @@ class NetworkExecution:
     end_s: float | None
 
 
+@dataclass
+class QueueExecution:
+    session_id: str
+    phase: str
+    destination_instance: str
+    bytes: int
+    arrival_s: float
+    start_s: float | None
+    end_s: float | None
+    depth_at_arrival: int
+    bytes_at_arrival: int
+
+
 @dataclass(frozen=True)
 class ExecutionResult:
     events: tuple[ExecutionEvent, ...]
     sessions: tuple[SessionExecution, ...]
     requests: tuple["RequestExecution", ...]
     network: tuple[NetworkExecution, ...]
+    queues: tuple[QueueExecution, ...]
     power: tuple[tuple[float, float, float], ...]
     modeled_source_power_at_deadline_w: float
     deadline_met: bool
@@ -324,9 +338,16 @@ class ExecutionSimulator:
         self.endpoint_waiting: dict[
             tuple[str, str], deque[tuple[int, str, tuple[int, int]]]
         ] = {}
+        self.kv_active: dict[str, int] = {}
+        self.kv_waiting: dict[
+            str, deque[tuple[int, str, tuple[int, int], QueueExecution]]
+        ] = {}
+        self.kv_waiting_bytes: dict[str, int] = {}
+        self.kv_records: dict[tuple[int, str], QueueExecution] = {}
         self.events: list[ExecutionEvent] = []
         self.power: list[tuple[float, float, float]] = []
         self.requests: list[RequestExecution] = []
+        self.queues: list[QueueExecution] = []
         self.request_arrivals: set[tuple[str, int]] = set()
         self.network: list[NetworkExecution] = []
 
@@ -463,6 +484,35 @@ class ExecutionSimulator:
         state = self.states[index]
         byte_count, replay_tokens, blocks = self._payload(index, phase)
         detail = (replay_tokens, blocks)
+        if state.move.method == "kv_transfer":
+            destination = state.move.destination_instance
+            waiting = self.kv_waiting.setdefault(destination, deque())
+            queued = self.kv_active.get(destination, 0) >= self.profile.max_parallel_kv
+            record = QueueExecution(
+                state.move.session_id, phase, destination, byte_count, self.time, None, None,
+                len(waiting) + 1 if queued else 0,
+                self.kv_waiting_bytes.get(destination, 0) + byte_count if queued else 0,
+            )
+            self.queues.append(record)
+            self.kv_records[index, phase] = record
+            if queued:
+                waiting.append((index, phase, detail, record))
+                self.kv_waiting_bytes[destination] = record.bytes_at_arrival
+                self._event("kv_queued", state.move.session_id, detail=destination)
+                return
+            self._start_kv(index, phase, detail, record)
+            return
+        self._transfer(index, phase, byte_count, detail)
+
+    def _start_kv(self, index: int, phase: str, detail: tuple[int, int],
+                  record: QueueExecution):
+        destination = record.destination_instance
+        self.kv_active[destination] = self.kv_active.get(destination, 0) + 1
+        record.start_s = self.time
+        self._transfer(index, phase, record.bytes, detail)
+
+    def _transfer(self, index: int, phase: str, byte_count: int, detail: tuple[int, int]):
+        state = self.states[index]
         if byte_count:
             source = self.sessions[state.move.session_id].source_instance
             action = "catch_up" if phase == "catch_up" else state.move.method
@@ -495,16 +545,13 @@ class ExecutionSimulator:
         replay = state.move.method == "replay" or (
             state.move.method == "replay_on_request" and phase == "wake"
         )
-        kind = "replay" if replay else "kv_transfer" if state.move.method == "kv_transfer" else ""
-        key = state.move.destination_instance, kind
-        if kind:
-            limit = (self.profile.max_parallel_replay if replay
-                     else self.profile.max_parallel_kv)
-            if self.endpoint_active.get(key, 0) >= limit:
+        key = state.move.destination_instance, "replay"
+        if replay:
+            if self.endpoint_active.get(key, 0) >= self.profile.max_parallel_replay:
                 self.endpoint_waiting.setdefault(key, deque()).append(
                     (index, phase, (replay_tokens, blocks))
                 )
-                self._event("endpoint_queued", state.move.session_id, detail=kind)
+                self._event("endpoint_queued", state.move.session_id, detail="replay")
                 return
             self.endpoint_active[key] = self.endpoint_active.get(key, 0) + 1
         if replay:
@@ -534,13 +581,21 @@ class ExecutionSimulator:
         replay = state.move.method == "replay" or (
             state.move.method == "replay_on_request" and phase == "wake"
         )
-        kind = "replay" if replay else "kv_transfer" if state.move.method == "kv_transfer" else ""
-        if kind:
-            key = state.move.destination_instance, kind
+        if replay:
+            key = state.move.destination_instance, "replay"
             self.endpoint_active[key] -= 1
             waiting = self.endpoint_waiting.get(key, [])
             if waiting:
                 self._endpoint(*waiting.popleft())
+        elif state.move.method == "kv_transfer":
+            destination = state.move.destination_instance
+            self.kv_records[index, phase].end_s = self.time
+            self.kv_active[destination] -= 1
+            waiting = self.kv_waiting[destination]
+            if waiting:
+                queued = waiting.popleft()
+                self.kv_waiting_bytes[destination] -= queued[3].bytes
+                self._start_kv(*queued)
         if state.move.method == "replay" or phase == "wake":
             self._event("replay_done", session_id, detail=state.move.destination_instance)
         if phase == "wake":
@@ -815,6 +870,7 @@ class ExecutionSimulator:
         ] if self.detailed else [])
         return ExecutionResult(
             tuple(self.events), sessions, tuple(self.requests), tuple(network),
+            tuple(self.queues) if self.detailed else (),
             tuple(self.power), at_deadline, at_deadline <= self.scenario.power_limit_w, makespan,
         )
 

@@ -11,6 +11,7 @@ Plausible wrong implementations:
 - Emit only a summary and make timing or network claims impossible to audit.
 - Drop active/cold GPU residency while constructing simulator sessions.
 - Size instances from compute while silently exceeding measured resident KV capacity.
+- Omit destination KV queue evidence needed to explain migration time.
 """
 
 from pathlib import Path
@@ -139,6 +140,7 @@ def test_small_run_reuses_plans_and_writes_raw_tables_and_plots(tmp_path: Path):
 
     experiment.write(iter(runs), tmp_path)
     for name in ("summary.csv", "events.csv", "sessions.csv", "requests.csv", "network.csv",
+                 "queues.csv",
                  "power.csv", "plans.csv", "power_timeline.png", "session_pause.png",
                  "network_time.png", "request_wait.png", "expected_vs_modeled_power.png",
                  "policy_outcomes.png"):

@@ -38,6 +38,9 @@ Inspect these aggregate figures:
 
 ## TODO: next targeted GPU job
 
+`DATA_TO_COLLECT.md` is the complete measurement list; this section is the next
+job only.
+
 Do not submit the next large job until its small plan and two-model smoke pass.
 Keep each missing measurement as a separate plan group so a failed group does
 not contaminate the others.

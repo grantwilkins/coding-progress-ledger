@@ -249,6 +249,8 @@ def _summary(run: ExperimentRun) -> dict:
     }
     starts = {(row.session_id, row.request_index): row.start_s for row in result.requests}
     request_waits = [starts[key] - arrival for key, arrival in arrivals.items() if key in starts]
+    queue_waits = [row.start_s - row.arrival_s for row in result.queues
+                   if row.start_s is not None]
     requests_started = result.requests_started_by(scenario.deadline_s)
     unresumed = sum(
         max(0.0, min(scenario.end_s, row.committed_s or scenario.end_s)
@@ -298,6 +300,16 @@ def _summary(run: ExperimentRun) -> dict:
         "network_duration_s": max(
             (row.end_s or scenario.end_s for row in result.network), default=0.0
         ) - min((row.start_s for row in result.network), default=0.0),
+        "destination_kv_queue_operations": len(result.queues),
+        "destination_kv_queue_max_depth": max(
+            (row.depth_at_arrival for row in result.queues), default=0
+        ),
+        "destination_kv_queue_max_bytes": max(
+            (row.bytes_at_arrival for row in result.queues), default=0
+        ),
+        "destination_kv_queue_total_wait_s": sum(queue_waits),
+        "destination_kv_queue_p95_wait_s": float(np.quantile(queue_waits, 0.95))
+        if queue_waits else 0.0,
         "excess_energy_j": excess_energy(
             result.power, scenario.deadline_s, scenario.end_s, scenario.power_limit_w
         ),
@@ -318,7 +330,7 @@ def write(runs: Iterable[ExperimentRun], out: Path) -> int:
     except StopIteration:
         raise ValueError("no experiment runs") from None
     out.mkdir(parents=True, exist_ok=True)
-    names = "summary", "events", "sessions", "requests", "network", "power", "plans"
+    names = "summary", "events", "sessions", "requests", "network", "queues", "power", "plans"
     summaries, plots, writers = [], [], {}
     with ExitStack() as stack:
         files = {name: stack.enter_context((out / f"{name}.csv").open("w", newline=""))
@@ -349,6 +361,10 @@ def write(runs: Iterable[ExperimentRun], out: Path) -> int:
             emit("requests", ({**base, **row.__dict__} for row in run.result.requests))
             emit("network", ({**base, **row.__dict__, "path": "|".join(row.path)}
                              for row in run.result.network))
+            emit("queues", ({**base, **row.__dict__,
+                             "wait_s": None if row.start_s is None
+                             else row.start_s - row.arrival_s}
+                            for row in run.result.queues))
             emit("power", ({**base, "time_s": t, "modeled_source_power_w": source,
                             "modeled_destination_power_w": destination}
                            for t, source, destination in run.result.power))

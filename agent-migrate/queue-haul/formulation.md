@@ -15,10 +15,11 @@ source placement.
 Only local source power is constrained; destination power is reported.
 
 The simulator follows background preparation, source quiescing, catch-up,
-route switch, commit, and optional sleep or shutdown. Concurrent transfers
-share every named link. Source power changes only at commit. A plan is feasible
-only when central-case execution meets both the move deadline and the trailing
-power window.
+route switch, commit, and optional sleep or shutdown. KV copies wait in a FIFO
+per destination before transferring; admitted transfers share every named
+link. Source power changes only at commit. A plan is feasible only when
+central-case execution meets both the move deadline and the trailing power
+window.
 
 A run is accepted when:
 
@@ -31,4 +32,4 @@ Request events affect context and timing but not dynamic power yet; output
 columns therefore say `modeled_*_power`.
 
 Unsupported context, load, concurrency, topology, or profile cases hard-fail.
-Open measurement work is listed in `assumptions.md`.
+Open measurement work is listed in `DATA_TO_COLLECT.md`.

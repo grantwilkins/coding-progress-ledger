@@ -14,6 +14,9 @@ Plausible wrong implementations:
 - Transfer nonexistent cold KV or defer replay for GPU-resident active KV.
 - Add network and destination KV time even though ingestion is pipelined.
 - Charge measured total concurrent action power once for every session.
+- Admit destination KV copies after rather than before their bytes move.
+- Apply a destination queue globally instead of once per destination instance.
+- Report queue depth or bytes without the newly queued transfer.
 """
 
 import json
@@ -29,7 +32,7 @@ from simulate import (ExecutionScenario, ExecutionSimulator, NetworkLink, Planne
 
 
 def model(tmp_path, switch=1, destination_rate=1e12, shutdown=2, setup=0, tp=2,
-          replay_rate=None, kv_capacity=10_000, kv_action_power=(0, 0)):
+          replay_rate=None, kv_capacity=10_000, kv_action_power=(0, 0), parallel_kv=1):
     source = {"kind": "measured", "reference": "hand", "valid_range": [1, 1000], "relative_error": 0}
     rate = {"1": [[1, 100], [1000, 100]], "2": [[1, 50], [1000, 50]]}
     raw = {
@@ -37,7 +40,7 @@ def model(tmp_path, switch=1, destination_rate=1e12, shutdown=2, setup=0, tp=2,
         "model": "m", "hardware": "h", "precision": "bf16", "tensor_parallel": tp,
         "gpus_per_node": 2, "power_scope": "gpu", "power_window_s": 1,
         "max_ell": 1, "kv_capacity_tokens": kv_capacity, "max_parallel_moves": 2,
-        "max_parallel_replay": 1, "max_parallel_kv": 1,
+        "max_parallel_replay": 1, "max_parallel_kv": parallel_kv,
         "sources": {k: source for k in (
             "power", "service", "capacity", "replay", "kv_transfer", "transitions"
         )},
@@ -125,7 +128,7 @@ def test_deadline_power_is_an_exact_trailing_window_average():
 def test_parallel_transfer_and_power_credit_at_commit(tmp_path):
     sessions = [SimSession(str(i), "source", 10, 25, 0, 40) for i in range(2)]
     moves = tuple(PlannedMove(str(i), "dest", "kv_transfer", i, ("wan",)) for i in range(2))
-    result = execute(scenario(sessions), model(tmp_path), moves)
+    result = execute(scenario(sessions), model(tmp_path, parallel_kv=2), moves)
 
     rows = {row.session_id: row for row in result.sessions}
     assert rows["0"].initial_ready_s == pytest.approx(2)  # 100 B each over one 100 B/s link
@@ -143,7 +146,7 @@ def test_parallel_transfer_and_power_credit_at_commit(tmp_path):
     assert after[-1][1] < before[0][1]
 
 
-def test_parallel_kv_copy_shares_pipelined_destination_capacity(tmp_path):
+def test_destination_kv_queue_blocks_bytes_until_slot_free(tmp_path):
     sessions = tuple(SimSession(str(i), "source", 10, 0, 0, 1) for i in range(2))
     moves = tuple(
         PlannedMove(str(i), "dest", "kv_transfer", i, ("wan",)) for i in range(2)
@@ -151,6 +154,23 @@ def test_parallel_kv_copy_shares_pipelined_destination_capacity(tmp_path):
     result = execute(
         scenario(sessions, links=(NetworkLink("wan", 1000),)),
         model(tmp_path, switch=0, destination_rate=100), moves,
+    )
+
+    assert [(row.start_s, row.end_s) for row in result.network] == [(0, 1), (1, 2)]
+    assert [(row.arrival_s, row.start_s, row.end_s, row.depth_at_arrival,
+             row.bytes_at_arrival) for row in result.queues] == [
+        (0, 0, 1, 0, 0), (0, 1, 2, 1, 100),
+    ]
+
+
+def test_configured_parallel_kv_copy_shares_destination_capacity(tmp_path):
+    sessions = tuple(SimSession(str(i), "source", 10, 0, 0, 1) for i in range(2))
+    moves = tuple(
+        PlannedMove(str(i), "dest", "kv_transfer", i, ("wan",)) for i in range(2)
+    )
+    result = execute(
+        scenario(sessions, links=(NetworkLink("wan", 1000),)),
+        model(tmp_path, switch=0, destination_rate=100, parallel_kv=2), moves,
     )
 
     assert [row.initial_ready_s for row in result.sessions] == pytest.approx([2, 2])
@@ -162,7 +182,7 @@ def test_action_power_is_total_for_concurrent_actions(tmp_path):
         PlannedMove(str(i), "dest", "kv_transfer", i, ("wan",)) for i in range(2)
     )
     result = execute(
-        scenario(sessions), model(tmp_path, kv_action_power=(10, 15)), moves,
+        scenario(sessions), model(tmp_path, kv_action_power=(10, 15), parallel_kv=2), moves,
     )
 
     baseline = result.power[0][2]
@@ -190,7 +210,7 @@ def test_prediction_preserves_results_without_audit_records(tmp_path):
     detailed = execute(topology, profile, moves)
     summary = predict(topology, profile, moves)
 
-    assert summary.events == summary.requests == summary.network == ()
+    assert summary.events == summary.requests == summary.network == summary.queues == ()
     assert summary.sessions == detailed.sessions
     assert summary.power == detailed.power
     assert summary.modeled_source_power_at_deadline_w \
