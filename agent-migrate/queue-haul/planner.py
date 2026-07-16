@@ -191,12 +191,11 @@ def plan(scenario: ExecutionScenario, profile: ModelProfile,
         methods = [METHODS[k] for k in best_method]
     elif solver == "node_drain":
         groups.sort(key=lambda group: best_cost[group].sum() / max(gains[group].sum(), 1e-12))
-        order = [j for group in groups for j in sorted(group, key=lambda j: best_cost[j])]
+        groups = [sorted(group, key=lambda j: best_cost[j]) for group in groups]
         methods = [METHODS[k] for k in best_method]
     selected = []
     if solver == "node_drain":
-        ordered_groups = [[j for j in order if j in group] for group in groups]
-        for group in ordered_groups:
+        for group in groups:
             if power_state.power(True) <= scenario.power_limit_w:
                 break
             for j in group:
