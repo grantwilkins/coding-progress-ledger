@@ -650,6 +650,7 @@ class ExecutionSimulator:
         self._schedule(self.scenario.controller_delay_s, "plan_ready")
         rates = {}
         while (self.heap or self.flows) and self.time <= self.scenario.end_s:
+            before = self.time
             if self.changed_links:
                 rates = self._update_rates(rates)
             finishes = {
@@ -658,9 +659,15 @@ class ExecutionSimulator:
             flow_time = min(finishes.values(), default=np.inf)
             event_time = self.heap[0][0] if self.heap else np.inf
             target = min(flow_time, event_time, self.scenario.end_s)
+            if target < before:
+                raise RuntimeError(f"simulated time moved backwards from {before} to {target}")
             self._advance(target, rates)
+            if self.time != target:
+                raise RuntimeError(f"simulator failed to advance from {before} to {target}")
+            processed = target > before
             if flow_time <= event_time and flow_time <= self.scenario.end_s:
                 done = [i for i, end in finishes.items() if end <= flow_time + 1e-12]
+                processed |= bool(done)
                 for flow_id in done:
                     flow = self.flows.pop(flow_id)
                     self.changed_links.update(flow.path)
@@ -677,7 +684,9 @@ class ExecutionSimulator:
                     self._event("network_done", state.move.session_id, detail=flow.phase)
                     self._endpoint(flow.move_index, flow.phase)
             else:
+                events = 0
                 while self.heap and self.heap[0][0] <= self.time + 1e-12:
+                    events += 1
                     _, _, kind, payload = heapq.heappop(self.heap)
                     if kind == "prepare":
                         self._prepare(*payload)
@@ -702,6 +711,9 @@ class ExecutionSimulator:
                             self._start_available(source)
                     else:
                         raise RuntimeError(f"unknown event {kind!r}")
+                processed |= bool(events)
+            if not processed:
+                raise RuntimeError(f"simulator made no progress at {self.time}")
             self._record_power()
             if target == self.scenario.end_s:
                 break

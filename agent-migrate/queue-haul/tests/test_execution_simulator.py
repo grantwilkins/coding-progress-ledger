@@ -19,8 +19,9 @@ import pytest
 
 import simulate
 from profiles import ModelProfile
-from simulate import (ExecutionScenario, NetworkLink, PlannedMove, PowerNode, ServingInstance,
-                      SimRequest, SimSession, execute, fair_link_rates, step_average)
+from simulate import (ExecutionScenario, ExecutionSimulator, NetworkLink, PlannedMove,
+                      PowerNode, ServingInstance, SimRequest, SimSession, execute,
+                      fair_link_rates, step_average)
 
 
 def model(tmp_path, switch=1, block_s=0, shutdown=2, setup=0, tp=2, replay_rate=None):
@@ -125,6 +126,18 @@ def test_parallel_transfer_and_power_credit_at_commit(tmp_path):
     after = [p for p in result.power if p[0] >= 3]
     assert len({p[1] for p in before}) == 1
     assert after[-1][1] < before[0][1]
+
+
+def test_event_loop_hard_fails_if_time_does_not_advance(tmp_path, monkeypatch):
+    session = SimSession("stuck", "source", 10, 0, 0, 1)
+    simulator = ExecutionSimulator(
+        scenario((session,)), model(tmp_path),
+        (PlannedMove("stuck", "dest", "kv_transfer", 0, ("wan",)),),
+    )
+    monkeypatch.setattr(simulator, "_advance", lambda _target, _rates: None)
+
+    with pytest.raises(RuntimeError, match="failed to advance"):
+        simulator.run()
 
 
 def test_catch_up_and_off_wait_for_last_session(tmp_path):
