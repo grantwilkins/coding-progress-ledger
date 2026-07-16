@@ -3,11 +3,15 @@
 Each session has a source instance, context, sampled requests, durable log, and
 expected prefill and decode rates. A model profile supplies the measured power
 curve, service rates, replay rates, KV block layout, action times, concurrency
-limits, and uncertainty cases.
+limits, resident KV-token capacity, and uncertainty cases. Active sessions are
+placed only when both compute load and resident KV fit; cold sessions consume
+neither until reactivation.
 
 The planner chooses whole sessions and one of three actions: replay, KV
 transfer, or replay on request. Random, load-only, node-aware, and node-drain
 selection are separate policies. Destination placement is a balanced pass.
+Destination placement enforces the same compute and resident-KV limits as the
+source placement.
 Only local source power is constrained; destination power is reported.
 
 The simulator follows background preparation, source quiescing, catch-up,

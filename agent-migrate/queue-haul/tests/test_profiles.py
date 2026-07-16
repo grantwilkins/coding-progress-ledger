@@ -7,6 +7,7 @@ Plausible wrong implementations:
 - Accept a convex or decreasing power curve that violates the controller model.
 - Extrapolate a rate or power curve outside its measured range.
 - Accept measured values without a source and error range.
+- Accept a nonpositive resident KV capacity.
 - Sample workload columns independently and create records absent from the trace.
 - Treat a legacy idle record as active or retain it as a third internal state.
 """
@@ -39,9 +40,11 @@ def profile():
         "schema": "queue-haul-model-profile-v1", "profile_id": "p", "status": "fitted",
         "model": "m", "hardware": "h", "precision": "bf16", "tensor_parallel": 1,
         "gpus_per_node": 8, "power_scope": "gpu", "power_window_s": 5,
-        "max_ell": 1, "max_parallel_moves": 2,
+        "max_ell": 1, "kv_capacity_tokens": 1000, "max_parallel_moves": 2,
         "max_parallel_replay": 1, "max_parallel_kv": 1,
-        "sources": {k: source(k) for k in ("power", "service", "replay", "kv_transfer", "transitions")},
+        "sources": {k: source(k) for k in (
+            "power", "service", "capacity", "replay", "kv_transfer", "transitions"
+        )},
         "cases": {"central": case},
     }
 
@@ -92,6 +95,11 @@ def test_missing_source_and_estimated_bounds_hard_fail(tmp_path):
     del raw["cases"]["central"]["action_power_w"]["replay_on_request"]
     with pytest.raises(ValueError, match="action_power_w fields"):
         ModelProfile.load(write(tmp_path, raw, "action.json"))
+
+    raw = profile()
+    raw["kv_capacity_tokens"] = 0
+    with pytest.raises(ValueError, match="invalid profile"):
+        ModelProfile.load(write(tmp_path, raw, "capacity.json"))
 
 
 def test_workload_sampling_preserves_complete_records(tmp_path):

@@ -13,6 +13,10 @@ usable only over its recorded context, load, and concurrency ranges.
   site paths.
 - `TODO(wake)`: fit first-request timing from complete session traces.
 - `TODO(load-cycle)`: include measured service time in expected request load.
+- `TODO(max-ell)`: validate the 5-second latency admission point against held-out
+  multi-session SLO runs; measured window sensitivity spans 0.439 to 0.623.
+- `TODO(prefix-sharing)`: derive exact shared-prefix blocks from tokenized traces;
+  current capacity sizing conservatively counts every active context in full.
 - `TODO(request-power)`: determine whether sampled requests require dynamic
   power updates.
 - `TODO(transition-power)`: replace sleep and shutdown steps with measured

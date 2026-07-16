@@ -31,6 +31,11 @@ replay or KV transfer. Cold sessions have no retained KV, consume no serving
 load, and use replay on request. The planner and simulator reject mismatched
 methods. Legacy `idle` inputs are loaded as cold.
 
+Serving instances are sized by both measured compute load (`max_ell`) and
+engine-reported resident KV-token capacity. Active sessions count against both;
+cold sessions count against neither. The GPT-OSS-20B A100 profile uses the
+smaller source/sink vLLM capacity of 1,214,544 tokens per TP=1 instance.
+
 The earlier additive model is frozen in `_archive/queue-haul-additive-v0`.
 
 `outputs/simulator_validation.{csv,png,pdf}` compares a two-session simulation

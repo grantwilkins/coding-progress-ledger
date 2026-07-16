@@ -10,13 +10,14 @@
   "power_scope": "gpu",
   "power_window_s": 5.0,
   "max_ell": 0.531357714017,
+  "kv_capacity_tokens": 1214544,
   "max_parallel_moves": 1,
   "max_parallel_replay": 1,
   "max_parallel_kv": 1,
   "sources": {
     "power": {
       "kind": "measured",
-      "reference": "outputs/stage1_gpt_oss_20b_a100_tp1_power_curve.csv",
+      "reference": "outputs/stage1_gpt_oss_20b_a100_tp1_constants.csv and outputs/stage1_gpt_oss_20b_a100_tp1_window_sensitivity_summary.csv",
       "valid_range": [0.0, 0.531357714017],
       "relative_error": 0.05
     },
@@ -25,6 +26,12 @@
       "reference": "outputs/stage1_gpt_oss_20b_a100_tp1_eager_quick2_service_scale.csv",
       "valid_range": [256, 31562],
       "relative_error": 0.25
+    },
+    "capacity": {
+      "kind": "measured",
+      "reference": "outputs/migration_validation_20260715_005021/smoke2 source.log and sink.log vLLM GPU KV cache size",
+      "valid_range": [0, 1214544],
+      "relative_error": 0.0
     },
     "replay": {
       "kind": "measured",

@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import argparse
 import csv
-import heapq
 import math
 from collections import deque
 from collections.abc import Iterable, Iterator
@@ -20,7 +19,7 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
 
-from planner import PlanResult, SOLVERS, plan
+from planner import InstanceCapacity, PlanResult, SOLVERS, plan
 from profiles import ModelProfile, WorkloadProfile
 from simulate import (ExecutionResult, ExecutionScenario, NetworkLink, PowerNode, ServingInstance,
                       SimRequest, SimSession, execute)
@@ -105,16 +104,15 @@ def build_scenario(workload: WorkloadProfile, profile: ModelProfile, sessions: i
     ])
     if np.any(ell > profile.max_ell):
         raise ValueError("a sampled session exceeds the calibrated load range")
-    assignment, loads = np.empty(sessions, int), []
-    heap = []
-    for j in np.argsort(-ell, kind="stable"):
-        if heap and heap[0][0] + ell[j] <= profile.max_ell:
-            load, gpu = heapq.heappop(heap)
-        else:
-            gpu, load = len(loads), 0.0
-            loads.append(0.0)
-        assignment[j], loads[gpu] = gpu, load + ell[j]
-        heapq.heappush(heap, (loads[gpu], gpu))
+    # TODO(prefix-sharing): count identical shared KV blocks once when traces expose them.
+    resident = np.array([r.context_tokens if r.state == "active" else 0 for r in records])
+    assignment, capacity = np.empty(sessions, int), InstanceCapacity(
+        [], [], profile.max_ell, profile.kv_capacity_tokens
+    )
+    for j in np.argsort(-np.maximum(ell / profile.max_ell,
+                                    resident / profile.kv_capacity_tokens), kind="stable"):
+        assignment[j] = capacity.place(ell[j], int(resident[j]), grow=True)
+    loads = capacity.loads
     gpu_count = len(loads)
     node_count = math.ceil(gpu_count / profile.gpus_per_node)
     nodes = tuple(
@@ -230,6 +228,15 @@ def excess_energy(power, start_s: float, end_s: float, limit_w: float) -> float:
 
 def _summary(run: ExperimentRun) -> dict:
     scenario, result = run.scenario, run.result
+    nodes = {node.node_id: node for node in scenario.nodes}
+    source_instances = {
+        instance.instance_id for instance in scenario.instances
+        if all(nodes[node].local for node in instance.gpu_nodes)
+    }
+    resident = {instance: 0 for instance in source_instances}
+    for session in scenario.sessions:
+        if session.state == "active":
+            resident[session.source_instance] += session.context_tokens
     completed = [row for row in result.sessions if row.committed_s is not None]
     resumed = all(row.committed_s is not None and row.committed_s <= scenario.deadline_s
                   for row in result.sessions)
@@ -253,8 +260,11 @@ def _summary(run: ExperimentRun) -> dict:
         "profile_case": run.case_id, "workload_profile": run.workload_id,
         "solver": run.plan.solver, "seed": run.plan.seed,
         "sessions": len(scenario.sessions),
+        "source_instances": len(source_instances),
         "source_nodes": sum(node.local for node in scenario.nodes),
         "destination_nodes": sum(not node.local for node in scenario.nodes),
+        "kv_capacity_tokens_per_instance": run.plan.kv_capacity_tokens,
+        "max_source_resident_kv_tokens": max(resident.values(), default=0),
         "power_limit_w": scenario.power_limit_w, "deadline_s": scenario.deadline_s,
         "end_s": scenario.end_s, "controller_delay_s": scenario.controller_delay_s,
         "solve_s": run.plan.solve_s,

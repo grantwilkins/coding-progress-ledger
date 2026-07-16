@@ -10,9 +10,12 @@ Plausible wrong implementations:
 - Reorder sessions while reconstructing an already ordered node-drain group.
 - Place every selected session on the first destination.
 - Defer replay for an active session or transfer nonexistent KV for a cold session.
+- Admit active KV that fits source instances but overfills a destination.
 """
 
 from dataclasses import replace
+
+import pytest
 
 from planner import METHODS, plan
 from simulate import (ExecutionScenario, NetworkLink, PowerNode, ServingInstance, SimRequest,
@@ -69,6 +72,14 @@ def test_planner_only_transfers_active_kv_and_defers_cold_replay(tmp_path):
     assert {move.session_id: move.method for move in result.moves} == {
         "a": "kv_transfer", "b": "replay_on_request",
     }
+
+
+def test_planner_rejects_destination_kv_overcommit(tmp_path):
+    topology = replace(problem(limit=0), instances=problem().instances[:-1])
+    paths = {(source, "t0"): ("wan",) for source in ("s0", "s1")}
+
+    with pytest.raises(ValueError, match="destination compute or KV capacity"):
+        plan(topology, model(tmp_path, tp=1, kv_capacity=15), paths, "load_only")
 
 
 def test_node_drain_counts_sleep_only_after_the_whole_node_is_selected(tmp_path):

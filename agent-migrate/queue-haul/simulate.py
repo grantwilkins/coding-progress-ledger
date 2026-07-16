@@ -359,6 +359,22 @@ class ExecutionSimulator:
                     and (not move.external_path
                          or any(link not in self.links for link in move.external_path)):
                 raise ValueError("external replay requires an external-to-destination path")
+        resident = {instance: 0 for instance in self.instances}
+        active = set()
+        for session in self.sessions.values():
+            if session.state == "active":
+                resident[session.source_instance] += session.context_tokens
+                active.add(session.session_id)
+        if any(tokens > self.profile.kv_capacity_tokens for tokens in resident.values()):
+            raise ValueError("serving instance exceeds resident KV capacity")
+        self.resident_tokens, self.resident_sessions = resident.copy(), active
+        for move in self.moves:
+            session = self.sessions[move.session_id]
+            if session.state == "active":
+                resident[session.source_instance] -= session.context_tokens
+                resident[move.destination_instance] += session.context_tokens
+        if any(tokens > self.profile.kv_capacity_tokens for tokens in resident.values()):
+            raise ValueError("serving instance exceeds resident KV capacity")
 
     def _schedule(self, when: float, kind: str, payload=None):
         self.sequence += 1
@@ -503,6 +519,10 @@ class ExecutionSimulator:
         if state.move.method == "replay" or phase == "wake":
             self._event("replay_done", session_id, detail=state.move.destination_instance)
         if phase == "wake":
+            destination = state.move.destination_instance
+            self.resident_tokens[destination] += self.context[session_id]
+            self.resident_sessions.add(session_id)
+            self._check_resident(destination)
             state.wake_ready = self.time
             self.deferred.remove(session_id)
             self.waking.remove(session_id)
@@ -542,6 +562,11 @@ class ExecutionSimulator:
     def _commit(self, index: int):
         state, session_id = self.states[index], self.states[index].move.session_id
         state.committed = self.time
+        source = self.sessions[session_id].source_instance
+        if session_id in self.resident_sessions:
+            self.resident_tokens[source] -= self.context[session_id]
+            self.resident_tokens[state.move.destination_instance] += self.context[session_id]
+            self._check_resident(state.move.destination_instance)
         self.power_model.move(session_id, state.move.destination_instance)
         self.quiescing.discard(session_id)
         self.paused.discard(session_id)
@@ -560,7 +585,6 @@ class ExecutionSimulator:
         if session_id in self.pending_requests:
             request_index, arrival = self.pending_requests.pop(session_id)
             self._schedule(self.time, "request_start", (session_id, request_index, arrival))
-        source = self.sessions[session_id].source_instance
         self.running[source] -= 1
         self._start_available(source)
         for node_id in self.instances[source].gpu_nodes:
@@ -620,7 +644,12 @@ class ExecutionSimulator:
 
     def _request_done(self, session_id: str, request_index: int):
         request = self.sessions[session_id].requests[request_index]
-        self.context[session_id] += request.prompt_tokens + request.output_tokens
+        added = request.prompt_tokens + request.output_tokens
+        self.context[session_id] += added
+        if session_id in self.resident_sessions:
+            instance = self.active_request_instance[session_id]
+            self.resident_tokens[instance] += added
+            self._check_resident(instance)
         self.active_request_end[session_id] = self.time
         instance = self.active_request_instance.pop(session_id)
         self.serving_active.remove(instance)
@@ -632,6 +661,10 @@ class ExecutionSimulator:
         waiting = self.serving_waiting.get(instance, deque())
         while waiting and instance not in self.serving_active:
             self._request_start(*waiting.popleft())
+
+    def _check_resident(self, instance: str):
+        if self.resident_tokens[instance] > self.profile.kv_capacity_tokens:
+            raise RuntimeError(f"serving instance {instance!r} exceeded resident KV capacity")
 
     def _advance(self, target: float, rates: dict[int, float]):
         elapsed = target - self.time

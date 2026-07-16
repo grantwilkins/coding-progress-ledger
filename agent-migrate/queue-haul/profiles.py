@@ -12,7 +12,7 @@ import numpy as np
 
 PROFILE_SCHEMA = "queue-haul-model-profile-v1"
 WORKLOAD_SCHEMA = "queue-haul-workload-profile-v1"
-SOURCE_SECTIONS = ("power", "service", "replay", "kv_transfer", "transitions")
+SOURCE_SECTIONS = ("power", "service", "capacity", "replay", "kv_transfer", "transitions")
 ACTION_POWER = {"replay", "kv_transfer", "replay_on_request", "catch_up", "sleep", "off"}
 WORKLOAD_STATES = {"active", "cold"}
 
@@ -168,6 +168,7 @@ class ModelProfile:
     power_scope: str
     power_window_s: float
     max_ell: float
+    kv_capacity_tokens: int
     max_parallel_moves: int
     max_parallel_replay: int
     max_parallel_kv: int
@@ -191,7 +192,8 @@ class ModelProfile:
             raw["profile_id"], raw["status"], raw["model"], raw["hardware"],
             raw["precision"], int(raw["tensor_parallel"]), int(raw["gpus_per_node"]),
             raw["power_scope"], float(raw["power_window_s"]), float(raw["max_ell"]),
-            int(raw["max_parallel_moves"]), int(raw["max_parallel_replay"]),
+            int(raw["kv_capacity_tokens"]), int(raw["max_parallel_moves"]),
+            int(raw["max_parallel_replay"]),
             int(raw["max_parallel_kv"]), sources, cases,
         )
         if value.status not in {"fitted", "validated", "estimated"}:
@@ -199,7 +201,8 @@ class ModelProfile:
         if value.power_scope not in {"gpu", "server"}:
             raise ValueError(f"unknown power scope {value.power_scope!r}")
         if not value.profile_id or value.tensor_parallel < 1 or value.gpus_per_node < 1 \
-                or value.power_window_s <= 0 or value.max_ell <= 0 or value.max_parallel_moves < 1:
+                or min(value.power_window_s, value.max_ell, value.kv_capacity_tokens,
+                       value.max_parallel_moves) <= 0:
             raise ValueError("invalid profile identity or limits")
         if min(value.max_parallel_replay, value.max_parallel_kv) < 1:
             raise ValueError("destination concurrency limits must be positive")

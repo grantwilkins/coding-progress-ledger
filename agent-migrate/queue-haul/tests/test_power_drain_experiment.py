@@ -10,6 +10,7 @@ Plausible wrong implementations:
 - Test the last power sample instead of integrating the deadline window.
 - Emit only a summary and make timing or network claims impossible to audit.
 - Drop active/cold GPU residency while constructing simulator sessions.
+- Size instances from compute while silently exceeding measured resident KV capacity.
 """
 
 from pathlib import Path
@@ -63,6 +64,23 @@ def test_scenario_preserves_cold_sessions_without_gpu_load():
     )
 
 
+def test_scenario_packing_enforces_compute_and_resident_kv_capacity():
+    model = ModelProfile.load(experiment.DEFAULT_MODEL)
+    workload = WorkloadProfile.load(experiment.DEFAULT_WORKLOADS[0])
+    record = workload.records[0]
+    profile = replace(model, kv_capacity_tokens=2 * record.context_tokens)
+    active, _ = experiment.build_scenario(
+        replace(workload, records=(record,)), profile, 3, 0, 0, 5, 5
+    )
+    cold, _ = experiment.build_scenario(
+        replace(workload, records=(replace(record, state="cold"),)),
+        profile, 3, 0, 0, 5, 5,
+    )
+
+    assert len(active.instances) // 2 == 2
+    assert len(cold.instances) // 2 == 1
+
+
 def test_profile_range_is_checked_before_a_long_run():
     model = ModelProfile.load(experiment.DEFAULT_MODEL)
     workload = WorkloadProfile.load(experiment.DEFAULT_WORKLOADS[2])
@@ -109,6 +127,8 @@ def test_small_run_reuses_plans_and_writes_raw_tables_and_plots(tmp_path: Path):
 
     summary = experiment._summary(runs[0])
     assert summary["initial_source_power_w"] == runs[0].plan.initial_source_power_w
+    assert summary["kv_capacity_tokens_per_instance"] == runs[0].plan.kv_capacity_tokens
+    assert summary["max_source_resident_kv_tokens"] <= summary["kv_capacity_tokens_per_instance"]
     assert summary["requested_source_drop_w"] == pytest.approx(
         runs[0].plan.initial_source_power_w - runs[0].scenario.power_limit_w
     )

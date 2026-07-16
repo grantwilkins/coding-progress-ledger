@@ -15,6 +15,7 @@ Plausible wrong implementations:
 """
 
 import json
+from dataclasses import replace
 
 import pytest
 
@@ -25,16 +26,19 @@ from simulate import (ExecutionScenario, ExecutionSimulator, NetworkLink, Planne
                       fair_link_rates, predict, step_average)
 
 
-def model(tmp_path, switch=1, block_s=0, shutdown=2, setup=0, tp=2, replay_rate=None):
+def model(tmp_path, switch=1, block_s=0, shutdown=2, setup=0, tp=2, replay_rate=None,
+          kv_capacity=10_000):
     source = {"kind": "measured", "reference": "hand", "valid_range": [1, 1000], "relative_error": 0}
     rate = {"1": [[1, 100], [1000, 100]], "2": [[1, 50], [1000, 50]]}
     raw = {
         "schema": "queue-haul-model-profile-v1", "profile_id": "hand", "status": "fitted",
         "model": "m", "hardware": "h", "precision": "bf16", "tensor_parallel": tp,
         "gpus_per_node": 2, "power_scope": "gpu", "power_window_s": 1,
-        "max_ell": 1, "max_parallel_moves": 2,
+        "max_ell": 1, "kv_capacity_tokens": kv_capacity, "max_parallel_moves": 2,
         "max_parallel_replay": 1, "max_parallel_kv": 1,
-        "sources": {k: source for k in ("power", "service", "replay", "kv_transfer", "transitions")},
+        "sources": {k: source for k in (
+            "power", "service", "capacity", "replay", "kv_transfer", "transitions"
+        )},
         "cases": {"central": {
             "F": 100, "G": 100, "power_curve": [[0, 10], [0.5, 30], [1, 40]],
             "prefill_tps": rate, "decode_tps": rate, "replay_tps": replay_rate or rate,
@@ -420,6 +424,33 @@ def test_invalid_move_and_tensor_parallel_mismatch_hard_fail(tmp_path):
         )
     with pytest.raises(ValueError, match="tensor parallelism"):
         execute(scenario((session,), tp=1), model(tmp_path), ())
+
+
+def test_execution_rejects_source_or_destination_kv_overcommit(tmp_path):
+    sessions = (SimSession("a", "source-a", 6, 0, 0, 1),
+                SimSession("b", "source-b", 6, 0, 0, 1))
+    topology = ExecutionScenario(
+        20, 30, 0, "awake", 0,
+        (PowerNode("src", 2, True), PowerNode("dst", 1, False)),
+        (ServingInstance("source-a", ("src",)), ServingInstance("source-b", ("src",)),
+         ServingInstance("dest", ("dst",))),
+        sessions, (NetworkLink("wan", 100),),
+    )
+    moves = tuple(PlannedMove(s.session_id, "dest", "kv_transfer", i, ("wan",))
+                  for i, s in enumerate(sessions))
+
+    with pytest.raises(ValueError, match="resident KV capacity"):
+        execute(topology, model(tmp_path, tp=1, kv_capacity=10), moves)
+
+    cold = tuple(SimSession(s.session_id, s.source_instance, 60, 0, 0, 1, state="cold")
+                 for s in sessions)
+    execute(replace(topology, sessions=cold), model(tmp_path, tp=1, kv_capacity=10), ())
+
+    growing = SimSession(
+        "growing", "source", 10, 0, 0, 1, requests=(SimRequest(0, 6, 0),)
+    )
+    with pytest.raises(RuntimeError, match="exceeded resident KV capacity"):
+        execute(scenario((growing,)), model(tmp_path, kv_capacity=15), ())
 
 
 @pytest.mark.parametrize(("state", "method"), (

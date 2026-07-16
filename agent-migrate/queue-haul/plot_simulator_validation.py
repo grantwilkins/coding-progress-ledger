@@ -61,6 +61,7 @@ def _profile() -> ModelProfile:
         "gpu",
         1,
         1,
+        1000,
         2,
         2,
         2,
