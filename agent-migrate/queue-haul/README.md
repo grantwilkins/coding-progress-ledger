@@ -29,7 +29,7 @@ skip audit records; experiment executions retain complete evidence tables.
 Sessions have two states. Active sessions have GPU-resident KV and use eager
 replay or KV transfer. Cold sessions have no retained KV, consume no serving
 load, and use replay on request. The planner and simulator reject mismatched
-methods.
+methods. Legacy `idle` inputs are loaded as cold.
 
 The earlier additive model is frozen in `_archive/queue-haul-additive-v0`.
 

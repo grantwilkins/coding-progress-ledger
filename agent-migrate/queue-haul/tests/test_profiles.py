@@ -8,7 +8,7 @@ Plausible wrong implementations:
 - Extrapolate a rate or power curve outside its measured range.
 - Accept measured values without a source and error range.
 - Sample workload columns independently and create records absent from the trace.
-- Accept an idle state whose GPU residency is undefined.
+- Treat a legacy idle record as active or retain it as a third internal state.
 """
 
 import json
@@ -113,8 +113,7 @@ def test_workload_sampling_preserves_complete_records(tmp_path):
     assert {(r.context_tokens, r.request_gap_s, r.log_external) for r in a} <= observed
 
     raw["records"][0]["state"] = "idle"
-    with pytest.raises(ValueError, match="invalid workload record"):
-        WorkloadProfile.load(write(tmp_path, raw, "idle.json"))
+    assert WorkloadProfile.load(write(tmp_path, raw, "idle.json")).records[0] == w.records[0]
 
 
 def test_checked_in_profiles_load_with_uncertainty_and_provenance():

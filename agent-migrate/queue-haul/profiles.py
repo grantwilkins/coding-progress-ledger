@@ -230,7 +230,8 @@ class WorkloadRecord:
     @classmethod
     def parse(cls, raw: dict) -> "WorkloadRecord":
         value = cls(
-            raw["job_type"], raw["state"], int(raw["context_tokens"]),
+            raw["job_type"], "cold" if raw["state"] == "idle" else raw["state"],
+            int(raw["context_tokens"]),
             int(raw["prompt_tokens"]), int(raw["output_tokens"]), float(raw["request_gap_s"]),
             float(raw["tool_delay_s"]), int(raw["log_bytes"]), bool(raw["log_external"]),
         )
