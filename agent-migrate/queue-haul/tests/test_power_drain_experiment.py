@@ -6,6 +6,7 @@ once centrally, and preserves raw execution evidence for every uncertainty case.
 Plausible wrong implementations:
 - Resample independent workload fields and create impossible sessions.
 - Re-plan the faster/slower cases and hide plan sensitivity.
+- Reorder or resample scenarios when worker processes execute them.
 - Test the last power sample instead of integrating the deadline window.
 - Emit only a summary and make timing or network claims impossible to audit.
 """
@@ -106,3 +107,23 @@ def test_small_run_reuses_plans_and_writes_raw_tables_and_plots(tmp_path: Path):
                  "network_time.png", "request_wait.png", "expected_vs_modeled_power.png",
                  "policy_outcomes.png"):
         assert (tmp_path / name).exists()
+
+
+def test_worker_processes_preserve_scenario_order_and_results():
+    args = {
+        "workload_paths": (experiment.DEFAULT_WORKLOADS[2],),
+        "sessions": 6,
+        "power_limits": (500,),
+        "deadlines": (5,),
+        "end_s": 5,
+        "solvers": ("load_only", "node_drain"),
+        "seed": 3,
+    }
+    serial = list(experiment.run(**args))
+    parallel = list(experiment.run(**args, workers=2))
+
+    assert [run.run_id for run in parallel] == [run.run_id for run in serial]
+    for expected, actual in zip(serial, parallel):
+        assert actual.scenario == expected.scenario
+        assert replace(actual.plan, solve_s=0) == replace(expected.plan, solve_s=0)
+        assert actual.result == expected.result

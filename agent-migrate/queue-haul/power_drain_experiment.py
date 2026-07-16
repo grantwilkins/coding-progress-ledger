@@ -6,7 +6,9 @@ import argparse
 import csv
 import heapq
 import math
+from collections import deque
 from collections.abc import Iterable, Iterator
+from concurrent.futures import ProcessPoolExecutor
 from contextlib import ExitStack
 from dataclasses import dataclass
 from itertools import chain
@@ -161,30 +163,55 @@ def build_scenario(workload: WorkloadProfile, profile: ModelProfile, sessions: i
     ), route
 
 
+def _run_group(profile, workload, sessions, seed, power_limit, deadline, end_s, solver,
+               link_bytes_per_s, final_state, controller_delay_s):
+    scenario, routes = build_scenario(
+        workload, profile, sessions, seed, power_limit, deadline, end_s,
+        link_bytes_per_s, final_state, controller_delay_s,
+    )
+    planned = plan(scenario, profile, routes, solver, "central", seed)
+    return tuple(
+        ExperimentRun(
+            f"{workload.profile_id}:{power_limit:g}:{deadline:g}:{solver}:{case_id}:{seed}",
+            workload.profile_id, scenario, planned, case_id,
+            execute(scenario, profile, planned.moves, case_id),
+        ) for case_id in profile.cases
+    )
+
+
 def run(model_path: Path = DEFAULT_MODEL, workload_paths=DEFAULT_WORKLOADS,
         sessions: int = 10_000, seed: int = 0, power_limits=(10_000.0,),
         deadlines=(120.0,), end_s: float = 180.0, solvers=SOLVERS,
         link_bytes_per_s: float = 125_000_000.0,
-        final_state: str = "awake",
-        controller_delay_s: float = 0.0) -> Iterator[ExperimentRun]:
+        final_state: str = "awake", controller_delay_s: float = 0.0,
+        workers: int = 1) -> Iterator[ExperimentRun]:
+    if workers < 1:
+        raise ValueError("workers must be positive")
     profile = ModelProfile.load(model_path)
-    for workload_path in workload_paths:
-        workload = WorkloadProfile.load(workload_path)
-        for power_limit in power_limits:
-            for deadline in deadlines:
-                scenario, routes = build_scenario(
-                    workload, profile, sessions, seed, power_limit, deadline, end_s,
-                    link_bytes_per_s, final_state,
-                    controller_delay_s,
-                )
-                for solver in solvers:
-                    planned = plan(scenario, profile, routes, solver, "central", seed)
-                    for case_id in profile.cases:
-                        result = execute(scenario, profile, planned.moves, case_id)
-                        run_id = f"{workload.profile_id}:{power_limit:g}:{deadline:g}:{solver}:{case_id}:{seed}"
-                        yield ExperimentRun(
-                            run_id, workload.profile_id, scenario, planned, case_id, result
+
+    def tasks():
+        for workload_path in workload_paths:
+            workload = WorkloadProfile.load(workload_path)
+            for power_limit in power_limits:
+                for deadline in deadlines:
+                    for solver in solvers:
+                        yield (
+                            profile, workload, sessions, seed, power_limit, deadline, end_s,
+                            solver, link_bytes_per_s, final_state, controller_delay_s,
                         )
+
+    if workers == 1:
+        for task in tasks():
+            yield from _run_group(*task)
+        return
+    pending = deque()
+    with ProcessPoolExecutor(max_workers=workers) as pool:
+        for task in tasks():
+            pending.append(pool.submit(_run_group, *task))
+            if len(pending) == workers:
+                yield from pending.popleft().result()
+        while pending:
+            yield from pending.popleft().result()
 
 
 def excess_energy(power, start_s: float, end_s: float, limit_w: float) -> float:
@@ -450,13 +477,14 @@ def main() -> None:
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--link-bytes-per-s", type=float, default=125_000_000.0)
     parser.add_argument("--controller-delay", type=float, default=0.0)
+    parser.add_argument("--workers", type=int, default=1)
     parser.add_argument("--final-state", choices=("awake", "sleep", "off"), default="awake")
     parser.add_argument("--out", type=Path, default=Path("queue-haul/outputs/power_drain"))
     args = parser.parse_args()
     runs = run(
         args.model_profile, args.workload_profile or DEFAULT_WORKLOADS, args.sessions, args.seed,
         args.power_limit, args.deadline, args.end, args.solver or SOLVERS,
-        args.link_bytes_per_s, args.final_state, args.controller_delay,
+        args.link_bytes_per_s, args.final_state, args.controller_delay, args.workers,
     )
     count = write(runs, args.out)
     print(f"runs={count} output={args.out}")
