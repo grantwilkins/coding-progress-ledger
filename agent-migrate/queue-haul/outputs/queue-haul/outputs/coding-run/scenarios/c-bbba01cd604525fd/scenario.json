@@ -1,0 +1,39 @@
+{
+  "activity": "none",
+  "bandwidth_mbps": 10000.0,
+  "concurrency": 2,
+  "context_size": 8192,
+  "deadline_s": 300,
+  "kind": "control",
+  "match_id": "bbba01cd604525fd",
+  "method": "replay",
+  "moves": [],
+  "repeat": 2,
+  "scenario_id": "c-bbba01cd604525fd",
+  "sessions": [
+    {
+      "job_class": "coding",
+      "order": 0,
+      "session_id": "claude:eaad8d63-63bf-7139-f930-0ef47fa45253",
+      "turn_index": 0
+    },
+    {
+      "job_class": "coding",
+      "order": 1,
+      "session_id": "claude:1534babd-9b9e-68e0-057e-d9ce7e08adf0",
+      "turn_index": 0
+    },
+    {
+      "job_class": "coding",
+      "order": 2,
+      "session_id": "codex:1229e212-7c9e-fc46-e948-4c87690d9e5e",
+      "turn_index": 2
+    },
+    {
+      "job_class": "coding",
+      "order": 3,
+      "session_id": "claude:d822a508-dc39-797d-a37d-fa6552fdb8bb",
+      "turn_index": 0
+    }
+  ]
+}

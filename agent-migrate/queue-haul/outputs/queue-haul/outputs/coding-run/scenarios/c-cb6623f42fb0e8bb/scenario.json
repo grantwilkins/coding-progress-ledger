@@ -1,0 +1,39 @@
+{
+  "activity": "none",
+  "bandwidth_mbps": 1000.0,
+  "concurrency": 4,
+  "context_size": 2048,
+  "deadline_s": 300,
+  "kind": "control",
+  "match_id": "cb6623f42fb0e8bb",
+  "method": "kv_transfer",
+  "moves": [],
+  "repeat": 2,
+  "scenario_id": "c-cb6623f42fb0e8bb",
+  "sessions": [
+    {
+      "job_class": "coding",
+      "order": 0,
+      "session_id": "claude:92cc24b6-ac8d-5231-bb2d-33b876557766",
+      "turn_index": 0
+    },
+    {
+      "job_class": "coding",
+      "order": 1,
+      "session_id": "claude:e2fd4f89-016f-29f0-48a1-3b2f1991b287",
+      "turn_index": 0
+    },
+    {
+      "job_class": "coding",
+      "order": 2,
+      "session_id": "codex:1229e212-7c9e-fc46-e948-4c87690d9e5e",
+      "turn_index": 0
+    },
+    {
+      "job_class": "coding",
+      "order": 3,
+      "session_id": "claude:eaad8d63-63bf-7139-f930-0ef47fa45253",
+      "turn_index": 0
+    }
+  ]
+}

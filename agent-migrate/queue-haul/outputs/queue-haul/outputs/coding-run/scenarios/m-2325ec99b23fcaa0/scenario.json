@@ -1,0 +1,68 @@
+{
+  "activity": "none",
+  "bandwidth_mbps": 10000.0,
+  "concurrency": 4,
+  "context_size": 8192,
+  "deadline_s": 300,
+  "kind": "migration",
+  "match_id": "2325ec99b23fcaa0",
+  "method": "replay",
+  "moves": [
+    {
+      "job_class": "coding",
+      "method": "replay",
+      "order": 0,
+      "session_id": "claude:d822a508-dc39-797d-a37d-fa6552fdb8bb",
+      "turn_index": 0
+    },
+    {
+      "job_class": "coding",
+      "method": "replay",
+      "order": 1,
+      "session_id": "codex:1229e212-7c9e-fc46-e948-4c87690d9e5e",
+      "turn_index": 2
+    },
+    {
+      "job_class": "coding",
+      "method": "replay",
+      "order": 2,
+      "session_id": "codex:2604c640-6bc9-2d90-5a8b-ae20bc5081fa",
+      "turn_index": 0
+    },
+    {
+      "job_class": "coding",
+      "method": "replay",
+      "order": 3,
+      "session_id": "claude:92cc24b6-ac8d-5231-bb2d-33b876557766",
+      "turn_index": 0
+    }
+  ],
+  "repeat": 1,
+  "scenario_id": "m-2325ec99b23fcaa0",
+  "sessions": [
+    {
+      "job_class": "coding",
+      "order": 0,
+      "session_id": "claude:d822a508-dc39-797d-a37d-fa6552fdb8bb",
+      "turn_index": 0
+    },
+    {
+      "job_class": "coding",
+      "order": 1,
+      "session_id": "codex:1229e212-7c9e-fc46-e948-4c87690d9e5e",
+      "turn_index": 2
+    },
+    {
+      "job_class": "coding",
+      "order": 2,
+      "session_id": "codex:2604c640-6bc9-2d90-5a8b-ae20bc5081fa",
+      "turn_index": 0
+    },
+    {
+      "job_class": "coding",
+      "order": 3,
+      "session_id": "claude:92cc24b6-ac8d-5231-bb2d-33b876557766",
+      "turn_index": 0
+    }
+  ]
+}

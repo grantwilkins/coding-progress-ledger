@@ -1,32 +1,37 @@
-# agent-migrate-agent
+# agent-migrate
 
-Research experiments for LLM state migration, evacuation, and power-shed planning.
+Research code for live LLM session migration and local source-site power control.
 
-The active thread is `queue-haul`: node-aware power shedding for active LLM jobs. The current claim is that modeled source-node power shed must be evaluated through the ramp-then-plateau node curve, not only through additive per-job active-work certificates.
+## Active code
 
-## Layout
+- `queue-haul/`: measured profiles, migration planner, event simulator, GPU
+  profiling controller, tests, and plots.
+- `evacuation/`: staged evacuation and fairness experiments.
+- `kv-transfer-early-experiment/`: early replay and KV-transfer calculations.
 
-- `queue-haul/` - current node-knee power-shed model, tests, findings, and canonical plots.
-- `evacuation/` - staged evacuation and fairness experiments with an EE364B write-up.
-- `kv-transfer-early-experiment/` - early context replay versus KV-transfer calculations and plots.
+The earlier additive Queue-Haul formulation is frozen in
+`../_archive/queue-haul-additive-v0/` and is not imported or tested by active
+code.
 
-`convex-allocation/` has been removed from the active tree.
+## Local validation
 
-## Run
+Run from this directory:
 
 ```bash
-uv sync
 uv run pytest
+uv run python queue-haul/power_drain_experiment.py \\
+  --workload-profile queue-haul/profiles/agentic_tool_loop.json \\
+  --sessions 6 --seed 3 --power-limit 500 --deadline 5 --end 5 \\
+  --solver load_only --out queue-haul/outputs/profile_smoke
 ```
 
-On the A100 cluster node used for the source-sink proof, `uv` is not on PATH;
-load the local runtime and run pytest directly:
+The experiment writes raw event, session, request, network, power, and plan
+CSVs together with summary and diagnostic plots. Unsupported profile ranges
+hard-fail.
 
-```bash
-module load gcc/14.2.0 openblas/0.3.28
-.venv/bin/python -m pytest
-```
+## GPU validation
 
+<<<<<<< HEAD
 ## Queue-Haul Plots
 
 Run from `queue-haul/`:
@@ -246,3 +251,8 @@ It writes `scale_results.csv`, `scale_policy_comparison.png`, and
 `scale_network_sensitivity.png`.
 
 Raw live run directories and scheduler logs are generated and ignored.
+=======
+Follow `queue-haul/handoff.md` before submitting the large profiling plan. The
+LMCache concurrency-2 metadata-read failure remains a blocker. Do not submit
+`stage1c_benchmark.sbatch` until the 16-scenario validation completes.
+>>>>>>> 12f09722 (Archive additive Queue-Haul model)

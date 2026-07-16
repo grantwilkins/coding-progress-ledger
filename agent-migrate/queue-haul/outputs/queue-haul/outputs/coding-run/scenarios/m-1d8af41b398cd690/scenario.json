@@ -1,0 +1,68 @@
+{
+  "activity": "none",
+  "bandwidth_mbps": 250.0,
+  "concurrency": 1,
+  "context_size": 2048,
+  "deadline_s": 300,
+  "kind": "migration",
+  "match_id": "1d8af41b398cd690",
+  "method": "kv_transfer",
+  "moves": [
+    {
+      "job_class": "coding",
+      "method": "kv_transfer",
+      "order": 0,
+      "session_id": "codex:1229e212-7c9e-fc46-e948-4c87690d9e5e",
+      "turn_index": 0
+    },
+    {
+      "job_class": "coding",
+      "method": "kv_transfer",
+      "order": 1,
+      "session_id": "codex:e381cc89-38ef-e67e-79b9-4b800369b4f5",
+      "turn_index": 0
+    },
+    {
+      "job_class": "coding",
+      "method": "kv_transfer",
+      "order": 2,
+      "session_id": "claude:eaad8d63-63bf-7139-f930-0ef47fa45253",
+      "turn_index": 0
+    },
+    {
+      "job_class": "coding",
+      "method": "kv_transfer",
+      "order": 3,
+      "session_id": "claude:92cc24b6-ac8d-5231-bb2d-33b876557766",
+      "turn_index": 0
+    }
+  ],
+  "repeat": 0,
+  "scenario_id": "m-1d8af41b398cd690",
+  "sessions": [
+    {
+      "job_class": "coding",
+      "order": 0,
+      "session_id": "codex:1229e212-7c9e-fc46-e948-4c87690d9e5e",
+      "turn_index": 0
+    },
+    {
+      "job_class": "coding",
+      "order": 1,
+      "session_id": "codex:e381cc89-38ef-e67e-79b9-4b800369b4f5",
+      "turn_index": 0
+    },
+    {
+      "job_class": "coding",
+      "order": 2,
+      "session_id": "claude:eaad8d63-63bf-7139-f930-0ef47fa45253",
+      "turn_index": 0
+    },
+    {
+      "job_class": "coding",
+      "order": 3,
+      "session_id": "claude:92cc24b6-ac8d-5231-bb2d-33b876557766",
+      "turn_index": 0
+    }
+  ]
+}

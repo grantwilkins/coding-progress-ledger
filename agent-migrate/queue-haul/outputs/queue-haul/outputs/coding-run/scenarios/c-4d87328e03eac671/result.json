@@ -1,0 +1,1298 @@
+{
+  "activities": [
+    {
+      "end_ns": 5550034975582435,
+      "overlapped_initial_copy": false,
+      "overlapped_request_wait": false,
+      "session_id": "claude:e2fd4f89-016f-29f0-48a1-3b2f1991b287",
+      "start_ns": 5550032923858340
+    },
+    {
+      "end_ns": 5550034691377051,
+      "overlapped_initial_copy": false,
+      "overlapped_request_wait": false,
+      "session_id": "codex:2604c640-6bc9-2d90-5a8b-ae20bc5081fa",
+      "start_ns": 5550032924262666
+    },
+    {
+      "end_ns": 5550034996761886,
+      "overlapped_initial_copy": false,
+      "overlapped_request_wait": false,
+      "session_id": "claude:92cc24b6-ac8d-5231-bb2d-33b876557766",
+      "start_ns": 5550032924660533
+    },
+    {
+      "end_ns": 5550035577963534,
+      "overlapped_initial_copy": false,
+      "overlapped_request_wait": false,
+      "session_id": "codex:1229e212-7c9e-fc46-e948-4c87690d9e5e",
+      "start_ns": 5550032925835052
+    }
+  ],
+  "continuations": [
+    {
+      "committed_context_hash": "261e83dbe9aa2a95c80c93a3ea67c88a826411143dc778d96786929e5fbe3574",
+      "context_hash": "261e83dbe9aa2a95c80c93a3ea67c88a826411143dc778d96786929e5fbe3574",
+      "end_ns": 5550036243024443,
+      "first_byte_ns": 5550036095474382,
+      "logical_kv_bytes": 0,
+      "logical_kv_chunks": 0,
+      "output_tokens": 29,
+      "processed_tokens": 0,
+      "prompt_tokens": 15757,
+      "request_id": "chatcmpl-0a8fa02a334049d392e1c55c433dd6fd",
+      "route_port": 41545,
+      "session_id": "claude:e2fd4f89-016f-29f0-48a1-3b2f1991b287",
+      "start_ns": 5550035579221852,
+      "status_code": 200,
+      "stream_chunks": [
+        {
+          "byte_count": 243,
+          "monotonic_ns": 5550035690672933
+        },
+        {
+          "byte_count": 234,
+          "monotonic_ns": 5550035690746153
+        },
+        {
+          "byte_count": 234,
+          "monotonic_ns": 5550035711922203
+        },
+        {
+          "byte_count": 234,
+          "monotonic_ns": 5550035736505082
+        },
+        {
+          "byte_count": 236,
+          "monotonic_ns": 5550035758653043
+        },
+        {
+          "byte_count": 239,
+          "monotonic_ns": 5550035781865765
+        },
+        {
+          "byte_count": 237,
+          "monotonic_ns": 5550035805099876
+        },
+        {
+          "byte_count": 240,
+          "monotonic_ns": 5550035827785193
+        },
+        {
+          "byte_count": 239,
+          "monotonic_ns": 5550035850549638
+        },
+        {
+          "byte_count": 239,
+          "monotonic_ns": 5550035873148365
+        },
+        {
+          "byte_count": 238,
+          "monotonic_ns": 5550035893352875
+        },
+        {
+          "byte_count": 242,
+          "monotonic_ns": 5550035912343856
+        },
+        {
+          "byte_count": 240,
+          "monotonic_ns": 5550035930804643
+        },
+        {
+          "byte_count": 239,
+          "monotonic_ns": 5550035948902072
+        },
+        {
+          "byte_count": 235,
+          "monotonic_ns": 5550035967190950
+        },
+        {
+          "byte_count": 234,
+          "monotonic_ns": 5550035985762275
+        },
+        {
+          "byte_count": 234,
+          "monotonic_ns": 5550036004165262
+        },
+        {
+          "byte_count": 234,
+          "monotonic_ns": 5550036022371471
+        },
+        {
+          "byte_count": 234,
+          "monotonic_ns": 5550036040710578
+        },
+        {
+          "byte_count": 234,
+          "monotonic_ns": 5550036059046505
+        },
+        {
+          "byte_count": 224,
+          "monotonic_ns": 5550036077342103
+        },
+        {
+          "byte_count": 225,
+          "monotonic_ns": 5550036095474382
+        },
+        {
+          "byte_count": 225,
+          "monotonic_ns": 5550036113895629
+        },
+        {
+          "byte_count": 225,
+          "monotonic_ns": 5550036132018178
+        },
+        {
+          "byte_count": 226,
+          "monotonic_ns": 5550036150570264
+        },
+        {
+          "byte_count": 225,
+          "monotonic_ns": 5550036168863072
+        },
+        {
+          "byte_count": 226,
+          "monotonic_ns": 5550036187223999
+        },
+        {
+          "byte_count": 225,
+          "monotonic_ns": 5550036205627476
+        },
+        {
+          "byte_count": 227,
+          "monotonic_ns": 5550036223915853
+        },
+        {
+          "byte_count": 255,
+          "monotonic_ns": 5550036242871545
+        },
+        {
+          "byte_count": 229,
+          "monotonic_ns": 5550036242922464
+        },
+        {
+          "byte_count": 13,
+          "monotonic_ns": 5550036242953814
+        }
+      ],
+      "wire_bytes": 0
+    },
+    {
+      "committed_context_hash": "e0d6f9e1f3f6e1be1b8fc32a63df01d699842fad9599d829d754ddab7dbbd098",
+      "context_hash": "e0d6f9e1f3f6e1be1b8fc32a63df01d699842fad9599d829d754ddab7dbbd098",
+      "end_ns": 5550037397504685,
+      "first_byte_ns": 5550037286886497,
+      "logical_kv_bytes": 0,
+      "logical_kv_chunks": 0,
+      "output_tokens": 57,
+      "processed_tokens": 0,
+      "prompt_tokens": 12839,
+      "request_id": "chatcmpl-2a897f3927e843c5a38abb4b2d8111b5",
+      "route_port": 41545,
+      "session_id": "codex:2604c640-6bc9-2d90-5a8b-ae20bc5081fa",
+      "start_ns": 5550036243662127,
+      "status_code": 200,
+      "stream_chunks": [
+        {
+          "byte_count": 243,
+          "monotonic_ns": 5550036337348275
+        },
+        {
+          "byte_count": 234,
+          "monotonic_ns": 5550036337387355
+        },
+        {
+          "byte_count": 234,
+          "monotonic_ns": 5550036359879553
+        },
+        {
+          "byte_count": 234,
+          "monotonic_ns": 5550036382906797
+        },
+        {
+          "byte_count": 237,
+          "monotonic_ns": 5550036407459695
+        },
+        {
+          "byte_count": 239,
+          "monotonic_ns": 5550036429740716
+        },
+        {
+          "byte_count": 240,
+          "monotonic_ns": 5550036454489833
+        },
+        {
+          "byte_count": 238,
+          "monotonic_ns": 5550036477716254
+        },
+        {
+          "byte_count": 244,
+          "monotonic_ns": 5550036497616667
+        },
+        {
+          "byte_count": 237,
+          "monotonic_ns": 5550036516663537
+        },
+        {
+          "byte_count": 240,
+          "monotonic_ns": 5550036535117914
+        },
+        {
+          "byte_count": 239,
+          "monotonic_ns": 5550036553400092
+        },
+        {
+          "byte_count": 239,
+          "monotonic_ns": 5550036571882958
+        },
+        {
+          "byte_count": 238,
+          "monotonic_ns": 5550036590180725
+        },
+        {
+          "byte_count": 242,
+          "monotonic_ns": 5550036608694311
+        },
+        {
+          "byte_count": 240,
+          "monotonic_ns": 5550036627087218
+        },
+        {
+          "byte_count": 239,
+          "monotonic_ns": 5550036645138088
+        },
+        {
+          "byte_count": 235,
+          "monotonic_ns": 5550036663657234
+        },
+        {
+          "byte_count": 237,
+          "monotonic_ns": 5550036681928852
+        },
+        {
+          "byte_count": 236,
+          "monotonic_ns": 5550036700248619
+        },
+        {
+          "byte_count": 236,
+          "monotonic_ns": 5550036718587727
+        },
+        {
+          "byte_count": 237,
+          "monotonic_ns": 5550036736795415
+        },
+        {
+          "byte_count": 235,
+          "monotonic_ns": 5550036755343710
+        },
+        {
+          "byte_count": 235,
+          "monotonic_ns": 5550036773755517
+        },
+        {
+          "byte_count": 235,
+          "monotonic_ns": 5550036792092825
+        },
+        {
+          "byte_count": 238,
+          "monotonic_ns": 5550036810446782
+        },
+        {
+          "byte_count": 241,
+          "monotonic_ns": 5550036828796159
+        },
+        {
+          "byte_count": 242,
+          "monotonic_ns": 5550036847203816
+        },
+        {
+          "byte_count": 239,
+          "monotonic_ns": 5550036865507493
+        },
+        {
+          "byte_count": 237,
+          "monotonic_ns": 5550036883540954
+        },
+        {
+          "byte_count": 242,
+          "monotonic_ns": 5550036902126839
+        },
+        {
+          "byte_count": 239,
+          "monotonic_ns": 5550036920344357
+        },
+        {
+          "byte_count": 239,
+          "monotonic_ns": 5550036938852953
+        },
+        {
+          "byte_count": 237,
+          "monotonic_ns": 5550036957160631
+        },
+        {
+          "byte_count": 240,
+          "monotonic_ns": 5550036975403609
+        },
+        {
+          "byte_count": 240,
+          "monotonic_ns": 5550036993793786
+        },
+        {
+          "byte_count": 235,
+          "monotonic_ns": 5550037012203312
+        },
+        {
+          "byte_count": 237,
+          "monotonic_ns": 5550037030408361
+        },
+        {
+          "byte_count": 237,
+          "monotonic_ns": 5550037048745078
+        },
+        {
+          "byte_count": 239,
+          "monotonic_ns": 5550037066933877
+        },
+        {
+          "byte_count": 240,
+          "monotonic_ns": 5550037085482763
+        },
+        {
+          "byte_count": 239,
+          "monotonic_ns": 5550037103699361
+        },
+        {
+          "byte_count": 239,
+          "monotonic_ns": 5550037122110228
+        },
+        {
+          "byte_count": 239,
+          "monotonic_ns": 5550037140438605
+        },
+        {
+          "byte_count": 235,
+          "monotonic_ns": 5550037158585974
+        },
+        {
+          "byte_count": 234,
+          "monotonic_ns": 5550037177043901
+        },
+        {
+          "byte_count": 234,
+          "monotonic_ns": 5550037195399378
+        },
+        {
+          "byte_count": 234,
+          "monotonic_ns": 5550037213585337
+        },
+        {
+          "byte_count": 234,
+          "monotonic_ns": 5550037231952964
+        },
+        {
+          "byte_count": 234,
+          "monotonic_ns": 5550037250087373
+        },
+        {
+          "byte_count": 224,
+          "monotonic_ns": 5550037268698168
+        },
+        {
+          "byte_count": 227,
+          "monotonic_ns": 5550037286886497
+        },
+        {
+          "byte_count": 226,
+          "monotonic_ns": 5550037305168624
+        },
+        {
+          "byte_count": 226,
+          "monotonic_ns": 5550037323551841
+        },
+        {
+          "byte_count": 227,
+          "monotonic_ns": 5550037341707290
+        },
+        {
+          "byte_count": 225,
+          "monotonic_ns": 5550037360297395
+        },
+        {
+          "byte_count": 225,
+          "monotonic_ns": 5550037378606983
+        },
+        {
+          "byte_count": 255,
+          "monotonic_ns": 5550037397402746
+        },
+        {
+          "byte_count": 229,
+          "monotonic_ns": 5550037397432426
+        },
+        {
+          "byte_count": 13,
+          "monotonic_ns": 5550037397452126
+        }
+      ],
+      "wire_bytes": 0
+    },
+    {
+      "committed_context_hash": "5b32418e628cf33ce1d75555a5d6706e9c7042c61a6e44b7f3248860a92da81a",
+      "context_hash": "5b32418e628cf33ce1d75555a5d6706e9c7042c61a6e44b7f3248860a92da81a",
+      "end_ns": 5550038863532944,
+      "first_byte_ns": 5550038713973412,
+      "logical_kv_bytes": 0,
+      "logical_kv_chunks": 0,
+      "output_tokens": 72,
+      "processed_tokens": 0,
+      "prompt_tokens": 15915,
+      "request_id": "chatcmpl-52737053cf754a5ab3b17c194a2ff314",
+      "route_port": 41545,
+      "session_id": "claude:92cc24b6-ac8d-5231-bb2d-33b876557766",
+      "start_ns": 5550037398348447,
+      "status_code": 200,
+      "stream_chunks": [
+        {
+          "byte_count": 243,
+          "monotonic_ns": 5550037510878338
+        },
+        {
+          "byte_count": 234,
+          "monotonic_ns": 5550037510942187
+        },
+        {
+          "byte_count": 234,
+          "monotonic_ns": 5550037532913980
+        },
+        {
+          "byte_count": 234,
+          "monotonic_ns": 5550037556271961
+        },
+        {
+          "byte_count": 237,
+          "monotonic_ns": 5550037579466602
+        },
+        {
+          "byte_count": 239,
+          "monotonic_ns": 5550037602239208
+        },
+        {
+          "byte_count": 240,
+          "monotonic_ns": 5550037625629788
+        },
+        {
+          "byte_count": 238,
+          "monotonic_ns": 5550037649176186
+        },
+        {
+          "byte_count": 244,
+          "monotonic_ns": 5550037673114550
+        },
+        {
+          "byte_count": 237,
+          "monotonic_ns": 5550037695456770
+        },
+        {
+          "byte_count": 240,
+          "monotonic_ns": 5550037715375143
+        },
+        {
+          "byte_count": 239,
+          "monotonic_ns": 5550037734149726
+        },
+        {
+          "byte_count": 239,
+          "monotonic_ns": 5550037752596232
+        },
+        {
+          "byte_count": 238,
+          "monotonic_ns": 5550037771440005
+        },
+        {
+          "byte_count": 242,
+          "monotonic_ns": 5550037789875531
+        },
+        {
+          "byte_count": 240,
+          "monotonic_ns": 5550037808336058
+        },
+        {
+          "byte_count": 239,
+          "monotonic_ns": 5550037826819774
+        },
+        {
+          "byte_count": 235,
+          "monotonic_ns": 5550037845090572
+        },
+        {
+          "byte_count": 235,
+          "monotonic_ns": 5550037863778596
+        },
+        {
+          "byte_count": 236,
+          "monotonic_ns": 5550037882280401
+        },
+        {
+          "byte_count": 235,
+          "monotonic_ns": 5550037900595479
+        },
+        {
+          "byte_count": 235,
+          "monotonic_ns": 5550037919277023
+        },
+        {
+          "byte_count": 237,
+          "monotonic_ns": 5550037937905428
+        },
+        {
+          "byte_count": 235,
+          "monotonic_ns": 5550037956373304
+        },
+        {
+          "byte_count": 235,
+          "monotonic_ns": 5550037974928089
+        },
+        {
+          "byte_count": 236,
+          "monotonic_ns": 5550037993404795
+        },
+        {
+          "byte_count": 235,
+          "monotonic_ns": 5550038011822172
+        },
+        {
+          "byte_count": 238,
+          "monotonic_ns": 5550038030417457
+        },
+        {
+          "byte_count": 246,
+          "monotonic_ns": 5550038048919553
+        },
+        {
+          "byte_count": 239,
+          "monotonic_ns": 5550038067405089
+        },
+        {
+          "byte_count": 237,
+          "monotonic_ns": 5550038085766036
+        },
+        {
+          "byte_count": 244,
+          "monotonic_ns": 5550038103984794
+        },
+        {
+          "byte_count": 239,
+          "monotonic_ns": 5550038122618369
+        },
+        {
+          "byte_count": 235,
+          "monotonic_ns": 5550038141057015
+        },
+        {
+          "byte_count": 240,
+          "monotonic_ns": 5550038159416272
+        },
+        {
+          "byte_count": 239,
+          "monotonic_ns": 5550038177971998
+        },
+        {
+          "byte_count": 239,
+          "monotonic_ns": 5550038196199726
+        },
+        {
+          "byte_count": 242,
+          "monotonic_ns": 5550038214879770
+        },
+        {
+          "byte_count": 240,
+          "monotonic_ns": 5550038233290447
+        },
+        {
+          "byte_count": 239,
+          "monotonic_ns": 5550038251571195
+        },
+        {
+          "byte_count": 235,
+          "monotonic_ns": 5550038270278419
+        },
+        {
+          "byte_count": 235,
+          "monotonic_ns": 5550038288784455
+        },
+        {
+          "byte_count": 236,
+          "monotonic_ns": 5550038307278451
+        },
+        {
+          "byte_count": 235,
+          "monotonic_ns": 5550038325753047
+        },
+        {
+          "byte_count": 235,
+          "monotonic_ns": 5550038344210173
+        },
+        {
+          "byte_count": 237,
+          "monotonic_ns": 5550038362445171
+        },
+        {
+          "byte_count": 235,
+          "monotonic_ns": 5550038380942977
+        },
+        {
+          "byte_count": 235,
+          "monotonic_ns": 5550038399217755
+        },
+        {
+          "byte_count": 236,
+          "monotonic_ns": 5550038417971388
+        },
+        {
+          "byte_count": 237,
+          "monotonic_ns": 5550038436496764
+        },
+        {
+          "byte_count": 237,
+          "monotonic_ns": 5550038454749192
+        },
+        {
+          "byte_count": 237,
+          "monotonic_ns": 5550038473192389
+        },
+        {
+          "byte_count": 241,
+          "monotonic_ns": 5550038491883943
+        },
+        {
+          "byte_count": 241,
+          "monotonic_ns": 5550038510381648
+        },
+        {
+          "byte_count": 242,
+          "monotonic_ns": 5550038528756736
+        },
+        {
+          "byte_count": 239,
+          "monotonic_ns": 5550038547122363
+        },
+        {
+          "byte_count": 239,
+          "monotonic_ns": 5550038565739677
+        },
+        {
+          "byte_count": 235,
+          "monotonic_ns": 5550038584199323
+        },
+        {
+          "byte_count": 234,
+          "monotonic_ns": 5550038602442242
+        },
+        {
+          "byte_count": 234,
+          "monotonic_ns": 5550038621135076
+        },
+        {
+          "byte_count": 234,
+          "monotonic_ns": 5550038639789990
+        },
+        {
+          "byte_count": 234,
+          "monotonic_ns": 5550038658236647
+        },
+        {
+          "byte_count": 234,
+          "monotonic_ns": 5550038677140079
+        },
+        {
+          "byte_count": 224,
+          "monotonic_ns": 5550038695714234
+        },
+        {
+          "byte_count": 225,
+          "monotonic_ns": 5550038713973412
+        },
+        {
+          "byte_count": 226,
+          "monotonic_ns": 5550038732702525
+        },
+        {
+          "byte_count": 225,
+          "monotonic_ns": 5550038751410829
+        },
+        {
+          "byte_count": 225,
+          "monotonic_ns": 5550038769715857
+        },
+        {
+          "byte_count": 227,
+          "monotonic_ns": 5550038788592879
+        },
+        {
+          "byte_count": 225,
+          "monotonic_ns": 5550038807193804
+        },
+        {
+          "byte_count": 225,
+          "monotonic_ns": 5550038825572841
+        },
+        {
+          "byte_count": 226,
+          "monotonic_ns": 5550038844332785
+        },
+        {
+          "byte_count": 255,
+          "monotonic_ns": 5550038863448985
+        },
+        {
+          "byte_count": 229,
+          "monotonic_ns": 5550038863479054
+        },
+        {
+          "byte_count": 13,
+          "monotonic_ns": 5550038863498624
+        }
+      ],
+      "wire_bytes": 0
+    },
+    {
+      "committed_context_hash": "6a0573e466e8dfbeffc4a3f25c2f9a90b8e8485df0e576077aa1497d8feefe16",
+      "context_hash": "6a0573e466e8dfbeffc4a3f25c2f9a90b8e8485df0e576077aa1497d8feefe16",
+      "end_ns": 5550041210882706,
+      "first_byte_ns": 5550041062503943,
+      "logical_kv_bytes": 0,
+      "logical_kv_chunks": 0,
+      "output_tokens": 124,
+      "processed_tokens": 0,
+      "prompt_tokens": 3511,
+      "request_id": "chatcmpl-a92fdbf1bb81407c98c3492a788f35cd",
+      "route_port": 41545,
+      "session_id": "codex:1229e212-7c9e-fc46-e948-4c87690d9e5e",
+      "start_ns": 5550038864276367,
+      "status_code": 200,
+      "stream_chunks": [
+        {
+          "byte_count": 243,
+          "monotonic_ns": 5550038910412653
+        },
+        {
+          "byte_count": 234,
+          "monotonic_ns": 5550038910448152
+        },
+        {
+          "byte_count": 234,
+          "monotonic_ns": 5550038931722602
+        },
+        {
+          "byte_count": 234,
+          "monotonic_ns": 5550038953822284
+        },
+        {
+          "byte_count": 237,
+          "monotonic_ns": 5550038973167302
+        },
+        {
+          "byte_count": 239,
+          "monotonic_ns": 5550038992137503
+        },
+        {
+          "byte_count": 240,
+          "monotonic_ns": 5550039010694578
+        },
+        {
+          "byte_count": 238,
+          "monotonic_ns": 5550039029035836
+        },
+        {
+          "byte_count": 244,
+          "monotonic_ns": 5550039047836169
+        },
+        {
+          "byte_count": 237,
+          "monotonic_ns": 5550039066302875
+        },
+        {
+          "byte_count": 240,
+          "monotonic_ns": 5550039084515614
+        },
+        {
+          "byte_count": 239,
+          "monotonic_ns": 5550039103289487
+        },
+        {
+          "byte_count": 239,
+          "monotonic_ns": 5550039121610924
+        },
+        {
+          "byte_count": 238,
+          "monotonic_ns": 5550039139904842
+        },
+        {
+          "byte_count": 242,
+          "monotonic_ns": 5550039158646196
+        },
+        {
+          "byte_count": 240,
+          "monotonic_ns": 5550039176859664
+        },
+        {
+          "byte_count": 239,
+          "monotonic_ns": 5550039195602718
+        },
+        {
+          "byte_count": 235,
+          "monotonic_ns": 5550039213982525
+        },
+        {
+          "byte_count": 237,
+          "monotonic_ns": 5550039232338682
+        },
+        {
+          "byte_count": 235,
+          "monotonic_ns": 5550039250921367
+        },
+        {
+          "byte_count": 235,
+          "monotonic_ns": 5550039269456882
+        },
+        {
+          "byte_count": 235,
+          "monotonic_ns": 5550039287874599
+        },
+        {
+          "byte_count": 235,
+          "monotonic_ns": 5550039306239686
+        },
+        {
+          "byte_count": 237,
+          "monotonic_ns": 5550039324655673
+        },
+        {
+          "byte_count": 235,
+          "monotonic_ns": 5550039343120419
+        },
+        {
+          "byte_count": 235,
+          "monotonic_ns": 5550039361546956
+        },
+        {
+          "byte_count": 235,
+          "monotonic_ns": 5550039379743114
+        },
+        {
+          "byte_count": 238,
+          "monotonic_ns": 5550039398470878
+        },
+        {
+          "byte_count": 241,
+          "monotonic_ns": 5550039416829735
+        },
+        {
+          "byte_count": 242,
+          "monotonic_ns": 5550039435268831
+        },
+        {
+          "byte_count": 239,
+          "monotonic_ns": 5550039453665558
+        },
+        {
+          "byte_count": 235,
+          "monotonic_ns": 5550039471943366
+        },
+        {
+          "byte_count": 237,
+          "monotonic_ns": 5550039490654780
+        },
+        {
+          "byte_count": 241,
+          "monotonic_ns": 5550039509125776
+        },
+        {
+          "byte_count": 240,
+          "monotonic_ns": 5550039527461124
+        },
+        {
+          "byte_count": 239,
+          "monotonic_ns": 5550039546031899
+        },
+        {
+          "byte_count": 235,
+          "monotonic_ns": 5550039564466425
+        },
+        {
+          "byte_count": 237,
+          "monotonic_ns": 5550039582613004
+        },
+        {
+          "byte_count": 235,
+          "monotonic_ns": 5550039601309078
+        },
+        {
+          "byte_count": 235,
+          "monotonic_ns": 5550039620157831
+        },
+        {
+          "byte_count": 235,
+          "monotonic_ns": 5550039638411179
+        },
+        {
+          "byte_count": 235,
+          "monotonic_ns": 5550039656960624
+        },
+        {
+          "byte_count": 237,
+          "monotonic_ns": 5550039675200563
+        },
+        {
+          "byte_count": 235,
+          "monotonic_ns": 5550039693922677
+        },
+        {
+          "byte_count": 235,
+          "monotonic_ns": 5550039712280514
+        },
+        {
+          "byte_count": 235,
+          "monotonic_ns": 5550039730480432
+        },
+        {
+          "byte_count": 242,
+          "monotonic_ns": 5550039749080077
+        },
+        {
+          "byte_count": 235,
+          "monotonic_ns": 5550039767633403
+        },
+        {
+          "byte_count": 237,
+          "monotonic_ns": 5550039786106629
+        },
+        {
+          "byte_count": 235,
+          "monotonic_ns": 5550039804485876
+        },
+        {
+          "byte_count": 235,
+          "monotonic_ns": 5550039822930112
+        },
+        {
+          "byte_count": 235,
+          "monotonic_ns": 5550039841288559
+        },
+        {
+          "byte_count": 235,
+          "monotonic_ns": 5550039859726056
+        },
+        {
+          "byte_count": 237,
+          "monotonic_ns": 5550039877903094
+        },
+        {
+          "byte_count": 235,
+          "monotonic_ns": 5550039896615138
+        },
+        {
+          "byte_count": 235,
+          "monotonic_ns": 5550039915047235
+        },
+        {
+          "byte_count": 237,
+          "monotonic_ns": 5550039933392442
+        },
+        {
+          "byte_count": 240,
+          "monotonic_ns": 5550039951857918
+        },
+        {
+          "byte_count": 240,
+          "monotonic_ns": 5550039970080317
+        },
+        {
+          "byte_count": 237,
+          "monotonic_ns": 5550039988780871
+        },
+        {
+          "byte_count": 237,
+          "monotonic_ns": 5550040007123528
+        },
+        {
+          "byte_count": 237,
+          "monotonic_ns": 5550040026691654
+        },
+        {
+          "byte_count": 239,
+          "monotonic_ns": 5550040045367298
+        },
+        {
+          "byte_count": 242,
+          "monotonic_ns": 5550040063998853
+        },
+        {
+          "byte_count": 239,
+          "monotonic_ns": 5550040082439249
+        },
+        {
+          "byte_count": 239,
+          "monotonic_ns": 5550040101062364
+        },
+        {
+          "byte_count": 235,
+          "monotonic_ns": 5550040119690788
+        },
+        {
+          "byte_count": 238,
+          "monotonic_ns": 5550040138125385
+        },
+        {
+          "byte_count": 239,
+          "monotonic_ns": 5550040156981287
+        },
+        {
+          "byte_count": 247,
+          "monotonic_ns": 5550040175516513
+        },
+        {
+          "byte_count": 239,
+          "monotonic_ns": 5550040193920190
+        },
+        {
+          "byte_count": 237,
+          "monotonic_ns": 5550040212673263
+        },
+        {
+          "byte_count": 239,
+          "monotonic_ns": 5550040231294458
+        },
+        {
+          "byte_count": 239,
+          "monotonic_ns": 5550040250206650
+        },
+        {
+          "byte_count": 239,
+          "monotonic_ns": 5550040278675232
+        },
+        {
+          "byte_count": 242,
+          "monotonic_ns": 5550040301600336
+        },
+        {
+          "byte_count": 240,
+          "monotonic_ns": 5550040322305521
+        },
+        {
+          "byte_count": 239,
+          "monotonic_ns": 5550040341210053
+        },
+        {
+          "byte_count": 235,
+          "monotonic_ns": 5550040360129345
+        },
+        {
+          "byte_count": 237,
+          "monotonic_ns": 5550040378686240
+        },
+        {
+          "byte_count": 235,
+          "monotonic_ns": 5550040397102397
+        },
+        {
+          "byte_count": 235,
+          "monotonic_ns": 5550040415709472
+        },
+        {
+          "byte_count": 235,
+          "monotonic_ns": 5550040434229927
+        },
+        {
+          "byte_count": 235,
+          "monotonic_ns": 5550040452555465
+        },
+        {
+          "byte_count": 237,
+          "monotonic_ns": 5550040471374318
+        },
+        {
+          "byte_count": 235,
+          "monotonic_ns": 5550040489759304
+        },
+        {
+          "byte_count": 235,
+          "monotonic_ns": 5550040508183571
+        },
+        {
+          "byte_count": 237,
+          "monotonic_ns": 5550040526601828
+        },
+        {
+          "byte_count": 237,
+          "monotonic_ns": 5550040545219132
+        },
+        {
+          "byte_count": 237,
+          "monotonic_ns": 5550040563695738
+        },
+        {
+          "byte_count": 241,
+          "monotonic_ns": 5550040582134495
+        },
+        {
+          "byte_count": 241,
+          "monotonic_ns": 5550040600459692
+        },
+        {
+          "byte_count": 242,
+          "monotonic_ns": 5550040619156256
+        },
+        {
+          "byte_count": 239,
+          "monotonic_ns": 5550040637647842
+        },
+        {
+          "byte_count": 239,
+          "monotonic_ns": 5550040655956390
+        },
+        {
+          "byte_count": 235,
+          "monotonic_ns": 5550040674685444
+        },
+        {
+          "byte_count": 238,
+          "monotonic_ns": 5550040693194529
+        },
+        {
+          "byte_count": 241,
+          "monotonic_ns": 5550040711525607
+        },
+        {
+          "byte_count": 242,
+          "monotonic_ns": 5550040730185951
+        },
+        {
+          "byte_count": 239,
+          "monotonic_ns": 5550040748625717
+        },
+        {
+          "byte_count": 242,
+          "monotonic_ns": 5550040767119073
+        },
+        {
+          "byte_count": 237,
+          "monotonic_ns": 5550040785561820
+        },
+        {
+          "byte_count": 237,
+          "monotonic_ns": 5550040803777238
+        },
+        {
+          "byte_count": 240,
+          "monotonic_ns": 5550040822432783
+        },
+        {
+          "byte_count": 240,
+          "monotonic_ns": 5550040840910779
+        },
+        {
+          "byte_count": 235,
+          "monotonic_ns": 5550040859233016
+        },
+        {
+          "byte_count": 237,
+          "monotonic_ns": 5550040877938380
+        },
+        {
+          "byte_count": 237,
+          "monotonic_ns": 5550040896346987
+        },
+        {
+          "byte_count": 241,
+          "monotonic_ns": 5550040914639485
+        },
+        {
+          "byte_count": 235,
+          "monotonic_ns": 5550040933309939
+        },
+        {
+          "byte_count": 234,
+          "monotonic_ns": 5550040951870604
+        },
+        {
+          "byte_count": 234,
+          "monotonic_ns": 5550040970412180
+        },
+        {
+          "byte_count": 234,
+          "monotonic_ns": 5550040988861066
+        },
+        {
+          "byte_count": 234,
+          "monotonic_ns": 5550041007194103
+        },
+        {
+          "byte_count": 234,
+          "monotonic_ns": 5550041025874837
+        },
+        {
+          "byte_count": 224,
+          "monotonic_ns": 5550041044327444
+        },
+        {
+          "byte_count": 227,
+          "monotonic_ns": 5550041062503943
+        },
+        {
+          "byte_count": 225,
+          "monotonic_ns": 5550041081085698
+        },
+        {
+          "byte_count": 225,
+          "monotonic_ns": 5550041099478455
+        },
+        {
+          "byte_count": 225,
+          "monotonic_ns": 5550041117970360
+        },
+        {
+          "byte_count": 225,
+          "monotonic_ns": 5550041136464306
+        },
+        {
+          "byte_count": 227,
+          "monotonic_ns": 5550041154954932
+        },
+        {
+          "byte_count": 225,
+          "monotonic_ns": 5550041173446758
+        },
+        {
+          "byte_count": 225,
+          "monotonic_ns": 5550041191898325
+        },
+        {
+          "byte_count": 255,
+          "monotonic_ns": 5550041210726797
+        },
+        {
+          "byte_count": 228,
+          "monotonic_ns": 5550041210788707
+        },
+        {
+          "byte_count": 13,
+          "monotonic_ns": 5550041210820866
+        }
+      ],
+      "wire_bytes": 0
+    }
+  ],
+  "deadline_met": true,
+  "deadline_s": 300,
+  "elapsed_s": 19.808971556,
+  "ended_ns": 5550041211851927,
+  "full_drain": false,
+  "migrations": [],
+  "scenario_id": "c-4d87328e03eac671",
+  "schema": "queue-haul-migration-result-v2",
+  "source_sleep_ns": null,
+  "started_ns": 5550021402876481,
+  "status": "complete",
+  "wire_bytes": {}
+}

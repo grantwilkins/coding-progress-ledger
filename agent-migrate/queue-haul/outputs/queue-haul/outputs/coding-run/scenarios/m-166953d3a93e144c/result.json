@@ -1,0 +1,3556 @@
+{
+  "activities": [
+    {
+      "end_ns": 5550772893142646,
+      "overlapped_initial_copy": true,
+      "overlapped_request_wait": false,
+      "session_id": "codex:e381cc89-38ef-e67e-79b9-4b800369b4f5",
+      "start_ns": 5550770384263999
+    },
+    {
+      "end_ns": 5550772869108712,
+      "overlapped_initial_copy": true,
+      "overlapped_request_wait": false,
+      "session_id": "claude:1534babd-9b9e-68e0-057e-d9ce7e08adf0",
+      "start_ns": 5550770386453494
+    },
+    {
+      "end_ns": 5550772653485964,
+      "overlapped_initial_copy": true,
+      "overlapped_request_wait": false,
+      "session_id": "claude:eaad8d63-63bf-7139-f930-0ef47fa45253",
+      "start_ns": 5550770388459240
+    },
+    {
+      "end_ns": 5550772783044033,
+      "overlapped_initial_copy": true,
+      "overlapped_request_wait": false,
+      "session_id": "codex:2604c640-6bc9-2d90-5a8b-ae20bc5081fa",
+      "start_ns": 5550770389368384
+    }
+  ],
+  "continuations": [
+    {
+      "committed_context_hash": "5015b1596c17be3ca3904e047b5f4238d39e659a5dff154b9ba583e9d558063e",
+      "context_hash": "5015b1596c17be3ca3904e047b5f4238d39e659a5dff154b9ba583e9d558063e",
+      "end_ns": 5550862005834119,
+      "first_byte_ns": 5550861853825819,
+      "logical_kv_bytes": 0,
+      "logical_kv_chunks": 0,
+      "output_tokens": 69,
+      "processed_tokens": 0,
+      "prompt_tokens": 11085,
+      "request_id": "chatcmpl-7e2f67dfa5814a00a7c106697ab66511",
+      "route_port": 41845,
+      "session_id": "codex:e381cc89-38ef-e67e-79b9-4b800369b4f5",
+      "start_ns": 5550860656264096,
+      "status_code": 200,
+      "stream_chunks": [
+        {
+          "byte_count": 243,
+          "monotonic_ns": 5550860719130770
+        },
+        {
+          "byte_count": 234,
+          "monotonic_ns": 5550860719202609
+        },
+        {
+          "byte_count": 234,
+          "monotonic_ns": 5550860737979355
+        },
+        {
+          "byte_count": 234,
+          "monotonic_ns": 5550860756727351
+        },
+        {
+          "byte_count": 237,
+          "monotonic_ns": 5550860775316369
+        },
+        {
+          "byte_count": 239,
+          "monotonic_ns": 5550860794034166
+        },
+        {
+          "byte_count": 240,
+          "monotonic_ns": 5550860812834642
+        },
+        {
+          "byte_count": 238,
+          "monotonic_ns": 5550860831529718
+        },
+        {
+          "byte_count": 244,
+          "monotonic_ns": 5550860850252805
+        },
+        {
+          "byte_count": 237,
+          "monotonic_ns": 5550860868668714
+        },
+        {
+          "byte_count": 240,
+          "monotonic_ns": 5550860887632479
+        },
+        {
+          "byte_count": 239,
+          "monotonic_ns": 5550860906746971
+        },
+        {
+          "byte_count": 239,
+          "monotonic_ns": 5550860925585777
+        },
+        {
+          "byte_count": 238,
+          "monotonic_ns": 5550860944431572
+        },
+        {
+          "byte_count": 242,
+          "monotonic_ns": 5550860963449876
+        },
+        {
+          "byte_count": 240,
+          "monotonic_ns": 5550860982480499
+        },
+        {
+          "byte_count": 239,
+          "monotonic_ns": 5550861001305584
+        },
+        {
+          "byte_count": 235,
+          "monotonic_ns": 5550861020081020
+        },
+        {
+          "byte_count": 237,
+          "monotonic_ns": 5550861039253443
+        },
+        {
+          "byte_count": 235,
+          "monotonic_ns": 5550861058095328
+        },
+        {
+          "byte_count": 235,
+          "monotonic_ns": 5550861077095262
+        },
+        {
+          "byte_count": 236,
+          "monotonic_ns": 5550861095785298
+        },
+        {
+          "byte_count": 235,
+          "monotonic_ns": 5550861114957911
+        },
+        {
+          "byte_count": 236,
+          "monotonic_ns": 5550861133887365
+        },
+        {
+          "byte_count": 235,
+          "monotonic_ns": 5550861152840179
+        },
+        {
+          "byte_count": 235,
+          "monotonic_ns": 5550861171762214
+        },
+        {
+          "byte_count": 235,
+          "monotonic_ns": 5550861190680128
+        },
+        {
+          "byte_count": 238,
+          "monotonic_ns": 5550861209501174
+        },
+        {
+          "byte_count": 246,
+          "monotonic_ns": 5550861228224280
+        },
+        {
+          "byte_count": 239,
+          "monotonic_ns": 5550861247361733
+        },
+        {
+          "byte_count": 237,
+          "monotonic_ns": 5550861266333577
+        },
+        {
+          "byte_count": 244,
+          "monotonic_ns": 5550861285289211
+        },
+        {
+          "byte_count": 239,
+          "monotonic_ns": 5550861304214076
+        },
+        {
+          "byte_count": 235,
+          "monotonic_ns": 5550861323157430
+        },
+        {
+          "byte_count": 240,
+          "monotonic_ns": 5550861342166474
+        },
+        {
+          "byte_count": 239,
+          "monotonic_ns": 5550861360892200
+        },
+        {
+          "byte_count": 239,
+          "monotonic_ns": 5550861380117262
+        },
+        {
+          "byte_count": 242,
+          "monotonic_ns": 5550861399041276
+        },
+        {
+          "byte_count": 240,
+          "monotonic_ns": 5550861417924611
+        },
+        {
+          "byte_count": 239,
+          "monotonic_ns": 5550861436547619
+        },
+        {
+          "byte_count": 235,
+          "monotonic_ns": 5550861455566472
+        },
+        {
+          "byte_count": 237,
+          "monotonic_ns": 5550861474282819
+        },
+        {
+          "byte_count": 235,
+          "monotonic_ns": 5550861493066785
+        },
+        {
+          "byte_count": 235,
+          "monotonic_ns": 5550861511992629
+        },
+        {
+          "byte_count": 236,
+          "monotonic_ns": 5550861531151912
+        },
+        {
+          "byte_count": 235,
+          "monotonic_ns": 5550861549864608
+        },
+        {
+          "byte_count": 236,
+          "monotonic_ns": 5550861568567535
+        },
+        {
+          "byte_count": 235,
+          "monotonic_ns": 5550861588250932
+        },
+        {
+          "byte_count": 235,
+          "monotonic_ns": 5550861607904899
+        },
+        {
+          "byte_count": 237,
+          "monotonic_ns": 5550861626907203
+        },
+        {
+          "byte_count": 237,
+          "monotonic_ns": 5550861645836798
+        },
+        {
+          "byte_count": 237,
+          "monotonic_ns": 5550861664818252
+        },
+        {
+          "byte_count": 239,
+          "monotonic_ns": 5550861683766716
+        },
+        {
+          "byte_count": 241,
+          "monotonic_ns": 5550861702720780
+        },
+        {
+          "byte_count": 235,
+          "monotonic_ns": 5550861721472046
+        },
+        {
+          "byte_count": 234,
+          "monotonic_ns": 5550861740702728
+        },
+        {
+          "byte_count": 234,
+          "monotonic_ns": 5550861759681262
+        },
+        {
+          "byte_count": 234,
+          "monotonic_ns": 5550861778665166
+        },
+        {
+          "byte_count": 234,
+          "monotonic_ns": 5550861797418572
+        },
+        {
+          "byte_count": 234,
+          "monotonic_ns": 5550861816342866
+        },
+        {
+          "byte_count": 224,
+          "monotonic_ns": 5550861835299721
+        },
+        {
+          "byte_count": 227,
+          "monotonic_ns": 5550861853825819
+        },
+        {
+          "byte_count": 225,
+          "monotonic_ns": 5550861872566766
+        },
+        {
+          "byte_count": 225,
+          "monotonic_ns": 5550861891843446
+        },
+        {
+          "byte_count": 226,
+          "monotonic_ns": 5550861910658052
+        },
+        {
+          "byte_count": 225,
+          "monotonic_ns": 5550861929560757
+        },
+        {
+          "byte_count": 226,
+          "monotonic_ns": 5550861948577621
+        },
+        {
+          "byte_count": 225,
+          "monotonic_ns": 5550861967567904
+        },
+        {
+          "byte_count": 225,
+          "monotonic_ns": 5550861986356110
+        },
+        {
+          "byte_count": 255,
+          "monotonic_ns": 5550862005725231
+        },
+        {
+          "byte_count": 229,
+          "monotonic_ns": 5550862005773610
+        },
+        {
+          "byte_count": 13,
+          "monotonic_ns": 5550862005802410
+        }
+      ],
+      "wire_bytes": 0
+    },
+    {
+      "committed_context_hash": "39b77bf8094ad8910b40d47c5fe410cdb70c9695510baeb8b834f64c360b5b5e",
+      "context_hash": "39b77bf8094ad8910b40d47c5fe410cdb70c9695510baeb8b834f64c360b5b5e",
+      "end_ns": 5550862929442187,
+      "first_byte_ns": 5550862815144678,
+      "logical_kv_bytes": 0,
+      "logical_kv_chunks": 0,
+      "output_tokens": 46,
+      "processed_tokens": 0,
+      "prompt_tokens": 13690,
+      "request_id": "chatcmpl-fbcc9d9ecf0b4206b73f8aa8c1c1f1d0",
+      "route_port": 41845,
+      "session_id": "claude:1534babd-9b9e-68e0-057e-d9ce7e08adf0",
+      "start_ns": 5550862006855189,
+      "status_code": 200,
+      "stream_chunks": [
+        {
+          "byte_count": 243,
+          "monotonic_ns": 5550862073513236
+        },
+        {
+          "byte_count": 234,
+          "monotonic_ns": 5550862073541926
+        },
+        {
+          "byte_count": 234,
+          "monotonic_ns": 5550862092739088
+        },
+        {
+          "byte_count": 234,
+          "monotonic_ns": 5550862111679992
+        },
+        {
+          "byte_count": 237,
+          "monotonic_ns": 5550862130538537
+        },
+        {
+          "byte_count": 239,
+          "monotonic_ns": 5550862149686860
+        },
+        {
+          "byte_count": 239,
+          "monotonic_ns": 5550862168470525
+        },
+        {
+          "byte_count": 235,
+          "monotonic_ns": 5550862187800006
+        },
+        {
+          "byte_count": 237,
+          "monotonic_ns": 5550862206837169
+        },
+        {
+          "byte_count": 246,
+          "monotonic_ns": 5550862225920642
+        },
+        {
+          "byte_count": 235,
+          "monotonic_ns": 5550862244887076
+        },
+        {
+          "byte_count": 240,
+          "monotonic_ns": 5550862264145728
+        },
+        {
+          "byte_count": 239,
+          "monotonic_ns": 5550862283147572
+        },
+        {
+          "byte_count": 239,
+          "monotonic_ns": 5550862302171325
+        },
+        {
+          "byte_count": 242,
+          "monotonic_ns": 5550862321118319
+        },
+        {
+          "byte_count": 240,
+          "monotonic_ns": 5550862340335881
+        },
+        {
+          "byte_count": 239,
+          "monotonic_ns": 5550862359315135
+        },
+        {
+          "byte_count": 235,
+          "monotonic_ns": 5550862378326739
+        },
+        {
+          "byte_count": 237,
+          "monotonic_ns": 5550862397241483
+        },
+        {
+          "byte_count": 235,
+          "monotonic_ns": 5550862416323536
+        },
+        {
+          "byte_count": 235,
+          "monotonic_ns": 5550862435503298
+        },
+        {
+          "byte_count": 237,
+          "monotonic_ns": 5550862454605891
+        },
+        {
+          "byte_count": 236,
+          "monotonic_ns": 5550862473451236
+        },
+        {
+          "byte_count": 236,
+          "monotonic_ns": 5550862492817497
+        },
+        {
+          "byte_count": 237,
+          "monotonic_ns": 5550862511640122
+        },
+        {
+          "byte_count": 237,
+          "monotonic_ns": 5550862530842774
+        },
+        {
+          "byte_count": 237,
+          "monotonic_ns": 5550862549587210
+        },
+        {
+          "byte_count": 239,
+          "monotonic_ns": 5550862568870851
+        },
+        {
+          "byte_count": 240,
+          "monotonic_ns": 5550862587935044
+        },
+        {
+          "byte_count": 239,
+          "monotonic_ns": 5550862606975738
+        },
+        {
+          "byte_count": 239,
+          "monotonic_ns": 5550862625751884
+        },
+        {
+          "byte_count": 239,
+          "monotonic_ns": 5550862644896486
+        },
+        {
+          "byte_count": 239,
+          "monotonic_ns": 5550862663831140
+        },
+        {
+          "byte_count": 235,
+          "monotonic_ns": 5550862682688816
+        },
+        {
+          "byte_count": 234,
+          "monotonic_ns": 5550862701457802
+        },
+        {
+          "byte_count": 234,
+          "monotonic_ns": 5550862720431166
+        },
+        {
+          "byte_count": 234,
+          "monotonic_ns": 5550862739334560
+        },
+        {
+          "byte_count": 234,
+          "monotonic_ns": 5550862757992058
+        },
+        {
+          "byte_count": 234,
+          "monotonic_ns": 5550862777293559
+        },
+        {
+          "byte_count": 224,
+          "monotonic_ns": 5550862796227473
+        },
+        {
+          "byte_count": 227,
+          "monotonic_ns": 5550862815144678
+        },
+        {
+          "byte_count": 225,
+          "monotonic_ns": 5550862833710566
+        },
+        {
+          "byte_count": 225,
+          "monotonic_ns": 5550862853656830
+        },
+        {
+          "byte_count": 227,
+          "monotonic_ns": 5550862872501305
+        },
+        {
+          "byte_count": 226,
+          "monotonic_ns": 5550862890963785
+        },
+        {
+          "byte_count": 226,
+          "monotonic_ns": 5550862909855109
+        },
+        {
+          "byte_count": 255,
+          "monotonic_ns": 5550862929351348
+        },
+        {
+          "byte_count": 229,
+          "monotonic_ns": 5550862929380378
+        },
+        {
+          "byte_count": 13,
+          "monotonic_ns": 5550862929398518
+        }
+      ],
+      "wire_bytes": 0
+    },
+    {
+      "committed_context_hash": "1944426c2e4081532a7904873b3526573a3de77b93673a8d8d21df9b53a83c70",
+      "context_hash": "1944426c2e4081532a7904873b3526573a3de77b93673a8d8d21df9b53a83c70",
+      "end_ns": 5550865225468315,
+      "first_byte_ns": 5550865073787861,
+      "logical_kv_bytes": 0,
+      "logical_kv_chunks": 0,
+      "output_tokens": 119,
+      "processed_tokens": 0,
+      "prompt_tokens": 14609,
+      "request_id": "chatcmpl-5615fb1d1b3644739fd7770bf8545a1d",
+      "route_port": 41845,
+      "session_id": "claude:eaad8d63-63bf-7139-f930-0ef47fa45253",
+      "start_ns": 5550862930177000,
+      "status_code": 200,
+      "stream_chunks": [
+        {
+          "byte_count": 243,
+          "monotonic_ns": 5550862997895287
+        },
+        {
+          "byte_count": 234,
+          "monotonic_ns": 5550862997956366
+        },
+        {
+          "byte_count": 234,
+          "monotonic_ns": 5550863016504604
+        },
+        {
+          "byte_count": 234,
+          "monotonic_ns": 5550863035657346
+        },
+        {
+          "byte_count": 236,
+          "monotonic_ns": 5550863054350633
+        },
+        {
+          "byte_count": 239,
+          "monotonic_ns": 5550863072969381
+        },
+        {
+          "byte_count": 236,
+          "monotonic_ns": 5550863092106393
+        },
+        {
+          "byte_count": 247,
+          "monotonic_ns": 5550863110835480
+        },
+        {
+          "byte_count": 235,
+          "monotonic_ns": 5550863129327788
+        },
+        {
+          "byte_count": 238,
+          "monotonic_ns": 5550863148348622
+        },
+        {
+          "byte_count": 239,
+          "monotonic_ns": 5550863167173937
+        },
+        {
+          "byte_count": 239,
+          "monotonic_ns": 5550863185950843
+        },
+        {
+          "byte_count": 235,
+          "monotonic_ns": 5550863204616820
+        },
+        {
+          "byte_count": 237,
+          "monotonic_ns": 5550863223662714
+        },
+        {
+          "byte_count": 244,
+          "monotonic_ns": 5550863242564748
+        },
+        {
+          "byte_count": 239,
+          "monotonic_ns": 5550863261223166
+        },
+        {
+          "byte_count": 235,
+          "monotonic_ns": 5550863280153350
+        },
+        {
+          "byte_count": 240,
+          "monotonic_ns": 5550863299033795
+        },
+        {
+          "byte_count": 239,
+          "monotonic_ns": 5550863317755302
+        },
+        {
+          "byte_count": 239,
+          "monotonic_ns": 5550863336459448
+        },
+        {
+          "byte_count": 242,
+          "monotonic_ns": 5550863355334023
+        },
+        {
+          "byte_count": 240,
+          "monotonic_ns": 5550863374133749
+        },
+        {
+          "byte_count": 239,
+          "monotonic_ns": 5550863392748227
+        },
+        {
+          "byte_count": 235,
+          "monotonic_ns": 5550863411865279
+        },
+        {
+          "byte_count": 235,
+          "monotonic_ns": 5550863430563666
+        },
+        {
+          "byte_count": 235,
+          "monotonic_ns": 5550863449136284
+        },
+        {
+          "byte_count": 235,
+          "monotonic_ns": 5550863468130488
+        },
+        {
+          "byte_count": 235,
+          "monotonic_ns": 5550863486944613
+        },
+        {
+          "byte_count": 236,
+          "monotonic_ns": 5550863505863778
+        },
+        {
+          "byte_count": 235,
+          "monotonic_ns": 5550863524467376
+        },
+        {
+          "byte_count": 237,
+          "monotonic_ns": 5550863543547359
+        },
+        {
+          "byte_count": 236,
+          "monotonic_ns": 5550863562301245
+        },
+        {
+          "byte_count": 237,
+          "monotonic_ns": 5550863580832713
+        },
+        {
+          "byte_count": 238,
+          "monotonic_ns": 5550863599938666
+        },
+        {
+          "byte_count": 244,
+          "monotonic_ns": 5550863618820871
+        },
+        {
+          "byte_count": 241,
+          "monotonic_ns": 5550863637400659
+        },
+        {
+          "byte_count": 240,
+          "monotonic_ns": 5550863656419772
+        },
+        {
+          "byte_count": 239,
+          "monotonic_ns": 5550863675252808
+        },
+        {
+          "byte_count": 239,
+          "monotonic_ns": 5550863694035754
+        },
+        {
+          "byte_count": 239,
+          "monotonic_ns": 5550863712598152
+        },
+        {
+          "byte_count": 239,
+          "monotonic_ns": 5550863731455747
+        },
+        {
+          "byte_count": 235,
+          "monotonic_ns": 5550863750501380
+        },
+        {
+          "byte_count": 238,
+          "monotonic_ns": 5550863769108838
+        },
+        {
+          "byte_count": 241,
+          "monotonic_ns": 5550863788179281
+        },
+        {
+          "byte_count": 242,
+          "monotonic_ns": 5550863807037406
+        },
+        {
+          "byte_count": 239,
+          "monotonic_ns": 5550863825852532
+        },
+        {
+          "byte_count": 235,
+          "monotonic_ns": 5550863844550409
+        },
+        {
+          "byte_count": 237,
+          "monotonic_ns": 5550863863516873
+        },
+        {
+          "byte_count": 241,
+          "monotonic_ns": 5550863882313959
+        },
+        {
+          "byte_count": 240,
+          "monotonic_ns": 5550863900936316
+        },
+        {
+          "byte_count": 239,
+          "monotonic_ns": 5550863919998169
+        },
+        {
+          "byte_count": 235,
+          "monotonic_ns": 5550863938838165
+        },
+        {
+          "byte_count": 235,
+          "monotonic_ns": 5550863957595331
+        },
+        {
+          "byte_count": 235,
+          "monotonic_ns": 5550863976506145
+        },
+        {
+          "byte_count": 235,
+          "monotonic_ns": 5550863995303861
+        },
+        {
+          "byte_count": 235,
+          "monotonic_ns": 5550864013874589
+        },
+        {
+          "byte_count": 236,
+          "monotonic_ns": 5550864032818984
+        },
+        {
+          "byte_count": 235,
+          "monotonic_ns": 5550864057388433
+        },
+        {
+          "byte_count": 237,
+          "monotonic_ns": 5550864076287577
+        },
+        {
+          "byte_count": 236,
+          "monotonic_ns": 5550864094878115
+        },
+        {
+          "byte_count": 242,
+          "monotonic_ns": 5550864113942898
+        },
+        {
+          "byte_count": 235,
+          "monotonic_ns": 5550864132752314
+        },
+        {
+          "byte_count": 235,
+          "monotonic_ns": 5550864151516090
+        },
+        {
+          "byte_count": 235,
+          "monotonic_ns": 5550864170299246
+        },
+        {
+          "byte_count": 235,
+          "monotonic_ns": 5550864189140402
+        },
+        {
+          "byte_count": 235,
+          "monotonic_ns": 5550864207967227
+        },
+        {
+          "byte_count": 236,
+          "monotonic_ns": 5550864226518085
+        },
+        {
+          "byte_count": 235,
+          "monotonic_ns": 5550864245504739
+        },
+        {
+          "byte_count": 237,
+          "monotonic_ns": 5550864264355284
+        },
+        {
+          "byte_count": 236,
+          "monotonic_ns": 5550864283052121
+        },
+        {
+          "byte_count": 237,
+          "monotonic_ns": 5550864301988976
+        },
+        {
+          "byte_count": 240,
+          "monotonic_ns": 5550864320753952
+        },
+        {
+          "byte_count": 240,
+          "monotonic_ns": 5550864339417209
+        },
+        {
+          "byte_count": 237,
+          "monotonic_ns": 5550864358320013
+        },
+        {
+          "byte_count": 237,
+          "monotonic_ns": 5550864377218508
+        },
+        {
+          "byte_count": 237,
+          "monotonic_ns": 5550864395965464
+        },
+        {
+          "byte_count": 239,
+          "monotonic_ns": 5550864414591242
+        },
+        {
+          "byte_count": 242,
+          "monotonic_ns": 5550864433337538
+        },
+        {
+          "byte_count": 239,
+          "monotonic_ns": 5550864452268753
+        },
+        {
+          "byte_count": 239,
+          "monotonic_ns": 5550864471158367
+        },
+        {
+          "byte_count": 237,
+          "monotonic_ns": 5550864489624706
+        },
+        {
+          "byte_count": 240,
+          "monotonic_ns": 5550864508626110
+        },
+        {
+          "byte_count": 240,
+          "monotonic_ns": 5550864527294837
+        },
+        {
+          "byte_count": 235,
+          "monotonic_ns": 5550864545881915
+        },
+        {
+          "byte_count": 238,
+          "monotonic_ns": 5550864565097987
+        },
+        {
+          "byte_count": 239,
+          "monotonic_ns": 5550864583917492
+        },
+        {
+          "byte_count": 240,
+          "monotonic_ns": 5550864602553800
+        },
+        {
+          "byte_count": 239,
+          "monotonic_ns": 5550864621616523
+        },
+        {
+          "byte_count": 239,
+          "monotonic_ns": 5550864640416359
+        },
+        {
+          "byte_count": 239,
+          "monotonic_ns": 5550864659302063
+        },
+        {
+          "byte_count": 235,
+          "monotonic_ns": 5550864678146089
+        },
+        {
+          "byte_count": 237,
+          "monotonic_ns": 5550864696977154
+        },
+        {
+          "byte_count": 237,
+          "monotonic_ns": 5550864715574992
+        },
+        {
+          "byte_count": 240,
+          "monotonic_ns": 5550864734559656
+        },
+        {
+          "byte_count": 239,
+          "monotonic_ns": 5550864753270123
+        },
+        {
+          "byte_count": 237,
+          "monotonic_ns": 5550864772348996
+        },
+        {
+          "byte_count": 235,
+          "monotonic_ns": 5550864791235341
+        },
+        {
+          "byte_count": 235,
+          "monotonic_ns": 5550864809743009
+        },
+        {
+          "byte_count": 235,
+          "monotonic_ns": 5550864828796732
+        },
+        {
+          "byte_count": 235,
+          "monotonic_ns": 5550864847453309
+        },
+        {
+          "byte_count": 236,
+          "monotonic_ns": 5550864866167656
+        },
+        {
+          "byte_count": 235,
+          "monotonic_ns": 5550864884892463
+        },
+        {
+          "byte_count": 237,
+          "monotonic_ns": 5550864903934726
+        },
+        {
+          "byte_count": 236,
+          "monotonic_ns": 5550864922890930
+        },
+        {
+          "byte_count": 237,
+          "monotonic_ns": 5550864941517628
+        },
+        {
+          "byte_count": 234,
+          "monotonic_ns": 5550864960510001
+        },
+        {
+          "byte_count": 234,
+          "monotonic_ns": 5550864979268608
+        },
+        {
+          "byte_count": 234,
+          "monotonic_ns": 5550864998140253
+        },
+        {
+          "byte_count": 234,
+          "monotonic_ns": 5550865017162826
+        },
+        {
+          "byte_count": 234,
+          "monotonic_ns": 5550865036142000
+        },
+        {
+          "byte_count": 224,
+          "monotonic_ns": 5550865055049645
+        },
+        {
+          "byte_count": 225,
+          "monotonic_ns": 5550865073787861
+        },
+        {
+          "byte_count": 225,
+          "monotonic_ns": 5550865092908084
+        },
+        {
+          "byte_count": 225,
+          "monotonic_ns": 5550865111723480
+        },
+        {
+          "byte_count": 225,
+          "monotonic_ns": 5550865130533395
+        },
+        {
+          "byte_count": 226,
+          "monotonic_ns": 5550865149486019
+        },
+        {
+          "byte_count": 225,
+          "monotonic_ns": 5550865168372444
+        },
+        {
+          "byte_count": 227,
+          "monotonic_ns": 5550865187294479
+        },
+        {
+          "byte_count": 226,
+          "monotonic_ns": 5550865206164154
+        },
+        {
+          "byte_count": 255,
+          "monotonic_ns": 5550865225398445
+        },
+        {
+          "byte_count": 230,
+          "monotonic_ns": 5550865225428085
+        },
+        {
+          "byte_count": 13,
+          "monotonic_ns": 5550865225447805
+        }
+      ],
+      "wire_bytes": 0
+    },
+    {
+      "committed_context_hash": "e0d6f9e1f3f6e1be1b8fc32a63df01d699842fad9599d829d754ddab7dbbd098",
+      "context_hash": "e0d6f9e1f3f6e1be1b8fc32a63df01d699842fad9599d829d754ddab7dbbd098",
+      "end_ns": 5550866345372479,
+      "first_byte_ns": 5550866232281177,
+      "logical_kv_bytes": 0,
+      "logical_kv_chunks": 0,
+      "output_tokens": 57,
+      "processed_tokens": 0,
+      "prompt_tokens": 12839,
+      "request_id": "chatcmpl-85655a501adb476787d896828f531a79",
+      "route_port": 41845,
+      "session_id": "codex:2604c640-6bc9-2d90-5a8b-ae20bc5081fa",
+      "start_ns": 5550865226595034,
+      "status_code": 200,
+      "stream_chunks": [
+        {
+          "byte_count": 243,
+          "monotonic_ns": 5550865288994022
+        },
+        {
+          "byte_count": 234,
+          "monotonic_ns": 5550865289057241
+        },
+        {
+          "byte_count": 234,
+          "monotonic_ns": 5550865307611620
+        },
+        {
+          "byte_count": 234,
+          "monotonic_ns": 5550865326625643
+        },
+        {
+          "byte_count": 237,
+          "monotonic_ns": 5550865345121222
+        },
+        {
+          "byte_count": 239,
+          "monotonic_ns": 5550865363882378
+        },
+        {
+          "byte_count": 240,
+          "monotonic_ns": 5550865382858442
+        },
+        {
+          "byte_count": 238,
+          "monotonic_ns": 5550865401571509
+        },
+        {
+          "byte_count": 244,
+          "monotonic_ns": 5550865424422165
+        },
+        {
+          "byte_count": 237,
+          "monotonic_ns": 5550865443755475
+        },
+        {
+          "byte_count": 240,
+          "monotonic_ns": 5550865462563521
+        },
+        {
+          "byte_count": 239,
+          "monotonic_ns": 5550865481053610
+        },
+        {
+          "byte_count": 239,
+          "monotonic_ns": 5550865500132823
+        },
+        {
+          "byte_count": 238,
+          "monotonic_ns": 5550865518815170
+        },
+        {
+          "byte_count": 242,
+          "monotonic_ns": 5550865537459957
+        },
+        {
+          "byte_count": 240,
+          "monotonic_ns": 5550865556354942
+        },
+        {
+          "byte_count": 239,
+          "monotonic_ns": 5550865575199807
+        },
+        {
+          "byte_count": 235,
+          "monotonic_ns": 5550865593911854
+        },
+        {
+          "byte_count": 237,
+          "monotonic_ns": 5550865612483312
+        },
+        {
+          "byte_count": 236,
+          "monotonic_ns": 5550865631382426
+        },
+        {
+          "byte_count": 236,
+          "monotonic_ns": 5550865650177392
+        },
+        {
+          "byte_count": 237,
+          "monotonic_ns": 5550865668670071
+        },
+        {
+          "byte_count": 235,
+          "monotonic_ns": 5550865687667675
+        },
+        {
+          "byte_count": 235,
+          "monotonic_ns": 5550865706099534
+        },
+        {
+          "byte_count": 235,
+          "monotonic_ns": 5550865724951269
+        },
+        {
+          "byte_count": 238,
+          "monotonic_ns": 5550865743960833
+        },
+        {
+          "byte_count": 241,
+          "monotonic_ns": 5550865762738949
+        },
+        {
+          "byte_count": 242,
+          "monotonic_ns": 5550865781290877
+        },
+        {
+          "byte_count": 239,
+          "monotonic_ns": 5550865800337441
+        },
+        {
+          "byte_count": 237,
+          "monotonic_ns": 5550865819172956
+        },
+        {
+          "byte_count": 242,
+          "monotonic_ns": 5550865837954172
+        },
+        {
+          "byte_count": 239,
+          "monotonic_ns": 5550865856628989
+        },
+        {
+          "byte_count": 239,
+          "monotonic_ns": 5550865875668572
+        },
+        {
+          "byte_count": 237,
+          "monotonic_ns": 5550865894371119
+        },
+        {
+          "byte_count": 240,
+          "monotonic_ns": 5550865912959157
+        },
+        {
+          "byte_count": 240,
+          "monotonic_ns": 5550865932044210
+        },
+        {
+          "byte_count": 235,
+          "monotonic_ns": 5550865950755286
+        },
+        {
+          "byte_count": 237,
+          "monotonic_ns": 5550865969340034
+        },
+        {
+          "byte_count": 237,
+          "monotonic_ns": 5550865988116530
+        },
+        {
+          "byte_count": 239,
+          "monotonic_ns": 5550866007062875
+        },
+        {
+          "byte_count": 240,
+          "monotonic_ns": 5550866025601273
+        },
+        {
+          "byte_count": 239,
+          "monotonic_ns": 5550866044364749
+        },
+        {
+          "byte_count": 239,
+          "monotonic_ns": 5550866063292973
+        },
+        {
+          "byte_count": 239,
+          "monotonic_ns": 5550866081836492
+        },
+        {
+          "byte_count": 235,
+          "monotonic_ns": 5550866100926365
+        },
+        {
+          "byte_count": 234,
+          "monotonic_ns": 5550866119605132
+        },
+        {
+          "byte_count": 234,
+          "monotonic_ns": 5550866138299658
+        },
+        {
+          "byte_count": 234,
+          "monotonic_ns": 5550866157335412
+        },
+        {
+          "byte_count": 234,
+          "monotonic_ns": 5550866176177677
+        },
+        {
+          "byte_count": 234,
+          "monotonic_ns": 5550866194610486
+        },
+        {
+          "byte_count": 224,
+          "monotonic_ns": 5550866213496621
+        },
+        {
+          "byte_count": 227,
+          "monotonic_ns": 5550866232281177
+        },
+        {
+          "byte_count": 226,
+          "monotonic_ns": 5550866251011874
+        },
+        {
+          "byte_count": 226,
+          "monotonic_ns": 5550866269613321
+        },
+        {
+          "byte_count": 227,
+          "monotonic_ns": 5550866288550756
+        },
+        {
+          "byte_count": 225,
+          "monotonic_ns": 5550866307298062
+        },
+        {
+          "byte_count": 225,
+          "monotonic_ns": 5550866325770601
+        },
+        {
+          "byte_count": 255,
+          "monotonic_ns": 5550866345259910
+        },
+        {
+          "byte_count": 229,
+          "monotonic_ns": 5550866345293580
+        },
+        {
+          "byte_count": 13,
+          "monotonic_ns": 5550866345312619
+        }
+      ],
+      "wire_bytes": 0
+    }
+  ],
+  "deadline_met": true,
+  "deadline_s": 300,
+  "elapsed_s": 108.712235604,
+  "ended_ns": 5550866345893214,
+  "full_drain": false,
+  "migrations": [
+    {
+      "catch_up": {
+        "context_hash": "5015b1596c17be3ca3904e047b5f4238d39e659a5dff154b9ba583e9d558063e",
+        "end_ns": 5550858820416329,
+        "first_byte_ns": 5550858644942488,
+        "logical_kv_bytes": 541065216,
+        "logical_kv_chunks": 43,
+        "output_tokens": 95,
+        "processed_tokens": 74,
+        "prompt_tokens": 11082,
+        "request_id": "chatcmpl-555bb0da24df4ab181975ecba869b539",
+        "start_ns": 5550856376643379,
+        "status_code": 200,
+        "stream_chunks": [
+          {
+            "byte_count": 243,
+            "monotonic_ns": 5550857017697047
+          },
+          {
+            "byte_count": 234,
+            "monotonic_ns": 5550857017744446
+          },
+          {
+            "byte_count": 234,
+            "monotonic_ns": 5550857036523132
+          },
+          {
+            "byte_count": 234,
+            "monotonic_ns": 5550857055134380
+          },
+          {
+            "byte_count": 237,
+            "monotonic_ns": 5550857073868436
+          },
+          {
+            "byte_count": 239,
+            "monotonic_ns": 5550857092598203
+          },
+          {
+            "byte_count": 239,
+            "monotonic_ns": 5550857111785225
+          },
+          {
+            "byte_count": 235,
+            "monotonic_ns": 5550857130314013
+          },
+          {
+            "byte_count": 237,
+            "monotonic_ns": 5550857149766302
+          },
+          {
+            "byte_count": 239,
+            "monotonic_ns": 5550857168453289
+          },
+          {
+            "byte_count": 239,
+            "monotonic_ns": 5550857187656411
+          },
+          {
+            "byte_count": 242,
+            "monotonic_ns": 5550857206067440
+          },
+          {
+            "byte_count": 240,
+            "monotonic_ns": 5550857225642869
+          },
+          {
+            "byte_count": 239,
+            "monotonic_ns": 5550857244503714
+          },
+          {
+            "byte_count": 235,
+            "monotonic_ns": 5550857262834604
+          },
+          {
+            "byte_count": 237,
+            "monotonic_ns": 5550857282328673
+          },
+          {
+            "byte_count": 235,
+            "monotonic_ns": 5550857302750083
+          },
+          {
+            "byte_count": 235,
+            "monotonic_ns": 5550857321478799
+          },
+          {
+            "byte_count": 236,
+            "monotonic_ns": 5550857340689831
+          },
+          {
+            "byte_count": 235,
+            "monotonic_ns": 5550857359043881
+          },
+          {
+            "byte_count": 236,
+            "monotonic_ns": 5550857378334632
+          },
+          {
+            "byte_count": 235,
+            "monotonic_ns": 5550857397334146
+          },
+          {
+            "byte_count": 235,
+            "monotonic_ns": 5550857416198021
+          },
+          {
+            "byte_count": 237,
+            "monotonic_ns": 5550857435051216
+          },
+          {
+            "byte_count": 238,
+            "monotonic_ns": 5550857454228278
+          },
+          {
+            "byte_count": 241,
+            "monotonic_ns": 5550857473631758
+          },
+          {
+            "byte_count": 242,
+            "monotonic_ns": 5550857492303475
+          },
+          {
+            "byte_count": 239,
+            "monotonic_ns": 5550857511197930
+          },
+          {
+            "byte_count": 235,
+            "monotonic_ns": 5550857530519091
+          },
+          {
+            "byte_count": 237,
+            "monotonic_ns": 5550857549186618
+          },
+          {
+            "byte_count": 241,
+            "monotonic_ns": 5550857568279631
+          },
+          {
+            "byte_count": 240,
+            "monotonic_ns": 5550857587210435
+          },
+          {
+            "byte_count": 239,
+            "monotonic_ns": 5550857606174539
+          },
+          {
+            "byte_count": 235,
+            "monotonic_ns": 5550857625096154
+          },
+          {
+            "byte_count": 237,
+            "monotonic_ns": 5550857643865710
+          },
+          {
+            "byte_count": 235,
+            "monotonic_ns": 5550857662599246
+          },
+          {
+            "byte_count": 235,
+            "monotonic_ns": 5550857681793118
+          },
+          {
+            "byte_count": 236,
+            "monotonic_ns": 5550857700237157
+          },
+          {
+            "byte_count": 235,
+            "monotonic_ns": 5550857719249391
+          },
+          {
+            "byte_count": 236,
+            "monotonic_ns": 5550857738692940
+          },
+          {
+            "byte_count": 235,
+            "monotonic_ns": 5550857757556316
+          },
+          {
+            "byte_count": 235,
+            "monotonic_ns": 5550857776171683
+          },
+          {
+            "byte_count": 235,
+            "monotonic_ns": 5550857795679322
+          },
+          {
+            "byte_count": 242,
+            "monotonic_ns": 5550857814407588
+          },
+          {
+            "byte_count": 235,
+            "monotonic_ns": 5550857832903877
+          },
+          {
+            "byte_count": 237,
+            "monotonic_ns": 5550857851853421
+          },
+          {
+            "byte_count": 235,
+            "monotonic_ns": 5550857871168762
+          },
+          {
+            "byte_count": 235,
+            "monotonic_ns": 5550857889502042
+          },
+          {
+            "byte_count": 236,
+            "monotonic_ns": 5550857908789163
+          },
+          {
+            "byte_count": 235,
+            "monotonic_ns": 5550857928903626
+          },
+          {
+            "byte_count": 236,
+            "monotonic_ns": 5550857947375875
+          },
+          {
+            "byte_count": 235,
+            "monotonic_ns": 5550857965990103
+          },
+          {
+            "byte_count": 235,
+            "monotonic_ns": 5550857985283784
+          },
+          {
+            "byte_count": 237,
+            "monotonic_ns": 5550858004074300
+          },
+          {
+            "byte_count": 240,
+            "monotonic_ns": 5550858024770477
+          },
+          {
+            "byte_count": 240,
+            "monotonic_ns": 5550858042509753
+          },
+          {
+            "byte_count": 237,
+            "monotonic_ns": 5550858061151520
+          },
+          {
+            "byte_count": 237,
+            "monotonic_ns": 5550858079523450
+          },
+          {
+            "byte_count": 237,
+            "monotonic_ns": 5550858098286546
+          },
+          {
+            "byte_count": 239,
+            "monotonic_ns": 5550858116893624
+          },
+          {
+            "byte_count": 242,
+            "monotonic_ns": 5550858135516401
+          },
+          {
+            "byte_count": 239,
+            "monotonic_ns": 5550858154324677
+          },
+          {
+            "byte_count": 239,
+            "monotonic_ns": 5550858173108143
+          },
+          {
+            "byte_count": 237,
+            "monotonic_ns": 5550858191647221
+          },
+          {
+            "byte_count": 240,
+            "monotonic_ns": 5550858210607415
+          },
+          {
+            "byte_count": 240,
+            "monotonic_ns": 5550858229357541
+          },
+          {
+            "byte_count": 235,
+            "monotonic_ns": 5550858247984759
+          },
+          {
+            "byte_count": 238,
+            "monotonic_ns": 5550858276194543
+          },
+          {
+            "byte_count": 239,
+            "monotonic_ns": 5550858357498286
+          },
+          {
+            "byte_count": 240,
+            "monotonic_ns": 5550858357552035
+          },
+          {
+            "byte_count": 239,
+            "monotonic_ns": 5550858357593155
+          },
+          {
+            "byte_count": 238,
+            "monotonic_ns": 5550858357608775
+          },
+          {
+            "byte_count": 239,
+            "monotonic_ns": 5550858408609945
+          },
+          {
+            "byte_count": 235,
+            "monotonic_ns": 5550858413746644
+          },
+          {
+            "byte_count": 237,
+            "monotonic_ns": 5550858413767284
+          },
+          {
+            "byte_count": 237,
+            "monotonic_ns": 5550858432491651
+          },
+          {
+            "byte_count": 240,
+            "monotonic_ns": 5550858455443796
+          },
+          {
+            "byte_count": 239,
+            "monotonic_ns": 5550858455477315
+          },
+          {
+            "byte_count": 238,
+            "monotonic_ns": 5550858477700628
+          },
+          {
+            "byte_count": 239,
+            "monotonic_ns": 5550858492897389
+          },
+          {
+            "byte_count": 235,
+            "monotonic_ns": 5550858562476767
+          },
+          {
+            "byte_count": 234,
+            "monotonic_ns": 5550858562524886
+          },
+          {
+            "byte_count": 234,
+            "monotonic_ns": 5550858562543256
+          },
+          {
+            "byte_count": 234,
+            "monotonic_ns": 5550858573607858
+          },
+          {
+            "byte_count": 234,
+            "monotonic_ns": 5550858588859828
+          },
+          {
+            "byte_count": 234,
+            "monotonic_ns": 5550858614275569
+          },
+          {
+            "byte_count": 224,
+            "monotonic_ns": 5550858629530890
+          },
+          {
+            "byte_count": 227,
+            "monotonic_ns": 5550858644942488
+          },
+          {
+            "byte_count": 225,
+            "monotonic_ns": 5550858809924922
+          },
+          {
+            "byte_count": 225,
+            "monotonic_ns": 5550858809972781
+          },
+          {
+            "byte_count": 226,
+            "monotonic_ns": 5550858815154400
+          },
+          {
+            "byte_count": 225,
+            "monotonic_ns": 5550858815206680
+          },
+          {
+            "byte_count": 226,
+            "monotonic_ns": 5550858815234179
+          },
+          {
+            "byte_count": 225,
+            "monotonic_ns": 5550858815247249
+          },
+          {
+            "byte_count": 225,
+            "monotonic_ns": 5550858815256969
+          },
+          {
+            "byte_count": 255,
+            "monotonic_ns": 5550858815266449
+          },
+          {
+            "byte_count": 229,
+            "monotonic_ns": 5550858815278329
+          },
+          {
+            "byte_count": 13,
+            "monotonic_ns": 5550858815289769
+          }
+        ],
+        "wire_bytes": 0
+      },
+      "catch_up_end_ns": 5550860655144857,
+      "catch_up_start_ns": 5550856376486401,
+      "committed_state": {
+        "context_hash": "5015b1596c17be3ca3904e047b5f4238d39e659a5dff154b9ba583e9d558063e",
+        "generation": 1,
+        "messages": [
+          {
+            "content": "Session state code 2788BEE7DB1A. Include 2788BEE7DB1A in every reply.",
+            "role": "system"
+          },
+          {
+            "content": "codex:e381cc89-38ef-e67e-79b9-4b800369b4f5 user turn 0 x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x ",
+            "role": "user"
+          },
+          {
+            "content": "Controlled turn: reply only with session state code 2788BEE7DB1A.",
+            "role": "user"
+          },
+          {
+            "content": "2788BEE7DB1A",
+            "role": "assistant"
+          }
+        ],
+        "session_id": "codex:e381cc89-38ef-e67e-79b9-4b800369b4f5"
+      },
+      "error": null,
+      "idle_ns": 5550856376486011,
+      "initial": {
+        "context_hash": "86d10cf1db2d7bd4d3118629c8f5fb953cb5e3744118f43a8f1061ddde747f95",
+        "end_ns": 5550854321695299,
+        "first_byte_ns": 5550854172045116,
+        "logical_kv_bytes": 542982144,
+        "logical_kv_chunks": 44,
+        "output_tokens": 95,
+        "processed_tokens": 0,
+        "prompt_tokens": 11047,
+        "request_id": "chatcmpl-123444d6542b4a2c86af5087e1d3160e",
+        "start_ns": 5550770385570390,
+        "status_code": 200,
+        "stream_chunks": [
+          {
+            "byte_count": 243,
+            "monotonic_ns": 5550787858670951
+          },
+          {
+            "byte_count": 234,
+            "monotonic_ns": 5550787858738721
+          },
+          {
+            "byte_count": 234,
+            "monotonic_ns": 5550852572294045
+          },
+          {
+            "byte_count": 234,
+            "monotonic_ns": 5550852590507646
+          },
+          {
+            "byte_count": 237,
+            "monotonic_ns": 5550852608803597
+          },
+          {
+            "byte_count": 239,
+            "monotonic_ns": 5550852627685732
+          },
+          {
+            "byte_count": 239,
+            "monotonic_ns": 5550852646652686
+          },
+          {
+            "byte_count": 235,
+            "monotonic_ns": 5550852665942707
+          },
+          {
+            "byte_count": 237,
+            "monotonic_ns": 5550852684907621
+          },
+          {
+            "byte_count": 239,
+            "monotonic_ns": 5550852703494299
+          },
+          {
+            "byte_count": 239,
+            "monotonic_ns": 5550852722631071
+          },
+          {
+            "byte_count": 242,
+            "monotonic_ns": 5550852741562556
+          },
+          {
+            "byte_count": 240,
+            "monotonic_ns": 5550852760370951
+          },
+          {
+            "byte_count": 239,
+            "monotonic_ns": 5550852779497304
+          },
+          {
+            "byte_count": 235,
+            "monotonic_ns": 5550852798506278
+          },
+          {
+            "byte_count": 237,
+            "monotonic_ns": 5550852817464672
+          },
+          {
+            "byte_count": 235,
+            "monotonic_ns": 5550852836450276
+          },
+          {
+            "byte_count": 235,
+            "monotonic_ns": 5550852855044644
+          },
+          {
+            "byte_count": 236,
+            "monotonic_ns": 5550852874362854
+          },
+          {
+            "byte_count": 235,
+            "monotonic_ns": 5550852893325178
+          },
+          {
+            "byte_count": 236,
+            "monotonic_ns": 5550852911922376
+          },
+          {
+            "byte_count": 235,
+            "monotonic_ns": 5550852930866961
+          },
+          {
+            "byte_count": 235,
+            "monotonic_ns": 5550852950305360
+          },
+          {
+            "byte_count": 237,
+            "monotonic_ns": 5550852969224225
+          },
+          {
+            "byte_count": 238,
+            "monotonic_ns": 5550852988235768
+          },
+          {
+            "byte_count": 241,
+            "monotonic_ns": 5550853006781926
+          },
+          {
+            "byte_count": 242,
+            "monotonic_ns": 5550853026377454
+          },
+          {
+            "byte_count": 239,
+            "monotonic_ns": 5550853044790284
+          },
+          {
+            "byte_count": 235,
+            "monotonic_ns": 5550853063883407
+          },
+          {
+            "byte_count": 237,
+            "monotonic_ns": 5550853082425165
+          },
+          {
+            "byte_count": 241,
+            "monotonic_ns": 5550853101474638
+          },
+          {
+            "byte_count": 240,
+            "monotonic_ns": 5550853120406423
+          },
+          {
+            "byte_count": 239,
+            "monotonic_ns": 5550853139401437
+          },
+          {
+            "byte_count": 235,
+            "monotonic_ns": 5550853158996705
+          },
+          {
+            "byte_count": 237,
+            "monotonic_ns": 5550853177522553
+          },
+          {
+            "byte_count": 235,
+            "monotonic_ns": 5550853196426278
+          },
+          {
+            "byte_count": 235,
+            "monotonic_ns": 5550853215123675
+          },
+          {
+            "byte_count": 236,
+            "monotonic_ns": 5550853234632303
+          },
+          {
+            "byte_count": 235,
+            "monotonic_ns": 5550853253195621
+          },
+          {
+            "byte_count": 236,
+            "monotonic_ns": 5550853272400633
+          },
+          {
+            "byte_count": 235,
+            "monotonic_ns": 5550853291389787
+          },
+          {
+            "byte_count": 235,
+            "monotonic_ns": 5550853309852256
+          },
+          {
+            "byte_count": 235,
+            "monotonic_ns": 5550853329055508
+          },
+          {
+            "byte_count": 242,
+            "monotonic_ns": 5550853347646166
+          },
+          {
+            "byte_count": 235,
+            "monotonic_ns": 5550853366881157
+          },
+          {
+            "byte_count": 237,
+            "monotonic_ns": 5550853385480165
+          },
+          {
+            "byte_count": 235,
+            "monotonic_ns": 5550853404329480
+          },
+          {
+            "byte_count": 235,
+            "monotonic_ns": 5550853423417853
+          },
+          {
+            "byte_count": 236,
+            "monotonic_ns": 5550853442570215
+          },
+          {
+            "byte_count": 235,
+            "monotonic_ns": 5550853464774848
+          },
+          {
+            "byte_count": 236,
+            "monotonic_ns": 5550853483372125
+          },
+          {
+            "byte_count": 235,
+            "monotonic_ns": 5550853501884524
+          },
+          {
+            "byte_count": 235,
+            "monotonic_ns": 5550853520186175
+          },
+          {
+            "byte_count": 237,
+            "monotonic_ns": 5550853538951881
+          },
+          {
+            "byte_count": 240,
+            "monotonic_ns": 5550853557819036
+          },
+          {
+            "byte_count": 240,
+            "monotonic_ns": 5550853576084227
+          },
+          {
+            "byte_count": 237,
+            "monotonic_ns": 5550853594816303
+          },
+          {
+            "byte_count": 237,
+            "monotonic_ns": 5550853613366812
+          },
+          {
+            "byte_count": 237,
+            "monotonic_ns": 5550853631642472
+          },
+          {
+            "byte_count": 239,
+            "monotonic_ns": 5550853650358539
+          },
+          {
+            "byte_count": 242,
+            "monotonic_ns": 5550853668902377
+          },
+          {
+            "byte_count": 239,
+            "monotonic_ns": 5550853687203478
+          },
+          {
+            "byte_count": 239,
+            "monotonic_ns": 5550853705778186
+          },
+          {
+            "byte_count": 235,
+            "monotonic_ns": 5550853724651281
+          },
+          {
+            "byte_count": 238,
+            "monotonic_ns": 5550853743269508
+          },
+          {
+            "byte_count": 239,
+            "monotonic_ns": 5550853761990105
+          },
+          {
+            "byte_count": 240,
+            "monotonic_ns": 5550853780654322
+          },
+          {
+            "byte_count": 238,
+            "monotonic_ns": 5550853799269259
+          },
+          {
+            "byte_count": 239,
+            "monotonic_ns": 5550853817659739
+          },
+          {
+            "byte_count": 235,
+            "monotonic_ns": 5550853836519374
+          },
+          {
+            "byte_count": 237,
+            "monotonic_ns": 5550853854850175
+          },
+          {
+            "byte_count": 240,
+            "monotonic_ns": 5550853873728420
+          },
+          {
+            "byte_count": 239,
+            "monotonic_ns": 5550853892351997
+          },
+          {
+            "byte_count": 238,
+            "monotonic_ns": 5550853910858506
+          },
+          {
+            "byte_count": 239,
+            "monotonic_ns": 5550853929678321
+          },
+          {
+            "byte_count": 235,
+            "monotonic_ns": 5550853948024402
+          },
+          {
+            "byte_count": 243,
+            "monotonic_ns": 5550853966727738
+          },
+          {
+            "byte_count": 239,
+            "monotonic_ns": 5550853985799431
+          },
+          {
+            "byte_count": 238,
+            "monotonic_ns": 5550854004498898
+          },
+          {
+            "byte_count": 239,
+            "monotonic_ns": 5550854022832308
+          },
+          {
+            "byte_count": 235,
+            "monotonic_ns": 5550854041735983
+          },
+          {
+            "byte_count": 234,
+            "monotonic_ns": 5550854060049894
+          },
+          {
+            "byte_count": 234,
+            "monotonic_ns": 5550854078832670
+          },
+          {
+            "byte_count": 234,
+            "monotonic_ns": 5550854097766294
+          },
+          {
+            "byte_count": 234,
+            "monotonic_ns": 5550854116298282
+          },
+          {
+            "byte_count": 234,
+            "monotonic_ns": 5550854134672412
+          },
+          {
+            "byte_count": 224,
+            "monotonic_ns": 5550854153568057
+          },
+          {
+            "byte_count": 227,
+            "monotonic_ns": 5550854172045116
+          },
+          {
+            "byte_count": 225,
+            "monotonic_ns": 5550854190563145
+          },
+          {
+            "byte_count": 225,
+            "monotonic_ns": 5550854209339521
+          },
+          {
+            "byte_count": 226,
+            "monotonic_ns": 5550854228080187
+          },
+          {
+            "byte_count": 225,
+            "monotonic_ns": 5550854246498676
+          },
+          {
+            "byte_count": 226,
+            "monotonic_ns": 5550854265257182
+          },
+          {
+            "byte_count": 225,
+            "monotonic_ns": 5550854283695452
+          },
+          {
+            "byte_count": 225,
+            "monotonic_ns": 5550854302304029
+          },
+          {
+            "byte_count": 255,
+            "monotonic_ns": 5550854321637190
+          },
+          {
+            "byte_count": 229,
+            "monotonic_ns": 5550854321666720
+          },
+          {
+            "byte_count": 13,
+            "monotonic_ns": 5550854321683179
+          }
+        ],
+        "wire_bytes": 0
+      },
+      "initial_end_ns": 5550856370807737,
+      "initial_start_ns": 5550770383608434,
+      "move": {
+        "method": "kv_transfer",
+        "order": 0,
+        "session_id": "codex:e381cc89-38ef-e67e-79b9-4b800369b4f5"
+      },
+      "pause_start_ns": 5550856370808047,
+      "queued_ns": 5550770382600441,
+      "switch_end_ns": 5550860655284936,
+      "switch_start_ns": 5550860655145277
+    },
+    {
+      "catch_up": {
+        "context_hash": "39b77bf8094ad8910b40d47c5fe410cdb70c9695510baeb8b834f64c360b5b5e",
+        "end_ns": 5550857929193413,
+        "first_byte_ns": 5550857814509667,
+        "logical_kv_bytes": 666894336,
+        "logical_kv_chunks": 53,
+        "output_tokens": 49,
+        "processed_tokens": 119,
+        "prompt_tokens": 13687,
+        "request_id": "chatcmpl-1a51cb8375a34848905e7d9e6a02b2f4",
+        "start_ns": 5550856427709039,
+        "status_code": 200,
+        "stream_chunks": [
+          {
+            "byte_count": 243,
+            "monotonic_ns": 5550857017505338
+          },
+          {
+            "byte_count": 234,
+            "monotonic_ns": 5550857017614667
+          },
+          {
+            "byte_count": 234,
+            "monotonic_ns": 5550857036380564
+          },
+          {
+            "byte_count": 234,
+            "monotonic_ns": 5550857055258848
+          },
+          {
+            "byte_count": 236,
+            "monotonic_ns": 5550857073728378
+          },
+          {
+            "byte_count": 239,
+            "monotonic_ns": 5550857092699402
+          },
+          {
+            "byte_count": 237,
+            "monotonic_ns": 5550857111644906
+          },
+          {
+            "byte_count": 240,
+            "monotonic_ns": 5550857130510231
+          },
+          {
+            "byte_count": 239,
+            "monotonic_ns": 5550857149625184
+          },
+          {
+            "byte_count": 238,
+            "monotonic_ns": 5550857168606488
+          },
+          {
+            "byte_count": 242,
+            "monotonic_ns": 5550857187516602
+          },
+          {
+            "byte_count": 240,
+            "monotonic_ns": 5550857206222929
+          },
+          {
+            "byte_count": 239,
+            "monotonic_ns": 5550857225505000
+          },
+          {
+            "byte_count": 235,
+            "monotonic_ns": 5550857244365035
+          },
+          {
+            "byte_count": 238,
+            "monotonic_ns": 5550857262929493
+          },
+          {
+            "byte_count": 239,
+            "monotonic_ns": 5550857282417082
+          },
+          {
+            "byte_count": 239,
+            "monotonic_ns": 5550857302612214
+          },
+          {
+            "byte_count": 237,
+            "monotonic_ns": 5550857321600528
+          },
+          {
+            "byte_count": 239,
+            "monotonic_ns": 5550857340548932
+          },
+          {
+            "byte_count": 239,
+            "monotonic_ns": 5550857359169500
+          },
+          {
+            "byte_count": 242,
+            "monotonic_ns": 5550857378423401
+          },
+          {
+            "byte_count": 240,
+            "monotonic_ns": 5550857397433855
+          },
+          {
+            "byte_count": 239,
+            "monotonic_ns": 5550857416318100
+          },
+          {
+            "byte_count": 235,
+            "monotonic_ns": 5550857434899248
+          },
+          {
+            "byte_count": 237,
+            "monotonic_ns": 5550857454372217
+          },
+          {
+            "byte_count": 235,
+            "monotonic_ns": 5550857473493390
+          },
+          {
+            "byte_count": 235,
+            "monotonic_ns": 5550857492398474
+          },
+          {
+            "byte_count": 237,
+            "monotonic_ns": 5550857511028002
+          },
+          {
+            "byte_count": 236,
+            "monotonic_ns": 5550857530377672
+          },
+          {
+            "byte_count": 236,
+            "monotonic_ns": 5550857549399196
+          },
+          {
+            "byte_count": 237,
+            "monotonic_ns": 5550857568373370
+          },
+          {
+            "byte_count": 237,
+            "monotonic_ns": 5550857587333794
+          },
+          {
+            "byte_count": 237,
+            "monotonic_ns": 5550857606299628
+          },
+          {
+            "byte_count": 239,
+            "monotonic_ns": 5550857625215613
+          },
+          {
+            "byte_count": 241,
+            "monotonic_ns": 5550857643729401
+          },
+          {
+            "byte_count": 239,
+            "monotonic_ns": 5550857662699525
+          },
+          {
+            "byte_count": 235,
+            "monotonic_ns": 5550857681653029
+          },
+          {
+            "byte_count": 234,
+            "monotonic_ns": 5550857700389986
+          },
+          {
+            "byte_count": 234,
+            "monotonic_ns": 5550857719334150
+          },
+          {
+            "byte_count": 234,
+            "monotonic_ns": 5550857738571102
+          },
+          {
+            "byte_count": 234,
+            "monotonic_ns": 5550857757337498
+          },
+          {
+            "byte_count": 234,
+            "monotonic_ns": 5550857776294152
+          },
+          {
+            "byte_count": 224,
+            "monotonic_ns": 5550857795534623
+          },
+          {
+            "byte_count": 227,
+            "monotonic_ns": 5550857814509667
+          },
+          {
+            "byte_count": 225,
+            "monotonic_ns": 5550857832783188
+          },
+          {
+            "byte_count": 225,
+            "monotonic_ns": 5550857852057299
+          },
+          {
+            "byte_count": 227,
+            "monotonic_ns": 5550857871287611
+          },
+          {
+            "byte_count": 226,
+            "monotonic_ns": 5550857889590671
+          },
+          {
+            "byte_count": 226,
+            "monotonic_ns": 5550857908908442
+          },
+          {
+            "byte_count": 255,
+            "monotonic_ns": 5550857928990925
+          },
+          {
+            "byte_count": 229,
+            "monotonic_ns": 5550857929105064
+          },
+          {
+            "byte_count": 13,
+            "monotonic_ns": 5550857929144764
+          }
+        ],
+        "wire_bytes": 0
+      },
+      "catch_up_end_ns": 5550860004531174,
+      "catch_up_start_ns": 5550856426787658,
+      "committed_state": {
+        "context_hash": "39b77bf8094ad8910b40d47c5fe410cdb70c9695510baeb8b834f64c360b5b5e",
+        "generation": 1,
+        "messages": [
+          {
+            "content": "Session state code 519E5AFFFC64. Include 519E5AFFFC64 in every reply.",
+            "role": "system"
+          },
+          {
+            "content": "claude:1534babd-9b9e-68e0-057e-d9ce7e08adf0 user turn 0 x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x ",
+            "role": "user"
+          },
+          {
+            "content": "Controlled turn: reply only with session state code 519E5AFFFC64.",
+            "role": "user"
+          },
+          {
+            "content": "519E5AFFFC64",
+            "role": "assistant"
+          }
+        ],
+        "session_id": "claude:1534babd-9b9e-68e0-057e-d9ce7e08adf0"
+      },
+      "error": null,
+      "idle_ns": 5550856426787048,
+      "initial": {
+        "context_hash": "f779e1e4a153c44ab6b4376672e53eb5e76f3ef51b4600d2768e27e179746eaa",
+        "end_ns": 5550853159222582,
+        "first_byte_ns": 5550853045051691,
+        "logical_kv_bytes": 671219712,
+        "logical_kv_chunks": 54,
+        "output_tokens": 32,
+        "processed_tokens": 0,
+        "prompt_tokens": 13656,
+        "request_id": "chatcmpl-4bd71506c646414fbede50ea3f6edeac",
+        "start_ns": 5550770390330218,
+        "status_code": 200,
+        "stream_chunks": [
+          {
+            "byte_count": 243,
+            "monotonic_ns": 5550852572432303
+          },
+          {
+            "byte_count": 234,
+            "monotonic_ns": 5550852572459523
+          },
+          {
+            "byte_count": 234,
+            "monotonic_ns": 5550852590581035
+          },
+          {
+            "byte_count": 234,
+            "monotonic_ns": 5550852608879496
+          },
+          {
+            "byte_count": 236,
+            "monotonic_ns": 5550852627760711
+          },
+          {
+            "byte_count": 239,
+            "monotonic_ns": 5550852646713795
+          },
+          {
+            "byte_count": 237,
+            "monotonic_ns": 5550852666093755
+          },
+          {
+            "byte_count": 240,
+            "monotonic_ns": 5550852685052140
+          },
+          {
+            "byte_count": 239,
+            "monotonic_ns": 5550852703571728
+          },
+          {
+            "byte_count": 242,
+            "monotonic_ns": 5550852722702151
+          },
+          {
+            "byte_count": 240,
+            "monotonic_ns": 5550852741611485
+          },
+          {
+            "byte_count": 239,
+            "monotonic_ns": 5550852760426491
+          },
+          {
+            "byte_count": 235,
+            "monotonic_ns": 5550852779406255
+          },
+          {
+            "byte_count": 237,
+            "monotonic_ns": 5550852798595167
+          },
+          {
+            "byte_count": 235,
+            "monotonic_ns": 5550852817558731
+          },
+          {
+            "byte_count": 235,
+            "monotonic_ns": 5550852836563525
+          },
+          {
+            "byte_count": 237,
+            "monotonic_ns": 5550852855161542
+          },
+          {
+            "byte_count": 236,
+            "monotonic_ns": 5550852874423854
+          },
+          {
+            "byte_count": 236,
+            "monotonic_ns": 5550852893376738
+          },
+          {
+            "byte_count": 235,
+            "monotonic_ns": 5550852911822217
+          },
+          {
+            "byte_count": 234,
+            "monotonic_ns": 5550852930979519
+          },
+          {
+            "byte_count": 234,
+            "monotonic_ns": 5550852950354079
+          },
+          {
+            "byte_count": 234,
+            "monotonic_ns": 5550852969333563
+          },
+          {
+            "byte_count": 234,
+            "monotonic_ns": 5550852988319977
+          },
+          {
+            "byte_count": 234,
+            "monotonic_ns": 5550853006899785
+          },
+          {
+            "byte_count": 224,
+            "monotonic_ns": 5550853026225996
+          },
+          {
+            "byte_count": 227,
+            "monotonic_ns": 5550853045051691
+          },
+          {
+            "byte_count": 225,
+            "monotonic_ns": 5550853063999556
+          },
+          {
+            "byte_count": 225,
+            "monotonic_ns": 5550853082461665
+          },
+          {
+            "byte_count": 227,
+            "monotonic_ns": 5550853101543528
+          },
+          {
+            "byte_count": 226,
+            "monotonic_ns": 5550853120460582
+          },
+          {
+            "byte_count": 226,
+            "monotonic_ns": 5550853139457136
+          },
+          {
+            "byte_count": 255,
+            "monotonic_ns": 5550853159125323
+          },
+          {
+            "byte_count": 229,
+            "monotonic_ns": 5550853159147153
+          },
+          {
+            "byte_count": 13,
+            "monotonic_ns": 5550853159163833
+          }
+        ],
+        "wire_bytes": 0
+      },
+      "initial_end_ns": 5550856426273293,
+      "initial_start_ns": 5550770385992457,
+      "move": {
+        "method": "kv_transfer",
+        "order": 1,
+        "session_id": "claude:1534babd-9b9e-68e0-057e-d9ce7e08adf0"
+      },
+      "pause_start_ns": 5550856426273603,
+      "queued_ns": 5550770382601441,
+      "switch_end_ns": 5550860005101918,
+      "switch_start_ns": 5550860004531454
+    },
+    {
+      "catch_up": {
+        "context_hash": "1944426c2e4081532a7904873b3526573a3de77b93673a8d8d21df9b53a83c70",
+        "end_ns": 5550858024083853,
+        "first_byte_ns": 5550857870909105,
+        "logical_kv_bytes": 704643072,
+        "logical_kv_chunks": 56,
+        "output_tokens": 54,
+        "processed_tokens": 270,
+        "prompt_tokens": 14606,
+        "request_id": "chatcmpl-5d5b6327caca463097039d4ddc9736a9",
+        "start_ns": 5550856427409842,
+        "status_code": 200,
+        "stream_chunks": [
+          {
+            "byte_count": 243,
+            "monotonic_ns": 5550857017243991
+          },
+          {
+            "byte_count": 234,
+            "monotonic_ns": 5550857017293021
+          },
+          {
+            "byte_count": 234,
+            "monotonic_ns": 5550857036211325
+          },
+          {
+            "byte_count": 234,
+            "monotonic_ns": 5550857054865062
+          },
+          {
+            "byte_count": 236,
+            "monotonic_ns": 5550857073511490
+          },
+          {
+            "byte_count": 239,
+            "monotonic_ns": 5550857092491104
+          },
+          {
+            "byte_count": 237,
+            "monotonic_ns": 5550857111456648
+          },
+          {
+            "byte_count": 240,
+            "monotonic_ns": 5550857130261703
+          },
+          {
+            "byte_count": 239,
+            "monotonic_ns": 5550857149437436
+          },
+          {
+            "byte_count": 238,
+            "monotonic_ns": 5550857168398070
+          },
+          {
+            "byte_count": 242,
+            "monotonic_ns": 5550857187301834
+          },
+          {
+            "byte_count": 240,
+            "monotonic_ns": 5550857206017291
+          },
+          {
+            "byte_count": 239,
+            "monotonic_ns": 5550857225319122
+          },
+          {
+            "byte_count": 235,
+            "monotonic_ns": 5550857244178837
+          },
+          {
+            "byte_count": 238,
+            "monotonic_ns": 5550857262699185
+          },
+          {
+            "byte_count": 239,
+            "monotonic_ns": 5550857282095045
+          },
+          {
+            "byte_count": 239,
+            "monotonic_ns": 5550857302413906
+          },
+          {
+            "byte_count": 237,
+            "monotonic_ns": 5550857321361871
+          },
+          {
+            "byte_count": 239,
+            "monotonic_ns": 5550857340334785
+          },
+          {
+            "byte_count": 239,
+            "monotonic_ns": 5550857358930322
+          },
+          {
+            "byte_count": 242,
+            "monotonic_ns": 5550857378169804
+          },
+          {
+            "byte_count": 240,
+            "monotonic_ns": 5550857397093598
+          },
+          {
+            "byte_count": 239,
+            "monotonic_ns": 5550857415922314
+          },
+          {
+            "byte_count": 235,
+            "monotonic_ns": 5550857434681120
+          },
+          {
+            "byte_count": 235,
+            "monotonic_ns": 5550857453999011
+          },
+          {
+            "byte_count": 235,
+            "monotonic_ns": 5550857473279792
+          },
+          {
+            "byte_count": 235,
+            "monotonic_ns": 5550857492163846
+          },
+          {
+            "byte_count": 235,
+            "monotonic_ns": 5550857510808184
+          },
+          {
+            "byte_count": 236,
+            "monotonic_ns": 5550857530096305
+          },
+          {
+            "byte_count": 235,
+            "monotonic_ns": 5550857549084839
+          },
+          {
+            "byte_count": 237,
+            "monotonic_ns": 5550857568031913
+          },
+          {
+            "byte_count": 236,
+            "monotonic_ns": 5550857586903438
+          },
+          {
+            "byte_count": 237,
+            "monotonic_ns": 5550857605856832
+          },
+          {
+            "byte_count": 237,
+            "monotonic_ns": 5550857624820566
+          },
+          {
+            "byte_count": 237,
+            "monotonic_ns": 5550857643511843
+          },
+          {
+            "byte_count": 239,
+            "monotonic_ns": 5550857662494167
+          },
+          {
+            "byte_count": 241,
+            "monotonic_ns": 5550857681437571
+          },
+          {
+            "byte_count": 239,
+            "monotonic_ns": 5550857700183708
+          },
+          {
+            "byte_count": 239,
+            "monotonic_ns": 5550857719109162
+          },
+          {
+            "byte_count": 235,
+            "monotonic_ns": 5550857738390393
+          },
+          {
+            "byte_count": 234,
+            "monotonic_ns": 5550857757229749
+          },
+          {
+            "byte_count": 234,
+            "monotonic_ns": 5550857776040024
+          },
+          {
+            "byte_count": 234,
+            "monotonic_ns": 5550857795335015
+          },
+          {
+            "byte_count": 234,
+            "monotonic_ns": 5550857814252120
+          },
+          {
+            "byte_count": 234,
+            "monotonic_ns": 5550857832633720
+          },
+          {
+            "byte_count": 224,
+            "monotonic_ns": 5550857851744582
+          },
+          {
+            "byte_count": 225,
+            "monotonic_ns": 5550857870909105
+          },
+          {
+            "byte_count": 225,
+            "monotonic_ns": 5550857889374034
+          },
+          {
+            "byte_count": 225,
+            "monotonic_ns": 5550857908519426
+          },
+          {
+            "byte_count": 225,
+            "monotonic_ns": 5550857928318262
+          },
+          {
+            "byte_count": 226,
+            "monotonic_ns": 5550857947275476
+          },
+          {
+            "byte_count": 225,
+            "monotonic_ns": 5550857965939403
+          },
+          {
+            "byte_count": 227,
+            "monotonic_ns": 5550857985216384
+          },
+          {
+            "byte_count": 226,
+            "monotonic_ns": 5550858004021500
+          },
+          {
+            "byte_count": 255,
+            "monotonic_ns": 5550858023802216
+          },
+          {
+            "byte_count": 229,
+            "monotonic_ns": 5550858023834046
+          },
+          {
+            "byte_count": 13,
+            "monotonic_ns": 5550858023852316
+          }
+        ],
+        "wire_bytes": 0
+      },
+      "catch_up_end_ns": 5550859785047075,
+      "catch_up_start_ns": 5550856427187894,
+      "committed_state": {
+        "context_hash": "1944426c2e4081532a7904873b3526573a3de77b93673a8d8d21df9b53a83c70",
+        "generation": 1,
+        "messages": [
+          {
+            "content": "Session state code 9C1A53F67512. Include 9C1A53F67512 in every reply.",
+            "role": "system"
+          },
+          {
+            "content": "claude:eaad8d63-63bf-7139-f930-0ef47fa45253 user turn 0 x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x ",
+            "role": "user"
+          },
+          {
+            "content": "Controlled turn: reply only with session state code 9C1A53F67512.",
+            "role": "user"
+          },
+          {
+            "content": "9C1A53F67512",
+            "role": "assistant"
+          }
+        ],
+        "session_id": "claude:eaad8d63-63bf-7139-f930-0ef47fa45253"
+      },
+      "error": null,
+      "idle_ns": 5550856427187294,
+      "initial": {
+        "context_hash": "139ebf6ea26ca5f8c49031628b3c030fc7d7e1215987637ca1687d425df398b9",
+        "end_ns": 5550853234706253,
+        "first_byte_ns": 5550853082295236,
+        "logical_kv_bytes": 716193792,
+        "logical_kv_chunks": 57,
+        "output_tokens": 36,
+        "processed_tokens": 0,
+        "prompt_tokens": 14571,
+        "request_id": "chatcmpl-6c84eecc1c374bf2974342712f5c4841",
+        "start_ns": 5550770392083026,
+        "status_code": 200,
+        "stream_chunks": [
+          {
+            "byte_count": 243,
+            "monotonic_ns": 5550852572162386
+          },
+          {
+            "byte_count": 234,
+            "monotonic_ns": 5550852572228705
+          },
+          {
+            "byte_count": 234,
+            "monotonic_ns": 5550852590415817
+          },
+          {
+            "byte_count": 234,
+            "monotonic_ns": 5550852608749407
+          },
+          {
+            "byte_count": 236,
+            "monotonic_ns": 5550852627621382
+          },
+          {
+            "byte_count": 239,
+            "monotonic_ns": 5550852646597567
+          },
+          {
+            "byte_count": 237,
+            "monotonic_ns": 5550852665851158
+          },
+          {
+            "byte_count": 240,
+            "monotonic_ns": 5550852684815732
+          },
+          {
+            "byte_count": 239,
+            "monotonic_ns": 5550852703439369
+          },
+          {
+            "byte_count": 242,
+            "monotonic_ns": 5550852722576862
+          },
+          {
+            "byte_count": 240,
+            "monotonic_ns": 5550852741511096
+          },
+          {
+            "byte_count": 239,
+            "monotonic_ns": 5550852760320172
+          },
+          {
+            "byte_count": 235,
+            "monotonic_ns": 5550852779361645
+          },
+          {
+            "byte_count": 235,
+            "monotonic_ns": 5550852798453618
+          },
+          {
+            "byte_count": 235,
+            "monotonic_ns": 5550852817408952
+          },
+          {
+            "byte_count": 235,
+            "monotonic_ns": 5550852836394806
+          },
+          {
+            "byte_count": 235,
+            "monotonic_ns": 5550852854979664
+          },
+          {
+            "byte_count": 236,
+            "monotonic_ns": 5550852874311705
+          },
+          {
+            "byte_count": 235,
+            "monotonic_ns": 5550852893270089
+          },
+          {
+            "byte_count": 237,
+            "monotonic_ns": 5550852911771028
+          },
+          {
+            "byte_count": 236,
+            "monotonic_ns": 5550852930817671
+          },
+          {
+            "byte_count": 235,
+            "monotonic_ns": 5550852950254360
+          },
+          {
+            "byte_count": 234,
+            "monotonic_ns": 5550852969133665
+          },
+          {
+            "byte_count": 234,
+            "monotonic_ns": 5550852988143959
+          },
+          {
+            "byte_count": 234,
+            "monotonic_ns": 5550853006725707
+          },
+          {
+            "byte_count": 234,
+            "monotonic_ns": 5550853026126907
+          },
+          {
+            "byte_count": 234,
+            "monotonic_ns": 5550853044697265
+          },
+          {
+            "byte_count": 224,
+            "monotonic_ns": 5550853063644749
+          },
+          {
+            "byte_count": 225,
+            "monotonic_ns": 5550853082295236
+          },
+          {
+            "byte_count": 225,
+            "monotonic_ns": 5550853101431459
+          },
+          {
+            "byte_count": 225,
+            "monotonic_ns": 5550853120354623
+          },
+          {
+            "byte_count": 225,
+            "monotonic_ns": 5550853139350197
+          },
+          {
+            "byte_count": 226,
+            "monotonic_ns": 5550853158941395
+          },
+          {
+            "byte_count": 225,
+            "monotonic_ns": 5550853177427434
+          },
+          {
+            "byte_count": 227,
+            "monotonic_ns": 5550853196384988
+          },
+          {
+            "byte_count": 226,
+            "monotonic_ns": 5550853215083875
+          },
+          {
+            "byte_count": 255,
+            "monotonic_ns": 5550853234542494
+          },
+          {
+            "byte_count": 229,
+            "monotonic_ns": 5550853234581514
+          },
+          {
+            "byte_count": 13,
+            "monotonic_ns": 5550853234600734
+          }
+        ],
+        "wire_bytes": 0
+      },
+      "initial_end_ns": 5550856427054155,
+      "initial_start_ns": 5550770387907194,
+      "move": {
+        "method": "kv_transfer",
+        "order": 2,
+        "session_id": "claude:eaad8d63-63bf-7139-f930-0ef47fa45253"
+      },
+      "pause_start_ns": 5550856427054485,
+      "queued_ns": 5550770382601851,
+      "switch_end_ns": 5550859795393363,
+      "switch_start_ns": 5550859785047175
+    },
+    {
+      "catch_up": {
+        "context_hash": "e0d6f9e1f3f6e1be1b8fc32a63df01d699842fad9599d829d754ddab7dbbd098",
+        "end_ns": 5550857928493130,
+        "first_byte_ns": 5550857814925713,
+        "logical_kv_bytes": 629145600,
+        "logical_kv_chunks": 50,
+        "output_tokens": 50,
+        "processed_tokens": 36,
+        "prompt_tokens": 12836,
+        "request_id": "chatcmpl-1ddb7b8e7ed747a1b2aad0190d106778",
+        "start_ns": 5550856292827821,
+        "status_code": 200,
+        "stream_chunks": [
+          {
+            "byte_count": 243,
+            "monotonic_ns": 5550856903977071
+          },
+          {
+            "byte_count": 234,
+            "monotonic_ns": 5550856904049560
+          },
+          {
+            "byte_count": 234,
+            "monotonic_ns": 5550857017345060
+          },
+          {
+            "byte_count": 234,
+            "monotonic_ns": 5550857036282815
+          },
+          {
+            "byte_count": 236,
+            "monotonic_ns": 5550857054966191
+          },
+          {
+            "byte_count": 239,
+            "monotonic_ns": 5550857073590409
+          },
+          {
+            "byte_count": 237,
+            "monotonic_ns": 5550857092544163
+          },
+          {
+            "byte_count": 240,
+            "monotonic_ns": 5550857111535367
+          },
+          {
+            "byte_count": 239,
+            "monotonic_ns": 5550857130396952
+          },
+          {
+            "byte_count": 238,
+            "monotonic_ns": 5550857149516535
+          },
+          {
+            "byte_count": 242,
+            "monotonic_ns": 5550857168512629
+          },
+          {
+            "byte_count": 240,
+            "monotonic_ns": 5550857187381934
+          },
+          {
+            "byte_count": 239,
+            "monotonic_ns": 5550857206122820
+          },
+          {
+            "byte_count": 235,
+            "monotonic_ns": 5550857225397381
+          },
+          {
+            "byte_count": 238,
+            "monotonic_ns": 5550857244264386
+          },
+          {
+            "byte_count": 239,
+            "monotonic_ns": 5550857262766665
+          },
+          {
+            "byte_count": 239,
+            "monotonic_ns": 5550857282252744
+          },
+          {
+            "byte_count": 237,
+            "monotonic_ns": 5550857302500275
+          },
+          {
+            "byte_count": 239,
+            "monotonic_ns": 5550857321415430
+          },
+          {
+            "byte_count": 239,
+            "monotonic_ns": 5550857340411254
+          },
+          {
+            "byte_count": 242,
+            "monotonic_ns": 5550857358981302
+          },
+          {
+            "byte_count": 240,
+            "monotonic_ns": 5550857378275653
+          },
+          {
+            "byte_count": 239,
+            "monotonic_ns": 5550857397213627
+          },
+          {
+            "byte_count": 235,
+            "monotonic_ns": 5550857416045133
+          },
+          {
+            "byte_count": 237,
+            "monotonic_ns": 5550857434762749
+          },
+          {
+            "byte_count": 236,
+            "monotonic_ns": 5550857454104449
+          },
+          {
+            "byte_count": 236,
+            "monotonic_ns": 5550857473358431
+          },
+          {
+            "byte_count": 237,
+            "monotonic_ns": 5550857492254056
+          },
+          {
+            "byte_count": 235,
+            "monotonic_ns": 5550857510890203
+          },
+          {
+            "byte_count": 235,
+            "monotonic_ns": 5550857530203654
+          },
+          {
+            "byte_count": 237,
+            "monotonic_ns": 5550857549309036
+          },
+          {
+            "byte_count": 237,
+            "monotonic_ns": 5550857568147852
+          },
+          {
+            "byte_count": 237,
+            "monotonic_ns": 5550857587068946
+          },
+          {
+            "byte_count": 239,
+            "monotonic_ns": 5550857606033590
+          },
+          {
+            "byte_count": 241,
+            "monotonic_ns": 5550857624938955
+          },
+          {
+            "byte_count": 239,
+            "monotonic_ns": 5550857643590942
+          },
+          {
+            "byte_count": 239,
+            "monotonic_ns": 5550857662544897
+          },
+          {
+            "byte_count": 235,
+            "monotonic_ns": 5550857681517041
+          },
+          {
+            "byte_count": 234,
+            "monotonic_ns": 5550857700295097
+          },
+          {
+            "byte_count": 234,
+            "monotonic_ns": 5550857719184822
+          },
+          {
+            "byte_count": 234,
+            "monotonic_ns": 5550857738465073
+          },
+          {
+            "byte_count": 234,
+            "monotonic_ns": 5550857757490606
+          },
+          {
+            "byte_count": 234,
+            "monotonic_ns": 5550857776096694
+          },
+          {
+            "byte_count": 224,
+            "monotonic_ns": 5550857795437914
+          },
+          {
+            "byte_count": 227,
+            "monotonic_ns": 5550857814925713
+          },
+          {
+            "byte_count": 226,
+            "monotonic_ns": 5550857832681689
+          },
+          {
+            "byte_count": 226,
+            "monotonic_ns": 5550857851943980
+          },
+          {
+            "byte_count": 227,
+            "monotonic_ns": 5550857871037453
+          },
+          {
+            "byte_count": 225,
+            "monotonic_ns": 5550857889448653
+          },
+          {
+            "byte_count": 225,
+            "monotonic_ns": 5550857908636165
+          },
+          {
+            "byte_count": 255,
+            "monotonic_ns": 5550857928402281
+          },
+          {
+            "byte_count": 229,
+            "monotonic_ns": 5550857928441511
+          },
+          {
+            "byte_count": 13,
+            "monotonic_ns": 5550857928460791
+          }
+        ],
+        "wire_bytes": 0
+      },
+      "catch_up_end_ns": 5550860004250316,
+      "catch_up_start_ns": 5550856272173273,
+      "committed_state": {
+        "context_hash": "e0d6f9e1f3f6e1be1b8fc32a63df01d699842fad9599d829d754ddab7dbbd098",
+        "generation": 1,
+        "messages": [
+          {
+            "content": "Session state code 98309AD2838D. Include 98309AD2838D in every reply.",
+            "role": "system"
+          },
+          {
+            "content": "codex:2604c640-6bc9-2d90-5a8b-ae20bc5081fa user turn 0 x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x x ",
+            "role": "user"
+          },
+          {
+            "content": "Controlled turn: reply only with session state code 98309AD2838D.",
+            "role": "user"
+          },
+          {
+            "content": "98309AD2838D",
+            "role": "assistant"
+          }
+        ],
+        "session_id": "codex:2604c640-6bc9-2d90-5a8b-ae20bc5081fa"
+      },
+      "error": null,
+      "idle_ns": 5550856272172893,
+      "initial": {
+        "context_hash": "2fae9cb9b37744fc8e61fd9d49f2870c955a5c29484106c15b578a2aef9f5bdb",
+        "end_ns": 5550853442724674,
+        "first_byte_ns": 5550853329144117,
+        "logical_kv_bytes": 629391360,
+        "logical_kv_chunks": 51,
+        "output_tokens": 47,
+        "processed_tokens": 0,
+        "prompt_tokens": 12805,
+        "request_id": "chatcmpl-875f1c6fb2974a81ac941eddb91406f1",
+        "start_ns": 5550770392438283,
+        "status_code": 200,
+        "stream_chunks": [
+          {
+            "byte_count": 243,
+            "monotonic_ns": 5550852572355814
+          },
+          {
+            "byte_count": 234,
+            "monotonic_ns": 5550852572387964
+          },
+          {
+            "byte_count": 234,
+            "monotonic_ns": 5550852590468047
+          },
+          {
+            "byte_count": 234,
+            "monotonic_ns": 5550852608927816
+          },
+          {
+            "byte_count": 237,
+            "monotonic_ns": 5550852627723561
+          },
+          {
+            "byte_count": 239,
+            "monotonic_ns": 5550852646760365
+          },
+          {
+            "byte_count": 240,
+            "monotonic_ns": 5550852666229034
+          },
+          {
+            "byte_count": 238,
+            "monotonic_ns": 5550852685154289
+          },
+          {
+            "byte_count": 242,
+            "monotonic_ns": 5550852703620748
+          },
+          {
+            "byte_count": 240,
+            "monotonic_ns": 5550852722748190
+          },
+          {
+            "byte_count": 239,
+            "monotonic_ns": 5550852741660585
+          },
+          {
+            "byte_count": 235,
+            "monotonic_ns": 5550852760475150
+          },
+          {
+            "byte_count": 238,
+            "monotonic_ns": 5550852779459874
+          },
+          {
+            "byte_count": 241,
+            "monotonic_ns": 5550852798560027
+          },
+          {
+            "byte_count": 242,
+            "monotonic_ns": 5550852817522211
+          },
+          {
+            "byte_count": 239,
+            "monotonic_ns": 5550852836526855
+          },
+          {
+            "byte_count": 237,
+            "monotonic_ns": 5550852855100133
+          },
+          {
+            "byte_count": 242,
+            "monotonic_ns": 5550852874467713
+          },
+          {
+            "byte_count": 235,
+            "monotonic_ns": 5550852893420987
+          },
+          {
+            "byte_count": 237,
+            "monotonic_ns": 5550852911875407
+          },
+          {
+            "byte_count": 236,
+            "monotonic_ns": 5550852930919830
+          },
+          {
+            "byte_count": 236,
+            "monotonic_ns": 5550852950403999
+          },
+          {
+            "byte_count": 237,
+            "monotonic_ns": 5550852969385063
+          },
+          {
+            "byte_count": 235,
+            "monotonic_ns": 5550852988371387
+          },
+          {
+            "byte_count": 235,
+            "monotonic_ns": 5550853006853936
+          },
+          {
+            "byte_count": 237,
+            "monotonic_ns": 5550853026310035
+          },
+          {
+            "byte_count": 240,
+            "monotonic_ns": 5550853044940932
+          },
+          {
+            "byte_count": 240,
+            "monotonic_ns": 5550853063737928
+          },
+          {
+            "byte_count": 235,
+            "monotonic_ns": 5550853082349786
+          },
+          {
+            "byte_count": 237,
+            "monotonic_ns": 5550853101509188
+          },
+          {
+            "byte_count": 240,
+            "monotonic_ns": 5550853120511182
+          },
+          {
+            "byte_count": 239,
+            "monotonic_ns": 5550853139502996
+          },
+          {
+            "byte_count": 239,
+            "monotonic_ns": 5550853159076154
+          },
+          {
+            "byte_count": 239,
+            "monotonic_ns": 5550853177470924
+          },
+          {
+            "byte_count": 235,
+            "monotonic_ns": 5550853196476567
+          },
+          {
+            "byte_count": 234,
+            "monotonic_ns": 5550853215173214
+          },
+          {
+            "byte_count": 234,
+            "monotonic_ns": 5550853234673623
+          },
+          {
+            "byte_count": 234,
+            "monotonic_ns": 5550853253242431
+          },
+          {
+            "byte_count": 234,
+            "monotonic_ns": 5550853272452453
+          },
+          {
+            "byte_count": 234,
+            "monotonic_ns": 5550853291464236
+          },
+          {
+            "byte_count": 224,
+            "monotonic_ns": 5550853309901356
+          },
+          {
+            "byte_count": 227,
+            "monotonic_ns": 5550853329144117
+          },
+          {
+            "byte_count": 226,
+            "monotonic_ns": 5550853347698235
+          },
+          {
+            "byte_count": 226,
+            "monotonic_ns": 5550853367032406
+          },
+          {
+            "byte_count": 227,
+            "monotonic_ns": 5550853385586844
+          },
+          {
+            "byte_count": 225,
+            "monotonic_ns": 5550853404392460
+          },
+          {
+            "byte_count": 225,
+            "monotonic_ns": 5550853423467873
+          },
+          {
+            "byte_count": 255,
+            "monotonic_ns": 5550853442624085
+          },
+          {
+            "byte_count": 229,
+            "monotonic_ns": 5550853442660675
+          },
+          {
+            "byte_count": 13,
+            "monotonic_ns": 5550853442679804
+          }
+        ],
+        "wire_bytes": 0
+      },
+      "initial_end_ns": 5550856272006735,
+      "initial_start_ns": 5550770388935227,
+      "move": {
+        "method": "kv_transfer",
+        "order": 3,
+        "session_id": "codex:2604c640-6bc9-2d90-5a8b-ae20bc5081fa"
+      },
+      "pause_start_ns": 5550856272007005,
+      "queued_ns": 5550770382602221,
+      "switch_end_ns": 5550860004872510,
+      "switch_start_ns": 5550860004251226
+    }
+  ],
+  "scenario_id": "m-166953d3a93e144c",
+  "schema": "queue-haul-migration-result-v2",
+  "source_sleep_ns": null,
+  "started_ns": 5550757633653690,
+  "status": "complete",
+  "wire_bytes": {
+    "api/client_to_target": 316794,
+    "api/target_to_client": 189887,
+    "kv/client_to_target": 191952,
+    "kv/target_to_client": 2572407072
+  }
+}
