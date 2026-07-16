@@ -11,7 +11,7 @@ import numpy as np
 
 from profiles import ModelProfile, ProfileCase
 from power_model import ExpectedPower
-from simulate import ExecutionScenario, MoveMethod, PlannedMove, SimSession, execute
+from simulate import ExecutionScenario, MoveMethod, PlannedMove, SimSession, predict
 
 
 METHODS: tuple[MoveMethod, ...] = ("replay", "kv_transfer", "replay_on_request")
@@ -211,7 +211,7 @@ def plan(scenario: ExecutionScenario, profile: ModelProfile,
                 power_state.remove(sessions[j].session_id)
     planned = power_state.power(True)
     moves = _place(selected, sessions, scenario, profile, paths, methods, case_id)
-    expected = execute(
+    expected = predict(
         replace(scenario, sessions=tuple(replace(session, requests=())
                                          for session in scenario.sessions)),
         profile, moves, case_id,

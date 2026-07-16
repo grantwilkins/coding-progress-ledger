@@ -264,8 +264,10 @@ def step_average(points, end_s: float, window_s: float, column: int = 1) -> floa
 
 class ExecutionSimulator:
     def __init__(self, scenario: ExecutionScenario, profile: ModelProfile,
-                 moves: tuple[PlannedMove, ...], case_id: str = "central"):
+                 moves: tuple[PlannedMove, ...], case_id: str = "central",
+                 detailed: bool = True):
         self.scenario, self.profile, self.case = scenario, profile, profile.case(case_id)
+        self.detailed = detailed
         self.nodes = {n.node_id: n for n in scenario.nodes}
         self.instances = {i.instance_id: i for i in scenario.instances}
         self.sessions = {s.session_id: s for s in scenario.sessions}
@@ -353,7 +355,8 @@ class ExecutionSimulator:
         heapq.heappush(self.heap, (when, self.sequence, kind, payload))
 
     def _event(self, name: str, session: str = "", node: str = "", detail: str = ""):
-        self.events.append(ExecutionEvent(self.time, name, session, node, detail))
+        if self.detailed:
+            self.events.append(ExecutionEvent(self.time, name, session, node, detail))
 
     def _start_action(self, key, action: str, instance: str | None = None,
                       node: str | None = None):
@@ -597,10 +600,11 @@ class ExecutionSimulator:
         self.serving_active.add(instance)
         self.active_request_instance[session_id] = instance
         self.active_request_end[session_id] = end
-        self.requests.append(RequestExecution(
-            session_id, request_index, instance, arrival_s, self.time,
-            self.time + prefill_s, end, request.prompt_tokens, request.output_tokens,
-        ))
+        if self.detailed:
+            self.requests.append(RequestExecution(
+                session_id, request_index, instance, arrival_s, self.time,
+                self.time + prefill_s, end, request.prompt_tokens, request.output_tokens,
+            ))
         self._event("request_start", session_id)
         self._schedule(end, "request_done", (session_id, request_index))
 
@@ -677,10 +681,11 @@ class ExecutionSimulator:
                     action = flow.move_index, flow.phase, "source"
                     if action in self.active_actions:
                         self._stop_action(action)
-                    self.network.append(NetworkExecution(
-                        state.move.session_id, flow.phase, flow.bytes, flow.bytes, 0, flow.path,
-                        flow.start, self.time,
-                    ))
+                    if self.detailed:
+                        self.network.append(NetworkExecution(
+                            state.move.session_id, flow.phase, flow.bytes, flow.bytes, 0,
+                            flow.path, flow.start, self.time,
+                        ))
                     self._event("network_done", state.move.session_id, detail=flow.phase)
                     self._endpoint(flow.move_index, flow.phase)
             else:
@@ -732,13 +737,13 @@ class ExecutionSimulator:
         )
         makespan = max((s.committed_s for s in sessions if s.committed_s is not None),
                        default=self.scenario.controller_delay_s)
-        network = self.network + [
+        network = self.network + ([
             NetworkExecution(
                 self.states[flow.move_index].move.session_id, flow.phase, flow.bytes,
                 round(flow.bytes - flow.remaining), round(flow.remaining), flow.path,
                 flow.start, None,
             ) for flow in self.flows.values()
-        ]
+        ] if self.detailed else [])
         return ExecutionResult(
             tuple(self.events), sessions, tuple(self.requests), tuple(network),
             tuple(self.power), at_deadline, at_deadline <= self.scenario.power_limit_w, makespan,
@@ -748,3 +753,9 @@ class ExecutionSimulator:
 def execute(scenario: ExecutionScenario, profile: ModelProfile,
             moves: tuple[PlannedMove, ...], case_id: str = "central") -> ExecutionResult:
     return ExecutionSimulator(scenario, profile, moves, case_id).run()
+
+
+def predict(scenario: ExecutionScenario, profile: ModelProfile,
+            moves: tuple[PlannedMove, ...], case_id: str = "central") -> ExecutionResult:
+    """Execute exactly without retaining audit records used only by experiments."""
+    return ExecutionSimulator(scenario, profile, moves, case_id, detailed=False).run()
