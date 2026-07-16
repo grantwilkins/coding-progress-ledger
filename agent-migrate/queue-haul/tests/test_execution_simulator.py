@@ -90,14 +90,14 @@ def test_rate_changes_stay_within_connected_links(tmp_path, monkeypatch):
     original = simulate.fair_link_rates
 
     def record(active, links):
-        calls.append(tuple(sorted(active.values())))
+        calls.append((tuple(sorted(active.values())), tuple(sorted(links))))
         return original(active, links)
 
     monkeypatch.setattr(simulate, "fair_link_rates", record)
     result = execute(topology, model(tmp_path, tp=1), moves)
     finished = {row.session_id: row.end_s for row in result.network}
 
-    assert (("c",),) in calls
+    assert ((("c",),), ("c",)) in calls
     assert finished == pytest.approx({"0": 5, "1": 2, "2": 5, "3": 1, "4": 1.5})
 
 

@@ -640,7 +640,8 @@ class ExecutionSimulator:
                         pending.append(link)
         rates = {flow_id: rate for flow_id, rate in rates.items() if flow_id in self.flows}
         rates.update(fair_link_rates(
-            {flow_id: self.flows[flow_id].path for flow_id in sorted(affected)}, self.links
+            {flow_id: self.flows[flow_id].path for flow_id in sorted(affected)},
+            {link: self.links[link] for link in links},
         ))
         self.changed_links.clear()
         return rates
