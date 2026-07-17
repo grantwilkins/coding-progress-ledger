@@ -109,3 +109,9 @@ choices, deadline completion, simulated power reduction, migration completion,
 and planning time in the paired coding sweep.
 `outputs/scaling_1_to_100k_15min_20260717/scaling_summary.{png,pdf}` repeats
 the sweep with a 15-minute deadline and 22.5-minute observation window.
+`outputs/lp_objective_comparison_15min_20260717/scaling_summary.{png,pdf}`
+compares the restored LP with peak-before-work and work-before-peak. All three
+choose nearly identical plans; at 100,000 sessions they move 94,956 sessions
+and achieve about 189% of the requested reduction. The restored LP is faster,
+so the remaining over-selection comes from the conservative linear power bound,
+not objective order.

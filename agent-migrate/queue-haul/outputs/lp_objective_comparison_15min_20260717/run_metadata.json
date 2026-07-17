@@ -1,0 +1,31 @@
+{
+  "created_utc": "2026-07-17T19:47:56.780974+00:00",
+  "git_sha": "03d7290230fedbf2bcae28528688c42268ff4f40",
+  "model_profile": "gpt-oss-20b-a100-tp1-20260716",
+  "workload_profile": "coding-live-20260714",
+  "session_counts": [
+    1,
+    3,
+    10,
+    32,
+    100,
+    316,
+    1000,
+    3162,
+    10000,
+    31623,
+    100000
+  ],
+  "solvers": [
+    "lp",
+    "lp_peak_first",
+    "lp_work_first"
+  ],
+  "lp_backend": "CLARABEL",
+  "requests_enabled": false,
+  "final_state": "awake",
+  "bandwidth_gbps_per_node": 1,
+  "deadline_s": 900,
+  "end_s": 1350,
+  "target_fraction_of_removable_power": 0.5
+}
