@@ -5,11 +5,15 @@ and continuation quantities without power or deadline acceptance rules.
 
 Plausible wrong implementations:
 - Regenerate different conversations for repeats or split a trace turn.
-- Change the selected session set when concurrency changes.
+- Change the selected session set across concurrency, methods, or bandwidths.
+- Rerun identical controls for every method and bandwidth.
 - Add catch-up cache hits to KV bytes transferred over the network.
 - Label requested context sizes as measured prompt tokens.
 - Count API or unbilled traffic as transferred KV, or compare raw rather than
   baseline-adjusted power.
+- Mix transition samples into steady awake/sleep windows or average irregular
+  samples without time weighting.
+- Compare the sleeping source GPU with the idle destination GPU.
 - Include response generation in time to first response.
 - Reduce incomplete, stale, or old-schema runs.
 """
@@ -70,15 +74,42 @@ def test_plan_keeps_same_order_across_concurrency_and_adds_controls(tmp_path):
     trace, manifest_path = tmp_path / "trace.jsonl", tmp_path / "manifest.json"
     write_trace(trace); c.write_json(manifest_path, c.make_manifest(trace, "coding", 3, 1))
 
-    plan = c.make_plan(manifest_path, [2048], [1, 2], [1000], ["replay", "kv_transfer"], ["none"], 1, 9)
+    plan = c.make_plan(
+        manifest_path, [2048], [1, 2], [1000, 10000],
+        ["replay", "kv_transfer"], ["none"], 1, 9,
+    )
 
     assert {row["kind"] for row in plan["scenarios"]} == {"migration", "control"}
+    assert len([row for row in plan["scenarios"] if row["kind"] == "control"]) == 2
     for method in c.METHODS:
         migration = [row for row in plan["scenarios"] if row["kind"] == "migration" and row["method"] == method]
-        assert len(migration) == 2
-        assert migration[0]["sessions"] == migration[1]["sessions"]
+        assert len(migration) == 4
+        assert all(row["sessions"] == migration[0]["sessions"] for row in migration)
         assert all({move["method"] for move in row["moves"]} == {method} for row in migration)
-    assert all(sum(row["match_id"] == other["match_id"] for other in plan["scenarios"]) == 2 for row in plan["scenarios"])
+    for match_id in {row["match_id"] for row in plan["scenarios"]}:
+        matched = [row for row in plan["scenarios"] if row["match_id"] == match_id]
+        assert sum(row["kind"] == "control" for row in matched) == 1
+        assert len(matched) == 5
+        assert all(row["sessions"] == matched[0]["sessions"] for row in matched)
+
+
+def test_plan_can_pin_the_same_sessions_across_repeats(tmp_path):
+    trace, manifest_path = tmp_path / "trace.jsonl", tmp_path / "manifest.json"
+    write_trace(trace); c.write_json(manifest_path, c.make_manifest(trace, "coding", 3, 1))
+    session_ids = ["a", "c"]
+
+    plan = c.make_plan(
+        manifest_path, [2048], [1, 2], [1000], ["replay"], ["none"], 2, 9,
+        session_ids=session_ids,
+    )
+
+    assert all([row["session_id"] for row in scenario["sessions"]] == session_ids
+               for scenario in plan["scenarios"])
+    with pytest.raises(ValueError, match="exactly 2"):
+        c.make_plan(
+            manifest_path, [2048], [2], [1000], ["replay"], ["none"], 1, 9,
+            session_ids=["a"],
+        )
 
 
 def test_plan_rejects_old_schema_and_too_few_sessions(tmp_path):
@@ -229,6 +260,99 @@ def test_network_and_power_measurements_use_measured_scopes(tmp_path):
     assert measured["source_mean_power_w"] == 100
     assert measured["destination_mean_power_w"] == 140
     assert measured["total_added_energy_j"] == 60
+
+
+def test_power_state_summary_uses_time_weighting_and_same_gpu(tmp_path):
+    power = tmp_path / "power.csv"
+    power.write_text(
+        "monotonic_ns,wall_ns,gpu,power_w,utilization_pct,memory_mib,valid\n"
+        "0,0,0,80,0,1000,1\n0,0,1,100,0,2000,1\n"
+        "1000000000,0,0,100,0,1000,1\n1000000000,0,1,100,0,2000,1\n"
+        "3000000000,0,0,50,0,100,1\n3000000000,0,1,100,0,2000,1\n"
+        "4000000000,0,0,50,0,100,1\n4000000000,0,1,100,0,2000,1\n"
+    )
+
+    node = tmp_path / "node.csv"
+    node.write_text(
+        "monotonic_ns,wall_ns,node,current_watts,consumed_joules\n"
+        "0,0,n0,200,100\n3000000000,0,n0,170,700\n"
+        "4000000000,0,n0,170,870\n"
+    )
+    rows = c.power_state_summary(
+        power, node,
+        [{"awake_ns": [0, 3_000_000_000], "sleep_ns": [3_000_000_000, 4_000_000_000]}],
+    )
+
+    source_awake = next(row for row in rows
+                        if row["device"] == "source" and row["state"] == "awake")
+    source_sleep = next(row for row in rows
+                        if row["device"] == "source" and row["state"] == "sleep")
+    destination = [row for row in rows if row["device"] == "destination"]
+    assert source_awake["mean_power_w"] == pytest.approx((80 + 2 * 100) / 3)
+    assert source_sleep["mean_power_w"] == 50
+    assert source_sleep["mean_memory_mib"] == 100
+    assert {row["mean_power_w"] for row in destination} == {100}
+    node_rows = [row for row in rows if row["scope"] == "node"]
+    assert [row["mean_power_w"] for row in node_rows] == [200, 170]
+
+
+def test_node_power_parsing_hard_fails_missing_or_disabled_energy(monkeypatch):
+    assert c.parse_node_power("CurrentWatts=210 ConsumedJoules=4200") == (210, 4200)
+    for text in ("CurrentWatts=n/s ConsumedJoules=n/s",
+                 "CurrentWatts=0 ConsumedJoules=0", "CurrentWatts=10"):
+        with pytest.raises(RuntimeError, match="Slurm node energy"):
+            c.parse_node_power(text)
+    monkeypatch.delenv("SLURMD_NODENAME", raising=False)
+    with pytest.raises(RuntimeError, match="SLURMD_NODENAME"):
+        c.node_power_reading()
+
+
+def test_power_profile_orders_steady_windows_and_verified_wake(tmp_path, monkeypatch):
+    calls = []
+
+    class Sampler:
+        def __init__(self, path):
+            calls.append(("sampler", path.name))
+
+        def start(self):
+            calls.append(("sampler", "start"))
+
+        def close(self):
+            calls.append(("sampler", "close"))
+
+    monkeypatch.setattr(c, "PowerSampler", Sampler)
+    monkeypatch.setattr(c.b, "set_source_sleep",
+                        lambda _cfg, state: calls.append(("sleep", state)))
+    monkeypatch.setattr(c.b, "reset_vllm_caches",
+                        lambda *_args: calls.append(("reset",)))
+    monkeypatch.setattr(c.time, "sleep",
+                        lambda seconds: calls.append(("wait", seconds)))
+    times = iter(range(1, 9))
+    monkeypatch.setattr(c.time, "monotonic_ns", lambda: next(times))
+    probe = c.RequestResult("wake", 200, "h", 7, 8, first_byte_ns=8)
+    monkeypatch.setattr(c, "stream_chat",
+                        lambda *_args: (calls.append(("probe",)) or (probe, "OK")))
+    monkeypatch.setattr(c, "power_state_summary", lambda *_args: [])
+    monkeypatch.setattr(c, "write_csv", lambda *_args: None)
+    monkeypatch.setattr(c, "write_json", lambda *_args: None)
+    stack = SimpleNamespace(run_root=tmp_path)
+
+    c.profile_power_states(stack, c.b.Config(), tmp_path / "power", 1, 60, False)
+
+    assert calls == [
+        ("sleep", False), ("sampler", "gpu_power.csv"), ("sampler", "start"),
+        ("reset",), ("wait", 10), ("wait", 60), ("sleep", True),
+        ("wait", 10), ("wait", 60), ("sleep", False), ("probe",),
+        ("sampler", "close"),
+    ]
+
+
+def test_batch_power_measurement_is_exclusive_and_requires_node_energy():
+    script = Path(c.__file__).with_name("stage1c_benchmark.sbatch").read_text()
+
+    assert "#SBATCH --exclusive" in script
+    assert "--power-state-cycles" in script
+    assert "--node-power" in script
 
 
 def test_model_check_uses_measured_work_and_stays_in_its_valid_range():

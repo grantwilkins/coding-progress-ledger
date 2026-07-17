@@ -34,7 +34,13 @@ Active transfers share every named bottleneck with work-conserving max-min
 rates. The default scenario builder currently creates only equal-capacity
 per-node source-egress and destination-ingress links; it does not instantiate a
 shared datacenter or WAN cut. Treat current network results as sensitivity
-results, not calibrated cross-datacenter topology claims.
+results, not calibrated cross-datacenter topology claims. Published
+[A100 GPUDirect measurements](https://developer.nvidia.com/blog/accelerating-io-in-the-modern-data-center-network-io/)
+give 24 GB/s per 200 Gbps RDMA rail, while
+[Jupiter](https://research.google.com/pubs/archive/43837.pdf) motivates
+full/half-bisection fabrics and sensitivity around shared external cuts. The
+shaped 1/10 Gbps WAN allocations remain scenario inputs rather than claims
+about the cluster.
 
 For active sessions with `--final-state awake`, `node_drain` ranks source nodes
 by exact power reduction to idle divided by predicted drain time. It then ranks
@@ -74,14 +80,36 @@ shutdown, paired method and bandwidth comparisons, or parallel KV connections.
 The new coding fit and the earlier live replay points occupy separate token
 ranges in the profile; the earlier range retains its 30% error bound.
 
+New Stage 1C plans pin or select the same sessions and turns across methods and
+bandwidths and share controls across those comparisons. The completed
+`coding-run` predates that change, so its cross-method and cross-bandwidth
+observations remain unpaired.
+
 Stage 1C reduction reports measured prompt, processed, and new tokens; initial
 KV payload bytes; catch-up cache hits; exact proxy KV-route bytes; request
 timing; and power relative to a measured idle baseline. It does not group or
 plot by requested context size.
 `initial_time`, `throughput`, `concurrency_scaling`, `service_effects`,
-`power_energy`, and `model_check` show the direct relationships. Concurrency
-comparisons are paired; method and bandwidth observations are not paired and
-must not be connected or interpreted as isolated effects.
+`power_energy`, and `model_check` show the direct relationships.
+
+Generate the next 30-scenario serial crossover from the completed run's
+manifest:
+
+```bash
+uv run python queue-haul/stage1c_controller.py make-plan \
+  --manifest queue-haul/outputs/coding-manifest.json \
+  --out queue-haul/outputs/serial-power-plan.json \
+  --context-sizes 10896,24292 --concurrency 1 \
+  --bandwidth-mbps 1000,10000 --methods kv_transfer,replay \
+  --activity none --repeats 3 --seed 0 \
+  --session-ids codex:e381cc89-38ef-e67e-79b9-4b800369b4f5
+```
+
+`stage1c_benchmark.sbatch` profiles two 60-second empty-awake/sleep pairs once
+before running that plan. It requests an exclusive node and hard-fails before
+model startup when Slurm node energy is unavailable. Raw GPU/node telemetry,
+state windows, transition times, wake probes, and `summary.csv` are stored in
+`RUN_ROOT/power_states`.
 
 `--workers` runs independent workload, power-limit, deadline, and solver groups
 in separate processes while preserving serial result order. It defaults to one

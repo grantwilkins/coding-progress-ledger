@@ -3,25 +3,38 @@
 This is the single list of missing live measurements. Keep the checked profile
 at concurrency one until the matching concurrency tests pass.
 
-## Next GPU job: parallel KV gate
+## Next GPU job: serial crossover and power states
+
+- [ ] Reuse `outputs/coding-manifest.json` and the existing two-model stack.
+  Pin `codex:e381cc89-38ef-e67e-79b9-4b800369b4f5` at trace turns 0 and 60,
+  expected to measure about 11k and 31k prompt tokens.
+- [ ] Run raw KV and replay at 1 and 10 Gbps, concurrency one, no activity, and
+  three repeats. Share one control across the four method/rate migrations for
+  each turn and repeat: 24 migrations plus 6 controls.
+- [ ] Before migrations, collect two paired 60-second empty-awake and vLLM
+  level-1 sleep windows on the already-running stack. Record both GPUs, source
+  memory, verified sleep/wake transitions, a post-wake request, and exclusive
+  whole-node Slurm energy.
+- [ ] Hard-fail before model startup if Slurm reports missing or zero node
+  energy. Do not label GPU-only measurements as whole-server power.
+- [ ] Record exact measured prompt and KV work, transfer and ingest timing,
+  cache hits, continuation, shaped and achieved rate, and source/destination
+  power for every migration.
+
+## Later GPU job: parallel KV gate
 
 - [ ] Give each simultaneous KV lookup an independent LMCache connection. First
-  run one fixed two-session, 8k-token, 1 Gbps, no-activity smoke at concurrency
-  1 and 2, with matched controls.
+  run a fixed two-session, 1 Gbps, no-activity smoke at concurrency 1 and 2,
+  with matched controls.
 - [ ] Require two distinct connection IDs and overlapping KV-byte windows at
   concurrency two. Also require exact aggregate wire bytes, correct cache hits
   and continuation, no errors, and complete timing, power, and reduction data.
-- [ ] After that gate passes, run only KV transfer for the same fixed sessions
+- [ ] After that gate passes, run KV transfer for the same fixed four sessions
   and turns at concurrency 1, 2, and 4, shaped aggregate rates of 1 and 10 Gbps,
-  no activity, and two repeats. Include matched controls: 24 scenarios total.
-- [ ] As a separate paired group, run raw KV and replay at approximately 8k and
-  31.6k measured context tokens, 1 and 10 Gbps, concurrency one, no activity,
-  and three repeats. Reuse each session and turn across methods and rates:
-  24 migrations plus 12 shared controls.
-- [ ] Record per transfer: source, destination, connection, exact payload and
-  wire bytes, dispatch, queue arrival, copy start, first byte, last byte,
-  destination ready, route switch, completion, and error. Record aggregate
-  proxy rate, queue depth and bytes, cache hits, and source/destination power.
+  no activity, and two repeats.
+- [ ] Record connection, payload and wire bytes, dispatch, queue arrival, copy
+  start, first byte, last byte, destination ready, route switch, completion,
+  queue depth, aggregate rate, cache hits, power, and errors.
 - [ ] Keep the checked profile at KV concurrency one until the smoke and
   targeted run show correct overlap, accounting, and completion.
 
@@ -49,22 +62,16 @@ at concurrency one until the matching concurrency tests pass.
 
 ## Network topology and outflow
 
-- [ ] Characterize topology separately from the two-GPU job. Test same-node,
-  same-DC cross-node, and cross-DC paths where available; otherwise label
-  shaped-proxy results as sensitivity data.
-- [ ] At concurrency 1, 2, 4, and 8, run one source to one destination, one to
-  many, many to one, and disjoint many-to-many transfers. Include staggered
-  completions to test whether freed capacity is redistributed.
-- [ ] Record source/destination node, rack, site, and direction; payload and
-  wire bytes; per-flow and aggregate goodput; host NIC and shared-boundary
-  counters; destination ingest/queue rate; background traffic; and failures.
-- [ ] Infer each sharing domain and its residual application goodput from the
-  aggregate plateaus. Validate max-min sharing with per-flow rates and the rate
-  jump after a competing transfer completes.
-- [ ] Calibrate separate directional capacities for source node egress, any
-  binding rack/fabric cut, source-DC egress, WAN pair, destination-DC ingress,
-  destination node ingress, and destination KV ingest. Omit tiers shown to be
-  nonbinding rather than assigning every tier the same guessed rate.
+- [ ] Use published A100 sensitivity bounds instead of a multi-node GPU
+  campaign: 24 GB/s effective per 200 Gbps RDMA rail, full and half-bisection
+  intra-DC fabrics, 5/10/20% external cuts, and 1:4/1:8/1:16
+  between-building-to-within-building ratios.
+- [ ] Keep 1 and 10 Gbps as explicitly shaped usable-WAN allocations, not
+  publication-derived facts. Apply each as one shared site/WAN cut while
+  keeping the published endpoint and fabric tiers nonbinding.
+- [ ] Obtain administrator telemetry or run one small aggregate check only
+  before making claims about this cluster's NIC rails, QoS share, background
+  load, routing, or physical site egress.
 - [ ] Measure external durable-log paths separately; do not infer them from the
   final destination link of the KV path.
 
@@ -92,9 +99,10 @@ at concurrency one until the matching concurrency tests pass.
 ## Power, network, and hardware
 
 - [ ] Measure request and migration power at every supported concurrency.
-- [ ] Measure empty-awake, sleep, and shutdown power and transition time for
-  both GPUs and the whole server; the current 67.12 W/GPU value is idle power,
-  not measured sleep power.
+- [ ] Fit empty-awake and sleep power and transition time from the next job;
+  the current 67.12 W/GPU value is idle power, not measured sleep power.
+- [ ] Measure shutdown power and transition time separately; a running Slurm
+  allocation cannot measure physical node power-off and reboot.
 - [ ] Measure and validate tensor-parallel layouts before simulating tensor
   parallelism greater than one.
 - [ ] Use cited public benchmark data only for clearly labeled sensitivity
@@ -104,9 +112,8 @@ at concurrency one until the matching concurrency tests pass.
 
 - [ ] Hold out complete drains and compare predicted versus measured queue
   wait, transfer time, route-switch time, request delay, and power over time.
-- [ ] Hold out concurrency shapes and path classes; compare predicted versus
-  measured per-flow rates, aggregate goodput, completion order, and completion
-  time under shared bottlenecks.
+- [ ] Validate the shared-cut simulator against the shaped proxy before making
+  claims about unmeasured physical topology.
 - [ ] Test background, expedited, and critical policies on the same held-out
   drains at 10-minute, 1-hour, and 6-hour horizons.
 - [ ] Record failures and incomplete runs; never fit a profile from partial

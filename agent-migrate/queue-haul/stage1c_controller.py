@@ -6,6 +6,7 @@ import gzip
 import hashlib
 import http.client
 import json
+import os
 import random
 import statistics
 import subprocess
@@ -194,33 +195,54 @@ def validate_manifest(manifest: dict) -> None:
         raise ValueError("a manifest must contain one standard job class")
 
 
-def make_plan(manifest_path: Path, context_sizes: list[int], concurrency: list[int], bandwidth_mbps: list[float], methods: list[str], activity: list[str], repeats: int, seed: int, deadline_s: float = 300.0) -> dict:
+def make_plan(manifest_path: Path, context_sizes: list[int], concurrency: list[int],
+              bandwidth_mbps: list[float], methods: list[str], activity: list[str],
+              repeats: int, seed: int, deadline_s: float = 300.0,
+              session_ids: tuple[str, ...] | list[str] = ()) -> dict:
     manifest = json.loads(manifest_path.read_text())
     validate_manifest(manifest)
     if not all(value > 0 for value in [*context_sizes, *concurrency, *bandwidth_mbps, repeats, deadline_s]):
         raise ValueError("plan values must be positive")
-    if not set(methods) <= set(METHODS) or not set(activity) <= set(ACTIVITIES):
+    if not methods or not activity or not set(methods) <= set(METHODS) \
+            or not set(activity) <= set(ACTIVITIES):
         raise ValueError("unknown method or activity")
     count = max(concurrency)
     if len(manifest["sessions"]) < count:
         raise ValueError(f"manifest needs at least {count} sessions")
+    sessions = {row["id"]: row for row in manifest["sessions"]}
+    if session_ids and (len(session_ids) != count or len(set(session_ids)) != count
+                        or not set(session_ids) <= sessions.keys()):
+        raise ValueError(f"session ids must name exactly {count} manifest sessions")
     scenarios = []
-    for method in methods:
-        for size in context_sizes:
-            for link in bandwidth_mbps:
-                for active in activity:
-                    for repeat in range(repeats):
-                        chosen = sorted(manifest["sessions"], key=lambda row: row["id"])
-                        random.Random(stable_seed(seed, method, size, link, active, repeat)).shuffle(chosen)
-                        chosen = chosen[:count]
-                        session_rows = [{"session_id": row["id"], "job_class": row["job_class"], "turn_index": nearest_turn(row, size), "order": order} for order, row in enumerate(chosen)]
-                        for width in concurrency:
-                            match_id = object_hash([method, size, link, active, repeat, width])[:16]
-                            base = {"match_id": match_id, "method": method, "context_size": size, "concurrency": width, "bandwidth_mbps": link, "activity": active, "repeat": repeat, "deadline_s": deadline_s, "sessions": session_rows}
-                            for kind in ("migration", "control"):
-                                scenario = {**base, "kind": kind, "scenario_id": f"{kind[0]}-{match_id}"}
-                                scenario["moves"] = [{**row, "method": method} for row in session_rows] if kind == "migration" else []
-                                scenarios.append(scenario)
+    for size in context_sizes:
+        for active in activity:
+            for repeat in range(repeats):
+                if session_ids:
+                    chosen = [sessions[session_id] for session_id in session_ids]
+                else:
+                    chosen = sorted(manifest["sessions"], key=lambda row: row["id"])
+                    random.Random(stable_seed(seed, size, active, repeat)).shuffle(chosen)
+                    chosen = chosen[:count]
+                session_rows = [{"session_id": row["id"], "job_class": row["job_class"],
+                                 "turn_index": nearest_turn(row, size), "order": order}
+                                for order, row in enumerate(chosen)]
+                for width in concurrency:
+                    match_id = object_hash([size, active, repeat, width, session_rows])[:16]
+                    base = {"match_id": match_id, "context_size": size,
+                            "concurrency": width, "activity": active, "repeat": repeat,
+                            "deadline_s": deadline_s, "sessions": session_rows}
+                    control = {**base, "method": methods[0],
+                               "bandwidth_mbps": bandwidth_mbps[0], "kind": "control",
+                               "scenario_id": f"c-{match_id}", "moves": []}
+                    scenarios.append(control)
+                    for method in methods:
+                        for link in bandwidth_mbps:
+                            scenario_id = object_hash([match_id, method, link])[:16]
+                            scenario = {**base, "method": method, "bandwidth_mbps": link,
+                                        "kind": "migration", "scenario_id": f"m-{scenario_id}"}
+                            scenario["moves"] = [{**row, "method": method}
+                                                 for row in session_rows]
+                            scenarios.append(scenario)
     random.Random(seed).shuffle(scenarios)
     plan = {"schema": PLAN_SCHEMA, "manifest": {"path": str(manifest_path), "sha256": file_hash(manifest_path)}, "seed": seed, "scenarios": scenarios}
     validate_plan(plan, manifest)
@@ -541,6 +563,214 @@ class PowerSampler:
             raise self.error
 
 
+def parse_node_power(text: str) -> tuple[float, float]:
+    fields = dict(item.split("=", 1) for item in text.split() if "=" in item)
+    try:
+        watts, joules = float(fields["CurrentWatts"]), float(fields["ConsumedJoules"])
+    except (KeyError, ValueError) as exc:
+        raise RuntimeError(f"Slurm node energy is unavailable: {text.strip()}") from exc
+    if watts <= 0 or joules <= 0:
+        raise RuntimeError(f"Slurm node energy is disabled: {text.strip()}")
+    return watts, joules
+
+
+def node_power_reading() -> tuple[str, float, float]:
+    node = os.environ.get("SLURMD_NODENAME")
+    if not node:
+        raise RuntimeError("SLURMD_NODENAME is required for node power")
+    output = subprocess.check_output(
+        ["scontrol", "show", "node", node, "--oneliner"], text=True,
+    )
+    return node, *parse_node_power(output)
+
+
+class NodePowerSampler:
+    def __init__(self, path: Path):
+        self.path, self.stop = path, threading.Event()
+        self.error: Exception | None = None
+        self.thread = threading.Thread(target=self._run, daemon=True)
+
+    def start(self) -> None:
+        self.thread.start()
+
+    def _run(self) -> None:
+        try:
+            with self.path.open("w", newline="", buffering=1) as handle:
+                writer = csv.writer(handle)
+                writer.writerow(
+                    ["monotonic_ns", "wall_ns", "node", "current_watts",
+                     "consumed_joules"]
+                )
+                while not self.stop.is_set():
+                    node, watts, joules = node_power_reading()
+                    writer.writerow(
+                        [time.monotonic_ns(), time.time_ns(), node, watts, joules]
+                    )
+                    self.stop.wait(1)
+        except Exception as exc:
+            self.error = exc
+
+    def close(self) -> None:
+        self.stop.set()
+        self.thread.join(5)
+        if self.thread.is_alive():
+            raise RuntimeError("node power sampler did not stop")
+        if self.error:
+            raise self.error
+
+
+def time_weighted_mean(rows: list[dict], start_ns: int, end_ns: int,
+                       key: str) -> float:
+    points = sorted(rows, key=lambda row: row["monotonic_ns"])
+    if end_ns <= start_ns or not any(row["monotonic_ns"] <= start_ns for row in points) \
+            or not any(row["monotonic_ns"] >= end_ns for row in points):
+        raise RuntimeError("power samples do not cover state window")
+    value = next(row[key] for row in reversed(points)
+                 if row["monotonic_ns"] <= start_ns)
+    area, cursor = 0.0, start_ns
+    for row in points:
+        sample = row["monotonic_ns"]
+        if sample <= start_ns:
+            continue
+        stop = min(sample, end_ns)
+        area += (stop - cursor) * value
+        if sample >= end_ns:
+            return area / (end_ns - start_ns)
+        cursor, value = sample, row[key]
+    raise RuntimeError("power samples do not cover state window")
+
+
+def power_state_summary(gpu_path: Path, node_path: Path | None,
+                        cycles: list[dict]) -> list[dict]:
+    gpu_rows = power_rows(gpu_path)
+    gpus = sorted({row["gpu"] for row in gpu_rows})
+    if len(gpus) != 2:
+        raise RuntimeError(f"expected two measured GPUs in {gpu_path}, found {gpus}")
+    node_rows = []
+    if node_path:
+        with node_path.open() as handle:
+            node_rows = [
+                {**row, "monotonic_ns": int(row["monotonic_ns"]),
+                 "current_watts": float(row["current_watts"]),
+                 "consumed_joules": float(row["consumed_joules"])}
+                for row in csv.DictReader(handle)
+            ]
+    summary = []
+    for cycle, windows in enumerate(cycles):
+        for state in ("awake", "sleep"):
+            start, end = windows[f"{state}_ns"]
+            for role, gpu in zip(("source", "destination"), gpus):
+                rows = [row for row in gpu_rows if row["gpu"] == gpu]
+                summary.append({
+                    "cycle": cycle, "state": state, "scope": "gpu", "device": role,
+                    "duration_s": duration(start, end),
+                    "mean_power_w": time_weighted_mean(rows, start, end, "power_w"),
+                    "mean_memory_mib": time_weighted_mean(
+                        rows, start, end, "memory_mib"
+                    ),
+                })
+            if node_rows:
+                before = max(
+                    (row for row in node_rows if row["monotonic_ns"] <= start),
+                    key=lambda row: row["monotonic_ns"], default=None,
+                )
+                after = min(
+                    (row for row in node_rows if row["monotonic_ns"] >= end),
+                    key=lambda row: row["monotonic_ns"], default=None,
+                )
+                if not before or not after \
+                        or after["consumed_joules"] <= before["consumed_joules"]:
+                    raise RuntimeError("node energy does not cover state window")
+                summary.append({
+                    "cycle": cycle, "state": state, "scope": "node",
+                    "device": before["node"],
+                    "duration_s": duration(
+                        before["monotonic_ns"], after["monotonic_ns"]
+                    ),
+                    "mean_power_w": (
+                        after["consumed_joules"] - before["consumed_joules"]
+                    ) / duration(before["monotonic_ns"], after["monotonic_ns"]),
+                    "reported_mean_power_w": time_weighted_mean(
+                        node_rows, start, end, "current_watts"
+                    ),
+                })
+    source = [row for row in summary
+              if row["scope"] == "gpu" and row["device"] == "source"]
+    awake = statistics.median(
+        row["mean_memory_mib"] for row in source if row["state"] == "awake"
+    )
+    sleeping = statistics.median(
+        row["mean_memory_mib"] for row in source if row["state"] == "sleep"
+    )
+    if sleeping >= awake:
+        raise RuntimeError("source GPU memory did not fall during sleep")
+    return summary
+
+
+def profile_power_states(stack: b.Stack, cfg: b.Config, root: Path, cycles: int,
+                         window_s: float, node_power: bool) -> None:
+    if cycles < 1 or window_s <= 0:
+        raise ValueError("power-state cycles and window must be positive")
+    root.mkdir(parents=True, exist_ok=True)
+    b.set_source_sleep(cfg, False)
+    gpu_sampler = PowerSampler(root / "gpu_power.csv")
+    node_sampler = NodePowerSampler(root / "node_power.csv") if node_power else None
+    gpu_sampler.start()
+    if node_sampler:
+        node_sampler.start()
+    rows, sleeping = [], False
+    try:
+        for cycle in range(cycles):
+            b.reset_vllm_caches(
+                cfg, (stack.run_root / "source.log", stack.run_root / "sink.log")
+            )
+            time.sleep(10)
+            awake_start = time.monotonic_ns()
+            time.sleep(window_s)
+            awake_end = time.monotonic_ns()
+            sleep_start = time.monotonic_ns()
+            b.set_source_sleep(cfg, True)
+            sleeping = True
+            sleep_end = time.monotonic_ns()
+            time.sleep(10)
+            steady_sleep_start = time.monotonic_ns()
+            time.sleep(window_s)
+            steady_sleep_end = time.monotonic_ns()
+            wake_start = time.monotonic_ns()
+            b.set_source_sleep(cfg, False)
+            sleeping = False
+            wake_end = time.monotonic_ns()
+            messages = [{"role": "user", "content": "Reply with exactly OK."}]
+            probe, text = stream_chat(
+                cfg, cfg.src_port, messages, 4, object_hash(messages), 600
+            )
+            if probe.status_code != 200 or probe.first_byte_ns is None or "OK" not in text:
+                raise RuntimeError("source did not serve a verified wake probe")
+            rows.append({
+                "cycle": cycle, "awake_ns": [awake_start, awake_end],
+                "sleep_transition_ns": [sleep_start, sleep_end],
+                "sleep_ns": [steady_sleep_start, steady_sleep_end],
+                "wake_transition_ns": [wake_start, wake_end],
+                "wake_probe": asdict(probe),
+            })
+    finally:
+        if sleeping:
+            b.set_source_sleep(cfg, False)
+        try:
+            gpu_sampler.close()
+        finally:
+            if node_sampler:
+                node_sampler.close()
+    summary = power_state_summary(
+        root / "gpu_power.csv", root / "node_power.csv" if node_power else None,
+        rows,
+    )
+    write_csv(root / "summary.csv", summary)
+    write_json(root / "result.json", {
+        "cycles": rows, "window_s": window_s, "node_power": node_power,
+    })
+
+
 def write_cache_slice(source: Path, destination: Path, start_ns: int, end_ns: int) -> None:
     with destination.open("w") as handle:
         for row in cache_operations(source, start_ns, end_ns):
@@ -676,7 +906,14 @@ def merge_run_metadata(current: dict, previous: dict | None, resume_from: str | 
     return current
 
 
-def run_plan(plan_path: Path, run_root: Path, cfg: b.Config, allow_dirty: bool, extra: list[str], resume_from: str | None = None) -> None:
+def run_plan(plan_path: Path, run_root: Path, cfg: b.Config, allow_dirty: bool,
+             extra: list[str], resume_from: str | None = None,
+             power_state_cycles: int = 0, power_state_window_s: float = 60,
+             node_power: bool = False) -> None:
+    if power_state_cycles < 0 or power_state_window_s <= 0:
+        raise ValueError("invalid power-state settings")
+    if node_power:
+        node_power_reading()
     plan = json.loads(plan_path.read_text())
     manifest_path = Path(plan["manifest"]["path"])
     if file_hash(manifest_path) != plan["manifest"]["sha256"]:
@@ -684,7 +921,7 @@ def run_plan(plan_path: Path, run_root: Path, cfg: b.Config, allow_dirty: bool, 
     manifest = json.loads(manifest_path.read_text())
     validate_plan(plan, manifest)
     sha, dirty = git_state(allow_dirty)
-    metadata = {"schema": RUN_SCHEMA, "plan_sha256": file_hash(plan_path), "plan_object_sha256": object_hash(plan), "manifest_sha256": file_hash(manifest_path), "git_sha": sha, "git_shas": [sha], "dirty": dirty, "config": config_record(cfg), "extra_vllm_args": extra}
+    metadata = {"schema": RUN_SCHEMA, "plan_sha256": file_hash(plan_path), "plan_object_sha256": object_hash(plan), "manifest_sha256": file_hash(manifest_path), "git_sha": sha, "git_shas": [sha], "dirty": dirty, "config": config_record(cfg), "extra_vllm_args": extra, "power_state_cycles": power_state_cycles, "power_state_window_s": power_state_window_s, "node_power": node_power}
     metadata_path = run_root / "run_metadata.json"
     previous = json.loads(metadata_path.read_text()) if metadata_path.exists() else None
     metadata = merge_run_metadata(metadata, previous, resume_from)
@@ -708,6 +945,12 @@ def run_plan(plan_path: Path, run_root: Path, cfg: b.Config, allow_dirty: bool, 
                 continue
             if stack is None:
                 stack = start_stack(scenario["bandwidth_mbps"])
+                power_result = run_root / "power_states" / "result.json"
+                if power_state_cycles and not power_result.exists():
+                    profile_power_states(
+                        stack, cfg, power_result.parent, power_state_cycles,
+                        power_state_window_s, node_power,
+                    )
             for reset_attempt in range(2):
                 try:
                     run_scenario(stack, cfg, manifest, scenario, root, metadata["plan_sha256"][:16])
@@ -815,7 +1058,8 @@ def network_measurements(path: Path) -> dict:
 def power_rows(path: Path) -> list[dict]:
     with path.open() as handle:
         return [{**row, "monotonic_ns": int(row["monotonic_ns"]), "gpu": int(row["gpu"]),
-                 "power_w": float(row["power_w"]), "utilization_pct": float(row["utilization_pct"])}
+                 "power_w": float(row["power_w"]), "utilization_pct": float(row["utilization_pct"]),
+                 "memory_mib": float(row["memory_mib"])}
                 for row in csv.DictReader(handle) if row["valid"] == "1"]
 
 
@@ -1200,9 +1444,13 @@ def parse_args(argv: list[str] | None = None):
     command.add_argument("--bandwidth-mbps", type=lambda value: csv_list(value, float), required=True)
     command.add_argument("--methods", type=lambda value: csv_list(value), default=list(METHODS))
     command.add_argument("--activity", type=lambda value: csv_list(value), default=list(ACTIVITIES))
+    command.add_argument("--session-ids", type=lambda value: csv_list(value), default=[])
     command.add_argument("--repeats", type=int, required=True); command.add_argument("--seed", type=int, required=True); command.add_argument("--deadline-s", type=float, default=300)
     command = sub.add_parser("run")
     command.add_argument("--plan", type=Path, required=True); command.add_argument("--run-root", type=Path, required=True); command.add_argument("--allow-dirty", action="store_true"); command.add_argument("--resume-from-git-sha")
+    command.add_argument("--power-state-cycles", type=int, default=0)
+    command.add_argument("--power-state-window-s", type=float, default=60)
+    command.add_argument("--node-power", action="store_true")
     b.add_common(command); command.add_argument("extra_vllm_args", nargs=argparse.REMAINDER)
     command = sub.add_parser("reduce"); command.add_argument("--run-root", type=Path, required=True)
     return parser.parse_args(argv)
@@ -1213,10 +1461,18 @@ def main(argv: list[str] | None = None) -> None:
     if args.command == "make-manifest":
         write_json(args.out, make_manifest(args.input, args.workload, args.sessions, args.seed))
     elif args.command == "make-plan":
-        write_json(args.out, make_plan(args.manifest, args.context_sizes, args.concurrency, args.bandwidth_mbps, args.methods, args.activity, args.repeats, args.seed, args.deadline_s))
+        write_json(args.out, make_plan(
+            args.manifest, args.context_sizes, args.concurrency, args.bandwidth_mbps,
+            args.methods, args.activity, args.repeats, args.seed, args.deadline_s,
+            args.session_ids,
+        ))
     elif args.command == "run":
         extra = args.extra_vllm_args[1:] if args.extra_vllm_args[:1] == ["--"] else args.extra_vllm_args
-        run_plan(args.plan, args.run_root, b.config_from_args(args), args.allow_dirty, extra, args.resume_from_git_sha)
+        run_plan(
+            args.plan, args.run_root, b.config_from_args(args), args.allow_dirty,
+            extra, args.resume_from_git_sha, args.power_state_cycles,
+            args.power_state_window_s, args.node_power,
+        )
     else:
         reduce_run(args.run_root)
 

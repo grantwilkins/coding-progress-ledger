@@ -6,6 +6,7 @@
 #SBATCH --cpus-per-task=16
 #SBATCH --gres=gpu:2
 #SBATCH --constraint=GPU_SKU:A100_SXM4&GPU_MEM:80GB
+#SBATCH --exclusive
 #SBATCH --mem=256G
 #SBATCH --time=12:00:00
 #SBATCH --output=/home/groups/ramr/gfw/coding-progress-ledger/agent-migrate/queue-haul/outputs/stage1c-%j.out
@@ -17,6 +18,8 @@ REPO=${REPO:-/home/groups/ramr/gfw/coding-progress-ledger/agent-migrate}
 PY=${PY:-$REPO/.venv/bin/python}
 PLAN=${PLAN:?set PLAN to a reviewed plan JSON file}
 RUN_ROOT=${RUN_ROOT:?set RUN_ROOT to a new or matching resumable run directory}
+POWER_STATE_CYCLES=${POWER_STATE_CYCLES:-2}
+POWER_STATE_WINDOW_S=${POWER_STATE_WINDOW_S:-60}
 
 cd "$REPO"
 module load gcc/14.2.0 openblas/0.3.28
@@ -27,6 +30,9 @@ export QH_PORT_OFFSET=${QH_PORT_OFFSET:-$((SLURM_JOB_ID % 40000 + 1000))}
 $PY queue-haul/stage1b_drain_sink.py preflight --required-gpus 2
 RUN_STATUS=0
 RESUME_ARGS=${RESUME_FROM_GIT_SHA:+--resume-from-git-sha $RESUME_FROM_GIT_SHA}
-$PY queue-haul/stage1c_controller.py run --plan "$PLAN" --run-root "$RUN_ROOT" $RESUME_ARGS || RUN_STATUS=$?
+$PY queue-haul/stage1c_controller.py run --plan "$PLAN" --run-root "$RUN_ROOT" \
+  --power-state-cycles "$POWER_STATE_CYCLES" \
+  --power-state-window-s "$POWER_STATE_WINDOW_S" --node-power \
+  $RESUME_ARGS || RUN_STATUS=$?
 $PY queue-haul/stage1c_controller.py reduce --run-root "$RUN_ROOT"
 exit "$RUN_STATUS"
