@@ -19,6 +19,7 @@ uv run python queue-haul/power_drain_experiment.py \
   --solver load_only --workers 2 --out queue-haul/outputs/profile_smoke
 uv run python queue-haul/plot_simulator_validation.py
 uv run python queue-haul/plot_simulator_evaluation.py
+uv run python queue-haul/plot_scaling_results.py
 ```
 
 The model profile uses exact measured KV bytes. KV loading overlaps network
@@ -88,3 +89,7 @@ hard-fails if any checked value differs.
 `outputs/simulator_evaluation.{csv,png,pdf}` shows requested versus simulated
 source-power reduction, route-switch completion, and request wait for a
 controlled 50-session sweep.
+
+`outputs/scaling_1_to_100k_20260716/scaling_summary.{png,pdf}` compares
+solver choices, deadline completion, simulated power reduction, migration
+completion, and planning time on the paired coding sweep.
