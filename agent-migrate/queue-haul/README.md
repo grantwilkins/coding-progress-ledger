@@ -29,6 +29,13 @@ Destination KV copies enter a FIFO per destination before moving bytes;
 `queues.csv` records arrival, start, completion, depth, bytes, observed wait,
 and whether a copy is still pending at the simulation cutoff.
 
+The network simulator is a fixed-path fluid-capacity model, not a TCP model.
+Active transfers share every named bottleneck with work-conserving max-min
+rates. The default scenario builder currently creates only equal-capacity
+per-node source-egress and destination-ingress links; it does not instantiate a
+shared datacenter or WAN cut. Treat current network results as sensitivity
+results, not calibrated cross-datacenter topology claims.
+
 For active sessions with `--final-state awake`, `node_drain` ranks source nodes
 by exact power reduction to idle divided by predicted drain time. It then ranks
 sessions within each node by power reduction per resource use and reserves the
