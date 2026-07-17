@@ -116,11 +116,14 @@ The third condition checks routing readiness, not end-to-end request latency.
 Request events affect context and timing but not dynamic power yet; output
 columns therefore say `modeled_*_power`.
 
-For the LP, every predicted commit must also precede \(D-\text{power window}\).
-`lp_power_shortfall_w` reports exact remaining source-power shortfall after
-rounding. `lp_peak_pressure` reports the largest rounded normalized LP resource
-load. The discrete-event result remains authoritative because aggregate LP
-capacity does not guarantee a schedule with serial stages and shared queues.
+The LP conservatively budgets migration resources through
+\(D-\text{power window}\), but acceptance separates the two deadlines: modeled
+trailing-window power must meet its limit at \(D\), and every migration must
+commit by \(D\). `lp_power_shortfall_w` reports exact remaining source-power
+shortfall after rounding. `lp_peak_pressure` reports the largest rounded
+normalized LP resource load. The discrete-event result remains authoritative
+because aggregate LP capacity does not guarantee a schedule with serial stages
+and shared queues.
 
 Unsupported context, load, concurrency, topology, or profile cases hard-fail.
 Open measurement work is listed in `DATA_TO_COLLECT.md`.

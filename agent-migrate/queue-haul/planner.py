@@ -332,6 +332,13 @@ def _round_lp(values: np.ndarray, valid: np.ndarray, resources: csr_matrix,
     return chosen, usage
 
 
+def _execution_feasible(scenario: ExecutionScenario, expected) -> bool:
+    return expected.deadline_met and all(
+        row.committed_s is not None and row.committed_s <= scenario.deadline_s
+        for row in expected.sessions
+    )
+
+
 def _node_drain_greedy(groups, sessions, gains, durations, valid, resources, horizon,
                        power: ExpectedPower, limit: float):
     n = len(gains)
@@ -447,7 +454,7 @@ def _plan_lp(scenario: ExecutionScenario, profile: ModelProfile, routes: Routes,
 
     def solve(objective, constraints):
         problem = cp.Problem(cp.Minimize(objective), constraints)
-        problem.solve(solver=cp.SCIPY)
+        problem.solve(solver=cp.CLARABEL)
         if problem.status not in (cp.OPTIMAL, cp.OPTIMAL_INACCURATE):
             raise RuntimeError(f"LP planner returned {problem.status}")
 
@@ -481,12 +488,8 @@ def _plan_lp(scenario: ExecutionScenario, profile: ModelProfile, routes: Routes,
         )),
         profile, moves, case_id,
     )
-    cutoff = scenario.deadline_s - profile.power_window_s
     feasible = planned <= scenario.power_limit_w and max(usage, default=0) <= 1 + 1e-8 \
-        and expected.deadline_met and all(
-            result.committed_s is not None and result.committed_s <= cutoff
-            for result in expected.sessions
-        )
+        and _execution_feasible(scenario, expected)
     return PlanResult(
         "lp", moves, initial, planned, expected.modeled_source_power_at_deadline_w,
         feasible, perf_counter() - start, profile.profile_id, case_id, seed,
@@ -623,12 +626,7 @@ def plan(scenario: ExecutionScenario, profile: ModelProfile,
                                          for session in scenario.sessions)),
         profile, moves, case_id,
     )
-    commit_deadline = scenario.deadline_s - profile.power_window_s \
-        if capacity_node_drain else scenario.deadline_s
-    feasible = planned <= scenario.power_limit_w and expected.deadline_met and all(
-        row.committed_s is not None and row.committed_s <= commit_deadline
-        for row in expected.sessions
-    )
+    feasible = planned <= scenario.power_limit_w and _execution_feasible(scenario, expected)
     return PlanResult(
         solver, moves, initial, planned, expected.modeled_source_power_at_deadline_w, feasible,
         perf_counter() - start, profile.profile_id, case_id, seed,

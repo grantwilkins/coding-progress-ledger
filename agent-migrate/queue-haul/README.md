@@ -39,13 +39,13 @@ the simpler whole-node ordering until those transitions are measured.
 
 `--solver lp` jointly selects replay and KV transfer under source-instance,
 network, destination replay, destination KV, compute, residency, and source
-power limits. It minimizes power shortfall, then peak resource use, then total
-migration work. The current LP scope is active sessions, one destination pool,
-the central profile, and `--final-state awake`; unsupported cases hard-fail.
-The fractional plan is rounded to whole sessions and accepted only after the
-existing discrete-event simulator checks its commits and trailing-window power.
-The exact equations and conservative concave-power bound are in
-`queue-haul/formulation.md`.
+power limits. Its CVXPY model uses CLARABEL and minimizes power shortfall, then
+peak resource use, then total migration work. The current LP scope is active
+sessions, one destination pool, the central profile, and `--final-state awake`;
+unsupported cases hard-fail. The fractional plan is rounded to whole sessions
+and accepted only when the discrete-event simulator meets trailing-window power
+and every migration commits by the migration deadline. The exact equations and
+conservative concave-power bound are in `queue-haul/formulation.md`.
 Action power is stored as total added power for each measured concurrency, not
 as power per session. The simulator updates these totals when concurrency
 changes, and the planner reuses a route-resource summary only when the complete

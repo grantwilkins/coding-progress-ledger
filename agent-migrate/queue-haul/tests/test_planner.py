@@ -17,12 +17,16 @@ Plausible wrong implementations:
 - Admit active KV that fits source instances but overfills a destination.
 - Add pipelined destination ingestion time to network transfer time.
 - Merge distinct route-resource summaries while caching repeated routes.
+- Require every migration before the power window instead of the migration deadline.
+- Accept a late migration or a missed measured power target.
 """
 
 from dataclasses import replace
+from types import SimpleNamespace
 
 import pytest
 
+import planner
 from planner import METHODS, _duration, _route_resources, plan
 from simulate import (ExecutionScenario, NetworkLink, PowerNode, ServingInstance, SimRequest,
                       SimSession)
@@ -333,3 +337,25 @@ def test_lp_reserves_the_trailing_power_window(tmp_path):
         replace(scenario, deadline_s=1, end_s=1), profile,
         {("s", "t"): ("wan",)}, "lp",
     ).moves == ()
+
+
+@pytest.mark.parametrize("solver", ("lp", "node_drain"))
+@pytest.mark.parametrize(("commit_s", "power_met", "feasible"), (
+    (10, True, True),
+    (10.000001, True, False),
+    (9, False, False),
+))
+def test_planner_separates_migration_deadline_from_power_window(
+        tmp_path, monkeypatch, solver, commit_s, power_met, feasible):
+    def predict(_scenario, _profile, moves, _case_id):
+        return SimpleNamespace(
+            deadline_met=power_met,
+            sessions=tuple(SimpleNamespace(committed_s=commit_s) for _ in moves),
+            modeled_source_power_at_deadline_w=0,
+        )
+
+    monkeypatch.setattr(planner, "predict", predict)
+    result = plan(problem(), model(tmp_path, tp=1), PATHS, solver)
+
+    assert result.moves
+    assert result.feasible is feasible
