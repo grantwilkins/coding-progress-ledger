@@ -274,9 +274,8 @@ def test_power_state_summary_uses_time_weighting_and_same_gpu(tmp_path):
 
     node = tmp_path / "node.csv"
     node.write_text(
-        "monotonic_ns,wall_ns,node,current_watts,consumed_joules\n"
-        "0,0,n0,200,100\n3000000000,0,n0,170,700\n"
-        "4000000000,0,n0,170,870\n"
+        "monotonic_ns,wall_ns,node,current_watts\n"
+        "0,0,n0,200\n3000000000,0,n0,170\n4000000000,0,n0,170\n"
     )
     rows = c.power_state_summary(
         power, node,
@@ -296,11 +295,10 @@ def test_power_state_summary_uses_time_weighting_and_same_gpu(tmp_path):
     assert [row["mean_power_w"] for row in node_rows] == [200, 170]
 
 
-def test_node_power_parsing_hard_fails_missing_or_disabled_energy(monkeypatch):
-    assert c.parse_node_power("CurrentWatts=210 ConsumedJoules=4200") == (210, 4200)
-    for text in ("CurrentWatts=n/s ConsumedJoules=n/s",
-                 "CurrentWatts=0 ConsumedJoules=0", "CurrentWatts=10"):
-        with pytest.raises(RuntimeError, match="Slurm node energy"):
+def test_node_power_parsing_hard_fails_missing_or_disabled_power(monkeypatch):
+    assert c.parse_node_power("CurrentWatts=210") == 210
+    for text in ("CurrentWatts=n/s", "CurrentWatts=0", "AveWatts=10"):
+        with pytest.raises(RuntimeError, match="Slurm node power"):
             c.parse_node_power(text)
     monkeypatch.delenv("SLURMD_NODENAME", raising=False)
     with pytest.raises(RuntimeError, match="SLURMD_NODENAME"):
@@ -347,7 +345,7 @@ def test_power_profile_orders_steady_windows_and_verified_wake(tmp_path, monkeyp
     ]
 
 
-def test_batch_power_measurement_is_exclusive_and_requires_node_energy():
+def test_batch_power_measurement_is_exclusive_and_records_node_power():
     script = Path(c.__file__).with_name("stage1c_benchmark.sbatch").read_text()
 
     assert "#SBATCH --exclusive" in script

@@ -106,10 +106,11 @@ uv run python queue-haul/stage1c_controller.py make-plan \
 ```
 
 `stage1c_benchmark.sbatch` profiles two 60-second empty-awake/sleep pairs once
-before running that plan. It requests an exclusive node and hard-fails before
-model startup when Slurm node energy is unavailable. Raw GPU/node telemetry,
-state windows, transition times, wake probes, and `summary.csv` are stored in
-`RUN_ROOT/power_states`.
+before running that plan. It requests an exclusive node. The primary 250 ms
+GPU power and energy measurements come from `nvidia-smi`; one-second Slurm
+`CurrentWatts` samples provide a secondary whole-node proxy. Raw GPU/node
+telemetry, state windows, transition times, wake probes, and `summary.csv` are
+stored in `RUN_ROOT/power_states`.
 
 `--workers` runs independent workload, power-limit, deadline, and solver groups
 in separate processes while preserving serial result order. It defaults to one

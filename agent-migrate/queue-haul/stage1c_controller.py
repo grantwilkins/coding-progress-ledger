@@ -563,25 +563,25 @@ class PowerSampler:
             raise self.error
 
 
-def parse_node_power(text: str) -> tuple[float, float]:
+def parse_node_power(text: str) -> float:
     fields = dict(item.split("=", 1) for item in text.split() if "=" in item)
     try:
-        watts, joules = float(fields["CurrentWatts"]), float(fields["ConsumedJoules"])
+        watts = float(fields["CurrentWatts"])
     except (KeyError, ValueError) as exc:
-        raise RuntimeError(f"Slurm node energy is unavailable: {text.strip()}") from exc
-    if watts <= 0 or joules <= 0:
-        raise RuntimeError(f"Slurm node energy is disabled: {text.strip()}")
-    return watts, joules
+        raise RuntimeError(f"Slurm node power is unavailable: {text.strip()}") from exc
+    if watts <= 0:
+        raise RuntimeError(f"Slurm node power is disabled: {text.strip()}")
+    return watts
 
 
-def node_power_reading() -> tuple[str, float, float]:
+def node_power_reading() -> tuple[str, float]:
     node = os.environ.get("SLURMD_NODENAME")
     if not node:
         raise RuntimeError("SLURMD_NODENAME is required for node power")
     output = subprocess.check_output(
         ["scontrol", "show", "node", node, "--oneliner"], text=True,
     )
-    return node, *parse_node_power(output)
+    return node, parse_node_power(output)
 
 
 class NodePowerSampler:
@@ -597,15 +597,10 @@ class NodePowerSampler:
         try:
             with self.path.open("w", newline="", buffering=1) as handle:
                 writer = csv.writer(handle)
-                writer.writerow(
-                    ["monotonic_ns", "wall_ns", "node", "current_watts",
-                     "consumed_joules"]
-                )
+                writer.writerow(["monotonic_ns", "wall_ns", "node", "current_watts"])
                 while not self.stop.is_set():
-                    node, watts, joules = node_power_reading()
-                    writer.writerow(
-                        [time.monotonic_ns(), time.time_ns(), node, watts, joules]
-                    )
+                    node, watts = node_power_reading()
+                    writer.writerow([time.monotonic_ns(), time.time_ns(), node, watts])
                     self.stop.wait(1)
         except Exception as exc:
             self.error = exc
@@ -651,8 +646,7 @@ def power_state_summary(gpu_path: Path, node_path: Path | None,
         with node_path.open() as handle:
             node_rows = [
                 {**row, "monotonic_ns": int(row["monotonic_ns"]),
-                 "current_watts": float(row["current_watts"]),
-                 "consumed_joules": float(row["consumed_joules"])}
+                 "current_watts": float(row["current_watts"])}
                 for row in csv.DictReader(handle)
             ]
     summary = []
@@ -670,27 +664,11 @@ def power_state_summary(gpu_path: Path, node_path: Path | None,
                     ),
                 })
             if node_rows:
-                before = max(
-                    (row for row in node_rows if row["monotonic_ns"] <= start),
-                    key=lambda row: row["monotonic_ns"], default=None,
-                )
-                after = min(
-                    (row for row in node_rows if row["monotonic_ns"] >= end),
-                    key=lambda row: row["monotonic_ns"], default=None,
-                )
-                if not before or not after \
-                        or after["consumed_joules"] <= before["consumed_joules"]:
-                    raise RuntimeError("node energy does not cover state window")
                 summary.append({
                     "cycle": cycle, "state": state, "scope": "node",
-                    "device": before["node"],
-                    "duration_s": duration(
-                        before["monotonic_ns"], after["monotonic_ns"]
-                    ),
-                    "mean_power_w": (
-                        after["consumed_joules"] - before["consumed_joules"]
-                    ) / duration(before["monotonic_ns"], after["monotonic_ns"]),
-                    "reported_mean_power_w": time_weighted_mean(
+                    "device": node_rows[0]["node"],
+                    "duration_s": duration(start, end),
+                    "mean_power_w": time_weighted_mean(
                         node_rows, start, end, "current_watts"
                     ),
                 })
