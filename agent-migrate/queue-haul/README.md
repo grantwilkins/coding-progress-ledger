@@ -100,6 +100,7 @@ hard-fails if any checked value differs.
 source-power reduction, route-switch completion, and request wait for a
 controlled 50-session sweep.
 
-`outputs/scaling_1_to_100k_20260716/scaling_summary.{png,pdf}` compares
-solver choices, deadline completion, simulated power reduction, migration
-completion, and planning time on the paired coding sweep.
+`outputs/scaling_1_to_100k_20260717/scaling_summary.{png,pdf}` compares the
+updated capacity-aware greedy, CLARABEL LP, and node-aware baseline on solver
+choices, deadline completion, simulated power reduction, migration completion,
+and planning time in the paired coding sweep.
