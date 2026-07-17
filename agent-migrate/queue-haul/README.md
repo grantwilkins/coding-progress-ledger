@@ -104,3 +104,5 @@ controlled 50-session sweep.
 updated capacity-aware greedy, CLARABEL LP, and node-aware baseline on solver
 choices, deadline completion, simulated power reduction, migration completion,
 and planning time in the paired coding sweep.
+`outputs/scaling_1_to_100k_15min_20260717/scaling_summary.{png,pdf}` repeats
+the sweep with a 15-minute deadline and 22.5-minute observation window.
