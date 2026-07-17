@@ -16,13 +16,14 @@ Plausible wrong implementations:
 - Defer replay for an active session or transfer nonexistent KV for a cold session.
 - Admit active KV that fits source instances but overfills a destination.
 - Add pipelined destination ingestion time to network transfer time.
+- Merge distinct route-resource summaries while caching repeated routes.
 """
 
 from dataclasses import replace
 
 import pytest
 
-from planner import METHODS, _duration, plan
+from planner import METHODS, _duration, _route_resources, plan
 from simulate import (ExecutionScenario, NetworkLink, PowerNode, ServingInstance, SimRequest,
                       SimSession)
 from test_execution_simulator import model
@@ -44,6 +45,29 @@ def problem(requests=(), limit=20, final="awake"):
 
 
 PATHS = {(source, dest): ("wan",) for source in ("s0", "s1") for dest in ("t0", "t1")}
+
+
+def test_route_resource_cache_reuses_only_identical_path_sets():
+    destinations = (ServingInstance("t0", ("d",)), ServingInstance("t1", ("d",)))
+    routes = {
+        ("same-a", "t0"): ("fast",), ("same-a", "t1"): ("fast",),
+        ("same-b", "t0"): ("fast",), ("same-b", "t1"): ("fast",),
+        ("different", "t0"): ("slow",), ("different", "t1"): ("slow",),
+    }
+    cache = {}
+
+    same_a = _route_resources("same-a", destinations, routes, {"fast": 100, "slow": 10},
+                              cache)
+    same_b = _route_resources("same-b", destinations, routes, {"fast": 100, "slow": 10},
+                              cache)
+    different = _route_resources(
+        "different", destinations, routes, {"fast": 100, "slow": 10}, cache,
+    )
+
+    assert same_a == same_b
+    assert same_a[0][2] == 100
+    assert different[0][2] == 10
+    assert len(cache) == 2
 
 
 def test_kv_duration_uses_the_slower_pipeline_stage(tmp_path):

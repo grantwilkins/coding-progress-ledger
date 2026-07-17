@@ -161,10 +161,15 @@ def _route(routes: Routes, source: str, destination: str) -> tuple[str, ...]:
     return routes(source, destination) if callable(routes) else routes[(source, destination)]
 
 
-def _route_resources(source: str, destinations, routes: Routes, links: dict[str, float]):
-    paths = [_route(routes, source, destination.instance_id) for destination in destinations]
+def _route_resources(source: str, destinations, routes: Routes, links: dict[str, float],
+                     cache: dict):
+    paths = tuple(dict.fromkeys(
+        _route(routes, source, destination.instance_id) for destination in destinations
+    ))
     if any(not path or any(link not in links for link in path) for path in paths):
         raise ValueError("LP route contains an unknown link")
+    if paths in cache:
+        return cache[paths]
 
     def summarize(options):
         common = set(options[0]).intersection(*map(set, options[1:]))
@@ -175,7 +180,8 @@ def _route_resources(source: str, destinations, routes: Routes, links: dict[str,
             min(links[link] for link in path) for path in options
         )
 
-    return summarize(paths), summarize([path[-1:] for path in paths])
+    cache[paths] = summarize(paths), summarize([path[-1:] for path in paths])
+    return cache[paths]
 
 
 def _migration_resources(scenario: ExecutionScenario, profile: ModelProfile, routes: Routes,
@@ -184,8 +190,9 @@ def _migration_resources(scenario: ExecutionScenario, profile: ModelProfile, rou
     n = len(sessions)
     links = {link.link_id: link.bytes_per_s for link in scenario.links}
     destination_ids = {instance.instance_id for instance in destinations}
+    summaries = {}
     route_cache = {
-        source: _route_resources(source, destinations, routes, links)
+        source: _route_resources(source, destinations, routes, links, summaries)
         for source in {session.source_instance for session in sessions}
     }
     replay_s = np.array([

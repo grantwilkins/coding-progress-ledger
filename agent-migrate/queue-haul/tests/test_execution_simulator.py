@@ -14,6 +14,8 @@ Plausible wrong implementations:
 - Transfer nonexistent cold KV or defer replay for GPU-resident active KV.
 - Add network and destination KV time even though ingestion is pipelined.
 - Charge measured total concurrent action power once for every session.
+- Fail to lower cached action power when concurrency decreases.
+- Mix source and destination action power while updating concurrency.
 - Admit destination KV copies after rather than before their bytes move.
 - Apply a destination queue globally instead of once per destination instance.
 - Report queue depth or bytes without the newly queued transfer.
@@ -35,7 +37,7 @@ from simulate import (ExecutionScenario, ExecutionSimulator, NetworkLink, Planne
 
 def model(tmp_path, switch=1, destination_rate=1e12, shutdown=2, setup=0, tp=2,
           replay_rate=None, kv_capacity=10_000, kv_action_power=(0, 0), parallel_kv=1,
-          parallel_moves=2):
+          parallel_moves=2, kv_source_action_power=(0, 0)):
     source = {"kind": "measured", "reference": "hand", "valid_range": [1, 1000], "relative_error": 0}
     rate = {"1": [[1, 100], [1000, 100]], "2": [[1, 50], [1000, 50]]}
     raw = {
@@ -56,8 +58,8 @@ def model(tmp_path, switch=1, destination_rate=1e12, shutdown=2, setup=0, tp=2,
             "switch_s": switch, "sleep_power_w": 2, "sleep_s": 1, "shutdown_s": shutdown,
             "action_power_w": {
                 "replay": {"1": [0, 0], "2": [0, 0]},
-                "kv_transfer": {"1": [0, kv_action_power[0]],
-                                "2": [0, kv_action_power[1]]},
+                "kv_transfer": {"1": [kv_source_action_power[0], kv_action_power[0]],
+                                "2": [kv_source_action_power[1], kv_action_power[1]]},
                 "replay_on_request": {"1": [0, 0], "2": [0, 0]},
                 "catch_up": {"1": [0, 0], "2": [0, 0]},
                 "sleep": {"1": [0, 0]}, "off": {"1": [0, 0]},
@@ -230,6 +232,36 @@ def test_action_power_is_total_for_concurrent_actions(tmp_path):
 
     baseline = result.power[0][2]
     assert max(point[2] for point in result.power) - baseline == pytest.approx(15)
+
+
+def test_action_power_tracks_concurrency_per_resource_on_start_and_stop(tmp_path):
+    topology = ExecutionScenario(
+        10, 20, 0, "awake", 0,
+        (PowerNode("src", 1, True), PowerNode("dst", 2, False)),
+        (ServingInstance("source", ("src",)), ServingInstance("d0", ("dst",)),
+         ServingInstance("d1", ("dst",))),
+        (), (NetworkLink("wan", 100),),
+    )
+    simulator = ExecutionSimulator(topology, model(
+        tmp_path, tp=1, kv_action_power=(10, 15), kv_source_action_power=(3, 5),
+    ), ())
+
+    simulator._start_action("a", "kv_transfer", instance="d0")
+    assert simulator._action_power(False) == pytest.approx(10)
+    simulator._start_action("source", "kv_transfer", instance="source")
+    assert simulator._action_power(True) == pytest.approx(3)
+    assert simulator._action_power(False) == pytest.approx(10)
+    simulator._start_action("b", "kv_transfer", instance="d0")
+    assert simulator._action_power(False) == pytest.approx(15)
+    simulator._start_action("c", "kv_transfer", instance="d1")
+    assert simulator._action_power(False) == pytest.approx(25)
+    simulator._stop_action("b")
+    assert simulator._action_power(False) == pytest.approx(20)
+    simulator._stop_action("a")
+    simulator._stop_action("c")
+    simulator._stop_action("source")
+    assert simulator._action_power(True) == 0
+    assert simulator._action_power(False) == 0
 
 
 def test_event_loop_hard_fails_if_time_does_not_advance(tmp_path, monkeypatch):

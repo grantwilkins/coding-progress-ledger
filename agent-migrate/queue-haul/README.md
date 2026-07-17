@@ -47,8 +47,10 @@ existing discrete-event simulator checks its commits and trailing-window power.
 The exact equations and conservative concave-power bound are in
 `queue-haul/formulation.md`.
 Action power is stored as total added power for each measured concurrency, not
-as power per session. Fit the serial coding data with repeats 0–1 and evaluate
-repeat 2 with:
+as power per session. The simulator updates these totals when concurrency
+changes, and the planner reuses a route-resource summary only when the complete
+set of route paths matches. Fit the serial coding data with repeats 0–1 and
+evaluate repeat 2 with:
 
 ```bash
 uv run python queue-haul/stage1c_profile_fit.py \

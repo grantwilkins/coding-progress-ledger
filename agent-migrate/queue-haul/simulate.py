@@ -331,6 +331,9 @@ class ExecutionSimulator:
         self.power_model = ExpectedPower(scenario, profile, case_id)
         self.node_state = {n.node_id: "awake" for n in scenario.nodes}
         self.active_actions: dict[object, tuple[str, bool, str]] = {}
+        self.action_counts: dict[tuple[str, bool, str], int] = {}
+        self.action_power_w = {True: 0.0, False: 0.0}
+        self.action_group_counts = {True: 0, False: 0}
         self.deferred = set()
         self.waking = set()
         self.pending_requests: dict[str, tuple[int, float]] = {}
@@ -420,18 +423,35 @@ class ExecutionSimulator:
             raise RuntimeError("an action requires one unused key and one resource")
         resource = node or instance
         local = self.nodes[node].local if node else self.nodes[self.instances[instance].gpu_nodes[0]].local
+        group = action, local, resource
+        old_count = self.action_counts.get(group, 0)
+        profile = self.case.action_power_w[action]
+        old_power = profile.power(old_count, local) if old_count else 0.0
+        new_power = profile.power(old_count + 1, local)
+        self.action_counts[group] = old_count + 1
+        self.action_power_w[local] += new_power - old_power
+        if not old_count:
+            self.action_group_counts[local] += 1
         self.active_actions[key] = action, local, resource
 
     def _stop_action(self, key):
-        self.active_actions.pop(key)
+        action, local, resource = self.active_actions.pop(key)
+        group = action, local, resource
+        old_count = self.action_counts[group]
+        profile = self.case.action_power_w[action]
+        old_power = profile.power(old_count, local)
+        new_power = profile.power(old_count - 1, local) if old_count > 1 else 0.0
+        if old_count > 1:
+            self.action_counts[group] = old_count - 1
+        else:
+            del self.action_counts[group]
+            self.action_group_counts[local] -= 1
+        self.action_power_w[local] += new_power - old_power
+        if not self.action_group_counts[local]:
+            self.action_power_w[local] = 0.0
 
     def _action_power(self, local: bool) -> float:
-        counts: dict[tuple[str, str], int] = {}
-        for action, action_local, resource in self.active_actions.values():
-            if action_local == local:
-                counts[action, resource] = counts.get((action, resource), 0) + 1
-        return sum(self.case.action_power_w[action].power(count, local)
-                   for (action, _), count in counts.items())
+        return self.action_power_w[local]
 
     def _node_power(self, local: bool) -> float:
         return self.power_model.power(local) + self._action_power(local)
