@@ -16,7 +16,7 @@ import matplotlib.pyplot as plt
 COLORS = {"node_aware": "#4C78A8", "node_drain": "#F58518", "lp": "#54A24B"}
 LABELS = {"node_aware": "Node aware", "node_drain": "Drain nodes", "lp": "LP"}
 PAIRED_FIELDS = (
-    "source_instances", "source_nodes", "bandwidth_gbps_per_node", "deadline_s",
+    "source_instances", "source_nodes", "bandwidth_gbps_per_node", "deadline_s", "end_s",
     "target_fraction_of_removable_power", "requested_source_drop_w",
 )
 
@@ -26,6 +26,14 @@ def ratios(row: dict) -> tuple[float, float, float]:
     completed = 100 * row["moves_completed_by_deadline"] / row["planned_moves"]
     achieved = 100 * row["modeled_source_drop_at_deadline_w"] / row["requested_source_drop_w"]
     return selected, completed, achieved
+
+
+def plot_title(row: dict) -> str:
+    return (
+        f"Coding, {row['bandwidth_gbps_per_node']:g} Gbps/node, "
+        f"{row['deadline_s'] / 60:g} min deadline, "
+        f"{100 * row['target_fraction_of_removable_power']:g}% awake-state power reduction"
+    )
 
 
 def read_rows(path: Path) -> list[dict]:
@@ -91,7 +99,7 @@ def plot(rows: list[dict], output: Path) -> None:
         ax.grid(alpha=0.25)
         ax.legend(fontsize=8)
     axes[1, 2].set_yscale("log")
-    fig.suptitle("Coding, 1 Gbps/node, 120 s deadline, 50% awake-state power reduction")
+    fig.suptitle(plot_title(reference[0]))
     fig.tight_layout()
     output.parent.mkdir(parents=True, exist_ok=True)
     fig.savefig(output.with_suffix(".png"), dpi=180)
