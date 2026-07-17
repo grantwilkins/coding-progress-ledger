@@ -178,78 +178,11 @@ def _route_resources(source: str, destinations, routes: Routes, links: dict[str,
     return summarize(paths), summarize([path[-1:] for path in paths])
 
 
-def _round_lp(values: np.ndarray, valid: np.ndarray, resources: csr_matrix,
-              gains: np.ndarray, work: np.ndarray, target: float):
-    n = gains.size
-    values = np.clip(values, 0, 1)
-    usage = np.zeros(resources.shape[0])
-    chosen = np.full(n, -1, int)
-    matrix = csc_matrix(resources)
-    gain = 0.0
-
-    def take(column):
-        nonlocal gain
-        session, method = column % n, column // n
-        if chosen[session] >= 0 or not valid[column]:
-            return False
-        start, end = matrix.indptr[column:column + 2]
-        rows, added = matrix.indices[start:end], matrix.data[start:end]
-        if np.any(usage[rows] + added > 1 + 1e-8):
-            return False
-        chosen[session] = method
-        usage[rows] += added
-        gain += gains[session]
-        return True
-
-    z = np.maximum(0, 1 - values[:n] - values[n:])
-    preferred = [
-        method * n + session
-        for session in range(n)
-        for method in [int(values[session + n] > values[session])]
-        if values[method * n + session] + 1e-8 >= z[session]
-    ]
-    preferred.sort(key=lambda column: (-values[column], work[column], column))
-    for column in preferred:
-        take(column)
-
-    score = np.tile(gains, 2) / np.maximum(work, 1e-12)
-    for column in np.lexsort((np.arange(2 * n), -score, -values)):
-        if gain + 1e-8 >= target:
-            break
-        take(int(column))
-    return chosen, usage
-
-
-def _plan_lp(scenario: ExecutionScenario, profile: ModelProfile, routes: Routes,
-             case_id: str, seed: int, start: float) -> PlanResult:
-    if case_id != "central" or scenario.final_state != "awake":
-        raise ValueError("LP supports the central profile with final_state='awake'")
-    sessions = _local_sessions(scenario)
-    if any(session.state != "active" for session in sessions):
-        raise ValueError("LP currently supports active sessions only")
+def _migration_resources(scenario: ExecutionScenario, profile: ModelProfile, routes: Routes,
+                         sessions: list[SimSession], destinations, case: ProfileCase,
+                         horizon: float):
+    n = len(sessions)
     links = {link.link_id: link.bytes_per_s for link in scenario.links}
-    nodes = {node.node_id: node for node in scenario.nodes}
-    destinations = [
-        instance for instance in scenario.instances
-        if all(not nodes[node].local for node in instance.gpu_nodes)
-    ]
-    if not destinations:
-        raise ValueError("scenario has no destination instance")
-    power = ExpectedPower(scenario, profile, case_id)
-    initial = power.power(True)
-    if initial <= scenario.power_limit_w:
-        return PlanResult(
-            "lp", (), initial, initial, initial, True, perf_counter() - start,
-            profile.profile_id, case_id, seed, profile.kv_capacity_tokens, 0.0, 0.0,
-        )
-    n, case = len(sessions), profile.case(case_id)
-    if not n:
-        return PlanResult(
-            "lp", (), initial, initial, initial, False, perf_counter() - start,
-            profile.profile_id, case_id, seed, profile.kv_capacity_tokens,
-            initial - scenario.power_limit_w, 0.0,
-        )
-    horizon = scenario.deadline_s - scenario.controller_delay_s - profile.power_window_s
     destination_ids = {instance.instance_id for instance in destinations}
     route_cache = {
         source: _route_resources(source, destinations, routes, links)
@@ -287,10 +220,10 @@ def _plan_lp(scenario: ExecutionScenario, profile: ModelProfile, routes: Routes,
                 if flexible_links is None:
                     flexible_links = route[1]
                 elif flexible_links != route[1]:
-                    raise ValueError("LP requires one shared destination link pool")
+                    raise ValueError("planner requires one shared destination link pool")
                 flexible[column] = byte_count
     if flexible_links and flexible_links & named_links.keys():
-        raise ValueError("LP destination-pool links must not also be fixed route links")
+        raise ValueError("planner destination-pool links must not also be fixed route links")
 
     valid = (durations <= max(horizon, 0)).reshape(-1)
     row, column, data, resource_count = [], [], [], 0
@@ -345,7 +278,154 @@ def _plan_lp(scenario: ExecutionScenario, profile: ModelProfile, routes: Routes,
          for j, session in enumerate(sessions) for method in range(2)),
         len(destinations) * profile.kv_capacity_tokens - destination_tokens,
     )
-    resources = csr_matrix((data, (row, column)), shape=(resource_count, 2 * n))
+    return durations, valid, csr_matrix(
+        (data, (row, column)), shape=(resource_count, 2 * n)
+    )
+
+
+def _round_lp(values: np.ndarray, valid: np.ndarray, resources: csr_matrix,
+              gains: np.ndarray, work: np.ndarray, target: float):
+    n = gains.size
+    values = np.clip(values, 0, 1)
+    usage = np.zeros(resources.shape[0])
+    chosen = np.full(n, -1, int)
+    matrix = csc_matrix(resources)
+    gain = 0.0
+
+    def take(column):
+        nonlocal gain
+        session, method = column % n, column // n
+        if chosen[session] >= 0 or not valid[column]:
+            return False
+        start, end = matrix.indptr[column:column + 2]
+        rows, added = matrix.indices[start:end], matrix.data[start:end]
+        if np.any(usage[rows] + added > 1 + 1e-8):
+            return False
+        chosen[session] = method
+        usage[rows] += added
+        gain += gains[session]
+        return True
+
+    z = np.maximum(0, 1 - values[:n] - values[n:])
+    preferred = [
+        method * n + session
+        for session in range(n)
+        for method in [int(values[session + n] > values[session])]
+        if values[method * n + session] + 1e-8 >= z[session]
+    ]
+    preferred.sort(key=lambda column: (-values[column], work[column], column))
+    for column in preferred:
+        take(column)
+
+    score = np.tile(gains, 2) / np.maximum(work, 1e-12)
+    for column in np.lexsort((np.arange(2 * n), -score, -values)):
+        if gain + 1e-8 >= target:
+            break
+        take(int(column))
+    return chosen, usage
+
+
+def _node_drain_greedy(groups, sessions, gains, durations, valid, resources, horizon,
+                       power: ExpectedPower, limit: float):
+    n = len(gains)
+    matrix = csc_matrix(resources)
+    chosen = np.full(n, -1, int)
+    usage = np.zeros(resources.shape[0])
+
+    def column(method, session):
+        start, end = matrix.indptr[method * n + session:method * n + session + 2]
+        return matrix.indices[start:end], matrix.data[start:end]
+
+    pressure = np.full(n, np.inf)
+    for j in range(n):
+        pressure[j] = min(
+            (max(column(method, j)[1], default=0.0)
+             for method in range(2) if valid[method * n + j]),
+            default=np.inf,
+        )
+    ordered_groups = []
+    for group in groups:
+        order = sorted(group, key=lambda j: (
+            -gains[j] / max(pressure[j], 1e-12), pressure[j], j
+        ))
+        group_usage = np.zeros(resources.shape[0])
+        peak = 0.0
+        for j in order:
+            options = []
+            for method in range(2):
+                if not valid[method * n + j]:
+                    continue
+                rows, added = column(method, j)
+                options.append((
+                    max(peak, max(group_usage[rows] + added, default=0.0)),
+                    durations[method, j], method, rows, added,
+                ))
+            if options:
+                peak, _, _, rows, added = min(options, key=lambda item: item[:3])
+                group_usage[rows] += added
+        score = sum(gains[j] for j in group if np.isfinite(pressure[j])) \
+            / max(horizon * peak, 1e-12) if peak else 0.0
+        ordered_groups.append((-score, min(group), order))
+
+    selected = []
+    for _, _, group in sorted(ordered_groups):
+        if power.power(True) <= limit:
+            break
+        for j in group:
+            options = []
+            for method in range(2):
+                if not valid[method * n + j]:
+                    continue
+                rows, added = column(method, j)
+                remaining = 1 - usage[rows]
+                if np.any(added > remaining + 1e-8):
+                    continue
+                options.append((
+                    max(added / np.maximum(remaining, 1e-12), default=0.0),
+                    durations[method, j], method, rows, added,
+                ))
+            if not options:
+                continue
+            _, _, method, rows, added = min(options, key=lambda item: item[:3])
+            chosen[j] = method
+            usage[rows] += added
+            selected.append(j)
+            power.remove(sessions[j].session_id)
+    return selected, chosen, usage
+
+
+def _plan_lp(scenario: ExecutionScenario, profile: ModelProfile, routes: Routes,
+             case_id: str, seed: int, start: float) -> PlanResult:
+    if case_id != "central" or scenario.final_state != "awake":
+        raise ValueError("LP supports the central profile with final_state='awake'")
+    sessions = _local_sessions(scenario)
+    if any(session.state != "active" for session in sessions):
+        raise ValueError("LP currently supports active sessions only")
+    nodes = {node.node_id: node for node in scenario.nodes}
+    destinations = [
+        instance for instance in scenario.instances
+        if all(not nodes[node].local for node in instance.gpu_nodes)
+    ]
+    if not destinations:
+        raise ValueError("scenario has no destination instance")
+    power = ExpectedPower(scenario, profile, case_id)
+    initial = power.power(True)
+    if initial <= scenario.power_limit_w:
+        return PlanResult(
+            "lp", (), initial, initial, initial, True, perf_counter() - start,
+            profile.profile_id, case_id, seed, profile.kv_capacity_tokens, 0.0, 0.0,
+        )
+    n, case = len(sessions), profile.case(case_id)
+    if not n:
+        return PlanResult(
+            "lp", (), initial, initial, initial, False, perf_counter() - start,
+            profile.profile_id, case_id, seed, profile.kv_capacity_tokens,
+            initial - scenario.power_limit_w, 0.0,
+        )
+    horizon = scenario.deadline_s - scenario.controller_delay_s - profile.power_window_s
+    durations, valid, resources = _migration_resources(
+        scenario, profile, routes, sessions, destinations, case, horizon
+    )
     gains = np.array([power.marginal(session.session_id) for session in sessions])
     target = initial - scenario.power_limit_w
     scale = max(target, 1.0)
@@ -484,6 +564,8 @@ def plan(scenario: ExecutionScenario, profile: ModelProfile,
         weight = np.array([_ell(sessions[j], case) for j in group])
         gains[group] += bonus * (weight / weight.sum() if weight.any() else 1 / len(group))
     rng = np.random.default_rng(seed)
+    capacity_node_drain = solver == "node_drain" and scenario.final_state == "awake" \
+        and all(session.state == "active" for session in sessions)
     if solver == "random":
         order = list(rng.permutation(np.flatnonzero(available)))
         methods = [METHODS[int(rng.choice(np.flatnonzero(valid[j])))] if available[j]
@@ -496,12 +578,23 @@ def plan(scenario: ExecutionScenario, profile: ModelProfile,
     elif solver == "node_aware":
         order = [j for j in np.argsort(best_cost / np.maximum(gains, 1e-12)) if available[j]]
         methods = [METHODS[k] for k in best_method]
-    elif solver == "node_drain":
+    elif solver == "node_drain" and not capacity_node_drain:
         groups.sort(key=lambda group: best_cost[group].sum() / max(gains[group].sum(), 1e-12))
         groups = [sorted(group, key=lambda j: best_cost[j]) for group in groups]
         methods = [METHODS[k] for k in best_method]
     selected = []
-    if solver == "node_drain":
+    if capacity_node_drain:
+        resource_horizon = horizon - profile.power_window_s
+        durations, resource_valid, resources = _migration_resources(
+            scenario, profile, paths, sessions, destinations, case, resource_horizon
+        )
+        selected, chosen, _ = _node_drain_greedy(
+            groups, sessions, gains, durations, resource_valid, resources,
+            resource_horizon, power_state, scenario.power_limit_w,
+        )
+        methods = [METHODS[chosen[j]] if chosen[j] >= 0 else METHODS[0]
+                   for j in range(len(sessions))]
+    elif solver == "node_drain":
         for group in groups:
             if power_state.power(True) <= scenario.power_limit_w:
                 break
@@ -523,8 +616,10 @@ def plan(scenario: ExecutionScenario, profile: ModelProfile,
                                          for session in scenario.sessions)),
         profile, moves, case_id,
     )
+    commit_deadline = scenario.deadline_s - profile.power_window_s \
+        if capacity_node_drain else scenario.deadline_s
     feasible = planned <= scenario.power_limit_w and expected.deadline_met and all(
-        row.committed_s is not None and row.committed_s <= scenario.deadline_s
+        row.committed_s is not None and row.committed_s <= commit_deadline
         for row in expected.sessions
     )
     return PlanResult(

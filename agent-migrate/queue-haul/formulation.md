@@ -14,6 +14,22 @@ Destination placement enforces the same compute and resident-KV limits as the
 source placement.
 Only local source power is constrained; destination power is reported.
 
+## Greedy node drain
+
+For active sessions and an awake final state, the node-drain policy uses the
+same normalized resource rows and usable window \(H\) as the LP. A source node
+is ranked by its exact power reduction to idle divided by the predicted time to
+move its sessions. Within a node, sessions are ranked by power reduction per
+resource use. Replay or KV transfer is chosen from the remaining source,
+network, destination replay/KV, compute, and resident-KV capacity.
+
+The policy visits nodes in that order and reserves capacity for each selected
+whole session. It finishes a node when all its sessions fit and otherwise moves
+only the sessions that fit before visiting the next node. The event simulator
+still decides whether the aggregate reservations form an exact schedule.
+Cold-session, sleep, and shutdown plans retain the earlier whole-node order
+until their resource use and transition timing are measured.
+
 ## LP planner
 
 The first LP scope is active sessions, replay and KV transfer, one destination

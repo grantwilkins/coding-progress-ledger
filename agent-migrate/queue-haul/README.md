@@ -29,6 +29,14 @@ Destination KV copies enter a FIFO per destination before moving bytes;
 `queues.csv` records arrival, start, completion, depth, bytes, observed wait,
 and whether a copy is still pending at the simulation cutoff.
 
+For active sessions with `--final-state awake`, `node_drain` ranks source nodes
+by exact power reduction to idle divided by predicted drain time. It then ranks
+sessions within each node by power reduction per resource use and reserves the
+same source, network, destination replay/KV, compute, KV residency, and trailing
+power-window capacities as the LP. It empties a node when possible and otherwise
+takes only the sessions that fit. Cold-session, sleep, and shutdown plans retain
+the simpler whole-node ordering until those transitions are measured.
+
 `--solver lp` jointly selects replay and KV transfer under source-instance,
 network, destination replay, destination KV, compute, residency, and source
 power limits. It minimizes power shortfall, then peak resource use, then total

@@ -10,7 +10,7 @@ Plausible wrong implementations:
 - Apply a fleet-wide migration budget instead of one budget per source instance.
 - Count external replay bytes against source egress.
 - Use the deadline instead of the deadline minus the trailing power window.
-- Stop halfway through a node-drain group.
+- Ignore the resource budget while trying to drain a node.
 - Reorder sessions while reconstructing an already ordered node-drain group.
 - Place every selected session on the first destination.
 - Defer replay for an active session or transfer nonexistent KV for a cold session.
@@ -137,6 +137,73 @@ def test_node_drain_orders_groups_then_sessions_by_move_time(tmp_path):
     result = plan(scenario, model(tmp_path, tp=1), paths, "node_drain")
 
     assert [move.session_id for move in result.moves] == ["a", "b", "c"]
+
+
+def test_node_drain_reserves_source_time_and_power_window(tmp_path):
+    profile = model(
+        tmp_path, switch=0, tp=1, destination_rate=100, parallel_moves=1,
+        replay_rate={"1": [[1, 50], [1000, 50]], "2": [[1, 25], [1000, 25]]},
+    )
+    scenario = ExecutionScenario(
+        4, 5, 0, "awake", 0,
+        (PowerNode("n", 1, True), PowerNode("d", 1, False)),
+        (ServingInstance("s", ("n",)), ServingInstance("t", ("d",))),
+        (SimSession("a", "s", 100, 10, 0, 1, False),
+         SimSession("b", "s", 100, 10, 0, 1, False)),
+        (NetworkLink("wan", 10_000),),
+    )
+
+    result = plan(scenario, profile, {("s", "t"): ("wan",)}, "node_drain")
+
+    assert [(move.session_id, move.method) for move in result.moves] == [("a", "replay")]
+    assert result.planned_source_power_w > scenario.power_limit_w
+    assert not result.feasible
+
+
+def test_node_drain_uses_kv_when_shared_replay_time_is_full(tmp_path):
+    profile = model(
+        tmp_path, switch=0, tp=1, destination_rate=500, parallel_moves=1,
+        replay_rate={"1": [[1, 100], [1000, 100]], "2": [[1, 50], [1000, 50]]},
+    )
+    sessions = tuple(SimSession(str(i), f"s{i}", 100, 10, 0, 1, False)
+                     for i in range(4))
+    scenario = ExecutionScenario(
+        4.2, 5, 40, "awake", 0,
+        (PowerNode("n0", 2, True), PowerNode("n1", 2, True),
+         PowerNode("d0", 1, False)),
+        tuple(ServingInstance(f"s{i}", (f"n{i // 2}",)) for i in range(4))
+        + (ServingInstance("d", ("d0",)),),
+        sessions, (NetworkLink("wan", 10_000),),
+    )
+    paths = {(f"s{i}", "d"): ("wan",) for i in range(4)}
+
+    result = plan(scenario, profile, paths, "node_drain")
+
+    assert result.feasible
+    assert [move.method for move in result.moves].count("replay") == 3
+    assert [move.method for move in result.moves].count("kv_transfer") == 1
+
+
+def test_node_drain_prefers_power_reduction_per_predicted_second(tmp_path):
+    profile = model(tmp_path, switch=0, tp=1, destination_rate=10, parallel_moves=1)
+    sessions = (
+        SimSession("fast", "sf", 100, 25, 0, 1, False),
+        SimSession("slow", "ss", 300, 25, 0, 1, False),
+    )
+    scenario = ExecutionScenario(
+        10, 11, 35, "awake", 0,
+        (PowerNode("nf", 1, True), PowerNode("ns", 1, True),
+         PowerNode("df", 1, False), PowerNode("ds", 1, False)),
+        (ServingInstance("sf", ("nf",)), ServingInstance("ss", ("ns",)),
+         ServingInstance("tf", ("df",)), ServingInstance("ts", ("ds",))),
+        sessions, (NetworkLink("wan", 10_000),),
+    )
+    paths = {(source, destination): ("wan",)
+             for source in ("sf", "ss") for destination in ("tf", "ts")}
+
+    result = plan(scenario, profile, paths, "node_drain")
+
+    assert [move.session_id for move in result.moves] == ["fast"]
 
 
 def test_random_skips_sessions_that_cannot_finish_by_the_deadline(tmp_path):
