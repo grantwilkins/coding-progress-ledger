@@ -74,24 +74,24 @@ g_j=P(L_s)-P(L_s-\ell_j).
 Since \(P\) is nondecreasing and concave, \(\sum_j g_jx_j\) is a conservative
 power-reduction estimate: removing several sessions from one instance saves at
 least the sum of their initial marginal reductions. With requested reduction
-\(\Delta P\) and shortfall \(s\geq0\):
+\(\Delta P\), the restored Queue-Haul program is:
 
 \[
-\sum_j g_j(x_j^R+x_j^K)+s\geq\Delta P.
+\begin{aligned}
+\operatorname{minimize}\quad
+&\sum_{j,a}c_j^a x_j^a\\
+\operatorname{subject\ to}\quad
+&\sum_j g_j(x_j^R+x_j^K)\geq\Delta P.
+\end{aligned}
 \]
 
 The exact concave constraint \(P_{\rm final}\leq P_{\rm limit}\) is not an LP.
 The planner therefore solves the safe linear bound, then evaluates the rounded
-plan with the exact power curve.
-
-The objectives are solved in order:
-
-1. minimize power shortfall \(s\);
-2. hold \(s\) fixed and minimize peak normalized resource use \(\phi\);
-3. hold \(s,\phi\) fixed and minimize total unloaded migration work.
-
-This makes method choice depend on shared capacity. It does not choose the
-fastest standalone method before considering the other sessions.
+plan with the exact power curve. If the target-constrained program is
+infeasible, a separate solve maximizes the conservative power reduction under
+the same resource limits. `lp_peak_first` minimizes shortfall, peak resource
+use, then work; `lp_work_first` swaps the last two objectives. These comparison
+solvers are not the default formulation.
 
 The fractional result is rounded deterministically. A whole-session assignment
 is accepted only when it preserves every LP resource limit. Remaining power

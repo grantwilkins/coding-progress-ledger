@@ -19,7 +19,8 @@ from simulate import (MOVE_METHODS_BY_STATE, ExecutionScenario, MoveMethod, Plan
 
 METHODS: tuple[MoveMethod, ...] = ("replay", "kv_transfer", "replay_on_request")
 SOLVERS = ("random", "load_only", "node_aware", "node_drain")
-ALL_SOLVERS = SOLVERS + ("lp",)
+LP_SOLVERS = ("lp", "lp_peak_first", "lp_work_first")
+ALL_SOLVERS = SOLVERS + LP_SOLVERS
 Routes = dict[tuple[str, str], tuple[str, ...]] | Callable[[str, str], tuple[str, ...]]
 
 
@@ -322,6 +323,8 @@ def _round_lp(values: np.ndarray, valid: np.ndarray, resources: csr_matrix,
     ]
     preferred.sort(key=lambda column: (-values[column], work[column], column))
     for column in preferred:
+        if gain + 1e-8 >= target:
+            break
         take(column)
 
     score = np.tile(gains, 2) / np.maximum(work, 1e-12)
@@ -408,8 +411,60 @@ def _node_drain_greedy(groups, sessions, gains, durations, valid, resources, hor
     return selected, chosen, usage
 
 
+def _solve_lp(solver: str, gains: np.ndarray, work: np.ndarray, valid: np.ndarray,
+              resources: csr_matrix, target: float) -> np.ndarray:
+    n, scale = gains.size, max(target, 1.0)
+    x = cp.Variable(2 * n, nonneg=True)
+    selected = x[:n] + x[n:]
+    base = [selected <= 1, resources @ x <= 1]
+    if (~valid).any():
+        base.append(x[~valid] == 0)
+
+    def solve(objective, constraints, maximize=False):
+        problem = cp.Problem(
+            cp.Maximize(objective) if maximize else cp.Minimize(objective), constraints
+        )
+        problem.solve(solver=cp.CLARABEL)
+        return problem
+
+    normalized_work = work @ x / max(work.max(), 1.0)
+    if solver == "lp":
+        problem = solve(
+            normalized_work, base + [gains @ selected / scale >= target / scale]
+        )
+        if problem.status in (cp.INFEASIBLE, cp.INFEASIBLE_INACCURATE):
+            problem = solve(gains @ selected / scale, base, maximize=True)
+    else:
+        shortfall = cp.Variable(nonneg=True)
+        linked = base + [gains @ selected / scale + shortfall >= target / scale]
+        problem = solve(shortfall, linked)
+        if problem.status in (cp.OPTIMAL, cp.OPTIMAL_INACCURATE):
+            linked += [shortfall <= float(shortfall.value) + 1e-8]
+            phi = cp.Variable(nonneg=True)
+            if solver == "lp_peak_first":
+                problem = solve(phi, linked + [resources @ x <= phi, phi <= 1])
+                if problem.status in (cp.OPTIMAL, cp.OPTIMAL_INACCURATE):
+                    problem = solve(
+                        normalized_work,
+                        linked + [resources @ x <= phi, phi <= float(phi.value) + 1e-8],
+                    )
+            elif solver == "lp_work_first":
+                problem = solve(normalized_work, linked)
+                if problem.status in (cp.OPTIMAL, cp.OPTIMAL_INACCURATE):
+                    problem = solve(
+                        phi,
+                        linked + [normalized_work <= float(problem.value) + 1e-8,
+                                  resources @ x <= phi, phi <= 1],
+                    )
+            else:
+                raise ValueError(f"unknown LP solver {solver!r}")
+    if problem.status not in (cp.OPTIMAL, cp.OPTIMAL_INACCURATE):
+        raise RuntimeError(f"LP planner returned {problem.status}")
+    return np.asarray(x.value)
+
+
 def _plan_lp(scenario: ExecutionScenario, profile: ModelProfile, routes: Routes,
-             case_id: str, seed: int, start: float) -> PlanResult:
+             solver: str, case_id: str, seed: int, start: float) -> PlanResult:
     if case_id != "central" or scenario.final_state != "awake":
         raise ValueError("LP supports the central profile with final_state='awake'")
     sessions = _local_sessions(scenario)
@@ -426,13 +481,13 @@ def _plan_lp(scenario: ExecutionScenario, profile: ModelProfile, routes: Routes,
     initial = power.power(True)
     if initial <= scenario.power_limit_w:
         return PlanResult(
-            "lp", (), initial, initial, initial, True, perf_counter() - start,
+            solver, (), initial, initial, initial, True, perf_counter() - start,
             profile.profile_id, case_id, seed, profile.kv_capacity_tokens, 0.0, 0.0,
         )
     n, case = len(sessions), profile.case(case_id)
     if not n:
         return PlanResult(
-            "lp", (), initial, initial, initial, False, perf_counter() - start,
+            solver, (), initial, initial, initial, False, perf_counter() - start,
             profile.profile_id, case_id, seed, profile.kv_capacity_tokens,
             initial - scenario.power_limit_w, 0.0,
         )
@@ -442,34 +497,10 @@ def _plan_lp(scenario: ExecutionScenario, profile: ModelProfile, routes: Routes,
     )
     gains = np.array([power.marginal(session.session_id) for session in sessions])
     target = initial - scenario.power_limit_w
-    scale = max(target, 1.0)
-
-    x = cp.Variable(2 * n, nonneg=True)
-    selected = x[:n] + x[n:]
-    shortfall = cp.Variable(nonneg=True)
-    base = [selected <= 1, resources @ x <= 1,
-            gains @ selected / scale + shortfall >= target / scale]
-    if (~valid).any():
-        base.append(x[~valid] == 0)
-
-    def solve(objective, constraints):
-        problem = cp.Problem(cp.Minimize(objective), constraints)
-        problem.solve(solver=cp.CLARABEL)
-        if problem.status not in (cp.OPTIMAL, cp.OPTIMAL_INACCURATE):
-            raise RuntimeError(f"LP planner returned {problem.status}")
-
-    solve(shortfall, base)
-    shortfall_star = float(shortfall.value)
-    phi = cp.Variable(nonneg=True)
-    linked = base + [shortfall <= shortfall_star + 1e-8,
-                     resources @ x <= phi, phi <= 1]
-    solve(phi, linked)
-    phi_star = float(phi.value)
     work = durations.reshape(-1)
-    solve(work @ x / max(work.max(), 1.0), linked + [phi <= phi_star + 1e-8])
-
     chosen, usage = _round_lp(
-        np.asarray(x.value), valid, resources, gains, work, target
+        _solve_lp(solver, gains, work, valid, resources, target),
+        valid, resources, gains, work, target,
     )
     selected_indices = [j for j in range(n) if chosen[j] >= 0]
     selected_indices.sort(
@@ -491,7 +522,7 @@ def _plan_lp(scenario: ExecutionScenario, profile: ModelProfile, routes: Routes,
     feasible = planned <= scenario.power_limit_w and max(usage, default=0) <= 1 + 1e-8 \
         and _execution_feasible(scenario, expected)
     return PlanResult(
-        "lp", moves, initial, planned, expected.modeled_source_power_at_deadline_w,
+        solver, moves, initial, planned, expected.modeled_source_power_at_deadline_w,
         feasible, perf_counter() - start, profile.profile_id, case_id, seed,
         profile.kv_capacity_tokens, max(0.0, planned - scenario.power_limit_w),
         max(usage, default=0.0),
@@ -538,8 +569,8 @@ def plan(scenario: ExecutionScenario, profile: ModelProfile,
     if solver not in ALL_SOLVERS:
         raise ValueError(f"unknown solver {solver!r}")
     start = perf_counter()
-    if solver == "lp":
-        return _plan_lp(scenario, profile, paths, case_id, seed, start)
+    if solver in LP_SOLVERS:
+        return _plan_lp(scenario, profile, paths, solver, case_id, seed, start)
     case = profile.case(case_id)
     sessions = _local_sessions(scenario)
     links = {link.link_id: link.bytes_per_s for link in scenario.links}

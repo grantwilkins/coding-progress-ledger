@@ -13,8 +13,14 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
 
-COLORS = {"node_aware": "#4C78A8", "node_drain": "#F58518", "lp": "#54A24B"}
-LABELS = {"node_aware": "Node aware", "node_drain": "Drain nodes", "lp": "LP"}
+COLORS = {
+    "node_aware": "#4C78A8", "node_drain": "#F58518", "lp": "#54A24B",
+    "lp_peak_first": "#E45756", "lp_work_first": "#B279A2",
+}
+LABELS = {
+    "node_aware": "Node aware", "node_drain": "Drain nodes", "lp": "Old LP",
+    "lp_peak_first": "Peak before work", "lp_work_first": "Work before peak",
+}
 PAIRED_FIELDS = (
     "source_instances", "source_nodes", "bandwidth_gbps_per_node", "deadline_s", "end_s",
     "target_fraction_of_removable_power", "requested_source_drop_w",

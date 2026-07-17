@@ -39,8 +39,11 @@ the simpler whole-node ordering until those transitions are measured.
 
 `--solver lp` jointly selects replay and KV transfer under source-instance,
 network, destination replay, destination KV, compute, residency, and source
-power limits. Its CVXPY model uses CLARABEL and minimizes power shortfall, then
-peak resource use, then total migration work. The current LP scope is active
+power limits. Its CVXPY model uses CLARABEL and restores the earlier Queue-Haul
+objective: meet the requested power reduction with minimum total migration
+work, or maximize power reduction when the target is infeasible. The
+`lp_peak_first` and `lp_work_first` solvers retain the two three-stage objective
+orders for direct comparison. The current LP scope is active
 sessions, one destination pool, the central profile, and `--final-state awake`;
 unsupported cases hard-fail. The fractional plan is rounded to whole sessions
 and accepted only when the discrete-event simulator meets trailing-window power

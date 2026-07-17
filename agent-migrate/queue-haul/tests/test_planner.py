@@ -19,15 +19,20 @@ Plausible wrong implementations:
 - Merge distinct route-resource summaries while caching repeated routes.
 - Require every migration before the power window instead of the migration deadline.
 - Accept a late migration or a missed measured power target.
+- Minimize peak resource use before migration work in the old Queue-Haul LP.
+- Round every positive fraction after enough power reduction has been selected.
+- Fail instead of maximizing achievable power reduction when the target is infeasible.
 """
 
 from dataclasses import replace
 from types import SimpleNamespace
 
+import numpy as np
 import pytest
+from scipy.sparse import csr_matrix
 
 import planner
-from planner import METHODS, _duration, _route_resources, plan
+from planner import METHODS, _duration, _round_lp, _route_resources, _solve_lp, plan
 from simulate import (ExecutionScenario, NetworkLink, PowerNode, ServingInstance, SimRequest,
                       SimSession)
 from test_execution_simulator import model
@@ -49,6 +54,40 @@ def problem(requests=(), limit=20, final="awake"):
 
 
 PATHS = {(source, dest): ("wan",) for source in ("s0", "s1") for dest in ("t0", "t1")}
+
+
+def test_lp_objective_variants_have_the_stated_priority():
+    gains = np.ones(2)
+    work = np.array([1.0, 2.0, 100.0, 100.0])
+    valid = np.array([True, True, False, False])
+    resources = csr_matrix([[1.0, 0.5, 0.0, 0.0]])
+
+    old = _solve_lp("lp", gains, work, valid, resources, 1)
+    peak = _solve_lp("lp_peak_first", gains, work, valid, resources, 1)
+    switched = _solve_lp("lp_work_first", gains, work, valid, resources, 1)
+
+    assert old[0] > 1 - 1e-5
+    assert switched[0] > 1 - 1e-5
+    assert peak[1] > 1 - 1e-5
+
+
+def test_old_lp_maximizes_power_when_target_is_infeasible():
+    values = _solve_lp(
+        "lp", np.array([2.0, 1.0]), np.ones(4), np.ones(4, bool),
+        csr_matrix([[1.0, 1.0, 1.0, 1.0]]), 4,
+    )
+
+    assert values[0] + values[2] > 1 - 1e-6
+    assert values[1] + values[3] < 1e-6
+
+
+def test_lp_rounding_stops_after_reaching_the_power_target():
+    chosen, _ = _round_lp(
+        np.array([0.6, 0.6, 0.0, 0.0]), np.ones(4, bool),
+        csr_matrix((0, 4)), np.ones(2), np.ones(4), 1,
+    )
+
+    assert np.count_nonzero(chosen >= 0) == 1
 
 
 def test_route_resource_cache_reuses_only_identical_path_sets():
