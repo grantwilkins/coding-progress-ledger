@@ -7,7 +7,9 @@ import heapq
 from time import perf_counter
 from typing import Callable
 
+import cvxpy as cp
 import numpy as np
+from scipy.sparse import csc_matrix, csr_matrix
 
 from profiles import ModelProfile, ProfileCase
 from power_model import ExpectedPower
@@ -17,6 +19,7 @@ from simulate import (MOVE_METHODS_BY_STATE, ExecutionScenario, MoveMethod, Plan
 
 METHODS: tuple[MoveMethod, ...] = ("replay", "kv_transfer", "replay_on_request")
 SOLVERS = ("random", "load_only", "node_aware", "node_drain")
+ALL_SOLVERS = SOLVERS + ("lp",)
 Routes = dict[tuple[str, str], tuple[str, ...]] | Callable[[str, str], tuple[str, ...]]
 
 
@@ -77,6 +80,8 @@ class PlanResult:
     profile_case: str
     seed: int
     kv_capacity_tokens: int
+    lp_power_shortfall_w: float | None = None
+    lp_peak_pressure: float | None = None
 
 
 def _ell(session: SimSession, case: ProfileCase) -> float:
@@ -156,6 +161,253 @@ def _route(routes: Routes, source: str, destination: str) -> tuple[str, ...]:
     return routes(source, destination) if callable(routes) else routes[(source, destination)]
 
 
+def _route_resources(source: str, destinations, routes: Routes, links: dict[str, float]):
+    paths = [_route(routes, source, destination.instance_id) for destination in destinations]
+    if any(not path or any(link not in links for link in path) for path in paths):
+        raise ValueError("LP route contains an unknown link")
+
+    def summarize(options):
+        common = set(options[0]).intersection(*map(set, options[1:]))
+        variable = [set(path) - common for path in options]
+        if any(len(path) > 1 for path in variable):
+            raise ValueError("LP supports one destination-pool link per route")
+        return common, set().union(*variable), min(
+            min(links[link] for link in path) for path in options
+        )
+
+    return summarize(paths), summarize([path[-1:] for path in paths])
+
+
+def _round_lp(values: np.ndarray, valid: np.ndarray, resources: csr_matrix,
+              gains: np.ndarray, work: np.ndarray, target: float):
+    n = gains.size
+    values = np.clip(values, 0, 1)
+    usage = np.zeros(resources.shape[0])
+    chosen = np.full(n, -1, int)
+    matrix = csc_matrix(resources)
+    gain = 0.0
+
+    def take(column):
+        nonlocal gain
+        session, method = column % n, column // n
+        if chosen[session] >= 0 or not valid[column]:
+            return False
+        start, end = matrix.indptr[column:column + 2]
+        rows, added = matrix.indices[start:end], matrix.data[start:end]
+        if np.any(usage[rows] + added > 1 + 1e-8):
+            return False
+        chosen[session] = method
+        usage[rows] += added
+        gain += gains[session]
+        return True
+
+    z = np.maximum(0, 1 - values[:n] - values[n:])
+    preferred = [
+        method * n + session
+        for session in range(n)
+        for method in [int(values[session + n] > values[session])]
+        if values[method * n + session] + 1e-8 >= z[session]
+    ]
+    preferred.sort(key=lambda column: (-values[column], work[column], column))
+    for column in preferred:
+        take(column)
+
+    score = np.tile(gains, 2) / np.maximum(work, 1e-12)
+    for column in np.lexsort((np.arange(2 * n), -score, -values)):
+        if gain + 1e-8 >= target:
+            break
+        take(int(column))
+    return chosen, usage
+
+
+def _plan_lp(scenario: ExecutionScenario, profile: ModelProfile, routes: Routes,
+             case_id: str, seed: int, start: float) -> PlanResult:
+    if case_id != "central" or scenario.final_state != "awake":
+        raise ValueError("LP supports the central profile with final_state='awake'")
+    sessions = _local_sessions(scenario)
+    if any(session.state != "active" for session in sessions):
+        raise ValueError("LP currently supports active sessions only")
+    links = {link.link_id: link.bytes_per_s for link in scenario.links}
+    nodes = {node.node_id: node for node in scenario.nodes}
+    destinations = [
+        instance for instance in scenario.instances
+        if all(not nodes[node].local for node in instance.gpu_nodes)
+    ]
+    if not destinations:
+        raise ValueError("scenario has no destination instance")
+    power = ExpectedPower(scenario, profile, case_id)
+    initial = power.power(True)
+    if initial <= scenario.power_limit_w:
+        return PlanResult(
+            "lp", (), initial, initial, initial, True, perf_counter() - start,
+            profile.profile_id, case_id, seed, profile.kv_capacity_tokens, 0.0, 0.0,
+        )
+    n, case = len(sessions), profile.case(case_id)
+    if not n:
+        return PlanResult(
+            "lp", (), initial, initial, initial, False, perf_counter() - start,
+            profile.profile_id, case_id, seed, profile.kv_capacity_tokens,
+            initial - scenario.power_limit_w, 0.0,
+        )
+    horizon = scenario.deadline_s - scenario.controller_delay_s - profile.power_window_s
+    destination_ids = {instance.instance_id for instance in destinations}
+    route_cache = {
+        source: _route_resources(source, destinations, routes, links)
+        for source in {session.source_instance for session in sessions}
+    }
+    replay_s = np.array([
+        session.context_tokens / case.replay.rate(session.context_tokens, 1)
+        for session in sessions
+    ])
+    kv_bytes = np.array([
+        case.kv_transfer.bytes(session.context_tokens) for session in sessions
+    ], float)
+    replay_bytes = np.array([session.log_bytes for session in sessions], float)
+    durations = np.zeros((2, n))
+    kv_service = np.zeros(n)
+    named_links: dict[str, dict[int, float]] = {}
+    flexible_links: set[str] | None = None
+    flexible: dict[int, float] = {}
+
+    for j, session in enumerate(sessions):
+        internal, external = route_cache[session.source_instance]
+        replay_route = external if session.log_external else internal
+        durations[0, j] = replay_bytes[j] / replay_route[2] + replay_s[j] + case.switch_s
+        transfer_s = max(kv_bytes[j] / internal[2],
+                         kv_bytes[j] / case.kv_transfer.destination_bytes_per_s)
+        kv_service[j] = transfer_s + case.kv_transfer.sync_s
+        durations[1, j] = case.kv_transfer.setup_s + kv_service[j] + case.switch_s
+        for method, (byte_count, route) in enumerate((
+            (replay_bytes[j], replay_route), (kv_bytes[j], internal)
+        )):
+            column = method * n + j
+            for link in sorted(route[0]):
+                named_links.setdefault(link, {})[column] = byte_count
+            if route[1]:
+                if flexible_links is None:
+                    flexible_links = route[1]
+                elif flexible_links != route[1]:
+                    raise ValueError("LP requires one shared destination link pool")
+                flexible[column] = byte_count
+    if flexible_links and flexible_links & named_links.keys():
+        raise ValueError("LP destination-pool links must not also be fixed route links")
+
+    valid = (durations <= max(horizon, 0)).reshape(-1)
+    row, column, data, resource_count = [], [], [], 0
+
+    def add_resource(entries, capacity):
+        nonlocal resource_count
+        entries = [(int(col), float(value)) for col, value in entries if value > 0]
+        if not entries:
+            return
+        if capacity <= 0:
+            valid[[col for col, _ in entries]] = False
+            return
+        row.extend([resource_count] * len(entries))
+        column.extend(col for col, _ in entries)
+        data.extend(value / capacity for _, value in entries)
+        resource_count += 1
+
+    by_source: dict[str, list[int]] = {}
+    for j, session in enumerate(sessions):
+        by_source.setdefault(session.source_instance, []).append(j)
+    for indices in by_source.values():
+        add_resource(
+            ((method * n + j, durations[method, j])
+             for j in indices for method in range(2)),
+            horizon * profile.max_parallel_moves,
+        )
+    for link, entries in named_links.items():
+        add_resource(entries.items(), links[link] * horizon)
+    if flexible_links:
+        add_resource(flexible.items(), sum(links[link] for link in flexible_links) * horizon)
+    add_resource(((j, replay_s[j]) for j in range(n)),
+                 len(destinations) * profile.max_parallel_replay * horizon)
+    add_resource(((n + j, kv_service[j]) for j in range(n)),
+                 len(destinations) * profile.max_parallel_kv * horizon)
+
+    destination_load = sum(
+        _ell(session, case) for session in scenario.sessions
+        if session.source_instance in destination_ids
+    )
+    destination_tokens = sum(
+        _resident_tokens(session) for session in scenario.sessions
+        if session.source_instance in destination_ids
+    )
+    add_resource(
+        ((method * n + j, _ell(session, case))
+         for j, session in enumerate(sessions) for method in range(2)),
+        sum(len(instance.gpu_nodes) for instance in destinations) * profile.max_ell
+        - destination_load,
+    )
+    add_resource(
+        ((method * n + j, _resident_tokens(session))
+         for j, session in enumerate(sessions) for method in range(2)),
+        len(destinations) * profile.kv_capacity_tokens - destination_tokens,
+    )
+    resources = csr_matrix((data, (row, column)), shape=(resource_count, 2 * n))
+    gains = np.array([power.marginal(session.session_id) for session in sessions])
+    target = initial - scenario.power_limit_w
+    scale = max(target, 1.0)
+
+    x = cp.Variable(2 * n, nonneg=True)
+    selected = x[:n] + x[n:]
+    shortfall = cp.Variable(nonneg=True)
+    base = [selected <= 1, resources @ x <= 1,
+            gains @ selected / scale + shortfall >= target / scale]
+    if (~valid).any():
+        base.append(x[~valid] == 0)
+
+    def solve(objective, constraints):
+        problem = cp.Problem(cp.Minimize(objective), constraints)
+        problem.solve(solver=cp.SCIPY)
+        if problem.status not in (cp.OPTIMAL, cp.OPTIMAL_INACCURATE):
+            raise RuntimeError(f"LP planner returned {problem.status}")
+
+    solve(shortfall, base)
+    shortfall_star = float(shortfall.value)
+    phi = cp.Variable(nonneg=True)
+    linked = base + [shortfall <= shortfall_star + 1e-8,
+                     resources @ x <= phi, phi <= 1]
+    solve(phi, linked)
+    phi_star = float(phi.value)
+    work = durations.reshape(-1)
+    solve(work @ x / max(work.max(), 1.0), linked + [phi <= phi_star + 1e-8])
+
+    chosen, usage = _round_lp(
+        np.asarray(x.value), valid, resources, gains, work, target
+    )
+    selected_indices = [j for j in range(n) if chosen[j] >= 0]
+    selected_indices.sort(
+        key=lambda j: durations[chosen[j], j] / max(gains[j], 1e-12)
+    )
+    methods = [METHODS[chosen[j]] if chosen[j] >= 0 else METHODS[0] for j in range(n)]
+    moves = _place(
+        selected_indices, sessions, scenario, profile, routes, methods, case_id
+    )
+    for j in selected_indices:
+        power.remove(sessions[j].session_id)
+    planned = power.power(True)
+    expected = predict(
+        replace(scenario, sessions=tuple(
+            replace(session, requests=()) for session in scenario.sessions
+        )),
+        profile, moves, case_id,
+    )
+    cutoff = scenario.deadline_s - profile.power_window_s
+    feasible = planned <= scenario.power_limit_w and max(usage, default=0) <= 1 + 1e-8 \
+        and expected.deadline_met and all(
+            result.committed_s is not None and result.committed_s <= cutoff
+            for result in expected.sessions
+        )
+    return PlanResult(
+        "lp", moves, initial, planned, expected.modeled_source_power_at_deadline_w,
+        feasible, perf_counter() - start, profile.profile_id, case_id, seed,
+        profile.kv_capacity_tokens, max(0.0, planned - scenario.power_limit_w),
+        max(usage, default=0.0),
+    )
+
+
 def _place(selected: list[int], sessions: list[SimSession], scenario: ExecutionScenario,
            profile: ModelProfile, routes: Routes,
            methods: list[MoveMethod], case_id: str) -> tuple[PlannedMove, ...]:
@@ -193,9 +445,12 @@ def _place(selected: list[int], sessions: list[SimSession], scenario: ExecutionS
 def plan(scenario: ExecutionScenario, profile: ModelProfile,
          paths: Routes, solver: str,
          case_id: str = "central", seed: int = 0) -> PlanResult:
-    if solver not in SOLVERS:
+    if solver not in ALL_SOLVERS:
         raise ValueError(f"unknown solver {solver!r}")
-    start, case = perf_counter(), profile.case(case_id)
+    start = perf_counter()
+    if solver == "lp":
+        return _plan_lp(scenario, profile, paths, case_id, seed, start)
+    case = profile.case(case_id)
     sessions = _local_sessions(scenario)
     links = {link.link_id: link.bytes_per_s for link in scenario.links}
     nodes = {n.node_id: n for n in scenario.nodes}

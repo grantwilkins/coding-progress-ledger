@@ -27,6 +27,16 @@ destination KV loading, followed by synchronization and route switching.
 Destination KV copies enter a FIFO per destination before moving bytes;
 `queues.csv` records arrival, start, completion, depth, bytes, observed wait,
 and whether a copy is still pending at the simulation cutoff.
+
+`--solver lp` jointly selects replay and KV transfer under source-instance,
+network, destination replay, destination KV, compute, residency, and source
+power limits. It minimizes power shortfall, then peak resource use, then total
+migration work. The current LP scope is active sessions, one destination pool,
+the central profile, and `--final-state awake`; unsupported cases hard-fail.
+The fractional plan is rounded to whole sessions and accepted only after the
+existing discrete-event simulator checks its commits and trailing-window power.
+The exact equations and conservative concave-power bound are in
+`queue-haul/formulation.md`.
 Action power is stored as total added power for each measured concurrency, not
 as power per session. Fit the serial coding data with repeats 0–1 and evaluate
 repeat 2 with:

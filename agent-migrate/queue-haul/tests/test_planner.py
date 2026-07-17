@@ -6,6 +6,10 @@ requests, restrict methods by GPU residency, and keep placement separate from se
 Plausible wrong implementations:
 - Give a planner sampled request times that are unavailable when it acts.
 - Treat source and destination power as one shared budget.
+- Choose each session's fastest method before enforcing shared replay and KV capacity.
+- Apply a fleet-wide migration budget instead of one budget per source instance.
+- Count external replay bytes against source egress.
+- Use the deadline instead of the deadline minus the trailing power window.
 - Stop halfway through a node-drain group.
 - Reorder sessions while reconstructing an already ordered node-drain group.
 - Place every selected session on the first destination.
@@ -147,3 +151,94 @@ def test_collective_link_contention_can_make_a_plan_infeasible(tmp_path):
     )
     assert len(result.moves) == 2
     assert not result.feasible
+
+
+def test_lp_uses_kv_when_shared_replay_time_is_full(tmp_path):
+    profile = model(
+        tmp_path, switch=0, tp=1, destination_rate=500, parallel_moves=1,
+        replay_rate={"1": [[1, 100], [1000, 100]], "2": [[1, 50], [1000, 50]]},
+    )
+    sessions = tuple(SimSession(str(i), f"s{i}", 100, 10, 0, 1, False)
+                     for i in range(4))
+    scenario = ExecutionScenario(
+        4.1, 5, 40, "awake", 0,
+        (PowerNode("n0", 2, True), PowerNode("n1", 2, True),
+         PowerNode("d0", 1, False)),
+        tuple(ServingInstance(f"s{i}", (f"n{i // 2}",)) for i in range(4))
+        + (ServingInstance("d", ("d0",)),),
+        sessions, (NetworkLink("wan", 10_000),),
+    )
+    paths = {(f"s{i}", "d"): ("wan",) for i in range(4)}
+
+    result = plan(scenario, profile, paths, "lp")
+
+    assert result.feasible
+    assert [move.method for move in result.moves].count("replay") == 3
+    assert [move.method for move in result.moves].count("kv_transfer") == 1
+
+
+def test_lp_enforces_each_source_instance_queue(tmp_path):
+    profile = model(
+        tmp_path, switch=0, tp=1, destination_rate=100, parallel_moves=1,
+        replay_rate={"1": [[1, 50], [1000, 50]], "2": [[1, 25], [1000, 25]]},
+    )
+    scenario = ExecutionScenario(
+        4, 5, 10, "awake", 0,
+        (PowerNode("n", 1, True), PowerNode("d", 1, False)),
+        (ServingInstance("s", ("n",)), ServingInstance("t", ("d",))),
+        (SimSession("a", "s", 100, 10, 0, 1, False),
+         SimSession("b", "s", 100, 10, 0, 1, False)),
+        (NetworkLink("wan", 10_000),),
+    )
+
+    result = plan(scenario, profile, {("s", "t"): ("wan",)}, "lp")
+
+    assert len(result.moves) == 1
+    assert result.planned_source_power_w > scenario.power_limit_w
+    assert not result.feasible
+
+
+def test_lp_external_replay_bypasses_source_egress(tmp_path):
+    profile = model(
+        tmp_path, switch=0, tp=1, destination_rate=100, parallel_moves=2,
+        replay_rate={"1": [[1, 1000], [1000, 1000]], "2": [[1, 500], [1000, 500]]},
+    )
+    scenario = ExecutionScenario(
+        2, 3, 10, "awake", 0,
+        (PowerNode("n", 1, True), PowerNode("d", 1, False)),
+        (ServingInstance("s", ("n",)), ServingInstance("t", ("d",))),
+        (SimSession("a", "s", 100, 10, 0, 100, True),
+         SimSession("b", "s", 100, 10, 0, 100, True)),
+        (NetworkLink("source", 1), NetworkLink("destination", 1000)),
+    )
+
+    result = plan(
+        scenario, profile, {("s", "t"): ("source", "destination")}, "lp"
+    )
+
+    assert result.feasible
+    assert len(result.moves) == 2
+    assert {move.method for move in result.moves} == {"replay"}
+
+
+def test_lp_reserves_the_trailing_power_window(tmp_path):
+    profile = model(
+        tmp_path, switch=0, tp=1, destination_rate=1, parallel_moves=1,
+        replay_rate={"1": [[1, 100], [1000, 100]], "2": [[1, 50], [1000, 50]]},
+    )
+    scenario = ExecutionScenario(
+        4, 5, 10, "awake", 0,
+        (PowerNode("n", 1, True), PowerNode("d", 1, False)),
+        (ServingInstance("s", ("n",)), ServingInstance("t", ("d",))),
+        (SimSession("a", "s", 301, 10, 0, 1, False),),
+        (NetworkLink("wan", 10_000),),
+    )
+
+    result = plan(scenario, profile, {("s", "t"): ("wan",)}, "lp")
+
+    assert result.moves == ()
+    assert not result.feasible
+    assert plan(
+        replace(scenario, deadline_s=1, end_s=1), profile,
+        {("s", "t"): ("wan",)}, "lp",
+    ).moves == ()

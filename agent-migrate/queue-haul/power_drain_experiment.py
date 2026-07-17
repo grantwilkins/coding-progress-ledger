@@ -19,7 +19,7 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
 
-from planner import InstanceCapacity, PlanResult, SOLVERS, plan
+from planner import ALL_SOLVERS, InstanceCapacity, PlanResult, SOLVERS, plan
 from profiles import ModelProfile, WorkloadProfile
 from simulate import (ExecutionResult, ExecutionScenario, NetworkLink, PowerNode, ServingInstance,
                       SimRequest, SimSession, execute)
@@ -290,6 +290,8 @@ def _summary(run: ExperimentRun) -> dict:
         "end_s": scenario.end_s, "controller_delay_s": scenario.controller_delay_s,
         "solve_s": run.plan.solve_s,
         "planned_moves": len(run.plan.moves), "plan_feasible": run.plan.feasible,
+        "lp_power_shortfall_w": run.plan.lp_power_shortfall_w,
+        "lp_peak_pressure": run.plan.lp_peak_pressure,
         "initial_source_power_w": run.plan.initial_source_power_w,
         "requested_source_drop_w": max(
             0.0, run.plan.initial_source_power_w - scenario.power_limit_w
@@ -423,12 +425,13 @@ def _plot(runs: list[PlotRun], summaries: list[dict], out: Path) -> None:
     fig.savefig(out / "power_timeline.png", dpi=160)
     plt.close(fig)
 
-    phase = {solver: [] for solver in SOLVERS}
+    phase = {solver: [] for solver in ALL_SOLVERS}
     for run in same:
         phase[run.solver] += run.pauses
     fig, ax = plt.subplots(figsize=(7, 4))
     labels = [solver for solver, values in phase.items() if values]
-    ax.boxplot([phase[label] for label in labels], tick_labels=labels, showfliers=False)
+    if labels:
+        ax.boxplot([phase[label] for label in labels], tick_labels=labels, showfliers=False)
     ax.set(ylabel="session pause (s)")
     ax.tick_params(axis="x", rotation=25)
     ax.grid(axis="y", alpha=0.25)
@@ -511,7 +514,7 @@ def main() -> None:
     parser.add_argument("--power-limit", type=float, action="append", required=True)
     parser.add_argument("--deadline", type=float, action="append", required=True)
     parser.add_argument("--end", type=float, required=True)
-    parser.add_argument("--solver", choices=SOLVERS, action="append")
+    parser.add_argument("--solver", choices=ALL_SOLVERS, action="append")
     parser.add_argument("--sessions", type=int, default=10_000)
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--link-bytes-per-s", type=float, default=125_000_000.0)

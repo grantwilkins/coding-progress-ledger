@@ -12,6 +12,7 @@ Plausible wrong implementations:
 - Drop active/cold GPU residency while constructing simulator sessions.
 - Size instances from compute while silently exceeding measured resident KV capacity.
 - Omit destination KV queue evidence needed to explain migration time.
+- Fail to write plots when a valid plan contains no migrations.
 """
 
 import csv
@@ -177,6 +178,16 @@ def test_small_run_reuses_plans_and_writes_raw_tables_and_plots(tmp_path: Path):
         assert int(row["depth_at_arrival"]) == queue.depth_at_arrival
         assert int(row["bytes_at_arrival"]) == queue.bytes_at_arrival
         assert row["pending_at_end"] == str(queue.start_s is None)
+
+
+def test_write_handles_a_plan_with_no_moves(tmp_path: Path):
+    runs = list(experiment.run(
+        workload_paths=(experiment.DEFAULT_WORKLOADS[2],), sessions=1,
+        power_limits=(10_000,), deadlines=(5,), end_s=5, solvers=("load_only",),
+    ))
+    assert all(not run.plan.moves for run in runs)
+    experiment.write(iter(runs), tmp_path)
+    assert (tmp_path / "session_pause.png").exists()
 
 
 def test_worker_processes_preserve_scenario_order_and_results():
