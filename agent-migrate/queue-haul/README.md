@@ -118,23 +118,24 @@ come from `nvidia-smi`; migration energy is time-weighted over those samples.
 Raw GPU telemetry, state windows, transition times, wake probes, and
 `summary.csv` are stored in `RUN_ROOT/power_states`.
 
-The next two reviewed jobs reuse that stack without repeating power profiling:
+Reproduce the two completed targeted jobs without repeating power profiling:
 
 ```bash
 sbatch queue-haul/stage1d_parallel_gate.sbatch
 sbatch queue-haul/stage1e_catch_up.sbatch
 ```
 
-Stage 1D runs 12 fixed two-session scenarios at 1 Gbps: KV concurrency one and
-two with matched controls and three repeats. `check-parallel` hard-fails unless
-concurrency two has independent connection IDs with overlapping positive-byte
-windows, exact aggregate accounting, cache hits, and correct continuations.
-Stage 1E runs 24 scenarios: one fixed session, 32/128/512/2,048-token
-controlled appends, 1/10 Gbps, two repeats, and matched controls. It measures
-generation during the initial copy and the final paused catch-up; the job
-records whether the observed path is actually incremental rather than assuming
-it. The shared runner reduces partial evidence but executes the hard gate only
-after every scenario completes.
+Stage 1D completed all 12 fixed two-session scenarios at 1 Gbps within
+deadline. All six migrations passed cache, continuation, exact aggregate byte,
+and independent large-body connection checks; each used 95 connections with up
+to four overlapping windows. Stage 1E completed all 24 scenarios within
+deadline: one fixed session, 32/128/512/2,048-token controlled appends, 1/10
+Gbps, two repeats, and matched controls. All 16 migrations overlapped generation
+with the initial copy, transferred positive incremental catch-up bytes, retained
+every appended token, continued correctly, and measured copy service faster
+than KV growth. The evidence is stored in `parallel-kv-gate-run-2` and
+`append-catch-up-run-2`. The shared runner reduces partial evidence but executes
+the hard gate only after every scenario completes.
 
 `--workers` runs independent workload, power-limit, deadline, and solver groups
 in separate processes while preserving serial result order. It defaults to one
