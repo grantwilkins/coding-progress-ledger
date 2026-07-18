@@ -543,13 +543,23 @@ class PowerSampler:
             with self.path.open("w", newline="", buffering=1) as handle:
                 writer = csv.writer(handle)
                 writer.writerow(["monotonic_ns", "wall_ns", "gpu", "power_w", "utilization_pct", "memory_mib", "valid"])
+                devices = b.allocated_gpu_ids()
+                query = ["--query-gpu=power.draw,utilization.gpu,memory.used",
+                         "--format=csv,noheader,nounits"]
                 while not self.stop.is_set():
-                    output = subprocess.check_output(["nvidia-smi", "--query-gpu=index,power.draw,utilization.gpu,memory.used", "--format=csv,noheader,nounits"], text=True)
+                    outputs = [subprocess.check_output(
+                        ["nvidia-smi", "-i", device, *query], text=True
+                    ) for device in devices] if devices else [subprocess.check_output(
+                        ["nvidia-smi", *query], text=True
+                    )]
+                    lines = [line for output in outputs for line in output.splitlines()]
+                    if devices and len(lines) != len(devices):
+                        raise RuntimeError("nvidia-smi did not report every allocated GPU")
                     mono, wall = time.monotonic_ns(), time.time_ns()
-                    for line in output.splitlines():
+                    for gpu, line in enumerate(lines):
                         values = [value.strip() for value in line.split(",")]
                         valid = all(value not in {"N/A", "[N/A]"} for value in values)
-                        writer.writerow([mono, wall, values[0], *values[1:], int(valid)])
+                        writer.writerow([mono, wall, gpu, *values, int(valid)])
                     self.stop.wait(.25)
         except Exception as exc:
             self.error = exc
@@ -720,9 +730,10 @@ def profile_power_states(stack: b.Stack, cfg: b.Config, root: Path, cycles: int,
             wake_end = time.monotonic_ns()
             messages = [{"role": "user", "content": "Reply with exactly OK."}]
             probe, text = stream_chat(
-                cfg, cfg.src_port, messages, 4, object_hash(messages), 600
+                cfg, cfg.src_port, messages, PROBE_MAX_TOKENS,
+                object_hash(messages), 600
             )
-            if probe.status_code != 200 or probe.first_byte_ns is None or "OK" not in text:
+            if probe.status_code != 200 or (not text and probe.output_tokens <= 0):
                 raise RuntimeError("source did not serve a verified wake probe")
             rows.append({
                 "cycle": cycle, "awake_ns": [awake_start, awake_end],
@@ -732,13 +743,15 @@ def profile_power_states(stack: b.Stack, cfg: b.Config, root: Path, cycles: int,
                 "wake_probe": asdict(probe),
             })
     finally:
-        if sleeping:
-            b.set_source_sleep(cfg, False)
         try:
-            gpu_sampler.close()
+            if sleeping:
+                b.set_source_sleep(cfg, False)
         finally:
-            if node_sampler:
-                node_sampler.close()
+            try:
+                gpu_sampler.close()
+            finally:
+                if node_sampler:
+                    node_sampler.close()
     summary = power_state_summary(
         root / "gpu_power.csv", root / "node_power.csv" if node_power else None,
         rows,
@@ -841,14 +854,20 @@ def run_scenario(stack: b.Stack, cfg: b.Config, manifest: dict, scenario: dict, 
             "migrations": [asdict(row) for row in migration_results], "activities": activities, "continuations": continuations,
         }
     finally:
-        if sleeping:
-            b.set_source_sleep(cfg, False)
-        if runtime:
-            runtime.close()
-        sampler.close()
-        time.sleep(.3)
-        event_log.close()
-        write_cache_slice(cache_log, root / "cache_operations.jsonl", start_ns, time.monotonic_ns())
+        try:
+            if sleeping:
+                b.set_source_sleep(cfg, False)
+        finally:
+            try:
+                if runtime:
+                    runtime.close()
+            finally:
+                try:
+                    sampler.close()
+                finally:
+                    time.sleep(.3)
+                    event_log.close()
+                    write_cache_slice(cache_log, root / "cache_operations.jsonl", start_ns, time.monotonic_ns())
     result["wire_bytes"] = b.proxy_counts(root / "proxy_bytes.csv")
     write_json(root / "result.json", result)
     return result
@@ -1020,14 +1039,16 @@ def flatten_migration(scenario: dict, result: dict, row: dict) -> dict:
     }
 
 
-def network_measurements(path: Path) -> dict:
+def network_measurements(path: Path, start_ns: int = 0, end_ns: int = 2**63 - 1) -> dict:
     rows = [row for row in b.proxy_rows(path) if row.get("billed") == "1" and row["route"] == "kv"
-            and row["direction"] == "target_to_client" and int(row["bytes"]) > 0]
+            and row["direction"] == "target_to_client" and int(row["bytes"]) > 0
+            and int(row["monotonic_ns"]) < end_ns
+            and int(row["monotonic_ns"]) + int(row["interval_ns"]) > start_ns]
     if not rows:
         return {"measured_kv_wire_bytes": 0, "kv_network_window_s": 0.0,
                 "measured_kv_throughput_mbps": 0.0}
-    start = min(int(row["monotonic_ns"]) for row in rows)
-    end = max(int(row["monotonic_ns"]) + int(row["interval_ns"]) for row in rows)
+    start = max(start_ns, min(int(row["monotonic_ns"]) for row in rows))
+    end = min(end_ns, max(int(row["monotonic_ns"]) + int(row["interval_ns"]) for row in rows))
     nbytes, window = sum(int(row["bytes"]) for row in rows), duration(start, end)
     return {"measured_kv_wire_bytes": nbytes, "kv_network_window_s": window,
             "measured_kv_throughput_mbps": nbytes * 8 / window / 1e6}
@@ -1048,12 +1069,12 @@ def power_measurements(path: Path, start_ns: int, end_ns: int,
     if len(gpus) != 2:
         raise RuntimeError(f"expected two measured GPUs in {path}, found {gpus}")
     for role, gpu, baseline in zip(("source", "destination"), gpus, baselines or (None, None)):
-        before = [row["power_w"] for row in rows if row["gpu"] == gpu and row["monotonic_ns"] < start_ns]
-        active = [row["power_w"] for row in rows if row["gpu"] == gpu and start_ns <= row["monotonic_ns"] <= end_ns]
-        if not before or not active:
+        gpu_rows = [row for row in rows if row["gpu"] == gpu]
+        before = [row["power_w"] for row in gpu_rows if row["monotonic_ns"] < start_ns]
+        if not before:
             raise RuntimeError(f"power samples do not cover migration window in {path}")
         baseline = statistics.median(before) if baseline is None else baseline
-        mean = statistics.fmean(active)
+        mean = time_weighted_mean(gpu_rows, start_ns, end_ns, "power_w")
         values.update({f"{role}_baseline_power_w": baseline, f"{role}_mean_power_w": mean,
                        f"{role}_added_power_w": mean - baseline,
                        f"{role}_added_energy_j": (mean - baseline) * duration(start_ns, end_ns)})
@@ -1356,7 +1377,7 @@ def reduce_run(run_root: Path) -> None:
             end = max(item["switch_end_ns"] for item in migration_rows)
             row.update({"migration_s": duration(start, end), "initial_requests_s": duration(start, initial_end),
                         "initial_time_to_first_responses_s": duration(start, first_end),
-                        **network_measurements(path.parent / "proxy_bytes.csv"),
+                        **network_measurements(path.parent / "proxy_bytes.csv", start, end),
                         **power_measurements(path.parent / "power.csv", start, end, baselines)})
             row["measured_replay_throughput_tokens_s"] = (
                 row["measured_processed_tokens"] / row["initial_time_to_first_responses_s"]

@@ -77,6 +77,17 @@ def test_vllm_commands_pin_validated_sandbox_flags_and_roles():
     assert "stage1b-src" in source and "stage1b-sink" in sink
 
 
+def test_vllm_commands_honor_slurm_gpu_ids(monkeypatch):
+    monkeypatch.setenv("CUDA_VISIBLE_DEVICES", "2,3")
+
+    source = cmd_text(s.vllm_cmd(s.Config(), "source"))
+    sink = cmd_text(s.vllm_cmd(s.Config(), "sink"))
+
+    assert "CUDA_VISIBLE_DEVICES=2" in source
+    assert "CUDA_VISIBLE_DEVICES=3" in sink
+    assert s.gpu_count() == 2
+
+
 def test_lmcache_and_proxy_use_host_commands_not_docker_or_tc():
     cfg = s.Config()
 
@@ -139,6 +150,8 @@ def test_port_offset_honors_env_for_config_and_cli(monkeypatch):
     assert cfg.smoke_port == 8220
     assert args.src_port == 8200
     assert args.lmc_port == 5755
+    assert "\"kv_port\":14679" in cmd_text(s.vllm_cmd(cfg, "source"))
+    assert "\"kv_port\":14680" in cmd_text(s.vllm_cmd(cfg, "sink"))
 
 
 def test_port_offset_rejects_invalid_values(monkeypatch):

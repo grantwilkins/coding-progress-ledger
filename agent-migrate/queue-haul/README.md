@@ -106,9 +106,10 @@ uv run python queue-haul/stage1c_controller.py make-plan \
 ```
 
 `stage1c_benchmark.sbatch` profiles two 60-second empty-awake/sleep pairs once
-before running that plan. It requests two GPUs. The primary 250 ms GPU power
-and energy measurements come from `nvidia-smi`. Raw GPU telemetry, state
-windows, transition times, wake probes, and `summary.csv` are stored in
+before running that plan. It requests two GPUs. The source and destination use
+Slurm's first and second assigned GPUs. The primary 250 ms GPU power samples
+come from `nvidia-smi`; migration energy is time-weighted over those samples.
+Raw GPU telemetry, state windows, transition times, wake probes, and `summary.csv` are stored in
 `RUN_ROOT/power_states`.
 
 `--workers` runs independent workload, power-limit, deadline, and solver groups

@@ -196,6 +196,11 @@ def vllm_exports(cfg: Config, role: str, remote_url: str) -> list[str]:
     return exports
 
 
+def allocated_gpu_ids() -> list[str]:
+    value = os.environ.get("CUDA_VISIBLE_DEVICES") or os.environ.get("SLURM_JOB_GPUS", "")
+    return [item.strip() for item in value.split(",") if item.strip()]
+
+
 def apptainer_cmd(cfg: Config, script: str, gpu: int | None = None, nv: bool = True) -> list[str]:
     cmd = ["apptainer", "exec", "--bind", f"{cfg.scratch_bind}:{cfg.scratch_bind}", cfg.sandbox, "bash", "-lc", script]
     if nv:
@@ -205,7 +210,9 @@ def apptainer_cmd(cfg: Config, script: str, gpu: int | None = None, nv: bool = T
         cmd.insert(2, f"--{mode}")
     if gpu is None:
         return cmd
-    return ["env", f"CUDA_VISIBLE_DEVICES={gpu}", f"APPTAINERENV_CUDA_VISIBLE_DEVICES={gpu}", f"NVIDIA_VISIBLE_DEVICES={gpu}", *cmd]
+    devices = allocated_gpu_ids()
+    device = devices[gpu] if devices else str(gpu)
+    return ["env", f"CUDA_VISIBLE_DEVICES={device}", f"APPTAINERENV_CUDA_VISIBLE_DEVICES={device}", f"NVIDIA_VISIBLE_DEVICES={device}", *cmd]
 
 
 def lmcache_cmd(cfg: Config) -> list[str]:
@@ -215,13 +222,13 @@ def lmcache_cmd(cfg: Config) -> list[str]:
 def vllm_cmd(cfg: Config, role: str, extra: list[str] | None = None) -> list[str]:
     reject_duplicate_extra(extra or [])
     if role == "source":
-        port, gpu, engine_id, kv_role, kv_port, rpc_port = cfg.src_port, 0, "s0", "kv_producer", 14579, "src"
+        port, gpu, engine_id, kv_role, kv_port, rpc_port = cfg.src_port, 0, "s0", "kv_producer", port_default(14579), "src"
         remote_url, cache_role = f"lm://{cfg.host}:{cfg.lmc_port}", "src"
     elif role == "sink":
-        port, gpu, engine_id, kv_role, kv_port, rpc_port = cfg.sink_port, 1, "d0", "kv_consumer", 14580, "sink"
+        port, gpu, engine_id, kv_role, kv_port, rpc_port = cfg.sink_port, 1, "d0", "kv_consumer", port_default(14580), "sink"
         remote_url, cache_role = f"lm://{cfg.host}:{cfg.kv_proxy_port}", "sink"
     elif role == "smoke1":
-        port, gpu, engine_id, kv_role, kv_port, rpc_port = cfg.smoke_port, 0, "e0", "kv_both", 14579, "smk"
+        port, gpu, engine_id, kv_role, kv_port, rpc_port = cfg.smoke_port, 0, "e0", "kv_both", port_default(14579), "smk"
         remote_url, cache_role = f"lm://{cfg.host}:{cfg.lmc_port}", "smoke1"
     else:
         raise ValueError(f"unknown role: {role}")
@@ -293,6 +300,9 @@ def port_free(host: str, port: int) -> bool:
 
 
 def gpu_count() -> int:
+    devices = allocated_gpu_ids()
+    if devices:
+        return len(devices)
     if not shutil.which("nvidia-smi"):
         raise RuntimeError("nvidia-smi not found")
     out = subprocess.check_output(["nvidia-smi", "-L"], text=True)

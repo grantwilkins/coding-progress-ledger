@@ -240,8 +240,9 @@ def test_network_and_power_measurements_use_measured_scopes(tmp_path):
         "1250000000,0,250000000,kv,target_to_client,2000000,1\n"
         "1250000000,0,250000000,api,client_to_target,9000000,1\n"
         "1250000000,0,250000000,kv,target_to_client,7000000,0\n"
+        "1750000000,0,250000000,kv,target_to_client,5000000,1\n"
     )
-    network = c.network_measurements(proxy)
+    network = c.network_measurements(proxy, 1_000_000_000, 1_500_000_000)
     assert network == {"measured_kv_wire_bytes": 3_000_000,
                        "kv_network_window_s": .5,
                        "measured_kv_throughput_mbps": 48.0}
@@ -251,6 +252,7 @@ def test_network_and_power_measurements_use_measured_scopes(tmp_path):
         "monotonic_ns,wall_ns,gpu,power_w,utilization_pct,memory_mib,valid\n"
         "0,0,0,80,0,0,1\n0,0,1,100,0,0,1\n"
         "1000000000,0,0,90,0,0,1\n1000000000,0,1,130,0,0,1\n"
+        "1500000000,0,0,110,0,0,1\n1500000000,0,1,150,0,0,1\n"
         "2000000000,0,0,110,0,0,1\n2000000000,0,1,150,0,0,1\n"
         "2000000000,0,1,999,0,0,0\n"
     )
@@ -305,6 +307,25 @@ def test_node_power_parsing_hard_fails_missing_or_disabled_power(monkeypatch):
         c.node_power_reading()
 
 
+def test_power_sampler_uses_allocated_gpu_order(tmp_path, monkeypatch):
+    path = tmp_path / "power.csv"
+    sampler = c.PowerSampler(path)
+    calls, outputs = [], iter(["80,0,10\n", "90,0,20\n"])
+    monkeypatch.setattr(c.b, "allocated_gpu_ids", lambda: ["2", "3"])
+
+    def check_output(command, text):
+        calls.append(command)
+        if len(calls) == 2:
+            sampler.stop.set()
+        return next(outputs)
+
+    monkeypatch.setattr(c.subprocess, "check_output", check_output)
+    sampler._run()
+
+    assert [command[2] for command in calls] == ["2", "3"]
+    assert [line.split(",")[2] for line in path.read_text().splitlines()[1:]] == ["0", "1"]
+
+
 def test_power_profile_orders_steady_windows_and_verified_wake(tmp_path, monkeypatch):
     calls = []
 
@@ -328,8 +349,10 @@ def test_power_profile_orders_steady_windows_and_verified_wake(tmp_path, monkeyp
     times = iter(range(1, 9))
     monkeypatch.setattr(c.time, "monotonic_ns", lambda: next(times))
     probe = c.RequestResult("wake", 200, "h", 7, 8, first_byte_ns=8)
-    monkeypatch.setattr(c, "stream_chat",
-                        lambda *_args: (calls.append(("probe",)) or (probe, "OK")))
+    monkeypatch.setattr(
+        c, "stream_chat",
+        lambda *args: calls.append(("probe", args[3])) or (probe, "ready"),
+    )
     monkeypatch.setattr(c, "power_state_summary", lambda *_args: [])
     monkeypatch.setattr(c, "write_csv", lambda *_args: None)
     monkeypatch.setattr(c, "write_json", lambda *_args: None)
@@ -340,7 +363,8 @@ def test_power_profile_orders_steady_windows_and_verified_wake(tmp_path, monkeyp
     assert calls == [
         ("sleep", False), ("sampler", "gpu_power.csv"), ("sampler", "start"),
         ("reset",), ("wait", 10), ("wait", 60), ("sleep", True),
-        ("wait", 10), ("wait", 60), ("sleep", False), ("probe",),
+        ("wait", 10), ("wait", 60), ("sleep", False),
+        ("probe", c.PROBE_MAX_TOKENS),
         ("sampler", "close"),
     ]
 
