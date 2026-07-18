@@ -481,6 +481,7 @@ def test_targeted_jobs_use_reviewed_plans_and_hard_gates():
     assert "stage1c_controller.py run" in runner
     assert "stage1c_controller.py reduce" in runner
     assert '"$CHECK" --run-root' in runner
+    assert "resume=()" not in runner and '"$@"' in runner
     for name, required in jobs.items():
         script = (root / name).read_text()
         assert "#SBATCH --gres=gpu:2" in script
