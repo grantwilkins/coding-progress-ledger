@@ -345,12 +345,13 @@ def test_power_profile_orders_steady_windows_and_verified_wake(tmp_path, monkeyp
     ]
 
 
-def test_batch_power_measurement_is_exclusive_and_records_node_power():
+def test_batch_power_measurement_requests_two_gpus():
     script = Path(c.__file__).with_name("stage1c_benchmark.sbatch").read_text()
 
-    assert "#SBATCH --exclusive" in script
+    assert "#SBATCH --gres=gpu:2" in script
+    assert "#SBATCH --exclusive" not in script
     assert "--power-state-cycles" in script
-    assert "--node-power" in script
+    assert "--node-power" not in script
 
 
 def test_model_check_uses_measured_work_and_stays_in_its_valid_range():

@@ -6,7 +6,6 @@
 #SBATCH --cpus-per-task=16
 #SBATCH --gres=gpu:2
 #SBATCH --constraint=GPU_SKU:A100_SXM4&GPU_MEM:80GB
-#SBATCH --exclusive
 #SBATCH --mem=256G
 #SBATCH --time=12:00:00
 #SBATCH --output=/home/groups/ramr/gfw/coding-progress-ledger/agent-migrate/queue-haul/outputs/stage1c-%j.out
@@ -32,7 +31,7 @@ RUN_STATUS=0
 RESUME_ARGS=${RESUME_FROM_GIT_SHA:+--resume-from-git-sha $RESUME_FROM_GIT_SHA}
 $PY queue-haul/stage1c_controller.py run --plan "$PLAN" --run-root "$RUN_ROOT" \
   --power-state-cycles "$POWER_STATE_CYCLES" \
-  --power-state-window-s "$POWER_STATE_WINDOW_S" --node-power \
+  --power-state-window-s "$POWER_STATE_WINDOW_S" \
   $RESUME_ARGS || RUN_STATUS=$?
 $PY queue-haul/stage1c_controller.py reduce --run-root "$RUN_ROOT"
 exit "$RUN_STATUS"
