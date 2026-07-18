@@ -7,7 +7,9 @@ Plausible wrong implementations:
 - Regenerate different conversations for repeats or split a trace turn.
 - Change the selected session set across concurrency, methods, or bandwidths.
 - Rerun identical controls for every method and bandwidth.
+- Claim parallel KV from aggregate bytes without independent overlapping links.
 - Add catch-up cache hits to KV bytes transferred over the network.
+- Mix appended prompt tokens with decoded output or infer growth from requested tokens.
 - Label requested context sizes as measured prompt tokens.
 - Count API or unbilled traffic as transferred KV, or compare raw rather than
   baseline-adjusted power.
@@ -110,6 +112,25 @@ def test_plan_can_pin_the_same_sessions_across_repeats(tmp_path):
             manifest_path, [2048], [2], [1000], ["replay"], ["none"], 1, 9,
             session_ids=["a"],
         )
+
+
+def test_catch_up_plan_pairs_each_measured_append_size(tmp_path):
+    trace, manifest_path = tmp_path / "trace.jsonl", tmp_path / "manifest.json"
+    write_trace(trace); c.write_json(manifest_path, c.make_manifest(trace, "coding", 3, 1))
+
+    plan = c.make_plan(
+        manifest_path, [2048], [1], [1000, 10000], ["kv_transfer"],
+        ["one_turn"], 1, 9, activity_tokens=[32, 128],
+    )
+
+    assert len(plan["scenarios"]) == 6
+    assert {row["activity_tokens"] for row in plan["scenarios"]} == {32, 128}
+    for tokens in (32, 128):
+        rows = [row for row in plan["scenarios"]
+                if row["activity_tokens"] == tokens]
+        assert sum(row["kind"] == "control" for row in rows) == 1
+        assert {row["bandwidth_mbps"] for row in rows
+                if row["kind"] == "migration"} == {1000, 10000}
 
 
 def test_plan_rejects_old_schema_and_too_few_sessions(tmp_path):
@@ -264,6 +285,74 @@ def test_network_and_power_measurements_use_measured_scopes(tmp_path):
     assert measured["total_added_energy_j"] == 60
 
 
+def test_parallel_gate_requires_independent_overlapping_positive_byte_windows(tmp_path):
+    proxy = tmp_path / "proxy.csv"
+    proxy.write_text(
+        "monotonic_ns,wall_ns,interval_ns,connection_id,route,direction,bytes,billed\n"
+        "0,0,250000000,a,kv,target_to_client,100,1\n"
+        "0,0,250000000,b,kv,target_to_client,100,1\n"
+        "250000000,0,250000000,a,kv,target_to_client,100,1\n"
+        "250000000,0,250000000,b,kv,target_to_client,100,1\n"
+        "0,0,250000000,z,api,client_to_target,999,1\n"
+        "0,0,250000000,z,kv,target_to_client,999,0\n"
+    )
+
+    measured = c.parallel_connection_measurements(
+        proxy, 0, 500_000_000, required=2,
+    )
+
+    assert measured == {
+        "connection_count": 2,
+        "max_parallel_connections": 2,
+        "overlap_buckets": 2,
+        "wire_bytes": 400,
+    }
+    proxy.write_text(proxy.read_text().replace(",b,kv", ",a,kv"))
+    with pytest.raises(RuntimeError, match="independent"):
+        c.parallel_connection_measurements(proxy, 0, 500_000_000, required=2)
+
+
+def test_parallel_gate_rejects_sequential_connections_with_same_total_bytes(tmp_path):
+    proxy = tmp_path / "proxy.csv"
+    proxy.write_text(
+        "monotonic_ns,wall_ns,interval_ns,connection_id,route,direction,bytes,billed\n"
+        "0,0,250000000,a,kv,target_to_client,200,1\n"
+        "250000000,0,250000000,a,kv,target_to_client,200,1\n"
+        "500000000,0,250000000,b,kv,target_to_client,200,1\n"
+        "750000000,0,250000000,b,kv,target_to_client,200,1\n"
+    )
+
+    with pytest.raises(RuntimeError, match="overlapping"):
+        c.parallel_connection_measurements(proxy, 0, 1_000_000_000, required=2)
+
+
+def test_catch_up_profile_separates_prompt_output_and_uses_strict_convergence():
+    row = {
+        "measured_kv_bytes": 1000 * 49_152,
+        "measured_prompt_tokens": 1000,
+        "initial_time_to_first_response_s": 2.0,
+        "initial_kv_wire_bytes": 49_153_000,
+        "catch_up_kv_wire_bytes": 2_000_000,
+        "catch_up_new_tokens": 40,
+        "measured_activity_append_tokens": 32,
+        "activity_output_tokens": 8,
+        "activity_s": .1,
+        "service_pause_s": .5,
+        "activity_overlapped_initial_copy": True,
+    }
+
+    measured = c.catch_up_profile(row)
+
+    assert measured["bytes_per_token"] == 49_152
+    assert measured["appended_prompt_tokens"] == 32
+    assert measured["decoded_output_tokens"] == 8
+    assert measured["state_growth_bytes"] == 40 * 49_152
+    assert measured["effective_copy_bytes_per_s"] == 1000 * 49_152 / 2
+    assert measured["kv_growth_bytes_per_s"] == 40 * 49_152 / .1
+    assert measured["converges"]
+    assert not c.catch_up_profile({**row, "activity_s": .08})["converges"]
+
+
 def test_power_state_summary_uses_time_weighting_and_same_gpu(tmp_path):
     power = tmp_path / "power.csv"
     power.write_text(
@@ -376,6 +465,27 @@ def test_batch_power_measurement_requests_two_gpus():
     assert "#SBATCH --exclusive" not in script
     assert "--power-state-cycles" in script
     assert "--node-power" not in script
+
+
+def test_targeted_jobs_use_reviewed_plans_and_hard_gates():
+    root = Path(c.__file__).parent
+    runner = (root / "stage1_targeted_run.sh").read_text()
+    jobs = {
+        "stage1d_parallel_gate.sbatch":
+            ("outputs/parallel-kv-gate-plan.json", "check-parallel"),
+        "stage1e_catch_up.sbatch":
+            ("outputs/append-catch-up-plan.json", "check-catch-up"),
+    }
+
+    assert "stage1b_drain_sink.py preflight --required-gpus 2" in runner
+    assert "stage1c_controller.py run" in runner
+    assert "stage1c_controller.py reduce" in runner
+    assert '"$CHECK" --run-root' in runner
+    for name, required in jobs.items():
+        script = (root / name).read_text()
+        assert "#SBATCH --gres=gpu:2" in script
+        assert all(value in script for value in required)
+        assert "stage1_targeted_run.sh" in script
 
 
 def test_model_check_uses_measured_work_and_stays_in_its_valid_range():

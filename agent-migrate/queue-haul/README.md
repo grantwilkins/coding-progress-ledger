@@ -75,20 +75,27 @@ uv run python queue-haul/stage1c_profile_fit.py \
 ```
 
 The checked profile remains `estimated`. It has not been validated for larger
-catch-up work, interactive or agentic jobs, eight-session drains, sleep or
-shutdown, paired method and bandwidth comparisons, or parallel KV connections.
-The new coding fit and the earlier live replay points occupy separate token
-ranges in the profile; the earlier range retains its 30% error bound.
+catch-up work, interactive or agentic jobs, eight-session drains, shutdown, or
+parallel KV connections, and it has not yet incorporated the paired serial or
+GPU-only sleep results. The new coding fit and the earlier live replay points
+occupy separate token ranges in the profile; the earlier range retains its 30%
+error bound.
 
 The completed `serial-power-run-2` pins the same session and turn across
 methods and bandwidths and shares controls across those comparisons. All 30
 scenarios completed within deadline. The older `coding-run` predates paired
 planning, so only its observations remain unpaired.
+Two paired 60-second windows found that source level-1 sleep released GPU
+memory but left A100 board power unchanged at about 84.9 W. The run did not
+collect exclusive whole-node power.
 
 Stage 1C reduction reports measured prompt, processed, and new tokens; initial
-KV payload bytes; catch-up cache hits; exact proxy KV-route bytes; request
-timing; and power relative to a measured idle baseline. It does not group or
-plot by requested context size.
+KV payload bytes; catch-up cache hits; connection-attributed proxy bytes;
+initial and catch-up wire windows; request timing; and power relative to a
+measured idle baseline. Active runs also write `catch_up.csv` with measured
+prompt/output separation, KV growth, effective copy service, final pause, and
+the resulting convergence test. It does not group or plot by requested context
+size.
 `initial_time`, `throughput`, `concurrency_scaling`, `service_effects`,
 `power_energy`, and `model_check` show the direct relationships.
 
@@ -110,6 +117,24 @@ Slurm's first and second assigned GPUs. The primary 250 ms GPU power samples
 come from `nvidia-smi`; migration energy is time-weighted over those samples.
 Raw GPU telemetry, state windows, transition times, wake probes, and
 `summary.csv` are stored in `RUN_ROOT/power_states`.
+
+The next two reviewed jobs reuse that stack without repeating power profiling:
+
+```bash
+sbatch queue-haul/stage1d_parallel_gate.sbatch
+sbatch queue-haul/stage1e_catch_up.sbatch
+```
+
+Stage 1D runs 12 fixed two-session scenarios at 1 Gbps: KV concurrency one and
+two with matched controls and three repeats. `check-parallel` hard-fails unless
+concurrency two has independent connection IDs with overlapping positive-byte
+windows, exact aggregate accounting, cache hits, and correct continuations.
+Stage 1E runs 24 scenarios: one fixed session, 32/128/512/2,048-token
+controlled appends, 1/10 Gbps, two repeats, and matched controls. It measures
+generation during the initial copy and the final paused catch-up; the job
+records whether the observed path is actually incremental rather than assuming
+it. The shared runner reduces partial evidence but executes the hard gate only
+after every scenario completes.
 
 `--workers` runs independent workload, power-limit, deadline, and solver groups
 in separate processes while preserving serial result order. It defaults to one

@@ -9,6 +9,7 @@ Plausible wrong implementations:
 - Start source/sink with colliding ports, long TMPDIRs, or shared cache dirs.
 - Shape each route independently instead of enforcing one shared link.
 - Bill both directions instead of the simulated source-egress directions.
+- Aggregate concurrent connections so apparent overlap cannot be attributed.
 - Trust reset HTTP 200 after vLLM logged that the reset failed.
 - Hide transfers in a private CPU cache or log every socket read as a sample.
 """
@@ -349,6 +350,7 @@ def test_proxy_relay_shapes_billable_bytes_and_logs(tmp_path):
     assert sum(int(r["bytes"]) for r in rows if r["direction"] == "client_to_target") == 512
     assert {r["route"] for r in rows} == {"api"}
     assert {r["billed"] for r in rows} == {"1"}
+    assert len({r["connection_id"] for r in rows}) == 1
     assert len(rows) <= 2
     connections = list(csv.DictReader((tmp_path / "proxy_connections.csv").open()))
     assert len(connections) == 1

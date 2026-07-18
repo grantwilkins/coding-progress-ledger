@@ -394,12 +394,12 @@ class ByteLog:
         path.parent.mkdir(parents=True, exist_ok=True)
         self.file = path.open("w", newline="", buffering=1)
         self.writer = csv.writer(self.file)
-        self.writer.writerow(["monotonic_ns", "wall_ns", "interval_ns", "route", "direction", "bytes", "billed"])
+        self.writer.writerow(["monotonic_ns", "wall_ns", "interval_ns", "connection_id", "route", "direction", "bytes", "billed"])
         connections = path.with_name("proxy_connections.csv")
         self.connections = connections.open("w", newline="", buffering=1)
         self.connection_writer = csv.writer(self.connections)
         self.connection_writer.writerow(["connection_id", "route", "start_ns", "end_ns", "client_to_target_bytes", "target_to_client_bytes"])
-        self.buckets: dict[tuple[int, str, str, bool], int] = {}
+        self.buckets: dict[tuple[int, str, str, str, bool], int] = {}
         self.lock = asyncio.Lock()
         self.task: asyncio.Task | None = None
         self.active = 0
@@ -409,10 +409,11 @@ class ByteLog:
     async def start(self) -> None:
         self.task = asyncio.create_task(self._flush_loop())
 
-    async def add(self, route: str, direction: str, nbytes: int, billed: bool) -> None:
+    async def add(self, connection_id: str, route: str, direction: str,
+                  nbytes: int, billed: bool) -> None:
         async with self.lock:
             bucket = time.monotonic_ns() // self.interval_ns * self.interval_ns
-            key = bucket, route, direction, billed
+            key = bucket, connection_id, route, direction, billed
             self.buckets[key] = self.buckets.get(key, 0) + nbytes
 
     async def opened(self) -> None:
@@ -436,8 +437,11 @@ class ByteLog:
         cutoff = time.monotonic_ns() // self.interval_ns * self.interval_ns
         async with self.lock:
             keys = [key for key in self.buckets if all_rows or key[0] < cutoff]
-            for bucket, route, direction, billed in sorted(keys):
-                self.writer.writerow([bucket, time.time_ns(), self.interval_ns, route, direction, self.buckets.pop((bucket, route, direction, billed)), int(billed)])
+            for bucket, connection_id, route, direction, billed in sorted(keys):
+                self.writer.writerow([bucket, time.time_ns(), self.interval_ns,
+                                      connection_id, route, direction,
+                                      self.buckets.pop((bucket, connection_id, route, direction, billed)),
+                                      int(billed)])
 
     async def close(self) -> None:
         await self.idle.wait()
@@ -568,7 +572,9 @@ def run_lmcache_server(host: str, port: int, max_bytes: int = 0) -> None:
             threading.Thread(target=handle_lmcache_client, args=(client, store), daemon=True).start()
 
 
-async def relay(reader: asyncio.StreamReader, writer: asyncio.StreamWriter, bucket: TokenBucket, log: ByteLog | None, route: str, direction: str) -> int:
+async def relay(reader: asyncio.StreamReader, writer: asyncio.StreamWriter,
+                bucket: TokenBucket, log: ByteLog | None, connection_id: str,
+                route: str, direction: str) -> int:
     total = 0
     try:
         charged = billable(route, direction)
@@ -579,7 +585,7 @@ async def relay(reader: asyncio.StreamReader, writer: asyncio.StreamWriter, buck
             await writer.drain()
             total += len(data)
             if log:
-                await log.add(route, direction, len(data), charged)
+                await log.add(connection_id, route, direction, len(data), charged)
     finally:
         writer.close()
         await writer.wait_closed()
@@ -595,8 +601,10 @@ async def handle_proxy(client_r: asyncio.StreamReader, client_w: asyncio.StreamW
     counts = (0, 0)
     try:
         counts = tuple(await asyncio.gather(
-            relay(client_r, target_w, bucket, log, route.name, "client_to_target"),
-            relay(target_r, client_w, bucket, log, route.name, "target_to_client"),
+            relay(client_r, target_w, bucket, log, connection_id, route.name,
+                  "client_to_target"),
+            relay(target_r, client_w, bucket, log, connection_id, route.name,
+                  "target_to_client"),
         ))
     finally:
         if log:

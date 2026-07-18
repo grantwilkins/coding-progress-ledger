@@ -3,32 +3,33 @@
 This is the single list of missing live measurements. Keep the checked profile
 at concurrency one until the matching concurrency tests pass.
 
-## Next GPU job: serial crossover and power states
+## Completed: serial crossover and GPU power states
 
-- [ ] Reuse `outputs/coding-manifest.json` and the existing two-model stack.
+- [x] Reuse `outputs/coding-manifest.json` and the existing two-model stack.
   Pin `codex:e381cc89-38ef-e67e-79b9-4b800369b4f5` at trace turns 0 and 60,
-  expected to measure about 11k and 31k prompt tokens.
-- [ ] Run raw KV and replay at 1 and 10 Gbps, concurrency one, no activity, and
+  which measured 11,047 and 30,474 prompt tokens.
+- [x] Run raw KV and replay at 1 and 10 Gbps, concurrency one, no activity, and
   three repeats. Share one control across the four method/rate migrations for
   each turn and repeat: 24 migrations plus 6 controls.
-- [ ] Before migrations, collect two paired 60-second empty-awake and vLLM
-  level-1 sleep windows on the already-running stack. Record both GPUs, source
-  memory, verified sleep/wake transitions, a post-wake request, and exclusive
-  whole-node Slurm energy.
-- [ ] Hard-fail before model startup if Slurm reports missing or zero node
-  energy. Do not label GPU-only measurements as whole-server power.
-- [ ] Record exact measured prompt and KV work, transfer and ingest timing,
+- [x] Collect two paired 60-second empty-awake and level-1 sleep GPU windows,
+  source memory, verified transitions, and post-wake requests. Sleep released
+  memory but source power remained about 84.9 W.
+- [ ] Obtain exclusive whole-node energy separately. `serial-power-run-2`
+  records `node_power: false`; do not label its GPU measurements as
+  whole-server power.
+- [x] Record exact measured prompt and KV work, transfer and ingest timing,
   cache hits, continuation, shaped and achieved rate, and source/destination
   power for every migration.
 
-## Later GPU job: parallel KV gate
+## Next GPU job: parallel KV gate
 
-- [ ] Give each simultaneous KV lookup an independent LMCache connection. First
-  run a fixed two-session, 1 Gbps, no-activity smoke at concurrency 1 and 2,
-  with matched controls.
+- [x] Script `stage1d_parallel_gate.sbatch` with the reviewed 12-scenario
+  `outputs/parallel-kv-gate-plan.json`.
+- [ ] Run the fixed two-session, 1 Gbps, no-activity smoke at concurrency 1
+  and 2 with matched controls.
 - [ ] Require two distinct connection IDs and overlapping KV-byte windows at
   concurrency two. Also require exact aggregate wire bytes, correct cache hits
-  and continuation, no errors, and complete timing, power, and reduction data.
+  and continuation, and no errors. `check-parallel` hard-fails otherwise.
 - [ ] After that gate passes, run KV transfer for the same fixed four sessions
   and turns at concurrency 1, 2, and 4, shaped aggregate rates of 1 and 10 Gbps,
   no activity, and two repeats.
@@ -40,6 +41,11 @@ at concurrency one until the matching concurrency tests pass.
 
 ## Urgency and append-only catch-up
 
+- [x] Script `stage1e_catch_up.sbatch` with the reviewed 24-scenario
+  `outputs/append-catch-up-plan.json`: 32/128/512/2,048-token controlled
+  appends, 1/10 Gbps, two repeats, and matched controls.
+- [ ] Run the scripted two-stage initial/final catch-up job and determine from
+  connection-attributed wire bytes whether the implementation is incremental.
 - [ ] Measure initial KV backlog, new KV bytes per generated token, source
   extraction rate, path goodput, destination ingest rate, and fixed quiesce,
   synchronization, and route-switch time.
@@ -100,7 +106,8 @@ at concurrency one until the matching concurrency tests pass.
 
 - [ ] Measure request and migration power at every supported concurrency.
 - [ ] Fit empty-awake and sleep power and transition time from the next job;
-  the current 67.12 W/GPU value is idle power, not measured sleep power.
+  the measured level-1 sleep point is about 84.9 W/GPU and did not reduce board
+  power, but only two transitions were observed.
 - [ ] Measure shutdown power and transition time separately; a running Slurm
   allocation cannot measure physical node power-off and reboot.
 - [ ] Measure and validate tensor-parallel layouts before simulating tensor

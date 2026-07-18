@@ -198,7 +198,8 @@ def validate_manifest(manifest: dict) -> None:
 def make_plan(manifest_path: Path, context_sizes: list[int], concurrency: list[int],
               bandwidth_mbps: list[float], methods: list[str], activity: list[str],
               repeats: int, seed: int, deadline_s: float = 300.0,
-              session_ids: tuple[str, ...] | list[str] = ()) -> dict:
+              session_ids: tuple[str, ...] | list[str] = (),
+              activity_tokens: tuple[int, ...] | list[int] = ()) -> dict:
     manifest = json.loads(manifest_path.read_text())
     validate_manifest(manifest)
     if not all(value > 0 for value in [*context_sizes, *concurrency, *bandwidth_mbps, repeats, deadline_s]):
@@ -206,6 +207,8 @@ def make_plan(manifest_path: Path, context_sizes: list[int], concurrency: list[i
     if not methods or not activity or not set(methods) <= set(METHODS) \
             or not set(activity) <= set(ACTIVITIES):
         raise ValueError("unknown method or activity")
+    if any(value <= 0 for value in activity_tokens):
+        raise ValueError("activity tokens must be positive")
     count = max(concurrency)
     if len(manifest["sessions"]) < count:
         raise ValueError(f"manifest needs at least {count} sessions")
@@ -216,33 +219,37 @@ def make_plan(manifest_path: Path, context_sizes: list[int], concurrency: list[i
     scenarios = []
     for size in context_sizes:
         for active in activity:
-            for repeat in range(repeats):
-                if session_ids:
-                    chosen = [sessions[session_id] for session_id in session_ids]
-                else:
-                    chosen = sorted(manifest["sessions"], key=lambda row: row["id"])
-                    random.Random(stable_seed(seed, size, active, repeat)).shuffle(chosen)
-                    chosen = chosen[:count]
-                session_rows = [{"session_id": row["id"], "job_class": row["job_class"],
-                                 "turn_index": nearest_turn(row, size), "order": order}
-                                for order, row in enumerate(chosen)]
-                for width in concurrency:
-                    match_id = object_hash([size, active, repeat, width, session_rows])[:16]
-                    base = {"match_id": match_id, "context_size": size,
-                            "concurrency": width, "activity": active, "repeat": repeat,
-                            "deadline_s": deadline_s, "sessions": session_rows}
-                    control = {**base, "method": methods[0],
-                               "bandwidth_mbps": bandwidth_mbps[0], "kind": "control",
-                               "scenario_id": f"c-{match_id}", "moves": []}
-                    scenarios.append(control)
-                    for method in methods:
-                        for link in bandwidth_mbps:
-                            scenario_id = object_hash([match_id, method, link])[:16]
-                            scenario = {**base, "method": method, "bandwidth_mbps": link,
-                                        "kind": "migration", "scenario_id": f"m-{scenario_id}"}
-                            scenario["moves"] = [{**row, "method": method}
-                                                 for row in session_rows]
-                            scenarios.append(scenario)
+            for appended in activity_tokens if active == "one_turn" and activity_tokens else [0]:
+                for repeat in range(repeats):
+                    if session_ids:
+                        chosen = [sessions[session_id] for session_id in session_ids]
+                    else:
+                        chosen = sorted(manifest["sessions"], key=lambda row: row["id"])
+                        random.Random(stable_seed(seed, size, active, repeat)).shuffle(chosen)
+                        chosen = chosen[:count]
+                    session_rows = [{"session_id": row["id"], "job_class": row["job_class"],
+                                     "turn_index": nearest_turn(row, size), "order": order}
+                                    for order, row in enumerate(chosen)]
+                    for width in concurrency:
+                        match_id = object_hash(
+                            [size, active, appended, repeat, width, session_rows]
+                        )[:16]
+                        base = {"match_id": match_id, "context_size": size,
+                                "concurrency": width, "activity": active,
+                                "activity_tokens": appended, "repeat": repeat,
+                                "deadline_s": deadline_s, "sessions": session_rows}
+                        control = {**base, "method": methods[0],
+                                   "bandwidth_mbps": bandwidth_mbps[0], "kind": "control",
+                                   "scenario_id": f"c-{match_id}", "moves": []}
+                        scenarios.append(control)
+                        for method in methods:
+                            for link in bandwidth_mbps:
+                                scenario_id = object_hash([match_id, method, link])[:16]
+                                scenario = {**base, "method": method, "bandwidth_mbps": link,
+                                            "kind": "migration", "scenario_id": f"m-{scenario_id}"}
+                                scenario["moves"] = [{**row, "method": method}
+                                                     for row in session_rows]
+                                scenarios.append(scenario)
     random.Random(seed).shuffle(scenarios)
     plan = {"schema": PLAN_SCHEMA, "manifest": {"path": str(manifest_path), "sha256": file_hash(manifest_path)}, "seed": seed, "scenarios": scenarios}
     validate_plan(plan, manifest)
@@ -386,7 +393,9 @@ def lookup_tokens(path: Path, request_id: str) -> tuple[int, int]:
 
 
 class LiveSession:
-    def __init__(self, cfg: b.Config, session: dict, turn_index: int, event_log: EventLog, source_log: Path, cache_log: Path, timeout_s: float):
+    def __init__(self, cfg: b.Config, session: dict, turn_index: int,
+                 event_log: EventLog, source_log: Path, cache_log: Path,
+                 timeout_s: float, activity_tokens: int = 0):
         self.cfg, self.row, self.event_log = cfg, session, event_log
         self.source_log, self.cache_log, self.timeout_s = source_log, cache_log, timeout_s
         self.session_id, self.state_code = session["id"], session["state_code"]
@@ -396,6 +405,10 @@ class LiveSession:
         self.activity_thread: threading.Thread | None = None
         self.activity_error: Exception | None = None
         self.activity_times: tuple[int, int] | None = None
+        self.activity_tokens = activity_tokens
+        self.activity_result: RequestResult | None = None
+        self.measured_activity_append_tokens = 0
+        self.warm_prompt_tokens = 0
         self.cache_keys: set[str] = set()
         self.activity_prompt_tokens: int | None = None
 
@@ -413,7 +426,10 @@ class LiveSession:
 
     def warm(self) -> None:
         before = time.monotonic_ns()
-        self.request(self.cfg.src_port, list(self.messages), "source_warm")
+        result, _ = self.request(
+            self.cfg.src_port, list(self.messages), "source_warm"
+        )
+        self.warm_prompt_tokens = result.prompt_tokens
         after = time.monotonic_ns()
         self.cache_keys |= {row["key_hash"] for row in cache_operations(self.cache_log, before, after) if row["operation"] == "source_write"}
 
@@ -432,11 +448,17 @@ class LiveSession:
         try:
             with self.lock:
                 base = list(self.messages)
-            user = {"role": "user", "content": f"Controlled turn: reply only with session state code {self.state_code}."}
+            prompt = f"Reply with session state code {self.state_code}." \
+                     + " x" * self.activity_tokens
+            user = {"role": "user", "content": prompt}
             result, text = self.request(self.cfg.src_port, base, "controlled_turn", user["content"])
             with self.lock:
                 self.messages = base + [user, {"role": "assistant", "content": text}]
+                self.activity_result = result
                 self.activity_prompt_tokens = result.prompt_tokens
+                self.measured_activity_append_tokens = (
+                    result.prompt_tokens - self.warm_prompt_tokens
+                )
                 self.generation += 1
             self.cache_keys |= {row["key_hash"] for row in cache_operations(self.cache_log, start, result.end_ns) if row["operation"] == "source_write"}
         except Exception as exc:
@@ -793,7 +815,11 @@ def run_scenario(stack: b.Stack, cfg: b.Config, manifest: dict, scenario: dict, 
         except Exception as exc:
             raise ScenarioResetError(str(exc)) from exc
         rows = {row["id"]: row for row in manifest["sessions"]}
-        sessions = {item["session_id"]: LiveSession(cfg, rows[item["session_id"]], item["turn_index"], event_log, source_log, cache_log, scenario["deadline_s"]) for item in scenario["sessions"]}
+        sessions = {item["session_id"]: LiveSession(
+            cfg, rows[item["session_id"]], item["turn_index"], event_log,
+            source_log, cache_log, scenario["deadline_s"],
+            scenario.get("activity_tokens", 0),
+        ) for item in scenario["sessions"]}
         method_by_session = {row["session_id"]: row["method"] for row in scenario["moves"]} or {session_id: scenario["method"] for session_id in sessions}
         replay = [session for session_id, session in sessions.items() if method_by_session[session_id] == "replay"]
         kv = [session for session in sessions.values() if session not in replay]
@@ -844,6 +870,10 @@ def run_scenario(stack: b.Stack, cfg: b.Config, manifest: dict, scenario: dict, 
                 "session_id": session.session_id, "start_ns": activity_start, "end_ns": activity_end,
                 "overlapped_initial_copy": bool(move_result and activity_start < move_result.initial_end_ns and activity_end > move_result.initial_start_ns),
                 "overlapped_request_wait": bool(move_result and activity_start < move_result.idle_ns and activity_end > move_result.pause_start_ns),
+                "requested_append_tokens": session.activity_tokens,
+                "measured_append_tokens": session.measured_activity_append_tokens,
+                "prompt_tokens": session.activity_result.prompt_tokens,
+                "output_tokens": session.activity_result.output_tokens,
             })
         elapsed_s = (time.monotonic_ns() - start_ns) / 1e9
         result = {
@@ -1016,6 +1046,10 @@ def request_measurements(prefix: str, request: dict | None, controller_end_ns: i
 def flatten_migration(scenario: dict, result: dict, row: dict) -> dict:
     initial, catch_up = row.get("initial") or {}, row.get("catch_up") or {}
     session = next(item for item in scenario["sessions"] if item["session_id"] == row["move"]["session_id"])
+    activity = next(
+        (item for item in result.get("activities", [])
+         if item["session_id"] == row["move"]["session_id"]), {}
+    )
     initial_metrics = request_measurements("initial", initial, row["initial_end_ns"])
     catch_up_metrics = request_measurements("catch_up", catch_up, row.get("catch_up_end_ns"))
     catch_up_metrics.pop("catch_up_processed_tokens")
@@ -1034,16 +1068,29 @@ def flatten_migration(scenario: dict, result: dict, row: dict) -> dict:
         "catch_up_new_tokens": max(0, catch_up.get("prompt_tokens", 0) - initial.get("prompt_tokens", 0)),
         "catch_up_cache_hit_chunks": catch_up_metrics.pop("catch_up_kv_chunks"),
         "catch_up_cache_hit_bytes": catch_up_metrics.pop("catch_up_kv_bytes"),
+        "requested_activity_tokens": activity.get("requested_append_tokens", 0),
+        "measured_activity_append_tokens": activity.get("measured_append_tokens", 0),
+        "activity_output_tokens": activity.get("output_tokens", 0),
+        "activity_s": duration(activity.get("start_ns"), activity.get("end_ns")),
+        "activity_overlapped_initial_copy": activity.get("overlapped_initial_copy", False),
         **initial_metrics, **catch_up_metrics,
         "initial_start_ns": row["initial_start_ns"], "initial_end_ns": row["initial_end_ns"], "pause_start_ns": row["pause_start_ns"], "idle_ns": row["idle_ns"], "catch_up_start_ns": row.get("catch_up_start_ns"), "catch_up_end_ns": row.get("catch_up_end_ns"), "switch_start_ns": row["switch_start_ns"], "switch_end_ns": row["switch_end_ns"],
     }
 
 
-def network_measurements(path: Path, start_ns: int = 0, end_ns: int = 2**63 - 1) -> dict:
-    rows = [row for row in b.proxy_rows(path) if row.get("billed") == "1" and row["route"] == "kv"
-            and row["direction"] == "target_to_client" and int(row["bytes"]) > 0
-            and int(row["monotonic_ns"]) < end_ns
-            and int(row["monotonic_ns"]) + int(row["interval_ns"]) > start_ns]
+def kv_network_rows(path: Path, start_ns: int, end_ns: int) -> list[dict]:
+    return [
+        row for row in b.proxy_rows(path)
+        if row.get("billed") == "1" and row["route"] == "kv"
+        and row["direction"] == "target_to_client" and int(row["bytes"]) > 0
+        and int(row["monotonic_ns"]) < end_ns
+        and int(row["monotonic_ns"]) + int(row["interval_ns"]) > start_ns
+    ]
+
+
+def network_measurements(path: Path, start_ns: int = 0,
+                         end_ns: int = 2**63 - 1) -> dict:
+    rows = kv_network_rows(path, start_ns, end_ns)
     if not rows:
         return {"measured_kv_wire_bytes": 0, "kv_network_window_s": 0.0,
                 "measured_kv_throughput_mbps": 0.0}
@@ -1052,6 +1099,71 @@ def network_measurements(path: Path, start_ns: int = 0, end_ns: int = 2**63 - 1)
     nbytes, window = sum(int(row["bytes"]) for row in rows), duration(start, end)
     return {"measured_kv_wire_bytes": nbytes, "kv_network_window_s": window,
             "measured_kv_throughput_mbps": nbytes * 8 / window / 1e6}
+
+
+def phase_network_measurements(path: Path, start_ns: int | None,
+                               end_ns: int | None, phase: str) -> dict:
+    measured = network_measurements(path, start_ns or 0, end_ns or 0)
+    return {
+        f"{phase}_kv_wire_bytes": measured["measured_kv_wire_bytes"],
+        f"{phase}_network_window_s": measured["kv_network_window_s"],
+        f"{phase}_kv_throughput_mbps":
+            measured["measured_kv_throughput_mbps"],
+    }
+
+
+def parallel_connection_measurements(path: Path, start_ns: int, end_ns: int,
+                                     required: int) -> dict:
+    rows = kv_network_rows(path, start_ns, end_ns)
+    if any(not row.get("connection_id") for row in rows):
+        raise RuntimeError("KV byte rows lack connection attribution")
+    buckets: dict[int, set[str]] = {}
+    for row in rows:
+        buckets.setdefault(int(row["monotonic_ns"]), set()).add(
+            row["connection_id"]
+        )
+    connections = {item for values in buckets.values() for item in values}
+    if len(connections) < required:
+        raise RuntimeError(
+            f"need {required} independent KV connections, found {len(connections)}"
+        )
+    maximum = max(map(len, buckets.values()), default=0)
+    overlap = sum(len(values) >= required for values in buckets.values())
+    if required > 1 and not overlap:
+        raise RuntimeError("independent KV connections lack overlapping byte windows")
+    return {
+        "connection_count": len(connections),
+        "max_parallel_connections": maximum,
+        "overlap_buckets": overlap,
+        "wire_bytes": sum(int(row["bytes"]) for row in rows),
+    }
+
+
+def catch_up_profile(row: dict) -> dict:
+    bytes_per_token = row["measured_kv_bytes"] / row["measured_prompt_tokens"]
+    growth_bytes = row["catch_up_new_tokens"] * bytes_per_token
+    service = row["measured_kv_bytes"] / row["initial_time_to_first_response_s"]
+    growth = growth_bytes / row["activity_s"]
+    return {
+        "scenario_id": row.get("scenario_id"),
+        "session_id": row.get("session_id"),
+        "bandwidth_mbps": row.get("bandwidth_mbps"),
+        "requested_append_tokens": row.get("requested_activity_tokens"),
+        "appended_prompt_tokens": row["measured_activity_append_tokens"],
+        "decoded_output_tokens": row["activity_output_tokens"],
+        "state_growth_tokens": row["catch_up_new_tokens"],
+        "bytes_per_token": bytes_per_token,
+        "state_growth_bytes": growth_bytes,
+        "initial_kv_wire_bytes": row["initial_kv_wire_bytes"],
+        "catch_up_kv_wire_bytes": row["catch_up_kv_wire_bytes"],
+        "effective_copy_bytes_per_s": service,
+        "kv_growth_bytes_per_s": growth,
+        "converges": service > growth,
+        "activity_s": row["activity_s"],
+        "service_pause_s": row["service_pause_s"],
+        "activity_overlapped_initial_copy":
+            row["activity_overlapped_initial_copy"],
+    }
 
 
 def power_rows(path: Path) -> list[dict]:
@@ -1358,6 +1470,15 @@ def reduce_run(run_root: Path) -> None:
         path = run_root / "scenarios" / scenario["scenario_id"] / "result.json"
         result = results[scenario["scenario_id"]]
         migration_rows = [flatten_migration(scenario, result, row) for row in result.get("migrations", [])]
+        for flat, raw in zip(migration_rows, result.get("migrations", [])):
+            proxy = path.parent / "proxy_bytes.csv"
+            flat.update(phase_network_measurements(
+                proxy, raw["initial_start_ns"], raw["initial_end_ns"], "initial",
+            ))
+            flat.update(phase_network_measurements(
+                proxy, raw.get("catch_up_start_ns"),
+                raw.get("catch_up_end_ns"), "catch_up",
+            ))
         migrations.extend(migration_rows)
         continuation = [duration(row["start_ns"], row["first_byte_ns"]) for row in result.get("continuations", [])]
         row = {**{key: scenario[key] for key in ("scenario_id", "match_id", "kind", "method", "concurrency", "bandwidth_mbps", "activity", "repeat")},
@@ -1404,6 +1525,13 @@ def reduce_run(run_root: Path) -> None:
         row["current_model_time_s"] = current_model_time(row, profile)
     write_csv(run_root / "migrations.csv", migrations)
     write_csv(run_root / "scenarios.csv", scenarios)
+    catch_up = [
+        catch_up_profile(row) for row in migrations
+        if row["success"] and row["activity"] == "one_turn"
+        and row["catch_up_s"] > 0
+    ]
+    if catch_up:
+        write_csv(run_root / "catch_up.csv", catch_up)
     groups: dict[tuple, list[dict]] = {}
     for row in scenarios:
         if row["kind"] == "migration":
@@ -1426,6 +1554,94 @@ def reduce_run(run_root: Path) -> None:
     cross_plots(run_root, migrations, scenarios)
 
 
+def valid_continuations(result: dict, expected: int) -> bool:
+    rows = result.get("continuations", [])
+    return len(rows) == expected and all(
+        row["status_code"] == 200
+        and row["context_hash"] == row["committed_context_hash"]
+        and row["processed_tokens"] == 0
+        for row in rows
+    )
+
+
+def check_parallel_run(run_root: Path) -> None:
+    plan = json.loads((run_root / "plan.json").read_text())
+    scenarios = [
+        row for row in plan["scenarios"]
+        if row["kind"] == "migration" and row["method"] == "kv_transfer"
+    ]
+    if {row["concurrency"] for row in scenarios} != {1, 2} \
+            or {row["bandwidth_mbps"] for row in scenarios} != {1000} \
+            or {row["repeat"] for row in scenarios} != {0, 1, 2}:
+        raise RuntimeError("parallel gate requires concurrency 1/2 at 1 Gbps for three repeats")
+    reports, failures = [], []
+    for scenario in scenarios:
+        root = run_root / "scenarios" / scenario["scenario_id"]
+        result = json.loads((root / "result.json").read_text())
+        moves = result.get("migrations", [])
+        start = min(row["initial_start_ns"] for row in moves)
+        end = max(row["initial_end_ns"] for row in moves)
+        try:
+            measured = parallel_connection_measurements(
+                root / "proxy_bytes.csv", start, end,
+                scenario["concurrency"],
+            )
+            payload = sum(row["initial"]["logical_kv_bytes"] for row in moves)
+            correct = len(moves) == len(scenario["sessions"]) and all(
+                not row["error"] and row["initial"]["processed_tokens"] == 0
+                and row["initial"]["logical_kv_bytes"] > 0 for row in moves
+            ) and valid_continuations(result, len(scenario["sessions"]))
+            passed = correct and measured["wire_bytes"] >= payload
+            error = "" if passed else "cache, continuation, or byte accounting failed"
+        except Exception as exc:
+            measured, payload, passed, error = {}, 0, False, str(exc)
+        reports.append({
+            "scenario_id": scenario["scenario_id"],
+            "concurrency": scenario["concurrency"],
+            "repeat": scenario["repeat"],
+            "payload_bytes": payload,
+            **measured, "passed": passed, "error": error,
+        })
+        if not passed:
+            failures.append(f"{scenario['scenario_id']}: {error}")
+    write_csv(run_root / "parallel_gate.csv", reports)
+    if failures:
+        raise RuntimeError("parallel KV gate failed: " + "; ".join(failures))
+
+
+def check_catch_up_run(run_root: Path) -> None:
+    plan = json.loads((run_root / "plan.json").read_text())
+    scenarios = [
+        row for row in plan["scenarios"] if row["kind"] == "migration"
+    ]
+    if {row["activity_tokens"] for row in scenarios} != {32, 128, 512, 2048} \
+            or {row["bandwidth_mbps"] for row in scenarios} != {1000, 10000}:
+        raise RuntimeError("catch-up job requires 32/128/512/2048 tokens at 1/10 Gbps")
+    with (run_root / "catch_up.csv").open() as handle:
+        rows = list(csv.DictReader(handle))
+    failures = []
+    if len(rows) != sum(len(row["sessions"]) for row in scenarios):
+        failures.append("missing catch-up rows")
+    for row in rows:
+        if row["activity_overlapped_initial_copy"] != "True":
+            failures.append(f"{row['scenario_id']}: activity did not overlap initial copy")
+        if min(float(row[name]) for name in (
+            "appended_prompt_tokens", "state_growth_tokens",
+            "initial_kv_wire_bytes", "catch_up_kv_wire_bytes",
+        )) <= 0:
+            failures.append(f"{row['scenario_id']}: incomplete token or byte accounting")
+        if float(row["state_growth_tokens"]) < float(row["appended_prompt_tokens"]):
+            failures.append(f"{row['scenario_id']}: state growth lost appended tokens")
+    for scenario in scenarios:
+        result = json.loads(
+            (run_root / "scenarios" / scenario["scenario_id"] / "result.json").read_text()
+        )
+        if not valid_continuations(result, len(scenario["sessions"])):
+            failures.append(f"{scenario['scenario_id']}: continuation failed")
+    if failures:
+        raise RuntimeError("catch-up evidence failed: " + "; ".join(failures))
+
+
 def csv_list(value: str, cast=str):
     return [cast(item) for item in value.split(",") if item]
 
@@ -1443,6 +1659,7 @@ def parse_args(argv: list[str] | None = None):
     command.add_argument("--bandwidth-mbps", type=lambda value: csv_list(value, float), required=True)
     command.add_argument("--methods", type=lambda value: csv_list(value), default=list(METHODS))
     command.add_argument("--activity", type=lambda value: csv_list(value), default=list(ACTIVITIES))
+    command.add_argument("--activity-tokens", type=lambda value: csv_list(value, int), default=[])
     command.add_argument("--session-ids", type=lambda value: csv_list(value), default=[])
     command.add_argument("--repeats", type=int, required=True); command.add_argument("--seed", type=int, required=True); command.add_argument("--deadline-s", type=float, default=300)
     command = sub.add_parser("run")
@@ -1452,6 +1669,9 @@ def parse_args(argv: list[str] | None = None):
     command.add_argument("--node-power", action="store_true")
     b.add_common(command); command.add_argument("extra_vllm_args", nargs=argparse.REMAINDER)
     command = sub.add_parser("reduce"); command.add_argument("--run-root", type=Path, required=True)
+    for name in ("check-parallel", "check-catch-up"):
+        command = sub.add_parser(name)
+        command.add_argument("--run-root", type=Path, required=True)
     return parser.parse_args(argv)
 
 
@@ -1463,7 +1683,7 @@ def main(argv: list[str] | None = None) -> None:
         write_json(args.out, make_plan(
             args.manifest, args.context_sizes, args.concurrency, args.bandwidth_mbps,
             args.methods, args.activity, args.repeats, args.seed, args.deadline_s,
-            args.session_ids,
+            args.session_ids, args.activity_tokens,
         ))
     elif args.command == "run":
         extra = args.extra_vllm_args[1:] if args.extra_vllm_args[:1] == ["--"] else args.extra_vllm_args
@@ -1472,8 +1692,12 @@ def main(argv: list[str] | None = None) -> None:
             extra, args.resume_from_git_sha, args.power_state_cycles,
             args.power_state_window_s, args.node_power,
         )
-    else:
+    elif args.command == "reduce":
         reduce_run(args.run_root)
+    elif args.command == "check-parallel":
+        check_parallel_run(args.run_root)
+    else:
+        check_catch_up_run(args.run_root)
 
 
 if __name__ == "__main__":
