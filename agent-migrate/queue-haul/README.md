@@ -80,10 +80,10 @@ shutdown, paired method and bandwidth comparisons, or parallel KV connections.
 The new coding fit and the earlier live replay points occupy separate token
 ranges in the profile; the earlier range retains its 30% error bound.
 
-New Stage 1C plans pin or select the same sessions and turns across methods and
-bandwidths and share controls across those comparisons. The completed
-`coding-run` predates that change, so its cross-method and cross-bandwidth
-observations remain unpaired.
+The completed `serial-power-run-2` pins the same session and turn across
+methods and bandwidths and shares controls across those comparisons. All 30
+scenarios completed within deadline. The older `coding-run` predates paired
+planning, so only its observations remain unpaired.
 
 Stage 1C reduction reports measured prompt, processed, and new tokens; initial
 KV payload bytes; catch-up cache hits; exact proxy KV-route bytes; request
@@ -92,8 +92,7 @@ plot by requested context size.
 `initial_time`, `throughput`, `concurrency_scaling`, `service_effects`,
 `power_energy`, and `model_check` show the direct relationships.
 
-Generate the next 30-scenario serial crossover from the completed run's
-manifest:
+Reproduce the completed 30-scenario serial crossover plan with:
 
 ```bash
 uv run python queue-haul/stage1c_controller.py make-plan \
@@ -109,8 +108,8 @@ uv run python queue-haul/stage1c_controller.py make-plan \
 before running that plan. It requests two GPUs. The source and destination use
 Slurm's first and second assigned GPUs. The primary 250 ms GPU power samples
 come from `nvidia-smi`; migration energy is time-weighted over those samples.
-Raw GPU telemetry, state windows, transition times, wake probes, and `summary.csv` are stored in
-`RUN_ROOT/power_states`.
+Raw GPU telemetry, state windows, transition times, wake probes, and
+`summary.csv` are stored in `RUN_ROOT/power_states`.
 
 `--workers` runs independent workload, power-limit, deadline, and solver groups
 in separate processes while preserving serial result order. It defaults to one
