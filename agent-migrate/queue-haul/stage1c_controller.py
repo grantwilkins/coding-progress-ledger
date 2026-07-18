@@ -1122,7 +1122,20 @@ def parallel_connection_measurements(path: Path, start_ns: int, end_ns: int,
         buckets.setdefault(int(row["monotonic_ns"]), set()).add(
             row["connection_id"]
         )
-    connections = {item for values in buckets.values() for item in values}
+    connection_bytes = {
+        connection: sum(
+            int(row["bytes"]) for row in rows
+            if row["connection_id"] == connection
+        )
+        for connection in {item for values in buckets.values() for item in values}
+    }
+    connections = {
+        connection for connection, nbytes in connection_bytes.items()
+        if nbytes >= 1_000_000
+    }
+    buckets = {
+        bucket: values & connections for bucket, values in buckets.items()
+    }
     if len(connections) < required:
         raise RuntimeError(
             f"need {required} independent KV connections, found {len(connections)}"

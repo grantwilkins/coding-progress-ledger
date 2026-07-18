@@ -289,10 +289,10 @@ def test_parallel_gate_requires_independent_overlapping_positive_byte_windows(tm
     proxy = tmp_path / "proxy.csv"
     proxy.write_text(
         "monotonic_ns,wall_ns,interval_ns,connection_id,route,direction,bytes,billed\n"
-        "0,0,250000000,a,kv,target_to_client,100,1\n"
-        "0,0,250000000,b,kv,target_to_client,100,1\n"
-        "250000000,0,250000000,a,kv,target_to_client,100,1\n"
-        "250000000,0,250000000,b,kv,target_to_client,100,1\n"
+        "0,0,250000000,a,kv,target_to_client,1000000,1\n"
+        "0,0,250000000,b,kv,target_to_client,1000000,1\n"
+        "250000000,0,250000000,a,kv,target_to_client,1000000,1\n"
+        "250000000,0,250000000,b,kv,target_to_client,1000000,1\n"
         "0,0,250000000,z,api,client_to_target,999,1\n"
         "0,0,250000000,z,kv,target_to_client,999,0\n"
     )
@@ -305,7 +305,7 @@ def test_parallel_gate_requires_independent_overlapping_positive_byte_windows(tm
         "connection_count": 2,
         "max_parallel_connections": 2,
         "overlap_buckets": 2,
-        "wire_bytes": 400,
+        "wire_bytes": 4000000,
     }
     proxy.write_text(proxy.read_text().replace(",b,kv", ",a,kv"))
     with pytest.raises(RuntimeError, match="independent"):
@@ -316,10 +316,10 @@ def test_parallel_gate_rejects_sequential_connections_with_same_total_bytes(tmp_
     proxy = tmp_path / "proxy.csv"
     proxy.write_text(
         "monotonic_ns,wall_ns,interval_ns,connection_id,route,direction,bytes,billed\n"
-        "0,0,250000000,a,kv,target_to_client,200,1\n"
-        "250000000,0,250000000,a,kv,target_to_client,200,1\n"
-        "500000000,0,250000000,b,kv,target_to_client,200,1\n"
-        "750000000,0,250000000,b,kv,target_to_client,200,1\n"
+        "0,0,250000000,a,kv,target_to_client,1000000,1\n"
+        "250000000,0,250000000,a,kv,target_to_client,1000000,1\n"
+        "500000000,0,250000000,b,kv,target_to_client,1000000,1\n"
+        "750000000,0,250000000,b,kv,target_to_client,1000000,1\n"
     )
 
     with pytest.raises(RuntimeError, match="overlapping"):
