@@ -243,6 +243,20 @@ def test_kv_bytes_come_from_logged_full_chunk_layout(tmp_path):
         c.expected_hits("kv_transfer", "initial", 11_082)
 
 
+def test_stored_tokens_uses_final_report_for_request(tmp_path):
+    log = tmp_path / "source.log"
+    log.write_text(
+        "Reqid: first, Total tokens 16523\n"
+        "Stored 8192 out of total 8192 tokens\n"
+        "Stored 16384 out of total 16384 tokens\n"
+        "Reqid: second, Total tokens 4235\n"
+        "Stored 4235 out of total 4235 tokens\n"
+    )
+
+    assert c.stored_tokens(log, "first") == 16_384
+    assert c.stored_tokens(log, "second") == 4_235
+
+
 def test_session_probe_appends_one_final_instruction():
     session = c.LiveSession.__new__(c.LiveSession)
     session.state_code = "CODE"

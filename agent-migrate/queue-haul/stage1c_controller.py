@@ -611,6 +611,21 @@ def lookup_tokens(path: Path, request_id: str) -> tuple[int, int]:
     raise RuntimeError(f"LMCache did not report request {request_id}")
 
 
+def stored_tokens(path: Path, request_id: str) -> int:
+    import re
+    marker = f"Reqid: {request_id},"
+    text = path.read_text(errors="ignore")
+    if marker not in text:
+        raise RuntimeError(f"LMCache did not report request {request_id}")
+    values = [int(value) for value in re.findall(
+        r"Stored (\d+) out of total \d+ tokens",
+        text.rsplit(marker, 1)[1].split("Reqid:", 1)[0],
+    )]
+    if not values:
+        raise RuntimeError(f"LMCache did not store request {request_id}")
+    return max(values)
+
+
 class LiveSession:
     def __init__(self, cfg: b.Config, session: dict, turn_index: int,
                  event_log: EventLog, source_log: Path, cache_log: Path,
@@ -659,7 +674,7 @@ class LiveSession:
         after = time.monotonic_ns()
         keys = {row["key_hash"] for row in cache_operations(self.cache_log, before, after) if row["operation"] == "source_write"}
         self.cache_keys |= keys
-        self.warm_cached_tokens = min(result.prompt_tokens, len(keys) * 256)
+        self.warm_cached_tokens = stored_tokens(self.source_log, result.request_id)
 
     def snapshot(self) -> SessionState:
         with self.lock:
