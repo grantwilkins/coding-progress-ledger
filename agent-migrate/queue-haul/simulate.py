@@ -95,11 +95,15 @@ class PlannedMove:
     order: int
     path: tuple[str, ...]
     external_path: tuple[str, ...] = ()
+    rate_limit_bytes_per_s: float | None = None
+    quiesce_s: float | None = None
 
     def __post_init__(self):
         if not self.session_id or not self.destination_instance or self.method not in {
             "replay", "kv_transfer", "replay_on_request"
-        } or self.order < 0:
+        } or self.order < 0 or self.rate_limit_bytes_per_s is not None \
+                and self.rate_limit_bytes_per_s <= 0 \
+                or self.quiesce_s is not None and self.quiesce_s < 0:
             raise ValueError("invalid planned move")
 
 
@@ -114,11 +118,14 @@ class ExecutionScenario:
     instances: tuple[ServingInstance, ...]
     sessions: tuple[SimSession, ...]
     links: tuple[NetworkLink, ...]
+    assumed_shutdown_s: float | None = None
 
     def __post_init__(self):
         if self.deadline_s <= 0 or self.end_s < self.deadline_s or self.power_limit_w < 0 \
                 or not 0 <= self.controller_delay_s <= self.deadline_s \
-                or self.final_state not in {"awake", "sleep", "off"}:
+                or self.final_state not in {"awake", "sleep", "off"} \
+                or self.assumed_shutdown_s is not None and self.assumed_shutdown_s < 0 \
+                or self.final_state == "off" and self.assumed_shutdown_s is None:
             raise ValueError("invalid execution scenario")
 
 
@@ -182,6 +189,8 @@ class ExecutionResult:
     power: tuple[tuple[float, float, float], ...]
     modeled_source_power_at_deadline_w: float
     deadline_met: bool
+    migration_makespan_s: float | None
+    final_state_ready_s: float | None
     makespan_s: float
 
     @property
@@ -239,6 +248,9 @@ class _MoveState:
     committed: float | None = None
     wake_start: float | None = None
     wake_ready: float | None = None
+    copied_blocks: int = 0
+    append_pending: int = 0
+    final_started: bool = False
 
 
 def fair_link_rates(paths: dict[int, tuple[str, ...]], links: dict[str, float]) -> dict[int, float]:
@@ -299,12 +311,20 @@ class ExecutionSimulator:
         self.kv_links = {
             instance: ("kv_destination", instance) for instance in self.instances
         }
+        self.moves = tuple(sorted(moves, key=lambda m: m.order))
+        self.pace_links = {
+            index: ("pace", index) for index, move in enumerate(self.moves)
+            if move.rate_limit_bytes_per_s is not None
+        }
         self.rate_links = {
             **self.links,
             **{link: self.case.kv_transfer.destination_bytes_per_s
                for link in self.kv_links.values()},
+            **{
+                self.pace_links[index]: self.moves[index].rate_limit_bytes_per_s
+                for index in self.pace_links
+            },
         }
-        self.moves = tuple(sorted(moves, key=lambda m: m.order))
         self._validate()
         self.time = 0.0
         self.heap: list[tuple[float, int, str, object]] = []
@@ -330,6 +350,7 @@ class ExecutionSimulator:
         self.paused = set()
         self.power_model = ExpectedPower(scenario, profile, case_id)
         self.node_state = {n.node_id: "awake" for n in scenario.nodes}
+        self.node_ready: dict[str, float] = {}
         self.active_actions: dict[object, tuple[str, bool, str]] = {}
         self.action_counts: dict[tuple[str, bool, str], int] = {}
         self.action_power_w = {True: 0.0, False: 0.0}
@@ -470,6 +491,9 @@ class ExecutionSimulator:
             self.running[source] += 1
             state = self.states[index]
             state.snapshot_tokens = self.context[state.move.session_id]
+            state.copied_blocks = (
+                state.snapshot_tokens // self.case.kv_transfer.block_tokens
+            )
             state.initial_start = self.time
             self._event("initial_start", state.move.session_id, detail=state.move.method)
             setup = self.case.kv_transfer.setup_s if state.move.method == "kv_transfer" else 0.0
@@ -488,8 +512,9 @@ class ExecutionSimulator:
             return byte_count, tokens if phase == "wake" else 0, 0
         blocks = self.case.kv_transfer.blocks(tokens)
         if phase == "catch_up":
-            blocks -= state.snapshot_tokens // self.case.kv_transfer.block_tokens
-            return max(0, blocks) * self.case.kv_transfer.block_bytes, 0, max(0, blocks)
+            blocks = tokens // self.case.kv_transfer.block_tokens - state.copied_blocks
+            tail = tokens % self.case.kv_transfer.block_tokens
+            return max(0, blocks) * self.case.kv_transfer.block_bytes, tail, max(0, blocks)
         return self.case.kv_transfer.bytes(tokens), 0, blocks
 
     def _path(self, state: _MoveState, phase: str) -> tuple[str, ...]:
@@ -500,9 +525,10 @@ class ExecutionSimulator:
         )
         return state.move.external_path if external else state.move.path
 
-    def _prepare(self, index: int, phase: str):
+    def _prepare(self, index: int, phase: str,
+                 payload: tuple[int, int, int] | None = None):
         state = self.states[index]
-        byte_count, replay_tokens, blocks = self._payload(index, phase)
+        byte_count, replay_tokens, blocks = payload or self._payload(index, phase)
         detail = (replay_tokens, blocks)
         if state.move.method == "kv_transfer":
             destination = state.move.destination_instance
@@ -543,12 +569,14 @@ class ExecutionSimulator:
                 self._start_action((index, phase, "source"), action, source)
             path = self._path(state, phase)
             rate_path: tuple[object, ...] = path
-            if state.move.method == "kv_transfer":
+            if state.move.method == "kv_transfer" and state.initial_start is not None:
                 self._start_action(
                     (index, phase, "destination"), action,
                     state.move.destination_instance,
                 )
                 rate_path += (self.kv_links[state.move.destination_instance],)
+                if index in self.pace_links:
+                    rate_path += (self.pace_links[index],)
             flow = _Flow(
                 self.next_flow, index, phase, float(byte_count), path, rate_path,
                 byte_count, self.time,
@@ -587,8 +615,9 @@ class ExecutionSimulator:
             duration = replay_tokens / self.case.replay.rate(rate_context, active)
             self._event("replay_start", state.move.session_id, detail=destination)
         elif state.move.method == "kv_transfer":
-            duration = (
+            duration = 0.0 if phase.startswith("append") else (
                 self.case.kv_transfer.catch_up_fixed_s
+                + replay_tokens / self.case.kv_transfer.tail_replay_tps
                 if phase == "catch_up"
                 else self.case.kv_transfer.initial_completion_s
             )
@@ -640,21 +669,45 @@ class ExecutionSimulator:
             self._schedule(self.time, "request_start", (session_id, request_index, arrival))
         elif phase == "initial":
             state.initial_ready = self.time
-            self.quiescing.add(session_id)
             self._event("initial_ready", session_id)
-            idle = max(self.time, self.active_request_end[session_id])
-            self._schedule(idle, "idle", index)
+            if state.move.method == "kv_transfer":
+                self._append_available(index, "initial")
+            self._schedule(
+                max(self.time, state.move.quiesce_s or self.time),
+                "quiesce", index,
+            )
+        elif phase.startswith("append"):
+            state.append_pending -= 1
+            self._event("append_ready", session_id)
+            if state.idle is not None and not state.append_pending:
+                self._start_final(index)
         else:
             state.catch_ready = self.time
             self._event("catch_up_ready", session_id)
             self._begin_switch(index)
 
+    def _quiesce(self, index: int):
+        state, session_id = self.states[index], self.states[index].move.session_id
+        if state.committed is not None or session_id in self.quiescing:
+            return
+        state.pause = self.time
+        self.quiescing.add(session_id)
+        self._event("pause", session_id)
+        self._schedule(max(self.time, self.active_request_end[session_id]), "idle", index)
+
     def _idle(self, index: int):
         state, session_id = self.states[index], self.states[index].move.session_id
-        state.pause = state.idle = self.time
+        state.idle = self.time
         self.paused.add(session_id)
-        self._event("pause", session_id)
         self._event("idle", session_id)
+        if not state.append_pending:
+            self._start_final(index)
+
+    def _start_final(self, index: int):
+        state, session_id = self.states[index], self.states[index].move.session_id
+        if state.final_started:
+            return
+        state.final_started = True
         if self.context[session_id] != state.snapshot_tokens:
             state.catch_start = self.time
             self._event("catch_up_start", session_id)
@@ -703,9 +756,7 @@ class ExecutionSimulator:
             if dependents <= self.power_model.removed and self.scenario.final_state != "awake":
                 # TODO(transition-power): replace the step change with a measured trace shape.
                 duration = self.case.sleep_s if self.scenario.final_state == "sleep" \
-                    else self.case.shutdown_s
-                if duration is None:
-                    raise ValueError("off requires an assumed shutdown time")
+                    else self.scenario.assumed_shutdown_s
                 self.node_state[node_id] = "transition"
                 self._start_action(("node", node_id), self.scenario.final_state, node=node_id)
                 self._event(f"{self.scenario.final_state}_start", node=node_id)
@@ -758,6 +809,11 @@ class ExecutionSimulator:
         request = self.sessions[session_id].requests[request_index]
         added = request.prompt_tokens + request.output_tokens
         self.context[session_id] += added
+        if session_id in self.move_index and session_id not in self.quiescing:
+            index = self.move_index[session_id]
+            state = self.states[index]
+            if state.move.method == "kv_transfer" and state.initial_ready is not None:
+                self._append_available(index, str(request_index))
         if session_id in self.resident_sessions:
             instance = self.active_request_instance[session_id]
             self.resident_tokens[instance] += added
@@ -773,6 +829,20 @@ class ExecutionSimulator:
         waiting = self.serving_waiting.get(instance, deque())
         while waiting and instance not in self.serving_active:
             self._request_start(*waiting.popleft())
+
+    def _append_available(self, index: int, label: str):
+        state = self.states[index]
+        completed = self.context[state.move.session_id] \
+            // self.case.kv_transfer.block_tokens
+        blocks = completed - state.copied_blocks
+        if blocks <= 0:
+            return
+        state.copied_blocks = completed
+        state.append_pending += 1
+        self._prepare(
+            index, f"append_{label}",
+            (blocks * self.case.kv_transfer.block_bytes, 0, blocks),
+        )
 
     def _check_resident(self, instance: str):
         if self.resident_tokens[instance] > self.profile.kv_capacity_tokens:
@@ -855,6 +925,8 @@ class ExecutionSimulator:
                         self._ready(*payload)
                     elif kind == "idle":
                         self._idle(payload)
+                    elif kind == "quiesce":
+                        self._quiesce(payload)
                     elif kind == "commit":
                         self._commit(payload)
                     elif kind == "request_start":
@@ -863,6 +935,7 @@ class ExecutionSimulator:
                         self._request_done(*payload)
                     elif kind == "node_state":
                         self.node_state[payload] = self.scenario.final_state
+                        self.node_ready[payload] = self.time
                         self.power_model.set_state(payload, self.scenario.final_state)
                         self._stop_action(("node", payload))
                         self._event(f"{self.scenario.final_state}_done", node=payload)
@@ -892,8 +965,30 @@ class ExecutionSimulator:
         at_deadline = step_average(
             self.power, self.scenario.deadline_s, self.profile.power_window_s
         )
-        makespan = max((s.committed_s for s in sessions if s.committed_s is not None),
-                       default=self.scenario.controller_delay_s)
+        migrations_complete = all(s.committed_s is not None for s in sessions)
+        migration_makespan = max(
+            (s.committed_s for s in sessions if s.committed_s is not None),
+            default=self.scenario.controller_delay_s,
+        ) if migrations_complete else None
+        drained = {
+            node_id for node_id, dependents in self.power_model.dependents.items()
+            if dependents and dependents <= self.power_model.removed
+        }
+        state_complete = self.scenario.final_state == "awake" or drained <= self.node_ready.keys()
+        final_ready = max(
+            [migration_makespan or self.scenario.controller_delay_s]
+            + ([] if self.scenario.final_state == "awake" else [
+                self.node_ready[node] for node in drained
+            ])
+        ) if migrations_complete and state_complete else None
+        deadline_met = at_deadline <= self.scenario.power_limit_w \
+            and migration_makespan is not None \
+            and migration_makespan <= self.scenario.deadline_s \
+            and final_ready is not None and final_ready <= self.scenario.deadline_s
+        makespan = final_ready if final_ready is not None else (
+            migration_makespan
+            if migration_makespan is not None else self.scenario.controller_delay_s
+        )
         network = self.network + ([
             NetworkExecution(
                 self.states[flow.move_index].move.session_id, flow.phase, flow.bytes,
@@ -904,7 +999,8 @@ class ExecutionSimulator:
         return ExecutionResult(
             tuple(self.events), sessions, tuple(self.requests), tuple(network),
             tuple(self.queues) if self.detailed else (),
-            tuple(self.power), at_deadline, at_deadline <= self.scenario.power_limit_w, makespan,
+            tuple(self.power), at_deadline, deadline_met,
+            migration_makespan, final_ready, makespan,
         )
 
 

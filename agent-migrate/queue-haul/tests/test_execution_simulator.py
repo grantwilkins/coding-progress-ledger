@@ -83,6 +83,7 @@ def scenario(sessions, deadline=20, end=30, final="awake", tp=2, links=None,
         (PowerNode("src", 2, True), PowerNode("dst", 2, False)),
         (ServingInstance("source", ("src",) * tp), ServingInstance("dest", ("dst",) * tp)),
         tuple(sessions), tuple(links or (NetworkLink("wan", 100),)),
+        2 if final == "off" else None,
     )
 
 
@@ -207,9 +208,9 @@ def test_kv_catch_up_waits_behind_an_earlier_destination_copy(tmp_path):
         model(tmp_path, switch=0, destination_rate=100), moves,
     )
 
-    catch_up = next(row for row in result.queues if row.phase == "catch_up")
-    assert catch_up.session_id == "growing"
-    assert (catch_up.arrival_s, catch_up.start_s, catch_up.depth_at_arrival) \
+    append = next(row for row in result.queues if row.phase.startswith("append"))
+    assert append.session_id == "growing"
+    assert (append.arrival_s, append.start_s, append.depth_at_arrival) \
         == pytest.approx((1, 2, 1))
 
 
@@ -319,6 +320,8 @@ def test_catch_up_and_off_wait_for_last_session(tmp_path):
     assert active.catch_up_start_s is not None
     assert off_start == max(commits)
     assert off_done == pytest.approx(off_start + 2)
+    assert result.migration_makespan_s == off_start
+    assert result.final_state_ready_s == result.makespan_s == off_done
 
 
 def test_shared_source_node_stays_awake_until_every_instance_moves(tmp_path):
@@ -336,6 +339,7 @@ def test_shared_source_node_stays_awake_until_every_instance_moves(tmp_path):
             ServingInstance("dest-b", ("dst",)),
         ),
         sessions, (NetworkLink("wan", 100),),
+        2,
     )
     moves = (
         PlannedMove("short", "dest-a", "kv_transfer", 0, ("wan",)),
@@ -454,11 +458,11 @@ def test_initial_kv_uses_snapshot_and_catch_up_uses_only_new_blocks(tmp_path):
         (PlannedMove("active", "dest", "kv_transfer", 0, ("wan",)),),
     )
     assert [(row.phase, row.bytes) for row in result.network] == [
-        ("initial", 100), ("catch_up", 100)
+        ("initial", 100), ("append_initial", 100)
     ]
 
 
-def test_kv_catch_up_resends_a_changed_partial_block(tmp_path):
+def test_kv_catch_up_replays_a_changed_partial_tail_without_network_bytes(tmp_path):
     session = SimSession(
         "active", "source", 11, 0, 0, 1, requests=(SimRequest(0, 4, 0),)
     )
@@ -466,9 +470,39 @@ def test_kv_catch_up_resends_a_changed_partial_block(tmp_path):
         scenario((session,)), model(tmp_path),
         (PlannedMove("active", "dest", "kv_transfer", 0, ("wan",)),),
     )
-    assert [(row.phase, row.bytes) for row in result.network] == [
-        ("initial", 110), ("catch_up", 100)
-    ]
+    row = result.sessions[0]
+    assert [(flow.phase, flow.bytes) for flow in result.network] == [("initial", 110)]
+    assert row.catch_up_ready_s - row.catch_up_start_s == pytest.approx(.05)
+
+
+@pytest.mark.parametrize(("growth", "blocks"), ((3, 0), (9, 1), (13, 1), (29, 3)))
+def test_append_copy_adds_only_newly_completed_blocks(tmp_path, growth, blocks):
+    session = SimSession(
+        "active", "source", 11, 0, 0, 1,
+        requests=(SimRequest(0, growth, 0),),
+    )
+    result = execute(
+        scenario((session,)), model(tmp_path),
+        (PlannedMove("active", "dest", "kv_transfer", 0, ("wan",)),),
+    )
+
+    assert sum(
+        flow.bytes for flow in result.network if flow.phase != "initial"
+    ) == blocks * 100
+
+
+def test_move_rate_limit_is_a_real_shared_flow_bottleneck(tmp_path):
+    session = SimSession("active", "source", 10, 0, 0, 1)
+    result = execute(
+        scenario((session,)),
+        model(tmp_path, switch=0),
+        (PlannedMove(
+            "active", "dest", "kv_transfer", 0, ("wan",),
+            rate_limit_bytes_per_s=50,
+        ),),
+    )
+
+    assert result.sessions[0].initial_ready_s == pytest.approx(2)
 
 
 def test_replay_catch_up_processes_only_tokens_after_snapshot(tmp_path):
@@ -500,7 +534,7 @@ def test_replay_catch_up_rates_new_tokens_at_full_context(tmp_path):
     assert result.sessions[0].catch_up_ready_s - catch_up.end_s == pytest.approx(1)
 
 
-def test_pause_begins_after_active_request_finishes(tmp_path):
+def test_pause_begins_at_quiescence_before_active_request_finishes(tmp_path):
     session = SimSession(
         "active", "source", 10, 0, 0, 1, requests=(SimRequest(0, 200, 0),)
     )
@@ -510,7 +544,8 @@ def test_pause_begins_after_active_request_finishes(tmp_path):
     )
     row = result.sessions[0]
     assert row.initial_ready_s == pytest.approx(1)
-    assert row.pause_s == row.idle_s == pytest.approx(2)
+    assert row.pause_s == pytest.approx(1)
+    assert row.idle_s == pytest.approx(2)
 
 
 def test_unmeasured_serving_concurrency_queues_at_one(tmp_path):

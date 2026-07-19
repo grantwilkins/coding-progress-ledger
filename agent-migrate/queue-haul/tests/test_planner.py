@@ -50,6 +50,7 @@ def problem(requests=(), limit=20, final="awake"):
         (ServingInstance("s0", ("n0",)), ServingInstance("s1", ("n1",)),
          ServingInstance("t0", ("d0",)), ServingInstance("t1", ("d1",))),
         sessions, (NetworkLink("wan", 100),),
+        2 if final == "off" else None,
     )
 
 
