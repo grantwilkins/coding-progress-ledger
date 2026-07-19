@@ -41,21 +41,26 @@ def model(tmp_path, switch=1, destination_rate=1e12, shutdown=2, setup=0, tp=2,
     source = {"kind": "measured", "reference": "hand", "valid_range": [1, 1000], "relative_error": 0}
     rate = {"1": [[1, 100], [1000, 100]], "2": [[1, 50], [1000, 50]]}
     raw = {
-        "schema": "queue-haul-model-profile-v2", "profile_id": "hand", "status": "fitted",
+        "schema": "queue-haul-model-profile-v3", "profile_id": "hand", "status": "fitted",
         "model": "m", "hardware": "h", "precision": "bf16", "tensor_parallel": tp,
         "gpus_per_node": 2, "power_scope": "gpu", "power_window_s": 1,
         "max_ell": 1, "kv_capacity_tokens": kv_capacity,
-        "max_parallel_moves": parallel_moves,
-        "max_parallel_replay": 1, "max_parallel_kv": parallel_kv,
+        "max_source_streams": parallel_moves,
+        "max_destination_replays": 1,
+        "max_destination_kv_streams": parallel_kv,
         "sources": {k: source for k in (
             "power", "service", "capacity", "replay", "kv_transfer", "transitions"
         )},
         "cases": {"central": {
             "F": 100, "G": 100, "power_curve": [[0, 10], [0.5, 30], [1, 40]],
             "prefill_tps": rate, "decode_tps": rate, "replay_tps": replay_rate or rate,
+            "replay_completion_s": 0,
             "kv_transfer": {"block_tokens": 10, "block_bytes": 100, "setup_s": setup,
-                            "destination_bytes_per_s": destination_rate, "sync_s": 0},
-            "switch_s": switch, "sleep_power_w": 2, "sleep_s": 1, "shutdown_s": shutdown,
+                            "destination_bytes_per_s": destination_rate,
+                            "initial_completion_s": 0, "catch_up_fixed_s": 0,
+                            "tail_replay_tps": 100},
+            "switch_s": switch, "sleep_power_delta_w": -8, "sleep_s": 1,
+            "shutdown_s": shutdown,
             "action_power_w": {
                 "replay": {"1": [0, 0], "2": [0, 0]},
                 "kv_transfer": {"1": [kv_source_action_power[0], kv_action_power[0]],

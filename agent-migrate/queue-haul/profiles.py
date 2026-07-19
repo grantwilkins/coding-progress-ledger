@@ -10,7 +10,7 @@ from pathlib import Path
 import numpy as np
 
 
-PROFILE_SCHEMA = "queue-haul-model-profile-v2"
+PROFILE_SCHEMA = "queue-haul-model-profile-v3"
 WORKLOAD_SCHEMA = "queue-haul-workload-profile-v1"
 SOURCE_SECTIONS = ("power", "service", "capacity", "replay", "kv_transfer", "transitions")
 ACTION_POWER = {"replay", "kv_transfer", "replay_on_request", "catch_up", "sleep", "off"}
@@ -122,17 +122,23 @@ class KVTransfer:
     block_bytes: int
     setup_s: float
     destination_bytes_per_s: float
-    sync_s: float
+    initial_completion_s: float
+    catch_up_fixed_s: float
+    tail_replay_tps: float
 
     @classmethod
     def parse(cls, raw: dict) -> "KVTransfer":
-        value = cls(int(raw["block_tokens"]), int(raw["block_bytes"]),
-                    float(raw["setup_s"]), float(raw["destination_bytes_per_s"]),
-                    float(raw["sync_s"]))
+        value = cls(
+            int(raw["block_tokens"]), int(raw["block_bytes"]),
+            float(raw["setup_s"]), float(raw["destination_bytes_per_s"]),
+            float(raw["initial_completion_s"]), float(raw["catch_up_fixed_s"]),
+            float(raw["tail_replay_tps"]),
+        )
         if value.block_tokens < 1 or value.block_bytes < 1 \
                 or value.block_bytes % value.block_tokens \
-                or min(value.setup_s, value.sync_s) < 0 \
-                or value.destination_bytes_per_s <= 0:
+                or min(value.setup_s, value.initial_completion_s,
+                       value.catch_up_fixed_s) < 0 \
+                or min(value.destination_bytes_per_s, value.tail_replay_tps) <= 0:
             raise ValueError("invalid KV transfer parameters")
         return value
 
@@ -152,11 +158,12 @@ class ProfileCase:
     prefill: RateCurve
     decode: RateCurve
     replay: RateCurve
+    replay_completion_s: float
     kv_transfer: KVTransfer
     switch_s: float
-    sleep_power_w: float
+    sleep_power_delta_w: float
     sleep_s: float
-    shutdown_s: float
+    shutdown_s: float | None
     action_power_w: dict[str, ActionPower]
 
     @classmethod
@@ -165,17 +172,23 @@ class ProfileCase:
             case_id, float(raw["F"]), float(raw["G"]),
             PowerCurve.parse(raw["power_curve"]),
             RateCurve.parse(raw["prefill_tps"]), RateCurve.parse(raw["decode_tps"]),
-            RateCurve.parse(raw["replay_tps"]), KVTransfer.parse(raw["kv_transfer"]),
-            float(raw["switch_s"]), float(raw["sleep_power_w"]),
-            float(raw["sleep_s"]), float(raw["shutdown_s"]),
+            RateCurve.parse(raw["replay_tps"]), float(raw["replay_completion_s"]),
+            KVTransfer.parse(raw["kv_transfer"]),
+            float(raw["switch_s"]), float(raw["sleep_power_delta_w"]),
+            float(raw["sleep_s"]),
+            None if raw["shutdown_s"] is None else float(raw["shutdown_s"]),
             {str(k): ActionPower.parse(v) for k, v in raw["action_power_w"].items()},
         )
         if set(value.action_power_w) != ACTION_POWER:
             raise ValueError(f"action_power_w fields must be {sorted(ACTION_POWER)}")
         if value.F <= 0 or value.G <= 0 or min(
-            value.switch_s, value.sleep_power_w, value.sleep_s, value.shutdown_s,
+            value.replay_completion_s, value.switch_s, value.sleep_s,
         ) < 0:
             raise ValueError("rates, times, and power must be nonnegative; F and G must be positive")
+        if value.shutdown_s is not None and value.shutdown_s < 0:
+            raise ValueError("shutdown time must be nonnegative")
+        if value.power_curve.power(0) + value.sleep_power_delta_w < 0:
+            raise ValueError("sleep power must be nonnegative")
         return value
 
 
@@ -192,9 +205,9 @@ class ModelProfile:
     power_window_s: float
     max_ell: float
     kv_capacity_tokens: int
-    max_parallel_moves: int
-    max_parallel_replay: int
-    max_parallel_kv: int
+    max_source_streams: int
+    max_destination_replays: int
+    max_destination_kv_streams: int
     sources: dict[str, Source]
     cases: dict[str, ProfileCase]
 
@@ -215,9 +228,9 @@ class ModelProfile:
             raw["profile_id"], raw["status"], raw["model"], raw["hardware"],
             raw["precision"], int(raw["tensor_parallel"]), int(raw["gpus_per_node"]),
             raw["power_scope"], float(raw["power_window_s"]), float(raw["max_ell"]),
-            int(raw["kv_capacity_tokens"]), int(raw["max_parallel_moves"]),
-            int(raw["max_parallel_replay"]),
-            int(raw["max_parallel_kv"]), sources, cases,
+            int(raw["kv_capacity_tokens"]), int(raw["max_source_streams"]),
+            int(raw["max_destination_replays"]),
+            int(raw["max_destination_kv_streams"]), sources, cases,
         )
         if value.status not in {"fitted", "validated", "estimated"}:
             raise ValueError(f"unknown profile status {value.status!r}")
@@ -225,9 +238,9 @@ class ModelProfile:
             raise ValueError(f"unknown power scope {value.power_scope!r}")
         if not value.profile_id or value.tensor_parallel < 1 or value.gpus_per_node < 1 \
                 or min(value.power_window_s, value.max_ell, value.kv_capacity_tokens,
-                       value.max_parallel_moves) <= 0:
+                       value.max_source_streams) <= 0:
             raise ValueError("invalid profile identity or limits")
-        if min(value.max_parallel_replay, value.max_parallel_kv) < 1:
+        if min(value.max_destination_replays, value.max_destination_kv_streams) < 1:
             raise ValueError("destination concurrency limits must be positive")
         for case in cases.values():
             if value.max_ell > case.power_curve.ell[-1]:

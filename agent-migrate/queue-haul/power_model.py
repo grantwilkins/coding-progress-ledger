@@ -54,7 +54,8 @@ class ExpectedPower:
         if state == "off":
             return 0.0
         if state == "sleep":
-            return self.case.sleep_power_w * (node.gpus if self.profile.power_scope == "gpu" else 1)
+            sleeping = self.case.power_curve.power(0) + self.case.sleep_power_delta_w
+            return sleeping * (node.gpus if self.profile.power_scope == "gpu" else 1)
         if self.profile.power_scope == "gpu":
             if slots is None:
                 return sum(self.slot_power[node_id])

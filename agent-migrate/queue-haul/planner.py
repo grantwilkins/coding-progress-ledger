@@ -114,14 +114,15 @@ def _duration(session: SimSession, method: MoveMethod, case: ProfileCase,
     if method == "replay":
         transfer_s = external_link_s(session.log_bytes) if session.log_external \
             else link_s(session.log_bytes)
-        return transfer_s + replay_s + case.switch_s
+        return transfer_s + replay_s + case.replay_completion_s + case.switch_s
     if method == "kv_transfer":
         size = case.kv_transfer.bytes(session.context_tokens)
         return (case.kv_transfer.setup_s
                 + max(link_s(size), size / case.kv_transfer.destination_bytes_per_s)
-                + case.kv_transfer.sync_s + case.switch_s)
+                + case.kv_transfer.initial_completion_s + case.switch_s)
     initial_s = 0.0 if session.log_external else link_s(session.log_bytes)
-    wake_s = (external_link_s(session.log_bytes) if session.log_external else 0.0) + replay_s
+    wake_s = (external_link_s(session.log_bytes) if session.log_external else 0.0) \
+        + replay_s + case.replay_completion_s
     return initial_s + case.switch_s + session.wake_probability * wake_s
 
 
@@ -216,7 +217,7 @@ def _migration_resources(scenario: ExecutionScenario, profile: ModelProfile, rou
         durations[0, j] = replay_bytes[j] / replay_route[2] + replay_s[j] + case.switch_s
         transfer_s = max(kv_bytes[j] / internal[2],
                          kv_bytes[j] / case.kv_transfer.destination_bytes_per_s)
-        kv_service[j] = transfer_s + case.kv_transfer.sync_s
+        kv_service[j] = transfer_s + case.kv_transfer.initial_completion_s
         durations[1, j] = case.kv_transfer.setup_s + kv_service[j] + case.switch_s
         for method, (byte_count, route) in enumerate((
             (replay_bytes[j], replay_route), (kv_bytes[j], internal)
@@ -256,16 +257,16 @@ def _migration_resources(scenario: ExecutionScenario, profile: ModelProfile, rou
         add_resource(
             ((method * n + j, durations[method, j])
              for j in indices for method in range(2)),
-            horizon * profile.max_parallel_moves,
+            horizon * profile.max_source_streams,
         )
     for link, entries in named_links.items():
         add_resource(entries.items(), links[link] * horizon)
     if flexible_links:
         add_resource(flexible.items(), sum(links[link] for link in flexible_links) * horizon)
     add_resource(((j, replay_s[j]) for j in range(n)),
-                 len(destinations) * profile.max_parallel_replay * horizon)
+                 len(destinations) * profile.max_destination_replays * horizon)
     add_resource(((n + j, kv_service[j]) for j in range(n)),
-                 len(destinations) * profile.max_parallel_kv * horizon)
+                 len(destinations) * profile.max_destination_kv_streams * horizon)
 
     destination_load = sum(
         _ell(session, case) for session in scenario.sessions

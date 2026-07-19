@@ -495,8 +495,12 @@ def test_targeted_jobs_use_reviewed_plans_and_hard_gates():
 
 def test_model_check_uses_measured_work_and_stays_in_its_valid_range():
     case = SimpleNamespace(
-        kv_transfer=SimpleNamespace(setup_s=.2, destination_bytes_per_s=1_000_000, sync_s=.3),
+        kv_transfer=SimpleNamespace(
+            setup_s=.2, destination_bytes_per_s=1_000_000,
+            initial_completion_s=.3,
+        ),
         replay=SimpleNamespace(rate=lambda _tokens, _concurrency: 500),
+        replay_completion_s=0,
     )
     profile = SimpleNamespace(
         sources={"kv_transfer": SimpleNamespace(valid_range=(500_000, 2_000_000)),

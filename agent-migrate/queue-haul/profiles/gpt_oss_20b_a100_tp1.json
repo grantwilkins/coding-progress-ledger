@@ -1,6 +1,6 @@
 {
-  "schema": "queue-haul-model-profile-v2",
-  "profile_id": "gpt-oss-20b-a100-tp1-20260716",
+  "schema": "queue-haul-model-profile-v3",
+  "profile_id": "gpt-oss-20b-a100-tp1-v3-00afd6a1",
   "status": "estimated",
   "model": "openai/gpt-oss-20b",
   "hardware": "NVIDIA A100 80GB",
@@ -11,9 +11,9 @@
   "power_window_s": 5.0,
   "max_ell": 0.531357714017,
   "kv_capacity_tokens": 1214544,
-  "max_parallel_moves": 1,
-  "max_parallel_replay": 1,
-  "max_parallel_kv": 1,
+  "max_source_streams": 1,
+  "max_destination_replays": 1,
+  "max_destination_kv_streams": 1,
   "sources": {
     "power": {
       "kind": "measured",
@@ -44,7 +44,7 @@
     },
     "replay": {
       "kind": "measured",
-      "reference": "outputs/coding-run/migrations.csv repeats 0-1 through 21546 tokens; outputs/power_drain_live_20260714/live_profile_*.json above that range",
+      "reference": "outputs/coding-run/migrations.csv and outputs/serial-power-run-2/migrations.csv repeats 0-1; outputs/power_drain_live_20260714/live_profile_*.json",
       "valid_range": [
         3473.0,
         31562
@@ -53,16 +53,16 @@
     },
     "kv_transfer": {
       "kind": "measured",
-      "reference": "outputs/coding-run/migrations.csv repeats 0-1",
+      "reference": "outputs/coding-run/migrations.csv and outputs/serial-power-run-2/migrations.csv repeats 0-1; outputs/append-catch-up-run-2/migrations.csv incremental blocks and tail",
       "valid_range": [
         170704896.0,
-        1059028992.0
+        1497858048.0
       ],
-      "relative_error": 0.0754288921673184
+      "relative_error": 0.4787711017863532
     },
     "transitions": {
       "kind": "assumed",
-      "reference": "outputs/coding-run/migrations.csv and scenarios.csv for route switch and action power; TODO measure catch-up, sleep, and shutdown",
+      "reference": "outputs/serial-power-run-2/migrations.csv, scenarios.csv, and power_states for route switch, action power, and GPU sleep; outputs/append-catch-up-run-2/migrations.csv for catch-up; shutdown remains sensitivity-only",
       "valid_range": [
         0.0,
         300.0
@@ -227,6 +227,10 @@
             4565.42
           ],
           [
+            30474,
+            3978.2727997152224
+          ],
+          [
             30800,
             3949.87
           ],
@@ -236,48 +240,43 @@
           ]
         ]
       },
+      "replay_completion_s": 1.3403952115,
       "kv_transfer": {
         "block_tokens": 256,
         "block_bytes": 12582912,
         "setup_s": 0,
-        "destination_bytes_per_s": 986985479.7599583,
-        "sync_s": 0
+        "destination_bytes_per_s": 620777236.0611658,
+        "initial_completion_s": 1.415044763,
+        "catch_up_fixed_s": 1.052118278,
+        "tail_replay_tps": 919.4260924435412
       },
-      "switch_s": 0.000100339,
-      "sleep_power_w": 67.1204195918,
-      "sleep_s": 0.0,
-      "shutdown_s": 30.0,
+      "switch_s": 0.000173443,
+      "sleep_power_delta_w": 0.015758548702308417,
+      "sleep_s": 3.2890054985,
+      "shutdown_s": null,
       "action_power_w": {
         "replay": {
           "1": [
-            0.0,
-            159.44579044117648
-          ],
-          "2": [
-            1.1326287262872654,
-            176.5870749354005
-          ],
-          "4": [
-            1.1326287262872654,
-            180.5839632867133
+            2.0595075270942402,
+            189.83729813637706
           ]
         },
         "kv_transfer": {
           "1": [
-            0.0,
-            6.791703296703297
+            3.1843701314751343,
+            11.8416114775968
           ]
         },
         "replay_on_request": {
           "1": [
-            0.0,
-            159.44579044117648
+            2.0595075270942402,
+            189.83729813637706
           ]
         },
         "catch_up": {
           "1": [
-            0,
-            0
+            3.1843701314751343,
+            11.8416114775968
           ]
         },
         "sleep": {
@@ -450,6 +449,10 @@
             5250.23
           ],
           [
+            30474,
+            5683.246856736032
+          ],
+          [
             30800,
             4542.35
           ],
@@ -459,48 +462,43 @@
           ]
         ]
       },
+      "replay_completion_s": 1.20635569035,
       "kv_transfer": {
         "block_tokens": 256,
         "block_bytes": 12582912,
         "setup_s": 0,
-        "destination_bytes_per_s": 1067506297.1344457,
-        "sync_s": 0
+        "destination_bytes_per_s": 1190987756.4131432,
+        "initial_completion_s": 1.2735402867,
+        "catch_up_fixed_s": 0.9469064502000001,
+        "tail_replay_tps": 1103.3113109322494
       },
-      "switch_s": 8.4614e-05,
-      "sleep_power_w": 67.1204195918,
-      "sleep_s": 0.0,
-      "shutdown_s": 30.0,
+      "switch_s": 0.000105954,
+      "sleep_power_delta_w": -0.017120182718045385,
+      "sleep_s": 0.970242138,
+      "shutdown_s": null,
       "action_power_w": {
         "replay": {
           "1": [
-            0.0,
-            159.44579044117648
-          ],
-          "2": [
-            1.1326287262872654,
-            176.5870749354005
-          ],
-          "4": [
-            1.1326287262872654,
-            180.5839632867133
+            2.0595075270942402,
+            189.83729813637706
           ]
         },
         "kv_transfer": {
           "1": [
-            0.0,
-            6.791703296703297
+            3.1843701314751343,
+            11.8416114775968
           ]
         },
         "replay_on_request": {
           "1": [
-            0.0,
-            159.44579044117648
+            2.0595075270942402,
+            189.83729813637706
           ]
         },
         "catch_up": {
           "1": [
-            0,
-            0
+            3.1843701314751343,
+            11.8416114775968
           ]
         },
         "sleep": {
@@ -673,6 +671,10 @@
             3880.61
           ],
           [
+            30474,
+            3060.2098459347864
+          ],
+          [
             30800,
             3357.39
           ],
@@ -682,48 +684,43 @@
           ]
         ]
       },
+      "replay_completion_s": 1.47443473265,
       "kv_transfer": {
         "block_tokens": 256,
         "block_bytes": 12582912,
         "setup_s": 0,
-        "destination_bytes_per_s": 917759869.5259902,
-        "sync_s": 0
+        "destination_bytes_per_s": 419792647.63239413,
+        "initial_completion_s": 1.5565492393000002,
+        "catch_up_fixed_s": 1.1573301058,
+        "tail_replay_tps": 766.1884103696177
       },
-      "switch_s": 0.000127269,
-      "sleep_power_w": 67.1204195918,
-      "sleep_s": 0.0,
-      "shutdown_s": 30.0,
+      "switch_s": 0.00019766525,
+      "sleep_power_delta_w": 0.04863728012266222,
+      "sleep_s": 5.607768859,
+      "shutdown_s": null,
       "action_power_w": {
         "replay": {
           "1": [
-            0.0,
-            159.44579044117648
-          ],
-          "2": [
-            1.1326287262872654,
-            176.5870749354005
-          ],
-          "4": [
-            1.1326287262872654,
-            180.5839632867133
+            2.0595075270942402,
+            189.83729813637706
           ]
         },
         "kv_transfer": {
           "1": [
-            0.0,
-            6.791703296703297
+            3.1843701314751343,
+            11.8416114775968
           ]
         },
         "replay_on_request": {
           "1": [
-            0.0,
-            159.44579044117648
+            2.0595075270942402,
+            189.83729813637706
           ]
         },
         "catch_up": {
           "1": [
-            0,
-            0
+            3.1843701314751343,
+            11.8416114775968
           ]
         },
         "sleep": {

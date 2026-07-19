@@ -463,7 +463,7 @@ class ExecutionSimulator:
 
     def _start_available(self, source: str):
         queue = self.by_source[source]
-        while self.running[source] < self.profile.max_parallel_moves \
+        while self.running[source] < self.profile.max_source_streams \
                 and self.next_by_source[source] < len(queue):
             index = queue[self.next_by_source[source]]
             self.next_by_source[source] += 1
@@ -507,7 +507,8 @@ class ExecutionSimulator:
         if state.move.method == "kv_transfer":
             destination = state.move.destination_instance
             waiting = self.kv_waiting.setdefault(destination, deque())
-            queued = self.kv_active.get(destination, 0) >= self.profile.max_parallel_kv
+            queued = self.kv_active.get(destination, 0) \
+                >= self.profile.max_destination_kv_streams
             queued_bytes = self.kv_waiting_bytes.get(destination, 0) + byte_count
             record = QueueExecution(
                 state.move.session_id, phase, destination, byte_count, self.time, None, None,
@@ -569,7 +570,8 @@ class ExecutionSimulator:
         )
         key = state.move.destination_instance, "replay"
         if replay:
-            if self.endpoint_active.get(key, 0) >= self.profile.max_parallel_replay:
+            if self.endpoint_active.get(key, 0) \
+                    >= self.profile.max_destination_replays:
                 self.endpoint_waiting.setdefault(key, deque()).append(
                     (index, phase, (replay_tokens, blocks))
                 )
@@ -585,7 +587,11 @@ class ExecutionSimulator:
             duration = replay_tokens / self.case.replay.rate(rate_context, active)
             self._event("replay_start", state.move.session_id, detail=destination)
         elif state.move.method == "kv_transfer":
-            duration = self.case.kv_transfer.sync_s
+            duration = (
+                self.case.kv_transfer.catch_up_fixed_s
+                if phase == "catch_up"
+                else self.case.kv_transfer.initial_completion_s
+            )
         else:
             duration = 0.0
         if duration and (index, phase, "destination") not in self.active_actions:
@@ -696,7 +702,10 @@ class ExecutionSimulator:
             dependents = self.power_model.dependents[node_id]
             if dependents <= self.power_model.removed and self.scenario.final_state != "awake":
                 # TODO(transition-power): replace the step change with a measured trace shape.
-                duration = self.case.sleep_s if self.scenario.final_state == "sleep" else self.case.shutdown_s
+                duration = self.case.sleep_s if self.scenario.final_state == "sleep" \
+                    else self.case.shutdown_s
+                if duration is None:
+                    raise ValueError("off requires an assumed shutdown time")
                 self.node_state[node_id] = "transition"
                 self._start_action(("node", node_id), self.scenario.final_state, node=node_id)
                 self._event(f"{self.scenario.final_state}_start", node=node_id)

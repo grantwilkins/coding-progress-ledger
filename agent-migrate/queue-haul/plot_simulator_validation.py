@@ -43,9 +43,10 @@ def _profile() -> ModelProfile:
         rate,
         rate,
         rate,
-        KVTransfer(10, 100, 0, 100, 0),
+        0,
+        KVTransfer(10, 100, 0, 100, 0, 0, 100),
         1,
-        2,
+        -8,
         1,
         2,
         {action: ActionPower.parse({"1": [0, 0], "2": [0, 0]})

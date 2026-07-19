@@ -31,9 +31,12 @@ def profile():
     case = {
         "F": 100, "G": 80, "power_curve": [[0, 10], [0.5, 30], [1, 40]],
         "prefill_tps": rate, "decode_tps": rate, "replay_tps": rate,
+        "replay_completion_s": 0.2,
         "kv_transfer": {"block_tokens": 4, "block_bytes": 100, "setup_s": 1,
-                        "destination_bytes_per_s": 50, "sync_s": 0.25},
-        "switch_s": 0.1, "sleep_power_w": 2, "sleep_s": 3, "shutdown_s": 4,
+                        "destination_bytes_per_s": 50, "initial_completion_s": 0.25,
+                        "catch_up_fixed_s": 0.4, "tail_replay_tps": 20},
+        "switch_s": 0.1, "sleep_power_delta_w": -8, "sleep_s": 3,
+        "shutdown_s": 4,
         "action_power_w": {"replay": {"1": [1, 2], "2": [1.5, 3]},
                            "kv_transfer": {"1": [2, 3]},
                            "replay_on_request": {"1": [1, 2]},
@@ -41,11 +44,11 @@ def profile():
                            "sleep": {"1": [1, 0]}, "off": {"1": [1, 0]}},
     }
     return {
-        "schema": "queue-haul-model-profile-v2", "profile_id": "p", "status": "fitted",
+        "schema": "queue-haul-model-profile-v3", "profile_id": "p", "status": "fitted",
         "model": "m", "hardware": "h", "precision": "bf16", "tensor_parallel": 1,
         "gpus_per_node": 8, "power_scope": "gpu", "power_window_s": 5,
-        "max_ell": 1, "kv_capacity_tokens": 1000, "max_parallel_moves": 2,
-        "max_parallel_replay": 1, "max_parallel_kv": 1,
+        "max_ell": 1, "kv_capacity_tokens": 1000, "max_source_streams": 2,
+        "max_destination_replays": 1, "max_destination_kv_streams": 1,
         "sources": {k: source(k) for k in (
             "power", "service", "capacity", "replay", "kv_transfer", "transitions"
         )},
@@ -85,6 +88,17 @@ def test_rate_range_exact_kv_bytes_and_action_power_are_explicit(tmp_path):
         case.prefill.rate(10, 3)
     with pytest.raises(ValueError, match="outside"):
         case.prefill.rate(0, 1)
+    assert case.kv_transfer.initial_completion_s == .25
+    assert case.kv_transfer.catch_up_fixed_s == .4
+    assert case.kv_transfer.tail_replay_tps == 20
+
+
+def test_version_two_profiles_do_not_inherit_zero_cost_catch_up(tmp_path):
+    raw = profile()
+    raw["schema"] = "queue-haul-model-profile-v2"
+
+    with pytest.raises(ValueError, match="queue-haul-model-profile-v3"):
+        ModelProfile.load(write(tmp_path, raw))
 
 
 def test_missing_source_and_estimated_bounds_hard_fail(tmp_path):
