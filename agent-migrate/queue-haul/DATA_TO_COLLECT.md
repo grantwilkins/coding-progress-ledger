@@ -3,6 +3,57 @@
 This is the single list of missing live measurements. Keep the checked profile
 at concurrency one until the matching concurrency tests pass.
 
+## North star and next campaign
+
+The target is a source datacenter shedding power across 1,000,000 or more
+sessions before a deadline. The simulator must choose whole sessions, replay or
+KV transfer, transfer timing and rate, and final quiescence while respecting
+per-source capacity and one shared source-site/WAN cut. The destination is an
+aggregate admission, replay, KV-ingest, and residency pool; its server scheduler
+is out of scope.
+
+The next campaign is one resumable two-GPU job with a 12-hour limit. Start the
+stack once, randomize scenarios, checkpoint each result, reuse compatible
+controls, and exclude incomplete or dirty scenarios from fitting.
+
+- [ ] **Parallel KV surface:** approximately 4k/16k/32k context, 1/10 Gbps,
+  logical concurrency 1/2/4, and three repeats. Reuse the completed 1 Gbps
+  concurrency 1/2 cells. Fit repeats 0-1 and hold out repeat 2.
+- [ ] **Multi-stage append:** one approximately 30k context session, steady and
+  bursty growth, 1/10 Gbps, three repeats, and four ordered background writes
+  before final quiescence.
+- [ ] **Workload validation:** interactive coding, coding, and agentic
+  tool-loop traces at low/high context and serving concurrency 1/4, with
+  paired no-migration and migration windows. Use traces, not GPU runs, to fit
+  request gaps and tool delays.
+- [ ] **Held-out drain:** eight mixed sessions in an unseen approximately
+  10-minute/10-Gbps case and one approximately one-hour/1-Gbps drip. Do not use
+  either case for fitting; evaluate a six-hour horizon offline.
+
+This campaign does not require a new transport library, TCP simulation,
+content-addressed KV, compression, target relays, failure replication, NIXL,
+or a 16-GPU drain. Add lower-level source/transport/destination probes only if
+the aggregate model retains systematic held-out error.
+
+### Required evidence and gates
+
+For every migration record session, phase or append-stage index, logical and
+wire bytes, start, destination-ready, pause, final catch-up, route-switch and
+commit times, achieved rate, cache hits, continuation, source/destination GPU
+power, and errors. For parallel runs also record exact per-session connection
+attribution and aggregate goodput.
+
+Each multi-stage row must additionally record newly created tokens, cumulative
+sealed and copied blocks, stage wire bytes, duplicate bytes, and the final
+residual. Hard-fail on missing stages, ambiguous session attribution, byte
+nonconservation, lost appended tokens, invalid continuation, or an incomplete
+scenario.
+
+Stop after this campaign if held-out transfer and drain errors are within
+15-20% without systematic residuals. Add pipeline-stage instrumentation only
+if that test fails; add connection pooling only if measured setup or connection
+churn materially limits representative transfers.
+
 ## Completed: serial crossover and GPU power states
 
 - [x] Reuse `outputs/coding-manifest.json` and the existing two-model stack.
@@ -30,12 +81,10 @@ at concurrency one until the matching concurrency tests pass.
 - [x] Require two distinct connection IDs and overlapping KV-byte windows at
   concurrency two. Also require exact aggregate wire bytes, correct cache hits
   and continuation, and no errors. `check-parallel` hard-fails otherwise.
-- [ ] After that gate passes, run KV transfer for the same fixed four sessions
-  and turns at concurrency 1, 2, and 4, shaped aggregate rates of 1 and 10 Gbps,
-  no activity, and two repeats.
-- [ ] Record connection, payload and wire bytes, dispatch, queue arrival, copy
-  start, first byte, last byte, destination ready, route switch, completion,
-  queue depth, aggregate rate, cache hits, power, and errors.
+- [ ] Complete the missing cells in the bounded parallel KV surface above.
+- [ ] Record logical and wire bytes, initial start, destination ready, route
+  switch, completion, per-session and aggregate rate, cache hits, concurrent
+  action power, and errors.
 - [ ] Keep the checked profile at KV concurrency one until the smoke and
   targeted run show correct overlap, accounting, and completion.
 
@@ -46,9 +95,10 @@ at concurrency one until the matching concurrency tests pass.
   appends, 1/10 Gbps, two repeats, and matched controls.
 - [x] Run the scripted two-stage initial/final catch-up job and determine from
   connection-attributed wire bytes whether the implementation is incremental.
-- [x] Measure initial KV backlog, new KV bytes per generated token, source
-  extraction rate, path goodput, destination ingest rate, and fixed quiesce,
-  synchronization, and route-switch time.
+- [x] Measure initial KV backlog, new KV bytes per generated token, path
+  goodput, end-to-end copy service, and fixed quiesce, synchronization, and
+  route-switch time. Do not label the aggregate copy rate as source extraction
+  or destination ingestion without stage-specific evidence.
 - [x] Add controlled turns of 32, 128, 512, and 2,048 measured prompt tokens.
   Separate appended prompt from decoded output tokens; record processed and new
   tokens, KV bytes, cache hits, response timing, service pause, and continuation
@@ -83,11 +133,13 @@ at concurrency one until the matching concurrency tests pass.
 
 ## Workloads and state transitions
 
-- [ ] Run serial interactive coding, coding, and agentic tool-loop sessions;
-  fit and validate each separately before sharing a curve.
-- [ ] Full drain: move all eight sessions and test awake, sleep, and shutdown
-  separately. Record the final route switch, transition start and end, and the
-  complete GPU and whole-server power traces.
+- [ ] Run the bounded workload-validation windows above; fit each job class
+  separately before sharing a curve.
+- [ ] Validate an eight-session awake drain on the two-GPU testbed. This checks
+  transfer, catch-up, request delay, and power accounting, not physical
+  eight-GPU node shutdown.
+- [ ] Profile exclusive whole-node sleep or shutdown separately only before
+  making claims about those final states.
 - [ ] Pair the same session, turn, and repeat across methods and bandwidths when
   estimating a method or bandwidth effect.
 
@@ -121,7 +173,13 @@ at concurrency one until the matching concurrency tests pass.
   wait, transfer time, route-switch time, request delay, and power over time.
 - [ ] Validate the shared-cut simulator against the shaped proxy before making
   claims about unmeasured physical topology.
-- [ ] Test background, expedited, and critical policies on the same held-out
-  drains at 10-minute, 1-hour, and 6-hour horizons.
+- [ ] Test background, expedited, and critical behavior from remaining slack
+  and required rate on the same held-out drains at 10-minute, 1-hour, and
+  offline 6-hour horizons.
+- [ ] Compare node-aware greedy with exact enumeration on tiny cases and the LP
+  on tractable cases before using greedy for the million-session sweep.
+- [ ] Require the summary-mode planner and simulator to complete a
+  million-session case within an explicit runtime and memory budget; do not
+  emit per-block audit events at that scale.
 - [ ] Record failures and incomplete runs; never fit a profile from partial
   scenarios.
