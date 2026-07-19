@@ -55,8 +55,6 @@ class PlotRun:
 
 
 def _requests(record, end_s: float, rng) -> tuple[SimRequest, ...]:
-    if record.state != "active":
-        return ()
     requests, elapsed = [], 0.0
     while True:
         gap = float(rng.exponential(record.request_gap_s) + record.tool_delay_s)
@@ -64,6 +62,8 @@ def _requests(record, end_s: float, rng) -> tuple[SimRequest, ...]:
         if elapsed > end_s:
             return tuple(requests)
         requests.append(SimRequest(gap, record.prompt_tokens, record.output_tokens))
+        if record.state == "cold":
+            return tuple(requests)
 
 
 def _validate_contexts(sessions: tuple[SimSession, ...], profile: ModelProfile) -> None:
@@ -88,16 +88,22 @@ def _validate_contexts(sessions: tuple[SimSession, ...], profile: ModelProfile) 
 def build_scenario(workload: WorkloadProfile, profile: ModelProfile, sessions: int, seed: int,
                    power_limit_w: float, deadline_s: float, end_s: float,
                    link_bytes_per_s: float = 125_000_000.0,
-                   final_state: str = "awake", controller_delay_s: float = 0.0):
+                   final_state: str = "awake", controller_delay_s: float = 0.0,
+                   intra_dc_bytes_per_s: float = 12_500_000_000.0,
+                   assumed_shutdown_s: float | None = None):
     # TODO(tp-topology): construct measured multi-GPU instance and network layouts.
     if profile.tensor_parallel != 1:
         raise ValueError("scenario builder currently supports tensor parallel size 1")
     # TODO(workloads): replace the small assumed record sets with held-out traces.
     records, case = workload.sample(sessions, seed), profile.case()
-    cycles = np.array([r.request_gap_s + r.tool_delay_s for r in records])
+    cycles = np.array([
+        r.request_gap_s + r.tool_delay_s
+        + r.prompt_tokens / case.prefill.rate(r.context_tokens, 1)
+        + r.output_tokens / case.decode.rate(r.context_tokens, 1)
+        for r in records
+    ])
     if any(r.state == "active" and cycle <= 0 for r, cycle in zip(records, cycles)):
         raise ValueError("active sessions require a positive request cycle")
-    # TODO(load-cycle): include measured service time when the workload profile records it.
     ell = np.array([
         (r.prompt_tokens / cycle) / case.F + (r.output_tokens / cycle) / case.G
         if r.state == "active" else 0.0 for r, cycle in zip(records, cycles)
@@ -116,9 +122,11 @@ def build_scenario(workload: WorkloadProfile, profile: ModelProfile, sessions: i
     gpu_count = len(loads)
     node_count = math.ceil(gpu_count / profile.gpus_per_node)
     nodes = tuple(
-        PowerNode(f"source-node-{i}", profile.gpus_per_node, True) for i in range(node_count)
+        PowerNode(f"source-node-{i}", profile.gpus_per_node, True, "source-dc")
+        for i in range(node_count)
     ) + tuple(
-        PowerNode(f"dest-node-{i}", profile.gpus_per_node, False) for i in range(node_count)
+        PowerNode(f"dest-node-{i}", profile.gpus_per_node, False, "destination-dc")
+        for i in range(node_count)
     )
     instances = tuple(
         ServingInstance(f"source-{i}", (f"source-node-{i // profile.gpus_per_node}",))
@@ -136,39 +144,56 @@ def build_scenario(workload: WorkloadProfile, profile: ModelProfile, sessions: i
             str(j), f"source-{assignment[j]}", r.context_tokens,
             r.prompt_tokens / cycle if r.state == "active" else 0.0,
             r.output_tokens / cycle if r.state == "active" else 0.0,
-            r.log_bytes, r.log_external, _requests(r, request_horizon, rng), True,
+            r.log_bytes, _requests(r, request_horizon, rng), True,
             0.0 if r.state != "cold" or wake_horizon <= r.tool_delay_s else
             1.0 if r.request_gap_s == 0 else
             1 - math.exp(-(wake_horizon - r.tool_delay_s) / r.request_gap_s),
             state=r.state,
+            expected_growth_tokens_per_s=(
+                (r.prompt_tokens + r.output_tokens) / cycle
+                * (1 + workload.source.relative_error)
+                if r.state == "active" else 0.0
+            ),
         ) for j, (r, cycle) in enumerate(zip(records, cycles))
     )
     _validate_contexts(sampled, profile)
-    # TODO(site-links): add shared site limits after they are measured.
-    links = tuple(NetworkLink(f"source-node-{i}-egress", link_bytes_per_s)
-                  for i in range(node_count)) + tuple(
-        NetworkLink(f"dest-node-{i}-ingress", link_bytes_per_s) for i in range(node_count)
+    links = (
+        *(NetworkLink(f"source-node-{i}-fabric", intra_dc_bytes_per_s)
+          for i in range(node_count)),
+        NetworkLink("source-dc-egress", link_bytes_per_s),
+        NetworkLink("wan-source-destination", link_bytes_per_s),
+        NetworkLink("destination-dc-ingress", link_bytes_per_s),
+        *(NetworkLink(f"dest-node-{i}-fabric", intra_dc_bytes_per_s)
+          for i in range(node_count)),
     )
     source_node = {f"source-{i}": i // profile.gpus_per_node for i in range(gpu_count)}
     dest_node = {f"dest-{i}": i // profile.gpus_per_node for i in range(gpu_count)}
 
     def route(source: str, destination: str) -> tuple[str, ...]:
-        return (f"source-node-{source_node[source]}-egress",
-                f"dest-node-{dest_node[destination]}-ingress")
+        return (
+            f"source-node-{source_node[source]}-fabric", "source-dc-egress",
+            "wan-source-destination", "destination-dc-ingress",
+            f"dest-node-{dest_node[destination]}-fabric",
+        )
 
     return ExecutionScenario(
         deadline_s, end_s, power_limit_w, final_state, controller_delay_s,
-        nodes, instances, sampled, links,
+        nodes, instances, sampled, links, assumed_shutdown_s,
     ), route
 
 
 def _run_group(profile, workload, sessions, seed, power_limit, deadline, end_s, solver,
-               link_bytes_per_s, final_state, controller_delay_s):
+               link_bytes_per_s, final_state, controller_delay_s,
+               intra_dc_bytes_per_s, assumed_shutdown_s):
     scenario, routes = build_scenario(
         workload, profile, sessions, seed, power_limit, deadline, end_s,
         link_bytes_per_s, final_state, controller_delay_s,
+        intra_dc_bytes_per_s, assumed_shutdown_s,
     )
-    planned = plan(scenario, profile, routes, solver, "central", seed)
+    planned = plan(
+        scenario, profile, routes, solver,
+        "slower" if "slower" in profile.cases else "central", seed,
+    )
     return tuple(
         ExperimentRun(
             f"{workload.profile_id}:{power_limit:g}:{deadline:g}:{solver}:{case_id}:{seed}",
@@ -183,7 +208,8 @@ def run(model_path: Path = DEFAULT_MODEL, workload_paths=DEFAULT_WORKLOADS,
         deadlines=(120.0,), end_s: float = 180.0, solvers=SOLVERS,
         link_bytes_per_s: float = 125_000_000.0,
         final_state: str = "awake", controller_delay_s: float = 0.0,
-        workers: int = 1) -> Iterator[ExperimentRun]:
+        workers: int = 1, intra_dc_bytes_per_s: float = 12_500_000_000.0,
+        assumed_shutdown_s: float | None = None) -> Iterator[ExperimentRun]:
     if workers < 1:
         raise ValueError("workers must be positive")
     profile = ModelProfile.load(model_path)
@@ -197,6 +223,7 @@ def run(model_path: Path = DEFAULT_MODEL, workload_paths=DEFAULT_WORKLOADS,
                         yield (
                             profile, workload, sessions, seed, power_limit, deadline, end_s,
                             solver, link_bytes_per_s, final_state, controller_delay_s,
+                            intra_dc_bytes_per_s, assumed_shutdown_s,
                         )
 
     if workers == 1:
@@ -386,7 +413,8 @@ def write(runs: Iterable[ExperimentRun], out: Path) -> int:
                             "destination_instance": row.destination_instance,
                             "method": row.method, "order": row.order,
                             "path": "|".join(row.path),
-                            "external_path": "|".join(row.external_path)}
+                            "rate_limit_bytes_per_s": row.rate_limit_bytes_per_s,
+                            "quiesce_s": row.quiesce_s}
                            for row in run.plan.moves))
             if run.case_id == "central":
                 methods = {row.session_id: row.method for row in run.result.sessions}
@@ -518,6 +546,8 @@ def main() -> None:
     parser.add_argument("--sessions", type=int, default=10_000)
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--link-bytes-per-s", type=float, default=125_000_000.0)
+    parser.add_argument("--intra-dc-bytes-per-s", type=float, default=12_500_000_000.0)
+    parser.add_argument("--assumed-shutdown-s", type=float)
     parser.add_argument("--controller-delay", type=float, default=0.0)
     parser.add_argument("--workers", type=int, default=1)
     parser.add_argument("--final-state", choices=("awake", "sleep", "off"), default="awake")
@@ -527,6 +557,7 @@ def main() -> None:
         args.model_profile, args.workload_profile or DEFAULT_WORKLOADS, args.sessions, args.seed,
         args.power_limit, args.deadline, args.end, args.solver or SOLVERS,
         args.link_bytes_per_s, args.final_state, args.controller_delay, args.workers,
+        args.intra_dc_bytes_per_s, args.assumed_shutdown_s,
     )
     count = write(runs, args.out)
     print(f"runs={count} output={args.out}")

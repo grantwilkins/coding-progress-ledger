@@ -1,10 +1,10 @@
 {
-  "schema": "queue-haul-workload-profile-v1",
+  "schema": "queue-haul-workload-profile-v2",
   "profile_id": "interactive-coding-live-20260714",
   "source": {"kind": "assumed", "reference": "outputs/power_drain_live_20260714/live_profile_interactive_coding.json plus assumptions.md request sizes", "valid_range": [18981, 31558], "relative_error": 0.5},
   "records": [
-    {"job_type": "interactive_coding", "state": "active", "context_tokens": 18981, "prompt_tokens": 150, "output_tokens": 300, "request_gap_s": 100, "tool_delay_s": 0, "log_bytes": 39034, "log_external": true},
-    {"job_type": "interactive_coding", "state": "active", "context_tokens": 23224, "prompt_tokens": 150, "output_tokens": 300, "request_gap_s": 100, "tool_delay_s": 0, "log_bytes": 47519, "log_external": true},
-    {"job_type": "interactive_coding", "state": "active", "context_tokens": 31558, "prompt_tokens": 150, "output_tokens": 300, "request_gap_s": 100, "tool_delay_s": 0, "log_bytes": 64187, "log_external": true}
+    {"job_type": "interactive_coding", "state": "active", "context_tokens": 18981, "prompt_tokens": 150, "output_tokens": 300, "request_gap_s": 100, "tool_delay_s": 0, "log_bytes": 39034, "log_location": "source_dc"},
+    {"job_type": "interactive_coding", "state": "active", "context_tokens": 23224, "prompt_tokens": 150, "output_tokens": 300, "request_gap_s": 100, "tool_delay_s": 0, "log_bytes": 47519, "log_location": "source_dc"},
+    {"job_type": "interactive_coding", "state": "active", "context_tokens": 31558, "prompt_tokens": 150, "output_tokens": 300, "request_gap_s": 100, "tool_delay_s": 0, "log_bytes": 64187, "log_location": "source_dc"}
   ]
 }

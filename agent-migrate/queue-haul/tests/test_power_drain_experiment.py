@@ -35,8 +35,11 @@ def test_build_scenario_packs_calibrated_sessions_and_named_links():
 
     assert len(scenario.sessions) == 12
     assert source_power(scenario, model) > 500
-    assert all(len(route(f"source-{i}", "dest-0")) == 2
+    assert all(len(route(f"source-{i}", "dest-0")) == 5
                for i in range(len(scenario.instances) // 2))
+    assert all("source-dc-egress" in route(f"source-{i}", "dest-0")
+               for i in range(len(scenario.instances) // 2))
+    assert {node.site_id for node in scenario.nodes} == {"source-dc", "destination-dc"}
 
 
 def test_active_load_does_not_use_cold_reactivation_probability():
@@ -47,8 +50,16 @@ def test_active_load_does_not_use_cold_reactivation_probability():
         workload, model, 6, 3, 500, 5, 5, controller_delay_s=1
     )
     for session, record in zip(scenario.sessions, records):
-        cycle = record.request_gap_s + record.tool_delay_s
+        case = model.case()
+        cycle = (record.request_gap_s + record.tool_delay_s
+                 + record.prompt_tokens / case.prefill.rate(record.context_tokens, 1)
+                 + record.output_tokens
+                 / case.decode.rate(record.context_tokens, 1))
         assert session.expected_f == pytest.approx(record.prompt_tokens / cycle)
+        assert session.expected_growth_tokens_per_s == pytest.approx(
+            (record.prompt_tokens + record.output_tokens) / cycle
+            * (1 + workload.source.relative_error)
+        )
         assert session.wake_probability == 0
 
 
@@ -61,7 +72,7 @@ def test_scenario_preserves_cold_sessions_without_gpu_load():
 
     assert session.state == "cold"
     assert session.expected_f == session.expected_g == 0
-    assert session.requests == ()
+    assert len(session.requests) <= 1
     assert session.wake_probability == pytest.approx(
         1 - math.exp(-(5 - workload.records[0].tool_delay_s)
                      / workload.records[0].request_gap_s)
@@ -143,6 +154,7 @@ def test_small_run_reuses_plans_and_writes_raw_tables_and_plots(tmp_path: Path):
     ))
     assert len(runs) == 3
     assert all(run.plan.moves == runs[0].plan.moves for run in runs)
+    assert all(run.plan.profile_case == "slower" for run in runs)
     assert all(next(e for e in run.result.events if e.event == "plan_ready").time_s == 0
                for run in runs)
 

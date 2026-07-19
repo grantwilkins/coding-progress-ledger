@@ -381,27 +381,28 @@ def test_moving_one_session_updates_only_its_gpu_power(tmp_path):
         == pytest.approx(40)  # P(0) + P(.5) = 10 + 30
 
 
-def test_deferred_replay_copies_only_source_local_log(tmp_path):
+def test_deferred_replay_leaves_source_local_log_until_wake(tmp_path):
     sessions = (
-        SimSession("external", "source", 10, 0, 0, 100, True, state="cold"),
-        SimSession("local", "source", 10, 0, 0, 100, False, state="cold"),
+        SimSession("external", "source", 10, 0, 0, 100, state="cold"),
+        SimSession("local", "source", 10, 0, 0, 100, state="cold"),
     )
     moves = (
-        PlannedMove("external", "dest", "replay_on_request", 0, ("wan",), ("wan",)),
+        PlannedMove("external", "dest", "replay_on_request", 0, ("wan",)),
         PlannedMove("local", "dest", "replay_on_request", 1, ("wan",)),
     )
     result = execute(scenario(sessions), model(tmp_path), moves)
     rows = {row.session_id: row for row in result.sessions}
     assert rows["external"].initial_ready_s == 0
-    assert rows["local"].initial_ready_s == pytest.approx(1)
+    assert rows["local"].initial_ready_s == 0
+    assert not result.network
 
 
 def test_deferred_replay_waits_for_an_observed_request(tmp_path):
     session = SimSession(
-        "external", "source", 10, 0, 0, 100, True,
+        "external", "source", 10, 0, 0, 100,
         requests=(SimRequest(0.5, 10, 0),), wake_probability=0.9, state="cold",
     )
-    move = PlannedMove("external", "dest", "replay_on_request", 0, ("wan",), ("wan",))
+    move = PlannedMove("external", "dest", "replay_on_request", 0, ("wan",))
     result = execute(scenario((session,)), model(tmp_path), (move,))
     row = result.sessions[0]
     request_start = [e.time_s for e in result.events if e.event == "request_start"]
@@ -441,7 +442,7 @@ def test_zero_delay_completion_at_end_is_processed(tmp_path):
 def test_unmeasured_destination_concurrency_queues_instead_of_overlapping(tmp_path):
     sessions = tuple(SimSession(str(i), "source", 10, 0, 0, 1) for i in range(2))
     moves = tuple(
-        PlannedMove(str(i), "dest", "replay", i, ("wan",), ("wan",)) for i in range(2)
+        PlannedMove(str(i), "dest", "replay", i, ("wan",)) for i in range(2)
     )
     result = execute(scenario(sessions), model(tmp_path), moves)
     ready = sorted(row.initial_ready_s for row in result.sessions)
@@ -507,7 +508,7 @@ def test_move_rate_limit_is_a_real_shared_flow_bottleneck(tmp_path):
 
 def test_replay_catch_up_processes_only_tokens_after_snapshot(tmp_path):
     session = SimSession(
-        "active", "source", 10, 0, 0, 100, False,
+        "active", "source", 10, 0, 0, 100,
         requests=(SimRequest(0, 10, 0),),
     )
     result = execute(
@@ -523,7 +524,7 @@ def test_replay_catch_up_rates_new_tokens_at_full_context(tmp_path):
     replay_rate = {"1": [[1, 100], [10, 100], [20, 10], [1000, 10]],
                    "2": [[1, 50], [1000, 50]]}
     session = SimSession(
-        "active", "source", 10, 0, 0, 100, False,
+        "active", "source", 10, 0, 0, 100,
         requests=(SimRequest(0, 10, 0),),
     )
     result = execute(
@@ -587,18 +588,18 @@ def test_queued_request_uses_destination_after_commit(tmp_path):
     assert request.start_s == pytest.approx(2)
 
 
-def test_external_replay_avoids_source_egress(tmp_path):
+def test_source_local_replay_uses_source_egress(tmp_path):
     session = SimSession(
-        "external", "source", 10, 0, 0, 100, True,
+        "external", "source", 10, 0, 0, 100,
         requests=(SimRequest(0.5, 10, 0),), state="cold",
     )
     links = (NetworkLink("source-egress", 100), NetworkLink("dest-ingress", 100))
     move = PlannedMove(
         "external", "dest", "replay_on_request", 0,
-        ("source-egress", "dest-ingress"), ("dest-ingress",),
+        ("source-egress", "dest-ingress"),
     )
     result = execute(scenario((session,), links=links), model(tmp_path), (move,))
-    assert [row.path for row in result.network] == [("dest-ingress",)]
+    assert [row.path for row in result.network] == [("source-egress", "dest-ingress")]
 
 
 def test_invalid_move_and_tensor_parallel_mismatch_hard_fail(tmp_path):
@@ -644,7 +645,7 @@ def test_execution_rejects_source_or_destination_kv_overcommit(tmp_path):
 ))
 def test_move_method_must_match_gpu_residency(tmp_path, state, method):
     session = SimSession("s", "source", 10, 0, 0, 1, state=state)
-    move = PlannedMove("s", "dest", method, 0, ("wan",), ("wan",))
+    move = PlannedMove("s", "dest", method, 0, ("wan",))
 
     with pytest.raises(ValueError, match=f"invalid for a {state} session"):
         execute(scenario((session,)), model(tmp_path), (move,))

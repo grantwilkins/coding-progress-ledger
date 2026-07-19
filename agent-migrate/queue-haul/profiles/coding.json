@@ -1,9 +1,9 @@
 {
-  "schema": "queue-haul-workload-profile-v1",
+  "schema": "queue-haul-workload-profile-v2",
   "profile_id": "coding-live-20260714",
   "source": {"kind": "assumed", "reference": "outputs/power_drain_live_20260714/live_profile_coding.json plus assumptions.md request sizes", "valid_range": [25592, 31544], "relative_error": 0.5},
   "records": [
-    {"job_type": "coding", "state": "active", "context_tokens": 25592, "prompt_tokens": 500, "output_tokens": 1000, "request_gap_s": 100, "tool_delay_s": 0, "log_bytes": 52283, "log_external": true},
-    {"job_type": "coding", "state": "active", "context_tokens": 31544, "prompt_tokens": 500, "output_tokens": 1000, "request_gap_s": 100, "tool_delay_s": 0, "log_bytes": 64187, "log_external": true}
+    {"job_type": "coding", "state": "active", "context_tokens": 25592, "prompt_tokens": 500, "output_tokens": 1000, "request_gap_s": 100, "tool_delay_s": 0, "log_bytes": 52283, "log_location": "source_dc"},
+    {"job_type": "coding", "state": "active", "context_tokens": 31544, "prompt_tokens": 500, "output_tokens": 1000, "request_gap_s": 100, "tool_delay_s": 0, "log_bytes": 64187, "log_location": "source_dc"}
   ]
 }

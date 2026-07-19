@@ -216,8 +216,8 @@ def test_node_drain_reserves_source_time_and_power_window(tmp_path):
         4, 5, 0, "awake", 0,
         (PowerNode("n", 1, True), PowerNode("d", 1, False)),
         (ServingInstance("s", ("n",)), ServingInstance("t", ("d",))),
-        (SimSession("a", "s", 100, 10, 0, 1, False),
-         SimSession("b", "s", 100, 10, 0, 1, False)),
+        (SimSession("a", "s", 100, 10, 0, 1),
+         SimSession("b", "s", 100, 10, 0, 1)),
         (NetworkLink("wan", 10_000),),
     )
 
@@ -233,7 +233,7 @@ def test_node_drain_uses_kv_when_shared_replay_time_is_full(tmp_path):
         tmp_path, switch=0, tp=1, destination_rate=500, parallel_moves=1,
         replay_rate={"1": [[1, 100], [1000, 100]], "2": [[1, 50], [1000, 50]]},
     )
-    sessions = tuple(SimSession(str(i), f"s{i}", 100, 10, 0, 1, False)
+    sessions = tuple(SimSession(str(i), f"s{i}", 100, 10, 0, 1)
                      for i in range(4))
     scenario = ExecutionScenario(
         4.2, 5, 40, "awake", 0,
@@ -255,8 +255,8 @@ def test_node_drain_uses_kv_when_shared_replay_time_is_full(tmp_path):
 def test_node_drain_prefers_power_reduction_per_predicted_second(tmp_path):
     profile = model(tmp_path, switch=0, tp=1, destination_rate=10, parallel_moves=1)
     sessions = (
-        SimSession("fast", "sf", 100, 25, 0, 1, False),
-        SimSession("slow", "ss", 300, 25, 0, 1, False),
+        SimSession("fast", "sf", 100, 25, 0, 1),
+        SimSession("slow", "ss", 300, 25, 0, 1),
     )
     scenario = ExecutionScenario(
         10, 11, 35, "awake", 0,
@@ -293,7 +293,7 @@ def test_lp_uses_kv_when_shared_replay_time_is_full(tmp_path):
         tmp_path, switch=0, tp=1, destination_rate=500, parallel_moves=1,
         replay_rate={"1": [[1, 100], [1000, 100]], "2": [[1, 50], [1000, 50]]},
     )
-    sessions = tuple(SimSession(str(i), f"s{i}", 100, 10, 0, 1, False)
+    sessions = tuple(SimSession(str(i), f"s{i}", 100, 10, 0, 1)
                      for i in range(4))
     scenario = ExecutionScenario(
         4.1, 5, 40, "awake", 0,
@@ -321,8 +321,8 @@ def test_lp_enforces_each_source_instance_queue(tmp_path):
         4, 5, 10, "awake", 0,
         (PowerNode("n", 1, True), PowerNode("d", 1, False)),
         (ServingInstance("s", ("n",)), ServingInstance("t", ("d",))),
-        (SimSession("a", "s", 100, 10, 0, 1, False),
-         SimSession("b", "s", 100, 10, 0, 1, False)),
+        (SimSession("a", "s", 100, 10, 0, 1),
+         SimSession("b", "s", 100, 10, 0, 1)),
         (NetworkLink("wan", 10_000),),
     )
 
@@ -333,7 +333,7 @@ def test_lp_enforces_each_source_instance_queue(tmp_path):
     assert not result.feasible
 
 
-def test_lp_external_replay_bypasses_source_egress(tmp_path):
+def test_lp_source_local_replay_uses_source_egress(tmp_path):
     profile = model(
         tmp_path, switch=0, tp=1, destination_rate=100, parallel_moves=2,
         replay_rate={"1": [[1, 1000], [1000, 1000]], "2": [[1, 500], [1000, 500]]},
@@ -342,8 +342,8 @@ def test_lp_external_replay_bypasses_source_egress(tmp_path):
         2, 3, 10, "awake", 0,
         (PowerNode("n", 1, True), PowerNode("d", 1, False)),
         (ServingInstance("s", ("n",)), ServingInstance("t", ("d",))),
-        (SimSession("a", "s", 100, 10, 0, 100, True),
-         SimSession("b", "s", 100, 10, 0, 100, True)),
+        (SimSession("a", "s", 100, 10, 0, 100),
+         SimSession("b", "s", 100, 10, 0, 100)),
         (NetworkLink("source", 1), NetworkLink("destination", 1000)),
     )
 
@@ -351,9 +351,18 @@ def test_lp_external_replay_bypasses_source_egress(tmp_path):
         scenario, profile, {("s", "t"): ("source", "destination")}, "lp"
     )
 
-    assert result.feasible
-    assert len(result.moves) == 2
-    assert {move.method for move in result.moves} == {"replay"}
+    assert not result.feasible
+    assert result.moves == ()
+
+
+def test_destination_capacity_reserves_expected_context_growth(tmp_path):
+    session = SimSession(
+        "a", "s0", 10, 25, 0, 100, expected_growth_tokens_per_s=1,
+    )
+    topology = replace(problem(limit=0), sessions=(session,))
+
+    with pytest.raises(ValueError, match="destination compute or KV capacity"):
+        plan(topology, model(tmp_path, tp=1, kv_capacity=15), PATHS, "load_only")
 
 
 def test_lp_reserves_the_trailing_power_window(tmp_path):
@@ -365,7 +374,7 @@ def test_lp_reserves_the_trailing_power_window(tmp_path):
         4, 5, 10, "awake", 0,
         (PowerNode("n", 1, True), PowerNode("d", 1, False)),
         (ServingInstance("s", ("n",)), ServingInstance("t", ("d",))),
-        (SimSession("a", "s", 301, 10, 0, 1, False),),
+        (SimSession("a", "s", 301, 10, 0, 1),),
         (NetworkLink("wan", 10_000),),
     )
 

@@ -37,6 +37,7 @@ class PowerNode:
     node_id: str
     gpus: int = 8
     local: bool = True
+    site_id: str = ""
 
     def __post_init__(self):
         if not self.node_id or self.gpus < 1:
@@ -72,16 +73,17 @@ class SimSession:
     expected_f: float
     expected_g: float
     log_bytes: int
-    log_external: bool = True
     requests: tuple[SimRequest, ...] = ()
     movable: bool = True
     wake_probability: float = 0.0
     state: SessionState = "active"
+    expected_growth_tokens_per_s: float = 0.0
 
     def __post_init__(self):
         if not self.session_id or not self.source_instance or self.context_tokens < 1 \
                 or min(self.expected_f, self.expected_g) < 0 or self.log_bytes < 1 \
                 or not 0 <= self.wake_probability <= 1 or self.state not in MOVE_METHODS_BY_STATE \
+                or self.expected_growth_tokens_per_s < 0 \
                 or self.state == "cold" and (self.expected_f or self.expected_g) \
                 or self.state == "active" and self.wake_probability:
             raise ValueError("invalid session")
@@ -94,7 +96,6 @@ class PlannedMove:
     method: MoveMethod
     order: int
     path: tuple[str, ...]
-    external_path: tuple[str, ...] = ()
     rate_limit_bytes_per_s: float | None = None
     quiesce_s: float | None = None
 
@@ -404,15 +405,10 @@ class ExecutionSimulator:
                 raise ValueError(f"session {move.session_id!r} cannot move")
             if move.method not in MOVE_METHODS_BY_STATE[session.state]:
                 raise ValueError(f"{move.method} is invalid for a {session.state} session")
-            if move.method == "replay_on_request" and not self.sessions[move.session_id].log_external \
-                    and self.sessions[move.session_id].log_bytes <= 0:
+            if move.method == "replay_on_request" and session.log_bytes <= 0:
                 raise ValueError("replay_on_request requires a durable session log")
             if not move.path or any(link not in self.links for link in move.path):
                 raise ValueError("move path contains an unknown link")
-            if session.log_external and move.method in {"replay", "replay_on_request"} \
-                    and (not move.external_path
-                         or any(link not in self.links for link in move.external_path)):
-                raise ValueError("external replay requires an external-to-destination path")
         resident = {instance: 0 for instance in self.instances}
         active = set()
         for session in self.sessions.values():
@@ -508,7 +504,7 @@ class ExecutionSimulator:
             ratio = session.log_bytes / session.context_tokens
             return max(1, round(tokens * ratio)), tokens, 0
         if state.move.method == "replay_on_request":
-            byte_count = session.log_bytes if session.log_external == (phase == "wake") else 0
+            byte_count = session.log_bytes if phase == "wake" else 0
             return byte_count, tokens if phase == "wake" else 0, 0
         blocks = self.case.kv_transfer.blocks(tokens)
         if phase == "catch_up":
@@ -518,12 +514,7 @@ class ExecutionSimulator:
         return self.case.kv_transfer.bytes(tokens), 0, blocks
 
     def _path(self, state: _MoveState, phase: str) -> tuple[str, ...]:
-        session = self.sessions[state.move.session_id]
-        external = session.log_external and (
-            state.move.method == "replay" or
-            state.move.method == "replay_on_request" and phase == "wake"
-        )
-        return state.move.external_path if external else state.move.path
+        return state.move.path
 
     def _prepare(self, index: int, phase: str,
                  payload: tuple[int, int, int] | None = None):
@@ -565,8 +556,7 @@ class ExecutionSimulator:
         if byte_count:
             source = self.sessions[state.move.session_id].source_instance
             action = "catch_up" if phase == "catch_up" else state.move.method
-            if state.move.method == "kv_transfer" or not self.sessions[state.move.session_id].log_external:
-                self._start_action((index, phase, "source"), action, source)
+            self._start_action((index, phase, "source"), action, source)
             path = self._path(state, phase)
             rate_path: tuple[object, ...] = path
             if state.move.method == "kv_transfer" and state.initial_start is not None:

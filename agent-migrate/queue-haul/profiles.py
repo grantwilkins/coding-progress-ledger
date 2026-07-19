@@ -11,7 +11,7 @@ import numpy as np
 
 
 PROFILE_SCHEMA = "queue-haul-model-profile-v3"
-WORKLOAD_SCHEMA = "queue-haul-workload-profile-v1"
+WORKLOAD_SCHEMA = "queue-haul-workload-profile-v2"
 SOURCE_SECTIONS = ("power", "service", "capacity", "replay", "kv_transfer", "transitions")
 ACTION_POWER = {"replay", "kv_transfer", "replay_on_request", "catch_up", "sleep", "off"}
 WORKLOAD_STATES = {"active", "cold"}
@@ -264,7 +264,7 @@ class WorkloadRecord:
     request_gap_s: float
     tool_delay_s: float
     log_bytes: int
-    log_external: bool
+    log_location: str
 
     @classmethod
     def parse(cls, raw: dict) -> "WorkloadRecord":
@@ -272,12 +272,12 @@ class WorkloadRecord:
             raw["job_type"], "cold" if raw["state"] == "idle" else raw["state"],
             int(raw["context_tokens"]),
             int(raw["prompt_tokens"]), int(raw["output_tokens"]), float(raw["request_gap_s"]),
-            float(raw["tool_delay_s"]), int(raw["log_bytes"]), bool(raw["log_external"]),
+            float(raw["tool_delay_s"]), int(raw["log_bytes"]), raw["log_location"],
         )
         if value.state not in WORKLOAD_STATES or value.context_tokens < 1 \
                 or value.prompt_tokens < 1 or value.output_tokens < 0 \
                 or min(value.request_gap_s, value.tool_delay_s) < 0 \
-                or value.log_bytes < 1:
+                or value.log_bytes < 1 or value.log_location != "source_dc":
             raise ValueError("invalid workload record")
         return value
 

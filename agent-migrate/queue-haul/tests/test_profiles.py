@@ -125,21 +125,23 @@ def test_missing_source_and_estimated_bounds_hard_fail(tmp_path):
 
 def test_workload_sampling_preserves_complete_records(tmp_path):
     raw = {
-        "schema": "queue-haul-workload-profile-v1", "profile_id": "w", "source": source("trace"),
+        "schema": "queue-haul-workload-profile-v2", "profile_id": "w", "source": source("trace"),
         "records": [
             {"job_type": "human", "state": "cold", "context_tokens": 10,
              "prompt_tokens": 2, "output_tokens": 1,
-             "request_gap_s": 100, "tool_delay_s": 0, "log_bytes": 40, "log_external": True},
+             "request_gap_s": 100, "tool_delay_s": 0, "log_bytes": 40,
+             "log_location": "source_dc"},
             {"job_type": "agent", "state": "active", "context_tokens": 100,
              "prompt_tokens": 20, "output_tokens": 10,
-             "request_gap_s": 1, "tool_delay_s": 2, "log_bytes": 400, "log_external": False},
+             "request_gap_s": 1, "tool_delay_s": 2, "log_bytes": 400,
+             "log_location": "source_dc"},
         ],
     }
     w = WorkloadProfile.load(write(tmp_path, raw, "workload.json"))
-    observed = {(r.context_tokens, r.request_gap_s, r.log_external) for r in w.records}
+    observed = {(r.context_tokens, r.request_gap_s, r.log_location) for r in w.records}
     a, b = w.sample(50, 7), w.sample(50, 7)
     assert a == b
-    assert {(r.context_tokens, r.request_gap_s, r.log_external) for r in a} <= observed
+    assert {(r.context_tokens, r.request_gap_s, r.log_location) for r in a} <= observed
 
     raw["records"][0]["state"] = "idle"
     assert WorkloadProfile.load(write(tmp_path, raw, "idle.json")).records[0] == w.records[0]

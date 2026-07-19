@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, replace
 import heapq
+import math
 from time import perf_counter
 from typing import Callable
 
@@ -89,8 +90,9 @@ def _ell(session: SimSession, case: ProfileCase) -> float:
     return session.expected_f / case.F + session.expected_g / case.G
 
 
-def _resident_tokens(session: SimSession) -> int:
-    return session.context_tokens if session.state == "active" else 0
+def _resident_tokens(session: SimSession, horizon: float = 0.0) -> int:
+    return math.ceil(session.context_tokens + session.expected_growth_tokens_per_s * horizon) \
+        if session.state == "active" else 0
 
 
 def source_power(scenario: ExecutionScenario, profile: ModelProfile, moved=(),
@@ -104,26 +106,20 @@ def source_power(scenario: ExecutionScenario, profile: ModelProfile, moved=(),
 
 
 def _duration(session: SimSession, method: MoveMethod, case: ProfileCase,
-              path: tuple[str, ...], links: dict[str, float]) -> float:
+              path: tuple[str, ...], links: dict[str, float], horizon: float = 0.0) -> float:
     def link_s(size):
         return size / min(links[link] for link in path)
-    def external_link_s(size):
-        # TODO(external-path): replace the destination-ingress assumption with measured topology.
-        return size / links[path[-1]]
-    replay_s = session.context_tokens / case.replay.rate(session.context_tokens, 1)
+    tokens = _resident_tokens(session, horizon) or session.context_tokens
+    replay_s = tokens / case.replay.rate(tokens, 1)
     if method == "replay":
-        transfer_s = external_link_s(session.log_bytes) if session.log_external \
-            else link_s(session.log_bytes)
-        return transfer_s + replay_s + case.replay_completion_s + case.switch_s
+        return link_s(session.log_bytes) + replay_s + case.replay_completion_s + case.switch_s
     if method == "kv_transfer":
-        size = case.kv_transfer.bytes(session.context_tokens)
+        size = case.kv_transfer.bytes(tokens)
         return (case.kv_transfer.setup_s
                 + max(link_s(size), size / case.kv_transfer.destination_bytes_per_s)
                 + case.kv_transfer.initial_completion_s + case.switch_s)
-    initial_s = 0.0 if session.log_external else link_s(session.log_bytes)
-    wake_s = (external_link_s(session.log_bytes) if session.log_external else 0.0) \
-        + replay_s + case.replay_completion_s
-    return initial_s + case.switch_s + session.wake_probability * wake_s
+    wake_s = link_s(session.log_bytes) + replay_s + case.replay_completion_s
+    return case.switch_s + session.wake_probability * wake_s
 
 
 def _local_sessions(scenario: ExecutionScenario) -> list[SimSession]:
@@ -197,12 +193,16 @@ def _migration_resources(scenario: ExecutionScenario, profile: ModelProfile, rou
         source: _route_resources(source, destinations, routes, links, summaries)
         for source in {session.source_instance for session in sessions}
     }
-    replay_s = np.array([
-        session.context_tokens / case.replay.rate(session.context_tokens, 1)
-        for session in sessions
-    ])
+    replay_s = np.zeros(n)
+    replay_valid = np.ones(n, bool)
+    for j, session in enumerate(sessions):
+        tokens = _resident_tokens(session, horizon)
+        try:
+            replay_s[j] = tokens / case.replay.rate(tokens, 1)
+        except ValueError:
+            replay_valid[j] = False
     kv_bytes = np.array([
-        case.kv_transfer.bytes(session.context_tokens) for session in sessions
+        case.kv_transfer.bytes(_resident_tokens(session, horizon)) for session in sessions
     ], float)
     replay_bytes = np.array([session.log_bytes for session in sessions], float)
     durations = np.zeros((2, n))
@@ -213,7 +213,7 @@ def _migration_resources(scenario: ExecutionScenario, profile: ModelProfile, rou
 
     for j, session in enumerate(sessions):
         internal, external = route_cache[session.source_instance]
-        replay_route = external if session.log_external else internal
+        replay_route = internal
         durations[0, j] = replay_bytes[j] / replay_route[2] + replay_s[j] + case.switch_s
         transfer_s = max(kv_bytes[j] / internal[2],
                          kv_bytes[j] / case.kv_transfer.destination_bytes_per_s)
@@ -235,6 +235,7 @@ def _migration_resources(scenario: ExecutionScenario, profile: ModelProfile, rou
         raise ValueError("planner destination-pool links must not also be fixed route links")
 
     valid = (durations <= max(horizon, 0)).reshape(-1)
+    valid[:n] &= replay_valid
     row, column, data, resource_count = [], [], [], 0
 
     def add_resource(entries, capacity):
@@ -273,7 +274,7 @@ def _migration_resources(scenario: ExecutionScenario, profile: ModelProfile, rou
         if session.source_instance in destination_ids
     )
     destination_tokens = sum(
-        _resident_tokens(session) for session in scenario.sessions
+        _resident_tokens(session, horizon) for session in scenario.sessions
         if session.source_instance in destination_ids
     )
     add_resource(
@@ -283,7 +284,7 @@ def _migration_resources(scenario: ExecutionScenario, profile: ModelProfile, rou
         - destination_load,
     )
     add_resource(
-        ((method * n + j, _resident_tokens(session))
+        ((method * n + j, _resident_tokens(session, horizon))
          for j, session in enumerate(sessions) for method in range(2)),
         len(destinations) * profile.kv_capacity_tokens - destination_tokens,
     )
@@ -466,8 +467,8 @@ def _solve_lp(solver: str, gains: np.ndarray, work: np.ndarray, valid: np.ndarra
 
 def _plan_lp(scenario: ExecutionScenario, profile: ModelProfile, routes: Routes,
              solver: str, case_id: str, seed: int, start: float) -> PlanResult:
-    if case_id != "central" or scenario.final_state != "awake":
-        raise ValueError("LP supports the central profile with final_state='awake'")
+    if scenario.final_state != "awake":
+        raise ValueError("LP supports final_state='awake'")
     sessions = _local_sessions(scenario)
     if any(session.state != "active" for session in sessions):
         raise ValueError("LP currently supports active sessions only")
@@ -534,6 +535,7 @@ def _place(selected: list[int], sessions: list[SimSession], scenario: ExecutionS
            profile: ModelProfile, routes: Routes,
            methods: list[MoveMethod], case_id: str) -> tuple[PlannedMove, ...]:
     case = profile.case(case_id)
+    link_rates = {link.link_id: link.bytes_per_s for link in scenario.links}
     nodes = {n.node_id: n for n in scenario.nodes}
     destinations = [
         i for i in scenario.instances if all(not nodes[n].local for n in i.gpu_nodes)
@@ -545,7 +547,9 @@ def _place(selected: list[int], sessions: list[SimSession], scenario: ExecutionS
     for session in scenario.sessions:
         if session.source_instance in load:
             load[session.source_instance] += _ell(session, case)
-            tokens[session.source_instance] += _resident_tokens(session)
+            tokens[session.source_instance] += _resident_tokens(
+                session, scenario.deadline_s - scenario.controller_delay_s
+            )
     size = len(destinations[0].gpu_nodes)
     capacity = InstanceCapacity(
         [load[i.instance_id] for i in destinations],
@@ -555,11 +559,30 @@ def _place(selected: list[int], sessions: list[SimSession], scenario: ExecutionS
     moves = []
     for order, j in enumerate(selected):
         session, ell = sessions[j], _ell(sessions[j], case)
-        destination = destinations[capacity.place(ell, _resident_tokens(session))].instance_id
+        horizon = scenario.deadline_s - scenario.controller_delay_s
+        destination = destinations[capacity.place(
+            ell, _resident_tokens(session, horizon)
+        )].instance_id
         path = _route(routes, session.source_instance, destination)
-        # TODO(external-path): replace the destination-ingress assumption with measured topology.
+        rate, quiesce = None, None
+        if methods[j] == "kv_transfer":
+            transition = 0.0 if scenario.final_state == "awake" else (
+                case.sleep_s if scenario.final_state == "sleep" else scenario.assumed_shutdown_s
+            )
+            reserve = (profile.power_window_s + case.switch_s + case.kv_transfer.catch_up_fixed_s
+                       + case.kv_transfer.block_tokens / case.kv_transfer.tail_replay_tps
+                       + transition)
+            quiesce = max(scenario.controller_delay_s, scenario.deadline_s - reserve)
+            copy_s = max(quiesce - scenario.controller_delay_s, 1e-12)
+            rate = (case.kv_transfer.bytes(session.context_tokens) / copy_s
+                    + session.expected_growth_tokens_per_s
+                    * case.kv_transfer.block_bytes / case.kv_transfer.block_tokens)
+            physical = min(case.kv_transfer.destination_bytes_per_s,
+                           *(link_rates[link_id] for link_id in path))
+            rate = min(rate, physical)
         moves.append(PlannedMove(
-            session.session_id, destination, methods[j], order, path, path[-1:]
+            session.session_id, destination, methods[j], order, path,
+            rate_limit_bytes_per_s=rate, quiesce_s=quiesce,
         ))
     return tuple(moves)
 
@@ -591,9 +614,14 @@ def plan(scenario: ExecutionScenario, profile: ModelProfile,
         # TODO(routes): measure heterogeneous destination links before optimizing over them.
         candidate_path = _route(paths, session.source_instance, destinations[0].instance_id)
         for k, method in enumerate(METHODS):
-            costs[j, k] = _duration(session, method, case, candidate_path, links)
-            valid[j, k] = method in MOVE_METHODS_BY_STATE[session.state] \
-                and costs[j, k] <= horizon
+            try:
+                costs[j, k] = _duration(
+                    session, method, case, candidate_path, links, horizon
+                )
+                valid[j, k] = method in MOVE_METHODS_BY_STATE[session.state] \
+                    and costs[j, k] <= horizon
+            except ValueError:
+                pass
     available = valid.any(1)
     best_method = np.argmin(np.where(valid, costs, np.inf), axis=1)
     best_cost = costs[np.arange(len(sessions)), best_method]
