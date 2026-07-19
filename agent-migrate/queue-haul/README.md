@@ -46,6 +46,12 @@ shaped 1/10 Gbps WAN allocations remain scenario inputs rather than claims
 about the cluster. Workload profile v2 fixes durable logs at `source_dc`, so
 replay traffic crosses the same site egress and WAN as KV traffic.
 
+Deadline pacing reserves KV setup and initial-completion time, includes the
+configured expected-growth envelope, and rejects rates above physical route or
+endpoint capacity. It caps background preparation only; paused final catch-up
+uses the available shared transport. Planner validation materializes expected
+growth at quiescence without exposing sampled future requests.
+
 For active sessions with `--final-state awake`, `node_drain` ranks source nodes
 by exact power reduction to idle divided by predicted drain time. It then ranks
 sessions within each node by power reduction per resource use and reserves the

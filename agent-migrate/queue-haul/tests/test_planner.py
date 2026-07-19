@@ -22,6 +22,7 @@ Plausible wrong implementations:
 - Minimize peak resource use before migration work in the old Queue-Haul LP.
 - Round every positive fraction after enough power reduction has been selected.
 - Fail instead of maximizing achievable power reduction when the target is infeasible.
+- Spend setup/completion time as transfer time or clamp an impossible KV pace.
 """
 
 from dataclasses import replace
@@ -32,7 +33,10 @@ import pytest
 from scipy.sparse import csr_matrix
 
 import planner
-from planner import METHODS, _duration, _round_lp, _route_resources, _solve_lp, plan
+from planner import (
+    METHODS, _duration, _expected_scenario, _required_kv_rate, _round_lp,
+    _route_resources, _solve_lp, plan,
+)
 from simulate import (ExecutionScenario, NetworkLink, PowerNode, ServingInstance, SimRequest,
                       SimSession)
 from test_execution_simulator import model
@@ -120,6 +124,39 @@ def test_kv_duration_uses_the_slower_pipeline_stage(tmp_path):
 
     assert _duration(session, "kv_transfer", profile.case(), ("wan",), {"wan": 100}) \
         == pytest.approx(2)
+
+
+def test_required_kv_rate_reserves_fixed_completion_and_rejects_overload(tmp_path):
+    case = model(tmp_path, switch=0, tp=1).case()
+    case = replace(
+        case,
+        kv_transfer=replace(case.kv_transfer, initial_completion_s=2),
+    )
+    session = SimSession("a", "s0", 10, 0, 0, 1)
+
+    assert _required_kv_rate(session, case, 10, 0, 100) == pytest.approx(12.5)
+    with pytest.raises(ValueError, match="physical capacity"):
+        _required_kv_rate(session, case, 10, 0, 12)
+
+
+def test_expected_prediction_materializes_growth_at_quiescence():
+    scenario = replace(
+        problem(), sessions=(SimSession(
+            "a", "s0", 10, 0, 0, 1,
+            requests=(SimRequest(1, 99, 0),),
+            expected_growth_tokens_per_s=2,
+        ),),
+    )
+    expected = _expected_scenario(
+        scenario,
+        (planner.PlannedMove(
+            "a", "t0", "kv_transfer", 0, ("wan",), quiesce_s=3,
+        ),),
+    )
+
+    assert expected.sessions[0].context_tokens == 16
+    assert expected.sessions[0].requests == ()
+    assert expected.sessions[0].expected_growth_tokens_per_s == 0
 
 
 def test_plan_does_not_read_sampled_future_requests(tmp_path):

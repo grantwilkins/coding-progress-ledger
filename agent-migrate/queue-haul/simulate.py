@@ -565,7 +565,7 @@ class ExecutionSimulator:
                     state.move.destination_instance,
                 )
                 rate_path += (self.kv_links[state.move.destination_instance],)
-                if index in self.pace_links:
+                if index in self.pace_links and phase != "catch_up":
                     rate_path += (self.pace_links[index],)
             flow = _Flow(
                 self.next_flow, index, phase, float(byte_count), path, rate_path,

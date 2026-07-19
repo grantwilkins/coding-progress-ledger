@@ -122,6 +122,67 @@ def _duration(session: SimSession, method: MoveMethod, case: ProfileCase,
     return case.switch_s + session.wake_probability * wake_s
 
 
+def _required_kv_rate(session: SimSession, case: ProfileCase, quiesce_s: float,
+                      controller_s: float, physical: float) -> float:
+    growth_s = quiesce_s - controller_s
+    transfer_s = growth_s - case.kv_transfer.setup_s \
+        - case.kv_transfer.initial_completion_s
+    if transfer_s <= 0:
+        raise ValueError("KV preparation has no transfer window")
+    rate = case.kv_transfer.bytes(math.ceil(
+        session.context_tokens + session.expected_growth_tokens_per_s * growth_s
+    )) / transfer_s
+    if rate > physical:
+        raise ValueError("KV preparation exceeds physical capacity")
+    return rate
+
+
+def _kv_schedule(scenario: ExecutionScenario, profile: ModelProfile,
+                 session: SimSession, case: ProfileCase, path: tuple[str, ...],
+                 links: dict[str, float]) -> tuple[float, float]:
+    transition = 0.0 if scenario.final_state == "awake" else (
+        case.sleep_s if scenario.final_state == "sleep"
+        else scenario.assumed_shutdown_s
+    )
+    reserve = (
+        profile.power_window_s + case.switch_s
+        + case.kv_transfer.catch_up_fixed_s
+        + case.kv_transfer.block_tokens / case.kv_transfer.tail_replay_tps
+        + transition
+    )
+    quiesce = max(scenario.controller_delay_s, scenario.deadline_s - reserve)
+    physical = min(
+        case.kv_transfer.destination_bytes_per_s,
+        *(links[link_id] for link_id in path),
+    )
+    return _required_kv_rate(
+        session, case, quiesce, scenario.controller_delay_s, physical,
+    ), quiesce
+
+
+def _expected_scenario(scenario: ExecutionScenario,
+                       moves: tuple[PlannedMove, ...]) -> ExecutionScenario:
+    by_session = {move.session_id: move for move in moves}
+    return replace(scenario, sessions=tuple(
+        replace(
+            session,
+            context_tokens=math.ceil(
+                session.context_tokens
+                + session.expected_growth_tokens_per_s
+                * max(
+                    0.0,
+                    (by_session[session.session_id].quiesce_s
+                     if by_session[session.session_id].quiesce_s is not None
+                     else scenario.deadline_s)
+                    - scenario.controller_delay_s,
+                )
+            ) if session.session_id in by_session else session.context_tokens,
+            requests=(), expected_growth_tokens_per_s=0,
+        )
+        for session in scenario.sessions
+    ))
+
+
 def _local_sessions(scenario: ExecutionScenario) -> list[SimSession]:
     nodes = {n.node_id: n for n in scenario.nodes}
     instances = {i.instance_id: i for i in scenario.instances}
@@ -516,9 +577,7 @@ def _plan_lp(scenario: ExecutionScenario, profile: ModelProfile, routes: Routes,
         power.remove(sessions[j].session_id)
     planned = power.power(True)
     expected = predict(
-        replace(scenario, sessions=tuple(
-            replace(session, requests=()) for session in scenario.sessions
-        )),
+        _expected_scenario(scenario, moves),
         profile, moves, case_id,
     )
     feasible = planned <= scenario.power_limit_w and max(usage, default=0) <= 1 + 1e-8 \
@@ -566,20 +625,9 @@ def _place(selected: list[int], sessions: list[SimSession], scenario: ExecutionS
         path = _route(routes, session.source_instance, destination)
         rate, quiesce = None, None
         if methods[j] == "kv_transfer":
-            transition = 0.0 if scenario.final_state == "awake" else (
-                case.sleep_s if scenario.final_state == "sleep" else scenario.assumed_shutdown_s
+            rate, quiesce = _kv_schedule(
+                scenario, profile, session, case, path, link_rates,
             )
-            reserve = (profile.power_window_s + case.switch_s + case.kv_transfer.catch_up_fixed_s
-                       + case.kv_transfer.block_tokens / case.kv_transfer.tail_replay_tps
-                       + transition)
-            quiesce = max(scenario.controller_delay_s, scenario.deadline_s - reserve)
-            copy_s = max(quiesce - scenario.controller_delay_s, 1e-12)
-            rate = (case.kv_transfer.bytes(session.context_tokens) / copy_s
-                    + session.expected_growth_tokens_per_s
-                    * case.kv_transfer.block_bytes / case.kv_transfer.block_tokens)
-            physical = min(case.kv_transfer.destination_bytes_per_s,
-                           *(link_rates[link_id] for link_id in path))
-            rate = min(rate, physical)
         moves.append(PlannedMove(
             session.session_id, destination, methods[j], order, path,
             rate_limit_bytes_per_s=rate, quiesce_s=quiesce,
@@ -618,6 +666,10 @@ def plan(scenario: ExecutionScenario, profile: ModelProfile,
                 costs[j, k] = _duration(
                     session, method, case, candidate_path, links, horizon
                 )
+                if method == "kv_transfer":
+                    _kv_schedule(
+                        scenario, profile, session, case, candidate_path, links,
+                    )
                 valid[j, k] = method in MOVE_METHODS_BY_STATE[session.state] \
                     and costs[j, k] <= horizon
             except ValueError:
@@ -682,8 +734,7 @@ def plan(scenario: ExecutionScenario, profile: ModelProfile,
     planned = power_state.power(True)
     moves = _place(selected, sessions, scenario, profile, paths, methods, case_id)
     expected = predict(
-        replace(scenario, sessions=tuple(replace(session, requests=())
-                                         for session in scenario.sessions)),
+        _expected_scenario(scenario, moves),
         profile, moves, case_id,
     )
     feasible = planned <= scenario.power_limit_w and _execution_feasible(scenario, expected)

@@ -21,6 +21,7 @@ Plausible wrong implementations:
 - Report queue depth or bytes without the newly queued transfer.
 - Drop zero-delay completion events exactly at the simulation cutoff.
 - Allocate queue audit records during summary-only prediction.
+- Apply a background pace cap to the paused final catch-up.
 """
 
 import json
@@ -504,6 +505,24 @@ def test_move_rate_limit_is_a_real_shared_flow_bottleneck(tmp_path):
     )
 
     assert result.sessions[0].initial_ready_s == pytest.approx(2)
+
+
+def test_final_catch_up_is_not_background_paced(tmp_path):
+    session = SimSession(
+        "active", "source", 10, 0, 0, 1,
+        requests=(SimRequest(2, 10, 0),),
+    )
+    result = execute(
+        scenario((session,)),
+        model(tmp_path, switch=0),
+        (PlannedMove(
+            "active", "dest", "kv_transfer", 0, ("wan",),
+            rate_limit_bytes_per_s=50, quiesce_s=2,
+        ),),
+    )
+    catch_up = next(row for row in result.network if row.phase == "catch_up")
+
+    assert catch_up.end_s - catch_up.start_s == pytest.approx(1)
 
 
 def test_replay_catch_up_processes_only_tokens_after_snapshot(tmp_path):
