@@ -9,6 +9,7 @@ Plausible wrong implementations:
 - Rerun identical controls for every method and bandwidth.
 - Couple migration concurrency to serving concurrency or sleep an awake drain.
 - Serialize append turns instead of overlapping generation with the next copy.
+- Omit or duplicate a factorial cell, leak repeat 2 into fitting, or run sleep.
 - Claim parallel KV from aggregate bytes without independent overlapping links.
 - Add catch-up cache hits to KV bytes transferred over the network.
 - Mix appended prompt tokens with decoded output or infer growth from requested tokens.
@@ -119,6 +120,37 @@ def test_plan_can_pin_the_same_sessions_across_repeats(tmp_path):
             manifest_path, [2048], [2], [1000], ["replay"], ["none"], 1, 9,
             session_ids=["a"],
         )
+
+
+def test_bounded_campaign_has_exact_surface_stages_and_split():
+    manifest = Path(c.__file__).with_name("outputs") / "coding-manifest.json"
+
+    plan = c.make_campaign(manifest, 7)
+
+    assert len(plan["scenarios"]) == 105
+    assert sum(row["kind"] == "migration" for row in plan["scenarios"]) == 90
+    assert sum(row["kind"] == "control" for row in plan["scenarios"]) == 15
+    assert all(row["final_state"] == "awake" for row in plan["scenarios"])
+    smoke = plan["scenarios"][0]
+    assert (
+        smoke["campaign"], smoke["context_size"], smoke["bandwidth_mbps"],
+        smoke["move_concurrency"], smoke["repeat"],
+    ) == ("parallel_surface", 4096, 1000, 4, 0)
+    assert all(
+        row["split"] == ("validation" if row["repeat"] == 2 else "train")
+        for row in plan["scenarios"]
+    )
+    staged = [
+        row for row in plan["scenarios"]
+        if row["campaign"] == "staged_append"
+        and row["kind"] == "migration"
+        and row["copy_policy"] == "after_each_request"
+    ]
+    assert len(staged) == 12
+    assert all(len(row["request_schedule"]) == 4 for row in staged)
+    broken = {**plan, "scenarios": plan["scenarios"][:-1]}
+    with pytest.raises(ValueError, match="105 scenarios"):
+        c.validate_campaign_plan(broken)
 
 
 def test_catch_up_plan_pairs_each_measured_append_size(tmp_path):

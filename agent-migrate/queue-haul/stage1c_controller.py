@@ -181,6 +181,18 @@ def session_messages(session: dict, turn_index: int) -> list[dict]:
     return messages
 
 
+def calibration_messages(session: dict, tokens: int) -> list[dict]:
+    return [
+        {"role": "system", "content": (
+            f"Session state code {session['state_code']}. "
+            f"Include {session['state_code']} in every reply."
+        )},
+        {"role": "user", "content": token_text(
+            f"{session['id']} calibration", tokens,
+        )},
+    ]
+
+
 def estimated_prompt_tokens(session: dict, turn_index: int) -> int:
     messages = session_messages(session, turn_index)
     return sum(len(row["content"].split()) for row in messages) + 64 * len(messages) + PROBE_MAX_TOKENS
@@ -287,6 +299,142 @@ def make_plan(manifest_path: Path, context_sizes: list[int], concurrency: list[i
     return plan
 
 
+def make_campaign(manifest_path: Path, seed: int,
+                  deadline_s: float = 900.0) -> dict:
+    manifest = json.loads(manifest_path.read_text())
+    validate_manifest(manifest)
+    if len(manifest["sessions"]) < 4 or deadline_s <= 0:
+        raise ValueError("campaign needs four sessions and a positive deadline")
+    selected = sorted(manifest["sessions"], key=lambda row: row["rank"])[:4]
+    classes = {row["id"]: row["job_class"] for row in selected}
+    scenarios = []
+
+    def add(campaign: str, split: str, sessions: list[dict], repeat: int,
+            schedule: list[dict], variants: list[tuple[str, str, int, float]]):
+        match_id = object_hash(
+            [campaign, split, sessions, repeat, schedule]
+        )[:16]
+        base = {
+            "match_id": match_id, "campaign": campaign, "split": split,
+            "context_size": sessions[0]["initial_tokens"], "activity":
+                "one_turn" if schedule else "none",
+            "activity_tokens": sum(row["append_tokens"] for row in schedule),
+            "request_schedule": schedule, "repeat": repeat,
+            "deadline_s": deadline_s, "sessions": sessions,
+            "serving_concurrency": 1, "final_state": "awake",
+        }
+        scenarios.append({
+            **base, "scenario_id": f"c-{match_id}", "kind": "control",
+            "method": variants[0][0], "copy_policy": "initial_final",
+            "concurrency": 1, "move_concurrency": 0,
+            "bandwidth_mbps": 1000, "moves": [],
+        })
+        for method, policy, concurrency, bandwidth in variants:
+            scenario_id = object_hash(
+                [match_id, method, policy, concurrency, bandwidth]
+            )[:16]
+            scenarios.append({
+                **base, "scenario_id": f"m-{scenario_id}",
+                "kind": "migration", "method": method,
+                "copy_policy": policy, "concurrency": concurrency,
+                "move_concurrency": concurrency,
+                "bandwidth_mbps": bandwidth,
+                "moves": [{**row, "method": method} for row in sessions],
+            })
+
+    variants = [
+        ("kv_transfer", "initial_final", concurrency, bandwidth)
+        for concurrency in (1, 2, 4) for bandwidth in (1000, 10000)
+    ]
+    for tokens in (4096, 16384, 30000):
+        sessions = [
+            {"session_id": row["id"], "job_class": classes[row["id"]],
+             "turn_index": 0, "initial_tokens": tokens, "order": order}
+            for order, row in enumerate(selected)
+        ]
+        for repeat in range(3):
+            add("parallel_surface", "validation" if repeat == 2 else "train",
+                sessions, repeat, [], variants)
+    schedules = {
+        "steady": [{"at_s": value, "append_tokens": 512}
+                   for value in (2, 4, 6, 8)],
+        "bursty": [
+            {"at_s": at_s, "append_tokens": tokens}
+            for at_s, tokens in ((2, 32), (2.2, 992), (7, 32), (7.2, 992))
+        ],
+    }
+    session = [{
+        "session_id": selected[0]["id"],
+        "job_class": selected[0]["job_class"],
+        "turn_index": 0, "initial_tokens": 28000, "order": 0,
+    }]
+    variants = [
+        (method, policy, 1, bandwidth)
+        for method, policy in (
+            ("replay", "initial_final"),
+            ("kv_transfer", "initial_final"),
+            ("kv_transfer", "after_each_request"),
+        )
+        for bandwidth in (1000, 10000)
+    ]
+    for schedule in schedules.values():
+        for repeat in range(3):
+            add("staged_append", "validation" if repeat == 2 else "train",
+                session, repeat, schedule, variants)
+    smoke = next(
+        row for row in scenarios
+        if row["campaign"] == "parallel_surface"
+        and row["kind"] == "migration" and row["context_size"] == 4096
+        and row["move_concurrency"] == 4 and row["bandwidth_mbps"] == 1000
+        and row["repeat"] == 0
+    )
+    scenarios.remove(smoke)
+    random.Random(seed).shuffle(scenarios)
+    plan = {
+        "schema": PLAN_SCHEMA,
+        "manifest": {"path": str(manifest_path),
+                     "sha256": file_hash(manifest_path)},
+        "seed": seed, "scenarios": [smoke, *scenarios],
+    }
+    validate_plan(plan, manifest)
+    validate_campaign_plan(plan)
+    return plan
+
+
+def validate_campaign_plan(plan: dict) -> None:
+    parallel = [
+        row for row in plan["scenarios"]
+        if row["campaign"] == "parallel_surface"
+    ]
+    staged = [
+        row for row in plan["scenarios"] if row["campaign"] == "staged_append"
+    ]
+    if len(plan["scenarios"]) != 105 or len(parallel) != 63 \
+            or len(staged) != 42:
+        raise ValueError("campaign must contain 105 scenarios (63 parallel, 42 staged)")
+    migrations = [row for row in plan["scenarios"] if row["kind"] == "migration"]
+    controls = [row for row in plan["scenarios"] if row["kind"] == "control"]
+    if len(migrations) != 90 or len(controls) != 15 \
+            or any(row["final_state"] != "awake" for row in plan["scenarios"]):
+        raise ValueError("campaign must contain 90 migrations, 15 awake controls")
+    if {
+        (row["context_size"], row["bandwidth_mbps"],
+         row["move_concurrency"], row["repeat"])
+        for row in parallel if row["kind"] == "migration"
+    } != {
+        (tokens, bandwidth, concurrency, repeat)
+        for tokens in (4096, 16384, 30000)
+        for bandwidth in (1000, 10000)
+        for concurrency in (1, 2, 4) for repeat in range(3)
+    }:
+        raise ValueError("parallel campaign matrix is incomplete")
+    if any(
+        row["split"] != ("validation" if row["repeat"] == 2 else "train")
+        for row in plan["scenarios"]
+    ):
+        raise ValueError("campaign split must be fixed by repeat")
+
+
 def validate_plan(plan: dict, manifest: dict) -> None:
     if plan.get("schema") not in SCHEMAS[PLAN_SCHEMA]:
         raise ValueError("unsupported plan schema")
@@ -332,7 +480,9 @@ def validate_plan(plan: dict, manifest: dict) -> None:
         if len({row.get("method") for row in scenario["moves"]}) > 1:
             pass  # Hand-authored mixed plans are valid; generated profiles use one method.
         for row in rows:
-            tokens = estimated_prompt_tokens(sessions[row["session_id"]], row["turn_index"])
+            tokens = row.get("initial_tokens") or estimated_prompt_tokens(
+                sessions[row["session_id"]], row["turn_index"]
+            )
             if tokens > MAX_MODEL_TOKENS:
                 raise ValueError(f"scenario {scenario['scenario_id']} prompt estimate {tokens} exceeds {MAX_MODEL_TOKENS}")
 
@@ -453,11 +603,13 @@ def lookup_tokens(path: Path, request_id: str) -> tuple[int, int]:
 class LiveSession:
     def __init__(self, cfg: b.Config, session: dict, turn_index: int,
                  event_log: EventLog, source_log: Path, cache_log: Path,
-                 timeout_s: float, activity_tokens: int = 0):
+                 timeout_s: float, activity_tokens: int = 0,
+                 initial_tokens: int | None = None):
         self.cfg, self.row, self.event_log = cfg, session, event_log
         self.source_log, self.cache_log, self.timeout_s = source_log, cache_log, timeout_s
         self.session_id, self.state_code = session["id"], session["state_code"]
-        self.messages = session_messages(session, turn_index)
+        self.messages = calibration_messages(session, initial_tokens) \
+            if initial_tokens else session_messages(session, turn_index)
         self.generation, self.route, self.paused = 0, cfg.src_port, False
         self.lock = threading.Lock()
         self.activity_thread: threading.Thread | None = None
@@ -971,6 +1123,7 @@ def run_scenario(stack: b.Stack, cfg: b.Config, manifest: dict, scenario: dict, 
             cfg, rows[item["session_id"]], item["turn_index"], event_log,
             source_log, cache_log, scenario["deadline_s"],
             scenario.get("activity_tokens", 0),
+            item.get("initial_tokens"),
         ) for item in scenario["sessions"]}
         method_by_session = {row["session_id"]: row["method"] for row in scenario["moves"]} or {session_id: scenario["method"] for session_id in sessions}
         replay = [session for session_id, session in sessions.items() if method_by_session[session_id] == "replay"]
@@ -1973,6 +2126,91 @@ def check_catch_up_run(run_root: Path) -> None:
         raise RuntimeError("catch-up evidence failed: " + "; ".join(failures))
 
 
+def check_campaign_run(run_root: Path) -> None:
+    plan = json.loads((run_root / "plan.json").read_text())
+    validate_campaign_plan(plan)
+    metadata = json.loads((run_root / "run_metadata.json").read_text())
+    if metadata.get("dirty") or metadata.get("plan_object_sha256") != object_hash(plan):
+        raise RuntimeError("campaign provenance is dirty or mismatched")
+    reports, failures = [], []
+    for scenario in plan["scenarios"]:
+        try:
+            root = run_root / "scenarios" / scenario["scenario_id"]
+            result = json.loads((root / "result.json").read_text())
+            if result.get("schema") not in SCHEMAS[RESULT_SCHEMA] \
+                    or result.get("status") != "complete" \
+                    or result.get("scenario_id") != scenario["scenario_id"] \
+                    or not result.get("deadline_met"):
+                raise RuntimeError("scenario is incomplete")
+            if scenario["kind"] == "control":
+                if result.get("migrations"):
+                    raise RuntimeError("control contains migrations")
+            else:
+                moves = result.get("migrations", [])
+                if len(moves) != len(scenario["sessions"]) \
+                        or any(row.get("error") for row in moves) \
+                        or not valid_continuations(
+                            result, len(scenario["sessions"])
+                        ):
+                    raise RuntimeError("migration or continuation failed")
+                if scenario["campaign"] == "parallel_surface":
+                    start = min(row["initial_start_ns"] for row in moves)
+                    end = max(row["initial_end_ns"] for row in moves)
+                    measured = parallel_connection_measurements(
+                        root / "proxy_connections.csv", start, end,
+                        scenario["move_concurrency"],
+                        {
+                            session: set(keys)
+                            for session, keys
+                            in result["session_cache_keys"].items()
+                        },
+                    )
+                    expected = {
+                        row["move"]["session_id"]:
+                            row["initial"]["logical_kv_bytes"]
+                        for row in moves
+                    }
+                    if measured["session_kv_body_bytes"] != expected:
+                        raise RuntimeError("parallel body bytes are not conserved")
+                else:
+                    for move in moves:
+                        append = move.get("append_stages", [])
+                        expected = 4 if scenario["copy_policy"] \
+                            == "after_each_request" else 0
+                        if len(append) != expected:
+                            raise RuntimeError("append stages are incomplete")
+                        rows = migration_stage_rows(
+                            scenario, result, move, root
+                        )
+                        for row in rows:
+                            if row["phase"] == "append" and (
+                                row["copied_blocks_after"]
+                                < row["copied_blocks_before"]
+                                or row["logical_body_bytes"]
+                                != row["wire_body_bytes"]
+                            ):
+                                raise RuntimeError(
+                                    "append watermark or bytes are invalid"
+                                )
+                    activities = result.get("activities", [])
+                    if len(activities) != 4 * len(scenario["sessions"]):
+                        raise RuntimeError("source append evidence is incomplete")
+            reports.append({
+                "scenario_id": scenario["scenario_id"],
+                "campaign": scenario["campaign"], "passed": True, "error": "",
+            })
+        except Exception as exc:
+            reports.append({
+                "scenario_id": scenario["scenario_id"],
+                "campaign": scenario["campaign"], "passed": False,
+                "error": f"{type(exc).__name__}: {exc}",
+            })
+            failures.append(f"{scenario['scenario_id']}: {exc}")
+    write_csv(run_root / "campaign_gate.csv", reports)
+    if failures:
+        raise RuntimeError("campaign evidence failed: " + "; ".join(failures))
+
+
 def csv_list(value: str, cast=str):
     return [cast(item) for item in value.split(",") if item]
 
@@ -1995,6 +2233,11 @@ def parse_args(argv: list[str] | None = None):
     command.add_argument("--session-ids", type=lambda value: csv_list(value), default=[])
     command.add_argument("--final-state", choices=("awake", "sleep"), default="awake")
     command.add_argument("--repeats", type=int, required=True); command.add_argument("--seed", type=int, required=True); command.add_argument("--deadline-s", type=float, default=300)
+    command = sub.add_parser("make-campaign")
+    command.add_argument("--manifest", type=Path, required=True)
+    command.add_argument("--out", type=Path, required=True)
+    command.add_argument("--seed", type=int, required=True)
+    command.add_argument("--deadline-s", type=float, default=900)
     command = sub.add_parser("run")
     command.add_argument("--plan", type=Path, required=True); command.add_argument("--run-root", type=Path, required=True); command.add_argument("--allow-dirty", action="store_true"); command.add_argument("--resume-from-git-sha")
     command.add_argument("--power-state-cycles", type=int, default=0)
@@ -2002,7 +2245,7 @@ def parse_args(argv: list[str] | None = None):
     command.add_argument("--node-power", action="store_true")
     b.add_common(command); command.add_argument("extra_vllm_args", nargs=argparse.REMAINDER)
     command = sub.add_parser("reduce"); command.add_argument("--run-root", type=Path, required=True)
-    for name in ("check-parallel", "check-catch-up"):
+    for name in ("check-parallel", "check-catch-up", "check-campaign"):
         command = sub.add_parser(name)
         command.add_argument("--run-root", type=Path, required=True)
     return parser.parse_args(argv)
@@ -2019,6 +2262,11 @@ def main(argv: list[str] | None = None) -> None:
             args.session_ids, args.activity_tokens,
             args.serving_concurrency, args.final_state,
         ))
+    elif args.command == "make-campaign":
+        write_json(
+            args.out,
+            make_campaign(args.manifest, args.seed, args.deadline_s),
+        )
     elif args.command == "run":
         extra = args.extra_vllm_args[1:] if args.extra_vllm_args[:1] == ["--"] else args.extra_vllm_args
         run_plan(
@@ -2030,8 +2278,10 @@ def main(argv: list[str] | None = None) -> None:
         reduce_run(args.run_root)
     elif args.command == "check-parallel":
         check_parallel_run(args.run_root)
-    else:
+    elif args.command == "check-catch-up":
         check_catch_up_run(args.run_root)
+    else:
+        check_campaign_run(args.run_root)
 
 
 if __name__ == "__main__":

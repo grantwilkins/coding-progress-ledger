@@ -140,6 +140,22 @@ sbatch queue-haul/stage1d_parallel_gate.sbatch
 sbatch queue-haul/stage1e_catch_up.sbatch
 ```
 
+Generate and submit the bounded 105-scenario hardware campaign with:
+
+```bash
+uv run python queue-haul/stage1c_controller.py make-campaign \
+  --manifest queue-haul/outputs/coding-manifest.json \
+  --out queue-haul/outputs/bounded-hardware-campaign-plan.json --seed 0
+sbatch queue-haul/stage1f_campaign.sbatch
+```
+
+The plan contains 63 parallel-surface and 42 staged-append scenarios. It runs
+the 4k/1-Gbps/concurrency-4 smoke first, randomizes the remainder, resumes only
+against the same hashed plan, and runs `check-campaign` after all 105 results
+complete. The workload-class and mixed held-out extension remains gated on
+pre-staged complete SWE-chat traces; it is not synthesized from the coding
+manifest.
+
 Stage 1D completed all 12 fixed two-session scenarios at 1 Gbps within
 deadline. All six migrations passed cache, continuation, exact aggregate byte,
 and independent large-body connection checks; each used 95 connections with up

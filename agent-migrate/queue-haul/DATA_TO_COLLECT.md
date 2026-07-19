@@ -16,6 +16,11 @@ The next campaign is one resumable two-GPU job with a 12-hour limit. Start the
 stack once, randomize scenarios, checkpoint each result, reuse compatible
 controls, and exclude incomplete or dirty scenarios from fitting.
 
+`stage1f_campaign.sbatch` implements the 105-scenario hardware portion: 63
+parallel-surface and 42 staged-append scenarios. The remaining workload and
+mixed held-out scenarios must not be generated until complete trace-backed
+interactive, coding, and agentic manifests are staged.
+
 - [ ] **Parallel KV surface:** approximately 4k/16k/32k context, 1/10 Gbps,
   logical concurrency 1/2/4, and three repeats. Rerun every cell with the
   corrected shaper and exact key attribution; use the old gate only as a

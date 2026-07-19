@@ -35,6 +35,9 @@ calls are out of scope. A connection is never a unit of simulated fairness.
 
 Fit repeats 0-1 and reserve repeat 2 plus the mixed drains for evaluation.
 Preserve raw observations and provenance. Hard-fail outside measured ranges.
+Do not fit any new profile until `check-campaign` passes every planned hardware
+scenario; do not substitute the coding calibration manifest for missing
+workload-class or mixed held-out traces.
 
 ## Required updates after the campaign
 
