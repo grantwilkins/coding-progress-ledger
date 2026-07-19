@@ -132,6 +132,7 @@ def test_bounded_campaign_has_exact_surface_stages_and_split():
     assert sum(row["kind"] == "control" for row in plan["scenarios"]) == 15
     assert all(row["final_state"] == "awake" for row in plan["scenarios"])
     smoke = plan["scenarios"][0]
+    assert smoke["smoke"]
     assert (
         smoke["campaign"], smoke["context_size"], smoke["bandwidth_mbps"],
         smoke["move_concurrency"], smoke["repeat"],
@@ -198,6 +199,14 @@ def test_plan_rejects_old_schema_and_too_few_sessions(tmp_path):
             manifest_path, [1024], [1], [1000], ["replay"], ["none"], 1, 0,
             final_state="sleep",
         )
+    plan = c.make_plan(
+        manifest_path, [1024], [1], [1000], ["replay"], ["none"], 1, 0,
+    )
+    plan["scenarios"][0]["request_schedule"] = [
+        {"at_s": 0, "append_tokens": c.MAX_MODEL_TOKENS}
+    ]
+    with pytest.raises(ValueError, match="prompt estimate"):
+        c.validate_plan(plan, json.loads(manifest_path.read_text()))
 
 
 def test_awake_drain_never_requests_sleep():
@@ -443,6 +452,28 @@ def test_live_runtime_pipelines_four_append_stages(monkeypatch, tmp_path):
     assert [row.logical_body_bytes for row in stages] == [10] * 4
 
 
+def test_request_schedule_is_relative_to_post_warm_epoch(tmp_path):
+    calls = []
+    session = SimpleNamespace(
+        session_id="s",
+        start_activity=lambda tokens, at_ns, stage: calls.append(
+            (tokens, at_ns, stage)
+        ),
+    )
+    runtime = c.LiveRuntime(
+        {"s": session}, SimpleNamespace(), "one_turn",
+        tmp_path / "sink.log", tmp_path / "cache.log",
+        SimpleNamespace(), tmp_path / "requests.jsonl",
+        [{"at_s": 2.5, "append_tokens": 32}],
+        scenario_start_ns=10_000_000_000,
+    )
+
+    runtime._start_next(session)
+    runtime.close()
+
+    assert calls == [(32, 12_500_000_000, 0)]
+
+
 def test_connection_attribution_conserves_duplicate_bodies(tmp_path):
     path = tmp_path / "proxy_connections.csv"
     path.write_text(
@@ -457,6 +488,30 @@ def test_connection_attribution_conserves_duplicate_bodies(tmp_path):
     assert measured["wire_body_bytes"] == 70
     assert measured["protocol_bytes"] == 108
     assert measured["key_body_bytes"] == {"k": 30, "z": 40}
+
+
+def test_control_service_rows_preserve_schedule_and_growth():
+    rows = c.service_request_rows(
+        {
+            "scenario_id": "control", "campaign": "staged_append",
+            "split": "train", "kind": "control", "concurrency": 1,
+            "serving_concurrency": 4,
+        },
+        {"activities": [{
+            "session_id": "s", "stage_index": 0,
+            "scheduled_ns": 1_000_000_000, "start_ns": 1_500_000_000,
+            "first_byte_ns": 1_750_000_000, "end_ns": 2_000_000_000,
+            "prompt_tokens": 120, "output_tokens": 5,
+            "measured_append_tokens": 20, "status_code": 200,
+        }]},
+    )
+
+    assert rows[0]["retained_growth_tokens"] == 20
+    assert rows[0]["schedule_delay_s"] == .5
+    assert rows[0]["ttft_s"] == .25
+    assert rows[0]["service_s"] == .5
+    assert rows[0]["serving_concurrency"] == 4
+    assert rows[0]["success"]
 
 
 def test_catch_up_profile_separates_prompt_output_and_uses_strict_convergence():
@@ -646,8 +701,14 @@ def test_model_check_uses_measured_work_and_stays_in_its_valid_range():
     assert c.current_model_time({**base, "method": "replay", "measured_prompt_tokens": 99}, profile) is None
 
 
-def test_reduce_validates_and_writes_interpretable_tables_and_plots(tmp_path, monkeypatch):
-    plan = {"schema": c.PLAN_SCHEMA, "scenarios": []}
+@pytest.mark.parametrize(
+    ("plan_schema", "has_stage_table"),
+    ((c.PLAN_SCHEMA, True), ("queue-haul-migration-plan-v2", False)),
+)
+def test_reduce_validates_and_writes_interpretable_tables_and_plots(
+    tmp_path, monkeypatch, plan_schema, has_stage_table,
+):
+    plan = {"schema": plan_schema, "scenarios": []}
     base = {"match_id": "pair", "method": "replay", "context_size": 1024, "concurrency": 1, "bandwidth_mbps": 1000, "activity": "none", "repeat": 0, "deadline_s": 10, "sessions": [{"session_id": "a", "turn_index": 0, "order": 0}]}
     for kind in ("migration", "control"):
         plan["scenarios"].append({**base, "scenario_id": kind, "kind": kind, "moves": [{"session_id": "a", "turn_index": 0, "order": 0, "method": "replay"}] if kind == "migration" else []})
@@ -669,11 +730,12 @@ def test_reduce_validates_and_writes_interpretable_tables_and_plots(tmp_path, mo
 
     c.reduce_run(tmp_path)
 
-    for name in ("migrations.csv", "migration_stages.csv", "scenarios.csv",
+    for name in ("migrations.csv", "service_requests.csv", "scenarios.csv",
                  "benchmark_summary.csv",
                  "initial_time.png", "throughput.png", "concurrency_scaling.png",
                  "service_effects.png", "power_energy.png"):
         assert (tmp_path / name).exists()
+    assert (tmp_path / "migration_stages.csv").exists() == has_stage_table
     table = (tmp_path / "scenarios.csv").read_text()
     assert "continuation_difference_s" in table
     assert "measured_prompt_tokens" in table

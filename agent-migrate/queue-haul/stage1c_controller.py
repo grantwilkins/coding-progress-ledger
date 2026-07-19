@@ -389,6 +389,7 @@ def make_campaign(manifest_path: Path, seed: int,
         and row["repeat"] == 0
     )
     scenarios.remove(smoke)
+    smoke["smoke"] = True
     random.Random(seed).shuffle(scenarios)
     plan = {
         "schema": PLAN_SCHEMA,
@@ -417,6 +418,9 @@ def validate_campaign_plan(plan: dict) -> None:
     if len(migrations) != 90 or len(controls) != 15 \
             or any(row["final_state"] != "awake" for row in plan["scenarios"]):
         raise ValueError("campaign must contain 90 migrations, 15 awake controls")
+    if not plan["scenarios"][0].get("smoke") \
+            or any(row.get("smoke") for row in plan["scenarios"][1:]):
+        raise ValueError("campaign must start with exactly one smoke")
     if {
         (row["context_size"], row["bandwidth_mbps"],
          row["move_concurrency"], row["repeat"])
@@ -483,8 +487,15 @@ def validate_plan(plan: dict, manifest: dict) -> None:
             tokens = row.get("initial_tokens") or estimated_prompt_tokens(
                 sessions[row["session_id"]], row["turn_index"]
             )
-            if tokens > MAX_MODEL_TOKENS:
-                raise ValueError(f"scenario {scenario['scenario_id']} prompt estimate {tokens} exceeds {MAX_MODEL_TOKENS}")
+            final_tokens = tokens + sum(
+                int(item["append_tokens"]) + PROBE_MAX_TOKENS + 64
+                for item in schedule
+            )
+            if final_tokens > MAX_MODEL_TOKENS:
+                raise ValueError(
+                    f"scenario {scenario['scenario_id']} prompt estimate "
+                    f"{final_tokens} exceeds {MAX_MODEL_TOKENS}"
+                )
 
 
 class EventLog:
@@ -692,7 +703,8 @@ class LiveSession:
                 self.prompt_tokens_by_hash[messages_hash(self.messages)] = result.prompt_tokens
             self.cache_keys |= {row["key_hash"] for row in cache_operations(self.cache_log, start, result.end_ns) if row["operation"] == "source_write"}
             self.activity_records.append({
-                "stage_index": stage_index, "start_ns": start,
+                "stage_index": stage_index, "scheduled_ns": at_ns,
+                "start_ns": start, "first_byte_ns": result.first_byte_ns,
                 "end_ns": result.end_ns, "requested_append_tokens": tokens,
                 "measured_append_tokens": result.prompt_tokens
                     - self.warm_prompt_tokens
@@ -700,6 +712,7 @@ class LiveSession:
                           for row in self.activity_records),
                 "prompt_tokens": result.prompt_tokens,
                 "output_tokens": result.output_tokens,
+                "status_code": result.status_code,
             })
         except Exception as exc:
             self.activity_error = exc
@@ -1140,11 +1153,12 @@ def run_scenario(stack: b.Stack, cfg: b.Config, manifest: dict, scenario: dict, 
         schedule = scenario.get("request_schedule")
         if schedule is None and scenario["activity"] == "one_turn":
             schedule = [{"at_s": 0, "append_tokens": scenario.get("activity_tokens", 0)}]
+        activity_epoch_ns = time.monotonic_ns()
         runtime = LiveRuntime(
             sessions, cfg, scenario["activity"], sink_log, cache_log, event_log,
             root / "requests.jsonl", schedule,
             scenario.get("copy_policy", "initial_final"), serving_concurrency,
-            start_ns,
+            activity_epoch_ns,
         )
         if scenario["kind"] == "migration":
             migration_results = MigrationController(runtime, move_concurrency).run(moves)
@@ -1315,6 +1329,10 @@ def run_plan(plan_path: Path, run_root: Path, cfg: b.Config, allow_dirty: bool,
                     write_json(root / "result.json", {"schema": RESULT_SCHEMA, "scenario_id": scenario["scenario_id"], "status": "failed", "error": f"{type(exc).__name__}: {exc}"})
                     b.stop_stack(stack)
                     stack = None
+                    if scenario.get("smoke"):
+                        raise RuntimeError(
+                            f"campaign smoke failed: {scenario['scenario_id']}"
+                        ) from exc
                     break
     finally:
         if stack:
@@ -1605,6 +1623,47 @@ def migration_stage_rows(scenario: dict, result: dict, move: dict,
             "processed_tail_tokens": request.get("processed_tokens", 0),
             "success": not move.get("error"), "error": move.get("error"),
         })
+    return rows
+
+
+def service_request_rows(scenario: dict, result: dict) -> list[dict]:
+    rows = [{
+        "scenario_id": scenario["scenario_id"],
+        "campaign": scenario.get("campaign", "legacy"),
+        "split": scenario.get("split", "train"),
+        "session_id": row["session_id"],
+        "request_index": row["stage_index"], "route": "source",
+        "scheduled_ns": row.get("scheduled_ns"), "start_ns": row["start_ns"],
+        "first_response_ns": row.get("first_byte_ns"),
+        "end_ns": row["end_ns"], "prompt_tokens": row["prompt_tokens"],
+        "output_tokens": row["output_tokens"],
+        "retained_growth_tokens": row["measured_append_tokens"],
+        "schedule_delay_s": duration(row.get("scheduled_ns"), row["start_ns"]),
+        "ttft_s": duration(row["start_ns"], row.get("first_byte_ns")),
+        "service_s": duration(row["start_ns"], row["end_ns"]),
+        "serving_concurrency": scenario.get(
+            "serving_concurrency", scenario["concurrency"]
+        ),
+        "success": row.get("status_code", 200) == 200,
+    } for row in result.get("activities", [])]
+    rows += [{
+        "scenario_id": scenario["scenario_id"],
+        "campaign": scenario.get("campaign", "legacy"),
+        "split": scenario.get("split", "train"),
+        "session_id": row["session_id"], "request_index": "continuation",
+        "route": "destination" if scenario["kind"] == "migration" else "source",
+        "scheduled_ns": None, "start_ns": row["start_ns"],
+        "first_response_ns": row.get("first_byte_ns"),
+        "end_ns": row["end_ns"], "prompt_tokens": row["prompt_tokens"],
+        "output_tokens": row["output_tokens"], "retained_growth_tokens": 0,
+        "schedule_delay_s": None,
+        "ttft_s": duration(row["start_ns"], row.get("first_byte_ns")),
+        "service_s": duration(row["start_ns"], row["end_ns"]),
+        "serving_concurrency": scenario.get(
+            "serving_concurrency", scenario["concurrency"]
+        ),
+        "success": row["status_code"] == 200,
+    } for row in result.get("continuations", [])]
     return rows
 
 
@@ -1938,13 +1997,17 @@ def reduce_run(run_root: Path) -> None:
             raise ValueError(f"invalid result for {scenario['scenario_id']}")
         results[scenario["scenario_id"]] = result
     baselines = pooled_power_baselines(run_root, plan, results)
-    migrations, scenarios, stages = [], [], []
+    migrations, scenarios, stages, services = [], [], [], []
     for scenario in plan["scenarios"]:
         path = run_root / "scenarios" / scenario["scenario_id"] / "result.json"
         result = results[scenario["scenario_id"]]
+        services.extend(service_request_rows(scenario, result))
         migration_rows = [flatten_migration(scenario, result, row) for row in result.get("migrations", [])]
-        for raw in result.get("migrations", []):
-            stages.extend(migration_stage_rows(scenario, result, raw, path.parent))
+        if plan["schema"] == PLAN_SCHEMA:
+            for raw in result.get("migrations", []):
+                stages.extend(
+                    migration_stage_rows(scenario, result, raw, path.parent)
+                )
         for flat, raw in zip(migration_rows, result.get("migrations", [])):
             proxy = path.parent / "proxy_bytes.csv"
             flat.update(phase_network_measurements(
@@ -1983,6 +2046,15 @@ def reduce_run(run_root: Path) -> None:
                         "initial_time_to_first_responses_s": 0.0, "measured_kv_wire_bytes": 0,
                         "kv_network_window_s": 0.0, "measured_kv_throughput_mbps": 0.0,
                         "measured_replay_throughput_tokens_s": 0.0})
+            if result.get("activities"):
+                start = min(item["start_ns"] for item in result["activities"])
+                end = max(item["end_ns"] for item in result["activities"])
+                row.update({
+                    "service_window_s": duration(start, end),
+                    **power_measurements(
+                        path.parent / "power.csv", start, end, baselines
+                    ),
+                })
         scenarios.append(row)
         if result["status"] == "complete":
             if not (path.parent / "migration_timeline.png").exists():
@@ -2000,6 +2072,8 @@ def reduce_run(run_root: Path) -> None:
         row["current_model_time_s"] = current_model_time(row, profile)
     write_csv(run_root / "migrations.csv", migrations)
     write_csv(run_root / "scenarios.csv", scenarios)
+    if services:
+        write_csv(run_root / "service_requests.csv", services)
     if stages:
         write_csv(run_root / "migration_stages.csv", stages)
     catch_up = [

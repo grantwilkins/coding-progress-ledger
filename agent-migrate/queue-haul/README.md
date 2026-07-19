@@ -118,7 +118,10 @@ snapshots and compares final catch-up against the last prepared stage.
 `copy_policy: after_each_request` pipelines the next controlled source turn
 with the current destination write, applies one serving-concurrency gate across
 sessions, and reduces exact key-attributed stage bytes to
-`migration_stages.csv`.
+`migration_stages.csv`. Request schedules start after reset and warm-up;
+`service_requests.csv` records scheduled delay, TTFT, service time, token
+growth, route, and success for migrations and controls. Version-2 reduction
+does not require the new connection-attribution evidence.
 
 Reproduce the completed 30-scenario serial crossover plan with:
 
@@ -156,11 +159,11 @@ sbatch queue-haul/stage1f_campaign.sbatch
 ```
 
 The plan contains 63 parallel-surface and 42 staged-append scenarios. It runs
-the 4k/1-Gbps/concurrency-4 smoke first, randomizes the remainder, resumes only
-against the same hashed plan, and runs `check-campaign` after all 105 results
-complete. The workload-class and mixed held-out extension remains gated on
-pre-staged complete SWE-chat traces; it is not synthesized from the coding
-manifest.
+the 4k/1-Gbps/concurrency-4 smoke first and aborts on its failure, randomizes
+the remainder, resumes only against the same hashed plan, and runs
+`check-campaign` after all 105 results complete. The workload-class and mixed
+held-out extension remains gated on pre-staged complete SWE-chat traces; it is
+not synthesized from the coding manifest.
 
 Stage 1D completed all 12 fixed two-session scenarios at 1 Gbps within
 deadline. All six migrations passed cache, continuation, exact aggregate byte,
