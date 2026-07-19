@@ -107,6 +107,7 @@ def test_ordered_append_stages_advance_the_prepared_state():
                 request = self.prepare(move, state, "append")
                 rows.append(AppendStageResult(
                     stage_index, request.start_ns, request.end_ns, state, request,
+                    stage_index, stage_index + 1, 10,
                 ))
             return tuple(rows)
 

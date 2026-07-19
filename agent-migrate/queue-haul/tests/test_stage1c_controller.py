@@ -8,6 +8,7 @@ Plausible wrong implementations:
 - Change the selected session set across concurrency, methods, or bandwidths.
 - Rerun identical controls for every method and bandwidth.
 - Couple migration concurrency to serving concurrency or sleep an awake drain.
+- Serialize append turns instead of overlapping generation with the next copy.
 - Claim parallel KV from aggregate bytes without independent overlapping links.
 - Add catch-up cache hits to KV bytes transferred over the network.
 - Mix appended prompt tokens with decoded output or infer growth from requested tokens.
@@ -24,6 +25,7 @@ Plausible wrong implementations:
 from __future__ import annotations
 
 import json
+import time
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -352,6 +354,79 @@ def test_parallel_gate_rejects_sequential_connections_with_same_total_bytes(tmp_
         )
 
 
+def test_live_runtime_pipelines_four_append_stages(monkeypatch, tmp_path):
+    session = c.LiveSession(
+        SimpleNamespace(src_port=1),
+        {"id": "s", "state_code": "CODE", "turns": [
+            {"input_tokens": 100, "append_tokens": 1, "output_tokens": 1}
+        ]},
+        0, SimpleNamespace(write=lambda *_args, **_kwargs: None),
+        tmp_path / "source.log", tmp_path / "cache.log", 10,
+    )
+    session.messages = [{"role": "user", "content": "base"}]
+    session.warm_prompt_tokens = 100
+    session.prompt_tokens_by_hash[c.messages_hash(session.messages)] = 100
+    calls = 0
+
+    def request(_port, _messages, label, _prompt=None, **_kwargs):
+        nonlocal calls
+        time.sleep(.02)
+        calls += 1
+        now = time.monotonic_ns()
+        return c.RequestResult(
+            label, 200, "", now, now, prompt_tokens=100 + 256 * calls,
+        ), "CODE"
+
+    session.request = request
+    runtime = c.LiveRuntime(
+        {"s": session}, SimpleNamespace(), "one_turn",
+        tmp_path / "sink.log", tmp_path / "cache.log",
+        SimpleNamespace(write=lambda *_args, **_kwargs: None),
+        tmp_path / "requests.jsonl",
+        [{"at_s": 0, "append_tokens": 32}] * 4,
+        "after_each_request", 1, time.monotonic_ns(),
+    )
+    overlap = []
+
+    def prepare(_move, state, _phase):
+        overlap.append(session.activity_thread is not None)
+        now = time.monotonic_ns()
+        return c.RequestResult(
+            "copy", 200, state.context_hash, now, now,
+            prompt_tokens=session.prompt_tokens_by_hash[state.context_hash],
+        )
+
+    runtime.prepare = prepare
+    monkeypatch.setattr(
+        c, "kv_layout",
+        lambda *_args: {"chunk_tokens": 256, "chunk_bytes": 10},
+    )
+    state = session.snapshot()
+    runtime._start_next(session)
+    stages = runtime.background(c.Move("s", "kv_transfer", 0), state)
+    runtime.close()
+
+    assert [row.stage_index for row in stages] == list(range(4))
+    assert overlap == [True, True, True, False]
+    assert [row.logical_body_bytes for row in stages] == [10] * 4
+
+
+def test_connection_attribution_conserves_duplicate_bodies(tmp_path):
+    path = tmp_path / "proxy_connections.csv"
+    path.write_text(
+        "connection_id,route,key_hash,start_ns,end_ns,client_to_target_bytes,target_to_client_bytes\n"
+        "a,kv,k,0,1,0,46\n"
+        "b,kv,k,1,2,0,56\n"
+        "c,kv,z,1,2,0,76\n"
+    )
+
+    measured = c.attributed_connections(path, 0, 3, {"k", "z"})
+
+    assert measured["wire_body_bytes"] == 70
+    assert measured["protocol_bytes"] == 108
+    assert measured["key_body_bytes"] == {"k": 30, "z": 40}
+
+
 def test_catch_up_profile_separates_prompt_output_and_uses_strict_convergence():
     row = {
         "measured_kv_bytes": 1000 * 49_152,
@@ -562,7 +637,8 @@ def test_reduce_validates_and_writes_interpretable_tables_and_plots(tmp_path, mo
 
     c.reduce_run(tmp_path)
 
-    for name in ("migrations.csv", "scenarios.csv", "benchmark_summary.csv",
+    for name in ("migrations.csv", "migration_stages.csv", "scenarios.csv",
+                 "benchmark_summary.csv",
                  "initial_time.png", "throughput.png", "concurrency_scaling.png",
                  "service_effects.png", "power_energy.png"):
         assert (tmp_path / name).exists()

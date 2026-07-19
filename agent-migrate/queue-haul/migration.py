@@ -56,6 +56,9 @@ class AppendStageResult:
     end_ns: int
     source_state: SessionState
     destination_request: RequestResult
+    copied_blocks_before: int
+    copied_blocks_after: int
+    logical_body_bytes: int
 
 
 @dataclass(frozen=True)

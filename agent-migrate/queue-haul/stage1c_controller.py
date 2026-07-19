@@ -17,7 +17,10 @@ from dataclasses import asdict, replace
 from pathlib import Path
 
 import stage1b_drain_sink as b
-from migration import MigrationController, Move, RequestResult, SessionState, StreamChunk
+from migration import (
+    AppendStageResult, MigrationController, Move, RequestResult, SessionState,
+    StreamChunk,
+)
 
 
 MANIFEST_SCHEMA = "queue-haul-migration-manifest-v3"
@@ -309,6 +312,21 @@ def validate_plan(plan: dict, manifest: dict) -> None:
                  or {row["session_id"] for row in rows} != ids)
         ):
             raise ValueError(f"invalid sleep request in {scenario['scenario_id']}")
+        schedule = scenario.get("request_schedule", [])
+        if scenario.get("copy_policy", "initial_final") not in {
+            "initial_final", "after_each_request",
+        } or any(
+            float(row["at_s"]) < 0 or int(row["append_tokens"]) <= 0
+            for row in schedule
+        ) or [float(row["at_s"]) for row in schedule] != sorted(
+            float(row["at_s"]) for row in schedule
+        ):
+            raise ValueError(f"invalid request schedule in {scenario['scenario_id']}")
+        if scenario.get("copy_policy") == "after_each_request" \
+                and (scenario["kind"] != "migration"
+                     or {row["method"] for row in scenario["moves"]}
+                     != {"kv_transfer"}):
+            raise ValueError(f"invalid append policy in {scenario['scenario_id']}")
         if scenario["kind"] == "migration" and len(scenario["moves"]) != len(rows):
             raise ValueError(f"migration {scenario['scenario_id']} does not move every selected session")
         if len({row.get("method") for row in scenario["moves"]}) > 1:
@@ -444,6 +462,8 @@ class LiveSession:
         self.lock = threading.Lock()
         self.activity_thread: threading.Thread | None = None
         self.activity_error: Exception | None = None
+        self.activity_gate: threading.Semaphore | None = None
+        self.activity_records: list[dict] = []
         self.activity_times: tuple[int, int] | None = None
         self.activity_tokens = activity_tokens
         self.activity_result: RequestResult | None = None
@@ -451,6 +471,7 @@ class LiveSession:
         self.warm_prompt_tokens = 0
         self.cache_keys: set[str] = set()
         self.activity_prompt_tokens: int | None = None
+        self.prompt_tokens_by_hash: dict[str, int] = {}
 
     def probe(self, messages: list[dict], prompt: str | None = None) -> list[dict]:
         return messages + [{"role": "user", "content": prompt or f"Reply with session state code {self.state_code}."}]
@@ -470,6 +491,7 @@ class LiveSession:
             self.cfg.src_port, list(self.messages), "source_warm"
         )
         self.warm_prompt_tokens = result.prompt_tokens
+        self.prompt_tokens_by_hash[messages_hash(self.messages)] = result.prompt_tokens
         after = time.monotonic_ns()
         self.cache_keys |= {row["key_hash"] for row in cache_operations(self.cache_log, before, after) if row["operation"] == "source_write"}
 
@@ -477,21 +499,36 @@ class LiveSession:
         with self.lock:
             return SessionState(self.session_id, self.generation, tuple(self.messages), messages_hash(self.messages))
 
-    def start_activity(self) -> None:
+    def start_activity(self, tokens: int | None = None, at_ns: int = 0,
+                       stage_index: int = 0) -> None:
         if self.activity_thread:
-            return
-        self.activity_thread = threading.Thread(target=self._activity, daemon=True)
+            raise RuntimeError(f"activity already running for {self.session_id}")
+        self.activity_error = None
+        self.activity_thread = threading.Thread(
+            target=self._activity,
+            args=(self.activity_tokens if tokens is None else tokens,
+                  at_ns, stage_index),
+            daemon=True,
+        )
         self.activity_thread.start()
 
-    def _activity(self) -> None:
+    def _activity(self, tokens: int, at_ns: int, stage_index: int) -> None:
         start = time.monotonic_ns()
         try:
+            if at_ns > time.monotonic_ns():
+                time.sleep((at_ns - time.monotonic_ns()) / 1e9)
+            start = time.monotonic_ns()
             with self.lock:
                 base = list(self.messages)
             prompt = f"Reply with session state code {self.state_code}." \
-                     + " x" * self.activity_tokens
+                     + " x" * tokens
             user = {"role": "user", "content": prompt}
-            result, text = self.request(self.cfg.src_port, base, "controlled_turn", user["content"])
+            gate = self.activity_gate or threading.Semaphore()
+            with gate:
+                result, text = self.request(
+                    self.cfg.src_port, base, f"controlled_turn_{stage_index}",
+                    user["content"],
+                )
             with self.lock:
                 self.messages = base + [user, {"role": "assistant", "content": text}]
                 self.activity_result = result
@@ -500,7 +537,18 @@ class LiveSession:
                     result.prompt_tokens - self.warm_prompt_tokens
                 )
                 self.generation += 1
+                self.prompt_tokens_by_hash[messages_hash(self.messages)] = result.prompt_tokens
             self.cache_keys |= {row["key_hash"] for row in cache_operations(self.cache_log, start, result.end_ns) if row["operation"] == "source_write"}
+            self.activity_records.append({
+                "stage_index": stage_index, "start_ns": start,
+                "end_ns": result.end_ns, "requested_append_tokens": tokens,
+                "measured_append_tokens": result.prompt_tokens
+                    - self.warm_prompt_tokens
+                    - sum(row["measured_append_tokens"]
+                          for row in self.activity_records),
+                "prompt_tokens": result.prompt_tokens,
+                "output_tokens": result.output_tokens,
+            })
         except Exception as exc:
             self.activity_error = exc
         self.activity_times = start, time.monotonic_ns()
@@ -512,6 +560,7 @@ class LiveSession:
                 raise TimeoutError(f"activity timed out for {self.session_id}")
         if self.activity_error:
             raise self.activity_error
+        self.activity_thread = None
 
     def continuation(self) -> RequestResult:
         with self.lock:
@@ -529,9 +578,21 @@ class LiveSession:
 
 
 class LiveRuntime:
-    def __init__(self, sessions: dict[str, LiveSession], cfg: b.Config, activity: str, sink_log: Path, cache_log: Path, event_log: EventLog, request_log: Path):
+    def __init__(self, sessions: dict[str, LiveSession], cfg: b.Config,
+                 activity: str, sink_log: Path, cache_log: Path,
+                 event_log: EventLog, request_log: Path,
+                 schedule: list[dict] | None = None,
+                 copy_policy: str = "initial_final",
+                 serving_concurrency: int = 1,
+                 scenario_start_ns: int = 0):
         self.sessions, self.cfg, self.activity = sessions, cfg, activity
         self.sink_log, self.cache_log, self.event_log = sink_log, cache_log, event_log
+        self.schedule, self.copy_policy = schedule or [], copy_policy
+        self.scenario_start_ns = scenario_start_ns
+        self.next_activity = {session_id: 0 for session_id in sessions}
+        gate = threading.Semaphore(serving_concurrency)
+        for session in sessions.values():
+            session.activity_gate = gate
         self.requests = request_log.open("w", buffering=1)
         self.lock = threading.Lock()
 
@@ -540,17 +601,60 @@ class LiveRuntime:
         self.event_log.write("snapshot", move_id=move.order, session_id=move.session_id, generation=state.generation, context_hash=state.context_hash)
         return state
 
+    def _start_next(self, session: LiveSession) -> bool:
+        index = self.next_activity[session.session_id]
+        if index == len(self.schedule):
+            return False
+        row = self.schedule[index]
+        session.start_activity(
+            int(row["append_tokens"]),
+            self.scenario_start_ns + int(float(row["at_s"]) * 1e9),
+            index,
+        )
+        self.next_activity[session.session_id] += 1
+        return True
+
     def background(self, move: Move, state: SessionState):
-        return ()
+        if self.copy_policy != "after_each_request":
+            return ()
+        session, stages = self.sessions[move.session_id], []
+        copied = state.messages and self._prompt_tokens(session, state) // 256
+        while session.activity_thread:
+            session.wait_activity()
+            current = session.snapshot()
+            self._start_next(session)
+            start = time.monotonic_ns()
+            request = self.prepare(move, current, "append")
+            end = time.monotonic_ns()
+            sealed = self._prompt_tokens(session, current) // 256
+            layout = kv_layout(self.cache_log, request.end_ns)
+            stages.append(AppendStageResult(
+                len(stages), start, end, current, request, copied, sealed,
+                (sealed - copied) * layout["chunk_bytes"],
+            ))
+            copied = sealed
+        return tuple(stages)
+
+    def run_activities(self, session_id: str) -> None:
+        session = self.sessions[session_id]
+        while self._start_next(session):
+            session.wait_activity()
+
+    @staticmethod
+    def _prompt_tokens(session: LiveSession, state: SessionState) -> int:
+        return session.prompt_tokens_by_hash[state.context_hash]
 
     def prepare(self, move: Move, state: SessionState, phase: str) -> RequestResult:
         session = self.sessions[move.session_id]
-        if phase == "initial" and self.activity == "one_turn":
-            session.start_activity()
+        if phase == "initial" and self.schedule:
+            self._start_next(session)
         self.event_log.write("copy_start", move_id=move.order, session_id=move.session_id, method=move.method, phase=phase)
         result, _text = session.request(self.cfg.api_proxy_port, list(state.messages), f"{move.method}_{phase}", bypass_lmcache=move.method == "replay")
         total, hit = lookup_tokens(self.sink_log, result.request_id)
-        expected = expected_hits(move.method, phase, total, session.activity_prompt_tokens)
+        expected = expected_hits(
+            move.method, phase, total,
+            self._prompt_tokens(session, state) if phase != "initial" else None,
+        )
         if hit != expected:
             raise RuntimeError(f"{move.method} request {result.request_id} hit {hit} tokens, expected {expected}")
         layout = kv_layout(self.cache_log, result.end_ns)
@@ -569,7 +673,8 @@ class LiveRuntime:
 
     def wait_idle(self, session_id: str) -> SessionState:
         session = self.sessions[session_id]
-        session.wait_activity()
+        while session.activity_thread or self._start_next(session):
+            session.wait_activity()
         state = session.snapshot()
         self.event_log.write("idle", session_id=session_id, generation=state.generation, context_hash=state.context_hash)
         return state
@@ -879,18 +984,24 @@ def run_scenario(stack: b.Stack, cfg: b.Config, manifest: dict, scenario: dict, 
         moves = [Move(row["session_id"], row["method"], row["order"]) for row in scenario["moves"]]
         move_concurrency = scenario.get("move_concurrency", scenario["concurrency"])
         serving_concurrency = scenario.get("serving_concurrency", scenario["concurrency"])
-        runtime = LiveRuntime(sessions, cfg, scenario["activity"], sink_log, cache_log, event_log, root / "requests.jsonl")
+        schedule = scenario.get("request_schedule")
+        if schedule is None and scenario["activity"] == "one_turn":
+            schedule = [{"at_s": 0, "append_tokens": scenario.get("activity_tokens", 0)}]
+        runtime = LiveRuntime(
+            sessions, cfg, scenario["activity"], sink_log, cache_log, event_log,
+            root / "requests.jsonl", schedule,
+            scenario.get("copy_policy", "initial_final"), serving_concurrency,
+            start_ns,
+        )
         if scenario["kind"] == "migration":
             migration_results = MigrationController(runtime, move_concurrency).run(moves)
             if any(not row.succeeded for row in migration_results):
                 raise RuntimeError("; ".join(row.error for row in migration_results if row.error))
         else:
             migration_results = []
-            if scenario["activity"] == "one_turn":
+            if schedule:
                 with ThreadPoolExecutor(max_workers=serving_concurrency) as pool:
-                    for session in sessions.values():
-                        session.start_activity()
-                    list(pool.map(lambda session: session.wait_activity(), sessions.values()))
+                    list(pool.map(runtime.run_activities, sessions))
         full_drain = scenario["kind"] == "migration" and set(sessions) == {row["id"] for row in manifest["sessions"]} and all(row.succeeded for row in migration_results)
         sleep_times = None
         final_state = scenario.get("final_state", "sleep")
@@ -912,19 +1023,22 @@ def run_scenario(stack: b.Stack, cfg: b.Config, manifest: dict, scenario: dict, 
             continuations.append({"session_id": session.session_id, "route_port": session.route, "committed_context_hash": committed_hash, **asdict(request)})
         activities = []
         for session in sessions.values():
-            if not session.activity_times:
-                continue
-            activity_start, activity_end = session.activity_times
             move_result = next((row for row in migration_results if row.move.session_id == session.session_id), None)
-            activities.append({
-                "session_id": session.session_id, "start_ns": activity_start, "end_ns": activity_end,
-                "overlapped_initial_copy": bool(move_result and activity_start < move_result.initial_end_ns and activity_end > move_result.initial_start_ns),
-                "overlapped_request_wait": bool(move_result and activity_start < move_result.idle_ns and activity_end > move_result.pause_start_ns),
-                "requested_append_tokens": session.activity_tokens,
-                "measured_append_tokens": session.measured_activity_append_tokens,
-                "prompt_tokens": session.activity_result.prompt_tokens,
-                "output_tokens": session.activity_result.output_tokens,
-            })
+            for activity_row in session.activity_records:
+                activities.append({
+                    "session_id": session.session_id,
+                    **activity_row,
+                    "overlapped_initial_copy": bool(
+                        move_result
+                        and activity_row["start_ns"] < move_result.initial_end_ns
+                        and activity_row["end_ns"] > move_result.initial_start_ns
+                    ),
+                    "overlapped_request_wait": bool(
+                        move_result
+                        and activity_row["start_ns"] < move_result.idle_ns
+                        and activity_row["end_ns"] > move_result.pause_start_ns
+                    ),
+                })
         elapsed_s = (time.monotonic_ns() - start_ns) / 1e9
         result = {
             "schema": RESULT_SCHEMA, "scenario_id": scenario["scenario_id"], "status": "complete",
@@ -1101,17 +1215,23 @@ def request_measurements(prefix: str, request: dict | None, controller_end_ns: i
 def flatten_migration(scenario: dict, result: dict, row: dict) -> dict:
     initial, catch_up = row.get("initial") or {}, row.get("catch_up") or {}
     session = next(item for item in scenario["sessions"] if item["session_id"] == row["move"]["session_id"])
-    activity = next(
-        (item for item in result.get("activities", [])
-         if item["session_id"] == row["move"]["session_id"]), {}
-    )
+    activities = [
+        item for item in result.get("activities", [])
+        if item["session_id"] == row["move"]["session_id"]
+    ]
     initial_metrics = request_measurements("initial", initial, row["initial_end_ns"])
     catch_up_metrics = request_measurements("catch_up", catch_up, row.get("catch_up_end_ns"))
     catch_up_metrics.pop("catch_up_processed_tokens")
     return {
         "scenario_id": scenario["scenario_id"], "match_id": scenario["match_id"], "job_class": session.get("job_class", ""),
         "session_id": row["move"]["session_id"], "method": row["move"]["method"], "order": row["move"]["order"],
-        "concurrency": scenario["concurrency"], "bandwidth_mbps": scenario["bandwidth_mbps"], "activity": scenario["activity"], "repeat": scenario["repeat"],
+        "concurrency": scenario["concurrency"],
+        "move_concurrency": scenario.get("move_concurrency", scenario["concurrency"]),
+        "serving_concurrency": scenario.get("serving_concurrency", scenario["concurrency"]),
+        "campaign": scenario.get("campaign", "legacy"),
+        "split": scenario.get("split", "train"),
+        "copy_policy": scenario.get("copy_policy", "initial_final"),
+        "bandwidth_mbps": scenario["bandwidth_mbps"], "activity": scenario["activity"], "repeat": scenario["repeat"],
         "success": not row.get("error"),
         "request_wait_s": duration(row["pause_start_ns"], row["idle_ns"]), "catch_up_s": duration(row.get("catch_up_start_ns"), row.get("catch_up_end_ns")),
         "service_pause_s": duration(row["pause_start_ns"], row["switch_end_ns"]), "route_switch_s": duration(row["switch_start_ns"], row["switch_end_ns"]),
@@ -1123,11 +1243,20 @@ def flatten_migration(scenario: dict, result: dict, row: dict) -> dict:
         "catch_up_new_tokens": max(0, catch_up.get("prompt_tokens", 0) - initial.get("prompt_tokens", 0)),
         "catch_up_cache_hit_chunks": catch_up_metrics.pop("catch_up_kv_chunks"),
         "catch_up_cache_hit_bytes": catch_up_metrics.pop("catch_up_kv_bytes"),
-        "requested_activity_tokens": activity.get("requested_append_tokens", 0),
-        "measured_activity_append_tokens": activity.get("measured_append_tokens", 0),
-        "activity_output_tokens": activity.get("output_tokens", 0),
-        "activity_s": duration(activity.get("start_ns"), activity.get("end_ns")),
-        "activity_overlapped_initial_copy": activity.get("overlapped_initial_copy", False),
+        "requested_activity_tokens": sum(
+            item["requested_append_tokens"] for item in activities
+        ),
+        "measured_activity_append_tokens": sum(
+            item["measured_append_tokens"] for item in activities
+        ),
+        "activity_output_tokens": sum(item["output_tokens"] for item in activities),
+        "activity_s": duration(
+            min((item["start_ns"] for item in activities), default=None),
+            max((item["end_ns"] for item in activities), default=None),
+        ),
+        "activity_overlapped_initial_copy": any(
+            item["overlapped_initial_copy"] for item in activities
+        ),
         **initial_metrics, **catch_up_metrics,
         "initial_start_ns": row["initial_start_ns"], "initial_end_ns": row["initial_end_ns"], "pause_start_ns": row["pause_start_ns"], "idle_ns": row["idle_ns"], "catch_up_start_ns": row.get("catch_up_start_ns"), "catch_up_end_ns": row.get("catch_up_end_ns"), "switch_start_ns": row["switch_start_ns"], "switch_end_ns": row["switch_end_ns"],
     }
@@ -1223,6 +1352,107 @@ def parallel_connection_measurements(path: Path, start_ns: int, end_ns: int,
         "kv_body_bytes": sum(row["body_bytes"] for row in rows),
         "session_kv_body_bytes": by_session,
     }
+
+
+def attributed_connections(path: Path, start_ns: int, end_ns: int,
+                           keys: set[str]) -> dict:
+    with path.open() as handle:
+        rows = [
+            row for row in csv.DictReader(handle)
+            if row["route"] == "kv" and row["key_hash"] in keys
+            and int(row["end_ns"]) > start_ns and int(row["start_ns"]) < end_ns
+        ]
+    bodies: dict[str, int] = {}
+    for row in rows:
+        bodies[row["key_hash"]] = bodies.get(row["key_hash"], 0) + max(
+            0, int(row["target_to_client_bytes"]) - b.LMCACHE_SERVER_META.size
+        )
+    wire = sum(int(row["target_to_client_bytes"]) for row in rows)
+    return {
+        "wire_bytes": wire, "wire_body_bytes": sum(bodies.values()),
+        "protocol_bytes": wire - sum(bodies.values()), "key_body_bytes": bodies,
+        "first_body_ns": min(
+            (int(row["start_ns"]) for row in rows
+             if int(row["target_to_client_bytes"])
+             > b.LMCACHE_SERVER_META.size),
+            default=None,
+        ),
+        "last_body_ns": max(
+            (int(row["end_ns"]) for row in rows
+             if int(row["target_to_client_bytes"])
+             > b.LMCACHE_SERVER_META.size),
+            default=None,
+        ),
+    }
+
+
+def migration_stage_rows(scenario: dict, result: dict, move: dict,
+                         root: Path) -> list[dict]:
+    session_id = move["move"]["session_id"]
+    activities = {
+        row["stage_index"]: row for row in result.get("activities", [])
+        if row["session_id"] == session_id
+    }
+    phases = [("initial", -1, move["initial_start_ns"],
+               move["initial_end_ns"], move.get("initial"), None)]
+    phases += [
+        ("append", row["stage_index"], row["start_ns"], row["end_ns"],
+         row["destination_request"], row)
+        for row in move.get("append_stages", [])
+    ]
+    if move.get("catch_up"):
+        phases.append(("catch_up", len(move.get("append_stages", [])),
+                       move["catch_up_start_ns"], move["catch_up_end_ns"],
+                       move["catch_up"], None))
+    seen, rows = set(), []
+    keys = set(result.get("session_cache_keys", {}).get(session_id, []))
+    for phase, index, start, end, request, stage in phases:
+        measured = attributed_connections(
+            root / "proxy_connections.csv", start, end, keys,
+        ) if request and move["move"]["method"] == "kv_transfer" else {
+            "wire_bytes": 0, "wire_body_bytes": 0, "protocol_bytes": 0,
+            "key_body_bytes": {}, "first_body_ns": None, "last_body_ns": None,
+        }
+        duplicate = sum(
+            size for key, size in measured["key_body_bytes"].items()
+            if key in seen
+        )
+        seen.update(measured.pop("key_body_bytes"))
+        activity = activities.get(index, {})
+        rows.append({
+            "scenario_id": scenario["scenario_id"],
+            "campaign": scenario.get("campaign", "legacy"),
+            "split": scenario.get("split", "train"),
+            "session_id": session_id, "method": move["move"]["method"],
+            "phase": phase, "stage_index": index,
+            "copy_policy": scenario.get("copy_policy", "initial_final"),
+            "move_concurrency": scenario.get(
+                "move_concurrency", scenario["concurrency"]
+            ),
+            "serving_concurrency": scenario.get(
+                "serving_concurrency", scenario["concurrency"]
+            ),
+            "bandwidth_mbps": scenario["bandwidth_mbps"],
+            "repeat": scenario["repeat"],
+            "measured_prompt_tokens": request.get("prompt_tokens", 0),
+            "newly_created_tokens": activity.get("measured_append_tokens", 0),
+            "copied_blocks_before": stage.get("copied_blocks_before")
+                if stage else None,
+            "copied_blocks_after": stage.get("copied_blocks_after")
+                if stage else None,
+            "logical_body_bytes": stage.get("logical_body_bytes")
+                if stage else request.get("logical_kv_bytes", 0),
+            **measured, "duplicate_body_bytes": duplicate,
+            "start_ns": start, "destination_ready_ns": end,
+            "pause_ns": move["pause_start_ns"],
+            "route_switch_ns": move["switch_start_ns"],
+            "commit_ns": move["switch_end_ns"],
+            "cache_hit_tokens": request.get("prompt_tokens", 0)
+                - request.get("processed_tokens", 0),
+            "processed_tail_tokens": request.get("processed_tokens", 0),
+            "success": not move.get("error"), "error": move.get("error"),
+        })
+    return rows
 
 
 def catch_up_profile(row: dict) -> dict:
@@ -1555,11 +1785,13 @@ def reduce_run(run_root: Path) -> None:
             raise ValueError(f"invalid result for {scenario['scenario_id']}")
         results[scenario["scenario_id"]] = result
     baselines = pooled_power_baselines(run_root, plan, results)
-    migrations, scenarios = [], []
+    migrations, scenarios, stages = [], [], []
     for scenario in plan["scenarios"]:
         path = run_root / "scenarios" / scenario["scenario_id"] / "result.json"
         result = results[scenario["scenario_id"]]
         migration_rows = [flatten_migration(scenario, result, row) for row in result.get("migrations", [])]
+        for raw in result.get("migrations", []):
+            stages.extend(migration_stage_rows(scenario, result, raw, path.parent))
         for flat, raw in zip(migration_rows, result.get("migrations", [])):
             proxy = path.parent / "proxy_bytes.csv"
             flat.update(phase_network_measurements(
@@ -1615,6 +1847,8 @@ def reduce_run(run_root: Path) -> None:
         row["current_model_time_s"] = current_model_time(row, profile)
     write_csv(run_root / "migrations.csv", migrations)
     write_csv(run_root / "scenarios.csv", scenarios)
+    if stages:
+        write_csv(run_root / "migration_stages.csv", stages)
     catch_up = [
         catch_up_profile(row) for row in migrations
         if row["success"] and row["activity"] == "one_turn"

@@ -109,6 +109,10 @@ New plans record migration and serving concurrency separately and default to
 it. Version-2 plans and results remain readable, while new artifacts use schema
 version 3. The migration controller also preserves ordered append-stage
 snapshots and compares final catch-up against the last prepared stage.
+`copy_policy: after_each_request` pipelines the next controlled source turn
+with the current destination write, applies one serving-concurrency gate across
+sessions, and reduces exact key-attributed stage bytes to
+`migration_stages.csv`.
 
 Reproduce the completed 30-scenario serial crossover plan with:
 
