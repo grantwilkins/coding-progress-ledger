@@ -589,14 +589,14 @@ def kv_metrics(hit: int, layout: dict) -> tuple[int, int]:
     return (hit + tokens - 1) // tokens, hit * layout["chunk_bytes"] // tokens
 
 
-def expected_hits(method: str, phase: str, total: int, source_prompt_tokens: int | None = None) -> int:
+def expected_hits(method: str, phase: str, total: int, source_tokens: int | None = None) -> int:
     if method != "kv_transfer":
         return 0
+    if source_tokens is None:
+        raise ValueError("KV transfer requires measured source tokens")
     if phase == "initial":
-        return total
-    if source_prompt_tokens is None:
-        raise ValueError("catch-up requires measured source prompt tokens")
-    return source_prompt_tokens // 256 * 256
+        return min(total, source_tokens)
+    return source_tokens // 256 * 256
 
 
 def lookup_tokens(path: Path, request_id: str) -> tuple[int, int]:
@@ -632,6 +632,7 @@ class LiveSession:
         self.activity_result: RequestResult | None = None
         self.measured_activity_append_tokens = 0
         self.warm_prompt_tokens = 0
+        self.warm_cached_tokens = 0
         self.cache_keys: set[str] = set()
         self.activity_prompt_tokens: int | None = None
         self.prompt_tokens_by_hash: dict[str, int] = {}
@@ -656,7 +657,9 @@ class LiveSession:
         self.warm_prompt_tokens = result.prompt_tokens
         self.prompt_tokens_by_hash[messages_hash(self.messages)] = result.prompt_tokens
         after = time.monotonic_ns()
-        self.cache_keys |= {row["key_hash"] for row in cache_operations(self.cache_log, before, after) if row["operation"] == "source_write"}
+        keys = {row["key_hash"] for row in cache_operations(self.cache_log, before, after) if row["operation"] == "source_write"}
+        self.cache_keys |= keys
+        self.warm_cached_tokens = min(result.prompt_tokens, len(keys) * 256)
 
     def snapshot(self) -> SessionState:
         with self.lock:
@@ -818,7 +821,8 @@ class LiveRuntime:
         total, hit = lookup_tokens(self.sink_log, result.request_id)
         expected = expected_hits(
             move.method, phase, total,
-            self._prompt_tokens(session, state) if phase != "initial" else None,
+            session.warm_cached_tokens if phase == "initial"
+            else self._prompt_tokens(session, state),
         )
         if hit != expected:
             raise RuntimeError(f"{move.method} request {result.request_id} hit {hit} tokens, expected {expected}")

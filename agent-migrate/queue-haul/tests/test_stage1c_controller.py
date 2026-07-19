@@ -235,11 +235,12 @@ def test_kv_bytes_come_from_logged_full_chunk_layout(tmp_path):
     assert layout["bytes_per_token"] == 49_152
     assert layout["chunk_tokens"] == 256
     assert c.kv_metrics(11_047, layout) == (44, 11_047 * 49_152)
-    assert c.expected_hits("kv_transfer", "initial", 11_047) == 11_047
+    assert c.expected_hits("kv_transfer", "initial", 4_235, 4_235) == 4_235
+    assert c.expected_hits("kv_transfer", "initial", 16_523, 16_384) == 16_384
     assert c.expected_hits("kv_transfer", "catch_up", 11_082, 10_999) == 10_752
     assert c.expected_hits("replay", "initial", 11_047) == 0
     with pytest.raises(ValueError, match="measured source"):
-        c.expected_hits("kv_transfer", "catch_up", 11_082)
+        c.expected_hits("kv_transfer", "initial", 11_082)
 
 
 def test_session_probe_appends_one_final_instruction():

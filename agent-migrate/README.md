@@ -143,9 +143,10 @@ private LMCache CPU tier disabled while retaining the 4 GB pinned staging alloca
 The pinned LMCache 0.3.3 connector is patched at process startup to read exact
 metadata lengths, serialize complete socket transactions, and reconnect after
 protocol errors before retrying once. This is a correctness baseline, not a
-parallel KV connection pool. KV accounting includes the partial final chunk and
-requires every initially staged prompt token to hit; catch-up requires every
-complete chunk shared with the measured source activity prompt and replays the divergent suffix. Semantic probes append one deterministic
+parallel KV connection pool. Initial KV verification requires every token
+actually staged by the source to hit, including a partial final chunk when LMCache stores one; catch-up requires
+every complete chunk shared with the measured source activity prompt and replays
+the divergent suffix. Semantic probes append one deterministic
 final instruction. Replay requests explicitly bypass LMCache and must report
 zero hits. On a two-GPU A100 node, check the pinned vLLM `0.10.1.1`
 and LMCache `0.3.3` setup:
@@ -251,8 +252,3 @@ It writes `scale_results.csv`, `scale_policy_comparison.png`, and
 `scale_network_sensitivity.png`.
 
 Raw live run directories and scheduler logs are generated and ignored.
-=======
-Follow `queue-haul/handoff.md` before submitting the large profiling plan. The
-LMCache concurrency-2 metadata-read failure remains a blocker. Do not submit
-`stage1c_benchmark.sbatch` until the 16-scenario validation completes.
->>>>>>> 12f09722 (Archive additive Queue-Haul model)
