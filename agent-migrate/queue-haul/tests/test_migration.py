@@ -6,6 +6,7 @@ Plausible wrong implementations:
 - Pause before starting the initial copy.
 - Switch the initial snapshot after a request changed the conversation.
 - Retry catch-up silently or leave the source paused after a failure.
+- Copy the original snapshot again after ordered append stages.
 - Apply independent replay and KV concurrency limits.
 - Report initial-copy time as service pause time.
 """
@@ -15,7 +16,9 @@ from __future__ import annotations
 import threading
 import time
 
-from migration import MigrationController, Move, RequestResult, SessionState
+from migration import (
+    AppendStageResult, MigrationController, Move, RequestResult, SessionState,
+)
 
 
 class FakeRuntime:
@@ -54,6 +57,9 @@ class FakeRuntime:
         self.paused.add(session_id)
         self.calls.append(("pause", session_id))
 
+    def background(self, move: Move, state: SessionState):
+        return ()
+
     def wait_idle(self, session_id: str) -> SessionState:
         self.calls.append(("idle", session_id))
         return self.state(session_id, int(session_id in self.changed))
@@ -90,6 +96,31 @@ def test_unchanged_state_skips_catch_up():
     assert result.succeeded
     assert result.catch_up is None
     assert [call[0] for call in runtime.calls].count("prepare") == 1
+
+
+def test_ordered_append_stages_advance_the_prepared_state():
+    class StagedRuntime(FakeRuntime):
+        def background(self, move, state):
+            rows = []
+            for stage_index in range(4):
+                state = self.state(move.session_id, stage_index + 1)
+                request = self.prepare(move, state, "append")
+                rows.append(AppendStageResult(
+                    stage_index, request.start_ns, request.end_ns, state, request,
+                ))
+            return tuple(rows)
+
+        def wait_idle(self, session_id):
+            self.calls.append(("idle", session_id))
+            return self.state(session_id, 4)
+
+    result = MigrationController(StagedRuntime(), 1).run(
+        [Move("s", "kv_transfer", 0)]
+    )[0]
+
+    assert [row.stage_index for row in result.append_stages] == list(range(4))
+    assert result.catch_up is None
+    assert result.committed_state.generation == 4
 
 
 def test_copy_failure_resumes_source_without_commit():

@@ -107,7 +107,8 @@ size.
 New plans record migration and serving concurrency separately and default to
 `final_state: awake`; source sleep occurs only when a plan explicitly requests
 it. Version-2 plans and results remain readable, while new artifacts use schema
-version 3.
+version 3. The migration controller also preserves ordered append-stage
+snapshots and compares final catch-up against the last prepared stage.
 
 Reproduce the completed 30-scenario serial crossover plan with:
 

@@ -540,6 +540,9 @@ class LiveRuntime:
         self.event_log.write("snapshot", move_id=move.order, session_id=move.session_id, generation=state.generation, context_hash=state.context_hash)
         return state
 
+    def background(self, move: Move, state: SessionState):
+        return ()
+
     def prepare(self, move: Move, state: SessionState, phase: str) -> RequestResult:
         session = self.sessions[move.session_id]
         if phase == "initial" and self.activity == "one_turn":

@@ -8,7 +8,7 @@ from typing import Callable, Literal, Protocol
 
 
 Method = Literal["replay", "kv_transfer"]
-Phase = Literal["initial", "catch_up"]
+Phase = Literal["initial", "append", "catch_up"]
 
 
 @dataclass(frozen=True)
@@ -50,6 +50,15 @@ class RequestResult:
 
 
 @dataclass(frozen=True)
+class AppendStageResult:
+    stage_index: int
+    start_ns: int
+    end_ns: int
+    source_state: SessionState
+    destination_request: RequestResult
+
+
+@dataclass(frozen=True)
 class MoveResult:
     move: Move
     queued_ns: int
@@ -62,6 +71,7 @@ class MoveResult:
     switch_start_ns: int
     switch_end_ns: int
     initial: RequestResult | None
+    append_stages: tuple[AppendStageResult, ...]
     catch_up: RequestResult | None
     committed_state: SessionState | None
     error: str | None
@@ -75,6 +85,8 @@ class Runtime(Protocol):
     def snapshot(self, move: Move) -> SessionState: ...
 
     def prepare(self, move: Move, state: SessionState, phase: Phase) -> RequestResult: ...
+
+    def background(self, move: Move, state: SessionState) -> tuple[AppendStageResult, ...]: ...
 
     def pause(self, session_id: str) -> None: ...
 
@@ -116,6 +128,7 @@ class MigrationController:
             self._start.notify_all()
 
         initial = catch_up = committed_state = None
+        append_stages: tuple[AppendStageResult, ...] = ()
         initial_end_ns = pause_start_ns = idle_ns = initial_start_ns
         catch_up_start_ns = catch_up_end_ns = None
         switch_start_ns = switch_end_ns = initial_start_ns
@@ -124,12 +137,17 @@ class MigrationController:
             initial = self.runtime.prepare(move, state, "initial")
             self._check(initial, state)
             initial_end_ns = self.clock()
+            append_stages = self.runtime.background(move, state)
+            for stage in append_stages:
+                self._check(stage.destination_request, stage.source_state)
+            prepared = append_stages[-1].source_state if append_stages else state
             pause_start_ns = self.clock()
             self.runtime.pause(move.session_id)
             paused = True
             current = self.runtime.wait_idle(move.session_id)
             idle_ns = self.clock()
-            if current.generation != state.generation or current.context_hash != state.context_hash:
+            if current.generation != prepared.generation \
+                    or current.context_hash != prepared.context_hash:
                 catch_up_start_ns = self.clock()
                 catch_up = self.runtime.prepare(move, current, "catch_up")
                 self._check(catch_up, current)
@@ -148,7 +166,7 @@ class MigrationController:
         return MoveResult(
             move, queued_ns, initial_start_ns, initial_end_ns, pause_start_ns, idle_ns,
             catch_up_start_ns, catch_up_end_ns, switch_start_ns, switch_end_ns,
-            initial, catch_up, committed_state, error,
+            initial, append_stages, catch_up, committed_state, error,
         )
 
     @staticmethod
