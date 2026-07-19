@@ -21,13 +21,13 @@ at concurrency one until the matching concurrency tests pass.
   cache hits, continuation, shaped and achieved rate, and source/destination
   power for every migration.
 
-## Next GPU job: parallel KV gate
+## Completed GPU job: parallel KV gate
 
 - [x] Script `stage1d_parallel_gate.sbatch` with the reviewed 12-scenario
   `outputs/parallel-kv-gate-plan.json`.
-- [ ] Run the fixed two-session, 1 Gbps, no-activity smoke at concurrency 1
+- [x] Run the fixed two-session, 1 Gbps, no-activity smoke at concurrency 1
   and 2 with matched controls.
-- [ ] Require two distinct connection IDs and overlapping KV-byte windows at
+- [x] Require two distinct connection IDs and overlapping KV-byte windows at
   concurrency two. Also require exact aggregate wire bytes, correct cache hits
   and continuation, and no errors. `check-parallel` hard-fails otherwise.
 - [ ] After that gate passes, run KV transfer for the same fixed four sessions
@@ -44,12 +44,12 @@ at concurrency one until the matching concurrency tests pass.
 - [x] Script `stage1e_catch_up.sbatch` with the reviewed 24-scenario
   `outputs/append-catch-up-plan.json`: 32/128/512/2,048-token controlled
   appends, 1/10 Gbps, two repeats, and matched controls.
-- [ ] Run the scripted two-stage initial/final catch-up job and determine from
+- [x] Run the scripted two-stage initial/final catch-up job and determine from
   connection-attributed wire bytes whether the implementation is incremental.
-- [ ] Measure initial KV backlog, new KV bytes per generated token, source
+- [x] Measure initial KV backlog, new KV bytes per generated token, source
   extraction rate, path goodput, destination ingest rate, and fixed quiesce,
   synchronization, and route-switch time.
-- [ ] Add controlled turns of 32, 128, 512, and 2,048 measured prompt tokens.
+- [x] Add controlled turns of 32, 128, 512, and 2,048 measured prompt tokens.
   Separate appended prompt from decoded output tokens; record processed and new
   tokens, KV bytes, cache hits, response timing, service pause, and continuation
   correctness for replay and KV transfer.
@@ -72,14 +72,14 @@ at concurrency one until the matching concurrency tests pass.
   campaign: 24 GB/s effective per 200 Gbps RDMA rail, full and half-bisection
   intra-DC fabrics, 5/10/20% external cuts, and 1:4/1:8/1:16
   between-building-to-within-building ratios.
-- [ ] Keep 1 and 10 Gbps as explicitly shaped usable-WAN allocations, not
+- [x] Keep 1 and 10 Gbps as explicitly shaped usable-WAN allocations, not
   publication-derived facts. Apply each as one shared site/WAN cut while
   keeping the published endpoint and fabric tiers nonbinding.
 - [ ] Obtain administrator telemetry or run one small aggregate check only
   before making claims about this cluster's NIC rails, QoS share, background
   load, routing, or physical site egress.
-- [ ] Measure external durable-log paths separately; do not infer them from the
-  final destination link of the KV path.
+- [x] Fix durable logs at the source DC and route replay through the same
+  shared site egress and WAN cut as KV transfer.
 
 ## Workloads and state transitions
 
@@ -105,7 +105,7 @@ at concurrency one until the matching concurrency tests pass.
 ## Power, network, and hardware
 
 - [ ] Measure request and migration power at every supported concurrency.
-- [ ] Fit empty-awake and sleep power and transition time from the next job;
+- [x] Fit empty-awake and sleep power and transition time from the paired job;
   the measured level-1 sleep point is about 84.9 W/GPU and did not reduce board
   power, but only two transitions were observed.
 - [ ] Measure shutdown power and transition time separately; a running Slurm

@@ -286,8 +286,11 @@ def _summary(run: ExperimentRun) -> dict:
         if session.state == "active":
             resident[session.source_instance] += session.context_tokens
     completed = [row for row in result.sessions if row.committed_s is not None]
-    resumed = all(row.committed_s is not None and row.committed_s <= scenario.deadline_s
-                  for row in result.sessions)
+    migration_ready = result.migration_makespan_s is not None \
+        and result.migration_makespan_s <= scenario.deadline_s
+    final_ready = result.final_state_ready_s is not None \
+        and result.final_state_ready_s <= scenario.deadline_s
+    power_met = result.modeled_source_power_at_deadline_w <= scenario.power_limit_w
     pauses = [row.committed_s - row.pause_s for row in completed if row.pause_s is not None]
     wakes = [row.wake_ready_s - row.wake_start_s for row in result.sessions
              if row.wake_ready_s is not None]
@@ -305,12 +308,15 @@ def _summary(run: ExperimentRun) -> dict:
     )
     return {
         "run_id": run.run_id, "model_profile": run.plan.profile_id,
-        "profile_case": run.case_id, "workload_profile": run.workload_id,
+        "profile_case": run.case_id, "planning_profile_case": run.plan.profile_case,
+        "workload_profile": run.workload_id,
         "solver": run.plan.solver, "seed": run.plan.seed,
         "sessions": len(scenario.sessions),
         "source_instances": len(source_instances),
         "source_nodes": sum(node.local for node in scenario.nodes),
         "destination_nodes": sum(not node.local for node in scenario.nodes),
+        "source_sites": len({node.site_id for node in scenario.nodes if node.local}),
+        "destination_sites": len({node.site_id for node in scenario.nodes if not node.local}),
         "kv_capacity_tokens_per_instance": run.plan.kv_capacity_tokens,
         "max_source_resident_kv_tokens": max(resident.values(), default=0),
         "power_limit_w": scenario.power_limit_w, "deadline_s": scenario.deadline_s,
@@ -329,10 +335,20 @@ def _summary(run: ExperimentRun) -> dict:
         "modeled_source_drop_at_deadline_w": max(
             0.0, run.plan.initial_source_power_w - result.modeled_source_power_at_deadline_w
         ),
-        "power_met": result.deadline_met, "moves_committed_by_deadline": resumed,
+        "power_met": power_met, "moves_committed_by_deadline": migration_ready,
+        "final_state_ready_by_deadline": final_ready,
+        "deadline_met": result.deadline_met,
         "requests_started_by_deadline": requests_started,
-        "accepted": result.deadline_met and resumed and requests_started,
-        "completed_by_end": result.completed_sessions, "makespan_s": result.makespan_s,
+        "accepted": result.deadline_met and requests_started,
+        "completed_by_end": result.completed_sessions,
+        "migration_makespan_s": result.migration_makespan_s,
+        "final_state_ready_s": result.final_state_ready_s,
+        "makespan_s": result.makespan_s,
+        "paced_kv_moves": sum(move.rate_limit_bytes_per_s is not None
+                              for move in run.plan.moves),
+        "total_kv_pace_bytes_per_s": sum(
+            move.rate_limit_bytes_per_s or 0 for move in run.plan.moves
+        ),
         "total_pause_s": sum(pauses),
         "p95_pause_s": float(np.quantile(pauses, 0.95)) if pauses else 0.0,
         "total_wake_s": sum(wakes), "unresumed_after_deadline_s": unresumed,

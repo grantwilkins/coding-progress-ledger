@@ -169,6 +169,11 @@ def test_small_run_reuses_plans_and_writes_raw_tables_and_plots(tmp_path: Path):
         runs[0].plan.initial_source_power_w
         - runs[0].result.modeled_source_power_at_deadline_w
     )
+    assert summary["planning_profile_case"] == "slower"
+    assert summary["deadline_met"] == runs[0].result.deadline_met
+    assert summary["migration_makespan_s"] == runs[0].result.migration_makespan_s
+    assert summary["final_state_ready_s"] == runs[0].result.final_state_ready_s
+    assert summary["source_sites"] == summary["destination_sites"] == 1
 
     experiment.write(iter(runs), tmp_path)
     for name in ("summary.csv", "events.csv", "sessions.csv", "requests.csv", "network.csv",

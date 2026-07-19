@@ -16,6 +16,7 @@ uv run pytest
 uv run python queue-haul/power_drain_experiment.py \
   --workload-profile queue-haul/profiles/agentic_tool_loop.json \
   --sessions 6 --seed 3 --power-limit 500 --deadline 5 --end 5 \
+  --link-bytes-per-s 125000000 --intra-dc-bytes-per-s 12500000000 \
   --solver load_only --workers 2 --out queue-haul/outputs/profile_smoke
 uv run python queue-haul/plot_simulator_validation.py
 uv run python queue-haul/plot_simulator_evaluation.py
@@ -31,16 +32,19 @@ and whether a copy is still pending at the simulation cutoff.
 
 The network simulator is a fixed-path fluid-capacity model, not a TCP model.
 Active transfers share every named bottleneck with work-conserving max-min
-rates. The default scenario builder currently creates only equal-capacity
-per-node source-egress and destination-ingress links; it does not instantiate a
-shared datacenter or WAN cut. Treat current network results as sensitivity
-results, not calibrated cross-datacenter topology claims. Published
+rates. The default route crosses a source-node fabric link, one shared source
+site egress, one shared WAN allocation, one shared destination-site ingress,
+and a destination-node fabric link. `--link-bytes-per-s` controls all three
+shared inter-site cuts; `--intra-dc-bytes-per-s` controls the nonbinding
+per-node fabric tier. Adding nodes therefore does not multiply WAN capacity.
+Treat these as sensitivity inputs, not calibrated physical-site claims. Published
 [A100 GPUDirect measurements](https://developer.nvidia.com/blog/accelerating-io-in-the-modern-data-center-network-io/)
 give 24 GB/s per 200 Gbps RDMA rail, while
 [Jupiter](https://research.google.com/pubs/archive/43837.pdf) motivates
 full/half-bisection fabrics and sensitivity around shared external cuts. The
 shaped 1/10 Gbps WAN allocations remain scenario inputs rather than claims
-about the cluster.
+about the cluster. Workload profile v2 fixes durable logs at `source_dc`, so
+replay traffic crosses the same site egress and WAN as KV traffic.
 
 For active sessions with `--final-state awake`, `node_drain` ranks source nodes
 by exact power reduction to idle divided by predicted drain time. It then ranks
@@ -57,7 +61,7 @@ objective: meet the requested power reduction with minimum total migration
 work, or maximize power reduction when the target is infeasible. The
 `lp_peak_first` and `lp_work_first` solvers retain the two three-stage objective
 orders for direct comparison. The current LP scope is active
-sessions, one destination pool, the central profile, and `--final-state awake`;
+sessions, one destination pool, and `--final-state awake`;
 unsupported cases hard-fail. The fractional plan is rounded to whole sessions
 and accepted only when the discrete-event simulator meets trailing-window power
 and every migration commits by the migration deadline. The exact equations and
@@ -70,16 +74,17 @@ evaluate repeat 2 with:
 
 ```bash
 uv run python queue-haul/stage1c_profile_fit.py \
-  --run-root queue-haul/outputs/coding-run \
-  --profile queue-haul/profiles/gpt_oss_20b_a100_tp1.json
+  --serial-root queue-haul/outputs/serial-power-run-2 \
+  --catch-up-root queue-haul/outputs/append-catch-up-run-2 \
+  --parallel-root queue-haul/outputs/parallel-kv-gate-run-2 \
+  --base-profile queue-haul/profiles/gpt_oss_20b_a100_tp1.json \
+  --out-profile /tmp/gpt_oss_20b_a100_tp1.json
 ```
 
-The checked profile remains `estimated`. It has not been validated for larger
-catch-up work, interactive or agentic jobs, eight-session drains, shutdown, or
-parallel KV connections, and it has not yet incorporated the paired serial or
-GPU-only sleep results. The new coding fit and the earlier live replay points
-occupy separate token ranges in the profile; the earlier range retains its 30%
-error bound.
+The checked profile remains `estimated`. It incorporates the paired serial,
+append-only catch-up, parallel-gate concurrency, and GPU-only sleep results,
+but has not been validated for interactive or agentic jobs, eight-session
+drains, shutdown, or exclusive whole-node power.
 
 The completed `serial-power-run-2` pins the same session and turn across
 methods and bandwidths and shares controls across those comparisons. All 30
