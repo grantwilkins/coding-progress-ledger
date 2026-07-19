@@ -11,6 +11,9 @@ cd "$REPO"
 module load gcc/14.2.0 openblas/0.3.28
 export QH_APPTAINER_IMAGE=${QH_APPTAINER_IMAGE:-/scratch/users/gfw/ptsim/vllm-openai-v0.10.1.1.sandbox}
 export QH_APPTAINER_GPU_MODE=${QH_APPTAINER_GPU_MODE:-nv}
+if [[ -z ${QH_PORT_OFFSET:-} && -n ${RESUME_FROM_GIT_SHA:-} ]]; then
+  QH_PORT_OFFSET=$("$PY" -c "import json,sys; print(json.load(open(sys.argv[1]))[\"config\"][\"src_port\"] - 8100)" "$RUN_ROOT/run_metadata.json")
+fi
 export QH_PORT_OFFSET=${QH_PORT_OFFSET:-$((SLURM_JOB_ID % 40000 + 1000))}
 
 $PY queue-haul/stage1b_drain_sink.py preflight --required-gpus 2

@@ -211,7 +211,8 @@ is available for development. Resume requires the same plan, manifest, and setti
 requires explicit `--resume-from-git-sha` authorization and records every
 commit. A failed scenario is saved, the testbed is restarted, independent
 scenarios continue, and the final command exits nonzero. The Slurm launcher
-always invokes reduction and preserves the run status:
+retains the original port mapping when resuming a targeted run and always
+invokes reduction and preserves the run status:
 
 ```bash
 $PY queue-haul/stage1c_controller.py run \
