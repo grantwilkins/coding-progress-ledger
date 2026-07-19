@@ -17,8 +17,9 @@ stack once, randomize scenarios, checkpoint each result, reuse compatible
 controls, and exclude incomplete or dirty scenarios from fitting.
 
 - [ ] **Parallel KV surface:** approximately 4k/16k/32k context, 1/10 Gbps,
-  logical concurrency 1/2/4, and three repeats. Reuse the completed 1 Gbps
-  concurrency 1/2 cells. Fit repeats 0-1 and hold out repeat 2.
+  logical concurrency 1/2/4, and three repeats. Rerun every cell with the
+  corrected shaper and exact key attribution; use the old gate only as a
+  regression smoke. Fit repeats 0-1 and hold out repeat 2.
 - [ ] **Multi-stage append:** one approximately 30k context session, steady and
   bursty growth, 1/10 Gbps, three repeats, and four ordered background writes
   before final quiescence.

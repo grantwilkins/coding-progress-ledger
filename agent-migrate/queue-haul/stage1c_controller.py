@@ -20,10 +20,16 @@ import stage1b_drain_sink as b
 from migration import MigrationController, Move, RequestResult, SessionState, StreamChunk
 
 
-MANIFEST_SCHEMA = "queue-haul-migration-manifest-v2"
-PLAN_SCHEMA = "queue-haul-migration-plan-v2"
-RESULT_SCHEMA = "queue-haul-migration-result-v2"
-RUN_SCHEMA = "queue-haul-migration-run-v2"
+MANIFEST_SCHEMA = "queue-haul-migration-manifest-v3"
+PLAN_SCHEMA = "queue-haul-migration-plan-v3"
+RESULT_SCHEMA = "queue-haul-migration-result-v3"
+RUN_SCHEMA = "queue-haul-migration-run-v3"
+SCHEMAS = {
+    MANIFEST_SCHEMA: {"queue-haul-migration-manifest-v2", MANIFEST_SCHEMA},
+    PLAN_SCHEMA: {"queue-haul-migration-plan-v2", PLAN_SCHEMA},
+    RESULT_SCHEMA: {"queue-haul-migration-result-v2", RESULT_SCHEMA},
+    RUN_SCHEMA: {"queue-haul-migration-run-v2", RUN_SCHEMA},
+}
 METHODS = ("replay", "kv_transfer")
 ACTIVITIES = ("none", "one_turn")
 JOB_CLASSES = ("interactive_coding", "coding", "agentic_tool_loop")
@@ -186,30 +192,37 @@ def stable_seed(*parts) -> int:
 
 
 def validate_manifest(manifest: dict) -> None:
-    if manifest.get("schema") != MANIFEST_SCHEMA:
+    if manifest.get("schema") not in SCHEMAS[MANIFEST_SCHEMA]:
         raise ValueError("unsupported manifest schema")
     if not manifest.get("sessions") or len({row["id"] for row in manifest["sessions"]}) != len(manifest["sessions"]):
         raise ValueError("manifest sessions must be nonempty and unique")
     classes = {row["job_class"] for row in manifest["sessions"]}
-    if classes != {manifest.get("workload")} or not classes <= set(JOB_CLASSES):
-        raise ValueError("a manifest must contain one standard job class")
+    if not classes <= set(JOB_CLASSES) or manifest.get("workload") != "mixed" \
+            and classes != {manifest.get("workload")}:
+        raise ValueError("a manifest must contain standard job classes")
 
 
 def make_plan(manifest_path: Path, context_sizes: list[int], concurrency: list[int],
               bandwidth_mbps: list[float], methods: list[str], activity: list[str],
               repeats: int, seed: int, deadline_s: float = 300.0,
               session_ids: tuple[str, ...] | list[str] = (),
-              activity_tokens: tuple[int, ...] | list[int] = ()) -> dict:
+              activity_tokens: tuple[int, ...] | list[int] = (),
+              serving_concurrency: tuple[int, ...] | list[int] = (),
+              final_state: str = "awake") -> dict:
     manifest = json.loads(manifest_path.read_text())
     validate_manifest(manifest)
-    if not all(value > 0 for value in [*context_sizes, *concurrency, *bandwidth_mbps, repeats, deadline_s]):
+    serving_concurrency = list(serving_concurrency) or [1]
+    if not all(value > 0 for value in [*context_sizes, *concurrency, *serving_concurrency,
+                                        *bandwidth_mbps, repeats, deadline_s]):
         raise ValueError("plan values must be positive")
+    if final_state not in {"awake", "sleep"}:
+        raise ValueError("live campaign final state must be awake or sleep")
     if not methods or not activity or not set(methods) <= set(METHODS) \
             or not set(activity) <= set(ACTIVITIES):
         raise ValueError("unknown method or activity")
     if any(value <= 0 for value in activity_tokens):
         raise ValueError("activity tokens must be positive")
-    count = max(concurrency)
+    count = max(*concurrency, *serving_concurrency)
     if len(manifest["sessions"]) < count:
         raise ValueError(f"manifest needs at least {count} sessions")
     sessions = {row["id"]: row for row in manifest["sessions"]}
@@ -230,26 +243,41 @@ def make_plan(manifest_path: Path, context_sizes: list[int], concurrency: list[i
                     session_rows = [{"session_id": row["id"], "job_class": row["job_class"],
                                      "turn_index": nearest_turn(row, size), "order": order}
                                     for order, row in enumerate(chosen)]
-                    for width in concurrency:
+                    for serving in serving_concurrency:
                         match_id = object_hash(
-                            [size, active, appended, repeat, width, session_rows]
+                            [size, active, appended, repeat, serving, session_rows]
                         )[:16]
                         base = {"match_id": match_id, "context_size": size,
-                                "concurrency": width, "activity": active,
+                                "serving_concurrency": serving, "activity": active,
                                 "activity_tokens": appended, "repeat": repeat,
-                                "deadline_s": deadline_s, "sessions": session_rows}
-                        control = {**base, "method": methods[0],
+                                "deadline_s": deadline_s, "sessions": session_rows,
+                                "campaign": "legacy", "split": "train",
+                                "copy_policy": "initial_final",
+                                "request_schedule": ([{"at_s": 0, "append_tokens": appended}]
+                                                     if active == "one_turn" else []),
+                                "final_state": "awake"}
+                        control = {**base, "concurrency": 1, "move_concurrency": 0,
+                                   "method": methods[0],
                                    "bandwidth_mbps": bandwidth_mbps[0], "kind": "control",
                                    "scenario_id": f"c-{match_id}", "moves": []}
                         scenarios.append(control)
-                        for method in methods:
-                            for link in bandwidth_mbps:
-                                scenario_id = object_hash([match_id, method, link])[:16]
-                                scenario = {**base, "method": method, "bandwidth_mbps": link,
-                                            "kind": "migration", "scenario_id": f"m-{scenario_id}"}
-                                scenario["moves"] = [{**row, "method": method}
-                                                     for row in session_rows]
-                                scenarios.append(scenario)
+                        for width in concurrency:
+                            for method in methods:
+                                for link in bandwidth_mbps:
+                                    scenario_id = object_hash(
+                                        [match_id, width, method, link]
+                                    )[:16]
+                                    scenario = {
+                                        **base, "concurrency": width,
+                                        "move_concurrency": width,
+                                        "method": method, "bandwidth_mbps": link,
+                                        "kind": "migration",
+                                        "scenario_id": f"m-{scenario_id}",
+                                        "final_state": final_state,
+                                    }
+                                    scenario["moves"] = [{**row, "method": method}
+                                                         for row in session_rows]
+                                    scenarios.append(scenario)
     random.Random(seed).shuffle(scenarios)
     plan = {"schema": PLAN_SCHEMA, "manifest": {"path": str(manifest_path), "sha256": file_hash(manifest_path)}, "seed": seed, "scenarios": scenarios}
     validate_plan(plan, manifest)
@@ -257,7 +285,7 @@ def make_plan(manifest_path: Path, context_sizes: list[int], concurrency: list[i
 
 
 def validate_plan(plan: dict, manifest: dict) -> None:
-    if plan.get("schema") != PLAN_SCHEMA:
+    if plan.get("schema") not in SCHEMAS[PLAN_SCHEMA]:
         raise ValueError("unsupported plan schema")
     validate_manifest(manifest)
     sessions = {row["id"]: row for row in manifest["sessions"]}
@@ -267,8 +295,20 @@ def validate_plan(plan: dict, manifest: dict) -> None:
         raise ValueError("plan scenarios must be nonempty and unique")
     for scenario in plan["scenarios"]:
         rows = scenario["sessions"]
-        if not {row["session_id"] for row in rows} <= ids or len(rows) < scenario["concurrency"]:
+        move_concurrency = scenario.get("move_concurrency", scenario["concurrency"])
+        serving_concurrency = scenario.get("serving_concurrency", scenario["concurrency"])
+        if not {row["session_id"] for row in rows} <= ids \
+                or len(rows) < max(move_concurrency, serving_concurrency):
             raise ValueError(f"invalid sessions in {scenario['scenario_id']}")
+        if scenario.get("final_state", "sleep") not in {"awake", "sleep"}:
+            raise ValueError(f"invalid final state in {scenario['scenario_id']}")
+        if plan["schema"] == PLAN_SCHEMA and (
+            scenario["kind"] == "control" and scenario["final_state"] != "awake"
+            or scenario["final_state"] == "sleep"
+            and (scenario["kind"] != "migration"
+                 or {row["session_id"] for row in rows} != ids)
+        ):
+            raise ValueError(f"invalid sleep request in {scenario['scenario_id']}")
         if scenario["kind"] == "migration" and len(scenario["moves"]) != len(rows):
             raise ValueError(f"migration {scenario['scenario_id']} does not move every selected session")
         if len({row.get("method") for row in scenario["moves"]}) > 1:
@@ -797,6 +837,10 @@ def restart_proxy(stack: b.Stack, cfg: b.Config, scenario_root: Path, mbps: floa
     b.wait_tcp(cfg.host, cfg.api_proxy_port, 30)
 
 
+def should_sleep(scenario: dict, full_drain: bool) -> bool:
+    return full_drain and scenario.get("final_state", "sleep") == "sleep"
+
+
 def run_scenario(stack: b.Stack, cfg: b.Config, manifest: dict, scenario: dict, root: Path, run_id: str) -> dict:
     root.mkdir(parents=True, exist_ok=True)
     write_json(root / "scenario.json", scenario)
@@ -830,21 +874,24 @@ def run_scenario(stack: b.Stack, cfg: b.Config, manifest: dict, scenario: dict, 
         for session in kv:
             session.warm()
         moves = [Move(row["session_id"], row["method"], row["order"]) for row in scenario["moves"]]
+        move_concurrency = scenario.get("move_concurrency", scenario["concurrency"])
+        serving_concurrency = scenario.get("serving_concurrency", scenario["concurrency"])
         runtime = LiveRuntime(sessions, cfg, scenario["activity"], sink_log, cache_log, event_log, root / "requests.jsonl")
         if scenario["kind"] == "migration":
-            migration_results = MigrationController(runtime, scenario["concurrency"]).run(moves)
+            migration_results = MigrationController(runtime, move_concurrency).run(moves)
             if any(not row.succeeded for row in migration_results):
                 raise RuntimeError("; ".join(row.error for row in migration_results if row.error))
         else:
             migration_results = []
             if scenario["activity"] == "one_turn":
-                with ThreadPoolExecutor(max_workers=scenario["concurrency"]) as pool:
+                with ThreadPoolExecutor(max_workers=serving_concurrency) as pool:
                     for session in sessions.values():
                         session.start_activity()
                     list(pool.map(lambda session: session.wait_activity(), sessions.values()))
         full_drain = scenario["kind"] == "migration" and set(sessions) == {row["id"] for row in manifest["sessions"]} and all(row.succeeded for row in migration_results)
         sleep_times = None
-        if full_drain:
+        final_state = scenario.get("final_state", "sleep")
+        if should_sleep(scenario, full_drain):
             sleep_start = time.monotonic_ns()
             b.set_source_sleep(cfg, True)
             sleeping = True
@@ -880,7 +927,8 @@ def run_scenario(stack: b.Stack, cfg: b.Config, manifest: dict, scenario: dict, 
             "schema": RESULT_SCHEMA, "scenario_id": scenario["scenario_id"], "status": "complete",
             "started_ns": start_ns, "ended_ns": time.monotonic_ns(), "elapsed_s": elapsed_s,
             "deadline_s": scenario["deadline_s"], "deadline_met": elapsed_s <= scenario["deadline_s"],
-            "full_drain": full_drain, "source_sleep_ns": sleep_times,
+            "full_drain": full_drain, "final_state": final_state,
+            "source_sleep_ns": sleep_times,
             "migrations": [asdict(row) for row in migration_results], "activities": activities, "continuations": continuations,
             "session_cache_keys": {
                 session_id: sorted(session.cache_keys)
@@ -1488,7 +1536,7 @@ def current_model_time(row: dict, profile) -> float | None:
 
 def reduce_run(run_root: Path) -> None:
     metadata = json.loads((run_root / "run_metadata.json").read_text())
-    if metadata.get("schema") != RUN_SCHEMA:
+    if metadata.get("schema") not in SCHEMAS[RUN_SCHEMA]:
         raise ValueError("unsupported run schema")
     plan = json.loads((run_root / "plan.json").read_text())
     if object_hash(plan) != metadata.get("plan_object_sha256", object_hash(plan)):
@@ -1499,7 +1547,8 @@ def reduce_run(run_root: Path) -> None:
         if not path.exists():
             raise RuntimeError(f"missing result for {scenario['scenario_id']}")
         result = json.loads(path.read_text())
-        if result.get("schema") != RESULT_SCHEMA or result.get("scenario_id") != scenario["scenario_id"]:
+        if result.get("schema") not in SCHEMAS[RESULT_SCHEMA] \
+                or result.get("scenario_id") != scenario["scenario_id"]:
             raise ValueError(f"invalid result for {scenario['scenario_id']}")
         results[scenario["scenario_id"]] = result
     baselines = pooled_power_baselines(run_root, plan, results)
@@ -1701,11 +1750,13 @@ def parse_args(argv: list[str] | None = None):
     command.add_argument("--manifest", type=Path, required=True); command.add_argument("--out", type=Path, required=True)
     command.add_argument("--context-sizes", type=lambda value: csv_list(value, int), required=True)
     command.add_argument("--concurrency", type=lambda value: csv_list(value, int), required=True)
+    command.add_argument("--serving-concurrency", type=lambda value: csv_list(value, int), default=[])
     command.add_argument("--bandwidth-mbps", type=lambda value: csv_list(value, float), required=True)
     command.add_argument("--methods", type=lambda value: csv_list(value), default=list(METHODS))
     command.add_argument("--activity", type=lambda value: csv_list(value), default=list(ACTIVITIES))
     command.add_argument("--activity-tokens", type=lambda value: csv_list(value, int), default=[])
     command.add_argument("--session-ids", type=lambda value: csv_list(value), default=[])
+    command.add_argument("--final-state", choices=("awake", "sleep"), default="awake")
     command.add_argument("--repeats", type=int, required=True); command.add_argument("--seed", type=int, required=True); command.add_argument("--deadline-s", type=float, default=300)
     command = sub.add_parser("run")
     command.add_argument("--plan", type=Path, required=True); command.add_argument("--run-root", type=Path, required=True); command.add_argument("--allow-dirty", action="store_true"); command.add_argument("--resume-from-git-sha")
@@ -1729,6 +1780,7 @@ def main(argv: list[str] | None = None) -> None:
             args.manifest, args.context_sizes, args.concurrency, args.bandwidth_mbps,
             args.methods, args.activity, args.repeats, args.seed, args.deadline_s,
             args.session_ids, args.activity_tokens,
+            args.serving_concurrency, args.final_state,
         ))
     elif args.command == "run":
         extra = args.extra_vllm_args[1:] if args.extra_vllm_args[:1] == ["--"] else args.extra_vllm_args

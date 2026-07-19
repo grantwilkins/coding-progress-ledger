@@ -7,6 +7,7 @@ Plausible wrong implementations:
 - Regenerate different conversations for repeats or split a trace turn.
 - Change the selected session set across concurrency, methods, or bandwidths.
 - Rerun identical controls for every method and bandwidth.
+- Couple migration concurrency to serving concurrency or sleep an awake drain.
 - Claim parallel KV from aggregate bytes without independent overlapping links.
 - Add catch-up cache hits to KV bytes transferred over the network.
 - Mix appended prompt tokens with decoded output or infer growth from requested tokens.
@@ -72,27 +73,31 @@ def test_context_drop_starts_a_new_synthetic_session_segment(tmp_path):
     assert any("turn 4" in row["content"] for row in messages)
 
 
-def test_plan_keeps_same_order_across_concurrency_and_adds_controls(tmp_path):
+def test_plan_separates_concurrency_and_reuses_compatible_controls(tmp_path):
     trace, manifest_path = tmp_path / "trace.jsonl", tmp_path / "manifest.json"
     write_trace(trace); c.write_json(manifest_path, c.make_manifest(trace, "coding", 3, 1))
 
     plan = c.make_plan(
         manifest_path, [2048], [1, 2], [1000, 10000],
         ["replay", "kv_transfer"], ["none"], 1, 9,
+        serving_concurrency=[1, 3],
     )
 
     assert {row["kind"] for row in plan["scenarios"]} == {"migration", "control"}
     assert len([row for row in plan["scenarios"] if row["kind"] == "control"]) == 2
     for method in c.METHODS:
         migration = [row for row in plan["scenarios"] if row["kind"] == "migration" and row["method"] == method]
-        assert len(migration) == 4
+        assert len(migration) == 8
         assert all(row["sessions"] == migration[0]["sessions"] for row in migration)
         assert all({move["method"] for move in row["moves"]} == {method} for row in migration)
+        assert {(row["move_concurrency"], row["serving_concurrency"])
+                for row in migration} == {(1, 1), (1, 3), (2, 1), (2, 3)}
     for match_id in {row["match_id"] for row in plan["scenarios"]}:
         matched = [row for row in plan["scenarios"] if row["match_id"] == match_id]
         assert sum(row["kind"] == "control" for row in matched) == 1
-        assert len(matched) == 5
+        assert len(matched) == 9
         assert all(row["sessions"] == matched[0]["sessions"] for row in matched)
+    assert all(row["final_state"] == "awake" for row in plan["scenarios"])
 
 
 def test_plan_can_pin_the_same_sessions_across_repeats(tmp_path):
@@ -148,6 +153,23 @@ def test_plan_rejects_old_schema_and_too_few_sessions(tmp_path):
     c.write_json(manifest_path, manifest)
     with pytest.raises(ValueError, match="prompt estimate"):
         c.make_plan(manifest_path, [1024], [1], [1000], ["replay"], ["none"], 1, 0)
+    with pytest.raises(ValueError, match="final state"):
+        c.make_plan(
+            manifest_path, [1024], [1], [1000], ["replay"], ["none"], 1, 0,
+            final_state="off",
+        )
+    c.write_json(manifest_path, c.make_manifest(trace, "coding", 2, 1))
+    with pytest.raises(ValueError, match="sleep request"):
+        c.make_plan(
+            manifest_path, [1024], [1], [1000], ["replay"], ["none"], 1, 0,
+            final_state="sleep",
+        )
+
+
+def test_awake_drain_never_requests_sleep():
+    assert not c.should_sleep({"final_state": "awake"}, True)
+    assert c.should_sleep({"final_state": "sleep"}, True)
+    assert not c.should_sleep({"final_state": "sleep"}, False)
 
 
 def test_summary_only_adds_tail_and_bootstrap_statistics_when_supported():
