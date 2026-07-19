@@ -286,44 +286,48 @@ def test_network_and_power_measurements_use_measured_scopes(tmp_path):
 
 
 def test_parallel_gate_requires_independent_overlapping_positive_byte_windows(tmp_path):
-    proxy = tmp_path / "proxy.csv"
+    proxy = tmp_path / "proxy_connections.csv"
     proxy.write_text(
-        "monotonic_ns,wall_ns,interval_ns,connection_id,route,direction,bytes,billed\n"
-        "0,0,250000000,a,kv,target_to_client,1000000,1\n"
-        "0,0,250000000,b,kv,target_to_client,1000000,1\n"
-        "250000000,0,250000000,a,kv,target_to_client,1000000,1\n"
-        "250000000,0,250000000,b,kv,target_to_client,1000000,1\n"
-        "0,0,250000000,z,api,client_to_target,999,1\n"
-        "0,0,250000000,z,kv,target_to_client,999,0\n"
+        "connection_id,route,key_hash,start_ns,end_ns,client_to_target_bytes,target_to_client_bytes\n"
+        "a,kv,ka,0,500000000,186,1000036\n"
+        "b,kv,kb,0,500000000,186,1000036\n"
+        "z,api,,0,500000000,999,0\n"
     )
 
     measured = c.parallel_connection_measurements(
         proxy, 0, 500_000_000, required=2,
+        session_keys={"sa": {"ka"}, "sb": {"kb"}},
     )
 
     assert measured == {
         "connection_count": 2,
-        "max_parallel_connections": 2,
-        "overlap_buckets": 2,
-        "wire_bytes": 4000000,
+        "session_count": 2,
+        "max_parallel_sessions": 2,
+        "overlap_windows": 1,
+        "wire_bytes": 2000072,
+        "kv_body_bytes": 2000000,
+        "session_kv_body_bytes": {"sa": 1000000, "sb": 1000000},
     }
-    proxy.write_text(proxy.read_text().replace(",b,kv", ",a,kv"))
-    with pytest.raises(RuntimeError, match="independent"):
-        c.parallel_connection_measurements(proxy, 0, 500_000_000, required=2)
+    with pytest.raises(RuntimeError, match="maps to 2 sessions"):
+        c.parallel_connection_measurements(
+            proxy, 0, 500_000_000, 2,
+            {"sa": {"ka", "kb"}, "sb": {"kb"}},
+        )
 
 
 def test_parallel_gate_rejects_sequential_connections_with_same_total_bytes(tmp_path):
-    proxy = tmp_path / "proxy.csv"
+    proxy = tmp_path / "proxy_connections.csv"
     proxy.write_text(
-        "monotonic_ns,wall_ns,interval_ns,connection_id,route,direction,bytes,billed\n"
-        "0,0,250000000,a,kv,target_to_client,1000000,1\n"
-        "250000000,0,250000000,a,kv,target_to_client,1000000,1\n"
-        "500000000,0,250000000,b,kv,target_to_client,1000000,1\n"
-        "750000000,0,250000000,b,kv,target_to_client,1000000,1\n"
+        "connection_id,route,key_hash,start_ns,end_ns,client_to_target_bytes,target_to_client_bytes\n"
+        "a,kv,ka,0,500000000,186,1000036\n"
+        "b,kv,kb,500000000,1000000000,186,1000036\n"
     )
 
     with pytest.raises(RuntimeError, match="overlapping"):
-        c.parallel_connection_measurements(proxy, 0, 1_000_000_000, required=2)
+        c.parallel_connection_measurements(
+            proxy, 0, 1_000_000_000, 2,
+            {"sa": {"ka"}, "sb": {"kb"}},
+        )
 
 
 def test_catch_up_profile_separates_prompt_output_and_uses_strict_convergence():

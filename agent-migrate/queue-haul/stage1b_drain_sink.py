@@ -378,7 +378,7 @@ class TokenBucket:
         delay = (nbytes - self.tokens) / self.rate
         self.tokens = 0.0
         self.updated = base + delay
-        return delay
+        return self.updated - now
 
     async def wait(self, nbytes: int) -> None:
         async with self.lock:
@@ -398,7 +398,7 @@ class ByteLog:
         connections = path.with_name("proxy_connections.csv")
         self.connections = connections.open("w", newline="", buffering=1)
         self.connection_writer = csv.writer(self.connections)
-        self.connection_writer.writerow(["connection_id", "route", "start_ns", "end_ns", "client_to_target_bytes", "target_to_client_bytes"])
+        self.connection_writer.writerow(["connection_id", "route", "key_hash", "start_ns", "end_ns", "client_to_target_bytes", "target_to_client_bytes"])
         self.buckets: dict[tuple[int, str, str, str, bool], int] = {}
         self.lock = asyncio.Lock()
         self.task: asyncio.Task | None = None
@@ -421,9 +421,12 @@ class ByteLog:
             self.active += 1
             self.idle.clear()
 
-    async def connection(self, connection_id: str, route: str, start_ns: int, counts: tuple[int, int]) -> None:
+    async def connection(self, connection_id: str, route: str, key_hash: str,
+                         start_ns: int, counts: tuple[int, int]) -> None:
         async with self.lock:
-            self.connection_writer.writerow([connection_id, route, start_ns, time.monotonic_ns(), *counts])
+            self.connection_writer.writerow([
+                connection_id, route, key_hash, start_ns, time.monotonic_ns(), *counts
+            ])
             self.active -= 1
             if not self.active:
                 self.idle.set()
@@ -454,6 +457,11 @@ class ByteLog:
 
 def billable(route: str, direction: str) -> bool:
     return (route, direction) in BILLED_DIRECTIONS
+
+
+def kv_key_hash(header: bytes) -> str:
+    raw_key = LMCACHE_CLIENT_META.unpack(header)[-1].rstrip(b" \0")
+    return hashlib.sha256(raw_key).hexdigest()
 
 
 @dataclass
@@ -574,11 +582,12 @@ def run_lmcache_server(host: str, port: int, max_bytes: int = 0) -> None:
 
 async def relay(reader: asyncio.StreamReader, writer: asyncio.StreamWriter,
                 bucket: TokenBucket, log: ByteLog | None, connection_id: str,
-                route: str, direction: str) -> int:
+                route: str, direction: str, initial: bytes = b"") -> int:
     total = 0
     try:
         charged = billable(route, direction)
-        while data := await reader.read(CHUNK):
+        data = initial or await reader.read(CHUNK)
+        while data:
             if charged:
                 await bucket.wait(len(data))
             writer.write(data)
@@ -586,6 +595,7 @@ async def relay(reader: asyncio.StreamReader, writer: asyncio.StreamWriter,
             total += len(data)
             if log:
                 await log.add(connection_id, route, direction, len(data), charged)
+            data = await reader.read(CHUNK)
     finally:
         writer.close()
         await writer.wait_closed()
@@ -596,19 +606,23 @@ async def handle_proxy(client_r: asyncio.StreamReader, client_w: asyncio.StreamW
     start = time.monotonic_ns()
     connection_id = hashlib.sha256(f"{route.name}:{start}".encode()).hexdigest()[:16]
     target_r, target_w = await asyncio.open_connection(route.target_host, route.target_port)
+    initial, key_hash = b"", ""
+    if route.name == "kv":
+        initial = await client_r.readexactly(LMCACHE_CLIENT_META.size)
+        key_hash = kv_key_hash(initial)
     if log:
         await log.opened()
     counts = (0, 0)
     try:
         counts = tuple(await asyncio.gather(
             relay(client_r, target_w, bucket, log, connection_id, route.name,
-                  "client_to_target"),
+                  "client_to_target", initial),
             relay(target_r, client_w, bucket, log, connection_id, route.name,
                   "target_to_client"),
         ))
     finally:
         if log:
-            await log.connection(connection_id, route.name, start, counts)
+            await log.connection(connection_id, route.name, key_hash, start, counts)
 
 
 async def start_proxy(routes: list[Route], rate_bps: float, log: Path | None = None) -> tuple[list[asyncio.AbstractServer], ByteLog | None]:

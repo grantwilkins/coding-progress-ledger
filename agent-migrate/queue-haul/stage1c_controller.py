@@ -882,6 +882,10 @@ def run_scenario(stack: b.Stack, cfg: b.Config, manifest: dict, scenario: dict, 
             "deadline_s": scenario["deadline_s"], "deadline_met": elapsed_s <= scenario["deadline_s"],
             "full_drain": full_drain, "source_sleep_ns": sleep_times,
             "migrations": [asdict(row) for row in migration_results], "activities": activities, "continuations": continuations,
+            "session_cache_keys": {
+                session_id: sorted(session.cache_keys)
+                for session_id, session in sessions.items()
+            },
         }
     finally:
         try:
@@ -1113,42 +1117,60 @@ def phase_network_measurements(path: Path, start_ns: int | None,
 
 
 def parallel_connection_measurements(path: Path, start_ns: int, end_ns: int,
-                                     required: int) -> dict:
-    rows = kv_network_rows(path, start_ns, end_ns)
-    if any(not row.get("connection_id") for row in rows):
-        raise RuntimeError("KV byte rows lack connection attribution")
-    buckets: dict[int, set[str]] = {}
-    for row in rows:
-        buckets.setdefault(int(row["monotonic_ns"]), set()).add(
-            row["connection_id"]
-        )
-    connection_bytes = {
-        connection: sum(
-            int(row["bytes"]) for row in rows
-            if row["connection_id"] == connection
-        )
-        for connection in {item for values in buckets.values() for item in values}
-    }
-    connections = {
-        connection for connection, nbytes in connection_bytes.items()
-        if nbytes >= 1_000_000
-    }
-    buckets = {
-        bucket: values & connections for bucket, values in buckets.items()
-    }
-    if len(connections) < required:
+                                     required: int,
+                                     session_keys: dict[str, set[str]]) -> dict:
+    with path.open() as handle:
+        raw = list(csv.DictReader(handle))
+    rows = []
+    for row in raw:
+        start, end = int(row["start_ns"]), int(row["end_ns"])
+        wire = int(row["target_to_client_bytes"])
+        if row["route"] != "kv" or end <= start_ns or start >= end_ns \
+                or wire - b.LMCACHE_SERVER_META.size < 1_000_000:
+            continue
+        matches = [
+            session for session, keys in session_keys.items()
+            if row["key_hash"] in keys
+        ]
+        if len(matches) != 1:
+            raise RuntimeError(
+                f"KV connection {row['connection_id']} maps to {len(matches)} sessions"
+            )
+        rows.append({
+            "connection_id": row["connection_id"], "session_id": matches[0],
+            "start_ns": max(start, start_ns), "end_ns": min(end, end_ns),
+            "wire_bytes": wire,
+            "body_bytes": wire - b.LMCACHE_SERVER_META.size,
+        })
+    sessions = {row["session_id"] for row in rows}
+    if len(sessions) < required:
         raise RuntimeError(
-            f"need {required} independent KV connections, found {len(connections)}"
+            f"need {required} sessions with KV bodies, found {len(sessions)}"
         )
-    maximum = max(map(len, buckets.values()), default=0)
-    overlap = sum(len(values) >= required for values in buckets.values())
+    boundaries = sorted({
+        value for row in rows for value in (row["start_ns"], row["end_ns"])
+    })
+    active = [
+        {
+            row["session_id"] for row in rows
+            if row["start_ns"] < right and row["end_ns"] > left
+        }
+        for left, right in zip(boundaries, boundaries[1:]) if right > left
+    ]
+    maximum = max(map(len, active), default=0)
+    overlap = sum(len(values) >= required for values in active)
     if required > 1 and not overlap:
-        raise RuntimeError("independent KV connections lack overlapping byte windows")
+        raise RuntimeError("distinct sessions lack overlapping KV body connections")
+    by_session = {
+        session: sum(row["body_bytes"] for row in rows if row["session_id"] == session)
+        for session in sessions
+    }
     return {
-        "connection_count": len(connections),
-        "max_parallel_connections": maximum,
-        "overlap_buckets": overlap,
-        "wire_bytes": sum(int(row["bytes"]) for row in rows),
+        "connection_count": len(rows), "session_count": len(sessions),
+        "max_parallel_sessions": maximum, "overlap_windows": overlap,
+        "wire_bytes": sum(row["wire_bytes"] for row in rows),
+        "kv_body_bytes": sum(row["body_bytes"] for row in rows),
+        "session_kv_body_bytes": by_session,
     }
 
 
@@ -1596,15 +1618,22 @@ def check_parallel_run(run_root: Path) -> None:
         end = max(row["initial_end_ns"] for row in moves)
         try:
             measured = parallel_connection_measurements(
-                root / "proxy_bytes.csv", start, end,
-                scenario["concurrency"],
+                root / "proxy_connections.csv", start, end, scenario["concurrency"],
+                {
+                    session: set(keys)
+                    for session, keys in result["session_cache_keys"].items()
+                },
             )
-            payload = sum(row["initial"]["logical_kv_bytes"] for row in moves)
+            expected = {
+                row["move"]["session_id"]: row["initial"]["logical_kv_bytes"]
+                for row in moves
+            }
+            payload = sum(expected.values())
             correct = len(moves) == len(scenario["sessions"]) and all(
                 not row["error"] and row["initial"]["processed_tokens"] == 0
                 and row["initial"]["logical_kv_bytes"] > 0 for row in moves
             ) and valid_continuations(result, len(scenario["sessions"]))
-            passed = correct and measured["wire_bytes"] >= payload
+            passed = correct and measured["session_kv_body_bytes"] == expected
             error = "" if passed else "cache, continuation, or byte accounting failed"
         except Exception as exc:
             measured, payload, passed, error = {}, 0, False, str(exc)

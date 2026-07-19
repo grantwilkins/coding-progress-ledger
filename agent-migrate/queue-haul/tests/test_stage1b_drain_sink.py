@@ -287,7 +287,7 @@ def test_token_bucket_reserves_one_shared_timeline():
 
     assert bucket.reserve(50, 0.0) == pytest.approx(0.5)
     assert bucket.updated == pytest.approx(0.5)
-    assert bucket.reserve(50, 0.0) == pytest.approx(0.5)
+    assert bucket.reserve(50, 0.0) == pytest.approx(1.0)
     assert bucket.updated == pytest.approx(1.0)
     assert bucket.reserve(75, 2.0) == 0
 
@@ -305,6 +305,16 @@ def test_source_egress_billing_directions_only():
     assert s.billable("kv", "target_to_client")
     assert not s.billable("api", "target_to_client")
     assert not s.billable("kv", "client_to_target")
+
+
+def test_kv_connection_key_hash_ignores_protocol_padding():
+    key = b"session-block"
+    header = s.LMCACHE_CLIENT_META.pack(
+        s.LMCACHE_CLIENT_GET, 0, 1, 2, 0, 0, 0, 0, 0,
+        key.ljust(s.LMCACHE_MAX_KEY_LENGTH, b"\0"),
+    )
+
+    assert s.kv_key_hash(header) == s.hashlib.sha256(key).hexdigest()
 
 
 def test_proxy_relay_shapes_billable_bytes_and_logs(tmp_path):
@@ -355,6 +365,7 @@ def test_proxy_relay_shapes_billable_bytes_and_logs(tmp_path):
     connections = list(csv.DictReader((tmp_path / "proxy_connections.csv").open()))
     assert len(connections) == 1
     assert int(connections[0]["client_to_target_bytes"]) == 512
+    assert connections[0]["key_hash"] == ""
 
 
 def test_smoke2_live_cli_is_wired_with_1gbps_default():
