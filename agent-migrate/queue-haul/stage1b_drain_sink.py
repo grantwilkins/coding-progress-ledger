@@ -24,7 +24,7 @@ from stage1_curves import shell
 
 MODEL = "openai/gpt-oss-20b"
 SANDBOX = Path("/scratch/users/gfw/ptsim/vllm-openai-v0.10.1.1.sandbox")
-MP_SANDBOX = Path("/scratch/users/gfw/ptsim/lmcache-v0.5.1-vllm0.22.0-cu129.sandbox")
+MP_IMAGE = Path("/scratch/users/gfw/ptsim/lmcache-v0.5.1-vllm0.22.0-cu129-primary.sif")
 REDIS_IMAGE = Path("/scratch/users/gfw/ptsim/redis-7.4.2-bookworm.sif")
 RUNTIME_VERSIONS = ("0.10.1.1", "0.3.3")
 MP_RUNTIME_VERSIONS = ("0.22.0+cu129", "0.5.1")
@@ -43,7 +43,7 @@ def expected_runtime_versions() -> tuple[str, str]:
 
 
 def apptainer_image_default() -> Path:
-    default = MP_SANDBOX if lmcache_mode() == "mp" else SANDBOX
+    default = MP_IMAGE if lmcache_mode() == "mp" else SANDBOX
     return Path(os.environ.get("QH_APPTAINER_IMAGE", default))
 
 

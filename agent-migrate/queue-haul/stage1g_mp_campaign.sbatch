@@ -17,6 +17,6 @@ RUN_ROOT=${RUN_ROOT:-queue-haul/outputs/mp-campaign-run}
 cd "$REPO"
 module load gcc/14.2.0 openblas/0.3.28
 export QH_LMCACHE_MODE=mp
-export QH_APPTAINER_IMAGE=${QH_APPTAINER_IMAGE:-/scratch/users/gfw/ptsim/lmcache-v0.5.1-vllm0.22.0-cu129.sandbox}
+export QH_APPTAINER_IMAGE=${QH_APPTAINER_IMAGE:-/scratch/users/gfw/ptsim/lmcache-v0.5.1-vllm0.22.0-cu129-primary.sif}
 export QH_PORT_OFFSET=${QH_PORT_OFFSET:-$((SLURM_JOB_ID % 40000 + 1000))}
 exec .venv/bin/python queue-haul/stage1g_mp_campaign.py --run-root "$RUN_ROOT"

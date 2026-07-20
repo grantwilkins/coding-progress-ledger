@@ -166,8 +166,11 @@ held-out extension remains gated on pre-staged complete SWE-chat traces; it is
 not synthesized from the coding manifest.
 
 Stage 1G is the opt-in LMCache multiprocess path; the legacy vLLM 0.10.1.1 /
-LMCache 0.3.3 path remains the default. It uses vLLM 0.22.0+cu129 and LMCache
-0.5.1's shipped `LMCacheMPConnector`, two CPU-only engine-driven MP servers,
+LMCache 0.3.3 path remains the default. It uses the verified immutable image
+`/scratch/users/gfw/ptsim/lmcache-v0.5.1-vllm0.22.0-cu129-primary.sif`
+(SHA-256 `50e98f65de09ebfe196f270c8b5c595636853646eb5536dca92f27bd45c084ab`),
+vLLM 0.22.0+cu129, LMCache 0.5.1's shipped `LMCacheMPConnector`, two CPU-only
+engine-driven MP servers,
 and Redis L2. The shared 10-Gbps proxy parses RESP and attributes successful
 GET response bodies to source SET keys, so remote wire bytes exclude source
 context growth. Run it on two A100s with:

@@ -82,7 +82,7 @@ def test_mp_runtime_uses_release_image_and_shipped_connector(monkeypatch):
     monkeypatch.setenv("QH_LMCACHE_MODE", "mp")
     source = cmd_text(s.vllm_cmd(s.Config(), "source"))
 
-    assert "lmcache-v0.5.1-vllm0.22.0-cu129.sandbox" in source
+    assert "lmcache-v0.5.1-vllm0.22.0-cu129-primary.sif" in source
     assert "LMCacheMPConnector" in source
     assert "lmcache.integration.vllm.lmcache_mp_connector" in source
     assert "lmcache.mp.host" in source and "lmcache.mp.port" in source
