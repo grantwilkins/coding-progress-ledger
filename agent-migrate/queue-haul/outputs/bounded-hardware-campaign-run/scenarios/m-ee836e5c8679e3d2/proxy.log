@@ -1,0 +1,9 @@
+Unhandled exception in client_connected_cb
+transport: <_SelectorSocketTransport fd=11 read=idle write=<idle, bufsize=0>>
+Traceback (most recent call last):
+  File "/home/groups/ramr/gfw/coding-progress-ledger/agent-migrate/queue-haul/stage1b_drain_sink.py", line 611, in handle_proxy
+    initial = await client_r.readexactly(LMCACHE_CLIENT_META.size)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/users/gfw/.local/share/uv/python/cpython-3.11.15-linux-x86_64-gnu/lib/python3.11/asyncio/streams.py", line 748, in readexactly
+    raise exceptions.IncompleteReadError(incomplete, n)
+asyncio.exceptions.IncompleteReadError: 0 bytes read on a total of 186 expected bytes

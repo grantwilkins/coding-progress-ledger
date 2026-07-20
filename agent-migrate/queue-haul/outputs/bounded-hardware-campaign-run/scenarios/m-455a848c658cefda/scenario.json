@@ -1,0 +1,56 @@
+{
+  "activity": "one_turn",
+  "activity_tokens": 2048,
+  "bandwidth_mbps": 1000,
+  "campaign": "staged_append",
+  "concurrency": 1,
+  "context_size": 28000,
+  "copy_policy": "initial_final",
+  "deadline_s": 900,
+  "final_state": "awake",
+  "kind": "migration",
+  "match_id": "476c4b17360f0f6a",
+  "method": "kv_transfer",
+  "move_concurrency": 1,
+  "moves": [
+    {
+      "initial_tokens": 28000,
+      "job_class": "coding",
+      "method": "kv_transfer",
+      "order": 0,
+      "session_id": "claude:d822a508-dc39-797d-a37d-fa6552fdb8bb",
+      "turn_index": 0
+    }
+  ],
+  "repeat": 2,
+  "request_schedule": [
+    {
+      "append_tokens": 32,
+      "at_s": 2
+    },
+    {
+      "append_tokens": 992,
+      "at_s": 2.2
+    },
+    {
+      "append_tokens": 32,
+      "at_s": 7
+    },
+    {
+      "append_tokens": 992,
+      "at_s": 7.2
+    }
+  ],
+  "scenario_id": "m-455a848c658cefda",
+  "serving_concurrency": 1,
+  "sessions": [
+    {
+      "initial_tokens": 28000,
+      "job_class": "coding",
+      "order": 0,
+      "session_id": "claude:d822a508-dc39-797d-a37d-fa6552fdb8bb",
+      "turn_index": 0
+    }
+  ],
+  "split": "validation"
+}
