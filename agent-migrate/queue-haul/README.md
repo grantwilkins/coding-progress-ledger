@@ -276,3 +276,8 @@ deadline, and a 50% removable-power target. Load-only, node-aware, and
 node-drain meet the target with about 524,000 replay moves; node-drain drains
 the most nodes. The LP moves 949,031 sessions and reaches 189% of the target,
 while random selection fails under shared-link contention.
+
+Greedy planning skips solver-specific state it does not consume, batches
+homogeneous seeded random choices without changing their sequence, and reuses
+static expected scenarios. Exact simulation also drops inactive links from
+fair-share calculations; these fast paths preserve move and simulation results.

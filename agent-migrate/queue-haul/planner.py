@@ -182,6 +182,8 @@ def _kv_schedule(scenario: ExecutionScenario, profile: ModelProfile,
 
 def _expected_scenario(scenario: ExecutionScenario,
                        moves: tuple[PlannedMove, ...]) -> ExecutionScenario:
+    if not any(s.requests or s.expected_growth_tokens_per_s for s in scenario.sessions):
+        return scenario
     by_session = {move.session_id: move for move in moves}
 
     def expected(session):
@@ -696,6 +698,8 @@ def plan(scenario: ExecutionScenario, profile: ModelProfile,
         # TODO(routes): measure heterogeneous destination links before optimizing over them.
         candidate_path = _route(paths, session.source_instance, destinations[0].instance_id)
         for k, method in enumerate(METHODS):
+            if method not in MOVE_METHODS_BY_STATE[session.state]:
+                continue
             try:
                 costs[j, k] = _duration(
                     session, method, case, candidate_path, links, horizon
@@ -704,40 +708,54 @@ def plan(scenario: ExecutionScenario, profile: ModelProfile,
                     _kv_schedule(
                         scenario, profile, session, case, candidate_path, links,
                     )
-                valid[j, k] = method in MOVE_METHODS_BY_STATE[session.state] \
-                    and costs[j, k] <= horizon
+                valid[j, k] = costs[j, k] <= horizon
             except ValueError:
                 pass
     available = valid.any(1)
-    best_method = np.argmin(np.where(valid, costs, np.inf), axis=1)
-    best_cost = costs[np.arange(len(sessions)), best_method]
-    groups = _drain_groups(scenario, sessions)
-    base_gain = np.array([power_state.marginal(s.session_id) for s in sessions])
-    gains = base_gain.copy()
-    for group in groups:
-        ids = [sessions[j].session_id for j in group]
-        bonus = power_state.drain_gain(ids) - base_gain[group].sum()
-        weight = np.array([_ell(sessions[j], case) for j in group])
-        gains[group] += bonus * (weight / weight.sum() if weight.any() else 1 / len(group))
-    rng = np.random.default_rng(seed)
     capacity_node_drain = solver == "node_drain" and scenario.final_state == "awake" \
         and all(session.state == "active" for session in sessions)
     if solver == "random":
-        order = list(rng.permutation(np.flatnonzero(available)))
-        methods = [METHODS[int(rng.choice(np.flatnonzero(valid[j])))] if available[j]
-                   else METHODS[0] for j in range(len(sessions))]
-    elif solver == "load_only":
-        order = [j for j in np.argsort(
+        rng = np.random.default_rng(seed)
+        eligible = np.flatnonzero(available)
+        order = rng.permutation(eligible)
+        choices = np.zeros(len(sessions), int)
+        if eligible.size and np.all(valid[eligible] == valid[eligible[0]]):
+            choices[eligible] = rng.choice(
+                np.flatnonzero(valid[eligible[0]]), eligible.size,
+            )
+        else:
+            for j in eligible:
+                choices[j] = rng.choice(np.flatnonzero(valid[j]))
+        methods = [METHODS[k] for k in choices]
+    else:
+        best_method = np.argmin(np.where(valid, costs, np.inf), axis=1)
+        best_cost = costs[np.arange(len(sessions)), best_method]
+        methods = [METHODS[k] for k in best_method]
+    if solver == "load_only":
+        order = np.argsort(
             best_cost / np.maximum([_ell(s, case) for s in sessions], 1e-12)
-        ) if available[j]]
-        methods = [METHODS[k] for k in best_method]
-    elif solver == "node_aware":
-        order = [j for j in np.argsort(best_cost / np.maximum(gains, 1e-12)) if available[j]]
-        methods = [METHODS[k] for k in best_method]
-    elif solver == "node_drain" and not capacity_node_drain:
-        groups.sort(key=lambda group: best_cost[group].sum() / max(gains[group].sum(), 1e-12))
-        groups = [sorted(group, key=lambda j: best_cost[j]) for group in groups]
-        methods = [METHODS[k] for k in best_method]
+        )
+        order = order[available[order]]
+    elif solver in {"node_aware", "node_drain"}:
+        groups = _drain_groups(scenario, sessions)
+        base_gain = np.array([power_state.marginal(s.session_id) for s in sessions])
+        gains = base_gain.copy()
+        for group in groups:
+            ids = [sessions[j].session_id for j in group]
+            bonus = power_state.drain_gain(ids) - base_gain[group].sum()
+            weight = np.array([_ell(sessions[j], case) for j in group])
+            gains[group] += bonus * (
+                weight / weight.sum() if weight.any() else 1 / len(group)
+            )
+        if solver == "node_aware":
+            order = np.argsort(best_cost / np.maximum(gains, 1e-12))
+            order = order[available[order]]
+        elif not capacity_node_drain:
+            groups.sort(
+                key=lambda group: best_cost[group].sum()
+                / max(gains[group].sum(), 1e-12)
+            )
+            groups = [sorted(group, key=lambda j: best_cost[j]) for group in groups]
     selected = []
     if capacity_node_drain:
         resource_horizon = horizon - profile.power_window_s

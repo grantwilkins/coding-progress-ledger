@@ -267,7 +267,7 @@ def fair_link_rates(paths: dict[int, tuple[str, ...]], links: dict[str, float]) 
     for flow, path in paths.items():
         for link in path:
             members[link].add(flow)
-    counts = {link: len(flows) for link, flows in members.items()}
+    counts = {link: len(flows) for link, flows in members.items() if flows}
     while active:
         share, bottleneck = min(
             ((residual[link] / count, link) for link, count in counts.items() if count),
@@ -282,6 +282,8 @@ def fair_link_rates(paths: dict[int, tuple[str, ...]], links: dict[str, float]) 
         for flow in blocked:
             for link in paths[flow]:
                 counts[link] -= 1
+                if not counts[link]:
+                    del counts[link]
     return rates
 
 

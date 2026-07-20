@@ -24,6 +24,7 @@ Plausible wrong implementations:
 - Apply a background pace cap to the paused final catch-up.
 - Transfer an unsealed partial block or commit without reconstructing its tail.
 - Omit measured replay completion time or emit duplicate network-start events.
+- Treat an unused or completed private link as an active bottleneck.
 """
 
 import json
@@ -96,6 +97,13 @@ def test_fair_rates_redistribute_capacity_across_two_bottlenecks():
     assert rates == pytest.approx({0: 90, 1: 10, 2: 10})
     assert rates[0] + rates[1] == pytest.approx(100)
     assert rates[1] + rates[2] == pytest.approx(20)
+
+
+def test_fair_rates_ignore_unused_links():
+    paths = {0: ("a",), 1: ("a", "b"), 2: ("b",)}
+    links = {"a": 100, "b": 20}
+
+    assert fair_link_rates(paths, {**links, "unused": 1}) == fair_link_rates(paths, links)
 
 
 def test_rate_changes_stay_within_connected_links(tmp_path, monkeypatch):

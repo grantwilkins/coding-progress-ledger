@@ -27,6 +27,10 @@ Plausible wrong implementations:
 - Hold replay log bytes fixed while expected session state grows.
 - Award an idle-node bonus while an unmovable session remains.
 - Reject a valid tail-only KV move because its background byte rate is zero.
+- Compute node-aware gains for solvers that do not use them.
+- Evaluate migration methods that are illegal for a session's residency state.
+- Rebuild an already-static expected scenario.
+- Change seeded random methods or move order while batching random choices.
 """
 
 from dataclasses import replace
@@ -177,6 +181,50 @@ def test_expected_prediction_materializes_growth_at_quiescence():
     assert expected.sessions[0].log_bytes == 2
     assert expected.sessions[0].requests == ()
     assert expected.sessions[0].expected_growth_tokens_per_s == 0
+
+
+def test_expected_prediction_reuses_a_static_scenario():
+    scenario = problem()
+    move = planner.PlannedMove("a", "t0", "replay", 0, ("wan",))
+
+    assert _expected_scenario(scenario, (move,)) is scenario
+
+
+@pytest.mark.parametrize("solver", ("random", "load_only"))
+def test_simple_solvers_skip_node_aware_work(tmp_path, monkeypatch, solver):
+    def unexpected(*_args, **_kwargs):
+        raise AssertionError("simple solver evaluated node-aware state")
+
+    monkeypatch.setattr(planner, "_drain_groups", unexpected)
+    monkeypatch.setattr(planner.ExpectedPower, "marginal", unexpected)
+    monkeypatch.setattr(planner.ExpectedPower, "drain_gain", unexpected)
+
+    plan(problem(), model(tmp_path, tp=1), PATHS, solver)
+
+
+def test_planner_only_evaluates_methods_allowed_by_session_state(tmp_path, monkeypatch):
+    original = planner._duration
+
+    def allowed(session, method, *args, **kwargs):
+        assert method in planner.MOVE_METHODS_BY_STATE[session.state]
+        return original(session, method, *args, **kwargs)
+
+    monkeypatch.setattr(planner, "_duration", allowed)
+
+    plan(problem(), model(tmp_path, tp=1), PATHS, "load_only")
+
+
+def test_random_batching_preserves_scalar_seed_sequence(tmp_path):
+    scenario = problem(limit=0)
+    rng = np.random.default_rng(7)
+    order = rng.permutation(2)
+    choices = [rng.choice(2) for _ in scenario.sessions]
+
+    result = plan(scenario, model(tmp_path, tp=1), PATHS, "random", seed=7)
+
+    assert [(move.session_id, move.method) for move in result.moves] == [
+        (scenario.sessions[j].session_id, METHODS[choices[j]]) for j in order
+    ]
 
 
 def test_replay_duration_scales_durable_log_with_expected_growth(tmp_path):
