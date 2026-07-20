@@ -190,11 +190,12 @@ At the final 16K append stage, vLLM reported 16,384 cached tokens, decomposed
 exactly into 14,848 vLLM-local and 1,536 LMCache-retrieved tokens. All
 continuations, RESP wire/body equations, and repeat counts passed.
 
-Stage 1H warm-prefetches each complete 12K/13.6K/15K/16K snapshot into
-destination L1 before the real vLLM lookup. It hard-fails unless WAN key counts
-are exactly 48/5/5/6 with no duplicate prefix keys, token and wire equations
-are exact, the final conversational turn preserves the state code, and one
-concurrency-four repeat exceeds 1 GB/s with two sessions overlapping:
+Stage 1H (`mp-incremental-run-3-20260720`) proved incremental MP staging:
+warm-prefetching each complete 12K/13.6K/15K/16K snapshot into retained
+destination L1 transferred exactly 48/5/5/6 new blocks with no repeated prefix
+keys. Every token, state, and wire gate passed, including a real second turn.
+The concurrency-four confirmation overlapped two attributed sessions at 1.116
+GB/s. Reproduce it with:
 
 ```bash
 sbatch queue-haul/stage1h_mp_incremental.sbatch
