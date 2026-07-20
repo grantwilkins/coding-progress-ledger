@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-import stage1h_mp_incremental as m
+import lmcache_incremental_prefetch as m
 
 
 def stage(source: set[str], new: set[str], wan: set[str], resident: set[str]) -> dict:

@@ -9,12 +9,12 @@ cd /home/groups/ramr/gfw/coding-progress-ledger/agent-migrate
 module load gcc/14.2.0 openblas/0.3.28
 PY=.venv/bin/python
 
-$PY queue-haul/stage1b_drain_sink.py preflight --required-gpus 2
-$PY queue-haul/stage1b_drain_sink.py smoke2-live --mbps 1000 --run-root /tmp/qh-smoke2-live
+$PY queue-haul/migration_testbed.py preflight --required-gpus 2
+$PY queue-haul/migration_testbed.py smoke2-live --mbps 1000 --run-root /tmp/qh-smoke2-live
 
-$PY queue-haul/stage1c_controller.py plan
-$PY queue-haul/stage1c_controller.py proof --mbps 1000 --run-root /tmp/qh-proof-live
-$PY queue-haul/stage1c_controller.py check --run-root /tmp/qh-proof-live
+$PY queue-haul/migration_profiler.py plan
+$PY queue-haul/migration_profiler.py proof --mbps 1000 --run-root /tmp/qh-proof-live
+$PY queue-haul/migration_profiler.py check --run-root /tmp/qh-proof-live
 ```
 
 Passing those commands proves the full end-to-end live path: source and sink are alive together, source stores KV, sink retrieves KV through the shaped KV proxy, sink replays full context through the shaped API proxy, and the controller orders replay and KV-transfer sessions under deadline.
@@ -193,7 +193,7 @@ specific PID. Do not kill unrelated user processes.
 ### 2. Preflight the host and sandbox
 
 ```bash
-$PY queue-haul/stage1b_drain_sink.py preflight --required-gpus 2
+$PY queue-haul/migration_testbed.py preflight --required-gpus 2
 ```
 
 This hard-fails if the old sandbox, HF cache, Apptainer, required imports, GPU
@@ -202,7 +202,7 @@ count, or ports are not usable.
 ### 3. Run live Stage 1b smoke
 
 ```bash
-$PY queue-haul/stage1b_drain_sink.py smoke2-live \
+$PY queue-haul/migration_testbed.py smoke2-live \
   --mbps 1000 \
   --run-root /tmp/qh-smoke2-live
 ```
@@ -232,11 +232,11 @@ Required evidence:
 ### 4. Run Stage 1c controller proof
 
 ```bash
-$PY queue-haul/stage1c_controller.py plan
-$PY queue-haul/stage1c_controller.py proof \
+$PY queue-haul/migration_profiler.py plan
+$PY queue-haul/migration_profiler.py proof \
   --mbps 1000 \
   --run-root /tmp/qh-proof-live
-$PY queue-haul/stage1c_controller.py check --run-root /tmp/qh-proof-live
+$PY queue-haul/migration_profiler.py check --run-root /tmp/qh-proof-live
 ```
 
 The default fixture intentionally has one replay-cheaper session and one
@@ -271,25 +271,23 @@ Build the session manifest from a local pinned TraceLab JSONL/JSONL.gz artifact,
 then run the greedy-ranked live drain with 4 Hz `nvidia-smi` telemetry:
 
 ```bash
-$PY queue-haul/stage1c_controller.py make-manifest \
+$PY queue-haul/migration_profiler.py make-manifest \
   --source tracelab \
   --input /path/to/syfi_coding_trace.jsonl.gz \
   --out queue-haul/outputs/stage1c_live-sessions.json \
   --sessions 8 \
   --seed 0
-$PY queue-haul/stage1c_controller.py live-drain \
+$PY queue-haul/migration_profiler.py live-drain \
   --manifest queue-haul/outputs/stage1c_live-sessions.json \
   --mbps 1000 \
   --nvsmi-ms 250 \
   --run-root queue-haul/outputs/stage1c_live
-$PY queue-haul/stage1c_controller.py check-live --run-root queue-haul/outputs/stage1c_live
-$PY queue-haul/stage1c_controller.py plot-live --run-root queue-haul/outputs/stage1c_live
-$PY queue-haul/stage1c_controller.py live-grid \
+$PY queue-haul/migration_profiler.py check-live --run-root queue-haul/outputs/stage1c_live
+$PY queue-haul/migration_profiler.py plot-live --run-root queue-haul/outputs/stage1c_live
+$PY queue-haul/migration_profiler.py live-grid \
   --manifest queue-haul/outputs/stage1c_live-sessions.json \
   --mbps 1000 \
   --run-root queue-haul/outputs/stage1c_grid
-# Or submit the unattended Slurm grid:
-sbatch queue-haul/stage1c_grid.sbatch
 ```
 
 The live controller writes `gpu_power.csv`, `events.jsonl`,

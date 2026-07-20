@@ -63,7 +63,7 @@ Stage 1a uses `powertrace-sim`'s vLLM probe stack. For the single-A100
 gpt-oss-20b TP=1 collection, write the runbook with:
 
 ```bash
-uv run python queue-haul/stage1_curves.py \
+uv run python queue-haul/service_curve_runner.py \
   --model openai/gpt-oss-20b \
   --hardware A100 \
   --tp 1 \
@@ -85,8 +85,8 @@ fit constants.
 
 ```bash
 (cd ../../powertrace-sim && uv run python scripts/eval/two_price_fit.py --configs gpt-oss-20b-a100 && uv run python scripts/eval/saturating_fit.py)
-uv run python queue-haul/stage1_profile.py
-uv run python queue-haul/stage1_window_sensitivity.py
+uv run python queue-haul/power_profile_reduce.py
+uv run python queue-haul/power_window_sensitivity.py
 ```
 
 The Queue-Haul reducer writes:
@@ -104,7 +104,7 @@ To measure `rho(T)`, context-dependent decode `G(T)`, and mixed prefill/decode
 interference on one A100 node, write the MVP runbook with:
 
 ```bash
-uv run python queue-haul/stage1_service_surface.py \
+uv run python queue-haul/service_surface_runner.py \
   --run-id gpt-oss-20b-a100-tp1-service-surface \
   -- --async-scheduling
 ```
@@ -114,7 +114,7 @@ that script on the A100 node, using the same optional `APP='apptainer exec ...'`
 wrapper as above. After collection, reduce the emitted bundles with:
 
 ```bash
-uv run python queue-haul/stage1_service_reduce.py \
+uv run python queue-haul/service_profile_reduce.py \
   --run-dir queue-haul/runs/stage1_service_surface/gpt-oss-20b-a100-tp1-service-surface/bundles
 ```
 
@@ -154,8 +154,8 @@ zero hits. On a two-GPU A100 node, check the pinned vLLM `0.10.1.1`
 and LMCache `0.3.3` setup:
 
 ```bash
-$PY queue-haul/stage1b_drain_sink.py preflight --required-gpus 2
-$PY queue-haul/stage1b_drain_sink.py smoke2-live --mbps 1000 --run-root /tmp/qh-smoke2-live
+$PY queue-haul/migration_testbed.py preflight --required-gpus 2
+$PY queue-haul/migration_testbed.py smoke2-live --mbps 1000 --run-root /tmp/qh-smoke2-live
 ```
 
 Stage 1c profiles migration mechanisms; it does not choose a power policy or
@@ -169,7 +169,7 @@ after reserving the state probe budget. State probes allow reasoning models enou
 budget to emit the required code:
 
 ```bash
-$PY queue-haul/stage1c_controller.py make-manifest \
+$PY queue-haul/migration_profiler.py make-manifest \
   --input /path/to/trace.jsonl.gz \
   --out queue-haul/outputs/coding-manifest.json \
   --workload coding \
@@ -182,7 +182,7 @@ no-migration controls. Generated profiling scenarios use one method at a time;
 the plan schema also permits moves with different methods:
 
 ```bash
-$PY queue-haul/stage1c_controller.py make-plan \
+$PY queue-haul/migration_profiler.py make-plan \
   --manifest queue-haul/outputs/coding-manifest.json \
   --out queue-haul/outputs/coding-plan.json \
   --context-sizes 2048,8192,16384 \
@@ -217,15 +217,15 @@ retains the original port mapping when resuming a targeted run and always
 invokes reduction and preserves the run status:
 
 ```bash
-$PY queue-haul/stage1c_controller.py run \
+$PY queue-haul/migration_profiler.py run \
   --plan queue-haul/outputs/coding-plan.json \
   --run-root queue-haul/outputs/coding-run
-$PY queue-haul/stage1c_controller.py reduce \
+$PY queue-haul/migration_profiler.py reduce \
   --run-root queue-haul/outputs/coding-run
 # On Sherlock:
 PLAN=queue-haul/outputs/coding-plan.json \
 RUN_ROOT=queue-haul/outputs/coding-run \
-sbatch queue-haul/stage1c_benchmark.sbatch
+sbatch queue-haul/migration_profile.sbatch
 ```
 
 Each scenario records controller events, every streamed response chunk, prompt

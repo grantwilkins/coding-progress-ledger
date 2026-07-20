@@ -16,7 +16,7 @@ The next campaign is one resumable two-GPU job with a 12-hour limit. Start the
 stack once, randomize scenarios, checkpoint each result, reuse compatible
 controls, and exclude incomplete or dirty scenarios from fitting.
 
-`stage1f_campaign.sbatch` implements the 105-scenario hardware portion: 63
+`bounded_hardware_campaign.sbatch` implements the 105-scenario hardware portion: 63
 parallel-surface and 42 staged-append scenarios. The remaining workload and
 mixed held-out scenarios must not be generated until complete trace-backed
 interactive, coding, and agentic manifests are staged.
@@ -80,7 +80,7 @@ churn materially limits representative transfers.
 
 ## Completed GPU job: parallel KV gate
 
-- [x] Script `stage1d_parallel_gate.sbatch` with the reviewed 12-scenario
+- [x] Script `parallel_kv_gate.sbatch` with the reviewed 12-scenario
   `outputs/parallel-kv-gate-plan.json`.
 - [x] Run the fixed two-session, 1 Gbps, no-activity smoke at concurrency 1
   and 2 with matched controls.
@@ -96,7 +96,7 @@ churn materially limits representative transfers.
 
 ## Urgency and append-only catch-up
 
-- [x] Script `stage1e_catch_up.sbatch` with the reviewed 24-scenario
+- [x] Script `append_catch_up.sbatch` with the reviewed 24-scenario
   `outputs/append-catch-up-plan.json`: 32/128/512/2,048-token controlled
   appends, 1/10 Gbps, two repeats, and matched controls.
 - [x] Run the scripted two-stage initial/final catch-up job and determine from

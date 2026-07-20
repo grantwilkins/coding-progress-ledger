@@ -1,6 +1,6 @@
 """
 Claim:
-Stage 1b starts from the validated old Apptainer sandbox path, keeps source and
+The migration testbed starts from the validated old Apptainer sandbox path, keeps source and
 sink vLLM instances separate, and replaces privileged kernel tc with one
 user-space bandwidth bucket shared by the source-egress KV/API proxy routes.
 
@@ -26,7 +26,7 @@ import time
 
 import pytest
 
-import stage1b_drain_sink as s
+import migration_testbed as s
 
 
 def cmd_text(cmd):
@@ -120,12 +120,12 @@ def test_lmcache_and_proxy_use_host_commands_not_docker_or_tc():
     lmcache = cmd_text(s.lmcache_cmd(cfg))
     proxy = cmd_text(s.proxy_cmd(cfg, 1000.0))
 
-    assert "stage1b_drain_sink.py lmcache-server --host 127.0.0.1 --port 5655" in lmcache
+    assert "migration_testbed.py lmcache-server --host 127.0.0.1 --port 5655" in lmcache
     assert "apptainer" not in lmcache
     assert "--nv" not in lmcache
     assert "APPTAINERENV_CUDA_VISIBLE_DEVICES" not in lmcache
     assert "lmcache.v1.server" not in lmcache
-    assert "stage1b_drain_sink.py proxy" in proxy
+    assert "migration_testbed.py proxy" in proxy
     assert "--kv-listen 127.0.0.1:8300 --kv-target 127.0.0.1:5655" in proxy
     assert "--api-listen 127.0.0.1:8400 --api-target 127.0.0.1:8200" in proxy
     assert "--mbps 1000.0" in proxy
@@ -236,7 +236,7 @@ def _lmc_request(port, command, key="k", data=b""):
 def test_lite_lmcache_server_put_get_and_flush(tmp_path):
     port = _free_port()
     log = tmp_path / "lmcache.log"
-    proc = subprocess.Popen([sys.executable, "queue-haul/stage1b_drain_sink.py", "lmcache-server", "--host", "127.0.0.1", "--port", str(port)], stdout=log.open("w"), stderr=subprocess.STDOUT, start_new_session=True)
+    proc = subprocess.Popen([sys.executable, "queue-haul/migration_testbed.py", "lmcache-server", "--host", "127.0.0.1", "--port", str(port)], stdout=log.open("w"), stderr=subprocess.STDOUT, start_new_session=True)
     try:
         s.wait_tcp_process("127.0.0.1", port, 5, proc, log)
         _lmc_request(port, s.LMCACHE_CLIENT_PUT, data=b"abc")

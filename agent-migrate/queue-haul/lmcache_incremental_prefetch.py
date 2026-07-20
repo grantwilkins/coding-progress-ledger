@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import argparse, dataclasses, hashlib, http.client, json, re, subprocess, time, traceback
 from pathlib import Path
-import stage1b_drain_sink as b
-import stage1g_mp_campaign as g
+import lmcache_mp_campaign as g
+import migration_testbed as b
 
 TARGETS = (12288, 13653, 15018, 16384)
 EXPECTED_WAN_BLOCKS = (48, 5, 5, 6)

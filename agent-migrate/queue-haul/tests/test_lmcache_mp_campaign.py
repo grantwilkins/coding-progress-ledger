@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-import stage1g_mp_campaign as m
+import lmcache_mp_campaign as m
 
 
 def test_max_distinct_overlap_attributes_sessions():

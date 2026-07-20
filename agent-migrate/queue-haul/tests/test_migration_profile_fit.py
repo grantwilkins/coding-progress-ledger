@@ -1,6 +1,6 @@
 """
 Claim:
-Stage 1C calibration fits repeats 0 and 1, evaluates repeat 2, and models KV
+Migration calibration fits repeats 0 and 1, evaluates repeat 2, and models KV
 network transfer and destination ingestion as overlapping work.
 
 Plausible wrong implementations:
@@ -15,7 +15,7 @@ Plausible wrong implementations:
 import pandas as pd
 import pytest
 
-import stage1c_profile_fit as fit
+import migration_profile_fit as fit
 
 
 def test_fit_uses_only_training_repeats_and_pipeline_time():

@@ -8,11 +8,11 @@
 #SBATCH --constraint=GPU_SKU:A100_SXM4&GPU_MEM:80GB
 #SBATCH --mem=256G
 #SBATCH --time=12:00:00
-#SBATCH --output=/home/groups/ramr/gfw/coding-progress-ledger/agent-migrate/queue-haul/outputs/stage1f-%j.out
-#SBATCH --error=/home/groups/ramr/gfw/coding-progress-ledger/agent-migrate/queue-haul/outputs/stage1f-%j.err
+#SBATCH --output=/home/groups/ramr/gfw/coding-progress-ledger/agent-migrate/queue-haul/outputs/bounded-hardware-campaign-%j.out
+#SBATCH --error=/home/groups/ramr/gfw/coding-progress-ledger/agent-migrate/queue-haul/outputs/bounded-hardware-campaign-%j.err
 
 export REPO=${REPO:-/home/groups/ramr/gfw/coding-progress-ledger/agent-migrate}
 export PLAN=${PLAN:-queue-haul/outputs/bounded-hardware-campaign-plan.json}
 export RUN_ROOT=${RUN_ROOT:-queue-haul/outputs/bounded-hardware-campaign-run}
 export CHECK=check-campaign
-exec "$REPO/queue-haul/stage1_targeted_run.sh"
+exec "$REPO/queue-haul/targeted_migration_run.sh"

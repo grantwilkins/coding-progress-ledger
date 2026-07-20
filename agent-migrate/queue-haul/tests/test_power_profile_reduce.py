@@ -2,7 +2,7 @@ from __future__ import annotations
 
 """
 Claim:
-Stage 1a reports node load as ell = f/F + g/G using the constants emitted
+The power-profile reducer reports node load as ell = f/F + g/G using the constants emitted
 with the artifact.
 
 Plausible wrong implementations:
@@ -18,7 +18,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-import stage1_profile as sp
+import power_profile_reduce as sp
 
 
 def test_plot_uses_actual_ell_and_normalizes_power(monkeypatch, tmp_path: Path):

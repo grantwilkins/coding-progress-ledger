@@ -7,7 +7,8 @@ power limit. The active path is:
 profiles.py → planner.py → simulate.py → power_drain_experiment.py
 ```
 
-`stage1*.py` collects and reduces model, service, migration, and power data.
+The role-named `*_runner.py`, `*_reduce.py`, `migration_*.py`, and
+`lmcache_*.py` programs collect and reduce service, migration, and power data.
 `profiles/*.json` records the measured range and uncertainty used by the
 simulator. Run all commands from `agent-migrate`:
 
@@ -80,7 +81,7 @@ set of route paths matches. Fit the serial coding data with repeats 0–1 and
 evaluate repeat 2 with:
 
 ```bash
-uv run python queue-haul/stage1c_profile_fit.py \
+uv run python queue-haul/migration_profile_fit.py \
   --serial-root queue-haul/outputs/serial-power-run-2 \
   --catch-up-root queue-haul/outputs/append-catch-up-run-2 \
   --parallel-root queue-haul/outputs/parallel-kv-gate-run-2 \
@@ -101,7 +102,7 @@ Two paired 60-second windows found that source level-1 sleep released GPU
 memory but left A100 board power unchanged at about 84.9 W. The run did not
 collect exclusive whole-node power.
 
-Stage 1C reduction reports measured prompt, processed, and new tokens; initial
+Migration reduction reports measured prompt, processed, and new tokens; initial
 KV payload bytes; catch-up cache hits; connection-attributed proxy bytes;
 initial and catch-up wire windows; request timing; and power relative to a
 measured idle baseline. Active runs also write `catch_up.csv` with measured
@@ -127,7 +128,7 @@ does not require the new connection-attribution evidence.
 Reproduce the completed 30-scenario serial crossover plan with:
 
 ```bash
-uv run python queue-haul/stage1c_controller.py make-plan \
+uv run python queue-haul/migration_profiler.py make-plan \
   --manifest queue-haul/outputs/coding-manifest.json \
   --out queue-haul/outputs/serial-power-plan.json \
   --context-sizes 10896,24292 --concurrency 1 \
@@ -136,7 +137,7 @@ uv run python queue-haul/stage1c_controller.py make-plan \
   --session-ids codex:e381cc89-38ef-e67e-79b9-4b800369b4f5
 ```
 
-`stage1c_benchmark.sbatch` profiles two 60-second empty-awake/sleep pairs once
+`migration_profile.sbatch` profiles two 60-second empty-awake/sleep pairs once
 before running that plan. It requests two GPUs. The source and destination use
 Slurm's first and second assigned GPUs. The primary 250 ms GPU power samples
 come from `nvidia-smi`; migration energy is time-weighted over those samples.
@@ -146,17 +147,17 @@ Raw GPU telemetry, state windows, transition times, wake probes, and
 Reproduce the two completed targeted jobs without repeating power profiling:
 
 ```bash
-sbatch queue-haul/stage1d_parallel_gate.sbatch
-sbatch queue-haul/stage1e_catch_up.sbatch
+sbatch queue-haul/parallel_kv_gate.sbatch
+sbatch queue-haul/append_catch_up.sbatch
 ```
 
 Generate and submit the bounded 105-scenario hardware campaign with:
 
 ```bash
-uv run python queue-haul/stage1c_controller.py make-campaign \
+uv run python queue-haul/migration_profiler.py make-campaign \
   --manifest queue-haul/outputs/coding-manifest.json \
   --out queue-haul/outputs/bounded-hardware-campaign-plan.json --seed 0
-sbatch queue-haul/stage1f_campaign.sbatch
+sbatch queue-haul/bounded_hardware_campaign.sbatch
 ```
 
 The plan contains 63 parallel-surface and 42 staged-append scenarios. It runs
@@ -166,7 +167,7 @@ the remainder, resumes only against the same hashed plan, and runs
 held-out extension remains gated on pre-staged complete SWE-chat traces; it is
 not synthesized from the coding manifest.
 
-Stage 1G is the opt-in LMCache multiprocess path; the legacy vLLM 0.10.1.1 /
+The LMCache multiprocess campaign is opt-in; the legacy vLLM 0.10.1.1 /
 LMCache 0.3.3 path remains the default. It uses the verified immutable image
 `/scratch/users/gfw/ptsim/lmcache-v0.5.1-vllm0.22.0-cu129-primary.sif`
 (SHA-256 `50e98f65de09ebfe196f270c8b5c595636853646eb5536dca92f27bd45c084ab`),
@@ -177,7 +178,7 @@ GET response bodies to source SET keys, so remote wire bytes exclude source
 context growth. Run it on two A100s with:
 
 ```bash
-sbatch queue-haul/stage1g_mp_campaign.sbatch
+sbatch queue-haul/lmcache_mp_campaign.sbatch
 ```
 
 The completed `mp-campaign-run-10-20260719` ran four distinct approximately
@@ -191,7 +192,8 @@ At the final 16K append stage, vLLM reported 16,384 cached tokens, decomposed
 exactly into 14,848 vLLM-local and 1,536 LMCache-retrieved tokens. All
 continuations, RESP wire/body equations, and repeat counts passed.
 
-Stage 1H (`mp-incremental-run-3-20260720`) proved incremental MP staging:
+The incremental-prefetch campaign (`mp-incremental-run-3-20260720`) proved
+incremental MP staging:
 warm-prefetching each complete 12K/13.6K/15K/16K snapshot into retained
 destination L1 transferred exactly 48/5/5/6 new blocks with no repeated prefix
 keys. Every token, state, and wire gate passed, including a real second turn.
@@ -203,13 +205,13 @@ block geometry and timing, not LMCache concepts in the simulator. Reproduce it
 with:
 
 ```bash
-sbatch queue-haul/stage1h_mp_incremental.sbatch
+sbatch queue-haul/lmcache_incremental_prefetch.sbatch
 ```
 
-Stage 1D completed all 12 fixed two-session scenarios at 1 Gbps within
+The parallel KV gate completed all 12 fixed two-session scenarios at 1 Gbps within
 deadline. All six migrations passed cache, continuation, exact aggregate byte,
 and independent large-body connection checks; each used 95 connections with up
-to four overlapping windows. Stage 1E completed all 24 scenarios within
+to four overlapping windows. The append catch-up campaign completed all 24 scenarios within
 deadline: one fixed session, 32/128/512/2,048-token controlled appends, 1/10
 Gbps, two repeats, and matched controls. All 16 migrations overlapped generation
 with the initial copy, transferred positive incremental catch-up bytes, retained

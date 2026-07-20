@@ -145,7 +145,7 @@ def runbook(args, extra: list[str]) -> str:
 
 def parse_args(argv: list[str] | None = None):
     root = Path(__file__).resolve().parents[3] / "powertrace-sim"
-    p = argparse.ArgumentParser(description="Queue-Haul Stage 1a powertrace-sim runbook")
+    p = argparse.ArgumentParser(description="Queue-Haul service-curve runbook")
     p.add_argument("--model", required=True)
     p.add_argument("--served-model-name")
     p.add_argument("--hardware", choices=("A100", "H100"), default="H100")

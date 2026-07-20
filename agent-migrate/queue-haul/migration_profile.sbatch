@@ -8,8 +8,8 @@
 #SBATCH --constraint=GPU_SKU:A100_SXM4&GPU_MEM:80GB
 #SBATCH --mem=256G
 #SBATCH --time=12:00:00
-#SBATCH --output=/home/groups/ramr/gfw/coding-progress-ledger/agent-migrate/queue-haul/outputs/stage1c-%j.out
-#SBATCH --error=/home/groups/ramr/gfw/coding-progress-ledger/agent-migrate/queue-haul/outputs/stage1c-%j.err
+#SBATCH --output=/home/groups/ramr/gfw/coding-progress-ledger/agent-migrate/queue-haul/outputs/migration-profile-%j.out
+#SBATCH --error=/home/groups/ramr/gfw/coding-progress-ledger/agent-migrate/queue-haul/outputs/migration-profile-%j.err
 
 set -euo pipefail
 
@@ -26,12 +26,12 @@ export QH_APPTAINER_IMAGE=${QH_APPTAINER_IMAGE:-/scratch/users/gfw/ptsim/vllm-op
 export QH_APPTAINER_GPU_MODE=${QH_APPTAINER_GPU_MODE:-nv}
 export QH_PORT_OFFSET=${QH_PORT_OFFSET:-$((SLURM_JOB_ID % 40000 + 1000))}
 
-$PY queue-haul/stage1b_drain_sink.py preflight --required-gpus 2
+$PY queue-haul/migration_testbed.py preflight --required-gpus 2
 RUN_STATUS=0
 RESUME_ARGS=${RESUME_FROM_GIT_SHA:+--resume-from-git-sha $RESUME_FROM_GIT_SHA}
-$PY queue-haul/stage1c_controller.py run --plan "$PLAN" --run-root "$RUN_ROOT" \
+$PY queue-haul/migration_profiler.py run --plan "$PLAN" --run-root "$RUN_ROOT" \
   --power-state-cycles "$POWER_STATE_CYCLES" \
   --power-state-window-s "$POWER_STATE_WINDOW_S" \
   $RESUME_ARGS || RUN_STATUS=$?
-$PY queue-haul/stage1c_controller.py reduce --run-root "$RUN_ROOT"
+$PY queue-haul/migration_profiler.py reduce --run-root "$RUN_ROOT"
 exit "$RUN_STATUS"

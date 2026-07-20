@@ -17,7 +17,7 @@ from types import SimpleNamespace
 
 import pytest
 
-import stage1_service_surface as s
+import service_surface_runner as s
 
 
 def args(**kwargs):

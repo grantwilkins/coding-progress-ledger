@@ -139,7 +139,7 @@ def make_plot(windows, power_curve, out_stem: Path) -> None:
 
 
 def parse_args(argv: list[str] | None = None):
-    p = argparse.ArgumentParser(description="Queue-Haul Stage 1a ell-vs-power reducer")
+    p = argparse.ArgumentParser(description="Queue-Haul load-versus-power reducer")
     p.add_argument("--windows", type=Path, default=PTRACE / f"windows_{CONFIG}.npz")
     p.add_argument("--summary", type=Path, default=PTRACE / "saturating_summary.csv")
     p.add_argument("--config", default=CONFIG)

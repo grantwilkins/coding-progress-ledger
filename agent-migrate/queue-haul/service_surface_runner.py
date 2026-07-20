@@ -6,7 +6,7 @@ import subprocess
 import time
 from pathlib import Path
 
-from stage1_curves import reject_duplicate_extra, shell
+from service_curve_runner import reject_duplicate_extra, shell
 
 DEFAULT_PREFILL_LENS = (256, 1024, 4096, 8192, 16384, 32767)
 DEFAULT_DECODE_PROMPTS = (256, 4096, 8192, 16384, 28672)
@@ -172,7 +172,7 @@ def runbook(args, extra: list[str]) -> str:
 
 def parse_args(argv: list[str] | None = None):
     root = Path(__file__).resolve().parents[3] / "powertrace-sim"
-    p = argparse.ArgumentParser(description="Queue-Haul Stage 1a service-surface runbook")
+    p = argparse.ArgumentParser(description="Queue-Haul service-surface runbook")
     p.add_argument("--model", default="openai/gpt-oss-20b")
     p.add_argument("--served-model-name")
     p.add_argument("--hardware", choices=("A100", "H100"), default="A100")
@@ -192,7 +192,7 @@ def parse_args(argv: list[str] | None = None):
     p.add_argument("--mixed-points", type=int, default=16)
     p.add_argument("--mixed-seed", type=int, default=0)
     p.add_argument("--powertrace-root", type=Path, default=root)
-    p.add_argument("--run-root", type=Path, default=Path(__file__).resolve().parent / "runs" / "stage1_service_surface")
+    p.add_argument("--run-root", type=Path, default=Path(__file__).resolve().parent / "runs" / "service_surface")
     p.add_argument("--run-id")
     p.add_argument("--python", default="python3")
     p.add_argument("--execute", action="store_true")

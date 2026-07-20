@@ -9,9 +9,9 @@ and KV-transfer sessions in a chosen order under a deadline.
 
 Implemented files:
 
-- `queue-haul/stage1b_drain_sink.py`: preflight, 1-GPU smoke, 2-GPU source/sink smoke, and stdlib throttle proxy.
-- `queue-haul/stage1c_controller.py`: tiny MILP-backed controller proof that emits and checks `controller_manifest.json`.
-- `queue-haul/tests/test_stage1b_drain_sink.py` and `queue-haul/tests/test_stage1c_controller.py`: pure-python checks for commands, config, proxy accounting, and manifest invariants.
+- `queue-haul/migration_testbed.py`: preflight, 1-GPU smoke, 2-GPU source/sink smoke, and stdlib throttle proxy.
+- `queue-haul/migration_profiler.py`: tiny MILP-backed controller proof that emits and checks `controller_manifest.json`.
+- `queue-haul/tests/test_migration_testbed.py` and `queue-haul/tests/test_migration_profiler.py`: pure-python checks for commands, config, proxy accounting, and manifest invariants.
 
 ## Working runtime path
 
@@ -49,12 +49,12 @@ no `--async-scheduling`.
 module load gcc/14.2.0 openblas/0.3.28
 PY=.venv/bin/python
 
-$PY queue-haul/stage1b_drain_sink.py preflight --required-gpus 2
-$PY queue-haul/stage1b_drain_sink.py smoke2-live --mbps 1000 --run-root /tmp/qh-smoke2-live
+$PY queue-haul/migration_testbed.py preflight --required-gpus 2
+$PY queue-haul/migration_testbed.py smoke2-live --mbps 1000 --run-root /tmp/qh-smoke2-live
 
-$PY queue-haul/stage1c_controller.py plan
-$PY queue-haul/stage1c_controller.py proof --mbps 1000 --run-root /tmp/qh-proof-live
-$PY queue-haul/stage1c_controller.py check --run-root /tmp/qh-proof-live
+$PY queue-haul/migration_profiler.py plan
+$PY queue-haul/migration_profiler.py proof --mbps 1000 --run-root /tmp/qh-proof-live
+$PY queue-haul/migration_profiler.py check --run-root /tmp/qh-proof-live
 ```
 
 `uv` is not on PATH on the current A100 node. Use `.venv/bin/python -m pytest`

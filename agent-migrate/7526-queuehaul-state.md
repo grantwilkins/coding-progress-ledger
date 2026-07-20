@@ -211,10 +211,10 @@ It updates residual source-node load as jobs are ordered, so the value of finish
 - `queue-haul/plot_node_knee_agentic_des_sweep.py`: agentic requested-shed DES disruption plot.
 - `queue-haul/plot_node_knee_scale_workload_sweep.py`: workload and source-node scale sweep.
 - `queue-haul/plot_node_knee_kappa_sweep.py`: planner rebuild-cushion sensitivity.
-- `queue-haul/stage1_profile.py`: rebuild measured gpt-oss-20b A100 TP1 `ell` and power curves from raw windows.
-- `queue-haul/stage1_window_sensitivity.py`: sweep rate/power window sizes and compare concave-fit stability.
-- `queue-haul/stage1_service_surface.py`: generate the A100 runbook for isolated `rho(T)`, `G(T)`, and mixed prefill/decode probes.
-- `queue-haul/stage1_service_reduce.py`: reduce completed service-surface probe bundles into CSV/PNG/PDF artifacts.
+- `queue-haul/power_profile_reduce.py`: rebuild measured gpt-oss-20b A100 TP1 `ell` and power curves from raw windows.
+- `queue-haul/power_window_sensitivity.py`: sweep rate/power window sizes and compare concave-fit stability.
+- `queue-haul/service_surface_runner.py`: generate the A100 runbook for isolated `rho(T)`, `G(T)`, and mixed prefill/decode probes.
+- `queue-haul/service_profile_reduce.py`: reduce completed service-surface probe bundles into CSV/PNG/PDF artifacts.
 
 ## Current Figures
 
@@ -367,11 +367,11 @@ Read: the concave shape is robust to windowing, but `F`, `G`, `rho*`, and the ab
 The next hardware run is the service surface:
 
 ```text
-uv run python queue-haul/stage1_service_surface.py \
+uv run python queue-haul/service_surface_runner.py \
   --run-id gpt-oss-20b-a100-tp1-service-surface \
   -- --async-scheduling
 
-uv run python queue-haul/stage1_service_reduce.py \
+uv run python queue-haul/service_profile_reduce.py \
   --run-dir queue-haul/runs/stage1_service_surface/gpt-oss-20b-a100-tp1-service-surface/bundles
 ```
 

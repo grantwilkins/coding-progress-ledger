@@ -2,7 +2,7 @@ from __future__ import annotations
 
 """
 Claim:
-Stage 1a window sensitivity recomputes raw-window power/load arrays for each
+Power-window sensitivity recomputes raw-window power/load arrays for each
 window size and reports comparable concave-fit diagnostics.
 
 Plausible wrong implementations:
@@ -15,7 +15,7 @@ Plausible wrong implementations:
 import numpy as np
 import pytest
 
-import stage1_window_sensitivity as ws
+import power_window_sensitivity as ws
 
 
 def test_validate_windows_sorts_but_rejects_nonpositive_or_duplicate():

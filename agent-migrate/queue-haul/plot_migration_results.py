@@ -72,7 +72,7 @@ def write_plots(rows: list[dict], output_dir: Path = OUTPUTS) -> list[Path]:
     axes[0].axhline(rows[0]["target_w"], color="tab:red", linestyle="--", label="target")
     axes[0].legend(fontsize=8)
     axes[1].legend(fontsize=8)
-    fig.suptitle("Stage 1c paired power validation")
+    fig.suptitle("Paired migration power validation")
     fig.tight_layout()
     paths = _save(fig, output_dir / "stage1c_power_change")
 
@@ -85,7 +85,7 @@ def write_plots(rows: list[dict], output_dir: Path = OUTPUTS) -> list[Path]:
         ax.set(xticks=(0, 1), xticklabels=("Baseline", "Post"), ylabel="Power (W)", title=f"{node.title()} GPU")
         ax.grid(axis="y", alpha=0.25)
     axes[0].legend(fontsize=8)
-    fig.suptitle("Most recent valid Stage 1c runs: power before and after")
+    fig.suptitle("Most recent valid migration runs: power before and after")
     fig.tight_layout()
     paths += _save(fig, output_dir / "stage1c_power_levels")
 

@@ -20,7 +20,7 @@ import time
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from stage1_curves import shell
+from service_curve_runner import shell
 
 MODEL = "openai/gpt-oss-20b"
 SANDBOX = Path("/scratch/users/gfw/ptsim/vllm-openai-v0.10.1.1.sandbox")
@@ -263,7 +263,7 @@ def apptainer_cmd(cfg: Config, script: str, gpu: int | None = None, nv: bool = T
 
 
 def lmcache_cmd(cfg: Config) -> list[str]:
-    return [sys.executable, "queue-haul/stage1b_drain_sink.py", "lmcache-server", "--host", cfg.host, "--port", str(cfg.lmc_port), "--max-bytes", str(LMCACHE_SERVER_MAX_BYTES)]
+    return [sys.executable, "queue-haul/migration_testbed.py", "lmcache-server", "--host", cfg.host, "--port", str(cfg.lmc_port), "--max-bytes", str(LMCACHE_SERVER_MAX_BYTES)]
 
 
 def redis_cmd(cfg: Config) -> list[str]:
@@ -352,7 +352,7 @@ def proxy_routes(cfg: Config) -> list[Route]:
 def proxy_cmd(cfg: Config, mbps: float = 1000.0, log: Path | None = None) -> list[str]:
     cmd = [
         sys.executable,
-        "queue-haul/stage1b_drain_sink.py",
+        "queue-haul/migration_testbed.py",
         "proxy",
         "--kv-listen",
         f"{cfg.host}:{cfg.kv_proxy_port}",
@@ -1308,7 +1308,7 @@ def add_common(p: argparse.ArgumentParser) -> None:
 
 
 def parse_args(argv: list[str] | None = None):
-    p = argparse.ArgumentParser(description="Queue-Haul Stage 1b source/sink LMCache smoke tooling")
+    p = argparse.ArgumentParser(description="Queue-Haul source/sink migration testbed")
     sub = p.add_subparsers(dest="cmd", required=True)
     for name in ("preflight", "smoke1", "smoke2", "smoke2-live"):
         sp = sub.add_parser(name)
@@ -1316,7 +1316,7 @@ def parse_args(argv: list[str] | None = None):
         if name == "preflight":
             sp.add_argument("--required-gpus", type=int, default=1)
         if name in ("smoke1", "smoke2", "smoke2-live"):
-            sp.add_argument("--run-root", type=Path, default=Path(f"queue-haul/runs/stage1b/{name}"))
+            sp.add_argument("--run-root", type=Path, default=Path(f"queue-haul/runs/migration_testbed/{name}"))
             if name.startswith("smoke2"):
                 sp.add_argument("--mbps", type=float, default=1000.0)
             sp.add_argument("extra_vllm_args", nargs=argparse.REMAINDER)

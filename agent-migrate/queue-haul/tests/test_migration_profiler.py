@@ -32,7 +32,7 @@ from types import SimpleNamespace
 
 import pytest
 
-import stage1c_controller as c
+import migration_profiler as c
 
 
 def write_trace(path: Path) -> None:
@@ -686,7 +686,7 @@ def test_power_profile_orders_steady_windows_and_verified_wake(tmp_path, monkeyp
 
 
 def test_batch_power_measurement_requests_two_gpus():
-    script = Path(c.__file__).with_name("stage1c_benchmark.sbatch").read_text()
+    script = Path(c.__file__).with_name("migration_profile.sbatch").read_text()
 
     assert "#SBATCH --gres=gpu:2" in script
     assert "#SBATCH --exclusive" not in script
@@ -696,17 +696,17 @@ def test_batch_power_measurement_requests_two_gpus():
 
 def test_targeted_jobs_use_reviewed_plans_and_hard_gates():
     root = Path(c.__file__).parent
-    runner = (root / "stage1_targeted_run.sh").read_text()
+    runner = (root / "targeted_migration_run.sh").read_text()
     jobs = {
-        "stage1d_parallel_gate.sbatch":
+        "parallel_kv_gate.sbatch":
             ("outputs/parallel-kv-gate-plan.json", "check-parallel"),
-        "stage1e_catch_up.sbatch":
+        "append_catch_up.sbatch":
             ("outputs/append-catch-up-plan.json", "check-catch-up"),
     }
 
-    assert "stage1b_drain_sink.py preflight --required-gpus 2" in runner
-    assert "stage1c_controller.py run" in runner
-    assert "stage1c_controller.py reduce" in runner
+    assert "migration_testbed.py preflight --required-gpus 2" in runner
+    assert "migration_profiler.py run" in runner
+    assert "migration_profiler.py reduce" in runner
     assert '"$CHECK" --run-root' in runner
     assert "resume=()" not in runner and '"$@"' in runner
     assert "src_port" in runner and "- 8100" in runner
@@ -714,7 +714,7 @@ def test_targeted_jobs_use_reviewed_plans_and_hard_gates():
         script = (root / name).read_text()
         assert "#SBATCH --gres=gpu:2" in script
         assert all(value in script for value in required)
-        assert "stage1_targeted_run.sh" in script
+        assert "targeted_migration_run.sh" in script
 
 
 def test_model_check_uses_measured_work_and_stays_in_its_valid_range():

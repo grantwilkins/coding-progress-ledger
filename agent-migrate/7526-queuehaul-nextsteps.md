@@ -39,7 +39,7 @@ Remaining modeling caveat: rebuild and post-rebuild serving still share the same
 
 Establishes the action space and measures the service curves. Split it into a curves-first Stage 1a and an LMCache capability Stage 1b so GPU runs can start without building a second profiling stack.
 
-**Stage 1a - Curves-only vLLM profiling.** Implemented as `queue-haul/stage1_curves.py`, a thin runbook wrapper around `powertrace-sim`'s existing vLLM probe stack. It emits decode, prefill, and mixed-grid probe commands, auto-prunes default prefill lengths to the served context window, and leaves raw bundles under `queue-haul/runs/stage1/` when executed.
+**Curves-only vLLM profiling.** Implemented as `queue-haul/service_curve_runner.py`, a thin runbook wrapper around `powertrace-sim`'s existing vLLM probe stack. It emits decode, prefill, and mixed-grid probe commands, auto-prunes default prefill lengths to the served context window, and leaves raw bundles under `queue-haul/runs/stage1/` when executed.
 
 Measured first:
 

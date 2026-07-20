@@ -11,7 +11,7 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
 
-from stage1_profile import binned_curve
+from power_profile_reduce import binned_curve
 
 CONFIG = "gpt-oss-20b-a100_tp1"
 ROOT = Path(__file__).resolve().parents[3]
@@ -122,7 +122,7 @@ def make_plot(summaries: list[dict], curves: list[dict], fits: list[dict], out_s
 
 
 def parse_args(argv: list[str] | None = None):
-    p = argparse.ArgumentParser(description="Queue-Haul Stage 1a window-size sensitivity")
+    p = argparse.ArgumentParser(description="Queue-Haul power-window sensitivity")
     p.add_argument("--raw-dir", type=Path, default=RAW_DIR)
     p.add_argument("--powertrace-root", type=Path, default=PTRACE)
     p.add_argument("--windows", nargs="+", type=float, default=list(WINDOWS))

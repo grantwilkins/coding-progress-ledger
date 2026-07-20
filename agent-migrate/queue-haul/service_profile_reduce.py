@@ -228,7 +228,7 @@ def write_mixed(rows: list[dict], out_stem: Path) -> None:
 
 
 def parse_args(argv: list[str] | None = None):
-    p = argparse.ArgumentParser(description="Reduce Queue-Haul Stage 1 service-surface bundles")
+    p = argparse.ArgumentParser(description="Reduce Queue-Haul service-surface bundles")
     p.add_argument("--run-dir", type=Path, required=True)
     p.add_argument("--out-stem", type=Path, default=OUT_STEM)
     return p.parse_args(argv)

@@ -1,6 +1,6 @@
 """
 Claim:
-The Stage 1a wrapper only builds the minimal powertrace-sim runbook needed for
+The service-curve wrapper only builds the minimal powertrace-sim runbook needed for
 Queue-Haul curves, preserving context limits and probe-specific vLLM flags.
 
 Plausible wrong implementations:
@@ -17,7 +17,7 @@ from types import SimpleNamespace
 
 import pytest
 
-import stage1_curves as s1
+import service_curve_runner as s1
 
 
 def args(**kwargs):

@@ -11,7 +11,7 @@ import traceback
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
-import stage1b_drain_sink as b
+import migration_testbed as b
 
 BLOCK_TOKENS = 256
 PREFETCH = re.compile(r"(\d+)/(\d+) retained keys \((\d+) L1, (\d+) L2\).*external_request_id=([^,\)]+)")

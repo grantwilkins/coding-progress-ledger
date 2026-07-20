@@ -18,7 +18,7 @@ from pathlib import Path
 
 import pytest
 
-import stage1_service_reduce as r
+import service_profile_reduce as r
 
 
 def write_bundle(root: Path, probe_type: str = "prefill_staircase") -> Path:

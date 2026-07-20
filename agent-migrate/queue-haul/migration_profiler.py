@@ -16,7 +16,7 @@ from concurrent.futures import ThreadPoolExecutor
 from dataclasses import asdict, replace
 from pathlib import Path
 
-import stage1b_drain_sink as b
+import migration_testbed as b
 from migration import (
     AppendStageResult, MigrationController, Move, RequestResult, SessionState,
     StreamChunk,

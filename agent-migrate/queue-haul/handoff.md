@@ -1,4 +1,4 @@
-# Stage 1C follow-up
+# Migration-profile follow-up
 
 The coding run completed all 648 scenarios and 1,296 session moves. The local
 raw results are in `queue-haul/outputs/coding-run`. Do not
@@ -9,12 +9,12 @@ Before using the run:
 
 ```bash
 uv run pytest queue-haul/tests
-uv run python queue-haul/stage1c_controller.py reduce \
+uv run python queue-haul/migration_profiler.py reduce \
   --run-root queue-haul/outputs/coding-run
-uv run python queue-haul/stage1c_profile_fit.py \
+uv run python queue-haul/migration_profile_fit.py \
   --run-root queue-haul/outputs/coding-run \
   --profile queue-haul/profiles/gpt_oss_20b_a100_tp1.json
-uv run python queue-haul/stage1c_controller.py reduce \
+uv run python queue-haul/migration_profiler.py reduce \
   --run-root queue-haul/outputs/coding-run
 ```
 
