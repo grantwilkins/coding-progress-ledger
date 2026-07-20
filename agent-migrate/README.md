@@ -231,9 +231,9 @@ sbatch queue-haul/stage1c_benchmark.sbatch
 Each scenario records controller events, every streamed response chunk, prompt
 and output token totals, structured cache operations, 250 ms link totals,
 per-connection byte totals, and 250 ms GPU power/utilization/memory samples.
-Per-session KV work uses exact complete chunks and bytes derived from the logged
-KV layout; concurrent shared-wire bytes remain scenario totals. Source sleep is
-attempted only after every active session commits, and its timing is separate
+Per-session logical KV work uses exact complete chunks and bytes derived from
+the logged KV layout; shared-prefix wire bytes remain scenario totals. Source sleep
+is attempted only after every active session commits, and its timing is separate
 from migration time.
 
 `reduce` validates the raw run and writes `migrations.csv`, `scenarios.csv`, and

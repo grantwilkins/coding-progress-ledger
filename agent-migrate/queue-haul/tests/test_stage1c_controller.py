@@ -411,6 +411,29 @@ def test_parallel_gate_rejects_sequential_connections_with_same_total_bytes(tmp_
         )
 
 
+def test_campaign_allows_ambiguous_shared_prefix_bytes(tmp_path):
+    proxy = tmp_path / "proxy_connections.csv"
+    proxy.write_text(
+        "connection_id,route,key_hash,start_ns,end_ns,client_to_target_bytes,target_to_client_bytes\n"
+        "a,kv,shared,0,500000000,186,1000036\n"
+        "b,kv,unique,0,500000000,186,1000036\n"
+    )
+
+    measured = c.parallel_connection_measurements(
+        proxy, 0, 500_000_000, 2,
+        {"sa": {"shared", "unique"}, "sb": {"shared"}}, strict=False,
+    )
+    stage = {
+        "copied_blocks_before": 111, "copied_blocks_after": 114,
+        "logical_body_bytes": 3, "wire_body_bytes": 2,
+    }
+
+    assert measured["kv_body_bytes"] == 2_000_000
+    assert c.max_overlap([(0, 2), (1, 3)]) == 2
+    assert c.valid_append_stage(stage)
+    assert not c.valid_append_stage({**stage, "wire_body_bytes": 4})
+
+
 def test_live_runtime_pipelines_four_append_stages(monkeypatch, tmp_path):
     session = c.LiveSession(
         SimpleNamespace(src_port=1),

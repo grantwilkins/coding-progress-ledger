@@ -1488,7 +1488,8 @@ def phase_network_measurements(path: Path, start_ns: int | None,
 
 def parallel_connection_measurements(path: Path, start_ns: int, end_ns: int,
                                      required: int,
-                                     session_keys: dict[str, set[str]]) -> dict:
+                                     session_keys: dict[str, set[str]],
+                                     strict: bool = True) -> dict:
     with path.open() as handle:
         raw = list(csv.DictReader(handle))
     rows = []
@@ -1502,18 +1503,19 @@ def parallel_connection_measurements(path: Path, start_ns: int, end_ns: int,
             session for session, keys in session_keys.items()
             if row["key_hash"] in keys
         ]
-        if len(matches) != 1:
+        if strict and len(matches) != 1:
             raise RuntimeError(
                 f"KV connection {row['connection_id']} maps to {len(matches)} sessions"
             )
         rows.append({
-            "connection_id": row["connection_id"], "session_id": matches[0],
+            "connection_id": row["connection_id"],
+            "session_id": matches[0] if len(matches) == 1 else None,
             "start_ns": max(start, start_ns), "end_ns": min(end, end_ns),
             "wire_bytes": wire,
             "body_bytes": wire - b.LMCACHE_SERVER_META.size,
         })
-    sessions = {row["session_id"] for row in rows}
-    if len(sessions) < required:
+    sessions = {row["session_id"] for row in rows if row["session_id"]}
+    if strict and len(sessions) < required:
         raise RuntimeError(
             f"need {required} sessions with KV bodies, found {len(sessions)}"
         )
@@ -1523,13 +1525,14 @@ def parallel_connection_measurements(path: Path, start_ns: int, end_ns: int,
     active = [
         {
             row["session_id"] for row in rows
-            if row["start_ns"] < right and row["end_ns"] > left
+            if row["session_id"] and row["start_ns"] < right
+            and row["end_ns"] > left
         }
         for left, right in zip(boundaries, boundaries[1:]) if right > left
     ]
     maximum = max(map(len, active), default=0)
     overlap = sum(len(values) >= required for values in active)
-    if required > 1 and not overlap:
+    if strict and required > 1 and not overlap:
         raise RuntimeError("distinct sessions lack overlapping KV body connections")
     by_session = {
         session: sum(row["body_bytes"] for row in rows if row["session_id"] == session)
@@ -1542,6 +1545,19 @@ def parallel_connection_measurements(path: Path, start_ns: int, end_ns: int,
         "kv_body_bytes": sum(row["body_bytes"] for row in rows),
         "session_kv_body_bytes": by_session,
     }
+
+
+def max_overlap(windows: list[tuple[int, int]]) -> int:
+    boundaries = sorted({value for window in windows for value in window})
+    return max((
+        sum(start < right and end > left for start, end in windows)
+        for left, right in zip(boundaries, boundaries[1:])
+    ), default=0)
+
+
+def valid_append_stage(row: dict) -> bool:
+    return row["copied_blocks_after"] >= row["copied_blocks_before"] \
+        and 0 <= row["wire_body_bytes"] <= row["logical_body_bytes"]
 
 
 def attributed_connections(path: Path, start_ns: int, end_ns: int,
@@ -2257,13 +2273,22 @@ def check_campaign_run(run_root: Path) -> None:
                             for session, keys
                             in result["session_cache_keys"].items()
                         },
+                        strict=False,
                     )
                     expected = {
                         row["move"]["session_id"]:
                             row["initial"]["logical_kv_bytes"]
                         for row in moves
                     }
-                    if measured["session_kv_body_bytes"] != expected:
+                    windows = [
+                        (row["initial_start_ns"], row["initial_end_ns"])
+                        for row in moves
+                    ]
+                    if max_overlap(windows) < scenario["move_concurrency"]:
+                        raise RuntimeError(
+                            "requested migration concurrency was not reached"
+                        )
+                    if measured["kv_body_bytes"] != sum(expected.values()):
                         raise RuntimeError("parallel body bytes are not conserved")
                 else:
                     for move in moves:
@@ -2276,12 +2301,8 @@ def check_campaign_run(run_root: Path) -> None:
                             scenario, result, move, root
                         )
                         for row in rows:
-                            if row["phase"] == "append" and (
-                                row["copied_blocks_after"]
-                                < row["copied_blocks_before"]
-                                or row["logical_body_bytes"]
-                                != row["wire_body_bytes"]
-                            ):
+                            if row["phase"] == "append" \
+                                    and not valid_append_stage(row):
                                 raise RuntimeError(
                                     "append watermark or bytes are invalid"
                                 )
