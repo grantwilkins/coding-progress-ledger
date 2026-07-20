@@ -49,3 +49,19 @@ def test_incremental_acceptance_rejects_full_prefix_refetch():
     assert not result["ok"]
     assert not result["gates"]["incremental_wire_transfer"]
     assert not result["gates"]["no_duplicate_prefix_traffic"]
+
+
+def test_chat_tokens_matches_reasoning_request(monkeypatch):
+    seen = {}
+
+    def fake(*args):
+        seen["payload"] = args[4]
+        return {"tokens": [1, 2], "count": 2}
+
+    monkeypatch.setattr(m, "http_json", fake)
+    cfg = type("Config", (), {"host": "h", "src_port": 1, "model": "m"})()
+    assert m.chat_tokens(cfg, "p") == [1, 2]
+    assert seen["payload"]["chat_template_kwargs"] == {
+        "reasoning_effort": "low",
+        "enable_thinking": True,
+    }

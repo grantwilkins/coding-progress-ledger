@@ -47,7 +47,8 @@ def http_json(host, port, method, path, payload=None, statuses=(200,)):
 def chat_tokens(cfg, prompt):
     result = http_json(cfg.host, cfg.src_port, "POST", "/tokenize",
                        {"model": cfg.model, "messages": [{"role": "user", "content": prompt}],
-                        "add_generation_prompt": True})
+                        "add_generation_prompt": True,
+                        "chat_template_kwargs": {"reasoning_effort": "low", "enable_thinking": True}})
     tokens = result.get("tokens")
     if not tokens or len(tokens) != result.get("count"):
         raise RuntimeError(f"vLLM did not return exact chat token IDs: {result.keys()}")
