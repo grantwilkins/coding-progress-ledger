@@ -1,0 +1,16 @@
+{
+  "created_local": "2026-07-20",
+  "git_sha": "518f32875d514c2234db57ff8a57d7f66fdfba24",
+  "model_profile": "gpt-oss-20b-a100-tp1-20260715",
+  "workload_profile": "coding-live-20260714-lowest-context",
+  "session_counts": [1, 3, 10, 32, 100, 316, 1000, 3162, 10000, 31623, 100000],
+  "solvers": ["random", "capacity", "lp"],
+  "requests_enabled": false,
+  "expected_growth_enabled": false,
+  "final_state": "awake",
+  "bandwidth_gbps_per_node": 1,
+  "deadline_s": 120,
+  "end_s": 180,
+  "target_fraction_of_removable_power": 0.5,
+  "seed": 3
+}
