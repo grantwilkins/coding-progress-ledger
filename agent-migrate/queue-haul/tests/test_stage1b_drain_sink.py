@@ -78,6 +78,31 @@ def test_vllm_commands_pin_validated_sandbox_flags_and_roles():
     assert "stage1b-src" in source and "stage1b-sink" in sink
 
 
+def test_mp_runtime_uses_release_image_and_shipped_connector(monkeypatch):
+    monkeypatch.setenv("QH_LMCACHE_MODE", "mp")
+    source = cmd_text(s.vllm_cmd(s.Config(), "source"))
+
+    assert "lmcache-v0.5.1-vllm0.22.0-cu129.sandbox" in source
+    assert "LMCacheMPConnector" in source
+    assert "lmcache.integration.vllm.lmcache_mp_connector" in source
+    assert "lmcache.mp.host" in source and "lmcache.mp.port" in source
+    assert "engine_driven" in source
+    assert "lmcache_compat" not in source
+    assert "cuda-12.9/compat" in source
+    assert "--gpu-memory-utilization 0.75" in source
+    assert "--disable-hybrid-kv-cache-manager" in source
+    assert "--enable-prompt-tokens-details" in source
+    assert "--enable-sleep-mode" not in source
+    assert s.expected_runtime_versions() == ("0.22.0+cu129", "0.5.1")
+
+
+def test_mp_chat_disables_reasoning_without_changing_legacy(monkeypatch):
+    cfg = s.Config()
+    assert "reasoning_effort" not in json.loads(s.chat_payload(cfg, "x"))
+    monkeypatch.setenv("QH_LMCACHE_MODE", "mp")
+    assert json.loads(s.chat_payload(cfg, "x"))["reasoning_effort"] == "low"
+
+
 def test_vllm_commands_honor_slurm_gpu_ids(monkeypatch):
     monkeypatch.setenv("CUDA_VISIBLE_DEVICES", "2,3")
 
@@ -106,6 +131,24 @@ def test_lmcache_and_proxy_use_host_commands_not_docker_or_tc():
     assert "--mbps 1000.0" in proxy
     assert "docker" not in proxy.lower()
     assert " tc " not in proxy.lower()
+
+
+def test_mp_cache_services_use_redis_l2_through_proxy(monkeypatch):
+    monkeypatch.setenv("QH_LMCACHE_MODE", "mp")
+    cfg = s.Config()
+    redis = cmd_text(s.redis_cmd(cfg))
+    source = cmd_text(s.mp_server_cmd(cfg, "source"))
+    sink = cmd_text(s.mp_server_cmd(cfg, "sink"))
+
+    assert "redis-7.4.2-bookworm.sif" in redis
+    assert "--port 5655" in redis
+    assert "lmcache server" in source and "--port 5555" in source
+    assert "--supported-transfer-mode engine_driven" in source
+    assert '"port":8300' in source
+    assert "--port 5556" in sink
+    assert '"port":8300' in sink
+    assert "--http-port 8080" in source and "--http-port 8081" in sink
+    assert "--nv" not in source and "CUDA_VISIBLE_DEVICES=" in source
 
 
 def test_lmcache_wait_reports_process_exit_log(tmp_path):
@@ -208,6 +251,33 @@ def test_lite_lmcache_server_put_get_and_flush(tmp_path):
         assert _lmc_request(port, s.LMCACHE_CLIENT_GET) == (s.LMCACHE_SERVER_FAIL, b"")
     finally:
         s.stop_proc(proc)
+
+
+def test_mp_flush_uses_explicit_config(monkeypatch, tmp_path):
+    cfg = s.Config(lmc_port=6380, src_lmc_http_port=8088, sink_lmc_http_port=8089)
+    calls = []
+
+    class Sock:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            pass
+
+        def sendall(self, data):
+            calls.append(data)
+
+        def recv(self, _size):
+            return b"+OK\r\n"
+
+    monkeypatch.setattr(s, "lmcache_mode", lambda: "mp")
+    monkeypatch.setattr(s.socket, "create_connection", lambda address: calls.append(address) or Sock())
+    monkeypatch.setattr(s, "http_text", lambda host, port, method, path: calls.append((host, port, method, path)))
+    s.flush_lmcache(s.Stack(type("Proc", (), {"poll": lambda self: None})(), None, None, None, tmp_path), cfg)
+
+    assert (cfg.host, 6380) in calls
+    assert (cfg.host, 8088, "POST", "/cache/clear") in calls
+    assert (cfg.host, 8089, "POST", "/cache/clear") in calls
 
 
 def test_reset_vllm_caches_requires_success_from_both_logs(monkeypatch, tmp_path):
@@ -367,6 +437,53 @@ def test_proxy_relay_shapes_billable_bytes_and_logs(tmp_path):
     assert int(connections[0]["client_to_target_bytes"]) == 512
     assert connections[0]["key_hash"] == ""
 
+
+
+def test_resp_proxy_attributes_and_shapes_each_returned_body(tmp_path):
+    async def run():
+        async def target(reader, writer):
+            for body in (b"a" * 32, b"b" * 48):
+                await s.read_resp(reader)
+                writer.write(b"$" + str(len(body)).encode() + b"\r\n" + body + b"\r\n")
+                await writer.drain()
+            writer.close()
+            await writer.wait_closed()
+
+        target_server = await asyncio.start_server(target, "127.0.0.1", 0)
+        target_port = target_server.sockets[0].getsockname()[1]
+        log = tmp_path / "proxy.csv"
+        servers, byte_log = await s.start_proxy(
+            [s.Route("kv", "127.0.0.1", 0, "127.0.0.1", target_port, "resp")],
+            rate_bps=320.0,
+            log=log,
+        )
+        proxy_port = servers[0].sockets[0].getsockname()[1]
+        reader, writer = await asyncio.open_connection("127.0.0.1", proxy_port)
+        t0 = time.monotonic()
+        for key in (b"session-a", b"session-b"):
+            writer.write(b"*2\r\n$3\r\nGET\r\n$" + str(len(key)).encode() + b"\r\n" + key + b"\r\n")
+        await writer.drain()
+        assert (await s.read_resp(reader)).payload == b"a" * 32
+        assert (await s.read_resp(reader)).payload == b"b" * 48
+        elapsed = time.monotonic() - t0
+        writer.close()
+        await writer.wait_closed()
+        for server in servers:
+            server.close()
+            await server.wait_closed()
+        target_server.close()
+        await target_server.wait_closed()
+        await byte_log.close()
+        return elapsed
+
+    assert asyncio.run(run()) >= .2
+    rows = list(csv.DictReader((tmp_path / "resp_transfers.csv").open()))
+    assert [row["command"] for row in rows] == ["GET", "GET"]
+    assert [int(row["payload_bytes"]) for row in rows] == [32, 48]
+    assert [row["key_hashes"] for row in rows] == [
+        s.hashlib.sha256(key).hexdigest() for key in (b"session-a", b"session-b")
+    ]
+    assert int(rows[0]["start_ns"]) < int(rows[1]["end_ns"])
 
 def test_smoke2_live_cli_is_wired_with_1gbps_default():
     args = s.parse_args(["smoke2-live", "--run-root", "/tmp/live-proof"])

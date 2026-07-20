@@ -1,0 +1,23 @@
+[32;20m[2026-07-20 04:58:11,229] LMCache INFO:[0m  torch_dev=<module 'torch.cuda' from '/opt/venv/lib/python3.12/site-packages/torch/cuda/__init__.py'>, torch_device_type=cuda [3m(__init__.py:63:lmcache)[0m
+[32;20m[2026-07-20 04:58:11,252] LMCache INFO:[0m CudaPinMemoryBackend: using torch cudart [3m(pin_memory.py:89:lmcache.v1.platform.cuda.pin_memory)[0m
+[32;20m[2026-07-20 04:58:11,542] LMCache INFO:[0m Skipping backend lmcache.v1.platform.musa.ops: predicate returned False [3m(__init__.py:114:lmcache)[0m
+[32;20m[2026-07-20 04:58:11,542] LMCache INFO:[0m Skipping backend lmcache.xpu_ops: predicate returned False [3m(__init__.py:114:lmcache)[0m
+[32;20m[2026-07-20 04:58:11,546] LMCache INFO:[0m Using backend: lmcache.c_ops [3m(__init__.py:132:lmcache)[0m
+[32;20m[2026-07-20 04:58:26,531] LMCache INFO:[0m multi_layer_block_kv_transfer mode: ptr [3m(base.py:94:lmcache.v1.multiprocess.transfer_context.base)[0m
+{
+  "best_parallel_median_bps": 1206086890.6889982,
+  "gates": {
+    "aggregate_throughput_gain": true,
+    "continuations_correct": true,
+    "distinct_session_overlap": true,
+    "remote_wire_accounting": true,
+    "three_repeats_each": true,
+    "token_accounting": true
+  },
+  "ok": true,
+  "parallel_median_bps": {
+    "2": 591174914.3813648,
+    "4": 1206086890.6889982
+  },
+  "serialized_ceiling_bps": 111215333.26898168
+}

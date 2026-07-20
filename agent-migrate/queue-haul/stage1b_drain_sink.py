@@ -24,12 +24,27 @@ from stage1_curves import shell
 
 MODEL = "openai/gpt-oss-20b"
 SANDBOX = Path("/scratch/users/gfw/ptsim/vllm-openai-v0.10.1.1.sandbox")
+MP_SANDBOX = Path("/scratch/users/gfw/ptsim/lmcache-v0.5.1-vllm0.22.0-cu129.sandbox")
+REDIS_IMAGE = Path("/scratch/users/gfw/ptsim/redis-7.4.2-bookworm.sif")
 RUNTIME_VERSIONS = ("0.10.1.1", "0.3.3")
+MP_RUNTIME_VERSIONS = ("0.22.0+cu129", "0.5.1")
 LMCACHE_CLEAR_MARKER = '"operation":"clear"'
 
 
+def lmcache_mode() -> str:
+    mode = os.environ.get("QH_LMCACHE_MODE", "legacy")
+    if mode not in {"legacy", "mp"}:
+        raise ValueError(f"unknown QH_LMCACHE_MODE: {mode}")
+    return mode
+
+
+def expected_runtime_versions() -> tuple[str, str]:
+    return MP_RUNTIME_VERSIONS if lmcache_mode() == "mp" else RUNTIME_VERSIONS
+
+
 def apptainer_image_default() -> Path:
-    return Path(os.environ.get("QH_APPTAINER_IMAGE", SANDBOX))
+    default = MP_SANDBOX if lmcache_mode() == "mp" else SANDBOX
+    return Path(os.environ.get("QH_APPTAINER_IMAGE", default))
 
 
 def port_offset() -> int:
@@ -61,6 +76,9 @@ TYPED_VLLM_FLAGS = {
     "--enable-chunked-prefill",
     "--enable-sleep-mode",
     "--enforce-eager",
+    "--gpu-memory-utilization",
+    "--disable-hybrid-kv-cache-manager",
+    "--enable-prompt-tokens-details",
     "--kv-transfer-config",
 }
 BILLED_DIRECTIONS = {("api", "client_to_target"), ("kv", "target_to_client")}
@@ -92,6 +110,10 @@ class Config:
     kv_proxy_port: int = field(default_factory=lambda: port_default(8300))
     api_proxy_port: int = field(default_factory=lambda: port_default(8400))
     smoke_port: int = field(default_factory=lambda: port_default(8120))
+    src_lmc_port: int = field(default_factory=lambda: port_default(5555))
+    sink_lmc_port: int = field(default_factory=lambda: port_default(5556))
+    src_lmc_http_port: int = field(default_factory=lambda: port_default(8080))
+    sink_lmc_http_port: int = field(default_factory=lambda: port_default(8081))
     max_model_len: int = 32768
     max_num_seqs: int = 256
     max_num_batched_tokens: int = 8192
@@ -104,6 +126,7 @@ class Route:
     listen_port: int
     target_host: str
     target_port: int
+    protocol: str = "raw"
 
 
 @dataclass
@@ -113,6 +136,7 @@ class Stack:
     source: subprocess.Popen | None
     sink: subprocess.Popen | None
     run_root: Path
+    cache_services: list[subprocess.Popen] = field(default_factory=list)
 
 
 def reject_duplicate_extra(extra: list[str]) -> None:
@@ -130,6 +154,8 @@ def parse_addr(text: str) -> tuple[str, int]:
 
 def validate_ports(cfg: Config) -> None:
     ports = [cfg.src_port, cfg.sink_port, cfg.lmc_port, cfg.kv_proxy_port, cfg.api_proxy_port, cfg.smoke_port]
+    if lmcache_mode() == "mp":
+        ports += [cfg.src_lmc_port, cfg.sink_lmc_port, cfg.src_lmc_http_port, cfg.sink_lmc_http_port]
     bad = [p for p in ports if p <= 0 or p > 65535]
     if bad:
         raise ValueError(f"invalid ports: {bad}")
@@ -158,6 +184,17 @@ def tmpdir(role: str) -> Path:
 
 
 def kv_config(engine_id: str, kv_role: str, kv_port: int, rpc_port: str) -> str:
+    if lmcache_mode() == "mp":
+        return json.dumps({
+            "kv_connector": "LMCacheMPConnector",
+            "kv_connector_module_path": "lmcache.integration.vllm.lmcache_mp_connector",
+            "kv_role": kv_role,
+            "kv_connector_extra_config": {
+                "lmcache.mp.host": "tcp://127.0.0.1",
+                "lmcache.mp.port": port_default(5555 if engine_id != "d0" else 5556),
+                "lmcache.mp.mp_transfer_mode": "engine_driven",
+            },
+        }, separators=(",", ":"))
     return json.dumps(
         {
             "kv_connector": "LMCacheConnectorV1",
@@ -173,7 +210,6 @@ def kv_config(engine_id: str, kv_role: str, kv_port: int, rpc_port: str) -> str:
 def vllm_exports(cfg: Config, role: str, remote_url: str) -> list[str]:
     env = {
         "PYTHONHASHSEED": "0",
-        "PYTHONPATH": str(LMCACHE_COMPAT),
         "VLLM_EXECUTE_MODEL_TIMEOUT_SECONDS": "900",
         "VLLM_SERVER_DEV_MODE": "1",
         "VLLM_USE_FLASHINFER_SAMPLER": "0",
@@ -191,8 +227,19 @@ def vllm_exports(cfg: Config, role: str, remote_url: str) -> list[str]:
         "LMCACHE_MAX_LOCAL_CPU_SIZE": LMCACHE_MAX_LOCAL_CPU_GB,
         **{k: str(v) for k, v in cache_dirs(cfg, role).items()},
     }
+    if lmcache_mode() == "legacy":
+        env["PYTHONPATH"] = str(LMCACHE_COMPAT)
     exports = [f"export {k}={shlex.quote(v)}" for k, v in env.items()]
-    exports.append("export LD_LIBRARY_PATH=/opt/venv/lib/python3.12/site-packages/nvidia/cu13/lib:/opt/venv/lib/python3.12/site-packages/nvidia/cuda_runtime/lib:/usr/local/cuda-12.9/targets/x86_64-linux/lib:/usr/local/cuda/targets/x86_64-linux/lib:${LD_LIBRARY_PATH:-}")
+    library_path = (
+        "/usr/local/cuda-12.9/compat:/opt/venv/lib/python3.12/site-packages/nvidia/cuda_runtime/lib:"
+        "/usr/local/cuda-12.9/targets/x86_64-linux/lib"
+        if lmcache_mode() == "mp" else
+        "/opt/venv/lib/python3.12/site-packages/nvidia/cu13/lib:"
+        "/opt/venv/lib/python3.12/site-packages/nvidia/cuda_runtime/lib:"
+        "/usr/local/cuda-12.9/targets/x86_64-linux/lib:"
+        "/usr/local/cuda/targets/x86_64-linux/lib"
+    )
+    exports.append(f"export LD_LIBRARY_PATH={library_path}:${{LD_LIBRARY_PATH:-}}")
     return exports
 
 
@@ -217,6 +264,34 @@ def apptainer_cmd(cfg: Config, script: str, gpu: int | None = None, nv: bool = T
 
 def lmcache_cmd(cfg: Config) -> list[str]:
     return [sys.executable, "queue-haul/stage1b_drain_sink.py", "lmcache-server", "--host", cfg.host, "--port", str(cfg.lmc_port), "--max-bytes", str(LMCACHE_SERVER_MAX_BYTES)]
+
+
+def redis_cmd(cfg: Config) -> list[str]:
+    return ["apptainer", "exec", REDIS_IMAGE, "redis-server", "--bind", cfg.host,
+            "--port", str(cfg.lmc_port), "--save", "", "--appendonly", "no"]
+
+
+def mp_server_cmd(cfg: Config, role: str) -> list[str]:
+    if role == "source":
+        port, http_port, l2_port = cfg.src_lmc_port, cfg.src_lmc_http_port, cfg.kv_proxy_port
+    elif role == "sink":
+        port, http_port, l2_port = cfg.sink_lmc_port, cfg.sink_lmc_http_port, cfg.kv_proxy_port
+    else:
+        raise ValueError(f"unknown MP server role: {role}")
+    adapter = json.dumps({"type": "resp", "host": cfg.host, "port": l2_port,
+                          "num_workers": 8}, separators=(",", ":"))
+    serve = [
+        "lmcache", "server", "--instance-id", f"queue-haul-{role}",
+        "--host", cfg.host, "--port", port, "--http-host", cfg.host,
+        "--http-port", http_port, "--l1-size-gb", 16, "--eviction-policy", "LRU",
+        "--chunk-size", 256, "--max-workers", 8,
+        "--supported-transfer-mode", "engine_driven", "--l2-adapter", adapter,
+    ]
+    script = "\n".join([
+        "export CUDA_VISIBLE_DEVICES=",
+        shell(serve),
+    ])
+    return apptainer_cmd(cfg, script, nv=False)
 
 
 def vllm_cmd(cfg: Config, role: str, extra: list[str] | None = None) -> list[str]:
@@ -256,7 +331,8 @@ def vllm_cmd(cfg: Config, role: str, extra: list[str] | None = None) -> list[str
         "auto",
         "--enable-chunked-prefill",
         "--enforce-eager",
-        *(["--enable-sleep-mode"] if role == "source" else []),
+        *(["--enable-sleep-mode"] if role == "source" and lmcache_mode() == "legacy" else []),
+        *(["--gpu-memory-utilization", 0.75, "--disable-hybrid-kv-cache-manager", "--enable-prompt-tokens-details"] if lmcache_mode() == "mp" else []),
         "--kv-transfer-config",
         kv_config(engine_id, kv_role, kv_port, rpc_port),
         *(extra or []),
@@ -267,7 +343,8 @@ def vllm_cmd(cfg: Config, role: str, extra: list[str] | None = None) -> list[str
 
 def proxy_routes(cfg: Config) -> list[Route]:
     return [
-        Route("kv", cfg.host, cfg.kv_proxy_port, cfg.host, cfg.lmc_port),
+        Route("kv", cfg.host, cfg.kv_proxy_port, cfg.host, cfg.lmc_port,
+              "resp" if lmcache_mode() == "mp" else "lmcache"),
         Route("api", cfg.host, cfg.api_proxy_port, cfg.host, cfg.sink_port),
     ]
 
@@ -310,8 +387,12 @@ def gpu_count() -> int:
 
 
 def runtime_versions(cfg: Config) -> tuple[str, str]:
-    check = "from importlib.metadata import version; from lmcache.v1.storage_backend.connector.lm_connector import LMCServerConnector; from lmcache.integration.vllm.vllm_v1_adapter import LMCacheConnectorV1Impl; assert LMCServerConnector._qh_patched and LMCacheConnectorV1Impl._qh_bypass_patched; print('QH_RUNTIME_VERSIONS', version('vllm'), version('lmcache'))"
-    script = "\n".join([f"export PYTHONPATH={shlex.quote(str(LMCACHE_COMPAT))}", shell(["/usr/bin/python3", "-c", check])])
+    if lmcache_mode() == "mp":
+        check = "from importlib.metadata import version; from lmcache.integration.vllm.lmcache_mp_connector import LMCacheMPConnector; print('QH_RUNTIME_VERSIONS', version('vllm'), version('lmcache'))"
+        script = shell(["python", "-c", check])
+    else:
+        check = "from importlib.metadata import version; from lmcache.v1.storage_backend.connector.lm_connector import LMCServerConnector; from lmcache.integration.vllm.vllm_v1_adapter import LMCacheConnectorV1Impl; assert LMCServerConnector._qh_patched and LMCacheConnectorV1Impl._qh_bypass_patched; print('QH_RUNTIME_VERSIONS', version('vllm'), version('lmcache'))"
+        script = "\n".join([f"export PYTHONPATH={shlex.quote(str(LMCACHE_COMPAT))}", shell(["/usr/bin/python3", "-c", check])])
     output = subprocess.check_output(apptainer_cmd(cfg, script, nv=False), text=True)
     _tag, vllm, lmcache = next(line for line in reversed(output.splitlines()) if line.startswith("QH_RUNTIME_VERSIONS ")).split()
     return vllm, lmcache
@@ -324,10 +405,13 @@ def preflight(cfg: Config, required_gpus: int = 1) -> list[str]:
         failures.append("apptainer not found")
     if not cfg.sandbox.exists():
         failures.append(f"sandbox missing: {cfg.sandbox}")
+    if lmcache_mode() == "mp" and not REDIS_IMAGE.exists():
+        failures.append(f"Redis image missing: {REDIS_IMAGE}")
     elif shutil.which("apptainer"):
         versions = runtime_versions(cfg)
-        if versions != RUNTIME_VERSIONS:
-            failures.append(f"need vLLM/LMCache {RUNTIME_VERSIONS}, saw {versions}")
+        expected = expected_runtime_versions()
+        if versions != expected:
+            failures.append(f"need vLLM/LMCache {expected}, saw {versions}")
     snapshots = model_snapshot_dir(cfg.hf_home, cfg.model)
     if not snapshots.exists() or not any(snapshots.iterdir()):
         failures.append(f"model snapshot missing: {snapshots}")
@@ -335,6 +419,8 @@ def preflight(cfg: Config, required_gpus: int = 1) -> list[str]:
         if len(str(path)) > 20:
             failures.append(f"TMPDIR too long for LMCache IPC: {path}")
     ports = [cfg.lmc_port, cfg.smoke_port] if required_gpus == 1 else [cfg.src_port, cfg.sink_port, cfg.lmc_port, cfg.kv_proxy_port, cfg.api_proxy_port]
+    if lmcache_mode() == "mp":
+        ports += [cfg.src_lmc_port, cfg.sink_lmc_port, cfg.src_lmc_http_port, cfg.sink_lmc_http_port]
     for port in ports:
         if not port_free(cfg.host, port):
             failures.append(f"port busy: {cfg.host}:{port}")
@@ -349,8 +435,8 @@ def preflight(cfg: Config, required_gpus: int = 1) -> list[str]:
         f"docker_present={bool(shutil.which('docker'))}",
         "real_tc=disabled_no_cap_net_admin",
         f"sandbox={cfg.sandbox}",
-        f"vllm={RUNTIME_VERSIONS[0]}",
-        f"lmcache={RUNTIME_VERSIONS[1]}",
+        f"vllm={expected_runtime_versions()[0]}",
+        f"lmcache={expected_runtime_versions()[1]}",
         f"model_snapshots={snapshots}",
     ]
 
@@ -399,6 +485,9 @@ class ByteLog:
         self.connections = connections.open("w", newline="", buffering=1)
         self.connection_writer = csv.writer(self.connections)
         self.connection_writer.writerow(["connection_id", "route", "key_hash", "start_ns", "end_ns", "client_to_target_bytes", "target_to_client_bytes"])
+        self.transfers = path.with_name("resp_transfers.csv").open("w", newline="", buffering=1)
+        self.transfer_writer = csv.writer(self.transfers)
+        self.transfer_writer.writerow(["connection_id", "command", "key_hashes", "start_ns", "end_ns", "request_wire_bytes", "response_wire_bytes", "request_body_bytes", "payload_bytes"])
         self.buckets: dict[tuple[int, str, str, str, bool], int] = {}
         self.lock = asyncio.Lock()
         self.task: asyncio.Task | None = None
@@ -431,6 +520,10 @@ class ByteLog:
             if not self.active:
                 self.idle.set()
 
+    async def resp_transfer(self, row: list) -> None:
+        async with self.lock:
+            self.transfer_writer.writerow(row)
+
     async def _flush_loop(self) -> None:
         while True:
             await asyncio.sleep(self.interval_ns / 1e9)
@@ -453,6 +546,7 @@ class ByteLog:
         await self.flush(all_rows=True)
         self.file.close()
         self.connections.close()
+        self.transfers.close()
 
 
 def billable(route: str, direction: str) -> bool:
@@ -580,6 +674,97 @@ def run_lmcache_server(host: str, port: int, max_bytes: int = 0) -> None:
             threading.Thread(target=handle_lmcache_client, args=(client, store), daemon=True).start()
 
 
+
+@dataclass(frozen=True)
+class RespFrame:
+    raw: bytes
+    payload: bytes | None = None
+    items: tuple[RespFrame, ...] = ()
+
+    def body_bytes(self) -> int:
+        return len(self.payload) if self.payload is not None else sum(item.body_bytes() for item in self.items)
+
+
+async def read_resp(reader: asyncio.StreamReader) -> RespFrame:
+    prefix = await reader.readexactly(1)
+    line = await reader.readline()
+    if not line.endswith(b"\r\n"):
+        raise ValueError("invalid RESP line")
+    raw = prefix + line
+    if prefix == b"$":
+        length = int(line[:-2])
+        if length < 0:
+            return RespFrame(raw)
+        body = await reader.readexactly(length + 2)
+        if not body.endswith(b"\r\n"):
+            raise ValueError("invalid RESP bulk trailer")
+        return RespFrame(raw + body, body[:-2])
+    if prefix == b"*":
+        count = int(line[:-2])
+        items = tuple([await read_resp(reader) for _ in range(max(0, count))])
+        return RespFrame(raw + b"".join(item.raw for item in items), items=items)
+    if prefix not in b"+-:":
+        raise ValueError(f"unsupported RESP prefix: {prefix!r}")
+    return RespFrame(raw, line[:-2])
+
+
+def resp_request(frame: RespFrame) -> tuple[str, list[str]]:
+    if not frame.items or frame.items[0].payload is None:
+        raise ValueError("RESP request is not an array command")
+    command = frame.items[0].payload.decode().upper()
+    key = frame.items[1].payload if len(frame.items) > 1 else None
+    return command, [hashlib.sha256(key).hexdigest()] if key is not None and command in {"GET", "SET", "EXISTS"} else []
+
+
+async def relay_resp(client_r: asyncio.StreamReader, client_w: asyncio.StreamWriter,
+                     target_r: asyncio.StreamReader, target_w: asyncio.StreamWriter,
+                     bucket: TokenBucket, log: ByteLog | None,
+                     connection_id: str) -> tuple[int, int]:
+    pending: asyncio.Queue = asyncio.Queue()
+    counts = [0, 0]
+
+    async def requests() -> None:
+        try:
+            while True:
+                start = time.monotonic_ns()
+                frame = await read_resp(client_r)
+                command, keys = resp_request(frame)
+                target_w.write(frame.raw)
+                await target_w.drain()
+                counts[0] += len(frame.raw)
+                if log:
+                    await log.add(connection_id, "kv", "client_to_target", len(frame.raw), False)
+                await pending.put((command, keys, start, len(frame.raw), frame.body_bytes()))
+        except asyncio.IncompleteReadError:
+            if target_w.can_write_eof():
+                target_w.write_eof()
+        finally:
+            await pending.put(None)
+
+    async def responses() -> None:
+        try:
+            while True:
+                request = await pending.get()
+                if request is None:
+                    return
+                command, keys, start, request_wire, request_body = request
+                frame = await read_resp(target_r)
+                await bucket.wait(len(frame.raw))
+                client_w.write(frame.raw)
+                await client_w.drain()
+                end = time.monotonic_ns()
+                counts[1] += len(frame.raw)
+                if log:
+                    await log.add(connection_id, "kv", "target_to_client", len(frame.raw), True)
+                    await log.resp_transfer([connection_id, command, ";".join(keys), start, end,
+                                             request_wire, len(frame.raw), request_body, frame.body_bytes()])
+                pending.task_done()
+        except asyncio.IncompleteReadError:
+            return
+
+    await asyncio.gather(requests(), responses())
+    return tuple(counts)
+
 async def relay(reader: asyncio.StreamReader, writer: asyncio.StreamWriter,
                 bucket: TokenBucket, log: ByteLog | None, connection_id: str,
                 route: str, direction: str, initial: bytes = b"") -> int:
@@ -607,20 +792,22 @@ async def handle_proxy(client_r: asyncio.StreamReader, client_w: asyncio.StreamW
     connection_id = hashlib.sha256(f"{route.name}:{start}".encode()).hexdigest()[:16]
     target_r, target_w = await asyncio.open_connection(route.target_host, route.target_port)
     initial, key_hash = b"", ""
-    if route.name == "kv":
+    if route.protocol == "lmcache":
         initial = await client_r.readexactly(LMCACHE_CLIENT_META.size)
         key_hash = kv_key_hash(initial)
     if log:
         await log.opened()
     counts = (0, 0)
     try:
-        counts = tuple(await asyncio.gather(
+        counts = await relay_resp(client_r, client_w, target_r, target_w, bucket, log, connection_id) if route.protocol == "resp" else tuple(await asyncio.gather(
             relay(client_r, target_w, bucket, log, connection_id, route.name,
                   "client_to_target", initial),
             relay(target_r, client_w, bucket, log, connection_id, route.name,
                   "target_to_client"),
         ))
     finally:
+        target_w.close()
+        client_w.close()
         if log:
             await log.connection(connection_id, route.name, key_hash, start, counts)
 
@@ -723,7 +910,10 @@ def prompt_text(session_id: str, words: int = 4096) -> str:
 
 
 def chat_payload(cfg: Config, prompt: str, max_tokens: int = 4) -> str:
-    return json.dumps({"model": cfg.model, "messages": [{"role": "user", "content": prompt}], "max_tokens": max_tokens, "temperature": 0})
+    payload = {"model": cfg.model, "messages": [{"role": "user", "content": prompt}], "max_tokens": max_tokens, "temperature": 0}
+    if lmcache_mode() == "mp":
+        payload["reasoning_effort"] = "low"
+    return json.dumps(payload)
 
 
 def post_chat(cfg: Config, port: int, prompt: str, max_tokens: int = 4) -> dict:
@@ -735,11 +925,12 @@ def post_chat(cfg: Config, port: int, prompt: str, max_tokens: int = 4) -> dict:
     text = resp.read().decode()
     conn.close()
     t1 = time.time()
-    content = ""
-    if resp.status == 200:
-        content = json.loads(text)["choices"][0]["message"].get("content") or ""
+    parsed = json.loads(text) if resp.status == 200 else {}
+    content = parsed.get("choices", [{}])[0].get("message", {}).get("content") or ""
     return {
         "status": resp.status,
+        "id": parsed.get("id", ""),
+        "usage": parsed.get("usage", {}),
         "content": content,
         "elapsed_s": t1 - t0,
         "start_ts": t0,
@@ -776,14 +967,23 @@ def stop_proc(proc: subprocess.Popen) -> None:
 
 
 def stop_stack(stack: Stack) -> None:
-    for proc in (stack.sink, stack.source, stack.proxy, stack.lmcache):
+    for proc in (stack.sink, stack.source, stack.proxy, *stack.cache_services, stack.lmcache):
         if proc:
             stop_proc(proc)
 
 
-def flush_lmcache(stack: Stack) -> None:
+def flush_lmcache(stack: Stack, cfg: Config | None = None) -> None:
+    cfg = cfg or Config()
     if stack.lmcache.poll() is not None:
         raise RuntimeError("LMCache server is not running")
+    if lmcache_mode() == "mp":
+        with socket.create_connection((cfg.host, cfg.lmc_port)) as sock:
+            sock.sendall(b"*1\r\n$8\r\nFLUSHALL\r\n")
+            if not sock.recv(64).startswith(b"+OK"):
+                raise RuntimeError("Redis FLUSHALL failed")
+        for port in (cfg.src_lmc_http_port, cfg.sink_lmc_http_port):
+            http_text(cfg.host, port, "POST", "/cache/clear")
+        return
     log = stack.run_root / "lmcache.log"
     cleared = count_needle(log, LMCACHE_CLEAR_MARKER)
     os.kill(stack.lmcache.pid, signal.SIGUSR1)
@@ -893,18 +1093,25 @@ def billed_window(rows: list[dict], route: str, direction: str) -> dict:
 def start_stack(cfg: Config, run_root: Path, mbps: float, extra: list[str] | None = None) -> Stack:
     preflight(cfg, required_gpus=2)
     run_root.mkdir(parents=True, exist_ok=True)
-    lmc = start_logged(lmcache_cmd(cfg), run_root / "lmcache.log")
+    lmc = start_logged(redis_cmd(cfg) if lmcache_mode() == "mp" else lmcache_cmd(cfg), run_root / "lmcache.log")
     proxy = source = None
+    services = []
     try:
         wait_tcp_process(cfg.host, cfg.lmc_port, 60, lmc, run_root / "lmcache.log")
         proxy = start_logged(proxy_cmd(cfg, mbps, run_root / "proxy_bytes.csv"), run_root / "proxy.log")
         wait_tcp(cfg.host, cfg.kv_proxy_port, 60)
         wait_tcp(cfg.host, cfg.api_proxy_port, 60)
+        if lmcache_mode() == "mp":
+            for role, port in (("source", cfg.src_lmc_port), ("sink", cfg.sink_lmc_port)):
+                log = run_root / f"lmcache-{role}.log"
+                service = start_logged(mp_server_cmd(cfg, role), log)
+                services.append(service)
+                wait_tcp_process(cfg.host, port, 300, service, log)
         source = start_logged(vllm_cmd(cfg, "source", extra or []), run_root / "source.log")
         wait_health_process(cfg.host, cfg.src_port, 1800, source, run_root / "source.log")
-        return Stack(lmc, proxy, source, None, run_root)
-    except Exception:
-        for proc in (source, proxy, lmc):
+        return Stack(lmc, proxy, source, None, run_root, services)
+    except BaseException:
+        for proc in (source, proxy, *services, lmc):
             if proc:
                 stop_proc(proc)
         raise
@@ -923,7 +1130,7 @@ def check_chat(result: dict, label: str) -> None:
 
 
 def warm_source(cfg: Config, run_root: Path, prompt: str, label: str = "source warm") -> tuple[dict, int]:
-    source_log = run_root / "source.log"
+    source_log = run_root / ("lmcache-source.log" if lmcache_mode() == "mp" else "source.log")
     stored0 = count_needle(source_log, "Stored")
     source = post_chat(cfg, cfg.src_port, prompt, 4)
     check_chat(source, label)
@@ -935,8 +1142,8 @@ def warm_source(cfg: Config, run_root: Path, prompt: str, label: str = "source w
 
 def run_smoke2_probe(cfg: Config, run_root: Path, mbps: float, words: int = 4096, prompt: str | None = None, prewarmed: tuple[dict, int] | None = None) -> dict:
     proxy_log = run_root / "proxy_bytes.csv"
-    source_log = run_root / "source.log"
-    sink_log = run_root / "sink.log"
+    source_log = run_root / ("lmcache-source.log" if lmcache_mode() == "mp" else "source.log")
+    sink_log = run_root / ("lmcache-sink.log" if lmcache_mode() == "mp" else "sink.log")
     prompt = prompt or prompt_text("smoke2-kv", words)
     replay_prompt = prompt_text(f"smoke2-replay-{int(time.time())}", min(words, 1024))
 
@@ -987,8 +1194,8 @@ def run_smoke2_probe(cfg: Config, run_root: Path, mbps: float, words: int = 4096
         "replay_delta": replay_delta,
         "kv_link": kv_link,
         "evidence": {
-            "source_connector": "engine_id: s0" in read_text(source_log) or "engine_id=s0" in read_text(source_log),
-            "sink_connector": "engine_id: d0" in read_text(sink_log) or "engine_id=d0" in read_text(sink_log),
+            "source_connector": "Registered non-GPU context" in read_text(source_log) if lmcache_mode() == "mp" else "engine_id: s0" in read_text(source_log) or "engine_id=s0" in read_text(source_log),
+            "sink_connector": "Registered non-GPU context" in read_text(sink_log) if lmcache_mode() == "mp" else "engine_id: d0" in read_text(sink_log) or "engine_id=d0" in read_text(sink_log),
             "source_stored": count_needle(source_log, "Stored") > stored0,
             "sink_retrieved": count_needle(sink_log, "Retrieved") > retrieved0,
             "kv_proxy_bytes": kv_delta.get("kv/target_to_client", 0),
@@ -1137,7 +1344,9 @@ def main(argv: list[str] | None = None) -> None:
         kv_target = parse_addr(args.kv_target)
         api_listen = parse_addr(args.api_listen)
         api_target = parse_addr(args.api_target)
-        routes = [Route("kv", *kv_listen, *kv_target), Route("api", *api_listen, *api_target)]
+        routes = [Route("kv", *kv_listen, *kv_target,
+                        "resp" if lmcache_mode() == "mp" else "lmcache"),
+                  Route("api", *api_listen, *api_target)]
         asyncio.run(run_proxy(routes, args.mbps * 1_000_000 / 8, args.log))
         return
 

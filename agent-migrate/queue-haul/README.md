@@ -165,6 +165,26 @@ the remainder, resumes only against the same hashed plan, and runs
 held-out extension remains gated on pre-staged complete SWE-chat traces; it is
 not synthesized from the coding manifest.
 
+Stage 1G is the opt-in LMCache multiprocess path; the legacy vLLM 0.10.1.1 /
+LMCache 0.3.3 path remains the default. It uses vLLM 0.22.0+cu129 and LMCache
+0.5.1's shipped `LMCacheMPConnector`, two CPU-only engine-driven MP servers,
+and Redis L2. The shared 10-Gbps proxy parses RESP and attributes successful
+GET response bodies to source SET keys, so remote wire bytes exclude source
+context growth. Run it on two A100s with:
+
+```bash
+sbatch queue-haul/stage1g_mp_campaign.sbatch
+```
+
+The completed `mp-campaign-run-10-20260719` ran four distinct approximately
+16K-token sessions at concurrency 1/2/4 and one four-stage append-only session,
+all with three repeats. Every hard gate passed. Median aggregate KV throughput
+was 591 MB/s at concurrency 2 and 1.206 GB/s at concurrency 4, versus a 111
+MB/s serialized ceiling; at least two key-attributed session bodies overlapped.
+At the final 16K append stage, vLLM reported 16,384 cached tokens, decomposed
+exactly into 14,848 vLLM-local and 1,536 LMCache-retrieved tokens. All
+continuations, RESP wire/body equations, and repeat counts passed.
+
 Stage 1D completed all 12 fixed two-session scenarios at 1 Gbps within
 deadline. All six migrations passed cache, continuation, exact aggregate byte,
 and independent large-body connection checks; each used 95 connections with up
