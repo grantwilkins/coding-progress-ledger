@@ -30,15 +30,13 @@ END_S = 15
 TARGET_FRACTIONS = (0.25, 0.5, 0.75, 1.0)
 COLORS = {
     "random": "#9B51E0",
-    "load_only": "#F2994A",
-    "node_aware": "#2F80ED",
-    "node_drain": "#176B52",
+    "capacity": "#2F80ED",
+    "lp": "#176B52",
 }
 LABELS = {
     "random": "Random",
-    "load_only": "Load only",
-    "node_aware": "Node aware",
-    "node_drain": "Drain nodes",
+    "capacity": "Capacity",
+    "lp": "LP",
 }
 
 
@@ -62,7 +60,7 @@ def evaluation_rows() -> list[dict]:
         )
         control_scenario = replace(probe, power_limit_w=initial)
         control_plan = plan(
-            control_scenario, profile, control_routes, "load_only", seed=3
+            control_scenario, profile, control_routes, "capacity", seed=3
         )
         control_result = execute(control_scenario, profile, control_plan.moves)
         control_wait = _summary(

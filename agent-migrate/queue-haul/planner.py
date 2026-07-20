@@ -19,9 +19,9 @@ from simulate import (MOVE_METHODS_BY_STATE, ExecutionScenario, MoveMethod, Plan
 
 
 METHODS: tuple[MoveMethod, ...] = ("replay", "kv_transfer", "replay_on_request")
-SOLVERS = ("random", "load_only", "node_aware", "node_drain")
+SOLVERS = ("random", "capacity", "lp")
 LP_SOLVERS = ("lp", "lp_peak_first", "lp_work_first")
-ALL_SOLVERS = SOLVERS + LP_SOLVERS
+ALL_SOLVERS = SOLVERS + LP_SOLVERS[1:]
 Routes = dict[tuple[str, str], tuple[str, ...]] | Callable[[str, str], tuple[str, ...]]
 
 
@@ -218,26 +218,6 @@ def _local_sessions(scenario: ExecutionScenario) -> list[SimSession]:
         if local == {True} and session.movable:
             out.append(session)
     return out
-
-
-def _drain_groups(scenario: ExecutionScenario, sessions: list[SimSession]) -> list[list[int]]:
-    instances = {i.instance_id: set(i.gpu_nodes) for i in scenario.instances}
-    by_node: dict[str, set[int]] = {}
-    for j, session in enumerate(sessions):
-        for node in instances[session.source_instance]:
-            by_node.setdefault(node, set()).add(j)
-    remaining = set(range(len(sessions)))
-    groups = []
-    while remaining:
-        group, pending = set(), [remaining.pop()]
-        while pending:
-            j = pending.pop()
-            group.add(j)
-            linked = set().union(*(by_node[node] for node in instances[sessions[j].source_instance]))
-            pending.extend(linked & remaining)
-            remaining -= linked
-        groups.append(sorted(group))
-    return groups
 
 
 def _route(routes: Routes, source: str, destination: str) -> tuple[str, ...]:
@@ -440,9 +420,8 @@ def _execution_feasible(scenario: ExecutionScenario, expected) -> bool:
     )
 
 
-def _node_drain_greedy(groups, sessions, gains, durations, valid, resources, horizon,
-                       power: ExpectedPower, limit: float):
-    n = len(gains)
+def _capacity_greedy(sessions, valid, resources, power: ExpectedPower, limit: float):
+    n = len(sessions)
     matrix = csc_matrix(resources)
     chosen = np.full(n, -1, int)
     usage = np.zeros(resources.shape[0])
@@ -451,61 +430,28 @@ def _node_drain_greedy(groups, sessions, gains, durations, valid, resources, hor
         start, end = matrix.indptr[method * n + session:method * n + session + 2]
         return matrix.indices[start:end], matrix.data[start:end]
 
-    pressure = np.full(n, np.inf)
-    for j in range(n):
-        pressure[j] = min(
-            (max(column(method, j)[1], default=0.0)
-             for method in range(2) if valid[method * n + j]),
-            default=np.inf,
-        )
-    ordered_groups = []
-    for group in groups:
-        order = sorted(group, key=lambda j: (
-            -gains[j] / max(pressure[j], 1e-12), pressure[j], j
-        ))
-        group_usage = np.zeros(resources.shape[0])
-        peak = 0.0
-        for j in order:
-            options = []
-            for method in range(2):
-                if not valid[method * n + j]:
-                    continue
+    scarcity = np.asarray(resources[:, valid].sum(axis=1)).ravel()
+    scores = np.full((2, n), np.inf)
+    for method in range(2):
+        for j in range(n):
+            if valid[method * n + j]:
                 rows, added = column(method, j)
-                options.append((
-                    max(peak, max(group_usage[rows] + added, default=0.0)),
-                    durations[method, j], method, rows, added,
-                ))
-            if options:
-                peak, _, _, rows, added = min(options, key=lambda item: item[:3])
-                group_usage[rows] += added
-        score = sum(gains[j] for j in group if np.isfinite(pressure[j])) \
-            / max(horizon * peak, 1e-12) if peak else 0.0
-        ordered_groups.append((-score, min(group), order))
-
+                scores[method, j] = max(added * scarcity[rows], default=0.0)
     selected = []
-    for _, _, group in sorted(ordered_groups):
+    for j in np.lexsort((np.arange(n), scores.min(axis=0))):
         if power.power(True) <= limit:
             break
-        for j in group:
-            options = []
-            for method in range(2):
-                if not valid[method * n + j]:
-                    continue
-                rows, added = column(method, j)
-                remaining = 1 - usage[rows]
-                if np.any(added > remaining + 1e-8):
-                    continue
-                options.append((
-                    max(added / np.maximum(remaining, 1e-12), default=0.0),
-                    durations[method, j], method, rows, added,
-                ))
-            if not options:
+        for method in np.lexsort((np.arange(2), scores[:, j])):
+            if not valid[method * n + j]:
                 continue
-            _, _, method, rows, added = min(options, key=lambda item: item[:3])
+            rows, added = column(method, j)
+            if np.any(usage[rows] + added > 1 + 1e-8):
+                continue
             chosen[j] = method
             usage[rows] += added
             selected.append(j)
             power.remove(sessions[j].session_id)
+            break
     return selected, chosen, usage
 
 
@@ -693,7 +639,6 @@ def plan(scenario: ExecutionScenario, profile: ModelProfile,
                           profile.profile_id, case_id, seed, profile.kv_capacity_tokens)
     horizon = scenario.deadline_s - scenario.controller_delay_s
     valid = np.zeros((len(sessions), len(METHODS)), bool)
-    costs = np.full(valid.shape, np.inf)
     for j, session in enumerate(sessions):
         # TODO(routes): measure heterogeneous destination links before optimizing over them.
         candidate_path = _route(paths, session.source_instance, destinations[0].instance_id)
@@ -701,19 +646,17 @@ def plan(scenario: ExecutionScenario, profile: ModelProfile,
             if method not in MOVE_METHODS_BY_STATE[session.state]:
                 continue
             try:
-                costs[j, k] = _duration(
+                duration = _duration(
                     session, method, case, candidate_path, links, horizon
                 )
                 if method == "kv_transfer":
                     _kv_schedule(
                         scenario, profile, session, case, candidate_path, links,
                     )
-                valid[j, k] = costs[j, k] <= horizon
+                valid[j, k] = duration <= horizon
             except ValueError:
                 pass
     available = valid.any(1)
-    capacity_node_drain = solver == "node_drain" and scenario.final_state == "awake" \
-        and all(session.state == "active" for session in sessions)
     if solver == "random":
         rng = np.random.default_rng(seed)
         eligible = np.flatnonzero(available)
@@ -727,55 +670,19 @@ def plan(scenario: ExecutionScenario, profile: ModelProfile,
             for j in eligible:
                 choices[j] = rng.choice(np.flatnonzero(valid[j]))
         methods = [METHODS[k] for k in choices]
-    else:
-        best_method = np.argmin(np.where(valid, costs, np.inf), axis=1)
-        best_cost = costs[np.arange(len(sessions)), best_method]
-        methods = [METHODS[k] for k in best_method]
-    if solver == "load_only":
-        order = np.argsort(
-            best_cost / np.maximum([_ell(s, case) for s in sessions], 1e-12)
-        )
-        order = order[available[order]]
-    elif solver in {"node_aware", "node_drain"}:
-        groups = _drain_groups(scenario, sessions)
-        base_gain = np.array([power_state.marginal(s.session_id) for s in sessions])
-        gains = base_gain.copy()
-        for group in groups:
-            ids = [sessions[j].session_id for j in group]
-            bonus = power_state.drain_gain(ids) - base_gain[group].sum()
-            weight = np.array([_ell(sessions[j], case) for j in group])
-            gains[group] += bonus * (
-                weight / weight.sum() if weight.any() else 1 / len(group)
-            )
-        if solver == "node_aware":
-            order = np.argsort(best_cost / np.maximum(gains, 1e-12))
-            order = order[available[order]]
-        elif not capacity_node_drain:
-            groups.sort(
-                key=lambda group: best_cost[group].sum()
-                / max(gains[group].sum(), 1e-12)
-            )
-            groups = [sorted(group, key=lambda j: best_cost[j]) for group in groups]
     selected = []
-    if capacity_node_drain:
+    if solver == "capacity":
+        if scenario.final_state != "awake" or any(s.state != "active" for s in sessions):
+            raise ValueError("capacity supports active sessions and final_state='awake'")
         resource_horizon = horizon - profile.power_window_s
-        durations, resource_valid, resources = _migration_resources(
+        _, resource_valid, resources = _migration_resources(
             scenario, profile, paths, sessions, destinations, case, resource_horizon
         )
-        selected, chosen, _ = _node_drain_greedy(
-            groups, sessions, gains, durations, resource_valid, resources,
-            resource_horizon, power_state, scenario.power_limit_w,
+        selected, chosen, _ = _capacity_greedy(
+            sessions, resource_valid, resources, power_state, scenario.power_limit_w,
         )
         methods = [METHODS[chosen[j]] if chosen[j] >= 0 else METHODS[0]
                    for j in range(len(sessions))]
-    elif solver == "node_drain":
-        for group in groups:
-            if power_state.power(True) <= scenario.power_limit_w:
-                break
-            for j in group:
-                if valid[j, METHODS.index(methods[j])]:
-                    selected.append(j)
-                    power_state.remove(sessions[j].session_id)
     else:
         for j in order:
             if power_state.power(True) <= scenario.power_limit_w:

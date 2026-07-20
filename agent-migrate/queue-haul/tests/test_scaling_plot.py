@@ -43,7 +43,7 @@ def test_scaling_rows_require_paired_solver_settings(tmp_path):
         "end_s", "target_fraction_of_removable_power", "requested_source_drop_w",
     ))
     rows = [
-        ("node_aware", 10, 1, 1, 1, 120, 180, 0.5, 50),
+        ("capacity", 10, 1, 1, 1, 120, 180, 0.5, 50),
         ("lp", 10, 1, 1, 1, 120, 180, 0.5, 51),
     ]
     path = tmp_path / "results.csv"

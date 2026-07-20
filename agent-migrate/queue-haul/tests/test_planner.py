@@ -10,8 +10,8 @@ Plausible wrong implementations:
 - Apply a fleet-wide migration budget instead of one budget per source instance.
 - Count external replay bytes against source egress.
 - Use the deadline instead of the deadline minus the trailing power window.
-- Ignore the resource budget while trying to drain a node.
-- Reorder sessions while reconstructing an already ordered node-drain group.
+- Rank by summed work instead of the largest scarcity-weighted resource use.
+- Admit a session after one of its resource capacities is exhausted.
 - Place every selected session on the first destination.
 - Defer replay for an active session or transfer nonexistent KV for a cold session.
 - Admit active KV that fits source instances but overfills a destination.
@@ -27,7 +27,7 @@ Plausible wrong implementations:
 - Hold replay log bytes fixed while expected session state grows.
 - Award an idle-node bonus while an unmovable session remains.
 - Reject a valid tail-only KV move because its background byte rate is zero.
-- Compute node-aware gains for solvers that do not use them.
+- Reintroduce power gain into the capacity-only ranking.
 - Evaluate migration methods that are illegal for a session's residency state.
 - Rebuild an already-static expected scenario.
 - Change seeded random methods or move order while batching random choices.
@@ -42,7 +42,7 @@ from scipy.sparse import csr_matrix
 
 import planner
 from planner import (
-    METHODS, _duration, _expected_scenario, _required_kv_rate, _round_lp,
+    METHODS, _capacity_greedy, _duration, _expected_scenario, _required_kv_rate, _round_lp,
     _route_resources, _solve_lp, plan,
 )
 from power_model import ExpectedPower
@@ -190,18 +190,6 @@ def test_expected_prediction_reuses_a_static_scenario():
     assert _expected_scenario(scenario, (move,)) is scenario
 
 
-@pytest.mark.parametrize("solver", ("random", "load_only"))
-def test_simple_solvers_skip_node_aware_work(tmp_path, monkeypatch, solver):
-    def unexpected(*_args, **_kwargs):
-        raise AssertionError("simple solver evaluated node-aware state")
-
-    monkeypatch.setattr(planner, "_drain_groups", unexpected)
-    monkeypatch.setattr(planner.ExpectedPower, "marginal", unexpected)
-    monkeypatch.setattr(planner.ExpectedPower, "drain_gain", unexpected)
-
-    plan(problem(), model(tmp_path, tp=1), PATHS, solver)
-
-
 def test_planner_only_evaluates_methods_allowed_by_session_state(tmp_path, monkeypatch):
     original = planner._duration
 
@@ -211,7 +199,7 @@ def test_planner_only_evaluates_methods_allowed_by_session_state(tmp_path, monke
 
     monkeypatch.setattr(planner, "_duration", allowed)
 
-    plan(problem(), model(tmp_path, tp=1), PATHS, "load_only")
+    plan(problem(), model(tmp_path, tp=1), PATHS, "capacity")
 
 
 def test_random_batching_preserves_scalar_seed_sequence(tmp_path):
@@ -265,7 +253,7 @@ def test_tail_only_kv_move_needs_no_background_rate(tmp_path):
 
     result = plan(
         scenario, model(tmp_path, switch=0, tp=1),
-        {("s", "t"): ("wan",)}, "load_only",
+        {("s", "t"): ("wan",)}, "capacity",
     )
 
     assert result.moves[0].method == "kv_transfer"
@@ -274,8 +262,8 @@ def test_tail_only_kv_move_needs_no_background_rate(tmp_path):
 
 def test_plan_does_not_read_sampled_future_requests(tmp_path):
     profile = model(tmp_path, tp=1)
-    a = plan(problem(), profile, PATHS, "load_only")
-    b = plan(problem((SimRequest(0, 10, 0),)), profile, PATHS, "load_only")
+    a = plan(problem(), profile, PATHS, "capacity")
+    b = plan(problem((SimRequest(0, 10, 0),)), profile, PATHS, "capacity")
     assert [(m.session_id, m.method) for m in a.moves] == [
         (m.session_id, m.method) for m in b.moves
     ]
@@ -283,14 +271,14 @@ def test_plan_does_not_read_sampled_future_requests(tmp_path):
 
 
 def test_destination_placement_balances_whole_sessions(tmp_path):
-    result = plan(problem(limit=0), model(tmp_path, tp=1), PATHS, "load_only")
+    result = plan(problem(limit=0), model(tmp_path, tp=1), PATHS, "capacity")
     assert {move.destination_instance for move in result.moves} == {"t0", "t1"}
     assert {move.session_id for move in result.moves} == {"a", "b"}
     assert all(move.method in METHODS for move in result.moves)
 
     def route(source, destination):
         return PATHS[source, destination]
-    assert plan(problem(limit=0), model(tmp_path, tp=1), route, "load_only").moves == result.moves
+    assert plan(problem(limit=0), model(tmp_path, tp=1), route, "capacity").moves == result.moves
 
 
 def test_planner_only_transfers_active_kv_and_defers_cold_replay(tmp_path):
@@ -298,66 +286,62 @@ def test_planner_only_transfers_active_kv_and_defers_cold_replay(tmp_path):
         SimSession("a", "s0", 10, 25, 0, 100),
         SimSession("b", "s1", 10, 0, 0, 100, wake_probability=1, state="cold"),
     ))
-    result = plan(topology, model(tmp_path, tp=1), PATHS, "node_drain")
+    result = plan(topology, model(tmp_path, tp=1), PATHS, "random")
 
     assert {move.session_id: move.method for move in result.moves} == {
         "a": "kv_transfer", "b": "replay_on_request",
     }
 
 
-def test_planner_rejects_destination_kv_overcommit(tmp_path):
+def test_capacity_greedy_prevents_destination_kv_overcommit(tmp_path):
     topology = replace(problem(limit=0), instances=problem().instances[:-1])
     paths = {(source, "t0"): ("wan",) for source in ("s0", "s1")}
 
-    with pytest.raises(ValueError, match="destination compute or KV capacity"):
-        plan(topology, model(tmp_path, tp=1, kv_capacity=15), paths, "load_only")
+    result = plan(topology, model(tmp_path, tp=1, kv_capacity=15), paths, "capacity")
+
+    assert len(result.moves) == 1
+    assert not result.feasible
 
 
-def test_node_drain_counts_sleep_only_after_the_whole_node_is_selected(tmp_path):
-    scenario = problem(limit=5, final="sleep")
-    shared = replace(scenario, nodes=(
-        PowerNode("n0", 2, True), PowerNode("d0", 1, False), PowerNode("d1", 1, False),
-    ), instances=(
-        ServingInstance("s0", ("n0",)), ServingInstance("s1", ("n0",)),
-        ServingInstance("t0", ("d0",)), ServingInstance("t1", ("d1",)),
-    ))
-    result = plan(shared, model(tmp_path, tp=1), PATHS, "node_drain")
-    assert {move.session_id for move in result.moves} == {"a", "b"}
-    assert result.feasible
+class UnlimitedPower:
+    def __init__(self):
+        self.removed = []
+
+    def power(self, _local):
+        return 1
+
+    def remove(self, session):
+        self.removed.append(session)
 
 
-def test_node_drain_orders_groups_then_sessions_by_move_time(tmp_path):
-    sessions = (
-        SimSession("a", "s0", 10, 25, 0, 100),
-        SimSession("b", "s1", 20, 25, 0, 100),
-        SimSession("c", "s2", 30, 25, 0, 100),
+def test_capacity_greedy_uses_bottleneck_pressure_and_preserves_capacity():
+    sessions = [SimpleNamespace(session_id=str(j)) for j in range(3)]
+    resources = csr_matrix([
+        [0.7, 0.4, 0.0, 0, 0, 0],
+        [0.7, 0.0, 0.4, 0, 0, 0],
+    ])
+
+    selected, chosen, usage = _capacity_greedy(
+        sessions, np.array([True] * 3 + [False] * 3), resources,
+        UnlimitedPower(), 0,
     )
-    scenario = ExecutionScenario(
-        10, 20, 6, "sleep", 0,
-        (
-            PowerNode("n0", 2, True), PowerNode("n1", 1, True),
-            PowerNode("d0", 1, False), PowerNode("d1", 1, False),
-            PowerNode("d2", 1, False),
-        ),
-        (
-            ServingInstance("s0", ("n0",)), ServingInstance("s1", ("n0",)),
-            ServingInstance("s2", ("n1",)), ServingInstance("t0", ("d0",)),
-            ServingInstance("t1", ("d1",)), ServingInstance("t2", ("d2",)),
-        ),
-        sessions, (NetworkLink("wan", 100),),
+
+    assert selected == [1, 2]
+    assert chosen.tolist() == [-1, 0, 0]
+    assert np.all(usage <= 1)
+
+
+def test_capacity_greedy_picks_the_lower_pressure_action():
+    selected, chosen, _ = _capacity_greedy(
+        [SimpleNamespace(session_id="a")], np.ones(2, bool),
+        csr_matrix([[0.6, 0.2], [0.0, 0.2]]), UnlimitedPower(), 0,
     )
-    paths = {
-        (source, destination): ("wan",)
-        for source in ("s0", "s1", "s2")
-        for destination in ("t0", "t1", "t2")
-    }
 
-    result = plan(scenario, model(tmp_path, tp=1), paths, "node_drain")
-
-    assert [move.session_id for move in result.moves] == ["a", "b", "c"]
+    assert selected == [0]
+    assert chosen.tolist() == [1]
 
 
-def test_node_drain_reserves_source_time_and_power_window(tmp_path):
+def test_capacity_reserves_source_time_and_power_window(tmp_path):
     profile = model(
         tmp_path, switch=0, tp=1, destination_rate=100, parallel_moves=1,
         replay_rate={"1": [[1, 50], [1000, 50]], "2": [[1, 25], [1000, 25]]},
@@ -371,14 +355,14 @@ def test_node_drain_reserves_source_time_and_power_window(tmp_path):
         (NetworkLink("wan", 10_000),),
     )
 
-    result = plan(scenario, profile, {("s", "t"): ("wan",)}, "node_drain")
+    result = plan(scenario, profile, {("s", "t"): ("wan",)}, "capacity")
 
     assert [(move.session_id, move.method) for move in result.moves] == [("a", "replay")]
     assert result.planned_source_power_w > scenario.power_limit_w
     assert not result.feasible
 
 
-def test_node_drain_uses_kv_when_shared_replay_time_is_full(tmp_path):
+def test_capacity_uses_kv_when_shared_replay_time_is_full(tmp_path):
     profile = model(
         tmp_path, switch=0, tp=1, destination_rate=500, parallel_moves=1,
         replay_rate={"1": [[1, 100], [1000, 100]], "2": [[1, 50], [1000, 50]]},
@@ -395,33 +379,11 @@ def test_node_drain_uses_kv_when_shared_replay_time_is_full(tmp_path):
     )
     paths = {(f"s{i}", "d"): ("wan",) for i in range(4)}
 
-    result = plan(scenario, profile, paths, "node_drain")
+    result = plan(scenario, profile, paths, "capacity")
 
     assert result.feasible
     assert [move.method for move in result.moves].count("replay") == 3
     assert [move.method for move in result.moves].count("kv_transfer") == 1
-
-
-def test_node_drain_prefers_power_reduction_per_predicted_second(tmp_path):
-    profile = model(tmp_path, switch=0, tp=1, destination_rate=10, parallel_moves=1)
-    sessions = (
-        SimSession("fast", "sf", 100, 25, 0, 1),
-        SimSession("slow", "ss", 300, 25, 0, 1),
-    )
-    scenario = ExecutionScenario(
-        10, 11, 35, "awake", 0,
-        (PowerNode("nf", 1, True), PowerNode("ns", 1, True),
-         PowerNode("df", 1, False), PowerNode("ds", 1, False)),
-        (ServingInstance("sf", ("nf",)), ServingInstance("ss", ("ns",)),
-         ServingInstance("tf", ("df",)), ServingInstance("ts", ("ds",))),
-        sessions, (NetworkLink("wan", 10_000),),
-    )
-    paths = {(source, destination): ("wan",)
-             for source in ("sf", "ss") for destination in ("tf", "ts")}
-
-    result = plan(scenario, profile, paths, "node_drain")
-
-    assert [move.session_id for move in result.moves] == ["fast"]
 
 
 def test_random_skips_sessions_that_cannot_finish_by_the_deadline(tmp_path):
@@ -432,7 +394,7 @@ def test_random_skips_sessions_that_cannot_finish_by_the_deadline(tmp_path):
 
 def test_collective_link_contention_can_make_a_plan_infeasible(tmp_path):
     result = plan(
-        replace(problem(limit=0), deadline_s=2.5), model(tmp_path, tp=1), PATHS, "load_only"
+        replace(problem(limit=0), deadline_s=2.5), model(tmp_path, tp=1), PATHS, "random"
     )
     assert len(result.moves) == 2
     assert not result.feasible
@@ -512,7 +474,7 @@ def test_destination_capacity_reserves_expected_context_growth(tmp_path):
     topology = replace(problem(limit=0), sessions=(session,))
 
     with pytest.raises(ValueError, match="destination compute or KV capacity"):
-        plan(topology, model(tmp_path, tp=1, kv_capacity=15), PATHS, "load_only")
+        plan(topology, model(tmp_path, tp=1, kv_capacity=15), PATHS, "capacity")
 
 
 def test_lp_reserves_the_trailing_power_window(tmp_path):
@@ -538,7 +500,7 @@ def test_lp_reserves_the_trailing_power_window(tmp_path):
     ).moves == ()
 
 
-@pytest.mark.parametrize("solver", ("lp", "node_drain"))
+@pytest.mark.parametrize("solver", ("lp", "capacity"))
 @pytest.mark.parametrize(("commit_s", "power_met", "feasible"), (
     (10, True, True),
     (10.000001, True, False),

@@ -92,10 +92,10 @@ Retain three policy comparisons:
 
 - Maximum-rate greedy.
 - Deadline-paced greedy.
-- Node-drain greedy with the whole-node power bonus.
+- Fixed-score capacity greedy.
 
 Use exact enumeration on tiny cases and the LP on tractable cases as quality
-references. The node-aware greedy is the intended million-session solver and
+references. The capacity greedy is the intended million-session solver and
 should remain approximately `O(N log N)`.
 
 Earlier quiescence is necessary when observed growth or contention consumes

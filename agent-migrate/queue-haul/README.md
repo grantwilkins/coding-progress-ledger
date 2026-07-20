@@ -18,7 +18,7 @@ uv run python queue-haul/power_drain_experiment.py \
   --workload-profile queue-haul/profiles/agentic_tool_loop.json \
   --sessions 6 --seed 3 --power-limit 500 --deadline 5 --end 5 \
   --link-bytes-per-s 125000000 --intra-dc-bytes-per-s 12500000000 \
-  --solver load_only --workers 2 --out queue-haul/outputs/profile_smoke
+  --solver capacity --workers 2 --out queue-haul/outputs/profile_smoke
 uv run python queue-haul/plot_simulator_validation.py
 uv run python queue-haul/plot_simulator_evaluation.py
 uv run python queue-haul/plot_scaling_results.py
@@ -57,13 +57,12 @@ Expected replay WAN bytes grow with the materialized durable log. Planner
 validation materializes expected growth at quiescence without exposing sampled
 future requests.
 
-For active sessions with `--final-state awake`, `node_drain` ranks source nodes
-by exact power reduction to idle divided by predicted drain time. It then ranks
-sessions within each node by power reduction per resource use and reserves the
-same source, network, destination replay/KV, compute, KV residency, and trailing
-power-window capacities as the LP. It empties a node when possible and otherwise
-takes only the sessions that fit. Cold-session, sleep, and shutdown plans retain
-the simpler whole-node ordering until those transitions are measured.
+For active sessions with `--final-state awake`, `capacity` scores each replay
+and KV-transfer option by its largest normalized resource use, weighted once by
+total demand for that resource. It sorts sessions once, chooses the lowest-pressure
+action that still fits, and reserves the same source, network, destination service,
+compute, KV-residency, and trailing power-window capacities as the LP. This keeps
+planning approximately `O(N log N)` while preventing resource overcommit.
 
 `--solver lp` jointly selects replay and KV transfer under source-instance,
 network, destination replay, destination KV, compute, residency, and source
@@ -257,10 +256,9 @@ hard-fails if any checked value differs.
 source-power reduction, route-switch completion, and request wait for a
 controlled 50-session sweep.
 
-`outputs/scaling_1_to_100k_20260717/scaling_summary.{png,pdf}` compares the
-updated capacity-aware greedy, CLARABEL LP, and node-aware baseline on solver
-choices, deadline completion, simulated power reduction, migration completion,
-and planning time in the paired coding sweep.
+Scaling plots compare random selection, the capacity greedy, and CLARABEL LP on
+solver choices, deadline completion, simulated power reduction, migration
+completion, and planning time.
 `outputs/scaling_1_to_100k_15min_20260717/scaling_summary.{png,pdf}` repeats
 the sweep with a 15-minute deadline and 22.5-minute observation window.
 `outputs/lp_objective_comparison_15min_20260717/scaling_summary.{png,pdf}`
@@ -270,14 +268,6 @@ and achieve about 189% of the requested reduction. The restored LP is faster,
 so the remaining over-selection comes from the conservative linear power bound,
 not objective order.
 
-`outputs/scaling_1m_6h_20260720/comparison.csv` compares all four greedy
-baselines with the LP for one million static coding sessions, a six-hour
-deadline, and a 50% removable-power target. Load-only, node-aware, and
-node-drain meet the target with about 524,000 replay moves; node-drain drains
-the most nodes. The LP moves 949,031 sessions and reaches 189% of the target,
-while random selection fails under shared-link contention.
-
-Greedy planning skips solver-specific state it does not consume, batches
-homogeneous seeded random choices without changing their sequence, and reuses
-static expected scenarios. Exact simulation also drops inactive links from
-fair-share calculations; these fast paths preserve move and simulation results.
+Greedy planning batches homogeneous seeded random choices without changing
+their sequence and reuses static expected scenarios. Exact simulation also
+drops inactive links from fair-share calculations.

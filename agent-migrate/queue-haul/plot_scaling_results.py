@@ -14,11 +14,11 @@ import matplotlib.pyplot as plt
 
 
 COLORS = {
-    "node_aware": "#4C78A8", "node_drain": "#F58518", "lp": "#54A24B",
+    "random": "#9B51E0", "capacity": "#4C78A8", "lp": "#54A24B",
     "lp_peak_first": "#E45756", "lp_work_first": "#B279A2",
 }
 LABELS = {
-    "node_aware": "Node aware", "node_drain": "Drain nodes", "lp": "Old LP",
+    "random": "Random", "capacity": "Capacity", "lp": "LP",
     "lp_peak_first": "Peak before work", "lp_work_first": "Work before peak",
 }
 PAIRED_FIELDS = (

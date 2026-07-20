@@ -8,27 +8,22 @@ placed only when both compute load and resident KV fit; cold sessions consume
 neither until reactivation.
 
 The planner chooses whole sessions and one of three actions: replay, KV
-transfer, or replay on request. Random, load-only, node-aware, and node-drain
-selection are separate policies. Destination placement is a balanced pass.
+transfer, or replay on request. Random, capacity-greedy, and LP selection are
+separate policies. Destination placement is a balanced pass.
 Destination placement enforces the same compute and resident-KV limits as the
 source placement.
 Only local source power is constrained; destination power is reported.
 
-## Greedy node drain
+## Capacity greedy
 
-For active sessions and an awake final state, the node-drain policy uses the
-same normalized resource rows and usable window \(H\) as the LP. A source node
-is ranked by its exact power reduction to idle divided by the predicted time to
-move its sessions. Within a node, sessions are ranked by power reduction per
-resource use. Replay or KV transfer is chosen from the remaining source,
-network, destination replay/KV, compute, and resident-KV capacity.
-
-The policy visits nodes in that order and reserves capacity for each selected
-whole session. It finishes a node when all its sessions fit and otherwise moves
-only the sessions that fit before visiting the next node. The event simulator
-still decides whether the aggregate reservations form an exact schedule.
-Cold-session, sleep, and shutdown plans retain the earlier whole-node order
-until their resource use and transition timing are measured.
+For active sessions and an awake final state, the capacity policy uses the same
+normalized resource rows and usable window \(H\) as the LP. Each action's score
+is its largest normalized resource use weighted by that resource's total demand.
+Sessions are sorted once by their best action score. In that order, the policy
+chooses the lowest-scoring replay or KV-transfer action that fits every remaining
+source, network, destination service, compute, and resident-KV capacity. The
+event simulator still decides whether the aggregate reservations form an exact
+schedule.
 
 ## LP planner
 

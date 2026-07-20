@@ -141,7 +141,7 @@ def test_agentic_shared_transfers_finish_without_floating_stall():
         scenario, model, (session.session_id for session in scenario.sessions)
     )
     scenario = replace(scenario, power_limit_w=(initial + minimum) / 2)
-    planned = experiment.plan(scenario, model, routes, "node_drain", seed=3)
+    planned = experiment.plan(scenario, model, routes, "capacity", seed=3)
     result = experiment.execute(scenario, model, planned.moves)
     assert result.completed_sessions == len(planned.moves)
 
@@ -149,7 +149,7 @@ def test_agentic_shared_transfers_finish_without_floating_stall():
 def test_small_run_reuses_plans_and_writes_raw_tables_and_plots(tmp_path: Path):
     runs = list(experiment.run(
         workload_paths=(experiment.DEFAULT_WORKLOADS[2],), sessions=6, power_limits=(500,),
-        deadlines=(5,), end_s=5, solvers=("load_only",), seed=3,
+        deadlines=(5,), end_s=5, solvers=("capacity",), seed=3,
         link_bytes_per_s=1_250_000_000,
     ))
     assert len(runs) == 3
@@ -200,7 +200,7 @@ def test_small_run_reuses_plans_and_writes_raw_tables_and_plots(tmp_path: Path):
 def test_write_handles_a_plan_with_no_moves(tmp_path: Path):
     runs = list(experiment.run(
         workload_paths=(experiment.DEFAULT_WORKLOADS[2],), sessions=1,
-        power_limits=(10_000,), deadlines=(5,), end_s=5, solvers=("load_only",),
+        power_limits=(10_000,), deadlines=(5,), end_s=5, solvers=("capacity",),
     ))
     assert all(not run.plan.moves for run in runs)
     experiment.write(iter(runs), tmp_path)
@@ -214,7 +214,7 @@ def test_worker_processes_preserve_scenario_order_and_results():
         "power_limits": (500,),
         "deadlines": (5,),
         "end_s": 5,
-        "solvers": ("load_only", "node_drain"),
+        "solvers": ("random", "capacity"),
         "seed": 3,
     }
     serial = list(experiment.run(**args))
