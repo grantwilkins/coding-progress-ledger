@@ -430,7 +430,8 @@ def test_campaign_allows_ambiguous_shared_prefix_bytes(tmp_path):
 
     assert measured["kv_body_bytes"] == 2_000_000
     assert c.max_overlap([(0, 2), (1, 3)]) == 2
-    assert c.valid_append_stage(stage)
+    assert not c.valid_append_stage(stage)
+    assert c.valid_append_stage({**stage, "wire_body_bytes": 3})
     assert not c.valid_append_stage({**stage, "wire_body_bytes": 4})
 
 
@@ -489,6 +490,63 @@ def test_live_runtime_pipelines_four_append_stages(monkeypatch, tmp_path):
     assert [row.stage_index for row in stages] == list(range(4))
     assert overlap == [True, True, True, False]
     assert [row.logical_body_bytes for row in stages] == [10] * 4
+
+
+def test_mp_prepare_prefetches_before_inference_and_advances_key_watermark(
+        monkeypatch, tmp_path):
+    monkeypatch.setattr(c.b, "lmcache_mode", lambda: "mp")
+    sink = tmp_path / "lmcache-sink.log"
+    sink.write_text(
+        "Registered non-GPU context model=model, world_size=1\n"
+    )
+    transfers = tmp_path / "resp_transfers.csv"
+    transfers.write_text(
+        "connection_id,command,key_hashes,start_ns,end_ns,"
+        "request_wire_bytes,response_wire_bytes,request_body_bytes,payload_bytes\n"
+        "a,GET,k1,1,2,1,11,1,10\n"
+    )
+    calls = []
+    session = SimpleNamespace(
+        cache_keys={"k1", "k2"}, copied_keys={"k1"},
+        warm_cached_tokens=512,
+        prompt_tokens_by_hash={"h": 520},
+        probe=lambda messages: messages + [{"role": "user", "content": "probe"}],
+    )
+
+    def request(*_args, **_kwargs):
+        calls.append("request")
+        return c.RequestResult(
+            "r", 200, "h", 3, 4, prompt_tokens=520,
+            cached_tokens=512,
+        ), "CODE"
+
+    session.request = request
+    monkeypatch.setattr(
+        c.b, "mp_chat_tokens",
+        lambda _cfg, _messages: calls.append("tokenize") or [1, 2],
+    )
+    monkeypatch.setattr(
+        c.b, "mp_warm_prefetch",
+        lambda *_args: calls.append("prefetch")
+        or {"total_keys": 2, "found_keys": 1},
+    )
+    monkeypatch.setattr(c.b, "mp_request_hit", lambda *_args: 512)
+    runtime = c.LiveRuntime(
+        {"s": session},
+        SimpleNamespace(api_proxy_port=1),
+        "none", sink, transfers,
+        SimpleNamespace(write=lambda *_args, **_kwargs: None),
+        tmp_path / "requests.jsonl",
+    )
+
+    result = runtime.prepare(c.Move("s", "kv_transfer", 0),
+                             c.SessionState("s", 0, (), "h"), "initial")
+    runtime.close()
+
+    assert calls == ["tokenize", "prefetch", "request"]
+    assert session.copied_keys == {"k1", "k2"}
+    assert (result.logical_kv_chunks, result.logical_kv_bytes,
+            result.processed_tokens) == (2, 20, 8)
 
 
 def test_request_schedule_is_relative_to_post_warm_epoch(tmp_path):

@@ -23,6 +23,7 @@ Plausible wrong implementations:
 - Allocate queue audit records during summary-only prediction.
 - Apply a background pace cap to the paused final catch-up.
 - Transfer an unsealed partial block or commit without reconstructing its tail.
+- Omit measured replay completion time or emit duplicate network-start events.
 """
 
 import json
@@ -39,7 +40,8 @@ from simulate import (ExecutionScenario, ExecutionSimulator, NetworkLink, Planne
 
 def model(tmp_path, switch=1, destination_rate=1e12, shutdown=2, setup=0, tp=2,
           replay_rate=None, kv_capacity=10_000, kv_action_power=(0, 0), parallel_kv=1,
-          parallel_moves=2, kv_source_action_power=(0, 0)):
+          parallel_moves=2, kv_source_action_power=(0, 0), replay_completion=0,
+          catch_up_fixed=0):
     source = {"kind": "measured", "reference": "hand", "valid_range": [1, 1000], "relative_error": 0}
     rate = {"1": [[1, 100], [1000, 100]], "2": [[1, 50], [1000, 50]]}
     raw = {
@@ -56,10 +58,10 @@ def model(tmp_path, switch=1, destination_rate=1e12, shutdown=2, setup=0, tp=2,
         "cases": {"central": {
             "F": 100, "G": 100, "power_curve": [[0, 10], [0.5, 30], [1, 40]],
             "prefill_tps": rate, "decode_tps": rate, "replay_tps": replay_rate or rate,
-            "replay_completion_s": 0,
+            "replay_completion_s": replay_completion,
             "kv_transfer": {"block_tokens": 10, "block_bytes": 100, "setup_s": setup,
                             "destination_bytes_per_s": destination_rate,
-                            "initial_completion_s": 0, "catch_up_fixed_s": 0,
+                            "initial_completion_s": 0, "catch_up_fixed_s": catch_up_fixed,
                             "tail_replay_tps": 100},
             "switch_s": switch, "sleep_power_delta_w": -8, "sleep_s": 1,
             "shutdown_s": shutdown,
@@ -450,6 +452,26 @@ def test_unmeasured_destination_concurrency_queues_instead_of_overlapping(tmp_pa
     ready = sorted(row.initial_ready_s for row in result.sessions)
     assert ready == pytest.approx([0.12, 0.22])
     assert sum(event.event == "endpoint_queued" for event in result.events) == 1
+
+
+def test_replay_includes_measured_completion_once(tmp_path):
+    result = execute(
+        scenario((SimSession("active", "source", 10, 0, 0, 100),)),
+        model(tmp_path, switch=0, replay_completion=.4),
+        (PlannedMove("active", "dest", "replay", 0, ("wan",)),),
+    )
+
+    assert result.sessions[0].initial_ready_s == pytest.approx(1.5)
+
+
+def test_each_network_flow_has_one_start_event(tmp_path):
+    result = execute(
+        scenario((SimSession("active", "source", 10, 0, 0, 1),)),
+        model(tmp_path, switch=0),
+        (PlannedMove("active", "dest", "kv_transfer", 0, ("wan",)),),
+    )
+
+    assert sum(event.event == "network_start" for event in result.events) == 1
 
 
 def test_initial_kv_uses_snapshot_and_catch_up_uses_only_new_blocks(tmp_path):

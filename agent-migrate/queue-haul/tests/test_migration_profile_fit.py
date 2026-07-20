@@ -10,6 +10,8 @@ Plausible wrong implementations:
 - Reverse bytes/s and seconds/byte.
 - Resend the changed partial block instead of replaying its tail.
 - Append measured and prior curve points out of order.
+- Reject current campaign schemas or ignore failed campaign gates.
+- Raise concurrency without fitting its measured action-power points.
 """
 
 import pandas as pd
@@ -69,3 +71,36 @@ def test_measured_replay_points_override_priors_and_remain_ordered():
     assert fit.merge_points(
         [[20, 2], [10, 1]], [[15, 9], [20, 99]]
     ) == [[10.0, 1.0], [15.0, 9.0], [20.0, 2.0]]
+
+
+def test_parallel_limit_reads_the_checked_bounded_campaign(tmp_path):
+    pd.DataFrame([
+        {"passed": True}, {"passed": True},
+    ]).to_csv(tmp_path / "campaign_gate.csv", index=False)
+    pd.DataFrame([
+        {"campaign": "parallel_surface", "kind": "migration",
+         "move_concurrency": width}
+        for width in (1, 2, 4)
+    ]).to_csv(tmp_path / "scenarios.csv", index=False)
+
+    assert fit.parallel_limit(tmp_path) == 4
+
+    pd.DataFrame([{"passed": False}]).to_csv(
+        tmp_path / "campaign_gate.csv", index=False,
+    )
+    with pytest.raises(ValueError, match="did not pass"):
+        fit.parallel_limit(tmp_path)
+
+
+def test_action_power_keeps_every_measured_concurrency():
+    rows = pd.DataFrame([
+        {"kind": "migration", "method": "kv_transfer", "activity": "none",
+         "repeat": repeat, "concurrency": concurrency,
+         "source_added_power_w": concurrency,
+         "destination_added_power_w": 2 * concurrency}
+        for repeat in (0, 1) for concurrency in (1, 2, 4)
+    ])
+
+    assert fit.total_action_power(rows, "kv_transfer", False) == {
+        "1": [1.0, 2.0], "2": [2.0, 4.0], "4": [4.0, 8.0],
+    }

@@ -23,6 +23,10 @@ Plausible wrong implementations:
 - Round every positive fraction after enough power reduction has been selected.
 - Fail instead of maximizing achievable power reduction when the target is infeasible.
 - Spend setup/completion time as transfer time or clamp an impossible KV pace.
+- Omit the mandatory final KV catch-up and partial-tail reconstruction.
+- Hold replay log bytes fixed while expected session state grows.
+- Award an idle-node bonus while an unmovable session remains.
+- Reject a valid tail-only KV move because its background byte rate is zero.
 """
 
 from dataclasses import replace
@@ -37,6 +41,7 @@ from planner import (
     METHODS, _duration, _expected_scenario, _required_kv_rate, _round_lp,
     _route_resources, _solve_lp, plan,
 )
+from power_model import ExpectedPower
 from simulate import (ExecutionScenario, NetworkLink, PowerNode, ServingInstance, SimRequest,
                       SimSession)
 from test_execution_simulator import model
@@ -126,6 +131,20 @@ def test_kv_duration_uses_the_slower_pipeline_stage(tmp_path):
         == pytest.approx(2)
 
 
+def test_kv_duration_includes_final_tail_and_catch_up(tmp_path):
+    profile = model(tmp_path, switch=0, tp=1, destination_rate=100)
+    case = replace(
+        profile.case(),
+        kv_transfer=replace(
+            profile.case().kv_transfer, catch_up_fixed_s=.4, tail_replay_tps=10,
+        ),
+    )
+    session = SimSession("a", "s0", 11, 0, 0, 1)
+
+    assert _duration(session, "kv_transfer", case, ("wan",), {"wan": 100}) \
+        == pytest.approx(1.5)
+
+
 def test_required_kv_rate_reserves_fixed_completion_and_rejects_overload(tmp_path):
     case = model(tmp_path, switch=0, tp=1).case()
     case = replace(
@@ -155,8 +174,54 @@ def test_expected_prediction_materializes_growth_at_quiescence():
     )
 
     assert expected.sessions[0].context_tokens == 16
+    assert expected.sessions[0].log_bytes == 2
     assert expected.sessions[0].requests == ()
     assert expected.sessions[0].expected_growth_tokens_per_s == 0
+
+
+def test_replay_duration_scales_durable_log_with_expected_growth(tmp_path):
+    session = SimSession(
+        "a", "s0", 10, 0, 0, 100, expected_growth_tokens_per_s=10,
+    )
+
+    assert _duration(
+        session, "replay", model(tmp_path, switch=0, tp=1).case(),
+        ("wan",), {"wan": 100}, 1,
+    ) == pytest.approx(2.2)
+
+
+def test_node_gain_does_not_idle_a_node_with_an_unmovable_session(tmp_path):
+    scenario = replace(problem(final="sleep"), nodes=(
+        PowerNode("n", 2, True), PowerNode("d0", 1, False),
+        PowerNode("d1", 1, False),
+    ), instances=(
+        ServingInstance("s0", ("n",)), ServingInstance("s1", ("n",)),
+        ServingInstance("t0", ("d0",)), ServingInstance("t1", ("d1",)),
+    ), sessions=(
+        SimSession("a", "s0", 10, 25, 0, 100),
+        SimSession("b", "s1", 10, 25, 0, 100, movable=False),
+    ))
+    power = ExpectedPower(scenario, model(tmp_path, tp=1))
+
+    assert power.drain_gain(["a"]) == pytest.approx(power.marginal("a"))
+
+
+def test_tail_only_kv_move_needs_no_background_rate(tmp_path):
+    scenario = ExecutionScenario(
+        10, 10, 0, "awake", 0,
+        (PowerNode("n", 1, True), PowerNode("d", 1, False)),
+        (ServingInstance("s", ("n",)), ServingInstance("t", ("d",))),
+        (SimSession("a", "s", 5, 25, 0, 10_000),),
+        (NetworkLink("wan", 100),),
+    )
+
+    result = plan(
+        scenario, model(tmp_path, switch=0, tp=1),
+        {("s", "t"): ("wan",)}, "load_only",
+    )
+
+    assert result.moves[0].method == "kv_transfer"
+    assert result.moves[0].rate_limit_bytes_per_s is None
 
 
 def test_plan_does_not_read_sampled_future_requests(tmp_path):

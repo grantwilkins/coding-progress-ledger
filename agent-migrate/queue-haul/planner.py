@@ -95,6 +95,22 @@ def _resident_tokens(session: SimSession, horizon: float = 0.0) -> int:
         if session.state == "active" else 0
 
 
+def _changes(session: SimSession, horizon: float) -> bool:
+    return horizon > 0 and session.expected_growth_tokens_per_s > 0
+
+
+def _log_bytes(session: SimSession, tokens: int) -> int:
+    return math.ceil(session.log_bytes * tokens / session.context_tokens)
+
+
+def _kv_catch_up_s(session: SimSession, tokens: int, case: ProfileCase,
+                   horizon: float) -> float:
+    tail = case.kv_transfer.tail_tokens(tokens)
+    return (case.kv_transfer.catch_up_fixed_s
+            + tail / case.kv_transfer.tail_replay_tps) \
+        if tail or _changes(session, horizon) else 0.0
+
+
 def source_power(scenario: ExecutionScenario, profile: ModelProfile, moved=(),
                  case_id: str = "central") -> float:
     """Expected local power after committed moves and the requested final node state."""
@@ -112,12 +128,16 @@ def _duration(session: SimSession, method: MoveMethod, case: ProfileCase,
     tokens = _resident_tokens(session, horizon) or session.context_tokens
     replay_s = tokens / case.replay.rate(tokens, 1)
     if method == "replay":
-        return link_s(session.log_bytes) + replay_s + case.replay_completion_s + case.switch_s
+        return link_s(_log_bytes(session, tokens)) + replay_s \
+            + case.replay_completion_s \
+            * (1 + _changes(session, horizon)) + case.switch_s
     if method == "kv_transfer":
         size = case.kv_transfer.sealed_bytes(tokens)
         return (case.kv_transfer.setup_s
                 + max(link_s(size), size / case.kv_transfer.destination_bytes_per_s)
-                + case.kv_transfer.initial_completion_s + case.switch_s)
+                + case.kv_transfer.initial_completion_s
+                + _kv_catch_up_s(session, tokens, case, horizon)
+                + case.switch_s)
     wake_s = link_s(session.log_bytes) + replay_s + case.replay_completion_s
     return case.switch_s + session.wake_probability * wake_s
 
@@ -163,24 +183,26 @@ def _kv_schedule(scenario: ExecutionScenario, profile: ModelProfile,
 def _expected_scenario(scenario: ExecutionScenario,
                        moves: tuple[PlannedMove, ...]) -> ExecutionScenario:
     by_session = {move.session_id: move for move in moves}
-    return replace(scenario, sessions=tuple(
-        replace(
-            session,
-            context_tokens=math.ceil(
-                session.context_tokens
-                + session.expected_growth_tokens_per_s
-                * max(
-                    0.0,
-                    (by_session[session.session_id].quiesce_s
-                     if by_session[session.session_id].quiesce_s is not None
-                     else scenario.deadline_s)
-                    - scenario.controller_delay_s,
-                )
-            ) if session.session_id in by_session else session.context_tokens,
-            requests=(), expected_growth_tokens_per_s=0,
+
+    def expected(session):
+        if session.session_id not in by_session:
+            return replace(session, requests=(), expected_growth_tokens_per_s=0)
+        move = by_session[session.session_id]
+        horizon = max(
+            0.0, (move.quiesce_s if move.quiesce_s is not None
+                  else scenario.deadline_s) - scenario.controller_delay_s,
         )
-        for session in scenario.sessions
-    ))
+        tokens = math.ceil(
+            session.context_tokens
+            + session.expected_growth_tokens_per_s * horizon
+        )
+        return replace(
+            session, context_tokens=tokens,
+            log_bytes=_log_bytes(session, tokens), requests=(),
+            expected_growth_tokens_per_s=0,
+        )
+
+    return replace(scenario, sessions=tuple(map(expected, scenario.sessions)))
 
 
 def _local_sessions(scenario: ExecutionScenario) -> list[SimSession]:
@@ -255,17 +277,24 @@ def _migration_resources(scenario: ExecutionScenario, profile: ModelProfile, rou
         for source in {session.source_instance for session in sessions}
     }
     replay_s = np.zeros(n)
+    replay_service = np.zeros(n)
     replay_valid = np.ones(n, bool)
     for j, session in enumerate(sessions):
         tokens = _resident_tokens(session, horizon)
         try:
             replay_s[j] = tokens / case.replay.rate(tokens, 1)
+            replay_service[j] = replay_s[j] + case.replay_completion_s * (
+                1 + _changes(session, horizon)
+            )
         except ValueError:
             replay_valid[j] = False
     kv_bytes = np.array([
         case.kv_transfer.sealed_bytes(_resident_tokens(session, horizon)) for session in sessions
     ], float)
-    replay_bytes = np.array([session.log_bytes for session in sessions], float)
+    replay_bytes = np.array([
+        _log_bytes(session, _resident_tokens(session, horizon))
+        for session in sessions
+    ], float)
     durations = np.zeros((2, n))
     kv_service = np.zeros(n)
     named_links: dict[str, dict[int, float]] = {}
@@ -275,10 +304,14 @@ def _migration_resources(scenario: ExecutionScenario, profile: ModelProfile, rou
     for j, session in enumerate(sessions):
         internal, external = route_cache[session.source_instance]
         replay_route = internal
-        durations[0, j] = replay_bytes[j] / replay_route[2] + replay_s[j] + case.switch_s
+        durations[0, j] = replay_bytes[j] / replay_route[2] \
+            + replay_service[j] + case.switch_s
         transfer_s = max(kv_bytes[j] / internal[2],
                          kv_bytes[j] / case.kv_transfer.destination_bytes_per_s)
-        kv_service[j] = transfer_s + case.kv_transfer.initial_completion_s
+        kv_service[j] = transfer_s + case.kv_transfer.initial_completion_s \
+            + _kv_catch_up_s(
+                session, _resident_tokens(session, horizon), case, horizon,
+            )
         durations[1, j] = case.kv_transfer.setup_s + kv_service[j] + case.switch_s
         for method, (byte_count, route) in enumerate((
             (replay_bytes[j], replay_route), (kv_bytes[j], internal)
@@ -325,7 +358,7 @@ def _migration_resources(scenario: ExecutionScenario, profile: ModelProfile, rou
         add_resource(entries.items(), links[link] * horizon)
     if flexible_links:
         add_resource(flexible.items(), sum(links[link] for link in flexible_links) * horizon)
-    add_resource(((j, replay_s[j]) for j in range(n)),
+    add_resource(((j, replay_service[j]) for j in range(n)),
                  len(destinations) * profile.max_destination_replays * horizon)
     add_resource(((n + j, kv_service[j]) for j in range(n)),
                  len(destinations) * profile.max_destination_kv_streams * horizon)
@@ -628,6 +661,7 @@ def _place(selected: list[int], sessions: list[SimSession], scenario: ExecutionS
             rate, quiesce = _kv_schedule(
                 scenario, profile, session, case, path, link_rates,
             )
+            rate = rate or None
         moves.append(PlannedMove(
             session.session_id, destination, methods[j], order, path,
             rate_limit_bytes_per_s=rate, quiesce_s=quiesce,

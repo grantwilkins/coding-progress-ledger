@@ -530,7 +530,7 @@ def stream_chat(cfg: b.Config, port: int, messages: list[dict], max_tokens: int,
     conn = http.client.HTTPConnection(cfg.host, port, timeout=timeout_s)
     conn.request("POST", "/v1/chat/completions", body, {"Content-Type": "application/json"})
     response = conn.getresponse()
-    chunks, text, request_id, first, prompt_tokens, output_tokens = [], [], "", None, 0, 0
+    chunks, text, request_id, first, prompt_tokens, output_tokens, cached_tokens = [], [], "", None, 0, 0, 0
     if response.status != 200:
         error = response.read().decode(errors="ignore")
         conn.close()
@@ -549,13 +549,22 @@ def stream_chat(cfg: b.Config, port: int, messages: list[dict], max_tokens: int,
         usage = item.get("usage") or {}
         prompt_tokens = int(usage.get("prompt_tokens", prompt_tokens))
         output_tokens = int(usage.get("completion_tokens", output_tokens))
+        cached_tokens = int(
+            (usage.get("prompt_tokens_details") or {}).get(
+                "cached_tokens", cached_tokens,
+            )
+        )
         content = (item.get("choices") or [{}])[0].get("delta", {}).get("content") or ""
         if content and first is None:
             first = now
         text.append(content)
     conn.close()
     end = time.monotonic_ns()
-    return RequestResult(request_id, response.status, context_hash, start, end, first or end, prompt_tokens, output_tokens, stream_chunks=tuple(chunks)), "".join(text)
+    return RequestResult(
+        request_id, response.status, context_hash, start, end, first or end,
+        prompt_tokens, output_tokens, cached_tokens,
+        stream_chunks=tuple(chunks),
+    ), "".join(text)
 
 
 def cache_operations(path: Path, start_ns: int = 0, end_ns: int = 2**63 - 1) -> list[dict]:
@@ -649,6 +658,7 @@ class LiveSession:
         self.warm_prompt_tokens = 0
         self.warm_cached_tokens = 0
         self.cache_keys: set[str] = set()
+        self.copied_keys: set[str] = set()
         self.activity_prompt_tokens: int | None = None
         self.prompt_tokens_by_hash: dict[str, int] = {}
 
@@ -666,15 +676,29 @@ class LiveSession:
 
     def warm(self) -> None:
         before = time.monotonic_ns()
+        log_offset = self.source_log.stat().st_size \
+            if b.lmcache_mode() == "mp" else 0
         result, _ = self.request(
             self.cfg.src_port, list(self.messages), "source_warm"
         )
         self.warm_prompt_tokens = result.prompt_tokens
         self.prompt_tokens_by_hash[messages_hash(self.messages)] = result.prompt_tokens
+        if b.lmcache_mode() == "mp":
+            b.mp_wait_stored(
+                self.source_log, log_offset,
+                result.prompt_tokens // 256 * 256,
+            )
         after = time.monotonic_ns()
-        keys = {row["key_hash"] for row in cache_operations(self.cache_log, before, after) if row["operation"] == "source_write"}
+        keys = b.mp_source_keys(self.cache_log, before, after) \
+            if b.lmcache_mode() == "mp" else {
+                row["key_hash"] for row in cache_operations(
+                    self.cache_log, before, after,
+                ) if row["operation"] == "source_write"
+            }
         self.cache_keys |= keys
-        self.warm_cached_tokens = stored_tokens(self.source_log, result.request_id)
+        self.warm_cached_tokens = len(keys) * 256 \
+            if b.lmcache_mode() == "mp" \
+            else stored_tokens(self.source_log, result.request_id)
 
     def snapshot(self) -> SessionState:
         with self.lock:
@@ -706,10 +730,18 @@ class LiveSession:
             user = {"role": "user", "content": prompt}
             gate = self.activity_gate or threading.Semaphore()
             with gate:
+                log_offset = self.source_log.stat().st_size \
+                    if b.lmcache_mode() == "mp" else 0
                 result, text = self.request(
                     self.cfg.src_port, base, f"controlled_turn_{stage_index}",
                     user["content"],
                 )
+                if b.lmcache_mode() == "mp":
+                    b.mp_wait_stored(
+                        self.source_log, log_offset,
+                        max(0, result.prompt_tokens // 256 * 256
+                            - len(self.cache_keys) * 256),
+                    )
             with self.lock:
                 self.messages = base + [user, {"role": "assistant", "content": text}]
                 self.activity_result = result
@@ -719,7 +751,13 @@ class LiveSession:
                 )
                 self.generation += 1
                 self.prompt_tokens_by_hash[messages_hash(self.messages)] = result.prompt_tokens
-            self.cache_keys |= {row["key_hash"] for row in cache_operations(self.cache_log, start, result.end_ns) if row["operation"] == "source_write"}
+            self.cache_keys |= b.mp_source_keys(
+                self.cache_log, start, result.end_ns,
+            ) if b.lmcache_mode() == "mp" else {
+                row["key_hash"] for row in cache_operations(
+                    self.cache_log, start, result.end_ns,
+                ) if row["operation"] == "source_write"
+            }
             self.activity_records.append({
                 "stage_index": stage_index, "scheduled_ns": at_ns,
                 "start_ns": start, "first_byte_ns": result.first_byte_ns,
@@ -771,6 +809,8 @@ class LiveRuntime:
         self.sessions, self.cfg, self.activity = sessions, cfg, activity
         self.sink_log, self.cache_log, self.event_log = sink_log, cache_log, event_log
         self.schedule, self.copy_policy = schedule or [], copy_policy
+        self.mp_layout = b.mp_model_layout(sink_log) \
+            if b.lmcache_mode() == "mp" else None
         self.scenario_start_ns = scenario_start_ns
         self.next_activity = {session_id: 0 for session_id in sessions}
         gate = threading.Semaphore(serving_concurrency)
@@ -801,7 +841,9 @@ class LiveRuntime:
         if self.copy_policy != "after_each_request":
             return ()
         session, stages = self.sessions[move.session_id], []
-        copied = state.messages and self._prompt_tokens(session, state) // 256
+        copied = len(session.copied_keys) if self.mp_layout else (
+            state.messages and self._prompt_tokens(session, state) // 256
+        )
         while session.activity_thread:
             session.wait_activity()
             current = session.snapshot()
@@ -809,8 +851,9 @@ class LiveRuntime:
             start = time.monotonic_ns()
             request = self.prepare(move, current, "append")
             end = time.monotonic_ns()
-            sealed = self._prompt_tokens(session, current) // 256
-            layout = kv_layout(self.cache_log, request.end_ns)
+            sealed = len(session.copied_keys) if self.mp_layout \
+                else self._prompt_tokens(session, current) // 256
+            layout = self._kv_layout(request.end_ns)
             stages.append(AppendStageResult(
                 len(stages), start, end, current, request, copied, sealed,
                 (sealed - copied) * layout["chunk_bytes"],
@@ -832,22 +875,85 @@ class LiveRuntime:
         if phase == "initial" and self.schedule:
             self._start_next(session)
         self.event_log.write("copy_start", move_id=move.order, session_id=move.session_id, method=move.method, phase=phase)
-        result, _text = session.request(self.cfg.api_proxy_port, list(state.messages), f"{move.method}_{phase}", bypass_lmcache=move.method == "replay")
-        total, hit = lookup_tokens(self.sink_log, result.request_id)
-        expected = expected_hits(
-            move.method, phase, total,
-            session.warm_cached_tokens if phase == "initial"
-            else self._prompt_tokens(session, state),
+        log_offset = self.sink_log.stat().st_size
+        if move.method == "kv_transfer" and self.mp_layout:
+            missing = session.cache_keys - session.copied_keys
+            warm = b.mp_warm_prefetch(
+                self.cfg,
+                b.mp_chat_tokens(
+                    self.cfg, session.probe(list(state.messages)),
+                ),
+                *self.mp_layout,
+            )
+            if warm["total_keys"] != len(session.cache_keys) \
+                    or warm["found_keys"] != len(missing):
+                raise RuntimeError(f"incomplete warm prefetch: {warm}")
+            request_offset = len(b.resp_rows(self.cache_log))
+        result, _text = session.request(
+            self.cfg.api_proxy_port, list(state.messages),
+            f"{move.method}_{phase}",
+            bypass_lmcache=move.method == "replay" and not self.mp_layout,
         )
-        if hit != expected:
-            raise RuntimeError(f"{move.method} request {result.request_id} hit {hit} tokens, expected {expected}")
-        layout = kv_layout(self.cache_log, result.end_ns)
-        logical_chunks, logical_bytes = kv_metrics(hit, layout)
+        if move.method == "kv_transfer" and self.mp_layout:
+            hit = b.mp_request_hit(
+                self.sink_log, log_offset, result.request_id,
+            )
+            request_gets = [
+                row for row in b.resp_rows(self.cache_log)[request_offset:]
+                if row["command"] == "GET"
+                and row["key_hashes"] in session.cache_keys
+                and int(row["payload_bytes"]) > 0
+            ]
+            if request_gets or result.cached_tokens != hit:
+                raise RuntimeError(
+                    f"request-time WAN or cache accounting mismatch for "
+                    f"{result.request_id}"
+                )
+            session.copied_keys |= session.cache_keys
+            total = result.prompt_tokens
+        else:
+            total, hit = lookup_tokens(self.sink_log, result.request_id) \
+                if not self.mp_layout else (result.prompt_tokens, 0)
+        if not self.mp_layout:
+            expected = expected_hits(
+                move.method, phase, total,
+                session.warm_cached_tokens if phase == "initial"
+                else self._prompt_tokens(session, state),
+            )
+            if hit != expected:
+                raise RuntimeError(
+                    f"{move.method} request {result.request_id} hit {hit} "
+                    f"tokens, expected {expected}"
+                )
+        layout = self._kv_layout(result.end_ns) \
+            if move.method == "kv_transfer" or not self.mp_layout else {}
+        logical_chunks, logical_bytes = (
+            (len(session.copied_keys),
+             len(session.copied_keys) * layout["chunk_bytes"])
+            if move.method == "kv_transfer" and self.mp_layout
+            else kv_metrics(hit, layout) if layout else (0, 0)
+        )
         result = replace(result, processed_tokens=total - hit, logical_kv_chunks=logical_chunks, logical_kv_bytes=logical_bytes)
         with self.lock:
             self.requests.write(json.dumps({"move_id": move.order, "session_id": move.session_id, "method": move.method, "phase": phase, "kv_layout": layout, **asdict(result)}, separators=(",", ":")) + "\n")
         self.event_log.write("copy_end", move_id=move.order, session_id=move.session_id, method=move.method, phase=phase, processed_tokens=result.processed_tokens, logical_kv_bytes=logical_bytes, logical_kv_chunks=result.logical_kv_chunks, kv_layout=layout)
         return result
+
+    def _kv_layout(self, end_ns: int) -> dict:
+        if not self.mp_layout:
+            return kv_layout(self.cache_log, end_ns)
+        sizes = {
+            int(row["payload_bytes"]) for row in b.resp_rows(self.cache_log)
+            if row["command"] == "GET" and int(row["payload_bytes"]) > 0
+            and int(row["end_ns"]) <= end_ns
+        }
+        if len(sizes) != 1:
+            raise RuntimeError(f"inconsistent MP KV block sizes: {sizes}")
+        size = sizes.pop()
+        return {
+            "chunk_tokens": 256, "chunk_bytes": size,
+            "bytes_per_token": size / 256, "dtype": None, "shape": [],
+        }
 
     def pause(self, session_id: str) -> None:
         session = self.sessions[session_id]
@@ -1141,13 +1247,22 @@ def run_scenario(stack: b.Stack, cfg: b.Config, manifest: dict, scenario: dict, 
     sampler = PowerSampler(root / "power.csv")
     sampler.start()
     start_ns = time.monotonic_ns()
-    cache_log, source_log, sink_log = stack.run_root / "lmcache.log", stack.run_root / "source.log", stack.run_root / "sink.log"
+    source_log = stack.run_root / (
+        "lmcache-source.log" if b.lmcache_mode() == "mp" else "source.log"
+    )
+    sink_log = stack.run_root / (
+        "lmcache-sink.log" if b.lmcache_mode() == "mp" else "sink.log"
+    )
+    cache_log = root / "resp_transfers.csv" \
+        if b.lmcache_mode() == "mp" else stack.run_root / "lmcache.log"
     runtime = None
     sleeping = False
     try:
         try:
             b.flush_lmcache(stack)
-            b.reset_vllm_caches(cfg, (source_log, sink_log))
+            b.reset_vllm_caches(cfg, (
+                stack.run_root / "source.log", stack.run_root / "sink.log",
+            ))
         except Exception as exc:
             raise ScenarioResetError(str(exc)) from exc
         rows = {row["id"]: row for row in manifest["sessions"]}
@@ -1252,7 +1367,11 @@ def run_scenario(stack: b.Stack, cfg: b.Config, manifest: dict, scenario: dict, 
                 finally:
                     time.sleep(.3)
                     event_log.close()
-                    write_cache_slice(cache_log, root / "cache_operations.jsonl", start_ns, time.monotonic_ns())
+                    if b.lmcache_mode() == "legacy":
+                        write_cache_slice(
+                            cache_log, root / "cache_operations.jsonl",
+                            start_ns, time.monotonic_ns(),
+                        )
     result["wire_bytes"] = b.proxy_counts(root / "proxy_bytes.csv")
     write_json(root / "result.json", result)
     return result
@@ -1303,7 +1422,7 @@ def run_plan(plan_path: Path, run_root: Path, cfg: b.Config, allow_dirty: bool,
     manifest = json.loads(manifest_path.read_text())
     validate_plan(plan, manifest)
     sha, dirty = git_state(allow_dirty)
-    metadata = {"schema": RUN_SCHEMA, "plan_sha256": file_hash(plan_path), "plan_object_sha256": object_hash(plan), "manifest_sha256": file_hash(manifest_path), "git_sha": sha, "git_shas": [sha], "dirty": dirty, "config": config_record(cfg), "extra_vllm_args": extra, "power_state_cycles": power_state_cycles, "power_state_window_s": power_state_window_s, "node_power": node_power}
+    metadata = {"schema": RUN_SCHEMA, "plan_sha256": file_hash(plan_path), "plan_object_sha256": object_hash(plan), "manifest_sha256": file_hash(manifest_path), "git_sha": sha, "git_shas": [sha], "dirty": dirty, "lmcache_mode": b.lmcache_mode(), "config": config_record(cfg), "extra_vllm_args": extra, "power_state_cycles": power_state_cycles, "power_state_window_s": power_state_window_s, "node_power": node_power}
     metadata_path = run_root / "run_metadata.json"
     previous = json.loads(metadata_path.read_text()) if metadata_path.exists() else None
     metadata = merge_run_metadata(metadata, previous, resume_from)
@@ -1490,6 +1609,30 @@ def parallel_connection_measurements(path: Path, start_ns: int, end_ns: int,
                                      required: int,
                                      session_keys: dict[str, set[str]],
                                      strict: bool = True) -> dict:
+    transfers = path.with_name("resp_transfers.csv")
+    if transfers.exists():
+        raw = [
+            row for row in b.resp_rows(transfers)
+            if row["command"] == "GET" and int(row["payload_bytes"]) > 0
+            and int(row["end_ns"]) > start_ns
+            and int(row["start_ns"]) < end_ns
+        ]
+        owners = {
+            key: [session for session, keys in session_keys.items() if key in keys]
+            for key in {row["key_hashes"] for row in raw}
+        }
+        if strict and any(len(values) != 1 for values in owners.values()):
+            raise RuntimeError("MP KV block lacks one source-session owner")
+        rows = [{
+            "connection_id": row["connection_id"],
+            "session_id": owners[row["key_hashes"]][0]
+                if len(owners[row["key_hashes"]]) == 1 else None,
+            "start_ns": max(int(row["start_ns"]), start_ns),
+            "end_ns": min(int(row["end_ns"]), end_ns),
+            "wire_bytes": int(row["response_wire_bytes"]),
+            "body_bytes": int(row["payload_bytes"]),
+        } for row in raw]
+        return _parallel_measurements(rows, required, strict)
     with path.open() as handle:
         raw = list(csv.DictReader(handle))
     rows = []
@@ -1514,6 +1657,11 @@ def parallel_connection_measurements(path: Path, start_ns: int, end_ns: int,
             "wire_bytes": wire,
             "body_bytes": wire - b.LMCACHE_SERVER_META.size,
         })
+    return _parallel_measurements(rows, required, strict)
+
+
+def _parallel_measurements(rows: list[dict], required: int,
+                           strict: bool) -> dict:
     sessions = {row["session_id"] for row in rows if row["session_id"]}
     if strict and len(sessions) < required:
         raise RuntimeError(
@@ -1557,11 +1705,39 @@ def max_overlap(windows: list[tuple[int, int]]) -> int:
 
 def valid_append_stage(row: dict) -> bool:
     return row["copied_blocks_after"] >= row["copied_blocks_before"] \
-        and 0 <= row["wire_body_bytes"] <= row["logical_body_bytes"]
+        and row["wire_body_bytes"] == row["logical_body_bytes"] \
+        and not row.get("duplicate_body_bytes", 0)
 
 
 def attributed_connections(path: Path, start_ns: int, end_ns: int,
                            keys: set[str]) -> dict:
+    transfers = path.with_name("resp_transfers.csv")
+    if transfers.exists():
+        raw = [
+            row for row in b.resp_rows(transfers)
+            if row["command"] == "GET" and row["key_hashes"] in keys
+            and int(row["payload_bytes"]) > 0
+            and int(row["end_ns"]) > start_ns
+            and int(row["start_ns"]) < end_ns
+        ]
+        bodies = {
+            key: sum(
+                int(row["payload_bytes"]) for row in raw
+                if row["key_hashes"] == key
+            ) for key in {row["key_hashes"] for row in raw}
+        }
+        body = sum(bodies.values())
+        wire = sum(int(row["response_wire_bytes"]) for row in raw)
+        return {
+            "wire_bytes": wire, "wire_body_bytes": body,
+            "protocol_bytes": wire - body, "key_body_bytes": bodies,
+            "first_body_ns": min(
+                (int(row["start_ns"]) for row in raw), default=None,
+            ),
+            "last_body_ns": max(
+                (int(row["end_ns"]) for row in raw), default=None,
+            ),
+        }
     with path.open() as handle:
         rows = [
             row for row in csv.DictReader(handle)
@@ -2181,7 +2357,8 @@ def check_parallel_run(run_root: Path) -> None:
             }
             payload = sum(expected.values())
             correct = len(moves) == len(scenario["sessions"]) and all(
-                not row["error"] and row["initial"]["processed_tokens"] == 0
+                not row["error"]
+                and row["initial"]["processed_tokens"] < 256
                 and row["initial"]["logical_kv_bytes"] > 0 for row in moves
             ) and valid_continuations(result, len(scenario["sessions"]))
             passed = correct and measured["session_kv_body_bytes"] == expected
@@ -2273,7 +2450,6 @@ def check_campaign_run(run_root: Path) -> None:
                             for session, keys
                             in result["session_cache_keys"].items()
                         },
-                        strict=False,
                     )
                     expected = {
                         row["move"]["session_id"]:

@@ -1,13 +1,12 @@
 from __future__ import annotations
 
-import argparse, dataclasses, hashlib, http.client, json, re, subprocess, time, traceback
+import argparse, dataclasses, hashlib, json, subprocess, time, traceback
 from pathlib import Path
 import lmcache_mp_campaign as g
 import migration_testbed as b
 
 TARGETS = (12288, 13653, 15018, 16384)
 EXPECTED_WAN_BLOCKS = (48, 5, 5, 6)
-MODEL_RE = re.compile(r"Registered non-GPU context.*model=([^,]+), world_size=(\d+)")
 
 
 def acceptance(stages: list[dict]) -> dict:
@@ -32,44 +31,12 @@ def acceptance(stages: list[dict]) -> dict:
     return {"ok": all(gates.values()), "gates": gates, "observed_wan_blocks": observed}
 
 
-def http_json(host, port, method, path, payload=None, statuses=(200,)):
-    conn = http.client.HTTPConnection(host, port, timeout=600)
-    try:
-        conn.request(method, path, json.dumps(payload) if payload is not None else None,
-                     {"Content-Type": "application/json"})
-        response, text = conn.getresponse(), None
-        text = response.read().decode()
-    finally:
-        conn.close()
-    if response.status not in statuses:
-        raise RuntimeError(f"{method} {path} failed {response.status}: {text[:500]}")
-    return json.loads(text)
-
-
 def chat_tokens(cfg, prompt):
-    result = http_json(cfg.host, cfg.src_port, "POST", "/tokenize",
-                       {"model": cfg.model, "messages": [{"role": "user", "content": prompt}],
-                        "add_generation_prompt": True,
-                        "chat_template_kwargs": {"reasoning_effort": "low", "enable_thinking": True}})
-    tokens = result.get("tokens")
-    if not tokens or len(tokens) != result.get("count"):
-        raise RuntimeError(f"vLLM did not return exact chat token IDs: {result.keys()}")
-    return tokens
+    return b.mp_chat_tokens(cfg, [{"role": "user", "content": prompt}])
 
 
 def warm_prefetch(cfg, tokens, model, world_size):
-    result = http_json(cfg.host, cfg.sink_lmc_http_port, "POST", "/cache/prefetches",
-                       {"model_name": model, "world_size": world_size, "token_ids": tokens}, (202,))
-    request_id = result.get("request_id")
-    if not request_id:
-        raise RuntimeError(f"warm prefetch was not submitted: {result}")
-    deadline = time.monotonic() + 600
-    while time.monotonic() < deadline:
-        status = http_json(cfg.host, cfg.sink_lmc_http_port, "GET", f"/cache/prefetches/{request_id}")
-        if status["status"] == "completed":
-            return status
-        time.sleep(.05)
-    raise TimeoutError(f"warm prefetch {request_id} did not complete")
+    return b.mp_warm_prefetch(cfg, tokens, model, world_size)
 
 
 def post_messages(cfg, messages):
@@ -104,10 +71,7 @@ def provenance(cfg):
 def incremental(cfg, stack):
     g.reset(stack, cfg)
     transfers, log = stack.run_root / "resp_transfers.csv", stack.run_root / "lmcache-sink.log"
-    match = MODEL_RE.search(log.read_text(errors="ignore"))
-    if not match:
-        raise RuntimeError("LMCache sink did not report its model layout")
-    model, world_size = match.group(1), int(match.group(2))
+    model, world_size = b.mp_model_layout(log)
     source_keys, target_keys, stages = set(), set(), []
     session, code, final_prompt, final_response = "mp-incremental", "QHMPSTAGEC0DE", "", None
     for index, target in enumerate(TARGETS):

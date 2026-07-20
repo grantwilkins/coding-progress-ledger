@@ -1,15 +1,16 @@
 """
 Claim:
-The migration testbed starts from the validated old Apptainer sandbox path, keeps source and
+The migration testbed pins each validated legacy/MP runtime, keeps source and
 sink vLLM instances separate, and replaces privileged kernel tc with one
 user-space bandwidth bucket shared by the source-egress KV/API proxy routes.
 
 Plausible wrong implementations:
-- Reintroduce Docker/latest-cu129 or LMCacheMPConnector.
+- Run the bounded campaign on the legacy connector or an unpinned MP image.
 - Start source/sink with colliding ports, long TMPDIRs, or shared cache dirs.
 - Shape each route independently instead of enforcing one shared link.
 - Bill both directions instead of the simulated source-egress directions.
 - Aggregate concurrent connections so apparent overlap cannot be attributed.
+- Read MP source keys before asynchronous chunk storage completes.
 - Trust reset HTTP 200 after vLLM logged that the reset failed.
 - Hide transfers in a private CPU cache or log every socket read as a sample.
 """
@@ -23,6 +24,7 @@ import socket
 import subprocess
 import sys
 import time
+from pathlib import Path
 
 import pytest
 
@@ -94,6 +96,37 @@ def test_mp_runtime_uses_release_image_and_shipped_connector(monkeypatch):
     assert "--enable-prompt-tokens-details" in source
     assert "--enable-sleep-mode" not in source
     assert s.expected_runtime_versions() == ("0.22.0+cu129", "0.5.1")
+
+
+def test_mp_tokenization_uses_the_exact_reasoning_chat_template(monkeypatch):
+    seen = {}
+
+    def request(_host, _port, _method, _path, payload):
+        seen.update(payload)
+        return {"tokens": [1, 2], "count": 2}
+
+    monkeypatch.setattr(s, "http_json", request)
+    messages = [{"role": "user", "content": "state"}]
+
+    assert s.mp_chat_tokens(s.Config(), messages) == [1, 2]
+    assert seen["messages"] == messages
+    assert seen["chat_template_kwargs"] == {
+        "reasoning_effort": "low", "enable_thinking": True,
+    }
+
+
+def test_mp_storage_wait_aggregates_chunked_writes(tmp_path):
+    log = tmp_path / "lmcache.log"
+    log.write_text("Stored 8192 tokens\nStored 4096 tokens\n")
+
+    s.mp_wait_stored(log, 0, 12288)
+
+
+def test_bounded_campaign_pins_validated_mp_transport():
+    text = Path("bounded_hardware_campaign.sbatch").read_text()
+
+    assert "QH_LMCACHE_MODE=mp" in text
+    assert "lmcache-v0.5.1-vllm0.22.0-cu129-primary.sif" in text
 
 
 def test_mp_chat_disables_reasoning_without_changing_legacy(monkeypatch):
@@ -236,7 +269,11 @@ def _lmc_request(port, command, key="k", data=b""):
 def test_lite_lmcache_server_put_get_and_flush(tmp_path):
     port = _free_port()
     log = tmp_path / "lmcache.log"
-    proc = subprocess.Popen([sys.executable, "queue-haul/migration_testbed.py", "lmcache-server", "--host", "127.0.0.1", "--port", str(port)], stdout=log.open("w"), stderr=subprocess.STDOUT, start_new_session=True)
+    proc = subprocess.Popen(
+        [sys.executable, s.__file__, "lmcache-server", "--host", "127.0.0.1",
+         "--port", str(port)], stdout=log.open("w"),
+        stderr=subprocess.STDOUT, start_new_session=True,
+    )
     try:
         s.wait_tcp_process("127.0.0.1", port, 5, proc, log)
         _lmc_request(port, s.LMCACHE_CLIENT_PUT, data=b"abc")

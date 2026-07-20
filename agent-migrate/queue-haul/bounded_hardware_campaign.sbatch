@@ -15,4 +15,6 @@ export REPO=${REPO:-/home/groups/ramr/gfw/coding-progress-ledger/agent-migrate}
 export PLAN=${PLAN:-queue-haul/outputs/bounded-hardware-campaign-plan.json}
 export RUN_ROOT=${RUN_ROOT:-queue-haul/outputs/bounded-hardware-campaign-run}
 export CHECK=check-campaign
+export QH_LMCACHE_MODE=mp
+export QH_APPTAINER_IMAGE=${QH_APPTAINER_IMAGE:-/scratch/users/gfw/ptsim/lmcache-v0.5.1-vllm0.22.0-cu129-primary.sif}
 exec "$REPO/queue-haul/targeted_migration_run.sh"

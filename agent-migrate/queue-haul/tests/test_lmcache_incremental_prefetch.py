@@ -54,14 +54,11 @@ def test_incremental_acceptance_rejects_full_prefix_refetch():
 def test_chat_tokens_matches_reasoning_request(monkeypatch):
     seen = {}
 
-    def fake(*args):
-        seen["payload"] = args[4]
-        return {"tokens": [1, 2], "count": 2}
+    def fake(_cfg, messages):
+        seen["messages"] = messages
+        return [1, 2]
 
-    monkeypatch.setattr(m, "http_json", fake)
+    monkeypatch.setattr(m.b, "mp_chat_tokens", fake)
     cfg = type("Config", (), {"host": "h", "src_port": 1, "model": "m"})()
     assert m.chat_tokens(cfg, "p") == [1, 2]
-    assert seen["payload"]["chat_template_kwargs"] == {
-        "reasoning_effort": "low",
-        "enable_thinking": True,
-    }
+    assert seen["messages"] == [{"role": "user", "content": "p"}]

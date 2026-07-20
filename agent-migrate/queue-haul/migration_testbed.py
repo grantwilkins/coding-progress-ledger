@@ -8,6 +8,7 @@ from collections import OrderedDict
 import http.client
 import json
 import os
+import re
 import shlex
 import shutil
 import signal
@@ -94,6 +95,9 @@ LMCACHE_SERVER_FAIL = 400
 LMCACHE_FAIL_PAYLOAD = (LMCACHE_SERVER_FAIL, 0, 1, 2, 0, 0, 0, 0, 0)
 LMCACHE_OK_PAYLOAD = (LMCACHE_SERVER_SUCCESS, 0, 1, 2, 0, 0, 0, 0, 0)
 LMCACHE_SERVER_MAX_BYTES = int(os.environ.get("QH_LMCACHE_SERVER_MAX_BYTES", "0"))
+MP_CONTEXT = re.compile(r"Registered non-GPU context.*model=([^,]+), world_size=(\d+)")
+MP_REQUEST = re.compile(r"(\d+)/(\d+) retained keys \((\d+) L1, (\d+) L2\).*external_request_id=([^,\)]+)")
+MP_STORED = re.compile(r"Stored (\d+) tokens")
 
 
 @dataclass(frozen=True)
@@ -1011,6 +1015,102 @@ def http_text(host: str, port: int, method: str, path: str) -> str:
     if response.status != 200:
         raise RuntimeError(f"{method} http://{host}:{port}{path} failed {response.status}: {body[:500]}")
     return body
+
+
+def http_json(host: str, port: int, method: str, path: str,
+              payload=None, statuses=(200,)) -> dict:
+    conn = http.client.HTTPConnection(host, port, timeout=600)
+    try:
+        conn.request(method, path, json.dumps(payload) if payload is not None else None,
+                     {"Content-Type": "application/json"})
+        response, body = conn.getresponse(), None
+        body = response.read().decode()
+    finally:
+        conn.close()
+    if response.status not in statuses:
+        raise RuntimeError(f"{method} {path} failed {response.status}: {body[:500]}")
+    return json.loads(body)
+
+
+def mp_chat_tokens(cfg: Config, messages: list[dict]) -> list[int]:
+    result = http_json(cfg.host, cfg.src_port, "POST", "/tokenize", {
+        "model": cfg.model, "messages": messages, "add_generation_prompt": True,
+        "chat_template_kwargs": {
+            "reasoning_effort": "low", "enable_thinking": True,
+        },
+    })
+    tokens = result.get("tokens")
+    if not tokens or len(tokens) != result.get("count"):
+        raise RuntimeError("vLLM did not return exact chat token IDs")
+    return tokens
+
+
+def mp_model_layout(log: Path) -> tuple[str, int]:
+    match = MP_CONTEXT.search(read_text(log))
+    if not match:
+        raise RuntimeError("LMCache did not report its model layout")
+    return match.group(1), int(match.group(2))
+
+
+def mp_warm_prefetch(cfg: Config, tokens: list[int], model: str,
+                     world_size: int) -> dict:
+    result = http_json(cfg.host, cfg.sink_lmc_http_port, "POST",
+                       "/cache/prefetches", {
+                           "model_name": model, "world_size": world_size,
+                           "token_ids": tokens,
+                       }, (202,))
+    request_id = result.get("request_id")
+    if not request_id:
+        raise RuntimeError("warm prefetch was not submitted")
+    deadline = time.monotonic() + 600
+    while time.monotonic() < deadline:
+        status = http_json(
+            cfg.host, cfg.sink_lmc_http_port, "GET",
+            f"/cache/prefetches/{request_id}",
+        )
+        if status["status"] == "completed":
+            return status
+        time.sleep(.05)
+    raise TimeoutError(f"warm prefetch {request_id} did not complete")
+
+
+def resp_rows(path: Path) -> list[dict]:
+    if not path.exists():
+        return []
+    with path.open() as handle:
+        return list(csv.DictReader(handle))
+
+
+def mp_source_keys(path: Path, start_ns: int, end_ns: int) -> set[str]:
+    return {
+        row["key_hashes"] for row in resp_rows(path)
+        if row["command"] == "SET"
+        and start_ns <= int(row["start_ns"]) < end_ns
+    }
+
+
+def mp_wait_stored(log: Path, offset: int, tokens: int) -> None:
+    deadline = time.monotonic() + 30
+    while time.monotonic() < deadline:
+        if sum(map(int, MP_STORED.findall(read_text(log)[offset:]))) >= tokens:
+            return
+        time.sleep(.05)
+    raise TimeoutError(f"LMCache stored fewer than {tokens} tokens")
+
+
+def mp_request_hit(log: Path, offset: int, request_id: str) -> int:
+    matches = [
+        tuple(map(int, match.groups()[:4]))
+        for match in MP_REQUEST.finditer(read_text(log)[offset:])
+        if match.group(5) == request_id
+        or match.group(5).startswith(request_id + "-")
+    ]
+    if len(matches) != 1:
+        raise RuntimeError(f"LMCache reported {len(matches)} records for {request_id}")
+    retained, queried, l1, l2 = matches[0]
+    if retained != queried or retained != l1 or l2:
+        raise RuntimeError(f"request {request_id} was not L1-only")
+    return retained * 256
 
 
 def set_source_sleep(cfg: Config, sleeping: bool) -> None:

@@ -603,7 +603,9 @@ class ExecutionSimulator:
             # TODO(concurrency): update running replay rates when validated limits exceed one.
             # TODO(catch-up-rate): replace this full-context rate with measured incremental replay.
             rate_context = self.context[state.move.session_id] if phase == "catch_up" else replay_tokens
-            duration = replay_tokens / self.case.replay.rate(rate_context, active)
+            duration = replay_tokens / self.case.replay.rate(
+                rate_context, active,
+            ) + self.case.replay_completion_s
             self._event("replay_start", state.move.session_id, detail=destination)
         elif state.move.method == "kv_transfer":
             duration = 0.0 if phase.startswith("append") else (

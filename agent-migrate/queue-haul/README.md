@@ -48,11 +48,14 @@ shaped 1/10 Gbps WAN allocations remain scenario inputs rather than claims
 about the cluster. Workload profile v2 fixes durable logs at `source_dc`, so
 replay traffic crosses the same site egress and WAN as KV traffic.
 
-Deadline pacing reserves KV setup and initial-completion time, includes the
-configured expected-growth envelope, and rejects rates above physical route or
-endpoint capacity. It caps background preparation only; paused final catch-up
-uses the available shared transport. Planner validation materializes expected
-growth at quiescence without exposing sampled future requests.
+Deadline pacing reserves KV setup, endpoint completion, final fixed catch-up,
+partial-tail reconstruction, and the configured expected-growth envelope. It
+rejects rates above physical route or endpoint capacity and caps background
+preparation only; paused final catch-up uses the available shared transport.
+Replay execution and LP capacity also include measured replay completion time.
+Expected replay WAN bytes grow with the materialized durable log. Planner
+validation materializes expected growth at quiescence without exposing sampled
+future requests.
 
 For active sessions with `--final-state awake`, `node_drain` ranks source nodes
 by exact power reduction to idle divided by predicted drain time. It then ranks
@@ -88,6 +91,10 @@ uv run python queue-haul/migration_profile_fit.py \
   --base-profile queue-haul/profiles/gpt_oss_20b_a100_tp1.json \
   --out-profile /tmp/gpt_oss_20b_a100_tp1.json
 ```
+
+After `check-campaign` passes, `--parallel-root` may point to the bounded
+campaign; the fitter then consumes its concurrency gate and measured action
+power. The one-off MP reports remain mechanism proofs, not profile-fit inputs.
 
 The checked profile remains `estimated`. It incorporates the paired serial,
 append-only catch-up, parallel-gate concurrency, and GPU-only sleep results,
@@ -163,12 +170,15 @@ sbatch queue-haul/bounded_hardware_campaign.sbatch
 The plan contains 63 parallel-surface and 42 staged-append scenarios. It runs
 the 4k/1-Gbps/concurrency-4 smoke first and aborts on its failure, randomizes
 the remainder, resumes only against the same hashed plan, and runs
-`check-campaign` after all 105 results complete. The workload-class and mixed
+`check-campaign` after all 105 results complete. This launcher pins the
+validated LMCache MP image and uses explicit warm-prefetch before inference;
+the gate requires distinct-session body overlap, exact missing-block bytes,
+L1-only readiness, and valid continuations. The workload-class and mixed
 held-out extension remains gated on pre-staged complete SWE-chat traces; it is
 not synthesized from the coding manifest.
 
-The LMCache multiprocess campaign is opt-in; the legacy vLLM 0.10.1.1 /
-LMCache 0.3.3 path remains the default. It uses the verified immutable image
+Standalone legacy plans still default to vLLM 0.10.1.1 / LMCache 0.3.3; the
+bounded campaign and MP-specific jobs opt into the verified immutable image
 `/scratch/users/gfw/ptsim/lmcache-v0.5.1-vllm0.22.0-cu129-primary.sif`
 (SHA-256 `50e98f65de09ebfe196f270c8b5c595636853646eb5536dca92f27bd45c084ab`),
 vLLM 0.22.0+cu129, LMCache 0.5.1's shipped `LMCacheMPConnector`, two CPU-only

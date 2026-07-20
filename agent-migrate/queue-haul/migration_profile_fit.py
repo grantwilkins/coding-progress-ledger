@@ -72,8 +72,9 @@ def fit_catch_up(rows: pd.DataFrame, block_tokens: int,
                  block_bytes: int) -> tuple[float, float]:
     selected = rows[
         (rows.method == "kv_transfer") & rows.repeat.isin(TRAIN_REPEATS)
+        & (rows.catch_up_prompt_tokens > 0)
     ].copy()
-    if selected.empty or (selected.catch_up_prompt_tokens <= 0).any():
+    if selected.empty:
         raise ValueError("catch-up fit needs successful measured catch-up rows")
     initial_blocks = selected.measured_prompt_tokens // block_tokens
     body_blocks = selected.catch_up_prompt_tokens // block_tokens - initial_blocks
@@ -110,7 +111,9 @@ def fit_sleep(root: Path) -> tuple[tuple[float, float, float],
 
 def validate_run(root: Path) -> None:
     metadata = json.loads((root / "run_metadata.json").read_text())
-    if metadata.get("dirty") or metadata.get("schema") != "queue-haul-migration-run-v2":
+    if metadata.get("dirty") or metadata.get("schema") not in {
+        "queue-haul-migration-run-v2", "queue-haul-migration-run-v3",
+    }:
         raise ValueError(f"invalid run metadata: {root}")
     scenarios = pd.read_csv(root / "scenarios.csv")
     if set(scenarios.status) != {"complete"}:
@@ -138,6 +141,23 @@ def total_action_power(rows: pd.DataFrame, method: str, serial_only: bool) -> di
         raise ValueError(f"no {method} action power measurements")
     return {str(int(width)): [float(source), float(destination)]
             for width, (source, destination) in medians.iterrows()}
+
+
+def parallel_limit(root: Path) -> int:
+    gate = root / "parallel_gate.csv"
+    if gate.exists():
+        rows = pd.read_csv(gate)
+        if rows.empty or not rows.passed.all():
+            raise ValueError("parallel evidence did not pass")
+        return int(rows.concurrency.max())
+    rows = pd.read_csv(root / "campaign_gate.csv")
+    if rows.empty or not rows.passed.all():
+        raise ValueError("campaign evidence did not pass")
+    scenarios = pd.read_csv(root / "scenarios.csv")
+    return int(scenarios[
+        (scenarios.campaign == "parallel_surface")
+        & (scenarios.kind == "migration")
+    ].move_concurrency.max())
 
 
 def evaluation(rows: pd.DataFrame, replay_curve: list[list[float]],
@@ -197,12 +217,17 @@ def fit_profile(serial_root: Path, catch_up_root: Path, profile_path: Path,
     migrations = pd.read_csv(serial_root / "migrations.csv")
     scenarios = pd.read_csv(serial_root / "scenarios.csv")
     catch_up = pd.read_csv(catch_up_root / "migrations.csv")
+    if parallel_root:
+        validate_run(parallel_root)
+        scenarios = pd.concat([
+            scenarios, pd.read_csv(parallel_root / "scenarios.csv"),
+        ], ignore_index=True)
     replay_curve, replay_error = fit_replay(migrations)
     destination_rate, kv_error = fit_kv(migrations)
     replay_completion = completion_s(migrations, "replay")
     kv_completion = completion_s(migrations, "kv_transfer")
     replay_power = total_action_power(scenarios, "replay", False)
-    kv_power = total_action_power(scenarios, "kv_transfer", True)
+    kv_power = total_action_power(scenarios, "kv_transfer", not parallel_root)
     switches = serial(migrations, "kv_transfer")
     switches = switches[switches.repeat.isin(TRAIN_REPEATS)].route_switch_s
     raw = json.loads(profile_path.read_text())
@@ -284,11 +309,7 @@ def fit_profile(serial_root: Path, catch_up_root: Path, profile_path: Path,
         }
     concurrency = 1
     if parallel_root:
-        validate_run(parallel_root)
-        gate = pd.read_csv(parallel_root / "parallel_gate.csv")
-        if gate.empty or not gate.passed.all():
-            raise ValueError("parallel evidence did not pass")
-        concurrency = int(gate.concurrency.max())
+        concurrency = parallel_limit(parallel_root)
     raw["max_source_streams"] = concurrency
     raw["max_destination_kv_streams"] = concurrency
     raw["max_destination_replays"] = 1

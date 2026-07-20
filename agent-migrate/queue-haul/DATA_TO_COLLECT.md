@@ -17,9 +17,11 @@ stack once, randomize scenarios, checkpoint each result, reuse compatible
 controls, and exclude incomplete or dirty scenarios from fitting.
 
 `bounded_hardware_campaign.sbatch` implements the 105-scenario hardware portion: 63
-parallel-surface and 42 staged-append scenarios. The remaining workload and
-mixed held-out scenarios must not be generated until complete trace-backed
-interactive, coding, and agentic manifests are staged.
+parallel-surface and 42 staged-append scenarios. It pins the validated
+LMCache-MP image and exercises explicit warm-prefetch, not inference-triggered
+fetch. The remaining workload and mixed held-out scenarios must not be
+generated until complete trace-backed interactive, coding, and agentic
+manifests are staged.
 
 - [ ] **Parallel KV surface:** approximately 4k/16k/32k context, 1/10 Gbps,
   logical concurrency 1/2/4, and three repeats. Rerun every cell with the
@@ -46,8 +48,9 @@ the aggregate model retains systematic held-out error.
 For every migration record session, phase or append-stage index, logical and
 wire bytes, start, destination-ready, pause, final catch-up, route-switch and
 commit times, achieved rate, cache hits, continuation, source/destination GPU
-power, and errors. For parallel runs also record exact per-session connection
-attribution and aggregate goodput.
+power, and errors. Each KV phase must prove that warm-prefetch moved exactly
+the missing source keys and that inference issued no WAN GET. For parallel runs
+also record exact per-session body attribution, overlap, and aggregate goodput.
 
 Each multi-stage row must additionally record newly created tokens, cumulative
 sealed and copied blocks, stage wire bytes, duplicate bytes, and the final
@@ -93,6 +96,9 @@ churn materially limits representative transfers.
   action power, and errors.
 - [ ] Keep the checked profile at KV concurrency one until the smoke and
   targeted run show correct overlap, accounting, and completion.
+- [x] Prove the MP primitive independently: explicit warm-prefetch transferred
+  48/5/5/6 new blocks, retained the full source watermark in destination L1,
+  issued no inference-time WAN GET, and preserved continuation.
 
 ## Urgency and append-only catch-up
 

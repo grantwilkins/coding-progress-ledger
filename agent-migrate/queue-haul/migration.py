@@ -42,6 +42,7 @@ class RequestResult:
     first_byte_ns: int | None = None
     prompt_tokens: int = 0
     output_tokens: int = 0
+    cached_tokens: int = 0
     processed_tokens: int = 0
     logical_kv_chunks: int = 0
     logical_kv_bytes: int = 0

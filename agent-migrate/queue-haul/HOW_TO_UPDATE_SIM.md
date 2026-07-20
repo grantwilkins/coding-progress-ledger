@@ -102,7 +102,10 @@ Earlier quiescence is necessary when observed growth or contention consumes
 slack. A plan is infeasible when its required rates exceed the measured
 endpoint or shared-cut capacity after reserving final catch-up and the power
 window. Reserve setup and initial-completion time inside preparation, pace
-background copies only, and leave paused final catch-up uncapped.
+background copies only, and leave paused final catch-up uncapped. Planner
+durations and LP stream budgets must include replay completion and the KV
+fixed catch-up plus partial-tail reconstruction; these are endpoint service,
+not WAN bytes.
 
 ## Large-scale execution
 

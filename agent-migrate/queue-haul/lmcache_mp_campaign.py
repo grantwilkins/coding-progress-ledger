@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import argparse
-import csv
 import http.client
 import json
 import re
@@ -19,10 +18,7 @@ RETRIEVED = re.compile(r"Retrieved (\d+) tokens")
 
 
 def rows(path: Path) -> list[dict]:
-    if not path.exists():
-        return []
-    with path.open() as handle:
-        return list(csv.DictReader(handle))
+    return b.resp_rows(path)
 
 
 def max_distinct_overlap(xs: list[dict], owners: dict[str, str]) -> int:

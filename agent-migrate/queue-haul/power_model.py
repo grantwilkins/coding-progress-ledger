@@ -130,13 +130,18 @@ class ExpectedPower:
         )
 
     def drain_gain(self, session_ids) -> float:
-        affected = {
-            node_id for session_id in session_ids
-            for node_id, _slot in self.instance_slots[self.route[session_id]]
-            if self.nodes[node_id].local
-        }
+        selected, slots = set(session_ids), {}
+        for session_id in selected:
+            owned = self.instance_slots[self.route[session_id]]
+            for node_id, slot in owned:
+                if self.nodes[node_id].local:
+                    slots.setdefault(node_id, list(self.slots[node_id]))[slot] \
+                        -= self.ell[session_id] / len(owned)
         return sum(
             self.node_power[node_id] - self._power(
-                node_id, [0.0] * self.nodes[node_id].gpus, self.scenario.final_state
-            ) for node_id in affected
+                node_id, values,
+                self.scenario.final_state
+                if self.dependents[node_id] <= self.removed | selected
+                else "awake",
+            ) for node_id, values in slots.items()
         )
