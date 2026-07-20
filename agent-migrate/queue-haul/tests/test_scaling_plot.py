@@ -2,11 +2,15 @@
 Claim:
 The scaling plot pairs identical experiments and reports simulated deadline
 power, selected moves, and completed moves with the correct denominators.
+Repeated trials are summarized at each solver and session count by their mean
+and observed minimum-to-maximum bounds.
 
 Plausible wrong implementations:
 - Plot planned power instead of simulated deadline-window power.
 - Divide completed moves by all sessions instead of selected moves.
 - Compare solvers at different session counts or power targets.
+- Mix trials from different session counts when computing error bounds.
+- Plot one random seed instead of the replicate mean and full observed range.
 - Label a new experiment with the previous experiment's deadline.
 """
 
@@ -14,7 +18,7 @@ import csv
 
 import pytest
 
-from plot_scaling_results import plot_title, ratios, read_rows
+from plot_scaling_results import bounds, plot_title, ratios, read_rows
 
 
 def test_scaling_ratios_use_simulated_power_and_matching_denominators():
@@ -37,13 +41,22 @@ def test_scaling_title_uses_the_recorded_deadline():
     }) == "Coding, 1 Gbps/node, 15 min deadline, 50% awake-state power reduction"
 
 
+def test_scaling_bounds_group_replicates_by_session_count():
+    rows = [
+        {"sessions": 10, "value": 2}, {"sessions": 1, "value": 7},
+        {"sessions": 10, "value": 6}, {"sessions": 1, "value": 7},
+    ]
+
+    assert bounds(rows, lambda row: row["value"]) == ([1, 10], [7, 4], [7, 2], [7, 6])
+
+
 def test_scaling_rows_require_paired_solver_settings(tmp_path):
     fields = ("solver", "sessions", *(
         "source_instances", "source_nodes", "bandwidth_gbps_per_node", "deadline_s",
         "end_s", "target_fraction_of_removable_power", "requested_source_drop_w",
     ))
     rows = [
-        ("capacity", 10, 1, 1, 1, 120, 180, 0.5, 50),
+        ("greedy", 10, 1, 1, 1, 120, 180, 0.5, 50),
         ("lp", 10, 1, 1, 1, 120, 180, 0.5, 51),
     ]
     path = tmp_path / "results.csv"

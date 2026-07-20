@@ -188,7 +188,7 @@ churn materially limits representative transfers.
 - [ ] Test background, expedited, and critical behavior from remaining slack
   and required rate on the same held-out drains at 10-minute, 1-hour, and
   offline 6-hour horizons.
-- [ ] Compare the capacity greedy with exact enumeration on tiny cases and the LP
+- [ ] Compare the greedy with exact enumeration on tiny cases and the LP
   on tractable cases before using greedy for the million-session sweep.
 - [ ] Require the summary-mode planner and simulator to complete a
   million-session case within an explicit runtime and memory budget; do not

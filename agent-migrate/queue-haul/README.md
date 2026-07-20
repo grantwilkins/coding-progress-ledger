@@ -18,7 +18,7 @@ uv run python queue-haul/power_drain_experiment.py \
   --workload-profile queue-haul/profiles/agentic_tool_loop.json \
   --sessions 6 --seed 3 --power-limit 500 --deadline 5 --end 5 \
   --link-bytes-per-s 125000000 --intra-dc-bytes-per-s 12500000000 \
-  --solver capacity --workers 2 --out queue-haul/outputs/profile_smoke
+  --solver greedy --workers 2 --out queue-haul/outputs/profile_smoke
 uv run python queue-haul/plot_simulator_validation.py
 uv run python queue-haul/plot_simulator_evaluation.py
 uv run python queue-haul/plot_scaling_results.py
@@ -57,7 +57,7 @@ Expected replay WAN bytes grow with the materialized durable log. Planner
 validation materializes expected growth at quiescence without exposing sampled
 future requests.
 
-For active sessions with `--final-state awake`, `capacity` scores each replay
+For active sessions with `--final-state awake`, `greedy` scores each replay
 and KV-transfer option by its largest normalized resource use, weighted once by
 total demand for that resource. It sorts sessions once, chooses the lowest-pressure
 action that still fits, and reserves the same source, network, destination service,
@@ -256,9 +256,10 @@ hard-fails if any checked value differs.
 source-power reduction, route-switch completion, and request wait for a
 controlled 50-session sweep.
 
-Scaling plots compare random selection, the capacity greedy, and CLARABEL LP on
+Scaling plots compare random selection, the greedy solver, and CLARABEL LP on
 solver choices, deadline completion, simulated power reduction, migration
-completion, and planning time.
+completion, and planning time. Random lines are means over ten seeds and shaded
+bands show the observed minimum and maximum.
 `outputs/scaling_1_to_100k_15min_20260717/scaling_summary.{png,pdf}` repeats
 the sweep with a 15-minute deadline and 22.5-minute observation window.
 `outputs/lp_objective_comparison_15min_20260717/scaling_summary.{png,pdf}`

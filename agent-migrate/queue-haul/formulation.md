@@ -8,15 +8,15 @@ placed only when both compute load and resident KV fit; cold sessions consume
 neither until reactivation.
 
 The planner chooses whole sessions and one of three actions: replay, KV
-transfer, or replay on request. Random, capacity-greedy, and LP selection are
+transfer, or replay on request. Random, greedy, and LP selection are
 separate policies. Destination placement is a balanced pass.
 Destination placement enforces the same compute and resident-KV limits as the
 source placement.
 Only local source power is constrained; destination power is reported.
 
-## Capacity greedy
+## Greedy
 
-For active sessions and an awake final state, the capacity policy uses the same
+For active sessions and an awake final state, the greedy policy uses the same
 normalized resource rows and usable window \(H\) as the LP. Each action's score
 is its largest normalized resource use weighted by that resource's total demand.
 Sessions are sorted once by their best action score. In that order, the policy

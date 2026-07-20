@@ -11,14 +11,15 @@ import matplotlib
 
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
+import numpy as np
 
 
 COLORS = {
-    "random": "#9B51E0", "capacity": "#4C78A8", "lp": "#54A24B",
+    "random": "#9B51E0", "greedy": "#4C78A8", "lp": "#54A24B",
     "lp_peak_first": "#E45756", "lp_work_first": "#B279A2",
 }
 LABELS = {
-    "random": "Random", "capacity": "Capacity", "lp": "LP",
+    "random": "Random", "greedy": "Greedy", "lp": "LP",
     "lp_peak_first": "Peak before work", "lp_work_first": "Work before peak",
 }
 PAIRED_FIELDS = (
@@ -51,45 +52,57 @@ def read_rows(path: Path) -> list[dict]:
                  for row in rows]
     solvers = sorted({row["solver"] for row in converted})
     sessions = sorted({row["sessions"] for row in converted})
-    indexed = {(row["solver"], row["sessions"]): row for row in converted}
-    if len(indexed) != len(converted) or set(indexed) != set(
+    pairs = {(row["solver"], row["sessions"]) for row in converted}
+    if pairs != set(
         (solver, count) for solver in solvers for count in sessions
     ):
-        raise ValueError("every solver requires exactly one row per session count")
+        raise ValueError("every solver requires a row per session count")
     for count in sessions:
-        reference = indexed[solvers[0], count]
-        if any(not math.isclose(indexed[solver, count][field], reference[field],
-                                rel_tol=1e-12, abs_tol=1e-9)
-               for solver in solvers[1:] for field in PAIRED_FIELDS):
+        selected = [row for row in converted if row["sessions"] == count]
+        reference = selected[0]
+        if any(not math.isclose(row[field], reference[field], rel_tol=1e-12, abs_tol=1e-9)
+               for row in selected[1:] for field in PAIRED_FIELDS):
             raise ValueError(f"solver settings differ at {count:g} sessions")
     return converted
+
+
+def bounds(rows: list[dict], value) -> tuple[list[float], ...]:
+    grouped = {
+        count: [value(row) for row in rows if row["sessions"] == count]
+        for count in sorted({row["sessions"] for row in rows})
+    }
+    return (
+        list(grouped),
+        [float(np.mean(values)) for values in grouped.values()],
+        [min(values) for values in grouped.values()],
+        [max(values) for values in grouped.values()],
+    )
 
 
 def plot(rows: list[dict], output: Path) -> None:
     solvers = sorted({row["solver"] for row in rows}, key=lambda value: tuple(COLORS).index(value))
     series = {
-        solver: sorted((row for row in rows if row["solver"] == solver),
-                       key=lambda row: row["sessions"])
+        solver: [row for row in rows if row["solver"] == solver]
         for solver in solvers
     }
     fig, axes = plt.subplots(2, 3, figsize=(14, 8))
     for solver, selected in series.items():
-        x = [row["sessions"] for row in selected]
-        values = [ratios(row) for row in selected]
         style = dict(marker="o", color=COLORS[solver], label=LABELS[solver])
-        axes[0, 0].plot(x, [value[0] for value in values], **style)
-        axes[0, 1].plot(x, [value[1] for value in values], **style)
-        axes[0, 2].plot(x, [value[2] for value in values], **style)
-        axes[1, 0].plot(
-            x, [row["modeled_source_drop_at_deadline_w"] / 1000 for row in selected], **style
+        values = (
+            lambda row: ratios(row)[0], lambda row: ratios(row)[1],
+            lambda row: ratios(row)[2],
+            lambda row: row["modeled_source_drop_at_deadline_w"] / 1000,
+            lambda row: row["makespan_s"], lambda row: row["plan_s"],
         )
-        axes[1, 1].plot(x, [row["makespan_s"] for row in selected], **style)
-        axes[1, 2].plot(x, [row["plan_s"] for row in selected], **style)
+        for ax, value in zip(axes.flat, values):
+            x, mean, low, high = bounds(selected, value)
+            ax.plot(x, mean, **style)
+            if low != high:
+                ax.fill_between(x, low, high, color=COLORS[solver], alpha=0.18)
     reference = next(iter(series.values()))
+    x, target, _, _ = bounds(reference, lambda row: row["requested_source_drop_w"] / 1000)
     axes[1, 0].plot(
-        [row["sessions"] for row in reference],
-        [row["requested_source_drop_w"] / 1000 for row in reference],
-        "k--", label="Target",
+        x, target, "k--", label="Target",
     )
     axes[0, 2].axhline(100, color="black", linestyle="--", label="Target")
     axes[1, 1].axhline(reference[0]["deadline_s"], color="black", linestyle="--",

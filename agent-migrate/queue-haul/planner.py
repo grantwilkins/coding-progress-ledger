@@ -19,7 +19,7 @@ from simulate import (MOVE_METHODS_BY_STATE, ExecutionScenario, MoveMethod, Plan
 
 
 METHODS: tuple[MoveMethod, ...] = ("replay", "kv_transfer", "replay_on_request")
-SOLVERS = ("random", "capacity", "lp")
+SOLVERS = ("random", "greedy", "lp")
 LP_SOLVERS = ("lp", "lp_peak_first", "lp_work_first")
 ALL_SOLVERS = SOLVERS + LP_SOLVERS[1:]
 Routes = dict[tuple[str, str], tuple[str, ...]] | Callable[[str, str], tuple[str, ...]]
@@ -420,7 +420,7 @@ def _execution_feasible(scenario: ExecutionScenario, expected) -> bool:
     )
 
 
-def _capacity_greedy(sessions, valid, resources, power: ExpectedPower, limit: float):
+def _greedy(sessions, valid, resources, power: ExpectedPower, limit: float):
     n = len(sessions)
     matrix = csc_matrix(resources)
     chosen = np.full(n, -1, int)
@@ -671,14 +671,14 @@ def plan(scenario: ExecutionScenario, profile: ModelProfile,
                 choices[j] = rng.choice(np.flatnonzero(valid[j]))
         methods = [METHODS[k] for k in choices]
     selected = []
-    if solver == "capacity":
+    if solver == "greedy":
         if scenario.final_state != "awake" or any(s.state != "active" for s in sessions):
-            raise ValueError("capacity supports active sessions and final_state='awake'")
+            raise ValueError("greedy supports active sessions and final_state='awake'")
         resource_horizon = horizon - profile.power_window_s
         _, resource_valid, resources = _migration_resources(
             scenario, profile, paths, sessions, destinations, case, resource_horizon
         )
-        selected, chosen, _ = _capacity_greedy(
+        selected, chosen, _ = _greedy(
             sessions, resource_valid, resources, power_state, scenario.power_limit_w,
         )
         methods = [METHODS[chosen[j]] if chosen[j] >= 0 else METHODS[0]

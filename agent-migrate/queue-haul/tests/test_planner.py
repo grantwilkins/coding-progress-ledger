@@ -27,7 +27,7 @@ Plausible wrong implementations:
 - Hold replay log bytes fixed while expected session state grows.
 - Award an idle-node bonus while an unmovable session remains.
 - Reject a valid tail-only KV move because its background byte rate is zero.
-- Reintroduce power gain into the capacity-only ranking.
+- Reintroduce power gain into the resource-only ranking.
 - Evaluate migration methods that are illegal for a session's residency state.
 - Rebuild an already-static expected scenario.
 - Change seeded random methods or move order while batching random choices.
@@ -42,7 +42,7 @@ from scipy.sparse import csr_matrix
 
 import planner
 from planner import (
-    METHODS, _capacity_greedy, _duration, _expected_scenario, _required_kv_rate, _round_lp,
+    METHODS, _duration, _expected_scenario, _greedy, _required_kv_rate, _round_lp,
     _route_resources, _solve_lp, plan,
 )
 from power_model import ExpectedPower
@@ -199,7 +199,7 @@ def test_planner_only_evaluates_methods_allowed_by_session_state(tmp_path, monke
 
     monkeypatch.setattr(planner, "_duration", allowed)
 
-    plan(problem(), model(tmp_path, tp=1), PATHS, "capacity")
+    plan(problem(), model(tmp_path, tp=1), PATHS, "greedy")
 
 
 def test_random_batching_preserves_scalar_seed_sequence(tmp_path):
@@ -253,7 +253,7 @@ def test_tail_only_kv_move_needs_no_background_rate(tmp_path):
 
     result = plan(
         scenario, model(tmp_path, switch=0, tp=1),
-        {("s", "t"): ("wan",)}, "capacity",
+        {("s", "t"): ("wan",)}, "greedy",
     )
 
     assert result.moves[0].method == "kv_transfer"
@@ -262,8 +262,8 @@ def test_tail_only_kv_move_needs_no_background_rate(tmp_path):
 
 def test_plan_does_not_read_sampled_future_requests(tmp_path):
     profile = model(tmp_path, tp=1)
-    a = plan(problem(), profile, PATHS, "capacity")
-    b = plan(problem((SimRequest(0, 10, 0),)), profile, PATHS, "capacity")
+    a = plan(problem(), profile, PATHS, "greedy")
+    b = plan(problem((SimRequest(0, 10, 0),)), profile, PATHS, "greedy")
     assert [(m.session_id, m.method) for m in a.moves] == [
         (m.session_id, m.method) for m in b.moves
     ]
@@ -271,14 +271,14 @@ def test_plan_does_not_read_sampled_future_requests(tmp_path):
 
 
 def test_destination_placement_balances_whole_sessions(tmp_path):
-    result = plan(problem(limit=0), model(tmp_path, tp=1), PATHS, "capacity")
+    result = plan(problem(limit=0), model(tmp_path, tp=1), PATHS, "greedy")
     assert {move.destination_instance for move in result.moves} == {"t0", "t1"}
     assert {move.session_id for move in result.moves} == {"a", "b"}
     assert all(move.method in METHODS for move in result.moves)
 
     def route(source, destination):
         return PATHS[source, destination]
-    assert plan(problem(limit=0), model(tmp_path, tp=1), route, "capacity").moves == result.moves
+    assert plan(problem(limit=0), model(tmp_path, tp=1), route, "greedy").moves == result.moves
 
 
 def test_planner_only_transfers_active_kv_and_defers_cold_replay(tmp_path):
@@ -293,11 +293,11 @@ def test_planner_only_transfers_active_kv_and_defers_cold_replay(tmp_path):
     }
 
 
-def test_capacity_greedy_prevents_destination_kv_overcommit(tmp_path):
+def test_greedy_prevents_destination_kv_overcommit(tmp_path):
     topology = replace(problem(limit=0), instances=problem().instances[:-1])
     paths = {(source, "t0"): ("wan",) for source in ("s0", "s1")}
 
-    result = plan(topology, model(tmp_path, tp=1, kv_capacity=15), paths, "capacity")
+    result = plan(topology, model(tmp_path, tp=1, kv_capacity=15), paths, "greedy")
 
     assert len(result.moves) == 1
     assert not result.feasible
@@ -314,14 +314,14 @@ class UnlimitedPower:
         self.removed.append(session)
 
 
-def test_capacity_greedy_uses_bottleneck_pressure_and_preserves_capacity():
+def test_greedy_uses_bottleneck_pressure_and_preserves_capacity():
     sessions = [SimpleNamespace(session_id=str(j)) for j in range(3)]
     resources = csr_matrix([
         [0.7, 0.4, 0.0, 0, 0, 0],
         [0.7, 0.0, 0.4, 0, 0, 0],
     ])
 
-    selected, chosen, usage = _capacity_greedy(
+    selected, chosen, usage = _greedy(
         sessions, np.array([True] * 3 + [False] * 3), resources,
         UnlimitedPower(), 0,
     )
@@ -331,8 +331,8 @@ def test_capacity_greedy_uses_bottleneck_pressure_and_preserves_capacity():
     assert np.all(usage <= 1)
 
 
-def test_capacity_greedy_picks_the_lower_pressure_action():
-    selected, chosen, _ = _capacity_greedy(
+def test_greedy_picks_the_lower_pressure_action():
+    selected, chosen, _ = _greedy(
         [SimpleNamespace(session_id="a")], np.ones(2, bool),
         csr_matrix([[0.6, 0.2], [0.0, 0.2]]), UnlimitedPower(), 0,
     )
@@ -341,7 +341,7 @@ def test_capacity_greedy_picks_the_lower_pressure_action():
     assert chosen.tolist() == [1]
 
 
-def test_capacity_reserves_source_time_and_power_window(tmp_path):
+def test_greedy_reserves_source_time_and_power_window(tmp_path):
     profile = model(
         tmp_path, switch=0, tp=1, destination_rate=100, parallel_moves=1,
         replay_rate={"1": [[1, 50], [1000, 50]], "2": [[1, 25], [1000, 25]]},
@@ -355,14 +355,14 @@ def test_capacity_reserves_source_time_and_power_window(tmp_path):
         (NetworkLink("wan", 10_000),),
     )
 
-    result = plan(scenario, profile, {("s", "t"): ("wan",)}, "capacity")
+    result = plan(scenario, profile, {("s", "t"): ("wan",)}, "greedy")
 
     assert [(move.session_id, move.method) for move in result.moves] == [("a", "replay")]
     assert result.planned_source_power_w > scenario.power_limit_w
     assert not result.feasible
 
 
-def test_capacity_uses_kv_when_shared_replay_time_is_full(tmp_path):
+def test_greedy_uses_kv_when_shared_replay_time_is_full(tmp_path):
     profile = model(
         tmp_path, switch=0, tp=1, destination_rate=500, parallel_moves=1,
         replay_rate={"1": [[1, 100], [1000, 100]], "2": [[1, 50], [1000, 50]]},
@@ -379,7 +379,7 @@ def test_capacity_uses_kv_when_shared_replay_time_is_full(tmp_path):
     )
     paths = {(f"s{i}", "d"): ("wan",) for i in range(4)}
 
-    result = plan(scenario, profile, paths, "capacity")
+    result = plan(scenario, profile, paths, "greedy")
 
     assert result.feasible
     assert [move.method for move in result.moves].count("replay") == 3
@@ -474,7 +474,7 @@ def test_destination_capacity_reserves_expected_context_growth(tmp_path):
     topology = replace(problem(limit=0), sessions=(session,))
 
     with pytest.raises(ValueError, match="destination compute or KV capacity"):
-        plan(topology, model(tmp_path, tp=1, kv_capacity=15), PATHS, "capacity")
+        plan(topology, model(tmp_path, tp=1, kv_capacity=15), PATHS, "greedy")
 
 
 def test_lp_reserves_the_trailing_power_window(tmp_path):
@@ -500,7 +500,7 @@ def test_lp_reserves_the_trailing_power_window(tmp_path):
     ).moves == ()
 
 
-@pytest.mark.parametrize("solver", ("lp", "capacity"))
+@pytest.mark.parametrize("solver", ("lp", "greedy"))
 @pytest.mark.parametrize(("commit_s", "power_met", "feasible"), (
     (10, True, True),
     (10.000001, True, False),

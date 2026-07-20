@@ -92,10 +92,10 @@ Retain three policy comparisons:
 
 - Maximum-rate greedy.
 - Deadline-paced greedy.
-- Fixed-score capacity greedy.
+- Fixed-score greedy.
 
 Use exact enumeration on tiny cases and the LP on tractable cases as quality
-references. The capacity greedy is the intended million-session solver and
+references. The greedy is the intended million-session solver and
 should remain approximately `O(N log N)`.
 
 Earlier quiescence is necessary when observed growth or contention consumes

@@ -30,12 +30,12 @@ END_S = 15
 TARGET_FRACTIONS = (0.25, 0.5, 0.75, 1.0)
 COLORS = {
     "random": "#9B51E0",
-    "capacity": "#2F80ED",
+    "greedy": "#2F80ED",
     "lp": "#176B52",
 }
 LABELS = {
     "random": "Random",
-    "capacity": "Capacity",
+    "greedy": "Greedy",
     "lp": "LP",
 }
 
@@ -60,7 +60,7 @@ def evaluation_rows() -> list[dict]:
         )
         control_scenario = replace(probe, power_limit_w=initial)
         control_plan = plan(
-            control_scenario, profile, control_routes, "capacity", seed=3
+            control_scenario, profile, control_routes, "greedy", seed=3
         )
         control_result = execute(control_scenario, profile, control_plan.moves)
         control_wait = _summary(
