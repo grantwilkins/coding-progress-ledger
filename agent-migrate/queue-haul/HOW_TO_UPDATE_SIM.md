@@ -20,6 +20,24 @@ session append-only stream
 Connections, packets, TCP, destination-server scheduling, and LMCache internal
 calls are out of scope. A connection is never a unit of simulated fairness.
 
+### Transport contract and adapter boundary
+
+The simulator is transport-independent. A KV transport exposes block geometry,
+aggregate endpoint timing and concurrency, and this contract:
+
+1. Transfer only complete immutable blocks missing after the destination's
+   copied-block watermark.
+2. Advance the watermark only after those blocks are destination-resident and
+   retained through commit.
+3. Reconstruct the unsealed partial tail during final preparation.
+
+LMCache implements that contract with token-derived keys, warm-prefetch, and
+retained L1 blocks. Those APIs, key formats, and cache-tier names belong only in
+the profiling/runtime adapter. A replacement transport changes that adapter and
+the measured profile; it changes the simulator only if it violates the generic
+contract, for example by moving partial blocks or allowing admitted state to be
+evicted before commit.
+
 ## Evidence-to-model mapping
 
 | Evidence | Update when supported | Do not infer |

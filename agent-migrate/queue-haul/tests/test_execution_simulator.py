@@ -22,6 +22,7 @@ Plausible wrong implementations:
 - Drop zero-delay completion events exactly at the simulation cutoff.
 - Allocate queue audit records during summary-only prediction.
 - Apply a background pace cap to the paused final catch-up.
+- Transfer an unsealed partial block or commit without reconstructing its tail.
 """
 
 import json
@@ -473,8 +474,20 @@ def test_kv_catch_up_replays_a_changed_partial_tail_without_network_bytes(tmp_pa
         (PlannedMove("active", "dest", "kv_transfer", 0, ("wan",)),),
     )
     row = result.sessions[0]
-    assert [(flow.phase, flow.bytes) for flow in result.network] == [("initial", 110)]
+    assert [(flow.phase, flow.bytes) for flow in result.network] == [("initial", 100)]
     assert row.catch_up_ready_s - row.catch_up_start_s == pytest.approx(.05)
+
+
+def test_static_partial_tail_is_reconstructed_without_wan_bytes(tmp_path):
+    result = execute(
+        scenario((SimSession("active", "source", 11, 0, 0, 1),)),
+        model(tmp_path),
+        (PlannedMove("active", "dest", "kv_transfer", 0, ("wan",)),),
+    )
+
+    row = result.sessions[0]
+    assert [(flow.phase, flow.bytes) for flow in result.network] == [("initial", 100)]
+    assert row.catch_up_ready_s - row.catch_up_start_s == pytest.approx(.01)
 
 
 @pytest.mark.parametrize(("growth", "blocks"), ((3, 0), (9, 1), (13, 1), (29, 3)))

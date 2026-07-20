@@ -250,6 +250,7 @@ class _MoveState:
     wake_start: float | None = None
     wake_ready: float | None = None
     copied_blocks: int = 0
+    scheduled_blocks: int = 0
     append_pending: int = 0
     final_started: bool = False
 
@@ -487,8 +488,8 @@ class ExecutionSimulator:
             self.running[source] += 1
             state = self.states[index]
             state.snapshot_tokens = self.context[state.move.session_id]
-            state.copied_blocks = (
-                state.snapshot_tokens // self.case.kv_transfer.block_tokens
+            state.scheduled_blocks = self.case.kv_transfer.sealed_blocks(
+                state.snapshot_tokens
             )
             state.initial_start = self.time
             self._event("initial_start", state.move.session_id, detail=state.move.method)
@@ -506,12 +507,12 @@ class ExecutionSimulator:
         if state.move.method == "replay_on_request":
             byte_count = session.log_bytes if phase == "wake" else 0
             return byte_count, tokens if phase == "wake" else 0, 0
-        blocks = self.case.kv_transfer.blocks(tokens)
+        blocks = self.case.kv_transfer.sealed_blocks(tokens)
         if phase == "catch_up":
-            blocks = tokens // self.case.kv_transfer.block_tokens - state.copied_blocks
-            tail = tokens % self.case.kv_transfer.block_tokens
+            blocks -= state.copied_blocks
+            tail = self.case.kv_transfer.tail_tokens(tokens)
             return max(0, blocks) * self.case.kv_transfer.block_bytes, tail, max(0, blocks)
-        return self.case.kv_transfer.bytes(tokens), 0, blocks
+        return self.case.kv_transfer.sealed_bytes(tokens), 0, blocks
 
     def _path(self, state: _MoveState, phase: str) -> tuple[str, ...]:
         return state.move.path
@@ -658,6 +659,7 @@ class ExecutionSimulator:
             request_index, arrival = self.pending_requests.pop(session_id)
             self._schedule(self.time, "request_start", (session_id, request_index, arrival))
         elif phase == "initial":
+            state.copied_blocks = state.scheduled_blocks
             state.initial_ready = self.time
             self._event("initial_ready", session_id)
             if state.move.method == "kv_transfer":
@@ -668,6 +670,8 @@ class ExecutionSimulator:
             )
         elif phase.startswith("append"):
             state.append_pending -= 1
+            if not state.append_pending:
+                state.copied_blocks = state.scheduled_blocks
             self._event("append_ready", session_id)
             if state.idle is not None and not state.append_pending:
                 self._start_final(index)
@@ -698,7 +702,10 @@ class ExecutionSimulator:
         if state.final_started:
             return
         state.final_started = True
-        if self.context[session_id] != state.snapshot_tokens:
+        if self.context[session_id] != state.snapshot_tokens or (
+            state.move.method == "kv_transfer"
+            and self.case.kv_transfer.tail_tokens(self.context[session_id])
+        ):
             state.catch_start = self.time
             self._event("catch_up_start", session_id)
             self._prepare(index, "catch_up")
@@ -822,12 +829,13 @@ class ExecutionSimulator:
 
     def _append_available(self, index: int, label: str):
         state = self.states[index]
-        completed = self.context[state.move.session_id] \
-            // self.case.kv_transfer.block_tokens
-        blocks = completed - state.copied_blocks
+        completed = self.case.kv_transfer.sealed_blocks(
+            self.context[state.move.session_id]
+        )
+        blocks = completed - state.scheduled_blocks
         if blocks <= 0:
             return
-        state.copied_blocks = completed
+        state.scheduled_blocks = completed
         state.append_pending += 1
         self._prepare(
             index, f"append_{label}",

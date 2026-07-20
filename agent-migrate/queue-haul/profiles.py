@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import json
-import math
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -118,6 +117,8 @@ class ActionPower:
 
 @dataclass(frozen=True)
 class KVTransfer:
+    """Transport-agnostic sealed-block movement and endpoint timing."""
+
     block_tokens: int
     block_bytes: int
     setup_s: float
@@ -142,11 +143,14 @@ class KVTransfer:
             raise ValueError("invalid KV transfer parameters")
         return value
 
-    def blocks(self, tokens: int) -> int:
-        return max(0, math.ceil(int(tokens) / self.block_tokens))
+    def sealed_blocks(self, tokens: int) -> int:
+        return max(0, int(tokens)) // self.block_tokens
 
-    def bytes(self, tokens: int) -> int:
-        return max(0, int(tokens)) * self.block_bytes // self.block_tokens
+    def sealed_bytes(self, tokens: int) -> int:
+        return self.sealed_blocks(tokens) * self.block_bytes
+
+    def tail_tokens(self, tokens: int) -> int:
+        return max(0, int(tokens)) % self.block_tokens
 
 
 @dataclass(frozen=True)

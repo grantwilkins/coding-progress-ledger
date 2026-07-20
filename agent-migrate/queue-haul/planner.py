@@ -114,7 +114,7 @@ def _duration(session: SimSession, method: MoveMethod, case: ProfileCase,
     if method == "replay":
         return link_s(session.log_bytes) + replay_s + case.replay_completion_s + case.switch_s
     if method == "kv_transfer":
-        size = case.kv_transfer.bytes(tokens)
+        size = case.kv_transfer.sealed_bytes(tokens)
         return (case.kv_transfer.setup_s
                 + max(link_s(size), size / case.kv_transfer.destination_bytes_per_s)
                 + case.kv_transfer.initial_completion_s + case.switch_s)
@@ -129,7 +129,7 @@ def _required_kv_rate(session: SimSession, case: ProfileCase, quiesce_s: float,
         - case.kv_transfer.initial_completion_s
     if transfer_s <= 0:
         raise ValueError("KV preparation has no transfer window")
-    rate = case.kv_transfer.bytes(math.ceil(
+    rate = case.kv_transfer.sealed_bytes(math.ceil(
         session.context_tokens + session.expected_growth_tokens_per_s * growth_s
     )) / transfer_s
     if rate > physical:
@@ -263,7 +263,7 @@ def _migration_resources(scenario: ExecutionScenario, profile: ModelProfile, rou
         except ValueError:
             replay_valid[j] = False
     kv_bytes = np.array([
-        case.kv_transfer.bytes(_resident_tokens(session, horizon)) for session in sessions
+        case.kv_transfer.sealed_bytes(_resident_tokens(session, horizon)) for session in sessions
     ], float)
     replay_bytes = np.array([session.log_bytes for session in sessions], float)
     durations = np.zeros((2, n))

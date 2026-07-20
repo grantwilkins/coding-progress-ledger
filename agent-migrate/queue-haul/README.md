@@ -23,9 +23,10 @@ uv run python queue-haul/plot_simulator_evaluation.py
 uv run python queue-haul/plot_scaling_results.py
 ```
 
-The model profile uses exact measured KV bytes. KV loading overlaps network
-transfer, so serial KV time is setup plus the slower of network transfer and
-destination KV loading, followed by synchronization and route switching.
+The model profile moves only complete immutable KV blocks; an unsealed tail is
+reconstructed during final preparation. KV loading overlaps network transfer,
+so serial KV time is setup plus the slower of network transfer and destination
+KV loading, followed by synchronization and route switching.
 Destination KV copies enter a FIFO per destination before moving bytes;
 `queues.csv` records arrival, start, completion, depth, bytes, observed wait,
 and whether a copy is still pending at the simulation cutoff.
@@ -195,7 +196,11 @@ warm-prefetching each complete 12K/13.6K/15K/16K snapshot into retained
 destination L1 transferred exactly 48/5/5/6 new blocks with no repeated prefix
 keys. Every token, state, and wire gate passed, including a real second turn.
 The concurrency-four confirmation overlapped two attributed sessions at 1.116
-GB/s. Reproduce it with:
+GB/s. This is an LMCache implementation of the simulator's generic contract:
+move missing sealed blocks, retain them at the destination until commit, and
+report readiness only after residency. Another transport needs new measured
+block geometry and timing, not LMCache concepts in the simulator. Reproduce it
+with:
 
 ```bash
 sbatch queue-haul/stage1h_mp_incremental.sbatch

@@ -1,6 +1,6 @@
 """
 Claim:
-Profiles preserve measured ranges, exact partial KV bytes, destination ingestion
+Profiles preserve measured ranges, sealed-block KV bytes, destination ingestion
 capacity, and total action power by concurrency.
 
 Plausible wrong implementations:
@@ -10,7 +10,7 @@ Plausible wrong implementations:
 - Accept a nonpositive resident KV capacity.
 - Sample workload columns independently and create records absent from the trace.
 - Treat a legacy idle record as active or retain it as a third internal state.
-- Round every initial KV payload up to a full allocator block.
+- Transfer a partial block proportionally or round it up.
 - Multiply total concurrent action power once per session.
 """
 
@@ -75,11 +75,15 @@ def test_power_curve_is_concave_and_never_extrapolates(tmp_path):
         ModelProfile.load(write(tmp_path, raw, "convex.json"))
 
 
-def test_rate_range_exact_kv_bytes_and_action_power_are_explicit(tmp_path):
+def test_rate_range_sealed_kv_bytes_and_action_power_are_explicit(tmp_path):
     case = ModelProfile.load(write(tmp_path, profile())).case()
     assert case.prefill.rate(500.5, 1) == pytest.approx(75)
-    assert case.kv_transfer.blocks(11) == 3
-    assert case.kv_transfer.bytes(11) == 275
+    assert [
+        (case.kv_transfer.sealed_blocks(tokens),
+         case.kv_transfer.sealed_bytes(tokens),
+         case.kv_transfer.tail_tokens(tokens))
+        for tokens in (3, 4, 11)
+    ] == [(0, 0, 3), (1, 100, 0), (2, 200, 3)]
     assert case.action_power_w["replay"].power(1, False) == 2
     assert case.action_power_w["replay"].power(2, False) == 3
     with pytest.raises(ValueError, match="unsupported concurrency"):

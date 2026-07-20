@@ -59,10 +59,11 @@ resource \(r\) has a normalized linear load:
 The resources are source-instance move time, each fixed network link, the
 balanced destination-link pool, destination replay time, destination KV
 service time, destination compute load, and resident KV tokens. Replay uses
-measured durable-log bytes and replay time. KV transfer uses exact KV bytes and
-the slower of path transfer and destination loading, followed by measured
-synchronization. Source-instance time covers the complete unloaded move because
-a source move slot remains occupied until commit.
+measured durable-log bytes and replay time. KV transfer uses complete sealed
+blocks, the slower of path transfer and destination loading, and final
+reconstruction of the partial tail followed by measured synchronization.
+Source-instance time covers the complete unloaded move because a source move
+slot remains occupied until commit.
 
 For initial source load \(L_s\), the linear power coefficient for session \(j\)
 is its measured one-session reduction:
