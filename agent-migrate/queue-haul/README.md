@@ -181,12 +181,24 @@ sbatch queue-haul/stage1g_mp_campaign.sbatch
 
 The completed `mp-campaign-run-10-20260719` ran four distinct approximately
 16K-token sessions at concurrency 1/2/4 and one four-stage append-only session,
-all with three repeats. Every hard gate passed. Median aggregate KV throughput
+all with three repeats. Its concurrency and accounting gates passed, but its
+append stages fetched 48/53/58/64 remote blocks and therefore did not establish
+incremental wire transfer. Median aggregate KV throughput
 was 591 MB/s at concurrency 2 and 1.206 GB/s at concurrency 4, versus a 111
 MB/s serialized ceiling; at least two key-attributed session bodies overlapped.
 At the final 16K append stage, vLLM reported 16,384 cached tokens, decomposed
 exactly into 14,848 vLLM-local and 1,536 LMCache-retrieved tokens. All
 continuations, RESP wire/body equations, and repeat counts passed.
+
+Stage 1H warm-prefetches each complete 12K/13.6K/15K/16K snapshot into
+destination L1 before the real vLLM lookup. It hard-fails unless WAN key counts
+are exactly 48/5/5/6 with no duplicate prefix keys, token and wire equations
+are exact, the final conversational turn preserves the state code, and one
+concurrency-four repeat exceeds 1 GB/s with two sessions overlapping:
+
+```bash
+sbatch queue-haul/stage1h_mp_incremental.sbatch
+```
 
 Stage 1D completed all 12 fixed two-session scenarios at 1 Gbps within
 deadline. All six migrations passed cache, continuation, exact aggregate byte,
