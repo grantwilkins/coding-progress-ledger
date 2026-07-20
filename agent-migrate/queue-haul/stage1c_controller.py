@@ -518,7 +518,7 @@ def messages_hash(messages: list[dict] | tuple[dict, ...]) -> str:
 
 
 def chat_payload(cfg: b.Config, messages: list[dict], max_tokens: int, bypass_lmcache: bool = False) -> dict:
-    payload = {"model": cfg.model, "messages": messages, "max_tokens": max_tokens, "temperature": 0, "stream": True, "stream_options": {"include_usage": True}}
+    payload = {"model": cfg.model, "messages": messages, "max_tokens": max_tokens, "temperature": 0, "reasoning_effort": "low", "stream": True, "stream_options": {"include_usage": True}}
     if bypass_lmcache:
         payload["kv_transfer_params"] = {"qh_bypass_lmcache": True}
     return payload

@@ -144,10 +144,12 @@ The pinned LMCache 0.3.3 connector is patched at process startup to read exact
 metadata lengths, serialize complete socket transactions, and reconnect after
 protocol errors before retrying once. This is a correctness baseline, not a
 parallel KV connection pool. Initial KV verification requires every token
-actually staged by the source to hit, including a partial final chunk when LMCache stores one; catch-up requires
+actually staged by the source to hit, including a partial final chunk when
+LMCache stores one; catch-up requires
 every complete chunk shared with the measured source activity prompt and replays
-the divergent suffix. Semantic probes append one deterministic
-final instruction. Replay requests explicitly bypass LMCache and must report
+the divergent suffix. Semantic probes append one deterministic final
+instruction and use low reasoning effort so the answer fits the fixed output
+budget. Replay requests explicitly bypass LMCache and must report
 zero hits. On a two-GPU A100 node, check the pinned vLLM `0.10.1.1`
 and LMCache `0.3.3` setup:
 
