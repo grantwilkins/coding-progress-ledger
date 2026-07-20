@@ -420,7 +420,7 @@ def _execution_feasible(scenario: ExecutionScenario, expected) -> bool:
     )
 
 
-def _greedy(sessions, valid, resources, power: ExpectedPower, limit: float):
+def _greedy(sessions, gains, valid, resources, power: ExpectedPower, limit: float):
     n = len(sessions)
     matrix = csc_matrix(resources)
     chosen = np.full(n, -1, int)
@@ -430,18 +430,28 @@ def _greedy(sessions, valid, resources, power: ExpectedPower, limit: float):
         start, end = matrix.indptr[method * n + session:method * n + session + 2]
         return matrix.indices[start:end], matrix.data[start:end]
 
-    scarcity = np.asarray(resources[:, valid].sum(axis=1)).ravel()
-    scores = np.full((2, n), np.inf)
+    costs = np.full((2, n), np.inf)
+    for method in range(2):
+        for j in range(n):
+            if valid[method * n + j]:
+                costs[method, j] = column(method, j)[1].sum()
+    demand = np.zeros(resources.shape[0])
+    for j, method in enumerate(np.argmin(costs, axis=0)):
+        if np.isfinite(costs[method, j]):
+            rows, added = column(method, j)
+            demand[rows] += added
+    prices = np.maximum(demand, 1)
+    efficiency = np.zeros((2, n))
     for method in range(2):
         for j in range(n):
             if valid[method * n + j]:
                 rows, added = column(method, j)
-                scores[method, j] = max(added * scarcity[rows], default=0.0)
+                efficiency[method, j] = gains[j] / max(added @ prices[rows], 1e-12)
     selected = []
-    for j in np.lexsort((np.arange(n), scores.min(axis=0))):
+    for j in np.lexsort((np.arange(n), -efficiency.max(axis=0))):
         if power.power(True) <= limit:
             break
-        for method in np.lexsort((np.arange(2), scores[:, j])):
+        for method in np.lexsort((np.arange(2), -efficiency[:, j])):
             if not valid[method * n + j]:
                 continue
             rows, added = column(method, j)
@@ -679,7 +689,8 @@ def plan(scenario: ExecutionScenario, profile: ModelProfile,
             scenario, profile, paths, sessions, destinations, case, resource_horizon
         )
         selected, chosen, _ = _greedy(
-            sessions, resource_valid, resources, power_state, scenario.power_limit_w,
+            sessions, np.array([power_state.marginal(s.session_id) for s in sessions]),
+            resource_valid, resources, power_state, scenario.power_limit_w,
         )
         methods = [METHODS[chosen[j]] if chosen[j] >= 0 else METHODS[0]
                    for j in range(len(sessions))]

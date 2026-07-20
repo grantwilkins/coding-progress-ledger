@@ -58,11 +58,13 @@ validation materializes expected growth at quiescence without exposing sampled
 future requests.
 
 For active sessions with `--final-state awake`, `greedy` scores each replay
-and KV-transfer option by its largest normalized resource use, weighted once by
-total demand for that resource. It sorts sessions once, chooses the lowest-pressure
-action that still fits, and reserves the same source, network, destination service,
-compute, KV-residency, and trailing power-window capacities as the LP. This keeps
-planning approximately `O(N log N)` while preventing resource overcommit.
+and KV-transfer option by conservative marginal source-power reduction per unit
+of priced resource use. Prices rise with normalized demand from one initially
+cheapest action per session, providing a scalable approximation to LP resource
+duals without counting mutually exclusive actions twice. It sorts once, chooses
+the highest-scoring action that still fits, and reserves the same source, network,
+destination service, compute, KV-residency, and trailing power-window capacities
+as the LP. This remains approximately `O(N log N)`.
 
 `--solver lp` jointly selects replay and KV transfer under source-instance,
 network, destination replay, destination KV, compute, residency, and source

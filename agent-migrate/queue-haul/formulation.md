@@ -18,12 +18,14 @@ Only local source power is constrained; destination power is reported.
 
 For active sessions and an awake final state, the greedy policy uses the same
 normalized resource rows and usable window \(H\) as the LP. Each action's score
-is its largest normalized resource use weighted by that resource's total demand.
-Sessions are sorted once by their best action score. In that order, the policy
-chooses the lowest-scoring replay or KV-transfer action that fits every remaining
-source, network, destination service, compute, and resident-KV capacity. The
-event simulator still decides whether the aggregate reservations form an exact
-schedule.
+is its conservative marginal source-power reduction divided by its priced
+resource use. Resource prices are at least one and rise with demand from each
+session's initially cheapest action, avoiding double-counting mutually exclusive
+replay and KV-transfer alternatives. Sessions are sorted once by their best
+action score. In that order, the policy chooses the highest-scoring action that
+fits every remaining source, network, destination service, compute, and
+resident-KV capacity. The event simulator still decides whether the aggregate
+reservations form an exact schedule.
 
 ## LP planner
 

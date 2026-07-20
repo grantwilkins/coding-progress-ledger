@@ -322,7 +322,7 @@ def test_greedy_uses_bottleneck_pressure_and_preserves_capacity():
     ])
 
     selected, chosen, usage = _greedy(
-        sessions, np.array([True] * 3 + [False] * 3), resources,
+        sessions, np.ones(3), np.array([True] * 3 + [False] * 3), resources,
         UnlimitedPower(), 0,
     )
 
@@ -333,12 +333,45 @@ def test_greedy_uses_bottleneck_pressure_and_preserves_capacity():
 
 def test_greedy_picks_the_lower_pressure_action():
     selected, chosen, _ = _greedy(
-        [SimpleNamespace(session_id="a")], np.ones(2, bool),
+        [SimpleNamespace(session_id="a")], np.ones(1), np.ones(2, bool),
         csr_matrix([[0.6, 0.2], [0.0, 0.2]]), UnlimitedPower(), 0,
     )
 
     assert selected == [0]
     assert chosen.tolist() == [1]
+
+
+def test_greedy_prioritizes_power_gain_over_small_resource_use():
+    sessions = [SimpleNamespace(session_id=str(j)) for j in range(11)]
+    resources = csr_matrix([np.r_[np.repeat(0.1, 10), 0.2, np.zeros(11)]])
+    gains = np.r_[np.ones(10), 100]
+    valid = np.r_[np.ones(11, bool), np.zeros(11, bool)]
+
+    selected, _, usage = _greedy(
+        sessions, gains, valid, resources, UnlimitedPower(), 0,
+    )
+    lp = _solve_lp("lp", gains, np.ones(22), valid, resources, 100)
+
+    assert selected[0] == 10
+    assert lp[10] > 1 - 1e-6
+    assert len(selected) == 9
+    assert usage[0] == pytest.approx(1)
+
+
+def test_greedy_prices_demand_from_one_action_per_session():
+    resources = csr_matrix([
+        [0.5, 0.6, 0.0, 0.0, 0.0, 0.0],
+        [0.0, 0.0, 0.6, 0.5, 0.0, 0.0],
+    ])
+
+    selected, chosen, _ = _greedy(
+        [SimpleNamespace(session_id=str(j)) for j in range(3)],
+        np.array([10, 9, 9]), np.array([True, True, True, True, False, False]),
+        resources, UnlimitedPower(), 0,
+    )
+
+    assert selected[0] == 0
+    assert chosen[0] == 1
 
 
 def test_greedy_reserves_source_time_and_power_window(tmp_path):
