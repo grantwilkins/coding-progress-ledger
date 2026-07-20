@@ -11,9 +11,10 @@ MODEL_RE = re.compile(r"Registered non-GPU context.*model=([^,]+), world_size=(\
 
 
 def acceptance(stages: list[dict]) -> dict:
-    prior_source, prior_wan = set(), set()
+    prior_wan = set()
     gates = dict.fromkeys(("incremental_wire_transfer", "no_duplicate_prefix_traffic",
-                           "exact_target_accounting", "exact_wire_accounting", "complete_state"), True)
+                           "exact_target_accounting", "exact_wire_accounting", "complete_state",
+                           "destination_l1_coverage"), True)
     gates["real_continuation"] = bool(stages and stages[-1]["continuation_ok"])
     for stage in stages:
         source, new = set(stage["source_block_keys"]), set(stage["new_source_block_keys"])
@@ -24,7 +25,8 @@ def acceptance(stages: list[dict]) -> dict:
         gates["exact_target_accounting"] &= stage["vllm_local_cached_tokens"] + stage["lmcache_retrieved_tokens"] == stage["reported_cached_tokens"]
         gates["exact_wire_accounting"] &= stage["wan_payload_bytes"] == len(wan) * stage["measured_block_bytes"]
         gates["complete_state"] &= after == before | wan_set == source and stage["reported_cached_tokens"] == stage["complete_cacheable_source_prefix"]
-        prior_source, prior_wan = source, prior_wan | wan_set
+        gates["destination_l1_coverage"] &= set(stage["destination_l1_hit_keys"]) == source
+        prior_wan |= wan_set
     observed = [len(stage["wan_get_block_keys"]) for stage in stages]
     gates["expected_block_counts"] = observed == list(EXPECTED_WAN_BLOCKS)
     return {"ok": all(gates.values()), "gates": gates, "observed_wan_blocks": observed}
@@ -106,7 +108,7 @@ def incremental(cfg, stack):
     if not match:
         raise RuntimeError("LMCache sink did not report its model layout")
     model, world_size = match.group(1), int(match.group(2))
-    source_keys, target_keys, gpu_keys, stages = set(), set(), set(), []
+    source_keys, target_keys, stages = set(), set(), []
     session, code, final_prompt, final_response = "mp-incremental", "QHMPSTAGEC0DE", "", None
     for index, target in enumerate(TARGETS):
         prompt, prompt_tokens = g.prompt_at(cfg, session, code, target)
@@ -130,18 +132,18 @@ def incremental(cfg, stack):
         rows = g.rows(transfers)
         request_gets = gets(rows[offset:])
         cache = g.cache_report(log, log_offset, {result["id"]})
-        wan_rows, missing_gpu = warm_gets + request_gets, source_keys - gpu_keys
+        wan_rows = warm_gets + request_gets
         wan_keys = [row["key_hashes"] for row in wan_rows]
         sizes = {int(row["payload_bytes"]) for row in wan_rows}
         l1 = sum(value[2] for value in cache["requests"].values())
-        if len(sizes) != 1 or l1 != len(missing_gpu) or cache["l2_blocks"] or request_gets:
-            raise RuntimeError(f"stage {target} not exact L1-only: sizes={sizes}, L1={l1}, expected={len(missing_gpu)}, L2={cache['l2_blocks']}, request_WAN={len(request_gets)}")
-        if warm["found_keys"] != warm["total_keys"] or warm["total_keys"] != len(source_keys):
+        if len(sizes) != 1 or l1 != len(source_keys) or cache["l2_blocks"] or request_gets:
+            raise RuntimeError(f"stage {target} not exact L1-only: sizes={sizes}, L1={l1}, expected={len(source_keys)}, L2={cache['l2_blocks']}, request_WAN={len(request_gets)}")
+        if warm["found_keys"] != len(new_source) or warm["total_keys"] != len(source_keys):
             raise RuntimeError(f"stage {target} warm prefetch incomplete: {warm}")
         reported, retrieved = g.cached_tokens(result), cache["retrieved_tokens"]
         stages.append({"target_tokens": target, "prompt_tokens": prompt_tokens,
             "source_block_keys": sorted(source_keys), "newly_stored_source_block_keys": sorted(new_source),
-            "new_source_block_keys": sorted(new_source), "destination_l1_hit_keys": sorted(missing_gpu),
+            "new_source_block_keys": sorted(new_source), "destination_l1_hit_keys": sorted(source_keys),
             "destination_l1_hit_blocks": l1, "destination_l2_prefetched_block_keys": wan_keys,
             "warm_prefetch_status": warm, "wan_get_block_keys": wan_keys,
             "wan_payload_bytes": sum(int(row["payload_bytes"]) for row in wan_rows),
@@ -153,7 +155,6 @@ def incremental(cfg, stack):
             "source_result": source_result, "destination_result": result,
             "continuation_ok": index < len(TARGETS) - 1})
         target_keys |= set(wan_keys)
-        gpu_keys = set(source_keys)
     offset = len(g.rows(transfers))
     continuation = post_messages(cfg, [{"role": "user", "content": final_prompt},
         {"role": "assistant", "content": final_response["content"]},
