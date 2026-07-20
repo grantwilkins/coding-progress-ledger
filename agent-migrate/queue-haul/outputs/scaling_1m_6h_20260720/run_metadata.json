@@ -1,0 +1,25 @@
+{
+  "created_utc": "2026-07-20T21:02:07Z",
+  "git_sha": "67fdb9f1204b83efa520c38ef2c85883e9ac0a6c",
+  "model_profile": "gpt-oss-20b-a100-tp1-v3-00afd6a1",
+  "workload_profile": "coding-live-20260714",
+  "sessions": 1000000,
+  "source_instances": 23799,
+  "source_nodes": 2975,
+  "solvers": ["random", "load_only", "node_aware", "node_drain", "lp"],
+  "requests_enabled": false,
+  "expected_context_growth_enabled": false,
+  "final_state": "awake",
+  "shared_inter_site_bandwidth_gbps": 1,
+  "deadline_s": 21600,
+  "end_s": 32400,
+  "target_fraction_of_removable_power": 0.5,
+  "initial_source_power_w": 5667029.760777048,
+  "minimum_awake_source_power_w": 1597465.986284912,
+  "requested_source_drop_w": 2034781.8872460679,
+  "build_s": 18.220735624898225,
+  "metric_notes": {
+    "plan_s": "planner construction plus its internal exact schedule validation",
+    "modeled_source_drop_at_deadline_w": "five-second trailing average at deadline"
+  }
+}

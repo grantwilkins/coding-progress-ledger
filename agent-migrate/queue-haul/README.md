@@ -269,3 +269,10 @@ choose nearly identical plans; at 100,000 sessions they move 94,956 sessions
 and achieve about 189% of the requested reduction. The restored LP is faster,
 so the remaining over-selection comes from the conservative linear power bound,
 not objective order.
+
+`outputs/scaling_1m_6h_20260720/comparison.csv` compares all four greedy
+baselines with the LP for one million static coding sessions, a six-hour
+deadline, and a 50% removable-power target. Load-only, node-aware, and
+node-drain meet the target with about 524,000 replay moves; node-drain drains
+the most nodes. The LP moves 949,031 sessions and reaches 189% of the target,
+while random selection fails under shared-link contention.
