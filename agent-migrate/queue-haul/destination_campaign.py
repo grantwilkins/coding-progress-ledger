@@ -259,6 +259,59 @@ def reduce_profile(
     }
 
 
+def acceptance_report(service: list[dict], loaded: list[dict]) -> dict:
+    radial = [abs(float(r["predicted_bound"]) / float(r["actual_bound"]) - 1) for r in service]
+    migration = [abs(float(r["predicted_s"]) / float(r["observed_s"]) - 1) for r in loaded]
+    false = [r["cell"] for r in service if r["predicted_feasible"] and not r["actual_feasible"]]
+    interactions = [r["cell"] for r, error in zip(loaded, migration) if error > .15]
+    correctness = [r["cell"] for r in loaded if not r.get("correct", False)]
+    if not radial or not migration:
+        raise ValueError("acceptance needs service and migration validation rows")
+    report = {
+        "false_feasible": false,
+        "median_radial_error": statistics.median(radial),
+        "median_migration_error": statistics.median(migration),
+        "loaded_interactions": interactions,
+        "correctness_failures": correctness,
+    }
+    report["accepted"] = not false and report["median_radial_error"] <= .15 \
+        and report["median_migration_error"] <= .15 and not correctness
+    return report
+
+
+def reserve_tasks(report: dict) -> list[dict]:
+    tasks = [{"phase": "service", "cell": cell, "reason": "boundary_disagreement"}
+             for cell in report.get("boundary_disagreements", [])]
+    if report.get("false_feasible") or report.get("median_radial_error", 0) > .15:
+        tasks += [{"phase": "service", "cell": cell, "reason": "facet_validation"}
+                  for cell in report.get("false_feasible") or report.get("service_validation_cells", [])]
+    tasks += [{"phase": "migration", "cell": cell, "reason": "interaction"}
+              for cell in report.get("loaded_interactions", [])]
+    tasks += [{"phase": "migration", "cell": cell, "reason": "correctness"}
+              for cell in report.get("correctness_failures", [])]
+    return list({object_hash(row): row for row in tasks}.values())
+
+
+def prepare_reserve(report_path: Path, bundle: Path, out: Path) -> dict | None:
+    tasks = reserve_tasks(json.loads(report_path.read_text()))
+    if not tasks:
+        return None
+    source = json.loads((bundle / "plan.json").read_text())
+    validate_plan(source)
+    out.mkdir(parents=True, exist_ok=True)
+    plan = {**source, "job": {"name": "reserve", "hours": 12}, "reserve_tasks": tasks}
+    write_json(out / "plan.json", plan)
+    job = out / "reserve.sh"
+    job.write_text("""#!/usr/bin/env bash
+set -euo pipefail
+uv run python queue-haul/destination_runner.py --plan "$QH_CAMPAIGN_PLAN" --run-root "$QH_RUN_ROOT"
+""")
+    job.chmod(0o755)
+    job.with_suffix(".sh.sha256").write_text(file_hash(job) + "\n")
+    write_checksums(out)
+    return plan
+
+
 def _read_table(path: Path) -> list[dict]:
     if path.suffix == ".csv":
         with path.open() as handle:
@@ -850,6 +903,14 @@ def main() -> None:
         reduce.add_argument(f"--{name}", type=Path, required=True)
     reduce.add_argument("--normals", type=json.loads, required=True)
     reduce.add_argument("--out", type=Path, required=True)
+    reserve = sub.add_parser("prepare-reserve")
+    reserve.add_argument("--report", type=Path, required=True)
+    reserve.add_argument("--bundle", type=Path, required=True)
+    reserve.add_argument("--out-dir", type=Path, required=True)
+    accept = sub.add_parser("acceptance")
+    accept.add_argument("--service", type=Path, required=True)
+    accept.add_argument("--loaded", type=Path, required=True)
+    accept.add_argument("--out", type=Path, required=True)
     build = sub.add_parser("build-manifests")
     build.add_argument("--trace-commons", type=Path, required=True)
     build.add_argument("--wildchat", type=Path, required=True)
@@ -924,6 +985,12 @@ def main() -> None:
                 args.normals,
             ),
         )
+        return
+    if args.command == "prepare-reserve":
+        prepare_reserve(args.report, args.bundle, args.out_dir)
+        return
+    if args.command == "acceptance":
+        write_json(args.out, acceptance_report(_read_table(args.service), _read_table(args.loaded)))
         return
     counter = (
         local_token_counter(args.model, args.local_tokenizer_revision)

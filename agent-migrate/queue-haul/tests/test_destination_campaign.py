@@ -251,6 +251,44 @@ def test_boundary_disagreement_hard_fails_without_four_of_five():
         campaign.boundary_decision(["feasible", "infeasible", "feasible"])
 
 
+def test_acceptance_targets_only_failed_reserve_cells(tmp_path):
+    service = [
+        {"cell": "coding", "actual_bound": 1, "predicted_bound": 1.1,
+         "actual_feasible": True, "predicted_feasible": True},
+        {"cell": "agentic", "actual_bound": 1, "predicted_bound": 1.2,
+         "actual_feasible": False, "predicted_feasible": True},
+    ]
+    loaded = [
+        {"cell": "replay-high", "observed_s": 10, "predicted_s": 10,
+         "correct": True},
+        {"cell": "kv-heldout", "observed_s": 10, "predicted_s": 12,
+         "correct": False},
+    ]
+    report = campaign.acceptance_report(service, loaded)
+    assert not report["accepted"]
+    assert campaign.reserve_tasks(report) == [
+        {"phase": "service", "cell": "agentic", "reason": "facet_validation"},
+        {"phase": "migration", "cell": "kv-heldout", "reason": "interaction"},
+        {"phase": "migration", "cell": "kv-heldout", "reason": "correctness"},
+    ]
+
+
+def test_reserve_bundle_exists_only_after_a_failed_reduction(tmp_path):
+    bundle = tmp_path / "mandatory"
+    campaign.prepare(content_free_manifest(tmp_path / "manifest.json"), bundle)
+    report = tmp_path / "report.json"
+    report.write_text(json.dumps({"accepted": True}))
+    assert campaign.prepare_reserve(report, bundle, tmp_path / "none") is None
+    assert not (tmp_path / "none").exists()
+    report.write_text(json.dumps({"boundary_disagreements": ["coding-normal"]}))
+    plan = campaign.prepare_reserve(report, bundle, tmp_path / "reserve")
+    assert plan["reserve_tasks"] == [{
+        "phase": "service", "cell": "coding-normal",
+        "reason": "boundary_disagreement",
+    }]
+    campaign.verify_checksums(tmp_path / "reserve")
+
+
 def test_profile_reduction_is_conservative_in_the_safe_direction():
     anchors = [
         {

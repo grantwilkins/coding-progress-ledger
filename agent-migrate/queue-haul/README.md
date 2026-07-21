@@ -32,7 +32,18 @@ uv run python queue-haul/destination_campaign.py prepare \
 Generated job files require sibling SHA-256 files. Write `SHA256SUMS` remotely,
 then retrieve full raw and reduced artifacts with `QH_REMOTE`,
 `QH_REMOTE_ROOT`, and `sync`; rsync is resumable and every received file is
-verified.
+verified. After reduction, `acceptance` checks held-out service and migration
+rows; `prepare-reserve` emits nothing when they pass and otherwise writes one
+12-hour bundle containing only the failed cells.
+
+```bash
+uv run python queue-haul/destination_campaign.py acceptance \
+  --service service-validation.jsonl --loaded loaded-validation.jsonl \
+  --out acceptance.json
+uv run python queue-haul/destination_campaign.py prepare-reserve \
+  --report acceptance.json --bundle /scratch/$USER/qh-destination-v2 \
+  --out-dir /scratch/$USER/qh-destination-v2-reserve
+```
 
 Queue-Haul optionally accepts a versioned `DestinationArchitecture` from
 `destination.py`. It describes compatibility, context-conditioned service work,
