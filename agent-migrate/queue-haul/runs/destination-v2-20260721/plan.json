@@ -1,0 +1,70 @@
+{
+  "anchor_drift_limit": 0.15,
+  "baseline_profile": {
+    "path": "baseline-profile.json",
+    "sha256": "b31d372950dab68dad651018df93f58c38a1b6682758eac3435fa9144bfed936"
+  },
+  "gpu_pair_hour_budget": 12,
+  "image_sha256": "50e98f65de09ebfe196f270c8b5c595636853646eb5536dca92f27bd45c084ab",
+  "job": {
+    "hours": 12,
+    "name": "mandatory"
+  },
+  "manifest": {
+    "path": "content-free-manifest.json",
+    "sha256": "e85a6aa32c3157c15d1e7b3872a105d7c06eb00fe54139dfc67abddc60970b99"
+  },
+  "migration": {
+    "bandwidth_gbps": 10,
+    "concurrency": 1,
+    "context_tokens": 16384,
+    "emergency_inside_fraction": 0.95,
+    "heldout_bandwidth_gbps": 5,
+    "heldout_context_tokens": 24576,
+    "methods": [
+      "replay",
+      "kv_transfer"
+    ],
+    "paired_controls": true,
+    "repeats": 3,
+    "rho": [
+      0.8,
+      "emergency_inside"
+    ]
+  },
+  "reserve_pair_hour_limit": 12,
+  "schema": "queue-haul-destination-campaign-v2",
+  "service": {
+    "anchors": [
+      4096,
+      16384,
+      24576
+    ],
+    "arrival": "open_loop_poisson",
+    "block_bootstrap_s": 30,
+    "bootstrap_samples": 2000,
+    "completion_target": 200,
+    "directions": [
+      "interactive_coding",
+      "coding",
+      "agentic_tool_loop"
+    ],
+    "disagreement_repeats": 5,
+    "hold_max_s": 480,
+    "hold_min_s": 180,
+    "initial_repeats": 3,
+    "radial_resolution": 0.05,
+    "run_cap_s": 720,
+    "slos": {
+      "emergency": {
+        "p90_mean_tpot_s": 0.25,
+        "p90_ttft_s": 10
+      },
+      "normal": {
+        "p90_mean_tpot_s": 0.1,
+        "p90_ttft_s": 2
+      }
+    },
+    "warmup_s": 60
+  }
+}

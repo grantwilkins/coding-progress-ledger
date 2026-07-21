@@ -1,0 +1,24 @@
+{
+  "gpu_measurements": [
+    "continuation",
+    "foreground_impact",
+    "kv_correctness",
+    "loaded_migration_slowdown",
+    "service_envelopes"
+  ],
+  "inventory": {
+    "continuation": "measure",
+    "foreground_impact": "measure",
+    "headroom_grid": "derive",
+    "kv_bytes": "derive",
+    "kv_correctness": "measure",
+    "loaded_migration_slowdown": "measure",
+    "old_migration_results": "reuse",
+    "old_service_results": "reuse",
+    "residency_horizon": "derive",
+    "service_envelopes": "measure",
+    "trace_growth": "derive",
+    "wan_capacity": "public_constant"
+  },
+  "schema": "queue-haul-destination-campaign-v2"
+}
