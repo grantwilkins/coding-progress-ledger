@@ -1,5 +1,11 @@
 # Queue-Haul
 
+`destination_campaign.py` builds content-free, revision-pinned trace manifests
+through the exact GPT-OSS tokenizer endpoint. It hard-fails unless each workload
+has disjoint 12/6/6 fit/tuning/final splits. `audit-evidence` lists the five GPU
+measurements; WAN/KV arithmetic, trace growth, horizons, and architecture sweeps
+remain offline derivations, while older hardware results are priors only.
+
 Queue-Haul optionally accepts a versioned `DestinationArchitecture` from
 `destination.py`. It describes compatibility, context-conditioned service work,
 nested normal/emergency/stable envelopes, per-replica baseline service and KV
