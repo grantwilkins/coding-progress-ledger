@@ -20,7 +20,8 @@ from destination_evaluation import reduce_bounds, reduce_loaded
 from migration_profiler import JOB_CLASSES, file_hash, object_hash, write_json
 
 
-SCHEMA = "queue-haul-destination-campaign-v1"
+SCHEMA = "queue-haul-destination-campaign-v2"
+MANIFEST_SCHEMA = "queue-haul-destination-campaign-v1"
 TRACE_SCHEMA = "queue-haul-trace-v1"
 NORMALIZER_VERSION = "queue-haul-normalizer-v2"
 EVIDENCE = {
@@ -34,8 +35,8 @@ EVIDENCE = {
     "trace_growth": "derive",
     "residency_horizon": "derive",
     "headroom_grid": "derive",
-    "old_service_results": "prior_only",
-    "old_migration_results": "prior_only",
+    "old_service_results": "reuse",
+    "old_migration_results": "reuse",
 }
 IMAGE_SHA256 = "50e98f65de09ebfe196f270c8b5c595636853646eb5536dca92f27bd45c084ab"
 SLO = {
@@ -56,7 +57,7 @@ SOURCES = {
 
 
 def audit_evidence(inventory: dict = EVIDENCE) -> dict:
-    allowed = {"measure", "derive", "public_constant", "prior_only"}
+    allowed = {"measure", "derive", "public_constant", "reuse"}
     bad = sorted(set(inventory.values()) - allowed)
     if bad:
         raise ValueError(f"unclassified evidence: {bad}")
@@ -67,34 +68,30 @@ def audit_evidence(inventory: dict = EVIDENCE) -> dict:
     }
 
 
-def make_plan() -> dict:
-    jobs = [
-        (1, "anchors_coding_frontier", (), (), False),
-        (2, "interactive_agentic_frontier", ("preflight",), (1,), False),
-        (3, "mixed_frontier_fit", ("frontier_1", "frontier_2"), (1, 2), False),
-        (4, "loaded_migration", ("profile_frozen",), (3,), False),
-        (5, "independent_validation", ("loaded_valid",), (4,), False),
-        (6, "adaptive_repeats", ("repeat_needed",), (5,), True),
-    ]
+def _manifest(path: Path) -> dict:
+    value = json.loads(path.read_text())
+    manifest = value.get("manifest", {})
+    if manifest.get("schema") != MANIFEST_SCHEMA or not value.get("traces"):
+        raise ValueError("campaign needs a complete content-free manifest")
+    for splits in manifest.get("splits", {}).values():
+        if [len(splits.get(k, ())) for k in ("fit", "tune", "validation")] != [12, 6, 6]:
+            raise ValueError("campaign manifest must preserve 12/6/6 splits")
+    return value
+
+
+def make_plan(manifest_path: Path) -> dict:
+    manifest = _manifest(manifest_path)
     return {
-        "schema": SCHEMA,
-        "image_sha256": IMAGE_SHA256,
-        "gpu_pair_hour_budget": 72,
-        "jobs": [
-            {
-                "shard": n,
-                "name": name,
-                "hours": 12,
-                "requires": list(req),
-                "after_shards": list(after),
-                "conditional": conditional,
-            }
-            for n, name, req, after, conditional in jobs
-        ],
+        "schema": SCHEMA, "image_sha256": IMAGE_SHA256,
+        "gpu_pair_hour_budget": 12, "reserve_pair_hour_limit": 12,
+        "job": {"name": "mandatory", "hours": 12},
+        "manifest": {"path": "content-free-manifest.json",
+                     "sha256": object_hash(manifest)},
+        "anchor_drift_limit": .15,
         "service": {
-            "directions": ["prefill", "decode", *JOB_CLASSES],
+            "anchors": [4096, 16384, 24576],
+            "directions": list(JOB_CLASSES),
             "arrival": "open_loop_poisson",
-            "arrival_sensitivity": "gamma_cv2",
             "warmup_s": 60,
             "hold_min_s": 180,
             "hold_max_s": 480,
@@ -109,7 +106,7 @@ def make_plan() -> dict:
         },
         "migration": {
             "methods": ["replay", "kv_transfer"],
-            "rho": [0, 0.5, 0.8, 0.95, "emergency_inside"],
+            "rho": [0.8, "emergency_inside"],
             "emergency_inside_fraction": 0.95,
             "context_tokens": 16384,
             "bandwidth_gbps": 10,
@@ -125,14 +122,35 @@ def make_plan() -> dict:
 def validate_plan(plan: dict) -> None:
     if (
         plan.get("schema") != SCHEMA
-        or sum(j["hours"] for j in plan["jobs"]) > plan["gpu_pair_hour_budget"]
+        or plan.get("job", {}).get("hours") != 12
+        or plan.get("gpu_pair_hour_budget") != 12
+        or plan.get("reserve_pair_hour_limit") != 12
     ):
         raise ValueError("campaign exceeds its A100-pair-hour budget")
     if (
         plan.get("image_sha256") != IMAGE_SHA256
         or plan["migration"]["rho"][-1] != "emergency_inside"
+        or plan.get("anchor_drift_limit") != .15
     ):
         raise ValueError("campaign runtime or emergency migration point changed")
+
+
+def prepare(manifest_path: Path, out: Path) -> dict:
+    manifest, plan = _manifest(manifest_path), None
+    out.mkdir(parents=True, exist_ok=True)
+    write_json(out / "content-free-manifest.json", manifest)
+    plan = make_plan(out / "content-free-manifest.json")
+    write_json(out / "plan.json", plan)
+    job = out / "mandatory.sh"
+    job.write_text("""#!/usr/bin/env bash
+set -euo pipefail
+uv run python queue-haul/destination_runner.py --plan "$QH_CAMPAIGN_PLAN" --run-root "$QH_RUN_ROOT"
+""")
+    job.chmod(0o755)
+    job.with_suffix(".sh.sha256").write_text(file_hash(job) + "\n")
+    write_json(out / "evidence.json", audit_evidence())
+    write_checksums(out)
+    return plan
 
 
 def boundary_decision(labels: list[str]) -> str:
@@ -487,36 +505,20 @@ def verify_checksums(root: Path) -> None:
         raise ValueError("artifact checksum mismatch")
 
 
-def submit(
-    plan_path: Path,
-    sbatch: Path,
-    job_dir: Path,
-    include_reserve: bool = False,
-    run=subprocess.run,
-) -> dict[int, str]:
+def submit(plan_path: Path, sbatch: Path, job_file: Path, run_root: Path,
+           run=subprocess.run) -> str:
     plan = json.loads(plan_path.read_text())
     validate_plan(plan)
-    ids = {}
-    for job in plan["jobs"]:
-        if job["conditional"] and not include_reserve:
-            continue
-        job_file = (job_dir / f"shard-{job['shard']}.sh").resolve()
-        if not job_file.is_file() or not job_file.with_suffix(".sh.sha256").is_file():
-            raise ValueError(f"missing immutable job file for shard {job['shard']}")
-        expected = job_file.with_suffix(".sh.sha256").read_text().split()[0]
-        if hashlib.sha256(job_file.read_bytes()).hexdigest() != expected:
-            raise ValueError(f"job file checksum changed for shard {job['shard']}")
-        command = ["sbatch", "--parsable"]
-        deps = [ids[n] for n in job["after_shards"]]
-        if deps:
-            command += [f"--dependency=afterok:{':'.join(deps)}"]
-        command += [
-            f"--export=ALL,QH_SHARD={job['shard']},QH_JOB_FILE={job_file},QH_CAMPAIGN_PLAN={plan_path.resolve()}",
-            str(sbatch),
-        ]
-        result = run(command, check=True, capture_output=True, text=True)
-        ids[job["shard"]] = result.stdout.strip().split(";")[0]
-    return ids
+    job_file = job_file.resolve()
+    checksum = job_file.with_suffix(".sh.sha256")
+    if not job_file.is_file() or not checksum.is_file() \
+            or file_hash(job_file) != checksum.read_text().split()[0]:
+        raise ValueError("missing or changed immutable job file")
+    command = ["sbatch", "--parsable",
+               f"--export=ALL,QH_JOB_FILE={job_file},QH_CAMPAIGN_PLAN={plan_path.resolve()},QH_RUN_ROOT={run_root.resolve()}",
+               str(sbatch)]
+    result = run(command, check=True, capture_output=True, text=True)
+    return result.stdout.strip().split(";")[0]
 
 
 def sync(remote: str, remote_root: str, local: Path, run=subprocess.run) -> None:
@@ -744,7 +746,7 @@ def build_manifests(rows: list[dict], seed: int = 0) -> dict:
             for split in ("fit", "tune", "validation")
         }
     return {
-        "schema": SCHEMA,
+        "schema": MANIFEST_SCHEMA,
         "trace_schema": TRACE_SCHEMA,
         "seed": seed,
         "rows_sha256": object_hash(
@@ -810,8 +812,9 @@ def main() -> None:
     sub = parser.add_subparsers(dest="command", required=True)
     audit = sub.add_parser("audit-evidence")
     audit.add_argument("--out", type=Path, required=True)
-    plan = sub.add_parser("make-plan")
-    plan.add_argument("--out", type=Path, required=True)
+    plan = sub.add_parser("prepare")
+    plan.add_argument("--manifest", type=Path, required=True)
+    plan.add_argument("--out-dir", type=Path, required=True)
     fetch = sub.add_parser("fetch-traces")
     fetch.add_argument("--out-dir", type=Path, required=True)
     fetch.add_argument("--trace-config")
@@ -820,15 +823,15 @@ def main() -> None:
     fetch.add_argument("--wildchat-split")
     fetch.add_argument("--nvidia-config")
     fetch.add_argument("--nvidia-split")
-    submit_parser = sub.add_parser("submit-next")
+    submit_parser = sub.add_parser("submit")
     submit_parser.add_argument("--plan", type=Path, required=True)
     submit_parser.add_argument(
         "--sbatch",
         type=Path,
         default=Path(__file__).with_name("destination_campaign.sbatch"),
     )
-    submit_parser.add_argument("--job-dir", type=Path, required=True)
-    submit_parser.add_argument("--include-reserve", action="store_true")
+    submit_parser.add_argument("--job-file", type=Path, required=True)
+    submit_parser.add_argument("--run-root", type=Path, required=True)
     sync_parser = sub.add_parser("sync")
     sync_parser.add_argument("--remote", default=os.environ.get("QH_REMOTE"))
     sync_parser.add_argument("--remote-root", default=os.environ.get("QH_REMOTE_ROOT"))
@@ -864,10 +867,8 @@ def main() -> None:
     if args.command == "audit-evidence":
         write_json(args.out, audit_evidence())
         return
-    if args.command == "make-plan":
-        plan = make_plan()
-        validate_plan(plan)
-        write_json(args.out, plan)
+    if args.command == "prepare":
+        prepare(args.manifest, args.out_dir)
         return
     if args.command == "fetch-traces":
         fetch_dataset(
@@ -893,10 +894,10 @@ def main() -> None:
             48,
         )
         return
-    if args.command == "submit-next":
+    if args.command == "submit":
         print(
             json.dumps(
-                submit(args.plan, args.sbatch, args.job_dir, args.include_reserve),
+                submit(args.plan, args.sbatch, args.job_file, args.run_root),
                 sort_keys=True,
             )
         )

@@ -14,16 +14,19 @@ GPU arrivals remain preregistered open-loop and are never inferred from them.
 omitting it uses the live vLLM `/tokenize` endpoint. Both render the GPT-OSS
 reasoning chat template, and only the resulting shape records are written.
 `DATA_TO_COLLECT.md` supersedes the original 72-hour grid with one mandatory
-12-hour A100-pair job and one targeted 12-hour reserve. The current `make-plan`
-output preserves the archived grid for reproducibility and must not be
-submitted until its scenarios match that evidence contract. `reduce` emits
-paired central and conservative measured A100 profile fragments.
+12-hour A100-pair job and one targeted 12-hour reserve. `prepare` creates the
+single checksum-pinned mandatory launch bundle; a reserve is generated only
+from a failed reduction. `reduce` emits paired central and conservative measured
+A100 profile fragments.
 
-Download public trace rows before allocating GPUs. Do not allocate GPUs from
-the archived plan:
+Download public trace rows before allocating GPUs, build the content-free
+manifest, then prepare the launch bundle:
 
 ```bash
 uv run --with pyarrow python queue-haul/destination_campaign.py fetch-traces --out-dir /scratch/$USER/qh-traces
+uv run python queue-haul/destination_campaign.py prepare \
+  --manifest /scratch/$USER/qh-traces/content-free-manifest.json \
+  --out-dir /scratch/$USER/qh-destination-v2
 ```
 
 Generated job files require sibling SHA-256 files. Write `SHA256SUMS` remotely,

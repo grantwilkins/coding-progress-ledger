@@ -1,7 +1,7 @@
 """Claim: campaign inputs preserve trace shape without content and reserve GPU time only for irreducible measurements.
 
 Plausible wrong implementations: leak source text, invent timestamps, accept topical non-code chat,
-overlap splits, sample only one context region, or spend GPU time deriving quantities available offline.
+retain the obsolete 72-hour grid, overlap splits, or spend GPU time deriving quantities available offline.
 """
 
 import destination_campaign as campaign
@@ -29,6 +29,18 @@ def count(value):
     if isinstance(value, list):
         return sum(len(row["content"].split()) + 1 for row in value)
     return len(value.split())
+
+
+def content_free_manifest(path):
+    splits = {
+        job: {name: [f"{job}-{name}-{i}" for i in range(n)]
+              for name, n in (("fit", 12), ("tune", 6), ("validation", 6))}
+        for job in campaign.JOB_CLASSES
+    }
+    value = {"manifest": {"schema": campaign.MANIFEST_SCHEMA, "splits": splits},
+             "traces": [{"session_id": "shape", "input_tokens_total": 1}]}
+    path.write_text(json.dumps(value))
+    return path
 
 
 def test_evidence_audit_measures_only_irreducible_cells():
@@ -221,14 +233,15 @@ def test_manifest_split_is_disjoint_deterministic_and_context_stratified():
         assert len(set().union(*map(set, splits.values()))) == 24
 
 
-def test_campaign_budget_dependencies_and_loaded_grid_are_frozen():
-    plan = campaign.make_plan()
+def test_campaign_is_one_mandatory_job_and_no_obsolete_grid(tmp_path):
+    plan = campaign.make_plan(content_free_manifest(tmp_path / "manifest.json"))
     campaign.validate_plan(plan)
-    assert sum(job["hours"] for job in plan["jobs"]) == 72
-    assert plan["jobs"][-1]["conditional"]
-    assert plan["migration"]["rho"] == [0, 0.5, 0.8, 0.95, "emergency_inside"]
+    assert plan["job"] == {"name": "mandatory", "hours": 12}
+    assert plan["gpu_pair_hour_budget"] == plan["reserve_pair_hour_limit"] == 12
+    assert "jobs" not in plan
+    assert plan["migration"]["rho"] == [0.8, "emergency_inside"]
     with pytest.raises(ValueError, match="budget"):
-        campaign.validate_plan(dict(plan, gpu_pair_hour_budget=71))
+        campaign.validate_plan(dict(plan, gpu_pair_hour_budget=72))
 
 
 def test_boundary_disagreement_hard_fails_without_four_of_five():
@@ -424,24 +437,21 @@ def test_checksum_manifest_detects_changed_artifact(tmp_path):
         campaign.verify_checksums(tmp_path)
 
 
-def test_slurm_submission_uses_afterok_and_skips_reserve(tmp_path):
-    plan = tmp_path / "plan.json"
-    plan.write_text(json.dumps(campaign.make_plan()))
-    job_dir = tmp_path / "jobs"
-    job_dir.mkdir()
-    for shard in range(1, 7):
-        job = job_dir / f"shard-{shard}.sh"
-        job.write_text("true\n")
-        job.with_suffix(".sh.sha256").write_text(
-            campaign.hashlib.sha256(job.read_bytes()).hexdigest() + "\n"
-        )
+def test_prepare_and_submit_use_one_immutable_job(tmp_path):
+    bundle = tmp_path / "bundle"
+    campaign.prepare(content_free_manifest(tmp_path / "manifest.json"), bundle)
+    campaign.verify_checksums(bundle)
+    plan, job = bundle / "plan.json", bundle / "mandatory.sh"
     calls = []
 
     def run(command, **_kwargs):
         calls.append(command)
         return SimpleNamespace(stdout=f"{100 + len(calls)};cluster\n")
 
-    ids = campaign.submit(plan, Path("campaign.sbatch"), job_dir, run=run)
-    assert ids == {1: "101", 2: "102", 3: "103", 4: "104", 5: "105"}
-    assert not any("QH_SHARD=6" in arg for call in calls for arg in call)
-    assert "--dependency=afterok:101:102" in calls[2]
+    assert campaign.submit(plan, Path("campaign.sbatch"), job,
+                           tmp_path / "run", run=run) == "101"
+    assert len(calls) == 1 and not any("dependency" in arg for arg in calls[0])
+    assert any("QH_RUN_ROOT=" in arg for arg in calls[0])
+    job.write_text("changed\n")
+    with pytest.raises(ValueError, match="changed"):
+        campaign.submit(plan, Path("campaign.sbatch"), job, tmp_path / "run")
