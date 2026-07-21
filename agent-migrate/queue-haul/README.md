@@ -1,5 +1,11 @@
 # Queue-Haul
 
+Queue-Haul optionally accepts a versioned `DestinationArchitecture` from
+`destination.py`. It describes compatibility, context-conditioned service work,
+nested normal/emergency/stable envelopes, per-replica baseline service and KV
+state, pool routes, and conservative loaded-migration coefficients. Omitting it
+keeps the legacy scalar destination model unchanged.
+
 Queue-Haul models and measures session migration under a local source-site
 power limit. The active path is:
 
