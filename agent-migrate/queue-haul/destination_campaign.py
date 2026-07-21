@@ -6,6 +6,7 @@ from dataclasses import asdict
 import hashlib
 import json
 import os
+import re
 import statistics
 import subprocess
 import urllib.parse
@@ -37,6 +38,17 @@ IMAGE_SHA256 = "50e98f65de09ebfe196f270c8b5c595636853646eb5536dca92f27bd45c084ab
 SLO = {
     "normal": {"p90_ttft_s": 2, "p90_mean_tpot_s": 0.1},
     "emergency": {"p90_ttft_s": 10, "p90_mean_tpot_s": 0.25},
+}
+SOURCES = {
+    "trace-commons/agent-traces": (
+        "CC-BY-4.0-compilation",
+        "contributor-certified public repositories",
+    ),
+    "allenai/WildChat-1M": ("ODC-BY-1.0", "affirmative opt-in"),
+    "nvidia/SWE-Hero-openhands-trajectories": (
+        "CC-BY-4.0",
+        "permissively licensed source repositories",
+    ),
 }
 
 
@@ -243,6 +255,9 @@ def fetch_dataset(
     out: Path,
     config: str | None = None,
     split: str | None = None,
+    predicate=None,
+    target: int | None = None,
+    sample_pages: int = 128,
     opener=urllib.request.urlopen,
 ) -> dict:
     encoded = urllib.parse.quote(dataset, safe="")
@@ -254,8 +269,8 @@ def fetch_dataset(
         )["splits"]
         choice = next((x for x in choices if x["split"] == "train"), choices[0])
         config, split = config or choice["config"], split or choice["split"]
-    rows, offset, total = [], 0, None
-    while total is None or offset < total:
+
+    def page(offset):
         query = urllib.parse.urlencode(
             {
                 "dataset": dataset,
@@ -265,12 +280,38 @@ def fetch_dataset(
                 "length": 100,
             }
         )
-        page = _get_json(f"https://datasets-server.huggingface.co/rows?{query}", opener)
-        batch, total = [x["row"] for x in page["rows"]], int(page["num_rows_total"])
-        if not batch and offset < total:
-            raise RuntimeError(f"dataset server stopped at {offset}/{total}")
-        rows += batch
-        offset += len(batch)
+        result = _get_json(
+            f"https://datasets-server.huggingface.co/rows?{query}", opener
+        )
+        return [x["row"] for x in result["rows"]], int(result["num_rows_total"])
+
+    first, total = page(0)
+    if target:
+        offsets = sorted(
+            {
+                round(i * max(0, total - 100) / max(1, sample_pages - 1))
+                for i in range(sample_pages)
+            }
+        )
+        batches = [first if offset == 0 else page(offset)[0] for offset in offsets]
+        rows = sorted(
+            (row for batch in batches for row in batch if predicate(row)),
+            key=object_hash,
+        )[:target]
+        if len(rows) < target:
+            raise ValueError(
+                f"need {target} eligible {dataset} rows, found {len(rows)}"
+            )
+        scanned = sum(map(len, batches))
+    else:
+        rows, offset = first, len(first)
+        while offset < total:
+            batch, _ = page(offset)
+            if not batch:
+                raise RuntimeError(f"dataset server stopped at {offset}/{total}")
+            rows += batch
+            offset += len(batch)
+        scanned = len(rows)
     if _get_json(info_url, opener)["sha"] != revision:
         raise RuntimeError(f"{dataset} changed during download")
     out.parent.mkdir(parents=True, exist_ok=True)
@@ -283,6 +324,8 @@ def fetch_dataset(
         "config": config,
         "split": split,
         "rows": len(rows),
+        "source_rows": total,
+        "scanned_rows": scanned,
         "sha256": hashlib.sha256(out.read_bytes()).hexdigest(),
     }
     write_json(out.with_suffix(out.suffix + ".metadata.json"), metadata)
@@ -380,7 +423,12 @@ def _text(value) -> str:
 
 def _messages(row: dict) -> list[dict]:
     value = next(
-        (row[k] for k in ("messages", "trajectory", "events") if row.get(k)), None
+        (
+            row[k]
+            for k in ("messages", "trajectory", "events", "conversation")
+            if row.get(k)
+        ),
+        None,
     )
     value = json.loads(value) if isinstance(value, str) else value
     if not isinstance(value, list):
@@ -421,6 +469,9 @@ def _seconds(value) -> float:
 def normalize_traces(
     rows: list[dict], source: str, revision: str, count_tokens
 ) -> list[dict]:
+    if source not in SOURCES:
+        raise ValueError(f"unapproved trace source: {source}")
+    license_id, content_basis = SOURCES[source]
     out = []
     for index, row in enumerate(rows):
         messages = _messages(row)
@@ -455,7 +506,8 @@ def normalize_traces(
                     "schema": TRACE_SCHEMA,
                     "source": source,
                     "revision": revision,
-                    "license": "CC-BY-4.0",
+                    "dataset_license": license_id,
+                    "content_basis": content_basis,
                     "session_id": f"{source}:{session_id}",
                     "turn": turn,
                     "time_s": _seconds(timestamp) if timestamp is not None else None,
@@ -483,30 +535,44 @@ def _sessions(rows: list[dict]) -> dict[str, list[dict]]:
     return grouped
 
 
+def wildchat_coding(row: dict) -> bool:
+    if row.get("toxic") or str(row.get("language", "")).lower() != "english":
+        return False
+    users = [m["content"] for m in _messages(row) if m["role"] == "user"]
+    text = "\n".join(users).lower()
+    signals = (
+        r"\b(python|javascript|typescript|rust|java|c\+\+|sql|react|node\.js)\b",
+        r"\b(function|method|compiler|exception|traceback|stack trace|unit test|api|database|regex)\b",
+        r"(^|\n)\s*(def |class |import |select |insert |const |let |fn )",
+    )
+    return len(users) >= 2 and (
+        "```" in text or sum(bool(re.search(x, text)) for x in signals) >= 2
+    )
+
+
+def nvidia_agentic(row: dict) -> bool:
+    allowed = {"MIT", "Apache-2.0", "BSD-2-Clause", "BSD-3-Clause"}
+    roles = {m["role"] for m in _messages(row)}
+    return row.get("license") in allowed and {"assistant", "tool"} <= roles
+
+
 def classify(rows: list[dict]) -> list[dict]:
     grouped = _sessions(rows)
-    nvidia = {k for k in grouped if k.startswith("nvidia/")}
-    timed = []
-    for session_id, turns in grouped.items():
-        times = sorted(r["time_s"] for r in turns if r["time_s"] is not None)
-        if not session_id.startswith("nvidia/") and len(times) > 1:
-            timed.append((session_id, (times[-1] - times[0]) / (len(times) - 1)))
-    if len(timed) < 48 or len(nvidia) < 24:
-        raise ValueError("need 48 timestamped Trace Commons and 24 NVIDIA sessions")
-    interactive = {
-        k for k, _ in sorted(timed, key=lambda x: (-x[1], x[0]))[: len(timed) // 2]
+    classes = {
+        session_id: "agentic_tool_loop"
+        if session_id.startswith("nvidia/")
+        else "interactive_coding"
+        if session_id.startswith("allenai/")
+        else "coding"
+        for session_id in grouped
     }
-    return [
-        dict(
-            row,
-            job_class="agentic_tool_loop"
-            if row["session_id"] in nvidia
-            else "interactive_coding"
-            if row["session_id"] in interactive
-            else "coding",
-        )
-        for row in rows
-    ]
+    if any(
+        sum(r["time_s"] is not None for r in grouped[sid]) < 2
+        for sid, job_class in classes.items()
+        if job_class == "interactive_coding"
+    ):
+        raise ValueError("WildChat interactive sessions need per-message timestamps")
+    return [dict(row, job_class=classes[row["session_id"]]) for row in rows]
 
 
 def build_manifests(rows: list[dict], seed: int = 0) -> dict:
@@ -570,6 +636,8 @@ def main() -> None:
     fetch.add_argument("--out-dir", type=Path, required=True)
     fetch.add_argument("--trace-config")
     fetch.add_argument("--trace-split")
+    fetch.add_argument("--wildchat-config")
+    fetch.add_argument("--wildchat-split")
     fetch.add_argument("--nvidia-config")
     fetch.add_argument("--nvidia-split")
     submit_parser = sub.add_parser("submit-next")
@@ -601,8 +669,10 @@ def main() -> None:
     reduce.add_argument("--out", type=Path, required=True)
     build = sub.add_parser("build-manifests")
     build.add_argument("--trace-commons", type=Path, required=True)
+    build.add_argument("--wildchat", type=Path, required=True)
     build.add_argument("--nvidia", type=Path, required=True)
     build.add_argument("--trace-revision", required=True)
+    build.add_argument("--wildchat-revision", required=True)
     build.add_argument("--nvidia-revision", required=True)
     build.add_argument("--host", default="127.0.0.1")
     build.add_argument("--port", type=int, default=8000)
@@ -626,10 +696,20 @@ def main() -> None:
             args.trace_split,
         )
         fetch_dataset(
+            "allenai/WildChat-1M",
+            args.out_dir / "wildchat-coding.jsonl",
+            args.wildchat_config,
+            args.wildchat_split,
+            wildchat_coding,
+            96,
+        )
+        fetch_dataset(
             "nvidia/SWE-Hero-openhands-trajectories",
             args.out_dir / "nvidia-swe-hero.jsonl",
             args.nvidia_config,
             args.nvidia_split,
+            nvidia_agentic,
+            96,
         )
         return
     if args.command == "submit-next":
@@ -664,12 +744,22 @@ def main() -> None:
         )
         return
     counter = token_counter(args.host, args.port, args.model)
+
     def load(path):
-        return [json.loads(line) for line in path.read_text().splitlines() if line.strip()]
+        return [
+            json.loads(line) for line in path.read_text().splitlines() if line.strip()
+        ]
+
     rows = normalize_traces(
         load(args.trace_commons),
         "trace-commons/agent-traces",
         args.trace_revision,
+        counter,
+    )
+    rows += normalize_traces(
+        load(args.wildchat),
+        "allenai/WildChat-1M",
+        args.wildchat_revision,
         counter,
     )
     rows += normalize_traces(

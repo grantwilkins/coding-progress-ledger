@@ -1,7 +1,7 @@
 """Claim: campaign inputs preserve trace shape without content and reserve GPU time only for irreducible measurements.
 
-Plausible wrong implementations: leak source text, invent NVIDIA timestamps, overlap splits,
-sample only one context region, or spend GPU time deriving quantities available offline.
+Plausible wrong implementations: leak source text, invent timestamps, accept topical non-code chat,
+overlap splits, sample only one context region, or spend GPU time deriving quantities available offline.
 """
 
 import destination_campaign as campaign
@@ -72,10 +72,16 @@ def test_trace_normalization_discards_content_and_does_not_invent_time():
 
 def test_manifest_split_is_disjoint_deterministic_and_context_stratified():
     trace_rows = []
-    for i in range(48):
+    for i in range(24):
         row = dict(id=f"trace-{i}", **messages("x " * (i + 1), i + 2))
         trace_rows += campaign.normalize_traces(
             [row], "trace-commons/agent-traces", "abc", count
+        )
+    interactive_rows = []
+    for i in range(24):
+        row = dict(id=f"interactive-{i}", **messages("x " * (i + 1), i + 2))
+        interactive_rows += campaign.normalize_traces(
+            [row], "allenai/WildChat-1M", "ghi", count
         )
     agent_rows = []
     for i in range(24):
@@ -83,7 +89,7 @@ def test_manifest_split_is_disjoint_deterministic_and_context_stratified():
         agent_rows += campaign.normalize_traces(
             [row], "nvidia/SWE-Hero-openhands-trajectories", "def", count
         )
-    rows = trace_rows + agent_rows
+    rows = trace_rows + interactive_rows + agent_rows
     first, second = (
         campaign.build_manifests(rows, 7),
         campaign.build_manifests(list(reversed(rows)), 7),
@@ -200,8 +206,48 @@ def test_revision_stable_dataset_fetch_records_exact_source(tmp_path):
         "config": "default",
         "split": "train",
         "rows": 1,
+        "source_rows": 1,
+        "scanned_rows": 1,
         "sha256": campaign.hashlib.sha256(out.read_bytes()).hexdigest(),
     }
+
+
+def test_wildchat_filter_requires_multiturn_high_precision_code_evidence():
+    base = {"language": "English", "toxic": False}
+    assert campaign.wildchat_coding(
+        {
+            **base,
+            "conversation": [
+                {"role": "user", "content": "My Python function raises this traceback"},
+                {"role": "assistant", "content": "Try this"},
+                {"role": "user", "content": "The unit test still fails"},
+            ],
+        }
+    )
+    assert not campaign.wildchat_coding(
+        {
+            **base,
+            "conversation": [
+                {"role": "user", "content": "Plan my cooking class"},
+                {"role": "assistant", "content": "Sure"},
+                {"role": "user", "content": "Make it interactive"},
+            ],
+        }
+    )
+
+
+def test_nvidia_filter_requires_permissive_license_and_agent_tool_loop():
+    row = {
+        "license": "MIT",
+        "trajectory": [
+            {"role": "user", "content": "fix it"},
+            {"role": "assistant", "content": "running tests"},
+            {"role": "tool", "content": "passed"},
+        ],
+    }
+    assert campaign.nvidia_agentic(row)
+    assert not campaign.nvidia_agentic(dict(row, license="GPL-3.0"))
+    assert not campaign.nvidia_agentic(dict(row, trajectory=row["trajectory"][:2]))
 
 
 def test_checksum_manifest_detects_changed_artifact(tmp_path):
