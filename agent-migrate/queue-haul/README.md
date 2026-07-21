@@ -6,6 +6,12 @@ nested normal/emergency/stable envelopes, per-replica baseline service and KV
 state, pool routes, and conservative loaded-migration coefficients. Omitting it
 keeps the legacy scalar destination model unchanged.
 
+Pass it as `plan(..., destination=architecture)` for pool-aware LP or greedy
+admission, or to `execute(..., destination=architecture)` for independent stable
+envelope validation. Results report admission mode, shortfall/failure, packing
+repairs, and predicted migration makespan; `target_unmet` is valid best effort,
+not successful curtailment.
+
 Queue-Haul models and measures session migration under a local source-site
 power limit. The active path is:
 

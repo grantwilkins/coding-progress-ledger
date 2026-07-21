@@ -70,7 +70,8 @@ class LoadedCoefficients:
         if not self.context_range[0] <= context <= self.context_range[1] \
                 or not self.bandwidth_range_bytes_per_s[0] <= bandwidth_bytes_per_s \
                 <= self.bandwidth_range_bytes_per_s[1] \
-                or initial_rho < self.rho[0] or boundary_rho > self.rho[-1]:
+                or initial_rho < self.rho[0] or initial_rho > boundary_rho \
+                or boundary_rho > self.rho[-1]:
             raise ValueError("migration candidate outside loaded-profile range")
         values = [np.interp(initial_rho, self.rho, self.slowdown),
                   np.interp(boundary_rho, self.rho, self.slowdown)]
@@ -200,4 +201,3 @@ class DestinationArchitecture:
     @property
     def type_by_id(self) -> dict[str, DestinationType]:
         return {q.type_id: q for q in self.types}
-

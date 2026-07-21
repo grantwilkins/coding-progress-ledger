@@ -84,6 +84,12 @@ class PlanResult:
     kv_capacity_tokens: int
     lp_power_shortfall_w: float | None = None
     lp_peak_pressure: float | None = None
+    admission_mode: str | None = None
+    power_shortfall_w: float = 0.0
+    failure_reason: str | None = None
+    packing_repair_count: int = 0
+    packing_repair_s: float = 0.0
+    predicted_migration_makespan_s: float | None = None
 
 
 def _ell(session: SimSession, case: ProfileCase) -> float:
@@ -629,7 +635,10 @@ def _place(selected: list[int], sessions: list[SimSession], scenario: ExecutionS
 
 def plan(scenario: ExecutionScenario, profile: ModelProfile,
          paths: Routes, solver: str,
-         case_id: str = "central", seed: int = 0) -> PlanResult:
+         case_id: str = "central", seed: int = 0, destination=None) -> PlanResult:
+    if destination is not None:
+        from pool_planner import plan_destination
+        return plan_destination(scenario, profile, solver, case_id, seed, destination)
     if solver not in ALL_SOLVERS:
         raise ValueError(f"unknown solver {solver!r}")
     start = perf_counter()

@@ -98,6 +98,7 @@ class PlannedMove:
     path: tuple[str, ...]
     rate_limit_bytes_per_s: float | None = None
     quiesce_s: float | None = None
+    destination_pool: str | None = None
 
     def __post_init__(self):
         if not self.session_id or not self.destination_instance or self.method not in {
@@ -1007,11 +1008,19 @@ class ExecutionSimulator:
 
 
 def execute(scenario: ExecutionScenario, profile: ModelProfile,
-            moves: tuple[PlannedMove, ...], case_id: str = "central") -> ExecutionResult:
+            moves: tuple[PlannedMove, ...], case_id: str = "central",
+            destination=None) -> ExecutionResult:
+    if destination:
+        from pool_planner import validate_destination_execution
+        validate_destination_execution(scenario, destination, moves)
     return ExecutionSimulator(scenario, profile, moves, case_id).run()
 
 
 def predict(scenario: ExecutionScenario, profile: ModelProfile,
-            moves: tuple[PlannedMove, ...], case_id: str = "central") -> ExecutionResult:
+            moves: tuple[PlannedMove, ...], case_id: str = "central",
+            destination=None) -> ExecutionResult:
     """Execute exactly without retaining audit records used only by experiments."""
+    if destination:
+        from pool_planner import validate_destination_execution
+        validate_destination_execution(scenario, destination, moves)
     return ExecutionSimulator(scenario, profile, moves, case_id, detailed=False).run()
