@@ -738,6 +738,10 @@ def token_counter(host: str, port: int, model: str):
     def count(value) -> int:
         payload = {"model": model, "add_generation_prompt": isinstance(value, list)}
         payload["messages" if isinstance(value, list) else "prompt"] = value
+        if isinstance(value, list):
+            payload["chat_template_kwargs"] = {
+                "reasoning_effort": "low", "enable_thinking": True,
+            }
         result = testbed.http_json(host, port, "POST", "/tokenize", payload)
         if result.get("count") is None:
             raise RuntimeError("vLLM tokenizer returned no count")

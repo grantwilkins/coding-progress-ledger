@@ -72,6 +72,16 @@ def test_trace_normalization_discards_content_and_does_not_invent_time():
     assert agent[0]["time_s"] is None
 
 
+def test_campaign_uses_exact_gpt_oss_reasoning_chat_template(monkeypatch):
+    seen = []
+    monkeypatch.setattr(campaign.testbed, "http_json", lambda *args: seen.append(args[-1]) or {"count": 3})
+    counter = campaign.token_counter("host", 1, "model")
+    assert counter([{"role": "user", "content": "x"}]) == 3
+    assert seen[0]["chat_template_kwargs"] == {
+        "reasoning_effort": "low", "enable_thinking": True,
+    }
+
+
 def test_manifest_split_is_disjoint_deterministic_and_context_stratified():
     trace_rows = []
     for i in range(24):
