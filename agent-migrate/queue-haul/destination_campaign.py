@@ -9,8 +9,10 @@ import os
 import re
 import statistics
 import subprocess
+import time
 import urllib.parse
 import urllib.request
+from urllib.error import HTTPError
 from pathlib import Path
 
 import migration_testbed as testbed
@@ -246,8 +248,15 @@ def _read_table(path: Path) -> list[dict]:
 
 
 def _get_json(url: str, opener=urllib.request.urlopen) -> dict:
-    with opener(url) as response:
-        return json.load(response)
+    for attempt in range(4):
+        try:
+            with opener(url) as response:
+                return json.load(response)
+        except HTTPError as error:
+            if error.code != 429 or attempt == 3:
+                raise
+            time.sleep(min(10, int(error.headers.get("Retry-After", "10"))))
+    raise AssertionError("unreachable")
 
 
 def fetch_dataset(
@@ -261,8 +270,20 @@ def fetch_dataset(
     opener=urllib.request.urlopen,
 ) -> dict:
     encoded = urllib.parse.quote(dataset, safe="")
-    info_url = f"https://huggingface.co/api/datasets/{encoded}"
+    info_url = (
+        f"https://huggingface.co/api/datasets/{urllib.parse.quote(dataset, safe='/')}"
+    )
     revision = _get_json(info_url, opener)["sha"]
+    metadata_path = out.with_suffix(out.suffix + ".metadata.json")
+    if out.is_file() and metadata_path.is_file():
+        cached = json.loads(metadata_path.read_text())
+        if (
+            (cached.get("dataset"), cached.get("revision")) == (dataset, revision)
+            and (config is None or cached.get("config") == config)
+            and (split is None or cached.get("split") == split)
+            and cached.get("sha256") == hashlib.sha256(out.read_bytes()).hexdigest()
+        ):
+            return cached
     if config is None or split is None:
         choices = _get_json(
             f"https://datasets-server.huggingface.co/splits?dataset={encoded}", opener
@@ -292,12 +313,18 @@ def fetch_dataset(
                 round(i * max(0, total - 100) / max(1, sample_pages - 1))
                 for i in range(sample_pages)
             }
+            - {0},
+            key=lambda offset: object_hash([dataset, offset]),
         )
-        batches = [first if offset == 0 else page(offset)[0] for offset in offsets]
-        rows = sorted(
-            (row for batch in batches for row in batch if predicate(row)),
-            key=object_hash,
-        )[:target]
+        batches, rows = [first], [row for row in first if predicate(row)]
+        for offset in offsets:
+            if len(rows) >= target:
+                break
+            time.sleep(1)
+            batch, _ = page(offset)
+            batches.append(batch)
+            rows += [row for row in batch if predicate(row)]
+        rows = sorted(rows, key=object_hash)[:target]
         if len(rows) < target:
             raise ValueError(
                 f"need {target} eligible {dataset} rows, found {len(rows)}"
@@ -328,7 +355,101 @@ def fetch_dataset(
         "scanned_rows": scanned,
         "sha256": hashlib.sha256(out.read_bytes()).hexdigest(),
     }
-    write_json(out.with_suffix(out.suffix + ".metadata.json"), metadata)
+    write_json(metadata_path, metadata)
+    return metadata
+
+
+def stable_sample(batches, predicate, target: int) -> list[dict]:
+    selected = {}
+    for batch in batches:
+        rows = [
+            json.loads(json.dumps(row, default=str)) for row in batch if predicate(row)
+        ]
+        selected.update((object_hash(row), row) for row in rows)
+        selected = dict(sorted(selected.items())[:target])
+    if len(selected) < target:
+        raise ValueError(f"need {target} eligible rows, found {len(selected)}")
+    return list(selected.values())
+
+
+def fetch_parquet_sample(
+    dataset: str,
+    out: Path,
+    predicate,
+    target: int,
+    config: str | None = None,
+    split: str | None = None,
+    opener=urllib.request.urlopen,
+    run=subprocess.run,
+) -> dict:
+    info_url = (
+        f"https://huggingface.co/api/datasets/{urllib.parse.quote(dataset, safe='/')}"
+    )
+    revision = _get_json(info_url, opener)["sha"]
+    metadata_path = out.with_suffix(out.suffix + ".metadata.json")
+    if out.is_file() and metadata_path.is_file():
+        cached = json.loads(metadata_path.read_text())
+        if (cached.get("dataset"), cached.get("revision")) == (
+            dataset,
+            revision,
+        ) and cached.get("sha256") == hashlib.sha256(out.read_bytes()).hexdigest():
+            return cached
+    index = _get_json(
+        "https://datasets-server.huggingface.co/parquet?"
+        + urllib.parse.urlencode({"dataset": dataset}),
+        opener,
+    )["parquet_files"]
+    files = [
+        row
+        for row in index
+        if (config is None or row["config"] == config)
+        and (split is None or row["split"] == split)
+    ]
+    if not files:
+        raise ValueError(f"no matching Parquet shard for {dataset}")
+    shard = sorted(files, key=lambda row: row["filename"])[
+        int(revision[:16], 16) % len(files)
+    ]
+    parquet = out.with_suffix(".parquet")
+    parquet.parent.mkdir(parents=True, exist_ok=True)
+    if not parquet.is_file() or parquet.stat().st_size != int(shard["size"]):
+        run(
+            [
+                "curl",
+                "-fL",
+                "--retry",
+                "3",
+                "--continue-at",
+                "-",
+                "-o",
+                str(parquet),
+                shard["url"],
+            ],
+            check=True,
+        )
+    import pyarrow.parquet as pq
+
+    batches = (
+        batch.to_pylist()
+        for batch in pq.ParquetFile(parquet).iter_batches(batch_size=1000)
+    )
+    rows = stable_sample(batches, predicate, target)
+    if _get_json(info_url, opener)["sha"] != revision:
+        raise RuntimeError(f"{dataset} changed during download")
+    out.write_text(
+        "".join(json.dumps(row, separators=(",", ":")) + "\n" for row in rows)
+    )
+    metadata = {
+        "dataset": dataset,
+        "revision": revision,
+        "config": shard["config"],
+        "split": shard["split"],
+        "shard": shard["filename"],
+        "rows": len(rows),
+        "parquet_sha256": hashlib.sha256(parquet.read_bytes()).hexdigest(),
+        "sha256": hashlib.sha256(out.read_bytes()).hexdigest(),
+    }
+    write_json(metadata_path, metadata)
     return metadata
 
 
@@ -695,13 +816,13 @@ def main() -> None:
             args.trace_config,
             args.trace_split,
         )
-        fetch_dataset(
+        fetch_parquet_sample(
             "allenai/WildChat-1M",
             args.out_dir / "wildchat-coding.jsonl",
+            wildchat_coding,
+            48,
             args.wildchat_config,
             args.wildchat_split,
-            wildchat_coding,
-            96,
         )
         fetch_dataset(
             "nvidia/SWE-Hero-openhands-trajectories",
@@ -709,7 +830,7 @@ def main() -> None:
             args.nvidia_config,
             args.nvidia_split,
             nvidia_agentic,
-            96,
+            48,
         )
         return
     if args.command == "submit-next":

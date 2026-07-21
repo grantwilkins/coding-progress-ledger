@@ -8,8 +8,10 @@ import destination_campaign as campaign
 import pytest
 import io
 import json
+from datetime import datetime
 from pathlib import Path
 from types import SimpleNamespace
+from urllib.error import HTTPError
 
 
 def messages(secret, gap, tools=False):
@@ -195,7 +197,10 @@ def test_revision_stable_dataset_fetch_records_exact_source(tmp_path):
         ]
     )
 
-    def open_url(_url):
+    urls = []
+
+    def open_url(url):
+        urls.append(url)
         return io.BytesIO(json.dumps(next(replies)).encode())
 
     out = tmp_path / "rows.jsonl"
@@ -210,6 +215,35 @@ def test_revision_stable_dataset_fetch_records_exact_source(tmp_path):
         "scanned_rows": 1,
         "sha256": campaign.hashlib.sha256(out.read_bytes()).hexdigest(),
     }
+    assert urls[0] == "https://huggingface.co/api/datasets/owner/data"
+    assert (
+        campaign.fetch_dataset(
+            "owner/data", out, opener=lambda _: io.BytesIO(b'{"sha":"revision"}')
+        )
+        == metadata
+    )
+
+
+def test_dataset_fetch_retries_throttling_but_not_other_http_errors(monkeypatch):
+    replies = iter(
+        [HTTPError("url", 429, "slow", {"Retry-After": "0"}, None), {"ok": True}]
+    )
+
+    def open_url(_url):
+        reply = next(replies)
+        if isinstance(reply, Exception):
+            raise reply
+        return io.BytesIO(json.dumps(reply).encode())
+
+    monkeypatch.setattr(campaign.time, "sleep", lambda _: None)
+    assert campaign._get_json("url", open_url) == {"ok": True}
+    with pytest.raises(HTTPError):
+        campaign._get_json(
+            "url",
+            lambda _: (_ for _ in ()).throw(
+                HTTPError("url", 403, "forbidden", {}, None)
+            ),
+        )
 
 
 def test_wildchat_filter_requires_multiturn_high_precision_code_evidence():
@@ -248,6 +282,18 @@ def test_nvidia_filter_requires_permissive_license_and_agent_tool_loop():
     assert campaign.nvidia_agentic(row)
     assert not campaign.nvidia_agentic(dict(row, license="GPL-3.0"))
     assert not campaign.nvidia_agentic(dict(row, trajectory=row["trajectory"][:2]))
+
+
+def test_streaming_sample_is_permutation_invariant_and_exact():
+    rows = [
+        {"id": i, "eligible": i % 2 == 0, "time": datetime(2020, 1, 1)}
+        for i in range(20)
+    ]
+    first = campaign.stable_sample([rows[:10], rows[10:]], lambda r: r["eligible"], 4)
+    second = campaign.stable_sample([list(reversed(rows))], lambda r: r["eligible"], 4)
+    assert first == second and len(first) == 4 and isinstance(first[0]["time"], str)
+    with pytest.raises(ValueError, match="need 11 eligible"):
+        campaign.stable_sample([rows], lambda r: r["eligible"], 11)
 
 
 def test_checksum_manifest_detects_changed_artifact(tmp_path):

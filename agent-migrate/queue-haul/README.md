@@ -17,7 +17,7 @@ Download public trace rows before allocating GPUs, then submit checksum-pinned
 job files through the single parameterized Slurm script:
 
 ```bash
-uv run python queue-haul/destination_campaign.py fetch-traces --out-dir /scratch/$USER/qh-traces
+uv run --with pyarrow python queue-haul/destination_campaign.py fetch-traces --out-dir /scratch/$USER/qh-traces
 uv run python queue-haul/destination_campaign.py make-plan --out queue-haul/outputs/destination-plan.json
 uv run python queue-haul/destination_campaign.py submit-next --plan queue-haul/outputs/destination-plan.json --job-dir queue-haul/outputs/destination-jobs
 ```
