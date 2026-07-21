@@ -5,6 +5,7 @@ sample only one context region, or spend GPU time deriving quantities available 
 """
 
 import destination_campaign as campaign
+import pytest
 
 
 def messages(secret, gap, tools=False):
@@ -58,3 +59,52 @@ def test_manifest_split_is_disjoint_deterministic_and_context_stratified():
     for splits in first["splits"].values():
         assert [len(splits[k]) for k in ("fit", "tune", "validation")] == [12, 6, 6]
         assert len(set().union(*map(set, splits.values()))) == 24
+
+
+def test_campaign_budget_dependencies_and_loaded_grid_are_frozen():
+    plan = campaign.make_plan()
+    campaign.validate_plan(plan)
+    assert sum(job["hours"] for job in plan["jobs"]) == 72
+    assert plan["jobs"][-1]["conditional"]
+    assert plan["migration"]["rho"] == [0, .5, .8, .95, "emergency_inside"]
+    with pytest.raises(ValueError, match="budget"):
+        campaign.validate_plan(dict(plan, gpu_pair_hour_budget=71))
+
+
+def test_boundary_disagreement_hard_fails_without_four_of_five():
+    assert campaign.boundary_decision(["feasible"] * 3) == "feasible"
+    assert campaign.boundary_decision(["feasible"] * 4 + ["infeasible"]) == "feasible"
+    with pytest.raises(ValueError, match="four-of-five"):
+        campaign.boundary_decision(["feasible", "infeasible", "feasible"])
+
+
+def test_profile_reduction_is_conservative_in_the_safe_direction():
+    anchors = [
+        {"metric": metric, "context_tokens": context, "run_id": run,
+         "tokens_per_s": base + run}
+        for metric, base in (("prefill", 100), ("decode", 50))
+        for context in (1000, 2000) for run in range(3)
+    ]
+    service = [
+        {"mode": mode, "facet": 0, "run_id": run, "bound": base + run / 10}
+        for mode, base in (("normal", 1), ("emergency", 2), ("stable", 3)) for run in range(3)
+    ]
+    loaded = [
+        {"method": method, "rho": rho, "run_id": run, "slowdown": 1 + rho + run / 10,
+         "context_tokens": 16000 + 4000 * run, "bandwidth_bytes_per_s": 5e8 + 5e8 * run}
+        for method in ("replay", "kv_transfer") for rho in (0, .5, .95) for run in range(3)
+    ]
+    identity = {"compatibility": {"model": "m", "tokenizer": "t", "durable_log": "l", "kv_abi": "k"},
+                "kv_capacity_tokens": 1000, "workload_prefill_fraction_range": [0, 1], "provenance": "runs"}
+    result = campaign.reduce_profile(anchors, service, loaded, identity, [[1, 1]])["profiles"]
+    assert result["conservative"]["bounds"]["normal"] < result["central"]["bounds"]["normal"]
+    assert result["conservative"]["prefill"][1][0] < result["central"]["prefill"][1][0]
+    assert result["conservative"]["loaded"]["replay"]["slowdown"][0] > result["central"]["loaded"]["replay"]["slowdown"][0]
+
+
+def test_failed_gate_stops_the_dag():
+    good = {"image_sha256": campaign.IMAGE_SHA256, "gpu_count": 2, "same_session_cache_hit": True,
+            "cross_session_cache_hits": 0, "tokenizer_ok": True}
+    campaign.check_gate(good, "preflight")
+    with pytest.raises(ValueError, match="cross_session_cache_hits"):
+        campaign.check_gate(dict(good, cross_session_cache_hits=1), "preflight")

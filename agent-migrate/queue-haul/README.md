@@ -5,6 +5,10 @@ through the exact GPT-OSS tokenizer endpoint. It hard-fails unless each workload
 has disjoint 12/6/6 fit/tuning/final splits. `audit-evidence` lists the five GPU
 measurements; WAN/KV arithmetic, trace growth, horizons, and architecture sweeps
 remain offline derivations, while older hardware results are priors only.
+`make-plan` freezes five 12-hour shards plus one conditional repeat shard (72
+A100-pair-hours total); `check` stops dependent shards on failed preflight,
+frontier, loaded-migration, or validation gates. `reduce` emits paired central
+and conservative measured A100 profile fragments.
 
 Queue-Haul optionally accepts a versioned `DestinationArchitecture` from
 `destination.py`. It describes compatibility, context-conditioned service work,

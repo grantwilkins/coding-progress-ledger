@@ -1,12 +1,15 @@
 from __future__ import annotations
 
 import argparse
+import csv
+from dataclasses import asdict
 import hashlib
 import json
 import statistics
 from pathlib import Path
 
 import migration_testbed as testbed
+from destination_evaluation import reduce_bounds, reduce_loaded
 from migration_profiler import JOB_CLASSES, object_hash, write_json
 
 
@@ -26,6 +29,9 @@ EVIDENCE = {
     "old_service_results": "prior_only",
     "old_migration_results": "prior_only",
 }
+IMAGE_SHA256 = "50e98f65de09ebfe196f270c8b5c595636853646eb5536dca92f27bd45c084ab"
+SLO = {"normal": {"p90_ttft_s": 2, "p90_mean_tpot_s": .1},
+       "emergency": {"p90_ttft_s": 10, "p90_mean_tpot_s": .25}}
 
 
 def audit_evidence(inventory: dict = EVIDENCE) -> dict:
@@ -35,6 +41,101 @@ def audit_evidence(inventory: dict = EVIDENCE) -> dict:
         raise ValueError(f"unclassified evidence: {bad}")
     return {"schema": SCHEMA, "inventory": inventory,
             "gpu_measurements": sorted(k for k, v in inventory.items() if v == "measure")}
+
+
+def make_plan() -> dict:
+    jobs = [
+        (1, "anchors_coding_frontier", (), False),
+        (2, "interactive_agentic_frontier", ("preflight",), False),
+        (3, "mixed_frontier_fit", ("frontier_1", "frontier_2"), False),
+        (4, "loaded_migration", ("profile_frozen",), False),
+        (5, "independent_validation", ("loaded_valid",), False),
+        (6, "adaptive_repeats", ("repeat_needed",), True),
+    ]
+    return {
+        "schema": SCHEMA, "image_sha256": IMAGE_SHA256, "gpu_pair_hour_budget": 72,
+        "jobs": [{"shard": n, "name": name, "hours": 12, "requires": list(req), "conditional": conditional}
+                 for n, name, req, conditional in jobs],
+        "service": {
+            "directions": ["prefill", "decode", *JOB_CLASSES], "arrival": "open_loop_poisson",
+            "arrival_sensitivity": "gamma_cv2", "warmup_s": 60, "hold_min_s": 180,
+            "hold_max_s": 480, "completion_target": 200, "run_cap_s": 720,
+            "initial_repeats": 3, "disagreement_repeats": 5, "radial_resolution": .05,
+            "block_bootstrap_s": 30, "bootstrap_samples": 2000, "slos": SLO,
+        },
+        "migration": {
+            "methods": ["replay", "kv_transfer"], "rho": [0, .5, .8, .95, "emergency_inside"],
+            "emergency_inside_fraction": .95, "context_tokens": 16384,
+            "bandwidth_gbps": 10, "heldout_context_tokens": 24576,
+            "heldout_bandwidth_gbps": 5, "concurrency": 1, "repeats": 3,
+            "paired_controls": True,
+        },
+    }
+
+
+def validate_plan(plan: dict) -> None:
+    if plan.get("schema") != SCHEMA or sum(j["hours"] for j in plan["jobs"]) > plan["gpu_pair_hour_budget"]:
+        raise ValueError("campaign exceeds its A100-pair-hour budget")
+    if plan.get("image_sha256") != IMAGE_SHA256 or plan["migration"]["rho"][-1] != "emergency_inside":
+        raise ValueError("campaign runtime or emergency migration point changed")
+
+
+def boundary_decision(labels: list[str]) -> str:
+    if len(labels) not in (3, 5) or not set(labels) <= {"feasible", "infeasible"}:
+        raise ValueError("boundary decisions need three or five valid runs")
+    counts = {label: labels.count(label) for label in set(labels)}
+    if len(labels) == 3 and len(counts) == 1 or len(labels) == 5 and max(counts.values()) >= 4:
+        return max(counts, key=counts.get)
+    raise ValueError("boundary disagreement requires a four-of-five decision")
+
+
+def check_gate(report: dict, phase: str) -> None:
+    required = {
+        "preflight": {"image_sha256": IMAGE_SHA256, "gpu_count": 2, "same_session_cache_hit": True,
+                      "cross_session_cache_hits": 0, "tokenizer_ok": True},
+        "frontier": {"false_feasible": 0, "median_radial_error_max": .15, "profile_frozen": True},
+        "loaded": {"paired_controls": True, "queue_gate": True, "loaded_valid": True},
+        "validation": {"false_feasible": 0, "kv_correct": True, "continuation": True},
+    }[phase]
+    failed = [key for key, value in required.items() if report.get(key) != value]
+    if failed:
+        raise ValueError(f"{phase} gate failed: {', '.join(failed)}")
+
+
+def _rates(rows: list[dict], metric: str, reducer) -> tuple[tuple[float, ...], tuple[float, ...]]:
+    selected = [r for r in rows if r["metric"] == metric]
+    contexts = sorted({float(r["context_tokens"]) for r in selected})
+    if len(contexts) < 2 or any(len({r["run_id"] for r in selected if float(r["context_tokens"]) == x}) < 3 for x in contexts):
+        raise ValueError(f"{metric} anchors need three runs at two contexts")
+    return tuple(contexts), tuple(float(reducer([float(r["tokens_per_s"]) for r in selected
+                                                if float(r["context_tokens"]) == x])) for x in contexts)
+
+
+def reduce_profile(anchors: list[dict], service: list[dict], loaded: list[dict],
+                   identity: dict, normals: list[list[float]]) -> dict:
+    bounds, migration = reduce_bounds(service), reduce_loaded(loaded, identity["provenance"])
+    profiles = {}
+    for case, reducer in (("central", statistics.median), ("conservative", min)):
+        profiles[case] = {
+            "type_id": "gpt-oss-20b-a100-tp1", "compatibility": identity["compatibility"],
+            "prefill": _rates(anchors, "prefill", reducer), "decode": _rates(anchors, "decode", reducer),
+            "normals": normals, "bounds": bounds[case], "kv_capacity_tokens": identity["kv_capacity_tokens"],
+            "loaded": {method: asdict(value) for method, value in migration[case].items()},
+            "workload_prefill_fraction_range": identity["workload_prefill_fraction_range"],
+            "provenance": identity["provenance"], "synthetic": False,
+        }
+    if any(c > k for mode in SLO for c, k in zip(profiles["conservative"]["bounds"][mode],
+                                                  profiles["central"]["bounds"][mode])):
+        raise ValueError("conservative envelope exceeds central envelope")
+    return {"schema": SCHEMA, "profiles": profiles,
+            "input_sha256": object_hash([anchors, service, loaded, identity, normals])}
+
+
+def _read_table(path: Path) -> list[dict]:
+    if path.suffix == ".csv":
+        with path.open() as handle:
+            return list(csv.DictReader(handle))
+    return [json.loads(line) for line in path.read_text().splitlines() if line.strip()]
 
 
 def _text(value) -> str:
@@ -142,6 +243,12 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Destination measurement campaign")
     sub = parser.add_subparsers(dest="command", required=True)
     audit = sub.add_parser("audit-evidence"); audit.add_argument("--out", type=Path, required=True)
+    plan = sub.add_parser("make-plan"); plan.add_argument("--out", type=Path, required=True)
+    check = sub.add_parser("check"); check.add_argument("--report", type=Path, required=True); check.add_argument("--phase", required=True, choices=("preflight", "frontier", "loaded", "validation"))
+    reduce = sub.add_parser("reduce")
+    for name in ("anchors", "service", "loaded", "identity"):
+        reduce.add_argument(f"--{name}", type=Path, required=True)
+    reduce.add_argument("--normals", type=json.loads, required=True); reduce.add_argument("--out", type=Path, required=True)
     build = sub.add_parser("build-manifests")
     build.add_argument("--trace-commons", type=Path, required=True); build.add_argument("--nvidia", type=Path, required=True)
     build.add_argument("--trace-revision", required=True); build.add_argument("--nvidia-revision", required=True)
@@ -152,6 +259,13 @@ def main() -> None:
     if args.command == "audit-evidence":
         write_json(args.out, audit_evidence())
         return
+    if args.command == "make-plan":
+        plan = make_plan(); validate_plan(plan); write_json(args.out, plan); return
+    if args.command == "check":
+        check_gate(json.loads(args.report.read_text()), args.phase); return
+    if args.command == "reduce":
+        write_json(args.out, reduce_profile(_read_table(args.anchors), _read_table(args.service),
+                                            _read_table(args.loaded), json.loads(args.identity.read_text()), args.normals)); return
     counter = token_counter(args.host, args.port, args.model)
     load = lambda path: [json.loads(line) for line in path.read_text().splitlines() if line.strip()]
     rows = normalize_traces(load(args.trace_commons), "trace-commons/agent-traces", args.trace_revision, counter)
