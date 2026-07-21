@@ -5,7 +5,11 @@ import csv
 from dataclasses import asdict
 import hashlib
 import json
+import os
 import statistics
+import subprocess
+import urllib.parse
+import urllib.request
 from pathlib import Path
 
 import migration_testbed as testbed
@@ -45,17 +49,18 @@ def audit_evidence(inventory: dict = EVIDENCE) -> dict:
 
 def make_plan() -> dict:
     jobs = [
-        (1, "anchors_coding_frontier", (), False),
-        (2, "interactive_agentic_frontier", ("preflight",), False),
-        (3, "mixed_frontier_fit", ("frontier_1", "frontier_2"), False),
-        (4, "loaded_migration", ("profile_frozen",), False),
-        (5, "independent_validation", ("loaded_valid",), False),
-        (6, "adaptive_repeats", ("repeat_needed",), True),
+        (1, "anchors_coding_frontier", (), (), False),
+        (2, "interactive_agentic_frontier", ("preflight",), (1,), False),
+        (3, "mixed_frontier_fit", ("frontier_1", "frontier_2"), (1, 2), False),
+        (4, "loaded_migration", ("profile_frozen",), (3,), False),
+        (5, "independent_validation", ("loaded_valid",), (4,), False),
+        (6, "adaptive_repeats", ("repeat_needed",), (5,), True),
     ]
     return {
         "schema": SCHEMA, "image_sha256": IMAGE_SHA256, "gpu_pair_hour_budget": 72,
-        "jobs": [{"shard": n, "name": name, "hours": 12, "requires": list(req), "conditional": conditional}
-                 for n, name, req, conditional in jobs],
+        "jobs": [{"shard": n, "name": name, "hours": 12, "requires": list(req),
+                  "after_shards": list(after), "conditional": conditional}
+                 for n, name, req, after, conditional in jobs],
         "service": {
             "directions": ["prefill", "decode", *JOB_CLASSES], "arrival": "open_loop_poisson",
             "arrival_sensitivity": "gamma_cv2", "warmup_s": 60, "hold_min_s": 180,
@@ -136,6 +141,92 @@ def _read_table(path: Path) -> list[dict]:
         with path.open() as handle:
             return list(csv.DictReader(handle))
     return [json.loads(line) for line in path.read_text().splitlines() if line.strip()]
+
+
+def _get_json(url: str, opener=urllib.request.urlopen) -> dict:
+    with opener(url) as response:
+        return json.load(response)
+
+
+def fetch_dataset(dataset: str, out: Path, config: str | None = None,
+                  split: str | None = None, opener=urllib.request.urlopen) -> dict:
+    encoded = urllib.parse.quote(dataset, safe="")
+    info_url = f"https://huggingface.co/api/datasets/{encoded}"
+    revision = _get_json(info_url, opener)["sha"]
+    if config is None or split is None:
+        choices = _get_json(f"https://datasets-server.huggingface.co/splits?dataset={encoded}", opener)["splits"]
+        choice = next((x for x in choices if x["split"] == "train"), choices[0])
+        config, split = config or choice["config"], split or choice["split"]
+    rows, offset, total = [], 0, None
+    while total is None or offset < total:
+        query = urllib.parse.urlencode({"dataset": dataset, "config": config, "split": split,
+                                        "offset": offset, "length": 100})
+        page = _get_json(f"https://datasets-server.huggingface.co/rows?{query}", opener)
+        batch, total = [x["row"] for x in page["rows"]], int(page["num_rows_total"])
+        if not batch and offset < total:
+            raise RuntimeError(f"dataset server stopped at {offset}/{total}")
+        rows += batch; offset += len(batch)
+    if _get_json(info_url, opener)["sha"] != revision:
+        raise RuntimeError(f"{dataset} changed during download")
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text("".join(json.dumps(row, separators=(",", ":")) + "\n" for row in rows))
+    metadata = {"dataset": dataset, "revision": revision, "config": config, "split": split,
+                "rows": len(rows), "sha256": hashlib.sha256(out.read_bytes()).hexdigest()}
+    write_json(out.with_suffix(out.suffix + ".metadata.json"), metadata)
+    return metadata
+
+
+def checksums(root: Path) -> dict[str, str]:
+    return {str(path.relative_to(root)): hashlib.sha256(path.read_bytes()).hexdigest()
+            for path in sorted(root.rglob("*")) if path.is_file() and path.name != "SHA256SUMS"}
+
+
+def write_checksums(root: Path) -> Path:
+    path = root / "SHA256SUMS"
+    path.write_text("".join(f"{digest}  {name}\n" for name, digest in checksums(root).items()))
+    return path
+
+
+def verify_checksums(root: Path) -> None:
+    manifest = root / "SHA256SUMS"
+    if not manifest.exists():
+        raise ValueError("missing SHA256SUMS")
+    expected = {name: digest for digest, name in (line.strip().split("  ", 1)
+                for line in manifest.read_text().splitlines() if line.strip())}
+    actual = checksums(root)
+    if expected != actual:
+        raise ValueError("artifact checksum mismatch")
+
+
+def submit(plan_path: Path, sbatch: Path, job_dir: Path, include_reserve: bool = False,
+           run=subprocess.run) -> dict[int, str]:
+    plan = json.loads(plan_path.read_text()); validate_plan(plan)
+    ids = {}
+    for job in plan["jobs"]:
+        if job["conditional"] and not include_reserve:
+            continue
+        job_file = (job_dir / f"shard-{job['shard']}.sh").resolve()
+        if not job_file.is_file() or not job_file.with_suffix(".sh.sha256").is_file():
+            raise ValueError(f"missing immutable job file for shard {job['shard']}")
+        expected = job_file.with_suffix(".sh.sha256").read_text().split()[0]
+        if hashlib.sha256(job_file.read_bytes()).hexdigest() != expected:
+            raise ValueError(f"job file checksum changed for shard {job['shard']}")
+        command = ["sbatch", "--parsable"]
+        deps = [ids[n] for n in job["after_shards"]]
+        if deps:
+            command += [f"--dependency=afterok:{':'.join(deps)}"]
+        command += [f"--export=ALL,QH_SHARD={job['shard']},QH_JOB_FILE={job_file},QH_CAMPAIGN_PLAN={plan_path.resolve()}", str(sbatch)]
+        result = run(command, check=True, capture_output=True, text=True)
+        ids[job["shard"]] = result.stdout.strip().split(";")[0]
+    return ids
+
+
+def sync(remote: str, remote_root: str, local: Path, run=subprocess.run) -> None:
+    local.mkdir(parents=True, exist_ok=True)
+    source = f"{remote}:{remote_root.rstrip('/')}/"
+    run(["rsync", "-a", "--partial", "--checksum", source + "SHA256SUMS", str(local / "SHA256SUMS")], check=True)
+    run(["rsync", "-a", "--partial", "--checksum", source, str(local) + "/"], check=True)
+    verify_checksums(local)
 
 
 def _text(value) -> str:
@@ -244,6 +335,13 @@ def main() -> None:
     sub = parser.add_subparsers(dest="command", required=True)
     audit = sub.add_parser("audit-evidence"); audit.add_argument("--out", type=Path, required=True)
     plan = sub.add_parser("make-plan"); plan.add_argument("--out", type=Path, required=True)
+    fetch = sub.add_parser("fetch-traces"); fetch.add_argument("--out-dir", type=Path, required=True)
+    fetch.add_argument("--trace-config"); fetch.add_argument("--trace-split"); fetch.add_argument("--nvidia-config"); fetch.add_argument("--nvidia-split")
+    submit_parser = sub.add_parser("submit-next"); submit_parser.add_argument("--plan", type=Path, required=True)
+    submit_parser.add_argument("--sbatch", type=Path, default=Path(__file__).with_name("destination_campaign.sbatch")); submit_parser.add_argument("--job-dir", type=Path, required=True)
+    submit_parser.add_argument("--include-reserve", action="store_true")
+    sync_parser = sub.add_parser("sync"); sync_parser.add_argument("--remote", default=os.environ.get("QH_REMOTE")); sync_parser.add_argument("--remote-root", default=os.environ.get("QH_REMOTE_ROOT")); sync_parser.add_argument("--local", type=Path, required=True)
+    checksum = sub.add_parser("checksums"); checksum.add_argument("--root", type=Path, required=True)
     check = sub.add_parser("check"); check.add_argument("--report", type=Path, required=True); check.add_argument("--phase", required=True, choices=("preflight", "frontier", "loaded", "validation"))
     reduce = sub.add_parser("reduce")
     for name in ("anchors", "service", "loaded", "identity"):
@@ -261,6 +359,16 @@ def main() -> None:
         return
     if args.command == "make-plan":
         plan = make_plan(); validate_plan(plan); write_json(args.out, plan); return
+    if args.command == "fetch-traces":
+        fetch_dataset("trace-commons/agent-traces", args.out_dir / "trace-commons.jsonl", args.trace_config, args.trace_split)
+        fetch_dataset("nvidia/SWE-Hero-openhands-trajectories", args.out_dir / "nvidia-swe-hero.jsonl", args.nvidia_config, args.nvidia_split); return
+    if args.command == "submit-next":
+        print(json.dumps(submit(args.plan, args.sbatch, args.job_dir, args.include_reserve), sort_keys=True)); return
+    if args.command == "sync":
+        if not args.remote or not args.remote_root: raise ValueError("sync needs QH_REMOTE and QH_REMOTE_ROOT")
+        sync(args.remote, args.remote_root, args.local); return
+    if args.command == "checksums":
+        write_checksums(args.root); return
     if args.command == "check":
         check_gate(json.loads(args.report.read_text()), args.phase); return
     if args.command == "reduce":

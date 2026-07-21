@@ -6,6 +6,10 @@ sample only one context region, or spend GPU time deriving quantities available 
 
 import destination_campaign as campaign
 import pytest
+import io
+import json
+from pathlib import Path
+from types import SimpleNamespace
 
 
 def messages(secret, gap, tools=False):
@@ -108,3 +112,39 @@ def test_failed_gate_stops_the_dag():
     campaign.check_gate(good, "preflight")
     with pytest.raises(ValueError, match="cross_session_cache_hits"):
         campaign.check_gate(dict(good, cross_session_cache_hits=1), "preflight")
+
+
+def test_revision_stable_dataset_fetch_records_exact_source(tmp_path):
+    replies = iter([
+        {"sha": "revision"}, {"splits": [{"config": "default", "split": "train"}]},
+        {"rows": [{"row": {"id": 1}}], "num_rows_total": 1}, {"sha": "revision"},
+    ])
+    def open_url(_url):
+        return io.BytesIO(json.dumps(next(replies)).encode())
+    out = tmp_path / "rows.jsonl"
+    metadata = campaign.fetch_dataset("owner/data", out, opener=open_url)
+    assert metadata == {"dataset": "owner/data", "revision": "revision", "config": "default",
+                        "split": "train", "rows": 1, "sha256": campaign.hashlib.sha256(out.read_bytes()).hexdigest()}
+
+
+def test_checksum_manifest_detects_changed_artifact(tmp_path):
+    (tmp_path / "raw.jsonl").write_text("one\n")
+    campaign.write_checksums(tmp_path); campaign.verify_checksums(tmp_path)
+    (tmp_path / "raw.jsonl").write_text("two\n")
+    with pytest.raises(ValueError, match="checksum"):
+        campaign.verify_checksums(tmp_path)
+
+
+def test_slurm_submission_uses_afterok_and_skips_reserve(tmp_path):
+    plan = tmp_path / "plan.json"; plan.write_text(json.dumps(campaign.make_plan()))
+    job_dir = tmp_path / "jobs"; job_dir.mkdir()
+    for shard in range(1, 7):
+        job = job_dir / f"shard-{shard}.sh"; job.write_text("true\n")
+        job.with_suffix(".sh.sha256").write_text(campaign.hashlib.sha256(job.read_bytes()).hexdigest() + "\n")
+    calls = []
+    def run(command, **_kwargs):
+        calls.append(command); return SimpleNamespace(stdout=f"{100 + len(calls)};cluster\n")
+    ids = campaign.submit(plan, Path("campaign.sbatch"), job_dir, run=run)
+    assert ids == {1: "101", 2: "102", 3: "103", 4: "104", 5: "105"}
+    assert not any("QH_SHARD=6" in arg for call in calls for arg in call)
+    assert "--dependency=afterok:101:102" in calls[2]

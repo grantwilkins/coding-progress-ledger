@@ -10,6 +10,21 @@ A100-pair-hours total); `check` stops dependent shards on failed preflight,
 frontier, loaded-migration, or validation gates. `reduce` emits paired central
 and conservative measured A100 profile fragments.
 
+Download public trace rows before allocating GPUs, then submit checksum-pinned
+job files through the single parameterized Slurm script:
+
+```bash
+uv run python queue-haul/destination_campaign.py fetch-traces --out-dir /scratch/$USER/qh-traces
+uv run python queue-haul/destination_campaign.py make-plan --out queue-haul/outputs/destination-plan.json
+uv run python queue-haul/destination_campaign.py submit-next --plan queue-haul/outputs/destination-plan.json --job-dir queue-haul/outputs/destination-jobs
+```
+
+Each `shard-N.sh` needs a sibling `shard-N.sh.sha256`; shards 1–5 submit with
+fail-fast `afterok` dependencies and shard 6 is submitted only with
+`--include-reserve`. Write `SHA256SUMS` remotely, then retrieve full raw and
+reduced artifacts with `QH_REMOTE`, `QH_REMOTE_ROOT`, and `sync`; rsync is
+resumable and every received file is verified.
+
 Queue-Haul optionally accepts a versioned `DestinationArchitecture` from
 `destination.py`. It describes compatibility, context-conditioned service work,
 nested normal/emergency/stable envelopes, per-replica baseline service and KV
