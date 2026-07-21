@@ -1239,7 +1239,18 @@ def should_sleep(scenario: dict, full_drain: bool) -> bool:
     return full_drain and scenario.get("final_state", "sleep") == "sleep"
 
 
-def run_scenario(stack: b.Stack, cfg: b.Config, manifest: dict, scenario: dict, root: Path, run_id: str) -> dict:
+def with_destination_load(load, action):
+    if load is None:
+        return action()
+    load.start(); load.wait_ready()
+    try:
+        return action()
+    finally:
+        load.close()
+
+
+def run_scenario(stack: b.Stack, cfg: b.Config, manifest: dict, scenario: dict,
+                 root: Path, run_id: str, destination_load=None) -> dict:
     root.mkdir(parents=True, exist_ok=True)
     write_json(root / "scenario.json", scenario)
     restart_proxy(stack, cfg, root, scenario["bandwidth_mbps"])
@@ -1294,15 +1305,17 @@ def run_scenario(stack: b.Stack, cfg: b.Config, manifest: dict, scenario: dict, 
             scenario.get("copy_policy", "initial_final"), serving_concurrency,
             activity_epoch_ns,
         )
-        if scenario["kind"] == "migration":
-            migration_results = MigrationController(runtime, move_concurrency).run(moves)
-            if any(not row.succeeded for row in migration_results):
-                raise RuntimeError("; ".join(row.error for row in migration_results if row.error))
-        else:
-            migration_results = []
+        def action():
+            if scenario["kind"] == "migration":
+                rows = MigrationController(runtime, move_concurrency).run(moves)
+                if any(not row.succeeded for row in rows):
+                    raise RuntimeError("; ".join(row.error for row in rows if row.error))
+                return rows
             if schedule:
                 with ThreadPoolExecutor(max_workers=serving_concurrency) as pool:
                     list(pool.map(runtime.run_activities, sessions))
+            return []
+        migration_results = with_destination_load(destination_load, action)
         full_drain = scenario["kind"] == "migration" and set(sessions) == {row["id"] for row in manifest["sessions"]} and all(row.succeeded for row in migration_results)
         sleep_times = None
         final_state = scenario.get("final_state", "sleep")
@@ -1348,6 +1361,7 @@ def run_scenario(stack: b.Stack, cfg: b.Config, manifest: dict, scenario: dict, 
             "full_drain": full_drain, "final_state": final_state,
             "source_sleep_ns": sleep_times,
             "migrations": [asdict(row) for row in migration_results], "activities": activities, "continuations": continuations,
+            "destination_load": destination_load.summary() if destination_load else None,
             "session_cache_keys": {
                 session_id: sorted(session.cache_keys)
                 for session_id, session in sessions.items()

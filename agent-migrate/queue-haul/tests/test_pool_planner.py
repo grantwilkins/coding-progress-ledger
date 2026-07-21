@@ -21,7 +21,8 @@ from destination import (DESTINATION_SCHEMA, CompatibilityFingerprint, ContextRa
                          DestinationArchitecture, DestinationPool, DestinationReplica,
                          DestinationType, LoadedCoefficients)
 from planner import plan
-from pool_planner import candidate_table, exact_replica_assignment, validate_destination_execution
+from pool_planner import (_mode_boundary_rho, candidate_table, exact_replica_assignment,
+                          validate_destination_execution)
 from power_model import ExpectedPower
 from simulate import PlannedMove, SimSession
 from test_execution_simulator import model
@@ -34,7 +35,7 @@ FP = CompatibilityFingerprint("m", "t", "log", "kv")
 def architecture(*, normal=.3, emergency=.5, stable=1, baselines=((0, 0), (0, 0)),
                  kv=1000, methods=("replay", "kv_transfer"), compatibility=FP,
                  residency=None, routes=(("wan",), ("wan",))):
-    loaded = LoadedCoefficients((0, 1), (1, 1), (1, 1000), (1, 1000), "hand")
+    loaded = LoadedCoefficients((0, 2), (1, 1), (1, 1000), (1, 1000), "hand")
     q = DestinationType(
         "q", compatibility, ContextRate((1, 1000), (100, 100)),
         ContextRate((1, 1000), (100, 100)), ((1, 1),),
@@ -46,6 +47,12 @@ def architecture(*, normal=.3, emergency=.5, stable=1, baselines=((0, 0), (0, 0)
         f"r{i}", route, methods,
     ) for i, (baseline, route) in enumerate(zip(baselines, routes)))
     return DestinationArchitecture(DESTINATION_SCHEMA, FP, (q,), pools, residency)
+
+
+def test_loaded_lookup_boundary_tracks_selected_admission_mode():
+    q = architecture(normal=.4, emergency=.6, stable=.8).types[0]
+    assert _mode_boundary_rho(q, "normal") == 1
+    assert _mode_boundary_rho(q, "emergency") == pytest.approx(1.5)
 
 
 def test_absent_architecture_is_exact_legacy_adapter(tmp_path):

@@ -33,6 +33,7 @@ def test_schedule_and_session_tokens_are_deterministic_but_isolated():
     first, forced = a.prompt(0)
     a.commit(first, forced)
     assert a.prompt(1)[0][:4] == first[:4]
+    assert len(a.prompt(1)[0]) == 6
     assert b.prompt(0)[0][:4] != first[:4]
 
 
@@ -78,3 +79,18 @@ def test_adaptive_search_brackets_each_nested_boundary():
     for mode, bound in boundaries.items():
         assert found[mode][0] <= bound <= found[mode][1]
         assert found[mode][1] - found[mode][0] <= .05 * found[mode][1]
+
+
+def test_rho_uses_token_counter_differences_and_requires_thirty_seconds():
+    rows = [
+        {"monotonic_ns": 0, "vllm:prompt_tokens_total": 10,
+         "vllm:generation_tokens_total": 20},
+        {"monotonic_ns": 40_000_000_000, "vllm:prompt_tokens_total": 50,
+         "vllm:generation_tokens_total": 60},
+    ]
+    assert runner.measured_rho(rows, 2, 2) == 1
+    assert runner.require_rho(rows, 1.04, 2, 2) == 1
+    with pytest.raises(RuntimeError, match="misses"):
+        runner.require_rho(rows, 1.051, 2, 2)
+    with pytest.raises(ValueError, match="thirty"):
+        runner.measured_rho([rows[0], {**rows[1], "monotonic_ns": 29_000_000_000}], 2, 2)

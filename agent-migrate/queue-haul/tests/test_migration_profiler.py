@@ -215,6 +215,19 @@ def test_awake_drain_never_requests_sleep():
     assert not c.should_sleep({"final_state": "sleep"}, False)
 
 
+def test_destination_load_gates_action_and_always_closes():
+    events = []
+    class Load:
+        def start(self): events.append("start")
+        def wait_ready(self): events.append("ready")
+        def close(self): events.append("close")
+    assert c.with_destination_load(Load(), lambda: events.append("action") or 7) == 7
+    assert events == ["start", "ready", "action", "close"]
+    with pytest.raises(RuntimeError):
+        c.with_destination_load(Load(), lambda: (_ for _ in ()).throw(RuntimeError()))
+    assert events[-1] == "close"
+
+
 def test_summary_only_adds_tail_and_bootstrap_statistics_when_supported():
     assert set(c.summary(list(range(9)))) == {"n", "median", "q25", "q75"}
     assert "median_ci_low" in c.summary(list(range(10)))

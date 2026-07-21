@@ -84,6 +84,10 @@ def _pool_rho(q, pool, work):
                      (len(pool.replicas) * np.asarray(q.bounds["normal"]))))
 
 
+def _mode_boundary_rho(q, mode):
+    return float(max(np.asarray(q.bounds[mode]) / np.asarray(q.bounds["normal"])))
+
+
 def candidate_table(scenario: ExecutionScenario, profile, architecture: DestinationArchitecture,
                     mode: str, power: ExpectedPower) -> CandidateTable:
     if mode not in {"normal", "emergency"}:
@@ -137,7 +141,7 @@ def candidate_table(scenario: ExecutionScenario, profile, architecture: Destinat
                 except ValueError:
                     continue
                 slowdown = q.loaded[method].worst(
-                    rho, min(1.0, q.loaded[method].rho[-1]),
+                    rho, _mode_boundary_rho(q, mode),
                     session.context_tokens, bandwidth,
                 )
                 duration *= slowdown

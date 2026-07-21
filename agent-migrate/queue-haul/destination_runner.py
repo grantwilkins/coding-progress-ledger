@@ -70,7 +70,7 @@ class Session:
                                      self.vocabulary, self.seed)
         forced = deterministic_tokens(f"{self.session_id}:{index}:output", 1,
                                       self.vocabulary, self.seed)[0]
-        return self.history + added, forced
+        return self.history[:self.prefix_tokens] + added, forced
 
     def commit(self, prompt: list[int], forced: int) -> None:
         self.history = prompt + [forced] * self.output_tokens
@@ -171,11 +171,98 @@ def drive(host: str, port: int, model: str, sessions: list[Session], rate: float
         return list(pool.map(one, range(count)))
 
 
+def prewarm(host: str, port: int, model: str, sessions: list[Session], timeout_s=720) -> list[dict]:
+    rows = []
+    for session in sessions:
+        prompt, forced = session.prompt(-1)
+        row = _completion(host, port, model, prompt[:session.prefix_tokens], 1, forced, timeout_s)
+        if row["status"] != 200:
+            raise RuntimeError(f"failed to prewarm {session.session_id}")
+        rows.append(row)
+    return rows
+
+
+class DestinationLoad:
+    def __init__(self, host: str, port: int, model: str, sessions: list[Session],
+                 target_rho: float, prefill_rate: float, decode_rate: float,
+                 root: Path, seed: int, chunk_s: float = 15):
+        work = np.mean([s.append_tokens / prefill_rate + s.output_tokens / decode_rate
+                        for s in sessions])
+        if target_rho <= 0 or work <= 0:
+            raise ValueError("destination load needs positive target and work")
+        self.host, self.port, self.model, self.sessions = host, port, model, sessions
+        self.target, self.prefill_rate, self.decode_rate = target_rho, prefill_rate, decode_rate
+        self.root, self.seed, self.chunk_s = root, seed, chunk_s
+        self.rate, self.stop, self.rows = target_rho / work, threading.Event(), []
+        self.sampler = MetricsSampler(host, port, root / "engine.csv")
+        self.thread, self.failure = threading.Thread(target=self._run, daemon=True), None
+        self.achieved = None
+
+    def start(self):
+        self.root.mkdir(parents=True, exist_ok=True)
+        prewarm(self.host, self.port, self.model, self.sessions)
+        self.sampler.start(); self.thread.start()
+
+    def _run(self):
+        try:
+            index = 0
+            while not self.stop.is_set():
+                count = max(1, math.ceil(self.rate * self.chunk_s))
+                self.rows += drive(self.host, self.port, self.model, self.sessions,
+                                   self.rate, count, self.seed + index)
+                index += 1
+        except Exception as exc:
+            self.failure = exc
+
+    def wait_ready(self):
+        deadline = time.monotonic() + 90
+        while time.monotonic() < deadline and not self.failure:
+            if len(self.sampler.rows) > 1 and (self.sampler.rows[-1]["monotonic_ns"] -
+                                               self.sampler.rows[0]["monotonic_ns"]) >= 30e9:
+                self.achieved = require_rho(self.sampler.rows, self.target,
+                                            self.prefill_rate, self.decode_rate)
+                return
+            time.sleep(.25)
+        raise RuntimeError("destination foreground did not reach its rho gate") from self.failure
+
+    def close(self):
+        self.stop.set(); self.thread.join(self.chunk_s + 10); self.sampler.close()
+        if self.thread.is_alive() or self.failure:
+            raise RuntimeError("destination foreground failed") from self.failure
+        (self.root / "requests.json").write_text(json.dumps(self.rows, indent=2) + "\n")
+
+    def summary(self):
+        return {"target_rho": self.target, "achieved_rho": self.achieved,
+                "request_count": len(self.rows),
+                "queue_at_start": self.sampler.rows[0].get("vllm:num_requests_waiting") if self.sampler.rows else None}
+
+
 def offered_work(rows: list[dict], duration_s: float) -> tuple[float, float]:
     if duration_s <= 0:
         raise ValueError("measurement duration must be positive")
     return (sum(int(r["input_tokens"]) for r in rows) / duration_s,
             sum(int(r["planned_output_tokens"]) for r in rows) / duration_s)
+
+
+def measured_rho(rows: list[dict], prefill_rate: float, decode_rate: float,
+                 normal_bound: float = 1) -> float:
+    if len(rows) < 2 or min(prefill_rate, decode_rate, normal_bound) <= 0:
+        raise ValueError("rho needs valid sampled rates and capacity")
+    first, last = rows[0], rows[-1]
+    seconds = (int(last["monotonic_ns"]) - int(first["monotonic_ns"])) / 1e9
+    if seconds < 30:
+        raise ValueError("rho gate needs thirty seconds of destination state")
+    prompt = float(last["vllm:prompt_tokens_total"] - first["vllm:prompt_tokens_total"]) / seconds
+    decode = float(last["vllm:generation_tokens_total"] - first["vllm:generation_tokens_total"]) / seconds
+    return (prompt / prefill_rate + decode / decode_rate) / normal_bound
+
+
+def require_rho(rows: list[dict], target: float, prefill_rate: float,
+                decode_rate: float, tolerance: float = .05) -> float:
+    achieved = measured_rho(rows, prefill_rate, decode_rate)
+    if abs(achieved - target) > tolerance:
+        raise RuntimeError(f"destination rho {achieved:.3f} misses target {target:.3f}")
+    return achieved
 
 
 def anchor_gate(rows: list[dict], expected: dict[tuple[str, int], float], limit: float = .15) -> None:
