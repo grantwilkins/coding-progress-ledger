@@ -12,6 +12,11 @@ envelope validation. Results report admission mode, shortfall/failure, packing
 repairs, and predicted migration makespan; `target_unmet` is valid best effort,
 not successful curtailment.
 
+`destination_evaluation.py` reduces three-or-more independent runs into central
+and conservative envelope/migration inputs and provides the fixed 36-cell
+`rho × H × pool-count` grid, exact facet headroom, integer replica allocation,
+and paired scalar/LP/greedy sweep records.
+
 Queue-Haul models and measures session migration under a local source-site
 power limit. The active path is:
 

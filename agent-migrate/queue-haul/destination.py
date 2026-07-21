@@ -167,8 +167,8 @@ class DestinationArchitecture:
     @classmethod
     def load(cls, path: str | Path) -> "DestinationArchitecture":
         raw = json.loads(Path(path).read_text())
-        fingerprint = lambda x: CompatibilityFingerprint(**x)
-        rate = lambda x: ContextRate(tuple(x[0]), tuple(x[1]))
+        def fingerprint(value): return CompatibilityFingerprint(**value)
+        def rate(value): return ContextRate(tuple(value[0]), tuple(value[1]))
         types = []
         for item in raw["types"]:
             loaded = {
