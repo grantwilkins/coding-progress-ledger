@@ -63,13 +63,14 @@ Source-instance time covers the complete unloaded move because a source move
 slot remains occupied until commit.
 
 For initial source load \(L_s\), the linear power coefficient for session \(j\)
-is its measured one-session reduction:
+is its measured one-session reduction (in watts; `w` avoids colliding with the
+decode token rate `g` used in destination demand):
 
 \[
-g_j=P(L_s)-P(L_s-\ell_j).
+w_j=P(L_s)-P(L_s-\ell_j).
 \]
 
-Since \(P\) is nondecreasing and concave, \(\sum_j g_jx_j\) is a conservative
+Since \(P\) is nondecreasing and concave, \(\sum_j w_jx_j\) is a conservative
 power-reduction estimate: removing several sessions from one instance saves at
 least the sum of their initial marginal reductions. With requested reduction
 \(\Delta P\), the restored Queue-Haul program is:
@@ -79,7 +80,7 @@ least the sum of their initial marginal reductions. With requested reduction
 \operatorname{minimize}\quad
 &\sum_{j,a}c_j^a x_j^a\\
 \operatorname{subject\ to}\quad
-&\sum_j g_j(x_j^R+x_j^K)\geq\Delta P.
+&\sum_j w_j(x_j^R+x_j^K)\geq\Delta P.
 \end{aligned}
 \]
 
