@@ -43,6 +43,7 @@ class CandidateTable:
     incidence: csr_matrix
     resources: csr_matrix
     resource_names: tuple[str, ...]
+    migration_horizon_s: float
 
 
 def _baseline(scenario: ExecutionScenario, architecture: DestinationArchitecture,
@@ -88,6 +89,8 @@ def candidate_table(scenario: ExecutionScenario, profile, architecture: Destinat
     if mode not in {"normal", "emergency"}:
         raise ValueError("admission mode must be normal or emergency")
     _validate_topology(scenario, architecture)
+    if architecture.source_compatibility.model != profile.model:
+        raise ValueError("source model does not match destination architecture")
     sessions = tuple(s for s in _local_sessions(scenario) if s.state == "active")
     migration_horizon = scenario.deadline_s - scenario.controller_delay_s - profile.power_window_s
     residency_horizon = architecture.residency_horizon_s
@@ -95,11 +98,14 @@ def candidate_table(scenario: ExecutionScenario, profile, architecture: Destinat
         if residency_horizon is None else residency_horizon
     if migration_horizon <= 0:
         return CandidateTable(sessions, (), csr_matrix((len(sessions), 0)),
-                              csr_matrix((0, 0)), ())
+                              csr_matrix((0, 0)), (), migration_horizon)
     work0, kv0 = _baseline(scenario, architecture, residency_horizon)
     links = {link.link_id: link.bytes_per_s for link in scenario.links}
     candidates = []
     for j, session in enumerate(sessions):
+        profile.case("central").replay.rate(
+            _resident_tokens(session, migration_horizon), 1,
+        )
         gain = power.marginal(session.session_id)
         for p, pool in enumerate(architecture.pools):
             q = architecture.type_by_id[pool.type_id]
@@ -182,7 +188,7 @@ def candidate_table(scenario: ExecutionScenario, profile, architecture: Destinat
                 cc.append(j)
     return CandidateTable(sessions, candidates, incidence,
                           csr_matrix((data, (rr, cc)), shape=(len(rows), len(candidates))),
-                          tuple(names))
+                          tuple(names), migration_horizon)
 
 
 def _allowed(selected, candidate, cuts):
@@ -275,6 +281,7 @@ def _pack(table, selected, architecture, scenario, mode):
     horizon = architecture.residency_horizon_s
     horizon = scenario.end_s - scenario.controller_delay_s if horizon is None else horizon
     work, kv = _baseline(scenario, architecture, horizon)
+    migration = {r.replica_id: 0.0 for p in architecture.pools for r in p.replicas}
     assignment = {}
     for p, pool in enumerate(architecture.pools):
         q, normals, bounds = architecture.type_by_id[pool.type_id], np.asarray(
@@ -284,18 +291,23 @@ def _pack(table, selected, architecture, scenario, mode):
         members.sort(key=lambda i: (-max(
             *(normals @ table.candidates[i].service_work / bounds),
             table.candidates[i].kv_tokens / q.kv_capacity_tokens,
+            table.candidates[i].duration_s / table.migration_horizon_s,
         ), table.sessions[table.candidates[i].session].session_id, i))
         for i in members:
             c, choices = table.candidates[i], []
             for r, replica in enumerate(pool.replicas):
                 next_work, next_kv = work[replica.replica_id] + c.service_work, kv[replica.replica_id] + c.kv_tokens
-                pressure = max(*(normals @ next_work / bounds), next_kv / q.kv_capacity_tokens)
+                next_migration = migration[replica.replica_id] + c.duration_s
+                pressure = max(*(normals @ next_work / bounds),
+                               next_kv / q.kv_capacity_tokens,
+                               next_migration / table.migration_horizon_s)
                 if pressure <= 1 + 1e-9:
-                    choices.append((pressure, r, next_work, next_kv))
+                    choices.append((pressure, r, next_work, next_kv, next_migration))
             if not choices:
                 return None, tuple(sorted(members))
-            _, r, next_work, next_kv = min(choices, key=lambda x: x[:2])
+            _, r, next_work, next_kv, next_migration = min(choices, key=lambda x: x[:2])
             work[pool.replicas[r].replica_id], kv[pool.replicas[r].replica_id] = next_work, next_kv
+            migration[pool.replicas[r].replica_id] = next_migration
             assignment[i] = pool.replicas[r].replica_id
     return assignment, None
 
@@ -322,13 +334,17 @@ def _assignment_valid(table, assignment, architecture, scenario, mode):
     horizon = architecture.residency_horizon_s
     horizon = scenario.end_s - scenario.controller_delay_s if horizon is None else horizon
     work, kv = _baseline(scenario, architecture, horizon)
+    migration = {r.replica_id: 0.0 for p in architecture.pools for r in p.replicas}
     pools = {r.replica_id: architecture.type_by_id[p.type_id]
              for p in architecture.pools for r in p.replicas}
     for i, replica in assignment.items():
         work[replica] += table.candidates[i].service_work
         kv[replica] += table.candidates[i].kv_tokens
+        migration[replica] += table.candidates[i].duration_s
     return all(np.all(np.asarray(q.normals) @ work[r] <= np.asarray(q.bounds[mode]) + 1e-9)
-               and kv[r] <= q.kv_capacity_tokens for r, q in pools.items())
+               and kv[r] <= q.kv_capacity_tokens
+               and migration[r] <= table.migration_horizon_s + 1e-9
+               for r, q in pools.items())
 
 
 def validate_destination_execution(scenario, architecture, moves):
@@ -399,7 +415,8 @@ def plan_destination(scenario, profile, solver, case_id, seed, architecture):
     moves = _moves(table, selected, assignment, architecture, scenario, profile)
     expected = predict(_expected_scenario(scenario, moves), profile, moves, case_id, architecture)
     shortfall = max(0.0, planned - scenario.power_limit_w)
-    feasible = not shortfall and expected.deadline_met
+    shortfall = 0.0 if shortfall <= 1e-8 else shortfall
+    feasible = shortfall == 0 and expected.deadline_met
     failure = None if feasible else "target_unmet" if shortfall else "migration_deadline"
     usage = np.asarray(table.resources[:, list(selected)].sum(1)).ravel() if selected else np.zeros(len(table.resource_names))
     bottleneck = table.resource_names[int(usage.argmax())] if usage.size and usage.max() else None

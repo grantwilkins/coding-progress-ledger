@@ -67,6 +67,8 @@ def test_replica_allocation_rounds_up_and_never_undersupplies_pools():
     assert replica_counts(q, 4, .5, 3, (.5, 0)) == (2, 2, 1, 1)
     assert sum(replica_counts(q, 4, .5, 4, (.5, 0))) \
         >= sum(replica_counts(q, 4, .5, 3, (.5, 0)))
+    assert sum(replica_counts(q, 4, .8, 3, (.5, 0))) \
+        >= sum(replica_counts(q, 4, .5, 3, (.5, 0)))
 
 
 def test_primary_grid_is_deterministic_and_complete():

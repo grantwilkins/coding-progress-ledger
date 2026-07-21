@@ -103,7 +103,7 @@ def primary_cells(): return tuple(SweepCell(*x) for x in product(RHO, HEADROOM, 
 def run_sweep(build, profile, cells=primary_cells(), seeds=range(10),
               transition_seeds=range(10, 30)):
     """Run paired legacy, pool-LP, and pool-greedy cells from a seeded builder."""
-    rows = []
+    rows, cells, seeds = [], tuple(cells), tuple(seeds)
 
     def run(selected_cells, selected_seeds):
         for cell, seed in product(selected_cells, selected_seeds):

@@ -140,6 +140,22 @@ def test_aggregate_feasibility_does_not_override_replica_packing(tmp_path):
     assert result.packing_repair_count >= 1 and result.failure_reason == "target_unmet"
 
 
+def test_exact_oracle_enforces_one_migration_at_a_time_per_replica(tmp_path):
+    arch = architecture(normal=1, emergency=1, stable=1)
+    arch = replace(arch, pools=(DestinationPool(
+        "p", "q", (DestinationReplica("t0"), DestinationReplica("t1", (.9, 0))),
+        "r", ("wan",), ("replay",),
+    ),))
+    sessions = tuple(replace(s, expected_f=5, log_bytes=500) for s in problem().sessions)
+    scenario = replace(problem(), sessions=sessions)
+    profile = model(tmp_path, switch=0, tp=1)
+    table = candidate_table(scenario, profile, arch, "normal", ExpectedPower(scenario, profile))
+    assignment = exact_replica_assignment(table, {0, 1}, arch, scenario, "normal")
+
+    assert assignment is not None
+    assert len(set(assignment.values())) == 2
+
+
 def test_execution_independently_rejects_stable_overflow():
     arch = architecture(normal=.3, emergency=.3, stable=.3,
                         baselines=((.2, 0), (0, 0)))
