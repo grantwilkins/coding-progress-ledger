@@ -74,12 +74,121 @@ def test_trace_normalization_discards_content_and_does_not_invent_time():
 
 def test_campaign_uses_exact_gpt_oss_reasoning_chat_template(monkeypatch):
     seen = []
-    monkeypatch.setattr(campaign.testbed, "http_json", lambda *args: seen.append(args[-1]) or {"count": 3})
+    monkeypatch.setattr(
+        campaign.testbed,
+        "http_json",
+        lambda *args: seen.append(args[-1]) or {"count": 3},
+    )
     counter = campaign.token_counter("host", 1, "model")
     assert counter([{"role": "user", "content": "x"}]) == 3
     assert seen[0]["chat_template_kwargs"] == {
-        "reasoning_effort": "low", "enable_thinking": True,
+        "reasoning_effort": "low",
+        "enable_thinking": True,
     }
+
+
+def test_local_tokenizer_counts_rendered_chat_and_raw_output():
+    class Encoding:
+        def __len__(self):
+            return 2
+
+        def __getitem__(self, key):
+            assert key == "input_ids"
+            return [1, 2, 3]
+
+    class Tokenizer:
+        def __call__(self, _text, add_special_tokens):
+            assert not add_special_tokens
+            return {"input_ids": [1, 2]}
+
+        def apply_chat_template(self, messages, **kwargs):
+            assert messages and kwargs == {
+                "tokenize": True,
+                "add_generation_prompt": True,
+                "reasoning_effort": "low",
+                "enable_thinking": True,
+            }
+            return Encoding()
+
+    counter = campaign.tokenizer_counter(Tokenizer())
+    assert counter("answer") == 2
+    assert counter([{"role": "user", "content": "prompt"}]) == 3
+
+
+def test_agent_native_tools_become_valid_shape_only_user_appends():
+    messages = [
+        {"role": "system", "content": "policy"},
+        {"role": "user", "content": "fix"},
+        {"role": "tool", "content": "output"},
+        {"role": "assistant", "content": "done"},
+    ]
+    assert campaign.renderable(messages) == [
+        {"role": "system", "content": "policy"},
+        {"role": "user", "content": "fix\noutput"},
+        {"role": "assistant", "content": "done"},
+    ]
+
+
+def test_assistant_event_without_a_prompt_is_rejected():
+    rows = campaign.normalize_traces(
+        [
+            {
+                "id": "one",
+                "messages": [
+                    {"role": "assistant", "content": "orphan"},
+                    {"role": "user", "content": "prompt", "timestamp": 1},
+                    {"role": "assistant", "content": "answer"},
+                ],
+            }
+        ],
+        "trace-commons/agent-traces",
+        "revision",
+        count,
+    )
+    assert len(rows) == 1 and rows[0]["turn"] == 1
+
+
+def test_source_row_without_messages_contributes_no_turns():
+    assert (
+        campaign.normalize_traces(
+            [{"id": "empty"}], "trace-commons/agent-traces", "revision", count
+        )
+        == []
+    )
+
+
+def test_wildchat_order_is_preserved_without_inventing_arrival_times():
+    rows = campaign.normalize_traces(
+        [
+            {
+                "id": "chat",
+                "conversation": [
+                    {"role": "user", "content": "first"},
+                    {"role": "assistant", "content": "answer"},
+                    {"role": "user", "content": "second"},
+                    {"role": "assistant", "content": "answer"},
+                ],
+            }
+        ],
+        "allenai/WildChat-1M",
+        "revision",
+        count,
+    )
+    assert [r["time_s"] for r in rows] == [None, None]
+    assert {r["job_class"] for r in campaign.classify(rows)} == {"interactive_coding"}
+
+
+def test_normalized_source_cache_reuses_only_exact_key(tmp_path):
+    calls = []
+
+    def make():
+        calls.append(1)
+        return [{"turn": len(calls)}]
+
+    path = tmp_path / "cache.json"
+    assert campaign.cached_normalize(path, "a", make) == [{"turn": 1}]
+    assert campaign.cached_normalize(path, "a", make) == [{"turn": 1}]
+    assert campaign.cached_normalize(path, "b", make) == [{"turn": 2}]
 
 
 def test_manifest_split_is_disjoint_deterministic_and_context_stratified():

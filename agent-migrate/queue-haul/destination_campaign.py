@@ -17,11 +17,12 @@ from pathlib import Path
 
 import migration_testbed as testbed
 from destination_evaluation import reduce_bounds, reduce_loaded
-from migration_profiler import JOB_CLASSES, object_hash, write_json
+from migration_profiler import JOB_CLASSES, file_hash, object_hash, write_json
 
 
 SCHEMA = "queue-haul-destination-campaign-v1"
 TRACE_SCHEMA = "queue-haul-trace-v1"
+NORMALIZER_VERSION = "queue-haul-normalizer-v2"
 EVIDENCE = {
     "service_envelopes": "measure",
     "loaded_migration_slowdown": "measure",
@@ -552,8 +553,10 @@ def _messages(row: dict) -> list[dict]:
         None,
     )
     value = json.loads(value) if isinstance(value, str) else value
+    if value is None:
+        return []
     if not isinstance(value, list):
-        raise ValueError("trace row has no message list")
+        raise ValueError("trace messages must be a list")
     return [
         {
             "role": str(m.get("role", m.get("type", ""))).lower(),
@@ -587,6 +590,21 @@ def _seconds(value) -> float:
     )
 
 
+def renderable(messages: list[dict]) -> list[dict]:
+    out = []
+    for message in messages:
+        role = message["role"] if message["role"] in {"assistant", "user"} else "user"
+        if message["role"] == "system" and not out:
+            role = "system"
+        if role == "assistant" and (not out or out[-1]["role"] == "system"):
+            role = "user"
+        if out and out[-1]["role"] == role:
+            out[-1]["content"] += "\n" + message["content"]
+        else:
+            out.append({"role": role, "content": message["content"]})
+    return out
+
+
 def normalize_traces(
     rows: list[dict], source: str, revision: str, count_tokens
 ) -> list[dict]:
@@ -596,6 +614,8 @@ def normalize_traces(
     out = []
     for index, row in enumerate(rows):
         messages = _messages(row)
+        if not messages:
+            continue
         session_id = str(
             next(
                 (
@@ -610,14 +630,17 @@ def normalize_traces(
         for turn, stop in enumerate(
             i for i, m in enumerate(messages) if m["role"] == "assistant"
         ):
-            prefix, answer = messages[:stop], messages[stop]
-            total = count_tokens(prefix)
+            original_prefix, answer = messages[:stop], messages[stop]
+            rendered = renderable(original_prefix)
+            if not rendered:
+                continue
+            total = count_tokens(rendered)
             if total < 1 or total > 32768:
                 continue
             timestamp = next(
                 (
                     m.get("timestamp")
-                    for m in reversed(prefix)
+                    for m in reversed(original_prefix)
                     if m.get("timestamp") is not None
                 ),
                 None,
@@ -629,6 +652,7 @@ def normalize_traces(
                     "revision": revision,
                     "dataset_license": license_id,
                     "content_basis": content_basis,
+                    "rendering_contract": "gpt-oss-shape-v1",
                     "session_id": f"{source}:{session_id}",
                     "turn": turn,
                     "time_s": _seconds(timestamp) if timestamp is not None else None,
@@ -636,9 +660,11 @@ def normalize_traces(
                     "newly_append_tokens": max(1, total - previous),
                     "output_tokens": max(1, count_tokens(answer["content"])),
                     "current_user_message_count": sum(
-                        m["role"] == "user" for m in prefix
+                        m["role"] == "user" for m in original_prefix
                     ),
-                    "tool_message_count": sum(m["role"] == "tool" for m in prefix),
+                    "tool_message_count": sum(
+                        m["role"] == "tool" for m in original_prefix
+                    ),
                     "reset": total < previous,
                     "content_sha256": hashlib.sha256(
                         json.dumps(messages[: stop + 1], sort_keys=True).encode()
@@ -687,12 +713,6 @@ def classify(rows: list[dict]) -> list[dict]:
         else "coding"
         for session_id in grouped
     }
-    if any(
-        sum(r["time_s"] is not None for r in grouped[sid]) < 2
-        for sid, job_class in classes.items()
-        if job_class == "interactive_coding"
-    ):
-        raise ValueError("WildChat interactive sessions need per-message timestamps")
     return [dict(row, job_class=classes[row["session_id"]]) for row in rows]
 
 
@@ -740,7 +760,8 @@ def token_counter(host: str, port: int, model: str):
         payload["messages" if isinstance(value, list) else "prompt"] = value
         if isinstance(value, list):
             payload["chat_template_kwargs"] = {
-                "reasoning_effort": "low", "enable_thinking": True,
+                "reasoning_effort": "low",
+                "enable_thinking": True,
             }
         result = testbed.http_json(host, port, "POST", "/tokenize", payload)
         if result.get("count") is None:
@@ -748,6 +769,40 @@ def token_counter(host: str, port: int, model: str):
         return int(result["count"])
 
     return count
+
+
+def tokenizer_counter(tokenizer):
+    def count(value) -> int:
+        if not isinstance(value, list):
+            return len(tokenizer(value, add_special_tokens=False)["input_ids"])
+        encoded = tokenizer.apply_chat_template(
+            value,
+            tokenize=True,
+            add_generation_prompt=True,
+            reasoning_effort="low",
+            enable_thinking=True,
+        )
+        return len(
+            encoded if isinstance(encoded, (list, tuple)) else encoded["input_ids"]
+        )
+
+    return count
+
+
+def local_token_counter(model: str, revision: str):
+    from transformers import AutoTokenizer
+
+    return tokenizer_counter(AutoTokenizer.from_pretrained(model, revision=revision))
+
+
+def cached_normalize(path: Path, key: str, make) -> list[dict]:
+    if path.is_file():
+        cached = json.loads(path.read_text())
+        if cached.get("key") == key:
+            return cached["traces"]
+    traces = make()
+    write_json(path, {"key": key, "traces": traces})
+    return traces
 
 
 def main() -> None:
@@ -802,6 +857,7 @@ def main() -> None:
     build.add_argument("--host", default="127.0.0.1")
     build.add_argument("--port", type=int, default=8000)
     build.add_argument("--model", default=testbed.MODEL)
+    build.add_argument("--local-tokenizer-revision")
     build.add_argument("--seed", type=int, default=0)
     build.add_argument("--out", type=Path, required=True)
     args = parser.parse_args()
@@ -868,32 +924,57 @@ def main() -> None:
             ),
         )
         return
-    counter = token_counter(args.host, args.port, args.model)
+    counter = (
+        local_token_counter(args.model, args.local_tokenizer_revision)
+        if args.local_tokenizer_revision
+        else token_counter(args.host, args.port, args.model)
+    )
 
     def load(path):
         return [
             json.loads(line) for line in path.read_text().splitlines() if line.strip()
         ]
 
-    rows = normalize_traces(
-        load(args.trace_commons),
-        "trace-commons/agent-traces",
-        args.trace_revision,
-        counter,
+    rows, source_counts = [], {}
+    for path, source, revision in (
+        (args.trace_commons, "trace-commons/agent-traces", args.trace_revision),
+        (args.wildchat, "allenai/WildChat-1M", args.wildchat_revision),
+        (args.nvidia, "nvidia/SWE-Hero-openhands-trajectories", args.nvidia_revision),
+    ):
+        raw = load(path)
+        key = object_hash(
+            [
+                NORMALIZER_VERSION,
+                file_hash(path),
+                source,
+                revision,
+                args.model,
+                args.local_tokenizer_revision or "vllm",
+            ]
+        )
+        cache = args.out.with_name(f".{args.out.stem}-{source.split('/')[0]}.json")
+        normalized = cached_normalize(
+            cache, key, lambda: normalize_traces(raw, source, revision, counter)
+        )
+        rows += normalized
+        source_counts[source] = {
+            "raw_rows": len(raw),
+            "sessions": len({r["session_id"] for r in normalized}),
+            "turns": len(normalized),
+        }
+    write_json(
+        args.out,
+        {
+            "manifest": build_manifests(rows, args.seed),
+            "traces": rows,
+            "source_counts": source_counts,
+            "tokenizer": {
+                "model": args.model,
+                "revision": args.local_tokenizer_revision,
+                "source": "transformers" if args.local_tokenizer_revision else "vllm",
+            },
+        },
     )
-    rows += normalize_traces(
-        load(args.wildchat),
-        "allenai/WildChat-1M",
-        args.wildchat_revision,
-        counter,
-    )
-    rows += normalize_traces(
-        load(args.nvidia),
-        "nvidia/SWE-Hero-openhands-trajectories",
-        args.nvidia_revision,
-        counter,
-    )
-    write_json(args.out, {"manifest": build_manifests(rows, args.seed), "traces": rows})
 
 
 if __name__ == "__main__":

@@ -8,6 +8,11 @@ remain offline derivations, while older hardware results are priors only.
 General coding uses Trace Commons, interactive coding uses uniformly sampled,
 opt-in English multi-turn WildChat rows passing a high-precision code filter,
 and agentic work uses permissively sourced NVIDIA SWE-Hero trajectories.
+WildChat and NVIDIA preserve turn order but provide no per-turn arrival evidence;
+GPU arrivals remain preregistered open-loop and are never inferred from them.
+`build-manifests --local-tokenizer-revision SHA` uses the pinned CPU tokenizer;
+omitting it uses the live vLLM `/tokenize` endpoint. Both render the GPT-OSS
+reasoning chat template, and only the resulting shape records are written.
 `make-plan` freezes five 12-hour shards plus one conditional repeat shard (72
 A100-pair-hours total); `check` stops dependent shards on failed preflight,
 frontier, loaded-migration, or validation gates. `reduce` emits paired central
