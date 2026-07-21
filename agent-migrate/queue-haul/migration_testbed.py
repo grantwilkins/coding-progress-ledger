@@ -334,6 +334,7 @@ def vllm_cmd(cfg: Config, role: str, extra: list[str] | None = None) -> list[str
         "--kv-cache-dtype",
         "auto",
         "--enable-chunked-prefill",
+        "--enable-prefix-caching",
         "--enforce-eager",
         *(["--enable-sleep-mode"] if role == "source" and lmcache_mode() == "legacy" else []),
         *(["--gpu-memory-utilization", 0.75, "--disable-hybrid-kv-cache-manager", "--enable-prompt-tokens-details"] if lmcache_mode() == "mp" else []),

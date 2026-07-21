@@ -12,6 +12,7 @@ Plausible wrong implementations:
 - Aggregate concurrent connections so apparent overlap cannot be attributed.
 - Read MP source keys before asynchronous chunk storage completes.
 - Trust reset HTTP 200 after vLLM logged that the reset failed.
+- Rely on a release-specific prefix-cache default for warm-session measurements.
 - Hide transfers in a private CPU cache or log every socket read as a sample.
 """
 
@@ -72,6 +73,7 @@ def test_vllm_commands_pin_validated_sandbox_flags_and_roles():
     assert "VLLM_RPC_BASE_PATH=/tmp/qh-src-" in source
     assert "VLLM_RPC_BASE_PATH=/tmp/qh-sink-" in sink
     assert "--enforce-eager" in source
+    assert "--enable-prefix-caching" in source
     assert "--enable-sleep-mode" in source
     assert "--enable-sleep-mode" not in sink
     assert "--enable-sleep-mode" not in smoke
