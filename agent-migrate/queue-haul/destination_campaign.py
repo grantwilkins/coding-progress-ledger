@@ -39,6 +39,7 @@ EVIDENCE = {
     "old_migration_results": "reuse",
 }
 IMAGE_SHA256 = "50e98f65de09ebfe196f270c8b5c595636853646eb5536dca92f27bd45c084ab"
+BASELINE_PROFILE = Path(__file__).with_name("profiles") / "gpt_oss_20b_a100_tp1.json"
 SLO = {
     "normal": {"p90_ttft_s": 2, "p90_mean_tpot_s": 0.1},
     "emergency": {"p90_ttft_s": 10, "p90_mean_tpot_s": 0.25},
@@ -87,6 +88,8 @@ def make_plan(manifest_path: Path) -> dict:
         "job": {"name": "mandatory", "hours": 12},
         "manifest": {"path": "content-free-manifest.json",
                      "sha256": object_hash(manifest)},
+        "baseline_profile": {"path": "baseline-profile.json",
+                             "sha256": file_hash(BASELINE_PROFILE)},
         "anchor_drift_limit": .15,
         "service": {
             "anchors": [4096, 16384, 24576],
@@ -129,6 +132,7 @@ def validate_plan(plan: dict) -> None:
         raise ValueError("campaign exceeds its A100-pair-hour budget")
     if (
         plan.get("image_sha256") != IMAGE_SHA256
+        or plan.get("baseline_profile", {}).get("sha256") != file_hash(BASELINE_PROFILE)
         or plan["migration"]["rho"][-1] != "emergency_inside"
         or plan.get("anchor_drift_limit") != .15
     ):
@@ -139,6 +143,7 @@ def prepare(manifest_path: Path, out: Path) -> dict:
     manifest, plan = _manifest(manifest_path), None
     out.mkdir(parents=True, exist_ok=True)
     write_json(out / "content-free-manifest.json", manifest)
+    (out / "baseline-profile.json").write_bytes(BASELINE_PROFILE.read_bytes())
     plan = make_plan(out / "content-free-manifest.json")
     write_json(out / "plan.json", plan)
     job = out / "mandatory.sh"
@@ -300,6 +305,8 @@ def prepare_reserve(report_path: Path, bundle: Path, out: Path) -> dict | None:
     validate_plan(source)
     out.mkdir(parents=True, exist_ok=True)
     plan = {**source, "job": {"name": "reserve", "hours": 12}, "reserve_tasks": tasks}
+    for name in ("content-free-manifest.json", "baseline-profile.json"):
+        (out / name).write_bytes((bundle / name).read_bytes())
     write_json(out / "plan.json", plan)
     job = out / "reserve.sh"
     job.write_text("""#!/usr/bin/env bash

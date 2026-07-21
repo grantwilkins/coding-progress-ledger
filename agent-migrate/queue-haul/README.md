@@ -15,9 +15,11 @@ omitting it uses the live vLLM `/tokenize` endpoint. Both render the GPT-OSS
 reasoning chat template, and only the resulting shape records are written.
 `DATA_TO_COLLECT.md` supersedes the original 72-hour grid with one mandatory
 12-hour A100-pair job and one targeted 12-hour reserve. `prepare` creates the
-single checksum-pinned mandatory launch bundle; a reserve is generated only
-from a failed reduction. `reduce` emits paired central and conservative measured
-A100 profile fragments.
+single checksum-pinned mandatory launch bundle, including the reused baseline
+profile. Its job runs the integrity gate, drift anchors, adaptive service
+frontier, paired loaded-migration probes, acceptance checks, and paired central
+and conservative profile reduction. Every cell checkpoints independently. A
+reserve is generated only from a failed reduction and names only failed cells.
 
 Download public trace rows before allocating GPUs, build the content-free
 manifest, then prepare the launch bundle:
