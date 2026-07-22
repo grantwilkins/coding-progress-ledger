@@ -52,6 +52,12 @@ def poisson_schedule(rate: float, count: int, seed: int) -> tuple[float, ...]:
     return tuple(out)
 
 
+def uniform_schedule(rate: float, count: int, _seed: int) -> tuple[float, ...]:
+    if rate <= 0 or count < 1:
+        raise ValueError("arrival rate and count must be positive")
+    return tuple(index / rate for index in range(count))
+
+
 @dataclass
 class Session:
     session_id: str
@@ -160,8 +166,9 @@ def _completion(host: str, port: int, model: str, prompt: list[int], output_toke
 
 
 def drive(host: str, port: int, model: str, sessions: list[Session], rate: float,
-          count: int, seed: int, timeout_s: float = 720) -> list[dict]:
-    schedule, epoch = poisson_schedule(rate, count, seed), time.monotonic()
+          count: int, seed: int, timeout_s: float = 720,
+          scheduler=poisson_schedule) -> list[dict]:
+    schedule, epoch = scheduler(rate, count, seed), time.monotonic()
     def one(index):
         scheduled = epoch + schedule[index]; time.sleep(max(0, scheduled - time.monotonic()))
         session = sessions[index % len(sessions)]
@@ -422,8 +429,9 @@ def measure_anchors(host: str, port: int, model: str, contexts: list[int],
                 sampler = MetricsSampler(host, port, cell / "engine.csv"); sampler.start()
                 try:
                     started = time.monotonic()
-                    requests = drive(host, port, model, sessions, 1.2 * expected[metric, context] / tokens,
-                                     math.ceil(1.2 * expected[metric, context] / tokens * hold_s), repeat)
+                    rate = 2 * expected[metric, context] / tokens
+                    requests = drive(host, port, model, sessions, rate,
+                                     math.ceil(rate * hold_s), repeat, scheduler=uniform_schedule)
                     time.sleep(max(0, hold_s - (time.monotonic() - started)))
                 finally:
                     sampler.close()

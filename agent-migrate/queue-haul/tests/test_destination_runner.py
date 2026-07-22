@@ -32,6 +32,7 @@ def metrics(slope=0):
 
 def test_schedule_and_session_tokens_are_deterministic_but_isolated():
     assert runner.poisson_schedule(2, 4, 7) == runner.poisson_schedule(2, 4, 7)
+    assert runner.uniform_schedule(2, 4, 7) == (0, .5, 1, 1.5)
     a = runner.Session("a", 4, 2, 3, 100, 7)
     b = runner.Session("b", 4, 2, 3, 100, 7)
     first, forced = a.prompt(0)
