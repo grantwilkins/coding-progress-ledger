@@ -398,7 +398,8 @@ def load_inputs(plan_path: Path) -> tuple[dict, dict, dict]:
 
 def measure_anchors(host: str, port: int, model: str, contexts: list[int],
                     vocabulary: int, expected: dict[tuple[str, int], float],
-                    root: Path, repeats: int = 3, hold_s: float = 60) -> list[dict]:
+                    root: Path, stack: testbed.Stack, cfg: testbed.Config,
+                    repeats: int = 3, hold_s: float = 60) -> list[dict]:
     path = root / "anchors.json"
     if path.exists():
         return json.loads(path.read_text())
@@ -408,6 +409,7 @@ def measure_anchors(host: str, port: int, model: str, contexts: list[int],
             tokens, counter = ((context - 1, "vllm:prompt_tokens_total") if metric == "prefill"
                                else (256, "vllm:generation_tokens_total"))
             for repeat in range(repeats):
+                testbed.flush_lmcache(stack, cfg)
                 sessions = [Session(f"anchor:{metric}:{context}:{repeat}:{i}",
                                     1 if metric == "prefill" else context - 1, 1 if metric == "decode" else context - 1,
                                     1 if metric == "prefill" else 256, vocabulary, repeat)
@@ -712,7 +714,7 @@ def run_campaign(plan_path: Path, run_root: Path, cfg: testbed.Config,
                     for metric in ("prefill", "decode") for context in plan["service"]["anchors"]}
         anchors = measure_anchors(cfg.host, cfg.sink_port, cfg.model,
                                   plan["service"]["anchors"], 201088, expected,
-                                  run_root / "anchors")
+                                  run_root / "anchors", stack, cfg)
         anchor_gate(anchors, expected, plan["anchor_drift_limit"])
         testbed.flush_lmcache(stack, cfg)
         service, bounds = measure_frontier(plan, bundle, profile, cfg, stack, run_root / "service")
