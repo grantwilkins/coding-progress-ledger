@@ -90,8 +90,12 @@ def parse_metrics(text: str) -> dict[str, float]:
             grouped.setdefault(name.split("{", 1)[0], []).append(float(value))
         except ValueError:
             continue
-    return {key: sum(values) / len(values) if key == "vllm:gpu_cache_usage_perc"
-            else sum(values) for key, values in grouped.items()}
+    metrics = {key: sum(values) / len(values) if key in
+               ("vllm:gpu_cache_usage_perc", "vllm:kv_cache_usage_perc")
+               else sum(values) for key, values in grouped.items()}
+    if "vllm:gpu_cache_usage_perc" not in metrics and "vllm:kv_cache_usage_perc" in metrics:
+        metrics["vllm:gpu_cache_usage_perc"] = metrics["vllm:kv_cache_usage_perc"]
+    return metrics
 
 
 class MetricsSampler:
