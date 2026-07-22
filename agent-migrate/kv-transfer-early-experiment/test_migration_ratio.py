@@ -1,14 +1,14 @@
 """
 Claim:
-migration_ratio compares architecture-derived runnable state with published,
-fresh-context H200 TTFT only for non-Llama models released since mid-2025.
+migration_ratio computes the pre-Inkling six-model H100/BF16 replay-to-KV-transfer
+ratio from the declared GQA, MLA, and DeepSeek compressed-cache layouts.
 
 Plausible wrong implementations:
-- substituting peak-FLOP/MFU estimates for public TTFT
-- omitting Qwen's fixed recurrent state or counting it once per token
-- treating full-precision KV as FP8 because the weights are FP8
+- retaining the newer Inkling catalogue instead of the requested old six points
+- omitting K or V, or using bits where the cache formula requires bytes
+- rounding DeepSeek compressed entries down instead of up
 - reversing bytes/bits or Gbps in transfer time
-- silently plotting old, closed, cached, or unbenchmarked models
+- plotting Qwen3-235B in the GLM-labeled context surface
 """
 
 import math
@@ -16,37 +16,46 @@ import math
 import migration_ratio as mr
 
 
-def test_published_h200_ttft_points_are_literal_inputs():
-    qwen, kimi = mr.BENCHMARKS
-    assert qwen.ttft_seconds == ((1024, 0.077), (8192, 0.2), (32768, 0.6), (65536, 1.6), (98304, 2.7), (131072, 4.2), (262144, 12.4))
-    assert kimi.ttft_seconds == ((1024, 0.112),)
+def test_restored_catalogue_is_the_pre_inkling_six():
+    assert [model.label for model in mr.MODELS] == [
+        "DeepSeek V4 Pro",
+        "Qwen3 Next 80B",
+        "Qwen3.5 397B",
+        "Kimi K2.6",
+        "GLM 5",
+        "Qwen3 235B",
+    ]
 
 
-def test_qwen_state_has_growing_gqa_and_fixed_gated_deltanet_parts():
-    kv_per_token = 10 * 2 * 2 * 256 * 2
-    fixed = 30 * 32 * 128 * 128 * 4 + 30 * (2 * 16 * 128 + 32 * 128) * 4 * 2
-    assert mr.qwen35_state(1) == kv_per_token + fixed
-    assert mr.qwen35_state(2) - mr.qwen35_state(1) == kv_per_token
+def test_gqa_and_mla_count_the_declared_bf16_state():
+    assert mr.gqa_kv(2, 3, 4)(5) == 2 * mr.BPE * 2 * 3 * 4 * 5
+    assert mr.mla_kv(2, 5, 7)(3) == 2 * (5 + 7) * 2 * 3
 
 
-def test_kimi_mla_state_counts_latent_and_rope_key_in_bf16():
-    assert mr.kimi_k25_state(1) == 61 * (512 + 64) * 2
+def test_deepseek_cache_rounds_compressed_entries_up():
+    assert mr.dsv4_kv(5) > mr.dsv4_kv(4)
+    assert mr.dsv4_kv(6) == mr.dsv4_kv(5)
+
+
+def test_prefill_contains_linear_ffn_and_quadratic_attention():
+    model = mr.Model("hand", 1, 1, 1, 2, 3, lambda _: 0)
+    assert mr.prefill_flops(model, 2) == 4e9 + 20
 
 
 def test_transfer_uses_bits_and_decimal_gbps():
-    assert mr.transfer_time(1_000_000_000, 8) == 1
+    model = mr.Model("hand", 1, 1, 1, 1, 1, lambda _: 1e9)
+    assert mr.t_transfer(model, 1, 8) == 1
 
 
 def test_ratio_is_one_at_the_derived_crossover():
-    state, ttft = mr.qwen35_state(98304), 2.7
-    assert math.isclose(mr.ratio(ttft, state, mr.crossover_gbps(ttft, state)), 1)
+    model, tokens = mr.model("DeepSeek V4 Pro"), 1_000
+    replay, state = mr.t_replay(model, tokens), model.kv_bytes(tokens)
+    crossover = state * 8 / replay / 1e9
+    assert math.isclose(replay / mr.t_transfer(model, tokens, crossover), 1)
 
 
-def test_quantitative_models_obey_release_and_no_llama_constraints():
-    assert all(benchmark.released >= "2025-07" for benchmark in mr.BENCHMARKS)
-    assert all("llama" not in benchmark.label.lower() for benchmark in mr.BENCHMARKS)
-
-
-def test_requested_models_without_comparable_ttft_are_not_plotted():
-    plotted = {benchmark.label for benchmark in mr.BENCHMARKS}
-    assert plotted.isdisjoint({label for label, _, _ in mr.UNMODELED})
+def test_glm_context_frame_uses_glm_values():
+    frame = mr.context_ratio_frame("GLM 5", 5, [1_000])
+    glm = mr.model("GLM 5")
+    expected = mr.t_replay(glm, 1_000) / mr.t_transfer(glm, 1_000, 5)
+    assert frame.iloc[0]["ratio"] == expected
