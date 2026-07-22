@@ -38,7 +38,9 @@ def content_free_manifest(path):
         for job in campaign.JOB_CLASSES
     }
     value = {"manifest": {"schema": campaign.MANIFEST_SCHEMA, "splits": splits},
-             "traces": [{"session_id": "shape", "input_tokens_total": 1}]}
+             "traces": [{"session_id": sid, "input_tokens_total": 256}
+                        for split in splits.values() for ids in split.values()
+                        for sid in ids]}
     path.write_text(json.dumps(value))
     return path
 
@@ -206,19 +208,19 @@ def test_normalized_source_cache_reuses_only_exact_key(tmp_path):
 def test_manifest_split_is_disjoint_deterministic_and_context_stratified():
     trace_rows = []
     for i in range(24):
-        row = dict(id=f"trace-{i}", **messages("x " * (i + 1), i + 2))
+        row = dict(id=f"trace-{i}", **messages("x " * (300 + i), i + 2))
         trace_rows += campaign.normalize_traces(
             [row], "trace-commons/agent-traces", "abc", count
         )
     interactive_rows = []
     for i in range(24):
-        row = dict(id=f"interactive-{i}", **messages("x " * (i + 1), i + 2))
+        row = dict(id=f"interactive-{i}", **messages("x " * (300 + i), i + 2))
         interactive_rows += campaign.normalize_traces(
             [row], "allenai/WildChat-1M", "ghi", count
         )
     agent_rows = []
     for i in range(24):
-        row = dict(id=f"agent-{i}", **messages("x " * (i + 1), 2, True))
+        row = dict(id=f"agent-{i}", **messages("x " * (300 + i), 2, True))
         agent_rows += campaign.normalize_traces(
             [row], "nvidia/SWE-Hero-openhands-trajectories", "def", count
         )
@@ -231,6 +233,23 @@ def test_manifest_split_is_disjoint_deterministic_and_context_stratified():
     for splits in first["splits"].values():
         assert [len(splits[k]) for k in ("fit", "tune", "validation")] == [12, 6, 6]
         assert len(set().union(*map(set, splits.values()))) == 24
+
+
+def test_manifest_excludes_sessions_the_runner_cannot_use():
+    rows = [
+        {"session_id": f"trace-commons/agent-traces:{i}", "turn": 0,
+         "input_tokens_total": 74 if i == 0 else 256 + i, "reset": False}
+        for i in range(25)
+    ] + [
+        {"session_id": f"{source}:{i}", "turn": 0,
+         "input_tokens_total": 256 + i, "reset": False}
+        for source in ("allenai/WildChat-1M", "nvidia/SWE-Hero-openhands-trajectories")
+        for i in range(24)
+    ]
+    manifest = campaign.build_manifests(rows)
+    assert "trace-commons/agent-traces:0" not in set().union(
+        *map(set, manifest["splits"]["coding"].values())
+    )
 
 
 def test_campaign_is_one_mandatory_job_and_no_obsolete_grid(tmp_path):

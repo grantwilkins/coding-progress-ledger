@@ -115,7 +115,9 @@ def test_launch_inputs_are_relative_and_checksum_pinned(tmp_path):
     manifest = tmp_path / "manifest.json"
     manifest.write_text(json.dumps({"manifest": {"schema": campaign.MANIFEST_SCHEMA,
                                                   "splits": splits},
-                                    "traces": [{"session_id": "shape"}]}))
+                                    "traces": [{"session_id": sid, "input_tokens_total": 256}
+                                               for values in splits.values()
+                                               for ids in values.values() for sid in ids]}))
     bundle = tmp_path / "bundle"; campaign.prepare(manifest, bundle)
     plan, loaded, profile = runner.load_inputs(bundle / "plan.json")
     assert plan["schema"] == campaign.SCHEMA and loaded["manifest"]["splits"] == splits

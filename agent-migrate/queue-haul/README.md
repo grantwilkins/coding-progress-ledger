@@ -8,6 +8,9 @@ remain offline derivations, while older hardware results are priors only.
 General coding uses Trace Commons, interactive coding uses uniformly sampled,
 opt-in English multi-turn WildChat rows passing a high-precision code filter,
 and agentic work uses permissively sourced NVIDIA SWE-Hero trajectories.
+Split construction excludes shapes outside the runner's 256–24,576-token
+domain, and both bundle preparation and runtime require every listed session
+to remain usable.
 WildChat and NVIDIA preserve turn order but provide no per-turn arrival evidence;
 GPU arrivals remain preregistered open-loop and are never inferred from them.
 `build-manifests --local-tokenizer-revision SHA` uses the pinned CPU tokenizer;
@@ -55,11 +58,11 @@ check and the runner rejects incompatible run-root reuse.
 ```bash
 # workstation
 git push origin profile-aware-deadlines
-rsync -a --checksum /private/tmp/qh-destination-v3-20260722/ \
-  <cluster>:/scratch/users/gfw/qh-destination-v3-20260722/
+rsync -a --checksum /private/tmp/qh-destination-v4-20260722/ \
+  <cluster>:/scratch/users/gfw/qh-destination-v4-20260722/
 
 # cluster
-cd /scratch/users/gfw/qh-destination-v3-20260722
+cd /scratch/users/gfw/qh-destination-v4-20260722
 sha256sum -c SHA256SUMS
 cd /home/groups/ramr/gfw/coding-progress-ledger/agent-migrate
 git switch profile-aware-deadlines
@@ -67,9 +70,9 @@ git pull --ff-only
 test "$(git rev-parse HEAD)" = "$(git rev-parse origin/profile-aware-deadlines)"
 module load gcc/14.2.0 openblas/0.3.28 uv/0.8.4
 uv run python queue-haul/destination_campaign.py submit \
-  --plan /scratch/users/gfw/qh-destination-v3-20260722/plan.json \
-  --job-file /scratch/users/gfw/qh-destination-v3-20260722/mandatory.sh \
-  --run-root /scratch/users/gfw/qh-destination-v3-run-20260722
+  --plan /scratch/users/gfw/qh-destination-v4-20260722/plan.json \
+  --job-file /scratch/users/gfw/qh-destination-v4-20260722/mandatory.sh \
+  --run-root /scratch/users/gfw/qh-destination-v4-run-20260722
 ```
 
 ```bash

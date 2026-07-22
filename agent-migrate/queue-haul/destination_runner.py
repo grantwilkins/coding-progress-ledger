@@ -295,7 +295,7 @@ def manifest_sessions(bundle: dict, job_class: str, split: str, vocabulary: int,
         if row["session_id"] in ids and not row.get("reset") \
                 and 256 <= int(row["input_tokens_total"]) <= 24576:
             grouped.setdefault(row["session_id"], []).append(row)
-    if not grouped:
+    if set(grouped) != ids:
         raise ValueError(f"missing usable {job_class} {split} session shapes")
     sessions = []
     for session_id, rows in sorted(grouped.items()):

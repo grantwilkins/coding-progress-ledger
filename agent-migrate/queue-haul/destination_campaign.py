@@ -74,9 +74,13 @@ def _manifest(path: Path) -> dict:
     manifest = value.get("manifest", {})
     if manifest.get("schema") != MANIFEST_SCHEMA or not value.get("traces"):
         raise ValueError("campaign needs a complete content-free manifest")
+    usable = {r["session_id"] for r in value["traces"]
+              if not r.get("reset") and 256 <= int(r["input_tokens_total"]) <= 24576}
     for splits in manifest.get("splits", {}).values():
         if [len(splits.get(k, ())) for k in ("fit", "tune", "validation")] != [12, 6, 6]:
             raise ValueError("campaign manifest must preserve 12/6/6 splits")
+        if not set().union(*map(set, splits.values())) <= usable:
+            raise ValueError("campaign splits contain unusable session shapes")
     return value
 
 
@@ -790,6 +794,8 @@ def build_manifests(rows: list[dict], seed: int = 0) -> dict:
             (sid, sorted(turns, key=lambda r: r["turn"]))
             for sid, turns in grouped.items()
             if turns[0]["job_class"] == job_class
+            and any(not r.get("reset") and 256 <= int(r["input_tokens_total"]) <= 24576
+                    for r in turns)
         ]
         sessions.sort(
             key=lambda item: (
