@@ -17,5 +17,6 @@ IMAGE=${QH_APPTAINER_IMAGE:-/scratch/users/gfw/ptsim/lmcache-v0.5.1-vllm0.22.0-c
 test "$(sha256sum "$IMAGE" | cut -d' ' -f1)" = 50e98f65de09ebfe196f270c8b5c595636853646eb5536dca92f27bd45c084ab
 test "$(sha256sum "$QH_JOB_FILE" | cut -d' ' -f1)" = "$(cut -d' ' -f1 "$QH_JOB_FILE.sha256")"
 export QH_LMCACHE_MODE=mp QH_APPTAINER_IMAGE=$IMAGE
+export QH_PORT_OFFSET=${QH_PORT_OFFSET:-$((SLURM_JOB_ID % 40000 + 1000))}
 cd "$REPO"
 exec bash "$QH_JOB_FILE"

@@ -493,3 +493,8 @@ def test_prepare_and_submit_use_one_immutable_job(tmp_path):
     job.write_text("changed\n")
     with pytest.raises(ValueError, match="changed"):
         campaign.submit(plan, Path("campaign.sbatch"), job, tmp_path / "run")
+
+
+def test_destination_batch_isolates_shared_node_ports():
+    text = Path("destination_campaign.sbatch").read_text()
+    assert "QH_PORT_OFFSET=${QH_PORT_OFFSET:-$((SLURM_JOB_ID % 40000 + 1000))}" in text

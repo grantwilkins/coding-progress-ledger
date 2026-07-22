@@ -18,8 +18,9 @@ reasoning chat template, and only the resulting shape records are written.
 single checksum-pinned mandatory launch bundle, including the reused baseline
 profile. Its job runs the integrity gate, drift anchors, adaptive service
 frontier, paired loaded-migration probes, acceptance checks, and paired central
-and conservative profile reduction. Every cell checkpoints independently. A
-reserve is generated only from a failed reduction and names only failed cells.
+and conservative profile reduction with job-specific ports on shared nodes.
+Every cell checkpoints independently. A reserve is generated only from a failed
+reduction and names only failed cells.
 
 Download public trace rows before allocating GPUs, build the content-free
 manifest, then prepare the launch bundle:
