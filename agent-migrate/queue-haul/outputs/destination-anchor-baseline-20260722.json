@@ -1,0 +1,30 @@
+{
+  "schema": "queue-haul-destination-anchor-baseline-v1",
+  "source": {
+    "run_root": "/scratch/users/gfw/qh-destination-v2-run-6-20260722",
+    "git_sha": "3acdc4e898eb3cc02360224d483e59764d32632a",
+    "plan_sha256": "c170831e1046ef0bdc96bf4098ecc41df05f3cfd134fbd2a4bb7a29bf43ca0a1",
+    "image_sha256": "50e98f65de09ebfe196f270c8b5c595636853646eb5536dca92f27bd45c084ab",
+    "anchors_sha256": "cedb737d6180af07eea0b61c6d5491a5c7650b8cb02bf6aca496c878a4e1b60f"
+  },
+  "anchors": [
+    {"metric": "prefill", "context_tokens": 4096, "run_id": 0, "tokens_per_s": 2871.681866051183},
+    {"metric": "prefill", "context_tokens": 4096, "run_id": 1, "tokens_per_s": 3413.4855006002417},
+    {"metric": "prefill", "context_tokens": 4096, "run_id": 2, "tokens_per_s": 2741.4841935137456},
+    {"metric": "decode", "context_tokens": 4096, "run_id": 0, "tokens_per_s": 1163.9988655161646},
+    {"metric": "decode", "context_tokens": 4096, "run_id": 1, "tokens_per_s": 1166.8153145475226},
+    {"metric": "decode", "context_tokens": 4096, "run_id": 2, "tokens_per_s": 1160.4579513416486},
+    {"metric": "prefill", "context_tokens": 16384, "run_id": 0, "tokens_per_s": 2465.0462920789464},
+    {"metric": "prefill", "context_tokens": 16384, "run_id": 1, "tokens_per_s": 3289.721461329069},
+    {"metric": "prefill", "context_tokens": 16384, "run_id": 2, "tokens_per_s": 1913.6544339185268},
+    {"metric": "decode", "context_tokens": 16384, "run_id": 0, "tokens_per_s": 454.30462222923506},
+    {"metric": "decode", "context_tokens": 16384, "run_id": 1, "tokens_per_s": 441.8037545485245},
+    {"metric": "decode", "context_tokens": 16384, "run_id": 2, "tokens_per_s": 428.8073466308978},
+    {"metric": "prefill", "context_tokens": 24576, "run_id": 0, "tokens_per_s": 3277.729661207345},
+    {"metric": "prefill", "context_tokens": 24576, "run_id": 1, "tokens_per_s": 2870.129472412891},
+    {"metric": "prefill", "context_tokens": 24576, "run_id": 2, "tokens_per_s": 1645.2860091999532},
+    {"metric": "decode", "context_tokens": 24576, "run_id": 0, "tokens_per_s": 234.7578920553727},
+    {"metric": "decode", "context_tokens": 24576, "run_id": 1, "tokens_per_s": 246.68844164773256},
+    {"metric": "decode", "context_tokens": 24576, "run_id": 2, "tokens_per_s": 245.37196069980092}
+  ]
+}

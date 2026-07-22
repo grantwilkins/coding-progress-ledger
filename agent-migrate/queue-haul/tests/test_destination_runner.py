@@ -12,6 +12,7 @@ Plausible wrong implementations:
 
 import pytest
 import json
+from pathlib import Path
 from types import SimpleNamespace
 
 import destination_campaign as campaign
@@ -86,6 +87,15 @@ def test_profile_rate_interpolates_only_inside_measured_domain():
     assert runner.profile_rate(profile, "prefill", 15) == 150
     with pytest.raises(ValueError, match="outside"):
         runner.profile_rate(profile, "prefill", 9)
+
+
+def test_repaired_baseline_passes_its_independent_anchor_gate():
+    root = Path(runner.__file__).parent
+    profile = json.loads((root / "profiles/gpt_oss_20b_a100_tp1.json").read_text())
+    rows = json.loads((root / "outputs/destination-anchor-baseline-20260722.json").read_text())["anchors"]
+    expected = {(metric, context): runner.profile_rate(profile, metric, context)
+                for metric in ("prefill", "decode") for context in (4096, 16384, 24576)}
+    runner.anchor_gate(rows, expected)
 
 
 def test_integrity_preflight_requires_same_but_not_cross_session_cache(monkeypatch):
