@@ -12,6 +12,7 @@
 #SBATCH --error=/home/groups/ramr/gfw/coding-progress-ledger/agent-migrate/queue-haul/outputs/destination-%A.err
 
 set -euo pipefail
+module load gcc/14.2.0 openblas/0.3.28 uv/0.8.4
 REPO=${REPO:-/home/groups/ramr/gfw/coding-progress-ledger/agent-migrate}
 IMAGE=${QH_APPTAINER_IMAGE:-/scratch/users/gfw/ptsim/lmcache-v0.5.1-vllm0.22.0-cu129-primary.sif}
 test "$(sha256sum "$IMAGE" | cut -d' ' -f1)" = 50e98f65de09ebfe196f270c8b5c595636853646eb5536dca92f27bd45c084ab
