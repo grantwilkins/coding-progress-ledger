@@ -1,14 +1,8 @@
-"""
-Migration decision ratio: t_replay / t_kv_transfer vs. inter-site bandwidth.
+"""Modeled prompt replay time divided by runnable-state transfer time.
 
-When the ratio > 1, replay is slower than shipping KV → ship KV.
-When the ratio < 1, replay is faster → just replay the prompt.
-The crossover at ratio = 1 is the phase boundary.
-
-Hardware reference: 8× H100 SXM, dense bf16, MFU = 0.35.
-KV sizes: bf16, from released architecture configs.
-Prefill: 2·A·T (dense FFN) + L·H_q·(d_qk + d_v)·T² (causal attention),
-         with architecture-specific attention scaling for compressed/hybrid models.
+The compute estimate is not end-to-end TTFT: it excludes queueing, tokenization,
+runtime overhead, and the first decode step. Ratios above one favor state transfer.
+Architecture constants come from the public model configs available 2026-07-22.
 """
 
 from __future__ import annotations
@@ -22,299 +16,179 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
-import pandas as pd
 import seaborn as sns
 from matplotlib.colors import Normalize
 
-# ── Hardware ──────────────────────────────────────────────────────────────────
-H100_BF16_DENSE_TFLOPS = 1_979 / 2  # dense = half of sparsity peak
-N_GPUS = 8
+B200_SYSTEM_FP8_DENSE_FLOPS = 36e15
 MFU = 0.35
-EFF_FLOPS = N_GPUS * H100_BF16_DENSE_TFLOPS * 1e12 * MFU  # ~2.77 PFLOP/s
+EFFECTIVE_FLOPS = B200_SYSTEM_FP8_DENSE_FLOPS * MFU
+CONTEXTS = np.geomspace(1_000, 1_000_000, 500)
+BANDWIDTHS_GBPS = np.linspace(0.1, 25, 500)
 
-BPE = 2  # bf16 bytes per element
-GLM5_CONTEXT_BANDWIDTHS_GBPS = np.linspace(0.1, 25, 500)
-GLM5_CONTEXT_TOKENS = np.geomspace(1_000, 10_000_000, 500)
-GLM5_CONTEXT_RATIO_YLIM = (1e-3, 1e3)
-
-# ── Model specs ───────────────────────────────────────────────────────────────
-KVFn = Callable[[int], float]
+BytesFn = Callable[[int], float]
+FlopsFn = Callable[[int], float]
 
 
 @dataclass(frozen=True)
 class Model:
-    label: str  # display name
-    active_b: float  # active params (billions)
-    softmax_layers: int  # layers that produce per-token KV
-    query_heads: int
-    qk_dim: int
-    v_dim: int
-    kv_bytes: KVFn  # total bf16 KV bytes as f(tokens)
-    attn_scale: float = 1.0  # effective sequence compression for attention FLOPs
-    color: str = "k"
-    ls: str = "-"
+    label: str
+    active_b: float | None
+    max_context: int
+    state_bytes: BytesFn | None
+    attention_flops: FlopsFn | None
+    architecture: str
+    cache_precision: str
+    color: str
 
 
-# ── KV size functions ─────────────────────────────────────────────────────────
-def gqa_kv(layers: int, kv_heads: int, head_dim: int) -> KVFn:
-    """GQA/MHA: 2 (K+V) × layers × kv_heads × head_dim × bf16."""
-    per_tok = 2 * BPE * layers * kv_heads * head_dim
-    return lambda T: T * per_tok
+def causal_pairs(tokens: int, window: int | None = None) -> int:
+    """Causal query-key pairs, optionally capped to a sliding/top-k window."""
+    width = min(tokens, window or tokens)
+    return width * (width + 1) // 2 + (tokens - width) * width
 
 
-def mla_kv(layers: int, kv_lora_rank: int = 512, rope_dim: int = 64) -> KVFn:
-    """MLA: stores compressed latent + RoPE key per layer."""
-    per_tok = BPE * layers * (kv_lora_rank + rope_dim)
-    return lambda T: T * per_tok
+def compressed_pairs(tokens: int, ratio: int, topk: int | None = None) -> int:
+    """Pairs after grouping consecutive keys by ``ratio`` and optional top-k."""
+    covered = min(tokens, ratio * topk) if topk else tokens
+    groups, tail = divmod(covered, ratio)
+    pairs = ratio * groups * (groups + 1) // 2 + tail * (groups + 1)
+    return pairs + (tokens - covered) * topk if topk else pairs
 
 
-def dsv4_kv(T: int) -> float:
-    """DeepSeek-V4 Pro CSA/HCA: 30 c4a layers + 31 c128a layers.
-    Each layer stores 512-dim shared KV entry (bf16) per compressed entry,
-    c4a layers additionally store 128-dim indexer cache per entry.
-    128-entry sliding window per layer."""
-    c4a, c128a, sw = 30, 31, 128
-    entry_bytes = 512 * BPE
-    idx_bytes = 128 * BPE
-    c4a_n = math.ceil(T / 4)
-    c128a_n = math.ceil(T / 128)
-    return c4a * ((sw + c4a_n) * entry_bytes + c4a_n * idx_bytes) + c128a * (
-        (sw + c128a_n) * entry_bytes
-    )
+def gqa_state(layers: int, kv_heads: int, head_dim: int, bytes_per_elem: float = 1) -> BytesFn:
+    return lambda tokens: tokens * 2 * layers * kv_heads * head_dim * bytes_per_elem
 
 
-# ── Model catalogue ───────────────────────────────────────────────────────────
-# The six canonical models of the evacuation problem setup (instance.py /
-# Table 2), sorted by KV size. eta and prefill rho both fall out of these
-# architecture configs, so the figure and the table cannot drift apart.
-MODELS = [
-    Model(
-        "DeepSeek V4 Pro",
-        active_b=49,
-        softmax_layers=61,
-        query_heads=128,
-        qk_dim=512,
-        v_dim=512,
-        kv_bytes=dsv4_kv,
-        attn_scale=(30 / 4 + 31 / 128) / 61,
-        color="#d62728",
-    ),
-    Model(
-        "Qwen3 Next 80B",
-        active_b=3,
-        softmax_layers=12,
-        query_heads=16,
-        qk_dim=256,
-        v_dim=256,
-        kv_bytes=gqa_kv(12, 2, 256),
-        color="#1f77b4",
-    ),
-    Model(
-        "Qwen3.5 397B",
-        active_b=17,
-        softmax_layers=15,
-        query_heads=32,
-        qk_dim=256,
-        v_dim=256,
-        kv_bytes=gqa_kv(15, 2, 256),
-        color="#9467bd",
-    ),
-    Model(
-        "Kimi K2.6",
-        active_b=32,
-        softmax_layers=61,
-        query_heads=64,
-        qk_dim=192,
-        v_dim=128,
-        kv_bytes=mla_kv(61, 512, 64),
-        color="#ff7f0e",
-    ),
-    Model(
-        "GLM 5",
-        active_b=40,
-        softmax_layers=78,
-        query_heads=64,
-        qk_dim=256,
-        v_dim=256,
-        kv_bytes=mla_kv(78, 512, 64),
-        color="#e377c2",
-    ),
-    Model(
-        "Qwen3 235B",
-        active_b=22,
-        softmax_layers=94,
-        query_heads=64,
-        qk_dim=128,
-        v_dim=128,
-        kv_bytes=gqa_kv(94, 4, 128),
-        color="#2ca02c",
-    ),
-]
+def mla_state(layers: int, bytes_per_elem: float = 1) -> BytesFn:
+    return lambda tokens: tokens * layers * (512 + 64) * bytes_per_elem
 
 
-# ── Cost model ────────────────────────────────────────────────────────────────
-def prefill_flops(m: Model, T: int) -> float:
-    ffn = 2.0 * m.active_b * 1e9 * T
-    attn = m.softmax_layers * m.query_heads * (m.qk_dim + m.v_dim) * T**2 * m.attn_scale
-    return ffn + attn
+def inkling_state(tokens: int) -> float:
+    global_kv = gqa_state(11, 8, 128, 2)(tokens)
+    local_kv = gqa_state(55, 16, 128, 2)(min(tokens, 512))
+    return global_kv + local_kv
 
 
-def t_replay(m: Model, T: int) -> float:
-    return prefill_flops(m, T) / EFF_FLOPS
+def deepseek_v4_state(tokens: int) -> float:
+    c4_entries, c128_entries, window = math.ceil(tokens / 4), math.ceil(tokens / 128), 128
+    c4 = (window + c4_entries) * 512 + c4_entries * 128 / 2
+    c128 = (window + c128_entries) * 512
+    return 30 * c4 + 31 * c128
 
 
-def t_transfer(m: Model, T: int, bw_gbps: float) -> float:
-    return m.kv_bytes(T) * 8.0 / (bw_gbps * 1e9)
+def nemotron_state(tokens: int) -> float:
+    kv = gqa_state(12, 2, 128)(tokens)
+    ssm = 48 * 256 * 64 * 128 * 2
+    conv = 48 * 256 * 64 * 4 * 2
+    return kv + ssm + conv
+
+
+def attention_flops(layers: int, heads: int, qk_v_dim: int, window: int | None = None) -> FlopsFn:
+    return lambda tokens: 2 * layers * heads * qk_v_dim * causal_pairs(tokens, window)
+
+
+def inkling_attention(tokens: int) -> float:
+    return attention_flops(11, 64, 256)(tokens) + attention_flops(55, 64, 256, 512)(tokens)
+
+
+def glm52_attention(tokens: int) -> float:
+    sparse = 2 * 78 * 64 * 512 * causal_pairs(tokens, 2048)
+    indexer = 2 * 21 * 32 * 128 * causal_pairs(tokens)
+    return sparse + indexer
+
+
+def deepseek_v4_attention(tokens: int) -> float:
+    local = 61 * causal_pairs(tokens, 128)
+    compressed = 30 * compressed_pairs(tokens, 4, 1024) + 31 * compressed_pairs(tokens, 128)
+    return 2 * 128 * 1024 * (local + compressed)
+
+
+MODELS = (
+    Model("Inkling NVFP4", 41, 1_048_576, inkling_state, inkling_attention, "11 global + 55 SWA layers", "BF16 KV", "#1f77b4"),
+    Model("GLM-5.2", 40, 1_048_576, mla_state(78), glm52_attention, "MLA + DSA IndexShare", "FP8 KV", "#e377c2"),
+    Model("DeepSeek-V4-Pro", 49, 1_048_576, deepseek_v4_state, deepseek_v4_attention, "30 CSA + 31 HCA layers", "FP8 KV + FP4 index", "#d62728"),
+    Model("Kimi K3", None, 1_048_576, None, None, "KDA + MLA; config pending", "undisclosed", "#ff7f0e"),
+    Model("Qwen3.7-Max", None, 1_048_576, None, None, "closed model", "undisclosed", "#9467bd"),
+    Model("Nemotron 3 Ultra", 55, 1_048_576, nemotron_state, attention_flops(12, 64, 256), "48 Mamba + 12 attention; 262K native", "FP8 KV + FP16 Mamba", "#2ca02c"),
+)
 
 
 def model(label: str) -> Model:
-    return next(m for m in MODELS if m.label == label)
+    return next(item for item in MODELS if item.label == label)
 
 
-def context_ratio_frame(label: str, bw_gbps: float, contexts) -> pd.DataFrame:
-    m = model(label)
-    return pd.DataFrame(
-        {
-            "context_tokens": T,
-            "ratio": t_replay(m, int(T)) / t_transfer(m, int(T), bw_gbps),
-        }
-        for T in contexts
-    )
+def modeled_models() -> tuple[Model, ...]:
+    return tuple(item for item in MODELS if item.state_bytes and item.attention_flops)
 
 
-def context_ratio_grid(label: str, bandwidths_gbps, contexts) -> pd.DataFrame:
-    return pd.concat(
-        [
-            context_ratio_frame(label, float(bw), contexts).assign(
-                bandwidth_gbps=float(bw)
-            )
-            for bw in bandwidths_gbps
-        ],
-        ignore_index=True,
-    )
+def replay_time(model: Model, tokens: int) -> float:
+    assert model.active_b is not None and model.attention_flops is not None
+    return (2 * model.active_b * 1e9 * tokens + model.attention_flops(tokens)) / EFFECTIVE_FLOPS
 
 
-def plot_glm5_context_ratio():
-    df = context_ratio_grid("Qwen3 235B", GLM5_CONTEXT_BANDWIDTHS_GBPS, GLM5_CONTEXT_TOKENS)
-    norm = Normalize(
-        GLM5_CONTEXT_BANDWIDTHS_GBPS.min(), GLM5_CONTEXT_BANDWIDTHS_GBPS.max()
-    )
-    cmap = plt.colormaps["viridis"]
+def transfer_time(model: Model, tokens: int, bandwidth_gbps: float) -> float:
+    assert model.state_bytes is not None
+    return model.state_bytes(tokens) * 8 / (bandwidth_gbps * 1e9)
 
-    sns.set_theme(style="whitegrid", context="talk")
-    fig, ax = plt.subplots(figsize=(8, 4.5))
-    for bw, group in df.groupby("bandwidth_gbps", sort=True):
-        ax.plot(
-            group["context_tokens"],
-            group["ratio"],
-            color=cmap(norm(bw)),
-            lw=0.9,
-            alpha=0.85,
-        )
-    ax.axhline(1.0, color="k", lw=1.2, ls=":", alpha=0.6)
-    ax.set_xscale("log")
+
+def ratio(model: Model, tokens: int, bandwidth_gbps: float) -> float:
+    return replay_time(model, tokens) / transfer_time(model, tokens, bandwidth_gbps)
+
+
+def style_axes(ax: plt.Axes) -> None:
+    ax.axhline(1, color="k", lw=1.2, ls=":", alpha=0.6)
     ax.set_yscale("log")
-    yl = ax.get_ylim()
-    ax.fill_between(
-        GLM5_CONTEXT_TOKENS,
-        1.0,
-        1e3,
-        alpha=0.06,
-        color="#B1040E",
-        zorder=0,
-    )
-    ax.fill_between(
-        GLM5_CONTEXT_TOKENS,
-        1e-3,
-        1.0,
-        alpha=0.06,
-        color="#008566",
-        zorder=0,
-    )
-    ax.set_ylim(yl)
-    ax.set_xlim(GLM5_CONTEXT_TOKENS.min(), GLM5_CONTEXT_TOKENS.max())
-    ax.set_ylim(*GLM5_CONTEXT_RATIO_YLIM)
-    ax.text(2e3, 105.5, "Transfer KV cache", color="#B1040E", ha="left", style="italic")
-    ax.text(3e5, 0.005, "Transfer context", color="#008566", ha="left", style="italic")
-    ax.set_xlabel("Context size (tokens)")
-    ax.set_ylabel(r"TTFT / Time to Transfer KV")
     ax.grid(True, which="both", alpha=0.15)
+    ax.set_ylabel("Modeled replay time / state-transfer time")
+
+
+def plot_context_ratio() -> None:
+    target = model("GLM-5.2")
+    norm, cmap = Normalize(BANDWIDTHS_GBPS.min(), BANDWIDTHS_GBPS.max()), plt.colormaps["viridis"]
+    fig, ax = plt.subplots(figsize=(8, 4.5))
+    for bandwidth in BANDWIDTHS_GBPS:
+        ax.plot(CONTEXTS, [ratio(target, int(t), bandwidth) for t in CONTEXTS], color=cmap(norm(bandwidth)), lw=0.9, alpha=0.85)
+    style_axes(ax)
+    ax.set_xscale("log")
+    ax.set_xlim(CONTEXTS.min(), CONTEXTS.max())
+    ax.set_ylim(1e-3, 1e3)
+    ax.fill_between(CONTEXTS, 1, 1e3, alpha=0.06, color="#B1040E")
+    ax.fill_between(CONTEXTS, 1e-3, 1, alpha=0.06, color="#008566")
+    ax.text(2e3, 105, "Transfer runnable state", color="#B1040E", style="italic")
+    ax.text(8e5, 0.005, "Replay context", color="#008566", ha="right", style="italic")
+    ax.set_xlabel("Context size (tokens)")
     cbar = fig.colorbar(plt.cm.ScalarMappable(norm=norm, cmap=cmap), ax=ax)
     cbar.set_label("Bandwidth (Gbps)")
     fig.tight_layout()
-    fig.savefig("qwen235b_context_ratio_bandwidths.png", dpi=220, bbox_inches="tight")
-    fig.savefig("qwen235b_context_ratio_bandwidths.pdf", bbox_inches="tight")
+    for suffix in ("png", "pdf"):
+        fig.savefig(f"glm5_context_ratio_bandwidths.{suffix}", dpi=220, bbox_inches="tight")
     plt.close(fig)
-    print("Wrote qwen235b_context_ratio_bandwidths.png / .pdf")
 
 
-# ── Plot ──────────────────────────────────────────────────────────────────────
-def main():
-    T = 100_000  # context length for the plot
-    bw = np.geomspace(0.1, 100, 500)  # Gbps
-
-    df = pd.DataFrame(
-        [
-            {
-                "Model": m.label,
-                "bandwidth_gbps": b,
-                "ratio": t_replay(m, T) / t_transfer(m, T, b),
-            }
-            for m in MODELS
-            for b in bw
-        ]
-    )
-    palette = {m.label: m.color for m in MODELS}
-
+def main() -> None:
+    tokens, bandwidths = 100_000, np.geomspace(0.1, 100, 500)
     sns.set_theme(style="whitegrid", context="talk")
-
     fig, ax = plt.subplots(figsize=(10, 4.5))
-    sns.lineplot(
-        data=df,
-        x="bandwidth_gbps",
-        y="ratio",
-        hue="Model",
-        hue_order=[m.label for m in MODELS],
-        palette=palette,
-        linewidth=2.2,
-        ax=ax,
-    )
-
+    for item in modeled_models():
+        ax.plot(bandwidths, [ratio(item, tokens, bw) for bw in bandwidths], label=item.label, color=item.color, lw=2.2)
+    style_axes(ax)
     ax.set_xscale("log")
-    ax.set_yscale("log")
-    ax.axhline(1.0, color="k", lw=1.2, ls=":", alpha=0.6)
-    yl = ax.get_ylim()
-    ax.fill_between(bw, 1.0, yl[1], alpha=0.06, color="#B1040E", zorder=0)
-    ax.fill_between(bw, yl[0], 1.0, alpha=0.06, color="#008566", zorder=0)
-    ax.set_ylim(yl)
-
-    ax.text(0.2, 15.5, "Transfer KV cache", color="#B1040E", ha="left", style="italic")
-    ax.text(3.0, 0.05, "Transfer context", color="#008566", ha="left", style="italic")
-
+    ax.set_xlim(0.1, 100)
     ax.set_xlabel("Inter-site bandwidth (Gbps)")
-    ax.set_ylabel(r"TTFT / Time to Transfer KV")
-    ax.grid(True, which="both", alpha=0.15)
-    ax.set_xlim(1e-1, 1e2)
-    plt.legend(bbox_to_anchor=(1.05, 0.5), loc="center left", frameon=False)
-
+    ax.legend(bbox_to_anchor=(1.05, 0.5), loc="center left", frameon=False)
     fig.tight_layout()
-    fig.savefig("migration_ratio.png", dpi=220, bbox_inches="tight")
-    fig.savefig("migration_ratio.pdf", bbox_inches="tight")
+    for suffix in ("png", "pdf"):
+        fig.savefig(f"migration_ratio.{suffix}", dpi=220, bbox_inches="tight")
     plt.close(fig)
-    print("Wrote migration_ratio.png / .pdf")
-    plot_glm5_context_ratio()
+    plot_context_ratio()
 
-    # ── summary table ──
-    print(
-        f"\n{'Model':34s} {'KV KiB/tok':>11s} {'replay (s)':>10s} "
-        f"{'xover Gbps':>11s}"
-    )
-    print("-" * 70)
-    for m in MODELS:
-        rp = t_replay(m, T)
-        kv = m.kv_bytes(T)
-        xo = kv * 8 / rp / 1e9
-        print(f"{m.label:34s} {kv/T/1024:9.1f}   {rp:9.2f}   {xo:9.2f}")
+    print(f"{'Model':24} {'state@100k':>12} {'replay':>9} {'xover':>9}")
+    for item in MODELS:
+        if item.state_bytes is None:
+            print(f"{item.label:24} {'undisclosed':>32}")
+            continue
+        state, replay = item.state_bytes(tokens), replay_time(item, tokens)
+        print(f"{item.label:24} {state / 1e9:10.2f}GB {replay:8.2f}s {state * 8 / replay / 1e9:7.2f}G")
 
 
 if __name__ == "__main__":
