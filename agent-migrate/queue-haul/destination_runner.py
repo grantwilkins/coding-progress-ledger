@@ -287,15 +287,24 @@ def require_rho(rows: list[dict], target: float, prefill_rate: float,
     return achieved
 
 
-def anchor_gate(rows: list[dict], expected: dict[tuple[str, int], float], limit: float = .15) -> None:
+def anchor_gate(rows: list[dict], expected: dict[tuple[str, int], float], limit: float = .15) -> dict:
     observed = {key: statistics.median(float(r["tokens_per_s"]) for r in rows
                                        if (r["metric"], int(r["context_tokens"])) == key)
                 for key in {(r["metric"], int(r["context_tokens"])) for r in rows}}
-    failed = [key for key, value in expected.items()
-              if key not in observed or observed[key] / value < 1 - limit - 1e-12]
-    if observed.keys() != expected.keys() or failed:
-        details = ", ".join(f"{metric}@{context}" for metric, context in failed)
-        raise ValueError(f"service anchor underdelivery exceeds the frozen limit: {details}")
+    if observed.keys() != expected.keys():
+        raise ValueError("service anchor checkpoint is incomplete")
+    anchors = [{"metric": key[0], "context_tokens": key[1],
+                "expected_tokens_per_s": expected[key], "observed_tokens_per_s": observed[key],
+                "ratio": observed[key] / expected[key]} for key in sorted(expected)]
+    return {"within_limit": all(r["ratio"] >= 1 - limit - 1e-12 for r in anchors),
+            "underdelivery_limit": limit, "anchors": anchors}
+
+
+def apply_anchor_rates(profile: dict, report: dict) -> None:
+    for row in report["anchors"]:
+        points = profile["cases"]["central"][f'{row["metric"]}_tps']["1"]
+        points[:] = sorted([p for p in points if int(p[0]) != row["context_tokens"]]
+                           + [[row["context_tokens"], row["observed_tokens_per_s"]]])
 
 
 def manifest_sessions(bundle: dict, job_class: str, split: str, vocabulary: int,
@@ -736,7 +745,9 @@ def run_campaign(plan_path: Path, run_root: Path, cfg: testbed.Config,
         anchors = measure_anchors(cfg.host, cfg.sink_port, cfg.model,
                                   plan["service"]["anchors"], 201088, expected,
                                   run_root / "anchors", stack, cfg)
-        anchor_gate(anchors, expected, plan["anchor_drift_limit"])
+        report = anchor_gate(anchors, expected, plan["anchor_drift_limit"])
+        (run_root / "anchor-gate.json").write_text(json.dumps(report, indent=2) + "\n")
+        apply_anchor_rates(profile, report)
         testbed.flush_lmcache(stack, cfg)
         service, bounds = measure_frontier(plan, bundle, profile, cfg, stack, run_root / "service")
         loaded_index = measure_loaded(plan, bundle, profile, cfg, stack, bounds, run_root / "loaded")

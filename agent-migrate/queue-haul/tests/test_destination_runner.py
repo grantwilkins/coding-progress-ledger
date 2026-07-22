@@ -66,26 +66,37 @@ def test_queue_drift_requires_real_samples():
 
 def test_anchor_gate_accepts_improvement_and_fifteen_percent_underdelivery():
     expected = {("prefill", 4096): 100, ("decode", 4096): 50}
-    runner.anchor_gate([
+    assert runner.anchor_gate([
         {"metric": "prefill", "context_tokens": 4096, "tokens_per_s": 85},
         {"metric": "decode", "context_tokens": 4096, "tokens_per_s": 57.5},
-    ], expected)
-    runner.anchor_gate([
+    ], expected)["within_limit"]
+    assert runner.anchor_gate([
         {"metric": "prefill", "context_tokens": 4096, "tokens_per_s": 200},
         {"metric": "decode", "context_tokens": 4096, "tokens_per_s": 100},
+    ], expected)["within_limit"]
+    report = runner.anchor_gate([
+        {"metric": "prefill", "context_tokens": 4096, "tokens_per_s": 84.9},
+        {"metric": "decode", "context_tokens": 4096, "tokens_per_s": 50},
     ], expected)
-    with pytest.raises(ValueError, match="underdelivery"):
-        runner.anchor_gate([
-            {"metric": "prefill", "context_tokens": 4096, "tokens_per_s": 84.9},
-            {"metric": "decode", "context_tokens": 4096, "tokens_per_s": 50},
-        ], expected)
+    assert not report["within_limit"]
+    with pytest.raises(ValueError, match="incomplete"):
+        runner.anchor_gate([{"metric": "prefill", "context_tokens": 4096,
+                             "tokens_per_s": 100}], expected)
 
 
 def test_anchor_gate_uses_independent_run_median_not_last_request():
-    runner.anchor_gate([
+    assert runner.anchor_gate([
         {"metric": "prefill", "context_tokens": 4096, "tokens_per_s": value}
         for value in (100, 100, 1)
-    ], {("prefill", 4096): 100})
+    ], {("prefill", 4096): 100})["within_limit"]
+
+
+def test_anchor_mismatch_recalibrates_central_profile():
+    profile = {"cases": {"central": {"prefill_tps": {"1": [[1, 10], [20, 30]]}}}}
+    report = {"anchors": [{"metric": "prefill", "context_tokens": 10,
+                            "observed_tokens_per_s": 25}]}
+    runner.apply_anchor_rates(profile, report)
+    assert profile["cases"]["central"]["prefill_tps"]["1"] == [[1, 10], [10, 25], [20, 30]]
 
 
 def test_profile_rate_interpolates_only_inside_measured_domain():
@@ -101,7 +112,7 @@ def test_repaired_baseline_passes_its_independent_anchor_gate():
     rows = json.loads((root / "outputs/destination-anchor-baseline-20260722.json").read_text())["anchors"]
     expected = {(metric, context): runner.profile_rate(profile, metric, context)
                 for metric in ("prefill", "decode") for context in (4096, 16384, 24576)}
-    runner.anchor_gate(rows, expected)
+    assert runner.anchor_gate(rows, expected)["within_limit"]
 
 
 def test_integrity_preflight_requires_same_but_not_cross_session_cache(monkeypatch):

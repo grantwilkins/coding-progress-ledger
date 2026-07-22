@@ -29,9 +29,10 @@ The destination baseline pins the clean vLLM 0.22 4K/16K/24K anchor medians.
 The original prefill shape is scaled by the median measured anchor ratio; exact
 anchor rows and run, plan, image, and artifact hashes are retained in
 `outputs/destination-anchor-baseline-20260722.json`. New campaigns replay those
-rates with uniform arrivals and hard-fail beyond 15% underdelivery. The shared
-simulator's 31,562-token endpoint remains outside the destination campaign's
-measured domain, which ends at 24,576.
+rates with uniform arrivals. Complete disagreements are written to
+`anchor-gate.json` and recalibrate the live normalization; only incomplete
+anchor data hard-fails. The shared simulator's 31,562-token endpoint remains
+outside the destination campaign's measured domain, which ends at 24,576.
 
 Download public trace rows before allocating GPUs, build the content-free
 manifest, then prepare the launch bundle:
