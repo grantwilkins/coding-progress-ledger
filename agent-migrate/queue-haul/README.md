@@ -39,6 +39,31 @@ verified. After reduction, `acceptance` checks held-out service and migration
 rows; `prepare-reserve` emits nothing when they pass and otherwise writes one
 12-hour bundle containing only the failed cells.
 
+Push the exact campaign commit before updating the cluster checkout. Transfer
+the prepared bundle, verify it from inside its directory, and use a new run
+root whenever the plan or commit changes. `submit` repeats the bundle checksum
+check and the runner rejects incompatible run-root reuse.
+
+```bash
+# workstation
+git push origin profile-aware-deadlines
+rsync -a --checksum /private/tmp/qh-destination-v2-20260721/ \
+  <cluster>:/scratch/users/gfw/qh-destination-v2-20260721/
+
+# cluster
+cd /scratch/users/gfw/qh-destination-v2-20260721
+sha256sum -c SHA256SUMS
+cd /home/groups/ramr/gfw/coding-progress-ledger/agent-migrate
+git switch profile-aware-deadlines
+git pull --ff-only
+test "$(git rev-parse HEAD)" = "$(git rev-parse origin/profile-aware-deadlines)"
+module load gcc/14.2.0 openblas/0.3.28 uv/0.8.4
+uv run python queue-haul/destination_campaign.py submit \
+  --plan /scratch/users/gfw/qh-destination-v2-20260721/plan.json \
+  --job-file /scratch/users/gfw/qh-destination-v2-20260721/mandatory.sh \
+  --run-root /scratch/users/gfw/qh-destination-v2-run-7-20260722
+```
+
 ```bash
 uv run python queue-haul/destination_campaign.py acceptance \
   --service service-validation.jsonl --loaded loaded-validation.jsonl \

@@ -115,6 +115,14 @@ def test_launch_inputs_are_relative_and_checksum_pinned(tmp_path):
         runner.load_inputs(bundle / "plan.json")
 
 
+def test_run_root_cannot_resume_a_different_commit(tmp_path):
+    path = tmp_path / "run.json"
+    runner.write_run_metadata(path, {"git_sha": "one"})
+    runner.write_run_metadata(path, {"git_sha": "one"})
+    with pytest.raises(RuntimeError, match="different campaign or commit"):
+        runner.write_run_metadata(path, {"git_sha": "two"})
+
+
 def test_loaded_scenario_has_one_session_and_one_method():
     scenario = runner.migration_scenario({"id": "s", "job_class": "coding"},
                                          "replay", 16384, 10000, 2)
@@ -137,6 +145,7 @@ def test_frontier_searches_once_then_repeats_only_boundary_cells(monkeypatch, tm
     thresholds = {"normal": 1, "emergency": 2, "stable": 3}
     monkeypatch.setattr(runner, "manifest_sessions", lambda *_: [runner.Session("s", 10, 2, 3, 100, 0)])
     monkeypatch.setattr(runner, "profile_rate", lambda *_: 100)
+    monkeypatch.setattr(runner.testbed, "flush_lmcache", lambda *args: None)
     def probe(*args, **kwargs):
         radius = args[4]; calls.append(radius)
         return {"classification": {mode: radius <= value for mode, value in thresholds.items()}}
@@ -145,7 +154,7 @@ def test_frontier_searches_once_then_repeats_only_boundary_cells(monkeypatch, tm
                         "disagreement_repeats": 5, "radial_resolution": .05,
                         "hold_min_s": 1, "slos": {}}}
     rows, bounds = runner.measure_frontier(plan, {}, {}, SimpleNamespace(
-        host="h", sink_port=1, model="m"), tmp_path)
+        host="h", sink_port=1, model="m"), object(), tmp_path)
     assert len(rows) == 9 and all(sum(r["mode"] == mode for r in rows) == 3 for mode in thresholds)
     assert bounds["normal"] <= bounds["emergency"] <= bounds["stable"]
     assert (tmp_path / "validation.jsonl").is_file() and len(calls) < 60

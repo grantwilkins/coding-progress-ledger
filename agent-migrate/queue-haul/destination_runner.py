@@ -280,9 +280,11 @@ def anchor_gate(rows: list[dict], expected: dict[tuple[str, int], float], limit:
     observed = {key: statistics.median(float(r["tokens_per_s"]) for r in rows
                                        if (r["metric"], int(r["context_tokens"])) == key)
                 for key in {(r["metric"], int(r["context_tokens"])) for r in rows}}
-    if observed.keys() != expected.keys() or any(abs(observed[key] / value - 1) > limit + 1e-12
-                                                  for key, value in expected.items()):
-        raise ValueError("service anchor drift exceeds the frozen limit")
+    failed = [key for key, value in expected.items()
+              if key not in observed or abs(observed[key] / value - 1) > limit + 1e-12]
+    if observed.keys() != expected.keys() or failed:
+        details = ", ".join(f"{metric}@{context}" for metric, context in failed)
+        raise ValueError(f"service anchor drift exceeds the frozen limit: {details}")
 
 
 def manifest_sessions(bundle: dict, job_class: str, split: str, vocabulary: int,
@@ -679,6 +681,12 @@ def runtime_identity(cfg: testbed.Config, plan: dict, bundle: dict,
             "provenance": provenance}
 
 
+def write_run_metadata(path: Path, metadata: dict) -> None:
+    if path.exists() and json.loads(path.read_text()) != metadata:
+        raise RuntimeError("run root belongs to a different campaign or commit")
+    path.write_text(json.dumps(metadata, indent=2) + "\n")
+
+
 def finalize(plan: dict, bundle: dict, profile: dict, cfg: testbed.Config,
              run_root: Path, service: list[dict], loaded: list[dict],
              loaded_validation: list[dict]) -> dict:
@@ -699,11 +707,12 @@ def run_campaign(plan_path: Path, run_root: Path, cfg: testbed.Config,
                  extra: list[str]) -> None:
     from destination_campaign import IMAGE_SHA256, write_checksums
     plan, bundle, profile = load_inputs(plan_path)
-    run_root.mkdir(parents=True, exist_ok=True)
     git_sha, dirty = profiler.git_state(False)
-    (run_root / "run.json").write_text(json.dumps(
-        {"schema": plan["schema"], "plan_sha256": hashlib.sha256(plan_path.read_bytes()).hexdigest(),
-         "image_sha256": IMAGE_SHA256, "git_sha": git_sha, "dirty": dirty}, indent=2) + "\n")
+    metadata = {"schema": plan["schema"],
+                "plan_sha256": hashlib.sha256(plan_path.read_bytes()).hexdigest(),
+                "image_sha256": IMAGE_SHA256, "git_sha": git_sha, "dirty": dirty}
+    run_root.mkdir(parents=True, exist_ok=True)
+    write_run_metadata(run_root / "run.json", metadata)
     stack = testbed.start_stack(cfg, run_root / "testbed", 10000, extra)
     try:
         testbed.start_sink(stack, cfg, extra)

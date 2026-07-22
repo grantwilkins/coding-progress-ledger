@@ -125,7 +125,7 @@ def test_mp_storage_wait_aggregates_chunked_writes(tmp_path):
 
 
 def test_bounded_campaign_pins_validated_mp_transport():
-    text = Path("bounded_hardware_campaign.sbatch").read_text()
+    text = Path(s.__file__).with_name("bounded_hardware_campaign.sbatch").read_text()
 
     assert "QH_LMCACHE_MODE=mp" in text
     assert "lmcache-v0.5.1-vllm0.22.0-cu129-primary.sif" in text

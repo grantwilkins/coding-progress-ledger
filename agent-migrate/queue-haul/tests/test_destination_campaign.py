@@ -479,22 +479,23 @@ def test_prepare_and_submit_use_one_immutable_job(tmp_path):
     bundle = tmp_path / "bundle"
     campaign.prepare(content_free_manifest(tmp_path / "manifest.json"), bundle)
     campaign.verify_checksums(bundle)
-    plan, job = bundle / "plan.json", bundle / "mandatory.sh"
+    plan, job, sbatch = bundle / "plan.json", bundle / "mandatory.sh", tmp_path / "campaign.sbatch"
+    sbatch.write_text("#!/bin/sh\n")
     calls = []
 
     def run(command, **_kwargs):
         calls.append(command)
         return SimpleNamespace(stdout=f"{100 + len(calls)};cluster\n")
 
-    assert campaign.submit(plan, Path("campaign.sbatch"), job,
+    assert campaign.submit(plan, sbatch, job,
                            tmp_path / "run", run=run) == "101"
     assert len(calls) == 1 and not any("dependency" in arg for arg in calls[0])
     assert any("QH_RUN_ROOT=" in arg for arg in calls[0])
     job.write_text("changed\n")
-    with pytest.raises(ValueError, match="changed"):
-        campaign.submit(plan, Path("campaign.sbatch"), job, tmp_path / "run")
+    with pytest.raises(ValueError, match="checksum"):
+        campaign.submit(plan, sbatch, job, tmp_path / "run")
 
 
 def test_destination_batch_isolates_shared_node_ports():
-    text = Path("destination_campaign.sbatch").read_text()
+    text = Path(campaign.__file__).with_name("destination_campaign.sbatch").read_text()
     assert "QH_PORT_OFFSET=${QH_PORT_OFFSET:-$((SLURM_JOB_ID % 40000 + 1000))}" in text

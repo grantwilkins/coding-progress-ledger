@@ -567,6 +567,7 @@ def verify_checksums(root: Path) -> None:
 
 def submit(plan_path: Path, sbatch: Path, job_file: Path, run_root: Path,
            run=subprocess.run) -> str:
+    verify_checksums(plan_path.parent)
     plan = json.loads(plan_path.read_text())
     validate_plan(plan)
     job_file = job_file.resolve()
@@ -574,6 +575,8 @@ def submit(plan_path: Path, sbatch: Path, job_file: Path, run_root: Path,
     if not job_file.is_file() or not checksum.is_file() \
             or file_hash(job_file) != checksum.read_text().split()[0]:
         raise ValueError("missing or changed immutable job file")
+    if not sbatch.is_file():
+        raise ValueError(f"missing sbatch file: {sbatch}")
     command = ["sbatch", "--parsable",
                f"--export=ALL,QH_JOB_FILE={job_file},QH_CAMPAIGN_PLAN={plan_path.resolve()},QH_RUN_ROOT={run_root.resolve()}",
                str(sbatch)]
