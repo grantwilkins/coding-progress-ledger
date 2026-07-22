@@ -1,89 +1,90 @@
-# KV state transfer vs. context replay
+# KV state transfer vs. public context replay
 
-`migration_ratio.py` compares runnable-state transfer time with a transparent
-prefill-compute estimate. It does not claim to predict end-to-end TTFT, which also
-depends on queueing, tokenization, runtime, parallelism, cache hits, and first-token
-decode.
+`migration_ratio.py` now uses public H200 TTFT measurements, not peak-FLOP or
+assumed-MFU replay estimates. Quantitative models must be non-Llama releases from
+July 2025 onward with public model dimensions and a compatible H100/H200 benchmark.
 
-## Reference and result
+## Benchmark-backed result
 
-The replay estimate uses one 8x B200 system's 36 PFLOP/s dense FP8 peak at 35%
-utilization: 12.6 PFLOP/s effective. The old 8x H100 BF16 arithmetic was correct
-(2.77 PFLOP/s effective), but those GPUs cannot run the current NVFP4 checkpoints
-natively and the larger BF16 checkpoints do not fit one node.
+Qwen3.5-35B-A3B was measured on one H200 SXM with concurrency 1, fresh context,
+no prompt caching, no speculative decoding, and full-precision KV. Its published
+TTFT rises from 77 ms at 1K to 12.4 s at 256K. Kimi-K2.5 publishes one exact
+single-request point: 112 ms at 1K on eight H200s. Its page does not state the
+cache policy, so the Kimi point has lower confidence.
 
-At 100,000 text tokens:
-
-| Model | Migrated state | Modeled replay | Crossover |
+| Model and context | Runnable state | Public TTFT | Crossover |
 |---|---:|---:|---:|
-| Inkling NVFP4 | 4.74 GB | 0.80 s | 47.30 Gbps |
-| GLM-5.2 | 4.49 GB | 0.79 s | 45.76 Gbps |
-| DeepSeek-V4-Pro | 0.45 GB | 0.88 s | 4.07 Gbps |
-| Nemotron 3 Ultra NVFP4 | 0.82 GB | 1.03 s | 6.39 Gbps |
-| Kimi K3 | undisclosed | not modeled | not modeled |
-| Qwen3.7-Max | undisclosed | not modeled | not modeled |
+| Qwen3.5-35B-A3B, 1K | 0.09 GB | 0.077 s | 8.92 Gbps |
+| Qwen3.5-35B-A3B, 32K | 0.74 GB | 0.600 s | 9.81 Gbps |
+| Qwen3.5-35B-A3B, 96K | 2.08 GB | 2.700 s | 6.16 Gbps |
+| Qwen3.5-35B-A3B, 256K | 5.43 GB | 12.400 s | 3.51 Gbps |
+| Kimi-K2.5, 1K | 0.07 GB | 0.112 s | 5.14 Gbps |
 
-GB is decimal. State sizes exclude allocator/block padding and transfer-protocol
-overhead. The crossover is state bits divided by modeled replay seconds.
+GB and Gbps are decimal. Crossover is state bits divided by measured TTFT. Above
+the crossover bandwidth, transferring runnable state is faster; below it, replay
+is faster. State sizes describe tensor payloads and exclude allocator padding and
+transport overhead.
 
-## Number audit
+Qwen runnable state includes ten BF16 full-attention GQA caches, thirty FP32
+Gated-DeltaNet recurrent matrices, and thirty BF16 convolution states. Kimi uses
+61 BF16 MLA caches containing a 512-value latent and 64-value RoPE key per token.
+These state sizes are derived from public configurations and reference cache
+shapes; the TTFT values themselves are measured.
 
-- The supplied `glm5_context_ratio_bandwidths` figure was actually generated from
-  `Qwen3 235B`. It now uses GLM-5.2 and is capped at its public 1M context window.
-- FP4 describes checkpoint weights, not KV precision. The modeled serving formats
-  are Inkling BF16 KV; GLM-5.2 FP8 MLA; DeepSeek FP8 shared KV plus FP4 indexer;
-  and Nemotron FP8 KV plus FP16 recurrent state.
-- Inkling has 66 layers: 11 global layers with 8 KV heads and 55 sliding-window
-  layers with 16 KV heads and a 512-token retained window.
-- GLM-5.2 has 78 MLA/DSA layers. Each token stores a 512-value latent and 64-value
-  RoPE key per layer. IndexShare runs 21 indexers for 78 top-2048 attention layers;
-  it reduces compute, not the MLA cache width.
-- DeepSeek-V4-Pro has 30 c4a and 31 c128a layers, a 128-token local window,
-  512-value shared cache entries, and a 128-value c4a index cache. The prior code
-  charged BF16 for every component; current Blackwell recipes use FP8 KV and FP4
-  index state.
-- Nemotron 3 Ultra has 12 attention and 48 Mamba layers. Migration includes its
-  fixed recurrent and convolution state; counting attention KV alone is incomplete.
-  Its config is native to 262,144 tokens; NVIDIA permits 1M extrapolation with a
-  workload-specific quality warning.
-- Kimi K3's public announcement says 2.8T total parameters, KDA/MLA, 896 experts
-  with 16 routed, and 1M context, but says the weights and technical report arrive
-  July 27, 2026. Active parameters, layer dimensions, and cache layout are not yet
-  public.
-- Qwen3.7-Max is a closed API model. Qwen publishes its 1M input limit but not the
-  layer/head/cache dimensions needed for this calculation.
+## Why the old GLM curve fell below one
 
-## TTFT evidence
+The previous plot divided a low-confidence B200 FLOP-model replay estimate by
+transfer time. At 100K and 25 Gbps it estimated about 0.79 s of replay but 1.44 s
+of transfer, producing 0.55. That was arithmetic consistency, not benchmark
+validation. An earlier version was also mislabeled: the GLM-named function plotted
+Qwen3-235B. The replacement plot contains only published H200 replay points and is
+named `benchmark_context_ratio_bandwidths`.
 
-Published TTFT values are not interchangeable with the zero-cache replay estimate.
-For example, NVIDIA reports GLM-5.2 p50 TTFT of 356 ms on an aggregated B200 target
-and 1.94 s on a disaggregated target, but both use a 64K-median agent trace with 90%
-KV hits and concurrency 64/128. Inkling's current NVIDIA recipe explicitly publishes
-no benchmark. The other requested models do not publish comparable no-hit,
-single-request, 100K TTFT measurements, so no measured TTFT was substituted into the
-curves.
+## Current model catalogue
 
-## Primary sources
+The requested frontier models remain useful architecture records but do not enter
+the ratio plot:
 
-- [Inkling announcement and architecture](https://thinkingmachines.ai/news/introducing-inkling/)
-- [Inkling configuration](https://huggingface.co/thinkingmachines/Inkling/blob/main/config.json)
-- [GLM-5.2 configuration](https://huggingface.co/zai-org/GLM-5.2/blob/main/config.json)
-- [GLM-5.2 IndexShare explanation](https://huggingface.co/blog/zai-org/glm-52-blog)
+| Model | Release | Exclusion |
+|---|---|---|
+| Inkling NVFP4 | July 2026 | No public no-cache TTFT |
+| GLM-5.2 | July 2026 | Public H200 TTFT workload has 90% KV hits |
+| DeepSeek-V4-Pro | April 2026 | No comparable public TTFT |
+| Kimi K3 | July 2026 | Weights and full configuration pending |
+| Qwen3.7-Max | July 2026 | Closed dimensions and no comparable public TTFT |
+| Nemotron 3 Ultra | April 2026 | No comparable public TTFT |
+
+They are not assigned synthetic TTFTs. No Llama model is used.
+
+## Confidence
+
+- Public TTFT transcription and transfer arithmetic: high.
+- Qwen3.5 state tensor geometry: medium-high; runtime allocation overhead is not
+  included.
+- Kimi-K2.5 state tensor geometry: medium-high; benchmark cache policy is unknown.
+- Cross-model comparison: medium-low because one H200 and eight H200 deployments
+  are different systems. The hardware is printed in every legend.
+- Requested 2026 models' architecture-only entries: medium to high where configs
+  are public; no performance claim is made.
+
+## Sources
+
+- [Qwen3.5 H200 benchmark and methodology](https://cdn.millstoneai.cloud/benchmarks/qwen3-5-35b-a3b-fp8-1x-h200-sxm/qwen3-5-35b-a3b-fp8-1x-h200-sxm.pdf)
+- [Qwen3.5 configuration](https://huggingface.co/Qwen/Qwen3.5-35B-A3B-FP8/blob/main/config.json)
+- [Qwen3.5 reference cache implementation](https://github.com/huggingface/transformers/blob/main/src/transformers/models/qwen3_5/modeling_qwen3_5.py)
+- [Kimi-K2.5 H200 benchmark](https://www.luminal.com/report/moonshotai-kimi-k2-5-8xh200)
+- [Kimi-K2.5 configuration](https://huggingface.co/moonshotai/Kimi-K2.5/blob/main/config.json)
+- [GLM-5.2 cached H200 benchmark](https://docs.nvidia.com/dynamo/dev/recipes/glm-5-2)
+- [Inkling architecture](https://thinkingmachines.ai/news/introducing-inkling/)
 - [DeepSeek-V4-Pro configuration](https://huggingface.co/deepseek-ai/DeepSeek-V4-Pro/blob/main/inference/config.json)
-- [DeepSeek V4 cache derivation](https://vllm.ai/blog/2026-04-24-deepseek-v4)
 - [Kimi K3 announcement](https://www.kimi.com/it-it/blog/kimi-k3)
 - [Qwen model limits](https://docs.qwencloud.com/developer-guides/getting-started/text-generation-models)
 - [Nemotron 3 Ultra configuration](https://huggingface.co/nvidia/NVIDIA-Nemotron-3-Ultra-550B-A55B-BF16/blob/main/config.json)
-- [Nemotron 3 Ultra technical report](https://research.nvidia.com/labs/nemotron/files/NVIDIA-Nemotron-3-Ultra-Technical-Report.pdf)
-- [NVIDIA GLM-5.2 benchmark](https://docs.nvidia.com/dynamo/dev/recipes/glm-5-2)
-- [NVIDIA Inkling deployment note](https://docs.nvidia.com/dynamo/recipes/inkling)
-- [DGX B200 specifications](https://www.nvidia.com/en-au/data-center/dgx-b200/)
 
 ## Files
 
-- `migration_ratio.py`: audited model, console summary, and plots.
-- `test_migration_ratio.py`: hand-derived unit, precision, boundary, and invariant tests.
-- `migration_ratio.{png,pdf}`: modeled ratio across bandwidth at 100K tokens.
-- `glm5_context_ratio_bandwidths.{png,pdf}`: GLM-5.2 ratio across context and bandwidth.
-- `prefill-breakeven.py` and its sweep artifacts are the older H100/BF16 experiment;
-  they are retained for provenance and are not the current model catalogue.
+- `migration_ratio.py`: public benchmark data, state geometry, console table, and plots.
+- `test_migration_ratio.py`: source-data, geometry, boundary, and invariant tests.
+- `migration_ratio.{png,pdf}`: crossover bandwidth at each published TTFT point.
+- `benchmark_context_ratio_bandwidths.{png,pdf}`: Qwen3.5 measured-context ratios.
+- `prefill-breakeven.py` and its sweep artifacts: retained legacy H100/BF16 model.
