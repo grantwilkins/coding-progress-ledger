@@ -466,13 +466,15 @@ def service_probe(host: str, port: int, model: str, sessions: list[Session],
 
 
 def measure_frontier(plan: dict, bundle: dict, profile: dict, cfg: testbed.Config,
-                     root: Path, vocabulary: int = 201088) -> tuple[list[dict], dict]:
+                     stack: testbed.Stack, root: Path,
+                     vocabulary: int = 201088) -> tuple[list[dict], dict]:
     rows = []
     for direction in plan["service"]["directions"]:
         sessions = manifest_sessions(bundle, direction, "fit", vocabulary, 0)
         context = round(statistics.mean(s.prefix_tokens for s in sessions))
         prefill, decode = profile_rate(profile, "prefill", context), profile_rate(profile, "decode", context)
         def pilot(radius):
+            testbed.flush_lmcache(stack, cfg)
             cell = root / "fit" / direction / f"pilot-{radius:.6f}"
             return service_probe(cfg.host, cfg.sink_port, cfg.model, sessions, radius,
                                  prefill, decode, plan["service"]["hold_min_s"],
@@ -482,6 +484,7 @@ def measure_frontier(plan: dict, bundle: dict, profile: dict, cfg: testbed.Confi
             labels = {inside: [], outside: []}
             for repeat in range(plan["service"]["disagreement_repeats"]):
                 for radius in labels:
+                    testbed.flush_lmcache(stack, cfg)
                     cell = root / "fit" / direction / f"{mode}-r{repeat}-{radius:.6f}"
                     labels[radius].append(service_probe(
                         cfg.host, cfg.sink_port, cfg.model, sessions, radius, prefill, decode,
@@ -510,6 +513,7 @@ def measure_frontier(plan: dict, bundle: dict, profile: dict, cfg: testbed.Confi
                 actuals = []
                 for expected_feasible, radius in ((True, bound * (1 - delta)),
                                                   (False, bound * (1 + delta))):
+                    testbed.flush_lmcache(stack, cfg)
                     cell = root / split / direction / f"{mode}-{radius:.6f}"
                     actual = service_probe(cfg.host, cfg.sink_port, cfg.model, sessions,
                                            radius, prefill, decode,
@@ -571,6 +575,7 @@ def measure_loaded(plan: dict, bundle: dict, profile: dict, cfg: testbed.Config,
         for repeat in range(plan["migration"]["repeats"]):
             control_root = root / f"rho{rho:.6f}-t{context}-b{bandwidth:g}-r{repeat}" / "control"
             if not (control_root / "result.json").exists():
+                testbed.flush_lmcache(stack, cfg)
                 load = DestinationLoad(cfg.host, cfg.sink_port, cfg.model, background, rho,
                                        prefill, decode, control_root / "foreground", repeat,
                                        normal_bound=normal)
@@ -582,6 +587,7 @@ def measure_loaded(plan: dict, bundle: dict, profile: dict, cfg: testbed.Config,
                                               method, context, bandwidth, repeat)
                 cell_root = control_root.parent / method
                 if not (cell_root / "result.json").exists():
+                    testbed.flush_lmcache(stack, cfg)
                     load = DestinationLoad(cfg.host, cfg.sink_port, cfg.model, background, rho,
                                            prefill, decode, cell_root / "foreground", repeat,
                                            normal_bound=normal)
@@ -708,7 +714,8 @@ def run_campaign(plan_path: Path, run_root: Path, cfg: testbed.Config,
                                   plan["service"]["anchors"], 201088, expected,
                                   run_root / "anchors")
         anchor_gate(anchors, expected, plan["anchor_drift_limit"])
-        service, bounds = measure_frontier(plan, bundle, profile, cfg, run_root / "service")
+        testbed.flush_lmcache(stack, cfg)
+        service, bounds = measure_frontier(plan, bundle, profile, cfg, stack, run_root / "service")
         loaded_index = measure_loaded(plan, bundle, profile, cfg, stack, bounds, run_root / "loaded")
         loaded, validation = reduce_loaded_results(profile, loaded_index, run_root / "loaded")
         finalize(plan, bundle, profile, cfg, run_root, service, loaded, validation)
