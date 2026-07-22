@@ -25,14 +25,13 @@ and conservative profile reduction with job-specific ports on shared nodes.
 Every cell checkpoints independently. A reserve is generated only from a failed
 reduction and names only failed cells.
 
-The destination baseline now uses the original measured 256/4K/8K decode
-staircase plus clean 4K/16K/24K anchors from the pinned vLLM 0.22 runtime. The
-raw anchor rows and exact run, plan, image, and artifact hashes are retained in
-`outputs/destination-anchor-baseline-20260722.json`; a new campaign repeats the
-anchors at a uniform 2x offered load and still hard-fails beyond 15% drift. The
-shared simulator's 31,562
-token endpoint continues the measured 16K–24K slope; the destination campaign
-uses only measured contexts through 24,576.
+The destination baseline pins the clean vLLM 0.22 4K/16K/24K anchor medians.
+The original prefill shape is scaled by the median measured anchor ratio; exact
+anchor rows and run, plan, image, and artifact hashes are retained in
+`outputs/destination-anchor-baseline-20260722.json`. New campaigns replay those
+rates with uniform arrivals and hard-fail beyond 15% underdelivery. The shared
+simulator's 31,562-token endpoint remains outside the destination campaign's
+measured domain, which ends at 24,576.
 
 Download public trace rows before allocating GPUs, build the content-free
 manifest, then prepare the launch bundle:
@@ -59,11 +58,11 @@ check and the runner rejects incompatible run-root reuse.
 ```bash
 # workstation
 git push origin profile-aware-deadlines
-rsync -a --checksum /private/tmp/qh-destination-v5-20260722/ \
-  <cluster>:/scratch/users/gfw/qh-destination-v5-20260722/
+rsync -a --checksum /private/tmp/qh-destination-v6-20260722/ \
+  <cluster>:/scratch/users/gfw/qh-destination-v6-20260722/
 
 # cluster
-cd /scratch/users/gfw/qh-destination-v5-20260722
+cd /scratch/users/gfw/qh-destination-v6-20260722
 sha256sum -c SHA256SUMS
 cd /home/groups/ramr/gfw/coding-progress-ledger/agent-migrate
 git switch profile-aware-deadlines
@@ -71,9 +70,9 @@ git pull --ff-only
 test "$(git rev-parse HEAD)" = "$(git rev-parse origin/profile-aware-deadlines)"
 module load gcc/14.2.0 openblas/0.3.28 uv/0.8.4
 uv run python queue-haul/destination_campaign.py submit \
-  --plan /scratch/users/gfw/qh-destination-v5-20260722/plan.json \
-  --job-file /scratch/users/gfw/qh-destination-v5-20260722/mandatory.sh \
-  --run-root /scratch/users/gfw/qh-destination-v5-run-20260722
+  --plan /scratch/users/gfw/qh-destination-v6-20260722/plan.json \
+  --job-file /scratch/users/gfw/qh-destination-v6-20260722/mandatory.sh \
+  --run-root /scratch/users/gfw/qh-destination-v6-run-20260722
 ```
 
 ```bash

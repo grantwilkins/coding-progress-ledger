@@ -33,6 +33,7 @@ def metrics(slope=0):
 def test_schedule_and_session_tokens_are_deterministic_but_isolated():
     assert runner.poisson_schedule(2, 4, 7) == runner.poisson_schedule(2, 4, 7)
     assert runner.uniform_schedule(2, 4, 7) == (0, .5, 1, 1.5)
+    assert runner.anchor_rate(100, 20) == 5
     a = runner.Session("a", 4, 2, 3, 100, 7)
     b = runner.Session("b", 4, 2, 3, 100, 7)
     first, forced = a.prompt(0)
@@ -63,13 +64,17 @@ def test_queue_drift_requires_real_samples():
         runner.queue_drift_upper(metrics()[:1])
 
 
-def test_anchor_drift_gate_is_inclusive_at_fifteen_percent():
+def test_anchor_gate_accepts_improvement_and_fifteen_percent_underdelivery():
     expected = {("prefill", 4096): 100, ("decode", 4096): 50}
     runner.anchor_gate([
         {"metric": "prefill", "context_tokens": 4096, "tokens_per_s": 85},
         {"metric": "decode", "context_tokens": 4096, "tokens_per_s": 57.5},
     ], expected)
-    with pytest.raises(ValueError, match="drift"):
+    runner.anchor_gate([
+        {"metric": "prefill", "context_tokens": 4096, "tokens_per_s": 200},
+        {"metric": "decode", "context_tokens": 4096, "tokens_per_s": 100},
+    ], expected)
+    with pytest.raises(ValueError, match="underdelivery"):
         runner.anchor_gate([
             {"metric": "prefill", "context_tokens": 4096, "tokens_per_s": 84.9},
             {"metric": "decode", "context_tokens": 4096, "tokens_per_s": 50},

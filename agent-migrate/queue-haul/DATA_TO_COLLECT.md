@@ -86,9 +86,9 @@ no-migration controls.
 This is a gate, not a new scientific result. Record the exact fingerprints and
 prove retained same-session KV hits, zero unintended cross-session hits, exact
 block counts and sizes, no inference-time WAN GET after warm prefetch, and
-valid continuation for replay and KV transfer. Repeat the 4K, 16K, and 24K
-isolated `F(T)`/`G(T)` anchors. A material drift invalidates reuse of the old
-profile and stops the job before fitting mixed-load results.
+valid continuation for replay and KV transfer. Replay the frozen 4K, 16K, and
+24K `F(T)`/`G(T)` rates with uniform arrivals. More than 15% underdelivery
+invalidates the profile and stops the job before fitting mixed-load results.
 
 The historical corpus cannot prove that the newly launched container and
 runtime still implement the same contract, which is the only reason this

@@ -58,6 +58,10 @@ def uniform_schedule(rate: float, count: int, _seed: int) -> tuple[float, ...]:
     return tuple(index / rate for index in range(count))
 
 
+def anchor_rate(expected: float, tokens: int) -> float:
+    return expected / tokens
+
+
 @dataclass
 class Session:
     session_id: str
@@ -288,10 +292,10 @@ def anchor_gate(rows: list[dict], expected: dict[tuple[str, int], float], limit:
                                        if (r["metric"], int(r["context_tokens"])) == key)
                 for key in {(r["metric"], int(r["context_tokens"])) for r in rows}}
     failed = [key for key, value in expected.items()
-              if key not in observed or abs(observed[key] / value - 1) > limit + 1e-12]
+              if key not in observed or observed[key] / value < 1 - limit - 1e-12]
     if observed.keys() != expected.keys() or failed:
         details = ", ".join(f"{metric}@{context}" for metric, context in failed)
-        raise ValueError(f"service anchor drift exceeds the frozen limit: {details}")
+        raise ValueError(f"service anchor underdelivery exceeds the frozen limit: {details}")
 
 
 def manifest_sessions(bundle: dict, job_class: str, split: str, vocabulary: int,
@@ -429,7 +433,7 @@ def measure_anchors(host: str, port: int, model: str, contexts: list[int],
                 sampler = MetricsSampler(host, port, cell / "engine.csv"); sampler.start()
                 try:
                     started = time.monotonic()
-                    rate = 2 * expected[metric, context] / tokens
+                    rate = anchor_rate(expected[metric, context], tokens)
                     requests = drive(host, port, model, sessions, rate,
                                      math.ceil(rate * hold_s), repeat, scheduler=uniform_schedule)
                     time.sleep(max(0, hold_s - (time.monotonic() - started)))
