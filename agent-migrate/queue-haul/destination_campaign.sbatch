@@ -6,7 +6,7 @@
 #SBATCH --cpus-per-task=16
 #SBATCH --gres=gpu:2
 #SBATCH --constraint=GPU_SKU:A100_SXM4&GPU_MEM:80GB
-#SBATCH --mem=256G
+#SBATCH --mem=400G
 #SBATCH --time=12:00:00
 #SBATCH --output=/home/groups/ramr/gfw/coding-progress-ledger/agent-migrate/queue-haul/outputs/destination-%A.out
 #SBATCH --error=/home/groups/ramr/gfw/coding-progress-ledger/agent-migrate/queue-haul/outputs/destination-%A.err
