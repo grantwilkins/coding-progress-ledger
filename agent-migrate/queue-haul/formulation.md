@@ -1,128 +1,298 @@
 # Queue-Haul formulation
 
-Each session has a source instance, context, sampled requests, durable log, and
-expected prefill and decode rates. A model profile supplies the measured power
-curve, service rates, replay rates, KV block layout, action times, concurrency
-limits, resident KV-token capacity, and uncertainty cases. Active sessions are
-placed only when both compute load and resident KV fit; cold sessions consume
-neither until reactivation.
+Queue-Haul chooses whole LLM sessions to move out of a source power domain
+before a deadline. It models source power, migration work, destination
+admission, concrete replica packing, and exact migration execution. Source
+power is constrained; destination power is reported.
 
-The planner chooses whole sessions and one of three actions: replay, KV
-transfer, or replay on request. Random, greedy, and LP selection are
-separate policies. Destination placement is a balanced pass.
-Destination placement enforces the same compute and resident-KV limits as the
-source placement.
-Only local source power is constrained; destination power is reported.
+A model profile supplies measured power and service curves, replay and KV
+timing, KV block layout, action power, concurrency limits, transition times,
+resident-KV capacity, and uncertainty cases.
+
+## Sessions
+
+A session is the unit of selection, migration, routing, and KV residency. A
+session \(s\) contains:
+
+- its current serving instance and active or cold state;
+- current context \(T_s\), durable-log bytes \(B_s\), and movable flag;
+- expected prefill and decode token rates \(f_s,g_s\);
+- optional expected context growth \(\gamma_s\) in tokens/s;
+- optional sampled requests, each with an arrival gap, prompt tokens, and
+  output tokens; and
+- for a cold session, its probability of waking during the planning horizon.
+
+An active session consumes expected service load and resident KV. In the
+legacy scalar model its normalized load is
+
+\[
+\ell_s=\frac{f_s}{F}+\frac{g_s}{G}.
+\]
+
+A pool-aware destination instead retains the two-dimensional work vector
+
+\[
+d_{s,q}=
+\left(\frac{f_s}{F_q(T_s)},\frac{g_s}{G_q(T_s)}\right)
+\]
+
+for destination type \(q\). A cold session has \(f_s=g_s=0\), consumes no live
+KV until it wakes, and can use only replay on request. An active session can
+use replay or KV transfer. Selection considers only movable sessions whose
+serving instance is entirely inside the local source-power scope.
+
+Planning never reads sampled future request times or sizes. For a planning
+horizon \(h\), it conservatively materializes expected active-session state as
+
+\[
+\widehat T_s(h)=\left\lceil T_s+\gamma_s h\right\rceil,\qquad
+\widehat B_s(h)=\left\lceil B_s\frac{\widehat T_s(h)}{T_s}\right\rceil.
+\]
+
+Expected service rates remain fixed during a plan. Sampled requests are used
+only by execution and evaluation.
+
+## Time horizons and power
+
+Let \(D\) be the power deadline, \(C\) controller delay, and \(W\) the measured
+trailing power window. Migration admission uses
+
+\[
+H_m=D-C-W.
+\]
+
+A pool-aware architecture may set a separate residency horizon \(H_r\);
+otherwise \(H_r\) is the simulated end time after controller delay. Separating
+the horizons prevents short migration deadlines from understating long-lived
+destination KV.
+
+For initial source load \(L\), moving session \(s\) has conservative marginal
+source-power gain
+
+\[
+w_s=P(L)-P(L-\ell_s).
+\]
+
+Because the measured power curve is nondecreasing and concave, summing these
+initial marginal gains is a conservative lower bound on the reduction from
+moving several sessions. The exact power model is reevaluated after integer
+selection. Source power is credited only when a migration commits, not when
+its background copy finishes.
+
+The profile also supplies total action power at each measured concurrency for
+replay, KV transfer, catch-up, and node transitions. The simulator updates that
+total when concurrency changes; it does not multiply a measured concurrent
+total by the number of sessions.
+
+## Candidates and resources
+
+The legacy planner has replay and KV-transfer candidates for each active
+session. With a `DestinationArchitecture`, a candidate is
+
+\[
+c=(s,a,p),
+\]
+
+where \(a\) is replay or KV transfer and \(p\) is a compatible destination
+pool. Replay requires matching model, tokenizer, and durable-log contract. KV
+transfer additionally requires a matching KV ABI.
+
+Every candidate records source-power gain, migration work and duration, exact
+route bytes, destination service work, and resident KV tokens. A candidate
+outside the measured context, bandwidth, workload-direction, or loaded-profile
+range hard-fails or is excluded.
+
+The common sparse relaxation is
+
+\[
+Ax\le\mathbf1,\qquad Ux\le\mathbf1,\qquad 0\le x\le1,
+\]
+
+where \(A\) permits at most one candidate per session and each row of \(U\) is
+normalized by its capacity. The resource rows are:
+
+| Resource | Capacity |
+|---|---|
+| source-instance migration | source streams \(\times H_m\) |
+| exact route link | link bytes/s \(\times H_m\) |
+| pool service facet | replicas \(\times\) policy bound minus baseline work |
+| pool live KV | replica KV capacity minus baseline KV at \(H_r\) |
+| pool migration occupancy | replicas \(\times H_m\) |
+
+The legacy adapter represents destination service with aggregate replay time,
+KV-service time, compute load, and resident-KV rows. Its flexible destination
+links form one balanced link pool. The architecture path instead preserves
+exact pools, routes, per-replica baselines, and service facets.
+
+Replay uses expected durable-log bytes, replay time, measured replay completion,
+and route-switch time. KV transfer uses setup, complete sealed KV blocks, the
+slower of network transfer and destination ingestion, measured initial
+completion, final missing blocks, partial-tail reconstruction, synchronization,
+and route-switch time. Source migration occupancy lasts until commit.
+
+## Destination admission
+
+Each destination type \(q\) has measured context-conditioned prefill and decode
+rates, KV capacity \(K_q\), and common nonnegative service-facet normals
+\(N_q\). Its nested policy envelopes satisfy
+
+\[
+h_q^{normal}\le h_q^{emergency}\le h_q^{stable}.
+\]
+
+For pool \(p\), baseline service work \(b_p\), and selected candidates \(y_c\),
+admission in mode \(m\) requires
+
+\[
+N_q\left(b_p+\sum_{c\in p}d_cy_c\right)
+\le |p|h_q^m.
+\]
+
+Live-state admission separately requires
+
+\[
+K_p^0+\sum_{c\in p}\widehat T_c(H_r)y_c\le |p|K_q.
+\]
+
+Normal admission is attempted first; emergency is tried only if normal cannot
+meet the source-power target. Stable is not an admission mode. It is the outer
+hard limit independently checked on each concrete replica during execution.
+A baseline already outside the requested admission envelope makes that pool
+unavailable.
+
+Baseline work and KV may come from explicit per-replica fields or destination
+background sessions, but never both.
+
+Measured loaded-migration coefficients inflate replay or KV duration by the
+worst supported slowdown between the pool's initial load and the selected mode
+boundary. Migration and destination ingestion may overlap when the measured
+primitive supports it, so their times are not blindly added.
 
 ## Greedy
 
-For active sessions and an awake final state, the greedy policy uses the same
-normalized resource rows and usable window \(H\) as the LP. Each action's score
-is its conservative marginal source-power reduction divided by its priced
-resource use. Resource prices are at least one and rise with demand from each
-session's initially cheapest action, avoiding double-counting mutually exclusive
-replay and KV-transfer alternatives. Sessions are sorted once by their best
-action score. In that order, the policy chooses the highest-scoring action that
-fits every remaining source, network, destination service, compute, and
-resident-KV capacity. The event simulator still decides whether the aggregate
-reservations form an exact schedule.
-
-## LP planner
-
-The first LP scope is active sessions, replay and KV transfer, one destination
-pool, the central profile case, and an awake final source state. Other cases
-hard-fail.
-
-For session \(j\), \(x_j^R,x_j^K\in[0,1]\) select replay or KV transfer and
-\(z_j\in[0,1]\) leaves the session at the source:
+Greedy uses the same candidate and normalized resource matrices as the LP. It
+first finds one initially cheapest legal candidate per session and sums those
+columns to estimate demand \(d_r\) for each resource. Counting one candidate
+per session avoids double-counting mutually exclusive replay, KV, or pool
+alternatives. The approximate resource price is
 
 \[
-x_j^R+x_j^K+z_j=1.
+\pi_r=\max(1,d_r).
 \]
 
-The usable migration window reserves the measured trailing power window:
+Candidate \(c\) receives score
 
 \[
-H=D-\text{controller delay}-\text{power window}.
+\operatorname{score}(c)=
+\frac{w_c}{\sum_r \pi_r u_{r,c}}.
 \]
 
-Methods whose unloaded duration exceeds \(H\) are disabled. Every remaining
-resource \(r\) has a normalized linear load:
+Sessions are sorted once by their best candidate score. In that order, greedy
+takes the highest-scoring candidate that preserves every remaining capacity
+and packing cut. The legacy path stops on exact modeled power; the pool-aware
+path stops on accumulated conservative gain. Both reevaluate exact source power
+after integer selection. This approximates LP dual pricing while remaining
+approximately \(O(N\log N)\).
 
-\[
-\sum_{j,a} u_{j,a,r}x_j^a\leq 1.
-\]
+## LP
 
-The resources are source-instance move time, each fixed network link, the
-balanced destination-link pool, destination replay time, destination KV
-service time, destination compute load, and resident KV tokens. Replay uses
-measured durable-log bytes and replay time. KV transfer uses complete sealed
-blocks, the slower of path transfer and destination loading, and final
-reconstruction of the partial tail followed by measured synchronization.
-Source-instance time covers the complete unloaded move because a source move
-slot remains occupied until commit.
-
-For initial source load \(L_s\), the linear power coefficient for session \(j\)
-is its measured one-session reduction (in watts; `w` avoids colliding with the
-decode token rate `g` used in destination demand):
-
-\[
-w_j=P(L_s)-P(L_s-\ell_j).
-\]
-
-Since \(P\) is nondecreasing and concave, \(\sum_j w_jx_j\) is a conservative
-power-reduction estimate: removing several sessions from one instance saves at
-least the sum of their initial marginal reductions. With requested reduction
-\(\Delta P\), the restored Queue-Haul program is:
+The default LP minimizes migration work while meeting requested conservative
+power reduction \(\Delta P\):
 
 \[
 \begin{aligned}
-\operatorname{minimize}\quad
-&\sum_{j,a}c_j^a x_j^a\\
+\operatorname{minimize}\quad &\sum_c m_cx_c\\
 \operatorname{subject\ to}\quad
-&\sum_j w_j(x_j^R+x_j^K)\geq\Delta P.
+&\sum_c w_cx_c\ge\Delta P,\\
+&Ax\le\mathbf1,\quad Ux\le\mathbf1,\quad 0\le x\le1.
 \end{aligned}
 \]
 
-The exact concave constraint \(P_{\rm final}\leq P_{\rm limit}\) is not an LP.
-The planner therefore solves the safe linear bound, then evaluates the rounded
-plan with the exact power curve. If the target-constrained program is
-infeasible, a separate solve maximizes the conservative power reduction under
-the same resource limits. `lp_peak_first` minimizes shortfall, peak resource
-use, then work; `lp_work_first` swaps the last two objectives. These comparison
-solvers are not the default formulation.
+If the target is infeasible, a separate solve maximizes conservative power
+shed. The pool-aware path then minimizes work at that maximum. The result is
+valid best effort with `failure_reason="target_unmet"` and an explicit watt
+shortfall, not successful curtailment. The legacy `lp_peak_first` and
+`lp_work_first` variants retain alternative objective orders for comparison.
 
-The fractional result is rounded deterministically. A whole-session assignment
-is accepted only when it preserves every LP resource limit. Remaining power
-shortfall is filled in LP-fraction order, then by power reduction per unloaded
-second, without violating those limits. Destination placement remains a
-separate balanced pass that enforces per-instance compute and KV residency.
+Fractional results are rounded deterministically to whole sessions while
+preserving every resource row. The legacy path then balances selected sessions
+across destination instances. The pool-aware path retains the chosen pool and
+packs each session onto a concrete replica by worst service, KV, and migration
+pressure.
 
-The simulator follows background preparation, source quiescing, catch-up,
-route switch, commit, and optional sleep or shutdown. KV copies wait in a FIFO
-per destination before transferring; admitted transfers share every named
-link. Source power changes only at commit. A plan is feasible only when
-central-case execution meets both the move deadline and the trailing power
-window.
+Aggregate pool feasibility does not imply replica feasibility. If deterministic
+packing fails, the failed candidate set becomes a cut and selection is solved
+again:
 
-A run is accepted when:
+\[
+\sum_{c\in C_k}x_c\le |C_k|-1.
+\]
 
-1. the trailing-window modeled source power is at or below the limit;
-2. every planned move commits by the deadline; and
-3. every request observed by the deadline starts by the deadline.
+Small cases have an exact replica-assignment oracle. Plans report packing
+repair count and time.
 
-The third condition checks routing readiness, not end-to-end request latency.
-Request events affect context and timing but not dynamic power yet; output
-columns therefore say `modeled_*_power`.
+## How sessions are updated during execution
 
-The LP conservatively budgets migration resources through
-\(D-\text{power window}\), but acceptance separates the two deadlines: modeled
-trailing-window power must meet its limit at \(D\), and every migration must
-commit by \(D\). `lp_power_shortfall_w` reports exact remaining source-power
-shortfall after rounding. `lp_peak_pressure` reports the largest rounded
-normalized LP resource load. The discrete-event result remains authoritative
-because aggregate LP capacity does not guarantee a schedule with serial stages
-and shared queues.
+The simulator maintains mutable execution state separately from the immutable
+input session:
 
-Unsupported context, load, concurrency, topology, or profile cases hard-fail.
-Open measurement work is listed in `DATA_TO_COLLECT.md`.
+1. **Requests.** A request waits if its current serving instance is busy or its
+   session is paused. At request completion, prompt plus output tokens are
+   added to the session context and to resident KV on the currently serving
+   instance. Durable-log accounting grows in proportion to context. Request
+   events affect migration state and timing but do not yet change the
+   expected-rate power model.
+2. **Snapshot preparation.** A move snapshots current context when its source
+   stream starts. Replay transfers and reconstructs the corresponding durable
+   log. KV transfer sends only complete sealed blocks; an unsealed tail is
+   never copied as a block.
+3. **Updates during copying.** Replay catches up log growth after quiescence.
+   After the initial KV snapshot is ready, each completed request exposes newly
+   sealed blocks as an append transfer. Those appends use the same destination
+   KV queue and shared links as other copies.
+4. **Quiescence and catch-up.** At the planned quiescence time, the source stops
+   admitting work for the session and waits for any active request. It then
+   waits for outstanding appends, transfers missing sealed blocks, reconstructs
+   the final partial tail by replay, and performs measured synchronization.
+   Background KV pacing does not cap this paused final catch-up.
+5. **Commit.** After route-switch time, commit atomically changes session
+   routing and power ownership. Current resident KV is removed from the source
+   and added to the selected destination. Pending requests can then start
+   there. No source-power reduction is credited before this point.
+6. **Cold sessions.** Replay-on-request switches the route without creating
+   live KV. The first later request triggers durable-log replay, installs the
+   reconstructed context at the destination, and then begins service.
+
+Source-instance stream limits serialize or overlap moves as configured.
+Transfers share every common network link with work-conserving max-min rates.
+KV copies additionally queue per destination and share measured destination
+ingestion capacity. If the requested final source state is sleep or off, a node
+transitions only after every dependent session has committed.
+
+## Validation and scope
+
+The event simulator is authoritative because aggregate resource feasibility
+does not guarantee a valid schedule through serial stages and shared queues. A
+plan is feasible only when:
+
+1. exact modeled source power after integer selection is at or below the limit;
+2. the trailing-window modeled source power at \(D\) is at or below the limit;
+3. every selected migration commits by \(D\); and
+4. any requested sleep or off transition finishes by \(D\).
+
+Experiment acceptance additionally requires every request observed by \(D\) to
+start by \(D\). This checks routing readiness, not end-to-end request latency.
+
+The legacy scalar LP and greedy support active sessions, the central profile
+case, one aggregate destination pool, and an awake final state. Passing a
+`DestinationArchitecture` enables multiple pools and routes, normal/emergency
+admission, concrete replica packing, and stable-envelope validation; its
+current planning scope remains active sessions, the central case, and an awake
+final state. Random planning retains cold-session and replay-on-request
+coverage.
+
+Unsupported context, workload direction, destination load, bandwidth,
+compatibility, topology, concurrency, or profile cases hard-fail. Continuous
+destination scheduling, request-level dynamic power, replanning, model loading,
+and predictive latency remain out of scope. Measurement requirements and open
+evidence are tracked in `DATA_TO_COLLECT.md`.

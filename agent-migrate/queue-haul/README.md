@@ -185,17 +185,17 @@ destination service, compute, KV-residency, and trailing power-window capacities
 as the LP. This remains approximately `O(N log N)`.
 
 `--solver lp` jointly selects replay and KV transfer under source-instance,
-network, destination replay, destination KV, compute, residency, and source
-power limits. Its CVXPY model uses CLARABEL and restores the earlier Queue-Haul
-objective: meet the requested power reduction with minimum total migration
-work, or maximize power reduction when the target is infeasible. The
-`lp_peak_first` and `lp_work_first` solvers retain the two three-stage objective
-orders for direct comparison. The current LP scope is active
-sessions, one destination pool, and `--final-state awake`;
+network, destination service, compute, residency, and source-power limits. Its
+CVXPY model uses CLARABEL and meets the requested power reduction with minimum
+migration work, or maximizes reduction when the target is infeasible. The
+legacy scalar path supports one aggregate destination pool; passing a
+`DestinationArchitecture` enables exact multi-pool candidates and replica
+packing. Both current paths support active sessions and `--final-state awake`;
 unsupported cases hard-fail. The fractional plan is rounded to whole sessions
 and accepted only when the discrete-event simulator meets trailing-window power
-and every migration commits by the migration deadline. The exact equations and
-conservative concave-power bound are in `queue-haul/formulation.md`.
+and every migration commits by the deadline. The current session, greedy, LP,
+pool-admission, packing, and execution equations are in
+`queue-haul/formulation.md`.
 Action power is stored as total added power for each measured concurrency, not
 as power per session. The simulator updates these totals when concurrency
 changes, and the planner reuses a route-resource summary only when the complete
