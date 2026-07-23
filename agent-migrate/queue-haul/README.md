@@ -37,6 +37,9 @@ outside the destination campaign's measured domain, which ends at 24,576.
 Service probes use time-bounded Poisson arrivals and include scheduled client
 backlog in stability. A block-bootstrap drift upper bound no larger than one
 queued request per measurement window is the frozen non-growth resolution.
+Disagreeing boundary cells receive five runs; their majority determines the
+boundary and the vote counts remain in `service.json` instead of aborting the
+campaign.
 
 Download public trace rows before allocating GPUs, build the content-free
 manifest, then prepare the launch bundle:
@@ -56,9 +59,11 @@ rows; `prepare-reserve` emits nothing when they pass and otherwise writes one
 12-hour bundle containing only the failed cells.
 
 Push the exact campaign commit before updating the cluster checkout. Transfer
-the prepared bundle, verify it from inside its directory, and use a new run
-root whenever the plan or commit changes. `submit` repeats the bundle checksum
-check and the runner rejects incompatible run-root reuse.
+the prepared bundle and verify it from inside its directory. Use a new run root
+when the plan changes; after a code-only failure, set
+`QH_RESUME_FROM_GIT_SHA` to the failed run's commit to reuse its completed
+cells. The runner records the commit history and rejects implicit or
+plan-incompatible reuse.
 
 ```bash
 # workstation

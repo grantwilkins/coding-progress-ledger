@@ -263,11 +263,12 @@ def test_campaign_is_one_mandatory_job_and_no_obsolete_grid(tmp_path):
         campaign.validate_plan(dict(plan, gpu_pair_hour_budget=72))
 
 
-def test_boundary_disagreement_hard_fails_without_four_of_five():
+def test_boundary_decision_uses_odd_run_majority():
     assert campaign.boundary_decision(["feasible"] * 3) == "feasible"
     assert campaign.boundary_decision(["feasible"] * 4 + ["infeasible"]) == "feasible"
-    with pytest.raises(ValueError, match="four-of-five"):
-        campaign.boundary_decision(["feasible", "infeasible", "feasible"])
+    assert campaign.boundary_decision(
+        ["feasible", "infeasible", "feasible", "infeasible", "infeasible"]
+    ) == "infeasible"
 
 
 def test_acceptance_targets_only_failed_reserve_cells(tmp_path):

@@ -151,12 +151,20 @@ def test_launch_inputs_are_relative_and_checksum_pinned(tmp_path):
         runner.load_inputs(bundle / "plan.json")
 
 
-def test_run_root_cannot_resume_a_different_commit(tmp_path):
+def test_run_root_requires_explicit_commit_resume(tmp_path):
     path = tmp_path / "run.json"
     runner.write_run_metadata(path, {"git_sha": "one"})
     runner.write_run_metadata(path, {"git_sha": "one"})
     with pytest.raises(RuntimeError, match="different campaign or commit"):
         runner.write_run_metadata(path, {"git_sha": "two"})
+    runner.write_run_metadata(path, {"git_sha": "two"}, "one")
+    assert json.loads(path.read_text())["git_history"] == ["one", "two"]
+    runner.write_run_metadata(path, {"git_sha": "two"})
+
+
+def test_resume_commit_defaults_from_environment(monkeypatch):
+    monkeypatch.setenv("QH_RESUME_FROM_GIT_SHA", "one")
+    assert runner.parse_args(["--plan", "p", "--run-root", "r"]).resume_from_git_sha == "one"
 
 
 def test_loaded_scenario_has_one_session_and_one_method():
@@ -229,6 +237,29 @@ def test_frontier_reruns_only_disagreements_and_accepts_four_of_five(monkeypatch
         if name.startswith("normal-r"):
             counts[radius] = counts.get(radius, 0) + 1
     assert sorted(counts.values()) == [3, 5]
+
+
+def test_frontier_records_three_of_five_boundary(monkeypatch, tmp_path):
+    thresholds = {"normal": 1, "emergency": 2, "stable": 3}
+    monkeypatch.setattr(runner, "manifest_sessions", lambda *_: [runner.Session("s", 10, 2, 3, 100, 0)])
+    monkeypatch.setattr(runner, "profile_rate", lambda *_: 100)
+    monkeypatch.setattr(runner.testbed, "flush_lmcache", lambda *args: None)
+    def probe(*args, **kwargs):
+        radius, root, seed = args[4], args[9], args[10]
+        labels = {mode: radius <= bound for mode, bound in thresholds.items()}
+        if root.name.startswith("normal-r") and not labels["normal"] and seed in (2, 3):
+            labels["normal"] = True
+        return {"classification": labels}
+    monkeypatch.setattr(runner, "service_probe", probe)
+    plan = {"service": {"directions": ["coding"], "initial_repeats": 3,
+                        "disagreement_repeats": 5, "radial_resolution": .05,
+                        "hold_min_s": 1, "block_bootstrap_s": 30,
+                        "bootstrap_samples": 10, "slos": {}}}
+    rows, _ = runner.measure_frontier(plan, {}, {}, SimpleNamespace(
+        host="h", sink_port=1, model="m"), object(), tmp_path)
+    normal = next(row for row in rows if row["mode"] == "normal")
+    assert normal["outside_feasible_votes"] == 2
+    assert normal["outside_repeats"] == 5
 
 
 def test_rho_uses_token_counter_differences_and_requires_thirty_seconds():

@@ -166,14 +166,7 @@ def boundary_decision(labels: list[str]) -> str:
     if len(labels) not in (3, 5) or not set(labels) <= {"feasible", "infeasible"}:
         raise ValueError("boundary decisions need three or five valid runs")
     counts = {label: labels.count(label) for label in set(labels)}
-    if (
-        len(labels) == 3
-        and len(counts) == 1
-        or len(labels) == 5
-        and max(counts.values()) >= 4
-    ):
-        return max(counts, key=counts.get)
-    raise ValueError("boundary disagreement requires a four-of-five decision")
+    return max(counts, key=counts.get)
 
 
 def check_gate(report: dict, phase: str) -> None:

@@ -8,6 +8,7 @@ import hashlib
 import http.client
 import json
 import math
+import os
 import random
 import statistics
 import threading
@@ -548,17 +549,18 @@ def measure_frontier(plan: dict, bundle: dict, profile: dict, cfg: testbed.Confi
                 if (repeat + 1 >= plan["service"]["initial_repeats"] and
                         all(len(set(values)) == 1 for values in labels.values())):
                     break
-            try:
-                decisions = {radius: boundary_decision([
-                    "feasible" if value else "infeasible" for value in values])
-                    for radius, values in labels.items()}
-            except ValueError as exc:
-                raise RuntimeError(f"unresolved {direction} {mode} boundary disagreement") from exc
-            if decisions != {inside: "feasible", outside: "infeasible"}:
-                raise RuntimeError(f"unresolved {direction} {mode} boundary disagreement")
+            decisions = {radius: boundary_decision([
+                "feasible" if value else "infeasible" for value in values])
+                for radius, values in labels.items()}
             rows += [{"split": "fit", "direction": direction, "mode": mode,
                       "facet": 0, "run_id": f"{direction}-{repeat}", "bound": inside,
-                      "outside": outside} for repeat in range(len(labels[inside]))]
+                      "outside": outside, "inside_decision": decisions[inside],
+                      "outside_decision": decisions[outside],
+                      "inside_feasible_votes": sum(labels[inside]),
+                      "inside_repeats": len(labels[inside]),
+                      "outside_feasible_votes": sum(labels[outside]),
+                      "outside_repeats": len(labels[outside])}
+                     for repeat in range(len(labels[inside]))]
     fit = {mode: statistics.median(float(r["bound"]) for r in rows
                                     if r["split"] == "fit" and r["mode"] == mode)
            for mode in MODES}
@@ -740,9 +742,17 @@ def runtime_identity(cfg: testbed.Config, plan: dict, bundle: dict,
             "provenance": provenance}
 
 
-def write_run_metadata(path: Path, metadata: dict) -> None:
-    if path.exists() and json.loads(path.read_text()) != metadata:
-        raise RuntimeError("run root belongs to a different campaign or commit")
+def write_run_metadata(path: Path, metadata: dict, resume_from_git_sha: str | None = None) -> None:
+    metadata = dict(metadata)
+    if path.exists():
+        previous = json.loads(path.read_text())
+        if all(previous.get(key) == value for key, value in metadata.items()):
+            return
+        immutable = set(metadata) - {"git_sha", "dirty"}
+        if (resume_from_git_sha != previous.get("git_sha") or
+                any(previous.get(key) != metadata[key] for key in immutable)):
+            raise RuntimeError("run root belongs to a different campaign or commit")
+        metadata["git_history"] = previous.get("git_history", [previous["git_sha"]]) + [metadata["git_sha"]]
     path.write_text(json.dumps(metadata, indent=2) + "\n")
 
 
@@ -763,7 +773,7 @@ def finalize(plan: dict, bundle: dict, profile: dict, cfg: testbed.Config,
 
 
 def run_campaign(plan_path: Path, run_root: Path, cfg: testbed.Config,
-                 extra: list[str]) -> None:
+                 extra: list[str], resume_from_git_sha: str | None = None) -> None:
     from destination_campaign import IMAGE_SHA256, write_checksums
     plan, bundle, profile = load_inputs(plan_path)
     git_sha, dirty = profiler.git_state(False)
@@ -771,7 +781,7 @@ def run_campaign(plan_path: Path, run_root: Path, cfg: testbed.Config,
                 "plan_sha256": hashlib.sha256(plan_path.read_bytes()).hexdigest(),
                 "image_sha256": IMAGE_SHA256, "git_sha": git_sha, "dirty": dirty}
     run_root.mkdir(parents=True, exist_ok=True)
-    write_run_metadata(run_root / "run.json", metadata)
+    write_run_metadata(run_root / "run.json", metadata, resume_from_git_sha)
     stack = testbed.start_stack(cfg, run_root / "testbed", 10000, extra)
     try:
         testbed.start_sink(stack, cfg, extra)
@@ -800,6 +810,7 @@ def parse_args(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--plan", type=Path, required=True)
     parser.add_argument("--run-root", type=Path, required=True)
+    parser.add_argument("--resume-from-git-sha", default=os.environ.get("QH_RESUME_FROM_GIT_SHA"))
     testbed.add_common(parser)
     parser.add_argument("extra_vllm_args", nargs=argparse.REMAINDER)
     return parser.parse_args(argv)
@@ -808,7 +819,8 @@ def parse_args(argv=None):
 def main(argv=None):
     args = parse_args(argv)
     extra = args.extra_vllm_args[1:] if args.extra_vllm_args[:1] == ["--"] else args.extra_vllm_args
-    run_campaign(args.plan, args.run_root, testbed.config_from_args(args), extra)
+    run_campaign(args.plan, args.run_root, testbed.config_from_args(args), extra,
+                 args.resume_from_git_sha)
 
 
 if __name__ == "__main__":

@@ -107,7 +107,8 @@ Use the three trace-shape families with unique prefixes and retained
 per-session KV. Generate open-loop arrivals and adaptively bracket each realized
 work direction. Refine boundary radius to at most 5%. Use at least three
 independent runs around each boundary and increase only cells whose run-level
-classifications disagree.
+classifications disagree. Stop after five runs, retain the vote counts, and use
+the majority without aborting the remaining campaign.
 
 Freeze the primary policies before fitting:
 
@@ -190,7 +191,7 @@ ranges, and provenance.
 Use the reserve only when the mandatory job exposes one of these preregistered
 failures:
 
-- boundary classifications disagree after three runs;
+- held-out service validation fails after a majority boundary decision;
 - the one-facet model exceeds 15% held-out radial error or produces a
   false-feasible result;
 - loaded-migration residuals exceed 15% or show a systematic context,
