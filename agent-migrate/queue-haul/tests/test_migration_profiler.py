@@ -226,6 +226,11 @@ def test_destination_load_gates_action_and_always_closes():
     with pytest.raises(RuntimeError):
         c.with_destination_load(Load(), lambda: (_ for _ in ()).throw(RuntimeError()))
     assert events[-1] == "close"
+    class FailedLoad(Load):
+        def wait_ready(self): raise TimeoutError
+    with pytest.raises(TimeoutError):
+        c.with_destination_load(FailedLoad(), lambda: None)
+    assert events[-1] == "close"
 
 
 def test_summary_only_adds_tail_and_bootstrap_statistics_when_supported():

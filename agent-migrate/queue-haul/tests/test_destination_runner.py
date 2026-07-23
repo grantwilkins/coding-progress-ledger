@@ -184,12 +184,62 @@ def test_adaptive_search_brackets_each_nested_boundary():
         assert found[mode][1] - found[mode][0] <= .05 * found[mode][1]
 
 
-def test_adaptive_search_never_runs_an_implicit_zero_boundary():
+def test_adaptive_search_censors_below_minimum_without_running_zero():
     calls = []
-    with pytest.raises(ValueError, match="below minimum"):
-        runner.find_boundaries(lambda radius: calls.append(radius) or
-                               {mode: False for mode in runner.MODES})
+    bounds = runner.find_boundaries(lambda radius: calls.append(radius) or
+                                    {mode: False for mode in runner.MODES})
     assert 0 not in calls
+    assert set(bounds.values()) == {(.025, .025)}
+
+
+def test_adaptive_search_censors_above_maximum():
+    assert set(runner.find_boundaries(
+        lambda radius: {mode: True for mode in runner.MODES}
+    ).values()) == {(4, 4)}
+
+
+def test_nest_bounds_only_shrinks_inverted_envelopes():
+    assert runner.nest_bounds({"normal": 3, "emergency": 2, "stable": 1}) == {
+        "normal": 1, "emergency": 1, "stable": 1,
+    }
+
+
+def test_destination_load_records_rho_miss_without_gate(monkeypatch):
+    load = runner.DestinationLoad.__new__(runner.DestinationLoad)
+    load.failure = None
+    load.sampler = SimpleNamespace(rows=[{"monotonic_ns": 0}, {"monotonic_ns": 30e9}])
+    load.target = load.prefill_rate = load.decode_rate = load.normal_bound = 1
+    monkeypatch.setattr(runner, "measured_rho", lambda *args: .4)
+    load.wait_ready()
+    assert load.achieved == .4
+
+
+def test_retry_call_records_and_recovers(tmp_path):
+    calls = []
+    def action():
+        calls.append(1)
+        if len(calls) < 3:
+            raise TimeoutError("cold start")
+        return "ok"
+    assert runner.retry_call(action, tmp_path / "retries.jsonl", 3, 0) == "ok"
+    assert len((tmp_path / "retries.jsonl").read_text().splitlines()) == 2
+
+
+def test_invalid_checkpoint_is_archived(tmp_path):
+    path = tmp_path / "result.json"
+    path.write_text('{"status":"complete"}')
+    assert runner.read_checkpoint(path, ("classification",)) is None and not path.exists()
+    assert len(list(tmp_path.glob("result.invalid-*.json"))) == 1
+    path.write_text('{"status":"complete","migrations":[]}')
+    assert runner.read_checkpoint(path, ("migrations",),
+                                  lambda row: len(row["migrations"]) == 1) is None
+
+
+def test_incomplete_anchor_checkpoint_is_archived(tmp_path):
+    path = tmp_path / "anchors.json"
+    path.write_text('[{"metric":"prefill","context_tokens":1,"run_id":0}]')
+    assert runner.read_anchor_checkpoint(path, {("prefill", 1): 1}, 3) is None
+    assert len(list(tmp_path.glob("anchors.invalid-*.json"))) == 1
 
 
 def test_frontier_searches_once_then_repeats_only_boundary_cells(monkeypatch, tmp_path):

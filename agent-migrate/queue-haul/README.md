@@ -30,8 +30,8 @@ The original prefill shape is scaled by the median measured anchor ratio; exact
 anchor rows and run, plan, image, and artifact hashes are retained in
 `outputs/destination-anchor-baseline-20260722.json`. New campaigns replay those
 rates with uniform arrivals. Complete disagreements are written to
-`anchor-gate.json` and recalibrate the live normalization; only incomplete
-anchor data hard-fails. The shared simulator's 31,562-token endpoint remains
+`anchor-gate.json` and recalibrate the live normalization; incomplete anchor
+checkpoints are archived and remeasured. The shared simulator's 31,562-token endpoint remains
 outside the destination campaign's measured domain, which ends at 24,576.
 
 Service probes use time-bounded Poisson arrivals and include scheduled client
@@ -40,6 +40,13 @@ queued request per measurement window is the frozen non-growth resolution.
 Disagreeing boundary cells receive five runs; their majority determines the
 boundary and the vote counts remain in `service.json` instead of aborting the
 campaign.
+
+Runtime startup and phase failures restart the stack up to four times by
+default (`QH_CAMPAIGN_ATTEMPTS`), preserving every complete cell and recording
+failures in `retries.jsonl`. `QH_HEALTH_TIMEOUT_S` defaults to one hour for
+cold model loads. Invalid checkpoints are archived and remeasured; out-of-range
+boundaries are censored, load-target misses are recorded, and noisy nonnested
+envelopes are conservatively shrunk instead of aborting the job.
 
 Download public trace rows before allocating GPUs, build the content-free
 manifest, then prepare the launch bundle:

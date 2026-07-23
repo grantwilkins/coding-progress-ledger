@@ -909,6 +909,10 @@ def wait_health_process(host: str, port: int, timeout_s: float, proc: subprocess
     raise TimeoutError(f"timed out waiting for http://{host}:{port}/health; process still running; log tail:\n{tail(log)}")
 
 
+def health_timeout() -> float:
+    return max(60, float(os.environ.get("QH_HEALTH_TIMEOUT_S", "3600")))
+
+
 def prompt_text(session_id: str, words: int = 4096) -> str:
     body = " ".join(f"{session_id}_{i % 97}" for i in range(words))
     return f"Session {session_id}. {body}. Reply with exactly OK."
@@ -1209,7 +1213,7 @@ def start_stack(cfg: Config, run_root: Path, mbps: float, extra: list[str] | Non
                 services.append(service)
                 wait_tcp_process(cfg.host, port, 300, service, log)
         source = start_logged(vllm_cmd(cfg, "source", extra or []), run_root / "source.log")
-        wait_health_process(cfg.host, cfg.src_port, 1800, source, run_root / "source.log")
+        wait_health_process(cfg.host, cfg.src_port, health_timeout(), source, run_root / "source.log")
         return Stack(lmc, proxy, source, None, run_root, services)
     except BaseException:
         for proc in (source, proxy, *services, lmc):
@@ -1222,7 +1226,7 @@ def start_sink(stack: Stack, cfg: Config, extra: list[str] | None = None) -> Non
     if stack.sink:
         return
     stack.sink = start_logged(vllm_cmd(cfg, "sink", extra or []), stack.run_root / "sink.log")
-    wait_health_process(cfg.host, cfg.sink_port, 1800, stack.sink, stack.run_root / "sink.log")
+    wait_health_process(cfg.host, cfg.sink_port, health_timeout(), stack.sink, stack.run_root / "sink.log")
 
 
 def check_chat(result: dict, label: str) -> None:

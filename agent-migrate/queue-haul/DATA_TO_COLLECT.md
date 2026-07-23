@@ -110,6 +110,11 @@ independent runs around each boundary and increase only cells whose run-level
 classifications disagree. Stop after five runs, retain the vote counts, and use
 the majority without aborting the remaining campaign.
 
+Retry transient stack, health, preflight, and phase failures in the same job;
+reuse complete cells and archive invalid checkpoints. Record target-load misses
+and censor unbracketed boundaries instead of terminating the campaign. Only
+changed immutable inputs or persistently invalid measurements stop collection.
+
 Freeze the primary policies before fitting:
 
 - normal: p90 TTFT at most 2 s and p90 per-request mean TPOT at most 100 ms;

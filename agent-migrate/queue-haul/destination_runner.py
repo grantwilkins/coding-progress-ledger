@@ -32,6 +32,56 @@ REQUIRED_METRICS = {
 MODES = ("normal", "emergency", "stable")
 
 
+def retry_call(action, path: Path, attempts: int, delay_s: float):
+    attempts, delay_s = max(1, attempts), max(0, delay_s)
+    for attempt in range(attempts):
+        try:
+            return action()
+        except Exception as exc:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            with path.open("a") as handle:
+                handle.write(json.dumps({"attempt": attempt + 1, "error": str(exc),
+                                         "type": type(exc).__name__}) + "\n")
+            if attempt + 1 == attempts:
+                raise
+            time.sleep(delay_s)
+
+
+def archive_checkpoint(path: Path) -> None:
+    path.replace(path.with_name(f"{path.stem}.invalid-{time.time_ns()}{path.suffix}"))
+
+
+def read_checkpoint(path: Path, required: tuple[str, ...] = (), valid=None) -> dict | None:
+    if not path.exists():
+        return None
+    try:
+        result = json.loads(path.read_text())
+    except (OSError, json.JSONDecodeError):
+        result = None
+    if (result and result.get("status") == "complete" and
+            all(key in result for key in required) and (valid is None or valid(result))):
+        return result
+    archive_checkpoint(path)
+    return None
+
+
+def read_anchor_checkpoint(path: Path, expected: dict, repeats: int) -> list[dict] | None:
+    if not path.exists():
+        return None
+    try:
+        rows = json.loads(path.read_text())
+        keys = {(row["metric"], int(row["context_tokens"])) for row in rows}
+        complete = keys == set(expected) and all(
+            sum((row["metric"], int(row["context_tokens"])) == key for row in rows) >= repeats
+            for key in keys)
+    except (OSError, json.JSONDecodeError, KeyError, TypeError):
+        complete = False
+    if complete:
+        return rows
+    archive_checkpoint(path)
+    return None
+
+
 def deterministic_tokens(label: str, count: int, vocabulary: int, seed: int) -> list[int]:
     if count < 0 or vocabulary <= 32:
         raise ValueError("invalid deterministic token request")
@@ -244,9 +294,8 @@ class DestinationLoad:
         while time.monotonic() < deadline and not self.failure:
             if len(self.sampler.rows) > 1 and (self.sampler.rows[-1]["monotonic_ns"] -
                                                self.sampler.rows[0]["monotonic_ns"]) >= 30e9:
-                self.achieved = require_rho(self.sampler.rows, self.target,
-                                            self.prefill_rate, self.decode_rate,
-                                            self.normal_bound)
+                self.achieved = measured_rho(self.sampler.rows, self.prefill_rate,
+                                             self.decode_rate, self.normal_bound)
                 return
             time.sleep(.25)
         raise RuntimeError("destination foreground did not reach its rho gate") from self.failure
@@ -342,19 +391,28 @@ def find_boundaries(probe, resolution: float = .05) -> dict[str, tuple[float, fl
     high = .5
     while at(high)["stable"] and high < 4:
         high *= 2
-    if at(high)["stable"]:
-        raise ValueError("stable boundary is unbracketed")
     low = resolution / 2
     low_value, out = at(low), {}
     for mode in MODES:
         if not low_value[mode]:
-            raise ValueError(f"{mode} boundary is below minimum measurable radius {low}")
+            out[mode] = (low, low)
+            continue
+        if at(high)[mode]:
+            out[mode] = (high, high)
+            continue
         lo, hi = low, high
         while hi - lo > resolution * max(hi, 1):
             mid = (lo + hi) / 2
             lo, hi = (mid, hi) if at(mid)[mode] else (lo, mid)
         out[mode] = (lo, hi)
     return out
+
+
+def nest_bounds(bounds: dict[str, float]) -> dict[str, float]:
+    bounds = dict(bounds)
+    bounds["emergency"] = min(bounds["emergency"], bounds["stable"])
+    bounds["normal"] = min(bounds["normal"], bounds["emergency"])
+    return bounds
 
 
 def queue_drift_upper(rows: list[dict], requests=(), block_s: float = 30,
@@ -441,8 +499,9 @@ def measure_anchors(host: str, port: int, model: str, contexts: list[int],
                     root: Path, stack: testbed.Stack, cfg: testbed.Config,
                     repeats: int = 3, hold_s: float = 60) -> list[dict]:
     path = root / "anchors.json"
-    if path.exists():
-        return json.loads(path.read_text())
+    checkpoint = read_anchor_checkpoint(path, expected, repeats)
+    if checkpoint:
+        return checkpoint
     rows = []
     for context in contexts:
         for metric in ("prefill", "decode"):
@@ -482,8 +541,10 @@ def service_probe(host: str, port: int, model: str, sessions: list[Session],
                   hold_s: float, slos: dict, root: Path, seed: int,
                   block_s: float = 30, samples: int = 2000) -> dict:
     result_path = root / "result.json"
-    if result_path.exists():
-        return json.loads(result_path.read_text())
+    checkpoint = read_checkpoint(result_path, ("classification",),
+                                 lambda row: set(MODES) <= set(row["classification"]))
+    if checkpoint:
+        return checkpoint
     work = statistics.mean(s.append_tokens / prefill_rate + s.output_tokens / decode_rate
                            for s in sessions)
     rate, count = radius / work, max(1, math.ceil(radius / work * hold_s))
@@ -561,11 +622,16 @@ def measure_frontier(plan: dict, bundle: dict, profile: dict, cfg: testbed.Confi
                       "outside_feasible_votes": sum(labels[outside]),
                       "outside_repeats": len(labels[outside])}
                      for repeat in range(len(labels[inside]))]
-    fit = {mode: statistics.median(float(r["bound"]) for r in rows
-                                    if r["split"] == "fit" and r["mode"] == mode)
-           for mode in MODES}
-    if not fit["normal"] <= fit["emergency"] <= fit["stable"]:
-        raise RuntimeError("measured destination envelopes are nonnested")
+    measured = {mode: statistics.median(float(r["bound"]) for r in rows
+                                         if r["split"] == "fit" and r["mode"] == mode)
+                for mode in MODES}
+    fit = nest_bounds(measured)
+    for row in rows:
+        row["measured_bound"] = row["bound"]
+        row["bound"] *= fit[row["mode"]] / measured[row["mode"]]
+    root.mkdir(parents=True, exist_ok=True)
+    (root / "frontier.json").write_text(json.dumps(
+        {"measured_bounds": measured, "nested_bounds": fit}, indent=2) + "\n")
     validation = []
     delta = .15 + 1e-9
     for split in ("tune", "validation"):
@@ -639,19 +705,25 @@ def measure_loaded(plan: dict, bundle: dict, profile: dict, cfg: testbed.Config,
         prefill, decode = profile_rate(profile, "prefill", context), profile_rate(profile, "decode", context)
         for repeat in range(plan["migration"]["repeats"]):
             control_root = root / f"rho{rho:.6f}-t{context}-b{bandwidth:g}-r{repeat}" / "control"
-            if not (control_root / "result.json").exists():
+            if not read_checkpoint(control_root / "result.json", ("destination_load",),
+                                   lambda row: row["destination_load"].get("achieved_rho") is not None):
                 testbed.flush_lmcache(stack, cfg)
                 load = DestinationLoad(cfg.host, cfg.sink_port, cfg.model, background, rho,
                                        prefill, decode, control_root / "foreground", repeat,
                                        normal_bound=normal)
-                load.start(); load.wait_ready(); time.sleep(30); load.close()
+                load.start()
+                try:
+                    load.wait_ready(); time.sleep(30)
+                finally:
+                    load.close()
                 (control_root / "result.json").write_text(json.dumps(
                     {"status": "complete", "destination_load": load.summary()}, indent=2) + "\n")
             for method in plan["migration"]["methods"]:
                 scenario = migration_scenario(manifest["sessions"][repeat % len(manifest["sessions"])],
                                               method, context, bandwidth, repeat)
                 cell_root = control_root.parent / method
-                if not (cell_root / "result.json").exists():
+                if not read_checkpoint(cell_root / "result.json", ("migrations",),
+                                       lambda row: len(row["migrations"]) == 1):
                     testbed.flush_lmcache(stack, cfg)
                     load = DestinationLoad(cfg.host, cfg.sink_port, cfg.model, background, rho,
                                            prefill, decode, cell_root / "foreground", repeat,
@@ -782,27 +854,31 @@ def run_campaign(plan_path: Path, run_root: Path, cfg: testbed.Config,
                 "image_sha256": IMAGE_SHA256, "git_sha": git_sha, "dirty": dirty}
     run_root.mkdir(parents=True, exist_ok=True)
     write_run_metadata(run_root / "run.json", metadata, resume_from_git_sha)
-    stack = testbed.start_stack(cfg, run_root / "testbed", 10000, extra)
-    try:
-        testbed.start_sink(stack, cfg, extra)
-        smoke = testbed.run_smoke2_probe(cfg, stack.run_root, 10000)
-        preflight = integrity_preflight(cfg, plan, smoke)
-        (run_root / "preflight.json").write_text(json.dumps(preflight, indent=2) + "\n")
-        expected = {(metric, context): profile_rate(profile, metric, context)
-                    for metric in ("prefill", "decode") for context in plan["service"]["anchors"]}
-        anchors = measure_anchors(cfg.host, cfg.sink_port, cfg.model,
-                                  plan["service"]["anchors"], 201088, expected,
-                                  run_root / "anchors", stack, cfg)
-        report = anchor_gate(anchors, expected, plan["anchor_drift_limit"])
-        (run_root / "anchor-gate.json").write_text(json.dumps(report, indent=2) + "\n")
-        apply_anchor_rates(profile, report)
-        testbed.flush_lmcache(stack, cfg)
-        service, bounds = measure_frontier(plan, bundle, profile, cfg, stack, run_root / "service")
-        loaded_index = measure_loaded(plan, bundle, profile, cfg, stack, bounds, run_root / "loaded")
-        loaded, validation = reduce_loaded_results(profile, loaded_index, run_root / "loaded")
-        finalize(plan, bundle, profile, cfg, run_root, service, loaded, validation)
-    finally:
-        testbed.stop_stack(stack)
+    def attempt():
+        stack = testbed.start_stack(cfg, run_root / "testbed", 10000, extra)
+        try:
+            testbed.start_sink(stack, cfg, extra)
+            smoke = testbed.run_smoke2_probe(cfg, stack.run_root, 10000)
+            preflight = integrity_preflight(cfg, plan, smoke)
+            (run_root / "preflight.json").write_text(json.dumps(preflight, indent=2) + "\n")
+            expected = {(metric, context): profile_rate(profile, metric, context)
+                        for metric in ("prefill", "decode") for context in plan["service"]["anchors"]}
+            anchors = measure_anchors(cfg.host, cfg.sink_port, cfg.model,
+                                      plan["service"]["anchors"], 201088, expected,
+                                      run_root / "anchors", stack, cfg)
+            report = anchor_gate(anchors, expected, plan["anchor_drift_limit"])
+            (run_root / "anchor-gate.json").write_text(json.dumps(report, indent=2) + "\n")
+            apply_anchor_rates(profile, report)
+            testbed.flush_lmcache(stack, cfg)
+            service, bounds = measure_frontier(plan, bundle, profile, cfg, stack, run_root / "service")
+            loaded_index = measure_loaded(plan, bundle, profile, cfg, stack, bounds, run_root / "loaded")
+            loaded, validation = reduce_loaded_results(profile, loaded_index, run_root / "loaded")
+            finalize(plan, bundle, profile, cfg, run_root, service, loaded, validation)
+        finally:
+            testbed.stop_stack(stack)
+    retry_call(attempt, run_root / "retries.jsonl",
+               int(os.environ.get("QH_CAMPAIGN_ATTEMPTS", "4")),
+               float(os.environ.get("QH_RETRY_DELAY_S", "30")))
     write_checksums(run_root)
 
 

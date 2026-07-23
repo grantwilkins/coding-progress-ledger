@@ -1242,8 +1242,9 @@ def should_sleep(scenario: dict, full_drain: bool) -> bool:
 def with_destination_load(load, action):
     if load is None:
         return action()
-    load.start(); load.wait_ready()
+    load.start()
     try:
+        load.wait_ready()
         return action()
     finally:
         load.close()

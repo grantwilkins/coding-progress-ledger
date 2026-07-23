@@ -100,6 +100,11 @@ def test_mp_runtime_uses_release_image_and_shipped_connector(monkeypatch):
     assert s.expected_runtime_versions() == ("0.22.0+cu129", "0.5.1")
 
 
+def test_health_timeout_is_configurable(monkeypatch):
+    monkeypatch.setenv("QH_HEALTH_TIMEOUT_S", "7200")
+    assert s.health_timeout() == 7200
+
+
 def test_mp_tokenization_uses_the_exact_reasoning_chat_template(monkeypatch):
     seen = {}
 
