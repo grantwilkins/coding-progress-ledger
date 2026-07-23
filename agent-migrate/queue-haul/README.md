@@ -34,6 +34,10 @@ rates with uniform arrivals. Complete disagreements are written to
 anchor data hard-fails. The shared simulator's 31,562-token endpoint remains
 outside the destination campaign's measured domain, which ends at 24,576.
 
+Service probes use time-bounded Poisson arrivals and include scheduled client
+backlog in stability. A block-bootstrap drift upper bound no larger than one
+queued request per measurement window is the frozen non-growth resolution.
+
 Download public trace rows before allocating GPUs, build the content-free
 manifest, then prepare the launch bundle:
 

@@ -32,12 +32,13 @@ def metrics(slope=0):
 
 def test_schedule_and_session_tokens_are_deterministic_but_isolated():
     assert runner.poisson_schedule(2, 4, 7) == runner.poisson_schedule(2, 4, 7)
+    window = runner.poisson_window(2, 4, 7)
+    assert window == runner.poisson_window(2, 4, 7) and all(t <= 4 for t in window)
     assert runner.uniform_schedule(2, 4, 7) == (0, .5, 1, 1.5)
     assert runner.anchor_rate(100, 20) == 5
     a = runner.Session("a", 4, 2, 3, 100, 7)
     b = runner.Session("b", 4, 2, 3, 100, 7)
-    first, forced = a.prompt(0)
-    a.commit(first, forced)
+    first, _ = a.prompt(0)
     assert a.prompt(1)[0][:4] == first[:4]
     assert len(a.prompt(1)[0]) == 6
     assert b.prompt(0)[0][:4] != first[:4]
@@ -62,6 +63,12 @@ def test_slo_boundary_is_inclusive_and_queue_growth_is_not_stable():
 def test_queue_drift_requires_real_samples():
     with pytest.raises(ValueError, match="sampled"):
         runner.queue_drift_upper(metrics()[:1])
+
+
+def test_client_side_backlog_is_not_classified_stable():
+    requests = [{**request(), "scheduled_ns": i * 10**9, "start_ns": 2 * i * 10**9}
+                for i in range(1, 100)]
+    assert not runner.classify(requests, metrics(), True, {})["stable"]
 
 
 def test_anchor_gate_accepts_improvement_and_fifteen_percent_underdelivery():
@@ -169,6 +176,14 @@ def test_adaptive_search_brackets_each_nested_boundary():
         assert found[mode][1] - found[mode][0] <= .05 * found[mode][1]
 
 
+def test_adaptive_search_never_runs_an_implicit_zero_boundary():
+    calls = []
+    with pytest.raises(ValueError, match="below minimum"):
+        runner.find_boundaries(lambda radius: calls.append(radius) or
+                               {mode: False for mode in runner.MODES})
+    assert 0 not in calls
+
+
 def test_frontier_searches_once_then_repeats_only_boundary_cells(monkeypatch, tmp_path):
     calls = []
     thresholds = {"normal": 1, "emergency": 2, "stable": 3}
@@ -181,12 +196,39 @@ def test_frontier_searches_once_then_repeats_only_boundary_cells(monkeypatch, tm
     monkeypatch.setattr(runner, "service_probe", probe)
     plan = {"service": {"directions": ["coding"], "initial_repeats": 3,
                         "disagreement_repeats": 5, "radial_resolution": .05,
-                        "hold_min_s": 1, "slos": {}}}
+                        "hold_min_s": 1, "block_bootstrap_s": 30,
+                        "bootstrap_samples": 10, "slos": {}}}
     rows, bounds = runner.measure_frontier(plan, {}, {}, SimpleNamespace(
         host="h", sink_port=1, model="m"), object(), tmp_path)
     assert len(rows) == 9 and all(sum(r["mode"] == mode for r in rows) == 3 for mode in thresholds)
     assert bounds["normal"] <= bounds["emergency"] <= bounds["stable"]
     assert (tmp_path / "validation.jsonl").is_file() and len(calls) < 60
+
+
+def test_frontier_reruns_only_disagreements_and_accepts_four_of_five(monkeypatch, tmp_path):
+    calls, thresholds = [], {"normal": 1, "emergency": 2, "stable": 3}
+    monkeypatch.setattr(runner, "manifest_sessions", lambda *_: [runner.Session("s", 10, 2, 3, 100, 0)])
+    monkeypatch.setattr(runner, "profile_rate", lambda *_: 100)
+    monkeypatch.setattr(runner.testbed, "flush_lmcache", lambda *args: None)
+    def probe(*args, **kwargs):
+        radius, root, seed = args[4], args[9], args[10]
+        calls.append((root.name, radius, seed))
+        labels = {mode: radius <= bound for mode, bound in thresholds.items()}
+        if root.name.startswith("normal-r") and labels["normal"] and seed == 2:
+            labels["normal"] = False
+        return {"classification": labels}
+    monkeypatch.setattr(runner, "service_probe", probe)
+    plan = {"service": {"directions": ["coding"], "initial_repeats": 3,
+                        "disagreement_repeats": 5, "radial_resolution": .05,
+                        "hold_min_s": 1, "block_bootstrap_s": 30,
+                        "bootstrap_samples": 10, "slos": {}}}
+    runner.measure_frontier(plan, {}, {}, SimpleNamespace(
+        host="h", sink_port=1, model="m"), object(), tmp_path)
+    counts = {}
+    for name, radius, _ in calls:
+        if name.startswith("normal-r"):
+            counts[radius] = counts.get(radius, 0) + 1
+    assert sorted(counts.values()) == [3, 5]
 
 
 def test_rho_uses_token_counter_differences_and_requires_thirty_seconds():

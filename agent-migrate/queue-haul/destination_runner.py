@@ -52,6 +52,15 @@ def poisson_schedule(rate: float, count: int, seed: int) -> tuple[float, ...]:
     return tuple(out)
 
 
+def poisson_window(rate: float, seconds: float, seed: int) -> tuple[float, ...]:
+    if min(rate, seconds) <= 0:
+        raise ValueError("arrival rate and window must be positive")
+    rng, elapsed, out = random.Random(seed), 0.0, []
+    while (elapsed := elapsed + rng.expovariate(rate)) <= seconds:
+        out.append(elapsed)
+    return tuple(out)
+
+
 def uniform_schedule(rate: float, count: int, _seed: int) -> tuple[float, ...]:
     if rate <= 0 or count < 1:
         raise ValueError("arrival rate and count must be positive")
@@ -71,7 +80,6 @@ class Session:
     vocabulary: int
     seed: int
     history: list[int] = field(init=False)
-    lock: threading.Lock = field(default_factory=threading.Lock, init=False)
 
     def __post_init__(self):
         if min(self.prefix_tokens, self.append_tokens, self.output_tokens) < 1:
@@ -85,10 +93,6 @@ class Session:
         forced = deterministic_tokens(f"{self.session_id}:{index}:output", 1,
                                       self.vocabulary, self.seed)[0]
         return self.history[:self.prefix_tokens] + added, forced
-
-    def commit(self, prompt: list[int], forced: int) -> None:
-        self.history = prompt + [forced] * self.output_tokens
-
 
 def parse_metrics(text: str) -> dict[str, float]:
     grouped = {}
@@ -171,21 +175,21 @@ def _completion(host: str, port: int, model: str, prompt: list[int], output_toke
 
 def drive(host: str, port: int, model: str, sessions: list[Session], rate: float,
           count: int, seed: int, timeout_s: float = 720,
-          scheduler=poisson_schedule) -> list[dict]:
-    schedule, epoch = scheduler(rate, count, seed), time.monotonic()
+          scheduler=poisson_schedule, window_s: float | None = None) -> list[dict]:
+    schedule = poisson_window(rate, window_s, seed) if window_s else scheduler(rate, count, seed)
+    count, epoch = len(schedule), time.monotonic()
     def one(index):
         scheduled = epoch + schedule[index]; time.sleep(max(0, scheduled - time.monotonic()))
         session = sessions[index % len(sessions)]
-        with session.lock:
-            prompt, forced = session.prompt(index)
-            row = _completion(host, port, model, prompt, session.output_tokens, forced, timeout_s)
-            row.update({"request_index": index, "session_id": session.session_id,
-                        "scheduled_ns": int(scheduled * 1e9), "input_tokens": session.append_tokens,
-                        "planned_output_tokens": session.output_tokens,
-                        "prompt_sha256": hashlib.sha256(bytes(np.asarray(prompt, dtype=np.uint32))).hexdigest()})
-            if row["status"] == 200 and row["output_tokens"] == session.output_tokens:
-                session.commit(prompt, forced)
-            return row
+        prompt, forced = session.prompt(index)
+        row = _completion(host, port, model, prompt, session.output_tokens, forced, timeout_s)
+        row.update({"request_index": index, "session_id": session.session_id,
+                    "scheduled_ns": int(scheduled * 1e9), "input_tokens": session.append_tokens,
+                    "planned_output_tokens": session.output_tokens,
+                    "prompt_sha256": hashlib.sha256(bytes(np.asarray(prompt, dtype=np.uint32))).hexdigest()})
+        return row
+    if not count:
+        return []
     with ThreadPoolExecutor(max_workers=min(256, count)) as pool:
         return list(pool.map(one, range(count)))
 
@@ -328,6 +332,8 @@ def manifest_sessions(bundle: dict, job_class: str, split: str, vocabulary: int,
 
 
 def find_boundaries(probe, resolution: float = .05) -> dict[str, tuple[float, float]]:
+    if resolution <= 0:
+        raise ValueError("boundary resolution must be positive")
     cache = {}
     def at(radius):
         cache.setdefault(radius, probe(radius))
@@ -337,9 +343,12 @@ def find_boundaries(probe, resolution: float = .05) -> dict[str, tuple[float, fl
         high *= 2
     if at(high)["stable"]:
         raise ValueError("stable boundary is unbracketed")
-    out = {}
+    low = resolution / 2
+    low_value, out = at(low), {}
     for mode in MODES:
-        lo, hi = 0.0, high
+        if not low_value[mode]:
+            raise ValueError(f"{mode} boundary is below minimum measurable radius {low}")
+        lo, hi = low, high
         while hi - lo > resolution * max(hi, 1):
             mid = (lo + hi) / 2
             lo, hi = (mid, hi) if at(mid)[mode] else (lo, mid)
@@ -347,31 +356,39 @@ def find_boundaries(probe, resolution: float = .05) -> dict[str, tuple[float, fl
     return out
 
 
-def queue_drift_upper(rows: list[dict], block_s: float = 30) -> float:
+def queue_drift_upper(rows: list[dict], requests=(), block_s: float = 30,
+                      samples: int = 2000) -> float:
     if len(rows) < 2:
         raise ValueError("queue drift needs sampled metrics")
-    t0 = int(rows[0]["monotonic_ns"]); points = [((int(r["monotonic_ns"]) - t0) / 1e9,
-                                                   float(r["vllm:num_requests_waiting"])) for r in rows]
+    t0 = int(rows[0]["monotonic_ns"]); points = [
+        ((int(r["monotonic_ns"]) - t0) / 1e9,
+         float(r["vllm:num_requests_waiting"]) + sum(
+             int(q.get("scheduled_ns", 0)) <= int(r["monotonic_ns"]) < int(q.get("start_ns", 0))
+             for q in requests)) for r in rows]
     points = [p for p in points if p[0] >= points[-1][0] / 3]
     slopes = []
     for block in range(max(1, math.ceil((points[-1][0] - points[0][0]) / block_s))):
         selected = [p for p in points if block * block_s <= p[0] - points[0][0] < (block + 1) * block_s]
         if len(selected) >= 2 and np.ptp([p[0] for p in selected]) > 0:
             slopes.append(float(np.polyfit(*zip(*selected), 1)[0]))
-    if not slopes:
+    if not slopes or samples < 1:
         raise ValueError("queue drift lacks complete blocks")
-    return float(np.mean(slopes) + (1.645 * np.std(slopes, ddof=1) / math.sqrt(len(slopes)) if len(slopes) > 1 else 0))
+    rng = random.Random(0)
+    return float(np.quantile([statistics.mean(rng.choices(slopes, k=len(slopes)))
+                              for _ in range(samples)], .95))
 
 
 def classify(requests: list[dict], metrics: list[dict], drained: bool,
-             slos: dict) -> dict[str, bool]:
+             slos: dict, block_s: float = 30, samples: int = 2000) -> dict[str, bool]:
     complete = bool(requests) and all(not r.get("error") and r.get("status") == 200 and
                                       r.get("output_tokens") == r.get("planned_output_tokens") for r in requests)
     ttft = np.quantile([r["ttft_s"] for r in requests], .9) if complete else math.inf
     tpot = np.quantile([r["mean_tpot_s"] for r in requests], .9) if complete else math.inf
     result = {mode: bool(complete and ttft <= policy["p90_ttft_s"] and
                          tpot <= policy["p90_mean_tpot_s"]) for mode, policy in slos.items()}
-    result["stable"] = bool(complete and drained and queue_drift_upper(metrics) <= 1e-12)
+    seconds = (int(metrics[-1]["monotonic_ns"]) - int(metrics[0]["monotonic_ns"])) / 1e9
+    result["stable"] = bool(complete and drained and
+                            queue_drift_upper(metrics, requests, block_s, samples) <= 1 / seconds)
     return result
 
 
@@ -461,7 +478,8 @@ def measure_anchors(host: str, port: int, model: str, contexts: list[int],
 
 def service_probe(host: str, port: int, model: str, sessions: list[Session],
                   radius: float, prefill_rate: float, decode_rate: float,
-                  hold_s: float, slos: dict, root: Path, seed: int) -> dict:
+                  hold_s: float, slos: dict, root: Path, seed: int,
+                  block_s: float = 30, samples: int = 2000) -> dict:
     result_path = root / "result.json"
     if result_path.exists():
         return json.loads(result_path.read_text())
@@ -472,8 +490,13 @@ def service_probe(host: str, port: int, model: str, sessions: list[Session],
     sampler = MetricsSampler(host, port, root / "engine.csv"); sampler.start()
     try:
         started = time.monotonic()
-        requests = drive(host, port, model, sessions, rate, count, seed)
+        requests = drive(host, port, model, sessions, rate, count, seed, window_s=hold_s)
         time.sleep(max(0, hold_s - (time.monotonic() - started)))
+        deadline = time.monotonic() + 5
+        while time.monotonic() < deadline and sampler.rows and any(
+                sampler.rows[-1][key] for key in
+                ("vllm:num_requests_running", "vllm:num_requests_waiting")):
+            time.sleep(.1)
     finally:
         sampler.close()
     metrics = [r for r in sampler.rows
@@ -481,7 +504,8 @@ def service_probe(host: str, port: int, model: str, sessions: list[Session],
     drained = not sampler.rows[-1]["vllm:num_requests_running"] \
         and not sampler.rows[-1]["vllm:num_requests_waiting"]
     result = {"status": "complete", "radius": radius,
-              "classification": classify(requests, metrics, drained, slos),
+              "classification": classify(requests, metrics, drained, slos, block_s, samples),
+              "queue_drift_upper": queue_drift_upper(metrics, requests, block_s, samples),
               "offered_prefill_tps": rate * statistics.mean(s.append_tokens for s in sessions),
               "offered_decode_tps": rate * statistics.mean(s.output_tokens for s in sessions),
               "request_count": len(requests), "drained": drained}
@@ -503,21 +527,34 @@ def measure_frontier(plan: dict, bundle: dict, profile: dict, cfg: testbed.Confi
             cell = root / "fit" / direction / f"pilot-{radius:.6f}"
             return service_probe(cfg.host, cfg.sink_port, cfg.model, sessions, radius,
                                  prefill, decode, plan["service"]["hold_min_s"],
-                                 plan["service"]["slos"], cell, 0)["classification"]
+                                 plan["service"]["slos"], cell, 0,
+                                 plan["service"]["block_bootstrap_s"],
+                                 plan["service"]["bootstrap_samples"])["classification"]
         boundaries = find_boundaries(pilot, plan["service"]["radial_resolution"])
+        from destination_campaign import boundary_decision
         for mode, (inside, outside) in boundaries.items():
             labels = {inside: [], outside: []}
             for repeat in range(plan["service"]["disagreement_repeats"]):
-                for radius in labels:
+                pending = labels if repeat < plan["service"]["initial_repeats"] else {
+                    radius: values for radius, values in labels.items() if len(set(values)) > 1}
+                for radius in pending:
                     testbed.flush_lmcache(stack, cfg)
                     cell = root / "fit" / direction / f"{mode}-r{repeat}-{radius:.6f}"
                     labels[radius].append(service_probe(
                         cfg.host, cfg.sink_port, cfg.model, sessions, radius, prefill, decode,
                         plan["service"]["hold_min_s"], plan["service"]["slos"], cell,
-                        repeat + 1)["classification"][mode])
-                if repeat == 2 and all(len(set(values)) == 1 for values in labels.values()):
+                        repeat + 1, plan["service"]["block_bootstrap_s"],
+                        plan["service"]["bootstrap_samples"])["classification"][mode])
+                if (repeat + 1 >= plan["service"]["initial_repeats"] and
+                        all(len(set(values)) == 1 for values in labels.values())):
                     break
-            if not all(labels[inside]) or any(labels[outside]):
+            try:
+                decisions = {radius: boundary_decision([
+                    "feasible" if value else "infeasible" for value in values])
+                    for radius, values in labels.items()}
+            except ValueError as exc:
+                raise RuntimeError(f"unresolved {direction} {mode} boundary disagreement") from exc
+            if decisions != {inside: "feasible", outside: "infeasible"}:
                 raise RuntimeError(f"unresolved {direction} {mode} boundary disagreement")
             rows += [{"split": "fit", "direction": direction, "mode": mode,
                       "facet": 0, "run_id": f"{direction}-{repeat}", "bound": inside,
@@ -543,7 +580,9 @@ def measure_frontier(plan: dict, bundle: dict, profile: dict, cfg: testbed.Confi
                     actual = service_probe(cfg.host, cfg.sink_port, cfg.model, sessions,
                                            radius, prefill, decode,
                                            plan["service"]["hold_min_s"],
-                                           plan["service"]["slos"], cell, 0)["classification"][mode]
+                                           plan["service"]["slos"], cell, 0,
+                                           plan["service"]["block_bootstrap_s"],
+                                           plan["service"]["bootstrap_samples"])["classification"][mode]
                     actuals.append(actual)
                 validation.append({"cell": f"{split}/{direction}/{mode}",
                                    "actual_bound": bound if actuals == [True, False]
@@ -576,7 +615,6 @@ def migration_scenario(session: dict, method: str, context: int, bandwidth: floa
             "turn_index": 0, "initial_tokens": context, "order": 0}
     key = hashlib.sha256(f"{method}:{context}:{bandwidth}:{repeat}".encode()).hexdigest()[:16]
     return {"scenario_id": f"loaded-{key}", "kind": "migration", "method": method,
-            "context_size": context, "activity": "none", "activity_tokens": 0,
             "request_schedule": [], "repeat": repeat, "deadline_s": 720,
             "sessions": [item], "moves": [{**item, "method": method}],
             "serving_concurrency": 1, "concurrency": 1, "move_concurrency": 1,

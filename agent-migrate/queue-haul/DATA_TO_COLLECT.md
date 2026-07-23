@@ -116,6 +116,11 @@ Freeze the primary policies before fitting:
 - stable: one-sided evidence of nonpositive backlog drift, no OOM, restart, or
   rejection, and complete drain after arrivals stop.
 
+The first destination pilot could not bracket exact-zero drift at any positive
+load. Before fitting, the frozen measurable threshold was revised to a
+block-bootstrap upper bound of one queued request per measurement window;
+scheduled client requests waiting to enter vLLM count toward that backlog.
+
 Revise policy thresholds only if the pilot cannot bracket a boundary,
 emergency lies outside stability, or normal and emergency are empirically
 indistinguishable. Freeze any revision before profile fitting.
