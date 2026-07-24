@@ -12,6 +12,7 @@ Plausible wrong implementations:
 
 import pytest
 import json
+import threading
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -212,6 +213,41 @@ def test_destination_load_records_rho_miss_without_gate(monkeypatch):
     monkeypatch.setattr(runner, "measured_rho", lambda *args: .4)
     load.wait_ready()
     assert load.achieved == .4
+
+
+def test_drive_stop_cancels_scheduled_requests(monkeypatch):
+    scheduled, stop, result = threading.Event(), threading.Event(), []
+    def scheduler(*_):
+        scheduled.set()
+        return (60,)
+    monkeypatch.setattr(runner, "_completion",
+                        lambda *_: pytest.fail("cancelled request was launched"))
+    thread = threading.Thread(target=lambda: result.extend(runner.drive(
+        "h", 1, "m", [runner.Session("s", 1, 1, 1, 100, 0)], 1, 1, 0,
+        scheduler=scheduler, stop=stop)))
+    thread.start(); assert scheduled.wait(1); stop.set(); thread.join(1)
+    assert not thread.is_alive() and result == []
+
+
+def test_destination_load_close_uses_request_timeout(tmp_path):
+    joined = []
+    load = runner.DestinationLoad.__new__(runner.DestinationLoad)
+    load.stop, load.failure, load.rows = threading.Event(), None, []
+    load.chunk_s, load.timeout_s, load.root = 15, 720, tmp_path
+    load.thread = SimpleNamespace(join=joined.append, is_alive=lambda: False)
+    load.sampler = SimpleNamespace(close=lambda: None)
+    load.close()
+    assert joined == [745]
+
+
+def test_destination_load_close_hard_fails_if_request_outlives_timeout(tmp_path):
+    load = runner.DestinationLoad.__new__(runner.DestinationLoad)
+    load.stop, load.failure, load.rows = threading.Event(), None, []
+    load.chunk_s, load.timeout_s, load.root = 0, 0, tmp_path
+    load.thread = SimpleNamespace(join=lambda _: None, is_alive=lambda: True)
+    load.sampler = SimpleNamespace(close=lambda: None)
+    with pytest.raises(RuntimeError, match="foreground failed"):
+        load.close()
 
 
 def test_retry_call_records_and_recovers(tmp_path):

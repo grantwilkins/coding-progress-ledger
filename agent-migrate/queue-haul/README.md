@@ -46,7 +46,8 @@ default (`QH_CAMPAIGN_ATTEMPTS`), preserving every complete cell and recording
 failures in `retries.jsonl`. `QH_HEALTH_TIMEOUT_S` defaults to one hour for
 cold model loads. Invalid checkpoints are archived and remeasured; out-of-range
 boundaries are censored, load-target misses are recorded, and noisy nonnested
-envelopes are conservatively shrunk instead of aborting the job.
+envelopes are conservatively shrunk instead of aborting the job. Loaded probes
+stop future arrivals and drain in-flight requests before the next cell.
 
 Download public trace rows before allocating GPUs, build the content-free
 manifest, then prepare the launch bundle:

@@ -226,11 +226,17 @@ def _completion(host: str, port: int, model: str, prompt: list[int], output_toke
 
 def drive(host: str, port: int, model: str, sessions: list[Session], rate: float,
           count: int, seed: int, timeout_s: float = 720,
-          scheduler=poisson_schedule, window_s: float | None = None) -> list[dict]:
+          scheduler=poisson_schedule, window_s: float | None = None,
+          stop: threading.Event | None = None) -> list[dict]:
     schedule = poisson_window(rate, window_s, seed) if window_s else scheduler(rate, count, seed)
     count, epoch = len(schedule), time.monotonic()
     def one(index):
-        scheduled = epoch + schedule[index]; time.sleep(max(0, scheduled - time.monotonic()))
+        scheduled = epoch + schedule[index]
+        delay = max(0, scheduled - time.monotonic())
+        if stop and stop.wait(delay):
+            return None
+        if not stop:
+            time.sleep(delay)
         session = sessions[index % len(sessions)]
         prompt, forced = session.prompt(index)
         row = _completion(host, port, model, prompt, session.output_tokens, forced, timeout_s)
@@ -242,7 +248,7 @@ def drive(host: str, port: int, model: str, sessions: list[Session], rate: float
     if not count:
         return []
     with ThreadPoolExecutor(max_workers=min(256, count)) as pool:
-        return list(pool.map(one, range(count)))
+        return [row for row in pool.map(one, range(count)) if row is not None]
 
 
 def prewarm(host: str, port: int, model: str, sessions: list[Session], timeout_s=720) -> list[dict]:
@@ -259,7 +265,8 @@ def prewarm(host: str, port: int, model: str, sessions: list[Session], timeout_s
 class DestinationLoad:
     def __init__(self, host: str, port: int, model: str, sessions: list[Session],
                  target_rho: float, prefill_rate: float, decode_rate: float,
-                 root: Path, seed: int, chunk_s: float = 15, normal_bound: float = 1):
+                 root: Path, seed: int, chunk_s: float = 15, normal_bound: float = 1,
+                 timeout_s: float = 720):
         work = np.mean([s.append_tokens / prefill_rate + s.output_tokens / decode_rate
                         for s in sessions])
         if min(target_rho, work, normal_bound) <= 0:
@@ -267,7 +274,7 @@ class DestinationLoad:
         self.host, self.port, self.model, self.sessions = host, port, model, sessions
         self.target, self.prefill_rate, self.decode_rate = target_rho, prefill_rate, decode_rate
         self.normal_bound = normal_bound
-        self.root, self.seed, self.chunk_s = root, seed, chunk_s
+        self.root, self.seed, self.chunk_s, self.timeout_s = root, seed, chunk_s, timeout_s
         self.rate, self.stop, self.rows = target_rho * normal_bound / work, threading.Event(), []
         self.sampler = MetricsSampler(host, port, root / "engine.csv")
         self.thread, self.failure = threading.Thread(target=self._run, daemon=True), None
@@ -275,7 +282,7 @@ class DestinationLoad:
 
     def start(self):
         self.root.mkdir(parents=True, exist_ok=True)
-        prewarm(self.host, self.port, self.model, self.sessions)
+        prewarm(self.host, self.port, self.model, self.sessions, self.timeout_s)
         self.sampler.start(); self.thread.start()
 
     def _run(self):
@@ -284,7 +291,8 @@ class DestinationLoad:
             while not self.stop.is_set():
                 count = max(1, math.ceil(self.rate * self.chunk_s))
                 self.rows += drive(self.host, self.port, self.model, self.sessions,
-                                   self.rate, count, self.seed + index)
+                                   self.rate, count, self.seed + index, self.timeout_s,
+                                   stop=self.stop)
                 index += 1
         except Exception as exc:
             self.failure = exc
@@ -301,7 +309,7 @@ class DestinationLoad:
         raise RuntimeError("destination foreground did not reach its rho gate") from self.failure
 
     def close(self):
-        self.stop.set(); self.thread.join(self.chunk_s + 10); self.sampler.close()
+        self.stop.set(); self.thread.join(self.chunk_s + self.timeout_s + 10); self.sampler.close()
         if self.thread.is_alive() or self.failure:
             raise RuntimeError("destination foreground failed") from self.failure
         (self.root / "requests.json").write_text(json.dumps(self.rows, indent=2) + "\n")
