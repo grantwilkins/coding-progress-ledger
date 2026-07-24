@@ -170,10 +170,24 @@ def test_resume_commit_defaults_from_environment(monkeypatch):
 
 
 def test_loaded_scenario_has_one_session_and_one_method():
-    scenario = runner.migration_scenario({"id": "s", "job_class": "coding"},
+    session = {"id": "s", "job_class": "coding", "state_code": "CODE",
+               "turns": [{"input_tokens": 1024, "append_tokens": 1,
+                           "output_tokens": 1}]}
+    manifest = {"schema": runner.profiler.MANIFEST_SCHEMA,
+                "workload": "coding", "sessions": [session]}
+    scenario = runner.migration_scenario(session,
                                          "replay", 16384, 10000, 2)
+    assert {"scenario_id", "kind", "method", "activity", "request_schedule",
+            "repeat", "deadline_s", "sessions", "moves", "serving_concurrency",
+            "concurrency", "move_concurrency", "copy_policy", "final_state",
+            "bandwidth_mbps"} <= scenario.keys()
     assert scenario["concurrency"] == scenario["move_concurrency"] == 1
+    assert scenario["activity"] == "none" and scenario["request_schedule"] == []
     assert scenario["moves"] == [{**scenario["sessions"][0], "method": "replay"}]
+    runner.validate_loaded_scenario(manifest, scenario)
+    del scenario["activity"]
+    with pytest.raises(ValueError, match="invalid loaded"):
+        runner.validate_loaded_scenario(manifest, scenario)
 
 
 def test_loaded_stack_preserves_proxy_until_cell_finishes(monkeypatch, tmp_path):
@@ -209,7 +223,10 @@ def test_loaded_stack_stops_when_sink_start_fails(monkeypatch, tmp_path):
 
 def loaded_inputs(monkeypatch):
     monkeypatch.setattr(runner, "migration_manifest", lambda _: {
-        "sessions": [{"id": "s", "job_class": "coding"}],
+        "schema": runner.profiler.MANIFEST_SCHEMA, "workload": "coding",
+        "sessions": [{"id": "s", "job_class": "coding", "state_code": "CODE",
+                      "turns": [{"input_tokens": 1024, "append_tokens": 1,
+                                  "output_tokens": 1}]}],
     })
     monkeypatch.setattr(runner, "manifest_sessions", lambda *_: [])
     monkeypatch.setattr(runner, "profile_rate", lambda *_: 1)

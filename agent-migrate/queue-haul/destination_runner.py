@@ -692,11 +692,35 @@ def migration_scenario(session: dict, method: str, context: int, bandwidth: floa
             "turn_index": 0, "initial_tokens": context, "order": 0}
     key = hashlib.sha256(f"{method}:{context}:{bandwidth}:{repeat}".encode()).hexdigest()[:16]
     return {"scenario_id": f"loaded-{key}", "kind": "migration", "method": method,
-            "request_schedule": [], "repeat": repeat, "deadline_s": 720,
+            "activity": "none", "request_schedule": [], "repeat": repeat,
+            "deadline_s": 720,
             "sessions": [item], "moves": [{**item, "method": method}],
             "serving_concurrency": 1, "concurrency": 1, "move_concurrency": 1,
             "copy_policy": "initial_final", "final_state": "awake",
             "bandwidth_mbps": bandwidth}
+
+
+def validate_loaded_scenario(manifest: dict, scenario: dict) -> None:
+    required = {"scenario_id", "kind", "method", "activity", "repeat",
+                "deadline_s", "sessions", "moves", "concurrency",
+                "bandwidth_mbps"}
+    if required - scenario.keys() \
+            or scenario.get("kind") != "migration" \
+            or scenario.get("method") not in profiler.METHODS \
+            or scenario.get("activity") != "none" \
+            or min(float(scenario.get(key, 0)) for key in (
+                "deadline_s", "concurrency", "move_concurrency",
+                "serving_concurrency", "bandwidth_mbps")) <= 0 \
+            or {(row.get("session_id"), row.get("order"))
+                for row in scenario.get("sessions", [])} != {
+                    (row.get("session_id"), row.get("order"))
+                    for row in scenario.get("moves", [])} \
+            or {row.get("method") for row in scenario.get("moves", [])} \
+            != {scenario.get("method")}:
+        raise ValueError("invalid loaded migration scenario")
+    profiler.validate_plan(
+        {"schema": profiler.PLAN_SCHEMA, "scenarios": [scenario]}, manifest,
+    )
 
 
 @contextmanager
@@ -740,6 +764,7 @@ def measure_loaded(plan: dict, bundle: dict, profile: dict, cfg: testbed.Config,
             for method in plan["migration"]["methods"]:
                 scenario = migration_scenario(manifest["sessions"][repeat % len(manifest["sessions"])],
                                               method, context, bandwidth, repeat)
+                validate_loaded_scenario(manifest, scenario)
                 cell_root = control_root.parent / method
                 if not read_checkpoint(cell_root / "result.json", ("migrations",),
                                        lambda row: len(row["migrations"]) == 1):
