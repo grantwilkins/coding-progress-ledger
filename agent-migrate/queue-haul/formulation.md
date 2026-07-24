@@ -49,18 +49,20 @@ The workload-direction domain is checked using
 token fraction.
 
 For cache-aware admission, let
-\(p_{s,q,r,\omega}\) be expected prefill accelerator-seconds per wall-second
+\(p_{s,q,r,\omega}\) be expected pinned-replica service-seconds per wall-second
 from a measured cache-conditioned work function
 \(\tau_q^P(T^{full},T^{hit},T^{miss})\). Guaranteed reuse may change this work,
 but subtracting hit tokens from a cold-prefill throughput is not generally
 valid: an uncached suffix still attends to the cached prefix. Prefix reuse does
 not reduce generation-phase work for the same full context and output. If the
-cache-conditioned profile or protected block identity is unknown, use the
-full-prefill approximation \(p_{s,q,r,\omega}=f_s/F_q(T_s)\); this is the
-current implementation. An observed cache-hit rate alone is not a residency
-guarantee. Decode \(G_q\) is keyed by live sequence length. Using one \(T_s\)
-for both cold prefill and decode is the current measured simplification, not a
-portable identity.
+cache-conditioned profile or protected block identity is unknown, the current
+implementation uses \(p_{s,q,r,\omega}=f_s/F_q(T_s)\). This is an
+append-token/cold-rate normalization coordinate, not a conservative physical
+cached-prefill bound. It transfers only within the empirically observed cache,
+affinity, context, and concurrency domain. An observed cache-hit rate alone is
+not a residency guarantee. Decode \(G_q\) is keyed by live sequence length.
+Using one \(T_s\) for both cold prefill and decode is the current measured
+simplification, not a portable identity.
 
 Over service-demand horizon \(H_s\), the target coordinates are
 
@@ -87,10 +89,15 @@ cached_j\le
 L_q^{block}.
 \]
 
-The run is the independent unit. Any request exceeding this bound reuses the
-nominal new append and excludes the whole run from service-capacity fitting.
-The recovered archive contains six cache-valid complete-work runs and 60
-append-hot complete-work runs.
+The physical execution is the contamination unit. Any request exceeding this
+bound reuses the nominal new append and excludes the whole execution from
+service-capacity fitting. A forensic geometry audit finds five
+private-prefix-consistent executions and 60 append-hot complete-work
+executions. Because the archive lacks stream-completion evidence, the five are
+descriptive sensitivity anchors rather than admissible service points. One
+colder under-hit is excluded after a likely silent prewarm failure. The
+persistent campaign process means these are not statistically independent
+replications.
 
 Planning never reads sampled future request times or sizes. For a planning
 horizon \(h\), it conservatively materializes expected active-session state as
@@ -202,7 +209,7 @@ satisfying eligibility, steady placement, and transition constraints:
 \operatorname{ServicePack}(z)\land
 \operatorname{KVPrivate}(z)\land
 \operatorname{MigrationSchedule}(z,\pi)\land
-\operatorname{ImpactOK}(z).
+\operatorname{ImpactOK}(z,\pi).
 \]
 
 It is joined to source selection by
@@ -217,9 +224,12 @@ P_{src}\left(S\setminus
 The optimizer may use conservative marginal power gains to choose candidates,
 but it reevaluates this exact source condition after integer selection.
 Robust semantics require the same \(z,\pi\) to satisfy service, KV, migration,
-and impact constraints for every \(\omega\in\Omega\); \(\pi\) may react only to
-observed completions, not future case information. The current implementation
-has only one central case, so this multi-case quantifier is proposed.
+and impact constraints for every \(\omega\in\Omega\). Here \(\pi\) is a
+history-dependent policy selected ex ante; it maps observed completions to
+actions but cannot read future case information. Define
+\(E_{s,a,r}=\min_\omega E_{s,a,r,\omega}\), and use a source-power lower bound
+valid simultaneously across declared source cases. The current implementation
+has only one central case, so these robust quantifiers are proposed.
 Compatibility fixes the model and tokenizer, durable-log and KV contracts,
 hardware, precision, parallel layout, engine configuration, warmness, and
 every measured context, workload, bandwidth, and concurrency domain. The
@@ -278,18 +288,20 @@ impact constraints. Equal GPU counts therefore need not imply equal available
 capacity.
 
 An evidence-robust label requires an accepted envelope and every case inside
-its support. The six v7 cache-valid runs provide observed-inner labels only.
-Feasibility that depends on a synthetic headroom value, interpolation between
-measured affinity rays, or an assumed facet shape is sensitivity/possible.
+its support. The five v7 private-prefix-consistent executions provide
+descriptive sensitivity anchors only. The colder under-hit is not promoted
+through an untested cache-monotonicity assumption. Feasibility that depends on
+a legacy anchor, synthetic headroom value, interpolation between affinity rays,
+or an assumed facet shape is sensitivity/possible.
 
 The current pool relaxation sums baseline work \(b_p\) and requires
 
 \[
-N_q\left(b_p+\sum_{c\in p}d_cy_c\right)
+N_q\left(b_p+\sum_{c\in p}d_cx_c\right)
 \le |p|h_q^m.
 \]
 
-V1 gives no cross-session sharing credit. Exact private-state admission is
+Target v1 gives no cross-session sharing credit. Exact private-state admission is
 
 \[
 B_{r,\omega}^0+
@@ -301,21 +313,25 @@ B_{r,\omega}^0+
 \quad\forall r,\omega.
 \]
 
-\(K_q^{blocks}\) is allocatable KV after model weights, activations, graph
-captures, and runtime workspace. Each session's private history and projected
-growth are block-rounded independently. Prefix-compute credit applies only to
-that session's history installed before route commit. The necessary aggregate
-pool pruning relaxation is
+\(B_{r,\omega}^0\) and \(K_q^{blocks}\) are physical block counts after model
+weights, activations, graph captures, and runtime workspace. Each session's
+private history and projected growth are block-rounded independently.
+Prefix-compute credit applies only to that session's history installed and
+protected until the credited request begins. V7 observes request-time reuse but
+does not prove such retention under arbitrary pressure. Without a runtime
+reservation, prospective prefix-compute credit is sensitivity-only. The
+necessary aggregate pool pruning relaxation is
 
 \[
 B_p^0+\sum_{c\in p}
-\left\lceil\frac{\widehat T_c(H_r)}{L_q^{block}}\right\rceil y_c
+\left\lceil\frac{\widehat T_c(H_r)}{L_q^{block}}\right\rceil x_c
 \le |p|K_q^{blocks}.
 \]
 
 The current schema exposes token-equivalent capacity and sums unrounded context
 tokens. It receives no sharing credit, but still needs block rounding or
-one-private-block tail headroom before it is a physical-memory guarantee.
+one block of tail headroom per resident session before it is a physical-memory
+guarantee.
 
 A later shared-KV extension may replace the private sum with an exact union of
 protected pinned-engine block keys. Evictable idle cache entries receive no
@@ -331,7 +347,9 @@ Baseline work and KV may come from explicit per-replica fields or destination
 background sessions, but never both.
 
 A migration model preserves exact transport lower bounds and calibrates only
-runtime-dependent work. Its component semantics are:
+runtime-dependent work. Log and sealed-KV bytes are evaluated at the snapshot
+selected by \(\pi\); append and catch-up bytes remain separate phases. Its
+component semantics are:
 
 \[
 \tau_{s,R,q}=
@@ -356,15 +374,19 @@ are not blindly added. A load-dependent residual is permitted only within a
 domain measured over the migration interval; requested load is never
 substituted for achieved load.
 
+The fitted v7 KV residual is `observed - route_floor`; it can be used in the
+explicit `max(route, ingest)` form only where route time is the measured
+bottleneck. Otherwise it must be redefined or refit.
+
 The schedule assigns residual route bandwidth after background reservations,
 and route time is never below bytes divided by the allocated bottleneck rate.
 Geographic routes require measured fixed/per-round latency; the v7 shaped local
 route does not identify it. `MigrationSchedule` means one nonanticipative
 schedule whose makespan is at most \(H_m\) in every declared case and that
 reserves each source stream, route edge, destination ingest/copy engine,
-replica migration slot, and measured temporary staging allocation over time.
-Aggregate byte and occupancy rows are necessary pruning relaxations, not that
-schedule proof.
+and replica migration slot. Any temporary staging allocation must become an
+explicit measured row; current code has none. Aggregate byte and occupancy rows
+are necessary pruning relaxations, not that schedule proof.
 
 The recovered v7 data identifies coefficients only for its recorded
 concurrency-one request schedules in the measured 16K/10-Gbps and
@@ -382,6 +404,14 @@ pools, but one arriving request does not establish a tail-SLO bound. A robust
 result currently requires idle/drained foreground or an explicit impact bound
 inside the exact measured overlap domain. This dynamic predicate is proposed
 semantics and is not encoded by the current architecture types.
+
+Operational feasibility additionally requires an accepted evidence status, a
+full pinned runtime and warm/healthy attestation, a fresh live-state snapshot
+held by a lease through commit, per-session KV block rounding, a supported
+service horizon, and either an idle/drained migration window or an accepted
+foreground-impact bound. The current architecture implementation does not
+enforce all of these gates, so its successful placements remain descriptive or
+`sensitivity/possible`.
 
 ## Greedy
 
@@ -486,9 +516,12 @@ transitions only after every dependent session has committed.
 
 ## Validation and scope
 
-The event simulator is authoritative because aggregate resource feasibility
-does not guarantee a valid schedule through serial stages and shared queues. A
-plan is feasible only when:
+The event simulator is authoritative only for deterministic schedules under
+fixed healthy modeled resources; aggregate resource feasibility alone does not
+guarantee a valid schedule through serial stages and shared queues. It has no
+failure, lease-expiry, or rollback model. Execution must revalidate the lease,
+retain source ownership until commit, and abort the destination attempt on a
+pre-commit failure. Within that scope, a plan is feasible only when:
 
 1. exact modeled source power after integer selection is at or below the limit;
 2. the trailing-window modeled source power at \(D\) is at or below the limit;
@@ -506,10 +539,12 @@ current planning scope remains active sessions, the central case, and an awake
 final state. Random planning retains cold-session and replay-on-request
 coverage.
 
-Unsupported context, workload direction, destination load, bandwidth,
-compatibility, topology, concurrency, or profile cases hard-fail. Continuous
-destination scheduling, request-level dynamic power, replanning, model loading,
-and predictive latency remain out of scope. Measurement-invalid or unbracketed
-service evidence and loaded probes without recorded migration-interval state
-also hard-fail during profile reduction. Measurement requirements and open
-evidence are tracked in `DATA_TO_COLLECT.md`.
+Malformed type-level context, workload, compatibility, topology, concurrency,
+or profile inputs hard-fail. Candidate-local unsupported method/path cases are
+omitted by the current prototype and are not yet reported structurally.
+Continuous destination scheduling, request-level dynamic power, replanning,
+model loading, and predictive latency remain out of scope.
+Measurement-invalid or unbracketed service evidence and loaded probes without
+recorded migration-interval state hard-fail during profile reduction.
+Measurement requirements and open evidence are tracked in
+`DATA_TO_COLLECT.md`.

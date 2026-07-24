@@ -10,6 +10,8 @@ Plausible wrong implementations:
 - Compare cache hits with the full prompt instead of the intentionally warmed prefix.
 - Accept a run when only a majority of its requests avoid future-append cache hits.
 - Treat a zero-work response as a cache-state result instead of measurement-invalid.
+- Trust reported token counts after a truncated stream or prompt-usage mismatch.
+- Conflate forensic legacy cache geometry with strict future service evidence.
 - Ignore physical cache-block rounding at the prefix/append boundary.
 - Clamp a changed runtime baseline into the load-induced slowdown.
 - Choose the median rather than worst observed migration slowdown.
@@ -23,7 +25,8 @@ from types import SimpleNamespace
 import pytest
 
 import destination_evaluation
-from destination_evaluation import (SweepCell, effective_headroom, primary_cells,
+from destination_evaluation import (SweepCell, archived_cache_state,
+                                    effective_headroom, primary_cells,
                                     reduce_bounds, reduce_loaded, replica_counts,
                                     run_sweep, service_cache_state)
 from test_pool_planner import architecture
@@ -33,7 +36,7 @@ def boundary_rows(emergency=2):
     return [
         {"mode": mode, "facet": 0, "run_id": run, "bound": bound + run / 10,
          "outside": bound + run / 10 + .5, "inside_decision": "feasible",
-         "outside_decision": "infeasible"}
+         "outside_decision": "infeasible", "cache_state": "private_prefix"}
         for mode, bound in (("normal", 1), ("emergency", emergency), ("stable", 3))
         for run in range(3)
     ]
@@ -57,22 +60,32 @@ def test_envelope_reduction_rejects_censored_boundary():
         reduce_bounds(rows)
 
 
+@pytest.mark.parametrize("state", ["append_hot", "prefix_underhit", None])
+def test_envelope_reduction_requires_exact_private_prefix_runs(state):
+    rows = boundary_rows()
+    rows[0]["cache_state"] = state
+
+    with pytest.raises(ValueError, match="private-prefix"):
+        reduce_bounds(rows)
+
+
 def cache_request(cached=96, prompt=113, appended=17, output=1):
     return {
         "status": 200, "error": "", "prompt_tokens": prompt,
         "cached_tokens": cached, "input_tokens": appended,
         "output_tokens": output, "planned_output_tokens": 1,
+        "done": True, "planned_prompt_tokens": prompt,
     }
 
 
 def test_service_cache_state_uses_warmed_prefix_block_boundary():
-    assert service_cache_state([cache_request()])["state"] == "private_prefix"
-    assert service_cache_state([cache_request(cached=112)])["state"] == "append_hot"
-    assert service_cache_state([cache_request(cached=80)])["state"] == "prefix_underhit"
+    assert service_cache_state([cache_request()], 16)["state"] == "private_prefix"
+    assert service_cache_state([cache_request(cached=112)], 16)["state"] == "append_hot"
+    assert service_cache_state([cache_request(cached=80)], 16)["state"] == "prefix_underhit"
 
 
 def test_service_cache_state_rejects_one_hot_append_at_run_level():
-    result = service_cache_state([cache_request(), cache_request(cached=112)])
+    result = service_cache_state([cache_request(), cache_request(cached=112)], 16)
 
     assert result["state"] == "append_hot"
     assert result["requests"] == {
@@ -82,9 +95,42 @@ def test_service_cache_state_rejects_one_hot_append_at_run_level():
 
 
 def test_service_cache_state_keeps_invalid_work_separate():
-    result = service_cache_state([cache_request(cached=112, output=0)])
+    result = service_cache_state([cache_request(cached=112, output=0)], 16)
 
     assert result["state"] == "measurement_invalid"
+
+
+@pytest.mark.parametrize(
+    "changed", [{"done": False}, {"planned_prompt_tokens": 114}]
+)
+def test_service_cache_state_requires_complete_exact_prompt_work(changed):
+    row = cache_request()
+    row.update(changed)
+
+    assert service_cache_state([row], 16)["state"] == "measurement_invalid"
+
+
+@pytest.mark.parametrize("missing", ["done", "planned_prompt_tokens"])
+def test_service_cache_state_requires_completion_evidence(missing):
+    row = cache_request()
+    row.pop(missing)
+
+    assert service_cache_state([row], 16)["state"] == "measurement_invalid"
+
+
+def test_archived_cache_state_is_geometry_not_completion_evidence():
+    row = cache_request()
+    row.pop("done")
+    row.pop("planned_prompt_tokens")
+
+    assert archived_cache_state([row], 16)["state"] == "private_prefix"
+    assert service_cache_state([row], 16)["state"] == "measurement_invalid"
+
+
+def test_service_cache_state_classifies_http_failure_without_usage():
+    row = {"status": 503, "error": "unavailable", "done": False}
+
+    assert service_cache_state([row], 16)["state"] == "measurement_invalid"
 
 
 def test_loaded_reduction_uses_worst_run_per_load():

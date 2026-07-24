@@ -37,9 +37,12 @@ produce 50 HTTP-200 responses with no prompt/output usage. No successful
 request uses an ID at or above 200000. Those responses invalidate 47 service
 runs and are not capacity failures. Of the 66 complete-work runs, 60 contain
 at least one cache hit extending into the nominal new append because prompts
-repeat across cells while vLLM APC persists. Only six runs are consistent with
-private-prefix-or-colder service; all pass every policy, with a common observed
-inner radius of 0.096953 and no capacity boundary. Twelve of 18 migrations
+repeat across cells while vLLM APC persists. Five executions are forensically
+consistent with exact private-prefix cache geometry, and their recorded
+usage-based summaries pass every policy at a common radius of 0.096953.
+However, the archive lacks stream-completion evidence, so these are descriptive
+sensitivity anchors rather than admissible service points. One under-hit is
+excluded because its prewarm likely failed silently. Twelve of 18 migrations
 overlap foreground work. Replay added 1.084 s TTFT to the one request arriving
 during reconstruction; matched KV added 4.7 ms. The smallest supported timing
 models keep the replay context curve with a compute/completion calibration and
@@ -59,9 +62,12 @@ outside the destination campaign's measured domain, which ends at 24,576.
 Service probes use time-bounded Poisson arrivals and include scheduled client
 backlog in stability. A block-bootstrap drift upper bound no larger than one
 queued request per measurement window is the frozen non-growth resolution.
-`destination_evaluation.service_cache_state` independently classifies each run
+`destination_evaluation.service_cache_state` classifies each physical execution
 against the block-rounded history prefix intentionally warmed by the runner;
-one request reusing the new append excludes the run from capacity fitting.
+one request reusing the new append excludes the execution from capacity
+fitting. The campaign now pins the 16-token block size, resets local APC,
+validates prewarm work and stream completion, and refuses profile reduction
+unless every boundary execution has exact private-prefix state.
 Disagreeing boundary cells receive five runs; their majority determines the
 boundary and the vote counts remain in `service.json` instead of aborting the
 campaign.
@@ -76,34 +82,40 @@ use isolated bandwidth-pinned stacks so MP connections and logs stay intact,
 then stop future arrivals and drain in-flight requests before the next cell.
 `QH_LOADED_REHEARSAL=1` runs the first loaded repeat without final reduction.
 
-Do not submit the reserve. Retain the six cache-valid service runs and exclude
-append-hot cells from capacity fitting. No new service measurement is needed
-for explicit sensitivity modeling at the observed inner point. An accepted
-boundary requires only a targeted rerun with safe forced tokens, unique
-appended prompts or reset APC, and a hard cache-state gate. The measured
-migration domain needs no additional campaign.
+Do not submit the reserve. Retain the five private-prefix-consistent executions
+as descriptive sensitivity anchors and exclude the under-hit and append-hot
+cells. No new service measurement is needed for sensitivity modeling at
+0.096953. Any admissible service point or boundary requires a targeted rerun
+with safe forced tokens, unique appended prompts or reset APC, and hard
+completion/cache-state gates. The measured migration domain needs no additional
+campaign.
 
 Queue-Haul optionally accepts a versioned `DestinationArchitecture` from
 `destination.py`. It describes compatibility, context-conditioned service work,
 nested normal/emergency/stable envelopes, per-replica baseline service and KV
-state, pool routes, and conservative loaded-migration coefficients. Omitting it
-keeps the legacy scalar destination model unchanged.
+state, pool routes, and scalar loaded-migration sensitivity coefficients.
+Omitting it keeps the legacy scalar destination model unchanged.
 
-The exact destination question is whether a source session set has a compatible
+The target destination question is whether a source session set has a compatible
 per-replica assignment whose private-prefix prefill and decode work stay inside
 the measured service blob, whose block-rounded private KV fits, and whose
-migration schedule meets the route and deadline constraints. V1 deliberately
-takes no cross-session prefix-sharing credit. The current implementation still
-needs physical-block rounding before its token-equivalent KV row is a memory
-guarantee. Hardware, model, parallel layout, engine configuration, and scheduler
-settings are part of the profile identity rather than portable GPU-count
-multipliers.
+migration schedule meets the route and deadline constraints. Target v1 gives
+no cross-session prefix-sharing credit. The current implementation still needs
+physical-block rounding before its token-equivalent KV row is a memory
+guarantee. Hardware, model, parallel layout, engine configuration, and
+scheduler settings are part of the profile identity rather than portable
+GPU-count multipliers.
+
+The current architecture code is an aggregate sensitivity prototype, not an
+operational admission certificate. It does not yet enforce the complete pinned
+runtime/health attestation, live-state lease, per-session KV block rounding,
+busy-pool impact gate, or evidence status described by the target constraint.
 
 Pass it as `plan(..., destination=architecture)` for pool-aware LP or greedy
-admission, or to `execute(..., destination=architecture)` for independent stable
-envelope validation. Results report admission mode, shortfall/failure, packing
-repairs, and predicted migration makespan; `target_unmet` is valid best effort,
-not successful curtailment.
+sensitivity analysis, or to `execute(..., destination=architecture)` for
+deterministic stable-envelope validation. Results report admission mode,
+shortfall/failure, packing repairs, and predicted migration makespan;
+`target_unmet` is valid best effort, not successful curtailment.
 
 `destination_evaluation.py` reduces three-or-more independent runs into central
 and conservative envelope/migration inputs and provides the fixed 36-cell
@@ -357,8 +369,10 @@ methods. Legacy `idle` inputs are loaded as cold.
 
 Serving instances are sized by both measured compute load (`max_ell`) and
 engine-reported resident KV-token capacity. Active sessions count against both;
-cold sessions count against neither. The GPT-OSS-20B A100 profile uses the
-smaller source/sink vLLM capacity of 1,214,544 tokens per TP=1 instance.
+cold sessions count against neither. The current MP GPT-OSS-20B/A100 profile
+uses the vLLM 0.22.0 source/sink readback of 963,152 KV tokens per TP=1
+instance at `gpu_memory_utilization=0.75`. The former 1,214,544-token value
+belonged to the older vLLM 0.10.1.1 configuration.
 
 The earlier additive model is frozen in `_archive/queue-haul-additive-v0`.
 

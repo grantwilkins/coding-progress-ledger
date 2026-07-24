@@ -23,6 +23,7 @@ import numpy as np
 
 import migration_profiler as profiler
 import migration_testbed as testbed
+from destination_evaluation import service_cache_state
 
 
 REQUIRED_METRICS = {
@@ -31,6 +32,7 @@ REQUIRED_METRICS = {
     "vllm:generation_tokens_total",
 }
 MODES = ("normal", "emergency", "stable")
+FORCED_VOCABULARY = 200000
 
 
 def retry_call(action, path: Path, attempts: int, delay_s: float):
@@ -143,7 +145,7 @@ class Session:
         added = deterministic_tokens(f"{self.session_id}:{index}:input", self.append_tokens,
                                      self.vocabulary, self.seed)
         forced = deterministic_tokens(f"{self.session_id}:{index}:output", 1,
-                                      self.vocabulary, self.seed)[0]
+                                      min(self.vocabulary, FORCED_VOCABULARY), self.seed)[0]
         return self.history[:self.prefix_tokens] + added, forced
 
 def parse_metrics(text: str) -> dict[str, float]:
@@ -199,7 +201,7 @@ def _completion(host: str, port: int, model: str, prompt: list[int], output_toke
     body = json.dumps({"model": model, "prompt": prompt, "max_tokens": output_tokens,
                        "ignore_eos": True, "temperature": 0, "allowed_token_ids": [forced],
                        "stream": True, "stream_options": {"include_usage": True}})
-    start, first, usage, chunks = time.monotonic_ns(), None, {}, []
+    start, first, usage, chunks, done = time.monotonic_ns(), None, {}, [], False
     connection = http.client.HTTPConnection(host, port, timeout=timeout_s)
     connection.request("POST", "/v1/completions", body, {"Content-Type": "application/json"})
     response = connection.getresponse()
@@ -212,6 +214,7 @@ def _completion(host: str, port: int, model: str, prompt: list[int], output_toke
             continue
         now, data = time.monotonic_ns(), line.strip()[5:].strip()
         if data == b"[DONE]":
+            done = True
             break
         item = json.loads(data); usage = item.get("usage") or usage
         if item.get("choices"):
@@ -221,7 +224,8 @@ def _completion(host: str, port: int, model: str, prompt: list[int], output_toke
     cached = int((usage.get("prompt_tokens_details") or {}).get("cached_tokens", 0))
     return {"status": response.status, "error": "", "start_ns": start, "first_ns": first or end,
             "end_ns": end, "prompt_tokens": prompt_tokens, "output_tokens": completion_tokens,
-            "cached_tokens": cached, "ttft_s": ((first or end) - start) / 1e9,
+            "cached_tokens": cached, "done": done,
+            "ttft_s": ((first or end) - start) / 1e9,
             "mean_tpot_s": (end - (first or end)) / 1e9 / max(1, completion_tokens - 1)}
 
 
@@ -243,6 +247,7 @@ def drive(host: str, port: int, model: str, sessions: list[Session], rate: float
         row = _completion(host, port, model, prompt, session.output_tokens, forced, timeout_s)
         row.update({"request_index": index, "session_id": session.session_id,
                     "scheduled_ns": int(scheduled * 1e9), "input_tokens": session.append_tokens,
+                    "planned_prompt_tokens": len(prompt),
                     "planned_output_tokens": session.output_tokens,
                     "prompt_sha256": hashlib.sha256(bytes(np.asarray(prompt, dtype=np.uint32))).hexdigest()})
         return row
@@ -257,7 +262,9 @@ def prewarm(host: str, port: int, model: str, sessions: list[Session], timeout_s
     for session in sessions:
         prompt, forced = session.prompt(-1)
         row = _completion(host, port, model, prompt[:session.prefix_tokens], 1, forced, timeout_s)
-        if row["status"] != 200:
+        if row["status"] != 200 or row["error"] or not row.get("done") \
+                or row.get("prompt_tokens") != session.prefix_tokens \
+                or row.get("output_tokens") != 1:
             raise RuntimeError(f"failed to prewarm {session.session_id}")
         rows.append(row)
     return rows
@@ -556,16 +563,21 @@ def measure_anchors(host: str, port: int, model: str, contexts: list[int],
 def service_probe(host: str, port: int, model: str, sessions: list[Session],
                   radius: float, prefill_rate: float, decode_rate: float,
                   hold_s: float, slos: dict, root: Path, seed: int,
-                  block_s: float = 30, samples: int = 2000) -> dict:
+                  cache_block_tokens: int, block_s: float = 30,
+                  samples: int = 2000) -> dict:
     result_path = root / "result.json"
-    checkpoint = read_checkpoint(result_path, ("classification",),
-                                 lambda row: set(MODES) <= set(row["classification"]))
+    checkpoint = read_checkpoint(
+        result_path, ("classification", "cache"),
+        lambda row: set(MODES) <= set(row["classification"])
+        and row["cache"].get("state") == "private_prefix",
+    )
     if checkpoint:
         return checkpoint
     work = statistics.mean(s.append_tokens / prefill_rate + s.output_tokens / decode_rate
                            for s in sessions)
     rate, count = radius / work, max(1, math.ceil(radius / work * hold_s))
-    root.mkdir(parents=True, exist_ok=True); prewarm(host, port, model, sessions)
+    root.mkdir(parents=True, exist_ok=True)
+    warm = prewarm(host, port, model, sessions)
     sampler = MetricsSampler(host, port, root / "engine.csv"); sampler.start()
     try:
         started = time.monotonic()
@@ -582,15 +594,29 @@ def service_probe(host: str, port: int, model: str, sessions: list[Session],
                if r["monotonic_ns"] <= sampler.rows[0]["monotonic_ns"] + hold_s * 1e9]
     drained = not sampler.rows[-1]["vllm:num_requests_running"] \
         and not sampler.rows[-1]["vllm:num_requests_waiting"]
+    cache = service_cache_state(requests, cache_block_tokens)
+    (root / "requests.json").write_text(json.dumps(requests, indent=2) + "\n")
+    if cache["state"] != "private_prefix":
+        result_path.write_text(json.dumps(
+            {"status": "invalid", "cache": cache}, indent=2, sort_keys=True
+        ) + "\n")
+        raise RuntimeError(f"service probe cache state is {cache['state']}")
     result = {"status": "complete", "radius": radius,
+              "cache": cache, "prewarm": warm,
               "classification": classify(requests, metrics, drained, slos, block_s, samples),
               "queue_drift_upper": queue_drift_upper(metrics, requests, block_s, samples),
               "offered_prefill_tps": rate * statistics.mean(s.append_tokens for s in sessions),
               "offered_decode_tps": rate * statistics.mean(s.output_tokens for s in sessions),
               "request_count": len(requests), "drained": drained}
-    (root / "requests.json").write_text(json.dumps(requests, indent=2) + "\n")
     result_path.write_text(json.dumps(result, indent=2, sort_keys=True) + "\n")
     return result
+
+
+def reset_service_cache(stack: testbed.Stack, cfg: testbed.Config) -> None:
+    testbed.flush_lmcache(stack, cfg)
+    testbed.reset_vllm_caches(
+        cfg, (stack.run_root / "source.log", stack.run_root / "sink.log")
+    )
 
 
 def measure_frontier(plan: dict, bundle: dict, profile: dict, cfg: testbed.Config,
@@ -602,11 +628,12 @@ def measure_frontier(plan: dict, bundle: dict, profile: dict, cfg: testbed.Confi
         context = round(statistics.mean(s.prefix_tokens for s in sessions))
         prefill, decode = profile_rate(profile, "prefill", context), profile_rate(profile, "decode", context)
         def pilot(radius):
-            testbed.flush_lmcache(stack, cfg)
+            reset_service_cache(stack, cfg)
             cell = root / "fit" / direction / f"pilot-{radius:.6f}"
             return service_probe(cfg.host, cfg.sink_port, cfg.model, sessions, radius,
                                  prefill, decode, plan["service"]["hold_min_s"],
                                  plan["service"]["slos"], cell, 0,
+                                 plan["service"]["cache_block_tokens"],
                                  plan["service"]["block_bootstrap_s"],
                                  plan["service"]["bootstrap_samples"])["classification"]
         boundaries = find_boundaries(pilot, plan["service"]["radial_resolution"])
@@ -617,12 +644,13 @@ def measure_frontier(plan: dict, bundle: dict, profile: dict, cfg: testbed.Confi
                 pending = labels if repeat < plan["service"]["initial_repeats"] else {
                     radius: values for radius, values in labels.items() if len(set(values)) > 1}
                 for radius in pending:
-                    testbed.flush_lmcache(stack, cfg)
+                    reset_service_cache(stack, cfg)
                     cell = root / "fit" / direction / f"{mode}-r{repeat}-{radius:.6f}"
                     labels[radius].append(service_probe(
                         cfg.host, cfg.sink_port, cfg.model, sessions, radius, prefill, decode,
                         plan["service"]["hold_min_s"], plan["service"]["slos"], cell,
-                        repeat + 1, plan["service"]["block_bootstrap_s"],
+                        repeat + 1, plan["service"]["cache_block_tokens"],
+                        plan["service"]["block_bootstrap_s"],
                         plan["service"]["bootstrap_samples"])["classification"][mode])
                 if (repeat + 1 >= plan["service"]["initial_repeats"] and
                         all(len(set(values)) == 1 for values in labels.values())):
@@ -637,7 +665,8 @@ def measure_frontier(plan: dict, bundle: dict, profile: dict, cfg: testbed.Confi
                       "inside_feasible_votes": sum(labels[inside]),
                       "inside_repeats": len(labels[inside]),
                       "outside_feasible_votes": sum(labels[outside]),
-                      "outside_repeats": len(labels[outside])}
+                      "outside_repeats": len(labels[outside]),
+                      "cache_state": "private_prefix"}
                      for repeat in range(len(labels[inside]))]
     measured = {mode: statistics.median(float(r["bound"]) for r in rows
                                          if r["split"] == "fit" and r["mode"] == mode)
@@ -660,14 +689,17 @@ def measure_frontier(plan: dict, bundle: dict, profile: dict, cfg: testbed.Confi
                 actuals = []
                 for expected_feasible, radius in ((True, bound * (1 - delta)),
                                                   (False, bound * (1 + delta))):
-                    testbed.flush_lmcache(stack, cfg)
+                    reset_service_cache(stack, cfg)
                     cell = root / split / direction / f"{mode}-{radius:.6f}"
                     actual = service_probe(cfg.host, cfg.sink_port, cfg.model, sessions,
                                            radius, prefill, decode,
                                            plan["service"]["hold_min_s"],
                                            plan["service"]["slos"], cell, 0,
+                                           plan["service"]["cache_block_tokens"],
                                            plan["service"]["block_bootstrap_s"],
-                                           plan["service"]["bootstrap_samples"])["classification"][mode]
+                                           plan["service"]["bootstrap_samples"])[
+                                               "classification"
+                                           ][mode]
                     actuals.append(actual)
                 validation.append({"cell": f"{split}/{direction}/{mode}",
                                    "actual_bound": bound if actuals == [True, False]
@@ -888,7 +920,8 @@ def runtime_identity(cfg: testbed.Config, plan: dict, bundle: dict,
             fractions.append(f / (f + g))
     fingerprint = hashlib.sha256(json.dumps(
         [plan["image_sha256"], cfg.model, revision, cfg.max_model_len,
-         cfg.max_num_seqs, cfg.max_num_batched_tokens], separators=(",", ":")).encode()).hexdigest()
+         cfg.max_num_seqs, cfg.max_num_batched_tokens,
+         plan["service"]["cache_block_tokens"]], separators=(",", ":")).encode()).hexdigest()
     return {"compatibility": {"model": f"{cfg.model}@{revision}",
                               "tokenizer": f"{cfg.model}@{revision}",
                               "durable_log": f"lmcache-{testbed.lmcache_mode()}-{fingerprint}",

@@ -17,24 +17,47 @@ HEADROOM = (.5, 1, 2)
 POOLS = (1, 4, 8)
 
 
-def service_cache_state(requests, block_tokens=16):
-    """Classify one independent run against its intentionally warmed prefix."""
+def archived_cache_state(requests, block_tokens):
+    """Audit legacy cache geometry without claiming complete service evidence."""
+    return _cache_state(requests, block_tokens, strict=False)
+
+
+def service_cache_state(requests, block_tokens):
+    """Validate current service evidence and its intended warmed-prefix state."""
+    return _cache_state(requests, block_tokens, strict=True)
+
+
+def _cache_state(requests, block_tokens, strict):
     if not requests or block_tokens < 1:
         raise ValueError("cache classification needs requests and block size")
+    geometry = ("prompt_tokens", "input_tokens", "cached_tokens")
+    completion = (
+        "planned_prompt_tokens", "output_tokens", "planned_output_tokens",
+    )
     counts = dict.fromkeys(
         ("private_prefix", "prefix_underhit", "append_hot", "measurement_invalid"), 0
     )
     for row in requests:
-        prompt, appended = int(row["prompt_tokens"]), int(row["input_tokens"])
-        cached = int(row["cached_tokens"])
-        if row["status"] != 200 or row["error"] or prompt <= 0 or not 0 < appended <= prompt \
-                or not 0 <= cached <= prompt \
-                or int(row["output_tokens"]) != int(row["planned_output_tokens"]):
+        if row.get("status") != 200 or row.get("error") \
+                or any(key not in row for key in geometry) \
+                or strict and (row.get("done") is not True
+                               or any(key not in row for key in completion)):
             state = "measurement_invalid"
         else:
-            warmed = (prompt - appended) // block_tokens * block_tokens
-            state = ("append_hot" if cached > warmed else
-                     "prefix_underhit" if cached < warmed else "private_prefix")
+            prompt, appended = int(row["prompt_tokens"]), int(row["input_tokens"])
+            cached = int(row["cached_tokens"])
+            if prompt <= 0 or not 0 < appended <= prompt \
+                    or not 0 <= cached <= prompt \
+                    or strict and (
+                        int(row["planned_prompt_tokens"]) != prompt
+                        or int(row["output_tokens"])
+                        != int(row["planned_output_tokens"])
+                    ):
+                state = "measurement_invalid"
+            else:
+                warmed = (prompt - appended) // block_tokens * block_tokens
+                state = ("append_hot" if cached > warmed else
+                         "prefix_underhit" if cached < warmed else "private_prefix")
         counts[state] += 1
     state = next(name for name in
                  ("measurement_invalid", "append_hot", "prefix_underhit", "private_prefix")
@@ -44,6 +67,8 @@ def service_cache_state(requests, block_tokens=16):
 
 def reduce_bounds(rows):
     """Return central medians and conservative run minima by mode and facet."""
+    if any(r.get("cache_state") != "private_prefix" for r in rows):
+        raise ValueError("service envelope needs exact private-prefix runs")
     if any(
         r.get("inside_decision") != "feasible"
         or r.get("outside_decision") != "infeasible"

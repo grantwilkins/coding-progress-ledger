@@ -6,8 +6,10 @@ its recorded request schedules. Its recovered archive identifies six invalid
 forced-token signatures
 that produce 50 empty HTTP-200 streams and invalidate 47 service runs. Sixty
 of 66 complete-work runs contain cache hits extending into the nominal new
-append. The six private-prefix-or-colder runs pass every policy and provide
-only observed inner points, not an accepted capacity envelope. The archive
+append. Five executions are forensically private-prefix-consistent and their
+recorded summaries pass every policy, but absent stream-completion evidence
+makes them descriptive sensitivity anchors, not admissible service points. The
+sole under-hit is excluded because its prewarm likely failed. The archive
 records foreground overlap in 12/18 migrations, but achieved load counts
 cached prompts and remains a prewindow average rather than migration-interval
 intensity.
@@ -24,9 +26,12 @@ workload bound. Their empirical maxima and paired foreground effects are not
 
 The destination profile is valid only for its pinned model, hardware,
 precision, parallel layout, engine, scheduler, and KV ABI. The current planner
-charges full expected prefill work and sums projected context tokens. It does
+uses an append-token/cold-rate normalization coordinate and sums projected
+context tokens. That coordinate is not a conservative physical cached-prefill
+bound. It does
 not credit cross-session prefix sharing because the evidence does not establish
 protected destination block identity or residency, and its unrounded token sum
-is not yet a physical-block memory guarantee. V1 uses block-rounded private KV
-as target semantics; any future sharing credit requires exact protected block
-keys and remains a separate optimization.
+is not yet a physical-block memory guarantee. Block-rounded private KV is target
+v1 semantics; any future sharing credit requires exact protected block keys and
+remains a separate optimization. The current vLLM 0.22.0/.75 runtime exposes
+963,152 KV tokens, not the older configuration's 1,214,544.

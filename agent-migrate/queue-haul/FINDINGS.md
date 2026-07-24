@@ -8,7 +8,7 @@ justify an accepted destination profile.
 - Do not launch the current reserve; its task list is ignored and it would
   repeat the full campaign.
 - Do not collect more migration timing for the measured low-concurrency case.
-  The raw records support conservative replay and KV timing envelopes and a
+  The raw records support empirical-max replay and KV timing envelopes and a
   method-affinity rule for live traffic.
 - Before any service rerun, replace the six invalid forced-token signatures and
   prevent repeated appended prompts from surviving in APC across cells. If a
@@ -24,7 +24,10 @@ The 47 summaries classified infeasible contain 50 requests with HTTP status
 200, no recorded error, and zero prompt and output usage. The client requested
 a forced token with `ignore_eos=true`, so these are not legitimate early model
 stops. The stream ended without the required work or usage record. The other
-9,131 of 9,181 requests produced exactly their planned output.
+9,131 requests reported their planned completion-token count. The archive did
+not retain returned token identity, finish reason, or whether `[DONE]` arrived.
+Consequently, it supports a forensic cache-geometry audit but cannot satisfy
+the stricter completion-evidence contract now enforced for new service runs.
 
 Every empty response is one of six deterministic
 `(session, request_index, forced_token)` signatures. Their forced token IDs are
@@ -53,48 +56,56 @@ state only when
 cached_tokens <= floor((prompt_tokens - input_tokens) / 16) * 16
 ```
 
-The run is the independent unit: one append-hot request contaminates the whole
-run. The reproducible `service_cache_state` reduction gives:
+The physical execution is the contamination unit: one append-hot request
+excludes the whole execution. These are not statistically independent
+replications because the campaign retained one vLLM process. The audit-only
+`archived_cache_state` geometry reduction gives:
 
 | Run state | Runs | Meaning |
 |---|---:|---|
 | measurement-invalid | 47 | at least one missing-work response |
 | append-hot | 60 | at least one cached block extends into the new append |
-| exact private prefix | 5 | every request matches the intended warmed prefix |
+| private-prefix consistent | 5 | every recorded cache count matches the intended warmed prefix |
 | prefix under-hit | 1 | no append reuse, but one request lost intended prefix blocks |
 
 Across all 9,181 requests, the corresponding request counts are 50 invalid,
-8,020 append-hot, 1,110 exact-private-prefix, and one prefix under-hit. Request
+8,020 append-hot, 1,110 private-prefix-consistent, and one prefix under-hit. Request
 counts inside a contaminated run are descriptive only; they are not additional
 independent evidence.
 
-Only six runs are usable as private-prefix-or-colder service observations:
+The under-hit is not private-prefix capacity evidence. Its request had zero
+cached tokens instead of the intended 9,616, and its unarchived prewarm used
+forced token 200740 in the same range where no measured request succeeded.
+Ordinary eviction is implausible at that point in the sequential prewarm, but
+the missing prewarm record prevents a causal claim. Exclude it.
+
+Only five executions are private-prefix-consistent descriptive observations:
 
 | Affinity | Split/cell | Radius | Requests | Cache state |
 |---|---|---:|---:|---|
-| interactive coding | fit/emergency | 0.114063 | 83 | exact private prefix |
-| coding | tune/normal | 0.096953 | 78 | exact private prefix |
-| agentic tool loop | tune/normal | 0.096953 | 27 | exact private prefix |
-| interactive coding | validation/normal | 0.096953 | 48 | exact private prefix |
-| coding | validation/normal | 0.096953 | 18 | one prefix under-hit |
-| agentic tool loop | validation/normal | 0.096953 | 11 | exact private prefix |
+| interactive coding | fit/emergency | 0.114063 | 83 | private-prefix consistent |
+| coding | tune/normal | 0.096953 | 78 | private-prefix consistent |
+| agentic tool loop | tune/normal | 0.096953 | 27 | private-prefix consistent |
+| interactive coding | validation/normal | 0.096953 | 48 | private-prefix consistent |
+| agentic tool loop | validation/normal | 0.096953 | 11 | private-prefix consistent |
 
-All six pass every policy. Their worst p90 TTFT is 0.587 s, worst p90 mean
-TPOT is 0.0248 s/token, and largest queue-drift upper bound is 0.00163
-requests/s. The common held-out observation is 0.096953. Interactive coding
-also has one fit-only success at 0.114063. These are observed inner points, not
-an accepted envelope: there are only two usable physical runs per affinity and
-no cache-valid failure.
+The recorded usage-based summaries for all five pass every policy. Their worst
+p90 TTFT is 0.383 s, worst p90 mean TPOT is 0.0248 s/token, and largest
+queue-drift upper bound is 0.00163 requests/s. The common descriptive point is
+0.096953. Interactive coding also has one fit-only point at 0.114063. Because
+stream completion is unobservable, these are sensitivity anchors, not strict
+service evidence or an accepted envelope. Coding has one such execution, the
+other affinities have two, and there is no private-prefix-consistent failure.
 
 The earlier 0.108677–0.182805 affinity maxima came from append-hot runs and are
 withdrawn as private-prefix capacity evidence. The data do not justify more
 service facets or a learned cache-work model. For current analysis, keep
 measured cold `F(T)`, `G(T)`, and KV capacity, and report:
 
-- **observed inner:** at or below a cache-valid point in the same measured
-  affinity/domain;
-- **possible/sensitivity:** dependent on an assumed service envelope or
-  interpolation; or
+- **descriptive anchor:** a legacy cache-geometry-consistent cell whose
+  completion evidence is unobservable;
+- **possible/sensitivity:** dependent on a descriptive anchor, assumed service
+  envelope, monotonicity, or interpolation; or
 - **unsupported:** outside the measured domain or based on an invalid or
   append-hot probe.
 
@@ -170,11 +181,16 @@ ranking on the recorded concurrency-one schedules in the measured
 schedule, continuous load claims, or an interference percentile requires new
 evidence.
 
-Service capacity remains right-censored. Retain the six cache-valid runs and
-exclude append-hot cells from capacity reduction. No rerun is needed for
-explicit sensitivity modeling at the observed 0.096953 inner point. If an
-accepted boundary is required, first select safe forced tokens, reset APC or
-make appended prompts unique across cells, and hard-fail missing work or cache
+There is no strictly admissible service point or boundary. Retain the five
+private-prefix-consistent executions as descriptive sensitivity anchors and
+exclude the under-hit and append-hot cells. No rerun is needed for explicit
+sensitivity modeling at 0.096953. Any accepted service evidence requires a
+targeted rerun: select safe forced tokens, reset APC or make appended prompts
+unique across cells, and hard-fail missing work, incomplete streams, or cache
 reuse beyond the warmed prefix. Start near 0.096953, expand until a failure is
 bracketed, and collect three independent runs only around each affinity's
 boundary. Compute normal, emergency, and stability from every physical run.
+
+The current vLLM 0.22.0 MP source and sink each report 963,152 KV tokens at
+`gpu_memory_utilization=0.75`. The earlier checked-in 1,214,544-token value came
+from a vLLM 0.10.1.1 configuration and is not capacity evidence for v7.

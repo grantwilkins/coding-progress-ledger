@@ -109,6 +109,7 @@ def make_plan(manifest_path: Path) -> dict:
             "radial_resolution": 0.05,
             "block_bootstrap_s": 30,
             "bootstrap_samples": 2000,
+            "cache_block_tokens": 16,
             "slos": SLO,
         },
         "migration": {
@@ -142,6 +143,7 @@ def validate_plan(plan: dict) -> None:
         )
         or plan["migration"]["rho"][-1] != "emergency_inside"
         or plan.get("anchor_drift_limit") != .15
+        or plan.get("service", {}).get("cache_block_tokens") != 16
     ):
         raise ValueError("campaign runtime or emergency migration point changed")
 

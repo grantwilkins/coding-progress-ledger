@@ -8,6 +8,7 @@ Plausible wrong implementations:
 - Extrapolate a rate or power curve outside its measured range.
 - Accept measured values without a source and error range.
 - Accept a nonpositive resident KV capacity.
+- Reuse KV capacity from a different engine and memory configuration.
 - Sample workload columns independently and create records absent from the trace.
 - Treat a legacy idle record as active or retain it as a third internal state.
 - Transfer a partial block proportionally or round it up.
@@ -95,6 +96,12 @@ def test_rate_range_sealed_kv_bytes_and_action_power_are_explicit(tmp_path):
     assert case.kv_transfer.initial_completion_s == .25
     assert case.kv_transfer.catch_up_fixed_s == .4
     assert case.kv_transfer.tail_replay_tps == 20
+
+
+def test_default_profile_uses_current_mp_runtime_kv_capacity():
+    path = Path(__file__).parents[1] / "profiles/gpt_oss_20b_a100_tp1.json"
+
+    assert ModelProfile.load(path).kv_capacity_tokens == 963152
 
 
 def test_version_two_profiles_do_not_inherit_zero_cost_catch_up(tmp_path):

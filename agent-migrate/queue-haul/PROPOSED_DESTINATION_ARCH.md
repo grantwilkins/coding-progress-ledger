@@ -1,10 +1,12 @@
 # Destination landing architecture
 
-Status: Queue-Haul implements the v1 admission model in `destination.py`,
-`pool_planner.py`, and `destination_evaluation.py`. The 2026-07-23 run does
-not support an accepted destination profile. The recovered raw records expose
-six invalid forced-token signatures, widespread append-hot service cells, and
-a right-censored private-prefix service frontier.
+Status: Queue-Haul implements an aggregate sensitivity prototype in
+`destination.py`, `pool_planner.py`, and `destination_evaluation.py`; it is not
+an operational admission certificate. The 2026-07-23 run does not support an
+accepted destination profile. The recovered raw records expose six invalid
+forced-token signatures, widespread append-hot service cells, one excluded
+under-hit, and five descriptive private-prefix-consistent cells without strict
+completion evidence or an admissible service frontier.
 They do support component timing for the recorded concurrency-one v7 request
 schedules in the measured 16K/10-Gbps and 24K/5-Gbps cells, plus a provisional
 live-traffic migration ranking. See `FINDINGS.md`.
@@ -98,12 +100,12 @@ state, and explicit policy. These sources are not interchangeable.
 |---|---|---|
 | pinned replica class \(q\) | compatibility and profile key | model, A100 80 GB, BF16, TP=1, image/runtime campaign record; the current type does not enforce the full tuple |
 | \(F_q(T),G_q(T)\) | cold-prefill and decode work coordinates | measured 256–31,562-token curves with declared 25% relative error; cache-conditioned prefill is unprofiled |
-| \(\mathcal C_q^m\) | joint TTFT/TPOT/stability service blob | six cache-valid inner runs across three affinities; common observation 0.096953; no accepted boundary |
+| \(\mathcal C_q^m\) | joint TTFT/TPOT/stability service blob | five legacy cache-geometry-consistent sensitivity anchors across three affinities; common point 0.096953; no admissible point or boundary |
 | \(b_r\) | current per-replica traffic point | must use profile-compatible prompt/decode telemetry; v7 `achieved_rho` is invalid |
-| \(K_q\) | allocatable live-KV stock after fixed runtime memory | exact 1,214,544-token vLLM readback for this homogeneous ABI |
-| private KV blocks | block-rounded per-session residency | exact 1,214,544-token capacity; v1 does not credit cross-session sharing |
+| \(K_q\) | allocatable live-KV stock after fixed runtime memory | 963,152-token vLLM 0.22.0 readback at 0.75 GPU-memory utilization |
+| private KV blocks | block-rounded per-session residency | target v1 accounting; current code sums unrounded tokens and gives no sharing credit |
 | replica inventory | assignment and fragmentation | direct site input; pool multiplication is only a relaxation |
-| migration components | deadline and temporary endpoint occupancy | conservative replay/KV fits for the recorded concurrency-one v7 schedules in the measured 16K/10-Gbps and 24K/5-Gbps cells |
+| migration components | deadline and temporary endpoint occupancy | empirical-max replay/KV envelopes for the recorded concurrency-one v7 schedules; no statistical coverage guarantee |
 | route edges and rates | transport feasibility | scenario topology plus shaped link rates; geography/fleet QoS remain inputs |
 | workload scenarios | horizon-specific arrivals, contexts, and prefix identity | modeled input; not a measurement of fleet behavior |
 | policy | requested SLO, headroom, and confidence rule | explicit operator input |
@@ -117,15 +119,19 @@ defines another replica class and requires its own evidence.
 
 ## Private-prefix v1 and contested situations
 
-V1 guarantees reuse only for the active session's migrated history. Its next
-append remains new work. It neither treats every turn as cold nor credits
-prefix blocks shared with another session. Per replica,
+The target v1 contract credits only the active session's migrated history; its
+next append remains new work. That history must be installed and protected
+until the credited request begins. V7 observes request-time reuse but does not
+prove protected residency under arbitrary pressure. Without a runtime
+reservation, prospective prefix-compute credit is sensitivity-only. Per replica
+and uncertainty case, target private-KV accounting is
 
 \[
+B_{r,\omega}^{0,blocks}+
 \sum_{s,a}
-\left\lceil\frac{\widehat T_s(H_r)}{L_q^{block}}\right\rceil
-\!z_{s,a,r}
-\le K_q^{blocks}.
+\left\lceil\frac{\widehat T_{s,\omega}(H_r)}
+{L_{q(r)}^{block}}\right\rceil z_{s,a,r}
+\le K_{q(r)}^{blocks}\qquad\forall r,\omega.
 \]
 
 This intentionally overstates physical memory when unrelated sessions happen
@@ -144,11 +150,23 @@ A separate destination is described by which constraint is contested:
 | route-contested | source-method-replica paths share residual edge bandwidth/latency | schedule later, select another route, or reject deadline |
 | endpoint-contested | replay compute, KV ingest/copy, source stream, or replica migration slot serializes work | schedule explicitly and check makespan |
 | foreground-impact-contested | migration overlaps latency-sensitive serving without an accepted impact bound | require idle/drained state or report possible |
+| stale or unreserved | replica, KV, endpoint, or residual-route state changed after planning | reacquire a fresh atomic lease or reject |
 
 These situations are intersections, not alternative destination types. A site
 may be service-, KV-, and route-contested simultaneously; the planner reports
-the first binding relaxation, while concrete packing and execution validation
-remain authoritative.
+the largest modeled relaxation pressure. Concrete packing and deterministic
+execution validation cover only the resources explicitly represented.
+
+Operational `feasible` requires more than the current prototype enforces: an
+accepted evidence status, full pinned runtime and warm/healthy attestation,
+fresh baseline and residual-route state held by a lease through commit,
+per-session KV block rounding, a supported service horizon, and either an
+idle/drained migration window or an accepted foreground-impact bound. Until
+those gates exist, architecture results are descriptive or
+`sensitivity/possible` even if the optimizer returns a placement. The simulator
+may model destination action power, but destination facility power and site
+caps are not admission constraints; either would require a separate measured
+resource row.
 
 ## Mirrored destination
 
@@ -173,7 +191,7 @@ p_{s,q,r,\omega},\;
 \right).
 \]
 
-\(p_{s,q,r,\omega}\) is prefill accelerator-seconds per wall-second from a
+\(p_{s,q,r,\omega}\) is pinned-replica service-seconds per wall-second from a
 measured cache-conditioned function
 \(\tau_q^P(T^{full},T^{hit},T^{miss})\), and
 \(\delta_{s,q,\omega}\) is horizon-average decode work:
@@ -191,9 +209,14 @@ A cache hit cannot be modeled by merely subtracting hit tokens from a
 cold-prefill curve: the suffix still attends to the cached prefix. Credit
 requires that the same exact pinned-engine blocks be available before prefill
 and protected in the KV constraint; if migration supplies them, its schedule
-must enforce install before use. Without that profile and reservation, use the
-current full-prefill approximation \(p=f_s/F_q(T_s)\). Prefix caching does not
-reduce generation-phase work for the same context and output.
+must enforce install before use. The current
+\(p=f_s/F_q(T_s)\) is an append-token/cold-rate normalization coordinate, not
+a conservative physical cached-prefill bound. It describes five legacy
+cache-geometry-consistent cells in their affinity, context, and concurrency
+domains; because their stream completion is unobservable, even use at those
+cells is sensitivity analysis until strict evidence and a service envelope or
+cache-conditioned work model are accepted. Prefix caching does not reduce
+generation-phase work for the same context and output.
 
 \(G_q\) is measured for the complete serving configuration and keyed by live
 sequence length. The current use of fixed rates and one \(T_s\) is a measured
@@ -222,24 +245,28 @@ The smallest useful resource model has one facet, `f/F + g/G <= h`. More
 facets are allowed only when valid held-out mixed-load data reject it. A run
 with missing token work or usage is measurement-invalid, not a capacity point.
 After excluding such runs, the v7 data contains only successful inner
-observations and cannot select another facet. For a pool with baseline work
-`b_p`, the necessary aggregate pruning relaxation is
+observations and cannot select another facet. For a pool with scenario-indexed
+baseline work `b_{p,\omega}`, the necessary aggregate pruning relaxation is
 
 \[
-N_q\left(b_p+\sum_s d_{s,q}y_s\right)\le |p|h_q^m.
+N_{q,\omega}\left(
+b_{p,\omega}+\sum_{s,a,r\in p}d_{s,q(r),r,\omega}z_{s,a,r}
+\right)\le |p|h_{q,\omega}^m
+\qquad \forall p,\omega.
 \]
 
 Normal and emergency are independently solved operator policies. Stable is the
 outer hard-safety ceiling used only by the execution validator. A baseline
 already outside the selected envelope makes that pool unavailable. Until a
-service envelope is identified, `h` remains an explicit sensitivity input:
-V7 can label a placement **observed-inner** at its cache-valid points, not
-evidence-robust, because each affinity has only two physical runs and no
-failure. A placement that depends on synthetic `h`, interpolation between
-affinity rays, or the assumed one-facet shape is **sensitivity/possible** even
-if it survives every chosen value. Anything outside the measured domain is
-unsupported. V7 does not identify a global conservative `h` or a
-mixed-affinity convex blob.
+service envelope is identified, `h` remains an explicit sensitivity input.
+V7 supplies five descriptive private-prefix-consistent anchors, not admissible
+service points: coding has one, the other affinities have two, and none is a
+failure. The colder coding under-hit is excluded rather than promoted through
+an untested cache-monotonicity assumption. A placement that depends on these
+legacy anchors, synthetic `h`, interpolation between affinity rays, or the
+assumed one-facet shape is **sensitivity/possible** even if it survives every
+chosen value. Anything outside the measured domain is unsupported. V7 does not
+identify a global conservative `h` or a mixed-affinity convex blob.
 
 The simple destination constraint is a nonanticipative existence statement.
 Let \(\omega\in\Omega\) jointly index demand forecasts and empirical profile
@@ -257,12 +284,14 @@ b_{r,\omega}+\sum_{s,a}d_{s,q(r),r,\omega}z_{s,a,r}
 \operatorname{KVPrivate}_{r,\omega}(z)\le K_{q(r)} & \forall r,\omega,\\
 \operatorname{makespan}(\operatorname{Schedule}(\pi,z,\omega))
 \le H_m & \forall\omega,\\
-\operatorname{ImpactOK}_{\omega}(z) & \forall\omega.
+\operatorname{ImpactOK}_{\omega}(z,\pi) & \forall\omega.
 \end{cases}
 \]
 
-\(\pi\) fixes ordering and resource-allocation decisions before uncertainty is
-known; it may react only to observed completions, not future case information.
+\(\pi\) is a history-dependent policy selected before uncertainty is known. It
+maps observed completions to actions but cannot read future case information.
+\(w_s\) is a simultaneous lower bound over declared source-power cases, and
+\(E_{s,a,r}=\min_\omega E_{s,a,r,\omega}\) requires eligibility in every case.
 
 The source sessions and destinations are therefore chosen jointly. A session
 that looks attractive for source-power relief but has no feasible
@@ -283,14 +312,16 @@ B_{r,\omega}^0+
 \le K_{q(r)}^{blocks}.
 \]
 
-V1 charges each session's history and projected growth independently. It does
+Target v1 charges each session's history and projected growth independently. It does
 not require block identities and gives no cross-session prefix-sharing credit.
 The current implementation still sums unrounded token equivalents, so
 block-rounding is target semantics rather than a present physical guarantee.
 A later shared-KV extension may replace the sum with an exact protected-block
 union without changing the other constraints.
 
-Replay contributes reconstructed context work and durable-log bytes. KV
+Replay contributes reconstructed context work and durable-log bytes. Every
+log or sealed-KV byte quantity is evaluated at the snapshot selected by
+\(\pi\); append and catch-up bytes remain separate phases. KV
 transfer contributes sealed-state bytes and destination ingestion/promotion
 work. Exact transport time must not be scaled by a runtime calibration. The
 desired component models are
@@ -320,6 +351,10 @@ shaped local route and cannot supply a geographic-WAN term. A load term may be
 added only after migration-interval work identifies one. A candidate whose
 predicted duration exceeds `H_m` is invalid.
 
+The fitted v7 KV residual is `observed - route_floor`; it can be reused in the
+explicit `max(route, ingest)` form only where route time is the measured
+bottleneck. Otherwise the residual must be redefined or refit.
+
 The v7 evidence supports empirical envelopes only for its recorded
 concurrency-one request schedules in the measured 16K/10-Gbps and
 24K/5-Gbps cells; “one overlapping request” alone is not a workload bound.
@@ -345,12 +380,12 @@ For every exact route edge `e`,
 
 Here \(x_c\) is the candidate view of \(z_{s,a,r}\), and the path is
 source-method-replica specific. This byte row is a necessary fluid relaxation,
-not an exact concurrent schedule. The authoritative schedule reserves
-per-time residual capacity on every edge, source stream, destination
-ingest/copy engine, replica migration slot, and measured temporary staging
-memory, then checks makespan. Migration concurrency remains one per replica in
-v1. Network transfer and destination ingestion may overlap only when the
-measured primitive supports it.
+not an exact concurrent schedule. The target schedule reserves per-time
+residual capacity on every edge, source stream, destination ingest/copy engine,
+and replica migration slot. Any temporary staging allocation must become an
+explicit measured row; current code has none. Migration concurrency remains
+one per replica in v1. Network transfer and destination ingestion may overlap
+only when the measured primitive supports it.
 
 The older `../evacuation` formulation already separated network, replay
 prefill, state ingestion, and KV residency. Queue-Haul adds steady service,
@@ -380,7 +415,8 @@ route-link bytes. The resource rows are only:
 
 Per-replica baseline work and KV are preserved. Supplying aggregate baseline
 fields and destination `SimSession` backgrounds simultaneously is rejected to
-prevent double counting. V1 remains block-rounded and additive. A later
+prevent double counting. Target v1 is block-rounded and additive; current code
+uses an unrounded token approximation. A later
 shared-prefix extension would require nonadditive prefix-group or block-union
 accounting in concrete packing.
 
@@ -405,7 +441,10 @@ oracle, not the production fallback.
 The destination execution validator independently checks each concrete replica
 against the stable envelope and additive KV capacity. Migration timing is
 validated separately by prediction and discrete-event execution simulation.
-Neither claims to predict continuous-batching latency.
+The simulator is authoritative only for its deterministic schedule under fixed
+healthy modeled resources; it has no failure, lease-expiry, or rollback model
+and does not predict continuous-batching latency. Execution must revalidate the
+lease and retain source ownership until commit.
 
 Each outcome independently reports `admission_mode`, `feasible`,
 `power_shortfall_w`, `failure_reason`, packing repairs, and predicted migration

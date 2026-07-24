@@ -328,7 +328,7 @@ def test_profile_reduction_is_conservative_in_the_safe_direction():
     service = [
         {"mode": mode, "facet": 0, "run_id": run, "bound": base + run / 10,
          "outside": base + run / 10 + .5, "inside_decision": "feasible",
-         "outside_decision": "infeasible"}
+         "outside_decision": "infeasible", "cache_state": "private_prefix"}
         for mode, base in (("normal", 1), ("emergency", 2), ("stable", 3))
         for run in range(3)
     ]

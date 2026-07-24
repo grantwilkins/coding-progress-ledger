@@ -5,8 +5,10 @@ Do not submit the current reserve bundle: its runner ignores the task list and
 would repeat the full campaign. Migration needs no new measurement for the
 measured low-concurrency domain. Service profiling remains conditional on
 an accepted boundary. Of 66 complete-work runs, 60 are append-hot because
-repeated prompts persist in vLLM APC; six cache-valid runs supply only observed
-private-prefix inner points.
+repeated prompts persist in vLLM APC. Five executions are forensically
+private-prefix-consistent but lack strict stream-completion evidence, so they
+supply descriptive sensitivity anchors only; one under-hit is excluded after a
+likely silent prewarm failure.
 
 The rule is simple: use existing measurements or deterministic derivations
 unless they cannot answer the admission question. Public data can establish a
@@ -19,12 +21,13 @@ correctness of this exact LMCache/vLLM contract.
 | Planner or validation task | Required datum | Existing evidence | New measurement | Use |
 |---|---|---|---|---|
 | pinned warm replica class | model/revision, tokenizer, weight/KV dtype, engine/version/flags, accelerator layout, TP/PP, scheduler, block layout | GPT-OSS-20B, A100 80 GB, BF16, TP=1 and campaign configuration records | exact preflight fingerprint only | select the profile; changing the tuple creates another class |
-| context-conditioned service work | private-prefix prefill and decode work over the demand horizon | stage-1 cold curves plus six end-to-end cache-valid service runs | none for observed-inner sensitivity; targeted service follow-up for an accepted envelope | use the affinity-level observed point; do not infer work from append-hot requests |
-| normal/emergency admission | mixed prefill/decode boundary under open-loop arrivals | six cache-valid runs all pass; common observed radius 0.096953; no failure | only after safe forced tokens and an APC/unique-append gate, probe the unresolved boundary | fit capacity only from cache-valid physical runs |
-| stable execution ceiling | nonpositive backlog drift, complete drain, no OOM/restart/rejection | the same six runs pass stability | same targeted follow-up if an upper boundary is required | reject final placements outside hard safety |
-| workload-direction domain | interactive-coding, coding, and agentic behavior | two cache-valid physical runs per affinity; no cache-valid failure or accepted mixed blob | none for sensitivity; boundary follow-up for evidence-robust admission | keep workload affinity as an evidence domain |
+| context-conditioned service work | private-prefix prefill and decode work over the demand horizon | stage-1 cold curves plus five legacy cache-geometry-consistent cells | none for descriptive sensitivity; targeted service follow-up for admissible evidence | use the affinity-level legacy anchor only as sensitivity; do not infer work from append-hot requests |
+| normal/emergency admission | mixed prefill/decode boundary under open-loop arrivals | five legacy summaries pass at a common radius 0.096953, but stream completion is unobservable | remeasure an inner point and probe the unresolved boundary with the corrected cache/work gate | fit capacity only from strict complete private-prefix executions |
+| stable execution ceiling | nonpositive backlog drift, complete drain, no OOM/restart/rejection | the same five legacy summaries pass but are not strict evidence | same targeted follow-up | reject final placements outside hard safety |
+| workload-direction domain | interactive-coding, coding, and agentic behavior | one legacy coding anchor and two for each other affinity; no admissible failure or mixed blob | none for sensitivity; targeted follow-up for evidence-robust admission | keep workload affinity as an evidence domain |
 | baseline service state | per-replica profile-compatible prefill/decode work, context, queue, and forecast window | raw request/engine telemetry exists; v7 `achieved_rho` is not a valid baseline | live telemetry at planning time | locate each replica inside its measured affinity blob |
-| allocatable KV supply | physical block capacity after weights, activations, graph captures, and runtime workspace | exact 1,214,544-token vLLM capacity for the pinned homogeneous ABI | preflight readback only | per-replica HBM stock through the residency horizon |
+| live-state lease | freshness generation plus reservations for service, KV, endpoint, and route headroom | not implemented | transactional destination readback and lease at planning/commit time | fail closed if state changes or the lease expires |
+| allocatable KV supply | physical block capacity after weights, activations, graph captures, and runtime workspace | 963,152-token readback for vLLM 0.22.0 at 0.75 GPU-memory utilization; the older 1,214,544 value is another class | exact live preflight readback | per-replica HBM stock through the residency horizon |
 | incremental KV demand | block-rounded private history and projected growth | within-session reuse and exact migration blocks are proven; cross-session sharing is deliberately uncredited | none for v1 | sum private blocks per replica; shared-prefix unions are a later optimization |
 | instance inventory and packing | healthy warm replica count, exact pinned class, pool/type membership, and per-replica baselines | architecture/scenario input plus packing tests | live health, configuration, and baseline readback at planning time | test existence of a concrete assignment; never infer it from GPU count alone |
 | replay migration | context reconstruction and log-transfer time | coding and serial migration corpora | none within the measured domain; reuse v7 loaded evidence | base replay work and deadline |
@@ -78,8 +81,9 @@ fit.
 - `outputs/destination-v7-20260722` plus its verified ignored raw archive: 18
   correct migration treatments and 113 service executions. Six forced-token
   signatures produce 50 empty responses and invalidate 47 runs. Sixty of 66
-  complete-work runs are append-hot; the remaining six cache-valid runs all
-  pass every policy but do not bracket a boundary. Twelve migrations overlap a
+  complete-work runs are append-hot; five private-prefix-consistent executions
+  have passing legacy summaries but lack strict completion evidence. One
+  under-hit is excluded after a likely failed prewarm. Twelve migrations overlap a
   foreground request. The rows support low-concurrency replay calibration,
   additive KV timing, and a live-traffic method-affinity rule; see
   `FINDINGS.md`.
@@ -118,9 +122,9 @@ preflight is repeated.
 
 The hypothesis was that context-normalized prefill and decode work compose into
 one portable facet across interactive-coding, coding, and agentic mixtures.
-The six cache-valid executions establish only conditional inner points because
-none fails an SLO or stability check. Complete-work append-hot runs are
-excluded from service fitting.
+The five legacy private-prefix-consistent executions are descriptive sensitivity
+anchors because strict stream completion is unobservable. The under-hit and
+complete-work append-hot executions are excluded from service fitting.
 
 Use the three trace-shape families with unique prefixes and retained
 per-session KV. Clear APC between cells or make every appended prompt unique.
@@ -222,12 +226,14 @@ target semantics but are not represented by the current schema.
 The generated reserve is not executable as a targeted job:
 `destination_runner.py` does not consume `reserve_tasks`. Do not submit it.
 
-Retain the six cache-valid runs and exclude append-hot cells. If an accepted
-service boundary is still required, select safe forced tokens, clear APC or
-make appended prompts unique across cells, and hard-fail cached blocks beyond
-the warmed prefix. Start near 0.096953, expand until failure, and collect three
-independent probes only around each affinity boundary. Compute normal,
-emergency, and stability from every physical run. No migration
+Retain the five private-prefix-consistent executions as descriptive sensitivity
+anchors and exclude the under-hit and append-hot cells. The corrected runner
+now caps forced tokens below 200000, pins the 16-token block size, resets local
+APC, validates prewarm work and stream completion, and hard-fails cache-state
+violations before reduction. To obtain admissible service evidence, first
+remeasure near 0.096953, then expand until failure, and
+collect three independent probes only around each affinity boundary. Compute
+normal, emergency, and stability from every physical run. No migration
 follow-up is required for component timing or method ranking within the
 recorded concurrency-one v7 schedules and measured 16K/10-Gbps and
 24K/5-Gbps cells. A robust foreground tail-SLO claim still requires enforced

@@ -7,6 +7,9 @@ Plausible wrong implementations:
 - Use achieved completions instead of offered tokens.
 - Accept requested destination load when the measured load missed it.
 - Reuse one prefix across nominally distinct sessions.
+- Accept a status-200 prewarm with missing prompt or completion work.
+- Select forced tokens outside the empirically working token range.
+- Omit the cache-block contract from the generated compatibility identity.
 - Treat an SLO boundary as infeasible or a just-outside value as feasible.
 - Declare a growing destination queue stable.
 """
@@ -45,6 +48,45 @@ def test_schedule_and_session_tokens_are_deterministic_but_isolated():
     assert a.prompt(1)[0][:4] == first[:4]
     assert len(a.prompt(1)[0]) == 6
     assert b.prompt(0)[0][:4] != first[:4]
+
+
+def test_session_forced_tokens_use_the_observed_safe_range(monkeypatch):
+    vocabularies = []
+
+    def tokens(label, count, vocabulary, seed):
+        vocabularies.append((label, vocabulary))
+        return [16] * count
+
+    monkeypatch.setattr(runner, "deterministic_tokens", tokens)
+    runner.Session("s", 4, 2, 3, 201088, 0).prompt(0)
+
+    assert vocabularies[-1] == ("s:0:output", 200000)
+
+
+def test_prewarm_rejects_status_200_without_token_work(monkeypatch):
+    monkeypatch.setattr(runner, "_completion", lambda *_: {
+        "status": 200, "error": "", "prompt_tokens": 0, "output_tokens": 0,
+        "done": True,
+    })
+
+    with pytest.raises(RuntimeError, match="failed to prewarm"):
+        runner.prewarm("h", 1, "m", [runner.Session("s", 4, 2, 3, 100, 0)])
+
+
+def test_service_reset_clears_remote_and_local_caches(monkeypatch, tmp_path):
+    calls = []
+    stack = SimpleNamespace(run_root=tmp_path)
+    cfg = SimpleNamespace()
+    monkeypatch.setattr(runner.testbed, "flush_lmcache",
+                        lambda actual_stack, actual_cfg: calls.append("remote"))
+    monkeypatch.setattr(runner.testbed, "reset_vllm_caches",
+                        lambda actual_cfg, logs: calls.append(logs))
+
+    runner.reset_service_cache(stack, cfg)
+
+    assert calls == [
+        "remote", (tmp_path / "source.log", tmp_path / "sink.log"),
+    ]
 
 
 def test_offered_work_does_not_depend_on_completion():
@@ -133,6 +175,27 @@ def test_integrity_preflight_requires_same_but_not_cross_session_cache(monkeypat
         host="h", sink_port=1, model="m"),
         {"image_sha256": campaign.IMAGE_SHA256}, {"acceptance": {"ok": True}}, 100)
     assert report["same_session_cache_hit"] and report["cross_session_cache_hits"] == 0
+
+
+def test_runtime_identity_changes_with_cache_block_contract(monkeypatch, tmp_path):
+    reference = tmp_path / "hub/models--m/refs/main"
+    reference.parent.mkdir(parents=True)
+    reference.write_text("revision")
+    cfg = SimpleNamespace(hf_home=tmp_path, model="m", max_model_len=10,
+                          max_num_seqs=2, max_num_batched_tokens=4)
+    plan = {"image_sha256": "image", "service": {
+        "directions": ["coding"], "cache_block_tokens": 16,
+    }}
+    monkeypatch.setattr(runner, "manifest_sessions",
+                        lambda *_: [runner.Session("s", 4, 2, 3, 100, 0)])
+    monkeypatch.setattr(runner, "profile_rate", lambda *_: 10)
+    monkeypatch.setattr(runner.testbed, "lmcache_mode", lambda: "mp")
+
+    first = runner.runtime_identity(cfg, plan, {}, {"kv_capacity_tokens": 1}, "p")
+    plan["service"]["cache_block_tokens"] = 32
+    second = runner.runtime_identity(cfg, plan, {}, {"kv_capacity_tokens": 1}, "p")
+
+    assert first["compatibility"]["kv_abi"] != second["compatibility"]["kv_abi"]
 
 
 def test_launch_inputs_are_relative_and_checksum_pinned(tmp_path):
@@ -513,7 +576,7 @@ def test_frontier_searches_once_then_repeats_only_boundary_cells(monkeypatch, tm
     thresholds = {"normal": 1, "emergency": 2, "stable": 3}
     monkeypatch.setattr(runner, "manifest_sessions", lambda *_: [runner.Session("s", 10, 2, 3, 100, 0)])
     monkeypatch.setattr(runner, "profile_rate", lambda *_: 100)
-    monkeypatch.setattr(runner.testbed, "flush_lmcache", lambda *args: None)
+    monkeypatch.setattr(runner, "reset_service_cache", lambda *args: None)
     def probe(*args, **kwargs):
         radius = args[4]; calls.append(radius)
         return {"classification": {mode: radius <= value for mode, value in thresholds.items()}}
@@ -521,7 +584,8 @@ def test_frontier_searches_once_then_repeats_only_boundary_cells(monkeypatch, tm
     plan = {"service": {"directions": ["coding"], "initial_repeats": 3,
                         "disagreement_repeats": 5, "radial_resolution": .05,
                         "hold_min_s": 1, "block_bootstrap_s": 30,
-                        "bootstrap_samples": 10, "slos": {}}}
+                        "bootstrap_samples": 10, "cache_block_tokens": 16,
+                        "slos": {}}}
     rows, bounds = runner.measure_frontier(plan, {}, {}, SimpleNamespace(
         host="h", sink_port=1, model="m"), object(), tmp_path)
     assert len(rows) == 9 and all(sum(r["mode"] == mode for r in rows) == 3 for mode in thresholds)
@@ -533,7 +597,7 @@ def test_frontier_reruns_only_disagreements_and_accepts_four_of_five(monkeypatch
     calls, thresholds = [], {"normal": 1, "emergency": 2, "stable": 3}
     monkeypatch.setattr(runner, "manifest_sessions", lambda *_: [runner.Session("s", 10, 2, 3, 100, 0)])
     monkeypatch.setattr(runner, "profile_rate", lambda *_: 100)
-    monkeypatch.setattr(runner.testbed, "flush_lmcache", lambda *args: None)
+    monkeypatch.setattr(runner, "reset_service_cache", lambda *args: None)
     def probe(*args, **kwargs):
         radius, root, seed = args[4], args[9], args[10]
         calls.append((root.name, radius, seed))
@@ -545,7 +609,8 @@ def test_frontier_reruns_only_disagreements_and_accepts_four_of_five(monkeypatch
     plan = {"service": {"directions": ["coding"], "initial_repeats": 3,
                         "disagreement_repeats": 5, "radial_resolution": .05,
                         "hold_min_s": 1, "block_bootstrap_s": 30,
-                        "bootstrap_samples": 10, "slos": {}}}
+                        "bootstrap_samples": 10, "cache_block_tokens": 16,
+                        "slos": {}}}
     runner.measure_frontier(plan, {}, {}, SimpleNamespace(
         host="h", sink_port=1, model="m"), object(), tmp_path)
     counts = {}
@@ -559,7 +624,7 @@ def test_frontier_records_three_of_five_boundary(monkeypatch, tmp_path):
     thresholds = {"normal": 1, "emergency": 2, "stable": 3}
     monkeypatch.setattr(runner, "manifest_sessions", lambda *_: [runner.Session("s", 10, 2, 3, 100, 0)])
     monkeypatch.setattr(runner, "profile_rate", lambda *_: 100)
-    monkeypatch.setattr(runner.testbed, "flush_lmcache", lambda *args: None)
+    monkeypatch.setattr(runner, "reset_service_cache", lambda *args: None)
     def probe(*args, **kwargs):
         radius, root, seed = args[4], args[9], args[10]
         labels = {mode: radius <= bound for mode, bound in thresholds.items()}
@@ -570,7 +635,8 @@ def test_frontier_records_three_of_five_boundary(monkeypatch, tmp_path):
     plan = {"service": {"directions": ["coding"], "initial_repeats": 3,
                         "disagreement_repeats": 5, "radial_resolution": .05,
                         "hold_min_s": 1, "block_bootstrap_s": 30,
-                        "bootstrap_samples": 10, "slos": {}}}
+                        "bootstrap_samples": 10, "cache_block_tokens": 16,
+                        "slos": {}}}
     rows, _ = runner.measure_frontier(plan, {}, {}, SimpleNamespace(
         host="h", sink_port=1, model="m"), object(), tmp_path)
     normal = next(row for row in rows if row["mode"] == "normal")

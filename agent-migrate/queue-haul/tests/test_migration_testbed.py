@@ -94,6 +94,7 @@ def test_mp_runtime_uses_release_image_and_shipped_connector(monkeypatch):
     assert "lmcache_compat" not in source
     assert "cuda-12.9/compat" in source
     assert "--gpu-memory-utilization 0.75" in source
+    assert "--block-size 16" in source
     assert "--disable-hybrid-kv-cache-manager" in source
     assert "--enable-prompt-tokens-details" in source
     assert "--enable-sleep-mode" not in source

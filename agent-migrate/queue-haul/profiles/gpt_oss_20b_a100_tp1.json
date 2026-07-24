@@ -1,6 +1,6 @@
 {
   "schema": "queue-haul-model-profile-v3",
-  "profile_id": "gpt-oss-20b-a100-tp1-v3-destination-3acdc4e8",
+  "profile_id": "gpt-oss-20b-a100-tp1-v3-destination-vllm022",
   "status": "estimated",
   "model": "openai/gpt-oss-20b",
   "hardware": "NVIDIA A100 80GB",
@@ -10,7 +10,7 @@
   "power_scope": "gpu",
   "power_window_s": 5.0,
   "max_ell": 0.531357714017,
-  "kv_capacity_tokens": 1214544,
+  "kv_capacity_tokens": 963152,
   "max_source_streams": 1,
   "max_destination_replays": 1,
   "max_destination_kv_streams": 1,
@@ -35,10 +35,10 @@
     },
     "capacity": {
       "kind": "measured",
-      "reference": "outputs/migration_validation_20260715_005021/smoke2 source.log and sink.log vLLM GPU KV cache size",
+      "reference": "outputs/mp-campaign-run-10-20260719 source.log and sink.log; vLLM 0.22.0 GPU KV cache at gpu_memory_utilization=0.75",
       "valid_range": [
         0,
-        1214544
+        963152
       ],
       "relative_error": 0.0
     },
