@@ -16,14 +16,12 @@ GPU arrivals remain preregistered open-loop and are never inferred from them.
 `build-manifests --local-tokenizer-revision SHA` uses the pinned CPU tokenizer;
 omitting it uses the live vLLM `/tokenize` endpoint. Both render the GPT-OSS
 reasoning chat template, and only the resulting shape records are written.
-`DATA_TO_COLLECT.md` supersedes the original 72-hour grid with one mandatory
-12-hour A100-pair job and one targeted 12-hour reserve. `prepare` creates the
-single checksum-pinned mandatory launch bundle, including the reused baseline
-profile. Its job runs the integrity gate, drift anchors, adaptive service
-frontier, paired loaded-migration probes, acceptance checks, and paired central
-and conservative profile reduction with job-specific ports on shared nodes.
-Every cell checkpoints independently. A reserve is generated only from a failed
-reduction and names only failed cells.
+`DATA_TO_COLLECT.md` is the evidence ledger. The completed 12-hour A100-pair
+job ran the integrity gate, drift anchors, adaptive service frontier, paired
+loaded-migration probes, acceptance checks, and profile reduction. Do not
+submit another campaign or the generated reserve before recovering the
+archived raw request and engine records. Although `prepare-reserve` writes a
+target list, the runner does not consume it and would repeat the full campaign.
 
 The completed 2026-07-23 campaign's JSON-only tuning bundle is tracked in
 `outputs/destination-v7-20260722/`. It includes the checksum-pinned inputs,
@@ -33,12 +31,17 @@ and logs remain in archival storage. The recorded run has no correctness
 failures but does not pass model acceptance, so these measurements are inputs
 for recalibration rather than an accepted profile.
 
-The post-run audit found an unbracketed service cell, identical policy labels
-in all 113 service summaries, no matched-runtime zero-load migration cell, and
-only 2 of 18 migration treatments within ±0.05 of requested load. Reduction now
-hard-fails those conditions. New plans add a matched zero-load cell and encode
-migration time as reused base timing times a runtime calibration factor times a
-load-only slowdown. The immutable v7 bundle is not rewritten.
+The post-run audit found identical policy labels in all 113 service summaries
+and 45 failed summaries whose omitted request records determine whether they
+are overload observations at all. Reconstructed realized-work labels violate
+the downward-closed service model. The migration results include four
+same-runtime zero-throughput treatments and useful low-work timing, but their
+30-second prewindow load cannot establish migration overlap or a causal load
+effect. The smallest supported exploratory models keep the replay context
+curve with a compute/completion calibration and model KV time as exact route
+time plus a residual. The current scalar loaded coefficients cannot safely
+encode those physical components, so the immutable v7 bundle is not rewritten
+and no profile is emitted.
 
 The destination baseline pins the clean vLLM 0.22 4K/16K/24K anchor medians.
 The original prefill shape is scaled by the median measured anchor ratio; exact
@@ -66,58 +69,12 @@ use isolated bandwidth-pinned stacks so MP connections and logs stay intact,
 then stop future arrivals and drain in-flight requests before the next cell.
 `QH_LOADED_REHEARSAL=1` runs the first loaded repeat without final reduction.
 
-Download public trace rows before allocating GPUs, build the content-free
-manifest, then prepare the launch bundle:
-
-```bash
-uv run --with pyarrow python queue-haul/destination_campaign.py fetch-traces --out-dir /scratch/$USER/qh-traces
-uv run python queue-haul/destination_campaign.py prepare \
-  --manifest /scratch/$USER/qh-traces/content-free-manifest.json \
-  --out-dir /scratch/$USER/qh-destination-v2
-```
-
-Generated job files require sibling SHA-256 files. Write `SHA256SUMS` remotely,
-then retrieve full raw and reduced artifacts with `QH_REMOTE`,
-`QH_REMOTE_ROOT`, and `sync`; rsync is resumable and every received file is
-verified. After reduction, `acceptance` checks held-out service and migration
-rows; `prepare-reserve` emits nothing when they pass and otherwise writes one
-12-hour bundle containing only the failed cells.
-
-Push the exact campaign commit before updating the cluster checkout. Transfer
-the prepared bundle and verify it from inside its directory. Use a new run root
-when the plan changes; after a code-only failure, set
-`QH_RESUME_FROM_GIT_SHA` to the failed run's commit to reuse its completed
-cells. The runner records the commit history and rejects implicit or
-plan-incompatible reuse.
-
-```bash
-# workstation
-git push origin profile-aware-deadlines
-rsync -a --checksum /private/tmp/qh-destination-v6-20260722/ \
-  <cluster>:/scratch/users/gfw/qh-destination-v6-20260722/
-
-# cluster
-cd /scratch/users/gfw/qh-destination-v6-20260722
-sha256sum -c SHA256SUMS
-cd /home/groups/ramr/gfw/coding-progress-ledger/agent-migrate
-git switch profile-aware-deadlines
-git pull --ff-only
-test "$(git rev-parse HEAD)" = "$(git rev-parse origin/profile-aware-deadlines)"
-module load gcc/14.2.0 openblas/0.3.28 uv/0.8.4
-uv run python queue-haul/destination_campaign.py submit \
-  --plan /scratch/users/gfw/qh-destination-v6-20260722/plan.json \
-  --job-file /scratch/users/gfw/qh-destination-v6-20260722/mandatory.sh \
-  --run-root /scratch/users/gfw/qh-destination-v6-run-20260722
-```
-
-```bash
-uv run python queue-haul/destination_campaign.py acceptance \
-  --service service-validation.jsonl --loaded loaded-validation.jsonl \
-  --out acceptance.json
-uv run python queue-haul/destination_campaign.py prepare-reserve \
-  --report acceptance.json --bundle /scratch/$USER/qh-destination-v2 \
-  --out-dir /scratch/$USER/qh-destination-v2-reserve
-```
+The next operation is archive recovery, not GPU submission. Retrieve and
+checksum the original run's `service/**/{requests.json,engine.csv}`,
+`loaded/**/{control,replay,kv_transfer}/foreground/{requests.json,engine.csv}`,
+and cache/KV telemetry. Recompute realized service work, request failures,
+foreground work over the exact migration interval, and retained prewarm state.
+Only unresolved cells should be converted into a new targeted runner plan.
 
 Queue-Haul optionally accepts a versioned `DestinationArchitecture` from
 `destination.py`. It describes compatibility, context-conditioned service work,
@@ -134,9 +91,11 @@ not successful curtailment.
 `destination_evaluation.py` reduces three-or-more independent runs into central
 and conservative envelope/migration inputs and provides the fixed 36-cell
 `rho × H × pool-count` grid, exact facet headroom, integer replica allocation,
-and paired scalar/LP/greedy sweep records. Service cells must have a feasible
-inner and infeasible outer observation. Migration cells must reach their load
-target and include a matched zero-load baseline from the same pinned runtime.
+and paired scalar/LP/greedy sweep records. Service evidence must have
+independent realized-work brackets with no monotonicity contradiction.
+Migration evidence must preserve route-time lower bounds and measure
+foreground overlap during migration. The current reducer does not yet encode
+the exploratory component model.
 
 Queue-Haul models and measures session migration under a local source-site
 power limit. The active path is:

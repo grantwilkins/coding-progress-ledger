@@ -166,18 +166,38 @@ unavailable.
 Baseline work and KV may come from explicit per-replica fields or destination
 background sessions, but never both.
 
-A matched zero-load run first calibrates reused method timing by
-\(\alpha_{a,q}>0\). Loaded coefficients then inflate it by the worst supported
-load-only slowdown:
+A migration model preserves exact transport lower bounds and calibrates only
+runtime-dependent work. Its component semantics are:
 
 \[
-\tau_{s,a,q}=\tau_{s,a}^{old}\alpha_{a,q}
-\max_{\rho\in[\rho_p,\rho_m]}S_{a,q}(\rho),\qquad S_{a,q}(\rho)\ge1,
+\tau_{s,R,q}=
+\frac{B_s^{log}}{b_{route}}+
+\alpha_{R,q}\tau_{s,R}^{compute,old}(T_s)+c_{R,q},
 \]
 
-where all three displayed terms are multiplied. Migration and destination
+for replay, and
+
+\[
+\tau_{s,K,q}=
+\max\left(
+\frac{B_s^{sealed}}{b_{route}},
+\frac{B_s^{sealed}}{C_{ingest,q}(u)}
+\right)+c_{K,q}(T_s,u),
+\]
+
+for KV transfer, plus separately measured catch-up and route-switch terms when
+the residual does not already contain them. Migration and destination
 ingestion may overlap when the measured primitive supports it, so their times
-are not blindly added. Requested load is never substituted for achieved load.
+are not blindly added. A load-dependent residual is permitted only within a
+domain measured over the migration interval; requested load is never
+substituted for achieved load.
+
+The compact v7 data identifies only exploratory low-work coefficients. It
+supports a replay compute/completion calibration and additive KV route plus
+residual timing, but not a load-dependent term. The current scalar
+`LoadedCoefficients` scales the complete duration and therefore cannot encode
+this component model without violating the route-time floor. No v7 destination
+profile is accepted.
 
 ## Greedy
 
@@ -305,7 +325,7 @@ coverage.
 Unsupported context, workload direction, destination load, bandwidth,
 compatibility, topology, concurrency, or profile cases hard-fail. Continuous
 destination scheduling, request-level dynamic power, replanning, model loading,
-and predictive latency remain out of scope. Unbracketed service cells and
-loaded probes outside their achieved-load tolerance also hard-fail during
-profile reduction. Measurement requirements and open evidence are tracked in
-`DATA_TO_COLLECT.md`.
+and predictive latency remain out of scope. Unbracketed or non-monotone
+service evidence and loaded probes without migration-interval overlap also
+hard-fail during profile reduction. Measurement requirements and open evidence
+are tracked in `DATA_TO_COLLECT.md`.

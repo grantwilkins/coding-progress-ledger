@@ -1,10 +1,11 @@
 # Destination evidence ledger
 
-Status: the completed mandatory job supplies anchors and correctness evidence
-but failed destination-model reduction. The old 72-hour grid remains
-superseded. Use the targeted 12-hour reserve only for a bracketed service rerun,
-a matched zero-load migration baseline, achieved-load reruns, and the observed
-KV context/bandwidth interaction.
+Status: do not submit another campaign or the current reserve bundle. First
+recover the completed run's archived request and engine records. The compact
+bundle supplies anchors, correctness, and low-work migration timing, but its
+summaries cannot distinguish service overload from request failure or establish
+foreground overlap during migration. The reserve runner currently ignores its
+task list and would repeat the full campaign.
 
 The rule is simple: use existing measurements or deterministic derivations
 unless they cannot answer the admission question. Public data can establish a
@@ -17,13 +18,13 @@ correctness of this exact LMCache/vLLM contract.
 | Planner or validation task | Required datum | Existing evidence | New measurement | Use |
 |---|---|---|---|---|
 | context-conditioned service work | isolated `F(T)` and `G(T)` | stage-1 prefill/decode curves, 256–31,562 tokens | 4K/16K/24K drift anchors only | convert each session to `(f/F, g/G)` |
-| normal/emergency admission | mixed prefill/decode boundary under open-loop arrivals | none; isolated staircases cannot establish joint interference or queue stability | mandatory mixed-ray frontier | fit common normals and policy bounds |
-| stable execution ceiling | nonpositive backlog drift, complete drain, no OOM/restart/rejection | none under controlled mixed destination load | same frontier runs | reject final placements outside hard safety |
-| workload-direction domain | interactive-coding, coding, and agentic boundary behavior | content-free trace shapes exist; no serving boundary comparison | same frontier runs | bound supported prefill fractions and test one-facet portability |
+| normal/emergency admission | mixed prefill/decode boundary under open-loop arrivals | v7 summaries collapse all policies and omit request-level causes | recover raw request/engine records; rerun only unresolved cells | fit policy bounds only from valid realized work |
+| stable execution ceiling | nonpositive backlog drift, complete drain, no OOM/restart/rejection | v7 has queue summaries but no request/error records | same archive-first recovery | reject final placements outside hard safety |
+| workload-direction domain | interactive-coding, coding, and agentic boundary behavior | v7 realized-work labels violate downward closure in current variables | recover request shapes/errors before adding a shape or burst row | separate affinity from consumable capacity |
 | live KV residency | KV capacity and per-session resident state | exact 1,214,544-token vLLM capacity plus block/token accounting | preflight readback only | HBM stock row through residency horizon |
 | replay migration | context reconstruction and log-transfer time | coding and serial migration corpora | no unloaded reprofiling; loaded probes below | base replay work and deadline |
 | KV migration | sealed bytes, copy/ingest time, append catch-up | coding, serial, parallel-gate, append, and bounded campaigns | no unloaded reprofiling; loaded probes below | base KV work, bytes, and deadline |
-| loaded migration | runtime calibration, replay/KV slowdown, and foreground impact versus baseline `rho` | v7 has no matched zero-load cell and only 2/18 treatments reached target | matched `rho=0`, then paired probes at `rho=0.8` and near the measured boundary | separate pinned-runtime baseline from conservative loaded slowdown |
+| loaded migration | runtime calibration, migration-interval load, and foreground impact | v7 supplies one zero-throughput row per measured cell and a low-work timing envelope, but no recorded overlap interval | recover foreground/control telemetry; rerun only if overlap remains unknown | component timing plus an explicitly supported load domain |
 | method eligibility | replay and KV compatibility | current pinned model/image logs and continuation checks | exact preflight fingerprint | candidate mask; KV additionally requires exact ABI |
 | migration correctness | cache hits, exact blocks/bytes, no WAN GET, valid continuation | parallel gate, serial, append, bounded campaigns | preflight plus every treatment run | reject invalid evidence and plans |
 | source-power target | marginal GPU power curve | stage-1 power curve and serial power windows | none | candidate source-power gain and shortfall |
@@ -69,12 +70,21 @@ fit.
   NVIDIA SWE-Hero agentic data, split 12/6/6 for fit/tune/validation and
   spanning 74–32,757 context tokens. It supplies request shapes, not arrival
   timing. Arrival processes are generated and recorded explicitly.
+- `outputs/destination-v7-20260722`: 18 correct migration treatments and 113
+  service summaries. Reconstructed service labels are not downward-closed even
+  after using realized per-session work and request rate. The migration rows
+  cover only 0–0.146 anchor-normalized foreground work and support exploratory
+  replay calibration and additive KV timing; see `FINDINGS.md`.
 
 The original 72-hour plan and its dense `rho × context × bandwidth × method`
 grid must not be submitted. Existing unloaded work curves make most of that
 grid redundant.
 
-## Mandatory 12-hour A100-pair job
+## Completed 12-hour A100-pair job
+
+This section records the completed campaign contract. It is not a launch
+instruction. Reuse its valid evidence and recover its archived raw files before
+planning another measurement.
 
 GPU 0 is the source and GPU 1 is one loaded destination replica. Pin the image
 digest, model revision, tokenizer, engine flags, durable-log contract, KV ABI,
@@ -149,16 +159,17 @@ for foreground load. Existing migration corpora are the `rho=0` baseline; they
 cannot reveal scheduler, HBM, or ingestion interference from a busy
 destination.
 
-For replay and KV transfer, measure:
+The completed job attempted:
 
 - 16K context and 10 Gbps at `rho=0` on the same pinned runtime;
 - 16K context and 10 Gbps at `rho=0.8` and just inside the measured admission
   boundary; and
 - held-out 24K context and 5 Gbps at the boundary/high-load condition.
 
-Use three independent repeats with paired no-migration controls and identical
-arrival seeds. A loaded treatment outside ±0.05 achieved `rho` is invalid and
-must not enter reduction. Record target and achieved `rho`, service-work direction,
+Its compact summaries are insufficient because achieved `rho` is a preceding
+30-second average, not work over the migration interval. Any re-reduction or
+targeted rerun must use identical arrival seeds and record target and achieved
+absolute work, service-work direction,
 queue/running/waiting state at migration start, reconstruction or sealed
 bytes, measured work, readiness and completion times, achieved path and ingest
 rates, foreground TTFT/TPOT/goodput deltas, KV pressure, cache hits,
@@ -176,8 +187,9 @@ Runs—not requests—are the independent experimental units. Use run-level
 inference with block resampling inside a run. Never bootstrap individual
 requests as independent experiments.
 
-Produce central and conservative profiles only from bracketed service cells,
-matched zero-load timing, and achieved loaded treatments. Admission consumes
+Produce central and conservative profiles only from independent bracketed
+service runs, component timing that preserves exact route lower bounds, and
+load measured over the migration interval. Admission consumes
 capacity lower bounds and migration-duration upper bounds. The measured profile
 is accepted only when:
 
@@ -195,20 +207,18 @@ output. These map directly to `DestinationType.prefill`, `decode`, `normals`,
 `bounds`, `kv_capacity_tokens`, `loaded`, compatibility fingerprints, valid
 ranges, and provenance.
 
-## Conditional 12-hour reserve
+## Conditional targeted follow-up
 
-Use the reserve only when the mandatory job exposes one of these preregistered
-failures:
+The generated reserve is not executable as a targeted job:
+`destination_runner.py` does not consume `reserve_tasks`. Do not submit it.
 
-- held-out service validation fails after a majority boundary decision;
-- the one-facet model exceeds 15% held-out radial error or produces a
-  false-feasible result;
-- loaded-migration residuals exceed 15% or show a systematic context,
-  bandwidth, method, or load interaction; or
-- state correctness, continuation, or deadline validation fails.
-
-Measure only the failing direction or interaction. Do not repeat passing cells
-or expand to a Cartesian grid.
+If the archive cannot resolve the service labels, rerun only realized-load
+inner/outer probes for the three workload families, with three independent runs
+per point and all three policies computed from each run. If the archive cannot
+establish foreground overlap, rerun three zero-work and three sustained,
+overlapping high-work treatments per method at 16K/10 Gbps with shared paired
+controls. Reuse the existing 24K/5-Gbps rows unless an independent loaded
+held-out claim specifically requires overlap there.
 
 ## Explicitly not collected on the two A100s
 

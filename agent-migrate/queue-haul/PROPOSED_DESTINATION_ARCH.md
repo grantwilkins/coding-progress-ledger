@@ -1,10 +1,11 @@
 # Destination landing architecture
 
 Status: Queue-Haul implements the v1 admission model in `destination.py`,
-`pool_planner.py`, and `destination_evaluation.py`. The remaining blocker is a
-conservative measured destination profile, not a new simulator architecture.
-The 2026-07-23 run is rejected because its service frontier was censored and
-its migration probes did not hold destination load; see `FINDINGS.md`.
+`pool_planner.py`, and `destination_evaluation.py`. The 2026-07-23 run does
+not support an accepted destination profile: its compact records cannot
+identify a service frontier or migration interference. They do support
+exploratory component timing. Recover the archived request and engine records
+before collecting more GPU data; see `FINDINGS.md`.
 
 Queue-Haul asks one question: **can a set of active sessions land on warm
 destination capacity before a source-power deadline?** It does not simulate a
@@ -101,9 +102,13 @@ Common nonnegative facet normals define nested policy envelopes:
 h_q^{normal}\le h_q^{emergency}\le h_q^{stable}.
 \]
 
-The smallest useful model has one facet, `f/F + g/G <= h`. More facets are
-allowed only when held-out mixed-load data reject it. For a pool with baseline
-work `b_p`, admission requires
+The smallest useful resource model has one facet, `f/F + g/G <= h`. More
+facets are allowed only when valid held-out mixed-load data reject it. Before
+fitting any facet, every failed point must be checked for componentwise
+dominance by a successful point using realized per-request work. A dominance
+violation is evidence for a missing eligibility, request-shape, or burst
+variable, not another resource facet. For a pool with baseline work `b_p`,
+admission requires
 
 \[
 N_q\left(b_p+\sum_s d_{s,q}y_s\right)\le |p|h_q^m.
@@ -111,7 +116,10 @@ N_q\left(b_p+\sum_s d_{s,q}y_s\right)\le |p|h_q^m.
 
 Normal and emergency are independently solved operator policies. Stable is the
 outer hard-safety ceiling used only by the execution validator. A baseline
-already outside the selected envelope makes that pool unavailable.
+already outside the selected envelope makes that pool unavailable. Until a
+service envelope is identified, `h` remains an explicit sensitivity input:
+placements can be robust across the conservative range, possible in only some
+cases, or unsupported outside the measured domain.
 
 Let `H_m = deadline - controller_delay - power_window` be the migration
 horizon and `H_r` the latest claimed residency horizon. They are deliberately
@@ -123,17 +131,34 @@ K_p^0+\sum_s k_s(H_r)y_s\le |p|K_q.
 
 Replay contributes reconstructed context work and durable-log bytes. KV
 transfer contributes sealed-state bytes and destination ingestion/promotion
-work. For method `a`, migration duration is
+work. Exact transport time must not be scaled by a runtime calibration. The
+desired component models are
 
 \[
-\tau_{s,a,q}=\tau_{s,a}^{old}\alpha_{a,q}
-\max_{\rho\in[\rho_p,\rho_m]}S_{a,q}(\rho),
+\tau_{s,R,q} =
+\frac{B_s^{log}}{b_{route}}+
+\alpha_{R,q}\tau_{s,R}^{compute,old}(T_s)+c_{R,q}
 \]
 
-with multiplication between all three terms: reused base timing, a positive
-matched-runtime calibration `α`, and a load-only slowdown `S(rho) >= 1`.
-This prevents a faster pinned runtime from being clamped into “no slowdown.”
-A candidate whose predicted duration exceeds `H_m` is invalid.
+and, for the measured KV primitive,
+
+\[
+\tau_{s,K,q} =
+\frac{B_s^{sealed}}{b_{route}}+c_{K,q}(T_s,u),
+\]
+
+plus separately measured catch-up and route-switch terms when they are not
+already included in `c`. If network and ingestion overlap, the transfer term
+becomes the slower supported stage, never less than
+`sealed_bytes / route_bytes_per_s`. A load term may be added only after
+migration-interval work identifies one. A candidate whose predicted duration
+exceeds `H_m` is invalid.
+
+The v7 evidence supports only exploratory low-work coefficients: replay keeps
+the old context curve with a compute/completion calibration, while KV uses
+`sealed_bytes / route_bytes_per_s + c`. The current scalar
+`LoadedCoefficients` multiplies the complete duration and cannot encode these
+physical semantics safely, so no v7 profile is emitted.
 
 For every exact route edge `e`,
 
@@ -220,15 +245,18 @@ about operator headroom.
    the variables remain service work, KV, ingestion, and bytes.
 
 The evaluation begins with the mirror and then varies initial destination load
-`rho`, effective normal headroom `H`, and pool count `P`. Pool panels isolate
-fragmentation/fungibility at fixed total resources; little difference under a
-homogeneous layout is a valid result. Multiple sites are represented by routes,
-not by another capacity abstraction.
+`rho`, effective normal headroom `H`, and pool count `P`. Until measured
+headroom and migration interference are identified, `rho` and `H` are
+sensitivity variables rather than calibrated probabilities. Pool panels
+isolate fragmentation/fungibility at fixed total resources; little difference
+under a homogeneous layout is a valid result. Multiple sites are represented
+by routes, not by another capacity abstraction.
 
-Only GPT-OSS-20B/A100 is a measured v1 destination type. Non-A100 profiles are
-synthetic sensitivity cases. Continuous destination load, continuous-batching
-simulation, replanning, cold sessions, model loading, concurrency above one,
-and predictive latency claims are out of scope.
+GPT-OSS-20B/A100 has measured anchors, KV capacity, correctness, and migration
+components, but no accepted service envelope or loaded-migration curve.
+Non-A100 profiles are synthetic sensitivity cases. Continuous destination
+load, continuous-batching simulation, replanning, cold sessions, model loading,
+concurrency above one, and predictive latency claims are out of scope.
 
 The service facet is a fluid admission model. It is valid only after every
 workload cell has a feasible/infeasible bracket and held-out cells show no
