@@ -124,9 +124,32 @@ def test_mp_tokenization_uses_the_exact_reasoning_chat_template(monkeypatch):
 
 def test_mp_storage_wait_aggregates_chunked_writes(tmp_path):
     log = tmp_path / "lmcache.log"
-    log.write_text("Stored 8192 tokens\nStored 4096 tokens\n")
+    prefix = "LMCache ✓\n".encode()
+    log.write_bytes(prefix + b"Stored 8192 tokens\nStored 4096 tokens\n")
 
-    s.mp_wait_stored(log, 0, 12288)
+    s.mp_wait_stored(log, len(prefix), 12288)
+
+
+def test_mp_storage_wait_requires_exact_resp_set_keys(tmp_path):
+    log = tmp_path / "lmcache.log"
+    log.write_text("Stored 512 tokens\n")
+    transfers = tmp_path / "resp_transfers.csv"
+    transfers.write_text(
+        "connection_id,command,key_hashes,start_ns,end_ns,request_wire_bytes,"
+        "response_wire_bytes,request_body_bytes,payload_bytes\n"
+        "a,SET,k1,2,3,1,1,1,1\n"
+        "a,SET,k2,4,5,1,1,1,1\n"
+    )
+
+    assert s.mp_wait_source_keys(log, 0, transfers, 1, 512) == {"k1", "k2"}
+
+
+def test_mp_request_hit_uses_byte_offset(tmp_path):
+    log = tmp_path / "lmcache.log"
+    prefix = "LMCache ✓\n".encode()
+    log.write_bytes(prefix + b"2/2 retained keys (2 L1, 0 L2), external_request_id=req,\n")
+
+    assert s.mp_request_hit(log, len(prefix), "req") == 512
 
 
 def test_bounded_campaign_pins_validated_mp_transport():

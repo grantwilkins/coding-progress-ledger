@@ -44,6 +44,22 @@ def write_trace(path: Path) -> None:
     path.write_text("".join(json.dumps(row) + "\n" for row in rows))
 
 
+def test_mp_scenario_rejects_proxy_restart_and_mismatched_stack(monkeypatch, tmp_path):
+    monkeypatch.setattr(c.b, "lmcache_mode", lambda: "mp")
+    scenario = {"bandwidth_mbps": 10000}
+    stack = SimpleNamespace(run_root=tmp_path, bandwidth_mbps=10000)
+
+    with pytest.raises(ValueError, match="isolated bandwidth-pinned"):
+        c.run_scenario(stack, SimpleNamespace(), {}, scenario, tmp_path, "run")
+    with pytest.raises(ValueError, match="does not match"):
+        c.run_scenario(stack, SimpleNamespace(), {}, scenario,
+                       tmp_path / "wrong", "run", configure_proxy=False)
+    stack.bandwidth_mbps = 5000
+    with pytest.raises(ValueError, match="does not match"):
+        c.run_scenario(stack, SimpleNamespace(), {}, scenario,
+                       tmp_path, "run", configure_proxy=False)
+
+
 def test_manifest_is_deterministic_and_uses_complete_trace_boundaries(tmp_path):
     trace = tmp_path / "trace.jsonl"; write_trace(trace)
     assert c.trace_time({"_line": 1, "timing_events": [{"timestamp": "1970-01-01T00:00:01Z"}]}) == 1

@@ -123,7 +123,7 @@ def add_source_keys(stack: b.Stack, cfg: b.Config, prompt: str, session: str,
 
 
 def cache_report(log: Path, offset: int, request_ids: set[str]) -> dict:
-    text = log.read_text(errors="ignore")[offset:]
+    text = b.read_after(log, offset)
     found = {}
     for match in PREFETCH.finditer(text):
         retained, queried, l1, l2, external_id = match.groups()

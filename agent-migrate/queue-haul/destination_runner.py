@@ -15,6 +15,7 @@ import threading
 import time
 import urllib.request
 from concurrent.futures import ThreadPoolExecutor
+from contextlib import contextmanager
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -698,9 +699,19 @@ def migration_scenario(session: dict, method: str, context: int, bandwidth: floa
             "bandwidth_mbps": bandwidth}
 
 
+@contextmanager
+def loaded_stack(cfg: testbed.Config, root: Path, bandwidth: float, extra: list[str]):
+    stack = testbed.start_stack(cfg, root, bandwidth, extra)
+    try:
+        testbed.start_sink(stack, cfg, extra)
+        yield stack
+    finally:
+        testbed.stop_stack(stack)
+
+
 def measure_loaded(plan: dict, bundle: dict, profile: dict, cfg: testbed.Config,
-                   stack: testbed.Stack, bounds: dict, root: Path,
-                   vocabulary: int = 201088) -> list[dict]:
+                   bounds: dict, root: Path, extra: list[str],
+                   vocabulary: int = 201088, rehearsal: bool = False) -> list[dict]:
     manifest, normal = migration_manifest(bundle), bounds["normal"]
     background = sum((manifest_sessions(bundle, job, "validation", vocabulary, 7)
                       for job in plan["service"]["directions"]), [])
@@ -715,15 +726,15 @@ def measure_loaded(plan: dict, bundle: dict, profile: dict, cfg: testbed.Config,
             control_root = root / f"rho{rho:.6f}-t{context}-b{bandwidth:g}-r{repeat}" / "control"
             if not read_checkpoint(control_root / "result.json", ("destination_load",),
                                    lambda row: row["destination_load"].get("achieved_rho") is not None):
-                testbed.flush_lmcache(stack, cfg)
-                load = DestinationLoad(cfg.host, cfg.sink_port, cfg.model, background, rho,
-                                       prefill, decode, control_root / "foreground", repeat,
-                                       normal_bound=normal)
-                load.start()
-                try:
-                    load.wait_ready(); time.sleep(30)
-                finally:
-                    load.close()
+                with loaded_stack(cfg, control_root / "testbed", bandwidth, extra):
+                    load = DestinationLoad(cfg.host, cfg.sink_port, cfg.model, background, rho,
+                                           prefill, decode, control_root / "foreground", repeat,
+                                           normal_bound=normal)
+                    load.start()
+                    try:
+                        load.wait_ready(); time.sleep(30)
+                    finally:
+                        load.close()
                 (control_root / "result.json").write_text(json.dumps(
                     {"status": "complete", "destination_load": load.summary()}, indent=2) + "\n")
             for method in plan["migration"]["methods"]:
@@ -732,15 +743,21 @@ def measure_loaded(plan: dict, bundle: dict, profile: dict, cfg: testbed.Config,
                 cell_root = control_root.parent / method
                 if not read_checkpoint(cell_root / "result.json", ("migrations",),
                                        lambda row: len(row["migrations"]) == 1):
-                    testbed.flush_lmcache(stack, cfg)
-                    load = DestinationLoad(cfg.host, cfg.sink_port, cfg.model, background, rho,
-                                           prefill, decode, cell_root / "foreground", repeat,
-                                           normal_bound=normal)
-                    profiler.run_scenario(stack, cfg, manifest, scenario, cell_root,
-                                          scenario["scenario_id"], load)
+                    with loaded_stack(cfg, cell_root, bandwidth, extra) as stack:
+                        load = DestinationLoad(cfg.host, cfg.sink_port, cfg.model, background, rho,
+                                               prefill, decode, cell_root / "foreground", repeat,
+                                               normal_bound=normal)
+                        profiler.run_scenario(stack, cfg, manifest, scenario, cell_root,
+                                              scenario["scenario_id"], load,
+                                              configure_proxy=False)
                 rows.append({"rho": rho, "context_tokens": context,
                              "bandwidth_mbps": bandwidth, "repeat": repeat,
                              "method": method, "path": str(cell_root / "result.json")})
+            if rehearsal:
+                root.mkdir(parents=True, exist_ok=True)
+                (root / "loaded.json").write_text(
+                    "".join(json.dumps(r) + "\n" for r in rows))
+                return rows
     root.mkdir(parents=True, exist_ok=True)
     (root / "loaded.json").write_text("".join(json.dumps(r) + "\n" for r in rows))
     return rows
@@ -862,6 +879,10 @@ def run_campaign(plan_path: Path, run_root: Path, cfg: testbed.Config,
                 "image_sha256": IMAGE_SHA256, "git_sha": git_sha, "dirty": dirty}
     run_root.mkdir(parents=True, exist_ok=True)
     write_run_metadata(run_root / "run.json", metadata, resume_from_git_sha)
+    rehearsal_value = os.environ.get("QH_LOADED_REHEARSAL", "0")
+    if rehearsal_value not in {"0", "1"}:
+        raise ValueError("QH_LOADED_REHEARSAL must be 0 or 1")
+    rehearsal = rehearsal_value == "1"
     def attempt():
         stack = testbed.start_stack(cfg, run_root / "testbed", 10000, extra)
         try:
@@ -879,15 +900,23 @@ def run_campaign(plan_path: Path, run_root: Path, cfg: testbed.Config,
             apply_anchor_rates(profile, report)
             testbed.flush_lmcache(stack, cfg)
             service, bounds = measure_frontier(plan, bundle, profile, cfg, stack, run_root / "service")
-            loaded_index = measure_loaded(plan, bundle, profile, cfg, stack, bounds, run_root / "loaded")
+            shared, stack = stack, None
+            testbed.stop_stack(shared)
+            loaded_index = measure_loaded(plan, bundle, profile, cfg, bounds,
+                                          run_root / "loaded", extra,
+                                          rehearsal=rehearsal)
+            if rehearsal:
+                return
             loaded, validation = reduce_loaded_results(profile, loaded_index, run_root / "loaded")
             finalize(plan, bundle, profile, cfg, run_root, service, loaded, validation)
         finally:
-            testbed.stop_stack(stack)
+            if stack:
+                testbed.stop_stack(stack)
     retry_call(attempt, run_root / "retries.jsonl",
                int(os.environ.get("QH_CAMPAIGN_ATTEMPTS", "4")),
                float(os.environ.get("QH_RETRY_DELAY_S", "30")))
-    write_checksums(run_root)
+    if not rehearsal:
+        write_checksums(run_root)
 
 
 def parse_args(argv=None):

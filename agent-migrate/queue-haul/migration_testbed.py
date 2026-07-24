@@ -141,6 +141,7 @@ class Stack:
     sink: subprocess.Popen | None
     run_root: Path
     cache_services: list[subprocess.Popen] = field(default_factory=list)
+    bandwidth_mbps: float = 0
 
 
 def reject_duplicate_extra(extra: list[str]) -> None:
@@ -1097,16 +1098,31 @@ def mp_source_keys(path: Path, start_ns: int, end_ns: int) -> set[str]:
 def mp_wait_stored(log: Path, offset: int, tokens: int) -> None:
     deadline = time.monotonic() + 30
     while time.monotonic() < deadline:
-        if sum(map(int, MP_STORED.findall(read_text(log)[offset:]))) >= tokens:
+        if sum(map(int, MP_STORED.findall(read_after(log, offset)))) >= tokens:
             return
         time.sleep(.05)
     raise TimeoutError(f"LMCache stored fewer than {tokens} tokens")
 
 
+def mp_wait_source_keys(log: Path, offset: int, transfers: Path,
+                        start_ns: int, tokens: int) -> set[str]:
+    mp_wait_stored(log, offset, tokens)
+    expected = tokens // 256
+    deadline = time.monotonic() + 600
+    while time.monotonic() < deadline:
+        keys = mp_source_keys(transfers, start_ns, 2**63 - 1)
+        if len(keys) == expected:
+            return keys
+        if len(keys) > expected:
+            raise RuntimeError(f"LMCache stored {len(keys)} keys, expected {expected}")
+        time.sleep(.05)
+    raise TimeoutError(f"LMCache stored fewer than {expected} unique keys")
+
+
 def mp_request_hit(log: Path, offset: int, request_id: str) -> int:
     matches = [
         tuple(map(int, match.groups()[:4]))
-        for match in MP_REQUEST.finditer(read_text(log)[offset:])
+        for match in MP_REQUEST.finditer(read_after(log, offset))
         if match.group(5) == request_id
         or match.group(5).startswith(request_id + "-")
     ]
@@ -1157,6 +1173,14 @@ def reset_vllm_caches(cfg: Config, logs: tuple[Path, Path]) -> None:
 
 def read_text(path: Path) -> str:
     return path.read_text(errors="ignore") if path.exists() else ""
+
+
+def read_after(path: Path, offset: int) -> str:
+    if not path.exists():
+        return ""
+    with path.open("rb") as handle:
+        handle.seek(offset)
+        return handle.read().decode(errors="ignore")
 
 
 def count_needle(path: Path, needle: str) -> int:
@@ -1214,7 +1238,7 @@ def start_stack(cfg: Config, run_root: Path, mbps: float, extra: list[str] | Non
                 wait_tcp_process(cfg.host, port, 300, service, log)
         source = start_logged(vllm_cmd(cfg, "source", extra or []), run_root / "source.log")
         wait_health_process(cfg.host, cfg.src_port, health_timeout(), source, run_root / "source.log")
-        return Stack(lmc, proxy, source, None, run_root, services)
+        return Stack(lmc, proxy, source, None, run_root, services, mbps)
     except BaseException:
         for proc in (source, proxy, *services, lmc):
             if proc:

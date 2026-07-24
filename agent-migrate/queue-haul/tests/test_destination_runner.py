@@ -13,6 +13,7 @@ Plausible wrong implementations:
 import pytest
 import json
 import threading
+from contextlib import contextmanager
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -173,6 +174,135 @@ def test_loaded_scenario_has_one_session_and_one_method():
                                          "replay", 16384, 10000, 2)
     assert scenario["concurrency"] == scenario["move_concurrency"] == 1
     assert scenario["moves"] == [{**scenario["sessions"][0], "method": "replay"}]
+
+
+def test_loaded_stack_preserves_proxy_until_cell_finishes(monkeypatch, tmp_path):
+    cfg, stack, events = object(), object(), []
+    monkeypatch.setattr(runner.testbed, "start_stack",
+                        lambda *args: events.append(("start", args)) or stack)
+    monkeypatch.setattr(runner.testbed, "start_sink",
+                        lambda *args: events.append(("sink", args)))
+    monkeypatch.setattr(runner.testbed, "stop_stack",
+                        lambda *args: events.append(("stop", args)))
+    with pytest.raises(RuntimeError, match="body"):
+        with runner.loaded_stack(cfg, tmp_path, 10000, ["x"]) as actual:
+            assert actual is stack
+            raise RuntimeError("body")
+    assert events == [
+        ("start", (cfg, tmp_path, 10000, ["x"])),
+        ("sink", (stack, cfg, ["x"])),
+        ("stop", (stack,)),
+    ]
+
+
+def test_loaded_stack_stops_when_sink_start_fails(monkeypatch, tmp_path):
+    stack, stopped = object(), []
+    monkeypatch.setattr(runner.testbed, "start_stack", lambda *_: stack)
+    monkeypatch.setattr(runner.testbed, "start_sink",
+                        lambda *_: (_ for _ in ()).throw(RuntimeError("sink")))
+    monkeypatch.setattr(runner.testbed, "stop_stack", stopped.append)
+    with pytest.raises(RuntimeError, match="sink"):
+        with runner.loaded_stack(object(), tmp_path, 10000, []):
+            pass
+    assert stopped == [stack]
+
+
+def loaded_inputs(monkeypatch):
+    monkeypatch.setattr(runner, "migration_manifest", lambda _: {
+        "sessions": [{"id": "s", "job_class": "coding"}],
+    })
+    monkeypatch.setattr(runner, "manifest_sessions", lambda *_: [])
+    monkeypatch.setattr(runner, "profile_rate", lambda *_: 1)
+    plan = {
+        "service": {"directions": []},
+        "migration": {"emergency_inside_fraction": .5,
+                      "context_tokens": 16384, "bandwidth_gbps": 10,
+                      "heldout_context_tokens": 24576,
+                      "heldout_bandwidth_gbps": 5, "repeats": 1,
+                      "methods": ["replay", "kv_transfer"]},
+    }
+    return plan, {"normal": 1, "emergency": 2}
+
+
+def checkpoint(path, payload):
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps({"status": "complete", **payload}))
+
+
+def test_loaded_rehearsal_uses_one_isolated_stack_per_incomplete_method(
+        monkeypatch, tmp_path):
+    plan, bounds = loaded_inputs(monkeypatch)
+    base = tmp_path / "rho0.800000-t16384-b10000-r0"
+    checkpoint(base / "control/result.json",
+               {"destination_load": {"achieved_rho": .8}})
+    stacks, calls = [], []
+
+    @contextmanager
+    def stack(_cfg, root, bandwidth, extra):
+        stacks.append((root, bandwidth, extra))
+        yield SimpleNamespace(run_root=root, bandwidth_mbps=bandwidth)
+
+    def run(actual, _cfg, _manifest, scenario, root, _run_id, load,
+            configure_proxy=True):
+        calls.append((actual, scenario, root, load, configure_proxy))
+        checkpoint(root / "result.json", {"migrations": [{}]})
+
+    monkeypatch.setattr(runner, "loaded_stack", stack)
+    monkeypatch.setattr(runner.profiler, "run_scenario", run)
+    monkeypatch.setattr(runner, "DestinationLoad", lambda *_args, **_kwargs: object())
+    cfg = SimpleNamespace(host="h", sink_port=1, model="m")
+    rows = runner.measure_loaded(plan, {}, {}, cfg, bounds, tmp_path, ["x"],
+                                 rehearsal=True)
+
+    assert [root.name for root, _, _ in stacks] == ["replay", "kv_transfer"]
+    assert all(bandwidth == 10000 and extra == ["x"]
+               for _, bandwidth, extra in stacks)
+    assert len(rows) == len(calls) == 2
+    assert all(stack.run_root == root and stack.bandwidth_mbps == 10000
+               and not configure for stack, _, root, _, configure in calls)
+
+
+def test_loaded_rehearsal_skips_all_complete_checkpoints(monkeypatch, tmp_path):
+    plan, bounds = loaded_inputs(monkeypatch)
+    base = tmp_path / "rho0.800000-t16384-b10000-r0"
+    checkpoint(base / "control/result.json",
+               {"destination_load": {"achieved_rho": .8}})
+    for method in plan["migration"]["methods"]:
+        checkpoint(base / method / "result.json", {"migrations": [{}]})
+    monkeypatch.setattr(runner, "loaded_stack",
+                        lambda *_: (_ for _ in ()).throw(AssertionError("stack")))
+    rows = runner.measure_loaded(
+        plan, {}, {}, SimpleNamespace(), bounds, tmp_path, [], rehearsal=True)
+    assert len(rows) == 2
+
+
+def test_loaded_control_uses_its_own_stack(monkeypatch, tmp_path):
+    plan, bounds = loaded_inputs(monkeypatch)
+    base = tmp_path / "rho0.800000-t16384-b10000-r0"
+    for method in plan["migration"]["methods"]:
+        checkpoint(base / method / "result.json", {"migrations": [{}]})
+    used, events = [], []
+
+    @contextmanager
+    def stack(_cfg, root, bandwidth, extra):
+        used.append((root, bandwidth, extra))
+        root.mkdir(parents=True)
+        yield object()
+
+    class Load:
+        def __init__(self, *_args, **_kwargs): pass
+        def start(self): events.append("start")
+        def wait_ready(self): events.append("ready")
+        def close(self): events.append("close")
+        def summary(self): return {"achieved_rho": .8}
+
+    monkeypatch.setattr(runner, "loaded_stack", stack)
+    monkeypatch.setattr(runner, "DestinationLoad", Load)
+    monkeypatch.setattr(runner.time, "sleep", lambda _: None)
+    runner.measure_loaded(plan, {}, {}, SimpleNamespace(host="h", sink_port=1, model="m"), bounds, tmp_path,
+                          ["x"], rehearsal=True)
+    assert used == [(base / "control/testbed", 10000, ["x"])]
+    assert events == ["start", "ready", "close"]
 
 
 def test_adaptive_search_brackets_each_nested_boundary():

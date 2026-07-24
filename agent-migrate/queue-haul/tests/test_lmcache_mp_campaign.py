@@ -46,12 +46,13 @@ def test_acceptance_requires_parallel_gain_and_all_gates():
 
 def test_cache_report_separates_l2_prefetch_from_engine_retrieval(tmp_path):
     log = tmp_path / "sink.log"
-    log.write_text(
+    prefix = "LMCache ✓\n".encode()
+    log.write_bytes(prefix + (
         "Prefetch request completed (L1+L2): 4/4 retained keys (0 L1, 4 L2) "
         "in 1 ms (external_request_id=req-1-worker, prefetch_request_id=0)\n"
         "Retrieved 512 tokens in 0.1 seconds\n"
-    )
-    out = m.cache_report(log, 0, {"req-1"})
+    ).encode())
+    out = m.cache_report(log, len(prefix), {"req-1"})
     assert out["prefetched_tokens"] == 1024
     assert out["loaded_tokens"] == 512
     assert out["l2_blocks"] == 4

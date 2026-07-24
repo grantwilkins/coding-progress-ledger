@@ -684,13 +684,14 @@ class LiveSession:
         self.warm_prompt_tokens = result.prompt_tokens
         self.prompt_tokens_by_hash[messages_hash(self.messages)] = result.prompt_tokens
         if b.lmcache_mode() == "mp":
-            b.mp_wait_stored(
+            keys = b.mp_wait_source_keys(
                 self.source_log, log_offset,
+                self.cache_log, before,
                 result.prompt_tokens // 256 * 256,
             )
-        after = time.monotonic_ns()
-        keys = b.mp_source_keys(self.cache_log, before, after) \
-            if b.lmcache_mode() == "mp" else {
+        else:
+            after = time.monotonic_ns()
+            keys = {
                 row["key_hash"] for row in cache_operations(
                     self.cache_log, before, after,
                 ) if row["operation"] == "source_write"
@@ -737,8 +738,9 @@ class LiveSession:
                     user["content"],
                 )
                 if b.lmcache_mode() == "mp":
-                    b.mp_wait_stored(
+                    keys = b.mp_wait_source_keys(
                         self.source_log, log_offset,
+                        self.cache_log, start,
                         max(0, result.prompt_tokens // 256 * 256
                             - len(self.cache_keys) * 256),
                     )
@@ -751,9 +753,7 @@ class LiveSession:
                 )
                 self.generation += 1
                 self.prompt_tokens_by_hash[messages_hash(self.messages)] = result.prompt_tokens
-            self.cache_keys |= b.mp_source_keys(
-                self.cache_log, start, result.end_ns,
-            ) if b.lmcache_mode() == "mp" else {
+            self.cache_keys |= keys if b.lmcache_mode() == "mp" else {
                 row["key_hash"] for row in cache_operations(
                     self.cache_log, start, result.end_ns,
                 ) if row["operation"] == "source_write"
@@ -1251,10 +1251,19 @@ def with_destination_load(load, action):
 
 
 def run_scenario(stack: b.Stack, cfg: b.Config, manifest: dict, scenario: dict,
-                 root: Path, run_id: str, destination_load=None) -> dict:
+                 root: Path, run_id: str, destination_load=None,
+                 configure_proxy: bool = True) -> dict:
+    if b.lmcache_mode() == "mp" and configure_proxy:
+        raise ValueError("MP scenarios require an isolated bandwidth-pinned stack")
+    if not configure_proxy and (
+        stack.run_root != root
+        or stack.bandwidth_mbps != scenario["bandwidth_mbps"]
+    ):
+        raise ValueError("scenario root or bandwidth does not match its isolated stack")
     root.mkdir(parents=True, exist_ok=True)
     write_json(root / "scenario.json", scenario)
-    restart_proxy(stack, cfg, root, scenario["bandwidth_mbps"])
+    if configure_proxy:
+        restart_proxy(stack, cfg, root, scenario["bandwidth_mbps"])
     event_log = EventLog(root / "events.jsonl", run_id, scenario["scenario_id"])
     sampler = PowerSampler(root / "power.csv")
     sampler.start()

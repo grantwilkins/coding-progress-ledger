@@ -47,7 +47,9 @@ failures in `retries.jsonl`. `QH_HEALTH_TIMEOUT_S` defaults to one hour for
 cold model loads. Invalid checkpoints are archived and remeasured; out-of-range
 boundaries are censored, load-target misses are recorded, and noisy nonnested
 envelopes are conservatively shrunk instead of aborting the job. Loaded probes
-stop future arrivals and drain in-flight requests before the next cell.
+use isolated bandwidth-pinned stacks so MP connections and logs stay intact,
+then stop future arrivals and drain in-flight requests before the next cell.
+`QH_LOADED_REHEARSAL=1` runs the first loaded repeat without final reduction.
 
 Download public trace rows before allocating GPUs, build the content-free
 manifest, then prepare the launch bundle:
