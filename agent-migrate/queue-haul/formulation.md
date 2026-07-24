@@ -78,6 +78,20 @@ The current implementation approximates these with
 must integrate a supported trajectory or use the worst supported rate over the
 projected range.
 
+For the v7 private-prefix contract with block size \(L_q^{block}\), request
+\(j\) is cache-valid only when
+
+\[
+cached_j\le
+\left\lfloor\frac{prompt_j-append_j}{L_q^{block}}\right\rfloor
+L_q^{block}.
+\]
+
+The run is the independent unit. Any request exceeding this bound reuses the
+nominal new append and excludes the whole run from service-capacity fitting.
+The recovered archive contains six cache-valid complete-work runs and 60
+append-hot complete-work runs.
+
 Planning never reads sampled future request times or sizes. For a planning
 horizon \(h\), it conservatively materializes expected active-session state as
 
@@ -164,9 +178,9 @@ The legacy adapter represents destination service with aggregate replay time,
 KV-service time, compute load, and resident-KV rows. Its flexible destination
 links form one balanced link pool. The architecture path instead preserves
 exact pools, routes, per-replica baselines, and service facets. Physical
-prefix sharing is nonadditive and is not represented in \(U\); without an
-exact block-union packing check, the relaxation should use block-rounded
-additive demand. V1 still uses unrounded token equivalents.
+prefix sharing is deliberately uncredited in v1; the target relaxation uses
+block-rounded additive demand. The current implementation still uses unrounded
+token equivalents.
 
 Replay uses expected durable-log bytes, replay time, measured replay completion,
 and route-switch time. KV transfer uses setup, complete sealed KV blocks, the
@@ -186,7 +200,7 @@ satisfying eligibility, steady placement, and transition constraints:
 \operatorname{DestinationOK}(z,\pi)=
 \operatorname{Compatible}(z)\land
 \operatorname{ServicePack}(z)\land
-\operatorname{KVUnion}(z)\land
+\operatorname{KVPrivate}(z)\land
 \operatorname{MigrationSchedule}(z,\pi)\land
 \operatorname{ImpactOK}(z).
 \]
@@ -263,10 +277,10 @@ session vectors among replicas and also satisfy KV, migration, route, and
 impact constraints. Equal GPU counts therefore need not imply equal available
 capacity.
 
-An evidence-robust label additionally requires every case to remain inside
-demonstrated conditional inner support. Feasibility that depends on a synthetic
-headroom value, interpolation between measured affinity rays, or an assumed
-facet shape is sensitivity/possible, not evidence-robust.
+An evidence-robust label requires an accepted envelope and every case inside
+its support. The six v7 cache-valid runs provide observed-inner labels only.
+Feasibility that depends on a synthetic headroom value, interpolation between
+measured affinity rays, or an assumed facet shape is sensitivity/possible.
 
 The current pool relaxation sums baseline work \(b_p\) and requires
 
@@ -275,30 +289,23 @@ N_q\left(b_p+\sum_{c\in p}d_cy_c\right)
 \le |p|h_q^m.
 \]
 
-Let \(\mathcal B_r^0\) be physical KV blocks already protected on replica
-\(r\), and \(\mathcal B_{s,r,\omega}(H_r)\) the blocks required by an admitted
-session through the residency horizon. A shared block must have the exact
-pinned-engine cache key and full-block granularity. Exact live-state admission
-is
+V1 gives no cross-session sharing credit. Exact private-state admission is
 
 \[
-\left|
-\mathcal B_r^0\cup
-\bigcup_{s,a:z_{s,a,r}=1}\mathcal B_{s,r,\omega}(H_r)
-\right|\le K_{q(r)}^{blocks}
+B_{r,\omega}^0+
+\sum_{s,a}
+\left\lceil
+\frac{\widehat T_{s,\omega}(H_r)}{L_{q(r)}^{block}}
+\right\rceil z_{s,a,r}
+\le K_{q(r)}^{blocks}
 \quad\forall r,\omega.
 \]
 
-Shared prefix blocks count once; private tails and projected generation remain
-per session and are rounded to engine blocks. \(K_q^{blocks}\) is the
-allocatable KV budget after model weights, activations, graph captures, and
-runtime workspace for the pinned configuration. Every block used to reduce
-\(p_{s,q,r,\omega}\) must belong to a separate
-\(\mathcal R_{s,r,\omega}^{hit}\) set guaranteed available before that
-request's prefill. It may contain baseline protected blocks or blocks installed
-by migration only when the schedule enforces install before use. Membership in
-the session's future required-block set is not enough. Without identities, the
-necessary aggregate additive pruning relaxation is
+\(K_q^{blocks}\) is allocatable KV after model weights, activations, graph
+captures, and runtime workspace. Each session's private history and projected
+growth are block-rounded independently. Prefix-compute credit applies only to
+that session's history installed before route commit. The necessary aggregate
+pool pruning relaxation is
 
 \[
 B_p^0+\sum_{c\in p}
@@ -309,6 +316,10 @@ B_p^0+\sum_{c\in p}
 The current schema exposes token-equivalent capacity and sums unrounded context
 tokens. It receives no sharing credit, but still needs block rounding or
 one-private-block tail headroom before it is a physical-memory guarantee.
+
+A later shared-KV extension may replace the private sum with an exact union of
+protected pinned-engine block keys. Evictable idle cache entries receive no
+admission credit.
 
 Normal admission is attempted first; emergency is tried only if normal cannot
 meet the source-power target. Stable is not an admission mode. It is the outer

@@ -35,13 +35,15 @@ profile acceptance.
 The raw audit found six forced-token signatures at IDs 200110–200952 that
 produce 50 HTTP-200 responses with no prompt/output usage. No successful
 request uses an ID at or above 200000. Those responses invalidate 47 service
-runs and are not capacity failures. All remaining 66 runs pass normal,
-emergency, and stability, leaving the resource frontier right-censored. Twelve
-of 18 migrations overlap
-foreground work. Replay added 1.084 s TTFT to the one request arriving during
-reconstruction; matched KV added 4.7 ms. The smallest supported timing models
-keep the replay context curve with a compute/completion calibration and model
-KV time as exact route time plus a residual. The current scalar loaded
+runs and are not capacity failures. Of the 66 complete-work runs, 60 contain
+at least one cache hit extending into the nominal new append because prompts
+repeat across cells while vLLM APC persists. Only six runs are consistent with
+private-prefix-or-colder service; all pass every policy, with a common observed
+inner radius of 0.096953 and no capacity boundary. Twelve of 18 migrations
+overlap foreground work. Replay added 1.084 s TTFT to the one request arriving
+during reconstruction; matched KV added 4.7 ms. The smallest supported timing
+models keep the replay context curve with a compute/completion calibration and
+model KV time as exact route time plus a residual. The current scalar loaded
 coefficients cannot safely encode those physical components, so the immutable
 v7 bundle is not rewritten and no profile is emitted.
 
@@ -57,6 +59,9 @@ outside the destination campaign's measured domain, which ends at 24,576.
 Service probes use time-bounded Poisson arrivals and include scheduled client
 backlog in stability. A block-bootstrap drift upper bound no larger than one
 queued request per measurement window is the frozen non-growth resolution.
+`destination_evaluation.service_cache_state` independently classifies each run
+against the block-rounded history prefix intentionally warmed by the runner;
+one request reusing the new append excludes the run from capacity fitting.
 Disagreeing boundary cells receive five runs; their majority determines the
 boundary and the vote counts remain in `service.json` instead of aborting the
 campaign.
@@ -71,12 +76,12 @@ use isolated bandwidth-pinned stacks so MP connections and logs stay intact,
 then stop future arrivals and drain in-flight requests before the next cell.
 `QH_LOADED_REHEARSAL=1` runs the first loaded repeat without final reduction.
 
-The next operation is to replace the invalid forced-token signatures, not
-submit the reserve. Select known-safe forced tokens and make a stream without
-completion, usage, or requested tokens a hard request failure. Reuse the 66
-valid service runs. New service measurements, if required, should probe only
-the corrected unresolved boundary. The measured migration domain needs no
-additional campaign.
+Do not submit the reserve. Retain the six cache-valid service runs and exclude
+append-hot cells from capacity fitting. No new service measurement is needed
+for explicit sensitivity modeling at the observed inner point. An accepted
+boundary requires only a targeted rerun with safe forced tokens, unique
+appended prompts or reset APC, and a hard cache-state gate. The measured
+migration domain needs no additional campaign.
 
 Queue-Haul optionally accepts a versioned `DestinationArchitecture` from
 `destination.py`. It describes compatibility, context-conditioned service work,
@@ -85,14 +90,14 @@ state, pool routes, and conservative loaded-migration coefficients. Omitting it
 keeps the legacy scalar destination model unchanged.
 
 The exact destination question is whether a source session set has a compatible
-per-replica assignment whose cache-miss prefill work and decode work stay inside
-the measured service blob, whose union of physical KV blocks fits, and whose
-migration schedule meets the route and deadline constraints. The current v1
-implementation uses full expected prefill work and additive context tokens, so
-it takes no cross-session prefix-sharing credit; it still needs physical-block
-rounding before its KV row is a memory guarantee. Hardware, model, parallel
-layout, engine configuration, and scheduler settings are part of the profile
-identity rather than portable GPU-count multipliers.
+per-replica assignment whose private-prefix prefill and decode work stay inside
+the measured service blob, whose block-rounded private KV fits, and whose
+migration schedule meets the route and deadline constraints. V1 deliberately
+takes no cross-session prefix-sharing credit. The current implementation still
+needs physical-block rounding before its token-equivalent KV row is a memory
+guarantee. Hardware, model, parallel layout, engine configuration, and scheduler
+settings are part of the profile identity rather than portable GPU-count
+multipliers.
 
 Pass it as `plan(..., destination=architecture)` for pool-aware LP or greedy
 admission, or to `execute(..., destination=architecture)` for independent stable

@@ -7,6 +7,10 @@ allocation deterministically.
 Plausible wrong implementations:
 - Treat requests as independent repeats or take a mean as the conservative bound.
 - Treat a censored or infeasible inner point as measured capacity.
+- Compare cache hits with the full prompt instead of the intentionally warmed prefix.
+- Accept a run when only a majority of its requests avoid future-append cache hits.
+- Treat a zero-work response as a cache-state result instead of measurement-invalid.
+- Ignore physical cache-block rounding at the prefix/append boundary.
 - Clamp a changed runtime baseline into the load-induced slowdown.
 - Choose the median rather than worst observed migration slowdown.
 - Divide total capacity rather than residual capacity by reference demand.
@@ -20,7 +24,8 @@ import pytest
 
 import destination_evaluation
 from destination_evaluation import (SweepCell, effective_headroom, primary_cells,
-                                    reduce_bounds, reduce_loaded, replica_counts, run_sweep)
+                                    reduce_bounds, reduce_loaded, replica_counts,
+                                    run_sweep, service_cache_state)
 from test_pool_planner import architecture
 
 
@@ -50,6 +55,36 @@ def test_envelope_reduction_rejects_censored_boundary():
 
     with pytest.raises(ValueError, match="bracketed"):
         reduce_bounds(rows)
+
+
+def cache_request(cached=96, prompt=113, appended=17, output=1):
+    return {
+        "status": 200, "error": "", "prompt_tokens": prompt,
+        "cached_tokens": cached, "input_tokens": appended,
+        "output_tokens": output, "planned_output_tokens": 1,
+    }
+
+
+def test_service_cache_state_uses_warmed_prefix_block_boundary():
+    assert service_cache_state([cache_request()])["state"] == "private_prefix"
+    assert service_cache_state([cache_request(cached=112)])["state"] == "append_hot"
+    assert service_cache_state([cache_request(cached=80)])["state"] == "prefix_underhit"
+
+
+def test_service_cache_state_rejects_one_hot_append_at_run_level():
+    result = service_cache_state([cache_request(), cache_request(cached=112)])
+
+    assert result["state"] == "append_hot"
+    assert result["requests"] == {
+        "private_prefix": 1, "prefix_underhit": 0, "append_hot": 1,
+        "measurement_invalid": 0,
+    }
+
+
+def test_service_cache_state_keeps_invalid_work_separate():
+    result = service_cache_state([cache_request(cached=112, output=0)])
+
+    assert result["state"] == "measurement_invalid"
 
 
 def test_loaded_reduction_uses_worst_run_per_load():

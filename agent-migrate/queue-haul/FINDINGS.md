@@ -10,9 +10,9 @@ justify an accepted destination profile.
 - Do not collect more migration timing for the measured low-concurrency case.
   The raw records support conservative replay and KV timing envelopes and a
   method-affinity rule for live traffic.
-- Replace the six invalid forced-token signatures before any service rerun. If
-  a measured service boundary is required, rerun only the unresolved service
-  frontier after that fix.
+- Before any service rerun, replace the six invalid forced-token signatures and
+  prevent repeated appended prompts from surviving in APC across cells. If a
+  measured boundary is required, rerun only the unresolved frontier.
 
 All 767 artifacts listed in `SHA256SUMS` match; the archive contains those
 artifacts plus the manifest itself. The local `data/` copy is ignored by Git
@@ -40,38 +40,63 @@ This separates two questions that the old reduction conflated:
 2. **Consumable capacity:** a run with missing work is not a capacity-boundary
    observation.
 
-After excluding the 47 invalid runs, all 66 complete-work runs pass normal,
-emergency, and stability. Their worst p90 TTFT is 0.587 s, worst p90 mean TPOT
-is 0.0276 s/token, and largest queue-drift upper bound is 0.00335 requests/s.
-The normal policies are 2 s TTFT and 0.1 s/token TPOT. The valid data therefore
-contains no infeasible capacity point.
+The 66 complete-work runs all pass normal, emergency, and stability, but
+request completeness is not sufficient for service-capacity evidence. The
+runner prewarms only each session's historical prefix, while repeated request
+indices produce the same appended prompts across cells and vLLM APC is not
+reset. Later cells can therefore reuse nominally future append blocks.
 
-Using each request's actual context and planned work, the largest valid
-successful normalized work rates are:
+For 16-token blocks, a request is consistent with the intended private-prefix
+state only when
 
-| Workload affinity | largest valid success |
-|---|---:|
-| agentic tool loop | 0.108677 |
-| coding | 0.182805 |
-| interactive coding | 0.134067 |
+```text
+cached_tokens <= floor((prompt_tokens - input_tokens) / 16) * 16
+```
 
-These are conditional inner observations, not frontier estimates or
-confidence bounds. The smallest common observed success is 0.108677. Normal
-and emergency cannot be distinguished because every valid run is well inside
-both SLOs.
+The run is the independent unit: one append-hot request contaminates the whole
+run. The reproducible `service_cache_state` reduction gives:
 
-The earlier downward-closure contradictions disappear when missing-work runs
-are excluded. Deleting only the zero-work rows would still leave two
-nonmonotone stable failures, so contaminated executions are not salvaged as
-boundary evidence. More facets or a learned request-shape model are therefore
-not justified. For current analysis, keep measured `F(T)`, `G(T)`, and KV
-capacity; treat service headroom as partially identified and report:
+| Run state | Runs | Meaning |
+|---|---:|---|
+| measurement-invalid | 47 | at least one missing-work response |
+| append-hot | 60 | at least one cached block extends into the new append |
+| exact private prefix | 5 | every request matches the intended warmed prefix |
+| prefix under-hit | 1 | no append reuse, but one request lost intended prefix blocks |
 
-- **robust:** within a selected conditional inner bound and all compatibility
-  and affinity predicates pass;
-- **possible:** feasible only for some unmeasured headroom values; or
-- **unsupported:** outside the measured affinity/domain or based on an invalid
-  probe.
+Across all 9,181 requests, the corresponding request counts are 50 invalid,
+8,020 append-hot, 1,110 exact-private-prefix, and one prefix under-hit. Request
+counts inside a contaminated run are descriptive only; they are not additional
+independent evidence.
+
+Only six runs are usable as private-prefix-or-colder service observations:
+
+| Affinity | Split/cell | Radius | Requests | Cache state |
+|---|---|---:|---:|---|
+| interactive coding | fit/emergency | 0.114063 | 83 | exact private prefix |
+| coding | tune/normal | 0.096953 | 78 | exact private prefix |
+| agentic tool loop | tune/normal | 0.096953 | 27 | exact private prefix |
+| interactive coding | validation/normal | 0.096953 | 48 | exact private prefix |
+| coding | validation/normal | 0.096953 | 18 | one prefix under-hit |
+| agentic tool loop | validation/normal | 0.096953 | 11 | exact private prefix |
+
+All six pass every policy. Their worst p90 TTFT is 0.587 s, worst p90 mean
+TPOT is 0.0248 s/token, and largest queue-drift upper bound is 0.00163
+requests/s. The common held-out observation is 0.096953. Interactive coding
+also has one fit-only success at 0.114063. These are observed inner points, not
+an accepted envelope: there are only two usable physical runs per affinity and
+no cache-valid failure.
+
+The earlier 0.108677–0.182805 affinity maxima came from append-hot runs and are
+withdrawn as private-prefix capacity evidence. The data do not justify more
+service facets or a learned cache-work model. For current analysis, keep
+measured cold `F(T)`, `G(T)`, and KV capacity, and report:
+
+- **observed inner:** at or below a cache-valid point in the same measured
+  affinity/domain;
+- **possible/sensitivity:** dependent on an assumed service envelope or
+  interpolation; or
+- **unsupported:** outside the measured domain or based on an invalid or
+  append-hot probe.
 
 ## Migration timing
 
@@ -139,15 +164,17 @@ not be hidden inside a service-capacity facet.
 
 ## Remaining evidence
 
-No additional migration campaign is needed for concurrency one, the measured
-16K/10-Gbps and 24K/5-Gbps cells, and low foreground work. Higher concurrency,
-continuous high load, or a claimed interference percentile would require new
+No additional migration campaign is needed for component timing or method
+ranking on the recorded concurrency-one schedules in the measured
+16K/10-Gbps and 24K/5-Gbps cells. Higher concurrency, a new foreground
+schedule, continuous load claims, or an interference percentile requires new
 evidence.
 
-Service capacity remains right-censored. First select known-safe forced tokens
-and make the client hard-fail a stream that lacks completion, usage, or the
-requested tokens. Then reuse all 66 valid runs. If an accepted boundary is
-still required, start with three independent corrected probes per workload
-affinity at nominal radius 0.5 and adapt only the affinity that fails. Compute
-normal, emergency, and stability from each physical run instead of rerunning
-the same boundary by policy.
+Service capacity remains right-censored. Retain the six cache-valid runs and
+exclude append-hot cells from capacity reduction. No rerun is needed for
+explicit sensitivity modeling at the observed 0.096953 inner point. If an
+accepted boundary is required, first select safe forced tokens, reset APC or
+make appended prompts unique across cells, and hard-fail missing work or cache
+reuse beyond the warmed prefix. Start near 0.096953, expand until a failure is
+bracketed, and collect three independent runs only around each affinity's
+boundary. Compute normal, emergency, and stability from every physical run.

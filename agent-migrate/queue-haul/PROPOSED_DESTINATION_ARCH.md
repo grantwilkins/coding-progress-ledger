@@ -3,7 +3,8 @@
 Status: Queue-Haul implements the v1 admission model in `destination.py`,
 `pool_planner.py`, and `destination_evaluation.py`. The 2026-07-23 run does
 not support an accepted destination profile. The recovered raw records expose
-six invalid forced-token signatures and a right-censored service frontier.
+six invalid forced-token signatures, widespread append-hot service cells, and
+a right-censored private-prefix service frontier.
 They do support component timing for the recorded concurrency-one v7 request
 schedules in the measured 16K/10-Gbps and 24K/5-Gbps cells, plus a provisional
 live-traffic migration ranking. See `FINDINGS.md`.
@@ -21,8 +22,8 @@ For a pinned serving class and a workload/concurrency domain already represented
 by its measured envelope, five consumable quantities decide whether an
 already-warm serving pool can land a session:
 
-1. cache-conditioned prefill work and decode work;
-2. the union of protected live KV blocks;
+1. private-prefix prefill work and decode work;
+2. block-rounded private live KV;
 3. replay reconstruction work during migration;
 4. KV ingestion or promotion work during migration; and
 5. bytes on every transport edge used by the migration.
@@ -97,22 +98,57 @@ state, and explicit policy. These sources are not interchangeable.
 |---|---|---|
 | pinned replica class \(q\) | compatibility and profile key | model, A100 80 GB, BF16, TP=1, image/runtime campaign record; the current type does not enforce the full tuple |
 | \(F_q(T),G_q(T)\) | cold-prefill and decode work coordinates | measured 256–31,562-token curves with declared 25% relative error; cache-conditioned prefill is unprofiled |
-| \(\mathcal C_q^m\) | joint TTFT/TPOT/stability service blob | 66 clean inner successes across three affinities; no accepted boundary |
+| \(\mathcal C_q^m\) | joint TTFT/TPOT/stability service blob | six cache-valid inner runs across three affinities; common observation 0.096953; no accepted boundary |
 | \(b_r\) | current per-replica traffic point | must use profile-compatible prompt/decode telemetry; v7 `achieved_rho` is invalid |
 | \(K_q\) | allocatable live-KV stock after fixed runtime memory | exact 1,214,544-token vLLM readback for this homogeneous ABI |
-| physical block sets | incremental KV and prefix-sharing credit | within-session reuse is observed; cross-session block union and protected residency are not measured |
+| private KV blocks | block-rounded per-session residency | exact 1,214,544-token capacity; v1 does not credit cross-session sharing |
 | replica inventory | assignment and fragmentation | direct site input; pool multiplication is only a relaxation |
 | migration components | deadline and temporary endpoint occupancy | conservative replay/KV fits for the recorded concurrency-one v7 schedules in the measured 16K/10-Gbps and 24K/5-Gbps cells |
 | route edges and rates | transport feasibility | scenario topology plus shaped link rates; geography/fleet QoS remain inputs |
 | workload scenarios | horizon-specific arrivals, contexts, and prefix identity | modeled input; not a measurement of fleet behavior |
 | policy | requested SLO, headroom, and confidence rule | explicit operator input |
-| guaranteed cache state | prefix-compute and memory credit | live protected/reserved block readback; assumptions receive no robust credit |
+| guaranteed cache state | session-history compute reuse | replay/KV installs private history; append-hot repeated prompts are excluded |
 
 Fixed model weights, activations, graph captures, and engine workspace do not
 need separate optimization rows for an already-warm pinned replica. They are
 already removed from measured \(K_q\) and embodied in its measured service
 blob. A different engine flag, accelerator layout, model, or memory partition
 defines another replica class and requires its own evidence.
+
+## Private-prefix v1 and contested situations
+
+V1 guarantees reuse only for the active session's migrated history. Its next
+append remains new work. It neither treats every turn as cold nor credits
+prefix blocks shared with another session. Per replica,
+
+\[
+\sum_{s,a}
+\left\lceil\frac{\widehat T_s(H_r)}{L_q^{block}}\right\rceil
+\!z_{s,a,r}
+\le K_q^{blocks}.
+\]
+
+This intentionally overstates physical memory when unrelated sessions happen
+to share exact prefixes. The result is uncredited sharing headroom and possible
+false-negative admission, not a prediction that those prefixes will miss.
+Cross-session block unions remain a later optimization.
+
+A separate destination is described by which constraint is contested:
+
+| Situation | Binding state or resource | Admission consequence |
+|---|---|---|
+| incompatible or cold | pinned model/runtime/hardware profile or warmness | no candidate |
+| service-contested | baseline plus private-prefix prefill/decode reaches an observed or assumed envelope | reduce admitted work or label sensitivity |
+| KV-contested | block-rounded private histories and growth reach allocatable HBM KV | reject or choose another replica |
+| packing-contested | aggregate pool stock fits but indivisible sessions do not fit replicas | repair assignment or reject |
+| route-contested | source-method-replica paths share residual edge bandwidth/latency | schedule later, select another route, or reject deadline |
+| endpoint-contested | replay compute, KV ingest/copy, source stream, or replica migration slot serializes work | schedule explicitly and check makespan |
+| foreground-impact-contested | migration overlaps latency-sensitive serving without an accepted impact bound | require idle/drained state or report possible |
+
+These situations are intersections, not alternative destination types. A site
+may be service-, KV-, and route-contested simultaneously; the planner reports
+the first binding relaxation, while concrete packing and execution validation
+remain authoritative.
 
 ## Mirrored destination
 
@@ -197,13 +233,13 @@ Normal and emergency are independently solved operator policies. Stable is the
 outer hard-safety ceiling used only by the execution validator. A baseline
 already outside the selected envelope makes that pool unavailable. Until a
 service envelope is identified, `h` remains an explicit sensitivity input:
-an **evidence-robust** placement must remain inside demonstrated conditional
-inner support for every case. A placement that depends on synthetic `h`,
-interpolation between affinity rays, or the assumed one-facet shape is only a
-**sensitivity/possible** result even if it survives every chosen value.
-Anything outside the measured domain is unsupported. V7 does not identify a
-global conservative `h` or a mixed-affinity convex blob; its three clean
-affinity families provide conditional inner observations only.
+V7 can label a placement **observed-inner** at its cache-valid points, not
+evidence-robust, because each affinity has only two physical runs and no
+failure. A placement that depends on synthetic `h`, interpolation between
+affinity rays, or the assumed one-facet shape is **sensitivity/possible** even
+if it survives every chosen value. Anything outside the measured domain is
+unsupported. V7 does not identify a global conservative `h` or a
+mixed-affinity convex blob.
 
 The simple destination constraint is a nonanticipative existence statement.
 Let \(\omega\in\Omega\) jointly index demand forecasts and empirical profile
@@ -218,7 +254,7 @@ z_{s,a,r}\le E_{s,a,r} & \forall s,a,r,\\
 \sum_s w_sy_s\ge\Delta P,\\
 b_{r,\omega}+\sum_{s,a}d_{s,q(r),r,\omega}z_{s,a,r}
 \in\mathcal C_{q(r),\omega}^m & \forall r,\omega,\\
-\operatorname{KVUnion}_{r,\omega}(z)\le K_{q(r)} & \forall r,\omega,\\
+\operatorname{KVPrivate}_{r,\omega}(z)\le K_{q(r)} & \forall r,\omega,\\
 \operatorname{makespan}(\operatorname{Schedule}(\pi,z,\omega))
 \le H_m & \forall\omega,\\
 \operatorname{ImpactOK}_{\omega}(z) & \forall\omega.
@@ -239,20 +275,20 @@ horizon and `H_r` the latest claimed residency horizon. They are deliberately
 separate. Live-state admission is
 
 \[
-\left|
-\mathcal B_r^0\cup
-\bigcup_{s,a:z_{s,a,r}=1}\mathcal B_{s,r,\omega}(H_r)
-\right|\le K_{q(r)}^{blocks}.
+B_{r,\omega}^0+
+\sum_{s,a}
+\left\lceil
+\frac{\widehat T_{s,\omega}(H_r)}{L_{q(r)}^{block}}
+\right\rceil z_{s,a,r}
+\le K_{q(r)}^{blocks}.
 \]
 
-The set union counts blocks with the exact pinned-engine prefix-cache key once.
-Private and partial tails plus projected generation are rounded to block
-granularity. Only protected/reserved blocks receive both memory and prefill-work
-credit; evictable idle entries are opportunity, not guaranteed capacity.
-The current homogeneous implementation exposes token-equivalent capacity, has
-no block identities, and sums unrounded projected contexts. It gets no sharing
-credit, but still needs block rounding or one-private-block tail headroom before
-it is a physical-memory guarantee.
+V1 charges each session's history and projected growth independently. It does
+not require block identities and gives no cross-session prefix-sharing credit.
+The current implementation still sums unrounded token equivalents, so
+block-rounding is target semantics rather than a present physical guarantee.
+A later shared-KV extension may replace the sum with an exact protected-block
+union without changing the other constraints.
 
 Replay contributes reconstructed context work and durable-log bytes. KV
 transfer contributes sealed-state bytes and destination ingestion/promotion
@@ -344,9 +380,9 @@ route-link bytes. The resource rows are only:
 
 Per-replica baseline work and KV are preserved. Supplying aggregate baseline
 fields and destination `SimSession` backgrounds simultaneously is rejected to
-prevent double counting. Exact shared-prefix credit is nonadditive; it belongs
-in the concrete block-union packing check, while the relaxation should remain
-block-rounded and additive unless prefix-group variables are introduced.
+prevent double counting. V1 remains block-rounded and additive. A later
+shared-prefix extension would require nonadditive prefix-group or block-union
+accounting in concrete packing.
 
 Optimization is lexicographic: meet the conservative power target, then
 minimize migration work. If no valid plan meets the target, maximize valid
