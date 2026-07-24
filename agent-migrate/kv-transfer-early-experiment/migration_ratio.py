@@ -289,7 +289,7 @@ def main():
     ax.set_ylim(yl)
 
     ax.text(0.2, 15.5, "Transfer KV cache", color="#B1040E", ha="left", style="italic")
-    ax.text(3.0, 0.05, "Transfer context", color="#008566", ha="left", style="italic")
+    ax.text(5.0, 0.05, "Transfer context", color="#008566", ha="left", style="italic")
 
     ax.set_xlabel("Inter-site bandwidth (Gbps)")
     ax.set_ylabel(r"TTFT / Time to Transfer KV")
