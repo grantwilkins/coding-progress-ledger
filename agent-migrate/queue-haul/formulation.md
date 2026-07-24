@@ -98,7 +98,8 @@ c=(s,a,p),
 
 where \(a\) is replay or KV transfer and \(p\) is a compatible destination
 pool. Replay requires matching model, tokenizer, and durable-log contract. KV
-transfer additionally requires a matching KV ABI.
+transfer additionally requires a matching KV ABI. The method's
+workload-affinity rule must also pass.
 
 Every candidate records source-power gain, migration work and duration, exact
 route bytes, destination service work, and resident KV tokens. A candidate
@@ -172,7 +173,7 @@ runtime-dependent work. Its component semantics are:
 \[
 \tau_{s,R,q}=
 \frac{B_s^{log}}{b_{route}}+
-\alpha_{R,q}\tau_{s,R}^{compute,old}(T_s)+c_{R,q},
+\alpha_{R,q}\tau_{s,R}^{compute+completion,old}(T_s)+\tau_q^{switch},
 \]
 
 for replay, and
@@ -192,12 +193,18 @@ are not blindly added. A load-dependent residual is permitted only within a
 domain measured over the migration interval; requested load is never
 substituted for achieved load.
 
-The compact v7 data identifies only exploratory low-work coefficients. It
-supports a replay compute/completion calibration and additive KV route plus
-residual timing, but not a load-dependent term. The current scalar
+The recovered v7 data identifies low-work coefficients. It supports a replay
+compute/completion calibration and additive KV route plus residual timing, but
+not a load-dependent term. The current scalar
 `LoadedCoefficients` scales the complete duration and therefore cannot encode
 this component model without violating the route-time floor. No v7 destination
 profile is accepted.
+
+Foreground impact is a method-affinity predicate rather than a service row.
+For latency-sensitive busy pools, KV is preferred. Replay requires an
+idle/drained pool or explicit TTFT slack until its observed 1.084-second
+new-arrival penalty has a defensible uncertainty bound. This dynamic predicate
+is proposed semantics and is not encoded by the current architecture types.
 
 ## Greedy
 
@@ -325,7 +332,7 @@ coverage.
 Unsupported context, workload direction, destination load, bandwidth,
 compatibility, topology, concurrency, or profile cases hard-fail. Continuous
 destination scheduling, request-level dynamic power, replanning, model loading,
-and predictive latency remain out of scope. Unbracketed or non-monotone
-service evidence and loaded probes without migration-interval overlap also
-hard-fail during profile reduction. Measurement requirements and open evidence
-are tracked in `DATA_TO_COLLECT.md`.
+and predictive latency remain out of scope. Measurement-invalid or unbracketed
+service evidence and loaded probes without recorded migration-interval state
+also hard-fail during profile reduction. Measurement requirements and open
+evidence are tracked in `DATA_TO_COLLECT.md`.

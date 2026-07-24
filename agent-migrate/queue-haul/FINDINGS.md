@@ -2,120 +2,152 @@
 
 ## Decision
 
-Do not submit another GPU campaign or the current reserve bundle yet. The
-compact 2026-07-23 bundle contains more usable evidence than the first
-reduction recognized, but it cannot identify a service-capacity frontier or a
-causal migration slowdown versus destination load. Recover the archived raw
-request and engine records before collecting new data.
+The recovered 2026-07-23 archive changes the diagnosis but still does not
+justify an accepted destination profile.
 
-The run does establish:
+- Do not launch the current reserve; its task list is ignored and it would
+  repeat the full campaign.
+- Do not collect more migration timing for the measured low-concurrency case.
+  The raw records support conservative replay and KV timing envelopes and a
+  method-affinity rule for live traffic.
+- Replace the six invalid forced-token signatures before any service rerun. If
+  a measured service boundary is required, rerun only the unresolved service
+  frontier after that fix.
 
-- 4K/16K/24K anchor delivery within 91.4%–99.9% of the reused rates;
-- exact replay and KV continuation for every migration;
-- new-runtime migration timing at 16K/10 Gbps and 24K/5 Gbps; and
-- low foreground work, from zero through 0.146 in anchor-normalized
-  prefill-plus-decode work.
-
-The checked profile therefore remains `estimated`.
+All 767 artifacts listed in `SHA256SUMS` match; the archive contains those
+artifacts plus the manifest itself. The local `data/` copy is ignored by Git
+and is not part of the evidence commit.
 
 ## Service evidence
 
-All 113 service summaries give identical normal, emergency, and stable labels.
-Of the 47 summaries labeled unstable, 45 report a drained queue and a
-queue-drift upper bound no larger than `1/180` requests/s. Under the runner's
-classifier those 45 failures require an incomplete request batch. The compact
-bundle omits `requests.json` and `engine.csv`, so it cannot distinguish a
-legitimate overload rejection from a transient or request-generation failure.
-It also cannot recover TTFT or TPOT.
+The 47 summaries classified infeasible contain 50 requests with HTTP status
+200, no recorded error, and zero prompt and output usage. The client requested
+a forced token with `ignore_eos=true`, so these are not legitimate early model
+stops. The stream ended without the required work or usage record. The other
+9,131 of 9,181 requests produced exactly their planned output.
 
-The nominal radius is not realized work. The runner normalizes every request
-at the cohort's mean context, uses the cohort's mean request work to choose an
-arrival rate, and then sends a Poisson count through a deterministic
-session order. Reconstructing each execution from its recorded request count,
-session order, and per-session context rates gives these fit intervals:
+Every empty response is one of six deterministic
+`(session, request_index, forced_token)` signatures. Their forced token IDs are
+200110–200952; no successful request uses a forced ID at or above 200000. This
+is a harness/token-eligibility defect, not evidence of overload. The
+descriptive incidence is 11/470 agentic requests, 18/5,065 coding requests, and
+21/3,646 interactive-coding requests.
 
-| Direction | largest successful realized work | smallest failed realized work |
-|---|---:|---:|
-| interactive coding | 0.123546 | 0.132380 |
-| coding | 0.184381 | 0.206757 |
-| agentic tool loop | 0.003985 | 0.017653 |
+This separates two questions that the old reduction conflated:
 
-These are descriptive intervals, not capacity bounds. Across all splits, 10 of
-21 unique failed points are componentwise dominated by a successful point even
-after adding realized request rate to prefill and decode work. No
-downward-closed facet model in the current variables can represent those
-labels. Adding more facets cannot repair the contradiction; request validity,
-per-request shape/SLO eligibility, and long-run resource capacity must be
-separate.
+1. **Measurement validity:** an empty forced-token stream invalidates the
+   probe; it does not establish production availability.
+2. **Consumable capacity:** a run with missing work is not a capacity-boundary
+   observation.
 
-The current service reduction also repeats one majority-decided boundary once
-per vote and then treats those copies as independent runs. Disputed cells
-therefore receive more weight. A future reduction must consume realized
-run-level work and one boundary estimate per independent run.
+After excluding the 47 invalid runs, all 66 complete-work runs pass normal,
+emergency, and stability. Their worst p90 TTFT is 0.587 s, worst p90 mean TPOT
+is 0.0276 s/token, and largest queue-drift upper bound is 0.00335 requests/s.
+The normal policies are 2 s TTFT and 0.1 s/token TPOT. The valid data therefore
+contains no infeasible capacity point.
 
-For existing offline analysis, retain measured `F(T)`, `G(T)`, and KV
-capacity. Treat service headroom as an explicit sensitivity input and report
-robust, possible, or unsupported placement. Do not fit a measured service
-envelope from these summaries.
+Using each request's actual context and planned work, the largest valid
+successful normalized work rates are:
 
-## Migration evidence
+| Workload affinity | largest valid success |
+|---|---:|
+| agentic tool loop | 0.108677 |
+| coding | 0.182805 |
+| interactive coding | 0.134067 |
 
-Recorded `achieved_rho` is raw normalized work divided by the rejected normal
-bound, 0.1140625. The apparent range 0–1.282 is therefore only 0–0.146 in raw
-normalized work. It is also a preceding 30-second throughput average, not a
-measurement over the migration interval. Each treatment records only zero to
-two foreground requests, `queue_at_start` refers to the sampler's first row,
-and the compact bundle cannot prove that foreground work overlapped migration.
+These are conditional inner observations, not frontier estimates or
+confidence bounds. The smallest common observed success is 0.108677. Normal
+and emergency cannot be distinguished because every valid run is well inside
+both SLOs.
 
-Four treatment rows have achieved throughput zero: replay and KV at both
-16K/10 Gbps and 24K/5 Gbps. They are exploratory same-runtime zero-throughput
-anchors, contrary to the earlier claim that the run had no zero-load
-measurement. They are not empty-destination controls: the runner first
-prewarms 18 background sessions totaling 264,699 prompt tokens, up to 21.8% of
-reported KV capacity, and retained residency is absent from the compact
-records. There is only one zero-throughput repeat per cell.
+The earlier downward-closure contradictions disappear when missing-work runs
+are excluded. Deleting only the zero-work rows would still leave two
+nonmonotone stable failures, so contaminated executions are not salvaged as
+boundary evidence. More facets or a learned request-shape model are therefore
+not justified. For current analysis, keep measured `F(T)`, `G(T)`, and KV
+capacity; treat service headroom as partially identified and report:
 
-After removing context or network time, neither method has an identified load
-trend. Spearman tests against achieved load give `p=0.589` for replay and
-`p=0.574` for KV. A linear load term does not improve replay leave-one-out
-median error and changes KV median error only from 4.2% to 3.4% with nine
-observations (`p=0.462`). That does not justify a load-indexed curve.
+- **robust:** within a selected conditional inner bound and all compatibility
+  and affinity predicates pass;
+- **possible:** feasible only for some unmeasured headroom values; or
+- **unsupported:** outside the measured affinity/domain or based on an invalid
+  probe.
 
-The smallest useful exploratory timing models are method-specific:
+## Migration timing
 
-- Keep the reused replay context curve. On the six 16K rows, central and
-  upper calibration factors are 0.564585 and 0.586673. Applied to the untouched
-  24K curve, they have 5.5% and 9.6% held-out median error and never
-  underpredict the three held-out runs.
-- Replace the KV scalar multiplier with
-  `duration = sealed_bytes / route_bytes_per_s + c`. Fitting the six 16K rows
-  gives `c=0.961186 s` centrally and `c=1.133822 s` conservatively. The 24K
-  held-out median errors are 2.4% and 7.8%; the conservative form never
+Twelve of 18 migration treatments overlap a foreground request. Ten have one
+request active at migration start, and two start a request during migration.
+All 36 control and treatment foreground requests reuse cached prefixes; the 20
+treatment requests reuse 2,608–3,168 cached tokens. Twenty-six of 27 first
+engine samples record the intended 264,699 prompt tokens, 18 generated tokens,
+and 18 successful prewarm requests. One control contains additional prior state
+and is not cache-state-identical to its treatments. The data proves reuse, not
+exact idle residency: the GPU cache gauge reports zero for evictable cached
+blocks. The intended 264,699-token prewarm is 21.79% of declared capacity but
+must not be modeled as measured resident occupancy. Six treatments have no
+foreground overlap; four complete no foreground request at all.
+
+The recorded `achieved_rho` remains the wrong timing covariate. It is a
+preceding 30-second average divided by the rejected service bound, and it
+counts cached prompt tokens as new compute. Subtracting cached prompts gives
+prewindow compute rho from 0 to 0.898. Exact migration-interval foreground work
+is not recoverable: aggregate request totals have no per-token timestamps,
+engine counters include migration work, and 8/18 samplers end 39–222 ms before
+route switch. The archive identifies overlap topology, not a load curve.
+
+The smallest reliable duration models remain method-specific:
+
+- Keep the reused replay compute-plus-completion context curve. On the six 16K
+  rows, central and conservative calibration factors are 0.564571 and
+  0.586660 after separating route bytes. Applied to the untouched 24K curve,
+  they have 5.5% and 9.6% held-out median error and never underpredict the
+  three held-out runs. One fitting context cannot identify a separate replay
+  intercept.
+- Model KV duration as `sealed_bytes / route_bytes_per_s + c`. The six 16K
+  rows give `c=0.961186 s` centrally and `c=1.133822 s` conservatively. The
+  24K held-out median errors are 2.4% and 7.8%; the conservative form never
   underpredicts.
 
-The KV result is mechanistic: GPU/runtime calibration belongs in the
-post-transfer residual, not on exact route time. The current
-`LoadedCoefficients` multiplies the complete migration duration, so a
-calibration below one can predict less than `bytes/link_rate`. It cannot safely
-encode this model yet. Replay link time and switch time likewise must remain
-outside runtime scaling.
+A categorical overlap split improves central replay held-out median error from
+5.5% to 4.2%, but its 16K idle fit contains one row. The analogous KV split
+underpredicts two held-out rows. That is insufficient evidence for another
+planner coefficient; the global conservative envelopes already cover both
+idle and observed busy executions.
 
-These timing fits are valid only as exploratory low-work envelopes for
-concurrency one and the two measured context/bandwidth cells. Their maxima are
-not 95% statistical bounds, and they do not establish foreground interference.
+Exact route time must remain outside runtime calibration. The current
+`LoadedCoefficients` multiplies the complete migration duration and can predict
+less than `bytes/link_rate`, so it cannot safely encode the KV model. Replay
+log transfer and switch time likewise remain physical components.
 
-## Next evidence decision
+## Foreground impact and affinity
 
-First recover the archived files written by the runner:
+Control and treatment runs provide ten exactly matched foreground requests per
+method, six of which overlap migration.
 
-- `service/**/{requests.json,engine.csv}` to identify request failures,
-  recompute realized work, TTFT, TPOT, and backlog;
-- `loaded/**/{control,replay,kv_transfer}/foreground/{requests.json,engine.csv}`
-  to measure foreground work and overlap during each migration; and
-- cache/KV metrics needed to establish actual resident state after prewarm.
+- For five already-active replay requests, paired TPOT increased by a median
+  3.45 ms/token and at most 6.79 ms/token. The five KV counterparts increased
+  by a median 0.42 ms/token and at most 0.67 ms/token.
+- The one request arriving during replay reconstruction incurred 1.084 s
+  additional TTFT. The same scheduled request arriving during KV transfer
+  incurred 4.7 ms additional TTFT.
 
-Those records may permit a valid re-reduction without another GPU hour. If
-they are unavailable, only the irreducible failed service cohorts and
-contemporaneous-overlap migration cells should be rerun. The current reserve
-must not be used for that purpose: it writes `reserve_tasks`, but
-`destination_runner.py` ignores them and reruns the full campaign.
+These are observations, not percentile bounds. They support a simple
+eligibility rule: prefer KV transfer for latency-sensitive busy destinations;
+allow replay only on an idle/drained destination or when explicit TTFT slack
+covers the empirical replay penalty plus uncertainty. Foreground impact should
+not be hidden inside a service-capacity facet.
+
+## Remaining evidence
+
+No additional migration campaign is needed for concurrency one, the measured
+16K/10-Gbps and 24K/5-Gbps cells, and low foreground work. Higher concurrency,
+continuous high load, or a claimed interference percentile would require new
+evidence.
+
+Service capacity remains right-censored. First select known-safe forced tokens
+and make the client hard-fail a stream that lacks completion, usage, or the
+requested tokens. Then reuse all 66 valid runs. If an accepted boundary is
+still required, start with three independent corrected probes per workload
+affinity at nominal radius 0.5 and adapt only the affinity that fails. Compute
+normal, emergency, and stability from each physical run instead of rerunning
+the same boundary by policy.

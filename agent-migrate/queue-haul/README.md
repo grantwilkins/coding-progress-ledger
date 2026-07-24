@@ -18,30 +18,32 @@ omitting it uses the live vLLM `/tokenize` endpoint. Both render the GPT-OSS
 reasoning chat template, and only the resulting shape records are written.
 `DATA_TO_COLLECT.md` is the evidence ledger. The completed 12-hour A100-pair
 job ran the integrity gate, drift anchors, adaptive service frontier, paired
-loaded-migration probes, acceptance checks, and profile reduction. Do not
-submit another campaign or the generated reserve before recovering the
-archived raw request and engine records. Although `prepare-reserve` writes a
-target list, the runner does not consume it and would repeat the full campaign.
+loaded-migration probes, acceptance checks, and profile reduction. The
+recovered raw archive is kept under ignored `data/`; all 767 artifacts listed
+in its checksum manifest match. Do not submit the generated reserve: although
+`prepare-reserve` writes a target list, the runner does not consume it and
+would repeat the full campaign.
 
 The completed 2026-07-23 campaign's JSON-only tuning bundle is tracked in
 `outputs/destination-v7-20260722/`. It includes the checksum-pinned inputs,
 anchors, all service and loaded result records, reductions, validation,
 acceptance, and provenance. `SHA256SUMS` verifies the bundle. Raw engine CSVs
-and logs remain in archival storage. The recorded run has no correctness
-failures but does not pass model acceptance, so these measurements are inputs
-for recalibration rather than an accepted profile.
+and logs remain in archival storage, with an ignored local copy for analysis.
+The recorded run proves migration correctness but does not pass destination
+profile acceptance.
 
-The post-run audit found identical policy labels in all 113 service summaries
-and 45 failed summaries whose omitted request records determine whether they
-are overload observations at all. Reconstructed realized-work labels violate
-the downward-closed service model. The migration results include four
-same-runtime zero-throughput treatments and useful low-work timing, but their
-30-second prewindow load cannot establish migration overlap or a causal load
-effect. The smallest supported exploratory models keep the replay context
-curve with a compute/completion calibration and model KV time as exact route
-time plus a residual. The current scalar loaded coefficients cannot safely
-encode those physical components, so the immutable v7 bundle is not rewritten
-and no profile is emitted.
+The raw audit found six forced-token signatures at IDs 200110–200952 that
+produce 50 HTTP-200 responses with no prompt/output usage. No successful
+request uses an ID at or above 200000. Those responses invalidate 47 service
+runs and are not capacity failures. All remaining 66 runs pass normal,
+emergency, and stability, leaving the resource frontier right-censored. Twelve
+of 18 migrations overlap
+foreground work. Replay added 1.084 s TTFT to the one request arriving during
+reconstruction; matched KV added 4.7 ms. The smallest supported timing models
+keep the replay context curve with a compute/completion calibration and model
+KV time as exact route time plus a residual. The current scalar loaded
+coefficients cannot safely encode those physical components, so the immutable
+v7 bundle is not rewritten and no profile is emitted.
 
 The destination baseline pins the clean vLLM 0.22 4K/16K/24K anchor medians.
 The original prefill shape is scaled by the median measured anchor ratio; exact
@@ -69,12 +71,12 @@ use isolated bandwidth-pinned stacks so MP connections and logs stay intact,
 then stop future arrivals and drain in-flight requests before the next cell.
 `QH_LOADED_REHEARSAL=1` runs the first loaded repeat without final reduction.
 
-The next operation is archive recovery, not GPU submission. Retrieve and
-checksum the original run's `service/**/{requests.json,engine.csv}`,
-`loaded/**/{control,replay,kv_transfer}/foreground/{requests.json,engine.csv}`,
-and cache/KV telemetry. Recompute realized service work, request failures,
-foreground work over the exact migration interval, and retained prewarm state.
-Only unresolved cells should be converted into a new targeted runner plan.
+The next operation is to replace the invalid forced-token signatures, not
+submit the reserve. Select known-safe forced tokens and make a stream without
+completion, usage, or requested tokens a hard request failure. Reuse the 66
+valid service runs. New service measurements, if required, should probe only
+the corrected unresolved boundary. The measured migration domain needs no
+additional campaign.
 
 Queue-Haul optionally accepts a versioned `DestinationArchitecture` from
 `destination.py`. It describes compatibility, context-conditioned service work,

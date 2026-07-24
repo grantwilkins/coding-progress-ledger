@@ -1,11 +1,11 @@
 # Destination evidence ledger
 
-Status: do not submit another campaign or the current reserve bundle. First
-recover the completed run's archived request and engine records. The compact
-bundle supplies anchors, correctness, and low-work migration timing, but its
-summaries cannot distinguish service overload from request failure or establish
-foreground overlap during migration. The reserve runner currently ignores its
-task list and would repeat the full campaign.
+Status: the archived request and engine records are recovered and verified.
+Do not submit the current reserve bundle: its runner ignores the task list and
+would repeat the full campaign. Migration needs no new measurement for the
+measured low-concurrency domain. Service profiling remains conditional on
+replacing six invalid forced-token signatures; the 66 valid runs are all
+feasible and therefore supply inner observations, not a capacity boundary.
 
 The rule is simple: use existing measurements or deterministic derivations
 unless they cannot answer the admission question. Public data can establish a
@@ -18,13 +18,13 @@ correctness of this exact LMCache/vLLM contract.
 | Planner or validation task | Required datum | Existing evidence | New measurement | Use |
 |---|---|---|---|---|
 | context-conditioned service work | isolated `F(T)` and `G(T)` | stage-1 prefill/decode curves, 256–31,562 tokens | 4K/16K/24K drift anchors only | convert each session to `(f/F, g/G)` |
-| normal/emergency admission | mixed prefill/decode boundary under open-loop arrivals | v7 summaries collapse all policies and omit request-level causes | recover raw request/engine records; rerun only unresolved cells | fit policy bounds only from valid realized work |
-| stable execution ceiling | nonpositive backlog drift, complete drain, no OOM/restart/rejection | v7 has queue summaries but no request/error records | same archive-first recovery | reject final placements outside hard safety |
-| workload-direction domain | interactive-coding, coding, and agentic boundary behavior | v7 realized-work labels violate downward closure in current variables | recover request shapes/errors before adding a shape or burst row | separate affinity from consumable capacity |
+| normal/emergency admission | mixed prefill/decode boundary under open-loop arrivals | all 66 complete-work v7 runs pass both policies; the frontier is right-censored | only after selecting safe forced tokens, probe the required unresolved boundary | fit capacity only from valid realized work |
+| stable execution ceiling | nonpositive backlog drift, complete drain, no OOM/restart/rejection | all 66 complete-work v7 runs pass stability | same targeted service follow-up if an upper boundary is required | reject final placements outside hard safety |
+| workload-direction domain | interactive-coding, coding, and agentic boundary behavior | conditional inner successes exist for all three affinities; no valid failure selects another facet | none until valid held-out data reject the one-facet model | keep workload affinity as eligibility/domain |
 | live KV residency | KV capacity and per-session resident state | exact 1,214,544-token vLLM capacity plus block/token accounting | preflight readback only | HBM stock row through residency horizon |
 | replay migration | context reconstruction and log-transfer time | coding and serial migration corpora | no unloaded reprofiling; loaded probes below | base replay work and deadline |
 | KV migration | sealed bytes, copy/ingest time, append catch-up | coding, serial, parallel-gate, append, and bounded campaigns | no unloaded reprofiling; loaded probes below | base KV work, bytes, and deadline |
-| loaded migration | runtime calibration, migration-interval load, and foreground impact | v7 supplies one zero-throughput row per measured cell and a low-work timing envelope, but no recorded overlap interval | recover foreground/control telemetry; rerun only if overlap remains unknown | component timing plus an explicitly supported load domain |
+| loaded migration | runtime calibration, migration-interval concurrency, and foreground impact | 12/18 v7 treatments overlap foreground work; timing and paired request effects support low-work envelopes | none for concurrency one and low foreground work | component timing plus busy-destination method affinity |
 | method eligibility | replay and KV compatibility | current pinned model/image logs and continuation checks | exact preflight fingerprint | candidate mask; KV additionally requires exact ABI |
 | migration correctness | cache hits, exact blocks/bytes, no WAN GET, valid continuation | parallel gate, serial, append, bounded campaigns | preflight plus every treatment run | reject invalid evidence and plans |
 | source-power target | marginal GPU power curve | stage-1 power curve and serial power windows | none | candidate source-power gain and shortfall |
@@ -70,11 +70,13 @@ fit.
   NVIDIA SWE-Hero agentic data, split 12/6/6 for fit/tune/validation and
   spanning 74–32,757 context tokens. It supplies request shapes, not arrival
   timing. Arrival processes are generated and recorded explicitly.
-- `outputs/destination-v7-20260722`: 18 correct migration treatments and 113
-  service summaries. Reconstructed service labels are not downward-closed even
-  after using realized per-session work and request rate. The migration rows
-  cover only 0–0.146 anchor-normalized foreground work and support exploratory
-  replay calibration and additive KV timing; see `FINDINGS.md`.
+- `outputs/destination-v7-20260722` plus its verified ignored raw archive: 18
+  correct migration treatments and 113 service executions. Six forced-token
+  signatures produce 50 empty responses and invalidate 47 runs; all 66
+  complete-work runs pass every policy. Twelve migrations overlap a foreground
+  request. The rows support
+  low-concurrency replay calibration, additive KV timing, and a live-traffic
+  method-affinity rule; see `FINDINGS.md`.
 
 The original 72-hour plan and its dense `rho × context × bandwidth × method`
 grid must not be submitted. Existing unloaded work curves make most of that
@@ -83,8 +85,8 @@ grid redundant.
 ## Completed 12-hour A100-pair job
 
 This section records the completed campaign contract. It is not a launch
-instruction. Reuse its valid evidence and recover its archived raw files before
-planning another measurement.
+instruction. Reuse its valid evidence and replace the invalid forced-token
+signatures before planning another service measurement.
 
 GPU 0 is the source and GPU 1 is one loaded destination replica. Pin the image
 digest, model revision, tokenizer, engine flags, durable-log contract, KV ABI,
@@ -108,11 +110,10 @@ preflight is repeated.
 
 ### 2. Mixed service envelope
 
-The hypothesis is that context-normalized prefill and decode work compose into
-one portable facet across interactive-coding, coding, and agentic mixtures. No
-existing run used controlled open-loop mixed load long enough to classify
-normal, emergency, and stable boundaries, so this cannot be inferred from the
-isolated `F/G` corpus.
+The hypothesis was that context-normalized prefill and decode work compose into
+one portable facet across interactive-coding, coding, and agentic mixtures.
+The valid executions establish only conditional inner points because none
+fails an SLO or stability check.
 
 Use the three trace-shape families with unique prefixes and retained
 per-session KV. Generate open-loop arrivals and adaptively bracket each realized
@@ -148,16 +149,16 @@ completed input/output token rates, TTFT, per-request mean TPOT, completion,
 queue time, queue-depth time series and fitted drift, running/waiting requests,
 KV/HBM use, preemptions, rejections, OOMs, restarts, and configuration digest.
 
-Fit one common-normal facet first. Add at most two facets only if tuning data
-show more than 15% radial error. The final validation split is touched once.
+Fit one common-normal facet only after valid data bracket it. Add at most two
+facets only if tuning data show more than 15% radial error. The current invalid
+runs do not justify another facet.
 
 ### 3. Migration under destination load
 
 The hypothesis is that the existing unloaded replay and KV timing
-factorization remains conservative after applying one uncertainty multiplier
-for foreground load. Existing migration corpora are the `rho=0` baseline; they
-cannot reveal scheduler, HBM, or ingestion interference from a busy
-destination.
+factorization remains conservative under foreground load. The raw records
+identify observed busy/idle overlap and component timing, but not a continuous
+load curve.
 
 The completed job attempted:
 
@@ -166,20 +167,18 @@ The completed job attempted:
   boundary; and
 - held-out 24K context and 5 Gbps at the boundary/high-load condition.
 
-Its compact summaries are insufficient because achieved `rho` is a preceding
-30-second average, not work over the migration interval. Any re-reduction or
-targeted rerun must use identical arrival seeds and record target and achieved
-absolute work, service-work direction,
-queue/running/waiting state at migration start, reconstruction or sealed
-bytes, measured work, readiness and completion times, achieved path and ingest
-rates, foreground TTFT/TPOT/goodput deltas, KV pressure, cache hits,
-continuation, and failures.
+The recovered request intervals show 12/18 treatments overlap foreground work.
+The achieved `rho` remains a preceding 30-second average, not
+migration-interval intensity, and it counts cached prompt tokens as compute.
+The exact request records support categorical idle/busy evidence and paired
+TTFT/TPOT effects; engine counters cannot isolate foreground tokens from replay
+or KV migration work.
 
-Reuse the existing context and bandwidth work curves. If held-out median
-migration-time error is at most 15%, no valid case is predicted feasible when
-it is not, and residuals have no systematic interaction, retain the
-factorization and fit only an upper-confidence slowdown. Do not create a
-load-indexed grid without evidence that it is needed.
+Reuse the existing replay context curve with the conservative runtime
+calibration. Use sealed bytes divided by route rate plus the conservative KV
+residual. Both have held-out median error below 10% and no conservative
+underprediction. Do not create a load-indexed grid without evidence that it is
+needed.
 
 ## Reduction and acceptance
 
@@ -188,10 +187,9 @@ inference with block resampling inside a run. Never bootstrap individual
 requests as independent experiments.
 
 Produce central and conservative profiles only from independent bracketed
-service runs, component timing that preserves exact route lower bounds, and
-load measured over the migration interval. Admission consumes
-capacity lower bounds and migration-duration upper bounds. The measured profile
-is accepted only when:
+service runs and component timing that preserves exact route lower bounds.
+Admission consumes capacity lower bounds and migration-duration upper bounds.
+The measured profile is accepted only when:
 
 1. no final-validation direction is falsely classified feasible;
 2. median radial boundary error is at most 15%;
@@ -212,13 +210,14 @@ ranges, and provenance.
 The generated reserve is not executable as a targeted job:
 `destination_runner.py` does not consume `reserve_tasks`. Do not submit it.
 
-If the archive cannot resolve the service labels, rerun only realized-load
-inner/outer probes for the three workload families, with three independent runs
-per point and all three policies computed from each run. If the archive cannot
-establish foreground overlap, rerun three zero-work and three sustained,
-overlapping high-work treatments per method at 16K/10 Gbps with shared paired
-controls. Reuse the existing 24K/5-Gbps rows unless an independent loaded
-held-out claim specifically requires overlap there.
+First select forced tokens below the observed invalid range and make missing
+completion, usage, or forced tokens a hard request failure. Reuse the 66 valid
+service runs. If an accepted service boundary is still required, run three
+independent corrected probes per workload affinity at nominal radius 0.5 and
+adapt only the affinity that fails. Compute normal, emergency, and stability
+from every physical run instead of rerunning a cell by policy. No migration
+follow-up is required unless the claim expands beyond concurrency one, low
+foreground work, or the measured context/bandwidth cells.
 
 ## Explicitly not collected on the two A100s
 

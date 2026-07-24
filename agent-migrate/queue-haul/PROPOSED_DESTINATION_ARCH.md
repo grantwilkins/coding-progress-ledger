@@ -2,10 +2,10 @@
 
 Status: Queue-Haul implements the v1 admission model in `destination.py`,
 `pool_planner.py`, and `destination_evaluation.py`. The 2026-07-23 run does
-not support an accepted destination profile: its compact records cannot
-identify a service frontier or migration interference. They do support
-exploratory component timing. Recover the archived request and engine records
-before collecting more GPU data; see `FINDINGS.md`.
+not support an accepted destination profile. The recovered raw records expose
+six invalid forced-token signatures and a right-censored service frontier.
+They do support low-work component timing and a live-traffic migration
+affinity rule. See `FINDINGS.md`.
 
 Queue-Haul asks one question: **can a set of active sessions land on warm
 destination capacity before a source-power deadline?** It does not simulate a
@@ -25,11 +25,11 @@ whether an already-warm serving pool can land a session:
 4. KV ingestion or promotion work during migration; and
 5. bytes on every transport edge used by the migration.
 
-Compatibility and warm model availability are eligibility predicates, not
-consumable rows. Source power is the objective and target, not destination
-capacity. GPU count, FLOPs, SM occupancy, HBM bandwidth, batch size, and
-scheduler policy are mechanisms whose effects must already be represented by
-measured service or migration rates.
+Compatibility, workload affinity, and warm model availability are eligibility
+predicates, not consumable rows. Source power is the objective and target, not
+destination capacity. GPU count, FLOPs, SM occupancy, HBM bandwidth, batch
+size, and scheduler policy are mechanisms whose effects must already be
+represented by measured service or migration rates.
 
 This boundary follows the systems evidence. DistServe and Splitwise show that
 prefill and decode consume different serving resources and can favor different
@@ -103,12 +103,11 @@ h_q^{normal}\le h_q^{emergency}\le h_q^{stable}.
 \]
 
 The smallest useful resource model has one facet, `f/F + g/G <= h`. More
-facets are allowed only when valid held-out mixed-load data reject it. Before
-fitting any facet, every failed point must be checked for componentwise
-dominance by a successful point using realized per-request work. A dominance
-violation is evidence for a missing eligibility, request-shape, or burst
-variable, not another resource facet. For a pool with baseline work `b_p`,
-admission requires
+facets are allowed only when valid held-out mixed-load data reject it. A run
+with missing token work or usage is measurement-invalid, not a capacity point.
+After excluding such runs, the v7 data contains only successful inner
+observations and cannot select another facet. For a pool with baseline work
+`b_p`, admission requires
 
 \[
 N_q\left(b_p+\sum_s d_{s,q}y_s\right)\le |p|h_q^m.
@@ -137,7 +136,7 @@ desired component models are
 \[
 \tau_{s,R,q} =
 \frac{B_s^{log}}{b_{route}}+
-\alpha_{R,q}\tau_{s,R}^{compute,old}(T_s)+c_{R,q}
+\alpha_{R,q}\tau_{s,R}^{compute+completion,old}(T_s)+\tau_q^{switch}
 \]
 
 and, for the measured KV primitive,
@@ -154,11 +153,19 @@ becomes the slower supported stage, never less than
 migration-interval work identifies one. A candidate whose predicted duration
 exceeds `H_m` is invalid.
 
-The v7 evidence supports only exploratory low-work coefficients: replay keeps
-the old context curve with a compute/completion calibration, while KV uses
+The v7 evidence supports low-work empirical envelopes: replay keeps the old
+context curve with a compute/completion calibration, while KV uses
 `sealed_bytes / route_bytes_per_s + c`. The current scalar
 `LoadedCoefficients` multiplies the complete duration and cannot encode these
 physical semantics safely, so no v7 profile is emitted.
+
+Migration method also carries a foreground-impact eligibility predicate.
+Twelve v7 treatments overlap foreground work. The one request arriving during
+replay incurred 1.084 s additional TTFT, versus 4.7 ms for the matched KV
+request. Until a larger sample establishes percentiles, a latency-sensitive
+busy pool prefers KV; replay requires an idle/drained pool or explicit SLO
+slack. This predicate is separate from steady service capacity.
+The current architecture types do not encode this dynamic predicate.
 
 For every exact route edge `e`,
 
@@ -252,18 +259,19 @@ isolate fragmentation/fungibility at fixed total resources; little difference
 under a homogeneous layout is a valid result. Multiple sites are represented
 by routes, not by another capacity abstraction.
 
-GPT-OSS-20B/A100 has measured anchors, KV capacity, correctness, and migration
-components, but no accepted service envelope or loaded-migration curve.
+GPT-OSS-20B/A100 has measured anchors, KV capacity, migration correctness, and
+migration components, but no accepted service envelope or continuous
+loaded-migration curve.
 Non-A100 profiles are synthetic sensitivity cases. Continuous destination
 load, continuous-batching simulation, replanning, cold sessions, model loading,
 concurrency above one, and predictive latency claims are out of scope.
 
-The service facet is a fluid admission model. It is valid only after every
-workload cell has a feasible/infeasible bracket and held-out cells show no
-false-feasible placement. A censored lower point is not capacity. If
-request-shape or arrival-burst effects still separate cells with the same
-normalized direction, add a measured arrival-envelope row rather than facets
-fitted to failed or under-sampled runs.
+The service facet is a fluid admission model. It is valid only after evidence
+validity passes, every workload cell has a feasible/infeasible bracket, and
+held-out cells show no false-feasible placement. A successful censored point
+is only an inner observation. If valid request-shape or arrival-burst evidence
+still separates cells with the same normalized direction, add a measured
+affinity or arrival-envelope row rather than facets fitted to invalid runs.
 
 `DATA_TO_COLLECT.md` is the evidence contract for every coefficient and claim.
 Absence of `DestinationArchitecture` invokes the exact legacy adapter and must
