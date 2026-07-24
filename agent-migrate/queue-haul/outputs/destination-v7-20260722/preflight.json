@@ -1,0 +1,111 @@
+{
+  "image_sha256": "50e98f65de09ebfe196f270c8b5c595636853646eb5536dca92f27bd45c084ab",
+  "gpu_count": 2,
+  "same_session_cache_hit": true,
+  "cross_session_cache_hits": 0,
+  "tokenizer_ok": true,
+  "migration_smoke": {
+    "schema": "queue-haul-stage1b-smoke2-v1",
+    "mbps": 10000,
+    "lambda_src_bytes_per_s": 1250000000.0,
+    "endpoints": {
+      "source": 34471,
+      "sink": 34571,
+      "api_proxy": 34771,
+      "kv_proxy": 34671
+    },
+    "source": {
+      "status": 200,
+      "id": "chatcmpl-9b477807a6869a74",
+      "usage": {
+        "prompt_tokens": 24655,
+        "total_tokens": 24659,
+        "completion_tokens": 4,
+        "prompt_tokens_details": null
+      },
+      "content": "",
+      "elapsed_s": 3.1681947708129883,
+      "start_ts": 1784865652.99828,
+      "end_ts": 1784865656.1664748,
+      "prompt_sha256": "5893f544213c590c5f74c4932dab1e9b0cf78b8005289f6a2c5f5b97cd691385",
+      "request_bytes": 53000,
+      "response_text": ""
+    },
+    "sink_kv": {
+      "status": 200,
+      "id": "chatcmpl-b8974863af8bca6c",
+      "usage": {
+        "prompt_tokens": 24655,
+        "total_tokens": 24659,
+        "completion_tokens": 4,
+        "prompt_tokens_details": {
+          "cached_tokens": 24576
+        }
+      },
+      "content": "",
+      "elapsed_s": 1.5690860748291016,
+      "start_ts": 1784865658.1684973,
+      "end_ts": 1784865659.7375834,
+      "prompt_sha256": "5893f544213c590c5f74c4932dab1e9b0cf78b8005289f6a2c5f5b97cd691385",
+      "request_bytes": 53000,
+      "response_text": ""
+    },
+    "sink_replay": {
+      "status": 200,
+      "id": "chatcmpl-b90765f53bf6474f",
+      "usage": {
+        "prompt_tokens": 11348,
+        "total_tokens": 11352,
+        "completion_tokens": 4,
+        "prompt_tokens_details": {
+          "cached_tokens": 64
+        }
+      },
+      "content": "",
+      "elapsed_s": 1.0374867916107178,
+      "start_ts": 1784865662.742975,
+      "end_ts": 1784865663.7804618,
+      "prompt_sha256": "cce340f4ad55847f4cd591de21ce6bbd97ac4c25735faddc8abe6eb6f7a9b585",
+      "request_bytes": 28759,
+      "response_text": ""
+    },
+    "proxy_total_delta": {
+      "api/client_to_target": 82045,
+      "api/target_to_client": 788,
+      "kv/client_to_target": 1208050104,
+      "kv/target_to_client": 1207962224
+    },
+    "kv_delta": {
+      "api/client_to_target": 53143,
+      "api/target_to_client": 788,
+      "kv/client_to_target": 40032,
+      "kv/target_to_client": 1207961184
+    },
+    "replay_delta": {
+      "api/client_to_target": 28902,
+      "api/target_to_client": 0,
+      "kv/client_to_target": 9240,
+      "kv/target_to_client": 176
+    },
+    "kv_link": {
+      "bytes": 1207962048,
+      "window_s": 6.561293363571167,
+      "bytes_per_s": 184104258.27119747
+    },
+    "evidence": {
+      "source_connector": true,
+      "sink_connector": true,
+      "source_stored": true,
+      "sink_retrieved": true,
+      "kv_proxy_bytes": 1207961184,
+      "api_proxy_bytes": 28902
+    },
+    "acceptance": {
+      "ok": true,
+      "kv_expected_link_s": 0.9663689472,
+      "kv_elapsed_s": 1.5690860748291016,
+      "kv_observed_bytes_per_s": 184104258.27119747,
+      "source_warmed_before_sink": false
+    }
+  }
+}

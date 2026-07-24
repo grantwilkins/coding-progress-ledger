@@ -1,0 +1,48 @@
+{
+  "within_limit": true,
+  "underdelivery_limit": 0.15,
+  "anchors": [
+    {
+      "metric": "decode",
+      "context_tokens": 4096,
+      "expected_tokens_per_s": 1179.7603222856533,
+      "observed_tokens_per_s": 1109.6084258150277,
+      "ratio": 0.9405371623833609
+    },
+    {
+      "metric": "decode",
+      "context_tokens": 16384,
+      "expected_tokens_per_s": 345.4108905224211,
+      "observed_tokens_per_s": 317.97384033307566,
+      "ratio": 0.9205669220566616
+    },
+    {
+      "metric": "decode",
+      "context_tokens": 24576,
+      "expected_tokens_per_s": 191.4113754214162,
+      "observed_tokens_per_s": 174.8848660847107,
+      "ratio": 0.9136597326030371
+    },
+    {
+      "metric": "prefill",
+      "context_tokens": 4096,
+      "expected_tokens_per_s": 5610.644418210733,
+      "observed_tokens_per_s": 5550.823048297525,
+      "ratio": 0.9893378789575323
+    },
+    {
+      "metric": "prefill",
+      "context_tokens": 16384,
+      "expected_tokens_per_s": 4655.2915180678565,
+      "observed_tokens_per_s": 4376.4708558464745,
+      "ratio": 0.9401067234695746
+    },
+    {
+      "metric": "prefill",
+      "context_tokens": 24576,
+      "expected_tokens_per_s": 5342.376350791121,
+      "observed_tokens_per_s": 5337.344115334956,
+      "ratio": 0.9990580529850879
+    }
+  ]
+}

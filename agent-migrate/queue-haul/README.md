@@ -25,6 +25,14 @@ and conservative profile reduction with job-specific ports on shared nodes.
 Every cell checkpoints independently. A reserve is generated only from a failed
 reduction and names only failed cells.
 
+The completed 2026-07-23 campaign's JSON-only tuning bundle is tracked in
+`outputs/destination-v7-20260722/`. It includes the checksum-pinned inputs,
+anchors, all service and loaded result records, reductions, validation,
+acceptance, and provenance. `SHA256SUMS` verifies the bundle. Raw engine CSVs
+and logs remain in archival storage. The recorded run has no correctness
+failures but does not pass model acceptance, so these measurements are inputs
+for recalibration rather than an accepted profile.
+
 The destination baseline pins the clean vLLM 0.22 4K/16K/24K anchor medians.
 The original prefill shape is scaled by the median measured anchor ratio; exact
 anchor rows and run, plan, image, and artifact hashes are retained in

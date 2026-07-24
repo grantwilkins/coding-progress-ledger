@@ -1,0 +1,208 @@
+{
+  "schema": "queue-haul-destination-campaign-v2",
+  "profiles": {
+    "central": {
+      "type_id": "gpt-oss-20b-a100-tp1",
+      "compatibility": {
+        "model": "openai/gpt-oss-20b@6cee5e81ee83917806bbde320786a8fb61efebee",
+        "tokenizer": "openai/gpt-oss-20b@6cee5e81ee83917806bbde320786a8fb61efebee",
+        "durable_log": "lmcache-mp-e5d897a336ae1fe7d882480bbb966562e2283917a00fb112a6387c750768537c",
+        "kv_abi": "e5d897a336ae1fe7d882480bbb966562e2283917a00fb112a6387c750768537c"
+      },
+      "prefill": [
+        [
+          4096.0,
+          16384.0,
+          24576.0
+        ],
+        [
+          5550.823048297525,
+          4376.4708558464745,
+          5337.344115334956
+        ]
+      ],
+      "decode": [
+        [
+          4096.0,
+          16384.0,
+          24576.0
+        ],
+        [
+          1109.6084258150277,
+          317.97384033307566,
+          174.8848660847107
+        ]
+      ],
+      "normals": [
+        [
+          1,
+          1
+        ]
+      ],
+      "bounds": {
+        "normal": [
+          0.11406250000000001
+        ],
+        "emergency": [
+          0.11406250000000001
+        ],
+        "stable": [
+          0.11406250000000001
+        ]
+      },
+      "kv_capacity_tokens": 1214544,
+      "loaded": {
+        "replay": {
+          "rho": [
+            0.0,
+            0.8,
+            0.95
+          ],
+          "slowdown": [
+            1.0,
+            1.0,
+            1.0
+          ],
+          "context_range": [
+            16384.0,
+            24576.0
+          ],
+          "bandwidth_range_bytes_per_s": [
+            625000000.0,
+            1250000000.0
+          ],
+          "provenance": "7a740e8ac3f7dcad900047d07b60da1d5cf58dc5f4e8f134835900166f46dd04"
+        },
+        "kv_transfer": {
+          "rho": [
+            0.0,
+            0.8,
+            0.95
+          ],
+          "slowdown": [
+            1.0,
+            1.0,
+            1.0
+          ],
+          "context_range": [
+            16384.0,
+            24576.0
+          ],
+          "bandwidth_range_bytes_per_s": [
+            625000000.0,
+            1250000000.0
+          ],
+          "provenance": "7a740e8ac3f7dcad900047d07b60da1d5cf58dc5f4e8f134835900166f46dd04"
+        }
+      },
+      "workload_prefill_fraction_range": [
+        0.006336034857227516,
+        0.9437793178004135
+      ],
+      "provenance": "7a740e8ac3f7dcad900047d07b60da1d5cf58dc5f4e8f134835900166f46dd04",
+      "synthetic": false
+    },
+    "conservative": {
+      "type_id": "gpt-oss-20b-a100-tp1",
+      "compatibility": {
+        "model": "openai/gpt-oss-20b@6cee5e81ee83917806bbde320786a8fb61efebee",
+        "tokenizer": "openai/gpt-oss-20b@6cee5e81ee83917806bbde320786a8fb61efebee",
+        "durable_log": "lmcache-mp-e5d897a336ae1fe7d882480bbb966562e2283917a00fb112a6387c750768537c",
+        "kv_abi": "e5d897a336ae1fe7d882480bbb966562e2283917a00fb112a6387c750768537c"
+      },
+      "prefill": [
+        [
+          4096.0,
+          16384.0,
+          24576.0
+        ],
+        [
+          5548.178002284213,
+          4374.165697013452,
+          5329.4662678407685
+        ]
+      ],
+      "decode": [
+        [
+          4096.0,
+          16384.0,
+          24576.0
+        ],
+        [
+          1106.331306373118,
+          312.4535477144445,
+          168.14035895977165
+        ]
+      ],
+      "normals": [
+        [
+          1,
+          1
+        ]
+      ],
+      "bounds": {
+        "normal": [
+          0.025
+        ],
+        "emergency": [
+          0.025
+        ],
+        "stable": [
+          0.025
+        ]
+      },
+      "kv_capacity_tokens": 1214544,
+      "loaded": {
+        "replay": {
+          "rho": [
+            0.0,
+            0.8,
+            0.95
+          ],
+          "slowdown": [
+            1.0,
+            1.0,
+            1.0
+          ],
+          "context_range": [
+            16384.0,
+            24576.0
+          ],
+          "bandwidth_range_bytes_per_s": [
+            625000000.0,
+            1250000000.0
+          ],
+          "provenance": "7a740e8ac3f7dcad900047d07b60da1d5cf58dc5f4e8f134835900166f46dd04"
+        },
+        "kv_transfer": {
+          "rho": [
+            0.0,
+            0.8,
+            0.95
+          ],
+          "slowdown": [
+            1.0,
+            1.0,
+            1.0
+          ],
+          "context_range": [
+            16384.0,
+            24576.0
+          ],
+          "bandwidth_range_bytes_per_s": [
+            625000000.0,
+            1250000000.0
+          ],
+          "provenance": "7a740e8ac3f7dcad900047d07b60da1d5cf58dc5f4e8f134835900166f46dd04"
+        }
+      },
+      "workload_prefill_fraction_range": [
+        0.006336034857227516,
+        0.9437793178004135
+      ],
+      "provenance": "7a740e8ac3f7dcad900047d07b60da1d5cf58dc5f4e8f134835900166f46dd04",
+      "synthetic": false
+    }
+  },
+  "input_sha256": "d998cfede908990960a3c9229e977859ee217e46f85c52843df043dd42cf63d0"
+}
