@@ -5,6 +5,7 @@ normal/emergency/stability classifications.
 
 Plausible wrong implementations:
 - Use achieved completions instead of offered tokens.
+- Accept requested destination load when the measured load missed it.
 - Reuse one prefix across nominally distinct sessions.
 - Treat an SLO boundary as infeasible or a just-outside value as feasible.
 - Declare a growing destination queue stable.
@@ -232,7 +233,8 @@ def loaded_inputs(monkeypatch):
     monkeypatch.setattr(runner, "profile_rate", lambda *_: 1)
     plan = {
         "service": {"directions": []},
-        "migration": {"emergency_inside_fraction": .5,
+        "migration": {"rho": [.8, "emergency_inside"],
+                      "emergency_inside_fraction": .5,
                       "context_tokens": 16384, "bandwidth_gbps": 10,
                       "heldout_context_tokens": 24576,
                       "heldout_bandwidth_gbps": 5, "repeats": 1,
@@ -262,7 +264,9 @@ def test_loaded_rehearsal_uses_one_isolated_stack_per_incomplete_method(
     def run(actual, _cfg, _manifest, scenario, root, _run_id, load,
             configure_proxy=True):
         calls.append((actual, scenario, root, load, configure_proxy))
-        checkpoint(root / "result.json", {"migrations": [{}]})
+        checkpoint(root / "result.json", {
+            "migrations": [{}], "destination_load": {"achieved_rho": .8},
+        })
 
     monkeypatch.setattr(runner, "loaded_stack", stack)
     monkeypatch.setattr(runner.profiler, "run_scenario", run)
@@ -279,13 +283,45 @@ def test_loaded_rehearsal_uses_one_isolated_stack_per_incomplete_method(
                and not configure for stack, _, root, _, configure in calls)
 
 
+def test_unloaded_calibration_does_not_start_destination_traffic(
+        monkeypatch, tmp_path):
+    plan, bounds = loaded_inputs(monkeypatch)
+    plan["migration"]["rho"] = [0]
+
+    @contextmanager
+    def stack(_cfg, root, _bandwidth, _extra):
+        yield SimpleNamespace(run_root=root)
+
+    def run(_stack, _cfg, _manifest, _scenario, root, _run_id, load,
+            configure_proxy=True):
+        assert load is None and not configure_proxy
+        checkpoint(root / "result.json", {
+            "migrations": [{}], "destination_load": None,
+        })
+
+    monkeypatch.setattr(runner, "loaded_stack", stack)
+    monkeypatch.setattr(runner.profiler, "run_scenario", run)
+    monkeypatch.setattr(
+        runner, "DestinationLoad",
+        lambda *_args, **_kwargs: pytest.fail("unloaded calibration started traffic"),
+    )
+    rows = runner.measure_loaded(
+        plan, {}, {}, SimpleNamespace(host="h", sink_port=1, model="m"),
+        bounds, tmp_path, [], rehearsal=True,
+    )
+    assert {row["rho"] for row in rows} == {0}
+    assert not list(tmp_path.glob("rho*/control/result.json"))
+
+
 def test_loaded_rehearsal_skips_all_complete_checkpoints(monkeypatch, tmp_path):
     plan, bounds = loaded_inputs(monkeypatch)
     base = tmp_path / "rho0.800000-t16384-b10000-r0"
     checkpoint(base / "control/result.json",
                {"destination_load": {"achieved_rho": .8}})
     for method in plan["migration"]["methods"]:
-        checkpoint(base / method / "result.json", {"migrations": [{}]})
+        checkpoint(base / method / "result.json", {
+            "migrations": [{}], "destination_load": {"achieved_rho": .8},
+        })
     monkeypatch.setattr(runner, "loaded_stack",
                         lambda *_: (_ for _ in ()).throw(AssertionError("stack")))
     rows = runner.measure_loaded(
@@ -297,7 +333,9 @@ def test_loaded_control_uses_its_own_stack(monkeypatch, tmp_path):
     plan, bounds = loaded_inputs(monkeypatch)
     base = tmp_path / "rho0.800000-t16384-b10000-r0"
     for method in plan["migration"]["methods"]:
-        checkpoint(base / method / "result.json", {"migrations": [{}]})
+        checkpoint(base / method / "result.json", {
+            "migrations": [{}], "destination_load": {"achieved_rho": .8},
+        })
     used, events = [], []
 
     @contextmanager
@@ -352,14 +390,59 @@ def test_nest_bounds_only_shrinks_inverted_envelopes():
     }
 
 
-def test_destination_load_records_rho_miss_without_gate(monkeypatch):
+def test_destination_load_rejects_rho_miss(monkeypatch):
     load = runner.DestinationLoad.__new__(runner.DestinationLoad)
     load.failure = None
     load.sampler = SimpleNamespace(rows=[{"monotonic_ns": 0}, {"monotonic_ns": 30e9}])
     load.target = load.prefill_rate = load.decode_rate = load.normal_bound = 1
     monkeypatch.setattr(runner, "measured_rho", lambda *args: .4)
-    load.wait_ready()
+    clock = iter((0, 0, 91))
+    monkeypatch.setattr(runner.time, "monotonic", lambda: next(clock))
+    monkeypatch.setattr(runner.time, "sleep", lambda _: None)
+    with pytest.raises(RuntimeError, match="misses target"):
+        load.wait_ready()
     assert load.achieved == .4
+
+
+def test_loaded_reduction_rejects_target_miss(tmp_path):
+    result = tmp_path / "result.json"
+    result.write_text(json.dumps({
+        "status": "complete",
+        "destination_load": {"achieved_rho": .4},
+        "migrations": [{"initial_start_ns": 0, "switch_end_ns": 1_000_000_000}],
+    }))
+    with pytest.raises(RuntimeError, match="misses target"):
+        runner.reduce_loaded_results({}, [{
+            "path": result, "rho": .8, "method": "replay", "repeat": 0,
+            "context_tokens": 16384, "bandwidth_mbps": 10000,
+        }], tmp_path)
+
+
+def test_loaded_reduction_separates_runtime_baseline_from_load(tmp_path, monkeypatch):
+    index = []
+    for method in ("replay", "kv_transfer"):
+        for rho, observed in ((0, 5), (.8, 7.5)):
+            result = tmp_path / f"{method}-{rho}.json"
+            result.write_text(json.dumps({
+                "status": "complete",
+                "destination_load": None if not rho else {"achieved_rho": rho},
+                "migrations": [{
+                    "initial_start_ns": 0,
+                    "switch_end_ns": int(observed * 1e9),
+                }],
+            }))
+            index.append({
+                "path": result, "rho": rho, "method": method, "repeat": 0,
+                "context_tokens": 16384, "bandwidth_mbps": 10000,
+            })
+    monkeypatch.setattr(runner, "unloaded_duration", lambda *_: 10)
+    rows, validation = runner.reduce_loaded_results({}, index, tmp_path)
+    by_cell = {(r["method"], r["rho"]): r["duration_factor"] for r in rows}
+    assert by_cell == {
+        ("replay", 0): .5, ("replay", .8): .75,
+        ("kv_transfer", 0): .5, ("kv_transfer", .8): .75,
+    }
+    assert validation == []
 
 
 def test_drive_stop_cancels_scheduled_requests(monkeypatch):

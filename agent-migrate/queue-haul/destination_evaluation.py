@@ -19,6 +19,13 @@ POOLS = (1, 4, 8)
 
 def reduce_bounds(rows):
     """Return central medians and conservative run minima by mode and facet."""
+    if any(
+        r.get("inside_decision") != "feasible"
+        or r.get("outside_decision") != "infeasible"
+        or float(r.get("outside", 0)) <= float(r["bound"])
+        for r in rows
+    ):
+        raise ValueError("service envelope needs bracketed feasible/infeasible cells")
     out = {}
     for conservative, name in ((False, "central"), (True, "conservative")):
         values = {}
@@ -42,14 +49,23 @@ def reduce_bounds(rows):
 
 
 def reduce_loaded(rows, provenance):
-    """Return median central and observed-worst conservative slowdown curves."""
+    """Separate matched-runtime baseline calibration from loaded slowdown."""
     result = {case: {} for case in ("central", "conservative")}
     for method in ("replay", "kv_transfer"):
         selected = [r for r in rows if r["method"] == method]
         rhos = sorted({float(r["rho"]) for r in selected})
-        if len(rhos) < 2 or any(len({r["run_id"] for r in selected if float(r["rho"]) == rho}) < 3
-                              for rho in rhos):
-            raise ValueError("each loaded-migration cell needs three independent runs")
+        if not rhos or rhos[0] != 0 or len(rhos) < 2 or any(
+            len({r["run_id"] for r in selected if float(r["rho"]) == rho}) < 3
+            for rho in rhos
+        ) or any(
+            "duration_factor" not in r or "achieved_rho" not in r
+            or float(r.get("duration_factor", 0)) <= 0
+            or abs(float(r.get("achieved_rho", math.inf)) - float(r["rho"])) > .05
+            for r in selected
+        ):
+            raise ValueError(
+                "loaded migration needs matched unloaded and achieved-load runs"
+            )
         common = (tuple(rhos), None,
                   (min(float(r["context_tokens"]) for r in selected),
                    max(float(r["context_tokens"]) for r in selected)),
@@ -58,9 +74,15 @@ def reduce_loaded(rows, provenance):
         if common[2][0] == common[2][1] or common[3][0] == common[3][1]:
             raise ValueError("loaded profile needs context and bandwidth ranges")
         for case, reducer in (("central", np.median), ("conservative", max)):
-            slowdowns = tuple(float(reducer([float(r["slowdown"]) for r in selected
-                                             if float(r["rho"]) == rho])) for rho in rhos)
-            result[case][method] = LoadedCoefficients(common[0], slowdowns, *common[2:])
+            factors = tuple(float(reducer([
+                float(r["duration_factor"]) for r in selected
+                if float(r["rho"]) == rho
+            ])) for rho in rhos)
+            baseline = factors[0]
+            slowdowns = tuple(max(1.0, value / baseline) for value in factors)
+            result[case][method] = LoadedCoefficients(
+                common[0], slowdowns, *common[2:], baseline
+            )
     return result
 
 

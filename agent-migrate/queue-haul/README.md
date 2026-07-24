@@ -33,6 +33,13 @@ and logs remain in archival storage. The recorded run has no correctness
 failures but does not pass model acceptance, so these measurements are inputs
 for recalibration rather than an accepted profile.
 
+The post-run audit found an unbracketed service cell, identical policy labels
+in all 113 service summaries, no matched-runtime zero-load migration cell, and
+only 2 of 18 migration treatments within ±0.05 of requested load. Reduction now
+hard-fails those conditions. New plans add a matched zero-load cell and encode
+migration time as reused base timing times a runtime calibration factor times a
+load-only slowdown. The immutable v7 bundle is not rewritten.
+
 The destination baseline pins the clean vLLM 0.22 4K/16K/24K anchor medians.
 The original prefill shape is scaled by the median measured anchor ratio; exact
 anchor rows and run, plan, image, and artifact hashes are retained in
@@ -127,7 +134,9 @@ not successful curtailment.
 `destination_evaluation.py` reduces three-or-more independent runs into central
 and conservative envelope/migration inputs and provides the fixed 36-cell
 `rho × H × pool-count` grid, exact facet headroom, integer replica allocation,
-and paired scalar/LP/greedy sweep records.
+and paired scalar/LP/greedy sweep records. Service cells must have a feasible
+inner and infeasible outer observation. Migration cells must reach their load
+target and include a matched zero-load baseline from the same pinned runtime.
 
 Queue-Haul models and measures session migration under a local source-site
 power limit. The active path is:

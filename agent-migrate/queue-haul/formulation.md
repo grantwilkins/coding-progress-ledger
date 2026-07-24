@@ -40,6 +40,9 @@ for destination type \(q\). A cold session has \(f_s=g_s=0\), consumes no live
 KV until it wakes, and can use only replay on request. An active session can
 use replay or KV transfer. Selection considers only movable sessions whose
 serving instance is entirely inside the local source-power scope.
+The workload-direction domain is checked using
+\(d_{s,q}^{prefill}/(d_{s,q}^{prefill}+d_{s,q}^{decode})\), not the raw input
+token fraction.
 
 Planning never reads sampled future request times or sizes. For a planning
 horizon \(h\), it conservatively materializes expected active-session state as
@@ -163,10 +166,18 @@ unavailable.
 Baseline work and KV may come from explicit per-replica fields or destination
 background sessions, but never both.
 
-Measured loaded-migration coefficients inflate replay or KV duration by the
-worst supported slowdown between the pool's initial load and the selected mode
-boundary. Migration and destination ingestion may overlap when the measured
-primitive supports it, so their times are not blindly added.
+A matched zero-load run first calibrates reused method timing by
+\(\alpha_{a,q}>0\). Loaded coefficients then inflate it by the worst supported
+load-only slowdown:
+
+\[
+\tau_{s,a,q}=\tau_{s,a}^{old}\alpha_{a,q}
+\max_{\rho\in[\rho_p,\rho_m]}S_{a,q}(\rho),\qquad S_{a,q}(\rho)\ge1,
+\]
+
+where all three displayed terms are multiplied. Migration and destination
+ingestion may overlap when the measured primitive supports it, so their times
+are not blindly added. Requested load is never substituted for achieved load.
 
 ## Greedy
 
@@ -294,5 +305,7 @@ coverage.
 Unsupported context, workload direction, destination load, bandwidth,
 compatibility, topology, concurrency, or profile cases hard-fail. Continuous
 destination scheduling, request-level dynamic power, replanning, model loading,
-and predictive latency remain out of scope. Measurement requirements and open
-evidence are tracked in `DATA_TO_COLLECT.md`.
+and predictive latency remain out of scope. Unbracketed service cells and
+loaded probes outside their achieved-load tolerance also hard-fail during
+profile reduction. Measurement requirements and open evidence are tracked in
+`DATA_TO_COLLECT.md`.

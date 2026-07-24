@@ -113,7 +113,7 @@ def make_plan(manifest_path: Path) -> dict:
         },
         "migration": {
             "methods": ["replay", "kv_transfer"],
-            "rho": [0.8, "emergency_inside"],
+            "rho": [0, 0.8, "emergency_inside"],
             "emergency_inside_fraction": 0.95,
             "context_tokens": 16384,
             "bandwidth_gbps": 10,
@@ -137,6 +137,9 @@ def validate_plan(plan: dict) -> None:
     if (
         plan.get("image_sha256") != IMAGE_SHA256
         or plan.get("baseline_profile", {}).get("sha256") != file_hash(BASELINE_PROFILE)
+        or plan["migration"]["rho"] not in (
+            [0, .8, "emergency_inside"], [.8, "emergency_inside"]
+        )
         or plan["migration"]["rho"][-1] != "emergency_inside"
         or plan.get("anchor_drift_limit") != .15
     ):
@@ -301,7 +304,12 @@ def prepare_reserve(report_path: Path, bundle: Path, out: Path) -> dict | None:
     source = json.loads((bundle / "plan.json").read_text())
     validate_plan(source)
     out.mkdir(parents=True, exist_ok=True)
-    plan = {**source, "job": {"name": "reserve", "hours": 12}, "reserve_tasks": tasks}
+    plan = {
+        **source,
+        "job": {"name": "reserve", "hours": 12},
+        "migration": {**source["migration"], "rho": [0, .8, "emergency_inside"]},
+        "reserve_tasks": tasks,
+    }
     for name in ("content-free-manifest.json", "baseline-profile.json"):
         (out / name).write_bytes((bundle / name).read_bytes())
     write_json(out / "plan.json", plan)

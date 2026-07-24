@@ -1,9 +1,10 @@
 # Destination evidence ledger
 
-Status: the existing corpus supplies most v1 coefficients. The old 72-hour
-destination grid is superseded. Launch one mandatory 12-hour two-A100 job and
-hold one targeted 12-hour reserve; expected use is 12 hours and the hard maximum
-is 24 hours.
+Status: the completed mandatory job supplies anchors and correctness evidence
+but failed destination-model reduction. The old 72-hour grid remains
+superseded. Use the targeted 12-hour reserve only for a bracketed service rerun,
+a matched zero-load migration baseline, achieved-load reruns, and the observed
+KV context/bandwidth interaction.
 
 The rule is simple: use existing measurements or deterministic derivations
 unless they cannot answer the admission question. Public data can establish a
@@ -22,7 +23,7 @@ correctness of this exact LMCache/vLLM contract.
 | live KV residency | KV capacity and per-session resident state | exact 1,214,544-token vLLM capacity plus block/token accounting | preflight readback only | HBM stock row through residency horizon |
 | replay migration | context reconstruction and log-transfer time | coding and serial migration corpora | no unloaded reprofiling; loaded probes below | base replay work and deadline |
 | KV migration | sealed bytes, copy/ingest time, append catch-up | coding, serial, parallel-gate, append, and bounded campaigns | no unloaded reprofiling; loaded probes below | base KV work, bytes, and deadline |
-| loaded migration | replay/KV slowdown and foreground impact versus baseline `rho` | only `rho=0`; prior destination requests are continuation checks, not sustained background | mandatory paired probes at `rho=0.8` and near the measured boundary | conservative slowdown from initial load to mode boundary |
+| loaded migration | runtime calibration, replay/KV slowdown, and foreground impact versus baseline `rho` | v7 has no matched zero-load cell and only 2/18 treatments reached target | matched `rho=0`, then paired probes at `rho=0.8` and near the measured boundary | separate pinned-runtime baseline from conservative loaded slowdown |
 | method eligibility | replay and KV compatibility | current pinned model/image logs and continuation checks | exact preflight fingerprint | candidate mask; KV additionally requires exact ABI |
 | migration correctness | cache hits, exact blocks/bytes, no WAN GET, valid continuation | parallel gate, serial, append, bounded campaigns | preflight plus every treatment run | reject invalid evidence and plans |
 | source-power target | marginal GPU power curve | stage-1 power curve and serial power windows | none | candidate source-power gain and shortfall |
@@ -150,12 +151,14 @@ destination.
 
 For replay and KV transfer, measure:
 
+- 16K context and 10 Gbps at `rho=0` on the same pinned runtime;
 - 16K context and 10 Gbps at `rho=0.8` and just inside the measured admission
   boundary; and
 - held-out 24K context and 5 Gbps at the boundary/high-load condition.
 
 Use three independent repeats with paired no-migration controls and identical
-arrival seeds. Record target and achieved `rho`, service-work direction,
+arrival seeds. A loaded treatment outside ±0.05 achieved `rho` is invalid and
+must not enter reduction. Record target and achieved `rho`, service-work direction,
 queue/running/waiting state at migration start, reconstruction or sealed
 bytes, measured work, readiness and completion times, achieved path and ingest
 rates, foreground TTFT/TPOT/goodput deltas, KV pressure, cache hits,
@@ -173,9 +176,10 @@ Runs—not requests—are the independent experimental units. Use run-level
 inference with block resampling inside a run. Never bootstrap individual
 requests as independent experiments.
 
-Produce central and conservative profiles. Admission consumes capacity lower
-bounds and migration-duration upper bounds. The measured profile is accepted
-only when:
+Produce central and conservative profiles only from bracketed service cells,
+matched zero-load timing, and achieved loaded treatments. Admission consumes
+capacity lower bounds and migration-duration upper bounds. The measured profile
+is accepted only when:
 
 1. no final-validation direction is falsely classified feasible;
 2. median radial boundary error is at most 15%;

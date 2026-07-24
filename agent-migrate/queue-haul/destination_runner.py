@@ -305,9 +305,12 @@ class DestinationLoad:
                                                self.sampler.rows[0]["monotonic_ns"]) >= 30e9:
                 self.achieved = measured_rho(self.sampler.rows, self.prefill_rate,
                                              self.decode_rate, self.normal_bound)
-                return
+                if load_within_target(self.achieved, self.target):
+                    return
             time.sleep(.25)
-        raise RuntimeError("destination foreground did not reach its rho gate") from self.failure
+        raise RuntimeError(
+            f"destination rho {self.achieved} misses target {self.target}"
+        ) from self.failure
 
     def close(self):
         self.stop.set(); self.thread.join(self.chunk_s + self.timeout_s + 10); self.sampler.close()
@@ -345,9 +348,14 @@ def require_rho(rows: list[dict], target: float, prefill_rate: float,
                 decode_rate: float, normal_bound: float = 1,
                 tolerance: float = .05) -> float:
     achieved = measured_rho(rows, prefill_rate, decode_rate, normal_bound)
-    if abs(achieved - target) > tolerance:
+    if not load_within_target(achieved, target, tolerance):
         raise RuntimeError(f"destination rho {achieved:.3f} misses target {target:.3f}")
     return achieved
+
+
+def load_within_target(achieved: float | None, target: float,
+                       tolerance: float = .05) -> bool:
+    return achieved is not None and abs(achieved - target) <= tolerance
 
 
 def anchor_gate(rows: list[dict], expected: dict[tuple[str, int], float], limit: float = .15) -> dict:
@@ -740,16 +748,23 @@ def measure_loaded(plan: dict, bundle: dict, profile: dict, cfg: testbed.Config,
     background = sum((manifest_sessions(bundle, job, "validation", vocabulary, 7)
                       for job in plan["service"]["directions"]), [])
     high = plan["migration"]["emergency_inside_fraction"] * bounds["emergency"] / normal
-    cells = [(rho, plan["migration"]["context_tokens"], plan["migration"]["bandwidth_gbps"] * 1000)
-             for rho in (.8, high)] + [(high, plan["migration"]["heldout_context_tokens"],
-                                        plan["migration"]["heldout_bandwidth_gbps"] * 1000)]
+    rhos = [high if rho == "emergency_inside" else float(rho)
+            for rho in plan["migration"]["rho"]]
+    cells = [(rho, plan["migration"]["context_tokens"],
+              plan["migration"]["bandwidth_gbps"] * 1000) for rho in rhos]
+    cells += [(high, plan["migration"]["heldout_context_tokens"],
+               plan["migration"]["heldout_bandwidth_gbps"] * 1000)]
     rows = []
     for rho, context, bandwidth in cells:
         prefill, decode = profile_rate(profile, "prefill", context), profile_rate(profile, "decode", context)
         for repeat in range(plan["migration"]["repeats"]):
             control_root = root / f"rho{rho:.6f}-t{context}-b{bandwidth:g}-r{repeat}" / "control"
-            if not read_checkpoint(control_root / "result.json", ("destination_load",),
-                                   lambda row: row["destination_load"].get("achieved_rho") is not None):
+            if rho and not read_checkpoint(
+                control_root / "result.json", ("destination_load",),
+                lambda row: load_within_target(
+                    row["destination_load"].get("achieved_rho"), rho
+                ),
+            ):
                 with loaded_stack(cfg, control_root / "testbed", bandwidth, extra):
                     load = DestinationLoad(cfg.host, cfg.sink_port, cfg.model, background, rho,
                                            prefill, decode, control_root / "foreground", repeat,
@@ -767,11 +782,18 @@ def measure_loaded(plan: dict, bundle: dict, profile: dict, cfg: testbed.Config,
                 validate_loaded_scenario(manifest, scenario)
                 cell_root = control_root.parent / method
                 if not read_checkpoint(cell_root / "result.json", ("migrations",),
-                                       lambda row: len(row["migrations"]) == 1):
+                                       lambda row: len(row["migrations"]) == 1
+                                       and (row.get("destination_load") is None if not rho
+                                       else load_within_target(
+                                           (row.get("destination_load") or {}).get("achieved_rho"),
+                                           rho,
+                                       ))):
                     with loaded_stack(cfg, cell_root, bandwidth, extra) as stack:
-                        load = DestinationLoad(cfg.host, cfg.sink_port, cfg.model, background, rho,
-                                               prefill, decode, cell_root / "foreground", repeat,
-                                               normal_bound=normal)
+                        load = None if not rho else DestinationLoad(
+                            cfg.host, cfg.sink_port, cfg.model, background, rho,
+                            prefill, decode, cell_root / "foreground", repeat,
+                            normal_bound=normal,
+                        )
                         profiler.run_scenario(stack, cfg, manifest, scenario, cell_root,
                                               scenario["scenario_id"], load,
                                               configure_proxy=False)
@@ -807,33 +829,45 @@ def reduce_loaded_results(profile: dict, index: list[dict], root: Path) -> tuple
         moves = result.get("migrations", [])
         if result.get("status") != "complete" or len(moves) != 1:
             raise RuntimeError(f"invalid loaded migration: {item['path']}")
+        target = float(item["rho"])
+        achieved = (result.get("destination_load") or {}).get("achieved_rho")
+        if target == 0 and result.get("destination_load") is None:
+            achieved = 0
+        elif not load_within_target(achieved, target):
+            raise RuntimeError(
+                f"loaded migration rho {achieved} misses target {item['rho']}"
+            )
         move = moves[0]; observed = (move["switch_end_ns"] - move["initial_start_ns"]) / 1e9
         bandwidth = float(item["bandwidth_mbps"]) * 125000
         base = unloaded_duration(profile, item["method"], int(item["context_tokens"]), bandwidth)
         correct = all(r.get("status_code") == 200 and
                       r.get("context_hash") == r.get("committed_context_hash")
                       for r in result.get("continuations", []))
-        row = {"method": item["method"], "rho": item["rho"],
-               "run_id": item["repeat"], "slowdown": max(1, observed / base),
+        row = {"method": item["method"], "rho": target,
+               "run_id": item["repeat"], "duration_factor": observed / base,
                "context_tokens": item["context_tokens"],
-               "bandwidth_bytes_per_s": bandwidth, "correct": correct,
+               "bandwidth_bytes_per_s": bandwidth, "achieved_rho": achieved,
+               "correct": correct,
                "_observed_s": observed, "_base_s": base}
         rows.append(row)
-    factors = {method: max(r["slowdown"] for r in rows
-                           if r["method"] == method and int(r["context_tokens"]) == 16384)
+    baseline = {method: statistics.median(
+        r["duration_factor"] for r in rows
+        if r["method"] == method and r["rho"] == 0
+    ) for method in ("replay", "kv_transfer")}
+    factors = {method: max(
+        1, *(r["duration_factor"] / baseline[method] for r in rows
+             if r["method"] == method and r["rho"] > 0
+             and int(r["context_tokens"]) == 16384)
+    )
                for method in ("replay", "kv_transfer")}
     for row in rows:
         if int(row["context_tokens"]) == 24576:
             validation.append({"cell": f"{row['method']}-heldout-r{row['run_id']}",
                                "observed_s": row["_observed_s"],
-                               "predicted_s": row["_base_s"] * factors[row["method"]],
+                               "predicted_s": row["_base_s"] * baseline[row["method"]]
+                               * factors[row["method"]],
                                "correct": row["correct"]})
         row.pop("_observed_s"); row.pop("_base_s")
-    for method in ("replay", "kv_transfer"):
-        rows += [{"method": method, "rho": 0, "run_id": f"existing-{repeat}",
-                  "slowdown": 1, "context_tokens": 16384 if repeat < 2 else 24576,
-                  "bandwidth_bytes_per_s": 1.25e9 if repeat < 2 else 625e6,
-                  "correct": True} for repeat in range(3)]
     (root / "reduction.jsonl").write_text("".join(json.dumps(r) + "\n" for r in rows))
     (root / "validation.jsonl").write_text("".join(json.dumps(r) + "\n" for r in validation))
     return rows, validation

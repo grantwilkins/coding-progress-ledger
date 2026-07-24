@@ -5,8 +5,10 @@ measured compatibility and migration domains.
 
 Plausible wrong implementations:
 - Use a single service rate for every context length.
+- Check raw token mix instead of normalized prefill/decode work.
 - Accept emergency capacity smaller than normal or stable capacity smaller than emergency.
 - Permit replay across a tokenizer/log mismatch or KV transfer across an ABI mismatch.
+- Treat a changed runtime baseline as load-induced slowdown.
 - Interpolate one slowdown at the initial load instead of taking the worst measured value
   through the selected envelope boundary.
 """
@@ -48,6 +50,14 @@ def test_context_conditioned_service_work_matches_hand_calculation():
         q.work(1, 1, 101)
 
 
+def test_workload_direction_uses_normalized_service_work():
+    q = replace(destination_type(), workload_prefill_fraction_range=(.49, .51))
+
+    assert q.work(100, 50, 10).tolist() == [1, 1]
+    with pytest.raises(ValueError, match="workload direction"):
+        q.work(50, 50, 10)
+
+
 @pytest.mark.parametrize("bounds", [
     {"normal": (1.1,), "emergency": (1,), "stable": (2,)},
     {"normal": (1,), "emergency": (2.1,), "stable": (2,)},
@@ -67,8 +77,8 @@ def test_method_compatibility_has_the_required_boundary():
 
 
 def test_loaded_coefficients_take_worst_slowdown_over_interval():
-    curve = loaded()
+    curve = replace(loaded(), baseline_factor=.5)
 
-    assert curve.worst(.25, .75, 50, 10) == 2
+    assert curve.worst(.25, .75, 50, 10) == 1
     with pytest.raises(ValueError, match="outside loaded-profile"):
         curve.worst(.25, .75, 101, 10)

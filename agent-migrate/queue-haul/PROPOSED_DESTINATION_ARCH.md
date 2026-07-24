@@ -3,6 +3,8 @@
 Status: Queue-Haul implements the v1 admission model in `destination.py`,
 `pool_planner.py`, and `destination_evaluation.py`. The remaining blocker is a
 conservative measured destination profile, not a new simulator architecture.
+The 2026-07-23 run is rejected because its service frontier was censored and
+its migration probes did not hold destination load; see `FINDINGS.md`.
 
 Queue-Haul asks one question: **can a set of active sessions land on warm
 destination capacity before a source-power deadline?** It does not simulate a
@@ -90,6 +92,8 @@ d_{s,q}=\left(f_s/F_q(T_s),\;g_s/G_q(T_s)\right).
 
 `F_q` and `G_q` are context-conditioned prefill and decode rates measured for
 the complete serving configuration, not theoretical hardware throughput.
+Workload direction is the fraction of normalized work due to prefill, not the
+raw fraction of tokens.
 Common nonnegative facet normals define nested policy envelopes:
 
 \[
@@ -119,10 +123,17 @@ K_p^0+\sum_s k_s(H_r)y_s\le |p|K_q.
 
 Replay contributes reconstructed context work and durable-log bytes. KV
 transfer contributes sealed-state bytes and destination ingestion/promotion
-work. The existing unloaded timing curves supply the base work; the measured
-upper-confidence worst slowdown between initial destination load and the
-chosen envelope boundary supplies the conservative loaded coefficient. A
-candidate whose own predicted duration exceeds `H_m` is invalid.
+work. For method `a`, migration duration is
+
+\[
+\tau_{s,a,q}=\tau_{s,a}^{old}\alpha_{a,q}
+\max_{\rho\in[\rho_p,\rho_m]}S_{a,q}(\rho),
+\]
+
+with multiplication between all three terms: reused base timing, a positive
+matched-runtime calibration `α`, and a load-only slowdown `S(rho) >= 1`.
+This prevents a faster pinned runtime from being clamped into “no slowdown.”
+A candidate whose predicted duration exceeds `H_m` is invalid.
 
 For every exact route edge `e`,
 
@@ -218,6 +229,13 @@ Only GPT-OSS-20B/A100 is a measured v1 destination type. Non-A100 profiles are
 synthetic sensitivity cases. Continuous destination load, continuous-batching
 simulation, replanning, cold sessions, model loading, concurrency above one,
 and predictive latency claims are out of scope.
+
+The service facet is a fluid admission model. It is valid only after every
+workload cell has a feasible/infeasible bracket and held-out cells show no
+false-feasible placement. A censored lower point is not capacity. If
+request-shape or arrival-burst effects still separate cells with the same
+normalized direction, add a measured arrival-envelope row rather than facets
+fitted to failed or under-sampled runs.
 
 `DATA_TO_COLLECT.md` is the evidence contract for every coefficient and claim.
 Absence of `DestinationArchitecture` invokes the exact legacy adapter and must

@@ -55,6 +55,7 @@ class LoadedCoefficients:
     context_range: tuple[float, float]
     bandwidth_range_bytes_per_s: tuple[float, float]
     provenance: str
+    baseline_factor: float = 1.0
 
     def __post_init__(self):
         if len(self.rho) < 2 or len(self.rho) != len(self.slowdown) \
@@ -62,7 +63,8 @@ class LoadedCoefficients:
                 or any(x < 1 for x in self.slowdown) \
                 or not 0 < self.context_range[0] < self.context_range[1] \
                 or not 0 < self.bandwidth_range_bytes_per_s[0] \
-                < self.bandwidth_range_bytes_per_s[1] or not self.provenance:
+                < self.bandwidth_range_bytes_per_s[1] or not self.provenance \
+                or self.baseline_factor <= 0:
             raise ValueError("invalid loaded migration coefficients")
 
     def worst(self, initial_rho: float, boundary_rho: float, context: float,
@@ -77,7 +79,7 @@ class LoadedCoefficients:
                   np.interp(boundary_rho, self.rho, self.slowdown)]
         values += [v for r, v in zip(self.rho, self.slowdown)
                    if initial_rho <= r <= boundary_rho]
-        return float(max(values))
+        return self.baseline_factor * float(max(values))
 
 
 @dataclass(frozen=True)
@@ -109,13 +111,13 @@ class DestinationType:
             raise ValueError("invalid or nonnested destination envelope")
 
     def work(self, expected_f: float, expected_g: float, context: float) -> np.ndarray:
-        total = expected_f + expected_g
-        fraction = expected_f / total if total else 0.5
+        work = np.array((expected_f / self.prefill.at(context),
+                         expected_g / self.decode.at(context)))
+        fraction = work[0] / work.sum() if work.sum() else 0.5
         lo, hi = self.workload_prefill_fraction_range
         if not lo <= fraction <= hi:
             raise ValueError("workload direction outside measured range")
-        return np.array((expected_f / self.prefill.at(context),
-                         expected_g / self.decode.at(context)))
+        return work
 
 
 @dataclass(frozen=True)
@@ -176,6 +178,7 @@ class DestinationArchitecture:
                     tuple(value["rho"]), tuple(value["slowdown"]),
                     tuple(value["context_range"]),
                     tuple(value["bandwidth_range_bytes_per_s"]), value["provenance"],
+                    value.get("baseline_factor", 1),
                 ) for method, value in item["loaded"].items()
             }
             types.append(DestinationType(

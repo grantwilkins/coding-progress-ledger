@@ -258,7 +258,7 @@ def test_campaign_is_one_mandatory_job_and_no_obsolete_grid(tmp_path):
     assert plan["job"] == {"name": "mandatory", "hours": 12}
     assert plan["gpu_pair_hour_budget"] == plan["reserve_pair_hour_limit"] == 12
     assert "jobs" not in plan
-    assert plan["migration"]["rho"] == [0.8, "emergency_inside"]
+    assert plan["migration"]["rho"] == [0, 0.8, "emergency_inside"]
     with pytest.raises(ValueError, match="budget"):
         campaign.validate_plan(dict(plan, gpu_pair_hour_budget=72))
 
@@ -301,11 +301,15 @@ def test_reserve_bundle_exists_only_after_a_failed_reduction(tmp_path):
     assert campaign.prepare_reserve(report, bundle, tmp_path / "none") is None
     assert not (tmp_path / "none").exists()
     report.write_text(json.dumps({"boundary_disagreements": ["coding-normal"]}))
+    source = json.loads((bundle / "plan.json").read_text())
+    source["migration"]["rho"] = [.8, "emergency_inside"]
+    (bundle / "plan.json").write_text(json.dumps(source))
     plan = campaign.prepare_reserve(report, bundle, tmp_path / "reserve")
     assert plan["reserve_tasks"] == [{
         "phase": "service", "cell": "coding-normal",
         "reason": "boundary_disagreement",
     }]
+    assert plan["migration"]["rho"] == [0, .8, "emergency_inside"]
     campaign.verify_checksums(tmp_path / "reserve")
 
 
@@ -322,7 +326,9 @@ def test_profile_reduction_is_conservative_in_the_safe_direction():
         for run in range(3)
     ]
     service = [
-        {"mode": mode, "facet": 0, "run_id": run, "bound": base + run / 10}
+        {"mode": mode, "facet": 0, "run_id": run, "bound": base + run / 10,
+         "outside": base + run / 10 + .5, "inside_decision": "feasible",
+         "outside_decision": "infeasible"}
         for mode, base in (("normal", 1), ("emergency", 2), ("stable", 3))
         for run in range(3)
     ]
@@ -331,7 +337,8 @@ def test_profile_reduction_is_conservative_in_the_safe_direction():
             "method": method,
             "rho": rho,
             "run_id": run,
-            "slowdown": 1 + rho + run / 10,
+            "duration_factor": .5 * (1 + rho + run / 10),
+            "achieved_rho": rho,
             "context_tokens": 16000 + 4000 * run,
             "bandwidth_bytes_per_s": 5e8 + 5e8 * run,
         }
@@ -359,8 +366,8 @@ def test_profile_reduction_is_conservative_in_the_safe_direction():
     )
     assert result["conservative"]["prefill"][1][0] < result["central"]["prefill"][1][0]
     assert (
-        result["conservative"]["loaded"]["replay"]["slowdown"][0]
-        > result["central"]["loaded"]["replay"]["slowdown"][0]
+        result["conservative"]["loaded"]["replay"]["baseline_factor"]
+        > result["central"]["loaded"]["replay"]["baseline_factor"]
     )
 
 
