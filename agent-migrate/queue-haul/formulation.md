@@ -5,9 +5,13 @@ before a deadline. It models source power, migration work, destination
 admission, concrete replica packing, and exact migration execution. Source
 power is constrained; destination power is reported.
 
-A model profile supplies measured power and service curves, replay and KV
-timing, KV block layout, action power, concurrency limits, transition times,
-resident-KV capacity, and uncertainty cases.
+A trustworthy destination profile must be conditional on a pinned serving
+class: model revision, weight and KV dtypes, engine and scheduler
+configuration, accelerator layout, and tensor/pipeline parallelism. It supplies
+measured power and service curves, replay and KV timing, KV block layout,
+action power, concurrency limits, transition times, allocatable KV capacity,
+and uncertainty cases. The current destination schema does not encode that
+complete tuple or multiple uncertainty cases.
 
 ## Sessions
 
@@ -43,6 +47,36 @@ serving instance is entirely inside the local source-power scope.
 The workload-direction domain is checked using
 \(d_{s,q}^{prefill}/(d_{s,q}^{prefill}+d_{s,q}^{decode})\), not the raw input
 token fraction.
+
+For cache-aware admission, let
+\(p_{s,q,r,\omega}\) be expected prefill accelerator-seconds per wall-second
+from a measured cache-conditioned work function
+\(\tau_q^P(T^{full},T^{hit},T^{miss})\). Guaranteed reuse may change this work,
+but subtracting hit tokens from a cold-prefill throughput is not generally
+valid: an uncached suffix still attends to the cached prefix. Prefix reuse does
+not reduce generation-phase work for the same full context and output. If the
+cache-conditioned profile or protected block identity is unknown, use the
+full-prefill approximation \(p_{s,q,r,\omega}=f_s/F_q(T_s)\); this is the
+current implementation. An observed cache-hit rate alone is not a residency
+guarantee. Decode \(G_q\) is keyed by live sequence length. Using one \(T_s\)
+for both cold prefill and decode is the current measured simplification, not a
+portable identity.
+
+Over service-demand horizon \(H_s\), the target coordinates are
+
+\[
+p_{s,q,r,\omega}=
+\frac{1}{H_s}\sum_{j\in requests(H_s)}
+\tau_{q,\omega}^P(T_j^{full},T_j^{hit},T_j^{miss}),\qquad
+\delta_{s,q,\omega}=
+\frac{1}{H_s}\int_0^{H_s}
+\frac{g_{s,\omega}(t)}{G_{q,\omega}(T_s(t))}\,dt.
+\]
+
+The current implementation approximates these with
+\((f_s/F_q(T_s),g_s/G_q(T_s))\). A physical claim with material context growth
+must integrate a supported trajectory or use the worst supported rate over the
+projected range.
 
 Planning never reads sampled future request times or sizes. For a planning
 horizon \(h\), it conservatively materializes expected active-session state as
@@ -101,6 +135,9 @@ pool. Replay requires matching model, tokenizer, and durable-log contract. KV
 transfer additionally requires a matching KV ABI. The method's
 workload-affinity rule must also pass.
 
+This is the v1 aggregate candidate. The general candidate is \(c=(s,a,r)\)
+with derived \(p(r)\) and source-method-replica path \(path(s,a,r)\).
+
 Every candidate records source-power gain, migration work and duration, exact
 route bytes, destination service work, and resident KV tokens. A candidate
 outside the measured context, bandwidth, workload-direction, or loaded-profile
@@ -118,15 +155,18 @@ normalized by its capacity. The resource rows are:
 | Resource | Capacity |
 |---|---|
 | source-instance migration | source streams \(\times H_m\) |
-| exact route link | link bytes/s \(\times H_m\) |
+| route-link fluid bound | allocatable link bytes/s \(\times H_m\) |
 | pool service facet | replicas \(\times\) policy bound minus baseline work |
-| pool live KV | replica KV capacity minus baseline KV at \(H_r\) |
+| additive pool live KV | replica KV capacity minus baseline KV at \(H_r\) |
 | pool migration occupancy | replicas \(\times H_m\) |
 
 The legacy adapter represents destination service with aggregate replay time,
 KV-service time, compute load, and resident-KV rows. Its flexible destination
 links form one balanced link pool. The architecture path instead preserves
-exact pools, routes, per-replica baselines, and service facets.
+exact pools, routes, per-replica baselines, and service facets. Physical
+prefix sharing is nonadditive and is not represented in \(U\); without an
+exact block-union packing check, the relaxation should use block-rounded
+additive demand. V1 still uses unrounded token equivalents.
 
 Replay uses expected durable-log bytes, replay time, measured replay completion,
 and route-switch time. KV transfer uses setup, complete sealed KV blocks, the
@@ -136,27 +176,139 @@ and route-switch time. Source migration occupancy lasts until commit.
 
 ## Destination admission
 
-Each destination type \(q\) has measured context-conditioned prefill and decode
-rates, KV capacity \(K_q\), and common nonnegative service-facet normals
-\(N_q\). Its nested policy envelopes satisfy
+The logical decision is destination-aware. Let \(z_{s,a,r}\) select source
+session \(s\), migration method \(a\), and concrete warm replica \(r\) of type
+\(q(r)\), and let \(\pi\) be a fixed nonanticipative migration ordering and
+resource-allocation policy. The set is admissible only if there exist \(z,\pi\)
+satisfying eligibility, steady placement, and transition constraints:
 
 \[
-h_q^{normal}\le h_q^{emergency}\le h_q^{stable}.
+\operatorname{DestinationOK}(z,\pi)=
+\operatorname{Compatible}(z)\land
+\operatorname{ServicePack}(z)\land
+\operatorname{KVUnion}(z)\land
+\operatorname{MigrationSchedule}(z,\pi)\land
+\operatorname{ImpactOK}(z).
 \]
 
-For pool \(p\), baseline service work \(b_p\), and selected candidates \(y_c\),
-admission in mode \(m\) requires
+It is joined to source selection by
+
+\[
+\sum_{a,r}z_{s,a,r}=y_s,\quad y_s\in\{0,1\},\qquad
+z_{s,a,r}\le E_{s,a,r},\qquad
+P_{src}\left(S\setminus
+\{s:y_s=1\}\right)\le P_{limit}.
+\]
+
+The optimizer may use conservative marginal power gains to choose candidates,
+but it reevaluates this exact source condition after integer selection.
+Robust semantics require the same \(z,\pi\) to satisfy service, KV, migration,
+and impact constraints for every \(\omega\in\Omega\); \(\pi\) may react only to
+observed completions, not future case information. The current implementation
+has only one central case, so this multi-case quantifier is proposed.
+Compatibility fixes the model and tokenizer, durable-log and KV contracts,
+hardware, precision, parallel layout, engine configuration, warmness, and
+every measured context, workload, bandwidth, and concurrency domain. The
+current implementation creates pool candidates \(c=(s,a,p)\), then performs
+concrete replica packing. It checks every returned assignment, but the greedy
+packer plus cuts is not a complete search for every feasible assignment. Its
+current compatibility fingerprint does not yet encode the complete pinned
+hardware/runtime tuple or uncertainty cases. Destination hardware need not
+equal source hardware: heterogeneous replay is eligible when \(q\) has its own
+measured profile and the model/tokenizer/log contract matches; KV additionally
+requires its exact transfer ABI/layout contract.
+
+Each destination type \(q\) has measured context-conditioned prefill and decode
+rates, allocatable KV capacity \(K_q\), and nonnegative service-facet normals.
+An uncertainty case \(\omega\) jointly selects demand plus empirical
+\(F_{q,\omega}\), \(G_{q,\omega}\), \(N_{q,\omega}\), and
+\(h_{q,\omega}^m\), defining
+
+\[
+\mathcal C_{q,\omega}^m=
+\{d\ge0:N_{q,\omega}d\le h_{q,\omega}^m\},\qquad
+h_{q,\omega}^{normal}\le h_{q,\omega}^{emergency}
+\le h_{q,\omega}^{stable}.
+\]
+
+The current schema has one central case and common normals; multiple cases are
+target semantics.
+
+For replica \(r\), baseline service work \(b_{r,\omega}\), and every declared
+uncertainty case \(\omega\), service admission over demand horizon \(H_s\) in
+mode \(m\) requires
+
+\[
+N_{q(r),\omega}\left(
+b_{r,\omega}+
+\sum_{s,a}
+\left(
+\ p_{s,q(r),r,\omega},
+\delta_{s,q(r),\omega}
+\right)z_{s,a,r}
+\right)
+\le h_{q(r),\omega}^m.
+\]
+
+The rates and context keys are horizon forecasts or conservative bounds over
+\(H_s\), not an indefinite steady-state promise.
+
+The empirical set described by these inequalities is the affinity blob of one
+pinned replica, not a theoretical FLOP limit. Its baseline-conditioned
+residual is
+\(\mathcal R_r=\{u\ge0:b_r+u\in\mathcal C_{q(r)}^m\}\).
+Ignoring indivisibility, a homogeneous pool has the service-only fluid
+relaxation \(\bigoplus_r\mathcal R_r\); actual admission must partition whole
+session vectors among replicas and also satisfy KV, migration, route, and
+impact constraints. Equal GPU counts therefore need not imply equal available
+capacity.
+
+An evidence-robust label additionally requires every case to remain inside
+demonstrated conditional inner support. Feasibility that depends on a synthetic
+headroom value, interpolation between measured affinity rays, or an assumed
+facet shape is sensitivity/possible, not evidence-robust.
+
+The current pool relaxation sums baseline work \(b_p\) and requires
 
 \[
 N_q\left(b_p+\sum_{c\in p}d_cy_c\right)
 \le |p|h_q^m.
 \]
 
-Live-state admission separately requires
+Let \(\mathcal B_r^0\) be physical KV blocks already protected on replica
+\(r\), and \(\mathcal B_{s,r,\omega}(H_r)\) the blocks required by an admitted
+session through the residency horizon. A shared block must have the exact
+pinned-engine cache key and full-block granularity. Exact live-state admission
+is
 
 \[
-K_p^0+\sum_{c\in p}\widehat T_c(H_r)y_c\le |p|K_q.
+\left|
+\mathcal B_r^0\cup
+\bigcup_{s,a:z_{s,a,r}=1}\mathcal B_{s,r,\omega}(H_r)
+\right|\le K_{q(r)}^{blocks}
+\quad\forall r,\omega.
 \]
+
+Shared prefix blocks count once; private tails and projected generation remain
+per session and are rounded to engine blocks. \(K_q^{blocks}\) is the
+allocatable KV budget after model weights, activations, graph captures, and
+runtime workspace for the pinned configuration. Every block used to reduce
+\(p_{s,q,r,\omega}\) must belong to a separate
+\(\mathcal R_{s,r,\omega}^{hit}\) set guaranteed available before that
+request's prefill. It may contain baseline protected blocks or blocks installed
+by migration only when the schedule enforces install before use. Membership in
+the session's future required-block set is not enough. Without identities, the
+necessary aggregate additive pruning relaxation is
+
+\[
+B_p^0+\sum_{c\in p}
+\left\lceil\frac{\widehat T_c(H_r)}{L_q^{block}}\right\rceil y_c
+\le |p|K_q^{blocks}.
+\]
+
+The current schema exposes token-equivalent capacity and sums unrounded context
+tokens. It receives no sharing credit, but still needs block rounding or
+one-private-block tail headroom before it is a physical-memory guarantee.
 
 Normal admission is attempted first; emergency is tried only if normal cannot
 meet the source-power target. Stable is not an admission mode. It is the outer
@@ -172,7 +324,7 @@ runtime-dependent work. Its component semantics are:
 
 \[
 \tau_{s,R,q}=
-\frac{B_s^{log}}{b_{route}}+
+\tau_{route}(B_s^{log},path(s,R,r))+
 \alpha_{R,q}\tau_{s,R}^{compute+completion,old}(T_s)+\tau_q^{switch},
 \]
 
@@ -181,9 +333,9 @@ for replay, and
 \[
 \tau_{s,K,q}=
 \max\left(
-\frac{B_s^{sealed}}{b_{route}},
-\frac{B_s^{sealed}}{C_{ingest,q}(u)}
-\right)+c_{K,q}(T_s,u),
+\tau_{route}(B_s^{sealed},path(s,K,r)),
+\frac{B_s^{sealed}}{C_{ingest,q}}
+\right)+c_{K,q}(T_s),
 \]
 
 for KV transfer, plus separately measured catch-up and route-switch terms when
@@ -193,18 +345,32 @@ are not blindly added. A load-dependent residual is permitted only within a
 domain measured over the migration interval; requested load is never
 substituted for achieved load.
 
-The recovered v7 data identifies low-work coefficients. It supports a replay
-compute/completion calibration and additive KV route plus residual timing, but
-not a load-dependent term. The current scalar
+The schedule assigns residual route bandwidth after background reservations,
+and route time is never below bytes divided by the allocated bottleneck rate.
+Geographic routes require measured fixed/per-round latency; the v7 shaped local
+route does not identify it. `MigrationSchedule` means one nonanticipative
+schedule whose makespan is at most \(H_m\) in every declared case and that
+reserves each source stream, route edge, destination ingest/copy engine,
+replica migration slot, and measured temporary staging allocation over time.
+Aggregate byte and occupancy rows are necessary pruning relaxations, not that
+schedule proof.
+
+The recovered v7 data identifies coefficients only for its recorded
+concurrency-one request schedules in the measured 16K/10-Gbps and
+24K/5-Gbps cells; the fact that at most one request overlaps is not by itself a
+workload bound. It supports a replay compute/completion calibration and
+additive KV route plus residual timing, but not a load-dependent term. The
+current scalar
 `LoadedCoefficients` scales the complete duration and therefore cannot encode
 this component model without violating the route-time floor. No v7 destination
 profile is accepted.
 
-Foreground impact is a method-affinity predicate rather than a service row.
-For latency-sensitive busy pools, KV is preferred. Replay requires an
-idle/drained pool or explicit TTFT slack until its observed 1.084-second
-new-arrival penalty has a defensible uncertainty bound. This dynamic predicate
-is proposed semantics and is not encoded by the current architecture types.
+Foreground impact is a provisional method policy rather than a service row.
+The paired observations rank KV ahead of replay for latency-sensitive busy
+pools, but one arriving request does not establish a tail-SLO bound. A robust
+result currently requires idle/drained foreground or an explicit impact bound
+inside the exact measured overlap domain. This dynamic predicate is proposed
+semantics and is not encoded by the current architecture types.
 
 ## Greedy
 

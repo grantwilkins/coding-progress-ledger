@@ -84,6 +84,16 @@ nested normal/emergency/stable envelopes, per-replica baseline service and KV
 state, pool routes, and conservative loaded-migration coefficients. Omitting it
 keeps the legacy scalar destination model unchanged.
 
+The exact destination question is whether a source session set has a compatible
+per-replica assignment whose cache-miss prefill work and decode work stay inside
+the measured service blob, whose union of physical KV blocks fits, and whose
+migration schedule meets the route and deadline constraints. The current v1
+implementation uses full expected prefill work and additive context tokens, so
+it takes no cross-session prefix-sharing credit; it still needs physical-block
+rounding before its KV row is a memory guarantee. Hardware, model, parallel
+layout, engine configuration, and scheduler settings are part of the profile
+identity rather than portable GPU-count multipliers.
+
 Pass it as `plan(..., destination=architecture)` for pool-aware LP or greedy
 admission, or to `execute(..., destination=architecture)` for independent stable
 envelope validation. Results report admission mode, shortfall/failure, packing

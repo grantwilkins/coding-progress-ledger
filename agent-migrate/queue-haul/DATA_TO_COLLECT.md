@@ -17,20 +17,24 @@ correctness of this exact LMCache/vLLM contract.
 
 | Planner or validation task | Required datum | Existing evidence | New measurement | Use |
 |---|---|---|---|---|
-| context-conditioned service work | isolated `F(T)` and `G(T)` | stage-1 prefill/decode curves, 256–31,562 tokens | 4K/16K/24K drift anchors only | convert each session to `(f/F, g/G)` |
+| pinned warm replica class | model/revision, tokenizer, weight/KV dtype, engine/version/flags, accelerator layout, TP/PP, scheduler, block layout | GPT-OSS-20B, A100 80 GB, BF16, TP=1 and campaign configuration records | exact preflight fingerprint only | select the profile; changing the tuple creates another class |
+| context-conditioned service work | cold `F(T)`, decode `G(T)`, and any cache-conditioned prefill work function over full/hit/miss lengths | stage-1 cold curves over 256–31,562 tokens; request rows record planned and cached tokens | none unless quantitative prefix-compute credit is required | use `(f/F, g/G)` today; a guaranteed hit alone does not calibrate reduced prefill work |
 | normal/emergency admission | mixed prefill/decode boundary under open-loop arrivals | all 66 complete-work v7 runs pass both policies; the frontier is right-censored | only after selecting safe forced tokens, probe the required unresolved boundary | fit capacity only from valid realized work |
 | stable execution ceiling | nonpositive backlog drift, complete drain, no OOM/restart/rejection | all 66 complete-work v7 runs pass stability | same targeted service follow-up if an upper boundary is required | reject final placements outside hard safety |
 | workload-direction domain | interactive-coding, coding, and agentic boundary behavior | conditional inner successes exist for all three affinities; no valid failure selects another facet | none until valid held-out data reject the one-facet model | keep workload affinity as eligibility/domain |
-| live KV residency | KV capacity and per-session resident state | exact 1,214,544-token vLLM capacity plus block/token accounting | preflight readback only | HBM stock row through residency horizon |
-| replay migration | context reconstruction and log-transfer time | coding and serial migration corpora | no unloaded reprofiling; loaded probes below | base replay work and deadline |
-| KV migration | sealed bytes, copy/ingest time, append catch-up | coding, serial, parallel-gate, append, and bounded campaigns | no unloaded reprofiling; loaded probes below | base KV work, bytes, and deadline |
-| loaded migration | runtime calibration, migration-interval concurrency, and foreground impact | 12/18 v7 treatments overlap foreground work; timing and paired request effects support low-work envelopes | none for concurrency one and low foreground work | component timing plus busy-destination method affinity |
+| baseline service state | per-replica profile-compatible prefill/decode work, context, queue, and forecast window | raw request/engine telemetry exists; v7 `achieved_rho` is not a valid baseline | live telemetry at planning time | locate each replica inside its measured affinity blob |
+| allocatable KV supply | physical block capacity after weights, activations, graph captures, and runtime workspace | exact 1,214,544-token vLLM capacity for the pinned homogeneous ABI | preflight readback only | per-replica HBM stock through the residency horizon |
+| incremental KV demand | protected baseline block IDs, required session blocks, private growth, and exact pinned-engine shared-prefix keys | within-session reuse and exact migration blocks are proven; cross-session sharing and idle-prefix residency are not | state readback only if sharing credit is claimed | enforce the physical block-set union; otherwise sum block-rounded private demands |
+| instance inventory and packing | healthy warm replica count, exact pinned class, pool/type membership, and per-replica baselines | architecture/scenario input plus packing tests | live health, configuration, and baseline readback at planning time | test existence of a concrete assignment; never infer it from GPU count alone |
+| replay migration | context reconstruction and log-transfer time | coding and serial migration corpora | none within the measured domain; reuse v7 loaded evidence | base replay work and deadline |
+| KV migration | sealed bytes, copy/ingest time, append catch-up | coding, serial, parallel-gate, append, and bounded campaigns | none within the measured domain; reuse v7 loaded evidence | base KV work, bytes, and deadline |
+| loaded migration | runtime calibration, overlap topology, and foreground impact | recorded concurrency-one v7 request schedules in the measured 16K/10-Gbps and 24K/5-Gbps cells; exact interval work is not identifiable | none for component timing/ranking inside those recorded schedules | component timing; foreground observations rank methods but do not prove a tail-SLO bound |
 | method eligibility | replay and KV compatibility | current pinned model/image logs and continuation checks | exact preflight fingerprint | candidate mask; KV additionally requires exact ABI |
 | migration correctness | cache hits, exact blocks/bytes, no WAN GET, valid continuation | parallel gate, serial, append, bounded campaigns | preflight plus every treatment run | reject invalid evidence and plans |
 | source-power target | marginal GPU power curve | stage-1 power curve and serial power windows | none | candidate source-power gain and shortfall |
 | source sleep/shutdown | transition time and whole-node power | level-1 sleep released memory but stayed near 84.9 W/GPU; no whole-node shutdown evidence | none for destination v1 | sensitivity only; no whole-node claim |
-| exact route rows | route and usable bandwidth | scenario topology and shaped 1/10-Gbps tests | none | bytes on every traversed link |
-| WAN geography and fabric | usable route capacity | public/administrator inputs only | none on these two GPUs | labeled scenario sensitivity, never a measured fleet claim |
+| exact route rows | source-method-replica path, residual bandwidth, latency, and reservation state | shaped 1/10-Gbps local tests validate component behavior only | live path and allocatable-capacity inventory at planning time | bytes and time reservations on every traversed link |
+| WAN geography and fabric | usable route capacity and fixed/per-round latency | public/administrator inputs only | none on these two GPUs | labeled scenario sensitivity, never a measured fleet claim |
 | DRAM/SSD tiers | tier capacity and promotion rate | public systems establish the mechanism, not local headroom | none for v1 | sensitivity/staging only; cannot satisfy active HBM row |
 | model weights/cold load | warmness, footprint, load time | fixed warm deployment and public hardware/model metadata | none for v1 | eligibility/baseline; cold placement is out of scope |
 | architecture sweeps | `rho`, `H`, pools, routes, replicas | generated architecture instances | none | offline LP/greedy evaluation |
@@ -201,9 +205,11 @@ The measured profile is accepted only when:
 Expected campaign outputs are a configuration/preflight record, service-cell
 rows, loaded-migration rows, reduction/validation summaries, central and
 conservative versioned destination profiles, and checksums for every input and
-output. These map directly to `DestinationType.prefill`, `decode`, `normals`,
-`bounds`, `kv_capacity_tokens`, `loaded`, compatibility fingerprints, valid
-ranges, and provenance.
+output. Existing fields cover `DestinationType.prefill`, `decode`, `normals`,
+`bounds`, additive `kv_capacity_tokens`, loaded coefficients, compatibility,
+and provenance. The full pinned replica tuple, component migration envelopes,
+cache-miss prefill semantics, and physical block unions are documented target
+semantics but are not represented by the current schema.
 
 ## Conditional targeted follow-up
 
@@ -216,8 +222,10 @@ service runs. If an accepted service boundary is still required, run three
 independent corrected probes per workload affinity at nominal radius 0.5 and
 adapt only the affinity that fails. Compute normal, emergency, and stability
 from every physical run instead of rerunning a cell by policy. No migration
-follow-up is required unless the claim expands beyond concurrency one, low
-foreground work, or the measured context/bandwidth cells.
+follow-up is required for component timing or method ranking within the
+recorded concurrency-one v7 schedules and measured 16K/10-Gbps and
+24K/5-Gbps cells. A robust foreground tail-SLO claim still requires enforced
+idle/drained migration or additional impact evidence.
 
 ## Explicitly not collected on the two A100s
 
