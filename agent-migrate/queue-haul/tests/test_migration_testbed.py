@@ -105,20 +105,23 @@ def test_health_timeout_is_configurable(monkeypatch):
     assert s.health_timeout() == 7200
 
 
-def test_mp_tokenization_uses_the_exact_reasoning_chat_template(monkeypatch):
+def test_mp_tokenization_uses_the_exact_chat_completion_renderer(monkeypatch):
     seen = {}
 
-    def request(_host, _port, _method, _path, payload):
+    def request(_host, _port, _method, path, payload):
+        seen["path"] = path
         seen.update(payload)
-        return {"tokens": [1, 2], "count": 2}
+        return {"token_ids": [1, 2]}
 
     monkeypatch.setattr(s, "http_json", request)
     messages = [{"role": "user", "content": "state"}]
 
     assert s.mp_chat_tokens(s.Config(), messages) == [1, 2]
-    assert seen["messages"] == messages
-    assert seen["chat_template_kwargs"] == {
-        "reasoning_effort": "low", "enable_thinking": True,
+    assert seen == {
+        "path": "/v1/chat/completions/render", "model": s.Config().model,
+        "messages": messages, "max_tokens": 512, "temperature": 0,
+        "reasoning_effort": "low", "stream": True,
+        "stream_options": {"include_usage": True},
     }
 
 

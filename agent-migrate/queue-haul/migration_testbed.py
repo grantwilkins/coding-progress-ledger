@@ -1039,15 +1039,15 @@ def http_json(host: str, port: int, method: str, path: str,
 
 
 def mp_chat_tokens(cfg: Config, messages: list[dict]) -> list[int]:
-    result = http_json(cfg.host, cfg.src_port, "POST", "/tokenize", {
-        "model": cfg.model, "messages": messages, "add_generation_prompt": True,
-        "chat_template_kwargs": {
-            "reasoning_effort": "low", "enable_thinking": True,
-        },
+    result = http_json(cfg.host, cfg.src_port, "POST",
+                       "/v1/chat/completions/render", {
+        "model": cfg.model, "messages": messages, "max_tokens": 512,
+        "temperature": 0, "reasoning_effort": "low", "stream": True,
+        "stream_options": {"include_usage": True},
     })
-    tokens = result.get("tokens")
-    if not tokens or len(tokens) != result.get("count"):
-        raise RuntimeError("vLLM did not return exact chat token IDs")
+    tokens = result.get("token_ids")
+    if not tokens:
+        raise RuntimeError("vLLM did not render exact chat token IDs")
     return tokens
 
 
