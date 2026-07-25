@@ -356,6 +356,110 @@ AIBrix publish no number at all. **Quantifying this is a contribution.**
 
 ---
 
+## 5b. The simulator-credibility bar, and the thing we are underselling
+
+### Nobody else has a validated dynamic power model for LLM serving
+
+This is the most important thing the literature review turned up. **No published
+LLM-serving simulator models dynamic GPU power.**
+
+- **Splitwise** measured power but scopes it out of the simulator: *"We only
+  consider the provisioned power, and not the dynamic power utilization, in our
+  study."*
+- **Vidur** has no power model: *"We plan to extend these to also capture the
+  cluster's energy consumption."*
+- The one paper that bolts a power model onto Vidur ([arXiv 2507.11417](https://arxiv.org/abs/2507.11417))
+  calibrates from **datasheet TDPs** and states in its own limitations paragraph
+  that it *"has not been validated against profiling tools such as NVML."*
+
+Our `power-concave-curve.md` — a Michaelis–Menten law at **R² 0.91–0.99 across 25
+node types** (7 models × {A100, H100} × TP 1–8, ~80k 5-second windows), with a
+two-price decomposition showing decode tokens cost **5–25× more energy** than
+prefill tokens, stable across every configuration — is stronger than anything
+published in this space. **We have been treating it as a methods detail. It is a
+headline contribution.**
+
+Two things to do with it: (i) print the 25-node-type table, since it is also the
+answer to "you only measured one GPU"; (ii) **refit on a held-out split and report
+MAPE**, which is the one thing it currently lacks — see C.3 below.
+
+### The accepted fidelity bar
+
+| Layer | Accepted error | Evidence |
+|---|---|---|
+| Fitted component model, held out | **MAPE < 3%** | Splitwise, 80:20 split |
+| End-to-end request metric | **2–9%, ~5% conventional** | AlpaServe <2%, DistServe <2%, Lucid <4.6%, Helix <5%, Sia <5%, Synergy <5%, Gavel <8%, **Vidur <9%** |
+| Heterogeneous serving | 9–15% | LLMServingSim 14.7% |
+| GPU power model | 3–13% | EnergAIzer 6.7–12.7% |
+
+Physical validation clusters in accepted papers are **small**: Vidur used a single
+4-GPU node; DistServe 32; Sia 44; Gavel 48; Pollux 64; Splitwise 4 VMs. Under 10%
+error on an end-to-end request metric, on whatever you actually own, is a passing
+grade.
+
+### Our extrapolation ratio is the problem, and it is nameable
+
+Published ratios run from 1× (Pollux) to 65× (Lucid). Ours is **2 GPUs validated →
+358 GPUs simulated ≈ 179×**, which exceeds everything in the literature. And
+extrapolation error does not stay flat: SimAI (NSDI'25) measured ASTRA-sim going
+from **45.9% error at 128 GPUs to 530.2% at 512**.
+
+Phase D at 16 GPUs brings us to **22×** — comparable to Synergy (16×) and well
+under Lucid. **State the ratio ourselves rather than letting a reviewer compute it.**
+
+### Copy Vidur's five experiments, and Helix's shape
+
+**Helix is our structural template, not Vidur:** validate on the one cluster you
+can actually build (they used 24 nodes, 3 GPU types, 10 Gb/s), report <5% on
+throughput and both latencies **plotted in the same figure as the real results**,
+then simulate exactly the configurations you cannot build — geo-distributed and
+high-heterogeneity — with inter-cluster bandwidth grounded in a *separate* iperf3
+measurement. That is precisely our shape.
+
+Vidur's fidelity section is the format to copy:
+
+1. **Static fidelity** — all requests at t=0, report **median and P95** as paired
+   real-vs-simulated bars with the signed % error annotated on each.
+2. **Dynamic fidelity** — Poisson arrivals at **85% of measured capacity**, with
+   the operating point justified (lower is idle, higher is a queueing tipping
+   point). Same paired-bar format.
+3. **Fidelity vs operating point** — sweep 0.75×–0.95× of capacity and show where
+   it degrades. Vidur honestly reports 12.65% at 95%.
+4. **Cost of the alternative** — GPU-hours the measurement would have taken vs
+   simulated wall-clock. Vidur: 42K GPU-hours / $218K vs $125.
+5. **What-if analysis only after fidelity is established.**
+
+### Four things that will get us rejected, and the fixes
+
+- **Heiser C.3 — calibrating and validating on the same data.** This is the most
+  likely kill-shot for a paper selling "grounded in our own measurements." Fix:
+  hold out a split for the power law and every timing fit, and report MAPE. The
+  migration timing models already do this correctly (fit repeats 0–1, evaluate on
+  repeat 2); the power law does not.
+- **Heiser C.1 / "evaluating a model against itself."** `predict` *is* the
+  simulator; there is no independent check. Fix: either build a genuinely
+  independent analytic bound, or stop implying a cross-check exists.
+- **Heiser A.3 — selective data range.** *"The interesting data range starts where
+  the graph ends."* Our measured domain ends at 24,576 tokens; the simulator runs
+  to 31,562 and 100% of interactive-coding moves are extrapolated. Fix: Phase C3.
+- **Claiming a flat sweep proves insensitivity.** Floyd & Paxson: *"Finding that
+  the simulation results do not change as the parameter is varied does not provide
+  a definitive result."* Fix: sweep one factor at a time and say what was held.
+
+Sweeping an unmeasured parameter is accepted in exactly four forms, all with
+precedent: bound the endpoints by a physical limit and say which (SimAI stops at
+400 Gbps because H100 PCIe is 512 Gbps); ground the swept value in a separate
+measurement (Helix's iperf3 matrix); sweep it and show the conclusion is invariant
+(Pollux injects synthetic network interference across a range); or state concretely
+why measuring was infeasible (DistServe: no high cross-node bandwidth on the
+testbed).
+
+**And publish a disagreement if we find one.** Sia reports that Pollux performed
+significantly *worse* on the physical cluster than its simulator predicted, and
+diagnoses why. That is the single highest-credibility move in the corpus, and our
+`model_check` median +78% error against TTFT is exactly such a disagreement — we
+should diagnose and publish it rather than leave it uncomputed.
+
 ## 6. What the literature settles
 
 **The motivation is citable, and the gap is named for us.** TAPAS (ASPLOS'25,
