@@ -126,6 +126,44 @@ Migration evidence must preserve route-time lower bounds and measure
 foreground overlap during migration. The current reducer does not yet encode
 the exploratory component model.
 
+`destination_bench.py` is the two-site offline sensitivity bench. It samples
+10,000 active sessions separately for coding, interactive coding, and agentic
+tool use from the pinned content-free manifest. One-times load is one request
+per session per 180 seconds; this is an explicit Poisson-rate sensitivity input,
+not observed fleet timing. Each session reserves its expected 180-second
+private history up front. The source is packed to its measured service limit
+and 16-token-rounded 963,152-token KV capacity, then the sink receives the
+identical A100 TP=1 replica inventory. The baseline has a 120-second total
+deadline: 115 migration seconds plus the five-second power window.
+
+Run each 10K reference in a fresh process so large planner state is released
+between workloads:
+
+```bash
+for workload in interactive_coding coding agentic_tool_loop; do
+  uv run python queue-haul/destination_bench.py \
+    --reference-only --workloads "$workload" --sessions 10000 --seeds 0:1 \
+    --out "queue-haul/outputs/destination-bench-10k-reference/$workload"
+done
+```
+
+Omit `--reference-only` for the pressure search. It first finds the maximum
+arrival load, then holds half that load while independently finding service,
+private-KV, shared-WAN, and migration-time transitions. Defaults are ten
+primary seeds and twenty additional transition seeds. The only interaction
+panels are service×KV and bandwidth×time; transition cells also run isolated
+replay and KV controls.
+
+The seed-0 reference in
+`outputs/destination-bench-10k-reference-20260724/` uses equal source/sink
+inventories of 65 interactive, 179 coding, and 172 agentic A100 replicas. LP
+lands 3,792, 7,746, and 7,829 sessions respectively; none lands all 10,000 by
+115 seconds. Interactive is service- and source-stream-contested; coding and
+agentic are source-stream-contested. These are
+`unsupported_extrapolation` sensitivity results: 0%, 33.9%, and 34.7% of the
+selected LP sessions are inside the measured 16K–24K migration context band.
+They are not admission or latency claims.
+
 Queue-Haul models and measures session migration under a local source-site
 power limit. The active path is:
 

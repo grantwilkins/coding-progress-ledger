@@ -18,7 +18,7 @@ from dataclasses import replace
 import pytest
 
 from destination import (CompatibilityFingerprint, ContextRate, DestinationType,
-                         LoadedCoefficients)
+                         LoadedCoefficients, MigrationComponents)
 
 
 def fingerprint(**changes):
@@ -82,3 +82,10 @@ def test_loaded_coefficients_take_worst_slowdown_over_interval():
     assert curve.worst(.25, .75, 50, 10) == 1
     with pytest.raises(ValueError, match="outside loaded-profile"):
         curve.worst(.25, .75, 101, 10)
+
+
+def test_migration_evidence_marks_each_out_of_domain_quantity():
+    components = MigrationComponents((16, 24), (5, 10), "hand", .5, 1)
+
+    assert components.extrapolates(20, 7) == ()
+    assert components.extrapolates(8, 20) == ("context", "bandwidth")

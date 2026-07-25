@@ -19,10 +19,10 @@ import pytest
 
 from destination import (DESTINATION_SCHEMA, CompatibilityFingerprint, ContextRate,
                          DestinationArchitecture, DestinationPool, DestinationReplica,
-                         DestinationType, LoadedCoefficients)
+                         DestinationType, LoadedCoefficients, MigrationComponents)
 from planner import plan
-from pool_planner import (_mode_boundary_rho, candidate_table, exact_replica_assignment,
-                          validate_destination_execution)
+from pool_planner import (_destination_duration, _mode_boundary_rho, candidate_table,
+                          exact_replica_assignment, validate_destination_execution)
 from power_model import ExpectedPower
 from simulate import PlannedMove, SimSession
 from test_execution_simulator import model
@@ -34,13 +34,14 @@ FP = CompatibilityFingerprint("m", "t", "log", "kv")
 
 def architecture(*, normal=.3, emergency=.5, stable=1, baselines=((0, 0), (0, 0)),
                  kv=1000, methods=("replay", "kv_transfer"), compatibility=FP,
-                 residency=None, routes=(("wan",), ("wan",))):
+                 residency=None, routes=(("wan",), ("wan",)), block=1):
     loaded = LoadedCoefficients((0, 2), (1, 1), (1, 1000), (1, 1000), "hand")
     q = DestinationType(
         "q", compatibility, ContextRate((1, 1000), (100, 100)),
         ContextRate((1, 1000), (100, 100)), ((1, 1),),
         {"normal": (normal,), "emergency": (emergency,), "stable": (stable,)},
         kv, {"replay": loaded, "kv_transfer": loaded}, (0, 1), "hand",
+        kv_block_tokens=block,
     )
     pools = tuple(DestinationPool(
         f"p{i}", "q", (DestinationReplica(f"t{i}", baseline),),
@@ -115,6 +116,49 @@ def test_residency_horizon_is_independent_of_migration_horizon(tmp_path):
                  destination=architecture(kv=25, residency=5))
 
     assert not long.moves and short.moves
+
+
+def test_private_kv_is_rounded_per_session_not_after_aggregation(tmp_path):
+    scenario = replace(problem(), sessions=tuple(
+        replace(s, context_tokens=17, expected_growth_tokens_per_s=0)
+        for s in problem().sessions
+    ))
+    profile = model(tmp_path, switch=0, tp=1)
+    arch = architecture(kv=48, block=16, methods=("replay",))
+    arch = replace(arch, pools=(arch.pools[0],))
+    result = plan(
+        scenario, profile, PATHS, "lp", destination=arch,
+    )
+
+    assert len(result.moves) == 1
+
+
+def test_physical_destination_timing_keeps_route_time_unscaled(tmp_path):
+    profile = model(tmp_path, switch=0, tp=1)
+    session = replace(problem().sessions[0], context_tokens=10, log_bytes=100,
+                      expected_growth_tokens_per_s=0)
+    components = MigrationComponents((5, 20), (50, 200), "hand", .5, 2)
+
+    replay = _destination_duration(
+        session, "replay", profile.case(), ("wan",), {"wan": 100}, 0, components,
+    )
+    kv = _destination_duration(
+        session, "kv_transfer", profile.case(), ("wan",), {"wan": 100}, 0,
+        components,
+    )
+
+    assert replay == pytest.approx(1 + .5 * .1)
+    assert kv == pytest.approx(1 + 2)
+
+
+def test_static_kv_snapshot_has_no_fake_deadline_catch_up(tmp_path):
+    result = plan(
+        problem(), model(tmp_path, switch=0, tp=1), PATHS, "lp",
+        destination=architecture(methods=("kv_transfer",)),
+    )
+
+    assert result.moves
+    assert all(move.quiesce_s is None for move in result.moves)
 
 
 def test_exact_route_rows_choose_the_route_with_capacity(tmp_path):

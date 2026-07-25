@@ -10,8 +10,9 @@ import numpy as np
 from scipy.sparse import csc_matrix, csr_matrix
 
 from destination import DestinationArchitecture
-from planner import (_duration, _expected_scenario, _kv_schedule, _local_sessions,
-                     _log_bytes, _resident_tokens, PlanResult, source_power)
+from planner import (_changes, _duration, _expected_scenario, _kv_catch_up_s,
+                     _kv_schedule, _local_sessions, _log_bytes, _resident_tokens,
+                     PlanResult, source_power)
 from power_model import ExpectedPower
 from simulate import ExecutionScenario, PlannedMove, SimSession, predict
 
@@ -57,15 +58,39 @@ def _baseline(scenario: ExecutionScenario, architecture: DestinationArchitecture
         raise ValueError("destination baselines and destination SimSession backgrounds are exclusive")
     work = {r.replica_id: np.array(r.baseline_work, float)
             for p in architecture.pools for r in p.replicas}
-    kv = {r.replica_id: r.baseline_kv_tokens
-          for p in architecture.pools for r in p.replicas}
+    kv = {
+        r.replica_id: -(-r.baseline_kv_tokens // q.kv_block_tokens)
+        for r, (_, q) in ((r, pools[r.replica_id])
+                          for p in architecture.pools for r in p.replicas)
+    }
     for session in backgrounds:
         _, q = pools[session.source_instance]
         work[session.source_instance] += q.work(
             session.expected_f, session.expected_g, session.context_tokens,
         )
-        kv[session.source_instance] += _resident_tokens(session, horizon)
+        kv[session.source_instance] += -(
+            -_resident_tokens(session, horizon) // q.kv_block_tokens
+        )
     return work, kv
+
+
+def _destination_duration(session, method, case, path, links, horizon, components):
+    tokens = _resident_tokens(session, horizon) or session.context_tokens
+    def route(size):
+        return size / min(links[link] for link in path)
+    if method == "replay":
+        contexts, rates = case.replay.by_concurrency[1]
+        rate = case.replay.rate(tokens, 1) if contexts[0] <= tokens <= contexts[-1] \
+            else float(min(rates))
+        compute = tokens / rate + case.replay_completion_s * (
+            1 + _changes(session, horizon)
+        )
+        return route(_log_bytes(session, tokens)) \
+            + components.compute_completion_factor * compute + case.switch_s
+    size = case.kv_transfer.sealed_bytes(tokens)
+    return route(size) + components.residual_s + _kv_catch_up_s(
+        session, tokens, case, horizon,
+    )
 
 
 def _validate_topology(scenario, architecture):
@@ -107,23 +132,32 @@ def candidate_table(scenario: ExecutionScenario, profile, architecture: Destinat
     links = {link.link_id: link.bytes_per_s for link in scenario.links}
     candidates = []
     for j, session in enumerate(sessions):
-        profile.case("central").replay.rate(
-            _resident_tokens(session, migration_horizon), 1,
-        )
         gain = power.marginal(session.session_id)
         for p, pool in enumerate(architecture.pools):
             q = architecture.type_by_id[pool.type_id]
+            if q.migration is None:
+                profile.case("central").replay.rate(
+                    _resident_tokens(session, migration_horizon), 1,
+                )
             if max(np.asarray(q.normals) @ sum(
                 (work0[r.replica_id] for r in pool.replicas), start=np.zeros(2)
             ) / (len(pool.replicas) * np.asarray(q.bounds[mode]))) > 1 + 1e-9:
                 continue
-            demand = q.work(session.expected_f, session.expected_g, session.context_tokens)
+            demand = q.work(
+                session.expected_f, session.expected_g,
+                _resident_tokens(session, residency_horizon),
+                q.migration is not None,
+            )
             baseline = sum((work0[r.replica_id] for r in pool.replicas), start=np.zeros(2))
-            resident = _resident_tokens(session, residency_horizon)
+            resident = -(-_resident_tokens(session, residency_horizon)
+                         // q.kv_block_tokens)
+            capacity = len(pool.replicas) * (
+                q.kv_capacity_tokens // q.kv_block_tokens
+            )
             if np.any(np.asarray(q.normals) @ demand >
                       len(pool.replicas) * np.asarray(q.bounds[mode])
                       - np.asarray(q.normals) @ baseline + 1e-9) \
-                    or resident > len(pool.replicas) * q.kv_capacity_tokens \
+                    or resident > capacity \
                     - sum(kv0[r.replica_id] for r in pool.replicas):
                 continue
             rho, bandwidth = _pool_rho(q, pool, work0), min(links[x] for x in pool.route)
@@ -131,20 +165,27 @@ def candidate_table(scenario: ExecutionScenario, profile, architecture: Destinat
                 if not q.compatibility.supports(architecture.source_compatibility, method):
                     continue
                 try:
-                    duration = _duration(
-                        session, method, profile.case("central"), pool.route, links,
-                        migration_horizon,
+                    components = None if q.migration is None else q.migration[method]
+                    duration = (
+                        _duration(
+                            session, method, profile.case("central"), pool.route,
+                            links, migration_horizon,
+                        ) if components is None else
+                        _destination_duration(
+                            session, method, profile.case("central"), pool.route,
+                            links, migration_horizon, components,
+                        )
                     )
                     if method == "kv_transfer":
                         _kv_schedule(scenario, profile, session, profile.case("central"),
                                      pool.route, links)
                 except ValueError:
                     continue
-                slowdown = q.loaded[method].worst(
-                    rho, _mode_boundary_rho(q, mode),
-                    session.context_tokens, bandwidth,
-                )
-                duration *= slowdown
+                if q.migration is None:
+                    duration *= q.loaded[method].worst(
+                        rho, _mode_boundary_rho(q, mode),
+                        session.context_tokens, bandwidth,
+                    )
                 if duration > migration_horizon:
                     continue
                 tokens = _resident_tokens(session, migration_horizon)
@@ -179,7 +220,7 @@ def candidate_table(scenario: ExecutionScenario, profile, architecture: Destinat
             add([np.asarray(normal) @ c.service_work if c.pool == p else 0
                  for c in candidates], residual, f"service:{pool.pool_id}")
         add([c.kv_tokens if c.pool == p else 0 for c in candidates],
-            len(pool.replicas) * q.kv_capacity_tokens
+            len(pool.replicas) * (q.kv_capacity_tokens // q.kv_block_tokens)
             - sum(kv0[r.replica_id] for r in pool.replicas), f"kv:{pool.pool_id}")
         add([c.duration_s if c.pool == p else 0 for c in candidates],
             len(pool.replicas) * migration_horizon, f"migration:{pool.pool_id}")
@@ -195,12 +236,7 @@ def candidate_table(scenario: ExecutionScenario, profile, architecture: Destinat
                           tuple(names), migration_horizon)
 
 
-def _allowed(selected, candidate, cuts):
-    choice = selected | {candidate}
-    return all(not set(cut) <= choice for cut in cuts)
-
-
-def _greedy(table: CandidateTable, target: float, cuts):
+def _greedy(table: CandidateTable, target: float):
     matrix, selected, usage = csc_matrix(table.resources), set(), np.zeros(table.resources.shape[0])
     cheapest = {}
     for i, c in enumerate(table.candidates):
@@ -223,8 +259,7 @@ def _greedy(table: CandidateTable, target: float, cuts):
             break
         sl = slice(matrix.indptr[i], matrix.indptr[i + 1])
         rows, values = matrix.indices[sl], matrix.data[sl]
-        if c.session in sessions or np.any(usage[rows] + values > 1 + 1e-8) \
-                or not _allowed(selected, i, cuts):
+        if c.session in sessions or np.any(usage[rows] + values > 1 + 1e-8):
             continue
         selected.add(i)
         sessions.add(c.session)
@@ -233,14 +268,13 @@ def _greedy(table: CandidateTable, target: float, cuts):
     return selected
 
 
-def _lp(table: CandidateTable, target: float, cuts):
+def _lp(table: CandidateTable, target: float):
     if not table.candidates:
         return set()
     n, x = len(table.candidates), cp.Variable(len(table.candidates), nonneg=True)
     gains = np.array([c.gain_w for c in table.candidates])
     work = np.array([c.migration_work_s for c in table.candidates])
     base = [table.incidence @ x <= 1, table.resources @ x <= 1, x <= 1]
-    base += [cp.sum(x[list(cut)]) <= len(cut) - 1 for cut in cuts]
     def solve(objective, constraints, maximize=False):
         p = cp.Problem(cp.Maximize(objective) if maximize else cp.Minimize(objective), constraints)
         p.solve(solver=cp.CLARABEL)
@@ -257,8 +291,7 @@ def _lp(table: CandidateTable, target: float, cuts):
         i, c = int(i), table.candidates[int(i)]
         sl = slice(matrix.indptr[i], matrix.indptr[i + 1])
         rows, added = matrix.indices[sl], matrix.data[sl]
-        if c.session in sessions or np.any(usage[rows] + added > 1 + 1e-8) \
-                or not _allowed(selected, i, cuts):
+        if c.session in sessions or np.any(usage[rows] + added > 1 + 1e-8):
             continue
         selected.add(i)
         sessions.add(c.session)
@@ -271,8 +304,7 @@ def _lp(table: CandidateTable, target: float, cuts):
             i, c = int(i), table.candidates[int(i)]
             sl = slice(matrix.indptr[i], matrix.indptr[i + 1])
             rows, added = matrix.indices[sl], matrix.data[sl]
-            if c.session in sessions or np.any(usage[rows] + added > 1 + 1e-8) \
-                    or not _allowed(selected, i, cuts):
+            if c.session in sessions or np.any(usage[rows] + added > 1 + 1e-8):
                 continue
             selected.add(i)
             sessions.add(c.session)
@@ -294,7 +326,8 @@ def _pack(table, selected, architecture, scenario, mode):
         members = [i for i in selected if table.candidates[i].pool == p]
         members.sort(key=lambda i: (-max(
             *(normals @ table.candidates[i].service_work / bounds),
-            table.candidates[i].kv_tokens / q.kv_capacity_tokens,
+            table.candidates[i].kv_tokens
+            / (q.kv_capacity_tokens // q.kv_block_tokens),
             table.candidates[i].duration_s / table.migration_horizon_s,
         ), table.sessions[table.candidates[i].session].session_id, i))
         for i in members:
@@ -303,7 +336,8 @@ def _pack(table, selected, architecture, scenario, mode):
                 next_work, next_kv = work[replica.replica_id] + c.service_work, kv[replica.replica_id] + c.kv_tokens
                 next_migration = migration[replica.replica_id] + c.duration_s
                 pressure = max(*(normals @ next_work / bounds),
-                               next_kv / q.kv_capacity_tokens,
+                               next_kv
+                               / (q.kv_capacity_tokens // q.kv_block_tokens),
                                next_migration / table.migration_horizon_s)
                 if pressure <= 1 + 1e-9:
                     choices.append((pressure, r, next_work, next_kv, next_migration))
@@ -346,7 +380,7 @@ def _assignment_valid(table, assignment, architecture, scenario, mode):
         kv[replica] += table.candidates[i].kv_tokens
         migration[replica] += table.candidates[i].duration_s
     return all(np.all(np.asarray(q.normals) @ work[r] <= np.asarray(q.bounds[mode]) + 1e-9)
-               and kv[r] <= q.kv_capacity_tokens
+               and kv[r] <= q.kv_capacity_tokens // q.kv_block_tokens
                and migration[r] <= table.migration_horizon_s + 1e-9
                for r, q in pools.items())
 
@@ -361,10 +395,16 @@ def validate_destination_execution(scenario, architecture, moves):
     sessions = {s.session_id: s for s in scenario.sessions}
     for move in moves:
         q, s = pools[move.destination_instance], sessions[move.session_id]
-        work[move.destination_instance] += q.work(s.expected_f, s.expected_g, s.context_tokens)
-        kv[move.destination_instance] += _resident_tokens(s, horizon)
+        work[move.destination_instance] += q.work(
+            s.expected_f, s.expected_g, _resident_tokens(s, horizon),
+            q.migration is not None,
+        )
+        kv[move.destination_instance] += -(
+            -_resident_tokens(s, horizon) // q.kv_block_tokens
+        )
     if any(np.any(np.asarray(q.normals) @ work[r] > np.asarray(q.bounds["stable"]) + 1e-9)
-           or kv[r] > q.kv_capacity_tokens for r, q in pools.items()):
+           or kv[r] > q.kv_capacity_tokens // q.kv_block_tokens
+           for r, q in pools.items()):
         raise ValueError("destination replica exceeds stable envelope")
 
 
@@ -376,7 +416,9 @@ def _moves(table, selected, assignment, architecture, scenario, profile):
     for order, i in enumerate(ordered):
         c, session = table.candidates[i], table.sessions[table.candidates[i].session]
         rate = quiesce = None
-        if c.method == "kv_transfer":
+        if c.method == "kv_transfer" and (
+            session.requests or session.expected_growth_tokens_per_s
+        ):
             rate, quiesce = _kv_schedule(scenario, profile, session, profile.case("central"), c.path, links)
             rate = rate or None
         moves.append(PlannedMove(session.session_id, assignment[i], c.method, order, c.path,
@@ -386,17 +428,21 @@ def _moves(table, selected, assignment, architecture, scenario, profile):
 
 def _mode_plan(scenario, profile, architecture, solver, mode, power, target):
     table = candidate_table(scenario, profile, architecture, mode, power)
-    cuts, repairs, repair_s = [], 0, 0.0
+    selected = (_lp if solver.startswith("lp") else _greedy)(table, target)
+    repairs, repair_s = 0, 0.0
     while True:
-        selected = (_lp if solver.startswith("lp") else _greedy)(table, target, cuts)
         started = perf_counter()
         assignment, cut = _pack(table, selected, architecture, scenario, mode)
         if assignment is not None:
             return table, selected, assignment, repairs, repair_s
-        if not cut or repairs > len(table.candidates):
+        if not cut:
             raise RuntimeError("destination packing repair did not converge")
+        drop = max(cut, key=lambda i: (
+            float(table.resources[:, i].sum())
+            / max(table.candidates[i].gain_w, 1e-12), i,
+        ))
+        selected.remove(drop)
         repair_s += perf_counter() - started
-        cuts.append(cut)
         repairs += 1
 
 
@@ -417,7 +463,8 @@ def plan_destination(scenario, profile, solver, case_id, seed, architecture):
             break
     mode, (table, selected, assignment, repairs, repair_s), planned = chosen
     moves = _moves(table, selected, assignment, architecture, scenario, profile)
-    expected = predict(_expected_scenario(scenario, moves), profile, moves, case_id, architecture)
+    validate_destination_execution(scenario, architecture, moves)
+    expected = predict(_expected_scenario(scenario, moves), profile, moves, case_id)
     shortfall = max(0.0, planned - scenario.power_limit_w)
     shortfall = 0.0 if shortfall <= 1e-8 else shortfall
     feasible = shortfall == 0 and expected.deadline_met

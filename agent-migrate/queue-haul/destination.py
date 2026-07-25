@@ -42,8 +42,10 @@ class ContextRate:
                 or any(b <= a for a, b in zip(self.contexts, self.contexts[1:])):
             raise ValueError("context rates require ordered positive points")
 
-    def at(self, context: float) -> float:
+    def at(self, context: float, extrapolate: bool = False) -> float:
         if not self.contexts[0] <= context <= self.contexts[-1]:
+            if extrapolate:
+                return min(self.rates)
             raise ValueError(f"context {context:g} outside measured range")
         return float(np.interp(context, self.contexts, self.rates))
 
@@ -83,6 +85,28 @@ class LoadedCoefficients:
 
 
 @dataclass(frozen=True)
+class MigrationComponents:
+    context_range: tuple[float, float]
+    bandwidth_range_bytes_per_s: tuple[float, float]
+    provenance: str
+    compute_completion_factor: float = 1.0
+    residual_s: float = 0.0
+
+    def __post_init__(self):
+        if not 0 < self.context_range[0] < self.context_range[1] \
+                or not 0 < self.bandwidth_range_bytes_per_s[0] \
+                < self.bandwidth_range_bytes_per_s[1] or not self.provenance \
+                or self.compute_completion_factor <= 0 or self.residual_s < 0:
+            raise ValueError("invalid migration components")
+
+    def extrapolates(self, context: float, bandwidth: float) -> tuple[str, ...]:
+        return tuple(name for name, value, bounds in (
+            ("context", context, self.context_range),
+            ("bandwidth", bandwidth, self.bandwidth_range_bytes_per_s),
+        ) if not bounds[0] <= value <= bounds[1])
+
+
+@dataclass(frozen=True)
 class DestinationType:
     type_id: str
     compatibility: CompatibilityFingerprint
@@ -95,6 +119,9 @@ class DestinationType:
     workload_prefill_fraction_range: tuple[float, float]
     provenance: str
     synthetic: bool = False
+    kv_block_tokens: int = 1
+    migration: dict[str, MigrationComponents] | None = None
+    evidence_status: str = "sensitivity"
 
     def __post_init__(self):
         normals = np.asarray(self.normals, float)
@@ -107,12 +134,17 @@ class DestinationType:
                 or np.any(bounds["emergency"] > bounds["stable"]) \
                 or self.kv_capacity_tokens < 1 or set(self.loaded) != {"replay", "kv_transfer"} \
                 or not 0 <= self.workload_prefill_fraction_range[0] \
-                <= self.workload_prefill_fraction_range[1] <= 1 or not self.provenance:
+                <= self.workload_prefill_fraction_range[1] <= 1 or not self.provenance \
+                or self.kv_block_tokens < 1 \
+                or self.migration is not None \
+                and set(self.migration) != {"replay", "kv_transfer"} \
+                or self.evidence_status not in {"accepted", "sensitivity"}:
             raise ValueError("invalid or nonnested destination envelope")
 
-    def work(self, expected_f: float, expected_g: float, context: float) -> np.ndarray:
-        work = np.array((expected_f / self.prefill.at(context),
-                         expected_g / self.decode.at(context)))
+    def work(self, expected_f: float, expected_g: float, context: float,
+             extrapolate: bool = False) -> np.ndarray:
+        work = np.array((expected_f / self.prefill.at(context, extrapolate),
+                         expected_g / self.decode.at(context, extrapolate)))
         fraction = work[0] / work.sum() if work.sum() else 0.5
         lo, hi = self.workload_prefill_fraction_range
         if not lo <= fraction <= hi:
@@ -189,6 +221,17 @@ class DestinationArchitecture:
                 item["kv_capacity_tokens"], loaded,
                 tuple(item["workload_prefill_fraction_range"]), item["provenance"],
                 item.get("synthetic", False),
+                item.get("kv_block_tokens", 1),
+                None if "migration" not in item else {
+                    method: MigrationComponents(
+                        tuple(value["context_range"]),
+                        tuple(value["bandwidth_range_bytes_per_s"]),
+                        value["provenance"],
+                        value.get("compute_completion_factor", 1),
+                        value.get("residual_s", 0),
+                    ) for method, value in item["migration"].items()
+                },
+                item.get("evidence_status", "sensitivity"),
             ))
         pools = tuple(DestinationPool(
             item["pool_id"], item["type_id"],
