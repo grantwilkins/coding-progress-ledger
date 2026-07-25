@@ -1,297 +1,412 @@
-# What the destination model actually is, and what to fix
+# What we can defend, what we can't, and the experiments that close the gap
 
-Plain-language companion to `PROPOSED_DESTINATION_ARCH.md`. No new notation.
-Every number here was read out of the code or recomputed from the checked-in
-profile and manifest on 2026-07-25.
+Plain-language companion to `PROPOSED_DESTINATION_ARCH.md`. Every number was read
+from the code or recomputed from the checked-in profile and manifest on
+2026-07-25. Where a claim is someone else's measurement, it is cited.
 
-## The short version
+---
 
-A destination site is five numbers, not a "capacity":
+## 0. Correction to the previous version of this document
 
-| # | Question | Row in the solver | Unit |
-|---|---|---|---|
-| 1 | Room to **hold** | `kv:<pool>` | KV blocks free |
-| 2 | Room to **serve** | `service:<pool>` | service headroom |
-| 3 | Room to **accept** | `migration:<pool>` | replica-seconds |
-| 4 | Room to **receive** | `route:<link>` | bytes |
-| 5 | (source side) Room to **send** | `source:<replica>` | stream-seconds |
+The earlier draft claimed the source and destination use the **same** load
+coordinate, and that the destination bound is therefore 5.481× too strict. **That
+is wrong.** They are two different coordinates:
 
-That is the whole surface. Everything else in the architecture doc is either a
-yes/no eligibility test before the solve, or a check after it.
+- The source packs with the **scalars** `F = 1448.32`, `G = 1260.38`
+  (`destination_bench.py:120`, `power_model.py:15`).
+- The destination scores work with the **context-conditioned curves**
+  (`destination.py:146`): prefill 4,655–5,872 tok/s, decode 1,180 tok/s at 4K
+  falling to 191 tok/s at 24K.
 
-**The one real problem:** we let the source fill a GPU to 0.531 and the
-destination fill an identical GPU to 0.097. Same GPU, same model, same engine,
-same coordinate. That 5.5× gap is not physics, and it is why interactive coding
-"cannot fit." Section 3 covers it. Everything else is bookkeeping by comparison.
+Measured over the actual seed-0 sessions, destination work ÷ source load is:
 
-## 1. What we can model, and how well
+| Workload | aggregate | per-session p10 / p50 / p90 | spread |
+|---|---:|---|---:|
+| Interactive coding | 0.856 | 0.59 / 0.77 / 1.30 | 3.9× |
+| Coding | 0.888 | 0.28 / 0.41 / 2.57 | 65× |
+| Agentic | 0.701 | 0.28 / 0.43 / 1.44 | 32× |
 
-These come from our own measurements. This is the part we should defend hard.
+So the destination coordinate is on average slightly **cheaper**, and varies by up
+to 65× per session. The "393.5% at 0.096953 vs 71.8% at 0.531358" table in the
+old draft was that column scaled by 5.481 and is invalid. Delete it.
 
-| Quantity | Value | Provenance | Error |
-|---|---|---|---|
-| Source power vs load | 12-point curve, 67.1 W idle → 248.9 W at ℓ=0.531 | measured | 5% |
-| Prefill work coordinate `F` | 1448.32 tok/s | measured | 25% |
-| Decode work coordinate `G` | 1260.38 tok/s | measured | 25% |
-| KV capacity | 963,152 tokens/replica | vLLM 0.22.0 readback @ 0.75 util | 0% |
-| KV block | 16 tokens | pinned | — |
-| Sealed KV bytes | 12,582,912 B per 256 tokens (48 KiB/token) | measured | — |
-| Replay time | `log_B/rate + 0.5867·(tokens/replay_tps + 1.340·(1+growth)) + switch` | fit on six 16K rows | 9.6% held-out median at 24K, never underpredicts |
-| KV time | `sealed_B/rate + 1.1338 + catch-up` | fit on six 16K rows | 7.8% held-out median at 24K, never underpredicts |
-| Replay foreground cost | +1.084 s TTFT to one arriving request; +3.45 ms/tok median TPOT | n=1 and n=5 | observation, not a percentile |
-| KV foreground cost | +4.7 ms TTFT; +0.42 ms/tok median TPOT | n=1 and n=5 | observation, not a percentile |
-| Measured migration domain | context 16,384–24,576 tok; link 5–10 Gbps | — | hard boundary |
+**The real objection to `SERVICE_BOUND = 0.096953` is simpler and survives:** it is
+a probe that passed, and `FINDINGS.md` states there is **no failure anywhere in
+the dataset**. It is a lower bound on capacity being used as an upper bound. There
+is even a passing observation at 0.114063 (`FINDINGS.md:86`) that we ignore.
 
-The migration timing is genuinely good: two-parameter physical models, held out
-to a different context and bandwidth, conservative by construction. That is a
-publishable result on its own.
+---
 
-## 2. What we cannot model, and what we substitute
+## 1. The finding that decides whether this paper works
 
-| Gap | What we do instead | Where | Honest label |
-|---|---|---|---|
-| Destination service capacity | fixed constant 0.096953, identical for normal/emergency/stable | `destination_bench.py:47` | **guess, and the wrong direction** |
-| Cache-conditioned prefill | `f/F(T)` — appended tokens charged at the cold full-context rate | `destination.py:144` | normalization coordinate, not a physical bound |
-| Cross-session prefix sharing | none; every session charged its full history | `pool_planner.py:222` | conservative by an unknown factor |
-| Destination background load | knob `pressure.service ∈ [0,1]` scaling the bound | `destination_bench.py:66` | sensitivity axis, not a measurement |
-| Concurrency > 1 | all timing from concurrency-one schedules | `_destination_duration` | out of domain |
-| WAN | one scalar bytes/s, three identical links, no latency term | `destination_bench.py:232` | placeholder |
-| Migration parallelism | 1 stream/source replica, 1 slot/sink replica | profile + `pool_planner.py` | assumed — but see §4, Llumnix backs it |
-| Context beyond 24,576 | replay curve extended flat at its slowest rate | `extrapolate_replay` | flagged `unsupported_extrapolation`; **in-domain fraction is 0.00 for interactive coding, 0.34 for coding/agentic** |
-| Failures, leases, rollback, cold model load | absent | — | out of scope, say so |
+**We optimize half of a power ledger.** The profile measures what a migration
+costs the destination, and we never put it in the objective.
 
-## 3. The 5.48× problem
+Measured, from `profiles/gpt_oss_20b_a100_tp1.json` → `action_power_w`:
 
-This is the headline issue and it is simple.
+| Method | Source | **Destination** |
+|---|---:|---:|
+| Replay | 2.06 W | **189.84 W** |
+| KV transfer | 3.18 W | **11.84 W** |
 
-Both bounds live on the **same** coordinate ℓ = f/F + g/G, with the **same**
-F=1448.32 and G=1260.38, from the **same** profile file, for the **same**
-A100/GPT-OSS-20B/TP=1 configuration.
+An A100's entire dynamic range in our own power curve is 248.89 − 67.12 =
+**181.77 W**. A replica doing replay draws **1.04× the full dynamic range of a
+loaded GPU**. Recomputing the reference run:
 
-| Side | Bound | What was actually observed |
-|---|---|---|
-| Source (`max_ell`) | **0.531358** | the last point of the power sweep — GPU at 248.9 W |
-| Destination (`SERVICE_BOUND`) | **0.096953** | a v7 probe that passed TTFT/TPOT/stability |
-
-Ratio: **5.481**.
-
-`FINDINGS.md` is explicit that there is **no private-prefix-consistent failure
-anywhere in the dataset**. Nothing was ever pushed until it broke. So 0.096953
-is a *lower* bound on what the destination can do, and we are using it as an
-*upper* bound. On the power curve, 0.096953 corresponds to an A100 drawing about
-125 W of a measured 67–249 W range. That is not a full GPU.
-
-What it costs us:
-
-| Workload | Required sink service, at 0.096953 | at 0.531358 |
-|---|---|---|
-| Interactive coding | **393.5%** | **71.8%** |
-| Coding | 70.1% | 12.8% |
-| Agentic tool loop | 74.0% | 13.5% |
-
-The entire "interactive coding cannot steady-host the workload" result is this
-one constant. Under a matched bound it fits with room to spare.
-
-Note this does *not* trivialize the paper. It relocates the contribution to the
-transition — source streams, migration window, WAN — which is exactly the part
-we actually measured well (§1). Steady state then becomes a clean sensitivity
-axis ("what if the sink is already X% busy") instead of a disguised assertion.
-
-**Recommendation.** Rename the constants to say what they are —
-`SOURCE_SWEEP_MAX = 0.531358` and `SINK_PROBED_SAFE = 0.096953` — and report
-every headline number as a band across the two. Then take the one measurement
-that collapses the band (§6, Phase 2).
-
-## 4. What the literature buys us
-
-### Llumnix (OSDI '24) — justifies our migration mechanics
-
-- Migration is **serialized per instance** with a pre-alloc → ACK → stage → commit
-  handshake; the source "migrates requests to the destination continuously" one
-  at a time. This is a real citation for `max_source_streams=1` and one migration
-  slot per sink replica — currently our two most naked assumptions.
-- **Downtime ≠ transfer time.** Downtime is one decode iteration and is constant
-  in sequence length; total copy time scales with length. Our migration-occupancy
-  row is copy time, which is the right choice.
-- Their cluster-level metric is **freeness** `F = (M − ΣV)/B`: free memory over
-  batch size. Memory is the primary residual; speed enters only as a divisor.
-  Supports making KV the first-class destination number.
-- **They never cross a WAN.** 16 GPUs, 4 VMs, 64 Gb/s, one datacenter. Nobody has
-  measured cross-site live migration — that gap is our contribution, but it also
-  means we cannot borrow a network number from them.
-- vLLM KV blocks are small and non-contiguous (128 KB per 16 tokens for 7B/16-bit;
-  1k tokens = 4k blocks), so they stage GPU→CPU into one buffer before sending.
-  We have no staging row; the architecture doc already admits this.
-
-### Skyplane (NSDI '23) — replaces our WAN placeholder
-
-- **AWS throttles all egress to 5 Gbps per VM** (≤32 cores). **GCP: 3 Gbps per
-  flow, 7 Gbps total egress.** Azure reaches ~16 Gbps NIC. Our single 10 Gbps
-  pipe shared by 179 replicas is not any real deployment.
-- Reaching those rates needs **up to 64 parallel TCP connections per VM**; one
-  connection gets far less. Bandwidth is *provisioned*, not constant.
-- Throughput **decays with RTT** — a geographic term we do not have at all.
-- Throughput is **stable over 18 hours**, so a static profiled bandwidth grid is
-  legitimate for a simulator. This validates our static-snapshot choice.
-- Their constraint structure is exactly what we should copy: per-link cap,
-  per-VM **egress** cap × #VMs, per-VM **ingress** cap × #VMs, per-region VM cap.
-- They **relax the integers, solve the LP, and round down**, reporting ≤1% from
-  optimal. That is a direct precedent for our LP-guided rounding — cite it and
-  stop treating the heuristic as a weakness.
-
-### Mooncake (ToS '25) — replaces our service bound
-
-- SLO is **relative**: TTFT_P90 = 10× and TBT_P90 = 5× the latency of the same
-  request running alone without interference. This is the principled definition
-  of an admissible radius, and it is what our frontier rerun should target.
-  (For reference, our source knee convention — within 25% of best median ITL —
-  is far *stricter* than production practice.)
-- **Goodput**: only requests that fully complete under SLO count. Matches our
-  "landed" semantics.
-- **Prediction-based early rejection**: a real destination refuses admission.
-  Our eligibility predicate is the right shape.
-- Production prefix cache hit ratio is **0.30–0.51** (512-token blocks, saturating
-  near 0.5); >50% of blocks are never reused while some are hit tens of thousands
-  of times. Our zero-sharing-credit KV charge is likely ~2× conservative.
-
-## 5. What we are optimizing, and the change worth making
-
-**Today.** `destination_bench.scenario` sets `power_limit_w` to the source power
-with *every* session moved. So the target is always full evacuation, the LP
-always returns `target_unmet` in `emergency` mode, and the search signal is the
-binary `all_sessions_landed`. We then read off `sessions_landed` after the fact.
-The one continuous quantity we care about — watts shed — is computed and
-discarded.
-
-**The change.** Stop claiming "these N sessions will be served acceptably at the
-destination." We cannot back that; we have no fleet telemetry and we do not want
-to model TTFT per request. Claim the inverse instead:
-
-> Given a destination that reports its residual vector, this evacuation either
-> fits or it does not, and here is the exact residual it requires.
-
-Then the headline figure is **required destination residual vs. watts shed** —
-one curve per workload, with the reader's own bound drawn as a horizontal line.
-That plot is *invariant* to the 0.097-vs-0.531 argument: the reader supplies the
-bound and reads off the answer. It removes the single biggest reviewer objection
-instead of arguing with it, and it is exactly the posture Skyplane takes with its
-profiled grid and Llumnix takes with reported freeness.
-
-## 6. Roadmap
-
-### Phase 0 — make the current run honest (days, no GPU time)
-
-1. Split the service constant into `SOURCE_SWEEP_MAX` / `SINK_PROBED_SAFE`; run
-   every headline at both and report a band.
-2. Replace the `bottleneck` field (argmax of one row) with a **binding set**:
-   every row ≥ 0.95, plus a count of source rows ≥ 0.95. One comma-separated
-   column. Today it says "source constrained" while hiding two rows above 98%.
-3. Collapse the three route links into one path-pressure row. They are identical
-   by construction (`source-egress`, `wan`, `destination-ingress` all get the
-   same rate), so three bars imply three independent bottlenecks that do not exist.
-4. Report the **LP triple**: fractional bound / rounded / post-packing. We already
-   solve the relaxation and throw the bound away.
-5. Drive `pressure_search` with **watts shed**, not `all_sessions_landed`.
-6. Make `emergency` differ from `normal`, or delete it. Right now all three modes
-   get the same bound, so the label carries no meaning.
-
-### Phase 1 — the residual vector and a real network (1–2 weeks, no GPU time)
-
-7. Emit the five numbers per site per solve as first-class output.
-8. Add Skyplane's network structure: per-replica egress cap, per-replica ingress
-   cap, shared inter-site link. Default egress to the measured 5 Gbps/VM.
-9. Add an RTT term to route time.
-10. Give cross-session prefix sharing a credit knob defaulted to 0, with
-    Mooncake's 0.30–0.51 as the sensitivity range.
-
-### Phase 2 — the one measurement that settles it (~1 GPU-day)
-
-11. The service-frontier rerun `FINDINGS.md` already specifies (safe forced
-    tokens, APC reset, hard-fail on missing work), but targeting a **Mooncake-style
-    relative SLO**: find the radius where p90 TTFT hits k× the isolated-request
-    TTFT. Start at 0.096953, expand until failure is bracketed, three runs at the
-    boundary. This converts the largest sensitivity axis into a measured number.
-
-    Note this contradicts `FINDINGS.md`'s current "no rerun is needed." That is
-    true for *sensitivity* modelling; it is not true for an NSDI claim about
-    destination capacity.
-12. Optional: a concurrency-2 migration probe, to test whether one stream per
-    replica is a real limit or a configuration choice.
-
-### Phase 3 — many sites (after Phase 1)
-
-13. One source, 1–8 sinks, identical A100 pools first. Two topologies:
-    independent paths, and a shared source-egress cut. Skew the sink baselines.
-    Synthetic non-A100 profiles only after that, and visibly marked.
-    No new "site capacity" abstraction — duplicate candidate columns and add rows.
-
-### Phase 4 — solver evaluation
-
-14. Exact integer optimum on small instances; LP fractional bound at all sizes;
-    LP-rounded; post-packing; greedy. Report watt-gap to the bound, runtime,
-    memory, and scaling in site count. Then, and only then, consider the
-    residual-aware primal-dual greedy.
-
-## 7. What the 10,000-session run actually shows
-
-Recomputed at seed 0, reference pressure (10 Gbps, 115 s window, no background
-load). Row usage is a fraction of capacity; values are the LP-rounded selection
-before packing repair.
-
-| | Interactive coding | Coding | Agentic tool loop |
+| Workload | Destination power added over the 115 s window | Source power relieved | Net |
 |---|---:|---:|---:|
-| Source replicas packed | 65 | 179 | 172 |
-| Sessions per replica | 154 | 56 | 58 |
-| Source service used | 83.9% | 14.4% | 19.3% |
-| Source KV used | 94.5% | 99.4% | 99.5% |
-| Median context | 5,751 | 17,249 | 16,537 |
-| **Landed (LP / greedy)** | **3,808 / 1,687** | **7,746 / 7,731** | **7,829 / 7,812** |
-| Sink service | **1.0000** | 0.667 | 0.705 |
-| Sink KV | 0.339 | 0.772 | 0.780 |
-| Sink migration occupancy | 0.543 | **0.987** | **0.987** |
-| Shared path (all 3 links) | 0.0003 | **0.993** | **0.999** |
-| Source streams ≥0.95 | 34 of 65 | 178 of 179 | 171 of 172 |
-| Packing drops | 16 | 0 | 0 |
-| Method split (LP) | 3,808 replay, 0 KV | 7,646 replay, 100 KV | 7,725 replay, 104 KV |
+| Interactive coding | 6.70 kW | 2.75 kW | **+3.95 kW** |
+| Coding | 33.00 kW | 7.22 kW | **+25.78 kW** |
+| Agentic | 31.69 kW | 9.00 kW | **+22.68 kW** |
 
-Three things the current plot hides:
+**Across two sites, power goes up by 2.4–4.6× what the source sheds, during
+exactly the 115 seconds of the grid event.**
 
-- **Nothing is bound by one thing.** Interactive is service *and* stream bound.
-  Coding and agentic are bound by streams, sink migration slots, *and* the WAN,
-  all within 1.3% of full, simultaneously.
-- **The "WAN at 99%" is not a migration budget, it is a KV budget.** The 7,646
-  replay migrations use ~0.27 GB of the 143.75 GB window. The 100 KV migrations
-  use ~140 GB, about 1.3 GB each. The LP buys back scarce source-stream seconds
-  by spending WAN on a handful of sessions. Greedy makes 18 KV moves and leaves
-  the WAN at 17% — and lands 15 fewer sessions.
-- **The source packing decides the destination question.** Coding and agentic
-  pack to 99.4% KV and only 14–19% service, so they arrive KV-shaped. Interactive
-  packs to 84% service, so it arrives service-shaped. The workload is not choosing
-  the bottleneck; the source packer is.
+This is structural, not a bug. `PROPOSED_DESTINATION_ARCH.md:167` puts destination
+facility power out of scope, `PlanResult` has no destination-power field,
+`evaluate()` records only `initial_source_w` and `source_w_shed`, and
+`simulate.py:481` computes destination node power and discards it. The optimizer
+has an unpriced resource, so it always prefers replay (189.84 W, ~35 KB) over KV
+(11.84 W, ~850 MB). It does, **98.7% of the time**.
 
-Greedy is only badly beaten in the one case where a resource genuinely saturates:
-interactive coding, where it lands 1,687 vs the LP's 3,808 (2.3× more service per
-admitted session) because it prices resources once from total offered demand and
-never reprices. Where nothing saturates hard, it is within 0.2%.
+Read the other way, this is the paper's most interesting axis and we have it
+half-modeled: **replay and KV transfer are a power-versus-bandwidth trade.** Replay
+costs 16× the destination power and almost no network; KV costs 16× less power
+and ~850 MB. Pricing both is what makes the choice meaningful.
 
-## 8. The three decisions to confirm
+---
 
-1. **First scaling experiment stays one source → many sinks.** Yes. Multi-source
-   routing adds a whole shared-cut problem we have no evidence for.
-2. **Watts shed primary, sessions landed secondary.** Yes — and more strongly
-   than the framing suggests: `sessions_landed` is not even monotone in resources,
-   because a bigger budget lets the LP admit heavier sessions. Watts is what the
-   paper claims.
-3. **Non-A100 sites stay visibly synthetic until measured.** Yes.
+## 2. The honest ledger
 
-## 9. What we should stop saying
+### Measured, defensible
 
-- "Matching hardware." We match replica *count*, not capacity. Say so.
-- "LP." It is an LP-guided rounded heuristic with packing repair. Skyplane does
-  the same thing and calls it that; so should we.
-- "Bottleneck." Report the binding set.
-- "Unrounded KV" in `PROPOSED_DESTINATION_ARCH.md` — the code block-rounds now
-  (`pool_planner.py:62`, `:152`). That documentation is stale.
-- "Feasible" without qualification. Feasibility here means *source power and
-  modeled deadline*; evidence status is a separate field and 0–34% of moves are
-  outside the measured context domain.
+| Quantity | Value | Error |
+|---|---|---|
+| Source power vs load | 12-point curve, 67.12 W idle → 248.89 W at ℓ=0.531 | 5% |
+| Prefill / decode work coordinates | `F` = 1448.32, `G` = 1260.38 tok/s | 25% |
+| KV capacity | 963,152 tokens/replica | 0% (readback) |
+| KV bytes/token | 49,152 B = 48 KiB | exact — see below |
+| Replay time | `log_B/rate + 0.5867·(tokens/replay_tps + 1.340·(1+growth)) + switch` | **9.6%** held-out at 24K, never underpredicts |
+| KV time | `sealed_B/rate + 1.1338 + catch-up` | **7.8%** held-out at 24K, never underpredicts |
+| Migration action power | replay 189.84 W dst; KV 11.84 W dst | measured, **unused** |
+| Replay foreground cost | +1.084 s TTFT, +3.45 ms/tok TPOT | n=1, n=5 |
+| KV foreground cost | +4.7 ms TTFT, +0.42 ms/tok TPOT | n=1, n=5 |
+
+The 48 KiB/token checks out exactly from the architecture:
+2 × 24 layers × 8 KV heads × 64 head-dim × 2 bytes = 49,152 B. And
+963,152 × 48 KiB = 44.1 GiB, leaving 11.8 GiB of the 55.9 GiB budget for weights
+— which matches gpt-oss-20b's MXFP4 expert weights. Back-solving predicts the
+measured KV capacity to **0.0065%**. The `precision: bf16` field means the KV and
+activation dtype, not the MoE weight dtype; that label should be split.
+
+The migration timing models are the strongest thing we have: two parameters,
+physically structured, held out to a different context **and** bandwidth,
+conservative by construction. They should anchor the paper.
+
+### Assumed, and load-bearing
+
+| Assumption | Where | Consequence if wrong |
+|---|---|---|
+| `max_source_streams = 1` | profile | decides everything — see §3 |
+| Service and migration are **independent** resources | `pool_planner.py:218-226` | a replica can be 98.7% migrating and 66.7% serving at once |
+| Destination power is free | objective | §1 |
+| Migration concurrency 1 per sink replica | `pool_planner.py` | untested |
+| One request rate, 1/180 req/s/session | `destination_bench.py:46` | — |
+| WAN is one scalar rate on three identical links | `destination_bench.py:232` | see §6 |
+| `normal = emergency = stable = 0.096953` | `destination_bench.py:187` | the mode machinery is inert |
+
+### Broken or inert, found by audit
+
+- **`predict` *is* the simulator** (`simulate.py:1010-1026`), differing only by a
+  logging flag. There is no analytic model to cross-check it against, so
+  "our model matches our simulator" has nothing behind it.
+- **`outputs/simulator_validation.csv` is a 2-session, 100-byte hand-arithmetic
+  unit test rendered as a PDF.** The file itself says "not hardware measurements."
+- **`outputs/simulator_evaluation.csv` and 4 of 5 scaling runs use deleted
+  solvers** (`node_aware`, `node_drain`, `load_only`) and cannot be regenerated.
+- **Largest real-GPU run migrates 4 concurrent sessions**, 105 scenarios, no
+  power deadline, no sleep or shutdown, `final_state` hardcoded to `awake`.
+- **The one sim-vs-hardware comparison** (`model_check`) is an analytic timing
+  equation, concurrency-1 only, 72 rows, **median +78% error against TTFT**
+  (+7.7% against copy wall time), with no error metric computed and no test.
+- **The 10,000-session bench runs zero inference requests.** `sample_sessions`
+  never sets `SimSession.requests` and `_expected_scenario` strips them anyway.
+  We measured foreground interference and then evaluated with no foreground.
+- **`workload_prefill_fraction_range = (0,1)`**, so the affinity gate never fires.
+  **`LoadedCoefficients`** is required and dead. **The stable-envelope check is a
+  tautology** — it re-tests a bound the packer already enforced.
+- **The pool path drops the destination ingest floor.** `formulation.md:363` and
+  `planner.py:145` both specify `max(route, bytes/ingest_rate)`;
+  `pool_planner.py:91` computes `route + residual` only. At 10 Gbps that
+  underestimates a 17K-token transfer by **27%**; in the pressure search, which
+  runs at 1000 Gbps, by **2.2×** — so the bandwidth axis is meaningless above
+  ~5 Gbps.
+- **Idle floor disagreement:** the curve says 67.12 W at ℓ=0; `README.md:273`
+  reports a measured 84.9 W after sleep. `power_limit_w` is defined as every GPU
+  at the floor, so a 26% floor error propagates into every reported shortfall.
+  Resolve which configuration each number came from.
+- **n=1.** One seed, one profile case (`central` is hard-required), despite
+  declared input errors of 25% (service), 30% (replay), 48% (KV), 100%
+  (transitions). No error bars anywhere.
+
+---
+
+## 3. Where the result actually comes from
+
+### Migration has a hard ceiling, set by GPUs sitting awake
+
+| Workload | Source power | Idle floor | Max sheddable by migration |
+|---|---:|---:|---:|
+| Interactive coding | 15,433 W | 4,833 W | **68.7%** |
+| Coding | 19,877 W | 12,350 W | **37.9%** |
+| Agentic | 21,394 W | 11,813 W | **44.8%** |
+
+Measured GPU sleep saves **0.0158 W**, so sleep is useless. Only powering nodes
+off recovers the floor, `shutdown_s` is `null`, and all three planners hard-require
+`final_state == "awake"`. Independent corroboration: DynamoLLM measures 8 idle
+H100s at **550 W** — our A100 node floor is 8 × 67.12 = 537 W.
+
+### Node power-off hinges on one unmeasured constant
+
+Exact per-replica drain time against the 115 s window:
+
+| Workload | Drainable at 1 stream | at 2 streams |
+|---|---:|---:|
+| Interactive coding | 1 of 65 | **65 of 65** |
+| Coding | 23 of 179 | **179 of 179** |
+| Agentic | 14 of 172 | **172 of 172** |
+
+The median replica needs 1.17–1.37 streams. This is a razor edge, and
+`max_source_streams = 1` has **no measurement behind it**. Our own README already
+contradicts it: `mp-campaign-run-10` measured **591 MB/s at concurrency 2 and
+1.206 GB/s at concurrency 4 against a 111 MB/s serialized ceiling**, and
+`bounded-hardware-campaign-run` completed 105 scenarios at concurrency 1/2/4.
+
+Confirmed at the other end of the scale: at a 6-hour window the legacy path drains
+**1,328–1,410 of 2,975 nodes**; at 115 s the destination path drains **0–1 of 23**.
+
+### The fleet is memory-parked, not compute-loaded
+
+| Workload | Source service used | Source KV used |
+|---|---:|---:|
+| Interactive coding | 83.9% | 94.5% |
+| Coding | **14.4%** | **99.4%** |
+| Agentic | **19.3%** | **99.5%** |
+
+Coding needs ~26 replicas for its compute and 178 for its KV. Each GPU sits near
+113 W, of which 67 W is idle floor. **What we are migrating is memory residency,
+not load** — which is exactly why powering nodes off, not moving compute, is where
+the watts are. It also means the obvious local baseline (consolidate + offload KV
+to DRAM/SSD, à la LMCache/Mooncake) must be measured before we claim the WAN hop
+is necessary.
+
+### The solver contributes almost nothing in 2 of 3 workloads
+
+Coding: LP 7,215.45 W vs greedy 7,204.36 W (**0.15%**). Agentic: 9,004.43 vs
+8,980.01 (**0.27%**). The LP reaches 95.9% of the trivial upper bound. The only
+place it wins is interactive coding (2,753 vs 1,964 W) — against our own
+single-shot-pricing greedy, which prices once and never reprices. At 1M sessions
+the LP is actively worse: **1.89× overshoot, 949,031 moves where 524,241 suffice.**
+
+---
+
+## 4. The claim to make
+
+Stop claiming "these N sessions will be served acceptably at the destination." We
+have no fleet telemetry and don't want per-request TTFT modelling. Claim:
+
+> Given a destination that reports its residual capacity, this evacuation either
+> fits or it does not, and here is exactly the residual it requires — and exactly
+> what the transition costs in watts, bytes, and time at both sites.
+
+The headline figure becomes **required destination residual vs. watts shed**, with
+the reader's own bound as a horizontal line. That plot is invariant to the
+0.096953 argument. It is Skyplane's posture with profiled bandwidth grids and
+Llumnix's with reported freeness.
+
+The frontier already computes cleanly:
+
+| Cut demanded | Coding shed | preserved | Interactive shed | preserved |
+|---:|---:|---:|---:|---:|
+| 30% | 2,774 W ✓ | 575 | 2,753 W ✗ | 3,792 |
+| 70% | 6,263 W ✓ | 3,758 | 2,753 W ✗ | 3,792 |
+| 90% | 7,215 W ✓ | **7,746** | 2,753 W ✗ | 3,792 |
+| 100% | 7,215 W ✗ | 7,746 | 2,753 W ✗ | 3,792 |
+
+Coding meets every cut to 90% preserving 77% of sessions. Interactive **saturates
+at a 20% cut** and never moves again — the sink-service row pins at 1.0000.
+
+---
+
+## 5. Experiment plan
+
+### Phase A — fix what makes the current numbers meaningless (days, no GPU)
+
+**A1. Price destination power.** Add it to every table and add a destination power
+cap as a constraint row. Re-run. Expect the method mix to flip toward KV transfer,
+and expect the paper's real contribution to become the replay-vs-KV
+power/bandwidth trade. *This is the highest-information change available.*
+
+**A2. Couple service and migration** into one per-replica resource, or gate replay
+to drained replicas as `PROPOSED_DESTINATION_ARCH.md:366` already requires.
+Re-run; expect coding/agentic landed counts to fall.
+
+**A3. Sweep `max_source_streams ∈ {1,2,4,8}`** and report landed sessions, watts,
+and nodes drained. Cite `bounded-hardware-campaign-run`, not Llumnix.
+
+**A4. Allow `final_state ∈ {sleep, off}`** in the destination planner and add a
+node-emptying term to the objective. Report nodes drained as a first-class metric
+— the column already exists in the 1M artifact.
+
+**A5. Restore the ingest floor** in `pool_planner._destination_duration`.
+
+**A6. Report the LP triple** (fractional bound / rounded / packed) plus an exact
+integer optimum on 100–500-session instances, with the watt gap.
+
+**A7. Ten seeds with bands; `faster` and `slower` profile cases.** Everything
+quoted today is n=1 with declared input errors of 25–100%.
+
+**A8. Put real requests in the bench** so the deadline check and the foreground
+interference we measured actually bind.
+
+**A9. Replace `bottleneck` with a binding set**; collapse the three identical route
+rows into one; drive the pressure search with watts, not `all_sessions_landed`.
+
+### Phase B — baselines (days, no GPU). Without these there is no paper.
+
+Plot watts shed against a **quality** axis (sessions lost, TTFT/TPOT damage):
+
+1. Do nothing.
+2. Drop/drain sessions until under cap.
+3. **Local consolidation + node power-off with KV offload** — the strongest
+   competitor, since our fleet is at 14.4% compute.
+4. GPU power capping / DVFS.
+5. Migration (ours).
+
+Migration must win on quality at equal watts. On the power-capping baseline we
+already have the answer and it is favourable: [Ma et al.](https://arxiv.org/abs/2605.11999)
+measured decode drawing **137–300 W against a 700 W TDP, with the lowest 280 W cap
+never engaging** — the driver holds ~1830 MHz because memory-bound decode saturates
+HBM, not compute. Splitwise Fig. 9 independently shows capping 700→350 W costs
+decode almost nothing. **The standard lever is inert for the phase that dominates
+serving.** Our own curve agrees: 67.12 → 248.89 W on a 400 W part.
+
+### Phase C — the measurements (~2 GPU-days)
+
+**C1. Migration concurrency 2 and 4 per source replica.** The harness, campaign,
+and 105 completed scenarios already exist. This one constant decides whether nodes
+can be emptied at all. It is the highest-value GPU-hour in the plan.
+
+**C2. The service-frontier rerun** `FINDINGS.md` specifies — safe forced tokens,
+APC reset, hard-fail on missing work — targeting a **Mooncake-style relative SLO**
+(p90 TTFT = k× isolated; Mooncake uses TTFT_P90 = 10×, TBT_P90 = 5×). Start at
+0.096953 and **expand until failure is bracketed**. A bound with no failure in the
+dataset is not a bound.
+
+**C3. Migration timing at 4–8K contexts**, where interactive coding actually lives
+and where **100% of its moves are currently extrapolated** (`in_domain_fraction`
+is 0.000 / 0.339 / 0.347 across the three workloads).
+
+### Phase D — the figure that carries the paper (~2 GPU-days, 16 GPUs)
+
+Two 8-GPU A100 nodes per site, our stack, **live open-loop traffic on both sites**,
+a shaped WAN cut, a synthetic curtailment signal. Measure with the 250 ms sampler
+we already have:
+
+- source **and destination** wall power through the whole event;
+- source crossing under the cap by the deadline in the 5 s trailing window;
+- destination p90 TTFT/TPOT for **pre-existing** destination sessions during the
+  migration burst — the number our model asserts and has never measured;
+- the same baselines from Phase B on the same hardware.
+
+Then show the simulator reproduces that power trace within its stated error at 16
+GPUs, before extrapolating to 358. **That single figure is the paper.**
+
+### Phase E — generality (~10 GPU-hours)
+
+The reviewer attack is not "one GPU" — `DestinationType` is already parameterized
+per type with its own curves, KV capacity, `synthetic` flag, and `evidence_status`.
+The dangerous attack is internal: *changing destination hardware is exactly the
+operation that decouples prefill and decode, which is the regime where a single
+`f/F + g/G` facet fails.*
+
+The cheapest defence is two points that move the prefill:decode ratio in **opposite**
+directions:
+
+- **H100, TP=1** (~4–6 GPU-h). Pre-register: KV capacity ratio 1.01× from the
+  closed form; prefill uplift near the **1.64× bandwidth** ratio rather than the
+  1.85–1.95× Splitwise saw on dense Llama-70B, because our MoE model runs at only
+  **10.7–17.6% prefill MFU**; decode 1.4–1.6×. Predicting a *lower*-than-published
+  uplift from our own MFU is a stronger result than the measurement.
+- **A100 TP=2** (~4 GPU-h, hardware we own). TP moves the ratio the other way and
+  changes KV capacity ~2×, exercising the closed form on a second axis.
+
+Two free moves: (i) **print the existing cross-hardware table** — the power law
+holds at R² 0.91–0.99 across **25 node types** (7 models × {A100, H100} × TP 1–8)
+with the decode:prefill energy ratio stable at 5–25×; the ℓ coordinate already
+demonstrably transfers for *power*, and only the service facet is single-type.
+(ii) **Reframe the facet as a conservative inner approximation**: `f/F + g/G ≤ 1`
+is the simplex inscribed in the box `{f ≤ F} ∩ {g ≤ G}`, so it under-admits, never
+over-admits. State the geometry and "why one facet" stops being an attack.
+
+Also state the per-type profiling protocol and its cost — **4–6 GPU-hours** (KV by
+closed form, 5-point prefill sweep, 5-point decode sweep, 16-point mixed grid).
+Mélange claims "<1 hour" without context curves; Helix, Splitwise, Vidur and
+AIBrix publish no number at all. **Quantifying this is a contribution.**
+
+---
+
+## 6. What the literature settles
+
+**The motivation is citable, and the gap is named for us.** TAPAS (ASPLOS'25,
+Microsoft Azure Research): *"Currently, live migration of GPU VMs is unsupported
+due to the complexities of GPU memory management, but this capability would
+enhance performance if implemented."*
+
+**The timescale is real.** POLCA (ASPLOS'24) documents a **10 s deadline that UPSes
+impose on power-capping response** against **out-of-band GPU control taking up to
+40 s**. TAPAS's power emergency is an **immediate cut to 75% of capacity sustained
+over 5 minutes**, where the baseline (uniform 35% frequency cap) costs **−35% IaaS
+and −28% SaaS performance**. Utility scheduling intervals are 5–15 min. Our 120 s
+deadline sits sensibly inside this.
+
+**Nobody responds to a utility curtailment signal, and nobody moves work between
+sites.** POLCA responds to a PDU breaker threshold; TAPAS to a UPS/AHU failure;
+Power Stabilization (Microsoft+OpenAI+NVIDIA 2025) to a grid frequency spec.
+Cross-region LLM work — SkyLB, GORGO, "AI Inference as Relocatable Electricity
+Demand" — routes **new** requests and explicitly does not migrate live KV state.
+Llumnix migrates, but intra-datacenter only, at 64 Gb/s, with no power objective.
+Splitwise already moves KV machine-to-machine in **5–8 ms over InfiniBand** — the
+transport primitive is published; it has just never been used for power.
+
+**Llumnix justifies our mechanics:** migration is serialized per instance with a
+pre-alloc/ACK/stage/commit handshake; downtime is one decode iteration and constant
+in length while copy time scales with length; the cluster metric is free memory ÷
+batch size.
+
+**Skyplane replaces our WAN placeholder:** AWS throttles **all egress to 5 Gbps per
+VM**, GCP to 3 Gbps per flow and 7 Gbps total; reaching those needs **up to 64
+parallel TCP connections**; throughput decays with RTT but is **stable over 18
+hours**, which validates a static profiled grid. Their constraint structure —
+per-link cap, per-VM egress × #VMs, per-VM ingress × #VMs — is what we should
+adopt. They also **relax, solve, and round down, reporting ≤1% from optimal**: a
+direct precedent for our LP-guided rounding.
+
+**Citation hygiene.** POLCA (arXiv 2308.12908) and "Characterizing Power Management
+Opportunities for LLMs in the Cloud" (ASPLOS'24) are **the same paper** retitled.
+Splitwise's headline "20% lower" is **cost**, not power. The 0.2–3 Hz power
+oscillation spectrum is a **training** phenomenon — POLCA's own production data
+shows inference is diurnal with 9% spikes at 2 s.
+
+---
+
+## 7. Open items I could not settle
+
+- Whether the 84.9 W measured sleep floor and the 67.12 W curve floor come from
+  the same configuration. This changes every reported shortfall.
+- Whether `max_source_streams` is a vLLM limit, an LMCache limit, or a choice.
+- Whether a destination replica can serve and ingest simultaneously at all — we
+  have one paired observation per method, not a percentile.
+- arXiv 2602.02987 (multiclass queueing with prefill/decode contention) may be the
+  nearest prior art to the `f/F + g/G` coordinate. Abstract only; read it before
+  claiming that coordinate is novel.
