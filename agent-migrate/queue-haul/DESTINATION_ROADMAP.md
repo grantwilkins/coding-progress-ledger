@@ -356,6 +356,95 @@ AIBrix publish no number at all. **Quantifying this is a contribution.**
 
 ---
 
+## 4b. We model the landing, not the stay — and the stay is where it breaks
+
+A real curtailment event is **about two hours long** (Duke/Norris: the average
+curtailment event lasts ~2 hours). Our residency horizon is
+`max(180, migration_s + 5)` = **180 seconds**, and `destination_bench.scenario()`
+zeroes `expected_growth_tokens_per_s` at placement, so sessions are frozen
+snapshots that never grow after they land.
+
+Let them keep growing at their traced rate:
+
+| Residency | Interactive coding | Coding | Agentic |
+|---|---:|---:|---:|
+| 180 s (**current**) | 94.5% | 99.4% | 99.5% |
+| 15 min | 139.6% | 107.6% | 110.4% |
+| 1 hour | 308.7% | 138.2% | 151.5% |
+| 2 hours | **534.2%** | **179.0%** | **206.3%** |
+
+**The destination runs out of KV memory 217–289 seconds after the migration
+completes.** The evacuation succeeds for about four minutes and then the sink is
+full.
+
+This is not a tuning problem, it is a missing dimension. All five resource rows we
+model are either transition-time rows (streams, routes, migration slots) or
+instantaneous-occupancy rows (service, KV at t=0). **None of them is a sustained
+constraint.** A grid event you must ride for two hours cannot be served by a
+destination that fills in four minutes.
+
+Three ways out, and the paper must pick one and say so: model session churn
+(arrivals and departures at the destination), model progressive eviction or
+tier-offload during the stay, or model return migration when the event ends. The
+alternative is to state plainly that we solve the *landing* problem and that
+sustained occupancy is out of scope — which is defensible, but only if said.
+
+## 4c. Grid grounding: what the event actually looks like
+
+**The failure mode we prevent is already happening, at our exact scale.** NERC's
+incident review of **July 10, 2024** (*Incident Review: Considering Simultaneous
+Voltage-Sensitive Load Reductions*, published 2025-01-08): a lightning-arrestor
+failure on a 230 kV line, with auto-reclosing configured for three attempts at
+each end, produced **six faults in 82 seconds**, each 42–66 ms, dropping voltage
+to 0.25–0.40 p.u. **About 1,500 MW of load disconnected — exclusively data-centre
+load.** No utility equipment tripped it; **the customer's own protection
+transferred the load to backup power.** About **1,260 MW dropped at the third
+depression and did not return for hours.** NERC interviewed the operators and
+found the rule: *"three voltage disturbances within one minute will result in data
+centers... transferring their load off the grid and staying off until they
+manually transfer back."*
+
+That is our baseline, and it is brutal: **an instantaneous, uncontrolled,
+hours-long disconnect of every session.** Graceful migration is not competing with
+"do nothing" — it is competing with a hard drop that has already happened twice at
+gigawatt scale (a second ~1,500 MW event occurred in ERCOT).
+
+**Regulators are actively writing the requirement we would satisfy.** NERC's
+Level 3 Alert (2026-05-04) proposes registering a **"Computational Load Entity"**
+— loads **≥20 MW at ≥60 kV with >1 MW of IT load** — and requires each to report
+its **"Expected Ramp Rate (MW/min), down-ramp and up-ramp."** FERC (RD26-7-000,
+2026-07-16) directed NERC to file mandatory computational-load Reliability
+Standards by **2026-12-31**. NERC's May 2026 Reliability Guideline names the
+failure mode **CILR (customer-initiated load reduction)**, notes that both existing
+NERC load-loss definitions **explicitly exclude it**, and recommends *"establishing
+large load curtailment as a System Operating Limit."*
+
+**A ramp rate in MW/min is exactly what our simulator computes.** That is the
+output format to report.
+
+**The market has already priced this.** ERCOT's demand-response contribution to
+resource adequacy jumped from **2.7 GW (2024 LTRA) to 13.3 GW for Summer 2026,
+rising to 53.1 GW by 2030**, attributed directly to new large-load curtailability
+under Texas SB6. Duke/Norris model **76 GW of new load integrable at 0.25% annual
+curtailment, 98 GW at 0.5%, 126 GW at 1.0%.** LBNL puts US data centres at 176 TWh
+in 2023 (4.4% of national electricity), reaching 6.7–12.0% by 2028.
+
+**And NERC names a modelling gap we are positioned to fill:** of 33,282 MW of data
+centre load in submitted dynamic model files, **25,504 MW has no dynamic model
+representation in stability software at all.**
+
+Two things to be careful about. NERC's white paper says stability events are
+*"low-probability, high-impact"* — **not** "high likelihood." And the July 2024
+report is a **NERC-only** review that says "Eastern Interconnection," never
+"Northern Virginia"; that attribution is trade press.
+
+**Still missing:** the ERCOT/PJM ancillary-service response-time table (RRS, ECRS,
+Synchronized Reserve, Regulation D). Two agents died on session limits before
+retrieving it. We still cannot say which product a 120-second response maps onto.
+What we *can* say is that response is measured in **seconds** (NERC: *"these events
+can transpire in a matter of seconds"*; POLCA: a **10 s** UPS deadline) while the
+event lasts **hours** — which is precisely the mismatch §4b exposes.
+
 ## 5b. The simulator-credibility bar, and the thing we are underselling
 
 ### Nobody else has a validated dynamic power model for LLM serving
