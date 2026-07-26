@@ -445,6 +445,166 @@ What we *can* say is that response is measured in **seconds** (NERC: *"these eve
 can transpire in a matter of seconds"*; POLCA: a **10 s** UPS deadline) while the
 event lasts **hours** — which is precisely the mismatch §4b exposes.
 
+## 4d. The constants, and why the formulation outlives them
+
+An NSDI reviewer will ask two separate questions and we should answer them
+separately: *what did you assume, and where did it come from?* and *what happens
+when the hardware changes?*
+
+### Every constant, with its provenance
+
+| Constant | Value | Where it came from |
+|---|---|---|
+| KV bytes per token | **49,152 B (48 KiB)** | closed form 2 × 24 layers × 8 KV heads × 64 head-dim × 2 bytes; predicts the measured capacity to **0.0065%** |
+| KV capacity per replica | **963,152 tokens** (44.1 GiB) | vLLM 0.22.0 readback at 0.75 GPU-memory utilisation |
+| KV ingest rate | **620.8 MB/s = 12,630 tok/s** | measured, CPU-mediated LMCache path |
+| Prefill throughput | **4,655–7,634 tok/s** over 256–31,562 tokens | measured; **10.7–17.6% MFU** against a 43,333 tok/s roofline (3.6B active params × 2 FLOP on 312 TFLOPS) |
+| Decode throughput | **3,774 → 77.9 tok/s** across 256 → 31,562 tokens (48.5× collapse) | measured; `1/G = a + b·T` holds to 4% below 16K, then breaks (19% over at 24.5K, 138% over at 31.5K) |
+| Tail replay rate | 919.4 tok/s | measured |
+| Replay time | `log_B/rate + 0.5867·(tokens/replay_tps + 1.340·(1+growth)) + switch` | fit on six 16K rows, **9.6%** held-out at 24K, never underpredicts |
+| KV transfer time | `sealed_B/rate + 1.1338 + catch-up` | fit on six 16K rows, **7.8%** held-out at 24K, never underpredicts |
+| Migration action power | replay **189.84 W**, KV **11.84 W** at the destination | measured |
+| Power vs load | 67.12 W idle → 248.89 W at ℓ=0.531 | measured, 5% error |
+| Request rate | 1/180 req/s/session = **0.31–0.86 rps/replica** | assumed; Llumnix's evaluation runs 0.42–1.9 req/s per instance, so we sit in the published range |
+| WAN bandwidth | 10 Gbps, one shared rate | **assumed**; Skyplane measures AWS capping *all* egress at 5 Gbps/VM, GCP 3 Gbps/flow and 7 Gbps total |
+| Source migration streams | **1** | **assumed**; our own `mp-campaign-run-10` measured 591 MB/s at concurrency 2 and 1.206 GB/s at concurrency 4 against a 111 MB/s serialized ceiling |
+| Service bound | 0.096953 | a probe that passed; **no failure exists in the dataset** |
+
+The bottom four are the honest weak points, and three of them we can close with
+measurements we already know how to run.
+
+### The constants move at very different speeds — and that is the result
+
+| Constant | Trajectory | Rate |
+|---|---|---|
+| Prefill throughput | compute-scaling **and** 5.7× of software headroom to the roofline; A100→H100 measured 1.85–1.95× | **fast** |
+| KV capacity | 80 → 141 → 192 GB, times FP8 (2×) or INT4 (4×), times MLA-style compression (~3.6×) | **fast** (10–25× plausible) |
+| KV ingest | 620.8 MB/s is a CPU-mediated path; Splitwise moves KV over RDMA in 5–8 ms | **fast** (~100× available today) |
+| Decode throughput | HBM-bandwidth-bound: 2,039 → 3,352 → 4,800 GB/s, ~1.64× per generation | **slow** |
+| WAN egress | 5 Gbps per VM on AWS — a *policy* cap, not physics; flat for years | **slowest** |
+| Migration concurrency | unmeasured | unknown |
+
+This gives the paper a claim that gets *stronger* with time rather than expiring:
+
+> Compute and memory improve by roughly 10× per generation while wide-area
+> bandwidth stays flat. So the binding constraint on cross-site evacuation
+> migrates away from the destination's steady-state capacity and toward the
+> transition — source streams, migration slots, and the network.
+
+Our reference run already shows two of three workloads in that regime (source
+streams saturated in 178 of 179 replicas, migration slots at 0.987, WAN at 0.993),
+and interactive coding — the one still limited by destination service — is exactly
+the case that a faster GPU moves into it. **The structural finding is not "a 2026
+A100 can absorb N sessions." It is "this problem is transition-limited, and
+becomes more so."**
+
+### What would actually break the formulation
+
+The model is `Ax ≤ 1, Ux ≤ 1, 0 ≤ x ≤ 1`. `A` is session incidence and depends on
+no measurement at all. Every entry of `U` is (a measured consumption) ÷ (a measured
+capacity). Changing any constant changes **numbers inside `U`** and nothing else —
+not the number of rows, not the columns, not the sparsity pattern, not the
+objective, not the solver, not the packer, not the validator.
+
+Exactly three things would break it, and the architecture already names all three:
+
+1. **A new kind of consumable appears** — staging memory, facility power, a
+   licence — and needs its own row. The fix is to add a row; no other change.
+2. **A resource stops being additive.** Cross-session prefix sharing is the live
+   example: KV would become a block-union rather than a sum, which concrete
+   packing cannot express today.
+3. **A resource stops being linear in the candidate** — interference that grows
+   faster than the sum of parts — which needs another facet, and the rule is to
+   add one only when held-out mixed-load data rejects the single facet.
+
+Being able to state the complete list of what would break it is a much stronger
+claim than "the model is general."
+
+### End to end, only one stage is hardware-specific
+
+| Stage | Depends on the constants? |
+|---|---|
+| 1. Measure the type (4–6 GPU-hours: KV by closed form, 5-point prefill sweep, 5-point decode sweep, 16-point mixed grid) | **yes — this is the only one** |
+| 2. Eligibility predicates (model, tokenizer, KV ABI, warmness) | no — boolean |
+| 3. Build the five resource rows | no — same rows, new numbers |
+| 4. Solve | no |
+| 5. Pack to concrete replicas | no |
+| 6. Validate by execution simulation | no |
+
+Adding a destination site means adding pools, per-replica baselines, candidate
+columns, and route edges. Adding a *hardware type* means running stage 1 once.
+Neither introduces a new abstraction. That is the robustness claim, and §4e tests
+it rather than asserting it.
+
+## 4e. The invariance test — run, not asserted
+
+Scale the measured constants by 10× and 100× and re-solve. Same code, same rows,
+same solver; only numbers inside `U` change. 10,000 sessions, seed 0, reference
+pressure. Binding set = every row family at or above 0.95.
+
+**Interactive coding** (65 replicas)
+
+| Streams | KV × | Prefill × | Landed | Watts | Binding |
+|---:|---:|---:|---:|---:|---|
+| 1 | 1 | 1 | 3,808 | 2,016 | service 1.00, source 1.00 |
+| 1 | **10** | 1 | 3,808 | 2,016 | service 1.00, source 1.00 |
+| 1 | **100** | 1 | 3,808 | 2,016 | service 1.00, source 1.00 |
+| 1 | 1 | **100** | 4,246 | 2,354 | service 1.00, source 1.00 |
+| **2** | 1 | 1 | 4,022 | 2,227 | service 1.00, source 0.97 |
+| **2** | 100 | **100** | 4,874 | 2,677 | service 1.00, source 0.97 |
+
+**Coding** (179 replicas)
+
+| Streams | KV × | Prefill × | Landed | Watts | Binding |
+|---:|---:|---:|---:|---:|---|
+| 1 | 1 | 1 | 7,746 | 6,100 | source 1.00, route 0.99, migration 0.99 |
+| 1 | **100** | **100** | 7,746 | 6,100 | source 1.00, route 0.99, migration 0.99 |
+| **2** | 1 | 1 | 8,295 | 6,192 | **migration 1.00, route 0.99** |
+| **2** | **100** | **100** | 8,295 | 6,192 | **migration 1.00, route 0.99** |
+
+Three results, and the second is the one to lead with.
+
+**1. The formulation is invariant.** Every cell above ran through unmodified code.
+No new row, no new abstraction, no solver change. Only entries in `U` moved.
+
+**2. Multiplying KV capacity by 100 changes nothing — not one session, not one
+watt, in any workload.** This is the direct answer to "what if we 10× the packing
+capability?" Nothing happens, because KV was never the binding row (0.34 and 0.77
+at reference). The formulation does not merely survive the change; it explains why
+the change is irrelevant.
+
+**3. Multiplying prefill throughput by 100 buys 11.5% on the service-bound
+workload and 0% on the transition-bound ones.** The reason is exact: the service
+coordinate is `f/F + g/G`, and interactive coding's demand splits 3.60 prefill
+against 21.20 decode. Prefill is 15% of the load, so even infinite prefill
+throughput removes at most 15%, and the row stays pinned at 1.00. **Decode, not
+prefill, is what holds the destination.**
+
+That matters because decode throughput is the **slowest-improving** constant in
+the table (HBM-bandwidth-bound, ~1.64× per GPU generation), while KV capacity and
+prefill throughput are the fastest. The sweep confirms the trajectory argument
+empirically rather than by assertion: **the constants that are improving quickly
+are the ones that do not bind, and the ones that bind are improving slowly or are
+policy-capped.**
+
+**4. The one knob that moves coding is migration concurrency, and it relocates the
+bottleneck.** Going from 1 to 2 source streams lands 7.1% more sessions and pushes
+the source-stream row off the binding set entirely — the constraint moves to the
+**destination migration slot and the WAN**. That is the predicted migration of the
+bottleneck from source to transition, observed.
+
+Two honest caveats. This scales only the *sink* constants, holding source packing
+fixed, which isolates the destination question by design. And 100× prefill is
+unphysical — it exceeds the roofline by 15× — so it is a limit probe establishing
+insensitivity along that ray, not a forecast. Per Floyd & Paxson, a flat sweep
+does not prove global insensitivity; it proves it along the axis swept, with the
+other factors held at the values stated.
+
+**What to print in the paper:** this table, plus the trajectory table from §4d.
+Together they say the thing that survives the hardware treadmill — *here is which
+constraint binds, here is where it moves as each constant improves, and here is
+the code that did not change while we found out.*
+
 ## 5b. The simulator-credibility bar, and the thing we are underselling
 
 ### Nobody else has a validated dynamic power model for LLM serving
