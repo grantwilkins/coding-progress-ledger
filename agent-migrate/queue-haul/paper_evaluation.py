@@ -36,6 +36,7 @@ PLOTS = (
              ("shed_w", "route_bytes", "prefill_service_work",
               "decode_service_work", "prefill_transition_work",
               "decode_transition_work", "kv_blocks",
+              "replay_migration_slot_s", "kv_migration_slot_s",
               "service_debt_replica_s", "required_recovery_s")),
     PlotSpec("Q4", "binding map", "q4_binding_map.pdf",
              ("route_headroom", "service_headroom", "binding_resources", "shed_w")),
@@ -96,6 +97,8 @@ def requirement_row(requirement, *, workload: str, sessions: int,
         "prefill_service_work": requirement.destination_service_work[0],
         "decode_service_work": requirement.destination_service_work[1],
         "kv_blocks": requirement.destination_kv_blocks,
+        "replay_migration_slot_s": requirement.replay_migration_slot_s,
+        "kv_migration_slot_s": requirement.kv_migration_slot_s,
         "service_debt_replica_s": service_debt_replica_s,
         "required_recovery_s": required_recovery_s,
         "binding_resources": "|".join(binding_resources),
@@ -120,11 +123,13 @@ def plot_requirement_frontier(rows: list[dict], out: Path) -> None:
         ("decode_transition_work", "Decode transition replica-s"),
         ("prefill_service_work", "Ongoing prefill replicas"),
         ("decode_service_work", "Ongoing decode replicas"),
+        ("replay_migration_slot_s", "Replay slot-s"),
+        ("kv_migration_slot_s", "KV ingest slot-s"),
         ("kv_blocks", "Live KV blocks"),
         ("service_debt_replica_s", "Queued replica-s"),
         ("required_recovery_s", "Required recovery (s)"),
     )
-    fig, axes = plt.subplots(2, 4, figsize=(14, 6), sharex=True)
+    fig, axes = plt.subplots(2, 5, figsize=(16, 6), sharex=True)
     for label in sorted({(row["workload"], row["sessions"]) for row in rows}):
         series = sorted(
             (row for row in rows
@@ -139,6 +144,7 @@ def plot_requirement_frontier(rows: list[dict], out: Path) -> None:
             )
             axis.set_ylabel(ylabel)
             axis.set_xlabel("Source accelerator power shed (W)")
+    axes.flat[-1].set_visible(False)
     axes.flat[0].legend(fontsize=7)
     fig.tight_layout()
     out.parent.mkdir(parents=True, exist_ok=True)

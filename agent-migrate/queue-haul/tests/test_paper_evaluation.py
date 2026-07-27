@@ -9,6 +9,7 @@ Plausible wrong implementations:
 - Accept a table without the physical fields named by its plot.
 - Label an assumed sweep as accepted measurement evidence.
 - Sum prefill and decode requirements into one composition-free scalar.
+- Hide KV ingest by reporting only serving-transition work.
 """
 
 import json
@@ -64,6 +65,8 @@ def test_requirement_row_preserves_physical_resource_totals(tmp_path):
     assert row["decode_service_work"] == 3
     assert row["prefill_transition_work"] == 4
     assert row["decode_transition_work"] == 0
+    assert row["replay_migration_slot_s"] == 1
+    assert row["kv_migration_slot_s"] == 2
     assert row["unmet_shed_w"] == 2
     assert row["kv_blocks"] == 7
     plot_requirement_frontier([row], tmp_path / "frontier.pdf")
