@@ -90,10 +90,13 @@ uv run python queue-haul/paper_evaluation.py \
 
 `requirement_frontier.py` computes destination requirements without constructing
 a destination inventory. `pool_planner.py` compares those requirements with
-concrete pool contracts. `simulate.py` validates the selected time schedule and
-shared queues. `evaluation_config.py` is the canonical source for assumed paper
-operating points and their replacement evidence. `paper_evaluation.py` writes
-the Q1–Q9 result/plot registry and rejects tables with missing provenance.
+concrete pool contracts and emits physical use/capacity rows. `simulate.py`
+independently schedules routes, reconstruction endpoints, requests, commits,
+and power. Pool service debt and recovery are aggregate planned quantities, not
+yet execution traces. `evaluation_config.py` is the canonical source for
+assumed paper operating points and their replacement evidence.
+`paper_evaluation.py` writes the Q1–Q9 result/plot registry and rejects tables
+with missing provenance.
 
 ## Measurement programs
 

@@ -93,6 +93,8 @@ explicit sensitivity until separately profiled.
 - `DestinationPool` identifies a compatible pool and logical route.
 - `DestinationArchitecture` groups types and pools.
 - `pool_planner.py` builds pool candidates and checks aggregate feasibility.
+- Each selected plan retains physical use, capacity, unit, and utilization for
+  every advertised resource row, plus per-pool/per-facet debt and recovery.
 - Internal replica packing remains a contract-validation tool, not a public
   Queue-Haul decision.
 - `requirement_frontier.py` reports raw landing requirements without assuming a
@@ -100,10 +102,11 @@ explicit sensitivity until separately profiled.
 - `simulate.py` independently schedules migrations, routes, requests, power,
   and queues.
 
-The planner implements explicit event admission, conservative service debt, and
-required recovery. The event simulator still needs pool-level debt and recovery
-traces. Existing `normal/emergency/stable` bounds map to normal policy, operator
-event policy, and hard stability respectively; they must not remain identical
+The planner implements explicit event admission, an aggregate service-work debt
+bound, and required recovery. That bound is not a time-scheduled queue. The
+event simulator still needs pool-level service-debt and recovery traces.
+Existing `normal/emergency/stable` bounds map to normal policy, operator event
+policy, and hard stability respectively; they must not remain identical
 placeholder numbers in accepted evidence.
 
 ## Evidence map

@@ -201,8 +201,8 @@ b_{p,r}+\sum_c s_{c,r}x_c
 \le C^{\mathrm{stable}}_{p,r}.
 \]
 
-Migration may temporarily queue work. Over the migration window, a conservative
-pool-level debt bound is
+Migration may temporarily queue serving work. Over the migration window, the
+planner uses this aggregate work bound:
 
 \[
 Q_{p,r}=
@@ -239,10 +239,15 @@ Q_{p,r}/
 \end{cases}
 \]
 
-The planner uses the conservative total-work bound. The independent event
-simulator schedules actual arrivals, migration work, commits, and pool queues.
-It reports peak debt and recovery and rejects a plan that violates the
-advertised contract.
+This is not a time-scheduled queue bound. Work that arrives late can create a
+larger queue even when the aggregate fits. The current event simulator
+independently schedules shared routes, reconstruction endpoints, requests,
+commits, and source power. Pool service debt and recovery remain planned
+admission quantities until the simulator schedules their release times.
+
+Replay prefill contributes measured serving-transition work. KV ingest uses a
+separate measured ingest slot. Queue-Haul does not charge KV ingest to prefill
+or decode service unless interference is measured.
 
 ## 6. Other resource constraints
 
@@ -269,7 +274,7 @@ For each logical route,
 \]
 
 This byte constraint is a fluid lower bound. The event simulator validates the
-actual shared-route schedule and queued bytes.
+actual shared-route schedule, transferred bytes, and completion time.
 
 Source preparation streams and pool transition capacity are time budgets:
 
