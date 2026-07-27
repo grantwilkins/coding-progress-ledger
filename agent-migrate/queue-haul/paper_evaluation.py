@@ -33,7 +33,9 @@ PLOTS = (
     PlotSpec("Q4", "shed target", "q4_achieved_shed.pdf",
              ("requested_shed_w", "achieved_shed_w", "unmet_shed_w")),
     PlotSpec("Q4", "requirement frontier", "q4_requirement_frontier.pdf",
-             ("shed_w", "route_bytes", "service_work", "kv_blocks",
+             ("shed_w", "route_bytes", "prefill_service_work",
+              "decode_service_work", "prefill_transition_work",
+              "decode_transition_work", "kv_blocks",
               "service_debt_replica_s", "required_recovery_s")),
     PlotSpec("Q4", "binding map", "q4_binding_map.pdf",
              ("route_headroom", "service_headroom", "binding_resources", "shed_w")),
@@ -89,8 +91,10 @@ def requirement_row(requirement, *, workload: str, sessions: int,
             - requirement.achieved_source_power_reduction_w,
         ),
         "route_bytes": requirement.wan_bytes,
-        "transition_work": sum(requirement.destination_transition_work),
-        "service_work": sum(requirement.destination_service_work),
+        "prefill_transition_work": requirement.destination_transition_work[0],
+        "decode_transition_work": requirement.destination_transition_work[1],
+        "prefill_service_work": requirement.destination_service_work[0],
+        "decode_service_work": requirement.destination_service_work[1],
         "kv_blocks": requirement.destination_kv_blocks,
         "service_debt_replica_s": service_debt_replica_s,
         "required_recovery_s": required_recovery_s,
@@ -112,13 +116,15 @@ def plot_requirement_frontier(rows: list[dict], out: Path) -> None:
 
     fields = (
         ("route_bytes", "Route bytes"),
-        ("transition_work", "Transition replica-s"),
-        ("service_work", "Ongoing replica-equivalents"),
+        ("prefill_transition_work", "Prefill transition replica-s"),
+        ("decode_transition_work", "Decode transition replica-s"),
+        ("prefill_service_work", "Ongoing prefill replicas"),
+        ("decode_service_work", "Ongoing decode replicas"),
         ("kv_blocks", "Live KV blocks"),
         ("service_debt_replica_s", "Queued replica-s"),
         ("required_recovery_s", "Required recovery (s)"),
     )
-    fig, axes = plt.subplots(2, 3, figsize=(11, 6), sharex=True)
+    fig, axes = plt.subplots(2, 4, figsize=(14, 6), sharex=True)
     for label in sorted({(row["workload"], row["sessions"]) for row in rows}):
         series = sorted(
             (row for row in rows

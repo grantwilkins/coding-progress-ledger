@@ -8,6 +8,7 @@ Plausible wrong implementations:
 - Overwrite two figures through a duplicate filename.
 - Accept a table without the physical fields named by its plot.
 - Label an assumed sweep as accepted measurement evidence.
+- Sum prefill and decode requirements into one composition-free scalar.
 """
 
 import json
@@ -59,8 +60,10 @@ def test_requirement_row_preserves_physical_resource_totals(tmp_path):
         service_debt_replica_s=5, required_recovery_s=2,
     )
 
-    assert row["service_work"] == 5
-    assert row["transition_work"] == 4
+    assert row["prefill_service_work"] == 2
+    assert row["decode_service_work"] == 3
+    assert row["prefill_transition_work"] == 4
+    assert row["decode_transition_work"] == 0
     assert row["unmet_shed_w"] == 2
     assert row["kv_blocks"] == 7
     plot_requirement_frontier([row], tmp_path / "frontier.pdf")
