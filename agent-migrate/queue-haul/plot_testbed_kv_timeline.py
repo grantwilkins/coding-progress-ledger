@@ -197,6 +197,10 @@ def plot(timeline_path: Path, inference_path: Path, out: Path) -> None:
     timeline, inference = _read_csv(timeline_path), _read_csv(inference_path)
     method = timeline[0]["method"]
     plt.style.use("seaborn-v0_8-whitegrid")
+    plt.rcParams.update({
+        "font.size": 12, "axes.labelsize": 13, "xtick.labelsize": 12,
+        "ytick.labelsize": 12, "legend.fontsize": 11,
+    })
     colors = {
         "bulk": "#4298B5",
         "drain": "#DAD7CB",
@@ -209,7 +213,7 @@ def plot(timeline_path: Path, inference_path: Path, out: Path) -> None:
         "text": "#2E2D29",
         "grid": "#DAD7CB",
     }
-    fig, gantt = plt.subplots(figsize=(11, 3.8))
+    fig, gantt = plt.subplots(figsize=(10, 3.1))
     phase_labels = ("KV Initial Write", "Append final KV") \
         if method == "kv_transfer" \
         else ("Initial Context Update", "Final Context Update")
@@ -218,10 +222,7 @@ def plot(timeline_path: Path, inference_path: Path, out: Path) -> None:
         ("catch_up_start_s", "catch_up_finish_s", phase_labels[1], "catch"),
     )
     if method == "replay":
-        phases = (
-            ("bulk_start_s", "bulk_send_finish_s", phase_labels[0], "bulk"),
-            ("catch_up_start_s", "catch_up_send_finish_s", phase_labels[1], "bulk"),
-        )
+        phases = ()
     gantt.axvspan(
         float(timeline[0]["quiesce_s"]),
         float(timeline[0]["catch_up_start_s"]),
@@ -233,29 +234,28 @@ def plot(timeline_path: Path, inference_path: Path, out: Path) -> None:
     positions = [1.4 * index for index in range(len(timeline))]
     inference_labels = set()
     for y, row in zip(positions, timeline):
-        source_y, migration_y, destination_y = y - .55, y, y + .55
+        source_y, migration_y, destination_y = y - .32, y, y + .32
         commit = float(row["commit_s"])
-        prior = ((-4.2, 1.25, "Prefill"), (-2.85, .5, "Decode"),
-                 (-2.15, .8, "Prefill"), (-1.25, .35, "Decode")) \
-            if method == "kv_transfer" \
-            else ((-4.2, 2.0, "Prefill"), (-2.05, 1.1, "Decode"))
+        prior = (
+            (-2.35, .65, "prefill"), (-1.7, .25, "decode"),
+            (-1.45, .3, "tool"), (-1.15, .85, "prefill"),
+            (-.3, .3, "decode"),
+        )
         for left, width, phase in prior:
             gantt.barh(
-                source_y, width, left=left, height=.25,
-                color=colors[phase.lower()], zorder=3,
+                source_y, width, left=left, height=.32,
+                color=colors[phase], hatch="//" if phase == "tool" else None,
+                edgecolor=colors["text"] if phase == "tool" else "none",
+                linewidth=.5, zorder=3,
             )
         gantt.text(
-            -2.55, source_y - .22, "prior inference (not to scale)",
-            ha="center", va="top", fontsize=8, color=colors["tool"],
-        )
-        gantt.text(
-            -.48, source_y, "...", ha="center", va="center",
-            color=colors["text"],
+            -1.18, source_y - .2, "prior inference (not to scale)",
+            ha="center", va="bottom", fontsize=10, color=colors["tool"],
         )
         for start_name, end_name, label, color in phases:
             start, end = float(row[start_name]), float(row[end_name])
             gantt.barh(
-                migration_y, end - start, left=start, height=.34,
+                migration_y, end - start, left=start, height=.32,
                 color=colors[color],
                 label=label if y == positions[0] else None, zorder=2,
             )
@@ -272,7 +272,7 @@ def plot(timeline_path: Path, inference_path: Path, out: Path) -> None:
             inference_y = source_y \
                 if segment["location"] == "source" else destination_y
             gantt.barh(
-                inference_y, end - start, left=start, height=.25,
+                inference_y, end - start, left=start, height=.32,
                 color=colors[color], hatch="//" if color == "tool" else None,
                 edgecolor=colors["text"] if color == "tool" else "none",
                 linewidth=.5,
@@ -292,7 +292,7 @@ def plot(timeline_path: Path, inference_path: Path, out: Path) -> None:
             zorder=4,
         )
     gantt.set_yticks(
-        [positions[0] - .55, positions[0], positions[0] + .55],
+        [positions[0] - .32, positions[0], positions[0] + .32],
         ["Inference at Source", "Migration", "Inference at Destination"],
     )
     gantt.invert_yaxis()
@@ -304,10 +304,6 @@ def plot(timeline_path: Path, inference_path: Path, out: Path) -> None:
         ),
         Patch(facecolor=colors["catch"], label=phase_labels[1]),
     ) if method == "kv_transfer" else (
-        Patch(
-            facecolor=colors["bulk"],
-            label="Context Update (<=250-ms bound)",
-        ),
         Patch(
             facecolor=colors["drain"], alpha=.6,
             label="Pause (drain active request)",
@@ -332,7 +328,7 @@ def plot(timeline_path: Path, inference_path: Path, out: Path) -> None:
     )
     gantt.legend(
         handles=legend, frameon=False, ncol=4, loc="upper center",
-        bbox_to_anchor=(.5, 1.36),
+        bbox_to_anchor=(.5, 1.43),
     )
     gantt.grid(axis="x", color=colors["grid"], linewidth=.8, alpha=.7)
     gantt.grid(axis="y", visible=False)
@@ -345,9 +341,9 @@ def plot(timeline_path: Path, inference_path: Path, out: Path) -> None:
         f"Time since {'first KV write' if method == 'kv_transfer' else 'replay start'} (s)"
     )
     end = max(float(row["first_token_s"]) for row in timeline) + 3
-    gantt.set_xlim(-4.5, end)
+    gantt.set_xlim(-2.5, end)
     gantt.set_xticks(range(0, int(end) + 1, 5))
-    fig.subplots_adjust(left=.17, right=.98, top=.7, bottom=.17)
+    fig.subplots_adjust(left=.2, right=.98, top=.63, bottom=.2)
     fig.savefig(out.with_suffix(".png"), dpi=200)
     fig.savefig(out.with_suffix(".pdf"))
     plt.close(fig)
