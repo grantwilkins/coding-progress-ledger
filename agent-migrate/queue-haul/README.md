@@ -104,7 +104,8 @@ paper evaluation is reorganized into mechanism validation, fixed-contract
 coordination, multi-pool contracts, and planner quality/scale. It rejects
 tables with missing provenance.
 `plot_testbed_kv_timeline.py` generates the measured two-A100 concurrency-one
-KV timeline with inference continuing through the pause from tidy event tables.
+KV timeline with inference continuing through request-boundary drain from tidy
+event tables.
 
 ## Measurement programs
 

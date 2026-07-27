@@ -136,7 +136,7 @@ def plot(timeline_path: Path, inference_path: Path, out: Path) -> None:
     timeline, inference = _read_csv(timeline_path), _read_csv(inference_path)
     colors = {
         "bulk": "#4C78A8",
-        "quiesce": "#ECA82C",
+        "drain": "#ECA82C",
         "catch": "#72B7B2",
         "switch": "#E45756",
         "token": "#2A9D5B",
@@ -147,9 +147,14 @@ def plot(timeline_path: Path, inference_path: Path, out: Path) -> None:
     fig, gantt = plt.subplots(figsize=(11, 3.2))
     phases = (
         ("bulk_start_s", "bulk_finish_s", "KV write + ingest", "bulk"),
-        ("quiesce_s", "catch_up_start_s", "Pause", "quiesce"),
         ("catch_up_start_s", "catch_up_finish_s", "Catch-up", "catch"),
         ("switch_start_s", "commit_s", "Route switch", "switch"),
+    )
+    gantt.axvspan(
+        float(timeline[0]["quiesce_s"]),
+        float(timeline[0]["catch_up_start_s"]),
+        color=colors["drain"], alpha=.16,
+        label="Request-boundary drain; source serves", zorder=0,
     )
     positions = [1.4 * index for index in range(len(timeline))]
     inference_labels = set()
