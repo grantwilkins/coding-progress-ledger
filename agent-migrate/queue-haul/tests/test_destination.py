@@ -11,14 +11,16 @@ Plausible wrong implementations:
 - Treat a changed runtime baseline as load-induced slowdown.
 - Interpolate one slowdown at the initial load instead of taking the worst measured value
   through the selected envelope boundary.
+- Accept a debt allowance while the event-capacity contract is disabled.
 """
 
 from dataclasses import replace
 
 import pytest
 
-from destination import (CompatibilityFingerprint, ContextRate, DestinationType,
-                         LoadedCoefficients, MigrationComponents)
+from destination import (CompatibilityFingerprint, ContextRate, DestinationPool,
+                         DestinationReplica, DestinationType, LoadedCoefficients,
+                         MigrationComponents)
 
 
 def fingerprint(**changes):
@@ -89,3 +91,11 @@ def test_migration_evidence_marks_each_out_of_domain_quantity():
 
     assert components.extrapolates(20, 7) == ()
     assert components.extrapolates(8, 20) == ("context", "bandwidth")
+
+
+def test_service_debt_requires_an_explicit_event_capacity_contract():
+    with pytest.raises(ValueError, match="invalid destination pool"):
+        DestinationPool(
+            "p", "q", (DestinationReplica("r"),), "route", ("wan",),
+            service_debt_fraction=.05,
+        )

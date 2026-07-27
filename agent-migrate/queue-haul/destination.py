@@ -180,7 +180,8 @@ class DestinationPool:
                 or not set(self.methods) <= {"replay", "kv_transfer"} \
                 or self.event_flex_fraction is not None \
                 and not 0 <= self.event_flex_fraction <= 1 \
-                or not 0 <= self.service_debt_fraction <= 1:
+                or not 0 <= self.service_debt_fraction <= 1 \
+                or self.event_flex_fraction is None and self.service_debt_fraction:
             raise ValueError("invalid destination pool")
 
 
