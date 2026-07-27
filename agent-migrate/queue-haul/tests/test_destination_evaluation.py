@@ -17,7 +17,7 @@ Plausible wrong implementations:
 - Choose the median rather than worst observed migration slowdown.
 - Divide total capacity rather than residual capacity by reference demand.
 - Round replica demand down or permit fewer replicas than pools.
-- Change the preregistered rho/headroom/pool grid order or contents.
+- Omit the two-pool case or conflate normal headroom, event flex, and debt.
 """
 
 from types import SimpleNamespace
@@ -184,9 +184,10 @@ def test_replica_allocation_rounds_up_and_never_undersupplies_pools():
 
 
 def test_primary_grid_is_deterministic_and_complete():
-    assert len(primary_cells()) == 36
-    assert primary_cells()[0] == primary_cells()[0].__class__(0, .5, 1)
-    assert primary_cells()[-1] == primary_cells()[-1].__class__(.95, 2, 8)
+    assert len(primary_cells()) == 4 * 3 * 4 * 4 * 4
+    assert primary_cells()[0] == SweepCell(0, .5, 1, 0, 0)
+    assert primary_cells()[-1] == SweepCell(.95, 2, 8, .20, .20)
+    assert {cell.pools for cell in primary_cells()} == {1, 2, 4, 8}
 
 
 def test_seeded_sweep_repeats_only_transition_cells(monkeypatch):
@@ -203,7 +204,7 @@ def test_seeded_sweep_repeats_only_transition_cells(monkeypatch):
             planner_memory_bytes=1,
         )
     monkeypatch.setattr(destination_evaluation, "plan", fake_plan)
-    cell = SweepCell(.8, 1, 1)
+    cell = SweepCell(.8, 1, 1, .1, .05)
 
     first = run_sweep(build, object(), (cell,), range(2), range(2, 4))
     second = run_sweep(build, object(), (cell,), range(2), range(2, 4))
@@ -212,3 +213,4 @@ def test_seeded_sweep_repeats_only_transition_cells(monkeypatch):
         return row["seed"], row["planner"], row["feasible"]
     assert list(map(key, first)) == list(map(key, second))
     assert {r["seed"] for r in first} == {0, 1, 2, 3}
+    assert {(r["flex"], r["debt"]) for r in first} == {(.1, .05)}

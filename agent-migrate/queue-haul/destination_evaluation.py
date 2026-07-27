@@ -14,7 +14,9 @@ from planner import plan
 
 RHO = (0, .5, .8, .95)
 HEADROOM = (.5, 1, 2)
-POOLS = (1, 4, 8)
+POOLS = (1, 2, 4, 8)
+FLEX = (0, .05, .10, .20)
+DEBT = (0, .05, .10, .20)
 
 
 def archived_cache_state(requests, block_tokens):
@@ -167,9 +169,12 @@ class SweepCell:
     rho: float
     headroom: float
     pools: int
+    flex: float
+    debt: float
 
 
-def primary_cells(): return tuple(SweepCell(*x) for x in product(RHO, HEADROOM, POOLS))
+def primary_cells():
+    return tuple(SweepCell(*x) for x in product(RHO, HEADROOM, POOLS, FLEX, DEBT))
 
 
 def run_sweep(build, profile, cells=primary_cells(), seeds=range(10),
@@ -188,8 +193,9 @@ def run_sweep(build, profile, cells=primary_cells(), seeds=range(10),
                     scenario, profile, routes, solver, seed=seed, destination=destination,
                 )
                 rows.append({
-                "rho": cell.rho, "headroom": cell.headroom, "pools": cell.pools,
-                "seed": seed, "planner": label, "feasible": result.feasible,
+                    "rho": cell.rho, "headroom": cell.headroom, "pools": cell.pools,
+                    "flex": cell.flex, "debt": cell.debt,
+                    "seed": seed, "planner": label, "feasible": result.feasible,
                 "shed_w": result.initial_source_power_w - result.planned_source_power_w,
                 "shortfall_w": result.power_shortfall_w, "mode": result.admission_mode,
                 "migration_s": result.predicted_migration_makespan_s,
@@ -201,8 +207,8 @@ def run_sweep(build, profile, cells=primary_cells(), seeds=range(10),
     run(cells, seeds)
     transitions = [cell for cell in cells if 0 < sum(
         r["feasible"] for r in rows if r["planner"] == "pool_lp"
-        and (r["rho"], r["headroom"], r["pools"]) ==
-        (cell.rho, cell.headroom, cell.pools)
+        and (r["rho"], r["headroom"], r["pools"], r["flex"], r["debt"]) ==
+        (cell.rho, cell.headroom, cell.pools, cell.flex, cell.debt)
     ) < len(tuple(seeds))]
     run(transitions, transition_seeds)
     return rows
