@@ -250,6 +250,65 @@ def _validate_greedy(actions, selected, horizon, streams, bandwidth):
         raise RuntimeError("greedy WAN budget exceeds deadline")
 
 
+BASELINES = (
+    "all_replay", "all_kv", "isolated_fastest", "network_greedy",
+    "service_greedy", "power_first",
+)
+
+
+def _baseline(actions, target, horizon, streams, bandwidth, policy):
+    if policy not in BASELINES:
+        raise ValueError("unknown frontier baseline")
+    eligible = list(range(len(actions)))
+    if policy in {"all_replay", "all_kv"}:
+        method = "replay" if policy == "all_replay" else "kv_transfer"
+        eligible = [i for i in eligible if actions[i].method == method]
+    if policy == "isolated_fastest":
+        eligible = list({
+            action.session_id: min(
+                (i for i in eligible if actions[i].session_id == action.session_id),
+                key=lambda i: (actions[i].duration_s, i),
+            )
+            for action in actions
+        }.values())
+    keys = {
+        "network_greedy": lambda i: (
+            actions[i].route_bytes / max(actions[i].source_power_gain_w, 1e-12), i,
+        ),
+        "service_greedy": lambda i: (
+            sum(actions[i].service_work)
+            / max(actions[i].source_power_gain_w, 1e-12), i,
+        ),
+        "power_first": lambda i: (-actions[i].source_power_gain_w, i),
+    }
+    key = keys.get(policy, lambda i: (
+        actions[i].duration_s / max(actions[i].source_power_gain_w, 1e-12), i,
+    ))
+    bins = {
+        source: [0.0] * streams
+        for source in {action.source_instance for action in actions}
+    }
+    selected, sessions, wan, gain = [], set(), 0, 0.0
+    for i in sorted(eligible, key=key):
+        action = actions[i]
+        choices = [
+            (used, stream) for stream, used in enumerate(bins[action.source_instance])
+            if used + action.duration_s <= horizon + 1e-7
+        ]
+        if action.session_id in sessions or not choices \
+                or wan + action.route_bytes > bandwidth * horizon + 1e-7:
+            continue
+        bins[action.source_instance][max(choices)[1]] += action.duration_s
+        selected.append(i)
+        sessions.add(action.session_id)
+        wan += action.route_bytes
+        gain += action.source_power_gain_w
+        if gain >= target - 1e-7:
+            break
+    _validate_greedy(actions, selected, horizon, streams, bandwidth)
+    return tuple(selected)
+
+
 def requirement_frontier(scenario: ExecutionScenario, profile,
                          destination_type: DestinationType,
                          target_source_power_reduction_w: float,
@@ -259,7 +318,7 @@ def requirement_frontier(scenario: ExecutionScenario, profile,
     """Return raw landing requirements; ``route_rtt_s`` is added once per action."""
     if target_source_power_reduction_w < 0 or route_bandwidth_bytes_per_s <= 0 \
             or route_rtt_s < 0 or source_streams < 1 \
-            or solver_mode not in {"exact", "greedy"}:
+            or solver_mode not in {"exact", "greedy", *BASELINES}:
         raise ValueError("invalid requirement-frontier input")
     start = perf_counter()
     horizon = scenario.deadline_s - scenario.controller_delay_s - profile.power_window_s
@@ -274,10 +333,16 @@ def requirement_frontier(scenario: ExecutionScenario, profile,
             actions, target_source_power_reduction_w, horizon, source_streams,
             route_bandwidth_bytes_per_s,
         )
-    else:
+    elif solver_mode == "greedy":
         selected = _greedy(
             actions, target_source_power_reduction_w, horizon, source_streams,
             route_bandwidth_bytes_per_s,
+        )
+        maximum = None
+    else:
+        selected = _baseline(
+            actions, target_source_power_reduction_w, horizon, source_streams,
+            route_bandwidth_bytes_per_s, solver_mode,
         )
         maximum = None
     chosen = tuple(actions[i] for i in selected)
@@ -316,7 +381,8 @@ def requirement_frontier(scenario: ExecutionScenario, profile,
         sum(action.duration_s for action in chosen if action.method == "kv_transfer"),
         wan, occupancies, minimum_streams, source_streams, mix, makespan, horizon,
         route_bandwidth_bytes_per_s, route_rtt_s, solver_mode,
-        ("optimal" if solver_mode == "exact" else "approximate")
+        ("optimal" if solver_mode == "exact" else
+         "approximate" if solver_mode == "greedy" else "baseline")
         + ("_target_met" if achieved + 1e-7 >= target_source_power_reduction_w
            else "_best_effort"),
         0.0 if solver_mode == "exact" else None, perf_counter() - start,

@@ -19,7 +19,7 @@ import pytest
 
 from destination import MigrationComponents
 from requirement_frontier import (
-    RequirementAction, _actions, _greedy, _solve, requirement_frontier,
+    RequirementAction, _actions, _baseline, _greedy, _solve, requirement_frontier,
     sweep_frontier,
 )
 from test_execution_simulator import model
@@ -120,6 +120,26 @@ def test_greedy_caps_overshoot_and_accounts_for_wan_and_source():
     first = _greedy(sources, 3, 10, 1, 100)
     assert first == _greedy(sources, 3, 10, 1, 100)
     assert first == (0, 2)
+
+
+def test_baselines_change_only_the_declared_ranking_policy():
+    actions = (
+        replace(action("a", "replay", 4, 2), route_bytes=1,
+                service_work=(10, 0)),
+        replace(action("a", "kv_transfer", 4, 1), route_bytes=10,
+                service_work=(0, 0)),
+        replace(action("b", "replay", 6, 3), route_bytes=1,
+                service_work=(1, 0)),
+        replace(action("b", "kv_transfer", 6, 4), route_bytes=10,
+                service_work=(0, 0)),
+    )
+
+    assert _baseline(actions, 4, 10, 1, 100, "all_replay") == (0,)
+    assert _baseline(actions, 4, 10, 1, 100, "all_kv") == (1,)
+    assert _baseline(actions, 4, 10, 1, 100, "isolated_fastest") == (1,)
+    assert _baseline(actions, 4, 10, 1, 100, "network_greedy") == (2,)
+    assert _baseline(actions, 4, 10, 1, 100, "service_greedy") == (1,)
+    assert _baseline(actions, 4, 10, 1, 100, "power_first") == (2,)
 
 
 def test_frontier_reports_physical_requirements_and_stream_invariance(tmp_path):
