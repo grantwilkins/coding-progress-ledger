@@ -3,6 +3,24 @@
 Complete tasks in order. After every change, run `uv run pytest`, stage all
 task files, and create the listed commit.
 
+## Calendar
+
+- **Jul 27–Aug 2:** finish Tasks 1–5 software paths. Exit with one physical
+  resource ledger, one realized pool-service trace, pinned workload inputs, and
+  runnable assumed-data commands.
+- **Aug 3–9:** run Tasks 6–7 on the two-A100 setup. Exit with held-out source
+  power and complete replay/KV handoff evidence.
+- **Aug 10–16:** run Task 8. Exit only after normal and stable destination
+  boundaries have passing and failing points for all three service mixes.
+- **Aug 17–23:** run the two-A100 part of Task 9. Exit with one accepted full
+  event or a written failed gate with raw evidence.
+- **Aug 24–30:** run the 8+8-A100 part of Task 9 and small exact planner cases
+  from Task 10. Exit with plan-versus-execution tables.
+- **Aug 31–Sep 6:** finish Task 10 at 10K, 100K, and 1M sessions. Exit with
+  fixed-total and fixed-per-pool results for all four workloads.
+- **Sep 7–13:** run Task 11 if hardware is available; otherwise keep those rows
+  assumed. Finish Task 12 and freeze the paper figures.
+
 ## 1. Paper and contract
 
 - [x] Confirm `formulation_nsdi.md`, `PROPOSED_DESTINATION_ARCH.md`, and
@@ -38,8 +56,8 @@ task files, and create the listed commit.
 
 ## 4. Simulator and result schema
 
-- [ ] Schedule pool reconstruction, service, route, and byte queues.
-- [ ] Consume advertised destination baselines; do not generate unrelated
+- [x] Schedule pool reconstruction, service, route, and byte queues.
+- [x] Consume advertised destination baselines; do not generate unrelated
   destination traffic.
 - [ ] Emit candidate choice, action mix, every capacity/use, binding set, debt,
   recovery, route queue, makespan, power, and exposed state.
@@ -51,7 +69,7 @@ task files, and create the listed commit.
 
 ## 5. Assumed-data evaluation pipeline
 
-- [ ] Add checksum-pinned ShareGPT conversation shapes from the supplied
+- [x] Add checksum-pinned ShareGPT conversation shapes from the supplied
   `ShareGPT_V3_unfiltered_cleaned_split.json` artifact.
 - [ ] Generate coding, interactive-coding, agentic, and conversation scenarios
   at 10K, 100K, and 1M sessions.
