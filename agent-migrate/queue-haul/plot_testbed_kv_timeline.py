@@ -11,6 +11,8 @@ import matplotlib
 
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
+from matplotlib.lines import Line2D
+from matplotlib.patches import Patch
 
 DEFAULT_SCENARIO = "m-0d41d4a3ced809ad"
 
@@ -89,9 +91,9 @@ def extract(root: Path, scenario_id: str) -> tuple[list[dict], list[dict]]:
         next_start = activities[index + 1]["start_ns"] \
             if index + 1 < len(activities) else None
         for phase, start, end in (
-            ("<P>", activity["start_ns"], activity["first_byte_ns"]),
-            ("<D>", activity["first_byte_ns"], activity["end_ns"]),
-            ("<Tool>", activity["end_ns"], next_start),
+            ("Prefill", activity["start_ns"], activity["first_byte_ns"]),
+            ("Decode", activity["first_byte_ns"], activity["end_ns"]),
+            ("Tool Call", activity["end_ns"], next_start),
         ):
             if end and int(end) > int(start):
                 segments.append({
@@ -102,14 +104,14 @@ def extract(root: Path, scenario_id: str) -> tuple[list[dict], list[dict]]:
                     "phase": phase,
                     "start_s": seconds(start),
                     "finish_s": seconds(end),
-                    "evidence_status": "measured" if phase != "<Tool>"
+                    "evidence_status": "measured" if phase != "Tool Call"
                         else "observed_application_gap",
                     "provenance": str(run / "result.json"),
                 })
     for session_id, continuation in continuations.items():
         for phase, start, end in (
-            ("<P>", continuation["start_ns"], continuation["first_byte_ns"]),
-            ("<D>", continuation["first_byte_ns"], continuation["end_ns"]),
+            ("Prefill", continuation["start_ns"], continuation["first_byte_ns"]),
+            ("Decode", continuation["first_byte_ns"], continuation["end_ns"]),
         ):
             segments.append({
                 "scenario_id": scenario_id,
@@ -134,33 +136,34 @@ def _write(path: Path, rows: list[dict]) -> None:
 
 def plot(timeline_path: Path, inference_path: Path, out: Path) -> None:
     timeline, inference = _read_csv(timeline_path), _read_csv(inference_path)
+    plt.style.use("seaborn-v0_8-whitegrid")
     colors = {
-        "bulk": "#4C78A8",
-        "drain": "#ECA82C",
-        "catch": "#72B7B2",
-        "switch": "#E45756",
-        "token": "#2A9D5B",
-        "prefill": "#7A5195",
-        "decode": "#EF5675",
-        "tool": "#8A8F98",
+        "bulk": "#4298B5",
+        "drain": "#DAD7CB",
+        "catch": "#279989",
+        "switch": "#8C1515",
+        "token": "#175E54",
+        "prefill": "#734675",
+        "decode": "#E98300",
+        "tool": "#7F7776",
+        "text": "#2E2D29",
+        "grid": "#DAD7CB",
     }
     fig, gantt = plt.subplots(figsize=(11, 3.2))
     phases = (
-        ("bulk_start_s", "bulk_finish_s", "KV write + ingest", "bulk"),
-        ("catch_up_start_s", "catch_up_finish_s", "Catch-up", "catch"),
-        ("switch_start_s", "commit_s", "Route switch", "switch"),
+        ("bulk_start_s", "bulk_finish_s", "KV Initial Write", "bulk"),
+        ("catch_up_start_s", "catch_up_finish_s", "Append final KV", "catch"),
     )
     gantt.axvspan(
         float(timeline[0]["quiesce_s"]),
         float(timeline[0]["catch_up_start_s"]),
-        color=colors["drain"], alpha=.16,
-        label="Request-boundary drain; source serves", zorder=0,
+        color=colors["drain"], alpha=.48,
+        label="Background KV Transfer", zorder=0,
     )
     positions = [1.4 * index for index in range(len(timeline))]
     inference_labels = set()
     for y, row in zip(positions, timeline):
         commit = float(row["commit_s"])
-        gantt.barh(y + .18, commit, height=.48, color="#ECEFF1", zorder=0)
         for start_name, end_name, label, color in phases:
             start, end = float(row[start_name]), float(row[end_name])
             gantt.barh(
@@ -174,32 +177,64 @@ def plot(timeline_path: Path, inference_path: Path, out: Path) -> None:
         for segment in session_segments:
             phase = segment["phase"]
             start, end = float(segment["start_s"]), float(segment["finish_s"])
-            color = {"<P>": "prefill", "<D>": "decode", "<Tool>": "tool"}[phase]
+            color = {
+                "Prefill": "prefill", "Decode": "decode", "Tool Call": "tool",
+            }[phase]
             gantt.barh(
                 y - .3, end - start, left=start, height=.24,
                 color=colors[color], hatch="//" if color == "tool" else None,
+                edgecolor=colors["text"] if color == "tool" else "none",
+                linewidth=.5,
                 label=phase if phase not in inference_labels else None,
                 zorder=3,
             )
             inference_labels.add(phase)
         gantt.scatter(
             commit, y + .18, marker="D", s=45, color=colors["switch"],
-            label="Commit" if y == positions[0] else None, zorder=4,
+            label="Route Switch" if y == positions[0] else None, zorder=4,
         )
         first_token = float(row["first_token_s"])
         gantt.scatter(
             first_token, y + .18, marker="*", s=95,
             color=colors["token"],
-            label="First post-switch token" if y == positions[0] else None,
+            label="First Token at Destination" if y == positions[0] else None,
             zorder=4,
         )
-    gantt.set_yticks(positions, [row["session"] for row in timeline])
-    gantt.invert_yaxis()
-    gantt.set_ylabel("Session")
-    gantt.legend(
-        frameon=False, ncol=5, loc="upper center", bbox_to_anchor=(.5, 1.32),
+    gantt.set_yticks(
+        [positions[0] - .3, positions[0] + .18],
+        ["Inference", "Migration"],
     )
-    gantt.grid(axis="x", alpha=.2)
+    gantt.invert_yaxis()
+    legend = (
+        Patch(facecolor=colors["prefill"], label="Prefill"),
+        Patch(facecolor=colors["decode"], label="Decode"),
+        Patch(
+            facecolor=colors["tool"], edgecolor=colors["text"],
+            hatch="//", label="Tool Call",
+        ),
+        Patch(facecolor=colors["bulk"], label="KV Initial Write"),
+        Patch(facecolor=colors["drain"], alpha=.6, label="Background KV Transfer"),
+        Patch(facecolor=colors["catch"], label="Append final KV"),
+        Line2D(
+            (), (), marker="D", linestyle="none", color=colors["switch"],
+            markersize=8, label="Route Switch",
+        ),
+        Line2D(
+            (), (), marker="*", linestyle="none", color=colors["token"],
+            markersize=12, label="First Token at Destination",
+        ),
+    )
+    gantt.legend(
+        handles=legend, frameon=False, ncol=4, loc="upper center",
+        bbox_to_anchor=(.5, 1.36),
+    )
+    gantt.grid(axis="x", color=colors["grid"], linewidth=.8, alpha=.7)
+    gantt.grid(axis="y", visible=False)
+    gantt.spines[["top", "right"]].set_visible(False)
+    gantt.spines[["left", "bottom"]].set_color(colors["text"])
+    gantt.tick_params(colors=colors["text"])
+    gantt.set_facecolor("#FFFFFF")
+    fig.set_facecolor("#FFFFFF")
     gantt.set_xlabel("Time since first KV write (s)")
     end = max(float(row["first_token_s"]) for row in timeline) + 3
     gantt.set_xlim(0, end)

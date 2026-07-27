@@ -73,9 +73,9 @@ def test_extract_preserves_pause_and_inference_semantics(tmp_path):
     assert row["first_token_s"] == pytest.approx(4.4)
     assert [(segment["phase"], segment["start_s"], segment["finish_s"])
             for segment in segments] == [
-        ("<P>", .1, .6), ("<D>", .6, .8), ("<Tool>", .8, 1.1),
-        ("<P>", 1.1, 2.2), ("<D>", 2.2, 2.5),
-        ("<P>", 4.2, 4.4), ("<D>", 4.4, 4.6),
+        ("Prefill", .1, .6), ("Decode", .6, .8), ("Tool Call", .8, 1.1),
+        ("Prefill", 1.1, 2.2), ("Decode", 2.2, 2.5),
+        ("Prefill", 4.2, 4.4), ("Decode", 4.4, 4.6),
     ]
     assert max(
         segment["finish_s"] for segment in segments
