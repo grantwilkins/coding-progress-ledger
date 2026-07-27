@@ -92,6 +92,9 @@ class PlanResult:
     predicted_migration_makespan_s: float | None = None
     bottleneck: str | None = None
     planner_memory_bytes: int | None = None
+    service_debt_replica_s: float = 0.0
+    required_recovery_s: float = 0.0
+    binding_resources: tuple[str, ...] = ()
 
 
 def _ell(session: SimSession, case: ProfileCase) -> float:

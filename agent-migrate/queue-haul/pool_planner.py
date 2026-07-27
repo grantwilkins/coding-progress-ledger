@@ -29,6 +29,7 @@ class Candidate:
     route_bytes: float
     service_work: tuple[float, float]
     kv_tokens: int
+    transition_work: tuple[float, float] = (0.0, 0.0)
 
     @property
     def replay_occupancy_s(self): return self.duration_s if self.method == "replay" else 0.0
@@ -114,6 +115,29 @@ def _mode_boundary_rho(q, mode):
     return float(max(np.asarray(q.bounds[mode]) / np.asarray(q.bounds["normal"])))
 
 
+def _event_bounds(q, pool, mode):
+    if pool.event_flex_fraction is None:
+        return np.asarray(q.bounds[mode])
+    normal, stable = np.asarray(q.bounds["normal"]), np.asarray(q.bounds["stable"])
+    return np.minimum(normal + pool.event_flex_fraction * stable, stable)
+
+
+def service_debt(baseline, ongoing, transition, stable, horizon):
+    """Return queued replica-seconds and required recovery per service row."""
+    baseline, ongoing, transition, stable = map(
+        lambda value: np.asarray(value, float),
+        (baseline, ongoing, transition, stable),
+    )
+    load = baseline + ongoing
+    debt = np.maximum(0, horizon * load + transition - horizon * stable)
+    spare = stable - load
+    recovery = np.divide(
+        debt, spare, out=np.full_like(debt, np.inf), where=spare > 0,
+    )
+    recovery[debt == 0] = 0
+    return debt, recovery
+
+
 def candidate_table(scenario: ExecutionScenario, profile, architecture: DestinationArchitecture,
                     mode: str, power: ExpectedPower) -> CandidateTable:
     if mode not in {"normal", "emergency"}:
@@ -136,13 +160,14 @@ def candidate_table(scenario: ExecutionScenario, profile, architecture: Destinat
         gain = power.marginal(session.session_id)
         for p, pool in enumerate(architecture.pools):
             q = architecture.type_by_id[pool.type_id]
+            bounds = _event_bounds(q, pool, mode)
             if q.migration is None:
                 profile.case("central").replay.rate(
                     _resident_tokens(session, migration_horizon), 1,
                 )
             if max(np.asarray(q.normals) @ sum(
                 (work0[r.replica_id] for r in pool.replicas), start=np.zeros(2)
-            ) / (len(pool.replicas) * np.asarray(q.bounds[mode]))) > 1 + 1e-9:
+            ) / (len(pool.replicas) * bounds)) > 1 + 1e-9:
                 continue
             demand = q.work(
                 session.expected_f, session.expected_g,
@@ -156,7 +181,7 @@ def candidate_table(scenario: ExecutionScenario, profile, architecture: Destinat
                 q.kv_capacity_tokens // q.kv_block_tokens
             )
             if np.any(np.asarray(q.normals) @ demand >
-                      len(pool.replicas) * np.asarray(q.bounds[mode])
+                      len(pool.replicas) * bounds
                       - np.asarray(q.normals) @ baseline + 1e-9) \
                     or resident > capacity \
                     - sum(kv0[r.replica_id] for r in pool.replicas):
@@ -192,9 +217,13 @@ def candidate_table(scenario: ExecutionScenario, profile, architecture: Destinat
                 tokens = _resident_tokens(session, migration_horizon)
                 route_bytes = (_log_bytes(session, tokens) if method == "replay" else
                                profile.case("central").kv_transfer.sealed_bytes(tokens))
+                transition = (
+                    (max(0, duration - route_bytes / bandwidth), 0)
+                    if method == "replay" else (0, 0)
+                )
                 candidates.append(Candidate(
                     j, method, p, gain, duration, duration, pool.route, route_bytes,
-                    tuple(demand), resident,
+                    tuple(demand), resident, transition,
                 ))
     candidates = tuple(candidates)
     incidence = csr_matrix((np.ones(len(candidates)),
@@ -216,10 +245,22 @@ def candidate_table(scenario: ExecutionScenario, profile, architecture: Destinat
     for p, pool in enumerate(architecture.pools):
         q = architecture.type_by_id[pool.type_id]
         baseline = sum((work0[r.replica_id] for r in pool.replicas), start=np.zeros(2))
-        for normal, bound in zip(q.normals, q.bounds[mode]):
+        event = _event_bounds(q, pool, mode)
+        for facet, (normal, bound) in enumerate(zip(q.normals, event)):
             residual = len(pool.replicas) * bound - np.asarray(normal) @ baseline
             add([np.asarray(normal) @ c.service_work if c.pool == p else 0
-                 for c in candidates], residual, f"service:{pool.pool_id}")
+                 for c in candidates], residual, f"service:{pool.pool_id}:{facet}")
+        if pool.event_flex_fraction is not None:
+            for facet, (normal, bound) in enumerate(zip(q.normals, q.bounds["stable"])):
+                capacity = migration_horizon * (
+                    len(pool.replicas) * bound - np.asarray(normal) @ baseline
+                    + pool.service_debt_fraction * len(pool.replicas) * bound
+                )
+                add([
+                    migration_horizon * (np.asarray(normal) @ c.service_work)
+                    + np.asarray(normal) @ c.transition_work if c.pool == p else 0
+                    for c in candidates
+                ], capacity, f"service-debt:{pool.pool_id}:{facet}")
         add([c.kv_tokens if c.pool == p else 0 for c in candidates],
             len(pool.replicas) * (q.kv_capacity_tokens // q.kv_block_tokens)
             - sum(kv0[r.replica_id] for r in pool.replicas), f"kv:{pool.pool_id}")
@@ -321,9 +362,8 @@ def _pack(table, selected, architecture, scenario, mode):
     migration = {r.replica_id: 0.0 for p in architecture.pools for r in p.replicas}
     assignment = {}
     for p, pool in enumerate(architecture.pools):
-        q, normals, bounds = architecture.type_by_id[pool.type_id], np.asarray(
-            architecture.type_by_id[pool.type_id].normals), np.asarray(
-            architecture.type_by_id[pool.type_id].bounds[mode])
+        q = architecture.type_by_id[pool.type_id]
+        normals, bounds = np.asarray(q.normals), _event_bounds(q, pool, mode)
         members = [i for i in selected if table.candidates[i].pool == p]
         members.sort(key=lambda i: (-max(
             *(normals @ table.candidates[i].service_work / bounds),
@@ -374,16 +414,16 @@ def _assignment_valid(table, assignment, architecture, scenario, mode):
     horizon = scenario.end_s - scenario.controller_delay_s if horizon is None else horizon
     work, kv = _baseline(scenario, architecture, horizon)
     migration = {r.replica_id: 0.0 for p in architecture.pools for r in p.replicas}
-    pools = {r.replica_id: architecture.type_by_id[p.type_id]
+    pools = {r.replica_id: (architecture.type_by_id[p.type_id], p)
              for p in architecture.pools for r in p.replicas}
     for i, replica in assignment.items():
         work[replica] += table.candidates[i].service_work
         kv[replica] += table.candidates[i].kv_tokens
         migration[replica] += table.candidates[i].duration_s
-    return all(np.all(np.asarray(q.normals) @ work[r] <= np.asarray(q.bounds[mode]) + 1e-9)
+    return all(np.all(np.asarray(q.normals) @ work[r] <= _event_bounds(q, pool, mode) + 1e-9)
                and kv[r] <= q.kv_capacity_tokens // q.kv_block_tokens
                and migration[r] <= table.migration_horizon_s + 1e-9
-               for r, q in pools.items())
+               for r, (q, pool) in pools.items())
 
 
 def validate_destination_execution(scenario, architecture, moves):
@@ -425,6 +465,38 @@ def _moves(table, selected, assignment, architecture, scenario, profile):
         moves.append(PlannedMove(session.session_id, assignment[i], c.method, order, c.path,
                                  rate, quiesce, architecture.pools[c.pool].pool_id))
     return tuple(moves)
+
+
+def _selected_service_debt(table, selected, architecture, scenario):
+    horizon = table.migration_horizon_s
+    residency = architecture.residency_horizon_s
+    residency = scenario.end_s - scenario.controller_delay_s \
+        if residency is None else residency
+    work0, _ = _baseline(scenario, architecture, residency)
+    debts, recoveries = [], []
+    for p, pool in enumerate(architecture.pools):
+        if pool.event_flex_fraction is None:
+            continue
+        q, normals = architecture.type_by_id[pool.type_id], np.asarray(
+            architecture.type_by_id[pool.type_id].normals,
+        )
+        baseline = normals @ sum(
+            (work0[r.replica_id] for r in pool.replicas), start=np.zeros(2),
+        )
+        members = [table.candidates[i] for i in selected if table.candidates[i].pool == p]
+        ongoing = sum(
+            (normals @ np.asarray(c.service_work) for c in members),
+            start=np.zeros(len(normals)),
+        )
+        transition = sum(
+            (normals @ np.asarray(c.transition_work) for c in members),
+            start=np.zeros(len(normals)),
+        )
+        stable = len(pool.replicas) * np.asarray(q.bounds["stable"])
+        debt, recovery = service_debt(baseline, ongoing, transition, stable, horizon)
+        debts.extend(debt)
+        recoveries.extend(recovery)
+    return max(debts, default=0.0), max(recoveries, default=0.0)
 
 
 def _mode_plan(scenario, profile, architecture, solver, mode, power, target):
@@ -472,6 +544,13 @@ def plan_destination(scenario, profile, solver, case_id, seed, architecture):
     failure = None if feasible else "target_unmet" if shortfall else "migration_deadline"
     usage = np.asarray(table.resources[:, list(selected)].sum(1)).ravel() if selected else np.zeros(len(table.resource_names))
     bottleneck = table.resource_names[int(usage.argmax())] if usage.size and usage.max() else None
+    binding = tuple(
+        name for name, value in zip(table.resource_names, usage)
+        if value >= 1 - 1e-7
+    )
+    debt, recovery = _selected_service_debt(
+        table, selected, architecture, scenario,
+    )
     temporal = [usage[i] for i, name in enumerate(table.resource_names)
                 if name.startswith(("source:", "route:", "migration:"))]
     horizon = scenario.deadline_s - scenario.controller_delay_s - profile.power_window_s
@@ -487,5 +566,5 @@ def plan_destination(scenario, profile, solver, case_id, seed, architecture):
         feasible, perf_counter() - start, profile.profile_id, case_id, seed,
         sum(len(p.replicas) * architecture.type_by_id[p.type_id].kv_capacity_tokens
             for p in architecture.pools), shortfall, None, mode, shortfall, failure,
-        repairs, repair_s, makespan, bottleneck, memory,
+        repairs, repair_s, makespan, bottleneck, memory, debt, recovery, binding,
     )

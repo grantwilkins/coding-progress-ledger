@@ -43,6 +43,8 @@ The public candidate is:
 The pool manager chooses a replica. A pool advertises ongoing service headroom,
 stable capacity, temporary queued-work allowance, reconstruction/ingest
 capacity, live-KV blocks, route capacity, compatibility, and evidence status.
+The pool planner enforces ongoing event capacity and conservative
+replica-second debt and reports required recovery.
 
 ## Evidence flow
 

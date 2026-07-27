@@ -171,11 +171,16 @@ class DestinationPool:
     route_id: str
     route: tuple[str, ...]
     methods: tuple[str, ...] = ("replay", "kv_transfer")
+    event_flex_fraction: float | None = None
+    service_debt_fraction: float = 0.0
 
     def __post_init__(self):
         if not self.pool_id or not self.type_id or not self.replicas or not self.route_id \
                 or not self.route or len({r.replica_id for r in self.replicas}) != len(self.replicas) \
-                or not set(self.methods) <= {"replay", "kv_transfer"}:
+                or not set(self.methods) <= {"replay", "kv_transfer"} \
+                or self.event_flex_fraction is not None \
+                and not 0 <= self.event_flex_fraction <= 1 \
+                or not 0 <= self.service_debt_fraction <= 1:
             raise ValueError("invalid destination pool")
 
 
@@ -240,6 +245,8 @@ class DestinationArchitecture:
                 r.get("baseline_kv_tokens", 0),
             ) for r in item["replicas"]), item["route_id"], tuple(item["route"]),
             tuple(item.get("methods", ("replay", "kv_transfer"))),
+            item.get("event_flex_fraction"),
+            item.get("service_debt_fraction", 0),
         ) for item in raw["pools"])
         return cls(raw["schema"], fingerprint(raw["source_compatibility"]),
                    tuple(types), pools, raw.get("residency_horizon_s"))

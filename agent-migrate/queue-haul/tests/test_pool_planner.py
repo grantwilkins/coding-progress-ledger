@@ -4,6 +4,8 @@ Pool-aware planning selects at most one method/pool candidate per session, charg
 resources to the exact pool and route, packs whole sessions on concrete replicas,
 and distinguishes normal, emergency, and valid target-unmet outcomes. KV transfer
 time is limited by the slower of route transfer and destination ingestion.
+Temporary reconstruction debt is measured in replica-seconds and can recover
+only from post-migration spare service.
 
 Plausible wrong implementations:
 - Borrow residual service or KV capacity across pools or replicas.
@@ -13,6 +15,8 @@ Plausible wrong implementations:
 - Admit an aggregate-feasible set that cannot be packed on replicas.
 - Label emergency rescue or maximum-shed best effort as normal success.
 - Validate execution against the admission envelope instead of stable capacity.
+- Treat a service percentage as sessions or omit the migration-window units.
+- Divide debt by total capacity instead of post-migration spare capacity.
 """
 
 from dataclasses import replace
@@ -23,8 +27,9 @@ from destination import (DESTINATION_SCHEMA, CompatibilityFingerprint, ContextRa
                          DestinationArchitecture, DestinationPool, DestinationReplica,
                          DestinationType, LoadedCoefficients, MigrationComponents)
 from planner import plan
-from pool_planner import (_destination_duration, _mode_boundary_rho, candidate_table,
-                          exact_replica_assignment, validate_destination_execution)
+from pool_planner import (_destination_duration, _event_bounds, _mode_boundary_rho,
+                          candidate_table, exact_replica_assignment, service_debt,
+                          validate_destination_execution)
 from power_model import ExpectedPower
 from simulate import PlannedMove, SimSession
 from test_execution_simulator import model
@@ -36,7 +41,8 @@ FP = CompatibilityFingerprint("m", "t", "log", "kv")
 
 def architecture(*, normal=.3, emergency=.5, stable=1, baselines=((0, 0), (0, 0)),
                  kv=1000, methods=("replay", "kv_transfer"), compatibility=FP,
-                 residency=None, routes=(("wan",), ("wan",)), block=1):
+                 residency=None, routes=(("wan",), ("wan",)), block=1,
+                 flex=None, debt=0):
     loaded = LoadedCoefficients((0, 2), (1, 1), (1, 1000), (1, 1000), "hand")
     q = DestinationType(
         "q", compatibility, ContextRate((1, 1000), (100, 100)),
@@ -47,7 +53,7 @@ def architecture(*, normal=.3, emergency=.5, stable=1, baselines=((0, 0), (0, 0)
     )
     pools = tuple(DestinationPool(
         f"p{i}", "q", (DestinationReplica(f"t{i}", baseline),),
-        f"r{i}", route, methods,
+        f"r{i}", route, methods, flex, debt,
     ) for i, (baseline, route) in enumerate(zip(baselines, routes)))
     return DestinationArchitecture(DESTINATION_SCHEMA, FP, (q,), pools, residency)
 
@@ -56,6 +62,47 @@ def test_loaded_lookup_boundary_tracks_selected_admission_mode():
     q = architecture(normal=.4, emergency=.6, stable=.8).types[0]
     assert _mode_boundary_rho(q, "normal") == 1
     assert _mode_boundary_rho(q, "emergency") == pytest.approx(1.5)
+
+
+def test_five_percent_flex_adds_stable_capacity_not_sessions():
+    arch = architecture(normal=.8, emergency=.8, stable=1, flex=.05)
+
+    assert _event_bounds(arch.types[0], arch.pools[0], "normal") == pytest.approx((.85,))
+
+
+def test_service_debt_and_recovery_use_replica_seconds():
+    debt, recovery = service_debt(
+        baseline=(.6,), ongoing=(.2,), transition=(30,), stable=(1,), horizon=100,
+    )
+
+    assert debt == pytest.approx((10,))
+    assert recovery == pytest.approx((50,))
+
+
+def test_positive_debt_without_spare_capacity_never_recovers():
+    debt, recovery = service_debt(
+        baseline=(.8,), ongoing=(.2,), transition=(1,), stable=(1,), horizon=100,
+    )
+
+    assert debt == pytest.approx((1,))
+    assert recovery[0] == float("inf")
+
+
+def test_replay_charges_transition_debt_but_kv_does_not(tmp_path):
+    arch = architecture(normal=1, emergency=1, stable=1, flex=0, debt=.2)
+    arch = replace(arch, pools=(arch.pools[0],))
+    scenario, profile = problem(), model(tmp_path, switch=0, tp=1)
+    table = candidate_table(scenario, profile, arch, "normal",
+                            ExpectedPower(scenario, profile))
+    row = next(i for i, name in enumerate(table.resource_names)
+               if name.startswith("service-debt:"))
+    choices = {
+        candidate.method: float(table.resources[row, i])
+        for i, candidate in enumerate(table.candidates)
+        if candidate.session == 0
+    }
+
+    assert choices["replay"] > choices["kv_transfer"]
 
 
 def test_absent_architecture_is_exact_legacy_adapter(tmp_path):

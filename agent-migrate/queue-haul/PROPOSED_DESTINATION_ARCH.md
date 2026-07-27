@@ -100,10 +100,11 @@ explicit sensitivity until separately profiled.
 - `simulate.py` independently schedules migrations, routes, requests, power,
   and queues.
 
-The implementation must add explicit event admission, service debt, recovery,
-and pool-level queue outputs. Existing `normal/emergency/stable` bounds map to
-normal policy, operator event policy, and hard stability respectively; they
-must not remain identical placeholder numbers in accepted evidence.
+The planner implements explicit event admission, conservative service debt, and
+required recovery. The event simulator still needs pool-level debt and recovery
+traces. Existing `normal/emergency/stable` bounds map to normal policy, operator
+event policy, and hard stability respectively; they must not remain identical
+placeholder numbers in accepted evidence.
 
 ## Evidence map
 

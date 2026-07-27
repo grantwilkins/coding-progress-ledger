@@ -5,36 +5,36 @@ task files, and create the listed commit.
 
 ## 1. Paper and contract
 
-- [ ] Confirm `formulation_nsdi.md`, `PROPOSED_DESTINATION_ARCH.md`, and
+- [x] Confirm `formulation_nsdi.md`, `PROPOSED_DESTINATION_ARCH.md`, and
   `DESTINATION_ROADMAP.md` match the pool-level contract.
-- [ ] Remove stale commands and claims from `README.md`.
-- [ ] Test: `uv run pytest`.
-- [ ] Commit: `Align Queue-Haul paper and evaluation contracts`.
+- [x] Remove stale commands and claims from `README.md`.
+- [x] Test: `uv run pytest`.
+- [x] Commit: `Align Queue-Haul paper and evaluation contracts`.
 
 ## 2. Assumptions and provenance
 
-- [ ] Add one canonical evaluation configuration for workloads, scales,
+- [x] Add one canonical evaluation configuration for workloads, scales,
   deadlines, routes, flex, debt, pool counts, and source skew.
-- [ ] Put `# TODO: ASSUMED` immediately above every unmeasured code default.
-- [ ] Record provenance, units, validity range, and replacement evidence in
+- [x] Put `# TODO: ASSUMED` immediately above every unmeasured code default.
+- [x] Record provenance, units, validity range, and replacement evidence in
   every configuration value and result row.
-- [ ] Hard-fail if an assumed value is emitted as measured or accepted.
-- [ ] Test: hand-worked provenance and invalid-input cases, then
+- [x] Hard-fail if an assumed value is emitted as measured or accepted.
+- [x] Test: hand-worked provenance and invalid-input cases, then
   `uv run pytest`.
-- [ ] Commit: `Add explicit evaluation assumptions and provenance`.
+- [x] Commit: `Add explicit evaluation assumptions and provenance`.
 
 ## 3. Pool service flex
 
-- [ ] Add ongoing event admission, stable capacity, and service-debt budgets.
-- [ ] Define flex as 0/5/10/20% of stable pool capacity above normal.
-- [ ] Define debt as excess replica-seconds over the migration window.
-- [ ] Report required recovery; positive debt with no spare capacity is
+- [x] Add ongoing event admission, stable capacity, and service-debt budgets.
+- [x] Define flex as 0/5/10/20% of stable pool capacity above normal.
+- [x] Define debt as excess replica-seconds over the migration window.
+- [x] Report required recovery; positive debt with no spare capacity is
   infeasible.
-- [ ] Keep memory as block-rounded stock and network as pool-route bytes/queue.
-- [ ] Test: exact units, boundaries, conservation, zero-spare recovery, and no
+- [x] Keep memory as block-rounded stock and network as pool-route bytes/queue.
+- [x] Test: exact units, boundaries, conservation, zero-spare recovery, and no
   double-counted migration work.
-- [ ] Run `uv run pytest`.
-- [ ] Commit: `Add pool service flex and transition debt`.
+- [x] Run `uv run pytest`.
+- [x] Commit: `Add pool service flex and transition debt`.
 
 ## 4. Simulator and result schema
 
