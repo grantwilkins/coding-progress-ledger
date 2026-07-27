@@ -82,13 +82,16 @@ uv run python queue-haul/power_drain_experiment.py \
 uv run python queue-haul/plot_simulator_validation.py
 uv run python queue-haul/plot_simulator_evaluation.py
 uv run python queue-haul/plot_scaling_results.py
+uv run python queue-haul/paper_evaluation.py \
+  --out queue-haul/outputs/paper-evaluation
 ```
 
 `requirement_frontier.py` computes destination requirements without constructing
 a destination inventory. `pool_planner.py` compares those requirements with
 concrete pool contracts. `simulate.py` validates the selected time schedule and
 shared queues. `evaluation_config.py` is the canonical source for assumed paper
-operating points and their replacement evidence.
+operating points and their replacement evidence. `paper_evaluation.py` writes
+the Q1–Q9 result/plot registry and rejects tables with missing provenance.
 
 ## Measurement programs
 

@@ -12,6 +12,7 @@ Plausible wrong implementations:
 - Drop active/cold GPU residency while constructing simulator sessions.
 - Size instances from compute while silently exceeding measured resident KV capacity.
 - Omit destination KV queue evidence needed to explain migration time.
+- Drop planned pool debt, recovery, or binding-resource evidence from summaries.
 - Fail to write plots when a valid plan contains no migrations.
 """
 
@@ -170,6 +171,9 @@ def test_small_run_reuses_plans_and_writes_raw_tables_and_plots(tmp_path: Path):
         - runs[0].result.modeled_source_power_at_deadline_w
     )
     assert summary["planning_profile_case"] == "slower"
+    assert summary["planned_service_debt_replica_s"] == runs[0].plan.service_debt_replica_s
+    assert summary["required_service_recovery_s"] == runs[0].plan.required_recovery_s
+    assert summary["binding_resources"] == "|".join(runs[0].plan.binding_resources)
     assert summary["deadline_met"] == runs[0].result.deadline_met
     assert summary["migration_makespan_s"] == runs[0].result.migration_makespan_s
     assert summary["final_state_ready_s"] == runs[0].result.final_state_ready_s
