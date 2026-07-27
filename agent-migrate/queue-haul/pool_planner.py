@@ -88,7 +88,8 @@ def _destination_duration(session, method, case, path, links, horizon, component
         return route(_log_bytes(session, tokens)) \
             + components.compute_completion_factor * compute + case.switch_s
     size = case.kv_transfer.sealed_bytes(tokens)
-    return route(size) + components.residual_s + _kv_catch_up_s(
+    return max(route(size), size / case.kv_transfer.destination_bytes_per_s) \
+        + components.residual_s + _kv_catch_up_s(
         session, tokens, case, horizon,
     )
 

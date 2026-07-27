@@ -192,6 +192,7 @@ The model profile moves only complete immutable KV blocks; an unsealed tail is
 reconstructed during final preparation. KV loading overlaps network transfer,
 so serial KV time is setup plus the slower of network transfer and destination
 KV loading, followed by synchronization and route switching.
+Pool-aware admission uses the same network-or-ingest floor.
 Destination KV copies enter a FIFO per destination before moving bytes;
 `queues.csv` records arrival, start, completion, depth, bytes, observed wait,
 and whether a copy is still pending at the simulation cutoff.

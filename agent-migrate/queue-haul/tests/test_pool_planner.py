@@ -2,12 +2,14 @@
 Claim:
 Pool-aware planning selects at most one method/pool candidate per session, charges
 resources to the exact pool and route, packs whole sessions on concrete replicas,
-and distinguishes normal, emergency, and valid target-unmet outcomes.
+and distinguishes normal, emergency, and valid target-unmet outcomes. KV transfer
+time is limited by the slower of route transfer and destination ingestion.
 
 Plausible wrong implementations:
 - Borrow residual service or KV capacity across pools or replicas.
 - Inflate greedy scarcity prices by counting every duplicate pool candidate.
 - Use migration growth for long-lived KV residency or count destination state twice.
+- Ignore destination ingestion or add its time to the overlapping route transfer.
 - Admit an aggregate-feasible set that cannot be packed on replicas.
 - Label emergency rescue or maximum-shed best effort as normal success.
 - Validate execution against the admission envelope instead of stable capacity.
@@ -149,6 +151,20 @@ def test_physical_destination_timing_keeps_route_time_unscaled(tmp_path):
 
     assert replay == pytest.approx(1 + .5 * .1)
     assert kv == pytest.approx(1 + 2)
+
+
+def test_kv_destination_timing_uses_ingest_floor(tmp_path):
+    profile = model(tmp_path, switch=0, destination_rate=50, tp=1)
+    session = replace(problem().sessions[0], context_tokens=10,
+                      expected_growth_tokens_per_s=0)
+    components = MigrationComponents((5, 20), (50, 200), "hand", residual_s=2)
+
+    duration = _destination_duration(
+        session, "kv_transfer", profile.case(), ("wan",), {"wan": 100}, 0,
+        components,
+    )
+
+    assert duration == pytest.approx(2 + 2)
 
 
 def test_static_kv_snapshot_has_no_fake_deadline_catch_up(tmp_path):
