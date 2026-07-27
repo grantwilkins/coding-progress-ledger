@@ -125,7 +125,12 @@ KV, migration and source-stream occupancy, WAN bytes, method mix, and a resource
 lower bound on makespan. The WAN byte budget is a fluid constraint rather than
 a packet schedule. `route_rtt_s` is one fixed delay per action and never changes
 the supplied effective bandwidth. `sweep_frontier` evaluates absolute
-source-power targets across stream-count sensitivities.
+source-power targets across stream-count sensitivities. The default
+`solver_mode="exact"` reports an optimal integer solution and zero MIP gap.
+The opt-in `solver_mode="greedy"` jointly ranks both methods by remaining-gain
+and source/WAN scarcity and concretely best-fits source-stream bins for large
+sweeps, but reports approximate status,
+no MIP gap, and no certified maximum modeled gain.
 
 `destination_evaluation.py` reduces three-or-more independent runs into central
 and conservative envelope/migration inputs and provides the fixed 36-cell
