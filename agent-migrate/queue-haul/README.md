@@ -4,9 +4,12 @@ Queue-Haul plans request-boundary migration of stateful LLM sessions to reduce
 source accelerator power before a deadline. It jointly chooses sessions,
 replay or full-KV transfer, and compatible destination serving pools.
 
-The primary output is a requirement frontier: destination and route resources
-needed for each source-power target. Destination capacity is an advertised pool
-contract, not an inferred GPU inventory.
+The primary output is an executable schedule naming each migrated session,
+replay or KV transfer, destination pool, handoff timing, source shutdown, and
+resource use, slack, debt, recovery, achieved shed, and unmet shed. A
+requirement frontier summarizes those schedules across source-power targets.
+Destination capacity is an advertised pool contract, not an inferred GPU
+inventory.
 
 ## Current evidence
 
@@ -95,8 +98,10 @@ independently schedules routes, reconstruction endpoints, requests, commits,
 and power. It separately traces declared pool-service demand and debt from
 realized replay and commit times. `evaluation_config.py` is the canonical
 source for assumed paper operating points and their replacement evidence.
-`paper_evaluation.py` writes the Q1–Q9 result/plot registry and rejects tables
-with missing provenance.
+`paper_evaluation.py` writes the legacy Q1–Q9 result/plot registry while the
+paper evaluation is reorganized into mechanism validation, fixed-contract
+coordination, multi-pool contracts, and planner quality/scale. It rejects
+tables with missing provenance.
 
 ## Measurement programs
 

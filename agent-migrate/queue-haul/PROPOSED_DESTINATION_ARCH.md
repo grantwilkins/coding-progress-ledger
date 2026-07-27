@@ -40,6 +40,38 @@ Compatibility is Boolean. Replay requires the same model, tokenizer, and
 durable-log execution contract. KV transfer additionally requires the exact KV
 ABI, layout, block format, and dtype.
 
+The contract is a versioned snapshot with units, evidence status, provenance,
+validity range, and replacement evidence for every value. Operational use also
+requires a lease and commit-time revalidation; the current simulator has
+neither and therefore does not produce production admission certificates.
+
+## Contract-to-output mapping
+
+The executable schedule is the primary output. The requirement frontier is a
+summary of validated schedules across requested shed targets.
+
+| Advertised contract field | Schedule use | Result-table columns |
+|---|---|---|
+| compatibility fingerprint and allowed actions | candidate eligibility and selected action/pool | `action`, `pool`, compatibility provenance |
+| current and event prefill/decode capacity | ongoing landed work | ongoing prefill/decode use, capacity, normalized slack |
+| stable capacity, debt budget | transition queue and recovery | service debt, recovery, capacity, normalized slack |
+| replay reconstruction capacity | replay start/finish and endpoint occupancy | reconstruction work/use, capacity, normalized slack |
+| KV-ingest capacity | KV transfer/ingest finish and occupancy | ingest work/use, capacity, normalized slack |
+| usable live-KV blocks | post-commit KV placement | KV blocks used, capacity, normalized slack |
+| route bandwidth and queued bytes | transfer start/finish and route occupancy | route bytes/time/debt, capacity, normalized slack |
+| lease or snapshot generation | validation domain | contract generation, provenance, validity range |
+
+Every selected-migration row records session ID, source, action, pool, start,
+transfer/reconstruction finish, quiesce, commit, first-token completion, bytes,
+transition work, ongoing work, KV blocks, and conservative source watts
+credited. Every scenario row records requested, achieved, and unmet watts;
+selected sessions; replay/KV counts and bytes; destination assignments; all
+resource use and normalized slack; the complete binding-resource set;
+predicted and realized makespan; debt and recovery; source shutdown; exposed
+sessions, context tokens, and KV bytes; seed; workload; source
+hardware/model/packing; deadline and measurement window; and evidence status,
+validity range, and provenance for every input.
+
 ## Service flex
 
 The destination contract separates three quantities:
@@ -110,6 +142,12 @@ start/finish and commit times and rejects debt or recovery violations. Existing
 and hard stability respectively; they must not remain identical placeholder
 numbers in accepted evidence.
 
+The simulator consumes the advertised residual vector at the contract
+generation. It does not synthesize unrelated destination traffic, hidden
+provider capacity, or future arrivals. Simulated scheduling and queue outcomes
+are evidence about coordination under that contract, not direct evidence of
+production destination behavior.
+
 ## Evidence map
 
 | Quantity | Current status |
@@ -170,7 +208,74 @@ Current code does not implement a live lease. Results therefore remain
 sensitivity or testbed validation rather than production admission
 certificates.
 
-## Scale experiments
+## Evaluation contracts
+
+### Fixed contract
+
+The many-session coordination experiment holds one compatible integrated pool
+contract fixed while requested shed rises through
+10/25/50/75/90/100% of maximum modeled shed. A single versioned canonical
+record fixes workload; source hardware, model, and packing; deadline; route
+bandwidth and RTT; event service flex; debt; usable KV; reconstruction and
+ingest capacity; and seed. This experiment asks how the contract is spent and
+whether joint replay/KV planning produces more executable shed. It is not a
+multi-site heterogeneity experiment.
+
+Plot normalized residual slack against requested shed for source preparation,
+route, reconstruction, ingest, ongoing prefill, ongoing decode, debt, live KV,
+and realized makespan. Zero is binding and negative values remain visible.
+Compare achieved shed against requested shed for Queue-Haul, all replay, all
+KV, the best simple greedy baseline, and an exact integer or LP reference where
+tractable. Report unmet watts, the first infeasible target, and the complete
+binding-resource set.
+
+### Multiple pool contracts
+
+Pool count is 1, 2, 4, or 8 under two explicitly defined regimes:
+
+1. **Fixed total resources:** hold each summed physical budget constant and
+   split it across the pools. Pool-specific routes and compatibility remain
+   explicit. This isolates fragmentation, route diversity, and compatibility.
+2. **Fixed resources per pool:** give each pool the same explicit budget, so
+   every summed destination budget grows linearly with pool count. This
+   measures added headroom until a source-side or other shared constraint
+   binds.
+
+Results must state the explicit route, reconstruction, ingest, ongoing service,
+debt, and KV settings; opaque scenario names are not sufficient.
+
+Resource diversity and compatibility diversity are separate experiments:
+
+- **Resource diversity:** vary pool route, reconstruction, ingest, service,
+  debt, or KV budgets while holding compatible action/pool choices fixed.
+- **Compatibility diversity:** vary compatible action/pool choices while
+  holding total physical resources fixed.
+
+For each destination resource, plot maximum executable shed against its
+capacity multiplier or advertised headroom with identical axes across panels.
+Use separate panels for route bandwidth or queued bytes, replay
+reconstruction, KV ingest, ongoing prefill, ongoing decode, event debt, and
+live-KV blocks. Each curve must expose the knee where another resource joins
+the binding set.
+
+### Schedule morphing
+
+Choose three or four explicit settings from the pool-count and bottleneck
+experiments, such as route-constrained, replay-reconstruction-constrained,
+service-constrained, and KV-memory/ingest-constrained. For each:
+
+- x-axis: time;
+- y-axis: destination pools;
+- rectangle: one migration, with width equal to scheduled duration;
+- fill or hatch: replay versus KV;
+- markers: commit and first-token completion;
+- overlays: shared route and transition-resource occupancy; and
+- annotation: final achieved shed and complete binding-resource set.
+
+The examples explain why the capacity curves bend or flatten; they are not
+decorative Gantt charts.
+
+### Scale and sensitivity
 
 The large simulator consumes advertised residual vectors; it does not generate
 unrelated destination traffic. Primary capacity is relative to the source
@@ -186,6 +291,13 @@ Use:
 - fixed-total and fixed-per-pool capacity;
 - separate resource and compatibility diversity experiments; and
 - integrated pools first, then disaggregated-pool sensitivity.
+
+Coding, interactive coding, agentic, and ShareGPT-like conversation are
+separate workload scenarios. Deadlines of 30/60/120/300 seconds, routes of
+1/5/10 Gbps, 0/5/10/20% flex and debt, workload, source packing, and seed are
+scenario axes, not error bars. Service flex, debt, multi-pool inventory,
+disaggregated pools, unmeasured routes, and unmeasured hardware points remain
+visibly `assumed/sensitivity` until their targeted measurements pass.
 
 The 8+8 A100 experiment validates the contract at a larger hardware point. It
 does not define the simulated site size.

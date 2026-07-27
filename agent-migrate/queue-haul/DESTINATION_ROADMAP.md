@@ -1,215 +1,286 @@
 # Queue-Haul evidence roadmap
 
-This roadmap orders the work by dependency. It does not assign dates. The
-canonical task checklist is `TODO.md`.
+This roadmap orders work by the paper's evidence flow, not by implementation
+component or date. The canonical task checklist remains `TODO.md`.
+
+The paper distinguishes four evidence classes:
+
+- **Measured:** source power, two-A100 replay/KV correctness, exact KV bytes and
+  blocks, and measured capacities.
+- **Fitted:** conservative migration-time and throughput models within stated
+  domains.
+- **Simulated:** coordination, schedules, queues, and power outcomes driven by
+  measured, fitted, and assumed inputs.
+- **Assumed / sensitivity:** unmeasured routes, destination service flex and
+  debt, multi-pool inventories, disaggregated pools, and unmeasured hardware.
+
+The simulator evaluates planning and scale under advertised residual budgets.
+It does not invent unrelated destination traffic, and its outputs are not
+direct evidence of production destination behavior.
 
 ## Current position
 
-Queue-Haul already has:
+Queue-Haul has measured A100 source power curves; working request-boundary
+replay and KV handoff on two A100s; conservative timing fits; exact KV block
+accounting; requirement-frontier, LP, integer, greedy, and pool-aware planners;
+an event simulator; and 10K-1M-session scaling machinery.
 
-- measured A100 source power curves;
-- working request-boundary replay and KV handoff on two A100s;
-- conservative replay/KV timing fits;
-- exact KV block accounting;
-- a requirement-frontier solver;
-- LP, exact integer, and greedy planning paths;
-- aggregate destination-pool planning;
-- an event simulator; and
-- 10K–1M-session scaling machinery.
+The principal gaps are held-out source group-removal validation, a bracketed
+destination service boundary, complete end-to-end execution validation,
+provenance-complete tidy tables for the new figure structure, and measured
+hardware diversity. The archived destination campaign supplies descriptive
+anchors only. Until the targeted rerun brackets passing and failing points,
+service flex and debt remain sensitivities.
 
-The main gaps are:
+## Universal result and figure gates
 
-- source power is not validated on held-out group removals;
-- destination service has no accepted pass/fail boundary;
-- the canonical assumed inputs exist, but not every older experiment consumes
-  them yet;
-- pool debt and recovery now have a deterministic fluid trace but still need
-  testbed validation;
-- existing figure outputs do not cover the full Q1–Q9 evaluation;
-- plan-versus-execution validation is too small; and
-- H100, A100 TP=2, and disaggregated-pool results are incomplete or assumed.
+The executable schedule is the primary system output. The requirement frontier
+summarizes validated schedules across targets.
 
-## Gate 1: make the complete assumed experiment runnable
+Every result row records experiment/scenario ID, seed, workload, source
+hardware/model/packing, deadline and measurement window, requested/achieved/
+unmet watts, selected sessions, replay/KV counts and bytes, pool assignments,
+all resource use and normalized slack, the complete binding-resource set,
+predicted and realized makespan, source shutdown, exposed work, and evidence
+status, units, provenance, validity range, and replacement evidence for every
+input.
 
-Before collecting more GPU data:
+Every schedule row records session ID, source, action, pool, start,
+transfer/reconstruction finish, quiesce, commit, first-token completion, bytes,
+transition work, ongoing work, KV blocks, and conservative source watts
+credited.
 
-1. centralize every assumed operating point;
-2. mark it `TODO: ASSUMED` in code and `assumed` in result records;
-3. add units, validity range, and required replacement evidence;
-4. implement pool event capacity, service debt, and recovery;
-5. emit one tidy result table for each memo question; and
-6. generate every planned figure from those tables.
+Every main-paper figure has the same pass condition:
 
-The simulator must use advertised destination residuals. It must not invent
-unrelated destination arrivals or claim to predict destination latency.
+1. its documented command runs from a clean checkout;
+2. its tidy input table contains complete provenance and passes the execution
+   validator; and
+3. the figure is generated only from that table, never from ad hoc simulator
+   objects.
 
-Pass condition: all Q1–Q9 commands run from a clean checkout, assumptions are
-visible in every affected row, and `uv run pytest` passes.
+Negative slack, failed validations, unmet watts, and exposed work remain in the
+tables and figures. Workload, packing, deadline, bandwidth, flex/debt, hardware,
+and seed sweeps are scenarios, not statistical error bars.
 
-## Gate 2: validate source power
+## 1. Make the assumed experiment runnable
 
-Use complete-run fit, calibration, and untouched final splits. Measure controlled
-session-group removals at several source loads.
+Centralize one canonical fixed-contract operating point: workload; source
+packing, hardware, and model; one compatible integrated destination pool;
+deadline; route bandwidth and RTT; event service flex; debt budget; usable KV;
+reconstruction and ingest capacity; and seed. Reuse existing central defaults
+if complete; otherwise choose and document one mid-range point.
 
-Pass condition: every final measured group sheds at least the watts Queue-Haul
-credited. Measure shutdown delay separately and require off before the final
-five-second power window.
+For each value, record units, measured/fitted/assumed status, provenance,
+validity range, and replacement evidence. Make the fixed-contract, multi-pool,
+planner-quality, and scale commands emit the universal result and schedule
+tables.
 
-## Gate 3: finish single-session evidence
+Keep 30/60/120/300-second deadlines, 1/5/10-Gbps routes, 0/5/10/20% flex and
+debt, alternate workloads and packings, and seed variation as separate
+sensitivities.
 
-Reuse the valid two-A100 replay/KV corpus. Add only missing 4K–8K context and
-5-Gbps points.
+Pass condition: the assumed canonical experiment and every planned figure
+command run from a clean checkout, the tables pass schema/provenance checks and
+the execution validator, and `uv run pytest` passes.
 
-Pass condition:
+## 2. Validate source power with held-out group removals
 
-- correct context and KV state;
-- exact bytes and blocks;
-- no destination WAN fetch after commit;
-- bounded quiesce;
-- correct route switch;
-- valid first post-switch token; and
-- conservative handoff-time prediction in the stated domain.
+Use complete-run fit, calibration, and untouched final splits. Measure
+controlled whole-session group removals at several source loads, including
+groups resembling planned selections.
 
-## Gate 4: measure destination flex
+Produce source power-model validation with predicted versus measured group
+shed and averaging-window stability. Show every negative safety margin as a
+failure.
+
+Pass condition: every final held-out group sheds at least the conservative
+watts credited. Measure shutdown delay separately and require the accelerator
+off before the final power window.
+
+## 3. Finish two-A100 replay/KV and execution validation
+
+Complete missing context/bandwidth points in the valid two-A100 corpus. Validate
+exact context, KV state, bytes, blocks, background preparation, overlap,
+catch-up, request-boundary quiesce, route switch, first post-switch token,
+timing jitter, realized source power change, and shutdown where applicable.
+
+Produce:
+
+- replay/KV single-session crossover and measured phase breakdown; and
+- one end-to-end replay/KV timeline with time on the x-axis, source serving,
+  bulk preparation, route transfer, reconstruction or KV ingest, catch-up,
+  quiesce, route switch, first post-switch token, source power, and shutdown.
+
+Overlay predicted and realized timing and report prediction error and safety
+margin. A small companion scatter or table may cover measured migration time
+and power shed across the corpus.
+
+Pass condition: no destination WAN fetch occurs after commit, quiesce is
+bounded, the first post-switch token is correct, state and byte accounting are
+exact, and predicted handoff time is conservative in its stated domain.
+
+Do not prioritize a three-A100 cross-region demonstration unless it exposes a
+qualitatively new implementation constraint not covered by the two-A100
+timeline. "It also works in three regions" is not a sufficient result.
+
+## 4. Produce fixed-contract many-session figures
+
+Hold the canonical one-pool contract fixed while requested shed rises through
+10/25/50/75/90/100% of maximum modeled shed.
+
+### B1. Resource slack versus requested shed
+
+- x-axis: requested shed in watts and/or percent of maximum modeled shed;
+- y-axis: normalized residual slack
+  \((\mathrm{capacity}-\mathrm{use})/\mathrm{capacity}\);
+- series or small multiples: source preparation, route bytes/time, replay
+  reconstruction, KV ingest, ongoing prefill, ongoing decode, service debt,
+  live-KV blocks, and deadline/realized makespan; and
+- annotations: complete binding-resource set at each target.
+
+Zero is binding and negative values are visible failures. The figure shows how
+one fixed contract is spent.
+
+### B2. Executable shed by planner
+
+- x-axis: requested shed;
+- y-axis: executable achieved shed;
+- reference: \(y=x\);
+- main series: Queue-Haul, all replay, all KV, best simple greedy, and exact
+  integer or LP reference where tractable; and
+- companion panel: selected replay/KV mix.
+
+Report unmet watts and annotate the first infeasible target and complete
+binding-resource set for each policy. Put the full baseline set in secondary
+material.
+
+Use the two-A100 timeline and predicted-versus-realized makespan, debt,
+recovery, and power-shed columns to validate concrete scheduling; do not repeat
+the Gantt chart here.
+
+Pass condition: the universal figure gate passes and every planner point has a
+concrete execution-validator result.
+
+## 5. Complete destination service-boundary measurements
 
 Run the corrected targeted campaign for prefill-heavy, balanced, and
-decode-heavy mixes.
+decode-heavy mixes. Use open-loop arrivals, unique appends or a reset prefix
+cache, exact private-prefix state, and 0/5/10/20% bursts.
 
-Pass condition:
+Pass condition: complete streams; bracketed passing and failing normal/stable
+points; at least three independent boundary runs; no restart, rejection,
+missing work, wrong cache state, or false-safe final point; and measured queued
+work and recovery. If the gate fails, service flex and debt remain
+`assumed/sensitivity` in every affected row.
 
-- complete streams;
-- exact private-prefix cache state;
-- normal and stable pass/fail points bracketed;
-- at least three independent boundary runs;
-- no false-safe final point; and
-- measured queued work and recovery for 0/5/10/20% bursts.
+## 6. Produce multi-pool figures
 
-If this gate fails, keep all service results labelled sensitivity.
+This stage opens the fixed contract and varies pool count, composition,
+compatibility, and headroom. Describe every scenario by explicit resource
+settings, not an opaque name.
 
-## Gate 5: validate execution
+### C1. Maximum shed versus pool count
 
-First run the full event on two A100s. Then run the same pool contract on 8+8
-A100s configured as independent TP=1 replicas.
+Use pool count 1/2/4/8 on the x-axis and maximum executable source
+accelerator-power shed in watts and percent of maximum modeled shed on the
+y-axis. Separate:
 
-Measure:
+1. **Fixed total resources:** keep summed physical budgets constant and split
+   them across pools.
+2. **Fixed resources per pool:** give each pool the same budget so summed
+   resources grow with pool count.
 
-- source and destination accelerator power;
-- route traffic and queued bytes;
-- reconstruction and service queues;
-- selected replay/KV actions;
-- quiesce and route-switch times;
-- first-token completion;
-- source shutdown; and
-- predicted versus realized makespan, debt, and recovery.
+Attribute changes to added capacity, fragmentation, route diversity, or
+compatibility diversity. Use representative workloads in the main paper and
+the full sweep in secondary material.
 
-Pass condition: every accepted migration commits by the deadline, the source is
-under the accelerator-power limit for the final window, and realized makespan,
-debt, and recovery do not exceed the advertised contract.
+### C2. Bottleneck-improvement small multiples
 
-## Gate 6: scale and diversity
+Use identical axes with resource capacity multiplier or advertised headroom on
+the x-axis and maximum executable shed on the y-axis. Give route
+bandwidth/queued bytes, replay reconstruction, KV ingest, ongoing prefill,
+ongoing decode, event debt, and live-KV blocks separate panels. Each curve must
+show the knee where another resource joins the binding set. Use 1/2/4/8-pool
+lines only when readable.
 
-Run coding, interactive coding, agentic, and ShareGPT conversation workloads at
-10K, 100K, and 1M sessions with ten seeds.
+### C3. Schedule morphing
 
-Use:
+Choose three or four explicit route-, reconstruction-, service-, and
+KV-memory/ingest-constrained settings from C1-C2. Plot time on the x-axis and
+destination pools on the y-axis. Draw one duration-width rectangle per
+migration with replay/KV fill or hatch; mark commit and first-token completion;
+show shared route and transition occupancy; and annotate final achieved shed
+and the complete binding-resource set. Each example must explain a capacity
+curve's knee or plateau.
 
-- measured-normal source packing;
-- balanced, moderate-skew, and high-skew sensitivity;
-- 30/60/120/300-second deadlines;
-- 1/5/10-Gbps routes;
-- 0/5/10/20% service flex and debt;
-- 1/2/4/8 destination pools;
-- fixed total resources split over pools;
-- fixed resources added per pool;
-- separate resource-diversity and compatibility-diversity cases; and
-- integrated and assumed prefill/decode-disaggregated sites.
+### C4. Workload and diversity robustness
 
-Pass condition: every reported point has a complete provenance record and a
-separate execution-validator result.
+Keep resource diversity and compatibility diversity separate. Resource
+diversity changes route, reconstruction, ingest, service, debt, or KV budgets
+while compatibility is fixed. Compatibility diversity changes eligible
+action/pool choices while total physical resources are fixed.
 
-## Gate 7: hardware generality
+For coding, interactive coding, agentic, and ShareGPT-like conversation,
+report maximum executable shed and complete binding-resource sets in a compact
+binary or normalized-slack matrix. Do not assign one exclusive failure cause
+when resources bind simultaneously.
 
-After the A100 TP=1 path passes, measure H100 TP=1 and A100 TP=2. Collect the
-smallest profile that identifies source power, prefill, decode, KV capacity,
-replay, and KV ingest in the required domain.
+Pass condition: the universal figure gate passes for C1-C4, and all simulated
+points retain their measured, fitted, and assumed input provenance.
 
-Pass condition: hardware sensitivity plots use measured profiles. Any missing
-dimension remains visibly assumed.
+## 7. Validate the pool contract on 8+8 A100s
 
-## Evaluation questions and plots
+Run the same compatible integrated-pool contract on 8+8 A100s configured as
+independent TP=1 replicas. Measure source and destination accelerator power,
+route traffic and queued bytes, reconstruction and service queues, selected
+actions, quiesce, route switch, first-token completion, shutdown, makespan,
+debt, and recovery.
 
-Use the questions and plots from the design memo.
+Pass condition: every accepted migration commits by the deadline, the source
+stays below the accelerator-power limit for the final window, and realized
+makespan, debt, recovery, and resource use stay within the advertised contract.
+This validates the abstraction at a larger testbed point; it does not define a
+production site or simulated inventory.
 
-### Q1. Does the source model predict session-removal power?
+## 8. Run planner-quality and scale experiments
 
-- predicted versus measured held-out group shed;
-- averaging-window stability;
-- show every negative safety margin as a failure.
+For planner quality, compare exact integer, LP bound, rounded/packed,
+Queue-Haul greedy, and focused baselines on executable shed, resource debt,
+optimality gap, planning time, and memory.
 
-### Q2. Are replay and KV distinct actions?
+For scale, plot planning time and memory at 10K, 100K, and 1M sessions for ten
+seeds. Every point retains provenance and an execution-validator result.
 
-- measured action phase diagram over bandwidth and context;
-- end-to-end breakdown of route, reconstruction/ingest, catch-up, scheduling,
-  and software time.
+Pass condition: exact/relaxed gaps are reported wherever tractable, all large
+points include validator status, and the universal figure gate passes.
 
-### Q3. Does joint planning respond to contention?
+## 9. Add measured hardware diversity
 
-- replay/KV mix versus route and reconstruction pressure;
-- achieved shed and complete binding-resource set.
+Only after the A100 TP=1 path passes, measure H100 TP=1 and A100 TP=2. Collect
+the smallest profile that identifies source power, prefill, decode, KV
+capacity, replay, and KV ingest throughout the required domain.
 
-### Q4. How much can one pool accept?
+Pass condition: main hardware-robustness results use measured profiles. Any
+missing dimension stays visibly assumed with units, validity range,
+provenance, and required replacement evidence.
 
-- achieved versus requested shed;
-- required route, transition, service, debt, recovery, and KV versus watts;
-- binding-resource map.
+## Main-paper figure budget
 
-### Q5. Does the plan execute?
+1. Source power-model validation.
+2. Replay/KV single-session crossover and measured breakdown.
+3. Two-A100 end-to-end execution timeline.
+4. Fixed-contract resource slack versus requested shed.
+5. Queue-Haul versus coordinated-planning baselines.
+6. Maximum shed versus 1/2/4/8 pools, fixed-total and fixed-per-pool.
+7. Destination bottleneck-improvement small multiples.
+8. Representative schedule morphing.
+9. Planner quality and scale.
+10. Compact workload/hardware robustness matrix.
 
-- predicted versus realized makespan;
-- one timeline with power, migrations, route use, pool queues, commits, and
-  shutdown.
+Full deadline, route, workload, packing, seed, and hardware sweeps belong in
+secondary material.
 
-### Q6. Is greedy good enough?
-
-- exact integer, LP bound, rounded/packed, greedy, and focused policy quality;
-- planning time and memory through 1M sessions.
-
-### Q7. What do more pools buy?
-
-- maximum shed versus 1/2/4/8 pools;
-- fixed-total versus fixed-per-pool budgets;
-- separate resource and compatibility diversity.
-
-### Q8. Does the abstraction survive hardware change?
-
-- achieved shed as route, KV, prefill, decode, and ingest improve;
-- action and destination changes at each bottleneck transition.
-
-### Q9. Does the workload determine the result?
-
-- four-workload robustness matrix;
-- trace, fitted synthetic, and shifted future-like workloads;
-- Poisson central testbed arrivals and equal-mean burst sensitivity.
-
-## Baselines
-
-Use:
-
-- all replay;
-- all KV;
-- isolated-fastest;
-- network-greedy;
-- service-greedy;
-- power-first then place;
-- exact integer and LP references;
-- round-robin and least-loaded for multiple pools; and
-- immediate session drop as the non-migration comparison.
-
-When migration cannot meet the target, report unmet watts, sessions, context
-tokens, and KV bytes still exposed. Do not invent the operator's drop or lower
-tier policy.
-
-## Final claim boundary
+## Claim boundary
 
 Queue-Haul may claim:
 
@@ -217,6 +288,10 @@ Queue-Haul may claim:
 > Queue-Haul computes and validates the source accelerator-power shed achievable
 > by a deadline.
 
-It may not claim full-facility power, arbitrary live decode migration, hidden
-provider capacity, long-term destination equilibrium, or a safe destination
-service envelope until the matching evidence gate passes.
+It may not claim facility or grid power from accelerator measurements,
+arbitrary mid-token migration, hidden provider capacity or unrelated
+destination arrivals, safe service headroom before Gate 5 passes, long-term
+destination equilibrium, production admission certificates without live
+contract leasing and revalidation, or measured hardware generality for assumed
+profiles. Infeasible targets report unmet watts and exposed work; partial
+achievement is never successful curtailment.
