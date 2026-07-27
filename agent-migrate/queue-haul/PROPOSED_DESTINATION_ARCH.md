@@ -11,12 +11,13 @@ They do support component timing for the recorded concurrency-one v7 request
 schedules in the measured 16K/10-Gbps and 24K/5-Gbps cells, plus a provisional
 live-traffic migration ranking. See `FINDINGS.md`.
 
-Queue-Haul asks one question: **can a set of active sessions land on warm
-destination capacity before a source-power deadline?** It does not simulate a
-destination scheduler or predict latency after admission. The first case is the
-current mirror: one destination datacenter with the same warm GPT-OSS-20B/A100
-serving configuration as the source. Every extension keeps the same sparse
-resource-allocation problem.
+Queue-Haul asks one question: **what destination residual resources are required
+to shed a given amount of source power before a deadline?** Its primary output
+is this requirement frontier; it needs a pinned destination class and route
+assumptions, not a concrete destination inventory. A supplied destination may
+later compare its residual vector against the frontier and run concrete packing
+and admission. Queue-Haul does not simulate a destination scheduler or predict
+latency after admission.
 
 ## Why these resources are sufficient
 
@@ -28,7 +29,7 @@ already-warm serving pool can land a session:
 2. block-rounded private live KV;
 3. replay reconstruction work during migration;
 4. KV ingestion or promotion work during migration; and
-5. bytes on every transport edge used by the migration.
+5. bytes on the logical WAN route used by the migration.
 
 Compatibility, workload affinity, pinned hardware/runtime identity, and warm
 model availability are eligibility predicates, not consumable rows. Source
@@ -65,14 +66,12 @@ Primary sources: [DistServe](https://www.usenix.org/conference/osdi24/presentati
 ## Objects and units
 
 - A **replica** is one `ServingInstance`; it may use multiple GPUs.
-- A **pool** is an ordered set of homogeneous replicas. Routes belong to
-  source-method-replica candidates, not to the site or pool in the general
-  model; v1 stores one route on a pool because it has one source site.
+- A **pool** is an ordered set of homogeneous replicas. V1 uses one logical WAN
+  route with effective available bandwidth and fixed route-class P50 RTT.
 - A **pool type** fixes model and revision, tokenizer, durable-log contract, KV
   ABI and dtype, hardware, precision, parallel layout, engine version and
   scheduler configuration, measured rates, envelopes, and valid domains.
-- A **site** contains pools. Multiple pools may share route links, so adding a
-  pool never creates network capacity implicitly.
+- A **site** contains pools.
 - A general **candidate** is `c = (session s, method a, replica r)` with derived
   `pool(r)` and `path(s,a,r)`. V1 first uses the aggregate
   `(session, method, pool)` relaxation and packs replicas afterward.
@@ -106,7 +105,7 @@ state, and explicit policy. These sources are not interchangeable.
 | private KV blocks | block-rounded per-session residency | target v1 accounting; current code sums unrounded tokens and gives no sharing credit |
 | replica inventory | assignment and fragmentation | direct site input; pool multiplication is only a relaxation |
 | migration components | deadline and temporary endpoint occupancy | empirical-max replay/KV envelopes for the recorded concurrency-one v7 schedules; no statistical coverage guarantee |
-| route edges and rates | transport feasibility | scenario topology plus shaped link rates; geography/fleet QoS remain inputs |
+| logical WAN bandwidth and RTT | transport feasibility | 5 Gbps central; 1/5/10 Gbps and P50 RTT classes 10/60/90/150/240 ms are sensitivity inputs |
 | workload scenarios | horizon-specific arrivals, contexts, and prefix identity | modeled input; not a measurement of fleet behavior |
 | policy | requested SLO, headroom, and confidence rule | explicit operator input |
 | guaranteed cache state | session-history compute reuse | replay/KV installs private history; append-hot repeated prompts are excluded |
@@ -147,9 +146,9 @@ A separate destination is described by which constraint is contested:
 | service-contested | baseline plus private-prefix prefill/decode reaches an observed or assumed envelope | reduce admitted work or label sensitivity |
 | KV-contested | block-rounded private histories and growth reach allocatable HBM KV | reject or choose another replica |
 | packing-contested | aggregate pool stock fits but indivisible sessions do not fit replicas | repair assignment or reject |
-| route-contested | source-method-replica paths share residual edge bandwidth/latency | schedule later, select another route, or reject deadline |
+| route-contested | migrations share effective WAN bandwidth and fixed route latency | schedule later or reject deadline |
 | endpoint-contested | replay compute, KV ingest/copy, source stream, or replica migration slot serializes work | schedule explicitly and check makespan |
-| foreground-impact-contested | migration overlaps latency-sensitive serving without an accepted impact bound | require idle/drained state or report possible |
+| budget-contested | overlapping service and migration exceed either independent budget | admit less or schedule explicitly |
 | stale or unreserved | replica, KV, endpoint, or residual-route state changed after planning | reacquire a fresh atomic lease or reject |
 
 These situations are intersections, not alternative destination types. A site
@@ -157,22 +156,20 @@ may be service-, KV-, and route-contested simultaneously; the planner reports
 the largest modeled relaxation pressure. Concrete packing and deterministic
 execution validation cover only the resources explicitly represented.
 
-Operational `feasible` requires more than the current prototype enforces: an
-accepted evidence status, full pinned runtime and warm/healthy attestation,
-fresh baseline and residual-route state held by a lease through commit,
-per-session KV block rounding, a supported service horizon, and either an
-idle/drained migration window or an accepted foreground-impact bound. Until
-those gates exist, architecture results are descriptive or
-`sensitivity/possible` even if the optimizer returns a placement. The simulator
-may model destination action power, but destination facility power and site
-caps are not admission constraints; either would require a separate measured
-resource row.
+Operational admission requires more than the requirement frontier: an accepted
+evidence status, full pinned runtime and warm/healthy attestation, fresh
+baseline and route state held by a lease through commit, per-session KV block
+rounding, and a supported service horizon. Until those gates exist, concrete
+architecture results are descriptive or `sensitivity/possible` even if the
+optimizer returns a placement. Destination power caps and pricing are outside
+this formulation.
 
-## Mirrored destination
+## Requirement frontier and optional concrete admission
 
-Let \(z_{s,a,r}\) select migration method \(a\) and concrete destination replica
-\(r\) for source session \(s\), with
-\(y_s=\sum_{a,r}z_{s,a,r}\le1\). The conservative source-power target is
+Let \(z_{s,a}\) select replay or KV transfer for source session \(s\), with
+\(y_s=\sum_a z_{s,a}\le1\). Both methods share one candidate table, so a plan
+may use replay for some sessions and KV for others while selecting at most one
+action per session. The conservative source-power target is
 
 \[
 \sum_s w_s y_s \ge \Delta P,
@@ -268,10 +265,10 @@ assumed one-facet shape is **sensitivity/possible** even if it survives every
 chosen value. Anything outside the measured domain is unsupported. V7 does not
 identify a global conservative `h` or a mixed-affinity convex blob.
 
-The simple destination constraint is a nonanticipative existence statement.
-Let \(\omega\in\Omega\) jointly index demand forecasts and empirical profile
-uncertainty. For binary \(z_{s,a,r}\), one assignment and one scheduling policy
-\(\pi\) must work for every declared case:
+Optional concrete admission refines each selected \(z_{s,a}\) into
+\(z_{s,a,r}\) on a supplied replica inventory. Let \(\omega\in\Omega\) jointly
+index demand forecasts and empirical profile uncertainty. One assignment and
+one scheduling policy \(\pi\) must work for every declared case:
 
 \[
 \exists z,\pi:\quad
@@ -283,8 +280,7 @@ b_{r,\omega}+\sum_{s,a}d_{s,q(r),r,\omega}z_{s,a,r}
 \in\mathcal C_{q(r),\omega}^m & \forall r,\omega,\\
 \operatorname{KVPrivate}_{r,\omega}(z)\le K_{q(r)} & \forall r,\omega,\\
 \operatorname{makespan}(\operatorname{Schedule}(\pi,z,\omega))
-\le H_m & \forall\omega,\\
-\operatorname{ImpactOK}_{\omega}(z,\pi) & \forall\omega.
+\le H_m & \forall\omega.
 \end{cases}
 \]
 
@@ -293,11 +289,11 @@ maps observed completions to actions but cannot read future case information.
 \(w_s\) is a simultaneous lower bound over declared source-power cases, and
 \(E_{s,a,r}=\min_\omega E_{s,a,r,\omega}\) requires eligibility in every case.
 
-The source sessions and destinations are therefore chosen jointly. A session
-that looks attractive for source-power relief but has no feasible
-`(method, replica)` assignment is not selectable. Multiple \(\omega\) cases and
-the complete pinned compatibility predicate are target semantics; v1 accepts
-only its central case and a smaller fingerprint.
+The requirement frontier chooses source sessions and methods jointly. Concrete
+replica assignment is an optional later comparison against supplied residual
+capacity. Multiple \(\omega\) cases and the complete pinned compatibility
+predicate are target semantics; v1 accepts only its central case and a smaller
+fingerprint.
 
 Let `H_m = deadline - controller_delay - power_window` be the migration
 horizon and `H_r` the latest claimed residency horizon. They are deliberately
@@ -330,6 +326,7 @@ desired component models are
 \tau_{s,R,q} =
 \tau_{route}(B_s^{log},path(s,R,r))+
 \alpha_{R,q}\tau_{s,R}^{compute+completion,old}(T_s)+\tau_q^{switch}
++\mathtt{route\_rtt\_s}
 \]
 
 and, for the measured KV primitive,
@@ -339,17 +336,17 @@ and, for the measured KV primitive,
 \max\left(
 \tau_{route}(B_s^{sealed},path(s,K,r)),
 \frac{B_s^{sealed}}{C_{ingest,q}}
-\right)+c_{K,q}(T_s),
+\right)+c_{K,q}(T_s)+\mathtt{route\_rtt\_s},
 \]
 
 plus separately measured catch-up and route-switch terms when they are not
-already included in `c`. The schedule assigns residual bandwidth after
-background reservations, and
-\(\tau_{route}(B,path)\ge B/\min_{e\in path}B_e^{alloc}\). A portable WAN model
-must additionally measure fixed or per-round latency; v7 validates only the
-shaped local route and cannot supply a geographic-WAN term. A load term may be
-added only after migration-interval work identifies one. A candidate whose
-predicted duration exceeds `H_m` is invalid.
+already included in `c`. V1 uses
+\(\tau_{route}(B)=B/B^{effective}\) and charges `route_rtt_s` once after the
+transfer/ingest pipeline: one fixed P50 RTT per migration action, with no RTT/2
+conversion. Effective bandwidth is
+5 Gbps centrally and 1/5/10 Gbps in sensitivity runs; route-class P50 RTTs are
+10/60/90/150/240 ms. V1 does not model TCP or require a multi-edge topology. A
+candidate whose predicted duration exceeds `H_m` is invalid.
 
 The fitted v7 KV residual is `observed - route_floor`; it can be reused in the
 explicit `max(route, ingest)` form only where route time is the measured
@@ -363,34 +360,29 @@ KV uses `sealed_bytes / route_bytes_per_s + c`. The current scalar
 `LoadedCoefficients` multiplies the complete duration and cannot encode these
 physical semantics safely, so no v7 profile is emitted.
 
-Migration method also carries a provisional foreground-impact policy.
-Twelve v7 treatments overlap foreground work. The one request arriving during
-replay incurred 1.084 s additional TTFT, versus 4.7 ms for the matched KV
-request. Until a larger sample establishes percentiles, a latency-sensitive
-busy pool may rank KV ahead of replay, but that observation does not prove a
-tail-SLO bound. A robust result currently requires idle/drained foreground or
-an explicit impact bound within the exact measured overlap domain. This policy
-is separate from steady service capacity and is not encoded by current types.
+Service and migration may overlap. They remain independently budgeted, so the
+plan must satisfy both service and migration rows and the execution schedule.
+The measured foreground effects are descriptive, not an extra admission bound.
 
-For every exact route edge `e`,
+For the logical WAN route,
 
 \[
-\sum_c b_{c,e}x_c\le B_e^{alloc}H_m.
+\sum_c b_cx_c\le B^{effective}H_m.
 \]
 
-Here \(x_c\) is the candidate view of \(z_{s,a,r}\), and the path is
-source-method-replica specific. This byte row is a necessary fluid relaxation,
-not an exact concurrent schedule. The target schedule reserves per-time
-residual capacity on every edge, source stream, destination ingest/copy engine,
-and replica migration slot. Any temporary staging allocation must become an
-explicit measured row; current code has none. Migration concurrency remains
-one per replica in v1. Network transfer and destination ingestion may overlap
-only when the measured primitive supports it.
+Here \(x_c\) is the candidate view of \(z_{s,a}\). This byte row is a necessary
+fluid relaxation, not an exact concurrent schedule. The target schedule
+reserves source streams, logical-route bandwidth, destination ingest/copy
+capacity, and migration slots over time. Source streams are swept over
+\(\{1,2,4,8\}\). Any temporary staging allocation must become an explicit
+measured row; current code has none. Network transfer and destination ingestion
+may overlap only when the measured primitive supports it.
 
 The older `../evacuation` formulation already separated network, replay
 prefill, state ingestion, and KV residency. Queue-Haul adds steady service,
 whole-session selection, source-power gain, destination baselines, exact
-routes, concrete replica packing, and independent execution validation.
+logical-route accounting, concrete replica packing, and independent execution
+validation.
 
 ## Sparse general form
 
@@ -401,9 +393,10 @@ All solvers consume the same candidate table. Its session-incidence matrix
 Ax\le\mathbf1,\qquad Ux\le\mathbf1,\qquad 0\le x\le1.
 \]
 
-Each column contains session and pool identity, method, source-power gain,
-migration work, pool service work, residency, method occupancy, and exact
-route-link bytes. The resource rows are only:
+Each column contains session and destination-class identity, method,
+source-power gain, migration work, service work, residency, method occupancy,
+and logical-route bytes. The requirement frontier reports the unnormalized
+totals; optional concrete admission normalizes them against these rows:
 
 | Row | Capacity after baseline | Horizon |
 |---|---:|---|
@@ -411,7 +404,12 @@ route-link bytes. The resource rows are only:
 | additive pool live KV | `|p| K - K_p^0` | `H_r` |
 | replica migration occupancy | replicas × `H_m` | `H_m` |
 | source stream | streams × `H_m` | `H_m` |
-| route-edge fluid bound | allocatable bytes/s × `H_m` | `H_m` |
+| logical-route fluid bound | effective bytes/s × `H_m` | `H_m` |
+
+Source streams are indivisible and are checked by packing selected durations
+into per-source stream bins of size `H_m`. The logical-route byte row remains a
+fluid relaxation; its makespan is a lower bound until event execution validates
+the concurrent route schedule.
 
 Per-replica baseline work and KV are preserved. Supplying aggregate baseline
 fields and destination `SimSession` backgrounds simultaneously is rejected to
@@ -461,29 +459,28 @@ about operator headroom.
 
 ## Deliberate extension path
 
-1. **Empty mirror:** one warm pool, current source-equivalent type and route.
-2. **Loaded mirror:** exact baseline service and KV on that pool.
+1. **Requirement frontier:** one pinned destination type, one logical WAN route,
+   joint replay/KV selection, and source-stream sensitivity.
+2. **Concrete comparison:** supply residual service, KV, migration, and route
+   budgets and test admission.
 3. **Tier-aware staging:** explicit lower-tier stock and promotion work, while
    HBM remains mandatory for active landing.
 4. **Multiple pools or sites:** duplicate candidate columns and add their pool
-   and exact route rows; no new solver abstraction.
+   and route rows; no new solver abstraction.
 5. **Heterogeneous hardware:** add measured or explicitly synthetic pool types;
    the variables remain service work, KV, ingestion, and bytes.
 
-The evaluation begins with the mirror and then varies initial destination load
-`rho`, effective normal headroom `H`, and pool count `P`. Until measured
-headroom and migration interference are identified, `rho` and `H` are
-sensitivity variables rather than calibrated probabilities. Pool panels
-isolate fragmentation/fungibility at fixed total resources; little difference
-under a homogeneous layout is a valid result. Multiple sites are represented
-by routes, not by another capacity abstraction.
+The evaluation begins with source-power targets at 10/25/50/75/90/100% of
+maximum shed, effective WAN bandwidth at 1/5/10 Gbps, route RTT classes at
+10/60/90/150/240 ms, and source streams at 1/2/4/8. A later concrete comparison
+may vary destination load, headroom, and pool count.
 
 GPT-OSS-20B/A100 has measured anchors, KV capacity, migration correctness, and
 migration components, but no accepted service envelope or continuous
 loaded-migration curve.
 Non-A100 profiles are synthetic sensitivity cases. Continuous destination
 load, continuous-batching simulation, replanning, cold sessions, model loading,
-concurrency above one, and predictive latency claims are out of scope.
+and predictive latency claims are out of scope.
 
 The service facet is a fluid admission model. It is valid only after evidence
 validity passes, every workload cell has a feasible/infeasible bracket, and

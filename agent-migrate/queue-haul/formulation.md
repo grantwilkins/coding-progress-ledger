@@ -9,9 +9,10 @@
 > is authoritative for the mathematical statement and its citations.
 
 Queue-Haul chooses whole LLM sessions to move out of a source power domain
-before a deadline. It models source power, migration work, destination
-admission, concrete replica packing, and exact migration execution. Source
-power is constrained; destination power is reported.
+before a deadline. Its primary result is required destination residual resources
+versus source watts shed; this needs a pinned destination class but no concrete
+destination inventory. Concrete admission and replica packing are optional
+later comparisons. Destination power caps and pricing are outside the model.
 
 A trustworthy destination profile must be conditional on a pinned serving
 class: model revision, weight and KV dtypes, engine and scheduler
@@ -157,20 +158,21 @@ total by the number of sessions.
 
 ## Candidates and resources
 
-The legacy planner has replay and KV-transfer candidates for each active
-session. With a `DestinationArchitecture`, a candidate is
+The requirement frontier has replay and KV-transfer candidates for each active
+session:
 
 \[
-c=(s,a,p),
+c=(s,a),\qquad a\in\{\text{replay},\text{KV}\}.
 \]
 
-where \(a\) is replay or KV transfer and \(p\) is a compatible destination
-pool. Replay requires matching model, tokenizer, and durable-log contract. KV
-transfer additionally requires a matching KV ABI. The method's
-workload-affinity rule must also pass.
+The solver selects both actions jointly, so a plan may contain both methods
+while the session-incidence row permits at most one action per session. Replay
+requires matching model, tokenizer, and durable-log contract. KV transfer
+additionally requires a matching KV ABI. The method's workload-affinity rule
+must also pass.
 
-This is the v1 aggregate candidate. The general candidate is \(c=(s,a,r)\)
-with derived \(p(r)\) and source-method-replica path \(path(s,a,r)\).
+Optional concrete admission refines this to \(c=(s,a,r)\) for a supplied
+replica inventory.
 
 Every candidate records source-power gain, migration work and duration, exact
 route bytes, destination service work, and resident KV tokens. A candidate
@@ -189,18 +191,20 @@ normalized by its capacity. The resource rows are:
 | Resource | Capacity |
 |---|---|
 | source-instance migration | source streams \(\times H_m\) |
-| route-link fluid bound | allocatable link bytes/s \(\times H_m\) |
+| logical-WAN fluid bound | effective bytes/s \(\times H_m\) |
 | pool service facet | replicas \(\times\) policy bound minus baseline work |
 | additive pool live KV | replica KV capacity minus baseline KV at \(H_r\) |
 | pool migration occupancy | replicas \(\times H_m\) |
 
-Service and migration are independent rows over the same columns, and concrete
-packing takes their **max**, not their sum, so a replica may be modeled as fully
-occupied by migration and fully occupied by serving at the same time. The pool
-path also has no destination ingest or replay-concurrency row: the legacy
+Source streams are indivisible: the requirement solver packs each selected
+duration into \(S_i\) bins of size \(H_m\) for its source instance. The WAN byte
+row remains a fluid relaxation. Its reported makespan is a lower bound unless
+the event executor validates the concurrent route schedule.
+
+Service and migration may overlap and are independently budgeted; both rows
+must fit. The pool path has no destination ingest or replay-concurrency row: the legacy
 `max_destination_replays` and `max_destination_kv_streams` rows were replaced by
 one method-agnostic migration-occupancy row of capacity \(\lvert p\rvert H_m\).
-Both gaps are named in `formulation_nsdi.md` §A.8.
 
 The legacy adapter represents destination service with aggregate replay time,
 KV-service time, compute load, and resident-KV rows. Its flexible destination
@@ -225,7 +229,7 @@ and route-switch time. Source migration occupancy lasts until commit.
 
 ## Destination admission
 
-The logical decision is destination-aware. Let \(z_{s,a,r}\) select source
+Concrete admission is optional. Let \(z_{s,a,r}\) select source
 session \(s\), migration method \(a\), and concrete warm replica \(r\) of type
 \(q(r)\), and let \(\pi\) be a fixed nonanticipative migration ordering and
 resource-allocation policy. The set is admissible only if there exist \(z,\pi\)
@@ -236,8 +240,7 @@ satisfying eligibility, steady placement, and transition constraints:
 \operatorname{Compatible}(z)\land
 \operatorname{ServicePack}(z)\land
 \operatorname{KVPrivate}(z)\land
-\operatorname{MigrationSchedule}(z,\pi)\land
-\operatorname{ImpactOK}(z,\pi).
+\operatorname{MigrationSchedule}(z,\pi).
 \]
 
 It is joined to source selection by
@@ -384,7 +387,8 @@ component semantics are:
 \[
 \tau_{s,R,q}=
 \tau_{route}(B_s^{log},path(s,R,r))+
-\alpha_{R,q}\tau_{s,R}^{compute+completion,old}(T_s)+\tau_q^{switch},
+\alpha_{R,q}\tau_{s,R}^{compute+completion,old}(T_s)+\tau_q^{switch}
++\mathtt{route\_rtt\_s},
 \]
 
 for replay, and
@@ -394,7 +398,7 @@ for replay, and
 \max\left(
 \tau_{route}(B_s^{sealed},path(s,K,r)),
 \frac{B_s^{sealed}}{C_{ingest,q}}
-\right)+c_{K,q}(T_s),
+\right)+c_{K,q}(T_s)+\mathtt{route\_rtt\_s},
 \]
 
 for KV transfer, plus separately measured catch-up and route-switch terms when
@@ -408,24 +412,21 @@ The fitted v7 KV residual is `observed - route_floor`; it can be used in the
 explicit `max(route, ingest)` form only where route time is the measured
 bottleneck. Otherwise it must be redefined or refit.
 
-The pool path does not implement the equation above. Its KV branch computes
-`route(sealed_bytes) + residual + catch_up`: it drops the ingest floor, and it
-also drops `setup_s` and `switch_s`, both of which the legacy path includes —
-so the two methods are inconsistently terminated, since the pool replay branch
-does keep `switch_s`. Omitting the ingest floor underestimates a 17K-token
-transfer by 27% at 10 Gbps and by 2.2x in the 1000-Gbps pressure search, which
-is why the bandwidth axis carries no information above roughly 5 Gbps. The
-legacy path honours the `max`. Separately, the pool replay branch silently
+The pool KV path now implements
+`max(route, bytes/ingest_rate) + residual + catch_up` (commit `ef435092`).
+Separately, the pool replay branch silently
 substitutes the minimum tabulated rate when context falls outside the measured
 replay curve, where the legacy path raises; that contradicts the hard-fail rule
 stated above and should raise.
 
-The schedule assigns residual route bandwidth after background reservations,
-and route time is never below bytes divided by the allocated bottleneck rate.
-Geographic routes require measured fixed/per-round latency; the v7 shaped local
-route does not identify it. `MigrationSchedule` means one nonanticipative
+V1 has one logical WAN route. Its bandwidth term is bytes divided by effective
+bandwidth; `route_rtt_s` is then added once after the transfer/ingest pipeline,
+exactly one fixed P50 RTT per migration action with no RTT/2 conversion. The
+central bandwidth is 5 Gbps; sensitivity
+uses 1/5/10 Gbps and P50 RTTs of 10/60/90/150/240 ms. No TCP or multi-edge
+topology model is required. `MigrationSchedule` means one nonanticipative
 schedule whose makespan is at most \(H_m\) in every declared case and that
-reserves each source stream, route edge, destination ingest/copy engine,
+reserves each source stream, logical route, destination ingest/copy engine,
 and replica migration slot. Any temporary staging allocation must become an
 explicit measured row; current code has none. Aggregate byte and occupancy rows
 are necessary pruning relaxations, not that schedule proof.
@@ -440,19 +441,15 @@ current scalar
 this component model without violating the route-time floor. No v7 destination
 profile is accepted.
 
-Foreground impact is a provisional method policy rather than a service row.
-The paired observations rank KV ahead of replay for latency-sensitive busy
-pools, but one arriving request does not establish a tail-SLO bound. A robust
-result currently requires idle/drained foreground or an explicit impact bound
-inside the exact measured overlap domain. This dynamic predicate is proposed
-semantics and is not encoded by the current architecture types.
+Service and migration may overlap when both independent budgets fit. The paired
+foreground observations remain descriptive and are not an extra interference
+constraint.
 
-Operational feasibility additionally requires an accepted evidence status, a
+Operational admission additionally requires an accepted evidence status, a
 full pinned runtime and warm/healthy attestation, a fresh live-state snapshot
 held by a lease through commit, per-session KV block rounding, a supported
-service horizon, and either an idle/drained migration window or an accepted
-foreground-impact bound. The current architecture implementation does not
-enforce all of these gates, so its successful placements remain descriptive or
+service horizon. The current architecture implementation does not enforce all
+of these gates, so its successful placements remain descriptive or
 `sensitivity/possible`.
 
 ## Greedy
@@ -597,6 +594,8 @@ pre-commit failure. Within that scope, a plan is feasible only when:
 Experiment acceptance additionally requires every request observed by \(D\) to
 start by \(D\). This checks routing readiness, not end-to-end request latency.
 
+The requirement frontier evaluates source targets at
+10/25/50/75/90/100% of maximum shed and source-stream sensitivity at 1/2/4/8.
 The legacy scalar LP and greedy support active sessions, the central profile
 case, one aggregate destination pool, and an awake final state. Passing a
 `DestinationArchitecture` enables multiple pools and routes, normal/emergency

@@ -37,42 +37,18 @@ is even a passing observation at 0.114063 (`FINDINGS.md:86`) that we ignore.
 
 ---
 
-## 1. The finding that decides whether this paper works
+## 1. The next modeling result
 
-**We optimize half of a power ledger.** The profile measures what a migration
-costs the destination, and we never put it in the objective.
+The primary result is **required destination residual resources versus source
+watts shed**. It requires a pinned destination class, not a concrete destination
+inventory. The candidate set contains replay and KV transfer together; the
+solver may select both methods across sessions, with at most one action per
+session.
 
-Measured, from `profiles/gpt_oss_20b_a100_tp1.json` → `action_power_w`:
-
-| Method | Source | **Destination** |
-|---|---:|---:|
-| Replay | 2.06 W | **189.84 W** |
-| KV transfer | 3.18 W | **11.84 W** |
-
-An A100's entire dynamic range in our own power curve is 248.89 − 67.12 =
-**181.77 W**. A replica doing replay draws **1.04× the full dynamic range of a
-loaded GPU**. Recomputing the reference run:
-
-| Workload | Destination power added over the 115 s window | Source power relieved | Net |
-|---|---:|---:|---:|
-| Interactive coding | 6.70 kW | 2.75 kW | **+3.95 kW** |
-| Coding | 33.00 kW | 7.22 kW | **+25.78 kW** |
-| Agentic | 31.69 kW | 9.00 kW | **+22.68 kW** |
-
-**Across two sites, power goes up by 2.4–4.6× what the source sheds, during
-exactly the 115 seconds of the grid event.**
-
-This is structural, not a bug. `PROPOSED_DESTINATION_ARCH.md:167` puts destination
-facility power out of scope, `PlanResult` has no destination-power field,
-`evaluate()` records only `initial_source_w` and `source_w_shed`, and
-`simulate.py:481` computes destination node power and discards it. The optimizer
-has an unpriced resource, so it always prefers replay (189.84 W, ~35 KB) over KV
-(11.84 W, ~850 MB). It does, **98.7% of the time**.
-
-Read the other way, this is the paper's most interesting axis and we have it
-half-modeled: **replay and KV transfer are a power-versus-bandwidth trade.** Replay
-costs 16× the destination power and almost no network; KV costs 16× less power
-and ~850 MB. Pricing both is what makes the choice meaningful.
+Destination power caps and pricing are deliberately out of scope. Measured
+action power may remain provenance, but it does not choose the method or define
+feasibility. A later operator can compare a concrete destination's residual
+service, KV, migration, and route budgets against the reported frontier.
 
 ---
 
@@ -88,7 +64,7 @@ and ~850 MB. Pricing both is what makes the choice meaningful.
 | KV bytes/token | 49,152 B = 48 KiB | exact — see below |
 | Replay time | `log_B/rate + 0.5867·(tokens/replay_tps + 1.340·(1+growth)) + switch` | **9.6%** held-out at 24K, never underpredicts |
 | KV time | `sealed_B/rate + 1.1338 + catch-up` | **7.8%** held-out at 24K, never underpredicts |
-| Migration action power | replay 189.84 W dst; KV 11.84 W dst | measured, **unused** |
+| Migration action power | replay 189.84 W dst; KV 11.84 W dst | measured, outside this formulation |
 | Replay foreground cost | +1.084 s TTFT, +3.45 ms/tok TPOT | n=1, n=5 |
 | KV foreground cost | +4.7 ms TTFT, +0.42 ms/tok TPOT | n=1, n=5 |
 
@@ -107,12 +83,11 @@ conservative by construction. They should anchor the paper.
 
 | Assumption | Where | Consequence if wrong |
 |---|---|---|
-| `max_source_streams = 1` | profile | decides everything — see §3 |
-| Service and migration are **independent** resources | `pool_planner.py:218-226` | a replica can be 98.7% migrating and 66.7% serving at once |
-| Destination power is free | objective | §1 |
+| Source streams | sensitivity | sweep 1/2/4/8 and report which resources change |
+| Service and migration are **independent** resources | `pool_planner.py:218-226` | overlap is allowed when both budgets fit |
 | Migration concurrency 1 per sink replica | `pool_planner.py` | untested |
 | One request rate, 1/180 req/s/session | `destination_bench.py:46` | — |
-| WAN is one scalar rate on three identical links | `destination_bench.py:232` | see §6 |
+| WAN is one logical route | requirement input | 5 Gbps central; 1/5/10 Gbps sensitivity; one fixed P50 RTT per action |
 | `normal = emergency = stable = 0.096953` | `destination_bench.py:187` | the mode machinery is inert |
 
 ### Broken or inert, found by audit
@@ -135,12 +110,8 @@ conservative by construction. They should anchor the paper.
 - **`workload_prefill_fraction_range = (0,1)`**, so the affinity gate never fires.
   **`LoadedCoefficients`** is required and dead. **The stable-envelope check is a
   tautology** — it re-tests a bound the packer already enforced.
-- **The pool path drops the destination ingest floor.** `formulation.md:363` and
-  `planner.py:145` both specify `max(route, bytes/ingest_rate)`;
-  `pool_planner.py:91` computes `route + residual` only. At 10 Gbps that
-  underestimates a 17K-token transfer by **27%**; in the pressure search, which
-  runs at 1000 Gbps, by **2.2×** — so the bandwidth axis is meaningless above
-  ~5 Gbps.
+- **Fixed:** the pool KV path now applies
+  `max(route, bytes/ingest_rate) + residual + catch_up` (`ef435092`).
 - **Idle floor disagreement:** the curve says 67.12 W at ℓ=0; `README.md:273`
   reports a measured 84.9 W after sleep. `power_limit_w` is defined as every GPU
   at the floor, so a 26% floor error propagates into every reported shortfall.
@@ -215,9 +186,10 @@ the LP is actively worse: **1.89× overshoot, 949,031 moves where 524,241 suffic
 Stop claiming "these N sessions will be served acceptably at the destination." We
 have no fleet telemetry and don't want per-request TTFT modelling. Claim:
 
-> Given a destination that reports its residual capacity, this evacuation either
-> fits or it does not, and here is exactly the residual it requires — and exactly
-> what the transition costs in watts, bytes, and time at both sites.
+> For each source-power target, here is the destination service, live KV,
+> migration occupancy, source-stream occupancy, WAN bytes, and makespan required.
+> A concrete destination may later compare its residual vector against this
+> frontier.
 
 The headline figure becomes **required destination residual vs. watts shed**, with
 the reader's own bound as a horizontal line. That plot is invariant to the
@@ -242,23 +214,27 @@ at a 20% cut** and never moves again — the sink-service row pins at 1.0000.
 
 ### Phase A — fix what makes the current numbers meaningless (days, no GPU)
 
-**A1. Price destination power.** Add it to every table and add a destination power
-cap as a constraint row. Re-run. Expect the method mix to flip toward KV transfer,
-and expect the paper's real contribution to become the replay-vs-KV
-power/bandwidth trade. *This is the highest-information change available.*
+**A1. Add the requirement-only frontier.** For source targets at
+10/25/50/75/90/100% of maximum shed, jointly select replay and KV candidates and
+report the raw residual-resource vector without constructing a destination.
 
-**A2. Couple service and migration** into one per-replica resource, or gate replay
-to drained replicas as `PROPOSED_DESTINATION_ARCH.md:366` already requires.
-Re-run; expect coding/agentic landed counts to fall.
+**A2. Use one logical WAN route.** Charge effective bandwidth plus exactly one
+`route_rtt_s` P50 RTT per action. Use 5 Gbps centrally, bandwidth sensitivity
+1/5/10 Gbps, and RTT classes 10/60/90/150/240 ms. Do not model TCP or require a
+multi-edge topology.
 
 **A3. Sweep `max_source_streams ∈ {1,2,4,8}`** and report landed sessions, watts,
-and nodes drained. Cite `bounded-hardware-campaign-run`, not Llumnix.
+resource totals, method mix, and makespan. Separate fixed-plan invariants from
+changes caused by reoptimization. Pack indivisible durations into per-source
+stream bins; keep the single WAN byte row as a fluid relaxation and label its
+makespan a lower bound until event execution validates it.
 
 **A4. Allow `final_state ∈ {sleep, off}`** in the destination planner and add a
 node-emptying term to the objective. Report nodes drained as a first-class metric
 — the column already exists in the 1M artifact.
 
-**A5. Restore the ingest floor** in `pool_planner._destination_duration`.
+**A5. Done: restore the ingest floor** in
+`pool_planner._destination_duration` (`ef435092`).
 
 **A6. Report the LP triple** (fractional bound / rounded / packed) plus an exact
 integer optimum on 100–500-session instances, with the watt gap.
@@ -266,11 +242,11 @@ integer optimum on 100–500-session instances, with the watt gap.
 **A7. Ten seeds with bands; `faster` and `slower` profile cases.** Everything
 quoted today is n=1 with declared input errors of 25–100%.
 
-**A8. Put real requests in the bench** so the deadline check and the foreground
-interference we measured actually bind.
+**A8. Put real requests in the bench** so the deadline and independent service
+budget checks exercise foreground work.
 
-**A9. Replace `bottleneck` with a binding set**; collapse the three identical route
-rows into one; drive the pressure search with watts, not `all_sessions_landed`.
+**A9. Replace `bottleneck` with a binding set** and drive the pressure search
+with watts, not `all_sessions_landed`.
 
 ### Phase B — baselines (days, no GPU). Without these there is no paper.
 
@@ -466,8 +442,8 @@ when the hardware changes?*
 | Migration action power | replay **189.84 W**, KV **11.84 W** at the destination | measured |
 | Power vs load | 67.12 W idle → 248.89 W at ℓ=0.531 | measured, 5% error |
 | Request rate | 1/180 req/s/session = **0.31–0.86 rps/replica** | assumed; Llumnix's evaluation runs 0.42–1.9 req/s per instance, so we sit in the published range |
-| WAN bandwidth | 10 Gbps, one shared rate | **assumed**; Skyplane measures AWS capping *all* egress at 5 Gbps/VM, GCP 3 Gbps/flow and 7 Gbps total |
-| Source migration streams | **1** | **assumed**; our own `mp-campaign-run-10` measured 591 MB/s at concurrency 2 and 1.206 GB/s at concurrency 4 against a 111 MB/s serialized ceiling |
+| WAN route | **5 Gbps central; 1/5/10 Gbps; P50 RTT 10/60/90/150/240 ms** | explicit sensitivity; one logical route and one RTT per action |
+| Source migration streams | **1/2/4/8** | sensitivity; our own `mp-campaign-run-10` measured 591 MB/s at concurrency 2 and 1.206 GB/s at concurrency 4 against a 111 MB/s serialized ceiling |
 | Service bound | 0.096953 | a probe that passed; **no failure exists in the dataset** |
 
 The bottom four are the honest weak points, and three of them we can close with
@@ -532,7 +508,7 @@ claim than "the model is general."
 | 6. Validate by execution simulation | no |
 
 Adding a destination site means adding pools, per-replica baselines, candidate
-columns, and route edges. Adding a *hardware type* means running stage 1 once.
+columns, and a logical-route input. Adding a *hardware type* means running stage 1 once.
 Neither introduces a new abstraction. That is the robustness claim, and §4e tests
 it rather than asserting it.
 
@@ -737,13 +713,11 @@ pre-alloc/ACK/stage/commit handshake; downtime is one decode iteration and const
 in length while copy time scales with length; the cluster metric is free memory ÷
 batch size.
 
-**Skyplane replaces our WAN placeholder:** AWS throttles **all egress to 5 Gbps per
-VM**, GCP to 3 Gbps per flow and 7 Gbps total; reaching those needs **up to 64
-parallel TCP connections**; throughput decays with RTT but is **stable over 18
-hours**, which validates a static profiled grid. Their constraint structure —
-per-link cap, per-VM egress × #VMs, per-VM ingress × #VMs — is what we should
-adopt. They also **relax, solve, and round down, reporting ≤1% from optimal**: a
-direct precedent for our LP-guided rounding.
+**Skyplane grounds the effective-WAN sensitivity:** its cloud results put 5 Gbps
+in a plausible central range and show route-dependent throughput. V1 represents
+that evidence with one effective bandwidth and one fixed P50 RTT, not a TCP or
+multi-edge network model. Skyplane also **relaxes, solves, and rounds down,
+reporting ≤1% from optimal**: a direct precedent for our LP-guided rounding.
 
 **Citation hygiene.** POLCA (arXiv 2308.12908) and "Characterizing Power Management
 Opportunities for LLMs in the Cloud" (ASPLOS'24) are **the same paper** retitled.
@@ -757,9 +731,9 @@ shows inference is diurnal with 9% spikes at 2 s.
 
 - Whether the 84.9 W measured sleep floor and the 67.12 W curve floor come from
   the same configuration. This changes every reported shortfall.
-- Whether `max_source_streams` is a vLLM limit, an LMCache limit, or a choice.
-- Whether a destination replica can serve and ingest simultaneously at all — we
-  have one paired observation per method, not a percentile.
+- Whether `max_source_streams` is a vLLM limit, an LMCache limit, or a choice;
+  the 1/2/4/8 sensitivity prevents that uncertainty from becoming a hidden
+  constant.
 - arXiv 2602.02987 (multiclass queueing with prefill/decode contention) may be the
   nearest prior art to the `f/F + g/G` coordinate. Abstract only; read it before
   claiming that coordinate is novel.

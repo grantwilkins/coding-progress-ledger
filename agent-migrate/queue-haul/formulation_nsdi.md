@@ -9,11 +9,12 @@ loop by coupling many sessions across shared limits.
 
 It covers two settings:
 
-- **§A. Many sessions, one destination site.** One source power domain evacuates
-  into one warm remote pool over one route.
-- **§B. Many sessions, many destination sites.** The same sessions choose among
-  several sites of possibly different hardware, reached over a shared transport
-  graph.
+- **§A. Requirement frontier.** One source power domain jointly chooses replay
+  and KV actions against a pinned destination class and one logical WAN route;
+  no concrete destination inventory is required.
+- **§B. Optional concrete comparison.** A supplied destination may compare its
+  residual vector against the frontier and add replica packing or multiple
+  sites later.
 
 Both are written as one linear program and solved greedily. The point of the
 document is that this is not a heuristic compromise: the LP has a structure —
@@ -52,9 +53,8 @@ needed for the multi-session problem, and reuses the existing symbols exactly.
 | \(k\in\mathcal K\) | destination replica | §\ref{sec:single-session} |
 | \(a\in\{R,K\}\) | migration method: context replay or KV transfer | §\ref{sec:single-session} |
 | \(T_j,C_j,K_{jk}\) | context length, serialized context bytes, missing KV bytes | §\ref{sec:single-session} |
-| \(B_{ik},\rho_{km}(T),\mu_{km},\eta_m\) | route rate, prefill rate, KV-ingest rate, KV bytes/token | §\ref{sec:single-session} |
+| \(B,\tau^{\mathrm{RTT}},\rho_{km}(T),\mu_{km},\eta_m\) | effective WAN rate, one fixed route RTT, prefill rate, KV-ingest rate, KV bytes/token | §\ref{sec:single-session} |
 | \(t^{R}_{ijk},t^{K}_{ijk}\) | isolated migration times | §\ref{sec:single-session} |
-| \(\pi^{a}_{jk}\) | incremental destination power of action \(a\) | §\ref{sec:single-session} |
 | \(H\) | hold period at the destination | §\ref{sec:single-session} |
 
 New in this document:
@@ -64,12 +64,11 @@ New in this document:
 | \(n\in\mathcal N\) | destination **site** (a facility; contains replicas) |
 | \(q\) | **pinned replica type** — model revision, tokenizer, KV ABI and dtype, hardware, precision, parallel layout, engine and scheduler configuration |
 | \(\mathcal P_{n,q}\subseteq\mathcal K\) | **pool**: the replicas of type \(q\) at site \(n\) |
-| \(e\in\mathcal E\) | transport edge, with allocatable rate \(B_e\) (bytes/s) |
-| \(c=(j,a,k)\) | **candidate** — the atomic decision |
-| \(x_c\in\{0,1\}\), \(y_j=\sum_{a,k}x_{(j,a,k)}\) | selection variables |
+| \(c=(j,a)\) | requirement-frontier **candidate** — the atomic decision |
+| \(x_c\in\{0,1\}\), \(y_j=\sum_a x_{(j,a)}\) | selection variables |
 | \(w_c\) | source power gain of \(c\) (W) |
 | \(t_c\) | migration duration of \(c\) (s); \(t_{(j,a,k)}=t^{a}_{i(j)jk}\) |
-| \(b_{c,e}\) | bytes candidate \(c\) puts on edge \(e\) |
+| \(b_c\) | bytes candidate \(c\) puts on the logical WAN route |
 | \(v_c=(v^{p}_c,v^{d}_c)\) | destination service work of \(c\) (service-seconds per wall-second, prefill and decode coordinates) |
 | \(\kappa_c\) | destination live-KV demand of \(c\), in blocks |
 | \(\Theta\) | requested source power reduction (W) |
@@ -114,7 +113,7 @@ open validity gap.
 
 ---
 
-## §A. Many sessions, one destination site
+## §A. Many sessions, one destination class
 
 ### A.1 What the event is
 
@@ -148,8 +147,11 @@ consumed only by execution and evaluation.
 
 ### A.2 The candidate is the atomic decision
 
-A **candidate** is \(c=(j,a,k)\): move session \(j\) by method \(a\) onto warm
-replica \(k\). It exists only if the eligibility predicate \(E_c\) holds.
+A requirement-frontier **candidate** is \(c=(j,a)\): move session \(j\) by
+replay or KV transfer on the pinned destination class. Both actions enter one
+candidate table, so a plan may use both methods across sessions while selecting
+at most one action per session. It exists only if the eligibility predicate
+\(E_c\) holds.
 Eligibility is a conjunction of exact matches, not a score:
 
 - replay requires equal model revision, tokenizer, and durable-log execution
@@ -165,10 +167,10 @@ eligible whenever the destination type carries its own measured profile.
 Eligibility is a boolean predicate over pinned identities; it is the one part of
 the formulation that involves no measured constant at all.
 
-Each candidate carries six quantities, and nothing else enters the optimization:
+Each candidate carries five quantities, and nothing else enters the optimization:
 
 \[
-c\ \longmapsto\ \bigl(w_c,\; t_c,\; \{b_{c,e}\}_{e\in\mathcal E},\; v_c,\; \kappa_c,\; \pi_c\bigr).
+c\ \longmapsto\ \bigl(w_c,\; t_c,\; b_c,\; v_c,\; \kappa_c\bigr).
 \]
 
 **Source power gain** \(w_c=\delta_{i(j)j}(L_i)\), the marginal of
@@ -176,21 +178,22 @@ c\ \longmapsto\ \bigl(w_c,\; t_c,\; \{b_{c,e}\}_{e\in\mathcal E},\; v_c,\; \kapp
 the last session on its node and the node can reach a lower power state before
 \(D\), \(w_c\) additionally carries the transition credit
 \(P^{\mathrm{idle}}_i-P^{\mathrm{off}}_i\). \(w_c\) depends on \(j\) only, not on
-\(a\) or \(k\) — the relief is entirely a source-side quantity.
+\(a\) — the relief is entirely a source-side quantity.
 
 **Duration** \(t_c=t^{a}_{i(j)jk}\), exactly the isolated migration time of
 §\ref{sec:single-session}, evaluated at \(\widehat T_j(H^{\mathrm{mig}})\):
 
 \[
 t_{(j,R,k)}
-=\frac{\widehat C_j}{B_{ik}}
+=\frac{\widehat C_j}{B}+\tau^{\mathrm{RTT}}
 +\alpha_{R,q}\!\left[\frac{\widehat T_j}{\rho_{km}(\widehat T_j)}+\tau^{\mathrm{cmp}}_{q}(1+\chi_j)\right]
 +\tau^{\mathrm{sw}}_q,
 \]
 
 \[
 t_{(j,K,k)}
-=\max\!\left\{\frac{K_{jk}}{B_{ik}},\ \frac{K_{jk}}{\mu_{km}}\right\}
+=\max\!\left\{\frac{K_{jk}}{B},\ \frac{K_{jk}}{\mu_{km}}\right\}
++\tau^{\mathrm{RTT}}
 +\tau^{\mathrm{res}}_{q}+c^{\mathrm{catch}}_{q}(\widehat T_j)
 +\tau^{\mathrm{sw}}_q,
 \]
@@ -200,17 +203,14 @@ where \(\chi_j=\mathbb 1[\gamma_j>0]\) counts one catch-up round,
 \(\tau^{\mathrm{res}}_q\) is the fitted KV residual. Both fits are held out to a
 different context *and* a different bandwidth and never underpredict (§D.3).
 The \(\max\) in the KV expression is the ingest floor of
-§\ref{sec:single-session}; the current pool implementation omits it and
-computes route time plus residual, which underestimates by 27 % at 10 Gbps and
-by \(2.2\times\) at 1000 Gbps. This is a fixed bug in the code, not a change to
-the formulation, and it is the reason the bandwidth axis of the current sweep
-saturates above ~5 Gbps.
+§\ref{sec:single-session}; commit `ef435092` restored it in the pool
+implementation. `route_rtt_s` contributes exactly one fixed P50 RTT per action,
+with no RTT/2 conversion and no TCP model.
 
-**Bytes on the wire.** \(b_{c,e}=\widehat C_j\) for replay,
-\(b_{c,e}=K_{jk}=\lfloor\widehat T_j/L^{\mathrm{tx}}_q\rfloor\,\eta_m L^{\mathrm{tx}}_q\)
+**Bytes on the wire.** \(b_c=\widehat C_j\) for replay and
+\(b_c=K_{jk}=\lfloor\widehat T_j/L^{\mathrm{tx}}_q\rfloor\,\eta_m L^{\mathrm{tx}}_q\)
 for KV transfer (only *sealed* blocks are copied; an unsealed tail is
-reconstructed, never shipped), for every \(e\) on \(c\)'s path. The full byte
-count is charged to each hop.
+reconstructed, never shipped).
 
 **Destination service work.** The two-dimensional coordinate
 \(v_c=\bigl(f_j/F_q(\widehat T_j),\ g_j/G_q(\widehat T_j)\bigr)\).
@@ -241,11 +241,6 @@ never a false positive. Note that \(L_q\) (the vLLM page, 16 tokens) and
 \(L^{\mathrm{tx}}_q\) (the LMCache transfer block, 256 tokens) are different
 quantities and are separately measured.
 
-**Destination action power** \(\pi_c=\pi^{a}_{jk}\), the incremental power the
-*receiving* site draws while performing \(a\). Measured: 189.84 W for replay,
-11.84 W for KV transfer, against a source-side cost of 2.06 W and 3.18 W. §A.4
-explains why this asymmetry is the most consequential coefficient in the model.
-
 ### A.3 The five consumable resources
 
 For a pinned serving class inside its measured envelope, exactly five
@@ -257,15 +252,19 @@ are absorbed into the measured rates and are not portable capacity constants.
 | # | Row \(r\) | One row per | Consumption \(u_{r,c}\) (unnormalized) | Capacity | Horizon |
 |---|---|---|---|---|---|
 | 1 | source stream | source instance \(i\) | \(t_c\,\mathbb 1[i(c)=i]\) | \(S_i\,H^{\mathrm{mig}}\) | \(H^{\mathrm{mig}}\) |
-| 2 | transport edge | edge \(e\in\mathcal E\) | \(b_{c,e}\) | \(B_e\,H^{\mathrm{mig}}\) | \(H^{\mathrm{mig}}\) |
+| 2 | logical WAN route | event | \(b_c\) | \(B\,H^{\mathrm{mig}}\) | \(H^{\mathrm{mig}}\) |
 | 3 | service facet | pool \(\mathcal P\), facet \(\iota\) | \(N_\iota\!\cdot\! v_c\,\mathbb 1[k(c)\in\mathcal P]\) | \(\lvert\mathcal P\rvert h^{\mathrm{mode}}_\iota-N_\iota\!\cdot\!\!\sum_{k\in\mathcal P} b_k\) | \(H^{\mathrm{res}}\) |
 | 4 | live KV | pool \(\mathcal P\) | \(\kappa_c\,\mathbb 1[k(c)\in\mathcal P]\) | \(\lvert\mathcal P\rvert\mathcal K_q-\sum_{k\in\mathcal P}\kappa^0_k\) | \(H^{\mathrm{res}}\) |
 | 5 | migration slot | pool \(\mathcal P\) | \(t_c\,\mathbb 1[k(c)\in\mathcal P]\) | \(\lvert\mathcal P\rvert H^{\mathrm{mig}}\) | \(H^{\mathrm{mig}}\) |
 
 Rows 1 and 5 are *time* budgets: a source instance can sustain \(S_i\)
 concurrent outbound streams, and a destination replica can absorb one migration
-at a time. Row 2 is a *byte* budget: a fluid relaxation of the transfer
-schedule. Rows 3 and 4 are *occupancy* budgets that persist after the event.
+at a time. Source streams are indivisible, so selected durations are packed
+into \(S_i\) bins of size \(H^{\mathrm{mig}}\) per source instance. Row 2 is a
+*byte* budget: a fluid relaxation of the transfer
+schedule over one logical WAN route. Its central rate is 5 Gbps; sensitivity
+uses 1/5/10 Gbps and P50 RTT classes 10/60/90/150/240 ms. Rows 3 and 4 are
+*occupancy* budgets that persist after the event.
 
 The service facet deserves a precise statement. For type \(q\), the admissible
 region is a polyhedron in the two-dimensional work coordinate,
@@ -308,43 +307,21 @@ A row whose residual capacity is non-positive makes the pool unavailable — a
 baseline already outside the requested envelope is not a small violation to be
 optimized against.
 
-### A.4 The objective is a two-sided power ledger
+### A.4 The objective and reported frontier
 
-The grid does not care where the watts are. Writing \(\mathcal M=\{c:x_c=1\}\)
-for the chosen plan, the instantaneous system-wide effect during the event is
+For each source-power target, the solver jointly selects replay and KV
+candidates and reports the unnormalized destination requirement vector:
 
 \[
-\underbrace{-\sum_{c\in\mathcal M}w_c}_{\text{source relief}}
-\;+\;\underbrace{\sum_{c\in\mathcal M}\pi_c}_{\text{transition power at the destination}}
-\;+\;\underbrace{\sum_{c\in\mathcal M}\bigl[P^{\mathrm{on}}_{k}(L_k+\ell^{q}_j)-P^{\mathrm{on}}_{k}(L_k)\bigr]}_{\text{residency power at the destination}} .
+\left(\sum_c v_cx_c,\ \sum_c\kappa_cx_c,\ \sum_ct_cx_c,\
+\sum_cb_cx_c,\ \operatorname{makespan}(x)\right)
+\quad\text{versus}\quad \sum_cw_cx_c.
 \]
 
-Only the first term is currently constrained; the second and third are computed
-and discarded. That is a defensible scope decision *only if stated*, because the
-measured asymmetry is large: at 189.84 W, one replica performing replay draws
-1.04\(\times\) the entire usable dynamic range of a loaded A100
-(181.77 W). Over the reference 115 s window the destination adds 6.70/33.00/31.69 kW
-across the three workloads against source relief of 2.75/7.22/9.00 kW — net
-system power rises by 2.4–4.6\(\times\) what the source sheds, for exactly the
-duration of the grid event.
-
-Two consequences, and the paper should take both.
-
-1. **Price it.** Add \(\pi_c\) to the objective and a destination power headroom
-   row \(\sum_{c:n(c)=n}\pi_c x_c\le\Pi_n\) per site. With destination power
-   free, the optimizer always prefers replay (189.84 W, ~35 KB) to KV transfer
-   (11.84 W, ~850 MB) and does so 98.7 % of the time. Pricing it turns the
-   method choice into what it physically is: **replay and KV transfer are a
-   power-versus-bandwidth trade**, 16\(\times\) the destination power against
-   four orders of magnitude in bytes. That trade is the interesting axis of the
-   paper and it is currently half-modelled.
-2. **Do not overclaim the shed.** With one source domain and an unpriced sink,
-   the honest claim is a *relocation* of demand plus a bounded transition cost,
-   not a net reduction. The net reduction claim requires either a destination
-   with genuine electrical headroom (a different grid region, a different hour,
-   curtailed renewable supply) or the residency term to be smaller than the
-   source term — which the concavity of \(P^{\mathrm{on}}\) makes plausible only
-   when the destination sits lower on its own curve than the source does.
+The main sweep uses targets at 10/25/50/75/90/100% of maximum sheddable power,
+source streams 1/2/4/8, bandwidth 1/5/10 Gbps, and route P50 RTT
+10/60/90/150/240 ms. Method counts are reported so the mixed replay/KV choice is
+visible. Destination power caps and pricing are outside this formulation.
 
 The deployed objective is lexicographic: meet the conservative power target,
 then minimize migration work. If the target is unreachable, maximize valid shed
@@ -354,32 +331,42 @@ successful curtailment.
 
 ### A.5 The integer program
 
-Collecting §A.2–§A.4, the single-site problem is
+Collecting §A.2–§A.4, expand each candidate over its source's stream bins
+\(h\in\{1,\ldots,S_{i(j)}\}\). The requirement problem is
 
 \[
 \begin{aligned}
-\text{(IP)}\qquad
-\min_{x}\quad & \sum_{c}t_c x_c\\
+\text{(REQ)}\qquad
+\min_{x}\quad & \sum_{c,h}t_c x_{c,h}\\
 \text{s.t.}\quad
-& \sum_{c} w_c x_c\ \ge\ \Theta
+& \sum_{c,h} w_c x_{c,h}\ \ge\ \Theta
 &&\text{(power target, covering)}\\
-& \sum_{a,k}x_{(j,a,k)}\ \le\ 1 && \forall j\in\mathcal J
+& \sum_{a,h}x_{(j,a),h}\ \le\ 1 && \forall j\in\mathcal J
 &&\text{(one move per session)}\\
-& \sum_{c}u_{r,c}x_c\ \le\ 1 && \forall r\in\mathcal R
-&&\text{(five resource families)}\\
-& x_c\le E_c,\qquad x_c\in\{0,1\}.
+& \sum_{c:i(c)=i}t_cx_{c,h}\le H^{\mathrm{mig}}
+&&\forall i,h &&\text{(indivisible source-stream bins)}\\
+& \sum_{c,h}b_cx_{c,h}\le BH^{\mathrm{mig}}
+&& &&\text{(logical-WAN fluid bound)}\\
+& x_{c,h}\le E_c,\qquad x_{c,h}\in\{0,1\}.
 \end{aligned}
 \]
 
-In matrix form, with \(A\) the session-incidence matrix (\(A_{jc}=1\) iff
-\(j(c)=j\)) and \(U\) the normalized resource matrix,
+Destination service work, KV blocks, and replay/KV migration-slot seconds are
+summed outputs, not constraints backed by invented capacity. The solver first
+maximizes conservative modeled gain, then minimizes duration subject to
+achieving \(\min(\Theta,\Theta^{\max})\). A supplied concrete destination may
+later add normalized residual rows \(Ux\le\mathbf1\).
+
+In matrix form, with \(A\) the session-incidence matrix,
 
 \[
-Ax\le\mathbf 1,\qquad Ux\le\mathbf 1,\qquad x\in\{0,1\}^{\lvert\mathcal C\rvert}.
+Ax\le\mathbf 1,\qquad Ux\le\mathbf 1,\qquad x\in\{0,1\}^{\lvert\mathcal C\rvert},
 \]
 
-\(A\) is a **partition matrix**: every column belongs to exactly one row. This
-single fact is what makes the problem tractable, and §C exploits it.
+where \(U\) contains the exact source-stream-bin rows and the WAN fluid row for
+the frontier, plus supplied residual rows only for concrete admission. \(A\) is
+a **partition matrix**: every column belongs to exactly one row. This single
+fact is what makes the problem tractable, and §C exploits it.
 
 Three properties of the formulation are worth naming explicitly.
 
@@ -390,22 +377,18 @@ conservative surrogate; exact source power is recomputed through
 \(P^{\mathrm{on}}\) after integer selection, and the plan is accepted only if
 the exact value clears the limit.
 
-**Source and destination are chosen jointly.** A session with a large \(w_j\)
-but no feasible \((a,k)\) is simply not selectable — it contributes no column.
-This is why source selection cannot be decomposed from destination admission,
-and why "pick the biggest power savers, then find them a home" is not a valid
-decomposition.
+**Source sessions and methods are chosen jointly.** Replay and KV candidates
+compete in one solve; the formulation never chooses one method globally.
 
-**The relaxation is necessary, not sufficient.** Rows 1–5 are aggregate fluid
-bounds. They prune; they do not prove a schedule exists. §A.8 covers the two
-gaps this leaves — replica indivisibility and the concurrent transfer schedule —
-and how each is discharged.
+**The WAN row is necessary, not sufficient.** Source stream bins are exact, but
+the WAN byte row does not prove a concurrent schedule. Its makespan is a lower
+bound until event execution validates it.
 
 ### A.6 Robust semantics
 
 Let \(\omega\in\Omega\) jointly index a demand forecast and an empirical profile
 case (\(F_{q,\omega},G_{q,\omega},N_{q,\omega},h_{q,\omega}\), migration
-coefficients, action power). The correct statement of feasibility is an
+coefficients). The correct statement of feasibility is an
 existence claim over a *single* assignment and a *single* nonanticipative
 policy \(\pi\) that must work in every declared case:
 
@@ -417,8 +400,7 @@ x_c\le E_c=\min_\omega E_{c,\omega},\\[2pt]
 \sum_c w_c x_c\ \ge\ \Theta, & w_c=\min_\omega w_{c,\omega},\\[2pt]
 b_{k,\omega}+\sum_{c:k(c)=k}v_{c,\omega}x_c\in\mathcal C^{\mathrm{mode}}_{q(k),\omega} & \forall k,\omega,\\[2pt]
 \kappa^0_{k,\omega}+\sum_{c:k(c)=k}\kappa_{c,\omega}x_c\le\mathcal K_{q(k)} & \forall k,\omega,\\[2pt]
-\operatorname{makespan}\bigl(\operatorname{Schedule}(\pi,x,\omega)\bigr)\le H^{\mathrm{mig}} & \forall\omega,\\[2pt]
-\operatorname{ImpactOK}_\omega(x,\pi) & \forall\omega.
+\operatorname{makespan}\bigl(\operatorname{Schedule}(\pi,x,\omega)\bigr)\le H^{\mathrm{mig}} & \forall\omega.
 \end{cases}
 \]
 
@@ -440,27 +422,22 @@ Operational admission requires more than the five rows:
 | service-contested | baseline + landed work reaches the envelope | admit less, or label `sensitivity` |
 | KV-contested | block-rounded histories reach allocatable HBM | reject, or choose another replica |
 | packing-contested | pool aggregate fits, indivisible sessions do not | repair the assignment, or reject |
-| route-contested | paths share residual edge bandwidth | schedule later, reroute, or miss the deadline |
+| route-contested | migrations share effective WAN bandwidth | schedule later or miss the deadline |
 | endpoint-contested | replay compute, ingest, source stream, or migration slot serializes | schedule explicitly, check makespan |
-| foreground-impact-contested | migration overlaps latency-sensitive serving | require drained state, or an accepted impact bound |
+| budget-contested | overlapping service and migration exceed either independent budget | admit less or schedule explicitly |
 | stale or unreserved | state changed after planning | reacquire an atomic lease, or reject |
 
 These are intersections, not alternative destination types: a site can be
 service-, KV-, and route-contested at once, and the planner reports the largest
 modelled pressure. `feasible` in the operational sense additionally requires an
 accepted evidence status, warm/healthy attestation of the full pinned runtime,
-a fresh baseline and residual-route snapshot held by a lease through commit, and
-either a drained migration window or an accepted foreground-impact bound. Until
+a fresh baseline and residual-route snapshot held by a lease through commit. Until
 those gates exist, a placement that the optimizer returns is reported as
 `sensitivity/possible`, not as a safe plan.
 
-Foreground impact is currently a *method policy*, not a resource row. The paired
-measurements — replay costs the one request arriving mid-migration \(+1.084\) s
-TTFT and already-active requests a median \(+3.45\) ms/token, against
-\(+4.7\) ms and \(+0.42\) ms/token for KV — rank KV ahead of replay for a busy
-latency-sensitive pool. One arriving request does not establish a tail-SLO
-bound, and the formulation says so rather than encoding a percentile it has not
-measured.
+Service and migration may overlap when both independent budgets fit. The paired
+foreground measurements remain descriptive and do not add an interference
+constraint.
 
 ### A.8 From pool aggregate to concrete replica
 
@@ -494,30 +471,28 @@ replica assignment could have placed. An exact DFS assignment oracle exists and
 is used in tests as a ground truth for whether a packing failure was genuine.)
 
 Note that \(\operatorname{press}\) takes a **max**, not a sum, across service,
-KV, and migration. A replica may therefore be modelled as 100 % occupied by
-migration and 100 % occupied by serving simultaneously. That is a real modelling
-gap: either couple the two into one per-replica resource, or gate replay to
-drained replicas as the foreground-impact policy already requires. The expected
-effect of fixing it is fewer landed sessions on the two workloads whose
-migration slots already run at 0.99 utilization.
+KV, and migration. This is intentional: service and migration may overlap, but
+each independent budget must remain at or below one.
 
 Finally, the aggregate byte row is not a schedule. The target execution model
-reserves per-time residual capacity on every edge, every source stream, every
+reserves per-time capacity on the logical WAN route, every source stream, every
 destination ingest engine, and every replica migration slot, and the
-discrete-event simulator checks it: transfers share links by max-min fair
+discrete-event simulator checks it: transfers share the route by max-min fair
 progressive filling, KV flows additionally traverse a virtual per-destination
 ingest link at \(\mu_{km}\), and a source slot is held from admission all the way
 through quiesce, catch-up, and switch — not merely for the network phase. Any
 temporary staging allocation would have to become its own measured row; there
-is none today.
+is none today. The byte-row makespan is therefore a lower bound until event
+execution validates the concurrent route schedule.
 
 ---
 
-## §B. Many sessions, many destination sites
+## §B. Optional concrete destinations
 
 ### B.1 The claim: more columns, not new variables
 
-Adding destination sites does not change the mathematical form. A route is a
+This section is a later admission comparison, not an input required by the
+frontier. Adding destination sites does not change the mathematical form. A route is a
 fixed edge list attached to a candidate, so *choosing where a session goes and
 how it gets there is choosing a column*, and the incidence constraint
 \(Ax\le\mathbf1\) already enforces that a session takes at most one. The
@@ -550,16 +525,15 @@ of \(N\) sites", and neither is in scope.
 
 ### B.2 The row inventory
 
-With \(N\) sites, \(Q\) types, and a transport graph \(\mathcal E\):
+With \(N\) sites and \(Q\) types:
 
 | Row family | Count, one site | Count, \(N\) sites | Comment |
 |---|---|---|---|
 | source stream | \(\lvert\mathcal I\rvert\) | \(\lvert\mathcal I\rvert\) | **unchanged** — a source-side limit |
-| transport edge | \(\lvert\mathcal E\rvert\) | \(\lvert\mathcal E\rvert\) | grows with the topology, and now genuinely couples sites |
+| logical route | 1 | \(N\) | one effective route per site; shared physical edges are a later refinement |
 | service facet | \(\Phi\) | \(\sum_{n,q}\Phi_{n,q}\) | one per pool per facet |
 | live KV | 1 | \(\lvert\{(n,q)\}\rvert\) | one per pool |
 | migration slot | 1 | \(\lvert\{(n,q)\}\rvert\) | one per pool |
-| destination power | — | \(N\) | new, if the ledger of §A.4 is priced |
 
 Columns grow by a factor of \(\sum_n\lvert\{q:\text{compatible}\}\rvert\); rows
 grow additively. The matrix stays extremely sparse: a candidate touches exactly
@@ -568,17 +542,10 @@ rows of its own pool — a column has \(O(1)\) nonzeros regardless of \(N\).
 
 ### B.3 The coupling that only exists when \(N>1\)
 
-With one site, the three edges of the single route carry identical byte counts
-and identical capacities, so two of the three route rows are pure redundancy —
-the reported "route utilization" is one constraint reported three times. With
-\(N\) sites the topology becomes the interesting object, because the source's
-egress edge is *shared by every destination*:
-
-\[
-\sum_{c}b_{c,e^{\mathrm{egress}}}x_c\ \le\ B_{e^{\mathrm{egress}}}H^{\mathrm{mig}},
-\]
-
-while each site's WAN hop and ingress edge are private. Three things follow.
+V1 has one logical route per destination, each with an effective bandwidth and
+fixed P50 RTT. It does not require a source-fabric/egress/WAN/ingress/fabric
+decomposition. Shared physical bottlenecks may be introduced later as explicit
+rows when a concrete topology supplies independently meaningful capacities.
 
 **Adding sites cannot relieve a source-side bound.** The source-stream row has
 capacity \(S_iH^{\mathrm{mig}}\) and does not depend on \(N\) at all. In the
@@ -587,11 +554,9 @@ row; no number of destinations changes it. This is the single most important
 structural statement the multi-site section can make: *the constraint that binds
 evacuation is on the side you are leaving, not the side you are going to.*
 
-**Site diversity buys capacity in rows 3–5 and buys nothing in rows 1–2 if the
-egress edge saturates first.** Whether spreading over \(N\) sites helps is
-decided by which of \(\{S_iH^{\mathrm{mig}},\,B_{e^{\mathrm{egress}}}H^{\mathrm{mig}}\}\)
-and \(\{\lvert\mathcal P\rvert h,\ \lvert\mathcal P\rvert\mathcal K_q,\ \lvert\mathcal P\rvert H^{\mathrm{mig}}\}\)
-binds. That is a one-line diagnostic and it should be the multi-site figure.
+**Site diversity buys destination capacity and route alternatives, but no
+source streams.** Whether spreading over \(N\) sites helps is decided by the
+binding set reported by concrete admission.
 
 **The fluid byte row and the duration model diverge under sharing.** Each
 candidate's \(t_c\) is computed as if it owned the bottleneck rate
@@ -646,24 +611,12 @@ source packing fixed by design; and \(100\times\) prefill exceeds the roofline
 by \(15\times\), so it is a limit probe establishing insensitivity *along that
 ray*, not a forecast.
 
-### B.5 Site-differentiated objectives
+### B.5 Site-differentiated comparison
 
-Sites differ in more than capacity. The generalized objective is a weighted
-ledger over the same columns:
-
-\[
-\max_x\ \sum_c\Bigl[w_c-\underbrace{\varphi_{n(c)}\pi_c}_{\text{sink power}}
--\underbrace{\psi_{n(c)}\,\rho^{\mathrm{res}}_c}_{\text{sink residency}}\Bigr]x_c
-\quad\text{or}\quad
-\min_x\ \sum_c\bigl[t_c+\zeta_{n(c)}b_c\bigr]x_c,
-\]
-
-with \(\varphi_n,\psi_n\) site power prices (\$/W, gCO\(_2\)/W, or 1 to recover
-raw watts) and \(\zeta_n\) an egress cost. Every one of these is a *coefficient
-on an existing column*. Site power headroom, by contrast, is a genuinely new
-**row**, \(\sum_{c:n(c)=n}\pi_c x_c\le\Pi_n\), and adding it is the mechanism by
-which a destination can refuse work for electrical rather than computational
-reasons.
+Concrete sites differ through supplied residual service, KV, migration, and
+route budgets. Comparing those vectors against the requirement frontier does
+not change the candidate or solver structure. Destination power prices and caps
+are outside this formulation.
 
 The multi-source generalization is equally cheap: with several source domains
 under independent curtailment orders, replace the single covering row by one per
@@ -1222,11 +1175,10 @@ tested and **rejected** — it underpredicted two held-out rows.
 
 | Assumption | Value | Consequence if wrong |
 |---|---|---|
-| Source migration streams \(S_i\) | **1** | decides everything: at \(S_i=1\), 1/65, 23/179, 14/172 replicas drain; at \(S_i=2\), **all** of them do. The median replica needs 1.17–1.37 streams. Our own campaign measured 591 MB/s at concurrency 2 and 1.206 GB/s at concurrency 4 against a 111 MB/s serialized ceiling |
+| Source migration streams \(S_i\) | **1/2/4/8 sensitivity** | report fixed-plan invariants and reoptimized resource changes; our own campaign measured 591 MB/s at concurrency 2 and 1.206 GB/s at concurrency 4 against a 111 MB/s serialized ceiling |
 | Service bound \(h\) | 0.096953, with `normal = emergency = stable` | a probe that passed, used as an upper bound; there is **no failure anywhere in the dataset**, and a *higher* passing point at 0.114063 is ignored. The mode machinery is inert |
-| Service ⟂ migration | independent rows, `max` not `sum` | a replica can be 98.7 % migrating and 66.7 % serving simultaneously |
-| Destination power | free | §A.4 |
-| WAN | one scalar rate on three identical links | Skyplane measures AWS capping *all* egress at 5 Gbps/VM, GCP 3 Gbps/flow and 7 Gbps total |
+| Service and migration overlap | independent budgets, `max` not `sum` | allowed when both budgets fit |
+| WAN | one logical route: 5 Gbps central, 1/5/10 Gbps; P50 RTT 10/60/90/150/240 ms | explicit sensitivity; one RTT is added per action |
 | Request rate | 1/180 req/s/session (0.31–0.86 req/s/replica) | inside Llumnix's published 0.42–1.9 req/s/instance range |
 | Migration concurrency | 1 per destination replica | untested |
 
@@ -1350,8 +1302,8 @@ claim.
 |---|---|---|
 | §\ref{sec:marginal-power} (drafted) | §0.1, Lemma C.1 | concave power ⇒ marginals are load-dependent and summing them is conservative |
 | §\ref{sec:single-session} (drafted) | §A.2 | replay vs KV is a bandwidth-vs-prefill crossover, with an ingest floor |
-| §5 Many sessions, one site | §A | five consumables, one clean LP, a two-sided power ledger |
-| §6 Many sessions, many sites | §B | site choice is a column, not a variable class; the binding constraint is on the source side |
+| §5 Many sessions, one destination class | §A | required residual resources vs. watts shed with joint replay/KV selection |
+| §6 Concrete destination comparison | §B | site choice is an optional column refinement; the binding constraint may remain on the source side |
 | §7 Solving it | §C | partition matroid + \(R\) budgets ⇒ \(\le2R\) fractional and \(\le R\) fractional mass ⇒ the LP is worth at most \(R\max_cw_c\) more than rounding it down, and max-shed admits a PTAS while the covering form admits nothing |
 | §8 Evaluation | §D | required destination residual vs. watts shed; the invariance sweep; the LP triple |
 | §9 Limitations | §E | we model the landing, not the stay |
@@ -1365,7 +1317,7 @@ Figures the formulation directly supports:
 2. **The binding-set map**: which of the five row families is at \(\ge0.95\), as
    a function of \(S_i\), KV capacity, and prefill throughput — the invariance
    sweep of §B.4, which is also the answer to "what if the hardware improves".
-3. **The replay/KV power–bandwidth trade** once \(\pi_c\) is priced (§A.4).
+3. **The mixed replay/KV method frontier** across bandwidth, RTT, and source-stream sensitivity.
 4. **The LP triple** — fractional / rounded / packed — against an exact integer
    optimum at 100–500 sessions (§C.5).
 5. **Ramp rate in MW/min**, which is the output format regulators are actively
