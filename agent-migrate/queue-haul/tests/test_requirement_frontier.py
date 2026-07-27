@@ -10,6 +10,7 @@ Plausible wrong implementations:
 - Round aggregate resident KV instead of rounding each session to paging blocks.
 - Treat RTT as a bandwidth penalty or omit its one fixed per-action term.
 - Change conserved resource totals when only source-stream concurrency changes.
+- Hide replay reconstruction inside total duration instead of reporting it.
 """
 
 from dataclasses import replace
@@ -137,12 +138,14 @@ def test_frontier_reports_physical_requirements_and_stream_invariance(tmp_path):
 
     assert one.target_met and dict(one.method_mix) == {"replay": 1, "kv_transfer": 1}
     assert one.destination_service_work == pytest.approx((.5, 0))
+    assert one.destination_transition_work[0] > 0
     assert one.destination_kv_blocks == 3
     assert one.destination_kv_tokens == 48
     assert one.wan_bytes == 101
     assert one.actions[1].route_bytes == 100  # one sealed 10-token transfer block
     conserved = (
-        "actions", "destination_service_work", "destination_kv_blocks",
+        "actions", "destination_service_work", "destination_transition_work",
+        "destination_kv_blocks",
         "destination_kv_tokens", "replay_migration_slot_s",
         "kv_migration_slot_s", "wan_bytes", "source_stream_occupancy_s",
         "method_mix",

@@ -72,6 +72,74 @@ def validate_rows(spec: PlotSpec, rows: list[dict]) -> None:
         raise ValueError("assumed inputs cannot support accepted plot evidence")
 
 
+def requirement_row(requirement, *, workload: str, sessions: int,
+                    service_debt_replica_s: float = 0,
+                    required_recovery_s: float = 0,
+                    binding_resources: tuple[str, ...] = (),
+                    input_provenance: str = "measured|assumed",
+                    evidence_status: str = "sensitivity") -> dict:
+    row = {
+        "workload": workload,
+        "sessions": sessions,
+        "requested_shed_w": requirement.target_source_power_reduction_w,
+        "shed_w": requirement.achieved_source_power_reduction_w,
+        "achieved_shed_w": requirement.achieved_source_power_reduction_w,
+        "unmet_shed_w": max(
+            0, requirement.target_source_power_reduction_w
+            - requirement.achieved_source_power_reduction_w,
+        ),
+        "route_bytes": requirement.wan_bytes,
+        "transition_work": sum(requirement.destination_transition_work),
+        "service_work": sum(requirement.destination_service_work),
+        "kv_blocks": requirement.destination_kv_blocks,
+        "service_debt_replica_s": service_debt_replica_s,
+        "required_recovery_s": required_recovery_s,
+        "binding_resources": "|".join(binding_resources),
+        "input_provenance": input_provenance,
+        "result_provenance": "simulated",
+        "evidence_status": evidence_status,
+    }
+    validate_rows(next(spec for spec in PLOTS if spec.name == "requirement frontier"), [row])
+    return row
+
+
+def plot_requirement_frontier(rows: list[dict], out: Path) -> None:
+    spec = next(spec for spec in PLOTS if spec.name == "requirement frontier")
+    validate_rows(spec, rows)
+    import matplotlib
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+
+    fields = (
+        ("route_bytes", "Route bytes"),
+        ("transition_work", "Transition replica-s"),
+        ("service_work", "Ongoing replica-equivalents"),
+        ("kv_blocks", "Live KV blocks"),
+        ("service_debt_replica_s", "Queued replica-s"),
+        ("required_recovery_s", "Required recovery (s)"),
+    )
+    fig, axes = plt.subplots(2, 3, figsize=(11, 6), sharex=True)
+    for label in sorted({(row["workload"], row["sessions"]) for row in rows}):
+        series = sorted(
+            (row for row in rows
+             if (row["workload"], row["sessions"]) == label),
+            key=lambda row: row["shed_w"],
+        )
+        for axis, (field, ylabel) in zip(axes.flat, fields):
+            axis.plot(
+                [row["shed_w"] for row in series],
+                [row[field] for row in series],
+                marker="o", label=f"{label[0]} {label[1]:,}",
+            )
+            axis.set_ylabel(ylabel)
+            axis.set_xlabel("Source accelerator power shed (W)")
+    axes.flat[0].legend(fontsize=7)
+    fig.tight_layout()
+    out.parent.mkdir(parents=True, exist_ok=True)
+    fig.savefig(out)
+    plt.close(fig)
+
+
 def write(out: Path) -> None:
     out.mkdir(parents=True, exist_ok=True)
     (out / "evaluation-manifest.json").write_text(json.dumps({

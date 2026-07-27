@@ -28,6 +28,7 @@ class RequirementAction:
     route_bytes: int
     service_work: tuple[float, float]
     kv_blocks: int
+    transition_work: tuple[float, float] = (0.0, 0.0)
 
 
 @dataclass(frozen=True)
@@ -39,6 +40,7 @@ class DestinationRequirement:
     target_met: bool
     actions: tuple[RequirementAction, ...]
     destination_service_work: tuple[float, float]
+    destination_transition_work: tuple[float, float]
     destination_kv_blocks: int
     destination_kv_tokens: int
     replay_migration_slot_s: float
@@ -86,10 +88,14 @@ def _actions(scenario: ExecutionScenario, profile, destination_type: Destination
                     math.ceil(session.log_bytes * tokens / session.context_tokens)
                     if method == "replay" else case.kv_transfer.sealed_bytes(tokens)
                 )
+                transition = (
+                    (max(0, duration - route_bytes / bandwidth - rtt), 0)
+                    if method == "replay" else (0, 0)
+                )
                 actions.append(RequirementAction(
                     session.session_id, session.source_instance, method,
                     power.marginal(session.session_id), duration, route_bytes,
-                    service, blocks,
+                    service, blocks, transition,
                 ))
     return tuple(actions)
 
@@ -279,6 +285,9 @@ def requirement_frontier(scenario: ExecutionScenario, profile,
     achieved = power.drain_gain(action.session_id for action in chosen)
     modeled = sum(action.source_power_gain_w for action in chosen)
     service = tuple(sum(action.service_work[i] for action in chosen) for i in range(2))
+    transition = tuple(
+        sum(action.transition_work[i] for action in chosen) for i in range(2)
+    )
     occupancies = tuple(
         (source, sum(action.duration_s for action in chosen
                      if action.source_instance == source))
@@ -300,7 +309,7 @@ def requirement_frontier(scenario: ExecutionScenario, profile,
     )
     return DestinationRequirement(
         target_source_power_reduction_w, achieved, modeled, maximum,
-        achieved + 1e-7 >= target_source_power_reduction_w, chosen, service,
+        achieved + 1e-7 >= target_source_power_reduction_w, chosen, service, transition,
         sum(action.kv_blocks for action in chosen),
         sum(action.kv_blocks for action in chosen) * destination_type.kv_block_tokens,
         sum(action.duration_s for action in chosen if action.method == "replay"),

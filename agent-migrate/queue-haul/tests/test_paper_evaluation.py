@@ -14,7 +14,9 @@ import json
 
 import pytest
 
-from paper_evaluation import PLOTS, validate_rows, write
+from paper_evaluation import (PLOTS, plot_requirement_frontier, requirement_row,
+                              validate_rows, write)
+from requirement_frontier import DestinationRequirement
 
 
 def test_registry_covers_every_paper_question_once_or_more():
@@ -44,3 +46,22 @@ def test_manifest_writes_the_canonical_grid_and_plot_registry(tmp_path):
     assert manifest["grid"]["deadlines"]["provenance"] == "assumed"
     assert len(manifest["plots"]) == len(PLOTS)
     assert (tmp_path / "plot-specs.csv").exists()
+
+
+def test_requirement_row_preserves_physical_resource_totals(tmp_path):
+    requirement = DestinationRequirement(
+        10, 8, 8, 8, False, (), (2, 3), (4, 0), 7, 112,
+        1, 2, 100, (), (), 1, (("replay", 1), ("kv_transfer", 1)),
+        3, 10, 10, 0, "exact", "optimal_best_effort", 0, .1,
+    )
+    row = requirement_row(
+        requirement, workload="coding", sessions=10_000,
+        service_debt_replica_s=5, required_recovery_s=2,
+    )
+
+    assert row["service_work"] == 5
+    assert row["transition_work"] == 4
+    assert row["unmet_shed_w"] == 2
+    assert row["kv_blocks"] == 7
+    plot_requirement_frontier([row], tmp_path / "frontier.pdf")
+    assert (tmp_path / "frontier.pdf").exists()
