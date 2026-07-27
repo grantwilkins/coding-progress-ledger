@@ -85,7 +85,8 @@ uv run python queue-haul/plot_scaling_results.py
 `requirement_frontier.py` computes destination requirements without constructing
 a destination inventory. `pool_planner.py` compares those requirements with
 concrete pool contracts. `simulate.py` validates the selected time schedule and
-shared queues.
+shared queues. `evaluation_config.py` is the canonical source for assumed paper
+operating points and their replacement evidence.
 
 ## Measurement programs
 
