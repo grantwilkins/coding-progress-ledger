@@ -325,6 +325,7 @@ def _summary(run: ExperimentRun) -> dict:
         "planned_moves": len(run.plan.moves), "plan_feasible": run.plan.feasible,
         "planned_service_debt_replica_s": run.plan.service_debt_replica_s,
         "required_service_recovery_s": run.plan.required_recovery_s,
+        "planned_resource_rows": len(run.plan.resource_uses),
         "binding_resources": "|".join(run.plan.binding_resources),
         "planner_bottleneck": run.plan.bottleneck,
         "lp_power_shortfall_w": run.plan.lp_power_shortfall_w,
@@ -389,7 +390,10 @@ def write(runs: Iterable[ExperimentRun], out: Path) -> int:
     except StopIteration:
         raise ValueError("no experiment runs") from None
     out.mkdir(parents=True, exist_ok=True)
-    names = "summary", "events", "sessions", "requests", "network", "queues", "power", "plans"
+    names = (
+        "summary", "events", "sessions", "requests", "network", "queues",
+        "power", "plans", "resources", "service_debt",
+    )
     summaries, plots, writers = [], [], {}
     with ExitStack() as stack:
         files = {name: stack.enter_context((out / f"{name}.csv").open("w", newline=""))
@@ -431,11 +435,16 @@ def write(runs: Iterable[ExperimentRun], out: Path) -> int:
                            for t, source, destination in run.result.power))
             emit("plans", ({**base, "session_id": row.session_id,
                             "destination_instance": row.destination_instance,
+                            "destination_pool": row.destination_pool,
                             "method": row.method, "order": row.order,
                             "path": "|".join(row.path),
                             "rate_limit_bytes_per_s": row.rate_limit_bytes_per_s,
                             "quiesce_s": row.quiesce_s}
                            for row in run.plan.moves))
+            emit("resources", ({**base, **row.__dict__}
+                               for row in run.plan.resource_uses))
+            emit("service_debt", ({**base, **row.__dict__}
+                                  for row in run.plan.service_debts))
             if run.case_id == "central":
                 methods = {row.session_id: row.method for row in run.result.sessions}
                 plots.append(PlotRun(

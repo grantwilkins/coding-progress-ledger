@@ -13,6 +13,7 @@ Plausible wrong implementations:
 - Size instances from compute while silently exceeding measured resident KV capacity.
 - Omit destination KV queue evidence needed to explain migration time.
 - Drop planned pool debt, recovery, or binding-resource evidence from summaries.
+- Drop the physical resource ledger or selected destination pool from raw output.
 - Fail to write plots when a valid plan contains no migrations.
 """
 

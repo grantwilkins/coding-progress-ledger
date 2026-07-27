@@ -18,6 +18,7 @@ Plausible wrong implementations:
 - Treat a service percentage as sessions or omit the migration-window units.
 - Divide debt by total capacity instead of post-migration spare capacity.
 - Mark positive debt feasible when post-migration service has no recovery spare.
+- Lose physical units or pool/facet identity in normalized planner rows.
 - Credit node shutdown during session selection instead of only after planning.
 """
 
@@ -121,6 +122,28 @@ def test_replay_charges_transition_debt_but_kv_does_not(tmp_path):
     }
 
     assert choices["replay"] > choices["kv_transfer"]
+
+
+def test_plan_preserves_physical_resource_and_debt_rows(tmp_path):
+    result = plan(
+        problem(limit=40), model(tmp_path, switch=0, tp=1), PATHS, "lp",
+        destination=architecture(
+            normal=1, emergency=1, stable=1, baselines=((.6, 0),),
+            routes=(("wan",),), methods=("replay",), flex=0, debt=.2,
+        ),
+    )
+
+    route = next(row for row in result.resource_uses if row.name == "route:wan")
+    assert route.unit == "bytes"
+    assert route.used == 100
+    assert route.capacity == 900
+    assert route.utilization == pytest.approx(1 / 9)
+    assert len(result.service_debts) == 1
+    debt = result.service_debts[0]
+    assert (debt.pool_id, debt.facet) == ("p0", 0)
+    assert debt.debt_replica_s == 0
+    assert debt.spare_replicas == pytest.approx(.15)
+    assert debt.recovery_s == 0
 
 
 def test_absent_architecture_is_exact_legacy_adapter(tmp_path):

@@ -70,6 +70,29 @@ class InstanceCapacity:
 
 
 @dataclass(frozen=True)
+class ResourceUse:
+    name: str
+    unit: str
+    used: float
+    capacity: float
+    utilization: float
+
+    def __post_init__(self):
+        if not self.name or not self.unit or self.used < 0 or self.capacity <= 0 \
+                or self.utilization < 0:
+            raise ValueError("invalid resource use")
+
+
+@dataclass(frozen=True)
+class ServiceDebtUse:
+    pool_id: str
+    facet: int
+    debt_replica_s: float
+    spare_replicas: float
+    recovery_s: float
+
+
+@dataclass(frozen=True)
 class PlanResult:
     solver: str
     moves: tuple[PlannedMove, ...]
@@ -95,6 +118,8 @@ class PlanResult:
     service_debt_replica_s: float = 0.0
     required_recovery_s: float = 0.0
     binding_resources: tuple[str, ...] = ()
+    resource_uses: tuple[ResourceUse, ...] = ()
+    service_debts: tuple[ServiceDebtUse, ...] = ()
 
 
 def _ell(session: SimSession, case: ProfileCase) -> float:

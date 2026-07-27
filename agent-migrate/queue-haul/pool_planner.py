@@ -12,7 +12,7 @@ from scipy.sparse import csc_matrix, csr_matrix
 from destination import DestinationArchitecture
 from planner import (_changes, _duration, _expected_scenario, _kv_catch_up_s,
                      _kv_schedule, _local_sessions, _log_bytes, _resident_tokens,
-                     PlanResult, source_power)
+                     PlanResult, ResourceUse, ServiceDebtUse, source_power)
 from power_model import ExpectedPower
 from simulate import ExecutionScenario, PlannedMove, SimSession, predict
 
@@ -45,6 +45,8 @@ class CandidateTable:
     incidence: csr_matrix
     resources: csr_matrix
     resource_names: tuple[str, ...]
+    resource_capacities: tuple[float, ...]
+    resource_units: tuple[str, ...]
     migration_horizon_s: float
 
 
@@ -152,7 +154,7 @@ def candidate_table(scenario: ExecutionScenario, profile, architecture: Destinat
         if residency_horizon is None else residency_horizon
     if migration_horizon <= 0:
         return CandidateTable(sessions, (), csr_matrix((len(sessions), 0)),
-                              csr_matrix((0, 0)), (), migration_horizon)
+                              csr_matrix((0, 0)), (), (), (), migration_horizon)
     work0, kv0 = _baseline(scenario, architecture, residency_horizon)
     links = {link.link_id: link.bytes_per_s for link in scenario.links}
     candidates = []
@@ -229,19 +231,20 @@ def candidate_table(scenario: ExecutionScenario, profile, architecture: Destinat
     incidence = csr_matrix((np.ones(len(candidates)),
                             ([c.session for c in candidates], range(len(candidates)))),
                            shape=(len(sessions), len(candidates)))
-    rows, capacities, names = [], [], []
-    def add(values, capacity, name):
+    rows, capacities, names, units = [], [], [], []
+    def add(values, capacity, name, unit):
         if any(values):
             rows.append(values)
             capacities.append(capacity)
             names.append(name)
+            units.append(unit)
     for source in sorted({s.source_instance for s in sessions}):
         add([c.duration_s if sessions[c.session].source_instance == source else 0
              for c in candidates], migration_horizon * profile.max_source_streams,
-            f"source:{source}")
+            f"source:{source}", "stream-s")
     for link, rate in links.items():
         add([c.route_bytes if link in c.path else 0 for c in candidates],
-            rate * migration_horizon, f"route:{link}")
+            rate * migration_horizon, f"route:{link}", "bytes")
     for p, pool in enumerate(architecture.pools):
         q = architecture.type_by_id[pool.type_id]
         baseline = sum((work0[r.replica_id] for r in pool.replicas), start=np.zeros(2))
@@ -249,7 +252,8 @@ def candidate_table(scenario: ExecutionScenario, profile, architecture: Destinat
         for facet, (normal, bound) in enumerate(zip(q.normals, event)):
             residual = len(pool.replicas) * bound - np.asarray(normal) @ baseline
             add([np.asarray(normal) @ c.service_work if c.pool == p else 0
-                 for c in candidates], residual, f"service:{pool.pool_id}:{facet}")
+                 for c in candidates], residual, f"service:{pool.pool_id}:{facet}",
+                "replica-s/s")
         if pool.event_flex_fraction is not None:
             for facet, (normal, bound) in enumerate(zip(q.normals, q.bounds["stable"])):
                 capacity = migration_horizon * (
@@ -260,12 +264,14 @@ def candidate_table(scenario: ExecutionScenario, profile, architecture: Destinat
                     migration_horizon * (np.asarray(normal) @ c.service_work)
                     + np.asarray(normal) @ c.transition_work if c.pool == p else 0
                     for c in candidates
-                ], capacity, f"service-debt:{pool.pool_id}:{facet}")
+                ], capacity, f"service-debt:{pool.pool_id}:{facet}", "replica-s")
         add([c.kv_tokens if c.pool == p else 0 for c in candidates],
             len(pool.replicas) * (q.kv_capacity_tokens // q.kv_block_tokens)
-            - sum(kv0[r.replica_id] for r in pool.replicas), f"kv:{pool.pool_id}")
+            - sum(kv0[r.replica_id] for r in pool.replicas), f"kv:{pool.pool_id}",
+            "blocks")
         add([c.duration_s if c.pool == p else 0 for c in candidates],
-            len(pool.replicas) * migration_horizon, f"migration:{pool.pool_id}")
+            len(pool.replicas) * migration_horizon, f"migration:{pool.pool_id}",
+            "replica-s")
     data, rr, cc = [], [], []
     for i, (row, capacity) in enumerate(zip(rows, capacities)):
         for j, value in enumerate(row):
@@ -275,7 +281,8 @@ def candidate_table(scenario: ExecutionScenario, profile, architecture: Destinat
                 cc.append(j)
     return CandidateTable(sessions, candidates, incidence,
                           csr_matrix((data, (rr, cc)), shape=(len(rows), len(candidates))),
-                          tuple(names), migration_horizon)
+                          tuple(names), tuple(capacities), tuple(units),
+                          migration_horizon)
 
 
 def _greedy(table: CandidateTable, target: float):
@@ -473,7 +480,7 @@ def _selected_service_debt(table, selected, architecture, scenario):
     residency = scenario.end_s - scenario.controller_delay_s \
         if residency is None else residency
     work0, _ = _baseline(scenario, architecture, residency)
-    debts, recoveries = [], []
+    records = []
     for p, pool in enumerate(architecture.pools):
         if pool.event_flex_fraction is None:
             continue
@@ -494,9 +501,13 @@ def _selected_service_debt(table, selected, architecture, scenario):
         )
         stable = len(pool.replicas) * np.asarray(q.bounds["stable"])
         debt, recovery = service_debt(baseline, ongoing, transition, stable, horizon)
-        debts.extend(debt)
-        recoveries.extend(recovery)
-    return max(debts, default=0.0), max(recoveries, default=0.0)
+        spare = stable - baseline - ongoing
+        records.extend(
+            ServiceDebtUse(pool.pool_id, facet, float(debt[facet]),
+                           float(spare[facet]), float(recovery[facet]))
+            for facet in range(len(debt))
+        )
+    return tuple(records)
 
 
 def _mode_plan(scenario, profile, architecture, solver, mode, power, target):
@@ -543,9 +554,11 @@ def plan_destination(scenario, profile, solver, case_id, seed, architecture):
     expected = predict(_expected_scenario(scenario, moves), profile, moves, case_id)
     shortfall = max(0.0, planned - scenario.power_limit_w)
     shortfall = 0.0 if shortfall <= 1e-8 else shortfall
-    debt, recovery = _selected_service_debt(
+    debt_rows = _selected_service_debt(
         table, selected, architecture, scenario,
     )
+    debt = max((row.debt_replica_s for row in debt_rows), default=0.0)
+    recovery = max((row.recovery_s for row in debt_rows), default=0.0)
     feasible = shortfall == 0 and expected.deadline_met and np.isfinite(recovery)
     failure = (
         None if feasible else "target_unmet" if shortfall
@@ -558,6 +571,13 @@ def plan_destination(scenario, profile, solver, case_id, seed, architecture):
         name for name, value in zip(table.resource_names, usage)
         if value >= 1 - 1e-7
     )
+    resources = tuple(
+        ResourceUse(name, unit, float(value * capacity), capacity, float(value))
+        for name, unit, capacity, value in zip(
+            table.resource_names, table.resource_units,
+            table.resource_capacities, usage,
+        )
+    )
     temporal = [usage[i] for i, name in enumerate(table.resource_names)
                 if name.startswith(("source:", "route:", "migration:"))]
     horizon = scenario.deadline_s - scenario.controller_delay_s - profile.power_window_s
@@ -569,9 +589,20 @@ def plan_destination(scenario, profile, solver, case_id, seed, architecture):
                                    table.resources.indptr, table.incidence.data,
                                    table.incidence.indices, table.incidence.indptr))
     return PlanResult(
-        solver, moves, initial, planned, expected.modeled_source_power_at_deadline_w,
-        feasible, perf_counter() - start, profile.profile_id, case_id, seed,
-        sum(len(p.replicas) * architecture.type_by_id[p.type_id].kv_capacity_tokens
-            for p in architecture.pools), shortfall, None, mode, shortfall, failure,
-        repairs, repair_s, makespan, bottleneck, memory, debt, recovery, binding,
+        solver=solver, moves=moves, initial_source_power_w=initial,
+        planned_source_power_w=planned,
+        expected_source_power_at_deadline_w=expected.modeled_source_power_at_deadline_w,
+        feasible=feasible, solve_s=perf_counter() - start,
+        profile_id=profile.profile_id, profile_case=case_id, seed=seed,
+        kv_capacity_tokens=sum(
+            len(p.replicas) * architecture.type_by_id[p.type_id].kv_capacity_tokens
+            for p in architecture.pools
+        ),
+        lp_power_shortfall_w=shortfall, admission_mode=mode,
+        power_shortfall_w=shortfall, failure_reason=failure,
+        packing_repair_count=repairs, packing_repair_s=repair_s,
+        predicted_migration_makespan_s=makespan, bottleneck=bottleneck,
+        planner_memory_bytes=memory, service_debt_replica_s=debt,
+        required_recovery_s=recovery, binding_resources=binding,
+        resource_uses=resources, service_debts=debt_rows,
     )
