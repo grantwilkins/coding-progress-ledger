@@ -87,6 +87,7 @@ uv run python queue-haul/power_drain_experiment.py \
 uv run python queue-haul/plot_simulator_validation.py
 uv run python queue-haul/plot_simulator_evaluation.py
 uv run python queue-haul/plot_scaling_results.py
+uv run python queue-haul/plot_testbed_kv_timeline.py
 uv run python queue-haul/paper_evaluation.py \
   --out queue-haul/outputs/paper-evaluation
 ```
@@ -102,6 +103,8 @@ source for assumed paper operating points and their replacement evidence.
 paper evaluation is reorganized into mechanism validation, fixed-contract
 coordination, multi-pool contracts, and planner quality/scale. It rejects
 tables with missing provenance.
+`plot_testbed_kv_timeline.py` generates the measured two-A100 four-concurrent-KV
+timeline and source-power panel from tidy tables.
 
 ## Measurement programs
 
