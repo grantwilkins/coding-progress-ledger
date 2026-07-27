@@ -58,6 +58,8 @@ archived raw logs
 
 Every input and result must say whether it is measured, fitted, assumed, or
 simulated. Assumed values are sensitivities, never admission guarantees.
+The conversation workload pins ShareGPT artifact revision
+`192ab2185289094fc556ec8ce5ce1e8e587154ca` and stores only token/turn shapes.
 
 The detailed contracts are in:
 

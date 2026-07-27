@@ -1,6 +1,7 @@
 """Claim: campaign inputs preserve trace shape without content and reserve GPU time only for irreducible measurements.
 
 Plausible wrong implementations: leak source text, invent timestamps, accept topical non-code chat,
+misread ShareGPT's human/gpt schema,
 retain the obsolete 72-hour grid, overlap splits, or spend GPU time deriving quantities available offline.
 """
 
@@ -190,6 +191,38 @@ def test_wildchat_order_is_preserved_without_inventing_arrival_times():
     )
     assert [r["time_s"] for r in rows] == [None, None]
     assert {r["job_class"] for r in campaign.classify(rows)} == {"interactive_coding"}
+
+
+def test_sharegpt_schema_becomes_content_free_conversation_shapes():
+    rows = campaign.normalize_traces(
+        [{
+            "id": "chat",
+            "conversations": [
+                {"from": "human", "value": "DO_NOT_LEAK"},
+                {"from": "gpt", "value": "answer"},
+                {"from": "human", "value": "follow up"},
+                {"from": "gpt", "value": "done"},
+            ],
+        }],
+        "anon8231489123/ShareGPT_Vicuna_unfiltered",
+        "sha256:abc",
+        count,
+    )
+
+    assert len(rows) == 2
+    assert all(row["time_s"] is None for row in rows)
+    assert "DO_NOT_LEAK" not in repr(rows)
+    assert {row["job_class"] for row in campaign.classify(rows)} == {"conversation"}
+
+
+def test_sharegpt_requires_the_pinned_revision_and_checksum(tmp_path, monkeypatch):
+    path = tmp_path / "sharegpt.json"
+    path.write_text("[]")
+    monkeypatch.setattr(campaign, "file_hash", lambda _: campaign.SHAREGPT_SHA256)
+
+    campaign.validate_sharegpt(path, campaign.SHAREGPT_REVISION)
+    with pytest.raises(ValueError, match="checksum changed"):
+        campaign.validate_sharegpt(path, "moving-main")
 
 
 def test_normalized_source_cache_reuses_only_exact_key(tmp_path):

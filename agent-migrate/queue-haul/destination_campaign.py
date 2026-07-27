@@ -54,7 +54,18 @@ SOURCES = {
         "CC-BY-4.0",
         "permissively licensed source repositories",
     ),
+    "anon8231489123/ShareGPT_Vicuna_unfiltered": (
+        "unspecified",
+        "public ShareGPT conversation artifact supplied by the experiment owner",
+    ),
 }
+SHAREGPT_URL = (
+    "https://huggingface.co/datasets/anon8231489123/"
+    "ShareGPT_Vicuna_unfiltered/resolve/main/"
+    "ShareGPT_V3_unfiltered_cleaned_split.json"
+)
+SHAREGPT_REVISION = "192ab2185289094fc556ec8ce5ce1e8e587154ca"
+SHAREGPT_SHA256 = "35f0e213ce091ed9b9af2a1f0755e9d39f9ccec34ab281cd4ca60d70f6479ba4"
 
 
 def audit_evidence(inventory: dict = EVIDENCE) -> dict:
@@ -97,7 +108,7 @@ def make_plan(manifest_path: Path) -> dict:
         "anchor_drift_limit": .15,
         "service": {
             "anchors": [4096, 16384, 24576],
-            "directions": list(JOB_CLASSES),
+            "directions": sorted(manifest["manifest"]["splits"]),
             "arrival": "open_loop_poisson",
             "warmup_s": 60,
             "hold_min_s": 180,
@@ -619,7 +630,7 @@ def _messages(row: dict) -> list[dict]:
     value = next(
         (
             row[k]
-            for k in ("messages", "trajectory", "events", "conversation")
+            for k in ("messages", "trajectory", "events", "conversation", "conversations")
             if row.get(k)
         ),
         None,
@@ -631,8 +642,16 @@ def _messages(row: dict) -> list[dict]:
         raise ValueError("trace messages must be a list")
     return [
         {
-            "role": str(m.get("role", m.get("type", ""))).lower(),
-            "content": _text(m.get("content", m.get("message", m.get("text", "")))),
+            "role": {
+                "human": "user",
+                "gpt": "assistant",
+            }.get(
+                str(m.get("role", m.get("type", m.get("from", "")))).lower(),
+                str(m.get("role", m.get("type", m.get("from", "")))).lower(),
+            ),
+            "content": _text(
+                m.get("content", m.get("message", m.get("text", m.get("value", ""))))
+            ),
             **(
                 {"timestamp": m[k]}
                 if (
@@ -747,6 +766,11 @@ def normalize_traces(
     return out
 
 
+def validate_sharegpt(path: Path, revision: str) -> None:
+    if revision != SHAREGPT_REVISION or file_hash(path) != SHAREGPT_SHA256:
+        raise ValueError("ShareGPT revision or checksum changed")
+
+
 def _sessions(rows: list[dict]) -> dict[str, list[dict]]:
     grouped = {}
     for row in rows:
@@ -780,6 +804,8 @@ def classify(rows: list[dict]) -> list[dict]:
     classes = {
         session_id: "agentic_tool_loop"
         if session_id.startswith("nvidia/")
+        else "conversation"
+        if session_id.startswith("anon8231489123/")
         else "interactive_coding"
         if session_id.startswith("allenai/")
         else "coding"
@@ -792,7 +818,9 @@ def build_manifests(rows: list[dict], seed: int = 0) -> dict:
     rows = classify(rows)
     grouped = _sessions(rows)
     manifests = {}
-    for job_class in JOB_CLASSES:
+    classes = JOB_CLASSES + (("conversation",)
+                             if any(r["job_class"] == "conversation" for r in rows) else ())
+    for job_class in classes:
         sessions = [
             (sid, sorted(turns, key=lambda r: r["turn"]))
             for sid, turns in grouped.items()
@@ -934,9 +962,11 @@ def main() -> None:
     build.add_argument("--trace-commons", type=Path, required=True)
     build.add_argument("--wildchat", type=Path, required=True)
     build.add_argument("--nvidia", type=Path, required=True)
+    build.add_argument("--sharegpt", type=Path)
     build.add_argument("--trace-revision", required=True)
     build.add_argument("--wildchat-revision", required=True)
     build.add_argument("--nvidia-revision", required=True)
+    build.add_argument("--sharegpt-revision")
     build.add_argument("--host", default="127.0.0.1")
     build.add_argument("--port", type=int, default=8000)
     build.add_argument("--model", default=testbed.MODEL)
@@ -1018,16 +1048,30 @@ def main() -> None:
     )
 
     def load(path):
-        return [
-            json.loads(line) for line in path.read_text().splitlines() if line.strip()
+        text = path.read_text()
+        value = json.loads(text) if text.lstrip().startswith("[") else [
+            json.loads(line) for line in text.splitlines() if line.strip()
         ]
+        if not isinstance(value, list):
+            raise ValueError("trace input must contain a list of rows")
+        return value
 
     rows, source_counts = [], {}
-    for path, source, revision in (
+    inputs = [
         (args.trace_commons, "trace-commons/agent-traces", args.trace_revision),
         (args.wildchat, "allenai/WildChat-1M", args.wildchat_revision),
         (args.nvidia, "nvidia/SWE-Hero-openhands-trajectories", args.nvidia_revision),
-    ):
+    ]
+    if (args.sharegpt is None) != (args.sharegpt_revision is None):
+        raise ValueError("ShareGPT path and revision must be supplied together")
+    if args.sharegpt:
+        validate_sharegpt(args.sharegpt, args.sharegpt_revision)
+        inputs.append((
+            args.sharegpt,
+            "anon8231489123/ShareGPT_Vicuna_unfiltered",
+            args.sharegpt_revision,
+        ))
+    for path, source, revision in inputs:
         raw = load(path)
         key = object_hash(
             [
