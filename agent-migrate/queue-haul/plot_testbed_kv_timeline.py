@@ -149,7 +149,7 @@ def plot(timeline_path: Path, inference_path: Path, out: Path) -> None:
         "text": "#2E2D29",
         "grid": "#DAD7CB",
     }
-    fig, gantt = plt.subplots(figsize=(11, 3.2))
+    fig, gantt = plt.subplots(figsize=(11, 3.8))
     phases = (
         ("bulk_start_s", "bulk_finish_s", "KV Initial Write", "bulk"),
         ("catch_up_start_s", "catch_up_finish_s", "Append final KV", "catch"),
@@ -163,11 +163,13 @@ def plot(timeline_path: Path, inference_path: Path, out: Path) -> None:
     positions = [1.4 * index for index in range(len(timeline))]
     inference_labels = set()
     for y, row in zip(positions, timeline):
+        source_y, migration_y, destination_y = y - .55, y, y + .55
         commit = float(row["commit_s"])
         for start_name, end_name, label, color in phases:
             start, end = float(row[start_name]), float(row[end_name])
             gantt.barh(
-                y + .18, end - start, left=start, height=.4, color=colors[color],
+                migration_y, end - start, left=start, height=.34,
+                color=colors[color],
                 label=label if y == positions[0] else None, zorder=2,
             )
         session_segments = [
@@ -180,8 +182,10 @@ def plot(timeline_path: Path, inference_path: Path, out: Path) -> None:
             color = {
                 "Prefill": "prefill", "Decode": "decode", "Tool Call": "tool",
             }[phase]
+            inference_y = source_y \
+                if segment["location"] == "source" else destination_y
             gantt.barh(
-                y - .3, end - start, left=start, height=.24,
+                inference_y, end - start, left=start, height=.25,
                 color=colors[color], hatch="//" if color == "tool" else None,
                 edgecolor=colors["text"] if color == "tool" else "none",
                 linewidth=.5,
@@ -190,19 +194,19 @@ def plot(timeline_path: Path, inference_path: Path, out: Path) -> None:
             )
             inference_labels.add(phase)
         gantt.scatter(
-            commit, y + .18, marker="D", s=45, color=colors["switch"],
+            commit, migration_y, marker="D", s=45, color=colors["switch"],
             label="Route Switch" if y == positions[0] else None, zorder=4,
         )
         first_token = float(row["first_token_s"])
         gantt.scatter(
-            first_token, y + .18, marker="*", s=95,
+            first_token, destination_y, marker="*", s=95,
             color=colors["token"],
             label="First Token at Destination" if y == positions[0] else None,
             zorder=4,
         )
     gantt.set_yticks(
-        [positions[0] - .3, positions[0] + .18],
-        ["Inference", "Migration"],
+        [positions[0] - .55, positions[0], positions[0] + .55],
+        ["Inference at Source", "Migration", "Inference at Destination"],
     )
     gantt.invert_yaxis()
     legend = (
@@ -238,7 +242,7 @@ def plot(timeline_path: Path, inference_path: Path, out: Path) -> None:
     gantt.set_xlabel("Time since first KV write (s)")
     end = max(float(row["first_token_s"]) for row in timeline) + 3
     gantt.set_xlim(0, end)
-    fig.subplots_adjust(left=.1, right=.98, top=.7, bottom=.2)
+    fig.subplots_adjust(left=.17, right=.98, top=.7, bottom=.17)
     fig.savefig(out.with_suffix(".png"), dpi=200)
     fig.savefig(out.with_suffix(".pdf"))
     plt.close(fig)
