@@ -1,5 +1,13 @@
 # Queue-Haul formulation
 
+> This document is the **implementation spec**: it tracks what the code does,
+> what it approximates, and where target semantics differ from current
+> behaviour. The **paper-facing** statement — the clean LP for the one-site and
+> many-site settings, the structural results that justify solving it greedily,
+> and the full constant/provenance ledger — is `formulation_nsdi.md`. Keep the
+> two in sync: this file is authoritative for implementation status, that file
+> is authoritative for the mathematical statement and its citations.
+
 Queue-Haul chooses whole LLM sessions to move out of a source power domain
 before a deadline. It models source power, migration work, destination
 admission, concrete replica packing, and exact migration execution. Source
@@ -137,6 +145,11 @@ moving several sessions. The exact power model is reevaluated after integer
 selection. Source power is credited only when a migration commits, not when
 its background copy finishes.
 
+The implemented `ExpectedPower.marginal` is richer than this expression: it
+works per GPU slot, and when \(s\) is the last remaining dependent of a node it
+also credits that node's transition to the requested final state. So \(w_s\) can
+carry a whole-node sleep or shutdown term.
+
 The profile also supplies total action power at each measured concurrency for
 replay, KV transfer, catch-up, and node transitions. The simulator updates that
 total when concurrency changes; it does not multiply a measured concurrent
@@ -181,13 +194,28 @@ normalized by its capacity. The resource rows are:
 | additive pool live KV | replica KV capacity minus baseline KV at \(H_r\) |
 | pool migration occupancy | replicas \(\times H_m\) |
 
+Service and migration are independent rows over the same columns, and concrete
+packing takes their **max**, not their sum, so a replica may be modeled as fully
+occupied by migration and fully occupied by serving at the same time. The pool
+path also has no destination ingest or replay-concurrency row: the legacy
+`max_destination_replays` and `max_destination_kv_streams` rows were replaced by
+one method-agnostic migration-occupancy row of capacity \(\lvert p\rvert H_m\).
+Both gaps are named in `formulation_nsdi.md` §A.8.
+
 The legacy adapter represents destination service with aggregate replay time,
 KV-service time, compute load, and resident-KV rows. Its flexible destination
 links form one balanced link pool. The architecture path instead preserves
 exact pools, routes, per-replica baselines, and service facets. Physical
 prefix sharing is deliberately uncredited in v1; the target relaxation uses
-block-rounded additive demand. The current implementation still uses unrounded
-token equivalents.
+block-rounded additive demand.
+
+Block rounding is implemented on the **pool** path and not on the legacy path.
+The pool candidate charges \(\lceil\widehat T_s(H_r)/L_q\rceil\) blocks against a
+capacity of \(\lvert p\rvert\lfloor K_q/L_q\rfloor\), with per-replica and
+per-background-session baselines rounded independently; the legacy path still
+sums unrounded \(\widehat T_s(H_m)\) tokens against `kv_capacity_tokens`. Note
+also that the paging block \(L_q\) (16 tokens) and the KV **transfer** block
+(256 tokens, `block_bytes` 12,582,912) are different measured quantities.
 
 Replay uses expected durable-log bytes, replay time, measured replay completion,
 and route-switch time. KV transfer uses setup, complete sealed KV blocks, the
@@ -328,10 +356,12 @@ B_p^0+\sum_{c\in p}
 \le |p|K_q^{blocks}.
 \]
 
-The current schema exposes token-equivalent capacity and sums unrounded context
-tokens. It receives no sharing credit, but still needs block rounding or
-one block of tail headroom per resident session before it is a physical-memory
-guarantee.
+The legacy schema exposes token-equivalent capacity and sums unrounded context
+tokens; it receives no sharing credit and still needs block rounding or one
+block of tail headroom per resident session before it is a physical-memory
+guarantee. The pool path implements the block-rounded form above, with the one
+residual gap that its capacity is \(\lfloor K_q/L_q\rfloor\) — a floor division
+of a measured token capacity — rather than a natively measured block count.
 
 A later shared-KV extension may replace the private sum with an exact union of
 protected pinned-engine block keys. Evictable idle cache entries receive no
@@ -377,6 +407,18 @@ substituted for achieved load.
 The fitted v7 KV residual is `observed - route_floor`; it can be used in the
 explicit `max(route, ingest)` form only where route time is the measured
 bottleneck. Otherwise it must be redefined or refit.
+
+The pool path does not implement the equation above. Its KV branch computes
+`route(sealed_bytes) + residual + catch_up`: it drops the ingest floor, and it
+also drops `setup_s` and `switch_s`, both of which the legacy path includes —
+so the two methods are inconsistently terminated, since the pool replay branch
+does keep `switch_s`. Omitting the ingest floor underestimates a 17K-token
+transfer by 27% at 10 Gbps and by 2.2x in the 1000-Gbps pressure search, which
+is why the bandwidth axis carries no information above roughly 5 Gbps. The
+legacy path honours the `max`. Separately, the pool replay branch silently
+substitutes the minimum tabulated rate when context falls outside the measured
+replay curve, where the legacy path raises; that contradicts the hard-fail rule
+stated above and should raise.
 
 The schedule assigns residual route bandwidth after background reservations,
 and route time is never below bytes divided by the allocated bottleneck rate.
@@ -432,12 +474,24 @@ Candidate \(c\) receives score
 \frac{w_c}{\sum_r \pi_r u_{r,c}}.
 \]
 
-Sessions are sorted once by their best candidate score. In that order, greedy
-takes the highest-scoring candidate that preserves every remaining capacity
-and packing cut. The legacy path stops on exact modeled power; the pool-aware
-path stops on accumulated conservative gain. Both reevaluate exact source power
-after integer selection. This approximates LP dual pricing while remaining
-approximately \(O(N\log N)\).
+The legacy path sorts sessions once by their best candidate score and tries that
+session's methods in score order; the pool path sorts candidates globally, so a
+session's alternative pools are scattered through the order rather than tried
+consecutively. In either order, greedy takes the highest-scoring candidate that
+preserves every remaining capacity. Greedy has no cut awareness — cuts exist
+only in the packing repair loop after selection. The legacy path stops on exact
+modeled power; the pool-aware path stops on accumulated conservative gain. Both
+reevaluate exact source power after integer selection. Prices and scores are
+computed once, before the loop, and are never recomputed as rows saturate.
+
+This approximates LP dual pricing while remaining approximately
+\(O(N\log N)\). `formulation_nsdi.md` §C.3 derives what it is approximating and
+states its failure modes, chiefly that flooring the price at one inverts the
+ordering on uncontested rows. The `1e-12` divisor guard would let a candidate
+with an all-zero resource column score as infinite; that column cannot arise
+today, because every candidate has a positive duration and therefore a positive
+source and migration entry, and cold sessions are filtered out of the pool
+table before candidates are built.
 
 ## LP
 
@@ -456,8 +510,16 @@ power reduction \(\Delta P\):
 If the target is infeasible, a separate solve maximizes conservative power
 shed. The pool-aware path then minimizes work at that maximum. The result is
 valid best effort with `failure_reason="target_unmet"` and an explicit watt
-shortfall, not successful curtailment. The legacy `lp_peak_first` and
-`lp_work_first` variants retain alternative objective orders for comparison.
+shortfall, not successful curtailment. The `lp_peak_first` and `lp_work_first`
+variants retain alternative objective orders on the legacy path only; the pool
+path dispatches every `lp*` solver name to the same objective, so all three
+produce identical plans there.
+
+The LP is solved by an interior-point conic solver without crossover, so the
+returned point is not a vertex and essentially every coordinate is fractional.
+The \(\le 2R\) fractionality bound of `formulation_nsdi.md` §C.2 applies to
+basic solutions and is therefore not realized today; this is why rounding is a
+sweep over all columns rather than a repair of a handful.
 
 Fractional results are rounded deterministically to whole sessions while
 preserving every resource row. The legacy path then balances selected sessions
@@ -465,16 +527,20 @@ across destination instances. The pool-aware path retains the chosen pool and
 packs each session onto a concrete replica by worst service, KV, and migration
 pressure.
 
-Aggregate pool feasibility does not imply replica feasibility. If deterministic
-packing fails, the failed candidate set becomes a cut and selection is solved
-again:
+Aggregate pool feasibility does not imply replica feasibility. The target repair
+is a cut on the failed candidate set, after which selection is solved again:
 
 \[
 \sum_{c\in C_k}x_c\le |C_k|-1.
 \]
 
-Small cases have an exact replica-assignment oracle. Plans report packing
-repair count and time.
+The implementation does not do this. On a packing failure it returns the entire
+member list of the failing pool, drops the single candidate with the worst total
+normalized resource per watt, and re-packs — no constraint is added and the LP
+is not re-solved. It is cheaper, and it can reject a set that another replica
+assignment could have placed. Small cases have an exact replica-assignment
+oracle, used in tests to confirm that a packing failure was genuine
+infeasibility. Plans report packing repair count and time.
 
 ## How sessions are updated during execution
 
