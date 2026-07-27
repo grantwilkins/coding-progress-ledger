@@ -1,4 +1,4 @@
-"""Plot a measured two-A100 KV handoff timeline from tidy event tables."""
+"""Plot measured two-A100 KV-transfer and replay handoff timelines."""
 
 from __future__ import annotations
 
@@ -14,7 +14,10 @@ import matplotlib.pyplot as plt
 from matplotlib.lines import Line2D
 from matplotlib.patches import Patch
 
-DEFAULT_SCENARIO = "m-0d41d4a3ced809ad"
+DEFAULT_SCENARIOS = {
+    "kv_transfer": "m-0d41d4a3ced809ad",
+    "replay": "m-b35dec3b9a228389",
+}
 
 
 def _read_csv(path: Path) -> list[dict[str, str]]:
@@ -25,8 +28,8 @@ def _read_csv(path: Path) -> list[dict[str, str]]:
 def extract(root: Path, scenario_id: str) -> tuple[list[dict], list[dict]]:
     run = root / "scenarios" / scenario_id
     scenario = json.loads((run / "scenario.json").read_text())
-    if scenario["method"] != "kv_transfer" or scenario["concurrency"] != 1:
-        raise ValueError("timeline requires a KV-transfer scenario with concurrency 1")
+    if scenario["method"] not in DEFAULT_SCENARIOS or scenario["concurrency"] != 1:
+        raise ValueError("timeline requires replay or KV transfer with concurrency 1")
     migrations = [
         row for row in _read_csv(root / "migrations.csv")
         if row["scenario_id"] == scenario_id
@@ -63,7 +66,7 @@ def extract(root: Path, scenario_id: str) -> tuple[list[dict], list[dict]]:
             "session": f"S{index}",
             "session_id": row["session_id"],
             "method": row["method"],
-            "kv_write_concurrency": int(row["concurrency"]),
+            "migration_concurrency": int(row["concurrency"]),
             "bandwidth_gbps": float(row["bandwidth_mbps"]) / 1000,
             "activity": row["activity"],
             "bulk_start_s": bulk_start,
@@ -136,6 +139,7 @@ def _write(path: Path, rows: list[dict]) -> None:
 
 def plot(timeline_path: Path, inference_path: Path, out: Path) -> None:
     timeline, inference = _read_csv(timeline_path), _read_csv(inference_path)
+    method = timeline[0]["method"]
     plt.style.use("seaborn-v0_8-whitegrid")
     colors = {
         "bulk": "#4298B5",
@@ -150,28 +154,36 @@ def plot(timeline_path: Path, inference_path: Path, out: Path) -> None:
         "grid": "#DAD7CB",
     }
     fig, gantt = plt.subplots(figsize=(11, 3.8))
+    phase_labels = ("KV Initial Write", "Append final KV") \
+        if method == "kv_transfer" else ("Initial Replay", "Final Replay")
     phases = (
-        ("bulk_start_s", "bulk_finish_s", "KV Initial Write", "bulk"),
-        ("catch_up_start_s", "catch_up_finish_s", "Append final KV", "catch"),
+        ("bulk_start_s", "bulk_finish_s", phase_labels[0], "bulk"),
+        ("catch_up_start_s", "catch_up_finish_s", phase_labels[1], "catch"),
     )
     gantt.axvspan(
         float(timeline[0]["quiesce_s"]),
         float(timeline[0]["catch_up_start_s"]),
         color=colors["drain"], alpha=.48,
-        label="Background KV Transfer", zorder=0,
+        label="Background KV Transfer" if method == "kv_transfer"
+            else "Pause (drain active request)",
+        zorder=0,
     )
     positions = [1.4 * index for index in range(len(timeline))]
     inference_labels = set()
     for y, row in zip(positions, timeline):
         source_y, migration_y, destination_y = y - .55, y, y + .55
         commit = float(row["commit_s"])
-        for left, width, phase in ((-4.2, 2.0, "Prefill"), (-2.05, 1.1, "Decode")):
+        prior = ((-4.2, 1.25, "Prefill"), (-2.85, .5, "Decode"),
+                 (-2.15, .8, "Prefill"), (-1.25, .35, "Decode")) \
+            if method == "kv_transfer" \
+            else ((-4.2, 2.0, "Prefill"), (-2.05, 1.1, "Decode"))
+        for left, width, phase in prior:
             gantt.barh(
                 source_y, width, left=left, height=.25,
                 color=colors[phase.lower()], zorder=3,
             )
         gantt.text(
-            -2.55, source_y - .22, "prior request (not to scale)",
+            -2.55, source_y - .22, "prior inference (not to scale)",
             ha="center", va="top", fontsize=8, color=colors["tool"],
         )
         gantt.text(
@@ -229,9 +241,13 @@ def plot(timeline_path: Path, inference_path: Path, out: Path) -> None:
             facecolor=colors["tool"], edgecolor=colors["text"],
             hatch="//", label="Tool Call",
         ),
-        Patch(facecolor=colors["bulk"], label="KV Initial Write"),
-        Patch(facecolor=colors["drain"], alpha=.6, label="Background KV Transfer"),
-        Patch(facecolor=colors["catch"], label="Append final KV"),
+        Patch(facecolor=colors["bulk"], label=phase_labels[0]),
+        Patch(
+            facecolor=colors["drain"], alpha=.6,
+            label="Background KV Transfer" if method == "kv_transfer"
+                else "Pause (drain active request)",
+        ),
+        Patch(facecolor=colors["catch"], label=phase_labels[1]),
         Line2D(
             (), (), marker="D", linestyle="none", color=colors["switch"],
             markersize=8, label="Route Switch",
@@ -252,7 +268,9 @@ def plot(timeline_path: Path, inference_path: Path, out: Path) -> None:
     gantt.tick_params(colors=colors["text"])
     gantt.set_facecolor("#FFFFFF")
     fig.set_facecolor("#FFFFFF")
-    gantt.set_xlabel("Time since first KV write (s)")
+    gantt.set_xlabel(
+        f"Time since {'first KV write' if method == 'kv_transfer' else 'replay start'} (s)"
+    )
     end = max(float(row["first_token_s"]) for row in timeline) + 3
     gantt.set_xlim(-4.5, end)
     gantt.set_xticks(range(0, int(end) + 1, 5))
@@ -265,13 +283,14 @@ def plot(timeline_path: Path, inference_path: Path, out: Path) -> None:
 def write(root: Path, scenario_id: str, out: Path) -> None:
     out.mkdir(parents=True, exist_ok=True)
     timeline, inference = extract(root, scenario_id)
-    timeline_path = out / "kv_write_concurrency_1_timeline.csv"
-    inference_path = out / "kv_write_concurrency_1_inference.csv"
+    stem = "kv_write" if timeline[0]["method"] == "kv_transfer" else "replay"
+    timeline_path = out / f"{stem}_concurrency_1_timeline.csv"
+    inference_path = out / f"{stem}_concurrency_1_inference.csv"
     _write(timeline_path, timeline)
     _write(inference_path, inference)
     plot(
         timeline_path, inference_path,
-        out / "kv_write_concurrency_1_timeline",
+        out / f"{stem}_concurrency_1_timeline",
     )
 
 
@@ -280,10 +299,11 @@ def main(argv: list[str] | None = None) -> None:
     parser.add_argument(
         "--root", type=Path, default=Path("outputs/bounded-hardware-campaign-run"),
     )
-    parser.add_argument("--scenario", default=DEFAULT_SCENARIO)
+    parser.add_argument("--method", choices=DEFAULT_SCENARIOS, default="kv_transfer")
+    parser.add_argument("--scenario")
     parser.add_argument("--out", type=Path, default=Path("outputs/mechanism-validation"))
     args = parser.parse_args(argv)
-    write(args.root, args.scenario, args.out)
+    write(args.root, args.scenario or DEFAULT_SCENARIOS[args.method], args.out)
 
 
 if __name__ == "__main__":

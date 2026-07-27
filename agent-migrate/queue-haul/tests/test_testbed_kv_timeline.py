@@ -101,3 +101,25 @@ def test_write_rejects_wrong_concurrency_and_emits_plot(tmp_path):
     assert (out / "kv_write_concurrency_1_inference.csv").stat().st_size
     assert (out / "kv_write_concurrency_1_timeline.png").stat().st_size
     assert (out / "kv_write_concurrency_1_timeline.pdf").stat().st_size
+
+
+def test_replay_uses_the_same_measured_clock(tmp_path):
+    root = fixture(tmp_path)
+    scenario = root / "scenarios/measured/scenario.json"
+    scenario.write_text(json.dumps({"method": "replay", "concurrency": 1}))
+    migrations = list(csv.DictReader((root / "migrations.csv").open()))
+    migrations[0]["method"] = "replay"
+    _csv(root / "migrations.csv", migrations)
+    timeline, segments = extract(root, "measured")
+    assert timeline[0]["method"] == "replay"
+    assert timeline[0]["bulk_start_s"] == 0
+    assert timeline[0]["catch_up_finish_s"] == 4
+    assert max(
+        row["finish_s"] for row in segments if row["location"] == "source"
+    ) > timeline[0]["quiesce_s"]
+    out = tmp_path / "out"
+    write(root, "measured", out)
+    assert (out / "replay_concurrency_1_timeline.csv").stat().st_size
+    assert (out / "replay_concurrency_1_inference.csv").stat().st_size
+    assert (out / "replay_concurrency_1_timeline.png").stat().st_size
+    assert (out / "replay_concurrency_1_timeline.pdf").stat().st_size
