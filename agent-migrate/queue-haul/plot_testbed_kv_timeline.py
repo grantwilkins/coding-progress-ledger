@@ -52,6 +52,39 @@ def extract(root: Path, scenario_id: str) -> tuple[list[dict], list[dict]]:
     def seconds(value: str | int) -> float:
         return (int(value) - base) / 1e9
 
+    replay_requests = {}
+    if scenario["method"] == "replay":
+        moves = {
+            row["move"]["session_id"]: row for row in result["migrations"]
+        }
+        connections = _read_csv(run / "proxy_connections.csv")
+        proxy_bytes = _read_csv(run / "proxy_bytes.csv")
+        for session_id, move in moves.items():
+            phases = {}
+            for phase, request in (
+                ("initial", move["initial"]), ("final", move["catch_up"]),
+            ):
+                connection = min(
+                    (row for row in connections if row["route"] == "api"),
+                    key=lambda row: abs(int(row["start_ns"]) - int(request["start_ns"])),
+                )
+                bins = [
+                    row for row in proxy_bytes
+                    if row["connection_id"] == connection["connection_id"]
+                    and row["direction"] == "client_to_target"
+                    and int(row["bytes"]) > 0
+                ]
+                if not bins:
+                    raise ValueError("replay timeline requires context-transfer bins")
+                send_finish = max(
+                    int(row["monotonic_ns"]) + int(row["interval_ns"])
+                    for row in bins
+                )
+                if send_finish >= int(request["first_byte_ns"]):
+                    raise ValueError("context-transfer bound must precede replay output")
+                phases[phase] = request | {"send_finish_ns": send_finish}
+            replay_requests[session_id] = phases
+
     timeline = []
     for index, row in enumerate(sorted(migrations, key=lambda item: int(item["order"])), 1):
         continuation = continuations[row["session_id"]]
@@ -61,6 +94,7 @@ def extract(root: Path, scenario_id: str) -> tuple[list[dict], list[dict]]:
         switch_start, commit = seconds(row["switch_start_ns"]), seconds(row["switch_end_ns"])
         continuation_start = seconds(continuation["start_ns"])
         first_token = seconds(continuation["first_byte_ns"])
+        replay = replay_requests.get(row["session_id"])
         timeline.append({
             "scenario_id": scenario_id,
             "session": f"S{index}",
@@ -72,11 +106,15 @@ def extract(root: Path, scenario_id: str) -> tuple[list[dict], list[dict]]:
             "bulk_start_s": bulk_start,
             "bulk_finish_s": bulk_finish,
             "bulk_s": bulk_finish - bulk_start,
+            "bulk_send_finish_s": seconds(replay["initial"]["send_finish_ns"])
+                if replay else None,
             "quiesce_s": quiesce,
             "request_boundary_wait_s": catch_start - quiesce,
             "catch_up_start_s": catch_start,
             "catch_up_finish_s": catch_finish,
             "catch_up_s": catch_finish - catch_start,
+            "catch_up_send_finish_s": seconds(replay["final"]["send_finish_ns"])
+                if replay else None,
             "switch_start_s": switch_start,
             "commit_s": commit,
             "route_switch_s": commit - switch_start,
@@ -110,6 +148,24 @@ def extract(root: Path, scenario_id: str) -> tuple[list[dict], list[dict]]:
                     "evidence_status": "measured" if phase != "Tool Call"
                         else "observed_application_gap",
                     "provenance": str(run / "result.json"),
+                })
+    for session_id, phases in replay_requests.items():
+        for stage, request in phases.items():
+            for phase, start, end in (
+                ("Prefill", request["send_finish_ns"], request["first_byte_ns"]),
+                ("Decode", request["first_byte_ns"], request["end_ns"]),
+            ):
+                segments.append({
+                    "scenario_id": scenario_id,
+                    "session_id": session_id,
+                    "stage": f"{stage}_replay",
+                    "location": "destination",
+                    "phase": phase,
+                    "start_s": seconds(start),
+                    "finish_s": seconds(end),
+                    "evidence_status": "measured_250ms_send_bound"
+                        if phase == "Prefill" else "measured",
+                    "provenance": f"{run}/result.json|{run}/proxy_bytes.csv",
                 })
     for session_id, continuation in continuations.items():
         for phase, start, end in (
@@ -155,11 +211,17 @@ def plot(timeline_path: Path, inference_path: Path, out: Path) -> None:
     }
     fig, gantt = plt.subplots(figsize=(11, 3.8))
     phase_labels = ("KV Initial Write", "Append final KV") \
-        if method == "kv_transfer" else ("Initial Replay", "Final Replay")
+        if method == "kv_transfer" \
+        else ("Initial Context Update", "Final Context Update")
     phases = (
         ("bulk_start_s", "bulk_finish_s", phase_labels[0], "bulk"),
         ("catch_up_start_s", "catch_up_finish_s", phase_labels[1], "catch"),
     )
+    if method == "replay":
+        phases = (
+            ("bulk_start_s", "bulk_send_finish_s", phase_labels[0], "bulk"),
+            ("catch_up_start_s", "catch_up_send_finish_s", phase_labels[1], "bulk"),
+        )
     gantt.axvspan(
         float(timeline[0]["quiesce_s"]),
         float(timeline[0]["catch_up_start_s"]),
@@ -234,6 +296,23 @@ def plot(timeline_path: Path, inference_path: Path, out: Path) -> None:
         ["Inference at Source", "Migration", "Inference at Destination"],
     )
     gantt.invert_yaxis()
+    migration_handles = (
+        Patch(facecolor=colors["bulk"], label=phase_labels[0]),
+        Patch(
+            facecolor=colors["drain"], alpha=.6,
+            label="Background KV Transfer",
+        ),
+        Patch(facecolor=colors["catch"], label=phase_labels[1]),
+    ) if method == "kv_transfer" else (
+        Patch(
+            facecolor=colors["bulk"],
+            label="Context Update (<=250-ms bound)",
+        ),
+        Patch(
+            facecolor=colors["drain"], alpha=.6,
+            label="Pause (drain active request)",
+        ),
+    )
     legend = (
         Patch(facecolor=colors["prefill"], label="Prefill"),
         Patch(facecolor=colors["decode"], label="Decode"),
@@ -241,13 +320,7 @@ def plot(timeline_path: Path, inference_path: Path, out: Path) -> None:
             facecolor=colors["tool"], edgecolor=colors["text"],
             hatch="//", label="Tool Call",
         ),
-        Patch(facecolor=colors["bulk"], label=phase_labels[0]),
-        Patch(
-            facecolor=colors["drain"], alpha=.6,
-            label="Background KV Transfer" if method == "kv_transfer"
-                else "Pause (drain active request)",
-        ),
-        Patch(facecolor=colors["catch"], label=phase_labels[1]),
+        *migration_handles,
         Line2D(
             (), (), marker="D", linestyle="none", color=colors["switch"],
             markersize=8, label="Route Switch",

@@ -1,12 +1,15 @@
 """
 Claim:
-The timeline preserves one measured clock, keeps inference active through the
-pause, and distinguishes copy completion, commit, and post-switch inference.
+The timeline preserves one measured clock, keeps source inference active
+through the pause, and assigns replay reconstruction to destination Prefill
+after the measured context-transfer bound.
 
 Plausible wrong implementations:
 - Reset inference and migration events to different time origins.
 - Stop source inference when the pause begins instead of draining active work.
 - Treat bulk-copy completion as the route-switch commit.
+- Label destination replay Prefill as context-transfer time.
+- Start replay Prefill before the context-transfer measurement bin ends.
 - Pair a continuation with the wrong session.
 - Accept a scenario whose KV-write concurrency is not one.
 """
@@ -59,6 +62,7 @@ def fixture(tmp_path):
             "first_byte_ns": 5_400_000_000,
             "end_ns": 5_600_000_000,
         }],
+        "migrations": [],
     }))
     return root
 
@@ -110,10 +114,48 @@ def test_replay_uses_the_same_measured_clock(tmp_path):
     migrations = list(csv.DictReader((root / "migrations.csv").open()))
     migrations[0]["method"] = "replay"
     _csv(root / "migrations.csv", migrations)
+    result_path = root / "scenarios/measured/result.json"
+    result = json.loads(result_path.read_text())
+    result["migrations"] = [{
+        "move": {"session_id": "s0"},
+        "initial": {
+            "start_ns": 1_050_000_000, "first_byte_ns": 2_800_000_000,
+            "end_ns": 2_900_000_000,
+        },
+        "catch_up": {
+            "start_ns": 4_050_000_000, "first_byte_ns": 4_800_000_000,
+            "end_ns": 4_900_000_000,
+        },
+    }]
+    result_path.write_text(json.dumps(result))
+    _csv(root / "scenarios/measured/proxy_connections.csv", [
+        {"connection_id": "initial", "route": "api",
+         "start_ns": 1_100_000_000, "end_ns": 2_900_000_000},
+        {"connection_id": "final", "route": "api",
+         "start_ns": 4_100_000_000, "end_ns": 4_900_000_000},
+    ])
+    _csv(root / "scenarios/measured/proxy_bytes.csv", [
+        {"monotonic_ns": 1_000_000_000, "interval_ns": 250_000_000,
+         "connection_id": "initial", "direction": "client_to_target", "bytes": 100},
+        {"monotonic_ns": 4_000_000_000, "interval_ns": 250_000_000,
+         "connection_id": "final", "direction": "client_to_target", "bytes": 20},
+    ])
     timeline, segments = extract(root, "measured")
     assert timeline[0]["method"] == "replay"
     assert timeline[0]["bulk_start_s"] == 0
+    assert timeline[0]["bulk_send_finish_s"] == .25
     assert timeline[0]["catch_up_finish_s"] == 4
+    assert [
+        (row["stage"], row["phase"], row["start_s"], row["finish_s"])
+        for row in segments if row["location"] == "destination"
+    ] == [
+        ("initial_replay", "Prefill", .25, 1.8),
+        ("initial_replay", "Decode", 1.8, 1.9),
+        ("final_replay", "Prefill", 3.25, 3.8),
+        ("final_replay", "Decode", 3.8, 3.9),
+        ("continuation", "Prefill", 4.2, 4.4),
+        ("continuation", "Decode", 4.4, 4.6),
+    ]
     assert max(
         row["finish_s"] for row in segments if row["location"] == "source"
     ) > timeline[0]["quiesce_s"]
