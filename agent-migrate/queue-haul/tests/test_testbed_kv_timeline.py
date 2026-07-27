@@ -76,8 +76,9 @@ def test_extract_preserves_pause_and_inference_semantics(tmp_path):
     assert row["commit_s"] == pytest.approx(4.1)
     assert row["first_token_s"] == pytest.approx(4.4)
     assert [(segment["location"], segment["phase"],
-             segment["start_s"], segment["finish_s"])
+            segment["start_s"], segment["finish_s"])
             for segment in segments] == [
+        ("source", "Tool Call", 0, .1),
         ("source", "Prefill", .1, .6),
         ("source", "Decode", .6, .8),
         ("source", "Tool Call", .8, 1.1),

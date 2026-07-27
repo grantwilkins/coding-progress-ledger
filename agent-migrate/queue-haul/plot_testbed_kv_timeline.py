@@ -128,6 +128,23 @@ def extract(root: Path, scenario_id: str) -> tuple[list[dict], list[dict]]:
         })
 
     segments = []
+    for session_id in continuations:
+        first_start = min(
+            int(row["start_ns"]) for row in activities
+            if row["session_id"] == session_id
+        )
+        if first_start > base:
+            segments.append({
+                "scenario_id": scenario_id,
+                "session_id": session_id,
+                "stage": "pre_activity",
+                "location": "source",
+                "phase": "Tool Call",
+                "start_s": 0,
+                "finish_s": seconds(first_start),
+                "evidence_status": "observed_application_gap",
+                "provenance": str(run / "result.json"),
+            })
     for index, activity in enumerate(activities):
         next_start = activities[index + 1]["start_ns"] \
             if index + 1 < len(activities) else None
@@ -222,7 +239,10 @@ def plot(timeline_path: Path, inference_path: Path, out: Path) -> None:
         ("catch_up_start_s", "catch_up_finish_s", phase_labels[1], "catch"),
     )
     if method == "replay":
-        phases = ()
+        phases = (
+            ("bulk_start_s", "bulk_send_finish_s", "Context Transfer", "bulk"),
+            ("catch_up_start_s", "catch_up_send_finish_s", "Context Transfer", "bulk"),
+        )
     gantt.axvspan(
         float(timeline[0]["quiesce_s"]),
         float(timeline[0]["catch_up_start_s"]),
@@ -246,12 +266,8 @@ def plot(timeline_path: Path, inference_path: Path, out: Path) -> None:
                 source_y, width, left=left, height=.32,
                 color=colors[phase], hatch="//" if phase == "tool" else None,
                 edgecolor=colors["text"] if phase == "tool" else "none",
-                linewidth=.5, zorder=3,
+                linewidth=0, zorder=3,
             )
-        gantt.text(
-            -1.18, source_y - .2, "prior inference (not to scale)",
-            ha="center", va="bottom", fontsize=10, color=colors["tool"],
-        )
         for start_name, end_name, label, color in phases:
             start, end = float(row[start_name]), float(row[end_name])
             gantt.barh(
@@ -275,7 +291,7 @@ def plot(timeline_path: Path, inference_path: Path, out: Path) -> None:
                 inference_y, end - start, left=start, height=.32,
                 color=colors[color], hatch="//" if color == "tool" else None,
                 edgecolor=colors["text"] if color == "tool" else "none",
-                linewidth=.5,
+                linewidth=0,
                 label=phase if phase not in inference_labels else None,
                 zorder=3,
             )
@@ -304,6 +320,7 @@ def plot(timeline_path: Path, inference_path: Path, out: Path) -> None:
         ),
         Patch(facecolor=colors["catch"], label=phase_labels[1]),
     ) if method == "kv_transfer" else (
+        Patch(facecolor=colors["bulk"], label="Context Transfer"),
         Patch(
             facecolor=colors["drain"], alpha=.6,
             label="Pause (drain active request)",
@@ -314,7 +331,7 @@ def plot(timeline_path: Path, inference_path: Path, out: Path) -> None:
         Patch(facecolor=colors["decode"], label="Decode"),
         Patch(
             facecolor=colors["tool"], edgecolor=colors["text"],
-            hatch="//", label="Tool Call",
+            hatch="//", linewidth=0, label="Tool Call",
         ),
         *migration_handles,
         Line2D(
@@ -343,9 +360,9 @@ def plot(timeline_path: Path, inference_path: Path, out: Path) -> None:
     end = max(float(row["first_token_s"]) for row in timeline) + 3
     gantt.set_xlim(-2.5, end)
     gantt.set_xticks(range(0, int(end) + 1, 5))
-    fig.subplots_adjust(left=.2, right=.98, top=.63, bottom=.2)
-    fig.savefig(out.with_suffix(".png"), dpi=200)
-    fig.savefig(out.with_suffix(".pdf"))
+    fig.tight_layout(pad=.25)
+    fig.savefig(out.with_suffix(".png"), dpi=200, bbox_inches="tight", pad_inches=.02)
+    fig.savefig(out.with_suffix(".pdf"), bbox_inches="tight", pad_inches=.02)
     plt.close(fig)
 
 
