@@ -102,7 +102,7 @@ state, and explicit policy. These sources are not interchangeable.
 | \(\mathcal C_q^m\) | joint TTFT/TPOT/stability service blob | five legacy cache-geometry-consistent sensitivity anchors across three affinities; common point 0.096953; no admissible point or boundary |
 | \(b_r\) | current per-replica traffic point | must use profile-compatible prompt/decode telemetry; v7 `achieved_rho` is invalid |
 | \(K_q\) | allocatable live-KV stock after fixed runtime memory | 963,152-token vLLM 0.22.0 readback at 0.75 GPU-memory utilization |
-| private KV blocks | block-rounded per-session residency | target v1 accounting; current code sums unrounded tokens and gives no sharing credit |
+| private KV blocks | block-rounded per-session residency | requirement-frontier and pool-aware paths round per session and give no sharing credit; the legacy scalar adapter remains unrounded |
 | replica inventory | assignment and fragmentation | direct site input; pool multiplication is only a relaxation |
 | migration components | deadline and temporary endpoint occupancy | empirical-max replay/KV envelopes for the recorded concurrency-one v7 schedules; no statistical coverage guarantee |
 | logical WAN bandwidth and RTT | transport feasibility | 5 Gbps central; 1/5/10 Gbps and P50 RTT classes 10/60/90/150/240 ms are sensitivity inputs |
@@ -158,8 +158,8 @@ execution validation cover only the resources explicitly represented.
 
 Operational admission requires more than the requirement frontier: an accepted
 evidence status, full pinned runtime and warm/healthy attestation, fresh
-baseline and route state held by a lease through commit, per-session KV block
-rounding, and a supported service horizon. Until those gates exist, concrete
+baseline and route state held by a lease through commit, and a supported service
+horizon. Until those gates exist, concrete
 architecture results are descriptive or `sensitivity/possible` even if the
 optimizer returns a placement. Destination power caps and pricing are outside
 this formulation.
@@ -310,8 +310,8 @@ B_{r,\omega}^0+
 
 Target v1 charges each session's history and projected growth independently. It does
 not require block identities and gives no cross-session prefix-sharing credit.
-The current implementation still sums unrounded token equivalents, so
-block-rounding is target semantics rather than a present physical guarantee.
+The requirement-frontier and pool-aware paths implement this per-session
+rounding; only the legacy scalar adapter sums unrounded token equivalents.
 A later shared-KV extension may replace the sum with an exact protected-block
 union without changing the other constraints.
 
@@ -414,7 +414,8 @@ the concurrent route schedule.
 Per-replica baseline work and KV are preserved. Supplying aggregate baseline
 fields and destination `SimSession` backgrounds simultaneously is rejected to
 prevent double counting. Target v1 is block-rounded and additive; current code
-uses an unrounded token approximation. A later
+implements that accounting in the requirement-frontier and pool-aware paths,
+while the legacy scalar adapter remains unrounded. A later
 shared-prefix extension would require nonadditive prefix-group or block-union
 accounting in concrete packing.
 

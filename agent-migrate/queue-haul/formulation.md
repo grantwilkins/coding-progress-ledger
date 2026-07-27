@@ -213,11 +213,12 @@ exact pools, routes, per-replica baselines, and service facets. Physical
 prefix sharing is deliberately uncredited in v1; the target relaxation uses
 block-rounded additive demand.
 
-Block rounding is implemented on the **pool** path and not on the legacy path.
+Block rounding is implemented by the requirement-frontier and pool-aware paths.
 The pool candidate charges \(\lceil\widehat T_s(H_r)/L_q\rceil\) blocks against a
 capacity of \(\lvert p\rvert\lfloor K_q/L_q\rfloor\), with per-replica and
-per-background-session baselines rounded independently; the legacy path still
-sums unrounded \(\widehat T_s(H_m)\) tokens against `kv_capacity_tokens`. Note
+per-background-session baselines rounded independently; only the legacy scalar
+adapter still sums unrounded \(\widehat T_s(H_m)\) tokens against
+`kv_capacity_tokens`. Note
 also that the paging block \(L_q\) (16 tokens) and the KV **transfer** block
 (256 tokens, `block_bytes` 12,582,912) are different measured quantities.
 

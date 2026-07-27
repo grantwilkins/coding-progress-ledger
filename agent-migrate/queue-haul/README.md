@@ -100,16 +100,16 @@ The target destination question is whether a source session set has a compatible
 per-replica assignment whose private-prefix prefill and decode work stay inside
 the measured service blob, whose block-rounded private KV fits, and whose
 migration schedule meets the route and deadline constraints. Target v1 gives
-no cross-session prefix-sharing credit. The current implementation still needs
-physical-block rounding before its token-equivalent KV row is a memory
-guarantee. Hardware, model, parallel layout, engine configuration, and
-scheduler settings are part of the profile identity rather than portable
-GPU-count multipliers.
+no cross-session prefix-sharing credit. The requirement-frontier and pool-aware
+paths round each session to physical KV blocks; only the legacy scalar adapter
+still uses an unrounded token-equivalent KV row. Hardware, model, parallel
+layout, engine configuration, and scheduler settings are part of the profile
+identity rather than portable GPU-count multipliers.
 
 The current architecture code is an aggregate sensitivity prototype, not an
 operational admission certificate. It does not yet enforce the complete pinned
-runtime/health attestation, live-state lease, per-session KV block rounding,
-busy-pool impact gate, or evidence status described by the target constraint.
+runtime/health attestation, live-state lease, or evidence status described by
+the target constraint.
 
 Pass it as `plan(..., destination=architecture)` for pool-aware LP or greedy
 sensitivity analysis, or to `execute(..., destination=architecture)` for
