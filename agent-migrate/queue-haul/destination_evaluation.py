@@ -171,10 +171,28 @@ class SweepCell:
     pools: int
     flex: float
     debt: float
+    budget_policy: str = "fixed_total"
+
+    def __post_init__(self):
+        if self.budget_policy not in {"fixed_total", "fixed_per_pool"}:
+            raise ValueError("invalid destination budget policy")
 
 
 def primary_cells():
-    return tuple(SweepCell(*x) for x in product(RHO, HEADROOM, POOLS, FLEX, DEBT))
+    central = SweepCell(.8, 1, 1, .10, .10)
+    cells = (
+        *(SweepCell(value, central.headroom, central.pools, central.flex, central.debt)
+          for value in RHO),
+        *(SweepCell(central.rho, value, central.pools, central.flex, central.debt)
+          for value in HEADROOM),
+        *(SweepCell(central.rho, central.headroom, value, central.flex, central.debt, policy)
+          for policy in ("fixed_total", "fixed_per_pool") for value in POOLS),
+        *(SweepCell(central.rho, central.headroom, central.pools, value, central.debt)
+          for value in FLEX),
+        *(SweepCell(central.rho, central.headroom, central.pools, central.flex, value)
+          for value in DEBT),
+    )
+    return tuple(dict.fromkeys(cells))
 
 
 def run_sweep(build, profile, cells=primary_cells(), seeds=range(10),
@@ -195,6 +213,7 @@ def run_sweep(build, profile, cells=primary_cells(), seeds=range(10),
                 rows.append({
                     "rho": cell.rho, "headroom": cell.headroom, "pools": cell.pools,
                     "flex": cell.flex, "debt": cell.debt,
+                    "budget_policy": cell.budget_policy,
                     "seed": seed, "planner": label, "feasible": result.feasible,
                 "shed_w": result.initial_source_power_w - result.planned_source_power_w,
                 "shortfall_w": result.power_shortfall_w, "mode": result.admission_mode,
@@ -207,8 +226,10 @@ def run_sweep(build, profile, cells=primary_cells(), seeds=range(10),
     run(cells, seeds)
     transitions = [cell for cell in cells if 0 < sum(
         r["feasible"] for r in rows if r["planner"] == "pool_lp"
-        and (r["rho"], r["headroom"], r["pools"], r["flex"], r["debt"]) ==
-        (cell.rho, cell.headroom, cell.pools, cell.flex, cell.debt)
+        and (r["rho"], r["headroom"], r["pools"], r["flex"], r["debt"],
+             r["budget_policy"]) ==
+        (cell.rho, cell.headroom, cell.pools, cell.flex, cell.debt,
+         cell.budget_policy)
     ) < len(tuple(seeds))]
     run(transitions, transition_seeds)
     return rows

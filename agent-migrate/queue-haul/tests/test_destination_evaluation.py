@@ -17,7 +17,9 @@ Plausible wrong implementations:
 - Choose the median rather than worst observed migration slowdown.
 - Divide total capacity rather than residual capacity by reference demand.
 - Round replica demand down or permit fewer replicas than pools.
-- Omit the two-pool case or conflate normal headroom, event flex, and debt.
+- Expand every operating point into an impractical Cartesian product.
+- Omit the two-pool or fixed-total versus fixed-per-pool cases.
+- Conflate normal headroom, event flex, and debt.
 """
 
 from types import SimpleNamespace
@@ -184,10 +186,13 @@ def test_replica_allocation_rounds_up_and_never_undersupplies_pools():
 
 
 def test_primary_grid_is_deterministic_and_complete():
-    assert len(primary_cells()) == 4 * 3 * 4 * 4 * 4
-    assert primary_cells()[0] == SweepCell(0, .5, 1, 0, 0)
-    assert primary_cells()[-1] == SweepCell(.95, 2, 8, .20, .20)
+    assert len(primary_cells()) == 19
+    assert primary_cells()[0] == SweepCell(0, 1, 1, .1, .1)
+    assert primary_cells()[-1] == SweepCell(.8, 1, 1, .1, .20)
     assert {cell.pools for cell in primary_cells()} == {1, 2, 4, 8}
+    assert {
+        cell.budget_policy for cell in primary_cells() if cell.pools > 1
+    } == {"fixed_total", "fixed_per_pool"}
 
 
 def test_seeded_sweep_repeats_only_transition_cells(monkeypatch):
