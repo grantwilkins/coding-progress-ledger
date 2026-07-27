@@ -12,7 +12,7 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
-DEFAULT_SCENARIO = "m-70aec4041b98c310"
+DEFAULT_SCENARIO = "m-0d41d4a3ced809ad"
 
 
 def _read_csv(path: Path) -> list[dict[str, str]]:
@@ -23,18 +23,24 @@ def _read_csv(path: Path) -> list[dict[str, str]]:
 def extract(root: Path, scenario_id: str) -> tuple[list[dict], list[dict]]:
     run = root / "scenarios" / scenario_id
     scenario = json.loads((run / "scenario.json").read_text())
-    if scenario["method"] != "kv_transfer" or scenario["concurrency"] != 4:
-        raise ValueError("timeline requires a KV-transfer scenario with concurrency 4")
+    if scenario["method"] != "kv_transfer" or scenario["concurrency"] != 1:
+        raise ValueError("timeline requires a KV-transfer scenario with concurrency 1")
     migrations = [
         row for row in _read_csv(root / "migrations.csv")
         if row["scenario_id"] == scenario_id
     ]
-    if len(migrations) != 4 or any(row["success"] != "True" for row in migrations):
-        raise ValueError("timeline requires four successful measured migrations")
+    if len(migrations) != 1 or migrations[0]["success"] != "True":
+        raise ValueError("timeline requires one successful measured migration")
     result = json.loads((run / "result.json").read_text())
     continuations = {row["session_id"]: row for row in result["continuations"]}
     if continuations.keys() != {row["session_id"] for row in migrations}:
         raise ValueError("every migration must have one matching continuation")
+    activities = sorted(result["activities"], key=lambda row: row["stage_index"])
+    if not activities or any(
+        row["session_id"] not in continuations or "first_byte_ns" not in row
+        for row in activities
+    ):
+        raise ValueError("timeline requires measured inference phase boundaries")
 
     base = min(int(row["initial_start_ns"]) for row in migrations)
 
@@ -78,20 +84,45 @@ def extract(root: Path, scenario_id: str) -> tuple[list[dict], list[dict]]:
             "provenance": f"{run}/result.json|{root}/migrations.csv",
         })
 
-    power = _read_csv(run / "power.csv")
-    gpus = sorted({int(row["gpu"]) for row in power})
-    if len(gpus) != 2:
-        raise ValueError("timeline requires power measurements from exactly two GPUs")
-    source = gpus[0]
-    power_rows = [{
-        "scenario_id": scenario_id,
-        "time_s": seconds(row["monotonic_ns"]),
-        "source_power_w": float(row["power_w"]),
-        "source_gpu": source,
-        "evidence_status": "measured",
-        "provenance": str(run / "power.csv"),
-    } for row in power if int(row["gpu"]) == source and row["valid"] == "1"]
-    return timeline, power_rows
+    segments = []
+    for index, activity in enumerate(activities):
+        next_start = activities[index + 1]["start_ns"] \
+            if index + 1 < len(activities) else None
+        for phase, start, end in (
+            ("<P>", activity["start_ns"], activity["first_byte_ns"]),
+            ("<D>", activity["first_byte_ns"], activity["end_ns"]),
+            ("<Tool>", activity["end_ns"], next_start),
+        ):
+            if end and int(end) > int(start):
+                segments.append({
+                    "scenario_id": scenario_id,
+                    "session_id": activity["session_id"],
+                    "stage": activity["stage_index"],
+                    "location": "source",
+                    "phase": phase,
+                    "start_s": seconds(start),
+                    "finish_s": seconds(end),
+                    "evidence_status": "measured" if phase != "<Tool>"
+                        else "observed_application_gap",
+                    "provenance": str(run / "result.json"),
+                })
+    for session_id, continuation in continuations.items():
+        for phase, start, end in (
+            ("<P>", continuation["start_ns"], continuation["first_byte_ns"]),
+            ("<D>", continuation["first_byte_ns"], continuation["end_ns"]),
+        ):
+            segments.append({
+                "scenario_id": scenario_id,
+                "session_id": session_id,
+                "stage": "continuation",
+                "location": "destination",
+                "phase": phase,
+                "start_s": seconds(start),
+                "finish_s": seconds(end),
+                "evidence_status": "measured",
+                "provenance": str(run / "result.json"),
+            })
+    return timeline, segments
 
 
 def _write(path: Path, rows: list[dict]) -> None:
@@ -101,74 +132,73 @@ def _write(path: Path, rows: list[dict]) -> None:
         writer.writerows(rows)
 
 
-def plot(timeline_path: Path, power_path: Path, out: Path) -> None:
-    timeline, power = _read_csv(timeline_path), _read_csv(power_path)
+def plot(timeline_path: Path, inference_path: Path, out: Path) -> None:
+    timeline, inference = _read_csv(timeline_path), _read_csv(inference_path)
     colors = {
         "bulk": "#4C78A8",
         "quiesce": "#ECA82C",
         "catch": "#72B7B2",
         "switch": "#E45756",
         "token": "#2A9D5B",
-        "power": "#5F4B8B",
+        "prefill": "#7A5195",
+        "decode": "#EF5675",
+        "tool": "#8A8F98",
     }
-    fig, (gantt, watts) = plt.subplots(
-        2, 1, figsize=(11, 6.2), sharex=True,
-        gridspec_kw={"height_ratios": (3, 1), "hspace": .12},
-    )
+    fig, gantt = plt.subplots(figsize=(11, 3.2))
     phases = (
         ("bulk_start_s", "bulk_finish_s", "KV write + ingest", "bulk"),
-        ("quiesce_s", "catch_up_start_s", "Quiesce", "quiesce"),
+        ("quiesce_s", "catch_up_start_s", "Pause", "quiesce"),
         ("catch_up_start_s", "catch_up_finish_s", "Catch-up", "catch"),
         ("switch_start_s", "commit_s", "Route switch", "switch"),
     )
-    for y, row in enumerate(timeline):
+    positions = [1.4 * index for index in range(len(timeline))]
+    inference_labels = set()
+    for y, row in zip(positions, timeline):
         commit = float(row["commit_s"])
-        gantt.barh(y, commit, height=.66, color="#ECEFF1", zorder=0)
+        gantt.barh(y + .18, commit, height=.48, color="#ECEFF1", zorder=0)
         for start_name, end_name, label, color in phases:
             start, end = float(row[start_name]), float(row[end_name])
             gantt.barh(
-                y, end - start, left=start, height=.52, color=colors[color],
-                label=label if y == 0 else None, zorder=2,
+                y + .18, end - start, left=start, height=.4, color=colors[color],
+                label=label if y == positions[0] else None, zorder=2,
             )
+        session_segments = [
+            segment for segment in inference
+            if segment["session_id"] == row["session_id"]
+        ]
+        for segment in session_segments:
+            phase = segment["phase"]
+            start, end = float(segment["start_s"]), float(segment["finish_s"])
+            color = {"<P>": "prefill", "<D>": "decode", "<Tool>": "tool"}[phase]
+            gantt.barh(
+                y - .3, end - start, left=start, height=.24,
+                color=colors[color], hatch="//" if color == "tool" else None,
+                label=phase if phase not in inference_labels else None,
+                zorder=3,
+            )
+            inference_labels.add(phase)
         gantt.scatter(
-            commit, y, marker="D", s=45, color=colors["switch"],
-            label="Commit" if y == 0 else None, zorder=4,
-        )
-        gantt.scatter(
-            float(row["quiesce_s"]), y, marker="|", s=140,
-            color=colors["quiesce"], label="Quiesce begins" if y == 0 else None,
-            zorder=4,
+            commit, y + .18, marker="D", s=45, color=colors["switch"],
+            label="Commit" if y == positions[0] else None, zorder=4,
         )
         first_token = float(row["first_token_s"])
         gantt.scatter(
-            first_token, y, marker="*", s=95,
-            color=colors["token"], label="First post-switch token" if y == 0 else None,
+            first_token, y + .18, marker="*", s=95,
+            color=colors["token"],
+            label="First post-switch token" if y == positions[0] else None,
             zorder=4,
         )
-        gantt.text(commit + .35, y, f"{commit:.1f}s", va="center", fontsize=8)
-        gantt.text(first_token + .35, y, f"{first_token:.1f}s", va="center", fontsize=8)
-    gantt.set_yticks(range(len(timeline)), [row["session"] for row in timeline])
+    gantt.set_yticks(positions, [row["session"] for row in timeline])
     gantt.invert_yaxis()
     gantt.set_ylabel("Session")
-    fig.suptitle(
-        "Measured two-A100 KV handoff: four concurrent writes at "
-        f"{float(timeline[0]['bandwidth_gbps']):g} Gbps", y=.98,
-    )
     gantt.legend(
-        frameon=False, ncol=4, loc="upper center", bbox_to_anchor=(.5, 1.16),
+        frameon=False, ncol=5, loc="upper center", bbox_to_anchor=(.5, 1.32),
     )
     gantt.grid(axis="x", alpha=.2)
-
-    xs = [float(row["time_s"]) for row in power]
-    ys = [float(row["source_power_w"]) for row in power]
-    watts.plot(xs, ys, color=colors["power"], linewidth=1.2)
-    for row in timeline:
-        watts.axvline(float(row["commit_s"]), color=colors["switch"], alpha=.25)
-    watts.set(xlabel="Time since first KV write (s)", ylabel="Source\npower (W)")
-    watts.grid(axis="x", alpha=.2)
+    gantt.set_xlabel("Time since first KV write (s)")
     end = max(float(row["first_token_s"]) for row in timeline) + 3
     gantt.set_xlim(0, end)
-    fig.subplots_adjust(left=.1, right=.98, top=.79, bottom=.12, hspace=.12)
+    fig.subplots_adjust(left=.1, right=.98, top=.7, bottom=.2)
     fig.savefig(out.with_suffix(".png"), dpi=200)
     fig.savefig(out.with_suffix(".pdf"))
     plt.close(fig)
@@ -176,17 +206,22 @@ def plot(timeline_path: Path, power_path: Path, out: Path) -> None:
 
 def write(root: Path, scenario_id: str, out: Path) -> None:
     out.mkdir(parents=True, exist_ok=True)
-    timeline, power = extract(root, scenario_id)
-    timeline_path = out / "kv_write_concurrency_4_timeline.csv"
-    power_path = out / "kv_write_concurrency_4_power.csv"
+    timeline, inference = extract(root, scenario_id)
+    timeline_path = out / "kv_write_concurrency_1_timeline.csv"
+    inference_path = out / "kv_write_concurrency_1_inference.csv"
     _write(timeline_path, timeline)
-    _write(power_path, power)
-    plot(timeline_path, power_path, out / "kv_write_concurrency_4_timeline")
+    _write(inference_path, inference)
+    plot(
+        timeline_path, inference_path,
+        out / "kv_write_concurrency_1_timeline",
+    )
 
 
 def main(argv: list[str] | None = None) -> None:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--root", type=Path, default=Path("outputs/coding-run"))
+    parser.add_argument(
+        "--root", type=Path, default=Path("outputs/bounded-hardware-campaign-run"),
+    )
     parser.add_argument("--scenario", default=DEFAULT_SCENARIO)
     parser.add_argument("--out", type=Path, default=Path("outputs/mechanism-validation"))
     args = parser.parse_args(argv)

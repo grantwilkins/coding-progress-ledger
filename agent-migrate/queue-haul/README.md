@@ -103,8 +103,8 @@ source for assumed paper operating points and their replacement evidence.
 paper evaluation is reorganized into mechanism validation, fixed-contract
 coordination, multi-pool contracts, and planner quality/scale. It rejects
 tables with missing provenance.
-`plot_testbed_kv_timeline.py` generates the measured two-A100 four-concurrent-KV
-timeline and source-power panel from tidy tables.
+`plot_testbed_kv_timeline.py` generates the measured two-A100 concurrency-one
+KV timeline with inference continuing through the pause from tidy event tables.
 
 ## Measurement programs
 
