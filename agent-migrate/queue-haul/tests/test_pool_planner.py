@@ -19,10 +19,12 @@ Plausible wrong implementations:
 - Divide debt by total capacity instead of post-migration spare capacity.
 - Mark positive debt feasible when post-migration service has no recovery spare.
 - Lose physical units or pool/facet identity in normalized planner rows.
+- Treat unused early capacity as if it could serve transition work arriving late.
 - Credit node shutdown during session selection instead of only after planning.
 """
 
 from dataclasses import replace
+from types import SimpleNamespace
 
 import pytest
 
@@ -31,10 +33,11 @@ from destination import (DESTINATION_SCHEMA, CompatibilityFingerprint, ContextRa
                          DestinationType, LoadedCoefficients, MigrationComponents)
 from planner import plan
 from pool_planner import (_destination_duration, _event_bounds, _mode_boundary_rho,
-                          candidate_table, exact_replica_assignment, service_debt,
-                          validate_destination_execution)
+                          _service_trace, candidate_table,
+                          destination_service_execution, exact_replica_assignment,
+                          service_debt, validate_destination_execution)
 from power_model import ExpectedPower
-from simulate import PlannedMove, SimSession
+from simulate import ExecutionEvent, PlannedMove, SimSession
 from test_execution_simulator import model
 from test_planner import PATHS, problem
 
@@ -89,6 +92,36 @@ def test_positive_debt_without_spare_capacity_never_recovers():
 
     assert debt == pytest.approx((1,))
     assert recovery[0] == float("inf")
+
+
+def test_late_transition_work_cannot_use_early_idle_capacity():
+    trace = _service_trace(0, 1, ((9, 2),), 0, 10)
+
+    assert trace[-1] == (10, 2, 1, 1)
+
+
+def test_realized_pool_trace_rejects_late_debt_above_budget(tmp_path):
+    arch = architecture(
+        normal=1, emergency=1, stable=1, baselines=((.6, 0),),
+        routes=(("wan",),), methods=("replay",), flex=0, debt=.05,
+    )
+    move = PlannedMove(
+        "a", "t0", "replay", 0, ("wan",), destination_pool="p0",
+    )
+    execution = SimpleNamespace(events=(
+        ExecutionEvent(8, "replay_start", "a"),
+        ExecutionEvent(9, "replay_done", "a"),
+        ExecutionEvent(9, "commit", "a"),
+    ))
+
+    rows = destination_service_execution(
+        problem(), model(tmp_path, switch=0, tp=1), arch, (move,), execution,
+    )
+
+    final = rows[-1]
+    assert final.peak_queued_replica_s == pytest.approx(.6)
+    assert final.debt_budget_replica_s == pytest.approx(.45)
+    assert not final.within_contract
 
 
 def test_plan_rejects_positive_debt_without_recovery_spare(tmp_path):

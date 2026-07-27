@@ -92,9 +92,9 @@ uv run python queue-haul/paper_evaluation.py \
 a destination inventory. `pool_planner.py` compares those requirements with
 concrete pool contracts and emits physical use/capacity rows. `simulate.py`
 independently schedules routes, reconstruction endpoints, requests, commits,
-and power. Pool service debt and recovery are aggregate planned quantities, not
-yet execution traces. `evaluation_config.py` is the canonical source for
-assumed paper operating points and their replacement evidence.
+and power. It separately traces declared pool-service demand and debt from
+realized replay and commit times. `evaluation_config.py` is the canonical
+source for assumed paper operating points and their replacement evidence.
 `paper_evaluation.py` writes the Q1–Q9 result/plot registry and rejects tables
 with missing provenance.
 

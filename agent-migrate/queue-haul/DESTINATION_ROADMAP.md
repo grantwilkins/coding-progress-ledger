@@ -22,7 +22,8 @@ The main gaps are:
 - source power is not validated on held-out group removals;
 - destination service has no accepted pass/fail boundary;
 - assumed inputs are spread across scripts;
-- the simulator lacks the agreed pool debt and recovery contract;
+- pool debt and recovery now have a deterministic fluid trace but still need
+  testbed validation;
 - existing figure outputs do not cover the full Q1–Q9 evaluation;
 - plan-versus-execution validation is too small; and
 - H100, A100 TP=2, and disaggregated-pool results are incomplete or assumed.

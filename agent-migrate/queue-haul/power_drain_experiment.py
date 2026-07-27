@@ -392,7 +392,7 @@ def write(runs: Iterable[ExperimentRun], out: Path) -> int:
     out.mkdir(parents=True, exist_ok=True)
     names = (
         "summary", "events", "sessions", "requests", "network", "queues",
-        "power", "plans", "resources", "service_debt",
+        "power", "plans", "resources", "service_debt", "pool_service",
     )
     summaries, plots, writers = [], [], {}
     with ExitStack() as stack:
@@ -445,6 +445,8 @@ def write(runs: Iterable[ExperimentRun], out: Path) -> int:
                                for row in run.plan.resource_uses))
             emit("service_debt", ({**base, **row.__dict__}
                                   for row in run.plan.service_debts))
+            emit("pool_service", ({**base, **row.__dict__}
+                                  for row in run.result.pool_service))
             if run.case_id == "central":
                 methods = {row.session_id: row.method for row in run.result.sessions}
                 plots.append(PlotRun(

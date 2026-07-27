@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections import deque
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 import heapq
 from typing import Literal
 
@@ -182,6 +182,20 @@ class QueueExecution:
 
 
 @dataclass(frozen=True)
+class PoolServiceExecution:
+    pool_id: str
+    facet: int
+    time_s: float
+    demand_replicas: float
+    stable_capacity_replicas: float
+    queued_replica_s: float
+    peak_queued_replica_s: float
+    debt_budget_replica_s: float
+    required_recovery_s: float
+    within_contract: bool
+
+
+@dataclass(frozen=True)
 class ExecutionResult:
     events: tuple[ExecutionEvent, ...]
     sessions: tuple[SessionExecution, ...]
@@ -194,6 +208,7 @@ class ExecutionResult:
     migration_makespan_s: float | None
     final_state_ready_s: float | None
     makespan_s: float
+    pool_service: tuple[PoolServiceExecution, ...] = ()
 
     @property
     def completed_sessions(self) -> int:
@@ -1013,7 +1028,17 @@ def execute(scenario: ExecutionScenario, profile: ModelProfile,
     if destination:
         from pool_planner import validate_destination_execution
         validate_destination_execution(scenario, destination, moves)
-    return ExecutionSimulator(scenario, profile, moves, case_id).run()
+    result = ExecutionSimulator(scenario, profile, moves, case_id).run()
+    if destination:
+        from pool_planner import destination_service_execution
+        rows = destination_service_execution(
+            scenario, profile, destination, moves, result,
+        )
+        result = replace(
+            result, pool_service=rows,
+            deadline_met=result.deadline_met and all(row.within_contract for row in rows),
+        )
+    return result
 
 
 def predict(scenario: ExecutionScenario, profile: ModelProfile,

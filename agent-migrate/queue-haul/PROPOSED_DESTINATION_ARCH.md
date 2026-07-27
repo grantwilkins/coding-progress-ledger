@@ -104,10 +104,11 @@ explicit sensitivity until separately profiled.
 
 The planner implements explicit event admission, an aggregate service-work debt
 bound, and required recovery. That bound is not a time-scheduled queue. The
-event simulator still needs pool-level service-debt and recovery traces.
-Existing `normal/emergency/stable` bounds map to normal policy, operator event
-policy, and hard stability respectively; they must not remain identical
-placeholder numbers in accepted evidence.
+event simulator separately drives a fluid service queue from realized replay
+start/finish and commit times and rejects debt or recovery violations. Existing
+`normal/emergency/stable` bounds map to normal policy, operator event policy,
+and hard stability respectively; they must not remain identical placeholder
+numbers in accepted evidence.
 
 ## Evidence map
 

@@ -240,10 +240,11 @@ Q_{p,r}/
 \]
 
 This is not a time-scheduled queue bound. Work that arrives late can create a
-larger queue even when the aggregate fits. The current event simulator
-independently schedules shared routes, reconstruction endpoints, requests,
-commits, and source power. Pool service debt and recovery remain planned
-admission quantities until the simulator schedules their release times.
+larger queue even when the aggregate fits. The event simulator independently
+schedules shared routes, reconstruction endpoints, requests, commits, and
+source power. It also drives a fluid pool-service queue from realized replay
+start/finish and commit times. An executed point is invalid if that queue
+exceeds the advertised debt budget or cannot recover.
 
 Replay prefill contributes measured serving-transition work. KV ingest uses a
 separate measured ingest slot. Queue-Haul does not charge KV ingest to prefill

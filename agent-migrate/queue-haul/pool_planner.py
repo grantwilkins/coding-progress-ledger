@@ -14,7 +14,8 @@ from planner import (_changes, _duration, _expected_scenario, _kv_catch_up_s,
                      _kv_schedule, _local_sessions, _log_bytes, _resident_tokens,
                      PlanResult, ResourceUse, ServiceDebtUse, source_power)
 from power_model import ExpectedPower
-from simulate import ExecutionScenario, PlannedMove, SimSession, predict
+from simulate import (ExecutionScenario, PlannedMove, PoolServiceExecution,
+                      SimSession, predict)
 
 
 @dataclass(frozen=True)
@@ -138,6 +139,98 @@ def service_debt(baseline, ongoing, transition, stable, horizon):
     )
     recovery[debt == 0] = 0
     return debt, recovery
+
+
+def _service_trace(initial, capacity, changes, start, end):
+    """Fluid queue under time-varying declared demand."""
+    if min(initial, capacity, start) < 0 or capacity <= 0 or end < start \
+            or any(not start <= time <= end for time, _ in changes):
+        raise ValueError("invalid service trace")
+    demand, queue, peak, time, rows = initial, 0.0, 0.0, start, []
+    grouped = {}
+    for at, delta in changes:
+        grouped[at] = grouped.get(at, 0.0) + delta
+    for at in (*sorted(grouped), end):
+        queue = max(0.0, queue + (demand - capacity) * (at - time))
+        peak = max(peak, queue)
+        demand += grouped.get(at, 0.0)
+        if demand < -1e-9:
+            raise ValueError("service demand became negative")
+        demand = max(0.0, demand)
+        rows.append((at, demand, queue, peak))
+        time = at
+    return tuple(rows)
+
+
+def destination_service_execution(scenario, profile, architecture, moves, result):
+    """Schedule declared pool work from realized replay and commit times."""
+    horizon = scenario.deadline_s - scenario.controller_delay_s - profile.power_window_s
+    end = scenario.controller_delay_s + horizon
+    residency = architecture.residency_horizon_s
+    residency = scenario.end_s - scenario.controller_delay_s \
+        if residency is None else residency
+    work0, _ = _baseline(scenario, architecture, residency)
+    sessions = {session.session_id: session for session in scenario.sessions}
+    pools = {pool.pool_id: pool for pool in architecture.pools}
+    move_pool = {move.session_id: pools[move.destination_pool] for move in moves}
+    move_type = {
+        session_id: architecture.type_by_id[pool.type_id]
+        for session_id, pool in move_pool.items()
+    }
+    changes = {(pool.pool_id, facet): [] for pool in architecture.pools
+               for facet in range(len(architecture.type_by_id[pool.type_id].normals))}
+    for event in result.events:
+        if event.session_id not in move_pool or not scenario.controller_delay_s \
+                <= event.time_s <= end:
+            continue
+        pool, q = move_pool[event.session_id], move_type[event.session_id]
+        normals = np.asarray(q.normals)
+        if event.event in {"replay_start", "replay_done"}:
+            sign = 1 if event.event == "replay_start" else -1
+            delta = normals @ np.array((1.0, 0.0)) * sign
+        elif event.event == "commit":
+            session = sessions[event.session_id]
+            delta = normals @ q.work(
+                session.expected_f, session.expected_g,
+                _resident_tokens(session, residency), q.migration is not None,
+            )
+        else:
+            continue
+        for facet, value in enumerate(delta):
+            changes[pool.pool_id, facet].append((event.time_s, float(value)))
+    rows = []
+    for pool in architecture.pools:
+        q, normals = architecture.type_by_id[pool.type_id], np.asarray(
+            architecture.type_by_id[pool.type_id].normals,
+        )
+        baseline = normals @ sum(
+            (work0[replica.replica_id] for replica in pool.replicas),
+            start=np.zeros(2),
+        )
+        stable = len(pool.replicas) * np.asarray(q.bounds["stable"])
+        event = stable if pool.event_flex_fraction is None else \
+            len(pool.replicas) * _event_bounds(q, pool, "normal")
+        budget = (
+            np.full(len(normals), np.inf) if pool.event_flex_fraction is None
+            else pool.service_debt_fraction * horizon * stable
+        )
+        for facet in range(len(normals)):
+            trace = _service_trace(
+                float(baseline[facet]), float(stable[facet]),
+                changes[pool.pool_id, facet], scenario.controller_delay_s, end,
+            )
+            final_demand, final_queue, peak = trace[-1][1:]
+            spare = stable[facet] - final_demand
+            recovery = 0.0 if final_queue == 0 else (
+                final_queue / spare if spare > 0 else np.inf
+            )
+            within = final_demand <= event[facet] + 1e-9 \
+                and peak <= budget[facet] + 1e-9 and np.isfinite(recovery)
+            rows.extend(PoolServiceExecution(
+                pool.pool_id, facet, time, demand, float(stable[facet]), queue,
+                peak_at_time, float(budget[facet]), float(recovery), bool(within),
+            ) for time, demand, queue, peak_at_time in trace)
+    return tuple(rows)
 
 
 def candidate_table(scenario: ExecutionScenario, profile, architecture: DestinationArchitecture,
