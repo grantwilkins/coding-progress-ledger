@@ -117,6 +117,14 @@ deterministic stable-envelope validation. Results report admission mode,
 shortfall/failure, packing repairs, and predicted migration makespan;
 `target_unmet` is valid best effort, not successful curtailment.
 
+`requirement_frontier.py` instead computes landing requirements without a
+destination inventory or destination power cap. Its exact integer solver jointly
+chooses replay and KV actions on one logical WAN route, then reports service work,
+block-rounded KV, migration and source-stream occupancy, WAN bytes, method mix,
+and a resource lower bound on makespan. `route_rtt_s` is one fixed delay per
+action and never changes the supplied effective bandwidth. `sweep_frontier`
+evaluates source-power targets across stream-count sensitivities.
+
 `destination_evaluation.py` reduces three-or-more independent runs into central
 and conservative envelope/migration inputs and provides the fixed 36-cell
 `rho × H × pool-count` grid, exact facet headroom, integer replica allocation,
