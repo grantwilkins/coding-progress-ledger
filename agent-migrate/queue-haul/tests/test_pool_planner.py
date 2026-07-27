@@ -17,6 +17,7 @@ Plausible wrong implementations:
 - Validate execution against the admission envelope instead of stable capacity.
 - Treat a service percentage as sessions or omit the migration-window units.
 - Divide debt by total capacity instead of post-migration spare capacity.
+- Mark positive debt feasible when post-migration service has no recovery spare.
 - Credit node shutdown during session selection instead of only after planning.
 """
 
@@ -87,6 +88,22 @@ def test_positive_debt_without_spare_capacity_never_recovers():
 
     assert debt == pytest.approx((1,))
     assert recovery[0] == float("inf")
+
+
+def test_plan_rejects_positive_debt_without_recovery_spare(tmp_path):
+    arch = architecture(
+        normal=1, emergency=1, stable=1, baselines=((.75, 0),),
+        routes=(("wan",),), methods=("replay",), flex=0, debt=.2,
+    )
+    result = plan(
+        problem(limit=40), model(tmp_path, switch=0, tp=1), PATHS, "lp",
+        destination=arch,
+    )
+
+    assert result.moves and result.service_debt_replica_s > 0
+    assert result.required_recovery_s == float("inf")
+    assert not result.feasible
+    assert result.failure_reason == "service_debt_unrecoverable"
 
 
 def test_replay_charges_transition_debt_but_kv_does_not(tmp_path):

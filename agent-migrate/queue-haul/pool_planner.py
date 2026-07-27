@@ -543,16 +543,20 @@ def plan_destination(scenario, profile, solver, case_id, seed, architecture):
     expected = predict(_expected_scenario(scenario, moves), profile, moves, case_id)
     shortfall = max(0.0, planned - scenario.power_limit_w)
     shortfall = 0.0 if shortfall <= 1e-8 else shortfall
-    feasible = shortfall == 0 and expected.deadline_met
-    failure = None if feasible else "target_unmet" if shortfall else "migration_deadline"
+    debt, recovery = _selected_service_debt(
+        table, selected, architecture, scenario,
+    )
+    feasible = shortfall == 0 and expected.deadline_met and np.isfinite(recovery)
+    failure = (
+        None if feasible else "target_unmet" if shortfall
+        else "service_debt_unrecoverable" if not np.isfinite(recovery)
+        else "migration_deadline"
+    )
     usage = np.asarray(table.resources[:, list(selected)].sum(1)).ravel() if selected else np.zeros(len(table.resource_names))
     bottleneck = table.resource_names[int(usage.argmax())] if usage.size and usage.max() else None
     binding = tuple(
         name for name, value in zip(table.resource_names, usage)
         if value >= 1 - 1e-7
-    )
-    debt, recovery = _selected_service_debt(
-        table, selected, architecture, scenario,
     )
     temporal = [usage[i] for i, name in enumerate(table.resource_names)
                 if name.startswith(("source:", "route:", "migration:"))]
