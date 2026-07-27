@@ -18,7 +18,7 @@ import pytest
 
 from destination import MigrationComponents
 from requirement_frontier import (
-    RequirementAction, _solve, requirement_frontier, sweep_frontier,
+    RequirementAction, _actions, _solve, requirement_frontier, sweep_frontier,
 )
 from test_execution_simulator import model
 from test_planner import problem
@@ -67,6 +67,18 @@ def test_source_streams_are_indivisible_deadline_bins():
     assert maximum == 2
 
 
+def test_solver_minimizes_work_after_crossing_target():
+    actions = (
+        action("a", "replay", 6, 1),
+        action("b", "kv_transfer", 5, 2),
+        action("c", "kv_transfer", 5, 3),
+    )
+
+    selected, _ = _solve(actions, 10, 10, 1, 100)
+
+    assert selected == (0, 1)
+
+
 def test_frontier_reports_physical_requirements_and_stream_invariance(tmp_path):
     profile = model(tmp_path, switch=0, tp=1)
     base = problem()
@@ -95,6 +107,47 @@ def test_frontier_reports_physical_requirements_and_stream_invariance(tmp_path):
     )
     assert all(getattr(one, field) == getattr(two, field) for field in conserved)
     assert one.makespan_lower_bound_s > two.makespan_lower_bound_s
+
+
+def test_target_status_uses_exact_posthoc_power_gain(tmp_path):
+    profile, base = model(tmp_path, switch=0, tp=1), problem(final="off")
+    scenario = replace(
+        base, sessions=tuple(replace(s, source_instance="s0") for s in base.sessions),
+    )
+
+    result = requirement_frontier(
+        scenario, profile, destination_type(), 25, 100, 0, 2,
+    )
+
+    assert result.maximum_modeled_source_power_gain_w == 20
+    assert result.achieved_source_power_reduction_w == 30
+    assert result.target_met
+
+
+def test_destination_capacity_does_not_gate_requirements(tmp_path):
+    profile, scenario, q = model(tmp_path, switch=0, tp=1), problem(), destination_type()
+    scenario = replace(scenario, nodes=scenario.nodes[:2], instances=scenario.instances[:2])
+    tiny = replace(
+        q, bounds={mode: (1e-9,) for mode in ("normal", "emergency", "stable")},
+        kv_capacity_tokens=1,
+    )
+
+    result = requirement_frontier(scenario, profile, tiny, 20, 100, 0, 2)
+
+    assert result.target_met
+    assert result.destination_service_work[0] > tiny.bounds["stable"][0]
+    assert result.destination_kv_tokens > tiny.kv_capacity_tokens
+
+
+def test_requirement_path_keeps_kv_destination_ingest_floor(tmp_path):
+    profile = model(tmp_path, switch=0, destination_rate=50, tp=1)
+    scenario = replace(problem(), sessions=(problem().sessions[0],))
+
+    actions = _actions(scenario, profile, destination_type(), 100, 0, 9, "central")
+
+    kv = next(action for action in actions if action.method == "kv_transfer")
+    assert kv.route_bytes == 100
+    assert kv.duration_s == pytest.approx(2)
 
 
 def test_rtt_is_one_additive_term_not_a_throughput_change(tmp_path):
