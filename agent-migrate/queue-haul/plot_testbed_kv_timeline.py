@@ -165,6 +165,19 @@ def plot(timeline_path: Path, inference_path: Path, out: Path) -> None:
     for y, row in zip(positions, timeline):
         source_y, migration_y, destination_y = y - .55, y, y + .55
         commit = float(row["commit_s"])
+        for left, width, phase in ((-4.2, 2.0, "Prefill"), (-2.05, 1.1, "Decode")):
+            gantt.barh(
+                source_y, width, left=left, height=.25,
+                color=colors[phase.lower()], zorder=3,
+            )
+        gantt.text(
+            -2.55, source_y - .22, "prior request (not to scale)",
+            ha="center", va="top", fontsize=8, color=colors["tool"],
+        )
+        gantt.text(
+            -.48, source_y, "...", ha="center", va="center",
+            color=colors["text"],
+        )
         for start_name, end_name, label, color in phases:
             start, end = float(row[start_name]), float(row[end_name])
             gantt.barh(
@@ -241,7 +254,8 @@ def plot(timeline_path: Path, inference_path: Path, out: Path) -> None:
     fig.set_facecolor("#FFFFFF")
     gantt.set_xlabel("Time since first KV write (s)")
     end = max(float(row["first_token_s"]) for row in timeline) + 3
-    gantt.set_xlim(0, end)
+    gantt.set_xlim(-4.5, end)
+    gantt.set_xticks(range(0, int(end) + 1, 5))
     fig.subplots_adjust(left=.17, right=.98, top=.7, bottom=.17)
     fig.savefig(out.with_suffix(".png"), dpi=200)
     fig.savefig(out.with_suffix(".pdf"))
