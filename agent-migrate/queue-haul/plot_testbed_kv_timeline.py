@@ -231,7 +231,9 @@ def plot(timeline_path: Path, inference_path: Path, out: Path) -> None:
         "grid": "#DAD7CB",
     }
     fig, gantt = plt.subplots(figsize=(10, 3.1))
-    phase_labels = ("KV Initial Write", "Append final KV") \
+    phase_labels = (
+        "Bulk KV Transfer + Ingest", "Final KV Delta Transfer + Ingest",
+    ) \
         if method == "kv_transfer" \
         else ("Initial Context Update", "Final Context Update")
     phases = (
@@ -247,7 +249,7 @@ def plot(timeline_path: Path, inference_path: Path, out: Path) -> None:
         float(timeline[0]["quiesce_s"]),
         float(timeline[0]["catch_up_start_s"]),
         color=colors["drain"], alpha=.48,
-        label="Background KV Transfer" if method == "kv_transfer"
+        label="Drain Active Request" if method == "kv_transfer"
             else "Pause (drain active request)",
         zorder=0,
     )
@@ -316,7 +318,7 @@ def plot(timeline_path: Path, inference_path: Path, out: Path) -> None:
         Patch(facecolor=colors["bulk"], label=phase_labels[0]),
         Patch(
             facecolor=colors["drain"], alpha=.6,
-            label="Background KV Transfer",
+            label="Drain Active Request",
         ),
         Patch(facecolor=colors["catch"], label=phase_labels[1]),
     ) if method == "kv_transfer" else (
@@ -355,7 +357,7 @@ def plot(timeline_path: Path, inference_path: Path, out: Path) -> None:
     gantt.set_facecolor("#FFFFFF")
     fig.set_facecolor("#FFFFFF")
     gantt.set_xlabel(
-        f"Time since {'first KV write' if method == 'kv_transfer' else 'replay start'} (s)"
+        f"Time since {'migration' if method == 'kv_transfer' else 'replay'} start (s)"
     )
     end = max(float(row["first_token_s"]) for row in timeline) + 3
     gantt.set_xlim(-2.5, end)
