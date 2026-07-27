@@ -55,6 +55,18 @@ def test_exact_solver_jointly_selects_replay_and_kv():
     assert maximum == 10
 
 
+def test_source_streams_are_indivisible_deadline_bins():
+    actions = tuple(
+        replace(action(str(i), "replay", 1, 6), source_instance="source")
+        for i in range(3)
+    )
+
+    selected, maximum = _solve(actions, 3, 10, 2, 100)
+
+    assert len(selected) == 2
+    assert maximum == 2
+
+
 def test_frontier_reports_physical_requirements_and_stream_invariance(tmp_path):
     profile = model(tmp_path, switch=0, tp=1)
     base = problem()

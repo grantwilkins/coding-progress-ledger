@@ -33,7 +33,8 @@ class RequirementAction:
 class DestinationRequirement:
     target_source_power_reduction_w: float
     achieved_source_power_reduction_w: float
-    maximum_achievable_source_power_reduction_w: float
+    selected_modeled_source_power_gain_w: float
+    maximum_modeled_source_power_gain_w: float
     target_met: bool
     actions: tuple[RequirementAction, ...]
     destination_service_work: tuple[float, float]
@@ -43,7 +44,7 @@ class DestinationRequirement:
     kv_migration_slot_s: float
     wan_bytes: int
     source_stream_occupancy_s: tuple[tuple[str, float], ...]
-    minimum_source_streams: tuple[tuple[str, int], ...]
+    minimum_source_streams_lower_bound: tuple[tuple[str, int], ...]
     source_stream_limit: int
     method_mix: tuple[tuple[str, int], ...]
     makespan_lower_bound_s: float
@@ -96,32 +97,37 @@ def _solve(actions: tuple[RequirementAction, ...], target: float, horizon: float
     sessions = {name: i for i, name in enumerate(dict.fromkeys(
         action.session_id for action in actions
     ))}
-    sources = {name: i for i, name in enumerate(sorted({
-        action.source_instance for action in actions
-    }))}
+    sources = tuple(sorted({action.source_instance for action in actions}))
+    source_rows = {
+        (source, stream): len(sessions) + i * streams + stream
+        for i, source in enumerate(sources) for stream in range(streams)
+    }
+    n = len(actions) * streams
     rows, columns, values = [], [], []
     for j, action in enumerate(actions):
-        for row, value in (
-            (sessions[action.session_id], 1),
-            (len(sessions) + sources[action.source_instance], action.duration_s),
-            (len(sessions) + len(sources), action.route_bytes),
-        ):
-            rows.append(row)
-            columns.append(j)
-            values.append(value)
+        for stream in range(streams):
+            column = j * streams + stream
+            for row, value in (
+                (sessions[action.session_id], 1),
+                (source_rows[action.source_instance, stream], action.duration_s),
+                (len(sessions) + len(sources) * streams, action.route_bytes),
+            ):
+                rows.append(row)
+                columns.append(column)
+                values.append(value)
     matrix = coo_matrix(
         (values, (rows, columns)),
-        shape=(len(sessions) + len(sources) + 1, len(actions)),
+        shape=(len(sessions) + len(sources) * streams + 1, n),
     ).tocsr()
     upper = np.r_[
         np.ones(len(sessions)),
-        np.full(len(sources), streams * horizon),
+        np.full(len(sources) * streams, horizon),
         bandwidth * horizon,
     ]
     base = LinearConstraint(matrix, -np.inf, upper)
-    bounds, integer = Bounds(0, 1), np.ones(len(actions))
-    gains = np.array([action.source_power_gain_w for action in actions])
-    work = np.array([action.duration_s for action in actions])
+    bounds, integer = Bounds(0, 1), np.ones(n)
+    gains = np.repeat([action.source_power_gain_w for action in actions], streams)
+    work = np.repeat([action.duration_s for action in actions], streams)
 
     def optimize(cost, constraints):
         result = milp(
@@ -140,7 +146,7 @@ def _solve(actions: tuple[RequirementAction, ...], target: float, horizon: float
         work,
         (base, LinearConstraint(gain_row, required - 1e-7, np.inf)),
     )
-    return tuple(np.flatnonzero(selected)), maximum_gain
+    return tuple(np.flatnonzero(selected) // streams), maximum_gain
 
 
 def requirement_frontier(scenario: ExecutionScenario, profile,
@@ -167,6 +173,7 @@ def requirement_frontier(scenario: ExecutionScenario, profile,
     chosen = tuple(actions[i] for i in selected)
     power = ExpectedPower(scenario, profile, case_id)
     achieved = power.drain_gain(action.session_id for action in chosen)
+    modeled = sum(action.source_power_gain_w for action in chosen)
     service = tuple(sum(action.service_work[i] for action in chosen) for i in range(2))
     occupancies = tuple(
         (source, sum(action.duration_s for action in chosen
@@ -188,7 +195,7 @@ def requirement_frontier(scenario: ExecutionScenario, profile,
         for method in ("replay", "kv_transfer")
     )
     return DestinationRequirement(
-        target_source_power_reduction_w, achieved, maximum,
+        target_source_power_reduction_w, achieved, modeled, maximum,
         achieved + 1e-7 >= target_source_power_reduction_w, chosen, service,
         sum(action.kv_blocks for action in chosen),
         sum(action.kv_blocks for action in chosen) * destination_type.kv_block_tokens,

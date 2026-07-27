@@ -119,11 +119,13 @@ shortfall/failure, packing repairs, and predicted migration makespan;
 
 `requirement_frontier.py` instead computes landing requirements without a
 destination inventory or destination power cap. Its exact integer solver jointly
-chooses replay and KV actions on one logical WAN route, then reports service work,
-block-rounded KV, migration and source-stream occupancy, WAN bytes, method mix,
-and a resource lower bound on makespan. `route_rtt_s` is one fixed delay per
-action and never changes the supplied effective bandwidth. `sweep_frontier`
-evaluates source-power targets across stream-count sensitivities.
+chooses replay and KV actions on one logical WAN route and assigns indivisible
+actions to source-stream deadline bins. It reports service work, block-rounded
+KV, migration and source-stream occupancy, WAN bytes, method mix, and a resource
+lower bound on makespan. The WAN byte budget is a fluid constraint rather than
+a packet schedule. `route_rtt_s` is one fixed delay per action and never changes
+the supplied effective bandwidth. `sweep_frontier` evaluates absolute
+source-power targets across stream-count sensitivities.
 
 `destination_evaluation.py` reduces three-or-more independent runs into central
 and conservative envelope/migration inputs and provides the fixed 36-cell
