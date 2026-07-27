@@ -17,6 +17,7 @@ Plausible wrong implementations:
 - Validate execution against the admission envelope instead of stable capacity.
 - Treat a service percentage as sessions or omit the migration-window units.
 - Divide debt by total capacity instead of post-migration spare capacity.
+- Credit node shutdown during session selection instead of only after planning.
 """
 
 from dataclasses import replace
@@ -136,6 +137,18 @@ def test_target_unmet_returns_valid_maximum_shed_plan(tmp_path):
 
     assert not result.feasible and result.failure_reason == "target_unmet"
     assert result.power_shortfall_w > 0 and result.moves == ()
+
+
+def test_shutdown_is_realized_after_selection_not_credited_to_the_plan(tmp_path):
+    profile = model(tmp_path, switch=0, tp=1)
+    scenario = replace(problem(final="off"), assumed_shutdown_s=1)
+    result = plan(
+        scenario, profile, PATHS, "lp",
+        destination=architecture(normal=1, emergency=1),
+    )
+
+    assert result.moves
+    assert result.expected_source_power_at_deadline_w < result.planned_source_power_w
 
 
 def test_pool_capacity_cannot_be_borrowed(tmp_path):

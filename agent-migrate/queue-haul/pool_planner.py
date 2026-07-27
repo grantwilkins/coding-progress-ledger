@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from time import perf_counter
 
 import cvxpy as cp
@@ -522,15 +522,18 @@ def _mode_plan(scenario, profile, architecture, solver, mode, power, target):
 def plan_destination(scenario, profile, solver, case_id, seed, architecture):
     if solver not in {"greedy", "lp", "lp_peak_first", "lp_work_first"}:
         raise ValueError("destination architecture supports pool-aware LP and greedy")
-    if case_id != "central" or scenario.final_state != "awake":
-        raise ValueError("destination admission supports central awake planning")
-    start, power = perf_counter(), ExpectedPower(scenario, profile, case_id)
+    if case_id != "central":
+        raise ValueError("destination admission supports the central profile")
+    selection_scenario = replace(
+        scenario, final_state="awake", assumed_shutdown_s=None,
+    )
+    start, power = perf_counter(), ExpectedPower(selection_scenario, profile, case_id)
     initial, target = power.power(True), max(0.0, power.power(True) - scenario.power_limit_w)
     chosen = None
     for mode in ("normal", "emergency"):
         result = _mode_plan(scenario, profile, architecture, solver, mode, power, target)
         moved = [result[0].sessions[result[0].candidates[i].session].session_id for i in result[1]]
-        planned = source_power(scenario, profile, moved, case_id)
+        planned = source_power(selection_scenario, profile, moved, case_id)
         chosen = mode, result, planned
         if planned <= scenario.power_limit_w + 1e-8:
             break
