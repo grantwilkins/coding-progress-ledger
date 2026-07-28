@@ -215,8 +215,8 @@ def plot(timeline_path: Path, inference_path: Path, out: Path) -> None:
     method = timeline[0]["method"]
     plt.style.use("seaborn-v0_8-whitegrid")
     plt.rcParams.update({
-        "font.size": 12, "axes.labelsize": 13, "xtick.labelsize": 12,
-        "ytick.labelsize": 12, "legend.fontsize": 11,
+        "font.size": 13, "axes.labelsize": 15, "xtick.labelsize": 13,
+        "ytick.labelsize": 13, "legend.fontsize": 11.5,
     })
     colors = {
         "bulk": "#4298B5",
@@ -230,7 +230,7 @@ def plot(timeline_path: Path, inference_path: Path, out: Path) -> None:
         "text": "#2E2D29",
         "grid": "#DAD7CB",
     }
-    fig, gantt = plt.subplots(figsize=(10, 3.1))
+    fig, gantt = plt.subplots(figsize=(7.2, 3))
     phase_labels = (
         "Bulk KV Transfer + Ingest", "Final KV Delta Transfer + Ingest",
     ) \
@@ -346,8 +346,8 @@ def plot(timeline_path: Path, inference_path: Path, out: Path) -> None:
         ),
     )
     gantt.legend(
-        handles=legend, frameon=False, ncol=4, loc="upper center",
-        bbox_to_anchor=(.5, 1.43),
+        handles=legend, frameon=False, ncol=3, loc="upper center",
+        bbox_to_anchor=(.5, 1.65),
     )
     gantt.grid(axis="x", color=colors["grid"], linewidth=.8, alpha=.7)
     gantt.grid(axis="y", visible=False)
@@ -363,6 +363,7 @@ def plot(timeline_path: Path, inference_path: Path, out: Path) -> None:
     gantt.set_xlim(-2.5, end)
     gantt.set_xticks(range(0, int(end) + 1, 5))
     fig.tight_layout(pad=.25)
+    fig.subplots_adjust(top=.58)
     fig.savefig(out.with_suffix(".png"), dpi=200, bbox_inches="tight", pad_inches=.02)
     fig.savefig(out.with_suffix(".pdf"), bbox_inches="tight", pad_inches=.02)
     plt.close(fig)
