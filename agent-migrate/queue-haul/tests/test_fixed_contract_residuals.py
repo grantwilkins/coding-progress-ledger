@@ -1,14 +1,14 @@
 """
 Claim:
-The fixed-contract table preserves physical capacity accounting and the plot
-normalizes only positive capacity overruns into binding shares.
+Every met fixed-contract point has nonnegative planned slack for every enforced
+physical capacity, and the plotted value is exactly that normalized slack.
 
 Plausible wrong implementations:
 - Use achieved rather than requested shed on the x-axis.
 - Reverse the residual sign.
 - Divide residual capacity by resource use.
 - Hide unmet watts at infeasible targets.
-- Normalize unused capacity into the binding mix.
+- Mark a source/WAN-feasible point met despite violating destination capacity.
 """
 
 import pytest
@@ -16,8 +16,8 @@ import pytest
 from plot_fixed_contract_residuals import (
     WORKLOADS,
     _fingerprint,
-    overrun_shares,
     result_row,
+    validate_slacks,
 )
 
 
@@ -28,6 +28,7 @@ def test_result_row_preserves_requested_power_and_capacity_normalized_slack():
     assert row["achieved_shed_w"] == 8
     assert row["unmet_shed_w"] == 2
     assert row["normalized_slack"] == pytest.approx(.25)
+    assert row["planned_slack"] == row["normalized_slack"]
 
     assert result_row(10, 10, "route", 5, 4)["normalized_slack"] == pytest.approx(-.25)
 
@@ -44,16 +45,10 @@ def test_cache_fingerprint_tracks_workload_inputs(tmp_path, monkeypatch):
     assert _fingerprint(model, manifest)["input_sha256"] != first
 
 
-def test_binding_mix_normalizes_only_capacity_overruns():
-    rows = [
-        result_row(10, 10, "unused", 1, 2),
-        result_row(10, 10, "small overrun", 3, 2),
-        result_row(10, 10, "large overrun", 6, 2),
-    ]
-    shares = {row["resource"]: row["overrun_share"] for row in overrun_shares(rows)}
+def test_met_target_rejects_any_enforced_capacity_violation():
+    validate_slacks(True, {"route": 0, "service": 1e-8})
 
-    assert shares == pytest.approx({
-        "unused": 0,
-        "small overrun": .2,
-        "large overrun": .8,
-    })
+    with pytest.raises(AssertionError, match="service"):
+        validate_slacks(True, {"route": 0, "service": -1e-6})
+
+    validate_slacks(False, {"service": -1})

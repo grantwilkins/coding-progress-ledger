@@ -1,5 +1,5 @@
 {
-  "data_version": 2,
+  "data_version": 3,
   "input_sha256": "01b649a47cd9b6ab15e72631df6d6e985c026332ce1a5d3287119aa82e0c098b",
   "sessions": 100000,
   "workloads": [
@@ -20,5 +20,6 @@
     0.75,
     0.9,
     1.0
-  ]
+  ],
+  "maximum_shed_definition": "contract-constrained greedy planned shed"
 }

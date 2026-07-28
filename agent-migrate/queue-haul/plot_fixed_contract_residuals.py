@@ -30,9 +30,9 @@ from destination_bench import (
     scenario,
     trace_shapes,
 )
-from planner import source_power
+from power_model import ExpectedPower
 from profiles import ModelProfile
-from requirement_frontier import requirement_frontier
+from requirement_frontier import _actions
 
 
 ROOT = Path(__file__).parent
@@ -43,10 +43,13 @@ PRESSURE = Pressure(service=.8, bandwidth_gbps=5, migration_s=115)
 FLEX = .10
 DEBT = .10
 SEED = 0
-DATA_VERSION = 2
+DATA_VERSION = 3
+
+
 def result_row(requested, achieved, resource, used, capacity, **fields):
     if capacity <= 0:
         raise ValueError("resource capacity must be positive")
+    slack = (capacity - used) / capacity
     return {
         "requested_shed_w": requested,
         "achieved_shed_w": achieved,
@@ -54,24 +57,19 @@ def result_row(requested, achieved, resource, used, capacity, **fields):
         "resource": resource,
         "used": used,
         "capacity": capacity,
-        "normalized_slack": (capacity - used) / capacity,
+        "normalized_slack": slack,
+        "planned_slack": slack,
         **fields,
     }
 
 
-def overrun_shares(rows):
-    grouped = {}
-    for row in rows:
-        grouped.setdefault(float(row["requested_shed_w"]), []).append(row)
-    result = []
-    for selected in grouped.values():
-        overrun = [max(0, -float(row["normalized_slack"])) for row in selected]
-        total = sum(overrun)
-        result.extend(
-            {**row, "overrun_share": value / total if total else 0}
-            for row, value in zip(selected, overrun)
+def validate_slacks(target_met, slacks):
+    violated = {resource: slack for resource, slack in slacks.items()
+                if slack < -1e-7}
+    if target_met and violated:
+        raise AssertionError(
+            f"Target marked met despite resource violations: {violated}"
         )
-    return result
 
 
 def _mixed_sessions(manifest, profile):
@@ -90,6 +88,49 @@ def _mixed_sessions(manifest, profile):
     return pack_source(tuple(sessions), profile)
 
 
+def _candidates(actions, capacities, normal, horizon, profile):
+    rate = profile.case().kv_transfer.destination_bytes_per_s
+    candidates = []
+    for action in actions:
+        ongoing = float(normal @ action.service_work)
+        transition = float(normal @ action.transition_work)
+        use = {
+            "WAN transfer bytes": action.route_bytes,
+            "Replay reconstruction GPU time": transition,
+            "KV-ingest GPU time":
+                action.route_bytes / rate if action.method == "kv_transfer" else 0,
+            "Ongoing integrated serving load": ongoing,
+            "Queued serving work": horizon * ongoing + transition,
+            "KV-cache blocks": action.kv_blocks,
+        }
+        cost = action.duration_s / horizon + sum(
+            use[resource] / capacity for resource, capacity in capacities.items()
+        )
+        candidates.append((action, use, action.source_power_gain_w / max(cost, 1e-12)))
+    return sorted(candidates, key=lambda item: (-item[2], item[0].session_id, item[0].method))
+
+
+def _select(candidates, target, capacities, horizon, power):
+    used = dict.fromkeys(capacities, 0.0)
+    source_used, sessions, selected = {}, set(), []
+    initial = power.power(True)
+    for action, use, _ in candidates:
+        if initial - power.power(True) >= target - 1e-8:
+            break
+        source = source_used.get(action.source_instance, 0)
+        if action.session_id in sessions or source + action.duration_s > horizon + 1e-8 \
+                or any(used[name] + value > capacities[name] + 1e-8
+                       for name, value in use.items()):
+            continue
+        selected.append(action)
+        sessions.add(action.session_id)
+        source_used[action.source_instance] = source + action.duration_s
+        for name, value in use.items():
+            used[name] += value
+        power.remove(action.session_id)
+    return tuple(selected), used, source_used, initial - power.power(True)
+
+
 def generate(model_path, manifest_path):
     profile = ModelProfile.load(model_path)
     manifest = json.loads(manifest_path.read_text())
@@ -103,11 +144,6 @@ def generate(model_path, manifest_path):
     )
     architecture_ = replace(architecture_, pools=(pool,))
     q = architecture_.types[0]
-    initial = source_power(scenario_, profile)
-    minimum = source_power(
-        scenario_, profile, (session.session_id for session in scenario_.sessions),
-    )
-    maximum = initial - minimum
     horizon = scenario_.deadline_s - profile.power_window_s
     bandwidth = PRESSURE.bandwidth_gbps * 125_000_000
     normal = np.asarray(q.normals[0])
@@ -127,64 +163,78 @@ def generate(model_path, manifest_path):
         replica.baseline_kv_tokens // KV_BLOCK_TOKENS for replica in pool.replicas
     )
     capacities = {
-        "Source stream time": horizon * profile.max_source_streams,
         "WAN transfer bytes": bandwidth * horizon,
-        "Replay GPU time": replicas * horizon * profile.max_destination_replays,
+        "Replay reconstruction GPU time":
+            replicas * horizon * profile.max_destination_replays,
         "KV-ingest GPU time": replicas * horizon * profile.max_destination_kv_streams,
-        "Ongoing serving load": event - baseline_service,
+        "Ongoing integrated serving load": event - baseline_service,
         "Queued serving work": horizon * (
             stable - baseline_service + DEBT * stable
         ),
         "KV-cache blocks": replicas * (q.kv_capacity_tokens // q.kv_block_tokens)
         - baseline_blocks,
-        "Migration makespan": horizon,
     }
+    candidates = _candidates(
+        _actions(scenario_, profile, q, bandwidth, 0, horizon, "central"),
+        capacities, normal, horizon, profile,
+    )
+    _, _, _, maximum = _select(
+        candidates, float("inf"), capacities, horizon,
+        ExpectedPower(scenario_, profile),
+    )
     rows = []
     for fraction in TARGETS:
         requested = fraction * maximum
-        requirement = requirement_frontier(
-            scenario_, profile, q, requested, bandwidth, 0,
-            profile.max_source_streams, solver_mode="greedy",
+        selected, used, source_used, achieved = _select(
+            candidates, requested, capacities, horizon,
+            ExpectedPower(scenario_, profile),
         )
-        ongoing = float(normal @ requirement.destination_service_work)
-        transition = float(normal @ requirement.destination_transition_work)
-        kv_bytes = sum(
-            action.route_bytes for action in requirement.actions
-            if action.method == "kv_transfer"
+        makespan = max(
+            [0, used["WAN transfer bytes"] / bandwidth]
+            + [action.duration_s for action in selected]
+            + list(source_used.values())
         )
         uses = {
-            "Source stream time": max(
-                (seconds for _, seconds in requirement.source_stream_occupancy_s),
-                default=0,
-            ),
-            "WAN transfer bytes": requirement.wan_bytes,
-            "Replay GPU time": transition,
-            "KV-ingest GPU time":
-                kv_bytes / profile.case().kv_transfer.destination_bytes_per_s,
-            "Ongoing serving load": ongoing,
-            "Queued serving work": horizon * ongoing + transition,
-            "KV-cache blocks": requirement.destination_kv_blocks,
-            "Migration makespan": requirement.makespan_lower_bound_s,
+            "Source migration-stream time": max(source_used.values(), default=0),
+            **used,
+            "Planned makespan lower bound": makespan,
         }
-        mix = dict(requirement.method_mix)
+        display_capacities = {
+            "Source migration-stream time": horizon,
+            **capacities,
+            "Planned makespan lower bound": horizon,
+        }
+        slacks = {
+            resource: (display_capacities[resource] - use)
+            / display_capacities[resource]
+            for resource, use in uses.items()
+        }
+        target_met = achieved >= requested - 1e-7
+        validate_slacks(target_met, slacks)
+        binding = "|".join(
+            resource for resource, slack in slacks.items() if slack <= 1e-6
+        )
         common = {
             "target_fraction": fraction,
             "maximum_modeled_shed_w": maximum,
             "sessions": SESSIONS,
             "source_replicas": replicas,
             "deadline_s": scenario_.deadline_s,
-            "replay_moves": mix["replay"],
-            "kv_moves": mix["kv_transfer"],
-            "target_met": requirement.target_met,
-            "solver_status": requirement.solver_status,
+            "replay_moves": sum(action.method == "replay" for action in selected),
+            "kv_moves": sum(action.method == "kv_transfer" for action in selected),
+            "target_met": target_met,
+            "solver_status":
+                "greedy_target_met" if target_met else "greedy_best_effort",
+            "binding_resources": binding,
+            "slack_kind": "planned",
+            "execution_validated": False,
             "evidence_status": "sensitivity",
         }
         rows.extend(
             result_row(
-                requested, requirement.achieved_source_power_reduction_w,
-                resource, uses[resource], capacity, **common,
+                requested, achieved, resource, uses[resource], capacity, **common,
             )
-            for resource, capacity in capacities.items()
+            for resource, capacity in display_capacities.items()
         )
     return rows
 
@@ -210,6 +260,7 @@ def _fingerprint(model_path, manifest_path):
         "event_flex_fraction": FLEX,
         "service_debt_fraction": DEBT,
         "target_fractions": list(TARGETS),
+        "maximum_shed_definition": "contract-constrained greedy planned shed",
     }
 
 
@@ -238,44 +289,55 @@ def plot(rows, out):
             "unmet_shed_w",
         ):
             row[field] = float(row[field])
-    rows = overrun_shares(rows)
-    resources = tuple(
-        resource for resource in dict.fromkeys(row["resource"] for row in rows)
-        if any(row["resource"] == resource and row["overrun_share"] for row in rows)
+    groups = (
+        ("Source and deadline", (
+            "Source migration-stream time", "WAN transfer bytes",
+            "Planned makespan lower bound",
+        )),
+        ("Transition resources", (
+            "Replay reconstruction GPU time", "KV-ingest GPU time",
+        )),
+        ("Destination residency", (
+            "Ongoing integrated serving load", "Queued serving work",
+            "KV-cache blocks",
+        )),
     )
-    targets = sorted({row["requested_shed_w"] for row in rows})
-    x = np.asarray(targets) / 1000
+    fractions = sorted({row["target_fraction"] for row in rows})
+    x = np.asarray(fractions) * 100
     sns.set_theme()
-    fig, axis = plt.subplots(figsize=(7, 4))
-    bottom = np.zeros(len(targets))
-    for resource, color in zip(resources, sns.color_palette(n_colors=len(resources))):
-        selected = sorted(
-            (row for row in rows if row["resource"] == resource),
-            key=lambda row: row["requested_shed_w"],
-        )
-        share = np.asarray([row["overrun_share"] for row in selected])
-        axis.bar(x, share, width=6.5, bottom=bottom, label=resource, color=color)
-        bottom += share
+    fig, axes = plt.subplots(3, 1, figsize=(7, 7.5), sharex=True, sharey=True)
+    colors = dict(zip(
+        (resource for _, resources in groups for resource in resources),
+        sns.color_palette(n_colors=8),
+    ))
     representatives = {
-        row["requested_shed_w"]: row for row in rows
-        if row["resource"] == resources[0]
+        row["target_fraction"]: row for row in rows
+        if row["resource"] == groups[0][1][0]
     }
-    failed = [i for i, target in enumerate(targets)
-              if float(representatives[target]["unmet_shed_w"]) > 1e-7]
-    axis.scatter(x[failed], np.full(len(failed), 1.03), marker="x", color="black",
-                 s=45, linewidth=1.5, label="Requested shed unmet", clip_on=False)
-    axis.set(
-        xlabel="Requested source-power shed (kW)",
-        ylabel="Share of normalized capacity overrun",
-        ylim=(0, 1.08),
-    )
-    axis.set_xticks(x, [f"{value:g}" for value in np.round(x)])
-    handles, labels = axis.get_legend_handles_labels()
-    order = [labels.index(resource) for resource in resources] \
-        + [labels.index("Requested shed unmet")]
-    axis.legend(
-        [handles[i] for i in order], [labels[i] for i in order],
-        frameon=False, loc="center left", bbox_to_anchor=(1, .5),
+    failed = [fraction * 100 for fraction in fractions
+              if representatives[fraction]["unmet_shed_w"] > 1e-7]
+    for axis, (label, resources) in zip(axes, groups):
+        for resource in resources:
+            selected = sorted(
+                (row for row in rows if row["resource"] == resource),
+                key=lambda row: row["target_fraction"],
+            )
+            axis.plot(
+                x, [row["normalized_slack"] for row in selected], "o-",
+                label=resource, color=colors[resource],
+            )
+        axis.axhline(0, color="black", linewidth=1.5)
+        axis.scatter(
+            failed, np.full(len(failed), -.035), marker="x", color="black",
+            s=45, linewidth=1.5, clip_on=False,
+        )
+        axis.set_title(label, loc="left")
+        axis.set_ylabel("Normalized slack")
+        axis.legend(frameon=False, loc="center left", bbox_to_anchor=(1, .5))
+    axes[-1].set(
+        xlabel="Requested source-power shed (% of maximum modeled shed)",
+        xticks=x,
+        ylim=(-.06, 1.05),
     )
     sns.despine()
     fig.tight_layout()
