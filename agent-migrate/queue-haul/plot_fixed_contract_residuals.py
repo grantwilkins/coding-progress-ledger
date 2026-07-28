@@ -42,7 +42,7 @@ PRESSURE = Pressure(service=.8, bandwidth_gbps=5, migration_s=115)
 FLEX = .10
 DEBT = .10
 SEED = 0
-DATA_VERSION = 1
+DATA_VERSION = 2
 COLORS = (
     "#8C1515", "#007C92", "#53284F", "#E98300",
     "#175E54", "#B83A4B", "#4298B5", "#53565A",
@@ -117,17 +117,17 @@ def generate(model_path, manifest_path):
         replica.baseline_kv_tokens // KV_BLOCK_TOKENS for replica in pool.replicas
     )
     capacities = {
-        "Source preparation": horizon * profile.max_source_streams,
-        "Route": bandwidth * horizon,
-        "Replay reconstruction": replicas * horizon * profile.max_destination_replays,
-        "KV ingest": replicas * horizon * profile.max_destination_kv_streams,
-        "Ongoing service": event - baseline_service,
-        "Service debt": horizon * (
+        "Source stream time": horizon * profile.max_source_streams,
+        "WAN transfer bytes": bandwidth * horizon,
+        "Replay GPU time": replicas * horizon * profile.max_destination_replays,
+        "KV-ingest GPU time": replicas * horizon * profile.max_destination_kv_streams,
+        "Ongoing serving load": event - baseline_service,
+        "Queued serving work": horizon * (
             stable - baseline_service + DEBT * stable
         ),
-        "Live KV": replicas * (q.kv_capacity_tokens // q.kv_block_tokens)
+        "KV-cache blocks": replicas * (q.kv_capacity_tokens // q.kv_block_tokens)
         - baseline_blocks,
-        "Deadline": horizon,
+        "Migration makespan": horizon,
     }
     rows = []
     for fraction in TARGETS:
@@ -143,17 +143,18 @@ def generate(model_path, manifest_path):
             if action.method == "kv_transfer"
         )
         uses = {
-            "Source preparation": max(
+            "Source stream time": max(
                 (seconds for _, seconds in requirement.source_stream_occupancy_s),
                 default=0,
             ),
-            "Route": requirement.wan_bytes,
-            "Replay reconstruction": transition,
-            "KV ingest": kv_bytes / profile.case().kv_transfer.destination_bytes_per_s,
-            "Ongoing service": ongoing,
-            "Service debt": horizon * ongoing + transition,
-            "Live KV": requirement.destination_kv_blocks,
-            "Deadline": requirement.makespan_lower_bound_s,
+            "WAN transfer bytes": requirement.wan_bytes,
+            "Replay GPU time": transition,
+            "KV-ingest GPU time":
+                kv_bytes / profile.case().kv_transfer.destination_bytes_per_s,
+            "Ongoing serving load": ongoing,
+            "Queued serving work": horizon * ongoing + transition,
+            "KV-cache blocks": requirement.destination_kv_blocks,
+            "Migration makespan": requirement.makespan_lower_bound_s,
         }
         mix = dict(requirement.method_mix)
         common = {
@@ -180,7 +181,7 @@ def generate(model_path, manifest_path):
 
 def _fingerprint(model_path, manifest_path):
     paths = (
-        model_path, manifest_path, ROOT / "destination.py",
+        model_path, manifest_path, *WORKLOADS.values(), ROOT / "destination.py",
         ROOT / "destination_bench.py", ROOT / "planner.py",
         ROOT / "pool_planner.py", ROOT / "requirement_frontier.py",
     )
@@ -252,12 +253,12 @@ def plot(rows, out):
         axis.set_ylim(-1.08, 1.08)
         axis.grid(color="#D7D2CB", linewidth=.8, alpha=.75)
         axis.spines[["top", "right"]].set_visible(False)
-    axes[0, 0].set_ylabel("Normalized residual headroom")
-    axes[1, 0].set_ylabel("Normalized residual headroom")
+    axes[0, 0].set_ylabel("Unused / advertised capacity")
+    axes[1, 0].set_ylabel("Unused / advertised capacity")
     for axis in axes[1]:
         axis.set_xlabel("Requested shed (kW)")
     fig.suptitle(
-        "Where does the fixed destination contract bind?",
+        "Which physical resource limits source-power shed?",
         fontsize=20, fontweight="bold", y=.985,
     )
     fig.text(
@@ -268,7 +269,7 @@ def plot(rows, out):
     )
     fig.text(
         .99, .01,
-        "Below zero = insufficient headroom   ▼ = clipped below −1   "
+        "Below zero = requested work exceeds capacity   ▼ = clipped below −1   "
         "× = requested source shed unmet",
         ha="right", fontsize=9, color="#53565A",
     )
