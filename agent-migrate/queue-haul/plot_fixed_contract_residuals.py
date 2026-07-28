@@ -14,6 +14,7 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
+import seaborn as sns
 
 from destination_bench import (
     CLASSES,
@@ -43,12 +44,6 @@ FLEX = .10
 DEBT = .10
 SEED = 0
 DATA_VERSION = 2
-COLORS = (
-    "#8C1515", "#007C92", "#53284F", "#E98300",
-    "#175E54", "#B83A4B", "#4298B5", "#53565A",
-)
-
-
 def result_row(requested, achieved, resource, used, capacity, **fields):
     if capacity <= 0:
         raise ValueError("resource capacity must be positive")
@@ -62,6 +57,21 @@ def result_row(requested, achieved, resource, used, capacity, **fields):
         "normalized_slack": (capacity - used) / capacity,
         **fields,
     }
+
+
+def overrun_shares(rows):
+    grouped = {}
+    for row in rows:
+        grouped.setdefault(float(row["requested_shed_w"]), []).append(row)
+    result = []
+    for selected in grouped.values():
+        overrun = [max(0, -float(row["normalized_slack"])) for row in selected]
+        total = sum(overrun)
+        result.extend(
+            {**row, "overrun_share": value / total if total else 0}
+            for row, value in zip(selected, overrun)
+        )
+    return result
 
 
 def _mixed_sessions(manifest, profile):
@@ -228,52 +238,47 @@ def plot(rows, out):
             "unmet_shed_w",
         ):
             row[field] = float(row[field])
-    plt.style.use("seaborn-v0_8-whitegrid")
-    resources = tuple(dict.fromkeys(row["resource"] for row in rows))
-    fig, axes = plt.subplots(2, 4, figsize=(14, 6.3), sharex=True, sharey=True)
-    for axis, resource, color in zip(axes.flat, resources, COLORS):
+    rows = overrun_shares(rows)
+    resources = tuple(
+        resource for resource in dict.fromkeys(row["resource"] for row in rows)
+        if any(row["resource"] == resource and row["overrun_share"] for row in rows)
+    )
+    targets = sorted({row["requested_shed_w"] for row in rows})
+    x = np.asarray(targets) / 1000
+    sns.set_theme()
+    fig, axis = plt.subplots(figsize=(7, 4))
+    bottom = np.zeros(len(targets))
+    for resource, color in zip(resources, sns.color_palette(n_colors=len(resources))):
         selected = sorted(
             (row for row in rows if row["resource"] == resource),
             key=lambda row: row["requested_shed_w"],
         )
-        x = np.asarray([row["requested_shed_w"] for row in selected]) / 1000
-        y = np.asarray([row["normalized_slack"] for row in selected])
-        shown = np.maximum(y, -1)
-        axis.axhspan(-1, 0, color="#8C1515", alpha=.07)
-        axis.axhline(0, color="#8C1515", linewidth=1.2)
-        axis.plot(x, shown, "o-", color=color, linewidth=2.2, markersize=5)
-        clipped = np.flatnonzero(y < -1)
-        axis.scatter(x[clipped], shown[clipped], marker="v", s=55, color=color,
-                     zorder=3)
-        failed = [i for i, row in enumerate(selected)
-                  if row["unmet_shed_w"] > 1e-7]
-        axis.scatter(x[failed], shown[failed], marker="x", s=55, color="#8C1515",
-                     linewidth=2, zorder=3)
-        axis.set_title(resource, fontsize=13, fontweight="bold")
-        axis.set_ylim(-1.08, 1.08)
-        axis.grid(color="#D7D2CB", linewidth=.8, alpha=.75)
-        axis.spines[["top", "right"]].set_visible(False)
-    axes[0, 0].set_ylabel("Unused / advertised capacity")
-    axes[1, 0].set_ylabel("Unused / advertised capacity")
-    for axis in axes[1]:
-        axis.set_xlabel("Requested shed (kW)")
-    fig.suptitle(
-        "Which physical resource limits source-power shed?",
-        fontsize=20, fontweight="bold", y=.985,
+        share = np.asarray([row["overrun_share"] for row in selected])
+        axis.bar(x, share, width=6.5, bottom=bottom, label=resource, color=color)
+        bottom += share
+    representatives = {
+        row["requested_shed_w"]: row for row in rows
+        if row["resource"] == resources[0]
+    }
+    failed = [i for i, target in enumerate(targets)
+              if float(representatives[target]["unmet_shed_w"]) > 1e-7]
+    axis.scatter(x[failed], np.full(len(failed), 1.03), marker="x", color="black",
+                 s=45, linewidth=1.5, label="Requested shed unmet", clip_on=False)
+    axis.set(
+        xlabel="Requested source-power shed (kW)",
+        ylabel="Share of normalized capacity overrun",
+        ylim=(0, 1.08),
     )
-    fig.text(
-        .5, .94,
-        "Canonical 100K-session mix · 120 s deadline · one A100 pool · "
-        "5 Gbps route · assumed sensitivity",
-        ha="center", fontsize=11, color="#53565A",
+    axis.set_xticks(x, [f"{value:g}" for value in np.round(x)])
+    handles, labels = axis.get_legend_handles_labels()
+    order = [labels.index(resource) for resource in resources] \
+        + [labels.index("Requested shed unmet")]
+    axis.legend(
+        [handles[i] for i in order], [labels[i] for i in order],
+        frameon=False, loc="center left", bbox_to_anchor=(1, .5),
     )
-    fig.text(
-        .99, .01,
-        "Below zero = requested work exceeds capacity   ▼ = clipped below −1   "
-        "× = requested source shed unmet",
-        ha="right", fontsize=9, color="#53565A",
-    )
-    fig.tight_layout(rect=(0, .055, 1, .84), h_pad=1.5)
+    sns.despine()
+    fig.tight_layout()
     for extension in ("png", "pdf"):
         fig.savefig(
             out / f"fixed_contract_residuals.{extension}",
