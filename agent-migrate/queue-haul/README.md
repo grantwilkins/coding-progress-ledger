@@ -89,6 +89,7 @@ uv run python queue-haul/plot_simulator_evaluation.py
 uv run python queue-haul/plot_scaling_results.py
 uv run python queue-haul/plot_testbed_kv_timeline.py
 uv run python queue-haul/plot_testbed_kv_timeline.py --method replay
+uv run python queue-haul/plot_fixed_contract_residuals.py
 uv run python queue-haul/paper_evaluation.py \
   --out queue-haul/outputs/paper-evaluation
 ```
@@ -107,6 +108,10 @@ tables with missing provenance.
 `plot_testbed_kv_timeline.py` generates measured two-A100 concurrency-one KV
 transfer and replay timelines with source inference continuing through
 request-boundary drain from tidy event tables.
+`plot_fixed_contract_residuals.py` caches the canonical 100K-session,
+120-second fixed-contract requirement sweep and plots normalized resource
+headroom against requested source-power shed. Use `--refresh` when its pinned
+inputs change.
 
 ## Measurement programs
 

@@ -1,0 +1,24 @@
+{
+  "data_version": 1,
+  "input_sha256": "040284fa89302b6c7718b0fca0f12be7fab41a21e872c2443df509b693c34fcc",
+  "sessions": 100000,
+  "workloads": [
+    "interactive_coding",
+    "coding",
+    "agentic_tool_loop"
+  ],
+  "seed": 0,
+  "deadline_s": 120,
+  "bandwidth_gbps": 5,
+  "baseline_service_fraction": 0.8,
+  "event_flex_fraction": 0.1,
+  "service_debt_fraction": 0.1,
+  "target_fractions": [
+    0.1,
+    0.25,
+    0.5,
+    0.75,
+    0.9,
+    1.0
+  ]
+}
