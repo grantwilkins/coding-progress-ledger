@@ -289,56 +289,47 @@ def plot(rows, out):
             "unmet_shed_w",
         ):
             row[field] = float(row[field])
-    groups = (
-        ("Source and deadline", (
-            "Source migration-stream time", "WAN transfer bytes",
-            "Planned makespan lower bound",
-        )),
-        ("Transition resources", (
-            "Replay reconstruction GPU time", "KV-ingest GPU time",
-        )),
-        ("Destination residency", (
-            "Ongoing integrated serving load", "Queued serving work",
-            "KV-cache blocks",
-        )),
+    series = (
+        ("Source migration-stream time", "Source streams", "#8C1515", "-"),
+        ("WAN transfer bytes", "WAN", "#007C92", "--"),
+        ("Replay reconstruction GPU time", "Replay", "#53284F", "--"),
+        ("KV-ingest GPU time", "KV ingest", "#E98300", "--"),
+        ("Ongoing integrated serving load", "Site load", "#175E54", ":"),
+        ("Queued serving work", "Queued work", "#B83A4B", ":"),
+        ("KV-cache blocks", "KV cache", "#4298B5", ":"),
     )
     fractions = sorted({row["target_fraction"] for row in rows})
     x = np.asarray(fractions) * 100
-    sns.set_theme()
-    fig, axes = plt.subplots(3, 1, figsize=(7, 7.5), sharex=True, sharey=True)
-    colors = dict(zip(
-        (resource for _, resources in groups for resource in resources),
-        sns.color_palette(n_colors=8),
-    ))
+    sns.set_theme(style="whitegrid")
+    fig, axis = plt.subplots(figsize=(7, 4))
     representatives = {
         row["target_fraction"]: row for row in rows
-        if row["resource"] == groups[0][1][0]
+        if row["resource"] == series[0][0]
     }
     failed = [fraction * 100 for fraction in fractions
               if representatives[fraction]["unmet_shed_w"] > 1e-7]
-    for axis, (label, resources) in zip(axes, groups):
-        for resource in resources:
-            selected = sorted(
-                (row for row in rows if row["resource"] == resource),
-                key=lambda row: row["target_fraction"],
-            )
-            axis.plot(
-                x, [row["normalized_slack"] for row in selected], "o-",
-                label=resource, color=colors[resource],
-            )
-        axis.axhline(0, color="black", linewidth=1.5)
+    for resource, label, color, linestyle in series:
+        selected = sorted(
+            (row for row in rows if row["resource"] == resource),
+            key=lambda row: row["target_fraction"],
+        )
+        axis.plot(
+            x, [row["normalized_slack"] for row in selected], marker="o",
+            label=label, color=color, linestyle=linestyle, linewidth=2,
+        )
+    axis.axhline(0, color="black", linewidth=1.5)
+    if failed:
         axis.scatter(
             failed, np.full(len(failed), -.035), marker="x", color="black",
-            s=45, linewidth=1.5, clip_on=False,
+            s=45, linewidth=1.5, label="Unmet", clip_on=False,
         )
-        axis.set_title(label, loc="left")
-        axis.set_ylabel("Normalized slack")
-        axis.legend(frameon=False, loc="center left", bbox_to_anchor=(1, .5))
-    axes[-1].set(
-        xlabel="Requested source-power shed (% of maximum modeled shed)",
+    axis.set(
+        xlabel="Requested shed (%)",
+        ylabel="Residual capacity (normalized)",
         xticks=x,
         ylim=(-.06, 1.05),
     )
+    axis.legend(frameon=False, loc="center left", bbox_to_anchor=(1, .5))
     sns.despine()
     fig.tight_layout()
     for extension in ("png", "pdf"):
