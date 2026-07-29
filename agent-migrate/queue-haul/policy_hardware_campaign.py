@@ -105,13 +105,13 @@ def _moves(policy, scenario, routes, profile, seed):
 
 
 def make_plan(manifest_path: Path, model_path: Path = DEFAULT_MODEL,
-              episodes: int = 50, sessions: int = 8, seed: int = 0,
+              episodes: int = 50, overlap_episodes: int = 25, sessions: int = 8, seed: int = 0,
               bandwidth_mbps: float = 10_000, deadline_s: float = 180,
               context_min: int = 4096, context_max: int = 30_464) -> dict:
     manifest = json.loads(manifest_path.read_text())
     profiler.validate_manifest(manifest)
     profile = ModelProfile.load(model_path)
-    if episodes < 1 or not 1 <= sessions <= len(manifest["sessions"]) \
+    if episodes < 1 or overlap_episodes < 0 or not 1 <= sessions <= len(manifest["sessions"]) \
             or bandwidth_mbps <= 0 or deadline_s <= profile.power_window_s \
             or context_min < 1 or context_max < context_min \
             or context_min % 256 or context_max % 256:
@@ -122,7 +122,7 @@ def make_plan(manifest_path: Path, model_path: Path = DEFAULT_MODEL,
 
     rng, scenarios = random.Random(seed), []
     available = sorted(manifest["sessions"], key=lambda row: row["id"])
-    for episode in range(episodes):
+    for episode in range(episodes + overlap_episodes):
         chosen = rng.sample(available, sessions)
         session_rows = [{
             "session_id": row["id"], "job_class": row["job_class"],
@@ -131,11 +131,14 @@ def make_plan(manifest_path: Path, model_path: Path = DEFAULT_MODEL,
             "order": order,
         } for order, row in enumerate(chosen)]
         match_id = profiler.object_hash([seed, episode, session_rows])[:16]
+        cohort = "idle_serial" if episode < episodes else "overlap_serial"
+        schedule = [] if cohort == "idle_serial" else [{"at_s": 0, "append_tokens": 512}]
         base = {
             "match_id": match_id, "episode": episode,
-            "campaign": "policy_hardware", "split": "measurement",
-            "activity": "none", "activity_tokens": 0,
-            "request_schedule": [], "repeat": episode,
+            "campaign": "policy_hardware", "split": "measurement", "cohort": cohort,
+            "activity": "none" if not schedule else "one_turn",
+            "activity_tokens": sum(row["append_tokens"] for row in schedule),
+            "request_schedule": schedule, "repeat": episode,
             "deadline_s": deadline_s, "sessions": session_rows,
             "serving_concurrency": 1, "concurrency": 1,
             "move_concurrency": 1, "copy_policy": "initial_final",
@@ -168,7 +171,7 @@ def make_plan(manifest_path: Path, model_path: Path = DEFAULT_MODEL,
                 "policy": policy, "moves": move_rows,
             })
     blocks = [[row for row in scenarios if row["episode"] == episode]
-              for episode in range(episodes)]
+              for episode in range(episodes + overlap_episodes)]
     for block in blocks:
         rng.shuffle(block)
     rng.shuffle(blocks)
@@ -184,7 +187,9 @@ def make_plan(manifest_path: Path, model_path: Path = DEFAULT_MODEL,
             "sha256": profiler.file_hash(model_path),
             "profile_id": profile.profile_id,
         },
-        "policies": list(POLICIES), "episodes": episodes,
+        "policies": list(POLICIES), "episodes": episodes + overlap_episodes,
+        "cohorts": {"idle_serial": episodes, "overlap_serial": overlap_episodes},
+        "excluded_sensitivity_concurrency": [2, 4],
         "sessions_per_episode": sessions, "scenarios": scenarios,
     }
     profiler.validate_plan(output, manifest)
@@ -196,6 +201,9 @@ def validate_policy_plan(plan_: dict) -> None:
     if plan_.get("execution_contract") != EXECUTION_CONTRACT:
         raise ValueError("unsupported policy hardware execution contract")
     policies = set(plan_["policies"])
+    cohorts = {name: sum(row.get("cohort", "idle_serial") == name for row in plan_["scenarios"]) / (len(policies) + 1) for name in ("idle_serial", "overlap_serial")}
+    if plan_.get("cohorts") != cohorts or plan_.get("excluded_sensitivity_concurrency") != [2, 4]:
+        raise ValueError("invalid policy campaign cohorts")
     episode_order = [row["episode"] for row in plan_["scenarios"]]
     if sum(
         index == 0 or episode != episode_order[index - 1]
@@ -262,7 +270,7 @@ exit "$status"
 set -euo pipefail
 export LC_ALL=C
 module load gcc/14.2.0 openblas/0.3.28 uv/0.8.4
-script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+script_dir="$SLURM_SUBMIT_DIR/queue-haul/outputs/policy-hardware-plan"
 export QH_POLICY_RUN_ROOT="${QH_POLICY_RUN_ROOT:-/scratch/$USER/qh-policy-run}"
 export QH_APPTAINER_IMAGE="${QH_APPTAINER_IMAGE:-/scratch/users/gfw/ptsim/lmcache-v0.5.1-vllm0.22.0-cu129-primary.sif}"
 test "$(sha256sum "$QH_APPTAINER_IMAGE" | cut -d' ' -f1)" = """ + IMAGE_SHA256 + """
@@ -354,12 +362,17 @@ def reduce_run(run_root: Path, out: Path | None = None):
                 "scenario_id": scenario["scenario_id"],
                 "match_id": scenario["match_id"],
                 "episode": scenario["episode"], "policy": scenario["policy"],
+                "cohort": scenario.get("cohort", "idle_serial"),
                 "session_id": row["move"]["session_id"],
                 "method": row["move"]["method"], "order": row["move"]["order"],
                 "context_tokens": contexts[row["move"]["session_id"]],
                 "reaction_readiness_s": readiness,
                 "reaction_commit_s": commit,
                 "scheduler_wait_s": _time(epoch, row["initial_start_ns"]),
+                "drain_wait_s": _time(row["pause_start_ns"], row["idle_ns"]) if "pause_start_ns" in row else 0,
+                "catch_up_s": _time(row["catch_up_start_ns"], row["catch_up_end_ns"]) if row.get("catch_up_start_ns") is not None else 0,
+                "route_switch_s": _time(row["switch_start_ns"], row["switch_end_ns"]) if "switch_start_ns" in row else 0,
+                "service_pause_s": _time(row["pause_start_ns"], row["switch_end_ns"]) if "pause_start_ns" in row else 0,
                 "migration_ttft_s":
                     _time(row["initial_start_ns"], initial["first_byte_ns"]),
                 "continuation_ttft_s":
@@ -376,6 +389,7 @@ def reduce_run(run_root: Path, out: Path | None = None):
         summaries.append({
             "scenario_id": scenario["scenario_id"],
             "match_id": scenario["match_id"], "episode": scenario["episode"],
+            "cohort": scenario.get("cohort", "idle_serial"),
             "policy": scenario["policy"], "status":
                 result.get("status", "missing"),
             "planned_migrations": planned,
@@ -393,7 +407,9 @@ def reduce_run(run_root: Path, out: Path | None = None):
     out.mkdir(parents=True, exist_ok=True)
     profiler.write_csv(out / "policy_migrations.csv", migrations)
     profiler.write_csv(out / "policy_episodes.csv", summaries)
-    plot(migrations, summaries, out)
+    for cohort in sorted({row["cohort"] for row in summaries}):
+        plot([row for row in migrations if row["cohort"] == cohort],
+             [row for row in summaries if row["cohort"] == cohort], out, cohort)
     return migrations, summaries
 
 
@@ -404,7 +420,7 @@ def completion_curve(rows, summaries, policy, field):
     return np.asarray(values), np.arange(1, len(values) + 1) / total
 
 
-def plot(rows, summaries, out):
+def plot(rows, summaries, out, cohort):
     colors = dict(zip(POLICIES, plt.get_cmap("tab10").colors))
     horizon = max(
         [row["deadline_s"] for row in summaries]
@@ -454,7 +470,7 @@ def plot(rows, summaries, out):
     fig.legend(loc="upper center", ncol=len(policies), frameon=False)
     fig.tight_layout(rect=(0, 0, 1, .91))
     for suffix in ("png", "pdf"):
-        fig.savefig(out / f"policy_hardware_cdf.{suffix}", dpi=220)
+        fig.savefig(out / f"policy_hardware_{cohort}_cdf.{suffix}", dpi=220)
     plt.close(fig)
 
 
@@ -465,6 +481,7 @@ def parse_args(argv=None):
     command.add_argument("--manifest", type=Path, default=DEFAULT_MANIFEST)
     command.add_argument("--out", type=Path, required=True)
     command.add_argument("--episodes", type=int, default=50)
+    command.add_argument("--overlap-episodes", type=int, default=25)
     command.add_argument("--sessions", type=int, default=8)
     command.add_argument("--seed", type=int, default=0)
     command.add_argument("--bandwidth-mbps", type=float, default=10_000)
@@ -480,6 +497,7 @@ def main(argv=None):
     if args.command == "prepare":
         prepare(
             args.manifest, args.out, episodes=args.episodes,
+            overlap_episodes=args.overlap_episodes,
             sessions=args.sessions, seed=args.seed,
             bandwidth_mbps=args.bandwidth_mbps, deadline_s=args.deadline_s,
         )

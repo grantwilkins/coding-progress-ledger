@@ -132,6 +132,11 @@ from a clean committed checkout with two A100 80GB GPUs. Multi-process logs
 rotate every five blocks; transfer and byte logs are sliced per scenario.
 The episode CSV compares profile-predicted source power before and after each
 migration with bracketed GPU measurements and reports power-drop attainment.
+The primary cohort has 50 idle serial episodes; a separate 25-episode serial
+cohort applies one controlled 512-token turn per session and reports drain wait,
+catch-up, service pause, and route-switch time. CSV rows carry the cohort and
+plots are emitted separately. Concurrency 2 and 4 are excluded future
+sensitivities outside the admitted resource model.
 The Slurm wrapper loads the pinned runtime modules and verifies the LMCache image.
 Override `QH_APPTAINER_IMAGE` if the pinned LMCache image is not at the default
 scratch path; set `QH_RESUME_FROM_GIT_SHA` when resuming after a code change.

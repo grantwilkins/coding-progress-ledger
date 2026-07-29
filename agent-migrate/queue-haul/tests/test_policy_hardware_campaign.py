@@ -48,11 +48,14 @@ def manifest(tmp_path):
 
 def test_plan_pairs_every_policy_on_the_same_complete_episode(tmp_path):
     manifest_path = manifest(tmp_path)
-    plan = make_plan(manifest_path, episodes=3, sessions=4, seed=7)
+    plan = make_plan(manifest_path, episodes=3, overlap_episodes=2, sessions=4, seed=7)
     assert plan == make_plan(
-        manifest_path, episodes=3, sessions=4, seed=7
+        manifest_path, episodes=3, overlap_episodes=2, sessions=4, seed=7
     )
     assert plan["execution_contract"] == EXECUTION_CONTRACT
+    assert plan["cohorts"] == {"idle_serial": 3, "overlap_serial": 2}
+    assert plan["excluded_sensitivity_concurrency"] == [2, 4]
+    assert {row["cohort"] for row in plan["scenarios"]} == {"idle_serial", "overlap_serial"}
     assert plan["model_profile"]["sha256"]
     assert not Path(plan["model_profile"]["path"]).is_absolute()
 
@@ -60,8 +63,8 @@ def test_plan_pairs_every_policy_on_the_same_complete_episode(tmp_path):
     assert sum(
         i == 0 or episode != episode_order[i - 1]
         for i, episode in enumerate(episode_order)
-    ) == 3
-    for episode in range(3):
+    ) == 5
+    for episode in range(5):
         rows = [row for row in plan["scenarios"]
                 if row["episode"] == episode]
         signatures = {
@@ -96,6 +99,7 @@ def test_prepared_job_is_self_locating_and_fail_fast(tmp_path):
     assert "uv/0.8.4" in sbatch
     assert "50e98f65de09ebfe196f270c8b5c595636853646eb5536dca92f27bd45c084ab" in sbatch
     assert "QH_PORT_OFFSET" in sbatch
+    assert "SLURM_SUBMIT_DIR" in sbatch
 
 
 def test_power_attainment_compares_model_drop_with_gpu_samples(tmp_path):
@@ -125,6 +129,8 @@ def test_reduction_uses_common_epoch_and_keeps_failed_denominator(tmp_path):
     failed = {**base, "scenario_id": "failed", "policy": "random"}
     plan = {
         "episodes": 1, "policies": ["queue_haul", "random"],
+        "cohorts": {"idle_serial": 1, "overlap_serial": 0},
+        "excluded_sensitivity_concurrency": [2, 4],
         "execution_contract": EXECUTION_CONTRACT,
         "model_profile": {"path": str(DEFAULT_MODEL), "sha256": profiler.file_hash(DEFAULT_MODEL)},
         "scenarios": [control, queue, failed],
