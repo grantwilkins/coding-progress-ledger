@@ -16,6 +16,7 @@ import pytest
 from plot_fixed_contract_residuals import (
     WORKLOADS,
     _fingerprint,
+    minimum_slack,
     result_row,
     validate_slacks,
 )
@@ -52,3 +53,14 @@ def test_met_target_rejects_any_enforced_capacity_violation():
         validate_slacks(True, {"route": 0, "service": -1e-6})
 
     validate_slacks(False, {"service": -1})
+
+
+def test_minimum_slack_tracks_the_binding_transition():
+    rows = [
+        {"target_fraction": .25, "resource": "source", "normalized_slack": .2},
+        {"target_fraction": .25, "resource": "service", "normalized_slack": .8},
+        {"target_fraction": .50, "resource": "source", "normalized_slack": .4},
+        {"target_fraction": .50, "resource": "service", "normalized_slack": .1},
+    ]
+
+    assert minimum_slack(rows, ("source", "service")) == ("source", "service")

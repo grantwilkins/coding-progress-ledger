@@ -38,12 +38,12 @@ from requirement_frontier import _actions
 ROOT = Path(__file__).parent
 DEFAULT_OUT = ROOT / "outputs/fixed-contract-residuals"
 SESSIONS = 100_000
-TARGETS = (.10, .25, .50, .75, .90, 1.0)
+TARGETS = tuple(i / 40 for i in range(1, 41))
 PRESSURE = Pressure(service=.8, bandwidth_gbps=5, migration_s=115)
 FLEX = .10
 DEBT = .10
 SEED = 0
-DATA_VERSION = 3
+DATA_VERSION = 4
 
 
 def result_row(requested, achieved, resource, used, capacity, **fields):
@@ -70,6 +70,19 @@ def validate_slacks(target_met, slacks):
         raise AssertionError(
             f"Target marked met despite resource violations: {violated}"
         )
+
+
+def minimum_slack(rows, resources):
+    values = {
+        (float(row["target_fraction"]), row["resource"]):
+            float(row["normalized_slack"])
+        for row in rows if row["resource"] in resources
+    }
+    fractions = sorted({fraction for fraction, _ in values})
+    return tuple(
+        min(resources, key=lambda resource: values[fraction, resource])
+        for fraction in fractions
+    )
 
 
 def _mixed_sessions(manifest, profile):
@@ -289,33 +302,51 @@ def plot(rows, out):
             "unmet_shed_w",
         ):
             row[field] = float(row[field])
-    series = (
+    primary = (
         ("Source migration-stream time", "Source streams", "#8C1515", "-"),
-        ("WAN transfer bytes", "WAN", "#007C92", "--"),
-        ("Replay reconstruction GPU time", "Replay", "#53284F", "--"),
-        ("KV-ingest GPU time", "KV ingest", "#E98300", "--"),
-        ("Ongoing integrated serving load", "Site load", "#175E54", ":"),
-        ("Queued serving work", "Queued work", "#B83A4B", ":"),
-        ("KV-cache blocks", "KV cache", "#4298B5", ":"),
+        ("Ongoing integrated serving load", "Serving load", "#175E54", ":"),
+        ("Queued serving work", "Serving-work budget", "#B83A4B", ":"),
     )
+    loose = (
+        "WAN transfer bytes", "Replay reconstruction GPU time",
+        "KV-ingest GPU time", "KV-cache blocks",
+    )
+    labels = {resource: label for resource, label, _, _ in primary}
+    colors = {resource: color for resource, _, color, _ in primary}
     fractions = sorted({row["target_fraction"] for row in rows})
     x = np.asarray(fractions) * 100
     sns.set_theme(style="whitegrid")
-    fig, axis = plt.subplots(figsize=(7, 4))
+    fig, (axis, strip) = plt.subplots(
+        2, 1, figsize=(7, 4.5), sharex=True, layout="constrained",
+        gridspec_kw={"height_ratios": (12, .7), "hspace": .08},
+    )
     representatives = {
         row["target_fraction"]: row for row in rows
-        if row["resource"] == series[0][0]
+        if row["resource"] == primary[0][0]
     }
     failed = [fraction * 100 for fraction in fractions
               if representatives[fraction]["unmet_shed_w"] > 1e-7]
-    for resource, label, color, linestyle in series:
+    all_resources = tuple(resource for resource, *_ in primary) + loose
+    values = {}
+    for resource in all_resources:
         selected = sorted(
             (row for row in rows if row["resource"] == resource),
             key=lambda row: row["target_fraction"],
         )
+        values[resource] = np.asarray(
+            [row["normalized_slack"] for row in selected]
+        )
+    loose_values = np.asarray([values[resource] for resource in loose])
+    axis.fill_between(
+        x, loose_values.min(0), loose_values.max(0),
+        color="#D5D5D5", alpha=.8, linewidth=0,
+    )
+    envelope = np.min([values[resource] for resource, *_ in primary], axis=0)
+    axis.plot(x, envelope, color="black", linewidth=5, zorder=2)
+    for resource, label, color, linestyle in primary:
         axis.plot(
-            x, [row["normalized_slack"] for row in selected], marker="o",
-            label=label, color=color, linestyle=linestyle, linewidth=2,
+            x, values[resource], color=color, linestyle=linestyle, linewidth=2.5,
+            marker="o", markersize=3, markevery=4, zorder=3,
         )
     axis.axhline(0, color="black", linewidth=1.5)
     if failed:
@@ -323,15 +354,50 @@ def plot(rows, out):
             failed, np.full(len(failed), -.035), marker="x", color="black",
             s=45, linewidth=1.5, label="Unmet", clip_on=False,
         )
-    axis.set(
-        xlabel="Requested shed (%)",
-        ylabel="Residual capacity (normalized)",
-        xticks=x,
-        ylim=(-.06, 1.05),
+    for resource, label, color, _ in primary:
+        axis.text(
+            102, values[resource][-1] + (.02 if resource == "Queued serving work" else 0),
+            label, color=color, va="center",
+        )
+    axis.text(
+        102, loose_values[:, -1].mean(),
+        "Other resources\n(WAN, replay, KV ingest, KV cache)",
+        color="#666666", va="center",
     )
-    axis.legend(frameon=False, loc="center left", bbox_to_anchor=(1, .5))
-    sns.despine()
-    fig.tight_layout()
+    axis.set(
+        ylabel="Normalized slack",
+        ylim=(-.06, 1.05),
+        xlim=(0, 140),
+    )
+    bindings = minimum_slack(rows, all_resources)
+    bounds = np.r_[
+        x[0] - (x[1] - x[0]) / 2,
+        (x[:-1] + x[1:]) / 2,
+        x[-1] + (x[-1] - x[-2]) / 2,
+    ]
+    for i, resource in enumerate(bindings):
+        strip.axvspan(
+            bounds[i], bounds[i + 1], color=colors.get(resource, "#777777"),
+            linewidth=0,
+        )
+    start = 0
+    for end in range(1, len(bindings) + 1):
+        if end == len(bindings) or bindings[end] != bindings[start]:
+            if bounds[end] - bounds[start] >= 12:
+                strip.text(
+                    (bounds[start] + bounds[end]) / 2, .5,
+                    labels.get(bindings[start], "Other"), color="white",
+                    ha="center", va="center", fontsize=8,
+                )
+            start = end
+    strip.set(
+        xlabel="Requested shed (%)", yticks=[], ylim=(0, 1),
+        xticks=(0, 25, 50, 75, 100),
+    )
+    strip.set_ylabel("Closest\nto binding", rotation=0, ha="right", va="center")
+    strip.grid(False)
+    sns.despine(ax=axis)
+    sns.despine(ax=strip, left=True, bottom=True)
     for extension in ("png", "pdf"):
         fig.savefig(
             out / f"fixed_contract_residuals.{extension}",
