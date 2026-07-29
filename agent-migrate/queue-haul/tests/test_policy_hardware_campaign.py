@@ -101,6 +101,7 @@ def test_prepared_job_is_self_locating_and_fail_fast(tmp_path):
     assert "50e98f65de09ebfe196f270c8b5c595636853646eb5536dca92f27bd45c084ab" in sbatch
     assert "QH_PORT_OFFSET" in sbatch
     assert "SLURM_SUBMIT_DIR" in sbatch
+    assert "/scratch/users/$USER/qh-policy-run" in sbatch
 
 
 def test_power_attainment_compares_model_drop_with_gpu_samples(tmp_path):
