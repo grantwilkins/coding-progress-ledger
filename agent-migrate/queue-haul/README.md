@@ -89,6 +89,7 @@ uv run python queue-haul/plot_simulator_evaluation.py
 uv run python queue-haul/plot_scaling_results.py
 uv run python queue-haul/plot_testbed_kv_timeline.py
 uv run python queue-haul/plot_testbed_kv_timeline.py --method replay
+uv run python queue-haul/plot_migration_ttft_cdf.py
 uv run python queue-haul/plot_fixed_contract_residuals.py
 uv run python queue-haul/paper_evaluation.py \
   --out queue-haul/outputs/paper-evaluation
