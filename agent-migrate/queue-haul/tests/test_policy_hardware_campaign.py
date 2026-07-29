@@ -94,6 +94,7 @@ def test_prepared_job_is_self_locating_and_fail_fast(tmp_path):
     job = (out / "run.sh").read_text()
     assert 'script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")"' in job
     assert "--fail-fast --stack-scenarios 30" in job
+    assert '"${run[@]}"' in job
     assert '[[ -f "$QH_POLICY_RUN_ROOT/plan.json" ]]' in job
     sbatch = (out / "run.sbatch").read_text()
     assert "uv/0.8.4" in sbatch
