@@ -82,7 +82,7 @@ class Model:
     v_dim: int
     kv_bytes: KVFn  # total bf16 KV bytes as f(tokens)
     color: str = "k"
-    ls: str = "-"
+    ls: str | tuple = "-"  # distinct texture per model
 
 
 # ── KV size functions ─────────────────────────────────────────────────────────
@@ -132,6 +132,7 @@ MODELS = [
         v_dim=512,
         kv_bytes=dsv4_kv,
         color="#d62728",
+        ls="-",
     ),
     Model(
         "Qwen3 Next 80B",
@@ -142,6 +143,7 @@ MODELS = [
         v_dim=256,
         kv_bytes=gqa_kv(12, 2, 256),
         color="#1f77b4",
+        ls=(0, (6, 2)),
     ),
     Model(
         "Qwen3.5 397B",
@@ -152,6 +154,7 @@ MODELS = [
         v_dim=256,
         kv_bytes=gqa_kv(15, 2, 256),
         color="#9467bd",
+        ls=(0, (4, 1.5, 1, 1.5)),
     ),
     Model(
         "Kimi K2.6",
@@ -162,6 +165,7 @@ MODELS = [
         v_dim=128,
         kv_bytes=mla_kv(61, 512, 64),
         color="#ff7f0e",
+        ls=(0, (3, 1, 1, 1, 1, 1)),
     ),
     Model(
         "GLM 5",
@@ -172,6 +176,7 @@ MODELS = [
         v_dim=256,
         kv_bytes=mla_kv(78, 512, 64),
         color="#e377c2",
+        ls=(0, (9, 3)),
     ),
     Model(
         "Qwen3 235B",
@@ -182,6 +187,7 @@ MODELS = [
         v_dim=128,
         kv_bytes=gqa_kv(94, 4, 128),
         color="#2ca02c",
+        ls=(0, (1, 1.6)),
     ),
 ]
 
