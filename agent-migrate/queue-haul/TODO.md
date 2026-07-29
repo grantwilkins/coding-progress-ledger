@@ -1,164 +1,85 @@
 # Queue-Haul TODO
 
-Complete tasks in order. After every change, run `uv run pytest`, stage all
-task files, and create the listed commit.
+## Claim to close
 
-## Calendar
+Queue-Haul chooses replay or KV transfer for each session, orders the chosen
+migrations, and predicts how much source accelerator power can be shed by a
+deadline. The primary implementation and two-A100 experiment execute migrations
+sequentially. Parallel migration is a separate sensitivity.
 
-- **Jul 27–Aug 2:** finish Tasks 1–5 software paths. Exit with one physical
-  resource ledger, one realized pool-service trace, pinned workload inputs, and
-  runnable assumed-data commands.
-- **Aug 3–9:** run Tasks 6–7 on the two-A100 setup. Exit with held-out source
-  power and complete replay/KV handoff evidence.
-- **Aug 10–16:** run Task 8. Exit only after normal and stable destination
-  boundaries have passing and failing points for all three service mixes.
-- **Aug 17–23:** run the two-A100 part of Task 9. Exit with one accepted full
-  event or a written failed gate with raw evidence.
-- **Aug 24–30:** run the 8+8-A100 part of Task 9 and small exact planner cases
-  from Task 10. Exit with plan-versus-execution tables.
-- **Aug 31–Sep 6:** finish Task 10 at 10K, 100K, and 1M sessions. Exit with
-  fixed-total and fixed-per-pool results for all four workloads.
-- **Sep 7–13:** run Task 11 if hardware is available; otherwise keep those rows
-  assumed. Finish Task 12 and freeze the paper figures.
+## Already shown
 
-## 1. Paper and contract
-
-- [x] Confirm `formulation_nsdi.md`, `PROPOSED_DESTINATION_ARCH.md`, and
-  `DESTINATION_ROADMAP.md` match the pool-level contract.
-- [x] Remove stale commands and claims from `README.md`.
-- [x] Test: `uv run pytest`.
-- [x] Commit: `Align Queue-Haul paper and evaluation contracts`.
-
-## 2. Assumptions and provenance
-
-- [x] Add one canonical evaluation configuration for workloads, scales,
-  deadlines, routes, flex, debt, pool counts, and source skew.
-- [x] Put `# TODO: ASSUMED` immediately above every unmeasured code default.
-- [x] Record provenance, units, validity range, and replacement evidence in
-  every configuration value and result row.
-- [x] Hard-fail if an assumed value is emitted as measured or accepted.
-- [x] Test: hand-worked provenance and invalid-input cases, then
-  `uv run pytest`.
-- [x] Commit: `Add explicit evaluation assumptions and provenance`.
-
-## 3. Pool service flex
-
-- [x] Add ongoing event admission, stable capacity, and service-debt budgets.
-- [x] Define flex as 0/5/10/20% of stable pool capacity above normal.
-- [x] Define debt as excess replica-seconds over the migration window.
-- [x] Report required recovery; positive debt with no spare capacity is
-  infeasible.
-- [x] Keep memory as block-rounded stock and network as pool-route bytes/queue.
-- [x] Test: exact units, boundaries, conservation, zero-spare recovery, and no
-  double-counted migration work.
-- [x] Run `uv run pytest`.
-- [x] Commit: `Add pool service flex and transition debt`.
-
-## 4. Simulator and result schema
-
-- [x] Schedule pool reconstruction, service, route, and byte queues.
-- [x] Consume advertised destination baselines; do not generate unrelated
-  destination traffic.
-- [ ] Emit candidate choice, action mix, every capacity/use, binding set, debt,
-  recovery, route queue, makespan, power, and exposed state.
-- [ ] Keep Poisson and equal-mean burst arrivals only for contract validation.
-- [ ] Test: planner-to-simulator accounting, pool aggregation, and deadline
-  boundaries.
-- [ ] Run `uv run pytest`.
-- [ ] Commit: `Complete pool-level drain simulation`.
-
-## 5. Assumed-data evaluation pipeline
-
-- [x] Add checksum-pinned ShareGPT conversation shapes from the supplied
-  `ShareGPT_V3_unfiltered_cleaned_split.json` artifact.
-- [ ] Generate coding, interactive-coding, agentic, and conversation scenarios
-  at 10K, 100K, and 1M sessions.
-- [ ] Run 30/60/120/300-second deadlines, 1/5/10-Gbps routes,
-  0/5/10/20% flex/debt, and 1/2/4/8 pools.
-- [ ] Generate one tidy result table for each Q1–Q9 question.
-- [ ] Generate every planned plot from reduced tables.
-- [ ] Ensure every plotted row carries measured/fitted/assumed/simulated
+- [x] The planner chooses replay/KV actions and an order.
+- [x] The simulator executes those actions with migration, route, request,
+  queue, commit, first-token timing, and power state.
+- [x] Pool planning accounts for service, transition work, route bytes, KV
+  stock, debt, recovery, and binding resources.
+- [x] Two-A100 replay and KV transfer both preserve continuation and exact
+  state/byte accounting.
+- [x] All 24 serial migration scenarios completed by their deadline.
+- [x] All 90 migrations in the bounded campaign completed by their deadline,
+  and all 105 campaign gates passed.
+- [x] Incremental KV transfer passed exact block, wire, destination-state, and
+  continuation gates.
+- [x] Measured replay and KV timelines show source inference, bulk migration,
+  request-boundary drain, catch-up, route switch, and first destination token.
+- [x] Measured loaded runs cover 16K/10-Gbps and 24K/5-Gbps points. These show
+  migration behavior under the recorded foreground overlap, not a destination
+  capacity boundary.
+- [x] Canonical workload shapes and assumed simulator axes carry explicit
   provenance.
+- [x] Run `uv run pytest`.
+
+## Required simulator result
+
+- [ ] Freeze one sequential execution contract and one canonical assumed pool
+  configuration.
+- [ ] Run Queue-Haul, replay-only, KV-only, and greedy on the same scenarios.
+- [ ] Report requested and achieved shed, selected action mix, last commit,
+  first destination token, route bytes/queue, destination work, deadline
+  status, and exposed sessions.
+- [ ] Show one representative simulator schedule and a compact scale result at
+  10K, 100K, and 1M sessions. Additional Cartesian sweeps are optional.
+- [ ] Keep every unmeasured route, pool, and service input labeled
+  `assumed/sensitivity`.
 - [ ] Run `uv run pytest`.
-- [ ] Commit: `Add complete NSDI evaluation pipeline`.
+- [ ] Commit: `Finalize sequential simulator evaluation`.
 
-## 6. Source power evidence
+## Required two-A100 closure
 
-- [ ] Split complete runs into fit, calibration, and untouched final groups.
-- [ ] Measure controlled group removals across source load.
-- [ ] Require measured shed to meet or exceed every credited final prediction.
-- [ ] Measure last-switch-to-off time and the final five-second 0-W accelerator
-  window.
-- [ ] Replace matching `TODO: ASSUMED` values.
-- [ ] Regenerate Q1.
+- [ ] Run the prepared `policy_hardware_campaign.py` experiment.
+- [ ] Use its planner-generated Queue-Haul replay/KV choice and order with the
+  existing eager sequential executor.
+- [ ] Compare Queue-Haul with replay-only, KV-only, greedy, and random on matched
+  eight-session episodes.
+- [ ] Report completion fraction, controller-to-first-token time,
+  controller-to-commit time, migration TTFT, and matched next-request TTFT
+  inflation.
+- [ ] Add one representative mixed-action Gantt chart using the existing event
+  records.
+- [ ] Retain failed or incomplete episodes in the completion denominator.
 - [ ] Run `uv run pytest`.
-- [ ] Commit: `Validate conservative source power shed`.
+- [ ] Commit: `Validate planner-driven sequential migration`.
 
-## 7. Single-session evidence
+## Final pass
 
-- [ ] Reuse valid two-A100 replay/KV evidence.
-- [ ] Add only missing 4K–8K and 5-Gbps points.
-- [ ] Validate bytes, blocks, cache state, no post-commit WAN fetch,
-  continuation, pause, route switch, and first token.
-- [ ] Regenerate Q2.
+- [ ] Regenerate the simulator and two-A100 tables and figures from a clean
+  checkout.
+- [ ] Verify input checksums and evidence labels.
+- [ ] Ensure the paper claims sequential two-A100 execution and simulated
+  large-scale coordination, not measured production admission or facility
+  power.
 - [ ] Run `uv run pytest`.
-- [ ] Commit: `Complete replay and KV handoff evidence`.
+- [ ] Commit: `Finalize Queue-Haul evaluation`.
 
-## 8. Destination service evidence
+## Optional extensions
 
-- [ ] Build prefill-heavy, balanced, and decode-heavy mixes from the four trace
-  families.
-- [ ] Use safe forced tokens, unique appends or cache reset, exact cache checks,
-  and complete-stream checks.
-- [ ] Bracket normal and stable passing/failing points.
-- [ ] Repeat only boundary points at least three times.
-- [ ] Measure queued work and recovery for 0/5/10/20% bursts.
-- [ ] Keep the profile `sensitivity` if any required boundary is unbracketed.
-- [ ] Replace matching `TODO: ASSUMED` values only after acceptance.
-- [ ] Regenerate Q3–Q4.
-- [ ] Run `uv run pytest`.
-- [ ] Commit: `Measure destination service flex`.
+These are useful follow-on results, not blockers for the claim above:
 
-## 9. End-to-end execution
-
-- [ ] Run the full event on two A100s.
-- [ ] Run the same contract on 8+8 A100 TP=1 replicas.
-- [ ] Measure accelerator power, pool/route queues, actions, pauses, switches,
-  first tokens, shutdown, makespan, debt, and recovery.
-- [ ] Reject any point that misses the deadline, final power window, or pool
-  contract.
-- [ ] Regenerate Q5.
-- [ ] Run `uv run pytest`.
-- [ ] Commit: `Validate end-to-end drain execution`.
-
-## 10. Planner, scale, and diversity
-
-- [ ] Compare exact integer, LP, rounded/packed, greedy, and focused baselines.
-- [ ] Run ten seeds for all workloads and source scales.
-- [ ] Run measured-normal, balanced, moderate-skew, and high-skew source
-  placement.
-- [ ] Separate fixed-total and fixed-per-pool experiments.
-- [ ] Separate resource diversity and compatibility diversity.
-- [ ] Run integrated pools and assumed prefill/decode-disaggregated pools.
-- [ ] Regenerate Q6–Q9.
-- [ ] Run `uv run pytest`.
-- [ ] Commit: `Complete scale and diversity evaluation`.
-
-## 11. Hardware generality
-
-- [ ] Measure H100 TP=1.
-- [ ] Measure A100 TP=2.
-- [ ] Replace matching assumed source power, service, KV, replay, and ingest
-  inputs.
-- [ ] Regenerate hardware sensitivity plots.
-- [ ] Run `uv run pytest`.
-- [ ] Commit: `Add measured hardware generality`.
-
-## 12. Final pass
-
-- [ ] Regenerate every reduced table and figure from a clean checkout.
-- [ ] Verify checksums and evidence labels.
-- [ ] Remove stale README content and completed TODO details.
-- [ ] Confirm all documents match implemented behavior.
-- [ ] Run `uv run pytest`.
-- [ ] Commit: `Finalize Queue-Haul NSDI evaluation`.
+- parallel planner-driven migration;
+- a bracketed destination normal/stable service boundary;
+- 8+8 A100, H100 TP=1, or A100 TP=2 generality;
+- disaggregated prefill/decode pools;
+- live leases and commit-time contract revalidation;
+- exhaustive deadline, bandwidth, pool-count, skew, and diversity grids; and
+- whole-node shutdown or facility/grid-power claims.

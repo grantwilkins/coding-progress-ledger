@@ -2,9 +2,11 @@
 
 Status: the code implements measured migration primitives, a requirement
 frontier, aggregate pool planning, internal replica packing, and a deterministic
-event simulator. The archived destination campaign does not provide an accepted
-service boundary. Until the targeted rerun brackets a passing and failing point,
-destination serving headroom is a sensitivity.
+event simulator. The pinned two-A100 data shows working replay and KV handoff,
+including request-boundary switching, continuation, exact KV accounting, and
+phase-level timelines. The primary end-to-end contract is sequential execution.
+Destination serving headroom remains an assumed sensitivity because the
+archived service campaign does not provide an accepted boundary.
 
 ## Public contract
 
@@ -40,10 +42,10 @@ Compatibility is Boolean. Replay requires the same model, tokenizer, and
 durable-log execution contract. KV transfer additionally requires the exact KV
 ABI, layout, block format, and dtype.
 
-The contract is a versioned snapshot with units, evidence status, provenance,
-validity range, and replacement evidence for every value. Operational use also
-requires a lease and commit-time revalidation; the current simulator has
-neither and therefore does not produce production admission certificates.
+The simulation contract is a versioned snapshot with units, evidence status,
+provenance, and a validity range. A production admission system would also need
+a live lease and commit-time revalidation. Those operational mechanisms are
+outside the end-to-end performance claim.
 
 ## Contract-to-output mapping
 
@@ -61,16 +63,12 @@ summary of validated schedules across requested shed targets.
 | route bandwidth and queued bytes | transfer start/finish and route occupancy | route bytes/time/debt, capacity, normalized slack |
 | lease or snapshot generation | validation domain | contract generation, provenance, validity range |
 
-Every selected-migration row records session ID, source, action, pool, start,
-transfer/reconstruction finish, quiesce, commit, first-token completion, bytes,
-transition work, ongoing work, KV blocks, and conservative source watts
-credited. Every scenario row records requested, achieved, and unmet watts;
-selected sessions; replay/KV counts and bytes; destination assignments; all
-resource use and normalized slack; the complete binding-resource set;
-predicted and realized makespan; debt and recovery; source shutdown; exposed
-sessions, context tokens, and KV bytes; seed; workload; source
-hardware/model/packing; deadline and measurement window; and evidence status,
-validity range, and provenance for every input.
+For the end-to-end evaluation, each selected migration needs session, action,
+order, destination, start, migration-ready, commit, and first-token times.
+Each scenario needs requested and achieved shed, replay/KV counts, last commit,
+route bytes/queue, destination work, exposed sessions, deadline status, seed,
+workload, and input provenance. More detailed resource rows remain available
+for diagnosis but are not required in one universal table.
 
 ## Service flex
 
@@ -113,10 +111,10 @@ Memory is a stock, not a queue. V1 rounds each session independently and gives
 no credit for shared prefixes. The pool advertises usable KV after accounting
 for internal fragmentation.
 
-An integrated pool exposes its measured prefill/decode sharing rule. A
-prefill/decode-disaggregated pool exposes separate resource budgets and queues.
-The integrated A100 TP=1 case is measured. Disaggregated pools remain an
-explicit sensitivity until separately profiled.
+An integrated pool exposes a prefill/decode sharing rule. The two-A100
+migration mechanisms are measured, but the destination service boundary is not;
+simulated service headroom therefore remains assumed. Disaggregated pools are
+an optional sensitivity.
 
 ## Current code mapping
 
@@ -152,27 +150,33 @@ production destination behavior.
 
 | Quantity | Current status |
 |---|---|
-| source power | measured; held-out group-removal gate remains |
+| source accelerator power curves | measured; used as model input |
 | replay and KV correctness | measured on two A100s |
+| serial migration completion | 24/24 serial and 90/90 bounded migrations completed by deadline |
+| bounded campaign gates | 105/105 passed |
 | replay/KV duration | conservatively fitted with held-out context/bandwidth |
 | KV bytes and block size | exact for the pinned ABI |
 | live-KV capacity | measured vLLM readback |
-| loaded migration effect | descriptive low-concurrency observations |
-| normal/stable service boundary | not accepted; targeted rerun required |
+| loaded migration effect | 18 observations; 12 overlap foreground work |
+| planner-driven mixed sequential episode | prepared, not yet run |
+| normal/stable service boundary | not accepted; optional for a measured shared-serving claim |
 | route bandwidth/RTT | assumed sensitivity |
 | pool flex and debt | operator sensitivity until testbed validation |
 | multi-pool inventory | assumed sensitivity |
-| H100 and A100 TP=2 service | required later measurement |
+| H100 and A100 TP=2 service | optional hardware-generality extension |
 | disaggregated prefill/decode site | assumed sensitivity |
 
 The invalid 2026-07-23 service cells remain excluded. The five
 private-prefix-consistent points near 0.096953 are descriptive anchors, not
 safe capacity.
 
-## Targeted service measurement
+## Optional targeted service measurement
 
-Use only three resource mixes derived from coding, interactive coding, agentic,
-and ShareGPT shapes:
+This measurement is required only for a measured shared-destination admission
+claim. It is not required to show that migration works on a dedicated
+destination or to evaluate assumed service headroom in the simulator. If run,
+use three resource mixes derived from coding, interactive coding, agentic, and
+ShareGPT shapes:
 
 - prefill-heavy;
 - balanced; and
@@ -191,47 +195,35 @@ For each mix:
 Any missing work, wrong cache state, restart, rejection, or unbracketed boundary
 prevents an accepted service profile.
 
-## Admission flow
+## Sequential evaluation flow
 
-1. Validate the pool fingerprint and evidence domain.
-2. Read current pool work, KV stock, route state, and contract generation.
-3. Build replay and KV candidates only for compatible pools.
-4. Check ongoing event capacity, stable capacity, debt, KV, transition, route,
-   source streams, and deadline.
-5. Select at most one action and pool per session.
-6. Validate the time schedule in the event simulator.
-7. Retain source ownership until the destination produces the first
-   post-switch token.
-8. Revalidate the destination contract at commit in an operational deployment.
+1. Validate compatibility and the stated input evidence domain.
+2. Build replay and KV candidates.
+3. Select at most one action and destination per session.
+4. Order the selected actions and execute them sequentially.
+5. Retain source ownership until route commit and verify the first destination
+   token.
+6. Validate the same schedule in the event simulator.
 
-Current code does not implement a live lease. Results therefore remain
-sensitivity or testbed validation rather than production admission
-certificates.
+Live contract leasing is an optional production extension.
 
 ## Evaluation contracts
 
-### Fixed contract
+### Minimum simulator evaluation
 
-The many-session coordination experiment holds one compatible integrated pool
-contract fixed while requested shed rises through
-10/25/50/75/90/100% of maximum modeled shed. A single versioned canonical
-record fixes workload; source hardware, model, and packing; deadline; route
-bandwidth and RTT; event service flex; debt; usable KV; reconstruction and
-ingest capacity; and seed. This experiment asks how the contract is spent and
-whether joint replay/KV planning produces more executable shed. It is not a
-multi-site heterogeneity experiment.
+Hold one compatible integrated-pool contract fixed while requested shed rises.
+Compare Queue-Haul with replay-only, KV-only, and greedy. Report selected
+actions, achieved shed, last commit, route use, destination work, exposed
+sessions, and deadline status. Show 10K, 100K, and 1M-session planning and
+execution behavior.
 
-Plot normalized residual slack against requested shed for source preparation,
-route, reconstruction, ingest, ongoing prefill, ongoing decode, debt, live KV,
-and realized makespan. Zero is binding and negative values remain visible.
-Compare achieved shed against requested shed for Queue-Haul, all replay, all
-KV, the best simple greedy baseline, and an exact integer or LP reference where
-tractable. Report unmet watts, the first infeasible target, and the complete
-binding-resource set.
+Plot achieved against requested shed and show the replay/KV mix. A compact
+resource-slack view is useful but not required to duplicate every internal
+resource in the main result.
 
-### Multiple pool contracts
+### Optional pool and diversity extensions
 
-Pool count is 1, 2, 4, or 8 under two explicitly defined regimes:
+Pool count may be varied under two explicitly defined regimes:
 
 1. **Fixed total resources:** hold each summed physical budget constant and
    split it across the pools. Pool-specific routes and compatibility remain
@@ -251,18 +243,14 @@ Resource diversity and compatibility diversity are separate experiments:
 - **Compatibility diversity:** vary compatible action/pool choices while
   holding total physical resources fixed.
 
-For each destination resource, plot maximum executable shed against its
-capacity multiplier or advertised headroom with identical axes across panels.
-Use separate panels for route bandwidth or queued bytes, replay
-reconstruction, KV ingest, ongoing prefill, ongoing decode, event debt, and
-live-KV blocks. Each curve must expose the knee where another resource joins
-the binding set.
+These experiments explain fragmentation and headroom, but they are not needed
+to establish the primary sequential end-to-end result.
 
-### Schedule morphing
+### Representative schedules
 
-Choose three or four explicit settings from the pool-count and bottleneck
-experiments, such as route-constrained, replay-reconstruction-constrained,
-service-constrained, and KV-memory/ingest-constrained. For each:
+Show one representative measured mixed-action schedule after the
+planner-driven two-A100 campaign and one representative simulator schedule.
+For each:
 
 - x-axis: time;
 - y-axis: destination pools;
@@ -272,8 +260,8 @@ service-constrained, and KV-memory/ingest-constrained. For each:
 - overlays: shared route and transition-resource occupancy; and
 - annotation: final achieved shed and complete binding-resource set.
 
-The examples explain why the capacity curves bend or flatten; they are not
-decorative Gantt charts.
+The schedules show where end-to-end time goes and when source ownership can
+move.
 
 ### Scale and sensitivity
 
@@ -281,16 +269,9 @@ The large simulator consumes advertised residual vectors; it does not generate
 unrelated destination traffic. Primary capacity is relative to the source
 relocation requirement. Pool-relative 0/5/10/20% flex is a sensitivity.
 
-Use:
-
-- 10K, 100K, and 1M source sessions;
-- coding, interactive coding, agentic, and ShareGPT conversation shapes;
-- 30/60/120/300-second deadlines;
-- 1/5/10-Gbps routes;
-- 1/2/4/8 pools;
-- fixed-total and fixed-per-pool capacity;
-- separate resource and compatibility diversity experiments; and
-- integrated pools first, then disaggregated-pool sensitivity.
+Use 10K, 100K, and 1M source sessions for the main scale result. One main
+workload and a compact workload robustness view are sufficient. Deadline,
+route, pool-count, skew, and diversity grids are optional sensitivities.
 
 Coding, interactive coding, agentic, and ShareGPT-like conversation are
 separate workload scenarios. Deadlines of 30/60/120/300 seconds, routes of
@@ -299,5 +280,5 @@ scenario axes, not error bars. Service flex, debt, multi-pool inventory,
 disaggregated pools, unmeasured routes, and unmeasured hardware points remain
 visibly `assumed/sensitivity` until their targeted measurements pass.
 
-The 8+8 A100 experiment validates the contract at a larger hardware point. It
-does not define the simulated site size.
+An 8+8 A100 experiment would add hardware-scale validation but is not required
+for the two-A100 sequential claim.

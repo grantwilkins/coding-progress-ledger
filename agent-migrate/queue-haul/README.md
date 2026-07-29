@@ -16,18 +16,23 @@ inventory.
 The repository contains:
 
 - measured GPT-OSS-20B/A100 power curves;
-- working replay and compatible KV handoff on two A100s;
+- working replay and compatible KV handoff on two A100s, with 24/24 serial and
+  90/90 bounded-campaign migrations completing by their deadlines;
+- 105/105 passing bounded-campaign gates and 6/6 passing parallel-KV gates;
 - conservative replay and KV duration fits;
-- exact KV block accounting;
+- exact full and incremental KV block/wire accounting;
+- measured request-boundary replay and KV Gantt charts through the first
+  destination token;
 - a one-pool requirement-frontier solver;
 - LP, integer, and greedy planners;
 - pool-aware planning and internal packing checks; and
 - a deterministic migration, network, request, queue, and power simulator.
 
-The source power fit still needs held-out group-removal validation. The archived
-destination service campaign does not provide an accepted capacity boundary.
-Its valid points are sensitivity anchors until the targeted rerun brackets
-passing and failing loads.
+The remaining two-A100 closure is to run the prepared planner-driven policy
+campaign, which executes mixed replay/KV choices and order sequentially. The
+archived destination service campaign does not provide an accepted shared-load
+capacity boundary, so simulator service headroom remains a sensitivity. That
+boundary is not required for the dedicated two-A100 migration claim.
 
 ## System boundary
 
@@ -123,7 +128,8 @@ inputs change.
 for eager, serial execution of Queue-Haul, greedy, and random method/order
 choices plus KV-only and replay-only baselines. It does not execute the
 planner's paced, quiesced schedule or measure planning latency, so it is
-mechanism-path evidence rather than full-scheduler evidence. The default 50
+the direct test of planner choice/order under the primary eager sequential
+execution contract, rather than a test of parallel scheduling. The default 50
 eight-session blocks yield 400 clustered observations per policy; variants and
 their control run contiguously in randomized order. Failed blocks remain in
 completion denominators, while TTFT inflation uses only complete matched
