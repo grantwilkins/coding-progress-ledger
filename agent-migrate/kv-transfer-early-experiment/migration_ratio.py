@@ -38,6 +38,8 @@ CONTEXT_MODEL = "DeepSeek V4 Pro"  # HCA layers stay quadratic, so the ratio
 CONTEXT_STEM = "deepseekv4_context_ratio_bandwidths"  # sweeps a wide range
 CONTEXT_BANDWIDTHS_GBPS = np.linspace(0.1, 25, 500)
 CONTEXT_TOKENS = np.geomspace(1_000, 10_000_000, 500)
+CONTEXT_RATIO_YLIM = (1e-2, 1e2)
+RATIO_YLIM = (1e-3, 1e2)
 
 # ── Model specs ───────────────────────────────────────────────────────────────
 KVFn = Callable[[int], float]
@@ -226,17 +228,19 @@ def context_ratio_grid(label: str, bandwidths_gbps, contexts) -> pd.DataFrame:
     )
 
 
-def shade_regions(ax, x):
-    """Shade above/below ratio = 1 and label the two decisions on that line."""
+def shade_regions(ax, x, kv_at, ctx_at):
+    """Shade above/below ratio = 1 and label the two decisions.
+
+    kv_at and ctx_at are (x in axes fraction, y in data) anchors, picked per
+    figure to land in the whitespace the curves leave open.
+    """
     lo, hi = ax.get_ylim()
     ax.fill_between(x, 1.0, hi, alpha=0.06, color="#B1040E", zorder=0)
     ax.fill_between(x, lo, 1.0, alpha=0.06, color="#008566", zorder=0)
     ax.set_ylim(lo, hi)
     tr = ax.get_yaxis_transform()  # x in axes fraction, y in data
-    # Geometric midpoint of each region keeps the label inside the axes however
-    # far the curves sit from ratio = 1.
-    ax.text(0.03, hi**0.5, "Transfer KV cache", color="#B1040E", style="italic", transform=tr)
-    ax.text(0.03, lo**0.5, "Transfer context", color="#008566", style="italic", transform=tr)
+    ax.text(*kv_at, "Transfer KV cache", color="#B1040E", style="italic", transform=tr)
+    ax.text(*ctx_at, "Transfer context", color="#008566", style="italic", transform=tr)
 
 
 def plot_context_ratio(label: str = CONTEXT_MODEL, stem: str = CONTEXT_STEM):
@@ -258,7 +262,8 @@ def plot_context_ratio(label: str = CONTEXT_MODEL, stem: str = CONTEXT_STEM):
     ax.set_xscale("log")
     ax.set_yscale("log")
     ax.set_xlim(CONTEXT_TOKENS.min(), CONTEXT_TOKENS.max())
-    shade_regions(ax, CONTEXT_TOKENS)
+    ax.set_ylim(*CONTEXT_RATIO_YLIM)
+    shade_regions(ax, CONTEXT_TOKENS, (0.04, 30), (0.56, 1.6e-2))
     ax.set_xlabel("Context size (tokens)")
     ax.set_ylabel(r"$t^{R}/t^{KV}$")
     ax.grid(True, which="both", alpha=0.15)
@@ -306,7 +311,8 @@ def main():
     ax.set_yscale("log")
     ax.axhline(1.0, color="k", lw=1.2, ls=":", alpha=0.6)
     ax.set_xlim(1e-1, 1e2)
-    shade_regions(ax, bw)
+    ax.set_ylim(*RATIO_YLIM)
+    shade_regions(ax, bw, (0.04, 20), (0.63, 4e-3))
 
     ax.set_xlabel("Inter-site bandwidth (Gbps)")
     ax.set_ylabel(r"$t^{R}/t^{KV}$")
