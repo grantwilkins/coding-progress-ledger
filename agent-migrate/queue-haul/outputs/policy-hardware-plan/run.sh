@@ -7,7 +7,7 @@ cd "$script_dir/../../.."
 resume=()
 [[ -z "${QH_RESUME_FROM_GIT_SHA:-}" ]] || resume=(--resume-from-git-sha "$QH_RESUME_FROM_GIT_SHA")
 status=0
-uv run python queue-haul/migration_profiler.py run --plan "$script_dir/plan.json"   --run-root "$QH_POLICY_RUN_ROOT" --fail-fast --stack-scenarios 30   "${resume[@]}" || status=$?
+uv run python queue-haul/migration_profiler.py run --plan "$script_dir/plan.json"   --run-root "$QH_POLICY_RUN_ROOT" --stack-scenarios 30   "${resume[@]}" || status=$?
 [[ -f "$QH_POLICY_RUN_ROOT/plan.json" ]] || exit "$status"
 uv run python queue-haul/policy_hardware_campaign.py reduce   --run-root "$QH_POLICY_RUN_ROOT"
 exit "$status"

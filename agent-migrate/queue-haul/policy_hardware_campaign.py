@@ -206,6 +206,14 @@ def validate_policy_plan(plan_: dict) -> None:
                 if row["episode"] == episode]
         if {row["policy"] for row in rows} != policies | {"control"}:
             raise ValueError("every episode must contain every policy and one control")
+        if any(
+            row["kind"] == "migration"
+            and (row["move_concurrency"] != 1
+                 or sorted(move["order"] for move in row["moves"])
+                 != list(range(len(row["moves"]))))
+            for row in rows
+        ):
+            raise ValueError("policy migrations must be sequential and totally ordered")
         signatures = {
             tuple(sorted(
                 (row["session_id"], row["initial_tokens"])
@@ -238,7 +246,7 @@ resume=()
 [[ -z "${QH_RESUME_FROM_GIT_SHA:-}" ]] || resume=(--resume-from-git-sha "$QH_RESUME_FROM_GIT_SHA")
 status=0
 uv run python queue-haul/migration_profiler.py run --plan "$script_dir/plan.json" \
-  --run-root "$QH_POLICY_RUN_ROOT" --fail-fast --stack-scenarios 30 \
+  --run-root "$QH_POLICY_RUN_ROOT" --stack-scenarios 30 \
   "${resume[@]}" || status=$?
 [[ -f "$QH_POLICY_RUN_ROOT/plan.json" ]] || exit "$status"
 uv run python queue-haul/policy_hardware_campaign.py reduce \
@@ -324,6 +332,15 @@ def reduce_run(run_root: Path, out: Path | None = None):
                 "context_tokens": contexts[row["move"]["session_id"]],
                 "reaction_readiness_s": readiness,
                 "reaction_commit_s": commit,
+                "migration_start_s": _time(epoch, row["initial_start_ns"]),
+                "migration_finish_s": _time(epoch, row["initial_end_ns"]),
+                "quiesce_s": _time(epoch, row["pause_start_ns"]),
+                "catch_up_start_s": _time(epoch, row.get("catch_up_start_ns"))
+                if row.get("catch_up_start_ns") is not None else None,
+                "catch_up_finish_s": _time(epoch, row.get("catch_up_end_ns"))
+                if row.get("catch_up_end_ns") is not None else None,
+                "continuation_start_s": _time(epoch, continuation["start_ns"]),
+                "first_token_s": _time(epoch, continuation["first_byte_ns"]),
                 "scheduler_wait_s": _time(epoch, row["initial_start_ns"]),
                 "migration_ttft_s":
                     _time(row["initial_start_ns"], initial["first_byte_ns"]),
@@ -357,6 +374,10 @@ def reduce_run(run_root: Path, out: Path | None = None):
     profiler.write_csv(out / "policy_migrations.csv", migrations)
     profiler.write_csv(out / "policy_episodes.csv", summaries)
     plot(migrations, summaries, out)
+    timeline = representative_timeline(migrations, summaries)
+    if timeline:
+        profiler.write_csv(out / "policy_gantt.csv", timeline)
+        plot_timeline(timeline, out)
     return migrations, summaries
 
 
@@ -365,6 +386,60 @@ def completion_curve(rows, summaries, policy, field):
                 if row["policy"] == policy)
     values = sorted(row[field] for row in rows if row["policy"] == policy)
     return np.asarray(values), np.arange(1, len(values) + 1) / total
+
+
+def representative_timeline(rows, summaries):
+    complete = {
+        row["scenario_id"] for row in summaries
+        if row["policy"] == "queue_haul"
+        and row["completed_migrations"] == row["planned_migrations"]
+    }
+    grouped = {
+        scenario: sorted(
+            (row for row in rows if row["scenario_id"] == scenario),
+            key=lambda row: row["order"],
+        )
+        for scenario in complete
+    }
+    mixed = [value for value in grouped.values()
+             if {row["method"] for row in value} == {"replay", "kv_transfer"}]
+    return min(mixed, key=lambda value: (value[0]["episode"], value[0]["scenario_id"])) \
+        if mixed else []
+
+
+def plot_timeline(rows, out):
+    colors = {"replay": "#4C78A8", "kv_transfer": "#F58518"}
+    fig, ax = plt.subplots(figsize=(9, 4.8))
+    for y, row in enumerate(rows):
+        start, commit = row["migration_start_s"], row["reaction_commit_s"]
+        ax.barh(y, commit - start, left=start, color=colors[row["method"]])
+        ax.scatter(row["reaction_readiness_s"], y, marker="o", color="black", s=24)
+        ax.scatter(commit, y, marker="D", color="#A11919", s=34)
+        ax.scatter(row["first_token_s"], y, marker="*", color="#176B52", s=70)
+    ax.set(
+        xlabel="Time from policy epoch (s)", ylabel="Migration order",
+        yticks=range(len(rows)),
+        yticklabels=[f"{row['order']}: {row['method'].replace('_', ' ')}"
+                     for row in rows],
+        title=f"Measured Queue-Haul sequential episode {rows[0]['episode']}",
+    )
+    ax.invert_yaxis()
+    ax.grid(axis="x", alpha=.25)
+    from matplotlib.lines import Line2D
+    ax.legend(handles=[
+        *(Line2D([0], [0], color=color, lw=8, label=method.replace("_", " "))
+          for method, color in colors.items()),
+        Line2D([0], [0], marker="o", color="black", lw=0,
+               label="Destination ready"),
+        Line2D([0], [0], marker="D", color="#A11919", lw=0, label="Commit"),
+        Line2D([0], [0], marker="*", color="#176B52", lw=0,
+               markersize=10, label="First token"),
+    ], ncol=3, frameon=False, loc="upper center", bbox_to_anchor=(.5, -.16))
+    fig.tight_layout()
+    for suffix in ("png", "pdf"):
+        fig.savefig(out / f"policy_hardware_gantt.{suffix}", dpi=220,
+                    bbox_inches="tight")
+    plt.close(fig)
 
 
 def plot(rows, summaries, out):
