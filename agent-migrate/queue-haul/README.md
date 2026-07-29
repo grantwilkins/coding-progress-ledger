@@ -95,6 +95,8 @@ uv run python queue-haul/policy_hardware_campaign.py prepare \
   --out queue-haul/outputs/policy-hardware-plan
 QH_POLICY_RUN_ROOT=/scratch/$USER/qh-policy-run \
   bash queue-haul/outputs/policy-hardware-plan/run.sh
+# Or submit the resumable two-A100 Slurm job:
+sbatch queue-haul/outputs/policy-hardware-plan/run.sbatch
 uv run python queue-haul/paper_evaluation.py \
   --out queue-haul/outputs/paper-evaluation
 ```
@@ -117,12 +119,21 @@ request-boundary drain from tidy event tables.
 120-second fixed-contract requirement sweep and plots normalized resource
 headroom against requested source-power shed. Use `--refresh` when its pinned
 inputs change.
-`policy_hardware_campaign.py` creates a resumable, ungated paired campaign for
-Queue-Haul, greedy, random-feasible, KV-only, and replay-only policies. Its
-default 50 eight-session episodes yield 400 planned migrations per policy and
-retain failed episodes in the completion-curve denominator. Reduction plots
-queue-inclusive first-token latency, destination TTFT, route commit, and paired
-next-request TTFT inflation.
+`policy_hardware_campaign.py` creates a resumable paired idle-session campaign
+for eager, serial execution of Queue-Haul, greedy, and random method/order
+choices plus KV-only and replay-only baselines. It does not execute the
+planner's paced, quiesced schedule or measure planning latency, so it is
+mechanism-path evidence rather than full-scheduler evidence. The default 50
+eight-session blocks yield 400 clustered observations per policy; variants and
+their control run contiguously in randomized order. Failed blocks remain in
+completion denominators, while TTFT inflation uses only complete matched
+controls from the same allocation, excluding blocks split by a time limit. Run
+from a clean committed checkout with two A100 80GB GPUs. Multi-process logs
+rotate every five blocks; transfer and byte logs are sliced per scenario.
+Override `QH_APPTAINER_IMAGE` if the pinned LMCache image is not at the default
+scratch path; set `QH_RESUME_FROM_GIT_SHA` when resuming after a code change.
+Re-submit the job after a time limit; its stable default run root resumes
+completed scenarios.
 
 ## Measurement programs
 

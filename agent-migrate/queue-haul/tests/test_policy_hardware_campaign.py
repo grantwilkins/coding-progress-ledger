@@ -12,12 +12,16 @@ Plausible wrong implementations:
 """
 
 import json
+import math
+from pathlib import Path
 
 import pytest
 
 from policy_hardware_campaign import (
+    EXECUTION_CONTRACT,
     completion_curve,
     make_plan,
+    prepare,
     reduce_run,
 )
 
@@ -39,9 +43,21 @@ def manifest(tmp_path):
 
 
 def test_plan_pairs_every_policy_on_the_same_complete_episode(tmp_path):
-    plan = make_plan(manifest(tmp_path), episodes=2, sessions=4, seed=7)
+    manifest_path = manifest(tmp_path)
+    plan = make_plan(manifest_path, episodes=3, sessions=4, seed=7)
+    assert plan == make_plan(
+        manifest_path, episodes=3, sessions=4, seed=7
+    )
+    assert plan["execution_contract"] == EXECUTION_CONTRACT
+    assert plan["model_profile"]["sha256"]
+    assert not Path(plan["model_profile"]["path"]).is_absolute()
 
-    for episode in range(2):
+    episode_order = [row["episode"] for row in plan["scenarios"]]
+    assert sum(
+        i == 0 or episode != episode_order[i - 1]
+        for i, episode in enumerate(episode_order)
+    ) == 3
+    for episode in range(3):
         rows = [row for row in plan["scenarios"]
                 if row["episode"] == episode]
         signatures = {
@@ -55,6 +71,24 @@ def test_plan_pairs_every_policy_on_the_same_complete_episode(tmp_path):
             {move["session_id"] for move in row["moves"]} == expected
             for row in rows if row["kind"] == "migration"
         )
+    queue_moves = [
+        move for row in plan["scenarios"] if row["policy"] == "queue_haul"
+        for move in row["moves"] if move["method"] == "kv_transfer"
+    ]
+    assert queue_moves
+    assert all(move["planned_rate_limit_bytes_per_s"] > 0
+               and move["planned_quiesce_s"] > 0 for move in queue_moves)
+
+
+def test_prepared_job_is_self_locating_and_fail_fast(tmp_path):
+    out = tmp_path / "queue-haul/outputs/policy"
+    prepare(manifest(tmp_path), out, episodes=1, sessions=4)
+
+    job = (out / "run.sh").read_text()
+    assert 'script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")"' in job
+    assert "--fail-fast --stack-scenarios 30" in job
+    assert '[[ -f "$QH_POLICY_RUN_ROOT/plan.json" ]]' in job
+    assert (out / "run.sbatch").exists()
 
 
 def test_reduction_uses_common_epoch_and_keeps_failed_denominator(tmp_path):
@@ -75,24 +109,25 @@ def test_reduction_uses_common_epoch_and_keeps_failed_denominator(tmp_path):
     failed = {**base, "scenario_id": "failed", "policy": "random"}
     plan = {
         "episodes": 1, "policies": ["queue_haul", "random"],
+        "execution_contract": EXECUTION_CONTRACT,
         "scenarios": [control, queue, failed],
     }
     (tmp_path / "plan.json").write_text(json.dumps(plan))
 
     def write(scenario, result):
         path = tmp_path / "scenarios" / scenario / "result.json"
-        path.parent.mkdir(parents=True)
+        path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(json.dumps(result))
 
     write("control", {
-        "status": "complete",
+        "status": "complete", "allocation_id": "job-a",
         "continuations": [
             {"session_id": name, "start_ns": 0, "first_byte_ns": 100_000_000}
             for name in ("a", "b")
         ],
     })
     write("queue", {
-        "status": "complete",
+        "status": "complete", "allocation_id": "job-a",
         "migrations": [{
             "queued_ns": 1_000_000_000,
             "initial_start_ns": start,
@@ -125,3 +160,16 @@ def test_reduction_uses_common_epoch_and_keeps_failed_denominator(tmp_path):
     x, y = completion_curve(migrations, summaries, "random",
                             "reaction_readiness_s")
     assert not len(x) and not len(y)
+
+    queue_result = json.loads(
+        (tmp_path / "scenarios/queue/result.json").read_text()
+    )
+    write("queue", {**queue_result, "allocation_id": "job-b"})
+    split_rows, split_summaries = reduce_run(tmp_path)
+    assert all(
+        math.isnan(row["continuation_ttft_delta_s"])
+        for row in split_rows if row["policy"] == "queue_haul"
+    )
+    assert not next(
+        row for row in split_summaries if row["policy"] == "queue_haul"
+    )["matched_control_complete"]

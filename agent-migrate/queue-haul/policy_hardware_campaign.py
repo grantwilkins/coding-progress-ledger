@@ -6,7 +6,6 @@ import argparse
 import json
 import math
 import random
-import shlex
 from pathlib import Path
 
 import matplotlib
@@ -26,10 +25,19 @@ DEFAULT_MANIFEST = Path("queue-haul/outputs/coding-manifest.json")
 DEFAULT_MODEL = ROOT / "profiles/gpt_oss_20b_a100_tp1.json"
 POLICIES = ("queue_haul", "greedy", "random", "kv_only", "replay_only")
 LABELS = {
-    "queue_haul": "Queue-Haul", "greedy": "Greedy",
-    "random": "Random feasible", "kv_only": "KV only",
+    "queue_haul": "QH choice/order", "greedy": "Greedy choice/order",
+    "random": "Random choice/order", "kv_only": "KV only",
     "replay_only": "Replay only",
 }
+EXECUTION_CONTRACT = "eager_serial_choice_order"
+
+
+def _portable_path(path: Path) -> str:
+    resolved = path.resolve()
+    try:
+        return str(resolved.relative_to(ROOT.parent.resolve()))
+    except ValueError:
+        return str(resolved)
 
 
 def _problem(profile, sessions, bandwidth_mbps, deadline_s):
@@ -60,7 +68,6 @@ def _moves(policy, scenario, routes, profile, seed):
                   "random": "random"}[policy]
         result = plan(scenario, profile, routes, solver, seed=seed)
         moves = result.moves
-        solve_s = result.solve_s
     else:
         method = "kv_transfer" if policy == "kv_only" else "replay"
         case = profile.case()
@@ -76,15 +83,24 @@ def _moves(policy, scenario, routes, profile, seed):
             (row.session_id, method, order)
             for order, row in enumerate(ordered)
         )
-        solve_s = 0.0
     normalized = [
-        (move.session_id, move.method, move.order)
-        if hasattr(move, "session_id") else move
+        {
+            "session_id": move.session_id, "method": move.method,
+            "order": move.order,
+            "planned_rate_limit_bytes_per_s":
+                move.rate_limit_bytes_per_s,
+            "planned_quiesce_s": move.quiesce_s,
+        } if hasattr(move, "session_id") else {
+            "session_id": move[0], "method": move[1], "order": move[2],
+            "planned_rate_limit_bytes_per_s": None,
+            "planned_quiesce_s": None,
+        }
         for move in moves
     ]
-    if {row[0] for row in normalized} != {row.session_id for row in sessions}:
+    if {row["session_id"] for row in normalized} \
+            != {row.session_id for row in sessions}:
         raise RuntimeError(f"{policy} did not plan the complete episode")
-    return normalized, solve_s
+    return normalized
 
 
 def make_plan(manifest_path: Path, model_path: Path = DEFAULT_MODEL,
@@ -132,14 +148,15 @@ def make_plan(manifest_path: Path, model_path: Path = DEFAULT_MODEL,
             profile, session_rows, bandwidth_mbps, deadline_s
         )
         for policy in POLICIES:
-            moves, solve_s = _moves(
+            moves = _moves(
                 policy, problem, routes, profile,
                 profiler.stable_seed(seed, episode, policy),
             )
             move_rows = [{
-                **next(row for row in session_rows if row["session_id"] == session),
-                "method": method, "order": order,
-            } for session, method, order in moves]
+                **next(row for row in session_rows
+                       if row["session_id"] == move["session_id"]),
+                **move,
+            } for move in moves]
             scenario_id = profiler.object_hash([match_id, policy, move_rows])[:16]
             scenarios.append({
                 **base, "scenario_id": f"p-{scenario_id}",
@@ -147,14 +164,25 @@ def make_plan(manifest_path: Path, model_path: Path = DEFAULT_MODEL,
                     move_rows[0]["method"]
                     if len({row["method"] for row in move_rows}) == 1
                     else "mixed",
-                "policy": policy, "planner_s": solve_s, "moves": move_rows,
+                "policy": policy, "moves": move_rows,
             })
-    rng.shuffle(scenarios)
+    blocks = [[row for row in scenarios if row["episode"] == episode]
+              for episode in range(episodes)]
+    for block in blocks:
+        rng.shuffle(block)
+    rng.shuffle(blocks)
+    scenarios = [row for block in blocks for row in block]
     output = {
         "schema": profiler.PLAN_SCHEMA,
         "manifest": {"path": str(manifest_path),
                      "sha256": profiler.file_hash(manifest_path)},
         "seed": seed, "campaign": "policy_hardware",
+        "execution_contract": EXECUTION_CONTRACT,
+        "model_profile": {
+            "path": _portable_path(model_path),
+            "sha256": profiler.file_hash(model_path),
+            "profile_id": profile.profile_id,
+        },
         "policies": list(POLICIES), "episodes": episodes,
         "sessions_per_episode": sessions, "scenarios": scenarios,
     }
@@ -164,7 +192,15 @@ def make_plan(manifest_path: Path, model_path: Path = DEFAULT_MODEL,
 
 
 def validate_policy_plan(plan_: dict) -> None:
+    if plan_.get("execution_contract") != EXECUTION_CONTRACT:
+        raise ValueError("unsupported policy hardware execution contract")
     policies = set(plan_["policies"])
+    episode_order = [row["episode"] for row in plan_["scenarios"]]
+    if sum(
+        index == 0 or episode != episode_order[index - 1]
+        for index, episode in enumerate(episode_order)
+    ) != plan_["episodes"]:
+        raise ValueError("matched episodes must form contiguous blocks")
     for episode in range(plan_["episodes"]):
         rows = [row for row in plan_["scenarios"]
                 if row["episode"] == episode]
@@ -192,16 +228,41 @@ def prepare(manifest: Path, out: Path, **kwargs) -> dict:
     plan_path = out / "plan.json"
     profiler.write_json(plan_path, plan_)
     job = out / "run.sh"
-    job.write_text(f"""#!/usr/bin/env bash
+    job.write_text("""#!/usr/bin/env bash
 set -euo pipefail
-: "${{QH_POLICY_RUN_ROOT:?set QH_POLICY_RUN_ROOT}}"
-export QH_LMCACHE_MODE="${{QH_LMCACHE_MODE:-mp}}"
+: "${QH_POLICY_RUN_ROOT:?set QH_POLICY_RUN_ROOT}"
+export QH_LMCACHE_MODE="${QH_LMCACHE_MODE:-mp}"
+script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+cd "$script_dir/../../.."
+resume=()
+[[ -z "${QH_RESUME_FROM_GIT_SHA:-}" ]] || resume=(--resume-from-git-sha "$QH_RESUME_FROM_GIT_SHA")
 status=0
-uv run python queue-haul/migration_profiler.py run --plan {shlex.quote(str(plan_path))} --run-root "$QH_POLICY_RUN_ROOT" || status=$?
-uv run python queue-haul/policy_hardware_campaign.py reduce --run-root "$QH_POLICY_RUN_ROOT"
+uv run python queue-haul/migration_profiler.py run --plan "$script_dir/plan.json" \
+  --run-root "$QH_POLICY_RUN_ROOT" --fail-fast --stack-scenarios 30 \
+  "${resume[@]}" || status=$?
+[[ -f "$QH_POLICY_RUN_ROOT/plan.json" ]] || exit "$status"
+uv run python queue-haul/policy_hardware_campaign.py reduce \
+  --run-root "$QH_POLICY_RUN_ROOT"
 exit "$status"
 """)
     job.chmod(0o755)
+    (out / "run.sbatch").write_text("""#!/bin/bash
+#SBATCH --job-name=qh-policy-cdf
+#SBATCH --partition=ramr
+#SBATCH --nodes=1
+#SBATCH --ntasks=1
+#SBATCH --cpus-per-task=16
+#SBATCH --gres=gpu:2
+#SBATCH --constraint=GPU_SKU:A100_SXM4&GPU_MEM:80GB
+#SBATCH --mem=256G
+#SBATCH --time=12:00:00
+#SBATCH --output=policy-hardware-%j.out
+#SBATCH --error=policy-hardware-%j.err
+set -euo pipefail
+script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+export QH_POLICY_RUN_ROOT="${QH_POLICY_RUN_ROOT:-/scratch/$USER/qh-policy-run}"
+bash "$script_dir/run.sh"
+""")
     return plan_
 
 
@@ -225,7 +286,7 @@ def reduce_run(run_root: Path, out: Path | None = None):
             continue
         result = json.loads(path.read_text())
         if result.get("status") == "complete":
-            controls[scenario["match_id"]] = {
+            controls[(scenario["match_id"], result.get("allocation_id"))] = {
                 row["session_id"]: _time(row["start_ns"], row["first_byte_ns"])
                 for row in result["continuations"]
             }
@@ -240,7 +301,9 @@ def reduce_run(run_root: Path, out: Path | None = None):
         epoch = min((row["queued_ns"] for row in raw), default=None)
         contexts = {row["session_id"]: row["initial_tokens"]
                     for row in scenario["sessions"]}
-        control = controls.get(scenario["match_id"], {})
+        control = controls.get(
+            (scenario["match_id"], result.get("allocation_id")), {}
+        )
         ready, committed = [], []
         for row in raw:
             initial = row["initial"]
@@ -266,9 +329,12 @@ def reduce_run(run_root: Path, out: Path | None = None):
                     _time(row["initial_start_ns"], initial["first_byte_ns"]),
                 "continuation_ttft_s":
                     _time(continuation["start_ns"], continuation["first_byte_ns"]),
-                "continuation_ttft_delta_s":
-                    _time(continuation["start_ns"], continuation["first_byte_ns"])
-                    - control.get(row["move"]["session_id"], float("nan")),
+                "continuation_ttft_delta_s": (
+                    _time(continuation["start_ns"],
+                          continuation["first_byte_ns"])
+                    - control[row["move"]["session_id"]]
+                    if row["move"]["session_id"] in control else float("nan")
+                ),
             })
         planned = len(scenario["moves"])
         summaries.append({
@@ -285,7 +351,7 @@ def reduce_run(run_root: Path, out: Path | None = None):
             "commit_90_s": _threshold(committed, planned, .9),
             "commit_100_s": _threshold(committed, planned, 1),
             "deadline_s": scenario["deadline_s"],
-            "planner_s": scenario.get("planner_s", 0),
+            "matched_control_complete": len(control) == planned,
         })
     out.mkdir(parents=True, exist_ok=True)
     profiler.write_csv(out / "policy_migrations.csv", migrations)
@@ -330,17 +396,13 @@ def plot(rows, summaries, out):
             and math.isfinite(row["continuation_ttft_delta_s"])
         )
         if delta:
-            total = sum(
-                row["planned_migrations"] for row in summaries
-                if row["policy"] == policy
-            )
             axes[3].step(
-                delta, np.arange(1, len(delta) + 1) / total,
+                delta, np.arange(1, len(delta) + 1) / len(delta),
                 where="post", color=colors[policy], label=LABELS[policy],
             )
-    axes[0].set_title("Reaction → first token")
+    axes[0].set_title("Controller queue → first token")
     axes[1].set_title("Destination TTFT")
-    axes[2].set_title("Reaction → route commit")
+    axes[2].set_title("Controller queue → route commit")
     axes[3].set_title("Next-request TTFT inflation")
     for i, ax in enumerate(axes[:3]):
         ax.set_xlabel(
@@ -350,7 +412,7 @@ def plot(rows, summaries, out):
         ax.set_ylabel("Fraction of planned migrations")
         ax.set_ylim(0, 1.02)
     axes[3].set_xlabel("Treatment − matched control (s)")
-    axes[3].set_ylabel("Fraction of planned migrations")
+    axes[3].set_ylabel("Fraction with matched control")
     axes[3].set_ylim(0, 1.02)
     fig.legend(loc="upper center", ncol=len(policies), frameon=False)
     fig.tight_layout(rect=(0, 0, 1, .91))

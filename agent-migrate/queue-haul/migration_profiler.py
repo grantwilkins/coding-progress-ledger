@@ -1228,6 +1228,18 @@ def write_cache_slice(source: Path, destination: Path, start_ns: int, end_ns: in
             handle.write(json.dumps(row, separators=(",", ":")) + "\n")
 
 
+def write_csv_tail(source: Path, destination: Path, offset: int) -> None:
+    with source.open("rb") as handle:
+        header = handle.readline()
+        if offset < len(header):
+            raise ValueError("CSV offset precedes header")
+        handle.seek(offset)
+        tail = handle.read()
+    with destination.open("wb") as handle:
+        handle.write(header)
+        handle.write(tail)
+
+
 def restart_proxy(stack: b.Stack, cfg: b.Config, scenario_root: Path, mbps: float) -> None:
     b.stop_proc(stack.proxy)
     stack.proxy = b.start_logged(b.proxy_cmd(cfg, mbps, scenario_root / "proxy_bytes.csv"), scenario_root / "proxy.log")
@@ -1276,6 +1288,10 @@ def run_scenario(stack: b.Stack, cfg: b.Config, manifest: dict, scenario: dict,
     proxy_log = stack.run_root / "proxy_bytes.csv" \
         if b.lmcache_mode() == "mp" else root / "proxy_bytes.csv"
     proxy_before = b.proxy_counts(proxy_log)
+    mp_offsets = {
+        name: (stack.run_root / name).stat().st_size
+        for name in ("proxy_bytes.csv", "resp_transfers.csv")
+    } if b.lmcache_mode() == "mp" else {}
     runtime = None
     sleeping = False
     try:
@@ -1366,6 +1382,7 @@ def run_scenario(stack: b.Stack, cfg: b.Config, manifest: dict, scenario: dict,
         elapsed_s = (time.monotonic_ns() - start_ns) / 1e9
         result = {
             "schema": RESULT_SCHEMA, "scenario_id": scenario["scenario_id"], "status": "complete",
+            "allocation_id": os.environ.get("SLURM_JOB_ID"),
             "started_ns": start_ns, "ended_ns": time.monotonic_ns(), "elapsed_s": elapsed_s,
             "deadline_s": scenario["deadline_s"], "deadline_met": elapsed_s <= scenario["deadline_s"],
             "full_drain": full_drain, "final_state": final_state,
@@ -1396,6 +1413,11 @@ def run_scenario(stack: b.Stack, cfg: b.Config, manifest: dict, scenario: dict,
                             cache_log, root / "cache_operations.jsonl",
                             start_ns, time.monotonic_ns(),
                         )
+                    else:
+                        for name, offset in mp_offsets.items():
+                            write_csv_tail(
+                                stack.run_root / name, root / name, offset,
+                            )
     result["wire_bytes"] = b.count_delta(
         proxy_before, b.proxy_counts(proxy_log),
     )
@@ -1436,8 +1458,10 @@ def merge_run_metadata(current: dict, previous: dict | None, resume_from: str | 
 def run_plan(plan_path: Path, run_root: Path, cfg: b.Config, allow_dirty: bool,
              extra: list[str], resume_from: str | None = None,
              power_state_cycles: int = 0, power_state_window_s: float = 60,
-             node_power: bool = False) -> None:
-    if power_state_cycles < 0 or power_state_window_s <= 0:
+             node_power: bool = False, fail_fast: bool = False,
+             stack_scenarios: int = 0) -> None:
+    if power_state_cycles < 0 or power_state_window_s <= 0 \
+            or stack_scenarios < 0:
         raise ValueError("invalid power-state settings")
     if node_power:
         node_power_reading()
@@ -1448,14 +1472,14 @@ def run_plan(plan_path: Path, run_root: Path, cfg: b.Config, allow_dirty: bool,
     manifest = json.loads(manifest_path.read_text())
     validate_plan(plan, manifest)
     sha, dirty = git_state(allow_dirty)
-    metadata = {"schema": RUN_SCHEMA, "plan_sha256": file_hash(plan_path), "plan_object_sha256": object_hash(plan), "manifest_sha256": file_hash(manifest_path), "git_sha": sha, "git_shas": [sha], "dirty": dirty, "lmcache_mode": b.lmcache_mode(), "config": config_record(cfg), "extra_vllm_args": extra, "power_state_cycles": power_state_cycles, "power_state_window_s": power_state_window_s, "node_power": node_power}
+    metadata = {"schema": RUN_SCHEMA, "plan_sha256": file_hash(plan_path), "plan_object_sha256": object_hash(plan), "manifest_sha256": file_hash(manifest_path), "git_sha": sha, "git_shas": [sha], "dirty": dirty, "lmcache_mode": b.lmcache_mode(), "config": config_record(cfg), "extra_vllm_args": extra, "power_state_cycles": power_state_cycles, "power_state_window_s": power_state_window_s, "node_power": node_power, "fail_fast": fail_fast, "stack_scenarios": stack_scenarios}
     metadata_path = run_root / "run_metadata.json"
     previous = json.loads(metadata_path.read_text()) if metadata_path.exists() else None
     metadata = merge_run_metadata(metadata, previous, resume_from)
     run_root.mkdir(parents=True, exist_ok=True)
     write_json(metadata_path, metadata)
     write_json(run_root / "plan.json", plan)
-    failures, stack, attempt = [], None, 0
+    failures, stack, attempt, stack_uses = [], None, 0, 0
 
     def start_stack(mbps: float):
         nonlocal attempt
@@ -1473,11 +1497,13 @@ def run_plan(plan_path: Path, run_root: Path, cfg: b.Config, allow_dirty: bool,
             if stack is not None and (
                 b.lmcache_mode() == "mp"
                 and stack.bandwidth_mbps != scenario["bandwidth_mbps"]
+                or stack_scenarios and stack_uses >= stack_scenarios
             ):
                 b.stop_stack(stack)
                 stack = None
             if stack is None:
                 stack = start_stack(scenario["bandwidth_mbps"])
+                stack_uses = 0
                 power_result = run_root / "power_states" / "result.json"
                 if power_state_cycles and not power_result.exists():
                     profile_power_states(
@@ -1486,6 +1512,7 @@ def run_plan(plan_path: Path, run_root: Path, cfg: b.Config, allow_dirty: bool,
                     )
             for reset_attempt in range(2):
                 try:
+                    stack_uses += 1
                     run_scenario(
                         stack, cfg, manifest, scenario, root,
                         metadata["plan_sha256"][:16],
@@ -1498,14 +1525,15 @@ def run_plan(plan_path: Path, run_root: Path, cfg: b.Config, allow_dirty: bool,
                     if reset_attempt:
                         raise
                     stack = start_stack(scenario["bandwidth_mbps"])
+                    stack_uses = 0
                 except Exception as exc:
                     failures.append(scenario["scenario_id"])
                     write_json(root / "result.json", {"schema": RESULT_SCHEMA, "scenario_id": scenario["scenario_id"], "status": "failed", "error": f"{type(exc).__name__}: {exc}"})
                     b.stop_stack(stack)
                     stack = None
-                    if scenario.get("smoke"):
+                    if scenario.get("smoke") or fail_fast:
                         raise RuntimeError(
-                            f"campaign smoke failed: {scenario['scenario_id']}"
+                            f"campaign scenario failed: {scenario['scenario_id']}"
                         ) from exc
                     break
     finally:
@@ -2569,6 +2597,8 @@ def parse_args(argv: list[str] | None = None):
     command.add_argument("--power-state-cycles", type=int, default=0)
     command.add_argument("--power-state-window-s", type=float, default=60)
     command.add_argument("--node-power", action="store_true")
+    command.add_argument("--fail-fast", action="store_true")
+    command.add_argument("--stack-scenarios", type=int, default=0)
     b.add_common(command); command.add_argument("extra_vllm_args", nargs=argparse.REMAINDER)
     command = sub.add_parser("reduce"); command.add_argument("--run-root", type=Path, required=True)
     for name in ("check-parallel", "check-catch-up", "check-campaign"):
@@ -2598,7 +2628,8 @@ def main(argv: list[str] | None = None) -> None:
         run_plan(
             args.plan, args.run_root, b.config_from_args(args), args.allow_dirty,
             extra, args.resume_from_git_sha, args.power_state_cycles,
-            args.power_state_window_s, args.node_power,
+            args.power_state_window_s, args.node_power, args.fail_fast,
+            args.stack_scenarios,
         )
     elif args.command == "reduce":
         reduce_run(args.run_root)

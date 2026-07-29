@@ -57,6 +57,18 @@ def test_mp_scenario_rejects_proxy_restart_and_mismatched_bandwidth(monkeypatch,
                        tmp_path, "run", configure_proxy=False)
 
 
+def test_shared_mp_csv_slice_contains_only_new_scenario_rows(tmp_path):
+    source, destination = tmp_path / "shared.csv", tmp_path / "scenario.csv"
+    source.write_text("time,value\n1,old\n")
+    offset = source.stat().st_size
+    with source.open("a") as handle:
+        handle.write("2,new\n3,newer\n")
+
+    c.write_csv_tail(source, destination, offset)
+
+    assert destination.read_text() == "time,value\n2,new\n3,newer\n"
+
+
 def test_mp_plan_reuses_stack_and_restarts_only_for_bandwidth(monkeypatch, tmp_path):
     manifest = tmp_path / "manifest.json"
     manifest.write_text("{}")
@@ -66,7 +78,8 @@ def test_mp_plan_reuses_stack_and_restarts_only_for_bandwidth(monkeypatch, tmp_p
         "scenarios": [
             {"scenario_id": "a", "bandwidth_mbps": 1000},
             {"scenario_id": "b", "bandwidth_mbps": 1000},
-            {"scenario_id": "c", "bandwidth_mbps": 5000},
+            {"scenario_id": "c", "bandwidth_mbps": 1000},
+            {"scenario_id": "d", "bandwidth_mbps": 5000},
         ],
     }))
     starts, runs, stops = [], [], []
@@ -92,12 +105,53 @@ def test_mp_plan_reuses_stack_and_restarts_only_for_bandwidth(monkeypatch, tmp_p
                          kwargs["configure_proxy"])),
     )
 
-    c.run_plan(plan, tmp_path / "run", SimpleNamespace(), False, [])
+    c.run_plan(
+        plan, tmp_path / "run", SimpleNamespace(), False, [],
+        stack_scenarios=2,
+    )
 
-    assert starts == [1000, 5000]
+    assert starts == [1000, 1000, 5000]
     assert runs == [("a", 1000, False), ("b", 1000, False),
-                    ("c", 5000, False)]
-    assert stops == [1000, 5000]
+                    ("c", 1000, False), ("d", 5000, False)]
+    assert stops == [1000, 1000, 5000]
+
+
+def test_fail_fast_records_first_failure_and_stops(monkeypatch, tmp_path):
+    manifest = tmp_path / "manifest.json"
+    manifest.write_text("{}")
+    plan = tmp_path / "plan.json"
+    plan.write_text(json.dumps({
+        "manifest": {"path": str(manifest), "sha256": c.file_hash(manifest)},
+        "scenarios": [
+            {"scenario_id": "a", "bandwidth_mbps": 1000},
+            {"scenario_id": "b", "bandwidth_mbps": 1000},
+        ],
+    }))
+    runs = []
+    stack = SimpleNamespace(run_root=tmp_path, bandwidth_mbps=1000)
+    monkeypatch.setattr(c, "validate_plan", lambda *_: None)
+    monkeypatch.setattr(c, "git_state", lambda _: ("sha", False))
+    monkeypatch.setattr(c, "config_record", lambda _: {})
+    monkeypatch.setattr(c.b, "lmcache_mode", lambda: "mp")
+    monkeypatch.setattr(c.b, "start_stack", lambda *_: stack)
+    monkeypatch.setattr(c.b, "start_sink", lambda *_: None)
+    monkeypatch.setattr(c.b, "stop_stack", lambda *_: None)
+
+    def fail(_stack, _cfg, _manifest, scenario, *_args, **_kwargs):
+        runs.append(scenario["scenario_id"])
+        raise RuntimeError("broken hardware")
+
+    monkeypatch.setattr(c, "run_scenario", fail)
+    with pytest.raises(RuntimeError, match="scenario failed"):
+        c.run_plan(
+            plan, tmp_path / "run", SimpleNamespace(), False, [],
+            fail_fast=True,
+        )
+
+    assert runs == ["a"]
+    assert json.loads(
+        (tmp_path / "run/scenarios/a/result.json").read_text()
+    )["status"] == "failed"
 
 
 def test_manifest_is_deterministic_and_uses_complete_trace_boundaries(tmp_path):
