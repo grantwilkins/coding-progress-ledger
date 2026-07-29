@@ -6,6 +6,7 @@ import csv
 import hashlib
 from collections import OrderedDict
 import http.client
+import io
 import json
 import os
 import re
@@ -1094,9 +1095,10 @@ def resp_rows(path: Path) -> list[dict]:
 def mp_source_keys(path: Path, offset: int) -> set[str]:
     with path.open() as handle:
         fields = next(csv.reader(handle))
+    with path.open("rb") as handle:
         handle.seek(offset)
-        return {row["key_hashes"] for row in csv.DictReader(handle, fieldnames=fields)
-                if row["command"] == "SET"}
+        rows = csv.DictReader(io.StringIO(handle.read().decode()), fieldnames=fields)
+        return {row["key_hashes"] for row in rows if row["command"] == "SET"}
 
 
 def mp_wait_stored(log: Path, offset: int, tokens: int) -> None:
