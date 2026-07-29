@@ -1254,12 +1254,9 @@ def run_scenario(stack: b.Stack, cfg: b.Config, manifest: dict, scenario: dict,
                  root: Path, run_id: str, destination_load=None,
                  configure_proxy: bool = True) -> dict:
     if b.lmcache_mode() == "mp" and configure_proxy:
-        raise ValueError("MP scenarios require an isolated bandwidth-pinned stack")
-    if not configure_proxy and (
-        stack.run_root != root
-        or stack.bandwidth_mbps != scenario["bandwidth_mbps"]
-    ):
-        raise ValueError("scenario root or bandwidth does not match its isolated stack")
+        raise ValueError("MP scenarios require a bandwidth-pinned stack")
+    if not configure_proxy and stack.bandwidth_mbps != scenario["bandwidth_mbps"]:
+        raise ValueError("scenario bandwidth does not match its stack")
     root.mkdir(parents=True, exist_ok=True)
     write_json(root / "scenario.json", scenario)
     if configure_proxy:
@@ -1274,8 +1271,11 @@ def run_scenario(stack: b.Stack, cfg: b.Config, manifest: dict, scenario: dict,
     sink_log = stack.run_root / (
         "lmcache-sink.log" if b.lmcache_mode() == "mp" else "sink.log"
     )
-    cache_log = root / "resp_transfers.csv" \
+    cache_log = stack.run_root / "resp_transfers.csv" \
         if b.lmcache_mode() == "mp" else stack.run_root / "lmcache.log"
+    proxy_log = stack.run_root / "proxy_bytes.csv" \
+        if b.lmcache_mode() == "mp" else root / "proxy_bytes.csv"
+    proxy_before = b.proxy_counts(proxy_log)
     runtime = None
     sleeping = False
     try:
@@ -1396,7 +1396,9 @@ def run_scenario(stack: b.Stack, cfg: b.Config, manifest: dict, scenario: dict,
                             cache_log, root / "cache_operations.jsonl",
                             start_ns, time.monotonic_ns(),
                         )
-    result["wire_bytes"] = b.proxy_counts(root / "proxy_bytes.csv")
+    result["wire_bytes"] = b.count_delta(
+        proxy_before, b.proxy_counts(proxy_log),
+    )
     write_json(root / "result.json", result)
     return result
 
@@ -1468,6 +1470,12 @@ def run_plan(plan_path: Path, run_root: Path, cfg: b.Config, allow_dirty: bool,
             root = run_root / "scenarios" / scenario["scenario_id"]
             if (root / "result.json").exists() and json.loads((root / "result.json").read_text()).get("status") == "complete":
                 continue
+            if stack is not None and (
+                b.lmcache_mode() == "mp"
+                and stack.bandwidth_mbps != scenario["bandwidth_mbps"]
+            ):
+                b.stop_stack(stack)
+                stack = None
             if stack is None:
                 stack = start_stack(scenario["bandwidth_mbps"])
                 power_result = run_root / "power_states" / "result.json"
@@ -1478,7 +1486,11 @@ def run_plan(plan_path: Path, run_root: Path, cfg: b.Config, allow_dirty: bool,
                     )
             for reset_attempt in range(2):
                 try:
-                    run_scenario(stack, cfg, manifest, scenario, root, metadata["plan_sha256"][:16])
+                    run_scenario(
+                        stack, cfg, manifest, scenario, root,
+                        metadata["plan_sha256"][:16],
+                        configure_proxy=b.lmcache_mode() != "mp",
+                    )
                     break
                 except ScenarioResetError:
                     b.stop_stack(stack)

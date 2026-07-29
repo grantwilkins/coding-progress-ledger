@@ -44,20 +44,60 @@ def write_trace(path: Path) -> None:
     path.write_text("".join(json.dumps(row) + "\n" for row in rows))
 
 
-def test_mp_scenario_rejects_proxy_restart_and_mismatched_stack(monkeypatch, tmp_path):
+def test_mp_scenario_rejects_proxy_restart_and_mismatched_bandwidth(monkeypatch, tmp_path):
     monkeypatch.setattr(c.b, "lmcache_mode", lambda: "mp")
     scenario = {"bandwidth_mbps": 10000}
     stack = SimpleNamespace(run_root=tmp_path, bandwidth_mbps=10000)
 
-    with pytest.raises(ValueError, match="isolated bandwidth-pinned"):
+    with pytest.raises(ValueError, match="bandwidth-pinned"):
         c.run_scenario(stack, SimpleNamespace(), {}, scenario, tmp_path, "run")
-    with pytest.raises(ValueError, match="does not match"):
-        c.run_scenario(stack, SimpleNamespace(), {}, scenario,
-                       tmp_path / "wrong", "run", configure_proxy=False)
     stack.bandwidth_mbps = 5000
     with pytest.raises(ValueError, match="does not match"):
         c.run_scenario(stack, SimpleNamespace(), {}, scenario,
                        tmp_path, "run", configure_proxy=False)
+
+
+def test_mp_plan_reuses_stack_and_restarts_only_for_bandwidth(monkeypatch, tmp_path):
+    manifest = tmp_path / "manifest.json"
+    manifest.write_text("{}")
+    plan = tmp_path / "plan.json"
+    plan.write_text(json.dumps({
+        "manifest": {"path": str(manifest), "sha256": c.file_hash(manifest)},
+        "scenarios": [
+            {"scenario_id": "a", "bandwidth_mbps": 1000},
+            {"scenario_id": "b", "bandwidth_mbps": 1000},
+            {"scenario_id": "c", "bandwidth_mbps": 5000},
+        ],
+    }))
+    starts, runs, stops = [], [], []
+
+    def start(_cfg, root, bandwidth, _extra):
+        starts.append(bandwidth)
+        return SimpleNamespace(run_root=root, bandwidth_mbps=bandwidth)
+
+    monkeypatch.setattr(c, "validate_plan", lambda *_: None)
+    monkeypatch.setattr(c, "git_state", lambda _: ("sha", False))
+    monkeypatch.setattr(c, "config_record", lambda _: {})
+    monkeypatch.setattr(c.b, "lmcache_mode", lambda: "mp")
+    monkeypatch.setattr(c.b, "start_stack", start)
+    monkeypatch.setattr(c.b, "start_sink", lambda *_: None)
+    monkeypatch.setattr(
+        c.b, "stop_stack",
+        lambda stack: stops.append(stack.bandwidth_mbps),
+    )
+    monkeypatch.setattr(
+        c, "run_scenario",
+        lambda stack, _cfg, _manifest, scenario, *_args, **kwargs:
+            runs.append((scenario["scenario_id"], stack.bandwidth_mbps,
+                         kwargs["configure_proxy"])),
+    )
+
+    c.run_plan(plan, tmp_path / "run", SimpleNamespace(), False, [])
+
+    assert starts == [1000, 5000]
+    assert runs == [("a", 1000, False), ("b", 1000, False),
+                    ("c", 5000, False)]
+    assert stops == [1000, 5000]
 
 
 def test_manifest_is_deterministic_and_uses_complete_trace_boundaries(tmp_path):

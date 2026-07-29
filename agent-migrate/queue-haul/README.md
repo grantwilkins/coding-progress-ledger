@@ -91,6 +91,10 @@ uv run python queue-haul/plot_testbed_kv_timeline.py
 uv run python queue-haul/plot_testbed_kv_timeline.py --method replay
 uv run python queue-haul/plot_migration_ttft_cdf.py
 uv run python queue-haul/plot_fixed_contract_residuals.py
+uv run python queue-haul/policy_hardware_campaign.py prepare \
+  --out queue-haul/outputs/policy-hardware-plan
+QH_POLICY_RUN_ROOT=/scratch/$USER/qh-policy-run \
+  bash queue-haul/outputs/policy-hardware-plan/run.sh
 uv run python queue-haul/paper_evaluation.py \
   --out queue-haul/outputs/paper-evaluation
 ```
@@ -113,6 +117,12 @@ request-boundary drain from tidy event tables.
 120-second fixed-contract requirement sweep and plots normalized resource
 headroom against requested source-power shed. Use `--refresh` when its pinned
 inputs change.
+`policy_hardware_campaign.py` creates a resumable, ungated paired campaign for
+Queue-Haul, greedy, random-feasible, KV-only, and replay-only policies. Its
+default 50 eight-session episodes yield 400 planned migrations per policy and
+retain failed episodes in the completion-curve denominator. Reduction plots
+queue-inclusive first-token latency, destination TTFT, route commit, and paired
+next-request TTFT inflation.
 
 ## Measurement programs
 
