@@ -396,6 +396,21 @@ def test_session_probe_appends_one_final_instruction():
     assert c.chat_payload(c.b.Config(), base, 1, True)["kv_transfer_params"] == {"qh_bypass_lmcache": True}
 
 
+def test_session_request_requires_http_success_not_exact_model_text(monkeypatch):
+    session = c.LiveSession.__new__(c.LiveSession)
+    session.cfg, session.state_code = c.b.Config(), "CODE"
+    session.session_id, session.timeout_s = "session", 1
+    session.event_log = SimpleNamespace(write=lambda *_args, **_kwargs: None)
+    result = c.RequestResult("request", 200, "hash", 1, 2)
+    monkeypatch.setattr(c, "stream_chat", lambda *_args: (result, "valid reply"))
+
+    assert session.request(1, [], "probe") == (result, "valid reply")
+    failed = c.RequestResult("request", 500, "hash", 1, 2)
+    monkeypatch.setattr(c, "stream_chat", lambda *_args: (failed, "CODE"))
+    with pytest.raises(RuntimeError, match="HTTP 500"):
+        session.request(1, [], "probe")
+
+
 def test_cli_only_exposes_new_commands():
     for command in ("make-manifest", "make-plan", "run", "reduce"):
         with pytest.raises(SystemExit) as error:

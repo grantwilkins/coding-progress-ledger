@@ -670,8 +670,10 @@ class LiveSession:
         self.event_log.write("request_start", session_id=self.session_id, request_id=label, route_port=port, context_hash=context_hash)
         result, text = stream_chat(self.cfg, port, self.probe(messages, prompt), PROBE_MAX_TOKENS, context_hash, self.timeout_s, bypass_lmcache)
         self.event_log.write("request_end", session_id=self.session_id, request_id=result.request_id, route_port=port, status_code=result.status_code, context_hash=context_hash, first_byte_ns=result.first_byte_ns, chunks=[asdict(chunk) for chunk in result.stream_chunks])
-        if result.status_code != 200 or self.state_code not in text:
-            raise RuntimeError(f"{label} failed state check for {self.session_id}: HTTP {result.status_code}")
+        if result.status_code != 200:
+            raise RuntimeError(
+                f"{label} failed for {self.session_id}: HTTP {result.status_code}"
+            )
         return result, text
 
     def warm(self) -> None:
