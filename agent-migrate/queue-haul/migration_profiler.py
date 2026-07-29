@@ -745,6 +745,8 @@ class LiveSession:
                         self.source_log, log_offset,
                         self.cache_log, transfer_offset,
                         result.prompt_tokens // 256 * 256,
+                        max(0, result.prompt_tokens // 256 * 256
+                            - len(self.cache_keys) * 256),
                     )
                     keys -= self.cache_keys
             with self.lock:

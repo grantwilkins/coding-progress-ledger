@@ -1111,8 +1111,9 @@ def mp_wait_stored(log: Path, offset: int, tokens: int) -> None:
 
 
 def mp_wait_source_keys(log: Path, offset: int, transfers: Path,
-                        transfer_offset: int, tokens: int) -> set[str]:
-    mp_wait_stored(log, offset, tokens)
+                        transfer_offset: int, tokens: int,
+                        stored_tokens: int | None = None) -> set[str]:
+    mp_wait_stored(log, offset, tokens if stored_tokens is None else stored_tokens)
     expected = tokens // 256
     deadline = time.monotonic() + 600
     while time.monotonic() < deadline:
