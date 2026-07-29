@@ -3,95 +3,104 @@
 % preamble providing amsmath, booktabs, graphicx and \bibliography{appendix}.
 
 \appendix
-\section{Replay/Transfer Ratio: Data, Model, and Assumptions}
+\section{Replay vs.\ KV Transfer: Data and Assumptions}
 \label{app:migration-ratio}
 
-This appendix documents \texttt{migration\_ratio.py}, which produces
-Figure~\ref{fig:migration-ratio} (ratio vs.\ inter-site bandwidth at fixed
-context) and the GLM-5 context--bandwidth surface. Everything below is an
-analytic roofline; no numbers here are measured.
+This appendix gives the numbers behind \texttt{migration\_ratio.py} and its two
+figures. Everything here is arithmetic on published specs. Nothing is measured.
 
-\subsection{Cost model}
+\subsection{What we compute}
 
-For a session of $T$ tokens we compare rebuilding serving state by
-\emph{replay} (prefill from the prompt) against \emph{state transfer}
-(shipping the KV cache). The reported quantity is the ratio
+A session holds $T$ tokens of context. To move it to another site we can send
+the prompt and prefill again (\emph{replay}), or send the KV cache
+(\emph{transfer}). We plot the ratio of the two times,
 \[
-  R(T,\lambda) \;=\; \frac{t_{\text{replay}}(T)}{t_{\text{transfer}}(T,\lambda)}
-  \;=\; \frac{\Phi(T)/\mathrm{EFF}}{8\,\eta(T)/\lambda},
+  \frac{t^{R}}{t^{KV}} \;=\; \frac{\Phi(T)/\mathrm{EFF}}{8\,\eta(T)/\lambda},
 \]
-with $R>1$ favouring KV transfer and $R<1$ favouring replay. Prefill work is
-split into a dense feed-forward term linear in $T$ and a causal-attention term
-quadratic in $T$:
+where $\Phi(T)$ is prefill FLOPs, $\mathrm{EFF}$ is sustained throughput,
+$\eta(T)$ is KV bytes, and $\lambda$ is the link rate in Gbps. Above $1$, send
+the KV cache. Below $1$, replay. The crossover rate is
+$\lambda^\star = 8\,\eta(T)/t^{R}(T)$.
+
+Prefill has two terms:
 \[
-  \Phi(T) \;=\; \underbrace{2 A T}_{\text{FFN, active params}}
-  \;+\; \underbrace{\sigma\, L\, H_q\,(d_{qk}+d_v)\, T^2}_{\text{causal attention}},
+  \Phi(T) \;=\; \underbrace{2 A T}_{\text{FFN}} \;+\;
+  \underbrace{2 H_q (d_{qk}+d_v)\, P(T)}_{\text{attention}},
 \]
-where $A$ is the activated parameter count, $L$ the number of layers holding
-per-token KV, $H_q$ the query-head count, and $\sigma$ an architecture-specific
-\emph{attention scale} capturing sequence-dimension compression (\S\ref{app:models}).
-The $T^2$ (rather than $2T^2$) coefficient absorbs the causal factor of
-$\tfrac{1}{2}$ against the $2$ FLOPs per multiply--accumulate. Transfer time uses
-$\eta(T)$, the total KV bytes at $T$ tokens, converted to bits over a link of
-$\lambda$ Gbps. Setting $R=1$ gives the crossover bandwidth
-$\lambda^\star = 8\,\eta(T)/t_{\text{replay}}(T)$.
+with $A$ the active parameter count, $H_q$ the query heads, and $P(T)$ the
+number of causal (query, key) pairs.
 
 \subsection{Hardware}
 
-One serving instance is $8\times$ H100 SXM. We take the dense BF16 tensor-core
-peak as $989.5$\,TFLOP/s per GPU, i.e.\ half the $1{,}979$\,TFLOP/s figure NVIDIA
-quotes with 2:4 structured sparsity~\cite{nvidia2024h100}. At a model FLOP
-utilization~\cite{chowdhery2023palm} of $\mathrm{MFU}=0.35$ this gives a sustained
-prefill budget
+One instance is $8\times$ H100 SXM. Dense BF16 peak is $989.5$\,TFLOP/s per GPU.
+That is half of the $1{,}979$\,TFLOP/s NVIDIA quotes, because their number
+assumes 2:4 sparsity~\cite{nvidia2024h100}. At 35\% model FLOP
+utilization~\cite{chowdhery2023palm},
 \[
   \mathrm{EFF} = 8 \times 989.5\,\text{TFLOP/s} \times 0.35 \approx 2.77\,\text{PFLOP/s}.
 \]
-MFU is the single free parameter in the model; $R$ scales linearly in it.
+MFU is the only free parameter. The ratio scales linearly in it.
 
-\subsection{Model data}
-\label{app:models}
+\subsection{Counting attention pairs}
 
-Architecture constants are read from each model's released configuration, not
-fitted. Three KV layouts appear:
+Plain causal attention computes $T^2/2$ pairs per layer. Three architecture
+features change that count.
 
 \begin{itemize}
-\item \textbf{GQA}~\cite{ainslie2023gqa}: $\eta = 2_{(K,V)}\cdot L \cdot H_{kv}
-\cdot d_{\text{head}} \cdot 2\,\text{B}$, with $\sigma=1$.
-\item \textbf{MLA}~\cite{deepseekv2}: only the compressed latent plus the RoPE
-key are cached, $\eta = L\,(r_{kv} + d_{\text{rope}})\cdot 2\,\text{B}$ with
-$r_{kv}=512$, $d_{\text{rope}}=64$; $\sigma=1$.
-\item \textbf{CSA/HCA}~\cite{deepseekv4}: DeepSeek-V4-Pro compresses $m$ tokens
-into one KV entry ($m=4$ for its 30 CSA layers, $m'=128$ for its 31 HCA layers),
-caches a $c=512$ entry per compressed block plus a $c_I=128$ indexer key on CSA
-layers, and keeps an $n_{\text{win}}=128$ uncompressed sliding window per layer.
-Sequence-dimension compression carries into attention as
-$\sigma = (30/4 + 31/128)/61 \approx 0.127$.
+\item \textbf{Compression.} CSA and HCA squeeze $m$ tokens into one KV
+entry~\cite{deepseekv4}. A layer sees $T/m$ entries instead of $T$.
+\item \textbf{Top-$k$.} DSA scores the entries with a cheap indexer and keeps the
+best $k$~\cite{deepseekv32}. Once the pool is bigger than $k$, every query
+attends to $k$ entries and the layer becomes linear in $T$.
+\item \textbf{Sliding window.} Some layers also keep the $w$ most recent tokens
+uncompressed. Every query attends to all of them.
 \end{itemize}
 
-For the hybrid-linear Qwen models, $L$ counts only the full-attention layers:
-Qwen3-Next-80B has $48$ layers at a full-attention interval of $4$ ($L=12$), and
-Qwen3.5-397B has $60$ layers in a 3:1 linear/full pattern ($L=15$). Their
-Gated~DeltaNet layers hold a constant-size recurrent state that we do not count
-as migratable KV.
+Pairs per layer are then
+\[
+  P(T) =
+  \begin{cases}
+    \dfrac{T^2}{2m} + wT, & T \le km, \\[2ex]
+    kT - \dfrac{k^2 m}{2} + wT, & T > km.
+  \end{cases}
+\]
+The two cases agree at $T = km$, where both give $k^2m/2 + wT$. Layers with
+$m=1$, $k=\infty$, $w=0$ reduce to $T^2/2$.
+
+\subsection{Model data}
+
+Every constant below comes from the released config. Table~\ref{tab:app-arch}
+lists them. KV layouts are GQA~\cite{ainslie2023gqa}, MLA (cache the compressed
+latent plus the RoPE key, $r_{kv}=512$, $d_{\text{rope}}=64$)~\cite{deepseekv2},
+and DeepSeek's CSA/HCA.
+
+DeepSeek-V4-Pro has 61 layers. The first two are HCA, the rest alternate, giving
+30 CSA and 31 HCA. CSA uses $m{=}4$ and $k{=}1024$, HCA uses $m'{=}128$ and no
+top-$k$, and both keep a 128-token window~\cite{deepseekv4}. GLM-5 runs DSA on
+all 78 layers with $k{=}2048$~\cite{glm5}. The other four use dense attention.
+
+For the hybrid Qwen models, $L$ counts only the full-attention layers.
+Qwen3-Next-80B has 48 layers with full attention every 4th ($L=12$). Qwen3.5-397B
+has 60 layers in a 3:1 linear/full pattern ($L=15$). Their Gated DeltaNet layers
+hold a fixed-size recurrent state, which we do not count as migratable KV.
 
 \begin{table}[t]
 \centering
 \resizebox{\columnwidth}{!}{
 \begin{tabular}{lrrlrl}
 \toprule
-Model & $A$ (B) & $L$ & KV layout & $\eta$ (KiB/tok) & Config source \\
+Model & $A$ (B) & $L$ & Attention & $\eta$ (KiB/tok) & Config \\
 \midrule
-DeepSeek-V4-Pro     & 49 & 61 & CSA/HCA, $m{=}4$/$m'{=}128$ & $9.7$   & \cite{deepseekv4} \\
-Qwen3-Next-80B-A3B  & 3  & 12 & GQA, $H_{kv}{=}2$, $d{=}256$ & $24.0$  & \cite{qwen3next} \\
-Qwen3.5-397B-A17B   & 17 & 15 & GQA, $H_{kv}{=}2$, $d{=}256$ & $30.0$  & \cite{qwen35} \\
-Kimi-K2.6           & 32 & 61 & MLA, $r_{kv}{=}512$          & $68.6$  & \cite{kimik26,kimik2} \\
-GLM-5               & 40 & 78 & MLA, $r_{kv}{=}512$          & $87.8$  & \cite{glm5} \\
-Qwen3-235B-A22B     & 22 & 94 & GQA, $H_{kv}{=}4$, $d{=}128$ & $188.0$ & \cite{qwen3} \\
+DeepSeek-V4-Pro     & 49 & 61 & CSA/HCA, $k{=}1024$ & $9.7$   & \cite{deepseekv4} \\
+Qwen3-Next-80B-A3B  & 3  & 12 & GQA, dense          & $24.0$  & \cite{qwen3next} \\
+Qwen3.5-397B-A17B   & 17 & 15 & GQA, dense          & $30.0$  & \cite{qwen35} \\
+Kimi-K2.6           & 32 & 61 & MLA, dense          & $68.6$  & \cite{kimik26,kimik2} \\
+GLM-5               & 40 & 78 & MLA + DSA, $k{=}2048$ & $87.8$ & \cite{glm5} \\
+Qwen3-235B-A22B     & 22 & 94 & GQA, dense          & $188.0$ & \cite{qwen3} \\
 \bottomrule
 \end{tabular}}
-\caption{Architecture constants, sorted by KV size. $A$ is activated parameters,
-$L$ the layers holding per-token KV, $\eta$ the BF16 KV bytes per token. All
-values are exact from the released configs.}
+\caption{Architecture constants, sorted by KV size. $A$ is active parameters,
+$L$ the layers holding per-token KV, $\eta$ the BF16 KV bytes per token.}
 \label{tab:app-arch}
 \end{table}
 
@@ -100,90 +109,70 @@ values are exact from the released configs.}
 \resizebox{0.9\columnwidth}{!}{
 \begin{tabular}{lrrr}
 \toprule
-Model & KV @ 100k & $t_{\text{replay}}$ (s) & $\lambda^\star$ (Gbps) \\
+Model & KV @ 100k & $t^{R}$ (s) & $\lambda^\star$ (Gbps) \\
 \midrule
-DeepSeek-V4-Pro     & $0.99$\,GB  & $7.20$  & $1.10$ \\
-Kimi-K2.6           & $7.03$\,GB  & $6.82$  & $8.24$ \\
-GLM-5               & $8.99$\,GB  & $12.11$ & $5.93$ \\
-Qwen3.5-397B-A17B   & $3.07$\,GB  & $2.11$  & $11.62$ \\
-Qwen3-235B-A22B     & $19.25$\,GB & $7.15$  & $21.55$ \\
-Qwen3-Next-80B-A3B  & $2.46$\,GB  & $0.57$  & $34.41$ \\
+DeepSeek-V4-Pro     & $0.99$\,GB  & $4.01$ & $1.98$ \\
+Kimi-K2.6           & $7.03$\,GB  & $6.82$ & $8.24$ \\
+GLM-5               & $8.99$\,GB  & $3.26$ & $22.04$ \\
+Qwen3.5-397B-A17B   & $3.07$\,GB  & $2.11$ & $11.62$ \\
+Qwen3-235B-A22B     & $19.25$\,GB & $7.15$ & $21.55$ \\
+Qwen3-Next-80B-A3B  & $2.46$\,GB  & $0.57$ & $34.41$ \\
 \bottomrule
 \end{tabular}}
-\caption{Model outputs at $T=100$k tokens on $8\times$H100. Crossovers span
-$1$--$34$\,Gbps, and are not monotone in $\eta$: a model that prefills fast
-(Qwen3-Next) needs a fast link before KV transfer pays off.}
+\caption{Results at $T=100$k tokens. Crossovers run from $2$ to $34$\,Gbps.
+They do not follow KV size. Qwen3-Next has a small cache but prefills so fast
+that transfer only wins on a very fast link.}
 \label{tab:app-crossover}
 \end{table}
 
-\subsection{Assumptions}
+\subsection{Effect of top-$k$ attention}
+
+Top-$k$ changes the shape of the answer, not just the numbers. For a dense model
+the replay term grows with $T^2$ while transfer grows with $T$, so the ratio
+climbs with context and the decision flips at some context length. For a
+top-$k$ model both terms are linear above $T=km$, so the ratio is flat and the
+decision no longer depends on context length. This is why the GLM-5 panel is
+close to horizontal past a few thousand tokens.
+
+The same correction moves the two sparse models in Table~\ref{tab:app-crossover}.
+Attention is the larger share of prefill for both. Charging it densely, as an
+earlier version of this model did, put GLM-5 at $12.11$\,s and $5.93$\,Gbps and
+DeepSeek-V4-Pro at $7.20$\,s and $1.10$\,Gbps.
+
+\subsection{What we leave out}
 
 \begin{enumerate}
-\item \textbf{Uniform BF16 KV.} $\eta$ assumes two bytes per cached element for
-every model. KV quantization, allocator padding, and block fragmentation are not
-modeled~\cite{kwon2023efficient}. This is the assumption that makes the six
-models comparable, but it is not what DeepSeek-V4-Pro actually stores: it uses
-BF16 only for the RoPE dimensions and FP8 elsewhere, roughly halving its cache to
-$\approx0.52$\,GB at $100$k~\cite{deepseekv4}, which would halve its crossover.
-\item \textbf{Roofline prefill.} $t_{\text{replay}}$ is FLOPs over sustained
-throughput at a fixed MFU, independent of $T$. It contains no kernel-efficiency
-curve, no batching effects, no pipeline or tensor-parallel communication, and no
-scheduler queueing~\cite{agrawal2024sarathi}.
-\item \textbf{Dense FFN accounting.} The $2AT$ term charges activated parameters
-only, and folds the linear-attention layers of the hybrid Qwen models into that
-term rather than costing them separately.
-\item \textbf{No overlap and no partial reuse.} Transfer and prefill are each
-charged in full and serially; we model neither layer-wise pipelining of KV
-transfer against compute nor prefix-cache hits at the
-destination~\cite{lmcache}. Both would favour transfer.
-\item \textbf{Link bandwidth is dedicated and flat.} $\lambda$ is a decimal-Gbps
-goodput number with no contention, congestion response, or RTT term. Context
-bytes ($\approx4$\,B/token of uint32 ids) are dropped from the replay side; at
-$\eta \ge 9.7$\,KiB/tok they shift $\lambda^\star$ by well under a percent.
-\item \textbf{Single session.} The ratio is per-session. It says nothing about
-what happens when many sessions contend for the same link and prefill pool ---
-that is the allocation problem the main body addresses.
+\item \textbf{KV is BF16 for everyone.} DeepSeek-V4-Pro really stores FP8 with
+BF16 only on the RoPE dimensions, about half of what we charge
+it~\cite{deepseekv4}. We keep BF16 so all six are measured the same way. Cutting
+its cache in half would halve its crossover. Quantization and allocator padding
+are also ignored~\cite{kwon2023efficient}.
+\item \textbf{Prefill is FLOPs over a fixed rate.} No kernel efficiency curve, no
+batching, no tensor- or pipeline-parallel communication, no
+queueing~\cite{agrawal2024sarathi}.
+\item \textbf{The FFN term charges active parameters only.} The linear-attention
+layers of the Qwen hybrids are folded into it rather than costed separately.
+\item \textbf{No overlap, no reuse.} Transfer and prefill are each charged in
+full and in series. We do not model pipelining KV transfer against compute, or
+prefix cache hits at the destination~\cite{lmcache}. Both would favour transfer.
+\item \textbf{Bandwidth is dedicated and flat.} No contention, no congestion
+control, no RTT. Context bytes (4\,B/token of uint32 ids) are dropped from the
+replay side. At $\eta \ge 9.7$\,KiB/tok they move the crossover by well under a
+percent.
+\item \textbf{One session.} This says nothing about many sessions sharing a link
+and a prefill pool. That is the allocation problem in the main body.
 \end{enumerate}
 
-\subsection{Known gap: top-$k$ sparse attention}
-
-The attention scale $\sigma$ models sequence-dimension \emph{compression} but not
-the top-$k$ \emph{sparsity} that both DSA-family models apply on top of it, so
-$\Phi(T)$ stays quadratic where the real models are close to linear. GLM-5 selects
-\texttt{index\_topk}${=}2048$ entries per query~\cite{glm5}, and DeepSeek-V4-Pro
-selects $1024$ compressed entries on its CSA layers~\cite{deepseekv4,deepseekv32}.
-Charging attention as $\approx 2Tk$ pairs instead of $T^2/2$ at $T=100$k gives:
-
-\begin{center}
-\begin{tabular}{lrr}
-\toprule
-& $t_{\text{replay}}$ (s) & $\lambda^\star$ (Gbps) \\
-\midrule
-GLM-5, as modeled        & $12.11$ & $5.93$ \\
-GLM-5, with top-$k$      & $3.27$  & $22.0$ \\
-DeepSeek-V4-Pro, as modeled   & $7.20$ & $1.10$ \\
-DeepSeek-V4-Pro, with top-$k$ & $3.98$ & $2.00$ \\
-\bottomrule
-\end{tabular}
-\end{center}
-
-Attention is $76\%$ of GLM-5's modeled prefill cost and $51\%$ of
-DeepSeek-V4-Pro's, so the correction is large for these two and nil for the four
-dense-attention models. The direction is uniform: cheaper replay pushes
-$\lambda^\star$ up, i.e.\ the figure \emph{understates} how far the replay region
-extends for sparse-attention models. Table~\ref{tab:app-crossover} and the
-figures report the uncorrected values.
-
-\subsection{Reproduction}
+\subsection{Running it}
 
 \begin{verbatim}
-uv run python migration_ratio.py   # figures + summary table
+uv run python migration_ratio.py
 uv run pytest test_migration_ratio.py
 \end{verbatim}
 
 \noindent
-Outputs are \texttt{migration\_ratio.\{png,pdf\}} (ratio vs.\ bandwidth at
-$T=100$k, $\lambda \in [0.1,100]$\,Gbps) and
+This writes \texttt{migration\_ratio.\{png,pdf\}} (ratio vs.\ bandwidth at
+$T=100$k over $0.1$--$100$\,Gbps) and
 \texttt{glm5\_context\_ratio\_bandwidths.\{png,pdf\}} (GLM-5 ratio vs.\ context
-for $T \in [10^3,10^7]$ over 500 links linearly spaced in $[0.1,25]$\,Gbps). The
-run is deterministic; there is no sampling and no seed.
+from $10^3$ to $10^7$ tokens, over 500 links spaced evenly in
+$0.1$--$25$\,Gbps). There is no sampling and no seed.

@@ -7,8 +7,9 @@ The crossover at ratio = 1 is the phase boundary.
 
 Hardware reference: 8× H100 SXM, dense bf16, MFU = 0.35.
 KV sizes: bf16, from released architecture configs.
-Prefill: 2·A·T (dense FFN) + L·H_q·(d_qk + d_v)·T² (causal attention),
-         with architecture-specific attention scaling for compressed/hybrid models.
+Prefill: 2·A·T (dense FFN) + 2·H_q·(d_qk + d_v)·pairs(T), where pairs(T) counts
+         causal (query, key) pairs under each model's attention layout —
+         sequence compression (CSA/HCA), top-k sparsity (DSA), sliding windows.
 """
 
 from __future__ import annotations
@@ -24,7 +25,22 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import seaborn as sns
-from matplotlib.colors import Normalize
+from matplotlib.colors import LinearSegmentedColormap, Normalize
+
+# ── Stanford identity palette ─────────────────────────────────────────────────
+CARDINAL = "#8C1515"
+SKY = "#4298B5"
+POPPY = "#E98300"
+LAGUNITA = "#007C92"
+PLUM = "#620059"
+BLACK = "#2E2D29"
+PALO_ALTO = "#175E54"
+PALO_ALTO_DARK = "#014240"
+FOG = "#DAD7CB"
+# Low → high bandwidth, monotone in lightness.
+BANDWIDTH_CMAP = LinearSegmentedColormap.from_list(
+    "stanford", [FOG, SKY, LAGUNITA, PALO_ALTO_DARK]
+)
 
 # ── Hardware ──────────────────────────────────────────────────────────────────
 H100_BF16_DENSE_TFLOPS = 1_979 / 2  # dense = half of sparsity peak
@@ -35,22 +51,47 @@ EFF_FLOPS = N_GPUS * H100_BF16_DENSE_TFLOPS * 1e12 * MFU  # ~2.77 PFLOP/s
 BPE = 2  # bf16 bytes per element
 GLM5_CONTEXT_BANDWIDTHS_GBPS = np.linspace(0.1, 25, 500)
 GLM5_CONTEXT_TOKENS = np.geomspace(1_000, 10_000_000, 500)
-GLM5_CONTEXT_RATIO_YLIM = (1e-3, 1e3)
 
 # ── Model specs ───────────────────────────────────────────────────────────────
 KVFn = Callable[[int], float]
 
 
 @dataclass(frozen=True)
+class Attn:
+    """A group of layers sharing one attention layout.
+
+    compress: KV sequence compressed to T/compress entries (CSA/HCA).
+    topk:     compressed entries each query attends to (DSA); 0 = dense.
+    window:   uncompressed sliding-window entries, always attended.
+    """
+
+    layers: int
+    compress: int = 1
+    topk: int = 0
+    window: int = 0
+
+    def pairs(self, T: int) -> float:
+        """Causal (query, key) pairs summed over this group's layers.
+
+        Dense costs T²/(2m). Top-k caps each query at k entries once the
+        compressed pool outgrows k (T > k·m), making the group linear in T.
+        """
+        if self.topk and T > self.topk * self.compress:
+            core = self.topk * T - self.topk**2 * self.compress / 2
+        else:
+            core = T**2 / (2 * self.compress)
+        return self.layers * (core + self.window * T)
+
+
+@dataclass(frozen=True)
 class Model:
     label: str  # display name
     active_b: float  # active params (billions)
-    softmax_layers: int  # layers that produce per-token KV
+    attn: tuple[Attn, ...]  # attention layout by layer group
     query_heads: int
     qk_dim: int
     v_dim: int
     kv_bytes: KVFn  # total bf16 KV bytes as f(tokens)
-    attn_scale: float = 1.0  # effective sequence compression for attention FLOPs
     color: str = "k"
     ls: str = "-"
 
@@ -91,63 +132,68 @@ MODELS = [
     Model(
         "DeepSeek V4 Pro",
         active_b=49,
-        softmax_layers=61,
+        # 2 HCA + 59 interleaved CSA/HCA = 30 CSA + 31 HCA; m=4/128, top-k=1024,
+        # 128-token sliding window on every layer.
+        attn=(
+            Attn(30, compress=4, topk=1024, window=128),
+            Attn(31, compress=128, window=128),
+        ),
         query_heads=128,
         qk_dim=512,
         v_dim=512,
         kv_bytes=dsv4_kv,
-        attn_scale=(30 / 4 + 31 / 128) / 61,
-        color="#d62728",
+        color=CARDINAL,
     ),
     Model(
         "Qwen3 Next 80B",
         active_b=3,
-        softmax_layers=12,
+        attn=(Attn(12),),
         query_heads=16,
         qk_dim=256,
         v_dim=256,
         kv_bytes=gqa_kv(12, 2, 256),
-        color="#1f77b4",
+        color=SKY,
     ),
     Model(
         "Qwen3.5 397B",
         active_b=17,
-        softmax_layers=15,
+        attn=(Attn(15),),
         query_heads=32,
         qk_dim=256,
         v_dim=256,
         kv_bytes=gqa_kv(15, 2, 256),
-        color="#9467bd",
+        color=POPPY,
     ),
     Model(
         "Kimi K2.6",
         active_b=32,
-        softmax_layers=61,
+        attn=(Attn(61),),
         query_heads=64,
         qk_dim=192,
         v_dim=128,
         kv_bytes=mla_kv(61, 512, 64),
-        color="#ff7f0e",
+        color=LAGUNITA,
     ),
     Model(
         "GLM 5",
         active_b=40,
-        softmax_layers=78,
+        attn=(Attn(78, topk=2048),),  # DSA, index_topk=2048
         query_heads=64,
         qk_dim=256,
         v_dim=256,
         kv_bytes=mla_kv(78, 512, 64),
-        color="#e377c2",
+        color=PLUM,
+        ls="--",  # crossover sits on top of Qwen3 235B
     ),
     Model(
         "Qwen3 235B",
         active_b=22,
-        softmax_layers=94,
+        attn=(Attn(94),),
         query_heads=64,
         qk_dim=128,
         v_dim=128,
         kv_bytes=gqa_kv(94, 4, 128),
-        color="#2ca02c",
+        color=BLACK,
     ),
 ]
 
@@ -155,8 +201,8 @@ MODELS = [
 # ── Cost model ────────────────────────────────────────────────────────────────
 def prefill_flops(m: Model, T: int) -> float:
     ffn = 2.0 * m.active_b * 1e9 * T
-    attn = m.softmax_layers * m.query_heads * (m.qk_dim + m.v_dim) * T**2 * m.attn_scale
-    return ffn + attn
+    pairs = sum(g.pairs(T) for g in m.attn)
+    return ffn + 2.0 * m.query_heads * (m.qk_dim + m.v_dim) * pairs
 
 
 def t_replay(m: Model, T: int) -> float:
@@ -194,12 +240,25 @@ def context_ratio_grid(label: str, bandwidths_gbps, contexts) -> pd.DataFrame:
     )
 
 
+def shade_regions(ax, x):
+    """Shade above/below ratio = 1 and label the two decisions on that line."""
+    lo, hi = ax.get_ylim()
+    ax.fill_between(x, 1.0, hi, alpha=0.06, color=CARDINAL, zorder=0)
+    ax.fill_between(x, lo, 1.0, alpha=0.06, color=PALO_ALTO, zorder=0)
+    ax.set_ylim(lo, hi)
+    tr = ax.get_yaxis_transform()  # x in axes fraction, y in data
+    # Geometric midpoint of each region keeps the label inside the axes however
+    # far the curves sit from ratio = 1.
+    ax.text(0.03, hi**0.5, "Transfer KV cache", color=CARDINAL, style="italic", transform=tr)
+    ax.text(0.03, lo**0.5, "Transfer context", color=PALO_ALTO, style="italic", transform=tr)
+
+
 def plot_glm5_context_ratio():
     df = context_ratio_grid("GLM 5", GLM5_CONTEXT_BANDWIDTHS_GBPS, GLM5_CONTEXT_TOKENS)
     norm = Normalize(
         GLM5_CONTEXT_BANDWIDTHS_GBPS.min(), GLM5_CONTEXT_BANDWIDTHS_GBPS.max()
     )
-    cmap = plt.colormaps["viridis"]
+    cmap = BANDWIDTH_CMAP
 
     sns.set_theme(style="whitegrid", context="talk")
     fig, ax = plt.subplots(figsize=(8, 4.5))
@@ -214,30 +273,10 @@ def plot_glm5_context_ratio():
     ax.axhline(1.0, color="k", lw=1.2, ls=":", alpha=0.6)
     ax.set_xscale("log")
     ax.set_yscale("log")
-    yl = ax.get_ylim()
-    ax.fill_between(
-        GLM5_CONTEXT_TOKENS,
-        1.0,
-        1e3,
-        alpha=0.06,
-        color="#B1040E",
-        zorder=0,
-    )
-    ax.fill_between(
-        GLM5_CONTEXT_TOKENS,
-        1e-3,
-        1.0,
-        alpha=0.06,
-        color="#008566",
-        zorder=0,
-    )
-    ax.set_ylim(yl)
     ax.set_xlim(GLM5_CONTEXT_TOKENS.min(), GLM5_CONTEXT_TOKENS.max())
-    ax.set_ylim(*GLM5_CONTEXT_RATIO_YLIM)
-    ax.text(2e3, 105.5, "Transfer KV cache", color="#B1040E", ha="left", style="italic")
-    ax.text(3e5, 0.005, "Transfer context", color="#008566", ha="left", style="italic")
+    shade_regions(ax, GLM5_CONTEXT_TOKENS)
     ax.set_xlabel("Context size (tokens)")
-    ax.set_ylabel(r"TTFT / Time to Transfer KV")
+    ax.set_ylabel(r"$t^{R}/t^{KV}$")
     ax.grid(True, which="both", alpha=0.15)
     cbar = fig.colorbar(plt.cm.ScalarMappable(norm=norm, cmap=cmap), ax=ax)
     cbar.set_label("Bandwidth (Gbps)")
@@ -264,37 +303,29 @@ def main():
             for b in bw
         ]
     )
-    palette = {m.label: m.color for m in MODELS}
-
     sns.set_theme(style="whitegrid", context="talk")
 
     fig, ax = plt.subplots(figsize=(10, 4.5))
-    sns.lineplot(
-        data=df,
-        x="bandwidth_gbps",
-        y="ratio",
-        hue="Model",
-        hue_order=[m.label for m in MODELS],
-        palette=palette,
-        linewidth=2.2,
-        ax=ax,
-    )
+    for m in MODELS:
+        g = df[df["Model"] == m.label]
+        ax.plot(
+            g["bandwidth_gbps"],
+            g["ratio"],
+            color=m.color,
+            ls=m.ls,
+            lw=2.2,
+            label=m.label,
+        )
 
     ax.set_xscale("log")
     ax.set_yscale("log")
     ax.axhline(1.0, color="k", lw=1.2, ls=":", alpha=0.6)
-    yl = ax.get_ylim()
-    ax.fill_between(bw, 1.0, yl[1], alpha=0.06, color="#B1040E", zorder=0)
-    ax.fill_between(bw, yl[0], 1.0, alpha=0.06, color="#008566", zorder=0)
-    ax.set_ylim(yl)
-
-    ax.text(0.2, 15.5, "Transfer KV cache", color="#B1040E", ha="left", style="italic")
-    ax.text(5.0, 0.05, "Transfer context", color="#008566", ha="left", style="italic")
+    ax.set_xlim(1e-1, 1e2)
+    shade_regions(ax, bw)
 
     ax.set_xlabel("Inter-site bandwidth (Gbps)")
-    ax.set_ylabel(r"TTFT / Time to Transfer KV")
+    ax.set_ylabel(r"$t^{R}/t^{KV}$")
     ax.grid(True, which="both", alpha=0.15)
-    ax.set_xlim(1e-1, 1e2)
     plt.legend(bbox_to_anchor=(1.05, 0.5), loc="center left", frameon=False)
 
     fig.tight_layout()
