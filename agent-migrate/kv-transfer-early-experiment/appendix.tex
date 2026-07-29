@@ -129,15 +129,21 @@ that transfer only wins on a very fast link.}
 
 Top-$k$ changes the shape of the answer, not just the numbers. For a dense model
 the replay term grows with $T^2$ while transfer grows with $T$, so the ratio
-climbs with context and the decision flips at some context length. For a
-top-$k$ model both terms are linear above $T=km$, so the ratio is flat and the
-decision no longer depends on context length. This is why the GLM-5 panel is
-close to horizontal past a few thousand tokens.
+climbs with context and the decision flips at some context length. Where every
+layer is capped at $k$, both terms are linear above $T=km$, the ratio is flat,
+and the decision stops depending on context length. GLM-5 is the extreme case:
+all 78 layers run DSA, so past a few thousand tokens its curve is horizontal.
 
-The same correction moves the two sparse models in Table~\ref{tab:app-crossover}.
-Attention is the larger share of prefill for both. Charging it densely, as an
-earlier version of this model did, put GLM-5 at $12.11$\,s and $5.93$\,Gbps and
-DeepSeek-V4-Pro at $7.20$\,s and $1.10$\,Gbps.
+DeepSeek-V4-Pro is the mixed case, and it is why we use it for the context panel.
+Only its 30 CSA layers are capped. The 31 HCA layers compress by $m'{=}128$ but
+attend densely, so a $T^2$ term survives with a small coefficient and takes over
+past a few million tokens. The boundary still moves with context, over a range
+wide enough to see.
+
+Charging attention densely, as an earlier version of this model did, put GLM-5 at
+$12.11$\,s and $5.93$\,Gbps and DeepSeek-V4-Pro at $7.20$\,s and $1.10$\,Gbps.
+One consequence of the correction: GLM-5 and Qwen3-235B now cross over within 2\%
+of each other, so their curves sit on top of one another in the bandwidth figure.
 
 \subsection{What we leave out}
 
@@ -173,6 +179,7 @@ uv run pytest test_migration_ratio.py
 \noindent
 This writes \texttt{migration\_ratio.\{png,pdf\}} (ratio vs.\ bandwidth at
 $T=100$k over $0.1$--$100$\,Gbps) and
-\texttt{glm5\_context\_ratio\_bandwidths.\{png,pdf\}} (GLM-5 ratio vs.\ context
+\texttt{deepseekv4\_context\_ratio\_bandwidths.\{png,pdf\}} (ratio vs.\ context
 from $10^3$ to $10^7$ tokens, over 500 links spaced evenly in
-$0.1$--$25$\,Gbps). There is no sampling and no seed.
+$0.1$--$25$\,Gbps). Set \texttt{CONTEXT\_MODEL} to plot the context panel for a
+different model. There is no sampling and no seed.

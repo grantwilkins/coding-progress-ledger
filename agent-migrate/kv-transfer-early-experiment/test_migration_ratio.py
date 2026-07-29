@@ -112,8 +112,22 @@ def test_ratio_is_one_at_the_derived_crossover():
     assert math.isclose(replay / mr.t_transfer(model, tokens, crossover), 1)
 
 
-def test_glm_context_frame_uses_glm_values():
-    frame = mr.context_ratio_frame("GLM 5", 5, [1_000])
-    glm = mr.model("GLM 5")
-    expected = mr.t_replay(glm, 1_000) / mr.t_transfer(glm, 1_000, 5)
-    assert frame.iloc[0]["ratio"] == expected
+def test_context_frame_follows_the_requested_model():
+    for label in ("GLM 5", mr.CONTEXT_MODEL):
+        m = mr.model(label)
+        frame = mr.context_ratio_frame(label, 5, [1_000])
+        assert frame.iloc[0]["ratio"] == mr.t_replay(m, 1_000) / mr.t_transfer(
+            m, 1_000, 5
+        )
+    assert mr.context_ratio_frame("GLM 5", 5, [1_000]).iloc[0]["ratio"] != (
+        mr.context_ratio_frame(mr.CONTEXT_MODEL, 5, [1_000]).iloc[0]["ratio"]
+    )
+
+
+def test_context_panel_model_spans_a_wide_ratio_range():
+    """The panel is only informative if the decision flips inside the sweep."""
+    m = mr.model(mr.CONTEXT_MODEL)
+    lo, hi = mr.CONTEXT_TOKENS.min(), mr.CONTEXT_TOKENS.max()
+    slow, fast = mr.CONTEXT_BANDWIDTHS_GBPS.min(), mr.CONTEXT_BANDWIDTHS_GBPS.max()
+    assert mr.t_replay(m, int(lo)) / mr.t_transfer(m, int(lo), slow) < 1
+    assert mr.t_replay(m, int(hi)) / mr.t_transfer(m, int(hi), fast) > 10

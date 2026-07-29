@@ -25,22 +25,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import seaborn as sns
-from matplotlib.colors import LinearSegmentedColormap, Normalize
-
-# ── Stanford identity palette ─────────────────────────────────────────────────
-CARDINAL = "#8C1515"
-SKY = "#4298B5"
-POPPY = "#E98300"
-LAGUNITA = "#007C92"
-PLUM = "#620059"
-BLACK = "#2E2D29"
-PALO_ALTO = "#175E54"
-PALO_ALTO_DARK = "#014240"
-FOG = "#DAD7CB"
-# Low → high bandwidth, monotone in lightness.
-BANDWIDTH_CMAP = LinearSegmentedColormap.from_list(
-    "stanford", [FOG, SKY, LAGUNITA, PALO_ALTO_DARK]
-)
+from matplotlib.colors import Normalize
 
 # ── Hardware ──────────────────────────────────────────────────────────────────
 H100_BF16_DENSE_TFLOPS = 1_979 / 2  # dense = half of sparsity peak
@@ -49,8 +34,10 @@ MFU = 0.35
 EFF_FLOPS = N_GPUS * H100_BF16_DENSE_TFLOPS * 1e12 * MFU  # ~2.77 PFLOP/s
 
 BPE = 2  # bf16 bytes per element
-GLM5_CONTEXT_BANDWIDTHS_GBPS = np.linspace(0.1, 25, 500)
-GLM5_CONTEXT_TOKENS = np.geomspace(1_000, 10_000_000, 500)
+CONTEXT_MODEL = "DeepSeek V4 Pro"  # HCA layers stay quadratic, so the ratio
+CONTEXT_STEM = "deepseekv4_context_ratio_bandwidths"  # sweeps a wide range
+CONTEXT_BANDWIDTHS_GBPS = np.linspace(0.1, 25, 500)
+CONTEXT_TOKENS = np.geomspace(1_000, 10_000_000, 500)
 
 # ── Model specs ───────────────────────────────────────────────────────────────
 KVFn = Callable[[int], float]
@@ -142,7 +129,7 @@ MODELS = [
         qk_dim=512,
         v_dim=512,
         kv_bytes=dsv4_kv,
-        color=CARDINAL,
+        color="#d62728",
     ),
     Model(
         "Qwen3 Next 80B",
@@ -152,7 +139,7 @@ MODELS = [
         qk_dim=256,
         v_dim=256,
         kv_bytes=gqa_kv(12, 2, 256),
-        color=SKY,
+        color="#1f77b4",
     ),
     Model(
         "Qwen3.5 397B",
@@ -162,7 +149,7 @@ MODELS = [
         qk_dim=256,
         v_dim=256,
         kv_bytes=gqa_kv(15, 2, 256),
-        color=POPPY,
+        color="#9467bd",
     ),
     Model(
         "Kimi K2.6",
@@ -172,7 +159,7 @@ MODELS = [
         qk_dim=192,
         v_dim=128,
         kv_bytes=mla_kv(61, 512, 64),
-        color=LAGUNITA,
+        color="#ff7f0e",
     ),
     Model(
         "GLM 5",
@@ -182,8 +169,7 @@ MODELS = [
         qk_dim=256,
         v_dim=256,
         kv_bytes=mla_kv(78, 512, 64),
-        color=PLUM,
-        ls="--",  # crossover sits on top of Qwen3 235B
+        color="#e377c2",
     ),
     Model(
         "Qwen3 235B",
@@ -193,7 +179,7 @@ MODELS = [
         qk_dim=128,
         v_dim=128,
         kv_bytes=gqa_kv(94, 4, 128),
-        color=BLACK,
+        color="#2ca02c",
     ),
 ]
 
@@ -243,22 +229,20 @@ def context_ratio_grid(label: str, bandwidths_gbps, contexts) -> pd.DataFrame:
 def shade_regions(ax, x):
     """Shade above/below ratio = 1 and label the two decisions on that line."""
     lo, hi = ax.get_ylim()
-    ax.fill_between(x, 1.0, hi, alpha=0.06, color=CARDINAL, zorder=0)
-    ax.fill_between(x, lo, 1.0, alpha=0.06, color=PALO_ALTO, zorder=0)
+    ax.fill_between(x, 1.0, hi, alpha=0.06, color="#B1040E", zorder=0)
+    ax.fill_between(x, lo, 1.0, alpha=0.06, color="#008566", zorder=0)
     ax.set_ylim(lo, hi)
     tr = ax.get_yaxis_transform()  # x in axes fraction, y in data
     # Geometric midpoint of each region keeps the label inside the axes however
     # far the curves sit from ratio = 1.
-    ax.text(0.03, hi**0.5, "Transfer KV cache", color=CARDINAL, style="italic", transform=tr)
-    ax.text(0.03, lo**0.5, "Transfer context", color=PALO_ALTO, style="italic", transform=tr)
+    ax.text(0.03, hi**0.5, "Transfer KV cache", color="#B1040E", style="italic", transform=tr)
+    ax.text(0.03, lo**0.5, "Transfer context", color="#008566", style="italic", transform=tr)
 
 
-def plot_glm5_context_ratio():
-    df = context_ratio_grid("GLM 5", GLM5_CONTEXT_BANDWIDTHS_GBPS, GLM5_CONTEXT_TOKENS)
-    norm = Normalize(
-        GLM5_CONTEXT_BANDWIDTHS_GBPS.min(), GLM5_CONTEXT_BANDWIDTHS_GBPS.max()
-    )
-    cmap = BANDWIDTH_CMAP
+def plot_context_ratio(label: str = CONTEXT_MODEL, stem: str = CONTEXT_STEM):
+    df = context_ratio_grid(label, CONTEXT_BANDWIDTHS_GBPS, CONTEXT_TOKENS)
+    norm = Normalize(CONTEXT_BANDWIDTHS_GBPS.min(), CONTEXT_BANDWIDTHS_GBPS.max())
+    cmap = plt.colormaps["viridis"]
 
     sns.set_theme(style="whitegrid", context="talk")
     fig, ax = plt.subplots(figsize=(8, 4.5))
@@ -273,18 +257,18 @@ def plot_glm5_context_ratio():
     ax.axhline(1.0, color="k", lw=1.2, ls=":", alpha=0.6)
     ax.set_xscale("log")
     ax.set_yscale("log")
-    ax.set_xlim(GLM5_CONTEXT_TOKENS.min(), GLM5_CONTEXT_TOKENS.max())
-    shade_regions(ax, GLM5_CONTEXT_TOKENS)
+    ax.set_xlim(CONTEXT_TOKENS.min(), CONTEXT_TOKENS.max())
+    shade_regions(ax, CONTEXT_TOKENS)
     ax.set_xlabel("Context size (tokens)")
     ax.set_ylabel(r"$t^{R}/t^{KV}$")
     ax.grid(True, which="both", alpha=0.15)
     cbar = fig.colorbar(plt.cm.ScalarMappable(norm=norm, cmap=cmap), ax=ax)
     cbar.set_label("Bandwidth (Gbps)")
     fig.tight_layout()
-    fig.savefig("glm5_context_ratio_bandwidths.png", dpi=220, bbox_inches="tight")
-    fig.savefig("glm5_context_ratio_bandwidths.pdf", bbox_inches="tight")
+    fig.savefig(f"{stem}.png", dpi=220, bbox_inches="tight")
+    fig.savefig(f"{stem}.pdf", bbox_inches="tight")
     plt.close(fig)
-    print("Wrote glm5_context_ratio_bandwidths.png / .pdf")
+    print(f"Wrote {stem}.png / .pdf")
 
 
 # ── Plot ──────────────────────────────────────────────────────────────────────
@@ -314,6 +298,7 @@ def main():
             color=m.color,
             ls=m.ls,
             lw=2.2,
+            alpha=0.7,
             label=m.label,
         )
 
@@ -333,7 +318,7 @@ def main():
     fig.savefig("migration_ratio.pdf", bbox_inches="tight")
     plt.close(fig)
     print("Wrote migration_ratio.png / .pdf")
-    plot_glm5_context_ratio()
+    plot_context_ratio()
 
     # ── summary table ──
     print(
