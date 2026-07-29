@@ -23,11 +23,14 @@ from simulate import ExecutionScenario, NetworkLink, PowerNode, ServingInstance,
 ROOT = Path(__file__).parent
 DEFAULT_MANIFEST = Path("queue-haul/outputs/coding-manifest.json")
 DEFAULT_MODEL = ROOT / "profiles/gpt_oss_20b_a100_tp1.json"
-POLICIES = ("queue_haul", "greedy", "random", "kv_only", "replay_only")
+POLICIES = (
+    "queue_haul", "greedy", "isolated_fastest", "random", "kv_only",
+    "replay_only",
+)
 LABELS = {
     "queue_haul": "QH choice/order", "greedy": "Greedy choice/order",
-    "random": "Random choice/order", "kv_only": "KV only",
-    "replay_only": "Replay only",
+    "isolated_fastest": "Per-session fastest", "random": "Random choice/order",
+    "kv_only": "KV only", "replay_only": "Replay only",
 }
 EXECUTION_CONTRACT = "eager_serial_choice_order"
 
@@ -69,19 +72,28 @@ def _moves(policy, scenario, routes, profile, seed):
         result = plan(scenario, profile, routes, solver, seed=seed)
         moves = result.moves
     else:
-        method = "kv_transfer" if policy == "kv_only" else "replay"
+        fixed_method = None if policy == "isolated_fastest" else {
+            "kv_only": "kv_transfer", "replay_only": "replay",
+        }[policy]
         case = profile.case()
         links = {row.link_id: row.bytes_per_s for row in scenario.links}
-        ordered = sorted(
-            sessions,
-            key=lambda row: (
-                _duration(row, method, case, ("link",), links),
-                row.session_id,
-            ),
-        )
+        choices = []
+        for row in sessions:
+            duration, method = min(
+                (_duration(row, candidate, case, ("link",), links), candidate)
+                for candidate in (
+                    (fixed_method,) if fixed_method
+                    else ("replay", "kv_transfer")
+                )
+            )
+            choices.append((duration, row, method))
         moves = tuple(
             (row.session_id, method, order)
-            for order, row in enumerate(ordered)
+            for order, (_, row, method) in enumerate(
+                sorted(choices, key=lambda choice: (
+                    choice[0], choice[1].session_id
+                ))
+            )
         )
     normalized = [
         {

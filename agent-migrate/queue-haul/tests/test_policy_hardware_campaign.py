@@ -1,12 +1,15 @@
 """
 Claim:
 Every policy consumes the same frozen hardware episode, reaction latency starts
-at one policy epoch, and failed or incomplete episodes remain in curve denominators.
+at one policy epoch, failed episodes remain in curve denominators, and the
+isolated-fastest baseline independently minimizes each session's migration time.
 
 Plausible wrong implementations:
 - Resample sessions or contexts independently for each policy.
 - Measure from each migration's own start and hide scheduler wait.
 - Let a policy omit sessions or execute migrations in parallel.
+- Pick one globally fastest method instead of choosing independently per session.
+- Order isolated-fastest sessions by an unselected method or reverse duration.
 - Condition completion curves only on successful migrations.
 - Pair continuation TTFT with a control from another episode.
 """
@@ -15,9 +18,11 @@ import json
 import math
 from copy import deepcopy
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
+import policy_hardware_campaign as campaign
 from policy_hardware_campaign import (
     EXECUTION_CONTRACT,
     completion_curve,
@@ -85,6 +90,37 @@ def test_plan_pairs_every_policy_on_the_same_complete_episode(tmp_path):
          if row["kind"] == "migration")["move_concurrency"] = 2
     with pytest.raises(ValueError, match="sequential"):
         validate_policy_plan(invalid)
+
+
+def test_isolated_fastest_chooses_per_session_then_orders_by_chosen_duration(
+        monkeypatch):
+    durations = {
+        ("a", "replay"): 5, ("a", "kv_transfer"): 2,
+        ("b", "replay"): 1, ("b", "kv_transfer"): 4,
+        ("c", "replay"): 3, ("c", "kv_transfer"): 6,
+    }
+    monkeypatch.setattr(
+        campaign, "_duration",
+        lambda session, method, *_: durations[session.session_id, method],
+    )
+    scenario = SimpleNamespace(
+        sessions=tuple(SimpleNamespace(session_id=name)
+                       for name in ("a", "b", "c")),
+        links=(SimpleNamespace(link_id="link", bytes_per_s=1),),
+    )
+    profile = SimpleNamespace(case=lambda: object())
+
+    moves = campaign._moves(
+        "isolated_fastest", scenario,
+        {("source", "destination"): ("link",)}, profile, seed=0,
+    )
+
+    assert [(row["session_id"], row["method"], row["order"])
+            for row in moves] == [
+        ("b", "replay", 0),
+        ("a", "kv_transfer", 1),
+        ("c", "replay", 2),
+    ]
 
 
 def test_prepared_job_is_self_locating_and_keeps_failures_visible(tmp_path):

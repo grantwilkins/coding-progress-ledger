@@ -125,9 +125,9 @@ request-boundary drain from tidy event tables.
 headroom against requested source-power shed. Use `--refresh` when its pinned
 inputs change.
 `policy_hardware_campaign.py` creates a resumable paired idle-session campaign
-for eager, serial execution of Queue-Haul, greedy, and random method/order
-choices plus KV-only and replay-only baselines. It does not execute the
-planner's paced, quiesced schedule or measure planning latency, so it is
+for eager, serial execution of Queue-Haul, greedy, per-session-fastest, and
+random method/order choices plus KV-only and replay-only baselines. It does not
+execute the planner's paced, quiesced schedule or measure planning latency, so it is
 the direct test of planner choice/order under the primary eager sequential
 execution contract, rather than a test of parallel scheduling. The default 50
 eight-session blocks yield 400 clustered observations per policy; variants and

@@ -46,8 +46,8 @@ of a planner-generated mixed action list.
 
 - asks the planner for Queue-Haul replay/KV choices and order;
 - executes all eight migrations eagerly and sequentially;
-- compares matched Queue-Haul, greedy, random, KV-only, and replay-only
-  episodes; and
+- compares matched Queue-Haul, greedy, per-session-fastest, random, KV-only,
+  and replay-only episodes; and
 - reduces completion, first-token, commit, migration-TTFT, and matched
   continuation-TTFT results.
 
