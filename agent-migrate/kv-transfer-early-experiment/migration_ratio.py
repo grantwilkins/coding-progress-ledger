@@ -301,16 +301,15 @@ def main():
     sns.set_theme(style="whitegrid", context="talk")
 
     fig, ax = plt.subplots(figsize=(10, 4.5))
+    lines = {}
     for m in MODELS:
         g = df[df["Model"] == m.label]
-        ax.plot(
+        (lines[m.label],) = ax.plot(
             g["bandwidth_gbps"],
             g["ratio"],
             color=m.color,
             ls=m.ls,
             lw=2.2,
-            alpha=0.7,
-            label=m.label,
         )
 
     ax.set_xscale("log")
@@ -323,7 +322,16 @@ def main():
     ax.set_xlabel("Inter-site bandwidth (Gbps)")
     ax.set_ylabel(r"$t^{R}/t^{KV}$")
     ax.grid(True, which="both", alpha=0.15)
-    plt.legend(bbox_to_anchor=(1.05, 0.5), loc="center left", frameon=False)
+    # Legend follows the curves top to bottom. All lines share a slope, so this
+    # is also the order they cross ratio = 1 going left to right.
+    top_first = sorted(MODELS, key=lambda m: -t_replay(m, T) / t_transfer(m, T, bw[0]))
+    ax.legend(
+        [lines[m.label] for m in top_first],
+        [m.label for m in top_first],
+        bbox_to_anchor=(1.05, 0.5),
+        loc="center left",
+        frameon=False,
+    )
 
     fig.tight_layout()
     fig.savefig("migration_ratio.png", dpi=220, bbox_inches="tight")
