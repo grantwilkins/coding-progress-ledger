@@ -744,9 +744,9 @@ class LiveSession:
                     keys = b.mp_wait_source_keys(
                         self.source_log, log_offset,
                         self.cache_log, transfer_offset,
-                        max(0, result.prompt_tokens // 256 * 256
-                            - len(self.cache_keys) * 256),
+                        result.prompt_tokens // 256 * 256,
                     )
+                    keys -= self.cache_keys
             with self.lock:
                 self.messages = base + [user, {"role": "assistant", "content": text}]
                 self.activity_result = result
