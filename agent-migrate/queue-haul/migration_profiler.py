@@ -734,6 +734,8 @@ class LiveSession:
             with gate:
                 log_offset = self.source_log.stat().st_size \
                     if b.lmcache_mode() == "mp" else 0
+                transfer_offset = self.cache_log.stat().st_size \
+                    if b.lmcache_mode() == "mp" else 0
                 result, text = self.request(
                     self.cfg.src_port, base, f"controlled_turn_{stage_index}",
                     user["content"],
@@ -741,7 +743,7 @@ class LiveSession:
                 if b.lmcache_mode() == "mp":
                     keys = b.mp_wait_source_keys(
                         self.source_log, log_offset,
-                        self.cache_log, start,
+                        self.cache_log, transfer_offset,
                         max(0, result.prompt_tokens // 256 * 256
                             - len(self.cache_keys) * 256),
                     )
