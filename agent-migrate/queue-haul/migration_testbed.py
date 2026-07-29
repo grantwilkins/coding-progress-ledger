@@ -1091,12 +1091,12 @@ def resp_rows(path: Path) -> list[dict]:
         return list(csv.DictReader(handle))
 
 
-def mp_source_keys(path: Path, start_ns: int, end_ns: int) -> set[str]:
-    return {
-        row["key_hashes"] for row in resp_rows(path)
-        if row["command"] == "SET"
-        and start_ns <= int(row["end_ns"]) < end_ns
-    }
+def mp_source_keys(path: Path, offset: int) -> set[str]:
+    with path.open() as handle:
+        fields = next(csv.reader(handle))
+        handle.seek(offset)
+        return {row["key_hashes"] for row in csv.DictReader(handle, fieldnames=fields)
+                if row["command"] == "SET"}
 
 
 def mp_wait_stored(log: Path, offset: int, tokens: int) -> None:
@@ -1109,12 +1109,12 @@ def mp_wait_stored(log: Path, offset: int, tokens: int) -> None:
 
 
 def mp_wait_source_keys(log: Path, offset: int, transfers: Path,
-                        start_ns: int, tokens: int) -> set[str]:
+                        transfer_offset: int, tokens: int) -> set[str]:
     mp_wait_stored(log, offset, tokens)
     expected = tokens // 256
     deadline = time.monotonic() + 600
     while time.monotonic() < deadline:
-        keys = mp_source_keys(transfers, start_ns, 2**63 - 1)
+        keys = mp_source_keys(transfers, transfer_offset)
         if len(keys) == expected:
             return keys
         if len(keys) > expected:

@@ -678,6 +678,7 @@ class LiveSession:
         before = time.monotonic_ns()
         log_offset = self.source_log.stat().st_size \
             if b.lmcache_mode() == "mp" else 0
+        transfer_offset = self.cache_log.stat().st_size if b.lmcache_mode() == "mp" else 0
         result, _ = self.request(
             self.cfg.src_port, list(self.messages), "source_warm"
         )
@@ -686,7 +687,7 @@ class LiveSession:
         if b.lmcache_mode() == "mp":
             keys = b.mp_wait_source_keys(
                 self.source_log, log_offset,
-                self.cache_log, before,
+                self.cache_log, transfer_offset,
                 result.prompt_tokens // 256 * 256,
             )
         else:

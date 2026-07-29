@@ -151,11 +151,13 @@ def test_mp_storage_wait_requires_exact_resp_set_keys(tmp_path):
     transfers.write_text(
         "connection_id,command,key_hashes,start_ns,end_ns,request_wire_bytes,"
         "response_wire_bytes,request_body_bytes,payload_bytes\n"
-        "a,SET,k1,0,3,1,1,1,1\n"
-        "a,SET,k2,4,5,1,1,1,1\n"
+        "a,SET,old,0,1,1,1,1,1\n"
     )
+    offset = transfers.stat().st_size
+    with transfers.open("a") as handle:
+        handle.write("a,SET,k1,0,3,1,1,1,1\na,SET,k2,4,5,1,1,1,1\n")
 
-    assert s.mp_wait_source_keys(log, 0, transfers, 1, 512) == {"k1", "k2"}
+    assert s.mp_wait_source_keys(log, 0, transfers, offset, 512) == {"k1", "k2"}
 
 
 def test_mp_request_hit_uses_byte_offset(tmp_path):
