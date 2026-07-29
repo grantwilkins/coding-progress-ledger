@@ -126,6 +126,16 @@ def test_mp_tokenization_uses_the_exact_chat_completion_renderer(monkeypatch):
     }
 
 
+def test_resp_transfer_is_immediately_visible(tmp_path):
+    async def check():
+        log = s.ByteLog(tmp_path / "proxy_bytes.csv")
+        await log.resp_transfer(["c", "SET", "k", 1, 2, 3, 4, 5, 6])
+        assert list(csv.DictReader((tmp_path / "resp_transfers.csv").open()))[0]["key_hashes"] == "k"
+        await log.close()
+
+    asyncio.run(check())
+
+
 def test_mp_storage_wait_aggregates_chunked_writes(tmp_path):
     log = tmp_path / "lmcache.log"
     prefix = "LMCache ✓\n".encode()

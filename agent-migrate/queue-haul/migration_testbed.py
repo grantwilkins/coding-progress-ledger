@@ -532,6 +532,7 @@ class ByteLog:
     async def resp_transfer(self, row: list) -> None:
         async with self.lock:
             self.transfer_writer.writerow(row)
+            self.transfers.flush()
 
     async def _flush_loop(self) -> None:
         while True:
