@@ -303,9 +303,9 @@ def plot(rows, out):
         ):
             row[field] = float(row[field])
     primary = (
-        ("Source migration-stream time", "Source streams", "#8C1515", "-"),
-        ("Ongoing integrated serving load", "Serving load", "#175E54", ":"),
-        ("Queued serving work", "Serving-work budget", "#B83A4B", ":"),
+        ("Source migration-stream time", "Source time", "#8C1515", "-"),
+        ("Ongoing integrated serving load", "GPU load", "#175E54", ":"),
+        ("Queued serving work", "GPU time", "#B83A4B", ":"),
     )
     loose = (
         "WAN transfer bytes", "Replay reconstruction GPU time",
@@ -340,13 +340,12 @@ def plot(rows, out):
     axis.fill_between(
         x, loose_values.min(0), loose_values.max(0),
         color="#D5D5D5", alpha=.8, linewidth=0,
+        label="WAN / GPU / memory",
     )
-    envelope = np.min([values[resource] for resource, *_ in primary], axis=0)
-    axis.plot(x, envelope, color="black", linewidth=5, zorder=2)
     for resource, label, color, linestyle in primary:
         axis.plot(
             x, values[resource], color=color, linestyle=linestyle, linewidth=2.5,
-            marker="o", markersize=3, markevery=4, zorder=3,
+            marker="o", markersize=3, markevery=4, zorder=3, label=label,
         )
     axis.axhline(0, color="black", linewidth=1.5)
     if failed:
@@ -354,20 +353,12 @@ def plot(rows, out):
             failed, np.full(len(failed), -.035), marker="x", color="black",
             s=45, linewidth=1.5, label="Unmet", clip_on=False,
         )
-    for resource, label, color, _ in primary:
-        axis.text(
-            102, values[resource][-1] + (.02 if resource == "Queued serving work" else 0),
-            label, color=color, va="center",
-        )
-    axis.text(
-        102, loose_values[:, -1].mean(),
-        "Other resources\n(WAN, replay, KV ingest, KV cache)",
-        color="#666666", va="center",
-    )
+    axis.legend(title="Resource", frameon=False, loc="center left",
+                bbox_to_anchor=(1.01, .5))
     axis.set(
         ylabel="Normalized slack",
         ylim=(-.06, 1.05),
-        xlim=(0, 140),
+        xlim=(0, 102.5),
     )
     bindings = minimum_slack(rows, all_resources)
     bounds = np.r_[
