@@ -17,10 +17,14 @@ from pathlib import Path
 
 import pytest
 
+import migration_profiler as profiler
+
 from policy_hardware_campaign import (
     EXECUTION_CONTRACT,
+    DEFAULT_MODEL,
     completion_curve,
     make_plan,
+    power_attainment,
     prepare,
     reduce_run,
 )
@@ -94,6 +98,15 @@ def test_prepared_job_is_self_locating_and_fail_fast(tmp_path):
     assert "QH_PORT_OFFSET" in sbatch
 
 
+def test_power_attainment_compares_model_drop_with_gpu_samples(tmp_path):
+    path = tmp_path / "power.csv"
+    path.write_text("monotonic_ns,wall_ns,gpu,power_w,utilization_pct,memory_mib,valid\n1,1,0,200,0,0,1\n1,1,1,100,0,0,1\n2,2,0,180,0,0,1\n2,2,1,110,0,0,1\n4,4,0,120,0,0,1\n4,4,1,130,0,0,1\n5,5,0,100,0,0,1\n5,5,1,140,0,0,1\n")
+    row = power_attainment(path, {"migrations": [{"queued_ns": 3, "switch_end_ns": 4}]}, 190, 90)
+    assert row["realized_source_power_before_w"] == 190
+    assert row["realized_source_power_after_w"] == 110
+    assert row["power_drop_attainment_fraction"] == .8
+
+
 def test_reduction_uses_common_epoch_and_keeps_failed_denominator(tmp_path):
     control = {
         "scenario_id": "control", "match_id": "same", "episode": 0,
@@ -113,6 +126,7 @@ def test_reduction_uses_common_epoch_and_keeps_failed_denominator(tmp_path):
     plan = {
         "episodes": 1, "policies": ["queue_haul", "random"],
         "execution_contract": EXECUTION_CONTRACT,
+        "model_profile": {"path": str(DEFAULT_MODEL), "sha256": profiler.file_hash(DEFAULT_MODEL)},
         "scenarios": [control, queue, failed],
     }
     (tmp_path / "plan.json").write_text(json.dumps(plan))
@@ -148,6 +162,7 @@ def test_reduction_uses_common_epoch_and_keeps_failed_denominator(tmp_path):
         ],
     })
     write("failed", {"status": "failed"})
+    (tmp_path / "scenarios/queue/power.csv").write_text("monotonic_ns,wall_ns,gpu,power_w,utilization_pct,memory_mib,valid\n0,0,0,200,0,0,1\n0,0,1,100,0,0,1\n6000000000,0,0,100,0,0,1\n6000000000,0,1,100,0,0,1\n")
 
     migrations, summaries = reduce_run(tmp_path)
     queue_rows = [row for row in migrations

@@ -281,9 +281,38 @@ def _threshold(values, planned, fraction):
     return sorted(values)[rank - 1] if len(values) >= rank else None
 
 
+def power_attainment(path: Path, result: dict, predicted_before: float, predicted_after: float) -> dict:
+    rows = profiler.power_rows(path)
+    source_gpu = min(row["gpu"] for row in rows)
+    source = [row for row in rows if row["gpu"] == source_gpu]
+    start = min(row["queued_ns"] for row in result["migrations"])
+    commit = max(row["switch_end_ns"] for row in result["migrations"])
+    before = [row["power_w"] for row in source if row["monotonic_ns"] < start]
+    after = [row["power_w"] for row in source if row["monotonic_ns"] >= commit]
+    if not before or not after:
+        raise RuntimeError(f"power samples do not bracket migration in {path}")
+    modeled = predicted_before - predicted_after
+    measured_before, measured_after = map(float, map(np.median, (before, after)))
+    measured = measured_before - measured_after
+    return {
+        "predicted_source_power_before_w": predicted_before,
+        "predicted_source_power_after_w": predicted_after,
+        "predicted_source_power_drop_w": modeled,
+        "realized_source_power_before_w": measured_before,
+        "realized_source_power_after_w": measured_after,
+        "realized_source_power_drop_w": measured,
+        "power_drop_attainment_fraction": measured / modeled,
+    }
+
+
 def reduce_run(run_root: Path, out: Path | None = None):
     plan_ = json.loads((run_root / "plan.json").read_text())
     validate_policy_plan(plan_)
+    profile_path = ROOT.parent / plan_["model_profile"]["path"]
+    if profiler.file_hash(profile_path) != plan_["model_profile"]["sha256"]:
+        raise RuntimeError("model profile changed after planning")
+    curve = ModelProfile.load(profile_path).case().power_curve
+    predicted_power = curve.power(.4), curve.power(0)
     out = out or run_root
     controls = {}
     for scenario in plan_["scenarios"]:
@@ -343,6 +372,7 @@ def reduce_run(run_root: Path, out: Path | None = None):
                 ),
             })
         planned = len(scenario["moves"])
+        power = power_attainment(path.parent / "power.csv", result, *predicted_power) if raw else {}
         summaries.append({
             "scenario_id": scenario["scenario_id"],
             "match_id": scenario["match_id"], "episode": scenario["episode"],
@@ -358,6 +388,7 @@ def reduce_run(run_root: Path, out: Path | None = None):
             "commit_100_s": _threshold(committed, planned, 1),
             "deadline_s": scenario["deadline_s"],
             "matched_control_complete": len(control) == planned,
+            **power,
         })
     out.mkdir(parents=True, exist_ok=True)
     profiler.write_csv(out / "policy_migrations.csv", migrations)
