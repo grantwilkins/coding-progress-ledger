@@ -47,3 +47,6 @@ Above the crossover bandwidth, ship KV. Below it, replay.
 - `migration_ratio.py`: ratio plots for bandwidth and GLM-5 context sweeps.
 - `glm5_context_ratio_bandwidths.{png,pdf}`: GLM-5 TTFT/KV-transfer ratio vs
   context size across fixed bandwidth lines.
+- `appendix.{tex,bib}`: writeup appendix for `migration_ratio.py` — cost model,
+  per-model architecture data with sources, assumptions, and the top-k sparse
+  attention gap. `\input`-able; compile standalone with a minimal preamble.

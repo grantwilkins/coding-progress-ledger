@@ -1,0 +1,147 @@
+% Citations for appendix.tex (migration_ratio.py).
+% kwon2023efficient, agrawal2024sarathi and lmcache also exist in
+% evacuation/ee364b-write-up/main.bib under these same keys -- drop the
+% duplicates if the two .bib files are ever merged.
+
+@misc{nvidia2024h100,
+  title        = {{NVIDIA H100 Tensor Core GPU Datasheet}},
+  author       = {{NVIDIA}},
+  year         = {2024},
+  note         = {BF16 tensor-core peak quoted as 1,979 TFLOP/s with 2:4
+                  structured sparsity; dense peak is half that},
+  howpublished = {\url{https://resources.nvidia.com/en-us-tensor-core}}
+}
+
+@article{chowdhery2023palm,
+  title   = {{PaLM}: Scaling Language Modeling with Pathways},
+  author  = {Chowdhery, Aakanksha and Narang, Sharan and Devlin, Jacob and others},
+  journal = {Journal of Machine Learning Research},
+  volume  = {24},
+  number  = {240},
+  pages   = {1--113},
+  year    = {2023},
+  note    = {defines model FLOP utilization (MFU)}
+}
+
+@inproceedings{ainslie2023gqa,
+  title     = {{GQA}: Training Generalized Multi-Query Transformer Models from
+               Multi-Head Checkpoints},
+  author    = {Ainslie, Joshua and Lee-Thorp, James and de Jong, Michiel and
+               Zemlyanskiy, Yury and Lebr{\'o}n, Federico and Sanghai, Sumit},
+  booktitle = {EMNLP},
+  year      = {2023}
+}
+
+@misc{deepseekv2,
+  title         = {{DeepSeek-V2}: A Strong, Economical, and Efficient
+                   Mixture-of-Experts Language Model},
+  author        = {{DeepSeek-AI}},
+  year          = {2024},
+  eprint        = {2405.04434},
+  archivePrefix = {arXiv},
+  note          = {introduces Multi-head Latent Attention (MLA)}
+}
+
+@misc{deepseekv32,
+  title        = {{DeepSeek-V3.2-Exp}: Boosting Long-Context Efficiency with
+                  DeepSeek Sparse Attention},
+  author       = {{DeepSeek-AI}},
+  year         = {2025},
+  note         = {introduces DSA and the lightning indexer},
+  howpublished = {\url{https://huggingface.co/deepseek-ai/DeepSeek-V3.2-Exp}}
+}
+
+@misc{deepseekv4,
+  title         = {{DeepSeek-V4}: Towards Highly Efficient Million-Token Context
+                   Intelligence},
+  author        = {{DeepSeek-AI}},
+  year          = {2026},
+  eprint        = {2606.19348},
+  archivePrefix = {arXiv},
+  note          = {V4-Pro model setup, Sec. 4.2.1: 61 layers, CSA m=4 /
+                   HCA m'=128, c=512, c\_I=128, n\_win=128, top-k=1024,
+                   1.6T total / 49B activated}
+}
+
+@misc{glm5,
+  title         = {{GLM-5}: from Vibe Coding to Agentic Engineering},
+  author        = {{GLM-5 Team}},
+  year          = {2026},
+  eprint        = {2602.15763},
+  archivePrefix = {arXiv},
+  note          = {config: 78 layers, MLA kv\_lora\_rank 512, qk\_rope 64,
+                   DSA index\_topk 2048, 40B activated}
+}
+
+@misc{kimik2,
+  title         = {{Kimi K2}: Open Agentic Intelligence},
+  author        = {{Kimi Team}},
+  year          = {2025},
+  eprint        = {2507.20534},
+  archivePrefix = {arXiv},
+  note          = {MLA configuration inherited by K2.6}
+}
+
+@misc{kimik26,
+  title        = {{Kimi-K2.6} Model Card},
+  author       = {{Moonshot AI}},
+  year         = {2026},
+  note         = {config: 61 layers, 64 heads, kv\_lora\_rank 512,
+                  qk\_rope 64, qk\_nope 128, v\_head\_dim 128, 32B activated},
+  howpublished = {\url{https://huggingface.co/moonshotai/Kimi-K2.6}}
+}
+
+@misc{qwen3,
+  title         = {{Qwen3} Technical Report},
+  author        = {{Qwen Team}},
+  year          = {2025},
+  eprint        = {2505.09388},
+  archivePrefix = {arXiv},
+  note          = {Qwen3-235B-A22B config: 94 layers, 64 q-heads,
+                   4 KV-heads, head\_dim 128}
+}
+
+@misc{qwen3next,
+  title        = {{Qwen3-Next-80B-A3B} Model Card},
+  author       = {{Qwen Team}},
+  year         = {2025},
+  note         = {config: 48 layers, full\_attention\_interval 4,
+                  16 q-heads, 2 KV-heads, head\_dim 256},
+  howpublished = {\url{https://huggingface.co/Qwen/Qwen3-Next-80B-A3B-Instruct}}
+}
+
+@misc{qwen35,
+  title        = {{Qwen3.5-397B-A17B} Model Card},
+  author       = {{Qwen Team}},
+  year         = {2026},
+  note         = {config: 60 layers in a 3:1 linear/full attention pattern,
+                  32 q-heads, 2 KV-heads, head\_dim 256},
+  howpublished = {\url{https://huggingface.co/Qwen/Qwen3.5-397B-A17B}}
+}
+
+@inproceedings{kwon2023efficient,
+  title     = {Efficient Memory Management for Large Language Model Serving with
+               {PagedAttention}},
+  author    = {Kwon, Woosuk and Li, Zhuohan and Zhuang, Siyuan and Sheng, Ying and
+               Zheng, Lianmin and Yu, Cody Hao and Gonzalez, Joseph E. and
+               Zhang, Hao and Stoica, Ion},
+  booktitle = {SOSP},
+  year      = {2023}
+}
+
+@inproceedings{agrawal2024sarathi,
+  title     = {Taming Throughput-Latency Tradeoff in {LLM} Inference with
+               {Sarathi-Serve}},
+  author    = {Agrawal, Amey and Kedia, Nitin and Panwar, Ashish and
+               Mohan, Jayashree and Kwatra, Nipun and Gulavani, Bhargav S. and
+               Tumanov, Alexey and Ramjee, Ramachandran},
+  booktitle = {OSDI},
+  year      = {2024}
+}
+
+@misc{lmcache,
+  title        = {{LMCache}: Redis for {LLMs}},
+  author       = {{LMCache Team}},
+  year         = {2024},
+  howpublished = {\url{https://github.com/LMCache/LMCache}}
+}
