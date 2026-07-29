@@ -1112,12 +1112,12 @@ def mp_wait_stored(log: Path, offset: int, tokens: int) -> None:
 
 def mp_wait_source_keys(log: Path, offset: int, transfers: Path,
                         transfer_offset: int, tokens: int,
-                        stored_tokens: int | None = None) -> set[str]:
-    mp_wait_stored(log, offset, tokens if stored_tokens is None else stored_tokens)
+                        known_keys: set[str] | None = None) -> set[str]:
+    mp_wait_stored(log, offset, tokens)
     expected = tokens // 256
     deadline = time.monotonic() + 600
     while time.monotonic() < deadline:
-        keys = mp_source_keys(transfers, transfer_offset)
+        keys = mp_source_keys(transfers, transfer_offset) - (known_keys or set())
         if len(keys) == expected:
             return keys
         if len(keys) > expected:

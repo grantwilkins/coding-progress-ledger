@@ -160,20 +160,20 @@ def test_mp_storage_wait_requires_exact_resp_set_keys(tmp_path):
     assert s.mp_wait_source_keys(log, 0, transfers, offset, 512) == {"k1", "k2"}
 
 
-def test_mp_source_keys_separates_full_keys_from_stored_delta(monkeypatch, tmp_path):
+def test_mp_source_keys_excludes_known_keys(monkeypatch, tmp_path):
     log = tmp_path / "lmcache.log"
     log.write_text("")
     transfers = tmp_path / "resp_transfers.csv"
     transfers.write_text(
         "connection_id,command,key_hashes,start_ns,end_ns,request_wire_bytes,"
         "response_wire_bytes,request_body_bytes,payload_bytes\n"
-        "a,SET,k1,0,1,1,1,1,1\na,SET,k2,2,3,1,1,1,1\n"
+        "a,SET,old,0,1,1,1,1,1\na,SET,k1,2,3,1,1,1,1\n"
     )
     waited = []
     monkeypatch.setattr(s, "mp_wait_stored",
                         lambda _log, _offset, tokens: waited.append(tokens))
 
-    assert s.mp_wait_source_keys(log, 0, transfers, 0, 512, 256) == {"k1", "k2"}
+    assert s.mp_wait_source_keys(log, 0, transfers, 0, 256, {"old"}) == {"k1"}
     assert waited == [256]
 
 
