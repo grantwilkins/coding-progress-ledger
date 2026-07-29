@@ -151,7 +151,7 @@ def test_mp_storage_wait_requires_exact_resp_set_keys(tmp_path):
     transfers.write_text(
         "connection_id,command,key_hashes,start_ns,end_ns,request_wire_bytes,"
         "response_wire_bytes,request_body_bytes,payload_bytes\n"
-        "a,SET,k1,2,3,1,1,1,1\n"
+        "a,SET,k1,0,3,1,1,1,1\n"
         "a,SET,k2,4,5,1,1,1,1\n"
     )
 

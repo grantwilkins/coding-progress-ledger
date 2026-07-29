@@ -1095,7 +1095,7 @@ def mp_source_keys(path: Path, start_ns: int, end_ns: int) -> set[str]:
     return {
         row["key_hashes"] for row in resp_rows(path)
         if row["command"] == "SET"
-        and start_ns <= int(row["start_ns"]) < end_ns
+        and start_ns <= int(row["end_ns"]) < end_ns
     }
 
 
