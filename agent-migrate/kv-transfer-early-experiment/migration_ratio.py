@@ -31,14 +31,17 @@ from matplotlib.colors import Normalize
 H100_BF16_DENSE_TFLOPS = 1_979 / 2  # dense = half of sparsity peak
 N_GPUS = 8
 MFU = 0.35
-EFF_FLOPS = N_GPUS * H100_BF16_DENSE_TFLOPS * 1e12 * MFU  # ~2.77 PFLOP/s
+NODE_EFF_FLOPS = N_GPUS * H100_BF16_DENSE_TFLOPS * 1e12 * MFU  # ~2.77 PFLOP/s
+NODE_HBM_GB = N_GPUS * 80.0  # 8x H100 SXM 80 GB
+WEIGHT_BYTES_PER_PARAM = 1.0  # FP8 serving weights
+RUNTIME_HEADROOM_GB = 100.0  # KV cache + activations
 
 BPE = 2  # bf16 bytes per element
 CONTEXT_MODEL = "DeepSeek V4 Pro"  # HCA layers stay quadratic, so the ratio
 CONTEXT_STEM = "deepseekv4_context_ratio_bandwidths"  # sweeps a wide range
 CONTEXT_BANDWIDTHS_GBPS = np.linspace(0.1, 25, 500)
 CONTEXT_TOKENS = np.geomspace(1_000, 10_000_000, 500)
-CONTEXT_RATIO_YLIM = (1e-2, 1e2)
+CONTEXT_RATIO_YLIM = (1e-3, 1e2)
 RATIO_YLIM = (1e-3, 1e2)
 
 # ── Model specs ───────────────────────────────────────────────────────────────
@@ -76,6 +79,7 @@ class Attn:
 class Model:
     label: str  # display name
     active_b: float  # active params (billions)
+    total_b: float  # total params (billions), sets the instance size
     attn: tuple[Attn, ...]  # attention layout by layer group
     query_heads: int
     qk_dim: int
@@ -121,6 +125,7 @@ MODELS = [
     Model(
         "DeepSeek V4 Pro",
         active_b=49,
+        total_b=1600,
         # 2 HCA + 59 interleaved CSA/HCA = 30 CSA + 31 HCA; m=4/128, top-k=1024,
         # 128-token sliding window on every layer.
         attn=(
@@ -137,6 +142,7 @@ MODELS = [
     Model(
         "Qwen3 Next 80B",
         active_b=3,
+        total_b=80,
         attn=(Attn(12),),
         query_heads=16,
         qk_dim=256,
@@ -148,6 +154,7 @@ MODELS = [
     Model(
         "Qwen3.5 397B",
         active_b=17,
+        total_b=397,
         attn=(Attn(15),),
         query_heads=32,
         qk_dim=256,
@@ -159,6 +166,7 @@ MODELS = [
     Model(
         "Kimi K2.6",
         active_b=32,
+        total_b=1000,
         attn=(Attn(61),),
         query_heads=64,
         qk_dim=192,
@@ -170,6 +178,7 @@ MODELS = [
     Model(
         "GLM 5",
         active_b=40,
+        total_b=744,
         attn=(Attn(78, topk=2048),),  # DSA, index_topk=2048
         query_heads=64,
         qk_dim=256,
@@ -181,6 +190,7 @@ MODELS = [
     Model(
         "Qwen3 235B",
         active_b=22,
+        total_b=235,
         attn=(Attn(94),),
         query_heads=64,
         qk_dim=128,
@@ -193,6 +203,17 @@ MODELS = [
 
 
 # ── Cost model ────────────────────────────────────────────────────────────────
+def nodes(m: Model) -> int:
+    """Instances needed to hold FP8 weights plus runtime headroom. A model too
+    large for one node is served across several, and prefill sees all of them."""
+    weights = m.total_b * WEIGHT_BYTES_PER_PARAM
+    return math.ceil((weights + RUNTIME_HEADROOM_GB) / NODE_HBM_GB)
+
+
+def eff_flops(m: Model) -> float:
+    return nodes(m) * NODE_EFF_FLOPS
+
+
 def prefill_flops(m: Model, T: int) -> float:
     ffn = 2.0 * m.active_b * 1e9 * T
     pairs = sum(g.pairs(T) for g in m.attn)
@@ -200,7 +221,7 @@ def prefill_flops(m: Model, T: int) -> float:
 
 
 def t_replay(m: Model, T: int) -> float:
-    return prefill_flops(m, T) / EFF_FLOPS
+    return prefill_flops(m, T) / eff_flops(m)
 
 
 def t_transfer(m: Model, T: int, bw_gbps: float) -> float:
@@ -269,7 +290,7 @@ def plot_context_ratio(label: str = CONTEXT_MODEL, stem: str = CONTEXT_STEM):
     ax.set_yscale("log")
     ax.set_xlim(CONTEXT_TOKENS.min(), CONTEXT_TOKENS.max())
     ax.set_ylim(*CONTEXT_RATIO_YLIM)
-    shade_regions(ax, CONTEXT_TOKENS, (0.04, 30), (0.56, 1.6e-2))
+    shade_regions(ax, CONTEXT_TOKENS, (0.04, 25), (0.56, 3e-3))
     ax.set_xlabel("Context size (tokens)")
     ax.set_ylabel(r"$t^{R}/t^{KV}$")
     ax.grid(True, which="both", alpha=0.15)

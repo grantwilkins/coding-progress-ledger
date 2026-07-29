@@ -5,8 +5,11 @@ the KV cache or replay the prompt/context?
 
 ## Setup
 
-- Hardware: 8x H100 SXM, dense bf16 peak = 7.92 PFLOP/s.
-- Assumed MFU: 35%, so effective prefill compute = 2.77 PFLOP/s.
+- Hardware: one instance is 8x H100 SXM, dense bf16 peak = 7.92 PFLOP/s, 640 GB HBM.
+- Assumed MFU: 35%, so one instance sustains 2.77 PFLOP/s of prefill.
+- Models too big for one instance get the fewest that hold FP8 weights + 100 GB
+  headroom, and prefill sees all of them. Instance count scales replay only; KV
+  bytes are per-token and do not move.
 - KV state is bf16. Quantized KV and allocator padding are not modeled.
 - Replay time is recomputed from prefill FLOPs at each context length; it is not a
   fixed tokens/sec benchmark. Attention counts the pairs each layout actually
@@ -17,29 +20,29 @@ the KV cache or replay the prompt/context?
 
 Above the crossover bandwidth, ship KV. Below it, replay.
 
-| Model | KV @ 100k | Replay | Prefill | Crossover |
-|---|---:|---:|---:|---:|
-| DeepSeek-V4-Pro | 0.99 GB | 4.01 s | 24.9k tok/s | 1.98 Gbps |
-| Kimi-K2.6 | 7.03 GB | 6.82 s | 14.7k tok/s | 8.24 Gbps |
-| GLM-5 | 8.99 GB | 3.26 s | 30.7k tok/s | 22.04 Gbps |
-| Qwen3-235B-A22B | 19.25 GB | 7.15 s | 14.0k tok/s | 21.55 Gbps |
-| Qwen3.5-397B-A17B | 3.07 GB | 2.11 s | 47.3k tok/s | 11.62 Gbps |
-| Qwen3-Next-80B-A3B | 2.46 GB | 0.57 s | 175.0k tok/s | 34.41 Gbps |
+| Model | Nodes | KV @ 100k | Replay | Prefill | Crossover |
+|---|---:|---:|---:|---:|---:|
+| DeepSeek-V4-Pro | 3 | 0.99 GB | 1.34 s | 74.8k tok/s | 5.94 Gbps |
+| Kimi-K2.6 | 2 | 7.03 GB | 3.41 s | 29.3k tok/s | 16.49 Gbps |
+| GLM-5 | 2 | 8.99 GB | 1.63 s | 61.3k tok/s | 44.08 Gbps |
+| Qwen3-235B-A22B | 1 | 19.25 GB | 7.15 s | 14.0k tok/s | 21.55 Gbps |
+| Qwen3.5-397B-A17B | 1 | 3.07 GB | 2.11 s | 47.3k tok/s | 11.62 Gbps |
+| Qwen3-Next-80B-A3B | 1 | 2.46 GB | 0.57 s | 175.0k tok/s | 34.41 Gbps |
 
 ## Takeaways
 
-- Crossovers are modest: about 2-34 Gbps at 100k tokens, not 100+ Gbps.
+- Crossovers are modest: about 6-44 Gbps at 100k tokens, not 100+ Gbps.
 - GLM-5 is no longer a heavy full-MHA outlier. The corrected model treats it as
   MLA + DSA compressed KV.
-- DeepSeek-V4-Pro has the lowest crossover because CSA/HCA keeps KV small enough
-  that transfer usually wins.
+- DeepSeek-V4-Pro still has the lowest crossover: CSA/HCA keeps KV small enough
+  that transfer usually wins, even though 3 instances make its replay fast.
+- GLM-5 has the highest. Its DSA-capped prefill is cheap and 2 instances make it
+  cheaper, so the link has to be very fast before shipping 8.99 GB pays off.
 - Qwen3-Next has the highest crossover because replay is extremely fast.
 - Context length only matters where attention is still quadratic. Dense models
   keep the T^2 replay term, so long contexts favour KV transfer. GLM-5's DSA
   caps every query at 2048 entries, so above ~2k tokens its replay is linear and
   its decision no longer depends on context length at all.
-- GLM-5 and Qwen3-235B now cross over within 2% of each other (22.04 vs 21.55
-  Gbps), so their curves overlap in `migration_ratio.png`.
 - `deepseekv4_context_ratio_bandwidths.{png,pdf}` shows the DeepSeek-V4-Pro ratio
   from 1k to 10M tokens across 500 linear-spaced 0.1-25 Gbps links. Its HCA
   layers have no top-k, so the quadratic term survives and the boundary still

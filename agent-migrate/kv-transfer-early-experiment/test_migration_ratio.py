@@ -90,6 +90,28 @@ def test_dsa_model_replay_grows_linearly_but_dense_model_does_not():
     assert mr.t_replay(qwen, 1_000_000) / mr.t_replay(qwen, 100_000) > 50
 
 
+def test_instance_size_follows_the_weight_footprint():
+    # 640 GB/node, FP8 weights + 100 GB headroom: 1.6T needs 3, 744B needs 2,
+    # and everything at or under 540B fits on one.
+    got = {m.label: mr.nodes(m) for m in mr.MODELS}
+    assert got == {
+        "DeepSeek V4 Pro": 3,
+        "Qwen3 Next 80B": 1,
+        "Qwen3.5 397B": 1,
+        "Kimi K2.6": 2,
+        "GLM 5": 2,
+        "Qwen3 235B": 1,
+    }
+
+
+def test_crossover_scales_with_the_instance_count():
+    """Nodes only buy prefill FLOPs; KV bytes are per-token and do not move."""
+    m = mr.model("GLM 5")
+    one_node = mr.prefill_flops(m, 100_000) / mr.NODE_EFF_FLOPS
+    assert math.isclose(one_node / mr.t_replay(m, 100_000), mr.nodes(m))
+    assert mr.t_transfer(m, 100_000, 10) == m.kv_bytes(100_000) * 8 / 10e9
+
+
 def test_gqa_and_mla_count_the_declared_bf16_state():
     assert mr.gqa_kv(2, 3, 4)(5) == 2 * mr.BPE * 2 * 3 * 4 * 5
     assert mr.mla_kv(2, 5, 7)(3) == 2 * (5 + 7) * 2 * 3
@@ -101,7 +123,7 @@ def test_deepseek_cache_rounds_compressed_entries_up():
 
 
 def test_transfer_uses_bits_and_decimal_gbps():
-    model = mr.Model("hand", 1, (mr.Attn(1),), 1, 1, 1, lambda _: 1e9)
+    model = mr.Model("hand", 1, 1, (mr.Attn(1),), 1, 1, 1, lambda _: 1e9)
     assert mr.t_transfer(model, 1, 8) == 1
 
 
