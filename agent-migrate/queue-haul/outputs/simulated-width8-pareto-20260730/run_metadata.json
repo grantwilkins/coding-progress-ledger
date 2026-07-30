@@ -15,6 +15,7 @@
   "scenarios": 600,
   "paired_episodes": 120,
   "observation_s": 600,
+  "planning_contract": "replanned shared aggregate replay/KV capacity; eager execution",
   "plan": {
     "path": "queue-haul/outputs/policy-hardware-width8-packing-plan/plan.json",
     "sha256": "e20ff148aded9b63458a65d378a2103579974a64fe0b3a8b05fd3bf4079cdba8"

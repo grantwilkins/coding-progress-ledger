@@ -167,6 +167,27 @@ def parallel_profile(profile, width, replay_caps):
     )
 
 
+def aggregate_planning_profile(profile, bandwidth_mbps, replay_caps, kv_caps):
+    cases = {}
+    for case_id, case in profile.cases.items():
+        x, y = case.replay.by_concurrency[1]
+        replay = RateCurve({1: (x, np.minimum(y, replay_caps[case_id]))})
+        transfer = replace(
+            case.kv_transfer,
+            destination_bytes_per_s=min(
+                case.kv_transfer.destination_bytes_per_s,
+                kv_caps[case_id][float(bandwidth_mbps)],
+            ),
+        )
+        cases[case_id] = replace(
+            case, replay=replay, kv_transfer=transfer
+        )
+    return replace(
+        profile, max_destination_replays=1,
+        max_destination_kv_streams=1, cases=cases,
+    )
+
+
 def shared_kv_profile(profile, bandwidth_mbps, concurrency, kv_caps):
     if concurrency <= 1:
         return profile
@@ -194,8 +215,7 @@ def planned_moves(rows):
     return tuple(
         PlannedMove(
             row["session_id"], "destination", row["method"], row["order"],
-            ("link",), row.get("planned_rate_limit_bytes_per_s"),
-            row.get("planned_quiesce_s"),
+            ("link",),
         )
         for row in sorted(rows, key=lambda row: row["order"])
     )
@@ -207,11 +227,13 @@ def simulate(plan_path=DEFAULT_PLAN, model_path=DEFAULT_MODEL,
     validate_policy_plan(plan_)
     if profiler.file_hash(model_path) != plan_["model_profile"]["sha256"]:
         raise RuntimeError("model profile changed after planning")
-    profile = ModelProfile.load(model_path)
+    base_profile = ModelProfile.load(model_path)
     replay_caps, _ = measured_replay_caps(width8)
-    kv_caps, _ = measured_kv_caps(width8, crossover_path.parent, profile)
+    kv_caps, _ = measured_kv_caps(
+        width8, crossover_path.parent, base_profile
+    )
     profile = parallel_profile(
-        profile, plan_["sessions_per_episode"], replay_caps
+        base_profile, plan_["sessions_per_episode"], replay_caps
     )
     crossover = json.loads(crossover_path.read_text())
     anchors = set(crossover["contexts"])
@@ -226,16 +248,17 @@ def simulate(plan_path=DEFAULT_PLAN, model_path=DEFAULT_MODEL,
             base["required_deadline_s"],
         )
         scenario = replace(scenario, end_s=max(base["deadline_s"], OBSERVATION_S))
+        planning_profile = aggregate_planning_profile(
+            base_profile, base["bandwidth_mbps"], replay_caps, kv_caps
+        )
         evidence = context_evidence(
             (row["initial_tokens"] for row in base["sessions"]), anchors
         )
         for policy in POLICIES:
-            moves = scenarios.get(policy, {}).get("moves")
-            if moves is None:
-                moves = _moves(
-                    policy, scenario, routes, profile,
-                    profiler.stable_seed(plan_["seed"], episode, policy),
-                )
+            moves = _moves(
+                policy, scenario, routes, planning_profile,
+                profiler.stable_seed(plan_["seed"], episode, policy),
+            )
             moves = planned_moves(moves)
             execution_profile = shared_kv_profile(
                 profile, base["bandwidth_mbps"],
@@ -279,6 +302,7 @@ def simulate(plan_path=DEFAULT_PLAN, model_path=DEFAULT_MODEL,
                     "measured_bandwidth_specific_aggregate_throughput_cap",
                 "power_evidence": "modeled",
                 "result_evidence": "simulated",
+                "planning_evidence": "replanned_with_aggregate_caps",
             })
     pareto_flags(rows, ("match_id",))
     for row in rows:
@@ -411,6 +435,8 @@ def run(plan_path=DEFAULT_PLAN, model_path=DEFAULT_MODEL,
         "scenarios": len(rows),
         "paired_episodes": len(rows) // len(POLICIES),
         "observation_s": OBSERVATION_S,
+        "planning_contract":
+            "replanned shared aggregate replay/KV capacity; eager execution",
         "plan": {
             "path": _portable_path(plan_path),
             "sha256": profiler.file_hash(plan_path),

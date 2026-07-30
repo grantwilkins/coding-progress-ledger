@@ -16,10 +16,11 @@ Plausible wrong implementations:
 import json
 
 from simulated_pareto_campaign import (
-    context_evidence, full_attainment_cdf, measured_kv_caps,
-    measured_replay_caps, meets_deadline, parallel_profile, pareto_flags,
-    shared_kv_profile,
+    aggregate_planning_profile, context_evidence, full_attainment_cdf,
+    measured_kv_caps, measured_replay_caps, meets_deadline, parallel_profile,
+    pareto_flags, shared_kv_profile,
 )
+from policy_hardware_campaign import _moves, _problem
 from test_execution_simulator import model
 
 
@@ -73,7 +74,7 @@ def test_deadline_boundary_tolerates_roundoff_but_not_real_misses():
 
 
 def test_width8_contract_does_not_silently_serialize_destination(tmp_path):
-    base = model(tmp_path)
+    base = model(tmp_path, tp=1)
     context = base.case().replay.by_concurrency[1][0][0]
     serial = base.case().replay.rate(context, 1)
     profile = parallel_profile(base, 8, {"central": serial / 2})
@@ -156,3 +157,27 @@ def test_kv_cap_uses_sealed_bytes_and_correct_bandwidth_source(tmp_path):
         5000.0: size / 2, 10000.0: size,
     }
     assert counts == {"serial": 2, "width8": 2}
+
+
+def test_queue_haul_replans_when_aggregate_bottleneck_changes(tmp_path):
+    base = model(tmp_path, tp=1)
+    context = max(
+        int(base.case().replay.by_concurrency[1][0][0]),
+        base.case().kv_transfer.block_tokens,
+    )
+    scenario, routes = _problem(
+        base, [{"session_id": "a", "initial_tokens": context}], 1000, 100
+    )
+    replay = {"central": 1e9}
+    kv = {"central": {1000.0: 1}}
+    replay_plan = aggregate_planning_profile(base, 1000, replay, kv)
+    kv_plan = aggregate_planning_profile(
+        base, 1000, {"central": .001}, {"central": {1000.0: 1e9}}
+    )
+
+    assert _moves(
+        "queue_haul", scenario, routes, replay_plan, 1
+    )[0]["method"] == "replay"
+    assert _moves(
+        "queue_haul", scenario, routes, kv_plan, 1
+    )[0]["method"] == "kv_transfer"
