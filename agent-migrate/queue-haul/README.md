@@ -136,9 +136,10 @@ source-power shed levels. Use `--refresh` when its pinned inputs change.
 that launches every session concurrently for Queue-Haul, greedy, KV-only, and
 replay-only. Its default truncated grid uses coding, interactive-coding, and
 agentic-tool-loop context-length profiles; uniform-over-support and
-uniform-over-range token distributions; configurable bandwidths and deadlines;
-and full-episode migration width. The requirement is passed to the Queue-Haul
-planner. The runner remains eager and does not execute planner pacing or measure
+uniform-over-range token distributions, or named exact context packs; configurable
+bandwidths and deadlines; and full-episode migration width. The requirement and
+cell bandwidth are passed to the Queue-Haul planner. The runner remains eager and
+does not execute planner pacing or measure
 planning latency. A policy-infeasible deadline retains its admitted prefix and
 appends an explicitly marked independently-fastest tail so runtime width remains
 the episode size. Failed episodes remain in denominators. Reduction writes

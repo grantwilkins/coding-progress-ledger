@@ -36,7 +36,7 @@ from policy_hardware_campaign import (
 )
 
 
-def manifest(tmp_path):
+def manifest(tmp_path, sessions=4):
     path = tmp_path / "manifest.json"
     path.write_text(json.dumps({
         "schema": "queue-haul-migration-manifest-v2",
@@ -47,13 +47,23 @@ def manifest(tmp_path):
                 "time_s": 0, "input_tokens": 4096,
                 "append_tokens": 32, "output_tokens": 1, "reset": False,
             }],
-        } for i in range(4)],
+        } for i in range(sessions)],
     }))
     return path
 
 
-def test_plan_pairs_every_policy_on_the_same_complete_episode(tmp_path):
+def test_plan_pairs_every_policy_on_the_same_complete_episode(
+        tmp_path, monkeypatch):
     manifest_path = manifest(tmp_path)
+    bandwidths = []
+    problem = campaign._problem
+    monkeypatch.setattr(
+        campaign, "_problem",
+        lambda profile, sessions, bandwidth, deadline: (
+            bandwidths.append(bandwidth),
+            problem(profile, sessions, bandwidth, deadline),
+        )[1],
+    )
     plan = make_plan(
         manifest_path, episodes=2, sessions=4, seed=7,
         bandwidths_mbps=(5_000, 10_000),
@@ -102,6 +112,7 @@ def test_plan_pairs_every_policy_on_the_same_complete_episode(tmp_path):
     assert all(len(signatures) == 1 for signatures in samples.values())
     assert {row["bandwidth_mbps"] for row in plan["scenarios"]} \
         == {5_000, 10_000}
+    assert set(bandwidths) == {5_000, 10_000}
     queue_moves = [
         move for row in plan["scenarios"] if row["policy"] == "queue_haul"
         for move in row["moves"] if move["method"] == "kv_transfer"
@@ -114,6 +125,29 @@ def test_plan_pairs_every_policy_on_the_same_complete_episode(tmp_path):
          if row["kind"] == "migration")["move_concurrency"] = 2
     with pytest.raises(ValueError, match="complete episode"):
         validate_policy_plan(invalid)
+
+
+def test_fixed_context_pack_preserves_width_and_pairing(tmp_path):
+    plan = make_plan(
+        manifest(tmp_path, 8), episodes=1, sessions=8, seed=7,
+        bandwidths_mbps=(10_000,), required_deadlines_s=(30,),
+        context_packs=("small",),
+    )
+
+    assert plan["context_packs"] == {"small": [4096] * 8}
+    assert plan["workload_profiles"] == []
+    assert plan["token_distributions"] == ["fixed"]
+    assert len(plan["scenarios"]) == 5
+    assert all(row["move_concurrency"] == 8 for row in plan["scenarios"])
+    assert all(
+        [session["initial_tokens"] for session in row["sessions"]]
+        == [4096] * 8 for row in plan["scenarios"]
+    )
+    with pytest.raises(ValueError, match="context packs"):
+        make_plan(
+            manifest(tmp_path, 8), episodes=1, sessions=4,
+            context_packs=("small",),
+        )
 
 
 def test_policy_appends_unadmitted_sessions_as_fastest_tail(monkeypatch):

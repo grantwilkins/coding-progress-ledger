@@ -28,6 +28,13 @@ DEFAULT_WORKLOADS = tuple(ROOT / f"profiles/{name}.json" for name in (
 ))
 TOKEN_DISTRIBUTIONS = ("uniform_support", "uniform_range")
 REQUIRED_DEADLINES_S = (30,)
+CONTEXT_PACKS = {
+    "tiny": (2048,) * 8,
+    "small": (4096,) * 8,
+    "medium": (8192,) * 8,
+    "mixed": (2048, 4096, 4096, 8192, 8192, 12288, 12288, 14336),
+    "large": (16384,) * 8,
+}
 POLICIES = ("queue_haul", "greedy", "kv_only", "replay_only")
 LABELS = {
     "queue_haul": "QH choice/order", "greedy": "Greedy choice/order",
@@ -145,40 +152,54 @@ def make_plan(manifest_path: Path, model_path: Path = DEFAULT_MODEL,
               workload_paths=(DEFAULT_WORKLOADS[0],),
               token_distributions=("uniform_support",),
               required_deadlines_s=REQUIRED_DEADLINES_S,
-              bandwidths_mbps=None) -> dict:
+              bandwidths_mbps=None, context_packs=()) -> dict:
     manifest = json.loads(manifest_path.read_text())
     profiler.validate_manifest(manifest)
     profile = ModelProfile.load(model_path)
-    workloads = [WorkloadProfile.load(path) for path in workload_paths]
+    pack_names = tuple(context_packs)
+    if len(set(pack_names)) != len(pack_names) \
+            or not set(pack_names) <= CONTEXT_PACKS.keys() \
+            or pack_names and any(len(CONTEXT_PACKS[name]) != sessions
+                                  for name in pack_names):
+        raise ValueError("invalid context packs for campaign width")
+    workloads = [] if pack_names else [
+        WorkloadProfile.load(path) for path in workload_paths
+    ]
     bandwidths = (bandwidth_mbps,) if bandwidths_mbps is None \
         else tuple(bandwidths_mbps)
     if episodes < 1 or not 1 <= sessions <= len(manifest["sessions"]) \
             or not bandwidths or min(bandwidths) <= 0 \
             or len(set(bandwidths)) != len(bandwidths) \
             or deadline_s <= profile.power_window_s \
-            or not workloads or not token_distributions \
-            or not required_deadlines_s \
+            or not (workloads or pack_names) \
+            or not token_distributions or not required_deadlines_s \
             or min(required_deadlines_s) <= profile.power_window_s:
         raise ValueError("invalid policy campaign dimensions")
     replay_contexts = profile.case().replay.by_concurrency[1][0]
 
     rng, scenarios = random.Random(seed), []
     available = sorted(manifest["sessions"], key=lambda row: row["id"])
+    sources = [(
+        workload.profile_id, workload.records[0].job_type, distribution, workload
+    ) for workload in workloads for distribution in token_distributions]
+    sources.extend((name, name, "fixed", CONTEXT_PACKS[name])
+                   for name in pack_names)
     cells = [
-        (workload, distribution, bandwidth, required_deadline, repeat)
-        for workload in workloads for distribution in token_distributions
+        (profile_id, job_type, distribution, source, bandwidth,
+         required_deadline, repeat)
+        for profile_id, job_type, distribution, source in sources
         for bandwidth in bandwidths
         for required_deadline in required_deadlines_s
         for repeat in range(episodes)
     ]
-    for episode, (workload, distribution, bandwidth, required_deadline, repeat) \
-            in enumerate(cells):
+    for episode, (profile_id, job_type, distribution, source, bandwidth,
+                  required_deadline, repeat) in enumerate(cells):
         sample_rng = random.Random(profiler.stable_seed(
-            seed, workload.profile_id, distribution, repeat
+            seed, profile_id, distribution, repeat
         ))
         chosen = sample_rng.sample(available, sessions)
-        contexts = _context_tokens(
-            workload, distribution, sessions, sample_rng
+        contexts = list(source) if distribution == "fixed" else _context_tokens(
+            source, distribution, sessions, sample_rng
         )
         if min(contexts) < replay_contexts[0] \
                 or max(contexts) > replay_contexts[-1]:
@@ -189,11 +210,10 @@ def make_plan(manifest_path: Path, model_path: Path = DEFAULT_MODEL,
             "initial_tokens": contexts[order],
             "order": order,
         } for order, row in enumerate(chosen)]
-        job_type = workload.records[0].job_type
         condition = f"{job_type}-{distribution}-{bandwidth:g}mbps-" \
             f"{required_deadline:g}s"
         sample_id = profiler.object_hash(
-            [seed, workload.profile_id, distribution, repeat, session_rows]
+            [seed, profile_id, distribution, repeat, session_rows]
         )[:16]
         match_id = profiler.object_hash(
             [sample_id, bandwidth, required_deadline]
@@ -217,7 +237,7 @@ def make_plan(manifest_path: Path, model_path: Path = DEFAULT_MODEL,
             "method": "replay", "policy": "control", "moves": [],
         })
         problem, routes = _problem(
-            profile, session_rows, bandwidth_mbps, required_deadline
+            profile, session_rows, bandwidth, required_deadline
         )
         for policy in POLICIES:
             moves = _moves(
@@ -257,11 +277,14 @@ def make_plan(manifest_path: Path, model_path: Path = DEFAULT_MODEL,
         },
         "policies": list(POLICIES), "episodes": len(cells),
         "episodes_per_cell": episodes,
-        "workload_profiles": [
+        "workload_profiles": [] if pack_names else [
             {"path": _portable_path(path), "sha256": profiler.file_hash(path)}
             for path in workload_paths
         ],
-        "token_distributions": list(token_distributions),
+        "token_distributions": ["fixed"] if pack_names
+            else list(token_distributions),
+        "context_packs": {name: list(CONTEXT_PACKS[name])
+                          for name in pack_names},
         "bandwidths_mbps": list(bandwidths),
         "required_deadlines_s": list(required_deadlines_s),
         "power_target_fraction": 1.0,
@@ -702,6 +725,8 @@ def parse_args(argv=None):
                          default=TOKEN_DISTRIBUTIONS)
     command.add_argument("--required-deadlines-s", type=float, nargs="+",
                          default=REQUIRED_DEADLINES_S)
+    command.add_argument("--context-packs", nargs="+",
+                         choices=tuple(CONTEXT_PACKS))
     command = sub.add_parser("reduce")
     command.add_argument("--run-root", type=Path, required=True)
     command.add_argument("--out", type=Path)
@@ -719,6 +744,7 @@ def main(argv=None):
             workload_paths=args.workload_profiles,
             token_distributions=args.token_distributions,
             required_deadlines_s=args.required_deadlines_s,
+            context_packs=args.context_packs or (),
         )
     else:
         reduce_run(args.run_root, args.out)
