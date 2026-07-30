@@ -9,11 +9,15 @@ Plausible wrong implementations:
 - Let an equal point dominate another point.
 - Compare policies from different episodes in the paired result.
 - Label non-anchor contexts or contexts outside the measured range as measured.
+- Apply aggregate replay/KV capacity independently to every concurrent stream.
+- Mix protocol-wire bytes with the simulator's sealed KV byte units.
 """
 
+import json
+
 from simulated_pareto_campaign import (
-    context_evidence, measured_replay_caps, meets_deadline, parallel_profile,
-    pareto_flags,
+    context_evidence, measured_kv_caps, measured_replay_caps, meets_deadline,
+    parallel_profile, pareto_flags, shared_kv_profile,
 )
 from test_execution_simulator import model
 
@@ -86,3 +90,50 @@ def test_replay_cap_uses_aggregate_episode_tokens(tmp_path):
 
     assert caps == {"central": 10, "faster": 10, "slower": 10}
     assert count == 2
+
+
+def test_kv_cap_is_shared_without_changing_replay(tmp_path):
+    base = parallel_profile(model(tmp_path), 8, {"central": 10})
+    replay = base.case().replay.rate(10, 4)
+    capped = shared_kv_profile(
+        base, 5000, 4, {"central": {5000.0: 80}}
+    )
+
+    assert capped.case().kv_transfer.destination_bytes_per_s == 80
+    assert capped.case().replay.rate(10, 4) == replay
+    assert shared_kv_profile(
+        base, 5000, 1, {"central": {5000.0: 80}}
+    ).case().kv_transfer.destination_bytes_per_s \
+        == base.case().kv_transfer.destination_bytes_per_s
+
+
+def test_kv_cap_uses_sealed_bytes_and_correct_bandwidth_source(tmp_path):
+    base, crossover = model(tmp_path), tmp_path / "crossover"
+    crossover.mkdir()
+    block = base.case().kv_transfer.block_tokens
+    size = base.case().kv_transfer.block_bytes
+    (tmp_path / "plan.json").write_text(json.dumps({"scenarios": [
+        {"scenario_id": "w5", "policy": "kv_only", "bandwidth_mbps": 5000,
+         "sessions": [{"initial_tokens": block}]},
+        {"scenario_id": "w10", "policy": "kv_only", "bandwidth_mbps": 10000,
+         "sessions": [{"initial_tokens": block}]},
+    ]}))
+    (tmp_path / "policy_episodes.csv").write_text(
+        "scenario_id,policy,commit_100_s\n"
+        "w5,kv_only,2\nw10,kv_only,1\n"
+    )
+    (crossover / "migrations.csv").write_text(
+        "scenario_id,method,bandwidth_mbps,measured_kv_bytes\n"
+        "x1,kv_transfer,1000,100\nx25,kv_transfer,2500,300\n"
+    )
+    (crossover / "scenarios.csv").write_text(
+        "scenario_id,migration_s\nx1,2\nx25,3\n"
+    )
+
+    caps, counts = measured_kv_caps(tmp_path, crossover, base)
+
+    assert caps["central"] == {
+        1000.0: 50, 2500.0: 100,
+        5000.0: size / 2, 10000.0: size,
+    }
+    assert counts == {"serial": 2, "width8": 2}

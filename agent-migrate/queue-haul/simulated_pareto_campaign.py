@@ -88,6 +88,51 @@ def measured_replay_caps(width8):
     }, len(rates)
 
 
+def measured_kv_caps(width8, crossover, profile):
+    quantiles = {"slower": .25, "central": .5, "faster": .75}
+    plan_ = json.loads((width8 / "plan.json").read_text())
+    scenarios = {row["scenario_id"]: row for row in plan_["scenarios"]}
+    episodes = [
+        row for row in csv.DictReader(
+            (width8 / "policy_episodes.csv").open()
+        ) if row["policy"] == "kv_only" and row["commit_100_s"]
+    ]
+    rates = {}
+    for row in episodes:
+        scenario = scenarios[row["scenario_id"]]
+        size = sum(
+            profile.case().kv_transfer.sealed_bytes(session["initial_tokens"])
+            for session in scenario["sessions"]
+        )
+        rates.setdefault(float(scenario["bandwidth_mbps"]), []).append(
+            size / float(row["commit_100_s"])
+        )
+    migrations = list(csv.DictReader((crossover / "migrations.csv").open()))
+    summaries = {
+        row["scenario_id"]: row
+        for row in csv.DictReader((crossover / "scenarios.csv").open())
+    }
+    serial = {}
+    for row in migrations:
+        if row["method"] == "kv_transfer":
+            serial.setdefault(float(row["bandwidth_mbps"]), []).append(
+                float(row["measured_kv_bytes"])
+                / float(summaries[row["scenario_id"]]["migration_s"])
+            )
+    if set(rates) != {5000.0, 10000.0} \
+            or not {1000.0, 2500.0} <= set(serial):
+        raise ValueError("KV calibration grid is incomplete")
+    combined = {1000.0: serial[1000.0], 2500.0: serial[2500.0], **rates}
+    return {
+        case: {
+            bandwidth: float(np.quantile(values, quantile))
+            for bandwidth, values in combined.items()
+        }
+        for case, quantile in quantiles.items()
+    }, {"serial": len(serial[1000.0]) + len(serial[2500.0]),
+        "width8": sum(map(len, rates.values()))}
+
+
 def parallel_profile(profile, width, replay_caps):
     if set(replay_caps) != set(profile.cases):
         raise ValueError("replay caps must cover every profile case")
@@ -122,6 +167,22 @@ def parallel_profile(profile, width, replay_caps):
     )
 
 
+def shared_kv_profile(profile, bandwidth_mbps, concurrency, kv_caps):
+    if concurrency <= 1:
+        return profile
+    cases = {}
+    for case_id, case in profile.cases.items():
+        cap = kv_caps[case_id][float(bandwidth_mbps)]
+        transfer = replace(
+            case.kv_transfer,
+            destination_bytes_per_s=min(
+                case.kv_transfer.destination_bytes_per_s, cap
+            ),
+        )
+        cases[case_id] = replace(case, kv_transfer=transfer)
+    return replace(profile, cases=cases)
+
+
 def write_csv(path, rows):
     with path.open("w", newline="") as stream:
         writer = csv.DictWriter(stream, tuple(rows[0]), lineterminator="\n")
@@ -148,6 +209,7 @@ def simulate(plan_path=DEFAULT_PLAN, model_path=DEFAULT_MODEL,
         raise RuntimeError("model profile changed after planning")
     profile = ModelProfile.load(model_path)
     replay_caps, _ = measured_replay_caps(width8)
+    kv_caps, _ = measured_kv_caps(width8, crossover_path.parent, profile)
     profile = parallel_profile(
         profile, plan_["sessions_per_episode"], replay_caps
     )
@@ -174,7 +236,12 @@ def simulate(plan_path=DEFAULT_PLAN, model_path=DEFAULT_MODEL,
                     policy, scenario, routes, profile,
                     profiler.stable_seed(plan_["seed"], episode, policy),
                 )
-            result = execute(scenario, profile, planned_moves(moves))
+            moves = planned_moves(moves)
+            execution_profile = shared_kv_profile(
+                profile, base["bandwidth_mbps"],
+                sum(move.method == "kv_transfer" for move in moves), kv_caps,
+            )
+            result = execute(scenario, execution_profile, moves)
             commits = [row.committed_s for row in result.sessions
                        if row.committed_s is not None]
             if len(commits) != len(scenario.sessions):
@@ -208,7 +275,8 @@ def simulate(plan_path=DEFAULT_PLAN, model_path=DEFAULT_MODEL,
                 "context_evidence": evidence,
                 "replay_contention_evidence":
                     "measured_width8_aggregate_throughput_cap",
-                "kv_contention_evidence": "extrapolated_serial_per_stream_rate",
+                "kv_contention_evidence":
+                    "measured_bandwidth_specific_aggregate_throughput_cap",
                 "power_evidence": "modeled",
                 "result_evidence": "simulated",
             })
@@ -279,7 +347,7 @@ def plot(rows, out):
     ax.text(
         .01, .01,
         "2/4/8/16K contexts measured; 12/14K interpolated\n"
-        "replay width-8 cap measured; KV/action power extrapolated; power modeled",
+        "replay/KV aggregate caps measured; action power extrapolated; power modeled",
         transform=ax.transAxes, fontsize=8, va="bottom",
     )
     fig.tight_layout(rect=(0, 0, 1, .86))
@@ -295,6 +363,10 @@ def run(plan_path=DEFAULT_PLAN, model_path=DEFAULT_MODEL,
     rows = simulate(plan_path, model_path, crossover_path, width8)
     summary = summarize(rows)
     replay_caps, replay_episodes = measured_replay_caps(width8)
+    profile = ModelProfile.load(model_path)
+    kv_caps, kv_episodes = measured_kv_caps(
+        width8, crossover_path.parent, profile
+    )
     write_csv(out / "simulated_pareto.csv", rows)
     write_csv(out / "policy_summary.csv", summary)
     plot(rows, out)
@@ -332,14 +404,20 @@ def run(plan_path=DEFAULT_PLAN, model_path=DEFAULT_MODEL,
             "complete_replay_only_episodes": replay_episodes,
             "aggregate_tokens_per_s": replay_caps,
         },
+        "kv_aggregate_caps": {
+            "crossover_migrations": kv_episodes["serial"],
+            "width8_episodes": kv_episodes["width8"],
+            "aggregate_bytes_per_s_by_case_and_bandwidth": kv_caps,
+        },
         "evidence": {
             "context_anchors": "measured",
             "in_range_nonanchors": "interpolated",
             "width8_launch": "measured in policy-hardware-width8-frontier-20260730",
             "width8_replay_aggregate_rate":
                 "measured replay-only episode context / completion time",
-            "width8_kv_per_stream_rate_and_action_power":
-                "extrapolated from serial calibration",
+            "kv_aggregate_rate":
+                "serial at 1/2.5 Gbit/s; width-8 at 5/10 Gbit/s",
+            "width8_action_power": "extrapolated from serial calibration",
             "power_attainment": "modeled from commit times",
             "results": "simulated",
         },
