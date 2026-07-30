@@ -15,6 +15,7 @@ Plausible wrong implementations:
 - Count commits just after the deadline or linearize the nonlinear power curve.
 - Plot destination-only prefill instead of migration-to-first-token latency.
 - Average committed-session fractions instead of nonlinear episode power.
+- Compute Pareto dominance across unmatched episodes or requested targets.
 """
 
 import csv
@@ -33,6 +34,7 @@ from policy_hardware_campaign import (
     completion_curve,
     deadline_attainment,
     make_plan,
+    pareto_points,
     power_shed_quantiles,
     prepare,
     reduce_run,
@@ -328,6 +330,7 @@ def test_reduction_uses_common_epoch_and_keeps_failed_denominator(tmp_path):
     assert (tmp_path / "policy_hardware_gantt.pdf").exists()
     assert (tmp_path / "policy_hardware_destination_ttft_cdf.pdf").exists()
     assert (tmp_path / "policy_hardware_power_shed_over_time.pdf").exists()
+    assert (tmp_path / "policy_hardware_measured_pareto.pdf").exists()
     random = next(row for row in summaries if row["policy"] == "random")
     assert random["planned_migrations"] == 2
     assert random["completed_migrations"] == 0
@@ -449,3 +452,32 @@ def test_power_shed_curve_uses_nonlinear_episode_power_and_keeps_failures():
     assert low == pytest.approx([0, 10.9375, 10.9375, 18.75])
     assert median == pytest.approx([0, 21.875, 21.875, 37.5])
     assert high == pytest.approx([0, 32.8125, 32.8125, 56.25])
+
+
+def test_pareto_points_use_achieved_shed_and_only_matched_peers():
+    attainment = [
+        {"scenario_id": scenario, "power_attainment_fraction": shed}
+        for scenario, shed in (("q", .8), ("g", .5), ("k", .6), ("r", .1))
+    ]
+    summaries = [
+        {"scenario_id": scenario, "match_id": match, "policy": policy,
+         "commit_100_s": commit, "required_deadline_s": 10,
+         "deadline_s": 100}
+        for scenario, match, policy, commit in (
+            ("q", "a", "queue_haul", 8),
+            ("g", "a", "greedy", 9),
+            ("k", "a", "kv_only", 7),
+            ("r", "b", "replay_only", 5),
+        )
+    ]
+
+    points = {
+        row["policy"]: row for row in pareto_points(attainment, summaries)
+    }
+
+    assert points["queue_haul"]["shed_percent"] == 80
+    assert points["queue_haul"]["deadline_fraction"] == .8
+    assert points["queue_haul"]["pareto"]
+    assert not points["greedy"]["pareto"]
+    assert points["kv_only"]["pareto"]
+    assert points["replay_only"]["pareto"]

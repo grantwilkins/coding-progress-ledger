@@ -158,8 +158,9 @@ Its completed checksum-pinned reduced bundle is retained under
 `outputs/policy-hardware-width8-frontier-20260730/`, including move-admission
 provenance and raw GPU samples. `plot-reduced` writes a pooled
 migration-to-destination-first-token CDF and median modeled source-power shed
-over elapsed time with an interquartile band. This idle evidence supports timing
-and projected, not realized, power attainment.
+over elapsed time with an interquartile band, plus paired measured
+attainment–completion operating points. This idle evidence supports timing and
+projected, not realized, power attainment.
 `migration_profiler.py make-crossover` creates paired single-session replay/KV
 measurements for each nominal context, bandwidth, and repeat. The synthetic body
 reserves 192 tokens for message overhead, and the first 32K replay is a fail-fast

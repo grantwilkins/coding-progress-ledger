@@ -559,6 +559,7 @@ def reduce_run(run_root: Path, out: Path | None = None):
     plot_destination_ttft(migrations, summaries, out)
     if power_curve:
         plot_power_shed(migrations, summaries, power_curve, out)
+        plot_hardware_pareto(attainment, summaries, out)
     for condition in sorted({row["condition"] for row in summaries}):
         plot(
             [row for row in migrations if row["condition"] == condition],
@@ -674,15 +675,93 @@ def plot_power_shed(rows, summaries, power_curve, out):
     plt.close(fig)
 
 
+def pareto_points(attainment, summaries):
+    achieved = {row["scenario_id"]: row for row in attainment}
+    points = []
+    for summary in summaries:
+        if summary["scenario_id"] not in achieved:
+            continue
+        commit = summary["commit_100_s"]
+        elapsed = float(commit) if commit not in (None, "") \
+            else float(summary["deadline_s"])
+        points.append({
+            "match_id": summary["match_id"], "policy": summary["policy"],
+            "shed_percent":
+                100 * float(achieved[summary["scenario_id"]]
+                            ["power_attainment_fraction"]),
+            "deadline_fraction":
+                elapsed / float(summary["required_deadline_s"]),
+            "censored": commit in (None, ""), "pareto": False,
+        })
+    for point in points:
+        peers = [row for row in points
+                 if row["match_id"] == point["match_id"]]
+        point["pareto"] = not any(
+            row["shed_percent"] >= point["shed_percent"]
+            and row["deadline_fraction"] <= point["deadline_fraction"]
+            and (row["shed_percent"] > point["shed_percent"]
+                 or row["deadline_fraction"] < point["deadline_fraction"])
+            for row in peers
+        )
+    return points
+
+
+def plot_hardware_pareto(attainment, summaries, out):
+    colors = dict(zip(POLICIES, plt.get_cmap("tab10").colors))
+    points = pareto_points(attainment, summaries)
+    fig, ax = plt.subplots(figsize=(6.4, 4.4))
+    for policy in POLICIES:
+        selected = [row for row in points if row["policy"] == policy]
+        if not selected:
+            continue
+        count = sum(row["pareto"] for row in selected)
+        ax.scatter(
+            [row["shed_percent"] for row in selected],
+            [row["deadline_fraction"] for row in selected],
+            color=colors[policy], alpha=.45, s=28,
+            label=f"{LABELS[policy]} ({count}/{len(selected)} frontier)",
+            zorder={"queue_haul": 4, "greedy": 3,
+                    "kv_only": 2, "replay_only": 1}[policy],
+        )
+        frontier = [row for row in selected if row["pareto"]]
+        ax.scatter(
+            [row["shed_percent"] for row in frontier],
+            [row["deadline_fraction"] for row in frontier],
+            facecolors="none", edgecolors="black", linewidths=.6, s=48,
+            zorder=5,
+        )
+    ax.axhline(1, color="black", linestyle="--", linewidth=1)
+    ax.set(
+        title="Measured paired hardware operating points (100% target)",
+        xlabel="Modeled source-power shed by deadline (% of maximum)",
+        ylabel="Full-width completion time / required deadline",
+        xlim=(-2, 102), ylim=(0, None),
+    )
+    ax.grid(alpha=.25)
+    ax.legend(frameon=False, fontsize=8)
+    fig.text(
+        .5, .01, "Black outline: paired nondominated; "
+        "19 s Queue-Haul/greedy include fastest-tail moves",
+        ha="center", fontsize=8,
+    )
+    fig.tight_layout(rect=(0, .04, 1, 1))
+    for suffix in ("png", "pdf"):
+        fig.savefig(out / f"policy_hardware_measured_pareto.{suffix}", dpi=220)
+    plt.close(fig)
+
+
 def plot_reduced(out, model_path=DEFAULT_MODEL):
     with (out / "policy_migrations.csv").open() as stream:
         rows = list(csv.DictReader(stream))
     with (out / "policy_episodes.csv").open() as stream:
         summaries = list(csv.DictReader(stream))
+    with (out / "policy_attainment.csv").open() as stream:
+        attainment = list(csv.DictReader(stream))
     plot_destination_ttft(rows, summaries, out)
     plot_power_shed(
         rows, summaries, ModelProfile.load(model_path).case().power_curve, out
     )
+    plot_hardware_pareto(attainment, summaries, out)
 
 
 def representative_timeline(rows, summaries):
