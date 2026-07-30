@@ -183,8 +183,9 @@ requirements: 600 scenarios in total.
 `simulated_pareto_campaign.py` evaluates the same five fixed context packs with
 the calibrated crossover profile and adds a paired random baseline. Its Pareto
 CSV and plot label 12K/14K contexts as interpolated, serial-to-width-8
-per-stream rates as extrapolated, and commit-derived power attainment as
-modeled; parallel launch is anchored by the existing width-8 hardware traces.
+KV rates as extrapolated, and commit-derived power attainment as modeled.
+Parallel launch and the replay aggregate-throughput cap are anchored by the
+existing width-8 hardware traces.
 `canonical_simulator_campaign.py` runs a four-target paired 10K-session
 Queue-Haul, greedy, per-session-fastest, replay-only, and KV-only comparison
 under one assumed dedicated-pool contract. Its compact 10K/100K/1M scale check

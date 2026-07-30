@@ -26,11 +26,28 @@
     "path": "queue-haul/outputs/policy-hardware-crossover-20260730/plan.json",
     "sha256": "f1ed00a69f2389b10d07930dd6cd6ad0cdd7dc7dad2181271995f160726a0d60"
   },
+  "width8_replay_cap": {
+    "plan": {
+      "path": "queue-haul/outputs/policy-hardware-width8-frontier-20260730/plan.json",
+      "sha256": "b8e8f9d5eb6c0d2bfb57102949567bfc7e47b9cec6fe73ade82acdef41bb2b4d"
+    },
+    "episodes": {
+      "path": "queue-haul/outputs/policy-hardware-width8-frontier-20260730/policy_episodes.csv",
+      "sha256": "f6e72056a2f6dda088f47a9ed21738272e2d3f254c52424fe3e76fa4ec619d3e"
+    },
+    "complete_replay_only_episodes": 72,
+    "aggregate_tokens_per_s": {
+      "central": 6822.187905055439,
+      "faster": 7266.433126641262,
+      "slower": 6550.0905342134665
+    }
+  },
   "evidence": {
     "context_anchors": "measured",
     "in_range_nonanchors": "interpolated",
     "width8_launch": "measured in policy-hardware-width8-frontier-20260730",
-    "width8_per_stream_rate_and_action_power": "extrapolated from serial calibration",
+    "width8_replay_aggregate_rate": "measured replay-only episode context / completion time",
+    "width8_kv_per_stream_rate_and_action_power": "extrapolated from serial calibration",
     "power_attainment": "modeled from commit times",
     "results": "simulated"
   },

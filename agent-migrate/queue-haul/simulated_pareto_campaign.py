@@ -28,6 +28,7 @@ ROOT = Path(__file__).parent
 DEFAULT_PLAN = ROOT / "outputs/policy-hardware-width8-packing-plan/plan.json"
 DEFAULT_MODEL = ROOT / "profiles/gpt_oss_20b_a100_tp1_crossover.json"
 DEFAULT_CROSSOVER = ROOT / "outputs/policy-hardware-crossover-20260730/plan.json"
+DEFAULT_WIDTH8 = ROOT / "outputs/policy-hardware-width8-frontier-20260730"
 DEFAULT_OUT = ROOT / "outputs/simulated-width8-pareto-20260730"
 POLICIES = ("queue_haul", "greedy", "random", "kv_only", "replay_only")
 OBSERVATION_S = 600
@@ -65,7 +66,31 @@ def meets_deadline(attainment, completion, deadline):
     return attainment >= 1 - 1e-9 and completion <= deadline + 1e-9
 
 
-def parallel_profile(profile, width):
+def measured_replay_caps(width8):
+    plan_ = json.loads((width8 / "plan.json").read_text())
+    totals = {
+        row["episode"]: sum(session["initial_tokens"]
+                            for session in row["sessions"])
+        for row in plan_["scenarios"] if row["policy"] == "control"
+    }
+    rows = list(csv.DictReader((width8 / "policy_episodes.csv").open()))
+    rates = [
+        totals[int(row["episode"])] / float(row["commit_100_s"])
+        for row in rows
+        if row["policy"] == "replay_only" and row["commit_100_s"]
+    ]
+    if not rates:
+        raise ValueError("width-8 run has no complete replay-only episodes")
+    slower, central, faster = np.quantile(rates, (.25, .5, .75))
+    return {
+        "central": float(central), "faster": float(faster),
+        "slower": float(slower),
+    }, len(rates)
+
+
+def parallel_profile(profile, width, replay_caps):
+    if set(replay_caps) != set(profile.cases):
+        raise ValueError("replay caps must cover every profile case")
     cases = {}
     for case_id, case in profile.cases.items():
         actions = {}
@@ -77,7 +102,15 @@ def parallel_profile(profile, width):
                           width * curve.destination_w[0]]),
             )
         replay = RateCurve({
-            concurrency: case.replay.by_concurrency[1]
+            concurrency: (
+                case.replay.by_concurrency[1] if concurrency == 1 else (
+                    case.replay.by_concurrency[1][0],
+                    np.minimum(
+                        case.replay.by_concurrency[1][1],
+                        replay_caps[case_id] / concurrency,
+                    ),
+                )
+            )
             for concurrency in range(1, width + 1)
         })
         cases[case_id] = replace(
@@ -108,13 +141,16 @@ def planned_moves(rows):
 
 
 def simulate(plan_path=DEFAULT_PLAN, model_path=DEFAULT_MODEL,
-             crossover_path=DEFAULT_CROSSOVER):
+             crossover_path=DEFAULT_CROSSOVER, width8=DEFAULT_WIDTH8):
     plan_ = json.loads(plan_path.read_text())
     validate_policy_plan(plan_)
     if profiler.file_hash(model_path) != plan_["model_profile"]["sha256"]:
         raise RuntimeError("model profile changed after planning")
     profile = ModelProfile.load(model_path)
-    profile = parallel_profile(profile, plan_["sessions_per_episode"])
+    replay_caps, _ = measured_replay_caps(width8)
+    profile = parallel_profile(
+        profile, plan_["sessions_per_episode"], replay_caps
+    )
     crossover = json.loads(crossover_path.read_text())
     anchors = set(crossover["contexts"])
     by_episode = {}
@@ -170,8 +206,9 @@ def simulate(plan_path=DEFAULT_PLAN, model_path=DEFAULT_MODEL,
                 "kv_moves": sum(row.method == "kv_transfer"
                                 for row in result.sessions),
                 "context_evidence": evidence,
-                "contention_evidence":
-                    "measured_parallel_launch_extrapolated_per_stream_rate",
+                "replay_contention_evidence":
+                    "measured_width8_aggregate_throughput_cap",
+                "kv_contention_evidence": "extrapolated_serial_per_stream_rate",
                 "power_evidence": "modeled",
                 "result_evidence": "simulated",
             })
@@ -242,7 +279,7 @@ def plot(rows, out):
     ax.text(
         .01, .01,
         "2/4/8/16K contexts measured; 12/14K interpolated\n"
-        "width-8 launch measured; per-stream rates extrapolated; power modeled",
+        "replay width-8 cap measured; KV/action power extrapolated; power modeled",
         transform=ax.transAxes, fontsize=8, va="bottom",
     )
     fig.tight_layout(rect=(0, 0, 1, .86))
@@ -252,10 +289,12 @@ def plot(rows, out):
 
 
 def run(plan_path=DEFAULT_PLAN, model_path=DEFAULT_MODEL,
-        crossover_path=DEFAULT_CROSSOVER, out=DEFAULT_OUT):
+        crossover_path=DEFAULT_CROSSOVER, width8=DEFAULT_WIDTH8,
+        out=DEFAULT_OUT):
     out.mkdir(parents=True, exist_ok=True)
-    rows = simulate(plan_path, model_path, crossover_path)
+    rows = simulate(plan_path, model_path, crossover_path, width8)
     summary = summarize(rows)
+    replay_caps, replay_episodes = measured_replay_caps(width8)
     write_csv(out / "simulated_pareto.csv", rows)
     write_csv(out / "policy_summary.csv", summary)
     plot(rows, out)
@@ -281,11 +320,25 @@ def run(plan_path=DEFAULT_PLAN, model_path=DEFAULT_MODEL,
             "path": _portable_path(crossover_path),
             "sha256": profiler.file_hash(crossover_path),
         },
+        "width8_replay_cap": {
+            "plan": {
+                "path": _portable_path(width8 / "plan.json"),
+                "sha256": profiler.file_hash(width8 / "plan.json"),
+            },
+            "episodes": {
+                "path": _portable_path(width8 / "policy_episodes.csv"),
+                "sha256": profiler.file_hash(width8 / "policy_episodes.csv"),
+            },
+            "complete_replay_only_episodes": replay_episodes,
+            "aggregate_tokens_per_s": replay_caps,
+        },
         "evidence": {
             "context_anchors": "measured",
             "in_range_nonanchors": "interpolated",
             "width8_launch": "measured in policy-hardware-width8-frontier-20260730",
-            "width8_per_stream_rate_and_action_power":
+            "width8_replay_aggregate_rate":
+                "measured replay-only episode context / completion time",
+            "width8_kv_per_stream_rate_and_action_power":
                 "extrapolated from serial calibration",
             "power_attainment": "modeled from commit times",
             "results": "simulated",
@@ -307,9 +360,13 @@ def main():
     parser.add_argument("--plan", type=Path, default=DEFAULT_PLAN)
     parser.add_argument("--model-profile", type=Path, default=DEFAULT_MODEL)
     parser.add_argument("--crossover-plan", type=Path, default=DEFAULT_CROSSOVER)
+    parser.add_argument("--width8-run", type=Path, default=DEFAULT_WIDTH8)
     parser.add_argument("--out", type=Path, default=DEFAULT_OUT)
     args = parser.parse_args()
-    run(args.plan, args.model_profile, args.crossover_plan, args.out)
+    run(
+        args.plan, args.model_profile, args.crossover_plan,
+        args.width8_run, args.out,
+    )
 
 
 if __name__ == "__main__":
