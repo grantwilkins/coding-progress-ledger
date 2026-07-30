@@ -131,15 +131,21 @@ source-power shed levels. Use `--refresh` when its pinned inputs change.
 that launches every session concurrently for Queue-Haul, greedy, KV-only, and
 replay-only. Its default truncated grid uses coding, interactive-coding, and
 agentic-tool-loop context-length profiles; uniform-over-support and
-uniform-over-range token distributions; a 30-second pilot requirement; and two
-eight-session episodes per cell, totaling 60 scenarios including controls. The
-requirement is passed to the Queue-Haul planner. The runner remains eager and
-does not execute planner pacing or measure planning latency. Failed episodes
-remain in denominators. Reduction writes timing CDFs and a power-attainment CDF;
-attainment is trailing-five-second average modeled source-power shed divided by
-the 100% source-power target. MP runs require bounded RESP quiescence between
-scenarios so late cache writes cannot cross scenario boundaries. Run
-from a clean committed checkout with two A100 80GB GPUs.
+uniform-over-range token distributions; configurable bandwidths and deadlines;
+and full-episode migration width. The requirement is passed to the Queue-Haul
+planner. The runner remains eager and does not execute planner pacing or measure
+planning latency. A policy-infeasible deadline retains its admitted prefix and
+appends an explicitly marked independently-fastest tail so runtime width remains
+the episode size. Failed episodes remain in denominators. Reduction writes
+timing CDFs and a power-attainment CDF; attainment is trailing-five-second
+average modeled source-power shed divided by the 100% source-power target. MP
+runs require bounded RESP quiescence between scenarios so late cache writes
+cannot cross scenario boundaries. Run from a clean committed checkout with two
+A100 80GB GPUs. The pinned frontier plan under
+`outputs/policy-hardware-width8-frontier-plan/` uses seed 1, three episodes per
+cell, eight sessions and moves, 5/10 Gbit/s, and 19/30-second requirements for
+360 scenarios. Its fresh default root is
+`/scratch/users/$USER/qh-policy-run-width8-frontier`; 1 Gbit/s is excluded.
 `canonical_simulator_campaign.py` runs a four-target paired 10K-session
 Queue-Haul, greedy, per-session-fastest, replay-only, and KV-only comparison
 under one assumed dedicated-pool contract. Its compact 10K/100K/1M scale check

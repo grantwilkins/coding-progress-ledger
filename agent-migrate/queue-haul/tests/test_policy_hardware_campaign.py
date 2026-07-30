@@ -56,10 +56,12 @@ def test_plan_pairs_every_policy_on_the_same_complete_episode(tmp_path):
     manifest_path = manifest(tmp_path)
     plan = make_plan(
         manifest_path, episodes=2, sessions=4, seed=7,
+        bandwidths_mbps=(5_000, 10_000),
         required_deadlines_s=(30, 45),
     )
     assert plan == make_plan(
         manifest_path, episodes=2, sessions=4, seed=7,
+        bandwidths_mbps=(5_000, 10_000),
         required_deadlines_s=(30, 45),
     )
     assert plan["execution_contract"] == EXECUTION_CONTRACT
@@ -70,8 +72,8 @@ def test_plan_pairs_every_policy_on_the_same_complete_episode(tmp_path):
     assert sum(
         i == 0 or episode != episode_order[i - 1]
         for i, episode in enumerate(episode_order)
-    ) == 4
-    for episode in range(4):
+    ) == 8
+    for episode in range(8):
         rows = [row for row in plan["scenarios"]
                 if row["episode"] == episode]
         signatures = {
@@ -98,6 +100,8 @@ def test_plan_pairs_every_policy_on_the_same_complete_episode(tmp_path):
             ))
     assert len(samples) == 2
     assert all(len(signatures) == 1 for signatures in samples.values())
+    assert {row["bandwidth_mbps"] for row in plan["scenarios"]} \
+        == {5_000, 10_000}
     queue_moves = [
         move for row in plan["scenarios"] if row["policy"] == "queue_haul"
         for move in row["moves"] if move["method"] == "kv_transfer"
@@ -110,6 +114,35 @@ def test_plan_pairs_every_policy_on_the_same_complete_episode(tmp_path):
          if row["kind"] == "migration")["move_concurrency"] = 2
     with pytest.raises(ValueError, match="complete episode"):
         validate_policy_plan(invalid)
+
+
+def test_policy_appends_unadmitted_sessions_as_fastest_tail(monkeypatch):
+    monkeypatch.setattr(campaign, "plan", lambda *_args, **_kwargs:
+                        SimpleNamespace(moves=(SimpleNamespace(
+                            session_id="a", method="replay", order=0,
+                            rate_limit_bytes_per_s=None, quiesce_s=0,
+                        ),)))
+    monkeypatch.setattr(
+        campaign, "_duration",
+        lambda session, method, *_: {
+            ("b", "replay"): 4, ("b", "kv_transfer"): 2,
+            ("c", "replay"): 1, ("c", "kv_transfer"): 3,
+        }[session.session_id, method],
+    )
+    scenario = SimpleNamespace(
+        sessions=tuple(SimpleNamespace(session_id=name)
+                       for name in ("a", "b", "c")),
+        links=(SimpleNamespace(link_id="link", bytes_per_s=1),),
+    )
+    moves = campaign._moves(
+        "queue_haul", scenario, {}, SimpleNamespace(case=lambda: object()), 0,
+    )
+    assert [(row["session_id"], row["method"], row["deadline_admitted"])
+            for row in moves] == [
+        ("a", "replay", True),
+        ("c", "replay", False),
+        ("b", "kv_transfer", False),
+    ]
 
 
 def test_isolated_fastest_chooses_per_session_then_orders_by_chosen_duration(

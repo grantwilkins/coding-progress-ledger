@@ -66,6 +66,22 @@ def _problem(profile, sessions, bandwidth_mbps, deadline_s):
     return scenario, {("source", "destination"): ("link",)}
 
 
+def _ranked_moves(sessions, methods, scenario, profile, offset=0):
+    case = profile.case()
+    links = {row.link_id: row.bytes_per_s for row in scenario.links}
+    choices = [min(
+        (_duration(row, method, case, ("link",), links), row, method)
+        for method in methods
+    ) for row in sessions]
+    return tuple(
+        (row.session_id, method, order)
+        for order, (_, row, method) in enumerate(
+            sorted(choices, key=lambda choice: (choice[0], choice[1].session_id)),
+            start=offset,
+        )
+    )
+
+
 def _moves(policy, scenario, routes, profile, seed):
     sessions = list(scenario.sessions)
     if policy in {"queue_haul", "greedy", "random"}:
@@ -77,26 +93,18 @@ def _moves(policy, scenario, routes, profile, seed):
         fixed_method = None if policy == "isolated_fastest" else {
             "kv_only": "kv_transfer", "replay_only": "replay",
         }[policy]
-        case = profile.case()
-        links = {row.link_id: row.bytes_per_s for row in scenario.links}
-        choices = []
-        for row in sessions:
-            duration, method = min(
-                (_duration(row, candidate, case, ("link",), links), candidate)
-                for candidate in (
-                    (fixed_method,) if fixed_method
-                    else ("replay", "kv_transfer")
-                )
-            )
-            choices.append((duration, row, method))
-        moves = tuple(
-            (row.session_id, method, order)
-            for order, (_, row, method) in enumerate(
-                sorted(choices, key=lambda choice: (
-                    choice[0], choice[1].session_id
-                ))
-            )
+        moves = _ranked_moves(
+            sessions, (fixed_method,) if fixed_method
+            else ("replay", "kv_transfer"), scenario, profile,
         )
+    admitted = {
+        move.session_id if hasattr(move, "session_id") else move[0]
+        for move in moves
+    }
+    moves = tuple(moves) + _ranked_moves(
+        [row for row in sessions if row.session_id not in admitted],
+        ("replay", "kv_transfer"), scenario, profile, len(moves),
+    )
     normalized = [
         {
             "session_id": move.session_id, "method": move.method,
@@ -104,10 +112,12 @@ def _moves(policy, scenario, routes, profile, seed):
             "planned_rate_limit_bytes_per_s":
                 move.rate_limit_bytes_per_s,
             "planned_quiesce_s": move.quiesce_s,
+            "deadline_admitted": move.session_id in admitted,
         } if hasattr(move, "session_id") else {
             "session_id": move[0], "method": move[1], "order": move[2],
             "planned_rate_limit_bytes_per_s": None,
             "planned_quiesce_s": None,
+            "deadline_admitted": move[0] in admitted,
         }
         for move in moves
     ]
@@ -134,13 +144,18 @@ def make_plan(manifest_path: Path, model_path: Path = DEFAULT_MODEL,
               bandwidth_mbps: float = 10_000, deadline_s: float = 180,
               workload_paths=(DEFAULT_WORKLOADS[0],),
               token_distributions=("uniform_support",),
-              required_deadlines_s=REQUIRED_DEADLINES_S) -> dict:
+              required_deadlines_s=REQUIRED_DEADLINES_S,
+              bandwidths_mbps=None) -> dict:
     manifest = json.loads(manifest_path.read_text())
     profiler.validate_manifest(manifest)
     profile = ModelProfile.load(model_path)
     workloads = [WorkloadProfile.load(path) for path in workload_paths]
+    bandwidths = (bandwidth_mbps,) if bandwidths_mbps is None \
+        else tuple(bandwidths_mbps)
     if episodes < 1 or not 1 <= sessions <= len(manifest["sessions"]) \
-            or bandwidth_mbps <= 0 or deadline_s <= profile.power_window_s \
+            or not bandwidths or min(bandwidths) <= 0 \
+            or len(set(bandwidths)) != len(bandwidths) \
+            or deadline_s <= profile.power_window_s \
             or not workloads or not token_distributions \
             or not required_deadlines_s \
             or min(required_deadlines_s) <= profile.power_window_s:
@@ -150,12 +165,13 @@ def make_plan(manifest_path: Path, model_path: Path = DEFAULT_MODEL,
     rng, scenarios = random.Random(seed), []
     available = sorted(manifest["sessions"], key=lambda row: row["id"])
     cells = [
-        (workload, distribution, required_deadline, repeat)
+        (workload, distribution, bandwidth, required_deadline, repeat)
         for workload in workloads for distribution in token_distributions
+        for bandwidth in bandwidths
         for required_deadline in required_deadlines_s
         for repeat in range(episodes)
     ]
-    for episode, (workload, distribution, required_deadline, repeat) \
+    for episode, (workload, distribution, bandwidth, required_deadline, repeat) \
             in enumerate(cells):
         sample_rng = random.Random(profiler.stable_seed(
             seed, workload.profile_id, distribution, repeat
@@ -174,12 +190,13 @@ def make_plan(manifest_path: Path, model_path: Path = DEFAULT_MODEL,
             "order": order,
         } for order, row in enumerate(chosen)]
         job_type = workload.records[0].job_type
-        condition = f"{job_type}-{distribution}-{required_deadline:g}s"
+        condition = f"{job_type}-{distribution}-{bandwidth:g}mbps-" \
+            f"{required_deadline:g}s"
         sample_id = profiler.object_hash(
             [seed, workload.profile_id, distribution, repeat, session_rows]
         )[:16]
         match_id = profiler.object_hash(
-            [sample_id, required_deadline]
+            [sample_id, bandwidth, required_deadline]
         )[:16]
         base = {
             "match_id": match_id, "sample_id": sample_id, "episode": episode,
@@ -193,7 +210,7 @@ def make_plan(manifest_path: Path, model_path: Path = DEFAULT_MODEL,
             "deadline_s": deadline_s, "sessions": session_rows,
             "serving_concurrency": 1, "concurrency": sessions,
             "move_concurrency": sessions, "copy_policy": "initial_final",
-            "final_state": "awake", "bandwidth_mbps": bandwidth_mbps,
+            "final_state": "awake", "bandwidth_mbps": bandwidth,
         }
         scenarios.append({
             **base, "scenario_id": f"c-{match_id}", "kind": "control",
@@ -245,6 +262,7 @@ def make_plan(manifest_path: Path, model_path: Path = DEFAULT_MODEL,
             for path in workload_paths
         ],
         "token_distributions": list(token_distributions),
+        "bandwidths_mbps": list(bandwidths),
         "required_deadlines_s": list(required_deadlines_s),
         "power_target_fraction": 1.0,
         "sessions_per_episode": sessions, "scenarios": scenarios,
@@ -676,6 +694,7 @@ def parse_args(argv=None):
     command.add_argument("--sessions", type=int, default=8)
     command.add_argument("--seed", type=int, default=0)
     command.add_argument("--bandwidth-mbps", type=float, default=10_000)
+    command.add_argument("--bandwidths-mbps", type=float, nargs="+")
     command.add_argument("--deadline-s", type=float, default=180)
     command.add_argument("--workload-profiles", type=Path, nargs="+",
                          default=DEFAULT_WORKLOADS)
@@ -696,6 +715,7 @@ def main(argv=None):
             args.manifest, args.out, episodes=args.episodes,
             sessions=args.sessions, seed=args.seed,
             bandwidth_mbps=args.bandwidth_mbps, deadline_s=args.deadline_s,
+            bandwidths_mbps=args.bandwidths_mbps,
             workload_paths=args.workload_profiles,
             token_distributions=args.token_distributions,
             required_deadlines_s=args.required_deadlines_s,
