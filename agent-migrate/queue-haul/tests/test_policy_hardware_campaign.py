@@ -12,6 +12,8 @@ Plausible wrong implementations:
 - Order isolated-fastest sessions by an unselected method or reverse duration.
 - Condition completion curves only on successful migrations.
 - Pair continuation TTFT with a control from another episode.
+- Stretch every timing metric to the campaign deadline instead of its data.
+- Compare unpaired policies or aggregate source power once per migration.
 """
 
 import json
@@ -231,3 +233,35 @@ def test_reduction_uses_common_epoch_and_keeps_failed_denominator(tmp_path):
     assert not next(
         row for row in split_summaries if row["policy"] == "queue_haul"
     )["matched_control_complete"]
+
+
+def test_plot_pairs_qh_with_greedy_at_metric_and_episode_levels(
+        tmp_path, monkeypatch):
+    rows = [
+        {"policy": policy, "reaction_readiness_s": ready,
+         "migration_ttft_s": ttft, "reaction_commit_s": commit}
+        for policy, ready, ttft, commit in (
+            ("queue_haul", 10, 1, 11), ("greedy", 9, 2, 12),
+            ("random", 100, 100, 100),
+        )
+    ]
+    summaries = [
+        {"policy": policy, "planned_migrations": 1, "deadline_s": 180,
+         "realized_source_power_drop_w": power}
+        for policy, power in (
+            ("queue_haul", 300), ("greedy", 200), ("random", 400),
+        )
+    ]
+    monkeypatch.setattr(campaign.plt, "close", lambda _: None)
+
+    campaign.plot(rows, summaries, tmp_path)
+
+    figure = campaign.plt.gcf()
+    assert [text.get_text() for text in figure.legends[0].texts] == [
+        campaign.LABELS["queue_haul"], campaign.LABELS["greedy"],
+    ]
+    assert len(figure.axes[1].lines) == 2
+    assert figure.axes[1].get_xlim()[1] < 5
+    assert {
+        tuple(line.get_xdata()) for line in figure.axes[3].lines
+    } == {(300,), (200,)}

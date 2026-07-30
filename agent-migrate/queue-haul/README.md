@@ -139,8 +139,9 @@ completion denominators, while TTFT inflation uses only complete matched
 controls from the same allocation, excluding blocks split by a time limit. Run
 from a clean committed checkout with two A100 80GB GPUs. Multi-process logs
 rotate every five blocks; transfer and byte logs are sliced per scenario.
-Reduction writes policy CDFs plus `policy_gantt.csv` and a measured Gantt chart
-for the earliest complete mixed-action Queue-Haul episode.
+Reduction writes paired Queue-Haul/greedy timing and source-power CDFs plus
+`policy_gantt.csv` and a measured Gantt chart for the earliest complete
+mixed-action Queue-Haul episode.
 `canonical_simulator_campaign.py` runs a four-target paired 10K-session
 Queue-Haul, greedy, per-session-fastest, replay-only, and KV-only comparison
 under one assumed dedicated-pool contract. Its compact 10K/100K/1M scale check

@@ -454,17 +454,11 @@ def plot_timeline(rows, out):
     plt.close(fig)
 
 
-def plot(rows, summaries, out):
+def plot(rows, summaries, out, cohort=None):
     colors = dict(zip(POLICIES, plt.get_cmap("tab10").colors))
-    horizon = max(
-        [row["deadline_s"] for row in summaries]
-        + [row[field] for row in rows for field in
-           ("reaction_readiness_s", "migration_ttft_s",
-            "reaction_commit_s")]
-    )
     fig, axes = plt.subplots(2, 2, figsize=(9, 6.5))
     axes = axes.ravel()
-    policies = [policy for policy in POLICIES
+    policies = [policy for policy in ("queue_haul", "greedy")
                 if any(row["policy"] == policy for row in summaries)]
     for policy in policies:
         for ax, field in zip(
@@ -473,24 +467,23 @@ def plot(rows, summaries, out):
         ):
             x, y = completion_curve(rows, summaries, policy, field)
             ax.step(
-                np.r_[0, x, horizon],
-                np.r_[0, y, y[-1] if len(y) else 0],
+                np.r_[0, x], np.r_[0, y],
                 where="post", color=colors[policy], label=LABELS[policy],
             )
-        delta = sorted(
-            row["continuation_ttft_delta_s"] for row in rows
+        power = sorted(
+            row["realized_source_power_drop_w"] for row in summaries
             if row["policy"] == policy
-            and math.isfinite(row["continuation_ttft_delta_s"])
+            and "realized_source_power_drop_w" in row
         )
-        if delta:
+        if power:
             axes[3].step(
-                delta, np.arange(1, len(delta) + 1) / len(delta),
+                power, np.arange(1, len(power) + 1) / len(power),
                 where="post", color=colors[policy], label=LABELS[policy],
             )
     axes[0].set_title("Controller queue → first token")
     axes[1].set_title("Destination TTFT")
     axes[2].set_title("Controller queue → route commit")
-    axes[3].set_title("Next-request TTFT inflation")
+    axes[3].set_title("Realized source power drop")
     for i, ax in enumerate(axes[:3]):
         ax.set_xlabel(
             "Transfer/replay + destination prefill (s)" if i == 1
@@ -498,13 +491,17 @@ def plot(rows, summaries, out):
         )
         ax.set_ylabel("Fraction of planned migrations")
         ax.set_ylim(0, 1.02)
-    axes[3].set_xlabel("Treatment − matched control (s)")
-    axes[3].set_ylabel("Fraction with matched control")
+    axes[3].set_xlabel("Source GPU power before − after migration (W)")
+    axes[3].set_ylabel("Fraction of episodes")
     axes[3].set_ylim(0, 1.02)
-    fig.legend(loc="upper center", ncol=len(policies), frameon=False)
+    handles, labels = axes[0].get_legend_handles_labels()
+    fig.legend(handles, labels, loc="upper center", ncol=len(policies),
+               frameon=False)
     fig.tight_layout(rect=(0, 0, 1, .91))
     for suffix in ("png", "pdf"):
-        fig.savefig(out / f"policy_hardware_cdf.{suffix}", dpi=220)
+        name = f"policy_hardware_{cohort}_cdf" if cohort \
+            else "policy_hardware_cdf"
+        fig.savefig(out / f"{name}.{suffix}", dpi=220)
     plt.close(fig)
 
 
