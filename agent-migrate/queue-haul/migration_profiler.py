@@ -299,6 +299,112 @@ def make_plan(manifest_path: Path, context_sizes: list[int], concurrency: list[i
     return plan
 
 
+def make_crossover_plan(manifest_path: Path, context_sizes: list[int],
+                        bandwidth_mbps: list[float], repeats: int, seed: int,
+                        deadline_s: float = 180) -> dict:
+    manifest = json.loads(manifest_path.read_text())
+    validate_manifest(manifest)
+    if not all(value > 0 for value in [
+        *context_sizes, *bandwidth_mbps, repeats, deadline_s,
+    ]) or len(set(context_sizes)) != len(context_sizes) \
+            or len(set(bandwidth_mbps)) != len(bandwidth_mbps):
+        raise ValueError("crossover dimensions must be positive and unique")
+    available = sorted(manifest["sessions"], key=lambda row: row["id"])
+    blocks = []
+    for bandwidth in sorted(bandwidth_mbps, reverse=True):
+        pairs = []
+        for size in context_sizes:
+            for repeat in range(repeats):
+                session = random.Random(
+                    stable_seed(seed, size, repeat)
+                ).choice(available)
+                sessions = [{
+                    "session_id": session["id"],
+                    "job_class": session["job_class"],
+                    "turn_index": 0,
+                    "initial_tokens": size,
+                    "order": 0,
+                }]
+                sample_id = object_hash([seed, size, repeat, sessions])[:16]
+                match_id = object_hash([sample_id, bandwidth])[:16]
+                base = {
+                    "match_id": match_id, "sample_id": sample_id,
+                    "campaign": "serial_crossover",
+                    "split": "validation" if repeat == 2 else "train",
+                    "context_size": size, "activity": "none",
+                    "activity_tokens": 0, "request_schedule": [],
+                    "repeat": repeat, "deadline_s": deadline_s,
+                    "sessions": sessions, "serving_concurrency": 1,
+                    "concurrency": 1, "move_concurrency": 1,
+                    "copy_policy": "initial_final", "final_state": "awake",
+                    "bandwidth_mbps": bandwidth, "kind": "migration",
+                }
+                pair = []
+                for method in METHODS:
+                    scenario_id = object_hash([match_id, method])[:16]
+                    pair.append({
+                        **base, "scenario_id": f"x-{scenario_id}",
+                        "method": method,
+                        "moves": [{**sessions[0], "method": method}],
+                    })
+                random.Random(stable_seed(seed, match_id)).shuffle(pair)
+                pairs.append(pair)
+        random.Random(stable_seed(seed, bandwidth)).shuffle(pairs)
+        blocks.append([row for pair in pairs for row in pair])
+    smoke = next(
+        row for row in blocks[0]
+        if row["context_size"] == min(context_sizes)
+        and row["repeat"] == 0 and row["method"] == "replay"
+    )
+    blocks[0].remove(smoke)
+    smoke["smoke"] = True
+    plan = {
+        "schema": PLAN_SCHEMA,
+        "manifest": {
+            "path": str(manifest_path), "sha256": file_hash(manifest_path),
+        },
+        "seed": seed, "campaign": "serial_crossover",
+        "contexts": context_sizes, "bandwidths_mbps": bandwidth_mbps,
+        "repeats": repeats, "scenarios": [smoke, *sum(blocks, [])],
+    }
+    validate_plan(plan, manifest)
+    validate_crossover_plan(plan)
+    return plan
+
+
+def validate_crossover_plan(plan: dict) -> None:
+    expected = {
+        (size, bandwidth, repeat, method)
+        for size in plan["contexts"]
+        for bandwidth in plan["bandwidths_mbps"]
+        for repeat in range(plan["repeats"])
+        for method in METHODS
+    }
+    actual = {
+        (row["context_size"], row["bandwidth_mbps"],
+         row["repeat"], row["method"])
+        for row in plan["scenarios"]
+    }
+    if actual != expected or len(actual) != len(plan["scenarios"]):
+        raise ValueError("crossover matrix is incomplete")
+    samples = {}
+    for row in plan["scenarios"]:
+        samples.setdefault(
+            (row["context_size"], row["repeat"]), set()
+        ).add((row["sample_id"], row["sessions"][0]["session_id"]))
+        if row["sessions"][0].get("initial_tokens") != row["context_size"]:
+            raise ValueError("crossover contexts must be exact")
+    if any(len(rows) != 1 for rows in samples.values()):
+        raise ValueError("crossover methods and bandwidths must be paired")
+    if not plan["scenarios"][0].get("smoke") \
+            or any(row.get("smoke") for row in plan["scenarios"][1:]):
+        raise ValueError("crossover must start with exactly one smoke")
+    links = [row["bandwidth_mbps"] for row in plan["scenarios"]]
+    if sum(index == 0 or link != links[index - 1]
+           for index, link in enumerate(links)) != len(plan["bandwidths_mbps"]):
+        raise ValueError("crossover bandwidths must form contiguous blocks")
+
+
 def make_campaign(manifest_path: Path, seed: int,
                   deadline_s: float = 900.0) -> dict:
     manifest = json.loads(manifest_path.read_text())
@@ -2595,6 +2701,14 @@ def parse_args(argv: list[str] | None = None):
     command.add_argument("--session-ids", type=lambda value: csv_list(value), default=[])
     command.add_argument("--final-state", choices=("awake", "sleep"), default="awake")
     command.add_argument("--repeats", type=int, required=True); command.add_argument("--seed", type=int, required=True); command.add_argument("--deadline-s", type=float, default=300)
+    command = sub.add_parser("make-crossover")
+    command.add_argument("--manifest", type=Path, required=True)
+    command.add_argument("--out", type=Path, required=True)
+    command.add_argument("--context-sizes", type=lambda value: csv_list(value, int), required=True)
+    command.add_argument("--bandwidth-mbps", type=lambda value: csv_list(value, float), required=True)
+    command.add_argument("--repeats", type=int, required=True)
+    command.add_argument("--seed", type=int, required=True)
+    command.add_argument("--deadline-s", type=float, default=180)
     command = sub.add_parser("make-campaign")
     command.add_argument("--manifest", type=Path, required=True)
     command.add_argument("--out", type=Path, required=True)
@@ -2625,6 +2739,11 @@ def main(argv: list[str] | None = None) -> None:
             args.methods, args.activity, args.repeats, args.seed, args.deadline_s,
             args.session_ids, args.activity_tokens,
             args.serving_concurrency, args.final_state,
+        ))
+    elif args.command == "make-crossover":
+        write_json(args.out, make_crossover_plan(
+            args.manifest, args.context_sizes, args.bandwidth_mbps,
+            args.repeats, args.seed, args.deadline_s,
         ))
     elif args.command == "make-campaign":
         write_json(

@@ -116,6 +116,47 @@ def test_mp_plan_reuses_stack_and_restarts_only_for_bandwidth(monkeypatch, tmp_p
     assert stops == [1000, 1000, 5000]
 
 
+def test_crossover_plan_is_exact_paired_and_bandwidth_blocked(tmp_path):
+    manifest = tmp_path / "manifest.json"
+    manifest.write_text(json.dumps({
+        "schema": c.MANIFEST_SCHEMA, "workload": "coding",
+        "sessions": [{
+            "id": f"s{index}", "job_class": "coding", "rank": index,
+            "state_code": f"C{index}", "turns": [{
+                "time_s": 0, "input_tokens": 4096, "append_tokens": 32,
+                "output_tokens": 1, "reset": False,
+            }],
+        } for index in range(2)],
+    }))
+    plan = c.make_crossover_plan(
+        manifest, [2048, 4096], [1000, 2500], 3, seed=7,
+    )
+
+    assert len(plan["scenarios"]) == 24
+    assert plan["scenarios"][0]["smoke"]
+    assert {
+        (row["context_size"], row["bandwidth_mbps"],
+         row["repeat"], row["method"])
+        for row in plan["scenarios"]
+    } == {
+        (size, bandwidth, repeat, method)
+        for size in (2048, 4096) for bandwidth in (1000, 2500)
+        for repeat in range(3) for method in c.METHODS
+    }
+    samples = {}
+    for row in plan["scenarios"]:
+        assert row["sessions"][0]["initial_tokens"] == row["context_size"]
+        samples.setdefault(
+            (row["context_size"], row["repeat"]), set()
+        ).add((row["sample_id"], row["sessions"][0]["session_id"]))
+    assert all(len(rows) == 1 for rows in samples.values())
+    links = [row["bandwidth_mbps"] for row in plan["scenarios"]]
+    assert sum(
+        index == 0 or link != links[index - 1]
+        for index, link in enumerate(links)
+    ) == 2
+
+
 def test_fail_fast_records_first_failure_and_stops(monkeypatch, tmp_path):
     manifest = tmp_path / "manifest.json"
     manifest.write_text("{}")

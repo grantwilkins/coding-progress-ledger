@@ -104,6 +104,11 @@ QH_POLICY_RUN_ROOT=/scratch/users/$USER/qh-policy-run-width8-pilot \
   bash queue-haul/outputs/policy-hardware-width8-pilot-plan/run.sh
 # Or submit the resumable two-A100 Slurm job:
 sbatch queue-haul/outputs/policy-hardware-width8-pilot-plan/run.sbatch
+uv run python queue-haul/migration_profiler.py make-crossover \
+  --manifest queue-haul/outputs/coding-manifest.json \
+  --out queue-haul/outputs/policy-hardware-crossover-plan/plan.json \
+  --context-sizes 2048,4096,8192,16384,24576,32768 \
+  --bandwidth-mbps 1000,2500,5000,10000 --repeats 3 --seed 1
 uv run python queue-haul/canonical_simulator_campaign.py
 uv run python queue-haul/paper_evaluation.py \
   --out queue-haul/outputs/paper-evaluation
@@ -150,6 +155,13 @@ Its completed checksum-pinned reduced bundle is retained under
 `outputs/policy-hardware-width8-frontier-20260730/`, including move-admission
 provenance and raw GPU samples. This idle evidence supports timing and projected,
 not realized, power attainment.
+`migration_profiler.py make-crossover` creates exact single-session replay/KV
+pairs for each context, bandwidth, and repeat. It keeps bandwidths in contiguous
+blocks to avoid unnecessary MP-stack restarts and makes the first 2K replay
+scenario a fail-fast smoke. Its 6-context, 4-bandwidth, 3-repeat grid contains
+144 migrations. Use the reduced measurements to establish the method crossover
+before freezing the 2K–16K width-8 packing plan; the current replay profile
+starts at 3,473 tokens and must not be extrapolated to 2K.
 `canonical_simulator_campaign.py` runs a four-target paired 10K-session
 Queue-Haul, greedy, per-session-fastest, replay-only, and KV-only comparison
 under one assumed dedicated-pool contract. Its compact 10K/100K/1M scale check
