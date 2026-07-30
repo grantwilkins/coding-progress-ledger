@@ -2,7 +2,8 @@
   "schema": "queue-haul-simulated-pareto-v1",
   "axes": {
     "x": "commit-integrated source-power shed / removable power",
-    "y": "last route commit time / required deadline"
+    "y": "last route commit time / required deadline",
+    "detail": "per-policy completion CDF for attainment >= 0.99"
   },
   "policies": [
     "queue_haul",

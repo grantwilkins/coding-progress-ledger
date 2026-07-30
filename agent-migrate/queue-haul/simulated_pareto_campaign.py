@@ -314,17 +314,39 @@ def summarize(rows):
     return output
 
 
+def full_attainment_cdf(rows, policy, threshold=.99):
+    values = sorted(
+        row["completion_deadline_ratio"] for row in rows
+        if row["policy"] == policy
+        and row["power_attainment_fraction"] >= threshold
+    )
+    return np.asarray(values), np.arange(1, len(values) + 1) / len(values) \
+        if values else np.array([])
+
+
 def plot(rows, out):
     colors = dict(zip(POLICIES, plt.get_cmap("tab10").colors))
     markers = dict(zip(POLICIES, ("o", "s", "^", "D", "x")))
-    fig, ax = plt.subplots(figsize=(8, 6))
-    for policy in POLICIES:
+    fig, axes = plt.subplots(1, 2, figsize=(12, 5.5))
+    ax, detail = axes
+    for policy in (*POLICIES[1:], POLICIES[0]):
         selected = [row for row in rows if row["policy"] == policy]
+        style = {
+            "s": 52, "alpha": .9, "facecolors": "none",
+            "edgecolors": colors[policy], "linewidths": 1.5, "zorder": 4,
+        } if policy == "queue_haul" else {
+            "s": 28, "alpha": .45, "color": colors[policy],
+        }
         ax.scatter(
             [100 * row["power_attainment_fraction"] for row in selected],
             [row["completion_deadline_ratio"] for row in selected],
-            s=28, alpha=.55, color=colors[policy], marker=markers[policy],
-            label=LABELS[policy],
+            marker=markers[policy], label=LABELS[policy], **style,
+        )
+        x, y = full_attainment_cdf(rows, policy)
+        detail.step(
+            np.r_[0, x], np.r_[0, y], where="post", color=colors[policy],
+            linewidth=2.5 if policy == "queue_haul" else 1.5,
+            zorder=3 if policy == "queue_haul" else 2,
         )
     frontier = sorted(
         (row for row in rows if row["pooled_pareto"]),
@@ -342,6 +364,14 @@ def plot(rows, out):
         xlim=(-2, 102),
     )
     ax.grid(alpha=.2)
+    detail.axvline(1, color="0.35", linestyle=":", linewidth=1)
+    detail.set(
+        title="Detail: scenarios attaining ≥99% shed",
+        xlabel="Completion time / required deadline",
+        ylabel="Fraction of full-attainment scenarios",
+        xlim=(0, 1.02), ylim=(0, 1.02),
+    )
+    detail.grid(alpha=.2)
     handles, labels = ax.get_legend_handles_labels()
     fig.legend(handles, labels, loc="upper center", frameon=False, ncol=3)
     ax.text(
@@ -350,7 +380,7 @@ def plot(rows, out):
         "replay/KV aggregate caps measured; action power extrapolated; power modeled",
         transform=ax.transAxes, fontsize=8, va="bottom",
     )
-    fig.tight_layout(rect=(0, 0, 1, .86))
+    fig.tight_layout(rect=(0, 0, 1, .82))
     for suffix in ("png", "pdf"):
         fig.savefig(out / f"simulated_width8_pareto.{suffix}", dpi=220)
     plt.close(fig)
@@ -375,6 +405,7 @@ def run(plan_path=DEFAULT_PLAN, model_path=DEFAULT_MODEL,
         "axes": {
             "x": "commit-integrated source-power shed / removable power",
             "y": "last route commit time / required deadline",
+            "detail": "per-policy completion CDF for attainment >= 0.99",
         },
         "policies": list(POLICIES),
         "scenarios": len(rows),

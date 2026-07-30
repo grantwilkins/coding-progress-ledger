@@ -186,7 +186,8 @@ CSV and plot label 12K/14K contexts as interpolated, concurrent action power as
 extrapolated, and commit-derived power attainment as modeled.
 Parallel launch and replay/KV aggregate-throughput caps are anchored by the
 hardware traces; KV uses serial measurements at 1/2.5 Gbit/s and width-8
-measurements at 5/10 Gbit/s.
+measurements at 5/10 Gbit/s. The figure pairs the full Pareto cloud with a
+per-policy completion CDF for scenarios attaining at least 99% shed.
 `canonical_simulator_campaign.py` runs a four-target paired 10K-session
 Queue-Haul, greedy, per-session-fastest, replay-only, and KV-only comparison
 under one assumed dedicated-pool contract. Its compact 10K/100K/1M scale check

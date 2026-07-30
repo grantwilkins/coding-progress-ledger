@@ -16,8 +16,9 @@ Plausible wrong implementations:
 import json
 
 from simulated_pareto_campaign import (
-    context_evidence, measured_kv_caps, measured_replay_caps, meets_deadline,
-    parallel_profile, pareto_flags, shared_kv_profile,
+    context_evidence, full_attainment_cdf, measured_kv_caps,
+    measured_replay_caps, meets_deadline, parallel_profile, pareto_flags,
+    shared_kv_profile,
 )
 from test_execution_simulator import model
 
@@ -45,6 +46,24 @@ def test_context_evidence_marks_nonanchors_and_extrapolation():
     assert context_evidence((2048, 8192), anchors) == "measured"
     assert context_evidence((4096, 12288), anchors) == "interpolated"
     assert context_evidence((1024, 4096), anchors) == "extrapolated"
+
+
+def test_full_attainment_detail_filters_and_normalizes_per_policy():
+    rows = [
+        {"policy": "a", "power_attainment_fraction": 1,
+         "completion_deadline_ratio": .8},
+        {"policy": "a", "power_attainment_fraction": .98,
+         "completion_deadline_ratio": .2},
+        {"policy": "a", "power_attainment_fraction": .99,
+         "completion_deadline_ratio": .4},
+        {"policy": "b", "power_attainment_fraction": 1,
+         "completion_deadline_ratio": .1},
+    ]
+
+    x, y = full_attainment_cdf(rows, "a")
+
+    assert x.tolist() == [.4, .8]
+    assert y.tolist() == [.5, 1]
 
 
 def test_deadline_boundary_tolerates_roundoff_but_not_real_misses():
