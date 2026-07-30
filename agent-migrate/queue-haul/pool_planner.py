@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, replace
+from heapq import heappop, heappush
 from time import perf_counter
 
 import cvxpy as cp
@@ -470,13 +471,18 @@ def _greedy_bundle(table: CandidateTable, target: float, power: ExpectedPower):
     return selected
 
 
-def _coupled_gain(table, power, pattern):
-    return power.drain_gain([
-        table.sessions[table.candidates[i].session].session_id for i in pattern
-    ])
+def _coupled_gain(table, power, pattern, cache=None):
+    sessions = frozenset(table.candidates[i].session for i in pattern)
+    if cache is None or sessions not in cache:
+        value = power.drain_gain([
+            table.sessions[session].session_id for session in sessions
+        ])
+        if cache is not None:
+            cache[sessions] = value
+    return value if cache is None else cache[sessions]
 
 
-def _coupled_source_patterns(table, power, priced, eta, scale):
+def _coupled_source_patterns(table, power, priced, eta, scale, cache=None):
     ordered = sorted(priced, key=lambda row: (
         row[1] / power.ell[table.sessions[table.candidates[row[0]].session].session_id],
         row[0],
@@ -485,7 +491,10 @@ def _coupled_source_patterns(table, power, priced, eta, scale):
     for i, value in ordered:
         pattern += (i,)
         price += value
-        key = (price - eta * _coupled_gain(table, power, pattern) / scale, pattern)
+        key = (
+            price - eta * _coupled_gain(table, power, pattern, cache) / scale,
+            pattern,
+        )
         if key < best:
             best = key
     return best[1], tuple(i for i, _value in ordered)
@@ -495,44 +504,101 @@ def _coupled_source_pattern(table, power, priced, eta, scale):
     return _coupled_source_patterns(table, power, priced, eta, scale)[0]
 
 
-def _recover_coupled(table, power, patterns, target, architecture, scenario, mode):
+def _recover_coupled(
+    table, power, patterns, target, architecture, scenario, mode, gain_cache=None,
+):
     matrix, selected, chosen = csc_matrix(table.resources), set(), {}
-    gain, blocked = 0.0, set()
+    gain, blocked, cache = 0.0, set(), {}
+    usage = np.zeros(matrix.shape[0])
     visited = {frozenset()}
+    sources = sorted(patterns)
+    rank = {source: i for i, source in enumerate(sources)}
+    versions = dict.fromkeys(sources, 0)
+    heap, deferred = [], []
+
+    def stats(pattern):
+        if pattern not in cache:
+            cache[pattern] = (
+                _coupled_gain(table, power, pattern, gain_cache),
+                sum(table.candidates[i].migration_work_s for i in pattern),
+                set(pattern),
+                np.asarray(matrix[:, list(pattern)].sum(1)).ravel()
+                if pattern else np.zeros(matrix.shape[0]),
+            )
+        return cache[pattern]
+
+    def entry(source, pattern):
+        old = chosen.get(source, ())
+        if not pattern or pattern == old or (source, old, pattern) in blocked:
+            return None
+        old_value, old_work, _members, _usage = stats(old)
+        value, work, _members, _usage = stats(pattern)
+        if value < old_value - 1e-8:
+            return None
+        added = value - old_value
+        ratio = min(added, target - gain) / max(work - old_work, 1e-12)
+        return (
+            -ratio, work, tuple(pattern) + (np.inf,), rank[source], versions[source],
+            source, old, pattern, added,
+        )
+
+    def add(source):
+        for pattern in sorted(patterns[source]):
+            item = entry(source, pattern)
+            if item is not None:
+                heappush(heap, item)
+
+    for source in sources:
+        add(source)
     while gain < target - 1e-8:
         best = None
-        for source in sorted(patterns):
-            old = chosen.get(source, ())
-            old_value = _coupled_gain(table, power, old)
-            old_work = sum(table.candidates[i].migration_work_s for i in old)
-            for pattern in sorted(patterns[source]):
-                if not pattern or (source, old, pattern) in blocked:
-                    continue
-                value = _coupled_gain(table, power, pattern)
-                if value < old_value - 1e-8 or pattern == old:
-                    continue
-                trial = selected - set(old) | set(pattern)
-                if frozenset(trial) in visited:
-                    continue
+        while heap:
+            item = heappop(heap)
+            source, old, pattern = item[5:8]
+            if item[4] != versions[source] or chosen.get(source, ()) != old:
+                continue
+            current = entry(source, pattern)
+            if current is None:
+                continue
+            if current[:4] != item[:4]:
+                heappush(heap, current)
+                continue
+            old_members, old_usage = stats(old)[2:]
+            members, pattern_usage = stats(pattern)[2:]
+            trial = selected - old_members | members
+            if frozenset(trial) in visited:
+                deferred.append(item)
+                continue
+            trial_usage = usage - old_usage + pattern_usage
+            if np.any(trial_usage >= 1 - 1e-7):
                 trial_usage = np.asarray(matrix[:, list(trial)].sum(1)).ravel()
-                if np.any(trial_usage > 1 + 1e-8):
-                    continue
-                work = sum(table.candidates[i].migration_work_s for i in pattern)
-                added_value, added_work = value - old_value, work - old_work
-                key = (
-                    min(added_value, target - gain) / max(added_work, 1e-12),
-                    -work, tuple(-i for i in pattern),
-                )
-                if best is None or key > best[0]:
-                    best = key, source, old, pattern, trial, added_value
+            if np.any(trial_usage > 1 + 1e-8):
+                deferred.append(item)
+                continue
+            best = source, old, pattern, trial, item[8]
+            break
         if best is None:
             break
-        if _pack(table, best[4], architecture, scenario, mode)[0] is None:
-            blocked.add((best[1], best[2], best[3]))
+        if _pack(table, best[3], architecture, scenario, mode)[0] is None:
+            blocked.add(best[:3])
             continue
-        chosen[best[1]], selected = best[3], best[4]
+        chosen[best[0]], selected = best[2], best[3]
         visited.add(frozenset(selected))
-        gain += best[5]
+        usage = np.asarray(matrix[:, list(selected)].sum(1)).ravel()
+        gain += best[4]
+        versions[best[0]] += 1
+        if best[4] < 0:
+            heap, deferred = [], []
+            for source in sources:
+                add(source)
+            continue
+        for item in deferred:
+            if item[4] == versions[item[5]]:
+                current = entry(item[5], item[7])
+                if current is not None:
+                    heappush(heap, current)
+        deferred = []
+        add(best[0])
     return selected
 
 
@@ -545,6 +611,7 @@ def _greedy_coupled(table, target, power, architecture, scenario, mode):
     for i, candidate in enumerate(table.candidates):
         by_session.setdefault(candidate.session, []).append(i)
     prices, eta, scale = np.zeros(table.resources.shape[0]), 1.0, max(target, 1.0)
+    gain_cache = {}
     retained = {source: set() for source in by_source}
     for iteration in range(32):
         selected, chosen = set(), []
@@ -568,7 +635,7 @@ def _greedy_coupled(table, target, power, architecture, scenario, mode):
                 i = ties[(iteration + source_order + position) % len(ties)]
                 priced.append((i, low))
             pattern, ordered = _coupled_source_patterns(
-                table, power, priced, eta, scale,
+                table, power, priced, eta, scale, gain_cache,
             )
             retained[source].add(pattern)
             if ordered:
@@ -577,12 +644,14 @@ def _greedy_coupled(table, target, power, architecture, scenario, mode):
             chosen.append(pattern)
         usage = np.asarray(table.resources[:, list(selected)].sum(1)).ravel() \
             if selected else np.zeros(table.resources.shape[0])
-        shed = sum(_coupled_gain(table, power, pattern) for pattern in chosen)
+        shed = sum(
+            _coupled_gain(table, power, pattern, gain_cache) for pattern in chosen
+        )
         step = .5 / np.sqrt(iteration + 1)
         prices = np.maximum(0, prices + step * (usage - 1))
         eta = max(0, eta + step * (target - shed) / scale)
     return _recover_coupled(
-        table, power, retained, target, architecture, scenario, mode,
+        table, power, retained, target, architecture, scenario, mode, gain_cache,
     )
 
 

@@ -316,6 +316,10 @@ with the exact source power curve. A target-capped recovery admits retained
 patterns only when aggregate rows and concrete replica packing fit. The result
 is still experimental: exact eager-parallel prediction is the final acceptance
 gate, and the policy is neither a global optimum nor a hardware controller.
+The implementation caches action-equivalent prefix gains and pattern resource
+vectors, then uses a lazy heap that preserves the same global recovery order.
+Near an aggregate boundary it recomputes the exact sparse sum, and it retains
+the concrete packing check after every accepted pattern.
 
 Selected moves are ordered by migration work per conservative watt. At
 controller completion, the executor starts every selected move eagerly.

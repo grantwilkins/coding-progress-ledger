@@ -15,6 +15,7 @@ order and overlaps moves up to its configured width.
 - [x] Add `greedy_bundle` to pool-aware fleet-policy comparisons.
 - [x] Add simulator-only `greedy_coupled` with exact source-prefix pricing and
   destination packing checks.
+- [x] Cache coupled patterns and preserve exact recovery order with a lazy heap.
 - [ ] Verify checksums and paper tables against the committed code revision.
 - [x] Run `uv run pytest`.
 

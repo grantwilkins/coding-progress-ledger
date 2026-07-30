@@ -219,6 +219,62 @@ def test_coupled_recovery_caps_one_watt_overshoot_before_work(tmp_path):
     assert selected == {1, 2}
 
 
+def test_coupled_recovery_preserves_aggregate_boundary(tmp_path):
+    profile, scenario = model(tmp_path), problem()
+    power = ExpectedPower(scenario, profile)
+    candidates = tuple(
+        Candidate(i, "replay", 0, power.marginal(session.session_id), 1, 1,
+                  ("wan",), 1, (0, 0), 0)
+        for i, session in enumerate(scenario.sessions)
+    )
+    limit = 1 + 1e-8
+
+    def recover(second):
+        table = CandidateTable(
+            scenario.sessions, candidates, csr_matrix(np.eye(2)),
+            csr_matrix(((.6, second), ((0, 0), (0, 1))), shape=(1, 2)),
+            ("route",), (1,), ("fraction",), 10,
+        )
+        return _recover_coupled(
+            table, power, {"s0": {(0,)}, "s1": {(1,)}},
+            power.drain_gain(("a", "b")),
+            replace(architecture(normal=1, emergency=1), pools=(
+                architecture(normal=1, emergency=1).pools[0],
+            )), scenario, "normal",
+        )
+
+    boundary = limit - .6
+    assert recover(boundary) == {0, 1}
+    assert recover(boundary + 1e-12) == {0}
+
+
+def test_coupled_recovery_preserves_prefix_tie_order(tmp_path):
+    profile, scenario = model(tmp_path), problem()
+    sessions = (scenario.sessions[0], replace(
+        scenario.sessions[1], source_instance="s0",
+    ))
+    scenario = replace(scenario, sessions=sessions)
+    power = ExpectedPower(scenario, profile)
+    candidates = (
+        Candidate(0, "replay", 0, 1, 1, 1, ("wan",), 1, (0, 0), 0),
+        Candidate(1, "replay", 0, 1, 0, 1, ("wan",), 1, (0, 0), 0),
+    )
+    table = CandidateTable(
+        sessions, candidates, csr_matrix(np.eye(2)),
+        csr_matrix((np.full(2, .1), (np.zeros(2), np.arange(2))), shape=(1, 2)),
+        ("route",), (1,), ("fraction",), 10,
+    )
+
+    selected = _recover_coupled(
+        table, power, {"s0": {(0,), (0, 1)}}, .1,
+        replace(architecture(normal=1, emergency=1), pools=(
+            architecture(normal=1, emergency=1).pools[0],
+        )), scenario, "normal",
+    )
+
+    assert selected == {0, 1}
+
+
 def test_loaded_lookup_boundary_tracks_selected_admission_mode():
     q = architecture(normal=.4, emergency=.6, stable=.8).types[0]
     assert _mode_boundary_rho(q, "normal") == 1
