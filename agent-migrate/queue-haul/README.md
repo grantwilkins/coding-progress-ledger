@@ -124,9 +124,9 @@ tables with missing provenance.
 transfer and replay timelines with source inference continuing through
 request-boundary drain from tidy event tables.
 `plot_fixed_contract_residuals.py` caches the canonical 100K-session,
-120-second fixed-contract requirement sweep and plots normalized resource
-headroom against requested source-power shed. Use `--refresh` when its pinned
-inputs change.
+120-second fixed-contract requirement sweep and compares mixed greedy,
+GPU-work-first, replay-only, and KV-only resource headroom at common requested
+source-power shed levels. Use `--refresh` when its pinned inputs change.
 `policy_hardware_campaign.py` creates a resumable paired idle-session campaign
 for eager, serial execution of Queue-Haul, greedy, per-session-fastest, and
 random method/order choices plus KV-only and replay-only baselines. It does not

@@ -9,17 +9,46 @@ Plausible wrong implementations:
 - Divide residual capacity by resource use.
 - Hide unmet watts at infeasible targets.
 - Mark a source/WAN-feasible point met despite violating destination capacity.
+- Leak replay into KV-only or KV transfer into replay-only.
+- Rank GPU-work-first actions by raw work instead of work per shed watt.
 """
+
+from types import SimpleNamespace
 
 import pytest
 
 from plot_fixed_contract_residuals import (
     WORKLOADS,
     _fingerprint,
+    _policy_candidates,
     minimum_slack,
     result_row,
     validate_slacks,
 )
+
+
+def test_policy_candidates_enforce_methods_and_gpu_work_per_watt():
+    def candidate(session, method, gain, work, score):
+        action = SimpleNamespace(
+            session_id=session, method=method, source_power_gain_w=gain,
+        )
+        return action, {"Queued serving work": work}, score
+
+    candidates = (
+        candidate("a", "replay", 2, 8, 5),
+        candidate("a", "kv_transfer", 2, 2, 4),
+        candidate("b", "replay", 1, 2, 3),
+    )
+
+    assert [item[0].method for item in _policy_candidates(
+        candidates, "replay",
+    )] == ["replay", "replay"]
+    assert [item[0].method for item in _policy_candidates(
+        candidates, "kv_transfer",
+    )] == ["kv_transfer"]
+    assert [item[0].session_id for item in _policy_candidates(
+        candidates, "gpu_work",
+    )] == ["a", "b", "a"]
 
 
 def test_result_row_preserves_requested_power_and_capacity_normalized_slack():

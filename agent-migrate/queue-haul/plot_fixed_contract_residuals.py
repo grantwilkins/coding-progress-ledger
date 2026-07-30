@@ -43,7 +43,13 @@ PRESSURE = Pressure(service=.8, bandwidth_gbps=5, migration_s=115)
 FLEX = .10
 DEBT = .10
 SEED = 0
-DATA_VERSION = 5
+DATA_VERSION = 6
+POLICIES = (
+    ("mixed", "Mixed greedy"),
+    ("gpu_work", "GPU-work first"),
+    ("replay", "Replay only"),
+    ("kv_transfer", "KV only"),
+)
 
 
 def result_row(requested, achieved, resource, used, capacity, **fields):
@@ -143,6 +149,20 @@ def _select(candidates, target, capacities, horizon, power):
     return tuple(selected), used, initial - power.power(True)
 
 
+def _policy_candidates(candidates, policy):
+    if policy in {"replay", "kv_transfer"}:
+        return tuple(item for item in candidates if item[0].method == policy)
+    if policy == "gpu_work":
+        return tuple(sorted(candidates, key=lambda item: (
+            item[1]["Queued serving work"]
+            / max(item[0].source_power_gain_w, 1e-12),
+            -item[2], item[0].session_id, item[0].method,
+        )))
+    if policy != "mixed":
+        raise ValueError(f"unknown policy {policy!r}")
+    return tuple(candidates)
+
+
 def generate(model_path, manifest_path):
     profile = ModelProfile.load(model_path)
     manifest = json.loads(manifest_path.read_text())
@@ -190,61 +210,69 @@ def generate(model_path, manifest_path):
         _actions(scenario_, profile, q, bandwidth, 0, horizon, "central"),
         capacities, normal, horizon, profile,
     )
-    _, _, maximum = _select(
-        candidates, float("inf"), capacities, horizon,
+    _, _, reference_maximum = _select(
+        _policy_candidates(candidates, "mixed"), float("inf"), capacities, horizon,
         ExpectedPower(scenario_, profile),
     )
     rows = []
-    for fraction in TARGETS:
-        requested = fraction * maximum
-        selected, used, achieved = _select(
-            candidates, requested, capacities, horizon,
+    for policy, label in POLICIES:
+        ordered = _policy_candidates(candidates, policy)
+        _, _, policy_maximum = _select(
+            ordered, float("inf"), capacities, horizon,
             ExpectedPower(scenario_, profile),
         )
-        makespan = max(
-            [0, used["WAN transfer bytes"] / bandwidth]
-            + [action.duration_s for action in selected]
-        )
-        uses = {
-            **used,
-            "Planned makespan lower bound": makespan,
-        }
-        display_capacities = {
-            **capacities,
-            "Planned makespan lower bound": horizon,
-        }
-        slacks = {
-            resource: (display_capacities[resource] - use)
-            / display_capacities[resource]
-            for resource, use in uses.items()
-        }
-        target_met = achieved >= requested - 1e-7
-        validate_slacks(target_met, slacks)
-        binding = "|".join(
-            resource for resource, slack in slacks.items() if slack <= 1e-6
-        )
-        common = {
-            "target_fraction": fraction,
-            "maximum_modeled_shed_w": maximum,
-            "sessions": SESSIONS,
-            "source_replicas": replicas,
-            "deadline_s": scenario_.deadline_s,
-            "replay_moves": sum(action.method == "replay" for action in selected),
-            "kv_moves": sum(action.method == "kv_transfer" for action in selected),
-            "target_met": target_met,
-            "solver_status":
-                "greedy_target_met" if target_met else "greedy_best_effort",
-            "binding_resources": binding,
-            "slack_kind": "planned",
-            "execution_validated": False,
-            "evidence_status": "sensitivity",
-        }
-        rows.extend(
-            result_row(
-                requested, achieved, resource, uses[resource], capacity, **common,
+        for fraction in TARGETS:
+            requested = fraction * reference_maximum
+            selected, used, achieved = _select(
+                ordered, requested, capacities, horizon,
+                ExpectedPower(scenario_, profile),
             )
-            for resource, capacity in display_capacities.items()
-        )
+            makespan = max(
+                [0, used["WAN transfer bytes"] / bandwidth]
+                + [action.duration_s for action in selected]
+            )
+            uses = {**used, "Planned makespan lower bound": makespan}
+            display_capacities = {
+                **capacities, "Planned makespan lower bound": horizon,
+            }
+            slacks = {
+                resource: (display_capacities[resource] - use)
+                / display_capacities[resource]
+                for resource, use in uses.items()
+            }
+            target_met = achieved >= requested - 1e-7
+            validate_slacks(target_met, slacks)
+            binding = "|".join(
+                resource for resource, slack in slacks.items() if slack <= 1e-6
+            )
+            common = {
+                "policy": policy,
+                "policy_label": label,
+                "target_fraction": fraction,
+                "maximum_modeled_shed_w": reference_maximum,
+                "policy_maximum_shed_w": policy_maximum,
+                "sessions": SESSIONS,
+                "source_replicas": replicas,
+                "deadline_s": scenario_.deadline_s,
+                "replay_moves":
+                    sum(action.method == "replay" for action in selected),
+                "kv_moves":
+                    sum(action.method == "kv_transfer" for action in selected),
+                "target_met": target_met,
+                "solver_status":
+                    f"{policy}_{'target_met' if target_met else 'best_effort'}",
+                "binding_resources": binding,
+                "slack_kind": "planned",
+                "execution_validated": False,
+                "evidence_status": "sensitivity",
+            }
+            rows.extend(
+                result_row(
+                    requested, achieved, resource, uses[resource], capacity,
+                    **common,
+                )
+                for resource, capacity in display_capacities.items()
+            )
     return rows
 
 
@@ -269,7 +297,8 @@ def _fingerprint(model_path, manifest_path):
         "event_flex_fraction": FLEX,
         "service_debt_fraction": DEBT,
         "target_fractions": list(TARGETS),
-        "maximum_shed_definition": "contract-constrained greedy planned shed",
+        "policies": [policy for policy, _ in POLICIES],
+        "maximum_shed_definition": "mixed-greedy contract-constrained planned shed",
     }
 
 
@@ -291,30 +320,11 @@ def load_or_generate(out, model_path, manifest_path, refresh=False):
     return rows
 
 
-def plot(rows, out):
-    for row in rows:
-        for field in (
-            "requested_shed_w", "normalized_slack", "target_fraction",
-            "unmet_shed_w",
-        ):
-            row[field] = float(row[field])
-    primary = (
-        ("WAN transfer bytes", "WAN bandwidth", "#8C1515", "-"),
-        ("Ongoing integrated serving load", "Concurrent GPU load", "#175E54", ":"),
-        ("Queued serving work", "Cumulative GPU work", "#B83A4B", ":"),
-    )
-    loose = (
-        "Replay reconstruction GPU time", "KV-ingest GPU time", "KV-cache blocks",
-    )
+def _plot_panel(axis, strip, rows, primary, loose):
     labels = {resource: label for resource, label, _, _ in primary}
     colors = {resource: color for resource, _, color, _ in primary}
     fractions = sorted({row["target_fraction"] for row in rows})
     x = np.asarray(fractions) * 100
-    sns.set_theme(style="whitegrid")
-    fig, (axis, strip) = plt.subplots(
-        2, 1, figsize=(7, 4.5), sharex=True, layout="constrained",
-        gridspec_kw={"height_ratios": (12, .7), "hspace": .08},
-    )
     representatives = {
         row["target_fraction"]: row for row in rows
         if row["resource"] == primary[0][0]
@@ -348,13 +358,7 @@ def plot(rows, out):
             failed, np.full(len(failed), -.035), marker="x", color="black",
             s=45, linewidth=1.5, label="Unmet", clip_on=False,
         )
-    axis.legend(title="Resource", frameon=False, loc="center left",
-                bbox_to_anchor=(1.01, .5))
-    axis.set(
-        ylabel="Normalized slack",
-        ylim=(-.06, 1.05),
-        xlim=(0, 102.5),
-    )
+    axis.set(ylim=(-.06, 1.05), xlim=(0, 102.5))
     bindings = minimum_slack(rows, all_resources)
     bounds = np.r_[
         x[0] - (x[1] - x[0]) / 2,
@@ -369,7 +373,7 @@ def plot(rows, out):
     start = 0
     for end in range(1, len(bindings) + 1):
         if end == len(bindings) or bindings[end] != bindings[start]:
-            if bounds[end] - bounds[start] >= 12:
+            if bounds[end] - bounds[start] >= 25:
                 strip.text(
                     (bounds[start] + bounds[end]) / 2, .5,
                     labels.get(bindings[start], "Other"), color="white",
@@ -377,13 +381,54 @@ def plot(rows, out):
                 )
             start = end
     strip.set(
-        xlabel="Requested shed (%)", yticks=[], ylim=(0, 1),
-        xticks=(0, 25, 50, 75, 100),
+        yticks=[], ylim=(0, 1), xticks=(0, 25, 50, 75, 100),
     )
-    strip.set_ylabel("Closest\nto binding", rotation=0, ha="right", va="center")
     strip.grid(False)
     sns.despine(ax=axis)
     sns.despine(ax=strip, left=True, bottom=True)
+
+
+def plot(rows, out):
+    for row in rows:
+        for field in (
+            "requested_shed_w", "normalized_slack", "target_fraction",
+            "unmet_shed_w", "policy_maximum_shed_w",
+        ):
+            row[field] = float(row[field])
+    primary = (
+        ("WAN transfer bytes", "WAN bandwidth", "#8C1515", "-"),
+        ("Ongoing integrated serving load", "Concurrent GPU load", "#175E54", ":"),
+        ("Queued serving work", "Cumulative GPU work", "#B83A4B", ":"),
+    )
+    loose = (
+        "Replay reconstruction GPU time", "KV-ingest GPU time", "KV-cache blocks",
+    )
+    sns.set_theme(style="whitegrid")
+    fig, axes = plt.subplots(
+        2, len(POLICIES), figsize=(15.5, 4.5), sharex="col", sharey="row",
+        layout="constrained",
+        gridspec_kw={"height_ratios": (12, .7), "hspace": .08},
+    )
+    for column, (policy, label) in enumerate(POLICIES):
+        selected = [row for row in rows if row["policy"] == policy]
+        _plot_panel(axes[0, column], axes[1, column], selected, primary, loose)
+        maximum = selected[0]["policy_maximum_shed_w"] / 1000
+        axes[0, column].set_title(f"{label}\nmax {maximum:.1f} kW")
+    axes[0, 0].set_ylabel("Normalized slack")
+    axes[1, 0].set_ylabel(
+        "Closest\nto binding", rotation=0, ha="right", va="center",
+    )
+    handles, labels = [], []
+    for axis in axes[0]:
+        for handle, label in zip(*axis.get_legend_handles_labels()):
+            if label not in labels:
+                handles.append(handle)
+                labels.append(label)
+    fig.legend(
+        handles, labels, title="Resource", frameon=False, ncol=len(labels),
+        loc="outside upper center",
+    )
+    fig.supxlabel("Requested shed (% of mixed-greedy maximum)")
     for extension in ("png", "pdf"):
         fig.savefig(
             out / f"fixed_contract_residuals.{extension}",
