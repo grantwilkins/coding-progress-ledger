@@ -1,0 +1,39 @@
+{
+  "schema": "queue-haul-simulated-pareto-v1",
+  "axes": {
+    "x": "commit-integrated source-power shed / removable power",
+    "y": "last route commit time / required deadline"
+  },
+  "policies": [
+    "queue_haul",
+    "greedy",
+    "random",
+    "kv_only",
+    "replay_only"
+  ],
+  "scenarios": 600,
+  "paired_episodes": 120,
+  "observation_s": 600,
+  "plan": {
+    "path": "queue-haul/outputs/policy-hardware-width8-packing-plan/plan.json",
+    "sha256": "e20ff148aded9b63458a65d378a2103579974a64fe0b3a8b05fd3bf4079cdba8"
+  },
+  "model": {
+    "path": "queue-haul/profiles/gpt_oss_20b_a100_tp1_crossover.json",
+    "sha256": "99ec3d2e3099f01103e7a0609a9d99beabfe7ec86eeb372d65f5829090658ab8"
+  },
+  "crossover": {
+    "path": "queue-haul/outputs/policy-hardware-crossover-20260730/plan.json",
+    "sha256": "f1ed00a69f2389b10d07930dd6cd6ad0cdd7dc7dad2181271995f160726a0d60"
+  },
+  "evidence": {
+    "context_anchors": "measured",
+    "in_range_nonanchors": "interpolated",
+    "width8_launch": "measured in policy-hardware-width8-frontier-20260730",
+    "width8_per_stream_rate_and_action_power": "extrapolated from serial calibration",
+    "power_attainment": "modeled from commit times",
+    "results": "simulated"
+  },
+  "pooled_frontier": "descriptive across heterogeneous scenarios",
+  "paired_pareto": "dominance is evaluated only within each matched episode"
+}

@@ -112,6 +112,7 @@ uv run python queue-haul/migration_profiler.py make-crossover \
 uv run python queue-haul/policy_hardware_campaign.py plot-reduced \
   --out queue-haul/outputs/policy-hardware-width8-frontier-20260730
 uv run python queue-haul/canonical_simulator_campaign.py
+uv run python queue-haul/simulated_pareto_campaign.py
 uv run python queue-haul/paper_evaluation.py \
   --out queue-haul/outputs/paper-evaluation
 ```
@@ -179,6 +180,11 @@ preserving the existing catch-up, power, and capacity evidence. The pinned
 `outputs/policy-hardware-width8-packing-plan/` runs three paired width-8 episodes
 for Tiny, Small, Medium, Mixed, and Large packs at 1/2.5/5/10 Gbit/s and 19/30-s
 requirements: 600 scenarios in total.
+`simulated_pareto_campaign.py` evaluates the same five fixed context packs with
+the calibrated crossover profile and adds a paired random baseline. Its Pareto
+CSV and plot label 12K/14K contexts as interpolated, serial-to-width-8
+per-stream rates as extrapolated, and commit-derived power attainment as
+modeled; parallel launch is anchored by the existing width-8 hardware traces.
 `canonical_simulator_campaign.py` runs a four-target paired 10K-session
 Queue-Haul, greedy, per-session-fastest, replay-only, and KV-only comparison
 under one assumed dedicated-pool contract. Its compact 10K/100K/1M scale check
