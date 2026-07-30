@@ -137,8 +137,8 @@ requirement is passed to the Queue-Haul planner. The runner remains eager and
 does not execute planner pacing or measure planning latency. Failed episodes
 remain in denominators. Reduction writes timing CDFs and a power-attainment CDF;
 attainment is trailing-five-second average modeled source-power shed divided by
-the 100% source-power target. MP runs drain the exact continuation `SET` count
-between scenarios so late cache writes cannot cross scenario boundaries. Run
+the 100% source-power target. MP runs require bounded RESP quiescence between
+scenarios so late cache writes cannot cross scenario boundaries. Run
 from a clean committed checkout with two A100 80GB GPUs.
 `canonical_simulator_campaign.py` runs a four-target paired 10K-session
 Queue-Haul, greedy, per-session-fastest, replay-only, and KV-only comparison

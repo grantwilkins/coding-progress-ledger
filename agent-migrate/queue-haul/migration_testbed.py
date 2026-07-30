@@ -1101,21 +1101,17 @@ def mp_source_keys(path: Path, offset: int) -> set[str]:
         return {row["key_hashes"] for row in rows if row["command"] == "SET"}
 
 
-def mp_wait_transfers(path: Path, offset: int, command: str, expected: int) -> None:
+def mp_wait_idle(path: Path, idle_s: float = 2) -> None:
     deadline = time.monotonic() + 600
+    size, since = path.stat().st_size, time.monotonic()
     while time.monotonic() < deadline:
-        with path.open() as handle:
-            fields = next(csv.reader(handle))
-        with path.open("rb") as handle:
-            handle.seek(offset)
-            rows = csv.DictReader(io.StringIO(handle.read().decode()), fieldnames=fields)
-            count = sum(row["command"] == command for row in rows)
-        if count == expected:
+        current = path.stat().st_size
+        if current != size:
+            size, since = current, time.monotonic()
+        elif time.monotonic() - since >= idle_s:
             return
-        if count > expected:
-            raise RuntimeError(f"LMCache completed {count} {command}s, expected {expected}")
         time.sleep(.05)
-    raise TimeoutError(f"LMCache completed fewer than {expected} {command}s")
+    raise TimeoutError("LMCache RESP transfers did not become idle")
 
 
 def mp_wait_stored(log: Path, offset: int, tokens: int) -> None:
