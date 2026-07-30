@@ -150,6 +150,7 @@ def test_prepared_job_is_self_locating_and_keeps_failures_visible(tmp_path):
     job = (out / "run.sh").read_text()
     assert 'script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")"' in job
     assert "--stack-scenarios 30" in job
+    assert "run=(" in job and '"${run[@]}"' in job
     assert "--fail-fast" not in job
     assert '[[ -f "$QH_POLICY_RUN_ROOT/plan.json" ]]' in job
     assert (out / "run.sbatch").exists()
