@@ -382,43 +382,32 @@ def full_attainment_cdf(rows, policy, threshold=.99):
         if values else np.array([])
 
 
+def policy_coordinates(rows, policy, normalized):
+    selected = [row for row in rows if row["policy"] == policy]
+    return (
+        [100 * row["power_attainment_fraction"] for row in selected],
+        [row["completion_budget_ratio" if normalized else "completion_s"]
+         for row in selected],
+    )
+
+
 def plot(rows, out):
     colors = dict(zip(POLICIES, plt.get_cmap("tab10").colors))
     markers = dict(zip(POLICIES, ("o", "s", "^", "D", "x")))
-    budgets = sorted({row["time_budget_s"] for row in rows})
     fig, axes = plt.subplots(1, 2, figsize=(12, 5.5))
-    cloud, mixture = axes
+    cloud, raw = axes
     for policy in (*POLICIES[1:], POLICIES[0]):
-        selected = [row for row in rows if row["policy"] == policy]
         style = {
             "s": 26, "alpha": .6, "facecolors": "none",
             "edgecolors": colors[policy], "linewidths": 1, "zorder": 4,
         } if policy == "queue_haul" else {
             "s": 18, "alpha": .3, "color": colors[policy],
         }
-        cloud.scatter(
-            [100 * row["power_attainment_fraction"] for row in selected],
-            [row["completion_budget_ratio"] for row in selected],
-            marker=markers[policy], label=LABELS[policy], **style,
-        )
-        aggregate = [(
-            budget,
-            np.mean([
-                row["power_attainment_fraction"] for row in selected
-                if row["time_budget_s"] == budget
-            ]),
-            np.median([
-                row["completion_s"] for row in selected
-                if row["time_budget_s"] == budget
-            ]),
-        ) for budget in budgets]
-        mixture.plot(
-            [100 * row[1] for row in aggregate],
-            [row[2] for row in aggregate],
-            marker=markers[policy], color=colors[policy], label=LABELS[policy],
-            linewidth=2.5 if policy == "queue_haul" else 1.5,
-            zorder=3 if policy == "queue_haul" else 2,
-        )
+        for axis, normalized in ((cloud, True), (raw, False)):
+            axis.scatter(
+                *policy_coordinates(rows, policy, normalized),
+                marker=markers[policy], label=LABELS[policy], **style,
+            )
     cloud.axhline(1, color="0.35", linestyle=":", linewidth=1)
     cloud.set(
         title="Matched scenario–budget outcomes",
@@ -427,13 +416,13 @@ def plot(rows, out):
         xlim=(-2, 102),
     )
     cloud.grid(alpha=.2)
-    mixture.set(
-        title="Identical workload mixture at each time budget",
-        xlabel="Mean modeled source-power shed (%)",
-        ylabel="Median admitted-set completion (s)",
+    raw.set(
+        title="All admitted-set completions",
+        xlabel="Modeled maximum source-power shed by deadline (%)",
+        ylabel="Admitted-set completion (s)",
         xlim=(-2, 102),
     )
-    mixture.grid(alpha=.2)
+    raw.grid(alpha=.2)
     handles, labels = cloud.get_legend_handles_labels()
     fig.legend(handles, labels, loc="upper center", frameon=False, ncol=3)
     cloud.text(
@@ -467,7 +456,7 @@ def run(plan_path=DEFAULT_PLAN, model_path=DEFAULT_MODEL,
         "axes": {
             "x": "deadline-integrated source-power shed / removable power",
             "y": "last admitted route commit time",
-            "mixture": "mean shed and median completion over identical workloads",
+            "raw_panel": "one point per matched scenario-budget-policy result",
         },
         "policies": list(POLICIES),
         "scenarios": len(rows),

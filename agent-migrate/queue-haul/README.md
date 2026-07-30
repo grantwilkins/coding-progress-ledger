@@ -185,8 +185,8 @@ CSV and plot label 12K/14K contexts as interpolated, concurrent action power as
 extrapolated, and commit-derived power attainment as modeled.
 Parallel launch and replay/KV aggregate-throughput caps are anchored by the
 hardware traces; KV uses serial measurements at 1/2.5 Gbit/s and width-8
-measurements at 5/10 Gbit/s. The figure pairs the full Pareto cloud with a
-matched-mixture frontier over 30/40/50/60/75-s budgets. Every policy is
+measurements at 5/10 Gbit/s. The figure pairs deadline-normalized and raw-second
+clouds over 30/40/50/60/75-s budgets, with one point per result. Every policy is
 replanned for each budget against the same aggregate caps and executes only its
 deadline-admitted actions; cleanup moves are excluded from both axes. The cloud
 crosses five fixed packing anchors and 18 observed width-8 workload mixes with
