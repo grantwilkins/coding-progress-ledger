@@ -126,6 +126,16 @@ def test_mp_tokenization_uses_the_exact_chat_completion_renderer(monkeypatch):
     }
 
 
+def test_resp_transfer_is_immediately_visible(tmp_path):
+    async def check():
+        log = s.ByteLog(tmp_path / "proxy_bytes.csv")
+        await log.resp_transfer(["c", "SET", "k", 1, 2, 3, 4, 5, 6])
+        assert list(csv.DictReader((tmp_path / "resp_transfers.csv").open()))[0]["key_hashes"] == "k"
+        await log.close()
+
+    asyncio.run(check())
+
+
 def test_mp_storage_wait_aggregates_chunked_writes(tmp_path):
     log = tmp_path / "lmcache.log"
     prefix = "LMCache ✓\n".encode()
@@ -141,11 +151,30 @@ def test_mp_storage_wait_requires_exact_resp_set_keys(tmp_path):
     transfers.write_text(
         "connection_id,command,key_hashes,start_ns,end_ns,request_wire_bytes,"
         "response_wire_bytes,request_body_bytes,payload_bytes\n"
-        "a,SET,k1,2,3,1,1,1,1\n"
-        "a,SET,k2,4,5,1,1,1,1\n"
+        "a,SET,old,0,1,1,1,1,1\n"
     )
+    offset = transfers.stat().st_size
+    with transfers.open("a") as handle:
+        handle.write("a,SET,k1,0,3,1,1,1,1\na,SET,k2,4,5,1,1,1,1\n")
 
-    assert s.mp_wait_source_keys(log, 0, transfers, 1, 512) == {"k1", "k2"}
+    assert s.mp_wait_source_keys(log, 0, transfers, offset, 512) == {"k1", "k2"}
+
+
+def test_mp_source_keys_excludes_known_keys(monkeypatch, tmp_path):
+    log = tmp_path / "lmcache.log"
+    log.write_text("")
+    transfers = tmp_path / "resp_transfers.csv"
+    transfers.write_text(
+        "connection_id,command,key_hashes,start_ns,end_ns,request_wire_bytes,"
+        "response_wire_bytes,request_body_bytes,payload_bytes\n"
+        "a,SET,old,0,1,1,1,1,1\na,SET,k1,2,3,1,1,1,1\n"
+    )
+    waited = []
+    monkeypatch.setattr(s, "mp_wait_stored",
+                        lambda _log, _offset, tokens: waited.append(tokens))
+
+    assert s.mp_wait_source_keys(log, 0, transfers, 0, 256, {"old"}) == {"k1"}
+    assert waited == [256]
 
 
 def test_mp_request_hit_uses_byte_offset(tmp_path):

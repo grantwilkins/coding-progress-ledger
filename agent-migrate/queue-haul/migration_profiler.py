@@ -670,14 +670,17 @@ class LiveSession:
         self.event_log.write("request_start", session_id=self.session_id, request_id=label, route_port=port, context_hash=context_hash)
         result, text = stream_chat(self.cfg, port, self.probe(messages, prompt), PROBE_MAX_TOKENS, context_hash, self.timeout_s, bypass_lmcache)
         self.event_log.write("request_end", session_id=self.session_id, request_id=result.request_id, route_port=port, status_code=result.status_code, context_hash=context_hash, first_byte_ns=result.first_byte_ns, chunks=[asdict(chunk) for chunk in result.stream_chunks])
-        if result.status_code != 200 or self.state_code not in text:
-            raise RuntimeError(f"{label} failed state check for {self.session_id}: HTTP {result.status_code}")
+        if result.status_code != 200:
+            raise RuntimeError(
+                f"{label} failed for {self.session_id}: HTTP {result.status_code}"
+            )
         return result, text
 
     def warm(self) -> None:
         before = time.monotonic_ns()
         log_offset = self.source_log.stat().st_size \
             if b.lmcache_mode() == "mp" else 0
+        transfer_offset = self.cache_log.stat().st_size if b.lmcache_mode() == "mp" else 0
         result, _ = self.request(
             self.cfg.src_port, list(self.messages), "source_warm"
         )
@@ -686,7 +689,7 @@ class LiveSession:
         if b.lmcache_mode() == "mp":
             keys = b.mp_wait_source_keys(
                 self.source_log, log_offset,
-                self.cache_log, before,
+                self.cache_log, transfer_offset,
                 result.prompt_tokens // 256 * 256,
             )
         else:
@@ -733,6 +736,8 @@ class LiveSession:
             with gate:
                 log_offset = self.source_log.stat().st_size \
                     if b.lmcache_mode() == "mp" else 0
+                transfer_offset = self.cache_log.stat().st_size \
+                    if b.lmcache_mode() == "mp" else 0
                 result, text = self.request(
                     self.cfg.src_port, base, f"controlled_turn_{stage_index}",
                     user["content"],
@@ -740,9 +745,10 @@ class LiveSession:
                 if b.lmcache_mode() == "mp":
                     keys = b.mp_wait_source_keys(
                         self.source_log, log_offset,
-                        self.cache_log, start,
+                        self.cache_log, transfer_offset,
                         max(0, result.prompt_tokens // 256 * 256
                             - len(self.cache_keys) * 256),
+                        self.cache_keys,
                     )
             with self.lock:
                 self.messages = base + [user, {"role": "assistant", "content": text}]

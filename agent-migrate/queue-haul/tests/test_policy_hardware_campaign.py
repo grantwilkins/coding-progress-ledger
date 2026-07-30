@@ -153,6 +153,10 @@ def test_prepared_job_is_self_locating_and_keeps_failures_visible(tmp_path):
     assert "--fail-fast" not in job
     assert '[[ -f "$QH_POLICY_RUN_ROOT/plan.json" ]]' in job
     assert (out / "run.sbatch").exists()
+    sbatch = (out / "run.sbatch").read_text()
+    assert "module load gcc/14.2.0 openblas/0.3.28 uv/0.8.4" in sbatch
+    assert "50e98f65de09ebfe196f270c8b5c595636853646eb5536dca92f27bd45c084ab" in sbatch
+    assert "QH_PORT_OFFSET" in sbatch
 
 
 def test_reduction_uses_common_epoch_and_keeps_failed_denominator(tmp_path):
