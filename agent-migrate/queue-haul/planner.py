@@ -504,11 +504,16 @@ def _solve_lp(solver: str, gains: np.ndarray, work: np.ndarray, valid: np.ndarra
     if (~valid).any():
         base.append(x[~valid] == 0)
 
+    best = None
+
     def solve(objective, constraints, maximize=False):
+        nonlocal best
         problem = cp.Problem(
             cp.Maximize(objective) if maximize else cp.Minimize(objective), constraints
         )
         problem.solve(solver=cp.CLARABEL)
+        if problem.status in (cp.OPTIMAL, cp.OPTIMAL_INACCURATE):
+            best = np.asarray(x.value).copy()
         return problem
 
     normalized_work = work @ x / max(work.max(), 1.0)
@@ -543,8 +548,10 @@ def _solve_lp(solver: str, gains: np.ndarray, work: np.ndarray, valid: np.ndarra
             else:
                 raise ValueError(f"unknown LP solver {solver!r}")
     if problem.status not in (cp.OPTIMAL, cp.OPTIMAL_INACCURATE):
-        raise RuntimeError(f"LP planner returned {problem.status}")
-    return np.asarray(x.value)
+        if best is None:
+            raise RuntimeError(f"LP planner returned {problem.status}")
+        return best
+    return best
 
 
 def _plan_lp(scenario: ExecutionScenario, profile: ModelProfile, routes: Routes,

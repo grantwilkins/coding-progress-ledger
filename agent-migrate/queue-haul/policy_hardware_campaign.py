@@ -712,6 +712,7 @@ def parse_args(argv=None):
     sub = parser.add_subparsers(dest="command", required=True)
     command = sub.add_parser("prepare")
     command.add_argument("--manifest", type=Path, default=DEFAULT_MANIFEST)
+    command.add_argument("--model-profile", type=Path, default=DEFAULT_MODEL)
     command.add_argument("--out", type=Path, required=True)
     command.add_argument("--episodes", type=int, default=2)
     command.add_argument("--sessions", type=int, default=8)
@@ -737,8 +738,8 @@ def main(argv=None):
     args = parse_args(argv)
     if args.command == "prepare":
         prepare(
-            args.manifest, args.out, episodes=args.episodes,
-            sessions=args.sessions, seed=args.seed,
+            args.manifest, args.out, model_path=args.model_profile,
+            episodes=args.episodes, sessions=args.sessions, seed=args.seed,
             bandwidth_mbps=args.bandwidth_mbps, deadline_s=args.deadline_s,
             bandwidths_mbps=args.bandwidths_mbps,
             workload_paths=args.workload_profiles,

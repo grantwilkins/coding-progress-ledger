@@ -87,6 +87,27 @@ def test_lp_objective_variants_have_the_stated_priority():
     assert peak[1] > 1 - 1e-5
 
 
+def test_lexicographic_lp_retains_last_feasible_stage(monkeypatch):
+    original, calls = planner.cp.Problem.solve, 0
+
+    def solve(problem, *args, **kwargs):
+        nonlocal calls
+        calls += 1
+        value = original(problem, *args, **kwargs)
+        if calls == 2:
+            problem._status = planner.cp.INFEASIBLE_INACCURATE
+        return value
+
+    monkeypatch.setattr(planner.cp.Problem, "solve", solve)
+    values = _solve_lp(
+        "lp_work_first", np.ones(2), np.ones(4), np.ones(4, bool),
+        csr_matrix([[1.0, 0.5, 1.0, 0.5]]), 1,
+    )
+
+    assert calls == 2
+    assert values is not None
+
+
 def test_old_lp_maximizes_power_when_target_is_infeasible():
     values = _solve_lp(
         "lp", np.array([2.0, 1.0]), np.ones(4), np.ones(4, bool),

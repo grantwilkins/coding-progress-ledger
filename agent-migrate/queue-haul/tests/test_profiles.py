@@ -20,7 +20,9 @@ from pathlib import Path
 
 import pytest
 
-from profiles import ModelProfile, WorkloadProfile
+from profiles import (
+    PROFILE_SCHEMA, WORKLOAD_SCHEMA, ModelProfile, WorkloadProfile,
+)
 
 
 def source(reference="run"):
@@ -160,11 +162,16 @@ def test_workload_sampling_preserves_complete_records(tmp_path):
 
 def test_checked_in_profiles_load_with_uncertainty_and_provenance():
     root = Path(__file__).parents[1] / "profiles"
-    model = ModelProfile.load(root / "gpt_oss_20b_a100_tp1.json")
-    workloads = [WorkloadProfile.load(path) for path in root.glob("*.json")
-                 if path.name != "gpt_oss_20b_a100_tp1.json"]
-    assert model.status == "estimated"
-    assert set(model.cases) == {"central", "faster", "slower"}
+    paths = list(root.glob("*.json"))
+    models = [ModelProfile.load(path) for path in paths
+              if json.loads(path.read_text()).get("schema") == PROFILE_SCHEMA]
+    workloads = [WorkloadProfile.load(path) for path in paths
+                 if json.loads(path.read_text()).get("schema") == WORKLOAD_SCHEMA]
+    assert len(models) >= 2
+    assert all(model.status == "estimated" for model in models)
+    assert all(set(model.cases) == {"central", "faster", "slower"}
+               for model in models)
+    model = models[0]
     assert model.sources["transitions"].kind == "assumed"
     assert {w.records[0].job_type for w in workloads} == {
         "interactive_coding", "coding", "agentic_tool_loop"

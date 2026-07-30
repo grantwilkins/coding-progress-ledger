@@ -167,7 +167,13 @@ starts at 3,473 tokens and must not be extrapolated to 2K. The completed 144/144
 crossover bundle is checksum-pinned under
 `outputs/policy-hardware-crossover-20260730/`. Replay is faster across the tested
 range at 1/2.5 Gbit/s, through 8K at 5 Gbit/s, and through 4K at 10 Gbit/s; the
-8K 10-Gbit/s cell is effectively tied.
+8K 10-Gbit/s cell is effectively tied. The derived profile
+`profiles/gpt_oss_20b_a100_tp1_crossover.json` replaces serial replay rate,
+replay/KV completion, KV ingestion lower bound, and route-switch timing while
+preserving the existing catch-up, power, and capacity evidence. The pinned
+`outputs/policy-hardware-width8-packing-plan/` runs three paired width-8 episodes
+for Tiny, Small, Medium, Mixed, and Large packs at 1/2.5/5/10 Gbit/s and 19/30-s
+requirements: 600 scenarios in total.
 `canonical_simulator_campaign.py` runs a four-target paired 10K-session
 Queue-Haul, greedy, per-session-fastest, replay-only, and KV-only comparison
 under one assumed dedicated-pool contract. Its compact 10K/100K/1M scale check

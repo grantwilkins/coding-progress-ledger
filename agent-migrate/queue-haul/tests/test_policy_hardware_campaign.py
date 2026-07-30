@@ -210,6 +210,14 @@ def test_isolated_fastest_chooses_per_session_then_orders_by_chosen_duration(
     ]
 
 
+def test_prepare_cli_accepts_frozen_model_profile(tmp_path):
+    args = campaign.parse_args([
+        "prepare", "--out", str(tmp_path),
+        "--model-profile", str(campaign.DEFAULT_MODEL),
+    ])
+    assert args.model_profile == campaign.DEFAULT_MODEL
+
+
 def test_prepared_job_is_self_locating_and_keeps_failures_visible(tmp_path):
     out = tmp_path / "queue-haul/outputs/policy"
     prepare(manifest(tmp_path), out, episodes=1, sessions=4)
