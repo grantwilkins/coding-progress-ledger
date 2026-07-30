@@ -1358,6 +1358,8 @@ def run_scenario(stack: b.Stack, cfg: b.Config, manifest: dict, scenario: dict,
             sleep_end = time.monotonic_ns()
             sleep_times = [sleep_start, sleep_end]
             event_log.write("source_sleep", start_ns=sleep_start, end_ns=sleep_end)
+        continuation_offset = cache_log.stat().st_size \
+            if b.lmcache_mode() == "mp" else 0
         continuations = []
         for item in sorted(scenario["sessions"], key=lambda row: row["order"]):
             session = sessions[item["session_id"]]
@@ -1367,6 +1369,11 @@ def run_scenario(stack: b.Stack, cfg: b.Config, manifest: dict, scenario: dict,
             committed_hash = messages_hash(session.messages)
             request = session.continuation()
             continuations.append({"session_id": session.session_id, "route_port": session.route, "committed_context_hash": committed_hash, **asdict(request)})
+        if b.lmcache_mode() == "mp":
+            b.mp_wait_transfers(
+                cache_log, continuation_offset, "SET",
+                sum(row["prompt_tokens"] // 256 for row in continuations),
+            )
         activities = []
         for session in sessions.values():
             move_result = next((row for row in migration_results if row.move.session_id == session.session_id), None)

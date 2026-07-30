@@ -1101,6 +1101,23 @@ def mp_source_keys(path: Path, offset: int) -> set[str]:
         return {row["key_hashes"] for row in rows if row["command"] == "SET"}
 
 
+def mp_wait_transfers(path: Path, offset: int, command: str, expected: int) -> None:
+    deadline = time.monotonic() + 600
+    while time.monotonic() < deadline:
+        with path.open() as handle:
+            fields = next(csv.reader(handle))
+        with path.open("rb") as handle:
+            handle.seek(offset)
+            rows = csv.DictReader(io.StringIO(handle.read().decode()), fieldnames=fields)
+            count = sum(row["command"] == command for row in rows)
+        if count == expected:
+            return
+        if count > expected:
+            raise RuntimeError(f"LMCache completed {count} {command}s, expected {expected}")
+        time.sleep(.05)
+    raise TimeoutError(f"LMCache completed fewer than {expected} {command}s")
+
+
 def mp_wait_stored(log: Path, offset: int, tokens: int) -> None:
     deadline = time.monotonic() + 30
     while time.monotonic() < deadline:
