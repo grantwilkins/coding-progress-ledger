@@ -14,7 +14,7 @@ Plausible wrong implementations:
 - Append cleanup migrations that were outside the deadline-admitted set.
 - Normalize attained shed by admitted sessions instead of all source sessions.
 - Resample workloads by policy/budget or count repeated plan cells as variation.
-- Aggregate raw completion points into a median or one point per budget.
+- Retain dominated or repeated points in a displayed Pareto envelope.
 """
 
 import json
@@ -25,7 +25,7 @@ from simulated_pareto_campaign import (
     admitted_moves, aggregate_planning_profile, context_evidence,
     frontier_metrics, full_attainment_cdf, measured_kv_caps,
     measured_replay_caps, meets_deadline, parallel_profile, pareto_flags,
-    policy_coordinates, shared_kv_profile, workload_grid,
+    frontier_coordinates, shared_kv_profile, unique_coordinates, workload_grid,
 )
 from policy_hardware_campaign import _moves, _problem
 from simulate import PlannedMove
@@ -128,18 +128,20 @@ def test_workload_grid_deduplicates_samples_and_crosses_same_bandwidths():
     ]
 
 
-def test_raw_plot_coordinates_keep_every_completion():
+def test_fan_keeps_unique_sweep_and_removes_dominated_frontier_points():
     rows = [
-        {"policy": "queue_haul", "power_attainment_fraction": .5,
-         "completion_s": 7, "completion_budget_ratio": .7},
-        {"policy": "queue_haul", "power_attainment_fraction": .8,
-         "completion_s": 11, "completion_budget_ratio": .55},
-        {"policy": "greedy", "power_attainment_fraction": 1,
-         "completion_s": 3, "completion_budget_ratio": .1},
+        {"time_budget_s": 10, "power_attainment_fraction": .5,
+         "completion_s": 5},
+        {"time_budget_s": 20, "power_attainment_fraction": .5,
+         "completion_s": 5},
+        {"time_budget_s": 30, "power_attainment_fraction": .7,
+         "completion_s": 9},
+        {"time_budget_s": 40, "power_attainment_fraction": .8,
+         "completion_s": 8},
     ]
 
-    assert policy_coordinates(rows, "queue_haul", False) == ([50, 80], [7, 11])
-    assert policy_coordinates(rows, "queue_haul", True) == ([50, 80], [.7, .55])
+    assert unique_coordinates(rows) == [(.5, 5), (.7, 9), (.8, 8)]
+    assert frontier_coordinates(rows) == [(.5, 5), (.8, 8)]
 
 
 def test_width8_contract_does_not_silently_serialize_destination(tmp_path):

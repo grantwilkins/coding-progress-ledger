@@ -382,56 +382,80 @@ def full_attainment_cdf(rows, policy, threshold=.99):
         if values else np.array([])
 
 
-def policy_coordinates(rows, policy, normalized):
-    selected = [row for row in rows if row["policy"] == policy]
-    return (
-        [100 * row["power_attainment_fraction"] for row in selected],
-        [row["completion_budget_ratio" if normalized else "completion_s"]
-         for row in selected],
+def unique_coordinates(rows):
+    points = []
+    for row in sorted(rows, key=lambda item: item["time_budget_s"]):
+        point = row["power_attainment_fraction"], row["completion_s"]
+        if point not in points:
+            points.append(point)
+    return points
+
+
+def frontier_coordinates(rows):
+    points = unique_coordinates(rows)
+    return sorted(
+        point for point in points
+        if not any(
+            other[0] >= point[0] and other[1] <= point[1] and other != point
+            for other in points
+        )
     )
 
 
 def plot(rows, out):
     colors = dict(zip(POLICIES, plt.get_cmap("tab10").colors))
-    markers = dict(zip(POLICIES, ("o", "s", "^", "D", "x")))
-    fig, axes = plt.subplots(1, 2, figsize=(12, 5.5))
-    cloud, raw = axes
-    for policy in (*POLICIES[1:], POLICIES[0]):
-        style = {
-            "s": 26, "alpha": .6, "facecolors": "none",
-            "edgecolors": colors[policy], "linewidths": 1, "zorder": 4,
-        } if policy == "queue_haul" else {
-            "s": 18, "alpha": .3, "color": colors[policy],
-        }
-        for axis, normalized in ((cloud, True), (raw, False)):
-            axis.scatter(
-                *policy_coordinates(rows, policy, normalized),
-                marker=markers[policy], label=LABELS[policy], **style,
+    bandwidths = sorted({row["bandwidth_mbps"] for row in rows})
+    samples = sorted({row["sample_id"] for row in rows})
+    fig, axes = plt.subplots(2, 2, figsize=(12, 9), sharex=True)
+    for panel, (axis, bandwidth) in enumerate(zip(axes.flat, bandwidths)):
+        for policy in POLICIES:
+            for index, sample in enumerate(samples):
+                selected = [
+                    row for row in rows
+                    if row["bandwidth_mbps"] == bandwidth
+                    and row["sample_id"] == sample and row["policy"] == policy
+                ]
+                sweep = unique_coordinates(selected)
+                frontier = frontier_coordinates(selected)
+                label = LABELS[policy] if panel == 0 and index == 0 else None
+                axis.plot(
+                    [100 * point[0] for point in sweep],
+                    [point[1] for point in sweep],
+                    color=colors[policy], alpha=.08, linewidth=.6,
+                )
+                axis.plot(
+                    [100 * point[0] for point in frontier],
+                    [point[1] for point in frontier],
+                    color=colors[policy],
+                    alpha=.55 if policy == "queue_haul" else .25,
+                    linewidth=1.4 if policy == "queue_haul" else .8,
+                    marker=".", markersize=3, label=label,
+                )
+        for index, sample in enumerate(samples):
+            frontier = frontier_coordinates([
+                row for row in rows
+                if row["bandwidth_mbps"] == bandwidth
+                and row["sample_id"] == sample
+            ])
+            axis.plot(
+                [100 * point[0] for point in frontier],
+                [point[1] for point in frontier],
+                color=".15", alpha=.3, linewidth=1, linestyle="--",
+                label="Matched frontier" if panel == 0 and index == 0 else None,
             )
-    cloud.axhline(1, color="0.35", linestyle=":", linewidth=1)
-    cloud.set(
-        title="Matched scenario–budget outcomes",
-        xlabel="Modeled maximum source-power shed by deadline (%)",
-        ylabel="Admitted-set completion / time budget",
-        xlim=(-2, 102),
+        axis.set(title=f"{bandwidth / 1000:g} Gbit/s", xlim=(-2, 102))
+        axis.grid(alpha=.2)
+    fig.supxlabel("Modeled maximum source-power shed by deadline (%)", y=.055)
+    fig.supylabel("Admitted-set completion (s)")
+    handles, labels = axes.flat[0].get_legend_handles_labels()
+    fig.legend(handles, labels, loc="upper center", frameon=False, ncol=5)
+    fig.text(
+        .5, .018,
+        "One fan per workload and policy; faint lines retain all unique deadline "
+        "outcomes; darker segments are nondominated; exact repeats collapsed",
+        ha="center", fontsize=9,
     )
-    cloud.grid(alpha=.2)
-    raw.set(
-        title="All admitted-set completions",
-        xlabel="Modeled maximum source-power shed by deadline (%)",
-        ylabel="Admitted-set completion (s)",
-        xlim=(-2, 102),
-    )
-    raw.grid(alpha=.2)
-    handles, labels = cloud.get_legend_handles_labels()
-    fig.legend(handles, labels, loc="upper center", frameon=False, ncol=3)
-    cloud.text(
-        .01, .01,
-        "2/4/8/16/24/32K replay anchors; fixed anchors + measured workload mixes\n"
-        "non-anchor rates interpolated; action power extrapolated; power modeled",
-        transform=cloud.transAxes, fontsize=8, va="bottom",
-    )
-    fig.tight_layout(rect=(0, 0, 1, .82))
+    fig.tight_layout(rect=(.02, .09, 1, .93))
     for suffix in ("png", "pdf"):
         fig.savefig(out / f"simulated_width8_pareto.{suffix}", dpi=220)
     plt.close(fig)
@@ -456,7 +480,8 @@ def run(plan_path=DEFAULT_PLAN, model_path=DEFAULT_MODEL,
         "axes": {
             "x": "deadline-integrated source-power shed / removable power",
             "y": "last admitted route commit time",
-            "raw_panel": "one point per matched scenario-budget-policy result",
+            "fan": "one deadline sweep per workload, bandwidth, and policy",
+            "display": "all unique outcomes faint; nondominated segments emphasized",
         },
         "policies": list(POLICIES),
         "scenarios": len(rows),
