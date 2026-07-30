@@ -13,7 +13,7 @@ Plausible wrong implementations:
 - Condition completion curves only on successful migrations.
 - Pair continuation TTFT with a control from another episode.
 - Stretch every timing metric to the campaign deadline instead of its data.
-- Compare unpaired policies or aggregate source power once per migration.
+- Omit the fixed-method controls or aggregate source power once per migration.
 """
 
 import json
@@ -242,6 +242,7 @@ def test_plot_pairs_qh_with_greedy_at_metric_and_episode_levels(
          "migration_ttft_s": ttft, "reaction_commit_s": commit}
         for policy, ready, ttft, commit in (
             ("queue_haul", 10, 1, 11), ("greedy", 9, 2, 12),
+            ("kv_only", 11, 3, 14), ("replay_only", 12, 4, 16),
             ("random", 100, 100, 100),
         )
     ]
@@ -249,7 +250,8 @@ def test_plot_pairs_qh_with_greedy_at_metric_and_episode_levels(
         {"policy": policy, "planned_migrations": 1, "deadline_s": 180,
          "realized_source_power_drop_w": power}
         for policy, power in (
-            ("queue_haul", 300), ("greedy", 200), ("random", 400),
+            ("queue_haul", 300), ("greedy", 200),
+            ("kv_only", 250), ("replay_only", 150), ("random", 400),
         )
     ]
     monkeypatch.setattr(campaign.plt, "close", lambda _: None)
@@ -259,9 +261,10 @@ def test_plot_pairs_qh_with_greedy_at_metric_and_episode_levels(
     figure = campaign.plt.gcf()
     assert [text.get_text() for text in figure.legends[0].texts] == [
         campaign.LABELS["queue_haul"], campaign.LABELS["greedy"],
+        campaign.LABELS["kv_only"], campaign.LABELS["replay_only"],
     ]
-    assert len(figure.axes[1].lines) == 2
+    assert len(figure.axes[1].lines) == 4
     assert figure.axes[1].get_xlim()[1] < 5
     assert {
         tuple(line.get_xdata()) for line in figure.axes[3].lines
-    } == {(300,), (200,)}
+    } == {(300,), (200,), (250,), (150,)}

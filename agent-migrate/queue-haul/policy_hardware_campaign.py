@@ -458,7 +458,8 @@ def plot(rows, summaries, out, cohort=None):
     colors = dict(zip(POLICIES, plt.get_cmap("tab10").colors))
     fig, axes = plt.subplots(2, 2, figsize=(9, 6.5))
     axes = axes.ravel()
-    policies = [policy for policy in ("queue_haul", "greedy")
+    policies = [policy for policy in
+                ("queue_haul", "greedy", "kv_only", "replay_only")
                 if any(row["policy"] == policy for row in summaries)]
     for policy in policies:
         for ax, field in zip(
