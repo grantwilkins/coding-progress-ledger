@@ -1,0 +1,5787 @@
+{
+  "bandwidths_mbps": [
+    1000.0,
+    2500.0,
+    5000.0,
+    10000.0
+  ],
+  "campaign": "serial_crossover",
+  "contexts": [
+    2048,
+    4096,
+    8192,
+    16384,
+    24576,
+    32768
+  ],
+  "manifest": {
+    "path": "queue-haul/outputs/coding-manifest.json",
+    "sha256": "faf321a6eab01f7f36c325dbd6e725d43b72cdffefd7ee060ef6f7cef20f1435"
+  },
+  "repeats": 3,
+  "scenarios": [
+    {
+      "activity": "none",
+      "activity_tokens": 0,
+      "bandwidth_mbps": 10000.0,
+      "campaign": "serial_crossover",
+      "concurrency": 1,
+      "context_size": 32768,
+      "copy_policy": "initial_final",
+      "deadline_s": 180,
+      "final_state": "awake",
+      "kind": "migration",
+      "match_id": "dff88bf91e4bc43a",
+      "method": "replay",
+      "move_concurrency": 1,
+      "moves": [
+        {
+          "initial_tokens": 32576,
+          "job_class": "coding",
+          "method": "replay",
+          "order": 0,
+          "session_id": "codex:e381cc89-38ef-e67e-79b9-4b800369b4f5",
+          "turn_index": 0
+        }
+      ],
+      "repeat": 0,
+      "request_schedule": [],
+      "sample_id": "787bde33093bc8a8",
+      "scenario_id": "x-2c824e02f9af796d",
+      "serving_concurrency": 1,
+      "sessions": [
+        {
+          "initial_tokens": 32576,
+          "job_class": "coding",
+          "order": 0,
+          "session_id": "codex:e381cc89-38ef-e67e-79b9-4b800369b4f5",
+          "turn_index": 0
+        }
+      ],
+      "smoke": true,
+      "split": "train"
+    },
+    {
+      "activity": "none",
+      "activity_tokens": 0,
+      "bandwidth_mbps": 10000.0,
+      "campaign": "serial_crossover",
+      "concurrency": 1,
+      "context_size": 24576,
+      "copy_policy": "initial_final",
+      "deadline_s": 180,
+      "final_state": "awake",
+      "kind": "migration",
+      "match_id": "47dc28bf6c8b0ab8",
+      "method": "replay",
+      "move_concurrency": 1,
+      "moves": [
+        {
+          "initial_tokens": 24384,
+          "job_class": "coding",
+          "method": "replay",
+          "order": 0,
+          "session_id": "codex:1229e212-7c9e-fc46-e948-4c87690d9e5e",
+          "turn_index": 0
+        }
+      ],
+      "repeat": 2,
+      "request_schedule": [],
+      "sample_id": "9b168db2bf033de8",
+      "scenario_id": "x-930d46c32aff2712",
+      "serving_concurrency": 1,
+      "sessions": [
+        {
+          "initial_tokens": 24384,
+          "job_class": "coding",
+          "order": 0,
+          "session_id": "codex:1229e212-7c9e-fc46-e948-4c87690d9e5e",
+          "turn_index": 0
+        }
+      ],
+      "split": "validation"
+    },
+    {
+      "activity": "none",
+      "activity_tokens": 0,
+      "bandwidth_mbps": 10000.0,
+      "campaign": "serial_crossover",
+      "concurrency": 1,
+      "context_size": 24576,
+      "copy_policy": "initial_final",
+      "deadline_s": 180,
+      "final_state": "awake",
+      "kind": "migration",
+      "match_id": "47dc28bf6c8b0ab8",
+      "method": "kv_transfer",
+      "move_concurrency": 1,
+      "moves": [
+        {
+          "initial_tokens": 24384,
+          "job_class": "coding",
+          "method": "kv_transfer",
+          "order": 0,
+          "session_id": "codex:1229e212-7c9e-fc46-e948-4c87690d9e5e",
+          "turn_index": 0
+        }
+      ],
+      "repeat": 2,
+      "request_schedule": [],
+      "sample_id": "9b168db2bf033de8",
+      "scenario_id": "x-293c5ba656ed6869",
+      "serving_concurrency": 1,
+      "sessions": [
+        {
+          "initial_tokens": 24384,
+          "job_class": "coding",
+          "order": 0,
+          "session_id": "codex:1229e212-7c9e-fc46-e948-4c87690d9e5e",
+          "turn_index": 0
+        }
+      ],
+      "split": "validation"
+    },
+    {
+      "activity": "none",
+      "activity_tokens": 0,
+      "bandwidth_mbps": 10000.0,
+      "campaign": "serial_crossover",
+      "concurrency": 1,
+      "context_size": 2048,
+      "copy_policy": "initial_final",
+      "deadline_s": 180,
+      "final_state": "awake",
+      "kind": "migration",
+      "match_id": "ea4d423c0823f348",
+      "method": "replay",
+      "move_concurrency": 1,
+      "moves": [
+        {
+          "initial_tokens": 1856,
+          "job_class": "coding",
+          "method": "replay",
+          "order": 0,
+          "session_id": "claude:eaad8d63-63bf-7139-f930-0ef47fa45253",
+          "turn_index": 0
+        }
+      ],
+      "repeat": 0,
+      "request_schedule": [],
+      "sample_id": "1782a8161d03f141",
+      "scenario_id": "x-dc0385ed877caac4",
+      "serving_concurrency": 1,
+      "sessions": [
+        {
+          "initial_tokens": 1856,
+          "job_class": "coding",
+          "order": 0,
+          "session_id": "claude:eaad8d63-63bf-7139-f930-0ef47fa45253",
+          "turn_index": 0
+        }
+      ],
+      "split": "train"
+    },
+    {
+      "activity": "none",
+      "activity_tokens": 0,
+      "bandwidth_mbps": 10000.0,
+      "campaign": "serial_crossover",
+      "concurrency": 1,
+      "context_size": 2048,
+      "copy_policy": "initial_final",
+      "deadline_s": 180,
+      "final_state": "awake",
+      "kind": "migration",
+      "match_id": "ea4d423c0823f348",
+      "method": "kv_transfer",
+      "move_concurrency": 1,
+      "moves": [
+        {
+          "initial_tokens": 1856,
+          "job_class": "coding",
+          "method": "kv_transfer",
+          "order": 0,
+          "session_id": "claude:eaad8d63-63bf-7139-f930-0ef47fa45253",
+          "turn_index": 0
+        }
+      ],
+      "repeat": 0,
+      "request_schedule": [],
+      "sample_id": "1782a8161d03f141",
+      "scenario_id": "x-b193c6d3f1e9a497",
+      "serving_concurrency": 1,
+      "sessions": [
+        {
+          "initial_tokens": 1856,
+          "job_class": "coding",
+          "order": 0,
+          "session_id": "claude:eaad8d63-63bf-7139-f930-0ef47fa45253",
+          "turn_index": 0
+        }
+      ],
+      "split": "train"
+    },
+    {
+      "activity": "none",
+      "activity_tokens": 0,
+      "bandwidth_mbps": 10000.0,
+      "campaign": "serial_crossover",
+      "concurrency": 1,
+      "context_size": 2048,
+      "copy_policy": "initial_final",
+      "deadline_s": 180,
+      "final_state": "awake",
+      "kind": "migration",
+      "match_id": "5177d80aaed6d6d1",
+      "method": "kv_transfer",
+      "move_concurrency": 1,
+      "moves": [
+        {
+          "initial_tokens": 1856,
+          "job_class": "coding",
+          "method": "kv_transfer",
+          "order": 0,
+          "session_id": "claude:e2fd4f89-016f-29f0-48a1-3b2f1991b287",
+          "turn_index": 0
+        }
+      ],
+      "repeat": 2,
+      "request_schedule": [],
+      "sample_id": "aac22fd822b762d1",
+      "scenario_id": "x-44812b074dfdb971",
+      "serving_concurrency": 1,
+      "sessions": [
+        {
+          "initial_tokens": 1856,
+          "job_class": "coding",
+          "order": 0,
+          "session_id": "claude:e2fd4f89-016f-29f0-48a1-3b2f1991b287",
+          "turn_index": 0
+        }
+      ],
+      "split": "validation"
+    },
+    {
+      "activity": "none",
+      "activity_tokens": 0,
+      "bandwidth_mbps": 10000.0,
+      "campaign": "serial_crossover",
+      "concurrency": 1,
+      "context_size": 2048,
+      "copy_policy": "initial_final",
+      "deadline_s": 180,
+      "final_state": "awake",
+      "kind": "migration",
+      "match_id": "5177d80aaed6d6d1",
+      "method": "replay",
+      "move_concurrency": 1,
+      "moves": [
+        {
+          "initial_tokens": 1856,
+          "job_class": "coding",
+          "method": "replay",
+          "order": 0,
+          "session_id": "claude:e2fd4f89-016f-29f0-48a1-3b2f1991b287",
+          "turn_index": 0
+        }
+      ],
+      "repeat": 2,
+      "request_schedule": [],
+      "sample_id": "aac22fd822b762d1",
+      "scenario_id": "x-98c4a5113231441d",
+      "serving_concurrency": 1,
+      "sessions": [
+        {
+          "initial_tokens": 1856,
+          "job_class": "coding",
+          "order": 0,
+          "session_id": "claude:e2fd4f89-016f-29f0-48a1-3b2f1991b287",
+          "turn_index": 0
+        }
+      ],
+      "split": "validation"
+    },
+    {
+      "activity": "none",
+      "activity_tokens": 0,
+      "bandwidth_mbps": 10000.0,
+      "campaign": "serial_crossover",
+      "concurrency": 1,
+      "context_size": 8192,
+      "copy_policy": "initial_final",
+      "deadline_s": 180,
+      "final_state": "awake",
+      "kind": "migration",
+      "match_id": "0cb36a321f02edac",
+      "method": "replay",
+      "move_concurrency": 1,
+      "moves": [
+        {
+          "initial_tokens": 8000,
+          "job_class": "coding",
+          "method": "replay",
+          "order": 0,
+          "session_id": "claude:1534babd-9b9e-68e0-057e-d9ce7e08adf0",
+          "turn_index": 0
+        }
+      ],
+      "repeat": 0,
+      "request_schedule": [],
+      "sample_id": "4cce1c9609535161",
+      "scenario_id": "x-9cb03a900250ff25",
+      "serving_concurrency": 1,
+      "sessions": [
+        {
+          "initial_tokens": 8000,
+          "job_class": "coding",
+          "order": 0,
+          "session_id": "claude:1534babd-9b9e-68e0-057e-d9ce7e08adf0",
+          "turn_index": 0
+        }
+      ],
+      "split": "train"
+    },
+    {
+      "activity": "none",
+      "activity_tokens": 0,
+      "bandwidth_mbps": 10000.0,
+      "campaign": "serial_crossover",
+      "concurrency": 1,
+      "context_size": 8192,
+      "copy_policy": "initial_final",
+      "deadline_s": 180,
+      "final_state": "awake",
+      "kind": "migration",
+      "match_id": "0cb36a321f02edac",
+      "method": "kv_transfer",
+      "move_concurrency": 1,
+      "moves": [
+        {
+          "initial_tokens": 8000,
+          "job_class": "coding",
+          "method": "kv_transfer",
+          "order": 0,
+          "session_id": "claude:1534babd-9b9e-68e0-057e-d9ce7e08adf0",
+          "turn_index": 0
+        }
+      ],
+      "repeat": 0,
+      "request_schedule": [],
+      "sample_id": "4cce1c9609535161",
+      "scenario_id": "x-86282ab9f8bf9fa3",
+      "serving_concurrency": 1,
+      "sessions": [
+        {
+          "initial_tokens": 8000,
+          "job_class": "coding",
+          "order": 0,
+          "session_id": "claude:1534babd-9b9e-68e0-057e-d9ce7e08adf0",
+          "turn_index": 0
+        }
+      ],
+      "split": "train"
+    },
+    {
+      "activity": "none",
+      "activity_tokens": 0,
+      "bandwidth_mbps": 10000.0,
+      "campaign": "serial_crossover",
+      "concurrency": 1,
+      "context_size": 16384,
+      "copy_policy": "initial_final",
+      "deadline_s": 180,
+      "final_state": "awake",
+      "kind": "migration",
+      "match_id": "53965cdf725268e9",
+      "method": "replay",
+      "move_concurrency": 1,
+      "moves": [
+        {
+          "initial_tokens": 16192,
+          "job_class": "coding",
+          "method": "replay",
+          "order": 0,
+          "session_id": "codex:2604c640-6bc9-2d90-5a8b-ae20bc5081fa",
+          "turn_index": 0
+        }
+      ],
+      "repeat": 2,
+      "request_schedule": [],
+      "sample_id": "775f1820faa8d8de",
+      "scenario_id": "x-dcaf0ba84bef406c",
+      "serving_concurrency": 1,
+      "sessions": [
+        {
+          "initial_tokens": 16192,
+          "job_class": "coding",
+          "order": 0,
+          "session_id": "codex:2604c640-6bc9-2d90-5a8b-ae20bc5081fa",
+          "turn_index": 0
+        }
+      ],
+      "split": "validation"
+    },
+    {
+      "activity": "none",
+      "activity_tokens": 0,
+      "bandwidth_mbps": 10000.0,
+      "campaign": "serial_crossover",
+      "concurrency": 1,
+      "context_size": 16384,
+      "copy_policy": "initial_final",
+      "deadline_s": 180,
+      "final_state": "awake",
+      "kind": "migration",
+      "match_id": "53965cdf725268e9",
+      "method": "kv_transfer",
+      "move_concurrency": 1,
+      "moves": [
+        {
+          "initial_tokens": 16192,
+          "job_class": "coding",
+          "method": "kv_transfer",
+          "order": 0,
+          "session_id": "codex:2604c640-6bc9-2d90-5a8b-ae20bc5081fa",
+          "turn_index": 0
+        }
+      ],
+      "repeat": 2,
+      "request_schedule": [],
+      "sample_id": "775f1820faa8d8de",
+      "scenario_id": "x-795ce6f2f59e9b30",
+      "serving_concurrency": 1,
+      "sessions": [
+        {
+          "initial_tokens": 16192,
+          "job_class": "coding",
+          "order": 0,
+          "session_id": "codex:2604c640-6bc9-2d90-5a8b-ae20bc5081fa",
+          "turn_index": 0
+        }
+      ],
+      "split": "validation"
+    },
+    {
+      "activity": "none",
+      "activity_tokens": 0,
+      "bandwidth_mbps": 10000.0,
+      "campaign": "serial_crossover",
+      "concurrency": 1,
+      "context_size": 4096,
+      "copy_policy": "initial_final",
+      "deadline_s": 180,
+      "final_state": "awake",
+      "kind": "migration",
+      "match_id": "5bb27f1a108b87da",
+      "method": "kv_transfer",
+      "move_concurrency": 1,
+      "moves": [
+        {
+          "initial_tokens": 3904,
+          "job_class": "coding",
+          "method": "kv_transfer",
+          "order": 0,
+          "session_id": "claude:eaad8d63-63bf-7139-f930-0ef47fa45253",
+          "turn_index": 0
+        }
+      ],
+      "repeat": 1,
+      "request_schedule": [],
+      "sample_id": "01498eca3f115870",
+      "scenario_id": "x-d098a09d848cf480",
+      "serving_concurrency": 1,
+      "sessions": [
+        {
+          "initial_tokens": 3904,
+          "job_class": "coding",
+          "order": 0,
+          "session_id": "claude:eaad8d63-63bf-7139-f930-0ef47fa45253",
+          "turn_index": 0
+        }
+      ],
+      "split": "train"
+    },
+    {
+      "activity": "none",
+      "activity_tokens": 0,
+      "bandwidth_mbps": 10000.0,
+      "campaign": "serial_crossover",
+      "concurrency": 1,
+      "context_size": 4096,
+      "copy_policy": "initial_final",
+      "deadline_s": 180,
+      "final_state": "awake",
+      "kind": "migration",
+      "match_id": "5bb27f1a108b87da",
+      "method": "replay",
+      "move_concurrency": 1,
+      "moves": [
+        {
+          "initial_tokens": 3904,
+          "job_class": "coding",
+          "method": "replay",
+          "order": 0,
+          "session_id": "claude:eaad8d63-63bf-7139-f930-0ef47fa45253",
+          "turn_index": 0
+        }
+      ],
+      "repeat": 1,
+      "request_schedule": [],
+      "sample_id": "01498eca3f115870",
+      "scenario_id": "x-4c86a64f6d12d09a",
+      "serving_concurrency": 1,
+      "sessions": [
+        {
+          "initial_tokens": 3904,
+          "job_class": "coding",
+          "order": 0,
+          "session_id": "claude:eaad8d63-63bf-7139-f930-0ef47fa45253",
+          "turn_index": 0
+        }
+      ],
+      "split": "train"
+    },
+    {
+      "activity": "none",
+      "activity_tokens": 0,
+      "bandwidth_mbps": 10000.0,
+      "campaign": "serial_crossover",
+      "concurrency": 1,
+      "context_size": 8192,
+      "copy_policy": "initial_final",
+      "deadline_s": 180,
+      "final_state": "awake",
+      "kind": "migration",
+      "match_id": "1649f6fe9fe15118",
+      "method": "kv_transfer",
+      "move_concurrency": 1,
+      "moves": [
+        {
+          "initial_tokens": 8000,
+          "job_class": "coding",
+          "method": "kv_transfer",
+          "order": 0,
+          "session_id": "claude:e2fd4f89-016f-29f0-48a1-3b2f1991b287",
+          "turn_index": 0
+        }
+      ],
+      "repeat": 1,
+      "request_schedule": [],
+      "sample_id": "9824ab1584b16e99",
+      "scenario_id": "x-f498110694eaef73",
+      "serving_concurrency": 1,
+      "sessions": [
+        {
+          "initial_tokens": 8000,
+          "job_class": "coding",
+          "order": 0,
+          "session_id": "claude:e2fd4f89-016f-29f0-48a1-3b2f1991b287",
+          "turn_index": 0
+        }
+      ],
+      "split": "train"
+    },
+    {
+      "activity": "none",
+      "activity_tokens": 0,
+      "bandwidth_mbps": 10000.0,
+      "campaign": "serial_crossover",
+      "concurrency": 1,
+      "context_size": 8192,
+      "copy_policy": "initial_final",
+      "deadline_s": 180,
+      "final_state": "awake",
+      "kind": "migration",
+      "match_id": "1649f6fe9fe15118",
+      "method": "replay",
+      "move_concurrency": 1,
+      "moves": [
+        {
+          "initial_tokens": 8000,
+          "job_class": "coding",
+          "method": "replay",
+          "order": 0,
+          "session_id": "claude:e2fd4f89-016f-29f0-48a1-3b2f1991b287",
+          "turn_index": 0
+        }
+      ],
+      "repeat": 1,
+      "request_schedule": [],
+      "sample_id": "9824ab1584b16e99",
+      "scenario_id": "x-8f3022f3b0b7fe54",
+      "serving_concurrency": 1,
+      "sessions": [
+        {
+          "initial_tokens": 8000,
+          "job_class": "coding",
+          "order": 0,
+          "session_id": "claude:e2fd4f89-016f-29f0-48a1-3b2f1991b287",
+          "turn_index": 0
+        }
+      ],
+      "split": "train"
+    },
+    {
+      "activity": "none",
+      "activity_tokens": 0,
+      "bandwidth_mbps": 10000.0,
+      "campaign": "serial_crossover",
+      "concurrency": 1,
+      "context_size": 24576,
+      "copy_policy": "initial_final",
+      "deadline_s": 180,
+      "final_state": "awake",
+      "kind": "migration",
+      "match_id": "17172c86a6860712",
+      "method": "kv_transfer",
+      "move_concurrency": 1,
+      "moves": [
+        {
+          "initial_tokens": 24384,
+          "job_class": "coding",
+          "method": "kv_transfer",
+          "order": 0,
+          "session_id": "claude:eaad8d63-63bf-7139-f930-0ef47fa45253",
+          "turn_index": 0
+        }
+      ],
+      "repeat": 0,
+      "request_schedule": [],
+      "sample_id": "2ff1c9736ff1695a",
+      "scenario_id": "x-a7712660a716d710",
+      "serving_concurrency": 1,
+      "sessions": [
+        {
+          "initial_tokens": 24384,
+          "job_class": "coding",
+          "order": 0,
+          "session_id": "claude:eaad8d63-63bf-7139-f930-0ef47fa45253",
+          "turn_index": 0
+        }
+      ],
+      "split": "train"
+    },
+    {
+      "activity": "none",
+      "activity_tokens": 0,
+      "bandwidth_mbps": 10000.0,
+      "campaign": "serial_crossover",
+      "concurrency": 1,
+      "context_size": 24576,
+      "copy_policy": "initial_final",
+      "deadline_s": 180,
+      "final_state": "awake",
+      "kind": "migration",
+      "match_id": "17172c86a6860712",
+      "method": "replay",
+      "move_concurrency": 1,
+      "moves": [
+        {
+          "initial_tokens": 24384,
+          "job_class": "coding",
+          "method": "replay",
+          "order": 0,
+          "session_id": "claude:eaad8d63-63bf-7139-f930-0ef47fa45253",
+          "turn_index": 0
+        }
+      ],
+      "repeat": 0,
+      "request_schedule": [],
+      "sample_id": "2ff1c9736ff1695a",
+      "scenario_id": "x-5fc7aada2183be6b",
+      "serving_concurrency": 1,
+      "sessions": [
+        {
+          "initial_tokens": 24384,
+          "job_class": "coding",
+          "order": 0,
+          "session_id": "claude:eaad8d63-63bf-7139-f930-0ef47fa45253",
+          "turn_index": 0
+        }
+      ],
+      "split": "train"
+    },
+    {
+      "activity": "none",
+      "activity_tokens": 0,
+      "bandwidth_mbps": 10000.0,
+      "campaign": "serial_crossover",
+      "concurrency": 1,
+      "context_size": 2048,
+      "copy_policy": "initial_final",
+      "deadline_s": 180,
+      "final_state": "awake",
+      "kind": "migration",
+      "match_id": "8a8f9306bc18d7e6",
+      "method": "replay",
+      "move_concurrency": 1,
+      "moves": [
+        {
+          "initial_tokens": 1856,
+          "job_class": "coding",
+          "method": "replay",
+          "order": 0,
+          "session_id": "claude:92cc24b6-ac8d-5231-bb2d-33b876557766",
+          "turn_index": 0
+        }
+      ],
+      "repeat": 1,
+      "request_schedule": [],
+      "sample_id": "4295955e89a62676",
+      "scenario_id": "x-a7cdd50d5cecebaa",
+      "serving_concurrency": 1,
+      "sessions": [
+        {
+          "initial_tokens": 1856,
+          "job_class": "coding",
+          "order": 0,
+          "session_id": "claude:92cc24b6-ac8d-5231-bb2d-33b876557766",
+          "turn_index": 0
+        }
+      ],
+      "split": "train"
+    },
+    {
+      "activity": "none",
+      "activity_tokens": 0,
+      "bandwidth_mbps": 10000.0,
+      "campaign": "serial_crossover",
+      "concurrency": 1,
+      "context_size": 2048,
+      "copy_policy": "initial_final",
+      "deadline_s": 180,
+      "final_state": "awake",
+      "kind": "migration",
+      "match_id": "8a8f9306bc18d7e6",
+      "method": "kv_transfer",
+      "move_concurrency": 1,
+      "moves": [
+        {
+          "initial_tokens": 1856,
+          "job_class": "coding",
+          "method": "kv_transfer",
+          "order": 0,
+          "session_id": "claude:92cc24b6-ac8d-5231-bb2d-33b876557766",
+          "turn_index": 0
+        }
+      ],
+      "repeat": 1,
+      "request_schedule": [],
+      "sample_id": "4295955e89a62676",
+      "scenario_id": "x-fdf768c13df77c7b",
+      "serving_concurrency": 1,
+      "sessions": [
+        {
+          "initial_tokens": 1856,
+          "job_class": "coding",
+          "order": 0,
+          "session_id": "claude:92cc24b6-ac8d-5231-bb2d-33b876557766",
+          "turn_index": 0
+        }
+      ],
+      "split": "train"
+    },
+    {
+      "activity": "none",
+      "activity_tokens": 0,
+      "bandwidth_mbps": 10000.0,
+      "campaign": "serial_crossover",
+      "concurrency": 1,
+      "context_size": 16384,
+      "copy_policy": "initial_final",
+      "deadline_s": 180,
+      "final_state": "awake",
+      "kind": "migration",
+      "match_id": "9763a861acbf1e26",
+      "method": "replay",
+      "move_concurrency": 1,
+      "moves": [
+        {
+          "initial_tokens": 16192,
+          "job_class": "coding",
+          "method": "replay",
+          "order": 0,
+          "session_id": "codex:e381cc89-38ef-e67e-79b9-4b800369b4f5",
+          "turn_index": 0
+        }
+      ],
+      "repeat": 1,
+      "request_schedule": [],
+      "sample_id": "95d704576174849d",
+      "scenario_id": "x-3bcb3d0272237088",
+      "serving_concurrency": 1,
+      "sessions": [
+        {
+          "initial_tokens": 16192,
+          "job_class": "coding",
+          "order": 0,
+          "session_id": "codex:e381cc89-38ef-e67e-79b9-4b800369b4f5",
+          "turn_index": 0
+        }
+      ],
+      "split": "train"
+    },
+    {
+      "activity": "none",
+      "activity_tokens": 0,
+      "bandwidth_mbps": 10000.0,
+      "campaign": "serial_crossover",
+      "concurrency": 1,
+      "context_size": 16384,
+      "copy_policy": "initial_final",
+      "deadline_s": 180,
+      "final_state": "awake",
+      "kind": "migration",
+      "match_id": "9763a861acbf1e26",
+      "method": "kv_transfer",
+      "move_concurrency": 1,
+      "moves": [
+        {
+          "initial_tokens": 16192,
+          "job_class": "coding",
+          "method": "kv_transfer",
+          "order": 0,
+          "session_id": "codex:e381cc89-38ef-e67e-79b9-4b800369b4f5",
+          "turn_index": 0
+        }
+      ],
+      "repeat": 1,
+      "request_schedule": [],
+      "sample_id": "95d704576174849d",
+      "scenario_id": "x-1da234fbd87c5433",
+      "serving_concurrency": 1,
+      "sessions": [
+        {
+          "initial_tokens": 16192,
+          "job_class": "coding",
+          "order": 0,
+          "session_id": "codex:e381cc89-38ef-e67e-79b9-4b800369b4f5",
+          "turn_index": 0
+        }
+      ],
+      "split": "train"
+    },
+    {
+      "activity": "none",
+      "activity_tokens": 0,
+      "bandwidth_mbps": 10000.0,
+      "campaign": "serial_crossover",
+      "concurrency": 1,
+      "context_size": 32768,
+      "copy_policy": "initial_final",
+      "deadline_s": 180,
+      "final_state": "awake",
+      "kind": "migration",
+      "match_id": "dff88bf91e4bc43a",
+      "method": "kv_transfer",
+      "move_concurrency": 1,
+      "moves": [
+        {
+          "initial_tokens": 32576,
+          "job_class": "coding",
+          "method": "kv_transfer",
+          "order": 0,
+          "session_id": "codex:e381cc89-38ef-e67e-79b9-4b800369b4f5",
+          "turn_index": 0
+        }
+      ],
+      "repeat": 0,
+      "request_schedule": [],
+      "sample_id": "787bde33093bc8a8",
+      "scenario_id": "x-29d3c436c5dd0302",
+      "serving_concurrency": 1,
+      "sessions": [
+        {
+          "initial_tokens": 32576,
+          "job_class": "coding",
+          "order": 0,
+          "session_id": "codex:e381cc89-38ef-e67e-79b9-4b800369b4f5",
+          "turn_index": 0
+        }
+      ],
+      "split": "train"
+    },
+    {
+      "activity": "none",
+      "activity_tokens": 0,
+      "bandwidth_mbps": 10000.0,
+      "campaign": "serial_crossover",
+      "concurrency": 1,
+      "context_size": 16384,
+      "copy_policy": "initial_final",
+      "deadline_s": 180,
+      "final_state": "awake",
+      "kind": "migration",
+      "match_id": "b54bae9f8985e686",
+      "method": "kv_transfer",
+      "move_concurrency": 1,
+      "moves": [
+        {
+          "initial_tokens": 16192,
+          "job_class": "coding",
+          "method": "kv_transfer",
+          "order": 0,
+          "session_id": "codex:1229e212-7c9e-fc46-e948-4c87690d9e5e",
+          "turn_index": 0
+        }
+      ],
+      "repeat": 0,
+      "request_schedule": [],
+      "sample_id": "0c49ea83df0ae488",
+      "scenario_id": "x-006c0864ed23e91b",
+      "serving_concurrency": 1,
+      "sessions": [
+        {
+          "initial_tokens": 16192,
+          "job_class": "coding",
+          "order": 0,
+          "session_id": "codex:1229e212-7c9e-fc46-e948-4c87690d9e5e",
+          "turn_index": 0
+        }
+      ],
+      "split": "train"
+    },
+    {
+      "activity": "none",
+      "activity_tokens": 0,
+      "bandwidth_mbps": 10000.0,
+      "campaign": "serial_crossover",
+      "concurrency": 1,
+      "context_size": 16384,
+      "copy_policy": "initial_final",
+      "deadline_s": 180,
+      "final_state": "awake",
+      "kind": "migration",
+      "match_id": "b54bae9f8985e686",
+      "method": "replay",
+      "move_concurrency": 1,
+      "moves": [
+        {
+          "initial_tokens": 16192,
+          "job_class": "coding",
+          "method": "replay",
+          "order": 0,
+          "session_id": "codex:1229e212-7c9e-fc46-e948-4c87690d9e5e",
+          "turn_index": 0
+        }
+      ],
+      "repeat": 0,
+      "request_schedule": [],
+      "sample_id": "0c49ea83df0ae488",
+      "scenario_id": "x-98a634537693f07a",
+      "serving_concurrency": 1,
+      "sessions": [
+        {
+          "initial_tokens": 16192,
+          "job_class": "coding",
+          "order": 0,
+          "session_id": "codex:1229e212-7c9e-fc46-e948-4c87690d9e5e",
+          "turn_index": 0
+        }
+      ],
+      "split": "train"
+    },
+    {
+      "activity": "none",
+      "activity_tokens": 0,
+      "bandwidth_mbps": 10000.0,
+      "campaign": "serial_crossover",
+      "concurrency": 1,
+      "context_size": 24576,
+      "copy_policy": "initial_final",
+      "deadline_s": 180,
+      "final_state": "awake",
+      "kind": "migration",
+      "match_id": "ed3c04fecb071001",
+      "method": "kv_transfer",
+      "move_concurrency": 1,
+      "moves": [
+        {
+          "initial_tokens": 24384,
+          "job_class": "coding",
+          "method": "kv_transfer",
+          "order": 0,
+          "session_id": "claude:d822a508-dc39-797d-a37d-fa6552fdb8bb",
+          "turn_index": 0
+        }
+      ],
+      "repeat": 1,
+      "request_schedule": [],
+      "sample_id": "b93e393debeaee6e",
+      "scenario_id": "x-99d19d693617b778",
+      "serving_concurrency": 1,
+      "sessions": [
+        {
+          "initial_tokens": 24384,
+          "job_class": "coding",
+          "order": 0,
+          "session_id": "claude:d822a508-dc39-797d-a37d-fa6552fdb8bb",
+          "turn_index": 0
+        }
+      ],
+      "split": "train"
+    },
+    {
+      "activity": "none",
+      "activity_tokens": 0,
+      "bandwidth_mbps": 10000.0,
+      "campaign": "serial_crossover",
+      "concurrency": 1,
+      "context_size": 24576,
+      "copy_policy": "initial_final",
+      "deadline_s": 180,
+      "final_state": "awake",
+      "kind": "migration",
+      "match_id": "ed3c04fecb071001",
+      "method": "replay",
+      "move_concurrency": 1,
+      "moves": [
+        {
+          "initial_tokens": 24384,
+          "job_class": "coding",
+          "method": "replay",
+          "order": 0,
+          "session_id": "claude:d822a508-dc39-797d-a37d-fa6552fdb8bb",
+          "turn_index": 0
+        }
+      ],
+      "repeat": 1,
+      "request_schedule": [],
+      "sample_id": "b93e393debeaee6e",
+      "scenario_id": "x-472ddc08c0dcdb92",
+      "serving_concurrency": 1,
+      "sessions": [
+        {
+          "initial_tokens": 24384,
+          "job_class": "coding",
+          "order": 0,
+          "session_id": "claude:d822a508-dc39-797d-a37d-fa6552fdb8bb",
+          "turn_index": 0
+        }
+      ],
+      "split": "train"
+    },
+    {
+      "activity": "none",
+      "activity_tokens": 0,
+      "bandwidth_mbps": 10000.0,
+      "campaign": "serial_crossover",
+      "concurrency": 1,
+      "context_size": 32768,
+      "copy_policy": "initial_final",
+      "deadline_s": 180,
+      "final_state": "awake",
+      "kind": "migration",
+      "match_id": "eefafee55fe88ecc",
+      "method": "kv_transfer",
+      "move_concurrency": 1,
+      "moves": [
+        {
+          "initial_tokens": 32576,
+          "job_class": "coding",
+          "method": "kv_transfer",
+          "order": 0,
+          "session_id": "claude:eaad8d63-63bf-7139-f930-0ef47fa45253",
+          "turn_index": 0
+        }
+      ],
+      "repeat": 1,
+      "request_schedule": [],
+      "sample_id": "f4f626f538d7d3f9",
+      "scenario_id": "x-25d4bfbe3e9ed055",
+      "serving_concurrency": 1,
+      "sessions": [
+        {
+          "initial_tokens": 32576,
+          "job_class": "coding",
+          "order": 0,
+          "session_id": "claude:eaad8d63-63bf-7139-f930-0ef47fa45253",
+          "turn_index": 0
+        }
+      ],
+      "split": "train"
+    },
+    {
+      "activity": "none",
+      "activity_tokens": 0,
+      "bandwidth_mbps": 10000.0,
+      "campaign": "serial_crossover",
+      "concurrency": 1,
+      "context_size": 32768,
+      "copy_policy": "initial_final",
+      "deadline_s": 180,
+      "final_state": "awake",
+      "kind": "migration",
+      "match_id": "eefafee55fe88ecc",
+      "method": "replay",
+      "move_concurrency": 1,
+      "moves": [
+        {
+          "initial_tokens": 32576,
+          "job_class": "coding",
+          "method": "replay",
+          "order": 0,
+          "session_id": "claude:eaad8d63-63bf-7139-f930-0ef47fa45253",
+          "turn_index": 0
+        }
+      ],
+      "repeat": 1,
+      "request_schedule": [],
+      "sample_id": "f4f626f538d7d3f9",
+      "scenario_id": "x-543643027323729c",
+      "serving_concurrency": 1,
+      "sessions": [
+        {
+          "initial_tokens": 32576,
+          "job_class": "coding",
+          "order": 0,
+          "session_id": "claude:eaad8d63-63bf-7139-f930-0ef47fa45253",
+          "turn_index": 0
+        }
+      ],
+      "split": "train"
+    },
+    {
+      "activity": "none",
+      "activity_tokens": 0,
+      "bandwidth_mbps": 10000.0,
+      "campaign": "serial_crossover",
+      "concurrency": 1,
+      "context_size": 4096,
+      "copy_policy": "initial_final",
+      "deadline_s": 180,
+      "final_state": "awake",
+      "kind": "migration",
+      "match_id": "874356fc98a67041",
+      "method": "replay",
+      "move_concurrency": 1,
+      "moves": [
+        {
+          "initial_tokens": 3904,
+          "job_class": "coding",
+          "method": "replay",
+          "order": 0,
+          "session_id": "codex:2604c640-6bc9-2d90-5a8b-ae20bc5081fa",
+          "turn_index": 0
+        }
+      ],
+      "repeat": 2,
+      "request_schedule": [],
+      "sample_id": "cd030047d52b1bed",
+      "scenario_id": "x-9bc10afd2aea6e9f",
+      "serving_concurrency": 1,
+      "sessions": [
+        {
+          "initial_tokens": 3904,
+          "job_class": "coding",
+          "order": 0,
+          "session_id": "codex:2604c640-6bc9-2d90-5a8b-ae20bc5081fa",
+          "turn_index": 0
+        }
+      ],
+      "split": "validation"
+    },
+    {
+      "activity": "none",
+      "activity_tokens": 0,
+      "bandwidth_mbps": 10000.0,
+      "campaign": "serial_crossover",
+      "concurrency": 1,
+      "context_size": 4096,
+      "copy_policy": "initial_final",
+      "deadline_s": 180,
+      "final_state": "awake",
+      "kind": "migration",
+      "match_id": "874356fc98a67041",
+      "method": "kv_transfer",
+      "move_concurrency": 1,
+      "moves": [
+        {
+          "initial_tokens": 3904,
+          "job_class": "coding",
+          "method": "kv_transfer",
+          "order": 0,
+          "session_id": "codex:2604c640-6bc9-2d90-5a8b-ae20bc5081fa",
+          "turn_index": 0
+        }
+      ],
+      "repeat": 2,
+      "request_schedule": [],
+      "sample_id": "cd030047d52b1bed",
+      "scenario_id": "x-7233364f85989294",
+      "serving_concurrency": 1,
+      "sessions": [
+        {
+          "initial_tokens": 3904,
+          "job_class": "coding",
+          "order": 0,
+          "session_id": "codex:2604c640-6bc9-2d90-5a8b-ae20bc5081fa",
+          "turn_index": 0
+        }
+      ],
+      "split": "validation"
+    },
+    {
+      "activity": "none",
+      "activity_tokens": 0,
+      "bandwidth_mbps": 10000.0,
+      "campaign": "serial_crossover",
+      "concurrency": 1,
+      "context_size": 8192,
+      "copy_policy": "initial_final",
+      "deadline_s": 180,
+      "final_state": "awake",
+      "kind": "migration",
+      "match_id": "d89bb0964483627d",
+      "method": "replay",
+      "move_concurrency": 1,
+      "moves": [
+        {
+          "initial_tokens": 8000,
+          "job_class": "coding",
+          "method": "replay",
+          "order": 0,
+          "session_id": "claude:e2fd4f89-016f-29f0-48a1-3b2f1991b287",
+          "turn_index": 0
+        }
+      ],
+      "repeat": 2,
+      "request_schedule": [],
+      "sample_id": "2e2eb54eb440bb85",
+      "scenario_id": "x-2d9b0d66826ec64a",
+      "serving_concurrency": 1,
+      "sessions": [
+        {
+          "initial_tokens": 8000,
+          "job_class": "coding",
+          "order": 0,
+          "session_id": "claude:e2fd4f89-016f-29f0-48a1-3b2f1991b287",
+          "turn_index": 0
+        }
+      ],
+      "split": "validation"
+    },
+    {
+      "activity": "none",
+      "activity_tokens": 0,
+      "bandwidth_mbps": 10000.0,
+      "campaign": "serial_crossover",
+      "concurrency": 1,
+      "context_size": 8192,
+      "copy_policy": "initial_final",
+      "deadline_s": 180,
+      "final_state": "awake",
+      "kind": "migration",
+      "match_id": "d89bb0964483627d",
+      "method": "kv_transfer",
+      "move_concurrency": 1,
+      "moves": [
+        {
+          "initial_tokens": 8000,
+          "job_class": "coding",
+          "method": "kv_transfer",
+          "order": 0,
+          "session_id": "claude:e2fd4f89-016f-29f0-48a1-3b2f1991b287",
+          "turn_index": 0
+        }
+      ],
+      "repeat": 2,
+      "request_schedule": [],
+      "sample_id": "2e2eb54eb440bb85",
+      "scenario_id": "x-7be2123c1d292312",
+      "serving_concurrency": 1,
+      "sessions": [
+        {
+          "initial_tokens": 8000,
+          "job_class": "coding",
+          "order": 0,
+          "session_id": "claude:e2fd4f89-016f-29f0-48a1-3b2f1991b287",
+          "turn_index": 0
+        }
+      ],
+      "split": "validation"
+    },
+    {
+      "activity": "none",
+      "activity_tokens": 0,
+      "bandwidth_mbps": 10000.0,
+      "campaign": "serial_crossover",
+      "concurrency": 1,
+      "context_size": 32768,
+      "copy_policy": "initial_final",
+      "deadline_s": 180,
+      "final_state": "awake",
+      "kind": "migration",
+      "match_id": "1de91791efe3346c",
+      "method": "replay",
+      "move_concurrency": 1,
+      "moves": [
+        {
+          "initial_tokens": 32576,
+          "job_class": "coding",
+          "method": "replay",
+          "order": 0,
+          "session_id": "codex:e381cc89-38ef-e67e-79b9-4b800369b4f5",
+          "turn_index": 0
+        }
+      ],
+      "repeat": 2,
+      "request_schedule": [],
+      "sample_id": "91d165df1e3f6ee2",
+      "scenario_id": "x-d19c20b9e9902a07",
+      "serving_concurrency": 1,
+      "sessions": [
+        {
+          "initial_tokens": 32576,
+          "job_class": "coding",
+          "order": 0,
+          "session_id": "codex:e381cc89-38ef-e67e-79b9-4b800369b4f5",
+          "turn_index": 0
+        }
+      ],
+      "split": "validation"
+    },
+    {
+      "activity": "none",
+      "activity_tokens": 0,
+      "bandwidth_mbps": 10000.0,
+      "campaign": "serial_crossover",
+      "concurrency": 1,
+      "context_size": 32768,
+      "copy_policy": "initial_final",
+      "deadline_s": 180,
+      "final_state": "awake",
+      "kind": "migration",
+      "match_id": "1de91791efe3346c",
+      "method": "kv_transfer",
+      "move_concurrency": 1,
+      "moves": [
+        {
+          "initial_tokens": 32576,
+          "job_class": "coding",
+          "method": "kv_transfer",
+          "order": 0,
+          "session_id": "codex:e381cc89-38ef-e67e-79b9-4b800369b4f5",
+          "turn_index": 0
+        }
+      ],
+      "repeat": 2,
+      "request_schedule": [],
+      "sample_id": "91d165df1e3f6ee2",
+      "scenario_id": "x-b8a85abb6325d9d6",
+      "serving_concurrency": 1,
+      "sessions": [
+        {
+          "initial_tokens": 32576,
+          "job_class": "coding",
+          "order": 0,
+          "session_id": "codex:e381cc89-38ef-e67e-79b9-4b800369b4f5",
+          "turn_index": 0
+        }
+      ],
+      "split": "validation"
+    },
+    {
+      "activity": "none",
+      "activity_tokens": 0,
+      "bandwidth_mbps": 10000.0,
+      "campaign": "serial_crossover",
+      "concurrency": 1,
+      "context_size": 4096,
+      "copy_policy": "initial_final",
+      "deadline_s": 180,
+      "final_state": "awake",
+      "kind": "migration",
+      "match_id": "76020d5f567d9929",
+      "method": "kv_transfer",
+      "move_concurrency": 1,
+      "moves": [
+        {
+          "initial_tokens": 3904,
+          "job_class": "coding",
+          "method": "kv_transfer",
+          "order": 0,
+          "session_id": "claude:1534babd-9b9e-68e0-057e-d9ce7e08adf0",
+          "turn_index": 0
+        }
+      ],
+      "repeat": 0,
+      "request_schedule": [],
+      "sample_id": "f333f27a0e660d20",
+      "scenario_id": "x-0f5752033471c0e7",
+      "serving_concurrency": 1,
+      "sessions": [
+        {
+          "initial_tokens": 3904,
+          "job_class": "coding",
+          "order": 0,
+          "session_id": "claude:1534babd-9b9e-68e0-057e-d9ce7e08adf0",
+          "turn_index": 0
+        }
+      ],
+      "split": "train"
+    },
+    {
+      "activity": "none",
+      "activity_tokens": 0,
+      "bandwidth_mbps": 10000.0,
+      "campaign": "serial_crossover",
+      "concurrency": 1,
+      "context_size": 4096,
+      "copy_policy": "initial_final",
+      "deadline_s": 180,
+      "final_state": "awake",
+      "kind": "migration",
+      "match_id": "76020d5f567d9929",
+      "method": "replay",
+      "move_concurrency": 1,
+      "moves": [
+        {
+          "initial_tokens": 3904,
+          "job_class": "coding",
+          "method": "replay",
+          "order": 0,
+          "session_id": "claude:1534babd-9b9e-68e0-057e-d9ce7e08adf0",
+          "turn_index": 0
+        }
+      ],
+      "repeat": 0,
+      "request_schedule": [],
+      "sample_id": "f333f27a0e660d20",
+      "scenario_id": "x-4f346e58a344a5f4",
+      "serving_concurrency": 1,
+      "sessions": [
+        {
+          "initial_tokens": 3904,
+          "job_class": "coding",
+          "order": 0,
+          "session_id": "claude:1534babd-9b9e-68e0-057e-d9ce7e08adf0",
+          "turn_index": 0
+        }
+      ],
+      "split": "train"
+    },
+    {
+      "activity": "none",
+      "activity_tokens": 0,
+      "bandwidth_mbps": 5000.0,
+      "campaign": "serial_crossover",
+      "concurrency": 1,
+      "context_size": 4096,
+      "copy_policy": "initial_final",
+      "deadline_s": 180,
+      "final_state": "awake",
+      "kind": "migration",
+      "match_id": "b3257ada378878d7",
+      "method": "kv_transfer",
+      "move_concurrency": 1,
+      "moves": [
+        {
+          "initial_tokens": 3904,
+          "job_class": "coding",
+          "method": "kv_transfer",
+          "order": 0,
+          "session_id": "claude:eaad8d63-63bf-7139-f930-0ef47fa45253",
+          "turn_index": 0
+        }
+      ],
+      "repeat": 1,
+      "request_schedule": [],
+      "sample_id": "01498eca3f115870",
+      "scenario_id": "x-13edec0f931d62f4",
+      "serving_concurrency": 1,
+      "sessions": [
+        {
+          "initial_tokens": 3904,
+          "job_class": "coding",
+          "order": 0,
+          "session_id": "claude:eaad8d63-63bf-7139-f930-0ef47fa45253",
+          "turn_index": 0
+        }
+      ],
+      "split": "train"
+    },
+    {
+      "activity": "none",
+      "activity_tokens": 0,
+      "bandwidth_mbps": 5000.0,
+      "campaign": "serial_crossover",
+      "concurrency": 1,
+      "context_size": 4096,
+      "copy_policy": "initial_final",
+      "deadline_s": 180,
+      "final_state": "awake",
+      "kind": "migration",
+      "match_id": "b3257ada378878d7",
+      "method": "replay",
+      "move_concurrency": 1,
+      "moves": [
+        {
+          "initial_tokens": 3904,
+          "job_class": "coding",
+          "method": "replay",
+          "order": 0,
+          "session_id": "claude:eaad8d63-63bf-7139-f930-0ef47fa45253",
+          "turn_index": 0
+        }
+      ],
+      "repeat": 1,
+      "request_schedule": [],
+      "sample_id": "01498eca3f115870",
+      "scenario_id": "x-f666e088442baafa",
+      "serving_concurrency": 1,
+      "sessions": [
+        {
+          "initial_tokens": 3904,
+          "job_class": "coding",
+          "order": 0,
+          "session_id": "claude:eaad8d63-63bf-7139-f930-0ef47fa45253",
+          "turn_index": 0
+        }
+      ],
+      "split": "train"
+    },
+    {
+      "activity": "none",
+      "activity_tokens": 0,
+      "bandwidth_mbps": 5000.0,
+      "campaign": "serial_crossover",
+      "concurrency": 1,
+      "context_size": 16384,
+      "copy_policy": "initial_final",
+      "deadline_s": 180,
+      "final_state": "awake",
+      "kind": "migration",
+      "match_id": "018f52a5f572d9fd",
+      "method": "replay",
+      "move_concurrency": 1,
+      "moves": [
+        {
+          "initial_tokens": 16192,
+          "job_class": "coding",
+          "method": "replay",
+          "order": 0,
+          "session_id": "codex:e381cc89-38ef-e67e-79b9-4b800369b4f5",
+          "turn_index": 0
+        }
+      ],
+      "repeat": 1,
+      "request_schedule": [],
+      "sample_id": "95d704576174849d",
+      "scenario_id": "x-223cd37d9e21bb95",
+      "serving_concurrency": 1,
+      "sessions": [
+        {
+          "initial_tokens": 16192,
+          "job_class": "coding",
+          "order": 0,
+          "session_id": "codex:e381cc89-38ef-e67e-79b9-4b800369b4f5",
+          "turn_index": 0
+        }
+      ],
+      "split": "train"
+    },
+    {
+      "activity": "none",
+      "activity_tokens": 0,
+      "bandwidth_mbps": 5000.0,
+      "campaign": "serial_crossover",
+      "concurrency": 1,
+      "context_size": 16384,
+      "copy_policy": "initial_final",
+      "deadline_s": 180,
+      "final_state": "awake",
+      "kind": "migration",
+      "match_id": "018f52a5f572d9fd",
+      "method": "kv_transfer",
+      "move_concurrency": 1,
+      "moves": [
+        {
+          "initial_tokens": 16192,
+          "job_class": "coding",
+          "method": "kv_transfer",
+          "order": 0,
+          "session_id": "codex:e381cc89-38ef-e67e-79b9-4b800369b4f5",
+          "turn_index": 0
+        }
+      ],
+      "repeat": 1,
+      "request_schedule": [],
+      "sample_id": "95d704576174849d",
+      "scenario_id": "x-85668319537aec5a",
+      "serving_concurrency": 1,
+      "sessions": [
+        {
+          "initial_tokens": 16192,
+          "job_class": "coding",
+          "order": 0,
+          "session_id": "codex:e381cc89-38ef-e67e-79b9-4b800369b4f5",
+          "turn_index": 0
+        }
+      ],
+      "split": "train"
+    },
+    {
+      "activity": "none",
+      "activity_tokens": 0,
+      "bandwidth_mbps": 5000.0,
+      "campaign": "serial_crossover",
+      "concurrency": 1,
+      "context_size": 32768,
+      "copy_policy": "initial_final",
+      "deadline_s": 180,
+      "final_state": "awake",
+      "kind": "migration",
+      "match_id": "261d6f327b4b12bb",
+      "method": "kv_transfer",
+      "move_concurrency": 1,
+      "moves": [
+        {
+          "initial_tokens": 32576,
+          "job_class": "coding",
+          "method": "kv_transfer",
+          "order": 0,
+          "session_id": "codex:e381cc89-38ef-e67e-79b9-4b800369b4f5",
+          "turn_index": 0
+        }
+      ],
+      "repeat": 2,
+      "request_schedule": [],
+      "sample_id": "91d165df1e3f6ee2",
+      "scenario_id": "x-8d21e2ccc0773a7b",
+      "serving_concurrency": 1,
+      "sessions": [
+        {
+          "initial_tokens": 32576,
+          "job_class": "coding",
+          "order": 0,
+          "session_id": "codex:e381cc89-38ef-e67e-79b9-4b800369b4f5",
+          "turn_index": 0
+        }
+      ],
+      "split": "validation"
+    },
+    {
+      "activity": "none",
+      "activity_tokens": 0,
+      "bandwidth_mbps": 5000.0,
+      "campaign": "serial_crossover",
+      "concurrency": 1,
+      "context_size": 32768,
+      "copy_policy": "initial_final",
+      "deadline_s": 180,
+      "final_state": "awake",
+      "kind": "migration",
+      "match_id": "261d6f327b4b12bb",
+      "method": "replay",
+      "move_concurrency": 1,
+      "moves": [
+        {
+          "initial_tokens": 32576,
+          "job_class": "coding",
+          "method": "replay",
+          "order": 0,
+          "session_id": "codex:e381cc89-38ef-e67e-79b9-4b800369b4f5",
+          "turn_index": 0
+        }
+      ],
+      "repeat": 2,
+      "request_schedule": [],
+      "sample_id": "91d165df1e3f6ee2",
+      "scenario_id": "x-d2ead15fcd2aa3c5",
+      "serving_concurrency": 1,
+      "sessions": [
+        {
+          "initial_tokens": 32576,
+          "job_class": "coding",
+          "order": 0,
+          "session_id": "codex:e381cc89-38ef-e67e-79b9-4b800369b4f5",
+          "turn_index": 0
+        }
+      ],
+      "split": "validation"
+    },
+    {
+      "activity": "none",
+      "activity_tokens": 0,
+      "bandwidth_mbps": 5000.0,
+      "campaign": "serial_crossover",
+      "concurrency": 1,
+      "context_size": 8192,
+      "copy_policy": "initial_final",
+      "deadline_s": 180,
+      "final_state": "awake",
+      "kind": "migration",
+      "match_id": "307826183440e1ab",
+      "method": "kv_transfer",
+      "move_concurrency": 1,
+      "moves": [
+        {
+          "initial_tokens": 8000,
+          "job_class": "coding",
+          "method": "kv_transfer",
+          "order": 0,
+          "session_id": "claude:1534babd-9b9e-68e0-057e-d9ce7e08adf0",
+          "turn_index": 0
+        }
+      ],
+      "repeat": 0,
+      "request_schedule": [],
+      "sample_id": "4cce1c9609535161",
+      "scenario_id": "x-207d2132f47e7dc3",
+      "serving_concurrency": 1,
+      "sessions": [
+        {
+          "initial_tokens": 8000,
+          "job_class": "coding",
+          "order": 0,
+          "session_id": "claude:1534babd-9b9e-68e0-057e-d9ce7e08adf0",
+          "turn_index": 0
+        }
+      ],
+      "split": "train"
+    },
+    {
+      "activity": "none",
+      "activity_tokens": 0,
+      "bandwidth_mbps": 5000.0,
+      "campaign": "serial_crossover",
+      "concurrency": 1,
+      "context_size": 8192,
+      "copy_policy": "initial_final",
+      "deadline_s": 180,
+      "final_state": "awake",
+      "kind": "migration",
+      "match_id": "307826183440e1ab",
+      "method": "replay",
+      "move_concurrency": 1,
+      "moves": [
+        {
+          "initial_tokens": 8000,
+          "job_class": "coding",
+          "method": "replay",
+          "order": 0,
+          "session_id": "claude:1534babd-9b9e-68e0-057e-d9ce7e08adf0",
+          "turn_index": 0
+        }
+      ],
+      "repeat": 0,
+      "request_schedule": [],
+      "sample_id": "4cce1c9609535161",
+      "scenario_id": "x-c4c11f9b3d834f87",
+      "serving_concurrency": 1,
+      "sessions": [
+        {
+          "initial_tokens": 8000,
+          "job_class": "coding",
+          "order": 0,
+          "session_id": "claude:1534babd-9b9e-68e0-057e-d9ce7e08adf0",
+          "turn_index": 0
+        }
+      ],
+      "split": "train"
+    },
+    {
+      "activity": "none",
+      "activity_tokens": 0,
+      "bandwidth_mbps": 5000.0,
+      "campaign": "serial_crossover",
+      "concurrency": 1,
+      "context_size": 16384,
+      "copy_policy": "initial_final",
+      "deadline_s": 180,
+      "final_state": "awake",
+      "kind": "migration",
+      "match_id": "c553e06c926441f9",
+      "method": "kv_transfer",
+      "move_concurrency": 1,
+      "moves": [
+        {
+          "initial_tokens": 16192,
+          "job_class": "coding",
+          "method": "kv_transfer",
+          "order": 0,
+          "session_id": "codex:1229e212-7c9e-fc46-e948-4c87690d9e5e",
+          "turn_index": 0
+        }
+      ],
+      "repeat": 0,
+      "request_schedule": [],
+      "sample_id": "0c49ea83df0ae488",
+      "scenario_id": "x-8dd0a35d206d5089",
+      "serving_concurrency": 1,
+      "sessions": [
+        {
+          "initial_tokens": 16192,
+          "job_class": "coding",
+          "order": 0,
+          "session_id": "codex:1229e212-7c9e-fc46-e948-4c87690d9e5e",
+          "turn_index": 0
+        }
+      ],
+      "split": "train"
+    },
+    {
+      "activity": "none",
+      "activity_tokens": 0,
+      "bandwidth_mbps": 5000.0,
+      "campaign": "serial_crossover",
+      "concurrency": 1,
+      "context_size": 16384,
+      "copy_policy": "initial_final",
+      "deadline_s": 180,
+      "final_state": "awake",
+      "kind": "migration",
+      "match_id": "c553e06c926441f9",
+      "method": "replay",
+      "move_concurrency": 1,
+      "moves": [
+        {
+          "initial_tokens": 16192,
+          "job_class": "coding",
+          "method": "replay",
+          "order": 0,
+          "session_id": "codex:1229e212-7c9e-fc46-e948-4c87690d9e5e",
+          "turn_index": 0
+        }
+      ],
+      "repeat": 0,
+      "request_schedule": [],
+      "sample_id": "0c49ea83df0ae488",
+      "scenario_id": "x-0d7bf9e6e599d0de",
+      "serving_concurrency": 1,
+      "sessions": [
+        {
+          "initial_tokens": 16192,
+          "job_class": "coding",
+          "order": 0,
+          "session_id": "codex:1229e212-7c9e-fc46-e948-4c87690d9e5e",
+          "turn_index": 0
+        }
+      ],
+      "split": "train"
+    },
+    {
+      "activity": "none",
+      "activity_tokens": 0,
+      "bandwidth_mbps": 5000.0,
+      "campaign": "serial_crossover",
+      "concurrency": 1,
+      "context_size": 16384,
+      "copy_policy": "initial_final",
+      "deadline_s": 180,
+      "final_state": "awake",
+      "kind": "migration",
+      "match_id": "6276adf97da9f3f4",
+      "method": "replay",
+      "move_concurrency": 1,
+      "moves": [
+        {
+          "initial_tokens": 16192,
+          "job_class": "coding",
+          "method": "replay",
+          "order": 0,
+          "session_id": "codex:2604c640-6bc9-2d90-5a8b-ae20bc5081fa",
+          "turn_index": 0
+        }
+      ],
+      "repeat": 2,
+      "request_schedule": [],
+      "sample_id": "775f1820faa8d8de",
+      "scenario_id": "x-5cfff3f1e0d08667",
+      "serving_concurrency": 1,
+      "sessions": [
+        {
+          "initial_tokens": 16192,
+          "job_class": "coding",
+          "order": 0,
+          "session_id": "codex:2604c640-6bc9-2d90-5a8b-ae20bc5081fa",
+          "turn_index": 0
+        }
+      ],
+      "split": "validation"
+    },
+    {
+      "activity": "none",
+      "activity_tokens": 0,
+      "bandwidth_mbps": 5000.0,
+      "campaign": "serial_crossover",
+      "concurrency": 1,
+      "context_size": 16384,
+      "copy_policy": "initial_final",
+      "deadline_s": 180,
+      "final_state": "awake",
+      "kind": "migration",
+      "match_id": "6276adf97da9f3f4",
+      "method": "kv_transfer",
+      "move_concurrency": 1,
+      "moves": [
+        {
+          "initial_tokens": 16192,
+          "job_class": "coding",
+          "method": "kv_transfer",
+          "order": 0,
+          "session_id": "codex:2604c640-6bc9-2d90-5a8b-ae20bc5081fa",
+          "turn_index": 0
+        }
+      ],
+      "repeat": 2,
+      "request_schedule": [],
+      "sample_id": "775f1820faa8d8de",
+      "scenario_id": "x-36c01e59846dcf9b",
+      "serving_concurrency": 1,
+      "sessions": [
+        {
+          "initial_tokens": 16192,
+          "job_class": "coding",
+          "order": 0,
+          "session_id": "codex:2604c640-6bc9-2d90-5a8b-ae20bc5081fa",
+          "turn_index": 0
+        }
+      ],
+      "split": "validation"
+    },
+    {
+      "activity": "none",
+      "activity_tokens": 0,
+      "bandwidth_mbps": 5000.0,
+      "campaign": "serial_crossover",
+      "concurrency": 1,
+      "context_size": 4096,
+      "copy_policy": "initial_final",
+      "deadline_s": 180,
+      "final_state": "awake",
+      "kind": "migration",
+      "match_id": "61e8e853da7a2bf1",
+      "method": "replay",
+      "move_concurrency": 1,
+      "moves": [
+        {
+          "initial_tokens": 3904,
+          "job_class": "coding",
+          "method": "replay",
+          "order": 0,
+          "session_id": "claude:1534babd-9b9e-68e0-057e-d9ce7e08adf0",
+          "turn_index": 0
+        }
+      ],
+      "repeat": 0,
+      "request_schedule": [],
+      "sample_id": "f333f27a0e660d20",
+      "scenario_id": "x-d79f3d3752b99201",
+      "serving_concurrency": 1,
+      "sessions": [
+        {
+          "initial_tokens": 3904,
+          "job_class": "coding",
+          "order": 0,
+          "session_id": "claude:1534babd-9b9e-68e0-057e-d9ce7e08adf0",
+          "turn_index": 0
+        }
+      ],
+      "split": "train"
+    },
+    {
+      "activity": "none",
+      "activity_tokens": 0,
+      "bandwidth_mbps": 5000.0,
+      "campaign": "serial_crossover",
+      "concurrency": 1,
+      "context_size": 4096,
+      "copy_policy": "initial_final",
+      "deadline_s": 180,
+      "final_state": "awake",
+      "kind": "migration",
+      "match_id": "61e8e853da7a2bf1",
+      "method": "kv_transfer",
+      "move_concurrency": 1,
+      "moves": [
+        {
+          "initial_tokens": 3904,
+          "job_class": "coding",
+          "method": "kv_transfer",
+          "order": 0,
+          "session_id": "claude:1534babd-9b9e-68e0-057e-d9ce7e08adf0",
+          "turn_index": 0
+        }
+      ],
+      "repeat": 0,
+      "request_schedule": [],
+      "sample_id": "f333f27a0e660d20",
+      "scenario_id": "x-d9ab684916ed8937",
+      "serving_concurrency": 1,
+      "sessions": [
+        {
+          "initial_tokens": 3904,
+          "job_class": "coding",
+          "order": 0,
+          "session_id": "claude:1534babd-9b9e-68e0-057e-d9ce7e08adf0",
+          "turn_index": 0
+        }
+      ],
+      "split": "train"
+    },
+    {
+      "activity": "none",
+      "activity_tokens": 0,
+      "bandwidth_mbps": 5000.0,
+      "campaign": "serial_crossover",
+      "concurrency": 1,
+      "context_size": 8192,
+      "copy_policy": "initial_final",
+      "deadline_s": 180,
+      "final_state": "awake",
+      "kind": "migration",
+      "match_id": "b8294ef4bf7bfada",
+      "method": "replay",
+      "move_concurrency": 1,
+      "moves": [
+        {
+          "initial_tokens": 8000,
+          "job_class": "coding",
+          "method": "replay",
+          "order": 0,
+          "session_id": "claude:e2fd4f89-016f-29f0-48a1-3b2f1991b287",
+          "turn_index": 0
+        }
+      ],
+      "repeat": 1,
+      "request_schedule": [],
+      "sample_id": "9824ab1584b16e99",
+      "scenario_id": "x-bc6843a4f340f784",
+      "serving_concurrency": 1,
+      "sessions": [
+        {
+          "initial_tokens": 8000,
+          "job_class": "coding",
+          "order": 0,
+          "session_id": "claude:e2fd4f89-016f-29f0-48a1-3b2f1991b287",
+          "turn_index": 0
+        }
+      ],
+      "split": "train"
+    },
+    {
+      "activity": "none",
+      "activity_tokens": 0,
+      "bandwidth_mbps": 5000.0,
+      "campaign": "serial_crossover",
+      "concurrency": 1,
+      "context_size": 8192,
+      "copy_policy": "initial_final",
+      "deadline_s": 180,
+      "final_state": "awake",
+      "kind": "migration",
+      "match_id": "b8294ef4bf7bfada",
+      "method": "kv_transfer",
+      "move_concurrency": 1,
+      "moves": [
+        {
+          "initial_tokens": 8000,
+          "job_class": "coding",
+          "method": "kv_transfer",
+          "order": 0,
+          "session_id": "claude:e2fd4f89-016f-29f0-48a1-3b2f1991b287",
+          "turn_index": 0
+        }
+      ],
+      "repeat": 1,
+      "request_schedule": [],
+      "sample_id": "9824ab1584b16e99",
+      "scenario_id": "x-0f673c7e0958f11d",
+      "serving_concurrency": 1,
+      "sessions": [
+        {
+          "initial_tokens": 8000,
+          "job_class": "coding",
+          "order": 0,
+          "session_id": "claude:e2fd4f89-016f-29f0-48a1-3b2f1991b287",
+          "turn_index": 0
+        }
+      ],
+      "split": "train"
+    },
+    {
+      "activity": "none",
+      "activity_tokens": 0,
+      "bandwidth_mbps": 5000.0,
+      "campaign": "serial_crossover",
+      "concurrency": 1,
+      "context_size": 2048,
+      "copy_policy": "initial_final",
+      "deadline_s": 180,
+      "final_state": "awake",
+      "kind": "migration",
+      "match_id": "26fd82f7f36b52ff",
+      "method": "kv_transfer",
+      "move_concurrency": 1,
+      "moves": [
+        {
+          "initial_tokens": 1856,
+          "job_class": "coding",
+          "method": "kv_transfer",
+          "order": 0,
+          "session_id": "claude:92cc24b6-ac8d-5231-bb2d-33b876557766",
+          "turn_index": 0
+        }
+      ],
+      "repeat": 1,
+      "request_schedule": [],
+      "sample_id": "4295955e89a62676",
+      "scenario_id": "x-e340a5604e316b6e",
+      "serving_concurrency": 1,
+      "sessions": [
+        {
+          "initial_tokens": 1856,
+          "job_class": "coding",
+          "order": 0,
+          "session_id": "claude:92cc24b6-ac8d-5231-bb2d-33b876557766",
+          "turn_index": 0
+        }
+      ],
+      "split": "train"
+    },
+    {
+      "activity": "none",
+      "activity_tokens": 0,
+      "bandwidth_mbps": 5000.0,
+      "campaign": "serial_crossover",
+      "concurrency": 1,
+      "context_size": 2048,
+      "copy_policy": "initial_final",
+      "deadline_s": 180,
+      "final_state": "awake",
+      "kind": "migration",
+      "match_id": "26fd82f7f36b52ff",
+      "method": "replay",
+      "move_concurrency": 1,
+      "moves": [
+        {
+          "initial_tokens": 1856,
+          "job_class": "coding",
+          "method": "replay",
+          "order": 0,
+          "session_id": "claude:92cc24b6-ac8d-5231-bb2d-33b876557766",
+          "turn_index": 0
+        }
+      ],
+      "repeat": 1,
+      "request_schedule": [],
+      "sample_id": "4295955e89a62676",
+      "scenario_id": "x-24df069b1d0bc315",
+      "serving_concurrency": 1,
+      "sessions": [
+        {
+          "initial_tokens": 1856,
+          "job_class": "coding",
+          "order": 0,
+          "session_id": "claude:92cc24b6-ac8d-5231-bb2d-33b876557766",
+          "turn_index": 0
+        }
+      ],
+      "split": "train"
+    },
+    {
+      "activity": "none",
+      "activity_tokens": 0,
+      "bandwidth_mbps": 5000.0,
+      "campaign": "serial_crossover",
+      "concurrency": 1,
+      "context_size": 2048,
+      "copy_policy": "initial_final",
+      "deadline_s": 180,
+      "final_state": "awake",
+      "kind": "migration",
+      "match_id": "d369942c720ecfa9",
+      "method": "replay",
+      "move_concurrency": 1,
+      "moves": [
+        {
+          "initial_tokens": 1856,
+          "job_class": "coding",
+          "method": "replay",
+          "order": 0,
+          "session_id": "claude:eaad8d63-63bf-7139-f930-0ef47fa45253",
+          "turn_index": 0
+        }
+      ],
+      "repeat": 0,
+      "request_schedule": [],
+      "sample_id": "1782a8161d03f141",
+      "scenario_id": "x-9cf704a1ab1a9b2c",
+      "serving_concurrency": 1,
+      "sessions": [
+        {
+          "initial_tokens": 1856,
+          "job_class": "coding",
+          "order": 0,
+          "session_id": "claude:eaad8d63-63bf-7139-f930-0ef47fa45253",
+          "turn_index": 0
+        }
+      ],
+      "split": "train"
+    },
+    {
+      "activity": "none",
+      "activity_tokens": 0,
+      "bandwidth_mbps": 5000.0,
+      "campaign": "serial_crossover",
+      "concurrency": 1,
+      "context_size": 2048,
+      "copy_policy": "initial_final",
+      "deadline_s": 180,
+      "final_state": "awake",
+      "kind": "migration",
+      "match_id": "d369942c720ecfa9",
+      "method": "kv_transfer",
+      "move_concurrency": 1,
+      "moves": [
+        {
+          "initial_tokens": 1856,
+          "job_class": "coding",
+          "method": "kv_transfer",
+          "order": 0,
+          "session_id": "claude:eaad8d63-63bf-7139-f930-0ef47fa45253",
+          "turn_index": 0
+        }
+      ],
+      "repeat": 0,
+      "request_schedule": [],
+      "sample_id": "1782a8161d03f141",
+      "scenario_id": "x-eb9e41b591396313",
+      "serving_concurrency": 1,
+      "sessions": [
+        {
+          "initial_tokens": 1856,
+          "job_class": "coding",
+          "order": 0,
+          "session_id": "claude:eaad8d63-63bf-7139-f930-0ef47fa45253",
+          "turn_index": 0
+        }
+      ],
+      "split": "train"
+    },
+    {
+      "activity": "none",
+      "activity_tokens": 0,
+      "bandwidth_mbps": 5000.0,
+      "campaign": "serial_crossover",
+      "concurrency": 1,
+      "context_size": 2048,
+      "copy_policy": "initial_final",
+      "deadline_s": 180,
+      "final_state": "awake",
+      "kind": "migration",
+      "match_id": "109c9dcfe0959617",
+      "method": "replay",
+      "move_concurrency": 1,
+      "moves": [
+        {
+          "initial_tokens": 1856,
+          "job_class": "coding",
+          "method": "replay",
+          "order": 0,
+          "session_id": "claude:e2fd4f89-016f-29f0-48a1-3b2f1991b287",
+          "turn_index": 0
+        }
+      ],
+      "repeat": 2,
+      "request_schedule": [],
+      "sample_id": "aac22fd822b762d1",
+      "scenario_id": "x-dc7dc09b12613fb3",
+      "serving_concurrency": 1,
+      "sessions": [
+        {
+          "initial_tokens": 1856,
+          "job_class": "coding",
+          "order": 0,
+          "session_id": "claude:e2fd4f89-016f-29f0-48a1-3b2f1991b287",
+          "turn_index": 0
+        }
+      ],
+      "split": "validation"
+    },
+    {
+      "activity": "none",
+      "activity_tokens": 0,
+      "bandwidth_mbps": 5000.0,
+      "campaign": "serial_crossover",
+      "concurrency": 1,
+      "context_size": 2048,
+      "copy_policy": "initial_final",
+      "deadline_s": 180,
+      "final_state": "awake",
+      "kind": "migration",
+      "match_id": "109c9dcfe0959617",
+      "method": "kv_transfer",
+      "move_concurrency": 1,
+      "moves": [
+        {
+          "initial_tokens": 1856,
+          "job_class": "coding",
+          "method": "kv_transfer",
+          "order": 0,
+          "session_id": "claude:e2fd4f89-016f-29f0-48a1-3b2f1991b287",
+          "turn_index": 0
+        }
+      ],
+      "repeat": 2,
+      "request_schedule": [],
+      "sample_id": "aac22fd822b762d1",
+      "scenario_id": "x-79356b720bb4c5d4",
+      "serving_concurrency": 1,
+      "sessions": [
+        {
+          "initial_tokens": 1856,
+          "job_class": "coding",
+          "order": 0,
+          "session_id": "claude:e2fd4f89-016f-29f0-48a1-3b2f1991b287",
+          "turn_index": 0
+        }
+      ],
+      "split": "validation"
+    },
+    {
+      "activity": "none",
+      "activity_tokens": 0,
+      "bandwidth_mbps": 5000.0,
+      "campaign": "serial_crossover",
+      "concurrency": 1,
+      "context_size": 4096,
+      "copy_policy": "initial_final",
+      "deadline_s": 180,
+      "final_state": "awake",
+      "kind": "migration",
+      "match_id": "61fed55f5f3d6a64",
+      "method": "replay",
+      "move_concurrency": 1,
+      "moves": [
+        {
+          "initial_tokens": 3904,
+          "job_class": "coding",
+          "method": "replay",
+          "order": 0,
+          "session_id": "codex:2604c640-6bc9-2d90-5a8b-ae20bc5081fa",
+          "turn_index": 0
+        }
+      ],
+      "repeat": 2,
+      "request_schedule": [],
+      "sample_id": "cd030047d52b1bed",
+      "scenario_id": "x-e568ef445b62d0d6",
+      "serving_concurrency": 1,
+      "sessions": [
+        {
+          "initial_tokens": 3904,
+          "job_class": "coding",
+          "order": 0,
+          "session_id": "codex:2604c640-6bc9-2d90-5a8b-ae20bc5081fa",
+          "turn_index": 0
+        }
+      ],
+      "split": "validation"
+    },
+    {
+      "activity": "none",
+      "activity_tokens": 0,
+      "bandwidth_mbps": 5000.0,
+      "campaign": "serial_crossover",
+      "concurrency": 1,
+      "context_size": 4096,
+      "copy_policy": "initial_final",
+      "deadline_s": 180,
+      "final_state": "awake",
+      "kind": "migration",
+      "match_id": "61fed55f5f3d6a64",
+      "method": "kv_transfer",
+      "move_concurrency": 1,
+      "moves": [
+        {
+          "initial_tokens": 3904,
+          "job_class": "coding",
+          "method": "kv_transfer",
+          "order": 0,
+          "session_id": "codex:2604c640-6bc9-2d90-5a8b-ae20bc5081fa",
+          "turn_index": 0
+        }
+      ],
+      "repeat": 2,
+      "request_schedule": [],
+      "sample_id": "cd030047d52b1bed",
+      "scenario_id": "x-3f81ac6e66b7d9f8",
+      "serving_concurrency": 1,
+      "sessions": [
+        {
+          "initial_tokens": 3904,
+          "job_class": "coding",
+          "order": 0,
+          "session_id": "codex:2604c640-6bc9-2d90-5a8b-ae20bc5081fa",
+          "turn_index": 0
+        }
+      ],
+      "split": "validation"
+    },
+    {
+      "activity": "none",
+      "activity_tokens": 0,
+      "bandwidth_mbps": 5000.0,
+      "campaign": "serial_crossover",
+      "concurrency": 1,
+      "context_size": 24576,
+      "copy_policy": "initial_final",
+      "deadline_s": 180,
+      "final_state": "awake",
+      "kind": "migration",
+      "match_id": "f875aa2e437236bf",
+      "method": "kv_transfer",
+      "move_concurrency": 1,
+      "moves": [
+        {
+          "initial_tokens": 24384,
+          "job_class": "coding",
+          "method": "kv_transfer",
+          "order": 0,
+          "session_id": "codex:1229e212-7c9e-fc46-e948-4c87690d9e5e",
+          "turn_index": 0
+        }
+      ],
+      "repeat": 2,
+      "request_schedule": [],
+      "sample_id": "9b168db2bf033de8",
+      "scenario_id": "x-7d6b6069a5d802c1",
+      "serving_concurrency": 1,
+      "sessions": [
+        {
+          "initial_tokens": 24384,
+          "job_class": "coding",
+          "order": 0,
+          "session_id": "codex:1229e212-7c9e-fc46-e948-4c87690d9e5e",
+          "turn_index": 0
+        }
+      ],
+      "split": "validation"
+    },
+    {
+      "activity": "none",
+      "activity_tokens": 0,
+      "bandwidth_mbps": 5000.0,
+      "campaign": "serial_crossover",
+      "concurrency": 1,
+      "context_size": 24576,
+      "copy_policy": "initial_final",
+      "deadline_s": 180,
+      "final_state": "awake",
+      "kind": "migration",
+      "match_id": "f875aa2e437236bf",
+      "method": "replay",
+      "move_concurrency": 1,
+      "moves": [
+        {
+          "initial_tokens": 24384,
+          "job_class": "coding",
+          "method": "replay",
+          "order": 0,
+          "session_id": "codex:1229e212-7c9e-fc46-e948-4c87690d9e5e",
+          "turn_index": 0
+        }
+      ],
+      "repeat": 2,
+      "request_schedule": [],
+      "sample_id": "9b168db2bf033de8",
+      "scenario_id": "x-4b9944ce84c1477b",
+      "serving_concurrency": 1,
+      "sessions": [
+        {
+          "initial_tokens": 24384,
+          "job_class": "coding",
+          "order": 0,
+          "session_id": "codex:1229e212-7c9e-fc46-e948-4c87690d9e5e",
+          "turn_index": 0
+        }
+      ],
+      "split": "validation"
+    },
+    {
+      "activity": "none",
+      "activity_tokens": 0,
+      "bandwidth_mbps": 5000.0,
+      "campaign": "serial_crossover",
+      "concurrency": 1,
+      "context_size": 8192,
+      "copy_policy": "initial_final",
+      "deadline_s": 180,
+      "final_state": "awake",
+      "kind": "migration",
+      "match_id": "3a87961daec6903f",
+      "method": "kv_transfer",
+      "move_concurrency": 1,
+      "moves": [
+        {
+          "initial_tokens": 8000,
+          "job_class": "coding",
+          "method": "kv_transfer",
+          "order": 0,
+          "session_id": "claude:e2fd4f89-016f-29f0-48a1-3b2f1991b287",
+          "turn_index": 0
+        }
+      ],
+      "repeat": 2,
+      "request_schedule": [],
+      "sample_id": "2e2eb54eb440bb85",
+      "scenario_id": "x-9a2bc4d5e6ba18c5",
+      "serving_concurrency": 1,
+      "sessions": [
+        {
+          "initial_tokens": 8000,
+          "job_class": "coding",
+          "order": 0,
+          "session_id": "claude:e2fd4f89-016f-29f0-48a1-3b2f1991b287",
+          "turn_index": 0
+        }
+      ],
+      "split": "validation"
+    },
+    {
+      "activity": "none",
+      "activity_tokens": 0,
+      "bandwidth_mbps": 5000.0,
+      "campaign": "serial_crossover",
+      "concurrency": 1,
+      "context_size": 8192,
+      "copy_policy": "initial_final",
+      "deadline_s": 180,
+      "final_state": "awake",
+      "kind": "migration",
+      "match_id": "3a87961daec6903f",
+      "method": "replay",
+      "move_concurrency": 1,
+      "moves": [
+        {
+          "initial_tokens": 8000,
+          "job_class": "coding",
+          "method": "replay",
+          "order": 0,
+          "session_id": "claude:e2fd4f89-016f-29f0-48a1-3b2f1991b287",
+          "turn_index": 0
+        }
+      ],
+      "repeat": 2,
+      "request_schedule": [],
+      "sample_id": "2e2eb54eb440bb85",
+      "scenario_id": "x-6a0769ab7eb6651d",
+      "serving_concurrency": 1,
+      "sessions": [
+        {
+          "initial_tokens": 8000,
+          "job_class": "coding",
+          "order": 0,
+          "session_id": "claude:e2fd4f89-016f-29f0-48a1-3b2f1991b287",
+          "turn_index": 0
+        }
+      ],
+      "split": "validation"
+    },
+    {
+      "activity": "none",
+      "activity_tokens": 0,
+      "bandwidth_mbps": 5000.0,
+      "campaign": "serial_crossover",
+      "concurrency": 1,
+      "context_size": 32768,
+      "copy_policy": "initial_final",
+      "deadline_s": 180,
+      "final_state": "awake",
+      "kind": "migration",
+      "match_id": "beda32187a0d320b",
+      "method": "kv_transfer",
+      "move_concurrency": 1,
+      "moves": [
+        {
+          "initial_tokens": 32576,
+          "job_class": "coding",
+          "method": "kv_transfer",
+          "order": 0,
+          "session_id": "claude:eaad8d63-63bf-7139-f930-0ef47fa45253",
+          "turn_index": 0
+        }
+      ],
+      "repeat": 1,
+      "request_schedule": [],
+      "sample_id": "f4f626f538d7d3f9",
+      "scenario_id": "x-d04cf27dd1c0677a",
+      "serving_concurrency": 1,
+      "sessions": [
+        {
+          "initial_tokens": 32576,
+          "job_class": "coding",
+          "order": 0,
+          "session_id": "claude:eaad8d63-63bf-7139-f930-0ef47fa45253",
+          "turn_index": 0
+        }
+      ],
+      "split": "train"
+    },
+    {
+      "activity": "none",
+      "activity_tokens": 0,
+      "bandwidth_mbps": 5000.0,
+      "campaign": "serial_crossover",
+      "concurrency": 1,
+      "context_size": 32768,
+      "copy_policy": "initial_final",
+      "deadline_s": 180,
+      "final_state": "awake",
+      "kind": "migration",
+      "match_id": "beda32187a0d320b",
+      "method": "replay",
+      "move_concurrency": 1,
+      "moves": [
+        {
+          "initial_tokens": 32576,
+          "job_class": "coding",
+          "method": "replay",
+          "order": 0,
+          "session_id": "claude:eaad8d63-63bf-7139-f930-0ef47fa45253",
+          "turn_index": 0
+        }
+      ],
+      "repeat": 1,
+      "request_schedule": [],
+      "sample_id": "f4f626f538d7d3f9",
+      "scenario_id": "x-297cef43d3a56dc0",
+      "serving_concurrency": 1,
+      "sessions": [
+        {
+          "initial_tokens": 32576,
+          "job_class": "coding",
+          "order": 0,
+          "session_id": "claude:eaad8d63-63bf-7139-f930-0ef47fa45253",
+          "turn_index": 0
+        }
+      ],
+      "split": "train"
+    },
+    {
+      "activity": "none",
+      "activity_tokens": 0,
+      "bandwidth_mbps": 5000.0,
+      "campaign": "serial_crossover",
+      "concurrency": 1,
+      "context_size": 24576,
+      "copy_policy": "initial_final",
+      "deadline_s": 180,
+      "final_state": "awake",
+      "kind": "migration",
+      "match_id": "1a39a8302462dd7b",
+      "method": "kv_transfer",
+      "move_concurrency": 1,
+      "moves": [
+        {
+          "initial_tokens": 24384,
+          "job_class": "coding",
+          "method": "kv_transfer",
+          "order": 0,
+          "session_id": "claude:eaad8d63-63bf-7139-f930-0ef47fa45253",
+          "turn_index": 0
+        }
+      ],
+      "repeat": 0,
+      "request_schedule": [],
+      "sample_id": "2ff1c9736ff1695a",
+      "scenario_id": "x-8558ffb7ec799658",
+      "serving_concurrency": 1,
+      "sessions": [
+        {
+          "initial_tokens": 24384,
+          "job_class": "coding",
+          "order": 0,
+          "session_id": "claude:eaad8d63-63bf-7139-f930-0ef47fa45253",
+          "turn_index": 0
+        }
+      ],
+      "split": "train"
+    },
+    {
+      "activity": "none",
+      "activity_tokens": 0,
+      "bandwidth_mbps": 5000.0,
+      "campaign": "serial_crossover",
+      "concurrency": 1,
+      "context_size": 24576,
+      "copy_policy": "initial_final",
+      "deadline_s": 180,
+      "final_state": "awake",
+      "kind": "migration",
+      "match_id": "1a39a8302462dd7b",
+      "method": "replay",
+      "move_concurrency": 1,
+      "moves": [
+        {
+          "initial_tokens": 24384,
+          "job_class": "coding",
+          "method": "replay",
+          "order": 0,
+          "session_id": "claude:eaad8d63-63bf-7139-f930-0ef47fa45253",
+          "turn_index": 0
+        }
+      ],
+      "repeat": 0,
+      "request_schedule": [],
+      "sample_id": "2ff1c9736ff1695a",
+      "scenario_id": "x-e9873aab400429f3",
+      "serving_concurrency": 1,
+      "sessions": [
+        {
+          "initial_tokens": 24384,
+          "job_class": "coding",
+          "order": 0,
+          "session_id": "claude:eaad8d63-63bf-7139-f930-0ef47fa45253",
+          "turn_index": 0
+        }
+      ],
+      "split": "train"
+    },
+    {
+      "activity": "none",
+      "activity_tokens": 0,
+      "bandwidth_mbps": 5000.0,
+      "campaign": "serial_crossover",
+      "concurrency": 1,
+      "context_size": 24576,
+      "copy_policy": "initial_final",
+      "deadline_s": 180,
+      "final_state": "awake",
+      "kind": "migration",
+      "match_id": "c0d65df927f5c76f",
+      "method": "replay",
+      "move_concurrency": 1,
+      "moves": [
+        {
+          "initial_tokens": 24384,
+          "job_class": "coding",
+          "method": "replay",
+          "order": 0,
+          "session_id": "claude:d822a508-dc39-797d-a37d-fa6552fdb8bb",
+          "turn_index": 0
+        }
+      ],
+      "repeat": 1,
+      "request_schedule": [],
+      "sample_id": "b93e393debeaee6e",
+      "scenario_id": "x-ad97497e7928b6c7",
+      "serving_concurrency": 1,
+      "sessions": [
+        {
+          "initial_tokens": 24384,
+          "job_class": "coding",
+          "order": 0,
+          "session_id": "claude:d822a508-dc39-797d-a37d-fa6552fdb8bb",
+          "turn_index": 0
+        }
+      ],
+      "split": "train"
+    },
+    {
+      "activity": "none",
+      "activity_tokens": 0,
+      "bandwidth_mbps": 5000.0,
+      "campaign": "serial_crossover",
+      "concurrency": 1,
+      "context_size": 24576,
+      "copy_policy": "initial_final",
+      "deadline_s": 180,
+      "final_state": "awake",
+      "kind": "migration",
+      "match_id": "c0d65df927f5c76f",
+      "method": "kv_transfer",
+      "move_concurrency": 1,
+      "moves": [
+        {
+          "initial_tokens": 24384,
+          "job_class": "coding",
+          "method": "kv_transfer",
+          "order": 0,
+          "session_id": "claude:d822a508-dc39-797d-a37d-fa6552fdb8bb",
+          "turn_index": 0
+        }
+      ],
+      "repeat": 1,
+      "request_schedule": [],
+      "sample_id": "b93e393debeaee6e",
+      "scenario_id": "x-c35a806280062bb6",
+      "serving_concurrency": 1,
+      "sessions": [
+        {
+          "initial_tokens": 24384,
+          "job_class": "coding",
+          "order": 0,
+          "session_id": "claude:d822a508-dc39-797d-a37d-fa6552fdb8bb",
+          "turn_index": 0
+        }
+      ],
+      "split": "train"
+    },
+    {
+      "activity": "none",
+      "activity_tokens": 0,
+      "bandwidth_mbps": 5000.0,
+      "campaign": "serial_crossover",
+      "concurrency": 1,
+      "context_size": 32768,
+      "copy_policy": "initial_final",
+      "deadline_s": 180,
+      "final_state": "awake",
+      "kind": "migration",
+      "match_id": "95ff03d01e29498b",
+      "method": "replay",
+      "move_concurrency": 1,
+      "moves": [
+        {
+          "initial_tokens": 32576,
+          "job_class": "coding",
+          "method": "replay",
+          "order": 0,
+          "session_id": "codex:e381cc89-38ef-e67e-79b9-4b800369b4f5",
+          "turn_index": 0
+        }
+      ],
+      "repeat": 0,
+      "request_schedule": [],
+      "sample_id": "787bde33093bc8a8",
+      "scenario_id": "x-7aa621c1e6e9e109",
+      "serving_concurrency": 1,
+      "sessions": [
+        {
+          "initial_tokens": 32576,
+          "job_class": "coding",
+          "order": 0,
+          "session_id": "codex:e381cc89-38ef-e67e-79b9-4b800369b4f5",
+          "turn_index": 0
+        }
+      ],
+      "split": "train"
+    },
+    {
+      "activity": "none",
+      "activity_tokens": 0,
+      "bandwidth_mbps": 5000.0,
+      "campaign": "serial_crossover",
+      "concurrency": 1,
+      "context_size": 32768,
+      "copy_policy": "initial_final",
+      "deadline_s": 180,
+      "final_state": "awake",
+      "kind": "migration",
+      "match_id": "95ff03d01e29498b",
+      "method": "kv_transfer",
+      "move_concurrency": 1,
+      "moves": [
+        {
+          "initial_tokens": 32576,
+          "job_class": "coding",
+          "method": "kv_transfer",
+          "order": 0,
+          "session_id": "codex:e381cc89-38ef-e67e-79b9-4b800369b4f5",
+          "turn_index": 0
+        }
+      ],
+      "repeat": 0,
+      "request_schedule": [],
+      "sample_id": "787bde33093bc8a8",
+      "scenario_id": "x-1ecbb7102217592d",
+      "serving_concurrency": 1,
+      "sessions": [
+        {
+          "initial_tokens": 32576,
+          "job_class": "coding",
+          "order": 0,
+          "session_id": "codex:e381cc89-38ef-e67e-79b9-4b800369b4f5",
+          "turn_index": 0
+        }
+      ],
+      "split": "train"
+    },
+    {
+      "activity": "none",
+      "activity_tokens": 0,
+      "bandwidth_mbps": 2500.0,
+      "campaign": "serial_crossover",
+      "concurrency": 1,
+      "context_size": 8192,
+      "copy_policy": "initial_final",
+      "deadline_s": 180,
+      "final_state": "awake",
+      "kind": "migration",
+      "match_id": "19f3509425b26f9a",
+      "method": "replay",
+      "move_concurrency": 1,
+      "moves": [
+        {
+          "initial_tokens": 8000,
+          "job_class": "coding",
+          "method": "replay",
+          "order": 0,
+          "session_id": "claude:1534babd-9b9e-68e0-057e-d9ce7e08adf0",
+          "turn_index": 0
+        }
+      ],
+      "repeat": 0,
+      "request_schedule": [],
+      "sample_id": "4cce1c9609535161",
+      "scenario_id": "x-9fd3fc4b656f686a",
+      "serving_concurrency": 1,
+      "sessions": [
+        {
+          "initial_tokens": 8000,
+          "job_class": "coding",
+          "order": 0,
+          "session_id": "claude:1534babd-9b9e-68e0-057e-d9ce7e08adf0",
+          "turn_index": 0
+        }
+      ],
+      "split": "train"
+    },
+    {
+      "activity": "none",
+      "activity_tokens": 0,
+      "bandwidth_mbps": 2500.0,
+      "campaign": "serial_crossover",
+      "concurrency": 1,
+      "context_size": 8192,
+      "copy_policy": "initial_final",
+      "deadline_s": 180,
+      "final_state": "awake",
+      "kind": "migration",
+      "match_id": "19f3509425b26f9a",
+      "method": "kv_transfer",
+      "move_concurrency": 1,
+      "moves": [
+        {
+          "initial_tokens": 8000,
+          "job_class": "coding",
+          "method": "kv_transfer",
+          "order": 0,
+          "session_id": "claude:1534babd-9b9e-68e0-057e-d9ce7e08adf0",
+          "turn_index": 0
+        }
+      ],
+      "repeat": 0,
+      "request_schedule": [],
+      "sample_id": "4cce1c9609535161",
+      "scenario_id": "x-91ff5731bab1910f",
+      "serving_concurrency": 1,
+      "sessions": [
+        {
+          "initial_tokens": 8000,
+          "job_class": "coding",
+          "order": 0,
+          "session_id": "claude:1534babd-9b9e-68e0-057e-d9ce7e08adf0",
+          "turn_index": 0
+        }
+      ],
+      "split": "train"
+    },
+    {
+      "activity": "none",
+      "activity_tokens": 0,
+      "bandwidth_mbps": 2500.0,
+      "campaign": "serial_crossover",
+      "concurrency": 1,
+      "context_size": 8192,
+      "copy_policy": "initial_final",
+      "deadline_s": 180,
+      "final_state": "awake",
+      "kind": "migration",
+      "match_id": "5f82668f97a9db93",
+      "method": "kv_transfer",
+      "move_concurrency": 1,
+      "moves": [
+        {
+          "initial_tokens": 8000,
+          "job_class": "coding",
+          "method": "kv_transfer",
+          "order": 0,
+          "session_id": "claude:e2fd4f89-016f-29f0-48a1-3b2f1991b287",
+          "turn_index": 0
+        }
+      ],
+      "repeat": 2,
+      "request_schedule": [],
+      "sample_id": "2e2eb54eb440bb85",
+      "scenario_id": "x-186b2eeeec75685b",
+      "serving_concurrency": 1,
+      "sessions": [
+        {
+          "initial_tokens": 8000,
+          "job_class": "coding",
+          "order": 0,
+          "session_id": "claude:e2fd4f89-016f-29f0-48a1-3b2f1991b287",
+          "turn_index": 0
+        }
+      ],
+      "split": "validation"
+    },
+    {
+      "activity": "none",
+      "activity_tokens": 0,
+      "bandwidth_mbps": 2500.0,
+      "campaign": "serial_crossover",
+      "concurrency": 1,
+      "context_size": 8192,
+      "copy_policy": "initial_final",
+      "deadline_s": 180,
+      "final_state": "awake",
+      "kind": "migration",
+      "match_id": "5f82668f97a9db93",
+      "method": "replay",
+      "move_concurrency": 1,
+      "moves": [
+        {
+          "initial_tokens": 8000,
+          "job_class": "coding",
+          "method": "replay",
+          "order": 0,
+          "session_id": "claude:e2fd4f89-016f-29f0-48a1-3b2f1991b287",
+          "turn_index": 0
+        }
+      ],
+      "repeat": 2,
+      "request_schedule": [],
+      "sample_id": "2e2eb54eb440bb85",
+      "scenario_id": "x-5aa97bff9a08d03f",
+      "serving_concurrency": 1,
+      "sessions": [
+        {
+          "initial_tokens": 8000,
+          "job_class": "coding",
+          "order": 0,
+          "session_id": "claude:e2fd4f89-016f-29f0-48a1-3b2f1991b287",
+          "turn_index": 0
+        }
+      ],
+      "split": "validation"
+    },
+    {
+      "activity": "none",
+      "activity_tokens": 0,
+      "bandwidth_mbps": 2500.0,
+      "campaign": "serial_crossover",
+      "concurrency": 1,
+      "context_size": 4096,
+      "copy_policy": "initial_final",
+      "deadline_s": 180,
+      "final_state": "awake",
+      "kind": "migration",
+      "match_id": "62aeb88e0b8be238",
+      "method": "replay",
+      "move_concurrency": 1,
+      "moves": [
+        {
+          "initial_tokens": 3904,
+          "job_class": "coding",
+          "method": "replay",
+          "order": 0,
+          "session_id": "claude:eaad8d63-63bf-7139-f930-0ef47fa45253",
+          "turn_index": 0
+        }
+      ],
+      "repeat": 1,
+      "request_schedule": [],
+      "sample_id": "01498eca3f115870",
+      "scenario_id": "x-707e0cb39230ab45",
+      "serving_concurrency": 1,
+      "sessions": [
+        {
+          "initial_tokens": 3904,
+          "job_class": "coding",
+          "order": 0,
+          "session_id": "claude:eaad8d63-63bf-7139-f930-0ef47fa45253",
+          "turn_index": 0
+        }
+      ],
+      "split": "train"
+    },
+    {
+      "activity": "none",
+      "activity_tokens": 0,
+      "bandwidth_mbps": 2500.0,
+      "campaign": "serial_crossover",
+      "concurrency": 1,
+      "context_size": 4096,
+      "copy_policy": "initial_final",
+      "deadline_s": 180,
+      "final_state": "awake",
+      "kind": "migration",
+      "match_id": "62aeb88e0b8be238",
+      "method": "kv_transfer",
+      "move_concurrency": 1,
+      "moves": [
+        {
+          "initial_tokens": 3904,
+          "job_class": "coding",
+          "method": "kv_transfer",
+          "order": 0,
+          "session_id": "claude:eaad8d63-63bf-7139-f930-0ef47fa45253",
+          "turn_index": 0
+        }
+      ],
+      "repeat": 1,
+      "request_schedule": [],
+      "sample_id": "01498eca3f115870",
+      "scenario_id": "x-610eb15ff0f2f35e",
+      "serving_concurrency": 1,
+      "sessions": [
+        {
+          "initial_tokens": 3904,
+          "job_class": "coding",
+          "order": 0,
+          "session_id": "claude:eaad8d63-63bf-7139-f930-0ef47fa45253",
+          "turn_index": 0
+        }
+      ],
+      "split": "train"
+    },
+    {
+      "activity": "none",
+      "activity_tokens": 0,
+      "bandwidth_mbps": 2500.0,
+      "campaign": "serial_crossover",
+      "concurrency": 1,
+      "context_size": 16384,
+      "copy_policy": "initial_final",
+      "deadline_s": 180,
+      "final_state": "awake",
+      "kind": "migration",
+      "match_id": "1304e5114f8b0569",
+      "method": "replay",
+      "move_concurrency": 1,
+      "moves": [
+        {
+          "initial_tokens": 16192,
+          "job_class": "coding",
+          "method": "replay",
+          "order": 0,
+          "session_id": "codex:e381cc89-38ef-e67e-79b9-4b800369b4f5",
+          "turn_index": 0
+        }
+      ],
+      "repeat": 1,
+      "request_schedule": [],
+      "sample_id": "95d704576174849d",
+      "scenario_id": "x-a74f5b7b869f46b1",
+      "serving_concurrency": 1,
+      "sessions": [
+        {
+          "initial_tokens": 16192,
+          "job_class": "coding",
+          "order": 0,
+          "session_id": "codex:e381cc89-38ef-e67e-79b9-4b800369b4f5",
+          "turn_index": 0
+        }
+      ],
+      "split": "train"
+    },
+    {
+      "activity": "none",
+      "activity_tokens": 0,
+      "bandwidth_mbps": 2500.0,
+      "campaign": "serial_crossover",
+      "concurrency": 1,
+      "context_size": 16384,
+      "copy_policy": "initial_final",
+      "deadline_s": 180,
+      "final_state": "awake",
+      "kind": "migration",
+      "match_id": "1304e5114f8b0569",
+      "method": "kv_transfer",
+      "move_concurrency": 1,
+      "moves": [
+        {
+          "initial_tokens": 16192,
+          "job_class": "coding",
+          "method": "kv_transfer",
+          "order": 0,
+          "session_id": "codex:e381cc89-38ef-e67e-79b9-4b800369b4f5",
+          "turn_index": 0
+        }
+      ],
+      "repeat": 1,
+      "request_schedule": [],
+      "sample_id": "95d704576174849d",
+      "scenario_id": "x-bb103497315db3f6",
+      "serving_concurrency": 1,
+      "sessions": [
+        {
+          "initial_tokens": 16192,
+          "job_class": "coding",
+          "order": 0,
+          "session_id": "codex:e381cc89-38ef-e67e-79b9-4b800369b4f5",
+          "turn_index": 0
+        }
+      ],
+      "split": "train"
+    },
+    {
+      "activity": "none",
+      "activity_tokens": 0,
+      "bandwidth_mbps": 2500.0,
+      "campaign": "serial_crossover",
+      "concurrency": 1,
+      "context_size": 4096,
+      "copy_policy": "initial_final",
+      "deadline_s": 180,
+      "final_state": "awake",
+      "kind": "migration",
+      "match_id": "dba66fbd856fcc65",
+      "method": "replay",
+      "move_concurrency": 1,
+      "moves": [
+        {
+          "initial_tokens": 3904,
+          "job_class": "coding",
+          "method": "replay",
+          "order": 0,
+          "session_id": "codex:2604c640-6bc9-2d90-5a8b-ae20bc5081fa",
+          "turn_index": 0
+        }
+      ],
+      "repeat": 2,
+      "request_schedule": [],
+      "sample_id": "cd030047d52b1bed",
+      "scenario_id": "x-e88d5e6c75d069ee",
+      "serving_concurrency": 1,
+      "sessions": [
+        {
+          "initial_tokens": 3904,
+          "job_class": "coding",
+          "order": 0,
+          "session_id": "codex:2604c640-6bc9-2d90-5a8b-ae20bc5081fa",
+          "turn_index": 0
+        }
+      ],
+      "split": "validation"
+    },
+    {
+      "activity": "none",
+      "activity_tokens": 0,
+      "bandwidth_mbps": 2500.0,
+      "campaign": "serial_crossover",
+      "concurrency": 1,
+      "context_size": 4096,
+      "copy_policy": "initial_final",
+      "deadline_s": 180,
+      "final_state": "awake",
+      "kind": "migration",
+      "match_id": "dba66fbd856fcc65",
+      "method": "kv_transfer",
+      "move_concurrency": 1,
+      "moves": [
+        {
+          "initial_tokens": 3904,
+          "job_class": "coding",
+          "method": "kv_transfer",
+          "order": 0,
+          "session_id": "codex:2604c640-6bc9-2d90-5a8b-ae20bc5081fa",
+          "turn_index": 0
+        }
+      ],
+      "repeat": 2,
+      "request_schedule": [],
+      "sample_id": "cd030047d52b1bed",
+      "scenario_id": "x-be69b37667667d14",
+      "serving_concurrency": 1,
+      "sessions": [
+        {
+          "initial_tokens": 3904,
+          "job_class": "coding",
+          "order": 0,
+          "session_id": "codex:2604c640-6bc9-2d90-5a8b-ae20bc5081fa",
+          "turn_index": 0
+        }
+      ],
+      "split": "validation"
+    },
+    {
+      "activity": "none",
+      "activity_tokens": 0,
+      "bandwidth_mbps": 2500.0,
+      "campaign": "serial_crossover",
+      "concurrency": 1,
+      "context_size": 32768,
+      "copy_policy": "initial_final",
+      "deadline_s": 180,
+      "final_state": "awake",
+      "kind": "migration",
+      "match_id": "57f425fc430a617d",
+      "method": "kv_transfer",
+      "move_concurrency": 1,
+      "moves": [
+        {
+          "initial_tokens": 32576,
+          "job_class": "coding",
+          "method": "kv_transfer",
+          "order": 0,
+          "session_id": "claude:eaad8d63-63bf-7139-f930-0ef47fa45253",
+          "turn_index": 0
+        }
+      ],
+      "repeat": 1,
+      "request_schedule": [],
+      "sample_id": "f4f626f538d7d3f9",
+      "scenario_id": "x-5c3c451d92dfb2fc",
+      "serving_concurrency": 1,
+      "sessions": [
+        {
+          "initial_tokens": 32576,
+          "job_class": "coding",
+          "order": 0,
+          "session_id": "claude:eaad8d63-63bf-7139-f930-0ef47fa45253",
+          "turn_index": 0
+        }
+      ],
+      "split": "train"
+    },
+    {
+      "activity": "none",
+      "activity_tokens": 0,
+      "bandwidth_mbps": 2500.0,
+      "campaign": "serial_crossover",
+      "concurrency": 1,
+      "context_size": 32768,
+      "copy_policy": "initial_final",
+      "deadline_s": 180,
+      "final_state": "awake",
+      "kind": "migration",
+      "match_id": "57f425fc430a617d",
+      "method": "replay",
+      "move_concurrency": 1,
+      "moves": [
+        {
+          "initial_tokens": 32576,
+          "job_class": "coding",
+          "method": "replay",
+          "order": 0,
+          "session_id": "claude:eaad8d63-63bf-7139-f930-0ef47fa45253",
+          "turn_index": 0
+        }
+      ],
+      "repeat": 1,
+      "request_schedule": [],
+      "sample_id": "f4f626f538d7d3f9",
+      "scenario_id": "x-f72058eea4489a60",
+      "serving_concurrency": 1,
+      "sessions": [
+        {
+          "initial_tokens": 32576,
+          "job_class": "coding",
+          "order": 0,
+          "session_id": "claude:eaad8d63-63bf-7139-f930-0ef47fa45253",
+          "turn_index": 0
+        }
+      ],
+      "split": "train"
+    },
+    {
+      "activity": "none",
+      "activity_tokens": 0,
+      "bandwidth_mbps": 2500.0,
+      "campaign": "serial_crossover",
+      "concurrency": 1,
+      "context_size": 2048,
+      "copy_policy": "initial_final",
+      "deadline_s": 180,
+      "final_state": "awake",
+      "kind": "migration",
+      "match_id": "7954b2cd4bbcbce4",
+      "method": "kv_transfer",
+      "move_concurrency": 1,
+      "moves": [
+        {
+          "initial_tokens": 1856,
+          "job_class": "coding",
+          "method": "kv_transfer",
+          "order": 0,
+          "session_id": "claude:eaad8d63-63bf-7139-f930-0ef47fa45253",
+          "turn_index": 0
+        }
+      ],
+      "repeat": 0,
+      "request_schedule": [],
+      "sample_id": "1782a8161d03f141",
+      "scenario_id": "x-718e2f03ba70de72",
+      "serving_concurrency": 1,
+      "sessions": [
+        {
+          "initial_tokens": 1856,
+          "job_class": "coding",
+          "order": 0,
+          "session_id": "claude:eaad8d63-63bf-7139-f930-0ef47fa45253",
+          "turn_index": 0
+        }
+      ],
+      "split": "train"
+    },
+    {
+      "activity": "none",
+      "activity_tokens": 0,
+      "bandwidth_mbps": 2500.0,
+      "campaign": "serial_crossover",
+      "concurrency": 1,
+      "context_size": 2048,
+      "copy_policy": "initial_final",
+      "deadline_s": 180,
+      "final_state": "awake",
+      "kind": "migration",
+      "match_id": "7954b2cd4bbcbce4",
+      "method": "replay",
+      "move_concurrency": 1,
+      "moves": [
+        {
+          "initial_tokens": 1856,
+          "job_class": "coding",
+          "method": "replay",
+          "order": 0,
+          "session_id": "claude:eaad8d63-63bf-7139-f930-0ef47fa45253",
+          "turn_index": 0
+        }
+      ],
+      "repeat": 0,
+      "request_schedule": [],
+      "sample_id": "1782a8161d03f141",
+      "scenario_id": "x-fa7d484dc884e52f",
+      "serving_concurrency": 1,
+      "sessions": [
+        {
+          "initial_tokens": 1856,
+          "job_class": "coding",
+          "order": 0,
+          "session_id": "claude:eaad8d63-63bf-7139-f930-0ef47fa45253",
+          "turn_index": 0
+        }
+      ],
+      "split": "train"
+    },
+    {
+      "activity": "none",
+      "activity_tokens": 0,
+      "bandwidth_mbps": 2500.0,
+      "campaign": "serial_crossover",
+      "concurrency": 1,
+      "context_size": 24576,
+      "copy_policy": "initial_final",
+      "deadline_s": 180,
+      "final_state": "awake",
+      "kind": "migration",
+      "match_id": "0497e47e02d991c0",
+      "method": "kv_transfer",
+      "move_concurrency": 1,
+      "moves": [
+        {
+          "initial_tokens": 24384,
+          "job_class": "coding",
+          "method": "kv_transfer",
+          "order": 0,
+          "session_id": "claude:eaad8d63-63bf-7139-f930-0ef47fa45253",
+          "turn_index": 0
+        }
+      ],
+      "repeat": 0,
+      "request_schedule": [],
+      "sample_id": "2ff1c9736ff1695a",
+      "scenario_id": "x-76439789fb4e2529",
+      "serving_concurrency": 1,
+      "sessions": [
+        {
+          "initial_tokens": 24384,
+          "job_class": "coding",
+          "order": 0,
+          "session_id": "claude:eaad8d63-63bf-7139-f930-0ef47fa45253",
+          "turn_index": 0
+        }
+      ],
+      "split": "train"
+    },
+    {
+      "activity": "none",
+      "activity_tokens": 0,
+      "bandwidth_mbps": 2500.0,
+      "campaign": "serial_crossover",
+      "concurrency": 1,
+      "context_size": 24576,
+      "copy_policy": "initial_final",
+      "deadline_s": 180,
+      "final_state": "awake",
+      "kind": "migration",
+      "match_id": "0497e47e02d991c0",
+      "method": "replay",
+      "move_concurrency": 1,
+      "moves": [
+        {
+          "initial_tokens": 24384,
+          "job_class": "coding",
+          "method": "replay",
+          "order": 0,
+          "session_id": "claude:eaad8d63-63bf-7139-f930-0ef47fa45253",
+          "turn_index": 0
+        }
+      ],
+      "repeat": 0,
+      "request_schedule": [],
+      "sample_id": "2ff1c9736ff1695a",
+      "scenario_id": "x-86a89796b89263b9",
+      "serving_concurrency": 1,
+      "sessions": [
+        {
+          "initial_tokens": 24384,
+          "job_class": "coding",
+          "order": 0,
+          "session_id": "claude:eaad8d63-63bf-7139-f930-0ef47fa45253",
+          "turn_index": 0
+        }
+      ],
+      "split": "train"
+    },
+    {
+      "activity": "none",
+      "activity_tokens": 0,
+      "bandwidth_mbps": 2500.0,
+      "campaign": "serial_crossover",
+      "concurrency": 1,
+      "context_size": 2048,
+      "copy_policy": "initial_final",
+      "deadline_s": 180,
+      "final_state": "awake",
+      "kind": "migration",
+      "match_id": "9b61f7109b6a6ac1",
+      "method": "replay",
+      "move_concurrency": 1,
+      "moves": [
+        {
+          "initial_tokens": 1856,
+          "job_class": "coding",
+          "method": "replay",
+          "order": 0,
+          "session_id": "claude:e2fd4f89-016f-29f0-48a1-3b2f1991b287",
+          "turn_index": 0
+        }
+      ],
+      "repeat": 2,
+      "request_schedule": [],
+      "sample_id": "aac22fd822b762d1",
+      "scenario_id": "x-c3927e6ebc109d7f",
+      "serving_concurrency": 1,
+      "sessions": [
+        {
+          "initial_tokens": 1856,
+          "job_class": "coding",
+          "order": 0,
+          "session_id": "claude:e2fd4f89-016f-29f0-48a1-3b2f1991b287",
+          "turn_index": 0
+        }
+      ],
+      "split": "validation"
+    },
+    {
+      "activity": "none",
+      "activity_tokens": 0,
+      "bandwidth_mbps": 2500.0,
+      "campaign": "serial_crossover",
+      "concurrency": 1,
+      "context_size": 2048,
+      "copy_policy": "initial_final",
+      "deadline_s": 180,
+      "final_state": "awake",
+      "kind": "migration",
+      "match_id": "9b61f7109b6a6ac1",
+      "method": "kv_transfer",
+      "move_concurrency": 1,
+      "moves": [
+        {
+          "initial_tokens": 1856,
+          "job_class": "coding",
+          "method": "kv_transfer",
+          "order": 0,
+          "session_id": "claude:e2fd4f89-016f-29f0-48a1-3b2f1991b287",
+          "turn_index": 0
+        }
+      ],
+      "repeat": 2,
+      "request_schedule": [],
+      "sample_id": "aac22fd822b762d1",
+      "scenario_id": "x-2ab6a2b5e8a5ef5a",
+      "serving_concurrency": 1,
+      "sessions": [
+        {
+          "initial_tokens": 1856,
+          "job_class": "coding",
+          "order": 0,
+          "session_id": "claude:e2fd4f89-016f-29f0-48a1-3b2f1991b287",
+          "turn_index": 0
+        }
+      ],
+      "split": "validation"
+    },
+    {
+      "activity": "none",
+      "activity_tokens": 0,
+      "bandwidth_mbps": 2500.0,
+      "campaign": "serial_crossover",
+      "concurrency": 1,
+      "context_size": 4096,
+      "copy_policy": "initial_final",
+      "deadline_s": 180,
+      "final_state": "awake",
+      "kind": "migration",
+      "match_id": "e215bb11fdcad41a",
+      "method": "kv_transfer",
+      "move_concurrency": 1,
+      "moves": [
+        {
+          "initial_tokens": 3904,
+          "job_class": "coding",
+          "method": "kv_transfer",
+          "order": 0,
+          "session_id": "claude:1534babd-9b9e-68e0-057e-d9ce7e08adf0",
+          "turn_index": 0
+        }
+      ],
+      "repeat": 0,
+      "request_schedule": [],
+      "sample_id": "f333f27a0e660d20",
+      "scenario_id": "x-cd62aee65617802a",
+      "serving_concurrency": 1,
+      "sessions": [
+        {
+          "initial_tokens": 3904,
+          "job_class": "coding",
+          "order": 0,
+          "session_id": "claude:1534babd-9b9e-68e0-057e-d9ce7e08adf0",
+          "turn_index": 0
+        }
+      ],
+      "split": "train"
+    },
+    {
+      "activity": "none",
+      "activity_tokens": 0,
+      "bandwidth_mbps": 2500.0,
+      "campaign": "serial_crossover",
+      "concurrency": 1,
+      "context_size": 4096,
+      "copy_policy": "initial_final",
+      "deadline_s": 180,
+      "final_state": "awake",
+      "kind": "migration",
+      "match_id": "e215bb11fdcad41a",
+      "method": "replay",
+      "move_concurrency": 1,
+      "moves": [
+        {
+          "initial_tokens": 3904,
+          "job_class": "coding",
+          "method": "replay",
+          "order": 0,
+          "session_id": "claude:1534babd-9b9e-68e0-057e-d9ce7e08adf0",
+          "turn_index": 0
+        }
+      ],
+      "repeat": 0,
+      "request_schedule": [],
+      "sample_id": "f333f27a0e660d20",
+      "scenario_id": "x-ade32e98d5c00f46",
+      "serving_concurrency": 1,
+      "sessions": [
+        {
+          "initial_tokens": 3904,
+          "job_class": "coding",
+          "order": 0,
+          "session_id": "claude:1534babd-9b9e-68e0-057e-d9ce7e08adf0",
+          "turn_index": 0
+        }
+      ],
+      "split": "train"
+    },
+    {
+      "activity": "none",
+      "activity_tokens": 0,
+      "bandwidth_mbps": 2500.0,
+      "campaign": "serial_crossover",
+      "concurrency": 1,
+      "context_size": 16384,
+      "copy_policy": "initial_final",
+      "deadline_s": 180,
+      "final_state": "awake",
+      "kind": "migration",
+      "match_id": "8d4acd7c9c975d89",
+      "method": "kv_transfer",
+      "move_concurrency": 1,
+      "moves": [
+        {
+          "initial_tokens": 16192,
+          "job_class": "coding",
+          "method": "kv_transfer",
+          "order": 0,
+          "session_id": "codex:2604c640-6bc9-2d90-5a8b-ae20bc5081fa",
+          "turn_index": 0
+        }
+      ],
+      "repeat": 2,
+      "request_schedule": [],
+      "sample_id": "775f1820faa8d8de",
+      "scenario_id": "x-388df305fbaa6aee",
+      "serving_concurrency": 1,
+      "sessions": [
+        {
+          "initial_tokens": 16192,
+          "job_class": "coding",
+          "order": 0,
+          "session_id": "codex:2604c640-6bc9-2d90-5a8b-ae20bc5081fa",
+          "turn_index": 0
+        }
+      ],
+      "split": "validation"
+    },
+    {
+      "activity": "none",
+      "activity_tokens": 0,
+      "bandwidth_mbps": 2500.0,
+      "campaign": "serial_crossover",
+      "concurrency": 1,
+      "context_size": 16384,
+      "copy_policy": "initial_final",
+      "deadline_s": 180,
+      "final_state": "awake",
+      "kind": "migration",
+      "match_id": "8d4acd7c9c975d89",
+      "method": "replay",
+      "move_concurrency": 1,
+      "moves": [
+        {
+          "initial_tokens": 16192,
+          "job_class": "coding",
+          "method": "replay",
+          "order": 0,
+          "session_id": "codex:2604c640-6bc9-2d90-5a8b-ae20bc5081fa",
+          "turn_index": 0
+        }
+      ],
+      "repeat": 2,
+      "request_schedule": [],
+      "sample_id": "775f1820faa8d8de",
+      "scenario_id": "x-7dcdee73423fd5ee",
+      "serving_concurrency": 1,
+      "sessions": [
+        {
+          "initial_tokens": 16192,
+          "job_class": "coding",
+          "order": 0,
+          "session_id": "codex:2604c640-6bc9-2d90-5a8b-ae20bc5081fa",
+          "turn_index": 0
+        }
+      ],
+      "split": "validation"
+    },
+    {
+      "activity": "none",
+      "activity_tokens": 0,
+      "bandwidth_mbps": 2500.0,
+      "campaign": "serial_crossover",
+      "concurrency": 1,
+      "context_size": 8192,
+      "copy_policy": "initial_final",
+      "deadline_s": 180,
+      "final_state": "awake",
+      "kind": "migration",
+      "match_id": "fd440fcb5d48f949",
+      "method": "replay",
+      "move_concurrency": 1,
+      "moves": [
+        {
+          "initial_tokens": 8000,
+          "job_class": "coding",
+          "method": "replay",
+          "order": 0,
+          "session_id": "claude:e2fd4f89-016f-29f0-48a1-3b2f1991b287",
+          "turn_index": 0
+        }
+      ],
+      "repeat": 1,
+      "request_schedule": [],
+      "sample_id": "9824ab1584b16e99",
+      "scenario_id": "x-85b5ccfdf62e5074",
+      "serving_concurrency": 1,
+      "sessions": [
+        {
+          "initial_tokens": 8000,
+          "job_class": "coding",
+          "order": 0,
+          "session_id": "claude:e2fd4f89-016f-29f0-48a1-3b2f1991b287",
+          "turn_index": 0
+        }
+      ],
+      "split": "train"
+    },
+    {
+      "activity": "none",
+      "activity_tokens": 0,
+      "bandwidth_mbps": 2500.0,
+      "campaign": "serial_crossover",
+      "concurrency": 1,
+      "context_size": 8192,
+      "copy_policy": "initial_final",
+      "deadline_s": 180,
+      "final_state": "awake",
+      "kind": "migration",
+      "match_id": "fd440fcb5d48f949",
+      "method": "kv_transfer",
+      "move_concurrency": 1,
+      "moves": [
+        {
+          "initial_tokens": 8000,
+          "job_class": "coding",
+          "method": "kv_transfer",
+          "order": 0,
+          "session_id": "claude:e2fd4f89-016f-29f0-48a1-3b2f1991b287",
+          "turn_index": 0
+        }
+      ],
+      "repeat": 1,
+      "request_schedule": [],
+      "sample_id": "9824ab1584b16e99",
+      "scenario_id": "x-ceb0c9aa1cd552d4",
+      "serving_concurrency": 1,
+      "sessions": [
+        {
+          "initial_tokens": 8000,
+          "job_class": "coding",
+          "order": 0,
+          "session_id": "claude:e2fd4f89-016f-29f0-48a1-3b2f1991b287",
+          "turn_index": 0
+        }
+      ],
+      "split": "train"
+    },
+    {
+      "activity": "none",
+      "activity_tokens": 0,
+      "bandwidth_mbps": 2500.0,
+      "campaign": "serial_crossover",
+      "concurrency": 1,
+      "context_size": 32768,
+      "copy_policy": "initial_final",
+      "deadline_s": 180,
+      "final_state": "awake",
+      "kind": "migration",
+      "match_id": "b9a7829c62a6b33e",
+      "method": "kv_transfer",
+      "move_concurrency": 1,
+      "moves": [
+        {
+          "initial_tokens": 32576,
+          "job_class": "coding",
+          "method": "kv_transfer",
+          "order": 0,
+          "session_id": "codex:e381cc89-38ef-e67e-79b9-4b800369b4f5",
+          "turn_index": 0
+        }
+      ],
+      "repeat": 2,
+      "request_schedule": [],
+      "sample_id": "91d165df1e3f6ee2",
+      "scenario_id": "x-f7e5ab34700ad9f4",
+      "serving_concurrency": 1,
+      "sessions": [
+        {
+          "initial_tokens": 32576,
+          "job_class": "coding",
+          "order": 0,
+          "session_id": "codex:e381cc89-38ef-e67e-79b9-4b800369b4f5",
+          "turn_index": 0
+        }
+      ],
+      "split": "validation"
+    },
+    {
+      "activity": "none",
+      "activity_tokens": 0,
+      "bandwidth_mbps": 2500.0,
+      "campaign": "serial_crossover",
+      "concurrency": 1,
+      "context_size": 32768,
+      "copy_policy": "initial_final",
+      "deadline_s": 180,
+      "final_state": "awake",
+      "kind": "migration",
+      "match_id": "b9a7829c62a6b33e",
+      "method": "replay",
+      "move_concurrency": 1,
+      "moves": [
+        {
+          "initial_tokens": 32576,
+          "job_class": "coding",
+          "method": "replay",
+          "order": 0,
+          "session_id": "codex:e381cc89-38ef-e67e-79b9-4b800369b4f5",
+          "turn_index": 0
+        }
+      ],
+      "repeat": 2,
+      "request_schedule": [],
+      "sample_id": "91d165df1e3f6ee2",
+      "scenario_id": "x-496a40dcbc0bdf1c",
+      "serving_concurrency": 1,
+      "sessions": [
+        {
+          "initial_tokens": 32576,
+          "job_class": "coding",
+          "order": 0,
+          "session_id": "codex:e381cc89-38ef-e67e-79b9-4b800369b4f5",
+          "turn_index": 0
+        }
+      ],
+      "split": "validation"
+    },
+    {
+      "activity": "none",
+      "activity_tokens": 0,
+      "bandwidth_mbps": 2500.0,
+      "campaign": "serial_crossover",
+      "concurrency": 1,
+      "context_size": 24576,
+      "copy_policy": "initial_final",
+      "deadline_s": 180,
+      "final_state": "awake",
+      "kind": "migration",
+      "match_id": "01148aef46ca681b",
+      "method": "replay",
+      "move_concurrency": 1,
+      "moves": [
+        {
+          "initial_tokens": 24384,
+          "job_class": "coding",
+          "method": "replay",
+          "order": 0,
+          "session_id": "codex:1229e212-7c9e-fc46-e948-4c87690d9e5e",
+          "turn_index": 0
+        }
+      ],
+      "repeat": 2,
+      "request_schedule": [],
+      "sample_id": "9b168db2bf033de8",
+      "scenario_id": "x-2ff4b832501b8823",
+      "serving_concurrency": 1,
+      "sessions": [
+        {
+          "initial_tokens": 24384,
+          "job_class": "coding",
+          "order": 0,
+          "session_id": "codex:1229e212-7c9e-fc46-e948-4c87690d9e5e",
+          "turn_index": 0
+        }
+      ],
+      "split": "validation"
+    },
+    {
+      "activity": "none",
+      "activity_tokens": 0,
+      "bandwidth_mbps": 2500.0,
+      "campaign": "serial_crossover",
+      "concurrency": 1,
+      "context_size": 24576,
+      "copy_policy": "initial_final",
+      "deadline_s": 180,
+      "final_state": "awake",
+      "kind": "migration",
+      "match_id": "01148aef46ca681b",
+      "method": "kv_transfer",
+      "move_concurrency": 1,
+      "moves": [
+        {
+          "initial_tokens": 24384,
+          "job_class": "coding",
+          "method": "kv_transfer",
+          "order": 0,
+          "session_id": "codex:1229e212-7c9e-fc46-e948-4c87690d9e5e",
+          "turn_index": 0
+        }
+      ],
+      "repeat": 2,
+      "request_schedule": [],
+      "sample_id": "9b168db2bf033de8",
+      "scenario_id": "x-8d1c3cf56819ab04",
+      "serving_concurrency": 1,
+      "sessions": [
+        {
+          "initial_tokens": 24384,
+          "job_class": "coding",
+          "order": 0,
+          "session_id": "codex:1229e212-7c9e-fc46-e948-4c87690d9e5e",
+          "turn_index": 0
+        }
+      ],
+      "split": "validation"
+    },
+    {
+      "activity": "none",
+      "activity_tokens": 0,
+      "bandwidth_mbps": 2500.0,
+      "campaign": "serial_crossover",
+      "concurrency": 1,
+      "context_size": 2048,
+      "copy_policy": "initial_final",
+      "deadline_s": 180,
+      "final_state": "awake",
+      "kind": "migration",
+      "match_id": "089e405d7cac573b",
+      "method": "kv_transfer",
+      "move_concurrency": 1,
+      "moves": [
+        {
+          "initial_tokens": 1856,
+          "job_class": "coding",
+          "method": "kv_transfer",
+          "order": 0,
+          "session_id": "claude:92cc24b6-ac8d-5231-bb2d-33b876557766",
+          "turn_index": 0
+        }
+      ],
+      "repeat": 1,
+      "request_schedule": [],
+      "sample_id": "4295955e89a62676",
+      "scenario_id": "x-364582756ac0fe2a",
+      "serving_concurrency": 1,
+      "sessions": [
+        {
+          "initial_tokens": 1856,
+          "job_class": "coding",
+          "order": 0,
+          "session_id": "claude:92cc24b6-ac8d-5231-bb2d-33b876557766",
+          "turn_index": 0
+        }
+      ],
+      "split": "train"
+    },
+    {
+      "activity": "none",
+      "activity_tokens": 0,
+      "bandwidth_mbps": 2500.0,
+      "campaign": "serial_crossover",
+      "concurrency": 1,
+      "context_size": 2048,
+      "copy_policy": "initial_final",
+      "deadline_s": 180,
+      "final_state": "awake",
+      "kind": "migration",
+      "match_id": "089e405d7cac573b",
+      "method": "replay",
+      "move_concurrency": 1,
+      "moves": [
+        {
+          "initial_tokens": 1856,
+          "job_class": "coding",
+          "method": "replay",
+          "order": 0,
+          "session_id": "claude:92cc24b6-ac8d-5231-bb2d-33b876557766",
+          "turn_index": 0
+        }
+      ],
+      "repeat": 1,
+      "request_schedule": [],
+      "sample_id": "4295955e89a62676",
+      "scenario_id": "x-d7b14125a19ff186",
+      "serving_concurrency": 1,
+      "sessions": [
+        {
+          "initial_tokens": 1856,
+          "job_class": "coding",
+          "order": 0,
+          "session_id": "claude:92cc24b6-ac8d-5231-bb2d-33b876557766",
+          "turn_index": 0
+        }
+      ],
+      "split": "train"
+    },
+    {
+      "activity": "none",
+      "activity_tokens": 0,
+      "bandwidth_mbps": 2500.0,
+      "campaign": "serial_crossover",
+      "concurrency": 1,
+      "context_size": 24576,
+      "copy_policy": "initial_final",
+      "deadline_s": 180,
+      "final_state": "awake",
+      "kind": "migration",
+      "match_id": "c7b43e5803c043b2",
+      "method": "kv_transfer",
+      "move_concurrency": 1,
+      "moves": [
+        {
+          "initial_tokens": 24384,
+          "job_class": "coding",
+          "method": "kv_transfer",
+          "order": 0,
+          "session_id": "claude:d822a508-dc39-797d-a37d-fa6552fdb8bb",
+          "turn_index": 0
+        }
+      ],
+      "repeat": 1,
+      "request_schedule": [],
+      "sample_id": "b93e393debeaee6e",
+      "scenario_id": "x-ca532ff6b59d278c",
+      "serving_concurrency": 1,
+      "sessions": [
+        {
+          "initial_tokens": 24384,
+          "job_class": "coding",
+          "order": 0,
+          "session_id": "claude:d822a508-dc39-797d-a37d-fa6552fdb8bb",
+          "turn_index": 0
+        }
+      ],
+      "split": "train"
+    },
+    {
+      "activity": "none",
+      "activity_tokens": 0,
+      "bandwidth_mbps": 2500.0,
+      "campaign": "serial_crossover",
+      "concurrency": 1,
+      "context_size": 24576,
+      "copy_policy": "initial_final",
+      "deadline_s": 180,
+      "final_state": "awake",
+      "kind": "migration",
+      "match_id": "c7b43e5803c043b2",
+      "method": "replay",
+      "move_concurrency": 1,
+      "moves": [
+        {
+          "initial_tokens": 24384,
+          "job_class": "coding",
+          "method": "replay",
+          "order": 0,
+          "session_id": "claude:d822a508-dc39-797d-a37d-fa6552fdb8bb",
+          "turn_index": 0
+        }
+      ],
+      "repeat": 1,
+      "request_schedule": [],
+      "sample_id": "b93e393debeaee6e",
+      "scenario_id": "x-bb81243032e156ba",
+      "serving_concurrency": 1,
+      "sessions": [
+        {
+          "initial_tokens": 24384,
+          "job_class": "coding",
+          "order": 0,
+          "session_id": "claude:d822a508-dc39-797d-a37d-fa6552fdb8bb",
+          "turn_index": 0
+        }
+      ],
+      "split": "train"
+    },
+    {
+      "activity": "none",
+      "activity_tokens": 0,
+      "bandwidth_mbps": 2500.0,
+      "campaign": "serial_crossover",
+      "concurrency": 1,
+      "context_size": 16384,
+      "copy_policy": "initial_final",
+      "deadline_s": 180,
+      "final_state": "awake",
+      "kind": "migration",
+      "match_id": "14a55671ea69a6bb",
+      "method": "replay",
+      "move_concurrency": 1,
+      "moves": [
+        {
+          "initial_tokens": 16192,
+          "job_class": "coding",
+          "method": "replay",
+          "order": 0,
+          "session_id": "codex:1229e212-7c9e-fc46-e948-4c87690d9e5e",
+          "turn_index": 0
+        }
+      ],
+      "repeat": 0,
+      "request_schedule": [],
+      "sample_id": "0c49ea83df0ae488",
+      "scenario_id": "x-e214ec87aca400f4",
+      "serving_concurrency": 1,
+      "sessions": [
+        {
+          "initial_tokens": 16192,
+          "job_class": "coding",
+          "order": 0,
+          "session_id": "codex:1229e212-7c9e-fc46-e948-4c87690d9e5e",
+          "turn_index": 0
+        }
+      ],
+      "split": "train"
+    },
+    {
+      "activity": "none",
+      "activity_tokens": 0,
+      "bandwidth_mbps": 2500.0,
+      "campaign": "serial_crossover",
+      "concurrency": 1,
+      "context_size": 16384,
+      "copy_policy": "initial_final",
+      "deadline_s": 180,
+      "final_state": "awake",
+      "kind": "migration",
+      "match_id": "14a55671ea69a6bb",
+      "method": "kv_transfer",
+      "move_concurrency": 1,
+      "moves": [
+        {
+          "initial_tokens": 16192,
+          "job_class": "coding",
+          "method": "kv_transfer",
+          "order": 0,
+          "session_id": "codex:1229e212-7c9e-fc46-e948-4c87690d9e5e",
+          "turn_index": 0
+        }
+      ],
+      "repeat": 0,
+      "request_schedule": [],
+      "sample_id": "0c49ea83df0ae488",
+      "scenario_id": "x-391c4502bd07104c",
+      "serving_concurrency": 1,
+      "sessions": [
+        {
+          "initial_tokens": 16192,
+          "job_class": "coding",
+          "order": 0,
+          "session_id": "codex:1229e212-7c9e-fc46-e948-4c87690d9e5e",
+          "turn_index": 0
+        }
+      ],
+      "split": "train"
+    },
+    {
+      "activity": "none",
+      "activity_tokens": 0,
+      "bandwidth_mbps": 2500.0,
+      "campaign": "serial_crossover",
+      "concurrency": 1,
+      "context_size": 32768,
+      "copy_policy": "initial_final",
+      "deadline_s": 180,
+      "final_state": "awake",
+      "kind": "migration",
+      "match_id": "c22176ef23cce586",
+      "method": "kv_transfer",
+      "move_concurrency": 1,
+      "moves": [
+        {
+          "initial_tokens": 32576,
+          "job_class": "coding",
+          "method": "kv_transfer",
+          "order": 0,
+          "session_id": "codex:e381cc89-38ef-e67e-79b9-4b800369b4f5",
+          "turn_index": 0
+        }
+      ],
+      "repeat": 0,
+      "request_schedule": [],
+      "sample_id": "787bde33093bc8a8",
+      "scenario_id": "x-de1d6198d9cd8dc2",
+      "serving_concurrency": 1,
+      "sessions": [
+        {
+          "initial_tokens": 32576,
+          "job_class": "coding",
+          "order": 0,
+          "session_id": "codex:e381cc89-38ef-e67e-79b9-4b800369b4f5",
+          "turn_index": 0
+        }
+      ],
+      "split": "train"
+    },
+    {
+      "activity": "none",
+      "activity_tokens": 0,
+      "bandwidth_mbps": 2500.0,
+      "campaign": "serial_crossover",
+      "concurrency": 1,
+      "context_size": 32768,
+      "copy_policy": "initial_final",
+      "deadline_s": 180,
+      "final_state": "awake",
+      "kind": "migration",
+      "match_id": "c22176ef23cce586",
+      "method": "replay",
+      "move_concurrency": 1,
+      "moves": [
+        {
+          "initial_tokens": 32576,
+          "job_class": "coding",
+          "method": "replay",
+          "order": 0,
+          "session_id": "codex:e381cc89-38ef-e67e-79b9-4b800369b4f5",
+          "turn_index": 0
+        }
+      ],
+      "repeat": 0,
+      "request_schedule": [],
+      "sample_id": "787bde33093bc8a8",
+      "scenario_id": "x-77e142637b74df9b",
+      "serving_concurrency": 1,
+      "sessions": [
+        {
+          "initial_tokens": 32576,
+          "job_class": "coding",
+          "order": 0,
+          "session_id": "codex:e381cc89-38ef-e67e-79b9-4b800369b4f5",
+          "turn_index": 0
+        }
+      ],
+      "split": "train"
+    },
+    {
+      "activity": "none",
+      "activity_tokens": 0,
+      "bandwidth_mbps": 1000.0,
+      "campaign": "serial_crossover",
+      "concurrency": 1,
+      "context_size": 32768,
+      "copy_policy": "initial_final",
+      "deadline_s": 180,
+      "final_state": "awake",
+      "kind": "migration",
+      "match_id": "f9f1928a16f382ac",
+      "method": "replay",
+      "move_concurrency": 1,
+      "moves": [
+        {
+          "initial_tokens": 32576,
+          "job_class": "coding",
+          "method": "replay",
+          "order": 0,
+          "session_id": "codex:e381cc89-38ef-e67e-79b9-4b800369b4f5",
+          "turn_index": 0
+        }
+      ],
+      "repeat": 0,
+      "request_schedule": [],
+      "sample_id": "787bde33093bc8a8",
+      "scenario_id": "x-427f02e58f4f5cd2",
+      "serving_concurrency": 1,
+      "sessions": [
+        {
+          "initial_tokens": 32576,
+          "job_class": "coding",
+          "order": 0,
+          "session_id": "codex:e381cc89-38ef-e67e-79b9-4b800369b4f5",
+          "turn_index": 0
+        }
+      ],
+      "split": "train"
+    },
+    {
+      "activity": "none",
+      "activity_tokens": 0,
+      "bandwidth_mbps": 1000.0,
+      "campaign": "serial_crossover",
+      "concurrency": 1,
+      "context_size": 32768,
+      "copy_policy": "initial_final",
+      "deadline_s": 180,
+      "final_state": "awake",
+      "kind": "migration",
+      "match_id": "f9f1928a16f382ac",
+      "method": "kv_transfer",
+      "move_concurrency": 1,
+      "moves": [
+        {
+          "initial_tokens": 32576,
+          "job_class": "coding",
+          "method": "kv_transfer",
+          "order": 0,
+          "session_id": "codex:e381cc89-38ef-e67e-79b9-4b800369b4f5",
+          "turn_index": 0
+        }
+      ],
+      "repeat": 0,
+      "request_schedule": [],
+      "sample_id": "787bde33093bc8a8",
+      "scenario_id": "x-f0d5abf37b3ca6ba",
+      "serving_concurrency": 1,
+      "sessions": [
+        {
+          "initial_tokens": 32576,
+          "job_class": "coding",
+          "order": 0,
+          "session_id": "codex:e381cc89-38ef-e67e-79b9-4b800369b4f5",
+          "turn_index": 0
+        }
+      ],
+      "split": "train"
+    },
+    {
+      "activity": "none",
+      "activity_tokens": 0,
+      "bandwidth_mbps": 1000.0,
+      "campaign": "serial_crossover",
+      "concurrency": 1,
+      "context_size": 4096,
+      "copy_policy": "initial_final",
+      "deadline_s": 180,
+      "final_state": "awake",
+      "kind": "migration",
+      "match_id": "6ad5716fdb477177",
+      "method": "kv_transfer",
+      "move_concurrency": 1,
+      "moves": [
+        {
+          "initial_tokens": 3904,
+          "job_class": "coding",
+          "method": "kv_transfer",
+          "order": 0,
+          "session_id": "claude:eaad8d63-63bf-7139-f930-0ef47fa45253",
+          "turn_index": 0
+        }
+      ],
+      "repeat": 1,
+      "request_schedule": [],
+      "sample_id": "01498eca3f115870",
+      "scenario_id": "x-a9ec70c7f61c6490",
+      "serving_concurrency": 1,
+      "sessions": [
+        {
+          "initial_tokens": 3904,
+          "job_class": "coding",
+          "order": 0,
+          "session_id": "claude:eaad8d63-63bf-7139-f930-0ef47fa45253",
+          "turn_index": 0
+        }
+      ],
+      "split": "train"
+    },
+    {
+      "activity": "none",
+      "activity_tokens": 0,
+      "bandwidth_mbps": 1000.0,
+      "campaign": "serial_crossover",
+      "concurrency": 1,
+      "context_size": 4096,
+      "copy_policy": "initial_final",
+      "deadline_s": 180,
+      "final_state": "awake",
+      "kind": "migration",
+      "match_id": "6ad5716fdb477177",
+      "method": "replay",
+      "move_concurrency": 1,
+      "moves": [
+        {
+          "initial_tokens": 3904,
+          "job_class": "coding",
+          "method": "replay",
+          "order": 0,
+          "session_id": "claude:eaad8d63-63bf-7139-f930-0ef47fa45253",
+          "turn_index": 0
+        }
+      ],
+      "repeat": 1,
+      "request_schedule": [],
+      "sample_id": "01498eca3f115870",
+      "scenario_id": "x-95eabccbcb36b054",
+      "serving_concurrency": 1,
+      "sessions": [
+        {
+          "initial_tokens": 3904,
+          "job_class": "coding",
+          "order": 0,
+          "session_id": "claude:eaad8d63-63bf-7139-f930-0ef47fa45253",
+          "turn_index": 0
+        }
+      ],
+      "split": "train"
+    },
+    {
+      "activity": "none",
+      "activity_tokens": 0,
+      "bandwidth_mbps": 1000.0,
+      "campaign": "serial_crossover",
+      "concurrency": 1,
+      "context_size": 24576,
+      "copy_policy": "initial_final",
+      "deadline_s": 180,
+      "final_state": "awake",
+      "kind": "migration",
+      "match_id": "827d51c673796550",
+      "method": "replay",
+      "move_concurrency": 1,
+      "moves": [
+        {
+          "initial_tokens": 24384,
+          "job_class": "coding",
+          "method": "replay",
+          "order": 0,
+          "session_id": "claude:d822a508-dc39-797d-a37d-fa6552fdb8bb",
+          "turn_index": 0
+        }
+      ],
+      "repeat": 1,
+      "request_schedule": [],
+      "sample_id": "b93e393debeaee6e",
+      "scenario_id": "x-44374f2adab4e36b",
+      "serving_concurrency": 1,
+      "sessions": [
+        {
+          "initial_tokens": 24384,
+          "job_class": "coding",
+          "order": 0,
+          "session_id": "claude:d822a508-dc39-797d-a37d-fa6552fdb8bb",
+          "turn_index": 0
+        }
+      ],
+      "split": "train"
+    },
+    {
+      "activity": "none",
+      "activity_tokens": 0,
+      "bandwidth_mbps": 1000.0,
+      "campaign": "serial_crossover",
+      "concurrency": 1,
+      "context_size": 24576,
+      "copy_policy": "initial_final",
+      "deadline_s": 180,
+      "final_state": "awake",
+      "kind": "migration",
+      "match_id": "827d51c673796550",
+      "method": "kv_transfer",
+      "move_concurrency": 1,
+      "moves": [
+        {
+          "initial_tokens": 24384,
+          "job_class": "coding",
+          "method": "kv_transfer",
+          "order": 0,
+          "session_id": "claude:d822a508-dc39-797d-a37d-fa6552fdb8bb",
+          "turn_index": 0
+        }
+      ],
+      "repeat": 1,
+      "request_schedule": [],
+      "sample_id": "b93e393debeaee6e",
+      "scenario_id": "x-777c97a16518907d",
+      "serving_concurrency": 1,
+      "sessions": [
+        {
+          "initial_tokens": 24384,
+          "job_class": "coding",
+          "order": 0,
+          "session_id": "claude:d822a508-dc39-797d-a37d-fa6552fdb8bb",
+          "turn_index": 0
+        }
+      ],
+      "split": "train"
+    },
+    {
+      "activity": "none",
+      "activity_tokens": 0,
+      "bandwidth_mbps": 1000.0,
+      "campaign": "serial_crossover",
+      "concurrency": 1,
+      "context_size": 32768,
+      "copy_policy": "initial_final",
+      "deadline_s": 180,
+      "final_state": "awake",
+      "kind": "migration",
+      "match_id": "80325a19ca3a4c2f",
+      "method": "replay",
+      "move_concurrency": 1,
+      "moves": [
+        {
+          "initial_tokens": 32576,
+          "job_class": "coding",
+          "method": "replay",
+          "order": 0,
+          "session_id": "claude:eaad8d63-63bf-7139-f930-0ef47fa45253",
+          "turn_index": 0
+        }
+      ],
+      "repeat": 1,
+      "request_schedule": [],
+      "sample_id": "f4f626f538d7d3f9",
+      "scenario_id": "x-2f3f853057120033",
+      "serving_concurrency": 1,
+      "sessions": [
+        {
+          "initial_tokens": 32576,
+          "job_class": "coding",
+          "order": 0,
+          "session_id": "claude:eaad8d63-63bf-7139-f930-0ef47fa45253",
+          "turn_index": 0
+        }
+      ],
+      "split": "train"
+    },
+    {
+      "activity": "none",
+      "activity_tokens": 0,
+      "bandwidth_mbps": 1000.0,
+      "campaign": "serial_crossover",
+      "concurrency": 1,
+      "context_size": 32768,
+      "copy_policy": "initial_final",
+      "deadline_s": 180,
+      "final_state": "awake",
+      "kind": "migration",
+      "match_id": "80325a19ca3a4c2f",
+      "method": "kv_transfer",
+      "move_concurrency": 1,
+      "moves": [
+        {
+          "initial_tokens": 32576,
+          "job_class": "coding",
+          "method": "kv_transfer",
+          "order": 0,
+          "session_id": "claude:eaad8d63-63bf-7139-f930-0ef47fa45253",
+          "turn_index": 0
+        }
+      ],
+      "repeat": 1,
+      "request_schedule": [],
+      "sample_id": "f4f626f538d7d3f9",
+      "scenario_id": "x-7d2ad19c5423cdf2",
+      "serving_concurrency": 1,
+      "sessions": [
+        {
+          "initial_tokens": 32576,
+          "job_class": "coding",
+          "order": 0,
+          "session_id": "claude:eaad8d63-63bf-7139-f930-0ef47fa45253",
+          "turn_index": 0
+        }
+      ],
+      "split": "train"
+    },
+    {
+      "activity": "none",
+      "activity_tokens": 0,
+      "bandwidth_mbps": 1000.0,
+      "campaign": "serial_crossover",
+      "concurrency": 1,
+      "context_size": 24576,
+      "copy_policy": "initial_final",
+      "deadline_s": 180,
+      "final_state": "awake",
+      "kind": "migration",
+      "match_id": "bfeacd2ff8a7639e",
+      "method": "replay",
+      "move_concurrency": 1,
+      "moves": [
+        {
+          "initial_tokens": 24384,
+          "job_class": "coding",
+          "method": "replay",
+          "order": 0,
+          "session_id": "claude:eaad8d63-63bf-7139-f930-0ef47fa45253",
+          "turn_index": 0
+        }
+      ],
+      "repeat": 0,
+      "request_schedule": [],
+      "sample_id": "2ff1c9736ff1695a",
+      "scenario_id": "x-6e304ab3e94566ec",
+      "serving_concurrency": 1,
+      "sessions": [
+        {
+          "initial_tokens": 24384,
+          "job_class": "coding",
+          "order": 0,
+          "session_id": "claude:eaad8d63-63bf-7139-f930-0ef47fa45253",
+          "turn_index": 0
+        }
+      ],
+      "split": "train"
+    },
+    {
+      "activity": "none",
+      "activity_tokens": 0,
+      "bandwidth_mbps": 1000.0,
+      "campaign": "serial_crossover",
+      "concurrency": 1,
+      "context_size": 24576,
+      "copy_policy": "initial_final",
+      "deadline_s": 180,
+      "final_state": "awake",
+      "kind": "migration",
+      "match_id": "bfeacd2ff8a7639e",
+      "method": "kv_transfer",
+      "move_concurrency": 1,
+      "moves": [
+        {
+          "initial_tokens": 24384,
+          "job_class": "coding",
+          "method": "kv_transfer",
+          "order": 0,
+          "session_id": "claude:eaad8d63-63bf-7139-f930-0ef47fa45253",
+          "turn_index": 0
+        }
+      ],
+      "repeat": 0,
+      "request_schedule": [],
+      "sample_id": "2ff1c9736ff1695a",
+      "scenario_id": "x-ae01b4390692d500",
+      "serving_concurrency": 1,
+      "sessions": [
+        {
+          "initial_tokens": 24384,
+          "job_class": "coding",
+          "order": 0,
+          "session_id": "claude:eaad8d63-63bf-7139-f930-0ef47fa45253",
+          "turn_index": 0
+        }
+      ],
+      "split": "train"
+    },
+    {
+      "activity": "none",
+      "activity_tokens": 0,
+      "bandwidth_mbps": 1000.0,
+      "campaign": "serial_crossover",
+      "concurrency": 1,
+      "context_size": 8192,
+      "copy_policy": "initial_final",
+      "deadline_s": 180,
+      "final_state": "awake",
+      "kind": "migration",
+      "match_id": "83506b955cd2de98",
+      "method": "replay",
+      "move_concurrency": 1,
+      "moves": [
+        {
+          "initial_tokens": 8000,
+          "job_class": "coding",
+          "method": "replay",
+          "order": 0,
+          "session_id": "claude:e2fd4f89-016f-29f0-48a1-3b2f1991b287",
+          "turn_index": 0
+        }
+      ],
+      "repeat": 1,
+      "request_schedule": [],
+      "sample_id": "9824ab1584b16e99",
+      "scenario_id": "x-13c7ba33ca0a1f92",
+      "serving_concurrency": 1,
+      "sessions": [
+        {
+          "initial_tokens": 8000,
+          "job_class": "coding",
+          "order": 0,
+          "session_id": "claude:e2fd4f89-016f-29f0-48a1-3b2f1991b287",
+          "turn_index": 0
+        }
+      ],
+      "split": "train"
+    },
+    {
+      "activity": "none",
+      "activity_tokens": 0,
+      "bandwidth_mbps": 1000.0,
+      "campaign": "serial_crossover",
+      "concurrency": 1,
+      "context_size": 8192,
+      "copy_policy": "initial_final",
+      "deadline_s": 180,
+      "final_state": "awake",
+      "kind": "migration",
+      "match_id": "83506b955cd2de98",
+      "method": "kv_transfer",
+      "move_concurrency": 1,
+      "moves": [
+        {
+          "initial_tokens": 8000,
+          "job_class": "coding",
+          "method": "kv_transfer",
+          "order": 0,
+          "session_id": "claude:e2fd4f89-016f-29f0-48a1-3b2f1991b287",
+          "turn_index": 0
+        }
+      ],
+      "repeat": 1,
+      "request_schedule": [],
+      "sample_id": "9824ab1584b16e99",
+      "scenario_id": "x-7e8f05023de3fb8e",
+      "serving_concurrency": 1,
+      "sessions": [
+        {
+          "initial_tokens": 8000,
+          "job_class": "coding",
+          "order": 0,
+          "session_id": "claude:e2fd4f89-016f-29f0-48a1-3b2f1991b287",
+          "turn_index": 0
+        }
+      ],
+      "split": "train"
+    },
+    {
+      "activity": "none",
+      "activity_tokens": 0,
+      "bandwidth_mbps": 1000.0,
+      "campaign": "serial_crossover",
+      "concurrency": 1,
+      "context_size": 24576,
+      "copy_policy": "initial_final",
+      "deadline_s": 180,
+      "final_state": "awake",
+      "kind": "migration",
+      "match_id": "1bcaf8eacbfcf70d",
+      "method": "replay",
+      "move_concurrency": 1,
+      "moves": [
+        {
+          "initial_tokens": 24384,
+          "job_class": "coding",
+          "method": "replay",
+          "order": 0,
+          "session_id": "codex:1229e212-7c9e-fc46-e948-4c87690d9e5e",
+          "turn_index": 0
+        }
+      ],
+      "repeat": 2,
+      "request_schedule": [],
+      "sample_id": "9b168db2bf033de8",
+      "scenario_id": "x-813c5a8d3c89da4e",
+      "serving_concurrency": 1,
+      "sessions": [
+        {
+          "initial_tokens": 24384,
+          "job_class": "coding",
+          "order": 0,
+          "session_id": "codex:1229e212-7c9e-fc46-e948-4c87690d9e5e",
+          "turn_index": 0
+        }
+      ],
+      "split": "validation"
+    },
+    {
+      "activity": "none",
+      "activity_tokens": 0,
+      "bandwidth_mbps": 1000.0,
+      "campaign": "serial_crossover",
+      "concurrency": 1,
+      "context_size": 24576,
+      "copy_policy": "initial_final",
+      "deadline_s": 180,
+      "final_state": "awake",
+      "kind": "migration",
+      "match_id": "1bcaf8eacbfcf70d",
+      "method": "kv_transfer",
+      "move_concurrency": 1,
+      "moves": [
+        {
+          "initial_tokens": 24384,
+          "job_class": "coding",
+          "method": "kv_transfer",
+          "order": 0,
+          "session_id": "codex:1229e212-7c9e-fc46-e948-4c87690d9e5e",
+          "turn_index": 0
+        }
+      ],
+      "repeat": 2,
+      "request_schedule": [],
+      "sample_id": "9b168db2bf033de8",
+      "scenario_id": "x-5f796be6a51e06f7",
+      "serving_concurrency": 1,
+      "sessions": [
+        {
+          "initial_tokens": 24384,
+          "job_class": "coding",
+          "order": 0,
+          "session_id": "codex:1229e212-7c9e-fc46-e948-4c87690d9e5e",
+          "turn_index": 0
+        }
+      ],
+      "split": "validation"
+    },
+    {
+      "activity": "none",
+      "activity_tokens": 0,
+      "bandwidth_mbps": 1000.0,
+      "campaign": "serial_crossover",
+      "concurrency": 1,
+      "context_size": 16384,
+      "copy_policy": "initial_final",
+      "deadline_s": 180,
+      "final_state": "awake",
+      "kind": "migration",
+      "match_id": "b4ff735e8ec67633",
+      "method": "kv_transfer",
+      "move_concurrency": 1,
+      "moves": [
+        {
+          "initial_tokens": 16192,
+          "job_class": "coding",
+          "method": "kv_transfer",
+          "order": 0,
+          "session_id": "codex:1229e212-7c9e-fc46-e948-4c87690d9e5e",
+          "turn_index": 0
+        }
+      ],
+      "repeat": 0,
+      "request_schedule": [],
+      "sample_id": "0c49ea83df0ae488",
+      "scenario_id": "x-923f4d1af371dab0",
+      "serving_concurrency": 1,
+      "sessions": [
+        {
+          "initial_tokens": 16192,
+          "job_class": "coding",
+          "order": 0,
+          "session_id": "codex:1229e212-7c9e-fc46-e948-4c87690d9e5e",
+          "turn_index": 0
+        }
+      ],
+      "split": "train"
+    },
+    {
+      "activity": "none",
+      "activity_tokens": 0,
+      "bandwidth_mbps": 1000.0,
+      "campaign": "serial_crossover",
+      "concurrency": 1,
+      "context_size": 16384,
+      "copy_policy": "initial_final",
+      "deadline_s": 180,
+      "final_state": "awake",
+      "kind": "migration",
+      "match_id": "b4ff735e8ec67633",
+      "method": "replay",
+      "move_concurrency": 1,
+      "moves": [
+        {
+          "initial_tokens": 16192,
+          "job_class": "coding",
+          "method": "replay",
+          "order": 0,
+          "session_id": "codex:1229e212-7c9e-fc46-e948-4c87690d9e5e",
+          "turn_index": 0
+        }
+      ],
+      "repeat": 0,
+      "request_schedule": [],
+      "sample_id": "0c49ea83df0ae488",
+      "scenario_id": "x-858151800921cb3f",
+      "serving_concurrency": 1,
+      "sessions": [
+        {
+          "initial_tokens": 16192,
+          "job_class": "coding",
+          "order": 0,
+          "session_id": "codex:1229e212-7c9e-fc46-e948-4c87690d9e5e",
+          "turn_index": 0
+        }
+      ],
+      "split": "train"
+    },
+    {
+      "activity": "none",
+      "activity_tokens": 0,
+      "bandwidth_mbps": 1000.0,
+      "campaign": "serial_crossover",
+      "concurrency": 1,
+      "context_size": 16384,
+      "copy_policy": "initial_final",
+      "deadline_s": 180,
+      "final_state": "awake",
+      "kind": "migration",
+      "match_id": "bacccabbb76c4fdc",
+      "method": "replay",
+      "move_concurrency": 1,
+      "moves": [
+        {
+          "initial_tokens": 16192,
+          "job_class": "coding",
+          "method": "replay",
+          "order": 0,
+          "session_id": "codex:2604c640-6bc9-2d90-5a8b-ae20bc5081fa",
+          "turn_index": 0
+        }
+      ],
+      "repeat": 2,
+      "request_schedule": [],
+      "sample_id": "775f1820faa8d8de",
+      "scenario_id": "x-0cf387c336ce97e8",
+      "serving_concurrency": 1,
+      "sessions": [
+        {
+          "initial_tokens": 16192,
+          "job_class": "coding",
+          "order": 0,
+          "session_id": "codex:2604c640-6bc9-2d90-5a8b-ae20bc5081fa",
+          "turn_index": 0
+        }
+      ],
+      "split": "validation"
+    },
+    {
+      "activity": "none",
+      "activity_tokens": 0,
+      "bandwidth_mbps": 1000.0,
+      "campaign": "serial_crossover",
+      "concurrency": 1,
+      "context_size": 16384,
+      "copy_policy": "initial_final",
+      "deadline_s": 180,
+      "final_state": "awake",
+      "kind": "migration",
+      "match_id": "bacccabbb76c4fdc",
+      "method": "kv_transfer",
+      "move_concurrency": 1,
+      "moves": [
+        {
+          "initial_tokens": 16192,
+          "job_class": "coding",
+          "method": "kv_transfer",
+          "order": 0,
+          "session_id": "codex:2604c640-6bc9-2d90-5a8b-ae20bc5081fa",
+          "turn_index": 0
+        }
+      ],
+      "repeat": 2,
+      "request_schedule": [],
+      "sample_id": "775f1820faa8d8de",
+      "scenario_id": "x-8e905931f5a72838",
+      "serving_concurrency": 1,
+      "sessions": [
+        {
+          "initial_tokens": 16192,
+          "job_class": "coding",
+          "order": 0,
+          "session_id": "codex:2604c640-6bc9-2d90-5a8b-ae20bc5081fa",
+          "turn_index": 0
+        }
+      ],
+      "split": "validation"
+    },
+    {
+      "activity": "none",
+      "activity_tokens": 0,
+      "bandwidth_mbps": 1000.0,
+      "campaign": "serial_crossover",
+      "concurrency": 1,
+      "context_size": 4096,
+      "copy_policy": "initial_final",
+      "deadline_s": 180,
+      "final_state": "awake",
+      "kind": "migration",
+      "match_id": "3dc58182e08d5210",
+      "method": "replay",
+      "move_concurrency": 1,
+      "moves": [
+        {
+          "initial_tokens": 3904,
+          "job_class": "coding",
+          "method": "replay",
+          "order": 0,
+          "session_id": "claude:1534babd-9b9e-68e0-057e-d9ce7e08adf0",
+          "turn_index": 0
+        }
+      ],
+      "repeat": 0,
+      "request_schedule": [],
+      "sample_id": "f333f27a0e660d20",
+      "scenario_id": "x-8fe95a2c5828721b",
+      "serving_concurrency": 1,
+      "sessions": [
+        {
+          "initial_tokens": 3904,
+          "job_class": "coding",
+          "order": 0,
+          "session_id": "claude:1534babd-9b9e-68e0-057e-d9ce7e08adf0",
+          "turn_index": 0
+        }
+      ],
+      "split": "train"
+    },
+    {
+      "activity": "none",
+      "activity_tokens": 0,
+      "bandwidth_mbps": 1000.0,
+      "campaign": "serial_crossover",
+      "concurrency": 1,
+      "context_size": 4096,
+      "copy_policy": "initial_final",
+      "deadline_s": 180,
+      "final_state": "awake",
+      "kind": "migration",
+      "match_id": "3dc58182e08d5210",
+      "method": "kv_transfer",
+      "move_concurrency": 1,
+      "moves": [
+        {
+          "initial_tokens": 3904,
+          "job_class": "coding",
+          "method": "kv_transfer",
+          "order": 0,
+          "session_id": "claude:1534babd-9b9e-68e0-057e-d9ce7e08adf0",
+          "turn_index": 0
+        }
+      ],
+      "repeat": 0,
+      "request_schedule": [],
+      "sample_id": "f333f27a0e660d20",
+      "scenario_id": "x-9289f352b581cef1",
+      "serving_concurrency": 1,
+      "sessions": [
+        {
+          "initial_tokens": 3904,
+          "job_class": "coding",
+          "order": 0,
+          "session_id": "claude:1534babd-9b9e-68e0-057e-d9ce7e08adf0",
+          "turn_index": 0
+        }
+      ],
+      "split": "train"
+    },
+    {
+      "activity": "none",
+      "activity_tokens": 0,
+      "bandwidth_mbps": 1000.0,
+      "campaign": "serial_crossover",
+      "concurrency": 1,
+      "context_size": 32768,
+      "copy_policy": "initial_final",
+      "deadline_s": 180,
+      "final_state": "awake",
+      "kind": "migration",
+      "match_id": "2fd6ae1e8a1852e6",
+      "method": "kv_transfer",
+      "move_concurrency": 1,
+      "moves": [
+        {
+          "initial_tokens": 32576,
+          "job_class": "coding",
+          "method": "kv_transfer",
+          "order": 0,
+          "session_id": "codex:e381cc89-38ef-e67e-79b9-4b800369b4f5",
+          "turn_index": 0
+        }
+      ],
+      "repeat": 2,
+      "request_schedule": [],
+      "sample_id": "91d165df1e3f6ee2",
+      "scenario_id": "x-b2948153b8d19310",
+      "serving_concurrency": 1,
+      "sessions": [
+        {
+          "initial_tokens": 32576,
+          "job_class": "coding",
+          "order": 0,
+          "session_id": "codex:e381cc89-38ef-e67e-79b9-4b800369b4f5",
+          "turn_index": 0
+        }
+      ],
+      "split": "validation"
+    },
+    {
+      "activity": "none",
+      "activity_tokens": 0,
+      "bandwidth_mbps": 1000.0,
+      "campaign": "serial_crossover",
+      "concurrency": 1,
+      "context_size": 32768,
+      "copy_policy": "initial_final",
+      "deadline_s": 180,
+      "final_state": "awake",
+      "kind": "migration",
+      "match_id": "2fd6ae1e8a1852e6",
+      "method": "replay",
+      "move_concurrency": 1,
+      "moves": [
+        {
+          "initial_tokens": 32576,
+          "job_class": "coding",
+          "method": "replay",
+          "order": 0,
+          "session_id": "codex:e381cc89-38ef-e67e-79b9-4b800369b4f5",
+          "turn_index": 0
+        }
+      ],
+      "repeat": 2,
+      "request_schedule": [],
+      "sample_id": "91d165df1e3f6ee2",
+      "scenario_id": "x-1a53aa7bb752484a",
+      "serving_concurrency": 1,
+      "sessions": [
+        {
+          "initial_tokens": 32576,
+          "job_class": "coding",
+          "order": 0,
+          "session_id": "codex:e381cc89-38ef-e67e-79b9-4b800369b4f5",
+          "turn_index": 0
+        }
+      ],
+      "split": "validation"
+    },
+    {
+      "activity": "none",
+      "activity_tokens": 0,
+      "bandwidth_mbps": 1000.0,
+      "campaign": "serial_crossover",
+      "concurrency": 1,
+      "context_size": 4096,
+      "copy_policy": "initial_final",
+      "deadline_s": 180,
+      "final_state": "awake",
+      "kind": "migration",
+      "match_id": "369b25f3b2a56ed3",
+      "method": "kv_transfer",
+      "move_concurrency": 1,
+      "moves": [
+        {
+          "initial_tokens": 3904,
+          "job_class": "coding",
+          "method": "kv_transfer",
+          "order": 0,
+          "session_id": "codex:2604c640-6bc9-2d90-5a8b-ae20bc5081fa",
+          "turn_index": 0
+        }
+      ],
+      "repeat": 2,
+      "request_schedule": [],
+      "sample_id": "cd030047d52b1bed",
+      "scenario_id": "x-87b46d40e7e6ab2a",
+      "serving_concurrency": 1,
+      "sessions": [
+        {
+          "initial_tokens": 3904,
+          "job_class": "coding",
+          "order": 0,
+          "session_id": "codex:2604c640-6bc9-2d90-5a8b-ae20bc5081fa",
+          "turn_index": 0
+        }
+      ],
+      "split": "validation"
+    },
+    {
+      "activity": "none",
+      "activity_tokens": 0,
+      "bandwidth_mbps": 1000.0,
+      "campaign": "serial_crossover",
+      "concurrency": 1,
+      "context_size": 4096,
+      "copy_policy": "initial_final",
+      "deadline_s": 180,
+      "final_state": "awake",
+      "kind": "migration",
+      "match_id": "369b25f3b2a56ed3",
+      "method": "replay",
+      "move_concurrency": 1,
+      "moves": [
+        {
+          "initial_tokens": 3904,
+          "job_class": "coding",
+          "method": "replay",
+          "order": 0,
+          "session_id": "codex:2604c640-6bc9-2d90-5a8b-ae20bc5081fa",
+          "turn_index": 0
+        }
+      ],
+      "repeat": 2,
+      "request_schedule": [],
+      "sample_id": "cd030047d52b1bed",
+      "scenario_id": "x-29a67e5983d439f9",
+      "serving_concurrency": 1,
+      "sessions": [
+        {
+          "initial_tokens": 3904,
+          "job_class": "coding",
+          "order": 0,
+          "session_id": "codex:2604c640-6bc9-2d90-5a8b-ae20bc5081fa",
+          "turn_index": 0
+        }
+      ],
+      "split": "validation"
+    },
+    {
+      "activity": "none",
+      "activity_tokens": 0,
+      "bandwidth_mbps": 1000.0,
+      "campaign": "serial_crossover",
+      "concurrency": 1,
+      "context_size": 2048,
+      "copy_policy": "initial_final",
+      "deadline_s": 180,
+      "final_state": "awake",
+      "kind": "migration",
+      "match_id": "5a47988bb404f8f7",
+      "method": "kv_transfer",
+      "move_concurrency": 1,
+      "moves": [
+        {
+          "initial_tokens": 1856,
+          "job_class": "coding",
+          "method": "kv_transfer",
+          "order": 0,
+          "session_id": "claude:eaad8d63-63bf-7139-f930-0ef47fa45253",
+          "turn_index": 0
+        }
+      ],
+      "repeat": 0,
+      "request_schedule": [],
+      "sample_id": "1782a8161d03f141",
+      "scenario_id": "x-d6a2cc785f7678f9",
+      "serving_concurrency": 1,
+      "sessions": [
+        {
+          "initial_tokens": 1856,
+          "job_class": "coding",
+          "order": 0,
+          "session_id": "claude:eaad8d63-63bf-7139-f930-0ef47fa45253",
+          "turn_index": 0
+        }
+      ],
+      "split": "train"
+    },
+    {
+      "activity": "none",
+      "activity_tokens": 0,
+      "bandwidth_mbps": 1000.0,
+      "campaign": "serial_crossover",
+      "concurrency": 1,
+      "context_size": 2048,
+      "copy_policy": "initial_final",
+      "deadline_s": 180,
+      "final_state": "awake",
+      "kind": "migration",
+      "match_id": "5a47988bb404f8f7",
+      "method": "replay",
+      "move_concurrency": 1,
+      "moves": [
+        {
+          "initial_tokens": 1856,
+          "job_class": "coding",
+          "method": "replay",
+          "order": 0,
+          "session_id": "claude:eaad8d63-63bf-7139-f930-0ef47fa45253",
+          "turn_index": 0
+        }
+      ],
+      "repeat": 0,
+      "request_schedule": [],
+      "sample_id": "1782a8161d03f141",
+      "scenario_id": "x-bea75eb61b2bef3d",
+      "serving_concurrency": 1,
+      "sessions": [
+        {
+          "initial_tokens": 1856,
+          "job_class": "coding",
+          "order": 0,
+          "session_id": "claude:eaad8d63-63bf-7139-f930-0ef47fa45253",
+          "turn_index": 0
+        }
+      ],
+      "split": "train"
+    },
+    {
+      "activity": "none",
+      "activity_tokens": 0,
+      "bandwidth_mbps": 1000.0,
+      "campaign": "serial_crossover",
+      "concurrency": 1,
+      "context_size": 8192,
+      "copy_policy": "initial_final",
+      "deadline_s": 180,
+      "final_state": "awake",
+      "kind": "migration",
+      "match_id": "3ac3555493886add",
+      "method": "replay",
+      "move_concurrency": 1,
+      "moves": [
+        {
+          "initial_tokens": 8000,
+          "job_class": "coding",
+          "method": "replay",
+          "order": 0,
+          "session_id": "claude:1534babd-9b9e-68e0-057e-d9ce7e08adf0",
+          "turn_index": 0
+        }
+      ],
+      "repeat": 0,
+      "request_schedule": [],
+      "sample_id": "4cce1c9609535161",
+      "scenario_id": "x-da9a5b52ce0a0a1f",
+      "serving_concurrency": 1,
+      "sessions": [
+        {
+          "initial_tokens": 8000,
+          "job_class": "coding",
+          "order": 0,
+          "session_id": "claude:1534babd-9b9e-68e0-057e-d9ce7e08adf0",
+          "turn_index": 0
+        }
+      ],
+      "split": "train"
+    },
+    {
+      "activity": "none",
+      "activity_tokens": 0,
+      "bandwidth_mbps": 1000.0,
+      "campaign": "serial_crossover",
+      "concurrency": 1,
+      "context_size": 8192,
+      "copy_policy": "initial_final",
+      "deadline_s": 180,
+      "final_state": "awake",
+      "kind": "migration",
+      "match_id": "3ac3555493886add",
+      "method": "kv_transfer",
+      "move_concurrency": 1,
+      "moves": [
+        {
+          "initial_tokens": 8000,
+          "job_class": "coding",
+          "method": "kv_transfer",
+          "order": 0,
+          "session_id": "claude:1534babd-9b9e-68e0-057e-d9ce7e08adf0",
+          "turn_index": 0
+        }
+      ],
+      "repeat": 0,
+      "request_schedule": [],
+      "sample_id": "4cce1c9609535161",
+      "scenario_id": "x-04e459c1911f1862",
+      "serving_concurrency": 1,
+      "sessions": [
+        {
+          "initial_tokens": 8000,
+          "job_class": "coding",
+          "order": 0,
+          "session_id": "claude:1534babd-9b9e-68e0-057e-d9ce7e08adf0",
+          "turn_index": 0
+        }
+      ],
+      "split": "train"
+    },
+    {
+      "activity": "none",
+      "activity_tokens": 0,
+      "bandwidth_mbps": 1000.0,
+      "campaign": "serial_crossover",
+      "concurrency": 1,
+      "context_size": 8192,
+      "copy_policy": "initial_final",
+      "deadline_s": 180,
+      "final_state": "awake",
+      "kind": "migration",
+      "match_id": "c31644f397575d72",
+      "method": "kv_transfer",
+      "move_concurrency": 1,
+      "moves": [
+        {
+          "initial_tokens": 8000,
+          "job_class": "coding",
+          "method": "kv_transfer",
+          "order": 0,
+          "session_id": "claude:e2fd4f89-016f-29f0-48a1-3b2f1991b287",
+          "turn_index": 0
+        }
+      ],
+      "repeat": 2,
+      "request_schedule": [],
+      "sample_id": "2e2eb54eb440bb85",
+      "scenario_id": "x-6c8b2e356d657fc8",
+      "serving_concurrency": 1,
+      "sessions": [
+        {
+          "initial_tokens": 8000,
+          "job_class": "coding",
+          "order": 0,
+          "session_id": "claude:e2fd4f89-016f-29f0-48a1-3b2f1991b287",
+          "turn_index": 0
+        }
+      ],
+      "split": "validation"
+    },
+    {
+      "activity": "none",
+      "activity_tokens": 0,
+      "bandwidth_mbps": 1000.0,
+      "campaign": "serial_crossover",
+      "concurrency": 1,
+      "context_size": 8192,
+      "copy_policy": "initial_final",
+      "deadline_s": 180,
+      "final_state": "awake",
+      "kind": "migration",
+      "match_id": "c31644f397575d72",
+      "method": "replay",
+      "move_concurrency": 1,
+      "moves": [
+        {
+          "initial_tokens": 8000,
+          "job_class": "coding",
+          "method": "replay",
+          "order": 0,
+          "session_id": "claude:e2fd4f89-016f-29f0-48a1-3b2f1991b287",
+          "turn_index": 0
+        }
+      ],
+      "repeat": 2,
+      "request_schedule": [],
+      "sample_id": "2e2eb54eb440bb85",
+      "scenario_id": "x-d20787e29249955e",
+      "serving_concurrency": 1,
+      "sessions": [
+        {
+          "initial_tokens": 8000,
+          "job_class": "coding",
+          "order": 0,
+          "session_id": "claude:e2fd4f89-016f-29f0-48a1-3b2f1991b287",
+          "turn_index": 0
+        }
+      ],
+      "split": "validation"
+    },
+    {
+      "activity": "none",
+      "activity_tokens": 0,
+      "bandwidth_mbps": 1000.0,
+      "campaign": "serial_crossover",
+      "concurrency": 1,
+      "context_size": 16384,
+      "copy_policy": "initial_final",
+      "deadline_s": 180,
+      "final_state": "awake",
+      "kind": "migration",
+      "match_id": "9929728a6946ef82",
+      "method": "kv_transfer",
+      "move_concurrency": 1,
+      "moves": [
+        {
+          "initial_tokens": 16192,
+          "job_class": "coding",
+          "method": "kv_transfer",
+          "order": 0,
+          "session_id": "codex:e381cc89-38ef-e67e-79b9-4b800369b4f5",
+          "turn_index": 0
+        }
+      ],
+      "repeat": 1,
+      "request_schedule": [],
+      "sample_id": "95d704576174849d",
+      "scenario_id": "x-2cc24d17ce25d589",
+      "serving_concurrency": 1,
+      "sessions": [
+        {
+          "initial_tokens": 16192,
+          "job_class": "coding",
+          "order": 0,
+          "session_id": "codex:e381cc89-38ef-e67e-79b9-4b800369b4f5",
+          "turn_index": 0
+        }
+      ],
+      "split": "train"
+    },
+    {
+      "activity": "none",
+      "activity_tokens": 0,
+      "bandwidth_mbps": 1000.0,
+      "campaign": "serial_crossover",
+      "concurrency": 1,
+      "context_size": 16384,
+      "copy_policy": "initial_final",
+      "deadline_s": 180,
+      "final_state": "awake",
+      "kind": "migration",
+      "match_id": "9929728a6946ef82",
+      "method": "replay",
+      "move_concurrency": 1,
+      "moves": [
+        {
+          "initial_tokens": 16192,
+          "job_class": "coding",
+          "method": "replay",
+          "order": 0,
+          "session_id": "codex:e381cc89-38ef-e67e-79b9-4b800369b4f5",
+          "turn_index": 0
+        }
+      ],
+      "repeat": 1,
+      "request_schedule": [],
+      "sample_id": "95d704576174849d",
+      "scenario_id": "x-43e302e717d36309",
+      "serving_concurrency": 1,
+      "sessions": [
+        {
+          "initial_tokens": 16192,
+          "job_class": "coding",
+          "order": 0,
+          "session_id": "codex:e381cc89-38ef-e67e-79b9-4b800369b4f5",
+          "turn_index": 0
+        }
+      ],
+      "split": "train"
+    },
+    {
+      "activity": "none",
+      "activity_tokens": 0,
+      "bandwidth_mbps": 1000.0,
+      "campaign": "serial_crossover",
+      "concurrency": 1,
+      "context_size": 2048,
+      "copy_policy": "initial_final",
+      "deadline_s": 180,
+      "final_state": "awake",
+      "kind": "migration",
+      "match_id": "47e2f2b038759487",
+      "method": "kv_transfer",
+      "move_concurrency": 1,
+      "moves": [
+        {
+          "initial_tokens": 1856,
+          "job_class": "coding",
+          "method": "kv_transfer",
+          "order": 0,
+          "session_id": "claude:e2fd4f89-016f-29f0-48a1-3b2f1991b287",
+          "turn_index": 0
+        }
+      ],
+      "repeat": 2,
+      "request_schedule": [],
+      "sample_id": "aac22fd822b762d1",
+      "scenario_id": "x-9679b183c078c20f",
+      "serving_concurrency": 1,
+      "sessions": [
+        {
+          "initial_tokens": 1856,
+          "job_class": "coding",
+          "order": 0,
+          "session_id": "claude:e2fd4f89-016f-29f0-48a1-3b2f1991b287",
+          "turn_index": 0
+        }
+      ],
+      "split": "validation"
+    },
+    {
+      "activity": "none",
+      "activity_tokens": 0,
+      "bandwidth_mbps": 1000.0,
+      "campaign": "serial_crossover",
+      "concurrency": 1,
+      "context_size": 2048,
+      "copy_policy": "initial_final",
+      "deadline_s": 180,
+      "final_state": "awake",
+      "kind": "migration",
+      "match_id": "47e2f2b038759487",
+      "method": "replay",
+      "move_concurrency": 1,
+      "moves": [
+        {
+          "initial_tokens": 1856,
+          "job_class": "coding",
+          "method": "replay",
+          "order": 0,
+          "session_id": "claude:e2fd4f89-016f-29f0-48a1-3b2f1991b287",
+          "turn_index": 0
+        }
+      ],
+      "repeat": 2,
+      "request_schedule": [],
+      "sample_id": "aac22fd822b762d1",
+      "scenario_id": "x-556fadd85cc90e6f",
+      "serving_concurrency": 1,
+      "sessions": [
+        {
+          "initial_tokens": 1856,
+          "job_class": "coding",
+          "order": 0,
+          "session_id": "claude:e2fd4f89-016f-29f0-48a1-3b2f1991b287",
+          "turn_index": 0
+        }
+      ],
+      "split": "validation"
+    },
+    {
+      "activity": "none",
+      "activity_tokens": 0,
+      "bandwidth_mbps": 1000.0,
+      "campaign": "serial_crossover",
+      "concurrency": 1,
+      "context_size": 2048,
+      "copy_policy": "initial_final",
+      "deadline_s": 180,
+      "final_state": "awake",
+      "kind": "migration",
+      "match_id": "301af245dcc98250",
+      "method": "kv_transfer",
+      "move_concurrency": 1,
+      "moves": [
+        {
+          "initial_tokens": 1856,
+          "job_class": "coding",
+          "method": "kv_transfer",
+          "order": 0,
+          "session_id": "claude:92cc24b6-ac8d-5231-bb2d-33b876557766",
+          "turn_index": 0
+        }
+      ],
+      "repeat": 1,
+      "request_schedule": [],
+      "sample_id": "4295955e89a62676",
+      "scenario_id": "x-de6bf5542c516c9c",
+      "serving_concurrency": 1,
+      "sessions": [
+        {
+          "initial_tokens": 1856,
+          "job_class": "coding",
+          "order": 0,
+          "session_id": "claude:92cc24b6-ac8d-5231-bb2d-33b876557766",
+          "turn_index": 0
+        }
+      ],
+      "split": "train"
+    },
+    {
+      "activity": "none",
+      "activity_tokens": 0,
+      "bandwidth_mbps": 1000.0,
+      "campaign": "serial_crossover",
+      "concurrency": 1,
+      "context_size": 2048,
+      "copy_policy": "initial_final",
+      "deadline_s": 180,
+      "final_state": "awake",
+      "kind": "migration",
+      "match_id": "301af245dcc98250",
+      "method": "replay",
+      "move_concurrency": 1,
+      "moves": [
+        {
+          "initial_tokens": 1856,
+          "job_class": "coding",
+          "method": "replay",
+          "order": 0,
+          "session_id": "claude:92cc24b6-ac8d-5231-bb2d-33b876557766",
+          "turn_index": 0
+        }
+      ],
+      "repeat": 1,
+      "request_schedule": [],
+      "sample_id": "4295955e89a62676",
+      "scenario_id": "x-251b232c9379aca4",
+      "serving_concurrency": 1,
+      "sessions": [
+        {
+          "initial_tokens": 1856,
+          "job_class": "coding",
+          "order": 0,
+          "session_id": "claude:92cc24b6-ac8d-5231-bb2d-33b876557766",
+          "turn_index": 0
+        }
+      ],
+      "split": "train"
+    }
+  ],
+  "schema": "queue-haul-migration-plan-v3",
+  "seed": 1
+}

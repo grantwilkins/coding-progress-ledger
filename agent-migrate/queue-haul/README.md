@@ -162,8 +162,12 @@ reserves 192 tokens for message overhead, and the first 32K replay is a fail-fas
 model-limit smoke. Bandwidths remain contiguous to avoid unnecessary MP-stack
 restarts. Its 6-context, 4-bandwidth, 3-repeat grid contains
 144 migrations. Use the reduced measurements to establish the method crossover
-before freezing the 2K–16K width-8 packing plan; the current replay profile
-starts at 3,473 tokens and must not be extrapolated to 2K.
+before freezing the 2K–16K width-8 packing plan; the legacy replay profile
+starts at 3,473 tokens and must not be extrapolated to 2K. The completed 144/144
+crossover bundle is checksum-pinned under
+`outputs/policy-hardware-crossover-20260730/`. Replay is faster across the tested
+range at 1/2.5 Gbit/s, through 8K at 5 Gbit/s, and through 4K at 10 Gbit/s; the
+8K 10-Gbit/s cell is effectively tied.
 `canonical_simulator_campaign.py` runs a four-target paired 10K-session
 Queue-Haul, greedy, per-session-fastest, replay-only, and KV-only comparison
 under one assumed dedicated-pool contract. Its compact 10K/100K/1M scale check
