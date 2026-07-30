@@ -1,7 +1,7 @@
 """
 Claim:
 Profiles preserve measured ranges, sealed-block KV bytes, destination ingestion
-capacity, and total action power by concurrency.
+capacity, and measured action-power curves.
 
 Plausible wrong implementations:
 - Accept a convex or decreasing power curve that violates the controller model.
@@ -12,7 +12,7 @@ Plausible wrong implementations:
 - Sample workload columns independently and create records absent from the trace.
 - Treat a legacy idle record as active or retain it as a third internal state.
 - Transfer a partial block proportionally or round it up.
-- Multiply total concurrent action power once per session.
+- Accept malformed action-power concurrency curves.
 """
 
 import json
@@ -45,10 +45,10 @@ def profile():
                            "sleep": {"1": [1, 0]}, "off": {"1": [1, 0]}},
     }
     return {
-        "schema": "queue-haul-model-profile-v3", "profile_id": "p", "status": "fitted",
+        "schema": "queue-haul-model-profile-v4", "profile_id": "p", "status": "fitted",
         "model": "m", "hardware": "h", "precision": "bf16", "tensor_parallel": 1,
         "gpus_per_node": 8, "power_scope": "gpu", "power_window_s": 5,
-        "max_ell": 1, "kv_capacity_tokens": 1000, "max_source_streams": 2,
+        "max_ell": 1, "kv_capacity_tokens": 1000,
         "max_destination_replays": 1, "max_destination_kv_streams": 1,
         "sources": {k: source(k) for k in (
             "power", "service", "capacity", "replay", "kv_transfer", "transitions"
@@ -108,7 +108,7 @@ def test_version_two_profiles_do_not_inherit_zero_cost_catch_up(tmp_path):
     raw = profile()
     raw["schema"] = "queue-haul-model-profile-v2"
 
-    with pytest.raises(ValueError, match="queue-haul-model-profile-v3"):
+    with pytest.raises(ValueError, match="queue-haul-model-profile-v4"):
         ModelProfile.load(write(tmp_path, raw))
 
 

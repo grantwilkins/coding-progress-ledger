@@ -9,7 +9,7 @@ from pathlib import Path
 import numpy as np
 
 
-PROFILE_SCHEMA = "queue-haul-model-profile-v3"
+PROFILE_SCHEMA = "queue-haul-model-profile-v4"
 WORKLOAD_SCHEMA = "queue-haul-workload-profile-v2"
 SOURCE_SECTIONS = ("power", "service", "capacity", "replay", "kv_transfer", "transitions")
 ACTION_POWER = {"replay", "kv_transfer", "replay_on_request", "catch_up", "sleep", "off"}
@@ -209,7 +209,6 @@ class ModelProfile:
     power_window_s: float
     max_ell: float
     kv_capacity_tokens: int
-    max_source_streams: int
     max_destination_replays: int
     max_destination_kv_streams: int
     sources: dict[str, Source]
@@ -232,8 +231,7 @@ class ModelProfile:
             raw["profile_id"], raw["status"], raw["model"], raw["hardware"],
             raw["precision"], int(raw["tensor_parallel"]), int(raw["gpus_per_node"]),
             raw["power_scope"], float(raw["power_window_s"]), float(raw["max_ell"]),
-            int(raw["kv_capacity_tokens"]), int(raw["max_source_streams"]),
-            int(raw["max_destination_replays"]),
+            int(raw["kv_capacity_tokens"]), int(raw["max_destination_replays"]),
             int(raw["max_destination_kv_streams"]), sources, cases,
         )
         if value.status not in {"fitted", "validated", "estimated"}:
@@ -241,8 +239,8 @@ class ModelProfile:
         if value.power_scope not in {"gpu", "server"}:
             raise ValueError(f"unknown power scope {value.power_scope!r}")
         if not value.profile_id or value.tensor_parallel < 1 or value.gpus_per_node < 1 \
-                or min(value.power_window_s, value.max_ell, value.kv_capacity_tokens,
-                       value.max_source_streams) <= 0:
+                or min(value.power_window_s, value.max_ell,
+                       value.kv_capacity_tokens) <= 0:
             raise ValueError("invalid profile identity or limits")
         if min(value.max_destination_replays, value.max_destination_kv_streams) < 1:
             raise ValueError("destination concurrency limits must be positive")

@@ -43,7 +43,7 @@ PRESSURE = Pressure(service=.8, bandwidth_gbps=5, migration_s=115)
 FLEX = .10
 DEBT = .10
 SEED = 0
-DATA_VERSION = 4
+DATA_VERSION = 5
 
 
 def result_row(requested, achieved, resource, used, capacity, **fields):
@@ -125,23 +125,22 @@ def _candidates(actions, capacities, normal, horizon, profile):
 
 def _select(candidates, target, capacities, horizon, power):
     used = dict.fromkeys(capacities, 0.0)
-    source_used, sessions, selected = {}, set(), []
+    sessions, selected = set(), []
     initial = power.power(True)
     for action, use, _ in candidates:
         if initial - power.power(True) >= target - 1e-8:
             break
-        source = source_used.get(action.source_instance, 0)
-        if action.session_id in sessions or source + action.duration_s > horizon + 1e-8 \
-                or any(used[name] + value > capacities[name] + 1e-8
-                       for name, value in use.items()):
+        if action.session_id in sessions or any(
+            used[name] + value > capacities[name] + 1e-8
+            for name, value in use.items()
+        ):
             continue
         selected.append(action)
         sessions.add(action.session_id)
-        source_used[action.source_instance] = source + action.duration_s
         for name, value in use.items():
             used[name] += value
         power.remove(action.session_id)
-    return tuple(selected), used, source_used, initial - power.power(True)
+    return tuple(selected), used, initial - power.power(True)
 
 
 def generate(model_path, manifest_path):
@@ -191,29 +190,26 @@ def generate(model_path, manifest_path):
         _actions(scenario_, profile, q, bandwidth, 0, horizon, "central"),
         capacities, normal, horizon, profile,
     )
-    _, _, _, maximum = _select(
+    _, _, maximum = _select(
         candidates, float("inf"), capacities, horizon,
         ExpectedPower(scenario_, profile),
     )
     rows = []
     for fraction in TARGETS:
         requested = fraction * maximum
-        selected, used, source_used, achieved = _select(
+        selected, used, achieved = _select(
             candidates, requested, capacities, horizon,
             ExpectedPower(scenario_, profile),
         )
         makespan = max(
             [0, used["WAN transfer bytes"] / bandwidth]
             + [action.duration_s for action in selected]
-            + list(source_used.values())
         )
         uses = {
-            "Source migration-stream time": max(source_used.values(), default=0),
             **used,
             "Planned makespan lower bound": makespan,
         }
         display_capacities = {
-            "Source migration-stream time": horizon,
             **capacities,
             "Planned makespan lower bound": horizon,
         }
@@ -303,13 +299,12 @@ def plot(rows, out):
         ):
             row[field] = float(row[field])
     primary = (
-        ("Source migration-stream time", "Source time", "#8C1515", "-"),
-        ("Ongoing integrated serving load", "GPU load", "#175E54", ":"),
-        ("Queued serving work", "GPU time", "#B83A4B", ":"),
+        ("WAN transfer bytes", "WAN bandwidth", "#8C1515", "-"),
+        ("Ongoing integrated serving load", "Concurrent GPU load", "#175E54", ":"),
+        ("Queued serving work", "Cumulative GPU work", "#B83A4B", ":"),
     )
     loose = (
-        "WAN transfer bytes", "Replay reconstruction GPU time",
-        "KV-ingest GPU time", "KV-cache blocks",
+        "Replay reconstruction GPU time", "KV-ingest GPU time", "KV-cache blocks",
     )
     labels = {resource: label for resource, label, _, _ in primary}
     colors = {resource: color for resource, _, color, _ in primary}
@@ -340,7 +335,7 @@ def plot(rows, out):
     axis.fill_between(
         x, loose_values.min(0), loose_values.max(0),
         color="#D5D5D5", alpha=.8, linewidth=0,
-        label="WAN / GPU / memory",
+        label="Replay / ingest / memory",
     )
     for resource, label, color, linestyle in primary:
         axis.plot(

@@ -53,7 +53,7 @@ def test_manifest_writes_the_canonical_grid_and_plot_registry(tmp_path):
 def test_requirement_row_preserves_physical_resource_totals(tmp_path):
     requirement = DestinationRequirement(
         10, 8, 8, 8, False, (), (2, 3), (4, 0), 7, 112,
-        1, 2, 100, (), (), 1, (("replay", 1), ("kv_transfer", 1)),
+        1, 2, 100, (("replay", 1), ("kv_transfer", 1)),
         3, 10, 10, 0, "exact", "optimal_best_effort", 0, .1,
     )
     row = requirement_row(

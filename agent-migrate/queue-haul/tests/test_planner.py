@@ -374,9 +374,9 @@ def test_greedy_prices_demand_from_one_action_per_session():
     assert chosen[0] == 1
 
 
-def test_greedy_reserves_source_time_and_power_window(tmp_path):
+def test_greedy_reserves_replay_time_and_power_window(tmp_path):
     profile = model(
-        tmp_path, switch=0, tp=1, destination_rate=100, parallel_moves=1,
+        tmp_path, switch=0, tp=1, destination_rate=100,
         replay_rate={"1": [[1, 50], [1000, 50]], "2": [[1, 25], [1000, 25]]},
     )
     scenario = ExecutionScenario(
@@ -397,7 +397,7 @@ def test_greedy_reserves_source_time_and_power_window(tmp_path):
 
 def test_greedy_uses_kv_when_shared_replay_time_is_full(tmp_path):
     profile = model(
-        tmp_path, switch=0, tp=1, destination_rate=500, parallel_moves=1,
+        tmp_path, switch=0, tp=1, destination_rate=500,
         replay_rate={"1": [[1, 100], [1000, 100]], "2": [[1, 50], [1000, 50]]},
     )
     sessions = tuple(SimSession(str(i), f"s{i}", 100, 10, 0, 1)
@@ -435,7 +435,7 @@ def test_collective_link_contention_can_make_a_plan_infeasible(tmp_path):
 
 def test_lp_uses_kv_when_shared_replay_time_is_full(tmp_path):
     profile = model(
-        tmp_path, switch=0, tp=1, destination_rate=500, parallel_moves=1,
+        tmp_path, switch=0, tp=1, destination_rate=500,
         replay_rate={"1": [[1, 100], [1000, 100]], "2": [[1, 50], [1000, 50]]},
     )
     sessions = tuple(SimSession(str(i), f"s{i}", 100, 10, 0, 1)
@@ -457,9 +457,9 @@ def test_lp_uses_kv_when_shared_replay_time_is_full(tmp_path):
     assert [move.method for move in result.moves].count("kv_transfer") == 1
 
 
-def test_lp_enforces_each_source_instance_queue(tmp_path):
+def test_lp_enforces_destination_replay_capacity(tmp_path):
     profile = model(
-        tmp_path, switch=0, tp=1, destination_rate=100, parallel_moves=1,
+        tmp_path, switch=0, tp=1, destination_rate=100,
         replay_rate={"1": [[1, 50], [1000, 50]], "2": [[1, 25], [1000, 25]]},
     )
     scenario = ExecutionScenario(
@@ -480,7 +480,7 @@ def test_lp_enforces_each_source_instance_queue(tmp_path):
 
 def test_lp_source_local_replay_uses_source_egress(tmp_path):
     profile = model(
-        tmp_path, switch=0, tp=1, destination_rate=100, parallel_moves=2,
+        tmp_path, switch=0, tp=1, destination_rate=100,
         replay_rate={"1": [[1, 1000], [1000, 1000]], "2": [[1, 500], [1000, 500]]},
     )
     scenario = ExecutionScenario(
@@ -512,7 +512,7 @@ def test_destination_capacity_reserves_expected_context_growth(tmp_path):
 
 def test_lp_reserves_the_trailing_power_window(tmp_path):
     profile = model(
-        tmp_path, switch=0, tp=1, destination_rate=1, parallel_moves=1,
+        tmp_path, switch=0, tp=1, destination_rate=1,
         replay_rate={"1": [[1, 100], [1000, 100]], "2": [[1, 50], [1000, 50]]},
     )
     scenario = ExecutionScenario(

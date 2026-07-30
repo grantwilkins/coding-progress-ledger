@@ -1,5 +1,5 @@
 {
-  "schema": "queue-haul-model-profile-v3",
+  "schema": "queue-haul-model-profile-v4",
   "profile_id": "gpt-oss-20b-a100-tp1-v3-destination-vllm022",
   "status": "estimated",
   "model": "openai/gpt-oss-20b",
@@ -11,7 +11,6 @@
   "power_window_s": 5.0,
   "max_ell": 0.531357714017,
   "kv_capacity_tokens": 963152,
-  "max_source_streams": 1,
   "max_destination_replays": 1,
   "max_destination_kv_streams": 1,
   "sources": {

@@ -190,16 +190,14 @@ normalized by its capacity. The resource rows are:
 
 | Resource | Capacity |
 |---|---|
-| source-instance migration | source streams \(\times H_m\) |
 | logical-WAN fluid bound | effective bytes/s \(\times H_m\) |
 | pool service facet | replicas \(\times\) policy bound minus baseline work |
 | additive pool live KV | replica KV capacity minus baseline KV at \(H_r\) |
 | pool migration occupancy | replicas \(\times H_m\) |
 
-Source streams are indivisible: the requirement solver packs each selected
-duration into \(S_i\) bins of size \(H_m\) for its source instance. The WAN byte
-row remains a fluid relaxation. Its reported makespan is a lower bound unless
-the event executor validates the concurrent route schedule.
+Migrations may start concurrently and share every link on their route. The WAN
+byte row is a fluid relaxation; the event executor validates the concurrent
+route schedule.
 
 Service and migration may overlap and are independently budgeted; both rows
 must fit. The pool path has no destination ingest or replay-concurrency row: the legacy
@@ -427,8 +425,8 @@ central bandwidth is 5 Gbps; sensitivity
 uses 1/5/10 Gbps and P50 RTTs of 10/60/90/150/240 ms. No TCP or multi-edge
 topology model is required. `MigrationSchedule` means one nonanticipative
 schedule whose makespan is at most \(H_m\) in every declared case and that
-reserves each source stream, logical route, destination ingest/copy engine,
-and replica migration slot. Any temporary staging allocation must become an
+reserves each logical route, destination ingest/copy engine, and replica
+migration slot. Any temporary staging allocation must become an
 explicit measured row; current code has none. Aggregate byte and occupancy rows
 are necessary pruning relaxations, not that schedule proof.
 
@@ -596,7 +594,7 @@ Experiment acceptance additionally requires every request observed by \(D\) to
 start by \(D\). This checks routing readiness, not end-to-end request latency.
 
 The requirement frontier evaluates source targets at
-10/25/50/75/90/100% of maximum shed and source-stream sensitivity at 1/2/4/8.
+10/25/50/75/90/100% of maximum shed.
 The legacy scalar LP and greedy support active sessions, the central profile
 case, one aggregate destination pool, and an awake final state. Passing a
 `DestinationArchitecture` enables multiple pools and routes, normal/emergency

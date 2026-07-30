@@ -363,15 +363,6 @@ def _migration_resources(scenario: ExecutionScenario, profile: ModelProfile, rou
         data.extend(value / capacity for _, value in entries)
         resource_count += 1
 
-    by_source: dict[str, list[int]] = {}
-    for j, session in enumerate(sessions):
-        by_source.setdefault(session.source_instance, []).append(j)
-    for indices in by_source.values():
-        add_resource(
-            ((method * n + j, durations[method, j])
-             for j in indices for method in range(2)),
-            horizon * profile.max_source_streams,
-        )
     for link, entries in named_links.items():
         add_resource(entries.items(), links[link] * horizon)
     if flexible_links:

@@ -41,6 +41,8 @@ performs final catch-up, switches routing, and succeeds when the destination
 returns the first token. Mid-token migration, return migration, cold model
 placement, unrelated destination arrivals, provider fleet policy, and facility
 power are out of scope.
+Same-source migrations may overlap and share the bandwidth of every link on
+their route; there is no fixed per-source migration-count limit.
 
 The public candidate is:
 

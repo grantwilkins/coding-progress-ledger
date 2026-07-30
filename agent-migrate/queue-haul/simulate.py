@@ -355,12 +355,6 @@ class ExecutionSimulator:
         self.changed_links: set[object] = set()
         self.states = [_MoveState(m) for m in self.moves]
         self.move_index = {state.move.session_id: i for i, state in enumerate(self.states)}
-        self.by_source: dict[str, list[int]] = {}
-        for i, state in enumerate(self.states):
-            source = self.sessions[state.move.session_id].source_instance
-            self.by_source.setdefault(source, []).append(i)
-        self.running = {source: 0 for source in self.by_source}
-        self.next_by_source = {source: 0 for source in self.by_source}
         self.context = {s.session_id: s.context_tokens for s in scenario.sessions}
         self.active_request_end = {s.session_id: 0.0 for s in scenario.sessions}
         self.active_request_instance: dict[str, str] = {}
@@ -462,8 +456,12 @@ class ExecutionSimulator:
         group = action, local, resource
         old_count = self.action_counts.get(group, 0)
         profile = self.case.action_power_w[action]
-        old_power = profile.power(old_count, local) if old_count else 0.0
-        new_power = profile.power(old_count + 1, local)
+        old_power = profile.power(1, True) if local and old_count else (
+            profile.power(old_count, False) if old_count else 0.0
+        )
+        new_power = old_power if local and old_count else profile.power(
+            old_count + 1, local
+        )
         self.action_counts[group] = old_count + 1
         self.action_power_w[local] += new_power - old_power
         if not old_count:
@@ -475,8 +473,12 @@ class ExecutionSimulator:
         group = action, local, resource
         old_count = self.action_counts[group]
         profile = self.case.action_power_w[action]
-        old_power = profile.power(old_count, local)
-        new_power = profile.power(old_count - 1, local) if old_count > 1 else 0.0
+        old_power = profile.power(1, True) if local else profile.power(
+            old_count, False
+        )
+        new_power = old_power if local and old_count > 1 else (
+            profile.power(old_count - 1, False) if old_count > 1 else 0.0
+        )
         if old_count > 1:
             self.action_counts[group] = old_count - 1
         else:
@@ -497,22 +499,16 @@ class ExecutionSimulator:
         if not self.power or point[1:] != self.power[-1][1:] or force:
             self.power.append(point)
 
-    def _start_available(self, source: str):
-        queue = self.by_source[source]
-        while self.running[source] < self.profile.max_source_streams \
-                and self.next_by_source[source] < len(queue):
-            index = queue[self.next_by_source[source]]
-            self.next_by_source[source] += 1
-            self.running[source] += 1
-            state = self.states[index]
-            state.snapshot_tokens = self.context[state.move.session_id]
-            state.scheduled_blocks = self.case.kv_transfer.sealed_blocks(
-                state.snapshot_tokens
-            )
-            state.initial_start = self.time
-            self._event("initial_start", state.move.session_id, detail=state.move.method)
-            setup = self.case.kv_transfer.setup_s if state.move.method == "kv_transfer" else 0.0
-            self._schedule(self.time + setup, "prepare", (index, "initial"))
+    def _start(self, index: int):
+        state = self.states[index]
+        state.snapshot_tokens = self.context[state.move.session_id]
+        state.scheduled_blocks = self.case.kv_transfer.sealed_blocks(
+            state.snapshot_tokens
+        )
+        state.initial_start = self.time
+        self._event("initial_start", state.move.session_id, detail=state.move.method)
+        setup = self.case.kv_transfer.setup_s if state.move.method == "kv_transfer" else 0.0
+        self._schedule(self.time + setup, "prepare", (index, "initial"))
 
     def _payload(self, index: int, phase: str) -> tuple[int, int, int]:
         state, session = self.states[index], self.sessions[self.states[index].move.session_id]
@@ -764,8 +760,6 @@ class ExecutionSimulator:
         if session_id in self.pending_requests:
             request_index, arrival = self.pending_requests.pop(session_id)
             self._schedule(self.time, "request_start", (session_id, request_index, arrival))
-        self.running[source] -= 1
-        self._start_available(source)
         for node_id in self.instances[source].gpu_nodes:
             if self.node_state[node_id] != "awake":
                 continue
@@ -959,8 +953,8 @@ class ExecutionSimulator:
                         self._event(f"{self.scenario.final_state}_done", node=payload)
                     elif kind == "plan_ready":
                         self._event("plan_ready")
-                        for source in self.by_source:
-                            self._start_available(source)
+                        for index in range(len(self.states)):
+                            self._start(index)
                     else:
                         raise RuntimeError(f"unknown event {kind!r}")
                 processed |= bool(events)

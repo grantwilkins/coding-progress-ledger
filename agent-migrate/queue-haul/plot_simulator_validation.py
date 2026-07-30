@@ -67,7 +67,6 @@ def _profile() -> ModelProfile:
         1000,
         2,
         2,
-        2,
         {name: source for name in SOURCE_SECTIONS},
         {"central": case},
     )

@@ -310,7 +310,6 @@ def fit_profile(serial_root: Path, catch_up_root: Path, profile_path: Path,
     concurrency = 1
     if parallel_root:
         concurrency = parallel_limit(parallel_root)
-    raw["max_source_streams"] = concurrency
     raw["max_destination_kv_streams"] = concurrency
     raw["max_destination_replays"] = 1
     out_profile.parent.mkdir(parents=True, exist_ok=True)

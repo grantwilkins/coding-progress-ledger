@@ -331,10 +331,6 @@ def candidate_table(scenario: ExecutionScenario, profile, architecture: Destinat
             capacities.append(capacity)
             names.append(name)
             units.append(unit)
-    for source in sorted({s.source_instance for s in sessions}):
-        add([c.duration_s if sessions[c.session].source_instance == source else 0
-             for c in candidates], migration_horizon * profile.max_source_streams,
-            f"source:{source}", "stream-s")
     for link, rate in links.items():
         add([c.route_bytes if link in c.path else 0 for c in candidates],
             rate * migration_horizon, f"route:{link}", "bytes")

@@ -9,7 +9,7 @@ Plausible wrong implementations:
 - Optimize bytes instead of migration work after satisfying the power target.
 - Round aggregate resident KV instead of rounding each session to paging blocks.
 - Treat RTT as a bandwidth penalty or omit its one fixed per-action term.
-- Change conserved resource totals when only source-stream concurrency changes.
+- Serialize migrations from one source despite available shared-link bandwidth.
 - Hide replay reconstruction inside total duration instead of reporting it.
 """
 
@@ -49,24 +49,24 @@ def test_exact_solver_jointly_selects_replay_and_kv():
         action("b", "kv_transfer", 4, 2),
     )
 
-    selected, maximum = _solve(actions, 10, 200, 1, 100)
-    infeasible, _ = _solve(actions, 11, 200, 1, 100)
+    selected, maximum = _solve(actions, 10, 200, 100)
+    infeasible, _ = _solve(actions, 11, 200, 100)
 
     assert selected == (0, 3)
     assert infeasible == selected
     assert maximum == 10
 
 
-def test_source_streams_are_indivisible_deadline_bins():
+def test_same_source_actions_are_limited_only_by_wan():
     actions = tuple(
         replace(action(str(i), "replay", 1, 6), source_instance="source")
         for i in range(3)
     )
 
-    selected, maximum = _solve(actions, 3, 10, 2, 100)
+    selected, maximum = _solve(actions, 3, 10, 100)
 
-    assert len(selected) == 2
-    assert maximum == 2
+    assert selected == (0, 1, 2)
+    assert maximum == 3
 
 
 def test_solver_minimizes_work_after_crossing_target():
@@ -76,12 +76,12 @@ def test_solver_minimizes_work_after_crossing_target():
         action("c", "kv_transfer", 5, 3),
     )
 
-    selected, _ = _solve(actions, 10, 10, 1, 100)
+    selected, _ = _solve(actions, 10, 10, 100)
 
     assert selected == (0, 1)
 
 
-def test_greedy_is_joint_and_stream_feasible_but_not_labeled_exact():
+def test_greedy_is_joint_and_bandwidth_feasible_but_not_labeled_exact():
     actions = (
         action("a", "replay", 6, 1),
         action("a", "kv_transfer", 6, 4),
@@ -89,37 +89,37 @@ def test_greedy_is_joint_and_stream_feasible_but_not_labeled_exact():
         replace(action("b", "kv_transfer", 4, 2), source_instance="a"),
     )
 
-    assert _greedy(actions, 10, 10, 1, 100) == _solve(
-        actions, 10, 10, 1, 100,
+    assert _greedy(actions, 10, 10, 100) == _solve(
+        actions, 10, 10, 100,
     )[0] == (0, 3)
     crowded = tuple(
         replace(action(str(i), "replay", 1, 6), source_instance="source")
         for i in range(3)
     )
-    assert len(_greedy(crowded, 3, 10, 2, 100)) == 2
+    assert _greedy(crowded, 3, 10, 100) == (0, 1, 2)
 
 
-def test_greedy_caps_overshoot_and_accounts_for_wan_and_source():
+def test_greedy_caps_overshoot_and_accounts_for_wan():
     overshoot = (
         action("large", "replay", 10, 5),
         action("precise", "kv_transfer", 6, 4),
     )
-    assert _greedy(overshoot, 6, 10, 1, 100) == (1,)
+    assert _greedy(overshoot, 6, 10, 100) == (1,)
 
     wan = (
         replace(action("a", "replay", 1, 1), route_bytes=101),
         replace(action("a", "kv_transfer", 1, 2), route_bytes=10),
     )
-    assert _greedy(wan, 1, 10, 1, 10) == (1,)
+    assert _greedy(wan, 1, 10, 10) == (1,)
 
     sources = (
         replace(action("a", "replay", 1, 6), source_instance="source-a"),
         replace(action("b", "replay", 1, 6), source_instance="source-a"),
         replace(action("c", "replay", 1, 6), source_instance="source-b"),
     )
-    first = _greedy(sources, 3, 10, 1, 100)
-    assert first == _greedy(sources, 3, 10, 1, 100)
-    assert first == (0, 2)
+    first = _greedy(sources, 3, 10, 100)
+    assert first == _greedy(sources, 3, 10, 100)
+    assert first == (0, 1, 2)
 
 
 def test_baselines_change_only_the_declared_ranking_policy():
@@ -134,15 +134,15 @@ def test_baselines_change_only_the_declared_ranking_policy():
                 service_work=(0, 0)),
     )
 
-    assert _baseline(actions, 4, 10, 1, 100, "all_replay") == (0,)
-    assert _baseline(actions, 4, 10, 1, 100, "all_kv") == (1,)
-    assert _baseline(actions, 4, 10, 1, 100, "isolated_fastest") == (1,)
-    assert _baseline(actions, 4, 10, 1, 100, "network_greedy") == (2,)
-    assert _baseline(actions, 4, 10, 1, 100, "service_greedy") == (1,)
-    assert _baseline(actions, 4, 10, 1, 100, "power_first") == (2,)
+    assert _baseline(actions, 4, 10, 100, "all_replay") == (0,)
+    assert _baseline(actions, 4, 10, 100, "all_kv") == (1,)
+    assert _baseline(actions, 4, 10, 100, "isolated_fastest") == (1,)
+    assert _baseline(actions, 4, 10, 100, "network_greedy") == (2,)
+    assert _baseline(actions, 4, 10, 100, "service_greedy") == (1,)
+    assert _baseline(actions, 4, 10, 100, "power_first") == (2,)
 
 
-def test_frontier_reports_physical_requirements_and_stream_invariance(tmp_path):
+def test_frontier_reports_physical_requirements(tmp_path):
     profile = model(tmp_path, switch=0, tp=1)
     base = problem()
     sessions = (
@@ -152,8 +152,8 @@ def test_frontier_reports_physical_requirements_and_stream_invariance(tmp_path):
     )
     scenario = replace(base, sessions=sessions)
 
-    one, two = sweep_frontier(
-        scenario, profile, destination_type(), (20,), (1, 2), 100, .5,
+    one, = sweep_frontier(
+        scenario, profile, destination_type(), (20,), 100, .5,
     )
 
     assert one.target_met and dict(one.method_mix) == {"replay": 1, "kv_transfer": 1}
@@ -163,15 +163,6 @@ def test_frontier_reports_physical_requirements_and_stream_invariance(tmp_path):
     assert one.destination_kv_tokens == 48
     assert one.wan_bytes == 101
     assert one.actions[1].route_bytes == 100  # one sealed 10-token transfer block
-    conserved = (
-        "actions", "destination_service_work", "destination_transition_work",
-        "destination_kv_blocks",
-        "destination_kv_tokens", "replay_migration_slot_s",
-        "kv_migration_slot_s", "wan_bytes", "source_stream_occupancy_s",
-        "method_mix",
-    )
-    assert all(getattr(one, field) == getattr(two, field) for field in conserved)
-    assert one.makespan_lower_bound_s > two.makespan_lower_bound_s
 
 
 def test_target_status_uses_exact_posthoc_power_gain(tmp_path):
@@ -181,7 +172,7 @@ def test_target_status_uses_exact_posthoc_power_gain(tmp_path):
     )
 
     result = requirement_frontier(
-        scenario, profile, destination_type(), 25, 100, 0, 2,
+        scenario, profile, destination_type(), 25, 100, 0,
     )
 
     assert result.maximum_modeled_source_power_gain_w == 20
@@ -197,7 +188,7 @@ def test_destination_capacity_does_not_gate_requirements(tmp_path):
         kv_capacity_tokens=1,
     )
 
-    result = requirement_frontier(scenario, profile, tiny, 20, 100, 0, 2)
+    result = requirement_frontier(scenario, profile, tiny, 20, 100, 0)
 
     assert result.target_met
     assert result.destination_service_work[0] > tiny.bounds["stable"][0]
@@ -207,7 +198,7 @@ def test_destination_capacity_does_not_gate_requirements(tmp_path):
 def test_public_greedy_result_disclaims_optimality(tmp_path):
     result = requirement_frontier(
         problem(), model(tmp_path, switch=0, tp=1), destination_type(),
-        20, 100, 0, 2, solver_mode="greedy",
+        20, 100, 0, solver_mode="greedy",
     )
 
     assert result.target_met
@@ -231,8 +222,8 @@ def test_requirement_path_keeps_kv_destination_ingest_floor(tmp_path):
 def test_rtt_is_one_additive_term_not_a_throughput_change(tmp_path):
     profile, scenario, q = model(tmp_path, switch=0, tp=1), problem(), destination_type()
 
-    zero = requirement_frontier(scenario, profile, q, 10, 100, 0, 1)
-    delayed = requirement_frontier(scenario, profile, q, 10, 100, .25, 1)
+    zero = requirement_frontier(scenario, profile, q, 10, 100, 0)
+    delayed = requirement_frontier(scenario, profile, q, 10, 100, .25)
 
     assert delayed.wan_bytes == zero.wan_bytes
     assert delayed.actions[0].duration_s == pytest.approx(

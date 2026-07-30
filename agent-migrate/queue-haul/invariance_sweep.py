@@ -42,24 +42,22 @@ for jc in ("interactive_coding", "coding"):
     packed, replicas = db.pack_source(
         db.sample_sessions(db.trace_shapes(manifest, jc), 10_000, 0, ratio), profile)
     print(f"\n===== {jc}: {replicas} source replicas =====", flush=True)
-    for streams in (1, 2):
-        prof_s = replace(profile, max_source_streams=streams)
-        sc = db.scenario(prof_s, packed, replicas, db.Pressure())
-        prof2 = db.extrapolate_replay(prof_s, sc.sessions, sc.deadline_s)
-        power = ExpectedPower(sc, prof2, "central")
-        target = max(0.0, power.power(True) - sc.power_limit_w)
-        for kv_mult in (1, 10, 100):
-            for pf_mult in (1, 100):
-                arch = build(prof2, sc.sessions, replicas, db.Pressure(),
-                             kv_mult, pf_mult, 1)
-                t = candidate_table(sc, prof2, arch, "emergency", power)
-                sel = _lp(t, target)
-                gain = sum(t.candidates[i].gain_w for i in sel)
-                b = binding(t, sel)
-                rows.append(dict(workload=jc, streams=streams, kv_mult=kv_mult,
-                                 prefill_mult=pf_mult, landed=len(sel),
-                                 gain_w=round(gain), binding=b))
-                print(f"  streams={streams}  KVx{kv_mult:<4d} prefillx{pf_mult:<4d} "
-                      f"-> landed {len(sel):5d}  gain {gain:7.0f} W   binding: {b}",
-                      flush=True)
+    sc = db.scenario(profile, packed, replicas, db.Pressure())
+    prof2 = db.extrapolate_replay(profile, sc.sessions, sc.deadline_s)
+    power = ExpectedPower(sc, prof2, "central")
+    target = max(0.0, power.power(True) - sc.power_limit_w)
+    for kv_mult in (1, 10, 100):
+        for pf_mult in (1, 100):
+            arch = build(prof2, sc.sessions, replicas, db.Pressure(),
+                         kv_mult, pf_mult, 1)
+            t = candidate_table(sc, prof2, arch, "emergency", power)
+            sel = _lp(t, target)
+            gain = sum(t.candidates[i].gain_w for i in sel)
+            b = binding(t, sel)
+            rows.append(dict(workload=jc, kv_mult=kv_mult,
+                             prefill_mult=pf_mult, landed=len(sel),
+                             gain_w=round(gain), binding=b))
+            print(f"  KVx{kv_mult:<4d} prefillx{pf_mult:<4d} "
+                  f"-> landed {len(sel):5d}  gain {gain:7.0f} W   binding: {b}",
+                  flush=True)
 json.dump(rows, open(sys.argv[1], "w"), indent=1)

@@ -320,7 +320,6 @@ every target:
 - ongoing prefill/decode headroom;
 - live-KV blocks;
 - service debt and required recovery;
-- source-stream occupancy;
 - binding resource set;
 - predicted and realized makespan; and
 - sessions, context tokens, and KV bytes still exposed.
@@ -346,12 +345,12 @@ questions:
 
 The first isolates fragmentation, compatibility, and route diversity. The
 second measures the value of additional headroom and the point where a shared
-source constraint stops further benefit. Resource diversity and compatibility
+route constraint stops further benefit. Resource diversity and compatibility
 diversity are varied in separate controlled experiments.
 
 Binding resources are a set, not an exclusive cause. Every result reports all
 resources with zero normalized residual slack; simultaneous route, transition,
-service, debt, KV, source-stream, and deadline constraints remain visible.
+service, debt, KV, and deadline constraints remain visible.
 
 ## 9. Evidence hierarchy and scope
 

@@ -13,7 +13,7 @@ Plausible wrong implementations:
 - Skip catch-up when a request changes state during background preparation.
 - Transfer nonexistent cold KV or defer replay for GPU-resident active KV.
 - Add network and destination KV time even though ingestion is pipelined.
-- Charge measured total concurrent action power once for every session.
+- Charge source transfer power once per flow instead of once per active resource.
 - Fail to lower cached action power when concurrency decreases.
 - Mix source and destination action power while updating concurrency.
 - Admit destination KV copies after rather than before their bytes move.
@@ -41,16 +41,14 @@ from simulate import (ExecutionScenario, ExecutionSimulator, NetworkLink, Planne
 
 def model(tmp_path, switch=1, destination_rate=1e12, shutdown=2, setup=0, tp=2,
           replay_rate=None, kv_capacity=10_000, kv_action_power=(0, 0), parallel_kv=1,
-          parallel_moves=2, kv_source_action_power=(0, 0), replay_completion=0,
-          catch_up_fixed=0):
+          kv_source_action_power=(0, 0), replay_completion=0, catch_up_fixed=0):
     source = {"kind": "measured", "reference": "hand", "valid_range": [1, 1000], "relative_error": 0}
     rate = {"1": [[1, 100], [1000, 100]], "2": [[1, 50], [1000, 50]]}
     raw = {
-        "schema": "queue-haul-model-profile-v3", "profile_id": "hand", "status": "fitted",
+        "schema": "queue-haul-model-profile-v4", "profile_id": "hand", "status": "fitted",
         "model": "m", "hardware": "h", "precision": "bf16", "tensor_parallel": tp,
         "gpus_per_node": 2, "power_scope": "gpu", "power_window_s": 1,
         "max_ell": 1, "kv_capacity_tokens": kv_capacity,
-        "max_source_streams": parallel_moves,
         "max_destination_replays": 1,
         "max_destination_kv_streams": parallel_kv,
         "sources": {k: source for k in (
@@ -194,7 +192,7 @@ def test_destination_kv_queue_refills_concurrency_two(tmp_path):
     )
     result = execute(
         scenario(sessions, links=(NetworkLink("wan", 1000),)),
-        model(tmp_path, switch=0, destination_rate=100, parallel_kv=2, parallel_moves=3),
+        model(tmp_path, switch=0, destination_rate=100, parallel_kv=2),
         moves,
     )
 
@@ -252,7 +250,7 @@ def test_action_power_is_total_for_concurrent_actions(tmp_path):
     assert max(point[2] for point in result.power) - baseline == pytest.approx(15)
 
 
-def test_action_power_tracks_concurrency_per_resource_on_start_and_stop(tmp_path):
+def test_action_power_tracks_source_activity_and_destination_concurrency(tmp_path):
     topology = ExecutionScenario(
         10, 20, 0, "awake", 0,
         (PowerNode("src", 1, True), PowerNode("dst", 2, False)),
@@ -268,6 +266,8 @@ def test_action_power_tracks_concurrency_per_resource_on_start_and_stop(tmp_path
     assert simulator._action_power(False) == pytest.approx(10)
     simulator._start_action("source", "kv_transfer", instance="source")
     assert simulator._action_power(True) == pytest.approx(3)
+    simulator._start_action("source-2", "kv_transfer", instance="source")
+    assert simulator._action_power(True) == pytest.approx(3)
     assert simulator._action_power(False) == pytest.approx(10)
     simulator._start_action("b", "kv_transfer", instance="d0")
     assert simulator._action_power(False) == pytest.approx(15)
@@ -278,6 +278,8 @@ def test_action_power_tracks_concurrency_per_resource_on_start_and_stop(tmp_path
     simulator._stop_action("a")
     simulator._stop_action("c")
     simulator._stop_action("source")
+    assert simulator._action_power(True) == pytest.approx(3)
+    simulator._stop_action("source-2")
     assert simulator._action_power(True) == 0
     assert simulator._action_power(False) == 0
 

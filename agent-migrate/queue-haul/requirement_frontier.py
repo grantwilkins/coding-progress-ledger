@@ -46,9 +46,6 @@ class DestinationRequirement:
     replay_migration_slot_s: float
     kv_migration_slot_s: float
     wan_bytes: int
-    source_stream_occupancy_s: tuple[tuple[str, float], ...]
-    minimum_source_streams_lower_bound: tuple[tuple[str, int], ...]
-    source_stream_limit: int
     method_mix: tuple[tuple[str, int], ...]
     makespan_lower_bound_s: float
     migration_horizon_s: float
@@ -101,43 +98,31 @@ def _actions(scenario: ExecutionScenario, profile, destination_type: Destination
 
 
 def _solve(actions: tuple[RequirementAction, ...], target: float, horizon: float,
-           streams: int, bandwidth: float):
+           bandwidth: float):
     if not actions:
         return (), 0.0
     sessions = {name: i for i, name in enumerate(dict.fromkeys(
         action.session_id for action in actions
     ))}
-    sources = tuple(sorted({action.source_instance for action in actions}))
-    source_rows = {
-        (source, stream): len(sessions) + i * streams + stream
-        for i, source in enumerate(sources) for stream in range(streams)
-    }
-    n = len(actions) * streams
+    n = len(actions)
     rows, columns, values = [], [], []
     for j, action in enumerate(actions):
-        for stream in range(streams):
-            column = j * streams + stream
-            for row, value in (
-                (sessions[action.session_id], 1),
-                (source_rows[action.source_instance, stream], action.duration_s),
-                (len(sessions) + len(sources) * streams, action.route_bytes),
-            ):
-                rows.append(row)
-                columns.append(column)
-                values.append(value)
+        for row, value in (
+            (sessions[action.session_id], 1),
+            (len(sessions), action.route_bytes),
+        ):
+            rows.append(row)
+            columns.append(j)
+            values.append(value)
     matrix = coo_matrix(
         (values, (rows, columns)),
-        shape=(len(sessions) + len(sources) * streams + 1, n),
+        shape=(len(sessions) + 1, n),
     ).tocsr()
-    upper = np.r_[
-        np.ones(len(sessions)),
-        np.full(len(sources) * streams, horizon),
-        bandwidth * horizon,
-    ]
+    upper = np.r_[np.ones(len(sessions)), bandwidth * horizon]
     base = LinearConstraint(matrix, -np.inf, upper)
     bounds, integer = Bounds(0, 1), np.ones(n)
-    gains = np.repeat([action.source_power_gain_w for action in actions], streams)
-    work = np.repeat([action.duration_s for action in actions], streams)
+    gains = np.asarray([action.source_power_gain_w for action in actions])
+    work = np.asarray([action.duration_s for action in actions])
 
     def optimize(cost, constraints):
         result = milp(
@@ -156,29 +141,17 @@ def _solve(actions: tuple[RequirementAction, ...], target: float, horizon: float
         work,
         (base, LinearConstraint(gain_row, required - 1e-7, np.inf)),
     )
-    return tuple(np.flatnonzero(selected) // streams), maximum_gain
+    return tuple(np.flatnonzero(selected)), maximum_gain
 
 
 def _greedy(actions: tuple[RequirementAction, ...], target: float, horizon: float,
-            streams: int, bandwidth: float):
-    bins = {
-        source: [0.0] * streams
-        for source in {action.source_instance for action in actions}
-    }
+            bandwidth: float):
     selected, sessions, wan, gain = [], set(), 0, 0.0
 
     def cost(i):
         action = actions[i]
-        return action.duration_s / (streams * horizon) \
+        return action.duration_s / horizon \
             + action.route_bytes / (bandwidth * horizon)
-
-    def placement(i):
-        action = actions[i]
-        choices = [
-            (used, j) for j, used in enumerate(bins[action.source_instance])
-            if used + action.duration_s <= horizon + 1e-7
-        ]
-        return max(choices)[1] if choices else None
 
     small, large, promoted = [], [], set()
     by_gain = sorted(range(len(actions)), key=lambda i: (
@@ -202,8 +175,7 @@ def _greedy(actions: tuple[RequirementAction, ...], target: float, horizon: floa
     def feasible(i):
         action = actions[i]
         return action.session_id not in sessions \
-            and wan + action.route_bytes <= bandwidth * horizon + 1e-7 \
-            and placement(i) is not None
+            and wan + action.route_bytes <= bandwidth * horizon + 1e-7
 
     while gain + 1e-7 < target:
         remaining = target - gain
@@ -222,28 +194,21 @@ def _greedy(actions: tuple[RequirementAction, ...], target: float, horizon: floa
             break
         _, _, i, heap = min(options)
         heapq.heappop(small if heap == "small" else large)
-        action, stream = actions[i], placement(i)
-        bins[action.source_instance][stream] += action.duration_s
+        action = actions[i]
         selected.append(i)
         sessions.add(action.session_id)
         wan += action.route_bytes
         gain += action.source_power_gain_w
-    _validate_greedy(actions, selected, horizon, streams, bandwidth)
+    _validate_greedy(actions, selected, horizon, bandwidth)
     return tuple(selected)
 
 
-def _validate_greedy(actions, selected, horizon, streams, bandwidth):
-    bins, sessions, wan = {}, set(), 0
+def _validate_greedy(actions, selected, horizon, bandwidth):
+    sessions, wan = set(), 0
     for i in selected:
         action = actions[i]
         if action.session_id in sessions:
             raise RuntimeError("greedy selected two actions for one session")
-        loads = bins.setdefault(action.source_instance, [0.0] * streams)
-        choices = [(used, j) for j, used in enumerate(loads)
-                   if used + action.duration_s <= horizon + 1e-7]
-        if not choices:
-            raise RuntimeError("greedy source-stream schedule exceeds deadline")
-        loads[max(choices)[1]] += action.duration_s
         sessions.add(action.session_id)
         wan += action.route_bytes
     if wan > bandwidth * horizon + 1e-7:
@@ -256,7 +221,7 @@ BASELINES = (
 )
 
 
-def _baseline(actions, target, horizon, streams, bandwidth, policy):
+def _baseline(actions, target, horizon, bandwidth, policy):
     if policy not in BASELINES:
         raise ValueError("unknown frontier baseline")
     eligible = list(range(len(actions)))
@@ -284,28 +249,19 @@ def _baseline(actions, target, horizon, streams, bandwidth, policy):
     key = keys.get(policy, lambda i: (
         actions[i].duration_s / max(actions[i].source_power_gain_w, 1e-12), i,
     ))
-    bins = {
-        source: [0.0] * streams
-        for source in {action.source_instance for action in actions}
-    }
     selected, sessions, wan, gain = [], set(), 0, 0.0
     for i in sorted(eligible, key=key):
         action = actions[i]
-        choices = [
-            (used, stream) for stream, used in enumerate(bins[action.source_instance])
-            if used + action.duration_s <= horizon + 1e-7
-        ]
-        if action.session_id in sessions or not choices \
+        if action.session_id in sessions \
                 or wan + action.route_bytes > bandwidth * horizon + 1e-7:
             continue
-        bins[action.source_instance][max(choices)[1]] += action.duration_s
         selected.append(i)
         sessions.add(action.session_id)
         wan += action.route_bytes
         gain += action.source_power_gain_w
         if gain >= target - 1e-7:
             break
-    _validate_greedy(actions, selected, horizon, streams, bandwidth)
+    _validate_greedy(actions, selected, horizon, bandwidth)
     return tuple(selected)
 
 
@@ -313,12 +269,10 @@ def requirement_frontier(scenario: ExecutionScenario, profile,
                          destination_type: DestinationType,
                          target_source_power_reduction_w: float,
                          route_bandwidth_bytes_per_s: float, route_rtt_s: float,
-                         source_streams: int, case_id: str = "central",
-                         solver_mode: str = "exact"):
+                         case_id: str = "central", solver_mode: str = "exact"):
     """Return raw landing requirements; ``route_rtt_s`` is added once per action."""
     if target_source_power_reduction_w < 0 or route_bandwidth_bytes_per_s <= 0 \
-            or route_rtt_s < 0 or source_streams < 1 \
-            or solver_mode not in {"exact", "greedy", *BASELINES}:
+            or route_rtt_s < 0 or solver_mode not in {"exact", "greedy", *BASELINES}:
         raise ValueError("invalid requirement-frontier input")
     start = perf_counter()
     horizon = scenario.deadline_s - scenario.controller_delay_s - profile.power_window_s
@@ -330,18 +284,18 @@ def requirement_frontier(scenario: ExecutionScenario, profile,
     )
     if solver_mode == "exact":
         selected, maximum = _solve(
-            actions, target_source_power_reduction_w, horizon, source_streams,
+            actions, target_source_power_reduction_w, horizon,
             route_bandwidth_bytes_per_s,
         )
     elif solver_mode == "greedy":
         selected = _greedy(
-            actions, target_source_power_reduction_w, horizon, source_streams,
+            actions, target_source_power_reduction_w, horizon,
             route_bandwidth_bytes_per_s,
         )
         maximum = None
     else:
         selected = _baseline(
-            actions, target_source_power_reduction_w, horizon, source_streams,
+            actions, target_source_power_reduction_w, horizon,
             route_bandwidth_bytes_per_s, solver_mode,
         )
         maximum = None
@@ -353,20 +307,10 @@ def requirement_frontier(scenario: ExecutionScenario, profile,
     transition = tuple(
         sum(action.transition_work[i] for action in chosen) for i in range(2)
     )
-    occupancies = tuple(
-        (source, sum(action.duration_s for action in chosen
-                     if action.source_instance == source))
-        for source in sorted({action.source_instance for action in chosen})
-    )
-    minimum_streams = tuple(
-        (source, math.ceil(seconds / horizon - 1e-12))
-        for source, seconds in occupancies
-    )
     wan = sum(action.route_bytes for action in chosen)
     makespan = max(
         [0.0, wan / route_bandwidth_bytes_per_s]
         + [action.duration_s for action in chosen]
-        + [seconds / source_streams for _, seconds in occupancies]
     )
     mix = tuple(
         (method, sum(action.method == method for action in chosen))
@@ -379,7 +323,7 @@ def requirement_frontier(scenario: ExecutionScenario, profile,
         sum(action.kv_blocks for action in chosen) * destination_type.kv_block_tokens,
         sum(action.duration_s for action in chosen if action.method == "replay"),
         sum(action.duration_s for action in chosen if action.method == "kv_transfer"),
-        wan, occupancies, minimum_streams, source_streams, mix, makespan, horizon,
+        wan, mix, makespan, horizon,
         route_bandwidth_bytes_per_s, route_rtt_s, solver_mode,
         ("optimal" if solver_mode == "exact" else
          "approximate" if solver_mode == "greedy" else "baseline")
@@ -389,13 +333,13 @@ def requirement_frontier(scenario: ExecutionScenario, profile,
     )
 
 
-def sweep_frontier(scenario, profile, destination_type, targets, stream_counts,
+def sweep_frontier(scenario, profile, destination_type, targets,
                    route_bandwidth_bytes_per_s, route_rtt_s, case_id="central",
                    solver_mode="exact"):
     return tuple(
         requirement_frontier(
             scenario, profile, destination_type, target,
-            route_bandwidth_bytes_per_s, route_rtt_s, streams, case_id, solver_mode,
+            route_bandwidth_bytes_per_s, route_rtt_s, case_id, solver_mode,
         )
-        for streams in stream_counts for target in targets
+        for target in targets
     )
