@@ -1,8 +1,8 @@
 """
 Claim:
-The simulated Pareto campaign maximizes attained shed, minimizes completion
-time, compares policies only within paired episodes, and exposes interpolation
-or extrapolation instead of presenting it as measured.
+The simulated Pareto campaign maximizes attained shed within each time budget,
+reports completion for only the admitted actions, compares policies only within
+matched scenario-budget pairs, and exposes interpolation or extrapolation.
 
 Plausible wrong implementations:
 - Reverse either Pareto objective.
@@ -11,29 +11,35 @@ Plausible wrong implementations:
 - Label non-anchor contexts or contexts outside the measured range as measured.
 - Apply aggregate replay/KV capacity independently to every concurrent stream.
 - Mix protocol-wire bytes with the simulator's sealed KV byte units.
+- Append cleanup migrations that were outside the deadline-admitted set.
+- Normalize attained shed by admitted sessions instead of all source sessions.
 """
 
 import json
+from types import SimpleNamespace
 
+import simulated_pareto_campaign as campaign
 from simulated_pareto_campaign import (
-    aggregate_planning_profile, context_evidence, full_attainment_cdf,
-    measured_kv_caps, measured_replay_caps, meets_deadline, parallel_profile,
-    pareto_flags, shared_kv_profile,
+    admitted_moves, aggregate_planning_profile, context_evidence,
+    frontier_metrics, full_attainment_cdf, measured_kv_caps,
+    measured_replay_caps, meets_deadline, parallel_profile, pareto_flags,
+    shared_kv_profile,
 )
 from policy_hardware_campaign import _moves, _problem
+from simulate import PlannedMove
 from test_execution_simulator import model
 
 
 def test_pareto_direction_and_pairing():
     rows = [
         {"match": "a", "power_attainment_fraction": .8,
-         "completion_deadline_ratio": .8},
+         "completion_s": .8},
         {"match": "a", "power_attainment_fraction": .7,
-         "completion_deadline_ratio": 1},
+         "completion_s": 1},
         {"match": "a", "power_attainment_fraction": .9,
-         "completion_deadline_ratio": 1.2},
+         "completion_s": 1.2},
         {"match": "b", "power_attainment_fraction": 1,
-         "completion_deadline_ratio": .1},
+         "completion_s": .1},
     ]
 
     pareto_flags(rows, ("match",))
@@ -52,13 +58,13 @@ def test_context_evidence_marks_nonanchors_and_extrapolation():
 def test_full_attainment_detail_filters_and_normalizes_per_policy():
     rows = [
         {"policy": "a", "power_attainment_fraction": 1,
-         "completion_deadline_ratio": .8},
+         "completion_budget_ratio": .8},
         {"policy": "a", "power_attainment_fraction": .98,
-         "completion_deadline_ratio": .2},
+         "completion_budget_ratio": .2},
         {"policy": "a", "power_attainment_fraction": .99,
-         "completion_deadline_ratio": .4},
+         "completion_budget_ratio": .4},
         {"policy": "b", "power_attainment_fraction": 1,
-         "completion_deadline_ratio": .1},
+         "completion_budget_ratio": .1},
     ]
 
     x, y = full_attainment_cdf(rows, "a")
@@ -71,6 +77,25 @@ def test_deadline_boundary_tolerates_roundoff_but_not_real_misses():
     assert meets_deadline(1 - 1e-12, 10 + 1e-12, 10)
     assert not meets_deadline(.99, 9, 10)
     assert not meets_deadline(1, 11, 10)
+
+
+def test_frontier_uses_only_admitted_moves_and_total_source_sessions(
+        tmp_path, monkeypatch):
+    base = model(tmp_path)
+    move = PlannedMove("a", "destination", "replay", 0, ("link",))
+    monkeypatch.setattr(
+        campaign, "plan",
+        lambda *args, **kwargs: SimpleNamespace(moves=(move,)),
+    )
+
+    selected = admitted_moves("queue_haul", None, None, None, 0)
+    attainment, completion = frontier_metrics(
+        [1], 2, 10, base.case().power_curve, base.power_window_s
+    )
+
+    assert selected == (move,)
+    assert 0 < attainment < 1
+    assert completion == 1
 
 
 def test_width8_contract_does_not_silently_serialize_destination(tmp_path):

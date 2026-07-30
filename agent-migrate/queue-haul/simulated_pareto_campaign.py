@@ -17,9 +17,10 @@ import numpy as np
 
 import migration_profiler as profiler
 from policy_hardware_campaign import (
-    LABELS, _moves, _portable_path, _problem, deadline_attainment,
+    LABELS, _portable_path, _problem, deadline_attainment,
     validate_policy_plan,
 )
+from planner import plan
 from profiles import ActionPower, ModelProfile, RateCurve
 from simulate import PlannedMove, execute
 
@@ -32,6 +33,7 @@ DEFAULT_WIDTH8 = ROOT / "outputs/policy-hardware-width8-frontier-20260730"
 DEFAULT_OUT = ROOT / "outputs/simulated-width8-pareto-20260730"
 POLICIES = ("queue_haul", "greedy", "random", "kv_only", "replay_only")
 OBSERVATION_S = 600
+TIME_BUDGETS_S = (16, 19, 22, 26, 30)
 
 
 def context_evidence(tokens, anchors):
@@ -50,13 +52,11 @@ def pareto_flags(rows, keys):
         row["pareto"] = not any(
             other["power_attainment_fraction"]
             >= row["power_attainment_fraction"]
-            and other["completion_deadline_ratio"]
-            <= row["completion_deadline_ratio"]
+            and other["completion_s"] <= row["completion_s"]
             and (
                 other["power_attainment_fraction"]
                 > row["power_attainment_fraction"]
-                or other["completion_deadline_ratio"]
-                < row["completion_deadline_ratio"]
+                or other["completion_s"] < row["completion_s"]
             )
             for other in peers
         )
@@ -211,18 +211,27 @@ def write_csv(path, rows):
         writer.writerows(rows)
 
 
-def planned_moves(rows):
+def admitted_moves(policy, scenario, routes, profile, seed):
+    solver = {"queue_haul": "lp_work_first"}.get(policy, policy)
     return tuple(
         PlannedMove(
-            row["session_id"], "destination", row["method"], row["order"],
-            ("link",),
+            move.session_id, move.destination_instance, move.method, move.order,
+            move.path,
         )
-        for row in sorted(rows, key=lambda row: row["order"])
+        for move in plan(scenario, profile, routes, solver, seed=seed).moves
     )
 
 
+def frontier_metrics(commits, total_sessions, budget_s, power_curve, power_window_s):
+    attainment = deadline_attainment(
+        commits, total_sessions, [budget_s], power_curve, power_window_s
+    )[0]["power_attainment_fraction"]
+    return attainment, max(commits, default=0.0)
+
+
 def simulate(plan_path=DEFAULT_PLAN, model_path=DEFAULT_MODEL,
-             crossover_path=DEFAULT_CROSSOVER, width8=DEFAULT_WIDTH8):
+             crossover_path=DEFAULT_CROSSOVER, width8=DEFAULT_WIDTH8,
+             time_budgets_s=TIME_BUDGETS_S):
     plan_ = json.loads(plan_path.read_text())
     validate_policy_plan(plan_)
     if profiler.file_hash(model_path) != plan_["model_profile"]["sha256"]:
@@ -237,79 +246,80 @@ def simulate(plan_path=DEFAULT_PLAN, model_path=DEFAULT_MODEL,
     )
     crossover = json.loads(crossover_path.read_text())
     anchors = set(crossover["contexts"])
-    by_episode = {}
-    for scenario in plan_["scenarios"]:
-        by_episode.setdefault(scenario["episode"], {})[scenario["policy"]] = scenario
+    controls = {}
+    for row in plan_["scenarios"]:
+        if row["policy"] == "control":
+            controls.setdefault((row["sample_id"], row["bandwidth_mbps"]), row)
     rows = []
-    for episode, scenarios in sorted(by_episode.items()):
-        base = scenarios["control"]
-        scenario, routes = _problem(
-            profile, base["sessions"], base["bandwidth_mbps"],
-            base["required_deadline_s"],
-        )
-        scenario = replace(scenario, end_s=max(base["deadline_s"], OBSERVATION_S))
-        planning_profile = aggregate_planning_profile(
-            base_profile, base["bandwidth_mbps"], replay_caps, kv_caps
-        )
+    for configuration, base in enumerate(controls.values()):
         evidence = context_evidence(
             (row["initial_tokens"] for row in base["sessions"]), anchors
         )
-        for policy in POLICIES:
-            moves = _moves(
-                policy, scenario, routes, planning_profile,
-                profiler.stable_seed(plan_["seed"], episode, policy),
+        for budget_s in time_budgets_s:
+            scenario, routes = _problem(
+                profile, base["sessions"], base["bandwidth_mbps"], budget_s,
             )
-            moves = planned_moves(moves)
-            execution_profile = shared_kv_profile(
-                profile, base["bandwidth_mbps"],
-                sum(move.method == "kv_transfer" for move in moves), kv_caps,
+            scenario = replace(scenario, end_s=max(OBSERVATION_S, budget_s))
+            planning_profile = aggregate_planning_profile(
+                base_profile, base["bandwidth_mbps"], replay_caps, kv_caps
             )
-            result = execute(scenario, execution_profile, moves)
-            commits = [row.committed_s for row in result.sessions
-                       if row.committed_s is not None]
-            if len(commits) != len(scenario.sessions):
-                raise RuntimeError(
-                    f"episode {episode} {policy} committed "
-                    f"{len(commits)}/{len(scenario.sessions)} by {scenario.end_s}s"
+            match_id = profiler.object_hash([
+                base["sample_id"], base["bandwidth_mbps"], budget_s,
+            ])[:16]
+            for policy in POLICIES:
+                moves = admitted_moves(
+                    policy, scenario, routes, planning_profile,
+                    profiler.stable_seed(
+                        plan_["seed"], base["sample_id"],
+                        base["bandwidth_mbps"], budget_s, policy,
+                    ),
                 )
-            completion = max(commits)
-            attainment = deadline_attainment(
-                commits, len(scenario.sessions),
-                [base["required_deadline_s"]], profile.case().power_curve,
-                profile.power_window_s,
-            )[0]["power_attainment_fraction"]
-            rows.append({
-                "episode": episode, "match_id": base["match_id"],
-                "context_profile": base["context_profile"],
-                "bandwidth_mbps": base["bandwidth_mbps"],
-                "required_deadline_s": base["required_deadline_s"],
-                "repeat": base["repeat"], "policy": policy,
-                "power_attainment_fraction": attainment,
-                "completion_s": completion,
-                "completion_deadline_ratio":
-                    completion / base["required_deadline_s"],
-                "deadline_met": meets_deadline(
-                    attainment, completion, base["required_deadline_s"]
-                ),
-                "replay_moves": sum(row.method == "replay"
+                execution_profile = shared_kv_profile(
+                    profile, base["bandwidth_mbps"],
+                    sum(move.method == "kv_transfer" for move in moves), kv_caps,
+                )
+                result = execute(scenario, execution_profile, moves)
+                commits = [row.committed_s for row in result.sessions
+                           if row.committed_s is not None]
+                if len(commits) != len(moves):
+                    raise RuntimeError(
+                        f"configuration {configuration} budget {budget_s:g}s "
+                        f"{policy} committed {len(commits)}/{len(moves)} admitted"
+                    )
+                attainment, completion = frontier_metrics(
+                    commits, len(scenario.sessions), budget_s,
+                    profile.case().power_curve, profile.power_window_s,
+                )
+                rows.append({
+                    "configuration": configuration, "match_id": match_id,
+                    "sample_id": base["sample_id"],
+                    "context_profile": base["context_profile"],
+                    "bandwidth_mbps": base["bandwidth_mbps"],
+                    "time_budget_s": budget_s, "policy": policy,
+                    "power_attainment_fraction": attainment,
+                    "completion_s": completion,
+                    "completion_budget_ratio": completion / budget_s,
+                    "full_shed_by_budget": meets_deadline(
+                        attainment, completion, budget_s
+                    ),
+                    "admitted_moves": len(moves),
+                    "replay_moves": sum(row.method == "replay"
+                                        for row in result.sessions),
+                    "kv_moves": sum(row.method == "kv_transfer"
                                     for row in result.sessions),
-                "kv_moves": sum(row.method == "kv_transfer"
-                                for row in result.sessions),
-                "context_evidence": evidence,
-                "replay_contention_evidence":
-                    "measured_width8_aggregate_throughput_cap",
-                "kv_contention_evidence":
-                    "measured_bandwidth_specific_aggregate_throughput_cap",
-                "power_evidence": "modeled",
-                "result_evidence": "simulated",
-                "planning_evidence": "replanned_with_aggregate_caps",
-            })
+                    "context_evidence": evidence,
+                    "replay_contention_evidence":
+                        "measured_width8_aggregate_throughput_cap",
+                    "kv_contention_evidence":
+                        "measured_bandwidth_specific_aggregate_throughput_cap",
+                    "power_evidence": "modeled",
+                    "result_evidence": "simulated",
+                    "planning_evidence":
+                        "deadline_specific_admitted_set_with_aggregate_caps",
+                })
     pareto_flags(rows, ("match_id",))
     for row in rows:
         row["paired_pareto"] = row.pop("pareto")
-    pareto_flags(rows, ())
-    for row in rows:
-        row["pooled_pareto"] = row.pop("pareto")
     return rows
 
 
@@ -322,25 +332,25 @@ def summarize(rows):
             "median_power_attainment_fraction": float(np.median([
                 row["power_attainment_fraction"] for row in selected
             ])),
-            "median_completion_deadline_ratio": float(np.median([
-                row["completion_deadline_ratio"] for row in selected
+            "median_completion_budget_ratio": float(np.median([
+                row["completion_budget_ratio"] for row in selected
             ])),
             "deadline_met_fraction": float(np.mean([
-                row["deadline_met"] for row in selected
+                row["full_shed_by_budget"] for row in selected
             ])),
             "paired_pareto_fraction": float(np.mean([
                 row["paired_pareto"] for row in selected
             ])),
-            "pooled_pareto_points": sum(
-                row["pooled_pareto"] for row in selected
-            ),
+            "median_admitted_moves": float(np.median([
+                row["admitted_moves"] for row in selected
+            ])),
         })
     return output
 
 
 def full_attainment_cdf(rows, policy, threshold=.99):
     values = sorted(
-        row["completion_deadline_ratio"] for row in rows
+        row["completion_budget_ratio"] for row in rows
         if row["policy"] == policy
         and row["power_attainment_fraction"] >= threshold
     )
@@ -351,8 +361,9 @@ def full_attainment_cdf(rows, policy, threshold=.99):
 def plot(rows, out):
     colors = dict(zip(POLICIES, plt.get_cmap("tab10").colors))
     markers = dict(zip(POLICIES, ("o", "s", "^", "D", "x")))
+    budgets = sorted({row["time_budget_s"] for row in rows})
     fig, axes = plt.subplots(1, 2, figsize=(12, 5.5))
-    ax, detail = axes
+    cloud, mixture = axes
     for policy in (*POLICIES[1:], POLICIES[0]):
         selected = [row for row in rows if row["policy"] == policy]
         style = {
@@ -361,48 +372,51 @@ def plot(rows, out):
         } if policy == "queue_haul" else {
             "s": 28, "alpha": .45, "color": colors[policy],
         }
-        ax.scatter(
+        cloud.scatter(
             [100 * row["power_attainment_fraction"] for row in selected],
-            [row["completion_deadline_ratio"] for row in selected],
+            [row["completion_budget_ratio"] for row in selected],
             marker=markers[policy], label=LABELS[policy], **style,
         )
-        x, y = full_attainment_cdf(rows, policy)
-        detail.step(
-            np.r_[0, x], np.r_[0, y], where="post", color=colors[policy],
+        aggregate = [(
+            budget,
+            np.mean([
+                row["power_attainment_fraction"] for row in selected
+                if row["time_budget_s"] == budget
+            ]),
+            np.median([
+                row["completion_s"] for row in selected
+                if row["time_budget_s"] == budget
+            ]),
+        ) for budget in budgets]
+        mixture.plot(
+            [100 * row[1] for row in aggregate],
+            [row[2] for row in aggregate],
+            marker=markers[policy], color=colors[policy], label=LABELS[policy],
             linewidth=2.5 if policy == "queue_haul" else 1.5,
             zorder=3 if policy == "queue_haul" else 2,
         )
-    frontier = sorted(
-        (row for row in rows if row["pooled_pareto"]),
-        key=lambda row: row["power_attainment_fraction"],
-    )
-    ax.plot(
-        [100 * row["power_attainment_fraction"] for row in frontier],
-        [row["completion_deadline_ratio"] for row in frontier],
-        "k--", linewidth=1.5, label="Pooled descriptive frontier",
-    )
-    ax.axhline(1, color="0.35", linestyle=":", linewidth=1)
-    ax.set(
+    cloud.axhline(1, color="0.35", linestyle=":", linewidth=1)
+    cloud.set(
+        title="Matched scenario–budget outcomes",
         xlabel="Modeled maximum source-power shed by deadline (%)",
-        ylabel="Completion time / required deadline",
+        ylabel="Admitted-set completion / time budget",
         xlim=(-2, 102),
     )
-    ax.grid(alpha=.2)
-    detail.axvline(1, color="0.35", linestyle=":", linewidth=1)
-    detail.set(
-        title="Detail: scenarios attaining ≥99% shed",
-        xlabel="Completion time / required deadline",
-        ylabel="Fraction of full-attainment scenarios",
-        xlim=(0, 1.02), ylim=(0, 1.02),
+    cloud.grid(alpha=.2)
+    mixture.set(
+        title="Identical workload mixture at each time budget",
+        xlabel="Mean modeled source-power shed (%)",
+        ylabel="Median admitted-set completion (s)",
+        xlim=(-2, 102),
     )
-    detail.grid(alpha=.2)
-    handles, labels = ax.get_legend_handles_labels()
+    mixture.grid(alpha=.2)
+    handles, labels = cloud.get_legend_handles_labels()
     fig.legend(handles, labels, loc="upper center", frameon=False, ncol=3)
-    ax.text(
+    cloud.text(
         .01, .01,
         "2/4/8/16K contexts measured; 12/14K interpolated\n"
         "replay/KV aggregate caps measured; action power extrapolated; power modeled",
-        transform=ax.transAxes, fontsize=8, va="bottom",
+        transform=cloud.transAxes, fontsize=8, va="bottom",
     )
     fig.tight_layout(rect=(0, 0, 1, .82))
     for suffix in ("png", "pdf"):
@@ -425,18 +439,19 @@ def run(plan_path=DEFAULT_PLAN, model_path=DEFAULT_MODEL,
     write_csv(out / "policy_summary.csv", summary)
     plot(rows, out)
     metadata = {
-        "schema": "queue-haul-simulated-pareto-v1",
+        "schema": "queue-haul-simulated-pareto-v2",
         "axes": {
-            "x": "commit-integrated source-power shed / removable power",
-            "y": "last route commit time / required deadline",
-            "detail": "per-policy completion CDF for attainment >= 0.99",
+            "x": "deadline-integrated source-power shed / removable power",
+            "y": "last admitted route commit time",
+            "mixture": "mean shed and median completion over identical workloads",
         },
         "policies": list(POLICIES),
         "scenarios": len(rows),
         "paired_episodes": len(rows) // len(POLICIES),
+        "time_budgets_s": list(TIME_BUDGETS_S),
         "observation_s": OBSERVATION_S,
         "planning_contract":
-            "replanned shared aggregate replay/KV capacity; eager execution",
+            "deadline-specific admitted set; no appended cleanup moves; eager execution",
         "plan": {
             "path": _portable_path(plan_path),
             "sha256": profiler.file_hash(plan_path),
@@ -478,7 +493,6 @@ def run(plan_path=DEFAULT_PLAN, model_path=DEFAULT_MODEL,
             "power_attainment": "modeled from commit times",
             "results": "simulated",
         },
-        "pooled_frontier": "descriptive across heterogeneous scenarios",
         "paired_pareto": "dominance is evaluated only within each matched episode",
     }
     (out / "run_metadata.json").write_text(json.dumps(metadata, indent=2) + "\n")

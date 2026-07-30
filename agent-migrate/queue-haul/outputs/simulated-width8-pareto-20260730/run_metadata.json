@@ -1,9 +1,9 @@
 {
-  "schema": "queue-haul-simulated-pareto-v1",
+  "schema": "queue-haul-simulated-pareto-v2",
   "axes": {
-    "x": "commit-integrated source-power shed / removable power",
-    "y": "last route commit time / required deadline",
-    "detail": "per-policy completion CDF for attainment >= 0.99"
+    "x": "deadline-integrated source-power shed / removable power",
+    "y": "last admitted route commit time",
+    "mixture": "mean shed and median completion over identical workloads"
   },
   "policies": [
     "queue_haul",
@@ -12,10 +12,17 @@
     "kv_only",
     "replay_only"
   ],
-  "scenarios": 600,
-  "paired_episodes": 120,
+  "scenarios": 1500,
+  "paired_episodes": 300,
+  "time_budgets_s": [
+    16,
+    19,
+    22,
+    26,
+    30
+  ],
   "observation_s": 600,
-  "planning_contract": "replanned shared aggregate replay/KV capacity; eager execution",
+  "planning_contract": "deadline-specific admitted set; no appended cleanup moves; eager execution",
   "plan": {
     "path": "queue-haul/outputs/policy-hardware-width8-packing-plan/plan.json",
     "sha256": "e20ff148aded9b63458a65d378a2103579974a64fe0b3a8b05fd3bf4079cdba8"
@@ -78,6 +85,5 @@
     "power_attainment": "modeled from commit times",
     "results": "simulated"
   },
-  "pooled_frontier": "descriptive across heterogeneous scenarios",
   "paired_pareto": "dominance is evaluated only within each matched episode"
 }
