@@ -154,6 +154,8 @@ class SessionExecution:
     committed_s: float | None
     wake_start_s: float | None
     wake_ready_s: float | None
+    initial_replay_start_s: float | None = None
+    catch_up_replay_start_s: float | None = None
 
 
 @dataclass(frozen=True)
@@ -265,6 +267,8 @@ class _MoveState:
     committed: float | None = None
     wake_start: float | None = None
     wake_ready: float | None = None
+    initial_replay_start: float | None = None
+    catch_replay_start: float | None = None
     copied_blocks: int = 0
     scheduled_blocks: int = 0
     append_pending: int = 0
@@ -620,6 +624,10 @@ class ExecutionSimulator:
             duration = replay_tokens / self.case.replay.rate(
                 rate_context, active,
             ) + self.case.replay_completion_s
+            if phase == "initial":
+                state.initial_replay_start = self.time
+            elif phase == "catch_up":
+                state.catch_replay_start = self.time
             self._event("replay_start", state.move.session_id, detail=destination)
         elif state.move.method == "kv_transfer":
             duration = 0.0 if phase.startswith("append") else (
@@ -971,7 +979,8 @@ class ExecutionSimulator:
             SessionExecution(
                 s.move.session_id, s.move.method, s.initial_start, s.initial_ready, s.pause,
                 s.idle, s.catch_start, s.catch_ready, s.switch, s.committed,
-                s.wake_start, s.wake_ready,
+                s.wake_start, s.wake_ready, s.initial_replay_start,
+                s.catch_replay_start,
             ) for s in self.states
         )
         at_deadline = step_average(
@@ -1019,27 +1028,28 @@ class ExecutionSimulator:
 def execute(scenario: ExecutionScenario, profile: ModelProfile,
             moves: tuple[PlannedMove, ...], case_id: str = "central",
             destination=None) -> ExecutionResult:
-    if destination:
-        from pool_planner import validate_destination_execution
-        validate_destination_execution(scenario, destination, moves)
-    result = ExecutionSimulator(scenario, profile, moves, case_id).run()
-    if destination:
-        from pool_planner import destination_service_execution
-        rows = destination_service_execution(
-            scenario, profile, destination, moves, result,
-        )
-        result = replace(
-            result, pool_service=rows,
-            deadline_met=result.deadline_met and all(row.within_contract for row in rows),
-        )
-    return result
+    return _run(scenario, profile, moves, case_id, destination, True)
 
 
 def predict(scenario: ExecutionScenario, profile: ModelProfile,
             moves: tuple[PlannedMove, ...], case_id: str = "central",
             destination=None) -> ExecutionResult:
     """Execute exactly without retaining audit records used only by experiments."""
+    return _run(scenario, profile, moves, case_id, destination, False)
+
+
+def _run(scenario, profile, moves, case_id, destination, detailed):
     if destination:
         from pool_planner import validate_destination_execution
         validate_destination_execution(scenario, destination, moves)
-    return ExecutionSimulator(scenario, profile, moves, case_id, detailed=False).run()
+    result = ExecutionSimulator(scenario, profile, moves, case_id, detailed).run()
+    if destination:
+        from pool_planner import destination_service_execution
+        rows = destination_service_execution(
+            scenario, profile, destination, moves, result, detailed,
+        )
+        result = replace(
+            result, pool_service=rows,
+            deadline_met=result.deadline_met and all(row.within_contract for row in rows),
+        )
+    return result

@@ -21,28 +21,63 @@ Plausible wrong implementations:
 - Lose physical units or pool/facet identity in normalized planner rows.
 - Treat unused early capacity as if it could serve transition work arriving late.
 - Credit node shutdown during session selection instead of only after planning.
+- Rank sessions only by initial marginal power and miss a feasible full-drain bundle.
 """
 
 from dataclasses import replace
 from types import SimpleNamespace
 
+import numpy as np
 import pytest
+from scipy.sparse import csr_matrix
 
 from destination import (DESTINATION_SCHEMA, CompatibilityFingerprint, ContextRate,
                          DestinationArchitecture, DestinationPool, DestinationReplica,
                          DestinationType, LoadedCoefficients, MigrationComponents)
 from planner import plan
-from pool_planner import (_destination_duration, _event_bounds, _mode_boundary_rho,
-                          _service_trace, candidate_table,
+from pool_planner import (Candidate, CandidateTable, _destination_duration, _event_bounds,
+                          _greedy, _greedy_bundle, _mode_boundary_rho, _service_trace,
+                          candidate_table,
                           destination_service_execution, exact_replica_assignment,
                           service_debt, validate_destination_execution)
 from power_model import ExpectedPower
-from simulate import ExecutionEvent, PlannedMove, SimSession
+from simulate import (PlannedMove, PowerNode, ServingInstance, SessionExecution,
+                      SimSession)
 from test_execution_simulator import model
 from test_planner import PATHS, problem
 
 
 FP = CompatibilityFingerprint("m", "t", "log", "kv")
+
+
+def test_full_drain_bundle_crosses_power_knee(tmp_path):
+    profile = model(tmp_path)
+    sessions = tuple(
+        SimSession(str(i), "s0" if i < 3 else f"s{i - 2}", 1,
+                   30 if i < 3 else 20, 0, 1)
+        for i in range(6)
+    )
+    scenario = replace(
+        problem(), sessions=sessions,
+        nodes=tuple(PowerNode(f"n{i}", 1, True) for i in range(4)),
+        instances=tuple(ServingInstance(f"s{i}", (f"n{i}",)) for i in range(4)),
+    )
+    power = ExpectedPower(scenario, profile)
+    costs = (.25, .25, .25, .3, .3, .3)
+    candidates = tuple(
+        Candidate(i, "replay", 0, power.marginal(str(i)), 1, 1, (), 0, (0, 0), 0)
+        for i in range(6)
+    )
+    table = CandidateTable(
+        sessions, candidates, csr_matrix(np.eye(6)),
+        csr_matrix((costs, (np.zeros(6), np.arange(6))), shape=(1, 6)),
+        ("route",), (1,), ("fraction",), 1,
+    )
+
+    assert _greedy(table, 26) == {3, 4, 5}
+    assert _greedy_bundle(table, 26, power) == {0, 1, 2}
+    assert power.drain_gain(("3", "4", "5")) == pytest.approx(24)
+    assert power.drain_gain(("0", "1", "2")) == pytest.approx(28)
 
 
 def architecture(*, normal=.3, emergency=.5, stable=1, baselines=((0, 0), (0, 0)),
@@ -98,6 +133,7 @@ def test_late_transition_work_cannot_use_early_idle_capacity():
     trace = _service_trace(0, 1, ((9, 2),), 0, 10)
 
     assert trace[-1] == (10, 2, 1, 1)
+    assert _service_trace(0, 1, ((9, 2),), 0, 10, False) == trace[-1:]
 
 
 def test_realized_pool_trace_rejects_late_debt_above_budget(tmp_path):
@@ -108,10 +144,10 @@ def test_realized_pool_trace_rejects_late_debt_above_budget(tmp_path):
     move = PlannedMove(
         "a", "t0", "replay", 0, ("wan",), destination_pool="p0",
     )
-    execution = SimpleNamespace(events=(
-        ExecutionEvent(8, "replay_start", "a"),
-        ExecutionEvent(9, "replay_done", "a"),
-        ExecutionEvent(9, "commit", "a"),
+    execution = SimpleNamespace(sessions=(
+        SessionExecution(
+            "a", "replay", 0, 9, 9, 9, None, None, 9, 9, None, None, 8,
+        ),
     ))
 
     rows = destination_service_execution(
@@ -122,6 +158,23 @@ def test_realized_pool_trace_rejects_late_debt_above_budget(tmp_path):
     assert final.peak_queued_replica_s == pytest.approx(.6)
     assert final.debt_budget_replica_s == pytest.approx(.45)
     assert not final.within_contract
+
+
+def test_prediction_rejects_realized_service_queue_violation(tmp_path):
+    arch = architecture(
+        normal=1, emergency=1, stable=1, baselines=((.6, 0),),
+        routes=(("wan",),), methods=("replay",), flex=0, debt=.02,
+    )
+    scenario = replace(problem(limit=40), controller_delay_s=7)
+
+    result = plan(
+        scenario, model(tmp_path, switch=0, tp=1), PATHS, "lp",
+        destination=arch,
+    )
+
+    assert result.moves
+    assert result.failure_reason == "destination_service_queue"
+    assert not result.feasible
 
 
 def test_plan_rejects_positive_debt_without_recovery_spare(tmp_path):
@@ -177,6 +230,21 @@ def test_plan_preserves_physical_resource_and_debt_rows(tmp_path):
     assert debt.debt_replica_s == 0
     assert debt.spare_replicas == pytest.approx(.15)
     assert debt.recovery_s == 0
+
+
+def test_v1_resource_rows_match_the_documented_contract(tmp_path):
+    scenario, profile = problem(), model(tmp_path, switch=0, tp=1)
+    arch = architecture(normal=1, emergency=1, stable=1, flex=0, debt=.2)
+    arch = replace(arch, pools=(arch.pools[0],))
+
+    table = candidate_table(
+        scenario, profile, arch, "normal", ExpectedPower(scenario, profile),
+    )
+
+    assert table.resource_names == (
+        "route:wan", "service:p0:0", "service-debt:p0:0",
+        "kv:p0", "migration:p0",
+    )
 
 
 def test_absent_architecture_is_exact_legacy_adapter(tmp_path):

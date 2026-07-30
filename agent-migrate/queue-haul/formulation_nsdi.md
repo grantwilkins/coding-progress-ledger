@@ -5,17 +5,17 @@ before a deadline. It chooses which sessions to move, whether to replay context
 or transfer KV state, and which compatible destination pool accepts each
 session.
 
-The primary system output is an executable migration schedule:
+The primary planner output is an executable fixed plan:
 
 > Given measured handoff primitives and advertised compatible destination-pool
 > budgets, report how much source accelerator power can be shed by a deadline
 > and the executable migration schedule that achieves it.
 
-The schedule names the whole sessions to move, replay or KV transfer for each
-session, destination pool, migration start and finish, commit, first-token
-completion, source shutdown where applicable, and resource use, slack, debt,
-recovery, achieved shed, and unmet shed. The requirement frontier summarizes
-these schedules across requested shed targets; it does not replace them.
+The plan names the whole sessions to move, replay or KV transfer for each,
+destination pool and replica, route, and order. The execution report adds
+start, reconstruction or ingest completion, commit, first-token observations,
+source transition, resource use, debt, recovery, achieved shed, and unmet
+shed. The requirement frontier summarizes plans across requested targets.
 
 The source model is hardware-specific because the objective is watts. A
 destination is an operator contract expressed in measured resource units.
@@ -34,8 +34,8 @@ Controller delay is \(C\), so migrations have
 H = D-C-W
 \]
 
-seconds to switch routing. The source must remain below the limit throughout
-the final \(W\)-second window.
+seconds to switch routing. Average source power over the final \(W\)-second
+window must be below the limit.
 
 Queue-Haul performs a request-boundary live handoff:
 
@@ -43,12 +43,12 @@ Queue-Haul performs a request-boundary live handoff:
 2. quiesce at a request boundary;
 3. copy or reconstruct the final delta;
 4. switch routing; and
-5. receive the first post-switch token from the destination.
+5. verify a post-switch destination response in hardware evaluation.
 
-This is not arbitrary mid-token migration. Landing succeeds at the first
-post-switch token. The destination pool accepts the session's declared ongoing
-service and KV demand after that point. Long-term fleet management and return
-migration are outside the claim.
+This is not arbitrary mid-token migration. Power ownership changes at commit;
+the hardware result separately verifies the first post-switch token. The
+destination pool accepts declared ongoing service and KV demand after commit.
+Long-term fleet management and return migration are outside the claim.
 
 If every session leaves an accelerator, Queue-Haul may shut it down. An off
 accelerator contributes 0 W and must reach that state before the final power
@@ -89,17 +89,12 @@ Any violation is a failed power model, not noise to suppress.
 
 ## 3. Destination pool contract
 
-A destination pool is
-
-\[
-p=(\text{site},\text{compatible serving type}).
-\]
-
-The type pins model revision, tokenizer, durable-log contract, KV ABI and
-dtype, hardware, parallel layout, engine, scheduler configuration, and warm
-health state. Replay requires the model, tokenizer, and durable-log contract.
-KV transfer additionally requires the exact KV contract. Compatibility is a
-Boolean eligibility check, not a price or capacity.
+A destination pool identifies a compatible serving type, replicas, route, and
+allowed methods. The V1 compatibility fingerprint contains model, tokenizer,
+durable-log contract, and KV ABI identifiers. Replay requires the first three;
+KV transfer additionally requires the KV identifier. Hardware/runtime identity
+and warm-health attestation remain provenance or production extensions rather
+than explicit V1 compatibility fields.
 
 The public candidate is
 
@@ -107,9 +102,8 @@ The public candidate is
 c=(j,a,p),\qquad a\in\{R,K\}.
 \]
 
-The destination manager, not Queue-Haul, places an accepted session on a
-replica. Any internal fragmentation has already been removed from the pool's
-advertised budget.
+Pool choice is public. Queue-Haul deterministically packs accepted sessions
+onto concrete replicas to validate service, KV, and migration occupancy.
 
 Each pool advertises:
 
@@ -117,10 +111,10 @@ Each pool advertises:
 - stable serving capacity;
 - an event admission limit for ongoing prefill and decode work;
 - a temporary service-debt budget in replica-seconds;
-- replay reconstruction and KV-ingest capacity;
+- replica inventory, from which the planner derives migration capacity;
 - usable live-KV capacity in physical blocks;
-- route bandwidth and queued-byte capacity; and
-- the evidence status and validity range for every value.
+- route identity and path, with link rates supplied by the scenario; and
+- evidence status and provenance.
 
 Normal capacity grounds the site's usual latency policy. Stable capacity is the
 largest measured rate with non-growing work and no failures. The operator may
@@ -145,33 +139,35 @@ capacity. It never means five percent more sessions.
 Candidate \(c=(j,a,p)\) carries:
 
 \[
-(w_j,\ t_c,\ b_c,\ s_c,\ m_c,\ k_c).
+(w_j,\ t_c,\ b_c,\ s_c,\ u_c,\ k_c).
 \]
 
 - \(w_j\): conservative source accelerator watts removed.
 - \(t_c\): measured or conservatively fitted handoff duration.
 - \(b_c\): route bytes.
 - \(s_c\): ongoing prefill/decode service work.
-- \(m_c\): temporary reconstruction or ingest work.
+- \(u_c\): temporary serving-transition work.
 - \(k_c\): block-rounded live-KV demand.
 
-Replay sends compact durable context and consumes destination reconstruction
-work. KV transfer sends sealed KV blocks and consumes route and ingest work.
-An unsealed tail is reconstructed during catch-up.
+Replay sends compact durable context and contributes serving-transition work.
+KV transfer sends sealed KV blocks. Reconstruction, transfer, and ingest are
+included in the fitted duration \(t_c\), but the aggregate planner does not
+advertise separate reconstruction and ingest capacity rows. An unsealed tail is
+reconstructed during catch-up.
 
-For effective route rate \(B_p\), fixed route RTT \(\tau_p\), destination
-prefill rate \(\rho_p(T)\), KV-ingest rate \(\mu_p\), and fitted residuals:
+For effective route rate \(B_p\), destination prefill rate \(\rho_p(T)\),
+KV-ingest rate \(\mu_p\), and fitted residuals:
 
 \[
 t^R_c =
-\frac{C_j}{B_p}+\tau_p+
+\frac{C_j}{B_p}+
 \alpha_p\frac{T_j}{\rho_p(T_j)}
 +r^R_p+\tau^{\mathrm{catch}}_j+\tau^{\mathrm{switch}}_p,
 \]
 
 \[
 t^K_c =
-\max\left(\frac{K_j}{B_p},\frac{K_j}{\mu_p}\right)+\tau_p+
+\max\left(\frac{K_j}{B_p},\frac{K_j}{\mu_p}\right)+
 r^K_p+\tau^{\mathrm{catch}}_j+\tau^{\mathrm{switch}}_p.
 \]
 
@@ -215,7 +211,7 @@ planner uses this aggregate work bound:
 Q_{p,r}=
 \max\left(
 0,\ H\left(b_{p,r}+\sum_c s_{c,r}x_c\right)
-  +\sum_c m_{c,r}x_c
+  +\sum_c u_{c,r}x_c
   -HC^{\mathrm{stable}}_{p,r}
 \right).
 \]
@@ -248,14 +244,13 @@ Q_{p,r}/
 
 This is not a time-scheduled queue bound. Work that arrives late can create a
 larger queue even when the aggregate fits. The event simulator independently
-schedules shared routes, reconstruction endpoints, requests, commits, and
-source power. It also drives a fluid pool-service queue from realized replay
+schedules shared routes, replay and KV endpoints, requests, commits, and source
+power. It also drives a fluid pool-service queue from realized replay
 start/finish and commit times. An executed point is invalid if that queue
 exceeds the advertised debt budget or cannot recover.
 
-Replay prefill contributes measured serving-transition work. KV ingest uses a
-separate measured ingest slot. Queue-Haul does not charge KV ingest to prefill
-or decode service unless interference is measured.
+Replay prefill contributes measured serving-transition work. KV ingest remains
+part of the migration duration rather than a separate aggregate admission row.
 
 ## 6. Other resource constraints
 
@@ -275,40 +270,57 @@ For each pool,
 
 for advertised usable live-KV blocks.
 
-For each logical route,
+For each physical link \(\lambda\),
 
 \[
-\sum_c b_cx_c\le B_pH.
+\sum_{c:\lambda\in\operatorname{path}(c)} b_cx_c\le B_\lambda H.
 \]
 
-This byte constraint is a fluid lower bound. The event simulator validates the
-actual shared-route schedule, transferred bytes, and completion time.
+These byte constraints are fluid relaxations. The event simulator validates
+the actual shared-link schedule, transferred bytes, and completion time.
 
-Source preparation streams and pool transition capacity are time budgets:
+Each pool with \(N_p\) replicas has an aggregate migration-time budget:
 
 \[
-\sum_{c:i(c)=i}t_cx_c\le S_iH,
-\qquad
 \sum_{c:p(c)=p}t_cx_c\le M_pH.
 \]
 
-Indivisible actions are packed into stream bins before acceptance.
+The current contract sets \(M_p=N_p\). It has no separate source-stream,
+reconstruction, or ingest row. After selection, indivisible actions are packed
+onto replicas. Each replica must independently satisfy its service, live-KV,
+and migration-time bounds.
 
 ## 7. Objective, schedule, and frontier
 
 For requested shed \(\Theta\), solve lexicographically:
 
 1. meet \(\sum_c w_cx_c\ge\Theta\);
-2. minimize migration work and resource debt.
+2. minimize \(\sum_c t_cx_c\).
 
 If the target is unreachable, maximize valid shed and report `target_unmet`
 with the watt shortfall. It is never called successful curtailment.
 
-For each selected migration, the planner emits session, source, action, pool,
-start, transfer or reconstruction finish, quiesce, commit, first-token
-completion, bytes, transition work, ongoing work, KV blocks, and conservative
-source watts credited. The execution validator rejects a plan whose concrete
-schedule violates an advertised resource or misses the deadline.
+The control-path greedy computes one scarcity price from the normalized demand
+of each session's cheapest candidate, ranks all candidates once by conservative
+watts per priced resource cost, and admits fitting candidates until the target
+is met. It does not dynamically reprice remaining capacity or select
+multi-session bundles. The opt-in `greedy_bundle` policy dynamically evaluates
+individual actions, prefixes of length two and three, and a full feasible
+instance drain using current exact drain gain and remaining slack. It remains
+experimental and is not the default controller.
+
+Selected moves are ordered by migration work per conservative watt. At
+controller completion, the executor starts every selected move eagerly.
+Independent paths proceed in parallel; overlapping paths share link capacity,
+and replay and KV endpoint queues use the selected order to break simultaneous
+arrivals. The order is therefore a priority relation, not serial execution.
+
+For each selected migration, the planner emits session, action, pool, replica,
+route, order, and optional pacing metadata. The plan reports aggregate
+conservative and exact source power. The execution report supplies phase timing,
+commit, observed request timing, bytes, and realized power. The validator
+rejects a plan whose concrete schedule violates an advertised resource or
+misses the deadline.
 
 The requirement frontier summarizes the validated schedules and reports, for
 every target:
@@ -316,7 +328,7 @@ every target:
 - achieved and unmet accelerator watts;
 - selected sessions and replay/KV mix;
 - route bytes and minimum route rate;
-- reconstruction and ingest work;
+- migration and serving-transition work;
 - ongoing prefill/decode headroom;
 - live-KV blocks;
 - service debt and required recovery;
@@ -333,7 +345,7 @@ change the decision variable.
 
 The fixed-contract experiment uses one canonical compatible integrated
 destination pool while requested shed rises. Its workload, packing, deadline,
-route, service, debt, KV, reconstruction, and ingest budgets do not change.
+route, service, debt, KV, and migration budgets do not change.
 This isolates joint whole-session selection and replay/KV coordination.
 
 The multi-pool experiment then opens that contract and varies pool count,
@@ -404,7 +416,7 @@ Out of scope:
 One versioned canonical scenario supplies the fixed-contract results. It records
 the workload; source packing, hardware, and model; one compatible integrated
 destination pool; deadline; route bandwidth and RTT; event service flex; debt
-budget; KV, reconstruction, and ingest capacity; and random seed. Each value
+budget; KV and migration capacity; and random seed. Each value
 has units, evidence status, provenance, validity range, and the evidence needed
 to replace it. Existing central defaults are canonical if they provide this
 record; otherwise use one documented mid-range point.
@@ -453,9 +465,9 @@ Plot normalized residual slack
 
 against requested shed in watts and/or percent of maximum modeled shed at the
 standard targets. Zero is binding; negative values are visible failures. Use
-one readable multi-line panel or small multiples for source preparation
-streams, route bytes or time, replay reconstruction, KV ingest, ongoing prefill,
-ongoing decode, service debt, live-KV blocks, and deadline or realized
+one readable multi-line panel or small multiples for route bytes or time,
+aggregate migration time, ongoing prefill, ongoing decode, service debt,
+live-KV blocks, and deadline or realized
 makespan. Report the complete binding-resource set. This figure explains how
 the fixed contract is spent.
 
@@ -498,16 +510,16 @@ where do their gains stop?
 
 Use identical-axis small multiples with advertised headroom or capacity
 multiplier on the x-axis and maximum executable shed on the y-axis, one panel
-each for route bandwidth or queued bytes, replay reconstruction, KV ingest,
-ongoing prefill, ongoing decode, event debt, and live-KV blocks. Use 1/2/4/8
+each for route bandwidth, aggregate migration capacity, ongoing prefill,
+ongoing decode, event debt, and live-KV blocks. Use 1/2/4/8
 pool lines only when readable; otherwise use one representative count and move
 the full matrix to the appendix. Each curve must show the knee at which another
 resource joins the binding set. Do not put unlike physical units on one axis.
 
 **Question C3.** How does the executable schedule change with the contract?
 
-Select three or four points from C1-C2, such as route-, reconstruction-,
-service-, and KV-memory/ingest-constrained points. Plot time on the x-axis and
+Select three or four points from C1-C2, such as route-, migration-, service-,
+and KV-memory-constrained points. Plot time on the x-axis and
 destination pools on the y-axis, with one rectangle per migration, width equal
 to scheduled duration, replay/KV fill or hatch, commit and first-token markers,
 shared route and transition-resource occupancy, and final achieved shed. These
@@ -517,7 +529,7 @@ schedule-morphing examples explain the capacity-curve shapes.
 required contract?
 
 Run resource diversity and compatibility diversity separately. Resource
-diversity varies route, reconstruction, ingest, service, or KV budgets while
+diversity varies route, migration, service, or KV budgets while
 holding compatibility fixed. Compatibility diversity varies eligible
 action/pool choices while holding total physical resources fixed. For coding,
 interactive coding, agentic, and ShareGPT-like conversation workloads, report
@@ -528,9 +540,11 @@ when constraints bind together.
 ## 14. Evaluation D: planner quality and scale
 
 **Question D1.** How close is the control-path planner to exact and relaxed
-references? Compare exact integer, LP bound, rounded/packed plan, Queue-Haul
-greedy, and focused baselines on executable shed, resource debt, optimality
-gap, planning time, and memory.
+references? Compare an exact integer oracle where tractable, the fractional
+target-first LP surrogate and its rounded/packed plan, Queue-Haul greedy, and
+focused baselines on executable shed, resource debt, planning time, and memory.
+Do not report the target-first LP as an upper bound on exact nonlinear shed; a
+separately defined chord relaxation is required for that claim.
 
 **Question D2.** Can Queue-Haul plan for 10K, 100K, and 1M sessions within an
 operationally useful budget? Plot planning time and memory against session
@@ -546,7 +560,7 @@ result row contains:
 - source hardware, model, packing, deadline, and measurement window;
 - requested, achieved, and unmet watts;
 - selected sessions; replay/KV counts and bytes; and pool assignment;
-- route, reconstruction, ingest, service, debt, recovery, and KV use;
+- route, migration, service, debt, recovery, and KV use;
 - normalized slack for every resource and the complete binding-resource set;
 - predicted and realized makespan and source shutdown time;
 - sessions, context tokens, and KV bytes still exposed; and

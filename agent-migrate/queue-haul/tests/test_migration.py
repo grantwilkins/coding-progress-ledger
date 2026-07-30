@@ -1,6 +1,7 @@
 """
 Claim: initial copy runs while the source serves, each session pauses once, changed
-state is copied once, and one total limit bounds replay and KV moves together.
+state is copied once, and ordered moves start eagerly under one shared concurrency
+limit.
 
 Plausible wrong implementations:
 - Pause before starting the initial copy.
@@ -8,6 +9,7 @@ Plausible wrong implementations:
 - Retry catch-up silently or leave the source paused after a failure.
 - Copy the original snapshot again after ordered append stages.
 - Apply independent replay and KV concurrency limits.
+- Wait for one move to commit before starting the next.
 - Report initial-copy time as service pause time.
 """
 
@@ -136,7 +138,7 @@ def test_copy_failure_resumes_source_without_commit():
     assert not any(call[0] == "commit" for call in runtime.calls)
 
 
-def test_one_limit_bounds_mixed_moves_and_dispatches_in_plan_order():
+def test_ordered_moves_start_eagerly_under_one_mixed_method_limit():
     runtime = FakeRuntime()
     moves = [Move("c", "replay", 2), Move("a", "replay", 0), Move("b", "kv_transfer", 1)]
 
@@ -144,6 +146,9 @@ def test_one_limit_bounds_mixed_moves_and_dispatches_in_plan_order():
 
     assert runtime.peak == 2
     assert [call[1] for call in runtime.calls if call[0] == "snapshot"] == ["a", "b", "c"]
+    assert runtime.calls.index(("snapshot", "b")) < next(
+        i for i, call in enumerate(runtime.calls) if call[0] == "commit"
+    )
     assert [result.move.session_id for result in results] == ["a", "b", "c"]
 
 

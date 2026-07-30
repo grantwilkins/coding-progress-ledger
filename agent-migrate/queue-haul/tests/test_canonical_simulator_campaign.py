@@ -1,8 +1,8 @@
 """
 Claim:
 The canonical campaign pairs every policy on one scenario, preserves fixed-method
-baselines, labels assumed destination capacity as sensitivity, and changes only
-session count in the compact scaling run.
+baselines, executes the primary contract without pacing, labels assumed destination
+capacity as sensitivity, and changes only session count in the compact scaling run.
 
 Plausible wrong implementations:
 - Resample a different session population for each policy.
@@ -10,12 +10,35 @@ Plausible wrong implementations:
 - Present the assumed destination contract as accepted measured evidence.
 - Run the LP at small scale but silently label another planner as LP at 1M.
 - Hold route capacity fixed while claiming an equivalent-capacity scale result.
+- Execute planner pacing while labeling the result as the eager hardware contract.
 """
 
 import csv
 import json
+from dataclasses import dataclass
 
-from canonical_simulator_campaign import POLICIES, run
+from canonical_simulator_campaign import POLICIES, eager, run
+from migration import ORDERED_EAGER_PARALLEL_V1
+
+
+@dataclass(frozen=True)
+class _Move:
+    rate_limit_bytes_per_s: float | None
+    quiesce_s: float | None
+
+
+@dataclass(frozen=True)
+class _Plan:
+    moves: tuple[_Move, ...]
+
+
+def test_primary_execution_is_unpaced_without_mutating_the_plan():
+    planned = _Plan((_Move(10, 20),))
+
+    executed = eager(planned)
+
+    assert executed.moves == (_Move(None, None),)
+    assert planned.moves == (_Move(10, 20),)
 
 
 def test_campaign_pairs_policies_and_keeps_scale_claim_explicit(tmp_path):
@@ -45,6 +68,7 @@ def test_campaign_pairs_policies_and_keeps_scale_claim_explicit(tmp_path):
     assert all(row["deadline_met"] for row in scale_rows)
 
     metadata = json.loads((tmp_path / "run_metadata.json").read_text())
+    assert metadata["execution_contract"] == ORDERED_EAGER_PARALLEL_V1
     assert metadata["destination_contract"].endswith("assumed sensitivity")
     assert metadata["scale_policy"] == "queue_haul_greedy"
     assert metadata["scale_topology"] == "equivalent pooled destination"

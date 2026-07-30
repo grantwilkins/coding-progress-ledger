@@ -4,12 +4,12 @@ Queue-Haul plans request-boundary migration of stateful LLM sessions to reduce
 source accelerator power before a deadline. It jointly chooses sessions,
 replay or full-KV transfer, and compatible destination serving pools.
 
-The primary output is an executable schedule naming each migrated session,
-replay or KV transfer, destination pool, handoff timing, source shutdown, and
-resource use, slack, debt, recovery, achieved shed, and unmet shed. A
-requirement frontier summarizes those schedules across source-power targets.
-Destination capacity is an advertised pool contract, not an inferred GPU
-inventory.
+The planner emits a fixed plan naming each migrated session, replay or KV
+transfer, destination pool and replica, route, and order. Execution adds phase
+timing, commit, observed first-token timing, source transitions, resource use,
+debt, recovery, achieved shed, and unmet shed. A requirement frontier summarizes
+plans across source-power targets. Destination capacity is an advertised pool
+contract, not an inferred GPU inventory.
 
 ## Current evidence
 
@@ -24,15 +24,15 @@ The repository contains:
 - measured request-boundary replay and KV Gantt charts through the first
   destination token;
 - a one-pool requirement-frontier solver;
-- LP, integer, and greedy planners;
+- LP, static greedy, and experimental bundle-greedy planners;
 - pool-aware planning and internal packing checks; and
 - a deterministic migration, network, request, queue, and power simulator.
 
-The remaining two-A100 closure is to run the prepared planner-driven policy
-campaign, which executes mixed replay/KV choices and order sequentially. The
-archived destination service campaign does not provide an accepted shared-load
-capacity boundary, so simulator service headroom remains a sensitivity. That
-boundary is not required for the dedicated two-A100 migration claim.
+The completed planner-driven policy campaign executes mixed replay/KV choices
+with ordered eager-parallel launch. The archived destination service campaign
+does not provide an accepted shared-load capacity boundary, so simulator
+service headroom remains a sensitivity. That boundary is not required for the
+dedicated two-A100 migration claim.
 
 ## System boundary
 
@@ -50,11 +50,12 @@ The public candidate is:
 (session, replay-or-KV, compatible destination pool)
 ```
 
-The pool manager chooses a replica. A pool advertises ongoing service headroom,
-stable capacity, temporary queued-work allowance, reconstruction/ingest
-capacity, live-KV blocks, route capacity, compatibility, and evidence status.
-The pool planner enforces ongoing event capacity and conservative
-replica-second debt and reports required recovery.
+The planner lowers the logical pool choice to a deterministic replica assignment.
+A V1 pool advertises ongoing and stable service envelopes, temporary queued-work
+allowance, live-KV blocks, route identity, allowed methods, compatibility, and
+evidence status. The scenario supplies link rates. The pool planner enforces
+ongoing event capacity and conservative replica-second debt and reports required
+recovery.
 
 ## Evidence flow
 
@@ -71,12 +72,10 @@ simulated. Assumed values are sensitivities, never admission guarantees.
 The conversation workload pins ShareGPT artifact revision
 `192ab2185289094fc556ec8ce5ce1e8e587154ca` and stores only token/turn shapes.
 
-The detailed contracts are in:
+The normative formulation and executable-contract mapping are in:
 
 - `formulation_nsdi.md`;
-- `PROPOSED_DESTINATION_ARCH.md`;
-- `DESTINATION_ROADMAP.md`; and
-- `TODO.md`.
+- `PROPOSED_DESTINATION_ARCH.md`.
 
 ## Main commands
 

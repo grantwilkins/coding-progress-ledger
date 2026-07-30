@@ -141,7 +141,7 @@ def service_debt(baseline, ongoing, transition, stable, horizon):
     return debt, recovery
 
 
-def _service_trace(initial, capacity, changes, start, end):
+def _service_trace(initial, capacity, changes, start, end, detailed=True):
     """Fluid queue under time-varying declared demand."""
     if min(initial, capacity, start) < 0 or capacity <= 0 or end < start \
             or any(not start <= time <= end for time, _ in changes):
@@ -157,12 +157,17 @@ def _service_trace(initial, capacity, changes, start, end):
         if demand < -1e-9:
             raise ValueError("service demand became negative")
         demand = max(0.0, demand)
-        rows.append((at, demand, queue, peak))
+        if detailed:
+            rows.append((at, demand, queue, peak))
+        else:
+            rows[:] = [(at, demand, queue, peak)]
         time = at
     return tuple(rows)
 
 
-def destination_service_execution(scenario, profile, architecture, moves, result):
+def destination_service_execution(
+    scenario, profile, architecture, moves, result, detailed=True,
+):
     """Schedule declared pool work from realized replay and commit times."""
     horizon = scenario.deadline_s - scenario.controller_delay_s - profile.power_window_s
     end = scenario.controller_delay_s + horizon
@@ -179,25 +184,32 @@ def destination_service_execution(scenario, profile, architecture, moves, result
     }
     changes = {(pool.pool_id, facet): [] for pool in architecture.pools
                for facet in range(len(architecture.type_by_id[pool.type_id].normals))}
-    for event in result.events:
-        if event.session_id not in move_pool or not scenario.controller_delay_s \
-                <= event.time_s <= end:
+    for row in result.sessions:
+        if row.session_id not in move_pool:
             continue
-        pool, q = move_pool[event.session_id], move_type[event.session_id]
+        pool, q = move_pool[row.session_id], move_type[row.session_id]
         normals = np.asarray(q.normals)
-        if event.event in {"replay_start", "replay_done"}:
-            sign = 1 if event.event == "replay_start" else -1
-            delta = normals @ np.array((1.0, 0.0)) * sign
-        elif event.event == "commit":
-            session = sessions[event.session_id]
+        if row.method == "replay":
+            for start, finish in (
+                (row.initial_replay_start_s, row.initial_ready_s),
+                (row.catch_up_replay_start_s, row.catch_up_ready_s),
+            ):
+                if start is not None and start <= end:
+                    delta = normals @ np.array((1.0, 0.0))
+                    for facet, value in enumerate(delta):
+                        changes[pool.pool_id, facet].append((start, float(value)))
+                        if finish is not None and finish <= end:
+                            changes[pool.pool_id, facet].append(
+                                (finish, float(-value))
+                            )
+        if row.committed_s is not None and row.committed_s <= end:
+            session = sessions[row.session_id]
             delta = normals @ q.work(
                 session.expected_f, session.expected_g,
                 _resident_tokens(session, residency), q.migration is not None,
             )
-        else:
-            continue
-        for facet, value in enumerate(delta):
-            changes[pool.pool_id, facet].append((event.time_s, float(value)))
+            for facet, value in enumerate(delta):
+                changes[pool.pool_id, facet].append((row.committed_s, float(value)))
     rows = []
     for pool in architecture.pools:
         q, normals = architecture.type_by_id[pool.type_id], np.asarray(
@@ -218,6 +230,7 @@ def destination_service_execution(scenario, profile, architecture, moves, result
             trace = _service_trace(
                 float(baseline[facet]), float(stable[facet]),
                 changes[pool.pool_id, facet], scenario.controller_delay_s, end,
+                detailed,
             )
             final_demand, final_queue, peak = trace[-1][1:]
             spare = stable[facet] - final_demand
@@ -403,6 +416,57 @@ def _greedy(table: CandidateTable, target: float):
         sessions.add(c.session)
         usage[rows] += values
         gain += c.gain_w
+    return selected
+
+
+def _greedy_bundle(table: CandidateTable, target: float, power: ExpectedPower):
+    matrix, selected = csc_matrix(table.resources), set()
+    sessions, usage, gain = set(), np.zeros(table.resources.shape[0]), 0.0
+    state = ExpectedPower(power.scenario, power.profile, power.case.case_id)
+    while gain < target - 1e-8:
+        choices, cheapest = [], {}
+        for i, c in enumerate(table.candidates):
+            if c.session in sessions:
+                continue
+            sl = slice(matrix.indptr[i], matrix.indptr[i + 1])
+            rows, values = matrix.indices[sl], matrix.data[sl]
+            if np.any(usage[rows] + values > 1 + 1e-8):
+                continue
+            cost = (values / (1 - usage[rows])).sum()
+            choices.append((i,))
+            if c.session not in cheapest or (cost, i) < cheapest[c.session]:
+                cheapest[c.session] = cost, i
+        groups = {}
+        for cost, i in cheapest.values():
+            session = table.sessions[table.candidates[i].session]
+            groups.setdefault(session.source_instance, []).append(
+                (power.ell[session.session_id] / cost, i)
+            )
+        for group in groups.values():
+            ordered = [i for _, i in sorted(group, reverse=True)]
+            choices.extend(tuple(ordered[:n]) for n in range(2, min(3, len(ordered)) + 1))
+            if len(ordered) > 3:
+                choices.append(tuple(ordered))
+        best = None
+        for choice in choices:
+            added = np.asarray(matrix[:, choice].sum(1)).ravel()
+            if np.any(usage + added > 1 + 1e-8):
+                continue
+            ids = [table.sessions[table.candidates[i].session].session_id for i in choice]
+            cost = sum(value / (1 - usage[row])
+                       for row, value in enumerate(added) if value)
+            key = (state.drain_gain(ids) / cost, tuple(-i for i in choice))
+            if best is None or key > best[0]:
+                best = key, choice, ids, added
+        if best is None:
+            break
+        before = state.power(True)
+        for session_id in best[2]:
+            state.remove(session_id)
+        gain += before - state.power(True)
+        selected.update(best[1])
+        sessions.update(table.candidates[i].session for i in best[1])
+        usage += best[3]
     return selected
 
 
@@ -601,7 +665,9 @@ def _selected_service_debt(table, selected, architecture, scenario):
 
 def _mode_plan(scenario, profile, architecture, solver, mode, power, target):
     table = candidate_table(scenario, profile, architecture, mode, power)
-    selected = (_lp if solver.startswith("lp") else _greedy)(table, target)
+    selected = (_lp(table, target) if solver.startswith("lp") else
+                _greedy_bundle(table, target, power) if solver == "greedy_bundle"
+                else _greedy(table, target))
     repairs, repair_s = 0, 0.0
     while True:
         started = perf_counter()
@@ -620,7 +686,7 @@ def _mode_plan(scenario, profile, architecture, solver, mode, power, target):
 
 
 def plan_destination(scenario, profile, solver, case_id, seed, architecture):
-    if solver not in {"greedy", "lp", "lp_peak_first", "lp_work_first"}:
+    if solver not in {"greedy", "greedy_bundle", "lp", "lp_peak_first", "lp_work_first"}:
         raise ValueError("destination architecture supports pool-aware LP and greedy")
     if case_id != "central":
         raise ValueError("destination admission supports the central profile")
@@ -640,7 +706,9 @@ def plan_destination(scenario, profile, solver, case_id, seed, architecture):
     mode, (table, selected, assignment, repairs, repair_s), planned = chosen
     moves = _moves(table, selected, assignment, architecture, scenario, profile)
     validate_destination_execution(scenario, architecture, moves)
-    expected = predict(_expected_scenario(scenario, moves), profile, moves, case_id)
+    expected = predict(
+        _expected_scenario(scenario, moves), profile, moves, case_id, architecture,
+    )
     shortfall = max(0.0, planned - scenario.power_limit_w)
     shortfall = 0.0 if shortfall <= 1e-8 else shortfall
     debt_rows = _selected_service_debt(
@@ -652,6 +720,9 @@ def plan_destination(scenario, profile, solver, case_id, seed, architecture):
     failure = (
         None if feasible else "target_unmet" if shortfall
         else "service_debt_unrecoverable" if not np.isfinite(recovery)
+        else "destination_service_queue" if any(
+            not row.within_contract for row in expected.pool_service
+        )
         else "migration_deadline"
     )
     usage = np.asarray(table.resources[:, list(selected)].sum(1)).ravel() if selected else np.zeros(len(table.resource_names))

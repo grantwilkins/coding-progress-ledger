@@ -218,4 +218,7 @@ def test_seeded_sweep_repeats_only_transition_cells(monkeypatch):
         return row["seed"], row["planner"], row["feasible"]
     assert list(map(key, first)) == list(map(key, second))
     assert {r["seed"] for r in first} == {0, 1, 2, 3}
+    assert {r["planner"] for r in first} == {
+        "scalar", "pool_lp", "pool_greedy", "pool_bundle",
+    }
     assert {(r["flex"], r["debt"]) for r in first} == {(.1, .05)}

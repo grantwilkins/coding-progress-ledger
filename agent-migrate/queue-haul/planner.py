@@ -21,8 +21,9 @@ from simulate import (MOVE_METHODS_BY_STATE, ExecutionScenario, MoveMethod, Plan
 METHODS: tuple[MoveMethod, ...] = ("replay", "kv_transfer", "replay_on_request")
 SOLVERS = ("random", "greedy", "lp")
 LP_SOLVERS = ("lp", "lp_peak_first", "lp_work_first")
+POOL_SOLVERS = ("greedy_bundle",)
 BASELINE_SOLVERS = ("isolated_fastest", "replay_only", "kv_only")
-ALL_SOLVERS = SOLVERS + LP_SOLVERS[1:] + BASELINE_SOLVERS
+ALL_SOLVERS = SOLVERS + LP_SOLVERS[1:] + BASELINE_SOLVERS + POOL_SOLVERS
 Routes = dict[tuple[str, str], tuple[str, ...]] | Callable[[str, str], tuple[str, ...]]
 
 
@@ -672,6 +673,8 @@ def plan(scenario: ExecutionScenario, profile: ModelProfile,
         return plan_destination(scenario, profile, solver, case_id, seed, destination)
     if solver not in ALL_SOLVERS:
         raise ValueError(f"unknown solver {solver!r}")
+    if solver in POOL_SOLVERS:
+        raise ValueError(f"{solver} requires a destination architecture")
     start = perf_counter()
     if solver in LP_SOLVERS:
         return _plan_lp(scenario, profile, paths, solver, case_id, seed, start)

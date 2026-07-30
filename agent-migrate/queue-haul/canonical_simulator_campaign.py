@@ -14,8 +14,8 @@ import matplotlib
 
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
-import numpy as np
 
+from migration import ORDERED_EAGER_PARALLEL_V1
 from planner import plan, source_power
 from power_drain_experiment import (
     DEFAULT_MODEL, ExperimentRun, _summary, build_scenario,
@@ -312,7 +312,7 @@ def run(model_path=DEFAULT_MODEL, workload_path=DEFAULT_WORKLOAD,
     write_csv(out / "policy_summary.csv", policy_rows)
     write_csv(out / "scale_summary.csv", scale_rows)
     (out / "run_metadata.json").write_text(json.dumps({
-        "execution_contract": "eager_one_stream_per_source",
+        "execution_contract": ORDERED_EAGER_PARALLEL_V1,
         "main_sessions": main_sessions, "scale_sessions": scale_sessions,
         "policies": POLICIES, "scale_policy": "queue_haul_greedy",
         "scale_topology": "equivalent pooled destination",

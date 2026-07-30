@@ -9,6 +9,8 @@ from typing import Callable, Literal, Protocol
 
 Method = Literal["replay", "kv_transfer"]
 Phase = Literal["initial", "append", "catch_up"]
+# Frozen serialized value: ordered starts, full-width concurrency, no executor pacing.
+ORDERED_EAGER_PARALLEL_V1 = "eager_parallel_all_sessions"
 
 
 @dataclass(frozen=True)

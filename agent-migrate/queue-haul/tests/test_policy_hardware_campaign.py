@@ -29,8 +29,8 @@ import numpy as np
 import pytest
 
 import policy_hardware_campaign as campaign
+from migration import ORDERED_EAGER_PARALLEL_V1
 from policy_hardware_campaign import (
-    EXECUTION_CONTRACT,
     completion_curve,
     deadline_attainment,
     make_plan,
@@ -60,6 +60,8 @@ def manifest(tmp_path, sessions=4):
 
 def test_plan_pairs_every_policy_on_the_same_complete_episode(
         tmp_path, monkeypatch):
+    assert ORDERED_EAGER_PARALLEL_V1 == "eager_parallel_all_sessions"
+    assert campaign.EXECUTION_CONTRACT == ORDERED_EAGER_PARALLEL_V1
     manifest_path = manifest(tmp_path)
     bandwidths = []
     problem = campaign._problem
@@ -80,7 +82,7 @@ def test_plan_pairs_every_policy_on_the_same_complete_episode(
         bandwidths_mbps=(5_000, 10_000),
         required_deadlines_s=(30, 45),
     )
-    assert plan["execution_contract"] == EXECUTION_CONTRACT
+    assert plan["execution_contract"] == ORDERED_EAGER_PARALLEL_V1
     assert plan["model_profile"]["sha256"]
     assert not Path(plan["model_profile"]["path"]).is_absolute()
 
@@ -268,7 +270,7 @@ def test_reduction_uses_common_epoch_and_keeps_failed_denominator(tmp_path):
     failed = {**base, "scenario_id": "failed", "policy": "random"}
     plan = {
         "episodes": 1, "policies": ["queue_haul", "random"],
-        "execution_contract": EXECUTION_CONTRACT,
+        "execution_contract": ORDERED_EAGER_PARALLEL_V1,
         "power_target_fraction": 1,
         "model_profile": {
             "path": "queue-haul/profiles/gpt_oss_20b_a100_tp1.json",

@@ -16,12 +16,14 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 import migration_profiler as profiler
+from migration import ORDERED_EAGER_PARALLEL_V1
 from planner import _duration, plan
 from profiles import ModelProfile, WorkloadProfile
 from simulate import ExecutionScenario, NetworkLink, PowerNode, ServingInstance, SimSession
 
 
 ROOT = Path(__file__).parent
+EXECUTION_CONTRACT = ORDERED_EAGER_PARALLEL_V1
 DEFAULT_MANIFEST = Path("queue-haul/outputs/coding-manifest.json")
 DEFAULT_MODEL = ROOT / "profiles/gpt_oss_20b_a100_tp1.json"
 DEFAULT_WORKLOADS = tuple(ROOT / f"profiles/{name}.json" for name in (
@@ -42,9 +44,6 @@ LABELS = {
     "isolated_fastest": "Per-session fastest", "random": "Random choice/order",
     "kv_only": "KV only", "replay_only": "Replay only",
 }
-EXECUTION_CONTRACT = "eager_parallel_all_sessions"
-
-
 def _portable_path(path: Path) -> str:
     resolved = path.resolve()
     try:
@@ -270,7 +269,7 @@ def make_plan(manifest_path: Path, model_path: Path = DEFAULT_MODEL,
         "manifest": {"path": str(manifest_path),
                      "sha256": profiler.file_hash(manifest_path)},
         "seed": seed, "campaign": "policy_hardware",
-        "execution_contract": EXECUTION_CONTRACT,
+        "execution_contract": ORDERED_EAGER_PARALLEL_V1,
         "model_profile": {
             "path": _portable_path(model_path),
             "sha256": profiler.file_hash(model_path),
@@ -297,7 +296,7 @@ def make_plan(manifest_path: Path, model_path: Path = DEFAULT_MODEL,
 
 
 def validate_policy_plan(plan_: dict) -> None:
-    if plan_.get("execution_contract") != EXECUTION_CONTRACT:
+    if plan_.get("execution_contract") != ORDERED_EAGER_PARALLEL_V1:
         raise ValueError("unsupported policy hardware execution contract")
     policies = set(plan_["policies"])
     episode_order = [row["episode"] for row in plan_["scenarios"]]
