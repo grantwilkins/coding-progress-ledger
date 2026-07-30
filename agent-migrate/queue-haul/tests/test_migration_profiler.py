@@ -134,6 +134,7 @@ def test_crossover_plan_is_exact_paired_and_bandwidth_blocked(tmp_path):
 
     assert len(plan["scenarios"]) == 24
     assert plan["scenarios"][0]["smoke"]
+    assert plan["scenarios"][0]["context_size"] == 4096
     assert {
         (row["context_size"], row["bandwidth_mbps"],
          row["repeat"], row["method"])
@@ -145,7 +146,8 @@ def test_crossover_plan_is_exact_paired_and_bandwidth_blocked(tmp_path):
     }
     samples = {}
     for row in plan["scenarios"]:
-        assert row["sessions"][0]["initial_tokens"] == row["context_size"]
+        assert row["sessions"][0]["initial_tokens"] \
+            == row["context_size"] - c.CROSSOVER_PROMPT_HEADROOM_TOKENS
         samples.setdefault(
             (row["context_size"], row["repeat"]), set()
         ).add((row["sample_id"], row["sessions"][0]["session_id"]))

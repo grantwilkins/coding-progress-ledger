@@ -156,10 +156,11 @@ Its completed checksum-pinned reduced bundle is retained under
 `outputs/policy-hardware-width8-frontier-20260730/`, including move-admission
 provenance and raw GPU samples. This idle evidence supports timing and projected,
 not realized, power attainment.
-`migration_profiler.py make-crossover` creates exact single-session replay/KV
-pairs for each context, bandwidth, and repeat. It keeps bandwidths in contiguous
-blocks to avoid unnecessary MP-stack restarts and makes the first 2K replay
-scenario a fail-fast smoke. Its 6-context, 4-bandwidth, 3-repeat grid contains
+`migration_profiler.py make-crossover` creates paired single-session replay/KV
+measurements for each nominal context, bandwidth, and repeat. The synthetic body
+reserves 192 tokens for message overhead, and the first 32K replay is a fail-fast
+model-limit smoke. Bandwidths remain contiguous to avoid unnecessary MP-stack
+restarts. Its 6-context, 4-bandwidth, 3-repeat grid contains
 144 migrations. Use the reduced measurements to establish the method crossover
 before freezing the 2K–16K width-8 packing plan; the current replay profile
 starts at 3,473 tokens and must not be extrapolated to 2K.

@@ -39,6 +39,7 @@ JOB_CLASSES = ("interactive_coding", "coding", "agentic_tool_loop")
 RESET_SUCCESS = "Successfully reset prefix cache"
 PROBE_MAX_TOKENS = 512
 MAX_MODEL_TOKENS = 32768
+CROSSOVER_PROMPT_HEADROOM_TOKENS = 192
 
 
 def file_hash(path: Path) -> str:
@@ -322,7 +323,7 @@ def make_crossover_plan(manifest_path: Path, context_sizes: list[int],
                     "session_id": session["id"],
                     "job_class": session["job_class"],
                     "turn_index": 0,
-                    "initial_tokens": size,
+                    "initial_tokens": size - CROSSOVER_PROMPT_HEADROOM_TOKENS,
                     "order": 0,
                 }]
                 sample_id = object_hash([seed, size, repeat, sessions])[:16]
@@ -353,7 +354,7 @@ def make_crossover_plan(manifest_path: Path, context_sizes: list[int],
         blocks.append([row for pair in pairs for row in pair])
     smoke = next(
         row for row in blocks[0]
-        if row["context_size"] == min(context_sizes)
+        if row["context_size"] == max(context_sizes)
         and row["repeat"] == 0 and row["method"] == "replay"
     )
     blocks[0].remove(smoke)
@@ -392,8 +393,9 @@ def validate_crossover_plan(plan: dict) -> None:
         samples.setdefault(
             (row["context_size"], row["repeat"]), set()
         ).add((row["sample_id"], row["sessions"][0]["session_id"]))
-        if row["sessions"][0].get("initial_tokens") != row["context_size"]:
-            raise ValueError("crossover contexts must be exact")
+        if row["sessions"][0].get("initial_tokens") \
+                != row["context_size"] - CROSSOVER_PROMPT_HEADROOM_TOKENS:
+            raise ValueError("crossover contexts must reserve prompt headroom")
     if any(len(rows) != 1 for rows in samples.values()):
         raise ValueError("crossover methods and bandwidths must be paired")
     if not plan["scenarios"][0].get("smoke") \
