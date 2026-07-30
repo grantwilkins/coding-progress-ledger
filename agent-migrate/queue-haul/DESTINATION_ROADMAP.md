@@ -56,13 +56,14 @@ two-A100 end-to-end performance story.
 
 ## Remaining simulator result
 
-Use one canonical sequential contract and show:
+Run `canonical_simulator_campaign.py`, which freezes one canonical sequential
+contract, and show:
 
 - selected replay/KV mix and order;
 - requested versus achieved source accelerator-power shed;
-- last commit and first destination token by the deadline;
+- last commit by the deadline;
 - route bytes/queue, destination work, and exposed sessions;
-- comparison with replay-only, KV-only, and greedy; and
+- comparison with replay-only, KV-only, isolated-fastest, and greedy; and
 - planning and execution behavior at 10K, 100K, and 1M sessions.
 
 One main workload plus a compact robustness view is sufficient. The full

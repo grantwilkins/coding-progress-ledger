@@ -31,6 +31,8 @@ Plausible wrong implementations:
 - Evaluate migration methods that are illegal for a session's residency state.
 - Rebuild an already-static expected scenario.
 - Change seeded random methods or move order while batching random choices.
+- Let a fixed-method baseline silently use the other migration mechanism.
+- Choose one globally fastest method for the isolated-fastest baseline.
 """
 
 from dataclasses import replace
@@ -125,6 +127,22 @@ def test_route_resource_cache_reuses_only_identical_path_sets():
     assert same_a[0][2] == 100
     assert different[0][2] == 10
     assert len(cache) == 2
+
+
+def test_equivalent_destination_routes_are_evaluated_once():
+    destinations = (
+        ServingInstance("t0", ("d",)), ServingInstance("t1", ("d",))
+    )
+    calls = []
+
+    def routes(source, destination):
+        calls.append((source, destination))
+        return ("wan",)
+
+    routes.destinations_equivalent = True
+    _route_resources("s0", destinations, routes, {"wan": 100}, {})
+
+    assert calls == [("s0", "t0")]
 
 
 def test_kv_duration_uses_the_slower_pipeline_stage(tmp_path):
@@ -417,6 +435,35 @@ def test_greedy_uses_kv_when_shared_replay_time_is_full(tmp_path):
     assert result.feasible
     assert [move.method for move in result.moves].count("replay") == 3
     assert [move.method for move in result.moves].count("kv_transfer") == 1
+
+
+def test_fixed_and_isolated_baselines_enforce_their_method_contract(tmp_path):
+    profile = model(
+        tmp_path, switch=0, tp=1, destination_rate=100,
+        replay_rate={
+            "1": [[1, 1], [10, 1], [100, 1000], [1000, 1000]],
+            "2": [[1, .5], [10, .5], [100, 500], [1000, 500]],
+        },
+    )
+    scenario = replace(
+        problem(limit=0),
+        sessions=(
+            SimSession("a", "s0", 10, 25, 0, 1),
+            SimSession("b", "s1", 100, 25, 0, 1),
+        ),
+        links=(NetworkLink("wan", 100),),
+        deadline_s=20,
+    )
+
+    replay = plan(scenario, profile, PATHS, "replay_only")
+    kv = plan(scenario, profile, PATHS, "kv_only")
+    isolated = plan(scenario, profile, PATHS, "isolated_fastest")
+
+    assert {move.method for move in replay.moves} == {"replay"}
+    assert {move.method for move in kv.moves} == {"kv_transfer"}
+    assert {move.session_id: move.method for move in isolated.moves} == {
+        "a": "kv_transfer", "b": "replay",
+    }
 
 
 def test_random_skips_sessions_that_cannot_finish_by_the_deadline(tmp_path):

@@ -21,7 +21,8 @@ from simulate import (MOVE_METHODS_BY_STATE, ExecutionScenario, MoveMethod, Plan
 METHODS: tuple[MoveMethod, ...] = ("replay", "kv_transfer", "replay_on_request")
 SOLVERS = ("random", "greedy", "lp")
 LP_SOLVERS = ("lp", "lp_peak_first", "lp_work_first")
-ALL_SOLVERS = SOLVERS + LP_SOLVERS[1:]
+BASELINE_SOLVERS = ("isolated_fastest", "replay_only", "kv_only")
+ALL_SOLVERS = SOLVERS + LP_SOLVERS[1:] + BASELINE_SOLVERS
 Routes = dict[tuple[str, str], tuple[str, ...]] | Callable[[str, str], tuple[str, ...]]
 
 
@@ -262,6 +263,8 @@ def _route(routes: Routes, source: str, destination: str) -> tuple[str, ...]:
 
 def _route_resources(source: str, destinations, routes: Routes, links: dict[str, float],
                      cache: dict):
+    if getattr(routes, "destinations_equivalent", False):
+        destinations = destinations[:1]
     paths = tuple(dict.fromkeys(
         _route(routes, source, destination.instance_id) for destination in destinations
     ))
@@ -711,13 +714,26 @@ def plan(scenario: ExecutionScenario, profile: ModelProfile,
                 choices[j] = rng.choice(np.flatnonzero(valid[j]))
         methods = [METHODS[k] for k in choices]
     selected = []
-    if solver == "greedy":
+    if solver == "greedy" or solver in BASELINE_SOLVERS:
         if scenario.final_state != "awake" or any(s.state != "active" for s in sessions):
             raise ValueError("greedy supports active sessions and final_state='awake'")
         resource_horizon = horizon - profile.power_window_s
-        _, resource_valid, resources = _migration_resources(
+        durations, resource_valid, resources = _migration_resources(
             scenario, profile, paths, sessions, destinations, case, resource_horizon
         )
+        if solver in BASELINE_SOLVERS:
+            allowed = np.zeros((2, len(sessions)), bool)
+            if solver == "replay_only":
+                allowed[0] = True
+            elif solver == "kv_only":
+                allowed[1] = True
+            else:
+                masked = np.where(
+                    resource_valid.reshape(2, -1), durations, np.inf
+                )
+                allowed[np.argmin(masked, axis=0), np.arange(len(sessions))] = \
+                    np.isfinite(masked).any(axis=0)
+            resource_valid &= allowed.reshape(-1)
         selected, chosen, _ = _greedy(
             sessions, np.array([power_state.marginal(s.session_id) for s in sessions]),
             resource_valid, resources, power_state, scenario.power_limit_w,

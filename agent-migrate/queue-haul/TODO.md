@@ -32,12 +32,13 @@ sequentially. Parallel migration is a separate sensitivity.
 
 ## Required simulator result
 
-- [ ] Freeze one sequential execution contract and one canonical assumed pool
+- [x] Freeze one sequential execution contract and one canonical assumed pool
   configuration.
-- [ ] Run Queue-Haul, replay-only, KV-only, and greedy on the same scenarios.
+- [ ] Run the prepared `canonical_simulator_campaign.py` campaign.
+- [ ] Run Queue-Haul, replay-only, KV-only, isolated-fastest, and greedy on the
+  same scenario.
 - [ ] Report requested and achieved shed, selected action mix, last commit,
-  first destination token, route bytes/queue, destination work, deadline
-  status, and exposed sessions.
+  route bytes/queue, destination work, deadline status, and exposed sessions.
 - [ ] Show one representative simulator schedule and a compact scale result at
   10K, 100K, and 1M sessions. Additional Cartesian sweeps are optional.
 - [ ] Keep every unmeasured route, pool, and service input labeled
