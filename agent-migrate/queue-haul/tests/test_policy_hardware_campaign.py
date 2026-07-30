@@ -1,21 +1,21 @@
 """
 Claim:
 Every policy consumes the same frozen hardware episode, reaction latency starts
-at one policy epoch, failed episodes remain in curve denominators, and the
-isolated-fastest baseline independently minimizes each session's migration time.
+at one policy epoch, all sessions launch concurrently, and failed episodes
+remain in deadline-attainment denominators.
 
 Plausible wrong implementations:
 - Resample sessions or contexts independently for each policy.
 - Measure from each migration's own start and hide scheduler wait.
-- Let a policy omit sessions or execute migrations in parallel.
-- Pick one globally fastest method instead of choosing independently per session.
-- Order isolated-fastest sessions by an unselected method or reverse duration.
+- Let a policy omit sessions or use a width below the episode size.
 - Condition completion curves only on successful migrations.
 - Pair continuation TTFT with a control from another episode.
 - Stretch every timing metric to the campaign deadline instead of its data.
 - Omit the fixed-method controls or aggregate source power once per migration.
+- Count commits just after the deadline or linearize the nonlinear power curve.
 """
 
+import csv
 import json
 import math
 from copy import deepcopy
@@ -28,6 +28,7 @@ import policy_hardware_campaign as campaign
 from policy_hardware_campaign import (
     EXECUTION_CONTRACT,
     completion_curve,
+    deadline_attainment,
     make_plan,
     prepare,
     reduce_run,
@@ -53,9 +54,13 @@ def manifest(tmp_path):
 
 def test_plan_pairs_every_policy_on_the_same_complete_episode(tmp_path):
     manifest_path = manifest(tmp_path)
-    plan = make_plan(manifest_path, episodes=3, sessions=4, seed=7)
+    plan = make_plan(
+        manifest_path, episodes=2, sessions=4, seed=7,
+        required_deadlines_s=(30, 45),
+    )
     assert plan == make_plan(
-        manifest_path, episodes=3, sessions=4, seed=7
+        manifest_path, episodes=2, sessions=4, seed=7,
+        required_deadlines_s=(30, 45),
     )
     assert plan["execution_contract"] == EXECUTION_CONTRACT
     assert plan["model_profile"]["sha256"]
@@ -65,8 +70,8 @@ def test_plan_pairs_every_policy_on_the_same_complete_episode(tmp_path):
     assert sum(
         i == 0 or episode != episode_order[i - 1]
         for i, episode in enumerate(episode_order)
-    ) == 3
-    for episode in range(3):
+    ) == 4
+    for episode in range(4):
         rows = [row for row in plan["scenarios"]
                 if row["episode"] == episode]
         signatures = {
@@ -80,6 +85,19 @@ def test_plan_pairs_every_policy_on_the_same_complete_episode(tmp_path):
             {move["session_id"] for move in row["moves"]} == expected
             for row in rows if row["kind"] == "migration"
         )
+        assert all(
+            row["move_concurrency"] == len(row["sessions"])
+            for row in rows if row["kind"] == "migration"
+        )
+    samples = {}
+    for row in plan["scenarios"]:
+        if row["policy"] == "control":
+            samples.setdefault(row["sample_id"], set()).add(tuple(
+                (session["session_id"], session["initial_tokens"])
+                for session in row["sessions"]
+            ))
+    assert len(samples) == 2
+    assert all(len(signatures) == 1 for signatures in samples.values())
     queue_moves = [
         move for row in plan["scenarios"] if row["policy"] == "queue_haul"
         for move in row["moves"] if move["method"] == "kv_transfer"
@@ -90,7 +108,7 @@ def test_plan_pairs_every_policy_on_the_same_complete_episode(tmp_path):
     invalid = deepcopy(plan)
     next(row for row in invalid["scenarios"]
          if row["kind"] == "migration")["move_concurrency"] = 2
-    with pytest.raises(ValueError, match="sequential"):
+    with pytest.raises(ValueError, match="complete episode"):
         validate_policy_plan(invalid)
 
 
@@ -141,11 +159,15 @@ def test_reduction_uses_common_epoch_and_keeps_failed_denominator(tmp_path):
     control = {
         "scenario_id": "control", "match_id": "same", "episode": 0,
         "policy": "control", "kind": "control", "deadline_s": 10,
+        "condition": "coding-uniform_support-10s",
+        "context_profile": "coding",
+        "token_distribution": "uniform_support", "required_deadline_s": 10,
+        "power_target_fraction": 1,
         "sessions": [{"session_id": name, "initial_tokens": 4096}
                      for name in ("a", "b")],
     }
     base = {
-        **control, "kind": "migration", "move_concurrency": 1,
+        **control, "kind": "migration", "move_concurrency": 2,
         "sessions": [{"session_id": name, "initial_tokens": 4096}
                      for name in ("a", "b")],
         "moves": [
@@ -160,6 +182,11 @@ def test_reduction_uses_common_epoch_and_keeps_failed_denominator(tmp_path):
     plan = {
         "episodes": 1, "policies": ["queue_haul", "random"],
         "execution_contract": EXECUTION_CONTRACT,
+        "power_target_fraction": 1,
+        "model_profile": {
+            "path": "queue-haul/profiles/gpt_oss_20b_a100_tp1.json",
+            "sha256": campaign.profiler.file_hash(campaign.DEFAULT_MODEL),
+        },
         "scenarios": [control, queue, failed],
     }
     (tmp_path / "plan.json").write_text(json.dumps(plan))
@@ -220,6 +247,13 @@ def test_reduction_uses_common_epoch_and_keeps_failed_denominator(tmp_path):
     x, y = completion_curve(migrations, summaries, "random",
                             "reaction_readiness_s")
     assert not len(x) and not len(y)
+    attainment = list(csv.DictReader(
+        (tmp_path / "policy_attainment.csv").open()
+    ))
+    assert {
+        row["policy"]: float(row["power_attainment_fraction"])
+        for row in attainment
+    } == {"queue_haul": 1, "random": 0}
 
     queue_result = json.loads(
         (tmp_path / "scenarios/queue/result.json").read_text()
@@ -265,6 +299,21 @@ def test_plot_pairs_qh_with_greedy_at_metric_and_episode_levels(
     ]
     assert len(figure.axes[1].lines) == 4
     assert figure.axes[1].get_xlim()[1] < 5
-    assert {
-        tuple(line.get_xdata()) for line in figure.axes[3].lines
-    } == {(300,), (200,), (250,), (150,)}
+
+
+def test_deadline_attainment_uses_episode_target_and_inclusive_deadline():
+    class QuadraticPower:
+        @staticmethod
+        def power(load):
+            return 100 + 100 * load ** 2
+
+    rows = deadline_attainment(
+        [5, 10], 4, [6, 9, 10.5, 11], QuadraticPower(),
+        power_window_s=1,
+    )
+
+    assert [row["committed_by_deadline"] for row in rows] == [1, 1, 2, 2]
+    assert [row["committed_before_power_window"] for row in rows] \
+        == [1, 1, 1, 2]
+    assert [row["power_attainment_fraction"] for row in rows] \
+        == pytest.approx([.4375, .4375, .59375, .75])

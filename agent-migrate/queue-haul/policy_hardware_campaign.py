@@ -16,23 +16,25 @@ import numpy as np
 
 import migration_profiler as profiler
 from planner import _duration, plan
-from profiles import ModelProfile
+from profiles import ModelProfile, WorkloadProfile
 from simulate import ExecutionScenario, NetworkLink, PowerNode, ServingInstance, SimSession
 
 
 ROOT = Path(__file__).parent
 DEFAULT_MANIFEST = Path("queue-haul/outputs/coding-manifest.json")
 DEFAULT_MODEL = ROOT / "profiles/gpt_oss_20b_a100_tp1.json"
-POLICIES = (
-    "queue_haul", "greedy", "isolated_fastest", "random", "kv_only",
-    "replay_only",
-)
+DEFAULT_WORKLOADS = tuple(ROOT / f"profiles/{name}.json" for name in (
+    "coding", "interactive_coding", "agentic_tool_loop",
+))
+TOKEN_DISTRIBUTIONS = ("uniform_support", "uniform_range")
+REQUIRED_DEADLINES_S = (30,)
+POLICIES = ("queue_haul", "greedy", "kv_only", "replay_only")
 LABELS = {
     "queue_haul": "QH choice/order", "greedy": "Greedy choice/order",
     "isolated_fastest": "Per-session fastest", "random": "Random choice/order",
     "kv_only": "KV only", "replay_only": "Replay only",
 }
-EXECUTION_CONTRACT = "eager_serial_choice_order"
+EXECUTION_CONTRACT = "eager_parallel_all_sessions"
 
 
 def _portable_path(path: Path) -> str:
@@ -115,41 +117,82 @@ def _moves(policy, scenario, routes, profile, seed):
     return normalized
 
 
+def _context_tokens(workload, distribution, count, rng):
+    support = tuple(sorted({
+        round(row.context_tokens / 256) * 256 for row in workload.records
+    }))
+    if distribution == "uniform_support":
+        return [rng.choice(support) for _ in range(count)]
+    if distribution == "uniform_range":
+        return [rng.randrange(support[0], support[-1] + 256, 256)
+                for _ in range(count)]
+    raise ValueError(f"unknown token distribution {distribution}")
+
+
 def make_plan(manifest_path: Path, model_path: Path = DEFAULT_MODEL,
-              episodes: int = 50, sessions: int = 8, seed: int = 0,
+              episodes: int = 2, sessions: int = 8, seed: int = 0,
               bandwidth_mbps: float = 10_000, deadline_s: float = 180,
-              context_min: int = 4096, context_max: int = 30_464) -> dict:
+              workload_paths=(DEFAULT_WORKLOADS[0],),
+              token_distributions=("uniform_support",),
+              required_deadlines_s=REQUIRED_DEADLINES_S) -> dict:
     manifest = json.loads(manifest_path.read_text())
     profiler.validate_manifest(manifest)
     profile = ModelProfile.load(model_path)
+    workloads = [WorkloadProfile.load(path) for path in workload_paths]
     if episodes < 1 or not 1 <= sessions <= len(manifest["sessions"]) \
             or bandwidth_mbps <= 0 or deadline_s <= profile.power_window_s \
-            or context_min < 1 or context_max < context_min \
-            or context_min % 256 or context_max % 256:
+            or not workloads or not token_distributions \
+            or not required_deadlines_s \
+            or min(required_deadlines_s) <= profile.power_window_s:
         raise ValueError("invalid policy campaign dimensions")
     replay_contexts = profile.case().replay.by_concurrency[1][0]
-    if context_min < replay_contexts[0] or context_max > replay_contexts[-1]:
-        raise ValueError("policy campaign contexts exceed measured replay range")
 
     rng, scenarios = random.Random(seed), []
     available = sorted(manifest["sessions"], key=lambda row: row["id"])
-    for episode in range(episodes):
-        chosen = rng.sample(available, sessions)
+    cells = [
+        (workload, distribution, required_deadline, repeat)
+        for workload in workloads for distribution in token_distributions
+        for required_deadline in required_deadlines_s
+        for repeat in range(episodes)
+    ]
+    for episode, (workload, distribution, required_deadline, repeat) \
+            in enumerate(cells):
+        sample_rng = random.Random(profiler.stable_seed(
+            seed, workload.profile_id, distribution, repeat
+        ))
+        chosen = sample_rng.sample(available, sessions)
+        contexts = _context_tokens(
+            workload, distribution, sessions, sample_rng
+        )
+        if min(contexts) < replay_contexts[0] \
+                or max(contexts) > replay_contexts[-1]:
+            raise ValueError("workload contexts exceed measured replay range")
         session_rows = [{
             "session_id": row["id"], "job_class": row["job_class"],
             "turn_index": 0,
-            "initial_tokens": rng.randrange(context_min, context_max + 256, 256),
+            "initial_tokens": contexts[order],
             "order": order,
         } for order, row in enumerate(chosen)]
-        match_id = profiler.object_hash([seed, episode, session_rows])[:16]
+        job_type = workload.records[0].job_type
+        condition = f"{job_type}-{distribution}-{required_deadline:g}s"
+        sample_id = profiler.object_hash(
+            [seed, workload.profile_id, distribution, repeat, session_rows]
+        )[:16]
+        match_id = profiler.object_hash(
+            [sample_id, required_deadline]
+        )[:16]
         base = {
-            "match_id": match_id, "episode": episode,
+            "match_id": match_id, "sample_id": sample_id, "episode": episode,
             "campaign": "policy_hardware", "split": "measurement",
+            "condition": condition, "context_profile": job_type,
+            "token_distribution": distribution,
+            "required_deadline_s": required_deadline,
+            "power_target_fraction": 1.0,
             "activity": "none", "activity_tokens": 0,
             "request_schedule": [], "repeat": episode,
             "deadline_s": deadline_s, "sessions": session_rows,
-            "serving_concurrency": 1, "concurrency": 1,
-            "move_concurrency": 1, "copy_policy": "initial_final",
+            "serving_concurrency": 1, "concurrency": sessions,
+            "move_concurrency": sessions, "copy_policy": "initial_final",
             "final_state": "awake", "bandwidth_mbps": bandwidth_mbps,
         }
         scenarios.append({
@@ -157,7 +200,7 @@ def make_plan(manifest_path: Path, model_path: Path = DEFAULT_MODEL,
             "method": "replay", "policy": "control", "moves": [],
         })
         problem, routes = _problem(
-            profile, session_rows, bandwidth_mbps, deadline_s
+            profile, session_rows, bandwidth_mbps, required_deadline
         )
         for policy in POLICIES:
             moves = _moves(
@@ -179,7 +222,7 @@ def make_plan(manifest_path: Path, model_path: Path = DEFAULT_MODEL,
                 "policy": policy, "moves": move_rows,
             })
     blocks = [[row for row in scenarios if row["episode"] == episode]
-              for episode in range(episodes)]
+              for episode in range(len(cells))]
     for block in blocks:
         rng.shuffle(block)
     rng.shuffle(blocks)
@@ -195,7 +238,15 @@ def make_plan(manifest_path: Path, model_path: Path = DEFAULT_MODEL,
             "sha256": profiler.file_hash(model_path),
             "profile_id": profile.profile_id,
         },
-        "policies": list(POLICIES), "episodes": episodes,
+        "policies": list(POLICIES), "episodes": len(cells),
+        "episodes_per_cell": episodes,
+        "workload_profiles": [
+            {"path": _portable_path(path), "sha256": profiler.file_hash(path)}
+            for path in workload_paths
+        ],
+        "token_distributions": list(token_distributions),
+        "required_deadlines_s": list(required_deadlines_s),
+        "power_target_fraction": 1.0,
         "sessions_per_episode": sessions, "scenarios": scenarios,
     }
     profiler.validate_plan(output, manifest)
@@ -220,12 +271,12 @@ def validate_policy_plan(plan_: dict) -> None:
             raise ValueError("every episode must contain every policy and one control")
         if any(
             row["kind"] == "migration"
-            and (row["move_concurrency"] != 1
+            and (row["move_concurrency"] != len(row["sessions"])
                  or sorted(move["order"] for move in row["moves"])
                  != list(range(len(row["moves"]))))
             for row in rows
         ):
-            raise ValueError("policy migrations must be sequential and totally ordered")
+            raise ValueError("policy migrations must launch the complete episode")
         signatures = {
             tuple(sorted(
                 (row["session_id"], row["initial_tokens"])
@@ -267,7 +318,7 @@ exit "$status"
 """)
     job.chmod(0o755)
     (out / "run.sbatch").write_text("""#!/bin/bash
-#SBATCH --job-name=qh-policy-cdf
+#SBATCH --job-name=qh-policy-parallel
 #SBATCH --partition=ramr
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
@@ -280,7 +331,7 @@ exit "$status"
 #SBATCH --error=policy-hardware-%j.err
 set -euo pipefail
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-export QH_POLICY_RUN_ROOT="${QH_POLICY_RUN_ROOT:-/scratch/$USER/qh-policy-run}"
+export QH_POLICY_RUN_ROOT="${QH_POLICY_RUN_ROOT:-/scratch/users/$USER/qh-policy-run-width8-pilot}"
 bash "$script_dir/run.sh"
 """)
     return plan_
@@ -295,9 +346,48 @@ def _threshold(values, planned, fraction):
     return sorted(values)[rank - 1] if len(values) >= rank else None
 
 
+def deadline_attainment(commits, sessions, deadlines, power_curve,
+                         power_window_s):
+    before, target = power_curve.power(.4), power_curve.power(.4) \
+        - power_curve.power(0)
+    output = []
+    for deadline in deadlines:
+        start, completed, cursor, area = deadline - power_window_s, 0, \
+            deadline - power_window_s, 0
+        for commit in sorted(commits):
+            if commit <= start:
+                completed += 1
+            elif commit <= deadline:
+                area += (commit - cursor) * power_curve.power(
+                    .4 * (1 - completed / sessions)
+                )
+                cursor, completed = commit, completed + 1
+        area += (deadline - cursor) * power_curve.power(
+            .4 * (1 - completed / sessions)
+        )
+        output.append({
+            "required_deadline_s": deadline,
+            "committed_by_deadline":
+                sum(value <= deadline for value in commits),
+            "committed_before_power_window":
+                sum(value <= start for value in commits),
+            "power_attainment_fraction": min(
+                1, max(0, (before - area / power_window_s) / target)
+            ),
+        })
+    return output
+
+
 def reduce_run(run_root: Path, out: Path | None = None):
     plan_ = json.loads((run_root / "plan.json").read_text())
     validate_policy_plan(plan_)
+    power_curve, power_window_s = None, 0
+    if plan_.get("power_target_fraction"):
+        model_path = ROOT.parent / plan_["model_profile"]["path"]
+        if profiler.file_hash(model_path) != plan_["model_profile"]["sha256"]:
+            raise RuntimeError("model profile changed after planning")
+        model = ModelProfile.load(model_path)
+        power_curve, power_window_s = model.case().power_curve, model.power_window_s
     out = out or run_root
     controls = {}
     for scenario in plan_["scenarios"]:
@@ -311,7 +401,7 @@ def reduce_run(run_root: Path, out: Path | None = None):
                 for row in result["continuations"]
             }
 
-    migrations, summaries = [], []
+    migrations, summaries, attainment = [], [], []
     for scenario in plan_["scenarios"]:
         if scenario["policy"] == "control":
             continue
@@ -338,7 +428,14 @@ def reduce_run(run_root: Path, out: Path | None = None):
             migrations.append({
                 "scenario_id": scenario["scenario_id"],
                 "match_id": scenario["match_id"],
+                "sample_id": scenario.get("sample_id", scenario["match_id"]),
                 "episode": scenario["episode"], "policy": scenario["policy"],
+                "condition": scenario.get("condition", "default"),
+                "context_profile": scenario.get("context_profile", "coding"),
+                "token_distribution":
+                    scenario.get("token_distribution", "uniform_support"),
+                "required_deadline_s":
+                    scenario.get("required_deadline_s", scenario["deadline_s"]),
                 "session_id": row["move"]["session_id"],
                 "method": row["move"]["method"], "order": row["move"]["order"],
                 "context_tokens": contexts[row["move"]["session_id"]],
@@ -366,9 +463,35 @@ def reduce_run(run_root: Path, out: Path | None = None):
                 ),
             })
         planned = len(scenario["moves"])
+        for row in deadline_attainment(
+            committed, len(scenario["sessions"]),
+            [scenario["required_deadline_s"]], power_curve,
+            power_window_s,
+        ) if power_curve else ():
+            attainment.append({
+                "scenario_id": scenario["scenario_id"],
+                "match_id": scenario["match_id"],
+                "sample_id": scenario.get("sample_id", scenario["match_id"]),
+                "episode": scenario["episode"], "policy": scenario["policy"],
+                "condition": scenario["condition"],
+                "context_profile": scenario.get("context_profile", "coding"),
+                "token_distribution": scenario["token_distribution"],
+                "power_target_fraction": scenario["power_target_fraction"],
+                **row,
+                "hit_power_target":
+                    row["power_attainment_fraction"] >= 1,
+            })
         summaries.append({
             "scenario_id": scenario["scenario_id"],
-            "match_id": scenario["match_id"], "episode": scenario["episode"],
+            "match_id": scenario["match_id"],
+            "sample_id": scenario.get("sample_id", scenario["match_id"]),
+            "episode": scenario["episode"],
+            "condition": scenario.get("condition", "default"),
+            "context_profile": scenario.get("context_profile", "coding"),
+            "token_distribution":
+                scenario.get("token_distribution", "uniform_support"),
+            "required_deadline_s":
+                scenario.get("required_deadline_s", scenario["deadline_s"]),
             "policy": scenario["policy"], "status":
                 result.get("status", "missing"),
             "planned_migrations": planned,
@@ -385,7 +508,21 @@ def reduce_run(run_root: Path, out: Path | None = None):
     out.mkdir(parents=True, exist_ok=True)
     profiler.write_csv(out / "policy_migrations.csv", migrations)
     profiler.write_csv(out / "policy_episodes.csv", summaries)
-    plot(migrations, summaries, out)
+    profiler.write_csv(out / "policy_attainment.csv", attainment)
+    plot(migrations, summaries, out, "pooled")
+    for condition in sorted({row["condition"] for row in summaries}):
+        plot(
+            [row for row in migrations if row["condition"] == condition],
+            [row for row in summaries if row["condition"] == condition],
+            out, condition,
+        )
+    if attainment:
+        plot_attainment(attainment, out, "pooled")
+        for condition in sorted({row["condition"] for row in attainment}):
+            plot_attainment(
+                [row for row in attainment if row["condition"] == condition],
+                out, condition,
+            )
     timeline = representative_timeline(migrations, summaries)
     if timeline:
         profiler.write_csv(out / "policy_gantt.csv", timeline)
@@ -429,11 +566,11 @@ def plot_timeline(rows, out):
         ax.scatter(commit, y, marker="D", color="#A11919", s=34)
         ax.scatter(row["first_token_s"], y, marker="*", color="#176B52", s=70)
     ax.set(
-        xlabel="Time from policy epoch (s)", ylabel="Migration order",
+        xlabel="Time from policy epoch (s)", ylabel="Submission rank",
         yticks=range(len(rows)),
         yticklabels=[f"{row['order']}: {row['method'].replace('_', ' ')}"
                      for row in rows],
-        title=f"Measured Queue-Haul sequential episode {rows[0]['episode']}",
+        title=f"Measured Queue-Haul parallel episode {rows[0]['episode']}",
     )
     ax.invert_yaxis()
     ax.grid(axis="x", alpha=.25)
@@ -456,10 +593,8 @@ def plot_timeline(rows, out):
 
 def plot(rows, summaries, out, cohort=None):
     colors = dict(zip(POLICIES, plt.get_cmap("tab10").colors))
-    fig, axes = plt.subplots(2, 2, figsize=(9, 6.5))
-    axes = axes.ravel()
-    policies = [policy for policy in
-                ("queue_haul", "greedy", "kv_only", "replay_only")
+    fig, axes = plt.subplots(1, 3, figsize=(13, 4))
+    policies = [policy for policy in POLICIES
                 if any(row["policy"] == policy for row in summaries)]
     for policy in policies:
         for ax, field in zip(
@@ -471,30 +606,16 @@ def plot(rows, summaries, out, cohort=None):
                 np.r_[0, x], np.r_[0, y],
                 where="post", color=colors[policy], label=LABELS[policy],
             )
-        power = sorted(
-            row["realized_source_power_drop_w"] for row in summaries
-            if row["policy"] == policy
-            and "realized_source_power_drop_w" in row
-        )
-        if power:
-            axes[3].step(
-                power, np.arange(1, len(power) + 1) / len(power),
-                where="post", color=colors[policy], label=LABELS[policy],
-            )
     axes[0].set_title("Controller queue → first token")
     axes[1].set_title("Destination TTFT")
     axes[2].set_title("Controller queue → route commit")
-    axes[3].set_title("Realized source power drop")
-    for i, ax in enumerate(axes[:3]):
+    for i, ax in enumerate(axes):
         ax.set_xlabel(
             "Transfer/replay + destination prefill (s)" if i == 1
             else "Time from common policy epoch (s)"
         )
         ax.set_ylabel("Fraction of planned migrations")
         ax.set_ylim(0, 1.02)
-    axes[3].set_xlabel("Source GPU power before − after migration (W)")
-    axes[3].set_ylabel("Fraction of episodes")
-    axes[3].set_ylim(0, 1.02)
     handles, labels = axes[0].get_legend_handles_labels()
     fig.legend(handles, labels, loc="upper center", ncol=len(policies),
                frameon=False)
@@ -506,17 +627,58 @@ def plot(rows, summaries, out, cohort=None):
     plt.close(fig)
 
 
+def plot_attainment(rows, out, condition=None):
+    colors = dict(zip(POLICIES, plt.get_cmap("tab10").colors))
+    deadlines = sorted({row["required_deadline_s"] for row in rows})
+    fig, axes = plt.subplots(
+        1, len(deadlines), figsize=(4.4 * len(deadlines), 4), squeeze=False
+    )
+    axes = axes[0]
+    for ax, deadline in zip(axes, deadlines):
+        for policy in POLICIES:
+            values = sorted(
+                100 * row["power_attainment_fraction"] for row in rows
+                if row["policy"] == policy
+                and row["required_deadline_s"] == deadline
+            )
+            if values:
+                ax.step(
+                    values, np.arange(1, len(values) + 1) / len(values),
+                    where="post", color=colors[policy], label=LABELS[policy],
+                )
+        ax.set(
+            title=f"{deadline:g} s requirement",
+            xlabel="Power-target attainment by deadline (%)",
+            ylabel="Fraction of episodes", xlim=(0, 102), ylim=(0, 1.02),
+        )
+    handles, labels = axes[0].get_legend_handles_labels()
+    fig.legend(handles, labels, loc="upper center", ncol=len(POLICIES),
+               frameon=False)
+    fig.tight_layout(rect=(0, 0, 1, .88))
+    for suffix in ("png", "pdf"):
+        name = f"policy_hardware_{condition}_attainment_cdf" if condition \
+            else "policy_hardware_attainment_cdf"
+        fig.savefig(out / f"{name}.{suffix}", dpi=220)
+    plt.close(fig)
+
+
 def parse_args(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     sub = parser.add_subparsers(dest="command", required=True)
     command = sub.add_parser("prepare")
     command.add_argument("--manifest", type=Path, default=DEFAULT_MANIFEST)
     command.add_argument("--out", type=Path, required=True)
-    command.add_argument("--episodes", type=int, default=50)
+    command.add_argument("--episodes", type=int, default=2)
     command.add_argument("--sessions", type=int, default=8)
     command.add_argument("--seed", type=int, default=0)
     command.add_argument("--bandwidth-mbps", type=float, default=10_000)
     command.add_argument("--deadline-s", type=float, default=180)
+    command.add_argument("--workload-profiles", type=Path, nargs="+",
+                         default=DEFAULT_WORKLOADS)
+    command.add_argument("--token-distributions", nargs="+",
+                         default=TOKEN_DISTRIBUTIONS)
+    command.add_argument("--required-deadlines-s", type=float, nargs="+",
+                         default=REQUIRED_DEADLINES_S)
     command = sub.add_parser("reduce")
     command.add_argument("--run-root", type=Path, required=True)
     command.add_argument("--out", type=Path)
@@ -530,6 +692,9 @@ def main(argv=None):
             args.manifest, args.out, episodes=args.episodes,
             sessions=args.sessions, seed=args.seed,
             bandwidth_mbps=args.bandwidth_mbps, deadline_s=args.deadline_s,
+            workload_paths=args.workload_profiles,
+            token_distributions=args.token_distributions,
+            required_deadlines_s=args.required_deadlines_s,
         )
     else:
         reduce_run(args.run_root, args.out)

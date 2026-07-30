@@ -99,11 +99,11 @@ uv run python queue-haul/plot_testbed_kv_timeline.py --method replay
 uv run python queue-haul/plot_migration_ttft_cdf.py
 uv run python queue-haul/plot_fixed_contract_residuals.py
 uv run python queue-haul/policy_hardware_campaign.py prepare \
-  --out queue-haul/outputs/policy-hardware-plan
-QH_POLICY_RUN_ROOT=/scratch/$USER/qh-policy-run \
-  bash queue-haul/outputs/policy-hardware-plan/run.sh
+  --out queue-haul/outputs/policy-hardware-width8-pilot-plan
+QH_POLICY_RUN_ROOT=/scratch/users/$USER/qh-policy-run-width8-pilot \
+  bash queue-haul/outputs/policy-hardware-width8-pilot-plan/run.sh
 # Or submit the resumable two-A100 Slurm job:
-sbatch queue-haul/outputs/policy-hardware-plan/run.sbatch
+sbatch queue-haul/outputs/policy-hardware-width8-pilot-plan/run.sbatch
 uv run python queue-haul/canonical_simulator_campaign.py
 uv run python queue-haul/paper_evaluation.py \
   --out queue-haul/outputs/paper-evaluation
@@ -128,20 +128,17 @@ request-boundary drain from tidy event tables.
 GPU-work-first, replay-only, and KV-only resource headroom at common requested
 source-power shed levels. Use `--refresh` when its pinned inputs change.
 `policy_hardware_campaign.py` creates a resumable paired idle-session campaign
-for eager, serial execution of Queue-Haul, greedy, per-session-fastest, and
-random method/order choices plus KV-only and replay-only baselines. It does not
-execute the planner's paced, quiesced schedule or measure planning latency, so it is
-the direct test of planner choice/order under the primary eager sequential
-execution contract, rather than a test of parallel scheduling. The default 50
-eight-session blocks yield 400 clustered observations per policy; variants and
-their control run contiguously in randomized order. Failed blocks remain in
-completion denominators, while TTFT inflation uses only complete matched
-controls from the same allocation, excluding blocks split by a time limit. Run
-from a clean committed checkout with two A100 80GB GPUs. Multi-process logs
-rotate every five blocks; transfer and byte logs are sliced per scenario.
-Reduction writes Queue-Haul, greedy, KV-only, and replay-only timing and
-source-power CDFs plus `policy_gantt.csv` and a measured Gantt chart for the
-earliest complete mixed-action Queue-Haul episode.
+that launches every session concurrently for Queue-Haul, greedy, KV-only, and
+replay-only. Its default truncated grid uses coding, interactive-coding, and
+agentic-tool-loop context-length profiles; uniform-over-support and
+uniform-over-range token distributions; a 30-second pilot requirement; and two
+eight-session episodes per cell, totaling 60 scenarios including controls. The
+requirement is passed to the Queue-Haul planner. The runner remains eager and
+does not execute planner pacing or measure planning latency. Failed episodes
+remain in denominators. Reduction writes timing CDFs and a power-attainment CDF;
+attainment is trailing-five-second average modeled source-power shed divided by
+the 100% source-power target. Run from a clean committed checkout with two A100
+80GB GPUs.
 `canonical_simulator_campaign.py` runs a four-target paired 10K-session
 Queue-Haul, greedy, per-session-fastest, replay-only, and KV-only comparison
 under one assumed dedicated-pool contract. Its compact 10K/100K/1M scale check
