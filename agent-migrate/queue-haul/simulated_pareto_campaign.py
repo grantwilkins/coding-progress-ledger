@@ -33,7 +33,7 @@ DEFAULT_WIDTH8 = ROOT / "outputs/policy-hardware-width8-frontier-20260730"
 DEFAULT_OUT = ROOT / "outputs/simulated-width8-pareto-20260730"
 POLICIES = ("queue_haul", "greedy", "random", "kv_only", "replay_only")
 OBSERVATION_S = 600
-TIME_BUDGETS_S = (16, 19, 22, 26, 30)
+TIME_BUDGETS_S = (30, 40, 50, 60, 75)
 
 
 def context_evidence(tokens, anchors):
@@ -229,11 +229,37 @@ def frontier_metrics(commits, total_sessions, budget_s, power_curve, power_windo
     return attainment, max(commits, default=0.0)
 
 
+def workload_grid(fixed_plan, hardware_plan):
+    fixed = {}
+    for row in fixed_plan["scenarios"]:
+        if row["policy"] == "control":
+            fixed.setdefault(row["context_profile"], row)
+    hardware = {}
+    for row in hardware_plan["scenarios"]:
+        if row["policy"] == "control":
+            hardware.setdefault(row["sample_id"], row)
+    bandwidths = sorted({
+        row["bandwidth_mbps"] for row in fixed_plan["scenarios"]
+        if row["policy"] == "control"
+    })
+    return [
+        (source, row, bandwidth)
+        for source, samples in (
+            ("fixed_anchor", fixed.values()),
+            ("measured_workload_mix", hardware.values()),
+        )
+        for row in samples
+        for bandwidth in bandwidths
+    ]
+
+
 def simulate(plan_path=DEFAULT_PLAN, model_path=DEFAULT_MODEL,
              crossover_path=DEFAULT_CROSSOVER, width8=DEFAULT_WIDTH8,
              time_budgets_s=TIME_BUDGETS_S):
     plan_ = json.loads(plan_path.read_text())
     validate_policy_plan(plan_)
+    hardware_plan = json.loads((width8 / "plan.json").read_text())
+    validate_policy_plan(hardware_plan)
     if profiler.file_hash(model_path) != plan_["model_profile"]["sha256"]:
         raise RuntimeError("model profile changed after planning")
     base_profile = ModelProfile.load(model_path)
@@ -246,36 +272,33 @@ def simulate(plan_path=DEFAULT_PLAN, model_path=DEFAULT_MODEL,
     )
     crossover = json.loads(crossover_path.read_text())
     anchors = set(crossover["contexts"])
-    controls = {}
-    for row in plan_["scenarios"]:
-        if row["policy"] == "control":
-            controls.setdefault((row["sample_id"], row["bandwidth_mbps"]), row)
     rows = []
-    for configuration, base in enumerate(controls.values()):
+    for configuration, (workload_source, base, bandwidth) in enumerate(
+            workload_grid(plan_, hardware_plan)):
         evidence = context_evidence(
             (row["initial_tokens"] for row in base["sessions"]), anchors
         )
         for budget_s in time_budgets_s:
             scenario, routes = _problem(
-                profile, base["sessions"], base["bandwidth_mbps"], budget_s,
+                profile, base["sessions"], bandwidth, budget_s,
             )
             scenario = replace(scenario, end_s=max(OBSERVATION_S, budget_s))
             planning_profile = aggregate_planning_profile(
-                base_profile, base["bandwidth_mbps"], replay_caps, kv_caps
+                base_profile, bandwidth, replay_caps, kv_caps
             )
             match_id = profiler.object_hash([
-                base["sample_id"], base["bandwidth_mbps"], budget_s,
+                base["sample_id"], bandwidth, budget_s,
             ])[:16]
             for policy in POLICIES:
                 moves = admitted_moves(
                     policy, scenario, routes, planning_profile,
                     profiler.stable_seed(
                         plan_["seed"], base["sample_id"],
-                        base["bandwidth_mbps"], budget_s, policy,
+                        bandwidth, budget_s, policy,
                     ),
                 )
                 execution_profile = shared_kv_profile(
-                    profile, base["bandwidth_mbps"],
+                    profile, bandwidth,
                     sum(move.method == "kv_transfer" for move in moves), kv_caps,
                 )
                 result = execute(scenario, execution_profile, moves)
@@ -294,7 +317,8 @@ def simulate(plan_path=DEFAULT_PLAN, model_path=DEFAULT_MODEL,
                     "configuration": configuration, "match_id": match_id,
                     "sample_id": base["sample_id"],
                     "context_profile": base["context_profile"],
-                    "bandwidth_mbps": base["bandwidth_mbps"],
+                    "workload_source": workload_source,
+                    "bandwidth_mbps": bandwidth,
                     "time_budget_s": budget_s, "policy": policy,
                     "power_attainment_fraction": attainment,
                     "completion_s": completion,
@@ -367,10 +391,10 @@ def plot(rows, out):
     for policy in (*POLICIES[1:], POLICIES[0]):
         selected = [row for row in rows if row["policy"] == policy]
         style = {
-            "s": 52, "alpha": .9, "facecolors": "none",
-            "edgecolors": colors[policy], "linewidths": 1.5, "zorder": 4,
+            "s": 26, "alpha": .6, "facecolors": "none",
+            "edgecolors": colors[policy], "linewidths": 1, "zorder": 4,
         } if policy == "queue_haul" else {
-            "s": 28, "alpha": .45, "color": colors[policy],
+            "s": 18, "alpha": .3, "color": colors[policy],
         }
         cloud.scatter(
             [100 * row["power_attainment_fraction"] for row in selected],
@@ -414,8 +438,8 @@ def plot(rows, out):
     fig.legend(handles, labels, loc="upper center", frameon=False, ncol=3)
     cloud.text(
         .01, .01,
-        "2/4/8/16K contexts measured; 12/14K interpolated\n"
-        "replay/KV aggregate caps measured; action power extrapolated; power modeled",
+        "2/4/8/16/24/32K replay anchors; fixed anchors + measured workload mixes\n"
+        "non-anchor rates interpolated; action power extrapolated; power modeled",
         transform=cloud.transAxes, fontsize=8, va="bottom",
     )
     fig.tight_layout(rect=(0, 0, 1, .82))
@@ -452,6 +476,9 @@ def run(plan_path=DEFAULT_PLAN, model_path=DEFAULT_MODEL,
         "observation_s": OBSERVATION_S,
         "planning_contract":
             "deadline-specific admitted set; no appended cleanup moves; eager execution",
+        "workload_contract":
+            "five fixed anchors plus 18 measured width-8 workload mixes, crossed "
+            "with every bandwidth and time budget",
         "plan": {
             "path": _portable_path(plan_path),
             "sha256": profiler.file_hash(plan_path),

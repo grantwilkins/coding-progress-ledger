@@ -12,17 +12,18 @@
     "kv_only",
     "replay_only"
   ],
-  "scenarios": 1500,
-  "paired_episodes": 300,
+  "scenarios": 2300,
+  "paired_episodes": 460,
   "time_budgets_s": [
-    16,
-    19,
-    22,
-    26,
-    30
+    30,
+    40,
+    50,
+    60,
+    75
   ],
   "observation_s": 600,
   "planning_contract": "deadline-specific admitted set; no appended cleanup moves; eager execution",
+  "workload_contract": "five fixed anchors plus 18 measured width-8 workload mixes, crossed with every bandwidth and time budget",
   "plan": {
     "path": "queue-haul/outputs/policy-hardware-width8-packing-plan/plan.json",
     "sha256": "e20ff148aded9b63458a65d378a2103579974a64fe0b3a8b05fd3bf4079cdba8"

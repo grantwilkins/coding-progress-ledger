@@ -13,6 +13,7 @@ Plausible wrong implementations:
 - Mix protocol-wire bytes with the simulator's sealed KV byte units.
 - Append cleanup migrations that were outside the deadline-admitted set.
 - Normalize attained shed by admitted sessions instead of all source sessions.
+- Resample workloads by policy/budget or count repeated plan cells as variation.
 """
 
 import json
@@ -23,7 +24,7 @@ from simulated_pareto_campaign import (
     admitted_moves, aggregate_planning_profile, context_evidence,
     frontier_metrics, full_attainment_cdf, measured_kv_caps,
     measured_replay_caps, meets_deadline, parallel_profile, pareto_flags,
-    shared_kv_profile,
+    shared_kv_profile, workload_grid,
 )
 from policy_hardware_campaign import _moves, _problem
 from simulate import PlannedMove
@@ -96,6 +97,34 @@ def test_frontier_uses_only_admitted_moves_and_total_source_sessions(
     assert selected == (move,)
     assert 0 < attainment < 1
     assert completion == 1
+
+
+def test_workload_grid_deduplicates_samples_and_crosses_same_bandwidths():
+    def control(sample, profile, bandwidth, tokens):
+        return {
+            "policy": "control", "sample_id": sample,
+            "context_profile": profile, "bandwidth_mbps": bandwidth,
+            "sessions": [{"initial_tokens": tokens}],
+        }
+
+    fixed = {"scenarios": [
+        control("fixed-a", "tiny", 1000, 2048),
+        control("fixed-b", "tiny", 2500, 2048),
+    ]}
+    hardware = {"scenarios": [
+        control("mixed", "coding", 5000, 14080),
+        control("mixed", "coding", 10000, 14080),
+    ]}
+
+    grid = workload_grid(fixed, hardware)
+
+    assert [(source, row["sessions"][0]["initial_tokens"], bandwidth)
+            for source, row, bandwidth in grid] == [
+        ("fixed_anchor", 2048, 1000),
+        ("fixed_anchor", 2048, 2500),
+        ("measured_workload_mix", 14080, 1000),
+        ("measured_workload_mix", 14080, 2500),
+    ]
 
 
 def test_width8_contract_does_not_silently_serialize_destination(tmp_path):

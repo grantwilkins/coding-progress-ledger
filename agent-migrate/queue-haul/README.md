@@ -186,9 +186,11 @@ extrapolated, and commit-derived power attainment as modeled.
 Parallel launch and replay/KV aggregate-throughput caps are anchored by the
 hardware traces; KV uses serial measurements at 1/2.5 Gbit/s and width-8
 measurements at 5/10 Gbit/s. The figure pairs the full Pareto cloud with a
-matched-mixture frontier over 16/19/22/26/30-s budgets. Every policy is
+matched-mixture frontier over 30/40/50/60/75-s budgets. Every policy is
 replanned for each budget against the same aggregate caps and executes only its
-deadline-admitted actions; cleanup moves are excluded from both axes.
+deadline-admitted actions; cleanup moves are excluded from both axes. The cloud
+crosses five fixed packing anchors and 18 observed width-8 workload mixes with
+every bandwidth and budget; no display jitter is applied.
 `canonical_simulator_campaign.py` runs a four-target paired 10K-session
 Queue-Haul, greedy, per-session-fastest, replay-only, and KV-only comparison
 under one assumed dedicated-pool contract. Its compact 10K/100K/1M scale check
