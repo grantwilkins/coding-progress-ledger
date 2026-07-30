@@ -146,6 +146,10 @@ A100 80GB GPUs. The pinned frontier plan under
 cell, eight sessions and moves, 5/10 Gbit/s, and 19/30-second requirements for
 360 scenarios. Its fresh default root is
 `/scratch/users/$USER/qh-policy-run-width8-frontier`; 1 Gbit/s is excluded.
+Its completed checksum-pinned reduced bundle is retained under
+`outputs/policy-hardware-width8-frontier-20260730/`, including move-admission
+provenance and raw GPU samples. This idle evidence supports timing and projected,
+not realized, power attainment.
 `canonical_simulator_campaign.py` runs a four-target paired 10K-session
 Queue-Haul, greedy, per-session-fastest, replay-only, and KV-only comparison
 under one assumed dedicated-pool contract. Its compact 10K/100K/1M scale check
