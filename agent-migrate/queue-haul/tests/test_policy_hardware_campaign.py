@@ -13,6 +13,8 @@ Plausible wrong implementations:
 - Stretch every timing metric to the campaign deadline instead of its data.
 - Omit the fixed-method controls or aggregate source power once per migration.
 - Count commits just after the deadline or linearize the nonlinear power curve.
+- Plot destination-only prefill instead of migration-to-first-token latency.
+- Average committed-session fractions instead of nonlinear episode power.
 """
 
 import csv
@@ -22,6 +24,7 @@ from copy import deepcopy
 from pathlib import Path
 from types import SimpleNamespace
 
+import numpy as np
 import pytest
 
 import policy_hardware_campaign as campaign
@@ -30,6 +33,7 @@ from policy_hardware_campaign import (
     completion_curve,
     deadline_attainment,
     make_plan,
+    power_shed_quantiles,
     prepare,
     reduce_run,
     validate_policy_plan,
@@ -322,6 +326,8 @@ def test_reduction_uses_common_epoch_and_keeps_failed_denominator(tmp_path):
         == pytest.approx([.1, .1])
     assert (tmp_path / "policy_gantt.csv").exists()
     assert (tmp_path / "policy_hardware_gantt.pdf").exists()
+    assert (tmp_path / "policy_hardware_destination_ttft_cdf.pdf").exists()
+    assert (tmp_path / "policy_hardware_power_shed_over_time.pdf").exists()
     random = next(row for row in summaries if row["policy"] == "random")
     assert random["planned_migrations"] == 2
     assert random["completed_migrations"] == 0
@@ -398,3 +404,48 @@ def test_deadline_attainment_uses_episode_target_and_inclusive_deadline():
         == [1, 1, 1, 2]
     assert [row["power_attainment_fraction"] for row in rows] \
         == pytest.approx([.4375, .4375, .59375, .75])
+
+
+def test_destination_ttft_cdf_includes_migration_time(tmp_path, monkeypatch):
+    rows = [
+        {"scenario_id": "a", "policy": "queue_haul",
+         "migration_ttft_s": value, "continuation_ttft_s": .1}
+        for value in (3, 5)
+    ]
+    summaries = [{
+        "scenario_id": "a", "policy": "queue_haul",
+        "planned_migrations": 2,
+    }]
+    monkeypatch.setattr(campaign.plt, "close", lambda _: None)
+
+    campaign.plot_destination_ttft(rows, summaries, tmp_path)
+
+    assert campaign.plt.gcf().axes[0].lines[0].get_xdata().tolist() \
+        == [0, 3, 5]
+
+
+def test_power_shed_curve_uses_nonlinear_episode_power_and_keeps_failures():
+    class QuadraticPower:
+        @staticmethod
+        def power(load):
+            return 100 + 100 * load ** 2
+
+    rows = [
+        {"scenario_id": "complete", "policy": "queue_haul",
+         "reaction_commit_s": value}
+        for value in (1, 3)
+    ]
+    summaries = [
+        {"scenario_id": scenario, "policy": "queue_haul",
+         "planned_migrations": 4}
+        for scenario in ("complete", "failed")
+    ]
+
+    low, median, high = power_shed_quantiles(
+        rows, summaries, "queue_haul", QuadraticPower(),
+        np.asarray([0, 1, 2, 3]),
+    )
+
+    assert low == pytest.approx([0, 10.9375, 10.9375, 18.75])
+    assert median == pytest.approx([0, 21.875, 21.875, 37.5])
+    assert high == pytest.approx([0, 32.8125, 32.8125, 56.25])

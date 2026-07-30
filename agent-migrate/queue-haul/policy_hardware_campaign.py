@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import csv
 import json
 import math
 import random
@@ -555,6 +556,9 @@ def reduce_run(run_root: Path, out: Path | None = None):
     profiler.write_csv(out / "policy_episodes.csv", summaries)
     profiler.write_csv(out / "policy_attainment.csv", attainment)
     plot(migrations, summaries, out, "pooled")
+    plot_destination_ttft(migrations, summaries, out)
+    if power_curve:
+        plot_power_shed(migrations, summaries, power_curve, out)
     for condition in sorted({row["condition"] for row in summaries}):
         plot(
             [row for row in migrations if row["condition"] == condition],
@@ -576,10 +580,109 @@ def reduce_run(run_root: Path, out: Path | None = None):
 
 
 def completion_curve(rows, summaries, policy, field):
-    total = sum(row["planned_migrations"] for row in summaries
+    total = sum(int(row["planned_migrations"]) for row in summaries
                 if row["policy"] == policy)
-    values = sorted(row[field] for row in rows if row["policy"] == policy)
+    values = sorted(float(row[field]) for row in rows
+                    if row["policy"] == policy)
     return np.asarray(values), np.arange(1, len(values) + 1) / total
+
+
+def power_shed_quantiles(rows, summaries, policy, power_curve, times):
+    commits = {}
+    for row in rows:
+        if row["policy"] == policy:
+            commits.setdefault(row["scenario_id"], []).append(
+                float(row["reaction_commit_s"])
+            )
+    before, target = power_curve.power(.4), \
+        power_curve.power(.4) - power_curve.power(0)
+    curves = []
+    for summary in summaries:
+        if summary["policy"] != policy:
+            continue
+        planned = int(summary["planned_migrations"])
+        completed = np.searchsorted(
+            sorted(commits.get(summary["scenario_id"], ())), times,
+            side="right",
+        )
+        load = .4 * (1 - completed / planned)
+        curves.append(100 * (before - np.asarray([
+            power_curve.power(value) for value in load
+        ])) / target)
+    return np.percentile(curves, (25, 50, 75), axis=0)
+
+
+def plot_destination_ttft(rows, summaries, out):
+    colors = dict(zip(POLICIES, plt.get_cmap("tab10").colors))
+    fig, ax = plt.subplots(figsize=(6.4, 4))
+    for policy in POLICIES:
+        x, y = completion_curve(
+            rows, summaries, policy, "migration_ttft_s"
+        )
+        if len(x):
+            ax.step(
+                np.r_[0, x], np.r_[0, y], where="post",
+                color=colors[policy], label=LABELS[policy],
+            )
+    ax.set(
+        title="Pooled hardware frontier",
+        xlabel="Migration start → destination first token (s)",
+        ylabel="Fraction of planned migrations", ylim=(0, 1.02),
+    )
+    ax.grid(alpha=.25)
+    ax.legend(frameon=False)
+    fig.tight_layout()
+    for suffix in ("png", "pdf"):
+        fig.savefig(
+            out / f"policy_hardware_destination_ttft_cdf.{suffix}", dpi=220
+        )
+    plt.close(fig)
+
+
+def plot_power_shed(rows, summaries, power_curve, out):
+    colors = dict(zip(POLICIES, plt.get_cmap("tab10").colors))
+    times = np.asarray(sorted({
+        0, *(float(row["reaction_commit_s"]) for row in rows)
+    }))
+    fig, ax = plt.subplots(figsize=(6.4, 4))
+    for policy in POLICIES:
+        if not any(row["policy"] == policy for row in summaries):
+            continue
+        low, median, high = power_shed_quantiles(
+            rows, summaries, policy, power_curve, times
+        )
+        ax.step(
+            times, median, where="post", color=colors[policy],
+            label=LABELS[policy],
+        )
+        ax.fill_between(
+            times, low, high, step="post", color=colors[policy], alpha=.12
+        )
+    ax.set(
+        title="Pooled episodes (median; shaded IQR)",
+        xlabel="Elapsed migration time (s)",
+        ylabel="Modeled source-power shed (% of maximum)",
+        xlim=(0, times[-1]), ylim=(0, 102),
+    )
+    ax.grid(alpha=.25)
+    ax.legend(frameon=False)
+    fig.tight_layout()
+    for suffix in ("png", "pdf"):
+        fig.savefig(
+            out / f"policy_hardware_power_shed_over_time.{suffix}", dpi=220
+        )
+    plt.close(fig)
+
+
+def plot_reduced(out, model_path=DEFAULT_MODEL):
+    with (out / "policy_migrations.csv").open() as stream:
+        rows = list(csv.DictReader(stream))
+    with (out / "policy_episodes.csv").open() as stream:
+        summaries = list(csv.DictReader(stream))
+    plot_destination_ttft(rows, summaries, out)
+    plot_power_shed(
+        rows, summaries, ModelProfile.load(model_path).case().power_curve, out
+    )
 
 
 def representative_timeline(rows, summaries):
@@ -731,6 +834,9 @@ def parse_args(argv=None):
     command = sub.add_parser("reduce")
     command.add_argument("--run-root", type=Path, required=True)
     command.add_argument("--out", type=Path)
+    command = sub.add_parser("plot-reduced")
+    command.add_argument("--out", type=Path, required=True)
+    command.add_argument("--model-profile", type=Path, default=DEFAULT_MODEL)
     return parser.parse_args(argv)
 
 
@@ -747,8 +853,10 @@ def main(argv=None):
             required_deadlines_s=args.required_deadlines_s,
             context_packs=args.context_packs or (),
         )
-    else:
+    elif args.command == "reduce":
         reduce_run(args.run_root, args.out)
+    else:
+        plot_reduced(args.out, args.model_profile)
 
 
 if __name__ == "__main__":

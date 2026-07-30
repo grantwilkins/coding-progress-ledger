@@ -109,6 +109,8 @@ uv run python queue-haul/migration_profiler.py make-crossover \
   --out queue-haul/outputs/policy-hardware-crossover-plan/plan.json \
   --context-sizes 2048,4096,8192,16384,24576,32768 \
   --bandwidth-mbps 1000,2500,5000,10000 --repeats 3 --seed 1
+uv run python queue-haul/policy_hardware_campaign.py plot-reduced \
+  --out queue-haul/outputs/policy-hardware-width8-frontier-20260730
 uv run python queue-haul/canonical_simulator_campaign.py
 uv run python queue-haul/paper_evaluation.py \
   --out queue-haul/outputs/paper-evaluation
@@ -154,8 +156,10 @@ cell, eight sessions and moves, 5/10 Gbit/s, and 19/30-second requirements for
 `/scratch/users/$USER/qh-policy-run-width8-frontier`; 1 Gbit/s is excluded.
 Its completed checksum-pinned reduced bundle is retained under
 `outputs/policy-hardware-width8-frontier-20260730/`, including move-admission
-provenance and raw GPU samples. This idle evidence supports timing and projected,
-not realized, power attainment.
+provenance and raw GPU samples. `plot-reduced` writes a pooled
+migration-to-destination-first-token CDF and median modeled source-power shed
+over elapsed time with an interquartile band. This idle evidence supports timing
+and projected, not realized, power attainment.
 `migration_profiler.py make-crossover` creates paired single-session replay/KV
 measurements for each nominal context, bandwidth, and repeat. The synthetic body
 reserves 192 tokens for message overhead, and the first 32K replay is a fail-fast
