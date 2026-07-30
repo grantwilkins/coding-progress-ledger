@@ -181,7 +181,9 @@ preserving the existing catch-up, power, and capacity evidence. The pinned
 for Tiny, Small, Medium, Mixed, and Large packs at 1/2.5/5/10 Gbit/s and 19/30-s
 requirements: 600 scenarios in total.
 `simulated_pareto_campaign.py` evaluates the same five fixed context packs with
-the calibrated crossover profile and adds a paired random baseline. Its Pareto
+the calibrated crossover profile and adds paired random and price-coupled
+greedy baselines. Coupled greedy uses the same single destination and link; its
+zero-background-load service envelope is explicitly a sensitivity. The Pareto
 CSV and plot label 12K/14K contexts as interpolated, concurrent action power as
 extrapolated, and commit-derived power attainment as modeled.
 Parallel launch and replay/KV aggregate-throughput caps are anchored by the

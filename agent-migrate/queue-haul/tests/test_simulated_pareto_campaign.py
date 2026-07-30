@@ -15,6 +15,7 @@ Plausible wrong implementations:
 - Normalize attained shed by admitted sessions instead of all source sessions.
 - Resample workloads by policy/budget or count repeated plan cells as variation.
 - Aggregate raw completion points into a median or one point per budget.
+- Run coupled greedy without its pool architecture or discard its pool assignment.
 """
 
 import json
@@ -23,6 +24,7 @@ from types import SimpleNamespace
 import simulated_pareto_campaign as campaign
 from simulated_pareto_campaign import (
     admitted_moves, aggregate_planning_profile, context_evidence,
+    coupled_architecture,
     frontier_metrics, full_attainment_cdf, measured_kv_caps,
     measured_replay_caps, meets_deadline, parallel_profile, pareto_flags,
     policy_coordinates, shared_kv_profile, workload_grid,
@@ -98,6 +100,26 @@ def test_frontier_uses_only_admitted_moves_and_total_source_sessions(
     assert selected == (move,)
     assert 0 < attainment < 1
     assert completion == 1
+
+
+def test_coupled_greedy_uses_the_single_destination_pool(tmp_path):
+    base = model(tmp_path, tp=1)
+    context = max(
+        int(base.case().replay.by_concurrency[1][0][0]),
+        base.case().kv_transfer.block_tokens,
+    )
+    scenario, routes = _problem(
+        base, [{"session_id": "a", "initial_tokens": context}], 1000, 100
+    )
+    destination = coupled_architecture(base)
+
+    moves = admitted_moves(
+        "greedy_coupled", scenario, routes, base, 0, destination,
+    )
+
+    assert len(moves) == 1
+    assert moves[0].destination_pool == "coupled-pool"
+    assert moves[0].destination_instance == "destination"
 
 
 def test_workload_grid_deduplicates_samples_and_crosses_same_bandwidths():

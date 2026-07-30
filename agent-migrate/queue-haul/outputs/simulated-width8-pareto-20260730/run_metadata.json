@@ -8,11 +8,12 @@
   "policies": [
     "queue_haul",
     "greedy",
+    "greedy_coupled",
     "random",
     "kv_only",
     "replay_only"
   ],
-  "scenarios": 2300,
+  "scenarios": 2760,
   "paired_episodes": 460,
   "time_budgets_s": [
     30,
@@ -23,6 +24,7 @@
   ],
   "observation_s": 600,
   "planning_contract": "deadline-specific admitted set; no appended cleanup moves; eager execution",
+  "greedy_coupled_contract": "one destination replica and measured link; zero background load and destination service headroom are sensitivity inputs",
   "workload_contract": "five fixed anchors plus 18 measured width-8 workload mixes, crossed with every bandwidth and time budget",
   "plan": {
     "path": "queue-haul/outputs/policy-hardware-width8-packing-plan/plan.json",

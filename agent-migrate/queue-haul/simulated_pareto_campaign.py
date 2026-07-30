@@ -16,13 +16,18 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 import migration_profiler as profiler
+from destination import (
+    DESTINATION_SCHEMA, CompatibilityFingerprint, ContextRate,
+    DestinationArchitecture, DestinationPool, DestinationReplica,
+    DestinationType, LoadedCoefficients,
+)
 from policy_hardware_campaign import (
     LABELS, _portable_path, _problem, deadline_attainment,
     validate_policy_plan,
 )
 from planner import plan
 from profiles import ActionPower, ModelProfile, RateCurve
-from simulate import PlannedMove, execute
+from simulate import execute
 
 
 ROOT = Path(__file__).parent
@@ -31,7 +36,11 @@ DEFAULT_MODEL = ROOT / "profiles/gpt_oss_20b_a100_tp1_crossover.json"
 DEFAULT_CROSSOVER = ROOT / "outputs/policy-hardware-crossover-20260730/plan.json"
 DEFAULT_WIDTH8 = ROOT / "outputs/policy-hardware-width8-frontier-20260730"
 DEFAULT_OUT = ROOT / "outputs/simulated-width8-pareto-20260730"
-POLICIES = ("queue_haul", "greedy", "random", "kv_only", "replay_only")
+POLICIES = (
+    "queue_haul", "greedy", "greedy_coupled", "random", "kv_only",
+    "replay_only",
+)
+LABELS = {**LABELS, "greedy_coupled": "Coupled greedy"}
 OBSERVATION_S = 600
 TIME_BUDGETS_S = (30, 40, 50, 60, 75)
 
@@ -211,14 +220,50 @@ def write_csv(path, rows):
         writer.writerows(rows)
 
 
-def admitted_moves(policy, scenario, routes, profile, seed):
+def coupled_architecture(profile):
+    case = profile.case()
+    fingerprint = CompatibilityFingerprint(
+        profile.model, "gpt-oss-pinned", "source-dc-log", "lmcache-mp-v7",
+    )
+    def rate(curve):
+        return ContextRate(*(
+            tuple(map(float, values))
+            for values in curve.by_concurrency[1]
+        ))
+    contexts = tuple(map(float, case.prefill.by_concurrency[1][0]))
+    loaded = LoadedCoefficients(
+        (0, 1), (1, 1), (contexts[0], contexts[-1]),
+        (125_000_000, 1_250_000_000),
+        "simulated-pareto-zero-load-sensitivity",
+    )
+    destination_type = DestinationType(
+        "gpt-oss-20b-a100-tp1", fingerprint, rate(case.prefill),
+        rate(case.decode), ((1, 1),),
+        {mode: (1,) for mode in ("normal", "emergency", "stable")},
+        profile.kv_capacity_tokens,
+        {"replay": loaded, "kv_transfer": loaded}, (0, 1),
+        "simulated-pareto-zero-load-sensitivity", True,
+        case.kv_transfer.block_tokens,
+    )
+    pool = DestinationPool(
+        "coupled-pool", destination_type.type_id,
+        (DestinationReplica("destination"),), "source-to-destination", ("link",),
+    )
+    return DestinationArchitecture(
+        DESTINATION_SCHEMA, fingerprint, (destination_type,), (pool,),
+    )
+
+
+def admitted_moves(policy, scenario, routes, profile, seed, destination=None):
     solver = {"queue_haul": "lp_work_first"}.get(policy, policy)
     return tuple(
-        PlannedMove(
-            move.session_id, move.destination_instance, move.method, move.order,
-            move.path,
+        replace(
+            move, rate_limit_bytes_per_s=None, quiesce_s=None,
         )
-        for move in plan(scenario, profile, routes, solver, seed=seed).moves
+        for move in plan(
+            scenario, profile, routes, solver, seed=seed,
+            destination=destination,
+        ).moves
     )
 
 
@@ -290,18 +335,24 @@ def simulate(plan_path=DEFAULT_PLAN, model_path=DEFAULT_MODEL,
                 base["sample_id"], bandwidth, budget_s,
             ])[:16]
             for policy in POLICIES:
+                destination = coupled_architecture(planning_profile) \
+                    if policy == "greedy_coupled" else None
                 moves = admitted_moves(
                     policy, scenario, routes, planning_profile,
                     profiler.stable_seed(
                         plan_["seed"], base["sample_id"],
                         bandwidth, budget_s, policy,
                     ),
+                    destination,
                 )
                 execution_profile = shared_kv_profile(
                     profile, bandwidth,
                     sum(move.method == "kv_transfer" for move in moves), kv_caps,
                 )
-                result = execute(scenario, execution_profile, moves)
+                result = execute(
+                    scenario, execution_profile, moves,
+                    destination=destination,
+                )
                 commits = [row.committed_s for row in result.sessions
                            if row.committed_s is not None]
                 if len(commits) != len(moves):
@@ -340,6 +391,9 @@ def simulate(plan_path=DEFAULT_PLAN, model_path=DEFAULT_MODEL,
                     "result_evidence": "simulated",
                     "planning_evidence":
                         "deadline_specific_admitted_set_with_aggregate_caps",
+                    "destination_contract":
+                        "single_pool_zero_load_service_sensitivity"
+                        if destination else "aggregate_migration_caps_only",
                 })
     pareto_flags(rows, ("match_id",))
     for row in rows:
@@ -393,7 +447,7 @@ def policy_coordinates(rows, policy, normalized):
 
 def plot(rows, out):
     colors = dict(zip(POLICIES, plt.get_cmap("tab10").colors))
-    markers = dict(zip(POLICIES, ("o", "s", "^", "D", "x")))
+    markers = dict(zip(POLICIES, ("o", "s", "P", "^", "D", "x")))
     fig, axes = plt.subplots(1, 2, figsize=(12, 5.5))
     cloud, raw = axes
     for policy in (*POLICIES[1:], POLICIES[0]):
@@ -465,6 +519,9 @@ def run(plan_path=DEFAULT_PLAN, model_path=DEFAULT_MODEL,
         "observation_s": OBSERVATION_S,
         "planning_contract":
             "deadline-specific admitted set; no appended cleanup moves; eager execution",
+        "greedy_coupled_contract":
+            "one destination replica and measured link; zero background load and "
+            "destination service headroom are sensitivity inputs",
         "workload_contract":
             "five fixed anchors plus 18 measured width-8 workload mixes, crossed "
             "with every bandwidth and time budget",
