@@ -309,6 +309,14 @@ individual actions, prefixes of length two and three, and a full feasible
 instance drain using current exact drain gain and remaining slack. It remains
 experimental and is not the default controller.
 
+The simulator-only `greedy_coupled` variant iterates prices for every aggregate
+route and destination row. At fixed prices, each source chooses the cheapest
+action per session, sorts by priced cost per load, and evaluates every prefix
+with the exact source power curve. A target-capped recovery admits retained
+patterns only when aggregate rows and concrete replica packing fit. The result
+is still experimental: exact eager-parallel prediction is the final acceptance
+gate, and the policy is neither a global optimum nor a hardware controller.
+
 Selected moves are ordered by migration work per conservative watt. At
 controller completion, the executor starts every selected move eagerly.
 Independent paths proceed in parallel; overlapping paths share link capacity,

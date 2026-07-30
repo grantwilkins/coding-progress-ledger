@@ -19,7 +19,7 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
 
-from planner import ALL_SOLVERS, InstanceCapacity, PlanResult, SOLVERS, plan
+from planner import ALL_SOLVERS, POOL_SOLVERS, InstanceCapacity, PlanResult, SOLVERS, plan
 from profiles import ModelProfile, WorkloadProfile
 from simulate import (ExecutionResult, ExecutionScenario, NetworkLink, PowerNode, ServingInstance,
                       SimRequest, SimSession, execute)
@@ -573,7 +573,10 @@ def main() -> None:
     parser.add_argument("--power-limit", type=float, action="append", required=True)
     parser.add_argument("--deadline", type=float, action="append", required=True)
     parser.add_argument("--end", type=float, required=True)
-    parser.add_argument("--solver", choices=ALL_SOLVERS, action="append")
+    parser.add_argument(
+        "--solver", choices=tuple(s for s in ALL_SOLVERS if s not in POOL_SOLVERS),
+        action="append",
+    )
     parser.add_argument("--sessions", type=int, default=10_000)
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--link-bytes-per-s", type=float, default=125_000_000.0)

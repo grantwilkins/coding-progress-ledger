@@ -21,7 +21,7 @@ from simulate import (MOVE_METHODS_BY_STATE, ExecutionScenario, MoveMethod, Plan
 METHODS: tuple[MoveMethod, ...] = ("replay", "kv_transfer", "replay_on_request")
 SOLVERS = ("random", "greedy", "lp")
 LP_SOLVERS = ("lp", "lp_peak_first", "lp_work_first")
-POOL_SOLVERS = ("greedy_bundle",)
+POOL_SOLVERS = ("greedy_bundle", "greedy_coupled")
 BASELINE_SOLVERS = ("isolated_fastest", "replay_only", "kv_only")
 ALL_SOLVERS = SOLVERS + LP_SOLVERS[1:] + BASELINE_SOLVERS + POOL_SOLVERS
 Routes = dict[tuple[str, str], tuple[str, ...]] | Callable[[str, str], tuple[str, ...]]

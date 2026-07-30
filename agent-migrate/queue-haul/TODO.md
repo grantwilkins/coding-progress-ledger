@@ -13,8 +13,10 @@ order and overlaps moves up to its configured width.
 - [x] Validate realized destination service debt during summary prediction.
 - [ ] Regenerate canonical simulator tables and figures from a clean checkout.
 - [x] Add `greedy_bundle` to pool-aware fleet-policy comparisons.
+- [x] Add simulator-only `greedy_coupled` with exact source-prefix pricing and
+  destination packing checks.
 - [ ] Verify checksums and paper tables against the committed code revision.
-- [ ] Run `uv run pytest`.
+- [x] Run `uv run pytest`.
 
 ## Optional
 

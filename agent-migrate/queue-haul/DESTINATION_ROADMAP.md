@@ -24,8 +24,8 @@ remain assumed sensitivities until measured.
 ## Remaining work
 
 1. Regenerate the fixed-contract and scale results from the committed code.
-2. Compare static greedy, experimental bundle greedy, LP, replay-only, and
-   KV-only policies on matched scenarios.
+2. Compare static greedy, experimental bundle and price-coupled greedy, LP,
+   replay-only, and KV-only policies on matched scenarios.
 3. Report requested and achieved shed, action mix, last commit, route and pool
    resource use, exposed sessions, and complete binding-resource sets.
 4. Keep the dedicated hardware result separate from simulated pool admission.

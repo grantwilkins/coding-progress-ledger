@@ -470,6 +470,122 @@ def _greedy_bundle(table: CandidateTable, target: float, power: ExpectedPower):
     return selected
 
 
+def _coupled_gain(table, power, pattern):
+    return power.drain_gain([
+        table.sessions[table.candidates[i].session].session_id for i in pattern
+    ])
+
+
+def _coupled_source_patterns(table, power, priced, eta, scale):
+    ordered = sorted(priced, key=lambda row: (
+        row[1] / power.ell[table.sessions[table.candidates[row[0]].session].session_id],
+        row[0],
+    ))
+    best, pattern, price = (0.0, ()), (), 0.0
+    for i, value in ordered:
+        pattern += (i,)
+        price += value
+        key = (price - eta * _coupled_gain(table, power, pattern) / scale, pattern)
+        if key < best:
+            best = key
+    return best[1], tuple(i for i, _value in ordered)
+
+
+def _coupled_source_pattern(table, power, priced, eta, scale):
+    return _coupled_source_patterns(table, power, priced, eta, scale)[0]
+
+
+def _recover_coupled(table, power, patterns, target, architecture, scenario, mode):
+    matrix, selected, chosen = csc_matrix(table.resources), set(), {}
+    gain, blocked = 0.0, set()
+    visited = {frozenset()}
+    while gain < target - 1e-8:
+        best = None
+        for source in sorted(patterns):
+            old = chosen.get(source, ())
+            old_value = _coupled_gain(table, power, old)
+            old_work = sum(table.candidates[i].migration_work_s for i in old)
+            for pattern in sorted(patterns[source]):
+                if not pattern or (source, old, pattern) in blocked:
+                    continue
+                value = _coupled_gain(table, power, pattern)
+                if value < old_value - 1e-8 or pattern == old:
+                    continue
+                trial = selected - set(old) | set(pattern)
+                if frozenset(trial) in visited:
+                    continue
+                trial_usage = np.asarray(matrix[:, list(trial)].sum(1)).ravel()
+                if np.any(trial_usage > 1 + 1e-8):
+                    continue
+                work = sum(table.candidates[i].migration_work_s for i in pattern)
+                added_value, added_work = value - old_value, work - old_work
+                key = (
+                    min(added_value, target - gain) / max(added_work, 1e-12),
+                    -work, tuple(-i for i in pattern),
+                )
+                if best is None or key > best[0]:
+                    best = key, source, old, pattern, trial, added_value
+        if best is None:
+            break
+        if _pack(table, best[4], architecture, scenario, mode)[0] is None:
+            blocked.add((best[1], best[2], best[3]))
+            continue
+        chosen[best[1]], selected = best[3], best[4]
+        visited.add(frozenset(selected))
+        gain += best[5]
+    return selected
+
+
+def _greedy_coupled(table, target, power, architecture, scenario, mode):
+    """Simulator-local emulation of source-local choices under shared prices."""
+    matrix = csc_matrix(table.resources)
+    by_source, by_session = {}, {}
+    for j, session in enumerate(table.sessions):
+        by_source.setdefault(session.source_instance, []).append(j)
+    for i, candidate in enumerate(table.candidates):
+        by_session.setdefault(candidate.session, []).append(i)
+    prices, eta, scale = np.zeros(table.resources.shape[0]), 1.0, max(target, 1.0)
+    retained = {source: set() for source in by_source}
+    for iteration in range(32):
+        selected, chosen = set(), []
+        for source_order, (source, members) in enumerate(sorted(by_source.items())):
+            priced = []
+            for position, session in enumerate(members):
+                if power.ell[table.sessions[session].session_id] <= 0:
+                    continue
+                actions = []
+                for i in by_session.get(session, ()):
+                    sl = slice(matrix.indptr[i], matrix.indptr[i + 1])
+                    rows, values = matrix.indices[sl], matrix.data[sl]
+                    value = table.candidates[i].migration_work_s \
+                        / table.migration_horizon_s + prices[rows] @ values
+                    actions.append((value, i))
+                if not actions:
+                    continue
+                actions.sort()
+                low = min(value for value, _i in actions)
+                ties = sorted(i for value, i in actions if abs(value - low) <= 1e-12)
+                i = ties[(iteration + source_order + position) % len(ties)]
+                priced.append((i, low))
+            pattern, ordered = _coupled_source_patterns(
+                table, power, priced, eta, scale,
+            )
+            retained[source].add(pattern)
+            if ordered:
+                retained[source].update((ordered[:1], ordered))
+            selected.update(pattern)
+            chosen.append(pattern)
+        usage = np.asarray(table.resources[:, list(selected)].sum(1)).ravel() \
+            if selected else np.zeros(table.resources.shape[0])
+        shed = sum(_coupled_gain(table, power, pattern) for pattern in chosen)
+        step = .5 / np.sqrt(iteration + 1)
+        prices = np.maximum(0, prices + step * (usage - 1))
+        eta = max(0, eta + step * (target - shed) / scale)
+    return _recover_coupled(
+        table, power, retained, target, architecture, scenario, mode,
+    )
+
+
 def _lp(table: CandidateTable, target: float):
     if not table.candidates:
         return set()
@@ -667,6 +783,9 @@ def _mode_plan(scenario, profile, architecture, solver, mode, power, target):
     table = candidate_table(scenario, profile, architecture, mode, power)
     selected = (_lp(table, target) if solver.startswith("lp") else
                 _greedy_bundle(table, target, power) if solver == "greedy_bundle"
+                else _greedy_coupled(
+                    table, target, power, architecture, scenario, mode,
+                ) if solver == "greedy_coupled"
                 else _greedy(table, target))
     repairs, repair_s = 0, 0.0
     while True:
@@ -686,7 +805,8 @@ def _mode_plan(scenario, profile, architecture, solver, mode, power, target):
 
 
 def plan_destination(scenario, profile, solver, case_id, seed, architecture):
-    if solver not in {"greedy", "greedy_bundle", "lp", "lp_peak_first", "lp_work_first"}:
+    if solver not in {"greedy", "greedy_bundle", "greedy_coupled",
+                      "lp", "lp_peak_first", "lp_work_first"}:
         raise ValueError("destination architecture supports pool-aware LP and greedy")
     if case_id != "central":
         raise ValueError("destination admission supports the central profile")

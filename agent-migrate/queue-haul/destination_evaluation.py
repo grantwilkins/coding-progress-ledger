@@ -9,6 +9,7 @@ import math
 import numpy as np
 
 from destination import LoadedCoefficients
+from migration import ORDERED_EAGER_PARALLEL_V1
 from planner import plan
 
 
@@ -197,7 +198,7 @@ def primary_cells():
 
 def run_sweep(build, profile, cells=primary_cells(), seeds=range(10),
               transition_seeds=range(10, 30)):
-    """Run paired legacy, LP, static-greedy, and bundle-greedy pool cells."""
+    """Run paired legacy, LP, and pool-greedy cells."""
     rows, cells, seeds = [], tuple(cells), tuple(seeds)
 
     def run(selected_cells, selected_seeds):
@@ -207,17 +208,27 @@ def run_sweep(build, profile, cells=primary_cells(), seeds=range(10),
                 ("scalar", "lp", None), ("pool_lp", "lp", architecture),
                 ("pool_greedy", "greedy", architecture),
                 ("pool_bundle", "greedy_bundle", architecture),
+                ("pool_coupled_experimental", "greedy_coupled", architecture),
             ):
                 result = plan(
                     scenario, profile, routes, solver, seed=seed, destination=destination,
+                )
+                selected_shed = (
+                    result.initial_source_power_w - result.planned_source_power_w
                 )
                 rows.append({
                     "rho": cell.rho, "headroom": cell.headroom, "pools": cell.pools,
                     "flex": cell.flex, "debt": cell.debt,
                     "budget_policy": cell.budget_policy,
                     "seed": seed, "planner": label, "feasible": result.feasible,
-                "shed_w": result.initial_source_power_w - result.planned_source_power_w,
+                "shed_w": selected_shed if result.feasible else 0,
+                "selected_shed_w": selected_shed,
+                "validated_shed_w": selected_shed if result.feasible else 0,
                 "shortfall_w": result.power_shortfall_w, "mode": result.admission_mode,
+                "solver": solver, "failure_reason": result.failure_reason,
+                "evidence_status": "sensitivity", "result_provenance": "simulated",
+                "input_provenance": "assumed_destination_contract",
+                "execution_contract": ORDERED_EAGER_PARALLEL_V1,
                 "migration_s": result.predicted_migration_makespan_s,
                 "bottleneck": result.bottleneck, "packing_repairs": result.packing_repair_count,
                 "runtime_s": result.solve_s, "memory_bytes": result.planner_memory_bytes,

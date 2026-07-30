@@ -24,7 +24,8 @@ The repository contains:
 - measured request-boundary replay and KV Gantt charts through the first
   destination token;
 - a one-pool requirement-frontier solver;
-- LP, static greedy, and experimental bundle-greedy planners;
+- LP, static greedy, experimental bundle greedy, and simulator-only
+  price-coupled greedy planners;
 - pool-aware planning and internal packing checks; and
 - a deterministic migration, network, request, queue, and power simulator.
 

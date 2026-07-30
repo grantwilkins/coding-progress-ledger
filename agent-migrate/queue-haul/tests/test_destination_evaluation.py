@@ -31,6 +31,7 @@ from destination_evaluation import (SweepCell, archived_cache_state,
                                     effective_headroom, primary_cells,
                                     reduce_bounds, reduce_loaded, replica_counts,
                                     run_sweep, service_cache_state)
+from migration import ORDERED_EAGER_PARALLEL_V1
 from test_pool_planner import architecture
 
 
@@ -206,7 +207,7 @@ def test_seeded_sweep_repeats_only_transition_cells(monkeypatch):
             feasible=feasible, initial_source_power_w=2, planned_source_power_w=1,
             power_shortfall_w=0, admission_mode="normal", predicted_migration_makespan_s=1,
             bottleneck="service:p0", packing_repair_count=0, solve_s=0,
-            planner_memory_bytes=1,
+            planner_memory_bytes=1, failure_reason=None,
         )
     monkeypatch.setattr(destination_evaluation, "plan", fake_plan)
     cell = SweepCell(.8, 1, 1, .1, .05)
@@ -220,5 +221,9 @@ def test_seeded_sweep_repeats_only_transition_cells(monkeypatch):
     assert {r["seed"] for r in first} == {0, 1, 2, 3}
     assert {r["planner"] for r in first} == {
         "scalar", "pool_lp", "pool_greedy", "pool_bundle",
+        "pool_coupled_experimental",
     }
     assert {(r["flex"], r["debt"]) for r in first} == {(.1, .05)}
+    assert {r["execution_contract"] for r in first} == {ORDERED_EAGER_PARALLEL_V1}
+    assert all(r["shed_w"] == (1 if r["feasible"] else 0) for r in first)
+    assert {r["selected_shed_w"] for r in first} == {1}

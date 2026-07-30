@@ -22,6 +22,7 @@ Plausible wrong implementations:
 - Treat unused early capacity as if it could serve transition work arriving late.
 - Credit node shutdown during session selection instead of only after planning.
 - Rank sessions only by initial marginal power and miss a feasible full-drain bundle.
+- Assign every coupled prefix member to the same cheap pool and fail concrete packing.
 """
 
 from dataclasses import replace
@@ -36,8 +37,9 @@ from destination import (DESTINATION_SCHEMA, CompatibilityFingerprint, ContextRa
                          DestinationType, LoadedCoefficients, MigrationComponents)
 from planner import plan
 from pool_planner import (Candidate, CandidateTable, _destination_duration, _event_bounds,
-                          _greedy, _greedy_bundle, _mode_boundary_rho, _service_trace,
-                          candidate_table,
+                          _greedy, _greedy_bundle, _greedy_coupled,
+                          _coupled_source_pattern, _mode_boundary_rho,
+                          _recover_coupled, _service_trace, candidate_table,
                           destination_service_execution, exact_replica_assignment,
                           service_debt, validate_destination_execution)
 from power_model import ExpectedPower
@@ -97,6 +99,124 @@ def architecture(*, normal=.3, emergency=.5, stable=1, baselines=((0, 0), (0, 0)
         f"r{i}", route, methods, flex, debt,
     ) for i, (baseline, route) in enumerate(zip(baselines, routes)))
     return DestinationArchitecture(DESTINATION_SCHEMA, FP, (q,), pools, residency)
+
+
+def test_coupled_prefix_crosses_knee_with_packable_mixed_pools(tmp_path):
+    profile = model(tmp_path)
+    sessions = tuple(SimSession(str(i), "s0", 1, 30, 0, 1) for i in range(3))
+    nodes = (PowerNode("n0", 1, True),) + tuple(
+        PowerNode(f"d{i}", 1, False) for i in range(3)
+    )
+    scenario = replace(
+        problem(), sessions=sessions, nodes=nodes,
+        instances=(ServingInstance("s0", ("n0",)),) + tuple(
+            ServingInstance(f"t{i}", (f"d{i}",)) for i in range(3)
+        ),
+    )
+    q = architecture(normal=1, emergency=1).types[0]
+    arch = DestinationArchitecture(
+        DESTINATION_SCHEMA, FP, (q,), (
+            DestinationPool(
+                "p0", "q", (DestinationReplica("t0"), DestinationReplica("t1")),
+                "r0", ("wan",), ("replay",),
+            ),
+            DestinationPool(
+                "p1", "q", (DestinationReplica("t2"),),
+                "r1", ("wan",), ("replay",),
+            ),
+        ),
+    )
+    power = ExpectedPower(scenario, profile)
+    candidates = tuple(
+        Candidate(j, "replay", pool, power.marginal(str(j)), 1, 1, ("wan",),
+                  1, (.6, 0), 0)
+        for j in range(3) for pool in range(2)
+    )
+    table = CandidateTable(
+        sessions, candidates,
+        csr_matrix((np.ones(6), (np.repeat(np.arange(3), 2), np.arange(6)))),
+        csr_matrix((np.full(6, .2), (np.zeros(6), np.arange(6))), shape=(1, 6)),
+        ("route",), (1,), ("fraction",), 10,
+    )
+
+    selected = _greedy_coupled(table, 28, power, arch, scenario, "normal")
+
+    assert _coupled_source_pattern(
+        table, power, ((0, 1), (2, 1.5), (4, 15)), 1, 1,
+    ) == (0, 2)  # objectives: 0, -5, -13.5, -10.5
+    assert len(selected) == 3
+    assert {candidates[i].session for i in selected} == {0, 1, 2}
+    assert sorted(candidates[i].pool for i in selected) == [0, 0, 1]
+    assert exact_replica_assignment(table, selected, arch, scenario, "normal") is not None
+
+
+def test_coupled_recovery_caps_one_watt_overshoot_before_work(tmp_path):
+    profile, scenario = model(tmp_path), problem()
+    sessions = (
+        replace(scenario.sessions[0], expected_f=5, expected_g=0),
+        replace(scenario.sessions[1], expected_f=2.5, expected_g=0),
+    )
+    scenario = replace(scenario, sessions=sessions)
+    power = ExpectedPower(scenario, profile)
+    candidates = (
+        Candidate(0, "replay", 0, 2, 1, 1, ("wan",), 1, (0, 0), 0),
+        Candidate(1, "replay", 0, 1, .75, 1, ("wan",), 1, (0, 0), 0),
+    )
+    table = CandidateTable(
+        sessions, candidates, csr_matrix(np.eye(2)),
+        csr_matrix((np.full(2, .1), (np.zeros(2), np.arange(2))), shape=(1, 2)),
+        ("route",), (1,), ("fraction",), 10,
+    )
+
+    selected = _recover_coupled(
+        table, power, {"s0": {(), (0,)}, "s1": {(1,)}}, 1,
+        replace(architecture(normal=1, emergency=1), pools=(
+            architecture(normal=1, emergency=1).pools[0],
+        )), scenario, "normal",
+    )
+
+    assert selected == {1}
+
+    upgrade = replace(
+        table,
+        candidates=(
+            replace(candidates[0], migration_work_s=.01),
+            candidates[1],
+        ),
+    )
+    target = power.drain_gain([s.session_id for s in sessions])
+    selected = _recover_coupled(
+        upgrade, power, {"s0": {(0,), (0, 1)}}, target,
+        replace(architecture(normal=1, emergency=1), pools=(
+            architecture(normal=1, emergency=1).pools[0],
+        )), scenario, "normal",
+    )
+
+    assert selected == {0, 1}
+
+    swap_candidates = (
+        replace(candidates[0], pool=0),
+        replace(candidates[0], pool=1),
+        replace(candidates[1], pool=0),
+    )
+    swap_table = replace(
+        table, candidates=swap_candidates,
+        incidence=csr_matrix((
+            np.ones(3), ((0, 0, 1), np.arange(3)),
+        ), shape=(2, 3)),
+        resources=csr_matrix((
+            (.6, .6, .6), ((0, 1, 0), np.arange(3)),
+        ), shape=(2, 3)),
+        resource_names=("pool:a", "pool:b"),
+        resource_capacities=(1, 1),
+        resource_units=("fraction", "fraction"),
+    )
+    selected = _recover_coupled(
+        swap_table, power, {"s0": {(0,), (1,)}, "s1": {(2,)}}, target,
+        architecture(normal=1, emergency=1), scenario, "normal",
+    )
+
+    assert selected == {1, 2}
 
 
 def test_loaded_lookup_boundary_tracks_selected_admission_mode():
