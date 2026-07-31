@@ -429,6 +429,35 @@ def test_destination_ttft_cdf_includes_migration_time(tmp_path, monkeypatch):
         == [0, 3, 5]
 
 
+def test_destination_ttft_cdf_separates_and_normalizes_bandwidths(
+        tmp_path, monkeypatch):
+    rows = [
+        {"scenario_id": scenario, "policy": "queue_haul",
+         "migration_ttft_s": value, "continuation_ttft_s": .1}
+        for scenario, value in (("slow", 3), ("fast", 1))
+    ]
+    summaries = [
+        {"scenario_id": scenario, "policy": "queue_haul",
+         "planned_migrations": 1}
+        for scenario in ("slow", "fast")
+    ]
+    scenarios = [
+        {"scenario_id": "slow", "bandwidth_mbps": 1000},
+        {"scenario_id": "fast", "bandwidth_mbps": 10000},
+    ]
+    monkeypatch.setattr(campaign.plt, "close", lambda _: None)
+
+    campaign.plot_destination_ttft_by_bandwidth(
+        rows, summaries, scenarios, tmp_path
+    )
+
+    axes = campaign.plt.gcf().axes
+    assert [ax.get_title() for ax in axes] == ["1 Gbit/s", "10 Gbit/s"]
+    assert [ax.lines[0].get_xdata().tolist() for ax in axes] \
+        == [[0, 3], [0, 1]]
+    assert all(ax.lines[0].get_ydata()[-1] == 1 for ax in axes)
+
+
 def test_power_shed_curve_uses_nonlinear_episode_power_and_keeps_failures():
     class QuadraticPower:
         @staticmethod

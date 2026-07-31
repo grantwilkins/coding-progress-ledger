@@ -186,7 +186,8 @@ requirements: 600 scenarios in total. Job 36822272 completed all 600 scenarios
 without failures in 8:08:22. Its checksum-pinned reduced bundle is under
 `outputs/policy-hardware-width8-packing-20260730/`; compressed results, GPU
 samples, proxy byte counters, and RESP transfer records retain the raw evidence
-without runtime debug logs.
+without runtime debug logs. Its bandwidth-faceted destination-TTFT CDF pools
+all five workloads, both deadlines, and three episodes within each bandwidth.
 `simulated_pareto_campaign.py` evaluates the same five fixed context packs with
 the calibrated crossover profile and adds paired random and price-coupled
 greedy baselines. Coupled greedy uses the same single destination and link; its

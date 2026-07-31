@@ -639,6 +639,52 @@ def plot_destination_ttft(rows, summaries, out):
     plt.close(fig)
 
 
+def plot_destination_ttft_by_bandwidth(rows, summaries, scenarios, out):
+    bandwidth = {
+        row["scenario_id"]: float(row["bandwidth_mbps"]) for row in scenarios
+    }
+    values = sorted(set(bandwidth.values()))
+    fig, axes = plt.subplots(
+        math.ceil(len(values) / 2), 2, figsize=(12, 3.8 * math.ceil(len(values) / 2)),
+        sharex=True, sharey=True, squeeze=False,
+    )
+    colors = dict(zip(POLICIES, plt.get_cmap("tab10").colors))
+    for ax, value in zip(axes.flat, values):
+        ids = {key for key, item in bandwidth.items() if item == value}
+        selected_rows = [row for row in rows if row["scenario_id"] in ids]
+        selected_summaries = [
+            row for row in summaries if row["scenario_id"] in ids
+        ]
+        for policy in POLICIES:
+            x, y = completion_curve(
+                selected_rows, selected_summaries, policy, "migration_ttft_s"
+            )
+            if len(x):
+                ax.step(
+                    np.r_[0, x], np.r_[0, y], where="post",
+                    color=colors[policy], label=LABELS[policy],
+                )
+        ax.set(
+            title=f"{value / 1000:g} Gbit/s",
+            xlabel="Migration start → destination first token (s)",
+            ylabel="Fraction of planned migrations", ylim=(0, 1.02),
+        )
+        ax.grid(alpha=.25)
+    for ax in axes.flat[len(values):]:
+        ax.remove()
+    handles, labels = axes.flat[0].get_legend_handles_labels()
+    fig.legend(handles, labels, loc="upper center", ncol=len(POLICIES),
+               frameon=False)
+    fig.suptitle("Full width-8 hardware campaign by bandwidth", y=.94)
+    fig.tight_layout(rect=(0, 0, 1, .88))
+    for suffix in ("png", "pdf"):
+        fig.savefig(
+            out / f"policy_hardware_destination_ttft_cdf_by_bandwidth.{suffix}",
+            dpi=220,
+        )
+    plt.close(fig)
+
+
 def plot_power_shed(rows, summaries, power_curve, out):
     colors = dict(zip(POLICIES, plt.get_cmap("tab10").colors))
     times = np.asarray(sorted({
@@ -750,6 +796,7 @@ def plot_hardware_pareto(attainment, summaries, out):
 
 
 def plot_reduced(out, model_path=DEFAULT_MODEL):
+    plan_ = json.loads((out / "plan.json").read_text())
     with (out / "policy_migrations.csv").open() as stream:
         rows = list(csv.DictReader(stream))
     with (out / "policy_episodes.csv").open() as stream:
@@ -757,6 +804,9 @@ def plot_reduced(out, model_path=DEFAULT_MODEL):
     with (out / "policy_attainment.csv").open() as stream:
         attainment = list(csv.DictReader(stream))
     plot_destination_ttft(rows, summaries, out)
+    plot_destination_ttft_by_bandwidth(
+        rows, summaries, plan_["scenarios"], out
+    )
     plot_power_shed(
         rows, summaries, ModelProfile.load(model_path).case().power_curve, out
     )
