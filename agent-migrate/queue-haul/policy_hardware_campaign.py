@@ -52,6 +52,9 @@ CDF_LABELS = {
     "queue_haul": "Queue-Haul LP", "greedy": "Queue-Haul Greedy",
     "kv_only": "KV Migrate Only", "replay_only": "Replay Context Only",
 }
+CDF_LINESTYLES = {
+    "queue_haul": "-", "greedy": "--", "kv_only": "-.", "replay_only": ":",
+}
 def _portable_path(path: Path) -> str:
     resolved = path.resolve()
     try:
@@ -632,7 +635,8 @@ def plot_destination_ttft(rows, summaries, out):
         if len(x):
             ax.step(
                 np.r_[0, x], np.r_[0, y], where="post",
-                color=CDF_COLORS[policy], linewidth=2.2,
+                color=CDF_COLORS[policy], linestyle=CDF_LINESTYLES[policy],
+                linewidth=2.2,
                 label=CDF_LABELS[policy],
             )
     ax.set(
@@ -791,7 +795,8 @@ def plot_migration_time_per_watt(summaries, power_curve, out):
                         if row["policy"] == policy)
         if values:
             ax.step(values, np.arange(1, len(values) + 1) / len(values),
-                    where="post", color=CDF_COLORS[policy], linewidth=2.2,
+                    where="post", color=CDF_COLORS[policy],
+                    linestyle=CDF_LINESTYLES[policy], linewidth=2.2,
                     label=CDF_LABELS[policy])
     ax.set(
         xlabel="E2E Migration / Modeled Shed Power (s/W)",

@@ -37,6 +37,7 @@ from migration import ORDERED_EAGER_PARALLEL_V1
 from policy_hardware_campaign import (
     CDF_COLORS,
     CDF_LABELS,
+    CDF_LINESTYLES,
     completion_curve,
     deadline_attainment,
     disruption_points,
@@ -445,6 +446,9 @@ def test_destination_ttft_cdf_includes_migration_time(tmp_path, monkeypatch):
     assert CDF_LABELS == {
         "queue_haul": "Queue-Haul LP", "greedy": "Queue-Haul Greedy",
         "kv_only": "KV Migrate Only", "replay_only": "Replay Context Only",
+    }
+    assert CDF_LINESTYLES == {
+        "queue_haul": "-", "greedy": "--", "kv_only": "-.", "replay_only": ":",
     }
 
 
