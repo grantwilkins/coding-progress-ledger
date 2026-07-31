@@ -1018,8 +1018,9 @@ class LiveRuntime:
             warm = b.mp_warm_prefetch(
                 self.cfg, tokens, *self.mp_layout,
             )
+            missing = len(tokens) // 256 - shared // 256
             if warm["total_keys"] != len(tokens) // 256 \
-                    or warm["found_keys"] != len(tokens) // 256 - shared // 256:
+                    or warm["found_keys"] > missing:
                 raise RuntimeError(f"incomplete warm prefetch: {warm}")
             request_offset = len(b.resp_rows(self.cache_log))
         result, _text = session.request(
@@ -1037,7 +1038,8 @@ class LiveRuntime:
                 and row["key_hashes"] in session.cache_keys
                 and int(row["payload_bytes"]) > 0
             ]
-            if request_gets or result.cached_tokens != hit:
+            if request_gets or result.cached_tokens != hit \
+                    or hit != warm["total_keys"] * 256:
                 raise RuntimeError(
                     f"request-time WAN or cache accounting mismatch for "
                     f"{result.request_id}"

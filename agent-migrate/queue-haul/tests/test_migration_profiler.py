@@ -687,7 +687,7 @@ def test_live_runtime_pipelines_four_append_stages(monkeypatch, tmp_path):
     assert [row.logical_body_bytes for row in stages] == [10] * 4
 
 
-def test_mp_prepare_prefetches_before_inference_and_advances_key_watermark(
+def test_mp_prepare_accepts_concurrent_l1_fill_and_advances_key_watermark(
         monkeypatch, tmp_path):
     monkeypatch.setattr(c.b, "lmcache_mode", lambda: "mp")
     sink = tmp_path / "lmcache-sink.log"
@@ -724,7 +724,7 @@ def test_mp_prepare_prefetches_before_inference_and_advances_key_watermark(
     monkeypatch.setattr(
         c.b, "mp_warm_prefetch",
         lambda *_args: calls.append("prefetch")
-        or {"total_keys": 2, "found_keys": 1},
+        or {"total_keys": 2, "found_keys": 0},
     )
     monkeypatch.setattr(c.b, "mp_request_hit", lambda *_args: 512)
     runtime = c.LiveRuntime(
