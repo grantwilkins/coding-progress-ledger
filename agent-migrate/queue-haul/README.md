@@ -182,7 +182,11 @@ replay/KV completion, KV ingestion lower bound, and route-switch timing while
 preserving the existing catch-up, power, and capacity evidence. The pinned
 `outputs/policy-hardware-width8-packing-plan/` runs three paired width-8 episodes
 for Tiny, Small, Medium, Mixed, and Large packs at 1/2.5/5/10 Gbit/s and 19/30-s
-requirements: 600 scenarios in total.
+requirements: 600 scenarios in total. Job 36822272 completed all 600 scenarios
+without failures in 8:08:22. Its checksum-pinned reduced bundle is under
+`outputs/policy-hardware-width8-packing-20260730/`; compressed results, GPU
+samples, proxy byte counters, and RESP transfer records retain the raw evidence
+without runtime debug logs.
 `simulated_pareto_campaign.py` evaluates the same five fixed context packs with
 the calibrated crossover profile and adds paired random and price-coupled
 greedy baselines. Coupled greedy uses the same single destination and link; its
