@@ -10,6 +10,7 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
 OUTPUTS = Path(__file__).parent / "outputs"
+POWER_DRAIN = OUTPUTS / "power_drain_live_20260714"
 CONDITIONS = ("admission", "mechanism_only")
 LABELS = ("Admission-feasible", "Mechanism-only")
 FLOATS = (
@@ -98,5 +99,38 @@ def write_plots(rows: list[dict], output_dir: Path = OUTPUTS) -> list[Path]:
     return paths + _save(fig, output_dir / "stage1c_completion")
 
 
+def load_power_parity(path: Path = POWER_DRAIN / "scenario_summary.csv") -> list[dict]:
+    with path.open() as f:
+        return [{"policy": row["policy"],
+                 "expected_w": float(row["planned_source_drop_w"]),
+                 "measured_w": float(row["measured_source_drop_w"])}
+                for row in csv.DictReader(f)]
+
+
+def write_power_parity(rows: list[dict], output_dir: Path = POWER_DRAIN) -> list[Path]:
+    fig, ax = plt.subplots(figsize=(5.5, 5.5))
+    for policy in sorted({row["policy"] for row in rows}):
+        selected = [row for row in rows if row["policy"] == policy]
+        ax.scatter([row["expected_w"] for row in selected],
+                   [row["measured_w"] for row in selected],
+                   s=28, alpha=.7,
+                   label={"lp": "Queue-Haul (LP)"}.get(
+                       policy, policy.replace("_", " ")))
+    values = [row[key] for row in rows for key in ("expected_w", "measured_w")]
+    lo, hi = min(0, min(values)), max(values)
+    pad = .05 * (hi - lo)
+    limits = (lo - pad, hi + pad)
+    ax.plot(limits, limits, color="black", linestyle="--", label="Expected = measured")
+    ax.set(xlabel="Expected source-power reduction (W)",
+           ylabel="Measured source-power reduction (W)",
+           xlim=limits, ylim=limits, title="Expected vs. measured power reduction")
+    ax.set_aspect("equal", adjustable="box")
+    ax.grid(alpha=.25)
+    ax.legend(frameon=False, fontsize=8)
+    fig.tight_layout()
+    return _save(fig, output_dir / "expected_vs_measured_power_reduction")
+
+
 if __name__ == "__main__":
     write_plots(load_results())
+    write_power_parity(load_power_parity())
