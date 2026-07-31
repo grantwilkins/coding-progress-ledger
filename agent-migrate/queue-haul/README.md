@@ -119,7 +119,9 @@ uv run python queue-haul/paper_evaluation.py \
 
 `requirement_frontier.py` computes destination requirements without constructing
 a destination inventory. `pool_planner.py` compares those requirements with
-concrete pool contracts and emits physical use/capacity rows. `simulate.py`
+concrete pool contracts and emits physical use/capacity rows. Pool admission
+shares route capacity across methods but tracks replay and KV aggregate work
+separately, matching their distinct measured throughput caps. `simulate.py`
 independently schedules routes, reconstruction endpoints, requests, commits,
 and power. It separately traces declared pool-service demand and debt from
 realized replay and commit times. `evaluation_config.py` is the canonical

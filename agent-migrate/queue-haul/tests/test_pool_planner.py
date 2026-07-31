@@ -23,6 +23,8 @@ Plausible wrong implementations:
 - Credit node shutdown during session selection instead of only after planning.
 - Rank sessions only by initial marginal power and miss a feasible full-drain bundle.
 - Assign every coupled prefix member to the same cheap pool and fail concrete packing.
+- Serialize replay and KV work despite having separate measured aggregate caps.
+- Relax aggregate method constraints but retain cross-method serialization in packing.
 """
 
 from dataclasses import replace
@@ -419,8 +421,14 @@ def test_v1_resource_rows_match_the_documented_contract(tmp_path):
 
     assert table.resource_names == (
         "route:wan", "service:p0:0", "service-debt:p0:0",
-        "kv:p0", "migration:p0",
+        "kv:p0", "migration:p0:replay", "migration:p0:kv_transfer",
     )
+    for method in ("replay", "kv_transfer"):
+        row = table.resource_names.index(f"migration:p0:{method}")
+        assert {
+            candidate.method for i, candidate in enumerate(table.candidates)
+            if table.resources[row, i]
+        } == {method}
 
 
 def test_absent_architecture_is_exact_legacy_adapter(tmp_path):
@@ -584,7 +592,7 @@ def test_aggregate_feasibility_does_not_override_replica_packing(tmp_path):
     assert result.packing_repair_count >= 1 and result.failure_reason == "target_unmet"
 
 
-def test_exact_oracle_enforces_one_migration_at_a_time_per_replica(tmp_path):
+def test_exact_oracle_enforces_each_method_budget_per_replica(tmp_path):
     arch = architecture(normal=1, emergency=1, stable=1)
     arch = replace(arch, pools=(DestinationPool(
         "p", "q", (DestinationReplica("t0"), DestinationReplica("t1", (.9, 0))),
@@ -598,6 +606,30 @@ def test_exact_oracle_enforces_one_migration_at_a_time_per_replica(tmp_path):
 
     assert assignment is not None
     assert len(set(assignment.values())) == 2
+
+
+def test_replica_allows_replay_and_kv_work_to_overlap():
+    scenario = problem()
+    arch = architecture(normal=1, emergency=1, stable=1)
+    arch = replace(arch, pools=(DestinationPool(
+        "p", "q", (DestinationReplica("t0"),), "r", ("wan",),
+    ),))
+    candidates = tuple(
+        Candidate(session, method, 0, 1, 6, 6, ("wan",), 1, (0, 0), 1)
+        for session in range(2) for method in ("replay", "kv_transfer")
+    )
+    table = CandidateTable(
+        scenario.sessions, candidates, csr_matrix((
+            np.ones(4), ((0, 0, 1, 1), np.arange(4)),
+        )), csr_matrix((0, 4)), (), (), (), 10,
+    )
+
+    assert exact_replica_assignment(
+        table, {0, 3}, arch, scenario, "normal",
+    ) == {0: "t0", 3: "t0"}
+    assert exact_replica_assignment(
+        table, {0, 2}, arch, scenario, "normal",
+    ) is None
 
 
 def test_execution_independently_rejects_stable_overflow():

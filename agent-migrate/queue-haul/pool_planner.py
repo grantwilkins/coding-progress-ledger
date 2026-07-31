@@ -372,9 +372,12 @@ def candidate_table(scenario: ExecutionScenario, profile, architecture: Destinat
             len(pool.replicas) * (q.kv_capacity_tokens // q.kv_block_tokens)
             - sum(kv0[r.replica_id] for r in pool.replicas), f"kv:{pool.pool_id}",
             "blocks")
-        add([c.duration_s if c.pool == p else 0 for c in candidates],
-            len(pool.replicas) * migration_horizon, f"migration:{pool.pool_id}",
-            "replica-s")
+        for method in pool.methods:
+            add([
+                c.duration_s if c.pool == p and c.method == method else 0
+                for c in candidates
+            ], len(pool.replicas) * migration_horizon,
+                f"migration:{pool.pool_id}:{method}", "replica-s")
     data, rr, cc = [], [], []
     for i, (row, capacity) in enumerate(zip(rows, capacities)):
         for j, value in enumerate(row):
@@ -704,7 +707,10 @@ def _pack(table, selected, architecture, scenario, mode):
     horizon = architecture.residency_horizon_s
     horizon = scenario.end_s - scenario.controller_delay_s if horizon is None else horizon
     work, kv = _baseline(scenario, architecture, horizon)
-    migration = {r.replica_id: 0.0 for p in architecture.pools for r in p.replicas}
+    migration = {
+        r.replica_id: {"replay": 0.0, "kv_transfer": 0.0}
+        for p in architecture.pools for r in p.replicas
+    }
     assignment = {}
     for p, pool in enumerate(architecture.pools):
         q = architecture.type_by_id[pool.type_id]
@@ -720,11 +726,13 @@ def _pack(table, selected, architecture, scenario, mode):
             c, choices = table.candidates[i], []
             for r, replica in enumerate(pool.replicas):
                 next_work, next_kv = work[replica.replica_id] + c.service_work, kv[replica.replica_id] + c.kv_tokens
-                next_migration = migration[replica.replica_id] + c.duration_s
+                next_migration = dict(migration[replica.replica_id])
+                next_migration[c.method] += c.duration_s
                 pressure = max(*(normals @ next_work / bounds),
                                next_kv
                                / (q.kv_capacity_tokens // q.kv_block_tokens),
-                               next_migration / table.migration_horizon_s)
+                               max(next_migration.values())
+                               / table.migration_horizon_s)
                 if pressure <= 1 + 1e-9:
                     choices.append((pressure, r, next_work, next_kv, next_migration))
             if not choices:
@@ -758,16 +766,20 @@ def _assignment_valid(table, assignment, architecture, scenario, mode):
     horizon = architecture.residency_horizon_s
     horizon = scenario.end_s - scenario.controller_delay_s if horizon is None else horizon
     work, kv = _baseline(scenario, architecture, horizon)
-    migration = {r.replica_id: 0.0 for p in architecture.pools for r in p.replicas}
+    migration = {
+        r.replica_id: {"replay": 0.0, "kv_transfer": 0.0}
+        for p in architecture.pools for r in p.replicas
+    }
     pools = {r.replica_id: (architecture.type_by_id[p.type_id], p)
              for p in architecture.pools for r in p.replicas}
     for i, replica in assignment.items():
         work[replica] += table.candidates[i].service_work
         kv[replica] += table.candidates[i].kv_tokens
-        migration[replica] += table.candidates[i].duration_s
+        candidate = table.candidates[i]
+        migration[replica][candidate.method] += candidate.duration_s
     return all(np.all(np.asarray(q.normals) @ work[r] <= _event_bounds(q, pool, mode) + 1e-9)
                and kv[r] <= q.kv_capacity_tokens // q.kv_block_tokens
-               and migration[r] <= table.migration_horizon_s + 1e-9
+               and max(migration[r].values()) <= table.migration_horizon_s + 1e-9
                for r, (q, pool) in pools.items())
 
 
