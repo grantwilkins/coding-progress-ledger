@@ -733,10 +733,12 @@ def disruption_points(rows, summaries, power_curve):
         planned = int(summary["planned_migrations"])
         saved = before - power_curve.power(.4 * (1 - len(selected) / planned))
         if saved > 0:
+            pause = sum(float(row.get("service_pause_s") or
+                              (float(row["reaction_commit_s"])
+                               - float(row["quiesce_s"]))) for row in selected)
             points.append({
                 "policy": summary["policy"],
-                "session_s_per_w":
-                    sum(float(row["service_pause_s"]) for row in selected) / saved,
+                "session_s_per_w": pause / saved,
             })
     return points
 
@@ -754,7 +756,7 @@ def plot_disruption(rows, summaries, power_curve, out):
     ax.set(
         xscale="log", xlabel="Measured session downtime / modeled watts shed (s/W)",
         ylabel="Fraction of episodes", ylim=(0, 1.02),
-        title="Width-8 hardware campaign disruption",
+        title=f"Width-8 hardware disruption ({len(points)} episodes)",
     )
     ax.grid(alpha=.25)
     ax.legend(frameon=False)
@@ -784,7 +786,7 @@ def plot_migration_time_per_watt(summaries, power_curve, out):
     ax.set(
         xlabel="Episode migration makespan / modeled watts shed (s/W)",
         ylabel="Fraction of episodes", ylim=(0, 1.02),
-        title="Width-8 hardware migration time per watt",
+        title=f"Width-8 hardware migration time per watt ({len(points)} episodes)",
     )
     ax.grid(alpha=.25)
     ax.legend(frameon=False)
@@ -893,9 +895,9 @@ def plot_reduced(out, model_path=DEFAULT_MODEL, pooled_with=()):
     power_curve = ModelProfile.load(model_path).case().power_curve
     plot_power_shed(rows, summaries, power_curve, out)
     plot_hardware_pareto(attainment, summaries, out)
-    with (out / "migrations.csv").open() as stream:
-        plot_disruption(list(csv.DictReader(stream)), summaries, power_curve, out)
-    plot_migration_time_per_watt(summaries, power_curve, out)
+    plot_disruption(rows + pooled_rows, summaries + pooled_summaries,
+                    power_curve, out)
+    plot_migration_time_per_watt(summaries + pooled_summaries, power_curve, out)
 
 
 def representative_timeline(rows, summaries):

@@ -516,8 +516,8 @@ def test_disruption_uses_summed_pause_and_nonlinear_achieved_power():
             return 100 + 100 * load ** 2
 
     rows = [
-        {"scenario_id": "a", "service_pause_s": pause}
-        for pause in (2, 3)
+        {"scenario_id": "a", "service_pause_s": 2},
+        {"scenario_id": "a", "quiesce_s": 4, "reaction_commit_s": 7},
     ]
     summaries = [{
         "scenario_id": "a", "policy": "queue_haul", "planned_migrations": 4,
