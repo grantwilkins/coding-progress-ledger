@@ -18,5 +18,13 @@ script_dir="$(dirname "$script_path")"
 export QH_MECHANISM_RUN_ROOT="${QH_MECHANISM_RUN_ROOT:-/scratch/users/$USER/qh-mechanism-validation-20260731}"
 export QH_APPTAINER_IMAGE="${QH_APPTAINER_IMAGE:-/scratch/users/gfw/ptsim/lmcache-v0.5.1-vllm0.22.0-cu129-primary.sif}"
 test "$(sha256sum "$QH_APPTAINER_IMAGE" | cut -d' ' -f1)" = 50e98f65de09ebfe196f270c8b5c595636853646eb5536dca92f27bd45c084ab
-export QH_PORT_OFFSET="${QH_PORT_OFFSET:-$((SLURM_JOB_ID % 40000 + 1000))}"
+port_file="$QH_MECHANISM_RUN_ROOT/port-offset"
+if [[ -f "$port_file" ]]; then
+  read -r QH_PORT_OFFSET < "$port_file"
+else
+  QH_PORT_OFFSET="${QH_PORT_OFFSET:-$((SLURM_JOB_ID % 40000 + 1000))}"
+  mkdir -p "$QH_MECHANISM_RUN_ROOT"
+  printf '%s\n' "$QH_PORT_OFFSET" > "$port_file"
+fi
+export QH_PORT_OFFSET
 bash "$script_dir/run.sh"

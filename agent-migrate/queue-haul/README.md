@@ -227,9 +227,9 @@ Override `QH_APPTAINER_IMAGE` if the pinned LMCache image is not at the default
 scratch path; set `QH_RESUME_FROM_GIT_SHA` when resuming after a code change.
 MP catch-up completeness uses exact rendered-token prefix chunks; observed key
 sets may also contain a generated-tail chunk.
-Re-submit the job after a time limit; its stable default run root resumes
 Stacked MP runs retain per-scenario byte, connection, and RESP traces.
-completed scenarios.
+Re-submit after a time limit; the stable run root reuses its original port
+offset and completed scenarios. Set `QH_RESUME_FROM_GIT_SHA` after code changes.
 
 ## Measurement programs
 

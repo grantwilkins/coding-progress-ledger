@@ -9,7 +9,8 @@ Plausible wrong implementations:
 
 import json
 
-from mechanism_validation_campaign import SCHEDULE, make_plan, representatives
+from mechanism_validation_campaign import (
+    SCHEDULE, make_plan, prepare, representatives)
 
 
 def manifest(tmp_path):
@@ -49,6 +50,16 @@ def test_plan_is_five_matched_active_request_pairs(tmp_path):
          tuple((turn["at_s"], turn["append_tokens"]) for turn in SCHEDULE),
          (("s0", 28_000),))
     }
+
+def test_sbatch_persists_port_offset_for_resume(tmp_path):
+    out = tmp_path / "plan"
+    prepare(manifest(tmp_path), out, repeats=1, session_id="s0")
+    script = (out / "run.sbatch").read_text()
+
+    assert 'port_file="$QH_MECHANISM_RUN_ROOT/port-offset"' in script
+    assert 'read -r QH_PORT_OFFSET < "$port_file"' in script
+    assert '"$QH_PORT_OFFSET" > "$port_file"' in script
+
 
 
 def test_representatives_choose_median_wait():
