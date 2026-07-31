@@ -429,6 +429,25 @@ def test_destination_ttft_cdf_includes_migration_time(tmp_path, monkeypatch):
         == [0, 3, 5]
 
 
+def test_pooled_results_concatenates_campaigns_without_reweighting(tmp_path):
+    paths = [tmp_path / name for name in ("packing", "frontier")]
+    for path, values in zip(paths, ((1,), (5, 10))):
+        path.mkdir()
+        with (path / "policy_migrations.csv").open("w", newline="") as stream:
+            writer = csv.DictWriter(stream, fieldnames=("migration_ttft_s",))
+            writer.writeheader()
+            writer.writerows({"migration_ttft_s": value} for value in values)
+        with (path / "policy_episodes.csv").open("w", newline="") as stream:
+            writer = csv.DictWriter(stream, fieldnames=("planned_migrations",))
+            writer.writeheader()
+            writer.writerow({"planned_migrations": len(values)})
+
+    rows, summaries = campaign._pooled_results(paths)
+
+    assert [int(row["migration_ttft_s"]) for row in rows] == [1, 5, 10]
+    assert [int(row["planned_migrations"]) for row in summaries] == [1, 2]
+
+
 def test_destination_ttft_cdf_separates_and_normalizes_bandwidths(
         tmp_path, monkeypatch):
     rows = [

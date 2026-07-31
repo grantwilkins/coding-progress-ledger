@@ -188,7 +188,10 @@ without failures in 8:08:22. Its checksum-pinned reduced bundle is under
 samples, proxy byte counters, and RESP transfer records retain the raw evidence
 without runtime debug logs. Its bandwidth-faceted destination-TTFT CDF pools
 all five workloads, both deadlines, and three episodes within each bandwidth;
-the companion pooled CDF combines all four bandwidths.
+the companion pooled CDF combines all four bandwidths. Regenerate that CDF
+with the earlier trace-sampled 5/10-Gbit/s frontier rows included at raw-sample
+weight using `plot-reduced --out <packing-results> --pooled-with
+<frontier-results>`.
 `simulated_pareto_campaign.py` evaluates the same five fixed context packs with
 the calibrated crossover profile and adds paired random and price-coupled
 greedy baselines. Coupled greedy uses the same single destination and link; its

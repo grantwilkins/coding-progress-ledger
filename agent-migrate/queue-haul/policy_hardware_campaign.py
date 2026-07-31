@@ -795,15 +795,23 @@ def plot_hardware_pareto(attainment, summaries, out):
     plt.close(fig)
 
 
-def plot_reduced(out, model_path=DEFAULT_MODEL):
+def _pooled_results(paths):
+    rows, summaries = [], []
+    for path in paths:
+        with (path / "policy_migrations.csv").open() as stream:
+            rows.extend(csv.DictReader(stream))
+        with (path / "policy_episodes.csv").open() as stream:
+            summaries.extend(csv.DictReader(stream))
+    return rows, summaries
+
+
+def plot_reduced(out, model_path=DEFAULT_MODEL, pooled_with=()):
     plan_ = json.loads((out / "plan.json").read_text())
-    with (out / "policy_migrations.csv").open() as stream:
-        rows = list(csv.DictReader(stream))
-    with (out / "policy_episodes.csv").open() as stream:
-        summaries = list(csv.DictReader(stream))
+    rows, summaries = _pooled_results((out,))
     with (out / "policy_attainment.csv").open() as stream:
         attainment = list(csv.DictReader(stream))
-    plot_destination_ttft(rows, summaries, out)
+    pooled_rows, pooled_summaries = _pooled_results(pooled_with)
+    plot_destination_ttft(rows + pooled_rows, summaries + pooled_summaries, out)
     plot_destination_ttft_by_bandwidth(
         rows, summaries, plan_["scenarios"], out
     )
@@ -965,6 +973,7 @@ def parse_args(argv=None):
     command = sub.add_parser("plot-reduced")
     command.add_argument("--out", type=Path, required=True)
     command.add_argument("--model-profile", type=Path, default=DEFAULT_MODEL)
+    command.add_argument("--pooled-with", type=Path, nargs="*", default=())
     return parser.parse_args(argv)
 
 
@@ -984,7 +993,7 @@ def main(argv=None):
     elif args.command == "reduce":
         reduce_run(args.run_root, args.out)
     else:
-        plot_reduced(args.out, args.model_profile)
+        plot_reduced(args.out, args.model_profile, args.pooled_with)
 
 
 if __name__ == "__main__":
