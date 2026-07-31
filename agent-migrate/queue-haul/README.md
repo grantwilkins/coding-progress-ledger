@@ -25,7 +25,8 @@ The repository contains:
   destination token;
 - a one-pool requirement-frontier solver;
 - LP, static greedy, experimental bundle greedy, and simulator-only
-  price-coupled greedy with cached exact recovery;
+  price-coupled greedy with an exact width-8 action oracle, bounded fallback,
+  and cached exact recovery;
 - pool-aware planning and internal packing checks; and
 - a deterministic migration, network, request, queue, and power simulator.
 

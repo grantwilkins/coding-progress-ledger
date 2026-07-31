@@ -25,6 +25,7 @@ Plausible wrong implementations:
 - Assign every coupled prefix member to the same cheap pool and fail concrete packing.
 - Serialize replay and KV work despite having separate measured aggregate caps.
 - Relax aggregate method constraints but retain cross-method serialization in packing.
+- Choose one cheap action per session before exploring feasible mixed-method patterns.
 """
 
 from dataclasses import replace
@@ -150,6 +151,40 @@ def test_coupled_prefix_crosses_knee_with_packable_mixed_pools(tmp_path):
     assert {candidates[i].session for i in selected} == {0, 1, 2}
     assert sorted(candidates[i].pool for i in selected) == [0, 0, 1]
     assert exact_replica_assignment(table, selected, arch, scenario, "normal") is not None
+
+
+def test_coupled_oracle_finds_the_only_feasible_method_mix(tmp_path):
+    profile, scenario = model(tmp_path), problem()
+    scenario = replace(scenario, sessions=(
+        scenario.sessions[0],
+        replace(scenario.sessions[1], source_instance="s0"),
+    ))
+    power = ExpectedPower(scenario, profile)
+    candidates = tuple(
+        Candidate(session, method, 0, 1, work, 6, ("wan",), 1, (0, 0), 0)
+        for session in range(2)
+        for method, work in (("replay", 1), ("kv_transfer", 2))
+    )
+    table = CandidateTable(
+        scenario.sessions, candidates, csr_matrix((
+            np.ones(4), ((0, 0, 1, 1), np.arange(4)),
+        )), csr_matrix((
+            np.full(4, .6), ((0, 1, 0, 1), np.arange(4)),
+        ), shape=(2, 4)), ("replay", "kv"), (10, 10), ("s", "s"), 10,
+    )
+    arch = architecture(normal=1, emergency=1, stable=1)
+    arch = replace(arch, pools=(DestinationPool(
+        "p", "q", (DestinationReplica("t0"),), "r", ("wan",),
+    ),))
+
+    selected = _greedy_coupled(
+        table, power.drain_gain(("a", "b")), power, arch, scenario, "normal",
+    )
+
+    assert {candidates[i].session for i in selected} == {0, 1}
+    assert {candidates[i].method for i in selected} == {
+        "replay", "kv_transfer",
+    }
 
 
 def test_coupled_recovery_caps_one_watt_overshoot_before_work(tmp_path):

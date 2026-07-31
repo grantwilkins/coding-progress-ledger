@@ -19,6 +19,9 @@ from simulate import (ExecutionScenario, PlannedMove, PoolServiceExecution,
                       SimSession, predict)
 
 
+MAX_EXACT_COUPLED_PATTERNS = 10_000
+
+
 @dataclass(frozen=True)
 class Candidate:
     session: int
@@ -507,6 +510,45 @@ def _coupled_source_pattern(table, power, priced, eta, scale):
     return _coupled_source_patterns(table, power, priced, eta, scale)[0]
 
 
+def _coupled_source_space(
+    table, power, members, by_session, matrix, gain_cache,
+):
+    choices = [tuple(by_session.get(session, ())) for session in members
+               if power.ell[table.sessions[session].session_id] > 0]
+    count = 1
+    for actions in choices:
+        count *= len(actions) + 1
+        if count > MAX_EXACT_COUPLED_PATTERNS:
+            return None
+    columns = {
+        i: np.asarray(matrix[:, i].todense()).ravel()
+        for actions in choices for i in actions
+    }
+    states = [((), 0.0, np.zeros(matrix.shape[0]))]
+    for actions in choices:
+        prior = states
+        states = list(prior)
+        for pattern, work, usage in prior:
+            for i in actions:
+                next_usage = usage + columns[i]
+                if np.all(next_usage <= 1 + 1e-8):
+                    states.append((
+                        pattern + (i,),
+                        work + table.candidates[i].migration_work_s,
+                        next_usage,
+                    ))
+    patterns = tuple(row[0] for row in states)
+    return (
+        patterns,
+        np.asarray([row[1] for row in states]),
+        np.asarray([row[2] for row in states]),
+        np.asarray([
+            _coupled_gain(table, power, pattern, gain_cache)
+            for pattern in patterns
+        ]),
+    )
+
+
 def _recover_coupled(
     table, power, patterns, target, architecture, scenario, mode, gain_cache=None,
 ):
@@ -616,33 +658,55 @@ def _greedy_coupled(table, target, power, architecture, scenario, mode):
     prices, eta, scale = np.zeros(table.resources.shape[0]), 1.0, max(target, 1.0)
     gain_cache = {}
     retained = {source: set() for source in by_source}
+    spaces = {
+        source: _coupled_source_space(
+            table, power, members, by_session, matrix, gain_cache,
+        ) for source, members in by_source.items()
+    }
+    for source, space in spaces.items():
+        if space is not None:
+            patterns, _work, _usage, gains = space
+            best = gains.max()
+            retained[source].update(
+                pattern for pattern, gain in zip(patterns, gains)
+                if gain >= best - 1e-8
+            )
     for iteration in range(32):
         selected, chosen = set(), []
         for source_order, (source, members) in enumerate(sorted(by_source.items())):
-            priced = []
-            for position, session in enumerate(members):
-                if power.ell[table.sessions[session].session_id] <= 0:
-                    continue
-                actions = []
-                for i in by_session.get(session, ()):
-                    sl = slice(matrix.indptr[i], matrix.indptr[i + 1])
-                    rows, values = matrix.indices[sl], matrix.data[sl]
-                    value = table.candidates[i].migration_work_s \
-                        / table.migration_horizon_s + prices[rows] @ values
-                    actions.append((value, i))
-                if not actions:
-                    continue
-                actions.sort()
-                low = min(value for value, _i in actions)
-                ties = sorted(i for value, i in actions if abs(value - low) <= 1e-12)
-                i = ties[(iteration + source_order + position) % len(ties)]
-                priced.append((i, low))
-            pattern, ordered = _coupled_source_patterns(
-                table, power, priced, eta, scale, gain_cache,
-            )
+            space = spaces[source]
+            if space is not None:
+                patterns, work, usage, gains = space
+                score = work / table.migration_horizon_s \
+                    + usage @ prices - eta * gains / scale
+                pattern = patterns[int(np.argmin(score))]
+            else:
+                priced = []
+                for position, session in enumerate(members):
+                    if power.ell[table.sessions[session].session_id] <= 0:
+                        continue
+                    actions = []
+                    for i in by_session.get(session, ()):
+                        sl = slice(matrix.indptr[i], matrix.indptr[i + 1])
+                        rows, values = matrix.indices[sl], matrix.data[sl]
+                        value = table.candidates[i].migration_work_s \
+                            / table.migration_horizon_s + prices[rows] @ values
+                        actions.append((value, i))
+                    if not actions:
+                        continue
+                    actions.sort()
+                    low = min(value for value, _i in actions)
+                    ties = sorted(
+                        i for value, i in actions if abs(value - low) <= 1e-12
+                    )
+                    i = ties[(iteration + source_order + position) % len(ties)]
+                    priced.append((i, low))
+                pattern, ordered = _coupled_source_patterns(
+                    table, power, priced, eta, scale, gain_cache,
+                )
+                if ordered:
+                    retained[source].update((ordered[:1], ordered))
             retained[source].add(pattern)
-            if ordered:
-                retained[source].update((ordered[:1], ordered))
             selected.update(pattern)
             chosen.append(pattern)
         usage = np.asarray(table.resources[:, list(selected)].sum(1)).ravel() \
