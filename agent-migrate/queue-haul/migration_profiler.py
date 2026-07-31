@@ -757,6 +757,8 @@ class LiveSession:
             if initial_tokens else session_messages(session, turn_index)
         self.generation, self.route, self.paused = 0, cfg.src_port, False
         self.lock = threading.Lock()
+        self.activity_condition = threading.Condition(self.lock)
+        self.activity_active = False
         self.activity_thread: threading.Thread | None = None
         self.activity_error: Exception | None = None
         self.activity_gate: threading.Semaphore | None = None
@@ -838,22 +840,24 @@ class LiveSession:
             if at_ns > time.monotonic_ns():
                 time.sleep((at_ns - time.monotonic_ns()) / 1e9)
             start = time.monotonic_ns()
-            with self.lock:
-                base = list(self.messages)
+            with self.activity_condition:
+                self.activity_condition.wait_for(lambda: not self.paused)
+                base, port = list(self.messages), self.route
+                self.activity_active = True
             prompt = f"Reply with session state code {self.state_code}." \
                      + " x" * tokens
             user = {"role": "user", "content": prompt}
             gate = self.activity_gate or threading.Semaphore()
             with gate:
                 log_offset = self.source_log.stat().st_size \
-                    if b.lmcache_mode() == "mp" else 0
+                    if port == self.cfg.src_port and b.lmcache_mode() == "mp" else 0
                 transfer_offset = self.cache_log.stat().st_size \
-                    if b.lmcache_mode() == "mp" else 0
+                    if port == self.cfg.src_port and b.lmcache_mode() == "mp" else 0
                 result, text = self.request(
-                    self.cfg.src_port, base, f"controlled_turn_{stage_index}",
+                    port, base, f"controlled_turn_{stage_index}",
                     user["content"],
                 )
-                if b.lmcache_mode() == "mp":
+                if port == self.cfg.src_port and b.lmcache_mode() == "mp":
                     keys = b.mp_wait_source_keys(
                         self.source_log, log_offset,
                         self.cache_log, transfer_offset,
@@ -870,13 +874,17 @@ class LiveSession:
                 )
                 self.generation += 1
                 self.prompt_tokens_by_hash[messages_hash(self.messages)] = result.prompt_tokens
-            self.cache_keys |= keys if b.lmcache_mode() == "mp" else {
-                row["key_hash"] for row in cache_operations(
-                    self.cache_log, start, result.end_ns,
-                ) if row["operation"] == "source_write"
-            }
+            source = port == self.cfg.src_port
+            if source:
+                self.cache_keys |= keys if b.lmcache_mode() == "mp" else {
+                    row["key_hash"] for row in cache_operations(
+                        self.cache_log, start, result.end_ns,
+                    ) if row["operation"] == "source_write"
+                }
             self.activity_records.append({
                 "stage_index": stage_index, "scheduled_ns": at_ns,
+                "route_port": port,
+                "location": "source" if source else "destination",
                 "start_ns": start, "first_byte_ns": result.first_byte_ns,
                 "end_ns": result.end_ns, "requested_append_tokens": tokens,
                 "measured_append_tokens": result.prompt_tokens
@@ -889,7 +897,11 @@ class LiveSession:
             })
         except Exception as exc:
             self.activity_error = exc
-        self.activity_times = start, time.monotonic_ns()
+        finally:
+            self.activity_times = start, time.monotonic_ns()
+            with self.activity_condition:
+                self.activity_active = False
+                self.activity_condition.notify_all()
 
     def wait_activity(self) -> None:
         if self.activity_thread:
@@ -989,7 +1001,8 @@ class LiveRuntime:
 
     def prepare(self, move: Move, state: SessionState, phase: str) -> RequestResult:
         session = self.sessions[move.session_id]
-        if phase == "initial" and self.schedule:
+        if phase == "initial" and self.schedule \
+                and self.copy_policy == "after_each_request":
             self._start_next(session)
         self.event_log.write("copy_start", move_id=move.order, session_id=move.session_id, method=move.method, phase=phase)
         log_offset = self.sink_log.stat().st_size
@@ -1078,32 +1091,44 @@ class LiveRuntime:
 
     def pause(self, session_id: str) -> None:
         session = self.sessions[session_id]
-        with session.lock:
+        with session.activity_condition:
             session.paused = True
         self.event_log.write("pause", session_id=session_id)
 
     def wait_idle(self, session_id: str) -> SessionState:
         session = self.sessions[session_id]
-        while session.activity_thread or self._start_next(session):
-            session.wait_activity()
-        state = session.snapshot()
+        deadline = time.monotonic() + session.timeout_s
+        with session.activity_condition:
+            while session.activity_active:
+                remaining = deadline - time.monotonic()
+                if remaining <= 0:
+                    raise TimeoutError(
+                        f"activity timed out for {session.session_id}"
+                    )
+                session.activity_condition.wait(remaining)
+            state = SessionState(
+                session.session_id, session.generation,
+                tuple(session.messages), messages_hash(session.messages),
+            )
         self.event_log.write("idle", session_id=session_id, generation=state.generation, context_hash=state.context_hash)
         return state
 
     def commit(self, move: Move, state: SessionState) -> None:
         session = self.sessions[move.session_id]
-        with session.lock:
+        with session.activity_condition:
             if session.generation != state.generation or messages_hash(session.messages) != state.context_hash:
                 raise RuntimeError(f"session {move.session_id} changed before route switch")
             session.messages = list(state.messages)
             session.route = self.cfg.api_proxy_port
             session.paused = False
+            session.activity_condition.notify_all()
         self.event_log.write("route_switch", move_id=move.order, session_id=move.session_id, route_port=self.cfg.api_proxy_port, context_hash=state.context_hash)
 
     def resume_source(self, session_id: str) -> None:
         session = self.sessions[session_id]
-        with session.lock:
+        with session.activity_condition:
             session.route, session.paused = self.cfg.src_port, False
+            session.activity_condition.notify_all()
         self.event_log.write("resume_source", session_id=session_id)
 
     def close(self) -> None:
@@ -1454,12 +1479,24 @@ def run_scenario(stack: b.Stack, cfg: b.Config, manifest: dict, scenario: dict,
         )
         def action():
             if scenario["kind"] == "migration":
-                rows = MigrationController(runtime, move_concurrency).run(moves)
+                with ThreadPoolExecutor(max_workers=len(sessions)) \
+                        as activity_pool:
+                    activity_futures = [
+                        activity_pool.submit(runtime.run_activities, session_id)
+                        for session_id in sessions
+                    ] if schedule and scenario.get(
+                        "copy_policy", "initial_final"
+                    ) == "initial_final" else []
+                    rows = MigrationController(
+                        runtime, move_concurrency
+                    ).run(moves)
+                    for future in activity_futures:
+                        future.result()
                 if any(not row.succeeded for row in rows):
                     raise RuntimeError("; ".join(row.error for row in rows if row.error))
                 return rows
             if schedule:
-                with ThreadPoolExecutor(max_workers=serving_concurrency) as pool:
+                with ThreadPoolExecutor(max_workers=len(sessions)) as pool:
                     list(pool.map(runtime.run_activities, sessions))
             return []
         migration_results = with_destination_load(destination_load, action)

@@ -21,11 +21,14 @@ Plausible wrong implementations:
 - Compare the sleeping source GPU with the idle destination GPU.
 - Include response generation in time to first response.
 - Reduce incomplete, stale, or old-schema runs.
+- Drain future scheduled arrivals on the source after quiescence.
+- Drop paused arrivals or resume them through the old source route.
 """
 
 from __future__ import annotations
 
 import json
+import threading
 import time
 from pathlib import Path
 from types import SimpleNamespace
@@ -763,6 +766,63 @@ def test_request_schedule_is_relative_to_post_warm_epoch(tmp_path):
     runtime.close()
 
     assert calls == [(32, 12_500_000_000, 0)]
+
+
+def test_quiescence_drains_admitted_request_and_routes_queue_to_destination(
+        monkeypatch, tmp_path):
+    monkeypatch.setattr(c.b, "lmcache_mode", lambda: "mp")
+    monkeypatch.setattr(c.b, "mp_model_layout", lambda _path: ("model", 1))
+    monkeypatch.setattr(c.b, "mp_wait_source_keys", lambda *_args: {"k"})
+    source, cache = tmp_path / "source.log", tmp_path / "cache.log"
+    source.write_text(""); cache.write_text("")
+    session = c.LiveSession(
+        SimpleNamespace(src_port=1, api_proxy_port=2),
+        {"id": "s", "state_code": "CODE", "turns": [{
+            "input_tokens": 100, "append_tokens": 1, "output_tokens": 1,
+        }]}, 0, SimpleNamespace(write=lambda *_args, **_kwargs: None),
+        source, cache, 2,
+    )
+    session.messages = [{"role": "user", "content": "base"}]
+    session.warm_prompt_tokens = 100
+    started, release, calls = threading.Event(), threading.Event(), []
+
+    def request(port, _messages, label, _prompt=None, **_kwargs):
+        calls.append(port)
+        if len(calls) == 1:
+            started.set()
+            assert release.wait(1)
+        now = time.monotonic_ns()
+        return c.RequestResult(
+            label, 200, "", now, now, first_byte_ns=now,
+            prompt_tokens=100 + len(calls), output_tokens=1,
+        ), "CODE"
+
+    session.request = request
+    runtime = c.LiveRuntime(
+        {"s": session}, SimpleNamespace(api_proxy_port=2), "one_turn",
+        tmp_path / "sink.log", cache,
+        SimpleNamespace(write=lambda *_args, **_kwargs: None),
+        tmp_path / "requests.jsonl",
+        [{"at_s": 0, "append_tokens": 1}] * 2,
+        scenario_start_ns=time.monotonic_ns(),
+    )
+    worker = threading.Thread(target=runtime.run_activities, args=("s",))
+    worker.start()
+    assert started.wait(1)
+    runtime.pause("s")
+    release.set()
+    state = runtime.wait_idle("s")
+    assert calls == [1]
+
+    runtime.commit(c.Move("s", "replay", 0), state)
+    worker.join(1)
+    runtime.close()
+
+    assert not worker.is_alive()
+    assert calls == [1, 2]
+    assert [row["location"] for row in session.activity_records] == [
+        "source", "destination",
+    ]
 
 
 def test_connection_attribution_conserves_duplicate_bodies(tmp_path):

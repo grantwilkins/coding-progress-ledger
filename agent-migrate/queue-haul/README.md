@@ -139,6 +139,10 @@ tables with missing provenance.
 current-stack 28K-context, 10-Gb/s, concurrency-one KV and replay measurements.
 It runs five repetitions of the same four-turn source workload and plots the
 trace nearest each mechanism's median request-boundary wait.
+Timestamped arrivals execute independently of migration. Quiescence drains only
+requests admitted before the pause; later arrivals wait for the destination
+route. The committed `fix1` charts predate this correction and must be replaced
+by the fresh `quiesce` run before using their gray intervals as drain evidence.
 `plot_fixed_contract_residuals.py` caches the canonical 100K-session,
 120-second fixed-contract requirement sweep and compares mixed greedy,
 GPU-work-first, replay-only, and KV-only resource headroom at common requested

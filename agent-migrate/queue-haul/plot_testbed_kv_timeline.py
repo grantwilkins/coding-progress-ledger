@@ -93,7 +93,15 @@ def extract(root: Path, scenario_id: str) -> tuple[list[dict], list[dict]]:
         catch_finish = seconds(row["catch_up_end_ns"])
         switch_start, commit = seconds(row["switch_start_ns"]), seconds(row["switch_end_ns"])
         continuation_start = seconds(continuation["start_ns"])
-        first_token = seconds(continuation["first_byte_ns"])
+        first_token = seconds(min(
+            [int(continuation["first_byte_ns"])] + [
+                int(activity["first_byte_ns"])
+                for activity in activities
+                if activity["session_id"] == row["session_id"]
+                and activity.get("location") == "destination"
+                and int(activity["first_byte_ns"]) >= int(row["switch_end_ns"])
+            ]
+        ))
         replay = replay_requests.get(row["session_id"])
         timeline.append({
             "scenario_id": scenario_id,
@@ -146,8 +154,11 @@ def extract(root: Path, scenario_id: str) -> tuple[list[dict], list[dict]]:
                 "provenance": str(run / "result.json"),
             })
     for index, activity in enumerate(activities):
-        next_start = activities[index + 1]["start_ns"] \
+        following = activities[index + 1] \
             if index + 1 < len(activities) else None
+        next_start = following["start_ns"] if following \
+            and following.get("location", "source") \
+            == activity.get("location", "source") else None
         for phase, start, end in (
             ("Prefill", activity["start_ns"], activity["first_byte_ns"]),
             ("Decode", activity["first_byte_ns"], activity["end_ns"]),
@@ -158,7 +169,7 @@ def extract(root: Path, scenario_id: str) -> tuple[list[dict], list[dict]]:
                     "scenario_id": scenario_id,
                     "session_id": activity["session_id"],
                     "stage": activity["stage_index"],
-                    "location": "source",
+                    "location": activity.get("location", "source"),
                     "phase": phase,
                     "start_s": seconds(start),
                     "finish_s": seconds(end),

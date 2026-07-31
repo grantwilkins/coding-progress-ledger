@@ -12,6 +12,8 @@ Plausible wrong implementations:
 - Start replay Prefill before the context-transfer measurement bin ends.
 - Pair a continuation with the wrong session.
 - Accept a scenario whose KV-write concurrency is not one.
+- Relabel queued post-switch activity as source inference.
+- Mark a later continuation as the first destination token.
 """
 
 import csv
@@ -56,6 +58,9 @@ def fixture(tmp_path):
             {"session_id": "s0", "stage_index": 1,
              "start_ns": 2_100_000_000, "first_byte_ns": 3_200_000_000,
              "end_ns": 3_500_000_000},
+            {"session_id": "s0", "stage_index": 2,
+             "location": "destination", "start_ns": 5_110_000_000,
+             "first_byte_ns": 5_150_000_000, "end_ns": 5_180_000_000},
         ],
         "continuations": [{
             "session_id": "s0", "start_ns": 5_200_000_000,
@@ -74,7 +79,7 @@ def test_extract_preserves_pause_and_inference_semantics(tmp_path):
     assert row["bulk_finish_s"] == 2
     assert row["quiesce_s"] == 2
     assert row["commit_s"] == pytest.approx(4.1)
-    assert row["first_token_s"] == pytest.approx(4.4)
+    assert row["first_token_s"] == pytest.approx(4.15)
     assert [(segment["location"], segment["phase"],
             segment["start_s"], segment["finish_s"])
             for segment in segments] == [
@@ -84,6 +89,8 @@ def test_extract_preserves_pause_and_inference_semantics(tmp_path):
         ("source", "Tool Call", .8, 1.1),
         ("source", "Prefill", 1.1, 2.2),
         ("source", "Decode", 2.2, 2.5),
+        ("destination", "Prefill", 4.11, 4.15),
+        ("destination", "Decode", 4.15, 4.18),
         ("destination", "Prefill", 4.2, 4.4),
         ("destination", "Decode", 4.4, 4.6),
     ]
@@ -150,6 +157,8 @@ def test_replay_uses_the_same_measured_clock(tmp_path):
         (row["stage"], row["phase"], row["start_s"], row["finish_s"])
         for row in segments if row["location"] == "destination"
     ] == [
+        (2, "Prefill", 4.11, 4.15),
+        (2, "Decode", 4.15, 4.18),
         ("initial_replay", "Prefill", .25, 1.8),
         ("initial_replay", "Decode", 1.8, 1.9),
         ("final_replay", "Prefill", 3.25, 3.8),
