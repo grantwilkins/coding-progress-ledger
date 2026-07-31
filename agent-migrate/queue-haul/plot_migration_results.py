@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import csv
-import json
 from pathlib import Path
 from statistics import mean
 
@@ -12,8 +11,6 @@ import matplotlib.pyplot as plt
 
 OUTPUTS = Path(__file__).parent / "outputs"
 POWER_DRAIN = OUTPUTS / "power_drain_live_20260714"
-P_IDLE_W, P_RANGE_W, LOAD_SHAPE = 84.9875, 415.0125, 0.495633
-F_PREFILL_TPS, G_DECODE_TPS = 4290.8614, 148.4846
 CONDITIONS = ("admission", "mechanism_only")
 LABELS = ("Admission-feasible", "Mechanism-only")
 FLOATS = (
@@ -102,36 +99,13 @@ def write_plots(rows: list[dict], output_dir: Path = OUTPUTS) -> list[Path]:
     return paths + _save(fig, output_dir / "stage1c_completion")
 
 
-def two_price_power(f: float, g: float) -> float:
-    load = f / F_PREFILL_TPS + g / G_DECODE_TPS
-    return P_IDLE_W + P_RANGE_W * LOAD_SHAPE * load / (1 + LOAD_SHAPE * load)
-
-
-def _recalculated_drop(manifest: dict) -> float:
-    source = manifest["input_manifest"]
-    calibration = source["load_calibration"]
-    moved = {session["id"] for session in manifest["sessions"]}
-
-    def power(sessions: list[dict]) -> float:
-        f = sum(session["ell_pre"] for session in sessions) * calibration["F_prefill_tps"]
-        g = sum(session["ell_dec"] for session in sessions) * calibration["G_decode_tps"]
-        return two_price_power(f, g)
-
-    sessions = source["sessions"]
-    return power(sessions) - power([session for session in sessions if session["id"] not in moved])
-
-
 def load_power_parity(path: Path = POWER_DRAIN / "scenario_summary.csv") -> list[dict]:
     with path.open() as f:
-        rows = [row for row in csv.DictReader(f) if row["policy"] in {"lp", "greedy"}]
-    results = []
-    for row in rows:
-        run = path.parent / row["workload"] / Path(row["run_root"]).name
-        with (run / "controller_manifest.json").open() as f:
-            manifest = json.load(f)
-        results.append({"policy": row["policy"], "expected_w": _recalculated_drop(manifest),
-                        "measured_w": float(row["measured_source_drop_w"])})
-    return results
+        return [{"policy": row["policy"],
+                 "expected_w": float(row["planned_source_drop_w"]),
+                 "measured_w": float(row["measured_source_drop_w"])}
+                for row in csv.DictReader(f)
+                if row["policy"] in {"lp", "greedy"}]
 
 
 def write_power_parity(rows: list[dict], output_dir: Path = POWER_DRAIN) -> list[Path]:
