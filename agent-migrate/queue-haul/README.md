@@ -168,9 +168,7 @@ projected, not realized, power attainment.
 The separate live power-drain evidence in
 `outputs/power_drain_live_20260714/` includes planned and measured source-power
 reductions; `plot_migration_results.py` writes their shared-axis parity plot.
-The parity plot compares Queue-Haul LP with greedy only. The same script writes
-a policy CDF of summed measured session downtime per measured watt saved;
-nonpositive measured savings are excluded because the ratio is undefined.
+The parity plot compares Queue-Haul LP with greedy only.
 `migration_profiler.py make-crossover` creates paired single-session replay/KV
 measurements for each nominal context, bandwidth, and repeat. The synthetic body
 reserves 192 tokens for message overhead, and the first 32K replay is a fail-fast

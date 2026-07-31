@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import csv
-import json
 from pathlib import Path
 from statistics import mean
 
@@ -139,40 +138,6 @@ def write_power_parity(rows: list[dict], output_dir: Path = POWER_DRAIN) -> list
     return _save(fig, output_dir / "expected_vs_measured_power_reduction")
 
 
-def load_disruption(path: Path = POWER_DRAIN / "scenario_summary.csv") -> list[dict]:
-    with path.open() as f:
-        rows = list(csv.DictReader(f))
-    disruptions = []
-    for row in rows:
-        saved_w = float(row["measured_source_drop_w"])
-        if saved_w <= 0:
-            continue
-        run = path.parent / row["workload"] / Path(row["run_root"]).name
-        with (run / "controller_manifest.json").open() as f:
-            sessions = json.load(f)["sessions"]
-        disruptions.append({"policy": row["policy"],
-                            "session_s_per_w": sum(s["downtime_s"] for s in sessions) / saved_w})
-    return disruptions
-
-
-def write_disruption_cdf(rows: list[dict], output_dir: Path = POWER_DRAIN) -> list[Path]:
-    fig, ax = plt.subplots(figsize=(6, 4))
-    labels = {"lp": "Queue-Haul", "milp": "MILP", "greedy": "Greedy",
-              "random": "Random", "power-unaware": "Power-unaware"}
-    for policy in labels:
-        values = sorted(row["session_s_per_w"] for row in rows if row["policy"] == policy)
-        ax.step(values, [(i + 1) / len(values) for i in range(len(values))],
-                where="post", label=labels[policy])
-    ax.set(xscale="log", xlabel="Disruption (session-seconds of downtime / W saved)",
-           ylabel="Fraction of runs", ylim=(0, 1.02),
-           title="Measured disruption per watt saved (89/90 runs)")
-    ax.grid(alpha=.25)
-    ax.legend(frameon=False, fontsize=8)
-    fig.tight_layout()
-    return _save(fig, output_dir / "disruption_per_watt_cdf")
-
-
 if __name__ == "__main__":
     write_plots(load_results())
     write_power_parity(load_power_parity())
-    write_disruption_cdf(load_disruption())
