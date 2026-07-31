@@ -19,6 +19,7 @@ Plausible wrong implementations:
 - Use migration duration instead of service pause for disruption.
 - Divide episode downtime by a linearized or requested power reduction.
 - Sum overlapping migration durations instead of using episode makespan.
+- Swap policy color or legend identities in the paper CDFs.
 """
 
 import csv
@@ -34,6 +35,8 @@ import pytest
 import policy_hardware_campaign as campaign
 from migration import ORDERED_EAGER_PARALLEL_V1
 from policy_hardware_campaign import (
+    CDF_COLORS,
+    CDF_LABELS,
     completion_curve,
     deadline_attainment,
     disruption_points,
@@ -430,8 +433,19 @@ def test_destination_ttft_cdf_includes_migration_time(tmp_path, monkeypatch):
 
     campaign.plot_destination_ttft(rows, summaries, tmp_path)
 
-    assert campaign.plt.gcf().axes[0].lines[0].get_xdata().tolist() \
-        == [0, 3, 5]
+    ax = campaign.plt.gcf().axes[0]
+    assert ax.lines[0].get_xdata().tolist() == [0, 3, 5]
+    assert ax.get_title() == ""
+    assert ax.get_xlabel() == "Migration + Destination TTFT (s)"
+    assert ax.get_ylabel() == "Cumulative Distribution"
+    assert CDF_COLORS == {
+        "queue_haul": "#8C1515", "greedy": "#175E54",
+        "kv_only": "#007C92", "replay_only": "#E98300",
+    }
+    assert CDF_LABELS == {
+        "queue_haul": "Queue-Haul LP", "greedy": "Queue-Haul Greedy",
+        "kv_only": "KV Migrate Only", "replay_only": "Replay Context Only",
+    }
 
 
 def test_pooled_results_concatenates_campaigns_without_reweighting(tmp_path):

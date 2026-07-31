@@ -44,6 +44,14 @@ LABELS = {
     "isolated_fastest": "Per-session fastest", "random": "Random choice/order",
     "kv_only": "KV only", "replay_only": "Replay only",
 }
+CDF_COLORS = {
+    "queue_haul": "#8C1515", "greedy": "#175E54",
+    "kv_only": "#007C92", "replay_only": "#E98300",
+}
+CDF_LABELS = {
+    "queue_haul": "Queue-Haul LP", "greedy": "Queue-Haul Greedy",
+    "kv_only": "KV Migrate Only", "replay_only": "Replay Context Only",
+}
 def _portable_path(path: Path) -> str:
     resolved = path.resolve()
     try:
@@ -616,8 +624,7 @@ def power_shed_quantiles(rows, summaries, policy, power_curve, times):
 
 
 def plot_destination_ttft(rows, summaries, out):
-    colors = dict(zip(POLICIES, plt.get_cmap("tab10").colors))
-    fig, ax = plt.subplots(figsize=(6.4, 4))
+    fig, ax = plt.subplots(figsize=(7, 4))
     for policy in POLICIES:
         x, y = completion_curve(
             rows, summaries, policy, "migration_ttft_s"
@@ -625,15 +632,18 @@ def plot_destination_ttft(rows, summaries, out):
         if len(x):
             ax.step(
                 np.r_[0, x], np.r_[0, y], where="post",
-                color=colors[policy], label=LABELS[policy],
+                color=CDF_COLORS[policy], linewidth=2.2,
+                label=CDF_LABELS[policy],
             )
     ax.set(
-        title="Pooled hardware frontier",
-        xlabel="Migration start → destination first token (s)",
-        ylabel="Fraction of planned migrations", ylim=(0, 1.02),
+        xlabel="Migration + Destination TTFT (s)",
+        ylabel="Cumulative Distribution", ylim=(0, 1.02),
     )
+    ax.tick_params(labelsize=12)
+    ax.xaxis.label.set_size(13)
+    ax.yaxis.label.set_size(13)
     ax.grid(alpha=.25)
-    ax.legend(frameon=False)
+    ax.legend(frameon=False, fontsize=11)
     fig.tight_layout()
     for suffix in ("png", "pdf"):
         fig.savefig(
@@ -775,21 +785,23 @@ def migration_time_per_watt_points(summaries, power_curve):
 
 def plot_migration_time_per_watt(summaries, power_curve, out):
     points = migration_time_per_watt_points(summaries, power_curve)
-    colors = dict(zip(POLICIES, plt.get_cmap("tab10").colors))
-    fig, ax = plt.subplots(figsize=(6.4, 4))
+    fig, ax = plt.subplots(figsize=(7, 4))
     for policy in POLICIES:
         values = sorted(row["migration_s_per_w"] for row in points
                         if row["policy"] == policy)
         if values:
             ax.step(values, np.arange(1, len(values) + 1) / len(values),
-                    where="post", color=colors[policy], label=LABELS[policy])
+                    where="post", color=CDF_COLORS[policy], linewidth=2.2,
+                    label=CDF_LABELS[policy])
     ax.set(
-        xlabel="Episode migration makespan / modeled watts shed (s/W)",
-        ylabel="Fraction of episodes", ylim=(0, 1.02),
-        title=f"Width-8 hardware migration time per watt ({len(points)} episodes)",
+        xlabel="E2E Migration / Modeled Shed Power (s/W)",
+        ylabel="Cumulative Distribution", ylim=(0, 1.02),
     )
+    ax.tick_params(labelsize=12)
+    ax.xaxis.label.set_size(13)
+    ax.yaxis.label.set_size(13)
     ax.grid(alpha=.25)
-    ax.legend(frameon=False)
+    ax.legend(frameon=False, fontsize=11)
     fig.tight_layout()
     for suffix in ("png", "pdf"):
         fig.savefig(out / f"policy_hardware_migration_time_per_watt_cdf.{suffix}",
