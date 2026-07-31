@@ -1,0 +1,40 @@
+{
+  "experimental": true,
+  "core_default_changed": false,
+  "execution_contract": "eager_parallel_all_sessions",
+  "input_provenance": "measured|fitted|assumed",
+  "result_provenance": "simulated",
+  "evidence_status": "sensitivity",
+  "counts": [
+    80,
+    240
+  ],
+  "seeds": [
+    0,
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9
+  ],
+  "targets": [
+    0.1,
+    0.5,
+    0.9
+  ],
+  "workload": "coding",
+  "solvers": [
+    "greedy",
+    "greedy_bundle",
+    "greedy_prefix",
+    "greedy_coupled"
+  ],
+  "model_sha256": "e40435eeeeb5417029729d6a9c29e2fa0a37afd48a3e2e8dfe5b76281dc292cd",
+  "manifest_sha256": "040ad63a8a36bed0a2498457e4dc70ef5e19b9a552fde7a398a6c7914e80614b",
+  "workload_sha256": "7d1001745a64d83f89995743525a1d7ad86f3009e3b26808b3e8423de854d17c",
+  "campaign_sha256": "b968c82cf6ea999bb83f82130bd11bb739952fedeb87e862b146c436911e5995"
+}

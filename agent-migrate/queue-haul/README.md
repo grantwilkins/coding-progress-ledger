@@ -116,6 +116,7 @@ uv run python queue-haul/migration_profiler.py make-crossover \
 uv run python queue-haul/policy_hardware_campaign.py plot-reduced \
   --out queue-haul/outputs/policy-hardware-width8-frontier-20260730
 uv run python queue-haul/canonical_simulator_campaign.py
+uv run python queue-haul/dual_lagrangian_experiment.py
 uv run python queue-haul/simulated_pareto_campaign.py
 uv run python queue-haul/paper_evaluation.py \
   --out queue-haul/outputs/paper-evaluation
@@ -130,6 +131,13 @@ independently schedules routes, reconstruction endpoints, requests, commits,
 and power. It separately traces declared pool-service demand and debt from
 realized replay and commit times. `evaluation_config.py` is the canonical
 source for assumed paper operating points and their replacement evidence.
+`dual_lagrangian_experiment.py` evaluates the existing simulator-only
+`greedy_prefix` policy as a dual-Lagrangian prefix method against the unchanged
+pool greedies on paired trace-derived targets and destination contracts;
+infeasible plans receive zero validated shed. The archived exploratory run under
+`outputs/dual-lagrangian-*` finds lower migration work and better target
+completion in packed coding traces, but its 10K-session 50%-target solve takes
+87 seconds versus 4 seconds for static greedy, so it is not a 1M-session claim.
 `paper_evaluation.py` writes the legacy Q1–Q9 result/plot registry while the
 paper evaluation is reorganized into mechanism validation, fixed-contract
 coordination, multi-pool contracts, and planner quality/scale. It rejects
