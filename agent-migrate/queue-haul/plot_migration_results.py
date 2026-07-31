@@ -113,16 +113,16 @@ def write_power_parity(rows: list[dict], output_dir: Path = POWER_DRAIN) -> list
     colors = {"lp": "tab:blue", "greedy": "tab:orange"}
     for policy in ("lp", "greedy"):
         selected = [row for row in rows if row["policy"] == policy]
-        for underestimated, marker in ((False, "o"), (True, "x")):
+        for undershot, marker in ((False, "o"), (True, "x")):
             points = [row for row in selected
-                      if (row["measured_w"] > row["expected_w"]) == underestimated]
+                      if (row["measured_w"] < row["expected_w"]) == undershot]
             if points:
                 ax.scatter([row["expected_w"] for row in points],
                            [row["measured_w"] for row in points],
                            color=colors[policy], marker=marker, s=34, alpha=.75,
                            label={"lp": "Queue-Haul", "greedy": "Greedy"}[policy]
-                           if not underestimated else None)
-    ax.scatter([], [], color="black", marker="x", label="Model underestimates")
+                           if not undershot else None)
+    ax.scatter([], [], color="black", marker="x", label="Measured undershoot")
     values = [row[key] for row in rows for key in ("expected_w", "measured_w")]
     lo, hi = min(0, min(values)), max(values)
     pad = .05 * (hi - lo)

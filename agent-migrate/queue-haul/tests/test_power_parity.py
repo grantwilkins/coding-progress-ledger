@@ -8,7 +8,7 @@ Plausible wrong implementations:
 - Plot measured sink power instead of measured source reduction.
 - Use requested target power instead of the planned reduction.
 - Include policies other than Queue-Haul and greedy.
-- Fail to mark expected reductions below measured reductions as underestimates.
+- Fail to mark measured reductions below expected reductions as undershoots.
 - Clip negative measurements or draw y=x across unequal axis limits.
 """
 
@@ -52,7 +52,7 @@ def test_power_parity_uses_planned_and_measured_source_reduction(tmp_path,
 
     ax = plt.gcf().axes[0]
     assert [points.get_offsets().tolist() for points in ax.collections[:3]] \
-        == [[[10, -2]], [[10, 12]], [[20, 18]]]
+        == [[[10, 12]], [[10, -2]], [[20, 18]]]
     assert ax.collections[0].get_facecolor()[0].tolist() \
         == list(to_rgba("tab:blue", .75))
     marker = MarkerStyle("x")
