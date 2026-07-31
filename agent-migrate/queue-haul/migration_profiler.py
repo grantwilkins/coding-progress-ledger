@@ -40,6 +40,8 @@ RESET_SUCCESS = "Successfully reset prefix cache"
 PROBE_MAX_TOKENS = 512
 MAX_MODEL_TOKENS = 32768
 CROSSOVER_PROMPT_HEADROOM_TOKENS = 192
+MP_SCENARIO_CSVS = (
+    "proxy_bytes.csv", "proxy_connections.csv", "resp_transfers.csv")
 
 
 def file_hash(path: Path) -> str:
@@ -1409,7 +1411,7 @@ def run_scenario(stack: b.Stack, cfg: b.Config, manifest: dict, scenario: dict,
     proxy_before = b.proxy_counts(proxy_log)
     mp_offsets = {
         name: (stack.run_root / name).stat().st_size
-        for name in ("proxy_bytes.csv", "resp_transfers.csv")
+        for name in MP_SCENARIO_CSVS
     } if b.lmcache_mode() == "mp" else {}
     runtime = None
     sleeping = False

@@ -69,6 +69,12 @@ def test_shared_mp_csv_slice_contains_only_new_scenario_rows(tmp_path):
     assert destination.read_text() == "time,value\n2,new\n3,newer\n"
 
 
+
+
+def test_mp_scenarios_preserve_timeline_inputs():
+    assert c.MP_SCENARIO_CSVS == (
+        "proxy_bytes.csv", "proxy_connections.csv", "resp_transfers.csv",
+    )
 def test_mp_plan_reuses_stack_and_restarts_only_for_bandwidth(monkeypatch, tmp_path):
     manifest = tmp_path / "manifest.json"
     manifest.write_text("{}")

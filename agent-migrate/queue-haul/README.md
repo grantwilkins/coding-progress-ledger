@@ -228,6 +228,7 @@ scratch path; set `QH_RESUME_FROM_GIT_SHA` when resuming after a code change.
 MP catch-up completeness uses exact rendered-token prefix chunks; observed key
 sets may also contain a generated-tail chunk.
 Re-submit the job after a time limit; its stable default run root resumes
+Stacked MP runs retain per-scenario byte, connection, and RESP traces.
 completed scenarios.
 
 ## Measurement programs
