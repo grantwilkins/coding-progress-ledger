@@ -561,6 +561,7 @@ def reduce_run(run_root: Path, out: Path | None = None):
         plot_power_shed(migrations, summaries, power_curve, out)
         plot_hardware_pareto(attainment, summaries, out)
         plot_disruption(migrations, summaries, power_curve, out)
+        plot_migration_time_per_watt(summaries, power_curve, out)
     for condition in sorted({row["condition"] for row in summaries}):
         plot(
             [row for row in migrations if row["condition"] == condition],
@@ -763,6 +764,37 @@ def plot_disruption(rows, summaries, power_curve, out):
     plt.close(fig)
 
 
+def migration_time_per_watt_points(summaries, power_curve):
+    saved = power_curve.power(.4) - power_curve.power(0)
+    return [{"policy": row["policy"],
+             "migration_s_per_w": float(row["commit_100_s"]) / saved}
+            for row in summaries if row["commit_100_s"] not in (None, "")]
+
+
+def plot_migration_time_per_watt(summaries, power_curve, out):
+    points = migration_time_per_watt_points(summaries, power_curve)
+    colors = dict(zip(POLICIES, plt.get_cmap("tab10").colors))
+    fig, ax = plt.subplots(figsize=(6.4, 4))
+    for policy in POLICIES:
+        values = sorted(row["migration_s_per_w"] for row in points
+                        if row["policy"] == policy)
+        if values:
+            ax.step(values, np.arange(1, len(values) + 1) / len(values),
+                    where="post", color=colors[policy], label=LABELS[policy])
+    ax.set(
+        xlabel="Episode migration makespan / modeled watts shed (s/W)",
+        ylabel="Fraction of episodes", ylim=(0, 1.02),
+        title="Width-8 hardware migration time per watt",
+    )
+    ax.grid(alpha=.25)
+    ax.legend(frameon=False)
+    fig.tight_layout()
+    for suffix in ("png", "pdf"):
+        fig.savefig(out / f"policy_hardware_migration_time_per_watt_cdf.{suffix}",
+                    dpi=220)
+    plt.close(fig)
+
+
 def pareto_points(attainment, summaries):
     achieved = {row["scenario_id"]: row for row in attainment}
     points = []
@@ -863,6 +895,7 @@ def plot_reduced(out, model_path=DEFAULT_MODEL, pooled_with=()):
     plot_hardware_pareto(attainment, summaries, out)
     with (out / "migrations.csv").open() as stream:
         plot_disruption(list(csv.DictReader(stream)), summaries, power_curve, out)
+    plot_migration_time_per_watt(summaries, power_curve, out)
 
 
 def representative_timeline(rows, summaries):

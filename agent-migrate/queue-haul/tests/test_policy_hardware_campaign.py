@@ -18,6 +18,7 @@ Plausible wrong implementations:
 - Compute Pareto dominance across unmatched episodes or requested targets.
 - Use migration duration instead of service pause for disruption.
 - Divide episode downtime by a linearized or requested power reduction.
+- Sum overlapping migration durations instead of using episode makespan.
 """
 
 import csv
@@ -37,6 +38,7 @@ from policy_hardware_campaign import (
     deadline_attainment,
     disruption_points,
     make_plan,
+    migration_time_per_watt_points,
     pareto_points,
     power_shed_quantiles,
     prepare,
@@ -523,6 +525,22 @@ def test_disruption_uses_summed_pause_and_nonlinear_achieved_power():
 
     assert disruption_points(rows, summaries, QuadraticPower()) == [{
         "policy": "queue_haul", "session_s_per_w": 5 / 12,
+    }]
+
+
+def test_migration_time_per_watt_uses_final_commit_makespan():
+    class QuadraticPower:
+        @staticmethod
+        def power(load):
+            return 100 + 100 * load ** 2
+
+    summaries = [{
+        "policy": "queue_haul", "commit_100_s": 8,
+        "commit_50_s": 3, "planned_migrations": 4,
+    }]
+
+    assert migration_time_per_watt_points(summaries, QuadraticPower()) == [{
+        "policy": "queue_haul", "migration_s_per_w": .5,
     }]
 
 
