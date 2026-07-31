@@ -173,7 +173,11 @@ replay/KV completion, KV ingestion lower bound, and route-switch timing while
 preserving the existing catch-up, power, and capacity evidence. The pinned
 `outputs/policy-hardware-width8-packing-plan/` runs three paired width-8 episodes
 for Tiny, Small, Medium, Mixed, and Large packs at 1/2.5/5/10 Gbit/s and 19/30-s
-requirements: 600 scenarios in total.
+requirements: 600 scenarios in total. Job 36822272 completed all 600 scenarios
+without failures in 8:08:22. Its checksum-pinned reduced bundle is under
+`outputs/policy-hardware-width8-packing-20260730/`; compressed results, GPU
+samples, proxy byte counters, and RESP transfer records retain the raw evidence
+without runtime debug logs.
 `canonical_simulator_campaign.py` runs a four-target paired 10K-session
 Queue-Haul, greedy, per-session-fastest, replay-only, and KV-only comparison
 under one assumed dedicated-pool contract. Its compact 10K/100K/1M scale check
