@@ -104,18 +104,25 @@ def load_power_parity(path: Path = POWER_DRAIN / "scenario_summary.csv") -> list
         return [{"policy": row["policy"],
                  "expected_w": float(row["planned_source_drop_w"]),
                  "measured_w": float(row["measured_source_drop_w"])}
-                for row in csv.DictReader(f)]
+                for row in csv.DictReader(f)
+                if row["policy"] in {"lp", "greedy"}]
 
 
 def write_power_parity(rows: list[dict], output_dir: Path = POWER_DRAIN) -> list[Path]:
     fig, ax = plt.subplots(figsize=(5.5, 5.5))
-    for policy in sorted({row["policy"] for row in rows}):
+    colors = {"lp": "tab:blue", "greedy": "tab:orange"}
+    for policy in ("lp", "greedy"):
         selected = [row for row in rows if row["policy"] == policy]
-        ax.scatter([row["expected_w"] for row in selected],
-                   [row["measured_w"] for row in selected],
-                   s=28, alpha=.7,
-                   label={"lp": "Queue-Haul (LP)"}.get(
-                       policy, policy.replace("_", " ")))
+        for underestimated, marker in ((False, "o"), (True, "x")):
+            points = [row for row in selected
+                      if (row["measured_w"] > row["expected_w"]) == underestimated]
+            if points:
+                ax.scatter([row["expected_w"] for row in points],
+                           [row["measured_w"] for row in points],
+                           color=colors[policy], marker=marker, s=34, alpha=.75,
+                           label={"lp": "Queue-Haul", "greedy": "Greedy"}[policy]
+                           if not underestimated else None)
+    ax.scatter([], [], color="black", marker="x", label="Model underestimates")
     values = [row[key] for row in rows for key in ("expected_w", "measured_w")]
     lo, hi = min(0, min(values)), max(values)
     pad = .05 * (hi - lo)
