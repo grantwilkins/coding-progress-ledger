@@ -767,6 +767,7 @@ class LiveSession:
         self.warm_cached_tokens = 0
         self.cache_keys: set[str] = set()
         self.copied_keys: set[str] = set()
+        self.copied_token_ids: list[int] = []
         self.activity_prompt_tokens: int | None = None
         self.prompt_tokens_by_hash: dict[str, int] = {}
 
@@ -955,7 +956,7 @@ class LiveRuntime:
         if self.copy_policy != "after_each_request":
             return ()
         session, stages = self.sessions[move.session_id], []
-        copied = len(session.copied_keys) if self.mp_layout else (
+        copied = len(session.copied_token_ids) // 256 if self.mp_layout else (
             state.messages and self._prompt_tokens(session, state) // 256
         )
         while session.activity_thread:
@@ -965,7 +966,7 @@ class LiveRuntime:
             start = time.monotonic_ns()
             request = self.prepare(move, current, "append")
             end = time.monotonic_ns()
-            sealed = len(session.copied_keys) if self.mp_layout \
+            sealed = len(session.copied_token_ids) // 256 if self.mp_layout \
                 else self._prompt_tokens(session, current) // 256
             layout = self._kv_layout(request.end_ns)
             stages.append(AppendStageResult(
@@ -991,16 +992,19 @@ class LiveRuntime:
         self.event_log.write("copy_start", move_id=move.order, session_id=move.session_id, method=move.method, phase=phase)
         log_offset = self.sink_log.stat().st_size
         if move.method == "kv_transfer" and self.mp_layout:
-            missing = session.cache_keys - session.copied_keys
-            warm = b.mp_warm_prefetch(
-                self.cfg,
-                b.mp_chat_tokens(
-                    self.cfg, session.probe(list(state.messages)),
-                ),
-                *self.mp_layout,
+            tokens = b.mp_chat_tokens(
+                self.cfg, session.probe(list(state.messages)),
             )
-            if warm["total_keys"] != len(session.cache_keys) \
-                    or warm["found_keys"] != len(missing):
+            shared = next((i for i, pair in enumerate(zip(
+                tokens, session.copied_token_ids,
+            )) if pair[0] != pair[1]), min(
+                len(tokens), len(session.copied_token_ids),
+            ))
+            warm = b.mp_warm_prefetch(
+                self.cfg, tokens, *self.mp_layout,
+            )
+            if warm["total_keys"] != len(tokens) // 256 \
+                    or warm["found_keys"] != len(tokens) // 256 - shared // 256:
                 raise RuntimeError(f"incomplete warm prefetch: {warm}")
             request_offset = len(b.resp_rows(self.cache_log))
         result, _text = session.request(
@@ -1024,6 +1028,7 @@ class LiveRuntime:
                     f"{result.request_id}"
                 )
             session.copied_keys |= session.cache_keys
+            session.copied_token_ids = tokens
             total = result.prompt_tokens
         else:
             total, hit = lookup_tokens(self.sink_log, result.request_id) \
@@ -1042,8 +1047,8 @@ class LiveRuntime:
         layout = self._kv_layout(result.end_ns) \
             if move.method == "kv_transfer" or not self.mp_layout else {}
         logical_chunks, logical_bytes = (
-            (len(session.copied_keys),
-             len(session.copied_keys) * layout["chunk_bytes"])
+            (len(session.copied_token_ids) // 256,
+             len(session.copied_token_ids) // 256 * layout["chunk_bytes"])
             if move.method == "kv_transfer" and self.mp_layout
             else kv_metrics(hit, layout) if layout else (0, 0)
         )

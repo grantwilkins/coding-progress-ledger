@@ -225,6 +225,8 @@ are disabled; measured two-A100 results provide continuation first-token
 evidence.
 Override `QH_APPTAINER_IMAGE` if the pinned LMCache image is not at the default
 scratch path; set `QH_RESUME_FROM_GIT_SHA` when resuming after a code change.
+MP catch-up completeness uses exact rendered-token prefix chunks; observed key
+sets may also contain a generated-tail chunk.
 Re-submit the job after a time limit; its stable default run root resumes
 completed scenarios.
 

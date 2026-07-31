@@ -185,6 +185,22 @@ def test_mp_source_keys_excludes_known_keys(monkeypatch, tmp_path):
     assert waited == [256]
 
 
+def test_mp_source_keys_include_generated_tail_key(tmp_path):
+    log = tmp_path / "lmcache.log"
+    log.write_text("Stored 768 tokens\n")
+    transfers = tmp_path / "resp_transfers.csv"
+    transfers.write_text(
+        "connection_id,command,key_hashes,start_ns,end_ns,request_wire_bytes,"
+        "response_wire_bytes,request_body_bytes,payload_bytes\n"
+        "a,SET,k1,0,1,1,1,1,1\na,SET,k2,2,3,1,1,1,1\n"
+        "a,SET,generated,4,5,1,1,1,1\n"
+    )
+
+    assert s.mp_wait_source_keys(log, 0, transfers, 0, 512) == {
+        "k1", "k2", "generated",
+    }
+
+
 def test_mp_request_hit_uses_byte_offset(tmp_path):
     log = tmp_path / "lmcache.log"
     prefix = "LMCache ✓\n".encode()

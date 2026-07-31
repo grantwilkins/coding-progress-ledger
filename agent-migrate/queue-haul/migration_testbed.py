@@ -1131,10 +1131,8 @@ def mp_wait_source_keys(log: Path, offset: int, transfers: Path,
     deadline = time.monotonic() + 600
     while time.monotonic() < deadline:
         keys = mp_source_keys(transfers, transfer_offset) - (known_keys or set())
-        if len(keys) == expected:
+        if len(keys) >= expected:
             return keys
-        if len(keys) > expected:
-            raise RuntimeError(f"LMCache stored {len(keys)} keys, expected {expected}")
         time.sleep(.05)
     raise TimeoutError(f"LMCache stored fewer than {expected} unique keys")
 

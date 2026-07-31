@@ -693,7 +693,8 @@ def test_mp_prepare_prefetches_before_inference_and_advances_key_watermark(
     )
     calls = []
     session = SimpleNamespace(
-        cache_keys={"k1", "k2"}, copied_keys={"k1"},
+        cache_keys={"stale", "k1", "k2"},
+        copied_keys={"stale", "k1"}, copied_token_ids=[0] * 256,
         warm_cached_tokens=512,
         prompt_tokens_by_hash={"h": 520},
         probe=lambda messages: messages + [{"role": "user", "content": "probe"}],
@@ -709,7 +710,7 @@ def test_mp_prepare_prefetches_before_inference_and_advances_key_watermark(
     session.request = request
     monkeypatch.setattr(
         c.b, "mp_chat_tokens",
-        lambda _cfg, _messages: calls.append("tokenize") or [1, 2],
+        lambda _cfg, _messages: calls.append("tokenize") or [0] * 512,
     )
     monkeypatch.setattr(
         c.b, "mp_warm_prefetch",
@@ -730,7 +731,8 @@ def test_mp_prepare_prefetches_before_inference_and_advances_key_watermark(
     runtime.close()
 
     assert calls == ["tokenize", "prefetch", "request"]
-    assert session.copied_keys == {"k1", "k2"}
+    assert session.copied_keys == {"stale", "k1", "k2"}
+    assert session.copied_token_ids == [0] * 512
     assert (result.logical_kv_chunks, result.logical_kv_bytes,
             result.processed_tokens) == (2, 20, 8)
 
