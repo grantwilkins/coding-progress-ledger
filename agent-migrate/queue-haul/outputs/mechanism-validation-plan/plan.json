@@ -1,0 +1,795 @@
+{
+  "manifest": {
+    "path": "queue-haul/outputs/coding-manifest.json",
+    "sha256": "faf321a6eab01f7f36c325dbd6e725d43b72cdffefd7ee060ef6f7cef20f1435"
+  },
+  "scenarios": [
+    {
+      "activity": "one_turn",
+      "activity_tokens": 2048,
+      "bandwidth_mbps": 10000,
+      "campaign": "mechanism_validation",
+      "concurrency": 1,
+      "context_size": 28000,
+      "copy_policy": "initial_final",
+      "deadline_s": 180,
+      "final_state": "awake",
+      "kind": "migration",
+      "match_id": "db98473a3d63562a",
+      "method": "replay",
+      "move_concurrency": 1,
+      "moves": [
+        {
+          "job_class": "coding",
+          "method": "replay",
+          "order": 0,
+          "session_id": "claude:d822a508-dc39-797d-a37d-fa6552fdb8bb",
+          "turn_index": 2
+        }
+      ],
+      "repeat": 4,
+      "request_schedule": [
+        {
+          "append_tokens": 512,
+          "at_s": 2
+        },
+        {
+          "append_tokens": 512,
+          "at_s": 4
+        },
+        {
+          "append_tokens": 512,
+          "at_s": 6
+        },
+        {
+          "append_tokens": 512,
+          "at_s": 8
+        }
+      ],
+      "scenario_id": "m-6f1014b58362ea74",
+      "serving_concurrency": 1,
+      "sessions": [
+        {
+          "initial_tokens": 28000,
+          "job_class": "coding",
+          "order": 0,
+          "session_id": "claude:d822a508-dc39-797d-a37d-fa6552fdb8bb",
+          "turn_index": 2
+        }
+      ],
+      "split": "validation"
+    },
+    {
+      "activity": "one_turn",
+      "activity_tokens": 2048,
+      "bandwidth_mbps": 10000,
+      "campaign": "mechanism_validation",
+      "concurrency": 1,
+      "context_size": 28000,
+      "copy_policy": "initial_final",
+      "deadline_s": 180,
+      "final_state": "awake",
+      "kind": "migration",
+      "match_id": "a8e2110da37f4612",
+      "method": "kv_transfer",
+      "move_concurrency": 1,
+      "moves": [
+        {
+          "job_class": "coding",
+          "method": "kv_transfer",
+          "order": 0,
+          "session_id": "claude:d822a508-dc39-797d-a37d-fa6552fdb8bb",
+          "turn_index": 2
+        }
+      ],
+      "repeat": 3,
+      "request_schedule": [
+        {
+          "append_tokens": 512,
+          "at_s": 2
+        },
+        {
+          "append_tokens": 512,
+          "at_s": 4
+        },
+        {
+          "append_tokens": 512,
+          "at_s": 6
+        },
+        {
+          "append_tokens": 512,
+          "at_s": 8
+        }
+      ],
+      "scenario_id": "m-bf6e37c709524bcb",
+      "serving_concurrency": 1,
+      "sessions": [
+        {
+          "initial_tokens": 28000,
+          "job_class": "coding",
+          "order": 0,
+          "session_id": "claude:d822a508-dc39-797d-a37d-fa6552fdb8bb",
+          "turn_index": 2
+        }
+      ],
+      "split": "validation"
+    },
+    {
+      "activity": "one_turn",
+      "activity_tokens": 2048,
+      "bandwidth_mbps": 10000,
+      "campaign": "mechanism_validation",
+      "concurrency": 1,
+      "context_size": 28000,
+      "copy_policy": "initial_final",
+      "deadline_s": 180,
+      "final_state": "awake",
+      "kind": "control",
+      "match_id": "787050cbb25dffb5",
+      "method": "kv_transfer",
+      "move_concurrency": 0,
+      "moves": [],
+      "repeat": 0,
+      "request_schedule": [
+        {
+          "append_tokens": 512,
+          "at_s": 2
+        },
+        {
+          "append_tokens": 512,
+          "at_s": 4
+        },
+        {
+          "append_tokens": 512,
+          "at_s": 6
+        },
+        {
+          "append_tokens": 512,
+          "at_s": 8
+        }
+      ],
+      "scenario_id": "c-787050cbb25dffb5",
+      "serving_concurrency": 1,
+      "sessions": [
+        {
+          "initial_tokens": 28000,
+          "job_class": "coding",
+          "order": 0,
+          "session_id": "claude:d822a508-dc39-797d-a37d-fa6552fdb8bb",
+          "turn_index": 2
+        }
+      ],
+      "split": "validation"
+    },
+    {
+      "activity": "one_turn",
+      "activity_tokens": 2048,
+      "bandwidth_mbps": 10000,
+      "campaign": "mechanism_validation",
+      "concurrency": 1,
+      "context_size": 28000,
+      "copy_policy": "initial_final",
+      "deadline_s": 180,
+      "final_state": "awake",
+      "kind": "migration",
+      "match_id": "db98473a3d63562a",
+      "method": "kv_transfer",
+      "move_concurrency": 1,
+      "moves": [
+        {
+          "job_class": "coding",
+          "method": "kv_transfer",
+          "order": 0,
+          "session_id": "claude:d822a508-dc39-797d-a37d-fa6552fdb8bb",
+          "turn_index": 2
+        }
+      ],
+      "repeat": 4,
+      "request_schedule": [
+        {
+          "append_tokens": 512,
+          "at_s": 2
+        },
+        {
+          "append_tokens": 512,
+          "at_s": 4
+        },
+        {
+          "append_tokens": 512,
+          "at_s": 6
+        },
+        {
+          "append_tokens": 512,
+          "at_s": 8
+        }
+      ],
+      "scenario_id": "m-58ebb559815de126",
+      "serving_concurrency": 1,
+      "sessions": [
+        {
+          "initial_tokens": 28000,
+          "job_class": "coding",
+          "order": 0,
+          "session_id": "claude:d822a508-dc39-797d-a37d-fa6552fdb8bb",
+          "turn_index": 2
+        }
+      ],
+      "split": "validation"
+    },
+    {
+      "activity": "one_turn",
+      "activity_tokens": 2048,
+      "bandwidth_mbps": 10000,
+      "campaign": "mechanism_validation",
+      "concurrency": 1,
+      "context_size": 28000,
+      "copy_policy": "initial_final",
+      "deadline_s": 180,
+      "final_state": "awake",
+      "kind": "control",
+      "match_id": "2f7d0d51961bc9cd",
+      "method": "kv_transfer",
+      "move_concurrency": 0,
+      "moves": [],
+      "repeat": 2,
+      "request_schedule": [
+        {
+          "append_tokens": 512,
+          "at_s": 2
+        },
+        {
+          "append_tokens": 512,
+          "at_s": 4
+        },
+        {
+          "append_tokens": 512,
+          "at_s": 6
+        },
+        {
+          "append_tokens": 512,
+          "at_s": 8
+        }
+      ],
+      "scenario_id": "c-2f7d0d51961bc9cd",
+      "serving_concurrency": 1,
+      "sessions": [
+        {
+          "initial_tokens": 28000,
+          "job_class": "coding",
+          "order": 0,
+          "session_id": "claude:d822a508-dc39-797d-a37d-fa6552fdb8bb",
+          "turn_index": 2
+        }
+      ],
+      "split": "validation"
+    },
+    {
+      "activity": "one_turn",
+      "activity_tokens": 2048,
+      "bandwidth_mbps": 10000,
+      "campaign": "mechanism_validation",
+      "concurrency": 1,
+      "context_size": 28000,
+      "copy_policy": "initial_final",
+      "deadline_s": 180,
+      "final_state": "awake",
+      "kind": "migration",
+      "match_id": "15fb6b4ebc76beb8",
+      "method": "replay",
+      "move_concurrency": 1,
+      "moves": [
+        {
+          "job_class": "coding",
+          "method": "replay",
+          "order": 0,
+          "session_id": "claude:d822a508-dc39-797d-a37d-fa6552fdb8bb",
+          "turn_index": 2
+        }
+      ],
+      "repeat": 1,
+      "request_schedule": [
+        {
+          "append_tokens": 512,
+          "at_s": 2
+        },
+        {
+          "append_tokens": 512,
+          "at_s": 4
+        },
+        {
+          "append_tokens": 512,
+          "at_s": 6
+        },
+        {
+          "append_tokens": 512,
+          "at_s": 8
+        }
+      ],
+      "scenario_id": "m-f53852bf9f383a15",
+      "serving_concurrency": 1,
+      "sessions": [
+        {
+          "initial_tokens": 28000,
+          "job_class": "coding",
+          "order": 0,
+          "session_id": "claude:d822a508-dc39-797d-a37d-fa6552fdb8bb",
+          "turn_index": 2
+        }
+      ],
+      "split": "validation"
+    },
+    {
+      "activity": "one_turn",
+      "activity_tokens": 2048,
+      "bandwidth_mbps": 10000,
+      "campaign": "mechanism_validation",
+      "concurrency": 1,
+      "context_size": 28000,
+      "copy_policy": "initial_final",
+      "deadline_s": 180,
+      "final_state": "awake",
+      "kind": "control",
+      "match_id": "15fb6b4ebc76beb8",
+      "method": "kv_transfer",
+      "move_concurrency": 0,
+      "moves": [],
+      "repeat": 1,
+      "request_schedule": [
+        {
+          "append_tokens": 512,
+          "at_s": 2
+        },
+        {
+          "append_tokens": 512,
+          "at_s": 4
+        },
+        {
+          "append_tokens": 512,
+          "at_s": 6
+        },
+        {
+          "append_tokens": 512,
+          "at_s": 8
+        }
+      ],
+      "scenario_id": "c-15fb6b4ebc76beb8",
+      "serving_concurrency": 1,
+      "sessions": [
+        {
+          "initial_tokens": 28000,
+          "job_class": "coding",
+          "order": 0,
+          "session_id": "claude:d822a508-dc39-797d-a37d-fa6552fdb8bb",
+          "turn_index": 2
+        }
+      ],
+      "split": "validation"
+    },
+    {
+      "activity": "one_turn",
+      "activity_tokens": 2048,
+      "bandwidth_mbps": 10000,
+      "campaign": "mechanism_validation",
+      "concurrency": 1,
+      "context_size": 28000,
+      "copy_policy": "initial_final",
+      "deadline_s": 180,
+      "final_state": "awake",
+      "kind": "migration",
+      "match_id": "2f7d0d51961bc9cd",
+      "method": "replay",
+      "move_concurrency": 1,
+      "moves": [
+        {
+          "job_class": "coding",
+          "method": "replay",
+          "order": 0,
+          "session_id": "claude:d822a508-dc39-797d-a37d-fa6552fdb8bb",
+          "turn_index": 2
+        }
+      ],
+      "repeat": 2,
+      "request_schedule": [
+        {
+          "append_tokens": 512,
+          "at_s": 2
+        },
+        {
+          "append_tokens": 512,
+          "at_s": 4
+        },
+        {
+          "append_tokens": 512,
+          "at_s": 6
+        },
+        {
+          "append_tokens": 512,
+          "at_s": 8
+        }
+      ],
+      "scenario_id": "m-515c75ee17ba7612",
+      "serving_concurrency": 1,
+      "sessions": [
+        {
+          "initial_tokens": 28000,
+          "job_class": "coding",
+          "order": 0,
+          "session_id": "claude:d822a508-dc39-797d-a37d-fa6552fdb8bb",
+          "turn_index": 2
+        }
+      ],
+      "split": "validation"
+    },
+    {
+      "activity": "one_turn",
+      "activity_tokens": 2048,
+      "bandwidth_mbps": 10000,
+      "campaign": "mechanism_validation",
+      "concurrency": 1,
+      "context_size": 28000,
+      "copy_policy": "initial_final",
+      "deadline_s": 180,
+      "final_state": "awake",
+      "kind": "migration",
+      "match_id": "2f7d0d51961bc9cd",
+      "method": "kv_transfer",
+      "move_concurrency": 1,
+      "moves": [
+        {
+          "job_class": "coding",
+          "method": "kv_transfer",
+          "order": 0,
+          "session_id": "claude:d822a508-dc39-797d-a37d-fa6552fdb8bb",
+          "turn_index": 2
+        }
+      ],
+      "repeat": 2,
+      "request_schedule": [
+        {
+          "append_tokens": 512,
+          "at_s": 2
+        },
+        {
+          "append_tokens": 512,
+          "at_s": 4
+        },
+        {
+          "append_tokens": 512,
+          "at_s": 6
+        },
+        {
+          "append_tokens": 512,
+          "at_s": 8
+        }
+      ],
+      "scenario_id": "m-2c27cf11907db160",
+      "serving_concurrency": 1,
+      "sessions": [
+        {
+          "initial_tokens": 28000,
+          "job_class": "coding",
+          "order": 0,
+          "session_id": "claude:d822a508-dc39-797d-a37d-fa6552fdb8bb",
+          "turn_index": 2
+        }
+      ],
+      "split": "validation"
+    },
+    {
+      "activity": "one_turn",
+      "activity_tokens": 2048,
+      "bandwidth_mbps": 10000,
+      "campaign": "mechanism_validation",
+      "concurrency": 1,
+      "context_size": 28000,
+      "copy_policy": "initial_final",
+      "deadline_s": 180,
+      "final_state": "awake",
+      "kind": "migration",
+      "match_id": "a8e2110da37f4612",
+      "method": "replay",
+      "move_concurrency": 1,
+      "moves": [
+        {
+          "job_class": "coding",
+          "method": "replay",
+          "order": 0,
+          "session_id": "claude:d822a508-dc39-797d-a37d-fa6552fdb8bb",
+          "turn_index": 2
+        }
+      ],
+      "repeat": 3,
+      "request_schedule": [
+        {
+          "append_tokens": 512,
+          "at_s": 2
+        },
+        {
+          "append_tokens": 512,
+          "at_s": 4
+        },
+        {
+          "append_tokens": 512,
+          "at_s": 6
+        },
+        {
+          "append_tokens": 512,
+          "at_s": 8
+        }
+      ],
+      "scenario_id": "m-2172737ec16de6ee",
+      "serving_concurrency": 1,
+      "sessions": [
+        {
+          "initial_tokens": 28000,
+          "job_class": "coding",
+          "order": 0,
+          "session_id": "claude:d822a508-dc39-797d-a37d-fa6552fdb8bb",
+          "turn_index": 2
+        }
+      ],
+      "split": "validation"
+    },
+    {
+      "activity": "one_turn",
+      "activity_tokens": 2048,
+      "bandwidth_mbps": 10000,
+      "campaign": "mechanism_validation",
+      "concurrency": 1,
+      "context_size": 28000,
+      "copy_policy": "initial_final",
+      "deadline_s": 180,
+      "final_state": "awake",
+      "kind": "migration",
+      "match_id": "15fb6b4ebc76beb8",
+      "method": "kv_transfer",
+      "move_concurrency": 1,
+      "moves": [
+        {
+          "job_class": "coding",
+          "method": "kv_transfer",
+          "order": 0,
+          "session_id": "claude:d822a508-dc39-797d-a37d-fa6552fdb8bb",
+          "turn_index": 2
+        }
+      ],
+      "repeat": 1,
+      "request_schedule": [
+        {
+          "append_tokens": 512,
+          "at_s": 2
+        },
+        {
+          "append_tokens": 512,
+          "at_s": 4
+        },
+        {
+          "append_tokens": 512,
+          "at_s": 6
+        },
+        {
+          "append_tokens": 512,
+          "at_s": 8
+        }
+      ],
+      "scenario_id": "m-7d98fb47549478f2",
+      "serving_concurrency": 1,
+      "sessions": [
+        {
+          "initial_tokens": 28000,
+          "job_class": "coding",
+          "order": 0,
+          "session_id": "claude:d822a508-dc39-797d-a37d-fa6552fdb8bb",
+          "turn_index": 2
+        }
+      ],
+      "split": "validation"
+    },
+    {
+      "activity": "one_turn",
+      "activity_tokens": 2048,
+      "bandwidth_mbps": 10000,
+      "campaign": "mechanism_validation",
+      "concurrency": 1,
+      "context_size": 28000,
+      "copy_policy": "initial_final",
+      "deadline_s": 180,
+      "final_state": "awake",
+      "kind": "migration",
+      "match_id": "787050cbb25dffb5",
+      "method": "kv_transfer",
+      "move_concurrency": 1,
+      "moves": [
+        {
+          "job_class": "coding",
+          "method": "kv_transfer",
+          "order": 0,
+          "session_id": "claude:d822a508-dc39-797d-a37d-fa6552fdb8bb",
+          "turn_index": 2
+        }
+      ],
+      "repeat": 0,
+      "request_schedule": [
+        {
+          "append_tokens": 512,
+          "at_s": 2
+        },
+        {
+          "append_tokens": 512,
+          "at_s": 4
+        },
+        {
+          "append_tokens": 512,
+          "at_s": 6
+        },
+        {
+          "append_tokens": 512,
+          "at_s": 8
+        }
+      ],
+      "scenario_id": "m-56202ca05f4bafa2",
+      "serving_concurrency": 1,
+      "sessions": [
+        {
+          "initial_tokens": 28000,
+          "job_class": "coding",
+          "order": 0,
+          "session_id": "claude:d822a508-dc39-797d-a37d-fa6552fdb8bb",
+          "turn_index": 2
+        }
+      ],
+      "split": "validation"
+    },
+    {
+      "activity": "one_turn",
+      "activity_tokens": 2048,
+      "bandwidth_mbps": 10000,
+      "campaign": "mechanism_validation",
+      "concurrency": 1,
+      "context_size": 28000,
+      "copy_policy": "initial_final",
+      "deadline_s": 180,
+      "final_state": "awake",
+      "kind": "control",
+      "match_id": "db98473a3d63562a",
+      "method": "kv_transfer",
+      "move_concurrency": 0,
+      "moves": [],
+      "repeat": 4,
+      "request_schedule": [
+        {
+          "append_tokens": 512,
+          "at_s": 2
+        },
+        {
+          "append_tokens": 512,
+          "at_s": 4
+        },
+        {
+          "append_tokens": 512,
+          "at_s": 6
+        },
+        {
+          "append_tokens": 512,
+          "at_s": 8
+        }
+      ],
+      "scenario_id": "c-db98473a3d63562a",
+      "serving_concurrency": 1,
+      "sessions": [
+        {
+          "initial_tokens": 28000,
+          "job_class": "coding",
+          "order": 0,
+          "session_id": "claude:d822a508-dc39-797d-a37d-fa6552fdb8bb",
+          "turn_index": 2
+        }
+      ],
+      "split": "validation"
+    },
+    {
+      "activity": "one_turn",
+      "activity_tokens": 2048,
+      "bandwidth_mbps": 10000,
+      "campaign": "mechanism_validation",
+      "concurrency": 1,
+      "context_size": 28000,
+      "copy_policy": "initial_final",
+      "deadline_s": 180,
+      "final_state": "awake",
+      "kind": "control",
+      "match_id": "a8e2110da37f4612",
+      "method": "kv_transfer",
+      "move_concurrency": 0,
+      "moves": [],
+      "repeat": 3,
+      "request_schedule": [
+        {
+          "append_tokens": 512,
+          "at_s": 2
+        },
+        {
+          "append_tokens": 512,
+          "at_s": 4
+        },
+        {
+          "append_tokens": 512,
+          "at_s": 6
+        },
+        {
+          "append_tokens": 512,
+          "at_s": 8
+        }
+      ],
+      "scenario_id": "c-a8e2110da37f4612",
+      "serving_concurrency": 1,
+      "sessions": [
+        {
+          "initial_tokens": 28000,
+          "job_class": "coding",
+          "order": 0,
+          "session_id": "claude:d822a508-dc39-797d-a37d-fa6552fdb8bb",
+          "turn_index": 2
+        }
+      ],
+      "split": "validation"
+    },
+    {
+      "activity": "one_turn",
+      "activity_tokens": 2048,
+      "bandwidth_mbps": 10000,
+      "campaign": "mechanism_validation",
+      "concurrency": 1,
+      "context_size": 28000,
+      "copy_policy": "initial_final",
+      "deadline_s": 180,
+      "final_state": "awake",
+      "kind": "migration",
+      "match_id": "787050cbb25dffb5",
+      "method": "replay",
+      "move_concurrency": 1,
+      "moves": [
+        {
+          "job_class": "coding",
+          "method": "replay",
+          "order": 0,
+          "session_id": "claude:d822a508-dc39-797d-a37d-fa6552fdb8bb",
+          "turn_index": 2
+        }
+      ],
+      "repeat": 0,
+      "request_schedule": [
+        {
+          "append_tokens": 512,
+          "at_s": 2
+        },
+        {
+          "append_tokens": 512,
+          "at_s": 4
+        },
+        {
+          "append_tokens": 512,
+          "at_s": 6
+        },
+        {
+          "append_tokens": 512,
+          "at_s": 8
+        }
+      ],
+      "scenario_id": "m-9c0968a998a54b3f",
+      "serving_concurrency": 1,
+      "sessions": [
+        {
+          "initial_tokens": 28000,
+          "job_class": "coding",
+          "order": 0,
+          "session_id": "claude:d822a508-dc39-797d-a37d-fa6552fdb8bb",
+          "turn_index": 2
+        }
+      ],
+      "split": "validation"
+    }
+  ],
+  "schema": "queue-haul-migration-plan-v3",
+  "seed": 1
+}

@@ -97,6 +97,10 @@ uv run python queue-haul/plot_simulator_evaluation.py
 uv run python queue-haul/plot_scaling_results.py
 uv run python queue-haul/plot_testbed_kv_timeline.py
 uv run python queue-haul/plot_testbed_kv_timeline.py --method replay
+uv run python queue-haul/mechanism_validation_campaign.py prepare \
+  --out queue-haul/outputs/mechanism-validation-plan
+# Run the matched current-stack KV/replay campaign on one 2xA100 node:
+sbatch queue-haul/outputs/mechanism-validation-plan/run.sbatch
 uv run python queue-haul/plot_migration_ttft_cdf.py
 uv run python queue-haul/plot_fixed_contract_residuals.py
 uv run python queue-haul/policy_hardware_campaign.py prepare \
@@ -131,9 +135,10 @@ source for assumed paper operating points and their replacement evidence.
 paper evaluation is reorganized into mechanism validation, fixed-contract
 coordination, multi-pool contracts, and planner quality/scale. It rejects
 tables with missing provenance.
-`plot_testbed_kv_timeline.py` generates measured two-A100 concurrency-one KV
-transfer and replay timelines with source inference continuing through
-request-boundary drain from tidy event tables.
+`mechanism_validation_campaign.py` replaces the mechanism Gantts with matched
+current-stack 28K-context, 10-Gb/s, concurrency-one KV and replay measurements.
+It runs five repetitions of the same four-turn source workload and plots the
+trace nearest each mechanism's median request-boundary wait.
 `plot_fixed_contract_residuals.py` caches the canonical 100K-session,
 120-second fixed-contract requirement sweep and compares mixed greedy,
 GPU-work-first, replay-only, and KV-only resource headroom at common requested
