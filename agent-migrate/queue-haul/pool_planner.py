@@ -647,12 +647,17 @@ def _recover_coupled(
     return selected
 
 
-def _greedy_coupled(table, target, power, architecture, scenario, mode):
+def _greedy_coupled(
+    table, target, power, architecture, scenario, mode, enumerate_small=True,
+):
     """Simulator-local emulation of source-local choices under shared prices."""
     matrix = csc_matrix(table.resources)
     by_source, by_session = {}, {}
     for j, session in enumerate(table.sessions):
         by_source.setdefault(session.source_instance, []).append(j)
+    if not enumerate_small:
+        for members in by_source.values():
+            members.sort(key=lambda j: table.sessions[j].session_id)
     for i, candidate in enumerate(table.candidates):
         by_session.setdefault(candidate.session, []).append(i)
     prices, eta, scale = np.zeros(table.resources.shape[0]), 1.0, max(target, 1.0)
@@ -661,7 +666,8 @@ def _greedy_coupled(table, target, power, architecture, scenario, mode):
     spaces = {
         source: _coupled_source_space(
             table, power, members, by_session, matrix, gain_cache,
-        ) for source, members in by_source.items()
+        ) if enumerate_small else None
+        for source, members in by_source.items()
     }
     for source, space in spaces.items():
         if space is not None:
@@ -681,7 +687,7 @@ def _greedy_coupled(table, target, power, architecture, scenario, mode):
                     + usage @ prices - eta * gains / scale
                 pattern = patterns[int(np.argmin(score))]
             else:
-                priced = []
+                priced, alternate = [], []
                 for position, session in enumerate(members):
                     if power.ell[table.sessions[session].session_id] <= 0:
                         continue
@@ -701,11 +707,29 @@ def _greedy_coupled(table, target, power, architecture, scenario, mode):
                     )
                     i = ties[(iteration + source_order + position) % len(ties)]
                     priced.append((i, low))
+                    if not enumerate_small:
+                        value, i = actions[
+                            (iteration + source_order + position) % min(2, len(actions))
+                        ]
+                        alternate.append((i, value))
                 pattern, ordered = _coupled_source_patterns(
                     table, power, priced, eta, scale, gain_cache,
                 )
                 if ordered:
-                    retained[source].update((ordered[:1], ordered))
+                    retained[source].update(
+                        ordered[:n] for n in (
+                            range(1, len(ordered) + 1) if not enumerate_small
+                            else (1, len(ordered))
+                        )
+                    )
+                if alternate:
+                    alternative, ordered = _coupled_source_patterns(
+                        table, power, alternate, eta, scale, gain_cache,
+                    )
+                    retained[source].add(alternative)
+                    retained[source].update(
+                        ordered[:n] for n in range(1, len(ordered) + 1)
+                    )
             retained[source].add(pattern)
             selected.update(pattern)
             chosen.append(pattern)
@@ -719,6 +743,12 @@ def _greedy_coupled(table, target, power, architecture, scenario, mode):
         eta = max(0, eta + step * (target - shed) / scale)
     return _recover_coupled(
         table, power, retained, target, architecture, scenario, mode, gain_cache,
+    )
+
+
+def _greedy_prefix(table, target, power, architecture, scenario, mode):
+    return _greedy_coupled(
+        table, target, power, architecture, scenario, mode, False,
     )
 
 
@@ -928,6 +958,9 @@ def _mode_plan(scenario, profile, architecture, solver, mode, power, target):
     table = candidate_table(scenario, profile, architecture, mode, power)
     selected = (_lp(table, target) if solver.startswith("lp") else
                 _greedy_bundle(table, target, power) if solver == "greedy_bundle"
+                else _greedy_prefix(
+                    table, target, power, architecture, scenario, mode,
+                ) if solver == "greedy_prefix"
                 else _greedy_coupled(
                     table, target, power, architecture, scenario, mode,
                 ) if solver == "greedy_coupled"
@@ -950,7 +983,7 @@ def _mode_plan(scenario, profile, architecture, solver, mode, power, target):
 
 
 def plan_destination(scenario, profile, solver, case_id, seed, architecture):
-    if solver not in {"greedy", "greedy_bundle", "greedy_coupled",
+    if solver not in {"greedy", "greedy_bundle", "greedy_prefix", "greedy_coupled",
                       "lp", "lp_peak_first", "lp_work_first"}:
         raise ValueError("destination architecture supports pool-aware LP and greedy")
     if case_id != "central":

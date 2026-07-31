@@ -321,6 +321,14 @@ vectors, then uses a lazy heap that preserves the same global recovery order.
 Near an aggregate boundary it recomputes the exact sparse sum, and it retains
 the concrete packing check after every accepted pattern.
 
+The separate simulator-only `greedy_prefix` experiment removes Cartesian
+source-pattern enumeration. It scans every exact-power prefix of the cheapest
+fixed-price action ordering and one deterministic alternative-action ordering,
+then uses the same aggregate recovery, concrete packing, and final temporal
+validation. It has polynomial local search but is not the default policy:
+high-target simulations lose feasibility relative to the regular greedy, and
+equal-cost cases remain sensitive to input order.
+
 Selected moves are ordered by migration work per conservative watt. At
 controller completion, the executor starts every selected move eagerly.
 Independent paths proceed in parallel; overlapping paths share link capacity,

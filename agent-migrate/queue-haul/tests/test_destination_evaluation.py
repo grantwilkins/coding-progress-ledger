@@ -221,7 +221,7 @@ def test_seeded_sweep_repeats_only_transition_cells(monkeypatch):
     assert {r["seed"] for r in first} == {0, 1, 2, 3}
     assert {r["planner"] for r in first} == {
         "scalar", "pool_lp", "pool_greedy", "pool_bundle",
-        "pool_coupled_experimental",
+        "pool_prefix_experimental", "pool_coupled_experimental",
     }
     assert {(r["flex"], r["debt"]) for r in first} == {(.1, .05)}
     assert {r["execution_contract"] for r in first} == {ORDERED_EAGER_PARALLEL_V1}

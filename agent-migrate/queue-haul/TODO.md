@@ -16,6 +16,8 @@ order and overlaps moves up to its configured width.
 - [x] Add simulator-only `greedy_coupled` with exact source-prefix pricing and
   destination packing checks.
 - [x] Cache coupled patterns and preserve exact recovery order with a lazy heap.
+- [x] Add a simulator-only polynomial prefix variant without changing defaults.
+- [ ] Resolve prefix order sensitivity and high-target feasibility losses before promotion.
 - [ ] Verify checksums and paper tables against the committed code revision.
 - [x] Run `uv run pytest`.
 

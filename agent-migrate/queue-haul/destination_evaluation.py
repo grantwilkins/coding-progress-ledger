@@ -208,6 +208,7 @@ def run_sweep(build, profile, cells=primary_cells(), seeds=range(10),
                 ("scalar", "lp", None), ("pool_lp", "lp", architecture),
                 ("pool_greedy", "greedy", architecture),
                 ("pool_bundle", "greedy_bundle", architecture),
+                ("pool_prefix_experimental", "greedy_prefix", architecture),
                 ("pool_coupled_experimental", "greedy_coupled", architecture),
             ):
                 result = plan(

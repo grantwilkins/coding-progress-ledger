@@ -41,7 +41,7 @@ from destination import (DESTINATION_SCHEMA, CompatibilityFingerprint, ContextRa
 from planner import plan
 from pool_planner import (Candidate, CandidateTable, _destination_duration, _event_bounds,
                           _greedy, _greedy_bundle, _greedy_coupled,
-                          _coupled_source_pattern, _mode_boundary_rho,
+                          _greedy_prefix, _coupled_source_pattern, _mode_boundary_rho,
                           _recover_coupled, _service_trace, candidate_table,
                           destination_service_execution, exact_replica_assignment,
                           service_debt, validate_destination_execution)
@@ -180,11 +180,16 @@ def test_coupled_oracle_finds_the_only_feasible_method_mix(tmp_path):
     selected = _greedy_coupled(
         table, power.drain_gain(("a", "b")), power, arch, scenario, "normal",
     )
+    prefix = _greedy_prefix(
+        table, power.drain_gain(("a", "b")), power, arch, scenario, "normal",
+    )
 
     assert {candidates[i].session for i in selected} == {0, 1}
     assert {candidates[i].method for i in selected} == {
         "replay", "kv_transfer",
     }
+    assert {candidates[i].session for i in prefix} == {0, 1}
+    assert {candidates[i].method for i in prefix} == {"replay", "kv_transfer"}
 
 
 def test_coupled_recovery_caps_one_watt_overshoot_before_work(tmp_path):
