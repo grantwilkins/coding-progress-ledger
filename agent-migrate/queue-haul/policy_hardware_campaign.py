@@ -489,6 +489,7 @@ def reduce_run(run_root: Path, out: Path | None = None):
                 "migration_start_s": _time(epoch, row["initial_start_ns"]),
                 "migration_finish_s": _time(epoch, row["initial_end_ns"]),
                 "quiesce_s": _time(epoch, row["pause_start_ns"]),
+                "service_pause_s": _time(row["pause_start_ns"], row["switch_end_ns"]),
                 "catch_up_start_s": _time(epoch, row.get("catch_up_start_ns"))
                 if row.get("catch_up_start_ns") is not None else None,
                 "catch_up_finish_s": _time(epoch, row.get("catch_up_end_ns"))
@@ -559,6 +560,7 @@ def reduce_run(run_root: Path, out: Path | None = None):
     if power_curve:
         plot_power_shed(migrations, summaries, power_curve, out)
         plot_hardware_pareto(attainment, summaries, out)
+        plot_disruption(migrations, summaries, power_curve, out)
     for condition in sorted({row["condition"] for row in summaries}):
         plot(
             [row for row in migrations if row["condition"] == condition],
@@ -720,6 +722,47 @@ def plot_power_shed(rows, summaries, power_curve, out):
     plt.close(fig)
 
 
+def disruption_points(rows, summaries, power_curve):
+    migrations = {}
+    for row in rows:
+        migrations.setdefault(row["scenario_id"], []).append(row)
+    points, before = [], power_curve.power(.4)
+    for summary in summaries:
+        selected = migrations.get(summary["scenario_id"], [])
+        planned = int(summary["planned_migrations"])
+        saved = before - power_curve.power(.4 * (1 - len(selected) / planned))
+        if saved > 0:
+            points.append({
+                "policy": summary["policy"],
+                "session_s_per_w":
+                    sum(float(row["service_pause_s"]) for row in selected) / saved,
+            })
+    return points
+
+
+def plot_disruption(rows, summaries, power_curve, out):
+    points = disruption_points(rows, summaries, power_curve)
+    colors = dict(zip(POLICIES, plt.get_cmap("tab10").colors))
+    fig, ax = plt.subplots(figsize=(6.4, 4))
+    for policy in POLICIES:
+        values = sorted(row["session_s_per_w"] for row in points
+                        if row["policy"] == policy)
+        if values:
+            ax.step(values, np.arange(1, len(values) + 1) / len(values),
+                    where="post", color=colors[policy], label=LABELS[policy])
+    ax.set(
+        xscale="log", xlabel="Measured session downtime / modeled watts shed (s/W)",
+        ylabel="Fraction of episodes", ylim=(0, 1.02),
+        title="Width-8 hardware campaign disruption",
+    )
+    ax.grid(alpha=.25)
+    ax.legend(frameon=False)
+    fig.tight_layout()
+    for suffix in ("png", "pdf"):
+        fig.savefig(out / f"policy_hardware_disruption_cdf.{suffix}", dpi=220)
+    plt.close(fig)
+
+
 def pareto_points(attainment, summaries):
     achieved = {row["scenario_id"]: row for row in attainment}
     points = []
@@ -815,10 +858,11 @@ def plot_reduced(out, model_path=DEFAULT_MODEL, pooled_with=()):
     plot_destination_ttft_by_bandwidth(
         rows, summaries, plan_["scenarios"], out
     )
-    plot_power_shed(
-        rows, summaries, ModelProfile.load(model_path).case().power_curve, out
-    )
+    power_curve = ModelProfile.load(model_path).case().power_curve
+    plot_power_shed(rows, summaries, power_curve, out)
     plot_hardware_pareto(attainment, summaries, out)
+    with (out / "migrations.csv").open() as stream:
+        plot_disruption(list(csv.DictReader(stream)), summaries, power_curve, out)
 
 
 def representative_timeline(rows, summaries):

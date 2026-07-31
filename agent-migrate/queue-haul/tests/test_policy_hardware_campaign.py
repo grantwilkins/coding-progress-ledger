@@ -16,6 +16,8 @@ Plausible wrong implementations:
 - Plot destination-only prefill instead of migration-to-first-token latency.
 - Average committed-session fractions instead of nonlinear episode power.
 - Compute Pareto dominance across unmatched episodes or requested targets.
+- Use migration duration instead of service pause for disruption.
+- Divide episode downtime by a linearized or requested power reduction.
 """
 
 import csv
@@ -33,6 +35,7 @@ from migration import ORDERED_EAGER_PARALLEL_V1
 from policy_hardware_campaign import (
     completion_curve,
     deadline_attainment,
+    disruption_points,
     make_plan,
     pareto_points,
     power_shed_quantiles,
@@ -502,6 +505,25 @@ def test_power_shed_curve_uses_nonlinear_episode_power_and_keeps_failures():
     assert low == pytest.approx([0, 10.9375, 10.9375, 18.75])
     assert median == pytest.approx([0, 21.875, 21.875, 37.5])
     assert high == pytest.approx([0, 32.8125, 32.8125, 56.25])
+
+
+def test_disruption_uses_summed_pause_and_nonlinear_achieved_power():
+    class QuadraticPower:
+        @staticmethod
+        def power(load):
+            return 100 + 100 * load ** 2
+
+    rows = [
+        {"scenario_id": "a", "service_pause_s": pause}
+        for pause in (2, 3)
+    ]
+    summaries = [{
+        "scenario_id": "a", "policy": "queue_haul", "planned_migrations": 4,
+    }]
+
+    assert disruption_points(rows, summaries, QuadraticPower()) == [{
+        "policy": "queue_haul", "session_s_per_w": 5 / 12,
+    }]
 
 
 def test_pareto_points_use_achieved_shed_and_only_matched_peers():

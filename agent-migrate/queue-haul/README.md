@@ -162,9 +162,9 @@ Its completed checksum-pinned reduced bundle is retained under
 `outputs/policy-hardware-width8-frontier-20260730/`, including move-admission
 provenance and raw GPU samples. `plot-reduced` writes a pooled
 migration-to-destination-first-token CDF and median modeled source-power shed
-over elapsed time with an interquartile band, plus paired measured
-attainment–completion operating points. This idle evidence supports timing and
-projected, not realized, power attainment.
+over elapsed time with an interquartile band, plus paired attainment–completion
+points and a CDF of measured session downtime per modeled watt shed. This idle
+evidence supports timing and projected, not realized, power attainment.
 The separate live power-drain evidence in
 `outputs/power_drain_live_20260714/` includes planned and measured source-power
 reductions; `plot_migration_results.py` writes their shared-axis parity plot.
