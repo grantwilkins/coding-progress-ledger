@@ -32,7 +32,7 @@ COLUMN_GROWTH_SWEEPS = 20
 COLUMN_TOLERANCE = 1e-8
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class Candidate:
     session: int
     method: str
@@ -53,7 +53,7 @@ class Candidate:
     def kv_occupancy_s(self): return self.duration_s if self.method == "kv_transfer" else 0.0
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class CandidateTable:
     sessions: tuple[SimSession, ...]
     candidates: tuple[Candidate, ...]
@@ -1055,7 +1055,7 @@ def _column_phase(table, target, costs, active, shortfall, stats):
         violations = best[minimum < -COLUMN_TOLERANCE]
         violations = violations[~np.isin(violations, columns, assume_unique=True)]
 
-        correction = np.maximum(0, -alpha - minimum)
+        correction = np.maximum(0, -minimum)
         correction[~np.isfinite(correction)] = 0
         lower = eta * target - resource_dual.sum() - (alpha + correction).sum()
         stats.update(sweeps=sweep + 1, columns=len(active), upper=float(result.fun),
@@ -1164,7 +1164,7 @@ def _persistent_column_phase(highs, table, target, costs, candidate_columns,
         np.minimum.at(best, sessions[tied], np.flatnonzero(tied))
         violations = best[minimum < -COLUMN_TOLERANCE]
         violations = violations[candidate_columns[violations] < 0]
-        correction = np.maximum(0, -alpha - minimum)
+        correction = np.maximum(0, -minimum)
         correction[~np.isfinite(correction)] = 0
         lower = eta * target - resource_dual.sum() - (alpha + correction).sum()
         pricing_s += perf_counter() - started
@@ -1194,15 +1194,21 @@ def _lp_column_generation_persistent(table: CandidateTable, target: float, stats
     highs, resources = highspy.Highs(), table.resources.shape[0]
     highs.setOptionValue("output_flag", False)
     highs.setOptionValue("solver", "simplex")
-    highs.addRows(
+    status = highs.addRows(
         resources + 1,
         np.concatenate((np.full(resources, -highspy.kHighsInf), [target])),
         np.concatenate((np.ones(resources), [highspy.kHighsInf])), 0,
         np.zeros(resources + 2, np.int32), np.array([], np.int32),
         np.array([], float),
     )
-    highs.addCol(1, 0, highspy.kHighsInf, 1, np.array([resources], np.int32),
-                 np.array([1.0]))
+    if status != highspy.HighsStatus.kOk:
+        raise RuntimeError("HiGHS failed to initialize master rows")
+    status = highs.addCol(
+        1, 0, highspy.kHighsInf, 1, np.array([resources], np.int32),
+        np.array([1.0]),
+    )
+    if status != highspy.HighsStatus.kOk:
+        raise RuntimeError("HiGHS failed to add shortfall column")
     candidate_columns = np.full(len(table.candidates), -1, np.int32)
     session_rows = np.full(table.incidence.shape[0], -1, np.int32)
     first = _persistent_column_phase(
@@ -1214,12 +1220,18 @@ def _lp_column_generation_persistent(table: CandidateTable, target: float, stats
     work = np.array([c.migration_work_s for c in table.candidates]) \
         / table.migration_horizon_s
     active = np.flatnonzero(candidate_columns >= 0)
-    highs.changeColsCost(
+    status = highs.changeColsCost(
         len(active), candidate_columns[active], work[active],
     )
-    highs.changeColBounds(0, 0, 0)
+    if status != highspy.HighsStatus.kOk:
+        raise RuntimeError("HiGHS failed to set Phase-II costs")
+    if highs.changeColBounds(0, 0, 0) != highspy.HighsStatus.kOk:
+        raise RuntimeError("HiGHS failed to fix target shortfall")
     phase2_target = max(0.0, effective - 1e-7)
-    highs.changeRowBounds(resources, phase2_target, highspy.kHighsInf)
+    if highs.changeRowBounds(
+        resources, phase2_target, highspy.kHighsInf,
+    ) != highspy.HighsStatus.kOk:
+        raise RuntimeError("HiGHS failed to set Phase-II target")
     second = _persistent_column_phase(
         highs, table, phase2_target, work, candidate_columns, session_rows, phase2,
     )

@@ -36,6 +36,7 @@ Plausible wrong implementations:
 - Charge migration work during shortfall minimization or omit the session dual.
 - Run Phase II at an infeasible requested target instead of maximum attainable gain.
 - Reuse candidate physics across pools with different types, routes, or source loads.
+- Double-count the session dual while repairing a tolerated reduced-cost violation.
 """
 
 from dataclasses import replace
@@ -143,6 +144,59 @@ def test_column_phase_one_ignores_migration_work():
     assert stats["phase1"]["columns"] == 1
     assert stats["active_columns"] == 2
     assert selected == {1}
+
+
+def test_column_certificate_repairs_reduced_cost_inside_tolerance(monkeypatch):
+    epsilon = 1e-5
+    table = CandidateTable(
+        (), (
+            Candidate(0, "replay", 0, 1, 1, 1, (), 0, (0, 0), 0),
+            Candidate(0, "kv_transfer", 0, 1 + epsilon, 1, 1, (), 0, (0, 0), 0),
+        ),
+        csr_matrix(np.ones((1, 2))), csr_matrix((0, 2)), (), (), (), 1,
+    )
+    monkeypatch.setattr(pool_planner, "COLUMN_TOLERANCE", 2 * epsilon)
+    stats = {}
+
+    pool_planner._column_phase(
+        table, 2, np.zeros(2), {0}, True, stats,
+    )
+
+    assert stats["upper"] == pytest.approx(1)
+    assert stats["lower"] == pytest.approx(1 - epsilon)
+    assert stats["lower"] <= 1 - epsilon + 1e-12
+
+
+def test_persistent_certificate_repairs_reduced_cost_inside_tolerance(monkeypatch):
+    epsilon = 1e-5
+    table = CandidateTable(
+        (), (
+            Candidate(0, "replay", 0, 1, 1, 1, (), 0, (0, 0), 0),
+            Candidate(0, "kv_transfer", 0, 1 + epsilon, 1, 1, (), 0, (0, 0), 0),
+        ),
+        csr_matrix(np.ones((1, 2))), csr_matrix((0, 2)), (), (), (), 1,
+    )
+    monkeypatch.setattr(pool_planner, "COLUMN_TOLERANCE", 2 * epsilon)
+    highs = pool_planner.highspy.Highs()
+    highs.setOptionValue("output_flag", False)
+    highs.addRows(
+        1, np.array([2.0]), np.array([pool_planner.highspy.kHighsInf]),
+        0, np.zeros(2, np.int32), np.array([], np.int32), np.array([], float),
+    )
+    highs.addCol(1, 0, pool_planner.highspy.kHighsInf, 1,
+                 np.array([0], np.int32), np.array([1.0]))
+    columns, rows = np.full(2, -1, np.int32), np.full(1, -1, np.int32)
+    pool_planner._add_priced_columns(
+        highs, table, [0], np.zeros(2), columns, rows,
+    )
+    stats = {}
+
+    pool_planner._persistent_column_phase(
+        highs, table, 2, np.zeros(2), columns, rows, stats,
+    )
+
+    assert stats["upper"] == pytest.approx(1)
+    assert stats["lower"] == pytest.approx(1 - epsilon)
 
 
 @pytest.mark.parametrize("target, shortfall", ((3, 0), (4, 1)))
