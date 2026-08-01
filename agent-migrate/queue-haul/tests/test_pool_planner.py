@@ -1084,6 +1084,9 @@ def test_native_pricing_matches_complete_python_sweep(tmp_path):
     assert sweep["phase2_costs"] == pytest.approx([
         row[3].duration_s / oracle.migration_horizon_s for row in expected
     ])
+    assert sweep["candidate_features"].reshape(-1, 7) == pytest.approx(
+        np.asarray([oracle.feature(row[3]) for row in expected]),
+    )
     assert sweep["repair_sum"] == pytest.approx(repair)
     assert sweep["minimum_reduced_cost"] == pytest.approx(minimum)
     assert sweep["evaluated_choices"] == evaluated

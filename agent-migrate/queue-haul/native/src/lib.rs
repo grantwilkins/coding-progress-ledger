@@ -48,6 +48,7 @@ struct Sweep {
     reduced: Vec<f64>,
     costs: Vec<f64>,
     gains: Vec<f64>,
+    features: Vec<f64>,
     starts: Vec<i32>,
     rows: Vec<i32>,
     values: Vec<f64>,
@@ -218,6 +219,7 @@ impl PricingOracle {
             reduced: Vec::with_capacity(winners.len()),
             costs: Vec::with_capacity(winners.len()),
             gains: Vec::with_capacity(winners.len()),
+            features: Vec::with_capacity(winners.len() * FEATURES),
             starts: vec![0],
             rows: Vec::new(),
             values: Vec::new(),
@@ -237,6 +239,10 @@ impl PricingOracle {
             sweep.reduced.push(winner.reduced);
             sweep.costs.push(duration / self.horizon);
             sweep.gains.push(self.gains[winner.session]);
+            let feature = (winner.session * self.signatures + signature) * FEATURES;
+            sweep
+                .features
+                .extend_from_slice(&self.features[feature..feature + FEATURES]);
             let start = self.option_starts[winner.option] as usize;
             let end = self.option_starts[winner.option + 1] as usize;
             for entry in start..end {
@@ -519,6 +525,7 @@ impl PricingOracle {
         result.set_item("reduced_costs", PyArray1::from_vec(py, sweep.reduced))?;
         result.set_item("phase2_costs", PyArray1::from_vec(py, sweep.costs))?;
         result.set_item("gains", PyArray1::from_vec(py, sweep.gains))?;
+        result.set_item("candidate_features", PyArray1::from_vec(py, sweep.features))?;
         result.set_item("resource_starts", PyArray1::from_vec(py, sweep.starts))?;
         result.set_item("resource_rows", PyArray1::from_vec(py, sweep.rows))?;
         result.set_item("resource_values", PyArray1::from_vec(py, sweep.values))?;

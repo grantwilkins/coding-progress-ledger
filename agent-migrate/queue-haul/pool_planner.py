@@ -1691,9 +1691,13 @@ def _native_column_phase(highs, oracle, native, target, phase_two, session_rows,
             sweep["reduced_costs"], sweep["phase2_costs"],
         )):
             session, option = int(session), int(option)
-            candidate = next(
-                candidate for candidate in oracle.choices(session)
-                if oracle.option_for[candidate.pool, candidate.method] == option
+            pool, method = oracle.options[option]
+            feature = sweep["candidate_features"][7 * column:7 * column + 7]
+            candidate = Candidate(
+                session, method, pool, float(sweep["gains"][column]),
+                float(feature[4]), float(feature[4]), oracle.pools[pool].route,
+                float(feature[0]), (float(feature[1]), float(feature[2])),
+                int(feature[3]), (float(feature[5]), float(feature[6])),
             )
             start, end = starts[column:column + 2]
             entries = tuple(zip(
