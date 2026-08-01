@@ -305,6 +305,15 @@ def _candidate_oracle(scenario, profile, architecture, mode, power):
     case, types = profile.case("central"), architecture.type_by_id
     links = {link.link_id: link.bytes_per_s for link in scenario.links}
     gains = tuple(power.marginal(session.session_id) for session in sessions)
+    grouped = {}
+    for p, pool in enumerate(architecture.pools):
+        q = types[pool.type_id]
+        key = (
+            q.type_id, len(pool.replicas), tuple(pool_work[p]), pool_kv[p],
+            tuple(_event_bounds(q, pool, mode)), pool.route, pool.methods,
+        )
+        grouped.setdefault(key, []).append(p)
+    pool_groups = tuple(map(tuple, grouped.values()))
 
     def records(j):
         session, values = sessions[j], []
@@ -315,7 +324,8 @@ def _candidate_oracle(scenario, profile, architecture, mode, power):
             "replay": _log_bytes(session, migration_tokens),
             "kv_transfer": case.kv_transfer.sealed_bytes(migration_tokens),
         }
-        for p, pool in enumerate(architecture.pools):
+        for group in pool_groups:
+            p, pool = group[0], architecture.pools[group[0]]
             q = types[pool.type_id]
             bounds = _event_bounds(q, pool, mode)
             if q.migration is None:
@@ -381,10 +391,12 @@ def _candidate_oracle(scenario, profile, architecture, mode, power):
                     (max(0, duration - route_bytes[method] / bandwidth), 0)
                     if method == "replay" else (0, 0)
                 )
-                values.append((
-                    method, p, duration, pool.route, route_bytes[method],
+                values.extend((
+                    method, destination, duration,
+                    architecture.pools[destination].route, route_bytes[method],
                     tuple(demand), resident, transition,
-                ))
+                ) for destination in group)
+        values.sort(key=lambda value: option_for[value[1], value[0]])
         return tuple(values)
 
     def choices(j):
@@ -510,6 +522,7 @@ def _candidate_oracle(scenario, profile, architecture, mode, power):
         pricing=pricing,
         signatures=tuple(signatures), option_signatures=option_signatures,
         templates=tuple(templates), option_for=option_for,
+        pool_groups=pool_groups,
     )
 
 

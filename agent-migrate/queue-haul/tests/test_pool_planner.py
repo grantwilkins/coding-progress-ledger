@@ -971,6 +971,17 @@ def test_equivalent_pools_share_candidate_physics_not_capacity_rows(tmp_path, mo
     assert any(name.startswith("service:p0") for name in table.resource_names)
     assert any(name.startswith("service:p1") for name in table.resource_names)
 
+    power = ExpectedPower(scenario, profile)
+    assert len(_candidate_oracle(
+        scenario, profile, architecture(normal=1, emergency=1, stable=1),
+        "normal", power,
+    ).pool_groups) == 1
+    assert len(_candidate_oracle(
+        scenario, profile, architecture(
+            normal=1, emergency=1, stable=1, baselines=((0, 0), (.1, 0)),
+        ), "normal", power,
+    ).pool_groups) == 2
+
 
 def test_streamed_candidates_and_columns_equal_exhaustive_table(tmp_path):
     scenario, profile = problem(), model(tmp_path, switch=0, tp=1)
