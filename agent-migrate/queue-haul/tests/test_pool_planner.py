@@ -187,12 +187,14 @@ def test_persistent_certificate_repairs_reduced_cost_inside_tolerance(monkeypatc
                  np.array([0], np.int32), np.array([1.0]))
     columns, rows = np.full(2, -1, np.int32), np.full(1, -1, np.int32)
     pool_planner._add_priced_columns(
-        highs, table, [0], np.zeros(2), columns, rows,
+        highs, table, pool_planner.csc_matrix(table.resources), [0],
+        np.zeros(2), columns, rows,
     )
     stats = {}
 
     pool_planner._persistent_column_phase(
-        highs, table, 2, np.zeros(2), columns, rows, stats,
+        highs, table, pool_planner.csc_matrix(table.resources), 2,
+        np.zeros(2), columns, rows, stats,
     )
 
     assert stats["upper"] == pytest.approx(1)

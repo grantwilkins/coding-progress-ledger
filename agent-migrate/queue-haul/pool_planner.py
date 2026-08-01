@@ -1094,8 +1094,8 @@ def _lp_column_generation(table: CandidateTable, target: float, stats=None):
     return selected
 
 
-def _add_priced_columns(highs, table, choices, costs, candidate_columns,
-                        session_rows):
+def _add_priced_columns(highs, table, resources, choices, costs,
+                        candidate_columns, session_rows):
     choices = np.asarray(choices, dtype=np.int32)
     sessions = np.array([table.candidates[i].session for i in choices], np.int32)
     new_sessions = np.unique(sessions[session_rows[sessions] < 0])
@@ -1110,7 +1110,7 @@ def _add_priced_columns(highs, table, choices, costs, candidate_columns,
         if status != highspy.HighsStatus.kOk:
             raise RuntimeError("HiGHS failed to add session rows")
         session_rows[new_sessions] = np.arange(first, first + len(new_sessions))
-    matrix, starts, indices, values = csc_matrix(table.resources), [0], [], []
+    matrix, starts, indices, values = resources, [0], [], []
     target_row = table.resources.shape[0]
     for choice, session in zip(choices, sessions):
         sl = slice(matrix.indptr[choice], matrix.indptr[choice + 1])
@@ -1131,8 +1131,8 @@ def _add_priced_columns(highs, table, choices, costs, candidate_columns,
     candidate_columns[choices] = np.arange(first, first + len(choices))
 
 
-def _persistent_column_phase(highs, table, target, costs, candidate_columns,
-                             session_rows, stats):
+def _persistent_column_phase(highs, table, resources, target, costs,
+                             candidate_columns, session_rows, stats):
     sessions = np.array([c.session for c in table.candidates])
     gains = np.array([c.gain_w for c in table.candidates])
     batch = max(256, table.incidence.shape[0] // COLUMN_GROWTH_SWEEPS)
@@ -1180,7 +1180,8 @@ def _persistent_column_phase(highs, table, target, costs, candidate_columns,
         choices = violations[order[:batch]]
         started = perf_counter()
         _add_priced_columns(
-            highs, table, choices, costs, candidate_columns, session_rows,
+            highs, table, resources, choices, costs, candidate_columns,
+            session_rows,
         )
         add_s += perf_counter() - started
         highs.setOptionValue("presolve", "off")
@@ -1211,8 +1212,9 @@ def _lp_column_generation_persistent(table: CandidateTable, target: float, stats
         raise RuntimeError("HiGHS failed to add shortfall column")
     candidate_columns = np.full(len(table.candidates), -1, np.int32)
     session_rows = np.full(table.incidence.shape[0], -1, np.int32)
+    resource_columns = csc_matrix(table.resources)
     first = _persistent_column_phase(
-        highs, table, target, np.zeros(len(table.candidates)),
+        highs, table, resource_columns, target, np.zeros(len(table.candidates)),
         candidate_columns, session_rows, phase1,
     )
     shortfall = float(first.col_value[0])
@@ -1233,7 +1235,8 @@ def _lp_column_generation_persistent(table: CandidateTable, target: float, stats
     ) != highspy.HighsStatus.kOk:
         raise RuntimeError("HiGHS failed to set Phase-II target")
     second = _persistent_column_phase(
-        highs, table, phase2_target, work, candidate_columns, session_rows, phase2,
+        highs, table, resource_columns, phase2_target, work, candidate_columns,
+        session_rows, phase2,
     )
     values = np.zeros(len(table.candidates))
     active = np.flatnonzero(candidate_columns >= 0)
