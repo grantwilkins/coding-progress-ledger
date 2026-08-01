@@ -632,9 +632,17 @@ def _recover_coupled(
     limits = np.ones(matrix.shape[0]) if resource_limits is None else resource_limits
     gain, blocked, cache = 0.0, set(), {}
     usage = np.zeros(matrix.shape[0])
-    visited = {frozenset()}
     sources = sorted(patterns)
     rank = {source: i for i, source in enumerate(sources)}
+    pattern_ids, multipliers, multiplier = {}, {}, 1
+    for source in sources:
+        pattern_ids[source] = {
+            pattern: i for i, pattern in enumerate(sorted(patterns[source]), 1)
+        }
+        multipliers[source], multiplier = multiplier, multiplier * (
+            len(pattern_ids[source]) + 1
+        )
+    state, visited = 0, {0}
     versions = dict.fromkeys(sources, 0)
     heap, deferred, assignment = [], [], None
 
@@ -698,31 +706,36 @@ def _recover_coupled(
                 continue
             old_members, old_usage = stats(old)[2:]
             members, pattern_usage = stats(pattern)[2:]
-            trial = selected - old_members | members
-            if frozenset(trial) in visited:
+            trial_state = state + (
+                pattern_ids[source][pattern] - pattern_ids[source].get(old, 0)
+            ) * multipliers[source]
+            if trial_state in visited:
                 deferred.append(item)
                 continue
             trial_usage = usage - old_usage + pattern_usage
             if np.any(trial_usage > limits + 1e-8):
                 deferred.append(item)
                 continue
-            best = source, old, pattern, trial, item[8], trial_usage
+            best = source, old, pattern, item[8], trial_usage, trial_state
             break
         if best is None:
             break
         if eager_pack:
             assignment = _pack(
-                table, best[3], architecture, scenario, mode,
+                table, selected - stats(best[1])[2] | stats(best[2])[2],
+                architecture, scenario, mode,
             )[0]
             if assignment is None:
                 blocked.add(best[:3])
                 continue
-        chosen[best[0]], selected = best[2], best[3]
-        visited.add(frozenset(selected))
-        usage = best[5]
-        gain += best[4]
+        selected.difference_update(stats(best[1])[2])
+        selected.update(stats(best[2])[2])
+        chosen[best[0]], state = best[2], best[5]
+        visited.add(state)
+        usage = best[4]
+        gain += best[3]
         versions[best[0]] += 1
-        if best[4] < 0:
+        if best[3] < 0:
             heap, deferred = [], []
             for source in sources:
                 add(source)

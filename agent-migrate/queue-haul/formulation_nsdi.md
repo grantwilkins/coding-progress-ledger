@@ -328,9 +328,11 @@ ordering, and retains the selected prefix and its neighbors, the singleton and
 full prefixes, and evenly spaced prefix-length ranks. Below 75% of removable
 awake power it uses one price pass and eight rank buckets; at higher targets it
 uses four passes and 64 buckets. Recovery updates aggregate resource vectors
-incrementally and checks their exact sparse sum once before return. It packs the
-final set once and reuses that assignment; an unpackable or unreachable set
-falls back to packing-aware recovery. Route budgets reserve the largest
+incrementally and encodes each visited combination as an exact mixed-radix
+integer over source-local prefix choices, avoiding copies of the global selected
+set. It checks the exact sparse resource sum once before return, packs the final
+set once, and reuses that assignment; an unpackable or unreachable set falls
+back to packing-aware recovery. Route budgets reserve the largest
 candidate's isolated post-route tail, and exact eager-parallel prediction
 remains the final acceptance gate. The method has polynomial local search but
 is still experimental and equal-cost cases remain sensitive to input order.
@@ -577,7 +579,10 @@ separately defined chord relaxation is required for that claim.
 **Question D2.** Can Queue-Haul plan for 10K, 100K, and 1M sessions within an
 operationally useful budget? Plot planning time and memory against session
 count for ten seeds. Every point retains provenance and an execution-validator
-result.
+result. The current single-seed 1M sensitivity is not a positive operational
+answer: although the prefix policy is faster than static greedy, it takes about
+12 minutes, uses 5.02 GB peak RSS, and leaves four seconds of migration-deadline
+slack. Replica packing remains the dominant measured bottleneck.
 
 ## 15. Result-table contract
 

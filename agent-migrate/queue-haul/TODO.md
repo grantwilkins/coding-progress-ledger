@@ -19,7 +19,12 @@ order and overlaps moves up to its configured width.
 - [x] Add a simulator-only polynomial prefix variant without changing defaults.
 - [x] Bound prefix recovery, remove repeated packing, and run a single-seed
   100K sensitivity.
-- [ ] Resolve prefix order sensitivity and broaden held-out high-target validation before promotion.
+- [x] Replace global selected-set copies with exact source-prefix state IDs.
+- [x] Run single-seed 250K, 500K, and 1M 10% scale sensitivities.
+- [ ] Vectorize or index replica packing without changing assignments.
+- [ ] Reduce prefix RSS and smooth the 75% frontier discontinuity.
+- [ ] Resolve prefix order sensitivity and broaden held-out high-target
+  validation before promotion.
 - [ ] Verify checksums and paper tables against the committed code revision.
 - [x] Run `uv run pytest`.
 

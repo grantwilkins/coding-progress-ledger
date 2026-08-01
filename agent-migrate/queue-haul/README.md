@@ -138,15 +138,20 @@ infeasible plans receive zero validated shed. The archived exploratory run under
 `outputs/dual-lagrangian-*` finds lower migration work and better target
 completion in packed coding traces. The scale-oriented policy uses a small
 prefix-length frontier, incremental aggregate recovery, one final packing pass,
-and a broader frontier above 75% requested shed. This bounded rewrite uses
+and a broader frontier at 75% requested shed. Recovery represents each visited
+combination by an exact mixed-radix source-prefix ID instead of copying the
+global selected set. This bounded rewrite uses
 roughly 6–44% more migration work than its exhaustive-prefix experimental
 precursor in the archived comparable cases, while remaining below static
-greedy. It remains experimental and is not a hardware or 1M-session claim. In
-the single 100K/50% sensitivity, it takes 81 versus 138 seconds and uses 53%
-less migration work than static greedy, but finishes migration in 111 versus 54
-seconds against a 115-second horizon. The smaller timing differences are
-indistinguishable at this sample size; these points are sensitivities, not
-confidence intervals.
+greedy. It remains experimental and does not change the hardware controller.
+In a single-seed coding 10% sensitivity, prefix versus static greedy takes
+65/92 seconds at 250K, 200/290 seconds at 500K, and 694/1,236 seconds at 1M,
+while selecting 55–60% less migration work. At 1M it uses 5.02 versus 4.63 GB
+peak RSS and finishes migration at 111 versus 9 seconds against a 115-second
+horizon. Two additional 100K workloads also pass exact validation with lower
+prefix time and work. The 75% branch passes at 100K but takes 229 versus 174
+seconds and 1.78 versus 0.78 GB at 74.9%. These are scale sensitivities, not
+confidence intervals or a production-scale claim.
 `paper_evaluation.py` writes the legacy Q1–Q9 result/plot registry while the
 paper evaluation is reorganized into mechanism validation, fixed-contract
 coordination, multi-pool contracts, and planner quality/scale. It rejects
