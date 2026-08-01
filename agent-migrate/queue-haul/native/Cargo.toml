@@ -1,0 +1,13 @@
+[package]
+name = "queue-haul-native"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.96"
+
+[lib]
+name = "_queue_haul_native"
+crate-type = ["cdylib"]
+
+[dependencies]
+numpy = "0.28"
+pyo3 = { version = "0.28", features = ["extension-module"] }

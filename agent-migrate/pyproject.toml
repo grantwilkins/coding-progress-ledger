@@ -17,5 +17,19 @@ dependencies = [
 testpaths = ["tests", "evacuation/tests", "queue-haul/tests"]
 norecursedirs = ["runs", ".venv", ".git", "dist", "build", "kv-transfer-early-experiment", "long-term-plans"]
 
+[tool.uv.workspace]
+members = [
+    "queue-haul/native",
+]
+
+[tool.uv.sources]
+queue-haul-native = { workspace = true }
+
 [dependency-groups]
-dev = ["pytest>=8"]
+dev = [
+    "maturin>=1.14.1",
+    "pytest>=8",
+]
+native = [
+    "queue-haul-native",
+]

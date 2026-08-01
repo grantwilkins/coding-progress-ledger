@@ -149,12 +149,15 @@ hardware or route capacity. All column-generation solvers remain experimental;
 `lp_column_generation_lazy` instead streams the complete implicit action
 universe, retains only generated master columns, stops on a global certified
 gap, and consults the oracle again during integral completion. It preserves the
-same LP but currently regenerates Python candidate physics on every pricing
-sweep. The native-pricing boundary factors these candidates into float64
-session/signature features, packed per-session feasibility masks, and distinct
-pool/method sparse templates; the initial kernel is limited to 16 options.
-Native sweep execution, indexed replica placement, and a compact execution
-verifier are still required for million-session operation.
+same LP but regenerates Python candidate physics on every pricing sweep.
+`lp_column_generation_native` runs the identical Phase-I/Phase-II master and
+certificate with a long-lived Rust pricing oracle while keeping HiGHS in Python.
+The native boundary factors candidates into float64 session/signature features,
+packed per-session feasibility masks, and distinct pool/method sparse templates;
+it is limited to 16 options and hard-fails outside that scope. Install it with
+`uv sync --group native` using rustup Cargo; the toolchain is pinned under
+`native/`. Indexed replica placement and a compact execution verifier are still
+required for million-session operation.
 `dual_lagrangian_experiment.py` evaluates the simulator-only `greedy_prefix`
 policy as a dual-Lagrangian prefix method against the unchanged static greedy
 baseline and other experimental pool policies on paired trace-derived targets;

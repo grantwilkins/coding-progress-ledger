@@ -58,10 +58,11 @@ def manifest():
 def test_reference_bench_accepts_additive_highs_backend():
     assert parse_solvers(
         "lp,lp_highs,lp_column_generation,lp_column_generation_persistent,"
-        "lp_column_generation_lazy",
+        "lp_column_generation_lazy,lp_column_generation_native",
     ) == (
         "lp", "lp_highs", "lp_column_generation",
         "lp_column_generation_persistent", "lp_column_generation_lazy",
+        "lp_column_generation_native",
     )
 
 

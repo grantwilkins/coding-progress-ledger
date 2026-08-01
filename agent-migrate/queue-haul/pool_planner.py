@@ -528,6 +528,23 @@ def _pricing_soa(oracle):
     )
 
 
+def _native_pricing_oracle(oracle):
+    from _queue_haul_native import PricingOracle
+
+    soa = _pricing_soa(oracle)
+    return PricingOracle(
+        len(oracle.sessions), len(oracle.signatures), len(oracle.options),
+        len(oracle.specs), oracle.migration_horizon_s,
+        *(
+            np.ascontiguousarray(values.ravel()) for values in (
+                soa.gains, soa.features, soa.feasible, soa.option_signatures,
+                soa.option_starts, soa.resource_rows,
+                soa.resource_coefficients, soa.session_ranks,
+            )
+        ),
+    ), soa
+
+
 def _materialize_candidates(oracle, candidates, prune=True):
     sessions, horizon = oracle.sessions, oracle.migration_horizon_s
     if horizon <= 0:
@@ -1590,10 +1607,90 @@ def _lazy_column_phase(highs, oracle, target, phase_two, session_rows,
     raise RuntimeError("lazy column generation did not converge")
 
 
-def _lp_column_generation_lazy(oracle, target, stats=None):
+def _native_column_phase(highs, oracle, native, target, phase_two, session_rows,
+                         active, candidates, stats):
+    batch = max(256, len(oracle.sessions) // COLUMN_GROWTH_SWEEPS)
+    pricing_s = add_s = solve_s = 0.0
+    iterations = 0
+    for sweep_index in range(len(oracle.options) * len(oracle.sessions) + 1):
+        started = perf_counter()
+        highs.run()
+        solve_s += perf_counter() - started
+        if highs.getModelStatus() != highspy.HighsModelStatus.kOptimal:
+            raise RuntimeError(f"native lazy master failed: {highs.getModelStatus()}")
+        solution, info = highs.getSolution(), highs.getInfo()
+        iterations += info.simplex_iteration_count
+        dual = np.asarray(solution.row_dual)
+        resources = np.maximum(0, -dual[:len(oracle.specs)])
+        alpha = np.zeros(len(oracle.sessions))
+        represented = np.flatnonzero(session_rows >= 0)
+        alpha[represented] = np.maximum(0, -dual[session_rows[represented]])
+        eta = max(0.0, dual[len(oracle.specs)])
+
+        started = perf_counter()
+        sweep = native.price(
+            2 if phase_two else 1, eta, resources, alpha, batch,
+            COLUMN_TOLERANCE,
+        )
+        lower = (sweep["effective_eta"] * target - resources.sum()
+                 - alpha.sum() - sweep["repair_sum"])
+        pricing_s += perf_counter() - started
+        upper = float(info.objective_function_value)
+        gap = upper - lower
+        stats.update(
+            sweeps=sweep_index + 1, columns=len(candidates), upper=upper,
+            lower=float(lower), gap=gap, pricing_s=pricing_s,
+            add_s=add_s, solve_s=solve_s, simplex_iterations=iterations,
+            evaluated_choices=int(sweep["evaluated_choices"]),
+        )
+        if gap <= COLUMN_GAP_TOLERANCE:
+            if len(sweep["candidate_ids"]):
+                native.discard(sweep["epoch"])
+            return solution
+        if not len(sweep["candidate_ids"]):
+            raise RuntimeError(f"native lazy certificate gap did not close: {gap}")
+
+        priced = []
+        starts = sweep["resource_starts"]
+        for column, (session, option, reduced, cost) in enumerate(zip(
+            sweep["session_indices"], sweep["option_indices"],
+            sweep["reduced_costs"], sweep["phase2_costs"],
+        )):
+            session, option = int(session), int(option)
+            candidate = next(
+                candidate for candidate in oracle.choices(session)
+                if oracle.option_for[candidate.pool, candidate.method] == option
+            )
+            start, end = starts[column:column + 2]
+            entries = tuple(zip(
+                map(int, sweep["resource_rows"][start:end]),
+                map(float, sweep["resource_values"][start:end]),
+            ))
+            order = (
+                oracle.sessions[session].session_id,
+                oracle.pools[candidate.pool].pool_id,
+                "0" if candidate.method == "replay" else "1",
+            )
+            priced.append(_PricedColumn(
+                float(reduced), order, candidate, entries,
+                float(cost) if phase_two else 0.0,
+            ))
+        started = perf_counter()
+        _lazy_add_columns(
+            highs, oracle, priced, session_rows, active, candidates,
+        )
+        native.commit(sweep["epoch"], sweep["candidate_ids"])
+        add_s += perf_counter() - started
+        highs.setOptionValue("presolve", "off")
+    raise RuntimeError("native lazy column generation did not converge")
+
+
+def _lp_column_generation_lazy(oracle, target, stats=None, native=False):
     if target <= 0 or oracle.migration_horizon_s <= 0:
         return _materialize_candidates(oracle, (), False), set()
     started, phase1, phase2 = perf_counter(), {}, {}
+    native_oracle = _native_pricing_oracle(oracle)[0] if native else None
+    build_s = perf_counter() - started
     highs, resources = highspy.Highs(), len(oracle.specs)
     highs.setOptionValue("output_flag", False)
     highs.setOptionValue("solver", "simplex")
@@ -1613,8 +1710,10 @@ def _lp_column_generation_lazy(oracle, target, stats=None):
         raise RuntimeError("HiGHS failed to add lazy shortfall column")
     session_rows = np.full(len(oracle.sessions), -1, np.int32)
     active, candidates = set(), []
-    first = _lazy_column_phase(
-        highs, oracle, target, False, session_rows, active, candidates, phase1,
+    phase = _native_column_phase if native else _lazy_column_phase
+    arguments = (highs, oracle) + ((native_oracle,) if native else ())
+    first = phase(
+        *arguments, target, False, session_rows, active, candidates, phase1,
     )
     shortfall = float(first.col_value[0])
     effective = max(0.0, target - shortfall)
@@ -1634,8 +1733,8 @@ def _lp_column_generation_lazy(oracle, target, stats=None):
         resources, phase2_target, highspy.kHighsInf,
     ) != highspy.HighsStatus.kOk:
         raise RuntimeError("HiGHS failed to set lazy Phase-II target")
-    second = _lazy_column_phase(
-        highs, oracle, phase2_target, True, session_rows, active, candidates, phase2,
+    second = phase(
+        *arguments, phase2_target, True, session_rows, active, candidates, phase2,
     )
     values = np.asarray(second.col_value)[1:len(candidates) + 1]
     master_columns = len(candidates)
@@ -1648,9 +1747,13 @@ def _lp_column_generation_lazy(oracle, target, stats=None):
             completion_columns=len(candidates) - master_columns,
             active_sessions=np.count_nonzero(session_rows >= 0),
             phase1_shortfall=shortfall, effective_target=effective,
-            phase1=phase1, phase2=phase2,
+            phase1=phase1, phase2=phase2, native_build_s=build_s if native else 0,
         )
     return table, selected
+
+
+def _lp_column_generation_native(oracle, target, stats=None):
+    return _lp_column_generation_lazy(oracle, target, stats, True)
 
 
 def _pack(table, selected, architecture, scenario, mode):
@@ -1821,13 +1924,16 @@ def _selected_service_debt(table, selected, architecture, scenario):
 
 def _mode_plan(scenario, profile, architecture, solver, mode, power, target):
     assignment = None
-    if solver == "lp_column_generation_lazy":
-        table, selected = _lp_column_generation_lazy(
+    streamed = solver in {"lp_column_generation_lazy", "lp_column_generation_native"}
+    if streamed:
+        solve = (_lp_column_generation_native if solver.endswith("native")
+                 else _lp_column_generation_lazy)
+        table, selected = solve(
             _candidate_oracle(scenario, profile, architecture, mode, power), target,
         )
     else:
         table = candidate_table(scenario, profile, architecture, mode, power)
-    if solver == "lp_column_generation_lazy":
+    if streamed:
         pass
     elif solver == "greedy_prefix":
         selected, assignment = _greedy_prefix(
@@ -1872,7 +1978,7 @@ def plan_destination(scenario, profile, solver, case_id, seed, architecture):
     if solver not in {"greedy", "greedy_bundle", "greedy_prefix", "greedy_coupled",
                       "lp", "lp_peak_first", "lp_work_first", "lp_highs",
                       "lp_column_generation", "lp_column_generation_persistent",
-                      "lp_column_generation_lazy"}:
+                      "lp_column_generation_lazy", "lp_column_generation_native"}:
         raise ValueError("destination architecture supports pool-aware LP and greedy")
     if case_id != "central":
         raise ValueError("destination admission supports the central profile")

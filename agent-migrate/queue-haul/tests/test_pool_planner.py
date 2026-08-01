@@ -60,10 +60,11 @@ from pool_planner import (Candidate, CandidateTable, _destination_duration, _eve
                           _greedy, _greedy_bundle, _greedy_coupled,
                           _greedy_prefix, _coupled_source_pattern,
                           _lp_column_generation, _lp_column_generation_lazy,
+                          _lp_column_generation_native,
                           _lp_column_generation_persistent,
                           _lp_highs,
                           _mode_boundary_rho,
-                          _pricing_soa,
+                          _native_pricing_oracle, _pricing_soa,
                           _dual_resource_limits, _retained_prefixes,
                           _source_removed_gain,
                           _recover_coupled, _service_trace, candidate_table,
@@ -419,6 +420,10 @@ def test_highs_lp_is_additive_and_does_not_replace_clarabel(monkeypatch):
         pool_planner, "_lp_column_generation_lazy",
         lambda *args: (table, called.append("lp_column_generation_lazy") or set()),
     )
+    monkeypatch.setattr(
+        pool_planner, "_lp_column_generation_native",
+        lambda *args: (table, called.append("lp_column_generation_native") or set()),
+    )
     monkeypatch.setattr(pool_planner, "_pack", lambda *args: ({}, None))
 
     pool_planner._mode_plan(None, None, None, "lp", "normal", None, 0)
@@ -436,10 +441,14 @@ def test_highs_lp_is_additive_and_does_not_replace_clarabel(monkeypatch):
     pool_planner._mode_plan(
         None, None, None, "lp_column_generation_lazy", "normal", None, 0,
     )
+    pool_planner._mode_plan(
+        None, None, None, "lp_column_generation_native", "normal", None, 0,
+    )
 
     assert called == [
         "lp", "lp_highs", "lp_column_generation",
         "lp_column_generation_persistent", "lp_column_generation_lazy",
+        "lp_column_generation_native",
     ]
 
 
@@ -1029,6 +1038,159 @@ def test_pricing_soa_reconstructs_every_candidate_column(tmp_path):
     ].tolist() != soa.resource_rows[
         soa.option_starts[2]:soa.option_starts[3]
     ].tolist()
+
+
+def test_native_pricing_matches_complete_python_sweep(tmp_path):
+    scenario, profile = problem(), model(tmp_path, switch=0, tp=1)
+    oracle = _candidate_oracle(
+        scenario, profile, architecture(normal=1, emergency=1, stable=1),
+        "normal", ExpectedPower(scenario, profile),
+    )
+    native, _ = _native_pricing_oracle(oracle)
+    resource_duals = np.linspace(.01, .03, len(oracle.specs))
+    session_duals = np.linspace(0, .02, len(oracle.sessions))
+    eta = .7
+    expected, repair, minimum, evaluated = [], 0.0, np.inf, 0
+    for j in range(len(oracle.sessions)):
+        choices = []
+        for candidate in oracle.choices(j):
+            option = oracle.option_for[candidate.pool, candidate.method]
+            reduced = (
+                candidate.duration_s / oracle.migration_horizon_s
+                + sum(resource_duals[row] * value
+                      for row, value in oracle.column(candidate))
+                - eta * oracle.gains[j] + session_duals[j]
+            )
+            choices.append((reduced, option, candidate))
+            evaluated += 1
+        session_minimum = min(value for value, _, _ in choices)
+        repair += max(0, -session_minimum)
+        minimum = min(minimum, session_minimum)
+        reduced, option, candidate = min(choices)
+        if reduced < 0:
+            expected.append((reduced, j, option, candidate))
+    ranks = {session.session_id: rank for rank, session in enumerate(sorted(
+        oracle.sessions, key=lambda session: session.session_id,
+    ))}
+    expected.sort(key=lambda row: (row[0], ranks[oracle.sessions[row[1]].session_id], row[2]))
+    sweep = native.price(2, eta, resource_duals, session_duals, len(oracle.sessions), 0)
+
+    assert sweep["session_indices"].tolist() == [row[1] for row in expected]
+    assert sweep["option_indices"].tolist() == [row[2] for row in expected]
+    assert sweep["candidate_ids"].tolist() == [
+        (row[1] << 4) | row[2] for row in expected
+    ]
+    assert sweep["reduced_costs"] == pytest.approx([row[0] for row in expected])
+    assert sweep["phase2_costs"] == pytest.approx([
+        row[3].duration_s / oracle.migration_horizon_s for row in expected
+    ])
+    assert sweep["repair_sum"] == pytest.approx(repair)
+    assert sweep["minimum_reduced_cost"] == pytest.approx(minimum)
+    assert sweep["evaluated_choices"] == evaluated
+    starts = sweep["resource_starts"]
+    for column, row in enumerate(expected):
+        start, end = starts[column:column + 2]
+        expected_column = oracle.column(row[3])
+        assert sweep["resource_rows"][start:end].tolist() == [
+            resource for resource, _ in expected_column
+        ]
+        assert sweep["resource_values"][start:end] == pytest.approx([
+            value for _, value in expected_column
+        ])
+
+
+def test_native_column_master_matches_python_lazy_solver(tmp_path):
+    scenario, profile = problem(), model(tmp_path, switch=0, tp=1)
+    arch = architecture(normal=1, emergency=1, stable=1)
+    power = ExpectedPower(scenario, profile)
+    target = sum(power.marginal(session.session_id)
+                 for session in scenario.sessions) / 2
+    python_stats, native_stats = {}, {}
+    python_table, python_selected = _lp_column_generation_lazy(
+        _candidate_oracle(scenario, profile, arch, "normal", power),
+        target, python_stats,
+    )
+    native_table, native_selected = _lp_column_generation_native(
+        _candidate_oracle(scenario, profile, arch, "normal", power),
+        target, native_stats,
+    )
+
+    totals = lambda table, selected: (
+        sum(table.candidates[i].gain_w for i in selected),
+        sum(table.candidates[i].migration_work_s for i in selected),
+    )
+    assert totals(native_table, native_selected) == pytest.approx(
+        totals(python_table, python_selected),
+    )
+    assert native_stats["phase1_shortfall"] == pytest.approx(
+        python_stats["phase1_shortfall"], abs=1e-7,
+    )
+    assert native_stats["phase2"]["upper"] == pytest.approx(
+        python_stats["phase2"]["upper"], abs=1e-7,
+    )
+    assert native_stats["phase1"]["gap"] <= pool_planner.COLUMN_GAP_TOLERANCE
+    assert native_stats["phase2"]["gap"] <= pool_planner.COLUMN_GAP_TOLERANCE
+
+
+def test_native_pricing_is_stable_certified_and_transactional():
+    from _queue_haul_native import PricingOracle
+
+    coefficients = np.zeros((2, 7))
+    coefficients[:, 0] = (1, 2)
+    native = PricingOracle(
+        3, 1, 2, 1, 10.0,
+        np.array([5., 5., 2.]),
+        np.array([[1., 0, 0, 0, 2, 0, 0],
+                  [1., 0, 0, 0, 4, 0, 0],
+                  [3., 0, 0, 0, 1, 0, 0]]).ravel(),
+        np.array([3, 3, 1], np.uint16), np.zeros(2, np.uint16),
+        np.array([0, 1, 2], np.int32), np.zeros(2, np.int32),
+        coefficients.ravel(), np.array([2, 0, 1], np.uint32),
+    )
+    sweep = native.price(2, 1, np.array([.5]), np.array([0., 1., 0.]), 2, 0)
+    assert sweep["candidate_ids"].tolist() == [0, 16]
+    assert sweep["reduced_costs"] == pytest.approx([-4.3, -3.1])
+    assert sweep["repair_sum"] == pytest.approx(7.8)
+    assert sweep["minimum_reduced_cost"] == pytest.approx(-4.3)
+    assert sweep["violating_sessions"] == 3
+    assert sweep["evaluated_choices"] == 5
+    with pytest.raises(ValueError, match="uncommitted"):
+        native.price(2, 1, np.array([.5]), np.array([0., 1., 0.]), 2, 0)
+    with pytest.raises(ValueError, match="does not match"):
+        native.commit(sweep["epoch"], np.array([0], np.uint64))
+    native.discard(sweep["epoch"])
+
+    tied = native.price(1, 10, np.zeros(1), np.zeros(3), 1, 0)
+    assert tied["effective_eta"] == 1
+    assert tied["candidate_ids"].tolist() == [16]
+    assert tied["repair_sum"] == pytest.approx(12)
+    native.commit(tied["epoch"], tied["candidate_ids"])
+    remaining = native.price(1, 1, np.zeros(1), np.zeros(3), 1, 0)
+    assert remaining["candidate_ids"].tolist() == [17]
+    assert remaining["repair_sum"] == pytest.approx(12)
+    native.discard(remaining["epoch"])
+
+
+@pytest.mark.parametrize("argument,value", [
+    (9, np.array([1, 1, 2], np.int32)),
+    (9, np.array([0, -1, 2], np.int32)),
+    (7, np.array([4, 3, 1], np.uint16)),
+    (12, np.array([0, 0, 2], np.uint32)),
+])
+def test_native_pricing_rejects_malformed_soa(argument, value):
+    from _queue_haul_native import PricingOracle
+
+    coefficients = np.zeros((2, 7))
+    coefficients[:, 0] = (1, 2)
+    arguments = [
+        3, 1, 2, 1, 10., np.array([5., 5., 2.]), np.zeros(21),
+        np.array([3, 3, 1], np.uint16), np.zeros(2, np.uint16),
+        np.array([0, 1, 2], np.int32), np.zeros(2, np.int32),
+        coefficients.ravel(), np.arange(3, dtype=np.uint32),
+    ]
+    arguments[argument] = value
+    with pytest.raises(ValueError, match="invalid pricing SoA"):
+        PricingOracle(*arguments)
 
 
 def test_absent_architecture_is_exact_legacy_adapter(tmp_path):

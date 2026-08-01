@@ -470,7 +470,7 @@ def parse_solvers(value: str) -> tuple[str, ...]:
     solvers = tuple(value.split(","))
     allowed = {"lp", "lp_highs", "lp_column_generation",
                "lp_column_generation_persistent", "lp_column_generation_lazy",
-               "greedy"}
+               "lp_column_generation_native", "greedy"}
     if not solvers or not set(solvers) <= allowed:
         raise argparse.ArgumentTypeError(f"solvers must be drawn from {sorted(allowed)}")
     return solvers
