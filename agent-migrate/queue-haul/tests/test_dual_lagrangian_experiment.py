@@ -18,6 +18,7 @@ from dual_lagrangian_experiment import (
     parse_solvers,
     power_limit,
     result_row,
+    rss_bytes,
 )
 
 
@@ -43,6 +44,11 @@ def test_experiment_stack_hash_covers_every_python_source(tmp_path):
     original = experiment_stack_hash(tmp_path)
     second.write_text("changed")
     assert experiment_stack_hash(tmp_path) != original
+
+
+def test_peak_rss_units_match_operating_system_contract():
+    assert rss_bytes(2, "darwin") == 2
+    assert rss_bytes(2, "linux") == 2048
 
 
 def test_failed_plan_has_zero_validated_shed_and_method_occupancy_only():

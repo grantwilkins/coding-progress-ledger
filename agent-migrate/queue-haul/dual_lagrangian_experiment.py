@@ -6,8 +6,11 @@ import argparse
 import csv
 import hashlib
 import json
+import resource
+import sys
 from dataclasses import replace
 from pathlib import Path
+from time import perf_counter
 
 import numpy as np
 
@@ -45,6 +48,10 @@ def experiment_stack_hash(root=ROOT):
         digest.update(path.name.encode())
         digest.update(path.read_bytes())
     return digest.hexdigest()
+
+
+def rss_bytes(value, platform=sys.platform):
+    return value if platform == "darwin" else value * 1024
 
 
 def result_row(result, workload, sessions, target_fraction, scenario_id,
@@ -176,6 +183,7 @@ def write_csv(path, rows):
 
 def run(out=DEFAULT_OUT, counts=(80, 240), seeds=range(3),
         target_fractions=(.1, .5, .9), workload="coding", solvers=SOLVERS):
+    started = perf_counter()
     profile = ModelProfile.load(bench.DEFAULT_MODEL)
     manifest = json.loads(bench.DEFAULT_MANIFEST.read_text())
     shapes = bench.trace_shapes(manifest, workload)
@@ -202,6 +210,8 @@ def run(out=DEFAULT_OUT, counts=(80, 240), seeds=range(3),
         "campaign_sha256": file_hash(Path(__file__)),
         "planner_code_sha256": bench.code_sha256(),
         "experiment_stack_sha256": experiment_stack_hash(),
+        "campaign_wall_s": perf_counter() - started,
+        "peak_rss_bytes": rss_bytes(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss),
     }, indent=2) + "\n")
     return rows
 
