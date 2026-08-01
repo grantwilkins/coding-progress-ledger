@@ -42,6 +42,7 @@ from types import SimpleNamespace
 
 import numpy as np
 import pytest
+from scipy.optimize import linprog
 from scipy.sparse import csr_matrix
 
 import pool_planner
@@ -53,7 +54,8 @@ from planner import plan
 from pool_planner import (Candidate, CandidateTable, _destination_duration, _event_bounds,
                           _greedy, _greedy_bundle, _greedy_coupled,
                           _greedy_prefix, _coupled_source_pattern,
-                          _lp_column_generation, _lp_highs,
+                          _lp_column_generation, _lp_column_generation_persistent,
+                          _lp_highs,
                           _mode_boundary_rho,
                           _dual_resource_limits, _retained_prefixes,
                           _source_removed_gain,
@@ -142,6 +144,70 @@ def test_column_phase_one_ignores_migration_work():
     assert selected == {1}
 
 
+@pytest.mark.parametrize("target, shortfall", ((3, 0), (4, 1)))
+def test_persistent_column_master_matches_rebuilding_certificate(target, shortfall):
+    table, persistent, rebuilding = _hand_lp_table(), {}, {}
+
+    selected = _lp_column_generation_persistent(table, target, persistent)
+    reference = _lp_column_generation(table, target, rebuilding)
+
+    assert selected == reference == {1, 2}
+    assert persistent["phase1_shortfall"] == pytest.approx(shortfall)
+    assert persistent["phase1"]["gap"] == pytest.approx(0, abs=1e-7)
+    assert persistent["phase2"]["gap"] == pytest.approx(0, abs=1e-7)
+
+
+@pytest.mark.parametrize("seed", range(3))
+def test_randomized_persistent_master_matches_complete_lp(seed):
+    rng, candidates, session_rows = np.random.default_rng(seed), [], []
+    for session in range(300):
+        if session % 17 == 0:
+            continue
+        gain = rng.uniform(.5, 2)
+        for choice in range(1 + session % 3):
+            candidates.append(Candidate(
+                session, "replay" if choice % 2 == 0 else "kv_transfer", 0,
+                gain, rng.uniform(.1, 3), 1, (), 0, (0, 0), 0,
+            ))
+            session_rows.append(session)
+    n = len(candidates)
+    resources = csr_matrix(rng.uniform(.001, .02, (2, n)))
+    incidence = csr_matrix((np.ones(n), (session_rows, np.arange(n))),
+                           shape=(300, n))
+    table = CandidateTable(
+        (), tuple(candidates), incidence, resources, ("a", "b"), (1, 1),
+        ("fraction", "fraction"), 10,
+    )
+    gains = np.array([c.gain_w for c in candidates])
+    work = np.array([c.migration_work_s for c in candidates]) / 10
+    common = csr_matrix(np.vstack((incidence.toarray(), resources.toarray())))
+    maximum = linprog(-gains, A_ub=common, b_ub=np.ones(common.shape[0]),
+                      bounds=(0, None), method="highs-ipm")
+    maximum_gain = -maximum.fun
+    target = maximum_gain * (1.1 if seed % 2 else .8)
+    effective = min(target, maximum_gain)
+    target_row = csr_matrix((-gains).reshape(1, -1))
+    exact = linprog(
+        work, A_ub=csr_matrix(np.vstack((common.toarray(), target_row.toarray()))),
+        b_ub=np.append(np.ones(common.shape[0]), -(effective - 1e-7)),
+        bounds=(0, None), method="highs-ipm",
+    )
+    stats = {}
+
+    selected = _lp_column_generation_persistent(table, target, stats)
+
+    assert stats["phase1_shortfall"] == pytest.approx(
+        max(0, target - maximum_gain), abs=1e-7,
+    )
+    assert stats["phase2"]["upper"] == pytest.approx(exact.fun, abs=1e-7)
+    assert stats["phase1"]["gap"] == pytest.approx(0, abs=1e-7)
+    assert stats["phase2"]["gap"] == pytest.approx(0, abs=1e-7)
+    assert stats["phase1"]["sweeps"] > 1
+    chosen = sorted(selected)
+    assert np.max(np.asarray(incidence[:, chosen].sum(1)), initial=0) <= 1
+    assert np.max(np.asarray(resources[:, chosen].sum(1)), initial=0) <= 1 + 1e-8
+
+
 def test_highs_lp_is_additive_and_does_not_replace_clarabel(monkeypatch):
     table, called = _hand_lp_table(), []
     monkeypatch.setattr(pool_planner, "candidate_table", lambda *args: table)
@@ -150,6 +216,10 @@ def test_highs_lp_is_additive_and_does_not_replace_clarabel(monkeypatch):
                         lambda *args: called.append("lp_highs") or set())
     monkeypatch.setattr(pool_planner, "_lp_column_generation",
                         lambda *args: called.append("lp_column_generation") or set())
+    monkeypatch.setattr(
+        pool_planner, "_lp_column_generation_persistent",
+        lambda *args: called.append("lp_column_generation_persistent") or set(),
+    )
     monkeypatch.setattr(pool_planner, "_pack", lambda *args: ({}, None))
 
     pool_planner._mode_plan(None, None, None, "lp", "normal", None, 0)
@@ -157,8 +227,14 @@ def test_highs_lp_is_additive_and_does_not_replace_clarabel(monkeypatch):
     pool_planner._mode_plan(
         None, None, None, "lp_column_generation", "normal", None, 0,
     )
+    pool_planner._mode_plan(
+        None, None, None, "lp_column_generation_persistent", "normal", None, 0,
+    )
 
-    assert called == ["lp", "lp_highs", "lp_column_generation"]
+    assert called == [
+        "lp", "lp_highs", "lp_column_generation",
+        "lp_column_generation_persistent",
+    ]
 
 
 def test_dual_retention_is_bounded_and_keeps_safeguards():

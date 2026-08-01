@@ -18,6 +18,7 @@ source = { virtual = "." }
 dependencies = [
     { name = "cvxpy", version = "1.7.5", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11'" },
     { name = "cvxpy", version = "1.8.2", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.11'" },
+    { name = "highspy" },
     { name = "matplotlib" },
     { name = "pandas", version = "2.3.3", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11'" },
     { name = "pandas", version = "3.0.2", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.11'" },
@@ -33,6 +34,7 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "cvxpy", specifier = ">=1.7.5" },
+    { name = "highspy", specifier = ">=1.14.0" },
     { name = "matplotlib", specifier = ">=3.7" },
     { name = "pandas", specifier = ">=2.3.3" },
     { name = "pyyaml", specifier = ">=6" },
@@ -482,6 +484,7 @@ name = "highspy"
 version = "1.14.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
+    { name = "numpy", version = "2.2.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11'" },
     { name = "numpy", version = "2.4.4", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.11'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/7a/66/e74b1a805f65c52666e3b54cfc1ba783e745c2c8a7abaae9e7ef2d9e7270/highspy-1.14.0.tar.gz", hash = "sha256:b09cb5e3179a25fc615b8b0941130b0f71e19372c119f3dd620d63b54cd3ca4c", size = 1654913, upload-time = "2026-04-06T15:53:31.738Z" }

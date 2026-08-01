@@ -7,6 +7,7 @@ from heapq import heappop, heappush
 from time import perf_counter
 
 import cvxpy as cp
+import highspy
 import numpy as np
 from scipy.optimize import linprog
 from scipy.sparse import csc_matrix, csr_matrix, hstack, vstack
@@ -27,7 +28,7 @@ DUAL_PREFIX_BUCKETS = 8
 DUAL_HIGH_TARGET_ITERATIONS = 4
 DUAL_HIGH_TARGET_BUCKETS = 64
 DUAL_HIGH_TARGET_FRACTION = .75
-COLUMN_GROWTH_SWEEPS = 40
+COLUMN_GROWTH_SWEEPS = 20
 COLUMN_TOLERANCE = 1e-8
 
 
@@ -1082,6 +1083,147 @@ def _lp_column_generation(table: CandidateTable, target: float, stats=None):
     return selected
 
 
+def _add_priced_columns(highs, table, choices, costs, candidate_columns,
+                        session_rows):
+    choices = np.asarray(choices, dtype=np.int32)
+    sessions = np.array([table.candidates[i].session for i in choices], np.int32)
+    new_sessions = np.unique(sessions[session_rows[sessions] < 0])
+    if new_sessions.size:
+        first = highs.getNumRow()
+        status = highs.addRows(
+            len(new_sessions), np.full(len(new_sessions), -highspy.kHighsInf),
+            np.ones(len(new_sessions)), 0,
+            np.zeros(len(new_sessions) + 1, np.int32),
+            np.array([], np.int32), np.array([], float),
+        )
+        if status != highspy.HighsStatus.kOk:
+            raise RuntimeError("HiGHS failed to add session rows")
+        session_rows[new_sessions] = np.arange(first, first + len(new_sessions))
+    matrix, starts, indices, values = csc_matrix(table.resources), [0], [], []
+    target_row = table.resources.shape[0]
+    for choice, session in zip(choices, sessions):
+        sl = slice(matrix.indptr[choice], matrix.indptr[choice + 1])
+        indices.extend(matrix.indices[sl])
+        values.extend(matrix.data[sl])
+        indices.extend((target_row, session_rows[session]))
+        values.extend((table.candidates[choice].gain_w, 1.0))
+        starts.append(len(indices))
+    first = highs.getNumCol()
+    status = highs.addCols(
+        len(choices), costs[choices], np.zeros(len(choices)),
+        np.full(len(choices), highspy.kHighsInf), len(indices),
+        np.asarray(starts, np.int32), np.asarray(indices, np.int32),
+        np.asarray(values, float),
+    )
+    if status != highspy.HighsStatus.kOk:
+        raise RuntimeError("HiGHS failed to add priced columns")
+    candidate_columns[choices] = np.arange(first, first + len(choices))
+
+
+def _persistent_column_phase(highs, table, target, costs, candidate_columns,
+                             session_rows, stats):
+    sessions = np.array([c.session for c in table.candidates])
+    gains = np.array([c.gain_w for c in table.candidates])
+    batch = max(256, table.incidence.shape[0] // COLUMN_GROWTH_SWEEPS)
+    pricing_s = add_s = solve_s = 0.0
+    iterations = 0
+    for sweep in range(len(table.candidates) + 1):
+        started = perf_counter()
+        highs.run()
+        solve_s += perf_counter() - started
+        if highs.getModelStatus() != highspy.HighsModelStatus.kOptimal:
+            raise RuntimeError(f"persistent master failed: {highs.getModelStatus()}")
+        solution, info = highs.getSolution(), highs.getInfo()
+        iterations += info.simplex_iteration_count
+        row_dual = np.asarray(solution.row_dual)
+        resource_dual = -row_dual[:table.resources.shape[0]]
+        eta = row_dual[table.resources.shape[0]]
+        alpha = np.zeros(table.incidence.shape[0])
+        represented = np.flatnonzero(session_rows >= 0)
+        alpha[represented] = -row_dual[session_rows[represented]]
+
+        started = perf_counter()
+        reduced = np.asarray(
+            costs + table.resources.T @ resource_dual - eta * gains,
+        ).ravel() + alpha[sessions]
+        minimum = np.full(table.incidence.shape[0], np.inf)
+        np.minimum.at(minimum, sessions, reduced)
+        best = np.full(table.incidence.shape[0], len(table.candidates))
+        tied = reduced == minimum[sessions]
+        np.minimum.at(best, sessions[tied], np.flatnonzero(tied))
+        violations = best[minimum < -COLUMN_TOLERANCE]
+        violations = violations[candidate_columns[violations] < 0]
+        correction = np.maximum(0, -alpha - minimum)
+        correction[~np.isfinite(correction)] = 0
+        lower = eta * target - resource_dual.sum() - (alpha + correction).sum()
+        pricing_s += perf_counter() - started
+        upper = float(info.objective_function_value)
+        stats.update(sweeps=sweep + 1,
+                     columns=int(np.count_nonzero(candidate_columns >= 0)),
+                     upper=upper, lower=float(lower), gap=upper - lower,
+                     pricing_s=pricing_s, add_s=add_s, solve_s=solve_s,
+                     simplex_iterations=iterations)
+        if not violations.size:
+            return solution
+        order = np.lexsort((violations, reduced[violations]))
+        choices = violations[order[:batch]]
+        started = perf_counter()
+        _add_priced_columns(
+            highs, table, choices, costs, candidate_columns, session_rows,
+        )
+        add_s += perf_counter() - started
+        highs.setOptionValue("presolve", "off")
+    raise RuntimeError("persistent column generation did not converge")
+
+
+def _lp_column_generation_persistent(table: CandidateTable, target: float, stats=None):
+    if not table.candidates or target <= 0:
+        return set()
+    started, phase1, phase2 = perf_counter(), {}, {}
+    highs, resources = highspy.Highs(), table.resources.shape[0]
+    highs.setOptionValue("output_flag", False)
+    highs.setOptionValue("solver", "simplex")
+    highs.addRows(
+        resources + 1,
+        np.concatenate((np.full(resources, -highspy.kHighsInf), [target])),
+        np.concatenate((np.ones(resources), [highspy.kHighsInf])), 0,
+        np.zeros(resources + 2, np.int32), np.array([], np.int32),
+        np.array([], float),
+    )
+    highs.addCol(1, 0, highspy.kHighsInf, 1, np.array([resources], np.int32),
+                 np.array([1.0]))
+    candidate_columns = np.full(len(table.candidates), -1, np.int32)
+    session_rows = np.full(table.incidence.shape[0], -1, np.int32)
+    first = _persistent_column_phase(
+        highs, table, target, np.zeros(len(table.candidates)),
+        candidate_columns, session_rows, phase1,
+    )
+    shortfall = float(first.col_value[0])
+    effective = max(0.0, target - shortfall)
+    work = np.array([c.migration_work_s for c in table.candidates]) \
+        / table.migration_horizon_s
+    active = np.flatnonzero(candidate_columns >= 0)
+    highs.changeColsCost(
+        len(active), candidate_columns[active], work[active],
+    )
+    highs.changeColBounds(0, 0, 0)
+    phase2_target = max(0.0, effective - 1e-7)
+    highs.changeRowBounds(resources, phase2_target, highspy.kHighsInf)
+    second = _persistent_column_phase(
+        highs, table, phase2_target, work, candidate_columns, session_rows, phase2,
+    )
+    values = np.zeros(len(table.candidates))
+    active = np.flatnonzero(candidate_columns >= 0)
+    values[active] = np.asarray(second.col_value)[candidate_columns[active]]
+    selected = _round_lp(table, target, values)
+    if stats is not None:
+        stats.update(wall_s=perf_counter() - started, active_columns=len(active),
+                     active_sessions=np.count_nonzero(session_rows >= 0),
+                     phase1_shortfall=shortfall, effective_target=effective,
+                     phase1=phase1, phase2=phase2)
+    return selected
+
+
 def _pack(table, selected, architecture, scenario, mode):
     horizon = architecture.residency_horizon_s
     horizon = scenario.end_s - scenario.controller_delay_s if horizon is None else horizon
@@ -1261,7 +1403,9 @@ def _mode_plan(scenario, profile, architecture, solver, mode, power, target):
             return_assignment=True,
         )
     else:
-        selected = (_lp_column_generation(table, target)
+        selected = (_lp_column_generation_persistent(table, target)
+                    if solver == "lp_column_generation_persistent" else
+                    _lp_column_generation(table, target)
                     if solver == "lp_column_generation" else
                     _lp_highs(table, target) if solver == "lp_highs" else
                     _lp(table, target) if solver.startswith("lp") else
@@ -1291,7 +1435,7 @@ def _mode_plan(scenario, profile, architecture, solver, mode, power, target):
 def plan_destination(scenario, profile, solver, case_id, seed, architecture):
     if solver not in {"greedy", "greedy_bundle", "greedy_prefix", "greedy_coupled",
                       "lp", "lp_peak_first", "lp_work_first", "lp_highs",
-                      "lp_column_generation"}:
+                      "lp_column_generation", "lp_column_generation_persistent"}:
         raise ValueError("destination architecture supports pool-aware LP and greedy")
     if case_id != "central":
         raise ValueError("destination admission supports the central profile")

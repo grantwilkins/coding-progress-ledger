@@ -8,6 +8,7 @@ Plausible wrong implementations:
 - Treat the full prompt as resident history or lose the newly appended work.
 - Round aggregate KV instead of each private session.
 - Resize hardware while varying pressure or multiply shared WAN by GPU count.
+- Duplicate replicas or route capacity when splitting inventory into pools.
 - Couple service and KV baselines.
 - Reverse a minimum-capacity threshold or miss a censored boundary.
 - Drop context or bandwidth extrapolation from the result label.
@@ -25,6 +26,7 @@ from destination_bench import (
     evidence,
     extrapolate_replay,
     pack_source,
+    parse_pool_counts,
     parse_solvers,
     sample_sessions,
     scenario,
@@ -54,9 +56,25 @@ def manifest():
 
 
 def test_reference_bench_accepts_additive_highs_backend():
-    assert parse_solvers("lp,lp_highs,lp_column_generation") == (
+    assert parse_solvers(
+        "lp,lp_highs,lp_column_generation,lp_column_generation_persistent",
+    ) == (
         "lp", "lp_highs", "lp_column_generation",
+        "lp_column_generation_persistent",
     )
+
+
+def test_pool_count_parser_and_split_preserve_frozen_inventory():
+    assert parse_pool_counts("1,2,4,8") == (1, 2, 4, 8)
+    sessions = (SimSession("a", "source-0", 16_384, 1, 1, 32_768),)
+
+    split = architecture(model(), sessions, 8, Pressure(), pool_count=4)
+
+    replicas = [r.replica_id for pool in split.pools for r in pool.replicas]
+    assert len(split.pools) == 4
+    assert sorted(replicas) == [f"dest-{i}" for i in range(8)]
+    assert all(pool.route == ("source-egress", "wan", "destination-ingress")
+               for pool in split.pools)
 
 
 def test_trace_shape_separates_resident_history_from_next_request():
