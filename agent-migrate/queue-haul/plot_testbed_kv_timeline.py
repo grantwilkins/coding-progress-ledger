@@ -11,7 +11,6 @@ import matplotlib
 
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
-from matplotlib.lines import Line2D
 from matplotlib.patches import Patch
 
 DEFAULT_SCENARIOS = {
@@ -231,11 +230,9 @@ def plot(timeline_path: Path, inference_path: Path, out: Path) -> None:
         "ytick.labelsize": 13, "legend.fontsize": 11.5,
     })
     colors = {
-        "bulk": "#4298B5",
+        "kv": "#4298B5",
+        "context": "#279989",
         "drain": "#DAD7CB",
-        "catch": "#279989",
-        "switch": "#8C1515",
-        "token": "#175E54",
         "prefill": "#734675",
         "decode": "#E98300",
         "tool": "#7F7776",
@@ -243,33 +240,26 @@ def plot(timeline_path: Path, inference_path: Path, out: Path) -> None:
         "grid": "#DAD7CB",
     }
     fig, gantt = plt.subplots(figsize=(7.2, 3))
-    phase_labels = (
-        "Bulk KV Transfer + Ingest", "Final KV Delta Transfer + Ingest",
-    ) \
-        if method == "kv_transfer" \
-        else ("Initial Context Update", "Final Context Update")
     phases = (
-        ("bulk_start_s", "bulk_finish_s", phase_labels[0], "bulk"),
-        ("catch_up_start_s", "catch_up_finish_s", phase_labels[1], "catch"),
+        ("bulk_start_s", "bulk_finish_s", "KV Transfer", "kv"),
+        ("catch_up_start_s", "catch_up_finish_s", "KV Transfer", "kv"),
     )
     if method == "replay":
         phases = (
-            ("bulk_start_s", "bulk_send_finish_s", "Context Transfer", "bulk"),
-            ("catch_up_start_s", "catch_up_send_finish_s", "Context Transfer", "bulk"),
+            ("bulk_start_s", "bulk_send_finish_s", "Context Transfer", "context"),
+            ("catch_up_start_s", "catch_up_send_finish_s", "Context Transfer", "context"),
         )
     gantt.axvspan(
         float(timeline[0]["quiesce_s"]),
         float(timeline[0]["catch_up_start_s"]),
         color=colors["drain"], alpha=.48,
-        label="Drain Active Request" if method == "kv_transfer"
-            else "Pause (drain active request)",
+        label="Drain",
         zorder=0,
     )
     positions = [1.4 * index for index in range(len(timeline))]
     inference_labels = set()
     for y, row in zip(positions, timeline):
         source_y, migration_y, destination_y = y - .32, y, y + .32
-        commit = float(row["commit_s"])
         prior = (
             (-2.35, .65, "prefill"), (-1.7, .25, "decode"),
             (-1.45, .3, "tool"), (-1.15, .85, "prefill"),
@@ -310,35 +300,17 @@ def plot(timeline_path: Path, inference_path: Path, out: Path) -> None:
                 zorder=3,
             )
             inference_labels.add(phase)
-        gantt.scatter(
-            commit, migration_y, marker="D", s=45, color=colors["switch"],
-            label="Route Switch" if y == positions[0] else None, zorder=4,
-        )
-        first_token = float(row["first_token_s"])
-        gantt.scatter(
-            first_token, destination_y, marker="*", s=95,
-            color=colors["token"],
-            label="First Token at Destination" if y == positions[0] else None,
-            zorder=4,
-        )
     gantt.set_yticks(
         [positions[0] - .32, positions[0], positions[0] + .32],
-        ["Inference at Source", "Migration", "Inference at Destination"],
+        ["Source GPU", "Migration", "Destination GPU"],
     )
     gantt.invert_yaxis()
     migration_handles = (
-        Patch(facecolor=colors["bulk"], label=phase_labels[0]),
-        Patch(
-            facecolor=colors["drain"], alpha=.6,
-            label="Drain Active Request",
-        ),
-        Patch(facecolor=colors["catch"], label=phase_labels[1]),
+        Patch(facecolor=colors["kv"], label="KV Transfer"),
+        Patch(facecolor=colors["drain"], alpha=.6, label="Drain"),
     ) if method == "kv_transfer" else (
-        Patch(facecolor=colors["bulk"], label="Context Transfer"),
-        Patch(
-            facecolor=colors["drain"], alpha=.6,
-            label="Pause (drain active request)",
-        ),
+        Patch(facecolor=colors["context"], label="Context Transfer"),
+        Patch(facecolor=colors["drain"], alpha=.6, label="Drain"),
     )
     legend = (
         Patch(facecolor=colors["prefill"], label="Prefill"),
@@ -348,14 +320,6 @@ def plot(timeline_path: Path, inference_path: Path, out: Path) -> None:
             hatch="//", linewidth=0, label="Tool Call",
         ),
         *migration_handles,
-        Line2D(
-            (), (), marker="D", linestyle="none", color=colors["switch"],
-            markersize=8, label="Route Switch",
-        ),
-        Line2D(
-            (), (), marker="*", linestyle="none", color=colors["token"],
-            markersize=12, label="First Token at Destination",
-        ),
     )
     gantt.legend(
         handles=legend, frameon=False, ncol=3, loc="upper center",
