@@ -772,7 +772,8 @@ def test_quiescence_drains_admitted_request_and_routes_queue_to_destination(
         monkeypatch, tmp_path):
     monkeypatch.setattr(c.b, "lmcache_mode", lambda: "mp")
     monkeypatch.setattr(c.b, "mp_model_layout", lambda _path: ("model", 1))
-    monkeypatch.setattr(c.b, "mp_wait_source_keys", lambda *_args: {"k"})
+    waited = []
+    monkeypatch.setattr(c.b, "mp_wait_source_keys", lambda *args: waited.append(args[4]) or {"k"})
     source, cache = tmp_path / "source.log", tmp_path / "cache.log"
     source.write_text(""); cache.write_text("")
     session = c.LiveSession(
@@ -794,7 +795,7 @@ def test_quiescence_drains_admitted_request_and_routes_queue_to_destination(
         now = time.monotonic_ns()
         return c.RequestResult(
             label, 200, "", now, now, first_byte_ns=now,
-            prompt_tokens=100 + len(calls), output_tokens=1,
+            prompt_tokens=768, output_tokens=1, cached_tokens=512,
         ), "CODE"
 
     session.request = request
@@ -825,6 +826,7 @@ def test_quiescence_drains_admitted_request_and_routes_queue_to_destination(
     ]
 
 
+    assert waited == [256]
 def test_connection_attribution_conserves_duplicate_bodies(tmp_path):
     path = tmp_path / "proxy_connections.csv"
     path.write_text(

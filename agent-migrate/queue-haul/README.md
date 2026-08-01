@@ -146,6 +146,7 @@ by the fresh `quiesce` run before using their gray intervals as drain evidence.
 Warm prefetch permits concurrent destination L1 fills but requires a full L1
 hit before inference.
 Source-store completion uses unique RESP keys, not LMCache summary token counts.
+Its expected key count comes from the request's retained-cache miss.
 `plot_fixed_contract_residuals.py` caches the canonical 100K-session,
 120-second fixed-contract requirement sweep and compares mixed greedy,
 GPU-work-first, replay-only, and KV-only resource headroom at common requested
