@@ -139,7 +139,9 @@ reduced-cost certification. It currently materializes the full candidate table
 and rebuilds restricted masters, so it is a correctness experiment rather than
 the million-session implementation.
 `lp_column_generation_persistent` keeps one native HiGHS master and basis while
-adding session rows and priced columns. `destination_bench.py --pool-counts`
+adding session rows and priced columns. Candidate construction reuses identical
+session physics across equivalent pool type/route signatures while retaining
+pool-specific capacity rows. `destination_bench.py --pool-counts`
 splits fixed replica inventory across pools to vary alternatives without adding
 hardware or route capacity. Both column-generation solvers remain experimental;
 lazy factorized pricing and placement-aware rounding are not yet implemented.

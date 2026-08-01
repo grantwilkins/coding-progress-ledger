@@ -291,6 +291,11 @@ def candidate_table(scenario: ExecutionScenario, profile, architecture: Destinat
         gain = power.marginal(session.session_id)
         migration_tokens = _resident_tokens(session, migration_horizon)
         residency_tokens = _resident_tokens(session, residency_horizon)
+        demand_cache, duration_cache = {}, {}
+        route_bytes = {
+            "replay": _log_bytes(session, migration_tokens),
+            "kv_transfer": case.kv_transfer.sealed_bytes(migration_tokens),
+        }
         for p, pool in enumerate(architecture.pools):
             q = types[pool.type_id]
             bounds = _event_bounds(q, pool, mode)
@@ -300,11 +305,13 @@ def candidate_table(scenario: ExecutionScenario, profile, architecture: Destinat
             if max(np.asarray(q.normals) @ baseline
                    / (len(pool.replicas) * bounds)) > 1 + 1e-9:
                 continue
-            demand = q.work(
-                session.expected_f, session.expected_g,
-                residency_tokens,
-                q.migration is not None,
-            )
+            demand_key = (q.type_id, q.migration is not None)
+            if demand_key not in demand_cache:
+                demand_cache[demand_key] = q.work(
+                    session.expected_f, session.expected_g,
+                    residency_tokens, q.migration is not None,
+                )
+            demand = demand_cache[demand_key]
             resident = -(-residency_tokens // q.kv_block_tokens)
             capacity = len(pool.replicas) * (
                 q.kv_capacity_tokens // q.kv_block_tokens
@@ -321,39 +328,43 @@ def candidate_table(scenario: ExecutionScenario, profile, architecture: Destinat
             for method in pool.methods:
                 if not q.compatibility.supports(architecture.source_compatibility, method):
                     continue
-                try:
-                    components = None if q.migration is None else q.migration[method]
-                    duration = (
-                        _duration(
-                            session, method, case, pool.route,
-                            links, migration_horizon,
-                        ) if components is None else
-                        _destination_duration(
-                            session, method, case, pool.route,
-                            links, migration_horizon, components,
+                duration_key = (q.type_id, pool.route, method, rho, mode)
+                if duration_key not in duration_cache:
+                    try:
+                        components = None if q.migration is None else q.migration[method]
+                        duration = (
+                            _duration(
+                                session, method, case, pool.route,
+                                links, migration_horizon,
+                            ) if components is None else
+                            _destination_duration(
+                                session, method, case, pool.route,
+                                links, migration_horizon, components,
+                            )
                         )
-                    )
-                    if method == "kv_transfer":
-                        _kv_schedule(scenario, profile, session, case,
-                                     pool.route, links)
-                except ValueError:
+                        if method == "kv_transfer":
+                            _kv_schedule(scenario, profile, session, case,
+                                         pool.route, links)
+                        if q.migration is None:
+                            duration *= q.loaded[method].worst(
+                                rho, _mode_boundary_rho(q, mode),
+                                session.context_tokens, bandwidth,
+                            )
+                        duration_cache[duration_key] = duration
+                    except ValueError:
+                        duration_cache[duration_key] = None
+                duration = duration_cache[duration_key]
+                if duration is None:
                     continue
-                if q.migration is None:
-                    duration *= q.loaded[method].worst(
-                        rho, _mode_boundary_rho(q, mode),
-                        session.context_tokens, bandwidth,
-                    )
                 if duration > migration_horizon:
                     continue
-                route_bytes = (_log_bytes(session, migration_tokens)
-                               if method == "replay" else
-                               case.kv_transfer.sealed_bytes(migration_tokens))
                 transition = (
-                    (max(0, duration - route_bytes / bandwidth), 0)
+                    (max(0, duration - route_bytes[method] / bandwidth), 0)
                     if method == "replay" else (0, 0)
                 )
                 candidates.append(Candidate(
-                    j, method, p, gain, duration, duration, pool.route, route_bytes,
+                    j, method, p, gain, duration, duration, pool.route,
+                    route_bytes[method],
                     tuple(demand), resident, transition,
                 ))
     candidates = tuple(candidates)

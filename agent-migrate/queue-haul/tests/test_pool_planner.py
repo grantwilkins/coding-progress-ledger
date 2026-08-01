@@ -35,6 +35,7 @@ Plausible wrong implementations:
 - Route the existing `lp` solver through HiGHS instead of keeping it additive.
 - Charge migration work during shortfall minimization or omit the session dual.
 - Run Phase II at an infeasible requested target instead of maximum attainable gain.
+- Reuse candidate physics across pools with different types, routes, or source loads.
 """
 
 from dataclasses import replace
@@ -727,6 +728,34 @@ def test_v1_resource_rows_match_the_documented_contract(tmp_path):
             candidate.method for i, candidate in enumerate(table.candidates)
             if table.resources[row, i]
         } == {method}
+
+
+def test_equivalent_pools_share_candidate_physics_not_capacity_rows(tmp_path, monkeypatch):
+    scenario, profile = problem(), model(tmp_path, switch=0, tp=1)
+    calls, duration = 0, pool_planner._duration
+
+    def counted(*args, **kwargs):
+        nonlocal calls
+        calls += 1
+        return duration(*args, **kwargs)
+
+    monkeypatch.setattr(pool_planner, "_duration", counted)
+    table = candidate_table(
+        scenario, profile, architecture(normal=1, emergency=1, stable=1),
+        "normal", ExpectedPower(scenario, profile),
+    )
+
+    choices = {
+        (candidate.session, candidate.method, candidate.pool): candidate
+        for candidate in table.candidates
+    }
+    for session in range(len(table.sessions)):
+        for method in ("replay", "kv_transfer"):
+            left, right = choices[session, method, 0], choices[session, method, 1]
+            assert replace(left, pool=0) == replace(right, pool=0)
+    assert calls == 2 * len(table.sessions)
+    assert any(name.startswith("service:p0") for name in table.resource_names)
+    assert any(name.startswith("service:p1") for name in table.resource_names)
 
 
 def test_absent_architecture_is_exact_legacy_adapter(tmp_path):
