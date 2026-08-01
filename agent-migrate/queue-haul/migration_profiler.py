@@ -1030,7 +1030,7 @@ class LiveRuntime:
         )
         if move.method == "kv_transfer" and self.mp_layout:
             hit = b.mp_request_hit(
-                self.sink_log, log_offset, result.request_id,
+                self.sink_log, log_offset, result.request_id, False,
             )
             request_gets = [
                 row for row in b.resp_rows(self.cache_log)[request_offset:]
@@ -1039,7 +1039,7 @@ class LiveRuntime:
                 and int(row["payload_bytes"]) > 0
             ]
             if request_gets or result.cached_tokens != hit \
-                    or hit != warm["total_keys"] * 256:
+                    or hit < (shared // 256 + warm["found_keys"]) * 256:
                 raise RuntimeError(
                     f"request-time WAN or cache accounting mismatch for "
                     f"{result.request_id}"

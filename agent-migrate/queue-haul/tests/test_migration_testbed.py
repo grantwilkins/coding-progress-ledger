@@ -202,6 +202,8 @@ def test_mp_request_hit_uses_byte_offset(tmp_path):
     log.write_bytes(prefix + b"2/2 retained keys (2 L1, 0 L2), external_request_id=req,\n")
 
     assert s.mp_request_hit(log, len(prefix), "req") == 512
+    log.write_text("1/2 retained keys (1 L1, 0 L2), external_request_id=req,\n")
+    assert s.mp_request_hit(log, 0, "req", False) == 256
 
 
 def test_bounded_campaign_pins_validated_mp_transport():
