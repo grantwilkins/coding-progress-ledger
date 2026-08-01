@@ -1130,6 +1130,10 @@ def test_native_column_master_matches_python_lazy_solver(tmp_path):
     )
     assert native_stats["phase1"]["gap"] <= pool_planner.COLUMN_GAP_TOLERANCE
     assert native_stats["phase2"]["gap"] <= pool_planner.COLUMN_GAP_TOLERANCE
+    assert native_stats["phase1"]["evaluated_choices"] > 0
+    assert native_stats["phase2"]["materialize_s"] >= 0
+    assert native_stats["completion_s"] >= 0
+    assert native_stats["table_s"] >= 0
 
 
 def test_native_pricing_is_stable_certified_and_transactional():

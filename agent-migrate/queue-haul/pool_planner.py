@@ -1642,8 +1642,8 @@ def _lazy_column_phase(highs, oracle, target, phase_two, session_rows,
 def _native_column_phase(highs, oracle, native, target, phase_two, session_rows,
                          active, candidates, stats):
     batch = max(256, len(oracle.sessions) // COLUMN_GROWTH_SWEEPS)
-    pricing_s = add_s = solve_s = 0.0
-    iterations = 0
+    pricing_s = materialize_s = add_s = solve_s = 0.0
+    iterations = choice_evaluations = 0
     for sweep_index in range(len(oracle.options) * len(oracle.sessions) + 1):
         started = perf_counter()
         highs.run()
@@ -1664,6 +1664,7 @@ def _native_column_phase(highs, oracle, native, target, phase_two, session_rows,
             2 if phase_two else 1, eta, resources, alpha, batch,
             COLUMN_TOLERANCE,
         )
+        choice_evaluations += int(sweep["evaluated_choices"])
         lower = (sweep["effective_eta"] * target - resources.sum()
                  - alpha.sum() - sweep["repair_sum"])
         pricing_s += perf_counter() - started
@@ -1672,8 +1673,8 @@ def _native_column_phase(highs, oracle, native, target, phase_two, session_rows,
         stats.update(
             sweeps=sweep_index + 1, columns=len(candidates), upper=upper,
             lower=float(lower), gap=gap, pricing_s=pricing_s,
-            add_s=add_s, solve_s=solve_s, simplex_iterations=iterations,
-            evaluated_choices=int(sweep["evaluated_choices"]),
+            materialize_s=materialize_s, add_s=add_s, solve_s=solve_s,
+            simplex_iterations=iterations, evaluated_choices=choice_evaluations,
         )
         if gap <= COLUMN_GAP_TOLERANCE:
             if len(sweep["candidate_ids"]):
@@ -1682,6 +1683,7 @@ def _native_column_phase(highs, oracle, native, target, phase_two, session_rows,
         if not len(sweep["candidate_ids"]):
             raise RuntimeError(f"native lazy certificate gap did not close: {gap}")
 
+        started = perf_counter()
         priced = []
         starts = sweep["resource_starts"]
         for column, (session, option, reduced, cost) in enumerate(zip(
@@ -1707,6 +1709,7 @@ def _native_column_phase(highs, oracle, native, target, phase_two, session_rows,
                 float(reduced), order, candidate, entries,
                 float(cost) if phase_two else 0.0,
             ))
+        materialize_s += perf_counter() - started
         started = perf_counter()
         _lazy_add_columns(
             highs, oracle, priced, session_rows, active, candidates,
@@ -1770,8 +1773,12 @@ def _lp_column_generation_lazy(oracle, target, stats=None, native=False):
     )
     values = np.asarray(second.col_value)[1:len(candidates) + 1]
     master_columns = len(candidates)
+    completed = perf_counter()
     candidates, selected = _lazy_completion(oracle, candidates, values, target)
+    completion_s = perf_counter() - completed
+    materialized = perf_counter()
     table = _materialize_candidates(oracle, candidates, False)
+    table_s = perf_counter() - materialized
     if stats is not None:
         stats.update(
             wall_s=perf_counter() - started, active_columns=master_columns,
@@ -1780,6 +1787,7 @@ def _lp_column_generation_lazy(oracle, target, stats=None, native=False):
             active_sessions=np.count_nonzero(session_rows >= 0),
             phase1_shortfall=shortfall, effective_target=effective,
             phase1=phase1, phase2=phase2, native_build_s=build_s if native else 0,
+            completion_s=completion_s, table_s=table_s,
         )
     return table, selected
 
