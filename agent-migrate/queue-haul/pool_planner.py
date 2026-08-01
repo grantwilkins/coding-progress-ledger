@@ -32,6 +32,7 @@ DUAL_HIGH_TARGET_FRACTION = .75
 COLUMN_GROWTH_SWEEPS = 20
 COLUMN_TOLERANCE = 1e-8
 COLUMN_GAP_TOLERANCE = 1e-7
+NATIVE_PRICING_CHUNK = 65_536
 
 
 @dataclass(frozen=True, slots=True)
@@ -305,9 +306,8 @@ def _candidate_oracle(scenario, profile, architecture, mode, power):
     links = {link.link_id: link.bytes_per_s for link in scenario.links}
     gains = tuple(power.marginal(session.session_id) for session in sessions)
 
-    def choices(j):
-        session, candidates = sessions[j], []
-        gain = gains[j]
+    def records(j):
+        session, values = sessions[j], []
         migration_tokens = _resident_tokens(session, migration_horizon)
         residency_tokens = _resident_tokens(session, residency_horizon)
         demand_cache, duration_cache = {}, {}
@@ -381,12 +381,18 @@ def _candidate_oracle(scenario, profile, architecture, mode, power):
                     (max(0, duration - route_bytes[method] / bandwidth), 0)
                     if method == "replay" else (0, 0)
                 )
-                candidates.append(Candidate(
-                    j, method, p, gain, duration, duration, pool.route,
-                    route_bytes[method],
+                values.append((
+                    method, p, duration, pool.route, route_bytes[method],
                     tuple(demand), resident, transition,
                 ))
-        return tuple(candidates)
+        return tuple(values)
+
+    def choices(j):
+        return tuple(Candidate(
+            j, method, p, gains[j], duration, duration, route, route_bytes,
+            demand, resident, transition,
+        ) for method, p, duration, route, route_bytes, demand, resident, transition
+                     in records(j))
 
     specs, row_for = [], {}
     def add(key, capacity, name, unit):
@@ -475,6 +481,19 @@ def _candidate_oracle(scenario, profile, architecture, mode, power):
             candidate.duration_s, *candidate.transition_work,
         ), float)
 
+    def pricing(j):
+        by_signature, mask = {}, 0
+        for method, p, duration, _route, route_bytes, demand, resident, transition \
+                in records(j):
+            option = option_for[p, method]
+            signature = option_signatures[option]
+            values = (route_bytes, *demand, resident, duration, *transition)
+            if signature in by_signature and by_signature[signature] != values:
+                raise ValueError("equivalent pricing signatures disagree")
+            by_signature[signature] = values
+            mask |= 1 << option
+        return by_signature, mask
+
     def column(candidate):
         entries = []
         values = feature(candidate)
@@ -488,61 +507,74 @@ def _candidate_oracle(scenario, profile, architecture, mode, power):
         sessions=sessions, migration_horizon_s=migration_horizon,
         pools=architecture.pools, gains=gains, specs=tuple(specs), choices=choices,
         column=column, feature=feature, options=tuple(options),
+        pricing=pricing,
         signatures=tuple(signatures), option_signatures=option_signatures,
         templates=tuple(templates), option_for=option_for,
     )
 
 
-def _pricing_soa(oracle):
-    if len(oracle.options) > 16:
-        raise ValueError("native pricing supports at most 16 pool-method options")
-    features = np.zeros((len(oracle.sessions), len(oracle.signatures), 7))
-    feasible = np.zeros(len(oracle.sessions), np.uint16)
-    seen = np.zeros((len(oracle.sessions), len(oracle.signatures)), bool)
-    for j in range(len(oracle.sessions)):
-        for candidate in oracle.choices(j):
-            option = oracle.option_for[candidate.pool, candidate.method]
-            signature = oracle.option_signatures[option]
-            values = oracle.feature(candidate)
-            if seen[j, signature] and not np.array_equal(features[j, signature], values):
-                raise ValueError("equivalent pricing signatures disagree")
-            features[j, signature] = values
-            seen[j, signature] = True
-            feasible[j] |= np.uint16(1 << option)
+def _pricing_chunk(oracle, start, stop):
+    features = np.zeros((stop - start, len(oracle.signatures), 7))
+    feasible = np.zeros(stop - start, np.uint16)
+    for j in range(start, stop):
+        local = j - start
+        priced, mask = oracle.pricing(j)
+        for signature, values in priced.items():
+            features[local, signature] = values
+        feasible[local] = mask
+    return features, feasible
+
+
+def _pricing_layout(oracle):
     starts, rows, coefficients = [0], [], []
     for template in oracle.templates:
         rows.extend(row for row, _ in template)
         coefficients.extend(value for _, value in template)
         starts.append(len(rows))
-    order = {session_id: rank for rank, session_id in enumerate(sorted(
-        session.session_id for session in oracle.sessions
-    ))}
+    return (np.asarray(oracle.option_signatures, np.uint16),
+            np.asarray(starts, np.int32), np.asarray(rows, np.int32),
+            np.asarray(coefficients))
+
+
+def _pricing_ranks(oracle):
+    order = sorted(range(len(oracle.sessions)),
+                   key=lambda j: oracle.sessions[j].session_id)
+    ranks = np.empty(len(order), np.uint32)
+    ranks[order] = np.arange(len(order), dtype=np.uint32)
+    return ranks
+
+
+def _pricing_soa(oracle):
+    if len(oracle.options) > 16:
+        raise ValueError("native pricing supports at most 16 pool-method options")
+    features, feasible = _pricing_chunk(oracle, 0, len(oracle.sessions))
+    option_signatures, starts, rows, coefficients = _pricing_layout(oracle)
     return PricingSoA(
         np.asarray(oracle.gains), features, feasible,
-        np.asarray(oracle.option_signatures, np.uint16),
-        np.asarray(starts, np.int32), np.asarray(rows, np.int32),
-        np.asarray(coefficients), np.fromiter(
-            (order[session.session_id] for session in oracle.sessions),
-            np.uint32, len(oracle.sessions),
-        ),
+        option_signatures, starts, rows, coefficients, _pricing_ranks(oracle),
     )
 
 
 def _native_pricing_oracle(oracle):
     from _queue_haul_native import PricingOracle
 
-    soa = _pricing_soa(oracle)
-    return PricingOracle(
+    if len(oracle.options) > 16:
+        raise ValueError("native pricing supports at most 16 pool-method options")
+    option_signatures, starts, rows, coefficients = _pricing_layout(oracle)
+    native = PricingOracle.allocate(
         len(oracle.sessions), len(oracle.signatures), len(oracle.options),
         len(oracle.specs), oracle.migration_horizon_s,
-        *(
-            np.ascontiguousarray(values.ravel()) for values in (
-                soa.gains, soa.features, soa.feasible, soa.option_signatures,
-                soa.option_starts, soa.resource_rows,
-                soa.resource_coefficients, soa.session_ranks,
-            )
-        ),
-    ), soa
+        option_signatures, starts, rows, np.ascontiguousarray(coefficients.ravel()),
+    )
+    ranks = _pricing_ranks(oracle)
+    for start in range(0, len(oracle.sessions), NATIVE_PRICING_CHUNK):
+        stop = min(start + NATIVE_PRICING_CHUNK, len(oracle.sessions))
+        features, feasible = _pricing_chunk(oracle, start, stop)
+        native.load(
+            start, np.asarray(oracle.gains[start:stop]), features.ravel(),
+            feasible, ranks[start:stop],
+        )
+    return native
 
 
 def _materialize_candidates(oracle, candidates, prune=True):
@@ -1689,7 +1721,7 @@ def _lp_column_generation_lazy(oracle, target, stats=None, native=False):
     if target <= 0 or oracle.migration_horizon_s <= 0:
         return _materialize_candidates(oracle, (), False), set()
     started, phase1, phase2 = perf_counter(), {}, {}
-    native_oracle = _native_pricing_oracle(oracle)[0] if native else None
+    native_oracle = _native_pricing_oracle(oracle) if native else None
     build_s = perf_counter() - started
     highs, resources = highspy.Highs(), len(oracle.specs)
     highs.setOptionValue("output_flag", False)

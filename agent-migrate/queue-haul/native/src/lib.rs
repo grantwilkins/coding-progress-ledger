@@ -73,6 +73,9 @@ struct PricingOracle {
     coefficients: Vec<f64>,
     session_ranks: Vec<u32>,
     generated: Vec<u16>,
+    loaded: Vec<bool>,
+    rank_used: Vec<bool>,
+    loaded_count: usize,
     epoch: u64,
     pending: Option<(u64, Vec<u64>)>,
 }
@@ -106,6 +109,9 @@ impl PricingOracle {
             return Err(PyValueError::new_err(
                 "previous pricing batch is uncommitted",
             ));
+        }
+        if self.loaded_count != self.sessions {
+            return Err(PyValueError::new_err("pricing SoA is incomplete"));
         }
         if !matches!(phase, 1 | 2)
             || batch == 0
@@ -297,6 +303,7 @@ impl PricingOracle {
         if options > 16
             || options == 0
             || signatures == 0
+            || feature_count.is_none()
             || sessions > i32::MAX as usize
             || resources > i32::MAX as usize
             || resource_rows.len() > i32::MAX as usize
@@ -345,9 +352,140 @@ impl PricingOracle {
             coefficients,
             session_ranks,
             generated: vec![0; sessions],
+            loaded: vec![true; sessions],
+            rank_used: vec![true; sessions],
+            loaded_count: sessions,
             epoch: 0,
             pending: None,
         })
+    }
+
+    #[staticmethod]
+    #[allow(clippy::too_many_arguments)]
+    fn allocate(
+        sessions: usize,
+        signatures: usize,
+        options: usize,
+        resources: usize,
+        horizon: f64,
+        option_signatures: PyReadonlyArray1<'_, u16>,
+        option_starts: PyReadonlyArray1<'_, i32>,
+        resource_rows: PyReadonlyArray1<'_, i32>,
+        coefficients: PyReadonlyArray1<'_, f64>,
+    ) -> PyResult<Self> {
+        let option_signatures = option_signatures.as_slice()?.to_vec();
+        let option_starts = option_starts.as_slice()?.to_vec();
+        let resource_rows = resource_rows.as_slice()?.to_vec();
+        let coefficients = coefficients.as_slice()?.to_vec();
+        let feature_count = sessions
+            .checked_mul(signatures)
+            .and_then(|value| value.checked_mul(FEATURES));
+        if options == 0
+            || options > 16
+            || signatures == 0
+            || feature_count.is_none()
+            || sessions > i32::MAX as usize
+            || resources > i32::MAX as usize
+            || resource_rows.len() > i32::MAX as usize
+            || !horizon.is_finite()
+            || horizon <= 0.0
+            || option_signatures.len() != options
+            || option_starts.len() != options + 1
+            || resource_rows.len().checked_mul(FEATURES) != Some(coefficients.len())
+            || option_starts.first().copied() != Some(0)
+            || option_starts
+                .windows(2)
+                .any(|window| window[0] < 0 || window[0] > window[1])
+            || option_starts.last().copied() != Some(resource_rows.len() as i32)
+            || option_signatures
+                .iter()
+                .any(|value| *value as usize >= signatures)
+            || resource_rows
+                .iter()
+                .any(|value| *value < 0 || *value as usize >= resources)
+            || !coefficients
+                .iter()
+                .all(|value| value.is_finite() && *value >= 0.0)
+        {
+            return Err(PyValueError::new_err("invalid pricing SoA"));
+        }
+        Ok(Self {
+            sessions,
+            signatures,
+            options,
+            resources,
+            horizon,
+            gains: vec![0.0; sessions],
+            features: vec![0.0; feature_count.unwrap()],
+            feasible: vec![0; sessions],
+            option_signatures,
+            option_starts,
+            resource_rows,
+            coefficients,
+            session_ranks: vec![0; sessions],
+            generated: vec![0; sessions],
+            loaded: vec![false; sessions],
+            rank_used: vec![false; sessions],
+            loaded_count: 0,
+            epoch: 0,
+            pending: None,
+        })
+    }
+
+    fn load(
+        &mut self,
+        start: usize,
+        gains: PyReadonlyArray1<'_, f64>,
+        features: PyReadonlyArray1<'_, f64>,
+        feasible: PyReadonlyArray1<'_, u16>,
+        session_ranks: PyReadonlyArray1<'_, u32>,
+    ) -> PyResult<()> {
+        let gains = gains.as_slice()?;
+        let features = features.as_slice()?;
+        let feasible = feasible.as_slice()?;
+        let session_ranks = session_ranks.as_slice()?;
+        let count = gains.len();
+        let end = start.checked_add(count);
+        let valid_mask = if self.options == 16 {
+            u16::MAX
+        } else {
+            (1u16 << self.options) - 1
+        };
+        let mut ranks: Vec<_> = session_ranks.iter().map(|rank| *rank as usize).collect();
+        ranks.sort_unstable();
+        if end.is_none_or(|end| end > self.sessions)
+            || features.len()
+                != count
+                    .checked_mul(self.signatures)
+                    .and_then(|value| value.checked_mul(FEATURES))
+                    .unwrap_or(usize::MAX)
+            || feasible.len() != count
+            || session_ranks.len() != count
+            || !gains.iter().all(|value| value.is_finite())
+            || !features.iter().all(|value| value.is_finite())
+            || feasible.iter().any(|mask| mask & !valid_mask != 0)
+            || (start..end.unwrap()).any(|session| self.loaded[session])
+            || ranks
+                .iter()
+                .any(|rank| *rank >= self.sessions || self.rank_used[*rank])
+            || ranks.windows(2).any(|window| window[0] == window[1])
+        {
+            return Err(PyValueError::new_err("invalid pricing SoA chunk"));
+        }
+        let end = end.unwrap();
+        self.gains[start..end].copy_from_slice(gains);
+        self.feasible[start..end].copy_from_slice(feasible);
+        self.session_ranks[start..end].copy_from_slice(session_ranks);
+        let feature_start = start * self.signatures * FEATURES;
+        self.features[feature_start..feature_start + features.len()].copy_from_slice(features);
+        for session in start..end {
+            self.loaded[session] = true;
+        }
+        for rank in ranks {
+            self.rank_used[rank] = true;
+        }
+        self.loaded_count += count;
+        Ok(())
     }
 
     fn price<'py>(

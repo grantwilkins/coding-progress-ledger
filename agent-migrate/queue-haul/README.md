@@ -154,7 +154,8 @@ same LP but regenerates Python candidate physics on every pricing sweep.
 certificate with a long-lived Rust pricing oracle while keeping HiGHS in Python.
 The native boundary factors candidates into float64 session/signature features,
 packed per-session feasibility masks, and distinct pool/method sparse templates;
-it is limited to 16 options and hard-fails outside that scope. Install it with
+bounded chunks load directly into Rust-owned storage. It is limited to 16
+options and hard-fails outside that scope. Install it with
 `uv sync --group native` using rustup Cargo; the toolchain is pinned under
 `native/`. Indexed replica placement and a compact execution verifier are still
 required for million-session operation.

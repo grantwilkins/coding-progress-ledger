@@ -1046,7 +1046,7 @@ def test_native_pricing_matches_complete_python_sweep(tmp_path):
         scenario, profile, architecture(normal=1, emergency=1, stable=1),
         "normal", ExpectedPower(scenario, profile),
     )
-    native, _ = _native_pricing_oracle(oracle)
+    native = _native_pricing_oracle(oracle)
     resource_duals = np.linspace(.01, .03, len(oracle.specs))
     session_duals = np.linspace(0, .02, len(oracle.sessions))
     eta = .7
@@ -1191,6 +1191,25 @@ def test_native_pricing_rejects_malformed_soa(argument, value):
     arguments[argument] = value
     with pytest.raises(ValueError, match="invalid pricing SoA"):
         PricingOracle(*arguments)
+
+
+def test_native_pricing_requires_complete_nonoverlapping_chunks():
+    from _queue_haul_native import PricingOracle
+
+    native = PricingOracle.allocate(
+        2, 1, 1, 1, 10., np.zeros(1, np.uint16),
+        np.array([0, 1], np.int32), np.zeros(1, np.int32), np.zeros(7),
+    )
+    with pytest.raises(ValueError, match="incomplete"):
+        native.price(1, 1, np.zeros(1), np.zeros(2), 1, 0)
+    chunk = (np.ones(1), np.zeros(7), np.ones(1, np.uint16))
+    native.load(0, *chunk, np.zeros(1, np.uint32))
+    with pytest.raises(ValueError, match="invalid pricing SoA chunk"):
+        native.load(0, *chunk, np.zeros(1, np.uint32))
+    native.load(1, *chunk, np.ones(1, np.uint32))
+    assert native.price(1, 1, np.zeros(1), np.zeros(2), 1, 0)[
+        "evaluated_choices"
+    ] == 2
 
 
 def test_absent_architecture_is_exact_legacy_adapter(tmp_path):
