@@ -150,8 +150,11 @@ hardware or route capacity. All column-generation solvers remain experimental;
 universe, retains only generated master columns, stops on a global certified
 gap, and consults the oracle again during integral completion. It preserves the
 same LP but currently regenerates Python candidate physics on every pricing
-sweep. Numeric structure-of-arrays pricing, indexed replica placement, and a
-compact execution verifier are still required for million-session operation.
+sweep. The native-pricing boundary factors these candidates into float64
+session/signature features, packed per-session feasibility masks, and distinct
+pool/method sparse templates; the initial kernel is limited to 16 options.
+Native sweep execution, indexed replica placement, and a compact execution
+verifier are still required for million-session operation.
 `dual_lagrangian_experiment.py` evaluates the simulator-only `greedy_prefix`
 policy as a dual-Lagrangian prefix method against the unchanged static greedy
 baseline and other experimental pool policies on paired trace-derived targets;

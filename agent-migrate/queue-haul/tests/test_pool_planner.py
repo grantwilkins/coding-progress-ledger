@@ -38,6 +38,7 @@ Plausible wrong implementations:
 - Reuse candidate physics across pools with different types, routes, or source loads.
 - Double-count the session dual while repairing a tolerated reduced-cost violation.
 - Omit the Phase-I shortfall dual cap or stop before the global gap closes.
+- Merge pool variables that share physics or misalign SoA resource templates.
 """
 
 from dataclasses import replace
@@ -62,6 +63,7 @@ from pool_planner import (Candidate, CandidateTable, _destination_duration, _eve
                           _lp_column_generation_persistent,
                           _lp_highs,
                           _mode_boundary_rho,
+                          _pricing_soa,
                           _dual_resource_limits, _retained_prefixes,
                           _source_removed_gain,
                           _recover_coupled, _service_trace, candidate_table,
@@ -988,6 +990,45 @@ def test_streamed_candidates_and_columns_equal_exhaustive_table(tmp_path):
             if oracle.specs[row][1] in table_rows
         }
         assert actual == pytest.approx(expected)
+
+
+def test_pricing_soa_reconstructs_every_candidate_column(tmp_path):
+    scenario, profile = problem(), model(tmp_path, switch=0, tp=1)
+    arch = architecture(normal=1, emergency=1, stable=1)
+    oracle = _candidate_oracle(
+        scenario, profile, arch, "normal", ExpectedPower(scenario, profile),
+    )
+    soa = _pricing_soa(oracle)
+
+    assert len(oracle.options) == 4
+    assert len(oracle.signatures) == 2
+    assert oracle.option_signatures[0] == oracle.option_signatures[2]
+    assert oracle.option_signatures[1] == oracle.option_signatures[3]
+    expected_masks = np.zeros(len(oracle.sessions), np.uint16)
+    for j in range(len(oracle.sessions)):
+        for candidate in oracle.choices(j):
+            option = oracle.option_for[candidate.pool, candidate.method]
+            expected_masks[j] |= np.uint16(1 << option)
+            signature = soa.option_signatures[option]
+            assert soa.features[j, signature] == pytest.approx(
+                oracle.feature(candidate),
+            )
+            start, end = soa.option_starts[option:option + 2]
+            actual = tuple(zip(
+                soa.resource_rows[start:end],
+                soa.resource_coefficients[start:end] @ soa.features[j, signature],
+            ))
+            expected = oracle.column(candidate)
+            assert tuple(row for row, _ in actual) == tuple(row for row, _ in expected)
+            assert tuple(value for _, value in actual) == pytest.approx(
+                tuple(value for _, value in expected),
+            )
+    assert np.array_equal(soa.feasible, expected_masks)
+    assert soa.resource_rows[
+        soa.option_starts[0]:soa.option_starts[1]
+    ].tolist() != soa.resource_rows[
+        soa.option_starts[2]:soa.option_starts[3]
+    ].tolist()
 
 
 def test_absent_architecture_is_exact_legacy_adapter(tmp_path):

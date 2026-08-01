@@ -67,6 +67,18 @@ class CandidateTable:
     migration_horizon_s: float
 
 
+@dataclass(frozen=True, slots=True)
+class PricingSoA:
+    gains: np.ndarray
+    features: np.ndarray
+    feasible: np.ndarray
+    option_signatures: np.ndarray
+    option_starts: np.ndarray
+    resource_rows: np.ndarray
+    resource_coefficients: np.ndarray
+    session_ranks: np.ndarray
+
+
 def _baseline(scenario: ExecutionScenario, architecture: DestinationArchitecture,
               horizon: float):
     pools = {r.replica_id: (p, architecture.type_by_id[p.type_id])
@@ -276,7 +288,9 @@ def _candidate_oracle(scenario, profile, architecture, mode, power):
     if migration_horizon <= 0:
         return SimpleNamespace(
             sessions=sessions, migration_horizon_s=migration_horizon, specs=(),
-            pools=architecture.pools, choices=lambda _: (), column=lambda _: (),
+            pools=architecture.pools, gains=(), options=(), signatures=(),
+            choices=lambda _: (), column=lambda _: (), feature=lambda _: (),
+            templates=(),
         )
     work0, kv0 = _baseline(scenario, architecture, residency_horizon)
     pool_work = tuple(
@@ -403,30 +417,114 @@ def _candidate_oracle(scenario, profile, architecture, mode, power):
             add(("migration", p, method), len(pool.replicas) * migration_horizon,
                 f"migration:{pool.pool_id}:{method}", "replica-s")
 
+    options = sorted([
+        (p, method) for p, pool in enumerate(architecture.pools)
+        for method in pool.methods
+        if types[pool.type_id].compatibility.supports(
+            architecture.source_compatibility, method,
+        )
+    ], key=lambda item: (
+        architecture.pools[item[0]].pool_id,
+        0 if item[1] == "replay" else 1,
+    ))
+    signatures, signature_for = [], {}
+    templates = []
+    for p, method in options:
+        pool, q = architecture.pools[p], types[architecture.pools[p].type_id]
+        baseline = pool_work[p]
+        rho = float(max(np.asarray(q.normals) @ baseline /
+                        (len(pool.replicas) * np.asarray(q.bounds["normal"]))))
+        signature = (q.type_id, pool.route, method, rho, mode)
+        if signature not in signature_for:
+            signature_for[signature] = len(signatures)
+            signatures.append(signature)
+        entries = []
+        def emit(key, coefficients):
+            row = row_for[key]
+            entries.append((row, np.asarray(coefficients) / specs[row][0]))
+        unit = np.eye(7)
+        for link in dict.fromkeys(pool.route):
+            emit(("route", link), unit[0])
+        for facet, normal in enumerate(q.normals):
+            ongoing = np.zeros(7)
+            ongoing[1:3] = normal
+            emit(("service", p, facet), ongoing)
+            if pool.event_flex_fraction is not None:
+                debt = np.zeros(7)
+                debt[1:3], debt[5:7] = migration_horizon * np.asarray(normal), normal
+                emit(("debt", p, facet), debt)
+        emit(("kv", p), unit[3])
+        emit(("migration", p, method), unit[4])
+        templates.append(tuple(entries))
+
+    option_for = {option: i for i, option in enumerate(options)}
+    option_signatures = tuple(
+        signature_for[(
+            types[architecture.pools[p].type_id].type_id,
+            architecture.pools[p].route, method,
+            float(max(np.asarray(types[architecture.pools[p].type_id].normals)
+                      @ pool_work[p] / (len(architecture.pools[p].replicas)
+                      * np.asarray(types[architecture.pools[p].type_id].bounds["normal"])))),
+            mode,
+        )] for p, method in options
+    )
+
+    def feature(candidate):
+        return np.asarray((
+            candidate.route_bytes, *candidate.service_work, candidate.kv_tokens,
+            candidate.duration_s, *candidate.transition_work,
+        ), float)
+
     def column(candidate):
         entries = []
-        def emit(key, value):
+        values = feature(candidate)
+        for row, coefficients in templates[option_for[candidate.pool, candidate.method]]:
+            value = float(coefficients @ values)
             if value:
-                row = row_for[key]
-                entries.append((row, value / specs[row][0]))
-        for link in dict.fromkeys(candidate.path):
-            emit(("route", link), candidate.route_bytes)
-        p, pool = candidate.pool, architecture.pools[candidate.pool]
-        q = types[pool.type_id]
-        for facet, normal in enumerate(q.normals):
-            emit(("service", p, facet),
-                 np.asarray(normal) @ candidate.service_work)
-            if pool.event_flex_fraction is not None:
-                emit(("debt", p, facet),
-                     migration_horizon * (np.asarray(normal) @ candidate.service_work)
-                     + np.asarray(normal) @ candidate.transition_work)
-        emit(("kv", p), candidate.kv_tokens)
-        emit(("migration", p, candidate.method), candidate.duration_s)
+                entries.append((row, value))
         return tuple(entries)
 
     return SimpleNamespace(
         sessions=sessions, migration_horizon_s=migration_horizon,
-        pools=architecture.pools, specs=tuple(specs), choices=choices, column=column,
+        pools=architecture.pools, gains=gains, specs=tuple(specs), choices=choices,
+        column=column, feature=feature, options=tuple(options),
+        signatures=tuple(signatures), option_signatures=option_signatures,
+        templates=tuple(templates), option_for=option_for,
+    )
+
+
+def _pricing_soa(oracle):
+    if len(oracle.options) > 16:
+        raise ValueError("native pricing supports at most 16 pool-method options")
+    features = np.zeros((len(oracle.sessions), len(oracle.signatures), 7))
+    feasible = np.zeros(len(oracle.sessions), np.uint16)
+    seen = np.zeros((len(oracle.sessions), len(oracle.signatures)), bool)
+    for j in range(len(oracle.sessions)):
+        for candidate in oracle.choices(j):
+            option = oracle.option_for[candidate.pool, candidate.method]
+            signature = oracle.option_signatures[option]
+            values = oracle.feature(candidate)
+            if seen[j, signature] and not np.array_equal(features[j, signature], values):
+                raise ValueError("equivalent pricing signatures disagree")
+            features[j, signature] = values
+            seen[j, signature] = True
+            feasible[j] |= np.uint16(1 << option)
+    starts, rows, coefficients = [0], [], []
+    for template in oracle.templates:
+        rows.extend(row for row, _ in template)
+        coefficients.extend(value for _, value in template)
+        starts.append(len(rows))
+    order = {session_id: rank for rank, session_id in enumerate(sorted(
+        session.session_id for session in oracle.sessions
+    ))}
+    return PricingSoA(
+        np.asarray(oracle.gains), features, feasible,
+        np.asarray(oracle.option_signatures, np.uint16),
+        np.asarray(starts, np.int32), np.asarray(rows, np.int32),
+        np.asarray(coefficients), np.fromiter(
+            (order[session.session_id] for session in oracle.sessions),
+            np.uint32, len(oracle.sessions),
+        ),
     )
 
 
