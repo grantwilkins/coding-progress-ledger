@@ -8,7 +8,8 @@ from time import perf_counter
 
 import cvxpy as cp
 import numpy as np
-from scipy.sparse import csc_matrix, csr_matrix
+from scipy.optimize import linprog
+from scipy.sparse import csc_matrix, csr_matrix, vstack
 
 from destination import DestinationArchitecture
 from planner import (_changes, _duration, _expected_scenario, _kv_catch_up_s,
@@ -280,28 +281,28 @@ def candidate_table(scenario: ExecutionScenario, profile, architecture: Destinat
         sum(kv0[r.replica_id] for r in pool.replicas)
         for pool in architecture.pools
     )
+    case, types = profile.case("central"), architecture.type_by_id
     links = {link.link_id: link.bytes_per_s for link in scenario.links}
     candidates = []
     for j, session in enumerate(sessions):
         gain = power.marginal(session.session_id)
+        migration_tokens = _resident_tokens(session, migration_horizon)
+        residency_tokens = _resident_tokens(session, residency_horizon)
         for p, pool in enumerate(architecture.pools):
-            q = architecture.type_by_id[pool.type_id]
+            q = types[pool.type_id]
             bounds = _event_bounds(q, pool, mode)
             if q.migration is None:
-                profile.case("central").replay.rate(
-                    _resident_tokens(session, migration_horizon), 1,
-                )
+                case.replay.rate(migration_tokens, 1)
             baseline = pool_work[p]
             if max(np.asarray(q.normals) @ baseline
                    / (len(pool.replicas) * bounds)) > 1 + 1e-9:
                 continue
             demand = q.work(
                 session.expected_f, session.expected_g,
-                _resident_tokens(session, residency_horizon),
+                residency_tokens,
                 q.migration is not None,
             )
-            resident = -(-_resident_tokens(session, residency_horizon)
-                         // q.kv_block_tokens)
+            resident = -(-residency_tokens // q.kv_block_tokens)
             capacity = len(pool.replicas) * (
                 q.kv_capacity_tokens // q.kv_block_tokens
             )
@@ -321,16 +322,16 @@ def candidate_table(scenario: ExecutionScenario, profile, architecture: Destinat
                     components = None if q.migration is None else q.migration[method]
                     duration = (
                         _duration(
-                            session, method, profile.case("central"), pool.route,
+                            session, method, case, pool.route,
                             links, migration_horizon,
                         ) if components is None else
                         _destination_duration(
-                            session, method, profile.case("central"), pool.route,
+                            session, method, case, pool.route,
                             links, migration_horizon, components,
                         )
                     )
                     if method == "kv_transfer":
-                        _kv_schedule(scenario, profile, session, profile.case("central"),
+                        _kv_schedule(scenario, profile, session, case,
                                      pool.route, links)
                 except ValueError:
                     continue
@@ -341,9 +342,9 @@ def candidate_table(scenario: ExecutionScenario, profile, architecture: Destinat
                     )
                 if duration > migration_horizon:
                     continue
-                tokens = _resident_tokens(session, migration_horizon)
-                route_bytes = (_log_bytes(session, tokens) if method == "replay" else
-                               profile.case("central").kv_transfer.sealed_bytes(tokens))
+                route_bytes = (_log_bytes(session, migration_tokens)
+                               if method == "replay" else
+                               case.kv_transfer.sealed_bytes(migration_tokens))
                 transition = (
                     (max(0, duration - route_bytes / bandwidth), 0)
                     if method == "replay" else (0, 0)
@@ -356,56 +357,64 @@ def candidate_table(scenario: ExecutionScenario, profile, architecture: Destinat
     incidence = csr_matrix((np.ones(len(candidates)),
                             ([c.session for c in candidates], range(len(candidates)))),
                            shape=(len(sessions), len(candidates)))
-    rows, capacities, names, units = [], [], [], []
-    def add(values, capacity, name, unit):
-        if any(values):
-            rows.append(values)
-            capacities.append(capacity)
-            names.append(name)
-            units.append(unit)
+    specs, row_for = [], {}
+    def add(key, capacity, name, unit):
+        row_for[key] = len(specs)
+        specs.append((capacity, name, unit))
     for link, rate in links.items():
-        add([c.route_bytes if link in c.path else 0 for c in candidates],
-            rate * migration_horizon, f"route:{link}", "bytes")
+        add(("route", link), rate * migration_horizon, f"route:{link}", "bytes")
     for p, pool in enumerate(architecture.pools):
-        q = architecture.type_by_id[pool.type_id]
+        q = types[pool.type_id]
         baseline = pool_work[p]
         event = _event_bounds(q, pool, mode)
         for facet, (normal, bound) in enumerate(zip(q.normals, event)):
             residual = len(pool.replicas) * bound - np.asarray(normal) @ baseline
-            add([np.asarray(normal) @ c.service_work if c.pool == p else 0
-                 for c in candidates], residual, f"service:{pool.pool_id}:{facet}",
-                "replica-s/s")
+            add(("service", p, facet), residual,
+                f"service:{pool.pool_id}:{facet}", "replica-s/s")
         if pool.event_flex_fraction is not None:
             for facet, (normal, bound) in enumerate(zip(q.normals, q.bounds["stable"])):
                 capacity = migration_horizon * (
                     len(pool.replicas) * bound - np.asarray(normal) @ baseline
                     + pool.service_debt_fraction * len(pool.replicas) * bound
                 )
-                add([
-                    migration_horizon * (np.asarray(normal) @ c.service_work)
-                    + np.asarray(normal) @ c.transition_work if c.pool == p else 0
-                    for c in candidates
-                ], capacity, f"service-debt:{pool.pool_id}:{facet}", "replica-s")
-        add([c.kv_tokens if c.pool == p else 0 for c in candidates],
-            len(pool.replicas) * (q.kv_capacity_tokens // q.kv_block_tokens)
-            - pool_kv[p], f"kv:{pool.pool_id}",
-            "blocks")
+                add(("debt", p, facet), capacity,
+                    f"service-debt:{pool.pool_id}:{facet}", "replica-s")
+        add(("kv", p), len(pool.replicas)
+            * (q.kv_capacity_tokens // q.kv_block_tokens) - pool_kv[p],
+            f"kv:{pool.pool_id}", "blocks")
         for method in pool.methods:
-            add([
-                c.duration_s if c.pool == p and c.method == method else 0
-                for c in candidates
-            ], len(pool.replicas) * migration_horizon,
+            add(("migration", p, method), len(pool.replicas) * migration_horizon,
                 f"migration:{pool.pool_id}:{method}", "replica-s")
     data, rr, cc = [], [], []
-    for i, (row, capacity) in enumerate(zip(rows, capacities)):
-        for j, value in enumerate(row):
-            if value:
-                data.append(value / capacity)
-                rr.append(i)
-                cc.append(j)
+    def emit(key, column, value):
+        if value:
+            row = row_for[key]
+            data.append(value / specs[row][0])
+            rr.append(row)
+            cc.append(column)
+    for column, candidate in enumerate(candidates):
+        for link in dict.fromkeys(candidate.path):
+            emit(("route", link), column, candidate.route_bytes)
+        p, pool = candidate.pool, architecture.pools[candidate.pool]
+        q = types[pool.type_id]
+        for facet, normal in enumerate(q.normals):
+            emit(("service", p, facet), column,
+                 np.asarray(normal) @ candidate.service_work)
+            if pool.event_flex_fraction is not None:
+                emit(("debt", p, facet), column,
+                     migration_horizon * (np.asarray(normal) @ candidate.service_work)
+                     + np.asarray(normal) @ candidate.transition_work)
+        emit(("kv", p), column, candidate.kv_tokens)
+        emit(("migration", p, candidate.method), column, candidate.duration_s)
+    used = sorted(set(rr))
+    remap = {old: new for new, old in enumerate(used)}
+    rr = [remap[row] for row in rr]
+    capacities = tuple(specs[row][0] for row in used)
+    names = tuple(specs[row][1] for row in used)
+    units = tuple(specs[row][2] for row in used)
     return CandidateTable(sessions, candidates, incidence,
-                          csr_matrix((data, (rr, cc)), shape=(len(rows), len(candidates))),
-                          tuple(names), tuple(capacities), tuple(units),
+                          csr_matrix((data, (rr, cc)), shape=(len(used), len(candidates))),
+                          names, capacities, units,
                           migration_horizon)
 
 
@@ -883,23 +892,10 @@ def _greedy_prefix(
     )
 
 
-def _lp(table: CandidateTable, target: float):
-    if not table.candidates:
-        return set()
-    n, x = len(table.candidates), cp.Variable(len(table.candidates), nonneg=True)
+def _round_lp(table, target, values):
+    n = len(table.candidates)
     gains = np.array([c.gain_w for c in table.candidates])
     work = np.array([c.migration_work_s for c in table.candidates])
-    base = [table.incidence @ x <= 1, table.resources @ x <= 1, x <= 1]
-    def solve(objective, constraints, maximize=False):
-        p = cp.Problem(cp.Maximize(objective) if maximize else cp.Minimize(objective), constraints)
-        p.solve(solver=cp.CLARABEL)
-        return p
-    problem = solve(work @ x, base + [gains @ x >= target])
-    if problem.status in (cp.INFEASIBLE, cp.INFEASIBLE_INACCURATE):
-        problem = solve(gains @ x, base, True)
-        best = float(problem.value)
-        problem = solve(work @ x, base + [gains @ x >= best - 1e-7])
-    values = np.asarray(x.value)
     matrix, selected, sessions = csc_matrix(table.resources), set(), set()
     usage, gain = np.zeros(table.resources.shape[0]), 0.0
     for i in np.lexsort((np.arange(n), work, -values)):
@@ -928,6 +924,81 @@ def _lp(table: CandidateTable, target: float):
     return selected
 
 
+def _lp(table: CandidateTable, target: float, stats=None):
+    if not table.candidates:
+        return set()
+    started, native_s, solves, iterations = perf_counter(), 0.0, 0, 0
+    n, x = len(table.candidates), cp.Variable(len(table.candidates), nonneg=True)
+    gains = np.array([c.gain_w for c in table.candidates])
+    work = np.array([c.migration_work_s for c in table.candidates])
+    base = [table.incidence @ x <= 1, table.resources @ x <= 1, x <= 1]
+    def solve(objective, constraints, maximize=False):
+        nonlocal native_s, solves, iterations
+        p = cp.Problem(cp.Maximize(objective) if maximize else cp.Minimize(objective), constraints)
+        p.solve(solver=cp.CLARABEL)
+        native_s += p.solver_stats.solve_time or 0
+        iterations += p.solver_stats.num_iters or 0
+        solves += 1
+        return p
+    problem = solve(work @ x, base + [gains @ x >= target])
+    if problem.status in (cp.INFEASIBLE, cp.INFEASIBLE_INACCURATE):
+        problem = solve(gains @ x, base, True)
+        best = float(problem.value)
+        problem = solve(work @ x, base + [gains @ x >= best - 1e-7])
+    selected = _round_lp(table, target, np.asarray(x.value))
+    if stats is not None:
+        stats.update(wall_s=perf_counter() - started, native_s=native_s,
+                     solves=solves, iterations=iterations)
+    return selected
+
+
+def _lp_highs(table: CandidateTable, target: float, stats=None):
+    if not table.candidates:
+        return set()
+    started, native_s, solves, iterations = perf_counter(), 0.0, 0, 0
+    gains = np.array([c.gain_w for c in table.candidates])
+    work = np.array([c.migration_work_s for c in table.candidates])
+    if not np.array_equal(np.asarray(table.incidence.sum(0)).ravel(),
+                          np.ones(len(table.candidates))):
+        raise ValueError("each LP candidate must belong to exactly one session")
+    common = vstack((table.incidence, table.resources), format="csr")
+    common_rhs = np.ones(common.shape[0])
+    gain_scale = max(float(target), float(gains.max(initial=0)), 1.0)
+    target_row = csr_matrix((-gains / gain_scale).reshape(1, -1))
+
+    def solve(objective, minimum=None):
+        nonlocal native_s, solves, iterations
+        matrix, rhs = common, common_rhs
+        if minimum is not None:
+            matrix = vstack((common, target_row), format="csr")
+            rhs = np.append(common_rhs, -minimum / gain_scale)
+        solve_started = perf_counter()
+        result = linprog(objective, A_ub=matrix, b_ub=rhs,
+                         bounds=(0, None), method="highs-ipm",
+                         options={"presolve": True})
+        native_s += perf_counter() - solve_started
+        solves += 1
+        iterations += result.nit
+        if result.status not in (0, 2):
+            raise RuntimeError(f"HiGHS failed: {result.message}")
+        return result
+
+    result = solve(work / table.migration_horizon_s, target)
+    if result.status == 2:
+        maximum = solve(-gains / gain_scale)
+        if maximum.status:
+            raise RuntimeError(f"HiGHS maximum-gain LP failed: {maximum.message}")
+        best = -float(maximum.fun) * gain_scale
+        result = solve(work / table.migration_horizon_s, best - 1e-7)
+    if result.status:
+        raise RuntimeError(f"HiGHS target LP failed: {result.message}")
+    selected = _round_lp(table, target, result.x)
+    if stats is not None:
+        stats.update(wall_s=perf_counter() - started, native_s=native_s,
+                     solves=solves, iterations=iterations)
+    return selected
+
+
 def _pack(table, selected, architecture, scenario, mode):
     horizon = architecture.residency_horizon_s
     horizon = scenario.end_s - scenario.controller_delay_s if horizon is None else horizon
@@ -940,6 +1011,11 @@ def _pack(table, selected, architecture, scenario, mode):
     for p, pool in enumerate(architecture.pools):
         q = architecture.type_by_id[pool.type_id]
         normals, bounds = np.asarray(q.normals), _event_bounds(q, pool, mode)
+        replicas = pool.replicas
+        replica_work = np.asarray([work[r.replica_id] for r in replicas])
+        replica_kv = np.asarray([kv[r.replica_id] for r in replicas])
+        replica_migration = np.zeros((len(replicas), 2))
+        method_column = {"replay": 0, "kv_transfer": 1}
         members = [i for i in selected if table.candidates[i].pool == p]
         members.sort(key=lambda i: (-max(
             *(normals @ table.candidates[i].service_work / bounds),
@@ -948,24 +1024,28 @@ def _pack(table, selected, architecture, scenario, mode):
             table.candidates[i].duration_s / table.migration_horizon_s,
         ), table.sessions[table.candidates[i].session].session_id, i))
         for i in members:
-            c, choices = table.candidates[i], []
-            for r, replica in enumerate(pool.replicas):
-                next_work, next_kv = work[replica.replica_id] + c.service_work, kv[replica.replica_id] + c.kv_tokens
-                next_migration = dict(migration[replica.replica_id])
-                next_migration[c.method] += c.duration_s
-                pressure = max(*(normals @ next_work / bounds),
-                               next_kv
-                               / (q.kv_capacity_tokens // q.kv_block_tokens),
-                               max(next_migration.values())
-                               / table.migration_horizon_s)
-                if pressure <= 1 + 1e-9:
-                    choices.append((pressure, r, next_work, next_kv, next_migration))
-            if not choices:
+            c = table.candidates[i]
+            next_work = replica_work + c.service_work
+            pressure = np.maximum.reduce((
+                np.max(next_work @ normals.T / bounds, axis=1),
+                (replica_kv + c.kv_tokens)
+                / (q.kv_capacity_tokens // q.kv_block_tokens),
+                np.maximum(
+                    np.max(replica_migration, axis=1),
+                    replica_migration[:, method_column[c.method]] + c.duration_s,
+                ) / table.migration_horizon_s,
+            ))
+            feasible = np.flatnonzero(pressure <= 1 + 1e-9)
+            if not feasible.size:
                 return None, tuple(sorted(members))
-            _, r, next_work, next_kv, next_migration = min(choices, key=lambda x: x[:2])
-            work[pool.replicas[r].replica_id], kv[pool.replicas[r].replica_id] = next_work, next_kv
-            migration[pool.replicas[r].replica_id] = next_migration
-            assignment[i] = pool.replicas[r].replica_id
+            r = feasible[np.argmin(pressure[feasible])]
+            replica_work[r] = next_work[r]
+            replica_kv[r] += c.kv_tokens
+            replica_migration[r, method_column[c.method]] += c.duration_s
+            replica_id = replicas[r].replica_id
+            work[replica_id], kv[replica_id] = replica_work[r], replica_kv[r]
+            migration[replica_id][c.method] = replica_migration[r, method_column[c.method]]
+            assignment[i] = replica_id
     return assignment, None
 
 
@@ -1098,10 +1178,12 @@ def _mode_plan(scenario, profile, architecture, solver, mode, power, target):
             return_assignment=True,
         )
     else:
-        selected = (_lp(table, target) if solver.startswith("lp") else
+        selected = (_lp_highs(table, target) if solver == "lp_highs" else
+                    _lp(table, target) if solver.startswith("lp") else
                     _greedy_bundle(table, target, power)
                     if solver == "greedy_bundle" else _greedy(table, target))
     repairs, repair_s = 0, 0.0
+    costs = np.asarray(table.resources.sum(0)).ravel()
     while True:
         started = perf_counter()
         if assignment is None:
@@ -1113,8 +1195,7 @@ def _mode_plan(scenario, profile, architecture, solver, mode, power, target):
         if not cut:
             raise RuntimeError("destination packing repair did not converge")
         drop = max(cut, key=lambda i: (
-            float(table.resources[:, i].sum())
-            / max(table.candidates[i].gain_w, 1e-12), i,
+            costs[i] / max(table.candidates[i].gain_w, 1e-12), i,
         ))
         selected.remove(drop)
         assignment = None
@@ -1124,7 +1205,7 @@ def _mode_plan(scenario, profile, architecture, solver, mode, power, target):
 
 def plan_destination(scenario, profile, solver, case_id, seed, architecture):
     if solver not in {"greedy", "greedy_bundle", "greedy_prefix", "greedy_coupled",
-                      "lp", "lp_peak_first", "lp_work_first"}:
+                      "lp", "lp_peak_first", "lp_work_first", "lp_highs"}:
         raise ValueError("destination architecture supports pool-aware LP and greedy")
     if case_id != "central":
         raise ValueError("destination admission supports the central profile")

@@ -6,6 +6,8 @@ and distinguishes normal, emergency, and valid target-unmet outcomes. KV transfe
 time is limited by the slower of route transfer and destination ingestion.
 Temporary reconstruction debt is measured in replica-seconds and can recover
 only from post-migration spare service.
+The experimental HiGHS backend solves the same target-first LP and uses the same
+rounder without replacing the default Clarabel backend.
 
 Plausible wrong implementations:
 - Borrow residual service or KV capacity across pools or replicas.
@@ -27,6 +29,8 @@ Plausible wrong implementations:
 - Relax aggregate method constraints but retain cross-method serialization in packing.
 - Choose one cheap action per session before exploring feasible mixed-method patterns.
 - Materialize every source prefix even though recovery retains a bounded frontier.
+- Reverse or mis-scale the HiGHS target row or skip maximum-gain fallback.
+- Route the existing `lp` solver through HiGHS instead of keeping it additive.
 """
 
 from dataclasses import replace
@@ -44,7 +48,8 @@ from destination import (DESTINATION_SCHEMA, CompatibilityFingerprint, ContextRa
 from planner import plan
 from pool_planner import (Candidate, CandidateTable, _destination_duration, _event_bounds,
                           _greedy, _greedy_bundle, _greedy_coupled,
-                          _greedy_prefix, _coupled_source_pattern, _mode_boundary_rho,
+                          _greedy_prefix, _coupled_source_pattern, _lp_highs,
+                          _mode_boundary_rho,
                           _dual_resource_limits, _retained_prefixes,
                           _source_removed_gain,
                           _recover_coupled, _service_trace, candidate_table,
@@ -58,6 +63,42 @@ from test_planner import PATHS, problem
 
 
 FP = CompatibilityFingerprint("m", "t", "log", "kv")
+
+
+def _hand_lp_table():
+    candidates = (
+        Candidate(0, "replay", 0, 2, 2, 2, (), 0, (0, 0), 0),
+        Candidate(0, "kv_transfer", 0, 2, 1, 1, (), 0, (0, 0), 0),
+        Candidate(1, "replay", 0, 1, 1, 1, (), 0, (0, 0), 0),
+    )
+    return CandidateTable(
+        (), candidates,
+        csr_matrix((np.ones(3), ((0, 0, 1), range(3))), shape=(2, 3)),
+        csr_matrix((np.array([.6, .8, .2]),
+                    (np.zeros(3, int), np.arange(3))), shape=(1, 3)),
+        ("resource",), (1,), ("fraction",), 10,
+    )
+
+
+def test_highs_lp_matches_target_problem_and_max_gain_fallback():
+    table = _hand_lp_table()
+
+    assert _lp_highs(table, 3) == {1, 2}
+    assert _lp_highs(table, 4) == {1, 2}
+
+
+def test_highs_lp_is_additive_and_does_not_replace_clarabel(monkeypatch):
+    table, called = _hand_lp_table(), []
+    monkeypatch.setattr(pool_planner, "candidate_table", lambda *args: table)
+    monkeypatch.setattr(pool_planner, "_lp", lambda *args: called.append("lp") or set())
+    monkeypatch.setattr(pool_planner, "_lp_highs",
+                        lambda *args: called.append("lp_highs") or set())
+    monkeypatch.setattr(pool_planner, "_pack", lambda *args: ({}, None))
+
+    pool_planner._mode_plan(None, None, None, "lp", "normal", None, 0)
+    pool_planner._mode_plan(None, None, None, "lp_highs", "normal", None, 0)
+
+    assert called == ["lp", "lp_highs"]
 
 
 def test_dual_retention_is_bounded_and_keeps_safeguards():

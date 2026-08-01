@@ -131,6 +131,9 @@ independently schedules routes, reconstruction endpoints, requests, commits,
 and power. It separately traces declared pool-service demand and debt from
 realized replay and commit times. `evaluation_config.py` is the canonical
 source for assumed paper operating points and their replacement evidence.
+The default pool LP remains the Clarabel implementation. The experimental
+`lp_highs` solver runs the same relaxation and rounder through SciPy/HiGHS;
+resource rows are assembled directly from candidate nonzeros.
 `dual_lagrangian_experiment.py` evaluates the simulator-only `greedy_prefix`
 policy as a dual-Lagrangian prefix method against the unchanged static greedy
 baseline and other experimental pool policies on paired trace-derived targets;

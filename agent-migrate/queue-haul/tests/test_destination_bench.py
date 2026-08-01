@@ -25,6 +25,7 @@ from destination_bench import (
     evidence,
     extrapolate_replay,
     pack_source,
+    parse_solvers,
     sample_sessions,
     scenario,
     trace_shapes,
@@ -50,6 +51,10 @@ def manifest():
             "newly_append_tokens": 1000, "output_tokens": 200,
         }],
     }
+
+
+def test_reference_bench_accepts_additive_highs_backend():
+    assert parse_solvers("lp,lp_highs") == ("lp", "lp_highs")
 
 
 def test_trace_shape_separates_resident_history_from_next_request():
