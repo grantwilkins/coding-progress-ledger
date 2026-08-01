@@ -89,8 +89,9 @@ def extract(root: Path, scenario_id: str) -> tuple[list[dict], list[dict]]:
     for index, row in enumerate(sorted(migrations, key=lambda item: int(item["order"])), 1):
         continuation = continuations[row["session_id"]]
         bulk_start, bulk_finish = seconds(row["initial_start_ns"]), seconds(row["initial_end_ns"])
-        quiesce, catch_start = seconds(row["pause_start_ns"]), seconds(row["catch_up_start_ns"])
-        catch_finish = seconds(row["catch_up_end_ns"])
+        quiesce = seconds(row["pause_start_ns"])
+        catch_start = seconds(row["catch_up_start_ns"] or row["idle_ns"])
+        catch_finish = seconds(row["catch_up_end_ns"] or row["idle_ns"])
         switch_start, commit = seconds(row["switch_start_ns"]), seconds(row["switch_end_ns"])
         continuation_start = seconds(continuation["start_ns"])
         first_token = seconds(min(

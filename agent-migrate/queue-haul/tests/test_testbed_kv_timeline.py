@@ -44,6 +44,7 @@ def fixture(tmp_path):
         "bandwidth_mbps": 1000, "activity": "staged", "success": "True",
         "initial_start_ns": 1_000_000_000,
         "initial_end_ns": 3_000_000_000,
+        "idle_ns": 3_500_000_000,
         "pause_start_ns": 3_000_000_000,
         "catch_up_start_ns": 4_000_000_000,
         "catch_up_end_ns": 5_000_000_000,
@@ -98,6 +99,18 @@ def test_extract_preserves_pause_and_inference_semantics(tmp_path):
         segment["finish_s"] for segment in segments
         if segment["location"] == "source"
     ) > row["quiesce_s"]
+
+
+def test_extract_accepts_no_catch_up(tmp_path):
+    root = fixture(tmp_path)
+    rows = list(csv.DictReader((root / "migrations.csv").open()))
+    rows[0]["catch_up_start_ns"] = rows[0]["catch_up_end_ns"] = ""
+    _csv(root / "migrations.csv", rows)
+
+    row = extract(root, "measured")[0][0]
+
+    assert row["request_boundary_wait_s"] == .5
+    assert row["catch_up_s"] == 0
 
 
 def test_write_rejects_wrong_concurrency_and_emits_plot(tmp_path):
