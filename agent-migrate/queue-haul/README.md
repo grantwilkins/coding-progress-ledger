@@ -155,12 +155,15 @@ certificate with a long-lived Rust pricing oracle while keeping HiGHS in Python.
 The native boundary factors candidates into float64 session/signature features,
 packed per-session feasibility masks, and distinct pool/method sparse templates;
 bounded chunks load directly into Rust-owned storage. It is limited to 16
-options and hard-fails outside that scope. Install it with
-`uv sync --group native` using rustup Cargo; the toolchain is pinned under
+options and hard-fails outside that scope. `uv sync` installs it for development;
+rustup Cargo must precede any system Cargo, and the toolchain is pinned under
 `native/`. Pools reuse admission physics only when type, route, replica count,
 baseline, bounds, and methods are exactly equal; variables and capacity rows
 remain pool-specific. Indexed replica placement and a compact execution verifier are still
 required for million-session operation.
+`outputs/native-lp-scale-20260801/one-million.json` records the post-optimization
+one-seed 1M-session LP/rounding sensitivity and its hashes; it explicitly excludes
+replica packing, DES, prediction, and execution validation.
 `dual_lagrangian_experiment.py` evaluates the simulator-only `greedy_prefix`
 policy as a dual-Lagrangian prefix method against the unchanged static greedy
 baseline and other experimental pool policies on paired trace-derived targets;

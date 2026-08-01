@@ -36,8 +36,6 @@ dependencies = [
 dev = [
     { name = "maturin" },
     { name = "pytest" },
-]
-native = [
     { name = "queue-haul-native" },
 ]
 
@@ -55,8 +53,8 @@ requires-dist = [
 dev = [
     { name = "maturin", specifier = ">=1.14.1" },
     { name = "pytest", specifier = ">=8" },
+    { name = "queue-haul-native", editable = "queue-haul/native" },
 ]
-native = [{ name = "queue-haul-native", editable = "queue-haul/native" }]
 
 [[package]]
 name = "cffi"

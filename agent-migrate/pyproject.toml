@@ -29,7 +29,5 @@ queue-haul-native = { workspace = true }
 dev = [
     "maturin>=1.14.1",
     "pytest>=8",
-]
-native = [
     "queue-haul-native",
 ]

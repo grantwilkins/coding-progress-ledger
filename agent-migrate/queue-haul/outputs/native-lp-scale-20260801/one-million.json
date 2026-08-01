@@ -1,0 +1,48 @@
+{
+  "schema": "queue-haul-native-lp-scale-v1",
+  "created_local": "2026-08-01T16:24:24-07:00",
+  "claim": "single-seed solver-and-rounding scale sensitivity; excludes replica packing, DES, prediction, and execution validation",
+  "git_sha": "35f61b181430b78393cb7171361e215d93c22e1b",
+  "code_sha256": "5ea9458dfdb7e40cdd7b9fb9d6c9a4c4adfbf5274ed705a640b548bfe240c5ba",
+  "model_sha256": "e40435eeeeb5417029729d6a9c29e2fa0a37afd48a3e2e8dfe5b76281dc292cd",
+  "manifest_sha256": "040ad63a8a36bed0a2498457e4dc70ef5e19b9a552fde7a398a6c7914e80614b",
+  "environment": {
+    "os": "macOS 14.3.1",
+    "architecture": "arm64",
+    "python": "3.10.19",
+    "rss_source": "resource.getrusage(RUSAGE_SELF).ru_maxrss"
+  },
+  "configuration": {
+    "workload": "coding",
+    "seed": 0,
+    "sessions": 1000000,
+    "pools": 8,
+    "methods_per_pool": 2,
+    "target_fraction_of_isolated_gain": 0.1,
+    "solver": "lp_column_generation_native",
+    "column_tolerance": 1e-8,
+    "gap_tolerance": 1e-7
+  },
+  "result": {
+    "possible_option_slots": 16000000,
+    "choice_evaluations_across_sweeps": 64000000,
+    "restricted_master_columns": 53827,
+    "completion_columns": 0,
+    "selected_moves": 13426,
+    "rounded_gain_w": 52964.29598529317,
+    "rounded_migration_work_s": 25667.496505682764,
+    "phase1_gap": 0.0,
+    "phase2_gap": 6.139089236967266e-12,
+    "observed_peak_rss_mib": 1988.359375
+  },
+  "timing_s": {
+    "scenario_build": 7.758260415866971,
+    "expected_power": 1.5320208752527833,
+    "candidate_oracle": 24.048587708733976,
+    "lp_rounding_total": 72.13536979071796,
+    "native_soa_build": 50.87410191632807,
+    "native_pricing": 0.5550272911787033,
+    "highs": 19.55704641714692,
+    "measured_total": 105.47423879057169
+  }
+}
