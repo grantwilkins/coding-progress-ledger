@@ -80,6 +80,43 @@ from test_planner import PATHS, problem
 FP = CompatibilityFingerprint("m", "t", "log", "kv")
 
 
+def _reference_marginal(power, session_id):
+    source = power.route[session_id]
+    owned = power.instance_slots[source]
+    by_node, share = {}, power.ell[session_id] / len(owned)
+    for node_id, slot in owned:
+        by_node.setdefault(node_id, list(power.slots[node_id]))[slot] -= share
+    return sum(
+        power.node_power[node_id] - power._power(
+            node_id, slots,
+            power.scenario.final_state
+            if power.dependents[node_id] - power.removed == {session_id}
+            else "awake",
+        )
+        for node_id, slots in by_node.items() if power.nodes[node_id].local
+    )
+
+
+@pytest.mark.parametrize("scope", ("gpu", "server"))
+@pytest.mark.parametrize("final,count", (("awake", 2), ("sleep", 1), ("off", 1)))
+def test_fast_marginal_matches_full_node_recomputation(tmp_path, scope, final, count):
+    profile, base = replace(model(tmp_path, tp=2), power_scope=scope), problem(final=final)
+    sessions = tuple(
+        replace(base.sessions[0], session_id=str(index), source_instance="s0")
+        for index in range(count)
+    )
+    scenario = replace(
+        base, sessions=sessions, nodes=(PowerNode("n0", 2, True),),
+        instances=(ServingInstance("s0", ("n0", "n0")),), links=(),
+    )
+    power = ExpectedPower(scenario, profile)
+
+    for session in sessions:
+        assert power.marginal(session.session_id) == pytest.approx(
+            _reference_marginal(power, session.session_id), abs=1e-12,
+        )
+
+
 def _hand_lp_table():
     candidates = (
         Candidate(0, "replay", 0, 2, 2, 2, (), 0, (0, 0), 0),

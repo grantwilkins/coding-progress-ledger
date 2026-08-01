@@ -120,14 +120,27 @@ class ExpectedPower:
         owned = self.instance_slots[source]
         by_node, share = {}, self.ell[session_id] / len(owned)
         for node_id, slot in owned:
-            by_node.setdefault(node_id, list(self.slots[node_id]))[slot] -= share
-        return sum(
-            self.node_power[node_id] - self._power(
-                node_id, slots,
-                self.scenario.final_state
-                if self.dependents[node_id] - self.removed == {session_id} else "awake",
-            ) for node_id, slots in by_node.items() if self.nodes[node_id].local
-        )
+            by_node.setdefault(node_id, {})[slot] = self.slots[node_id][slot] - share
+        gain = 0.0
+        for node_id, changed in by_node.items():
+            if not self.nodes[node_id].local:
+                continue
+            final = self.dependents[node_id] - self.removed == {session_id}
+            if final and self.scenario.final_state != "awake":
+                after = self._power(node_id, state=self.scenario.final_state)
+            elif self.profile.power_scope == "gpu":
+                after = sum(
+                    self.case.power_curve.power(changed[slot])
+                    if slot in changed else watts
+                    for slot, watts in enumerate(self.slot_power[node_id])
+                )
+            else:
+                after = self.case.power_curve.power(sum(
+                    changed.get(slot, load)
+                    for slot, load in enumerate(self.slots[node_id])
+                ))
+            gain += self.node_power[node_id] - after
+        return gain
 
     def drain_gain(self, session_ids) -> float:
         selected, slots = set(session_ids), {}
