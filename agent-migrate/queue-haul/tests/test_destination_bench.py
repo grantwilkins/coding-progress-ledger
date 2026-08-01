@@ -54,7 +54,9 @@ def manifest():
 
 
 def test_reference_bench_accepts_additive_highs_backend():
-    assert parse_solvers("lp,lp_highs") == ("lp", "lp_highs")
+    assert parse_solvers("lp,lp_highs,lp_column_generation") == (
+        "lp", "lp_highs", "lp_column_generation",
+    )
 
 
 def test_trace_shape_separates_resident_history_from_next_request():

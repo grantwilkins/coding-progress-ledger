@@ -464,8 +464,9 @@ def parse_classes(value: str) -> tuple[str, ...]:
 
 def parse_solvers(value: str) -> tuple[str, ...]:
     solvers = tuple(value.split(","))
-    if not solvers or not set(solvers) <= {"lp", "lp_highs", "greedy"}:
-        raise argparse.ArgumentTypeError("solvers must be lp, lp_highs, and/or greedy")
+    allowed = {"lp", "lp_highs", "lp_column_generation", "greedy"}
+    if not solvers or not set(solvers) <= allowed:
+        raise argparse.ArgumentTypeError(f"solvers must be drawn from {sorted(allowed)}")
     return solvers
 
 

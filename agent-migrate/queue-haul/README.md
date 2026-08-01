@@ -134,6 +134,10 @@ source for assumed paper operating points and their replacement evidence.
 The default pool LP remains the Clarabel implementation. The experimental
 `lp_highs` solver runs the same relaxation and rounder through SciPy/HiGHS;
 resource rows are assembled directly from candidate nonzeros.
+`lp_column_generation` is an exact Phase-I/Phase-II prototype with complete
+reduced-cost certification. It currently materializes the full candidate table
+and rebuilds restricted masters, so it is a correctness experiment rather than
+the million-session implementation.
 `dual_lagrangian_experiment.py` evaluates the simulator-only `greedy_prefix`
 policy as a dual-Lagrangian prefix method against the unchanged static greedy
 baseline and other experimental pool policies on paired trace-derived targets;

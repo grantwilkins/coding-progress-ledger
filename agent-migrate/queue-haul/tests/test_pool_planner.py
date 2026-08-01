@@ -8,6 +8,8 @@ Temporary reconstruction debt is measured in replica-seconds and can recover
 only from post-migration spare service.
 The experimental HiGHS backend solves the same target-first LP and uses the same
 rounder without replacing the default Clarabel backend.
+The column-generation backend uses an always-feasible shortfall phase, includes
+session prices in reduced costs, and certifies every phase with complete pricing.
 
 Plausible wrong implementations:
 - Borrow residual service or KV capacity across pools or replicas.
@@ -31,6 +33,8 @@ Plausible wrong implementations:
 - Materialize every source prefix even though recovery retains a bounded frontier.
 - Reverse or mis-scale the HiGHS target row or skip maximum-gain fallback.
 - Route the existing `lp` solver through HiGHS instead of keeping it additive.
+- Charge migration work during shortfall minimization or omit the session dual.
+- Run Phase II at an infeasible requested target instead of maximum attainable gain.
 """
 
 from dataclasses import replace
@@ -48,7 +52,8 @@ from destination import (DESTINATION_SCHEMA, CompatibilityFingerprint, ContextRa
 from planner import plan
 from pool_planner import (Candidate, CandidateTable, _destination_duration, _event_bounds,
                           _greedy, _greedy_bundle, _greedy_coupled,
-                          _greedy_prefix, _coupled_source_pattern, _lp_highs,
+                          _greedy_prefix, _coupled_source_pattern,
+                          _lp_column_generation, _lp_highs,
                           _mode_boundary_rho,
                           _dual_resource_limits, _retained_prefixes,
                           _source_removed_gain,
@@ -87,18 +92,73 @@ def test_highs_lp_matches_target_problem_and_max_gain_fallback():
     assert _lp_highs(table, 4) == {1, 2}
 
 
+@pytest.mark.parametrize("target, shortfall", ((3, 0), (4, 1)))
+def test_column_generation_matches_flat_lp_and_certifies_both_phases(
+    target, shortfall,
+):
+    table, stats = _hand_lp_table(), {}
+
+    selected = _lp_column_generation(table, target, stats)
+
+    assert selected == _lp_highs(table, target) == {1, 2}
+    assert stats["phase1_shortfall"] == pytest.approx(shortfall)
+    assert stats["effective_target"] == pytest.approx(3)
+    assert stats["phase1"]["gap"] == pytest.approx(0, abs=1e-7)
+    assert stats["phase2"]["gap"] == pytest.approx(0, abs=1e-7)
+
+
+def test_column_pricing_uses_session_dual_to_avoid_duplicate_equivalent_choices():
+    candidates = tuple(
+        Candidate(0, method, 0, 1, 1, 1, (), 0, (0, 0), 0)
+        for method in ("replay", "kv_transfer")
+    )
+    table = CandidateTable(
+        (), candidates, csr_matrix(np.ones((1, 2))), csr_matrix((0, 2)),
+        (), (), (), 1,
+    )
+    stats = {}
+
+    _lp_column_generation(table, 1, stats)
+
+    assert stats["active_columns"] == 1
+    assert stats["phase1"]["gap"] == pytest.approx(0)
+
+
+def test_column_phase_one_ignores_migration_work():
+    candidates = (
+        Candidate(0, "replay", 0, 1, 100, 1, (), 0, (0, 0), 0),
+        Candidate(0, "kv_transfer", 0, 1, 1, 1, (), 0, (0, 0), 0),
+    )
+    table = CandidateTable(
+        (), candidates, csr_matrix(np.ones((1, 2))), csr_matrix((0, 2)),
+        (), (), (), 1,
+    )
+    stats = {}
+
+    selected = _lp_column_generation(table, 1, stats)
+
+    assert stats["phase1"]["columns"] == 1
+    assert stats["active_columns"] == 2
+    assert selected == {1}
+
+
 def test_highs_lp_is_additive_and_does_not_replace_clarabel(monkeypatch):
     table, called = _hand_lp_table(), []
     monkeypatch.setattr(pool_planner, "candidate_table", lambda *args: table)
     monkeypatch.setattr(pool_planner, "_lp", lambda *args: called.append("lp") or set())
     monkeypatch.setattr(pool_planner, "_lp_highs",
                         lambda *args: called.append("lp_highs") or set())
+    monkeypatch.setattr(pool_planner, "_lp_column_generation",
+                        lambda *args: called.append("lp_column_generation") or set())
     monkeypatch.setattr(pool_planner, "_pack", lambda *args: ({}, None))
 
     pool_planner._mode_plan(None, None, None, "lp", "normal", None, 0)
     pool_planner._mode_plan(None, None, None, "lp_highs", "normal", None, 0)
+    pool_planner._mode_plan(
+        None, None, None, "lp_column_generation", "normal", None, 0,
+    )
 
-    assert called == ["lp", "lp_highs"]
+    assert called == ["lp", "lp_highs", "lp_column_generation"]
 
 
 def test_dual_retention_is_bounded_and_keeps_safeguards():

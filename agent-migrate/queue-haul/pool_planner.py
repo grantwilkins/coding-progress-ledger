@@ -9,7 +9,7 @@ from time import perf_counter
 import cvxpy as cp
 import numpy as np
 from scipy.optimize import linprog
-from scipy.sparse import csc_matrix, csr_matrix, vstack
+from scipy.sparse import csc_matrix, csr_matrix, hstack, vstack
 
 from destination import DestinationArchitecture
 from planner import (_changes, _duration, _expected_scenario, _kv_catch_up_s,
@@ -27,6 +27,8 @@ DUAL_PREFIX_BUCKETS = 8
 DUAL_HIGH_TARGET_ITERATIONS = 4
 DUAL_HIGH_TARGET_BUCKETS = 64
 DUAL_HIGH_TARGET_FRACTION = .75
+COLUMN_GROWTH_SWEEPS = 40
+COLUMN_TOLERANCE = 1e-8
 
 
 @dataclass(frozen=True)
@@ -999,6 +1001,87 @@ def _lp_highs(table: CandidateTable, target: float, stats=None):
     return selected
 
 
+def _column_phase(table, target, costs, active, shortfall, stats):
+    sessions = np.array([c.session for c in table.candidates])
+    gains = np.array([c.gain_w for c in table.candidates])
+    active = set(active)
+    batch = max(256, table.incidence.shape[0] // COLUMN_GROWTH_SWEEPS)
+    for sweep in range(len(table.candidates) + 1):
+        columns = np.array(sorted(active), int)
+        represented = np.unique(sessions[columns]) if columns.size else np.array([], int)
+        incidence = table.incidence[represented][:, columns]
+        resources = table.resources[:, columns]
+        target_row = csr_matrix((-gains[columns]).reshape(1, -1))
+        matrix = vstack((incidence, resources, target_row), format="csr")
+        objective = costs[columns]
+        if shortfall:
+            matrix = hstack((matrix, csr_matrix((
+                [-1.0], ([matrix.shape[0] - 1], [0])),
+                shape=(matrix.shape[0], 1),
+            )), format="csr")
+            objective = np.append(objective, 1)
+        result = linprog(
+            objective, A_ub=matrix,
+            b_ub=np.concatenate((
+                np.ones(len(represented) + table.resources.shape[0]), [-target],
+            )), bounds=(0, None), method="highs-ds", options={"presolve": True},
+        )
+        if result.status:
+            raise RuntimeError(f"column master failed: {result.message}")
+        dual = -result.ineqlin.marginals
+        alpha = np.zeros(table.incidence.shape[0])
+        alpha[represented] = dual[:len(represented)]
+        resource_dual = dual[len(represented):-1]
+        eta = dual[-1]
+        base = costs + table.resources.T @ resource_dual - eta * gains
+        reduced = np.asarray(base).ravel() + alpha[sessions]
+        minimum = np.full(table.incidence.shape[0], np.inf)
+        np.minimum.at(minimum, sessions, reduced)
+        best = np.full(table.incidence.shape[0], len(table.candidates))
+        tied = reduced == minimum[sessions]
+        np.minimum.at(best, sessions[tied], np.flatnonzero(tied))
+        violations = best[minimum < -COLUMN_TOLERANCE]
+        violations = violations[~np.isin(violations, columns, assume_unique=True)]
+
+        correction = np.maximum(0, -alpha - minimum)
+        correction[~np.isfinite(correction)] = 0
+        lower = eta * target - resource_dual.sum() - (alpha + correction).sum()
+        stats.update(sweeps=sweep + 1, columns=len(active), upper=float(result.fun),
+                     lower=float(lower), gap=float(result.fun - lower))
+        if not violations.size:
+            return result, columns, active
+        order = np.lexsort((violations, reduced[violations]))
+        active.update(map(int, violations[order[:batch]]))
+    raise RuntimeError("column generation did not converge")
+
+
+def _lp_column_generation(table: CandidateTable, target: float, stats=None):
+    if not table.candidates or target <= 0:
+        return set()
+    started, phase1, phase2 = perf_counter(), {}, {}
+    zeros = np.zeros(len(table.candidates))
+    first, columns, active = _column_phase(
+        table, target, zeros, set(), True, phase1,
+    )
+    shortfall = float(first.x[-1])
+    effective = max(0.0, target - shortfall)
+    work = np.array([c.migration_work_s for c in table.candidates]) \
+        / table.migration_horizon_s
+    second, columns, active = _column_phase(
+        table, max(0.0, effective - 1e-7), work, active, False, phase2,
+    )
+    values = np.zeros(len(table.candidates))
+    values[columns] = second.x
+    selected = _round_lp(table, target, values)
+    if stats is not None:
+        stats.update(wall_s=perf_counter() - started,
+                     active_columns=len(active),
+                     active_sessions=len({table.candidates[i].session for i in active}),
+                     phase1_shortfall=shortfall, effective_target=effective,
+                     phase1=phase1, phase2=phase2)
+    return selected
+
+
 def _pack(table, selected, architecture, scenario, mode):
     horizon = architecture.residency_horizon_s
     horizon = scenario.end_s - scenario.controller_delay_s if horizon is None else horizon
@@ -1178,7 +1261,9 @@ def _mode_plan(scenario, profile, architecture, solver, mode, power, target):
             return_assignment=True,
         )
     else:
-        selected = (_lp_highs(table, target) if solver == "lp_highs" else
+        selected = (_lp_column_generation(table, target)
+                    if solver == "lp_column_generation" else
+                    _lp_highs(table, target) if solver == "lp_highs" else
                     _lp(table, target) if solver.startswith("lp") else
                     _greedy_bundle(table, target, power)
                     if solver == "greedy_bundle" else _greedy(table, target))
@@ -1205,7 +1290,8 @@ def _mode_plan(scenario, profile, architecture, solver, mode, power, target):
 
 def plan_destination(scenario, profile, solver, case_id, seed, architecture):
     if solver not in {"greedy", "greedy_bundle", "greedy_prefix", "greedy_coupled",
-                      "lp", "lp_peak_first", "lp_work_first", "lp_highs"}:
+                      "lp", "lp_peak_first", "lp_work_first", "lp_highs",
+                      "lp_column_generation"}:
         raise ValueError("destination architecture supports pool-aware LP and greedy")
     if case_id != "central":
         raise ValueError("destination admission supports the central profile")
