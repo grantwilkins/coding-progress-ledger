@@ -318,16 +318,24 @@ is still experimental: exact eager-parallel prediction is the final acceptance
 gate, and the policy is neither a global optimum nor a hardware controller.
 The implementation caches action-equivalent prefix gains and pattern resource
 vectors, then uses a lazy heap that preserves the same global recovery order.
-Near an aggregate boundary it recomputes the exact sparse sum, and it retains
-the concrete packing check after every accepted pattern.
+It remains the stronger small-source diagnostic rather than the scale path.
 
 The separate simulator-only `greedy_prefix` experiment removes Cartesian
-source-pattern enumeration. It scans every exact-power prefix of the cheapest
-fixed-price action ordering and one deterministic alternative-action ordering,
-then uses the same aggregate recovery, concrete packing, and final temporal
-validation. It has polynomial local search but is not the default policy:
-high-target simulations lose feasibility relative to the regular greedy, and
-equal-cost cases remain sensitive to input order.
+source-pattern enumeration. It warm-starts destination prices with the regular
+greedy's duplicate-safe scarcity prices, scans every exact-power prefix of the
+cheapest fixed-price action ordering and one deterministic alternative-action
+ordering, and retains the selected prefix and its neighbors, the singleton and
+full prefixes, and evenly spaced prefix-length ranks. Below 75% of removable
+awake power it uses one price pass and eight rank buckets; at higher targets it
+uses four passes and 64 buckets. Recovery updates aggregate resource vectors
+incrementally and checks their exact sparse sum once before return. It packs the
+final set once and reuses that assignment; an unpackable or unreachable set
+falls back to packing-aware recovery. Route budgets reserve the largest
+candidate's isolated post-route tail, and exact eager-parallel prediction
+remains the final acceptance gate. The method has polynomial local search but
+is still experimental and equal-cost cases remain sensitive to input order.
+Bounding the frontier reduces planning work but can choose more migration work
+than the exhaustive-prefix experimental precursor.
 
 Selected moves are ordered by migration work per conservative watt. At
 controller completion, the executor starts every selected move eagerly.

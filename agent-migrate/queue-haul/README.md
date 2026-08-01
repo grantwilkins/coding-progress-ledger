@@ -131,13 +131,22 @@ independently schedules routes, reconstruction endpoints, requests, commits,
 and power. It separately traces declared pool-service demand and debt from
 realized replay and commit times. `evaluation_config.py` is the canonical
 source for assumed paper operating points and their replacement evidence.
-`dual_lagrangian_experiment.py` evaluates the existing simulator-only
-`greedy_prefix` policy as a dual-Lagrangian prefix method against the unchanged
-pool greedies on paired trace-derived targets and destination contracts;
+`dual_lagrangian_experiment.py` evaluates the simulator-only `greedy_prefix`
+policy as a dual-Lagrangian prefix method against the unchanged static greedy
+baseline and other experimental pool policies on paired trace-derived targets;
 infeasible plans receive zero validated shed. The archived exploratory run under
 `outputs/dual-lagrangian-*` finds lower migration work and better target
-completion in packed coding traces, but its 10K-session 50%-target solve takes
-87 seconds versus 4 seconds for static greedy, so it is not a 1M-session claim.
+completion in packed coding traces. The scale-oriented policy uses a small
+prefix-length frontier, incremental aggregate recovery, one final packing pass,
+and a broader frontier above 75% requested shed. This bounded rewrite uses
+roughly 6–44% more migration work than its exhaustive-prefix experimental
+precursor in the archived comparable cases, while remaining below static
+greedy. It remains experimental and is not a hardware or 1M-session claim. In
+the single 100K/50% sensitivity, it takes 81 versus 138 seconds and uses 53%
+less migration work than static greedy, but finishes migration in 111 versus 54
+seconds against a 115-second horizon. The smaller timing differences are
+indistinguishable at this sample size; these points are sensitivities, not
+confidence intervals.
 `paper_evaluation.py` writes the legacy Q1–Q9 result/plot registry while the
 paper evaluation is reorganized into mechanism validation, fixed-contract
 coordination, multi-pool contracts, and planner quality/scale. It rejects

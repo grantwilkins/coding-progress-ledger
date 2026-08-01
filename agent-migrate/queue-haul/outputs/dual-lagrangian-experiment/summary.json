@@ -5,7 +5,7 @@
     "solver": "greedy",
     "cases": 10,
     "feasible": 10,
-    "median_solve_s": 0.007961354218423367,
+    "median_solve_s": 0.007421312853693962,
     "median_feasible_migration_work_s": 3.918749760652438,
     "both_greedy_feasible": 10,
     "median_paired_work_delta_vs_greedy_s": 0.0
@@ -16,7 +16,7 @@
     "solver": "greedy_bundle",
     "cases": 10,
     "feasible": 10,
-    "median_solve_s": 0.03775050025433302,
+    "median_solve_s": 0.035887124948203564,
     "median_feasible_migration_work_s": 3.918749760652438,
     "both_greedy_feasible": 10,
     "median_paired_work_delta_vs_greedy_s": 0.0
@@ -27,10 +27,10 @@
     "solver": "greedy_coupled",
     "cases": 10,
     "feasible": 10,
-    "median_solve_s": 0.030596604570746422,
-    "median_feasible_migration_work_s": 4.862140970258922,
+    "median_solve_s": 0.039174561854451895,
+    "median_feasible_migration_work_s": 4.792006988334381,
     "both_greedy_feasible": 10,
-    "median_paired_work_delta_vs_greedy_s": 0.5613348295865934
+    "median_paired_work_delta_vs_greedy_s": 0.2342129444099441
   },
   {
     "sessions": 80,
@@ -38,10 +38,10 @@
     "solver": "greedy_prefix",
     "cases": 10,
     "feasible": 10,
-    "median_solve_s": 0.05426916666328907,
-    "median_feasible_migration_work_s": 3.231347763309601,
+    "median_solve_s": 0.011407749727368355,
+    "median_feasible_migration_work_s": 4.543710652504961,
     "both_greedy_feasible": 10,
-    "median_paired_work_delta_vs_greedy_s": -0.6043942876937147
+    "median_paired_work_delta_vs_greedy_s": 0.0
   },
   {
     "sessions": 80,
@@ -49,7 +49,7 @@
     "solver": "greedy",
     "cases": 10,
     "feasible": 10,
-    "median_solve_s": 0.00885022897273302,
+    "median_solve_s": 0.008143229875713587,
     "median_feasible_migration_work_s": 21.5060951587556,
     "both_greedy_feasible": 10,
     "median_paired_work_delta_vs_greedy_s": 0.0
@@ -60,7 +60,7 @@
     "solver": "greedy_bundle",
     "cases": 10,
     "feasible": 10,
-    "median_solve_s": 0.1297768340446055,
+    "median_solve_s": 0.12734874989837408,
     "median_feasible_migration_work_s": 18.613376013541,
     "both_greedy_feasible": 10,
     "median_paired_work_delta_vs_greedy_s": -0.6746746886676807
@@ -71,8 +71,8 @@
     "solver": "greedy_coupled",
     "cases": 10,
     "feasible": 10,
-    "median_solve_s": 0.032079646829515696,
-    "median_feasible_migration_work_s": 18.97505590403864,
+    "median_solve_s": 0.040756812784820795,
+    "median_feasible_migration_work_s": 18.86088129484211,
     "both_greedy_feasible": 10,
     "median_paired_work_delta_vs_greedy_s": -2.0553900472142654
   },
@@ -82,10 +82,10 @@
     "solver": "greedy_prefix",
     "cases": 10,
     "feasible": 10,
-    "median_solve_s": 0.0570720424875617,
-    "median_feasible_migration_work_s": 18.525487893465375,
+    "median_solve_s": 0.012092063203454018,
+    "median_feasible_migration_work_s": 18.411313284268847,
     "both_greedy_feasible": 10,
-    "median_paired_work_delta_vs_greedy_s": -2.1411012773202156
+    "median_paired_work_delta_vs_greedy_s": -0.5232499642361592
   },
   {
     "sessions": 80,
@@ -93,7 +93,7 @@
     "solver": "greedy",
     "cases": 10,
     "feasible": 4,
-    "median_solve_s": 0.016368208918720484,
+    "median_solve_s": 0.015588812064379454,
     "median_feasible_migration_work_s": 118.98420389107278,
     "both_greedy_feasible": 4,
     "median_paired_work_delta_vs_greedy_s": 0.0
@@ -104,7 +104,7 @@
     "solver": "greedy_bundle",
     "cases": 10,
     "feasible": 8,
-    "median_solve_s": 0.5346827916800976,
+    "median_solve_s": 0.5049706245772541,
     "median_feasible_migration_work_s": 104.66732267213528,
     "both_greedy_feasible": 4,
     "median_paired_work_delta_vs_greedy_s": 0.0
@@ -114,11 +114,11 @@
     "target_fraction": 0.9,
     "solver": "greedy_coupled",
     "cases": 10,
-    "feasible": 0,
-    "median_solve_s": 0.045965437311679125,
-    "median_feasible_migration_work_s": null,
-    "both_greedy_feasible": 0,
-    "median_paired_work_delta_vs_greedy_s": null
+    "feasible": 9,
+    "median_solve_s": 0.04562650015577674,
+    "median_feasible_migration_work_s": 109.69811496837711,
+    "both_greedy_feasible": 4,
+    "median_paired_work_delta_vs_greedy_s": 6.910497058545701
   },
   {
     "sessions": 80,
@@ -126,7 +126,7 @@
     "solver": "greedy_prefix",
     "cases": 10,
     "feasible": 9,
-    "median_solve_s": 0.07988312561064959,
+    "median_solve_s": 0.07009383291006088,
     "median_feasible_migration_work_s": 96.99183238720286,
     "both_greedy_feasible": 4,
     "median_paired_work_delta_vs_greedy_s": -3.5195189342895645
@@ -137,7 +137,7 @@
     "solver": "greedy",
     "cases": 10,
     "feasible": 10,
-    "median_solve_s": 0.021651916205883026,
+    "median_solve_s": 0.020179604180157185,
     "median_feasible_migration_work_s": 5.501213467359252,
     "both_greedy_feasible": 10,
     "median_paired_work_delta_vs_greedy_s": 0.0
@@ -148,7 +148,7 @@
     "solver": "greedy_bundle",
     "cases": 10,
     "feasible": 10,
-    "median_solve_s": 0.14555450016632676,
+    "median_solve_s": 0.14738945802673697,
     "median_feasible_migration_work_s": 5.501213467359252,
     "both_greedy_feasible": 10,
     "median_paired_work_delta_vs_greedy_s": 0.0
@@ -159,10 +159,10 @@
     "solver": "greedy_coupled",
     "cases": 10,
     "feasible": 10,
-    "median_solve_s": 0.08676468720659614,
+    "median_solve_s": 0.10678272927179933,
     "median_feasible_migration_work_s": 5.02803042347786,
     "both_greedy_feasible": 10,
-    "median_paired_work_delta_vs_greedy_s": 0.0
+    "median_paired_work_delta_vs_greedy_s": -0.15899656142092145
   },
   {
     "sessions": 240,
@@ -170,10 +170,10 @@
     "solver": "greedy_prefix",
     "cases": 10,
     "feasible": 10,
-    "median_solve_s": 0.1601773756556213,
-    "median_feasible_migration_work_s": 5.02803042347786,
+    "median_solve_s": 0.030921687372028828,
+    "median_feasible_migration_work_s": 4.927293600985646,
     "both_greedy_feasible": 10,
-    "median_paired_work_delta_vs_greedy_s": -0.17242289267734945
+    "median_paired_work_delta_vs_greedy_s": -0.05906954491315686
   },
   {
     "sessions": 240,
@@ -181,7 +181,7 @@
     "solver": "greedy",
     "cases": 10,
     "feasible": 10,
-    "median_solve_s": 0.025172728579491377,
+    "median_solve_s": 0.023837437387555838,
     "median_feasible_migration_work_s": 60.10766278755492,
     "both_greedy_feasible": 10,
     "median_paired_work_delta_vs_greedy_s": 0.0
@@ -192,7 +192,7 @@
     "solver": "greedy_bundle",
     "cases": 10,
     "feasible": 10,
-    "median_solve_s": 1.0153376036323607,
+    "median_solve_s": 1.0110191879794002,
     "median_feasible_migration_work_s": 52.740280701098655,
     "both_greedy_feasible": 10,
     "median_paired_work_delta_vs_greedy_s": -6.783219253516158
@@ -203,10 +203,10 @@
     "solver": "greedy_coupled",
     "cases": 10,
     "feasible": 10,
-    "median_solve_s": 0.09505477081984282,
-    "median_feasible_migration_work_s": 49.54355189523375,
+    "median_solve_s": 0.11053135385736823,
+    "median_feasible_migration_work_s": 47.82783407953261,
     "both_greedy_feasible": 10,
-    "median_paired_work_delta_vs_greedy_s": -9.559770900359268
+    "median_paired_work_delta_vs_greedy_s": -11.220968685849037
   },
   {
     "sessions": 240,
@@ -214,10 +214,10 @@
     "solver": "greedy_prefix",
     "cases": 10,
     "feasible": 10,
-    "median_solve_s": 0.17573702102527022,
-    "median_feasible_migration_work_s": 48.04019803999617,
+    "median_solve_s": 0.03375931270420551,
+    "median_feasible_migration_work_s": 49.59468676771791,
     "both_greedy_feasible": 10,
-    "median_paired_work_delta_vs_greedy_s": -11.220968685849037
+    "median_paired_work_delta_vs_greedy_s": -7.6898446828826685
   },
   {
     "sessions": 240,
@@ -225,7 +225,7 @@
     "solver": "greedy",
     "cases": 10,
     "feasible": 0,
-    "median_solve_s": 0.07066547870635986,
+    "median_solve_s": 0.0659718750976026,
     "median_feasible_migration_work_s": null,
     "both_greedy_feasible": 0,
     "median_paired_work_delta_vs_greedy_s": null
@@ -236,7 +236,7 @@
     "solver": "greedy_bundle",
     "cases": 10,
     "feasible": 4,
-    "median_solve_s": 4.406125896144658,
+    "median_solve_s": 4.297627541236579,
     "median_feasible_migration_work_s": 323.27864165508447,
     "both_greedy_feasible": 0,
     "median_paired_work_delta_vs_greedy_s": null
@@ -246,9 +246,9 @@
     "target_fraction": 0.9,
     "solver": "greedy_coupled",
     "cases": 10,
-    "feasible": 0,
-    "median_solve_s": 0.1510344580747187,
-    "median_feasible_migration_work_s": null,
+    "feasible": 10,
+    "median_solve_s": 0.13366677099838853,
+    "median_feasible_migration_work_s": 311.30733642675506,
     "both_greedy_feasible": 0,
     "median_paired_work_delta_vs_greedy_s": null
   },
@@ -258,8 +258,8 @@
     "solver": "greedy_prefix",
     "cases": 10,
     "feasible": 9,
-    "median_solve_s": 0.36141120782122016,
-    "median_feasible_migration_work_s": 317.04106161076305,
+    "median_solve_s": 0.23929185420274734,
+    "median_feasible_migration_work_s": 316.5062758251959,
     "both_greedy_feasible": 0,
     "median_paired_work_delta_vs_greedy_s": null
   }

@@ -1,0 +1,46 @@
+[
+  {
+    "sessions": 100000,
+    "target_fraction": 0.1,
+    "solver": "greedy",
+    "cases": 1,
+    "feasible": 1,
+    "median_solve_s": 18.575490916147828,
+    "median_feasible_migration_work_s": 3429.5034644781686,
+    "both_greedy_feasible": 1,
+    "median_paired_work_delta_vs_greedy_s": 0.0
+  },
+  {
+    "sessions": 100000,
+    "target_fraction": 0.1,
+    "solver": "greedy_prefix",
+    "cases": 1,
+    "feasible": 1,
+    "median_solve_s": 18.132067625410855,
+    "median_feasible_migration_work_s": 1624.012711284469,
+    "both_greedy_feasible": 1,
+    "median_paired_work_delta_vs_greedy_s": -1805.4907531936994
+  },
+  {
+    "sessions": 100000,
+    "target_fraction": 0.5,
+    "solver": "greedy",
+    "cases": 1,
+    "feasible": 1,
+    "median_solve_s": 137.40774566680193,
+    "median_feasible_migration_work_s": 56310.38347357342,
+    "both_greedy_feasible": 1,
+    "median_paired_work_delta_vs_greedy_s": 0.0
+  },
+  {
+    "sessions": 100000,
+    "target_fraction": 0.5,
+    "solver": "greedy_prefix",
+    "cases": 1,
+    "feasible": 1,
+    "median_solve_s": 80.57678824942559,
+    "median_feasible_migration_work_s": 26435.18418562252,
+    "both_greedy_feasible": 1,
+    "median_paired_work_delta_vs_greedy_s": -29875.1992879509
+  }
+]

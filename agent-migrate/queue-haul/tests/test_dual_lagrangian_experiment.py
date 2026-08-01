@@ -13,7 +13,12 @@ from types import SimpleNamespace
 
 import pytest
 
-from dual_lagrangian_experiment import parse_solvers, power_limit, result_row
+from dual_lagrangian_experiment import (
+    experiment_stack_hash,
+    parse_solvers,
+    power_limit,
+    result_row,
+)
 
 
 def test_power_target_is_fraction_of_removable_power():
@@ -28,6 +33,16 @@ def test_scale_solver_subset_rejects_nonexperimental_policy():
     assert parse_solvers("greedy,greedy_prefix") == ("greedy", "greedy_prefix")
     with pytest.raises(ValueError):
         parse_solvers("lp")
+
+
+def test_experiment_stack_hash_covers_every_python_source(tmp_path):
+    first = tmp_path / "first.py"
+    second = tmp_path / "second.py"
+    first.write_text("one")
+    second.write_text("two")
+    original = experiment_stack_hash(tmp_path)
+    second.write_text("changed")
+    assert experiment_stack_hash(tmp_path) != original
 
 
 def test_failed_plan_has_zero_validated_shed_and_method_occupancy_only():

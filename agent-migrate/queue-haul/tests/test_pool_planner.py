@@ -26,6 +26,7 @@ Plausible wrong implementations:
 - Serialize replay and KV work despite having separate measured aggregate caps.
 - Relax aggregate method constraints but retain cross-method serialization in packing.
 - Choose one cheap action per session before exploring feasible mixed-method patterns.
+- Materialize every source prefix even though recovery retains a bounded frontier.
 """
 
 from dataclasses import replace
@@ -35,6 +36,8 @@ import numpy as np
 import pytest
 from scipy.sparse import csr_matrix
 
+import pool_planner
+
 from destination import (DESTINATION_SCHEMA, CompatibilityFingerprint, ContextRate,
                          DestinationArchitecture, DestinationPool, DestinationReplica,
                          DestinationType, LoadedCoefficients, MigrationComponents)
@@ -42,6 +45,8 @@ from planner import plan
 from pool_planner import (Candidate, CandidateTable, _destination_duration, _event_bounds,
                           _greedy, _greedy_bundle, _greedy_coupled,
                           _greedy_prefix, _coupled_source_pattern, _mode_boundary_rho,
+                          _dual_resource_limits, _retained_prefixes,
+                          _source_removed_gain,
                           _recover_coupled, _service_trace, candidate_table,
                           destination_service_execution, exact_replica_assignment,
                           service_debt, validate_destination_execution)
@@ -53,6 +58,25 @@ from test_planner import PATHS, problem
 
 
 FP = CompatibilityFingerprint("m", "t", "log", "kv")
+
+
+def test_dual_retention_is_bounded_and_keeps_safeguards():
+    ordered, best = tuple(range(100)), tuple(range(37))
+
+    retained = _retained_prefixes(best, ordered)
+
+    assert {(0,), ordered, ordered[:36], best, ordered[:38]} <= retained
+    assert len(retained) <= pool_planner.DUAL_PREFIX_BUCKETS + 4
+
+
+def test_dual_route_limit_reserves_the_largest_post_route_tail():
+    table = CandidateTable(
+        (), (Candidate(0, "replay", 0, 1, 1, 3, (), 1, (0, 0), 0),),
+        csr_matrix(np.zeros((0, 1))), csr_matrix(np.array(((.2,), (.4,)))),
+        ("route:wan", "service:p:0"), (1, 1), ("bytes", "replica-s/s"), 10,
+    )
+
+    assert _dual_resource_limits(table) == pytest.approx((.9, 1))
 
 
 def test_full_drain_bundle_crosses_power_knee(tmp_path):
@@ -130,6 +154,12 @@ def test_coupled_prefix_crosses_knee_with_packable_mixed_pools(tmp_path):
         ),
     )
     power = ExpectedPower(scenario, profile)
+    removed = 0
+    for count, session in enumerate(sessions, 1):
+        removed += power.ell[session.session_id]
+        assert _source_removed_gain(power, "s0", removed) == pytest.approx(
+            power.drain_gain(row.session_id for row in sessions[:count])
+        )
     candidates = tuple(
         Candidate(j, "replay", pool, power.marginal(str(j)), 1, 1, ("wan",),
                   1, (.6, 0), 0)
@@ -259,6 +289,57 @@ def test_coupled_recovery_caps_one_watt_overshoot_before_work(tmp_path):
     )
 
     assert selected == {1, 2}
+
+
+def test_coupled_recovery_packs_once_and_falls_back(tmp_path, monkeypatch):
+    profile, scenario = model(tmp_path), problem()
+    power = ExpectedPower(scenario, profile)
+    candidates = tuple(
+        Candidate(i, "replay", 0, 1, 1, 1, ("wan",), 1, (0, 0), 0)
+        for i in range(2)
+    )
+    table = CandidateTable(
+        scenario.sessions, candidates, csr_matrix(np.eye(2)),
+        csr_matrix((np.full(2, .1), (np.zeros(2), np.arange(2))), shape=(1, 2)),
+        ("route",), (1,), ("fraction",), 10,
+    )
+    arch = replace(architecture(normal=1, emergency=1), pools=(
+        architecture(normal=1, emergency=1).pools[0],
+    ))
+    patterns = {"s0": {(0,)}, "s1": {(1,)}}
+    target = power.drain_gain(("a", "b"))
+    real, calls = pool_planner._pack, 0
+
+    def counted(*args):
+        nonlocal calls
+        calls += 1
+        return real(*args)
+
+    monkeypatch.setattr(pool_planner, "_pack", counted)
+    lazy = _recover_coupled(
+        table, power, patterns, target, arch, scenario, "normal",
+    )
+    lazy_calls, calls = calls, 0
+    eager = _recover_coupled(
+        table, power, patterns, target, arch, scenario, "normal",
+        eager_pack=True,
+    )
+
+    assert lazy == eager == {0, 1}
+    assert lazy_calls == 1
+    assert calls == 2
+
+    calls = 0
+    def reject_final_once(*args):
+        nonlocal calls
+        calls += 1
+        return (None, ()) if calls == 1 else real(*args)
+
+    monkeypatch.setattr(pool_planner, "_pack", reject_final_once)
+    assert _recover_coupled(
+        table, power, patterns, target, arch, scenario, "normal",
+    ) == eager
+    assert calls == 3
 
 
 def test_coupled_recovery_preserves_aggregate_boundary(tmp_path):

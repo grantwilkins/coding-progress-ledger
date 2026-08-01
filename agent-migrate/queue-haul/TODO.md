@@ -17,7 +17,9 @@ order and overlaps moves up to its configured width.
   destination packing checks.
 - [x] Cache coupled patterns and preserve exact recovery order with a lazy heap.
 - [x] Add a simulator-only polynomial prefix variant without changing defaults.
-- [ ] Resolve prefix order sensitivity and high-target feasibility losses before promotion.
+- [x] Bound prefix recovery, remove repeated packing, and run a single-seed
+  100K sensitivity.
+- [ ] Resolve prefix order sensitivity and broaden held-out high-target validation before promotion.
 - [ ] Verify checksums and paper tables against the committed code revision.
 - [x] Run `uv run pytest`.
 

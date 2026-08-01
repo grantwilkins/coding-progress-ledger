@@ -20,6 +20,12 @@ from simulate import (ExecutionScenario, PlannedMove, PoolServiceExecution,
 
 
 MAX_EXACT_COUPLED_PATTERNS = 10_000
+COUPLED_PRICE_ITERATIONS = 32
+DUAL_PRICE_ITERATIONS = 1
+DUAL_PREFIX_BUCKETS = 8
+DUAL_HIGH_TARGET_ITERATIONS = 4
+DUAL_HIGH_TARGET_BUCKETS = 64
+DUAL_HIGH_TARGET_FRACTION = .75
 
 
 @dataclass(frozen=True)
@@ -266,6 +272,14 @@ def candidate_table(scenario: ExecutionScenario, profile, architecture: Destinat
         return CandidateTable(sessions, (), csr_matrix((len(sessions), 0)),
                               csr_matrix((0, 0)), (), (), (), migration_horizon)
     work0, kv0 = _baseline(scenario, architecture, residency_horizon)
+    pool_work = tuple(
+        sum((work0[r.replica_id] for r in pool.replicas), start=np.zeros(2))
+        for pool in architecture.pools
+    )
+    pool_kv = tuple(
+        sum(kv0[r.replica_id] for r in pool.replicas)
+        for pool in architecture.pools
+    )
     links = {link.link_id: link.bytes_per_s for link in scenario.links}
     candidates = []
     for j, session in enumerate(sessions):
@@ -277,16 +291,15 @@ def candidate_table(scenario: ExecutionScenario, profile, architecture: Destinat
                 profile.case("central").replay.rate(
                     _resident_tokens(session, migration_horizon), 1,
                 )
-            if max(np.asarray(q.normals) @ sum(
-                (work0[r.replica_id] for r in pool.replicas), start=np.zeros(2)
-            ) / (len(pool.replicas) * bounds)) > 1 + 1e-9:
+            baseline = pool_work[p]
+            if max(np.asarray(q.normals) @ baseline
+                   / (len(pool.replicas) * bounds)) > 1 + 1e-9:
                 continue
             demand = q.work(
                 session.expected_f, session.expected_g,
                 _resident_tokens(session, residency_horizon),
                 q.migration is not None,
             )
-            baseline = sum((work0[r.replica_id] for r in pool.replicas), start=np.zeros(2))
             resident = -(-_resident_tokens(session, residency_horizon)
                          // q.kv_block_tokens)
             capacity = len(pool.replicas) * (
@@ -296,9 +309,11 @@ def candidate_table(scenario: ExecutionScenario, profile, architecture: Destinat
                       len(pool.replicas) * bounds
                       - np.asarray(q.normals) @ baseline + 1e-9) \
                     or resident > capacity \
-                    - sum(kv0[r.replica_id] for r in pool.replicas):
+                    - pool_kv[p]:
                 continue
-            rho, bandwidth = _pool_rho(q, pool, work0), min(links[x] for x in pool.route)
+            rho = float(max(np.asarray(q.normals) @ baseline /
+                            (len(pool.replicas) * np.asarray(q.bounds["normal"]))))
+            bandwidth = min(links[x] for x in pool.route)
             for method in pool.methods:
                 if not q.compatibility.supports(architecture.source_compatibility, method):
                     continue
@@ -353,7 +368,7 @@ def candidate_table(scenario: ExecutionScenario, profile, architecture: Destinat
             rate * migration_horizon, f"route:{link}", "bytes")
     for p, pool in enumerate(architecture.pools):
         q = architecture.type_by_id[pool.type_id]
-        baseline = sum((work0[r.replica_id] for r in pool.replicas), start=np.zeros(2))
+        baseline = pool_work[p]
         event = _event_bounds(q, pool, mode)
         for facet, (normal, bound) in enumerate(zip(q.normals, event)):
             residual = len(pool.replicas) * bound - np.asarray(normal) @ baseline
@@ -373,7 +388,7 @@ def candidate_table(scenario: ExecutionScenario, profile, architecture: Destinat
                 ], capacity, f"service-debt:{pool.pool_id}:{facet}", "replica-s")
         add([c.kv_tokens if c.pool == p else 0 for c in candidates],
             len(pool.replicas) * (q.kv_capacity_tokens // q.kv_block_tokens)
-            - sum(kv0[r.replica_id] for r in pool.replicas), f"kv:{pool.pool_id}",
+            - pool_kv[p], f"kv:{pool.pool_id}",
             "blocks")
         for method in pool.methods:
             add([
@@ -394,8 +409,7 @@ def candidate_table(scenario: ExecutionScenario, profile, architecture: Destinat
                           migration_horizon)
 
 
-def _greedy(table: CandidateTable, target: float):
-    matrix, selected, usage = csc_matrix(table.resources), set(), np.zeros(table.resources.shape[0])
+def _scarcity_prices(table, matrix):
     cheapest = {}
     for i, c in enumerate(table.candidates):
         a = matrix.data[matrix.indptr[i]:matrix.indptr[i + 1]].sum()
@@ -405,7 +419,12 @@ def _greedy(table: CandidateTable, target: float):
     for _, i in cheapest.values():
         demand[matrix.indices[matrix.indptr[i]:matrix.indptr[i + 1]]] += \
             matrix.data[matrix.indptr[i]:matrix.indptr[i + 1]]
-    prices, score = np.maximum(demand, 1), []
+    return np.maximum(demand, 1)
+
+
+def _greedy(table: CandidateTable, target: float):
+    matrix, selected, usage = csc_matrix(table.resources), set(), np.zeros(table.resources.shape[0])
+    prices, score = _scarcity_prices(table, matrix), []
     for i, c in enumerate(table.candidates):
         sl = slice(matrix.indptr[i], matrix.indptr[i + 1])
         rows, values = matrix.indices[sl], matrix.data[sl]
@@ -488,26 +507,82 @@ def _coupled_gain(table, power, pattern, cache=None):
     return value if cache is None else cache[sessions]
 
 
+def _source_removed_gain(power, source, removed_load):
+    owned = power.instance_slots[source]
+    share = removed_load / len(owned)
+    if power.profile.power_scope == "gpu":
+        return sum(
+            power.slot_power[node][slot]
+            - power.case.power_curve.power(power.slots[node][slot] - share)
+            for node, slot in owned if power.nodes[node].local
+        )
+    slots = {}
+    for node, slot in owned:
+        if power.nodes[node].local:
+            slots.setdefault(node, list(power.slots[node]))[slot] -= share
+    return sum(
+        power.node_power[node] - power._power(node, values, "awake")
+        for node, values in slots.items()
+    )
+
+
 def _coupled_source_patterns(table, power, priced, eta, scale, cache=None):
     ordered = sorted(priced, key=lambda row: (
         row[1] / power.ell[table.sessions[table.candidates[row[0]].session].session_id],
         row[0],
     ))
-    best, pattern, price = (0.0, ()), (), 0.0
-    for i, value in ordered:
-        pattern += (i,)
+    if not ordered:
+        return (), ()
+    source = table.sessions[table.candidates[ordered[0][0]].session].source_instance
+    best, price, removed = (0.0, 0), 0.0, 0.0
+    for k, (i, value) in enumerate(ordered, 1):
+        session = table.sessions[table.candidates[i].session]
+        if session.source_instance != source:
+            raise ValueError("prefix pricing crossed a source power domain")
         price += value
-        key = (
-            price - eta * _coupled_gain(table, power, pattern, cache) / scale,
-            pattern,
-        )
-        if key < best:
-            best = key
-    return best[1], tuple(i for i, _value in ordered)
+        removed += power.ell[session.session_id]
+        score = price - eta * _source_removed_gain(
+            power, source, removed,
+        ) / scale
+        if score < best[0]:
+            best = score, k
+    order = tuple(i for i, _value in ordered)
+    return order[:best[1]], order
 
 
 def _coupled_source_pattern(table, power, priced, eta, scale):
     return _coupled_source_patterns(table, power, priced, eta, scale)[0]
+
+
+def _retained_prefixes(pattern, ordered, buckets=None):
+    if not ordered:
+        return {pattern}
+    buckets = DUAL_PREFIX_BUCKETS if buckets is None else buckets
+    if buckets < 1:
+        raise ValueError("prefix recovery needs a positive bucket count")
+    n, k = len(ordered), len(pattern)
+    sizes = {1, n, max(1, k - 1), k, min(n, k + 1)}
+    sizes.update(
+        -(-n * step // buckets) for step in range(1, buckets)
+    )
+    return {ordered[:size] for size in sizes}
+
+
+def _dual_resource_limits(table):
+    limits = np.ones(table.resources.shape[0])
+    matrix = csr_matrix(table.resources)
+    for row, name in enumerate(table.resource_names):
+        if not name.startswith("route:"):
+            continue
+        columns = matrix.indices[matrix.indptr[row]:matrix.indptr[row + 1]]
+        values = matrix.data[matrix.indptr[row]:matrix.indptr[row + 1]]
+        tail = max((
+            table.candidates[i].duration_s
+            - value * table.migration_horizon_s
+            for i, value in zip(columns, values)
+        ), default=0.0)
+        limits[row] = max(0.0, 1 - tail / table.migration_horizon_s)
+    return limits
 
 
 def _coupled_source_space(
@@ -551,20 +626,33 @@ def _coupled_source_space(
 
 def _recover_coupled(
     table, power, patterns, target, architecture, scenario, mode, gain_cache=None,
+    eager_pack=False, return_assignment=False, resource_limits=None,
 ):
     matrix, selected, chosen = csc_matrix(table.resources), set(), {}
+    limits = np.ones(matrix.shape[0]) if resource_limits is None else resource_limits
     gain, blocked, cache = 0.0, set(), {}
     usage = np.zeros(matrix.shape[0])
     visited = {frozenset()}
     sources = sorted(patterns)
     rank = {source: i for i, source in enumerate(sources)}
     versions = dict.fromkeys(sources, 0)
-    heap, deferred = [], []
+    heap, deferred, assignment = [], [], None
 
     def stats(pattern):
         if pattern not in cache:
+            sessions = {table.candidates[i].session for i in pattern}
+            sources = {
+                table.sessions[session].source_instance for session in sessions
+            }
             cache[pattern] = (
-                _coupled_gain(table, power, pattern, gain_cache),
+                _source_removed_gain(
+                    power, next(iter(sources)), sum(
+                        power.ell[table.sessions[session].session_id]
+                        for session in sessions
+                    ),
+                ) if len(sources) == 1 else _coupled_gain(
+                    table, power, pattern, gain_cache,
+                ),
                 sum(table.candidates[i].migration_work_s for i in pattern),
                 set(pattern),
                 np.asarray(matrix[:, list(pattern)].sum(1)).ravel()
@@ -615,21 +703,23 @@ def _recover_coupled(
                 deferred.append(item)
                 continue
             trial_usage = usage - old_usage + pattern_usage
-            if np.any(trial_usage >= 1 - 1e-7):
-                trial_usage = np.asarray(matrix[:, list(trial)].sum(1)).ravel()
-            if np.any(trial_usage > 1 + 1e-8):
+            if np.any(trial_usage > limits + 1e-8):
                 deferred.append(item)
                 continue
-            best = source, old, pattern, trial, item[8]
+            best = source, old, pattern, trial, item[8], trial_usage
             break
         if best is None:
             break
-        if _pack(table, best[3], architecture, scenario, mode)[0] is None:
-            blocked.add(best[:3])
-            continue
+        if eager_pack:
+            assignment = _pack(
+                table, best[3], architecture, scenario, mode,
+            )[0]
+            if assignment is None:
+                blocked.add(best[:3])
+                continue
         chosen[best[0]], selected = best[2], best[3]
         visited.add(frozenset(selected))
-        usage = np.asarray(matrix[:, list(selected)].sum(1)).ravel()
+        usage = best[5]
         gain += best[4]
         versions[best[0]] += 1
         if best[4] < 0:
@@ -644,14 +734,32 @@ def _recover_coupled(
                     heappush(heap, current)
         deferred = []
         add(best[0])
-    return selected
+    if not eager_pack and gain >= target - 1e-8:
+        assignment = _pack(table, selected, architecture, scenario, mode)[0]
+    if not eager_pack and (gain < target - 1e-8 or assignment is None):
+        return _recover_coupled(
+            table, power, patterns, target, architecture, scenario, mode,
+            gain_cache, True, return_assignment, limits,
+        )
+    exact_usage = np.asarray(matrix[:, list(selected)].sum(1)).ravel() \
+        if selected else np.zeros(matrix.shape[0])
+    if np.any(exact_usage > limits + 1e-8):
+        raise RuntimeError("coupled recovery exceeded an aggregate resource")
+    return (selected, assignment) if return_assignment else selected
 
 
 def _greedy_coupled(
     table, target, power, architecture, scenario, mode, enumerate_small=True,
+    iterations=None, return_assignment=False, resource_limits=None,
+    prefix_buckets=None,
 ):
     """Simulator-local emulation of source-local choices under shared prices."""
+    iterations = COUPLED_PRICE_ITERATIONS if iterations is None else iterations
+    if iterations < 1:
+        raise ValueError("dual pricing needs a positive iteration budget")
     matrix = csc_matrix(table.resources)
+    limits = np.ones(matrix.shape[0]) \
+        if resource_limits is None else resource_limits
     by_source, by_session = {}, {}
     for j, session in enumerate(table.sessions):
         by_source.setdefault(session.source_instance, []).append(j)
@@ -660,7 +768,8 @@ def _greedy_coupled(
             members.sort(key=lambda j: table.sessions[j].session_id)
     for i, candidate in enumerate(table.candidates):
         by_session.setdefault(candidate.session, []).append(i)
-    prices, eta, scale = np.zeros(table.resources.shape[0]), 1.0, max(target, 1.0)
+    prices = _scarcity_prices(table, matrix)
+    eta, scale = 1.0, max(target, 1.0)
     gain_cache = {}
     retained = {source: set() for source in by_source}
     spaces = {
@@ -677,7 +786,7 @@ def _greedy_coupled(
                 pattern for pattern, gain in zip(patterns, gains)
                 if gain >= best - 1e-8
             )
-    for iteration in range(32):
+    for iteration in range(iterations):
         selected, chosen = set(), []
         for source_order, (source, members) in enumerate(sorted(by_source.items())):
             space = spaces[source]
@@ -715,20 +824,15 @@ def _greedy_coupled(
                 pattern, ordered = _coupled_source_patterns(
                     table, power, priced, eta, scale, gain_cache,
                 )
-                if ordered:
-                    retained[source].update(
-                        ordered[:n] for n in (
-                            range(1, len(ordered) + 1) if not enumerate_small
-                            else (1, len(ordered))
-                        )
-                    )
+                retained[source].update(_retained_prefixes(
+                    pattern, ordered, prefix_buckets,
+                ))
                 if alternate:
                     alternative, ordered = _coupled_source_patterns(
                         table, power, alternate, eta, scale, gain_cache,
                     )
-                    retained[source].add(alternative)
                     retained[source].update(
-                        ordered[:n] for n in range(1, len(ordered) + 1)
+                        _retained_prefixes(alternative, ordered, prefix_buckets)
                     )
             retained[source].add(pattern)
             selected.update(pattern)
@@ -739,16 +843,30 @@ def _greedy_coupled(
             _coupled_gain(table, power, pattern, gain_cache) for pattern in chosen
         )
         step = .5 / np.sqrt(iteration + 1)
-        prices = np.maximum(0, prices + step * (usage - 1))
+        prices = np.maximum(0, prices + step * (usage - limits))
         eta = max(0, eta + step * (target - shed) / scale)
     return _recover_coupled(
         table, power, retained, target, architecture, scenario, mode, gain_cache,
+        return_assignment=return_assignment,
+        resource_limits=limits,
     )
 
 
-def _greedy_prefix(table, target, power, architecture, scenario, mode):
+def _greedy_prefix(
+    table, target, power, architecture, scenario, mode, return_assignment=False,
+):
+    maximum = power.drain_gain(
+        session.session_id for session in table.sessions
+    )
+    high = maximum > 0 and target >= DUAL_HIGH_TARGET_FRACTION * maximum
     return _greedy_coupled(
         table, target, power, architecture, scenario, mode, False,
+        iterations=(DUAL_HIGH_TARGET_ITERATIONS if high
+                    else DUAL_PRICE_ITERATIONS),
+        return_assignment=return_assignment,
+        resource_limits=_dual_resource_limits(table),
+        prefix_buckets=(DUAL_HIGH_TARGET_BUCKETS if high
+                        else DUAL_PREFIX_BUCKETS),
     )
 
 
@@ -956,19 +1074,27 @@ def _selected_service_debt(table, selected, architecture, scenario):
 
 def _mode_plan(scenario, profile, architecture, solver, mode, power, target):
     table = candidate_table(scenario, profile, architecture, mode, power)
-    selected = (_lp(table, target) if solver.startswith("lp") else
-                _greedy_bundle(table, target, power) if solver == "greedy_bundle"
-                else _greedy_prefix(
-                    table, target, power, architecture, scenario, mode,
-                ) if solver == "greedy_prefix"
-                else _greedy_coupled(
-                    table, target, power, architecture, scenario, mode,
-                ) if solver == "greedy_coupled"
-                else _greedy(table, target))
+    assignment = None
+    if solver == "greedy_prefix":
+        selected, assignment = _greedy_prefix(
+            table, target, power, architecture, scenario, mode, True,
+        )
+    elif solver == "greedy_coupled":
+        selected, assignment = _greedy_coupled(
+            table, target, power, architecture, scenario, mode,
+            return_assignment=True,
+        )
+    else:
+        selected = (_lp(table, target) if solver.startswith("lp") else
+                    _greedy_bundle(table, target, power)
+                    if solver == "greedy_bundle" else _greedy(table, target))
     repairs, repair_s = 0, 0.0
     while True:
         started = perf_counter()
-        assignment, cut = _pack(table, selected, architecture, scenario, mode)
+        if assignment is None:
+            assignment, cut = _pack(table, selected, architecture, scenario, mode)
+        else:
+            cut = None
         if assignment is not None:
             return table, selected, assignment, repairs, repair_s
         if not cut:
@@ -978,6 +1104,7 @@ def _mode_plan(scenario, profile, architecture, solver, mode, power, target):
             / max(table.candidates[i].gain_w, 1e-12), i,
         ))
         selected.remove(drop)
+        assignment = None
         repair_s += perf_counter() - started
         repairs += 1
 

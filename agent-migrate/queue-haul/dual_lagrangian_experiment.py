@@ -39,6 +39,14 @@ def file_hash(path):
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
+def experiment_stack_hash(root=ROOT):
+    digest = hashlib.sha256()
+    for path in sorted(root.glob("*.py")):
+        digest.update(path.name.encode())
+        digest.update(path.read_bytes())
+    return digest.hexdigest()
+
+
 def result_row(result, workload, sessions, target_fraction, scenario_id,
                source_instances=None, max_source_width=None, requested_shed_w=None,
                minimum_awake_source_power_w=None):
@@ -192,6 +200,8 @@ def run(out=DEFAULT_OUT, counts=(80, 240), seeds=range(3),
         "manifest_sha256": file_hash(bench.DEFAULT_MANIFEST),
         "workload_sha256": file_hash(bench.WORKLOADS[workload]),
         "campaign_sha256": file_hash(Path(__file__)),
+        "planner_code_sha256": bench.code_sha256(),
+        "experiment_stack_sha256": experiment_stack_hash(),
     }, indent=2) + "\n")
     return rows
 
