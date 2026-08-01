@@ -37,6 +37,7 @@ Plausible wrong implementations:
 - Run Phase II at an infeasible requested target instead of maximum attainable gain.
 - Reuse candidate physics across pools with different types, routes, or source loads.
 - Double-count the session dual while repairing a tolerated reduced-cost violation.
+- Omit the Phase-I shortfall dual cap or stop before the global gap closes.
 """
 
 from dataclasses import replace
@@ -54,9 +55,11 @@ from destination import (DESTINATION_SCHEMA, CompatibilityFingerprint, ContextRa
                          DestinationType, LoadedCoefficients, MigrationComponents)
 from planner import plan
 from pool_planner import (Candidate, CandidateTable, _destination_duration, _event_bounds,
+                          _candidate_oracle,
                           _greedy, _greedy_bundle, _greedy_coupled,
                           _greedy_prefix, _coupled_source_pattern,
-                          _lp_column_generation, _lp_column_generation_persistent,
+                          _lp_column_generation, _lp_column_generation_lazy,
+                          _lp_column_generation_persistent,
                           _lp_highs,
                           _mode_boundary_rho,
                           _dual_resource_limits, _retained_prefixes,
@@ -86,6 +89,31 @@ def _hand_lp_table():
         csr_matrix((np.array([.6, .8, .2]),
                     (np.zeros(3, int), np.arange(3))), shape=(1, 3)),
         ("resource",), (1,), ("fraction",), 10,
+    )
+
+
+def _table_oracle(table):
+    matrix, candidates = pool_planner.csc_matrix(table.resources), table.candidates
+    columns = {id(candidate): i for i, candidate in enumerate(candidates)}
+    sessions = range(table.incidence.shape[0])
+    return SimpleNamespace(
+        sessions=tuple(SimpleNamespace(session_id=str(i)) for i in sessions),
+        pools=tuple(
+            SimpleNamespace(pool_id=f"p{i}", methods=("replay", "kv_transfer"))
+            for i in range(1 + max((c.pool for c in candidates), default=-1))
+        ),
+        migration_horizon_s=table.migration_horizon_s,
+        specs=tuple(zip(table.resource_capacities, table.resource_names,
+                        table.resource_units)),
+        choices=lambda session: tuple(
+            candidate for candidate in candidates if candidate.session == session
+        ),
+        column=lambda candidate: tuple(zip(
+            matrix.indices[matrix.indptr[columns[id(candidate)]]:
+                           matrix.indptr[columns[id(candidate)] + 1]],
+            matrix.data[matrix.indptr[columns[id(candidate)]]:
+                        matrix.indptr[columns[id(candidate)] + 1]],
+        )),
     )
 
 
@@ -201,6 +229,44 @@ def test_persistent_certificate_repairs_reduced_cost_inside_tolerance(monkeypatc
     assert stats["lower"] == pytest.approx(1 - epsilon)
 
 
+def test_lazy_certificate_closes_aggregate_subthreshold_gap(monkeypatch):
+    epsilon = 1e-5
+    table = CandidateTable(
+        (), (
+            Candidate(0, "replay", 0, 1, 1, 1, (), 0, (0, 0), 0),
+            Candidate(0, "kv_transfer", 0, 1 + epsilon, 1, 1, (), 0, (0, 0), 0),
+        ),
+        csr_matrix(np.ones((1, 2))), csr_matrix((0, 2)), (), (), (), 1,
+    )
+    oracle = _table_oracle(table)
+    monkeypatch.setattr(pool_planner, "COLUMN_TOLERANCE", 2 * epsilon)
+    highs = pool_planner.highspy.Highs()
+    highs.setOptionValue("output_flag", False)
+    highs.addRows(
+        1, np.array([2.0]), np.array([pool_planner.highspy.kHighsInf]),
+        0, np.zeros(2, np.int32), np.array([], np.int32), np.array([], float),
+    )
+    highs.addCol(1, 0, pool_planner.highspy.kHighsInf, 1,
+                 np.array([0], np.int32), np.array([1.0]))
+    rows, active, candidates = np.full(1, -1, np.int32), set(), []
+    first = table.candidates[0]
+    pool_planner._lazy_add_columns(
+        highs, oracle,
+        [pool_planner._PricedColumn(0, ("0", "p0", "0"), first, (), 0)],
+        rows, active, candidates,
+    )
+    stats = {}
+
+    pool_planner._lazy_column_phase(
+        highs, oracle, 2, False, rows, active, candidates, stats,
+    )
+
+    assert stats["columns"] == 2
+    assert stats["upper"] == pytest.approx(1 - epsilon)
+    assert stats["lower"] <= 1 - epsilon + 1e-12
+    assert stats["gap"] <= pool_planner.COLUMN_GAP_TOLERANCE
+
+
 @pytest.mark.parametrize("target, shortfall", ((3, 0), (4, 1)))
 def test_persistent_column_master_matches_rebuilding_certificate(target, shortfall):
     table, persistent, rebuilding = _hand_lp_table(), {}, {}
@@ -212,6 +278,75 @@ def test_persistent_column_master_matches_rebuilding_certificate(target, shortfa
     assert persistent["phase1_shortfall"] == pytest.approx(shortfall)
     assert persistent["phase1"]["gap"] == pytest.approx(0, abs=1e-7)
     assert persistent["phase2"]["gap"] == pytest.approx(0, abs=1e-7)
+
+
+@pytest.mark.parametrize("target", (3, 4))
+def test_lazy_column_master_matches_complete_persistent_lp(target):
+    table = _hand_lp_table()
+    lazy, persistent = {}, {}
+
+    restricted, selected = _lp_column_generation_lazy(_table_oracle(table), target, lazy)
+    reference = _lp_column_generation_persistent(table, target, persistent)
+
+    semantic = lambda source, indices: {
+        (source.candidates[i].session, source.candidates[i].method) for i in indices
+    }
+    assert semantic(restricted, selected) == semantic(table, reference)
+    assert lazy["phase1_shortfall"] == pytest.approx(
+        persistent["phase1_shortfall"], abs=1e-7,
+    )
+    assert lazy["phase2"]["upper"] == pytest.approx(
+        persistent["phase2"]["upper"], abs=1e-7,
+    )
+    assert lazy["phase1"]["gap"] == pytest.approx(0, abs=1e-7)
+    assert lazy["phase2"]["gap"] == pytest.approx(0, abs=1e-7)
+    assert lazy["completion_columns"] == 0
+
+
+@pytest.mark.parametrize("target", (4, 20))
+@pytest.mark.parametrize("reverse", (False, True))
+def test_lazy_matches_complete_lp_with_mixed_asymmetric_pools(target, reverse):
+    candidates = [
+        Candidate(0, "replay", 0, 2, 3, 3, (), 0, (0, 0), 0),
+        Candidate(0, "kv_transfer", 1, 2, 1, 1, (), 0, (0, 0), 0),
+        Candidate(1, "replay", 1, 3, 2, 2, (), 0, (0, 0), 0),
+        Candidate(2, "kv_transfer", 0, 1, 1, 1, (), 0, (0, 0), 0),
+        Candidate(4, "replay", 0, 4, 4, 4, (), 0, (0, 0), 0),
+        Candidate(4, "kv_transfer", 1, 4, 2, 2, (), 0, (0, 0), 0),
+    ]
+    resources = np.array((
+        (.2, .2, .1, .3, .4, .4),
+        (.5, 0, 0, .4, .2, 0),
+        (0, .3, .6, 0, 0, .4),
+    ))
+    if reverse:
+        candidates.reverse()
+        resources = resources[:, ::-1]
+    incidence = csr_matrix((
+        np.ones(len(candidates)),
+        ([candidate.session for candidate in candidates], range(len(candidates))),
+    ), shape=(5, len(candidates)))
+    table = CandidateTable(
+        (), tuple(candidates), incidence, csr_matrix(resources),
+        ("shared", "pool-0", "pool-1"), (1, 1, 1),
+        ("fraction",) * 3, 10,
+    )
+    lazy, persistent = {}, {}
+
+    _lp_column_generation_lazy(_table_oracle(table), target, lazy)
+    _lp_column_generation_persistent(table, target, persistent)
+
+    assert lazy["phase1_shortfall"] == pytest.approx(
+        persistent["phase1_shortfall"], abs=1e-7,
+    )
+    assert lazy["effective_target"] == pytest.approx(
+        persistent["effective_target"], abs=1e-7,
+    )
+    assert lazy["phase2"]["upper"] == pytest.approx(
+        persistent["phase2"]["upper"], abs=1e-7,
+    )
+    assert lazy["phase1"]["gap"] <= pool_planner.COLUMN_GAP_TOLERANCE
+    assert lazy["phase2"]["gap"] <= pool_planner.COLUMN_GAP_TOLERANCE
 
 
 @pytest.mark.parametrize("seed", range(3))
@@ -277,6 +412,11 @@ def test_highs_lp_is_additive_and_does_not_replace_clarabel(monkeypatch):
         pool_planner, "_lp_column_generation_persistent",
         lambda *args: called.append("lp_column_generation_persistent") or set(),
     )
+    monkeypatch.setattr(pool_planner, "_candidate_oracle", lambda *args: object())
+    monkeypatch.setattr(
+        pool_planner, "_lp_column_generation_lazy",
+        lambda *args: (table, called.append("lp_column_generation_lazy") or set()),
+    )
     monkeypatch.setattr(pool_planner, "_pack", lambda *args: ({}, None))
 
     pool_planner._mode_plan(None, None, None, "lp", "normal", None, 0)
@@ -287,10 +427,17 @@ def test_highs_lp_is_additive_and_does_not_replace_clarabel(monkeypatch):
     pool_planner._mode_plan(
         None, None, None, "lp_column_generation_persistent", "normal", None, 0,
     )
+    monkeypatch.setattr(
+        pool_planner, "candidate_table",
+        lambda *args: pytest.fail("lazy solver materialized the full table"),
+    )
+    pool_planner._mode_plan(
+        None, None, None, "lp_column_generation_lazy", "normal", None, 0,
+    )
 
     assert called == [
         "lp", "lp_highs", "lp_column_generation",
-        "lp_column_generation_persistent",
+        "lp_column_generation_persistent", "lp_column_generation_lazy",
     ]
 
 
@@ -812,6 +959,35 @@ def test_equivalent_pools_share_candidate_physics_not_capacity_rows(tmp_path, mo
     assert calls == 2 * len(table.sessions)
     assert any(name.startswith("service:p0") for name in table.resource_names)
     assert any(name.startswith("service:p1") for name in table.resource_names)
+
+
+def test_streamed_candidates_and_columns_equal_exhaustive_table(tmp_path):
+    scenario, profile = problem(), model(tmp_path, switch=0, tp=1)
+    arch = architecture(normal=1, emergency=1, stable=1)
+    power = ExpectedPower(scenario, profile)
+    oracle = _candidate_oracle(scenario, profile, arch, "normal", power)
+    table = candidate_table(scenario, profile, arch, "normal", power)
+    streamed = tuple(
+        candidate for j in range(len(oracle.sessions))
+        for candidate in oracle.choices(j)
+    )
+    matrix = pool_planner.csc_matrix(table.resources)
+    table_rows = {name: row for row, name in enumerate(table.resource_names)}
+
+    assert streamed == table.candidates
+    for column, candidate in enumerate(streamed):
+        expected = {
+            table.resource_names[row]: value
+            for row, value in zip(
+                matrix.indices[matrix.indptr[column]:matrix.indptr[column + 1]],
+                matrix.data[matrix.indptr[column]:matrix.indptr[column + 1]],
+            )
+        }
+        actual = {
+            oracle.specs[row][1]: value for row, value in oracle.column(candidate)
+            if oracle.specs[row][1] in table_rows
+        }
+        assert actual == pytest.approx(expected)
 
 
 def test_absent_architecture_is_exact_legacy_adapter(tmp_path):

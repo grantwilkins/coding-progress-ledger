@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass, replace
 from heapq import heappop, heappush
 from time import perf_counter
+from types import SimpleNamespace
 
 import cvxpy as cp
 import highspy
@@ -30,6 +31,7 @@ DUAL_HIGH_TARGET_BUCKETS = 64
 DUAL_HIGH_TARGET_FRACTION = .75
 COLUMN_GROWTH_SWEEPS = 20
 COLUMN_TOLERANCE = 1e-8
+COLUMN_GAP_TOLERANCE = 1e-7
 
 
 @dataclass(frozen=True, slots=True)
@@ -260,8 +262,7 @@ def destination_service_execution(
     return tuple(rows)
 
 
-def candidate_table(scenario: ExecutionScenario, profile, architecture: DestinationArchitecture,
-                    mode: str, power: ExpectedPower) -> CandidateTable:
+def _candidate_oracle(scenario, profile, architecture, mode, power):
     if mode not in {"normal", "emergency"}:
         raise ValueError("admission mode must be normal or emergency")
     _validate_topology(scenario, architecture)
@@ -273,8 +274,10 @@ def candidate_table(scenario: ExecutionScenario, profile, architecture: Destinat
     residency_horizon = scenario.end_s - scenario.controller_delay_s \
         if residency_horizon is None else residency_horizon
     if migration_horizon <= 0:
-        return CandidateTable(sessions, (), csr_matrix((len(sessions), 0)),
-                              csr_matrix((0, 0)), (), (), (), migration_horizon)
+        return SimpleNamespace(
+            sessions=sessions, migration_horizon_s=migration_horizon, specs=(),
+            pools=architecture.pools, choices=lambda _: (), column=lambda _: (),
+        )
     work0, kv0 = _baseline(scenario, architecture, residency_horizon)
     pool_work = tuple(
         sum((work0[r.replica_id] for r in pool.replicas), start=np.zeros(2))
@@ -286,9 +289,11 @@ def candidate_table(scenario: ExecutionScenario, profile, architecture: Destinat
     )
     case, types = profile.case("central"), architecture.type_by_id
     links = {link.link_id: link.bytes_per_s for link in scenario.links}
-    candidates = []
-    for j, session in enumerate(sessions):
-        gain = power.marginal(session.session_id)
+    gains = tuple(power.marginal(session.session_id) for session in sessions)
+
+    def choices(j):
+        session, candidates = sessions[j], []
+        gain = gains[j]
         migration_tokens = _resident_tokens(session, migration_horizon)
         residency_tokens = _resident_tokens(session, residency_horizon)
         demand_cache, duration_cache = {}, {}
@@ -367,10 +372,8 @@ def candidate_table(scenario: ExecutionScenario, profile, architecture: Destinat
                     route_bytes[method],
                     tuple(demand), resident, transition,
                 ))
-    candidates = tuple(candidates)
-    incidence = csr_matrix((np.ones(len(candidates)),
-                            ([c.session for c in candidates], range(len(candidates)))),
-                           shape=(len(sessions), len(candidates)))
+        return tuple(candidates)
+
     specs, row_for = [], {}
     def add(key, capacity, name, unit):
         row_for[key] = len(specs)
@@ -399,37 +402,67 @@ def candidate_table(scenario: ExecutionScenario, profile, architecture: Destinat
         for method in pool.methods:
             add(("migration", p, method), len(pool.replicas) * migration_horizon,
                 f"migration:{pool.pool_id}:{method}", "replica-s")
-    data, rr, cc = [], [], []
-    def emit(key, column, value):
-        if value:
-            row = row_for[key]
-            data.append(value / specs[row][0])
-            rr.append(row)
-            cc.append(column)
-    for column, candidate in enumerate(candidates):
+
+    def column(candidate):
+        entries = []
+        def emit(key, value):
+            if value:
+                row = row_for[key]
+                entries.append((row, value / specs[row][0]))
         for link in dict.fromkeys(candidate.path):
-            emit(("route", link), column, candidate.route_bytes)
+            emit(("route", link), candidate.route_bytes)
         p, pool = candidate.pool, architecture.pools[candidate.pool]
         q = types[pool.type_id]
         for facet, normal in enumerate(q.normals):
-            emit(("service", p, facet), column,
+            emit(("service", p, facet),
                  np.asarray(normal) @ candidate.service_work)
             if pool.event_flex_fraction is not None:
-                emit(("debt", p, facet), column,
+                emit(("debt", p, facet),
                      migration_horizon * (np.asarray(normal) @ candidate.service_work)
                      + np.asarray(normal) @ candidate.transition_work)
-        emit(("kv", p), column, candidate.kv_tokens)
-        emit(("migration", p, candidate.method), column, candidate.duration_s)
-    used = sorted(set(rr))
+        emit(("kv", p), candidate.kv_tokens)
+        emit(("migration", p, candidate.method), candidate.duration_s)
+        return tuple(entries)
+
+    return SimpleNamespace(
+        sessions=sessions, migration_horizon_s=migration_horizon,
+        pools=architecture.pools, specs=tuple(specs), choices=choices, column=column,
+    )
+
+
+def _materialize_candidates(oracle, candidates, prune=True):
+    sessions, horizon = oracle.sessions, oracle.migration_horizon_s
+    if horizon <= 0:
+        return CandidateTable(sessions, (), csr_matrix((len(sessions), 0)),
+                              csr_matrix((0, 0)), (), (), (), horizon)
+    candidates = tuple(candidates)
+    incidence = csr_matrix((np.ones(len(candidates)),
+                            ([c.session for c in candidates], range(len(candidates)))),
+                           shape=(len(sessions), len(candidates)))
+    data, rr, cc = [], [], []
+    for column, candidate in enumerate(candidates):
+        for row, value in oracle.column(candidate):
+            data.append(value)
+            rr.append(row)
+            cc.append(column)
+    used = sorted(set(rr)) if prune else list(range(len(oracle.specs)))
     remap = {old: new for new, old in enumerate(used)}
     rr = [remap[row] for row in rr]
-    capacities = tuple(specs[row][0] for row in used)
-    names = tuple(specs[row][1] for row in used)
-    units = tuple(specs[row][2] for row in used)
+    capacities = tuple(oracle.specs[row][0] for row in used)
+    names = tuple(oracle.specs[row][1] for row in used)
+    units = tuple(oracle.specs[row][2] for row in used)
     return CandidateTable(sessions, candidates, incidence,
                           csr_matrix((data, (rr, cc)), shape=(len(used), len(candidates))),
-                          names, capacities, units,
-                          migration_horizon)
+                          names, capacities, units, horizon)
+
+
+def candidate_table(scenario: ExecutionScenario, profile, architecture: DestinationArchitecture,
+                    mode: str, power: ExpectedPower) -> CandidateTable:
+    oracle = _candidate_oracle(scenario, profile, architecture, mode, power)
+    return _materialize_candidates(oracle, (
+        candidate for j in range(len(oracle.sessions))
+        for candidate in oracle.choices(j)
+    ))
 
 
 def _scarcity_prices(table, matrix):
@@ -1250,6 +1283,278 @@ def _lp_column_generation_persistent(table: CandidateTable, target: float, stats
     return selected
 
 
+@dataclass(slots=True)
+class _PricedColumn:
+    reduced: float
+    order: tuple[str, str, str]
+    candidate: Candidate
+    entries: tuple[tuple[int, float], ...]
+    cost: float
+
+    def __lt__(self, other):
+        return (self.reduced, self.order) > (other.reduced, other.order)
+
+
+@dataclass(slots=True)
+class _CompletionColumn:
+    rank: tuple
+    candidate: Candidate
+    entries: tuple[tuple[int, float], ...]
+
+    def __lt__(self, other):
+        return self.rank < other.rank
+
+
+def _lazy_completion(oracle, candidates, values, target):
+    candidates, usage = list(candidates), np.zeros(len(oracle.specs))
+    selected, sessions = set(), set()
+    gain = 0.0
+    semantic = lambda candidate: (
+        oracle.sessions[candidate.session].session_id,
+        oracle.pools[candidate.pool].pool_id,
+        "0" if candidate.method == "replay" else "1",
+    )
+    identities = {
+        (candidate.session, candidate.pool, candidate.method): i
+        for i, candidate in enumerate(candidates)
+    }
+    masses = {
+        identity: values[i] for identity, i in identities.items()
+    }
+    after = {}
+    for i in sorted(
+        (i for i, value in enumerate(values) if value > 0),
+        key=lambda i: (-values[i], candidates[i].migration_work_s,
+                       semantic(candidates[i])),
+    ):
+        candidate, entries = candidates[i], oracle.column(candidates[i])
+        rank = (-values[i], candidate.migration_work_s, *semantic(candidate))
+        if candidate.session in sessions:
+            continue
+        if all(usage[row] + value <= 1 + 1e-8 for row, value in entries):
+            selected.add(i)
+            sessions.add(candidate.session)
+            for row, value in entries:
+                usage[row] += value
+            gain += candidate.gain_w
+            if gain >= target - 1e-8:
+                return candidates, selected
+        else:
+            after[candidate.session] = rank
+
+    def next_choice(j, after=None):
+        best = None
+        for candidate in oracle.choices(j):
+            identity = (candidate.session, candidate.pool, candidate.method)
+            rank = (
+                -masses.get(identity, 0.0), candidate.migration_work_s,
+                *semantic(candidate),
+            )
+            if (after is None or rank > after) and (
+                best is None or rank < best.rank
+            ):
+                best = _CompletionColumn(rank, candidate, oracle.column(candidate))
+        return best
+
+    heap = []
+    for j in range(len(oracle.sessions)):
+        if j not in sessions:
+            item = next_choice(j, after.get(j))
+            if item is not None:
+                heappush(heap, item)
+    while heap:
+        item = heappop(heap)
+        candidate = item.candidate
+        if all(usage[row] + value <= 1 + 1e-8
+               for row, value in item.entries):
+            identity = (candidate.session, candidate.pool, candidate.method)
+            i = identities.get(identity)
+            if i is None:
+                i = len(candidates)
+                identities[identity] = i
+                candidates.append(candidate)
+            selected.add(i)
+            sessions.add(candidate.session)
+            for row, value in item.entries:
+                usage[row] += value
+            gain += candidate.gain_w
+            if gain >= target - 1e-8:
+                break
+        else:
+            item = next_choice(candidate.session, item.rank)
+            if item is not None:
+                heappush(heap, item)
+    return candidates, selected
+
+
+def _lazy_add_columns(highs, oracle, priced, session_rows, active, candidates):
+    sessions = sorted({item.candidate.session for item in priced
+                       if session_rows[item.candidate.session] < 0})
+    if sessions:
+        first = highs.getNumRow()
+        status = highs.addRows(
+            len(sessions), np.full(len(sessions), -highspy.kHighsInf),
+            np.ones(len(sessions)), 0, np.zeros(len(sessions) + 1, np.int32),
+            np.array([], np.int32), np.array([], float),
+        )
+        if status != highspy.HighsStatus.kOk:
+            raise RuntimeError("HiGHS failed to add lazy session rows")
+        session_rows[sessions] = np.arange(first, first + len(sessions))
+    target, starts, indices, values = len(oracle.specs), [0], [], []
+    for item in priced:
+        candidate = item.candidate
+        indices.extend(row for row, _ in item.entries)
+        values.extend(value for _, value in item.entries)
+        indices.extend((target, session_rows[candidate.session]))
+        values.extend((candidate.gain_w, 1.0))
+        starts.append(len(indices))
+    status = highs.addCols(
+        len(priced), np.array([item.cost for item in priced]),
+        np.zeros(len(priced)), np.full(len(priced), highspy.kHighsInf),
+        len(indices), np.asarray(starts, np.int32), np.asarray(indices, np.int32),
+        np.asarray(values, float),
+    )
+    if status != highspy.HighsStatus.kOk:
+        raise RuntimeError("HiGHS failed to add lazy priced columns")
+    for item in priced:
+        candidate = item.candidate
+        active.add((candidate.session, candidate.pool, candidate.method))
+        candidates.append(candidate)
+
+
+def _lazy_column_phase(highs, oracle, target, phase_two, session_rows,
+                       active, candidates, stats):
+    batch = max(256, len(oracle.sessions) // COLUMN_GROWTH_SWEEPS)
+    pricing_s = add_s = solve_s = 0.0
+    iterations = 0
+    for sweep in range(sum(len(pool.methods) for pool in oracle.pools)
+                       * len(oracle.sessions) + 1):
+        started = perf_counter()
+        highs.run()
+        solve_s += perf_counter() - started
+        if highs.getModelStatus() != highspy.HighsModelStatus.kOptimal:
+            raise RuntimeError(f"lazy master failed: {highs.getModelStatus()}")
+        solution, info = highs.getSolution(), highs.getInfo()
+        iterations += info.simplex_iteration_count
+        dual = np.asarray(solution.row_dual)
+        resources = np.maximum(0, -dual[:len(oracle.specs)])
+        eta = max(0.0, dual[len(oracle.specs)])
+        eta = eta if phase_two else min(1.0, eta)
+
+        started, heap, dual_sessions = perf_counter(), [], 0.0
+        for j, session in enumerate(oracle.sessions):
+            row = session_rows[j]
+            alpha = max(0.0, -dual[row]) if row >= 0 else 0.0
+            minimum, best = np.inf, None
+            for candidate in oracle.choices(j):
+                entries = oracle.column(candidate)
+                cost = candidate.migration_work_s / oracle.migration_horizon_s \
+                    if phase_two else 0.0
+                reduced = cost + sum(
+                    resources[index] * value for index, value in entries
+                ) - eta * candidate.gain_w + alpha
+                minimum = min(minimum, reduced)
+                identity = (candidate.session, candidate.pool, candidate.method)
+                order = (session.session_id,
+                         oracle.pools[candidate.pool].pool_id,
+                         "0" if candidate.method == "replay" else "1")
+                if identity not in active and (
+                    best is None or (reduced, order) < (best.reduced, best.order)
+                ):
+                    best = _PricedColumn(reduced, order, candidate, entries, cost)
+            if np.isfinite(minimum):
+                alpha += max(0.0, -minimum)
+            dual_sessions += alpha
+            if best is not None and best.reduced < 0:
+                heappush(heap, best)
+                if len(heap) > batch:
+                    heappop(heap)
+        lower = eta * target - resources.sum() - dual_sessions
+        pricing_s += perf_counter() - started
+        upper = float(info.objective_function_value)
+        gap = upper - lower
+        stats.update(
+            sweeps=sweep + 1, columns=len(candidates), upper=upper,
+            lower=float(lower), gap=gap, pricing_s=pricing_s,
+            add_s=add_s, solve_s=solve_s, simplex_iterations=iterations,
+        )
+        if gap <= COLUMN_GAP_TOLERANCE:
+            return solution
+        if not heap:
+            raise RuntimeError(f"lazy certificate gap did not close: {gap}")
+        priced = sorted(heap, key=lambda item: (item.reduced, item.order))
+        started = perf_counter()
+        _lazy_add_columns(
+            highs, oracle, priced, session_rows, active, candidates,
+        )
+        add_s += perf_counter() - started
+        highs.setOptionValue("presolve", "off")
+    raise RuntimeError("lazy column generation did not converge")
+
+
+def _lp_column_generation_lazy(oracle, target, stats=None):
+    if target <= 0 or oracle.migration_horizon_s <= 0:
+        return _materialize_candidates(oracle, (), False), set()
+    started, phase1, phase2 = perf_counter(), {}, {}
+    highs, resources = highspy.Highs(), len(oracle.specs)
+    highs.setOptionValue("output_flag", False)
+    highs.setOptionValue("solver", "simplex")
+    status = highs.addRows(
+        resources + 1,
+        np.concatenate((np.full(resources, -highspy.kHighsInf), [target])),
+        np.concatenate((np.ones(resources), [highspy.kHighsInf])), 0,
+        np.zeros(resources + 2, np.int32), np.array([], np.int32),
+        np.array([], float),
+    )
+    if status != highspy.HighsStatus.kOk:
+        raise RuntimeError("HiGHS failed to initialize lazy master")
+    if highs.addCol(
+        1, 0, highspy.kHighsInf, 1, np.array([resources], np.int32),
+        np.array([1.0]),
+    ) != highspy.HighsStatus.kOk:
+        raise RuntimeError("HiGHS failed to add lazy shortfall column")
+    session_rows = np.full(len(oracle.sessions), -1, np.int32)
+    active, candidates = set(), []
+    first = _lazy_column_phase(
+        highs, oracle, target, False, session_rows, active, candidates, phase1,
+    )
+    shortfall = float(first.col_value[0])
+    effective = max(0.0, target - shortfall)
+    if candidates:
+        columns = np.arange(1, len(candidates) + 1, dtype=np.int32)
+        costs = np.array([
+            candidate.migration_work_s / oracle.migration_horizon_s
+            for candidate in candidates
+        ])
+        if highs.changeColsCost(len(columns), columns, costs) \
+                != highspy.HighsStatus.kOk:
+            raise RuntimeError("HiGHS failed to set lazy Phase-II costs")
+    if highs.changeColBounds(0, 0, 0) != highspy.HighsStatus.kOk:
+        raise RuntimeError("HiGHS failed to fix lazy target shortfall")
+    phase2_target = max(0.0, effective - 1e-7)
+    if highs.changeRowBounds(
+        resources, phase2_target, highspy.kHighsInf,
+    ) != highspy.HighsStatus.kOk:
+        raise RuntimeError("HiGHS failed to set lazy Phase-II target")
+    second = _lazy_column_phase(
+        highs, oracle, phase2_target, True, session_rows, active, candidates, phase2,
+    )
+    values = np.asarray(second.col_value)[1:len(candidates) + 1]
+    master_columns = len(candidates)
+    candidates, selected = _lazy_completion(oracle, candidates, values, target)
+    table = _materialize_candidates(oracle, candidates, False)
+    if stats is not None:
+        stats.update(
+            wall_s=perf_counter() - started, active_columns=master_columns,
+            materialized_columns=len(candidates),
+            completion_columns=len(candidates) - master_columns,
+            active_sessions=np.count_nonzero(session_rows >= 0),
+            phase1_shortfall=shortfall, effective_target=effective,
+            phase1=phase1, phase2=phase2,
+        )
+    return table, selected
+
+
 def _pack(table, selected, architecture, scenario, mode):
     horizon = architecture.residency_horizon_s
     horizon = scenario.end_s - scenario.controller_delay_s if horizon is None else horizon
@@ -1417,9 +1722,16 @@ def _selected_service_debt(table, selected, architecture, scenario):
 
 
 def _mode_plan(scenario, profile, architecture, solver, mode, power, target):
-    table = candidate_table(scenario, profile, architecture, mode, power)
     assignment = None
-    if solver == "greedy_prefix":
+    if solver == "lp_column_generation_lazy":
+        table, selected = _lp_column_generation_lazy(
+            _candidate_oracle(scenario, profile, architecture, mode, power), target,
+        )
+    else:
+        table = candidate_table(scenario, profile, architecture, mode, power)
+    if solver == "lp_column_generation_lazy":
+        pass
+    elif solver == "greedy_prefix":
         selected, assignment = _greedy_prefix(
             table, target, power, architecture, scenario, mode, True,
         )
@@ -1461,7 +1773,8 @@ def _mode_plan(scenario, profile, architecture, solver, mode, power, target):
 def plan_destination(scenario, profile, solver, case_id, seed, architecture):
     if solver not in {"greedy", "greedy_bundle", "greedy_prefix", "greedy_coupled",
                       "lp", "lp_peak_first", "lp_work_first", "lp_highs",
-                      "lp_column_generation", "lp_column_generation_persistent"}:
+                      "lp_column_generation", "lp_column_generation_persistent",
+                      "lp_column_generation_lazy"}:
         raise ValueError("destination architecture supports pool-aware LP and greedy")
     if case_id != "central":
         raise ValueError("destination admission supports the central profile")

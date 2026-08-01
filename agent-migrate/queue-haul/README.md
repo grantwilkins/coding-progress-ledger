@@ -134,10 +134,10 @@ source for assumed paper operating points and their replacement evidence.
 The default pool LP remains the Clarabel implementation. The experimental
 `lp_highs` solver runs the same relaxation and rounder through SciPy/HiGHS;
 resource rows are assembled directly from candidate nonzeros.
-`lp_column_generation` is an exact Phase-I/Phase-II prototype with complete
-reduced-cost certification. It currently materializes the full candidate table
-and rebuilds restricted masters, so it is a correctness experiment rather than
-the million-session implementation.
+`lp_column_generation` is a Phase-I/Phase-II prototype with a reported
+primal-dual certificate. It materializes the full candidate table and rebuilds
+restricted masters, so it is a correctness reference rather than the
+million-session implementation.
 `lp_column_generation_persistent` keeps one native HiGHS master and basis while
 adding session rows and priced columns, and reuses one column-oriented resource
 matrix across insertion batches. Candidate construction uses compact
@@ -145,8 +145,13 @@ immutable records and reuses identical session physics across equivalent pool
 type/route signatures while retaining pool-specific capacity rows.
 `destination_bench.py --pool-counts`
 splits fixed replica inventory across pools to vary alternatives without adding
-hardware or route capacity. Both column-generation solvers remain experimental;
-lazy factorized pricing and placement-aware rounding are not yet implemented.
+hardware or route capacity. All column-generation solvers remain experimental;
+`lp_column_generation_lazy` instead streams the complete implicit action
+universe, retains only generated master columns, stops on a global certified
+gap, and consults the oracle again during integral completion. It preserves the
+same LP but currently regenerates Python candidate physics on every pricing
+sweep. Numeric structure-of-arrays pricing, indexed replica placement, and a
+compact execution verifier are still required for million-session operation.
 `dual_lagrangian_experiment.py` evaluates the simulator-only `greedy_prefix`
 policy as a dual-Lagrangian prefix method against the unchanged static greedy
 baseline and other experimental pool policies on paired trace-derived targets;
