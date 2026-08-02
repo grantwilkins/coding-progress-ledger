@@ -289,7 +289,9 @@ def _route_resources(source: str, destinations, routes: Routes, links: dict[str,
 
 def _migration_resources(scenario: ExecutionScenario, profile: ModelProfile, routes: Routes,
                          sessions: list[SimSession], destinations, case: ProfileCase,
-                         horizon: float):
+                         horizon: float, replication: int = 1):
+    if replication < 1:
+        raise ValueError("replication must be positive")
     n = len(sessions)
     links = {link.link_id: link.bytes_per_s for link in scenario.links}
     destination_ids = {instance.instance_id for instance in destinations}
@@ -364,7 +366,7 @@ def _migration_resources(scenario: ExecutionScenario, profile: ModelProfile, rou
             return
         row.extend([resource_count] * len(entries))
         column.extend(col for col, _ in entries)
-        data.extend(value / capacity for _, value in entries)
+        data.extend(replication * value / capacity for _, value in entries)
         resource_count += 1
 
     for link, entries in named_links.items():
@@ -395,9 +397,10 @@ def _migration_resources(scenario: ExecutionScenario, profile: ModelProfile, rou
          for j, session in enumerate(sessions) for method in range(2)),
         len(destinations) * profile.kv_capacity_tokens - destination_tokens,
     )
-    return durations, valid, csr_matrix(
-        (data, (row, column)), shape=(resource_count, 2 * n)
-    )
+    resources = csr_matrix((data, (row, column)), shape=(resource_count, 2 * n))
+    if resources.shape[0]:
+        valid &= np.asarray(resources.max(axis=0).toarray()).ravel() <= 1 + 1e-8
+    return durations, valid, resources
 
 
 def _round_lp(values: np.ndarray, valid: np.ndarray, resources: csr_matrix,
@@ -497,7 +500,7 @@ def _greedy(sessions, gains, valid, resources, power: ExpectedPower, limit: floa
 
 
 def _solve_lp(solver: str, gains: np.ndarray, work: np.ndarray, valid: np.ndarray,
-              resources: csr_matrix, target: float) -> np.ndarray:
+              resources: csr_matrix, target: float, backend=None) -> np.ndarray:
     n, scale = gains.size, max(target, 1.0)
     x = cp.Variable(2 * n, nonneg=True)
     selected = x[:n] + x[n:]
@@ -512,7 +515,8 @@ def _solve_lp(solver: str, gains: np.ndarray, work: np.ndarray, valid: np.ndarra
         problem = cp.Problem(
             cp.Maximize(objective) if maximize else cp.Minimize(objective), constraints
         )
-        problem.solve(solver=cp.CLARABEL)
+        options = {"solver": backend or cp.CLARABEL}
+        problem.solve(**options)
         if problem.status in (cp.OPTIMAL, cp.OPTIMAL_INACCURATE):
             best = np.asarray(x.value).copy()
         return problem
@@ -556,7 +560,8 @@ def _solve_lp(solver: str, gains: np.ndarray, work: np.ndarray, valid: np.ndarra
 
 
 def _plan_lp(scenario: ExecutionScenario, profile: ModelProfile, routes: Routes,
-             solver: str, case_id: str, seed: int, start: float) -> PlanResult:
+             solver: str, case_id: str, seed: int, start: float,
+             replication: int = 1) -> PlanResult:
     if scenario.final_state != "awake":
         raise ValueError("LP supports final_state='awake'")
     sessions = _local_sessions(scenario)
@@ -585,13 +590,17 @@ def _plan_lp(scenario: ExecutionScenario, profile: ModelProfile, routes: Routes,
         )
     horizon = scenario.deadline_s - scenario.controller_delay_s - profile.power_window_s
     durations, valid, resources = _migration_resources(
-        scenario, profile, routes, sessions, destinations, case, horizon
+        scenario, profile, routes, sessions, destinations, case, horizon,
+        replication,
     )
     gains = np.array([power.marginal(session.session_id) for session in sessions])
     target = initial - scenario.power_limit_w
     work = durations.reshape(-1)
     chosen, usage = _round_lp(
-        _solve_lp(solver, gains, work, valid, resources, target),
+        _solve_lp(
+            solver, gains, work, valid, resources, target,
+            cp.HIGHS if replication > 1 else None,
+        ),
         valid, resources, gains, work, target,
     )
     selected_indices = [j for j in range(n) if chosen[j] >= 0]
@@ -667,7 +676,8 @@ def _place(selected: list[int], sessions: list[SimSession], scenario: ExecutionS
 
 def plan(scenario: ExecutionScenario, profile: ModelProfile,
          paths: Routes, solver: str,
-         case_id: str = "central", seed: int = 0, destination=None) -> PlanResult:
+         case_id: str = "central", seed: int = 0, destination=None,
+         replication: int = 1) -> PlanResult:
     if destination is not None:
         from pool_planner import plan_destination
         return plan_destination(scenario, profile, solver, case_id, seed, destination)
@@ -677,7 +687,9 @@ def plan(scenario: ExecutionScenario, profile: ModelProfile,
         raise ValueError(f"{solver} requires a destination architecture")
     start = perf_counter()
     if solver in LP_SOLVERS:
-        return _plan_lp(scenario, profile, paths, solver, case_id, seed, start)
+        return _plan_lp(
+            scenario, profile, paths, solver, case_id, seed, start, replication,
+        )
     case = profile.case(case_id)
     sessions = _local_sessions(scenario)
     links = {link.link_id: link.bytes_per_s for link in scenario.links}
@@ -729,7 +741,8 @@ def plan(scenario: ExecutionScenario, profile: ModelProfile,
             raise ValueError("greedy supports active sessions and final_state='awake'")
         resource_horizon = horizon - profile.power_window_s
         durations, resource_valid, resources = _migration_resources(
-            scenario, profile, paths, sessions, destinations, case, resource_horizon
+            scenario, profile, paths, sessions, destinations, case,
+            resource_horizon, replication,
         )
         if solver in BASELINE_SOLVERS:
             allowed = np.zeros((2, len(sessions)), bool)

@@ -1,4 +1,4 @@
-"""Simulate the calibrated width-8 plan and plot its power–completion frontier."""
+"""Simulate full-width fluid migration plans and plot their frontier."""
 
 from __future__ import annotations
 
@@ -27,15 +27,17 @@ from policy_hardware_campaign import (
 )
 from planner import plan
 from profiles import ActionPower, ModelProfile, RateCurve
-from simulate import execute
+from simulate import predict
 
 
 ROOT = Path(__file__).parent
 DEFAULT_PLAN = ROOT / "outputs/policy-hardware-width8-packing-plan/plan.json"
 DEFAULT_MODEL = ROOT / "profiles/gpt_oss_20b_a100_tp1_crossover.json"
 DEFAULT_CROSSOVER = ROOT / "outputs/policy-hardware-crossover-20260730/plan.json"
-DEFAULT_WIDTH8 = ROOT / "outputs/policy-hardware-width8-frontier-20260730"
-DEFAULT_OUT = ROOT / "outputs/simulated-width8-pareto-20260730"
+DEFAULT_WORKLOAD_PLAN = ROOT / "outputs/policy-hardware-width8-frontier-20260730/plan.json"
+DEFAULT_OUT = ROOT / "outputs/simulated-fullwidth-pareto-20260802"
+DEFAULT_SESSIONS = 10_000
+MAX_FLUID_PLANNING_SESSIONS = 256
 POLICIES = (
     "queue_haul", "greedy", "greedy_coupled", "random", "kv_only",
     "replay_only",
@@ -75,76 +77,9 @@ def meets_deadline(attainment, completion, deadline):
     return attainment >= 1 - 1e-9 and completion <= deadline + 1e-9
 
 
-def measured_replay_caps(width8):
-    plan_ = json.loads((width8 / "plan.json").read_text())
-    totals = {
-        row["episode"]: sum(session["initial_tokens"]
-                            for session in row["sessions"])
-        for row in plan_["scenarios"] if row["policy"] == "control"
-    }
-    rows = list(csv.DictReader((width8 / "policy_episodes.csv").open()))
-    rates = [
-        totals[int(row["episode"])] / float(row["commit_100_s"])
-        for row in rows
-        if row["policy"] == "replay_only" and row["commit_100_s"]
-    ]
-    if not rates:
-        raise ValueError("width-8 run has no complete replay-only episodes")
-    slower, central, faster = np.quantile(rates, (.25, .5, .75))
-    return {
-        "central": float(central), "faster": float(faster),
-        "slower": float(slower),
-    }, len(rates)
-
-
-def measured_kv_caps(width8, crossover, profile):
-    quantiles = {"slower": .25, "central": .5, "faster": .75}
-    plan_ = json.loads((width8 / "plan.json").read_text())
-    scenarios = {row["scenario_id"]: row for row in plan_["scenarios"]}
-    episodes = [
-        row for row in csv.DictReader(
-            (width8 / "policy_episodes.csv").open()
-        ) if row["policy"] == "kv_only" and row["commit_100_s"]
-    ]
-    rates = {}
-    for row in episodes:
-        scenario = scenarios[row["scenario_id"]]
-        size = sum(
-            profile.case().kv_transfer.sealed_bytes(session["initial_tokens"])
-            for session in scenario["sessions"]
-        )
-        rates.setdefault(float(scenario["bandwidth_mbps"]), []).append(
-            size / float(row["commit_100_s"])
-        )
-    migrations = list(csv.DictReader((crossover / "migrations.csv").open()))
-    summaries = {
-        row["scenario_id"]: row
-        for row in csv.DictReader((crossover / "scenarios.csv").open())
-    }
-    serial = {}
-    for row in migrations:
-        if row["method"] == "kv_transfer":
-            serial.setdefault(float(row["bandwidth_mbps"]), []).append(
-                float(row["measured_kv_bytes"])
-                / float(summaries[row["scenario_id"]]["migration_s"])
-            )
-    if set(rates) != {5000.0, 10000.0} \
-            or not {1000.0, 2500.0} <= set(serial):
-        raise ValueError("KV calibration grid is incomplete")
-    combined = {1000.0: serial[1000.0], 2500.0: serial[2500.0], **rates}
-    return {
-        case: {
-            bandwidth: float(np.quantile(values, quantile))
-            for bandwidth, values in combined.items()
-        }
-        for case, quantile in quantiles.items()
-    }, {"serial": len(serial[1000.0]) + len(serial[2500.0]),
-        "width8": sum(map(len, rates.values()))}
-
-
-def parallel_profile(profile, width, replay_caps):
-    if set(replay_caps) != set(profile.cases):
-        raise ValueError("replay caps must cover every profile case")
+def fluid_profile(profile, width, resident_tokens):
+    if width < 1 or resident_tokens < 1:
+        raise ValueError("fluid profile dimensions must be positive")
     cases = {}
     for case_id, case in profile.cases.items():
         actions = {}
@@ -155,62 +90,76 @@ def parallel_profile(profile, width, replay_caps):
                 np.array([curve.destination_w[0],
                           width * curve.destination_w[0]]),
             )
-        replay = RateCurve({
-            concurrency: (
-                case.replay.by_concurrency[1] if concurrency == 1 else (
-                    case.replay.by_concurrency[1][0],
-                    np.minimum(
-                        case.replay.by_concurrency[1][1],
-                        replay_caps[case_id] / concurrency,
-                    ),
-                )
-            )
-            for concurrency in range(1, width + 1)
-        })
+        replay = RateCurve({concurrency: case.replay.by_concurrency[1]
+                            for concurrency in range(1, width + 1)})
         cases[case_id] = replace(
             case, action_power_w=actions, replay=replay
         )
     return replace(
-        profile, max_destination_replays=width,
-        max_destination_kv_streams=width, cases=cases,
+        profile, kv_capacity_tokens=max(profile.kv_capacity_tokens, resident_tokens),
+        max_destination_replays=width, max_destination_kv_streams=width,
+        cases=cases,
     )
 
 
-def aggregate_planning_profile(profile, bandwidth_mbps, replay_caps, kv_caps):
+def aggregate_profile(profile, base_profile, width, replication, resident_tokens):
+    if replication < 1:
+        raise ValueError("replication must be positive")
+    grouped = fluid_profile(base_profile, width, resident_tokens)
     cases = {}
-    for case_id, case in profile.cases.items():
-        x, y = case.replay.by_concurrency[1]
-        replay = RateCurve({1: (x, np.minimum(y, replay_caps[case_id]))})
-        transfer = replace(
+    for case_id, case in grouped.cases.items():
+        actions = {
+            name: replace(
+                curve,
+                source_w=replication * curve.source_w,
+                destination_w=replication * curve.destination_w,
+            )
+            for name, curve in case.action_power_w.items()
+        }
+        kv_transfer = replace(
             case.kv_transfer,
-            destination_bytes_per_s=min(
-                case.kv_transfer.destination_bytes_per_s,
-                kv_caps[case_id][float(bandwidth_mbps)],
-            ),
+            destination_bytes_per_s=case.kv_transfer.destination_bytes_per_s
+            / replication,
         )
         cases[case_id] = replace(
-            case, replay=replay, kv_transfer=transfer
+            case, action_power_w=actions, kv_transfer=kv_transfer,
         )
     return replace(
-        profile, max_destination_replays=1,
-        max_destination_kv_streams=1, cases=cases,
+        grouped,
+        kv_capacity_tokens=max(1, profile.kv_capacity_tokens // replication),
+        cases=cases,
     )
 
 
-def shared_kv_profile(profile, bandwidth_mbps, concurrency, kv_caps):
-    if concurrency <= 1:
-        return profile
-    cases = {}
-    for case_id, case in profile.cases.items():
-        cap = kv_caps[case_id][float(bandwidth_mbps)]
-        transfer = replace(
-            case.kv_transfer,
-            destination_bytes_per_s=min(
-                case.kv_transfer.destination_bytes_per_s, cap
-            ),
-        )
-        cases[case_id] = replace(case, kv_transfer=transfer)
-    return replace(profile, cases=cases)
+def expand_sessions(base, sessions):
+    if sessions < 1:
+        raise ValueError("sessions must be positive")
+    templates = base["sessions"]
+    return [{
+        "session_id": f"{base['sample_id']}-{index}",
+        "job_class": templates[index % len(templates)]["job_class"],
+        "turn_index": 0,
+        "initial_tokens": templates[index % len(templates)]["initial_tokens"],
+        "order": index,
+    } for index in range(sessions)]
+
+
+def expand_moves(moves, template_rows, session_rows, template_width=None):
+    by_template = {move.session_id: move for move in moves}
+    replication = len(session_rows) // len(template_rows)
+    template_width = template_width or len(template_rows)
+    expanded = []
+    for row in session_rows:
+        template = template_rows[
+            (row["order"] // template_width // replication) * template_width
+            + row["order"] % template_width
+        ]
+        if template["session_id"] in by_template:
+            expanded.append(replace(
+                by_template[template["session_id"]],
+                session_id=row["session_id"], order=len(expanded),
+            ))
+    return tuple(expanded)
 
 
 def write_csv(path, rows):
@@ -254,7 +203,8 @@ def coupled_architecture(profile):
     )
 
 
-def admitted_moves(policy, scenario, routes, profile, seed, destination=None):
+def admitted_moves(policy, scenario, routes, profile, seed, destination=None,
+                   replication=1):
     solver = {"queue_haul": "lp_work_first"}.get(policy, policy)
     return tuple(
         replace(
@@ -262,7 +212,7 @@ def admitted_moves(policy, scenario, routes, profile, seed, destination=None):
         )
         for move in plan(
             scenario, profile, routes, solver, seed=seed,
-            destination=destination,
+            destination=destination, replication=replication,
         ).moves
     )
 
@@ -299,69 +249,105 @@ def workload_grid(fixed_plan, hardware_plan):
 
 
 def simulate(plan_path=DEFAULT_PLAN, model_path=DEFAULT_MODEL,
-             crossover_path=DEFAULT_CROSSOVER, width8=DEFAULT_WIDTH8,
+             crossover_path=DEFAULT_CROSSOVER,
+             workload_plan=DEFAULT_WORKLOAD_PLAN, sessions=DEFAULT_SESSIONS,
              time_budgets_s=TIME_BUDGETS_S):
     plan_ = json.loads(plan_path.read_text())
     validate_policy_plan(plan_)
-    hardware_plan = json.loads((width8 / "plan.json").read_text())
-    validate_policy_plan(hardware_plan)
+    workload_plan_ = json.loads(workload_plan.read_text())
+    validate_policy_plan(workload_plan_)
+    if sessions < 1:
+        raise ValueError("sessions must be positive")
     if profiler.file_hash(model_path) != plan_["model_profile"]["sha256"]:
         raise RuntimeError("model profile changed after planning")
     base_profile = ModelProfile.load(model_path)
-    replay_caps, _ = measured_replay_caps(width8)
-    kv_caps, _ = measured_kv_caps(
-        width8, crossover_path.parent, base_profile
-    )
-    profile = parallel_profile(
-        base_profile, plan_["sessions_per_episode"], replay_caps
-    )
     crossover = json.loads(crossover_path.read_text())
     anchors = set(crossover["contexts"])
     rows = []
     for configuration, (workload_source, base, bandwidth) in enumerate(
-            workload_grid(plan_, hardware_plan)):
+            workload_grid(plan_, workload_plan_)):
+        template_width = len(base["sessions"])
+        if not template_width or sessions % template_width:
+            raise ValueError(
+                "sessions must be a positive multiple of the workload template width"
+            )
+        replications = sessions // template_width
+        planning_repeat = min(
+            replications, MAX_FLUID_PLANNING_SESSIONS // template_width,
+        )
+        while replications % planning_repeat:
+            planning_repeat -= 1
+        planning_width = template_width * planning_repeat
+        group_replications = replications // planning_repeat
+        template_rows = expand_sessions(base, planning_width)
+        session_rows = expand_sessions(base, sessions)
+        profile = fluid_profile(
+            base_profile, sessions,
+            sum(row["initial_tokens"] for row in session_rows),
+        )
+        planning_profile = replace(
+            profile,
+            cases=fluid_profile(
+                base_profile, planning_width,
+                sum(row["initial_tokens"] for row in template_rows),
+            ).cases,
+        )
+        execution_profile = aggregate_profile(
+            profile, base_profile, planning_width, group_replications,
+            sum(row["initial_tokens"] for row in template_rows),
+        )
         evidence = context_evidence(
-            (row["initial_tokens"] for row in base["sessions"]), anchors
+            (row["initial_tokens"] for row in session_rows), anchors
         )
         for budget_s in time_budgets_s:
             scenario, routes = _problem(
-                profile, base["sessions"], bandwidth, budget_s,
+                execution_profile, template_rows, bandwidth / group_replications,
+                budget_s,
             )
-            scenario = replace(scenario, end_s=max(OBSERVATION_S, budget_s))
-            planning_profile = aggregate_planning_profile(
-                base_profile, bandwidth, replay_caps, kv_caps
+            scenario = replace(
+                scenario,
+                end_s=max(OBSERVATION_S, budget_s) * replications,
+            )
+            planning_scenario, planning_routes = _problem(
+                planning_profile, template_rows, bandwidth,
+                budget_s,
+            )
+            planning_scenario = replace(
+                planning_scenario, end_s=max(OBSERVATION_S, budget_s)
             )
             match_id = profiler.object_hash([
-                base["sample_id"], bandwidth, budget_s,
+                base["sample_id"], sessions, bandwidth, budget_s,
             ])[:16]
             for policy in POLICIES:
-                destination = coupled_architecture(planning_profile) \
+                destination = coupled_architecture(execution_profile) \
                     if policy == "greedy_coupled" else None
-                moves = admitted_moves(
-                    policy, scenario, routes, planning_profile,
+                template_moves = admitted_moves(
+                    policy, planning_scenario, planning_routes, planning_profile,
                     profiler.stable_seed(
                         plan_["seed"], base["sample_id"],
                         bandwidth, budget_s, policy,
                     ),
                     destination,
+                    group_replications,
                 )
-                execution_profile = shared_kv_profile(
-                    profile, bandwidth,
-                    sum(move.method == "kv_transfer" for move in moves), kv_caps,
+                moves = expand_moves(
+                    template_moves, template_rows, session_rows, template_width,
                 )
-                result = execute(
-                    scenario, execution_profile, moves,
+                result = predict(
+                    scenario, execution_profile, template_moves,
                     destination=destination,
                 )
-                commits = [row.committed_s for row in result.sessions
-                           if row.committed_s is not None]
+                commits = [row.committed_s
+                           for row in result.sessions
+                           if row.committed_s is not None
+                           for _ in range(group_replications)]
                 if len(commits) != len(moves):
                     raise RuntimeError(
                         f"configuration {configuration} budget {budget_s:g}s "
                         f"{policy} committed {len(commits)}/{len(moves)} admitted"
                     )
                 attainment, completion = frontier_metrics(
-                    commits, len(scenario.sessions), budget_s,
+                    commits, sessions, budget_s,
                     profile.case().power_curve, profile.power_window_s,
                 )
                 rows.append({
@@ -378,22 +364,20 @@ def simulate(plan_path=DEFAULT_PLAN, model_path=DEFAULT_MODEL,
                         attainment, completion, budget_s
                     ),
                     "admitted_moves": len(moves),
-                    "replay_moves": sum(row.method == "replay"
-                                        for row in result.sessions),
-                    "kv_moves": sum(row.method == "kv_transfer"
-                                    for row in result.sessions),
+                    "replay_moves": sum(move.method == "replay" for move in moves),
+                    "kv_moves": sum(move.method == "kv_transfer" for move in moves),
                     "context_evidence": evidence,
                     "replay_contention_evidence":
-                        "measured_width8_aggregate_throughput_cap",
+                        "serial_measured_rate_per_active_flow",
                     "kv_contention_evidence":
-                        "measured_bandwidth_specific_aggregate_throughput_cap",
+                        "shared_destination_and_route_links",
                     "power_evidence": "modeled",
                     "result_evidence": "simulated",
                     "planning_evidence":
-                        "deadline_specific_admitted_set_with_aggregate_caps",
+                        "deadline_specific_admitted_set_with_fluid_links",
                     "destination_contract":
                         "single_pool_zero_load_service_sensitivity"
-                        if destination else "aggregate_migration_caps_only",
+                        if destination else "fluid_shared_link_execution",
                 })
     pareto_flags(rows, ("match_id",))
     for row in rows:
@@ -481,32 +465,30 @@ def plot(rows, out):
     fig.legend(handles, labels, loc="upper center", frameon=False, ncol=3)
     cloud.text(
         .01, .01,
-        "2/4/8/16/24/32K replay anchors; fixed anchors + measured workload mixes\n"
-        "non-anchor rates interpolated; action power extrapolated; power modeled",
+        "Full-width fluid episodes; fixed anchors + measured workload mixes\n"
+        "non-anchor rates interpolated; serial power extended; power modeled",
         transform=cloud.transAxes, fontsize=8, va="bottom",
     )
     fig.tight_layout(rect=(0, 0, 1, .82))
     for suffix in ("png", "pdf"):
-        fig.savefig(out / f"simulated_width8_pareto.{suffix}", dpi=220)
+        fig.savefig(out / f"simulated_fullwidth_pareto.{suffix}", dpi=220)
     plt.close(fig)
 
 
 def run(plan_path=DEFAULT_PLAN, model_path=DEFAULT_MODEL,
-        crossover_path=DEFAULT_CROSSOVER, width8=DEFAULT_WIDTH8,
+        crossover_path=DEFAULT_CROSSOVER,
+        workload_plan=DEFAULT_WORKLOAD_PLAN, sessions=DEFAULT_SESSIONS,
         out=DEFAULT_OUT):
     out.mkdir(parents=True, exist_ok=True)
-    rows = simulate(plan_path, model_path, crossover_path, width8)
-    summary = summarize(rows)
-    replay_caps, replay_episodes = measured_replay_caps(width8)
-    profile = ModelProfile.load(model_path)
-    kv_caps, kv_episodes = measured_kv_caps(
-        width8, crossover_path.parent, profile
+    rows = simulate(
+        plan_path, model_path, crossover_path, workload_plan, sessions,
     )
+    summary = summarize(rows)
     write_csv(out / "simulated_pareto.csv", rows)
     write_csv(out / "policy_summary.csv", summary)
     plot(rows, out)
     metadata = {
-        "schema": "queue-haul-simulated-pareto-v2",
+        "schema": "queue-haul-simulated-pareto-v3",
         "axes": {
             "x": "deadline-integrated source-power shed / removable power",
             "y": "last admitted route commit time",
@@ -518,13 +500,21 @@ def run(plan_path=DEFAULT_PLAN, model_path=DEFAULT_MODEL,
         "time_budgets_s": list(TIME_BUDGETS_S),
         "observation_s": OBSERVATION_S,
         "planning_contract":
-            "deadline-specific admitted set; no appended cleanup moves; eager execution",
+            "deadline-specific admitted template set; replicated groups share fluid resources; "
+            "no appended cleanup moves; eager execution",
+        "execution_contract":
+            "each template group represents identical full-width flows; route bandwidth and "
+            "destination ingest are divided by replication while action power is multiplied",
         "greedy_coupled_contract":
             "one destination replica and measured link; zero background load and "
             "destination service headroom are sensitivity inputs",
         "workload_contract":
-            "five fixed anchors plus 18 measured width-8 workload mixes, crossed "
-            "with every bandwidth and time budget",
+            "five fixed anchors plus measured workload templates, expanded to the "
+            "requested episode width and crossed with every bandwidth and budget",
+        "sessions_per_episode": sessions,
+        "fluid_planning_max_sessions": MAX_FLUID_PLANNING_SESSIONS,
+        "completion_horizon_contract":
+            "max(observation_s, budget_s) scaled by full template replication",
         "plan": {
             "path": _portable_path(plan_path),
             "sha256": profiler.file_hash(plan_path),
@@ -537,32 +527,17 @@ def run(plan_path=DEFAULT_PLAN, model_path=DEFAULT_MODEL,
             "path": _portable_path(crossover_path),
             "sha256": profiler.file_hash(crossover_path),
         },
-        "width8_replay_cap": {
-            "plan": {
-                "path": _portable_path(width8 / "plan.json"),
-                "sha256": profiler.file_hash(width8 / "plan.json"),
-            },
-            "episodes": {
-                "path": _portable_path(width8 / "policy_episodes.csv"),
-                "sha256": profiler.file_hash(width8 / "policy_episodes.csv"),
-            },
-            "complete_replay_only_episodes": replay_episodes,
-            "aggregate_tokens_per_s": replay_caps,
-        },
-        "kv_aggregate_caps": {
-            "crossover_migrations": kv_episodes["serial"],
-            "width8_episodes": kv_episodes["width8"],
-            "aggregate_bytes_per_s_by_case_and_bandwidth": kv_caps,
+        "workload_plan": {
+            "path": _portable_path(workload_plan),
+            "sha256": profiler.file_hash(workload_plan),
         },
         "evidence": {
             "context_anchors": "measured",
             "in_range_nonanchors": "interpolated",
-            "width8_launch": "measured in policy-hardware-width8-frontier-20260730",
-            "width8_replay_aggregate_rate":
-                "measured replay-only episode context / completion time",
-            "kv_aggregate_rate":
-                "serial at 1/2.5 Gbit/s; width-8 at 5/10 Gbit/s",
-            "width8_action_power": "extrapolated from serial calibration",
+            "full_width_execution": "fluid shared-link simulation",
+            "replay_rate": "serial measured rate applied per active flow",
+            "kv_rate": "destination ingest and route links share capacity",
+            "action_power": "linear extension of serial calibration",
             "power_attainment": "modeled from commit times",
             "results": "simulated",
         },
@@ -582,12 +557,13 @@ def main():
     parser.add_argument("--plan", type=Path, default=DEFAULT_PLAN)
     parser.add_argument("--model-profile", type=Path, default=DEFAULT_MODEL)
     parser.add_argument("--crossover-plan", type=Path, default=DEFAULT_CROSSOVER)
-    parser.add_argument("--width8-run", type=Path, default=DEFAULT_WIDTH8)
+    parser.add_argument("--workload-plan", type=Path, default=DEFAULT_WORKLOAD_PLAN)
+    parser.add_argument("--sessions", type=int, default=DEFAULT_SESSIONS)
     parser.add_argument("--out", type=Path, default=DEFAULT_OUT)
     args = parser.parse_args()
     run(
         args.plan, args.model_profile, args.crossover_plan,
-        args.width8_run, args.out,
+        args.workload_plan, args.sessions, args.out,
     )
 
 

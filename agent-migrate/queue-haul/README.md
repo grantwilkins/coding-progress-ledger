@@ -266,20 +266,19 @@ the companion pooled CDF combines all four bandwidths. Regenerate that CDF
 with the earlier trace-sampled 5/10-Gbit/s frontier rows included at raw-sample
 weight using `plot-reduced --out <packing-results> --pooled-with
 <frontier-results>`; this pooling also applies to both per-watt CDFs.
-`simulated_pareto_campaign.py` evaluates the same five fixed context packs with
-the calibrated crossover profile and adds paired random and price-coupled
-greedy baselines. Coupled greedy uses the same single destination and link; its
-zero-background-load service envelope is explicitly a sensitivity. The Pareto
-CSV and plot label 12K/14K contexts as interpolated, concurrent action power as
-extrapolated, and commit-derived power attainment as modeled.
-Parallel launch and replay/KV aggregate-throughput caps are anchored by the
-hardware traces; KV uses serial measurements at 1/2.5 Gbit/s and width-8
-measurements at 5/10 Gbit/s. The figure pairs deadline-normalized and raw-second
-clouds over 30/40/50/60/75-s budgets, with one point per result. Every policy is
-replanned for each budget against the same aggregate caps and executes only its
-deadline-admitted actions; cleanup moves are excluded from both axes. The cloud
-crosses five fixed packing anchors and 18 observed width-8 workload mixes with
-every bandwidth and budget; no display jitter is applied.
+`simulated_pareto_campaign.py` evaluates five fixed context anchors plus the
+measured workload templates with the calibrated crossover profile and paired
+random and coupled-greedy baselines. Its default episode width is 10,000
+sessions: templates are expanded to that width and executed through the core
+fluid simulator, with repeated templates grouped as equivalent fluid flows.
+Replay applies the serial measured rate per active flow; KV
+and route traffic share their destination and network-link capacities; action
+power is linearly extended from serial calibration. The Pareto CSV and plot
+label measured, interpolated, and modeled quantities explicitly. The figure
+pairs deadline-normalized and raw-second clouds over 30/40/50/60/75-s budgets,
+with one point per result and no display jitter. The prior width-8 output remains
+available as historical evidence; the full-width output is
+`outputs/simulated-fullwidth-pareto-20260802/`.
 `canonical_simulator_campaign.py` runs a four-target paired 10K-session
 Queue-Haul, greedy, per-session-fastest, replay-only, and KV-only comparison
 under one assumed dedicated-pool contract. Its compact 10K/100K/1M scale check
