@@ -185,6 +185,12 @@ horizon. Two additional 100K workloads also pass exact validation with lower
 prefix time and work. The 75% branch passes at 100K but takes 229 versus 174
 seconds and 1.78 versus 0.78 GB at 74.9%. These are scale sensitivities, not
 confidence intervals or a production-scale claim.
+The campaign also computes a fractional source-chord LP lower bound on migration
+work and plots each feasible greedy's excess work over that bound. The bound is
+valid for the concave GPU-scoped power profile and relaxes integrality, replica
+packing, and exact timing; it is not the unknown integral optimum.
+The plot reports completion over every case and compares work only on the paired
+common-feasible cohort to avoid survivor bias.
 `paper_evaluation.py` writes the legacy Q1–Q9 result/plot registry while the
 paper evaluation is reorganized into mechanism validation, fixed-contract
 coordination, multi-pool contracts, and planner quality/scale. It rejects
