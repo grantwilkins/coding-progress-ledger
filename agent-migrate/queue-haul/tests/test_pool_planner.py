@@ -53,9 +53,11 @@ import pool_planner
 
 from destination import (DESTINATION_SCHEMA, CompatibilityFingerprint, ContextRate,
                          DestinationArchitecture, DestinationPool, DestinationReplica,
-                         DestinationType, LoadedCoefficients, MigrationComponents)
+                         DestinationType, FluidMigrationService, LoadedCoefficients,
+                         MigrationComponents)
 from planner import plan
 from pool_planner import (Candidate, CandidateTable, _destination_duration, _event_bounds,
+                          _baseline_policy,
                           _candidate_oracle,
                           _greedy, _greedy_lagrangian,
                           _lagrangian_source_prefix,
@@ -72,7 +74,7 @@ from pool_planner import (Candidate, CandidateTable, _destination_duration, _eve
                           service_debt, validate_destination_execution)
 from power_model import ExpectedPower
 from simulate import (PlannedMove, PowerNode, ServingInstance, SessionExecution,
-                      SimSession)
+                      SimSession, execute)
 from test_execution_simulator import model
 from test_planner import PATHS, problem
 
@@ -142,6 +144,46 @@ def _hand_lp_table():
                     (np.zeros(3, int), np.arange(3))), shape=(1, 3)),
         ("resource",), (1,), ("fraction",), 10,
     )
+
+
+@pytest.mark.parametrize("policy,method", (
+    ("replay_only", "replay"), ("kv_only", "kv_transfer"),
+))
+def test_fixed_method_baselines_share_candidate_resources(policy, method):
+    table = _hand_lp_table()
+
+    selected = _baseline_policy(table, 3, policy, 0)
+
+    assert {table.candidates[i].method for i in selected} == {method}
+    assert np.asarray(table.resources[:, list(selected)].sum(1)).max() <= 1
+
+
+def test_isolated_fastest_locks_method_before_shared_admission():
+    table = _hand_lp_table()
+
+    selected = _baseline_policy(table, 3, "isolated_fastest", 0)
+
+    assert selected == {1, 2}
+
+
+def test_seeded_random_baseline_never_exceeds_shared_resources():
+    table = _hand_lp_table()
+
+    first = _baseline_policy(table, 3, "random", 7)
+    second = _baseline_policy(table, 3, "random", 7)
+
+    assert first == second
+    assert np.asarray(table.resources[:, list(first)].sum(1)).max(initial=0) <= 1
+    assert len({table.candidates[i].session for i in first}) == len(first)
+
+
+def test_random_chooses_among_currently_feasible_methods():
+    table = _hand_lp_table()
+    table = replace(table, resources=csr_matrix(np.array([[.4, .8, .6]])))
+
+    selected = _baseline_policy(table, 3, "random", 3)
+
+    assert selected == {0, 2}
 
 
 def _table_oracle(table):
@@ -523,7 +565,7 @@ def test_dual_route_limit_reserves_the_largest_post_route_tail():
 def architecture(*, normal=.3, emergency=.5, stable=1, baselines=((0, 0), (0, 0)),
                  kv=1000, methods=("replay", "kv_transfer"), compatibility=FP,
                  residency=None, routes=(("wan",), ("wan",)), block=1,
-                 flex=None, debt=0):
+                 flex=None, debt=0, fluid=None):
     loaded = LoadedCoefficients((0, 2), (1, 1), (1, 1000), (1, 1000), "hand")
     q = DestinationType(
         "q", compatibility, ContextRate((1, 1000), (100, 100)),
@@ -534,9 +576,187 @@ def architecture(*, normal=.3, emergency=.5, stable=1, baselines=((0, 0), (0, 0)
     )
     pools = tuple(DestinationPool(
         f"p{i}", "q", (DestinationReplica(f"t{i}", baseline),),
-        f"r{i}", route, methods, flex, debt,
+        f"r{i}", route, methods, flex, debt, fluid,
     ) for i, (baseline, route) in enumerate(zip(baselines, routes)))
     return DestinationArchitecture(DESTINATION_SCHEMA, FP, (q,), pools, residency)
+
+
+def test_fluid_pool_charges_serial_replay_work_to_replica_speedup(tmp_path):
+    service = FluidMigrationService(
+        4, 100, {"replay": 1, "kv_transfer": 1},
+        {"replay": 1, "kv_transfer": 1}, "hand",
+    )
+    arch = architecture(
+        normal=1, emergency=1, stable=1, baselines=((0, 0),),
+        routes=(("wan",),), fluid=service,
+    )
+    arch = replace(arch, pools=(replace(
+        arch.pools[0], replicas=(DestinationReplica("t0"), DestinationReplica("t1")),
+    ),))
+    scenario, profile = problem(), model(tmp_path, switch=0, tp=1)
+    table = candidate_table(scenario, profile, arch, "normal", ExpectedPower(scenario, profile))
+    single = replace(arch, pools=(replace(
+        arch.pools[0], replicas=(DestinationReplica("t0"),),
+    ),))
+    single_table = candidate_table(
+        scenario, profile, single, "normal", ExpectedPower(scenario, profile),
+    )
+    row = table.resource_names.index("migration:p0:replay")
+    kv_row = table.resource_names.index("migration:p0:kv_transfer")
+    wan_row = table.resource_names.index("route:wan")
+    replay = [i for i, candidate in enumerate(table.candidates)
+              if candidate.method == "replay"]
+
+    assert table.resource_capacities[row] == pytest.approx(2 * 4 * 9)
+    assert table.resource_capacities[kv_row] == pytest.approx(2 * 100 * 9)
+    assert table.resource_capacities[wan_row] == pytest.approx(100 * 9)
+    assert table.resource_capacities[kv_row] == pytest.approx(
+        2 * single_table.resource_capacities[
+            single_table.resource_names.index("migration:p0:kv_transfer")
+        ]
+    )
+    assert table.resource_capacities[wan_row] == pytest.approx(
+        single_table.resource_capacities[
+            single_table.resource_names.index("route:wan")
+        ]
+    )
+    assert np.asarray(table.resources[row, replay].sum()) == pytest.approx(
+        sum(table.candidates[i].migration_work_s for i in replay)
+        / table.resource_capacities[row]
+    )
+
+
+def test_fluid_execution_uses_whole_pool_and_fitted_action_power(tmp_path):
+    service = FluidMigrationService(
+        4, 100, {"replay": 5, "kv_transfer": 1},
+        {"replay": 7, "kv_transfer": 1}, "hand",
+    )
+    arch = architecture(
+        normal=1, emergency=1, stable=1, baselines=((0, 0),),
+        routes=(("wan",),), fluid=service,
+    )
+    arch = replace(arch, pools=(replace(
+        arch.pools[0], replicas=(DestinationReplica("t0"), DestinationReplica("t1")),
+    ),))
+    scenario, profile = problem(), model(
+        tmp_path, switch=0, tp=1, replay_completion=2,
+    )
+    move = PlannedMove("a", "t0", "replay", 0, ("wan",), destination_pool="p0")
+    baseline = ExpectedPower(scenario, profile)
+
+    result = execute(scenario, profile, (move,), destination=arch)
+    table = candidate_table(
+        scenario, profile, arch, "normal", ExpectedPower(scenario, profile),
+    )
+    planned = next(candidate for candidate in table.candidates
+                   if candidate.session == 0 and candidate.method == "replay")
+
+    assert result.sessions[0].committed_s == pytest.approx(1 + 2 / 8)
+    assert planned.duration_s == pytest.approx(result.sessions[0].committed_s)
+    assert result.power[0][1:] == pytest.approx((baseline.power(True), baseline.power(False)))
+    assert result.power[1][1:] == pytest.approx(
+        (baseline.power(True) + 5, baseline.power(False) + 2 * 7)
+    )
+
+
+def test_fluid_kv_execution_includes_post_ingest_residual(tmp_path):
+    service = FluidMigrationService(
+        4, 100, {"replay": 0, "kv_transfer": 0},
+        {"replay": 0, "kv_transfer": 0}, "hand",
+    )
+    arch = architecture(
+        normal=1, emergency=1, stable=1, baselines=((0, 0),),
+        routes=(("wan",),), fluid=service,
+    )
+    components = MigrationComponents((1, 1000), (1, 1000), "hand", residual_s=3)
+    arch = replace(
+        arch, types=(replace(arch.types[0], migration={
+            "replay": components, "kv_transfer": components,
+        }),), pools=(replace(
+            arch.pools[0], replicas=(DestinationReplica("t0"), DestinationReplica("t1")),
+        ),),
+    )
+    scenario, profile = problem(), model(tmp_path, switch=0, tp=1)
+    move = PlannedMove(
+        "a", "t0", "kv_transfer", 0, ("wan",), destination_pool="p0",
+    )
+
+    result = execute(scenario, profile, (move,), destination=arch)
+
+    assert result.sessions[0].committed_s == pytest.approx(4)
+
+
+def test_fluid_execution_is_split_invariant_and_power_is_not_per_flow(tmp_path):
+    service = FluidMigrationService(
+        4, 100, {"replay": 5, "kv_transfer": 1},
+        {"replay": 7, "kv_transfer": 1}, "hand",
+    )
+    arch = architecture(
+        normal=1, emergency=1, stable=1, baselines=((0, 0),),
+        routes=(("wan",),), fluid=service,
+    )
+    arch = replace(arch, pools=(replace(
+        arch.pools[0], replicas=(DestinationReplica("t0"), DestinationReplica("t1")),
+    ),))
+    base, profile = problem(), model(tmp_path, switch=0, tp=1)
+    whole = replace(base, sessions=(SimSession("a", "s0", 10, 25, 0, 100),))
+    split = replace(base, sessions=(
+        SimSession("a", "s0", 5, 12.5, 0, 50),
+        SimSession("b", "s1", 5, 12.5, 0, 50),
+    ))
+    one = execute(whole, profile, (
+        PlannedMove("a", "t0", "replay", 0, ("wan",), destination_pool="p0"),
+    ), destination=arch)
+    two = execute(split, profile, (
+        PlannedMove("a", "t0", "replay", 0, ("wan",), destination_pool="p0"),
+        PlannedMove("b", "t1", "replay", 1, ("wan",), destination_pool="p0"),
+    ), destination=arch)
+    baseline = ExpectedPower(split, profile)
+
+    assert one.migration_makespan_s == pytest.approx(two.migration_makespan_s)
+    assert two.power[1][1:] == pytest.approx(
+        (baseline.power(True) + 2 * 5, baseline.power(False) + 2 * 7)
+    )
+
+
+def test_fluid_replay_capacity_has_no_width_eight_admission_ceiling():
+    candidates = tuple(
+        Candidate(i, "replay", 0, 1, 5, 1, (), 0, (0, 0), 0)
+        for i in range(16)
+    )
+    table = CandidateTable(
+        (), candidates, csr_matrix(np.eye(16)),
+        csr_matrix(np.full((1, 16), 1 / 16)),
+        ("migration:p:replay",), (80,), ("serial-replay-s",), 10,
+    )
+
+    selected = _greedy(table, 16)
+
+    assert len(selected) == 16
+    assert np.asarray(table.resources[:, list(selected)].sum()).item() == pytest.approx(1)
+
+
+def test_fluid_resource_boundaries_conserve_replay_and_mixed_wan():
+    candidates = (
+        Candidate(0, "replay", 0, 1, 30, 1, (), 60, (0, 0), 0),
+        Candidate(1, "replay", 0, 1, 50, 1, (), 0, (0, 0), 0),
+        Candidate(2, "kv_transfer", 0, 1, 40, 1, (), 40, (0, 0), 0),
+        Candidate(3, "replay", 0, 1, 1e-6, 1, (), 1e-4, (0, 0), 0),
+    )
+    table = CandidateTable(
+        (), candidates, csr_matrix(np.eye(4)),
+        csr_matrix(np.array(((30 / 80, 50 / 80, 0, 1e-6 / 80),
+                             (0, 0, 1, 0), (.6, 0, .4, 1e-6)))),
+        ("migration:p:replay", "migration:p:kv_transfer", "route:wan"),
+        (80, 40, 100), ("serial-replay-s", "bytes", "bytes"), 10,
+    )
+    usage = lambda selected: np.asarray(
+        table.resources[:, selected].sum(1)
+    ).ravel()
+
+    assert usage([0, 1, 2]) == pytest.approx((1, 1, 1))
+    assert np.any(usage([0, 1, 2, 3]) > 1)
+    assert np.all(usage(sorted(_greedy(table, 4))) <= 1 + 1e-8)
 
 
 def test_lagrangian_crosses_knee_with_packable_mixed_pools(tmp_path):
@@ -1389,11 +1609,16 @@ def test_exact_route_rows_choose_the_route_with_capacity(tmp_path):
 
 
 def test_aggregate_feasibility_does_not_override_replica_packing(tmp_path):
+    fluid = FluidMigrationService(
+        4, 100, {"replay": 0, "kv_transfer": 0},
+        {"replay": 0, "kv_transfer": 0}, "hand",
+    )
     arch = architecture(normal=1, emergency=1, stable=1,
-                        baselines=((.2, 0), (.4, 0)))
+                        baselines=((.2, 0), (.4, 0)), fluid=fluid)
     arch = replace(arch, pools=(DestinationPool(
         "p", "q", (DestinationReplica("t0", (.2, 0)),
                     DestinationReplica("t1", (.4, 0))), "r", ("wan",), ("replay",),
+        fluid_migration=fluid,
     ),))
     sessions = tuple(replace(s, expected_f=70, expected_g=0) for s in problem().sessions)
     scenario = replace(problem(), sessions=sessions)

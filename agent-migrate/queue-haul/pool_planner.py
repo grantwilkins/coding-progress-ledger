@@ -309,6 +309,13 @@ def _candidate_oracle(scenario, profile, architecture, mode, power):
         key = (
             q.type_id, len(pool.replicas), tuple(pool_work[p]), pool_kv[p],
             tuple(_event_bounds(q, pool, mode)), pool.route, pool.methods,
+            None if pool.fluid_migration is None else (
+                pool.fluid_migration.replay_speedup,
+                pool.fluid_migration.kv_ingest_bytes_per_s,
+                tuple(sorted(pool.fluid_migration.source_power_w.items())),
+                tuple(sorted(pool.fluid_migration.destination_power_w.items())),
+                pool.fluid_migration.provenance,
+            ),
         )
         grouped.setdefault(key, []).append(p)
     pool_groups = tuple(map(tuple, grouped.values()))
@@ -355,7 +362,13 @@ def _candidate_oracle(scenario, profile, architecture, mode, power):
             for method in pool.methods:
                 if not q.compatibility.supports(architecture.source_compatibility, method):
                     continue
-                duration_key = (q.type_id, pool.route, method, rho, mode)
+                duration_key = (
+                    q.type_id, pool.route, method, rho, mode,
+                    None if pool.fluid_migration is None else (
+                        pool.fluid_migration.replay_speedup,
+                        pool.fluid_migration.kv_ingest_bytes_per_s,
+                    ),
+                )
                 if duration_key not in duration_cache:
                     try:
                         components = None if q.migration is None else q.migration[method]
@@ -369,6 +382,32 @@ def _candidate_oracle(scenario, profile, architecture, mode, power):
                                 links, migration_horizon, components,
                             )
                         )
+                        migration_work = duration
+                        if pool.fluid_migration:
+                            if method == "replay":
+                                stream_work = migration_tokens / case.replay.rate(
+                                    migration_tokens, 1,
+                                )
+                                tail_work = case.replay_completion_s * (
+                                    1 + _changes(session, migration_horizon)
+                                )
+                                migration_work = stream_work + tail_work
+                                capacity = len(pool.replicas) \
+                                    * pool.fluid_migration.replay_speedup
+                                duration = max(
+                                    route_bytes[method] / bandwidth,
+                                    stream_work / capacity,
+                                ) + tail_work / capacity + case.switch_s
+                            else:
+                                migration_work = route_bytes[method]
+                                duration = max(
+                                    route_bytes[method] / bandwidth,
+                                    migration_work / (
+                                        len(pool.replicas)
+                                        * pool.fluid_migration.kv_ingest_bytes_per_s
+                                    ),
+                                ) + (components.residual_s if components else
+                                     case.kv_transfer.initial_completion_s)
                         if method == "kv_transfer":
                             _kv_schedule(scenario, profile, session, case,
                                          pool.route, links)
@@ -377,12 +416,13 @@ def _candidate_oracle(scenario, profile, architecture, mode, power):
                                 rho, _mode_boundary_rho(q, mode),
                                 session.context_tokens, bandwidth,
                             )
-                        duration_cache[duration_key] = duration
+                        duration_cache[duration_key] = duration, migration_work
                     except ValueError:
                         duration_cache[duration_key] = None
-                duration = duration_cache[duration_key]
-                if duration is None:
+                timed = duration_cache[duration_key]
+                if timed is None:
                     continue
+                duration, migration_work = timed
                 if duration > migration_horizon:
                     continue
                 transition = (
@@ -390,7 +430,7 @@ def _candidate_oracle(scenario, profile, architecture, mode, power):
                     if method == "replay" else (0, 0)
                 )
                 values.extend((
-                    method, destination, duration,
+                    method, destination, duration, migration_work,
                     architecture.pools[destination].route, route_bytes[method],
                     tuple(demand), resident, transition,
                 ) for destination in group)
@@ -399,9 +439,9 @@ def _candidate_oracle(scenario, profile, architecture, mode, power):
 
     def choices(j):
         return tuple(Candidate(
-            j, method, p, gains[j], duration, duration, route, route_bytes,
+            j, method, p, gains[j], migration_work, duration, route, route_bytes,
             demand, resident, transition,
-        ) for method, p, duration, route, route_bytes, demand, resident, transition
+        ) for method, p, duration, migration_work, route, route_bytes, demand, resident, transition
                      in records(j))
 
     specs, row_for = [], {}
@@ -430,8 +470,15 @@ def _candidate_oracle(scenario, profile, architecture, mode, power):
             * (q.kv_capacity_tokens // q.kv_block_tokens) - pool_kv[p],
             f"kv:{pool.pool_id}", "blocks")
         for method in pool.methods:
-            add(("migration", p, method), len(pool.replicas) * migration_horizon,
-                f"migration:{pool.pool_id}:{method}", "replica-s")
+            service = pool.fluid_migration
+            capacity = len(pool.replicas) * migration_horizon * (
+                service.replay_speedup if service and method == "replay" else
+                service.kv_ingest_bytes_per_s if service else 1
+            )
+            add(("migration", p, method), capacity,
+                f"migration:{pool.pool_id}:{method}",
+                "serial-replay-s" if service and method == "replay" else
+                "bytes" if service else "replica-s")
 
     options = sorted([
         (p, method) for p, pool in enumerate(architecture.pools)
@@ -488,16 +535,16 @@ def _candidate_oracle(scenario, profile, architecture, mode, power):
     def feature(candidate):
         return np.asarray((
             candidate.route_bytes, *candidate.service_work, candidate.kv_tokens,
-            candidate.duration_s, *candidate.transition_work,
+            candidate.migration_work_s, *candidate.transition_work,
         ), float)
 
     def pricing(j):
         by_signature, mask = {}, 0
-        for method, p, duration, _route, route_bytes, demand, resident, transition \
+        for method, p, duration, migration_work, _route, route_bytes, demand, resident, transition \
                 in records(j):
             option = option_for[p, method]
             signature = option_signatures[option]
-            values = (route_bytes, *demand, resident, duration, *transition)
+            values = (route_bytes, *demand, resident, migration_work, *transition)
             if signature in by_signature and by_signature[signature] != values:
                 raise ValueError("equivalent pricing signatures disagree")
             by_signature[signature] = values
@@ -623,9 +670,11 @@ def candidate_table(scenario: ExecutionScenario, profile, architecture: Destinat
     ))
 
 
-def _scarcity_prices(table, matrix):
+def _scarcity_prices(table, matrix, eligible=None):
+    eligible = range(len(table.candidates)) if eligible is None else eligible
     cheapest = {}
-    for i, c in enumerate(table.candidates):
+    for i in eligible:
+        c = table.candidates[i]
         a = matrix.data[matrix.indptr[i]:matrix.indptr[i + 1]].sum()
         if c.session not in cheapest or (a, i) < cheapest[c.session]:
             cheapest[c.session] = (a, i)
@@ -636,16 +685,18 @@ def _scarcity_prices(table, matrix):
     return np.maximum(demand, 1)
 
 
-def _greedy(table: CandidateTable, target: float):
+def _greedy(table: CandidateTable, target: float, eligible=None):
     matrix, selected, usage = csc_matrix(table.resources), set(), np.zeros(table.resources.shape[0])
-    prices, score = _scarcity_prices(table, matrix), []
-    for i, c in enumerate(table.candidates):
+    eligible = tuple(range(len(table.candidates))) if eligible is None else tuple(eligible)
+    prices, score = _scarcity_prices(table, matrix, eligible), []
+    for i in eligible:
+        c = table.candidates[i]
         sl = slice(matrix.indptr[i], matrix.indptr[i + 1])
         rows, values = matrix.indices[sl], matrix.data[sl]
-        score.append(c.gain_w / max(values @ prices[rows], 1e-12))
+        score.append((c.gain_w / max(values @ prices[rows], 1e-12), i))
     sessions, gain = set(), 0.0
-    for i in np.lexsort((np.arange(len(score)), -np.asarray(score))):
-        i, c = int(i), table.candidates[int(i)]
+    for _, i in sorted(score, key=lambda row: (-row[0], row[1])):
+        c = table.candidates[i]
         if gain >= target - 1e-8:
             break
         sl = slice(matrix.indptr[i], matrix.indptr[i + 1])
@@ -657,6 +708,48 @@ def _greedy(table: CandidateTable, target: float):
         usage[rows] += values
         gain += c.gain_w
     return selected
+
+
+def _baseline_policy(table: CandidateTable, target: float, policy: str, seed: int):
+    if policy == "random":
+        matrix, usage = csc_matrix(table.resources), np.zeros(table.resources.shape[0])
+        rng, selected, gain = np.random.default_rng(seed), set(), 0.0
+        choices = {
+            session: [i for i, candidate in enumerate(table.candidates)
+                      if candidate.session == session]
+            for session in range(table.incidence.shape[0])
+        }
+        for session in rng.permutation(table.incidence.shape[0]):
+            options = []
+            for i in choices[int(session)]:
+                column = matrix[:, i]
+                if np.all(usage[column.indices] + column.data <= 1 + 1e-8):
+                    options.append(i)
+            if not options:
+                continue
+            i = options[int(rng.integers(len(options)))]
+            column = matrix[:, i]
+            rows, values = column.indices, column.data
+            selected.add(i)
+            usage[rows] += values
+            gain += table.candidates[i].gain_w
+            if gain >= target - 1e-8:
+                break
+        return selected
+    eligible = [
+        i for i, candidate in enumerate(table.candidates)
+        if policy not in {"replay_only", "kv_only"}
+        or candidate.method == ("replay" if policy == "replay_only" else "kv_transfer")
+    ]
+    if policy == "isolated_fastest":
+        fastest = {}
+        for i in eligible:
+            candidate = table.candidates[i]
+            key = (candidate.duration_s, candidate.migration_work_s, i)
+            if candidate.session not in fastest or key < fastest[candidate.session][0]:
+                fastest[candidate.session] = key, i
+        eligible = [value[1] for value in fastest.values()]
+    return _greedy(table, target, eligible)
 
 
 def _lagrangian_gain(table, power, pattern, cache=None):
@@ -1700,6 +1793,7 @@ def _pack(table, selected, architecture, scenario, mode):
             *(normals @ table.candidates[i].service_work / bounds),
             table.candidates[i].kv_tokens
             / (q.kv_capacity_tokens // q.kv_block_tokens),
+            0 if pool.fluid_migration else
             table.candidates[i].duration_s / table.migration_horizon_s,
         ), table.sessions[table.candidates[i].session].session_id, i))
         for i in members:
@@ -1709,7 +1803,7 @@ def _pack(table, selected, architecture, scenario, mode):
                 np.max(next_work @ normals.T / bounds, axis=1),
                 (replica_kv + c.kv_tokens)
                 / (q.kv_capacity_tokens // q.kv_block_tokens),
-                np.maximum(
+                np.zeros(len(replicas)) if pool.fluid_migration else np.maximum(
                     np.max(replica_migration, axis=1),
                     replica_migration[:, method_column[c.method]] + c.duration_s,
                 ) / table.migration_horizon_s,
@@ -1720,7 +1814,8 @@ def _pack(table, selected, architecture, scenario, mode):
             r = feasible[np.argmin(pressure[feasible])]
             replica_work[r] = next_work[r]
             replica_kv[r] += c.kv_tokens
-            replica_migration[r, method_column[c.method]] += c.duration_s
+            if not pool.fluid_migration:
+                replica_migration[r, method_column[c.method]] += c.duration_s
             replica_id = replicas[r].replica_id
             work[replica_id], kv[replica_id] = replica_work[r], replica_kv[r]
             migration[replica_id][c.method] = replica_migration[r, method_column[c.method]]
@@ -1763,7 +1858,8 @@ def _assignment_valid(table, assignment, architecture, scenario, mode):
         migration[replica][candidate.method] += candidate.duration_s
     return all(np.all(np.asarray(q.normals) @ work[r] <= _event_bounds(q, pool, mode) + 1e-9)
                and kv[r] <= q.kv_capacity_tokens // q.kv_block_tokens
-               and max(migration[r].values()) <= table.migration_horizon_s + 1e-9
+               and (pools[r][1].fluid_migration is not None
+                    or max(migration[r].values()) <= table.migration_horizon_s + 1e-9)
                for r, (q, pool) in pools.items())
 
 
@@ -1844,7 +1940,7 @@ def _selected_service_debt(table, selected, architecture, scenario):
     return tuple(records)
 
 
-def _mode_plan(scenario, profile, architecture, solver, mode, power, target):
+def _mode_plan(scenario, profile, architecture, solver, mode, power, target, seed=0):
     assignment = None
     streamed = solver in {"lp_column_generation_lazy", "lp_column_generation_native"}
     if streamed:
@@ -1861,6 +1957,8 @@ def _mode_plan(scenario, profile, architecture, solver, mode, power, target):
         selected, assignment = _greedy_lagrangian(
             table, target, power, architecture, scenario, mode, True,
         )
+    elif solver in {"isolated_fastest", "random", "replay_only", "kv_only"}:
+        selected = _baseline_policy(table, target, solver, seed)
     else:
         selected = (_lp_column_generation_persistent(table, target)
                     if solver == "lp_column_generation_persistent" else
@@ -1892,6 +1990,7 @@ def _mode_plan(scenario, profile, architecture, solver, mode, power, target):
 
 def plan_destination(scenario, profile, solver, case_id, seed, architecture):
     if solver not in {"greedy", "greedy_lagrangian",
+                      "isolated_fastest", "random", "replay_only", "kv_only",
                       "lp", "lp_peak_first", "lp_work_first", "lp_highs",
                       "lp_column_generation", "lp_column_generation_persistent",
                       "lp_column_generation_lazy", "lp_column_generation_native"}:
@@ -1905,7 +2004,7 @@ def plan_destination(scenario, profile, solver, case_id, seed, architecture):
     initial, target = power.power(True), max(0.0, power.power(True) - scenario.power_limit_w)
     chosen = None
     for mode in ("normal", "emergency"):
-        result = _mode_plan(scenario, profile, architecture, solver, mode, power, target)
+        result = _mode_plan(scenario, profile, architecture, solver, mode, power, target, seed)
         moved = [result[0].sessions[result[0].candidates[i].session].session_id for i in result[1]]
         planned = source_power(selection_scenario, profile, moved, case_id)
         chosen = mode, result, planned

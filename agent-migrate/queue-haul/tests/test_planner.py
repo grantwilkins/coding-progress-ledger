@@ -30,8 +30,6 @@ Plausible wrong implementations:
 - Reintroduce power gain into the resource-only ranking.
 - Evaluate migration methods that are illegal for a session's residency state.
 - Rebuild an already-static expected scenario.
-- Ignore repeated template multiplicity in shared resource rows.
-- Use the fragile default LP backend instead of HiGHS for replicated sparse planning rows.
 - Change seeded random methods or move order while batching random choices.
 - Let a fixed-method baseline silently use the other migration mechanism.
 - Choose one globally fastest method for the isolated-fastest baseline.
@@ -150,30 +148,6 @@ def test_route_resource_cache_reuses_only_identical_path_sets():
     assert same_a[0][2] == 100
     assert different[0][2] == 10
     assert len(cache) == 2
-
-
-def test_migration_resources_scale_for_repeated_template_sessions(tmp_path):
-    scenario = problem()
-    profile = model(tmp_path, tp=1)
-    sessions = planner._local_sessions(scenario)
-    destinations = tuple(
-        instance for instance in scenario.instances
-        if instance.instance_id.startswith("t")
-    )
-
-    one = _migration_resources(
-        scenario, profile, PATHS, sessions, destinations, profile.case(), 5,
-    )
-    repeated = _migration_resources(
-        scenario, profile, PATHS, sessions, destinations, profile.case(), 5, 2,
-    )
-    overfull = _migration_resources(
-        scenario, profile, PATHS, sessions, destinations, profile.case(), 5, 1000,
-    )
-
-    assert np.array_equal(one[0], repeated[0])
-    assert np.allclose(repeated[2].toarray(), 2 * one[2].toarray())
-    assert not overfull[1].any()
 
 
 def test_equivalent_destination_routes_are_evaluated_once():

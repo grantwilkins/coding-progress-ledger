@@ -164,6 +164,25 @@ class DestinationReplica:
 
 
 @dataclass(frozen=True)
+class FluidMigrationService:
+    replay_speedup: float
+    kv_ingest_bytes_per_s: float
+    source_power_w: dict[str, float]
+    destination_power_w: dict[str, float]
+    provenance: str
+
+    def __post_init__(self):
+        methods = {"replay", "kv_transfer"}
+        if not 1 <= self.replay_speedup <= 8 or self.kv_ingest_bytes_per_s <= 0 \
+                or set(self.source_power_w) != methods \
+                or set(self.destination_power_w) != methods \
+                or min(*self.source_power_w.values(),
+                       *self.destination_power_w.values()) < 0 \
+                or not self.provenance:
+            raise ValueError("invalid fluid migration service")
+
+
+@dataclass(frozen=True)
 class DestinationPool:
     pool_id: str
     type_id: str
@@ -173,6 +192,7 @@ class DestinationPool:
     methods: tuple[str, ...] = ("replay", "kv_transfer")
     event_flex_fraction: float | None = None
     service_debt_fraction: float = 0.0
+    fluid_migration: FluidMigrationService | None = None
 
     def __post_init__(self):
         if not self.pool_id or not self.type_id or not self.replicas or not self.route_id \
@@ -248,6 +268,8 @@ class DestinationArchitecture:
             tuple(item.get("methods", ("replay", "kv_transfer"))),
             item.get("event_flex_fraction"),
             item.get("service_debt_fraction", 0),
+            FluidMigrationService(**item["fluid_migration"])
+            if "fluid_migration" in item else None,
         ) for item in raw["pools"])
         return cls(raw["schema"], fingerprint(raw["source_compatibility"]),
                    tuple(types), pools, raw.get("residency_horizon_s"))

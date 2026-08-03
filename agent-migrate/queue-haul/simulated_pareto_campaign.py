@@ -172,10 +172,10 @@ def admitted_moves(policy, scenario, routes, profile, seed, destination=None,
         replace(
             move, rate_limit_bytes_per_s=None, quiesce_s=None,
         )
-        for move in plan(
-            scenario, profile, routes, solver, seed=seed,
-            destination=destination, replication=replication,
-        ).moves
+            for move in plan(
+                scenario, profile, routes, solver, seed=seed,
+                destination=destination,
+            ).moves
     )
 
 

@@ -289,9 +289,7 @@ def _route_resources(source: str, destinations, routes: Routes, links: dict[str,
 
 def _migration_resources(scenario: ExecutionScenario, profile: ModelProfile, routes: Routes,
                          sessions: list[SimSession], destinations, case: ProfileCase,
-                         horizon: float, replication: int = 1):
-    if replication < 1:
-        raise ValueError("replication must be positive")
+                         horizon: float):
     n = len(sessions)
     links = {link.link_id: link.bytes_per_s for link in scenario.links}
     destination_ids = {instance.instance_id for instance in destinations}
@@ -366,7 +364,7 @@ def _migration_resources(scenario: ExecutionScenario, profile: ModelProfile, rou
             return
         row.extend([resource_count] * len(entries))
         column.extend(col for col, _ in entries)
-        data.extend(replication * value / capacity for _, value in entries)
+        data.extend(value / capacity for _, value in entries)
         resource_count += 1
 
     for link, entries in named_links.items():
@@ -560,8 +558,7 @@ def _solve_lp(solver: str, gains: np.ndarray, work: np.ndarray, valid: np.ndarra
 
 
 def _plan_lp(scenario: ExecutionScenario, profile: ModelProfile, routes: Routes,
-             solver: str, case_id: str, seed: int, start: float,
-             replication: int = 1) -> PlanResult:
+             solver: str, case_id: str, seed: int, start: float) -> PlanResult:
     if scenario.final_state != "awake":
         raise ValueError("LP supports final_state='awake'")
     sessions = _local_sessions(scenario)
@@ -591,7 +588,6 @@ def _plan_lp(scenario: ExecutionScenario, profile: ModelProfile, routes: Routes,
     horizon = scenario.deadline_s - scenario.controller_delay_s - profile.power_window_s
     durations, valid, resources = _migration_resources(
         scenario, profile, routes, sessions, destinations, case, horizon,
-        replication,
     )
     gains = np.array([power.marginal(session.session_id) for session in sessions])
     target = initial - scenario.power_limit_w
@@ -599,7 +595,6 @@ def _plan_lp(scenario: ExecutionScenario, profile: ModelProfile, routes: Routes,
     chosen, usage = _round_lp(
         _solve_lp(
             solver, gains, work, valid, resources, target,
-            cp.HIGHS if replication > 1 else None,
         ),
         valid, resources, gains, work, target,
     )
@@ -677,7 +672,7 @@ def _place(selected: list[int], sessions: list[SimSession], scenario: ExecutionS
 def plan(scenario: ExecutionScenario, profile: ModelProfile,
          paths: Routes, solver: str,
          case_id: str = "central", seed: int = 0, destination=None,
-         replication: int = 1) -> PlanResult:
+         ) -> PlanResult:
     if destination is not None:
         from pool_planner import plan_destination
         return plan_destination(scenario, profile, solver, case_id, seed, destination)
@@ -688,7 +683,7 @@ def plan(scenario: ExecutionScenario, profile: ModelProfile,
     start = perf_counter()
     if solver in LP_SOLVERS:
         return _plan_lp(
-            scenario, profile, paths, solver, case_id, seed, start, replication,
+            scenario, profile, paths, solver, case_id, seed, start,
         )
     case = profile.case(case_id)
     sessions = _local_sessions(scenario)
@@ -742,7 +737,7 @@ def plan(scenario: ExecutionScenario, profile: ModelProfile,
         resource_horizon = horizon - profile.power_window_s
         durations, resource_valid, resources = _migration_resources(
             scenario, profile, paths, sessions, destinations, case,
-            resource_horizon, replication,
+            resource_horizon,
         )
         if solver in BASELINE_SOLVERS:
             allowed = np.zeros((2, len(sessions)), bool)
