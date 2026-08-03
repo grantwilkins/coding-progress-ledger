@@ -173,7 +173,7 @@ class FluidMigrationService:
 
     def __post_init__(self):
         methods = {"replay", "kv_transfer"}
-        if not 1 <= self.replay_speedup <= 8 or self.kv_ingest_bytes_per_s <= 0 \
+        if not 0 < self.replay_speedup <= 8 or self.kv_ingest_bytes_per_s <= 0 \
                 or set(self.source_power_w) != methods \
                 or set(self.destination_power_w) != methods \
                 or min(*self.source_power_w.values(),

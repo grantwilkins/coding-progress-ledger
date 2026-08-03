@@ -92,8 +92,8 @@ def fit_hardware(profile, evidence=EVIDENCE):
     if len(speedups) < 10:
         raise ValueError("insufficient width-8 replay evidence")
     speed = np.quantile(speedups, (.25, .5, .75))
-    if np.any((speed < 1) | (speed > 8)):
-        raise ValueError("fitted replay speedup is outside [1, 8]")
+    if np.any((speed <= 0) | (speed > 8)):
+        raise ValueError("fitted replay capacity factor is outside (0, 8]")
 
     powers = {}
     for method in ("replay", "kv_transfer"):

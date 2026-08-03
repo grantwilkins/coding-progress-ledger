@@ -279,10 +279,10 @@ destination packing and report simulated sensitivity, trailing-five-second
 target attainment, last commit, censoring, source hashes, and dirty Git state.
 Reduction hard-fails missing or duplicate shards and emits separate trace and
 anchor small multiples. Conservative and optimistic fits run on sentinel cells;
-the full grid uses the central fit. The pinned stage-span evidence currently
-fits p25/median/p75 replay factors of 0.963/0.984/1.026, so `prepare`
-intentionally hard-fails the agreed `[1, 8]` speedup bound pending an explicit
-modeling decision or better endpoint-only evidence; it does not clamp them.
+the full grid uses the central fit. The pinned stage-span evidence fits
+p25/median/p75 replay capacity factors of 0.963/0.984/1.026. These are used
+without clamping: the lower two represent a small effective slowdown, while
+width 8 remains only the upper validity bound.
 `canonical_simulator_campaign.py` runs a four-target paired 10K-session
 Queue-Haul, both greedies, per-session-fastest, replay-only, and KV-only comparison
 under one assumed dedicated-pool contract. Its compact 10K/100K/1M scale check

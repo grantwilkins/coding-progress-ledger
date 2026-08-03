@@ -1,14 +1,15 @@
 """
 Claim:
-The v4 campaign uses exact 10K idle snapshots, fits width-8 replay as a
-speedup rather than a width cap, runs all seven policies over one manifest,
+The v4 campaign uses exact 10K idle snapshots, fits width-8 replay as an
+unclamped positive capacity factor rather than a width cap, runs all seven policies over one manifest,
 hard-fails incomplete shard reductions, and censors misses without allowing
 them to dominate successful target attainment.
 
 Plausible wrong implementations:
 - Reintroduce grouped template replication or an eight-flow ceiling.
 - Fit replay from failed, non-10G, or non-width-8 episodes.
-- Clamp an invalid replay fit instead of failing.
+- Clamp a measured sub-unit replay factor to one or reject it as a slowdown.
+- Accept a nonpositive or above-width replay factor.
 - Omit side-case sentinels or one hardware baseline.
 - Compare unrelated workload seeds in Pareto dominance.
 - Let a deadline miss dominate a successful point.
@@ -82,7 +83,7 @@ def test_width8_fit_uses_only_complete_10g_eight_move_episodes(tmp_path):
     }
 
 
-def test_width8_fit_hard_fails_out_of_range(tmp_path):
+def test_width8_fit_hard_fails_above_width(tmp_path):
     evidence = tmp_path / "evidence"
     evidence.mkdir()
     scenarios = [{
@@ -97,7 +98,7 @@ def test_width8_fit_hard_fails_out_of_range(tmp_path):
     stages = [{
         "scenario_id": f"r{i}", "method": "replay", "success": "true",
         "phase": "initial", "measured_prompt_tokens": 10,
-        "start_ns": 0, "destination_ready_ns": 1_000_000_000,
+        "start_ns": 0, "destination_ready_ns": 50_000_000,
     } for i in range(10) for _ in range(8)]
     _write(evidence / "scenarios.csv", scenarios)
     _write(evidence / "migration_stages.csv", stages)
@@ -106,9 +107,14 @@ def test_width8_fit_hard_fails_out_of_range(tmp_path):
         fit_hardware(model(tmp_path, tp=1), evidence)
 
 
-def test_actual_stage_span_evidence_hard_fails_agreed_speedup_bound():
-    with pytest.raises(ValueError, match="outside"):
-        fit_hardware(ModelProfile.load(MODEL))
+def test_actual_stage_span_evidence_preserves_measured_subunit_factors():
+    fitted = fit_hardware(ModelProfile.load(MODEL))
+    factors = fitted["cases"]
+
+    assert fitted["replay_episodes"] == 36
+    assert .95 < factors["conservative"]["replay_speedup"] < 1
+    assert .95 < factors["central"]["replay_speedup"] < 1
+    assert 1 < factors["optimistic"]["replay_speedup"] < 1.05
 
 
 def test_trailing_window_attainment_finds_first_crossing():

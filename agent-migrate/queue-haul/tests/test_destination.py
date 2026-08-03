@@ -12,6 +12,7 @@ Plausible wrong implementations:
 - Interpolate one slowdown at the initial load instead of taking the worst measured value
   through the selected envelope boundary.
 - Accept a debt allowance while the event-capacity contract is disabled.
+- Reject a measured sub-unit replay capacity factor or accept a nonpositive factor.
 """
 
 from dataclasses import replace
@@ -19,8 +20,17 @@ from dataclasses import replace
 import pytest
 
 from destination import (CompatibilityFingerprint, ContextRate, DestinationPool,
-                         DestinationReplica, DestinationType, LoadedCoefficients,
+                         DestinationReplica, DestinationType, FluidMigrationService,
+                         LoadedCoefficients,
                          MigrationComponents)
+
+
+def test_fluid_replay_factor_accepts_slowdown_but_requires_positive_capacity():
+    values = ({"replay": 1, "kv_transfer": 1},) * 2
+
+    assert FluidMigrationService(.963, 1, *values, "hand").replay_speedup == .963
+    with pytest.raises(ValueError, match="fluid migration"):
+        FluidMigrationService(0, 1, *values, "hand")
 
 
 def fingerprint(**changes):
