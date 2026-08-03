@@ -2,7 +2,7 @@
 
 Slurm job `37368991` ran eight LMCache replay migrations across two A100 80 GB GPUs while trace-shaped inference remained queued on the source, then switched queued inference to the destination. No LMCache bypass was used.
 
-`run-37368991/` contains native PowerTrace samples, phase markers, queue metrics for all three foreground intervals, payload-free transfer telemetry, a prompt-free migration summary, and rendered plots. The power plot averages samples into fixed 500 ms bins and identifies the source as Stanford Poppy and destination as Stanford Lagunita. Request bodies and message-bearing result files are intentionally excluded. `driver.submitted.py` is the exact job driver; `../driver.py` adds portable postprocessing and the documented sampling-coverage gate.
+`run-37368991/` contains native PowerTrace samples, phase markers, queue metrics for all three foreground intervals, payload-free transfer telemetry, a prompt-free migration summary, and rendered plots. The power plot averages Stanford Poppy source and Stanford Lagunita destination samples into fixed 5 s bins. Request bodies and message-bearing result files are intentionally excluded. `driver.submitted.py` is the exact job driver; `../driver.py` adds portable postprocessing and the documented sampling-coverage gate.
 
 Slurm recorded exit `1` only after the completed measurement because the submitted reducer rejected any cadence gap over 250 ms. The portable reducer instead hard-fails below 90% overall coverage or above a one-second blind spot.
 

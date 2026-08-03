@@ -168,9 +168,9 @@ def parse_wall(value: str) -> float:
 def bin_power(rows: list[dict], origin: float) -> tuple[list[float], list[float]]:
     bins = {}
     for row in rows:
-        index = int((parse_wall(row["timestamp"]) - origin) // .5)
+        index = int((parse_wall(row["timestamp"]) - origin) // 5)
         bins.setdefault(index, []).append(float(row["power.draw [W]"]))
-    return ([index * .5 + .25 for index in sorted(bins)],
+    return ([index * 5 + 2.5 for index in sorted(bins)],
             [statistics.mean(bins[index]) for index in sorted(bins)])
 
 
@@ -249,10 +249,10 @@ def reduce_power(run_root: Path, local_power: Path, markers: Markers,
 
     origin = markers.rows[0]["wall_ns"] / 1e9
     sns.set_context("talk", font_scale=1.1)
-    fig, ax = plt.subplots(figsize=(8, 4))
+    fig, ax = plt.subplots(figsize=(12, 5))
     for label, uuid, color in (
-        ("Stanford Poppy", role_uuids[0], "#8C1515"),
-        ("Stanford Lagunita", role_uuids[1], "#007C92"),
+        ("Source", role_uuids[0], "#8C1515"),
+        ("Dest", role_uuids[1], "#007C92"),
     ):
         ax.plot(*bin_power(by_uuid[uuid], origin), lw=1.5, label=label,
                 color=color)
@@ -266,7 +266,7 @@ def reduce_power(run_root: Path, local_power: Path, markers: Markers,
         if name in marker:
             ax.axvline(marker[name], color="black", lw=.7, ls=":")
     ax.set(xlabel="Time (s)", ylabel="Power per GPU (W)")
-    ax.legend(frameon=False, loc="upper center", ncol=2)
+    ax.legend(frameon=False, loc="upper center", bbox_to_anchor=(.5, -.2), ncol=2)
     fig.tight_layout()
     for suffix in ("png", "pdf"):
         fig.savefig(run_root / f"power_curve.{suffix}", dpi=220)
