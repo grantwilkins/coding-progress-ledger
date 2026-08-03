@@ -248,6 +248,7 @@ def reduce_power(run_root: Path, local_power: Path, markers: Markers,
     write_json(run_root / "power_summary.json", summary)
 
     origin = markers.rows[0]["wall_ns"] / 1e9
+    sns.set_style("whitegrid")
     sns.set_context("talk", font_scale=1.1)
     fig, ax = plt.subplots(figsize=(12, 5))
     for label, uuid, color in (
