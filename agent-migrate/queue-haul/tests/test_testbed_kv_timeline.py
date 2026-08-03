@@ -14,6 +14,7 @@ Plausible wrong implementations:
 - Accept a scenario whose KV-write concurrency is not one.
 - Relabel queued post-switch activity as source inference.
 - Mark a later continuation as the first destination token.
+- Place Switch or Resume markers on the wrong lane or measured event time.
 """
 
 import csv
@@ -21,6 +22,7 @@ import json
 
 import pytest
 
+import plot_testbed_kv_timeline as timeline_plot
 from plot_testbed_kv_timeline import extract, write
 
 
@@ -126,6 +128,18 @@ def test_write_rejects_wrong_concurrency_and_emits_plot(tmp_path):
     assert (out / "kv_write_concurrency_1_inference.csv").stat().st_size
     assert (out / "kv_write_concurrency_1_timeline.png").stat().st_size
     assert (out / "kv_write_concurrency_1_timeline.pdf").stat().st_size
+
+
+def test_timeline_marks_switch_and_resume_events(tmp_path, monkeypatch):
+    monkeypatch.setattr(timeline_plot.plt, "close", lambda _: None)
+    out = tmp_path / "out"
+    write(fixture(tmp_path), "measured", out)
+
+    ax = timeline_plot.plt.gcf().axes[0]
+    assert [text.get_text() for text in ax.texts] == ["Switch", "Resume"]
+    markers = [marker.get_offsets()[0].tolist() for marker in ax.collections]
+    assert markers[0] == pytest.approx([4.1, 0])
+    assert markers[1] == pytest.approx([4.15, .32])
 
 
 def test_replay_uses_the_same_measured_clock(tmp_path):

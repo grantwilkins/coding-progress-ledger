@@ -302,6 +302,18 @@ def plot(timeline_path: Path, inference_path: Path, out: Path) -> None:
                 zorder=3,
             )
             inference_labels.add(phase)
+        for time, marker, color, label, lane in (
+            (float(row["commit_s"]), "8", "#B31B1B", "Switch", migration_y),
+            (float(row["first_token_s"]), "*", "#D4A017", "Resume", destination_y),
+        ):
+            gantt.scatter(
+                time, lane, marker=marker, s=105, color=color,
+                edgecolor=colors["text"], linewidth=.6, zorder=4,
+            )
+            gantt.annotate(
+                label, (time, lane), xytext=(0, -12), textcoords="offset points",
+                ha="center", va="bottom", fontsize=10, color=colors["text"],
+            )
     gantt.set_yticks(
         [positions[0] - .32, positions[0], positions[0] + .32],
         ["Source GPU", "Migration", "Dest. GPU"],
