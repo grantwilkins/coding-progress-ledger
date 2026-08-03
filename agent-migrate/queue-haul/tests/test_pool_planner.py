@@ -40,6 +40,7 @@ Plausible wrong implementations:
 - Omit the Phase-I shortfall dual cap or stop before the global gap closes.
 - Merge pool variables that share physics or misalign SoA resource templates.
 - Re-scan every candidate for every session in the feasible-random baseline.
+- Repack every retained action after dropping one fragmented packing candidate.
 """
 
 from dataclasses import replace
@@ -69,6 +70,7 @@ from pool_planner import (Candidate, CandidateTable, _destination_duration, _eve
                           _mode_boundary_rho,
                           _native_pricing_oracle, _pricing_soa,
                           _dual_resource_limits, _retained_prefixes,
+                          _assignment_valid, _pack,
                           _source_removed_gain,
                           _recover_lagrangian, _service_trace, candidate_table,
                           destination_service_execution, exact_replica_assignment,
@@ -536,7 +538,7 @@ def test_highs_lp_is_additive_and_does_not_replace_clarabel(monkeypatch):
         pool_planner, "_lp_column_generation_native",
         lambda *args: (table, called.append("lp_column_generation_native") or set()),
     )
-    monkeypatch.setattr(pool_planner, "_pack", lambda *args: ({}, None))
+    monkeypatch.setattr(pool_planner, "_pack", lambda *args, **kwargs: ({}, ()))
 
     pool_planner._mode_plan(None, None, None, "lp", "normal", None, 0)
     pool_planner._mode_plan(None, None, None, "lp_highs", "normal", None, 0)
@@ -786,10 +788,18 @@ def test_fluid_deadline_repair_is_separate_and_recomputes_shortfall(
             ), pool_service=(),
         )
 
+    pack, calls = pool_planner._pack, []
+
+    def counted_pack(*args, **kwargs):
+        calls.append(None)
+        return pack(*args, **kwargs)
+
     monkeypatch.setattr(pool_planner, "predict", predicted)
+    monkeypatch.setattr(pool_planner, "_pack", counted_pack)
     result = plan(problem(), model(tmp_path, switch=0, tp=1), PATHS, "greedy",
                   destination=arch)
 
+    assert len(calls) == 1
     assert result.deadline_repair_count == 1
     assert result.packing_repair_count == 0
     assert result.predicted_migration_makespan_s <= 9
@@ -1703,8 +1713,49 @@ def test_aggregate_feasibility_does_not_override_replica_packing(tmp_path):
                             ExpectedPower(scenario, model(tmp_path, tp=1)))
 
     assert exact_replica_assignment(table, {0, 1}, arch, scenario, "normal") is None
+    assignment, rejected = _pack(
+        table, {0, 1}, arch, scenario, "normal", repair=True,
+    )
+
+    assert set(assignment) | set(rejected) == {0, 1}
+    assert set(assignment).isdisjoint(rejected)
+    assert len(assignment) == len(rejected) == 1
+    costs = np.asarray(table.resources.sum(0)).ravel()
+    assert set(assignment) == {min((0, 1), key=lambda i: costs[i] / table.candidates[i].gain_w)}
+    assert _assignment_valid(table, assignment, arch, scenario, "normal")
     result = plan(scenario, model(tmp_path, switch=0, tp=1), PATHS, "lp", destination=arch)
-    assert result.packing_repair_count >= 1 and result.failure_reason == "target_unmet"
+    assert result.packing_repair_count == 1 and result.failure_reason == "target_unmet"
+
+
+def test_packing_repair_keeps_power_efficient_maximal_greedy_subset():
+    fluid = FluidMigrationService(
+        1, 1, {"replay": 0, "kv_transfer": 0},
+        {"replay": 0, "kv_transfer": 0}, "hand",
+    )
+    arch = architecture(
+        normal=1, emergency=1, stable=1, baselines=((0, 0),),
+        routes=(("wan",),), fluid=fluid,
+    )
+    arch = replace(arch, pools=(replace(
+        arch.pools[0], replicas=(DestinationReplica("t0"), DestinationReplica("t1")),
+    ),))
+    candidates = tuple(
+        Candidate(i, "replay", 0, 4 - i, 1, 1, (), 0, (work, 0), 0)
+        for i, work in enumerate((.6, .6, .5, .3))
+    )
+    table = CandidateTable(
+        tuple(SimpleNamespace(session_id=str(i)) for i in range(4)), candidates,
+        csr_matrix(np.eye(4)), csr_matrix(np.full((1, 4), .25)),
+        ("aggregate",), (1,), ("fraction",), 1,
+    )
+
+    forward = _pack(table, list(range(4)), arch, problem(), "normal", repair=True)
+    reverse = _pack(table, list(reversed(range(4))), arch, problem(), "normal", repair=True)
+
+    assert forward == reverse
+    assignment, rejected = forward
+    assert set(assignment) == {0, 1, 3} and rejected == (2,)
+    assert _assignment_valid(table, assignment, arch, problem(), "normal")
 
 
 def test_exact_oracle_enforces_each_method_budget_per_replica(tmp_path):

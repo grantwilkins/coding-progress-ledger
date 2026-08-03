@@ -176,6 +176,9 @@ final set. Feasible-random groups each session's candidates in one pass, so its
 setup is linear in candidate count. Immutable single-policy scale runs under `outputs/dual-lagrangian-*`
 record the former `greedy_prefix` name; mixed bundles containing retired
 optimizers were removed rather than rewritten.
+Replica-packing repair considers actions from best to worst normalized resource
+per watt, keeps feasible placements fixed, and rejects actions that cannot fit.
+It reports rejected-action count and complete repair-pass time.
 The campaign also computes a fractional source-chord LP lower bound on migration
 work and plots each feasible greedy's excess work over that bound. The bound is
 valid for the concave GPU-scoped power profile and relaxes integrality, replica

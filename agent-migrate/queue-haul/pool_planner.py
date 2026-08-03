@@ -1769,7 +1769,7 @@ def _lp_column_generation_native(oracle, target, stats=None):
     return _lp_column_generation_lazy(oracle, target, stats, True)
 
 
-def _pack(table, selected, architecture, scenario, mode):
+def _pack(table, selected, architecture, scenario, mode, repair=False):
     horizon = architecture.residency_horizon_s
     horizon = scenario.end_s - scenario.controller_delay_s if horizon is None else horizon
     work, kv = _baseline(scenario, architecture, horizon)
@@ -1777,7 +1777,8 @@ def _pack(table, selected, architecture, scenario, mode):
         r.replica_id: {"replay": 0.0, "kv_transfer": 0.0}
         for p in architecture.pools for r in p.replicas
     }
-    assignment = {}
+    assignment, rejected = {}, []
+    costs = np.asarray(table.resources.sum(0)).ravel() if repair else None
     for p, pool in enumerate(architecture.pools):
         q = architecture.type_by_id[pool.type_id]
         normals, bounds = np.asarray(q.normals), _event_bounds(q, pool, mode)
@@ -1787,7 +1788,10 @@ def _pack(table, selected, architecture, scenario, mode):
         replica_migration = np.zeros((len(replicas), 2))
         method_column = {"replay": 0, "kv_transfer": 1}
         members = [i for i in selected if table.candidates[i].pool == p]
-        members.sort(key=lambda i: (-max(
+        members.sort(key=(
+            lambda i: (costs[i] / max(table.candidates[i].gain_w, 1e-12),
+                       table.sessions[table.candidates[i].session].session_id, i)
+        ) if repair else lambda i: (-max(
             *(normals @ table.candidates[i].service_work / bounds),
             table.candidates[i].kv_tokens
             / (q.kv_capacity_tokens // q.kv_block_tokens),
@@ -1808,6 +1812,9 @@ def _pack(table, selected, architecture, scenario, mode):
             ))
             feasible = np.flatnonzero(pressure <= 1 + 1e-9)
             if not feasible.size:
+                if repair:
+                    rejected.append(i)
+                    continue
                 return None, tuple(sorted(members))
             r = feasible[np.argmin(pressure[feasible])]
             replica_work[r] = next_work[r]
@@ -1818,7 +1825,7 @@ def _pack(table, selected, architecture, scenario, mode):
             work[replica_id], kv[replica_id] = replica_work[r], replica_kv[r]
             migration[replica_id][c.method] = replica_migration[r, method_column[c.method]]
             assignment[i] = replica_id
-    return assignment, None
+    return assignment, tuple(rejected) if repair else None
 
 
 def exact_replica_assignment(table, selected, architecture, scenario, mode):
@@ -1966,24 +1973,15 @@ def _mode_plan(scenario, profile, architecture, solver, mode, power, target, see
                     _lp(table, target) if solver.startswith("lp") else
                     _greedy(table, target))
     repairs, repair_s = 0, 0.0
-    costs = np.asarray(table.resources.sum(0)).ravel()
-    while True:
+    if assignment is None:
         started = perf_counter()
-        if assignment is None:
-            assignment, cut = _pack(table, selected, architecture, scenario, mode)
-        else:
-            cut = None
-        if assignment is not None:
-            return table, selected, assignment, repairs, repair_s
-        if not cut:
-            raise RuntimeError("destination packing repair did not converge")
-        drop = max(cut, key=lambda i: (
-            costs[i] / max(table.candidates[i].gain_w, 1e-12), i,
-        ))
-        selected.remove(drop)
-        assignment = None
-        repair_s += perf_counter() - started
-        repairs += 1
+        assignment, cut = _pack(
+            table, selected, architecture, scenario, mode, repair=True,
+        )
+        selected.difference_update(cut)
+        repairs = len(cut)
+        repair_s = perf_counter() - started if cut else 0.0
+    return table, selected, assignment, repairs, repair_s
 
 
 def plan_destination(scenario, profile, solver, case_id, seed, architecture):
@@ -2028,9 +2026,7 @@ def plan_destination(scenario, profile, solver, case_id, seed, architecture):
             costs[i] / max(table.candidates[i].gain_w, 1e-12), i,
         ))
         selected.remove(drop)
-        assignment, cut = _pack(table, selected, architecture, scenario, mode)
-        if assignment is None or cut:
-            raise RuntimeError("fluid deadline repair broke destination packing")
+        assignment.pop(drop)
         moved = [table.sessions[table.candidates[i].session].session_id for i in selected]
         planned = source_power(selection_scenario, profile, moved, case_id)
         deadline_repairs += 1

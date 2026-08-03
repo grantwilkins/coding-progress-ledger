@@ -530,13 +530,14 @@ is a cut on the failed candidate set, after which selection is solved again:
 \sum_{c\in C_k}x_c\le |C_k|-1.
 \]
 
-The implementation does not do this. On a packing failure it returns the entire
-member list of the failing pool, drops the single candidate with the worst total
-normalized resource per watt, and re-packs — no constraint is added and the LP
-is not re-solved. It is cheaper, and it can reject a set that another replica
-assignment could have placed. Small cases have an exact replica-assignment
-oracle, used in tests to confirm that a packing failure was genuine
-infeasibility. Plans report packing repair count and time.
+The implementation does not add this cut or re-solve the LP. It orders each
+pool's selected actions from best to worst total normalized resource per watt,
+keeps each feasible placement fixed, and rejects an action when no replica can
+fit it. The result is maximal only under that frozen greedy order; reassignment
+could admit a different set. Small cases have an exact replica-assignment oracle
+for comparison. Plans report rejected-action count and complete repair-pass
+time as packing repair count and time. Later deadline repair only removes
+actions from this valid assignment; it never repacks the retained subset.
 
 ## How sessions are updated during execution
 
