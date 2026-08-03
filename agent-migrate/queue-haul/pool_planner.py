@@ -714,11 +714,9 @@ def _baseline_policy(table: CandidateTable, target: float, policy: str, seed: in
     if policy == "random":
         matrix, usage = csc_matrix(table.resources), np.zeros(table.resources.shape[0])
         rng, selected, gain = np.random.default_rng(seed), set(), 0.0
-        choices = {
-            session: [i for i, candidate in enumerate(table.candidates)
-                      if candidate.session == session]
-            for session in range(table.incidence.shape[0])
-        }
+        choices = [[] for _ in range(table.incidence.shape[0])]
+        for i, candidate in enumerate(table.candidates):
+            choices[candidate.session].append(i)
         for session in rng.permutation(table.incidence.shape[0]):
             options = []
             for i in choices[int(session)]:

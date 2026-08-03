@@ -172,7 +172,8 @@ trace-derived targets; infeasible plans receive zero validated shed. Static
 `greedy` fixes one scarcity price and one global candidate order.
 `greedy_lagrangian` iterates aggregate-resource prices, retains a bounded set of
 exact nonlinear source prefixes, performs target-capped recovery, and packs the
-final set. Immutable single-policy scale runs under `outputs/dual-lagrangian-*`
+final set. Feasible-random groups each session's candidates in one pass, so its
+setup is linear in candidate count. Immutable single-policy scale runs under `outputs/dual-lagrangian-*`
 record the former `greedy_prefix` name; mixed bundles containing retired
 optimizers were removed rather than rewritten.
 The campaign also computes a fractional source-chord LP lower bound on migration

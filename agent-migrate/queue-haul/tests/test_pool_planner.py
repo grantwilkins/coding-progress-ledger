@@ -39,6 +39,7 @@ Plausible wrong implementations:
 - Double-count the session dual while repairing a tolerated reduced-cost violation.
 - Omit the Phase-I shortfall dual cap or stop before the global gap closes.
 - Merge pool variables that share physics or misalign SoA resource templates.
+- Re-scan every candidate for every session in the feasible-random baseline.
 """
 
 from dataclasses import replace
@@ -175,6 +176,26 @@ def test_seeded_random_baseline_never_exceeds_shared_resources():
     assert first == second
     assert np.asarray(table.resources[:, list(first)].sum(1)).max(initial=0) <= 1
     assert len({table.candidates[i].session for i in first}) == len(first)
+
+
+def test_random_groups_candidates_in_one_pass():
+    class Counted:
+        def __init__(self, rows):
+            self.rows, self.iterations = rows, 0
+
+        def __iter__(self):
+            self.iterations += 1
+            return iter(self.rows)
+
+        def __getitem__(self, index):
+            return self.rows[index]
+
+    table = _hand_lp_table()
+    candidates = Counted(table.candidates)
+
+    _baseline_policy(replace(table, candidates=candidates), 3, "random", 7)
+
+    assert candidates.iterations == 1
 
 
 def test_random_chooses_among_currently_feasible_methods():
