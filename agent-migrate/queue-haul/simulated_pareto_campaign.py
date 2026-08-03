@@ -339,8 +339,9 @@ def run_row(row, manifest):
 def _write_csv(path, rows):
     if not rows:
         raise ValueError("cannot write an empty CSV")
+    fields = tuple(dict.fromkeys(key for row in rows for key in row))
     with path.open("w", newline="") as stream:
-        writer = csv.DictWriter(stream, rows[0].keys(), lineterminator="\n")
+        writer = csv.DictWriter(stream, fields, lineterminator="\n")
         writer.writeheader()
         writer.writerows(rows)
 

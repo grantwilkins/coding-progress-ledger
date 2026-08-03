@@ -18,6 +18,7 @@ Plausible wrong implementations:
 - Find target attainment from instantaneous rather than trailing-window power.
 - Include greedy_lagrangian or omit an intended scalable baseline.
 - Apply an absolute-watt tolerance after normalizing the HiGHS gain row.
+- Derive a mixed trace/anchor shard's CSV schema from only its first row.
 """
 
 import csv
@@ -62,6 +63,18 @@ def test_anchor_contexts_stay_inside_measured_rate_surfaces():
     for context in ANCHORS:
         assert case.prefill.rate(context, 1) > 0
         assert case.decode.rate(context, 1) > 0
+
+
+def test_write_csv_unions_mixed_row_fields(tmp_path):
+    path = tmp_path / "mixed.csv"
+
+    campaign._write_csv(path, [{"kind": "trace"},
+                               {"kind": "anchor", "anchor_tokens": 1998}])
+
+    with path.open(newline="") as stream:
+        rows = list(csv.DictReader(stream))
+    assert rows == [{"kind": "trace", "anchor_tokens": ""},
+                    {"kind": "anchor", "anchor_tokens": "1998"}]
 
 
 def test_highs_max_gain_fallback_handles_trace_power_scale():
