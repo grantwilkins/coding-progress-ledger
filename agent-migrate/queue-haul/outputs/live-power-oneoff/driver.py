@@ -180,8 +180,12 @@ def migration_window(marker: dict[str, float]) -> tuple[float, float]:
     return marker["migration_start"], marker["migration_complete"]
 
 
-def destination_resume_window(marker: dict[str, float]) -> tuple[float, float]:
-    return marker["migration_complete"], marker["source_stopped"]
+def switch_window(marker: dict[str, float]) -> tuple[float, float]:
+    return marker["migration_complete"], marker["destination_steady"]
+
+
+def shutdown_window(marker: dict[str, float]) -> tuple[float, float]:
+    return marker["destination_steady"], marker["source_stopped"]
 
 
 def reduce_power(run_root: Path, local_power: Path, markers: Markers,
@@ -271,9 +275,12 @@ def reduce_power(run_root: Path, local_power: Path, markers: Markers,
     if "migration_start" in marker and "migration_complete" in marker:
         ax.axvspan(*migration_window(marker), color="#DAD7CB", alpha=.5,
                    label="Migration Time")
-    if "migration_complete" in marker and "source_stopped" in marker:
-        ax.axvspan(*destination_resume_window(marker), color="#007C92",
-                   alpha=.12, label="Destination Resume")
+    if "migration_complete" in marker and "destination_steady" in marker:
+        ax.axvspan(*switch_window(marker), color="#007C92",
+                   alpha=.12, label="Switch")
+    if "destination_steady" in marker and "source_stopped" in marker:
+        ax.axvspan(*shutdown_window(marker), color="#6F4E7C",
+                   alpha=.12, label="Shutdown")
     for name in ("source_steady", "migration_start", "migration_complete",
                  "source_stopped"):
         if name in marker:
@@ -287,7 +294,7 @@ def reduce_power(run_root: Path, local_power: Path, markers: Markers,
     for spine in ax.spines.values():
         spine.set_color("black")
     ax.legend(frameon=False, fontsize=13, loc="upper center",
-              bbox_to_anchor=(.5, -.2), ncol=4)
+              bbox_to_anchor=(.5, -.2), ncol=5)
     fig.tight_layout()
     for suffix in ("png", "pdf"):
         fig.savefig(run_root / f"power_curve.{suffix}", dpi=220,

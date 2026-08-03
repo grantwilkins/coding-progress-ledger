@@ -9,7 +9,8 @@ Plausible wrong implementations:
 - Include samples before the requested display window.
 - Include samples at or beyond the display cutoff.
 - Highlight source shutdown instead of migration completion.
-- Start destination resume before migration completion.
+- End switching before destination steady state.
+- Start shutdown before destination steady state.
 """
 
 import importlib.util
@@ -45,7 +46,8 @@ def test_power_uses_fixed_one_second_mean_bins():
 
 def test_migration_highlight_ends_at_completion():
     marker = {"migration_start": 10, "migration_complete": 20,
-              "source_stopped": 30}
+              "destination_steady": 30, "source_stopped": 40}
 
     assert driver.migration_window(marker) == (10, 20)
-    assert driver.destination_resume_window(marker) == (20, 30)
+    assert driver.switch_window(marker) == (20, 30)
+    assert driver.shutdown_window(marker) == (30, 40)
