@@ -15,6 +15,7 @@ import matplotlib
 
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
+import seaborn as sns
 
 
 REPO = Path(__file__).resolve().parents[3]
@@ -164,6 +165,15 @@ def parse_wall(value: str) -> float:
     return dt.datetime.strptime(value, "%Y/%m/%d %H:%M:%S.%f").timestamp()
 
 
+def bin_power(rows: list[dict], origin: float) -> tuple[list[float], list[float]]:
+    bins = {}
+    for row in rows:
+        index = int((parse_wall(row["timestamp"]) - origin) // .5)
+        bins.setdefault(index, []).append(float(row["power.draw [W]"]))
+    return ([index * .5 + .25 for index in sorted(bins)],
+            [statistics.mean(bins[index]) for index in sorted(bins)])
+
+
 def reduce_power(run_root: Path, local_power: Path, markers: Markers,
                  role_uuids: list[str]) -> None:
     destination_path = run_root / "power_100ms.csv"
@@ -238,29 +248,25 @@ def reduce_power(run_root: Path, local_power: Path, markers: Markers,
     write_json(run_root / "power_summary.json", summary)
 
     origin = markers.rows[0]["wall_ns"] / 1e9
-    fig, ax = plt.subplots(figsize=(10, 4.8))
+    sns.set_context("talk", font_scale=1.1)
+    fig, ax = plt.subplots(figsize=(8, 4))
     for label, uuid, color in (
-        ("Source GPU", role_uuids[0], "#8C1515"),
-        ("Destination GPU", role_uuids[1], "#007C92"),
+        ("Stanford Poppy", role_uuids[0], "#8C1515"),
+        ("Stanford Lagunita", role_uuids[1], "#007C92"),
     ):
-        values = by_uuid[uuid]
-        ax.plot(
-            [parse_wall(row["timestamp"]) - origin for row in values],
-            [float(row["power.draw [W]"]) for row in values],
-            lw=.8, label=label, color=color,
-        )
+        ax.plot(*bin_power(by_uuid[uuid], origin), lw=1.5, label=label,
+                color=color)
     marker = {row["event"]: row["wall_ns"] / 1e9 - origin
               for row in markers.rows}
     if "migration_start" in marker and "source_stopped" in marker:
         ax.axvspan(marker["migration_start"], marker["source_stopped"],
-                   color="#E98300", alpha=.12, label="Both GPUs active")
+                   color="#E98300", alpha=.12)
     for name in ("source_steady", "migration_start", "migration_complete",
                  "source_stopped"):
         if name in marker:
             ax.axvline(marker[name], color="black", lw=.7, ls=":")
-    ax.set(xlabel="Elapsed time (s)", ylabel="GPU power (W)",
-           title="Queued replay migration: native 100 ms NVIDIA-SMI samples")
-    ax.legend(frameon=False, ncol=3)
+    ax.set(xlabel="Time (s)", ylabel="Power per GPU (W)")
+    ax.legend(frameon=False, loc="upper center", ncol=2)
     fig.tight_layout()
     for suffix in ("png", "pdf"):
         fig.savefig(run_root / f"power_curve.{suffix}", dpi=220)
