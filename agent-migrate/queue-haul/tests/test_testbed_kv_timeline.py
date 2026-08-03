@@ -15,6 +15,7 @@ Plausible wrong implementations:
 - Relabel queued post-switch activity as source inference.
 - Mark a later continuation as the first destination token.
 - Place Switch or Resume markers on the wrong lane or measured event time.
+- Put event-marker labels over the timeline instead of in its legend.
 """
 
 import csv
@@ -136,10 +137,13 @@ def test_timeline_marks_switch_and_resume_events(tmp_path, monkeypatch):
     write(fixture(tmp_path), "measured", out)
 
     ax = timeline_plot.plt.gcf().axes[0]
-    assert [text.get_text() for text in ax.texts] == ["Switch", "Resume"]
+    assert not ax.texts
+    assert {text.get_text() for text in ax.get_legend().get_texts()} \
+        >= {"Switch", "Resume"}
     markers = [marker.get_offsets()[0].tolist() for marker in ax.collections]
-    assert markers[0] == pytest.approx([4.1, 0])
+    assert markers[0] == pytest.approx([2.5, -.32])
     assert markers[1] == pytest.approx([4.15, .32])
+    assert [marker.get_sizes()[0] for marker in ax.collections] == [150, 150]
 
 
 def test_replay_uses_the_same_measured_clock(tmp_path):

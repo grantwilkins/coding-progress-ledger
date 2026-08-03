@@ -11,6 +11,7 @@ import matplotlib
 
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
+from matplotlib.lines import Line2D
 from matplotlib.patches import Patch
 
 DEFAULT_SCENARIOS = {
@@ -302,17 +303,17 @@ def plot(timeline_path: Path, inference_path: Path, out: Path) -> None:
                 zorder=3,
             )
             inference_labels.add(phase)
-        for time, marker, color, label, lane in (
-            (float(row["commit_s"]), "8", "#B31B1B", "Switch", migration_y),
-            (float(row["first_token_s"]), "*", "#D4A017", "Resume", destination_y),
+        source_finish = max(
+            (float(segment["finish_s"]) for segment in session_segments
+             if segment["location"] == "source"), default=0,
+        )
+        for time, marker, color, lane in (
+            (source_finish, "8", "#B31B1B", source_y),
+            (float(row["first_token_s"]), "*", "#D4A017", destination_y),
         ):
             gantt.scatter(
-                time, lane, marker=marker, s=105, color=color,
+                time, lane, marker=marker, s=150, color=color,
                 edgecolor=colors["text"], linewidth=.6, zorder=4,
-            )
-            gantt.annotate(
-                label, (time, lane), xytext=(0, -12), textcoords="offset points",
-                ha="center", va="bottom", fontsize=10, color=colors["text"],
             )
     gantt.set_yticks(
         [positions[0] - .32, positions[0], positions[0] + .32],
@@ -328,9 +329,15 @@ def plot(timeline_path: Path, inference_path: Path, out: Path) -> None:
         ),
         Patch(facecolor=colors[transfer_color], label=transfer_label),
         Patch(facecolor=colors["drain"], alpha=.6, label="Drain"),
+        Line2D([], [], marker="8", markersize=12, linestyle="none",
+               markerfacecolor="#B31B1B", markeredgecolor=colors["text"],
+               label="Switch"),
+        Line2D([], [], marker="*", markersize=14, linestyle="none",
+               markerfacecolor="#D4A017", markeredgecolor=colors["text"],
+               label="Resume"),
     )
     gantt.legend(
-        handles=legend, frameon=False, ncol=3, loc="upper center",
+        handles=legend, frameon=False, ncol=4, loc="upper center",
         bbox_to_anchor=(.5, 1.42),
     )
     gantt.grid(axis="x", color=colors["grid"], linewidth=.8, alpha=.7)
