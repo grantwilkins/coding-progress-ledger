@@ -151,9 +151,9 @@ Candidate \(c=(j,a,p)\) carries:
 
 Replay sends compact durable context and contributes serving-transition work.
 KV transfer sends sealed KV blocks. Reconstruction, transfer, and ingest are
-included in the fitted duration \(t_c\), but the aggregate planner does not
-advertise separate reconstruction and ingest capacity rows. An unsealed tail is
-reconstructed during catch-up.
+included in the fitted duration \(t_c\). The planners also charge aggregate
+replay service and KV-transfer/ingest work to distinct method-specific rows; an
+unsealed tail is reconstructed during catch-up.
 
 For effective route rate \(B_p\), destination prefill rate \(\rho_p(T)\),
 KV-ingest rate \(\mu_p\), and fitted residuals:
@@ -249,16 +249,24 @@ power. It also drives a fluid pool-service queue from realized replay
 start/finish and commit times. An executed point is invalid if that queue
 exceeds the advertised debt budget or cannot recover.
 
-Replay prefill contributes measured serving-transition work. KV ingest remains
-part of the migration duration rather than a separate aggregate admission row.
+Replay prefill contributes measured serving-transition work. KV transfer and
+ingest contribute to the distinct KV migration-work row; neither is charged as
+ongoing destination service.
 
 ## 6. Other resource constraints
 
-For every session,
+For every session, the executable plan chooses at most one candidate. If
+\(y_c\) denotes that whole-session choice,
 
 \[
-\sum_{a,p}x_{jap}\le1,\qquad x_{jap}\in\{0,1\}.
+\sum_{c:j(c)=j}y_c\le1,\qquad y_c\in\{0,1\}.
 \]
+
+The optimizer described below does not solve this integer program directly. It
+first replaces \(y_c\) by a fractional LP variable \(x_c\in[0,1]\), then rounds
+the LP solution to a resource-feasible set of whole sessions. This distinction
+is important: the LP objective is solved optimally for the relaxation, but the
+emitted migration plan is not claimed to be the optimal integer solution.
 
 Only eligible candidates exist.
 
@@ -279,48 +287,175 @@ For each physical link \(\lambda\),
 These byte constraints are fluid relaxations. The event simulator validates
 the actual shared-link schedule, transferred bytes, and completion time.
 
-Each pool with \(N_p\) replicas has an aggregate migration-time budget:
+For a non-fluid pool with \(N_p\) replicas, replay and KV transfer have separate
+aggregate occupancy budgets:
 
 \[
-\sum_{c:p(c)=p}t_cx_c\le M_pH.
+\sum_{c:p(c)=p,\ a(c)=a}t_cx_c\le N_pH,
+\qquad a\in\{R,K\}.
 \]
 
-The current contract sets \(M_p=N_p\). It has no separate source-stream,
-reconstruction, or ingest row. After selection, indivisible actions are packed
-onto replicas. Each replica must independently satisfy its service, live-KV,
-and migration-time bounds.
+For a pool with the implemented fluid migration contract, the replay row is
+instead measured serial replay work bounded by \(N_pH\) times the advertised
+replay speedup, and the KV row is bytes bounded by \(N_pH\) times advertised
+ingest bytes/s. After selection, indivisible actions are packed onto replicas.
+For non-fluid pools, replay and KV occupancies are accumulated separately on
+each replica, and the larger must fit within \(H\); service and live-KV bounds
+must also hold independently on every replica.
 
-## 7. Objective, schedule, and frontier
+## 7. LP, fallback, and implemented greedies
 
-For requested shed \(\Theta\), solve lexicographically:
+The implementation assembles all shared constraints into a normalized sparse
+matrix. Let \(A_{rc}\) be candidate \(c\)'s demand on resource \(r\), divided by
+that resource's capacity, and let \(J_{jc}=1\) when candidate \(c\) moves session
+\(j\). Thus the common LP feasible region is
 
-1. meet \(\sum_c w_cx_c\ge\Theta\);
-2. minimize \(\sum_c t_cx_c\).
+\[
+\mathcal X=\left\{x:\ 0\le x_c\le1,\quad
+                 \sum_cJ_{jc}x_c\le1\ \forall j,\quad
+                 \sum_cA_{rc}x_c\le1\ \forall r\right\}.
+\]
 
-If the target is unreachable, maximize valid shed and report `target_unmet`
-with the watt shortfall. It is never called successful curtailment.
+In the hardware campaign and canonical simulator, the Queue-Haul policy uses
+the implemented `lp_work_first` objective. For requested shed \(\Theta\), its
+first phase is
 
-`greedy` computes one scarcity price from the normalized demand
-of each session's cheapest candidate, ranks all candidates once by conservative
-watts per priced resource cost, and admits fitting candidates until the target
-is met. It does not dynamically reprice remaining capacity.
+\[
+s^*=\min_{x\in\mathcal X,\ s\ge0}s
+\quad\text{s.t.}\quad
+\sum_c w_cx_c+s\ge\Theta.
+\tag{LP-1}
+\]
 
-`greedy_lagrangian` warm-starts destination prices with the static
-greedy's duplicate-safe scarcity prices, scans every exact-power prefix of the
-cheapest fixed-price action ordering and one deterministic alternative-action
-ordering, and retains the selected prefix and its neighbors, the singleton and
-full prefixes, and evenly spaced prefix-length ranks. Below 75% of removable
-awake power it uses one price pass and eight rank buckets; at higher targets it
-uses four passes and 64 buckets. Recovery updates aggregate resource vectors
-incrementally and encodes each visited combination as an exact mixed-radix
-integer over source-local prefix choices, avoiding copies of the global selected
-set. It checks the exact sparse resource sum once before return, packs the final
-set once, and reuses that assignment; an unpackable or unreachable set falls
-back to packing-aware recovery. Route budgets reserve the largest
-candidate's isolated post-route tail, and exact eager-parallel prediction
-remains the final acceptance gate. Both greedies are supported optimizer
-options; neither is a global optimum, and equal-cost cases remain sensitive to
-the deterministic input order.
+When the target is attainable, \(s^*=0\). When it is not, minimizing shortfall
+is exactly the maximum-evacuation fallback under the same deadline and resource
+constraints:
+
+\[
+\Theta-s^*=\max_{x\in\mathcal X}\sum_cw_cx_c.
+\]
+
+This equality is for the fractional relaxation. Deterministic rounding and the
+execution checks can produce less evacuation; the code does not claim a
+maximum executable integer set.
+
+The implementation fixes \(s\) to \(s^*\), within solver tolerance, and then
+minimizes total modeled migration work,
+
+\[
+q^*=\min_{x\in\mathcal X}\sum_c q_cx_c
+\quad\text{s.t.}\quad
+\sum_cw_cx_c+s^*\ge\Theta,
+\tag{LP-2}
+\]
+
+where \(q_c=t_c\) for the fixed aggregate planner and is the measured migration
+work field for a pool with a fluid migration service. Finally it fixes that
+work, again within tolerance, and minimizes the largest normalized resource
+pressure \(\phi\), subject to \(Ax\le\phi\mathbf1\) and \(\phi\le1\). These are
+three lexicographic phases, not a weighted sum.
+
+The pool-aware `lp` and `lp_highs` reference backends express the same target-
+then-work policy by first solving LP-2 with \(s=0\). If that problem is
+infeasible, they maximize fractional shed, then minimize work at the resulting
+maximum. The column-generation backends implement the equivalent two-phase
+shortfall-then-work form. These backend variants are simulator/planner-quality
+tools; the hardware campaign names `lp_work_first`.
+
+The fractional solution is converted to an executable plan by deterministic
+rounding. Candidates are considered using their LP mass and migration work;
+only a candidate whose session is still unchosen and whose addition keeps every
+normalized resource row at most one is accepted. A second pass considers
+remaining candidates by watts per migration work. Rounding may therefore fail
+to attain a fractionally attainable target. The planner recomputes the exact
+nonlinear source power for the rounded whole-session set and reports the
+remaining watt shortfall. A result with positive shortfall is `target_unmet`,
+never successful curtailment. Concrete placement and eager-parallel simulation
+are subsequent acceptance checks and may remove further moves.
+
+### Static greedy
+
+The implemented `greedy` uses the same eligible candidates and normalized
+resource columns as the LP. For each session it first identifies the candidate
+with the smallest unpriced normalized demand, \(\sum_rA_{rc}\). It then computes
+one duplicate-safe scarcity price per resource,
+
+\[
+\pi_r=\max\left\{1,
+\sum_j A_{r,c_j^{\min}}\right\},
+\]
+
+and gives every candidate the fixed score
+
+\[
+\operatorname{score}(c)=
+\frac{w_c}{\sum_r\pi_rA_{rc}}.
+\]
+
+The pool-aware greedy scans candidates once in descending score, accepting a
+candidate only if its session is unchosen and all resource rows still fit. The
+fixed aggregate planner used by the existing hardware path ranks sessions by
+their best candidate score and, for each session, tries replay and KV transfer
+in score order. It stops after exact recomputation reaches the power limit or no
+more candidates fit. Neither implementation recomputes scarcity prices after
+an acceptance. Ties are resolved by stable integer/session order.
+
+### Lagrangian greedy
+
+`greedy_lagrangian` is implemented only in the pool-aware planner. The hardware
+campaign invokes it through the implemented one-pool, idle dedicated-sink
+adapter; this does not make multi-pool or loaded-destination behavior hardware
+evidence. The checksum-pinned July 30 hardware bundle predates this policy, so
+the repository currently contains no completed hardware evidence for the
+Lagrangian extension; its present evidence is simulation.
+
+It starts from the static greedy prices. Given resource prices \(\pi\) and a
+power multiplier \(\eta\), it chooses each session's cheapest action using
+
+\[
+d_c=\frac{q_c}{H}+\sum_r\pi_rA_{rc}.
+\]
+
+For each source instance, sessions are sorted by \(d_c/\ell_j\). The algorithm
+evaluates every prefix of that order with the exact fitted source power curve,
+not the additive \(w_j\)'s, and retains the prefix minimizing
+
+\[
+\sum_{c\in Q}d_c-
+\eta\,\frac{w_i(Q)}{\max\{\Theta,1\}}.
+\]
+
+It repeats the prefix construction for one deterministic alternative-action
+ordering. Around each selected prefix it retains its neighboring lengths, the
+singleton and full prefixes, and evenly spaced prefix lengths. Below 75% of all
+removable awake power the implementation performs one price pass and uses eight
+prefix buckets; at or above 75% it performs four passes and uses 64. After each
+pass it applies projected subgradient updates
+
+\[
+\pi_r\leftarrow\max\{0,\pi_r+\alpha(u_r-\bar u_r)\},
+\qquad
+\eta\leftarrow\max\left\{0,
+\eta+\alpha\frac{\Theta-w(Q)}{\max\{\Theta,1\}}\right\},
+\]
+
+with \(\alpha=0.5/\sqrt{k}\), actual normalized use \(u_r\), and limit
+\(\bar u_r\). Route limits reserve the largest candidate's isolated non-route
+tail because the byte-row relaxation alone does not represent that time.
+
+The recovery stage combines retained source-local prefixes by target-capped
+exact watts gained per additional migration work, incrementally rejecting any
+combination that exceeds an aggregate row. It then packs the selected actions
+on concrete replicas once. If the target is unreachable or that packing fails,
+it reruns recovery with packing checked on every accepted change. The final
+sparse resource sum, replica assignment, exact source power, and eager-parallel
+deadline prediction are all checked before the plan is accepted.
+
+Both greedies are heuristics. Neither supplies an LP bound or a global integer-
+optimality claim, and the Lagrangian pass count and retained-prefix buckets are
+fixed implementation budgets rather than convergence guarantees.
+
+## 8. Schedule and frontier
 
 Selected moves are ordered by migration work per conservative watt. At
 controller completion, the executor starts every selected move eagerly.
@@ -351,7 +486,7 @@ every target:
 
 The main targets are 10/25/50/75/90/100% of maximum modeled shed.
 
-## 8. Fixed and multi-pool contracts
+## 9. Fixed and multi-pool contracts
 
 Adding a destination adds candidate columns and pool/route rows. It does not
 change the decision variable.
@@ -377,7 +512,7 @@ Binding resources are a set, not an exclusive cause. Every result reports all
 resources with zero normalized residual slack; simultaneous route, transition,
 service, debt, KV, and deadline constraints remain visible.
 
-## 9. Evidence hierarchy and scope
+## 10. Evidence hierarchy and scope
 
 Every input and result is classified as:
 
@@ -426,7 +561,7 @@ Out of scope:
 - TCP behavior; and
 - long-term destination equilibrium.
 
-## 10. Canonical scenario and sensitivities
+## 11. Canonical scenario and sensitivities
 
 One versioned canonical scenario supplies the fixed-contract results. It records
 the workload; source packing, hardware, and model; one compatible integrated
@@ -441,7 +576,7 @@ scenario sweeps use 30/60/120/300-second deadlines, 1/5/10-Gbps routes, and
 0/5/10/20% service flex and debt. Workload, source packing, deadline, bandwidth,
 and seed sweeps are scenarios, not statistical error bars.
 
-## 11. Evaluation A: mechanism validation
+## 12. Evaluation A: mechanism validation
 
 **Question A.** Can the measured handoff primitives and source power model
 predict an actual request-boundary migration?
@@ -464,7 +599,7 @@ power shed; do not repeat its Gantt chart elsewhere.
 A three-A100 cross-region demonstration is out of the plan unless it reveals a
 qualitatively new implementation constraint not covered by this validation.
 
-## 12. Evaluation B: many sessions under one fixed contract
+## 13. Evaluation B: many sessions under one fixed contract
 
 Keep the canonical destination contract fixed as requested shed rises.
 
@@ -500,7 +635,7 @@ infeasible target and complete binding-resource set for each policy.
 scheduling? Use Evaluation A's timeline and the predicted-versus-realized
 makespan, debt, recovery, and power-shed columns rather than another Gantt.
 
-## 13. Evaluation C: many sessions across many pools
+## 14. Evaluation C: many sessions across many pools
 
 **Question C1.** How does maximum executable shed change with 1, 2, 4, and 8
 compatible pools?
@@ -552,7 +687,7 @@ maximum executable shed and the complete binding-resource set in a compact
 binary or normalized-slack matrix. Never assign one exclusive failure cause
 when constraints bind together.
 
-## 14. Evaluation D: planner quality and scale
+## 15. Evaluation D: planner quality and scale
 
 **Question D1.** How close is the control-path planner to exact and relaxed
 references? Compare an exact integer oracle where tractable, the fractional
@@ -569,7 +704,7 @@ answer: although Lagrangian greedy is faster than static greedy, it takes about
 12 minutes, uses 5.02 GB peak RSS, and leaves four seconds of migration-deadline
 slack. Replica packing remains the dominant measured bottleneck.
 
-## 15. Result-table contract
+## 16. Result-table contract
 
 Figures consume tidy result tables, never ad hoc simulator objects. Every
 result row contains:
@@ -590,7 +725,7 @@ action, pool, start, transfer/reconstruction finish, quiesce, commit,
 first-token completion, bytes, transition work, ongoing work, KV blocks, and
 conservative source watts credited.
 
-## 16. Main-paper figure budget and claim boundary
+## 17. Main-paper figure budget and claim boundary
 
 The main-paper sequence is:
 
