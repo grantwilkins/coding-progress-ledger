@@ -28,13 +28,12 @@ from simulate import NetworkLink, execute, step_average
 ROOT = Path(__file__).parent
 MODEL = ROOT / "profiles/gpt_oss_20b_a100_tp1_crossover.json"
 EVIDENCE = ROOT / "outputs/policy-hardware-width8-frontier-20260730"
-OUT = ROOT / "outputs/simulated-pareto-v4-20260803"
+OUT = ROOT / "outputs/simulated-pareto-v5-20260803"
 WORKLOADS = tuple(ROOT / f"profiles/{name}.json" for name in (
     "coding", "interactive_coding", "agentic_tool_loop",
 ))
 POLICIES = (
-    "queue_haul", "greedy", "greedy_lagrangian", "isolated_fastest",
-    "random", "replay_only", "kv_only",
+    "queue_haul", "greedy", "isolated_fastest", "random", "replay_only", "kv_only",
 )
 SOLVERS = {"queue_haul": "lp_highs"}
 BANDWIDTHS_MBPS = (1000, 2500, 5000, 10000)
@@ -44,7 +43,7 @@ ANCHORS = (1998, 4045, 8141, 16336, 32718)
 SHARDS = 64
 SESSIONS = 10_000
 WINDOW_S = 5
-SCHEMA = "queue-haul-simulated-pareto-v4"
+SCHEMA = "queue-haul-simulated-pareto-v5"
 
 
 def _csv(path):
@@ -163,9 +162,9 @@ def manifest_rows():
                                          "deadline_s": deadline,
                                          "target_fraction": target, "policy": policy})
     for index, row in enumerate(rows):
-        row["row_id"] = f"v4-{index:05d}"
+        row["row_id"] = f"v5-{index:05d}"
         row["shard"] = index % SHARDS
-    if len(rows) != 14_392:
+    if len(rows) != 12_336:
         raise RuntimeError("unexpected campaign grid size")
     return rows
 

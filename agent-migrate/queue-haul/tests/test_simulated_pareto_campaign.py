@@ -1,7 +1,8 @@
 """
 Claim:
-The v4 campaign uses exact 10K idle snapshots, fits width-8 replay as an
-unclamped positive capacity factor rather than a width cap, runs all seven policies over one manifest,
+The v5 campaign uses exact 10K idle snapshots, fits width-8 replay as an
+unclamped positive capacity factor rather than a width cap, runs six scalable
+policies over one manifest while excluding scale-limited greedy_lagrangian,
 hard-fails incomplete shard reductions, and censors misses without allowing
 them to dominate successful target attainment.
 
@@ -15,6 +16,7 @@ Plausible wrong implementations:
 - Let a deadline miss dominate a successful point.
 - Reduce missing, duplicate, or stale shard rows.
 - Find target attainment from instantaneous rather than trailing-window power.
+- Include greedy_lagrangian or omit an intended scalable baseline.
 """
 
 import csv
@@ -41,15 +43,16 @@ def _write(path, rows):
 def test_manifest_is_exact_full_grid_plus_sentinel():
     rows = manifest_rows()
 
-    assert len(rows) == 14_392
+    assert len(rows) == 12_336
     assert len({row["row_id"] for row in rows}) == len(rows)
     assert {row["policy"] for row in rows} == set(campaign.POLICIES)
+    assert "greedy_lagrangian" not in campaign.POLICIES
     assert {row["case"] for row in rows} == {
         "central", "conservative", "optimistic",
     }
     assert {row["shard"] for row in rows} == set(range(64))
-    assert sum(row["case"] == "central" for row in rows) == 13_720
-    assert sum(row["case"] != "central" for row in rows) == 672
+    assert sum(row["case"] == "central" for row in rows) == 11_760
+    assert sum(row["case"] != "central" for row in rows) == 576
 
 
 def test_width8_fit_uses_only_complete_10g_eight_move_episodes(tmp_path):

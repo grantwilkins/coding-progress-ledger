@@ -125,6 +125,11 @@ uv run python queue-haul/paper_evaluation.py \
   --out queue-haul/outputs/paper-evaluation
 ```
 
+The exact 10K Pareto campaign includes Queue-Haul, greedy, isolated-fastest,
+feasible-random, replay-only, and KV-only. The combinatorial
+`greedy_lagrangian` recovery is excluded and remains a separate scale-limited
+experiment.
+
 `requirement_frontier.py` computes destination requirements without constructing
 a destination inventory. `pool_planner.py` compares those requirements with
 concrete pool contracts and emits physical use/capacity rows. Pool admission
