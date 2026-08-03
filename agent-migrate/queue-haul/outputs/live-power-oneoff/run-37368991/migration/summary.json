@@ -1,0 +1,23 @@
+{
+  "contexts": [2048, 4096, 4096, 8192, 8192, 12288, 12288, 14336],
+  "deadline_met": true,
+  "elapsed_s": 70.048158476,
+  "migration_window_s": 12.914128117,
+  "replays": [
+    {"order": 0, "prompt_tokens": 2191, "output_tokens": 25, "replay_s": 7.153754585, "status_code": 200},
+    {"order": 1, "prompt_tokens": 4231, "output_tokens": 28, "replay_s": 7.405381958, "status_code": 200},
+    {"order": 2, "prompt_tokens": 4240, "output_tokens": 24, "replay_s": 7.29485755, "status_code": 200},
+    {"order": 3, "prompt_tokens": 8333, "output_tokens": 30, "replay_s": 7.471558285, "status_code": 200},
+    {"order": 4, "prompt_tokens": 8334, "output_tokens": 25, "replay_s": 7.389299147, "status_code": 200},
+    {"order": 5, "prompt_tokens": 12428, "output_tokens": 20, "replay_s": 7.278212117, "status_code": 200},
+    {"order": 6, "prompt_tokens": 12432, "output_tokens": 24, "replay_s": 7.402655379, "status_code": 200},
+    {"order": 7, "prompt_tokens": 14482, "output_tokens": 22, "replay_s": 7.367991353, "status_code": 200}
+  ],
+  "status": "complete",
+  "wire_bytes": {
+    "api/client_to_target": 271564,
+    "api/target_to_client": 68238,
+    "kv/client_to_target": 23090741324,
+    "kv/target_to_client": 7700770083
+  }
+}
