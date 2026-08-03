@@ -1126,7 +1126,6 @@ def mp_wait_stored(log: Path, offset: int, tokens: int) -> None:
 def mp_wait_source_keys(log: Path, offset: int, transfers: Path,
                         transfer_offset: int, tokens: int,
                         known_keys: set[str] | None = None) -> set[str]:
-    mp_wait_stored(log, offset, tokens)
     expected = tokens // 256
     deadline = time.monotonic() + 600
     while time.monotonic() < deadline:
@@ -1137,7 +1136,8 @@ def mp_wait_source_keys(log: Path, offset: int, transfers: Path,
     raise TimeoutError(f"LMCache stored fewer than {expected} unique keys")
 
 
-def mp_request_hit(log: Path, offset: int, request_id: str) -> int:
+def mp_request_hit(log: Path, offset: int, request_id: str,
+                   require_all: bool = True) -> int:
     matches = [
         tuple(map(int, match.groups()[:4]))
         for match in MP_REQUEST.finditer(read_after(log, offset))
@@ -1147,7 +1147,7 @@ def mp_request_hit(log: Path, offset: int, request_id: str) -> int:
     if len(matches) != 1:
         raise RuntimeError(f"LMCache reported {len(matches)} records for {request_id}")
     retained, queried, l1, l2 = matches[0]
-    if retained != queried or retained != l1 or l2:
+    if retained != l1 or l2 or require_all and retained != queried:
         raise RuntimeError(f"request {request_id} was not L1-only")
     return retained * 256
 

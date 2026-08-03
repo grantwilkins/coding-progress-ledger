@@ -189,6 +189,12 @@ Timestamped arrivals execute independently of migration. Quiescence drains only
 requests admitted before the pause; later arrivals wait for the destination
 route. The committed `fix1` charts predate this correction and must be replaced
 by the fresh `quiesce` run before using their gray intervals as drain evidence.
+Warm prefetch permits concurrent destination L1 fills but requires a full L1
+hit before inference.
+Source-store completion uses unique RESP keys, not LMCache summary token counts.
+Its expected key count comes from the request's retained-cache miss.
+Traces with no catch-up plot a zero-length catch-up at the measured idle boundary.
+Destination inference forbids L2 reads but may recompute an unstorable boundary chunk.
 `plot_fixed_contract_residuals.py` caches the canonical 100K-session,
 120-second fixed-contract requirement sweep and compares mixed greedy,
 GPU-work-first, replay-only, and KV-only resource headroom at common requested

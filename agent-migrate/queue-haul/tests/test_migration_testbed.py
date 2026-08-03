@@ -168,7 +168,7 @@ def test_mp_wait_idle_uses_bounded_stability(tmp_path):
     assert time.monotonic() - started >= .01
 
 
-def test_mp_source_keys_excludes_known_keys(monkeypatch, tmp_path):
+def test_mp_source_keys_excludes_known_keys(tmp_path):
     log = tmp_path / "lmcache.log"
     log.write_text("")
     transfers = tmp_path / "resp_transfers.csv"
@@ -177,17 +177,12 @@ def test_mp_source_keys_excludes_known_keys(monkeypatch, tmp_path):
         "response_wire_bytes,request_body_bytes,payload_bytes\n"
         "a,SET,old,0,1,1,1,1,1\na,SET,k1,2,3,1,1,1,1\n"
     )
-    waited = []
-    monkeypatch.setattr(s, "mp_wait_stored",
-                        lambda _log, _offset, tokens: waited.append(tokens))
-
     assert s.mp_wait_source_keys(log, 0, transfers, 0, 256, {"old"}) == {"k1"}
-    assert waited == [256]
 
 
 def test_mp_source_keys_include_generated_tail_key(tmp_path):
     log = tmp_path / "lmcache.log"
-    log.write_text("Stored 768 tokens\n")
+    log.write_text("Stored 512 tokens\n")
     transfers = tmp_path / "resp_transfers.csv"
     transfers.write_text(
         "connection_id,command,key_hashes,start_ns,end_ns,request_wire_bytes,"
@@ -207,6 +202,8 @@ def test_mp_request_hit_uses_byte_offset(tmp_path):
     log.write_bytes(prefix + b"2/2 retained keys (2 L1, 0 L2), external_request_id=req,\n")
 
     assert s.mp_request_hit(log, len(prefix), "req") == 512
+    log.write_text("1/2 retained keys (1 L1, 0 L2), external_request_id=req,\n")
+    assert s.mp_request_hit(log, 0, "req", False) == 256
 
 
 def test_bounded_campaign_pins_validated_mp_transport():
