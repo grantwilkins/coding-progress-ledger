@@ -27,7 +27,7 @@ import pytest
 
 import simulated_pareto_campaign as campaign
 from simulated_pareto_campaign import (
-    MODEL, ROOT, WORKLOADS, attainment_time, file_hash, fit_hardware,
+    ANCHORS, MODEL, ROOT, WORKLOADS, attainment_time, file_hash, fit_hardware,
     manifest_rows, pareto_flags, reduce, run_row,
 )
 from profiles import ModelProfile
@@ -54,6 +54,14 @@ def test_manifest_is_exact_full_grid_plus_sentinel():
     assert {row["shard"] for row in rows} == set(range(64))
     assert sum(row["case"] == "central" for row in rows) == 11_760
     assert sum(row["case"] != "central" for row in rows) == 576
+
+
+def test_anchor_contexts_stay_inside_measured_rate_surfaces():
+    case = ModelProfile.load(MODEL).case()
+
+    for context in ANCHORS:
+        assert case.prefill.rate(context, 1) > 0
+        assert case.decode.rate(context, 1) > 0
 
 
 def test_highs_max_gain_fallback_handles_trace_power_scale():
