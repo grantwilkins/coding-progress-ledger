@@ -657,11 +657,11 @@ def plot_destination_ttft(rows, summaries, out):
         xlabel="Migration + Destination TTFT (s)",
         ylabel="Cumulative Distribution", ylim=(0, 1.02),
     )
-    ax.tick_params(labelsize=12)
-    ax.xaxis.label.set_size(13)
-    ax.yaxis.label.set_size(13)
+    ax.tick_params(labelsize=13)
+    ax.xaxis.label.set_size(15)
+    ax.yaxis.label.set_size(15)
     ax.grid(alpha=.25)
-    ax.legend(frameon=False, fontsize=11)
+    ax.legend(frameon=False, fontsize=12)
     fig.tight_layout()
     for suffix in ("png", "pdf"):
         fig.savefig(
@@ -816,11 +816,11 @@ def plot_migration_time_per_watt(summaries, power_curve, out):
         xlabel="E2E Migration / Power Shed (s/W)",
         ylabel="Cumulative Distribution", ylim=(0, 1.02),
     )
-    ax.tick_params(labelsize=12)
-    ax.xaxis.label.set_size(13)
-    ax.yaxis.label.set_size(13)
+    ax.tick_params(labelsize=13)
+    ax.xaxis.label.set_size(15)
+    ax.yaxis.label.set_size(15)
     ax.grid(alpha=.25)
-    ax.legend(frameon=False, fontsize=9, loc="lower right")
+    ax.legend(frameon=False, fontsize=10, loc="lower right")
     fig.tight_layout()
     for suffix in ("png", "pdf"):
         fig.savefig(out / f"policy_hardware_migration_time_per_watt_cdf.{suffix}",
