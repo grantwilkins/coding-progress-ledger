@@ -340,6 +340,8 @@ def fluid_service_completion(work, capacity, arrivals=None):
         if active:
             virtual += (next_time - time) * capacity / len(active)
         time = next_time
+        if active and finish <= arrival:
+            virtual = max(virtual, active[0][0])
         while active and active[0][0] <= virtual + 1e-12:
             _, index = heapq.heappop(active)
             completed[index] = time

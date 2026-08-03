@@ -26,6 +26,7 @@ Plausible wrong implementations:
 - Omit measured replay completion time or emit duplicate network-start events.
 - Treat an unused or completed private link as an active bottleneck.
 - Cap divisible site reconstruction at the calibration batch width.
+- Stall fluid completion when a sub-ULP finish increment follows a large arrival time.
 """
 
 import json
@@ -54,6 +55,16 @@ def test_fluid_service_shares_with_staggered_arrivals():
     completed = fluid_service_completion([10, 10], 10, [0, 1])
 
     assert completed.tolist() == pytest.approx([1, 2])
+
+
+def test_fluid_service_advances_at_large_arrival_times():
+    count, work, capacity, arrival = 836, .525594358, 2569.9189051686362, 8244.6711704
+
+    completed = fluid_service_completion([work] * count, capacity, [arrival] * count)
+
+    assert (completed - arrival).tolist() == pytest.approx(
+        [count * work / capacity] * count, rel=0, abs=1e-12,
+    )
 
 
 def test_fluid_pipeline_preserves_causality_and_split_invariance():
