@@ -650,18 +650,18 @@ def plot_destination_ttft(rows, summaries, out):
             ax.step(
                 np.r_[0, x], np.r_[0, y], where="post",
                 color=CDF_COLORS[policy], linestyle=CDF_LINESTYLES[policy],
-                linewidth=2.2,
+                linewidth=3,
                 label=CDF_LABELS[policy],
             )
     ax.set(
         xlabel="Migration + Destination TTFT (s)",
         ylabel="Cumulative Distribution", ylim=(0, 1.02),
     )
-    ax.tick_params(labelsize=13)
+    ax.tick_params(labelsize=15)
     ax.xaxis.label.set_size(15)
     ax.yaxis.label.set_size(15)
     ax.grid(alpha=.25)
-    ax.legend(frameon=False, fontsize=12)
+    ax.legend(frameon=False, fontsize=15)
     fig.tight_layout()
     for suffix in ("png", "pdf"):
         fig.savefig(
@@ -810,17 +810,17 @@ def plot_migration_time_per_watt(summaries, power_curve, out):
         if values:
             ax.step(values, np.arange(1, len(values) + 1) / len(values),
                     where="post", color=CDF_COLORS[policy],
-                    linestyle=CDF_LINESTYLES[policy], linewidth=2.2,
+                    linestyle=CDF_LINESTYLES[policy], linewidth=3,
                     label=CDF_LABELS[policy])
     ax.set(
         xlabel="E2E Migration / Power Shed (s/W)",
         ylabel="Cumulative Distribution", ylim=(0, 1.02),
     )
-    ax.tick_params(labelsize=13)
+    ax.tick_params(labelsize=15)
     ax.xaxis.label.set_size(15)
     ax.yaxis.label.set_size(15)
     ax.grid(alpha=.25)
-    ax.legend(frameon=False, fontsize=10, loc="lower right")
+    ax.legend(frameon=False, fontsize=13, loc="lower right")
     fig.tight_layout()
     for suffix in ("png", "pdf"):
         fig.savefig(out / f"policy_hardware_migration_time_per_watt_cdf.{suffix}",
