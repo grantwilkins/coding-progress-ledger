@@ -174,6 +174,10 @@ def bin_power(rows: list[dict], origin: float) -> tuple[list[float], list[float]
             [statistics.mean(bins[index]) for index in sorted(bins)])
 
 
+def migration_window(marker: dict[str, float]) -> tuple[float, float]:
+    return marker["migration_start"], marker["migration_complete"]
+
+
 def reduce_power(run_root: Path, local_power: Path, markers: Markers,
                  role_uuids: list[str]) -> None:
     destination_path = run_root / "power_100ms.csv"
@@ -252,25 +256,26 @@ def reduce_power(run_root: Path, local_power: Path, markers: Markers,
     sns.set_context("talk", font_scale=1.1)
     fig, ax = plt.subplots(figsize=(12, 5))
     for label, uuid, color in (
-        ("Source", role_uuids[0], "#8C1515"),
+        ("Source", role_uuids[0], "#E98300"),
         ("Dest", role_uuids[1], "#007C92"),
     ):
         ax.plot(*bin_power(by_uuid[uuid], origin), lw=1.5, label=label,
                 color=color)
     marker = {row["event"]: row["wall_ns"] / 1e9 - origin
               for row in markers.rows}
-    if "migration_start" in marker and "source_stopped" in marker:
-        ax.axvspan(marker["migration_start"], marker["source_stopped"],
-                   color="#E98300", alpha=.12)
+    if "migration_start" in marker and "migration_complete" in marker:
+        ax.axvspan(*migration_window(marker), color="#DAD7CB", alpha=.5,
+                   label="Migration Time")
     for name in ("source_steady", "migration_start", "migration_complete",
                  "source_stopped"):
         if name in marker:
             ax.axvline(marker[name], color="black", lw=.7, ls=":")
     ax.set(xlabel="Time (s)", ylabel="Power per GPU (W)")
-    ax.legend(frameon=False, loc="upper center", bbox_to_anchor=(.5, -.2), ncol=2)
+    ax.legend(frameon=False, loc="upper center", bbox_to_anchor=(.5, -.2), ncol=3)
     fig.tight_layout()
     for suffix in ("png", "pdf"):
-        fig.savefig(run_root / f"power_curve.{suffix}", dpi=220)
+        fig.savefig(run_root / f"power_curve.{suffix}", dpi=220,
+                    bbox_inches="tight")
     plt.close(fig)
 
 

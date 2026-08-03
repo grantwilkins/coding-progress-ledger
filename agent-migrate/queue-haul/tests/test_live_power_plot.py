@@ -6,6 +6,7 @@ Plausible wrong implementations:
 - Use a rolling average instead of fixed bins.
 - Put a boundary sample in the preceding bin.
 - Sum samples or mis-scale milliseconds as seconds.
+- Highlight source shutdown instead of migration completion.
 """
 
 import importlib.util
@@ -33,3 +34,10 @@ def test_power_uses_fixed_five_second_mean_bins():
 
     assert times == pytest.approx([2.5, 7.5])
     assert watts == pytest.approx([150, 500])
+
+
+def test_migration_highlight_ends_at_completion():
+    marker = {"migration_start": 10, "migration_complete": 20,
+              "source_stopped": 30}
+
+    assert driver.migration_window(marker) == (10, 20)
