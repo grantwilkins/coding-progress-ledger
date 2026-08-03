@@ -1,4 +1,4 @@
-"""Plot per-GPU power draw from a measured power trace, averaged into 1 s bins."""
+"""Plot the raw per-GPU power trace from a measured power sample log."""
 
 from __future__ import annotations
 
@@ -15,21 +15,19 @@ import matplotlib.pyplot as plt
 COLORS = {"0": "#8C1515", "1": "#008566", "text": "#2E2D29", "grid": "#DAD7CB"}
 
 
-def bin_power(path: Path, bin_s: float) -> dict[str, tuple[list[float], list[float]]]:
+def read_power(path: Path) -> dict[str, tuple[list[float], list[float]]]:
     rows = list(csv.DictReader(path.open()))
     if any(row["valid"] != "1" for row in rows):
         raise ValueError("power trace contains invalid samples")
     base = min(int(row["monotonic_ns"]) for row in rows)
-    bins: dict[str, dict[int, list[float]]] = defaultdict(lambda: defaultdict(list))
+    samples: dict[str, list[tuple[float, float]]] = defaultdict(list)
     for row in rows:
-        index = int((int(row["monotonic_ns"]) - base) / 1e9 / bin_s)
-        bins[row["gpu"]][index].append(float(row["power_w"]))
-    return {
-        gpu: (
-            [(index + .5) * bin_s for index in sorted(samples)],
-            [sum(samples[index]) / len(samples[index]) for index in sorted(samples)],
+        samples[row["gpu"]].append(
+            ((int(row["monotonic_ns"]) - base) / 1e9, float(row["power_w"]))
         )
-        for gpu, samples in bins.items()
+    return {
+        gpu: tuple(zip(*sorted(points)))
+        for gpu, points in samples.items()
     }
 
 
@@ -61,11 +59,10 @@ def plot(series: dict[str, tuple[list[float], list[float]]], out: Path) -> None:
 def main(argv: list[str] | None = None) -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--power", type=Path, default=Path("data/power.csv"))
-    parser.add_argument("--bin-s", type=float, default=1.0)
     parser.add_argument("--out", type=Path, default=Path("outputs/power-trace/power_per_gpu"))
     args = parser.parse_args(argv)
     args.out.parent.mkdir(parents=True, exist_ok=True)
-    plot(bin_power(args.power, args.bin_s), args.out)
+    plot(read_power(args.power), args.out)
 
 
 if __name__ == "__main__":
