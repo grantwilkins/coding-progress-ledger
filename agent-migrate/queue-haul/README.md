@@ -172,7 +172,10 @@ trace-derived targets; infeasible plans receive zero validated shed. Static
 `greedy` fixes one scarcity price and one global candidate order.
 `greedy_lagrangian` iterates aggregate-resource prices, retains a bounded set of
 exact nonlinear source prefixes, performs target-capped recovery, and packs the
-final set. Feasible-random groups each session's candidates in one pass, so its
+final set. Recovery caches sparse candidate columns and accumulates each retained
+prefix without constructing sparse submatrices, and reuses those statistics in
+packing fallback. Equal normal/emergency pool bounds reuse one admission solve.
+Feasible-random groups each session's candidates in one pass, so its
 setup is linear in candidate count. Immutable single-policy scale runs under `outputs/dual-lagrangian-*`
 record the former `greedy_prefix` name; mixed bundles containing retired
 optimizers were removed rather than rewritten.

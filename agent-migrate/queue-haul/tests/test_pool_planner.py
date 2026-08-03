@@ -1043,16 +1043,25 @@ def test_lagrangian_recovery_packs_once_and_falls_back(tmp_path, monkeypatch):
     assert calls == 2
 
     calls = 0
+    gain_calls, removed_gain = 0, pool_planner._source_removed_gain
+
+    def counted_gain(*args):
+        nonlocal gain_calls
+        gain_calls += 1
+        return removed_gain(*args)
+
     def reject_final_once(*args):
         nonlocal calls
         calls += 1
         return (None, ()) if calls == 1 else real(*args)
 
+    monkeypatch.setattr(pool_planner, "_source_removed_gain", counted_gain)
     monkeypatch.setattr(pool_planner, "_pack", reject_final_once)
     assert _recover_lagrangian(
         table, power, patterns, target, arch, scenario, "normal",
     ) == eager
     assert calls == 3
+    assert gain_calls == 2
 
 
 def test_lagrangian_recovery_preserves_aggregate_boundary(tmp_path):
@@ -1562,24 +1571,41 @@ def test_absent_architecture_is_exact_legacy_adapter(tmp_path):
     assert old.feasible == adapted.feasible
 
 
-def test_normal_success_and_emergency_rescue_are_distinct(tmp_path):
+def test_normal_success_and_emergency_rescue_are_distinct(tmp_path, monkeypatch):
     profile, scenario = model(tmp_path, switch=0, tp=1), problem()
+    mode_plan, calls = pool_planner._mode_plan, []
+
+    def counted(*args, **kwargs):
+        calls.append(args[4])
+        return mode_plan(*args, **kwargs)
+
+    monkeypatch.setattr(pool_planner, "_mode_plan", counted)
 
     assert plan(scenario, profile, PATHS, "lp", destination=architecture()).admission_mode == "normal"
+    calls.clear()
     rescued = plan(
         scenario, profile, PATHS, "lp",
         destination=architecture(normal=.2, emergency=.3),
     )
+    assert calls == ["normal", "emergency"]
     assert rescued.feasible and rescued.admission_mode == "emergency"
 
 
-def test_target_unmet_returns_valid_maximum_shed_plan(tmp_path):
+def test_target_unmet_returns_valid_maximum_shed_plan(tmp_path, monkeypatch):
+    mode_plan, calls = pool_planner._mode_plan, []
+
+    def counted(*args, **kwargs):
+        calls.append(args[4])
+        return mode_plan(*args, **kwargs)
+
+    monkeypatch.setattr(pool_planner, "_mode_plan", counted)
     result = plan(
         problem(), model(tmp_path, switch=0, tp=1), PATHS, "greedy",
-        destination=architecture(methods=("kv_transfer",),
+        destination=architecture(normal=.3, emergency=.3, methods=("kv_transfer",),
                                  compatibility=replace(FP, kv_abi="other")),
     )
 
+    assert calls == ["normal"] and result.admission_mode == "emergency"
     assert not result.feasible and result.failure_reason == "target_unmet"
     assert result.power_shortfall_w > 0 and result.moves == ()
 

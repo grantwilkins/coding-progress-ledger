@@ -841,11 +841,15 @@ def _dual_resource_limits(table):
 
 def _recover_lagrangian(
     table, power, patterns, target, architecture, scenario, mode, gain_cache=None,
-    eager_pack=False, return_assignment=False, resource_limits=None,
+    eager_pack=False, return_assignment=False, resource_limits=None, stats_cache=None,
 ):
     matrix, selected, chosen = csc_matrix(table.resources), set(), {}
+    columns = tuple((matrix.indices[matrix.indptr[i]:matrix.indptr[i + 1]],
+                     matrix.data[matrix.indptr[i]:matrix.indptr[i + 1]])
+                    for i in range(matrix.shape[1]))
     limits = np.ones(matrix.shape[0]) if resource_limits is None else resource_limits
-    gain, blocked, cache = 0.0, set(), {}
+    gain, blocked = 0.0, set()
+    cache = {} if stats_cache is None else stats_cache
     usage = np.zeros(matrix.shape[0])
     sources = sorted(patterns)
     rank = {source: i for i, source in enumerate(sources)}
@@ -867,6 +871,10 @@ def _recover_lagrangian(
             sources = {
                 table.sessions[session].source_instance for session in sessions
             }
+            pattern_usage = np.zeros(matrix.shape[0])
+            for i in pattern:
+                rows, values = columns[i]
+                pattern_usage[rows] += values
             cache[pattern] = (
                 _source_removed_gain(
                     power, next(iter(sources)), sum(
@@ -878,8 +886,7 @@ def _recover_lagrangian(
                 ),
                 sum(table.candidates[i].migration_work_s for i in pattern),
                 set(pattern),
-                np.asarray(matrix[:, list(pattern)].sum(1)).ravel()
-                if pattern else np.zeros(matrix.shape[0]),
+                pattern_usage,
             )
         return cache[pattern]
 
@@ -967,7 +974,7 @@ def _recover_lagrangian(
     if not eager_pack and (gain < target - 1e-8 or assignment is None):
         return _recover_lagrangian(
             table, power, patterns, target, architecture, scenario, mode,
-            gain_cache, True, return_assignment, limits,
+            gain_cache, True, return_assignment, limits, cache,
         )
     exact_usage = np.asarray(matrix[:, list(selected)].sum(1)).ravel() \
         if selected else np.zeros(matrix.shape[0])
@@ -1999,12 +2006,19 @@ def plan_destination(scenario, profile, solver, case_id, seed, architecture):
     start, power = perf_counter(), ExpectedPower(selection_scenario, profile, case_id)
     initial, target = power.power(True), max(0.0, power.power(True) - scenario.power_limit_w)
     chosen = None
+    equal_modes = all(np.array_equal(
+        _event_bounds(architecture.type_by_id[pool.type_id], pool, "normal"),
+        _event_bounds(architecture.type_by_id[pool.type_id], pool, "emergency"),
+    ) for pool in architecture.pools)
     for mode in ("normal", "emergency"):
         result = _mode_plan(scenario, profile, architecture, solver, mode, power, target, seed)
         moved = [result[0].sessions[result[0].candidates[i].session].session_id for i in result[1]]
         planned = source_power(selection_scenario, profile, moved, case_id)
         chosen = mode, result, planned
         if planned <= scenario.power_limit_w + 1e-8:
+            break
+        if mode == "normal" and equal_modes:
+            chosen = "emergency", result, planned
             break
     mode, (table, selected, assignment, repairs, repair_s), planned = chosen
     fluid = any(pool.fluid_migration for pool in architecture.pools)
