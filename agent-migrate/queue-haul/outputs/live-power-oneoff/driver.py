@@ -265,7 +265,7 @@ def reduce_power(run_root: Path, local_power: Path, markers: Markers,
         ("Destination", role_uuids[1], "#007C92"),
     ):
         ax.plot(*bin_power(by_uuid[uuid], origin, PLOT_START_S, PLOT_STOP_S),
-                lw=2.2, label=label, color=color)
+                lw=1.5, label=label, color=color)
     marker = {row["event"]: row["wall_ns"] / 1e9 - origin - PLOT_START_S
               for row in markers.rows}
     if "migration_start" in marker and "migration_complete" in marker:

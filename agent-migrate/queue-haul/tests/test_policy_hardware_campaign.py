@@ -438,7 +438,7 @@ def test_destination_ttft_cdf_includes_migration_time(tmp_path, monkeypatch):
     campaign.plot_destination_ttft(rows, summaries, tmp_path)
 
     ax = campaign.plt.gcf().axes[0]
-    assert tuple(ax.figure.get_size_inches()) == (7, 3.5)
+    assert tuple(ax.figure.get_size_inches()) == (5, 4)
     assert ax.lines[0].get_xdata().tolist() == [0, 3, 5]
     assert ax.get_title() == ""
     assert ax.get_xlabel() == "Migration + Destination TTFT (s)"
@@ -473,7 +473,7 @@ def test_migration_time_per_watt_cdf_uses_compact_paper_dimensions(
     }], QuadraticPower(), tmp_path)
 
     figure = campaign.plt.gcf()
-    assert tuple(figure.get_size_inches()) == (7, 3.5)
+    assert tuple(figure.get_size_inches()) == (5, 4)
     assert figure.axes[0].get_xlabel() == "E2E Migration / Power Shed (s/W)"
 
 

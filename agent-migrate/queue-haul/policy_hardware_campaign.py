@@ -60,7 +60,7 @@ CDF_LINESTYLES = {
     "queue_haul": "-", "greedy": "--", "greedy_lagrangian": (0, (3, 1, 1, 1)),
     "kv_only": "-.", "replay_only": ":",
 }
-CDF_FIGSIZE = (7, 3.5)
+CDF_FIGSIZE = (5, 4)
 
 
 def _portable_path(path: Path) -> str:
@@ -820,7 +820,7 @@ def plot_migration_time_per_watt(summaries, power_curve, out):
     ax.xaxis.label.set_size(13)
     ax.yaxis.label.set_size(13)
     ax.grid(alpha=.25)
-    ax.legend(frameon=False, fontsize=11)
+    ax.legend(frameon=False, fontsize=9, loc="lower right")
     fig.tight_layout()
     for suffix in ("png", "pdf"):
         fig.savefig(out / f"policy_hardware_migration_time_per_watt_cdf.{suffix}",
