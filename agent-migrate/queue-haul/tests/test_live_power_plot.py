@@ -7,6 +7,7 @@ Plausible wrong implementations:
 - Put a boundary sample in the preceding bin.
 - Sum samples or mis-scale milliseconds as seconds.
 - Highlight source shutdown instead of migration completion.
+- Start destination resume before migration completion.
 """
 
 import importlib.util
@@ -41,3 +42,4 @@ def test_migration_highlight_ends_at_completion():
               "source_stopped": 30}
 
     assert driver.migration_window(marker) == (10, 20)
+    assert driver.destination_resume_window(marker) == (20, 30)

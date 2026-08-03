@@ -15,7 +15,6 @@ import matplotlib
 
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
-import seaborn as sns
 
 
 REPO = Path(__file__).resolve().parents[3]
@@ -178,6 +177,10 @@ def migration_window(marker: dict[str, float]) -> tuple[float, float]:
     return marker["migration_start"], marker["migration_complete"]
 
 
+def destination_resume_window(marker: dict[str, float]) -> tuple[float, float]:
+    return marker["migration_complete"], marker["source_stopped"]
+
+
 def reduce_power(run_root: Path, local_power: Path, markers: Markers,
                  role_uuids: list[str]) -> None:
     destination_path = run_root / "power_100ms.csv"
@@ -252,26 +255,35 @@ def reduce_power(run_root: Path, local_power: Path, markers: Markers,
     write_json(run_root / "power_summary.json", summary)
 
     origin = markers.rows[0]["wall_ns"] / 1e9
-    sns.set_style("whitegrid")
-    sns.set_context("talk", font_scale=1.1)
+    plt.style.use("default")
     fig, ax = plt.subplots(figsize=(12, 5))
     for label, uuid, color in (
         ("Source", role_uuids[0], "#E98300"),
         ("Dest", role_uuids[1], "#007C92"),
     ):
-        ax.plot(*bin_power(by_uuid[uuid], origin), lw=1.5, label=label,
+        ax.plot(*bin_power(by_uuid[uuid], origin), lw=2.2, label=label,
                 color=color)
     marker = {row["event"]: row["wall_ns"] / 1e9 - origin
               for row in markers.rows}
     if "migration_start" in marker and "migration_complete" in marker:
         ax.axvspan(*migration_window(marker), color="#DAD7CB", alpha=.5,
                    label="Migration Time")
+    if "migration_complete" in marker and "source_stopped" in marker:
+        ax.axvspan(*destination_resume_window(marker), color="#007C92",
+                   alpha=.12, label="Destination Resume")
     for name in ("source_steady", "migration_start", "migration_complete",
                  "source_stopped"):
         if name in marker:
             ax.axvline(marker[name], color="black", lw=.7, ls=":")
     ax.set(xlabel="Time (s)", ylabel="Power per GPU (W)")
-    ax.legend(frameon=False, loc="upper center", bbox_to_anchor=(.5, -.2), ncol=3)
+    ax.tick_params(labelsize=12)
+    ax.xaxis.label.set_size(13)
+    ax.yaxis.label.set_size(13)
+    ax.grid(alpha=.25)
+    for spine in ax.spines.values():
+        spine.set_color("black")
+    ax.legend(frameon=False, fontsize=11, loc="upper center",
+              bbox_to_anchor=(.5, -.2), ncol=4)
     fig.tight_layout()
     for suffix in ("png", "pdf"):
         fig.savefig(run_root / f"power_curve.{suffix}", dpi=220,
