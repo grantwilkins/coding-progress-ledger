@@ -167,9 +167,9 @@ def parse_wall(value: str) -> float:
 def bin_power(rows: list[dict], origin: float) -> tuple[list[float], list[float]]:
     bins = {}
     for row in rows:
-        index = int((parse_wall(row["timestamp"]) - origin) // 5)
+        index = int(parse_wall(row["timestamp"]) - origin)
         bins.setdefault(index, []).append(float(row["power.draw [W]"]))
-    return ([index * 5 + 2.5 for index in sorted(bins)],
+    return ([index + .5 for index in sorted(bins)],
             [statistics.mean(bins[index]) for index in sorted(bins)])
 
 
@@ -256,7 +256,7 @@ def reduce_power(run_root: Path, local_power: Path, markers: Markers,
 
     origin = markers.rows[0]["wall_ns"] / 1e9
     plt.style.use("default")
-    fig, ax = plt.subplots(figsize=(12, 5))
+    fig, ax = plt.subplots(figsize=(10, 4))
     for label, uuid, color in (
         ("Source", role_uuids[0], "#E98300"),
         ("Dest", role_uuids[1], "#007C92"),
@@ -276,13 +276,13 @@ def reduce_power(run_root: Path, local_power: Path, markers: Markers,
         if name in marker:
             ax.axvline(marker[name], color="black", lw=.7, ls=":")
     ax.set(xlabel="Time (s)", ylabel="Power per GPU (W)")
-    ax.tick_params(labelsize=12)
-    ax.xaxis.label.set_size(13)
-    ax.yaxis.label.set_size(13)
+    ax.tick_params(labelsize=14)
+    ax.xaxis.label.set_size(16)
+    ax.yaxis.label.set_size(16)
     ax.grid(alpha=.25)
     for spine in ax.spines.values():
         spine.set_color("black")
-    ax.legend(frameon=False, fontsize=11, loc="upper center",
+    ax.legend(frameon=False, fontsize=13, loc="upper center",
               bbox_to_anchor=(.5, -.2), ncol=4)
     fig.tight_layout()
     for suffix in ("png", "pdf"):

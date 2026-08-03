@@ -1,6 +1,6 @@
 """
 Claim:
-Power samples are averaged independently in fixed 5 s bins.
+Power samples are averaged independently in fixed 1 s bins.
 
 Plausible wrong implementations:
 - Use a rolling average instead of fixed bins.
@@ -24,16 +24,16 @@ driver = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(driver)
 
 
-def test_power_uses_fixed_five_second_mean_bins():
+def test_power_uses_fixed_one_second_mean_bins():
     rows = [
         {"timestamp": f"2026/08/03 00:00:{second}", "power.draw [W]": watts}
-        for second, watts in (("00.000", "100"), ("04.999", "200"),
-                              ("05.000", "400"), ("09.999", "600"))
+        for second, watts in (("00.000", "100"), ("00.999", "200"),
+                              ("01.000", "400"), ("01.999", "600"))
     ]
 
     times, watts = driver.bin_power(rows, driver.parse_wall(rows[0]["timestamp"]))
 
-    assert times == pytest.approx([2.5, 7.5])
+    assert times == pytest.approx([.5, 1.5])
     assert watts == pytest.approx([150, 500])
 
 
