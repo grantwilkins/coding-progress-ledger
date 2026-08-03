@@ -1159,7 +1159,10 @@ def _lp_highs(table: CandidateTable, target: float, stats=None):
         if maximum.status:
             raise RuntimeError(f"HiGHS maximum-gain LP failed: {maximum.message}")
         best = -float(maximum.fun) * gain_scale
-        result = solve(work / table.migration_horizon_s, best - 1e-7)
+        result = solve(
+            work / table.migration_horizon_s,
+            max(0.0, best - 1e-7 * gain_scale),
+        )
     if result.status:
         raise RuntimeError(f"HiGHS target LP failed: {result.message}")
     selected = _round_lp(table, target, result.x)

@@ -141,7 +141,8 @@ realized replay and commit times. `evaluation_config.py` is the canonical
 source for assumed paper operating points and their replacement evidence.
 The default pool LP remains the Clarabel implementation. The experimental
 `lp_highs` solver runs the same relaxation and rounder through SciPy/HiGHS;
-resource rows are assembled directly from candidate nonzeros.
+resource rows are assembled directly from candidate nonzeros, and maximum-gain
+fallback uses a scale-relative normalized feasibility margin.
 `lp_column_generation` is a Phase-I/Phase-II prototype with a reported
 primal-dual certificate. It materializes the full candidate table and rebuilds
 restricted masters, so it is a correctness reference rather than the

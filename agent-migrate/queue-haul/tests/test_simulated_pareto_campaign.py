@@ -17,6 +17,7 @@ Plausible wrong implementations:
 - Reduce missing, duplicate, or stale shard rows.
 - Find target attainment from instantaneous rather than trailing-window power.
 - Include greedy_lagrangian or omit an intended scalable baseline.
+- Apply an absolute-watt tolerance after normalizing the HiGHS gain row.
 """
 
 import csv
@@ -53,6 +54,28 @@ def test_manifest_is_exact_full_grid_plus_sentinel():
     assert {row["shard"] for row in rows} == set(range(64))
     assert sum(row["case"] == "central" for row in rows) == 11_760
     assert sum(row["case"] != "central" for row in rows) == 576
+
+
+def test_highs_max_gain_fallback_handles_trace_power_scale():
+    profile = ModelProfile.load(MODEL)
+    manifest = {
+        "sessions": 10_000,
+        "model": {"path": str(MODEL.relative_to(ROOT)), "sha256": file_hash(MODEL)},
+        "workloads": {
+            str(path.relative_to(ROOT)): {"sha256": file_hash(path)}
+            for path in WORKLOADS
+        },
+        "fits": fit_hardware(profile),
+    }
+    result = run_row({
+        "episode_id": "interactive_coding-seed-1", "kind": "trace",
+        "workload": "profiles/interactive_coding.json", "seed": 1,
+        "case": "central", "bandwidth_mbps": 10_000, "deadline_s": 60,
+        "target_fraction": .5, "policy": "queue_haul",
+    }, manifest)
+
+    assert result["sessions"] == 10_000
+    assert result["admitted_moves"] > 0
 
 
 def test_width8_fit_uses_only_complete_10g_eight_move_episodes(tmp_path):
