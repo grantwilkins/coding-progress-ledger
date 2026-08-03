@@ -88,15 +88,13 @@ remaining_bytes
 (deadline - now - final_catchup - switch - transition - power_window)
 ```
 
-Retain three policy comparisons:
+Retain two optimizer comparisons:
 
-- Maximum-rate greedy.
-- Deadline-paced greedy.
-- Fixed-score greedy.
+- Static scarcity-priced `greedy`.
+- Dual-priced source-prefix `greedy_lagrangian`.
 
 Use exact enumeration on tiny cases and the LP on tractable cases as quality
-references. The greedy is the intended million-session solver and
-should remain approximately `O(N log N)`.
+references. Report planning time and memory for both supported greedies.
 
 Earlier quiescence is necessary when observed growth or contention consumes
 slack. A plan is infeasible when its required rates exceed the measured

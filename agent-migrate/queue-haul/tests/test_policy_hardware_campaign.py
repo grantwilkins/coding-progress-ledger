@@ -20,6 +20,7 @@ Plausible wrong implementations:
 - Divide episode downtime by a linearized or requested power reduction.
 - Sum overlapping migration durations instead of using episode makespan.
 - Swap policy color or legend identities in the paper CDFs.
+- Route Lagrangian planning through a simulated executor instead of the hardware plan.
 """
 
 import csv
@@ -154,7 +155,7 @@ def test_fixed_context_pack_preserves_width_and_pairing(tmp_path):
     assert plan["context_packs"] == {"small": [4096] * 8}
     assert plan["workload_profiles"] == []
     assert plan["token_distributions"] == ["fixed"]
-    assert len(plan["scenarios"]) == 5
+    assert len(plan["scenarios"]) == 6
     assert all(row["move_concurrency"] == 8 for row in plan["scenarios"])
     assert all(
         [session["initial_tokens"] for session in row["sessions"]]
@@ -441,14 +442,18 @@ def test_destination_ttft_cdf_includes_migration_time(tmp_path, monkeypatch):
     assert ax.get_ylabel() == "Cumulative Distribution"
     assert CDF_COLORS == {
         "queue_haul": "#8C1515", "greedy": "#175E54",
+        "greedy_lagrangian": "#6F4E7C",
         "kv_only": "#007C92", "replay_only": "#E98300",
     }
     assert CDF_LABELS == {
         "queue_haul": "Queue-Haul LP", "greedy": "Queue-Haul Greedy",
+        "greedy_lagrangian": "Queue-Haul Lagrangian Greedy",
         "kv_only": "KV Migrate Only", "replay_only": "Replay Context Only",
     }
     assert CDF_LINESTYLES == {
-        "queue_haul": "-", "greedy": "--", "kv_only": "-.", "replay_only": ":",
+        "queue_haul": "-", "greedy": "--",
+        "greedy_lagrangian": (0, (3, 1, 1, 1)),
+        "kv_only": "-.", "replay_only": ":",
     }
 
 

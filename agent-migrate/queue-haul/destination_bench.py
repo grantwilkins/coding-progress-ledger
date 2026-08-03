@@ -470,7 +470,7 @@ def parse_solvers(value: str) -> tuple[str, ...]:
     solvers = tuple(value.split(","))
     allowed = {"lp", "lp_highs", "lp_column_generation",
                "lp_column_generation_persistent", "lp_column_generation_lazy",
-               "lp_column_generation_native", "greedy"}
+               "lp_column_generation_native", "greedy", "greedy_lagrangian"}
     if not solvers or not set(solvers) <= allowed:
         raise argparse.ArgumentTypeError(f"solvers must be drawn from {sorted(allowed)}")
     return solvers
@@ -606,7 +606,10 @@ def main():
     parser.add_argument("--iterations", type=int, default=8)
     parser.add_argument("--reference-only", action="store_true")
     parser.add_argument("--workloads", type=parse_classes, default=CLASSES)
-    parser.add_argument("--solvers", type=parse_solvers, default=("lp", "greedy"))
+    parser.add_argument(
+        "--solvers", type=parse_solvers,
+        default=("lp", "greedy", "greedy_lagrangian"),
+    )
     parser.add_argument("--pool-counts", type=parse_pool_counts, default=(1,))
     args = parser.parse_args()
     if args.reference_only:

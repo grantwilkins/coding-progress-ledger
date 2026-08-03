@@ -25,8 +25,8 @@ Plausible wrong implementations:
 - Lose physical units or pool/facet identity in normalized planner rows.
 - Treat unused early capacity as if it could serve transition work arriving late.
 - Credit node shutdown during session selection instead of only after planning.
-- Rank sessions only by initial marginal power and miss a feasible full-drain bundle.
-- Assign every coupled prefix member to the same cheap pool and fail concrete packing.
+- Rank sessions only by initial marginal power and miss a feasible source prefix.
+- Assign every Lagrangian prefix member to the same cheap pool and fail concrete packing.
 - Serialize replay and KV work despite having separate measured aggregate caps.
 - Relax aggregate method constraints but retain cross-method serialization in packing.
 - Choose one cheap action per session before exploring feasible mixed-method patterns.
@@ -57,8 +57,8 @@ from destination import (DESTINATION_SCHEMA, CompatibilityFingerprint, ContextRa
 from planner import plan
 from pool_planner import (Candidate, CandidateTable, _destination_duration, _event_bounds,
                           _candidate_oracle,
-                          _greedy, _greedy_bundle, _greedy_coupled,
-                          _greedy_prefix, _coupled_source_pattern,
+                          _greedy, _greedy_lagrangian,
+                          _lagrangian_source_prefix,
                           _lp_column_generation, _lp_column_generation_lazy,
                           _lp_column_generation_native,
                           _lp_column_generation_persistent,
@@ -67,7 +67,7 @@ from pool_planner import (Candidate, CandidateTable, _destination_duration, _eve
                           _native_pricing_oracle, _pricing_soa,
                           _dual_resource_limits, _retained_prefixes,
                           _source_removed_gain,
-                          _recover_coupled, _service_trace, candidate_table,
+                          _recover_lagrangian, _service_trace, candidate_table,
                           destination_service_execution, exact_replica_assignment,
                           service_debt, validate_destination_execution)
 from power_model import ExpectedPower
@@ -78,6 +78,18 @@ from test_planner import PATHS, problem
 
 
 FP = CompatibilityFingerprint("m", "t", "log", "kv")
+
+
+def test_public_solver_surface_hard_fails_retired_greedies(tmp_path):
+    profile, scenario = model(tmp_path), problem()
+    with pytest.raises(ValueError, match="requires a destination architecture"):
+        plan(scenario, profile, PATHS, "greedy_lagrangian")
+    for retired in ("greedy_bundle", "greedy_coupled", "greedy_prefix"):
+        with pytest.raises(ValueError, match="supports pool-aware LP and greedy"):
+            plan(
+                scenario, profile, PATHS, retired,
+                destination=architecture(),
+            )
 
 
 def _reference_marginal(power, session_id):
@@ -508,36 +520,6 @@ def test_dual_route_limit_reserves_the_largest_post_route_tail():
     assert _dual_resource_limits(table) == pytest.approx((.9, 1))
 
 
-def test_full_drain_bundle_crosses_power_knee(tmp_path):
-    profile = model(tmp_path)
-    sessions = tuple(
-        SimSession(str(i), "s0" if i < 3 else f"s{i - 2}", 1,
-                   30 if i < 3 else 20, 0, 1)
-        for i in range(6)
-    )
-    scenario = replace(
-        problem(), sessions=sessions,
-        nodes=tuple(PowerNode(f"n{i}", 1, True) for i in range(4)),
-        instances=tuple(ServingInstance(f"s{i}", (f"n{i}",)) for i in range(4)),
-    )
-    power = ExpectedPower(scenario, profile)
-    costs = (.25, .25, .25, .3, .3, .3)
-    candidates = tuple(
-        Candidate(i, "replay", 0, power.marginal(str(i)), 1, 1, (), 0, (0, 0), 0)
-        for i in range(6)
-    )
-    table = CandidateTable(
-        sessions, candidates, csr_matrix(np.eye(6)),
-        csr_matrix((costs, (np.zeros(6), np.arange(6))), shape=(1, 6)),
-        ("route",), (1,), ("fraction",), 1,
-    )
-
-    assert _greedy(table, 26) == {3, 4, 5}
-    assert _greedy_bundle(table, 26, power) == {0, 1, 2}
-    assert power.drain_gain(("3", "4", "5")) == pytest.approx(24)
-    assert power.drain_gain(("0", "1", "2")) == pytest.approx(28)
-
-
 def architecture(*, normal=.3, emergency=.5, stable=1, baselines=((0, 0), (0, 0)),
                  kv=1000, methods=("replay", "kv_transfer"), compatibility=FP,
                  residency=None, routes=(("wan",), ("wan",)), block=1,
@@ -557,7 +539,7 @@ def architecture(*, normal=.3, emergency=.5, stable=1, baselines=((0, 0), (0, 0)
     return DestinationArchitecture(DESTINATION_SCHEMA, FP, (q,), pools, residency)
 
 
-def test_coupled_prefix_crosses_knee_with_packable_mixed_pools(tmp_path):
+def test_lagrangian_crosses_knee_with_packable_mixed_pools(tmp_path):
     profile = model(tmp_path)
     sessions = tuple(SimSession(str(i), "s0", 1, 30, 0, 1) for i in range(3))
     nodes = (PowerNode("n0", 1, True),) + tuple(
@@ -601,9 +583,9 @@ def test_coupled_prefix_crosses_knee_with_packable_mixed_pools(tmp_path):
         ("route",), (1,), ("fraction",), 10,
     )
 
-    selected = _greedy_coupled(table, 28, power, arch, scenario, "normal")
+    selected = _greedy_lagrangian(table, 28, power, arch, scenario, "normal")
 
-    assert _coupled_source_pattern(
+    assert _lagrangian_source_prefix(
         table, power, ((0, 1), (2, 1.5), (4, 15)), 1, 1,
     ) == (0, 2)  # objectives: 0, -5, -13.5, -10.5
     assert len(selected) == 3
@@ -612,7 +594,7 @@ def test_coupled_prefix_crosses_knee_with_packable_mixed_pools(tmp_path):
     assert exact_replica_assignment(table, selected, arch, scenario, "normal") is not None
 
 
-def test_coupled_oracle_finds_the_only_feasible_method_mix(tmp_path):
+def test_lagrangian_finds_the_only_feasible_method_mix(tmp_path):
     profile, scenario = model(tmp_path), problem()
     scenario = replace(scenario, sessions=(
         scenario.sessions[0],
@@ -636,10 +618,7 @@ def test_coupled_oracle_finds_the_only_feasible_method_mix(tmp_path):
         "p", "q", (DestinationReplica("t0"),), "r", ("wan",),
     ),))
 
-    selected = _greedy_coupled(
-        table, power.drain_gain(("a", "b")), power, arch, scenario, "normal",
-    )
-    prefix = _greedy_prefix(
+    selected = _greedy_lagrangian(
         table, power.drain_gain(("a", "b")), power, arch, scenario, "normal",
     )
 
@@ -647,11 +626,9 @@ def test_coupled_oracle_finds_the_only_feasible_method_mix(tmp_path):
     assert {candidates[i].method for i in selected} == {
         "replay", "kv_transfer",
     }
-    assert {candidates[i].session for i in prefix} == {0, 1}
-    assert {candidates[i].method for i in prefix} == {"replay", "kv_transfer"}
 
 
-def test_coupled_recovery_caps_one_watt_overshoot_before_work(tmp_path):
+def test_lagrangian_recovery_caps_one_watt_overshoot_before_work(tmp_path):
     profile, scenario = model(tmp_path), problem()
     sessions = (
         replace(scenario.sessions[0], expected_f=5, expected_g=0),
@@ -669,7 +646,7 @@ def test_coupled_recovery_caps_one_watt_overshoot_before_work(tmp_path):
         ("route",), (1,), ("fraction",), 10,
     )
 
-    selected = _recover_coupled(
+    selected = _recover_lagrangian(
         table, power, {"s0": {(), (0,)}, "s1": {(1,)}}, 1,
         replace(architecture(normal=1, emergency=1), pools=(
             architecture(normal=1, emergency=1).pools[0],
@@ -686,7 +663,7 @@ def test_coupled_recovery_caps_one_watt_overshoot_before_work(tmp_path):
         ),
     )
     target = power.drain_gain([s.session_id for s in sessions])
-    selected = _recover_coupled(
+    selected = _recover_lagrangian(
         upgrade, power, {"s0": {(0,), (0, 1)}}, target,
         replace(architecture(normal=1, emergency=1), pools=(
             architecture(normal=1, emergency=1).pools[0],
@@ -712,7 +689,7 @@ def test_coupled_recovery_caps_one_watt_overshoot_before_work(tmp_path):
         resource_capacities=(1, 1),
         resource_units=("fraction", "fraction"),
     )
-    selected = _recover_coupled(
+    selected = _recover_lagrangian(
         swap_table, power, {"s0": {(0,), (1,)}, "s1": {(2,)}}, target,
         architecture(normal=1, emergency=1), scenario, "normal",
     )
@@ -720,7 +697,7 @@ def test_coupled_recovery_caps_one_watt_overshoot_before_work(tmp_path):
     assert selected == {1, 2}
 
 
-def test_coupled_recovery_packs_once_and_falls_back(tmp_path, monkeypatch):
+def test_lagrangian_recovery_packs_once_and_falls_back(tmp_path, monkeypatch):
     profile, scenario = model(tmp_path), problem()
     power = ExpectedPower(scenario, profile)
     candidates = tuple(
@@ -745,11 +722,11 @@ def test_coupled_recovery_packs_once_and_falls_back(tmp_path, monkeypatch):
         return real(*args)
 
     monkeypatch.setattr(pool_planner, "_pack", counted)
-    lazy = _recover_coupled(
+    lazy = _recover_lagrangian(
         table, power, patterns, target, arch, scenario, "normal",
     )
     lazy_calls, calls = calls, 0
-    eager = _recover_coupled(
+    eager = _recover_lagrangian(
         table, power, patterns, target, arch, scenario, "normal",
         eager_pack=True,
     )
@@ -765,13 +742,13 @@ def test_coupled_recovery_packs_once_and_falls_back(tmp_path, monkeypatch):
         return (None, ()) if calls == 1 else real(*args)
 
     monkeypatch.setattr(pool_planner, "_pack", reject_final_once)
-    assert _recover_coupled(
+    assert _recover_lagrangian(
         table, power, patterns, target, arch, scenario, "normal",
     ) == eager
     assert calls == 3
 
 
-def test_coupled_recovery_preserves_aggregate_boundary(tmp_path):
+def test_lagrangian_recovery_preserves_aggregate_boundary(tmp_path):
     profile, scenario = model(tmp_path), problem()
     power = ExpectedPower(scenario, profile)
     candidates = tuple(
@@ -787,7 +764,7 @@ def test_coupled_recovery_preserves_aggregate_boundary(tmp_path):
             csr_matrix(((.6, second), ((0, 0), (0, 1))), shape=(1, 2)),
             ("route",), (1,), ("fraction",), 10,
         )
-        return _recover_coupled(
+        return _recover_lagrangian(
             table, power, {"s0": {(0,)}, "s1": {(1,)}},
             power.drain_gain(("a", "b")),
             replace(architecture(normal=1, emergency=1), pools=(
@@ -800,7 +777,7 @@ def test_coupled_recovery_preserves_aggregate_boundary(tmp_path):
     assert recover(boundary + 1e-12) == {0}
 
 
-def test_coupled_recovery_preserves_prefix_tie_order(tmp_path):
+def test_lagrangian_recovery_preserves_prefix_tie_order(tmp_path):
     profile, scenario = model(tmp_path), problem()
     sessions = (scenario.sessions[0], replace(
         scenario.sessions[1], source_instance="s0",
@@ -817,7 +794,7 @@ def test_coupled_recovery_preserves_prefix_tie_order(tmp_path):
         ("route",), (1,), ("fraction",), 10,
     )
 
-    selected = _recover_coupled(
+    selected = _recover_lagrangian(
         table, power, {"s0": {(0,), (0, 1)}}, .1,
         replace(architecture(normal=1, emergency=1), pools=(
             architecture(normal=1, emergency=1).pools[0],

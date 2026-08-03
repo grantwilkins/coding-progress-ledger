@@ -198,7 +198,7 @@ def primary_cells():
 
 def run_sweep(build, profile, cells=primary_cells(), seeds=range(10),
               transition_seeds=range(10, 30)):
-    """Run paired legacy, LP, and pool-greedy cells."""
+    """Run paired legacy, LP, and supported pool-greedy cells."""
     rows, cells, seeds = [], tuple(cells), tuple(seeds)
 
     def run(selected_cells, selected_seeds):
@@ -207,9 +207,7 @@ def run_sweep(build, profile, cells=primary_cells(), seeds=range(10),
             for label, solver, destination in (
                 ("scalar", "lp", None), ("pool_lp", "lp", architecture),
                 ("pool_greedy", "greedy", architecture),
-                ("pool_bundle", "greedy_bundle", architecture),
-                ("pool_prefix_experimental", "greedy_prefix", architecture),
-                ("pool_coupled_experimental", "greedy_coupled", architecture),
+                ("pool_lagrangian", "greedy_lagrangian", architecture),
             ):
                 result = plan(
                     scenario, profile, routes, solver, seed=seed, destination=destination,

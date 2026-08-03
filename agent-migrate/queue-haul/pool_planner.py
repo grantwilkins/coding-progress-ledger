@@ -22,8 +22,6 @@ from simulate import (ExecutionScenario, PlannedMove, PoolServiceExecution,
                       SimSession, predict)
 
 
-MAX_EXACT_COUPLED_PATTERNS = 10_000
-COUPLED_PRICE_ITERATIONS = 32
 DUAL_PRICE_ITERATIONS = 1
 DUAL_PREFIX_BUCKETS = 8
 DUAL_HIGH_TARGET_ITERATIONS = 4
@@ -661,58 +659,7 @@ def _greedy(table: CandidateTable, target: float):
     return selected
 
 
-def _greedy_bundle(table: CandidateTable, target: float, power: ExpectedPower):
-    matrix, selected = csc_matrix(table.resources), set()
-    sessions, usage, gain = set(), np.zeros(table.resources.shape[0]), 0.0
-    state = ExpectedPower(power.scenario, power.profile, power.case.case_id)
-    while gain < target - 1e-8:
-        choices, cheapest = [], {}
-        for i, c in enumerate(table.candidates):
-            if c.session in sessions:
-                continue
-            sl = slice(matrix.indptr[i], matrix.indptr[i + 1])
-            rows, values = matrix.indices[sl], matrix.data[sl]
-            if np.any(usage[rows] + values > 1 + 1e-8):
-                continue
-            cost = (values / (1 - usage[rows])).sum()
-            choices.append((i,))
-            if c.session not in cheapest or (cost, i) < cheapest[c.session]:
-                cheapest[c.session] = cost, i
-        groups = {}
-        for cost, i in cheapest.values():
-            session = table.sessions[table.candidates[i].session]
-            groups.setdefault(session.source_instance, []).append(
-                (power.ell[session.session_id] / cost, i)
-            )
-        for group in groups.values():
-            ordered = [i for _, i in sorted(group, reverse=True)]
-            choices.extend(tuple(ordered[:n]) for n in range(2, min(3, len(ordered)) + 1))
-            if len(ordered) > 3:
-                choices.append(tuple(ordered))
-        best = None
-        for choice in choices:
-            added = np.asarray(matrix[:, choice].sum(1)).ravel()
-            if np.any(usage + added > 1 + 1e-8):
-                continue
-            ids = [table.sessions[table.candidates[i].session].session_id for i in choice]
-            cost = sum(value / (1 - usage[row])
-                       for row, value in enumerate(added) if value)
-            key = (state.drain_gain(ids) / cost, tuple(-i for i in choice))
-            if best is None or key > best[0]:
-                best = key, choice, ids, added
-        if best is None:
-            break
-        before = state.power(True)
-        for session_id in best[2]:
-            state.remove(session_id)
-        gain += before - state.power(True)
-        selected.update(best[1])
-        sessions.update(table.candidates[i].session for i in best[1])
-        usage += best[3]
-    return selected
-
-
-def _coupled_gain(table, power, pattern, cache=None):
+def _lagrangian_gain(table, power, pattern, cache=None):
     sessions = frozenset(table.candidates[i].session for i in pattern)
     if cache is None or sessions not in cache:
         value = power.drain_gain([
@@ -742,7 +689,7 @@ def _source_removed_gain(power, source, removed_load):
     )
 
 
-def _coupled_source_patterns(table, power, priced, eta, scale, cache=None):
+def _lagrangian_source_prefixes(table, power, priced, eta, scale):
     ordered = sorted(priced, key=lambda row: (
         row[1] / power.ell[table.sessions[table.candidates[row[0]].session].session_id],
         row[0],
@@ -766,8 +713,8 @@ def _coupled_source_patterns(table, power, priced, eta, scale, cache=None):
     return order[:best[1]], order
 
 
-def _coupled_source_pattern(table, power, priced, eta, scale):
-    return _coupled_source_patterns(table, power, priced, eta, scale)[0]
+def _lagrangian_source_prefix(table, power, priced, eta, scale):
+    return _lagrangian_source_prefixes(table, power, priced, eta, scale)[0]
 
 
 def _retained_prefixes(pattern, ordered, buckets=None):
@@ -801,46 +748,7 @@ def _dual_resource_limits(table):
     return limits
 
 
-def _coupled_source_space(
-    table, power, members, by_session, matrix, gain_cache,
-):
-    choices = [tuple(by_session.get(session, ())) for session in members
-               if power.ell[table.sessions[session].session_id] > 0]
-    count = 1
-    for actions in choices:
-        count *= len(actions) + 1
-        if count > MAX_EXACT_COUPLED_PATTERNS:
-            return None
-    columns = {
-        i: np.asarray(matrix[:, i].todense()).ravel()
-        for actions in choices for i in actions
-    }
-    states = [((), 0.0, np.zeros(matrix.shape[0]))]
-    for actions in choices:
-        prior = states
-        states = list(prior)
-        for pattern, work, usage in prior:
-            for i in actions:
-                next_usage = usage + columns[i]
-                if np.all(next_usage <= 1 + 1e-8):
-                    states.append((
-                        pattern + (i,),
-                        work + table.candidates[i].migration_work_s,
-                        next_usage,
-                    ))
-    patterns = tuple(row[0] for row in states)
-    return (
-        patterns,
-        np.asarray([row[1] for row in states]),
-        np.asarray([row[2] for row in states]),
-        np.asarray([
-            _coupled_gain(table, power, pattern, gain_cache)
-            for pattern in patterns
-        ]),
-    )
-
-
-def _recover_coupled(
+def _recover_lagrangian(
     table, power, patterns, target, architecture, scenario, mode, gain_cache=None,
     eager_pack=False, return_assignment=False, resource_limits=None,
 ):
@@ -874,7 +782,7 @@ def _recover_coupled(
                         power.ell[table.sessions[session].session_id]
                         for session in sessions
                     ),
-                ) if len(sources) == 1 else _coupled_gain(
+                ) if len(sources) == 1 else _lagrangian_gain(
                     table, power, pattern, gain_cache,
                 ),
                 sum(table.candidates[i].migration_work_s for i in pattern),
@@ -966,136 +874,93 @@ def _recover_coupled(
     if not eager_pack and gain >= target - 1e-8:
         assignment = _pack(table, selected, architecture, scenario, mode)[0]
     if not eager_pack and (gain < target - 1e-8 or assignment is None):
-        return _recover_coupled(
+        return _recover_lagrangian(
             table, power, patterns, target, architecture, scenario, mode,
             gain_cache, True, return_assignment, limits,
         )
     exact_usage = np.asarray(matrix[:, list(selected)].sum(1)).ravel() \
         if selected else np.zeros(matrix.shape[0])
     if np.any(exact_usage > limits + 1e-8):
-        raise RuntimeError("coupled recovery exceeded an aggregate resource")
+        raise RuntimeError("Lagrangian recovery exceeded an aggregate resource")
     return (selected, assignment) if return_assignment else selected
 
 
-def _greedy_coupled(
-    table, target, power, architecture, scenario, mode, enumerate_small=True,
-    iterations=None, return_assignment=False, resource_limits=None,
-    prefix_buckets=None,
+def _greedy_lagrangian(
+    table, target, power, architecture, scenario, mode, return_assignment=False,
 ):
-    """Simulator-local emulation of source-local choices under shared prices."""
-    iterations = COUPLED_PRICE_ITERATIONS if iterations is None else iterations
+    """Choose source-local prefixes under iterated aggregate-resource prices."""
+    maximum = power.drain_gain(session.session_id for session in table.sessions)
+    high = maximum > 0 and target >= DUAL_HIGH_TARGET_FRACTION * maximum
+    iterations = DUAL_HIGH_TARGET_ITERATIONS if high else DUAL_PRICE_ITERATIONS
+    prefix_buckets = DUAL_HIGH_TARGET_BUCKETS if high else DUAL_PREFIX_BUCKETS
     if iterations < 1:
         raise ValueError("dual pricing needs a positive iteration budget")
     matrix = csc_matrix(table.resources)
-    limits = np.ones(matrix.shape[0]) \
-        if resource_limits is None else resource_limits
+    limits = _dual_resource_limits(table)
     by_source, by_session = {}, {}
     for j, session in enumerate(table.sessions):
         by_source.setdefault(session.source_instance, []).append(j)
-    if not enumerate_small:
-        for members in by_source.values():
-            members.sort(key=lambda j: table.sessions[j].session_id)
+    for members in by_source.values():
+        members.sort(key=lambda j: table.sessions[j].session_id)
     for i, candidate in enumerate(table.candidates):
         by_session.setdefault(candidate.session, []).append(i)
     prices = _scarcity_prices(table, matrix)
     eta, scale = 1.0, max(target, 1.0)
     gain_cache = {}
     retained = {source: set() for source in by_source}
-    spaces = {
-        source: _coupled_source_space(
-            table, power, members, by_session, matrix, gain_cache,
-        ) if enumerate_small else None
-        for source, members in by_source.items()
-    }
-    for source, space in spaces.items():
-        if space is not None:
-            patterns, _work, _usage, gains = space
-            best = gains.max()
-            retained[source].update(
-                pattern for pattern, gain in zip(patterns, gains)
-                if gain >= best - 1e-8
-            )
     for iteration in range(iterations):
         selected, chosen = set(), []
         for source_order, (source, members) in enumerate(sorted(by_source.items())):
-            space = spaces[source]
-            if space is not None:
-                patterns, work, usage, gains = space
-                score = work / table.migration_horizon_s \
-                    + usage @ prices - eta * gains / scale
-                pattern = patterns[int(np.argmin(score))]
-            else:
-                priced, alternate = [], []
-                for position, session in enumerate(members):
-                    if power.ell[table.sessions[session].session_id] <= 0:
-                        continue
-                    actions = []
-                    for i in by_session.get(session, ()):
-                        sl = slice(matrix.indptr[i], matrix.indptr[i + 1])
-                        rows, values = matrix.indices[sl], matrix.data[sl]
-                        value = table.candidates[i].migration_work_s \
-                            / table.migration_horizon_s + prices[rows] @ values
-                        actions.append((value, i))
-                    if not actions:
-                        continue
-                    actions.sort()
-                    low = min(value for value, _i in actions)
-                    ties = sorted(
-                        i for value, i in actions if abs(value - low) <= 1e-12
-                    )
-                    i = ties[(iteration + source_order + position) % len(ties)]
-                    priced.append((i, low))
-                    if not enumerate_small:
-                        value, i = actions[
-                            (iteration + source_order + position) % min(2, len(actions))
-                        ]
-                        alternate.append((i, value))
-                pattern, ordered = _coupled_source_patterns(
-                    table, power, priced, eta, scale, gain_cache,
+            priced, alternate = [], []
+            for position, session in enumerate(members):
+                if power.ell[table.sessions[session].session_id] <= 0:
+                    continue
+                actions = []
+                for i in by_session.get(session, ()):
+                    sl = slice(matrix.indptr[i], matrix.indptr[i + 1])
+                    rows, values = matrix.indices[sl], matrix.data[sl]
+                    value = table.candidates[i].migration_work_s \
+                        / table.migration_horizon_s + prices[rows] @ values
+                    actions.append((value, i))
+                if not actions:
+                    continue
+                actions.sort()
+                low = min(value for value, _i in actions)
+                ties = sorted(i for value, i in actions if abs(value - low) <= 1e-12)
+                i = ties[(iteration + source_order + position) % len(ties)]
+                priced.append((i, low))
+                value, alternate_i = actions[
+                    (iteration + source_order + position) % min(2, len(actions))
+                ]
+                alternate.append((alternate_i, value))
+            pattern, ordered = _lagrangian_source_prefixes(
+                table, power, priced, eta, scale,
+            )
+            retained[source].update(_retained_prefixes(
+                pattern, ordered, prefix_buckets,
+            ))
+            if alternate:
+                alternative, ordered = _lagrangian_source_prefixes(
+                    table, power, alternate, eta, scale,
                 )
-                retained[source].update(_retained_prefixes(
-                    pattern, ordered, prefix_buckets,
-                ))
-                if alternate:
-                    alternative, ordered = _coupled_source_patterns(
-                        table, power, alternate, eta, scale, gain_cache,
-                    )
-                    retained[source].update(
-                        _retained_prefixes(alternative, ordered, prefix_buckets)
-                    )
+                retained[source].update(
+                    _retained_prefixes(alternative, ordered, prefix_buckets)
+                )
             retained[source].add(pattern)
             selected.update(pattern)
             chosen.append(pattern)
         usage = np.asarray(table.resources[:, list(selected)].sum(1)).ravel() \
             if selected else np.zeros(table.resources.shape[0])
         shed = sum(
-            _coupled_gain(table, power, pattern, gain_cache) for pattern in chosen
+            _lagrangian_gain(table, power, pattern, gain_cache) for pattern in chosen
         )
         step = .5 / np.sqrt(iteration + 1)
         prices = np.maximum(0, prices + step * (usage - limits))
         eta = max(0, eta + step * (target - shed) / scale)
-    return _recover_coupled(
+    return _recover_lagrangian(
         table, power, retained, target, architecture, scenario, mode, gain_cache,
         return_assignment=return_assignment,
         resource_limits=limits,
-    )
-
-
-def _greedy_prefix(
-    table, target, power, architecture, scenario, mode, return_assignment=False,
-):
-    maximum = power.drain_gain(
-        session.session_id for session in table.sessions
-    )
-    high = maximum > 0 and target >= DUAL_HIGH_TARGET_FRACTION * maximum
-    return _greedy_coupled(
-        table, target, power, architecture, scenario, mode, False,
-        iterations=(DUAL_HIGH_TARGET_ITERATIONS if high
-                    else DUAL_PRICE_ITERATIONS),
-        return_assignment=return_assignment,
-        resource_limits=_dual_resource_limits(table),
-        prefix_buckets=(DUAL_HIGH_TARGET_BUCKETS if high
-                        else DUAL_PREFIX_BUCKETS),
     )
 
 
@@ -1992,14 +1857,9 @@ def _mode_plan(scenario, profile, architecture, solver, mode, power, target):
         table = candidate_table(scenario, profile, architecture, mode, power)
     if streamed:
         pass
-    elif solver == "greedy_prefix":
-        selected, assignment = _greedy_prefix(
+    elif solver == "greedy_lagrangian":
+        selected, assignment = _greedy_lagrangian(
             table, target, power, architecture, scenario, mode, True,
-        )
-    elif solver == "greedy_coupled":
-        selected, assignment = _greedy_coupled(
-            table, target, power, architecture, scenario, mode,
-            return_assignment=True,
         )
     else:
         selected = (_lp_column_generation_persistent(table, target)
@@ -2008,8 +1868,7 @@ def _mode_plan(scenario, profile, architecture, solver, mode, power, target):
                     if solver == "lp_column_generation" else
                     _lp_highs(table, target) if solver == "lp_highs" else
                     _lp(table, target) if solver.startswith("lp") else
-                    _greedy_bundle(table, target, power)
-                    if solver == "greedy_bundle" else _greedy(table, target))
+                    _greedy(table, target))
     repairs, repair_s = 0, 0.0
     costs = np.asarray(table.resources.sum(0)).ravel()
     while True:
@@ -2032,7 +1891,7 @@ def _mode_plan(scenario, profile, architecture, solver, mode, power, target):
 
 
 def plan_destination(scenario, profile, solver, case_id, seed, architecture):
-    if solver not in {"greedy", "greedy_bundle", "greedy_prefix", "greedy_coupled",
+    if solver not in {"greedy", "greedy_lagrangian",
                       "lp", "lp_peak_first", "lp_work_first", "lp_highs",
                       "lp_column_generation", "lp_column_generation_persistent",
                       "lp_column_generation_lazy", "lp_column_generation_native"}:

@@ -12,19 +12,16 @@ order and overlaps moves up to its configured width.
 - [x] Keep measured, fitted, simulated, and assumed evidence labels explicit.
 - [x] Validate realized destination service debt during summary prediction.
 - [ ] Regenerate canonical simulator tables and figures from a clean checkout.
-- [x] Add `greedy_bundle` to pool-aware fleet-policy comparisons.
-- [x] Add simulator-only `greedy_coupled` with exact source-prefix pricing and
-  destination packing checks.
-- [x] Cache coupled patterns and preserve exact recovery order with a lazy heap.
-- [x] Add a simulator-only polynomial prefix variant without changing defaults.
-- [x] Bound prefix recovery, remove repeated packing, and run a single-seed
+- [x] Consolidate the optimizer surface to `greedy` and
+  `greedy_lagrangian` across simulator and hardware planning.
+- [x] Bound Lagrangian recovery, remove repeated packing, and run a single-seed
   100K sensitivity.
 - [x] Replace global selected-set copies with exact source-prefix state IDs.
 - [x] Run single-seed 250K, 500K, and 1M 10% scale sensitivities.
 - [ ] Vectorize or index replica packing without changing assignments.
-- [ ] Reduce prefix RSS and smooth the 75% frontier discontinuity.
-- [ ] Resolve prefix order sensitivity and broaden held-out high-target
-  validation before promotion.
+- [ ] Reduce Lagrangian RSS and smooth the 75% frontier discontinuity.
+- [ ] Resolve Lagrangian order sensitivity and broaden held-out high-target
+  validation.
 - [ ] Verify checksums and paper tables against the committed code revision.
 - [x] Run `uv run pytest`.
 

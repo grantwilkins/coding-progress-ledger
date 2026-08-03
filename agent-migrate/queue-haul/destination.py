@@ -255,3 +255,40 @@ class DestinationArchitecture:
     @property
     def type_by_id(self) -> dict[str, DestinationType]:
         return {q.type_id: q for q in self.types}
+
+
+def dedicated_sink_architecture(profile, replica_id: str | tuple[str, ...],
+                                route: tuple[str, ...]) -> DestinationArchitecture:
+    """Advertise an idle dedicated sink without claiming shared-service headroom."""
+    case = profile.case()
+    fingerprint = CompatibilityFingerprint(
+        profile.model, "gpt-oss-pinned", "source-dc-log", "lmcache-mp-v7",
+    )
+
+    def rate(curve):
+        return ContextRate(*(
+            tuple(map(float, values)) for values in curve.by_concurrency[1]
+        ))
+
+    contexts = tuple(map(float, case.prefill.by_concurrency[1][0]))
+    loaded = LoadedCoefficients(
+        (0, 1), (1, 1), (contexts[0], contexts[-1]),
+        (1, 1e15), "dedicated-idle-sink-sensitivity",
+    )
+    destination_type = DestinationType(
+        f"{profile.model}-{profile.hardware}-tp{profile.tensor_parallel}",
+        fingerprint, rate(case.prefill), rate(case.decode), ((1, 1),),
+        {mode: (1,) for mode in MODES}, profile.kv_capacity_tokens,
+        {method: loaded for method in ("replay", "kv_transfer")}, (0, 1),
+        "dedicated-idle-sink-sensitivity", True,
+        case.kv_transfer.block_tokens,
+    )
+    replica_ids = (replica_id,) if isinstance(replica_id, str) else replica_id
+    pool = DestinationPool(
+        "dedicated-sink", destination_type.type_id,
+        tuple(DestinationReplica(value) for value in replica_ids),
+        "dedicated-route", route,
+    )
+    return DestinationArchitecture(
+        DESTINATION_SCHEMA, fingerprint, (destination_type,), (pool,),
+    )

@@ -24,8 +24,7 @@ The repository contains:
 - measured request-boundary replay and KV Gantt charts through the first
   destination token;
 - a one-pool requirement-frontier solver;
-- LP, static greedy, experimental bundle and prefix greedies, and simulator-only
-  price-coupled greedy with an exact width-8 action oracle and cached recovery;
+- LP, static `greedy`, and dual-priced `greedy_lagrangian` optimizers;
 - pool-aware planning and internal packing checks; and
 - a deterministic migration, network, request, queue, and power simulator.
 
@@ -116,7 +115,7 @@ uv run python queue-haul/migration_profiler.py make-crossover \
 uv run python queue-haul/policy_hardware_campaign.py plot-reduced \
   --out queue-haul/outputs/policy-hardware-width8-frontier-20260730
 uv run python queue-haul/canonical_simulator_campaign.py
-uv run python queue-haul/dual_lagrangian_experiment.py
+uv run python queue-haul/greedy_lagrangian_experiment.py
 uv run python queue-haul/simulated_pareto_campaign.py
 uv run python queue-haul/paper_evaluation.py \
   --out queue-haul/outputs/paper-evaluation
@@ -164,27 +163,14 @@ required for million-session operation.
 `outputs/native-lp-scale-20260801/one-million.json` records the post-optimization
 one-seed 1M-session LP/rounding sensitivity and its hashes; it explicitly excludes
 replica packing, DES, prediction, and execution validation.
-`dual_lagrangian_experiment.py` evaluates the simulator-only `greedy_prefix`
-policy as a dual-Lagrangian prefix method against the unchanged static greedy
-baseline and other experimental pool policies on paired trace-derived targets;
-infeasible plans receive zero validated shed. The archived exploratory run under
-`outputs/dual-lagrangian-*` finds lower migration work and better target
-completion in packed coding traces. The scale-oriented policy uses a small
-prefix-length frontier, incremental aggregate recovery, one final packing pass,
-and a broader frontier at 75% requested shed. Recovery represents each visited
-combination by an exact mixed-radix source-prefix ID instead of copying the
-global selected set. This bounded rewrite uses
-roughly 6–44% more migration work than its exhaustive-prefix experimental
-precursor in the archived comparable cases, while remaining below static
-greedy. It remains experimental and does not change the hardware controller.
-In a single-seed coding 10% sensitivity, prefix versus static greedy takes
-65/92 seconds at 250K, 200/290 seconds at 500K, and 694/1,236 seconds at 1M,
-while selecting 55–60% less migration work. At 1M it uses 5.02 versus 4.63 GB
-peak RSS and finishes migration at 111 versus 9 seconds against a 115-second
-horizon. Two additional 100K workloads also pass exact validation with lower
-prefix time and work. The 75% branch passes at 100K but takes 229 versus 174
-seconds and 1.78 versus 0.78 GB at 74.9%. These are scale sensitivities, not
-confidence intervals or a production-scale claim.
+`greedy_lagrangian_experiment.py` compares the two supported greedies on paired
+trace-derived targets; infeasible plans receive zero validated shed. Static
+`greedy` fixes one scarcity price and one global candidate order.
+`greedy_lagrangian` iterates aggregate-resource prices, retains a bounded set of
+exact nonlinear source prefixes, performs target-capped recovery, and packs the
+final set. Immutable single-policy scale runs under `outputs/dual-lagrangian-*`
+record the former `greedy_prefix` name; mixed bundles containing retired
+optimizers were removed rather than rewritten.
 The campaign also computes a fractional source-chord LP lower bound on migration
 work and plots each feasible greedy's excess work over that bound. The bound is
 valid for the concave GPU-scoped power profile and relaxes integrality, replica
@@ -208,8 +194,11 @@ by the fresh `quiesce` run before using their gray intervals as drain evidence.
 GPU-work-first, replay-only, and KV-only resource headroom at common requested
 source-power shed levels. Use `--refresh` when its pinned inputs change.
 `policy_hardware_campaign.py` creates a resumable paired idle-session campaign
-that launches every session concurrently for Queue-Haul, greedy, KV-only, and
-replay-only. Its default truncated grid uses coding, interactive-coding, and
+that launches every session concurrently for Queue-Haul, both greedies,
+KV-only, and replay-only. Static greedy retains its established hardware
+planning path. Lagrangian greedy uses a one-pool idle dedicated-sink adapter,
+then emits the same frozen move schema. Its default truncated grid uses coding,
+interactive-coding, and
 agentic-tool-loop context-length profiles; uniform-over-support and
 uniform-over-range token distributions, or named exact context packs; configurable
 bandwidths and deadlines; and full-episode migration width. The requirement and
@@ -235,6 +224,8 @@ over elapsed time with an interquartile band, plus paired attainment–completio
 points and a CDF of measured session downtime per modeled watt shed. This idle
 evidence also includes an episode migration-makespan-per-modeled-watt CDF and
 supports timing and projected, not realized, power attainment.
+The pinned 2026-07-30 bundles predate `greedy_lagrangian`; they do not constitute
+hardware evidence for it. A new two-A100 run is required for that claim.
 The separate live power-drain evidence in
 `outputs/power_drain_live_20260714/` includes planned and measured source-power
 reductions; `plot_migration_results.py` writes their shared-axis parity plot.
@@ -268,7 +259,7 @@ weight using `plot-reduced --out <packing-results> --pooled-with
 <frontier-results>`; this pooling also applies to both per-watt CDFs.
 `simulated_pareto_campaign.py` evaluates five fixed context anchors plus the
 measured workload templates with the calibrated crossover profile and paired
-random and coupled-greedy baselines. Its default episode width is 10,000
+random, static-greedy, and Lagrangian-greedy baselines. Its default episode width is 10,000
 sessions: templates are expanded to that width and executed through the core
 fluid simulator, with repeated templates grouped as equivalent fluid flows.
 Replay applies the serial measured rate per active flow; KV
@@ -276,16 +267,20 @@ and route traffic share their destination and network-link capacities; action
 power is linearly extended from serial calibration. The Pareto CSV and plot
 label measured, interpolated, and modeled quantities explicitly. The figure
 pairs deadline-normalized and raw-second clouds over 30/40/50/60/75-s budgets,
-with one point per result and no display jitter. The prior width-8 output remains
-available as historical evidence; the full-width output is
-`outputs/simulated-fullwidth-pareto-20260802/`.
+with one point per result and no display jitter. Mixed historical bundles that
+contained retired greedies were removed and must be regenerated.
 `canonical_simulator_campaign.py` runs a four-target paired 10K-session
-Queue-Haul, greedy, per-session-fastest, replay-only, and KV-only comparison
+Queue-Haul, both greedies, per-session-fastest, replay-only, and KV-only comparison
 under one assumed dedicated-pool contract. Its compact 10K/100K/1M scale check
-uses the Queue-Haul greedy planner, an equivalent pooled-destination topology,
+uses both greedies, an equivalent pooled-destination topology,
 10 Gbps per 10K sessions, and summary-only prediction. Sampled future requests
 are disabled; measured two-A100 results provide continuation first-token
 evidence.
+
+Software results are authoritative for optimizer intent, aggregate feasibility,
+and fleet-scale sensitivities. Hardware results are authoritative for measured
+execution and timing of the frozen plan. A mismatch fails validation; neither
+result silently overwrites the other.
 Override `QH_APPTAINER_IMAGE` if the pinned LMCache image is not at the default
 scratch path; set `QH_RESUME_FROM_GIT_SHA` when resuming after a code change.
 MP catch-up completeness uses exact rendered-token prefix chunks; observed key

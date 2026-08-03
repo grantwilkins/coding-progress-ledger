@@ -16,11 +16,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 import migration_profiler as profiler
-from destination import (
-    DESTINATION_SCHEMA, CompatibilityFingerprint, ContextRate,
-    DestinationArchitecture, DestinationPool, DestinationReplica,
-    DestinationType, LoadedCoefficients,
-)
+from destination import dedicated_sink_architecture
 from policy_hardware_campaign import (
     LABELS, _portable_path, _problem, deadline_attainment,
     validate_policy_plan,
@@ -39,10 +35,10 @@ DEFAULT_OUT = ROOT / "outputs/simulated-fullwidth-pareto-20260802"
 DEFAULT_SESSIONS = 10_000
 MAX_FLUID_PLANNING_SESSIONS = 256
 POLICIES = (
-    "queue_haul", "greedy", "greedy_coupled", "random", "kv_only",
+    "queue_haul", "greedy", "greedy_lagrangian", "random", "kv_only",
     "replay_only",
 )
-LABELS = {**LABELS, "greedy_coupled": "Coupled greedy"}
+LABELS = {**LABELS, "greedy_lagrangian": "Lagrangian greedy"}
 OBSERVATION_S = 600
 TIME_BUDGETS_S = (30, 40, 50, 60, 75)
 
@@ -169,40 +165,6 @@ def write_csv(path, rows):
         writer.writerows(rows)
 
 
-def coupled_architecture(profile):
-    case = profile.case()
-    fingerprint = CompatibilityFingerprint(
-        profile.model, "gpt-oss-pinned", "source-dc-log", "lmcache-mp-v7",
-    )
-    def rate(curve):
-        return ContextRate(*(
-            tuple(map(float, values))
-            for values in curve.by_concurrency[1]
-        ))
-    contexts = tuple(map(float, case.prefill.by_concurrency[1][0]))
-    loaded = LoadedCoefficients(
-        (0, 1), (1, 1), (contexts[0], contexts[-1]),
-        (125_000_000, 1_250_000_000),
-        "simulated-pareto-zero-load-sensitivity",
-    )
-    destination_type = DestinationType(
-        "gpt-oss-20b-a100-tp1", fingerprint, rate(case.prefill),
-        rate(case.decode), ((1, 1),),
-        {mode: (1,) for mode in ("normal", "emergency", "stable")},
-        profile.kv_capacity_tokens,
-        {"replay": loaded, "kv_transfer": loaded}, (0, 1),
-        "simulated-pareto-zero-load-sensitivity", True,
-        case.kv_transfer.block_tokens,
-    )
-    pool = DestinationPool(
-        "coupled-pool", destination_type.type_id,
-        (DestinationReplica("destination"),), "source-to-destination", ("link",),
-    )
-    return DestinationArchitecture(
-        DESTINATION_SCHEMA, fingerprint, (destination_type,), (pool,),
-    )
-
-
 def admitted_moves(policy, scenario, routes, profile, seed, destination=None,
                    replication=1):
     solver = {"queue_haul": "lp_work_first"}.get(policy, policy)
@@ -319,8 +281,9 @@ def simulate(plan_path=DEFAULT_PLAN, model_path=DEFAULT_MODEL,
                 base["sample_id"], sessions, bandwidth, budget_s,
             ])[:16]
             for policy in POLICIES:
-                destination = coupled_architecture(execution_profile) \
-                    if policy == "greedy_coupled" else None
+                destination = dedicated_sink_architecture(
+                    execution_profile, "destination", ("link",),
+                ) if policy == "greedy_lagrangian" else None
                 template_moves = admitted_moves(
                     policy, planning_scenario, planning_routes, planning_profile,
                     profiler.stable_seed(
@@ -505,7 +468,7 @@ def run(plan_path=DEFAULT_PLAN, model_path=DEFAULT_MODEL,
         "execution_contract":
             "each template group represents identical full-width flows; route bandwidth and "
             "destination ingest are divided by replication while action power is multiplied",
-        "greedy_coupled_contract":
+        "greedy_lagrangian_contract":
             "one destination replica and measured link; zero background load and "
             "destination service headroom are sensitivity inputs",
         "workload_contract":

@@ -1,4 +1,4 @@
-"""Paired simulator experiment for the experimental dual-Lagrangian selector."""
+"""Paired simulator experiment for the two supported greedy optimizers."""
 
 from __future__ import annotations
 
@@ -25,8 +25,8 @@ from profiles import ModelProfile
 
 
 ROOT = Path(__file__).parent
-DEFAULT_OUT = ROOT / "outputs/dual-lagrangian-experiment"
-SOLVERS = ("greedy", "greedy_bundle", "greedy_prefix", "greedy_coupled")
+DEFAULT_OUT = ROOT / "outputs/greedy-lagrangian-experiment"
+SOLVERS = ("greedy", "greedy_lagrangian")
 
 
 def power_limit(initial, minimum, fraction):
@@ -38,7 +38,7 @@ def power_limit(initial, minimum, fraction):
 def parse_solvers(value):
     solvers = tuple(value.split(","))
     if not solvers or not set(solvers) <= set(SOLVERS):
-        raise ValueError("unknown experimental solver")
+        raise ValueError("unknown greedy solver")
     return solvers
 
 
@@ -217,10 +217,7 @@ def plot_relaxation_gap(rows, output):
     solvers = [solver for solver in SOLVERS if any(
         row["solver"] == solver for row in rows
     )]
-    labels = {
-        "greedy": "Static", "greedy_bundle": "Bundles",
-        "greedy_prefix": "Lagrangian\nprefix", "greedy_coupled": "Coupled",
-    }
+    labels = {"greedy": "Static", "greedy_lagrangian": "Lagrangian"}
     fig, axes = plt.subplots(2, len(targets), figsize=(3.4 * len(targets), 5.5),
                              squeeze=False)
     for column, target in enumerate(targets):
@@ -334,7 +331,7 @@ def run(out=DEFAULT_OUT, counts=(80, 240), seeds=range(3),
     (out / "summary.json").write_text(json.dumps(summarize(rows), indent=2) + "\n")
     plot_relaxation_gap(rows, out / "work_above_chord_bound")
     (out / "run_metadata.json").write_text(json.dumps({
-        "experimental": True, "core_default_changed": False,
+        "optimizers": "supported", "core_default_changed": False,
         "gap_definition": "feasible work / fractional source-chord LP work - 1",
         "execution_contract": ORDERED_EAGER_PARALLEL_V1,
         "input_provenance": "measured|fitted|assumed",
@@ -371,7 +368,7 @@ def main():
         write_csv(args.out / "results.csv", rows)
         plot_relaxation_gap(rows, args.out / "work_above_chord_bound")
         (args.out / "run_metadata.json").write_text(json.dumps({
-            "experimental": True,
+            "optimizers": "supported",
             "gap_definition": "feasible work / fractional source-chord LP work - 1",
             "inputs": {str(path): file_hash(path) for path in args.combine},
         }, indent=2) + "\n")

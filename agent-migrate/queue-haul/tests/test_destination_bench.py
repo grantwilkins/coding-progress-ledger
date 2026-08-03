@@ -14,6 +14,7 @@ Plausible wrong implementations:
 - Drop context or bandwidth extrapolation from the result label.
 """
 
+import argparse
 from types import SimpleNamespace
 
 import pytest
@@ -64,6 +65,15 @@ def test_reference_bench_accepts_additive_highs_backend():
         "lp_column_generation_persistent", "lp_column_generation_lazy",
         "lp_column_generation_native",
     )
+
+
+def test_reference_bench_accepts_both_supported_greedies():
+    assert parse_solvers("greedy,greedy_lagrangian") == (
+        "greedy", "greedy_lagrangian",
+    )
+    for retired in ("greedy_bundle", "greedy_coupled", "greedy_prefix"):
+        with pytest.raises(argparse.ArgumentTypeError):
+            parse_solvers(retired)
 
 
 def test_pool_count_parser_and_split_preserve_frozen_inventory():

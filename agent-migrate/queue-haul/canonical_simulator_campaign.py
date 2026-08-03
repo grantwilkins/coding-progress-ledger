@@ -15,6 +15,7 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
+from destination import dedicated_sink_architecture
 from migration import ORDERED_EAGER_PARALLEL_V1
 from planner import plan, source_power
 from power_drain_experiment import (
@@ -30,6 +31,7 @@ DEFAULT_OUT = ROOT / "outputs/canonical-simulator"
 POLICIES = {
     "queue_haul": "lp_work_first",
     "greedy": "greedy",
+    "greedy_lagrangian": "greedy_lagrangian",
     "isolated_fastest": "isolated_fastest",
     "replay_only": "replay_only",
     "kv_only": "kv_only",
@@ -91,6 +93,18 @@ def eager(planned):
     )
 
 
+def lagrangian_architecture(profile, scenario_):
+    nodes = {node.node_id: node for node in scenario_.nodes}
+    replicas = tuple(
+        instance.instance_id for instance in scenario_.instances
+        if all(not nodes[node].local for node in instance.gpu_nodes)
+    )
+    return dedicated_sink_architecture(
+        profile, replicas,
+        ("source-dc-egress", "wan-source-destination", "destination-dc-ingress"),
+    )
+
+
 def enrich(policy, target_fraction, scenario_, planned, result, execution_s,
            workload_id, profile):
     summary = _summary(ExperimentRun(
@@ -138,9 +152,16 @@ def policy_runs(profile, workload, sessions, seed, target_fractions):
             profile, workload, sessions, seed, target_fraction,
         )
         for policy, solver in POLICIES.items():
-            planned = eager(plan(scenario_, profile, routes, solver, seed=seed))
+            destination = lagrangian_architecture(profile, scenario_) \
+                if solver == "greedy_lagrangian" else None
+            planned = eager(plan(
+                scenario_, profile, routes, solver, seed=seed,
+                destination=destination,
+            ))
             start = perf_counter()
-            result = execute(scenario_, profile, planned.moves)
+            result = execute(
+                scenario_, profile, planned.moves, destination=destination,
+            )
             planned = replace(
                 planned,
                 expected_source_power_at_deadline_w=
@@ -184,29 +205,35 @@ def scale_runs(profile, workload, counts, seed):
             ROUTE_BYTES_PER_S * sessions / SCALE_SESSIONS_PER_ROUTE,
         )
         scenario_, routes = pooled_scale(scenario_)
-        planned = eager(plan(
-            scenario_, profile, routes, "greedy", seed=seed
-        ))
-        start = perf_counter()
-        result = predict(scenario_, profile, planned.moves)
-        rows.append({
-            "sessions": sessions, "scenario_id": scenario_id(scenario_),
-            "planner": "queue_haul_greedy", "planned_moves": len(planned.moves),
-            "replay_moves": sum(move.method == "replay" for move in planned.moves),
-            "kv_moves": sum(move.method == "kv_transfer" for move in planned.moves),
-            "requested_source_drop_w":
-                planned.initial_source_power_w - scenario_.power_limit_w,
-            "achieved_source_drop_w":
-                planned.initial_source_power_w
-                - result.modeled_source_power_at_deadline_w,
-            "deadline_met": result.deadline_met,
-            "last_commit_s": result.migration_makespan_s,
-            "plan_s": planned.solve_s, "execution_s": perf_counter() - start,
-            "topology": "pooled_destination",
-            "input_provenance": "measured|fitted|assumed",
-            "result_provenance": "simulated",
-            "evidence_status": "sensitivity",
-        })
+        for solver in ("greedy", "greedy_lagrangian"):
+            destination = lagrangian_architecture(profile, scenario_) \
+                if solver == "greedy_lagrangian" else None
+            planned = eager(plan(
+                scenario_, profile, routes, solver, seed=seed,
+                destination=destination,
+            ))
+            start = perf_counter()
+            result = predict(
+                scenario_, profile, planned.moves, destination=destination,
+            )
+            rows.append({
+                "sessions": sessions, "scenario_id": scenario_id(scenario_),
+                "planner": solver, "planned_moves": len(planned.moves),
+                "replay_moves": sum(move.method == "replay" for move in planned.moves),
+                "kv_moves": sum(move.method == "kv_transfer" for move in planned.moves),
+                "requested_source_drop_w":
+                    planned.initial_source_power_w - scenario_.power_limit_w,
+                "achieved_source_drop_w":
+                    planned.initial_source_power_w
+                    - result.modeled_source_power_at_deadline_w,
+                "deadline_met": result.deadline_met,
+                "last_commit_s": result.migration_makespan_s,
+                "plan_s": planned.solve_s, "execution_s": perf_counter() - start,
+                "topology": "pooled_destination",
+                "input_provenance": "measured|fitted|assumed",
+                "result_provenance": "simulated",
+                "evidence_status": "sensitivity",
+            })
     return rows
 
 
@@ -253,14 +280,17 @@ def plot(policy_rows, scale_rows, schedule_rows, out):
         ylabel="Achieved source power (kW)",
     )
     axes[0].legend(frameon=False)
-    axes[1].plot(
-        [row["sessions"] for row in scale_rows],
-        [row["plan_s"] for row in scale_rows], "o-", label="Plan",
-    )
-    axes[1].plot(
-        [row["sessions"] for row in scale_rows],
-        [row["execution_s"] for row in scale_rows], "o-", label="Predict",
-    )
+    for planner in ("greedy", "greedy_lagrangian"):
+        selected = [row for row in scale_rows if row["planner"] == planner]
+        axes[1].plot(
+            [row["sessions"] for row in selected],
+            [row["plan_s"] for row in selected], "o-", label=f"{planner} plan",
+        )
+        axes[1].plot(
+            [row["sessions"] for row in selected],
+            [row["execution_s"] for row in selected], "o--",
+            label=f"{planner} predict",
+        )
     axes[1].set(xscale="log", yscale="log", xlabel="Sessions", ylabel="Seconds")
     axes[1].legend(frameon=False)
     for axis in axes:
@@ -314,7 +344,8 @@ def run(model_path=DEFAULT_MODEL, workload_path=DEFAULT_WORKLOAD,
     (out / "run_metadata.json").write_text(json.dumps({
         "execution_contract": ORDERED_EAGER_PARALLEL_V1,
         "main_sessions": main_sessions, "scale_sessions": scale_sessions,
-        "policies": POLICIES, "scale_policy": "queue_haul_greedy",
+        "policies": POLICIES,
+        "scale_policies": ("greedy", "greedy_lagrangian"),
         "scale_topology": "equivalent pooled destination",
         "scale_target_fraction": SCALE_TARGET_FRACTION,
         "scale_route_contract": "10 Gbps per 10K sessions",

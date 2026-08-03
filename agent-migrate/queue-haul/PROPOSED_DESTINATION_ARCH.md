@@ -210,8 +210,8 @@ Live contract leasing is an optional production extension.
 ### Minimum simulator evaluation
 
 Hold one compatible integrated-pool contract fixed while requested shed rises.
-Compare Queue-Haul with replay-only, KV-only, static greedy, and experimental
-bundle greedy. Report selected actions, achieved shed, last commit, route use,
+Compare Queue-Haul with replay-only, KV-only, static greedy, and Lagrangian
+greedy. Report selected actions, achieved shed, last commit, route use,
 destination work, exposed sessions, and deadline status. Show 10K, 100K, and
 1M-session planning and execution behavior.
 

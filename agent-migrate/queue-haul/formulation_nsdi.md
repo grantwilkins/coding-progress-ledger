@@ -300,28 +300,12 @@ For requested shed \(\Theta\), solve lexicographically:
 If the target is unreachable, maximize valid shed and report `target_unmet`
 with the watt shortfall. It is never called successful curtailment.
 
-The control-path greedy computes one scarcity price from the normalized demand
+`greedy` computes one scarcity price from the normalized demand
 of each session's cheapest candidate, ranks all candidates once by conservative
 watts per priced resource cost, and admits fitting candidates until the target
-is met. It does not dynamically reprice remaining capacity or select
-multi-session bundles. The opt-in `greedy_bundle` policy dynamically evaluates
-individual actions, prefixes of length two and three, and a full feasible
-instance drain using current exact drain gain and remaining slack. It remains
-experimental and is not the default controller.
+is met. It does not dynamically reprice remaining capacity.
 
-The simulator-only `greedy_coupled` variant iterates prices for every aggregate
-route and destination row. At fixed prices, each source chooses the cheapest
-action per session, sorts by priced cost per load, and evaluates every prefix
-with the exact source power curve. A target-capped recovery admits retained
-patterns only when aggregate rows and concrete replica packing fit. The result
-is still experimental: exact eager-parallel prediction is the final acceptance
-gate, and the policy is neither a global optimum nor a hardware controller.
-The implementation caches action-equivalent prefix gains and pattern resource
-vectors, then uses a lazy heap that preserves the same global recovery order.
-It remains the stronger small-source diagnostic rather than the scale path.
-
-The separate simulator-only `greedy_prefix` experiment removes Cartesian
-source-pattern enumeration. It warm-starts destination prices with the regular
+`greedy_lagrangian` warm-starts destination prices with the static
 greedy's duplicate-safe scarcity prices, scans every exact-power prefix of the
 cheapest fixed-price action ordering and one deterministic alternative-action
 ordering, and retains the selected prefix and its neighbors, the singleton and
@@ -334,10 +318,9 @@ set. It checks the exact sparse resource sum once before return, packs the final
 set once, and reuses that assignment; an unpackable or unreachable set falls
 back to packing-aware recovery. Route budgets reserve the largest
 candidate's isolated post-route tail, and exact eager-parallel prediction
-remains the final acceptance gate. The method has polynomial local search but
-is still experimental and equal-cost cases remain sensitive to input order.
-Bounding the frontier reduces planning work but can choose more migration work
-than the exhaustive-prefix experimental precursor.
+remains the final acceptance gate. Both greedies are supported optimizer
+options; neither is a global optimum, and equal-cost cases remain sensitive to
+the deterministic input order.
 
 Selected moves are ordered by migration work per conservative watt. At
 controller completion, the executor starts every selected move eagerly.
@@ -411,8 +394,10 @@ Every input and result is classified as:
 The two-A100 testbed validates implementation details abstracted by simulation:
 background preparation, overlap, catch-up, request-boundary quiesce, route
 switch, first post-switch token, timing jitter, and realized source power
-change. The simulator evaluates coordination and scale. It is not direct
-evidence of production destination behavior.
+change. Hardware owns measured execution and timing of the frozen plan.
+Software owns optimizer intent, modeled admission, and fleet-scale sensitivity.
+A disagreement is a validation failure. Simulation is not direct evidence of
+production destination behavior.
 
 Current evidence supports:
 
@@ -580,7 +565,7 @@ separately defined chord relaxation is required for that claim.
 operationally useful budget? Plot planning time and memory against session
 count for ten seeds. Every point retains provenance and an execution-validator
 result. The current single-seed 1M sensitivity is not a positive operational
-answer: although the prefix policy is faster than static greedy, it takes about
+answer: although Lagrangian greedy is faster than static greedy, it takes about
 12 minutes, uses 5.02 GB peak RSS, and leaves four seconds of migration-deadline
 slack. Replica packing remains the dominant measured bottleneck.
 

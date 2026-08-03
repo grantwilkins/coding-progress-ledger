@@ -16,7 +16,7 @@ Plausible wrong implementations:
 - Normalize attained shed by admitted sessions instead of all source sessions.
 - Resample workloads by policy/budget or count repeated plan cells as variation.
 - Aggregate raw completion points into a median or one point per budget.
-- Run coupled greedy without its pool architecture or discard its pool assignment.
+- Run Lagrangian greedy without its pool architecture or discard its pool assignment.
 """
 
 from types import SimpleNamespace
@@ -24,7 +24,6 @@ from types import SimpleNamespace
 import simulated_pareto_campaign as campaign
 from simulated_pareto_campaign import (
     admitted_moves, context_evidence,
-    coupled_architecture,
     aggregate_profile, expand_moves, expand_sessions, fluid_profile, frontier_metrics,
     full_attainment_cdf,
     meets_deadline, pareto_flags, policy_coordinates, workload_grid,
@@ -102,7 +101,7 @@ def test_frontier_uses_only_admitted_moves_and_total_source_sessions(
     assert completion == 1
 
 
-def test_coupled_greedy_uses_the_single_destination_pool(tmp_path):
+def test_lagrangian_greedy_uses_the_dedicated_destination_pool(tmp_path):
     base = model(tmp_path, tp=1)
     context = max(
         int(base.case().replay.by_concurrency[1][0][0]),
@@ -111,14 +110,16 @@ def test_coupled_greedy_uses_the_single_destination_pool(tmp_path):
     scenario, routes = _problem(
         base, [{"session_id": "a", "initial_tokens": context}], 1000, 100
     )
-    destination = coupled_architecture(base)
+    destination = campaign.dedicated_sink_architecture(
+        base, "destination", ("link",),
+    )
 
     moves = admitted_moves(
-        "greedy_coupled", scenario, routes, base, 0, destination,
+        "greedy_lagrangian", scenario, routes, base, 0, destination,
     )
 
     assert len(moves) == 1
-    assert moves[0].destination_pool == "coupled-pool"
+    assert moves[0].destination_pool == "dedicated-sink"
     assert moves[0].destination_instance == "destination"
 
 
