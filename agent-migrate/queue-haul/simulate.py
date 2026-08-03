@@ -1108,8 +1108,7 @@ def _run_fluid(scenario, profile, moves, case_id, destination, detailed):
         case.kv_transfer.sealed_bytes(sessions[move.session_id].context_tokens)
         for move in moves
     ], float)
-    network_done = start + np.cumsum(route_bytes) / bandwidth
-    network_start = np.concatenate(([start], network_done[:-1]))
+    network_done = np.full(len(moves), start + route_bytes.sum() / bandwidth)
     commits = np.empty(len(moves))
     for pool_id, pool in pools.items():
         service = pool.fluid_migration
@@ -1127,20 +1126,20 @@ def _run_fluid(scenario, profile, moves, case_id, destination, detailed):
                 for i in replay
             ])
             capacity = len(pool.replicas) * service.replay_speedup
-            streamed = fluid_pipeline_completion(
-                work, network_start[replay], network_done[replay],
-                capacity,
-            )
+            streamed = np.full(len(replay), max(
+                network_done[replay[0]], start + work.sum() / capacity,
+            ))
             done = fluid_service_completion(
                 np.full(len(replay), case.replay_completion_s), capacity, streamed,
             )
             commits[replay] = done + case.switch_s
         kv = [i for i in members if moves[i].method == "kv_transfer"]
         if kv:
-            ingested = fluid_pipeline_completion(
-                route_bytes[kv], network_start[kv], network_done[kv],
-                len(pool.replicas) * service.kv_ingest_bytes_per_s,
-            )
+            ingested = np.full(len(kv), max(
+                network_done[kv[0]], start + route_bytes[kv].sum() / (
+                    len(pool.replicas) * service.kv_ingest_bytes_per_s
+                ),
+            ))
             q = destination.type_by_id[pool.type_id]
             residual = q.migration["kv_transfer"].residual_s \
                 if q.migration else case.kv_transfer.initial_completion_s

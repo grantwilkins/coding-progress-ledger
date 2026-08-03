@@ -2011,11 +2011,32 @@ def plan_destination(scenario, profile, solver, case_id, seed, architecture):
         if planned <= scenario.power_limit_w + 1e-8:
             break
     mode, (table, selected, assignment, repairs, repair_s), planned = chosen
-    moves = _moves(table, selected, assignment, architecture, scenario, profile)
-    validate_destination_execution(scenario, architecture, moves)
-    expected = predict(
-        _expected_scenario(scenario, moves), profile, moves, case_id, architecture,
-    )
+    fluid = any(pool.fluid_migration for pool in architecture.pools)
+    deadline_repairs = 0
+    deadline_repair_s = 0.0
+    while True:
+        moves = _moves(table, selected, assignment, architecture, scenario, profile)
+        validate_destination_execution(scenario, architecture, moves)
+        expected = predict(
+            _expected_scenario(scenario, moves), profile, moves, case_id, architecture,
+        )
+        deadline = scenario.controller_delay_s + table.migration_horizon_s
+        if not fluid or expected.migration_makespan_s is not None \
+                and expected.migration_makespan_s <= deadline + 1e-9 or not selected:
+            break
+        started = perf_counter()
+        costs = np.asarray(table.resources.sum(0)).ravel()
+        drop = max(selected, key=lambda i: (
+            costs[i] / max(table.candidates[i].gain_w, 1e-12), i,
+        ))
+        selected.remove(drop)
+        assignment, cut = _pack(table, selected, architecture, scenario, mode)
+        if assignment is None or cut:
+            raise RuntimeError("fluid deadline repair broke destination packing")
+        moved = [table.sessions[table.candidates[i].session].session_id for i in selected]
+        planned = source_power(selection_scenario, profile, moved, case_id)
+        deadline_repairs += 1
+        deadline_repair_s += perf_counter() - started
     shortfall = max(0.0, planned - scenario.power_limit_w)
     shortfall = 0.0 if shortfall <= 1e-8 else shortfall
     debt_rows = _selected_service_debt(
@@ -2068,6 +2089,8 @@ def plan_destination(scenario, profile, solver, case_id, seed, architecture):
         lp_power_shortfall_w=shortfall, admission_mode=mode,
         power_shortfall_w=shortfall, failure_reason=failure,
         packing_repair_count=repairs, packing_repair_s=repair_s,
+        deadline_repair_count=deadline_repairs,
+        deadline_repair_s=deadline_repair_s,
         predicted_migration_makespan_s=makespan, bottleneck=bottleneck,
         planner_memory_bytes=memory, service_debt_replica_s=debt,
         required_recovery_s=recovery, binding_resources=binding,

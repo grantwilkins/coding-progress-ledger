@@ -114,6 +114,8 @@ class PlanResult:
     failure_reason: str | None = None
     packing_repair_count: int = 0
     packing_repair_s: float = 0.0
+    deadline_repair_count: int = 0
+    deadline_repair_s: float = 0.0
     predicted_migration_makespan_s: float | None = None
     bottleneck: str | None = None
     planner_memory_bytes: int | None = None

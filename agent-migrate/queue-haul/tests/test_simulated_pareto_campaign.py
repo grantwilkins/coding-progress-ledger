@@ -1,233 +1,199 @@
 """
 Claim:
-The simulated Pareto campaign maximizes attained shed within each time budget,
-reports completion for only the admitted actions, compares policies only within
-matched scenario-budget pairs, and exposes interpolation or extrapolation.
+The v4 campaign uses exact 10K idle snapshots, fits width-8 replay as a
+speedup rather than a width cap, runs all seven policies over one manifest,
+hard-fails incomplete shard reductions, and censors misses without allowing
+them to dominate successful target attainment.
 
 Plausible wrong implementations:
-- Reverse either Pareto objective.
-- Let an equal point dominate another point.
-- Compare policies from different episodes in the paired result.
-- Label non-anchor contexts or contexts outside the measured range as measured.
-- Keep a hidden width-eight endpoint cap in the full-width profile.
-- Scale session count in metadata without expanding the simulated episode.
-- Replace fluid link sharing with one serialized transfer per session.
-- Append cleanup migrations that were outside the deadline-admitted set.
-- Normalize attained shed by admitted sessions instead of all source sessions.
-- Resample workloads by policy/budget or count repeated plan cells as variation.
-- Aggregate raw completion points into a median or one point per budget.
-- Run Lagrangian greedy without its pool architecture or discard its pool assignment.
+- Reintroduce grouped template replication or an eight-flow ceiling.
+- Fit replay from failed, non-10G, or non-width-8 episodes.
+- Clamp an invalid replay fit instead of failing.
+- Omit side-case sentinels or one hardware baseline.
+- Compare unrelated workload seeds in Pareto dominance.
+- Let a deadline miss dominate a successful point.
+- Reduce missing, duplicate, or stale shard rows.
+- Find target attainment from instantaneous rather than trailing-window power.
 """
 
-from types import SimpleNamespace
+import csv
+import json
+
+import pytest
 
 import simulated_pareto_campaign as campaign
 from simulated_pareto_campaign import (
-    admitted_moves, context_evidence,
-    aggregate_profile, expand_moves, expand_sessions, fluid_profile, frontier_metrics,
-    full_attainment_cdf,
-    meets_deadline, pareto_flags, policy_coordinates, workload_grid,
+    MODEL, ROOT, WORKLOADS, attainment_time, file_hash, fit_hardware,
+    manifest_rows, pareto_flags, reduce, run_row,
 )
-from policy_hardware_campaign import _problem
-from simulate import PlannedMove
+from profiles import ModelProfile
 from test_execution_simulator import model
 
 
-def test_pareto_direction_and_pairing():
-    rows = [
-        {"match": "a", "power_attainment_fraction": .8,
-         "completion_s": .8},
-        {"match": "a", "power_attainment_fraction": .7,
-         "completion_s": 1},
-        {"match": "a", "power_attainment_fraction": .9,
-         "completion_s": 1.2},
-        {"match": "b", "power_attainment_fraction": 1,
-         "completion_s": .1},
-    ]
-
-    pareto_flags(rows, ("match",))
-
-    assert [row["pareto"] for row in rows] == [True, False, True, True]
+def _write(path, rows):
+    with path.open("w", newline="") as stream:
+        writer = csv.DictWriter(stream, rows[0].keys())
+        writer.writeheader()
+        writer.writerows(rows)
 
 
-def test_context_evidence_marks_nonanchors_and_extrapolation():
-    anchors = {2048, 4096, 8192, 16384}
+def test_manifest_is_exact_full_grid_plus_sentinel():
+    rows = manifest_rows()
 
-    assert context_evidence((2048, 8192), anchors) == "measured"
-    assert context_evidence((4096, 12288), anchors) == "interpolated"
-    assert context_evidence((1024, 4096), anchors) == "extrapolated"
-
-
-def test_full_attainment_detail_filters_and_normalizes_per_policy():
-    rows = [
-        {"policy": "a", "power_attainment_fraction": 1,
-         "completion_budget_ratio": .8},
-        {"policy": "a", "power_attainment_fraction": .98,
-         "completion_budget_ratio": .2},
-        {"policy": "a", "power_attainment_fraction": .99,
-         "completion_budget_ratio": .4},
-        {"policy": "b", "power_attainment_fraction": 1,
-         "completion_budget_ratio": .1},
-    ]
-
-    x, y = full_attainment_cdf(rows, "a")
-
-    assert x.tolist() == [.4, .8]
-    assert y.tolist() == [.5, 1]
+    assert len(rows) == 14_392
+    assert len({row["row_id"] for row in rows}) == len(rows)
+    assert {row["policy"] for row in rows} == set(campaign.POLICIES)
+    assert {row["case"] for row in rows} == {
+        "central", "conservative", "optimistic",
+    }
+    assert {row["shard"] for row in rows} == set(range(64))
+    assert sum(row["case"] == "central" for row in rows) == 13_720
+    assert sum(row["case"] != "central" for row in rows) == 672
 
 
-def test_deadline_boundary_tolerates_roundoff_but_not_real_misses():
-    assert meets_deadline(1 - 1e-12, 10 + 1e-12, 10)
-    assert not meets_deadline(.99, 9, 10)
-    assert not meets_deadline(1, 11, 10)
+def test_width8_fit_uses_only_complete_10g_eight_move_episodes(tmp_path):
+    evidence = tmp_path / "evidence"
+    evidence.mkdir()
+    scenarios, stages = [], []
+    for method, prefix in (("replay", "r"), ("kv_transfer", "k")):
+        for episode in range(10):
+            scenario = f"{prefix}{episode}"
+            scenarios.append({
+                "scenario_id": scenario, "kind": "migration", "status": "complete",
+                "bandwidth_mbps": 10000, "concurrency": 8, "method": method,
+                "source_added_power_w": 4 if method == "kv_transfer" else 1,
+                "destination_added_power_w": 20 if method == "kv_transfer" else 200,
+            })
+            if method == "replay":
+                stages.extend({
+                    "scenario_id": scenario, "method": "replay", "success": "true",
+                    "phase": "initial", "measured_prompt_tokens": 10,
+                    "start_ns": 0, "destination_ready_ns": 200_000_000,
+                } for _ in range(8))
+    _write(evidence / "scenarios.csv", scenarios)
+    _write(evidence / "migration_stages.csv", stages)
 
+    fitted = fit_hardware(model(tmp_path, tp=1), evidence)
 
-def test_frontier_uses_only_admitted_moves_and_total_source_sessions(
-        tmp_path, monkeypatch):
-    base = model(tmp_path)
-    move = PlannedMove("a", "destination", "replay", 0, ("link",))
-    monkeypatch.setattr(
-        campaign, "plan",
-        lambda *args, **kwargs: SimpleNamespace(moves=(move,)),
-    )
-
-    selected = admitted_moves("queue_haul", None, None, None, 0)
-    attainment, completion = frontier_metrics(
-        [1], 2, 10, base.case().power_curve, base.power_window_s
-    )
-
-    assert selected == (move,)
-    assert 0 < attainment < 1
-    assert completion == 1
-
-
-def test_lagrangian_greedy_uses_the_dedicated_destination_pool(tmp_path):
-    base = model(tmp_path, tp=1)
-    context = max(
-        int(base.case().replay.by_concurrency[1][0][0]),
-        base.case().kv_transfer.block_tokens,
-    )
-    scenario, routes = _problem(
-        base, [{"session_id": "a", "initial_tokens": context}], 1000, 100
-    )
-    destination = campaign.dedicated_sink_architecture(
-        base, "destination", ("link",),
-    )
-
-    moves = admitted_moves(
-        "greedy_lagrangian", scenario, routes, base, 0, destination,
-    )
-
-    assert len(moves) == 1
-    assert moves[0].destination_pool == "dedicated-sink"
-    assert moves[0].destination_instance == "destination"
-
-
-def test_workload_grid_deduplicates_samples_and_crosses_same_bandwidths():
-    def control(sample, profile, bandwidth, tokens):
-        return {
-            "policy": "control", "sample_id": sample,
-            "context_profile": profile, "bandwidth_mbps": bandwidth,
-            "sessions": [{"initial_tokens": tokens}],
-        }
-
-    fixed = {"scenarios": [
-        control("fixed-a", "tiny", 1000, 2048),
-        control("fixed-b", "tiny", 2500, 2048),
-    ]}
-    hardware = {"scenarios": [
-        control("mixed", "coding", 5000, 14080),
-        control("mixed", "coding", 10000, 14080),
-    ]}
-
-    grid = workload_grid(fixed, hardware)
-
-    assert [(source, row["sessions"][0]["initial_tokens"], bandwidth)
-            for source, row, bandwidth in grid] == [
-        ("fixed_anchor", 2048, 1000),
-        ("fixed_anchor", 2048, 2500),
-        ("measured_workload_mix", 14080, 1000),
-        ("measured_workload_mix", 14080, 2500),
-    ]
-
-
-def test_raw_plot_coordinates_keep_every_completion():
-    rows = [
-        {"policy": "queue_haul", "power_attainment_fraction": .5,
-         "completion_s": 7, "completion_budget_ratio": .7},
-        {"policy": "queue_haul", "power_attainment_fraction": .8,
-         "completion_s": 11, "completion_budget_ratio": .55},
-        {"policy": "greedy", "power_attainment_fraction": 1,
-         "completion_s": 3, "completion_budget_ratio": .1},
-    ]
-
-    assert policy_coordinates(rows, "queue_haul", False) == ([50, 80], [7, 11])
-    assert policy_coordinates(rows, "queue_haul", True) == ([50, 80], [.7, .55])
-
-
-def test_fluid_profile_supports_full_width_without_aggregate_cap(tmp_path):
-    base = model(tmp_path, tp=1)
-    context = base.case().replay.by_concurrency[1][0][0]
-    serial = base.case().replay.rate(context, 1)
-    profile = fluid_profile(base, 32, 32 * int(context))
-
-    assert profile.max_destination_replays == 32
-    assert profile.max_destination_kv_streams == 32
-    assert profile.kv_capacity_tokens >= 32 * context
-    assert all(
-        curve.concurrency[-1] == 32
-        for case in profile.cases.values()
-        for curve in case.action_power_w.values()
-    )
-    assert all(set(case.replay.by_concurrency) == set(range(1, 33))
-               for case in profile.cases.values())
-    assert profile.case().replay.rate(context, 1) == serial
-    assert profile.case().replay.rate(context, 32) == serial
-
-
-def test_aggregate_profile_preserves_replicated_fluid_work(tmp_path):
-    base = model(tmp_path, tp=1)
-    full = fluid_profile(base, 32, 32 * 100)
-    grouped = aggregate_profile(base, base, 8, 4, 8 * 100)
-
-    assert grouped.max_destination_replays == 8
-    assert grouped.case().kv_transfer.destination_bytes_per_s \
-        == base.case().kv_transfer.destination_bytes_per_s / 4
-    assert grouped.case().action_power_w["replay"].source_w[-1] \
-        == full.case().action_power_w["replay"].source_w[-1]
-
-
-def test_expand_sessions_repeats_templates_at_requested_width():
-    base = {
-        "sample_id": "sample",
-        "sessions": [
-            {"job_class": "a", "initial_tokens": 2},
-            {"job_class": "b", "initial_tokens": 4},
-        ],
+    assert fitted["replay_episodes"] == 10
+    assert fitted["cases"]["central"]["replay_speedup"] == pytest.approx(4)
+    assert fitted["cases"]["central"]["source_power_w"] == {
+        "replay": 1, "kv_transfer": 4,
     }
 
-    expanded = expand_sessions(base, 5)
 
-    assert len(expanded) == 5
-    assert [row["initial_tokens"] for row in expanded] == [2, 4, 2, 4, 2]
-    assert [row["session_id"] for row in expanded] == [
-        "sample-0", "sample-1", "sample-2", "sample-3", "sample-4",
-    ]
+def test_width8_fit_hard_fails_out_of_range(tmp_path):
+    evidence = tmp_path / "evidence"
+    evidence.mkdir()
+    scenarios = [{
+        "scenario_id": f"r{i}", "kind": "migration", "status": "complete",
+        "bandwidth_mbps": 10000, "concurrency": 8, "method": "replay",
+        "source_added_power_w": 1, "destination_added_power_w": 1,
+    } for i in range(10)] + [{
+        "scenario_id": f"k{i}", "kind": "migration", "status": "complete",
+        "bandwidth_mbps": 10000, "concurrency": 8, "method": "kv_transfer",
+        "source_added_power_w": 1, "destination_added_power_w": 1,
+    } for i in range(10)]
+    stages = [{
+        "scenario_id": f"r{i}", "method": "replay", "success": "true",
+        "phase": "initial", "measured_prompt_tokens": 10,
+        "start_ns": 0, "destination_ready_ns": 1_000_000_000,
+    } for i in range(10) for _ in range(8)]
+    _write(evidence / "scenarios.csv", scenarios)
+    _write(evidence / "migration_stages.csv", stages)
+
+    with pytest.raises(ValueError, match="outside"):
+        fit_hardware(model(tmp_path, tp=1), evidence)
 
 
-def test_expand_moves_replicates_template_admissions():
-    base = {
-        "sample_id": "sample",
-        "sessions": [{"job_class": "a", "initial_tokens": 2},
-                     {"job_class": "b", "initial_tokens": 4}],
+def test_actual_stage_span_evidence_hard_fails_agreed_speedup_bound():
+    with pytest.raises(ValueError, match="outside"):
+        fit_hardware(ModelProfile.load(MODEL))
+
+
+def test_trailing_window_attainment_finds_first_crossing():
+    power = ((0, 100, 0), (2, 120, 0), (4, 50, 0), (10, 50, 0))
+
+    assert attainment_time(power, 75, 2, 10) == pytest.approx(37 / 7)
+    assert attainment_time(power, 40, 2, 10) is None
+
+
+def test_all_seven_policies_run_same_exact_idle_episode():
+    fit = {
+        "replay_speedup": 1.1,
+        "source_power_w": {"replay": 1, "kv_transfer": 4},
+        "destination_power_w": {"replay": 230, "kv_transfer": 23},
     }
-    template = expand_sessions(base, 2)
-    full = expand_sessions(base, 6)
-    moves = (PlannedMove("sample-1", "destination", "replay", 0, ("link",)),)
+    manifest = {
+        "sessions": 10,
+        "model": {"path": str(MODEL.relative_to(ROOT)), "sha256": file_hash(MODEL)},
+        "workloads": {
+            str(path.relative_to(ROOT)): {"sha256": file_hash(path)}
+            for path in WORKLOADS
+        },
+        "fits": {"cases": {"central": fit}},
+    }
+    base = {
+        "row_id": "test", "shard": 0, "episode_id": "coding-seed-0",
+        "kind": "trace", "workload": "profiles/coding.json", "seed": 0,
+        "case": "central", "bandwidth_mbps": 10000, "deadline_s": 60,
+        "target_fraction": .25,
+    }
 
-    expanded = expand_moves(moves, template, full)
+    rows = [run_row({**base, "policy": policy}, manifest)
+            for policy in campaign.POLICIES]
 
-    assert [move.session_id for move in expanded] == [
-        "sample-1", "sample-3", "sample-5",
+    assert {row["policy"] for row in rows} == set(campaign.POLICIES)
+    assert all(row["sessions"] == 10 and row["committed_moves"] == row["admitted_moves"]
+               for row in rows)
+    assert all({"packing_repair_count", "packing_repair_s",
+                "deadline_repair_count", "deadline_repair_s"} <= row.keys()
+               for row in rows)
+
+
+def test_censored_miss_cannot_dominate_success():
+    rows = [
+        {"episode_id": "a", "bandwidth_mbps": 1000, "case": "central",
+         "target_attained": True, "target_attainment_s": 8,
+         "attained_shed_fraction": .5},
+        {"episode_id": "a", "bandwidth_mbps": 1000, "case": "central",
+         "target_attained": False, "target_attainment_s": "",
+         "attained_shed_fraction": .9},
     ]
-    assert [move.order for move in expanded] == [0, 1, 2]
+
+    pareto_flags(rows)
+
+    assert rows[0]["pareto"]
+    assert not rows[1]["pareto"]
+
+    misses = [dict(rows[1]), dict(rows[1])]
+    pareto_flags(misses)
+    assert not any(row["pareto"] for row in misses)
+
+
+def test_reduce_hard_fails_missing_shards(tmp_path):
+    (tmp_path / "manifest.json").write_text(json.dumps({
+        "schema": campaign.SCHEMA, "shards": 2, "rows": [],
+    }))
+
+    with pytest.raises(FileNotFoundError, match="missing shards"):
+        reduce(tmp_path)
+
+
+def test_reduce_hard_fails_manifest_row_mutation(tmp_path):
+    expected = {
+        "row_id": "v4-0", "shard": 0, "episode_id": "coding-seed-0",
+        "kind": "trace", "workload": "profiles/coding.json", "seed": 0,
+        "case": "central", "bandwidth_mbps": 1000, "deadline_s": 60,
+        "target_fraction": .25, "policy": "queue_haul",
+    }
+    (tmp_path / "manifest.json").write_text(json.dumps({
+        "schema": campaign.SCHEMA, "shards": 1, "rows": [expected],
+    }))
+    altered = {**expected, "policy": "greedy", "sessions": 10,
+               "attained_shed_fraction": .2, "target_attained": False,
+               "censored": True}
+    _write(tmp_path / "shard-00.csv", [altered])
+
+    with pytest.raises(ValueError, match="manifest"):
+        reduce(tmp_path)

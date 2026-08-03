@@ -116,7 +116,11 @@ uv run python queue-haul/policy_hardware_campaign.py plot-reduced \
   --out queue-haul/outputs/policy-hardware-width8-frontier-20260730
 uv run python queue-haul/canonical_simulator_campaign.py
 uv run python queue-haul/greedy_lagrangian_experiment.py
-uv run python queue-haul/simulated_pareto_campaign.py
+uv run python queue-haul/simulated_pareto_campaign.py prepare
+for shard in {0..63}; do
+  uv run python queue-haul/simulated_pareto_campaign.py run-shard --shard "$shard"
+done
+uv run python queue-haul/simulated_pareto_campaign.py reduce
 uv run python queue-haul/paper_evaluation.py \
   --out queue-haul/outputs/paper-evaluation
 ```
@@ -263,18 +267,22 @@ the companion pooled CDF combines all four bandwidths. Regenerate that CDF
 with the earlier trace-sampled 5/10-Gbit/s frontier rows included at raw-sample
 weight using `plot-reduced --out <packing-results> --pooled-with
 <frontier-results>`; this pooling also applies to both per-watt CDFs.
-`simulated_pareto_campaign.py` evaluates five fixed context anchors plus the
-measured workload templates with the calibrated crossover profile and paired
-random, static-greedy, and Lagrangian-greedy baselines. Its default episode width is 10,000
-sessions: templates are expanded to that width and executed through the core
-fluid simulator, with repeated templates grouped as equivalent fluid flows.
-Replay applies the serial measured rate per active flow; KV
-and route traffic share their destination and network-link capacities; action
-power is linearly extended from serial calibration. The Pareto CSV and plot
-label measured, interpolated, and modeled quantities explicitly. The figure
-pairs deadline-normalized and raw-second clouds over 30/40/50/60/75-s budgets,
-with one point per result and no display jitter. Mixed historical bundles that
-contained retired greedies were removed and must be regenerated.
+`simulated_pareto_campaign.py` creates 64 deterministic shards for 14 exact
+10K-session idle snapshots: three trace seeds for each workload and five
+trace-derived context anchors. It compares Queue-Haul, static and Lagrangian
+greedy, isolated-fastest, feasible-random, replay-only, and KV-only over fixed
+1/2.5/5/10-Gbit/s site links and 30-second through four-hour deadlines. Replay
+is a divisible destination-fleet service fitted from successful width-8 10G
+episodes; width 8 is calibration evidence, not an execution cap. KV bytes use
+both fixed WAN and per-replica ingest capacity. All methods use identical idle
+destination packing and report simulated sensitivity, trailing-five-second
+target attainment, last commit, censoring, source hashes, and dirty Git state.
+Reduction hard-fails missing or duplicate shards and emits separate trace and
+anchor small multiples. Conservative and optimistic fits run on sentinel cells;
+the full grid uses the central fit. The pinned stage-span evidence currently
+fits p25/median/p75 replay factors of 0.963/0.984/1.026, so `prepare`
+intentionally hard-fails the agreed `[1, 8]` speedup bound pending an explicit
+modeling decision or better endpoint-only evidence; it does not clamp them.
 `canonical_simulator_campaign.py` runs a four-target paired 10K-session
 Queue-Haul, both greedies, per-session-fastest, replay-only, and KV-only comparison
 under one assumed dedicated-pool contract. Its compact 10K/100K/1M scale check

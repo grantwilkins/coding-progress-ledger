@@ -55,7 +55,7 @@ from destination import (DESTINATION_SCHEMA, CompatibilityFingerprint, ContextRa
                          DestinationArchitecture, DestinationPool, DestinationReplica,
                          DestinationType, FluidMigrationService, LoadedCoefficients,
                          MigrationComponents)
-from planner import plan
+from planner import plan, source_power
 from pool_planner import (Candidate, CandidateTable, _destination_duration, _event_bounds,
                           _baseline_policy,
                           _candidate_oracle,
@@ -717,6 +717,62 @@ def test_fluid_execution_is_split_invariant_and_power_is_not_per_flow(tmp_path):
     assert two.power[1][1:] == pytest.approx(
         (baseline.power(True) + 2 * 5, baseline.power(False) + 2 * 7)
     )
+
+
+def test_fluid_replay_and_kv_move_simultaneously_on_fixed_wan(tmp_path):
+    service = FluidMigrationService(
+        4, 100, {"replay": 0, "kv_transfer": 0},
+        {"replay": 0, "kv_transfer": 0}, "hand",
+    )
+    arch = architecture(
+        normal=1, emergency=1, stable=1, baselines=((0, 0),),
+        routes=(("wan",),), fluid=service,
+    )
+    arch = replace(arch, pools=(replace(
+        arch.pools[0], replicas=(DestinationReplica("t0"), DestinationReplica("t1")),
+    ),))
+    scenario, profile = problem(), model(tmp_path, switch=0, tp=1)
+    moves = (
+        PlannedMove("a", "t0", "replay", 0, ("wan",), destination_pool="p0"),
+        PlannedMove("b", "t1", "kv_transfer", 1, ("wan",), destination_pool="p0"),
+    )
+    first = execute(scenario, profile, moves, destination=arch)
+    second = execute(scenario, profile, (
+        replace(moves[0], order=1), replace(moves[1], order=0),
+    ), destination=arch)
+
+    assert {row.start_s for row in first.network} == {0}
+    assert {row.end_s for row in first.network} == {2}
+    assert {row.session_id: row.committed_s for row in first.sessions} == pytest.approx(
+        {row.session_id: row.committed_s for row in second.sessions}
+    )
+
+
+def test_fluid_deadline_repair_is_separate_and_recomputes_shortfall(
+        tmp_path, monkeypatch):
+    service = FluidMigrationService(
+        4, 100, {"replay": 0, "kv_transfer": 0},
+        {"replay": 0, "kv_transfer": 0}, "hand",
+    )
+    arch = architecture(normal=1, emergency=1, stable=1, fluid=service)
+
+    def predicted(scenario, profile, moves, *args, **kwargs):
+        makespan = 10 if len(moves) > 1 else 8
+        return SimpleNamespace(
+            migration_makespan_s=makespan, deadline_met=True,
+            modeled_source_power_at_deadline_w=source_power(
+                scenario, profile, [move.session_id for move in moves],
+            ), pool_service=(),
+        )
+
+    monkeypatch.setattr(pool_planner, "predict", predicted)
+    result = plan(problem(), model(tmp_path, switch=0, tp=1), PATHS, "greedy",
+                  destination=arch)
+
+    assert result.deadline_repair_count == 1
+    assert result.packing_repair_count == 0
+    assert result.predicted_migration_makespan_s <= 9
+    assert result.power_shortfall_w > 0 and result.failure_reason == "target_unmet"
 
 
 def test_fluid_replay_capacity_has_no_width_eight_admission_ceiling():
