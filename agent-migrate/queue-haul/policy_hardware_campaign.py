@@ -661,7 +661,7 @@ def plot_destination_ttft(rows, summaries, out):
     ax.xaxis.label.set_size(15)
     ax.yaxis.label.set_size(15)
     ax.grid(alpha=.25)
-    ax.legend(frameon=False, fontsize=15)
+    ax.legend(frameon=False, fontsize=13)
     fig.tight_layout()
     for suffix in ("png", "pdf"):
         fig.savefig(
