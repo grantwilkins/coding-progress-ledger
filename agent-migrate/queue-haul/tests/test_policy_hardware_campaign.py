@@ -21,6 +21,7 @@ Plausible wrong implementations:
 - Sum overlapping migration durations instead of using episode makespan.
 - Swap policy color or legend identities in the paper CDFs.
 - Change one paper CDF's physical dimensions without changing the other.
+- Leave a public axis label inconsistent with the reported metric.
 - Route Lagrangian planning through a simulated executor instead of the hardware plan.
 """
 
@@ -471,7 +472,9 @@ def test_migration_time_per_watt_cdf_uses_compact_paper_dimensions(
         "policy": "queue_haul", "commit_100_s": 8,
     }], QuadraticPower(), tmp_path)
 
-    assert tuple(campaign.plt.gcf().get_size_inches()) == (7, 3.5)
+    figure = campaign.plt.gcf()
+    assert tuple(figure.get_size_inches()) == (7, 3.5)
+    assert figure.axes[0].get_xlabel() == "E2E Migration / Power Shed (s/W)"
 
 
 def test_pooled_results_concatenates_campaigns_without_reweighting(tmp_path):

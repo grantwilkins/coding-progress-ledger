@@ -813,7 +813,7 @@ def plot_migration_time_per_watt(summaries, power_curve, out):
                     linestyle=CDF_LINESTYLES[policy], linewidth=2.2,
                     label=CDF_LABELS[policy])
     ax.set(
-        xlabel="E2E Migration / Modeled Shed Power (s/W)",
+        xlabel="E2E Migration / Power Shed (s/W)",
         ylabel="Cumulative Distribution", ylim=(0, 1.02),
     )
     ax.tick_params(labelsize=12)
