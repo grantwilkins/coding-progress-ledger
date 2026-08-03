@@ -11,7 +11,6 @@ import matplotlib
 
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
-from matplotlib.lines import Line2D
 from matplotlib.patches import Patch
 
 DEFAULT_SCENARIOS = {
@@ -230,11 +229,9 @@ def plot(timeline_path: Path, inference_path: Path, out: Path) -> None:
         "ytick.labelsize": 13, "legend.fontsize": 11.5,
     })
     colors = {
-        "bulk": "#4298B5",
+        "kv": "#279989",
+        "context": "#4298B5",
         "drain": "#DAD7CB",
-        "catch": "#279989",
-        "switch": "#8C1515",
-        "token": "#175E54",
         "prefill": "#734675",
         "decode": "#E98300",
         "tool": "#7F7776",
@@ -242,33 +239,24 @@ def plot(timeline_path: Path, inference_path: Path, out: Path) -> None:
         "grid": "#DAD7CB",
     }
     fig, gantt = plt.subplots(figsize=(7.2, 3))
-    phase_labels = (
-        "Bulk KV Transfer + Ingest", "Final KV Delta Transfer + Ingest",
-    ) \
-        if method == "kv_transfer" \
-        else ("Initial Context Update", "Final Context Update")
+    transfer_label, transfer_color = ("KV Transfer", "kv") \
+        if method == "kv_transfer" else ("Context Transfer", "context")
     phases = (
-        ("bulk_start_s", "bulk_finish_s", phase_labels[0], "bulk"),
-        ("catch_up_start_s", "catch_up_finish_s", phase_labels[1], "catch"),
+        ("bulk_start_s", "bulk_finish_s"),
+        ("catch_up_start_s", "catch_up_finish_s"),
+    ) if method == "kv_transfer" else (
+        ("bulk_start_s", "bulk_send_finish_s"),
+        ("catch_up_start_s", "catch_up_send_finish_s"),
     )
-    if method == "replay":
-        phases = (
-            ("bulk_start_s", "bulk_send_finish_s", "Context Transfer", "bulk"),
-            ("catch_up_start_s", "catch_up_send_finish_s", "Context Transfer", "bulk"),
-        )
     gantt.axvspan(
         float(timeline[0]["quiesce_s"]),
         float(timeline[0]["catch_up_start_s"]),
-        color=colors["drain"], alpha=.48,
-        label="Drain Active Request" if method == "kv_transfer"
-            else "Pause (drain active request)",
-        zorder=0,
+        color=colors["drain"], alpha=.48, label="Drain", zorder=0,
     )
     positions = [1.4 * index for index in range(len(timeline))]
     inference_labels = set()
     for y, row in zip(positions, timeline):
         source_y, migration_y, destination_y = y - .32, y, y + .32
-        commit = float(row["commit_s"])
         prior = (
             (-2.35, .65, "prefill"), (-1.7, .25, "decode"),
             (-1.45, .3, "tool"), (-1.15, .85, "prefill"),
@@ -281,12 +269,13 @@ def plot(timeline_path: Path, inference_path: Path, out: Path) -> None:
                 edgecolor=colors["text"] if phase == "tool" else "none",
                 linewidth=0, zorder=3,
             )
-        for start_name, end_name, label, color in phases:
+        for index, (start_name, end_name) in enumerate(phases):
             start, end = float(row[start_name]), float(row[end_name])
             gantt.barh(
                 migration_y, end - start, left=start, height=.32,
-                color=colors[color],
-                label=label if y == positions[0] else None, zorder=2,
+                color=colors[transfer_color],
+                label=transfer_label if y == positions[0] and not index else None,
+                zorder=2,
             )
         session_segments = [
             segment for segment in inference
@@ -309,36 +298,11 @@ def plot(timeline_path: Path, inference_path: Path, out: Path) -> None:
                 zorder=3,
             )
             inference_labels.add(phase)
-        gantt.scatter(
-            commit, migration_y, marker="D", s=45, color=colors["switch"],
-            label="Route Switch" if y == positions[0] else None, zorder=4,
-        )
-        first_token = float(row["first_token_s"])
-        gantt.scatter(
-            first_token, destination_y, marker="*", s=95,
-            color=colors["token"],
-            label="First Token at Destination" if y == positions[0] else None,
-            zorder=4,
-        )
     gantt.set_yticks(
         [positions[0] - .32, positions[0], positions[0] + .32],
-        ["Inference at Source", "Migration", "Inference at Destination"],
+        ["Source GPU", "Migration", "Dest. GPU"],
     )
     gantt.invert_yaxis()
-    migration_handles = (
-        Patch(facecolor=colors["bulk"], label=phase_labels[0]),
-        Patch(
-            facecolor=colors["drain"], alpha=.6,
-            label="Drain Active Request",
-        ),
-        Patch(facecolor=colors["catch"], label=phase_labels[1]),
-    ) if method == "kv_transfer" else (
-        Patch(facecolor=colors["bulk"], label="Context Transfer"),
-        Patch(
-            facecolor=colors["drain"], alpha=.6,
-            label="Pause (drain active request)",
-        ),
-    )
     legend = (
         Patch(facecolor=colors["prefill"], label="Prefill"),
         Patch(facecolor=colors["decode"], label="Decode"),
@@ -346,19 +310,12 @@ def plot(timeline_path: Path, inference_path: Path, out: Path) -> None:
             facecolor=colors["tool"], edgecolor=colors["text"],
             hatch="//", linewidth=0, label="Tool Call",
         ),
-        *migration_handles,
-        Line2D(
-            (), (), marker="D", linestyle="none", color=colors["switch"],
-            markersize=8, label="Route Switch",
-        ),
-        Line2D(
-            (), (), marker="*", linestyle="none", color=colors["token"],
-            markersize=12, label="First Token at Destination",
-        ),
+        Patch(facecolor=colors[transfer_color], label=transfer_label),
+        Patch(facecolor=colors["drain"], alpha=.6, label="Drain"),
     )
     gantt.legend(
         handles=legend, frameon=False, ncol=3, loc="upper center",
-        bbox_to_anchor=(.5, 1.65),
+        bbox_to_anchor=(.5, 1.42),
     )
     gantt.grid(axis="x", color=colors["grid"], linewidth=.8, alpha=.7)
     gantt.grid(axis="y", visible=False)
@@ -374,7 +331,7 @@ def plot(timeline_path: Path, inference_path: Path, out: Path) -> None:
     gantt.set_xlim(-2.5, end)
     gantt.set_xticks(range(0, int(end) + 1, 5))
     fig.tight_layout(pad=.25)
-    fig.subplots_adjust(top=.58)
+    fig.subplots_adjust(top=.68)
     fig.savefig(out.with_suffix(".png"), dpi=200, bbox_inches="tight", pad_inches=.02)
     fig.savefig(out.with_suffix(".pdf"), bbox_inches="tight", pad_inches=.02)
     plt.close(fig)
