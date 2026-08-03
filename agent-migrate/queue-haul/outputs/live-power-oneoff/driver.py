@@ -263,7 +263,7 @@ def reduce_power(run_root: Path, local_power: Path, markers: Markers,
 
     origin = markers.rows[0]["wall_ns"] / 1e9
     plt.style.use("default")
-    fig, ax = plt.subplots(figsize=(10, 4))
+    fig, ax = plt.subplots(figsize=(8, 4))
     for label, uuid, color in (
         ("Source", role_uuids[0], "#E98300"),
         ("Destination", role_uuids[1], "#007C92"),
@@ -274,7 +274,7 @@ def reduce_power(run_root: Path, local_power: Path, markers: Markers,
               for row in markers.rows}
     if "migration_start" in marker and "migration_complete" in marker:
         ax.axvspan(*migration_window(marker), color="#DAD7CB", alpha=.5,
-                   label="Migration Time")
+                   label="Migration")
     if "migration_complete" in marker and "destination_steady" in marker:
         ax.axvspan(*switch_window(marker), color="#007C92",
                    alpha=.12, label="Switch")
