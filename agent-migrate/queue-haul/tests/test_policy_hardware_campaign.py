@@ -20,6 +20,7 @@ Plausible wrong implementations:
 - Divide episode downtime by a linearized or requested power reduction.
 - Sum overlapping migration durations instead of using episode makespan.
 - Swap policy color or legend identities in the paper CDFs.
+- Change one paper CDF's physical dimensions without changing the other.
 - Route Lagrangian planning through a simulated executor instead of the hardware plan.
 """
 
@@ -436,6 +437,7 @@ def test_destination_ttft_cdf_includes_migration_time(tmp_path, monkeypatch):
     campaign.plot_destination_ttft(rows, summaries, tmp_path)
 
     ax = campaign.plt.gcf().axes[0]
+    assert tuple(ax.figure.get_size_inches()) == (7, 3.5)
     assert ax.lines[0].get_xdata().tolist() == [0, 3, 5]
     assert ax.get_title() == ""
     assert ax.get_xlabel() == "Migration + Destination TTFT (s)"
@@ -455,6 +457,21 @@ def test_destination_ttft_cdf_includes_migration_time(tmp_path, monkeypatch):
         "greedy_lagrangian": (0, (3, 1, 1, 1)),
         "kv_only": "-.", "replay_only": ":",
     }
+
+
+def test_migration_time_per_watt_cdf_uses_compact_paper_dimensions(
+        tmp_path, monkeypatch):
+    class QuadraticPower:
+        @staticmethod
+        def power(load):
+            return 100 + 100 * load ** 2
+
+    monkeypatch.setattr(campaign.plt, "close", lambda _: None)
+    campaign.plot_migration_time_per_watt([{
+        "policy": "queue_haul", "commit_100_s": 8,
+    }], QuadraticPower(), tmp_path)
+
+    assert tuple(campaign.plt.gcf().get_size_inches()) == (7, 3.5)
 
 
 def test_pooled_results_concatenates_campaigns_without_reweighting(tmp_path):

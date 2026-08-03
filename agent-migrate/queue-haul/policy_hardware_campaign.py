@@ -60,6 +60,9 @@ CDF_LINESTYLES = {
     "queue_haul": "-", "greedy": "--", "greedy_lagrangian": (0, (3, 1, 1, 1)),
     "kv_only": "-.", "replay_only": ":",
 }
+CDF_FIGSIZE = (7, 3.5)
+
+
 def _portable_path(path: Path) -> str:
     resolved = path.resolve()
     try:
@@ -638,7 +641,7 @@ def power_shed_quantiles(rows, summaries, policy, power_curve, times):
 
 
 def plot_destination_ttft(rows, summaries, out):
-    fig, ax = plt.subplots(figsize=(7, 4))
+    fig, ax = plt.subplots(figsize=CDF_FIGSIZE)
     for policy in POLICIES:
         x, y = completion_curve(
             rows, summaries, policy, "migration_ttft_s"
@@ -800,7 +803,7 @@ def migration_time_per_watt_points(summaries, power_curve):
 
 def plot_migration_time_per_watt(summaries, power_curve, out):
     points = migration_time_per_watt_points(summaries, power_curve)
-    fig, ax = plt.subplots(figsize=(7, 4))
+    fig, ax = plt.subplots(figsize=CDF_FIGSIZE)
     for policy in POLICIES:
         values = sorted(row["migration_s_per_w"] for row in points
                         if row["policy"] == policy)
