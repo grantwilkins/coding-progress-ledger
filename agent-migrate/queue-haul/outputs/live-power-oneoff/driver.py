@@ -32,6 +32,7 @@ PLAN = QH / "outputs/policy-hardware-width8-packing-plan/plan.json"
 BUNDLE = QH / "outputs/destination-v7-20260722/content-free-manifest.json"
 PROFILE = QH / "outputs/destination-v7-20260722/baseline-profile.json"
 TARGET_RHO = 16.5
+PLOT_START_S, PLOT_STOP_S = 300, 700
 
 
 def write_json(path: Path, value) -> None:
@@ -164,12 +165,14 @@ def parse_wall(value: str) -> float:
     return dt.datetime.strptime(value, "%Y/%m/%d %H:%M:%S.%f").timestamp()
 
 
-def bin_power(rows: list[dict], origin: float) -> tuple[list[float], list[float]]:
+def bin_power(rows: list[dict], origin: float,
+              start: int = 0, stop: int | None = None) -> tuple[list[float], list[float]]:
     bins = {}
     for row in rows:
         index = int(parse_wall(row["timestamp"]) - origin)
-        bins.setdefault(index, []).append(float(row["power.draw [W]"]))
-    return ([index + .5 for index in sorted(bins)],
+        if index >= start and (stop is None or index < stop):
+            bins.setdefault(index, []).append(float(row["power.draw [W]"]))
+    return ([index - start + .5 for index in sorted(bins)],
             [statistics.mean(bins[index]) for index in sorted(bins)])
 
 
@@ -259,11 +262,11 @@ def reduce_power(run_root: Path, local_power: Path, markers: Markers,
     fig, ax = plt.subplots(figsize=(10, 4))
     for label, uuid, color in (
         ("Source", role_uuids[0], "#E98300"),
-        ("Dest", role_uuids[1], "#007C92"),
+        ("Destination", role_uuids[1], "#007C92"),
     ):
-        ax.plot(*bin_power(by_uuid[uuid], origin), lw=2.2, label=label,
-                color=color)
-    marker = {row["event"]: row["wall_ns"] / 1e9 - origin
+        ax.plot(*bin_power(by_uuid[uuid], origin, PLOT_START_S, PLOT_STOP_S),
+                lw=2.2, label=label, color=color)
+    marker = {row["event"]: row["wall_ns"] / 1e9 - origin - PLOT_START_S
               for row in markers.rows}
     if "migration_start" in marker and "migration_complete" in marker:
         ax.axvspan(*migration_window(marker), color="#DAD7CB", alpha=.5,
@@ -276,6 +279,7 @@ def reduce_power(run_root: Path, local_power: Path, markers: Markers,
         if name in marker:
             ax.axvline(marker[name], color="black", lw=.7, ls=":")
     ax.set(xlabel="Time (s)", ylabel="Power per GPU (W)")
+    ax.set_xlim(0, PLOT_STOP_S - PLOT_START_S)
     ax.tick_params(labelsize=14)
     ax.xaxis.label.set_size(16)
     ax.yaxis.label.set_size(16)

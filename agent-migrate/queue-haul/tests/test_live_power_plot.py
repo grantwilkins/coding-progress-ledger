@@ -6,6 +6,8 @@ Plausible wrong implementations:
 - Use a rolling average instead of fixed bins.
 - Put a boundary sample in the preceding bin.
 - Sum samples or mis-scale milliseconds as seconds.
+- Include samples before the requested display window.
+- Include samples at or beyond the display cutoff.
 - Highlight source shutdown instead of migration completion.
 - Start destination resume before migration completion.
 """
@@ -35,6 +37,10 @@ def test_power_uses_fixed_one_second_mean_bins():
 
     assert times == pytest.approx([.5, 1.5])
     assert watts == pytest.approx([150, 500])
+    assert driver.bin_power(rows, driver.parse_wall(rows[0]["timestamp"]), 1) \
+        == ([.5], [500])
+    assert driver.bin_power(rows, driver.parse_wall(rows[0]["timestamp"]), 0, 1) \
+        == ([.5], [150])
 
 
 def test_migration_highlight_ends_at_completion():
