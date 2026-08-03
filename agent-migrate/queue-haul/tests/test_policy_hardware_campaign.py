@@ -444,9 +444,9 @@ def test_destination_ttft_cdf_includes_migration_time(tmp_path, monkeypatch):
     assert ax.get_xlabel() == "Migration + Destination TTFT (s)"
     assert ax.get_ylabel() == "Cumulative Distribution"
     assert CDF_COLORS == {
-        "queue_haul": "#8C1515", "greedy": "#175E54",
-        "greedy_lagrangian": "#6F4E7C",
-        "kv_only": "#007C92", "replay_only": "#E98300",
+        "queue_haul": "#B1040E", "greedy": "#008566",
+        "greedy_lagrangian": "#620059",
+        "kv_only": "#006CB8", "replay_only": "#E98300",
     }
     assert CDF_LABELS == {
         "queue_haul": "Queue-Haul LP", "greedy": "Queue-Haul Greedy",

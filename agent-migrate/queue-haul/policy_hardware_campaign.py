@@ -47,9 +47,9 @@ LABELS = {
     "kv_only": "KV only", "replay_only": "Replay only",
 }
 CDF_COLORS = {
-    "queue_haul": "#8C1515", "greedy": "#175E54",
-    "greedy_lagrangian": "#6F4E7C",
-    "kv_only": "#007C92", "replay_only": "#E98300",
+    "queue_haul": "#B1040E", "greedy": "#008566",
+    "greedy_lagrangian": "#620059",
+    "kv_only": "#006CB8", "replay_only": "#E98300",
 }
 CDF_LABELS = {
     "queue_haul": "Queue-Haul LP", "greedy": "Queue-Haul Greedy",

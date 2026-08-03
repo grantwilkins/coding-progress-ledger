@@ -263,7 +263,7 @@ def reduce_power(run_root: Path, local_power: Path, markers: Markers,
 
     origin = markers.rows[0]["wall_ns"] / 1e9
     plt.style.use("default")
-    fig, ax = plt.subplots(figsize=(8, 4))
+    fig, ax = plt.subplots(figsize=(9, 4))
     for label, uuid, color in (
         ("Source", role_uuids[0], "#E98300"),
         ("Destination", role_uuids[1], "#007C92"),
