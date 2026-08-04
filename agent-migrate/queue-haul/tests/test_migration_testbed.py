@@ -101,6 +101,57 @@ def test_mp_runtime_uses_release_image_and_shipped_connector(monkeypatch):
     assert s.expected_runtime_versions() == ("0.22.0+cu129", "0.5.1")
 
 
+def test_native_mp_runtime_uses_host_stack_and_gpu_assignment(monkeypatch):
+    monkeypatch.setenv("QH_RUNTIME", "native")
+    monkeypatch.setenv("QH_LMCACHE_MODE", "mp")
+    monkeypatch.setenv("CUDA_VISIBLE_DEVICES", "2,3")
+
+    source = cmd_text(s.vllm_cmd(s.Config(), "source"))
+    sink = cmd_text(s.vllm_cmd(s.Config(), "sink"))
+    cache = cmd_text(s.mp_server_cmd(s.Config(), "source"))
+    redis = cmd_text(s.redis_cmd(s.Config()))
+
+    assert "apptainer" not in source + sink + cache + redis
+    assert "CUDA_VISIBLE_DEVICES=2" in source
+    assert "CUDA_VISIBLE_DEVICES=3" in sink
+    assert str(Path(s.sys.executable).parent) in source
+    assert "LD_LIBRARY_PATH" not in source
+    assert redis.startswith("redis-server --bind 127.0.0.1 --port 5655")
+    assert s.expected_runtime_versions() == ("0.22.0", "0.5.1")
+
+
+def test_native_runtime_rejects_legacy_and_unknown_modes(monkeypatch):
+    monkeypatch.setenv("QH_RUNTIME", "native")
+    with pytest.raises(ValueError, match="requires QH_LMCACHE_MODE=mp"):
+        s.runtime_mode()
+
+    monkeypatch.setenv("QH_RUNTIME", "other")
+    with pytest.raises(ValueError, match="unknown QH_RUNTIME"):
+        s.runtime_mode()
+
+
+def test_native_preflight_requires_host_commands_and_pinned_versions(monkeypatch, tmp_path):
+    monkeypatch.setenv("QH_RUNTIME", "native")
+    monkeypatch.setenv("QH_LMCACHE_MODE", "mp")
+    snapshot = tmp_path / "snapshot"
+    snapshot.mkdir()
+    (snapshot / "config.json").touch()
+    monkeypatch.setattr(s, "model_snapshot_dir", lambda *_args: snapshot)
+    monkeypatch.setattr(s, "port_free", lambda *_args: True)
+    monkeypatch.setattr(s, "gpu_count", lambda: 2)
+    monkeypatch.setattr(s.shutil, "which", lambda *_args, **_kwargs: None)
+
+    with pytest.raises(RuntimeError) as error:
+        s.preflight(s.Config(), 2)
+    for executable in ("vllm", "lmcache", "redis-server"):
+        assert f"{executable} not found" in str(error.value)
+
+    monkeypatch.setattr(s.shutil, "which", lambda executable, **_kwargs: f"/bin/{executable}")
+    monkeypatch.setattr(s, "runtime_versions", lambda _cfg: ("0.22.1", "0.5.1"))
+    with pytest.raises(RuntimeError, match="need vLLM/LMCache.*0.22.1"):
+        s.preflight(s.Config(), 2)
+
+
 def test_health_timeout_is_configurable(monkeypatch):
     monkeypatch.setenv("QH_HEALTH_TIMEOUT_S", "7200")
     assert s.health_timeout() == 7200

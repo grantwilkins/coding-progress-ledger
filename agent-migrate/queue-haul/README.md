@@ -72,6 +72,21 @@ simulated. Assumed values are sensitivities, never admission guarantees.
 The conversation workload pins ShareGPT artifact revision
 `192ab2185289094fc556ec8ce5ce1e8e587154ca` and stores only token/turn shapes.
 
+## Azure A100 setup
+
+On an Ubuntu Azure A100 node with `/datadrive` mounted and working NVIDIA
+drivers, run the setup as the login user:
+
+```bash
+bash queue-haul/setup.sh
+source ~/.bashrc
+```
+
+This installs the pinned Python 3.12, vLLM 0.22.0 CUDA 12.9, and LMCache 0.5.1
+native runtime, downloads the Sherlock GPT-OSS-20B snapshot into `/datadrive`,
+keeps runtime caches there, and selects the native MP path. The existing
+Apptainer runtime remains the default when `QH_RUNTIME` is unset.
+
 The normative formulation and executable-contract mapping are in:
 
 - `formulation_nsdi.md`;

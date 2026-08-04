@@ -30,6 +30,7 @@ MP_IMAGE = Path("/scratch/users/gfw/ptsim/lmcache-v0.5.1-vllm0.22.0-cu129-primar
 REDIS_IMAGE = Path("/scratch/users/gfw/ptsim/redis-7.4.2-bookworm.sif")
 RUNTIME_VERSIONS = ("0.10.1.1", "0.3.3")
 MP_RUNTIME_VERSIONS = ("0.22.0+cu129", "0.5.1")
+NATIVE_RUNTIME_VERSIONS = ("0.22.0", "0.5.1")
 LMCACHE_CLEAR_MARKER = '"operation":"clear"'
 
 
@@ -40,7 +41,18 @@ def lmcache_mode() -> str:
     return mode
 
 
+def runtime_mode() -> str:
+    mode = os.environ.get("QH_RUNTIME", "apptainer")
+    if mode not in {"apptainer", "native"}:
+        raise ValueError(f"unknown QH_RUNTIME: {mode}")
+    if mode == "native" and lmcache_mode() != "mp":
+        raise ValueError("native runtime requires QH_LMCACHE_MODE=mp")
+    return mode
+
+
 def expected_runtime_versions() -> tuple[str, str]:
+    if runtime_mode() == "native":
+        return NATIVE_RUNTIME_VERSIONS
     return MP_RUNTIME_VERSIONS if lmcache_mode() == "mp" else RUNTIME_VERSIONS
 
 
@@ -60,9 +72,9 @@ def port_default(base: int) -> int:
     return base + port_offset()
 
 
-HF_HOME = Path("/scratch/users/gfw/ptsim/hf")
+HF_HOME = Path(os.environ.get("HF_HOME", "/scratch/users/gfw/ptsim/hf"))
 SCRATCH_BIND = Path("/scratch/users/gfw")
-CACHE_ROOT = Path("/scratch/users/gfw/ptsim/cache")
+CACHE_ROOT = Path(os.environ.get("QH_CACHE_ROOT", "/scratch/users/gfw/ptsim/cache"))
 LMCACHE_COMPAT = Path(__file__).with_name("lmcache_compat").resolve()
 CHUNK = 65536
 LMCACHE_MAX_LOCAL_CPU_GB = "4"
@@ -246,7 +258,8 @@ def vllm_exports(cfg: Config, role: str, remote_url: str) -> list[str]:
         "/usr/local/cuda-12.9/targets/x86_64-linux/lib:"
         "/usr/local/cuda/targets/x86_64-linux/lib"
     )
-    exports.append(f"export LD_LIBRARY_PATH={library_path}:${{LD_LIBRARY_PATH:-}}")
+    if runtime_mode() == "apptainer":
+        exports.append(f"export LD_LIBRARY_PATH={library_path}:${{LD_LIBRARY_PATH:-}}")
     return exports
 
 
@@ -256,6 +269,13 @@ def allocated_gpu_ids() -> list[str]:
 
 
 def apptainer_cmd(cfg: Config, script: str, gpu: int | None = None, nv: bool = True) -> list[str]:
+    if runtime_mode() == "native":
+        script = f"export PATH={shlex.quote(str(Path(sys.executable).parent))}:$PATH\n{script}"
+        if gpu is None:
+            return ["bash", "-lc", script]
+        devices = allocated_gpu_ids()
+        device = devices[gpu] if devices else str(gpu)
+        return ["env", f"CUDA_VISIBLE_DEVICES={device}", "bash", "-lc", script]
     cmd = ["apptainer", "exec", "--bind", f"{cfg.scratch_bind}:{cfg.scratch_bind}", cfg.sandbox, "bash", "-lc", script]
     if nv:
         mode = os.environ.get("QH_APPTAINER_GPU_MODE", "nv")
@@ -274,6 +294,9 @@ def lmcache_cmd(cfg: Config) -> list[str]:
 
 
 def redis_cmd(cfg: Config) -> list[str]:
+    if runtime_mode() == "native":
+        return ["redis-server", "--bind", cfg.host, "--port", str(cfg.lmc_port),
+                "--save", "", "--appendonly", "no"]
     return ["apptainer", "exec", REDIS_IMAGE, "redis-server", "--bind", cfg.host,
             "--port", str(cfg.lmc_port), "--save", "", "--appendonly", "no"]
 
@@ -411,13 +434,22 @@ def runtime_versions(cfg: Config) -> tuple[str, str]:
 def preflight(cfg: Config, required_gpus: int = 1) -> list[str]:
     validate_ports(cfg)
     failures = []
-    if not shutil.which("apptainer"):
-        failures.append("apptainer not found")
-    if not cfg.sandbox.exists():
-        failures.append(f"sandbox missing: {cfg.sandbox}")
-    if lmcache_mode() == "mp" and not REDIS_IMAGE.exists():
-        failures.append(f"Redis image missing: {REDIS_IMAGE}")
-    elif shutil.which("apptainer"):
+    native = runtime_mode() == "native"
+    if native:
+        runtime_bin = str(Path(sys.executable).parent)
+        for executable in ("vllm", "lmcache"):
+            if not shutil.which(executable, path=runtime_bin):
+                failures.append(f"{executable} not found in {runtime_bin}")
+        if not shutil.which("redis-server"):
+            failures.append("redis-server not found")
+    else:
+        if not shutil.which("apptainer"):
+            failures.append("apptainer not found")
+        if not cfg.sandbox.exists():
+            failures.append(f"sandbox missing: {cfg.sandbox}")
+        if lmcache_mode() == "mp" and not REDIS_IMAGE.exists():
+            failures.append(f"Redis image missing: {REDIS_IMAGE}")
+    if not failures:
         versions = runtime_versions(cfg)
         expected = expected_runtime_versions()
         if versions != expected:
@@ -440,11 +472,12 @@ def preflight(cfg: Config, required_gpus: int = 1) -> list[str]:
     if failures:
         raise RuntimeError("\n".join(failures))
     return [
+        f"runtime={runtime_mode()}",
         f"apptainer={shutil.which('apptainer')}",
         f"gpus={seen_gpus}",
         f"docker_present={bool(shutil.which('docker'))}",
         "real_tc=disabled_no_cap_net_admin",
-        f"sandbox={cfg.sandbox}",
+        f"runtime_path={Path(sys.executable).parent}" if native else f"sandbox={cfg.sandbox}",
         f"vllm={expected_runtime_versions()[0]}",
         f"lmcache={expected_runtime_versions()[1]}",
         f"model_snapshots={snapshots}",
