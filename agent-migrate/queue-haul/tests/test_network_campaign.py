@@ -180,9 +180,9 @@ def test_host_reports_must_match_commit_runtime_and_expected_regions(tmp_path):
         "ptp": "/dev/ptp0", "datadrive": True,
     }
     reports = {
-        "sweden": {**base, "region": "swedencentral", "private_ip": "10.0.0.4"},
-        "east": {**base, "region": "eastus2", "private_ip": "10.1.0.4"},
-        "west": {**base, "region": "westeurope", "private_ip": "10.2.0.4"},
+        "sweden": {**base, "region": "SwedenCentral", "private_ip": "10.0.0.4"},
+        "east": {**base, "region": "EastUS2", "private_ip": "10.1.0.4"},
+        "west": {**base, "region": "WestEurope", "private_ip": "10.2.0.4"},
     }
     n.validate_hosts(cluster(tmp_path), reports)
 

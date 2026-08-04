@@ -255,7 +255,7 @@ def validate_hosts(cluster: Cluster | None, reports: dict[str, dict]) -> None:
         raise ValueError("host reports do not cover the cluster")
     for node_id, report in reports.items():
         node = expected[node_id] if expected else None
-        if node and (report["region"] != node.region
+        if node and (report["region"].lower() != node.region.lower()
                      or report["private_ip"] != node.host):
             raise ValueError(f"{node_id} region or private IP changed")
         if report.get("dirty") or report.get("vm_size") \
