@@ -41,6 +41,7 @@ CLOCK_LIMIT_MS = 2.0
 RESUME_DRIFT = .10
 REQUEST_TIMEOUT_S = 600.0
 REPEATS = 3
+ISOLATED_PROMPT_HEADROOM_TOKENS = 512
 POLICIES = (
     "queue_haul", "greedy", "greedy_lagrangian", "kv_only", "replay_only",
     "random",
@@ -452,7 +453,8 @@ def make_plan(manifest_path: Path, contract: dict, seed: int = 1,
                     rng = random.Random(profiler.stable_seed(seed, context, repeat))
                     row = rng.choice(available)
                     session = {"session_id": row["id"], "job_class": row["job_class"],
-                               "turn_index": 0, "initial_tokens": context - 192,
+                               "turn_index": 0,
+                               "initial_tokens": context - ISOLATED_PROMPT_HEADROOM_TOKENS,
                                "order": 0}
                     for method in ("replay", "kv_transfer"):
                         scenario_id = _hash([

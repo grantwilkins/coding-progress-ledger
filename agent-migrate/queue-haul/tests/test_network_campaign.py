@@ -348,6 +348,9 @@ def test_isolated_plan_is_54_paired_route_relative_migrations(tmp_path):
     plan = n.make_plan(path, contract, seed=7, design="isolated")
 
     assert plan["design"] == "isolated" and len(plan["scenarios"]) == 54
+    assert all(row["sessions"][0]["initial_tokens"] ==
+               row["context_size"] - n.ISOLATED_PROMPT_HEADROOM_TOKENS
+               for row in plan["scenarios"])
     assert {(row["context_size"], row["bandwidth"], row["repeat"], row["method"])
             for row in plan["scenarios"]} == {
         (size, bandwidth, repeat, method)
