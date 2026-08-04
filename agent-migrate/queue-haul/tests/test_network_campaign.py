@@ -422,7 +422,7 @@ def test_chat_explicitly_probes_state_code(monkeypatch):
     assert seen == {"messages": [
         {"role": "user", "content": "context"},
         {"role": "user", "content":
-         "Reply only with session state code CODE."}], "tokens": 16}
+         "Reply only with session state code CODE."}], "tokens": 32}
 
 
 def test_resume_metadata_appends_dynamic_check_but_pins_identity():

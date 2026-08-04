@@ -234,7 +234,7 @@ The Azure campaign profile uses the Sweden A100 PCIe 300 W calibration retained
 under `/datadrive/queue-haul-network/control/power-cal-300w-*`: 98.1 W
 model-resident idle and 140.2 W at the profile's maximum expected load. Bare GPU
 idle is outside this curve.
-Reconstruction requests end with an explicit state-code probe and reserve 16
+Reconstruction requests end with an explicit state-code probe and reserve 32
 output tokens; a successful HTTP response without the code hard-fails the attempt.
 
 Reduction runs automatically and can also be repeated without hardware:
