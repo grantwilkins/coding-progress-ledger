@@ -231,10 +231,17 @@ def test_hero_slice_supports_highlighted_frontier_claim():
                 and row["bandwidth_mbps"] == campaign.HERO[1]
                 and row["case"] == "central" and row["pareto"].lower() == "true"]
 
-    policies = {row["policy"] for row in selected}
-    assert {"queue_haul", "greedy"} <= policies
-    assert policies == {"queue_haul", "greedy", "isolated_fastest", "replay_only"}
-    assert not {"random", "kv_only"} & policies
+    owners = {}
+    for row in selected:
+        point = (row["attained_shed_fraction"], row["target_attainment_s"])
+        owners.setdefault(point, set()).add(row["policy"])
+
+    assert list(owners.values()).count({"queue_haul"}) == 3
+    assert list(owners.values()).count({"greedy"}) == 2
+    assert list(owners.values()).count(
+        {"queue_haul", "greedy", "isolated_fastest", "replay_only"},
+    ) == 1
+    assert len(owners) == 6
 
 
 def test_reduce_hard_fails_missing_shards(tmp_path):

@@ -435,7 +435,7 @@ def _hero_plot(rows, out):
     axis.plot([point[0] for point in points], [point[1] for point in points],
               color="0.15", linewidth=3, label="Pareto frontier")
     for policy, label, marker, color, size in (
-        ("isolated_fastest", "Replay-only / isolated overlap", "o", "0.5", 150),
+        ("isolated_fastest", "Shared endpoint: all four", "o", "0.5", 150),
         ("queue_haul", "Queue-Haul LP", "o", "#0072B2", 180),
         ("greedy", "Queue-Haul greedy", "*", "#D55E00", 280),
     ):
@@ -443,8 +443,15 @@ def _hero_plot(rows, out):
         axis.scatter([point[0] for point in members], [point[1] for point in members],
                      s=size, marker=marker, facecolors="none" if marker == "*" else color,
                      edgecolors=color, linewidths=2.2, label=label, zorder=3)
+    shared = [point for point, policies in frontier.items() if {
+        "queue_haul", "greedy", "isolated_fastest", "replay_only",
+    } <= policies]
+    if len(shared) != 1:
+        raise ValueError("hero slice requires one four-policy shared endpoint")
+    axis.annotate("all four policies", xy=shared[0], xytext=(72, 240),
+                  arrowprops={"arrowstyle": "->", "color": "0.3"}, color="0.3")
     axis.set(xlabel="Attained power shed (%)  →", ylabel="Time to target (s)  ↓",
-             title="Representative Pareto frontier · interactive coding · 10 Gb/s")
+             title="Example Pareto frontier · interactive coding seed 1 · 10 Gb/s")
     axis.set_yscale("log")
     axis.invert_yaxis()
     axis.grid(alpha=.18)
