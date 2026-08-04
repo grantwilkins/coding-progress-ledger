@@ -731,6 +731,15 @@ def _remote_ready(process: subprocess.Popen, timeout_s: float) -> dict:
     raise TimeoutError("remote sink readiness timed out")
 
 
+def _wait_remote_ready(remote: dict[str, subprocess.Popen],
+                       timeout_s: float) -> None:
+    with ThreadPoolExecutor(max_workers=len(remote)) as pool:
+        futures = {node_id: pool.submit(_remote_ready, process, timeout_s)
+                   for node_id, process in remote.items()}
+        for node_id in sorted(futures):
+            futures[node_id].result()
+
+
 def _stop_remote(node: Node, key: Path, root: Path,
                  process: subprocess.Popen) -> None:
     if process.poll() is None:
@@ -797,7 +806,7 @@ def start_cluster(cluster: Cluster, key: Path, contract: dict,
                 text=True, start_new_session=True,
             )
             remote[node_id] = process
-            _remote_ready(process, testbed.health_timeout())
+        _wait_remote_ready(remote, testbed.health_timeout())
         local = testbed.Stack(
             lmc, proxy, source, None, run_root, services,
             aggregate or 0,

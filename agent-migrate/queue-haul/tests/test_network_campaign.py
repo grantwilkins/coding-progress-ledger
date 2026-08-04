@@ -14,6 +14,7 @@ Plausible wrong implementations:
 
 import csv
 import json
+import threading
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -440,6 +441,22 @@ def test_remote_stop_signals_recorded_node_serve_pid(monkeypatch, tmp_path):
 
     assert "node-serve.pid" in calls[0][0][-1]
     assert calls[-1] == ("wait", 30)
+
+
+def test_remote_readiness_waits_in_parallel(monkeypatch):
+    started = []
+    both_started = threading.Event()
+
+    def ready(process, timeout):
+        started.append((process, timeout))
+        if len(started) == 2:
+            both_started.set()
+        assert both_started.wait(1)
+
+    monkeypatch.setattr(n, "_remote_ready", ready)
+    n._wait_remote_ready({"east": "east", "west": "west"}, 300)
+
+    assert sorted(started) == [("east", 300), ("west", 300)]
 
 
 def test_reducer_keeps_failed_attempts_and_uses_latest(tmp_path):
