@@ -86,9 +86,9 @@ class Cluster:
         if len(value.destinations) != 2 or len({n.id for n in nodes}) != 3 \
                 or len({n.host for n in nodes}) != 3:
             raise ValueError("cluster node ids and hosts must be unique")
-        if value.source.region != "swedencentral" \
+        if value.source.region != "eastus2" \
                 or {node.region for node in value.destinations} \
-                != {"eastus2", "westeurope"}:
+                != {"swedencentral", "westeurope"}:
             raise ValueError("cluster regions do not match the frozen topology")
         return value
 
