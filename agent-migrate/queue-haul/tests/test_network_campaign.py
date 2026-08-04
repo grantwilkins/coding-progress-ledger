@@ -407,6 +407,24 @@ def test_progress_checkpoint_is_atomic_and_counts_latest_results(tmp_path):
     assert not (tmp_path / "progress.json.tmp").exists()
 
 
+def test_chat_explicitly_probes_state_code(monkeypatch):
+    seen = {}
+
+    def stream(_cfg, _port, messages, tokens, _hash, _timeout):
+        seen.update(messages=messages, tokens=tokens)
+        now = n.time.monotonic_ns()
+        return n.profiler.RequestResult("r", 200, "", now, now), "CODE"
+
+    monkeypatch.setattr(n.profiler, "stream_chat", stream)
+    n._chat(object(), 1, [{"role": "user", "content": "context"}],
+            "CODE", 1)
+
+    assert seen == {"messages": [
+        {"role": "user", "content": "context"},
+        {"role": "user", "content":
+         "Reply only with session state code CODE."}], "tokens": 16}
+
+
 def test_resume_metadata_appends_dynamic_check_but_pins_identity():
     first = {"git_sha": "abc", "plan_sha256": "p", "checks": [{"clock": 1}]}
     current = {"git_sha": "abc", "plan_sha256": "p", "checks": [{"clock": 2}]}

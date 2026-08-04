@@ -866,8 +866,10 @@ def _clear_cluster(stack: ClusterStack) -> None:
 
 def _chat(cfg: testbed.Config, port: int, messages: list[dict], code: str,
           timeout_s: float) -> dict:
+    messages = messages + [{"role": "user", "content":
+                            f"Reply only with session state code {code}."}]
     result, text = profiler.stream_chat(
-        cfg, port, messages, 4, profiler.messages_hash(messages), timeout_s)
+        cfg, port, messages, 16, profiler.messages_hash(messages), timeout_s)
     if result.status_code != 200 or code not in text:
         raise RuntimeError(
             f"session reconstruction failed: HTTP {result.status_code}, "
