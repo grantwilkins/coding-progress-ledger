@@ -436,7 +436,7 @@ def test_chat_explicitly_probes_state_code(monkeypatch):
     assert seen == {"messages": [
         {"role": "user", "content": "context"},
         {"role": "user", "content":
-         "Reply only with session state code CODE."}], "tokens": 32}
+         "Reply only with session state code CODE."}], "tokens": 128}
 
 
 def test_warm_waits_only_for_complete_lmcache_blocks(monkeypatch, tmp_path):
