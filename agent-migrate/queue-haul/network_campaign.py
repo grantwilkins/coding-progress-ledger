@@ -790,7 +790,7 @@ def stop_cluster(stack: ClusterStack, collect: bool = True) -> None:
 
 
 def smoke(cluster: Cluster, key: Path, calibration: dict, bandwidth: str,
-          run_root: Path, words: int = 4096) -> dict:
+          run_root: Path, words: int = 1024) -> dict:
     contract = freeze_contract(calibration)
     stack = start_cluster(cluster, key, contract, bandwidth, run_root)
     report = None
@@ -1219,7 +1219,7 @@ def parse_args(argv=None):
     command.add_argument("--bandwidth", default="natural",
                          choices=("natural", "controlled_40", "controlled_80"))
     command.add_argument("--run-root", type=Path, required=True)
-    command.add_argument("--words", type=int, default=4096)
+    command.add_argument("--words", type=int, default=1024)
     command = sub.add_parser("run")
     command.add_argument("--cluster", type=Path, required=True)
     command.add_argument("--ssh-key", type=Path,

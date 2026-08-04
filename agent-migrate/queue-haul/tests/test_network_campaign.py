@@ -241,6 +241,13 @@ def test_network_proxy_cli_preserves_named_routes_and_caps():
     assert rates == {"kv/east": 375_000_000, "api/east": 375_000_000}
 
 
+def test_network_smoke_prompt_fits_model_context():
+    assert n.parse_args([
+        "smoke", "--cluster", "cluster.json", "--calibration", "c.json",
+        "--run-root", "run",
+    ]).words == 1024
+
+
 def test_cluster_routes_keep_data_private_and_share_destination_caps(tmp_path):
     value = cluster(tmp_path)
     routes, ports = n.cluster_routes(value)
