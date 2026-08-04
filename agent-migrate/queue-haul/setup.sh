@@ -71,7 +71,6 @@ from pathlib import Path
 
 import torch
 import lmcache.c_ops
-from huggingface_hub import snapshot_download
 from lmcache.integration.vllm.lmcache_mp_connector import LMCacheMPConnector
 
 assert version("vllm") == "0.22.0", version("vllm")
@@ -80,8 +79,8 @@ assert torch.version.cuda == "12.9", torch.version.cuda
 snapshot = Path("/datadrive/hub/models--openai--gpt-oss-20b/snapshots/6cee5e81ee83917806bbde320786a8fb61efebee")
 assert snapshot.is_dir(), snapshot
 assert len(list(snapshot.glob("model-*.safetensors"))) == 3, snapshot
-snapshot_download("openai/gpt-oss-20b", revision=snapshot.name,
-                  local_files_only=True)
+assert all((snapshot / name).is_file() for name in
+           ("config.json", "model.safetensors.index.json", "tokenizer.json"))
 PY
 valkey-server --version
 

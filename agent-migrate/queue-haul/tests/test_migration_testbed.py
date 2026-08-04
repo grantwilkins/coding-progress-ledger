@@ -43,6 +43,9 @@ def test_vllm_commands_pin_validated_sandbox_flags_and_roles():
     sink = cmd_text(s.vllm_cmd(cfg, "sink"))
     smoke = cmd_text(s.vllm_cmd(cfg, "smoke1"))
 
+    assert str(s.model_path(cfg)) in source
+    assert "--served-model-name openai/gpt-oss-20b" in source
+
     assert "vllm-openai-v0.10.1.1.sandbox" in source
     assert "CUDA_VISIBLE_DEVICES=0" in source
     assert "APPTAINERENV_CUDA_VISIBLE_DEVICES=0" in source

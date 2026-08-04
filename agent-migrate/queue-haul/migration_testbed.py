@@ -25,6 +25,7 @@ from pathlib import Path
 from service_curve_runner import shell
 
 MODEL = "openai/gpt-oss-20b"
+MODEL_REVISION = "6cee5e81ee83917806bbde320786a8fb61efebee"
 SANDBOX = Path("/scratch/users/gfw/ptsim/vllm-openai-v0.10.1.1.sandbox")
 MP_IMAGE = Path("/scratch/users/gfw/ptsim/lmcache-v0.5.1-vllm0.22.0-cu129-primary.sif")
 REDIS_IMAGE = Path("/scratch/users/gfw/ptsim/redis-7.4.2-bookworm.sif")
@@ -185,6 +186,10 @@ def validate_ports(cfg: Config) -> None:
 
 def model_snapshot_dir(hf_home: Path, model: str) -> Path:
     return hf_home / "hub" / f"models--{model.replace('/', '--')}" / "snapshots"
+
+
+def model_path(cfg: Config) -> Path:
+    return model_snapshot_dir(cfg.hf_home, cfg.model) / MODEL_REVISION
 
 
 def cache_dirs(cfg: Config, role: str) -> dict[str, Path]:
@@ -352,7 +357,7 @@ def vllm_cmd(cfg: Config, role: str, extra: list[str] | None = None, *,
     serve = [
         "vllm",
         "serve",
-        cfg.model,
+        model_path(cfg),
         "--host",
         bind_host or cfg.host,
         "--port",
@@ -466,9 +471,10 @@ def preflight(cfg: Config, required_gpus: int = 1) -> list[str]:
         expected = expected_runtime_versions()
         if versions != expected:
             failures.append(f"need vLLM/LMCache {expected}, saw {versions}")
-    snapshots = model_snapshot_dir(cfg.hf_home, cfg.model)
-    if not snapshots.exists() or not any(snapshots.iterdir()):
-        failures.append(f"model snapshot missing: {snapshots}")
+    snapshot = model_path(cfg)
+    if not snapshot.is_dir() or not all((snapshot / name).exists() for name in (
+            "config.json", "model.safetensors.index.json", "tokenizer.json")):
+        failures.append(f"model snapshot missing: {snapshot}")
     for path in [tmpdir("src"), tmpdir("sink"), tmpdir("smoke1")]:
         if len(str(path)) > 20:
             failures.append(f"TMPDIR too long for LMCache IPC: {path}")
@@ -492,7 +498,7 @@ def preflight(cfg: Config, required_gpus: int = 1) -> list[str]:
         f"runtime_path={Path(sys.executable).parent}" if native else f"sandbox={cfg.sandbox}",
         f"vllm={expected_runtime_versions()[0]}",
         f"lmcache={expected_runtime_versions()[1]}",
-        f"model_snapshots={snapshots}",
+        f"model_snapshot={snapshot}",
     ]
 
 
