@@ -382,6 +382,31 @@ def test_reducer_keeps_failed_attempts_and_uses_latest(tmp_path):
     assert (row["scenario_id"], row["attempt"]) == ("s", "2")
 
 
+def test_resume_skips_complete_and_advances_past_interrupted_attempt(tmp_path):
+    root = tmp_path / "scenarios/s"
+    interrupted = root / "attempt-0002"
+    interrupted.mkdir(parents=True)
+    first = root / "attempt-0001"
+    first.mkdir()
+    n.write_checkpoint(first / "result.json", {"status": "complete"})
+
+    assert n._latest_result(root)[0] == 1
+    assert n._next_attempt(root) == 3
+
+
+def test_progress_checkpoint_is_atomic_and_counts_latest_results(tmp_path):
+    plan = {"scenarios": [{"scenario_id": "done"}, {"scenario_id": "todo"}]}
+    result = tmp_path / "scenarios/done/attempt-0001/result.json"
+    n.write_checkpoint(result, {"status": "complete"})
+
+    progress = n.checkpoint_progress(plan, tmp_path)
+
+    assert progress["completed_scenario_ids"] == ["done"]
+    assert (progress["completed"], progress["missing"]) == (1, 1)
+    assert json.loads((tmp_path / "progress.json").read_text()) == progress
+    assert not (tmp_path / "progress.json.tmp").exists()
+
+
 def test_resume_metadata_appends_dynamic_check_but_pins_identity():
     first = {"git_sha": "abc", "plan_sha256": "p", "checks": [{"clock": 1}]}
     current = {"git_sha": "abc", "plan_sha256": "p", "checks": [{"clock": 2}]}

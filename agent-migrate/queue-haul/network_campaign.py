@@ -48,6 +48,22 @@ WORKLOAD_PATHS = {name: ROOT / f"profiles/{name}.json" for name in (
 EXPECTED_RUNTIME = {"vllm": "0.22.0", "lmcache": "0.5.1"}
 
 
+def write_checkpoint(path: Path, value: dict) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temporary = path.with_suffix(path.suffix + ".tmp")
+    with temporary.open("w") as handle:
+        json.dump(value, handle, indent=2, sort_keys=True)
+        handle.write("\n")
+        handle.flush()
+        os.fsync(handle.fileno())
+    temporary.replace(path)
+    descriptor = os.open(path.parent, os.O_RDONLY)
+    try:
+        os.fsync(descriptor)
+    finally:
+        os.close(descriptor)
+
+
 @dataclass(frozen=True)
 class Node:
     id: str
@@ -1008,8 +1024,7 @@ def run_network_scenario(stack: ClusterStack, manifest: dict, scenario: dict,
         "connections": connections, "resp_transfers": transfers,
         "source_sleep_ns": [sleep_start_ns, sleep_end_ns],
     }
-    (root / "result.json").write_text(
-        json.dumps(result, indent=2, sort_keys=True) + "\n")
+    write_checkpoint(root / "result.json", result)
     return result
 
 
@@ -1019,6 +1034,30 @@ def _latest_result(root: Path) -> tuple[int, dict] | None:
         return None
     path = rows[-1]
     return int(path.parent.name.rsplit("-", 1)[-1]), json.loads(path.read_text())
+
+
+def _next_attempt(root: Path) -> int:
+    attempts = [int(path.name.rsplit("-", 1)[-1])
+                for path in root.glob("attempt-*") if path.is_dir()]
+    return max(attempts, default=0) + 1
+
+
+def checkpoint_progress(plan: dict, run_root: Path) -> dict:
+    complete, failed = [], []
+    for scenario in plan["scenarios"]:
+        latest = _latest_result(run_root / "scenarios" / scenario["scenario_id"])
+        if latest:
+            (complete if latest[1].get("status") == "complete" else failed) \
+                .append(scenario["scenario_id"])
+    value = {
+        "schema": "queue-haul-network-progress-v1",
+        "updated_ns": time.time_ns(), "expected": len(plan["scenarios"]),
+        "completed": len(complete), "failed": len(failed),
+        "missing": len(plan["scenarios"]) - len(complete) - len(failed),
+        "completed_scenario_ids": complete,
+    }
+    write_checkpoint(run_root / "progress.json", value)
+    return value
 
 
 def reduce_run(plan: dict, run_root: Path) -> dict:
@@ -1120,9 +1159,9 @@ def run_campaign(cluster: Cluster, key: Path, current_calibration: Path,
     previous = json.loads(metadata_path.read_text()) \
         if metadata_path.exists() else None
     metadata = merge_metadata(metadata, previous)
-    metadata_path.write_text(json.dumps(metadata, indent=2, sort_keys=True) + "\n")
-    (run_root / "plan.json").write_text(
-        json.dumps(plan, indent=2, sort_keys=True) + "\n")
+    write_checkpoint(metadata_path, metadata)
+    write_checkpoint(run_root / "plan.json", plan)
+    checkpoint_progress(plan, run_root)
     manifest = json.loads(Path(plan["manifest"]["path"]).read_text())
     prefill_tps = ModelProfile.load(MODEL_PATH).case().F
     stack, bandwidth = None, None
@@ -1142,20 +1181,21 @@ def run_campaign(cluster: Cluster, key: Path, current_calibration: Path,
                     run_root / "stacks" /
                     f"{bandwidth}-{time.time_ns()}",
                 )
-            attempt = (latest[0] if latest else 0) + 1
+            attempt = _next_attempt(scenario_root)
             attempt_root = scenario_root / f"attempt-{attempt:04d}"
             try:
                 run_network_scenario(
                     stack, manifest, scenario, attempt_root, prefill_tps)
             except Exception as exc:
                 attempt_root.mkdir(parents=True, exist_ok=True)
-                (attempt_root / "result.json").write_text(json.dumps({
+                write_checkpoint(attempt_root / "result.json", {
                     "schema": RESULT_SCHEMA, "status": "failed",
                     "scenario_id": scenario["scenario_id"],
                     "error": f"{type(exc).__name__}: {exc}",
-                }, indent=2, sort_keys=True) + "\n")
+                })
                 stop_cluster(stack)
                 stack = None
+            checkpoint_progress(plan, run_root)
     finally:
         if stack:
             stop_cluster(stack)

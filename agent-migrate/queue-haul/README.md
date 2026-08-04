@@ -219,9 +219,12 @@ or natural, sink load to historical-throughput `rho=0.8`, or deadline to 19 s.
 This replaces the 648-run full matrix, which adds interactions we do not need to
 answer the present one-factor questions. Every policy reaches both destinations.
 
-The runner is resumable. A failed attempt remains under `attempt-NNNN`; rerunning
-uses the next attempt number and never hides the prior failure. After any Spot
-deallocation, restart the VMs, rerun `setup.sh` and `check`, write a fresh formal
+The runner checkpoints each scenario result atomically and fsyncs it before
+continuing. `progress.json` records completed scenario IDs and counts after every
+attempt. Rerun the same command and run root to skip every completed scenario;
+an interrupted or failed `attempt-NNNN` remains intact and resume uses the next
+attempt number. After any Spot deallocation, restart the VMs, rerun `setup.sh`
+and `check`, write a fresh formal
 calibration file, and resume with that file as `--current-calibration`. Resume
 hard-fails if RTT or simultaneous goodput drifts more than 10%, or if the plan,
 commit, node identity, model, or runtime changed. Azure Scheduled Events are
