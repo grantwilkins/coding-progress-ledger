@@ -301,18 +301,25 @@ def redis_cmd(cfg: Config) -> list[str]:
             "--port", str(cfg.lmc_port), "--save", "", "--appendonly", "no"]
 
 
-def mp_server_cmd(cfg: Config, role: str) -> list[str]:
+def mp_server_cmd(cfg: Config, role: str, *, bind_host: str | None = None,
+                  http_host: str | None = None, l2_host: str | None = None,
+                  l2_port: int | None = None) -> list[str]:
     if role == "source":
-        port, http_port, l2_port = cfg.src_lmc_port, cfg.src_lmc_http_port, cfg.kv_proxy_port
+        port, http_port, default_l2_port = (
+            cfg.src_lmc_port, cfg.src_lmc_http_port, cfg.kv_proxy_port)
     elif role == "sink":
-        port, http_port, l2_port = cfg.sink_lmc_port, cfg.sink_lmc_http_port, cfg.kv_proxy_port
+        port, http_port, default_l2_port = (
+            cfg.sink_lmc_port, cfg.sink_lmc_http_port, cfg.kv_proxy_port)
     else:
         raise ValueError(f"unknown MP server role: {role}")
-    adapter = json.dumps({"type": "resp", "host": cfg.host, "port": l2_port,
+    l2_port = l2_port or default_l2_port
+    adapter = json.dumps({"type": "resp", "host": l2_host or cfg.host,
+                          "port": l2_port,
                           "num_workers": 8}, separators=(",", ":"))
+    bind_host, http_host = bind_host or cfg.host, http_host or cfg.host
     serve = [
         "lmcache", "server", "--instance-id", f"queue-haul-{role}",
-        "--host", cfg.host, "--port", port, "--http-host", cfg.host,
+        "--host", bind_host, "--port", port, "--http-host", http_host,
         "--http-port", http_port, "--l1-size-gb", 16, "--eviction-policy", "LRU",
         "--chunk-size", 256, "--max-workers", 8,
         "--supported-transfer-mode", "engine_driven", "--l2-adapter", adapter,
@@ -324,7 +331,10 @@ def mp_server_cmd(cfg: Config, role: str) -> list[str]:
     return apptainer_cmd(cfg, script, nv=False)
 
 
-def vllm_cmd(cfg: Config, role: str, extra: list[str] | None = None) -> list[str]:
+def vllm_cmd(cfg: Config, role: str, extra: list[str] | None = None, *,
+             gpu_index: int | None = None,
+             bind_host: str | None = None,
+             sleep_mode: bool | None = None) -> list[str]:
     reject_duplicate_extra(extra or [])
     if role == "source":
         port, gpu, engine_id, kv_role, kv_port, rpc_port = cfg.src_port, 0, "s0", "kv_producer", port_default(14579), "src"
@@ -344,7 +354,7 @@ def vllm_cmd(cfg: Config, role: str, extra: list[str] | None = None) -> list[str
         "serve",
         cfg.model,
         "--host",
-        cfg.host,
+        bind_host or cfg.host,
         "--port",
         port,
         "--served-model-name",
@@ -364,14 +374,16 @@ def vllm_cmd(cfg: Config, role: str, extra: list[str] | None = None) -> list[str
         "--enable-chunked-prefill",
         "--enable-prefix-caching",
         "--enforce-eager",
-        *(["--enable-sleep-mode"] if role == "source" and lmcache_mode() == "legacy" else []),
+        *(["--enable-sleep-mode"] if role == "source" and (
+            sleep_mode if sleep_mode is not None else lmcache_mode() == "legacy"
+        ) else []),
         *(["--gpu-memory-utilization", 0.75, "--disable-hybrid-kv-cache-manager", "--enable-prompt-tokens-details"] if lmcache_mode() == "mp" else []),
         "--kv-transfer-config",
         kv_config(engine_id, kv_role, kv_port, rpc_port),
         *(extra or []),
     ]
     script = "\n".join([f"mkdir -p {dirs}", *vllm_exports(cfg, cache_role, remote_url), shell(serve)])
-    return apptainer_cmd(cfg, script, gpu)
+    return apptainer_cmd(cfg, script, gpu if gpu_index is None else gpu_index)
 
 
 def proxy_routes(cfg: Config) -> list[Route]:
@@ -530,7 +542,8 @@ class BandwidthLimiter:
         if not billable(route, direction):
             return 0.0
         buckets = [bucket for bucket in (
-            self.aggregate, self.routes.get(route),
+            self.aggregate,
+            self.routes.get(route) or self.routes.get(route.rsplit("/", 1)[-1]),
         ) if bucket]
         return max((bucket.reserve(nbytes, now) for bucket in buckets),
                    default=0.0)
@@ -1577,9 +1590,39 @@ def parse_args(argv: list[str] | None = None):
     sp.add_argument("--kv-target", default="127.0.0.1:5655")
     sp.add_argument("--api-listen", default="127.0.0.1:8400")
     sp.add_argument("--api-target", default="127.0.0.1:8200")
-    sp.add_argument("--mbps", type=float, required=True)
+    sp.add_argument("--mbps", type=float)
+    sp.add_argument("--routes-json")
+    sp.add_argument("--aggregate-mbps", type=float)
+    sp.add_argument("--route-mbps-json")
     sp.add_argument("--log", type=Path)
     return p.parse_args(argv)
+
+
+def proxy_config(args) -> tuple[list[Route], float | None, dict[str, float]]:
+    if args.routes_json:
+        routes = [Route(**raw) for raw in json.loads(args.routes_json)]
+        if args.mbps is not None:
+            raise ValueError("network routes use --aggregate-mbps, not --mbps")
+        aggregate = args.aggregate_mbps
+        rates = json.loads(args.route_mbps_json or "{}")
+    else:
+        if args.mbps is None:
+            raise ValueError("legacy proxy requires --mbps")
+        kv_listen = parse_addr(args.kv_listen)
+        kv_target = parse_addr(args.kv_target)
+        api_listen = parse_addr(args.api_listen)
+        api_target = parse_addr(args.api_target)
+        routes = [Route("kv", *kv_listen, *kv_target,
+                        "resp" if lmcache_mode() == "mp" else "lmcache"),
+                  Route("api", *api_listen, *api_target)]
+        aggregate, rates = args.mbps, {}
+    if aggregate is not None and aggregate <= 0 \
+            or any(float(rate) <= 0 for rate in rates.values()) \
+            or set(rates) - {route.name for route in routes}:
+        raise ValueError("invalid proxy bandwidth contract")
+    return routes, (aggregate * 1_000_000 / 8 if aggregate else None), {
+        route: float(rate) * 1_000_000 / 8 for route, rate in rates.items()
+    }
 
 
 def main(argv: list[str] | None = None) -> None:
@@ -1588,14 +1631,8 @@ def main(argv: list[str] | None = None) -> None:
         run_lmcache_server(args.host, args.port, args.max_bytes)
         return
     if args.cmd == "proxy":
-        kv_listen = parse_addr(args.kv_listen)
-        kv_target = parse_addr(args.kv_target)
-        api_listen = parse_addr(args.api_listen)
-        api_target = parse_addr(args.api_target)
-        routes = [Route("kv", *kv_listen, *kv_target,
-                        "resp" if lmcache_mode() == "mp" else "lmcache"),
-                  Route("api", *api_listen, *api_target)]
-        asyncio.run(run_proxy(routes, args.mbps * 1_000_000 / 8, args.log))
+        routes, aggregate, rates = proxy_config(args)
+        asyncio.run(run_proxy(routes, aggregate, args.log, rates))
         return
 
     cfg = config_from_args(args)

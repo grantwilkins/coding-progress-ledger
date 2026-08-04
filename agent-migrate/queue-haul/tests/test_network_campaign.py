@@ -123,7 +123,7 @@ def test_targeted_design_has_seven_cells_and_126_policy_migrations():
 
 
 def test_hierarchical_limiter_enforces_route_and_source_caps():
-    limiter = testbed.BandwidthLimiter(100, {"kv/east": 60, "kv/west": 60})
+    limiter = testbed.BandwidthLimiter(100, {"east": 60, "west": 60})
     for bucket in (limiter.aggregate, *limiter.routes.values()):
         bucket.updated = 0
 
@@ -187,3 +187,60 @@ def test_host_reports_must_match_commit_runtime_and_expected_regions(tmp_path):
     reports["west"]["vllm"] = "0.22.1"
     with pytest.raises(ValueError, match="runtime"):
         n.validate_hosts(cluster(tmp_path), reports)
+
+
+def test_remote_sink_uses_gpu_zero_private_api_and_source_l2(monkeypatch):
+    monkeypatch.setenv("QH_RUNTIME", "native")
+    monkeypatch.setenv("QH_LMCACHE_MODE", "mp")
+    cfg = testbed.Config()
+
+    cache = testbed.shell(testbed.mp_server_cmd(
+        cfg, "sink", bind_host="127.0.0.1", http_host="10.1.0.4",
+        l2_host="10.0.0.4", l2_port=8301,
+    ))
+    vllm = testbed.shell(testbed.vllm_cmd(
+        cfg, "sink", gpu_index=0, bind_host="10.1.0.4"))
+    source = testbed.shell(testbed.vllm_cmd(cfg, "source", sleep_mode=True))
+
+    assert '"host":"10.0.0.4","port":8301' in cache
+    assert "--http-host 10.1.0.4" in cache
+    assert "CUDA_VISIBLE_DEVICES=0" in vllm
+    assert "--host 10.1.0.4" in vllm
+    assert "--enable-sleep-mode" in source
+
+
+def test_network_proxy_cli_preserves_named_routes_and_caps():
+    routes = [
+        testbed.Route("kv/east", "10.0.0.4", 8301, "127.0.0.1", 5655, "resp"),
+        testbed.Route("api/east", "127.0.0.1", 8401, "10.1.0.4", 8200),
+    ]
+    args = testbed.parse_args([
+        "proxy", "--routes-json", json.dumps([n.asdict(route) for route in routes]),
+        "--aggregate-mbps", "6000", "--route-mbps-json",
+        json.dumps({"kv/east": 3000, "api/east": 3000}),
+    ])
+    parsed, aggregate, rates = testbed.proxy_config(args)
+
+    assert parsed == routes
+    assert aggregate == 750_000_000
+    assert rates == {"kv/east": 375_000_000, "api/east": 375_000_000}
+
+
+def test_cluster_routes_keep_data_private_and_share_destination_caps(tmp_path):
+    value = cluster(tmp_path)
+    routes, ports = n.cluster_routes(value)
+
+    assert routes == [
+        testbed.Route("kv/east", "10.0.0.4", 8301, "127.0.0.1", 5655, "resp"),
+        testbed.Route("api/east", "127.0.0.1", 8401, "10.1.0.4", 8200),
+        testbed.Route("kv/west", "10.0.0.4", 8302, "127.0.0.1", 5655, "resp"),
+        testbed.Route("api/west", "127.0.0.1", 8402, "10.2.0.4", 8200),
+    ]
+    assert ports == {"east": {"kv": 8301, "api": 8401},
+                     "west": {"kv": 8302, "api": 8402}}
+
+    contract = n.freeze_contract(calibration())
+    aggregate, rates = n.bandwidth_limits(contract, "controlled_40")
+    assert aggregate == 6600
+    assert rates == {"east": 3000, "west": 3600}
+    assert n.bandwidth_limits(contract, "natural") == (None, {})

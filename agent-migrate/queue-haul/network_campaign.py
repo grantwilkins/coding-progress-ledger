@@ -6,14 +6,19 @@ import argparse
 import json
 import os
 import re
+import select
 import shlex
+import signal
 import statistics
 import subprocess
 import sys
+import threading
 import time
 from dataclasses import asdict, dataclass
 from importlib.metadata import version
 from pathlib import Path
+
+import migration_testbed as testbed
 
 
 CLUSTER_SCHEMA = "queue-haul-azure-cluster-v1"
@@ -366,6 +371,255 @@ def target_conditions() -> list[dict]:
     return [{**anchor, **change} for change in changes]
 
 
+def cluster_routes(cluster: Cluster) -> tuple[list[testbed.Route], dict]:
+    routes, ports = [], {}
+    for index, node in enumerate(sorted(cluster.destinations,
+                                        key=lambda value: value.id), start=1):
+        kv, api = 8300 + index, 8400 + index
+        ports[node.id] = {"kv": kv, "api": api}
+        routes.extend((
+            testbed.Route(
+                f"kv/{node.id}", cluster.source.host, kv,
+                "127.0.0.1", 5655, "resp"),
+            testbed.Route(
+                f"api/{node.id}", "127.0.0.1", api,
+                node.host, 8200),
+        ))
+    return routes, ports
+
+
+def bandwidth_limits(contract: dict, label: str
+                     ) -> tuple[float | None, dict[str, float]]:
+    if label == "natural":
+        return None, {}
+    if label not in {"controlled_40", "controlled_80"}:
+        raise ValueError(f"unknown bandwidth condition: {label}")
+    percent = label.rsplit("_", 1)[-1]
+    return (
+        float(contract["aggregate"]["controlled_mbps"][percent]),
+        {node: float(row["controlled_mbps"][percent])
+         for node, row in contract["paths"].items()},
+    )
+
+
+def proxy_command(routes: list[testbed.Route], aggregate_mbps: float | None,
+                  route_mbps: dict[str, float], log: Path) -> list[str]:
+    command = [
+        sys.executable, "queue-haul/migration_testbed.py", "proxy",
+        "--routes-json", json.dumps([asdict(route) for route in routes]),
+        "--route-mbps-json", json.dumps(route_mbps), "--log", str(log),
+    ]
+    if aggregate_mbps:
+        command += ["--aggregate-mbps", str(aggregate_mbps)]
+    return command
+
+
+def node_serve(node_id: str, bind_host: str, source_host: str, kv_port: int,
+               run_root: Path) -> None:
+    import migration_profiler
+
+    cfg = testbed.Config(host="127.0.0.1")
+    testbed.preflight(cfg, 1)
+    run_root.mkdir(parents=True, exist_ok=False)
+    cache = sink = None
+    sampler = migration_profiler.PowerSampler(run_root / "power.csv")
+    stopped = threading.Event()
+    for signum in (signal.SIGINT, signal.SIGTERM, signal.SIGHUP):
+        signal.signal(signum, lambda *_args: stopped.set())
+    try:
+        cache_log = run_root / "lmcache-sink.log"
+        cache = testbed.start_logged(testbed.mp_server_cmd(
+            cfg, "sink", bind_host="127.0.0.1", http_host=bind_host,
+            l2_host=source_host, l2_port=kv_port,
+        ), cache_log)
+        testbed.wait_tcp_process(
+            "127.0.0.1", cfg.sink_lmc_port, 300, cache, cache_log)
+        sink_log = run_root / "sink.log"
+        sink = testbed.start_logged(testbed.vllm_cmd(
+            cfg, "sink", gpu_index=0, bind_host=bind_host), sink_log)
+        testbed.wait_health_process(
+            bind_host, cfg.sink_port, testbed.health_timeout(), sink, sink_log)
+        sampler.start()
+        print(json.dumps({
+            "status": "ready", "node_id": node_id, "host": bind_host,
+            "vllm_port": cfg.sink_port, "kv_port": kv_port,
+            "monotonic_ns": time.monotonic_ns(), "wall_ns": time.time_ns(),
+        }, sort_keys=True), flush=True)
+        stopped.wait()
+    finally:
+        if sampler.thread.is_alive():
+            sampler.close()
+        for process in (sink, cache):
+            if process:
+                testbed.stop_proc(process)
+
+
+@dataclass
+class ClusterStack:
+    cluster: Cluster
+    cfg: testbed.Config
+    local: testbed.Stack
+    sampler: object
+    remote: dict[str, subprocess.Popen]
+    remote_roots: dict[str, Path]
+    ports: dict
+    run_root: Path
+    key: Path
+
+
+def _remote_ready(process: subprocess.Popen, timeout_s: float) -> dict:
+    deadline = time.monotonic() + timeout_s
+    while time.monotonic() < deadline:
+        if process.poll() is not None:
+            raise RuntimeError("remote sink exited before readiness")
+        ready, _, _ = select.select([process.stdout], [], [], 1)
+        if ready:
+            line = process.stdout.readline()
+            try:
+                report = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            if report.get("status") == "ready":
+                return report
+    raise TimeoutError("remote sink readiness timed out")
+
+
+def start_cluster(cluster: Cluster, key: Path, contract: dict,
+                  bandwidth: str, run_root: Path) -> ClusterStack:
+    import migration_profiler
+
+    cfg = testbed.Config(host="127.0.0.1")
+    testbed.preflight(cfg, 1)
+    run_root.mkdir(parents=True, exist_ok=False)
+    routes, ports = cluster_routes(cluster)
+    aggregate, rates = bandwidth_limits(contract, bandwidth)
+    lmc = proxy = source = None
+    services, remote = [], {}
+    sampler = migration_profiler.PowerSampler(run_root / "power.csv")
+    try:
+        lmc_log = run_root / "redis.log"
+        lmc = testbed.start_logged(testbed.redis_cmd(cfg), lmc_log)
+        testbed.wait_tcp_process("127.0.0.1", cfg.lmc_port, 60, lmc, lmc_log)
+        proxy_log = run_root / "proxy.log"
+        proxy = testbed.start_logged(proxy_command(
+            routes, aggregate, rates, run_root / "proxy_bytes.csv"), proxy_log)
+        for route in routes:
+            testbed.wait_tcp_process(
+                route.listen_host, route.listen_port, 30, proxy, proxy_log)
+        cache_log = run_root / "lmcache-source.log"
+        cache = testbed.start_logged(testbed.mp_server_cmd(
+            cfg, "source", l2_host="127.0.0.1", l2_port=cfg.lmc_port,
+        ), cache_log)
+        services.append(cache)
+        testbed.wait_tcp_process(
+            "127.0.0.1", cfg.src_lmc_port, 300, cache, cache_log)
+        source_log = run_root / "source.log"
+        source = testbed.start_logged(testbed.vllm_cmd(
+            cfg, "source", gpu_index=0, sleep_mode=True), source_log)
+        testbed.wait_health_process(
+            "127.0.0.1", cfg.src_port, testbed.health_timeout(),
+            source, source_log)
+        sampler.start()
+        remote_roots = {}
+        by_id = {node.id: node for node in cluster.destinations}
+        for node_id in sorted(by_id):
+            node = by_id[node_id]
+            remote_root = Path(node.run_root) / run_root.name / node_id
+            remote_roots[node_id] = remote_root
+            command = ssh_command(node, key, [
+                "uv", "run", "python", "queue-haul/network_campaign.py",
+                "node-serve", "--node-id", node_id, "--bind-host", node.host,
+                "--source-host", cluster.source.host, "--kv-port",
+                str(ports[node_id]["kv"]), "--run-root", str(remote_root),
+            ])
+            process = subprocess.Popen(
+                command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                text=True, start_new_session=True,
+            )
+            remote[node_id] = process
+            _remote_ready(process, testbed.health_timeout())
+        local = testbed.Stack(
+            lmc, proxy, source, None, run_root, services,
+            aggregate or 0,
+        )
+        return ClusterStack(
+            cluster, cfg, local, sampler, remote, remote_roots, ports,
+            run_root, key,
+        )
+    except BaseException:
+        for process in remote.values():
+            testbed.stop_proc(process)
+        if sampler.thread.is_alive():
+            sampler.close()
+        for process in (source, proxy, *services, lmc):
+            if process:
+                testbed.stop_proc(process)
+        raise
+
+
+def _scp(node: Node, key: Path, source: Path, destination: Path) -> None:
+    destination.mkdir(parents=True, exist_ok=False)
+    subprocess.run([
+        "scp", "-q", "-r", "-o", "BatchMode=yes", "-o",
+        "StrictHostKeyChecking=yes", "-i", str(key), "-P", str(node.ssh_port),
+        f"{node.ssh_user}@{node.host}:{source}/.", str(destination),
+    ], check=True)
+
+
+def stop_cluster(stack: ClusterStack, collect: bool = True) -> None:
+    for process in stack.remote.values():
+        testbed.stop_proc(process)
+    if stack.sampler.thread.is_alive():
+        stack.sampler.close()
+    testbed.stop_stack(stack.local)
+    if collect:
+        nodes = {node.id: node for node in stack.cluster.destinations}
+        for node_id, root in stack.remote_roots.items():
+            _scp(nodes[node_id], stack.key, root,
+                 stack.run_root / "nodes" / node_id)
+
+
+def smoke(cluster: Cluster, key: Path, calibration: dict, bandwidth: str,
+          run_root: Path, words: int = 4096) -> dict:
+    contract = freeze_contract(calibration)
+    stack = start_cluster(cluster, key, contract, bandwidth, run_root)
+    report = None
+    try:
+        prompt = testbed.prompt_text(f"network-smoke-{time.time_ns()}", words)
+        source, _ = testbed.warm_source(stack.cfg, run_root, prompt)
+        results = {}
+        for node in sorted(cluster.destinations, key=lambda value: value.id):
+            before = testbed.proxy_counts(run_root / "proxy_bytes.csv")
+            result = testbed.post_chat(
+                stack.cfg, stack.ports[node.id]["api"], prompt, 4)
+            testbed.check_chat(result, f"{node.id} KV continuation")
+            time.sleep(1)
+            delta = testbed.count_delta(
+                before, testbed.proxy_counts(run_root / "proxy_bytes.csv"))
+            key_name = f"kv/{node.id}/target_to_client"
+            cached = int((result["usage"].get("prompt_tokens_details") or {})
+                         .get("cached_tokens", 0))
+            if delta.get(key_name, 0) <= 0 or cached <= 0:
+                raise RuntimeError(f"{node.id} did not reconstruct remote KV")
+            results[node.id] = {
+                "request": result, "wire_bytes": delta[key_name],
+                "cached_tokens": cached,
+            }
+        testbed.set_source_sleep(stack.cfg, True)
+        time.sleep(5)
+        testbed.set_source_sleep(stack.cfg, False)
+        report = {
+            "schema": "queue-haul-network-smoke-v1", "status": "complete",
+            "bandwidth": bandwidth, "source": source,
+            "destinations": results,
+        }
+        (run_root / "report.json").write_text(
+            json.dumps(report, indent=2, sort_keys=True) + "\n")
+        return report
+    finally:
+        stop_cluster(stack)
+
+
 def prepare(cluster_path: Path, calibration_path: Path, out: Path) -> dict:
     cluster = Cluster.load(cluster_path)
     calibration = json.loads(calibration_path.read_text())
@@ -401,6 +655,21 @@ def parse_args(argv=None):
     command.add_argument("--repeats", type=int, default=3)
     command.add_argument("--ping-count", type=int, default=200)
     sub.add_parser("node-check")
+    command = sub.add_parser("node-serve")
+    command.add_argument("--node-id", required=True)
+    command.add_argument("--bind-host", required=True)
+    command.add_argument("--source-host", required=True)
+    command.add_argument("--kv-port", type=int, required=True)
+    command.add_argument("--run-root", type=Path, required=True)
+    command = sub.add_parser("smoke")
+    command.add_argument("--cluster", type=Path, required=True)
+    command.add_argument("--ssh-key", type=Path,
+                         default=Path("~/.ssh/azrs").expanduser())
+    command.add_argument("--calibration", type=Path, required=True)
+    command.add_argument("--bandwidth", default="natural",
+                         choices=("natural", "controlled_40", "controlled_80"))
+    command.add_argument("--run-root", type=Path, required=True)
+    command.add_argument("--words", type=int, default=4096)
     return parser.parse_args(argv)
 
 
@@ -418,6 +687,15 @@ def main(argv=None) -> None:
         print(json.dumps(calibrate(
             Cluster.load(args.cluster), args.ssh_key.expanduser(), args.out,
             args.seconds, args.repeats, args.ping_count,
+        ), indent=2, sort_keys=True))
+    elif args.command == "node-serve":
+        node_serve(args.node_id, args.bind_host, args.source_host,
+                   args.kv_port, args.run_root)
+    elif args.command == "smoke":
+        print(json.dumps(smoke(
+            Cluster.load(args.cluster), args.ssh_key.expanduser(),
+            json.loads(args.calibration.read_text()), args.bandwidth,
+            args.run_root, args.words,
         ), indent=2, sort_keys=True))
 
 
