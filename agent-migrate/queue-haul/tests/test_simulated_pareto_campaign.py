@@ -19,6 +19,7 @@ Plausible wrong implementations:
 - Include greedy_lagrangian or omit an intended scalable baseline.
 - Apply an absolute-watt tolerance after normalizing the HiGHS gain row.
 - Derive a mixed trace/anchor shard's CSV schema from only its first row.
+- Present a cherry-picked hero slice whose frontier does not support its labels.
 """
 
 import csv
@@ -222,6 +223,18 @@ def test_censored_miss_cannot_dominate_success():
     misses = [dict(rows[1]), dict(rows[1])]
     pareto_flags(misses)
     assert not any(row["pareto"] for row in misses)
+
+
+def test_hero_slice_supports_highlighted_frontier_claim():
+    rows = campaign._parse_rows(campaign.OUT / "pareto.csv")
+    selected = [row for row in rows if row["episode_id"] == campaign.HERO[0]
+                and row["bandwidth_mbps"] == campaign.HERO[1]
+                and row["case"] == "central" and row["pareto"].lower() == "true"]
+
+    policies = {row["policy"] for row in selected}
+    assert {"queue_haul", "greedy"} <= policies
+    assert policies == {"queue_haul", "greedy", "isolated_fastest", "replay_only"}
+    assert not {"random", "kv_only"} & policies
 
 
 def test_reduce_hard_fails_missing_shards(tmp_path):

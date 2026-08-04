@@ -40,6 +40,7 @@ BANDWIDTHS_MBPS = (1000, 2500, 5000, 10000)
 DEADLINES_S = (30, 60, 120, 300, 900, 3600, 14400)
 TARGETS = (.10, .25, .50, .75, 1.0)
 ANCHORS = (1998, 4045, 8141, 16336, 31562)
+HERO = ("interactive_coding-seed-1", 10000)
 SHARDS = 64
 SESSIONS = 10_000
 WINDOW_S = 5
@@ -413,6 +414,49 @@ def _plot(rows, out, kind):
     plt.close(fig)
 
 
+def _hero_plot(rows, out):
+    selected = [row for row in rows if row["episode_id"] == HERO[0]
+                and row["bandwidth_mbps"] == HERO[1] and row["case"] == "central"]
+    frontier = {}
+    for row in selected:
+        if row["pareto"]:
+            point = (100 * row["attained_shed_fraction"],
+                     float(row["target_attainment_s"]))
+            frontier.setdefault(point, set()).add(row["policy"])
+    if not frontier:
+        raise ValueError("hero slice has no Pareto frontier")
+
+    fig, axis = plt.subplots(figsize=(8, 5.5))
+    background = [row for row in selected if row["target_attained"] and not row["pareto"]]
+    axis.scatter([100 * row["attained_shed_fraction"] for row in background],
+                 [float(row["target_attainment_s"]) for row in background],
+                 color="0.65", alpha=.22, s=24, label="Dominated outcomes")
+    points = sorted(frontier)
+    axis.plot([point[0] for point in points], [point[1] for point in points],
+              color="0.15", linewidth=3, label="Pareto frontier")
+    for policy, label, marker, color, size in (
+        ("isolated_fastest", "Replay-only / isolated overlap", "o", "0.5", 150),
+        ("queue_haul", "Queue-Haul LP", "o", "#0072B2", 180),
+        ("greedy", "Queue-Haul greedy", "*", "#D55E00", 280),
+    ):
+        members = [point for point, policies in frontier.items() if policy in policies]
+        axis.scatter([point[0] for point in members], [point[1] for point in members],
+                     s=size, marker=marker, facecolors="none" if marker == "*" else color,
+                     edgecolors=color, linewidths=2.2, label=label, zorder=3)
+    axis.set(xlabel="Attained power shed (%)  →", ylabel="Time to target (s)  ↓",
+             title="Representative Pareto frontier · interactive coding · 10 Gb/s")
+    axis.set_yscale("log")
+    axis.invert_yaxis()
+    axis.grid(alpha=.18)
+    axis.legend(frameon=False, ncol=2)
+    fig.text(.5, .01, "Seed 1, central hardware fit; repeated identical points are collapsed.",
+             ha="center", fontsize=9, color="0.35")
+    fig.tight_layout(rect=(0, .04, 1, 1))
+    for suffix in ("png", "pdf"):
+        fig.savefig(out / f"pareto-hero.{suffix}", dpi=240)
+    plt.close(fig)
+
+
 def reduce(out=OUT):
     manifest = json.loads((out / "manifest.json").read_text())
     paths = [out / f"shard-{shard:02d}.csv" for shard in range(manifest["shards"])]
@@ -448,6 +492,7 @@ def reduce(out=OUT):
     _write_csv(out / "policy_summary.csv", summary)
     _plot(rows, out, "trace")
     _plot(rows, out, "anchor")
+    _hero_plot(rows, out)
     metadata = {key: manifest[key] for key in (
         "schema", "sessions", "shards", "fits", "model", "workloads",
         "anchor_fit", "source", "assumptions",
