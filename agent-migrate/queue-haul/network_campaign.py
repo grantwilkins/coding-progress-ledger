@@ -3,8 +3,11 @@
 from __future__ import annotations
 
 import argparse
+import csv
+import hashlib
 import json
 import os
+import random
 import re
 import select
 import shlex
@@ -14,15 +17,22 @@ import subprocess
 import sys
 import threading
 import time
+import urllib.request
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import asdict, dataclass
 from importlib.metadata import version
 from pathlib import Path
 
 import migration_testbed as testbed
+import migration_profiler as profiler
+import policy_hardware_campaign as policy_campaign
+from profiles import ModelProfile, WorkloadProfile
 
 
 CLUSTER_SCHEMA = "queue-haul-azure-cluster-v1"
 CALIBRATION_SCHEMA = "queue-haul-network-calibration-v1"
+PLAN_SCHEMA = "queue-haul-network-plan-v1"
+RESULT_SCHEMA = "queue-haul-network-result-v1"
 CLOCK_LIMIT_MS = 2.0
 RESUME_DRIFT = .10
 REPEATS = 3
@@ -31,6 +41,10 @@ POLICIES = (
     "random",
 )
 ROOT = Path(__file__).parent
+MODEL_PATH = ROOT / "profiles/gpt_oss_20b_a100_tp1.json"
+WORKLOAD_PATHS = {name: ROOT / f"profiles/{name}.json" for name in (
+    "coding", "interactive_coding", "agentic_tool_loop",
+)}
 EXPECTED_RUNTIME = {"vllm": "0.22.0", "lmcache": "0.5.1"}
 
 
@@ -371,6 +385,173 @@ def target_conditions() -> list[dict]:
     return [{**anchor, **change} for change in changes]
 
 
+def _hash(value) -> str:
+    return hashlib.sha256(json.dumps(
+        value, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+
+
+def make_plan(manifest_path: Path, contract: dict, seed: int = 1,
+              sessions: int = 8) -> dict:
+    manifest = json.loads(manifest_path.read_text())
+    profiler.validate_manifest(manifest)
+    available = sorted(manifest["sessions"], key=lambda row: row["id"])
+    if not 0 < sessions <= len(available):
+        raise ValueError("invalid session count")
+    model, scenarios = ModelProfile.load(MODEL_PATH), []
+    destinations = tuple(sorted(contract["paths"]))
+    if len(destinations) != 2:
+        raise ValueError("network contract requires two destinations")
+    for condition_index, condition in enumerate(target_conditions()):
+        workload = WorkloadProfile.load(WORKLOAD_PATHS[condition["workload"]])
+        for repeat in range(REPEATS):
+            rng = random.Random(profiler.stable_seed(
+                seed, condition_index, repeat))
+            chosen = rng.sample(available, sessions)
+            contexts = policy_campaign._context_tokens(
+                workload, "uniform_support", sessions, rng)
+            session_rows = [{
+                "session_id": row["id"], "job_class": row["job_class"],
+                "turn_index": 0, "initial_tokens": contexts[index],
+                "order": index,
+            } for index, row in enumerate(chosen)]
+            for policy_index, policy in enumerate(POLICIES):
+                destination = destinations[
+                    (condition_index + repeat + policy_index) % 2]
+                path = contract["paths"][destination]
+                bandwidth = path["natural_mbps"] if condition["bandwidth"] \
+                    == "natural" else path["controlled_mbps"][
+                        condition["bandwidth"].rsplit("_", 1)[-1]]
+                problem, routes = policy_campaign._problem(
+                    model, session_rows, bandwidth, condition["deadline_s"])
+                moves = policy_campaign._moves(
+                    policy, problem, routes, model,
+                    profiler.stable_seed(
+                        seed, condition_index, repeat, policy),
+                )
+                scenario_id = _hash([
+                    condition_index, repeat, policy, destination, session_rows,
+                    moves,
+                ])[:16]
+                scenarios.append({
+                    "scenario_id": scenario_id,
+                    "condition_index": condition_index, "repeat": repeat,
+                    **condition, "policy": policy,
+                    "destination": destination,
+                    "bandwidth_mbps": bandwidth,
+                    "sessions": session_rows, "moves": moves,
+                })
+    rng = random.Random(seed)
+    for bandwidth in ("controlled_80", "controlled_40", "natural"):
+        rows = [row for row in scenarios if row["bandwidth"] == bandwidth]
+        rng.shuffle(rows)
+        scenarios = [row for row in scenarios if row["bandwidth"] != bandwidth]
+        scenarios.extend(rows)
+    output = {
+        "schema": PLAN_SCHEMA, "seed": seed,
+        "manifest": {"path": str(manifest_path),
+                     "sha256": profiler.file_hash(manifest_path)},
+        "model_profile": {"path": str(MODEL_PATH),
+                          "sha256": profiler.file_hash(MODEL_PATH)},
+        "network_contract": contract, "policies": list(POLICIES),
+        "conditions": target_conditions(), "repeats": REPEATS,
+        "sessions_per_scenario": sessions, "scenarios": scenarios,
+    }
+    validate_plan(output)
+    return output
+
+
+def validate_plan(plan: dict) -> None:
+    if plan.get("schema") != PLAN_SCHEMA:
+        raise ValueError("invalid network plan schema")
+    scenarios = plan.get("scenarios", [])
+    if len(scenarios) != len(target_conditions()) * REPEATS * len(POLICIES) \
+            or len({row["scenario_id"] for row in scenarios}) != len(scenarios):
+        raise ValueError("network plan must contain exactly 126 unique scenarios")
+    contract = plan["network_contract"]
+    for condition_index in range(len(target_conditions())):
+        for repeat in range(REPEATS):
+            rows = [row for row in scenarios if (
+                row["condition_index"], row["repeat"]
+            ) == (condition_index, repeat)]
+            signatures = {tuple((item["session_id"], item["initial_tokens"])
+                                for item in row["sessions"]) for row in rows}
+            if {row["policy"] for row in rows} != set(POLICIES) \
+                    or len(signatures) != 1:
+                raise ValueError("policy block is incomplete or unmatched")
+            for row in rows:
+                path = contract["paths"][row["destination"]]
+                expected = path["natural_mbps"] if row["bandwidth"] \
+                    == "natural" else path["controlled_mbps"][
+                        row["bandwidth"].rsplit("_", 1)[-1]]
+                if row["bandwidth_mbps"] != expected \
+                        or {move["session_id"] for move in row["moves"]} \
+                        != {item["session_id"] for item in row["sessions"]}:
+                    raise ValueError("scenario route or move contract changed")
+    if any({row["destination"] for row in scenarios
+            if row["policy"] == policy} != set(contract["paths"])
+           for policy in POLICIES):
+        raise ValueError("every policy must cover both destinations")
+
+
+def active_scheduled_events(raw: dict) -> list[dict]:
+    events = raw.get("Events")
+    if not isinstance(events, list):
+        raise ValueError("invalid Azure Scheduled Events response")
+    return events
+
+
+class ScheduledEventMonitor:
+    url = "http://169.254.169.254/metadata/scheduledevents?api-version=2020-07-01"
+
+    def __init__(self, path: Path, stop: threading.Event | None = None):
+        self.path, self.stop = path, stop or threading.Event()
+        self.events: list[dict] = []
+        self.error: BaseException | None = None
+        self.thread = threading.Thread(target=self._run, daemon=True)
+
+    def start(self) -> None:
+        self.thread.start()
+
+    def _get(self) -> dict:
+        request = urllib.request.Request(self.url, headers={"Metadata": "true"})
+        opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+        with opener.open(request, timeout=5) as response:
+            return json.load(response)
+
+    def _run(self) -> None:
+        incarnation = None
+        try:
+            with self.path.open("w", buffering=1) as handle:
+                while not self.stop.wait(1):
+                    raw = self._get()
+                    events = active_scheduled_events(raw)
+                    current = raw.get("DocumentIncarnation")
+                    if events or current != incarnation:
+                        handle.write(json.dumps({
+                            "monotonic_ns": time.monotonic_ns(),
+                            "wall_ns": time.time_ns(), **raw,
+                        }, separators=(",", ":")) + "\n")
+                    incarnation = current
+                    if events:
+                        self.events.extend(events)
+                        self.stop.set()
+        except BaseException as exc:
+            self.error = exc
+            self.stop.set()
+
+    def check(self) -> None:
+        if self.error:
+            raise RuntimeError("Azure Scheduled Events monitor failed") \
+                from self.error
+        if self.events:
+            raise RuntimeError(f"Azure Spot event received: {self.events}")
+
+    def close(self) -> None:
+        self.stop.set()
+        self.thread.join(10)
+        self.check()
+
+
 def cluster_routes(cluster: Cluster) -> tuple[list[testbed.Route], dict]:
     routes, ports = [], {}
     for index, node in enumerate(sorted(cluster.destinations,
@@ -424,9 +605,11 @@ def node_serve(node_id: str, bind_host: str, source_host: str, kv_port: int,
     cache = sink = None
     sampler = migration_profiler.PowerSampler(run_root / "power.csv")
     stopped = threading.Event()
+    spot = ScheduledEventMonitor(run_root / "scheduled_events.jsonl", stopped)
     for signum in (signal.SIGINT, signal.SIGTERM, signal.SIGHUP):
         signal.signal(signum, lambda *_args: stopped.set())
     try:
+        spot.start()
         cache_log = run_root / "lmcache-sink.log"
         cache = testbed.start_logged(testbed.mp_server_cmd(
             cfg, "sink", bind_host="127.0.0.1", http_host=bind_host,
@@ -452,6 +635,7 @@ def node_serve(node_id: str, bind_host: str, source_host: str, kv_port: int,
         for process in (sink, cache):
             if process:
                 testbed.stop_proc(process)
+        spot.close()
 
 
 @dataclass
@@ -465,6 +649,7 @@ class ClusterStack:
     ports: dict
     run_root: Path
     key: Path
+    spot: ScheduledEventMonitor
 
 
 def _remote_ready(process: subprocess.Popen, timeout_s: float) -> dict:
@@ -496,7 +681,9 @@ def start_cluster(cluster: Cluster, key: Path, contract: dict,
     lmc = proxy = source = None
     services, remote = [], {}
     sampler = migration_profiler.PowerSampler(run_root / "power.csv")
+    spot = ScheduledEventMonitor(run_root / "scheduled_events.jsonl")
     try:
+        spot.start()
         lmc_log = run_root / "redis.log"
         lmc = testbed.start_logged(testbed.redis_cmd(cfg), lmc_log)
         testbed.wait_tcp_process("127.0.0.1", cfg.lmc_port, 60, lmc, lmc_log)
@@ -544,7 +731,7 @@ def start_cluster(cluster: Cluster, key: Path, contract: dict,
         )
         return ClusterStack(
             cluster, cfg, local, sampler, remote, remote_roots, ports,
-            run_root, key,
+            run_root, key, spot,
         )
     except BaseException:
         for process in remote.values():
@@ -554,6 +741,7 @@ def start_cluster(cluster: Cluster, key: Path, contract: dict,
         for process in (source, proxy, *services, lmc):
             if process:
                 testbed.stop_proc(process)
+        spot.close()
         raise
 
 
@@ -572,6 +760,7 @@ def stop_cluster(stack: ClusterStack, collect: bool = True) -> None:
     if stack.sampler.thread.is_alive():
         stack.sampler.close()
     testbed.stop_stack(stack.local)
+    stack.spot.close()
     if collect:
         nodes = {node.id: node for node in stack.cluster.destinations}
         for node_id, root in stack.remote_roots.items():
@@ -620,15 +809,352 @@ def smoke(cluster: Cluster, key: Path, calibration: dict, bandwidth: str,
         stop_cluster(stack)
 
 
-def prepare(cluster_path: Path, calibration_path: Path, out: Path) -> dict:
+def _clear_cluster(stack: ClusterStack) -> None:
+    testbed.set_source_sleep(stack.cfg, False)
+    with __import__("socket").create_connection((
+            stack.cfg.host, stack.cfg.lmc_port)) as sock:
+        sock.sendall(b"*1\r\n$8\r\nFLUSHALL\r\n")
+        if not sock.recv(64).startswith(b"+OK"):
+            raise RuntimeError("Redis FLUSHALL failed")
+    testbed.http_text(stack.cfg.host, stack.cfg.src_lmc_http_port,
+                       "POST", "/cache/clear")
+    testbed.http_text(stack.cfg.host, stack.cfg.src_port,
+                       "POST", "/reset_prefix_cache")
+    for node in stack.cluster.destinations:
+        testbed.http_text(node.host, stack.cfg.sink_lmc_http_port,
+                           "POST", "/cache/clear")
+        testbed.http_text(node.host, stack.cfg.sink_port,
+                           "POST", "/reset_prefix_cache")
+
+
+def _chat(cfg: testbed.Config, port: int, messages: list[dict], code: str,
+          timeout_s: float) -> dict:
+    result, text = profiler.stream_chat(
+        cfg, port, messages, 4, profiler.messages_hash(messages), timeout_s)
+    if result.status_code != 200 or code not in text:
+        raise RuntimeError(
+            f"session reconstruction failed: HTTP {result.status_code}, "
+            f"state code present={code in text}")
+    return {**asdict(result), "state_code_verified": True}
+
+
+def _warm(stack: ClusterStack, messages: list[dict], code: str,
+          timeout_s: float) -> dict:
+    log = stack.run_root / "lmcache-source.log"
+    offset = log.stat().st_size
+    result = _chat(stack.cfg, stack.cfg.src_port, messages, code, timeout_s)
+    testbed.mp_wait_stored(log, offset, result["prompt_tokens"])
+    return result
+
+
+def _csv_window(path: Path, start_ns: int, end_ns: int) -> list[dict]:
+    if not path.exists():
+        return []
+    with path.open() as handle:
+        rows = list(csv.DictReader(handle))
+    return [row for row in rows if int(row["start_ns"]) >= start_ns
+            and int(row["end_ns"]) <= end_ns]
+
+
+class SinkLoad:
+    def __init__(self, cfg: testbed.Config, port: int, prefill_tps: float,
+                 path: Path):
+        if prefill_tps <= 0:
+            raise ValueError("sink prefill throughput must be positive")
+        self.cfg, self.port, self.prefill_tps, self.path = (
+            cfg, port, prefill_tps, path)
+        self.stop, self.error = threading.Event(), None
+        self.thread = threading.Thread(target=self._run, daemon=True)
+
+    def start(self) -> None:
+        self.thread.start()
+
+    def _request(self, index: int) -> dict:
+        messages = [{"role": "user", "content":
+                     f"load-{index} " + "x " * 512}]
+        result, _ = profiler.stream_chat(
+            self.cfg, self.port, messages, 1,
+            profiler.messages_hash(messages), 600)
+        if result.status_code != 200:
+            raise RuntimeError(f"sink load request failed: {result.status_code}")
+        return asdict(result)
+
+    def _run(self) -> None:
+        futures, index = [], 0
+        interval = 512 / (.8 * self.prefill_tps)
+        next_at = time.monotonic()
+        try:
+            with ThreadPoolExecutor(max_workers=8) as pool:
+                while not self.stop.is_set():
+                    delay = next_at - time.monotonic()
+                    if delay > 0 and self.stop.wait(delay):
+                        break
+                    futures.append(pool.submit(self._request, index))
+                    index += 1
+                    next_at += interval
+                rows = [future.result() for future in futures]
+            self.path.write_text("".join(
+                json.dumps(row, separators=(",", ":")) + "\n"
+                for row in rows))
+        except BaseException as exc:
+            self.error = exc
+
+    def close(self) -> None:
+        self.stop.set()
+        self.thread.join(900)
+        if self.thread.is_alive():
+            raise TimeoutError("sink load did not stop")
+        if self.error:
+            raise RuntimeError("sink load failed") from self.error
+
+
+def run_network_scenario(stack: ClusterStack, manifest: dict, scenario: dict,
+                         root: Path, prefill_tps: float) -> dict:
+    root.mkdir(parents=True, exist_ok=False)
+    (root / "scenario.json").write_text(
+        json.dumps(scenario, indent=2, sort_keys=True) + "\n")
+    stack.spot.check()
+    if any(process.poll() is not None for process in stack.remote.values()):
+        raise RuntimeError("remote sink exited")
+    _clear_cluster(stack)
+    sessions = {row["id"]: row for row in manifest["sessions"]}
+    messages = {row["session_id"]: profiler.calibration_messages(
+        sessions[row["session_id"]], row["initial_tokens"])
+        for row in scenario["sessions"]}
+    moves = sorted(scenario["moves"], key=lambda row: row["order"])
+    timeout = float(scenario["deadline_s"])
+    for move in moves:
+        if move["method"] == "replay":
+            row = sessions[move["session_id"]]
+            _warm(stack, messages[move["session_id"]],
+                  row["state_code"], timeout)
+    _clear_cluster(stack)
+    for move in moves:
+        if move["method"] == "kv_transfer":
+            row = sessions[move["session_id"]]
+            _warm(stack, messages[move["session_id"]],
+                  row["state_code"], timeout)
+    node = next(node for node in stack.cluster.destinations
+                if node.id == scenario["destination"])
+    load = SinkLoad(stack.cfg, stack.ports[node.id]["api"], prefill_tps,
+                    root / "sink_load.jsonl") \
+        if scenario["sink_load"] == "rho_0.8" else None
+    before = testbed.proxy_counts(stack.run_root / "proxy_bytes.csv")
+    start_ns = time.monotonic_ns()
+    if load:
+        load.start()
+    try:
+        def reconstruct(move):
+            session = sessions[move["session_id"]]
+            return {
+                **move, "request": _chat(
+                    stack.cfg, stack.ports[node.id]["api"],
+                    messages[move["session_id"]], session["state_code"],
+                    timeout,
+                ),
+            }
+
+        with ThreadPoolExecutor(max_workers=len(moves)) as pool:
+            results = list(pool.map(reconstruct, moves))
+    finally:
+        if load:
+            load.close()
+    end_ns = time.monotonic_ns()
+    if any(row["method"] == "kv_transfer"
+           and row["request"]["cached_tokens"] <= 0 for row in results):
+        raise RuntimeError("KV reconstruction reported no cached tokens")
+    testbed.set_source_sleep(stack.cfg, True)
+    sleep_start_ns = time.monotonic_ns()
+    time.sleep(5)
+    testbed.set_source_sleep(stack.cfg, False)
+    sleep_end_ns = time.monotonic_ns()
+    time.sleep(.5)
+    stack.spot.check()
+    proxy = stack.run_root / "proxy_bytes.csv"
+    connections = _csv_window(
+        proxy.with_name("proxy_connections.csv"), start_ns, end_ns)
+    transfers = _csv_window(
+        proxy.with_name("resp_transfers.csv"), start_ns, end_ns)
+    elapsed = (end_ns - start_ns) / 1e9
+    result = {
+        "schema": RESULT_SCHEMA, "status": "complete",
+        "scenario_id": scenario["scenario_id"], "started_ns": start_ns,
+        "ended_ns": end_ns, "migration_s": elapsed,
+        "deadline_met": elapsed <= scenario["deadline_s"],
+        "requests": results,
+        "wire_bytes": testbed.count_delta(
+            before, testbed.proxy_counts(proxy)),
+        "connections": connections, "resp_transfers": transfers,
+        "source_sleep_ns": [sleep_start_ns, sleep_end_ns],
+    }
+    (root / "result.json").write_text(
+        json.dumps(result, indent=2, sort_keys=True) + "\n")
+    return result
+
+
+def _latest_result(root: Path) -> tuple[int, dict] | None:
+    rows = sorted(root.glob("attempt-*/result.json"))
+    if not rows:
+        return None
+    path = rows[-1]
+    return int(path.parent.name.rsplit("-", 1)[-1]), json.loads(path.read_text())
+
+
+def reduce_run(plan: dict, run_root: Path) -> dict:
+    rows, completed, failed, missing = [], 0, 0, 0
+    for scenario in plan["scenarios"]:
+        latest = _latest_result(run_root / "scenarios" / scenario["scenario_id"])
+        if latest is None:
+            missing += 1
+            attempt, result = 0, {"status": "missing"}
+        else:
+            attempt, result = latest
+            completed += result["status"] == "complete"
+            failed += result["status"] == "failed"
+        connections = result.get("connections", [])
+        rtts = [float(row["target_rtt_us"]) / 1000 for row in connections
+                if row.get("target_rtt_us")]
+        wire = result.get("wire_bytes", {})
+        rows.append({
+            "scenario_id": scenario["scenario_id"],
+            "condition_index": scenario["condition_index"],
+            "repeat": scenario["repeat"], "policy": scenario["policy"],
+            "destination": scenario["destination"],
+            "workload": scenario["workload"],
+            "bandwidth": scenario["bandwidth"],
+            "sink_load": scenario["sink_load"],
+            "deadline_s": scenario["deadline_s"], "attempt": attempt,
+            "status": result["status"],
+            "migration_s": result.get("migration_s", ""),
+            "deadline_met": result.get("deadline_met", ""),
+            "api_request_bytes": wire.get(
+                f"api/{scenario['destination']}/client_to_target", 0),
+            "kv_response_bytes": wire.get(
+                f"kv/{scenario['destination']}/target_to_client", 0),
+            "median_tcp_rtt_ms": statistics.median(rtts) if rtts else "",
+            "retransmissions": sum(int(row.get("target_total_retrans") or 0)
+                                   for row in connections),
+            "error": result.get("error", ""),
+        })
+    profiler.write_csv(run_root / "results.csv", rows)
+    summary = {
+        "schema": "queue-haul-network-summary-v1",
+        "expected": len(plan["scenarios"]), "completed": completed,
+        "failed": failed, "missing": missing,
+        "valid": completed == len(plan["scenarios"])
+        and not failed and not missing,
+    }
+    (run_root / "summary.json").write_text(
+        json.dumps(summary, indent=2, sort_keys=True) + "\n")
+    artifacts = [path for path in sorted(run_root.rglob("*"))
+                 if path.is_file() and path.name != "artifacts.sha256"]
+    (run_root / "artifacts.sha256").write_text("".join(
+        f"{profiler.file_hash(path)}  {path.relative_to(run_root)}\n"
+        for path in artifacts))
+    return summary
+
+
+def merge_metadata(current: dict, previous: dict | None) -> dict:
+    if previous is None:
+        return current
+    core = lambda row: {key: value for key, value in row.items()
+                        if key != "checks"}
+    if core(current) != core(previous):
+        raise RuntimeError("run metadata changed; use a new run root")
+    current["checks"] = previous["checks"] + current["checks"]
+    return current
+
+
+def run_campaign(cluster: Cluster, key: Path, current_calibration: Path,
+                 plan_path: Path, run_root: Path) -> dict:
+    plan = json.loads(plan_path.read_text())
+    validate_plan(plan)
+    if Cluster.parse(plan["cluster"]) != cluster:
+        raise ValueError("run cluster differs from the prepared plan")
+    if profiler.file_hash(Path(plan["manifest"]["path"])) \
+            != plan["manifest"]["sha256"] \
+            or profiler.file_hash(MODEL_PATH) != plan["model_profile"]["sha256"]:
+        raise RuntimeError("pinned plan input changed")
+    current = freeze_contract(json.loads(current_calibration.read_text()))
+    validate_resume(plan["network_contract"], current)
+    reports = host_check(cluster, key)
+    sha, dirty = profiler.git_state(False)
+    run_root.mkdir(parents=True, exist_ok=True)
+    identity_fields = (
+        "git_sha", "dirty", "gpu", "gpu_memory_mib", "vllm", "lmcache",
+        "vm_size", "priority", "ptp", "datadrive", "private_ip", "region",
+    )
+    metadata = {
+        "schema": "queue-haul-network-run-v1",
+        "plan_sha256": profiler.file_hash(plan_path), "git_sha": sha,
+        "dirty": dirty,
+        "hosts": {node: {field: report.get(field) for field in identity_fields}
+                  for node, report in reports.items()},
+        "checks": [{"wall_ns": time.time_ns(), "hosts": reports,
+            "calibration": {"path": str(current_calibration),
+                "sha256": profiler.file_hash(current_calibration),
+                "contract": current}}],
+    }
+    metadata_path = run_root / "run_metadata.json"
+    previous = json.loads(metadata_path.read_text()) \
+        if metadata_path.exists() else None
+    metadata = merge_metadata(metadata, previous)
+    metadata_path.write_text(json.dumps(metadata, indent=2, sort_keys=True) + "\n")
+    (run_root / "plan.json").write_text(
+        json.dumps(plan, indent=2, sort_keys=True) + "\n")
+    manifest = json.loads(Path(plan["manifest"]["path"]).read_text())
+    prefill_tps = ModelProfile.load(MODEL_PATH).case().F
+    stack, bandwidth = None, None
+    try:
+        for scenario in plan["scenarios"]:
+            scenario_root = run_root / "scenarios" / scenario["scenario_id"]
+            latest = _latest_result(scenario_root)
+            if latest and latest[1].get("status") == "complete":
+                continue
+            if stack and bandwidth != scenario["bandwidth"]:
+                stop_cluster(stack)
+                stack = None
+            if stack is None:
+                bandwidth = scenario["bandwidth"]
+                stack = start_cluster(
+                    cluster, key, plan["network_contract"], bandwidth,
+                    run_root / "stacks" /
+                    f"{bandwidth}-{time.time_ns()}",
+                )
+            attempt = (latest[0] if latest else 0) + 1
+            attempt_root = scenario_root / f"attempt-{attempt:04d}"
+            try:
+                run_network_scenario(
+                    stack, manifest, scenario, attempt_root, prefill_tps)
+            except Exception as exc:
+                attempt_root.mkdir(parents=True, exist_ok=True)
+                (attempt_root / "result.json").write_text(json.dumps({
+                    "schema": RESULT_SCHEMA, "status": "failed",
+                    "scenario_id": scenario["scenario_id"],
+                    "error": f"{type(exc).__name__}: {exc}",
+                }, indent=2, sort_keys=True) + "\n")
+                stop_cluster(stack)
+                stack = None
+    finally:
+        if stack:
+            stop_cluster(stack)
+    summary = reduce_run(plan, run_root)
+    if not summary["valid"]:
+        raise RuntimeError(
+            f"network campaign incomplete: {summary['failed']} failed, "
+            f"{summary['missing']} missing")
+    return summary
+
+
+def prepare(cluster_path: Path, calibration_path: Path, manifest_path: Path,
+            out: Path, seed: int = 1, sessions: int = 8) -> dict:
     cluster = Cluster.load(cluster_path)
     calibration = json.loads(calibration_path.read_text())
-    plan = {
-        "schema": "queue-haul-network-plan-v1",
-        "cluster": cluster.as_dict(),
-        "network": freeze_contract(calibration),
-        "policies": list(POLICIES), "repeats": REPEATS,
-        "conditions": target_conditions(),
+    plan = make_plan(manifest_path, freeze_contract(calibration), seed, sessions)
+    plan["cluster"] = cluster.as_dict()
+    plan["calibration"] = {
+        "path": str(calibration_path),
+        "sha256": profiler.file_hash(calibration_path),
     }
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(json.dumps(plan, indent=2, sort_keys=True) + "\n")
@@ -641,7 +1167,10 @@ def parse_args(argv=None):
     command = sub.add_parser("prepare")
     command.add_argument("--cluster", type=Path, required=True)
     command.add_argument("--calibration", type=Path, required=True)
+    command.add_argument("--manifest", type=Path, required=True)
     command.add_argument("--out", type=Path, required=True)
+    command.add_argument("--seed", type=int, default=1)
+    command.add_argument("--sessions", type=int, default=8)
     command = sub.add_parser("check")
     command.add_argument("--cluster", type=Path, required=True)
     command.add_argument("--ssh-key", type=Path,
@@ -670,13 +1199,24 @@ def parse_args(argv=None):
                          choices=("natural", "controlled_40", "controlled_80"))
     command.add_argument("--run-root", type=Path, required=True)
     command.add_argument("--words", type=int, default=4096)
+    command = sub.add_parser("run")
+    command.add_argument("--cluster", type=Path, required=True)
+    command.add_argument("--ssh-key", type=Path,
+                         default=Path("~/.ssh/azrs").expanduser())
+    command.add_argument("--current-calibration", type=Path, required=True)
+    command.add_argument("--plan", type=Path, required=True)
+    command.add_argument("--run-root", type=Path, required=True)
+    command = sub.add_parser("reduce")
+    command.add_argument("--plan", type=Path, required=True)
+    command.add_argument("--run-root", type=Path, required=True)
     return parser.parse_args(argv)
 
 
 def main(argv=None) -> None:
     args = parse_args(argv)
     if args.command == "prepare":
-        prepare(args.cluster, args.calibration, args.out)
+        prepare(args.cluster, args.calibration, args.manifest, args.out,
+                args.seed, args.sessions)
     elif args.command == "node-check":
         print(json.dumps(node_report(), sort_keys=True))
     elif args.command == "check":
@@ -697,6 +1237,16 @@ def main(argv=None) -> None:
             json.loads(args.calibration.read_text()), args.bandwidth,
             args.run_root, args.words,
         ), indent=2, sort_keys=True))
+    elif args.command == "run":
+        print(json.dumps(run_campaign(
+            Cluster.load(args.cluster), args.ssh_key.expanduser(),
+            args.current_calibration, args.plan, args.run_root,
+        ), indent=2, sort_keys=True))
+    elif args.command == "reduce":
+        plan = json.loads(args.plan.read_text())
+        validate_plan(plan)
+        print(json.dumps(reduce_run(plan, args.run_root),
+                         indent=2, sort_keys=True))
 
 
 if __name__ == "__main__":

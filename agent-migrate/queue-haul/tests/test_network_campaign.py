@@ -12,7 +12,9 @@ Plausible wrong implementations:
 - Recreate the 648-run factorial instead of the seven targeted conditions.
 """
 
+import csv
 import json
+from pathlib import Path
 
 import pytest
 
@@ -244,3 +246,96 @@ def test_cluster_routes_keep_data_private_and_share_destination_caps(tmp_path):
     assert aggregate == 6600
     assert rates == {"east": 3000, "west": 3600}
     assert n.bandwidth_limits(contract, "natural") == (None, {})
+
+
+def test_network_plan_is_matched_balanced_and_exactly_126(monkeypatch, tmp_path):
+    manifest = {
+        "schema": "queue-haul-migration-manifest-v2",
+        "source": {"path": "trace.json", "sha256": "0" * 64},
+        "seed": 1, "workload": "coding",
+        "classification": {"turn_rate_q25_hz": .1,
+                           "turn_rate_q75_hz": 1},
+        "message_generator": "deterministic_trace_tokens_v2",
+        "sessions": [{
+            "id": f"s{i}", "job_class": "coding", "state_code": f"C{i}",
+            "rank": i, "turn_rate_hz": 1, "human_fraction": 0,
+            "tool_fraction": 0, "turns": [{"time_s": 0,
+                "input_tokens": 4096, "append_tokens": 0,
+                "output_tokens": 4, "reset": False}],
+        } for i in range(12)],
+    }
+    path = tmp_path / "manifest.json"
+    path.write_text(json.dumps(manifest))
+    monkeypatch.setattr(n, "WORKLOAD_PATHS", {
+        name: Path(__file__).parents[1] / "profiles" / f"{name}.json"
+        for name in ("coding", "interactive_coding", "agentic_tool_loop")
+    })
+
+    plan = n.make_plan(path, n.freeze_contract(calibration()), seed=7)
+
+    assert len(plan["scenarios"]) == 126
+    assert {row["policy"] for row in plan["scenarios"]} == set(n.POLICIES)
+    assert all({row["destination"] for row in plan["scenarios"]
+                if row["policy"] == policy} == {"east", "west"}
+               for policy in n.POLICIES)
+    for condition in range(7):
+        for repeat in range(3):
+            rows = [row for row in plan["scenarios"]
+                    if (row["condition_index"], row["repeat"])
+                    == (condition, repeat)]
+            signatures = {tuple((item["session_id"], item["initial_tokens"])
+                                for item in row["sessions"]) for row in rows}
+            assert len(rows) == 6 and len(signatures) == 1
+            assert all(row["bandwidth_mbps"] ==
+                       plan["network_contract"]["paths"]
+                       [row["destination"]]["controlled_mbps"]["80"]
+                       for row in rows if row["bandwidth"] == "controlled_80")
+
+
+def test_scheduled_events_reject_active_spot_notice():
+    assert n.active_scheduled_events({"Events": []}) == []
+    event = {"EventId": "e", "EventType": "Preempt", "Resources": ["vm"]}
+    assert n.active_scheduled_events({"Events": [event]}) == [event]
+    with pytest.raises(ValueError, match="Scheduled Events"):
+        n.active_scheduled_events({})
+
+
+def test_reducer_keeps_failed_attempts_and_uses_latest(tmp_path):
+    scenario = {
+        "scenario_id": "s", "condition_index": 0, "repeat": 0,
+        "policy": "queue_haul", "destination": "east",
+        "workload": "coding", "bandwidth": "natural",
+        "sink_load": "idle", "deadline_s": 30,
+    }
+    root = tmp_path / "run"
+    first = root / "scenarios/s/attempt-0001"
+    second = root / "scenarios/s/attempt-0002"
+    first.mkdir(parents=True)
+    second.mkdir(parents=True)
+    (first / "result.json").write_text(json.dumps({
+        "status": "failed", "error": "Spot eviction"}))
+    (second / "result.json").write_text(json.dumps({
+        "status": "complete", "migration_s": 2, "deadline_met": True,
+        "wire_bytes": {}, "connections": []}))
+
+    summary = n.reduce_run({"scenarios": [scenario]}, root)
+
+    assert summary == {"schema": "queue-haul-network-summary-v1",
+                       "expected": 1, "completed": 1, "failed": 0,
+                       "missing": 0, "valid": True}
+    assert (root / "artifacts.sha256").is_file()
+    assert (first / "result.json").is_file()
+    with (root / "results.csv").open() as handle:
+        row = next(csv.DictReader(handle))
+    assert (row["scenario_id"], row["attempt"]) == ("s", "2")
+
+
+def test_resume_metadata_appends_dynamic_check_but_pins_identity():
+    first = {"git_sha": "abc", "plan_sha256": "p", "checks": [{"clock": 1}]}
+    current = {"git_sha": "abc", "plan_sha256": "p", "checks": [{"clock": 2}]}
+
+    assert n.merge_metadata(current, first)["checks"] == [
+        {"clock": 1}, {"clock": 2}]
+    current["git_sha"] = "changed"
+    with pytest.raises(RuntimeError, match="metadata changed"):
+        n.merge_metadata(current, first)
