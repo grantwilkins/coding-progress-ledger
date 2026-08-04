@@ -72,21 +72,180 @@ simulated. Assumed values are sensitivities, never admission guarantees.
 The conversation workload pins ShareGPT artifact revision
 `192ab2185289094fc556ec8ce5ce1e8e587154ca` and stores only token/turn shapes.
 
-## Azure A100 setup
+## Three-region Azure A100 campaign
 
-On a DNF-based Azure A100 node with `/datadrive` mounted and working NVIDIA
-drivers, run the setup as the login user:
+The implemented campaign powers down the East US 2 source GPU and reconstructs
+sessions in West Europe and Sweden Central. It uses private IPs over Global VNet
+Peering; Azure routes peered-VNet traffic over the Microsoft backbone, not the
+public Internet. No Azure CLI access is needed on the VMs. The relevant Azure
+contracts are [Global VNet Peering](https://learn.microsoft.com/en-us/azure/networking/design-guide/cross-region),
+[Linux PTP/chrony](https://learn.microsoft.com/en-us/azure/virtual-machines/linux/time-sync),
+and [Spot Scheduled Events](https://learn.microsoft.com/en-us/azure/virtual-machines/windows/scheduled-events).
+
+The frozen node map in `queue-haul/azure_network_cluster.json` is:
+
+| role | region | private IP |
+|---|---|---|
+| source/power-down | East US 2 | `10.0.0.4` |
+| destination | West Europe | `10.1.0.4` |
+| destination | Sweden Central | `10.2.0.4` |
+
+`check` compares every entry with Azure IMDS and hard-fails before calibration
+if the actual West/Sweden address assignment differs. In that case, correct the
+two destination records; do not bypass the check.
+
+### One-time portal work for the Azure account owner
+
+The account owner must complete these items. The experiment operator does not
+need `az` permissions.
+
+1. Use three `Standard_NC24ads_A100_v4` Spot VMs with one visible A100 each,
+   Azure Linux 3.0, persistent `/datadrive`, eviction policy `Deallocate`, and
+   no delete-on-eviction data disk.
+2. Configure bidirectional Global VNet Peering between the East US 2 VNet and
+   each destination VNet. Both peerings must show `Connected`; address spaces
+   must not overlap. Destination-to-destination peering is unnecessary.
+3. Do not add a public data-plane address, NAT gateway, VPN, load balancer, or
+   TLS terminator. SSH can use the existing private access path. Private Azure
+   backbone traffic is not application-layer encryption; that is acceptable for
+   this measurement-only, private-VNet deployment.
+4. Restrict NSGs to these experiment flows. Source egress goes only to each
+   destination on TCP `22,5201,8081,8200` and ICMP. West Europe permits source
+   `10.0.0.4/32` on those ports; Sweden Central does the same. East US 2 permits
+   TCP `8302` from West `10.1.0.4/32`, TCP `8301` from Sweden `10.2.0.4/32`,
+   and ICMP from both. Ports `5555,5556,5655,8080,8100,8401,8402` remain
+   host-local. Do not expose any experiment port to `0.0.0.0/0`.
+5. Confirm all three VMs have the repository at
+   `/home/azureuser/coding-progress-ledger/agent-migrate`, the same commit, and
+   the source has `~/.ssh/azrs` plus verified host keys for both destinations.
+
+### Install all three hosts
+
+Run from the `agent-migrate` repository on every VM as `azureuser`, not root:
 
 ```bash
 bash queue-haul/setup.sh
 source ~/.bashrc
 ```
 
-This installs Valkey plus the pinned Python 3.12, vLLM 0.22.0 CUDA 12.9, and
-LMCache 0.5.1 native runtime, downloads the Sherlock GPT-OSS-20B snapshot into
-`/datadrive`, keeps runtime caches there, and selects LMCache's Valkey-compatible
-RESP backend in the native MP path. The existing Apptainer runtime remains the
-default when `QH_RUNTIME` is unset.
+This installs Valkey, `chrony`, and `iperf3`, configures chrony against Azure's
+stable `/dev/ptp_hyperv` device, waits for synchronization, installs the pinned
+Python 3.12/vLLM 0.22.0/LMCache 0.5.1 CUDA 12.9 runtime, and stores the pinned
+GPT-OSS-20B model and caches under `/datadrive`. Setup hard-fails without the
+A100, persistent data mount, PTP device, or pinned runtime.
+
+From the East US 2 source, establish and verify SSH host keys once, then confirm
+that the same commit is checked out everywhere:
+
+```bash
+ssh -i ~/.ssh/azrs azureuser@10.1.0.4 true
+ssh -i ~/.ssh/azrs azureuser@10.2.0.4 true
+git rev-parse HEAD
+ssh -i ~/.ssh/azrs azureuser@10.1.0.4 'cd /home/azureuser/coding-progress-ledger/agent-migrate && git rev-parse HEAD'
+ssh -i ~/.ssh/azrs azureuser@10.2.0.4 'cd /home/azureuser/coding-progress-ledger/agent-migrate && git rev-parse HEAD'
+```
+
+### Calibrate, smoke-test, and run
+
+Run every command below from the East US 2 `agent-migrate` directory. Do not
+start a formal run with a dirty tracked worktree.
+
+```bash
+source ~/.bashrc
+mkdir -p /datadrive/queue-haul-network/control
+
+uv run python queue-haul/network_campaign.py check \
+  --cluster queue-haul/azure_network_cluster.json \
+  --ssh-key ~/.ssh/azrs
+
+uv run python queue-haul/network_campaign.py calibrate \
+  --cluster queue-haul/azure_network_cluster.json \
+  --ssh-key ~/.ssh/azrs \
+  --out /datadrive/queue-haul-network/control/calibration.json
+```
+
+Formal calibration takes three 60-second repeats. It records 200 RTT samples per
+path, isolated one- and eight-stream `iperf3`, simultaneous eight-stream
+receiver goodput to both destinations, all raw iperf JSON, host fingerprints,
+and clock uncertainty. Controlled 40% and 80% rates come from simultaneous—not
+isolated—receiver goodput, with an aggregate source-NIC cap. Clock uncertainty
+above 2 ms is a hard failure.
+
+Run both an unshaped and shaped end-to-end gate before planning:
+
+```bash
+uv run python queue-haul/network_campaign.py smoke \
+  --cluster queue-haul/azure_network_cluster.json \
+  --ssh-key ~/.ssh/azrs \
+  --calibration /datadrive/queue-haul-network/control/calibration.json \
+  --bandwidth natural \
+  --run-root /datadrive/queue-haul-network/smoke-natural
+
+uv run python queue-haul/network_campaign.py smoke \
+  --cluster queue-haul/azure_network_cluster.json \
+  --ssh-key ~/.ssh/azrs \
+  --calibration /datadrive/queue-haul-network/control/calibration.json \
+  --bandwidth controlled_40 \
+  --run-root /datadrive/queue-haul-network/smoke-controlled-40
+```
+
+Each smoke must prove nonzero KV wire bytes and cached tokens at both remote
+destinations, then sleep and wake the source GPU. Use new smoke directories;
+existing directories are rejected.
+
+Prepare and run the targeted campaign:
+
+```bash
+uv run python queue-haul/network_campaign.py prepare \
+  --cluster queue-haul/azure_network_cluster.json \
+  --calibration /datadrive/queue-haul-network/control/calibration.json \
+  --manifest queue-haul/outputs/coding-manifest.json \
+  --out /datadrive/queue-haul-network/control/plan.json
+
+uv run python queue-haul/network_campaign.py run \
+  --cluster queue-haul/azure_network_cluster.json \
+  --ssh-key ~/.ssh/azrs \
+  --current-calibration /datadrive/queue-haul-network/control/calibration.json \
+  --plan /datadrive/queue-haul-network/control/plan.json \
+  --run-root /datadrive/queue-haul-network/formal-001
+```
+
+The design is 7 targeted one-factor conditions x 3 repeats x 6 policies = 126
+physical policy scenarios. The policies are Queue-Haul, greedy, Lagrangian
+greedy, KV-only, replay-only, and seeded feasible random. The anchor is
+interactive coding, controlled 80% bandwidth, idle sink, and 30-second
+deadline; one cell each changes workload to coding or agentic, bandwidth to 40%
+or natural, sink load to historical-throughput `rho=0.8`, or deadline to 19 s.
+This replaces the 648-run full matrix, which adds interactions we do not need to
+answer the present one-factor questions. Every policy reaches both destinations.
+
+The runner is resumable. A failed attempt remains under `attempt-NNNN`; rerunning
+uses the next attempt number and never hides the prior failure. After any Spot
+deallocation, restart the VMs, rerun `setup.sh` and `check`, write a fresh formal
+calibration file, and resume with that file as `--current-calibration`. Resume
+hard-fails if RTT or simultaneous goodput drifts more than 10%, or if the plan,
+commit, node identity, model, or runtime changed. Azure Scheduled Events are
+logged on all three hosts and an active Spot event fails the attempt.
+
+Reduction runs automatically and can also be repeated without hardware:
+
+```bash
+uv run python queue-haul/network_campaign.py reduce \
+  --plan /datadrive/queue-haul-network/control/plan.json \
+  --run-root /datadrive/queue-haul-network/formal-001
+sha256sum -c /datadrive/queue-haul-network/formal-001/artifacts.sha256
+```
+
+`summary.json` is valid only with all 126 latest attempts complete. `results.csv`
+contains status, deadline, migration time, API/log bytes, KV bytes, TCP RTT, and
+retransmissions per scenario. Every stack retains 250-ms directional byte logs,
+per-connection duration/bytes/RTT/RTT variance/congestion window/retransmits,
+per-RESP-transfer payload and wire bytes, source and destination GPU power,
+service logs, scheduled events, and loaded-sink request traces. Scenario results
+retain streaming chunks, prompt/cached token counts, TTFT timestamps, source
+sleep timestamps, state-code validation, and every attempt. Power scope is GPU,
+not whole-node. These files become evidence only after the hardware run passes;
+their presence in the implementation is not a measurement claim.
 
 The normative formulation and executable-contract mapping are in:
 

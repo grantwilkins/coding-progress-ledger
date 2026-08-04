@@ -239,7 +239,48 @@ recorded concurrency-one v7 schedules and measured 16K/10-Gbps and
 24K/5-Gbps cells. A robust foreground tail-SLO claim still requires enforced
 idle/drained migration or additional impact evidence.
 
-## Explicitly not collected on the two A100s
+## Three-region Azure follow-up
+
+The three-region campaign is implemented but is not yet evidence. East US 2 is
+the source/power-down node; West Europe and Sweden Central are destinations.
+The formal design is the seven one-factor conditions and 126 policy scenarios
+documented in `README.md`, not the 648-cell Cartesian matrix. Each matched
+condition/repeat uses identical sessions for all six policies, and every policy
+uses both destinations.
+
+Freeze each Spot allocation only after the following all pass: exact private
+IP/region/VM/GPU/runtime/commit identity, clean tracked worktree, mounted
+`/datadrive`, Azure PTP-backed chrony uncertainty at most 2 ms, zero-loss
+200-sample ping, and three 60-second isolated and simultaneous iperf repeats.
+Compute 40% and 80% route and aggregate caps from median simultaneous receiver
+goodput. After reallocation, append a new allocation check and continue only if
+every route RTT and route/aggregate goodput remains within 10% of the original
+contract.
+
+Retain, without aggregation or deletion:
+
+- calibration host reports, every RTT sample, and raw client/server iperf JSON;
+- 250-ms bytes by route, direction, connection, and billed status;
+- per-connection start/end, directional bytes, TCP RTT/variance, congestion
+  window, and total retransmissions;
+- per-KV GET request/response/payload bytes and start/end;
+- streaming request timestamps/chunks, TTFT, token use, cache hits, method,
+  destination, commit, deadline, and state-code validation;
+- source and both destination GPU power/utilization/memory with monotonic and
+  wall timestamps, plus source sleep/wake timestamps;
+- foreground-load requests, all service logs, every changed or active Azure
+  Scheduled Events record, every failed/retried attempt, run metadata, and
+  checksums.
+
+Reject a physical attempt on host/runtime drift, clock or calibration gate
+failure, Spot notice, service exit, invalid continuation, missing KV bytes,
+zero cached tokens for a KV move, or telemetry failure. A deadline miss is an
+experimental outcome, not a mechanism failure, and remains in the result.
+`summary.json` is formally valid only when the latest attempt for every one of
+the 126 scenarios is complete. Power conclusions remain GPU-scoped; no
+whole-node or facility-power claim is permitted.
+
+## Explicitly not collected on the prior two A100s
 
 - geographic WAN latency, datacenter egress, NIC rails, or operator QoS;
 - DRAM/SSD fleet headroom or storage hierarchy capacity;
