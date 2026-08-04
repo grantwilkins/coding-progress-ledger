@@ -67,6 +67,24 @@ def calibration():
     }
 
 
+def campaign_manifest(tmp_path, count=12):
+    path = tmp_path / "manifest.json"
+    path.write_text(json.dumps({
+        "schema": "queue-haul-migration-manifest-v2",
+        "source": {"path": "trace.json", "sha256": "0" * 64},
+        "seed": 1, "workload": "coding", "classification": {},
+        "message_generator": "deterministic_trace_tokens_v2",
+        "sessions": [{
+            "id": f"s{i}", "job_class": "coding", "state_code": f"C{i}",
+            "rank": i, "turn_rate_hz": 1, "human_fraction": 0,
+            "tool_fraction": 0, "turns": [{"time_s": 0,
+                "input_tokens": 4096, "append_tokens": 0,
+                "output_tokens": 4, "reset": False}],
+        } for i in range(count)],
+    }))
+    return path
+
+
 def test_cluster_pins_actual_roles_and_rejects_ambiguous_hosts(tmp_path):
     value = cluster(tmp_path)
     assert (value.source.region, value.source.host) == (
@@ -118,12 +136,16 @@ def test_clock_and_resume_drift_are_hard_boundaries():
 def test_targeted_design_has_seven_cells_and_126_policy_migrations():
     cells = n.target_conditions()
     assert len(cells) == 7
-    assert len({tuple(sorted(cell.items())) for cell in cells}) == 7
-    assert {cell["workload"] for cell in cells} == {
-        "interactive_coding", "coding", "agentic_tool_loop"}
+    assert len({json.dumps(cell, sort_keys=True) for cell in cells}) == 7
+    assert {cell["workload"] for cell in cells} == {"agentic_tool_loop"}
     assert {cell["bandwidth"] for cell in cells} == {
         "natural", "controlled_40", "controlled_80"}
-    assert {cell["sink_load"] for cell in cells} == {"idle", "rho_0.8"}
+    assert {tuple(sorted(cell["background"].items())) for cell in cells} == {
+        (("east", (0, 0)), ("west", (0, 0))),
+        (("east", (.2, .2)), ("west", (.2, .2))),
+        (("east", (.2, .4)), ("west", (.4, .2))),
+        (("east", (.4, .2)), ("west", (.2, .4))),
+    }
     assert {cell["deadline_s"] for cell in cells} == {19, 30}
     assert n.POLICIES[-1] == "random"
     assert len(cells) * n.REPEATS * len(n.POLICIES) == 126
@@ -278,23 +300,7 @@ def test_cluster_routes_keep_data_private_and_share_destination_caps(tmp_path):
 
 
 def test_network_plan_is_matched_balanced_and_exactly_126(monkeypatch, tmp_path):
-    manifest = {
-        "schema": "queue-haul-migration-manifest-v2",
-        "source": {"path": "trace.json", "sha256": "0" * 64},
-        "seed": 1, "workload": "coding",
-        "classification": {"turn_rate_q25_hz": .1,
-                           "turn_rate_q75_hz": 1},
-        "message_generator": "deterministic_trace_tokens_v2",
-        "sessions": [{
-            "id": f"s{i}", "job_class": "coding", "state_code": f"C{i}",
-            "rank": i, "turn_rate_hz": 1, "human_fraction": 0,
-            "tool_fraction": 0, "turns": [{"time_s": 0,
-                "input_tokens": 4096, "append_tokens": 0,
-                "output_tokens": 4, "reset": False}],
-        } for i in range(12)],
-    }
-    path = tmp_path / "manifest.json"
-    path.write_text(json.dumps(manifest))
+    path = campaign_manifest(tmp_path)
     monkeypatch.setattr(n, "WORKLOAD_PATHS", {
         name: Path(__file__).parents[1] / "profiles" / f"{name}.json"
         for name in ("coding", "interactive_coding", "agentic_tool_loop")
@@ -303,10 +309,10 @@ def test_network_plan_is_matched_balanced_and_exactly_126(monkeypatch, tmp_path)
     plan = n.make_plan(path, n.freeze_contract(calibration()), seed=7)
 
     assert len(plan["scenarios"]) == 126
+    assert plan["design"] == "joint"
     assert {row["policy"] for row in plan["scenarios"]} == set(n.POLICIES)
-    assert all({row["destination"] for row in plan["scenarios"]
-                if row["policy"] == policy} == {"east", "west"}
-               for policy in n.POLICIES)
+    assert all("destination" not in row and "moves" not in row
+               for row in plan["scenarios"])
     for condition in range(7):
         for repeat in range(3):
             rows = [row for row in plan["scenarios"]
@@ -315,10 +321,10 @@ def test_network_plan_is_matched_balanced_and_exactly_126(monkeypatch, tmp_path)
             signatures = {tuple((item["session_id"], item["initial_tokens"])
                                 for item in row["sessions"]) for row in rows}
             assert len(rows) == 6 and len(signatures) == 1
-            assert all(row["bandwidth_mbps"] ==
-                       plan["network_contract"]["paths"]
-                       [row["destination"]]["controlled_mbps"]["80"]
-                       for row in rows if row["bandwidth"] == "controlled_80")
+            assert all(row["bandwidth_mbps"] == {
+                node: path["controlled_mbps"]["80"]
+                for node, path in plan["network_contract"]["paths"].items()
+            } for row in rows if row["bandwidth"] == "controlled_80")
 
     contract = n.freeze_contract(calibration())
     contract["paths"] = {"east": contract["paths"]["east"]}
@@ -326,8 +332,74 @@ def test_network_plan_is_matched_balanced_and_exactly_126(monkeypatch, tmp_path)
         "natural_mbps": contract["paths"]["east"]["natural_mbps"],
         "controlled_mbps": contract["paths"]["east"]["controlled_mbps"],
     }
-    east = n.make_plan(path, contract, seed=7)
-    assert {row["destination"] for row in east["scenarios"]} == {"east"}
+    with pytest.raises(ValueError, match="two destinations"):
+        n.make_plan(path, contract, seed=7)
+
+
+def test_isolated_plan_is_54_paired_route_relative_migrations(tmp_path):
+    path = campaign_manifest(tmp_path, 4)
+    contract = n.freeze_contract(calibration())
+    contract["paths"] = {"east": contract["paths"]["east"]}
+    contract["aggregate"] = {
+        "natural_mbps": contract["paths"]["east"]["natural_mbps"],
+        "controlled_mbps": contract["paths"]["east"]["controlled_mbps"],
+    }
+
+    plan = n.make_plan(path, contract, seed=7, design="isolated")
+
+    assert plan["design"] == "isolated" and len(plan["scenarios"]) == 54
+    assert {(row["context_size"], row["bandwidth"], row["repeat"], row["method"])
+            for row in plan["scenarios"]} == {
+        (size, bandwidth, repeat, method)
+        for size in (2048, 8192, 32768)
+        for bandwidth in ("controlled_40", "controlled_80", "natural")
+        for repeat in range(3) for method in ("replay", "kv_transfer")
+    }
+
+
+def test_prometheus_snapshot_reads_live_kv_and_warns_on_drift():
+    samples = ["""
+vllm:kv_cache_usage_perc 0.31
+vllm:num_requests_running 2
+vllm:num_requests_waiting 1
+"""]
+    snapshot = n.summarize_metrics(samples, .2)
+
+    assert snapshot["kv_fraction"] == pytest.approx(.31)
+    assert snapshot["warning"]
+
+
+def test_joint_planner_preserves_dynamic_destinations(monkeypatch):
+    moves = [SimpleNamespace(
+        session_id="s0", destination_instance="west",
+        destination_pool="pool/west", method="replay", order=0,
+        path=("link/west",), rate_limit_bytes_per_s=None, quiesce_s=None,
+    )]
+    seen = {}
+    monkeypatch.setattr(n, "solve", lambda problem, profile, routes, solver,
+                        seed, destination: seen.update(
+                            routes=routes, architecture=destination) or
+                        SimpleNamespace(moves=moves))
+    scenario = {
+        "policy": "queue_haul", "deadline_s": 30,
+        "sessions": [{"session_id": "s0", "initial_tokens": 8192}],
+        "bandwidth_mbps": {"east": 1000, "west": 2000},
+        "background": {"east": (.2, .4), "west": (.4, .2)},
+    }
+    profile = n.ModelProfile.load(n.MODEL_PATH)
+
+    result = n.plan_joint_scenario(
+        scenario, {"east": {"kv_fraction": .4},
+                   "west": {"kv_fraction": .2}}, profile, 1)
+
+    assert result[0]["destination_instance"] == "west"
+    assert seen["routes"] == {("source", "east"): ("link/east",),
+                              ("source", "west"): ("link/west",)}
+    assert {pool.replicas[0].baseline_kv_tokens
+            for pool in seen["architecture"].pools} == {
+                round(.4 * profile.kv_capacity_tokens),
+                round(.2 * profile.kv_capacity_tokens),
+            }
 
 
 def test_scheduled_events_reject_active_spot_notice():

@@ -19,20 +19,24 @@ import threading
 import time
 import urllib.request
 from concurrent.futures import ThreadPoolExecutor
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, replace
 from importlib.metadata import version
 from pathlib import Path
 
 import migration_testbed as testbed
 import migration_profiler as profiler
 import policy_hardware_campaign as policy_campaign
+from destination import (DestinationArchitecture, DestinationPool,
+                         DestinationReplica, dedicated_sink_architecture)
+from planner import plan as solve
 from profiles import ModelProfile, WorkloadProfile
+from simulate import NetworkLink, PowerNode, ServingInstance
 
 
 CLUSTER_SCHEMA = "queue-haul-azure-cluster-v1"
 CALIBRATION_SCHEMA = "queue-haul-network-calibration-v1"
-PLAN_SCHEMA = "queue-haul-network-plan-v1"
-RESULT_SCHEMA = "queue-haul-network-result-v1"
+PLAN_SCHEMA = "queue-haul-network-plan-v2"
+RESULT_SCHEMA = "queue-haul-network-result-v2"
 CLOCK_LIMIT_MS = 2.0
 RESUME_DRIFT = .10
 REQUEST_TIMEOUT_S = 600.0
@@ -400,13 +404,16 @@ def calibrate(cluster: Cluster, key: Path, out: Path, seconds: int = 60,
 
 def target_conditions() -> list[dict]:
     anchor = {
-        "workload": "interactive_coding", "bandwidth": "controlled_80",
-        "sink_load": "idle", "deadline_s": 30,
+        "workload": "agentic_tool_loop", "bandwidth": "controlled_80",
+        "background": {"east": (.2, .2), "west": (.2, .2)},
+        "deadline_s": 30,
     }
     changes = (
-        {}, {"workload": "coding"}, {"workload": "agentic_tool_loop"},
+        {}, {"background": {"east": (0, 0), "west": (0, 0)}},
+        {"background": {"east": (.2, .4), "west": (.4, .2)}},
+        {"background": {"east": (.4, .2), "west": (.2, .4)}},
         {"bandwidth": "controlled_40"}, {"bandwidth": "natural"},
-        {"sink_load": "rho_0.8"}, {"deadline_s": 19},
+        {"deadline_s": 19},
     )
     return [{**anchor, **change} for change in changes]
 
@@ -416,57 +423,82 @@ def _hash(value) -> str:
         value, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
 
 
+def _bandwidths(contract: dict, label: str) -> dict[str, float]:
+    return {node: row["natural_mbps"] if label == "natural" else
+            row["controlled_mbps"][label.rsplit("_", 1)[-1]]
+            for node, row in contract["paths"].items()}
+
+
 def make_plan(manifest_path: Path, contract: dict, seed: int = 1,
-              sessions: int = 8) -> dict:
+              sessions: int = 8, design: str = "joint") -> dict:
     manifest = json.loads(manifest_path.read_text())
     profiler.validate_manifest(manifest)
     available = sorted(manifest["sessions"], key=lambda row: row["id"])
-    if not 0 < sessions <= len(available):
+    if design == "joint" and not 0 < sessions <= len(available) \
+            or design == "isolated" and not available:
         raise ValueError("invalid session count")
-    model, scenarios = ModelProfile.load(MODEL_PATH), []
+    scenarios = []
     destinations = tuple(sorted(contract["paths"]))
-    if not 1 <= len(destinations) <= 2:
-        raise ValueError("network contract requires one or two destinations")
-    for condition_index, condition in enumerate(target_conditions()):
-        workload = WorkloadProfile.load(WORKLOAD_PATHS[condition["workload"]])
-        for repeat in range(REPEATS):
-            rng = random.Random(profiler.stable_seed(
-                seed, condition_index, repeat))
-            chosen = rng.sample(available, sessions)
-            contexts = policy_campaign._context_tokens(
-                workload, "uniform_support", sessions, rng)
-            session_rows = [{
-                "session_id": row["id"], "job_class": row["job_class"],
-                "turn_index": 0, "initial_tokens": contexts[index],
-                "order": index,
-            } for index, row in enumerate(chosen)]
-            for policy_index, policy in enumerate(POLICIES):
-                destination = destinations[
-                    (condition_index + repeat + policy_index)
-                    % len(destinations)]
-                path = contract["paths"][destination]
-                bandwidth = path["natural_mbps"] if condition["bandwidth"] \
-                    == "natural" else path["controlled_mbps"][
-                        condition["bandwidth"].rsplit("_", 1)[-1]]
-                problem, routes = policy_campaign._problem(
-                    model, session_rows, bandwidth, condition["deadline_s"])
-                moves = policy_campaign._moves(
-                    policy, problem, routes, model,
-                    profiler.stable_seed(
-                        seed, condition_index, repeat, policy),
-                )
-                scenario_id = _hash([
-                    condition_index, repeat, policy, destination, session_rows,
-                    moves,
-                ])[:16]
-                scenarios.append({
-                    "scenario_id": scenario_id,
-                    "condition_index": condition_index, "repeat": repeat,
-                    **condition, "policy": policy,
-                    "destination": destination,
-                    "bandwidth_mbps": bandwidth,
-                    "sessions": session_rows, "moves": moves,
-                })
+    if design not in {"joint", "isolated"} or len(destinations) != (
+        2 if design == "joint" else 1
+    ):
+        raise ValueError(f"{design} design requires "
+                         f"{'two destinations' if design == 'joint' else 'one destination'}")
+    if design == "isolated":
+        destination = destinations[0]
+        for bandwidth in ("controlled_80", "controlled_40", "natural"):
+            for context in (2048, 8192, 32768):
+                for repeat in range(REPEATS):
+                    rng = random.Random(profiler.stable_seed(seed, context, repeat))
+                    row = rng.choice(available)
+                    session = {"session_id": row["id"], "job_class": row["job_class"],
+                               "turn_index": 0, "initial_tokens": context - 192,
+                               "order": 0}
+                    for method in ("replay", "kv_transfer"):
+                        scenario_id = _hash([
+                            design, destination, bandwidth, context, repeat, method, session,
+                        ])[:16]
+                        scenarios.append({
+                            "scenario_id": scenario_id, "design": design,
+                            "condition_index": context, "repeat": repeat,
+                            "policy": method, "method": method,
+                            "destination": destination, "workload": "agentic_tool_loop",
+                            "bandwidth": bandwidth,
+                            "bandwidth_mbps": _bandwidths(contract, bandwidth)[destination],
+                            "context_size": context, "deadline_s": 180,
+                            "background": {destination: (0, 0)},
+                            "sessions": [session],
+                            "moves": [{"session_id": row["id"], "method": method,
+                                       "destination_instance": destination, "order": 0,
+                                       "deadline_admitted": True}],
+                        })
+    else:
+        for condition_index, condition in enumerate(target_conditions()):
+            workload = WorkloadProfile.load(WORKLOAD_PATHS[condition["workload"]])
+            for repeat in range(REPEATS):
+                rng = random.Random(profiler.stable_seed(
+                    seed, condition_index, repeat))
+                chosen = rng.sample(available, sessions)
+                contexts = policy_campaign._context_tokens(
+                    workload, "uniform_support", sessions, rng)
+                session_rows = [{
+                    "session_id": row["id"], "job_class": row["job_class"],
+                    "turn_index": 0, "initial_tokens": contexts[index],
+                    "order": index,
+                } for index, row in enumerate(chosen)]
+                for policy in POLICIES:
+                    scenario_id = _hash([
+                        design, condition_index, repeat, policy, session_rows,
+                    ])[:16]
+                    scenarios.append({
+                        "scenario_id": scenario_id, "design": design,
+                        "condition_index": condition_index, "repeat": repeat,
+                        **condition, "policy": policy,
+                        "planner_seed": profiler.stable_seed(
+                            seed, condition_index, repeat, policy),
+                        "bandwidth_mbps": _bandwidths(contract, condition["bandwidth"]),
+                        "sessions": session_rows,
+                    })
     rng = random.Random(seed)
     for bandwidth in ("controlled_80", "controlled_40", "natural"):
         rows = [row for row in scenarios if row["bandwidth"] == bandwidth]
@@ -474,13 +506,13 @@ def make_plan(manifest_path: Path, contract: dict, seed: int = 1,
         scenarios = [row for row in scenarios if row["bandwidth"] != bandwidth]
         scenarios.extend(rows)
     output = {
-        "schema": PLAN_SCHEMA, "seed": seed,
+        "schema": PLAN_SCHEMA, "design": design, "seed": seed,
         "manifest": {"path": str(manifest_path),
                      "sha256": profiler.file_hash(manifest_path)},
         "model_profile": {"path": str(MODEL_PATH),
                           "sha256": profiler.file_hash(MODEL_PATH)},
         "network_contract": contract, "policies": list(POLICIES),
-        "conditions": target_conditions(), "repeats": REPEATS,
+        "conditions": target_conditions() if design == "joint" else [], "repeats": REPEATS,
         "sessions_per_scenario": sessions, "scenarios": scenarios,
     }
     validate_plan(output)
@@ -491,9 +523,18 @@ def validate_plan(plan: dict) -> None:
     if plan.get("schema") != PLAN_SCHEMA:
         raise ValueError("invalid network plan schema")
     scenarios = plan.get("scenarios", [])
-    if len(scenarios) != len(target_conditions()) * REPEATS * len(POLICIES) \
+    design = plan.get("design")
+    expected = 126 if design == "joint" else 54 if design == "isolated" else 0
+    if len(scenarios) != expected \
             or len({row["scenario_id"] for row in scenarios}) != len(scenarios):
-        raise ValueError("network plan must contain exactly 126 unique scenarios")
+        raise ValueError(f"network plan must contain exactly {expected} unique scenarios")
+    if design == "isolated":
+        if len(plan["network_contract"]["paths"]) != 1 or any(
+            row.get("destination") not in plan["network_contract"]["paths"]
+            or len(row.get("moves", ())) != 1 for row in scenarios
+        ):
+            raise ValueError("invalid isolated plan")
+        return
     contract = plan["network_contract"]
     for condition_index in range(len(target_conditions())):
         for repeat in range(REPEATS):
@@ -506,18 +547,9 @@ def validate_plan(plan: dict) -> None:
                     or len(signatures) != 1:
                 raise ValueError("policy block is incomplete or unmatched")
             for row in rows:
-                path = contract["paths"][row["destination"]]
-                expected = path["natural_mbps"] if row["bandwidth"] \
-                    == "natural" else path["controlled_mbps"][
-                        row["bandwidth"].rsplit("_", 1)[-1]]
-                if row["bandwidth_mbps"] != expected \
-                        or {move["session_id"] for move in row["moves"]} \
-                        != {item["session_id"] for item in row["sessions"]}:
+                if row["bandwidth_mbps"] != _bandwidths(contract, row["bandwidth"]) \
+                        or "destination" in row or "moves" in row:
                     raise ValueError("scenario route or move contract changed")
-    if any({row["destination"] for row in scenarios
-            if row["policy"] == policy} != set(contract["paths"])
-           for policy in POLICIES):
-        raise ValueError("every policy must cover every destination")
 
 
 def active_scheduled_events(raw: dict) -> list[dict]:
@@ -899,13 +931,105 @@ def _csv_window(path: Path, start_ns: int, end_ns: int) -> list[dict]:
             and int(row["end_ns"]) <= end_ns]
 
 
+def summarize_metrics(samples: list[str], target_kv: float) -> dict:
+    names = ("kv_cache_usage_perc", "num_requests_running", "num_requests_waiting")
+    values = {name: [] for name in names}
+    for sample in samples:
+        for name in names:
+            match = re.search(rf"^vllm:{name}(?:\{{[^\n]*\}})?\s+([0-9.eE+-]+)$",
+                              sample, re.MULTILINE)
+            if not match:
+                raise ValueError(f"missing vLLM metric {name}")
+            values[name].append(float(match.group(1)))
+    result = {
+        "kv_fraction": statistics.median(values["kv_cache_usage_perc"]),
+        "running": statistics.median(values["num_requests_running"]),
+        "waiting": max(values["num_requests_waiting"]),
+    }
+    result["warning"] = abs(result["kv_fraction"] - target_kv) > .05 \
+        or result["waiting"] > 0
+    return result
+
+
+def destination_metrics(stack: ClusterStack, node_id: str,
+                        target_kv: float) -> dict:
+    samples = []
+    for index in range(5):
+        samples.append(testbed.http_text(
+            stack.cfg.host, stack.ports[node_id]["api"], "GET", "/metrics"))
+        if index < 4:
+            time.sleep(1)
+    return summarize_metrics(samples, target_kv)
+
+
+def plan_joint_scenario(scenario: dict, snapshots: dict[str, dict],
+                        profile: ModelProfile, seed: int) -> list[dict]:
+    base, _ = policy_campaign._problem(
+        profile, scenario["sessions"], 1, scenario["deadline_s"])
+    destinations = tuple(sorted(scenario["bandwidth_mbps"]))
+    links = tuple(NetworkLink(
+        f"link/{node}", scenario["bandwidth_mbps"][node] * 125_000,
+    ) for node in destinations)
+    problem = replace(
+        base,
+        nodes=(base.nodes[0], *(PowerNode(f"{node}-node", 1, False)
+                                for node in destinations)),
+        instances=(base.instances[0], *(ServingInstance(
+            node, (f"{node}-node",)) for node in destinations)),
+        links=links,
+    )
+    template = dedicated_sink_architecture(profile, destinations[0],
+                                           (links[0].link_id,))
+    dtype = template.types[0]
+    pools = tuple(DestinationPool(
+        f"pool/{node}", dtype.type_id,
+        (DestinationReplica(
+            node, (float(scenario["background"][node][0]) / 2,) * 2,
+            round(snapshots[node]["kv_fraction"] * dtype.kv_capacity_tokens),
+        ),), f"route/{node}", (f"link/{node}",),
+    ) for node in destinations)
+    architecture = DestinationArchitecture(
+        template.schema, template.source_compatibility, template.types, pools)
+    solver = {
+        "queue_haul": "lp_work_first", "greedy": "greedy",
+        "greedy_lagrangian": "greedy_lagrangian", "random": "random",
+        "kv_only": "kv_only", "replay_only": "replay_only",
+    }[scenario["policy"]]
+    routes = {("source", node): (f"link/{node}",) for node in destinations}
+    result = solve(problem, profile, routes, solver, seed=seed,
+                   destination=architecture)
+    planned = list(result.moves)
+    admitted = {move.session_id for move in planned}
+    missing = tuple(row for row in problem.sessions
+                    if row.session_id not in admitted)
+    if missing:
+        late = replace(problem, sessions=missing, deadline_s=600, end_s=600)
+        planned.extend(replace(move, order=move.order + len(planned)) for move in solve(
+            late, profile, routes, solver, seed=seed, destination=architecture,
+        ).moves)
+    moves = [{
+        "session_id": move.session_id,
+        "destination_instance": move.destination_instance,
+        "destination_pool": move.destination_pool,
+        "method": move.method, "order": move.order,
+        "path": list(move.path),
+        "planned_rate_limit_bytes_per_s": move.rate_limit_bytes_per_s,
+        "planned_quiesce_s": move.quiesce_s,
+        "deadline_admitted": move.session_id in admitted,
+    } for move in planned]
+    if {row["session_id"] for row in moves} != {
+            row["session_id"] for row in scenario["sessions"]}:
+        raise RuntimeError("policy did not plan the complete evacuation")
+    return moves
+
+
 class SinkLoad:
     def __init__(self, cfg: testbed.Config, port: int, prefill_tps: float,
-                 path: Path):
-        if prefill_tps <= 0:
-            raise ValueError("sink prefill throughput must be positive")
-        self.cfg, self.port, self.prefill_tps, self.path = (
-            cfg, port, prefill_tps, path)
+                 rho: float, path: Path):
+        if prefill_tps <= 0 or not 0 < rho < 1:
+            raise ValueError("invalid sink load")
+        self.cfg, self.port, self.prefill_tps, self.rho, self.path = (
+            cfg, port, prefill_tps, rho, path)
         self.stop, self.error = threading.Event(), None
         self.thread = threading.Thread(target=self._run, daemon=True)
 
@@ -916,7 +1040,7 @@ class SinkLoad:
         messages = [{"role": "user", "content":
                      f"load-{index} " + "x " * 512}]
         result, _ = profiler.stream_chat(
-            self.cfg, self.port, messages, 1,
+            self.cfg, self.port, messages, 64,
             profiler.messages_hash(messages), 600)
         if result.status_code != 200:
             raise RuntimeError(f"sink load request failed: {result.status_code}")
@@ -924,7 +1048,7 @@ class SinkLoad:
 
     def _run(self) -> None:
         futures, index = [], 0
-        interval = 512 / (.8 * self.prefill_tps)
+        interval = 512 / (self.rho * self.prefill_tps)
         next_at = time.monotonic()
         try:
             with ThreadPoolExecutor(max_workers=8) as pool:
@@ -964,34 +1088,52 @@ def run_network_scenario(stack: ClusterStack, manifest: dict, scenario: dict,
     messages = {row["session_id"]: profiler.calibration_messages(
         sessions[row["session_id"]], row["initial_tokens"])
         for row in scenario["sessions"]}
-    moves = sorted(scenario["moves"], key=lambda row: row["order"])
     timeout = REQUEST_TIMEOUT_S
-    for move in moves:
-        if move["method"] == "replay":
-            row = sessions[move["session_id"]]
-            _warm(stack, messages[move["session_id"]],
-                  row["state_code"], timeout)
-    _clear_cluster(stack)
-    for move in moves:
-        if move["method"] == "kv_transfer":
-            row = sessions[move["session_id"]]
-            _warm(stack, messages[move["session_id"]],
-                  row["state_code"], timeout)
-    node = next(node for node in stack.cluster.destinations
-                if node.id == scenario["destination"])
-    load = SinkLoad(stack.cfg, stack.ports[node.id]["api"], prefill_tps,
-                    root / "sink_load.jsonl") \
-        if scenario["sink_load"] == "rho_0.8" else None
+    loads, snapshots = {}, {}
+    for node in stack.cluster.destinations:
+        compute, kv = scenario["background"].get(node.id, (0, 0))
+        if compute:
+            loads[node.id] = SinkLoad(
+                stack.cfg, stack.ports[node.id]["api"], prefill_tps, compute,
+                root / f"sink_load_{node.id}.jsonl")
+            loads[node.id].start()
+    try:
+        if scenario["design"] == "joint":
+            time.sleep(5)
+            nodes = stack.cluster.destinations
+            with ThreadPoolExecutor(max_workers=len(nodes)) as pool:
+                snapshots = dict(zip(
+                    (node.id for node in nodes),
+                    pool.map(lambda node: destination_metrics(
+                        stack, node.id, scenario["background"][node.id][1]), nodes),
+                ))
+            moves = plan_joint_scenario(
+                scenario, snapshots, ModelProfile.load(MODEL_PATH),
+                scenario["planner_seed"])
+            write_checkpoint(root / "decision.json", {
+                "background": snapshots, "moves": moves,
+            })
+        else:
+            moves = scenario["moves"]
+        moves = sorted(moves, key=lambda row: row["order"])
+        for move in moves:
+            if move["method"] == "kv_transfer":
+                row = sessions[move["session_id"]]
+                _warm(stack, messages[move["session_id"]],
+                      row["state_code"], timeout)
+    except BaseException:
+        for load in loads.values():
+            load.close()
+        raise
     before = testbed.proxy_counts(stack.run_root / "proxy_bytes.csv")
     start_ns = time.monotonic_ns()
-    if load:
-        load.start()
     try:
         def reconstruct(move):
             session = sessions[move["session_id"]]
+            destination = move["destination_instance"]
             return {
                 **move, "request": _chat(
-                    stack.cfg, stack.ports[node.id]["api"],
+                    stack.cfg, stack.ports[destination]["api"],
                     messages[move["session_id"]], session["state_code"],
                     timeout,
                 ),
@@ -1000,7 +1142,7 @@ def run_network_scenario(stack: ClusterStack, manifest: dict, scenario: dict,
         with ThreadPoolExecutor(max_workers=len(moves)) as pool:
             results = list(pool.map(reconstruct, moves))
     finally:
-        if load:
+        for load in loads.values():
             load.close()
     end_ns = time.monotonic_ns()
     if any(row["method"] == "kv_transfer"
@@ -1025,6 +1167,7 @@ def run_network_scenario(stack: ClusterStack, manifest: dict, scenario: dict,
         "ended_ns": end_ns, "migration_s": elapsed,
         "deadline_met": elapsed <= scenario["deadline_s"],
         "requests": results,
+        "background": snapshots,
         "wire_bytes": testbed.count_delta(
             before, testbed.proxy_counts(proxy)),
         "connections": connections, "resp_transfers": transfers,
@@ -1081,22 +1224,26 @@ def reduce_run(plan: dict, run_root: Path) -> dict:
         rtts = [float(row["target_rtt_us"]) / 1000 for row in connections
                 if row.get("target_rtt_us")]
         wire = result.get("wire_bytes", {})
+        destinations = sorted({request.get("destination_instance", "")
+                               for request in result.get("requests", [])} - {""})
         rows.append({
             "scenario_id": scenario["scenario_id"],
             "condition_index": scenario["condition_index"],
             "repeat": scenario["repeat"], "policy": scenario["policy"],
-            "destination": scenario["destination"],
+            "destination": ",".join(destinations) or scenario.get("destination", ""),
             "workload": scenario["workload"],
             "bandwidth": scenario["bandwidth"],
-            "sink_load": scenario["sink_load"],
+            "background": json.dumps(scenario.get("background", {}), sort_keys=True),
             "deadline_s": scenario["deadline_s"], "attempt": attempt,
             "status": result["status"],
             "migration_s": result.get("migration_s", ""),
             "deadline_met": result.get("deadline_met", ""),
-            "api_request_bytes": wire.get(
-                f"api/{scenario['destination']}/client_to_target", 0),
-            "kv_response_bytes": wire.get(
-                f"kv/{scenario['destination']}/target_to_client", 0),
+            "api_request_bytes": sum(value for key, value in wire.items()
+                                     if key.endswith("/client_to_target")
+                                     and key.startswith("api/")),
+            "kv_response_bytes": sum(value for key, value in wire.items()
+                                    if key.endswith("/target_to_client")
+                                    and key.startswith("kv/")),
             "median_tcp_rtt_ms": statistics.median(rtts) if rtts else "",
             "retransmissions": sum(int(row.get("target_total_retrans") or 0)
                                    for row in connections),
@@ -1201,6 +1348,8 @@ def run_campaign(cluster: Cluster, key: Path, current_calibration: Path,
                 })
                 stop_cluster(stack)
                 stack = None
+                checkpoint_progress(plan, run_root)
+                raise
             checkpoint_progress(plan, run_root)
     finally:
         if stack:
@@ -1214,10 +1363,12 @@ def run_campaign(cluster: Cluster, key: Path, current_calibration: Path,
 
 
 def prepare(cluster_path: Path, calibration_path: Path, manifest_path: Path,
-            out: Path, seed: int = 1, sessions: int = 8) -> dict:
+            out: Path, seed: int = 1, sessions: int = 8,
+            design: str = "joint") -> dict:
     cluster = Cluster.load(cluster_path)
     calibration = json.loads(calibration_path.read_text())
-    plan = make_plan(manifest_path, freeze_contract(calibration), seed, sessions)
+    plan = make_plan(manifest_path, freeze_contract(calibration), seed, sessions,
+                     design)
     plan["cluster"] = cluster.as_dict()
     plan["calibration"] = {
         "path": str(calibration_path),
@@ -1238,6 +1389,8 @@ def parse_args(argv=None):
     command.add_argument("--out", type=Path, required=True)
     command.add_argument("--seed", type=int, default=1)
     command.add_argument("--sessions", type=int, default=8)
+    command.add_argument("--design", choices=("joint", "isolated"),
+                         default="joint")
     command = sub.add_parser("check")
     command.add_argument("--cluster", type=Path, required=True)
     command.add_argument("--ssh-key", type=Path,
@@ -1283,7 +1436,7 @@ def main(argv=None) -> None:
     args = parse_args(argv)
     if args.command == "prepare":
         prepare(args.cluster, args.calibration, args.manifest, args.out,
-                args.seed, args.sessions)
+                args.seed, args.sessions, args.design)
     elif args.command == "node-check":
         print(json.dumps(node_report(), sort_keys=True))
     elif args.command == "check":

@@ -196,36 +196,60 @@ existing directories are rejected.
 Prepare and run the targeted campaign:
 
 ```bash
+# Validate one route first with 54 paired replay/KV migrations.
 uv run python queue-haul/network_campaign.py prepare \
+  --design isolated \
+  --cluster queue-haul/azure_network_cluster_east.json \
+  --calibration /datadrive/queue-haul-network/control/calibration-east-post-west-001.json \
+  --manifest queue-haul/outputs/coding-manifest.json \
+  --out /datadrive/queue-haul-network/control/plan-east-validation.json
+
+uv run python queue-haul/network_campaign.py run \
+  --cluster queue-haul/azure_network_cluster_east.json \
+  --ssh-key ~/.ssh/azrs \
+  --current-calibration /datadrive/queue-haul-network/control/calibration-east-post-west-001.json \
+  --plan /datadrive/queue-haul-network/control/plan-east-validation.json \
+  --run-root /datadrive/queue-haul-network/validation-east-001
+
+# Prepare the joint campaign after both routes validate.
+uv run python queue-haul/network_campaign.py prepare \
+  --design joint \
   --cluster queue-haul/azure_network_cluster.json \
   --calibration /datadrive/queue-haul-network/control/calibration.json \
   --manifest queue-haul/outputs/coding-manifest.json \
-  --out /datadrive/queue-haul-network/control/plan.json
+  --out /datadrive/queue-haul-network/control/plan-joint.json
 
 uv run python queue-haul/network_campaign.py run \
   --cluster queue-haul/azure_network_cluster.json \
   --ssh-key ~/.ssh/azrs \
   --current-calibration /datadrive/queue-haul-network/control/calibration.json \
-  --plan /datadrive/queue-haul-network/control/plan.json \
+  --plan /datadrive/queue-haul-network/control/plan-joint.json \
   --run-root /datadrive/queue-haul-network/formal-001
 ```
 
-The design is 7 targeted one-factor conditions x 3 repeats x 6 policies = 126
-physical policy scenarios. The policies are Queue-Haul, greedy, Lagrangian
-greedy, KV-only, replay-only, and seeded feasible random. The anchor is
-interactive coding, controlled 80% bandwidth, idle sink, and 30-second
-deadline; one cell each changes workload to coding or agentic, bandwidth to 40%
-or natural, sink load to historical-throughput `rho=0.8`, or deadline to 19 s.
-This replaces the 648-run full matrix, which adds interactions we do not need to
-answer the present one-factor questions. Every policy reaches both destinations.
-When a destination is unavailable, the same design can run against a pinned
-one-destination cluster and calibration; every policy then reaches that node.
+An isolated plan pairs replay and KV at 2K, 8K, and 32K contexts, route-relative
+40%, 80%, and natural bandwidth, and three repeats: 54 migrations per site. The
+joint design is 7 targeted agentic-trace conditions x 3 repeats x 6 policies =
+126 physical scenarios. The policies are Queue-Haul, greedy, Lagrangian greedy,
+KV-only, replay-only, and seeded feasible random. Its 20%-compute/20%-KV anchor
+uses controlled 80% bandwidth and a 30-second deadline. The other cells are
+idle destinations; crossed 20/40 and 40/20 compute/KV pressure in both
+directions; controlled 40%; natural bandwidth; and a 19-second deadline.
 
-The runner checkpoints each scenario result atomically and fsyncs it before
-continuing. `progress.json` records completed scenario IDs and counts after every
+Joint scenarios do not preassign a destination. After five seconds of seeded
+background warmup and five one-second vLLM metric samples, the selected policy
+chooses destination, replay or KV, and order for every session. Declared work
+and measured live KV usage are planner inputs. A live-state deviation over five
+percentage points or any waiting request is retained as a warning, not a failed
+measurement. Missing metrics, invalid reconstruction, or missing KV evidence
+remain hard failures.
+
+The runner checkpoints each decision and scenario result atomically and fsyncs
+them. `progress.json` records completed scenario IDs and counts after every
 attempt. Rerun the same command and run root to skip every completed scenario;
 an interrupted or failed `attempt-NNNN` remains intact and resume uses the next
-attempt number. After any Spot deallocation, restart the VMs, rerun `setup.sh`
+attempt number. A failed attempt stops immediately instead of repeatedly cold
+loading the models. After any Spot deallocation, restart the VMs, rerun `setup.sh`
 and `check`, write a fresh formal
 calibration file, and resume with that file as `--current-calibration`. Resume
 hard-fails if RTT or simultaneous goodput drifts more than 10%, or if the plan,
@@ -250,7 +274,7 @@ uv run python queue-haul/network_campaign.py reduce \
 sha256sum -c /datadrive/queue-haul-network/formal-001/artifacts.sha256
 ```
 
-`summary.json` is valid only with all 126 latest attempts complete. `results.csv`
+`summary.json` is valid only with all planned latest attempts complete. `results.csv`
 contains status, deadline, migration time, API/log bytes, KV bytes, TCP RTT, and
 retransmissions per scenario. Every stack retains 250-ms directional byte logs,
 per-connection duration/bytes/RTT/RTT variance/congestion window/retransmits,
