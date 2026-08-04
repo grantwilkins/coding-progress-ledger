@@ -172,6 +172,18 @@ def test_iperf_uses_receiver_goodput_and_rejects_partial_runs():
         n.iperf_mbps(raw)
 
 
+def test_iperf_waits_for_remote_listener(monkeypatch, tmp_path):
+    node = cluster(tmp_path).destinations[0]
+    calls = []
+    monkeypatch.setattr(n.subprocess, "run", lambda command, check: calls.append(
+        (command, check)))
+
+    n._wait_iperf_server(node, Path("key"), 5201)
+
+    assert calls[0][1] is True
+    assert "until ss -ltnH" in calls[0][0][-1]
+
+
 def test_host_reports_must_match_commit_runtime_and_expected_regions(tmp_path):
     base = {
         "git_sha": "abc", "dirty": False, "gpu": "NVIDIA A100 80GB PCIe",

@@ -306,6 +306,13 @@ def _iperf_client(host: str, port: int, seconds: int,
     ], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
 
 
+def _wait_iperf_server(node: Node, key: Path, port: int) -> None:
+    subprocess.run(ssh_command(node, key, [
+        "timeout", "10", "bash", "-c",
+        f"until ss -ltnH 'sport = :{port}' | grep -q .; do sleep .1; done",
+    ]), check=True)
+
+
 def _finish_iperf(client: subprocess.Popen, server: subprocess.Popen) -> dict:
     output, error = client.communicate()
     server_output, server_error = server.communicate(timeout=10)
@@ -328,7 +335,7 @@ def calibrate(cluster: Cluster, key: Path, out: Path, seconds: int = 60,
         for repeat in range(repeats):
             for streams in (1, 8):
                 server = _iperf_server(node, key, port)
-                time.sleep(.5)
+                _wait_iperf_server(node, key, port)
                 raw = _finish_iperf(
                     _iperf_client(node.host, port, seconds, streams), server)
                 paths[node.id]["raw"].append({
@@ -342,7 +349,8 @@ def calibrate(cluster: Cluster, key: Path, out: Path, seconds: int = 60,
     for repeat in range(repeats):
         servers = [_iperf_server(node, key, port)
                    for node in cluster.destinations]
-        time.sleep(.5)
+        for node in cluster.destinations:
+            _wait_iperf_server(node, key, port)
         clients = [_iperf_client(node.host, port, seconds, 8)
                    for node in cluster.destinations]
         rows = [_finish_iperf(client, server)
