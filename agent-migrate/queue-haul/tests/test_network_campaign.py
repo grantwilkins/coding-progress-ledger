@@ -15,6 +15,7 @@ Plausible wrong implementations:
 import csv
 import json
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -436,6 +437,21 @@ def test_chat_explicitly_probes_state_code(monkeypatch):
         {"role": "user", "content": "context"},
         {"role": "user", "content":
          "Reply only with session state code CODE."}], "tokens": 32}
+
+
+def test_warm_waits_only_for_complete_lmcache_blocks(monkeypatch, tmp_path):
+    log = tmp_path / "lmcache-source.log"
+    log.touch()
+    stack = SimpleNamespace(
+        cfg=SimpleNamespace(src_port=1), run_root=tmp_path)
+    seen = []
+    monkeypatch.setattr(n, "_chat", lambda *_args: {"prompt_tokens": 19086})
+    monkeypatch.setattr(n.testbed, "mp_wait_stored",
+                        lambda *args: seen.append(args))
+
+    n._warm(stack, [], "CODE", 1)
+
+    assert seen == [(log, 0, 18944)]
 
 
 def test_resume_metadata_appends_dynamic_check_but_pins_identity():

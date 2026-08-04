@@ -884,7 +884,8 @@ def _warm(stack: ClusterStack, messages: list[dict], code: str,
     log = stack.run_root / "lmcache-source.log"
     offset = log.stat().st_size
     result = _chat(stack.cfg, stack.cfg.src_port, messages, code, timeout_s)
-    testbed.mp_wait_stored(log, offset, result["prompt_tokens"])
+    testbed.mp_wait_stored(
+        log, offset, result["prompt_tokens"] // 256 * 256)
     return result
 
 
