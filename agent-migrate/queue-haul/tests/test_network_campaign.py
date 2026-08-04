@@ -240,6 +240,9 @@ def test_network_proxy_cli_preserves_named_routes_and_caps():
     assert aggregate == 750_000_000
     assert rates == {"kv/east": 375_000_000, "api/east": 375_000_000}
 
+    args.route_mbps_json = json.dumps({"east": 3000})
+    assert testbed.proxy_config(args)[2] == {"east": 375_000_000}
+
 
 def test_network_smoke_prompt_fits_model_context():
     assert n.parse_args([

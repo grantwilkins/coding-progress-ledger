@@ -1622,9 +1622,11 @@ def proxy_config(args) -> tuple[list[Route], float | None, dict[str, float]]:
                         "resp" if lmcache_mode() == "mp" else "lmcache"),
                   Route("api", *api_listen, *api_target)]
         aggregate, rates = args.mbps, {}
+    route_keys = {route.name for route in routes}
+    route_keys |= {route.rsplit("/", 1)[-1] for route in route_keys}
     if aggregate is not None and aggregate <= 0 \
             or any(float(rate) <= 0 for rate in rates.values()) \
-            or set(rates) - {route.name for route in routes}:
+            or set(rates) - route_keys:
         raise ValueError("invalid proxy bandwidth contract")
     return routes, (aggregate * 1_000_000 / 8 if aggregate else None), {
         route: float(rate) * 1_000_000 / 8 for route, rate in rates.items()
