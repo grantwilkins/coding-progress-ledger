@@ -63,7 +63,7 @@ uv pip install --python .venv/bin/python \
 
 .venv/bin/hf download openai/gpt-oss-20b \
   --revision 6cee5e81ee83917806bbde320786a8fb61efebee \
-  --exclude 'original/*' 'metal/*'
+  --exclude 'original/*' --exclude 'metal/*'
 
 .venv/bin/python - <<'PY'
 from importlib.metadata import version

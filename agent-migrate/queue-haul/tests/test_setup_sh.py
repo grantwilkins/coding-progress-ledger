@@ -22,7 +22,7 @@ def test_setup_script_has_valid_bash_and_pinned_runtime_contract():
     for value in ("0.11.32", "3.12", "1.96.0", "vllm==0.22.0", "lmcache==0.5.1", "cu129"):
         assert value in text
     assert "6cee5e81ee83917806bbde320786a8fb61efebee" in text
-    assert "--exclude 'original/*' 'metal/*'" in text
+    assert "--exclude 'original/*' --exclude 'metal/*'" in text
     assert "HF_HOME=/datadrive" in text
     assert "HF_HUB_CACHE=/datadrive/hub" in text
     assert "QH_CACHE_ROOT=/datadrive/queue-haul-cache" in text
