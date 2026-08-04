@@ -1,0 +1,95 @@
+{
+  "schema": "queue-haul-simulated-pareto-v5",
+  "sessions": 10000,
+  "shards": 64,
+  "fits": {
+    "cases": {
+      "conservative": {
+        "replay_speedup": 0.9625857554441652,
+        "source_power_w": {
+          "replay": 1.5513170033284958,
+          "kv_transfer": 4.386084510487638
+        },
+        "destination_power_w": {
+          "replay": 241.67477301961574,
+          "kv_transfer": 27.818813226746183
+        }
+      },
+      "central": {
+        "replay_speedup": 0.9842661452196999,
+        "source_power_w": {
+          "replay": 1.2364753796504502,
+          "kv_transfer": 3.944126602622127
+        },
+        "destination_power_w": {
+          "replay": 230.16131619829466,
+          "kv_transfer": 23.051464786997286
+        }
+      },
+      "optimistic": {
+        "replay_speedup": 1.0257992126149662,
+        "source_power_w": {
+          "replay": 0.9598305841056032,
+          "kv_transfer": 3.624239892218135
+        },
+        "destination_power_w": {
+          "replay": 225.19136708525224,
+          "kv_transfer": 20.0154754293055
+        }
+      }
+    },
+    "replay_episodes": 36,
+    "source": {
+      "scenarios.csv": {
+        "sha256": "222cfddfda665a6cf1ea2e521cb25ba23bf7930ad0727a0c99b044b43a8dc2b8"
+      },
+      "migration_stages.csv": {
+        "sha256": "e5a9f6a128ea7358353d92d02120d69bba6c4591b4fb2306624ecade233fb531"
+      }
+    }
+  },
+  "model": {
+    "path": "profiles/gpt_oss_20b_a100_tp1_crossover.json",
+    "sha256": "99ec3d2e3099f01103e7a0609a9d99beabfe7ec86eeb372d65f5829090658ab8"
+  },
+  "workloads": {
+    "profiles/coding.json": {
+      "sha256": "7d1001745a64d83f89995743525a1d7ad86f3009e3b26808b3e8423de854d17c"
+    },
+    "profiles/interactive_coding.json": {
+      "sha256": "34a02cdd04042680db3fdd0cc73de36d2103e438a455a70cbfe3db9ec47de1e5"
+    },
+    "profiles/agentic_tool_loop.json": {
+      "sha256": "753d921af1461f5bc32d32e8ae0f93dab7293cac6ffc60aebc3eebc0881b855b"
+    }
+  },
+  "anchor_fit": {
+    "contexts": [
+      1998,
+      4045,
+      8141,
+      16336,
+      31562
+    ],
+    "records": "uniform sample over all three trace record sets",
+    "log_bytes": "per-record trace log-bytes/context ratio"
+  },
+  "source": {
+    "git_sha": "a97c570b6590d82b9c65fcea767e51f18db31766",
+    "dirty": true
+  },
+  "assumptions": {
+    "workload": "exact idle trace snapshot; no arrivals or growth",
+    "wan": "fixed site aggregate",
+    "replay": "fully divisible destination-fleet fluid pool",
+    "kv": "all bytes consume WAN and per-replica ingest",
+    "destination": "matched idle fleet; free intra-site relocation",
+    "destination_spare_fraction": 1.0,
+    "evidence": "simulated sensitivity"
+  },
+  "rows": 12336,
+  "evidence_label": "simulated sensitivity",
+  "power_metric": "first trailing 5-second target window",
+  "completion_metric": "last commit reported separately",
+  "censoring": "deadline misses remain denominators and cannot dominate successes"
+}
