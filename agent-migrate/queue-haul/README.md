@@ -218,6 +218,8 @@ deadline; one cell each changes workload to coding or agentic, bandwidth to 40%
 or natural, sink load to historical-throughput `rho=0.8`, or deadline to 19 s.
 This replaces the 648-run full matrix, which adds interactions we do not need to
 answer the present one-factor questions. Every policy reaches both destinations.
+When a destination is unavailable, the same design can run against a pinned
+one-destination cluster and calibration; every policy then reaches that node.
 
 The runner checkpoints each scenario result atomically and fsyncs it before
 continuing. `progress.json` records completed scenario IDs and counts after every

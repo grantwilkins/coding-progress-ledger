@@ -78,6 +78,10 @@ def test_cluster_pins_actual_roles_and_rejects_ambiguous_hosts(tmp_path):
     with pytest.raises(ValueError, match="unique"):
         n.Cluster.parse(raw)
 
+    raw = value.as_dict()
+    raw["destinations"] = raw["destinations"][:1]
+    assert [node.id for node in n.Cluster.parse(raw).destinations] == ["east"]
+
 
 def test_contract_uses_simultaneous_route_and_aggregate_goodput():
     contract = n.freeze_contract(calibration())
@@ -313,6 +317,15 @@ def test_network_plan_is_matched_balanced_and_exactly_126(monkeypatch, tmp_path)
                        plan["network_contract"]["paths"]
                        [row["destination"]]["controlled_mbps"]["80"]
                        for row in rows if row["bandwidth"] == "controlled_80")
+
+    contract = n.freeze_contract(calibration())
+    contract["paths"] = {"east": contract["paths"]["east"]}
+    contract["aggregate"] = {
+        "natural_mbps": contract["paths"]["east"]["natural_mbps"],
+        "controlled_mbps": contract["paths"]["east"]["controlled_mbps"],
+    }
+    east = n.make_plan(path, contract, seed=7)
+    assert {row["destination"] for row in east["scenarios"]} == {"east"}
 
 
 def test_scheduled_events_reject_active_spot_notice():

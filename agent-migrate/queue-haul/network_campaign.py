@@ -99,12 +99,13 @@ class Cluster:
             tuple(Node.parse(node) for node in raw["destinations"]),
         )
         nodes = (value.source, *value.destinations)
-        if len(value.destinations) != 2 or len({n.id for n in nodes}) != 3 \
-                or len({n.host for n in nodes}) != 3:
+        if not 1 <= len(value.destinations) <= 2 \
+                or len({n.id for n in nodes}) != len(nodes) \
+                or len({n.host for n in nodes}) != len(nodes):
             raise ValueError("cluster node ids and hosts must be unique")
         if value.source.region != "swedencentral" \
-                or {node.region for node in value.destinations} \
-                != {"eastus2", "westeurope"}:
+                or not {node.region for node in value.destinations} \
+                <= {"eastus2", "westeurope"}:
             raise ValueError("cluster regions do not match the frozen topology")
         return value
 
@@ -126,7 +127,7 @@ def validate_calibration(raw: dict) -> None:
         map(float, raw["clock_uncertainty_ms"].values())
     ) > CLOCK_LIMIT_MS:
         raise ValueError("clock uncertainty exceeds 2 ms")
-    if len(raw.get("paths", {})) != 2 \
+    if not 1 <= len(raw.get("paths", {})) <= 2 \
             or any(not row.get("rtt_ms") or not row.get("simultaneous_mbps")
                    or min(map(float, row["simultaneous_mbps"])) <= 0
                    for row in raw["paths"].values()) \
@@ -423,8 +424,8 @@ def make_plan(manifest_path: Path, contract: dict, seed: int = 1,
         raise ValueError("invalid session count")
     model, scenarios = ModelProfile.load(MODEL_PATH), []
     destinations = tuple(sorted(contract["paths"]))
-    if len(destinations) != 2:
-        raise ValueError("network contract requires two destinations")
+    if not 1 <= len(destinations) <= 2:
+        raise ValueError("network contract requires one or two destinations")
     for condition_index, condition in enumerate(target_conditions()):
         workload = WorkloadProfile.load(WORKLOAD_PATHS[condition["workload"]])
         for repeat in range(REPEATS):
@@ -440,7 +441,8 @@ def make_plan(manifest_path: Path, contract: dict, seed: int = 1,
             } for index, row in enumerate(chosen)]
             for policy_index, policy in enumerate(POLICIES):
                 destination = destinations[
-                    (condition_index + repeat + policy_index) % 2]
+                    (condition_index + repeat + policy_index)
+                    % len(destinations)]
                 path = contract["paths"][destination]
                 bandwidth = path["natural_mbps"] if condition["bandwidth"] \
                     == "natural" else path["controlled_mbps"][
@@ -514,7 +516,7 @@ def validate_plan(plan: dict) -> None:
     if any({row["destination"] for row in scenarios
             if row["policy"] == policy} != set(contract["paths"])
            for policy in POLICIES):
-        raise ValueError("every policy must cover both destinations")
+        raise ValueError("every policy must cover every destination")
 
 
 def active_scheduled_events(raw: dict) -> list[dict]:
