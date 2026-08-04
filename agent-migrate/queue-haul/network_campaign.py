@@ -610,6 +610,7 @@ def node_serve(node_id: str, bind_host: str, source_host: str, kv_port: int,
     cfg = testbed.Config(host="127.0.0.1")
     testbed.preflight(cfg, 1)
     run_root.mkdir(parents=True, exist_ok=False)
+    (run_root / "node-serve.pid").write_text(str(os.getpid()))
     cache = sink = None
     sampler = migration_profiler.PowerSampler(run_root / "power.csv")
     stopped = threading.Event()
@@ -677,6 +678,17 @@ def _remote_ready(process: subprocess.Popen, timeout_s: float) -> dict:
     raise TimeoutError("remote sink readiness timed out")
 
 
+def _stop_remote(node: Node, key: Path, root: Path,
+                 process: subprocess.Popen) -> None:
+    if process.poll() is None:
+        subprocess.run(ssh_command(node, key, [
+            "python3", "-c",
+            "import os,sys; os.kill(int(open(sys.argv[1]).read()), 15)",
+            str(root / "node-serve.pid"),
+        ]), check=True)
+        process.wait(timeout=30)
+
+
 def start_cluster(cluster: Cluster, key: Path, contract: dict,
                   bandwidth: str, run_root: Path) -> ClusterStack:
     import migration_profiler
@@ -742,8 +754,8 @@ def start_cluster(cluster: Cluster, key: Path, contract: dict,
             run_root, key, spot,
         )
     except BaseException:
-        for process in remote.values():
-            testbed.stop_proc(process)
+        for node_id, process in remote.items():
+            _stop_remote(by_id[node_id], key, remote_roots[node_id], process)
         if sampler.thread.is_alive():
             sampler.close()
         for process in (source, proxy, *services, lmc):
@@ -763,14 +775,15 @@ def _scp(node: Node, key: Path, source: Path, destination: Path) -> None:
 
 
 def stop_cluster(stack: ClusterStack, collect: bool = True) -> None:
-    for process in stack.remote.values():
-        testbed.stop_proc(process)
+    nodes = {node.id: node for node in stack.cluster.destinations}
+    for node_id, process in stack.remote.items():
+        _stop_remote(nodes[node_id], stack.key, stack.remote_roots[node_id],
+                     process)
     if stack.sampler.thread.is_alive():
         stack.sampler.close()
     testbed.stop_stack(stack.local)
     stack.spot.close()
     if collect:
-        nodes = {node.id: node for node in stack.cluster.destinations}
         for node_id, root in stack.remote_roots.items():
             _scp(nodes[node_id], stack.key, root,
                  stack.run_root / "nodes" / node_id)

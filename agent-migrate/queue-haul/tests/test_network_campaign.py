@@ -326,6 +326,22 @@ def test_scheduled_event_monitor_allows_azure_first_call_delay(tmp_path):
     assert timeouts[:2] == [125, 5]
 
 
+def test_remote_stop_signals_recorded_node_serve_pid(monkeypatch, tmp_path):
+    node = cluster(tmp_path).destinations[0]
+    calls = []
+    process = type("Process", (), {
+        "poll": lambda self: None,
+        "wait": lambda self, timeout: calls.append(("wait", timeout)),
+    })()
+    monkeypatch.setattr(n.subprocess, "run", lambda command, check: calls.append(
+        (command, check)))
+
+    n._stop_remote(node, Path("key"), Path("run/east"), process)
+
+    assert "node-serve.pid" in calls[0][0][-1]
+    assert calls[-1] == ("wait", 30)
+
+
 def test_reducer_keeps_failed_attempts_and_uses_latest(tmp_path):
     scenario = {
         "scenario_id": "s", "condition_index": 0, "repeat": 0,
