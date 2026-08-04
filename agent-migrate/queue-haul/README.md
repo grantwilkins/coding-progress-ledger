@@ -82,10 +82,11 @@ bash queue-haul/setup.sh
 source ~/.bashrc
 ```
 
-This installs the pinned Python 3.12, vLLM 0.22.0 CUDA 12.9, and LMCache 0.5.1
-native runtime, downloads the Sherlock GPT-OSS-20B snapshot into `/datadrive`,
-keeps runtime caches there, and selects the native MP path. The existing
-Apptainer runtime remains the default when `QH_RUNTIME` is unset.
+This installs Valkey plus the pinned Python 3.12, vLLM 0.22.0 CUDA 12.9, and
+LMCache 0.5.1 native runtime, downloads the Sherlock GPT-OSS-20B snapshot into
+`/datadrive`, keeps runtime caches there, and selects LMCache's Valkey-compatible
+RESP backend in the native MP path. The existing Apptainer runtime remains the
+default when `QH_RUNTIME` is unset.
 
 The normative formulation and executable-contract mapping are in:
 

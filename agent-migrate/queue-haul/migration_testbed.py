@@ -295,7 +295,7 @@ def lmcache_cmd(cfg: Config) -> list[str]:
 
 def redis_cmd(cfg: Config) -> list[str]:
     if runtime_mode() == "native":
-        return ["redis-server", "--bind", cfg.host, "--port", str(cfg.lmc_port),
+        return ["valkey-server", "--bind", cfg.host, "--port", str(cfg.lmc_port),
                 "--save", "", "--appendonly", "no"]
     return ["apptainer", "exec", REDIS_IMAGE, "redis-server", "--bind", cfg.host,
             "--port", str(cfg.lmc_port), "--save", "", "--appendonly", "no"]
@@ -440,8 +440,8 @@ def preflight(cfg: Config, required_gpus: int = 1) -> list[str]:
         for executable in ("vllm", "lmcache"):
             if not shutil.which(executable, path=runtime_bin):
                 failures.append(f"{executable} not found in {runtime_bin}")
-        if not shutil.which("redis-server"):
-            failures.append("redis-server not found")
+        if not shutil.which("valkey-server"):
+            failures.append("valkey-server not found")
     else:
         if not shutil.which("apptainer"):
             failures.append("apptainer not found")

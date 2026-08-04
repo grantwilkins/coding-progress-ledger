@@ -116,7 +116,7 @@ def test_native_mp_runtime_uses_host_stack_and_gpu_assignment(monkeypatch):
     assert "CUDA_VISIBLE_DEVICES=3" in sink
     assert str(Path(s.sys.executable).parent) in source
     assert "LD_LIBRARY_PATH" not in source
-    assert redis.startswith("redis-server --bind 127.0.0.1 --port 5655")
+    assert redis.startswith("valkey-server --bind 127.0.0.1 --port 5655")
     assert s.expected_runtime_versions() == ("0.22.0", "0.5.1")
 
 
@@ -143,7 +143,7 @@ def test_native_preflight_requires_host_commands_and_pinned_versions(monkeypatch
 
     with pytest.raises(RuntimeError) as error:
         s.preflight(s.Config(), 2)
-    for executable in ("vllm", "lmcache", "redis-server"):
+    for executable in ("vllm", "lmcache", "valkey-server"):
         assert f"{executable} not found" in str(error.value)
 
     monkeypatch.setattr(s.shutil, "which", lambda executable, **_kwargs: f"/bin/{executable}")

@@ -14,7 +14,7 @@ repo_dir=$(dirname "$queue_haul_dir")
   exit 1
 }
 
-sudo dnf install -y gcc gcc-c++ make pkgconf-pkg-config ca-certificates curl redis
+sudo dnf install -y gcc gcc-c++ make pkgconf-pkg-config ca-certificates curl valkey
 sudo chown "$(id -un):$(id -gn)" /datadrive
 chmod u+rwx /datadrive
 
@@ -73,6 +73,6 @@ snapshot = Path("/datadrive/hub/models--openai--gpt-oss-20b/snapshots/6cee5e81ee
 assert snapshot.is_dir(), snapshot
 assert len(list(snapshot.glob("model-*.safetensors"))) == 3, snapshot
 PY
-redis-server --version
+valkey-server --version
 
 echo "Queue-Haul Azure setup complete. Run: source ~/.bashrc"
