@@ -310,7 +310,7 @@ def test_mp_cache_services_use_redis_l2_through_proxy(monkeypatch):
 
     assert "redis-7.4.2-bookworm.sif" in redis
     assert "--port 5655" in redis
-    assert "lmcache server" in source and "--port 5555" in source
+    assert "lmcache server" in source and "--port 5557" in source
     assert "--supported-transfer-mode engine_driven" in source
     assert '"port":8300' in source
     assert "--port 5556" in sink

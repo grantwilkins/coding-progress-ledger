@@ -128,7 +128,7 @@ class Config:
     kv_proxy_port: int = field(default_factory=lambda: port_default(8300))
     api_proxy_port: int = field(default_factory=lambda: port_default(8400))
     smoke_port: int = field(default_factory=lambda: port_default(8120))
-    src_lmc_port: int = field(default_factory=lambda: port_default(5555))
+    src_lmc_port: int = field(default_factory=lambda: port_default(5557))
     sink_lmc_port: int = field(default_factory=lambda: port_default(5556))
     src_lmc_http_port: int = field(default_factory=lambda: port_default(8080))
     sink_lmc_http_port: int = field(default_factory=lambda: port_default(8081))
@@ -210,7 +210,7 @@ def kv_config(engine_id: str, kv_role: str, kv_port: int, rpc_port: str) -> str:
             "kv_role": kv_role,
             "kv_connector_extra_config": {
                 "lmcache.mp.host": "tcp://127.0.0.1",
-                "lmcache.mp.port": port_default(5555 if engine_id != "d0" else 5556),
+                "lmcache.mp.port": port_default(5557 if engine_id != "d0" else 5556),
                 "lmcache.mp.mp_transfer_mode": "engine_driven",
             },
         }, separators=(",", ":"))

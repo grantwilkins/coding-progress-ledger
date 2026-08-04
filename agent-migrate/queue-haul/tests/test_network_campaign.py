@@ -217,6 +217,7 @@ def test_remote_sink_uses_gpu_zero_private_api_and_source_l2(monkeypatch):
     source = testbed.shell(testbed.vllm_cmd(cfg, "source", sleep_mode=True))
 
     assert '"host":"10.0.0.4","port":8301' in cache
+    assert '"lmcache.mp.port":5557' in source
     assert "--http-host 10.1.0.4" in cache
     assert "CUDA_VISIBLE_DEVICES=0" in vllm
     assert "--host 10.1.0.4" in vllm

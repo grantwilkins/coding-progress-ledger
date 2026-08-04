@@ -113,7 +113,7 @@ need `az` permissions.
    destination on TCP `22,5201,8081,8200` and ICMP. East US 2 permits source
    `10.0.0.4/32` on those ports; West Europe does the same. Sweden Central
    permits TCP `8301` from East `10.1.0.4/32` and TCP `8302` from West
-   `10.2.0.4/32`. Ports `5555,5556,5655,8080,8100,8401,8402` remain
+   `10.2.0.4/32`. Ports `5556,5557,5655,8080,8100,8401,8402` remain
    host-local. Do not expose any experiment port to `0.0.0.0/0`.
 5. Confirm all three VMs have the repository at
    `/home/azureuser/coding-progress-ledger/agent-migrate`, the same commit, and
