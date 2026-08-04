@@ -14,9 +14,16 @@ repo_dir=$(dirname "$queue_haul_dir")
   exit 1
 }
 
-sudo dnf install -y gcc gcc-c++ make pkgconf-pkg-config ca-certificates curl valkey
+sudo dnf install -y gcc gcc-c++ make pkgconf-pkg-config ca-certificates curl valkey chrony iperf3
 sudo chown "$(id -un):$(id -gn)" /datadrive
 chmod u+rwx /datadrive
+
+[[ -e /dev/ptp_hyperv ]] || { echo "/dev/ptp_hyperv not found" >&2; exit 1; }
+ptp_line='refclock PHC /dev/ptp_hyperv poll 3 dpoll -2 offset 0 stratum 2'
+grep -Fqx "$ptp_line" /etc/chrony.conf || printf '%s\n' "$ptp_line" | sudo tee -a /etc/chrony.conf >/dev/null
+sudo systemctl enable --now chronyd
+sudo systemctl restart chronyd
+chronyc waitsync 60 0.002
 
 curl -LsSf https://astral.sh/uv/0.11.32/install.sh | env UV_UNMANAGED_INSTALL="$HOME/.local/bin" sh
 export PATH="$HOME/.local/bin:$HOME/.cargo/bin:$PATH"
