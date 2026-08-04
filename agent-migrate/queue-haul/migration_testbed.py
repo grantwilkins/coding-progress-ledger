@@ -516,6 +516,32 @@ class TokenBucket:
             await asyncio.sleep(delay)
 
 
+class BandwidthLimiter:
+    def __init__(self, aggregate_bps: float | None,
+                 route_bps: dict[str, float] | None = None):
+        self.aggregate = TokenBucket(aggregate_bps) if aggregate_bps else None
+        self.routes = {
+            route: TokenBucket(rate) for route, rate in (route_bps or {}).items()
+        }
+        self.lock = asyncio.Lock()
+
+    def reserve(self, route: str, direction: str, nbytes: int,
+                now: float) -> float:
+        if not billable(route, direction):
+            return 0.0
+        buckets = [bucket for bucket in (
+            self.aggregate, self.routes.get(route),
+        ) if bucket]
+        return max((bucket.reserve(nbytes, now) for bucket in buckets),
+                   default=0.0)
+
+    async def wait(self, route: str, direction: str, nbytes: int) -> None:
+        async with self.lock:
+            delay = self.reserve(route, direction, nbytes, time.monotonic())
+        if delay:
+            await asyncio.sleep(delay)
+
+
 class ByteLog:
     interval_ns = 250_000_000
 
@@ -527,7 +553,13 @@ class ByteLog:
         connections = path.with_name("proxy_connections.csv")
         self.connections = connections.open("w", newline="", buffering=1)
         self.connection_writer = csv.writer(self.connections)
-        self.connection_writer.writerow(["connection_id", "route", "key_hash", "start_ns", "end_ns", "client_to_target_bytes", "target_to_client_bytes"])
+        self.connection_writer.writerow([
+            "connection_id", "route", "key_hash", "start_ns", "end_ns",
+            "client_to_target_bytes", "target_to_client_bytes",
+            "client_rtt_us", "client_rttvar_us", "client_snd_cwnd",
+            "client_total_retrans", "target_rtt_us", "target_rttvar_us",
+            "target_snd_cwnd", "target_total_retrans",
+        ])
         self.transfers = path.with_name("resp_transfers.csv").open("w", newline="", buffering=1)
         self.transfer_writer = csv.writer(self.transfers)
         self.transfer_writer.writerow(["connection_id", "command", "key_hashes", "start_ns", "end_ns", "request_wire_bytes", "response_wire_bytes", "request_body_bytes", "payload_bytes"])
@@ -554,10 +586,16 @@ class ByteLog:
             self.idle.clear()
 
     async def connection(self, connection_id: str, route: str, key_hash: str,
-                         start_ns: int, counts: tuple[int, int]) -> None:
+                         start_ns: int, counts: tuple[int, int],
+                         tcp: tuple[dict, dict] = ({}, {})) -> None:
         async with self.lock:
             self.connection_writer.writerow([
-                connection_id, route, key_hash, start_ns, time.monotonic_ns(), *counts
+                connection_id, route, key_hash, start_ns, time.monotonic_ns(),
+                *counts,
+                *(tcp[0].get(key, "") for key in (
+                    "rtt_us", "rttvar_us", "snd_cwnd", "total_retrans")),
+                *(tcp[1].get(key, "") for key in (
+                    "rtt_us", "rttvar_us", "snd_cwnd", "total_retrans")),
             ])
             self.active -= 1
             if not self.active:
@@ -594,7 +632,24 @@ class ByteLog:
 
 
 def billable(route: str, direction: str) -> bool:
-    return (route, direction) in BILLED_DIRECTIONS
+    return (route.split("/", 1)[0], direction) in BILLED_DIRECTIONS
+
+
+def parse_tcp_info(blob: bytes) -> dict[str, int]:
+    if len(blob) < 104:
+        return {}
+    value = lambda offset: int.from_bytes(blob[offset:offset + 4], "little")
+    return {
+        "rtt_us": value(68), "rttvar_us": value(72),
+        "snd_cwnd": value(80), "total_retrans": value(100),
+    }
+
+
+def stream_tcp_info(writer: asyncio.StreamWriter) -> dict[str, int]:
+    sock = writer.get_extra_info("socket")
+    if not sock or not hasattr(socket, "TCP_INFO"):
+        return {}
+    return parse_tcp_info(sock.getsockopt(socket.IPPROTO_TCP, socket.TCP_INFO, 104))
 
 
 def kv_key_hash(header: bytes) -> str:
@@ -762,8 +817,8 @@ def resp_request(frame: RespFrame) -> tuple[str, list[str]]:
 
 async def relay_resp(client_r: asyncio.StreamReader, client_w: asyncio.StreamWriter,
                      target_r: asyncio.StreamReader, target_w: asyncio.StreamWriter,
-                     bucket: TokenBucket, log: ByteLog | None,
-                     connection_id: str) -> tuple[int, int]:
+                     limiter: BandwidthLimiter, log: ByteLog | None,
+                     connection_id: str, route: str) -> tuple[int, int]:
     pending: asyncio.Queue = asyncio.Queue()
     counts = [0, 0]
 
@@ -777,7 +832,7 @@ async def relay_resp(client_r: asyncio.StreamReader, client_w: asyncio.StreamWri
                 await target_w.drain()
                 counts[0] += len(frame.raw)
                 if log:
-                    await log.add(connection_id, "kv", "client_to_target", len(frame.raw), False)
+                    await log.add(connection_id, route, "client_to_target", len(frame.raw), False)
                 await pending.put((command, keys, start, len(frame.raw), frame.body_bytes()))
         except asyncio.IncompleteReadError:
             if target_w.can_write_eof():
@@ -793,13 +848,13 @@ async def relay_resp(client_r: asyncio.StreamReader, client_w: asyncio.StreamWri
                     return
                 command, keys, start, request_wire, request_body = request
                 frame = await read_resp(target_r)
-                await bucket.wait(len(frame.raw))
+                await limiter.wait(route, "target_to_client", len(frame.raw))
                 client_w.write(frame.raw)
                 await client_w.drain()
                 end = time.monotonic_ns()
                 counts[1] += len(frame.raw)
                 if log:
-                    await log.add(connection_id, "kv", "target_to_client", len(frame.raw), True)
+                    await log.add(connection_id, route, "target_to_client", len(frame.raw), True)
                     await log.resp_transfer([connection_id, command, ";".join(keys), start, end,
                                              request_wire, len(frame.raw), request_body, frame.body_bytes()])
                 pending.task_done()
@@ -810,7 +865,7 @@ async def relay_resp(client_r: asyncio.StreamReader, client_w: asyncio.StreamWri
     return tuple(counts)
 
 async def relay(reader: asyncio.StreamReader, writer: asyncio.StreamWriter,
-                bucket: TokenBucket, log: ByteLog | None, connection_id: str,
+                limiter: BandwidthLimiter, log: ByteLog | None, connection_id: str,
                 route: str, direction: str, initial: bytes = b"") -> int:
     total = 0
     try:
@@ -818,7 +873,7 @@ async def relay(reader: asyncio.StreamReader, writer: asyncio.StreamWriter,
         data = initial or await reader.read(CHUNK)
         while data:
             if charged:
-                await bucket.wait(len(data))
+                await limiter.wait(route, direction, len(data))
             writer.write(data)
             await writer.drain()
             total += len(data)
@@ -831,7 +886,9 @@ async def relay(reader: asyncio.StreamReader, writer: asyncio.StreamWriter,
     return total
 
 
-async def handle_proxy(client_r: asyncio.StreamReader, client_w: asyncio.StreamWriter, route: Route, bucket: TokenBucket, log: ByteLog | None) -> None:
+async def handle_proxy(client_r: asyncio.StreamReader, client_w: asyncio.StreamWriter,
+                       route: Route, limiter: BandwidthLimiter,
+                       log: ByteLog | None) -> None:
     start = time.monotonic_ns()
     connection_id = hashlib.sha256(f"{route.name}:{start}".encode()).hexdigest()[:16]
     target_r, target_w = await asyncio.open_connection(route.target_host, route.target_port)
@@ -843,21 +900,29 @@ async def handle_proxy(client_r: asyncio.StreamReader, client_w: asyncio.StreamW
         await log.opened()
     counts = (0, 0)
     try:
-        counts = await relay_resp(client_r, client_w, target_r, target_w, bucket, log, connection_id) if route.protocol == "resp" else tuple(await asyncio.gather(
-            relay(client_r, target_w, bucket, log, connection_id, route.name,
+        counts = await relay_resp(
+            client_r, client_w, target_r, target_w, limiter, log,
+            connection_id, route.name,
+        ) if route.protocol == "resp" else tuple(await asyncio.gather(
+            relay(client_r, target_w, limiter, log, connection_id, route.name,
                   "client_to_target", initial),
-            relay(target_r, client_w, bucket, log, connection_id, route.name,
+            relay(target_r, client_w, limiter, log, connection_id, route.name,
                   "target_to_client"),
         ))
     finally:
+        tcp = stream_tcp_info(client_w), stream_tcp_info(target_w)
         target_w.close()
         client_w.close()
         if log:
-            await log.connection(connection_id, route.name, key_hash, start, counts)
+            await log.connection(
+                connection_id, route.name, key_hash, start, counts, tcp)
 
 
-async def start_proxy(routes: list[Route], rate_bps: float, log: Path | None = None) -> tuple[list[asyncio.AbstractServer], ByteLog | None]:
-    bucket = TokenBucket(rate_bps)
+async def start_proxy(routes: list[Route], rate_bps: float | None,
+                      log: Path | None = None,
+                      route_bps: dict[str, float] | None = None
+                      ) -> tuple[list[asyncio.AbstractServer], ByteLog | None]:
+    limiter = BandwidthLimiter(rate_bps, route_bps)
     byte_log = ByteLog(log) if log else None
     if byte_log:
         await byte_log.start()
@@ -865,7 +930,8 @@ async def start_proxy(routes: list[Route], rate_bps: float, log: Path | None = N
     for route in routes:
         servers.append(
             await asyncio.start_server(
-                lambda r, w, route=route: handle_proxy(r, w, route, bucket, byte_log),
+                lambda r, w, route=route: handle_proxy(
+                    r, w, route, limiter, byte_log),
                 route.listen_host,
                 route.listen_port,
             )
@@ -873,8 +939,10 @@ async def start_proxy(routes: list[Route], rate_bps: float, log: Path | None = N
     return servers, byte_log
 
 
-async def run_proxy(routes: list[Route], rate_bps: float, log: Path | None = None) -> None:
-    servers, byte_log = await start_proxy(routes, rate_bps, log)
+async def run_proxy(routes: list[Route], rate_bps: float | None,
+                    log: Path | None = None,
+                    route_bps: dict[str, float] | None = None) -> None:
+    servers, byte_log = await start_proxy(routes, rate_bps, log, route_bps)
     try:
         await asyncio.gather(*(server.serve_forever() for server in servers))
     finally:

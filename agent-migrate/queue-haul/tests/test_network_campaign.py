@@ -17,6 +17,7 @@ import json
 import pytest
 
 import network_campaign as n
+import migration_testbed as testbed
 
 
 def cluster(tmp_path):
@@ -119,3 +120,26 @@ def test_targeted_design_has_seven_cells_and_126_policy_migrations():
     assert {cell["deadline_s"] for cell in cells} == {19, 30}
     assert n.POLICIES[-1] == "random"
     assert len(cells) * n.REPEATS * len(n.POLICIES) == 126
+
+
+def test_hierarchical_limiter_enforces_route_and_source_caps():
+    limiter = testbed.BandwidthLimiter(100, {"kv/east": 60, "kv/west": 60})
+    for bucket in (limiter.aggregate, *limiter.routes.values()):
+        bucket.updated = 0
+
+    assert limiter.reserve("kv/east", "target_to_client", 60, 0) == 1
+    assert limiter.reserve("kv/west", "target_to_client", 60, 0) == 1.2
+    assert limiter.reserve("kv/east", "client_to_target", 10_000, 0) == 0
+
+
+def test_linux_tcp_info_parser_uses_microseconds_and_total_retransmissions():
+    blob = bytearray(104)
+    blob[68:72] = (12_345).to_bytes(4, "little")
+    blob[72:76] = (2_000).to_bytes(4, "little")
+    blob[80:84] = (17).to_bytes(4, "little")
+    blob[100:104] = (9).to_bytes(4, "little")
+
+    assert testbed.parse_tcp_info(bytes(blob)) == {
+        "rtt_us": 12_345, "rttvar_us": 2_000,
+        "snd_cwnd": 17, "total_retrans": 9,
+    }
