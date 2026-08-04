@@ -112,8 +112,8 @@ need `az` permissions.
 4. Restrict NSGs to these experiment flows. Source egress goes only to each
    destination on TCP `22,5201,8081,8200` and ICMP. West Europe permits source
    `10.0.0.4/32` on those ports; Sweden Central does the same. East US 2 permits
-   TCP `8302` from West `10.1.0.4/32`, TCP `8301` from Sweden `10.2.0.4/32`,
-   and ICMP from both. Ports `5555,5556,5655,8080,8100,8401,8402` remain
+   TCP `8302` from West `10.1.0.4/32` and TCP `8301` from Sweden
+   `10.2.0.4/32`. Ports `5555,5556,5655,8080,8100,8401,8402` remain
    host-local. Do not expose any experiment port to `0.0.0.0/0`.
 5. Confirm all three VMs have the repository at
    `/home/azureuser/coding-progress-ledger/agent-migrate`, the same commit, and
