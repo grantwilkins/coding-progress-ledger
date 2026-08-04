@@ -231,6 +231,8 @@ An isolated plan pairs replay and KV at 2K, 8K, and 32K contexts, route-relative
 40%, 80%, and natural bandwidth, and three repeats: 54 migrations per site. The
 West run uses `azure_network_cluster_west.json` with its one-path calibration.
 Multi-site destination services start concurrently for each bandwidth stack.
+Resume permits a synchronized commit update while keeping all other run identity
+fields pinned and retaining both commits in the metadata checks.
 joint design is 7 targeted agentic-trace conditions x 3 repeats x 6 policies =
 126 physical scenarios. The policies are Queue-Haul, greedy, Lagrangian greedy,
 KV-only, replay-only, and seeded feasible random. Its 20%-compute/20%-KV anchor

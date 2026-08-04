@@ -1281,8 +1281,13 @@ def reduce_run(plan: dict, run_root: Path) -> dict:
 def merge_metadata(current: dict, previous: dict | None) -> dict:
     if previous is None:
         return current
-    core = lambda row: {key: value for key, value in row.items()
-                        if key != "checks"}
+    def core(row):
+        return {key: ({node: {field: value for field, value in report.items()
+                              if field != "git_sha"}
+                       for node, report in value.items()}
+                      if key == "hosts" else value)
+                for key, value in row.items()
+                if key not in {"checks", "git_sha"}}
     if core(current) != core(previous):
         raise RuntimeError("run metadata changed; use a new run root")
     current["checks"] = previous["checks"] + current["checks"]

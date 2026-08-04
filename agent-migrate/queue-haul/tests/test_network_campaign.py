@@ -547,12 +547,16 @@ def test_warm_waits_only_for_complete_lmcache_blocks(monkeypatch, tmp_path):
     assert seen == [(log, 0, 18944)]
 
 
-def test_resume_metadata_appends_dynamic_check_but_pins_identity():
-    first = {"git_sha": "abc", "plan_sha256": "p", "checks": [{"clock": 1}]}
-    current = {"git_sha": "abc", "plan_sha256": "p", "checks": [{"clock": 2}]}
+def test_resume_metadata_allows_audited_commit_change_but_pins_identity():
+    first = {"git_sha": "abc", "plan_sha256": "p",
+             "hosts": {"east": {"git_sha": "abc", "gpu": "A100"}},
+             "checks": [{"clock": 1}]}
+    current = {"git_sha": "changed", "plan_sha256": "p",
+               "hosts": {"east": {"git_sha": "changed", "gpu": "A100"}},
+               "checks": [{"clock": 2}]}
 
     assert n.merge_metadata(current, first)["checks"] == [
         {"clock": 1}, {"clock": 2}]
-    current["git_sha"] = "changed"
+    current["hosts"]["east"]["gpu"] = "H100"
     with pytest.raises(RuntimeError, match="metadata changed"):
         n.merge_metadata(current, first)
