@@ -143,3 +143,47 @@ def test_linux_tcp_info_parser_uses_microseconds_and_total_retransmissions():
         "rtt_us": 12_345, "rttvar_us": 2_000,
         "snd_cwnd": 17, "total_retrans": 9,
     }
+
+
+def test_chrony_uncertainty_includes_offset_and_dispersion():
+    tracking = """
+Leap status     : Normal
+Last offset     : -0.000400000 seconds
+Root dispersion: 0.000700000 seconds
+"""
+    assert n.chrony_uncertainty_ms(tracking) == pytest.approx(1.1)
+    with pytest.raises(ValueError, match="Leap status"):
+        n.chrony_uncertainty_ms(tracking.replace("Normal", "Not synchronised"))
+
+
+def test_iperf_uses_receiver_goodput_and_rejects_partial_runs():
+    raw = {
+        "error": "",
+        "end": {
+            "sum_sent": {"bits_per_second": 9_000_000_000},
+            "sum_received": {"bits_per_second": 8_000_000_000},
+        },
+    }
+    assert n.iperf_mbps(raw) == 8000
+    raw["error"] = "unable to send control message"
+    with pytest.raises(RuntimeError, match="iperf3"):
+        n.iperf_mbps(raw)
+
+
+def test_host_reports_must_match_commit_runtime_and_expected_regions(tmp_path):
+    base = {
+        "git_sha": "abc", "dirty": False, "gpu": "NVIDIA A100 80GB PCIe",
+        "gpu_memory_mib": 81920, "vllm": "0.22.0", "lmcache": "0.5.1",
+        "vm_size": "Standard_NC24ads_A100_v4", "clock_uncertainty_ms": 1,
+        "ptp": "/dev/ptp0", "datadrive": True,
+    }
+    reports = {
+        "sweden": {**base, "region": "swedencentral", "private_ip": "10.0.0.4"},
+        "east": {**base, "region": "eastus2", "private_ip": "10.1.0.4"},
+        "west": {**base, "region": "westeurope", "private_ip": "10.2.0.4"},
+    }
+    n.validate_hosts(cluster(tmp_path), reports)
+
+    reports["west"]["vllm"] = "0.22.1"
+    with pytest.raises(ValueError, match="runtime"):
+        n.validate_hosts(cluster(tmp_path), reports)
