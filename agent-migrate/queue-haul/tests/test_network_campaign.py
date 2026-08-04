@@ -313,6 +313,19 @@ def test_scheduled_events_reject_active_spot_notice():
         n.active_scheduled_events({})
 
 
+def test_scheduled_event_monitor_allows_azure_first_call_delay(tmp_path):
+    monitor = n.ScheduledEventMonitor(tmp_path / "events.jsonl")
+    timeouts = []
+    monitor._get = lambda timeout: timeouts.append(timeout) or {
+        "DocumentIncarnation": "1", "Events": []}
+    monitor.start()
+    while len(timeouts) < 2:
+        n.time.sleep(.01)
+    monitor.close()
+
+    assert timeouts[:2] == [125, 5]
+
+
 def test_reducer_keeps_failed_attempts_and_uses_latest(tmp_path):
     scenario = {
         "scenario_id": "s", "condition_index": 0, "repeat": 0,

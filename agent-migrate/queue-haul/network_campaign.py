@@ -520,10 +520,10 @@ class ScheduledEventMonitor:
     def start(self) -> None:
         self.thread.start()
 
-    def _get(self) -> dict:
+    def _get(self, timeout: int) -> dict:
         request = urllib.request.Request(self.url, headers={"Metadata": "true"})
         opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
-        with opener.open(request, timeout=5) as response:
+        with opener.open(request, timeout=timeout) as response:
             return json.load(response)
 
     def _run(self) -> None:
@@ -531,7 +531,7 @@ class ScheduledEventMonitor:
         try:
             with self.path.open("w", buffering=1) as handle:
                 while not self.stop.wait(1):
-                    raw = self._get()
+                    raw = self._get(125 if incarnation is None else 5)
                     events = active_scheduled_events(raw)
                     current = raw.get("DocumentIncarnation")
                     if events or current != incarnation:
@@ -556,7 +556,7 @@ class ScheduledEventMonitor:
 
     def close(self) -> None:
         self.stop.set()
-        self.thread.join(10)
+        self.thread.join(130)
         self.check()
 
 
