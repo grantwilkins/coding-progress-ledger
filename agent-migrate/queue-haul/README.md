@@ -230,6 +230,11 @@ hard-fails if RTT or simultaneous goodput drifts more than 10%, or if the plan,
 commit, node identity, model, or runtime changed. Azure Scheduled Events are
 logged on all three hosts and an active Spot event fails the attempt.
 
+The Azure campaign profile uses the Sweden A100 PCIe 300 W calibration retained
+under `/datadrive/queue-haul-network/control/power-cal-300w-*`: 98.1 W
+model-resident idle and 140.2 W at the profile's maximum expected load. Bare GPU
+idle is outside this curve.
+
 Reduction runs automatically and can also be repeated without hardware:
 
 ```bash
