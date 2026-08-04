@@ -241,8 +241,9 @@ idle/drained migration or additional impact evidence.
 
 ## Three-region Azure follow-up
 
-The three-region campaign is implemented but is not yet evidence. East US 2 is
-the source/power-down node; West Europe and Sweden Central are destinations.
+The three-region campaign is implemented but is not yet evidence. Sweden
+Central is the source/power-down node; East US 2 and West Europe are
+destinations.
 The formal design is the seven one-factor conditions and 126 policy scenarios
 documented in `README.md`, not the 648-cell Cartesian matrix. Each matched
 condition/repeat uses identical sessions for all six policies, and every policy

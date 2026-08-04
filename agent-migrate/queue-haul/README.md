@@ -74,8 +74,8 @@ The conversation workload pins ShareGPT artifact revision
 
 ## Three-region Azure A100 campaign
 
-The implemented campaign powers down the East US 2 source GPU and reconstructs
-sessions in West Europe and Sweden Central. It uses private IPs over Global VNet
+The implemented campaign powers down the Sweden Central source GPU and
+reconstructs sessions in East US 2 and West Europe. It uses private IPs over Global VNet
 Peering; Azure routes peered-VNet traffic over the Microsoft backbone, not the
 public Internet. No Azure CLI access is needed on the VMs. The relevant Azure
 contracts are [Global VNet Peering](https://learn.microsoft.com/en-us/azure/networking/design-guide/cross-region),
@@ -86,9 +86,9 @@ The frozen node map in `queue-haul/azure_network_cluster.json` is:
 
 | role | region | private IP |
 |---|---|---|
-| source/power-down | East US 2 | `10.0.0.4` |
-| destination | West Europe | `10.1.0.4` |
-| destination | Sweden Central | `10.2.0.4` |
+| source/power-down | Sweden Central | `10.0.0.4` |
+| destination | East US 2 | `10.1.0.4` |
+| destination | West Europe | `10.2.0.4` |
 
 `check` compares every entry with Azure IMDS and hard-fails before calibration
 if the actual West/Sweden address assignment differs. In that case, correct the
@@ -102,7 +102,7 @@ need `az` permissions.
 1. Use three `Standard_NC24ads_A100_v4` Spot VMs with one visible A100 each,
    Azure Linux 3.0, persistent `/datadrive`, eviction policy `Deallocate`, and
    no delete-on-eviction data disk.
-2. Configure bidirectional Global VNet Peering between the East US 2 VNet and
+2. Configure bidirectional Global VNet Peering between the Sweden Central VNet and
    each destination VNet. Both peerings must show `Connected`; address spaces
    must not overlap. Destination-to-destination peering is unnecessary.
 3. Do not add a public data-plane address, NAT gateway, VPN, load balancer, or
@@ -110,9 +110,9 @@ need `az` permissions.
    backbone traffic is not application-layer encryption; that is acceptable for
    this measurement-only, private-VNet deployment.
 4. Restrict NSGs to these experiment flows. Source egress goes only to each
-   destination on TCP `22,5201,8081,8200` and ICMP. West Europe permits source
-   `10.0.0.4/32` on those ports; Sweden Central does the same. East US 2 permits
-   TCP `8302` from West `10.1.0.4/32` and TCP `8301` from Sweden
+   destination on TCP `22,5201,8081,8200` and ICMP. East US 2 permits source
+   `10.0.0.4/32` on those ports; West Europe does the same. Sweden Central
+   permits TCP `8301` from East `10.1.0.4/32` and TCP `8302` from West
    `10.2.0.4/32`. Ports `5555,5556,5655,8080,8100,8401,8402` remain
    host-local. Do not expose any experiment port to `0.0.0.0/0`.
 5. Confirm all three VMs have the repository at
@@ -134,7 +134,7 @@ Python 3.12/vLLM 0.22.0/LMCache 0.5.1 CUDA 12.9 runtime, and stores the pinned
 GPT-OSS-20B model and caches under `/datadrive`. Setup hard-fails without the
 A100, persistent data mount, PTP device, or pinned runtime.
 
-From the East US 2 source, establish and verify SSH host keys once, then confirm
+From the Sweden Central source, establish and verify SSH host keys once, then confirm
 that the same commit is checked out everywhere:
 
 ```bash
@@ -147,7 +147,7 @@ ssh -i ~/.ssh/azrs azureuser@10.2.0.4 'cd /home/azureuser/coding-progress-ledger
 
 ### Calibrate, smoke-test, and run
 
-Run every command below from the East US 2 `agent-migrate` directory. Do not
+Run every command below from the Sweden Central `agent-migrate` directory. Do not
 start a formal run with a dirty tracked worktree.
 
 ```bash

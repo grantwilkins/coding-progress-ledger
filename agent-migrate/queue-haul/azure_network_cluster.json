@@ -1,8 +1,8 @@
 {
   "schema": "queue-haul-azure-cluster-v1",
   "source": {
-    "id": "east",
-    "region": "eastus2",
+    "id": "sweden",
+    "region": "swedencentral",
     "host": "10.0.0.4",
     "ssh_user": "azureuser",
     "repo_root": "/home/azureuser/coding-progress-ledger/agent-migrate",
@@ -10,16 +10,16 @@
   },
   "destinations": [
     {
-      "id": "west",
-      "region": "westeurope",
+      "id": "east",
+      "region": "eastus2",
       "host": "10.1.0.4",
       "ssh_user": "azureuser",
       "repo_root": "/home/azureuser/coding-progress-ledger/agent-migrate",
       "run_root": "/datadrive/queue-haul-network"
     },
     {
-      "id": "sweden",
-      "region": "swedencentral",
+      "id": "west",
+      "region": "westeurope",
       "host": "10.2.0.4",
       "ssh_user": "azureuser",
       "repo_root": "/home/azureuser/coding-progress-ledger/agent-migrate",

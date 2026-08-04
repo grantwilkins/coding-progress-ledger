@@ -27,17 +27,17 @@ def cluster(tmp_path):
     path.write_text(json.dumps({
         "schema": n.CLUSTER_SCHEMA,
         "source": {
-            "id": "east", "region": "eastus2",
+            "id": "sweden", "region": "swedencentral",
             "host": "10.0.0.4", "ssh_user": "azureuser",
             "repo_root": "/home/azureuser/coding-progress-ledger/agent-migrate",
             "run_root": "/datadrive/queue-haul-network",
         },
         "destinations": [
-            {"id": "west", "region": "westeurope", "host": "10.1.0.4",
+            {"id": "east", "region": "eastus2", "host": "10.1.0.4",
              "ssh_user": "azureuser",
              "repo_root": "/home/azureuser/coding-progress-ledger/agent-migrate",
              "run_root": "/datadrive/queue-haul-network"},
-            {"id": "sweden", "region": "swedencentral", "host": "10.2.0.4",
+            {"id": "west", "region": "westeurope", "host": "10.2.0.4",
              "ssh_user": "azureuser",
              "repo_root": "/home/azureuser/coding-progress-ledger/agent-migrate",
              "run_root": "/datadrive/queue-haul-network"},
@@ -49,14 +49,14 @@ def cluster(tmp_path):
 def calibration():
     return {
         "schema": n.CALIBRATION_SCHEMA,
-        "clock_uncertainty_ms": {"east": .2, "west": 1.5, "sweden": 2.0},
+        "clock_uncertainty_ms": {"sweden": .2, "east": 1.5, "west": 2.0},
         "paths": {
-            "west": {
+            "east": {
                 "rtt_ms": [80, 100, 90],
                 "isolated_mbps": [18_000, 17_000, 19_000],
                 "simultaneous_mbps": [7_550, 7_450, 7_500],
             },
-            "sweden": {
+            "west": {
                 "rtt_ms": [30, 40, 35],
                 "isolated_mbps": [19_000, 18_000, 18_500],
                 "simultaneous_mbps": [9_050, 8_950, 9_000],
@@ -69,9 +69,9 @@ def calibration():
 def test_cluster_pins_actual_roles_and_rejects_ambiguous_hosts(tmp_path):
     value = cluster(tmp_path)
     assert (value.source.region, value.source.host) == (
-        "eastus2", "10.0.0.4")
+        "swedencentral", "10.0.0.4")
     assert {(node.region, node.host) for node in value.destinations} == {
-        ("westeurope", "10.1.0.4"), ("swedencentral", "10.2.0.4")}
+        ("eastus2", "10.1.0.4"), ("westeurope", "10.2.0.4")}
 
     raw = value.as_dict()
     raw["destinations"][0]["host"] = "10.0.0.4"
@@ -82,11 +82,11 @@ def test_cluster_pins_actual_roles_and_rejects_ambiguous_hosts(tmp_path):
 def test_contract_uses_simultaneous_route_and_aggregate_goodput():
     contract = n.freeze_contract(calibration())
 
-    assert contract["paths"]["west"] == {
+    assert contract["paths"]["east"] == {
         "rtt_ms": 90.0, "natural_mbps": 7500.0,
         "controlled_mbps": {"40": 3000, "80": 6000},
     }
-    assert contract["paths"]["sweden"]["natural_mbps"] == 9000
+    assert contract["paths"]["west"]["natural_mbps"] == 9000
     assert contract["aggregate"] == {
         "natural_mbps": 16500.0,
         "controlled_mbps": {"40": 6600, "80": 13200},
@@ -96,16 +96,16 @@ def test_contract_uses_simultaneous_route_and_aggregate_goodput():
 def test_clock_and_resume_drift_are_hard_boundaries():
     n.validate_calibration(calibration())
     bad = calibration()
-    bad["clock_uncertainty_ms"]["sweden"] = 2.001
+    bad["clock_uncertainty_ms"]["west"] = 2.001
     with pytest.raises(ValueError, match="clock"):
         n.validate_calibration(bad)
 
     original = freeze = n.freeze_contract(calibration())
     within = json.loads(json.dumps(freeze))
-    within["paths"]["west"]["natural_mbps"] *= .9
+    within["paths"]["east"]["natural_mbps"] *= .9
     n.validate_resume(original, within)
     outside = json.loads(json.dumps(freeze))
-    outside["paths"]["west"]["natural_mbps"] *= .899
+    outside["paths"]["east"]["natural_mbps"] *= .899
     with pytest.raises(ValueError, match="drift"):
         n.validate_resume(original, outside)
 
@@ -125,13 +125,13 @@ def test_targeted_design_has_seven_cells_and_126_policy_migrations():
 
 
 def test_hierarchical_limiter_enforces_route_and_source_caps():
-    limiter = testbed.BandwidthLimiter(100, {"sweden": 60, "west": 60})
+    limiter = testbed.BandwidthLimiter(100, {"east": 60, "west": 60})
     for bucket in (limiter.aggregate, *limiter.routes.values()):
         bucket.updated = 0
 
-    assert limiter.reserve("kv/sweden", "target_to_client", 60, 0) == 1
+    assert limiter.reserve("kv/east", "target_to_client", 60, 0) == 1
     assert limiter.reserve("kv/west", "target_to_client", 60, 0) == 1.2
-    assert limiter.reserve("kv/sweden", "client_to_target", 10_000, 0) == 0
+    assert limiter.reserve("kv/east", "client_to_target", 10_000, 0) == 0
 
 
 def test_linux_tcp_info_parser_uses_microseconds_and_total_retransmissions():
@@ -180,9 +180,9 @@ def test_host_reports_must_match_commit_runtime_and_expected_regions(tmp_path):
         "ptp": "/dev/ptp0", "datadrive": True,
     }
     reports = {
-        "east": {**base, "region": "eastus2", "private_ip": "10.0.0.4"},
-        "west": {**base, "region": "westeurope", "private_ip": "10.1.0.4"},
-        "sweden": {**base, "region": "swedencentral", "private_ip": "10.2.0.4"},
+        "sweden": {**base, "region": "swedencentral", "private_ip": "10.0.0.4"},
+        "east": {**base, "region": "eastus2", "private_ip": "10.1.0.4"},
+        "west": {**base, "region": "westeurope", "private_ip": "10.2.0.4"},
     }
     n.validate_hosts(cluster(tmp_path), reports)
 
@@ -213,19 +213,19 @@ def test_remote_sink_uses_gpu_zero_private_api_and_source_l2(monkeypatch):
 
 def test_network_proxy_cli_preserves_named_routes_and_caps():
     routes = [
-        testbed.Route("kv/west", "10.0.0.4", 8301, "127.0.0.1", 5655, "resp"),
-        testbed.Route("api/west", "127.0.0.1", 8401, "10.1.0.4", 8200),
+        testbed.Route("kv/east", "10.0.0.4", 8301, "127.0.0.1", 5655, "resp"),
+        testbed.Route("api/east", "127.0.0.1", 8401, "10.1.0.4", 8200),
     ]
     args = testbed.parse_args([
         "proxy", "--routes-json", json.dumps([n.asdict(route) for route in routes]),
         "--aggregate-mbps", "6000", "--route-mbps-json",
-        json.dumps({"kv/west": 3000, "api/west": 3000}),
+        json.dumps({"kv/east": 3000, "api/east": 3000}),
     ])
     parsed, aggregate, rates = testbed.proxy_config(args)
 
     assert parsed == routes
     assert aggregate == 750_000_000
-    assert rates == {"kv/west": 375_000_000, "api/west": 375_000_000}
+    assert rates == {"kv/east": 375_000_000, "api/east": 375_000_000}
 
 
 def test_cluster_routes_keep_data_private_and_share_destination_caps(tmp_path):
@@ -233,18 +233,18 @@ def test_cluster_routes_keep_data_private_and_share_destination_caps(tmp_path):
     routes, ports = n.cluster_routes(value)
 
     assert routes == [
-        testbed.Route("kv/sweden", "10.0.0.4", 8301, "127.0.0.1", 5655, "resp"),
-        testbed.Route("api/sweden", "127.0.0.1", 8401, "10.2.0.4", 8200),
+        testbed.Route("kv/east", "10.0.0.4", 8301, "127.0.0.1", 5655, "resp"),
+        testbed.Route("api/east", "127.0.0.1", 8401, "10.1.0.4", 8200),
         testbed.Route("kv/west", "10.0.0.4", 8302, "127.0.0.1", 5655, "resp"),
-        testbed.Route("api/west", "127.0.0.1", 8402, "10.1.0.4", 8200),
+        testbed.Route("api/west", "127.0.0.1", 8402, "10.2.0.4", 8200),
     ]
-    assert ports == {"sweden": {"kv": 8301, "api": 8401},
+    assert ports == {"east": {"kv": 8301, "api": 8401},
                      "west": {"kv": 8302, "api": 8402}}
 
     contract = n.freeze_contract(calibration())
     aggregate, rates = n.bandwidth_limits(contract, "controlled_40")
     assert aggregate == 6600
-    assert rates == {"sweden": 3600, "west": 3000}
+    assert rates == {"east": 3000, "west": 3600}
     assert n.bandwidth_limits(contract, "natural") == (None, {})
 
 
@@ -276,7 +276,7 @@ def test_network_plan_is_matched_balanced_and_exactly_126(monkeypatch, tmp_path)
     assert len(plan["scenarios"]) == 126
     assert {row["policy"] for row in plan["scenarios"]} == set(n.POLICIES)
     assert all({row["destination"] for row in plan["scenarios"]
-                if row["policy"] == policy} == {"sweden", "west"}
+                if row["policy"] == policy} == {"east", "west"}
                for policy in n.POLICIES)
     for condition in range(7):
         for repeat in range(3):
