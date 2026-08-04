@@ -27,6 +27,9 @@ def test_setup_script_has_valid_bash_and_pinned_runtime_contract():
     assert "HF_HUB_CACHE=/datadrive/hub" in text
     assert "QH_CACHE_ROOT=/datadrive/queue-haul-cache" in text
     assert "QH_RUNTIME=native" in text
+    assert "command -v dnf" in text
+    assert "dnf install -y gcc gcc-c++ make pkgconf-pkg-config ca-certificates curl redis" in text
+    assert "apt-get" not in text
 
 
 def test_setup_replaces_one_managed_bashrc_block():

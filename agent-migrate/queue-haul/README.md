@@ -74,7 +74,7 @@ The conversation workload pins ShareGPT artifact revision
 
 ## Azure A100 setup
 
-On an Ubuntu Azure A100 node with `/datadrive` mounted and working NVIDIA
+On a DNF-based Azure A100 node with `/datadrive` mounted and working NVIDIA
 drivers, run the setup as the login user:
 
 ```bash

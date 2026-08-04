@@ -2,7 +2,7 @@
 set -euo pipefail
 
 [[ $EUID -ne 0 ]] || { echo "run setup.sh as the login user, not root" >&2; exit 1; }
-command -v apt-get >/dev/null || { echo "setup.sh requires Ubuntu apt-get" >&2; exit 1; }
+command -v dnf >/dev/null || { echo "setup.sh requires dnf" >&2; exit 1; }
 command -v nvidia-smi >/dev/null || { echo "nvidia-smi not found" >&2; exit 1; }
 [[ $(nvidia-smi --query-gpu=name --format=csv,noheader) == *A100* ]] || { echo "no A100 GPU found" >&2; exit 1; }
 mountpoint -q /datadrive || { echo "/datadrive is not mounted" >&2; exit 1; }
@@ -14,8 +14,7 @@ repo_dir=$(dirname "$queue_haul_dir")
   exit 1
 }
 
-sudo apt-get update
-sudo apt-get install -y build-essential ca-certificates curl pkg-config redis-server
+sudo dnf install -y gcc gcc-c++ make pkgconf-pkg-config ca-certificates curl redis
 sudo chown "$(id -un):$(id -gn)" /datadrive
 chmod u+rwx /datadrive
 
