@@ -238,6 +238,8 @@ model-resident idle and 140.2 W at the profile's maximum expected load. Bare GPU
 idle is outside this curve.
 Reconstruction requests end with an explicit state-code probe and reserve 128
 output tokens; a successful HTTP response without the code hard-fails the attempt.
+The 600-second HTTP timeout is independent of the measured scenario deadline;
+slow reconstruction completes with `deadline_met=false` instead of restarting.
 
 Reduction runs automatically and can also be repeated without hardware:
 

@@ -35,6 +35,7 @@ PLAN_SCHEMA = "queue-haul-network-plan-v1"
 RESULT_SCHEMA = "queue-haul-network-result-v1"
 CLOCK_LIMIT_MS = 2.0
 RESUME_DRIFT = .10
+REQUEST_TIMEOUT_S = 600.0
 REPEATS = 3
 POLICIES = (
     "queue_haul", "greedy", "greedy_lagrangian", "kv_only", "replay_only",
@@ -964,7 +965,7 @@ def run_network_scenario(stack: ClusterStack, manifest: dict, scenario: dict,
         sessions[row["session_id"]], row["initial_tokens"])
         for row in scenario["sessions"]}
     moves = sorted(scenario["moves"], key=lambda row: row["order"])
-    timeout = float(scenario["deadline_s"])
+    timeout = REQUEST_TIMEOUT_S
     for move in moves:
         if move["method"] == "replay":
             row = sessions[move["session_id"]]

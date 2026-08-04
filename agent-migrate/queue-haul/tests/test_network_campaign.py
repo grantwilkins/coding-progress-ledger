@@ -127,6 +127,7 @@ def test_targeted_design_has_seven_cells_and_126_policy_migrations():
     assert {cell["deadline_s"] for cell in cells} == {19, 30}
     assert n.POLICIES[-1] == "random"
     assert len(cells) * n.REPEATS * len(n.POLICIES) == 126
+    assert n.REQUEST_TIMEOUT_S > max(cell["deadline_s"] for cell in cells)
 
 
 def test_hierarchical_limiter_enforces_route_and_source_caps():
