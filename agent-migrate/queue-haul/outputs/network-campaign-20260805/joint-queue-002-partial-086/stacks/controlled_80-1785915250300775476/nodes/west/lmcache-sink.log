@@ -1,0 +1,776 @@
+[32;20m[2026-08-05 07:35:55,629] LMCache INFO:[0m  torch_dev=StubCPUDevice(device_type=cpu), torch_device_type=cpu [3m(__init__.py:63:lmcache)[0m
+[32;20m[2026-08-05 07:35:55,841] LMCache INFO:[0m Skipping backend lmcache.v1.platform.musa.ops: predicate returned False [3m(__init__.py:114:lmcache)[0m
+[32;20m[2026-08-05 07:35:55,842] LMCache INFO:[0m Skipping backend lmcache.xpu_ops: predicate returned False [3m(__init__.py:114:lmcache)[0m
+[32;20m[2026-08-05 07:35:55,842] LMCache INFO:[0m Skipping backend lmcache.c_ops: predicate returned False [3m(__init__.py:114:lmcache)[0m
+
+ _     __  __    ____           _          
+| |   |  \/  |  / ___|__ _  ___| |__   ___      LMCache v0.5.1
+| |   | |\/| | | |   / _` |/ __| '_ \ / _ \     Website:  https://lmcache.ai/
+| |___| |  | | | |__| (_| | (__| | | |  __/     Recipes:  https://docs.lmcache.ai/recipes
+|_____|_|  |_|  \____\__,_|\___|_| |_|\___|     LinkedIn: https://www.linkedin.com/company/lmcache-lab
+Set LMCACHE_DISABLE_BANNER=1 to hide this banner.
+
+[32;20m[2026-08-05 07:35:57,010] LMCache INFO:[0m multi_layer_block_kv_transfer mode: tensor [3m(base.py:94:lmcache.v1.multiprocess.transfer_context.base)[0m
+[32;20m[2026-08-05 07:35:59,912] LMCache INFO:[0m Discovered API module: cache_api [3m(router_discovery.py:53:lmcache.v1.utils.router_discovery)[0m
+[32;20m[2026-08-05 07:35:59,915] LMCache INFO:[0m Discovered API module: env_api [3m(router_discovery.py:53:lmcache.v1.utils.router_discovery)[0m
+[32;20m[2026-08-05 07:35:59,917] LMCache INFO:[0m Discovered API module: loglevel_api [3m(router_discovery.py:53:lmcache.v1.utils.router_discovery)[0m
+[32;20m[2026-08-05 07:35:59,921] LMCache INFO:[0m Discovered API module: metrics_api [3m(router_discovery.py:53:lmcache.v1.utils.router_discovery)[0m
+[32;20m[2026-08-05 07:35:59,924] LMCache INFO:[0m Discovered API module: periodic_thread_api [3m(router_discovery.py:53:lmcache.v1.utils.router_discovery)[0m
+[32;20m[2026-08-05 07:35:59,925] LMCache INFO:[0m Discovered API module: run_script_api [3m(router_discovery.py:53:lmcache.v1.utils.router_discovery)[0m
+[32;20m[2026-08-05 07:35:59,926] LMCache INFO:[0m Discovered API module: thread_api [3m(router_discovery.py:53:lmcache.v1.utils.router_discovery)[0m
+[32;20m[2026-08-05 07:35:59,926] LMCache INFO:[0m Discovered API module: common_api [3m(router_discovery.py:53:lmcache.v1.utils.router_discovery)[0m
+[32;20m[2026-08-05 07:35:59,928] LMCache INFO:[0m Discovered API module: config_api [3m(router_discovery.py:53:lmcache.v1.utils.router_discovery)[0m
+[32;20m[2026-08-05 07:35:59,931] LMCache INFO:[0m Discovered API module: info_api [3m(router_discovery.py:53:lmcache.v1.utils.router_discovery)[0m
+[32;20m[2026-08-05 07:35:59,934] LMCache INFO:[0m Discovered API module: quota_api [3m(router_discovery.py:53:lmcache.v1.utils.router_discovery)[0m
+[32;20m[2026-08-05 07:35:59,939] LMCache INFO:[0m Discovered API module: reconfigure_api [3m(router_discovery.py:53:lmcache.v1.utils.router_discovery)[0m
+[33;20m[2026-08-05 07:35:59,957] LMCache WARNING:[0m LazyMemoryAllocator requires memory pinning which is not supported on the current backend. Disabling l1-use-lazy. [3m(config.py:155:lmcache.v1.distributed.config)[0m
+[32;20m[2026-08-05 07:35:59,959] LMCache INFO:[0m Starting LMCache HTTP server on http://10.2.0.4:8081 [3m(http_server.py:258:lmcache.v1.multiprocess.http_server)[0m
+INFO:     Started server process [2918]
+INFO:     Waiting for application startup.
+[32;20m[2026-08-05 07:36:00,044] LMCache INFO:[0m Starting LMCache HTTP server... (accelerator available: False) [3m(http_server.py:73:lmcache.v1.multiprocess.http_server)[0m
+[32;20m[2026-08-05 07:36:00,087] LMCache INFO:[0m OTel MeterProvider initialised with Prometheus fallback (standalone metrics HTTP server disabled; /metrics must be exposed by the caller), resource={'telemetry.sdk.language': 'python', 'telemetry.sdk.name': 'opentelemetry', 'telemetry.sdk.version': '1.40.0', 'service.instance.id': 'queue-haul-sink', 'service.name': 'unknown_service'} [3m(otel_init.py:114:lmcache.v1.mp_observability.otel_init)[0m
+[32;20m[2026-08-05 07:36:00,089] LMCache INFO:[0m Checking if shm capacity is larger than L1 request [3m(server.py:329:lmcache.v1.multiprocess.server)[0m
+[32;20m[2026-08-05 07:36:00,116] LMCache INFO:[0m Starting L1EvictionController... [3m(eviction_controller.py:53:lmcache.v1.distributed.storage_controllers.eviction_controller)[0m
+[32;20m[2026-08-05 07:36:00,130] LMCache INFO:[0m Created RESP L2 adapter: 10.0.0.4:8302 (workers=8) [3m(resp_l2_adapter.py:163:lmcache.v1.distributed.l2_adapters.resp_l2_adapter)[0m
+[32;20m[2026-08-05 07:36:00,131] LMCache INFO:[0m Starting L2EvictionController... [3m(eviction_controller.py:233:lmcache.v1.distributed.storage_controllers.eviction_controller)[0m
+[32;20m[2026-08-05 07:36:00,131] LMCache INFO:[0m Starting StoreController... [3m(store_controller.py:305:lmcache.v1.distributed.storage_controllers.store_controller)[0m
+[32;20m[2026-08-05 07:36:00,131] LMCache INFO:[0m Starting PrefetchController... [3m(prefetch_controller.py:555:lmcache.v1.distributed.storage_controllers.prefetch_controller)[0m
+[32;20m[2026-08-05 07:36:00,132] LMCache INFO:[0m Using blake3 hash function [3m(token_hasher.py:79:lmcache.v1.multiprocess.token_hasher)[0m
+[32;20m[2026-08-05 07:36:00,152] LMCache INFO:[0m Computed NONE_HASH=b"~>\xff\x9e\xf7a:P4\x0e\xb1&w\xee\x03\xb8:\xc7Y\xfc\xba\x9b\xb3'\x05\xf0rH\xd5mG;" using hash function [3m(token_hasher.py:180:lmcache.v1.multiprocess.token_hasher)[0m
+[32;20m[2026-08-05 07:36:00,153] LMCache INFO:[0m TokenHasher initialized: chunk_size=256, hash_algorithm=blake3 [3m(token_hasher.py:67:lmcache.v1.multiprocess.token_hasher)[0m
+[32;20m[2026-08-05 07:36:00,153] LMCache INFO:[0m PeriodicThread SessionManager-cleanup-thread-90178b8c830 entering main loop (interval=60.0s) [3m(periodic_thread.py:284:lmcache.v1.periodic_thread)[0m
+[32;20m[2026-08-05 07:36:00,153] LMCache INFO:[0m Started PeriodicThread: SessionManager-cleanup-thread-90178b8c830 (level=medium, interval=60.0s, init_wait=0.0s) [3m(periodic_thread.py:244:lmcache.v1.periodic_thread)[0m
+[32;20m[2026-08-05 07:36:00,154] LMCache INFO:[0m Supported transfer mode: engine_driven [3m(server.py:206:lmcache.v1.multiprocess.server)[0m
+[32;20m[2026-08-05 07:36:00,154] LMCache INFO:[0m PeriodicThread lmcache-mp-worker-reaper entering main loop (interval=30.0s) [3m(periodic_thread.py:284:lmcache.v1.periodic_thread)[0m
+[32;20m[2026-08-05 07:36:00,154] LMCache INFO:[0m Started PeriodicThread: lmcache-mp-worker-reaper (level=medium, interval=30.0s, init_wait=0.0s) [3m(periodic_thread.py:244:lmcache.v1.periodic_thread)[0m
+[32;20m[2026-08-05 07:36:00,170] LMCache INFO:[0m Created AffinityThreadPool 'affinity-pool-0' with 8 worker slots: up to 8 distinct affinity keys each bind to their own thread before slots are shared. Compare this against the number of clients expected to connect to confirm routing. [3m(affinity_pool.py:60:lmcache.v1.multiprocess.affinity_pool)[0m
+[32;20m[2026-08-05 07:36:00,170] LMCache INFO:[0m LMCache ZMQ cache server is running on tcp://127.0.0.1:5556 [3m(server.py:385:lmcache.v1.multiprocess.server)[0m
+[32;20m[2026-08-05 07:36:00,170] LMCache INFO:[0m LMCache cache server is running... [3m(server.py:400:lmcache.v1.multiprocess.server)[0m
+[32;20m[2026-08-05 07:36:00,171] LMCache INFO:[0m LMCache HTTP server initialized [3m(http_server.py:166:lmcache.v1.multiprocess.http_server)[0m
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://10.2.0.4:8081 (Press CTRL+C to quit)
+[32;20m[2026-08-05 07:38:26,877] LMCache INFO:[0m Using shm non-GPU transfer strategy [3m(server_transfer.py:66:lmcache.v1.multiprocess.modules.server_transfer)[0m
+[32;20m[2026-08-05 07:38:26,878] LMCache INFO:[0m Registered non-GPU context for instance 4167126762923656106 (model=/datadrive/hub/models--openai--gpt-oss-20b/snapshots/6cee5e81ee83917806bbde320786a8fb61efebee, world_size=1) [3m(engine_driven_transfer.py:376:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:38:46,287] LMCache INFO:[0m Checking memory allocator consistency [3m(memory_management.py:1852:lmcache.v1.memory_management)[0m
+[32;20m[2026-08-05 07:38:46,287] LMCache INFO:[0m  - Total active allocations: 0 [3m(memory_management.py:1853:lmcache.v1.memory_management)[0m
+[32;20m[2026-08-05 07:38:46,287] LMCache INFO:[0m  - Total allocated size: 0.000000 MB [3m(memory_management.py:1854:lmcache.v1.memory_management)[0m
+[32;20m[2026-08-05 07:38:46,287] LMCache INFO:[0m  - Total free size: 16384.000000 MB [3m(memory_management.py:1861:lmcache.v1.memory_management)[0m
+[32;20m[2026-08-05 07:38:46,287] LMCache INFO:[0m L1Manager memcheck: total objects = 0, write-locked = 0, read-locked = 0 [3m(l1_manager.py:887:lmcache.v1.distributed.l1_manager)[0m
+[33;20m[2026-08-05 07:38:46,287] LMCache WARNING:[0m L1Manager: force-clearing all 0 objects (including locked ones). This may corrupt in-flight store/prefetch operations — use with caution. [3m(l1_manager.py:732:lmcache.v1.distributed.l1_manager)[0m
+[32;20m[2026-08-05 07:38:46,288] LMCache INFO:[0m L1Manager: cleared 0 objects, 0 remaining. [3m(l1_manager.py:750:lmcache.v1.distributed.l1_manager)[0m
+[32;20m[2026-08-05 07:38:46,288] LMCache INFO:[0m Checking memory allocator consistency [3m(memory_management.py:1852:lmcache.v1.memory_management)[0m
+[32;20m[2026-08-05 07:38:46,288] LMCache INFO:[0m  - Total active allocations: 0 [3m(memory_management.py:1853:lmcache.v1.memory_management)[0m
+[32;20m[2026-08-05 07:38:46,288] LMCache INFO:[0m  - Total allocated size: 0.000000 MB [3m(memory_management.py:1854:lmcache.v1.memory_management)[0m
+[32;20m[2026-08-05 07:38:46,288] LMCache INFO:[0m  - Total free size: 16384.000000 MB [3m(memory_management.py:1861:lmcache.v1.memory_management)[0m
+[32;20m[2026-08-05 07:38:46,288] LMCache INFO:[0m L1Manager memcheck: total objects = 0, write-locked = 0, read-locked = 0 [3m(l1_manager.py:887:lmcache.v1.distributed.l1_manager)[0m
+[32;20m[2026-08-05 07:38:46,288] LMCache INFO:[0m Cache cleared via HTTP API [3m(cache_api.py:184:lmcache.v1.multiprocess.http_apis.cache_api)[0m
+INFO:     10.0.0.4:52444 - "POST /cache/clear HTTP/1.1" 200 OK
+[32;20m[2026-08-05 07:38:46,650] LMCache INFO:[0m AffinityThreadPool: affinity_key=-4559728735480918109 assigned to worker slot 0 of 8 (thread affinity-pool-0-0); 1 distinct key(s) now bound [3m(affinity_pool.py:108:lmcache.v1.multiprocess.affinity_pool)[0m
+[32;20m[2026-08-05 07:38:46,695] LMCache INFO:[0m Stored 512 tokens in 0.044 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:38:47,402] LMCache INFO:[0m Stored 512 tokens in 0.003 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:38:48,241] LMCache INFO:[0m Stored 512 tokens in 0.003 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:38:49,174] LMCache INFO:[0m Stored 512 tokens in 0.003 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:38:50,003] LMCache INFO:[0m Stored 512 tokens in 0.003 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:38:50,917] LMCache INFO:[0m Stored 512 tokens in 0.003 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:38:51,800] LMCache INFO:[0m Stored 512 tokens in 0.003 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:38:52,685] LMCache INFO:[0m Stored 512 tokens in 0.003 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:38:53,537] LMCache INFO:[0m Stored 512 tokens in 0.003 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:38:54,431] LMCache INFO:[0m Stored 512 tokens in 0.003 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:38:55,324] LMCache INFO:[0m Stored 512 tokens in 0.003 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:38:56,213] LMCache INFO:[0m Stored 512 tokens in 0.002 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:38:57,076] LMCache INFO:[0m Stored 512 tokens in 0.003 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:38:57,965] LMCache INFO:[0m Stored 512 tokens in 0.002 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:38:58,855] LMCache INFO:[0m Stored 512 tokens in 0.003 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:38:59,738] LMCache INFO:[0m Stored 512 tokens in 0.003 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:39:00,622] LMCache INFO:[0m Stored 512 tokens in 0.003 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:39:01,508] LMCache INFO:[0m Stored 512 tokens in 0.002 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:39:02,392] LMCache INFO:[0m Stored 512 tokens in 0.003 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:39:03,282] LMCache INFO:[0m Stored 512 tokens in 0.003 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:39:04,158] LMCache INFO:[0m Stored 512 tokens in 0.002 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:39:05,031] LMCache INFO:[0m Stored 512 tokens in 0.003 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:39:05,913] LMCache INFO:[0m Stored 512 tokens in 0.003 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:39:06,804] LMCache INFO:[0m Stored 512 tokens in 0.002 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:39:07,722] LMCache INFO:[0m Stored 512 tokens in 0.003 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:39:08,585] LMCache INFO:[0m Stored 512 tokens in 0.003 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:39:09,450] LMCache INFO:[0m Stored 512 tokens in 0.003 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:39:10,341] LMCache INFO:[0m Stored 512 tokens in 0.002 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:39:11,235] LMCache INFO:[0m Stored 512 tokens in 0.003 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:39:12,103] LMCache INFO:[0m Stored 512 tokens in 0.002 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:39:13,030] LMCache INFO:[0m Stored 512 tokens in 0.003 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:39:13,892] LMCache INFO:[0m Stored 512 tokens in 0.002 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:39:14,760] LMCache INFO:[0m Stored 512 tokens in 0.003 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:39:15,658] LMCache INFO:[0m Stored 512 tokens in 0.003 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:39:16,521] LMCache INFO:[0m Stored 512 tokens in 0.003 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:39:17,415] LMCache INFO:[0m Stored 512 tokens in 0.002 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:39:18,311] LMCache INFO:[0m Stored 512 tokens in 0.003 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:39:19,171] LMCache INFO:[0m Stored 512 tokens in 0.002 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:39:20,066] LMCache INFO:[0m Stored 512 tokens in 0.003 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:39:20,959] LMCache INFO:[0m Stored 512 tokens in 0.003 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:39:21,828] LMCache INFO:[0m Stored 512 tokens in 0.002 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:39:25,152] LMCache INFO:[0m Prefetch request completed (L1+L2): 55/55 retained keys (0 L1, 55 L2) in 3220.1 ms (external_request_id=chatcmpl-b213f9b5570c59e3-8de29fb2, prefetch_request_id=41) [3m(storage_manager.py:709:lmcache.v1.distributed.storage_manager)[0m
+[32;20m[2026-08-05 07:39:25,194] LMCache INFO:[0m Retrieved 14080 tokens in 0.031 seconds [3m(engine_driven_transfer.py:530:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:39:26,168] LMCache INFO:[0m Prefetch request completed (L1+L2): 55/55 retained keys (0 L1, 55 L2) in 4153.4 ms (external_request_id=chatcmpl-b20b38471d82ee7c-970ae5de, prefetch_request_id=42) [3m(storage_manager.py:709:lmcache.v1.distributed.storage_manager)[0m
+[32;20m[2026-08-05 07:39:26,209] LMCache INFO:[0m Retrieved 14080 tokens in 0.030 seconds [3m(engine_driven_transfer.py:530:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:39:27,210] LMCache INFO:[0m Prefetch request completed (L1+L2): 55/55 retained keys (0 L1, 55 L2) in 5192.5 ms (external_request_id=chatcmpl-a7e0cf69c12ae160-8f5736e1, prefetch_request_id=43) [3m(storage_manager.py:709:lmcache.v1.distributed.storage_manager)[0m
+[32;20m[2026-08-05 07:39:27,252] LMCache INFO:[0m Retrieved 14080 tokens in 0.030 seconds [3m(engine_driven_transfer.py:530:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:39:28,497] LMCache INFO:[0m Prefetch request completed (L1+L2): 55/55 retained keys (0 L1, 55 L2) in 6476.3 ms (external_request_id=chatcmpl-9dd91d8f4af64895-b6760645, prefetch_request_id=44) [3m(storage_manager.py:709:lmcache.v1.distributed.storage_manager)[0m
+[32;20m[2026-08-05 07:39:28,538] LMCache INFO:[0m Retrieved 14080 tokens in 0.030 seconds [3m(engine_driven_transfer.py:530:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:39:29,644] LMCache INFO:[0m Prefetch request completed (L1+L2): 55/55 retained keys (0 L1, 55 L2) in 7619.6 ms (external_request_id=chatcmpl-87d1a200947ce9c3-a8f5d1ce, prefetch_request_id=45) [3m(storage_manager.py:709:lmcache.v1.distributed.storage_manager)[0m
+[32;20m[2026-08-05 07:39:29,685] LMCache INFO:[0m Retrieved 14080 tokens in 0.030 seconds [3m(engine_driven_transfer.py:530:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:39:32,636] LMCache INFO:[0m Prefetch request completed (L1+L2): 123/123 retained keys (0 L1, 123 L2) in 10551.3 ms (external_request_id=chatcmpl-886b09c65edad51a-80e1f6a1, prefetch_request_id=46) [3m(storage_manager.py:709:lmcache.v1.distributed.storage_manager)[0m
+[32;20m[2026-08-05 07:39:32,718] LMCache INFO:[0m Retrieved 31488 tokens in 0.066 seconds [3m(engine_driven_transfer.py:530:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:39:35,712] LMCache INFO:[0m Stored 512 tokens in 0.003 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:39:35,781] LMCache INFO:[0m Stored 512 tokens in 0.002 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:39:35,784] LMCache INFO:[0m Stored 512 tokens in 0.002 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:39:35,786] LMCache INFO:[0m Prefetch request completed (L1+L2): 120/120 retained keys (0 L1, 120 L2) in 13695.5 ms (external_request_id=chatcmpl-82f286e6d4c102b1-840e4271, prefetch_request_id=47) [3m(storage_manager.py:709:lmcache.v1.distributed.storage_manager)[0m
+[32;20m[2026-08-05 07:39:35,866] LMCache INFO:[0m Retrieved 30720 tokens in 0.064 seconds [3m(engine_driven_transfer.py:530:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:39:36,002] LMCache INFO:[0m Stored 512 tokens in 0.003 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:39:36,007] LMCache INFO:[0m Stored 512 tokens in 0.002 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:39:36,010] LMCache INFO:[0m Stored 512 tokens in 0.002 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:39:36,014] LMCache INFO:[0m Stored 512 tokens in 0.002 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:39:36,017] LMCache INFO:[0m Stored 512 tokens in 0.002 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:39:38,051] LMCache INFO:[0m Prefetch request completed (L1+L2): 123/123 retained keys (0 L1, 123 L2) in 15952.1 ms (external_request_id=chatcmpl-996610f177e4b886-9424265e, prefetch_request_id=48) [3m(storage_manager.py:709:lmcache.v1.distributed.storage_manager)[0m
+[32;20m[2026-08-05 07:39:38,127] LMCache INFO:[0m Retrieved 31488 tokens in 0.066 seconds [3m(engine_driven_transfer.py:530:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:39:38,309] LMCache INFO:[0m Stored 512 tokens in 0.003 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:39:38,517] LMCache INFO:[0m Stored 512 tokens in 0.003 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:39:38,522] LMCache INFO:[0m Stored 512 tokens in 0.002 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:39:38,525] LMCache INFO:[0m Stored 512 tokens in 0.002 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:39:38,529] LMCache INFO:[0m Stored 512 tokens in 0.002 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:39:38,532] LMCache INFO:[0m Stored 512 tokens in 0.002 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:39:38,536] LMCache INFO:[0m Stored 512 tokens in 0.002 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:39:38,539] LMCache INFO:[0m Stored 512 tokens in 0.002 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:39:40,666] LMCache INFO:[0m Stored 512 tokens in 0.003 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:39:40,782] LMCache INFO:[0m Stored 512 tokens in 0.002 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:39:40,786] LMCache INFO:[0m Stored 512 tokens in 0.002 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:39:40,790] LMCache INFO:[0m Stored 512 tokens in 0.002 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:39:40,794] LMCache INFO:[0m Stored 512 tokens in 0.002 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:40:08,554] LMCache INFO:[0m Checking memory allocator consistency [3m(memory_management.py:1852:lmcache.v1.memory_management)[0m
+[32;20m[2026-08-05 07:40:08,555] LMCache INFO:[0m  - Total active allocations: 124 [3m(memory_management.py:1853:lmcache.v1.memory_management)[0m
+[32;20m[2026-08-05 07:40:08,555] LMCache INFO:[0m  - Total allocated size: 1488.000000 MB [3m(memory_management.py:1854:lmcache.v1.memory_management)[0m
+[32;20m[2026-08-05 07:40:08,555] LMCache INFO:[0m  - Total free size: 14896.000000 MB [3m(memory_management.py:1861:lmcache.v1.memory_management)[0m
+[32;20m[2026-08-05 07:40:08,555] LMCache INFO:[0m L1Manager memcheck: total objects = 124, write-locked = 0, read-locked = 0 [3m(l1_manager.py:887:lmcache.v1.distributed.l1_manager)[0m
+[33;20m[2026-08-05 07:40:08,555] LMCache WARNING:[0m L1Manager: force-clearing all 124 objects (including locked ones). This may corrupt in-flight store/prefetch operations — use with caution. [3m(l1_manager.py:732:lmcache.v1.distributed.l1_manager)[0m
+[32;20m[2026-08-05 07:40:08,555] LMCache INFO:[0m L1Manager: cleared 124 objects, 0 remaining. [3m(l1_manager.py:750:lmcache.v1.distributed.l1_manager)[0m
+[32;20m[2026-08-05 07:40:08,556] LMCache INFO:[0m Checking memory allocator consistency [3m(memory_management.py:1852:lmcache.v1.memory_management)[0m
+[32;20m[2026-08-05 07:40:08,556] LMCache INFO:[0m  - Total active allocations: 0 [3m(memory_management.py:1853:lmcache.v1.memory_management)[0m
+[32;20m[2026-08-05 07:40:08,556] LMCache INFO:[0m  - Total allocated size: 0.000000 MB [3m(memory_management.py:1854:lmcache.v1.memory_management)[0m
+[32;20m[2026-08-05 07:40:08,556] LMCache INFO:[0m  - Total free size: 16384.000000 MB [3m(memory_management.py:1861:lmcache.v1.memory_management)[0m
+[32;20m[2026-08-05 07:40:08,556] LMCache INFO:[0m L1Manager memcheck: total objects = 0, write-locked = 0, read-locked = 0 [3m(l1_manager.py:887:lmcache.v1.distributed.l1_manager)[0m
+[32;20m[2026-08-05 07:40:08,556] LMCache INFO:[0m Cache cleared via HTTP API [3m(cache_api.py:184:lmcache.v1.multiprocess.http_apis.cache_api)[0m
+INFO:     10.0.0.4:59798 - "POST /cache/clear HTTP/1.1" 200 OK
+[32;20m[2026-08-05 07:40:51,620] LMCache INFO:[0m Prefetch request completed (L1+L2): 55/55 retained keys (0 L1, 55 L2) in 3849.1 ms (external_request_id=chatcmpl-b5fd3700eaf46ed1-af50e702, prefetch_request_id=70) [3m(storage_manager.py:709:lmcache.v1.distributed.storage_manager)[0m
+[32;20m[2026-08-05 07:40:51,660] LMCache INFO:[0m Retrieved 14080 tokens in 0.031 seconds [3m(engine_driven_transfer.py:530:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:40:52,955] LMCache INFO:[0m Prefetch request completed (L1+L2): 55/55 retained keys (0 L1, 55 L2) in 5180.2 ms (external_request_id=chatcmpl-b2812c0161478fec-89e6c6d5, prefetch_request_id=71) [3m(storage_manager.py:709:lmcache.v1.distributed.storage_manager)[0m
+[32;20m[2026-08-05 07:40:52,995] LMCache INFO:[0m Retrieved 14080 tokens in 0.031 seconds [3m(engine_driven_transfer.py:530:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:40:55,595] LMCache INFO:[0m Prefetch request completed (L1+L2): 120/120 retained keys (0 L1, 120 L2) in 7690.1 ms (external_request_id=chatcmpl-958303875892f7d2-91c28f2a, prefetch_request_id=72) [3m(storage_manager.py:709:lmcache.v1.distributed.storage_manager)[0m
+[32;20m[2026-08-05 07:40:55,673] LMCache INFO:[0m Retrieved 30720 tokens in 0.065 seconds [3m(engine_driven_transfer.py:530:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:40:58,064] LMCache INFO:[0m Prefetch request completed (L1+L2): 120/120 retained keys (0 L1, 120 L2) in 10154.8 ms (external_request_id=chatcmpl-aa01c09d41cf289f-bff0675a, prefetch_request_id=73) [3m(storage_manager.py:709:lmcache.v1.distributed.storage_manager)[0m
+[32;20m[2026-08-05 07:40:58,143] LMCache INFO:[0m Retrieved 30720 tokens in 0.065 seconds [3m(engine_driven_transfer.py:530:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:41:00,709] LMCache INFO:[0m Prefetch request completed (L1+L2): 123/123 retained keys (0 L1, 123 L2) in 12795.1 ms (external_request_id=chatcmpl-a31a3ffafa96ad1f-87e7b0e8, prefetch_request_id=74) [3m(storage_manager.py:709:lmcache.v1.distributed.storage_manager)[0m
+[32;20m[2026-08-05 07:41:00,787] LMCache INFO:[0m Retrieved 31488 tokens in 0.066 seconds [3m(engine_driven_transfer.py:530:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:41:02,490] LMCache INFO:[0m Prefetch request completed (L1+L2): 120/120 retained keys (0 L1, 120 L2) in 14570.7 ms (external_request_id=chatcmpl-a65831ad74520523-b1e80566, prefetch_request_id=75) [3m(storage_manager.py:709:lmcache.v1.distributed.storage_manager)[0m
+[32;20m[2026-08-05 07:41:02,566] LMCache INFO:[0m Retrieved 30720 tokens in 0.064 seconds [3m(engine_driven_transfer.py:530:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:41:04,158] LMCache INFO:[0m Prefetch request completed (L1+L2): 120/120 retained keys (0 L1, 120 L2) in 16234.6 ms (external_request_id=chatcmpl-b386a4e8e57f3f95-bc6d1b48, prefetch_request_id=76) [3m(storage_manager.py:709:lmcache.v1.distributed.storage_manager)[0m
+[32;20m[2026-08-05 07:41:04,234] LMCache INFO:[0m Retrieved 30720 tokens in 0.064 seconds [3m(engine_driven_transfer.py:530:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:41:14,159] LMCache INFO:[0m Checking memory allocator consistency [3m(memory_management.py:1852:lmcache.v1.memory_management)[0m
+[32;20m[2026-08-05 07:41:14,160] LMCache INFO:[0m  - Total active allocations: 0 [3m(memory_management.py:1853:lmcache.v1.memory_management)[0m
+[32;20m[2026-08-05 07:41:14,160] LMCache INFO:[0m  - Total allocated size: 0.000000 MB [3m(memory_management.py:1854:lmcache.v1.memory_management)[0m
+[32;20m[2026-08-05 07:41:14,160] LMCache INFO:[0m  - Total free size: 16384.000000 MB [3m(memory_management.py:1861:lmcache.v1.memory_management)[0m
+[32;20m[2026-08-05 07:41:14,160] LMCache INFO:[0m L1Manager memcheck: total objects = 0, write-locked = 0, read-locked = 0 [3m(l1_manager.py:887:lmcache.v1.distributed.l1_manager)[0m
+[33;20m[2026-08-05 07:41:14,160] LMCache WARNING:[0m L1Manager: force-clearing all 0 objects (including locked ones). This may corrupt in-flight store/prefetch operations — use with caution. [3m(l1_manager.py:732:lmcache.v1.distributed.l1_manager)[0m
+[32;20m[2026-08-05 07:41:14,160] LMCache INFO:[0m L1Manager: cleared 0 objects, 0 remaining. [3m(l1_manager.py:750:lmcache.v1.distributed.l1_manager)[0m
+[32;20m[2026-08-05 07:41:14,160] LMCache INFO:[0m Checking memory allocator consistency [3m(memory_management.py:1852:lmcache.v1.memory_management)[0m
+[32;20m[2026-08-05 07:41:14,160] LMCache INFO:[0m  - Total active allocations: 0 [3m(memory_management.py:1853:lmcache.v1.memory_management)[0m
+[32;20m[2026-08-05 07:41:14,160] LMCache INFO:[0m  - Total allocated size: 0.000000 MB [3m(memory_management.py:1854:lmcache.v1.memory_management)[0m
+[32;20m[2026-08-05 07:41:14,160] LMCache INFO:[0m  - Total free size: 16384.000000 MB [3m(memory_management.py:1861:lmcache.v1.memory_management)[0m
+[32;20m[2026-08-05 07:41:14,160] LMCache INFO:[0m L1Manager memcheck: total objects = 0, write-locked = 0, read-locked = 0 [3m(l1_manager.py:887:lmcache.v1.distributed.l1_manager)[0m
+[32;20m[2026-08-05 07:41:14,160] LMCache INFO:[0m Cache cleared via HTTP API [3m(cache_api.py:184:lmcache.v1.multiprocess.http_apis.cache_api)[0m
+INFO:     10.0.0.4:50830 - "POST /cache/clear HTTP/1.1" 200 OK
+[32;20m[2026-08-05 07:41:14,333] LMCache INFO:[0m Stored 512 tokens in 0.003 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:41:15,243] LMCache INFO:[0m Stored 512 tokens in 0.003 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:41:16,123] LMCache INFO:[0m Stored 512 tokens in 0.003 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:41:17,009] LMCache INFO:[0m Stored 512 tokens in 0.002 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:41:17,891] LMCache INFO:[0m Stored 512 tokens in 0.003 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:41:18,776] LMCache INFO:[0m Stored 512 tokens in 0.003 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:41:19,667] LMCache INFO:[0m Stored 512 tokens in 0.002 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:41:20,526] LMCache INFO:[0m Stored 512 tokens in 0.002 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:41:21,415] LMCache INFO:[0m Stored 512 tokens in 0.002 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:41:22,303] LMCache INFO:[0m Stored 512 tokens in 0.003 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:41:23,194] LMCache INFO:[0m Stored 512 tokens in 0.003 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:41:24,082] LMCache INFO:[0m Stored 512 tokens in 0.003 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:41:24,967] LMCache INFO:[0m Stored 512 tokens in 0.002 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:41:25,856] LMCache INFO:[0m Stored 512 tokens in 0.003 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:41:26,708] LMCache INFO:[0m Stored 512 tokens in 0.002 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:41:27,595] LMCache INFO:[0m Stored 512 tokens in 0.003 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:41:28,483] LMCache INFO:[0m Stored 512 tokens in 0.002 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:41:29,365] LMCache INFO:[0m Stored 512 tokens in 0.002 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:41:30,249] LMCache INFO:[0m Stored 512 tokens in 0.002 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:41:31,134] LMCache INFO:[0m Stored 512 tokens in 0.003 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:41:32,027] LMCache INFO:[0m Stored 512 tokens in 0.003 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:41:32,952] LMCache INFO:[0m Stored 512 tokens in 0.002 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:41:33,781] LMCache INFO:[0m Stored 512 tokens in 0.003 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:41:34,674] LMCache INFO:[0m Stored 512 tokens in 0.003 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:41:35,568] LMCache INFO:[0m Stored 512 tokens in 0.003 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:41:36,494] LMCache INFO:[0m Stored 512 tokens in 0.003 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:41:37,322] LMCache INFO:[0m Stored 512 tokens in 0.003 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:41:38,218] LMCache INFO:[0m Stored 512 tokens in 0.003 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:41:39,112] LMCache INFO:[0m Stored 512 tokens in 0.002 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:41:39,968] LMCache INFO:[0m Stored 512 tokens in 0.003 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:41:40,853] LMCache INFO:[0m Stored 512 tokens in 0.002 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:41:41,742] LMCache INFO:[0m Stored 512 tokens in 0.003 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:41:42,637] LMCache INFO:[0m Stored 512 tokens in 0.003 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:41:43,532] LMCache INFO:[0m Stored 512 tokens in 0.003 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:41:44,396] LMCache INFO:[0m Stored 512 tokens in 0.003 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:41:45,323] LMCache INFO:[0m Stored 512 tokens in 0.003 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:41:46,177] LMCache INFO:[0m Stored 512 tokens in 0.003 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:41:47,037] LMCache INFO:[0m Stored 512 tokens in 0.003 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:41:47,940] LMCache INFO:[0m Stored 512 tokens in 0.002 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:41:48,809] LMCache INFO:[0m Stored 512 tokens in 0.003 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:41:49,702] LMCache INFO:[0m Stored 512 tokens in 0.003 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:41:50,575] LMCache INFO:[0m Stored 512 tokens in 0.003 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:41:51,478] LMCache INFO:[0m Stored 512 tokens in 0.003 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:41:52,374] LMCache INFO:[0m Stored 512 tokens in 0.003 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:41:53,251] LMCache INFO:[0m Stored 512 tokens in 0.003 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:41:54,137] LMCache INFO:[0m Stored 512 tokens in 0.002 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:41:55,014] LMCache INFO:[0m Stored 512 tokens in 0.002 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:41:58,495] LMCache INFO:[0m Stored 512 tokens in 0.003 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:41:58,758] LMCache INFO:[0m Prefetch request completed (L1+L2): 55/55 retained keys (0 L1, 55 L2) in 3238.0 ms (external_request_id=chatcmpl-b4d14523c1f4946c-9feb053d, prefetch_request_id=124) [3m(storage_manager.py:709:lmcache.v1.distributed.storage_manager)[0m
+[32;20m[2026-08-05 07:41:58,800] LMCache INFO:[0m Retrieved 14080 tokens in 0.030 seconds [3m(engine_driven_transfer.py:530:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:41:59,973] LMCache INFO:[0m Prefetch request completed (L1+L2): 55/55 retained keys (0 L1, 55 L2) in 4355.9 ms (external_request_id=chatcmpl-8431af31e9cc00af-afadb306, prefetch_request_id=125) [3m(storage_manager.py:709:lmcache.v1.distributed.storage_manager)[0m
+[32;20m[2026-08-05 07:42:00,016] LMCache INFO:[0m Retrieved 14080 tokens in 0.031 seconds [3m(engine_driven_transfer.py:530:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:42:01,097] LMCache INFO:[0m Prefetch request completed (L1+L2): 55/55 retained keys (0 L1, 55 L2) in 5476.4 ms (external_request_id=chatcmpl-9ee8635f42f8fe37-957b0db2, prefetch_request_id=126) [3m(storage_manager.py:709:lmcache.v1.distributed.storage_manager)[0m
+[32;20m[2026-08-05 07:42:01,138] LMCache INFO:[0m Retrieved 14080 tokens in 0.030 seconds [3m(engine_driven_transfer.py:530:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:42:03,755] LMCache INFO:[0m Prefetch request completed (L1+L2): 123/123 retained keys (0 L1, 123 L2) in 8128.8 ms (external_request_id=chatcmpl-a306b72c372fc600-a932ebe0, prefetch_request_id=127) [3m(storage_manager.py:709:lmcache.v1.distributed.storage_manager)[0m
+[32;20m[2026-08-05 07:42:03,842] LMCache INFO:[0m Retrieved 31488 tokens in 0.071 seconds [3m(engine_driven_transfer.py:530:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:42:06,488] LMCache INFO:[0m Prefetch request completed (L1+L2): 120/120 retained keys (0 L1, 120 L2) in 10857.4 ms (external_request_id=chatcmpl-ad75a4b84c95ceb7-b7790541, prefetch_request_id=128) [3m(storage_manager.py:709:lmcache.v1.distributed.storage_manager)[0m
+[32;20m[2026-08-05 07:42:06,568] LMCache INFO:[0m Retrieved 30720 tokens in 0.064 seconds [3m(engine_driven_transfer.py:530:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:42:08,983] LMCache INFO:[0m Stored 512 tokens in 0.002 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:42:08,985] LMCache INFO:[0m Prefetch request completed (L1+L2): 120/120 retained keys (0 L1, 120 L2) in 13349.9 ms (external_request_id=chatcmpl-bc06bb31909acfe0-93b04510, prefetch_request_id=129) [3m(storage_manager.py:709:lmcache.v1.distributed.storage_manager)[0m
+[32;20m[2026-08-05 07:42:09,066] LMCache INFO:[0m Retrieved 30720 tokens in 0.064 seconds [3m(engine_driven_transfer.py:530:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:42:09,104] LMCache INFO:[0m Stored 512 tokens in 0.002 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:42:09,271] LMCache INFO:[0m Stored 512 tokens in 0.003 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:42:09,275] LMCache INFO:[0m Stored 512 tokens in 0.002 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:42:09,279] LMCache INFO:[0m Stored 512 tokens in 0.002 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:42:09,282] LMCache INFO:[0m Stored 512 tokens in 0.002 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:42:09,286] LMCache INFO:[0m Stored 512 tokens in 0.002 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:42:09,289] LMCache INFO:[0m Stored 512 tokens in 0.002 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:42:10,605] LMCache INFO:[0m Prefetch request completed (L1+L2): 123/123 retained keys (0 L1, 123 L2) in 14966.4 ms (external_request_id=chatcmpl-92aa87be689f1b07-b27b6bf1, prefetch_request_id=130) [3m(storage_manager.py:709:lmcache.v1.distributed.storage_manager)[0m
+[32;20m[2026-08-05 07:42:10,682] LMCache INFO:[0m Retrieved 31488 tokens in 0.066 seconds [3m(engine_driven_transfer.py:530:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:42:11,499] LMCache INFO:[0m Stored 512 tokens in 0.002 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:42:11,565] LMCache INFO:[0m Stored 512 tokens in 0.002 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:42:11,733] LMCache INFO:[0m Stored 512 tokens in 0.002 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:42:11,736] LMCache INFO:[0m Stored 512 tokens in 0.002 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:42:11,740] LMCache INFO:[0m Stored 512 tokens in 0.002 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:42:11,744] LMCache INFO:[0m Stored 512 tokens in 0.002 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:42:11,747] LMCache INFO:[0m Stored 512 tokens in 0.002 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:42:11,750] LMCache INFO:[0m Stored 512 tokens in 0.002 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:42:13,828] LMCache INFO:[0m Stored 512 tokens in 0.003 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:42:13,955] LMCache INFO:[0m Stored 512 tokens in 0.002 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:42:13,959] LMCache INFO:[0m Stored 512 tokens in 0.002 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:42:13,962] LMCache INFO:[0m Stored 512 tokens in 0.002 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:42:25,033] LMCache INFO:[0m Checking memory allocator consistency [3m(memory_management.py:1852:lmcache.v1.memory_management)[0m
+[32;20m[2026-08-05 07:42:25,033] LMCache INFO:[0m  - Total active allocations: 136 [3m(memory_management.py:1853:lmcache.v1.memory_management)[0m
+[32;20m[2026-08-05 07:42:25,033] LMCache INFO:[0m  - Total allocated size: 1632.000000 MB [3m(memory_management.py:1854:lmcache.v1.memory_management)[0m
+[32;20m[2026-08-05 07:42:25,033] LMCache INFO:[0m  - Total free size: 14752.000000 MB [3m(memory_management.py:1861:lmcache.v1.memory_management)[0m
+[32;20m[2026-08-05 07:42:25,033] LMCache INFO:[0m L1Manager memcheck: total objects = 136, write-locked = 0, read-locked = 0 [3m(l1_manager.py:887:lmcache.v1.distributed.l1_manager)[0m
+[33;20m[2026-08-05 07:42:25,033] LMCache WARNING:[0m L1Manager: force-clearing all 136 objects (including locked ones). This may corrupt in-flight store/prefetch operations — use with caution. [3m(l1_manager.py:732:lmcache.v1.distributed.l1_manager)[0m
+[32;20m[2026-08-05 07:42:25,034] LMCache INFO:[0m L1Manager: cleared 136 objects, 0 remaining. [3m(l1_manager.py:750:lmcache.v1.distributed.l1_manager)[0m
+[32;20m[2026-08-05 07:42:25,034] LMCache INFO:[0m Checking memory allocator consistency [3m(memory_management.py:1852:lmcache.v1.memory_management)[0m
+[32;20m[2026-08-05 07:42:25,034] LMCache INFO:[0m  - Total active allocations: 0 [3m(memory_management.py:1853:lmcache.v1.memory_management)[0m
+[32;20m[2026-08-05 07:42:25,034] LMCache INFO:[0m  - Total allocated size: 0.000000 MB [3m(memory_management.py:1854:lmcache.v1.memory_management)[0m
+[32;20m[2026-08-05 07:42:25,034] LMCache INFO:[0m  - Total free size: 16384.000000 MB [3m(memory_management.py:1861:lmcache.v1.memory_management)[0m
+[32;20m[2026-08-05 07:42:25,035] LMCache INFO:[0m L1Manager memcheck: total objects = 0, write-locked = 0, read-locked = 0 [3m(l1_manager.py:887:lmcache.v1.distributed.l1_manager)[0m
+[32;20m[2026-08-05 07:42:25,035] LMCache INFO:[0m Cache cleared via HTTP API [3m(cache_api.py:184:lmcache.v1.multiprocess.http_apis.cache_api)[0m
+INFO:     10.0.0.4:36048 - "POST /cache/clear HTTP/1.1" 200 OK
+[32;20m[2026-08-05 07:42:58,225] LMCache INFO:[0m Stored 8192 tokens in 0.019 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:42:58,887] LMCache INFO:[0m Stored 5888 tokens in 0.015 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:42:59,483] LMCache INFO:[0m Stored 7936 tokens in 0.021 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:43:00,420] LMCache INFO:[0m Stored 8192 tokens in 0.020 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:43:01,715] LMCache INFO:[0m Stored 8192 tokens in 0.021 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:43:01,718] LMCache INFO:[0m Prefetch request completed (L1+L2): 120/120 retained keys (0 L1, 120 L2) in 4145.2 ms (external_request_id=chatcmpl-803ddd78d967be85-a376608e, prefetch_request_id=153) [3m(storage_manager.py:709:lmcache.v1.distributed.storage_manager)[0m
+[32;20m[2026-08-05 07:43:01,800] LMCache INFO:[0m Retrieved 30720 tokens in 0.067 seconds [3m(engine_driven_transfer.py:530:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:43:03,193] LMCache INFO:[0m Stored 7168 tokens in 0.019 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:43:05,550] LMCache INFO:[0m Prefetch request completed (L1+L2): 120/120 retained keys (0 L1, 120 L2) in 7972.2 ms (external_request_id=chatcmpl-8f327c2069f331fb-90df76d9, prefetch_request_id=154) [3m(storage_manager.py:709:lmcache.v1.distributed.storage_manager)[0m
+[32;20m[2026-08-05 07:43:05,626] LMCache INFO:[0m Retrieved 30720 tokens in 0.065 seconds [3m(engine_driven_transfer.py:530:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:43:37,909] LMCache INFO:[0m Checking memory allocator consistency [3m(memory_management.py:1852:lmcache.v1.memory_management)[0m
+[32;20m[2026-08-05 07:43:37,909] LMCache INFO:[0m  - Total active allocations: 178 [3m(memory_management.py:1853:lmcache.v1.memory_management)[0m
+[32;20m[2026-08-05 07:43:37,909] LMCache INFO:[0m  - Total allocated size: 2136.000000 MB [3m(memory_management.py:1854:lmcache.v1.memory_management)[0m
+[32;20m[2026-08-05 07:43:37,909] LMCache INFO:[0m  - Total free size: 14248.000000 MB [3m(memory_management.py:1861:lmcache.v1.memory_management)[0m
+[32;20m[2026-08-05 07:43:37,909] LMCache INFO:[0m L1Manager memcheck: total objects = 178, write-locked = 0, read-locked = 0 [3m(l1_manager.py:887:lmcache.v1.distributed.l1_manager)[0m
+[33;20m[2026-08-05 07:43:37,909] LMCache WARNING:[0m L1Manager: force-clearing all 178 objects (including locked ones). This may corrupt in-flight store/prefetch operations — use with caution. [3m(l1_manager.py:732:lmcache.v1.distributed.l1_manager)[0m
+[32;20m[2026-08-05 07:43:37,910] LMCache INFO:[0m L1Manager: cleared 178 objects, 0 remaining. [3m(l1_manager.py:750:lmcache.v1.distributed.l1_manager)[0m
+[32;20m[2026-08-05 07:43:37,910] LMCache INFO:[0m Checking memory allocator consistency [3m(memory_management.py:1852:lmcache.v1.memory_management)[0m
+[32;20m[2026-08-05 07:43:37,910] LMCache INFO:[0m  - Total active allocations: 0 [3m(memory_management.py:1853:lmcache.v1.memory_management)[0m
+[32;20m[2026-08-05 07:43:37,910] LMCache INFO:[0m  - Total allocated size: 0.000000 MB [3m(memory_management.py:1854:lmcache.v1.memory_management)[0m
+[32;20m[2026-08-05 07:43:37,910] LMCache INFO:[0m  - Total free size: 16384.000000 MB [3m(memory_management.py:1861:lmcache.v1.memory_management)[0m
+[32;20m[2026-08-05 07:43:37,911] LMCache INFO:[0m L1Manager memcheck: total objects = 0, write-locked = 0, read-locked = 0 [3m(l1_manager.py:887:lmcache.v1.distributed.l1_manager)[0m
+[32;20m[2026-08-05 07:43:37,911] LMCache INFO:[0m Cache cleared via HTTP API [3m(cache_api.py:184:lmcache.v1.multiprocess.http_apis.cache_api)[0m
+INFO:     10.0.0.4:33520 - "POST /cache/clear HTTP/1.1" 200 OK
+[32;20m[2026-08-05 07:43:38,083] LMCache INFO:[0m Stored 512 tokens in 0.003 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:43:39,878] LMCache INFO:[0m Stored 512 tokens in 0.003 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:43:41,637] LMCache INFO:[0m Stored 512 tokens in 0.003 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:43:43,400] LMCache INFO:[0m Stored 512 tokens in 0.003 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:43:45,176] LMCache INFO:[0m Stored 512 tokens in 0.003 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:43:46,949] LMCache INFO:[0m Stored 512 tokens in 0.003 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:43:48,702] LMCache INFO:[0m Stored 512 tokens in 0.003 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:43:50,469] LMCache INFO:[0m Stored 512 tokens in 0.003 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:43:52,227] LMCache INFO:[0m Stored 512 tokens in 0.003 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:43:54,001] LMCache INFO:[0m Stored 512 tokens in 0.003 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:43:55,778] LMCache INFO:[0m Stored 512 tokens in 0.003 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:43:57,549] LMCache INFO:[0m Stored 512 tokens in 0.003 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:43:59,358] LMCache INFO:[0m Stored 512 tokens in 0.003 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:44:01,069] LMCache INFO:[0m Stored 512 tokens in 0.003 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:44:02,843] LMCache INFO:[0m Stored 512 tokens in 0.003 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:44:04,621] LMCache INFO:[0m Stored 512 tokens in 0.003 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:44:06,399] LMCache INFO:[0m Stored 512 tokens in 0.003 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:44:08,145] LMCache INFO:[0m Stored 512 tokens in 0.003 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:44:09,947] LMCache INFO:[0m Stored 512 tokens in 0.003 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:44:11,692] LMCache INFO:[0m Stored 512 tokens in 0.003 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:44:13,439] LMCache INFO:[0m Stored 512 tokens in 0.003 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:44:15,216] LMCache INFO:[0m Stored 512 tokens in 0.003 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:44:16,989] LMCache INFO:[0m Stored 512 tokens in 0.003 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:44:18,767] LMCache INFO:[0m Stored 512 tokens in 0.003 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:44:20,518] LMCache INFO:[0m Stored 512 tokens in 0.003 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:44:22,295] LMCache INFO:[0m Stored 512 tokens in 0.003 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:44:26,154] LMCache INFO:[0m Prefetch request completed (L1+L2): 55/55 retained keys (0 L1, 55 L2) in 3820.1 ms (external_request_id=chatcmpl-9ad1497728950ab2-b8eff806, prefetch_request_id=182) [3m(storage_manager.py:709:lmcache.v1.distributed.storage_manager)[0m
+[32;20m[2026-08-05 07:44:26,194] LMCache INFO:[0m Retrieved 14080 tokens in 0.031 seconds [3m(engine_driven_transfer.py:530:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:44:29,910] LMCache INFO:[0m Prefetch request completed (L1+L2): 120/120 retained keys (0 L1, 120 L2) in 7443.0 ms (external_request_id=chatcmpl-8d1fe305e9c8ddb6-a66f24db, prefetch_request_id=183) [3m(storage_manager.py:709:lmcache.v1.distributed.storage_manager)[0m
+[32;20m[2026-08-05 07:44:29,993] LMCache INFO:[0m Retrieved 30720 tokens in 0.067 seconds [3m(engine_driven_transfer.py:530:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:44:31,613] LMCache INFO:[0m Prefetch request completed (L1+L2): 120/120 retained keys (0 L1, 120 L2) in 9140.4 ms (external_request_id=chatcmpl-86b8756850e2d37e-8d9ba583, prefetch_request_id=184) [3m(storage_manager.py:709:lmcache.v1.distributed.storage_manager)[0m
+[32;20m[2026-08-05 07:44:31,693] LMCache INFO:[0m Retrieved 30720 tokens in 0.064 seconds [3m(engine_driven_transfer.py:530:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:44:33,860] LMCache INFO:[0m Prefetch request completed (L1+L2): 123/123 retained keys (0 L1, 123 L2) in 11383.1 ms (external_request_id=chatcmpl-92884de247987a5d-9b99c3d3, prefetch_request_id=185) [3m(storage_manager.py:709:lmcache.v1.distributed.storage_manager)[0m
+[32;20m[2026-08-05 07:44:33,942] LMCache INFO:[0m Retrieved 31488 tokens in 0.066 seconds [3m(engine_driven_transfer.py:530:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:44:34,059] LMCache INFO:[0m Stored 512 tokens in 0.002 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:44:36,489] LMCache INFO:[0m Stored 512 tokens in 0.003 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:44:36,568] LMCache INFO:[0m Stored 512 tokens in 0.002 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:44:36,612] LMCache INFO:[0m Stored 512 tokens in 0.002 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:44:36,682] LMCache INFO:[0m Stored 512 tokens in 0.002 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:44:36,686] LMCache INFO:[0m Stored 512 tokens in 0.002 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:44:36,731] LMCache INFO:[0m Stored 512 tokens in 0.002 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:44:36,776] LMCache INFO:[0m Stored 512 tokens in 0.002 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:44:37,889] LMCache INFO:[0m Prefetch request completed (L1+L2): 120/120 retained keys (0 L1, 120 L2) in 15406.9 ms (external_request_id=chatcmpl-a7d74bee5134f8e9-81f6066f, prefetch_request_id=186) [3m(storage_manager.py:709:lmcache.v1.distributed.storage_manager)[0m
+[32;20m[2026-08-05 07:44:37,966] LMCache INFO:[0m Retrieved 30720 tokens in 0.064 seconds [3m(engine_driven_transfer.py:530:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:44:37,998] LMCache INFO:[0m Prefetch request completed (L1+L2): 123/123 retained keys (0 L1, 123 L2) in 15510.0 ms (external_request_id=chatcmpl-bb68c96cc1ee0791-aa1a8c6b, prefetch_request_id=187) [3m(storage_manager.py:709:lmcache.v1.distributed.storage_manager)[0m
+[32;20m[2026-08-05 07:44:38,074] LMCache INFO:[0m Retrieved 31488 tokens in 0.065 seconds [3m(engine_driven_transfer.py:530:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:44:38,269] LMCache INFO:[0m Stored 512 tokens in 0.003 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:44:39,950] LMCache INFO:[0m Stored 512 tokens in 0.003 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:44:41,746] LMCache INFO:[0m Stored 512 tokens in 0.003 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:44:52,826] LMCache INFO:[0m Checking memory allocator consistency [3m(memory_management.py:1852:lmcache.v1.memory_management)[0m
+[32;20m[2026-08-05 07:44:52,826] LMCache INFO:[0m  - Total active allocations: 74 [3m(memory_management.py:1853:lmcache.v1.memory_management)[0m
+[32;20m[2026-08-05 07:44:52,826] LMCache INFO:[0m  - Total allocated size: 888.000000 MB [3m(memory_management.py:1854:lmcache.v1.memory_management)[0m
+[32;20m[2026-08-05 07:44:52,826] LMCache INFO:[0m  - Total free size: 15496.000000 MB [3m(memory_management.py:1861:lmcache.v1.memory_management)[0m
+[32;20m[2026-08-05 07:44:52,826] LMCache INFO:[0m L1Manager memcheck: total objects = 74, write-locked = 0, read-locked = 0 [3m(l1_manager.py:887:lmcache.v1.distributed.l1_manager)[0m
+[33;20m[2026-08-05 07:44:52,826] LMCache WARNING:[0m L1Manager: force-clearing all 74 objects (including locked ones). This may corrupt in-flight store/prefetch operations — use with caution. [3m(l1_manager.py:732:lmcache.v1.distributed.l1_manager)[0m
+[32;20m[2026-08-05 07:44:52,826] LMCache INFO:[0m L1Manager: cleared 74 objects, 0 remaining. [3m(l1_manager.py:750:lmcache.v1.distributed.l1_manager)[0m
+[32;20m[2026-08-05 07:44:52,827] LMCache INFO:[0m Checking memory allocator consistency [3m(memory_management.py:1852:lmcache.v1.memory_management)[0m
+[32;20m[2026-08-05 07:44:52,827] LMCache INFO:[0m  - Total active allocations: 0 [3m(memory_management.py:1853:lmcache.v1.memory_management)[0m
+[32;20m[2026-08-05 07:44:52,827] LMCache INFO:[0m  - Total allocated size: 0.000000 MB [3m(memory_management.py:1854:lmcache.v1.memory_management)[0m
+[32;20m[2026-08-05 07:44:52,827] LMCache INFO:[0m  - Total free size: 16384.000000 MB [3m(memory_management.py:1861:lmcache.v1.memory_management)[0m
+[32;20m[2026-08-05 07:44:52,827] LMCache INFO:[0m L1Manager memcheck: total objects = 0, write-locked = 0, read-locked = 0 [3m(l1_manager.py:887:lmcache.v1.distributed.l1_manager)[0m
+[32;20m[2026-08-05 07:44:52,827] LMCache INFO:[0m Cache cleared via HTTP API [3m(cache_api.py:184:lmcache.v1.multiprocess.http_apis.cache_api)[0m
+INFO:     10.0.0.4:59302 - "POST /cache/clear HTTP/1.1" 200 OK
+[32;20m[2026-08-05 07:44:52,999] LMCache INFO:[0m Stored 512 tokens in 0.003 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:44:54,777] LMCache INFO:[0m Stored 512 tokens in 0.003 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:44:56,558] LMCache INFO:[0m Stored 512 tokens in 0.003 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:44:58,311] LMCache INFO:[0m Stored 512 tokens in 0.003 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:45:00,097] LMCache INFO:[0m Stored 512 tokens in 0.003 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:45:01,848] LMCache INFO:[0m Stored 512 tokens in 0.003 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:45:03,628] LMCache INFO:[0m Stored 512 tokens in 0.003 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:45:05,225] LMCache INFO:[0m Stored 7936 tokens in 0.020 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:45:06,161] LMCache INFO:[0m Stored 8192 tokens in 0.020 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:45:07,455] LMCache INFO:[0m Stored 8192 tokens in 0.021 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:45:08,787] LMCache INFO:[0m Stored 1792 tokens in 0.008 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:45:08,808] LMCache INFO:[0m Stored 6400 tokens in 0.017 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:45:09,481] LMCache INFO:[0m Stored 8192 tokens in 0.020 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:45:10,509] LMCache INFO:[0m Stored 8192 tokens in 0.020 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:45:11,887] LMCache INFO:[0m Stored 8192 tokens in 0.021 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:45:12,987] LMCache INFO:[0m Stored 3840 tokens in 0.012 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:45:13,004] LMCache INFO:[0m Stored 4352 tokens in 0.012 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:45:13,762] LMCache INFO:[0m Stored 8192 tokens in 0.020 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:45:14,876] LMCache INFO:[0m Stored 8192 tokens in 0.021 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:45:16,343] LMCache INFO:[0m Stored 8192 tokens in 0.020 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:45:17,216] LMCache INFO:[0m Stored 5632 tokens in 0.016 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:45:17,229] LMCache INFO:[0m Stored 2304 tokens in 0.008 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:45:18,078] LMCache INFO:[0m Stored 8192 tokens in 0.020 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:45:19,279] LMCache INFO:[0m Stored 8192 tokens in 0.021 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:45:20,835] LMCache INFO:[0m Stored 8192 tokens in 0.021 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:45:21,480] LMCache INFO:[0m Stored 7680 tokens in 0.020 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:45:21,488] LMCache INFO:[0m Stored 512 tokens in 0.004 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:45:22,423] LMCache INFO:[0m Stored 8192 tokens in 0.021 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:45:23,713] LMCache INFO:[0m Stored 8192 tokens in 0.021 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:45:25,030] LMCache INFO:[0m Stored 6656 tokens in 0.018 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:45:25,245] LMCache INFO:[0m Stored 512 tokens in 0.003 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:45:25,249] LMCache INFO:[0m Stored 512 tokens in 0.002 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:45:25,253] LMCache INFO:[0m Stored 512 tokens in 0.002 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:45:25,256] LMCache INFO:[0m Stored 512 tokens in 0.002 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:45:25,259] LMCache INFO:[0m Stored 512 tokens in 0.002 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:45:25,262] LMCache INFO:[0m Stored 512 tokens in 0.002 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:45:25,265] LMCache INFO:[0m Stored 512 tokens in 0.002 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:45:26,126] LMCache INFO:[0m Stored 512 tokens in 0.003 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:45:27,479] LMCache INFO:[0m Stored 512 tokens in 0.003 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:45:27,597] LMCache INFO:[0m Stored 512 tokens in 0.002 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:45:27,601] LMCache INFO:[0m Stored 512 tokens in 0.002 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:45:27,605] LMCache INFO:[0m Stored 512 tokens in 0.002 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:45:27,608] LMCache INFO:[0m Stored 512 tokens in 0.002 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:45:28,382] LMCache INFO:[0m Stored 512 tokens in 0.003 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:45:30,130] LMCache INFO:[0m Stored 512 tokens in 0.003 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:45:31,906] LMCache INFO:[0m Stored 512 tokens in 0.003 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:45:33,686] LMCache INFO:[0m Stored 512 tokens in 0.003 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:45:44,821] LMCache INFO:[0m Checking memory allocator consistency [3m(memory_management.py:1852:lmcache.v1.memory_management)[0m
+[32;20m[2026-08-05 07:45:44,821] LMCache INFO:[0m  - Total active allocations: 648 [3m(memory_management.py:1853:lmcache.v1.memory_management)[0m
+[32;20m[2026-08-05 07:45:44,821] LMCache INFO:[0m  - Total allocated size: 7776.000000 MB [3m(memory_management.py:1854:lmcache.v1.memory_management)[0m
+[32;20m[2026-08-05 07:45:44,821] LMCache INFO:[0m  - Total free size: 8608.000000 MB [3m(memory_management.py:1861:lmcache.v1.memory_management)[0m
+[32;20m[2026-08-05 07:45:44,821] LMCache INFO:[0m L1Manager memcheck: total objects = 648, write-locked = 0, read-locked = 0 [3m(l1_manager.py:887:lmcache.v1.distributed.l1_manager)[0m
+[33;20m[2026-08-05 07:45:44,822] LMCache WARNING:[0m L1Manager: force-clearing all 648 objects (including locked ones). This may corrupt in-flight store/prefetch operations — use with caution. [3m(l1_manager.py:732:lmcache.v1.distributed.l1_manager)[0m
+[32;20m[2026-08-05 07:45:44,823] LMCache INFO:[0m L1Manager: cleared 648 objects, 0 remaining. [3m(l1_manager.py:750:lmcache.v1.distributed.l1_manager)[0m
+[32;20m[2026-08-05 07:45:44,824] LMCache INFO:[0m Checking memory allocator consistency [3m(memory_management.py:1852:lmcache.v1.memory_management)[0m
+[32;20m[2026-08-05 07:45:44,824] LMCache INFO:[0m  - Total active allocations: 0 [3m(memory_management.py:1853:lmcache.v1.memory_management)[0m
+[32;20m[2026-08-05 07:45:44,824] LMCache INFO:[0m  - Total allocated size: 0.000000 MB [3m(memory_management.py:1854:lmcache.v1.memory_management)[0m
+[32;20m[2026-08-05 07:45:44,825] LMCache INFO:[0m  - Total free size: 16384.000000 MB [3m(memory_management.py:1861:lmcache.v1.memory_management)[0m
+[32;20m[2026-08-05 07:45:44,825] LMCache INFO:[0m L1Manager memcheck: total objects = 0, write-locked = 0, read-locked = 0 [3m(l1_manager.py:887:lmcache.v1.distributed.l1_manager)[0m
+[32;20m[2026-08-05 07:45:44,825] LMCache INFO:[0m Cache cleared via HTTP API [3m(cache_api.py:184:lmcache.v1.multiprocess.http_apis.cache_api)[0m
+INFO:     10.0.0.4:45712 - "POST /cache/clear HTTP/1.1" 200 OK
+[32;20m[2026-08-05 07:45:44,996] LMCache INFO:[0m Stored 512 tokens in 0.003 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:45:45,911] LMCache INFO:[0m Stored 512 tokens in 0.003 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:45:46,778] LMCache INFO:[0m Stored 512 tokens in 0.003 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:45:47,665] LMCache INFO:[0m Stored 512 tokens in 0.003 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:45:48,561] LMCache INFO:[0m Stored 512 tokens in 0.003 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:45:49,426] LMCache INFO:[0m Stored 512 tokens in 0.003 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:45:50,317] LMCache INFO:[0m Stored 512 tokens in 0.003 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:45:51,187] LMCache INFO:[0m Stored 512 tokens in 0.003 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:45:52,089] LMCache INFO:[0m Stored 512 tokens in 0.003 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:45:52,986] LMCache INFO:[0m Stored 512 tokens in 0.003 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:45:53,842] LMCache INFO:[0m Stored 512 tokens in 0.003 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:45:54,737] LMCache INFO:[0m Stored 512 tokens in 0.003 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:45:55,635] LMCache INFO:[0m Stored 512 tokens in 0.003 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:45:56,503] LMCache INFO:[0m Stored 512 tokens in 0.003 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:45:57,400] LMCache INFO:[0m Stored 512 tokens in 0.003 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:45:58,270] LMCache INFO:[0m Stored 512 tokens in 0.003 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:45:59,172] LMCache INFO:[0m Stored 512 tokens in 0.003 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:46:00,046] LMCache INFO:[0m Stored 512 tokens in 0.003 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:46:00,920] LMCache INFO:[0m Stored 512 tokens in 0.003 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:46:01,794] LMCache INFO:[0m Stored 512 tokens in 0.003 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:46:02,704] LMCache INFO:[0m Stored 512 tokens in 0.003 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:46:03,579] LMCache INFO:[0m Stored 512 tokens in 0.003 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:46:04,458] LMCache INFO:[0m Stored 512 tokens in 0.003 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:46:05,333] LMCache INFO:[0m Stored 512 tokens in 0.003 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:46:06,265] LMCache INFO:[0m Stored 512 tokens in 0.003 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:46:07,103] LMCache INFO:[0m Stored 512 tokens in 0.003 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:46:08,000] LMCache INFO:[0m Stored 512 tokens in 0.003 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:46:08,866] LMCache INFO:[0m Stored 512 tokens in 0.003 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:46:09,763] LMCache INFO:[0m Stored 512 tokens in 0.003 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:46:10,651] LMCache INFO:[0m Stored 512 tokens in 0.003 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:46:11,543] LMCache INFO:[0m Stored 512 tokens in 0.004 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:46:12,413] LMCache INFO:[0m Stored 512 tokens in 0.003 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:46:13,312] LMCache INFO:[0m Stored 512 tokens in 0.003 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:46:14,171] LMCache INFO:[0m Stored 512 tokens in 0.003 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:46:15,059] LMCache INFO:[0m Stored 512 tokens in 0.003 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:46:15,957] LMCache INFO:[0m Stored 512 tokens in 0.003 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:46:16,827] LMCache INFO:[0m Stored 512 tokens in 0.003 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:46:17,723] LMCache INFO:[0m Stored 512 tokens in 0.003 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:46:18,591] LMCache INFO:[0m Stored 512 tokens in 0.003 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:46:19,491] LMCache INFO:[0m Stored 512 tokens in 0.003 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:46:20,359] LMCache INFO:[0m Stored 512 tokens in 0.003 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:46:21,283] LMCache INFO:[0m Stored 512 tokens in 0.003 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:46:22,177] LMCache INFO:[0m Stored 512 tokens in 0.003 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:46:23,007] LMCache INFO:[0m Stored 512 tokens in 0.003 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:46:23,900] LMCache INFO:[0m Stored 512 tokens in 0.003 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:46:24,795] LMCache INFO:[0m Stored 512 tokens in 0.003 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:46:27,679] LMCache INFO:[0m Stored 512 tokens in 0.003 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:46:31,687] LMCache INFO:[0m Prefetch request completed (L1+L2): 120/120 retained keys (0 L1, 120 L2) in 6032.4 ms (external_request_id=chatcmpl-b521cb08ba22bd1c-a423eedf, prefetch_request_id=274) [3m(storage_manager.py:709:lmcache.v1.distributed.storage_manager)[0m
+[32;20m[2026-08-05 07:46:31,771] LMCache INFO:[0m Retrieved 30720 tokens in 0.068 seconds [3m(engine_driven_transfer.py:530:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:46:32,354] LMCache INFO:[0m Stored 512 tokens in 0.003 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:46:35,358] LMCache INFO:[0m Prefetch request completed (L1+L2): 120/120 retained keys (0 L1, 120 L2) in 9697.8 ms (external_request_id=chatcmpl-88ecf38b4d63c0ef-86f40ce7, prefetch_request_id=275) [3m(storage_manager.py:709:lmcache.v1.distributed.storage_manager)[0m
+[32;20m[2026-08-05 07:46:35,440] LMCache INFO:[0m Retrieved 30720 tokens in 0.064 seconds [3m(engine_driven_transfer.py:530:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:46:36,367] LMCache INFO:[0m Prefetch request completed (L1+L2): 123/123 retained keys (0 L1, 123 L2) in 10701.6 ms (external_request_id=chatcmpl-ba32f1ac7f799d01-a977bb51, prefetch_request_id=276) [3m(storage_manager.py:709:lmcache.v1.distributed.storage_manager)[0m
+[32;20m[2026-08-05 07:46:36,454] LMCache INFO:[0m Retrieved 31488 tokens in 0.066 seconds [3m(engine_driven_transfer.py:530:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:46:39,152] LMCache INFO:[0m Prefetch request completed (L1+L2): 123/123 retained keys (0 L1, 123 L2) in 13481.9 ms (external_request_id=chatcmpl-90cead4189e6bdae-b37bab28, prefetch_request_id=277) [3m(storage_manager.py:709:lmcache.v1.distributed.storage_manager)[0m
+[32;20m[2026-08-05 07:46:39,235] LMCache INFO:[0m Retrieved 31488 tokens in 0.066 seconds [3m(engine_driven_transfer.py:530:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:46:39,607] LMCache INFO:[0m Stored 512 tokens in 0.004 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:46:41,861] LMCache INFO:[0m Prefetch request completed (L1+L2): 123/123 retained keys (0 L1, 123 L2) in 16184.5 ms (external_request_id=chatcmpl-8d43f0b26578eef6-a0cd7e78, prefetch_request_id=278) [3m(storage_manager.py:709:lmcache.v1.distributed.storage_manager)[0m
+[32;20m[2026-08-05 07:46:41,943] LMCache INFO:[0m Retrieved 31488 tokens in 0.066 seconds [3m(engine_driven_transfer.py:530:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:46:42,289] LMCache INFO:[0m Stored 512 tokens in 0.003 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:46:42,356] LMCache INFO:[0m Stored 512 tokens in 0.002 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:46:42,471] LMCache INFO:[0m Stored 512 tokens in 0.003 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:46:42,475] LMCache INFO:[0m Stored 512 tokens in 0.002 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:46:42,479] LMCache INFO:[0m Stored 512 tokens in 0.002 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:46:42,568] LMCache INFO:[0m Stored 512 tokens in 0.003 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:46:42,571] LMCache INFO:[0m Stored 512 tokens in 0.002 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:46:42,872] LMCache INFO:[0m Stored 512 tokens in 0.003 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:46:44,274] LMCache INFO:[0m Prefetch request completed (L1+L2): 123/123 retained keys (0 L1, 123 L2) in 18592.2 ms (external_request_id=chatcmpl-93188ad18fcda3c1-b992ddc7, prefetch_request_id=279) [3m(storage_manager.py:709:lmcache.v1.distributed.storage_manager)[0m
+[32;20m[2026-08-05 07:46:44,351] LMCache INFO:[0m Retrieved 31488 tokens in 0.066 seconds [3m(engine_driven_transfer.py:530:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:46:44,958] LMCache INFO:[0m Stored 512 tokens in 0.002 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:46:45,026] LMCache INFO:[0m Stored 512 tokens in 0.003 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:46:45,186] LMCache INFO:[0m Stored 512 tokens in 0.002 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:46:45,190] LMCache INFO:[0m Stored 512 tokens in 0.002 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:46:45,193] LMCache INFO:[0m Stored 512 tokens in 0.002 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:46:45,197] LMCache INFO:[0m Stored 512 tokens in 0.002 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:46:45,200] LMCache INFO:[0m Stored 512 tokens in 0.002 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:46:45,579] LMCache INFO:[0m Stored 512 tokens in 0.003 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:46:47,320] LMCache INFO:[0m Stored 512 tokens in 0.003 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:46:47,368] LMCache INFO:[0m Stored 512 tokens in 0.003 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:46:47,486] LMCache INFO:[0m Stored 512 tokens in 0.003 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:46:47,490] LMCache INFO:[0m Stored 512 tokens in 0.002 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:46:47,494] LMCache INFO:[0m Stored 512 tokens in 0.002 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:46:47,497] LMCache INFO:[0m Stored 512 tokens in 0.002 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:46:47,807] LMCache INFO:[0m Stored 512 tokens in 0.002 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:46:58,965] LMCache INFO:[0m Checking memory allocator consistency [3m(memory_management.py:1852:lmcache.v1.memory_management)[0m
+[32;20m[2026-08-05 07:46:58,965] LMCache INFO:[0m  - Total active allocations: 144 [3m(memory_management.py:1853:lmcache.v1.memory_management)[0m
+[32;20m[2026-08-05 07:46:58,965] LMCache INFO:[0m  - Total allocated size: 1728.000000 MB [3m(memory_management.py:1854:lmcache.v1.memory_management)[0m
+[32;20m[2026-08-05 07:46:58,965] LMCache INFO:[0m  - Total free size: 14656.000000 MB [3m(memory_management.py:1861:lmcache.v1.memory_management)[0m
+[32;20m[2026-08-05 07:46:58,965] LMCache INFO:[0m L1Manager memcheck: total objects = 144, write-locked = 0, read-locked = 0 [3m(l1_manager.py:887:lmcache.v1.distributed.l1_manager)[0m
+[33;20m[2026-08-05 07:46:58,965] LMCache WARNING:[0m L1Manager: force-clearing all 144 objects (including locked ones). This may corrupt in-flight store/prefetch operations — use with caution. [3m(l1_manager.py:732:lmcache.v1.distributed.l1_manager)[0m
+[32;20m[2026-08-05 07:46:58,966] LMCache INFO:[0m L1Manager: cleared 144 objects, 0 remaining. [3m(l1_manager.py:750:lmcache.v1.distributed.l1_manager)[0m
+[32;20m[2026-08-05 07:46:58,966] LMCache INFO:[0m Checking memory allocator consistency [3m(memory_management.py:1852:lmcache.v1.memory_management)[0m
+[32;20m[2026-08-05 07:46:58,966] LMCache INFO:[0m  - Total active allocations: 0 [3m(memory_management.py:1853:lmcache.v1.memory_management)[0m
+[32;20m[2026-08-05 07:46:58,966] LMCache INFO:[0m  - Total allocated size: 0.000000 MB [3m(memory_management.py:1854:lmcache.v1.memory_management)[0m
+[32;20m[2026-08-05 07:46:58,967] LMCache INFO:[0m  - Total free size: 16384.000000 MB [3m(memory_management.py:1861:lmcache.v1.memory_management)[0m
+[32;20m[2026-08-05 07:46:58,967] LMCache INFO:[0m L1Manager memcheck: total objects = 0, write-locked = 0, read-locked = 0 [3m(l1_manager.py:887:lmcache.v1.distributed.l1_manager)[0m
+[32;20m[2026-08-05 07:46:58,967] LMCache INFO:[0m Cache cleared via HTTP API [3m(cache_api.py:184:lmcache.v1.multiprocess.http_apis.cache_api)[0m
+INFO:     10.0.0.4:50218 - "POST /cache/clear HTTP/1.1" 200 OK
+[32;20m[2026-08-05 07:46:59,138] LMCache INFO:[0m Stored 512 tokens in 0.003 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:47:00,929] LMCache INFO:[0m Stored 512 tokens in 0.003 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:47:02,935] LMCache INFO:[0m Prefetch request completed (L1+L2): 2/2 retained keys (0 L1, 2 L2) in 312.0 ms (external_request_id=chatcmpl-99fa8d1a19fe47e3-92738b96, prefetch_request_id=308) [3m(storage_manager.py:709:lmcache.v1.distributed.storage_manager)[0m
+[32;20m[2026-08-05 07:47:02,939] LMCache INFO:[0m Retrieved 512 tokens in 0.003 seconds [3m(engine_driven_transfer.py:530:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:47:04,694] LMCache INFO:[0m Prefetch request completed (L1+L2): 2/2 retained keys (0 L1, 2 L2) in 318.5 ms (external_request_id=chatcmpl-91fe93ddec47cf06-8c740b39, prefetch_request_id=309) [3m(storage_manager.py:709:lmcache.v1.distributed.storage_manager)[0m
+[32;20m[2026-08-05 07:47:04,700] LMCache INFO:[0m Retrieved 512 tokens in 0.003 seconds [3m(engine_driven_transfer.py:530:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:47:06,485] LMCache INFO:[0m Prefetch request completed (L1+L2): 2/2 retained keys (0 L1, 2 L2) in 322.2 ms (external_request_id=chatcmpl-ad17d2ffe423d32f-bdedec4f, prefetch_request_id=310) [3m(storage_manager.py:709:lmcache.v1.distributed.storage_manager)[0m
+[32;20m[2026-08-05 07:47:06,490] LMCache INFO:[0m Retrieved 512 tokens in 0.003 seconds [3m(engine_driven_transfer.py:530:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:47:08,265] LMCache INFO:[0m Prefetch request completed (L1+L2): 2/2 retained keys (0 L1, 2 L2) in 350.5 ms (external_request_id=chatcmpl-874ef99e37101641-a537a2b8, prefetch_request_id=311) [3m(storage_manager.py:709:lmcache.v1.distributed.storage_manager)[0m
+[32;20m[2026-08-05 07:47:08,270] LMCache INFO:[0m Retrieved 512 tokens in 0.003 seconds [3m(engine_driven_transfer.py:530:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:47:10,015] LMCache INFO:[0m Prefetch request completed (L1+L2): 2/2 retained keys (0 L1, 2 L2) in 321.0 ms (external_request_id=chatcmpl-a98edc0c7f1c8fd8-86dbd3df, prefetch_request_id=312) [3m(storage_manager.py:709:lmcache.v1.distributed.storage_manager)[0m
+[32;20m[2026-08-05 07:47:10,020] LMCache INFO:[0m Retrieved 512 tokens in 0.003 seconds [3m(engine_driven_transfer.py:530:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:47:11,793] LMCache INFO:[0m Prefetch request completed (L1+L2): 2/2 retained keys (0 L1, 2 L2) in 349.9 ms (external_request_id=chatcmpl-99adbb64d5a9ccb7-82b6dc80, prefetch_request_id=313) [3m(storage_manager.py:709:lmcache.v1.distributed.storage_manager)[0m
+[32;20m[2026-08-05 07:47:11,798] LMCache INFO:[0m Retrieved 512 tokens in 0.003 seconds [3m(engine_driven_transfer.py:530:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:47:13,553] LMCache INFO:[0m Prefetch request completed (L1+L2): 2/2 retained keys (0 L1, 2 L2) in 317.1 ms (external_request_id=chatcmpl-9542487762d6110b-8515d4bf, prefetch_request_id=314) [3m(storage_manager.py:709:lmcache.v1.distributed.storage_manager)[0m
+[32;20m[2026-08-05 07:47:13,558] LMCache INFO:[0m Retrieved 512 tokens in 0.002 seconds [3m(engine_driven_transfer.py:530:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:47:15,340] LMCache INFO:[0m Prefetch request completed (L1+L2): 2/2 retained keys (0 L1, 2 L2) in 351.1 ms (external_request_id=chatcmpl-b8ede6346b26edff-a32451b1, prefetch_request_id=315) [3m(storage_manager.py:709:lmcache.v1.distributed.storage_manager)[0m
+[32;20m[2026-08-05 07:47:15,345] LMCache INFO:[0m Retrieved 512 tokens in 0.003 seconds [3m(engine_driven_transfer.py:530:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:47:17,066] LMCache INFO:[0m Prefetch request completed (L1+L2): 2/2 retained keys (0 L1, 2 L2) in 319.9 ms (external_request_id=chatcmpl-8e0518a250b22060-95f25568, prefetch_request_id=316) [3m(storage_manager.py:709:lmcache.v1.distributed.storage_manager)[0m
+[32;20m[2026-08-05 07:47:17,072] LMCache INFO:[0m Retrieved 512 tokens in 0.002 seconds [3m(engine_driven_transfer.py:530:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:47:18,874] LMCache INFO:[0m Prefetch request completed (L1+L2): 2/2 retained keys (0 L1, 2 L2) in 348.6 ms (external_request_id=chatcmpl-a032a0952f3bca14-b6b959d8, prefetch_request_id=317) [3m(storage_manager.py:709:lmcache.v1.distributed.storage_manager)[0m
+[32;20m[2026-08-05 07:47:18,880] LMCache INFO:[0m Retrieved 512 tokens in 0.002 seconds [3m(engine_driven_transfer.py:530:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:47:20,686] LMCache INFO:[0m Prefetch request completed (L1+L2): 2/2 retained keys (0 L1, 2 L2) in 379.9 ms (external_request_id=chatcmpl-a37c0a1493d304ab-be59f61b, prefetch_request_id=318) [3m(storage_manager.py:709:lmcache.v1.distributed.storage_manager)[0m
+[32;20m[2026-08-05 07:47:20,691] LMCache INFO:[0m Retrieved 512 tokens in 0.002 seconds [3m(engine_driven_transfer.py:530:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:47:22,386] LMCache INFO:[0m Prefetch request completed (L1+L2): 2/2 retained keys (0 L1, 2 L2) in 317.0 ms (external_request_id=chatcmpl-a89a7ec9918220c8-8a603c16, prefetch_request_id=319) [3m(storage_manager.py:709:lmcache.v1.distributed.storage_manager)[0m
+[32;20m[2026-08-05 07:47:22,391] LMCache INFO:[0m Retrieved 512 tokens in 0.002 seconds [3m(engine_driven_transfer.py:530:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:47:24,154] LMCache INFO:[0m Prefetch request completed (L1+L2): 2/2 retained keys (0 L1, 2 L2) in 324.2 ms (external_request_id=chatcmpl-95d57b6a10b5d386-83461d06, prefetch_request_id=320) [3m(storage_manager.py:709:lmcache.v1.distributed.storage_manager)[0m
+[32;20m[2026-08-05 07:47:24,159] LMCache INFO:[0m Retrieved 512 tokens in 0.003 seconds [3m(engine_driven_transfer.py:530:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:47:25,906] LMCache INFO:[0m Prefetch request completed (L1+L2): 2/2 retained keys (0 L1, 2 L2) in 325.5 ms (external_request_id=chatcmpl-8a1d4e4e45be6d1f-a3415485, prefetch_request_id=321) [3m(storage_manager.py:709:lmcache.v1.distributed.storage_manager)[0m
+[32;20m[2026-08-05 07:47:25,912] LMCache INFO:[0m Retrieved 512 tokens in 0.003 seconds [3m(engine_driven_transfer.py:530:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:47:27,688] LMCache INFO:[0m Prefetch request completed (L1+L2): 2/2 retained keys (0 L1, 2 L2) in 324.0 ms (external_request_id=chatcmpl-b4bb030fe0084723-b4f9d0b7, prefetch_request_id=322) [3m(storage_manager.py:709:lmcache.v1.distributed.storage_manager)[0m
+[32;20m[2026-08-05 07:47:27,693] LMCache INFO:[0m Retrieved 512 tokens in 0.003 seconds [3m(engine_driven_transfer.py:530:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:47:29,449] LMCache INFO:[0m Prefetch request completed (L1+L2): 2/2 retained keys (0 L1, 2 L2) in 320.7 ms (external_request_id=chatcmpl-a7aa3444c86e726b-8ae75a7c, prefetch_request_id=323) [3m(storage_manager.py:709:lmcache.v1.distributed.storage_manager)[0m
+[32;20m[2026-08-05 07:47:29,455] LMCache INFO:[0m Retrieved 512 tokens in 0.003 seconds [3m(engine_driven_transfer.py:530:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:47:31,231] LMCache INFO:[0m Prefetch request completed (L1+L2): 2/2 retained keys (0 L1, 2 L2) in 318.6 ms (external_request_id=chatcmpl-8e10f36a59293969-89fd58ba, prefetch_request_id=324) [3m(storage_manager.py:709:lmcache.v1.distributed.storage_manager)[0m
+[32;20m[2026-08-05 07:47:31,236] LMCache INFO:[0m Retrieved 512 tokens in 0.003 seconds [3m(engine_driven_transfer.py:530:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:47:33,046] LMCache INFO:[0m Prefetch request completed (L1+L2): 2/2 retained keys (0 L1, 2 L2) in 379.4 ms (external_request_id=chatcmpl-9b6729f98d399950-b470caf2, prefetch_request_id=325) [3m(storage_manager.py:709:lmcache.v1.distributed.storage_manager)[0m
+[32;20m[2026-08-05 07:47:33,051] LMCache INFO:[0m Retrieved 512 tokens in 0.002 seconds [3m(engine_driven_transfer.py:530:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:47:34,756] LMCache INFO:[0m Prefetch request completed (L1+L2): 2/2 retained keys (0 L1, 2 L2) in 318.5 ms (external_request_id=chatcmpl-98bbab93d5f67079-89ff4305, prefetch_request_id=326) [3m(storage_manager.py:709:lmcache.v1.distributed.storage_manager)[0m
+[32;20m[2026-08-05 07:47:34,761] LMCache INFO:[0m Retrieved 512 tokens in 0.002 seconds [3m(engine_driven_transfer.py:530:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:47:35,579] LMCache INFO:[0m Stored 7936 tokens in 0.018 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:47:36,349] LMCache INFO:[0m Stored 2048 tokens in 0.007 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:47:36,367] LMCache INFO:[0m Stored 6144 tokens in 0.015 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:47:37,050] LMCache INFO:[0m Stored 8192 tokens in 0.019 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:47:37,754] LMCache INFO:[0m Stored 4352 tokens in 0.011 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:47:37,767] LMCache INFO:[0m Stored 3840 tokens in 0.010 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:47:38,549] LMCache INFO:[0m Stored 8192 tokens in 0.019 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:47:38,763] LMCache INFO:[0m Stored 1536 tokens in 0.006 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:47:41,204] LMCache INFO:[0m Prefetch request completed (L1+L2): 120/120 retained keys (0 L1, 120 L2) in 6264.6 ms (external_request_id=chatcmpl-93ac483e0b8ee830-83ff9f80, prefetch_request_id=330) [3m(storage_manager.py:709:lmcache.v1.distributed.storage_manager)[0m
+[32;20m[2026-08-05 07:47:41,286] LMCache INFO:[0m Retrieved 30720 tokens in 0.067 seconds [3m(engine_driven_transfer.py:530:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:47:44,227] LMCache INFO:[0m Prefetch request completed (L1+L2): 120/120 retained keys (0 L1, 120 L2) in 9282.4 ms (external_request_id=chatcmpl-92ecca26e29bdfb4-aee1ea12, prefetch_request_id=331) [3m(storage_manager.py:709:lmcache.v1.distributed.storage_manager)[0m
+[32;20m[2026-08-05 07:47:44,306] LMCache INFO:[0m Retrieved 30720 tokens in 0.065 seconds [3m(engine_driven_transfer.py:530:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:47:45,445] LMCache INFO:[0m Prefetch request completed (L1+L2): 123/123 retained keys (0 L1, 123 L2) in 10495.6 ms (external_request_id=chatcmpl-a3f1a6791e36b0f9-a83c3b6a, prefetch_request_id=332) [3m(storage_manager.py:709:lmcache.v1.distributed.storage_manager)[0m
+[32;20m[2026-08-05 07:47:45,526] LMCache INFO:[0m Retrieved 31488 tokens in 0.066 seconds [3m(engine_driven_transfer.py:530:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:47:48,409] LMCache INFO:[0m Prefetch request completed (L1+L2): 123/123 retained keys (0 L1, 123 L2) in 13453.8 ms (external_request_id=chatcmpl-82a90bba5ffffa34-a499a972, prefetch_request_id=333) [3m(storage_manager.py:709:lmcache.v1.distributed.storage_manager)[0m
+[32;20m[2026-08-05 07:47:48,491] LMCache INFO:[0m Retrieved 31488 tokens in 0.067 seconds [3m(engine_driven_transfer.py:530:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:47:50,776] LMCache INFO:[0m Prefetch request completed (L1+L2): 123/123 retained keys (0 L1, 123 L2) in 15816.5 ms (external_request_id=chatcmpl-bd9846d59d394cd6-b10d6354, prefetch_request_id=334) [3m(storage_manager.py:709:lmcache.v1.distributed.storage_manager)[0m
+[32;20m[2026-08-05 07:47:50,857] LMCache INFO:[0m Retrieved 31488 tokens in 0.066 seconds [3m(engine_driven_transfer.py:530:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:47:52,369] LMCache INFO:[0m Prefetch request completed (L1+L2): 2/2 retained keys (0 L1, 2 L2) in 13812.4 ms (external_request_id=chatcmpl-bc0c198d751dade3-847478a3, prefetch_request_id=336) [3m(storage_manager.py:709:lmcache.v1.distributed.storage_manager)[0m
+[32;20m[2026-08-05 07:47:52,377] LMCache INFO:[0m Retrieved 512 tokens in 0.003 seconds [3m(engine_driven_transfer.py:530:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:47:52,383] LMCache INFO:[0m Prefetch request completed (L1+L2): 2/2 retained keys (0 L1, 2 L2) in 13827.2 ms (external_request_id=chatcmpl-841e399b106edc48-b73ba730, prefetch_request_id=335) [3m(storage_manager.py:709:lmcache.v1.distributed.storage_manager)[0m
+[32;20m[2026-08-05 07:47:52,390] LMCache INFO:[0m Retrieved 512 tokens in 0.002 seconds [3m(engine_driven_transfer.py:530:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:47:52,422] LMCache INFO:[0m Prefetch request completed (L1+L2): 2/2 retained keys (0 L1, 2 L2) in 12686.9 ms (external_request_id=chatcmpl-adc4acd2bdbd1a15-98baeee2, prefetch_request_id=337) [3m(storage_manager.py:709:lmcache.v1.distributed.storage_manager)[0m
+[32;20m[2026-08-05 07:47:52,428] LMCache INFO:[0m Retrieved 512 tokens in 0.002 seconds [3m(engine_driven_transfer.py:530:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:47:52,459] LMCache INFO:[0m Prefetch request completed (L1+L2): 2/2 retained keys (0 L1, 2 L2) in 10942.7 ms (external_request_id=chatcmpl-948f7c9bdfd12cbd-932025aa, prefetch_request_id=338) [3m(storage_manager.py:709:lmcache.v1.distributed.storage_manager)[0m
+[32;20m[2026-08-05 07:47:52,466] LMCache INFO:[0m Retrieved 512 tokens in 0.002 seconds [3m(engine_driven_transfer.py:530:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:47:52,530] LMCache INFO:[0m Prefetch request completed (L1+L2): 2/2 retained keys (0 L1, 2 L2) in 9267.9 ms (external_request_id=chatcmpl-9067f366dc1ccedd-8ae89cea, prefetch_request_id=339) [3m(storage_manager.py:709:lmcache.v1.distributed.storage_manager)[0m
+[32;20m[2026-08-05 07:47:52,531] LMCache INFO:[0m Prefetch request completed (L1+L2): 2/2 retained keys (0 L1, 2 L2) in 7492.8 ms (external_request_id=chatcmpl-81bf7df5b3bf2f29-956ea98c, prefetch_request_id=340) [3m(storage_manager.py:709:lmcache.v1.distributed.storage_manager)[0m
+[32;20m[2026-08-05 07:47:52,536] LMCache INFO:[0m Retrieved 512 tokens in 0.002 seconds [3m(engine_driven_transfer.py:530:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:47:52,539] LMCache INFO:[0m Retrieved 512 tokens in 0.002 seconds [3m(engine_driven_transfer.py:530:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:47:52,636] LMCache INFO:[0m Prefetch request completed (L1+L2): 2/2 retained keys (0 L1, 2 L2) in 5840.5 ms (external_request_id=chatcmpl-890fdbc41a9f5402-8411f4d6, prefetch_request_id=341) [3m(storage_manager.py:709:lmcache.v1.distributed.storage_manager)[0m
+[32;20m[2026-08-05 07:47:52,638] LMCache INFO:[0m Prefetch request completed (L1+L2): 2/2 retained keys (0 L1, 2 L2) in 4060.1 ms (external_request_id=chatcmpl-a81dd492f4ae6263-a36751aa, prefetch_request_id=342) [3m(storage_manager.py:709:lmcache.v1.distributed.storage_manager)[0m
+[32;20m[2026-08-05 07:47:52,643] LMCache INFO:[0m Retrieved 512 tokens in 0.003 seconds [3m(engine_driven_transfer.py:530:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:47:52,647] LMCache INFO:[0m Retrieved 512 tokens in 0.002 seconds [3m(engine_driven_transfer.py:530:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:47:54,867] LMCache INFO:[0m Prefetch request completed (L1+L2): 2/2 retained keys (0 L1, 2 L2) in 324.4 ms (external_request_id=chatcmpl-bf27c901765f0b30-89299a6a, prefetch_request_id=343) [3m(storage_manager.py:709:lmcache.v1.distributed.storage_manager)[0m
+[32;20m[2026-08-05 07:47:54,871] LMCache INFO:[0m Retrieved 512 tokens in 0.002 seconds [3m(engine_driven_transfer.py:530:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:47:54,970] LMCache INFO:[0m Prefetch request completed (L1+L2): 2/2 retained keys (0 L1, 2 L2) in 359.6 ms (external_request_id=chatcmpl-ba2f1e9aed72507a-be47c39a, prefetch_request_id=344) [3m(storage_manager.py:709:lmcache.v1.distributed.storage_manager)[0m
+[32;20m[2026-08-05 07:47:54,974] LMCache INFO:[0m Retrieved 512 tokens in 0.002 seconds [3m(engine_driven_transfer.py:530:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:48:06,214] LMCache INFO:[0m Checking memory allocator consistency [3m(memory_management.py:1852:lmcache.v1.memory_management)[0m
+[32;20m[2026-08-05 07:48:06,215] LMCache INFO:[0m  - Total active allocations: 169 [3m(memory_management.py:1853:lmcache.v1.memory_management)[0m
+[32;20m[2026-08-05 07:48:06,215] LMCache INFO:[0m  - Total allocated size: 2028.000000 MB [3m(memory_management.py:1854:lmcache.v1.memory_management)[0m
+[32;20m[2026-08-05 07:48:06,215] LMCache INFO:[0m  - Total free size: 14356.000000 MB [3m(memory_management.py:1861:lmcache.v1.memory_management)[0m
+[32;20m[2026-08-05 07:48:06,215] LMCache INFO:[0m L1Manager memcheck: total objects = 169, write-locked = 0, read-locked = 0 [3m(l1_manager.py:887:lmcache.v1.distributed.l1_manager)[0m
+[33;20m[2026-08-05 07:48:06,215] LMCache WARNING:[0m L1Manager: force-clearing all 169 objects (including locked ones). This may corrupt in-flight store/prefetch operations — use with caution. [3m(l1_manager.py:732:lmcache.v1.distributed.l1_manager)[0m
+[32;20m[2026-08-05 07:48:06,216] LMCache INFO:[0m L1Manager: cleared 169 objects, 0 remaining. [3m(l1_manager.py:750:lmcache.v1.distributed.l1_manager)[0m
+[32;20m[2026-08-05 07:48:06,216] LMCache INFO:[0m Checking memory allocator consistency [3m(memory_management.py:1852:lmcache.v1.memory_management)[0m
+[32;20m[2026-08-05 07:48:06,216] LMCache INFO:[0m  - Total active allocations: 0 [3m(memory_management.py:1853:lmcache.v1.memory_management)[0m
+[32;20m[2026-08-05 07:48:06,216] LMCache INFO:[0m  - Total allocated size: 0.000000 MB [3m(memory_management.py:1854:lmcache.v1.memory_management)[0m
+[32;20m[2026-08-05 07:48:06,216] LMCache INFO:[0m  - Total free size: 16384.000000 MB [3m(memory_management.py:1861:lmcache.v1.memory_management)[0m
+[32;20m[2026-08-05 07:48:06,216] LMCache INFO:[0m L1Manager memcheck: total objects = 0, write-locked = 0, read-locked = 0 [3m(l1_manager.py:887:lmcache.v1.distributed.l1_manager)[0m
+[32;20m[2026-08-05 07:48:06,217] LMCache INFO:[0m Cache cleared via HTTP API [3m(cache_api.py:184:lmcache.v1.multiprocess.http_apis.cache_api)[0m
+INFO:     10.0.0.4:38048 - "POST /cache/clear HTTP/1.1" 200 OK
+[32;20m[2026-08-05 07:48:06,388] LMCache INFO:[0m Stored 512 tokens in 0.003 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:48:08,175] LMCache INFO:[0m Stored 512 tokens in 0.003 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:48:09,937] LMCache INFO:[0m Stored 512 tokens in 0.003 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:48:11,698] LMCache INFO:[0m Stored 512 tokens in 0.003 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:48:13,481] LMCache INFO:[0m Stored 512 tokens in 0.003 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:48:15,247] LMCache INFO:[0m Stored 512 tokens in 0.003 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:48:16,997] LMCache INFO:[0m Stored 512 tokens in 0.003 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:48:18,778] LMCache INFO:[0m Stored 512 tokens in 0.003 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:48:20,554] LMCache INFO:[0m Stored 512 tokens in 0.003 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:48:22,311] LMCache INFO:[0m Stored 512 tokens in 0.003 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:48:24,095] LMCache INFO:[0m Stored 512 tokens in 0.003 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:48:25,847] LMCache INFO:[0m Stored 512 tokens in 0.003 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:48:27,625] LMCache INFO:[0m Stored 512 tokens in 0.003 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:48:29,375] LMCache INFO:[0m Stored 512 tokens in 0.003 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:48:31,153] LMCache INFO:[0m Stored 512 tokens in 0.003 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:48:32,936] LMCache INFO:[0m Stored 512 tokens in 0.003 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:48:34,722] LMCache INFO:[0m Stored 512 tokens in 0.003 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:48:36,459] LMCache INFO:[0m Stored 512 tokens in 0.003 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:48:38,266] LMCache INFO:[0m Stored 512 tokens in 0.003 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:48:40,510] LMCache INFO:[0m Stored 7936 tokens in 0.019 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:48:41,447] LMCache INFO:[0m Stored 8192 tokens in 0.020 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:48:42,737] LMCache INFO:[0m Stored 8192 tokens in 0.020 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:48:43,978] LMCache INFO:[0m Stored 6400 tokens in 0.017 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:48:44,130] LMCache INFO:[0m Prefetch request completed (L1+L2): 120/120 retained keys (0 L1, 120 L2) in 4961.2 ms (external_request_id=chatcmpl-af51c8f5d12dcd3c-bd1a101c, prefetch_request_id=364) [3m(storage_manager.py:709:lmcache.v1.distributed.storage_manager)[0m
+[32;20m[2026-08-05 07:48:44,211] LMCache INFO:[0m Retrieved 30720 tokens in 0.066 seconds [3m(engine_driven_transfer.py:530:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:48:46,644] LMCache INFO:[0m Prefetch request completed (L1+L2): 123/123 retained keys (0 L1, 123 L2) in 7464.1 ms (external_request_id=chatcmpl-9f37cf53c932ac1d-a686975f, prefetch_request_id=366) [3m(storage_manager.py:709:lmcache.v1.distributed.storage_manager)[0m
+[32;20m[2026-08-05 07:48:46,723] LMCache INFO:[0m Retrieved 31488 tokens in 0.066 seconds [3m(engine_driven_transfer.py:530:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:48:49,139] LMCache INFO:[0m Prefetch request completed (L1+L2): 123/123 retained keys (0 L1, 123 L2) in 9952.0 ms (external_request_id=chatcmpl-a8aff7b031fef90b-ba604977, prefetch_request_id=367) [3m(storage_manager.py:709:lmcache.v1.distributed.storage_manager)[0m
+[32;20m[2026-08-05 07:48:49,217] LMCache INFO:[0m Retrieved 31488 tokens in 0.066 seconds [3m(engine_driven_transfer.py:530:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:48:49,902] LMCache INFO:[0m Stored 512 tokens in 0.002 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:48:49,964] LMCache INFO:[0m Stored 512 tokens in 0.002 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:48:50,542] LMCache INFO:[0m Stored 512 tokens in 0.002 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:48:50,587] LMCache INFO:[0m Stored 512 tokens in 0.002 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:48:50,655] LMCache INFO:[0m Stored 512 tokens in 0.002 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:48:50,659] LMCache INFO:[0m Stored 512 tokens in 0.002 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:48:50,865] LMCache INFO:[0m Stored 512 tokens in 0.002 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:48:52,371] LMCache INFO:[0m Stored 512 tokens in 0.003 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:48:54,120] LMCache INFO:[0m Stored 512 tokens in 0.003 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:48:55,899] LMCache INFO:[0m Stored 512 tokens in 0.003 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:48:57,664] LMCache INFO:[0m Stored 512 tokens in 0.003 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:48:59,444] LMCache INFO:[0m Stored 512 tokens in 0.003 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:49:01,196] LMCache INFO:[0m Stored 512 tokens in 0.003 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:49:02,977] LMCache INFO:[0m Stored 512 tokens in 0.003 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:49:04,735] LMCache INFO:[0m Stored 512 tokens in 0.003 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:49:06,496] LMCache INFO:[0m Stored 512 tokens in 0.003 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:49:08,258] LMCache INFO:[0m Stored 512 tokens in 0.003 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:49:10,052] LMCache INFO:[0m Stored 512 tokens in 0.003 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:49:11,812] LMCache INFO:[0m Stored 512 tokens in 0.003 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:49:13,577] LMCache INFO:[0m Stored 512 tokens in 0.003 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:49:15,351] LMCache INFO:[0m Stored 512 tokens in 0.003 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:49:26,550] LMCache INFO:[0m Checking memory allocator consistency [3m(memory_management.py:1852:lmcache.v1.memory_management)[0m
+[32;20m[2026-08-05 07:49:26,550] LMCache INFO:[0m  - Total active allocations: 200 [3m(memory_management.py:1853:lmcache.v1.memory_management)[0m
+[32;20m[2026-08-05 07:49:26,551] LMCache INFO:[0m  - Total allocated size: 2400.000000 MB [3m(memory_management.py:1854:lmcache.v1.memory_management)[0m
+[32;20m[2026-08-05 07:49:26,551] LMCache INFO:[0m  - Total free size: 13984.000000 MB [3m(memory_management.py:1861:lmcache.v1.memory_management)[0m
+[32;20m[2026-08-05 07:49:26,551] LMCache INFO:[0m L1Manager memcheck: total objects = 200, write-locked = 0, read-locked = 0 [3m(l1_manager.py:887:lmcache.v1.distributed.l1_manager)[0m
+[33;20m[2026-08-05 07:49:26,551] LMCache WARNING:[0m L1Manager: force-clearing all 200 objects (including locked ones). This may corrupt in-flight store/prefetch operations — use with caution. [3m(l1_manager.py:732:lmcache.v1.distributed.l1_manager)[0m
+[32;20m[2026-08-05 07:49:26,551] LMCache INFO:[0m L1Manager: cleared 200 objects, 0 remaining. [3m(l1_manager.py:750:lmcache.v1.distributed.l1_manager)[0m
+[32;20m[2026-08-05 07:49:26,552] LMCache INFO:[0m Checking memory allocator consistency [3m(memory_management.py:1852:lmcache.v1.memory_management)[0m
+[32;20m[2026-08-05 07:49:26,552] LMCache INFO:[0m  - Total active allocations: 0 [3m(memory_management.py:1853:lmcache.v1.memory_management)[0m
+[32;20m[2026-08-05 07:49:26,552] LMCache INFO:[0m  - Total allocated size: 0.000000 MB [3m(memory_management.py:1854:lmcache.v1.memory_management)[0m
+[32;20m[2026-08-05 07:49:26,552] LMCache INFO:[0m  - Total free size: 16384.000000 MB [3m(memory_management.py:1861:lmcache.v1.memory_management)[0m
+[32;20m[2026-08-05 07:49:26,552] LMCache INFO:[0m L1Manager memcheck: total objects = 0, write-locked = 0, read-locked = 0 [3m(l1_manager.py:887:lmcache.v1.distributed.l1_manager)[0m
+[32;20m[2026-08-05 07:49:26,553] LMCache INFO:[0m Cache cleared via HTTP API [3m(cache_api.py:184:lmcache.v1.multiprocess.http_apis.cache_api)[0m
+INFO:     10.0.0.4:53806 - "POST /cache/clear HTTP/1.1" 200 OK
+[32;20m[2026-08-05 07:49:26,730] LMCache INFO:[0m Stored 512 tokens in 0.003 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:49:28,512] LMCache INFO:[0m Stored 512 tokens in 0.003 seconds [3m(engine_driven_transfer.py:471:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:49:30,523] LMCache INFO:[0m Prefetch request completed (L1+L2): 2/2 retained keys (0 L1, 2 L2) in 331.4 ms (external_request_id=chatcmpl-bebe264128945efb-83af95a0, prefetch_request_id=391) [3m(storage_manager.py:709:lmcache.v1.distributed.storage_manager)[0m
+[32;20m[2026-08-05 07:49:30,528] LMCache INFO:[0m Retrieved 512 tokens in 0.002 seconds [3m(engine_driven_transfer.py:530:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:49:32,315] LMCache INFO:[0m Prefetch request completed (L1+L2): 2/2 retained keys (0 L1, 2 L2) in 325.5 ms (external_request_id=chatcmpl-bf96b9f35527cfca-a64b6564, prefetch_request_id=392) [3m(storage_manager.py:709:lmcache.v1.distributed.storage_manager)[0m
+[32;20m[2026-08-05 07:49:32,320] LMCache INFO:[0m Retrieved 512 tokens in 0.003 seconds [3m(engine_driven_transfer.py:530:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:49:34,094] LMCache INFO:[0m Prefetch request completed (L1+L2): 2/2 retained keys (0 L1, 2 L2) in 351.8 ms (external_request_id=chatcmpl-9e341c40abd75ee6-bc74b002, prefetch_request_id=393) [3m(storage_manager.py:709:lmcache.v1.distributed.storage_manager)[0m
+[32;20m[2026-08-05 07:49:34,099] LMCache INFO:[0m Retrieved 512 tokens in 0.002 seconds [3m(engine_driven_transfer.py:530:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:49:35,825] LMCache INFO:[0m Prefetch request completed (L1+L2): 2/2 retained keys (0 L1, 2 L2) in 320.2 ms (external_request_id=chatcmpl-8f9414a940da34a5-8dfb5376, prefetch_request_id=394) [3m(storage_manager.py:709:lmcache.v1.distributed.storage_manager)[0m
+[32;20m[2026-08-05 07:49:35,830] LMCache INFO:[0m Retrieved 512 tokens in 0.002 seconds [3m(engine_driven_transfer.py:530:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:49:37,630] LMCache INFO:[0m Prefetch request completed (L1+L2): 2/2 retained keys (0 L1, 2 L2) in 356.1 ms (external_request_id=chatcmpl-80739188b14f474a-a8e9eaed, prefetch_request_id=395) [3m(storage_manager.py:709:lmcache.v1.distributed.storage_manager)[0m
+[32;20m[2026-08-05 07:49:37,636] LMCache INFO:[0m Retrieved 512 tokens in 0.003 seconds [3m(engine_driven_transfer.py:530:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:49:39,421] LMCache INFO:[0m Prefetch request completed (L1+L2): 2/2 retained keys (0 L1, 2 L2) in 385.3 ms (external_request_id=chatcmpl-b5b66ad86d914101-a7612c85, prefetch_request_id=396) [3m(storage_manager.py:709:lmcache.v1.distributed.storage_manager)[0m
+[32;20m[2026-08-05 07:49:39,426] LMCache INFO:[0m Retrieved 512 tokens in 0.003 seconds [3m(engine_driven_transfer.py:530:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:49:41,165] LMCache INFO:[0m Prefetch request completed (L1+L2): 2/2 retained keys (0 L1, 2 L2) in 349.8 ms (external_request_id=chatcmpl-a3445786456ec8a1-a36a9428, prefetch_request_id=397) [3m(storage_manager.py:709:lmcache.v1.distributed.storage_manager)[0m
+[32;20m[2026-08-05 07:49:41,171] LMCache INFO:[0m Retrieved 512 tokens in 0.003 seconds [3m(engine_driven_transfer.py:530:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:49:42,963] LMCache INFO:[0m Prefetch request completed (L1+L2): 2/2 retained keys (0 L1, 2 L2) in 399.4 ms (external_request_id=chatcmpl-82a8e0510fa65f00-b87d2ec6, prefetch_request_id=398) [3m(storage_manager.py:709:lmcache.v1.distributed.storage_manager)[0m
+[32;20m[2026-08-05 07:49:42,969] LMCache INFO:[0m Retrieved 512 tokens in 0.003 seconds [3m(engine_driven_transfer.py:530:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:49:44,709] LMCache INFO:[0m Prefetch request completed (L1+L2): 2/2 retained keys (0 L1, 2 L2) in 357.5 ms (external_request_id=chatcmpl-8cbc7c5030c2e3f9-be3cca76, prefetch_request_id=399) [3m(storage_manager.py:709:lmcache.v1.distributed.storage_manager)[0m
+[32;20m[2026-08-05 07:49:44,714] LMCache INFO:[0m Retrieved 512 tokens in 0.003 seconds [3m(engine_driven_transfer.py:530:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:49:46,473] LMCache INFO:[0m Prefetch request completed (L1+L2): 2/2 retained keys (0 L1, 2 L2) in 372.6 ms (external_request_id=chatcmpl-a15340206e4b4ec7-9fb5dfb9, prefetch_request_id=400) [3m(storage_manager.py:709:lmcache.v1.distributed.storage_manager)[0m
+[32;20m[2026-08-05 07:49:46,479] LMCache INFO:[0m Retrieved 512 tokens in 0.003 seconds [3m(engine_driven_transfer.py:530:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:49:48,199] LMCache INFO:[0m Prefetch request completed (L1+L2): 2/2 retained keys (0 L1, 2 L2) in 327.3 ms (external_request_id=chatcmpl-9ec0b623d859a62e-93bd67ef, prefetch_request_id=401) [3m(storage_manager.py:709:lmcache.v1.distributed.storage_manager)[0m
+[32;20m[2026-08-05 07:49:48,204] LMCache INFO:[0m Retrieved 512 tokens in 0.002 seconds [3m(engine_driven_transfer.py:530:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:49:50,000] LMCache INFO:[0m Prefetch request completed (L1+L2): 2/2 retained keys (0 L1, 2 L2) in 338.6 ms (external_request_id=chatcmpl-bbc27df1d62a21ab-b90d8de1, prefetch_request_id=402) [3m(storage_manager.py:709:lmcache.v1.distributed.storage_manager)[0m
+[32;20m[2026-08-05 07:49:50,005] LMCache INFO:[0m Retrieved 512 tokens in 0.003 seconds [3m(engine_driven_transfer.py:530:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:49:51,735] LMCache INFO:[0m Prefetch request completed (L1+L2): 2/2 retained keys (0 L1, 2 L2) in 327.8 ms (external_request_id=chatcmpl-81761222fe7067d3-8b3de182, prefetch_request_id=403) [3m(storage_manager.py:709:lmcache.v1.distributed.storage_manager)[0m
+[32;20m[2026-08-05 07:49:51,740] LMCache INFO:[0m Retrieved 512 tokens in 0.003 seconds [3m(engine_driven_transfer.py:530:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:49:53,504] LMCache INFO:[0m Prefetch request completed (L1+L2): 2/2 retained keys (0 L1, 2 L2) in 309.9 ms (external_request_id=chatcmpl-a99ed58efe172886-921f6001, prefetch_request_id=404) [3m(storage_manager.py:709:lmcache.v1.distributed.storage_manager)[0m
+[32;20m[2026-08-05 07:49:53,509] LMCache INFO:[0m Retrieved 512 tokens in 0.003 seconds [3m(engine_driven_transfer.py:530:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:49:55,279] LMCache INFO:[0m Prefetch request completed (L1+L2): 2/2 retained keys (0 L1, 2 L2) in 330.2 ms (external_request_id=chatcmpl-b847100558e7403c-a75257f2, prefetch_request_id=405) [3m(storage_manager.py:709:lmcache.v1.distributed.storage_manager)[0m
+[32;20m[2026-08-05 07:49:55,285] LMCache INFO:[0m Retrieved 512 tokens in 0.003 seconds [3m(engine_driven_transfer.py:530:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:49:57,069] LMCache INFO:[0m Prefetch request completed (L1+L2): 2/2 retained keys (0 L1, 2 L2) in 337.1 ms (external_request_id=chatcmpl-a1279e950862aa72-9d85dda6, prefetch_request_id=406) [3m(storage_manager.py:709:lmcache.v1.distributed.storage_manager)[0m
+[32;20m[2026-08-05 07:49:57,075] LMCache INFO:[0m Retrieved 512 tokens in 0.003 seconds [3m(engine_driven_transfer.py:530:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:49:58,848] LMCache INFO:[0m Prefetch request completed (L1+L2): 2/2 retained keys (0 L1, 2 L2) in 355.7 ms (external_request_id=chatcmpl-b6ce16df7fe6cd14-a52b4173, prefetch_request_id=407) [3m(storage_manager.py:709:lmcache.v1.distributed.storage_manager)[0m
+[32;20m[2026-08-05 07:49:58,853] LMCache INFO:[0m Retrieved 512 tokens in 0.003 seconds [3m(engine_driven_transfer.py:530:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:50:00,590] LMCache INFO:[0m Prefetch request completed (L1+L2): 2/2 retained keys (0 L1, 2 L2) in 324.9 ms (external_request_id=chatcmpl-bbe63944a018278f-baeb7f04, prefetch_request_id=408) [3m(storage_manager.py:709:lmcache.v1.distributed.storage_manager)[0m
+[32;20m[2026-08-05 07:50:00,595] LMCache INFO:[0m Retrieved 512 tokens in 0.002 seconds [3m(engine_driven_transfer.py:530:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:50:02,390] LMCache INFO:[0m Prefetch request completed (L1+L2): 2/2 retained keys (0 L1, 2 L2) in 356.5 ms (external_request_id=chatcmpl-9f372e8bfcbce1e7-958505cf, prefetch_request_id=409) [3m(storage_manager.py:709:lmcache.v1.distributed.storage_manager)[0m
+[32;20m[2026-08-05 07:50:02,395] LMCache INFO:[0m Retrieved 512 tokens in 0.002 seconds [3m(engine_driven_transfer.py:530:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:50:04,152] LMCache INFO:[0m Prefetch request completed (L1+L2): 2/2 retained keys (0 L1, 2 L2) in 351.7 ms (external_request_id=chatcmpl-9a190db3b5df99e4-893e726f, prefetch_request_id=410) [3m(storage_manager.py:709:lmcache.v1.distributed.storage_manager)[0m
+[32;20m[2026-08-05 07:50:04,158] LMCache INFO:[0m Retrieved 512 tokens in 0.003 seconds [3m(engine_driven_transfer.py:530:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:50:05,910] LMCache INFO:[0m Prefetch request completed (L1+L2): 2/2 retained keys (0 L1, 2 L2) in 352.1 ms (external_request_id=chatcmpl-832f33903b77513d-b31e27f5, prefetch_request_id=411) [3m(storage_manager.py:709:lmcache.v1.distributed.storage_manager)[0m
+[32;20m[2026-08-05 07:50:05,915] LMCache INFO:[0m Retrieved 512 tokens in 0.003 seconds [3m(engine_driven_transfer.py:530:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:50:07,697] LMCache INFO:[0m Prefetch request completed (L1+L2): 2/2 retained keys (0 L1, 2 L2) in 383.0 ms (external_request_id=chatcmpl-909aa3596dea9759-84a645ae, prefetch_request_id=412) [3m(storage_manager.py:709:lmcache.v1.distributed.storage_manager)[0m
+[32;20m[2026-08-05 07:50:07,702] LMCache INFO:[0m Retrieved 512 tokens in 0.003 seconds [3m(engine_driven_transfer.py:530:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:50:12,013] LMCache INFO:[0m Prefetch request completed (L1+L2): 55/55 retained keys (0 L1, 55 L2) in 3869.5 ms (external_request_id=chatcmpl-ad5c8b7685e64eee-b8e7031a, prefetch_request_id=413) [3m(storage_manager.py:709:lmcache.v1.distributed.storage_manager)[0m
+[32;20m[2026-08-05 07:50:12,054] LMCache INFO:[0m Retrieved 14080 tokens in 0.031 seconds [3m(engine_driven_transfer.py:530:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:50:12,782] LMCache INFO:[0m Prefetch request completed (L1+L2): 55/55 retained keys (0 L1, 55 L2) in 4600.8 ms (external_request_id=chatcmpl-b2e7ffcd217b075d-9cedd83b, prefetch_request_id=414) [3m(storage_manager.py:709:lmcache.v1.distributed.storage_manager)[0m
+[32;20m[2026-08-05 07:50:12,824] LMCache INFO:[0m Retrieved 14080 tokens in 0.030 seconds [3m(engine_driven_transfer.py:530:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:50:14,142] LMCache INFO:[0m Prefetch request completed (L1+L2): 55/55 retained keys (0 L1, 55 L2) in 5865.1 ms (external_request_id=chatcmpl-9a4ec116ae396f9c-8f18cd15, prefetch_request_id=415) [3m(storage_manager.py:709:lmcache.v1.distributed.storage_manager)[0m
+[32;20m[2026-08-05 07:50:14,183] LMCache INFO:[0m Retrieved 14080 tokens in 0.031 seconds [3m(engine_driven_transfer.py:530:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:50:18,691] LMCache INFO:[0m Prefetch request completed (L1+L2): 120/120 retained keys (0 L1, 120 L2) in 10409.3 ms (external_request_id=chatcmpl-b4786fa2bd56666a-9ced73ee, prefetch_request_id=416) [3m(storage_manager.py:709:lmcache.v1.distributed.storage_manager)[0m
+[32;20m[2026-08-05 07:50:18,772] LMCache INFO:[0m Retrieved 30720 tokens in 0.066 seconds [3m(engine_driven_transfer.py:530:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:50:19,075] LMCache INFO:[0m Prefetch request completed (L1+L2): 123/123 retained keys (0 L1, 123 L2) in 10788.4 ms (external_request_id=chatcmpl-bc1903659eb5b1ab-bc3db144, prefetch_request_id=417) [3m(storage_manager.py:709:lmcache.v1.distributed.storage_manager)[0m
+[32;20m[2026-08-05 07:50:19,155] LMCache INFO:[0m Retrieved 31488 tokens in 0.065 seconds [3m(engine_driven_transfer.py:530:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:50:22,755] LMCache INFO:[0m Prefetch request completed (L1+L2): 2/2 retained keys (0 L1, 2 L2) in 13674.3 ms (external_request_id=chatcmpl-b050e762d3e0abc2-afd78653, prefetch_request_id=420) [3m(storage_manager.py:709:lmcache.v1.distributed.storage_manager)[0m
+[32;20m[2026-08-05 07:50:22,763] LMCache INFO:[0m Retrieved 512 tokens in 0.003 seconds [3m(engine_driven_transfer.py:530:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:50:22,950] LMCache INFO:[0m Prefetch request completed (L1+L2): 2/2 retained keys (0 L1, 2 L2) in 12095.0 ms (external_request_id=chatcmpl-ab2f9e5c1688a8d7-8447aee7, prefetch_request_id=421) [3m(storage_manager.py:709:lmcache.v1.distributed.storage_manager)[0m
+[32;20m[2026-08-05 07:50:22,957] LMCache INFO:[0m Retrieved 512 tokens in 0.002 seconds [3m(engine_driven_transfer.py:530:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:50:23,060] LMCache INFO:[0m Prefetch request completed (L1+L2): 2/2 retained keys (0 L1, 2 L2) in 10420.8 ms (external_request_id=chatcmpl-9c5539245ed78806-8491b131, prefetch_request_id=422) [3m(storage_manager.py:709:lmcache.v1.distributed.storage_manager)[0m
+[32;20m[2026-08-05 07:50:23,067] LMCache INFO:[0m Retrieved 512 tokens in 0.002 seconds [3m(engine_driven_transfer.py:530:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:50:23,100] LMCache INFO:[0m Prefetch request completed (L1+L2): 2/2 retained keys (0 L1, 2 L2) in 8689.1 ms (external_request_id=chatcmpl-b7d59608bd581dd2-91b46ad9, prefetch_request_id=423) [3m(storage_manager.py:709:lmcache.v1.distributed.storage_manager)[0m
+[32;20m[2026-08-05 07:50:23,106] LMCache INFO:[0m Retrieved 512 tokens in 0.002 seconds [3m(engine_driven_transfer.py:530:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:50:23,173] LMCache INFO:[0m Prefetch request completed (L1+L2): 2/2 retained keys (0 L1, 2 L2) in 7018.2 ms (external_request_id=chatcmpl-842c04d6325e893a-86faaa81, prefetch_request_id=424) [3m(storage_manager.py:709:lmcache.v1.distributed.storage_manager)[0m
+[32;20m[2026-08-05 07:50:23,179] LMCache INFO:[0m Retrieved 512 tokens in 0.002 seconds [3m(engine_driven_transfer.py:530:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:50:23,279] LMCache INFO:[0m Prefetch request completed (L1+L2): 2/2 retained keys (0 L1, 2 L2) in 5352.0 ms (external_request_id=chatcmpl-afb63a27032b41c1-9828d3d0, prefetch_request_id=425) [3m(storage_manager.py:709:lmcache.v1.distributed.storage_manager)[0m
+[32;20m[2026-08-05 07:50:23,284] LMCache INFO:[0m Retrieved 512 tokens in 0.002 seconds [3m(engine_driven_transfer.py:530:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:50:23,351] LMCache INFO:[0m Prefetch request completed (L1+L2): 2/2 retained keys (0 L1, 2 L2) in 3626.8 ms (external_request_id=chatcmpl-a07390c9d78a1dff-9d8d902e, prefetch_request_id=426) [3m(storage_manager.py:709:lmcache.v1.distributed.storage_manager)[0m
+[32;20m[2026-08-05 07:50:23,356] LMCache INFO:[0m Retrieved 512 tokens in 0.002 seconds [3m(engine_driven_transfer.py:530:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:50:23,387] LMCache INFO:[0m Prefetch request completed (L1+L2): 2/2 retained keys (0 L1, 2 L2) in 1929.1 ms (external_request_id=chatcmpl-b07af4f5cbaac3ea-acccad1f, prefetch_request_id=427) [3m(storage_manager.py:709:lmcache.v1.distributed.storage_manager)[0m
+[32;20m[2026-08-05 07:50:23,392] LMCache INFO:[0m Retrieved 512 tokens in 0.002 seconds [3m(engine_driven_transfer.py:530:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:50:23,455] LMCache INFO:[0m Prefetch request completed (L1+L2): 123/123 retained keys (0 L1, 123 L2) in 15164.5 ms (external_request_id=chatcmpl-93864ff8c4a49808-a104af8b, prefetch_request_id=418) [3m(storage_manager.py:709:lmcache.v1.distributed.storage_manager)[0m
+[32;20m[2026-08-05 07:50:23,532] LMCache INFO:[0m Retrieved 31488 tokens in 0.065 seconds [3m(engine_driven_transfer.py:530:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:50:24,468] LMCache INFO:[0m Prefetch request completed (L1+L2): 120/120 retained keys (0 L1, 120 L2) in 16171.6 ms (external_request_id=chatcmpl-9099070af25199f4-89d9dbb0, prefetch_request_id=419) [3m(storage_manager.py:709:lmcache.v1.distributed.storage_manager)[0m
+[32;20m[2026-08-05 07:50:24,542] LMCache INFO:[0m Retrieved 30720 tokens in 0.063 seconds [3m(engine_driven_transfer.py:530:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:50:25,467] LMCache INFO:[0m Prefetch request completed (L1+L2): 2/2 retained keys (0 L1, 2 L2) in 327.1 ms (external_request_id=chatcmpl-8d1eab823153bfd1-b911427f, prefetch_request_id=428) [3m(storage_manager.py:709:lmcache.v1.distributed.storage_manager)[0m
+[32;20m[2026-08-05 07:50:25,472] LMCache INFO:[0m Retrieved 512 tokens in 0.002 seconds [3m(engine_driven_transfer.py:530:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:50:25,727] LMCache INFO:[0m Prefetch request completed (L1+L2): 2/2 retained keys (0 L1, 2 L2) in 360.2 ms (external_request_id=chatcmpl-aa6546291150be4b-8f8e9f21, prefetch_request_id=429) [3m(storage_manager.py:709:lmcache.v1.distributed.storage_manager)[0m
+[32;20m[2026-08-05 07:50:25,732] LMCache INFO:[0m Retrieved 512 tokens in 0.002 seconds [3m(engine_driven_transfer.py:530:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+[32;20m[2026-08-05 07:50:27,226] LMCache INFO:[0m Prefetch request completed (L1+L2): 2/2 retained keys (0 L1, 2 L2) in 445.4 ms (external_request_id=chatcmpl-929ef1a7ebbada0a-a78d2bc5, prefetch_request_id=430) [3m(storage_manager.py:709:lmcache.v1.distributed.storage_manager)[0m
+[32;20m[2026-08-05 07:50:27,231] LMCache INFO:[0m Retrieved 512 tokens in 0.002 seconds [3m(engine_driven_transfer.py:530:lmcache.v1.multiprocess.modules.engine_driven_transfer)[0m
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+[32;20m[2026-08-05 07:50:38,249] LMCache INFO:[0m Shutting down LMCache HTTP server... [3m(http_server.py:171:lmcache.v1.multiprocess.http_server)[0m
+[32;20m[2026-08-05 07:50:38,295] LMCache INFO:[0m LMCache HTTP server stopped [3m(http_server.py:193:lmcache.v1.multiprocess.http_server)[0m
+INFO:     Application shutdown complete.
+INFO:     Finished server process [2918]
+/usr/lib/python3.12/multiprocessing/resource_tracker.py:255: UserWarning: resource_tracker: There appear to be 1 leaked shared_memory objects to clean up at shutdown
+  warnings.warn('resource_tracker: There appear to be %d '

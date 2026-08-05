@@ -1,0 +1,122 @@
+{
+  "background": {
+    "east": {
+      "kv_fraction": 0.0012269938650306678,
+      "running": 2.0,
+      "waiting": 1.0,
+      "warning": true
+    },
+    "west": {
+      "kv_fraction": 0.0006466589288675051,
+      "running": 1.0,
+      "waiting": 1.0,
+      "warning": true
+    }
+  },
+  "moves": [
+    {
+      "deadline_admitted": true,
+      "destination_instance": "west",
+      "destination_pool": "pool/west",
+      "method": "replay",
+      "order": 0,
+      "path": [
+        "link/west"
+      ],
+      "planned_quiesce_s": null,
+      "planned_rate_limit_bytes_per_s": null,
+      "session_id": "codex:2604c640-6bc9-2d90-5a8b-ae20bc5081fa"
+    },
+    {
+      "deadline_admitted": true,
+      "destination_instance": "east",
+      "destination_pool": "pool/east",
+      "method": "kv_transfer",
+      "order": 1,
+      "path": [
+        "link/east"
+      ],
+      "planned_quiesce_s": null,
+      "planned_rate_limit_bytes_per_s": null,
+      "session_id": "claude:d822a508-dc39-797d-a37d-fa6552fdb8bb"
+    },
+    {
+      "deadline_admitted": true,
+      "destination_instance": "west",
+      "destination_pool": "pool/west",
+      "method": "kv_transfer",
+      "order": 2,
+      "path": [
+        "link/west"
+      ],
+      "planned_quiesce_s": null,
+      "planned_rate_limit_bytes_per_s": null,
+      "session_id": "claude:eaad8d63-63bf-7139-f930-0ef47fa45253"
+    },
+    {
+      "deadline_admitted": true,
+      "destination_instance": "west",
+      "destination_pool": "pool/west",
+      "method": "replay",
+      "order": 3,
+      "path": [
+        "link/west"
+      ],
+      "planned_quiesce_s": null,
+      "planned_rate_limit_bytes_per_s": null,
+      "session_id": "codex:1229e212-7c9e-fc46-e948-4c87690d9e5e"
+    },
+    {
+      "deadline_admitted": true,
+      "destination_instance": "west",
+      "destination_pool": "pool/west",
+      "method": "kv_transfer",
+      "order": 4,
+      "path": [
+        "link/west"
+      ],
+      "planned_quiesce_s": null,
+      "planned_rate_limit_bytes_per_s": null,
+      "session_id": "codex:e381cc89-38ef-e67e-79b9-4b800369b4f5"
+    },
+    {
+      "deadline_admitted": true,
+      "destination_instance": "east",
+      "destination_pool": "pool/east",
+      "method": "kv_transfer",
+      "order": 5,
+      "path": [
+        "link/east"
+      ],
+      "planned_quiesce_s": null,
+      "planned_rate_limit_bytes_per_s": null,
+      "session_id": "claude:1534babd-9b9e-68e0-057e-d9ce7e08adf0"
+    },
+    {
+      "deadline_admitted": true,
+      "destination_instance": "east",
+      "destination_pool": "pool/east",
+      "method": "kv_transfer",
+      "order": 6,
+      "path": [
+        "link/east"
+      ],
+      "planned_quiesce_s": null,
+      "planned_rate_limit_bytes_per_s": null,
+      "session_id": "claude:e2fd4f89-016f-29f0-48a1-3b2f1991b287"
+    },
+    {
+      "deadline_admitted": true,
+      "destination_instance": "east",
+      "destination_pool": "pool/east",
+      "method": "replay",
+      "order": 7,
+      "path": [
+        "link/east"
+      ],
+      "planned_quiesce_s": null,
+      "planned_rate_limit_bytes_per_s": null,
+      "session_id": "claude:92cc24b6-ac8d-5231-bb2d-33b876557766"
+    }
+  ]
+}

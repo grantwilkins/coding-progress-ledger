@@ -300,8 +300,10 @@ old low-load samples and this endpoint. Bare GPU idle is outside this curve.
 `outputs/network-campaign-20260805` retains the complete 54/54 East and West
 single-link campaigns plus the successful `handoff-009` and bidirectional-cache
 `handoff-010` three-node evidence, including raw 100-ms power, request,
-transfer, decision, plot, and checksum
-artifacts.
+transfer, decision, plot, and checksum artifacts. It also retains
+`joint-queue-002-partial-086`: 86/126 completed joint scenarios, three raw stack
+captures, and interrupted-attempt audit evidence. The first 17 scenarios used
+consumer-only destination caches; the following 69 used bidirectional caches.
 Reconstruction requests end with an explicit state-code probe and reserve 128
 output tokens; a successful HTTP response without the code hard-fails the attempt.
 The 600-second HTTP timeout is independent of the measured scenario deadline;
