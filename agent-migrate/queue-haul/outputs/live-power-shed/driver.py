@@ -162,16 +162,23 @@ def wait_serving(load: destination.DestinationLoad, completions: int = 5,
 
 
 def wait_drained(load: destination.DestinationLoad, seconds: float = 300,
-                 label: str = "source") -> None:
+                 label: str = "source") -> int:
+    """Drained means the GPU is doing no work and holds no KV blocks.
+
+    num_requests_waiting is deliberately not part of the predicate: an LMCache
+    L2 eviction can strand a request in the connector, where it is counted as
+    waiting but is never scheduled and consumes no GPU. Those stragglers are
+    reported, not waited on.
+    """
     deadline = time.monotonic() + seconds
     while time.monotonic() < deadline:
         check(load, label)
-        rows = load.sampler.rows[-4:]
-        if len(rows) == 4 and all(
+        rows = load.sampler.rows[-8:]
+        if len(rows) == 8 and all(
             row["vllm:num_requests_running"] == 0
-            and row["vllm:num_requests_waiting"] == 0 for row in rows
+            and row["vllm:gpu_cache_usage_perc"] == 0 for row in rows
         ):
-            return
+            return int(rows[-1]["vllm:num_requests_waiting"])
         time.sleep(.25)
     raise RuntimeError(f"{label} engine did not drain")
 
@@ -495,9 +502,11 @@ def main() -> None:
         markers.add("loads_paused_for_shed")
         source.pause()
         dest.pause()
-        wait_drained(source, label="source foreground")
-        wait_drained(dest, label="destination background")
-        markers.add("loads_drained_for_shed")
+        markers.add(
+            "loads_drained_for_shed",
+            source_stranded=wait_drained(source, label="source foreground"),
+            destination_stranded=wait_drained(dest, label="destination background"),
+        )
 
         original_flush = profiler.b.flush_lmcache
         original_reset = profiler.b.reset_vllm_caches
@@ -551,8 +560,8 @@ def main() -> None:
 
         markers.add("source_admission_stopped")
         source.pause()
-        wait_drained(source, label="source foreground")
-        markers.add("source_drained")
+        markers.add("source_drained",
+                    stranded=wait_drained(source, label="source foreground"))
 
         hold([dest, takeover], POST_S, "post-switch destination hold")
         markers.add("measurement_complete")
