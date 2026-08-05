@@ -1,4 +1,4 @@
-"""Plot measured migration-to-first-token ECDFs by movement method."""
+"""Plot measured migration-to-first-token ECDFs by policy."""
 
 from __future__ import annotations
 
@@ -14,9 +14,16 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 
-METHODS = {"kv_transfer": "KV Migrate Only", "replay": "Replay Context Only"}
-COLORS = {"kv_transfer": "#006CB8", "replay": "#E98300"}
-LINESTYLES = {"kv_transfer": "-.", "replay": ":"}
+POLICIES = {
+    "queue_haul": ("Queue-Haul LP", "#B1040E", "-"),
+    "greedy": ("Queue-Haul Greedy", "#008566", "--"),
+    "greedy_lagrangian": ("Queue-Haul Lagrangian Greedy", "#620059",
+                          (0, (3, 1, 1, 1))),
+    "kv_only": ("KV Migrate Only", "#006CB8", "-."),
+    "kv_transfer": ("KV Migrate Only", "#006CB8", "-."),
+    "replay_only": ("Replay Context Only", "#E98300", ":"),
+    "replay": ("Replay Context Only", "#E98300", ":"),
+}
 FIGSIZE = (5, 4)
 
 
@@ -77,16 +84,18 @@ def write(run_root: Path) -> list[dict]:
         writer = csv.DictWriter(stream, rows[0], lineterminator="\n")
         writer.writeheader()
         writer.writerows(rows)
+    dropped = sorted({row["policy"] for row in rows} - set(POLICIES))
+    if dropped:
+        print(f"omitting policies without a reference curve: {dropped}")
     plt.style.use("default")
     figure, axis = plt.subplots(figsize=FIGSIZE)
-    for method, label in METHODS.items():
+    for policy, (label, color, linestyle) in POLICIES.items():
         x, y = ecdf(row["migration_ttft_s"] for row in rows
-                    if row["method"] == method)
+                    if row["policy"] == policy)
         if not len(x):
             continue
         axis.step(np.r_[0, x], np.r_[0, y], where="post", linewidth=3,
-                  color=COLORS[method], linestyle=LINESTYLES[method],
-                  label=f"{label} (n={len(x)})")
+                  color=color, linestyle=linestyle, label=label)
     axis.set(xlabel="Migration + Destination TTFT (s)",
              ylabel="Cumulative Distribution", ylim=(0, 1.02))
     axis.tick_params(labelsize=15)
@@ -105,9 +114,10 @@ def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--run-root", type=Path, required=True)
     rows = write(parser.parse_args().run_root)
-    print(json.dumps({method: len([row for row in rows
-                                   if row["method"] == method])
-                      for method in METHODS}, indent=2))
+    print(json.dumps({policy: len([row for row in rows
+                                   if row["policy"] == policy])
+                      for policy in sorted({row["policy"] for row in rows})},
+                     indent=2))
 
 
 if __name__ == "__main__":
