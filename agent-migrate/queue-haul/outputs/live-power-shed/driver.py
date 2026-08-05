@@ -223,8 +223,21 @@ def parse_wall(value: str) -> float:
     return dt.datetime.strptime(value, "%Y/%m/%d %H:%M:%S.%f").timestamp()
 
 
+def parseable(row: dict) -> bool:
+    try:
+        parse_wall(row["timestamp"]), parse_wall(row["query.start"]), \
+            parse_wall(row["query.end"]), float(row["power.draw [W]"])
+    except (ValueError, TypeError, KeyError):
+        return False
+    return True
+
+
 def load_power(run_root: Path, role_uuids: list[str]):
-    rows = list(csv.DictReader((run_root / "power_100ms.csv").open()))
+    raw = list(csv.DictReader((run_root / "power_100ms.csv").open()))
+    rows = [row for row in raw if parseable(row)]
+    # A logger killed mid-write leaves one torn line; anything more is corruption.
+    if len(raw) - len(rows) > 2:
+        raise RuntimeError(f"power log has {len(raw) - len(rows)} unparseable rows")
     if not rows:
         raise RuntimeError("100 ms power logger wrote no rows")
     by_uuid = {uuid: [] for uuid in role_uuids}
@@ -463,10 +476,15 @@ def main() -> None:
         hold([source, dest], STEADY_S, "both-busy steady load")
         markers.add("steady_hold_complete")
 
-        markers.add("source_paused_for_reset")
+        # run_scenario flushes the shared LMCache. Any request in flight when that
+        # happens loses its KV entries underneath it and wedges the engine's KV
+        # connector, so both engines must be quiet across the flush window.
+        markers.add("loads_paused_for_shed")
         source.pause()
+        dest.pause()
         wait_drained(source, label="source foreground")
-        markers.add("source_drained_for_reset")
+        wait_drained(dest, label="destination background")
+        markers.add("loads_drained_for_shed")
 
         original_flush = profiler.b.flush_lmcache
         original_reset = profiler.b.reset_vllm_caches
@@ -477,9 +495,13 @@ def main() -> None:
             flush_count += 1
             result = original_flush(*args, **kwargs)
             if flush_count == 2:
-                markers.add("source_load_resumed")
+                # Both sites resume before the moves start, so the shed lands on a
+                # destination that is already carrying its own tenants again.
+                markers.add("loads_resumed")
                 source.resume()
+                dest.resume()
                 wait_queue(source, label="source foreground")
+                wait_serving(dest, len(dest.rows) + 3, label="destination background")
                 markers.add("migration_start")
             elif flush_count != 1:
                 raise RuntimeError(f"unexpected scenario flush {flush_count}")

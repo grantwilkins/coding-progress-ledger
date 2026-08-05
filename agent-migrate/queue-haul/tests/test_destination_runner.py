@@ -528,7 +528,7 @@ def test_destination_load_close_uses_request_timeout(tmp_path):
     load = runner.DestinationLoad.__new__(runner.DestinationLoad)
     load.stop, load.failure, load.rows = threading.Event(), None, []
     load.chunk_s, load.timeout_s, load.root = 15, 720, tmp_path
-    load.thread = SimpleNamespace(join=joined.append, is_alive=lambda: False)
+    load.thread = SimpleNamespace(join=joined.append, is_alive=lambda: False, ident=1)
     load.sampler = SimpleNamespace(close=lambda: None)
     load.close()
     assert joined == [745]
@@ -538,7 +538,7 @@ def test_destination_load_close_hard_fails_if_request_outlives_timeout(tmp_path)
     load = runner.DestinationLoad.__new__(runner.DestinationLoad)
     load.stop, load.failure, load.rows = threading.Event(), None, []
     load.chunk_s, load.timeout_s, load.root = 0, 0, tmp_path
-    load.thread = SimpleNamespace(join=lambda _: None, is_alive=lambda: True)
+    load.thread = SimpleNamespace(join=lambda _: None, is_alive=lambda: True, ident=1)
     load.sampler = SimpleNamespace(close=lambda: None)
     with pytest.raises(RuntimeError, match="foreground failed"):
         load.close()
@@ -756,3 +756,25 @@ def test_open_loop_rate_overrides_the_rho_derived_rate(tmp_path):
     assert load.rate == 4 and load.summary()["offered_rps"] == 4
     closed = runner.DestinationLoad("h", 1, "m", sessions, 16.5, 10, 10, tmp_path, 0)
     assert closed.rate == pytest.approx(16.5 / closed.work)
+
+
+def test_close_is_safe_when_start_failed_before_the_thread_ran(tmp_path):
+    """A prewarm that raises must not mask itself with a join error."""
+    sessions = [runner.Session("s", 4, 2, 3, 100, 0)]
+    load = runner.DestinationLoad("h", 1, "m", sessions, 1, 1, 1, tmp_path, 0)
+    assert load.thread.ident is None
+    load.close()
+
+
+def test_prewarm_uses_its_own_shorter_timeout(tmp_path, monkeypatch):
+    """A wedged engine should fail in minutes, not one request timeout per session."""
+    seen = []
+    monkeypatch.setattr(runner, "prewarm",
+                        lambda host, port, model, sessions, timeout: seen.append(timeout))
+    monkeypatch.setattr(runner.MetricsSampler, "start", lambda self: None)
+    sessions = [runner.Session("s", 4, 2, 3, 100, 0)]
+    load = runner.DestinationLoad("h", 1, "m", sessions, 1, 1, 1, tmp_path, 0,
+                                  timeout_s=720, prewarm_timeout_s=300)
+    load.start()
+    load.stop.set(); load.thread.join(5)
+    assert seen == [300]

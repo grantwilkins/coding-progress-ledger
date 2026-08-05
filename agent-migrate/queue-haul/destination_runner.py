@@ -280,7 +280,7 @@ class DestinationLoad:
                  target_rho: float, prefill_rate: float, decode_rate: float,
                  root: Path, seed: int, chunk_s: float = 15, normal_bound: float = 1,
                  timeout_s: float = 720, rps: float | None = None,
-                 max_inflight: int = 0):
+                 max_inflight: int = 0, prewarm_timeout_s: float = 300):
         work = np.mean([s.append_tokens / prefill_rate + s.output_tokens / decode_rate
                         for s in sessions])
         if min(target_rho, work, normal_bound) <= 0:
@@ -293,6 +293,7 @@ class DestinationLoad:
         self.target, self.prefill_rate, self.decode_rate = target_rho, prefill_rate, decode_rate
         self.normal_bound = normal_bound
         self.root, self.seed, self.chunk_s, self.timeout_s = root, seed, chunk_s, timeout_s
+        self.prewarm_timeout_s = prewarm_timeout_s
         self.rate = rps if rps else target_rho * normal_bound / work
         self.work, self.max_inflight = float(work), max_inflight
         self.stop, self.rows = threading.Event(), []
@@ -304,7 +305,7 @@ class DestinationLoad:
 
     def start(self):
         self.root.mkdir(parents=True, exist_ok=True)
-        prewarm(self.host, self.port, self.model, self.sessions, self.timeout_s)
+        prewarm(self.host, self.port, self.model, self.sessions, self.prewarm_timeout_s)
         self.sampler.start(); self.thread.start()
 
     def pause(self):
@@ -371,7 +372,10 @@ class DestinationLoad:
         ) from self.failure
 
     def close(self):
-        self.stop.set(); self.thread.join(self.chunk_s + self.timeout_s + 10); self.sampler.close()
+        self.stop.set()
+        if getattr(self.thread, "ident", 1) is None:
+            return  # start() raised before the arrival thread ran; nothing to join
+        self.thread.join(self.chunk_s + self.timeout_s + 10); self.sampler.close()
         if self.thread.is_alive() or self.failure:
             raise RuntimeError("destination foreground failed") from self.failure
         (self.root / "requests.json").write_text(json.dumps(self.rows, indent=2) + "\n")
