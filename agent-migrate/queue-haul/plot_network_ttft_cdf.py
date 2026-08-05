@@ -26,10 +26,10 @@ def attempts(run_root: Path) -> list[Path]:
     for path in sorted(run_root.glob("scenarios/*/attempt-*/result.json")):
         if json.loads(path.read_text())["status"] == "complete":
             paths[path.parent.parent] = path
-    missing = sorted({path for path in run_root.glob("scenarios/*")}
-                     - set(paths))
+    missing = sorted({path for path in run_root.glob("scenarios/*")} - set(paths))
     if missing:
-        raise ValueError(f"scenarios without a complete attempt: {missing}")
+        print(f"skipping {len(missing)} scenarios without a complete attempt: "
+              f"{', '.join(path.name for path in missing)}")
     return [paths[key] for key in sorted(paths)]
 
 
@@ -38,24 +38,29 @@ def extract(run_root: Path) -> list[dict]:
     for path in attempts(run_root):
         result = json.loads(path.read_text())
         scenario = json.loads((path.parent / "scenario.json").read_text())
-        if len(result["requests"]) != 1:
-            raise ValueError(f"CDF requires one migration per scenario: {path}")
-        move = result["requests"][0]
-        request, start = move["request"], result["started_ns"]
-        if not start <= request["start_ns"] <= request["first_byte_ns"]:
-            raise ValueError(f"invalid migration timing order: {path}")
-        rows.append({
-            "scenario_id": result["scenario_id"],
-            "method": move["method"],
-            "bandwidth": scenario["bandwidth"],
-            "bandwidth_mbps": scenario["bandwidth_mbps"],
-            "workload": scenario["workload"],
-            "context_size": scenario["context_size"],
-            "migration_s": result["migration_s"],
-            "migration_ttft_s": (request["first_byte_ns"] - start) / 1e9,
-            "destination_request_ttft_s":
-                (request["first_byte_ns"] - request["start_ns"]) / 1e9,
-        })
+        rates = scenario["bandwidth_mbps"]
+        for move in result["requests"]:
+            request = move["request"]
+            if not result["started_ns"] <= request["start_ns"] \
+                    <= request["first_byte_ns"]:
+                raise ValueError(f"invalid migration timing order: {path}")
+            destination = move.get("destination_instance")
+            rows.append({
+                "scenario_id": result["scenario_id"],
+                "session_id": move["session_id"],
+                "order": move.get("order", 0),
+                "method": move["method"],
+                "destination": destination,
+                "policy": scenario.get("policy"),
+                "bandwidth": scenario["bandwidth"],
+                "bandwidth_mbps": rates[destination]
+                if isinstance(rates, dict) else rates,
+                "workload": scenario["workload"],
+                "scheduler_wait_s":
+                    (request["start_ns"] - result["started_ns"]) / 1e9,
+                "migration_ttft_s":
+                    (request["first_byte_ns"] - request["start_ns"]) / 1e9,
+            })
     if not rows:
         raise ValueError(f"no migrations in {run_root}")
     return rows
@@ -81,7 +86,7 @@ def write(run_root: Path) -> list[dict]:
             continue
         axis.step(np.r_[0, x], np.r_[0, y], where="post", linewidth=3,
                   color=COLORS[method], linestyle=LINESTYLES[method],
-                  label=label)
+                  label=f"{label} (n={len(x)})")
     axis.set(xlabel="Migration + Destination TTFT (s)",
              ylabel="Cumulative Distribution", ylim=(0, 1.02))
     axis.tick_params(labelsize=15)

@@ -9,13 +9,15 @@ def scenario(root, name, attempt, status, method="kv_transfer", first=3_000_000_
     body = {"scenario_id": name, "status": status}
     if status == "complete":
         body |= {"started_ns": 1_000_000_000, "ended_ns": 4_000_000_000,
-                 "migration_s": 3.0, "requests": [{"method": method, "request": {
-                     "start_ns": 1_000_000_000, "first_byte_ns": first,
-                     "end_ns": 4_000_000_000}}]}
+                 "migration_s": 3.0, "requests": [{
+                     "method": method, "order": 0, "session_id": f"s:{name}",
+                     "destination_instance": "west", "request": {
+                         "start_ns": 1_000_000_000, "first_byte_ns": first,
+                         "end_ns": 4_000_000_000}}]}
     (path / "result.json").write_text(json.dumps(body))
     (path / "scenario.json").write_text(json.dumps({
-        "bandwidth": "natural", "bandwidth_mbps": 2156.4,
-        "workload": "agentic_tool_loop", "context_size": 8192}))
+        "bandwidth": "controlled_80", "bandwidth_mbps": {"west": 7400},
+        "policy": "queue_haul", "workload": "agentic_tool_loop"}))
 
 
 def test_retried_attempt_supersedes_preempted_failure(tmp_path):
@@ -25,17 +27,17 @@ def test_retried_attempt_supersedes_preempted_failure(tmp_path):
 
     rows = p.write(tmp_path)
 
-    assert [(row["scenario_id"], row["method"], row["migration_ttft_s"])
-            for row in rows] == [("a", "kv_transfer", 2.0), ("b", "replay", 1.0)]
+    assert [(row["scenario_id"], row["method"], row["migration_ttft_s"],
+             row["bandwidth_mbps"]) for row in rows] == [
+                 ("a", "kv_transfer", 2.0, 7400), ("b", "replay", 1.0, 7400)]
     assert (tmp_path / "migration_ttft_cdf.png").is_file()
 
 
-def test_scenario_without_a_complete_attempt_fails(tmp_path):
+def test_partial_campaign_reports_skipped_scenarios(tmp_path, capsys):
     scenario(tmp_path, "a", "attempt-0001", "failed")
+    scenario(tmp_path, "b", "attempt-0001", "complete")
 
-    try:
-        p.extract(tmp_path)
-    except ValueError as error:
-        assert "complete attempt" in str(error)
-    else:
-        raise AssertionError("expected a failure for an all-failed scenario")
+    rows = p.extract(tmp_path)
+
+    assert [row["scenario_id"] for row in rows] == ["b"]
+    assert "skipping 1 scenarios" in capsys.readouterr().out
