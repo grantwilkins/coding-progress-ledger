@@ -1265,9 +1265,6 @@ def run_handoff(cluster: Cluster, key: Path, calibration_path: Path,
             for row in scenario["sessions"]}
         codes = {session_id: records[session_id]["state_code"]
                  for session_id in messages}
-        for session_id in messages:
-            _warm(stack, messages[session_id], codes[session_id],
-                  REQUEST_TIMEOUT_S)
         prefill_tps = ModelProfile.load(MODEL_PATH).case().F
         for node in cluster.destinations:
             loads[node.id] = SinkLoad(

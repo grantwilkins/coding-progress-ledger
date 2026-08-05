@@ -283,7 +283,8 @@ destination service. Raw source/East/West samples and verified requests retain
 synchronized phase timestamps. Handoff planning uses each session's measured
 uncached-prefill and decode rates from the Sweden window; destination background
 work converts the load generator's requested prefill rate through the measured
-service curve.
+service curve. The measured Sweden window itself populates KV state; there is no
+separate request warmup before it.
 
 The Azure campaign profile uses the Sweden A100 PCIe 300 W calibration retained
 under `/datadrive/queue-haul-network/control/power-cal-300w-*`: 98.1 W
