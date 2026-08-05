@@ -1182,8 +1182,10 @@ def reset_result(text: str) -> bool | None:
     return None
 
 
-def reset_vllm_caches(cfg: Config, logs: tuple[Path, Path]) -> None:
-    for port, log in zip((cfg.src_port, cfg.sink_port), logs):
+def reset_vllm_caches(cfg: Config, logs: tuple[Path, ...],
+                      ports: tuple[int, ...] | None = None) -> None:
+    """Reset prefix caches; `ports` narrows the reset to a subset of engines."""
+    for port, log in zip(ports or (cfg.src_port, cfg.sink_port), logs):
         offset = log.stat().st_size
         http_text(cfg.host, port, "POST", "/reset_prefix_cache")
         deadline = time.monotonic() + 10
