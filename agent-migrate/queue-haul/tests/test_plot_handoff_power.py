@@ -48,6 +48,8 @@ def test_reduce_aligns_power_regions_and_queue_depth(tmp_path):
                          "target_to_client", 2000, 1))
         writer.writerow((0, 2_500_000_000, 250_000_000, "b", "kv/germany",
                          "target_to_client", 3000, 1))
+        writer.writerow((0, 1_500_000_000, 250_000_000, "b", "kv/west",
+                         "client_to_target", 4000, 1))
 
     rows = p.reduce(tmp_path)
 

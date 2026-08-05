@@ -55,14 +55,17 @@ def bin_mean(points: list[tuple[float, float]],
             [statistics.fmean(bins[index]) for index in sorted(bins)])
 
 
-def bin_rate(points: list[tuple[float, float]], stop: float,
-             start: float = PLOT_START_S) -> tuple[list[float], list[float]]:
+def cumulative(points: list[tuple[float, float]], stop: float,
+               start: float = PLOT_START_S) -> tuple[list[float], list[float]]:
     bins = {index: 0. for index in range(int(start), int(stop) + 1)}
     for seconds, value in points:
         if start <= seconds <= stop:
             bins[int(seconds)] += value
-    return ([index + .5 for index in sorted(bins)],
-            [bins[index] for index in sorted(bins)])
+    total, series = 0., []
+    for index in sorted(bins):
+        total += bins[index]
+        series.append(total / 1000)
+    return [index + .5 for index in sorted(bins)], series
 
 
 def style(axis, xlim: tuple[float, float], ylabel: str) -> None:
@@ -138,13 +141,9 @@ def reduce(run_root: Path) -> list[dict]:
     for node, path in paths.items():
         top.plot(*bin_mean(read_power(path, base)), lw=1.5,
                  color=COLORS[node], label=node.title())
-    bottom.plot(*bin_rate([point for (node, direction), points in kv.items()
-                           for point in points if direction == "client_to_target"],
-                          xlim[1]),
-                lw=1.2, color=COLORS["sweden"], label="Sweden write")
     for node in paths.keys() - {"sweden"}:
-        bottom.plot(*bin_rate(kv[(node, "target_to_client")], xlim[1]), lw=1.2,
-                    color=COLORS[node], label=f"{node.title()} read")
+        bottom.plot(*cumulative(kv[(node, "target_to_client")], xlim[1]), lw=1.5,
+                    color=COLORS[node], label=f"{node.title()} pulls KV")
     for axis in (top, bottom):
         for label, start, end, color, alpha in SPANS:
             if start in marker and end in marker:
@@ -154,7 +153,7 @@ def reduce(run_root: Path) -> list[dict]:
             if name in marker:
                 axis.axvline(marker[name], color="black", lw=.7, ls=":")
     style(top, xlim, "Power per GPU (W)")
-    style(bottom, xlim, "KV traffic (MB/s)")
+    style(bottom, xlim, "KV moved (GB)")
     bottom.set_xlabel("Time (s)", size=16)
     top.legend(frameon=False, fontsize=13, loc="upper center",
                bbox_to_anchor=(.5, 1.28), ncol=3)
