@@ -287,9 +287,10 @@ service curve. The measured Sweden window itself populates KV state; there is no
 separate request warmup before it.
 
 The Azure campaign profile uses the Sweden A100 PCIe 300 W calibration retained
-under `/datadrive/queue-haul-network/control/power-cal-300w-*`: 98.1 W
-model-resident idle and 140.2 W at the profile's maximum expected load. Bare GPU
-idle is outside this curve.
+under `/datadrive/queue-haul-network/control/power-cal-300w-*` plus the measured
+`handoff-008` endpoint: 98.1 W model-resident idle and 179.1 W at
+`ell=0.6468`. The two-point curve is the conservative concave envelope of the
+old low-load samples and this endpoint. Bare GPU idle is outside this curve.
 Reconstruction requests end with an explicit state-code probe and reserve 128
 output tokens; a successful HTTP response without the code hard-fails the attempt.
 The 600-second HTTP timeout is independent of the measured scenario deadline;
