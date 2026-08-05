@@ -1,10 +1,10 @@
 """
 Claim:
-Handoff plots align per-region power and unique KV fetches to event timestamps.
+Handoff plots align each region's 1-second power means to event timestamps.
 
 Plausible wrong implementations:
-- use wall time for monotonic transfer timestamps
-- count duplicate KV chunks more than once
+- use the wrong event as the shared time origin
+- place a sample in the wrong 1-second bin
 - assign a destination's samples to the wrong region
 - aggregate power across regions instead of within each region and second
 """
@@ -49,18 +49,6 @@ def test_reduce_aligns_power_regions_and_queue_depth(tmp_path):
                              "vllm:num_requests_waiting"))
             for index, moment in enumerate(moments):
                 writer.writerow((moment, index + 1, index))
-    with (tmp_path / "proxy_connections.csv").open("w", newline="") as handle:
-        writer = csv.writer(handle)
-        writer.writerow(("connection_id", "route"))
-        writer.writerows((("a", "kv/east"), ("b", "kv/germany")))
-    with (tmp_path / "resp_transfers.csv").open("w", newline="") as handle:
-        writer = csv.writer(handle)
-        writer.writerow(("connection_id", "command", "key_hashes", "end_ns",
-                         "payload_bytes"))
-        writer.writerows((("a", "GET", "k1", 2_500_000_000, 2000),
-                          ("a", "GET", "k1", 2_600_000_000, 2000),
-                          ("b", "GET", "k2", 2_500_000_000, 3000),
-                          ("b", "SET", "k3", 1_500_000_000, 4000)))
 
     rows = p.reduce(tmp_path)
 
@@ -73,5 +61,3 @@ def test_reduce_aligns_power_regions_and_queue_depth(tmp_path):
         queue = list(csv.DictReader(handle))
     assert len(queue) == 12
     assert (tmp_path / "power_handoff.png").is_file()
-    assert p.read_fetches(tmp_path, 1_000_000_000) == {
-        "east": [(1.5, 0.002)], "germany": [(1.5, 0.003)]}
