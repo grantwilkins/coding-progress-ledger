@@ -1,7 +1,17 @@
 import csv
 import json
 
+import pytest
+
 import power_rate_sweep as sweep
+
+
+def test_gpu_guard_requires_azure_300w_a100(monkeypatch):
+    monkeypatch.setattr(sweep.subprocess, "check_output",
+                        lambda *_args, **_kwargs: "NVIDIA A100 80GB PCIe, 300.00\n")
+    sweep.validate_gpu("NVIDIA A100 80GB PCIe", 300)
+    with pytest.raises(RuntimeError, match="expected one"):
+        sweep.validate_gpu("NVIDIA A100-SXM4-80GB", 400)
 
 
 def test_reduce_emits_concave_envelope(tmp_path):

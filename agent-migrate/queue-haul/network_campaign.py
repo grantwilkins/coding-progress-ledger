@@ -47,7 +47,7 @@ POLICIES = (
     "random",
 )
 ROOT = Path(__file__).parent
-MODEL_PATH = ROOT / "profiles/gpt_oss_20b_a100_tp1.json"
+MODEL_PATH = ROOT / "profiles/gpt_oss_20b_a100_tp1_azure_300w.json"
 WORKLOAD_PATHS = {name: ROOT / f"profiles/{name}.json" for name in (
     "coding", "interactive_coding", "agentic_tool_loop",
 )}

@@ -24,6 +24,16 @@ import network_campaign as n
 import migration_testbed as testbed
 
 
+def test_campaign_scopes_300w_profile_to_azure_nodes():
+    generic = n.ModelProfile.load(n.MODEL_PATH.with_name("gpt_oss_20b_a100_tp1.json"))
+    azure = n.ModelProfile.load(n.MODEL_PATH)
+
+    assert n.MODEL_PATH.name == "gpt_oss_20b_a100_tp1_azure_300w.json"
+    assert generic.max_ell == pytest.approx(.531357714017)
+    assert azure.max_ell == pytest.approx(10.054248624043707)
+    assert azure.hardware == "NVIDIA A100 80GB PCIe (Azure 300 W)"
+
+
 def cluster(tmp_path):
     path = tmp_path / "cluster.json"
     path.write_text(json.dumps({

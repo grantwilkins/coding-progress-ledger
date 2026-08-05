@@ -291,7 +291,11 @@ work converts the load generator's requested prefill rate through the measured
 service curve. The measured Sweden window itself populates KV state; there is no
 separate request warmup before it.
 
-The Azure campaign profile uses the cache-cold fixed-rate A100 sweep at
+Only the Azure campaign uses
+`profiles/gpt_oss_20b_a100_tp1_azure_300w.json`, calibrated on an Azure
+NVIDIA A100 80GB PCIe whose `nvidia-smi` power limit is 300 W. The generic
+`gpt_oss_20b_a100_tp1.json` retains the original non-Azure A100 calibration.
+The Azure profile uses the cache-cold fixed-rate sweep at
 `/datadrive/queue-haul-network/control/power-cal-300w-rate-001`: 18 rates from
 0.25 to 20 requests/s, 20-second windows, a 1,100-word synthetic prompt body
 with a unique leading hash, 64-token outputs, and zero cached prompt tokens. Its
@@ -299,7 +303,8 @@ conservative concave envelope reaches 300.24 W at `ell=10.0543`; the 14--20
 requests/s deep-queue points independently remain near 299 W. The 98.1 W
 model-resident idle anchor comes from
 `power-cal-300w-002`; bare GPU idle is outside this curve. Reproduce and reduce
-the sweep with:
+the sweep with the commands below. The runner hard-fails unless `nvidia-smi`
+reports exactly one NVIDIA A100 80GB PCIe with a 300 W power limit.
 
 ```bash
 uv run python power_rate_sweep.py --out PATH --window-s 20 --warmup-s 5 --workers 512 --rates 0.25 0.5 0.75 1 1.5 2 3 4 5 6 7 8 9 10 12 14 16 20

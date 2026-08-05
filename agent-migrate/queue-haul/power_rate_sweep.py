@@ -16,6 +16,14 @@ from pathlib import Path
 from urllib.request import Request, urlopen
 
 
+def validate_gpu(name: str, power_limit_w: float) -> None:
+    rows = subprocess.check_output([
+        "nvidia-smi", "--query-gpu=name,power.limit", "--format=csv,noheader,nounits",
+    ], text=True).strip().splitlines()
+    if rows != [f"{name}, {power_limit_w:.2f}"]:
+        raise RuntimeError(f"expected one {name} at {power_limit_w:.2f} W, got {rows}")
+
+
 def power(path: Path, stop: threading.Event, interval: float) -> None:
     with path.open("w", newline="") as handle:
         writer = csv.writer(handle)
@@ -116,6 +124,8 @@ def main() -> None:
     parser.add_argument("--warmup-s", type=float, default=5)
     parser.add_argument("--output-tokens", type=int, default=64)
     parser.add_argument("--workers", type=int, default=512)
+    parser.add_argument("--expected-gpu", default="NVIDIA A100 80GB PCIe")
+    parser.add_argument("--expected-power-limit-w", type=float, default=300)
     parser.add_argument("--reduce-only", action="store_true")
     parser.add_argument("--prefill-capacity-tps", type=float)
     parser.add_argument("--decode-capacity-tps", type=float)
@@ -134,8 +144,10 @@ def main() -> None:
                args.idle_power_w, args.curve_max_rate)
         return
     if args.window_s <= 0 or args.warmup_s < 0 or args.output_tokens < 1 \
-            or args.workers < 1 or not args.rates or min(args.rates) <= 0:
+            or args.workers < 1 or args.expected_power_limit_w <= 0 \
+            or not args.rates or min(args.rates) <= 0:
         raise ValueError("invalid sweep settings")
+    validate_gpu(args.expected_gpu, args.expected_power_limit_w)
     args.out.mkdir(parents=True, exist_ok=False)
     prompt = "power calibration " + "x " * 1100
     rows = []
