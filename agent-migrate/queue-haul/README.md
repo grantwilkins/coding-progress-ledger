@@ -406,6 +406,15 @@ output tokens; a successful HTTP response without the code hard-fails the attemp
 The 600-second HTTP timeout is independent of the measured scenario deadline;
 slow reconstruction completes with `deadline_met=false` instead of restarting.
 
+`plot_hardware_power_parity.py` pools the completed width-8 policy and joint
+network scenarios into faceted 0--100% requested-versus-achieved shed parity
+plots. Each policy/request level shows median achieved shed with 10th--90th
+percentile whiskers; `x` marks median undershoot and dots mark parity or
+overshoot. Requested shed is the normalized deadline-admitted decision;
+achieved shed uses the trailing power window from hardware completion times.
+The two three-node handoffs use measured Sweden pre/post power. Run
+`uv run python queue-haul/plot_hardware_power_parity.py`.
+
 Reduction runs automatically and can also be repeated without hardware:
 
 ```bash
