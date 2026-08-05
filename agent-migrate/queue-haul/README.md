@@ -298,8 +298,9 @@ under `/datadrive/queue-haul-network/control/power-cal-300w-*` plus the measured
 old low-load samples and this endpoint. Bare GPU idle is outside this curve.
 
 `outputs/network-campaign-20260805` retains the complete 54/54 East and West
-single-link campaigns and the successful three-node `handoff-009` evidence,
-including raw 100-ms power, request, transfer, decision, plot, and checksum
+single-link campaigns plus the successful `handoff-009` and bidirectional-cache
+`handoff-010` three-node evidence, including raw 100-ms power, request,
+transfer, decision, plot, and checksum
 artifacts.
 Reconstruction requests end with an explicit state-code probe and reserve 128
 output tokens; a successful HTTP response without the code hard-fails the attempt.
