@@ -7,6 +7,7 @@ are kv_both with a >32 GB LMCache L1 so the handoff is visible in the cache.
 """
 from __future__ import annotations
 
+import collections
 import csv
 import datetime as dt
 import json
@@ -34,12 +35,16 @@ import migration_profiler as profiler
 import migration_testbed as testbed
 
 
-SCENARIO_ID = "p-bc461d9bb1fc33c6"  # replay, 8 of 8 sessions -> full shed
+# Default is the queue_haul LP arm: 3 replay + 5 kv_transfer of 8 at 10 Gbps.
+# p-bc461d9bb1fc33c6 is the replay_only baseline arm for the same context pack.
+SCENARIO_ID = os.environ.get("QH_SCENARIO_ID", "p-09cfe127f6c1e59f")
 PLAN = QH / "outputs/policy-hardware-width8-packing-plan/plan.json"
 BUNDLE = QH / "outputs/destination-v7-20260722/content-free-manifest.json"
 PROFILE = QH / "outputs/destination-v7-20260722/baseline-profile.json"
 JOB_CLASS = "agentic_tool_loop"
-SPLITS = ("validation", "fit", "tune")
+# Twelve sessions, not all three splits: the foreground KV working set has to
+# leave room for an uncapped-enough L2, which the kv_transfer moves ride on.
+SPLITS = ("validation", "tune")
 SOURCE_RPS, DEST_RPS = 4.0, 1.0
 SOURCE_INFLIGHT, DEST_INFLIGHT = 128, 48
 DEST_ONLY_S, STEADY_S, POST_S = 60, 300, 300
@@ -186,8 +191,8 @@ def load_inputs():
     scenario = next(
         row for row in plan["scenarios"] if row["scenario_id"] == SCENARIO_ID
     )
-    if scenario["method"] != "replay" or len(scenario["moves"]) != 8 \
-            or len(scenario["sessions"]) != 8 \
+    if scenario["method"] not in ("replay", "mixed", "kv_transfer") \
+            or len(scenario["moves"]) != 8 or len(scenario["sessions"]) != 8 \
             or scenario["bandwidth_mbps"] != 10_000:
         raise RuntimeError("selected full-shed scenario changed")
     manifest_path = REPO / plan["manifest"]["path"]
@@ -421,8 +426,16 @@ def main() -> None:
         raise RuntimeError(f"expected two unique allocated GPUs: {role_uuids}")
     write_json(run_root / "configuration.json", {
         "scenario_id": SCENARIO_ID,
+        "policy": scenario["policy"],
+        "scenario_method": scenario["method"],
         "shed_contexts": [row["initial_tokens"] for row in scenario["sessions"]],
         "shed_moves": len(scenario["moves"]),
+        "move_methods": collections.Counter(
+            row["method"] for row in scenario["moves"]),
+        "move_method_by_context": sorted(
+            (next(s["initial_tokens"] for s in scenario["sessions"]
+                  if s["session_id"] == row["session_id"]), row["method"])
+            for row in scenario["moves"]),
         "job_class": JOB_CLASS,
         "foreground_sessions": len(sessions),
         "foreground_mean_context": context,
@@ -525,7 +538,7 @@ def main() -> None:
             profiler.b.reset_vllm_caches = original_reset
         if result["status"] != "complete" or len(result["migrations"]) != 8 \
                 or not all(row["error"] is None for row in result["migrations"]):
-            raise RuntimeError("full-shed replay migration did not complete")
+            raise RuntimeError("full-shed migration did not complete")
         markers.add("migration_complete")
 
         takeover = make_load(cfg, cfg.sink_port, sessions, rates, work,

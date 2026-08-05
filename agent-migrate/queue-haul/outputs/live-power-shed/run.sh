@@ -17,10 +17,11 @@ export QH_APPTAINER_IMAGE="$IMAGE"
 export QH_PORT_OFFSET=$((SLURM_JOB_ID % 40000 + 1000))
 export QH_KV_ROLE_SOURCE=kv_both
 export QH_KV_ROLE_SINK=kv_both
-export QH_LMCACHE_L1_GB=36
-# kv_both mirrors the whole L1 working set into L2, so bound Redis or it grows
-# unbounded and the two 36 GB L1 pools no longer fit the cgroup.
-export QH_REDIS_MAXMEMORY_GB=8
+export QH_LMCACHE_L1_GB=34
+# The kv_transfer moves ride on L2, so it must be large enough that eviction is
+# rare: an evicted key under an in-flight prefetch leaves the request deferred
+# forever. 20 GB against a 12-session foreground and 2.7 GB of migrating KV.
+export QH_REDIS_MAXMEMORY_GB=20
 
 # LMCache does not unlink its L1 pool if it is killed; a stale 36 GB segment is
 # charged to the cgroup forever. Drop pools whose owning pid is gone.
