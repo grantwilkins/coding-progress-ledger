@@ -404,6 +404,22 @@ def test_joint_planner_preserves_dynamic_destinations(monkeypatch):
                 round(.4 * profile.kv_capacity_tokens),
                 round(.2 * profile.kv_capacity_tokens),
             }
+    dtype = seen["architecture"].types[0]
+    assert {pool.replicas[0].baseline_work
+            for pool in seen["architecture"].pools} == {
+                tuple(dtype.work(profile.case().F * rho, 0, 512))
+                for rho in (.2, .4)}
+
+
+def test_observed_demand_uses_uncached_prefill_and_decode_tokens():
+    rows = [
+        {"session_id": "a", "prompt_tokens": 100, "cached_tokens": 80,
+         "output_tokens": 10},
+        {"session_id": "a", "prompt_tokens": 120, "cached_tokens": 100,
+         "output_tokens": 14},
+    ]
+
+    assert n.observed_demand(rows, 2) == {"a": (20, 12)}
 
 
 def test_scheduled_events_reject_active_spot_notice():

@@ -280,7 +280,10 @@ The harness serves eight pinned agentic sessions on Sweden for five minutes,
 routes their KV state to dynamically selected destinations while both sustain
 50% background inference, sleeps Sweden, and verifies another five minutes of
 destination service. Raw source/East/West samples and verified requests retain
-synchronized phase timestamps.
+synchronized phase timestamps. Handoff planning uses each session's measured
+uncached-prefill and decode rates from the Sweden window; destination background
+work converts the load generator's requested prefill rate through the measured
+service curve.
 
 The Azure campaign profile uses the Sweden A100 PCIe 300 W calibration retained
 under `/datadrive/queue-haul-network/control/power-cal-300w-*`: 98.1 W

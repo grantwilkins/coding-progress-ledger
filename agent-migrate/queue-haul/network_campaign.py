@@ -978,9 +978,16 @@ def destination_metrics(stack: ClusterStack, node_id: str,
 
 
 def plan_joint_scenario(scenario: dict, snapshots: dict[str, dict],
-                        profile: ModelProfile, seed: int) -> list[dict]:
+                        profile: ModelProfile, seed: int,
+                        demand: dict[str, tuple[float, float]] | None = None
+                        ) -> list[dict]:
     base, _ = policy_campaign._problem(
         profile, scenario["sessions"], 1, scenario["deadline_s"])
+    if demand is not None:
+        base = replace(base, sessions=tuple(replace(
+            session, expected_f=demand[session.session_id][0],
+            expected_g=demand[session.session_id][1],
+        ) for session in base.sessions))
     destinations = tuple(sorted(scenario["bandwidth_mbps"]))
     links = tuple(NetworkLink(
         f"link/{node}", scenario["bandwidth_mbps"][node] * 125_000,
@@ -999,7 +1006,9 @@ def plan_joint_scenario(scenario: dict, snapshots: dict[str, dict],
     pools = tuple(DestinationPool(
         f"pool/{node}", dtype.type_id,
         (DestinationReplica(
-            node, (float(scenario["background"][node][0]) / 2,) * 2,
+            node, tuple(dtype.work(
+                profile.case().F * float(scenario["background"][node][0]),
+                0, 512)),
             round(snapshots[node]["kv_fraction"] * dtype.kv_capacity_tokens),
         ),), f"route/{node}", (f"link/{node}",),
     ) for node in destinations)
@@ -1211,6 +1220,18 @@ def _serve_window(stack: ClusterStack, messages: dict[str, list[dict]],
     return rows
 
 
+def observed_demand(rows: list[dict], seconds: float) -> dict[str, tuple[float, float]]:
+    if seconds <= 0:
+        raise ValueError("observation window must be positive")
+    demand = {}
+    for row in rows:
+        values = demand.setdefault(row["session_id"], [0, 0])
+        values[0] += row["prompt_tokens"] - row["cached_tokens"]
+        values[1] += row["output_tokens"]
+    return {session_id: (values[0] / seconds, values[1] / seconds)
+            for session_id, values in demand.items()}
+
+
 def run_handoff(cluster: Cluster, key: Path, calibration_path: Path,
                 plan_path: Path, manifest_path: Path, run_root: Path,
                 window_s: float = 300, destination_load: float = .5,
@@ -1269,7 +1290,9 @@ def run_handoff(cluster: Cluster, key: Path, calibration_path: Path,
                     lambda node: destination_metrics(stack, node.id, 0), nodes)))
         moves = plan_joint_scenario(
             scenario, snapshots, ModelProfile.load(MODEL_PATH),
-            scenario["planner_seed"])
+            scenario["planner_seed"], observed_demand(
+                pre, (phase["pre_end"]["monotonic_ns"]
+                      - phase["pre_start"]["monotonic_ns"]) / 1e9))
         write_checkpoint(run_root / "decision.json", {
             "background": snapshots, "moves": moves})
         mark("handoff_start")
