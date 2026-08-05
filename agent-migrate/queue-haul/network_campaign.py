@@ -1047,6 +1047,25 @@ def plan_joint_scenario(scenario: dict, snapshots: dict[str, dict],
     return moves
 
 
+def agentic_demand(records: dict[str, dict], sessions: list[dict],
+                   profile: ModelProfile
+                   ) -> dict[str, tuple[float, float]]:
+    demand = {}
+    for session in sessions:
+        row = records[session["session_id"]]
+        rate, turns = float(row["turn_rate_hz"]), row["turns"]
+        if rate <= 0 or not turns:
+            raise ValueError("agentic trace demand must be positive")
+        demand[row["id"]] = (
+            rate * statistics.mean(turn["append_tokens"] for turn in turns),
+            rate * statistics.mean(turn["output_tokens"] for turn in turns),
+        )
+    case = profile.case()
+    scale = .4 / sum(f / case.F + g / case.G for f, g in demand.values())
+    return {session_id: (f * scale, g * scale)
+            for session_id, (f, g) in demand.items()}
+
+
 class SinkLoad:
     def __init__(self, cfg: testbed.Config, port: int, prefill_tps: float,
                  rho: float, path: Path):
@@ -1131,9 +1150,10 @@ def run_network_scenario(stack: ClusterStack, manifest: dict, scenario: dict,
                     pool.map(lambda node: destination_metrics(
                         stack, node.id, scenario["background"][node.id][1]), nodes),
                 ))
+            profile = ModelProfile.load(MODEL_PATH)
             moves = plan_joint_scenario(
-                scenario, snapshots, ModelProfile.load(MODEL_PATH),
-                scenario["planner_seed"])
+                scenario, snapshots, profile, scenario["planner_seed"],
+                agentic_demand(sessions, scenario["sessions"], profile))
             write_checkpoint(root / "decision.json", {
                 "background": snapshots, "moves": moves,
             })

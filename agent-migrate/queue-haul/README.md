@@ -243,7 +243,9 @@ directions; controlled 40%; natural bandwidth; and a 19-second deadline.
 Joint scenarios do not preassign a destination. After five seconds of seeded
 background warmup and five one-second vLLM metric samples, the selected policy
 chooses destination, replay or KV, and order for every session. Declared work
-and measured live KV usage are planner inputs. A live-state deviation over five
+comes from pinned agentic turn rates and prefill/decode tokens; measured live KV
+usage is also a planner input. Trace demand is normalized to the campaign's
+existing total source-load contract of `ell=0.4`. A live-state deviation over five
 percentage points or any waiting request is retained as a warning, not a failed
 measurement. Missing metrics, invalid reconstruction, or missing KV evidence
 remain hard failures.

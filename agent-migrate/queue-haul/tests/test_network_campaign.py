@@ -422,6 +422,19 @@ def test_observed_demand_uses_uncached_prefill_and_decode_tokens():
     assert n.observed_demand(rows, 2) == {"a": (20, 12)}
 
 
+def test_agentic_demand_uses_trace_turn_rate_and_token_work():
+    records = {"a": {"id": "a", "turn_rate_hz": .5, "turns": [
+        {"append_tokens": 10, "output_tokens": 2},
+        {"append_tokens": 30, "output_tokens": 6},
+    ]}}
+
+    profile = n.ModelProfile.load(n.MODEL_PATH)
+    demand = n.agentic_demand(records, [{"session_id": "a"}], profile)
+
+    assert demand["a"][0] / profile.case().F \
+        + demand["a"][1] / profile.case().G == pytest.approx(.4)
+
+
 def test_scheduled_events_reject_active_spot_notice():
     assert n.active_scheduled_events({"Events": []}) == []
     event = {"EventId": "e", "EventType": "Preempt", "Resources": ["vm"]}
