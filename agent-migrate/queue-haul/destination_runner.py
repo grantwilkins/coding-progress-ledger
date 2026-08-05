@@ -229,6 +229,18 @@ def _completion(host: str, port: int, model: str, prompt: list[int], output_toke
             "mean_tpot_s": (end - (first or end)) / 1e9 / max(1, completion_tokens - 1)}
 
 
+def issue(host: str, port: int, model: str, session: Session, index: int,
+          scheduled_ns: int, timeout_s: float) -> dict:
+    prompt, forced = session.prompt(index)
+    row = _completion(host, port, model, prompt, session.output_tokens, forced, timeout_s)
+    row.update({"request_index": index, "session_id": session.session_id,
+                "scheduled_ns": scheduled_ns, "input_tokens": session.append_tokens,
+                "planned_prompt_tokens": len(prompt),
+                "planned_output_tokens": session.output_tokens,
+                "prompt_sha256": hashlib.sha256(bytes(np.asarray(prompt, dtype=np.uint32))).hexdigest()})
+    return row
+
+
 def drive(host: str, port: int, model: str, sessions: list[Session], rate: float,
           count: int, seed: int, timeout_s: float = 720,
           scheduler=poisson_schedule, window_s: float | None = None,
@@ -242,15 +254,8 @@ def drive(host: str, port: int, model: str, sessions: list[Session], rate: float
             return None
         if not stop:
             time.sleep(delay)
-        session = sessions[index % len(sessions)]
-        prompt, forced = session.prompt(index)
-        row = _completion(host, port, model, prompt, session.output_tokens, forced, timeout_s)
-        row.update({"request_index": index, "session_id": session.session_id,
-                    "scheduled_ns": int(scheduled * 1e9), "input_tokens": session.append_tokens,
-                    "planned_prompt_tokens": len(prompt),
-                    "planned_output_tokens": session.output_tokens,
-                    "prompt_sha256": hashlib.sha256(bytes(np.asarray(prompt, dtype=np.uint32))).hexdigest()})
-        return row
+        return issue(host, port, model, sessions[index % len(sessions)], index,
+                     int(scheduled * 1e9), timeout_s)
     if not count:
         return []
     with ThreadPoolExecutor(max_workers=min(256, count)) as pool:
@@ -274,16 +279,25 @@ class DestinationLoad:
     def __init__(self, host: str, port: int, model: str, sessions: list[Session],
                  target_rho: float, prefill_rate: float, decode_rate: float,
                  root: Path, seed: int, chunk_s: float = 15, normal_bound: float = 1,
-                 timeout_s: float = 720):
+                 timeout_s: float = 720, rps: float | None = None,
+                 max_inflight: int = 0):
         work = np.mean([s.append_tokens / prefill_rate + s.output_tokens / decode_rate
                         for s in sessions])
         if min(target_rho, work, normal_bound) <= 0:
             raise ValueError("destination load needs positive target and work")
+        if rps is not None and rps <= 0:
+            raise ValueError("open-loop arrival rate must be positive")
+        if (rps is None) != (max_inflight <= 0):
+            raise ValueError("open-loop mode needs both rps and max_inflight")
         self.host, self.port, self.model, self.sessions = host, port, model, sessions
         self.target, self.prefill_rate, self.decode_rate = target_rho, prefill_rate, decode_rate
         self.normal_bound = normal_bound
         self.root, self.seed, self.chunk_s, self.timeout_s = root, seed, chunk_s, timeout_s
-        self.rate, self.stop, self.rows = target_rho * normal_bound / work, threading.Event(), []
+        self.rate = rps if rps else target_rho * normal_bound / work
+        self.work, self.max_inflight = float(work), max_inflight
+        self.stop, self.rows = threading.Event(), []
+        self.admit, self.blocked_arrivals = threading.Event(), 0
+        self.admit.set()
         self.sampler = MetricsSampler(host, port, root / "engine.csv")
         self.thread, self.failure = threading.Thread(target=self._run, daemon=True), None
         self.achieved = None
@@ -293,17 +307,54 @@ class DestinationLoad:
         prewarm(self.host, self.port, self.model, self.sessions, self.timeout_s)
         self.sampler.start(); self.thread.start()
 
+    def pause(self):
+        """Stop new arrivals; in-flight requests keep draining."""
+        self.admit.clear()
+
+    def resume(self):
+        self.admit.set()
+
     def _run(self):
         try:
-            index = 0
-            while not self.stop.is_set():
-                count = max(1, math.ceil(self.rate * self.chunk_s))
-                self.rows += drive(self.host, self.port, self.model, self.sessions,
-                                   self.rate, count, self.seed + index, self.timeout_s,
-                                   stop=self.stop)
-                index += 1
+            self._run_open() if self.max_inflight else self._run_chunked()
         except Exception as exc:
             self.failure = exc
+
+    def _run_chunked(self):
+        index = 0
+        while not self.stop.is_set():
+            count = max(1, math.ceil(self.rate * self.chunk_s))
+            self.rows += drive(self.host, self.port, self.model, self.sessions,
+                               self.rate, count, self.seed + index, self.timeout_s,
+                               stop=self.stop)
+            index += 1
+
+    def _run_open(self):
+        """Poisson arrivals that never wait on completions, capped by max_inflight."""
+        rng, gate, lock = random.Random(self.seed), threading.Semaphore(self.max_inflight), threading.Lock()
+        def one(index, scheduled_ns):
+            try:
+                row = issue(self.host, self.port, self.model,
+                            self.sessions[index % len(self.sessions)], index,
+                            scheduled_ns, self.timeout_s)
+                with lock:
+                    self.rows.append(row)
+            finally:
+                gate.release()
+        with ThreadPoolExecutor(max_workers=self.max_inflight) as pool:
+            index = 0
+            while not self.stop.wait(rng.expovariate(self.rate)):
+                while not self.admit.is_set():
+                    if self.stop.wait(.1):
+                        return
+                scheduled_ns = time.time_ns()
+                if not gate.acquire(blocking=False):
+                    self.blocked_arrivals += 1
+                    while not gate.acquire(blocking=False):
+                        if self.stop.wait(.05):
+                            return
+                pool.submit(one, index, scheduled_ns)
+                index += 1
 
     def wait_ready(self):
         deadline = time.monotonic() + 90
@@ -327,7 +378,9 @@ class DestinationLoad:
 
     def summary(self):
         return {"target_rho": self.target, "achieved_rho": self.achieved,
-                "request_count": len(self.rows),
+                "offered_rps": self.rate, "max_inflight": self.max_inflight,
+                "blocked_arrivals": self.blocked_arrivals,
+                "work_per_request_s": self.work, "request_count": len(self.rows),
                 "queue_at_start": self.sampler.rows[0].get("vllm:num_requests_waiting") if self.sampler.rows else None}
 
 

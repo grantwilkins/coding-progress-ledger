@@ -612,3 +612,32 @@ def test_smoke2_live_cli_is_wired_with_1gbps_default():
     assert args.cmd == "smoke2-live"
     assert args.mbps == 1000.0
     assert str(args.run_root) == "/tmp/live-proof"
+
+
+def test_kv_role_overrides_let_both_engines_store_and_load(monkeypatch):
+    """kv_both is needed when source and destination both serve live traffic."""
+    monkeypatch.setenv("QH_KV_ROLE_SOURCE", "kv_both")
+    monkeypatch.setenv("QH_KV_ROLE_SINK", "kv_both")
+    cfg = s.Config()
+    source = " ".join(map(str, s.vllm_cmd(cfg, "source")))
+    sink = " ".join(map(str, s.vllm_cmd(cfg, "sink")))
+    assert "kv_both" in source and "kv_producer" not in source
+    assert "kv_both" in sink and "kv_consumer" not in sink
+    assert "engine_id\":\"s0" in source and "engine_id\":\"d0" in sink
+
+
+def test_kv_roles_default_to_producer_and_consumer(monkeypatch):
+    monkeypatch.delenv("QH_KV_ROLE_SOURCE", raising=False)
+    monkeypatch.delenv("QH_KV_ROLE_SINK", raising=False)
+    assert s.kv_role_for("source") == "kv_producer"
+    assert s.kv_role_for("sink") == "kv_consumer"
+    assert s.kv_role_for("smoke1") == "kv_both"
+
+
+def test_l1_cache_size_is_configurable(monkeypatch):
+    monkeypatch.setenv("QH_LMCACHE_MODE", "mp")
+    monkeypatch.setenv("QH_LMCACHE_L1_GB", "36")
+    cmd = " ".join(map(str, s.mp_server_cmd(s.Config(), "source")))
+    assert "--l1-size-gb 36" in cmd
+    monkeypatch.delenv("QH_LMCACHE_L1_GB")
+    assert "--l1-size-gb 16" in " ".join(map(str, s.mp_server_cmd(s.Config(), "source")))

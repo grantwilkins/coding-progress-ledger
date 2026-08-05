@@ -66,6 +66,7 @@ CACHE_ROOT = Path("/scratch/users/gfw/ptsim/cache")
 LMCACHE_COMPAT = Path(__file__).with_name("lmcache_compat").resolve()
 CHUNK = 65536
 LMCACHE_MAX_LOCAL_CPU_GB = "4"
+DEFAULT_KV_ROLES = {"source": "kv_producer", "sink": "kv_consumer", "smoke1": "kv_both"}
 TYPED_VLLM_FLAGS = {
     "--host",
     "--port",
@@ -190,6 +191,15 @@ def tmpdir(role: str) -> Path:
     return Path(f"/tmp/qh-{tag}-{os.getpid()}")
 
 
+def kv_role_for(role: str) -> str:
+    """vLLM kv_role per engine; QH_KV_ROLE_{SOURCE,SINK} override the defaults."""
+    return os.environ.get(f"QH_KV_ROLE_{role.upper()}", DEFAULT_KV_ROLES[role])
+
+
+def lmcache_l1_gb() -> int:
+    return int(os.environ.get("QH_LMCACHE_L1_GB", "16"))
+
+
 def kv_config(engine_id: str, kv_role: str, kv_port: int, rpc_port: str) -> str:
     if lmcache_mode() == "mp":
         return json.dumps({
@@ -290,7 +300,7 @@ def mp_server_cmd(cfg: Config, role: str) -> list[str]:
     serve = [
         "lmcache", "server", "--instance-id", f"queue-haul-{role}",
         "--host", cfg.host, "--port", port, "--http-host", cfg.host,
-        "--http-port", http_port, "--l1-size-gb", 16, "--eviction-policy", "LRU",
+        "--http-port", http_port, "--l1-size-gb", lmcache_l1_gb(), "--eviction-policy", "LRU",
         "--chunk-size", 256, "--max-workers", 8,
         "--supported-transfer-mode", "engine_driven", "--l2-adapter", adapter,
     ]
@@ -304,16 +314,17 @@ def mp_server_cmd(cfg: Config, role: str) -> list[str]:
 def vllm_cmd(cfg: Config, role: str, extra: list[str] | None = None) -> list[str]:
     reject_duplicate_extra(extra or [])
     if role == "source":
-        port, gpu, engine_id, kv_role, kv_port, rpc_port = cfg.src_port, 0, "s0", "kv_producer", port_default(14579), "src"
+        port, gpu, engine_id, kv_port, rpc_port = cfg.src_port, 0, "s0", port_default(14579), "src"
         remote_url, cache_role = f"lm://{cfg.host}:{cfg.lmc_port}", "src"
     elif role == "sink":
-        port, gpu, engine_id, kv_role, kv_port, rpc_port = cfg.sink_port, 1, "d0", "kv_consumer", port_default(14580), "sink"
+        port, gpu, engine_id, kv_port, rpc_port = cfg.sink_port, 1, "d0", port_default(14580), "sink"
         remote_url, cache_role = f"lm://{cfg.host}:{cfg.kv_proxy_port}", "sink"
     elif role == "smoke1":
-        port, gpu, engine_id, kv_role, kv_port, rpc_port = cfg.smoke_port, 0, "e0", "kv_both", port_default(14579), "smk"
+        port, gpu, engine_id, kv_port, rpc_port = cfg.smoke_port, 0, "e0", port_default(14579), "smk"
         remote_url, cache_role = f"lm://{cfg.host}:{cfg.lmc_port}", "smoke1"
     else:
         raise ValueError(f"unknown role: {role}")
+    kv_role = kv_role_for(role)
 
     dirs = " ".join(shlex.quote(str(p)) for p in [tmpdir(cache_role), *cache_dirs(cfg, cache_role).values()])
     serve = [
