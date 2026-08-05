@@ -510,6 +510,7 @@ def main() -> None:
 
         original_flush = profiler.b.flush_lmcache
         original_reset = profiler.b.reset_vllm_caches
+        original_with_load = profiler.with_destination_load
         flush_count = 0
 
         def coordinated_flush(*args, **kwargs):
@@ -517,14 +518,7 @@ def main() -> None:
             flush_count += 1
             result = original_flush(*args, **kwargs)
             if flush_count == 2:
-                # Both sites resume before the moves start, so the shed lands on a
-                # destination that is already carrying its own tenants again.
-                markers.add("loads_resumed")
-                source.resume()
-                dest.resume()
-                wait_queue(source, label="source foreground")
-                wait_serving(dest, len(dest.rows) + 3, label="destination background")
-                markers.add("migration_start")
+                markers.add("kv_sessions_warming")
             elif flush_count != 1:
                 raise RuntimeError(f"unexpected scenario flush {flush_count}")
             return result
@@ -533,8 +527,24 @@ def main() -> None:
             """The destination keeps serving its tenants across the shed."""
             original_reset(reset_cfg, logs[:1], (reset_cfg.src_port,))
 
+        def resume_then_move(load, action):
+            """Resume both sites immediately before the moves.
+
+            The kv_transfer sessions are warmed serially just before this, and
+            foreground churn evicts their freshly written KV from L2 within
+            seconds. Resuming any earlier loses the state the moves depend on.
+            """
+            markers.add("loads_resumed")
+            source.resume()
+            dest.resume()
+            wait_queue(source, label="source foreground")
+            wait_serving(dest, len(dest.rows) + 3, label="destination background")
+            markers.add("migration_start")
+            return original_with_load(load, action)
+
         profiler.b.flush_lmcache = coordinated_flush
         profiler.b.reset_vllm_caches = source_only_reset
+        profiler.with_destination_load = resume_then_move
         profiler.b.mp_wait_idle = lambda *_args, **_kwargs: None
         markers.add("shed_start")
         try:
@@ -545,6 +555,7 @@ def main() -> None:
         finally:
             profiler.b.flush_lmcache = original_flush
             profiler.b.reset_vllm_caches = original_reset
+            profiler.with_destination_load = original_with_load
         if result["status"] != "complete" or len(result["migrations"]) != 8 \
                 or not all(row["error"] is None for row in result["migrations"]):
             raise RuntimeError("full-shed migration did not complete")
