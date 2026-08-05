@@ -577,6 +577,15 @@ def test_chat_explicitly_probes_state_code(monkeypatch):
          "Reply only with session state code CODE."}], "tokens": 128}
 
 
+def test_chat_retries_one_invalid_probe(monkeypatch):
+    replies = iter(["invalid", "CODE"])
+    result = n.profiler.RequestResult("r", 200, "", 1, 2)
+    monkeypatch.setattr(n.profiler, "stream_chat",
+                        lambda *_args: (result, next(replies)))
+
+    assert n._chat(object(), 1, [], "CODE", 1)["probe_attempts"] == 2
+
+
 def test_warm_waits_only_for_complete_lmcache_blocks(monkeypatch, tmp_path):
     log = tmp_path / "lmcache-source.log"
     log.touch()

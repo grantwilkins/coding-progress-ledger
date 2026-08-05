@@ -918,13 +918,15 @@ def _chat(cfg: testbed.Config, port: int, messages: list[dict], code: str,
           timeout_s: float) -> dict:
     messages = messages + [{"role": "user", "content":
                             f"Reply only with session state code {code}."}]
-    result, text = profiler.stream_chat(
-        cfg, port, messages, 128, profiler.messages_hash(messages), timeout_s)
-    if result.status_code != 200 or code not in text:
-        raise RuntimeError(
-            f"session reconstruction failed: HTTP {result.status_code}, "
-            f"state code present={code in text}")
-    return {**asdict(result), "state_code_verified": True}
+    for attempt in range(2):
+        result, text = profiler.stream_chat(
+            cfg, port, messages, 128, profiler.messages_hash(messages), timeout_s)
+        if result.status_code == 200 and code in text:
+            return {**asdict(result), "state_code_verified": True,
+                    "probe_attempts": attempt + 1}
+    raise RuntimeError(
+        f"session reconstruction failed after 2 probes: HTTP "
+        f"{result.status_code}, response={text[:200]!r}")
 
 
 def _warm(stack: ClusterStack, messages: list[dict], code: str,

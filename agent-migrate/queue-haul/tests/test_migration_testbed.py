@@ -58,7 +58,7 @@ def test_vllm_commands_pin_validated_sandbox_flags_and_roles():
     assert "LMCacheConnectorV1" in source
     assert "LMCacheMPConnector" not in source
     assert "kv_producer" in source and "engine_id\":\"s0" in source
-    assert "kv_consumer" in sink and "engine_id\":\"d0" in sink
+    assert "kv_both" in sink and "engine_id\":\"d0" in sink
     assert "kv_both" in smoke and "engine_id\":\"e0" in smoke
     assert "LMCACHE_REMOTE_URL=lm://127.0.0.1:5655" in source
     assert "LMCACHE_REMOTE_URL=lm://127.0.0.1:8300" in sink

@@ -345,7 +345,7 @@ def vllm_cmd(cfg: Config, role: str, extra: list[str] | None = None, *,
         port, gpu, engine_id, kv_role, kv_port, rpc_port = cfg.src_port, 0, "s0", "kv_producer", port_default(14579), "src"
         remote_url, cache_role = f"lm://{cfg.host}:{cfg.lmc_port}", "src"
     elif role == "sink":
-        port, gpu, engine_id, kv_role, kv_port, rpc_port = cfg.sink_port, 1, "d0", "kv_consumer", port_default(14580), "sink"
+        port, gpu, engine_id, kv_role, kv_port, rpc_port = cfg.sink_port, 1, "d0", "kv_both", port_default(14580), "sink"
         remote_url, cache_role = f"lm://{cfg.host}:{cfg.kv_proxy_port}", "sink"
     elif role == "smoke1":
         port, gpu, engine_id, kv_role, kv_port, rpc_port = cfg.smoke_port, 0, "e0", "kv_both", port_default(14579), "smk"

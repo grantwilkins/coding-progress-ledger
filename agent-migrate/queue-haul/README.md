@@ -41,6 +41,8 @@ performs final catch-up, switches routing, and succeeds when the destination
 returns the first token. Mid-token migration, return migration, cold model
 placement, unrelated destination arrivals, provider fleet policy, and facility
 power are out of scope.
+Destinations use the bidirectional LMCache role so resumed sessions write back
+KV instead of remaining read-only migration consumers.
 Same-source migrations may overlap and share the bandwidth of every link on
 their route; there is no fixed per-source migration-count limit.
 
@@ -250,7 +252,8 @@ percentage points or any waiting request is retained as a warning, not a failed
 measurement. Missing metrics, invalid reconstruction, or missing KV evidence
 remain hard failures.
 
-The runner checkpoints each decision and scenario result atomically and fsyncs
+The runner retries one malformed state-code probe, then hard-fails with its
+response excerpt. It checkpoints each decision and scenario result atomically and fsyncs
 them. `progress.json` records completed scenario IDs and counts after every
 attempt. Rerun the same command and run root to skip every completed scenario;
 an interrupted or failed `attempt-NNNN` remains intact and resume uses the next
