@@ -122,8 +122,8 @@ def reduce(run_root: Path) -> list[dict]:
             axis.axvline(marker[name], color="black", lw=.7, ls=":")
     style(axis, xlim, "Power per GPU (W)")
     axis.set_xlabel("Time (s)", size=16)
-    axis.legend(frameon=False, loc="upper center", bbox_to_anchor=(.5, -.2),
-                ncol=3, prop={"family": "monospace", "size": 13})
+    axis.legend(frameon=False, fontsize=13, loc="upper center",
+                bbox_to_anchor=(.5, -.2), ncol=3)
     figure.tight_layout()
     for suffix in ("png", "pdf"):
         figure.savefig(run_root / f"power_handoff.{suffix}", dpi=220,
