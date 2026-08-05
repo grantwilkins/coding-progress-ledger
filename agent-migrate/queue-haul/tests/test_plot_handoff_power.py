@@ -38,6 +38,16 @@ def test_reduce_aligns_power_regions_and_queue_depth(tmp_path):
                              "vllm:num_requests_waiting"))
             for index, moment in enumerate(moments):
                 writer.writerow((moment, index + 1, index))
+    with (tmp_path / "proxy_bytes.csv").open("w", newline="") as handle:
+        writer = csv.writer(handle)
+        writer.writerow(("monotonic_ns", "wall_ns", "interval_ns", "connection_id",
+                         "route", "direction", "bytes", "billed"))
+        writer.writerow((0, 1_500_000_000, 250_000_000, "a", "kv/east",
+                         "client_to_target", 1000, 1))
+        writer.writerow((0, 2_500_000_000, 250_000_000, "a", "kv/east",
+                         "target_to_client", 2000, 1))
+        writer.writerow((0, 2_500_000_000, 250_000_000, "b", "kv/germany",
+                         "target_to_client", 3000, 1))
 
     rows = p.reduce(tmp_path)
 

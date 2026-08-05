@@ -1,4 +1,4 @@
-"""Reduce and plot synchronized three-node handoff power."""
+"""Reduce and plot synchronized three-node handoff power and KV movement."""
 
 from __future__ import annotations
 
@@ -16,9 +16,10 @@ import matplotlib.pyplot as plt
 
 COLORS = {"sweden": "#8C1515", "east": "#006CB8",
           "west": "#008566", "germany": "#008566"}
-SPANS = (("Handoff", "handoff_start", "handoff_end", "#DAD7CB", .5),
-         ("Sleep", "sleep_start", "sleep_ready", "#007C92", .12),
+SPANS = (("KV transfer", "handoff_start", "handoff_end", "#DAD7CB", .5),
+         ("Sweden sleep", "sleep_start", "sleep_ready", "#007C92", .12),
          ("Destination steady", "post_start", "post_end", "#6F4E7C", .12))
+PLOT_START_S = 30
 
 
 def read_power(path: Path, base_ns: int) -> list[tuple[float, float]]:
@@ -30,12 +31,47 @@ def read_power(path: Path, base_ns: int) -> list[tuple[float, float]]:
             for row in rows]
 
 
-def bin_power(points: list[tuple[float, float]]) -> tuple[list[float], list[float]]:
+def read_kv(path: Path, base_ns: int) -> dict[tuple[str, str], list[tuple[float, float]]]:
+    series = {}
+    for row in csv.DictReader(path.open()):
+        pool, _, node = row["route"].partition("/")
+        if pool != "kv":
+            continue
+        seconds = (int(row["wall_ns"]) - base_ns) / 1e9
+        series.setdefault((node, row["direction"]), []).append(
+            (seconds, int(row["bytes"]) / 1e6))
+    if not series:
+        raise ValueError(f"no kv routes in {path}")
+    return series
+
+
+def bin_mean(points: list[tuple[float, float]],
+             start: float = PLOT_START_S) -> tuple[list[float], list[float]]:
     bins = {}
-    for seconds, watts in points:
-        bins.setdefault(int(seconds // 1), []).append(watts)
+    for seconds, value in points:
+        if seconds >= start:
+            bins.setdefault(int(seconds), []).append(value)
     return ([index + .5 for index in sorted(bins)],
             [statistics.fmean(bins[index]) for index in sorted(bins)])
+
+
+def bin_rate(points: list[tuple[float, float]], stop: float,
+             start: float = PLOT_START_S) -> tuple[list[float], list[float]]:
+    bins = {index: 0. for index in range(int(start), int(stop) + 1)}
+    for seconds, value in points:
+        if start <= seconds <= stop:
+            bins[int(seconds)] += value
+    return ([index + .5 for index in sorted(bins)],
+            [bins[index] for index in sorted(bins)])
+
+
+def style(axis, xlim: tuple[float, float], ylabel: str) -> None:
+    axis.set_xlim(*xlim)
+    axis.set_ylabel(ylabel, size=16)
+    axis.tick_params(labelsize=14)
+    axis.grid(alpha=.25)
+    for spine in axis.spines.values():
+        spine.set_color("black")
 
 
 def reduce(run_root: Path) -> list[dict]:
@@ -91,31 +127,38 @@ def reduce(run_root: Path) -> list[dict]:
             writer.writeheader()
             writer.writerows(queue)
 
-    plt.style.use("default")
-    figure, axis = plt.subplots(figsize=(9, 4))
-    for node, path in paths.items():
-        axis.plot(*bin_power(read_power(path, base)), lw=1.5,
-                  color=COLORS[node], label=node.title())
     marker = {name: (phase["wall_ns"] - base) / 1e9
               for name, phase in phases.items()}
-    for label, start, end, color, alpha in SPANS:
-        if start in marker and end in marker:
-            axis.axvspan(marker[start], marker[end], color=color, alpha=alpha,
-                         label=label)
-    for name in ("pre_end", "handoff_start", "handoff_end", "post_start"):
-        if name in marker:
-            axis.axvline(marker[name], color="black", lw=.7, ls=":")
-    axis.set(xlabel="Time (s)", ylabel="Power per GPU (W)")
-    axis.set_xlim(0, marker["post_end"])
-    axis.tick_params(labelsize=14)
-    axis.xaxis.label.set_size(16)
-    axis.yaxis.label.set_size(16)
-    axis.grid(alpha=.25)
-    for spine in axis.spines.values():
-        spine.set_color("black")
-    axis.legend(frameon=False, fontsize=13, loc="upper center",
-                bbox_to_anchor=(.5, -.2), ncol=3)
-    figure.tight_layout()
+    xlim = (PLOT_START_S, marker["post_end"])
+    kv = read_kv(run_root / "proxy_bytes.csv", base)
+    plt.style.use("default")
+    figure, (top, bottom) = plt.subplots(
+        2, 1, figsize=(9, 5.6), sharex=True, height_ratios=(2.4, 1),
+        gridspec_kw={"hspace": .12})
+    for node, path in paths.items():
+        top.plot(*bin_mean(read_power(path, base)), lw=1.5,
+                 color=COLORS[node], label=node.title())
+    bottom.plot(*bin_rate([point for (node, direction), points in kv.items()
+                           for point in points if direction == "client_to_target"],
+                          xlim[1]),
+                lw=1.2, color=COLORS["sweden"], label="Sweden write")
+    for node in paths.keys() - {"sweden"}:
+        bottom.plot(*bin_rate(kv[(node, "target_to_client")], xlim[1]), lw=1.2,
+                    color=COLORS[node], label=f"{node.title()} read")
+    for axis in (top, bottom):
+        for label, start, end, color, alpha in SPANS:
+            if start in marker and end in marker:
+                axis.axvspan(marker[start], marker[end], color=color, alpha=alpha,
+                             label=label if axis is top else None)
+        for name in ("pre_end", "handoff_start", "handoff_end", "post_start"):
+            if name in marker:
+                axis.axvline(marker[name], color="black", lw=.7, ls=":")
+    style(top, xlim, "Power per GPU (W)")
+    style(bottom, xlim, "KV traffic (MB/s)")
+    bottom.set_xlabel("Time (s)", size=16)
+    top.legend(frameon=False, fontsize=13, loc="upper center",
+               bbox_to_anchor=(.5, 1.28), ncol=3)
+    bottom.legend(frameon=False, fontsize=12, loc="upper left", ncol=3)
     for suffix in ("png", "pdf"):
         figure.savefig(run_root / f"power_handoff.{suffix}", dpi=220,
                        bbox_inches="tight")
