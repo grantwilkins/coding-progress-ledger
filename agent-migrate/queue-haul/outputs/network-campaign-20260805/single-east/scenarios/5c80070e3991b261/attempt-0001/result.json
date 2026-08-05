@@ -1,0 +1,166 @@
+{
+  "background": {},
+  "connections": [],
+  "deadline_met": true,
+  "ended_ns": 9505705446525,
+  "migration_s": 2.835720263,
+  "requests": [
+    {
+      "deadline_admitted": true,
+      "destination_instance": "east",
+      "method": "kv_transfer",
+      "order": 0,
+      "request": {
+        "cached_tokens": 1536,
+        "context_hash": "068f3c8e114a64f1e6a8f83f079b8dc06066d55185a3117c97a68267f630fbcc",
+        "end_ns": 9505705182181,
+        "first_byte_ns": 9505485894521,
+        "logical_kv_bytes": 0,
+        "logical_kv_chunks": 0,
+        "output_tokens": 23,
+        "processed_tokens": 0,
+        "prompt_tokens": 1680,
+        "request_id": "chatcmpl-875d849664d54b4b",
+        "start_ns": 9502870051321,
+        "state_code_verified": true,
+        "status_code": 200,
+        "stream_chunks": [
+          {
+            "byte_count": 270,
+            "monotonic_ns": 9505113288296
+          },
+          {
+            "byte_count": 231,
+            "monotonic_ns": 9505192426063
+          },
+          {
+            "byte_count": 234,
+            "monotonic_ns": 9505219096804
+          },
+          {
+            "byte_count": 231,
+            "monotonic_ns": 9505246234067
+          },
+          {
+            "byte_count": 232,
+            "monotonic_ns": 9505273209027
+          },
+          {
+            "byte_count": 228,
+            "monotonic_ns": 9505300944989
+          },
+          {
+            "byte_count": 225,
+            "monotonic_ns": 9505459271760
+          },
+          {
+            "byte_count": 226,
+            "monotonic_ns": 9505485894521
+          },
+          {
+            "byte_count": 227,
+            "monotonic_ns": 9505513354588
+          },
+          {
+            "byte_count": 226,
+            "monotonic_ns": 9505540267271
+          },
+          {
+            "byte_count": 226,
+            "monotonic_ns": 9505567024043
+          },
+          {
+            "byte_count": 228,
+            "monotonic_ns": 9505593415051
+          },
+          {
+            "byte_count": 226,
+            "monotonic_ns": 9505620595325
+          },
+          {
+            "byte_count": 226,
+            "monotonic_ns": 9505649158584
+          },
+          {
+            "byte_count": 227,
+            "monotonic_ns": 9505676770294
+          },
+          {
+            "byte_count": 234,
+            "monotonic_ns": 9505705044303
+          },
+          {
+            "byte_count": 302,
+            "monotonic_ns": 9505705096210
+          },
+          {
+            "byte_count": 13,
+            "monotonic_ns": 9505705126427
+          }
+        ],
+        "wire_bytes": 0
+      },
+      "session_id": "claude:92cc24b6-ac8d-5231-bb2d-33b876557766"
+    }
+  ],
+  "resp_transfers": [
+    {
+      "command": "GET",
+      "connection_id": "9d8ce7cb256d2090",
+      "end_ns": "9504334019768",
+      "key_hashes": "916177bfddf0b81ad9ebf8a8860e4e3a4608af4ccf014f10c7e906e9635caa82",
+      "payload_bytes": "12582912",
+      "request_body_bytes": "172",
+      "request_wire_bytes": "190",
+      "response_wire_bytes": "12582925",
+      "start_ns": "9503082003248"
+    },
+    {
+      "command": "GET",
+      "connection_id": "611257db81f950d4",
+      "end_ns": "9504459917280",
+      "key_hashes": "4ed01062284535885c2c82514bb1ce05cdd67ecf391ce5257e3db944fbf36a5d",
+      "payload_bytes": "12582912",
+      "request_body_bytes": "172",
+      "request_wire_bytes": "190",
+      "response_wire_bytes": "12582925",
+      "start_ns": "9503084533971"
+    },
+    {
+      "command": "GET",
+      "connection_id": "47e7b827e6f1af0c",
+      "end_ns": "9504688553791",
+      "key_hashes": "fa90ab7fb126611bba1b442518fb4fba34073bee3a4dce7f7a196c548783665e",
+      "payload_bytes": "12582912",
+      "request_body_bytes": "172",
+      "request_wire_bytes": "190",
+      "response_wire_bytes": "12582925",
+      "start_ns": "9503082047822"
+    },
+    {
+      "command": "GET",
+      "connection_id": "aa72e79887ebb154",
+      "end_ns": "9504938264819",
+      "key_hashes": "5b279980e8fe609fb5f08c770841d002cdd6dc5a9faf2d99d30cfd466f349b91",
+      "payload_bytes": "12582912",
+      "request_body_bytes": "172",
+      "request_wire_bytes": "190",
+      "response_wire_bytes": "12582925",
+      "start_ns": "9503081838200"
+    }
+  ],
+  "scenario_id": "5c80070e3991b261",
+  "schema": "queue-haul-network-result-v2",
+  "source_sleep_ns": [
+    9506345018793,
+    9513705874422
+  ],
+  "started_ns": 9502869726262,
+  "status": "complete",
+  "wire_bytes": {
+    "api/east/client_to_target": 3655,
+    "api/east/target_to_client": 4293,
+    "kv/east/client_to_target": 2298,
+    "kv/east/target_to_client": 75497574
+  }
+}
