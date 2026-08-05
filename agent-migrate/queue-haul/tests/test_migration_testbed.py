@@ -641,3 +641,30 @@ def test_l1_cache_size_is_configurable(monkeypatch):
     assert "--l1-size-gb 36" in cmd
     monkeypatch.delenv("QH_LMCACHE_L1_GB")
     assert "--l1-size-gb 16" in " ".join(map(str, s.mp_server_cmd(s.Config(), "source")))
+
+
+def test_redis_l2_is_unbounded_by_default(monkeypatch):
+    monkeypatch.delenv("QH_REDIS_MAXMEMORY_GB", raising=False)
+    cmd = " ".join(map(str, s.redis_cmd(s.Config())))
+    assert "--maxmemory" not in cmd
+
+
+def test_redis_l2_cap_bounds_the_duplicate_of_l1(monkeypatch):
+    """kv_both on both engines mirrors the L1 working set into L2."""
+    monkeypatch.setenv("QH_REDIS_MAXMEMORY_GB", "8")
+    cmd = " ".join(map(str, s.redis_cmd(s.Config())))
+    assert "--maxmemory 8gb" in cmd and "--maxmemory-policy allkeys-lru" in cmd
+
+
+def test_reset_vllm_caches_can_target_a_port_subset(monkeypatch):
+    """The destination keeps serving while the source is reset for a shed."""
+    posted, cfg = [], s.Config()
+    monkeypatch.setattr(s, "http_text",
+                        lambda host, port, method, path: posted.append(port))
+    monkeypatch.setattr(s, "reset_result", lambda _text: True)
+    log = Path(__file__).resolve()
+    s.reset_vllm_caches(cfg, (log,), (cfg.src_port,))
+    assert posted == [cfg.src_port]
+    posted.clear()
+    s.reset_vllm_caches(cfg, (log, log))
+    assert posted == [cfg.src_port, cfg.sink_port]

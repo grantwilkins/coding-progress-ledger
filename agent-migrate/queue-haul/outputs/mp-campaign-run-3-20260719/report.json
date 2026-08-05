@@ -1,0 +1,943 @@
+{
+  "acceptance": null,
+  "append": [],
+  "bandwidth_mbps": 10000,
+  "parallel": [
+    {
+      "accounting_ok": true,
+      "block_payload_bytes": 12582912,
+      "concurrency": 1,
+      "continuations_ok": false,
+      "distinct_session_overlap": 1,
+      "lmcache_loaded_tokens": 65536,
+      "lmcache_prefetched_tokens": 65536,
+      "lmcache_retrieved_tokens": 65536,
+      "remote_blocks": 256,
+      "remote_payload_bytes": 3221225472,
+      "remote_wire_bytes": 3221228800,
+      "repeat": 0,
+      "requests": [
+        {
+          "code_ok": true,
+          "content": "Acknowledged. QHMP0C0DE",
+          "elapsed_s": 7.7447829246521,
+          "end_ns": 5928308971237723,
+          "end_ts": 1784543039.3261251,
+          "id": "chatcmpl-a14432831db52adb",
+          "prompt_sha256": "475518dfebebffa0a0ede9c29f36c4a8fe7ca1bf6a2deb626f804a4c8e47a5a8",
+          "request_bytes": 25644,
+          "response_text": "",
+          "start_ns": 5928301226268166,
+          "start_ts": 1784543031.5813422,
+          "status": 200,
+          "usage": {
+            "completion_tokens": 302,
+            "prompt_tokens": 16446,
+            "prompt_tokens_details": null,
+            "total_tokens": 16748
+          }
+        },
+        {
+          "code_ok": true,
+          "content": "Acknowledged. QHMP1C0DE",
+          "elapsed_s": 11.357066869735718,
+          "end_ns": 5928320328567440,
+          "end_ts": 1784543050.6834543,
+          "id": "chatcmpl-a6461298f62633bd",
+          "prompt_sha256": "c1013d4010dd8549c3229f1e6cf07a8dc86ff975b682c15f1e8a5bb268ca8cae",
+          "request_bytes": 25644,
+          "response_text": "",
+          "start_ns": 5928308971286633,
+          "start_ts": 1784543039.3263874,
+          "status": 200,
+          "usage": {
+            "completion_tokens": 471,
+            "prompt_tokens": 16446,
+            "prompt_tokens_details": null,
+            "total_tokens": 16917
+          }
+        },
+        {
+          "code_ok": true,
+          "content": "Acknowledged. Received the list. QHMP2C0DE",
+          "elapsed_s": 9.423879861831665,
+          "end_ns": 5928329752698370,
+          "end_ts": 1784543060.1075864,
+          "id": "chatcmpl-a1cc162d83e6faa2",
+          "prompt_sha256": "bd7992479ca15e3540d74ab33e9e66b9448b7c9ff4da6cf3fa0aa8095d51ba6c",
+          "request_bytes": 25644,
+          "response_text": "",
+          "start_ns": 5928320328612499,
+          "start_ts": 1784543050.6837065,
+          "status": 200,
+          "usage": {
+            "completion_tokens": 386,
+            "prompt_tokens": 16446,
+            "prompt_tokens_details": null,
+            "total_tokens": 16832
+          }
+        },
+        {
+          "code_ok": false,
+          "content": "",
+          "elapsed_s": 12.21986174583435,
+          "end_ns": 5928341972792308,
+          "end_ts": 1784543072.3277054,
+          "id": "chatcmpl-8294c01a066399db",
+          "prompt_sha256": "3c87adcc026c8b37f78c0e6fd67b2545c9c009bab5fdfa912505bfface39fa9c",
+          "request_bytes": 25644,
+          "response_text": "",
+          "start_ns": 5928329752745390,
+          "start_ts": 1784543060.1078436,
+          "status": 200,
+          "usage": {
+            "completion_tokens": 512,
+            "prompt_tokens": 16446,
+            "prompt_tokens_details": null,
+            "total_tokens": 16958
+          }
+        }
+      ],
+      "sessions": [
+        {
+          "session": "mp16k-0",
+          "source": {
+            "content": "",
+            "elapsed_s": 1.787642240524292,
+            "end_ts": 1784543018.502787,
+            "id": "chatcmpl-adf6e19e2e09b1e3",
+            "prompt_sha256": "475518dfebebffa0a0ede9c29f36c4a8fe7ca1bf6a2deb626f804a4c8e47a5a8",
+            "request_bytes": 25642,
+            "response_text": "",
+            "start_ts": 1784543016.7151449,
+            "status": 200,
+            "usage": {
+              "completion_tokens": 4,
+              "prompt_tokens": 16446,
+              "prompt_tokens_details": null,
+              "total_tokens": 16450
+            }
+          },
+          "stored_blocks": 64
+        },
+        {
+          "session": "mp16k-1",
+          "source": {
+            "content": "",
+            "elapsed_s": 1.6728358268737793,
+            "end_ts": 1784543022.1884985,
+            "id": "chatcmpl-8427c2ed70cf4e87",
+            "prompt_sha256": "c1013d4010dd8549c3229f1e6cf07a8dc86ff975b682c15f1e8a5bb268ca8cae",
+            "request_bytes": 25642,
+            "response_text": "",
+            "start_ts": 1784543020.5156627,
+            "status": 200,
+            "usage": {
+              "completion_tokens": 4,
+              "prompt_tokens": 16446,
+              "prompt_tokens_details": null,
+              "total_tokens": 16450
+            }
+          },
+          "stored_blocks": 64
+        },
+        {
+          "session": "mp16k-2",
+          "source": {
+            "content": "",
+            "elapsed_s": 1.6655712127685547,
+            "end_ts": 1784543025.8678417,
+            "id": "chatcmpl-aa63002ec8ced7e0",
+            "prompt_sha256": "bd7992479ca15e3540d74ab33e9e66b9448b7c9ff4da6cf3fa0aa8095d51ba6c",
+            "request_bytes": 25642,
+            "response_text": "",
+            "start_ts": 1784543024.2022705,
+            "status": 200,
+            "usage": {
+              "completion_tokens": 4,
+              "prompt_tokens": 16446,
+              "prompt_tokens_details": null,
+              "total_tokens": 16450
+            }
+          },
+          "stored_blocks": 64
+        },
+        {
+          "session": "mp16k-3",
+          "source": {
+            "content": "",
+            "elapsed_s": 1.6640145778656006,
+            "end_ts": 1784543029.5476327,
+            "id": "chatcmpl-a281ec8dadc3e6b5",
+            "prompt_sha256": "3c87adcc026c8b37f78c0e6fd67b2545c9c009bab5fdfa912505bfface39fa9c",
+            "request_bytes": 25642,
+            "response_text": "",
+            "start_ts": 1784543027.883618,
+            "status": 200,
+            "usage": {
+              "completion_tokens": 4,
+              "prompt_tokens": 16446,
+              "prompt_tokens_details": null,
+              "total_tokens": 16450
+            }
+          },
+          "stored_blocks": 64
+        }
+      ],
+      "target_cacheable_tokens": 65536,
+      "throughput_bps": 110143880.57356146,
+      "vllm_external_tokens": 0,
+      "vllm_local_tokens": 0,
+      "wire_ok": true
+    },
+    {
+      "accounting_ok": true,
+      "block_payload_bytes": 12582912,
+      "concurrency": 1,
+      "continuations_ok": false,
+      "distinct_session_overlap": 1,
+      "lmcache_loaded_tokens": 65536,
+      "lmcache_prefetched_tokens": 65536,
+      "lmcache_retrieved_tokens": 65536,
+      "remote_blocks": 256,
+      "remote_payload_bytes": 3221225472,
+      "remote_wire_bytes": 3221228800,
+      "repeat": 1,
+      "requests": [
+        {
+          "code_ok": false,
+          "content": "",
+          "elapsed_s": 12.205074787139893,
+          "end_ns": 5928370152693841,
+          "end_ts": 1784543100.5075722,
+          "id": "chatcmpl-b8dcc4538cc72030",
+          "prompt_sha256": "475518dfebebffa0a0ede9c29f36c4a8fe7ca1bf6a2deb626f804a4c8e47a5a8",
+          "request_bytes": 25644,
+          "response_text": "",
+          "start_ns": 5928357947355166,
+          "start_ts": 1784543088.3024974,
+          "status": 200,
+          "usage": {
+            "completion_tokens": 512,
+            "prompt_tokens": 16446,
+            "prompt_tokens_details": null,
+            "total_tokens": 16958
+          }
+        },
+        {
+          "code_ok": false,
+          "content": "mp16k-1_0 mp16k-1_1 mp16k-1_2 mp16k-1_3 mp16k-1_4 mp16k-1_5 mp16k",
+          "elapsed_s": 12.149212837219238,
+          "end_ns": 5928382302219475,
+          "end_ts": 1784543112.6570911,
+          "id": "chatcmpl-a1e892563eff8f62",
+          "prompt_sha256": "c1013d4010dd8549c3229f1e6cf07a8dc86ff975b682c15f1e8a5bb268ca8cae",
+          "request_bytes": 25644,
+          "response_text": "",
+          "start_ns": 5928370152747011,
+          "start_ts": 1784543100.5078783,
+          "status": 200,
+          "usage": {
+            "completion_tokens": 512,
+            "prompt_tokens": 16446,
+            "prompt_tokens_details": null,
+            "total_tokens": 16958
+          }
+        },
+        {
+          "code_ok": true,
+          "content": "Session mp16k-2 acknowledged. QHMP2C0DE",
+          "elapsed_s": 7.784818649291992,
+          "end_ns": 5928390087342299,
+          "end_ts": 1784543120.4422164,
+          "id": "chatcmpl-89ccb3590949dc0a",
+          "prompt_sha256": "bd7992479ca15e3540d74ab33e9e66b9448b7c9ff4da6cf3fa0aa8095d51ba6c",
+          "request_bytes": 25644,
+          "response_text": "",
+          "start_ns": 5928382302274384,
+          "start_ts": 1784543112.6573977,
+          "status": 200,
+          "usage": {
+            "completion_tokens": 314,
+            "prompt_tokens": 16446,
+            "prompt_tokens_details": null,
+            "total_tokens": 16760
+          }
+        },
+        {
+          "code_ok": true,
+          "content": "Acknowledged. The session mp16k-3 has been received and the state code QHMP3C0DE is noted. QHMP3C0DE",
+          "elapsed_s": 8.620113134384155,
+          "end_ns": 5928398707766468,
+          "end_ts": 1784543129.062642,
+          "id": "chatcmpl-b4f91b0e4e27befe",
+          "prompt_sha256": "3c87adcc026c8b37f78c0e6fd67b2545c9c009bab5fdfa912505bfface39fa9c",
+          "request_bytes": 25644,
+          "response_text": "",
+          "start_ns": 5928390087398388,
+          "start_ts": 1784543120.442529,
+          "status": 200,
+          "usage": {
+            "completion_tokens": 351,
+            "prompt_tokens": 16446,
+            "prompt_tokens_details": null,
+            "total_tokens": 16797
+          }
+        }
+      ],
+      "sessions": [
+        {
+          "session": "mp16k-0",
+          "source": {
+            "content": "",
+            "elapsed_s": 1.6641554832458496,
+            "end_ts": 1784543075.2170644,
+            "id": "chatcmpl-9373cbed425c4bc5",
+            "prompt_sha256": "475518dfebebffa0a0ede9c29f36c4a8fe7ca1bf6a2deb626f804a4c8e47a5a8",
+            "request_bytes": 25642,
+            "response_text": "",
+            "start_ts": 1784543073.552909,
+            "status": 200,
+            "usage": {
+              "completion_tokens": 4,
+              "prompt_tokens": 16446,
+              "prompt_tokens_details": null,
+              "total_tokens": 16450
+            }
+          },
+          "stored_blocks": 64
+        },
+        {
+          "session": "mp16k-1",
+          "source": {
+            "content": "",
+            "elapsed_s": 1.6657888889312744,
+            "end_ts": 1784543078.9041464,
+            "id": "chatcmpl-a5dcae357e29b840",
+            "prompt_sha256": "c1013d4010dd8549c3229f1e6cf07a8dc86ff975b682c15f1e8a5bb268ca8cae",
+            "request_bytes": 25642,
+            "response_text": "",
+            "start_ts": 1784543077.2383575,
+            "status": 200,
+            "usage": {
+              "completion_tokens": 4,
+              "prompt_tokens": 16446,
+              "prompt_tokens_details": null,
+              "total_tokens": 16450
+            }
+          },
+          "stored_blocks": 64
+        },
+        {
+          "session": "mp16k-2",
+          "source": {
+            "content": "",
+            "elapsed_s": 1.6620516777038574,
+            "end_ts": 1784543082.588758,
+            "id": "chatcmpl-af3883a0aa895dfc",
+            "prompt_sha256": "bd7992479ca15e3540d74ab33e9e66b9448b7c9ff4da6cf3fa0aa8095d51ba6c",
+            "request_bytes": 25642,
+            "response_text": "",
+            "start_ts": 1784543080.9267063,
+            "status": 200,
+            "usage": {
+              "completion_tokens": 4,
+              "prompt_tokens": 16446,
+              "prompt_tokens_details": null,
+              "total_tokens": 16450
+            }
+          },
+          "stored_blocks": 64
+        },
+        {
+          "session": "mp16k-3",
+          "source": {
+            "content": "",
+            "elapsed_s": 1.659679651260376,
+            "end_ts": 1784543086.2729788,
+            "id": "chatcmpl-972e26d80cc4dbe4",
+            "prompt_sha256": "3c87adcc026c8b37f78c0e6fd67b2545c9c009bab5fdfa912505bfface39fa9c",
+            "request_bytes": 25642,
+            "response_text": "",
+            "start_ts": 1784543084.6132991,
+            "status": 200,
+            "usage": {
+              "completion_tokens": 4,
+              "prompt_tokens": 16446,
+              "prompt_tokens_details": null,
+              "total_tokens": 16450
+            }
+          },
+          "stored_blocks": 64
+        }
+      ],
+      "target_cacheable_tokens": 65536,
+      "throughput_bps": 98110136.23909979,
+      "vllm_external_tokens": 0,
+      "vllm_local_tokens": 0,
+      "wire_ok": true
+    },
+    {
+      "accounting_ok": true,
+      "block_payload_bytes": 12582912,
+      "concurrency": 1,
+      "continuations_ok": true,
+      "distinct_session_overlap": 1,
+      "lmcache_loaded_tokens": 65536,
+      "lmcache_prefetched_tokens": 65536,
+      "lmcache_retrieved_tokens": 65536,
+      "remote_blocks": 256,
+      "remote_payload_bytes": 3221225472,
+      "remote_wire_bytes": 3221228800,
+      "repeat": 2,
+      "requests": [
+        {
+          "code_ok": true,
+          "content": "I have received the list of tokens and will process them as needed. QHMP0C0DE",
+          "elapsed_s": 8.019936800003052,
+          "end_ns": 5928422664977437,
+          "end_ts": 1784543153.0198681,
+          "id": "chatcmpl-9744725e860bdb07",
+          "prompt_sha256": "475518dfebebffa0a0ede9c29f36c4a8fe7ca1bf6a2deb626f804a4c8e47a5a8",
+          "request_bytes": 25644,
+          "response_text": "",
+          "start_ns": 5928414644799454,
+          "start_ts": 1784543144.9999313,
+          "status": 200,
+          "usage": {
+            "completion_tokens": 325,
+            "prompt_tokens": 16446,
+            "prompt_tokens_details": null,
+            "total_tokens": 16771
+          }
+        },
+        {
+          "code_ok": true,
+          "content": "Acknowledged. QHMP1C0DE",
+          "elapsed_s": 10.534937858581543,
+          "end_ns": 5928433200216275,
+          "end_ts": 1784543163.5550888,
+          "id": "chatcmpl-a20c89966c400bde",
+          "prompt_sha256": "c1013d4010dd8549c3229f1e6cf07a8dc86ff975b682c15f1e8a5bb268ca8cae",
+          "request_bytes": 25644,
+          "response_text": "",
+          "start_ns": 5928422665043987,
+          "start_ts": 1784543153.020151,
+          "status": 200,
+          "usage": {
+            "completion_tokens": 439,
+            "prompt_tokens": 16446,
+            "prompt_tokens_details": null,
+            "total_tokens": 16885
+          }
+        },
+        {
+          "code_ok": true,
+          "content": "I have received the list of tokens. QHMP2C0DE",
+          "elapsed_s": 10.498290061950684,
+          "end_ns": 5928443698806733,
+          "end_ts": 1784543174.0536788,
+          "id": "chatcmpl-969f7315e2af67d4",
+          "prompt_sha256": "bd7992479ca15e3540d74ab33e9e66b9448b7c9ff4da6cf3fa0aa8095d51ba6c",
+          "request_bytes": 25644,
+          "response_text": "",
+          "start_ns": 5928433200258595,
+          "start_ts": 1784543163.5553887,
+          "status": 200,
+          "usage": {
+            "completion_tokens": 440,
+            "prompt_tokens": 16446,
+            "prompt_tokens_details": null,
+            "total_tokens": 16886
+          }
+        },
+        {
+          "code_ok": true,
+          "content": "I have received the session **mp16k-3** with the state code **QHMP3C0DE**.  \nThe body contains a long list of tokens ranging from **mp16k-3_0** to **mp16k-3_96**, repeated multiple times.  \nPlease let me know how you would like me to process or interpret this data.  \n\nQHMP3C0DE",
+          "elapsed_s": 10.524644374847412,
+          "end_ns": 5928454223763674,
+          "end_ts": 1784543184.5786178,
+          "id": "chatcmpl-be8571c39bf823b1",
+          "prompt_sha256": "3c87adcc026c8b37f78c0e6fd67b2545c9c009bab5fdfa912505bfface39fa9c",
+          "request_bytes": 25644,
+          "response_text": "",
+          "start_ns": 5928443698850992,
+          "start_ts": 1784543174.0539734,
+          "status": 200,
+          "usage": {
+            "completion_tokens": 442,
+            "prompt_tokens": 16446,
+            "prompt_tokens_details": null,
+            "total_tokens": 16888
+          }
+        }
+      ],
+      "sessions": [
+        {
+          "session": "mp16k-0",
+          "source": {
+            "content": "",
+            "elapsed_s": 1.6715149879455566,
+            "end_ts": 1784543131.9289002,
+            "id": "chatcmpl-b771e9db7c88b74c",
+            "prompt_sha256": "475518dfebebffa0a0ede9c29f36c4a8fe7ca1bf6a2deb626f804a4c8e47a5a8",
+            "request_bytes": 25642,
+            "response_text": "",
+            "start_ts": 1784543130.2573853,
+            "status": 200,
+            "usage": {
+              "completion_tokens": 4,
+              "prompt_tokens": 16446,
+              "prompt_tokens_details": null,
+              "total_tokens": 16450
+            }
+          },
+          "stored_blocks": 64
+        },
+        {
+          "session": "mp16k-1",
+          "source": {
+            "content": "",
+            "elapsed_s": 1.6554222106933594,
+            "end_ts": 1784543135.609026,
+            "id": "chatcmpl-bb665cb2c7c72f14",
+            "prompt_sha256": "c1013d4010dd8549c3229f1e6cf07a8dc86ff975b682c15f1e8a5bb268ca8cae",
+            "request_bytes": 25642,
+            "response_text": "",
+            "start_ts": 1784543133.9536037,
+            "status": 200,
+            "usage": {
+              "completion_tokens": 4,
+              "prompt_tokens": 16446,
+              "prompt_tokens_details": null,
+              "total_tokens": 16450
+            }
+          },
+          "stored_blocks": 64
+        },
+        {
+          "session": "mp16k-2",
+          "source": {
+            "content": "",
+            "elapsed_s": 1.6459805965423584,
+            "end_ts": 1784543139.281073,
+            "id": "chatcmpl-a6d623b9a405c84e",
+            "prompt_sha256": "bd7992479ca15e3540d74ab33e9e66b9448b7c9ff4da6cf3fa0aa8095d51ba6c",
+            "request_bytes": 25642,
+            "response_text": "",
+            "start_ts": 1784543137.6350925,
+            "status": 200,
+            "usage": {
+              "completion_tokens": 4,
+              "prompt_tokens": 16446,
+              "prompt_tokens_details": null,
+              "total_tokens": 16450
+            }
+          },
+          "stored_blocks": 64
+        },
+        {
+          "session": "mp16k-3",
+          "source": {
+            "content": "",
+            "elapsed_s": 1.6502900123596191,
+            "end_ts": 1784543142.9590795,
+            "id": "chatcmpl-bb45c5ffcead99d4",
+            "prompt_sha256": "3c87adcc026c8b37f78c0e6fd67b2545c9c009bab5fdfa912505bfface39fa9c",
+            "request_bytes": 25642,
+            "response_text": "",
+            "start_ts": 1784543141.3087895,
+            "status": 200,
+            "usage": {
+              "completion_tokens": 4,
+              "prompt_tokens": 16446,
+              "prompt_tokens_details": null,
+              "total_tokens": 16450
+            }
+          },
+          "stored_blocks": 64
+        }
+      ],
+      "target_cacheable_tokens": 65536,
+      "throughput_bps": 108257858.73690546,
+      "vllm_external_tokens": 0,
+      "vllm_local_tokens": 0,
+      "wire_ok": true
+    },
+    {
+      "accounting_ok": true,
+      "block_payload_bytes": 12582912,
+      "concurrency": 2,
+      "continuations_ok": false,
+      "distinct_session_overlap": 2,
+      "lmcache_loaded_tokens": 65536,
+      "lmcache_prefetched_tokens": 65536,
+      "lmcache_retrieved_tokens": 65536,
+      "remote_blocks": 256,
+      "remote_payload_bytes": 3221225472,
+      "remote_wire_bytes": 3221228800,
+      "repeat": 0,
+      "requests": [
+        {
+          "code_ok": true,
+          "content": "Acknowledged. QHMP0C0DE",
+          "elapsed_s": 12.33710789680481,
+          "end_ns": 5928482521281918,
+          "end_ts": 1784543212.8761563,
+          "id": "chatcmpl-909f7b863b396b9c",
+          "prompt_sha256": "475518dfebebffa0a0ede9c29f36c4a8fe7ca1bf6a2deb626f804a4c8e47a5a8",
+          "request_bytes": 25644,
+          "response_text": "",
+          "start_ns": 5928470183870745,
+          "start_ts": 1784543200.5390484,
+          "status": 200,
+          "usage": {
+            "completion_tokens": 302,
+            "prompt_tokens": 16446,
+            "prompt_tokens_details": null,
+            "total_tokens": 16748
+          }
+        },
+        {
+          "code_ok": false,
+          "content": "Here is the list you provided:\n\nmp16k-1_0 mp16k-1_1",
+          "elapsed_s": 16.51385498046875,
+          "end_ns": 5928486698541476,
+          "end_ts": 1784543217.0534146,
+          "id": "chatcmpl-ba460c5a47ccae17",
+          "prompt_sha256": "c1013d4010dd8549c3229f1e6cf07a8dc86ff975b682c15f1e8a5bb268ca8cae",
+          "request_bytes": 25644,
+          "response_text": "",
+          "start_ns": 5928470184415959,
+          "start_ts": 1784543200.5395596,
+          "status": 200,
+          "usage": {
+            "completion_tokens": 512,
+            "prompt_tokens": 16446,
+            "prompt_tokens_details": null,
+            "total_tokens": 16958
+          }
+        },
+        {
+          "code_ok": true,
+          "content": "Acknowledged. QHMP2C0DE",
+          "elapsed_s": 9.809758186340332,
+          "end_ns": 5928492331340180,
+          "end_ts": 1784543222.6862152,
+          "id": "chatcmpl-817cec70d1c74fa3",
+          "prompt_sha256": "bd7992479ca15e3540d74ab33e9e66b9448b7c9ff4da6cf3fa0aa8095d51ba6c",
+          "request_bytes": 25644,
+          "response_text": "",
+          "start_ns": 5928482521325517,
+          "start_ts": 1784543212.876457,
+          "status": 200,
+          "usage": {
+            "completion_tokens": 396,
+            "prompt_tokens": 16446,
+            "prompt_tokens_details": null,
+            "total_tokens": 16842
+          }
+        },
+        {
+          "code_ok": true,
+          "content": "Acknowledged. QHMP3C0DE",
+          "elapsed_s": 10.224188327789307,
+          "end_ns": 5928496923056271,
+          "end_ts": 1784543227.2779036,
+          "id": "chatcmpl-9500d3d31a50780a",
+          "prompt_sha256": "3c87adcc026c8b37f78c0e6fd67b2545c9c009bab5fdfa912505bfface39fa9c",
+          "request_bytes": 25644,
+          "response_text": "",
+          "start_ns": 5928486698585395,
+          "start_ts": 1784543217.0537152,
+          "status": 200,
+          "usage": {
+            "completion_tokens": 420,
+            "prompt_tokens": 16446,
+            "prompt_tokens_details": null,
+            "total_tokens": 16866
+          }
+        }
+      ],
+      "sessions": [
+        {
+          "session": "mp16k-0",
+          "source": {
+            "content": "",
+            "elapsed_s": 1.6592357158660889,
+            "end_ts": 1784543187.4299977,
+            "id": "chatcmpl-9f9c96e5510ea54a",
+            "prompt_sha256": "475518dfebebffa0a0ede9c29f36c4a8fe7ca1bf6a2deb626f804a4c8e47a5a8",
+            "request_bytes": 25642,
+            "response_text": "",
+            "start_ts": 1784543185.770762,
+            "status": 200,
+            "usage": {
+              "completion_tokens": 4,
+              "prompt_tokens": 16446,
+              "prompt_tokens_details": null,
+              "total_tokens": 16450
+            }
+          },
+          "stored_blocks": 64
+        },
+        {
+          "session": "mp16k-1",
+          "source": {
+            "content": "",
+            "elapsed_s": 1.6551907062530518,
+            "end_ts": 1784543191.1163542,
+            "id": "chatcmpl-b79f7b5997dc0a8b",
+            "prompt_sha256": "c1013d4010dd8549c3229f1e6cf07a8dc86ff975b682c15f1e8a5bb268ca8cae",
+            "request_bytes": 25642,
+            "response_text": "",
+            "start_ts": 1784543189.4611635,
+            "status": 200,
+            "usage": {
+              "completion_tokens": 4,
+              "prompt_tokens": 16446,
+              "prompt_tokens_details": null,
+              "total_tokens": 16450
+            }
+          },
+          "stored_blocks": 64
+        },
+        {
+          "session": "mp16k-2",
+          "source": {
+            "content": "",
+            "elapsed_s": 1.6646740436553955,
+            "end_ts": 1784543194.8122928,
+            "id": "chatcmpl-aa8ca088425c1dd3",
+            "prompt_sha256": "bd7992479ca15e3540d74ab33e9e66b9448b7c9ff4da6cf3fa0aa8095d51ba6c",
+            "request_bytes": 25642,
+            "response_text": "",
+            "start_ts": 1784543193.1476188,
+            "status": 200,
+            "usage": {
+              "completion_tokens": 4,
+              "prompt_tokens": 16446,
+              "prompt_tokens_details": null,
+              "total_tokens": 16450
+            }
+          },
+          "stored_blocks": 64
+        },
+        {
+          "session": "mp16k-3",
+          "source": {
+            "content": "",
+            "elapsed_s": 1.657785177230835,
+            "end_ts": 1784543198.5035717,
+            "id": "chatcmpl-962d442a7c744fa3",
+            "prompt_sha256": "3c87adcc026c8b37f78c0e6fd67b2545c9c009bab5fdfa912505bfface39fa9c",
+            "request_bytes": 25642,
+            "response_text": "",
+            "start_ts": 1784543196.8457866,
+            "status": 200,
+            "usage": {
+              "completion_tokens": 4,
+              "prompt_tokens": 16446,
+              "prompt_tokens_details": null,
+              "total_tokens": 16450
+            }
+          },
+          "stored_blocks": 64
+        }
+      ],
+      "target_cacheable_tokens": 65536,
+      "throughput_bps": 187342077.47383857,
+      "vllm_external_tokens": 0,
+      "vllm_local_tokens": 0,
+      "wire_ok": true
+    },
+    {
+      "accounting_ok": true,
+      "block_payload_bytes": 12582912,
+      "concurrency": 2,
+      "continuations_ok": false,
+      "distinct_session_overlap": 2,
+      "lmcache_loaded_tokens": 65536,
+      "lmcache_prefetched_tokens": 65536,
+      "lmcache_retrieved_tokens": 65536,
+      "remote_blocks": 256,
+      "remote_payload_bytes": 3221225472,
+      "remote_wire_bytes": 3221228800,
+      "repeat": 1,
+      "requests": [
+        {
+          "code_ok": false,
+          "content": "",
+          "elapsed_s": 12.982720375061035,
+          "end_ns": 5928525895869621,
+          "end_ts": 1784543256.250753,
+          "id": "chatcmpl-b0a102679726dcb7",
+          "prompt_sha256": "475518dfebebffa0a0ede9c29f36c4a8fe7ca1bf6a2deb626f804a4c8e47a5a8",
+          "request_bytes": 25644,
+          "response_text": "",
+          "start_ns": 5928512912851022,
+          "start_ts": 1784543243.2680326,
+          "status": 200,
+          "usage": {
+            "completion_tokens": 512,
+            "prompt_tokens": 16446,
+            "prompt_tokens_details": null,
+            "total_tokens": 16958
+          }
+        },
+        {
+          "code_ok": false,
+          "content": "mp16k-1_0 mp16k-1_1 mp16k-1_2 mp16k-1_3 mp16k-1_4 mp16k-1_5 mp16k-1_6 mp16k-1_7 mp16k-1_8 mp16k-1_9 mp16k-1_10 mp16k-1_11 mp16k-1_12 mp16k-1_13 mp16k-1_14 mp16k-1_15 mp16k-1_16 mp16k-1_17 mp16k-1_18 mp16k-1_19 mp16k-1_20 mp16k-1_21 mp16k-1_22 mp16k-1_23 mp16k-",
+          "elapsed_s": 12.361885070800781,
+          "end_ns": 5928525275483678,
+          "end_ts": 1784543255.6303577,
+          "id": "chatcmpl-acc876ea64b26d3a",
+          "prompt_sha256": "c1013d4010dd8549c3229f1e6cf07a8dc86ff975b682c15f1e8a5bb268ca8cae",
+          "request_bytes": 25644,
+          "response_text": "",
+          "start_ns": 5928512913329847,
+          "start_ts": 1784543243.2684727,
+          "status": 200,
+          "usage": {
+            "completion_tokens": 512,
+            "prompt_tokens": 16446,
+            "prompt_tokens_details": null,
+            "total_tokens": 16958
+          }
+        },
+        {
+          "code_ok": true,
+          "content": "Acknowledged. Session mp16k-2 is active. State code: QHMP2C0DE. QHMP2C0DE",
+          "elapsed_s": 11.104509353637695,
+          "end_ns": 5928536380270722,
+          "end_ts": 1784543266.735158,
+          "id": "chatcmpl-952754f1f57cfddb",
+          "prompt_sha256": "bd7992479ca15e3540d74ab33e9e66b9448b7c9ff4da6cf3fa0aa8095d51ba6c",
+          "request_bytes": 25644,
+          "response_text": "",
+          "start_ns": 5928525275517918,
+          "start_ts": 1784543255.6306486,
+          "status": 200,
+          "usage": {
+            "completion_tokens": 457,
+            "prompt_tokens": 16446,
+            "prompt_tokens_details": null,
+            "total_tokens": 16903
+          }
+        },
+        {
+          "code_ok": true,
+          "content": "Acknowledged. QHMP3C0DE",
+          "elapsed_s": 10.462290525436401,
+          "end_ns": 5928536358480101,
+          "end_ts": 1784543266.7133548,
+          "id": "chatcmpl-a08cdcb699885f88",
+          "prompt_sha256": "3c87adcc026c8b37f78c0e6fd67b2545c9c009bab5fdfa912505bfface39fa9c",
+          "request_bytes": 25644,
+          "response_text": "",
+          "start_ns": 5928525895905730,
+          "start_ts": 1784543256.2510643,
+          "status": 200,
+          "usage": {
+            "completion_tokens": 426,
+            "prompt_tokens": 16446,
+            "prompt_tokens_details": null,
+            "total_tokens": 16872
+          }
+        }
+      ],
+      "sessions": [
+        {
+          "session": "mp16k-0",
+          "source": {
+            "content": "",
+            "elapsed_s": 1.6565916538238525,
+            "end_ts": 1784543230.14217,
+            "id": "chatcmpl-9f3f076a4bcb4644",
+            "prompt_sha256": "475518dfebebffa0a0ede9c29f36c4a8fe7ca1bf6a2deb626f804a4c8e47a5a8",
+            "request_bytes": 25642,
+            "response_text": "",
+            "start_ts": 1784543228.4855783,
+            "status": 200,
+            "usage": {
+              "completion_tokens": 4,
+              "prompt_tokens": 16446,
+              "prompt_tokens_details": null,
+              "total_tokens": 16450
+            }
+          },
+          "stored_blocks": 64
+        },
+        {
+          "session": "mp16k-1",
+          "source": {
+            "content": "",
+            "elapsed_s": 1.650090217590332,
+            "end_ts": 1784543233.8257241,
+            "id": "chatcmpl-a1f7c83fb4fd4618",
+            "prompt_sha256": "c1013d4010dd8549c3229f1e6cf07a8dc86ff975b682c15f1e8a5bb268ca8cae",
+            "request_bytes": 25642,
+            "response_text": "",
+            "start_ts": 1784543232.175634,
+            "status": 200,
+            "usage": {
+              "completion_tokens": 4,
+              "prompt_tokens": 16446,
+              "prompt_tokens_details": null,
+              "total_tokens": 16450
+            }
+          },
+          "stored_blocks": 64
+        },
+        {
+          "session": "mp16k-2",
+          "source": {
+            "content": "",
+            "elapsed_s": 1.6669471263885498,
+            "end_ts": 1784543237.529645,
+            "id": "chatcmpl-9cb92ccaf20d2f70",
+            "prompt_sha256": "bd7992479ca15e3540d74ab33e9e66b9448b7c9ff4da6cf3fa0aa8095d51ba6c",
+            "request_bytes": 25642,
+            "response_text": "",
+            "start_ts": 1784543235.8626978,
+            "status": 200,
+            "usage": {
+              "completion_tokens": 4,
+              "prompt_tokens": 16446,
+              "prompt_tokens_details": null,
+              "total_tokens": 16450
+            }
+          },
+          "stored_blocks": 64
+        },
+        {
+          "session": "mp16k-3",
+          "source": {
+            "content": "",
+            "elapsed_s": 1.6600167751312256,
+            "end_ts": 1784543241.2236989,
+            "id": "chatcmpl-aec7da12b9517f1f",
+            "prompt_sha256": "3c87adcc026c8b37f78c0e6fd67b2545c9c009bab5fdfa912505bfface39fa9c",
+            "request_bytes": 25642,
+            "response_text": "",
+            "start_ts": 1784543239.563682,
+            "status": 200,
+            "usage": {
+              "completion_tokens": 4,
+              "prompt_tokens": 16446,
+              "prompt_tokens_details": null,
+              "total_tokens": 16450
+            }
+          },
+          "stored_blocks": 64
+        }
+      ],
+      "target_cacheable_tokens": 65536,
+      "throughput_bps": 234243462.7928496,
+      "vllm_external_tokens": 0,
+      "vllm_local_tokens": 0,
+      "wire_ok": true
+    }
+  ],
+  "schema": "queue-haul-mp-campaign-v1"
+}

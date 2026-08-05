@@ -1,0 +1,13 @@
+Traceback (most recent call last):
+  File "/home/groups/ramr/gfw/coding-progress-ledger/agent-migrate/queue-haul/stage1g_mp_campaign.py", line 288, in main
+    print(json.dumps(run(args.run_root), indent=2, sort_keys=True))
+                     ^^^^^^^^^^^^^^^^^^
+  File "/home/groups/ramr/gfw/coding-progress-ledger/agent-migrate/queue-haul/stage1g_mp_campaign.py", line 253, in run
+    result = measure(cfg, stack, [(prompts[session], code) for session, code in sessions], owners, concurrency, False)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/groups/ramr/gfw/coding-progress-ledger/agent-migrate/queue-haul/stage1g_mp_campaign.py", line 181, in measure
+    cache = cache_report(log, log0, ids)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/groups/ramr/gfw/coding-progress-ledger/agent-migrate/queue-haul/stage1g_mp_campaign.py", line 149, in cache_report
+    raise RuntimeError(f"LMCache did not report requests: {sorted(missing)}")
+RuntimeError: LMCache did not report requests: ['chatcmpl-87057d46bb87efc5', 'chatcmpl-8d33c968f5235e43', 'chatcmpl-a2af79313e293f35', 'chatcmpl-b81de4607c294219']

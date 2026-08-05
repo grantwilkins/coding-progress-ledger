@@ -1,0 +1,15 @@
+[32;20m[2026-07-20 04:25:02,002] LMCache INFO:[0m  torch_dev=<module 'torch.cuda' from '/opt/venv/lib/python3.12/site-packages/torch/cuda/__init__.py'>, torch_device_type=cuda [3m(__init__.py:63:lmcache)[0m
+[32;20m[2026-07-20 04:25:02,022] LMCache INFO:[0m CudaPinMemoryBackend: using torch cudart [3m(pin_memory.py:89:lmcache.v1.platform.cuda.pin_memory)[0m
+[32;20m[2026-07-20 04:25:02,314] LMCache INFO:[0m Skipping backend lmcache.v1.platform.musa.ops: predicate returned False [3m(__init__.py:114:lmcache)[0m
+[32;20m[2026-07-20 04:25:02,314] LMCache INFO:[0m Skipping backend lmcache.xpu_ops: predicate returned False [3m(__init__.py:114:lmcache)[0m
+[32;20m[2026-07-20 04:25:02,317] LMCache INFO:[0m Using backend: lmcache.c_ops [3m(__init__.py:132:lmcache)[0m
+[32;20m[2026-07-20 04:25:11,821] LMCache INFO:[0m multi_layer_block_kv_transfer mode: ptr [3m(base.py:94:lmcache.v1.multiprocess.transfer_context.base)[0m
+Traceback (most recent call last):
+  File "/home/groups/ramr/gfw/coding-progress-ledger/agent-migrate/queue-haul/stage1g_mp_campaign.py", line 296, in <module>
+    main()
+  File "/home/groups/ramr/gfw/coding-progress-ledger/agent-migrate/queue-haul/stage1g_mp_campaign.py", line 288, in main
+    print(json.dumps(run(args.run_root), indent=2, sort_keys=True))
+                     ^^^^^^^^^^^^^^^^^^
+  File "/home/groups/ramr/gfw/coding-progress-ledger/agent-migrate/queue-haul/stage1g_mp_campaign.py", line 277, in run
+    raise RuntimeError(f"MP campaign acceptance failed: {final}")
+RuntimeError: MP campaign acceptance failed: {'ok': False, 'gates': {'three_repeats_each': True, 'distinct_session_overlap': True, 'aggregate_throughput_gain': True, 'token_accounting': True, 'remote_wire_accounting': True, 'continuations_correct': False}, 'serialized_ceiling_bps': 118527845.11090878, 'parallel_median_bps': {2: 187589196.96164265, 4: 1088062816.7210035}, 'best_parallel_median_bps': 1088062816.7210035}

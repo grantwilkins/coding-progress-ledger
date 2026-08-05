@@ -2,7 +2,7 @@
 # Run the full-shed power trace directly inside an existing 2-GPU allocation.
 set -euo pipefail
 export LC_ALL=C
-source /etc/profile.d/modules.sh
+source "${LMOD_PKG:-/share/software/user/open/lmod/lmod}/init/bash"
 module load gcc/14.2.0 openblas/0.3.28 uv/0.8.4
 
 REPO=/home/groups/ramr/gfw/coding-progress-ledger/agent-migrate
@@ -18,6 +18,16 @@ export QH_PORT_OFFSET=$((SLURM_JOB_ID % 40000 + 1000))
 export QH_KV_ROLE_SOURCE=kv_both
 export QH_KV_ROLE_SINK=kv_both
 export QH_LMCACHE_L1_GB=36
+# kv_both mirrors the whole L1 working set into L2, so bound Redis or it grows
+# unbounded and the two 36 GB L1 pools no longer fit the cgroup.
+export QH_REDIS_MAXMEMORY_GB=8
+
+# LMCache does not unlink its L1 pool if it is killed; a stale 36 GB segment is
+# charged to the cgroup forever. Drop pools whose owning pid is gone.
+for pool in /dev/shm/lmcache_l1_pool_*; do
+  [ -e "$pool" ] || continue
+  kill -0 "${pool##*_}" 2>/dev/null || rm -f "$pool"
+done
 export POWERTRACE_TELEMETRY_TMPDIR="$L_SCRATCH/qh-shed-powertrace-$SLURM_JOB_ID"
 
 mkdir -p "$RUN_ROOT" "$POWERTRACE_TELEMETRY_TMPDIR"

@@ -1,0 +1,21 @@
+[32;20m[2026-07-20 03:10:40,704] LMCache INFO:[0m  torch_dev=<module 'torch.cuda' from '/opt/venv/lib/python3.12/site-packages/torch/cuda/__init__.py'>, torch_device_type=cuda [3m(__init__.py:63:lmcache)[0m
+[32;20m[2026-07-20 03:10:40,720] LMCache INFO:[0m CudaPinMemoryBackend: using torch cudart [3m(pin_memory.py:89:lmcache.v1.platform.cuda.pin_memory)[0m
+[32;20m[2026-07-20 03:10:40,999] LMCache INFO:[0m Skipping backend lmcache.v1.platform.musa.ops: predicate returned False [3m(__init__.py:114:lmcache)[0m
+[32;20m[2026-07-20 03:10:40,999] LMCache INFO:[0m Skipping backend lmcache.xpu_ops: predicate returned False [3m(__init__.py:114:lmcache)[0m
+[32;20m[2026-07-20 03:10:41,005] LMCache INFO:[0m Using backend: lmcache.c_ops [3m(__init__.py:132:lmcache)[0m
+[32;20m[2026-07-20 03:10:50,910] LMCache INFO:[0m multi_layer_block_kv_transfer mode: ptr [3m(base.py:94:lmcache.v1.multiprocess.transfer_context.base)[0m
+Traceback (most recent call last):
+  File "/home/groups/ramr/gfw/coding-progress-ledger/agent-migrate/queue-haul/stage1g_mp_campaign.py", line 296, in <module>
+    main()
+  File "/home/groups/ramr/gfw/coding-progress-ledger/agent-migrate/queue-haul/stage1g_mp_campaign.py", line 288, in main
+    print(json.dumps(run(args.run_root), indent=2, sort_keys=True))
+                     ^^^^^^^^^^^^^^^^^^
+  File "/home/groups/ramr/gfw/coding-progress-ledger/agent-migrate/queue-haul/stage1g_mp_campaign.py", line 253, in run
+    result = measure(cfg, stack, [(prompts[session], code) for session, code in sessions], owners, concurrency, False)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/groups/ramr/gfw/coding-progress-ledger/agent-migrate/queue-haul/stage1g_mp_campaign.py", line 181, in measure
+    cache = cache_report(log, log0, ids)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/groups/ramr/gfw/coding-progress-ledger/agent-migrate/queue-haul/stage1g_mp_campaign.py", line 149, in cache_report
+    raise RuntimeError(f"LMCache did not report requests: {sorted(missing)}")
+RuntimeError: LMCache did not report requests: ['chatcmpl-87057d46bb87efc5', 'chatcmpl-8d33c968f5235e43', 'chatcmpl-a2af79313e293f35', 'chatcmpl-b81de4607c294219']

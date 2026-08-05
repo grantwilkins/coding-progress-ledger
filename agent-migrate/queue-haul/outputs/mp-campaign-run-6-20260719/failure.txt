@@ -1,0 +1,21 @@
+Traceback (most recent call last):
+  File "/home/groups/ramr/gfw/coding-progress-ledger/agent-migrate/queue-haul/stage1g_mp_campaign.py", line 288, in main
+    print(json.dumps(run(args.run_root), indent=2, sort_keys=True))
+                     ^^^^^^^^^^^^^^^^^^
+  File "/home/groups/ramr/gfw/coding-progress-ledger/agent-migrate/queue-haul/stage1g_mp_campaign.py", line 240, in run
+    stack = b.start_stack(cfg, root, 10000)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/groups/ramr/gfw/coding-progress-ledger/agent-migrate/queue-haul/stage1b_drain_sink.py", line 1091, in start_stack
+    preflight(cfg, required_gpus=2)
+  File "/home/groups/ramr/gfw/coding-progress-ledger/agent-migrate/queue-haul/stage1b_drain_sink.py", line 411, in preflight
+    versions = runtime_versions(cfg)
+               ^^^^^^^^^^^^^^^^^^^^^
+  File "/home/groups/ramr/gfw/coding-progress-ledger/agent-migrate/queue-haul/stage1b_drain_sink.py", line 396, in runtime_versions
+    output = subprocess.check_output(apptainer_cmd(cfg, script, nv=False), text=True)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/users/gfw/.local/share/uv/python/cpython-3.11.15-linux-x86_64-gnu/lib/python3.11/subprocess.py", line 466, in check_output
+    return run(*popenargs, stdout=PIPE, timeout=timeout, check=True,
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/users/gfw/.local/share/uv/python/cpython-3.11.15-linux-x86_64-gnu/lib/python3.11/subprocess.py", line 571, in run
+    raise CalledProcessError(retcode, process.args,
+subprocess.CalledProcessError: Command '['apptainer', 'exec', '--bind', '/scratch/users/gfw:/scratch/users/gfw', PosixPath('/scratch/users/gfw/ptsim/lmcache-v0.5.1-vllm0.22.0-cu129.sandbox'), 'bash', '-lc', 'python -c \'from importlib.metadata import version; from lmcache.integration.vllm.lmcache_mp_connector import LMCacheMPConnector; print(\'"\'"\'QH_RUNTIME_VERSIONS\'"\'"\', version(\'"\'"\'vllm\'"\'"\'), version(\'"\'"\'lmcache\'"\'"\'))\'']' returned non-zero exit status 1.

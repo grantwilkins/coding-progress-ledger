@@ -283,9 +283,18 @@ def lmcache_cmd(cfg: Config) -> list[str]:
     return [sys.executable, "queue-haul/migration_testbed.py", "lmcache-server", "--host", cfg.host, "--port", str(cfg.lmc_port), "--max-bytes", str(LMCACHE_SERVER_MAX_BYTES)]
 
 
+def redis_maxmemory_gb() -> int:
+    return int(os.environ.get("QH_REDIS_MAXMEMORY_GB", "0"))
+
+
 def redis_cmd(cfg: Config) -> list[str]:
+    """L2 store. Unbounded by default; bound it when both engines are kv_both,
+    which otherwise duplicates the whole L1 working set into RAM."""
+    cap = redis_maxmemory_gb()
     return ["apptainer", "exec", REDIS_IMAGE, "redis-server", "--bind", cfg.host,
-            "--port", str(cfg.lmc_port), "--save", "", "--appendonly", "no"]
+            "--port", str(cfg.lmc_port), "--save", "", "--appendonly", "no",
+            *(["--maxmemory", f"{cap}gb", "--maxmemory-policy", "allkeys-lru"]
+              if cap else [])]
 
 
 def mp_server_cmd(cfg: Config, role: str) -> list[str]:
