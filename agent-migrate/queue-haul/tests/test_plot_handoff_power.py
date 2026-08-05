@@ -1,3 +1,14 @@
+"""
+Claim:
+Handoff plots align per-region power and unique KV fetches to event timestamps.
+
+Plausible wrong implementations:
+- use wall time for monotonic transfer timestamps
+- count duplicate KV chunks more than once
+- assign a destination's samples to the wrong region
+- aggregate power across regions instead of within each region and second
+"""
+
 import csv
 import json
 
@@ -5,7 +16,7 @@ import plot_handoff_power as p
 
 
 def test_reduce_aligns_power_regions_and_queue_depth(tmp_path):
-    phases = {name: {"wall_ns": value} for name, value in {
+    phases = {name: {"wall_ns": value, "monotonic_ns": value} for name, value in {
         "pre_start": 1_000_000_000, "pre_end": 2_000_000_000,
         "handoff_start": 2_000_000_000, "handoff_end": 2_500_000_000,
         "switch_start": 2_500_000_000, "traffic_switched": 2_500_100_000,
@@ -38,18 +49,18 @@ def test_reduce_aligns_power_regions_and_queue_depth(tmp_path):
                              "vllm:num_requests_waiting"))
             for index, moment in enumerate(moments):
                 writer.writerow((moment, index + 1, index))
-    with (tmp_path / "proxy_bytes.csv").open("w", newline="") as handle:
+    with (tmp_path / "proxy_connections.csv").open("w", newline="") as handle:
         writer = csv.writer(handle)
-        writer.writerow(("monotonic_ns", "wall_ns", "interval_ns", "connection_id",
-                         "route", "direction", "bytes", "billed"))
-        writer.writerow((0, 1_500_000_000, 250_000_000, "a", "kv/east",
-                         "client_to_target", 1000, 1))
-        writer.writerow((0, 2_500_000_000, 250_000_000, "a", "kv/east",
-                         "target_to_client", 2000, 1))
-        writer.writerow((0, 2_500_000_000, 250_000_000, "b", "kv/germany",
-                         "target_to_client", 3000, 1))
-        writer.writerow((0, 1_500_000_000, 250_000_000, "b", "kv/west",
-                         "client_to_target", 4000, 1))
+        writer.writerow(("connection_id", "route"))
+        writer.writerows((("a", "kv/east"), ("b", "kv/germany")))
+    with (tmp_path / "resp_transfers.csv").open("w", newline="") as handle:
+        writer = csv.writer(handle)
+        writer.writerow(("connection_id", "command", "key_hashes", "end_ns",
+                         "payload_bytes"))
+        writer.writerows((("a", "GET", "k1", 2_500_000_000, 2000),
+                          ("a", "GET", "k1", 2_600_000_000, 2000),
+                          ("b", "GET", "k2", 2_500_000_000, 3000),
+                          ("b", "SET", "k3", 1_500_000_000, 4000)))
 
     rows = p.reduce(tmp_path)
 
@@ -62,3 +73,5 @@ def test_reduce_aligns_power_regions_and_queue_depth(tmp_path):
         queue = list(csv.DictReader(handle))
     assert len(queue) == 12
     assert (tmp_path / "power_handoff.png").is_file()
+    assert p.read_fetches(tmp_path, 1_000_000_000) == {
+        "east": [(1.5, 0.002)], "germany": [(1.5, 0.003)]}

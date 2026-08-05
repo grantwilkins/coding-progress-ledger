@@ -31,17 +31,25 @@ def read_power(path: Path, base_ns: int) -> list[tuple[float, float]]:
             for row in rows]
 
 
-def read_kv(path: Path, base_ns: int) -> dict[tuple[str, str], list[tuple[float, float]]]:
-    series = {}
-    for row in csv.DictReader(path.open()):
-        pool, _, node = row["route"].partition("/")
+def read_fetches(run_root: Path, base_ns: int) -> dict[str, list[tuple[float, float]]]:
+    """Cumulative-ready first fetch of each KV chunk, by destination region."""
+    route = {row["connection_id"]: row["route"] for row
+             in csv.DictReader((run_root / "proxy_connections.csv").open())}
+    rows = sorted((row for row
+                   in csv.DictReader((run_root / "resp_transfers.csv").open())
+                   if row["command"] == "GET"), key=lambda row: int(row["end_ns"]))
+    series, seen = {}, set()
+    for row in rows:
+        if row["key_hashes"] in seen:
+            continue
+        seen.add(row["key_hashes"])
+        pool, _, node = route[row["connection_id"]].partition("/")
         if pool != "kv":
             continue
-        seconds = (int(row["wall_ns"]) - base_ns) / 1e9
-        series.setdefault((node, row["direction"]), []).append(
-            (seconds, int(row["bytes"]) / 1e6))
+        series.setdefault(node, []).append(
+            ((int(row["end_ns"]) - base_ns) / 1e9, int(row["payload_bytes"]) / 1e6))
     if not series:
-        raise ValueError(f"no kv routes in {path}")
+        raise ValueError(f"no kv fetches in {run_root}")
     return series
 
 
@@ -133,7 +141,7 @@ def reduce(run_root: Path) -> list[dict]:
     marker = {name: (phase["wall_ns"] - base) / 1e9
               for name, phase in phases.items()}
     xlim = (PLOT_START_S, marker["post_end"])
-    kv = read_kv(run_root / "proxy_bytes.csv", base)
+    kv = read_fetches(run_root, phases["pre_start"]["monotonic_ns"])
     plt.style.use("default")
     figure, (top, bottom) = plt.subplots(
         2, 1, figsize=(9, 5.6), sharex=True, height_ratios=(2.4, 1),
@@ -142,8 +150,8 @@ def reduce(run_root: Path) -> list[dict]:
         top.plot(*bin_mean(read_power(path, base)), lw=1.5,
                  color=COLORS[node], label=node.title())
     for node in paths.keys() - {"sweden"}:
-        bottom.plot(*cumulative(kv[(node, "target_to_client")], xlim[1]), lw=1.5,
-                    color=COLORS[node], label=f"{node.title()} pulls KV")
+        bottom.plot(*cumulative(kv[node], xlim[1]), lw=1.5,
+                    color=COLORS[node], label=f"{node.title()} fetches KV")
     for axis in (top, bottom):
         for label, start, end, color, alpha in SPANS:
             if start in marker and end in marker:
@@ -153,7 +161,7 @@ def reduce(run_root: Path) -> list[dict]:
             if name in marker:
                 axis.axvline(marker[name], color="black", lw=.7, ls=":")
     style(top, xlim, "Power per GPU (W)")
-    style(bottom, xlim, "KV moved (GB)")
+    style(bottom, xlim, "KV fetched (GB)")
     bottom.set_xlabel("Time (s)", size=16)
     top.legend(frameon=False, fontsize=13, loc="upper center",
                bbox_to_anchor=(.5, 1.28), ncol=3)
