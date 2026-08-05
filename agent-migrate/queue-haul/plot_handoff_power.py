@@ -14,6 +14,13 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
 
+COLORS = {"sweden": "#8C1515", "east": "#006CB8",
+          "west": "#008566", "germany": "#008566"}
+SPANS = (("Handoff", "handoff_start", "handoff_end", "#DAD7CB", .5),
+         ("Sleep", "sleep_start", "sleep_ready", "#007C92", .12),
+         ("Destination steady", "post_start", "post_end", "#6F4E7C", .12))
+
+
 def read_power(path: Path, base_ns: int) -> list[tuple[float, float]]:
     with path.open() as handle:
         rows = list(csv.DictReader(handle))
@@ -21,6 +28,14 @@ def read_power(path: Path, base_ns: int) -> list[tuple[float, float]]:
         raise ValueError(f"invalid power samples: {path}")
     return [((int(row["wall_ns"]) - base_ns) / 1e9, float(row["power_w"]))
             for row in rows]
+
+
+def bin_power(points: list[tuple[float, float]]) -> tuple[list[float], list[float]]:
+    bins = {}
+    for seconds, watts in points:
+        bins.setdefault(int(seconds // 1), []).append(watts)
+    return ([index + .5 for index in sorted(bins)],
+            [statistics.fmean(bins[index]) for index in sorted(bins)])
 
 
 def reduce(run_root: Path) -> list[dict]:
@@ -52,7 +67,6 @@ def reduce(run_root: Path) -> list[dict]:
         writer = csv.DictWriter(handle, fieldnames=rows[0])
         writer.writeheader()
         writer.writerows(rows)
-
     if result.get("schema") == "queue-haul-three-node-handoff-v2":
         means = {(row["node"], row["phase"]): row["mean_power_w"] for row in rows}
         if means["sweden", "pre"] < 200 or \
@@ -77,34 +91,34 @@ def reduce(run_root: Path) -> list[dict]:
             writer.writeheader()
             writer.writerows(queue)
 
-    plt.style.use("seaborn-v0_8-whitegrid")
-    figure, axis = plt.subplots(figsize=(11, 4.5))
-    colors = dict(zip(nodes, plt.get_cmap("tab10").colors))
-    colors["sweden"] = "#8C1515"
+    plt.style.use("default")
+    figure, axis = plt.subplots(figsize=(9, 4))
     for node, path in paths.items():
-        points = read_power(path, base)
-        axis.plot(*zip(*points), color=colors[node], linewidth=1,
-                  alpha=.8, label=node.title())
-    if "traffic_switched" in phases:
-        regions = (("Migration", "handoff_start", "handoff_end", "#E98300", None),
-                   ("Switch", "switch_start", "traffic_switched", "#7B5EA7", None),
-                   ("Source power fall", "traffic_switched", "sleep_ready", "#4F5B66", "///"))
-        for label, start, end, color, hatch in regions:
-            left, right = ((phases[name]["wall_ns"] - base) / 1e9
-                           for name in (start, end))
-            axis.axvspan(left, max(right, left + 1), color=color, alpha=.18,
-                        hatch=hatch, label=label)
-    else:
-        axis.axvline((phases["handoff_start"]["wall_ns"] - base) / 1e9,
-                    color="#2E2D29", linestyle="--", label="Handoff")
-        axis.axvline((phases["sleep_ready"]["wall_ns"] - base) / 1e9,
-                    color="#E98300", linestyle=":", label="Sweden sleep")
-    axis.set(xlabel="Seconds from inference window start", ylabel="GPU power (W)")
-    axis.set_title(result["scenario"]["policy"].replace("_", " ").title())
-    axis.legend(frameon=False, ncol=3)
+        axis.plot(*bin_power(read_power(path, base)), lw=1.5,
+                  color=COLORS[node], label=node.title())
+    marker = {name: (phase["wall_ns"] - base) / 1e9
+              for name, phase in phases.items()}
+    for label, start, end, color, alpha in SPANS:
+        if start in marker and end in marker:
+            axis.axvspan(marker[start], marker[end], color=color, alpha=alpha,
+                         label=label)
+    for name in ("pre_end", "handoff_start", "handoff_end", "post_start"):
+        if name in marker:
+            axis.axvline(marker[name], color="black", lw=.7, ls=":")
+    axis.set(xlabel="Time (s)", ylabel="Power per GPU (W)")
+    axis.set_xlim(0, marker["post_end"])
+    axis.tick_params(labelsize=14)
+    axis.xaxis.label.set_size(16)
+    axis.yaxis.label.set_size(16)
+    axis.grid(alpha=.25)
+    for spine in axis.spines.values():
+        spine.set_color("black")
+    axis.legend(frameon=False, fontsize=13, loc="upper center",
+                bbox_to_anchor=(.5, -.2), ncol=3)
     figure.tight_layout()
-    figure.savefig(run_root / "power_handoff.png", dpi=200)
-    figure.savefig(run_root / "power_handoff.pdf")
+    for suffix in ("png", "pdf"):
+        figure.savefig(run_root / f"power_handoff.{suffix}", dpi=220,
+                       bbox_inches="tight")
     plt.close(figure)
     return rows
 
