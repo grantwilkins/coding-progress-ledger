@@ -41,8 +41,8 @@ performs final catch-up, switches routing, and succeeds when the destination
 returns the first token. Mid-token migration, return migration, cold model
 placement, unrelated destination arrivals, provider fleet policy, and facility
 power are out of scope.
-Destinations use the bidirectional LMCache role so resumed sessions write back
-KV instead of remaining read-only migration consumers.
+Destinations use a 32 GB bidirectional LMCache L1 so resumed sessions retain
+and write back KV instead of remaining read-only migration consumers.
 Same-source migrations may overlap and share the bandwidth of every link on
 their route; there is no fixed per-source migration-count limit.
 

@@ -325,7 +325,7 @@ def mp_server_cmd(cfg: Config, role: str, *, bind_host: str | None = None,
     serve = [
         "lmcache", "server", "--instance-id", f"queue-haul-{role}",
         "--host", bind_host, "--port", port, "--http-host", http_host,
-        "--http-port", http_port, "--l1-size-gb", 16, "--eviction-policy", "LRU",
+        "--http-port", http_port, "--l1-size-gb", 32, "--eviction-policy", "LRU",
         "--chunk-size", 256, "--max-workers", 8,
         "--supported-transfer-mode", "engine_driven", "--l2-adapter", adapter,
     ]

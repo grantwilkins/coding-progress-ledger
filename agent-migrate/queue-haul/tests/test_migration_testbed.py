@@ -317,6 +317,7 @@ def test_mp_cache_services_use_redis_l2_through_proxy(monkeypatch):
     assert "--supported-transfer-mode engine_driven" in source
     assert '"port":8300' in source
     assert "--port 5556" in sink
+    assert "--l1-size-gb 32" in sink
     assert '"port":8300' in sink
     assert "--http-port 8080" in source and "--http-port 8081" in sink
     assert "--nv" not in source and "CUDA_VISIBLE_DEVICES=" in source
