@@ -291,11 +291,20 @@ work converts the load generator's requested prefill rate through the measured
 service curve. The measured Sweden window itself populates KV state; there is no
 separate request warmup before it.
 
-The Azure campaign profile uses the Sweden A100 PCIe 300 W calibration retained
-under `/datadrive/queue-haul-network/control/power-cal-300w-*` plus the measured
-`handoff-008` endpoint: 98.1 W model-resident idle and 179.1 W at
-`ell=0.6468`. The two-point curve is the conservative concave envelope of the
-old low-load samples and this endpoint. Bare GPU idle is outside this curve.
+The Azure campaign profile uses the cache-cold fixed-rate A100 sweep at
+`/datadrive/queue-haul-network/control/power-cal-300w-rate-001`: 18 rates from
+0.25 to 20 requests/s, 20-second windows, a 1,100-word synthetic prompt body
+with a unique leading hash, 64-token outputs, and zero cached prompt tokens. Its
+conservative concave envelope reaches 300.24 W at `ell=10.0543`; the 14--20
+requests/s deep-queue points independently remain near 299 W. The 98.1 W
+model-resident idle anchor comes from
+`power-cal-300w-002`; bare GPU idle is outside this curve. Reproduce and reduce
+the sweep with:
+
+```bash
+uv run python power_rate_sweep.py --out PATH --window-s 20 --warmup-s 5 --workers 512 --rates 0.25 0.5 0.75 1 1.5 2 3 4 5 6 7 8 9 10 12 14 16 20
+uv run python power_rate_sweep.py --out PATH --reduce-only --prefill-capacity-tps 1448.32 --decode-capacity-tps 1260.38 --idle-power-w 98.11623555 --curve-max-rate 12
+```
 
 `outputs/network-campaign-20260805` retains the complete 54/54 East and West
 single-link campaigns plus the successful `handoff-009` and bidirectional-cache
