@@ -547,6 +547,30 @@ def test_migration_time_per_watt_cdf_uses_compact_paper_dimensions(
     assert figure.axes[0].get_xlabel() == "E2E Migration / Power Shed (s/W)"
 
 
+def test_disruption_cdf_matches_paper_style(tmp_path, monkeypatch):
+    class QuadraticPower:
+        @staticmethod
+        def power(load):
+            return 100 + 100 * load ** 2
+
+    monkeypatch.setattr(campaign.plt, "close", lambda _: None)
+    campaign.plot_disruption(
+        [{"scenario_id": "a", "service_pause_s": 2}],
+        [{"scenario_id": "a", "policy": "queue_haul",
+          "planned_migrations": 1}],
+        QuadraticPower(), tmp_path,
+    )
+
+    ax = campaign.plt.gcf().axes[0]
+    assert tuple(ax.figure.get_size_inches()) == (5, 4)
+    assert ax.get_title() == ""
+    assert ax.get_xlabel() == "Session Downtime / Power Shed (s/W)"
+    assert ax.get_ylabel() == "Cumulative Distribution"
+    assert ax.get_xscale() == "log"
+    assert ax.lines[0].get_color() == CDF_COLORS["queue_haul"]
+    assert ax.lines[0].get_label() == CDF_LABELS["queue_haul"]
+
+
 def test_pooled_results_concatenates_campaigns_without_reweighting(tmp_path):
     paths = [tmp_path / name for name in ("packing", "frontier")]
     for path, values in zip(paths, ((1,), (5, 10))):

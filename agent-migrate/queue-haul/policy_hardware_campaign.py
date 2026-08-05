@@ -792,21 +792,24 @@ def disruption_points(rows, summaries, power_curve):
 
 def plot_disruption(rows, summaries, power_curve, out):
     points = disruption_points(rows, summaries, power_curve)
-    colors = dict(zip(POLICIES, plt.get_cmap("tab10").colors))
-    fig, ax = plt.subplots(figsize=(6.4, 4))
+    fig, ax = plt.subplots(figsize=CDF_FIGSIZE)
     for policy in POLICIES:
         values = sorted(row["session_s_per_w"] for row in points
                         if row["policy"] == policy)
         if values:
             ax.step(values, np.arange(1, len(values) + 1) / len(values),
-                    where="post", color=colors[policy], label=LABELS[policy])
+                    where="post", color=CDF_COLORS[policy],
+                    linestyle=CDF_LINESTYLES[policy], linewidth=3,
+                    label=CDF_LABELS[policy])
     ax.set(
-        xscale="log", xlabel="Measured session downtime / modeled watts shed (s/W)",
-        ylabel="Fraction of episodes", ylim=(0, 1.02),
-        title=f"Width-8 hardware disruption ({len(points)} episodes)",
+        xscale="log", xlabel="Session Downtime / Power Shed (s/W)",
+        ylabel="Cumulative Distribution", ylim=(0, 1.02),
     )
+    ax.tick_params(labelsize=15)
+    ax.xaxis.label.set_size(15)
+    ax.yaxis.label.set_size(15)
     ax.grid(alpha=.25)
-    ax.legend(frameon=False)
+    ax.legend(frameon=False, fontsize=13, loc="lower right")
     fig.tight_layout()
     for suffix in ("png", "pdf"):
         fig.savefig(out / f"policy_hardware_disruption_cdf.{suffix}", dpi=220)
