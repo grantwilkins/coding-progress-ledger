@@ -657,7 +657,7 @@ def proxy_command(routes: list[testbed.Route], aggregate_mbps: float | None,
 
 
 def node_serve(node_id: str, bind_host: str, source_host: str, kv_port: int,
-               run_root: Path) -> None:
+               run_root: Path, power_interval_s: float = .25) -> None:
     import migration_profiler
 
     cfg = testbed.Config(host="127.0.0.1")
@@ -665,7 +665,8 @@ def node_serve(node_id: str, bind_host: str, source_host: str, kv_port: int,
     run_root.mkdir(parents=True, exist_ok=False)
     (run_root / "node-serve.pid").write_text(str(os.getpid()))
     cache = sink = None
-    sampler = migration_profiler.PowerSampler(run_root / "power.csv")
+    sampler = migration_profiler.PowerSampler(
+        run_root / "power.csv", power_interval_s)
     stopped = threading.Event()
     spot = ScheduledEventMonitor(run_root / "scheduled_events.jsonl", stopped)
     for signum in (signal.SIGINT, signal.SIGTERM, signal.SIGHUP):
@@ -752,7 +753,8 @@ def _stop_remote(node: Node, key: Path, root: Path,
 
 
 def start_cluster(cluster: Cluster, key: Path, contract: dict,
-                  bandwidth: str, run_root: Path) -> ClusterStack:
+                  bandwidth: str, run_root: Path,
+                  power_interval_s: float = .25) -> ClusterStack:
     import migration_profiler
 
     cfg = testbed.Config(host="127.0.0.1")
@@ -762,7 +764,8 @@ def start_cluster(cluster: Cluster, key: Path, contract: dict,
     aggregate, rates = bandwidth_limits(contract, bandwidth)
     lmc = proxy = source = None
     services, remote = [], {}
-    sampler = migration_profiler.PowerSampler(run_root / "power.csv")
+    sampler = migration_profiler.PowerSampler(
+        run_root / "power.csv", power_interval_s)
     spot = ScheduledEventMonitor(run_root / "scheduled_events.jsonl")
     try:
         spot.start()
@@ -800,6 +803,7 @@ def start_cluster(cluster: Cluster, key: Path, contract: dict,
                 "node-serve", "--node-id", node_id, "--bind-host", node.host,
                 "--source-host", cluster.source.host, "--kv-port",
                 str(ports[node_id]["kv"]), "--run-root", str(remote_root),
+                "--power-interval-s", str(power_interval_s),
             ])
             process = subprocess.Popen(
                 command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
@@ -1188,6 +1192,122 @@ def run_network_scenario(stack: ClusterStack, manifest: dict, scenario: dict,
     return result
 
 
+def _serve_window(stack: ClusterStack, messages: dict[str, list[dict]],
+                  codes: dict[str, str], routes: dict[str, tuple[str, int]],
+                  seconds: float, phase: str) -> list[dict]:
+    deadline, rows = time.monotonic() + seconds, []
+    with ThreadPoolExecutor(max_workers=len(routes)) as pool:
+        while time.monotonic() < deadline:
+            started = time.monotonic_ns()
+            futures = {session_id: pool.submit(
+                _chat, stack.cfg, port, messages[session_id], codes[session_id],
+                REQUEST_TIMEOUT_S)
+                for session_id, (_, port) in routes.items()}
+            for session_id, future in futures.items():
+                node, _ = routes[session_id]
+                rows.append({"phase": phase, "session_id": session_id,
+                             "node": node, "batch_started_ns": started,
+                             **future.result()})
+    return rows
+
+
+def run_handoff(cluster: Cluster, key: Path, calibration_path: Path,
+                plan_path: Path, manifest_path: Path, run_root: Path,
+                window_s: float = 300, destination_load: float = .5,
+                power_interval_s: float = .1) -> dict:
+    if run_root.exists() or window_s <= 0 or not 0 < destination_load < 1:
+        raise ValueError("handoff requires a new root and positive windows/load")
+    plan, manifest = (json.loads(path.read_text())
+                      for path in (plan_path, manifest_path))
+    validate_plan(plan)
+    if profiler.file_hash(manifest_path) != plan["manifest"]["sha256"]:
+        raise RuntimeError("handoff manifest differs from plan")
+    if Cluster.parse(plan["cluster"]) != cluster:
+        raise ValueError("handoff cluster differs from plan")
+    calibration = json.loads(calibration_path.read_text())
+    validate_resume(plan["network_contract"], freeze_contract(calibration))
+    host_check(cluster, key)
+    scenario = next(row for row in plan["scenarios"]
+                    if row["policy"] == "kv_only"
+                    and row["bandwidth"] == "natural")
+    scenario = {**scenario, "deadline_s": window_s,
+                "background": {node.id: [destination_load, 0]
+                               for node in cluster.destinations}}
+    stack = start_cluster(cluster, key, plan["network_contract"], "natural",
+                          run_root, power_interval_s)
+    loads, sleeping, result = {}, False, None
+    try:
+        _clear_cluster(stack)
+        records = {row["id"]: row for row in manifest["sessions"]}
+        messages = {row["session_id"]: profiler.calibration_messages(
+            records[row["session_id"]], row["initial_tokens"])
+            for row in scenario["sessions"]}
+        codes = {session_id: records[session_id]["state_code"]
+                 for session_id in messages}
+        for session_id in messages:
+            _warm(stack, messages[session_id], codes[session_id],
+                  REQUEST_TIMEOUT_S)
+        prefill_tps = ModelProfile.load(MODEL_PATH).case().F
+        for node in cluster.destinations:
+            loads[node.id] = SinkLoad(
+                stack.cfg, stack.ports[node.id]["api"], prefill_tps,
+                destination_load, run_root / f"sink_load_{node.id}.jsonl")
+            loads[node.id].start()
+        phase = {}
+        mark = lambda name: phase.update({name: {
+            "monotonic_ns": time.monotonic_ns(), "wall_ns": time.time_ns()}})
+        mark("pre_start")
+        pre = _serve_window(
+            stack, messages, codes,
+            {session_id: ("sweden", stack.cfg.src_port)
+             for session_id in messages}, window_s, "pre")
+        mark("pre_end")
+        nodes = cluster.destinations
+        with ThreadPoolExecutor(max_workers=len(nodes)) as pool:
+            snapshots = dict(zip(
+                (node.id for node in nodes), pool.map(
+                    lambda node: destination_metrics(stack, node.id, 0), nodes)))
+        moves = plan_joint_scenario(
+            scenario, snapshots, ModelProfile.load(MODEL_PATH),
+            scenario["planner_seed"])
+        write_checkpoint(run_root / "decision.json", {
+            "background": snapshots, "moves": moves})
+        mark("handoff_start")
+        routes = {move["session_id"]: (
+            move["destination_instance"],
+            stack.ports[move["destination_instance"]]["api"])
+            for move in moves}
+        handoff = _serve_window(stack, messages, codes, routes, 0.001, "handoff")
+        mark("handoff_end")
+        mark("sleep_start")
+        testbed.set_source_sleep(stack.cfg, True)
+        sleeping = True
+        mark("sleep_ready")
+        mark("post_start")
+        post = _serve_window(
+            stack, messages, codes, routes, window_s, "post")
+        mark("post_end")
+        result = {"schema": "queue-haul-three-node-handoff-v1",
+                  "status": "complete", "window_s": window_s,
+                  "destination_load": destination_load,
+                  "power_interval_s": power_interval_s, "phases": phase,
+                  "scenario": scenario, "decision": {
+                      "background": snapshots, "moves": moves},
+                  "requests": pre + handoff + post}
+    finally:
+        try:
+            for load in loads.values():
+                load.close()
+        finally:
+            try:
+                if sleeping:
+                    testbed.set_source_sleep(stack.cfg, False)
+            finally:
+                stop_cluster(stack)
+    write_checkpoint(run_root / "result.json", result)
+    return result
+
+
 def _latest_result(root: Path) -> tuple[int, dict] | None:
     rows = sorted(root.glob("attempt-*/result.json"))
     if not rows:
@@ -1426,6 +1546,7 @@ def parse_args(argv=None):
     command.add_argument("--source-host", required=True)
     command.add_argument("--kv-port", type=int, required=True)
     command.add_argument("--run-root", type=Path, required=True)
+    command.add_argument("--power-interval-s", type=float, default=.25)
     command = sub.add_parser("smoke")
     command.add_argument("--cluster", type=Path, required=True)
     command.add_argument("--ssh-key", type=Path,
@@ -1445,6 +1566,17 @@ def parse_args(argv=None):
     command = sub.add_parser("reduce")
     command.add_argument("--plan", type=Path, required=True)
     command.add_argument("--run-root", type=Path, required=True)
+    command = sub.add_parser("handoff")
+    command.add_argument("--cluster", type=Path, required=True)
+    command.add_argument("--ssh-key", type=Path,
+                         default=Path("~/.ssh/azrs").expanduser())
+    command.add_argument("--calibration", type=Path, required=True)
+    command.add_argument("--plan", type=Path, required=True)
+    command.add_argument("--manifest", type=Path, required=True)
+    command.add_argument("--run-root", type=Path, required=True)
+    command.add_argument("--window-s", type=float, default=300)
+    command.add_argument("--destination-load", type=float, default=.5)
+    command.add_argument("--power-interval-s", type=float, default=.1)
     return parser.parse_args(argv)
 
 
@@ -1466,7 +1598,7 @@ def main(argv=None) -> None:
         ), indent=2, sort_keys=True))
     elif args.command == "node-serve":
         node_serve(args.node_id, args.bind_host, args.source_host,
-                   args.kv_port, args.run_root)
+                   args.kv_port, args.run_root, args.power_interval_s)
     elif args.command == "smoke":
         print(json.dumps(smoke(
             Cluster.load(args.cluster), args.ssh_key.expanduser(),
@@ -1483,6 +1615,12 @@ def main(argv=None) -> None:
         validate_plan(plan)
         print(json.dumps(reduce_run(plan, args.run_root),
                          indent=2, sort_keys=True))
+    elif args.command == "handoff":
+        print(json.dumps(run_handoff(
+            Cluster.load(args.cluster), args.ssh_key.expanduser(),
+            args.calibration, args.plan, args.manifest, args.run_root,
+            args.window_s, args.destination_load, args.power_interval_s,
+        ), indent=2, sort_keys=True))
 
 
 if __name__ == "__main__":

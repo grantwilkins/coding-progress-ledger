@@ -257,8 +257,30 @@ loading the models. After any Spot deallocation, restart the VMs, rerun `setup.s
 and `check`, write a fresh formal
 calibration file, and resume with that file as `--current-calibration`. Resume
 hard-fails if RTT or simultaneous goodput drifts more than 10%, or if the plan,
-commit, node identity, model, or runtime changed. Azure Scheduled Events are
+node identity, model, or runtime changed. A synchronized commit update remains
+visible in the audit checks. Azure Scheduled Events are
 logged on all three hosts and an active Spot event fails the attempt.
+
+After the joint campaign, run the measured three-node handoff with 100-ms power
+sampling, five-minute pre/post windows, natural links, and 50% destination load:
+
+```bash
+uv run python queue-haul/network_campaign.py handoff \
+  --cluster queue-haul/azure_network_cluster.json \
+  --ssh-key ~/.ssh/azrs \
+  --calibration /datadrive/queue-haul-network/control/calibration-post-west-001.json \
+  --plan /datadrive/queue-haul-network/control/plan-joint-001.json \
+  --manifest queue-haul/outputs/coding-manifest.json \
+  --run-root /datadrive/queue-haul-network/handoff-001
+uv run python queue-haul/plot_handoff_power.py \
+  --run-root /datadrive/queue-haul-network/handoff-001
+```
+
+The harness serves eight pinned agentic sessions on Sweden for five minutes,
+routes their KV state to dynamically selected destinations while both sustain
+50% background inference, sleeps Sweden, and verifies another five minutes of
+destination service. Raw source/East/West samples and verified requests retain
+synchronized phase timestamps.
 
 The Azure campaign profile uses the Sweden A100 PCIe 300 W calibration retained
 under `/datadrive/queue-haul-network/control/power-cal-300w-*`: 98.1 W

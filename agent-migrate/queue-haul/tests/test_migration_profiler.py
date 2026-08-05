@@ -956,6 +956,11 @@ def test_power_sampler_uses_allocated_gpu_order(tmp_path, monkeypatch):
     assert [line.split(",")[2] for line in path.read_text().splitlines()[1:]] == ["0", "1"]
 
 
+def test_power_sampler_rejects_nonpositive_interval(tmp_path):
+    with pytest.raises(ValueError, match="interval"):
+        c.PowerSampler(tmp_path / "power.csv", 0)
+
+
 def test_power_profile_orders_steady_windows_and_verified_wake(tmp_path, monkeypatch):
     calls = []
 

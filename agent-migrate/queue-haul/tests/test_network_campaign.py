@@ -459,6 +459,22 @@ def test_remote_readiness_waits_in_parallel(monkeypatch):
     assert sorted(started) == [("east", 300), ("west", 300)]
 
 
+def test_serve_window_routes_every_session(monkeypatch):
+    ticks = iter((0.0, 0.0, 2.0))
+    monkeypatch.setattr(n.time, "monotonic", lambda: next(ticks))
+    monkeypatch.setattr(n, "_chat", lambda _cfg, port, _messages, code,
+                        _timeout: {"port": port, "code": code})
+    stack = SimpleNamespace(cfg=object())
+
+    rows = n._serve_window(
+        stack, {"a": [], "b": []}, {"a": "A", "b": "B"},
+        {"a": ("east", 1), "b": ("west", 2)}, 1, "pre")
+
+    assert {(row["session_id"], row["node"], row["port"], row["code"])
+            for row in rows} == {("a", "east", 1, "A"),
+                                 ("b", "west", 2, "B")}
+
+
 def test_reducer_keeps_failed_attempts_and_uses_latest(tmp_path):
     scenario = {
         "scenario_id": "s", "condition_index": 0, "repeat": 0,
