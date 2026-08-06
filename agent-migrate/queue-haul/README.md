@@ -708,7 +708,7 @@ and the source drained naturally in 3.002 s before a stable five-minute
 destination hold. Mean source power fell from 255.8 W to 85.8 W while mean
 destination power rose from 128.2 W to 283.4 W. The three replay moves
 recomputed 10,662 tokens; the five KV moves computed 713 tokens while reusing
-2.72 GB of KV. The plot shows the 300–400 s handoff region as fixed 1 s mean
+2.72 GB of KV. The plot shows the 300–400 s handoff region as fixed 500 ms mean
 power in a compact, outlined view. The retained paired 10 Hz samples have 95.6%
 coverage and the bundle includes phase-level engine queue depth and
 checksum-pinned raw data.

@@ -52,7 +52,7 @@ SOURCE_RPS, DEST_RPS = 4.0, 1.0
 BUSY_APPEND_TOKENS, BUSY_OUTPUT_TOKENS = 2048, 32
 SOURCE_INFLIGHT, DEST_INFLIGHT = 64, 48
 STEADY_S, POST_S, MIGRATION_DEADLINE_S = 300, 300, 30
-PLOT_START_S, PLOT_STOP_S = 300, 400
+PLOT_START_S, PLOT_STOP_S, PLOT_BIN_S = 300, 400, .5
 SOURCE, DESTINATION = "#E98300", "#007C92"
 WINDOWS = (
     ("migration", "migration_start", "migration_complete", "#DAD7CB", .5,
@@ -297,15 +297,15 @@ def series(by_uuid, uuid, origin):
             [float(row["power.draw [W]"]) for row in by_uuid[uuid]])
 
 
-def bin_power(rows: list[dict], origin: float, start: int = 0,
-              stop: int | None = None) -> tuple[list[float], list[float]]:
+def bin_power(rows: list[dict], origin: float, start: float = 0,
+              stop: float | None = None) -> tuple[list[float], list[float]]:
     bins = collections.defaultdict(list)
     for row in rows:
         elapsed = parse_wall(row["timestamp"]) - origin
         if elapsed >= start and (stop is None or elapsed < stop):
-            bins[int(elapsed)].append(float(row["power.draw [W]"]))
-    return ([second + .5 for second in sorted(bins)],
-            [statistics.mean(bins[second]) for second in sorted(bins)])
+            bins[int(elapsed / PLOT_BIN_S)].append(float(row["power.draw [W]"]))
+    return ([(index + .5) * PLOT_BIN_S for index in sorted(bins)],
+            [statistics.mean(bins[index]) for index in sorted(bins)])
 
 
 def settle_time(times, watts, start, floor, band=15.0, dwell=5.0):
