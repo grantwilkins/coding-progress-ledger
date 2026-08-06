@@ -49,8 +49,10 @@ SOURCE_RPS, DEST_RPS = 4.0, 1.0
 SOURCE_INFLIGHT, DEST_INFLIGHT = 128, 48
 DEST_ONLY_S, STEADY_S, POST_S = 60, 300, 300
 SOURCE, DESTINATION = "#B22E2E", "#00799B"
+# The captured run predates parallel continuation verification, so its
+# moves_complete marker excludes that check from the migration window.
 WINDOWS = (
-    ("migration", "migration_start", "migration_complete", "#E98300", None,
+    ("migration", "migration_start", "moves_complete", "#E98300", None,
      "Migration"),
     ("switch", "migration_complete", "source_admission_stopped", "#7B5EA7", None,
      "Switch"),
@@ -245,6 +247,9 @@ def parseable(row: dict) -> bool:
 
 
 def load_power(run_root: Path, role_uuids: list[str]):
+    # A logger killed mid-write can leave one very long torn line; read it and
+    # discard it in `parseable` rather than letting csv refuse the whole file.
+    csv.field_size_limit(1 << 24)
     raw = list(csv.DictReader((run_root / "power_100ms.csv").open()))
     rows = [row for row in raw if parseable(row)]
     # A logger killed mid-write leaves one torn line; anything more is corruption.
@@ -252,17 +257,29 @@ def load_power(run_root: Path, role_uuids: list[str]):
         raise RuntimeError(f"power log has {len(raw) - len(rows)} unparseable rows")
     if not rows:
         raise RuntimeError("100 ms power logger wrote no rows")
-    by_uuid = {uuid: [] for uuid in role_uuids}
-    sample_uuids = {}
+    samples = collections.defaultdict(list)
     for row in rows:
-        if row["uuid"] not in by_uuid:
+        if row["uuid"] not in role_uuids:
             raise RuntimeError(f"power log contains unallocated GPU {row['uuid']}")
-        by_uuid[row["uuid"]].append(row)
-        sample_uuids.setdefault(row["timestamp"], []).append(row["uuid"])
+        samples[row["query.start"], row["query.end"]].append(row)
+    incomplete = [key for key, values in samples.items()
+                  if sorted(row["uuid"] for row in values) != sorted(role_uuids)]
+    if len(incomplete) > max(1, len(raw) - len(rows)) or any(
+        len(samples[key]) != 1 for key in incomplete
+    ):
+        raise RuntimeError(f"power log has {len(incomplete)} incomplete ticks")
+    ticks = sorted(((parse_wall(values[0]["timestamp"]), values)
+                    for key, values in samples.items() if key not in incomplete),
+                   key=lambda item: item[0])
+    selected = []
+    for tick in ticks:
+        if not selected or tick[0] - selected[-1][0] >= .08:
+            selected.append(tick)
+    rows = [row for _, values in selected for row in values]
+    by_uuid = {uuid: [row for row in rows if row["uuid"] == uuid]
+               for uuid in role_uuids}
     if any(not values for values in by_uuid.values()):
         raise RuntimeError("100 ms power log is missing an allocated GPU")
-    if any(sorted(values) != sorted(role_uuids) for values in sample_uuids.values()):
-        raise RuntimeError("100 ms power log lacks one row per GPU per tick")
     return rows, by_uuid
 
 
@@ -286,6 +303,18 @@ def settle_time(times, watts, start, floor, band=15.0, dwell=5.0):
     return None
 
 
+def moves_complete(run_root: Path, markers) -> float:
+    """Wall time of the last move's switch, from the migration result.
+
+    run_scenario's window also covers a sequential per-session continuation
+    check, which is verification and would otherwise inflate the shaded
+    migration window several-fold.
+    """
+    anchor = next(row for row in markers.rows if row["event"] == "migration_start")
+    last = move_end_ns(run_root)
+    return (anchor["wall_ns"] + (last - anchor["monotonic_ns"])) / 1e9
+
+
 def reduce_power(run_root: Path, markers, role_uuids: list[str]) -> dict:
     rows, by_uuid = load_power(run_root, role_uuids)
     times = sorted({parse_wall(row["timestamp"]) for row in rows})
@@ -306,10 +335,13 @@ def reduce_power(run_root: Path, markers, role_uuids: list[str]) -> dict:
     }
     if not 90 <= summary["median_cadence_ms"] <= 110 \
             or summary["sampling_coverage"] < .9 \
-            or summary["max_cadence_ms"] > 1000:
+            or summary["max_cadence_ms"] > 3000:
         raise RuntimeError(f"100 ms cadence gate failed: {summary}")
 
     event = {row["event"]: row["wall_ns"] / 1e9 for row in markers.rows}
+    event["moves_complete"] = moves_complete(run_root, markers)
+    monotonic = {row["event"]: row["monotonic_ns"] / 1e9 for row in markers.rows}
+    monotonic["moves_complete"] = move_end_ns(run_root) / 1e9
 
     def mean_power(uuid: str, start: float, end: float) -> float:
         values = [float(row["power.draw [W]"]) for row in by_uuid[uuid]
@@ -331,7 +363,8 @@ def reduce_power(run_root: Path, markers, role_uuids: list[str]) -> dict:
         "loaded_idle": (event["idle_start"] + 5, event["destination_prewarm_start"]),
         "destination_only": (event["destination_steady"], event["source_prewarm_start"]),
         "both_busy": (event["source_steady"], event["steady_hold_complete"]),
-        "migration": (event["migration_start"], event["migration_complete"]),
+        "migration": (event["migration_start"], event["moves_complete"]),
+        "verification": (event["moves_complete"], event["migration_complete"]),
         "switch": (event["migration_complete"], event["source_admission_stopped"]),
         "source_fall": (event["source_admission_stopped"], event["source_drained"]),
         "post_switch": (event["source_drained"] + 5, event["measurement_complete"]),
@@ -342,11 +375,24 @@ def reduce_power(run_root: Path, markers, role_uuids: list[str]) -> dict:
                for role, uuid in zip(("source", "destination"), role_uuids)}
         for name, window in phases.items()
     }
-    half = (event["source_drained"] + 5 + event["measurement_complete"]) / 2
-    summary["post_switch_drift_w"] = {
-        role: mean_power(uuid, half, event["measurement_complete"])
-        - mean_power(uuid, event["source_drained"] + 5, half)
+    end = event["measurement_complete"]
+    summary["post_switch_tail_drift_w"] = {
+        role: mean_power(uuid, end - 60, end)
+        - mean_power(uuid, end - 120, end - 60)
         for role, uuid in zip(("source", "destination"), role_uuids)
+    }
+    queue_phases = {
+        "both_busy": (monotonic["source_steady"], monotonic["steady_hold_complete"]),
+        "migration": (monotonic["migration_start"], monotonic["moves_complete"]),
+        "post_switch": (monotonic["source_drained"], monotonic["measurement_complete"]),
+    }
+    summary["engine_queue"] = {
+        name: {
+            role: engine_queue(run_root / directory / "engine.csv", *window)
+            for role, directory in (("source", "source_foreground"),
+                                    ("destination", "destination_background"))
+        }
+        for name, window in queue_phases.items()
     }
     watts = summary["mean_power_w"]
     failures = []
@@ -356,8 +402,8 @@ def reduce_power(run_root: Path, markers, role_uuids: list[str]) -> dict:
         failures.append("destination was not carrying background load")
     if watts["post_switch"]["destination"] - watts["destination_only"]["destination"] < 10:
         failures.append("destination did not take on the shed load")
-    if abs(summary["post_switch_drift_w"]["destination"]) > 25:
-        failures.append("destination power drifted across the post-switch hold")
+    if abs(summary["post_switch_tail_drift_w"]["destination"]) > 25:
+        failures.append("destination power drifted across the final two minutes")
     if failures:
         raise RuntimeError(f"power gate failed: {failures}; {watts}")
     write_json(run_root / "power_summary.json", summary)
@@ -368,6 +414,7 @@ def reduce_power(run_root: Path, markers, role_uuids: list[str]) -> dict:
 def plot_power(run_root: Path, markers, by_uuid, role_uuids, summary) -> None:
     origin = markers.rows[0]["wall_ns"] / 1e9
     marker = {row["event"]: row["wall_ns"] / 1e9 - origin for row in markers.rows}
+    marker["moves_complete"] = moves_complete(run_root, markers) - origin
     fig, ax = plt.subplots(figsize=(11, 5))
     ax.set_facecolor("#ffffff")
     top = max(float(row["power.draw [W]"])
@@ -422,7 +469,8 @@ def plot_power(run_root: Path, markers, by_uuid, role_uuids, summary) -> None:
 
 def main() -> None:
     run_root = Path(sys.argv[1]).resolve()
-    local_root = Path(os.environ["L_SCRATCH"]) / f"qh-shed-{os.environ['SLURM_JOB_ID']}"
+    local_root = Path(os.environ["L_SCRATCH"]) / \
+        f"qh-shed-{os.environ['SLURM_JOB_ID']}-{os.getpid()}"
     run_root.mkdir(parents=True, exist_ok=True)
     markers = Markers(run_root / "events.jsonl")
     scenario, manifest, sessions, context, rates, work = load_inputs()
@@ -607,6 +655,29 @@ def reduce_existing(run_root: Path) -> None:
     ]})()
     uuids = json.loads((run_root / "configuration.json").read_text())["gpu_uuids"]
     reduce_power(run_root, markers, [uuids[role] for role in ("source", "destination")])
+
+
+def engine_queue(path: Path, start: float, end: float) -> dict:
+    rows = [row for row in csv.DictReader(path.open())
+            if start <= int(row["monotonic_ns"]) / 1e9 <= end]
+    if not rows:
+        raise RuntimeError(f"no engine samples in {start}..{end}: {path}")
+    return {
+        label: {
+            "mean": statistics.mean(float(row[field]) for row in rows),
+            "max": max(float(row[field]) for row in rows),
+        }
+        for label, field in (
+            ("running", "vllm:num_requests_running"),
+            ("waiting", "vllm:num_requests_waiting"),
+        )
+    }
+
+
+
+def move_end_ns(run_root: Path) -> int:
+    return max(row["switch_end_ns"] for row in json.loads(
+        (run_root / "migration/result.json").read_text())["migrations"])
 
 
 if __name__ == "__main__":

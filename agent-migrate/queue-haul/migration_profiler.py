@@ -1410,6 +1410,27 @@ def with_destination_load(load, action):
         load.close()
 
 
+def verify_continuations(scenario, sessions, cfg):
+    expected_port = cfg.api_proxy_port if scenario["kind"] == "migration" \
+        else cfg.src_port
+
+    def verify(item):
+        session = sessions[item["session_id"]]
+        if session.route != expected_port:
+            raise RuntimeError(f"wrong continuation route for {session.session_id}")
+        committed_hash = messages_hash(session.messages)
+        request = session.continuation()
+        return {
+            "session_id": session.session_id, "route_port": session.route,
+            "committed_context_hash": committed_hash,
+            **asdict(request),
+        }
+
+    ordered = sorted(scenario["sessions"], key=lambda row: row["order"])
+    with ThreadPoolExecutor(max_workers=len(ordered)) as pool:
+        return list(pool.map(verify, ordered))
+
+
 def run_scenario(stack: b.Stack, cfg: b.Config, manifest: dict, scenario: dict,
                  root: Path, run_id: str, destination_load=None,
                  configure_proxy: bool = True) -> dict:
@@ -1512,15 +1533,7 @@ def run_scenario(stack: b.Stack, cfg: b.Config, manifest: dict, scenario: dict,
             sleep_end = time.monotonic_ns()
             sleep_times = [sleep_start, sleep_end]
             event_log.write("source_sleep", start_ns=sleep_start, end_ns=sleep_end)
-        continuations = []
-        for item in sorted(scenario["sessions"], key=lambda row: row["order"]):
-            session = sessions[item["session_id"]]
-            expected_port = cfg.api_proxy_port if scenario["kind"] == "migration" else cfg.src_port
-            if session.route != expected_port:
-                raise RuntimeError(f"wrong continuation route for {session.session_id}")
-            committed_hash = messages_hash(session.messages)
-            request = session.continuation()
-            continuations.append({"session_id": session.session_id, "route_port": session.route, "committed_context_hash": committed_hash, **asdict(request)})
+        continuations = verify_continuations(scenario, sessions, cfg)
         if b.lmcache_mode() == "mp":
             b.mp_wait_idle(cache_log)
         activities = []

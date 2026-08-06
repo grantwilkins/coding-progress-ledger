@@ -463,6 +463,35 @@ def test_session_request_requires_http_success_not_exact_model_text(monkeypatch)
         session.request(1, [], "probe")
 
 
+def test_continuations_verify_in_parallel_and_preserve_order():
+    barrier = threading.Barrier(2)
+
+    class Session:
+        route = 7
+
+        def __init__(self, session_id):
+            self.session_id, self.messages = session_id, []
+
+        def continuation(self):
+            barrier.wait(timeout=1)
+            self.messages.append({"role": "assistant", "content": self.session_id})
+            return c.RequestResult(self.session_id, 200, "h", 1, 2)
+
+    sessions = {name: Session(name) for name in ("a", "b")}
+    scenario = {"kind": "migration", "sessions": [
+        {"session_id": "b", "order": 1},
+        {"session_id": "a", "order": 0},
+    ]}
+
+    rows = c.verify_continuations(
+        scenario, sessions, SimpleNamespace(api_proxy_port=7, src_port=8),
+    )
+
+    assert [row["session_id"] for row in rows] == ["a", "b"]
+    assert {row["committed_context_hash"] for row in rows} == {
+        c.messages_hash([])}
+
+
 def test_cli_only_exposes_new_commands():
     for command in ("make-manifest", "make-plan", "run", "reduce"):
         with pytest.raises(SystemExit) as error:
