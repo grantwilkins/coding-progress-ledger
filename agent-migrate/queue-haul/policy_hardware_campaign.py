@@ -606,6 +606,7 @@ def reduce_run(run_root: Path, out: Path | None = None):
         plot_hardware_pareto(attainment, summaries, out)
         plot_disruption(migrations, summaries, power_curve, out)
         plot_migration_time_per_watt(summaries, power_curve, out)
+        plot_full_power_attainment(summaries, power_window_s, out)
     for condition in sorted({row["condition"] for row in summaries}):
         plot(
             [row for row in migrations if row["condition"] == condition],
@@ -632,6 +633,24 @@ def completion_curve(rows, summaries, policy, field):
     values = sorted(float(row[field]) for row in rows
                     if row["policy"] == policy)
     return np.asarray(values), np.arange(1, len(values) + 1) / total
+
+
+def full_power_attainment_curve(summaries, policy, deadline_s,
+                                power_window_s):
+    selected = [row for row in summaries if row["policy"] == policy
+                and float(row["required_deadline_s"]) == deadline_s]
+    if not selected:
+        return np.asarray([]), np.asarray([])
+    events = sorted(
+        float(row["commit_100_s"]) + power_window_s for row in selected
+        if row["commit_100_s"] not in (None, "")
+        and float(row["commit_100_s"]) + power_window_s <= deadline_s
+    )
+    x = np.r_[0, events]
+    y = np.r_[0, np.arange(1, len(events) + 1) / len(selected)]
+    if not events or events[-1] < deadline_s:
+        x, y = np.r_[x, deadline_s], np.r_[y, y[-1]]
+    return x, y
 
 
 def power_shed_quantiles(rows, summaries, policy, power_curve, times):
@@ -685,6 +704,38 @@ def plot_destination_ttft(rows, summaries, out):
     for suffix in ("png", "pdf"):
         fig.savefig(
             out / f"policy_hardware_destination_ttft_cdf.{suffix}", dpi=220
+        )
+    plt.close(fig)
+
+
+def plot_full_power_attainment(summaries, power_window_s, out,
+                               deadline_s=30):
+    fig, ax = plt.subplots(figsize=CDF_FIGSIZE)
+    for policy in POLICIES:
+        x, y = full_power_attainment_curve(
+            summaries, policy, deadline_s, power_window_s
+        )
+        if len(x):
+            ax.step(
+                x, y, where="post", color=CDF_COLORS[policy],
+                linestyle=CDF_LINESTYLES[policy], linewidth=3,
+                label=f"{CDF_LABELS[policy]} ({y[-1]:.0%})",
+            )
+    ax.set(
+        xlabel="Time to Full Power-Shed Attainment (s)",
+        ylabel=f"Fraction of {deadline_s:g}-s Episodes",
+        xlim=(0, deadline_s), ylim=(0, 1.02),
+    )
+    ax.tick_params(labelsize=15)
+    ax.xaxis.label.set_size(15)
+    ax.yaxis.label.set_size(15)
+    ax.grid(alpha=.25)
+    ax.legend(frameon=False, fontsize=11, loc="lower right")
+    fig.tight_layout()
+    for suffix in ("png", "pdf"):
+        fig.savefig(
+            out / f"policy_hardware_{deadline_s:g}s_full_power_attainment_cdf.{suffix}",
+            dpi=220,
         )
     plt.close(fig)
 
@@ -1083,12 +1134,16 @@ def plot_reduced(out, model_path=DEFAULT_MODEL, pooled_with=()):
     plot_destination_ttft_by_bandwidth(
         rows, summaries, plan_["scenarios"], out
     )
-    power_curve = ModelProfile.load(model_path).case().power_curve
+    model = ModelProfile.load(model_path)
+    power_curve = model.case().power_curve
     plot_power_shed(rows, summaries, power_curve, out)
     plot_hardware_pareto(attainment, summaries, out)
     plot_disruption(rows + pooled_rows, summaries + pooled_summaries,
                     power_curve, out)
     plot_migration_time_per_watt(summaries + pooled_summaries, power_curve, out)
+    plot_full_power_attainment(
+        summaries + pooled_summaries, model.power_window_s, out
+    )
 
 
 def representative_timeline(rows, summaries):

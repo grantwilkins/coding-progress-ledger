@@ -13,6 +13,8 @@ Plausible wrong implementations:
 - Stretch every timing metric to the campaign deadline instead of its data.
 - Omit the fixed-method controls or aggregate source power once per migration.
 - Count commits just after the deadline or linearize the nonlinear power curve.
+- Drop failed full-target episodes or forget the trailing power window.
+- Mix 19-second plans into the 30-second attainment curve.
 - Plot destination-only prefill instead of migration-to-first-token latency.
 - Average committed-session fractions instead of nonlinear episode power.
 - Compute Pareto dominance across unmatched episodes or requested targets.
@@ -44,6 +46,7 @@ from policy_hardware_campaign import (
     completion_curve,
     deadline_attainment,
     disruption_points,
+    full_power_attainment_curve,
     make_plan,
     migration_time_per_watt_points,
     pareto_points,
@@ -364,6 +367,7 @@ def test_reduction_uses_common_epoch_and_keeps_failed_denominator(tmp_path):
     assert (tmp_path / "policy_hardware_destination_ttft_cdf.pdf").exists()
     assert (tmp_path / "policy_hardware_power_shed_over_time.pdf").exists()
     assert (tmp_path / "policy_hardware_measured_pareto.pdf").exists()
+    assert (tmp_path / "policy_hardware_30s_full_power_attainment_cdf.pdf").exists()
     random = next(row for row in summaries if row["policy"] == "random")
     assert random["planned_migrations"] == 2
     assert random["completed_migrations"] == 0
@@ -442,7 +446,6 @@ def test_deadline_attainment_uses_episode_target_and_inclusive_deadline():
         == pytest.approx([.4375, .4375, .59375, .75])
 
 
-
 def test_common_packing_chart_uses_120_matched_rows_and_five_point_band(
         tmp_path, monkeypatch):
     packing, baseline, out = (
@@ -488,6 +491,23 @@ def test_common_packing_chart_uses_120_matched_rows_and_five_point_band(
     labels = [row.get_text() for row in campaign.plt.gcf().axes[0].get_yticklabels()]
     assert labels[2] == "Per-session fastest (n=120)"
     assert (out / "policy_hardware_common_packing.pdf").exists()
+
+
+def test_full_power_attainment_keeps_failures_and_power_window():
+    summaries = [
+        {"policy": policy, "required_deadline_s": deadline,
+         "commit_100_s": commit}
+        for policy, deadline, commit in (
+            ("queue_haul", 30, 5), ("queue_haul", 30, 25),
+            ("queue_haul", 30, 26), ("queue_haul", 30, ""),
+            ("queue_haul", 19, 1), ("greedy", 30, 1),
+        )
+    ]
+
+    x, y = full_power_attainment_curve(summaries, "queue_haul", 30, 5)
+
+    assert x.tolist() == [0, 10, 30]
+    assert y.tolist() == [0, .25, .5]
 
 
 def test_destination_ttft_cdf_includes_migration_time(tmp_path, monkeypatch):
