@@ -29,9 +29,15 @@ def read_power(path: Path, base_ns: int) -> list[tuple[float, float]]:
 def reduce(run_root: Path) -> list[dict]:
     result = json.loads((run_root / "result.json").read_text())
     phases, base = result["phases"], result["phases"]["pre_start"]["wall_ns"]
-    windows = {name: ((phases[f"{name}_start"]["wall_ns"] - base) / 1e9,
-                      (phases[f"{name}_end"]["wall_ns"] - base) / 1e9)
-               for name in ("pre", "post")}
+    names = {"pre": ("pre_start", "pre_end"),
+             "post": ("post_start", "post_end")}
+    if "traffic_switched" in phases:
+        names["post"] = ("sleep_ready", "post_end")
+        names |= {"migration": ("handoff_start", "handoff_end"),
+                  "source_fall": ("traffic_switched", "sleep_ready")}
+    windows = {name: ((phases[start]["wall_ns"] - base) / 1e9,
+                      (phases[end]["wall_ns"] - base) / 1e9)
+               for name, (start, end) in names.items()}
     paths = {"sweden": run_root / "power.csv",
              "east": run_root / "nodes/east/power.csv",
              "west": run_root / "nodes/west/power.csv"}
@@ -49,18 +55,53 @@ def reduce(run_root: Path) -> list[dict]:
         writer = csv.DictWriter(handle, fieldnames=rows[0])
         writer.writeheader()
         writer.writerows(rows)
+
+    if result.get("schema") == "queue-haul-three-node-handoff-v2":
+        means = {(row["node"], row["phase"]): row["mean_power_w"] for row in rows}
+        if means["sweden", "pre"] < 200 or \
+                means["sweden", "pre"] - means["sweden", "post"] < 50:
+            raise ValueError("source power did not show a high-to-low handoff")
+        queue = []
+        for node in paths:
+            with (run_root / f"metrics_{node}.csv").open() as handle:
+                samples = list(csv.DictReader(handle))
+            for phase, (start, end) in windows.items():
+                selected = [row for row in samples
+                            if start <= (int(row["wall_ns"]) - base) / 1e9 <= end]
+                if not selected:
+                    raise ValueError(f"{node} queue metrics do not cover {phase}")
+                queue.append({
+                    "node": node, "phase": phase, "samples": len(selected),
+                    "mean_running": statistics.fmean(float(row["vllm:num_requests_running"]) for row in selected),
+                    "max_waiting": max(float(row["vllm:num_requests_waiting"]) for row in selected),
+                })
+        with (run_root / "queue_summary.csv").open("w", newline="") as handle:
+            writer = csv.DictWriter(handle, fieldnames=queue[0])
+            writer.writeheader()
+            writer.writerows(queue)
+
     plt.style.use("seaborn-v0_8-whitegrid")
     figure, axis = plt.subplots(figsize=(11, 4.5))
     for node, path in paths.items():
         points = read_power(path, base)
         axis.plot(*zip(*points), color=COLORS[node], linewidth=1,
                   alpha=.8, label=node.title())
-    handoff = (phases["handoff_start"]["wall_ns"] - base) / 1e9
-    sleep = (phases["sleep_ready"]["wall_ns"] - base) / 1e9
-    axis.axvline(handoff, color="#2E2D29", linestyle="--", label="Handoff")
-    axis.axvline(sleep, color="#E98300", linestyle=":", label="Sweden sleep")
+    if "traffic_switched" in phases:
+        regions = (("Migration", "handoff_start", "handoff_end", "#E98300", None),
+                   ("Switch", "switch_start", "traffic_switched", "#7B5EA7", None),
+                   ("Source power fall", "traffic_switched", "sleep_ready", "#4F5B66", "///"))
+        for label, start, end, color, hatch in regions:
+            left, right = ((phases[name]["wall_ns"] - base) / 1e9
+                           for name in (start, end))
+            axis.axvspan(left, max(right, left + 1), color=color, alpha=.18,
+                        hatch=hatch, label=label)
+    else:
+        axis.axvline((phases["handoff_start"]["wall_ns"] - base) / 1e9,
+                    color="#2E2D29", linestyle="--", label="Handoff")
+        axis.axvline((phases["sleep_ready"]["wall_ns"] - base) / 1e9,
+                    color="#E98300", linestyle=":", label="Sweden sleep")
     axis.set(xlabel="Seconds from inference window start", ylabel="GPU power (W)")
-    axis.legend(frameon=False, ncol=5)
+    axis.legend(frameon=False, ncol=3)
     figure.tight_layout()
     figure.savefig(run_root / "power_handoff.png", dpi=200)
     figure.savefig(run_root / "power_handoff.pdf")

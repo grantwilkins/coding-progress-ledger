@@ -266,8 +266,9 @@ node identity, model, or runtime changed. A synchronized commit update remains
 visible in the audit checks. Azure Scheduled Events are
 logged on all three hosts and an active Spot event fails the attempt.
 
-After the joint campaign, run the measured three-node handoff with 100-ms power
-sampling, five-minute pre/post windows, natural links, and 50% destination load:
+After the joint campaign, run the Queue-Haul three-node handoff with a 30-second
+full-shed deadline, 100-ms power sampling, five-minute pre/post windows, natural
+links, and 50% destination load:
 
 ```bash
 uv run python queue-haul/network_campaign.py handoff \
@@ -281,15 +282,21 @@ uv run python queue-haul/plot_handoff_power.py \
   --run-root /datadrive/queue-haul-network/handoff-001
 ```
 
-The harness serves eight pinned agentic sessions on Sweden for five minutes,
-routes their KV state to dynamically selected destinations while both sustain
-50% background inference, sleeps Sweden, and verifies another five minutes of
-destination service. Raw source/East/West samples and verified requests retain
-synchronized phase timestamps. Handoff planning uses each session's measured
-uncached-prefill and decode rates from the Sweden window; destination background
-work converts the load generator's requested prefill rate through the measured
-service curve. The measured Sweden window itself populates KV state; there is no
-separate request warmup before it.
+The harness keeps eight pinned agentic sessions plus an independent 80%-load
+agentic stream serving on Sweden for five minutes while both destinations sustain
+50% background inference. The 30-second handoff clock starts before live metrics
+and Queue-Haul LP planning, covers all parallel replay/KV reconstruction, and
+hard-fails unless all eight sessions are admitted and complete by the deadline.
+Destination background service never pauses. At the traffic switch, destination
+session service starts immediately while source admissions stop and Sweden drains
+and sleeps concurrently.
+
+Handoff processes pin `kv_both`, 33 GB L1 pools, a 32 GB Redis cap, and disabled
+vLLM prefix caching. Unrelated source and destination loads bypass LMCache so
+they cannot evict migration state. The reducer shades migration, switch, and
+source power-fall windows, writes phase queue depth, and requires Sweden to
+start at or above 200 W and shed at least 50 W. The measured Sweden window
+itself populates the migrating KV state; there is no separate warmup before it.
 
 The Azure campaign profile uses the Sweden A100 PCIe 300 W calibration retained
 under `/datadrive/queue-haul-network/control/power-cal-300w-*` plus the measured
