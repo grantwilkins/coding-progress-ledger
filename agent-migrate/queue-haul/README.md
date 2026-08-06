@@ -768,8 +768,10 @@ all five workloads, both deadlines, and three episodes within each bandwidth;
 the companion pooled CDF combines all four bandwidths. Regenerate that CDF
 with the earlier trace-sampled 5/10-Gbit/s frontier rows included at raw-sample
 weight using `plot-reduced --out <packing-results> --pooled-with
-<frontier-results>`; this pooling also applies to the maximum-session,
-maximum-session-per-watt, and existing per-watt CDFs.
+<frontier-results> <isolated-fastest-results>`; this pooling also applies to the
+maximum-session, maximum-session-per-watt, and existing per-watt CDFs. The
+retained maximum-session CDF includes one slowest-migration sample from each of
+the 120 isolated-fastest episodes.
 `simulated_pareto_campaign.py` creates 64 deterministic shards for 14 exact
 10K-session idle snapshots: three trace seeds for each workload and five
 trace-derived context anchors. It compares Queue-Haul, static and Lagrangian
