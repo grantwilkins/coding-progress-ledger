@@ -23,8 +23,9 @@ POLICY_ROOTS = tuple(OUTPUTS / f"policy-hardware-width8-{name}-20260730"
 NETWORK_ROOT = OUTPUTS / "network-campaign-20260805"
 METHODS = ("queue_haul", "greedy", "greedy_lagrangian", "kv_only",
            "replay_only", "random")
+PLOT_METHODS = ("queue_haul", "greedy", "kv_only", "replay_only")
 METHOD_LABELS = {
-    "queue_haul": "Queue-Haul LP", "greedy": "Greedy",
+    "queue_haul": "Queue-Haul LP", "greedy": "Queue-Haul Greedy",
     "greedy_lagrangian": "Lagrangian greedy", "kv_only": "KV only",
     "replay_only": "Replay only", "random": "Random",
 }
@@ -119,14 +120,17 @@ def outcomes(rows: list[dict]) -> list[tuple[str, int, float]]:
 
 
 def method_outcomes(rows: list[dict]) -> list[tuple[str, list[tuple]]]:
-    return [(method, outcomes(selected)) for method in METHODS
-            if (selected := [row for row in rows if row["method"] == method])]
+    summaries = [(method, outcomes(selected)) for method in PLOT_METHODS
+                 if (selected := [row for row in rows
+                                  if row["method"] == method])]
+    return sorted(summaries,
+                  key=lambda row: row[1][1][2] + row[1][2][2], reverse=True)
 
 
 def write_plot(rows: list[dict], out: Path) -> None:
     summaries = method_outcomes(rows)
     colors = ("#B1040E", "#006CB8", "#008566")
-    fig, axis = plt.subplots(figsize=(8, 4.2))
+    fig, axis = plt.subplots(figsize=(6, 3))
     for y, (method, summary) in enumerate(summaries):
         left = 0
         for (name, _count, percent), color in zip(summary, colors):
@@ -141,10 +145,8 @@ def write_plot(rows: list[dict], out: Path) -> None:
         axis.text(101, y, f"{met:.1f}% met", va="center", fontsize=9)
     axis.set(xlim=(0, 114), xticks=range(0, 101, 20),
              yticks=range(len(summaries)),
-             yticklabels=[f"{METHOD_LABELS[method]}  (n={sum(row[1] for row in summary)})"
-                          for method, summary in summaries],
+             yticklabels=[METHOD_LABELS[method] for method, _ in summaries],
              xlabel="Share of hardware scenarios (%)")
-    axis.set_title("Power-target outcomes by method", pad=48)
     axis.invert_yaxis()
     axis.spines[["left", "right", "top"]].set_visible(False)
     axis.tick_params(axis="x", length=0)

@@ -1,7 +1,8 @@
 """
 Claim:
 Each hardware point compares deadline-admitted and achieved source-power shed
-on the same 0--100% episode scale and enters one outcome bucket for its method.
+on the same 0--100% episode scale and enters one outcome bucket for its displayed
+method; displayed methods are ordered by their met-or-exceeded rate.
 
 Plausible wrong implementations:
 - Use the campaign-wide 100% goal instead of the policy's admitted request.
@@ -9,6 +10,7 @@ Plausible wrong implementations:
 - Use elapsed campaign time instead of per-scenario completion timestamps.
 - Include unmeasured missing scenarios as zero-achievement observations.
 - Pool methods, flip the error sign, or mark equality as an undershoot.
+- Retain excluded methods or sort displayed methods by the wrong statistic.
 """
 
 import csv
@@ -73,18 +75,19 @@ def test_outcomes_classify_the_error_sign_and_equality_boundary():
         {"method": method, "requested_percent": 50,
          "achieved_percent": achieved}
         for method, achieved in (("queue_haul", 40), ("queue_haul", 50),
-                                 ("queue_haul", 60), ("greedy", 50))
+                                 ("queue_haul", 60), ("greedy", 50),
+                                 ("random", 50))
     ]
 
     assert method_outcomes(rows) == [
-        ("queue_haul", [
-            ("Below target", 1, 100 / 3),
-            ("On target", 1, 100 / 3),
-            ("Above target", 1, 100 / 3),
-        ]),
         ("greedy", [
             ("Below target", 0, 0),
             ("On target", 1, 100),
             ("Above target", 0, 0),
+        ]),
+        ("queue_haul", [
+            ("Below target", 1, 100 / 3),
+            ("On target", 1, 100 / 3),
+            ("Above target", 1, 100 / 3),
         ]),
     ]
