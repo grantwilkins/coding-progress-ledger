@@ -52,6 +52,7 @@ SOURCE_RPS, DEST_RPS = 4.0, 1.0
 BUSY_APPEND_TOKENS, BUSY_OUTPUT_TOKENS = 2048, 32
 SOURCE_INFLIGHT, DEST_INFLIGHT = 64, 48
 STEADY_S, POST_S, MIGRATION_DEADLINE_S = 300, 300, 30
+PLOT_START_S, PLOT_STOP_S = 300, 400
 SOURCE, DESTINATION = "#E98300", "#007C92"
 WINDOWS = (
     ("migration", "migration_start", "migration_complete", "#DAD7CB", .5,
@@ -296,11 +297,12 @@ def series(by_uuid, uuid, origin):
             [float(row["power.draw [W]"]) for row in by_uuid[uuid]])
 
 
-def bin_power(rows: list[dict], origin: float) -> tuple[list[float], list[float]]:
+def bin_power(rows: list[dict], origin: float, start: int = 0,
+              stop: int | None = None) -> tuple[list[float], list[float]]:
     bins = collections.defaultdict(list)
     for row in rows:
         elapsed = parse_wall(row["timestamp"]) - origin
-        if elapsed >= 0:
+        if elapsed >= start and (stop is None or elapsed < stop):
             bins[int(elapsed)].append(float(row["power.draw [W]"]))
     return ([second + .5 for second in sorted(bins)],
             [statistics.mean(bins[second]) for second in sorted(bins)])
@@ -432,8 +434,8 @@ def plot_power(run_root: Path, markers, by_uuid, role_uuids, summary) -> None:
         ("Source", role_uuids[0], SOURCE),
         ("Destination", role_uuids[1], DESTINATION),
     ):
-        ax.plot(*bin_power(by_uuid[uuid], origin), lw=1.2, label=label,
-                color=color, zorder=2)
+        ax.plot(*bin_power(by_uuid[uuid], origin, PLOT_START_S, PLOT_STOP_S),
+                lw=1.2, label=label, color=color, zorder=2)
     for name, start, end, color, alpha, label in WINDOWS:
         left, right = marker[start], marker[end]
         if name == "switch" and right - left < 2:
@@ -443,7 +445,7 @@ def plot_power(run_root: Path, markers, by_uuid, role_uuids, summary) -> None:
         ax.axvline(marker[event], color="black", lw=.7, ls=":", zorder=1)
 
     ax.set(xlabel="Time (s)", ylabel="Power per GPU (W)")
-    ax.set_xlim(0, marker["measurement_complete"])
+    ax.set_xlim(PLOT_START_S, PLOT_STOP_S)
     ax.grid(alpha=.25)
     ax.tick_params(labelsize=11)
     ax.xaxis.label.set_size(13)

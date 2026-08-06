@@ -8,6 +8,7 @@ Plausible wrong implementations:
 - Put a boundary sample in the preceding bin.
 - Sum samples or mis-scale milliseconds as seconds.
 - Include samples before the trace origin.
+- Reindex a cropped trace or use inclusive display-window boundaries.
 - Highlight the wrong migration or traffic-switch boundaries.
 - Conflate route switching with source power-down.
 """
@@ -38,6 +39,8 @@ def test_power_uses_fixed_one_second_mean_bins():
 
     assert times == pytest.approx([.5, 1.5])
     assert watts == pytest.approx([200, 600])
+    assert driver.bin_power(rows, origin, 0, 1) == ([.5], [200])
+    assert driver.bin_power(rows, origin, 1, 2) == ([1.5], [600])
 
 
 def test_highlights_use_measured_migration_switch_and_power_down_boundaries():
