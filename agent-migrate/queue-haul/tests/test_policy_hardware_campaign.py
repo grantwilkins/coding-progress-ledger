@@ -510,6 +510,20 @@ def test_full_power_attainment_keeps_failures_and_power_window():
     assert y.tolist() == [0, .25, .5]
 
 
+def test_full_power_attainment_legend_is_plain_and_upper_left(
+        tmp_path, monkeypatch):
+    monkeypatch.setattr(campaign.plt, "close", lambda _: None)
+    campaign.plot_full_power_attainment([{
+        "policy": "queue_haul", "required_deadline_s": 30,
+        "commit_100_s": 5,
+    }], 5, tmp_path)
+
+    legend = campaign.plt.gcf().axes[0].get_legend()
+    assert [text.get_text() for text in legend.texts] \
+        == [CDF_LABELS["queue_haul"]]
+    assert legend._loc == 2
+
+
 def test_destination_ttft_cdf_includes_migration_time(tmp_path, monkeypatch):
     rows = [
         {"scenario_id": "a", "policy": "queue_haul",

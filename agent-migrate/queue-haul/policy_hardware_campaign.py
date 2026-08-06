@@ -719,7 +719,7 @@ def plot_full_power_attainment(summaries, power_window_s, out,
             ax.step(
                 x, y, where="post", color=CDF_COLORS[policy],
                 linestyle=CDF_LINESTYLES[policy], linewidth=3,
-                label=f"{CDF_LABELS[policy]} ({y[-1]:.0%})",
+                label=CDF_LABELS[policy],
             )
     ax.set(
         xlabel="Time to Full Power-Shed Attainment (s)",
@@ -730,7 +730,8 @@ def plot_full_power_attainment(summaries, power_window_s, out,
     ax.xaxis.label.set_size(15)
     ax.yaxis.label.set_size(15)
     ax.grid(alpha=.25)
-    ax.legend(frameon=False, fontsize=11, loc="lower right")
+    if ax.lines:
+        ax.legend(frameon=False, fontsize=11, loc="upper left")
     fig.tight_layout()
     for suffix in ("png", "pdf"):
         fig.savefig(
