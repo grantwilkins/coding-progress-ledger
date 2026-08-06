@@ -1,21 +1,21 @@
 """
 Claim:
 Each hardware point compares deadline-admitted and achieved source-power shed
-on the same 0--100% episode scale, using x only below parity and dots otherwise.
+on the same 0--100% episode scale and enters one outcome bucket for its method.
 
 Plausible wrong implementations:
 - Use the campaign-wide 100% goal instead of the policy's admitted request.
 - Normalize by migrations pooled across scenarios instead of within each episode.
 - Use elapsed campaign time instead of per-scenario completion timestamps.
 - Include unmeasured missing scenarios as zero-achievement observations.
-- Mark equality or over-delivery as an undershoot.
+- Pool methods, flip the error sign, or mark equality as an undershoot.
 """
 
 import csv
 import json
 from types import SimpleNamespace
 
-from plot_hardware_power_parity import load_network, load_policy, outcomes
+from plot_hardware_power_parity import load_network, load_policy, method_outcomes
 
 
 def _scenario(scenario_id="s", policy="queue_haul", admitted=4):
@@ -70,12 +70,21 @@ def test_network_uses_completion_times_and_omits_missing_cases(tmp_path):
 
 def test_outcomes_classify_the_error_sign_and_equality_boundary():
     rows = [
-        {"requested_percent": 50, "achieved_percent": achieved}
-        for achieved in (40, 50, 60, 50)
+        {"method": method, "requested_percent": 50,
+         "achieved_percent": achieved}
+        for method, achieved in (("queue_haul", 40), ("queue_haul", 50),
+                                 ("queue_haul", 60), ("greedy", 50))
     ]
 
-    assert outcomes(rows) == [
-        ("Below target", 1, 25),
-        ("On target", 2, 50),
-        ("Above target", 1, 25),
+    assert method_outcomes(rows) == [
+        ("queue_haul", [
+            ("Below target", 1, 100 / 3),
+            ("On target", 1, 100 / 3),
+            ("Above target", 1, 100 / 3),
+        ]),
+        ("greedy", [
+            ("Below target", 0, 0),
+            ("On target", 1, 100),
+            ("Above target", 0, 0),
+        ]),
     ]

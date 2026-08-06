@@ -23,6 +23,11 @@ POLICY_ROOTS = tuple(OUTPUTS / f"policy-hardware-width8-{name}-20260730"
 NETWORK_ROOT = OUTPUTS / "network-campaign-20260805"
 METHODS = ("queue_haul", "greedy", "greedy_lagrangian", "kv_only",
            "replay_only", "random")
+METHOD_LABELS = {
+    "queue_haul": "Queue-Haul LP", "greedy": "Greedy",
+    "greedy_lagrangian": "Lagrangian greedy", "kv_only": "KV only",
+    "replay_only": "Replay only", "random": "Random",
+}
 
 
 def _point(campaign: str, scenario: str, method: str, requested: float,
@@ -113,26 +118,39 @@ def outcomes(rows: list[dict]) -> list[tuple[str, int, float]]:
             for name, count in counts.items()]
 
 
+def method_outcomes(rows: list[dict]) -> list[tuple[str, list[tuple]]]:
+    return [(method, outcomes(selected)) for method in METHODS
+            if (selected := [row for row in rows if row["method"] == method])]
+
+
 def write_plot(rows: list[dict], out: Path) -> None:
-    summary = outcomes(rows)
+    summaries = method_outcomes(rows)
     colors = ("#B1040E", "#006CB8", "#008566")
-    labels = {"Below target": "Shortfall", "Above target": "Exceeded"}
-    fig, axis = plt.subplots(figsize=(8, 2.6))
-    left = 0
-    for (name, count, percent), color in zip(summary, colors):
-        axis.barh(0, percent, left=left, height=.55, color=color,
-                  label=f"{name} ({count})")
-        axis.text(left + percent / 2, 0,
-                  f"{labels.get(name, name)}\n{percent:.1f}%",
-                  color="white", ha="center", va="center", weight="bold")
-        left += percent
-    met = summary[1][2] + summary[2][2]
-    axis.set(xlim=(0, 100), ylim=(-.65, .65), yticks=(),
-             xlabel="Share of hardware scenarios (%)",
-             title=f"{met:.1f}% meet or exceed the requested power shed  (n={len(rows)})")
+    fig, axis = plt.subplots(figsize=(8, 4.2))
+    for y, (method, summary) in enumerate(summaries):
+        left = 0
+        for (name, _count, percent), color in zip(summary, colors):
+            axis.barh(y, percent, left=left, height=.62, color=color,
+                      label=name if y == 0 else None)
+            if percent >= 8:
+                axis.text(left + percent / 2, y, f"{percent:.1f}%",
+                          color="white", ha="center", va="center",
+                          weight="bold")
+            left += percent
+        met = summary[1][2] + summary[2][2]
+        axis.text(101, y, f"{met:.1f}% met", va="center", fontsize=9)
+    axis.set(xlim=(0, 114), xticks=range(0, 101, 20),
+             yticks=range(len(summaries)),
+             yticklabels=[f"{METHOD_LABELS[method]}  (n={sum(row[1] for row in summary)})"
+                          for method, summary in summaries],
+             xlabel="Share of hardware scenarios (%)")
+    axis.set_title("Power-target outcomes by method", pad=48)
+    axis.invert_yaxis()
     axis.spines[["left", "right", "top"]].set_visible(False)
     axis.tick_params(axis="x", length=0)
     axis.grid(axis="x", alpha=.2, zorder=0)
+    axis.legend(frameon=False, ncol=3, loc="lower center",
+                bbox_to_anchor=(.5, 1.01))
     fig.tight_layout()
     out.parent.mkdir(parents=True, exist_ok=True)
     for suffix in ("png", "pdf"):
