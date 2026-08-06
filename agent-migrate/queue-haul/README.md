@@ -545,14 +545,22 @@ range at 1/2.5 Gbit/s, through 8K at 5 Gbit/s, and through 4K at 10 Gbit/s; the
 8K 10-Gbit/s cell is effectively tied. The derived profile
 `profiles/gpt_oss_20b_a100_tp1_crossover.json` replaces serial replay rate,
 replay/KV completion, KV ingestion lower bound, and route-switch timing while
-preserving the existing catch-up, power, and capacity evidence. The pinned
+preserving the existing catch-up, power, and capacity evidence. `--policies isolated_fastest` enables the per-session-fastest policy without
+changing the default policy set. The pinned
 `outputs/policy-hardware-width8-packing-plan/` runs three paired width-8 episodes
 for Tiny, Small, Medium, Mixed, and Large packs at 1/2.5/5/10 Gbit/s and 19/30-s
 requirements: 600 scenarios in total. Job 36822272 completed all 600 scenarios
 without failures in 8:08:22. Its checksum-pinned reduced bundle is under
 `outputs/policy-hardware-width8-packing-20260730/`; compressed results, GPU
 samples, proxy byte counters, and RESP transfer records retain the raw evidence
-without runtime debug logs. Its bandwidth-faceted destination-TTFT CDF pools
+without runtime debug logs. The matched 120-episode, 240-scenario baseline plan is pinned under
+`outputs/policy-hardware-width8-isolated-fastest-plan/`. Its launcher reduces
+all episodes, hard-validates three complete repetitions per condition and clean
+plan/profile provenance, writes checksums, and rebuilds the comparison from the
+common packing cohort only (120 observations per method). The comparison uses
+±5 percentage points relative to Queue-Haul LP for better/similar/worse and
+shows every sample count; frontier and partial-network rows are excluded.
+Its bandwidth-faceted destination-TTFT CDF pools
 all five workloads, both deadlines, and three episodes within each bandwidth;
 the companion pooled CDF combines all four bandwidths. Regenerate that CDF
 with the earlier trace-sampled 5/10-Gbit/s frontier rows included at raw-sample
