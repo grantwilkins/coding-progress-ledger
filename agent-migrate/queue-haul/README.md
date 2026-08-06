@@ -615,8 +615,9 @@ cell, eight sessions and moves, 5/10 Gbit/s, and 19/30-second requirements for
 Its completed checksum-pinned reduced bundle is retained under
 `outputs/policy-hardware-width8-frontier-20260730/`, including move-admission
 provenance and raw GPU samples. `plot-reduced` writes a pooled
-migration-to-destination-first-token CDF and median modeled source-power shed
-over elapsed time with an interquartile band, plus paired attainment–completion
+migration-to-destination-first-token CDF, a separate CDF of the slowest session
+in each complete episode, and median modeled source-power shed over
+elapsed time with an interquartile band, plus paired attainment–completion
 points and a CDF of measured session downtime per modeled watt shed. This idle
 evidence also includes an episode migration-makespan-per-modeled-watt CDF and
 supports timing and projected, not realized, power attainment.
@@ -765,7 +766,8 @@ all five workloads, both deadlines, and three episodes within each bandwidth;
 the companion pooled CDF combines all four bandwidths. Regenerate that CDF
 with the earlier trace-sampled 5/10-Gbit/s frontier rows included at raw-sample
 weight using `plot-reduced --out <packing-results> --pooled-with
-<frontier-results>`; this pooling also applies to both per-watt CDFs.
+<frontier-results>`; this pooling also applies to the maximum-session and both
+per-watt CDFs.
 `simulated_pareto_campaign.py` creates 64 deterministic shards for 14 exact
 10K-session idle snapshots: three trace seeds for each workload and five
 trace-derived context anchors. It compares Queue-Haul, static and Lagrangian

@@ -601,6 +601,7 @@ def reduce_run(run_root: Path, out: Path | None = None):
     profiler.write_csv(out / "policy_attainment.csv", attainment)
     plot(migrations, summaries, out, "pooled")
     plot_destination_ttft(migrations, summaries, out)
+    plot_max_session_ttft(migrations, summaries, out)
     if power_curve:
         plot_power_shed(migrations, summaries, power_curve, out)
         plot_hardware_pareto(attainment, summaries, out)
@@ -702,6 +703,45 @@ def plot_destination_ttft(rows, summaries, out):
         fig.savefig(
             out / f"policy_hardware_destination_ttft_cdf.{suffix}", dpi=220
         )
+    plt.close(fig)
+
+
+def max_session_ttft_points(rows, summaries):
+    grouped = {}
+    for row in rows:
+        grouped.setdefault(row["scenario_id"], []).append(
+            float(row["migration_ttft_s"])
+        )
+    return [{"policy": row["policy"],
+             "max_session_ttft_s": max(grouped[row["scenario_id"]])}
+            for row in summaries
+            if len(grouped.get(row["scenario_id"], ()))
+            == int(row["planned_migrations"])]
+
+
+def plot_max_session_ttft(rows, summaries, out):
+    points = max_session_ttft_points(rows, summaries)
+    fig, ax = plt.subplots(figsize=CDF_FIGSIZE)
+    for policy in POLICIES:
+        values = sorted(row["max_session_ttft_s"] for row in points
+                        if row["policy"] == policy)
+        if values:
+            ax.step(np.r_[0, values], np.r_[0, np.arange(1, len(values) + 1)
+                                           / len(values)], where="post",
+                    color=CDF_COLORS[policy],
+                    linestyle=CDF_LINESTYLES[policy], linewidth=3,
+                    label=CDF_LABELS[policy])
+    ax.set(xlabel="Maximum Session Migration + TTFT (s)",
+           ylabel="Cumulative Distribution", ylim=(0, 1.02))
+    ax.tick_params(labelsize=15)
+    ax.xaxis.label.set_size(15)
+    ax.yaxis.label.set_size(15)
+    ax.grid(alpha=.25)
+    ax.legend(frameon=False, fontsize=13)
+    fig.tight_layout()
+    for suffix in ("png", "pdf"):
+        fig.savefig(out / f"policy_hardware_max_session_ttft_cdf.{suffix}",
+                    dpi=220)
     plt.close(fig)
 
 
@@ -1135,6 +1175,9 @@ def plot_reduced(out, model_path=DEFAULT_MODEL, pooled_with=()):
         attainment = list(csv.DictReader(stream))
     pooled_rows, pooled_summaries = _pooled_results(pooled_with)
     plot_destination_ttft(rows + pooled_rows, summaries + pooled_summaries, out)
+    plot_max_session_ttft(
+        rows + pooled_rows, summaries + pooled_summaries, out
+    )
     plot_destination_ttft_by_bandwidth(
         rows, summaries, plan_["scenarios"], out
     )

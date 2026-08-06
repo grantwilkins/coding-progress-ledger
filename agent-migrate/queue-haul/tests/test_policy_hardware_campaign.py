@@ -17,6 +17,7 @@ Plausible wrong implementations:
 - Clip full-target completions at the deadline instead of extending the CDF.
 - Mix 19-second plans into the 30-second attainment curve.
 - Plot destination-only prefill instead of migration-to-first-token latency.
+- Average or pool migrations instead of taking each complete episode's maximum.
 - Average committed-session fractions instead of nonlinear episode power.
 - Compute Pareto dominance across unmatched episodes or requested targets.
 - Use migration duration instead of service pause for disruption.
@@ -49,6 +50,7 @@ from policy_hardware_campaign import (
     disruption_points,
     full_power_attainment_curve,
     make_plan,
+    max_session_ttft_points,
     migration_time_per_watt_points,
     pareto_points,
     power_shed_quantiles,
@@ -568,6 +570,33 @@ def test_destination_ttft_cdf_includes_migration_time(tmp_path, monkeypatch):
         "isolated_fastest": (0, (5, 1)),
         "kv_only": "-.", "replay_only": ":",
     }
+
+
+def test_max_session_ttft_uses_slowest_session_in_each_complete_episode(
+        tmp_path, monkeypatch):
+    rows = [
+        {"scenario_id": scenario, "migration_ttft_s": value}
+        for scenario, value in (("a", 3), ("a", 5), ("b", 7),
+                                ("c", 1), ("c", 2))
+    ]
+    summaries = [
+        {"scenario_id": "a", "policy": "queue_haul",
+         "planned_migrations": 2},
+        {"scenario_id": "b", "policy": "queue_haul",
+         "planned_migrations": 2},
+        {"scenario_id": "c", "policy": "kv_only",
+         "planned_migrations": 2},
+    ]
+
+    assert max_session_ttft_points(rows, summaries) == [
+        {"policy": "queue_haul", "max_session_ttft_s": 5},
+        {"policy": "kv_only", "max_session_ttft_s": 2},
+    ]
+    monkeypatch.setattr(campaign.plt, "close", lambda _: None)
+    campaign.plot_max_session_ttft(rows, summaries, tmp_path)
+    ax = campaign.plt.gcf().axes[0]
+    assert ax.lines[0].get_xdata().tolist() == [0, 5]
+    assert ax.get_xlabel() == "Maximum Session Migration + TTFT (s)"
 
 
 def test_migration_time_per_watt_cdf_uses_compact_paper_dimensions(
