@@ -153,7 +153,9 @@ def _rate(curve) -> ContextRate:
 
 
 def architecture(profile: ModelProfile, sessions: tuple[SimSession, ...], replicas: int,
-                 pressure: Pressure, methods=("replay", "kv_transfer")):
+                 pressure: Pressure, methods=("replay", "kv_transfer"), pool_count=1):
+    if not 1 <= pool_count <= replicas:
+        raise ValueError("pool count must be between one and the replica count")
     case, fp = profile.case(), _fingerprint(profile)
     loaded = LoadedCoefficients(
         (0, 1), (1, 1), MIGRATION_CONTEXT, MIGRATION_BANDWIDTH, "legacy-adapter-unused",
@@ -190,12 +192,14 @@ def architecture(profile: ModelProfile, sessions: tuple[SimSession, ...], replic
         "descriptive-private-prefix-anchor:0.096953", False, KV_BLOCK_TOKENS,
         migration, "sensitivity",
     )
-    pool = DestinationPool(
-        "sink-a100", q.type_id, replicas_, "source-to-sink",
+    pools = tuple(DestinationPool(
+        "sink-a100" if pool_count == 1 else f"sink-a100-{i}",
+        q.type_id, replicas_[i::pool_count],
+        "source-to-sink" if pool_count == 1 else f"source-to-sink-{i}",
         ("source-egress", "wan", "destination-ingress"), tuple(methods),
-    )
+    ) for i in range(pool_count))
     return DestinationArchitecture(
-        DESTINATION_SCHEMA, fp, (q,), (pool,), max(180, pressure.migration_s + 5),
+        DESTINATION_SCHEMA, fp, (q,), pools, max(180, pressure.migration_s + 5),
     )
 
 
@@ -284,13 +288,13 @@ def extrapolate_replay(profile: ModelProfile,
 
 def evaluate(profile: ModelProfile, sessions: tuple[SimSession, ...], replicas: int,
              pressure: Pressure, seed: int, job_class: str, axis: str,
-             solver="lp", methods=("replay", "kv_transfer")) -> dict:
+             solver="lp", methods=("replay", "kv_transfer"), pool_count=1) -> dict:
     scenario_ = scenario(profile, sessions, replicas, pressure)
     execution_profile = extrapolate_replay(
         profile, scenario_.sessions, scenario_.deadline_s,
     )
     architecture_ = architecture(
-        execution_profile, scenario_.sessions, replicas, pressure, methods,
+        execution_profile, scenario_.sessions, replicas, pressure, methods, pool_count,
     )
     result = plan(
         scenario_, execution_profile, {}, solver, seed=seed,
@@ -303,7 +307,7 @@ def evaluate(profile: ModelProfile, sessions: tuple[SimSession, ...], replicas: 
               for method in ("replay", "kv_transfer")}
     return {
         "workload": job_class, "seed": seed, "axis": axis, "solver": solver,
-        "methods": "+".join(methods), **pressure.__dict__,
+        "methods": "+".join(methods), "pools": pool_count, **pressure.__dict__,
         "source_replicas": replicas, "sink_replicas": replicas,
         "sessions": len(sessions), "sessions_landed": len(result.moves),
         "all_sessions_landed": result.feasible and len(result.moves) == len(sessions),
@@ -464,9 +468,19 @@ def parse_classes(value: str) -> tuple[str, ...]:
 
 def parse_solvers(value: str) -> tuple[str, ...]:
     solvers = tuple(value.split(","))
-    if not solvers or not set(solvers) <= {"lp", "greedy"}:
-        raise argparse.ArgumentTypeError("solvers must be lp and/or greedy")
+    allowed = {"lp", "lp_highs", "lp_column_generation",
+               "lp_column_generation_persistent", "lp_column_generation_lazy",
+               "lp_column_generation_native", "greedy", "greedy_lagrangian"}
+    if not solvers or not set(solvers) <= allowed:
+        raise argparse.ArgumentTypeError(f"solvers must be drawn from {sorted(allowed)}")
     return solvers
+
+
+def parse_pool_counts(value: str) -> tuple[int, ...]:
+    counts = tuple(map(int, value.split(",")))
+    if not counts or min(counts) < 1:
+        raise argparse.ArgumentTypeError("pool counts must be positive")
+    return counts
 
 
 def run(model_path: Path, manifest_path: Path, out: Path, sessions: int,
@@ -544,7 +558,7 @@ def run(model_path: Path, manifest_path: Path, out: Path, sessions: int,
 
 def run_reference(model_path: Path, manifest_path: Path, out: Path,
                   sessions: int, seed: int, classes=CLASSES,
-                  solvers=("lp", "greedy")):
+                  solvers=("lp", "greedy"), pool_counts=(1,)):
     profile = ModelProfile.load(model_path)
     manifest = json.loads(manifest_path.read_text())
     rows = []
@@ -553,11 +567,12 @@ def run_reference(model_path: Path, manifest_path: Path, out: Path,
             trace_shapes(manifest, job_class), sessions, seed,
             log_bytes_per_token(WORKLOADS[job_class]),
         ), profile)
-        for solver in solvers:
-            rows.append(evaluate(
-                profile, sampled, replicas, Pressure(), seed, job_class,
-                "reference", solver,
-            ))
+        for pool_count in pool_counts:
+            for solver in solvers:
+                rows.append(evaluate(
+                    profile, sampled, replicas, Pressure(), seed, job_class,
+                    "reference", solver, pool_count=pool_count,
+                ))
     out.mkdir(parents=True, exist_ok=True)
     _write_csv(out / "results.csv", rows)
     metadata = {
@@ -571,6 +586,7 @@ def run_reference(model_path: Path, manifest_path: Path, out: Path,
         "model_sha256": hashlib.sha256(model_path.read_bytes()).hexdigest(),
         "manifest_sha256": hashlib.sha256(manifest_path.read_bytes()).hexdigest(),
         "sessions_per_workload": sessions, "seed": seed,
+        "pool_counts": pool_counts,
         "deadline_s": 120, "migration_s": 115, "residency_s": 180,
         "claim": "sensitivity/possible; never an admission guarantee",
     }
@@ -590,11 +606,15 @@ def main():
     parser.add_argument("--iterations", type=int, default=8)
     parser.add_argument("--reference-only", action="store_true")
     parser.add_argument("--workloads", type=parse_classes, default=CLASSES)
-    parser.add_argument("--solvers", type=parse_solvers, default=("lp", "greedy"))
+    parser.add_argument(
+        "--solvers", type=parse_solvers,
+        default=("lp", "greedy", "greedy_lagrangian"),
+    )
+    parser.add_argument("--pool-counts", type=parse_pool_counts, default=(1,))
     args = parser.parse_args()
     if args.reference_only:
         run_reference(args.model, args.manifest, args.out, args.sessions,
-                      args.seeds.start, args.workloads, args.solvers)
+                      args.seeds.start, args.workloads, args.solvers, args.pool_counts)
     else:
         run(args.model, args.manifest, args.out, args.sessions, args.seeds,
             args.transition_seeds, args.iterations, args.workloads)

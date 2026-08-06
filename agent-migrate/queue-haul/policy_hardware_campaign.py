@@ -16,6 +16,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 import migration_profiler as profiler
+from destination import dedicated_sink_architecture
 from migration import ORDERED_EAGER_PARALLEL_V1
 from planner import _duration, plan
 from profiles import ModelProfile, WorkloadProfile
@@ -38,23 +39,30 @@ CONTEXT_PACKS = {
     "mixed": (2048, 4096, 4096, 8192, 8192, 12288, 12288, 14336),
     "large": (16384,) * 8,
 }
-POLICIES = ("queue_haul", "greedy", "kv_only", "replay_only")
+POLICIES = ("queue_haul", "greedy", "greedy_lagrangian", "kv_only", "replay_only")
 LABELS = {
     "queue_haul": "QH choice/order", "greedy": "Greedy choice/order",
+    "greedy_lagrangian": "Lagrangian greedy choice/order",
     "isolated_fastest": "Per-session fastest", "random": "Random choice/order",
     "kv_only": "KV only", "replay_only": "Replay only",
 }
 CDF_COLORS = {
-    "queue_haul": "#8C1515", "greedy": "#175E54",
-    "kv_only": "#007C92", "replay_only": "#E98300",
+    "queue_haul": "#B1040E", "greedy": "#008566",
+    "greedy_lagrangian": "#620059",
+    "kv_only": "#006CB8", "replay_only": "#E98300",
 }
 CDF_LABELS = {
     "queue_haul": "Queue-Haul LP", "greedy": "Queue-Haul Greedy",
+    "greedy_lagrangian": "Queue-Haul Lagrangian Greedy",
     "kv_only": "KV Migrate Only", "replay_only": "Replay Context Only",
 }
 CDF_LINESTYLES = {
-    "queue_haul": "-", "greedy": "--", "kv_only": "-.", "replay_only": ":",
+    "queue_haul": "-", "greedy": "--", "greedy_lagrangian": (0, (3, 1, 1, 1)),
+    "kv_only": "-.", "replay_only": ":",
 }
+CDF_FIGSIZE = (5, 4)
+
+
 def _portable_path(path: Path) -> str:
     resolved = path.resolve()
     try:
@@ -102,10 +110,16 @@ def _ranked_moves(sessions, methods, scenario, profile, offset=0):
 
 def _moves(policy, scenario, routes, profile, seed):
     sessions = list(scenario.sessions)
-    if policy in {"queue_haul", "greedy", "random"}:
+    if policy in {"queue_haul", "greedy", "greedy_lagrangian", "random"}:
         solver = {"queue_haul": "lp_work_first", "greedy": "greedy",
+                  "greedy_lagrangian": "greedy_lagrangian",
                   "random": "random"}[policy]
-        result = plan(scenario, profile, routes, solver, seed=seed)
+        destination = dedicated_sink_architecture(
+            profile, "destination", ("link",),
+        ) if policy == "greedy_lagrangian" else None
+        result = plan(
+            scenario, profile, routes, solver, seed=seed, destination=destination,
+        )
         moves = result.moves
     else:
         fixed_method = None if policy == "isolated_fastest" else {
@@ -627,7 +641,7 @@ def power_shed_quantiles(rows, summaries, policy, power_curve, times):
 
 
 def plot_destination_ttft(rows, summaries, out):
-    fig, ax = plt.subplots(figsize=(7, 4))
+    fig, ax = plt.subplots(figsize=CDF_FIGSIZE)
     for policy in POLICIES:
         x, y = completion_curve(
             rows, summaries, policy, "migration_ttft_s"
@@ -636,18 +650,18 @@ def plot_destination_ttft(rows, summaries, out):
             ax.step(
                 np.r_[0, x], np.r_[0, y], where="post",
                 color=CDF_COLORS[policy], linestyle=CDF_LINESTYLES[policy],
-                linewidth=2.2,
+                linewidth=3,
                 label=CDF_LABELS[policy],
             )
     ax.set(
         xlabel="Migration + Destination TTFT (s)",
         ylabel="Cumulative Distribution", ylim=(0, 1.02),
     )
-    ax.tick_params(labelsize=12)
-    ax.xaxis.label.set_size(13)
-    ax.yaxis.label.set_size(13)
+    ax.tick_params(labelsize=15)
+    ax.xaxis.label.set_size(15)
+    ax.yaxis.label.set_size(15)
     ax.grid(alpha=.25)
-    ax.legend(frameon=False, fontsize=11)
+    ax.legend(frameon=False, fontsize=13)
     fig.tight_layout()
     for suffix in ("png", "pdf"):
         fig.savefig(
@@ -789,24 +803,24 @@ def migration_time_per_watt_points(summaries, power_curve):
 
 def plot_migration_time_per_watt(summaries, power_curve, out):
     points = migration_time_per_watt_points(summaries, power_curve)
-    fig, ax = plt.subplots(figsize=(7, 4))
+    fig, ax = plt.subplots(figsize=CDF_FIGSIZE)
     for policy in POLICIES:
         values = sorted(row["migration_s_per_w"] for row in points
                         if row["policy"] == policy)
         if values:
             ax.step(values, np.arange(1, len(values) + 1) / len(values),
                     where="post", color=CDF_COLORS[policy],
-                    linestyle=CDF_LINESTYLES[policy], linewidth=2.2,
+                    linestyle=CDF_LINESTYLES[policy], linewidth=3,
                     label=CDF_LABELS[policy])
     ax.set(
-        xlabel="E2E Migration / Modeled Shed Power (s/W)",
+        xlabel="E2E Migration / Power Shed (s/W)",
         ylabel="Cumulative Distribution", ylim=(0, 1.02),
     )
-    ax.tick_params(labelsize=12)
-    ax.xaxis.label.set_size(13)
-    ax.yaxis.label.set_size(13)
+    ax.tick_params(labelsize=15)
+    ax.xaxis.label.set_size(15)
+    ax.yaxis.label.set_size(15)
     ax.grid(alpha=.25)
-    ax.legend(frameon=False, fontsize=11)
+    ax.legend(frameon=False, fontsize=13, loc="lower right")
     fig.tight_layout()
     for suffix in ("png", "pdf"):
         fig.savefig(out / f"policy_hardware_migration_time_per_watt_cdf.{suffix}",
@@ -859,8 +873,7 @@ def plot_hardware_pareto(attainment, summaries, out):
             [row["deadline_fraction"] for row in selected],
             color=colors[policy], alpha=.45, s=28,
             label=f"{LABELS[policy]} ({count}/{len(selected)} frontier)",
-            zorder={"queue_haul": 4, "greedy": 3,
-                    "kv_only": 2, "replay_only": 1}[policy],
+            zorder=len(POLICIES) - POLICIES.index(policy),
         )
         frontier = [row for row in selected if row["pareto"]]
         ax.scatter(
@@ -880,7 +893,7 @@ def plot_hardware_pareto(attainment, summaries, out):
     ax.legend(frameon=False, fontsize=8)
     fig.text(
         .5, .01, "Black outline: paired nondominated; "
-        "19 s Queue-Haul/greedy include fastest-tail moves",
+        "19 s optimizer policies include fastest-tail moves",
         ha="center", fontsize=8,
     )
     fig.tight_layout(rect=(0, .04, 1, 1))

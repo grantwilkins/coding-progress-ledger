@@ -1,0 +1,38 @@
+{
+  "background": {
+    "west": [
+      0,
+      0
+    ]
+  },
+  "bandwidth": "controlled_40",
+  "bandwidth_mbps": 3700,
+  "condition_index": 32768,
+  "context_size": 32768,
+  "deadline_s": 180,
+  "design": "isolated",
+  "destination": "west",
+  "method": "kv_transfer",
+  "moves": [
+    {
+      "deadline_admitted": true,
+      "destination_instance": "west",
+      "method": "kv_transfer",
+      "order": 0,
+      "session_id": "codex:e381cc89-38ef-e67e-79b9-4b800369b4f5"
+    }
+  ],
+  "policy": "kv_transfer",
+  "repeat": 2,
+  "scenario_id": "d0737ab78dbbaaa9",
+  "sessions": [
+    {
+      "initial_tokens": 32256,
+      "job_class": "coding",
+      "order": 0,
+      "session_id": "codex:e381cc89-38ef-e67e-79b9-4b800369b4f5",
+      "turn_index": 0
+    }
+  ],
+  "workload": "agentic_tool_loop"
+}

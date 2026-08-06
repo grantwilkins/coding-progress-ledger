@@ -44,8 +44,8 @@ from scipy.sparse import csr_matrix
 
 import planner
 from planner import (
-    METHODS, _duration, _expected_scenario, _greedy, _required_kv_rate, _round_lp,
-    _route_resources, _solve_lp, plan,
+    METHODS, _duration, _expected_scenario, _greedy, _migration_resources,
+    _required_kv_rate, _round_lp, _route_resources, _solve_lp, plan,
 )
 from power_model import ExpectedPower
 from simulate import (ExecutionScenario, NetworkLink, PowerNode, ServingInstance, SimRequest,

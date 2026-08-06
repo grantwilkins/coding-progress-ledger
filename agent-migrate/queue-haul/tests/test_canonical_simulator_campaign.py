@@ -2,7 +2,7 @@
 Claim:
 The canonical campaign pairs every policy on one scenario, preserves fixed-method
 baselines, executes the primary contract without pacing, labels assumed destination
-capacity as sensitivity, and changes only session count in the compact scaling run.
+capacity as sensitivity, and compares both greedies in the compact scaling run.
 
 Plausible wrong implementations:
 - Resample a different session population for each policy.
@@ -62,15 +62,17 @@ def test_campaign_pairs_policies_and_keeps_scale_claim_explicit(tmp_path):
     assert all(row["deadline_met"] for row in policy_rows
                if row["policy"] == "queue_haul")
     assert all(row["evidence_status"] == "sensitivity" for row in policy_rows)
-    assert [row["sessions"] for row in scale_rows] == [6, 12]
-    assert {row["planner"] for row in scale_rows} == {"queue_haul_greedy"}
+    assert [row["sessions"] for row in scale_rows] == [6, 6, 12, 12]
+    assert {row["planner"] for row in scale_rows} == {
+        "greedy", "greedy_lagrangian",
+    }
     assert {row["topology"] for row in scale_rows} == {"pooled_destination"}
     assert all(row["deadline_met"] for row in scale_rows)
 
     metadata = json.loads((tmp_path / "run_metadata.json").read_text())
     assert metadata["execution_contract"] == ORDERED_EAGER_PARALLEL_V1
     assert metadata["destination_contract"].endswith("assumed sensitivity")
-    assert metadata["scale_policy"] == "queue_haul_greedy"
+    assert metadata["scale_policies"] == ["greedy", "greedy_lagrangian"]
     assert metadata["scale_topology"] == "equivalent pooled destination"
     assert metadata["scale_target_fraction"] == .1
     assert metadata["scale_route_contract"] == "10 Gbps per 10K sessions"

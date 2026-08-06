@@ -322,6 +322,55 @@ def step_average(points, end_s: float, window_s: float, column: int = 1) -> floa
     return (area + (end_s - cursor) * value) / window_s
 
 
+def fluid_service_completion(work, capacity, arrivals=None):
+    """Return processor-sharing completion times for divisible work."""
+    work = np.asarray(work, float)
+    arrivals = np.zeros(len(work)) if arrivals is None else np.asarray(arrivals, float)
+    if work.ndim != 1 or arrivals.shape != work.shape or capacity <= 0 \
+            or np.any(work < 0) or np.any(arrivals < 0):
+        raise ValueError("invalid fluid service workload")
+    order = np.argsort(arrivals, kind="stable")
+    completed, active, cursor, virtual = np.empty(len(work)), [], 0, 0.0
+    time = 0.0
+    while cursor < len(work) or active:
+        arrival = arrivals[order[cursor]] if cursor < len(work) else np.inf
+        finish = time + (active[0][0] - virtual) * len(active) / capacity \
+            if active else np.inf
+        next_time = min(arrival, finish)
+        if active:
+            virtual += (next_time - time) * capacity / len(active)
+        time = next_time
+        if active and finish <= arrival:
+            virtual = max(virtual, active[0][0])
+        while active and active[0][0] <= virtual + 1e-12:
+            _, index = heapq.heappop(active)
+            completed[index] = time
+        while cursor < len(work) and arrivals[order[cursor]] <= time + 1e-12:
+            index = int(order[cursor])
+            if work[index] == 0:
+                completed[index] = time
+            else:
+                heapq.heappush(active, (virtual + work[index], index))
+            cursor += 1
+    return completed
+
+
+def fluid_pipeline_completion(work, starts, ends, capacity):
+    """Completion of ordered divisible work streaming from an upstream service."""
+    work, starts, ends = map(lambda value: np.asarray(value, float), (work, starts, ends))
+    if work.ndim != 1 or starts.shape != work.shape or ends.shape != work.shape \
+            or capacity <= 0 or np.any(work < 0) or np.any(starts < 0) \
+            or np.any(ends < starts) or np.any(starts[1:] < ends[:-1]):
+        raise ValueError("invalid fluid pipeline workload")
+    completed, backlog, previous = np.empty(len(work)), 0.0, 0.0
+    for i, (amount, begin, end) in enumerate(zip(work, starts, ends)):
+        backlog = max(0.0, backlog - capacity * (begin - previous))
+        backlog = max(0.0, backlog + amount - capacity * (end - begin))
+        completed[i] = end + backlog / capacity
+        previous = end
+    return completed
+
+
 class ExecutionSimulator:
     def __init__(self, scenario: ExecutionScenario, profile: ModelProfile,
                  moves: tuple[PlannedMove, ...], case_id: str = "central",
@@ -1038,11 +1087,135 @@ def predict(scenario: ExecutionScenario, profile: ModelProfile,
     return _run(scenario, profile, moves, case_id, destination, False)
 
 
+def _run_fluid(scenario, profile, moves, case_id, destination, detailed):
+    if scenario.final_state != "awake" or any(
+        session.requests or session.expected_growth_tokens_per_s
+        for session in scenario.sessions
+    ):
+        raise ValueError("fluid migration execution requires an idle awake snapshot")
+    moves = tuple(sorted(moves, key=lambda move: move.order))
+    pools = {pool.pool_id: pool for pool in destination.pools}
+    if any(move.destination_pool not in pools for move in moves):
+        raise ValueError("fluid moves require a destination pool")
+    paths = {move.path for move in moves}
+    if len(paths) > 1:
+        raise ValueError("fluid execution currently requires one shared site route")
+    sessions = {session.session_id: session for session in scenario.sessions}
+    case, start = profile.case(case_id), scenario.controller_delay_s
+    path = next(iter(paths), ())
+    links = {link.link_id: link.bytes_per_s for link in scenario.links}
+    bandwidth = min((links[link] for link in path), default=np.inf)
+    route_bytes = np.array([
+        sessions[move.session_id].log_bytes if move.method == "replay" else
+        case.kv_transfer.sealed_bytes(sessions[move.session_id].context_tokens)
+        for move in moves
+    ], float)
+    network_done = np.full(len(moves), start + route_bytes.sum() / bandwidth)
+    commits = np.empty(len(moves))
+    for pool_id, pool in pools.items():
+        service = pool.fluid_migration
+        members = [i for i, move in enumerate(moves) if move.destination_pool == pool_id]
+        if not members:
+            continue
+        if service is None:
+            raise ValueError("fluid execution cannot mix legacy destination pools")
+        replay = [i for i in members if moves[i].method == "replay"]
+        if replay:
+            work = np.array([
+                sessions[moves[i].session_id].context_tokens / case.replay.rate(
+                    sessions[moves[i].session_id].context_tokens, 1,
+                )
+                for i in replay
+            ])
+            capacity = len(pool.replicas) * service.replay_speedup
+            streamed = np.full(len(replay), max(
+                network_done[replay[0]], start + work.sum() / capacity,
+            ))
+            done = fluid_service_completion(
+                np.full(len(replay), case.replay_completion_s), capacity, streamed,
+            )
+            commits[replay] = done + case.switch_s
+        kv = [i for i in members if moves[i].method == "kv_transfer"]
+        if kv:
+            ingested = np.full(len(kv), max(
+                network_done[kv[0]], start + route_bytes[kv].sum() / (
+                    len(pool.replicas) * service.kv_ingest_bytes_per_s
+                ),
+            ))
+            q = destination.type_by_id[pool.type_id]
+            residual = q.migration["kv_transfer"].residual_s \
+                if q.migration else case.kv_transfer.initial_completion_s
+            commits[kv] = ingested + residual + case.switch_s
+
+    power_model = ExpectedPower(scenario, profile, case_id)
+    power = [(0.0, power_model.power(True), power_model.power(False))]
+    by_time = {}
+    for i, commit in enumerate(commits):
+        if commit <= scenario.end_s:
+            by_time.setdefault(float(commit), []).append(i)
+
+    def action(active, local):
+        total = 0.0
+        for pool_id, pool in pools.items():
+            service = pool.fluid_migration
+            for method in ("replay", "kv_transfer"):
+                members = [i for i in active if moves[i].destination_pool == pool_id
+                           and moves[i].method == method]
+                if not members:
+                    continue
+                replicas = len({sessions[moves[i].session_id].source_instance
+                                for i in members}) if local else len(pool.replicas)
+                values = service.source_power_w if local else service.destination_power_w
+                total += replicas * values[method]
+        return total
+
+    active = set(range(len(moves)))
+    if start:
+        power.append((start, power_model.power(True), power_model.power(False)))
+    if active:
+        power.append((start, power_model.power(True) + action(active, True),
+                      power_model.power(False) + action(active, False)))
+    for time in sorted(by_time):
+        for i in by_time[time]:
+            power_model.remove(moves[i].session_id)
+            active.remove(i)
+        power.append((time, power_model.power(True) + action(active, True),
+                      power_model.power(False) + action(active, False)))
+    if power[-1][0] != scenario.end_s:
+        power.append((scenario.end_s, power[-1][1], power[-1][2]))
+    rows = tuple(SessionExecution(
+        move.session_id, move.method, start,
+        float(network_done[i]) if move.method == "replay" else float(commits[i]),
+        float(commits[i]), float(commits[i]), None, None, float(commits[i]),
+        float(commits[i]) if commits[i] <= scenario.end_s else None, None, None,
+        float(network_done[i]) if move.method == "replay" else None,
+    ) for i, move in enumerate(moves))
+    at_deadline = step_average(power, scenario.deadline_s, profile.power_window_s)
+    complete = all(commit <= scenario.end_s for commit in commits)
+    makespan = float(max(commits, default=start)) if complete else None
+    deadline_met = complete and makespan <= scenario.deadline_s \
+        and at_deadline <= scenario.power_limit_w
+    network = tuple(NetworkExecution(
+        move.session_id, "initial", int(route_bytes[i]), int(route_bytes[i]), 0,
+        move.path, start, float(network_done[i]),
+    ) for i, move in enumerate(moves)) if detailed else ()
+    events = tuple(ExecutionEvent(float(commits[i]), "commit", move.session_id)
+                   for i, move in enumerate(moves)
+                   if commits[i] <= scenario.end_s) if detailed else ()
+    return ExecutionResult(
+        events, rows, (), network, (), tuple(power), at_deadline, deadline_met,
+        makespan, makespan, makespan or start,
+    )
+
+
 def _run(scenario, profile, moves, case_id, destination, detailed):
     if destination:
         from pool_planner import validate_destination_execution
         validate_destination_execution(scenario, destination, moves)
-    result = ExecutionSimulator(scenario, profile, moves, case_id, detailed).run()
+    fluid = destination and any(pool.fluid_migration for pool in destination.pools)
+    result = _run_fluid(
+        scenario, profile, moves, case_id, destination, detailed,
+    ) if fluid else ExecutionSimulator(scenario, profile, moves, case_id, detailed).run()
     if destination:
         from pool_planner import destination_service_execution
         rows = destination_service_execution(

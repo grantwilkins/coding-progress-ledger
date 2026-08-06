@@ -5,10 +5,13 @@ from __future__ import annotations
 from dataclasses import dataclass, replace
 from heapq import heappop, heappush
 from time import perf_counter
+from types import SimpleNamespace
 
 import cvxpy as cp
+import highspy
 import numpy as np
-from scipy.sparse import csc_matrix, csr_matrix
+from scipy.optimize import linprog
+from scipy.sparse import csc_matrix, csr_matrix, hstack, vstack
 
 from destination import DestinationArchitecture
 from planner import (_changes, _duration, _expected_scenario, _kv_catch_up_s,
@@ -19,10 +22,18 @@ from simulate import (ExecutionScenario, PlannedMove, PoolServiceExecution,
                       SimSession, predict)
 
 
-MAX_EXACT_COUPLED_PATTERNS = 10_000
+DUAL_PRICE_ITERATIONS = 1
+DUAL_PREFIX_BUCKETS = 8
+DUAL_HIGH_TARGET_ITERATIONS = 4
+DUAL_HIGH_TARGET_BUCKETS = 64
+DUAL_HIGH_TARGET_FRACTION = .75
+COLUMN_GROWTH_SWEEPS = 20
+COLUMN_TOLERANCE = 1e-8
+COLUMN_GAP_TOLERANCE = 1e-7
+NATIVE_PRICING_CHUNK = 65_536
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class Candidate:
     session: int
     method: str
@@ -43,7 +54,7 @@ class Candidate:
     def kv_occupancy_s(self): return self.duration_s if self.method == "kv_transfer" else 0.0
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class CandidateTable:
     sessions: tuple[SimSession, ...]
     candidates: tuple[Candidate, ...]
@@ -53,6 +64,18 @@ class CandidateTable:
     resource_capacities: tuple[float, ...]
     resource_units: tuple[str, ...]
     migration_horizon_s: float
+
+
+@dataclass(frozen=True, slots=True)
+class PricingSoA:
+    gains: np.ndarray
+    features: np.ndarray
+    feasible: np.ndarray
+    option_signatures: np.ndarray
+    option_starts: np.ndarray
+    resource_rows: np.ndarray
+    resource_coefficients: np.ndarray
+    session_ranks: np.ndarray
 
 
 def _baseline(scenario: ExecutionScenario, architecture: DestinationArchitecture,
@@ -250,8 +273,7 @@ def destination_service_execution(
     return tuple(rows)
 
 
-def candidate_table(scenario: ExecutionScenario, profile, architecture: DestinationArchitecture,
-                    mode: str, power: ExpectedPower) -> CandidateTable:
+def _candidate_oracle(scenario, profile, architecture, mode, power):
     if mode not in {"normal", "emergency"}:
         raise ValueError("admission mode must be normal or emergency")
     _validate_topology(scenario, architecture)
@@ -263,32 +285,68 @@ def candidate_table(scenario: ExecutionScenario, profile, architecture: Destinat
     residency_horizon = scenario.end_s - scenario.controller_delay_s \
         if residency_horizon is None else residency_horizon
     if migration_horizon <= 0:
-        return CandidateTable(sessions, (), csr_matrix((len(sessions), 0)),
-                              csr_matrix((0, 0)), (), (), (), migration_horizon)
+        return SimpleNamespace(
+            sessions=sessions, migration_horizon_s=migration_horizon, specs=(),
+            pools=architecture.pools, gains=(), options=(), signatures=(),
+            choices=lambda _: (), column=lambda _: (), feature=lambda _: (),
+            templates=(),
+        )
     work0, kv0 = _baseline(scenario, architecture, residency_horizon)
+    pool_work = tuple(
+        sum((work0[r.replica_id] for r in pool.replicas), start=np.zeros(2))
+        for pool in architecture.pools
+    )
+    pool_kv = tuple(
+        sum(kv0[r.replica_id] for r in pool.replicas)
+        for pool in architecture.pools
+    )
+    case, types = profile.case("central"), architecture.type_by_id
     links = {link.link_id: link.bytes_per_s for link in scenario.links}
-    candidates = []
-    for j, session in enumerate(sessions):
-        gain = power.marginal(session.session_id)
-        for p, pool in enumerate(architecture.pools):
-            q = architecture.type_by_id[pool.type_id]
+    gains = tuple(power.marginal(session.session_id) for session in sessions)
+    grouped = {}
+    for p, pool in enumerate(architecture.pools):
+        q = types[pool.type_id]
+        key = (
+            q.type_id, len(pool.replicas), tuple(pool_work[p]), pool_kv[p],
+            tuple(_event_bounds(q, pool, mode)), pool.route, pool.methods,
+            None if pool.fluid_migration is None else (
+                pool.fluid_migration.replay_speedup,
+                pool.fluid_migration.kv_ingest_bytes_per_s,
+                tuple(sorted(pool.fluid_migration.source_power_w.items())),
+                tuple(sorted(pool.fluid_migration.destination_power_w.items())),
+                pool.fluid_migration.provenance,
+            ),
+        )
+        grouped.setdefault(key, []).append(p)
+    pool_groups = tuple(map(tuple, grouped.values()))
+
+    def records(j):
+        session, values = sessions[j], []
+        migration_tokens = _resident_tokens(session, migration_horizon)
+        residency_tokens = _resident_tokens(session, residency_horizon)
+        demand_cache, duration_cache = {}, {}
+        route_bytes = {
+            "replay": _log_bytes(session, migration_tokens),
+            "kv_transfer": case.kv_transfer.sealed_bytes(migration_tokens),
+        }
+        for group in pool_groups:
+            p, pool = group[0], architecture.pools[group[0]]
+            q = types[pool.type_id]
             bounds = _event_bounds(q, pool, mode)
             if q.migration is None:
-                profile.case("central").replay.rate(
-                    _resident_tokens(session, migration_horizon), 1,
-                )
-            if max(np.asarray(q.normals) @ sum(
-                (work0[r.replica_id] for r in pool.replicas), start=np.zeros(2)
-            ) / (len(pool.replicas) * bounds)) > 1 + 1e-9:
+                case.replay.rate(migration_tokens, 1)
+            baseline = pool_work[p]
+            if max(np.asarray(q.normals) @ baseline
+                   / (len(pool.replicas) * bounds)) > 1 + 1e-9:
                 continue
-            demand = q.work(
-                session.expected_f, session.expected_g,
-                _resident_tokens(session, residency_horizon),
-                q.migration is not None,
-            )
-            baseline = sum((work0[r.replica_id] for r in pool.replicas), start=np.zeros(2))
-            resident = -(-_resident_tokens(session, residency_horizon)
-                         // q.kv_block_tokens)
+            demand_key = (q.type_id, q.migration is not None)
+            if demand_key not in demand_cache:
+                demand_cache[demand_key] = q.work(
+                    session.expected_f, session.expected_g,
+                    residency_tokens, q.migration is not None,
+                )
+            demand = demand_cache[demand_key]
+            resident = -(-residency_tokens // q.kv_block_tokens)
             capacity = len(pool.replicas) * (
                 q.kv_capacity_tokens // q.kv_block_tokens
             )
@@ -296,108 +354,327 @@ def candidate_table(scenario: ExecutionScenario, profile, architecture: Destinat
                       len(pool.replicas) * bounds
                       - np.asarray(q.normals) @ baseline + 1e-9) \
                     or resident > capacity \
-                    - sum(kv0[r.replica_id] for r in pool.replicas):
+                    - pool_kv[p]:
                 continue
-            rho, bandwidth = _pool_rho(q, pool, work0), min(links[x] for x in pool.route)
+            rho = float(max(np.asarray(q.normals) @ baseline /
+                            (len(pool.replicas) * np.asarray(q.bounds["normal"]))))
+            bandwidth = min(links[x] for x in pool.route)
             for method in pool.methods:
                 if not q.compatibility.supports(architecture.source_compatibility, method):
                     continue
-                try:
-                    components = None if q.migration is None else q.migration[method]
-                    duration = (
-                        _duration(
-                            session, method, profile.case("central"), pool.route,
-                            links, migration_horizon,
-                        ) if components is None else
-                        _destination_duration(
-                            session, method, profile.case("central"), pool.route,
-                            links, migration_horizon, components,
+                duration_key = (
+                    q.type_id, pool.route, method, rho, mode,
+                    None if pool.fluid_migration is None else (
+                        pool.fluid_migration.replay_speedup,
+                        pool.fluid_migration.kv_ingest_bytes_per_s,
+                    ),
+                )
+                if duration_key not in duration_cache:
+                    try:
+                        components = None if q.migration is None else q.migration[method]
+                        duration = (
+                            _duration(
+                                session, method, case, pool.route,
+                                links, migration_horizon,
+                            ) if components is None else
+                            _destination_duration(
+                                session, method, case, pool.route,
+                                links, migration_horizon, components,
+                            )
                         )
-                    )
-                    if method == "kv_transfer":
-                        _kv_schedule(scenario, profile, session, profile.case("central"),
-                                     pool.route, links)
-                except ValueError:
+                        migration_work = duration
+                        if pool.fluid_migration:
+                            if method == "replay":
+                                stream_work = migration_tokens / case.replay.rate(
+                                    migration_tokens, 1,
+                                )
+                                tail_work = case.replay_completion_s * (
+                                    1 + _changes(session, migration_horizon)
+                                )
+                                migration_work = stream_work + tail_work
+                                capacity = len(pool.replicas) \
+                                    * pool.fluid_migration.replay_speedup
+                                duration = max(
+                                    route_bytes[method] / bandwidth,
+                                    stream_work / capacity,
+                                ) + tail_work / capacity + case.switch_s
+                            else:
+                                migration_work = route_bytes[method]
+                                duration = max(
+                                    route_bytes[method] / bandwidth,
+                                    migration_work / (
+                                        len(pool.replicas)
+                                        * pool.fluid_migration.kv_ingest_bytes_per_s
+                                    ),
+                                ) + (components.residual_s if components else
+                                     case.kv_transfer.initial_completion_s)
+                        if method == "kv_transfer":
+                            _kv_schedule(scenario, profile, session, case,
+                                         pool.route, links)
+                        if q.migration is None:
+                            duration *= q.loaded[method].worst(
+                                rho, _mode_boundary_rho(q, mode),
+                                session.context_tokens, bandwidth,
+                            )
+                        duration_cache[duration_key] = duration, migration_work
+                    except ValueError:
+                        duration_cache[duration_key] = None
+                timed = duration_cache[duration_key]
+                if timed is None:
                     continue
-                if q.migration is None:
-                    duration *= q.loaded[method].worst(
-                        rho, _mode_boundary_rho(q, mode),
-                        session.context_tokens, bandwidth,
-                    )
+                duration, migration_work = timed
                 if duration > migration_horizon:
                     continue
-                tokens = _resident_tokens(session, migration_horizon)
-                route_bytes = (_log_bytes(session, tokens) if method == "replay" else
-                               profile.case("central").kv_transfer.sealed_bytes(tokens))
                 transition = (
-                    (max(0, duration - route_bytes / bandwidth), 0)
+                    (max(0, duration - route_bytes[method] / bandwidth), 0)
                     if method == "replay" else (0, 0)
                 )
-                candidates.append(Candidate(
-                    j, method, p, gain, duration, duration, pool.route, route_bytes,
+                values.extend((
+                    method, destination, duration, migration_work,
+                    architecture.pools[destination].route, route_bytes[method],
                     tuple(demand), resident, transition,
-                ))
-    candidates = tuple(candidates)
-    incidence = csr_matrix((np.ones(len(candidates)),
-                            ([c.session for c in candidates], range(len(candidates)))),
-                           shape=(len(sessions), len(candidates)))
-    rows, capacities, names, units = [], [], [], []
-    def add(values, capacity, name, unit):
-        if any(values):
-            rows.append(values)
-            capacities.append(capacity)
-            names.append(name)
-            units.append(unit)
+                ) for destination in group)
+        values.sort(key=lambda value: option_for[value[1], value[0]])
+        return tuple(values)
+
+    def choices(j):
+        return tuple(Candidate(
+            j, method, p, gains[j], migration_work, duration, route, route_bytes,
+            demand, resident, transition,
+        ) for method, p, duration, migration_work, route, route_bytes, demand, resident, transition
+                     in records(j))
+
+    specs, row_for = [], {}
+    def add(key, capacity, name, unit):
+        row_for[key] = len(specs)
+        specs.append((capacity, name, unit))
     for link, rate in links.items():
-        add([c.route_bytes if link in c.path else 0 for c in candidates],
-            rate * migration_horizon, f"route:{link}", "bytes")
+        add(("route", link), rate * migration_horizon, f"route:{link}", "bytes")
     for p, pool in enumerate(architecture.pools):
-        q = architecture.type_by_id[pool.type_id]
-        baseline = sum((work0[r.replica_id] for r in pool.replicas), start=np.zeros(2))
+        q = types[pool.type_id]
+        baseline = pool_work[p]
         event = _event_bounds(q, pool, mode)
         for facet, (normal, bound) in enumerate(zip(q.normals, event)):
             residual = len(pool.replicas) * bound - np.asarray(normal) @ baseline
-            add([np.asarray(normal) @ c.service_work if c.pool == p else 0
-                 for c in candidates], residual, f"service:{pool.pool_id}:{facet}",
-                "replica-s/s")
+            add(("service", p, facet), residual,
+                f"service:{pool.pool_id}:{facet}", "replica-s/s")
         if pool.event_flex_fraction is not None:
             for facet, (normal, bound) in enumerate(zip(q.normals, q.bounds["stable"])):
                 capacity = migration_horizon * (
                     len(pool.replicas) * bound - np.asarray(normal) @ baseline
                     + pool.service_debt_fraction * len(pool.replicas) * bound
                 )
-                add([
-                    migration_horizon * (np.asarray(normal) @ c.service_work)
-                    + np.asarray(normal) @ c.transition_work if c.pool == p else 0
-                    for c in candidates
-                ], capacity, f"service-debt:{pool.pool_id}:{facet}", "replica-s")
-        add([c.kv_tokens if c.pool == p else 0 for c in candidates],
-            len(pool.replicas) * (q.kv_capacity_tokens // q.kv_block_tokens)
-            - sum(kv0[r.replica_id] for r in pool.replicas), f"kv:{pool.pool_id}",
-            "blocks")
+                add(("debt", p, facet), capacity,
+                    f"service-debt:{pool.pool_id}:{facet}", "replica-s")
+        add(("kv", p), len(pool.replicas)
+            * (q.kv_capacity_tokens // q.kv_block_tokens) - pool_kv[p],
+            f"kv:{pool.pool_id}", "blocks")
         for method in pool.methods:
-            add([
-                c.duration_s if c.pool == p and c.method == method else 0
-                for c in candidates
-            ], len(pool.replicas) * migration_horizon,
-                f"migration:{pool.pool_id}:{method}", "replica-s")
-    data, rr, cc = [], [], []
-    for i, (row, capacity) in enumerate(zip(rows, capacities)):
-        for j, value in enumerate(row):
+            service = pool.fluid_migration
+            capacity = len(pool.replicas) * migration_horizon * (
+                service.replay_speedup if service and method == "replay" else
+                service.kv_ingest_bytes_per_s if service else 1
+            )
+            add(("migration", p, method), capacity,
+                f"migration:{pool.pool_id}:{method}",
+                "serial-replay-s" if service and method == "replay" else
+                "bytes" if service else "replica-s")
+
+    options = sorted([
+        (p, method) for p, pool in enumerate(architecture.pools)
+        for method in pool.methods
+        if types[pool.type_id].compatibility.supports(
+            architecture.source_compatibility, method,
+        )
+    ], key=lambda item: (
+        architecture.pools[item[0]].pool_id,
+        0 if item[1] == "replay" else 1,
+    ))
+    signatures, signature_for = [], {}
+    templates = []
+    for p, method in options:
+        pool, q = architecture.pools[p], types[architecture.pools[p].type_id]
+        baseline = pool_work[p]
+        rho = float(max(np.asarray(q.normals) @ baseline /
+                        (len(pool.replicas) * np.asarray(q.bounds["normal"]))))
+        signature = (q.type_id, pool.route, method, rho, mode)
+        if signature not in signature_for:
+            signature_for[signature] = len(signatures)
+            signatures.append(signature)
+        entries = []
+        def emit(key, coefficients):
+            row = row_for[key]
+            entries.append((row, np.asarray(coefficients) / specs[row][0]))
+        unit = np.eye(7)
+        for link in dict.fromkeys(pool.route):
+            emit(("route", link), unit[0])
+        for facet, normal in enumerate(q.normals):
+            ongoing = np.zeros(7)
+            ongoing[1:3] = normal
+            emit(("service", p, facet), ongoing)
+            if pool.event_flex_fraction is not None:
+                debt = np.zeros(7)
+                debt[1:3], debt[5:7] = migration_horizon * np.asarray(normal), normal
+                emit(("debt", p, facet), debt)
+        emit(("kv", p), unit[3])
+        emit(("migration", p, method), unit[4])
+        templates.append(tuple(entries))
+
+    option_for = {option: i for i, option in enumerate(options)}
+    option_signatures = tuple(
+        signature_for[(
+            types[architecture.pools[p].type_id].type_id,
+            architecture.pools[p].route, method,
+            float(max(np.asarray(types[architecture.pools[p].type_id].normals)
+                      @ pool_work[p] / (len(architecture.pools[p].replicas)
+                      * np.asarray(types[architecture.pools[p].type_id].bounds["normal"])))),
+            mode,
+        )] for p, method in options
+    )
+
+    def feature(candidate):
+        return np.asarray((
+            candidate.route_bytes, *candidate.service_work, candidate.kv_tokens,
+            candidate.migration_work_s, *candidate.transition_work,
+        ), float)
+
+    def pricing(j):
+        by_signature, mask = {}, 0
+        for method, p, duration, migration_work, _route, route_bytes, demand, resident, transition \
+                in records(j):
+            option = option_for[p, method]
+            signature = option_signatures[option]
+            values = (route_bytes, *demand, resident, migration_work, *transition)
+            if signature in by_signature and by_signature[signature] != values:
+                raise ValueError("equivalent pricing signatures disagree")
+            by_signature[signature] = values
+            mask |= 1 << option
+        return by_signature, mask
+
+    def column(candidate):
+        entries = []
+        values = feature(candidate)
+        for row, coefficients in templates[option_for[candidate.pool, candidate.method]]:
+            value = float(coefficients @ values)
             if value:
-                data.append(value / capacity)
-                rr.append(i)
-                cc.append(j)
+                entries.append((row, value))
+        return tuple(entries)
+
+    return SimpleNamespace(
+        sessions=sessions, migration_horizon_s=migration_horizon,
+        pools=architecture.pools, gains=gains, specs=tuple(specs), choices=choices,
+        column=column, feature=feature, options=tuple(options),
+        pricing=pricing,
+        signatures=tuple(signatures), option_signatures=option_signatures,
+        templates=tuple(templates), option_for=option_for,
+        pool_groups=pool_groups,
+    )
+
+
+def _pricing_chunk(oracle, start, stop):
+    features = np.zeros((stop - start, len(oracle.signatures), 7))
+    feasible = np.zeros(stop - start, np.uint16)
+    for j in range(start, stop):
+        local = j - start
+        priced, mask = oracle.pricing(j)
+        for signature, values in priced.items():
+            features[local, signature] = values
+        feasible[local] = mask
+    return features, feasible
+
+
+def _pricing_layout(oracle):
+    starts, rows, coefficients = [0], [], []
+    for template in oracle.templates:
+        rows.extend(row for row, _ in template)
+        coefficients.extend(value for _, value in template)
+        starts.append(len(rows))
+    return (np.asarray(oracle.option_signatures, np.uint16),
+            np.asarray(starts, np.int32), np.asarray(rows, np.int32),
+            np.asarray(coefficients))
+
+
+def _pricing_ranks(oracle):
+    order = sorted(range(len(oracle.sessions)),
+                   key=lambda j: oracle.sessions[j].session_id)
+    ranks = np.empty(len(order), np.uint32)
+    ranks[order] = np.arange(len(order), dtype=np.uint32)
+    return ranks
+
+
+def _pricing_soa(oracle):
+    if len(oracle.options) > 16:
+        raise ValueError("native pricing supports at most 16 pool-method options")
+    features, feasible = _pricing_chunk(oracle, 0, len(oracle.sessions))
+    option_signatures, starts, rows, coefficients = _pricing_layout(oracle)
+    return PricingSoA(
+        np.asarray(oracle.gains), features, feasible,
+        option_signatures, starts, rows, coefficients, _pricing_ranks(oracle),
+    )
+
+
+def _native_pricing_oracle(oracle):
+    from _queue_haul_native import PricingOracle
+
+    if len(oracle.options) > 16:
+        raise ValueError("native pricing supports at most 16 pool-method options")
+    option_signatures, starts, rows, coefficients = _pricing_layout(oracle)
+    native = PricingOracle.allocate(
+        len(oracle.sessions), len(oracle.signatures), len(oracle.options),
+        len(oracle.specs), oracle.migration_horizon_s,
+        option_signatures, starts, rows, np.ascontiguousarray(coefficients.ravel()),
+    )
+    ranks = _pricing_ranks(oracle)
+    for start in range(0, len(oracle.sessions), NATIVE_PRICING_CHUNK):
+        stop = min(start + NATIVE_PRICING_CHUNK, len(oracle.sessions))
+        features, feasible = _pricing_chunk(oracle, start, stop)
+        native.load(
+            start, np.asarray(oracle.gains[start:stop]), features.ravel(),
+            feasible, ranks[start:stop],
+        )
+    return native
+
+
+def _materialize_candidates(oracle, candidates, prune=True):
+    sessions, horizon = oracle.sessions, oracle.migration_horizon_s
+    if horizon <= 0:
+        return CandidateTable(sessions, (), csr_matrix((len(sessions), 0)),
+                              csr_matrix((0, 0)), (), (), (), horizon)
+    candidates = tuple(candidates)
+    incidence = csr_matrix((np.ones(len(candidates)),
+                            ([c.session for c in candidates], range(len(candidates)))),
+                           shape=(len(sessions), len(candidates)))
+    data, rr, cc = [], [], []
+    for column, candidate in enumerate(candidates):
+        for row, value in oracle.column(candidate):
+            data.append(value)
+            rr.append(row)
+            cc.append(column)
+    used = sorted(set(rr)) if prune else list(range(len(oracle.specs)))
+    remap = {old: new for new, old in enumerate(used)}
+    rr = [remap[row] for row in rr]
+    capacities = tuple(oracle.specs[row][0] for row in used)
+    names = tuple(oracle.specs[row][1] for row in used)
+    units = tuple(oracle.specs[row][2] for row in used)
     return CandidateTable(sessions, candidates, incidence,
-                          csr_matrix((data, (rr, cc)), shape=(len(rows), len(candidates))),
-                          tuple(names), tuple(capacities), tuple(units),
-                          migration_horizon)
+                          csr_matrix((data, (rr, cc)), shape=(len(used), len(candidates))),
+                          names, capacities, units, horizon)
 
 
-def _greedy(table: CandidateTable, target: float):
-    matrix, selected, usage = csc_matrix(table.resources), set(), np.zeros(table.resources.shape[0])
+def candidate_table(scenario: ExecutionScenario, profile, architecture: DestinationArchitecture,
+                    mode: str, power: ExpectedPower) -> CandidateTable:
+    oracle = _candidate_oracle(scenario, profile, architecture, mode, power)
+    return _materialize_candidates(oracle, (
+        candidate for j in range(len(oracle.sessions))
+        for candidate in oracle.choices(j)
+    ))
+
+
+def _scarcity_prices(table, matrix, eligible=None):
+    eligible = range(len(table.candidates)) if eligible is None else eligible
     cheapest = {}
-    for i, c in enumerate(table.candidates):
+    for i in eligible:
+        c = table.candidates[i]
         a = matrix.data[matrix.indptr[i]:matrix.indptr[i + 1]].sum()
         if c.session not in cheapest or (a, i) < cheapest[c.session]:
             cheapest[c.session] = (a, i)
@@ -405,14 +682,21 @@ def _greedy(table: CandidateTable, target: float):
     for _, i in cheapest.values():
         demand[matrix.indices[matrix.indptr[i]:matrix.indptr[i + 1]]] += \
             matrix.data[matrix.indptr[i]:matrix.indptr[i + 1]]
-    prices, score = np.maximum(demand, 1), []
-    for i, c in enumerate(table.candidates):
+    return np.maximum(demand, 1)
+
+
+def _greedy(table: CandidateTable, target: float, eligible=None):
+    matrix, selected, usage = csc_matrix(table.resources), set(), np.zeros(table.resources.shape[0])
+    eligible = tuple(range(len(table.candidates))) if eligible is None else tuple(eligible)
+    prices, score = _scarcity_prices(table, matrix, eligible), []
+    for i in eligible:
+        c = table.candidates[i]
         sl = slice(matrix.indptr[i], matrix.indptr[i + 1])
         rows, values = matrix.indices[sl], matrix.data[sl]
-        score.append(c.gain_w / max(values @ prices[rows], 1e-12))
+        score.append((c.gain_w / max(values @ prices[rows], 1e-12), i))
     sessions, gain = set(), 0.0
-    for i in np.lexsort((np.arange(len(score)), -np.asarray(score))):
-        i, c = int(i), table.candidates[int(i)]
+    for _, i in sorted(score, key=lambda row: (-row[0], row[1])):
+        c = table.candidates[i]
         if gain >= target - 1e-8:
             break
         sl = slice(matrix.indptr[i], matrix.indptr[i + 1])
@@ -426,58 +710,47 @@ def _greedy(table: CandidateTable, target: float):
     return selected
 
 
-def _greedy_bundle(table: CandidateTable, target: float, power: ExpectedPower):
-    matrix, selected = csc_matrix(table.resources), set()
-    sessions, usage, gain = set(), np.zeros(table.resources.shape[0]), 0.0
-    state = ExpectedPower(power.scenario, power.profile, power.case.case_id)
-    while gain < target - 1e-8:
-        choices, cheapest = [], {}
-        for i, c in enumerate(table.candidates):
-            if c.session in sessions:
+def _baseline_policy(table: CandidateTable, target: float, policy: str, seed: int):
+    if policy == "random":
+        matrix, usage = csc_matrix(table.resources), np.zeros(table.resources.shape[0])
+        rng, selected, gain = np.random.default_rng(seed), set(), 0.0
+        choices = [[] for _ in range(table.incidence.shape[0])]
+        for i, candidate in enumerate(table.candidates):
+            choices[candidate.session].append(i)
+        for session in rng.permutation(table.incidence.shape[0]):
+            options = []
+            for i in choices[int(session)]:
+                column = matrix[:, i]
+                if np.all(usage[column.indices] + column.data <= 1 + 1e-8):
+                    options.append(i)
+            if not options:
                 continue
-            sl = slice(matrix.indptr[i], matrix.indptr[i + 1])
-            rows, values = matrix.indices[sl], matrix.data[sl]
-            if np.any(usage[rows] + values > 1 + 1e-8):
-                continue
-            cost = (values / (1 - usage[rows])).sum()
-            choices.append((i,))
-            if c.session not in cheapest or (cost, i) < cheapest[c.session]:
-                cheapest[c.session] = cost, i
-        groups = {}
-        for cost, i in cheapest.values():
-            session = table.sessions[table.candidates[i].session]
-            groups.setdefault(session.source_instance, []).append(
-                (power.ell[session.session_id] / cost, i)
-            )
-        for group in groups.values():
-            ordered = [i for _, i in sorted(group, reverse=True)]
-            choices.extend(tuple(ordered[:n]) for n in range(2, min(3, len(ordered)) + 1))
-            if len(ordered) > 3:
-                choices.append(tuple(ordered))
-        best = None
-        for choice in choices:
-            added = np.asarray(matrix[:, choice].sum(1)).ravel()
-            if np.any(usage + added > 1 + 1e-8):
-                continue
-            ids = [table.sessions[table.candidates[i].session].session_id for i in choice]
-            cost = sum(value / (1 - usage[row])
-                       for row, value in enumerate(added) if value)
-            key = (state.drain_gain(ids) / cost, tuple(-i for i in choice))
-            if best is None or key > best[0]:
-                best = key, choice, ids, added
-        if best is None:
-            break
-        before = state.power(True)
-        for session_id in best[2]:
-            state.remove(session_id)
-        gain += before - state.power(True)
-        selected.update(best[1])
-        sessions.update(table.candidates[i].session for i in best[1])
-        usage += best[3]
-    return selected
+            i = options[int(rng.integers(len(options)))]
+            column = matrix[:, i]
+            rows, values = column.indices, column.data
+            selected.add(i)
+            usage[rows] += values
+            gain += table.candidates[i].gain_w
+            if gain >= target - 1e-8:
+                break
+        return selected
+    eligible = [
+        i for i, candidate in enumerate(table.candidates)
+        if policy not in {"replay_only", "kv_only"}
+        or candidate.method == ("replay" if policy == "replay_only" else "kv_transfer")
+    ]
+    if policy == "isolated_fastest":
+        fastest = {}
+        for i in eligible:
+            candidate = table.candidates[i]
+            key = (candidate.duration_s, candidate.migration_work_s, i)
+            if candidate.session not in fastest or key < fastest[candidate.session][0]:
+                fastest[candidate.session] = key, i
+        eligible = [value[1] for value in fastest.values()]
+    return _greedy(table, target, eligible)
 
 
-def _coupled_gain(table, power, pattern, cache=None):
+def _lagrangian_gain(table, power, pattern, cache=None):
     sessions = frozenset(table.candidates[i].session for i in pattern)
     if cache is None or sessions not in cache:
         value = power.drain_gain([
@@ -488,87 +761,132 @@ def _coupled_gain(table, power, pattern, cache=None):
     return value if cache is None else cache[sessions]
 
 
-def _coupled_source_patterns(table, power, priced, eta, scale, cache=None):
+def _source_removed_gain(power, source, removed_load):
+    owned = power.instance_slots[source]
+    share = removed_load / len(owned)
+    if power.profile.power_scope == "gpu":
+        return sum(
+            power.slot_power[node][slot]
+            - power.case.power_curve.power(power.slots[node][slot] - share)
+            for node, slot in owned if power.nodes[node].local
+        )
+    slots = {}
+    for node, slot in owned:
+        if power.nodes[node].local:
+            slots.setdefault(node, list(power.slots[node]))[slot] -= share
+    return sum(
+        power.node_power[node] - power._power(node, values, "awake")
+        for node, values in slots.items()
+    )
+
+
+def _lagrangian_source_prefixes(table, power, priced, eta, scale):
     ordered = sorted(priced, key=lambda row: (
         row[1] / power.ell[table.sessions[table.candidates[row[0]].session].session_id],
         row[0],
     ))
-    best, pattern, price = (0.0, ()), (), 0.0
-    for i, value in ordered:
-        pattern += (i,)
+    if not ordered:
+        return (), ()
+    source = table.sessions[table.candidates[ordered[0][0]].session].source_instance
+    best, price, removed = (0.0, 0), 0.0, 0.0
+    for k, (i, value) in enumerate(ordered, 1):
+        session = table.sessions[table.candidates[i].session]
+        if session.source_instance != source:
+            raise ValueError("prefix pricing crossed a source power domain")
         price += value
-        key = (
-            price - eta * _coupled_gain(table, power, pattern, cache) / scale,
-            pattern,
-        )
-        if key < best:
-            best = key
-    return best[1], tuple(i for i, _value in ordered)
+        removed += power.ell[session.session_id]
+        score = price - eta * _source_removed_gain(
+            power, source, removed,
+        ) / scale
+        if score < best[0]:
+            best = score, k
+    order = tuple(i for i, _value in ordered)
+    return order[:best[1]], order
 
 
-def _coupled_source_pattern(table, power, priced, eta, scale):
-    return _coupled_source_patterns(table, power, priced, eta, scale)[0]
+def _lagrangian_source_prefix(table, power, priced, eta, scale):
+    return _lagrangian_source_prefixes(table, power, priced, eta, scale)[0]
 
 
-def _coupled_source_space(
-    table, power, members, by_session, matrix, gain_cache,
-):
-    choices = [tuple(by_session.get(session, ())) for session in members
-               if power.ell[table.sessions[session].session_id] > 0]
-    count = 1
-    for actions in choices:
-        count *= len(actions) + 1
-        if count > MAX_EXACT_COUPLED_PATTERNS:
-            return None
-    columns = {
-        i: np.asarray(matrix[:, i].todense()).ravel()
-        for actions in choices for i in actions
-    }
-    states = [((), 0.0, np.zeros(matrix.shape[0]))]
-    for actions in choices:
-        prior = states
-        states = list(prior)
-        for pattern, work, usage in prior:
-            for i in actions:
-                next_usage = usage + columns[i]
-                if np.all(next_usage <= 1 + 1e-8):
-                    states.append((
-                        pattern + (i,),
-                        work + table.candidates[i].migration_work_s,
-                        next_usage,
-                    ))
-    patterns = tuple(row[0] for row in states)
-    return (
-        patterns,
-        np.asarray([row[1] for row in states]),
-        np.asarray([row[2] for row in states]),
-        np.asarray([
-            _coupled_gain(table, power, pattern, gain_cache)
-            for pattern in patterns
-        ]),
+def _retained_prefixes(pattern, ordered, buckets=None):
+    if not ordered:
+        return {pattern}
+    buckets = DUAL_PREFIX_BUCKETS if buckets is None else buckets
+    if buckets < 1:
+        raise ValueError("prefix recovery needs a positive bucket count")
+    n, k = len(ordered), len(pattern)
+    sizes = {1, n, max(1, k - 1), k, min(n, k + 1)}
+    sizes.update(
+        -(-n * step // buckets) for step in range(1, buckets)
     )
+    return {ordered[:size] for size in sizes}
 
 
-def _recover_coupled(
+def _dual_resource_limits(table):
+    limits = np.ones(table.resources.shape[0])
+    matrix = csr_matrix(table.resources)
+    for row, name in enumerate(table.resource_names):
+        if not name.startswith("route:"):
+            continue
+        columns = matrix.indices[matrix.indptr[row]:matrix.indptr[row + 1]]
+        values = matrix.data[matrix.indptr[row]:matrix.indptr[row + 1]]
+        tail = max((
+            table.candidates[i].duration_s
+            - value * table.migration_horizon_s
+            for i, value in zip(columns, values)
+        ), default=0.0)
+        limits[row] = max(0.0, 1 - tail / table.migration_horizon_s)
+    return limits
+
+
+def _recover_lagrangian(
     table, power, patterns, target, architecture, scenario, mode, gain_cache=None,
+    eager_pack=False, return_assignment=False, resource_limits=None, stats_cache=None,
 ):
     matrix, selected, chosen = csc_matrix(table.resources), set(), {}
-    gain, blocked, cache = 0.0, set(), {}
+    columns = tuple((matrix.indices[matrix.indptr[i]:matrix.indptr[i + 1]],
+                     matrix.data[matrix.indptr[i]:matrix.indptr[i + 1]])
+                    for i in range(matrix.shape[1]))
+    limits = np.ones(matrix.shape[0]) if resource_limits is None else resource_limits
+    gain, blocked = 0.0, set()
+    cache = {} if stats_cache is None else stats_cache
     usage = np.zeros(matrix.shape[0])
-    visited = {frozenset()}
     sources = sorted(patterns)
     rank = {source: i for i, source in enumerate(sources)}
+    pattern_ids, multipliers, multiplier = {}, {}, 1
+    for source in sources:
+        pattern_ids[source] = {
+            pattern: i for i, pattern in enumerate(sorted(patterns[source]), 1)
+        }
+        multipliers[source], multiplier = multiplier, multiplier * (
+            len(pattern_ids[source]) + 1
+        )
+    state, visited = 0, {0}
     versions = dict.fromkeys(sources, 0)
-    heap, deferred = [], []
+    heap, deferred, assignment = [], [], None
 
     def stats(pattern):
         if pattern not in cache:
+            sessions = {table.candidates[i].session for i in pattern}
+            sources = {
+                table.sessions[session].source_instance for session in sessions
+            }
+            pattern_usage = np.zeros(matrix.shape[0])
+            for i in pattern:
+                rows, values = columns[i]
+                pattern_usage[rows] += values
             cache[pattern] = (
-                _coupled_gain(table, power, pattern, gain_cache),
+                _source_removed_gain(
+                    power, next(iter(sources)), sum(
+                        power.ell[table.sessions[session].session_id]
+                        for session in sessions
+                    ),
+                ) if len(sources) == 1 else _lagrangian_gain(
+                    table, power, pattern, gain_cache,
+                ),
                 sum(table.candidates[i].migration_work_s for i in pattern),
                 set(pattern),
-                np.asarray(matrix[:, list(pattern)].sum(1)).ravel()
-                if pattern else np.zeros(matrix.shape[0]),
+                pattern_usage,
             )
         return cache[pattern]
 
@@ -610,29 +928,36 @@ def _recover_coupled(
                 continue
             old_members, old_usage = stats(old)[2:]
             members, pattern_usage = stats(pattern)[2:]
-            trial = selected - old_members | members
-            if frozenset(trial) in visited:
+            trial_state = state + (
+                pattern_ids[source][pattern] - pattern_ids[source].get(old, 0)
+            ) * multipliers[source]
+            if trial_state in visited:
                 deferred.append(item)
                 continue
             trial_usage = usage - old_usage + pattern_usage
-            if np.any(trial_usage >= 1 - 1e-7):
-                trial_usage = np.asarray(matrix[:, list(trial)].sum(1)).ravel()
-            if np.any(trial_usage > 1 + 1e-8):
+            if np.any(trial_usage > limits + 1e-8):
                 deferred.append(item)
                 continue
-            best = source, old, pattern, trial, item[8]
+            best = source, old, pattern, item[8], trial_usage, trial_state
             break
         if best is None:
             break
-        if _pack(table, best[3], architecture, scenario, mode)[0] is None:
-            blocked.add(best[:3])
-            continue
-        chosen[best[0]], selected = best[2], best[3]
-        visited.add(frozenset(selected))
-        usage = np.asarray(matrix[:, list(selected)].sum(1)).ravel()
-        gain += best[4]
+        if eager_pack:
+            assignment = _pack(
+                table, selected - stats(best[1])[2] | stats(best[2])[2],
+                architecture, scenario, mode,
+            )[0]
+            if assignment is None:
+                blocked.add(best[:3])
+                continue
+        selected.difference_update(stats(best[1])[2])
+        selected.update(stats(best[2])[2])
+        chosen[best[0]], state = best[2], best[5]
+        visited.add(state)
+        usage = best[4]
+        gain += best[3]
         versions[best[0]] += 1
-        if best[4] < 0:
+        if best[3] < 0:
             heap, deferred = [], []
             for source in sources:
                 add(source)
@@ -644,101 +969,103 @@ def _recover_coupled(
                     heappush(heap, current)
         deferred = []
         add(best[0])
-    return selected
+    if not eager_pack and gain >= target - 1e-8:
+        assignment = _pack(table, selected, architecture, scenario, mode)[0]
+    if not eager_pack and (gain < target - 1e-8 or assignment is None):
+        return _recover_lagrangian(
+            table, power, patterns, target, architecture, scenario, mode,
+            gain_cache, True, return_assignment, limits, cache,
+        )
+    exact_usage = np.asarray(matrix[:, list(selected)].sum(1)).ravel() \
+        if selected else np.zeros(matrix.shape[0])
+    if np.any(exact_usage > limits + 1e-8):
+        raise RuntimeError("Lagrangian recovery exceeded an aggregate resource")
+    return (selected, assignment) if return_assignment else selected
 
 
-def _greedy_coupled(table, target, power, architecture, scenario, mode):
-    """Simulator-local emulation of source-local choices under shared prices."""
+def _greedy_lagrangian(
+    table, target, power, architecture, scenario, mode, return_assignment=False,
+):
+    """Choose source-local prefixes under iterated aggregate-resource prices."""
+    maximum = power.drain_gain(session.session_id for session in table.sessions)
+    high = maximum > 0 and target >= DUAL_HIGH_TARGET_FRACTION * maximum
+    iterations = DUAL_HIGH_TARGET_ITERATIONS if high else DUAL_PRICE_ITERATIONS
+    prefix_buckets = DUAL_HIGH_TARGET_BUCKETS if high else DUAL_PREFIX_BUCKETS
+    if iterations < 1:
+        raise ValueError("dual pricing needs a positive iteration budget")
     matrix = csc_matrix(table.resources)
+    limits = _dual_resource_limits(table)
     by_source, by_session = {}, {}
     for j, session in enumerate(table.sessions):
         by_source.setdefault(session.source_instance, []).append(j)
+    for members in by_source.values():
+        members.sort(key=lambda j: table.sessions[j].session_id)
     for i, candidate in enumerate(table.candidates):
         by_session.setdefault(candidate.session, []).append(i)
-    prices, eta, scale = np.zeros(table.resources.shape[0]), 1.0, max(target, 1.0)
+    prices = _scarcity_prices(table, matrix)
+    eta, scale = 1.0, max(target, 1.0)
     gain_cache = {}
     retained = {source: set() for source in by_source}
-    spaces = {
-        source: _coupled_source_space(
-            table, power, members, by_session, matrix, gain_cache,
-        ) for source, members in by_source.items()
-    }
-    for source, space in spaces.items():
-        if space is not None:
-            patterns, _work, _usage, gains = space
-            best = gains.max()
-            retained[source].update(
-                pattern for pattern, gain in zip(patterns, gains)
-                if gain >= best - 1e-8
-            )
-    for iteration in range(32):
+    for iteration in range(iterations):
         selected, chosen = set(), []
         for source_order, (source, members) in enumerate(sorted(by_source.items())):
-            space = spaces[source]
-            if space is not None:
-                patterns, work, usage, gains = space
-                score = work / table.migration_horizon_s \
-                    + usage @ prices - eta * gains / scale
-                pattern = patterns[int(np.argmin(score))]
-            else:
-                priced = []
-                for position, session in enumerate(members):
-                    if power.ell[table.sessions[session].session_id] <= 0:
-                        continue
-                    actions = []
-                    for i in by_session.get(session, ()):
-                        sl = slice(matrix.indptr[i], matrix.indptr[i + 1])
-                        rows, values = matrix.indices[sl], matrix.data[sl]
-                        value = table.candidates[i].migration_work_s \
-                            / table.migration_horizon_s + prices[rows] @ values
-                        actions.append((value, i))
-                    if not actions:
-                        continue
-                    actions.sort()
-                    low = min(value for value, _i in actions)
-                    ties = sorted(
-                        i for value, i in actions if abs(value - low) <= 1e-12
-                    )
-                    i = ties[(iteration + source_order + position) % len(ties)]
-                    priced.append((i, low))
-                pattern, ordered = _coupled_source_patterns(
-                    table, power, priced, eta, scale, gain_cache,
+            priced, alternate = [], []
+            for position, session in enumerate(members):
+                if power.ell[table.sessions[session].session_id] <= 0:
+                    continue
+                actions = []
+                for i in by_session.get(session, ()):
+                    sl = slice(matrix.indptr[i], matrix.indptr[i + 1])
+                    rows, values = matrix.indices[sl], matrix.data[sl]
+                    value = table.candidates[i].migration_work_s \
+                        / table.migration_horizon_s + prices[rows] @ values
+                    actions.append((value, i))
+                if not actions:
+                    continue
+                actions.sort()
+                low = min(value for value, _i in actions)
+                ties = sorted(i for value, i in actions if abs(value - low) <= 1e-12)
+                i = ties[(iteration + source_order + position) % len(ties)]
+                priced.append((i, low))
+                value, alternate_i = actions[
+                    (iteration + source_order + position) % min(2, len(actions))
+                ]
+                alternate.append((alternate_i, value))
+            pattern, ordered = _lagrangian_source_prefixes(
+                table, power, priced, eta, scale,
+            )
+            retained[source].update(_retained_prefixes(
+                pattern, ordered, prefix_buckets,
+            ))
+            if alternate:
+                alternative, ordered = _lagrangian_source_prefixes(
+                    table, power, alternate, eta, scale,
                 )
-                if ordered:
-                    retained[source].update((ordered[:1], ordered))
+                retained[source].update(
+                    _retained_prefixes(alternative, ordered, prefix_buckets)
+                )
             retained[source].add(pattern)
             selected.update(pattern)
             chosen.append(pattern)
         usage = np.asarray(table.resources[:, list(selected)].sum(1)).ravel() \
             if selected else np.zeros(table.resources.shape[0])
         shed = sum(
-            _coupled_gain(table, power, pattern, gain_cache) for pattern in chosen
+            _lagrangian_gain(table, power, pattern, gain_cache) for pattern in chosen
         )
         step = .5 / np.sqrt(iteration + 1)
-        prices = np.maximum(0, prices + step * (usage - 1))
+        prices = np.maximum(0, prices + step * (usage - limits))
         eta = max(0, eta + step * (target - shed) / scale)
-    return _recover_coupled(
+    return _recover_lagrangian(
         table, power, retained, target, architecture, scenario, mode, gain_cache,
+        return_assignment=return_assignment,
+        resource_limits=limits,
     )
 
 
-def _lp(table: CandidateTable, target: float):
-    if not table.candidates:
-        return set()
-    n, x = len(table.candidates), cp.Variable(len(table.candidates), nonneg=True)
+def _round_lp(table, target, values):
+    n = len(table.candidates)
     gains = np.array([c.gain_w for c in table.candidates])
     work = np.array([c.migration_work_s for c in table.candidates])
-    base = [table.incidence @ x <= 1, table.resources @ x <= 1, x <= 1]
-    def solve(objective, constraints, maximize=False):
-        p = cp.Problem(cp.Maximize(objective) if maximize else cp.Minimize(objective), constraints)
-        p.solve(solver=cp.CLARABEL)
-        return p
-    problem = solve(work @ x, base + [gains @ x >= target])
-    if problem.status in (cp.INFEASIBLE, cp.INFEASIBLE_INACCURATE):
-        problem = solve(gains @ x, base, True)
-        best = float(problem.value)
-        problem = solve(work @ x, base + [gains @ x >= best - 1e-7])
-    values = np.asarray(x.value)
     matrix, selected, sessions = csc_matrix(table.resources), set(), set()
     usage, gain = np.zeros(table.resources.shape[0]), 0.0
     for i in np.lexsort((np.arange(n), work, -values)):
@@ -767,7 +1094,692 @@ def _lp(table: CandidateTable, target: float):
     return selected
 
 
-def _pack(table, selected, architecture, scenario, mode):
+def _lp(table: CandidateTable, target: float, stats=None):
+    if not table.candidates:
+        return set()
+    started, native_s, solves, iterations = perf_counter(), 0.0, 0, 0
+    n, x = len(table.candidates), cp.Variable(len(table.candidates), nonneg=True)
+    gains = np.array([c.gain_w for c in table.candidates])
+    work = np.array([c.migration_work_s for c in table.candidates])
+    base = [table.incidence @ x <= 1, table.resources @ x <= 1, x <= 1]
+    def solve(objective, constraints, maximize=False):
+        nonlocal native_s, solves, iterations
+        p = cp.Problem(cp.Maximize(objective) if maximize else cp.Minimize(objective), constraints)
+        p.solve(solver=cp.CLARABEL)
+        native_s += p.solver_stats.solve_time or 0
+        iterations += p.solver_stats.num_iters or 0
+        solves += 1
+        return p
+    problem = solve(work @ x, base + [gains @ x >= target])
+    if problem.status in (cp.INFEASIBLE, cp.INFEASIBLE_INACCURATE):
+        problem = solve(gains @ x, base, True)
+        best = float(problem.value)
+        problem = solve(work @ x, base + [gains @ x >= best - 1e-7])
+    selected = _round_lp(table, target, np.asarray(x.value))
+    if stats is not None:
+        stats.update(wall_s=perf_counter() - started, native_s=native_s,
+                     solves=solves, iterations=iterations)
+    return selected
+
+
+def _lp_highs(table: CandidateTable, target: float, stats=None):
+    if not table.candidates:
+        return set()
+    started, native_s, solves, iterations = perf_counter(), 0.0, 0, 0
+    gains = np.array([c.gain_w for c in table.candidates])
+    work = np.array([c.migration_work_s for c in table.candidates])
+    if not np.array_equal(np.asarray(table.incidence.sum(0)).ravel(),
+                          np.ones(len(table.candidates))):
+        raise ValueError("each LP candidate must belong to exactly one session")
+    common = vstack((table.incidence, table.resources), format="csr")
+    common_rhs = np.ones(common.shape[0])
+    gain_scale = max(float(target), float(gains.max(initial=0)), 1.0)
+    target_row = csr_matrix((-gains / gain_scale).reshape(1, -1))
+
+    def solve(objective, minimum=None):
+        nonlocal native_s, solves, iterations
+        matrix, rhs = common, common_rhs
+        if minimum is not None:
+            matrix = vstack((common, target_row), format="csr")
+            rhs = np.append(common_rhs, -minimum / gain_scale)
+        solve_started = perf_counter()
+        result = linprog(objective, A_ub=matrix, b_ub=rhs,
+                         bounds=(0, None), method="highs-ipm",
+                         options={"presolve": True})
+        native_s += perf_counter() - solve_started
+        solves += 1
+        iterations += result.nit
+        if result.status not in (0, 2):
+            raise RuntimeError(f"HiGHS failed: {result.message}")
+        return result
+
+    result = solve(work / table.migration_horizon_s, target)
+    if result.status == 2:
+        maximum = solve(-gains / gain_scale)
+        if maximum.status:
+            raise RuntimeError(f"HiGHS maximum-gain LP failed: {maximum.message}")
+        best = -float(maximum.fun) * gain_scale
+        result = solve(
+            work / table.migration_horizon_s,
+            max(0.0, best - 1e-7 * gain_scale),
+        )
+    if result.status:
+        raise RuntimeError(f"HiGHS target LP failed: {result.message}")
+    selected = _round_lp(table, target, result.x)
+    if stats is not None:
+        stats.update(wall_s=perf_counter() - started, native_s=native_s,
+                     solves=solves, iterations=iterations)
+    return selected
+
+
+def _column_phase(table, target, costs, active, shortfall, stats):
+    sessions = np.array([c.session for c in table.candidates])
+    gains = np.array([c.gain_w for c in table.candidates])
+    active = set(active)
+    batch = max(256, table.incidence.shape[0] // COLUMN_GROWTH_SWEEPS)
+    for sweep in range(len(table.candidates) + 1):
+        columns = np.array(sorted(active), int)
+        represented = np.unique(sessions[columns]) if columns.size else np.array([], int)
+        incidence = table.incidence[represented][:, columns]
+        resources = table.resources[:, columns]
+        target_row = csr_matrix((-gains[columns]).reshape(1, -1))
+        matrix = vstack((incidence, resources, target_row), format="csr")
+        objective = costs[columns]
+        if shortfall:
+            matrix = hstack((matrix, csr_matrix((
+                [-1.0], ([matrix.shape[0] - 1], [0])),
+                shape=(matrix.shape[0], 1),
+            )), format="csr")
+            objective = np.append(objective, 1)
+        result = linprog(
+            objective, A_ub=matrix,
+            b_ub=np.concatenate((
+                np.ones(len(represented) + table.resources.shape[0]), [-target],
+            )), bounds=(0, None), method="highs-ds", options={"presolve": True},
+        )
+        if result.status:
+            raise RuntimeError(f"column master failed: {result.message}")
+        dual = -result.ineqlin.marginals
+        alpha = np.zeros(table.incidence.shape[0])
+        alpha[represented] = dual[:len(represented)]
+        resource_dual = dual[len(represented):-1]
+        eta = dual[-1]
+        base = costs + table.resources.T @ resource_dual - eta * gains
+        reduced = np.asarray(base).ravel() + alpha[sessions]
+        minimum = np.full(table.incidence.shape[0], np.inf)
+        np.minimum.at(minimum, sessions, reduced)
+        best = np.full(table.incidence.shape[0], len(table.candidates))
+        tied = reduced == minimum[sessions]
+        np.minimum.at(best, sessions[tied], np.flatnonzero(tied))
+        violations = best[minimum < -COLUMN_TOLERANCE]
+        violations = violations[~np.isin(violations, columns, assume_unique=True)]
+
+        correction = np.maximum(0, -minimum)
+        correction[~np.isfinite(correction)] = 0
+        lower = eta * target - resource_dual.sum() - (alpha + correction).sum()
+        stats.update(sweeps=sweep + 1, columns=len(active), upper=float(result.fun),
+                     lower=float(lower), gap=float(result.fun - lower))
+        if not violations.size:
+            return result, columns, active
+        order = np.lexsort((violations, reduced[violations]))
+        active.update(map(int, violations[order[:batch]]))
+    raise RuntimeError("column generation did not converge")
+
+
+def _lp_column_generation(table: CandidateTable, target: float, stats=None):
+    if not table.candidates or target <= 0:
+        return set()
+    started, phase1, phase2 = perf_counter(), {}, {}
+    zeros = np.zeros(len(table.candidates))
+    first, columns, active = _column_phase(
+        table, target, zeros, set(), True, phase1,
+    )
+    shortfall = float(first.x[-1])
+    effective = max(0.0, target - shortfall)
+    work = np.array([c.migration_work_s for c in table.candidates]) \
+        / table.migration_horizon_s
+    second, columns, active = _column_phase(
+        table, max(0.0, effective - 1e-7), work, active, False, phase2,
+    )
+    values = np.zeros(len(table.candidates))
+    values[columns] = second.x
+    selected = _round_lp(table, target, values)
+    if stats is not None:
+        stats.update(wall_s=perf_counter() - started,
+                     active_columns=len(active),
+                     active_sessions=len({table.candidates[i].session for i in active}),
+                     phase1_shortfall=shortfall, effective_target=effective,
+                     phase1=phase1, phase2=phase2)
+    return selected
+
+
+def _add_priced_columns(highs, table, resources, choices, costs,
+                        candidate_columns, session_rows):
+    choices = np.asarray(choices, dtype=np.int32)
+    sessions = np.array([table.candidates[i].session for i in choices], np.int32)
+    new_sessions = np.unique(sessions[session_rows[sessions] < 0])
+    if new_sessions.size:
+        first = highs.getNumRow()
+        status = highs.addRows(
+            len(new_sessions), np.full(len(new_sessions), -highspy.kHighsInf),
+            np.ones(len(new_sessions)), 0,
+            np.zeros(len(new_sessions) + 1, np.int32),
+            np.array([], np.int32), np.array([], float),
+        )
+        if status != highspy.HighsStatus.kOk:
+            raise RuntimeError("HiGHS failed to add session rows")
+        session_rows[new_sessions] = np.arange(first, first + len(new_sessions))
+    matrix, starts, indices, values = resources, [0], [], []
+    target_row = table.resources.shape[0]
+    for choice, session in zip(choices, sessions):
+        sl = slice(matrix.indptr[choice], matrix.indptr[choice + 1])
+        indices.extend(matrix.indices[sl])
+        values.extend(matrix.data[sl])
+        indices.extend((target_row, session_rows[session]))
+        values.extend((table.candidates[choice].gain_w, 1.0))
+        starts.append(len(indices))
+    first = highs.getNumCol()
+    status = highs.addCols(
+        len(choices), costs[choices], np.zeros(len(choices)),
+        np.full(len(choices), highspy.kHighsInf), len(indices),
+        np.asarray(starts, np.int32), np.asarray(indices, np.int32),
+        np.asarray(values, float),
+    )
+    if status != highspy.HighsStatus.kOk:
+        raise RuntimeError("HiGHS failed to add priced columns")
+    candidate_columns[choices] = np.arange(first, first + len(choices))
+
+
+def _persistent_column_phase(highs, table, resources, target, costs,
+                             candidate_columns, session_rows, stats):
+    sessions = np.array([c.session for c in table.candidates])
+    gains = np.array([c.gain_w for c in table.candidates])
+    batch = max(256, table.incidence.shape[0] // COLUMN_GROWTH_SWEEPS)
+    pricing_s = add_s = solve_s = 0.0
+    iterations = 0
+    for sweep in range(len(table.candidates) + 1):
+        started = perf_counter()
+        highs.run()
+        solve_s += perf_counter() - started
+        if highs.getModelStatus() != highspy.HighsModelStatus.kOptimal:
+            raise RuntimeError(f"persistent master failed: {highs.getModelStatus()}")
+        solution, info = highs.getSolution(), highs.getInfo()
+        iterations += info.simplex_iteration_count
+        row_dual = np.asarray(solution.row_dual)
+        resource_dual = -row_dual[:table.resources.shape[0]]
+        eta = row_dual[table.resources.shape[0]]
+        alpha = np.zeros(table.incidence.shape[0])
+        represented = np.flatnonzero(session_rows >= 0)
+        alpha[represented] = -row_dual[session_rows[represented]]
+
+        started = perf_counter()
+        reduced = np.asarray(
+            costs + table.resources.T @ resource_dual - eta * gains,
+        ).ravel() + alpha[sessions]
+        minimum = np.full(table.incidence.shape[0], np.inf)
+        np.minimum.at(minimum, sessions, reduced)
+        best = np.full(table.incidence.shape[0], len(table.candidates))
+        tied = reduced == minimum[sessions]
+        np.minimum.at(best, sessions[tied], np.flatnonzero(tied))
+        violations = best[minimum < -COLUMN_TOLERANCE]
+        violations = violations[candidate_columns[violations] < 0]
+        correction = np.maximum(0, -minimum)
+        correction[~np.isfinite(correction)] = 0
+        lower = eta * target - resource_dual.sum() - (alpha + correction).sum()
+        pricing_s += perf_counter() - started
+        upper = float(info.objective_function_value)
+        stats.update(sweeps=sweep + 1,
+                     columns=int(np.count_nonzero(candidate_columns >= 0)),
+                     upper=upper, lower=float(lower), gap=upper - lower,
+                     pricing_s=pricing_s, add_s=add_s, solve_s=solve_s,
+                     simplex_iterations=iterations)
+        if not violations.size:
+            return solution
+        order = np.lexsort((violations, reduced[violations]))
+        choices = violations[order[:batch]]
+        started = perf_counter()
+        _add_priced_columns(
+            highs, table, resources, choices, costs, candidate_columns,
+            session_rows,
+        )
+        add_s += perf_counter() - started
+        highs.setOptionValue("presolve", "off")
+    raise RuntimeError("persistent column generation did not converge")
+
+
+def _lp_column_generation_persistent(table: CandidateTable, target: float, stats=None):
+    if not table.candidates or target <= 0:
+        return set()
+    started, phase1, phase2 = perf_counter(), {}, {}
+    highs, resources = highspy.Highs(), table.resources.shape[0]
+    highs.setOptionValue("output_flag", False)
+    highs.setOptionValue("solver", "simplex")
+    status = highs.addRows(
+        resources + 1,
+        np.concatenate((np.full(resources, -highspy.kHighsInf), [target])),
+        np.concatenate((np.ones(resources), [highspy.kHighsInf])), 0,
+        np.zeros(resources + 2, np.int32), np.array([], np.int32),
+        np.array([], float),
+    )
+    if status != highspy.HighsStatus.kOk:
+        raise RuntimeError("HiGHS failed to initialize master rows")
+    status = highs.addCol(
+        1, 0, highspy.kHighsInf, 1, np.array([resources], np.int32),
+        np.array([1.0]),
+    )
+    if status != highspy.HighsStatus.kOk:
+        raise RuntimeError("HiGHS failed to add shortfall column")
+    candidate_columns = np.full(len(table.candidates), -1, np.int32)
+    session_rows = np.full(table.incidence.shape[0], -1, np.int32)
+    resource_columns = csc_matrix(table.resources)
+    first = _persistent_column_phase(
+        highs, table, resource_columns, target, np.zeros(len(table.candidates)),
+        candidate_columns, session_rows, phase1,
+    )
+    shortfall = float(first.col_value[0])
+    effective = max(0.0, target - shortfall)
+    work = np.array([c.migration_work_s for c in table.candidates]) \
+        / table.migration_horizon_s
+    active = np.flatnonzero(candidate_columns >= 0)
+    status = highs.changeColsCost(
+        len(active), candidate_columns[active], work[active],
+    )
+    if status != highspy.HighsStatus.kOk:
+        raise RuntimeError("HiGHS failed to set Phase-II costs")
+    if highs.changeColBounds(0, 0, 0) != highspy.HighsStatus.kOk:
+        raise RuntimeError("HiGHS failed to fix target shortfall")
+    phase2_target = max(0.0, effective - 1e-7)
+    if highs.changeRowBounds(
+        resources, phase2_target, highspy.kHighsInf,
+    ) != highspy.HighsStatus.kOk:
+        raise RuntimeError("HiGHS failed to set Phase-II target")
+    second = _persistent_column_phase(
+        highs, table, resource_columns, phase2_target, work, candidate_columns,
+        session_rows, phase2,
+    )
+    values = np.zeros(len(table.candidates))
+    active = np.flatnonzero(candidate_columns >= 0)
+    values[active] = np.asarray(second.col_value)[candidate_columns[active]]
+    selected = _round_lp(table, target, values)
+    if stats is not None:
+        stats.update(wall_s=perf_counter() - started, active_columns=len(active),
+                     active_sessions=np.count_nonzero(session_rows >= 0),
+                     phase1_shortfall=shortfall, effective_target=effective,
+                     phase1=phase1, phase2=phase2)
+    return selected
+
+
+@dataclass(slots=True)
+class _PricedColumn:
+    reduced: float
+    order: tuple[str, str, str]
+    candidate: Candidate
+    entries: tuple[tuple[int, float], ...]
+    cost: float
+
+    def __lt__(self, other):
+        return (self.reduced, self.order) > (other.reduced, other.order)
+
+
+@dataclass(slots=True)
+class _CompletionColumn:
+    rank: tuple
+    candidate: Candidate
+    entries: tuple[tuple[int, float], ...]
+
+    def __lt__(self, other):
+        return self.rank < other.rank
+
+
+def _lazy_completion(oracle, candidates, values, target):
+    candidates, usage = list(candidates), np.zeros(len(oracle.specs))
+    selected, sessions = set(), set()
+    gain = 0.0
+    semantic = lambda candidate: (
+        oracle.sessions[candidate.session].session_id,
+        oracle.pools[candidate.pool].pool_id,
+        "0" if candidate.method == "replay" else "1",
+    )
+    identities = {
+        (candidate.session, candidate.pool, candidate.method): i
+        for i, candidate in enumerate(candidates)
+    }
+    masses = {
+        identity: values[i] for identity, i in identities.items()
+    }
+    after = {}
+    for i in sorted(
+        (i for i, value in enumerate(values) if value > 0),
+        key=lambda i: (-values[i], candidates[i].migration_work_s,
+                       semantic(candidates[i])),
+    ):
+        candidate, entries = candidates[i], oracle.column(candidates[i])
+        rank = (-values[i], candidate.migration_work_s, *semantic(candidate))
+        if candidate.session in sessions:
+            continue
+        if all(usage[row] + value <= 1 + 1e-8 for row, value in entries):
+            selected.add(i)
+            sessions.add(candidate.session)
+            for row, value in entries:
+                usage[row] += value
+            gain += candidate.gain_w
+            if gain >= target - 1e-8:
+                return candidates, selected
+        else:
+            after[candidate.session] = rank
+
+    def next_choice(j, after=None):
+        best = None
+        for candidate in oracle.choices(j):
+            identity = (candidate.session, candidate.pool, candidate.method)
+            rank = (
+                -masses.get(identity, 0.0), candidate.migration_work_s,
+                *semantic(candidate),
+            )
+            if (after is None or rank > after) and (
+                best is None or rank < best.rank
+            ):
+                best = _CompletionColumn(rank, candidate, oracle.column(candidate))
+        return best
+
+    heap = []
+    for j in range(len(oracle.sessions)):
+        if j not in sessions:
+            item = next_choice(j, after.get(j))
+            if item is not None:
+                heappush(heap, item)
+    while heap:
+        item = heappop(heap)
+        candidate = item.candidate
+        if all(usage[row] + value <= 1 + 1e-8
+               for row, value in item.entries):
+            identity = (candidate.session, candidate.pool, candidate.method)
+            i = identities.get(identity)
+            if i is None:
+                i = len(candidates)
+                identities[identity] = i
+                candidates.append(candidate)
+            selected.add(i)
+            sessions.add(candidate.session)
+            for row, value in item.entries:
+                usage[row] += value
+            gain += candidate.gain_w
+            if gain >= target - 1e-8:
+                break
+        else:
+            item = next_choice(candidate.session, item.rank)
+            if item is not None:
+                heappush(heap, item)
+    return candidates, selected
+
+
+def _lazy_add_columns(highs, oracle, priced, session_rows, active, candidates):
+    sessions = sorted({item.candidate.session for item in priced
+                       if session_rows[item.candidate.session] < 0})
+    if sessions:
+        first = highs.getNumRow()
+        status = highs.addRows(
+            len(sessions), np.full(len(sessions), -highspy.kHighsInf),
+            np.ones(len(sessions)), 0, np.zeros(len(sessions) + 1, np.int32),
+            np.array([], np.int32), np.array([], float),
+        )
+        if status != highspy.HighsStatus.kOk:
+            raise RuntimeError("HiGHS failed to add lazy session rows")
+        session_rows[sessions] = np.arange(first, first + len(sessions))
+    target, starts, indices, values = len(oracle.specs), [0], [], []
+    for item in priced:
+        candidate = item.candidate
+        indices.extend(row for row, _ in item.entries)
+        values.extend(value for _, value in item.entries)
+        indices.extend((target, session_rows[candidate.session]))
+        values.extend((candidate.gain_w, 1.0))
+        starts.append(len(indices))
+    status = highs.addCols(
+        len(priced), np.array([item.cost for item in priced]),
+        np.zeros(len(priced)), np.full(len(priced), highspy.kHighsInf),
+        len(indices), np.asarray(starts, np.int32), np.asarray(indices, np.int32),
+        np.asarray(values, float),
+    )
+    if status != highspy.HighsStatus.kOk:
+        raise RuntimeError("HiGHS failed to add lazy priced columns")
+    for item in priced:
+        candidate = item.candidate
+        active.add((candidate.session, candidate.pool, candidate.method))
+        candidates.append(candidate)
+
+
+def _lazy_column_phase(highs, oracle, target, phase_two, session_rows,
+                       active, candidates, stats):
+    batch = max(256, len(oracle.sessions) // COLUMN_GROWTH_SWEEPS)
+    pricing_s = add_s = solve_s = 0.0
+    iterations = 0
+    for sweep in range(sum(len(pool.methods) for pool in oracle.pools)
+                       * len(oracle.sessions) + 1):
+        started = perf_counter()
+        highs.run()
+        solve_s += perf_counter() - started
+        if highs.getModelStatus() != highspy.HighsModelStatus.kOptimal:
+            raise RuntimeError(f"lazy master failed: {highs.getModelStatus()}")
+        solution, info = highs.getSolution(), highs.getInfo()
+        iterations += info.simplex_iteration_count
+        dual = np.asarray(solution.row_dual)
+        resources = np.maximum(0, -dual[:len(oracle.specs)])
+        eta = max(0.0, dual[len(oracle.specs)])
+        eta = eta if phase_two else min(1.0, eta)
+
+        started, heap, dual_sessions = perf_counter(), [], 0.0
+        for j, session in enumerate(oracle.sessions):
+            row = session_rows[j]
+            alpha = max(0.0, -dual[row]) if row >= 0 else 0.0
+            minimum, best = np.inf, None
+            for candidate in oracle.choices(j):
+                entries = oracle.column(candidate)
+                cost = candidate.migration_work_s / oracle.migration_horizon_s \
+                    if phase_two else 0.0
+                reduced = cost + sum(
+                    resources[index] * value for index, value in entries
+                ) - eta * candidate.gain_w + alpha
+                minimum = min(minimum, reduced)
+                identity = (candidate.session, candidate.pool, candidate.method)
+                order = (session.session_id,
+                         oracle.pools[candidate.pool].pool_id,
+                         "0" if candidate.method == "replay" else "1")
+                if identity not in active and (
+                    best is None or (reduced, order) < (best.reduced, best.order)
+                ):
+                    best = _PricedColumn(reduced, order, candidate, entries, cost)
+            if np.isfinite(minimum):
+                alpha += max(0.0, -minimum)
+            dual_sessions += alpha
+            if best is not None and best.reduced < 0:
+                heappush(heap, best)
+                if len(heap) > batch:
+                    heappop(heap)
+        lower = eta * target - resources.sum() - dual_sessions
+        pricing_s += perf_counter() - started
+        upper = float(info.objective_function_value)
+        gap = upper - lower
+        stats.update(
+            sweeps=sweep + 1, columns=len(candidates), upper=upper,
+            lower=float(lower), gap=gap, pricing_s=pricing_s,
+            add_s=add_s, solve_s=solve_s, simplex_iterations=iterations,
+        )
+        if gap <= COLUMN_GAP_TOLERANCE:
+            return solution
+        if not heap:
+            raise RuntimeError(f"lazy certificate gap did not close: {gap}")
+        priced = sorted(heap, key=lambda item: (item.reduced, item.order))
+        started = perf_counter()
+        _lazy_add_columns(
+            highs, oracle, priced, session_rows, active, candidates,
+        )
+        add_s += perf_counter() - started
+        highs.setOptionValue("presolve", "off")
+    raise RuntimeError("lazy column generation did not converge")
+
+
+def _native_column_phase(highs, oracle, native, target, phase_two, session_rows,
+                         active, candidates, stats):
+    batch = max(256, len(oracle.sessions) // COLUMN_GROWTH_SWEEPS)
+    pricing_s = materialize_s = add_s = solve_s = 0.0
+    iterations = choice_evaluations = 0
+    for sweep_index in range(len(oracle.options) * len(oracle.sessions) + 1):
+        started = perf_counter()
+        highs.run()
+        solve_s += perf_counter() - started
+        if highs.getModelStatus() != highspy.HighsModelStatus.kOptimal:
+            raise RuntimeError(f"native lazy master failed: {highs.getModelStatus()}")
+        solution, info = highs.getSolution(), highs.getInfo()
+        iterations += info.simplex_iteration_count
+        dual = np.asarray(solution.row_dual)
+        resources = np.maximum(0, -dual[:len(oracle.specs)])
+        alpha = np.zeros(len(oracle.sessions))
+        represented = np.flatnonzero(session_rows >= 0)
+        alpha[represented] = np.maximum(0, -dual[session_rows[represented]])
+        eta = max(0.0, dual[len(oracle.specs)])
+
+        started = perf_counter()
+        sweep = native.price(
+            2 if phase_two else 1, eta, resources, alpha, batch,
+            COLUMN_TOLERANCE,
+        )
+        choice_evaluations += int(sweep["evaluated_choices"])
+        lower = (sweep["effective_eta"] * target - resources.sum()
+                 - alpha.sum() - sweep["repair_sum"])
+        pricing_s += perf_counter() - started
+        upper = float(info.objective_function_value)
+        gap = upper - lower
+        stats.update(
+            sweeps=sweep_index + 1, columns=len(candidates), upper=upper,
+            lower=float(lower), gap=gap, pricing_s=pricing_s,
+            materialize_s=materialize_s, add_s=add_s, solve_s=solve_s,
+            simplex_iterations=iterations, evaluated_choices=choice_evaluations,
+        )
+        if gap <= COLUMN_GAP_TOLERANCE:
+            if len(sweep["candidate_ids"]):
+                native.discard(sweep["epoch"])
+            return solution
+        if not len(sweep["candidate_ids"]):
+            raise RuntimeError(f"native lazy certificate gap did not close: {gap}")
+
+        started = perf_counter()
+        priced = []
+        starts = sweep["resource_starts"]
+        for column, (session, option, reduced, cost) in enumerate(zip(
+            sweep["session_indices"], sweep["option_indices"],
+            sweep["reduced_costs"], sweep["phase2_costs"],
+        )):
+            session, option = int(session), int(option)
+            pool, method = oracle.options[option]
+            feature = sweep["candidate_features"][7 * column:7 * column + 7]
+            candidate = Candidate(
+                session, method, pool, float(sweep["gains"][column]),
+                float(feature[4]), float(feature[4]), oracle.pools[pool].route,
+                float(feature[0]), (float(feature[1]), float(feature[2])),
+                int(feature[3]), (float(feature[5]), float(feature[6])),
+            )
+            start, end = starts[column:column + 2]
+            entries = tuple(zip(
+                map(int, sweep["resource_rows"][start:end]),
+                map(float, sweep["resource_values"][start:end]),
+            ))
+            order = (
+                oracle.sessions[session].session_id,
+                oracle.pools[candidate.pool].pool_id,
+                "0" if candidate.method == "replay" else "1",
+            )
+            priced.append(_PricedColumn(
+                float(reduced), order, candidate, entries,
+                float(cost) if phase_two else 0.0,
+            ))
+        materialize_s += perf_counter() - started
+        started = perf_counter()
+        _lazy_add_columns(
+            highs, oracle, priced, session_rows, active, candidates,
+        )
+        native.commit(sweep["epoch"], sweep["candidate_ids"])
+        add_s += perf_counter() - started
+        highs.setOptionValue("presolve", "off")
+    raise RuntimeError("native lazy column generation did not converge")
+
+
+def _lp_column_generation_lazy(oracle, target, stats=None, native=False):
+    if target <= 0 or oracle.migration_horizon_s <= 0:
+        return _materialize_candidates(oracle, (), False), set()
+    started, phase1, phase2 = perf_counter(), {}, {}
+    native_oracle = _native_pricing_oracle(oracle) if native else None
+    build_s = perf_counter() - started
+    highs, resources = highspy.Highs(), len(oracle.specs)
+    highs.setOptionValue("output_flag", False)
+    highs.setOptionValue("solver", "simplex")
+    status = highs.addRows(
+        resources + 1,
+        np.concatenate((np.full(resources, -highspy.kHighsInf), [target])),
+        np.concatenate((np.ones(resources), [highspy.kHighsInf])), 0,
+        np.zeros(resources + 2, np.int32), np.array([], np.int32),
+        np.array([], float),
+    )
+    if status != highspy.HighsStatus.kOk:
+        raise RuntimeError("HiGHS failed to initialize lazy master")
+    if highs.addCol(
+        1, 0, highspy.kHighsInf, 1, np.array([resources], np.int32),
+        np.array([1.0]),
+    ) != highspy.HighsStatus.kOk:
+        raise RuntimeError("HiGHS failed to add lazy shortfall column")
+    session_rows = np.full(len(oracle.sessions), -1, np.int32)
+    active, candidates = set(), []
+    phase = _native_column_phase if native else _lazy_column_phase
+    arguments = (highs, oracle) + ((native_oracle,) if native else ())
+    first = phase(
+        *arguments, target, False, session_rows, active, candidates, phase1,
+    )
+    shortfall = float(first.col_value[0])
+    effective = max(0.0, target - shortfall)
+    if candidates:
+        columns = np.arange(1, len(candidates) + 1, dtype=np.int32)
+        costs = np.array([
+            candidate.migration_work_s / oracle.migration_horizon_s
+            for candidate in candidates
+        ])
+        if highs.changeColsCost(len(columns), columns, costs) \
+                != highspy.HighsStatus.kOk:
+            raise RuntimeError("HiGHS failed to set lazy Phase-II costs")
+    if highs.changeColBounds(0, 0, 0) != highspy.HighsStatus.kOk:
+        raise RuntimeError("HiGHS failed to fix lazy target shortfall")
+    phase2_target = max(0.0, effective - 1e-7)
+    if highs.changeRowBounds(
+        resources, phase2_target, highspy.kHighsInf,
+    ) != highspy.HighsStatus.kOk:
+        raise RuntimeError("HiGHS failed to set lazy Phase-II target")
+    second = phase(
+        *arguments, phase2_target, True, session_rows, active, candidates, phase2,
+    )
+    values = np.asarray(second.col_value)[1:len(candidates) + 1]
+    master_columns = len(candidates)
+    completed = perf_counter()
+    candidates, selected = _lazy_completion(oracle, candidates, values, target)
+    completion_s = perf_counter() - completed
+    materialized = perf_counter()
+    table = _materialize_candidates(oracle, candidates, False)
+    table_s = perf_counter() - materialized
+    if stats is not None:
+        stats.update(
+            wall_s=perf_counter() - started, active_columns=master_columns,
+            materialized_columns=len(candidates),
+            completion_columns=len(candidates) - master_columns,
+            active_sessions=np.count_nonzero(session_rows >= 0),
+            phase1_shortfall=shortfall, effective_target=effective,
+            phase1=phase1, phase2=phase2, native_build_s=build_s if native else 0,
+            completion_s=completion_s, table_s=table_s,
+        )
+    return table, selected
+
+
+def _lp_column_generation_native(oracle, target, stats=None):
+    return _lp_column_generation_lazy(oracle, target, stats, True)
+
+
+def _pack(table, selected, architecture, scenario, mode, repair=False):
     horizon = architecture.residency_horizon_s
     horizon = scenario.end_s - scenario.controller_delay_s if horizon is None else horizon
     work, kv = _baseline(scenario, architecture, horizon)
@@ -775,37 +1787,55 @@ def _pack(table, selected, architecture, scenario, mode):
         r.replica_id: {"replay": 0.0, "kv_transfer": 0.0}
         for p in architecture.pools for r in p.replicas
     }
-    assignment = {}
+    assignment, rejected = {}, []
+    costs = np.asarray(table.resources.sum(0)).ravel() if repair else None
     for p, pool in enumerate(architecture.pools):
         q = architecture.type_by_id[pool.type_id]
         normals, bounds = np.asarray(q.normals), _event_bounds(q, pool, mode)
+        replicas = pool.replicas
+        replica_work = np.asarray([work[r.replica_id] for r in replicas])
+        replica_kv = np.asarray([kv[r.replica_id] for r in replicas])
+        replica_migration = np.zeros((len(replicas), 2))
+        method_column = {"replay": 0, "kv_transfer": 1}
         members = [i for i in selected if table.candidates[i].pool == p]
-        members.sort(key=lambda i: (-max(
+        members.sort(key=(
+            lambda i: (costs[i] / max(table.candidates[i].gain_w, 1e-12),
+                       table.sessions[table.candidates[i].session].session_id, i)
+        ) if repair else lambda i: (-max(
             *(normals @ table.candidates[i].service_work / bounds),
             table.candidates[i].kv_tokens
             / (q.kv_capacity_tokens // q.kv_block_tokens),
+            0 if pool.fluid_migration else
             table.candidates[i].duration_s / table.migration_horizon_s,
         ), table.sessions[table.candidates[i].session].session_id, i))
         for i in members:
-            c, choices = table.candidates[i], []
-            for r, replica in enumerate(pool.replicas):
-                next_work, next_kv = work[replica.replica_id] + c.service_work, kv[replica.replica_id] + c.kv_tokens
-                next_migration = dict(migration[replica.replica_id])
-                next_migration[c.method] += c.duration_s
-                pressure = max(*(normals @ next_work / bounds),
-                               next_kv
-                               / (q.kv_capacity_tokens // q.kv_block_tokens),
-                               max(next_migration.values())
-                               / table.migration_horizon_s)
-                if pressure <= 1 + 1e-9:
-                    choices.append((pressure, r, next_work, next_kv, next_migration))
-            if not choices:
+            c = table.candidates[i]
+            next_work = replica_work + c.service_work
+            pressure = np.maximum.reduce((
+                np.max(next_work @ normals.T / bounds, axis=1),
+                (replica_kv + c.kv_tokens)
+                / (q.kv_capacity_tokens // q.kv_block_tokens),
+                np.zeros(len(replicas)) if pool.fluid_migration else np.maximum(
+                    np.max(replica_migration, axis=1),
+                    replica_migration[:, method_column[c.method]] + c.duration_s,
+                ) / table.migration_horizon_s,
+            ))
+            feasible = np.flatnonzero(pressure <= 1 + 1e-9)
+            if not feasible.size:
+                if repair:
+                    rejected.append(i)
+                    continue
                 return None, tuple(sorted(members))
-            _, r, next_work, next_kv, next_migration = min(choices, key=lambda x: x[:2])
-            work[pool.replicas[r].replica_id], kv[pool.replicas[r].replica_id] = next_work, next_kv
-            migration[pool.replicas[r].replica_id] = next_migration
-            assignment[i] = pool.replicas[r].replica_id
-    return assignment, None
+            r = feasible[np.argmin(pressure[feasible])]
+            replica_work[r] = next_work[r]
+            replica_kv[r] += c.kv_tokens
+            if not pool.fluid_migration:
+                replica_migration[r, method_column[c.method]] += c.duration_s
+            replica_id = replicas[r].replica_id
+            work[replica_id], kv[replica_id] = replica_work[r], replica_kv[r]
+            migration[replica_id][c.method] = replica_migration[r, method_column[c.method]]
+            assignment[i] = replica_id
+    return assignment, tuple(rejected) if repair else None
 
 
 def exact_replica_assignment(table, selected, architecture, scenario, mode):
@@ -843,7 +1873,8 @@ def _assignment_valid(table, assignment, architecture, scenario, mode):
         migration[replica][candidate.method] += candidate.duration_s
     return all(np.all(np.asarray(q.normals) @ work[r] <= _event_bounds(q, pool, mode) + 1e-9)
                and kv[r] <= q.kv_capacity_tokens // q.kv_block_tokens
-               and max(migration[r].values()) <= table.migration_horizon_s + 1e-9
+               and (pools[r][1].fluid_migration is not None
+                    or max(migration[r].values()) <= table.migration_horizon_s + 1e-9)
                for r, (q, pool) in pools.items())
 
 
@@ -924,34 +1955,51 @@ def _selected_service_debt(table, selected, architecture, scenario):
     return tuple(records)
 
 
-def _mode_plan(scenario, profile, architecture, solver, mode, power, target):
-    table = candidate_table(scenario, profile, architecture, mode, power)
-    selected = (_lp(table, target) if solver.startswith("lp") else
-                _greedy_bundle(table, target, power) if solver == "greedy_bundle"
-                else _greedy_coupled(
-                    table, target, power, architecture, scenario, mode,
-                ) if solver == "greedy_coupled"
-                else _greedy(table, target))
+def _mode_plan(scenario, profile, architecture, solver, mode, power, target, seed=0):
+    assignment = None
+    streamed = solver in {"lp_column_generation_lazy", "lp_column_generation_native"}
+    if streamed:
+        solve = (_lp_column_generation_native if solver.endswith("native")
+                 else _lp_column_generation_lazy)
+        table, selected = solve(
+            _candidate_oracle(scenario, profile, architecture, mode, power), target,
+        )
+    else:
+        table = candidate_table(scenario, profile, architecture, mode, power)
+    if streamed:
+        pass
+    elif solver == "greedy_lagrangian":
+        selected, assignment = _greedy_lagrangian(
+            table, target, power, architecture, scenario, mode, True,
+        )
+    elif solver in {"isolated_fastest", "random", "replay_only", "kv_only"}:
+        selected = _baseline_policy(table, target, solver, seed)
+    else:
+        selected = (_lp_column_generation_persistent(table, target)
+                    if solver == "lp_column_generation_persistent" else
+                    _lp_column_generation(table, target)
+                    if solver == "lp_column_generation" else
+                    _lp_highs(table, target) if solver == "lp_highs" else
+                    _lp(table, target) if solver.startswith("lp") else
+                    _greedy(table, target))
     repairs, repair_s = 0, 0.0
-    while True:
+    if assignment is None:
         started = perf_counter()
-        assignment, cut = _pack(table, selected, architecture, scenario, mode)
-        if assignment is not None:
-            return table, selected, assignment, repairs, repair_s
-        if not cut:
-            raise RuntimeError("destination packing repair did not converge")
-        drop = max(cut, key=lambda i: (
-            float(table.resources[:, i].sum())
-            / max(table.candidates[i].gain_w, 1e-12), i,
-        ))
-        selected.remove(drop)
-        repair_s += perf_counter() - started
-        repairs += 1
+        assignment, cut = _pack(
+            table, selected, architecture, scenario, mode, repair=True,
+        )
+        selected.difference_update(cut)
+        repairs = len(cut)
+        repair_s = perf_counter() - started if cut else 0.0
+    return table, selected, assignment, repairs, repair_s
 
 
 def plan_destination(scenario, profile, solver, case_id, seed, architecture):
-    if solver not in {"greedy", "greedy_bundle", "greedy_coupled",
-                      "lp", "lp_peak_first", "lp_work_first"}:
+    if solver not in {"greedy", "greedy_lagrangian",
+                      "isolated_fastest", "random", "replay_only", "kv_only",
+                      "lp", "lp_peak_first", "lp_work_first", "lp_highs",
+                      "lp_column_generation", "lp_column_generation_persistent",
+                      "lp_column_generation_lazy", "lp_column_generation_native"}:
         raise ValueError("destination architecture supports pool-aware LP and greedy")
     if case_id != "central":
         raise ValueError("destination admission supports the central profile")
@@ -961,19 +2009,45 @@ def plan_destination(scenario, profile, solver, case_id, seed, architecture):
     start, power = perf_counter(), ExpectedPower(selection_scenario, profile, case_id)
     initial, target = power.power(True), max(0.0, power.power(True) - scenario.power_limit_w)
     chosen = None
+    equal_modes = all(np.array_equal(
+        _event_bounds(architecture.type_by_id[pool.type_id], pool, "normal"),
+        _event_bounds(architecture.type_by_id[pool.type_id], pool, "emergency"),
+    ) for pool in architecture.pools)
     for mode in ("normal", "emergency"):
-        result = _mode_plan(scenario, profile, architecture, solver, mode, power, target)
+        result = _mode_plan(scenario, profile, architecture, solver, mode, power, target, seed)
         moved = [result[0].sessions[result[0].candidates[i].session].session_id for i in result[1]]
         planned = source_power(selection_scenario, profile, moved, case_id)
         chosen = mode, result, planned
         if planned <= scenario.power_limit_w + 1e-8:
             break
+        if mode == "normal" and equal_modes:
+            chosen = "emergency", result, planned
+            break
     mode, (table, selected, assignment, repairs, repair_s), planned = chosen
-    moves = _moves(table, selected, assignment, architecture, scenario, profile)
-    validate_destination_execution(scenario, architecture, moves)
-    expected = predict(
-        _expected_scenario(scenario, moves), profile, moves, case_id, architecture,
-    )
+    fluid = any(pool.fluid_migration for pool in architecture.pools)
+    deadline_repairs = 0
+    deadline_repair_s = 0.0
+    while True:
+        moves = _moves(table, selected, assignment, architecture, scenario, profile)
+        validate_destination_execution(scenario, architecture, moves)
+        expected = predict(
+            _expected_scenario(scenario, moves), profile, moves, case_id, architecture,
+        )
+        deadline = scenario.controller_delay_s + table.migration_horizon_s
+        if not fluid or expected.migration_makespan_s is not None \
+                and expected.migration_makespan_s <= deadline + 1e-9 or not selected:
+            break
+        started = perf_counter()
+        costs = np.asarray(table.resources.sum(0)).ravel()
+        drop = max(selected, key=lambda i: (
+            costs[i] / max(table.candidates[i].gain_w, 1e-12), i,
+        ))
+        selected.remove(drop)
+        assignment.pop(drop)
+        moved = [table.sessions[table.candidates[i].session].session_id for i in selected]
+        planned = source_power(selection_scenario, profile, moved, case_id)
+        deadline_repairs += 1
+        deadline_repair_s += perf_counter() - started
     shortfall = max(0.0, planned - scenario.power_limit_w)
     shortfall = 0.0 if shortfall <= 1e-8 else shortfall
     debt_rows = _selected_service_debt(
@@ -1026,6 +2100,8 @@ def plan_destination(scenario, profile, solver, case_id, seed, architecture):
         lp_power_shortfall_w=shortfall, admission_mode=mode,
         power_shortfall_w=shortfall, failure_reason=failure,
         packing_repair_count=repairs, packing_repair_s=repair_s,
+        deadline_repair_count=deadline_repairs,
+        deadline_repair_s=deadline_repair_s,
         predicted_migration_makespan_s=makespan, bottleneck=bottleneck,
         planner_memory_bytes=memory, service_debt_replica_s=debt,
         required_recovery_s=recovery, binding_resources=binding,

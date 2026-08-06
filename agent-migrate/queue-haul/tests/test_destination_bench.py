@@ -8,11 +8,13 @@ Plausible wrong implementations:
 - Treat the full prompt as resident history or lose the newly appended work.
 - Round aggregate KV instead of each private session.
 - Resize hardware while varying pressure or multiply shared WAN by GPU count.
+- Duplicate replicas or route capacity when splitting inventory into pools.
 - Couple service and KV baselines.
 - Reverse a minimum-capacity threshold or miss a censored boundary.
 - Drop context or bandwidth extrapolation from the result label.
 """
 
+import argparse
 from types import SimpleNamespace
 
 import pytest
@@ -25,6 +27,8 @@ from destination_bench import (
     evidence,
     extrapolate_replay,
     pack_source,
+    parse_pool_counts,
+    parse_solvers,
     sample_sessions,
     scenario,
     trace_shapes,
@@ -50,6 +54,39 @@ def manifest():
             "newly_append_tokens": 1000, "output_tokens": 200,
         }],
     }
+
+
+def test_reference_bench_accepts_additive_highs_backend():
+    assert parse_solvers(
+        "lp,lp_highs,lp_column_generation,lp_column_generation_persistent,"
+        "lp_column_generation_lazy,lp_column_generation_native",
+    ) == (
+        "lp", "lp_highs", "lp_column_generation",
+        "lp_column_generation_persistent", "lp_column_generation_lazy",
+        "lp_column_generation_native",
+    )
+
+
+def test_reference_bench_accepts_both_supported_greedies():
+    assert parse_solvers("greedy,greedy_lagrangian") == (
+        "greedy", "greedy_lagrangian",
+    )
+    for retired in ("greedy_bundle", "greedy_coupled", "greedy_prefix"):
+        with pytest.raises(argparse.ArgumentTypeError):
+            parse_solvers(retired)
+
+
+def test_pool_count_parser_and_split_preserve_frozen_inventory():
+    assert parse_pool_counts("1,2,4,8") == (1, 2, 4, 8)
+    sessions = (SimSession("a", "source-0", 16_384, 1, 1, 32_768),)
+
+    split = architecture(model(), sessions, 8, Pressure(), pool_count=4)
+
+    replicas = [r.replica_id for pool in split.pools for r in pool.replicas]
+    assert len(split.pools) == 4
+    assert sorted(replicas) == [f"dest-{i}" for i in range(8)]
+    assert all(pool.route == ("source-egress", "wan", "destination-ingress")
+               for pool in split.pools)
 
 
 def test_trace_shape_separates_resident_history_from_next_request():

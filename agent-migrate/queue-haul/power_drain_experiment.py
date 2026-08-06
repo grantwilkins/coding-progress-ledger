@@ -90,7 +90,8 @@ def build_scenario(workload: WorkloadProfile, profile: ModelProfile, sessions: i
                    link_bytes_per_s: float = 125_000_000.0,
                    final_state: str = "awake", controller_delay_s: float = 0.0,
                    intra_dc_bytes_per_s: float = 12_500_000_000.0,
-                   assumed_shutdown_s: float | None = None):
+                   assumed_shutdown_s: float | None = None,
+                   idle_snapshot: bool = False):
     # TODO(tp-topology): construct measured multi-GPU instance and network layouts.
     if profile.tensor_parallel != 1:
         raise ValueError("scenario builder currently supports tensor parallel size 1")
@@ -144,13 +145,13 @@ def build_scenario(workload: WorkloadProfile, profile: ModelProfile, sessions: i
             str(j), f"source-{assignment[j]}", r.context_tokens,
             r.prompt_tokens / cycle if r.state == "active" else 0.0,
             r.output_tokens / cycle if r.state == "active" else 0.0,
-            r.log_bytes, _requests(r, request_horizon, rng), True,
+            r.log_bytes, () if idle_snapshot else _requests(r, request_horizon, rng), True,
             0.0 if r.state != "cold" or wake_horizon <= r.tool_delay_s else
             1.0 if r.request_gap_s == 0 else
             1 - math.exp(-(wake_horizon - r.tool_delay_s) / r.request_gap_s),
             state=r.state,
             expected_growth_tokens_per_s=(
-                (r.prompt_tokens + r.output_tokens) / cycle
+                0.0 if idle_snapshot else (r.prompt_tokens + r.output_tokens) / cycle
                 * (1 + workload.source.relative_error)
                 if r.state == "active" else 0.0
             ),

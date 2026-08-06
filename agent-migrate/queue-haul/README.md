@@ -24,9 +24,7 @@ The repository contains:
 - measured request-boundary replay and KV Gantt charts through the first
   destination token;
 - a one-pool requirement-frontier solver;
-- LP, static greedy, experimental bundle greedy, and simulator-only
-  price-coupled greedy with an exact width-8 action oracle, bounded fallback,
-  and cached exact recovery;
+- LP, static `greedy`, and dual-priced `greedy_lagrangian` optimizers;
 - pool-aware planning and internal packing checks; and
 - a deterministic migration, network, request, queue, and power simulator.
 
@@ -43,6 +41,8 @@ performs final catch-up, switches routing, and succeeds when the destination
 returns the first token. Mid-token migration, return migration, cold model
 placement, unrelated destination arrivals, provider fleet policy, and facility
 power are out of scope.
+Destinations use a 32 GB bidirectional LMCache L1 so resumed sessions retain
+and write back KV instead of remaining read-only migration consumers.
 Same-source migrations may overlap and share the bandwidth of every link on
 their route; there is no fixed per-source migration-count limit.
 
@@ -73,6 +73,261 @@ Every input and result must say whether it is measured, fitted, assumed, or
 simulated. Assumed values are sensitivities, never admission guarantees.
 The conversation workload pins ShareGPT artifact revision
 `192ab2185289094fc556ec8ce5ce1e8e587154ca` and stores only token/turn shapes.
+
+## Three-region Azure A100 campaign
+
+The implemented campaign powers down the Sweden Central source GPU and
+reconstructs sessions in East US 2 and West Europe. It uses private IPs over Global VNet
+Peering; Azure routes peered-VNet traffic over the Microsoft backbone, not the
+public Internet. No Azure CLI access is needed on the VMs. The relevant Azure
+contracts are [Global VNet Peering](https://learn.microsoft.com/en-us/azure/networking/design-guide/cross-region),
+[Linux PTP/chrony](https://learn.microsoft.com/en-us/azure/virtual-machines/linux/time-sync),
+and [Spot Scheduled Events](https://learn.microsoft.com/en-us/azure/virtual-machines/windows/scheduled-events).
+
+The frozen node map in `queue-haul/azure_network_cluster.json` is:
+
+| role | region | private IP |
+|---|---|---|
+| source/power-down | Sweden Central | `10.0.0.4` |
+| destination | East US 2 | `10.1.0.4` |
+| destination | West Europe | `10.2.0.4` |
+
+`check` compares every entry with Azure IMDS and hard-fails before calibration
+if the actual West/Sweden address assignment differs. In that case, correct the
+two destination records; do not bypass the check.
+
+### One-time portal work for the Azure account owner
+
+The account owner must complete these items. The experiment operator does not
+need `az` permissions.
+
+1. Use three `Standard_NC24ads_A100_v4` Spot VMs with one visible A100 each,
+   Azure Linux 3.0, persistent `/datadrive`, eviction policy `Deallocate`, and
+   no delete-on-eviction data disk.
+2. Configure bidirectional Global VNet Peering between the Sweden Central VNet and
+   each destination VNet. Both peerings must show `Connected`; address spaces
+   must not overlap. Destination-to-destination peering is unnecessary.
+3. Do not add a public data-plane address, NAT gateway, VPN, load balancer, or
+   TLS terminator. SSH can use the existing private access path. Private Azure
+   backbone traffic is not application-layer encryption; that is acceptable for
+   this measurement-only, private-VNet deployment.
+4. Restrict NSGs to these experiment flows. Source egress goes only to each
+   destination on TCP `22,5201,8081,8200` and ICMP. East US 2 permits source
+   `10.0.0.4/32` on those ports; West Europe does the same. Sweden Central
+   permits TCP `8301` from East `10.1.0.4/32` and TCP `8302` from West
+   `10.2.0.4/32`. Ports `5556,5557,5655,8080,8100,8401,8402` remain
+   host-local. Do not expose any experiment port to `0.0.0.0/0`.
+5. Confirm all three VMs have the repository at
+   `/home/azureuser/coding-progress-ledger/agent-migrate`, the same commit, and
+   the source has `~/.ssh/azrs` plus verified host keys for both destinations.
+
+### Install all three hosts
+
+Run from the `agent-migrate` repository on every VM as `azureuser`, not root:
+
+```bash
+bash queue-haul/setup.sh
+source ~/.bashrc
+```
+
+This installs Valkey, `chrony`, and `iperf3`, configures chrony against Azure's
+stable `/dev/ptp_hyperv` device, waits for synchronization, installs the pinned
+Python 3.12/vLLM 0.22.0/LMCache 0.5.1 CUDA 12.9 runtime, and stores the pinned
+GPT-OSS-20B model and caches under `/datadrive`. Setup hard-fails without the
+A100, persistent data mount, PTP device, or pinned runtime.
+
+From the Sweden Central source, establish and verify SSH host keys once, then confirm
+that the same commit is checked out everywhere:
+
+```bash
+ssh -i ~/.ssh/azrs azureuser@10.1.0.4 true
+ssh -i ~/.ssh/azrs azureuser@10.2.0.4 true
+git rev-parse HEAD
+ssh -i ~/.ssh/azrs azureuser@10.1.0.4 'cd /home/azureuser/coding-progress-ledger/agent-migrate && git rev-parse HEAD'
+ssh -i ~/.ssh/azrs azureuser@10.2.0.4 'cd /home/azureuser/coding-progress-ledger/agent-migrate && git rev-parse HEAD'
+```
+
+### Calibrate, smoke-test, and run
+
+Run every command below from the Sweden Central `agent-migrate` directory. Do not
+start a formal run with a dirty tracked worktree.
+
+```bash
+source ~/.bashrc
+mkdir -p /datadrive/queue-haul-network/control
+
+uv run python queue-haul/network_campaign.py check \
+  --cluster queue-haul/azure_network_cluster.json \
+  --ssh-key ~/.ssh/azrs
+
+uv run python queue-haul/network_campaign.py calibrate \
+  --cluster queue-haul/azure_network_cluster.json \
+  --ssh-key ~/.ssh/azrs \
+  --out /datadrive/queue-haul-network/control/calibration.json
+```
+
+Formal calibration takes three 60-second repeats. It records 200 RTT samples per
+path, isolated one- and eight-stream `iperf3`, simultaneous eight-stream
+receiver goodput to both destinations, all raw iperf JSON, host fingerprints,
+and clock uncertainty. Controlled 40% and 80% rates come from simultaneous—not
+isolated—receiver goodput, with an aggregate source-NIC cap. Clock uncertainty
+above 2 ms is a hard failure.
+
+Run both an unshaped and shaped end-to-end gate before planning:
+
+```bash
+uv run python queue-haul/network_campaign.py smoke \
+  --cluster queue-haul/azure_network_cluster.json \
+  --ssh-key ~/.ssh/azrs \
+  --calibration /datadrive/queue-haul-network/control/calibration.json \
+  --bandwidth natural \
+  --run-root /datadrive/queue-haul-network/smoke-natural
+
+uv run python queue-haul/network_campaign.py smoke \
+  --cluster queue-haul/azure_network_cluster.json \
+  --ssh-key ~/.ssh/azrs \
+  --calibration /datadrive/queue-haul-network/control/calibration.json \
+  --bandwidth controlled_40 \
+  --run-root /datadrive/queue-haul-network/smoke-controlled-40
+```
+
+Each smoke must prove nonzero KV wire bytes and cached tokens at both remote
+destinations, then sleep and wake the source GPU. Use new smoke directories;
+existing directories are rejected.
+
+Prepare and run the targeted campaign:
+
+```bash
+# Validate one route first with 54 paired replay/KV migrations.
+uv run python queue-haul/network_campaign.py prepare \
+  --design isolated \
+  --cluster queue-haul/azure_network_cluster_east.json \
+  --calibration /datadrive/queue-haul-network/control/calibration-east-post-west-001.json \
+  --manifest queue-haul/outputs/coding-manifest.json \
+  --out /datadrive/queue-haul-network/control/plan-east-validation.json
+
+uv run python queue-haul/network_campaign.py run \
+  --cluster queue-haul/azure_network_cluster_east.json \
+  --ssh-key ~/.ssh/azrs \
+  --current-calibration /datadrive/queue-haul-network/control/calibration-east-post-west-001.json \
+  --plan /datadrive/queue-haul-network/control/plan-east-validation.json \
+  --run-root /datadrive/queue-haul-network/validation-east-001
+
+# Prepare the joint campaign after both routes validate.
+uv run python queue-haul/network_campaign.py prepare \
+  --design joint \
+  --cluster queue-haul/azure_network_cluster.json \
+  --calibration /datadrive/queue-haul-network/control/calibration.json \
+  --manifest queue-haul/outputs/coding-manifest.json \
+  --out /datadrive/queue-haul-network/control/plan-joint.json
+
+uv run python queue-haul/network_campaign.py run \
+  --cluster queue-haul/azure_network_cluster.json \
+  --ssh-key ~/.ssh/azrs \
+  --current-calibration /datadrive/queue-haul-network/control/calibration.json \
+  --plan /datadrive/queue-haul-network/control/plan-joint.json \
+  --run-root /datadrive/queue-haul-network/formal-001
+```
+
+An isolated plan pairs replay and KV at 2K, 8K, and 32K contexts, route-relative
+40%, 80%, and natural bandwidth, and three repeats: 54 migrations per site. The
+West run uses `azure_network_cluster_west.json` with its one-path calibration.
+Multi-site destination services start concurrently for each bandwidth stack.
+Resume permits a synchronized commit update while keeping all other run identity
+fields pinned and retaining both commits in the metadata checks.
+joint design is 7 targeted agentic-trace conditions x 3 repeats x 6 policies =
+126 physical scenarios. The policies are Queue-Haul, greedy, Lagrangian greedy,
+KV-only, replay-only, and seeded feasible random. Its 20%-compute/20%-KV anchor
+uses controlled 80% bandwidth and a 30-second deadline. The other cells are
+idle destinations; crossed 20/40 and 40/20 compute/KV pressure in both
+directions; controlled 40%; natural bandwidth; and a 19-second deadline.
+
+Joint scenarios do not preassign a destination. After five seconds of seeded
+background warmup and five one-second vLLM metric samples, the selected policy
+chooses destination, replay or KV, and order for every session. Declared work
+comes from pinned agentic turn rates and prefill/decode tokens; measured live KV
+usage is also a planner input. Trace demand is normalized to the campaign's
+existing total source-load contract of `ell=0.4`. A live-state deviation over five
+percentage points or any waiting request is retained as a warning, not a failed
+measurement. Missing metrics, invalid reconstruction, or missing KV evidence
+remain hard failures.
+
+The runner retries one malformed state-code probe, then hard-fails with its
+response excerpt. It checkpoints each decision and scenario result atomically and fsyncs
+them. `progress.json` records completed scenario IDs and counts after every
+attempt. Rerun the same command and run root to skip every completed scenario;
+an interrupted or failed `attempt-NNNN` remains intact and resume uses the next
+attempt number. A failed attempt stops immediately instead of repeatedly cold
+loading the models. After any Spot deallocation, restart the VMs, rerun `setup.sh`
+and `check`, write a fresh formal
+calibration file, and resume with that file as `--current-calibration`. Resume
+hard-fails if RTT or simultaneous goodput drifts more than 10%, or if the plan,
+node identity, model, or runtime changed. A synchronized commit update remains
+visible in the audit checks. Azure Scheduled Events are
+logged on all three hosts and an active Spot event fails the attempt.
+
+After the joint campaign, run the measured three-node handoff with 100-ms power
+sampling, five-minute pre/post windows, natural links, and 50% destination load:
+
+```bash
+uv run python queue-haul/network_campaign.py handoff \
+  --cluster queue-haul/azure_network_cluster.json \
+  --ssh-key ~/.ssh/azrs \
+  --calibration /datadrive/queue-haul-network/control/calibration-post-west-001.json \
+  --plan /datadrive/queue-haul-network/control/plan-joint-001.json \
+  --manifest queue-haul/outputs/coding-manifest.json \
+  --run-root /datadrive/queue-haul-network/handoff-001
+uv run python queue-haul/plot_handoff_power.py \
+  --run-root /datadrive/queue-haul-network/handoff-001
+```
+
+The harness serves eight pinned agentic sessions on Sweden for five minutes,
+routes their KV state to dynamically selected destinations while both sustain
+50% background inference, sleeps Sweden, and verifies another five minutes of
+destination service. Raw source/East/West samples and verified requests retain
+synchronized phase timestamps. Handoff planning uses each session's measured
+uncached-prefill and decode rates from the Sweden window; destination background
+work converts the load generator's requested prefill rate through the measured
+service curve. The measured Sweden window itself populates KV state; there is no
+separate request warmup before it.
+
+The Azure campaign profile uses the Sweden A100 PCIe 300 W calibration retained
+under `/datadrive/queue-haul-network/control/power-cal-300w-*` plus the measured
+`handoff-008` endpoint: 98.1 W model-resident idle and 179.1 W at
+`ell=0.6468`. The two-point curve is the conservative concave envelope of the
+old low-load samples and this endpoint. Bare GPU idle is outside this curve.
+
+`outputs/network-campaign-20260805` retains the complete 54/54 East and West
+single-link campaigns plus the successful `handoff-009` and bidirectional-cache
+`handoff-010` three-node evidence, including raw 100-ms power, request,
+transfer, decision, plot, and checksum artifacts. It also retains
+`joint-queue-002-partial-086`: 86/126 completed joint scenarios, three raw stack
+captures, and interrupted-attempt audit evidence. The first 17 scenarios used
+consumer-only destination caches; the following 69 used bidirectional caches.
+Reconstruction requests end with an explicit state-code probe and reserve 128
+output tokens; a successful HTTP response without the code hard-fails the attempt.
+The 600-second HTTP timeout is independent of the measured scenario deadline;
+slow reconstruction completes with `deadline_met=false` instead of restarting.
+
+Reduction runs automatically and can also be repeated without hardware:
+
+```bash
+uv run python queue-haul/network_campaign.py reduce \
+  --plan /datadrive/queue-haul-network/control/plan.json \
+  --run-root /datadrive/queue-haul-network/formal-001
+sha256sum -c /datadrive/queue-haul-network/formal-001/artifacts.sha256
+```
+
+`summary.json` is valid only with all planned latest attempts complete. `results.csv`
+contains status, deadline, migration time, API/log bytes, KV bytes, TCP RTT, and
+retransmissions per scenario. Every stack retains 250-ms directional byte logs,
+per-connection duration/bytes/RTT/RTT variance/congestion window/retransmits,
+per-RESP-transfer payload and wire bytes, source and destination GPU power,
+service logs, scheduled events, and loaded-sink request traces. Scenario results
+retain streaming chunks, prompt/cached token counts, TTFT timestamps, source
+sleep timestamps, state-code validation, and every attempt. Power scope is GPU,
+not whole-node. These files become evidence only after the hardware run passes;
+their presence in the implementation is not a measurement claim.
 
 The normative formulation and executable-contract mapping are in:
 
@@ -117,10 +372,23 @@ uv run python queue-haul/migration_profiler.py make-crossover \
 uv run python queue-haul/policy_hardware_campaign.py plot-reduced \
   --out queue-haul/outputs/policy-hardware-width8-frontier-20260730
 uv run python queue-haul/canonical_simulator_campaign.py
-uv run python queue-haul/simulated_pareto_campaign.py
+uv run python queue-haul/greedy_lagrangian_experiment.py
+uv run python queue-haul/simulated_pareto_campaign.py prepare
+for shard in {0..63}; do
+  uv run python queue-haul/simulated_pareto_campaign.py run-shard --shard "$shard"
+done
+uv run python queue-haul/simulated_pareto_campaign.py reduce
 uv run python queue-haul/paper_evaluation.py \
   --out queue-haul/outputs/paper-evaluation
 ```
+
+The exact 10K Pareto campaign includes Queue-Haul, greedy, isolated-fastest,
+feasible-random, replay-only, and KV-only. The combinatorial
+`greedy_lagrangian` recovery is excluded and remains a separate scale-limited
+experiment. Trace-derived context anchors stop at the measured 31,562-token
+prefill/decode boundary. `pareto-hero.png` shows one explicitly scoped example:
+interactive-coding seed 1 at 10 Gb/s. Repeated identical frontier points are
+collapsed, and the endpoint shared by all four frontier policies is labeled.
 
 `requirement_frontier.py` computes destination requirements without constructing
 a destination inventory. `pool_planner.py` compares those requirements with
@@ -131,6 +399,61 @@ independently schedules routes, reconstruction endpoints, requests, commits,
 and power. It separately traces declared pool-service demand and debt from
 realized replay and commit times. `evaluation_config.py` is the canonical
 source for assumed paper operating points and their replacement evidence.
+The default pool LP remains the Clarabel implementation. The experimental
+`lp_highs` solver runs the same relaxation and rounder through SciPy/HiGHS;
+resource rows are assembled directly from candidate nonzeros, and maximum-gain
+fallback uses a scale-relative normalized feasibility margin.
+`lp_column_generation` is a Phase-I/Phase-II prototype with a reported
+primal-dual certificate. It materializes the full candidate table and rebuilds
+restricted masters, so it is a correctness reference rather than the
+million-session implementation.
+`lp_column_generation_persistent` keeps one native HiGHS master and basis while
+adding session rows and priced columns, and reuses one column-oriented resource
+matrix across insertion batches. Candidate construction uses compact
+immutable records and reuses identical session physics across equivalent pool
+type/route signatures while retaining pool-specific capacity rows.
+`destination_bench.py --pool-counts`
+splits fixed replica inventory across pools to vary alternatives without adding
+hardware or route capacity. All column-generation solvers remain experimental;
+`lp_column_generation_lazy` instead streams the complete implicit action
+universe, retains only generated master columns, stops on a global certified
+gap, and consults the oracle again during integral completion. It preserves the
+same LP but regenerates Python candidate physics on every pricing sweep.
+`lp_column_generation_native` runs the identical Phase-I/Phase-II master and
+certificate with a long-lived Rust pricing oracle while keeping HiGHS in Python.
+The native boundary factors candidates into float64 session/signature features,
+packed per-session feasibility masks, and distinct pool/method sparse templates;
+bounded chunks load directly into Rust-owned storage. It is limited to 16
+options and hard-fails outside that scope. `uv sync` installs it for development;
+rustup Cargo must precede any system Cargo, and the toolchain is pinned under
+`native/`. Pools reuse admission physics only when type, route, replica count,
+baseline, bounds, and methods are exactly equal; variables and capacity rows
+remain pool-specific. Indexed replica placement and a compact execution verifier are still
+required for million-session operation.
+`outputs/native-lp-scale-20260801/one-million.json` records the post-optimization
+one-seed 1M-session LP/rounding sensitivity and its hashes; it explicitly excludes
+replica packing, DES, prediction, and execution validation.
+`greedy_lagrangian_experiment.py` compares the two supported greedies on paired
+trace-derived targets; infeasible plans receive zero validated shed. Static
+`greedy` fixes one scarcity price and one global candidate order.
+`greedy_lagrangian` iterates aggregate-resource prices, retains a bounded set of
+exact nonlinear source prefixes, performs target-capped recovery, and packs the
+final set. Recovery caches sparse candidate columns and accumulates each retained
+prefix without constructing sparse submatrices, and reuses those statistics in
+packing fallback. Equal normal/emergency pool bounds reuse one admission solve.
+Feasible-random groups each session's candidates in one pass, so its
+setup is linear in candidate count. Immutable single-policy scale runs under `outputs/dual-lagrangian-*`
+record the former `greedy_prefix` name; mixed bundles containing retired
+optimizers were removed rather than rewritten.
+Replica-packing repair considers actions from best to worst normalized resource
+per watt, keeps feasible placements fixed, and rejects actions that cannot fit.
+It reports rejected-action count and complete repair-pass time.
+The campaign also computes a fractional source-chord LP lower bound on migration
+work and plots each feasible greedy's excess work over that bound. The bound is
+valid for the concave GPU-scoped power profile and relaxes integrality, replica
+packing, and exact timing; it is not the unknown integral optimum.
+The plot reports completion over every case and compares work only on the paired
+common-feasible cohort to avoid survivor bias.
 `paper_evaluation.py` writes the legacy Q1–Q9 result/plot registry while the
 paper evaluation is reorganized into mechanism validation, fixed-contract
 coordination, multi-pool contracts, and planner quality/scale. It rejects
@@ -154,8 +477,11 @@ Destination inference forbids L2 reads but may recompute an unstorable boundary 
 GPU-work-first, replay-only, and KV-only resource headroom at common requested
 source-power shed levels. Use `--refresh` when its pinned inputs change.
 `policy_hardware_campaign.py` creates a resumable paired idle-session campaign
-that launches every session concurrently for Queue-Haul, greedy, KV-only, and
-replay-only. Its default truncated grid uses coding, interactive-coding, and
+that launches every session concurrently for Queue-Haul, both greedies,
+KV-only, and replay-only. Static greedy retains its established hardware
+planning path. Lagrangian greedy uses a one-pool idle dedicated-sink adapter,
+then emits the same frozen move schema. Its default truncated grid uses coding,
+interactive-coding, and
 agentic-tool-loop context-length profiles; uniform-over-support and
 uniform-over-range token distributions, or named exact context packs; configurable
 bandwidths and deadlines; and full-episode migration width. The requirement and
@@ -181,6 +507,8 @@ over elapsed time with an interquartile band, plus paired attainment–completio
 points and a CDF of measured session downtime per modeled watt shed. This idle
 evidence also includes an episode migration-makespan-per-modeled-watt CDF and
 supports timing and projected, not realized, power attainment.
+The pinned 2026-07-30 bundles predate `greedy_lagrangian`; they do not constitute
+hardware evidence for it. A new two-A100 run is required for that claim.
 The separate live power-drain evidence in
 `outputs/power_drain_live_20260714/` includes planned and measured source-power
 reductions; `plot_migration_results.py` writes their shared-axis parity plot.
@@ -221,27 +549,34 @@ the companion pooled CDF combines all four bandwidths. Regenerate that CDF
 with the earlier trace-sampled 5/10-Gbit/s frontier rows included at raw-sample
 weight using `plot-reduced --out <packing-results> --pooled-with
 <frontier-results>`; this pooling also applies to both per-watt CDFs.
-`simulated_pareto_campaign.py` evaluates the same five fixed context packs with
-the calibrated crossover profile and adds paired random and price-coupled
-greedy baselines. Coupled greedy uses the same single destination and link; its
-zero-background-load service envelope is explicitly a sensitivity. The Pareto
-CSV and plot label 12K/14K contexts as interpolated, concurrent action power as
-extrapolated, and commit-derived power attainment as modeled.
-Parallel launch and replay/KV aggregate-throughput caps are anchored by the
-hardware traces; KV uses serial measurements at 1/2.5 Gbit/s and width-8
-measurements at 5/10 Gbit/s. The figure pairs deadline-normalized and raw-second
-clouds over 30/40/50/60/75-s budgets, with one point per result. Every policy is
-replanned for each budget against the same aggregate caps and executes only its
-deadline-admitted actions; cleanup moves are excluded from both axes. The cloud
-crosses five fixed packing anchors and 18 observed width-8 workload mixes with
-every bandwidth and budget; no display jitter is applied.
+`simulated_pareto_campaign.py` creates 64 deterministic shards for 14 exact
+10K-session idle snapshots: three trace seeds for each workload and five
+trace-derived context anchors. It compares Queue-Haul, static and Lagrangian
+greedy, isolated-fastest, feasible-random, replay-only, and KV-only over fixed
+1/2.5/5/10-Gbit/s site links and 30-second through four-hour deadlines. Replay
+is a divisible destination-fleet service fitted from successful width-8 10G
+episodes; width 8 is calibration evidence, not an execution cap. KV bytes use
+both fixed WAN and per-replica ingest capacity. All methods use identical idle
+destination packing and report simulated sensitivity, trailing-five-second
+target attainment, last commit, censoring, source hashes, and dirty Git state.
+Reduction hard-fails missing or duplicate shards and emits separate trace and
+anchor small multiples. Conservative and optimistic fits run on sentinel cells;
+the full grid uses the central fit. The pinned stage-span evidence fits
+p25/median/p75 replay capacity factors of 0.963/0.984/1.026. These are used
+without clamping: the lower two represent a small effective slowdown, while
+width 8 remains only the upper validity bound.
 `canonical_simulator_campaign.py` runs a four-target paired 10K-session
-Queue-Haul, greedy, per-session-fastest, replay-only, and KV-only comparison
+Queue-Haul, both greedies, per-session-fastest, replay-only, and KV-only comparison
 under one assumed dedicated-pool contract. Its compact 10K/100K/1M scale check
-uses the Queue-Haul greedy planner, an equivalent pooled-destination topology,
+uses both greedies, an equivalent pooled-destination topology,
 10 Gbps per 10K sessions, and summary-only prediction. Sampled future requests
 are disabled; measured two-A100 results provide continuation first-token
 evidence.
+
+Software results are authoritative for optimizer intent, aggregate feasibility,
+and fleet-scale sensitivities. Hardware results are authoritative for measured
+execution and timing of the frozen plan. A mismatch fails validation; neither
+result silently overwrites the other.
 Override `QH_APPTAINER_IMAGE` if the pinned LMCache image is not at the default
 scratch path; set `QH_RESUME_FROM_GIT_SHA` when resuming after a code change.
 MP catch-up completeness uses exact rendered-token prefix chunks; observed key

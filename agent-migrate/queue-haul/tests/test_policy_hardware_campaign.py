@@ -20,6 +20,9 @@ Plausible wrong implementations:
 - Divide episode downtime by a linearized or requested power reduction.
 - Sum overlapping migration durations instead of using episode makespan.
 - Swap policy color or legend identities in the paper CDFs.
+- Change one paper CDF's physical dimensions without changing the other.
+- Leave a public axis label inconsistent with the reported metric.
+- Route Lagrangian planning through a simulated executor instead of the hardware plan.
 """
 
 import csv
@@ -154,7 +157,7 @@ def test_fixed_context_pack_preserves_width_and_pairing(tmp_path):
     assert plan["context_packs"] == {"small": [4096] * 8}
     assert plan["workload_profiles"] == []
     assert plan["token_distributions"] == ["fixed"]
-    assert len(plan["scenarios"]) == 5
+    assert len(plan["scenarios"]) == 6
     assert all(row["move_concurrency"] == 8 for row in plan["scenarios"])
     assert all(
         [session["initial_tokens"] for session in row["sessions"]]
@@ -435,21 +438,43 @@ def test_destination_ttft_cdf_includes_migration_time(tmp_path, monkeypatch):
     campaign.plot_destination_ttft(rows, summaries, tmp_path)
 
     ax = campaign.plt.gcf().axes[0]
+    assert tuple(ax.figure.get_size_inches()) == (5, 4)
     assert ax.lines[0].get_xdata().tolist() == [0, 3, 5]
     assert ax.get_title() == ""
     assert ax.get_xlabel() == "Migration + Destination TTFT (s)"
     assert ax.get_ylabel() == "Cumulative Distribution"
     assert CDF_COLORS == {
-        "queue_haul": "#8C1515", "greedy": "#175E54",
-        "kv_only": "#007C92", "replay_only": "#E98300",
+        "queue_haul": "#B1040E", "greedy": "#008566",
+        "greedy_lagrangian": "#620059",
+        "kv_only": "#006CB8", "replay_only": "#E98300",
     }
     assert CDF_LABELS == {
         "queue_haul": "Queue-Haul LP", "greedy": "Queue-Haul Greedy",
+        "greedy_lagrangian": "Queue-Haul Lagrangian Greedy",
         "kv_only": "KV Migrate Only", "replay_only": "Replay Context Only",
     }
     assert CDF_LINESTYLES == {
-        "queue_haul": "-", "greedy": "--", "kv_only": "-.", "replay_only": ":",
+        "queue_haul": "-", "greedy": "--",
+        "greedy_lagrangian": (0, (3, 1, 1, 1)),
+        "kv_only": "-.", "replay_only": ":",
     }
+
+
+def test_migration_time_per_watt_cdf_uses_compact_paper_dimensions(
+        tmp_path, monkeypatch):
+    class QuadraticPower:
+        @staticmethod
+        def power(load):
+            return 100 + 100 * load ** 2
+
+    monkeypatch.setattr(campaign.plt, "close", lambda _: None)
+    campaign.plot_migration_time_per_watt([{
+        "policy": "queue_haul", "commit_100_s": 8,
+    }], QuadraticPower(), tmp_path)
+
+    figure = campaign.plt.gcf()
+    assert tuple(figure.get_size_inches()) == (5, 4)
+    assert figure.axes[0].get_xlabel() == "E2E Migration / Power Shed (s/W)"
 
 
 def test_pooled_results_concatenates_campaigns_without_reweighting(tmp_path):

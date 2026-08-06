@@ -32,6 +32,10 @@ PLAN = QH / "outputs/policy-hardware-width8-packing-plan/plan.json"
 BUNDLE = QH / "outputs/destination-v7-20260722/content-free-manifest.json"
 PROFILE = QH / "outputs/destination-v7-20260722/baseline-profile.json"
 TARGET_RHO = 16.5
+<<<<<<< HEAD
+=======
+PLOT_START_S, PLOT_STOP_S = 300, 700
+>>>>>>> 6bf8f39f85e3b53e6b60c9b132d81acbc54ec7ef
 
 
 def write_json(path: Path, value) -> None:
@@ -164,6 +168,32 @@ def parse_wall(value: str) -> float:
     return dt.datetime.strptime(value, "%Y/%m/%d %H:%M:%S.%f").timestamp()
 
 
+<<<<<<< HEAD
+=======
+def bin_power(rows: list[dict], origin: float,
+              start: int = 0, stop: int | None = None) -> tuple[list[float], list[float]]:
+    bins = {}
+    for row in rows:
+        index = int(parse_wall(row["timestamp"]) - origin)
+        if index >= start and (stop is None or index < stop):
+            bins.setdefault(index, []).append(float(row["power.draw [W]"]))
+    return ([index - start + .5 for index in sorted(bins)],
+            [statistics.mean(bins[index]) for index in sorted(bins)])
+
+
+def migration_window(marker: dict[str, float]) -> tuple[float, float]:
+    return marker["migration_start"], marker["migration_complete"]
+
+
+def switch_window(marker: dict[str, float]) -> tuple[float, float]:
+    return marker["migration_complete"], marker["destination_steady"]
+
+
+def shutdown_window(marker: dict[str, float]) -> tuple[float, float]:
+    return marker["destination_steady"], marker["source_stopped"]
+
+
+>>>>>>> 6bf8f39f85e3b53e6b60c9b132d81acbc54ec7ef
 def reduce_power(run_root: Path, local_power: Path, markers: Markers,
                  role_uuids: list[str]) -> None:
     destination_path = run_root / "power_100ms.csv"
@@ -238,6 +268,7 @@ def reduce_power(run_root: Path, local_power: Path, markers: Markers,
     write_json(run_root / "power_summary.json", summary)
 
     origin = markers.rows[0]["wall_ns"] / 1e9
+<<<<<<< HEAD
     fig, ax = plt.subplots(figsize=(10, 4.8))
     for label, uuid, color in (
         ("Source GPU", role_uuids[0], "#8C1515"),
@@ -254,16 +285,54 @@ def reduce_power(run_root: Path, local_power: Path, markers: Markers,
     if "migration_start" in marker and "source_stopped" in marker:
         ax.axvspan(marker["migration_start"], marker["source_stopped"],
                    color="#E98300", alpha=.12, label="Both GPUs active")
+=======
+    plt.style.use("default")
+    fig, ax = plt.subplots(figsize=(9, 4))
+    for label, uuid, color in (
+        ("Source", role_uuids[0], "#E98300"),
+        ("Destination", role_uuids[1], "#007C92"),
+    ):
+        ax.plot(*bin_power(by_uuid[uuid], origin, PLOT_START_S, PLOT_STOP_S),
+                lw=1.5, label=label, color=color)
+    marker = {row["event"]: row["wall_ns"] / 1e9 - origin - PLOT_START_S
+              for row in markers.rows}
+    if "migration_start" in marker and "migration_complete" in marker:
+        ax.axvspan(*migration_window(marker), color="#DAD7CB", alpha=.5,
+                   label="Migration")
+    if "migration_complete" in marker and "destination_steady" in marker:
+        ax.axvspan(*switch_window(marker), color="#007C92",
+                   alpha=.12, label="Switch")
+    if "destination_steady" in marker and "source_stopped" in marker:
+        ax.axvspan(*shutdown_window(marker), color="#6F4E7C",
+                   alpha=.12, label="Shutdown")
+>>>>>>> 6bf8f39f85e3b53e6b60c9b132d81acbc54ec7ef
     for name in ("source_steady", "migration_start", "migration_complete",
                  "source_stopped"):
         if name in marker:
             ax.axvline(marker[name], color="black", lw=.7, ls=":")
+<<<<<<< HEAD
     ax.set(xlabel="Elapsed time (s)", ylabel="GPU power (W)",
            title="Queued replay migration: native 100 ms NVIDIA-SMI samples")
     ax.legend(frameon=False, ncol=3)
     fig.tight_layout()
     for suffix in ("png", "pdf"):
         fig.savefig(run_root / f"power_curve.{suffix}", dpi=220)
+=======
+    ax.set(xlabel="Time (s)", ylabel="Power per GPU (W)")
+    ax.set_xlim(0, PLOT_STOP_S - PLOT_START_S)
+    ax.tick_params(labelsize=14)
+    ax.xaxis.label.set_size(16)
+    ax.yaxis.label.set_size(16)
+    ax.grid(alpha=.25)
+    for spine in ax.spines.values():
+        spine.set_color("black")
+    ax.legend(frameon=False, fontsize=13, loc="upper center",
+              bbox_to_anchor=(.5, -.2), ncol=5)
+    fig.tight_layout()
+    for suffix in ("png", "pdf"):
+        fig.savefig(run_root / f"power_curve.{suffix}", dpi=220,
+                    bbox_inches="tight")
+>>>>>>> 6bf8f39f85e3b53e6b60c9b132d81acbc54ec7ef
     plt.close(fig)
 
 

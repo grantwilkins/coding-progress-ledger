@@ -1,4 +1,4 @@
-"""Simulate the calibrated width-8 plan and plot its power–completion frontier."""
+"""Run the exact, sharded full-fleet simulated Pareto sensitivity."""
 
 from __future__ import annotations
 
@@ -8,6 +8,7 @@ from dataclasses import replace
 import hashlib
 import json
 from pathlib import Path
+import subprocess
 
 import matplotlib
 
@@ -15,580 +16,523 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
 
-import migration_profiler as profiler
-from destination import (
-    DESTINATION_SCHEMA, CompatibilityFingerprint, ContextRate,
-    DestinationArchitecture, DestinationPool, DestinationReplica,
-    DestinationType, LoadedCoefficients,
-)
-from policy_hardware_campaign import (
-    LABELS, _portable_path, _problem, deadline_attainment,
-    validate_policy_plan,
-)
-from planner import plan
-from profiles import ActionPower, ModelProfile, RateCurve
-from simulate import execute
+from destination import FluidMigrationService, dedicated_sink_architecture
+from migration_profiler import file_hash, stable_seed
+from planner import plan, source_power
+from power_drain_experiment import build_scenario
+from power_model import ExpectedPower
+from profiles import ModelProfile, WorkloadProfile
+from simulate import NetworkLink, execute, step_average
 
 
 ROOT = Path(__file__).parent
-DEFAULT_PLAN = ROOT / "outputs/policy-hardware-width8-packing-plan/plan.json"
-DEFAULT_MODEL = ROOT / "profiles/gpt_oss_20b_a100_tp1_crossover.json"
-DEFAULT_CROSSOVER = ROOT / "outputs/policy-hardware-crossover-20260730/plan.json"
-DEFAULT_WIDTH8 = ROOT / "outputs/policy-hardware-width8-frontier-20260730"
-DEFAULT_OUT = ROOT / "outputs/simulated-width8-pareto-20260730"
+MODEL = ROOT / "profiles/gpt_oss_20b_a100_tp1_crossover.json"
+EVIDENCE = ROOT / "outputs/policy-hardware-width8-frontier-20260730"
+OUT = ROOT / "outputs/simulated-pareto-v5-20260803"
+WORKLOADS = tuple(ROOT / f"profiles/{name}.json" for name in (
+    "coding", "interactive_coding", "agentic_tool_loop",
+))
 POLICIES = (
-    "queue_haul", "greedy", "greedy_coupled", "random", "kv_only",
-    "replay_only",
+    "queue_haul", "greedy", "isolated_fastest", "random", "replay_only", "kv_only",
 )
-LABELS = {**LABELS, "greedy_coupled": "Coupled greedy"}
-OBSERVATION_S = 600
-TIME_BUDGETS_S = (30, 40, 50, 60, 75)
+SOLVERS = {"queue_haul": "lp_highs"}
+BANDWIDTHS_MBPS = (1000, 2500, 5000, 10000)
+DEADLINES_S = (30, 60, 120, 300, 900, 3600, 14400)
+TARGETS = (.10, .25, .50, .75, 1.0)
+ANCHORS = (1998, 4045, 8141, 16336, 31562)
+HERO = ("interactive_coding-seed-1", 10000)
+SHARDS = 64
+SESSIONS = 10_000
+WINDOW_S = 5
+SCHEMA = "queue-haul-simulated-pareto-v5"
 
 
-def context_evidence(tokens, anchors):
-    values = set(tokens)
-    if values <= anchors:
-        return "measured"
-    if min(values) >= min(anchors) and max(values) <= max(anchors):
-        return "interpolated"
-    return "extrapolated"
+def _csv(path):
+    with path.open(newline="") as stream:
+        return list(csv.DictReader(stream))
 
 
-def pareto_flags(rows, keys):
-    for row in rows:
-        peers = [other for other in rows
-                 if all(other[key] == row[key] for key in keys)]
-        row["pareto"] = not any(
-            other["power_attainment_fraction"]
-            >= row["power_attainment_fraction"]
-            and other["completion_s"] <= row["completion_s"]
-            and (
-                other["power_attainment_fraction"]
-                > row["power_attainment_fraction"]
-                or other["completion_s"] < row["completion_s"]
-            )
-            for other in peers
-        )
+def _float(row, key):
+    value = float(row[key])
+    if not np.isfinite(value):
+        raise ValueError(f"nonfinite {key}")
+    return value
 
 
-def meets_deadline(attainment, completion, deadline):
-    return attainment >= 1 - 1e-9 and completion <= deadline + 1e-9
-
-
-def measured_replay_caps(width8):
-    plan_ = json.loads((width8 / "plan.json").read_text())
-    totals = {
-        row["episode"]: sum(session["initial_tokens"]
-                            for session in row["sessions"])
-        for row in plan_["scenarios"] if row["policy"] == "control"
+def fit_hardware(profile, evidence=EVIDENCE):
+    scenarios = _csv(evidence / "scenarios.csv")
+    stages = _csv(evidence / "migration_stages.csv")
+    accepted = {
+        row["scenario_id"] for row in scenarios
+        if row["kind"] == "migration" and row["status"] == "complete"
+        and _float(row, "bandwidth_mbps") == 10000
+        and int(row["concurrency"]) == 8
     }
-    rows = list(csv.DictReader((width8 / "policy_episodes.csv").open()))
-    rates = [
-        totals[int(row["episode"])] / float(row["commit_100_s"])
-        for row in rows
-        if row["policy"] == "replay_only" and row["commit_100_s"]
-    ]
-    if not rates:
-        raise ValueError("width-8 run has no complete replay-only episodes")
-    slower, central, faster = np.quantile(rates, (.25, .5, .75))
-    return {
-        "central": float(central), "faster": float(faster),
-        "slower": float(slower),
-    }, len(rates)
-
-
-def measured_kv_caps(width8, crossover, profile):
-    quantiles = {"slower": .25, "central": .5, "faster": .75}
-    plan_ = json.loads((width8 / "plan.json").read_text())
-    scenarios = {row["scenario_id"]: row for row in plan_["scenarios"]}
-    episodes = [
-        row for row in csv.DictReader(
-            (width8 / "policy_episodes.csv").open()
-        ) if row["policy"] == "kv_only" and row["commit_100_s"]
-    ]
-    rates = {}
-    for row in episodes:
-        scenario = scenarios[row["scenario_id"]]
-        size = sum(
-            profile.case().kv_transfer.sealed_bytes(session["initial_tokens"])
-            for session in scenario["sessions"]
-        )
-        rates.setdefault(float(scenario["bandwidth_mbps"]), []).append(
-            size / float(row["commit_100_s"])
-        )
-    migrations = list(csv.DictReader((crossover / "migrations.csv").open()))
-    summaries = {
-        row["scenario_id"]: row
-        for row in csv.DictReader((crossover / "scenarios.csv").open())
+    replay_ids = {
+        row["scenario_id"] for row in scenarios
+        if row["scenario_id"] in accepted and row["method"] == "replay"
     }
-    serial = {}
-    for row in migrations:
-        if row["method"] == "kv_transfer":
-            serial.setdefault(float(row["bandwidth_mbps"]), []).append(
-                float(row["measured_kv_bytes"])
-                / float(summaries[row["scenario_id"]]["migration_s"])
+    grouped = {}
+    for row in stages:
+        if row["scenario_id"] in replay_ids and row["method"] == "replay" \
+                and row["success"].lower() == "true" and row["phase"] == "initial":
+            grouped.setdefault(row["scenario_id"], []).append(row)
+    case, speedups = profile.case(), []
+    for rows in grouped.values():
+        if len(rows) != 8:
+            raise ValueError("width-8 replay fit requires eight successful migrations")
+        work = sum(
+            _float(row, "measured_prompt_tokens") / case.replay.rate(
+                _float(row, "measured_prompt_tokens"), 1,
+            ) + case.replay_completion_s for row in rows
+        )
+        span = (max(_float(row, "destination_ready_ns") for row in rows)
+                - min(_float(row, "start_ns") for row in rows)) / 1e9
+        speedups.append(work / span)
+    if len(speedups) < 10:
+        raise ValueError("insufficient width-8 replay evidence")
+    speed = np.quantile(speedups, (.25, .5, .75))
+    if np.any((speed <= 0) | (speed > 8)):
+        raise ValueError("fitted replay capacity factor is outside (0, 8]")
+
+    powers = {}
+    for method in ("replay", "kv_transfer"):
+        rows = [row for row in scenarios if row["scenario_id"] in accepted
+                and row["method"] == method]
+        if len(rows) < 10:
+            raise ValueError(f"insufficient {method} action-power evidence")
+        powers[method] = {
+            side: np.quantile([_float(row, field) for row in rows], (.25, .5, .75)).tolist()
+            for side, field in (
+                ("source", "source_added_power_w"),
+                ("destination", "destination_added_power_w"),
             )
-    if set(rates) != {5000.0, 10000.0} \
-            or not {1000.0, 2500.0} <= set(serial):
-        raise ValueError("KV calibration grid is incomplete")
-    combined = {1000.0: serial[1000.0], 2500.0: serial[2500.0], **rates}
-    return {
-        case: {
-            bandwidth: float(np.quantile(values, quantile))
-            for bandwidth, values in combined.items()
         }
-        for case, quantile in quantiles.items()
-    }, {"serial": len(serial[1000.0]) + len(serial[2500.0]),
-        "width8": sum(map(len, rates.values()))}
-
-
-def parallel_profile(profile, width, replay_caps):
-    if set(replay_caps) != set(profile.cases):
-        raise ValueError("replay caps must cover every profile case")
     cases = {}
-    for case_id, case in profile.cases.items():
-        actions = {}
-        for name, curve in case.action_power_w.items():
-            actions[name] = ActionPower(
-                np.array([1, width]),
-                np.array([curve.source_w[0], width * curve.source_w[0]]),
-                np.array([curve.destination_w[0],
-                          width * curve.destination_w[0]]),
-            )
-        replay = RateCurve({
-            concurrency: (
-                case.replay.by_concurrency[1] if concurrency == 1 else (
-                    case.replay.by_concurrency[1][0],
-                    np.minimum(
-                        case.replay.by_concurrency[1][1],
-                        replay_caps[case_id] / concurrency,
-                    ),
-                )
-            )
-            for concurrency in range(1, width + 1)
-        })
-        cases[case_id] = replace(
-            case, action_power_w=actions, replay=replay
-        )
-    return replace(
-        profile, max_destination_replays=width,
-        max_destination_kv_streams=width, cases=cases,
+    for name, speed_index, power_index in (
+        ("conservative", 0, 2), ("central", 1, 1), ("optimistic", 2, 0),
+    ):
+        cases[name] = {
+            "replay_speedup": float(speed[speed_index]),
+            "source_power_w": {
+                method: powers[method]["source"][power_index] for method in powers
+            },
+            "destination_power_w": {
+                method: powers[method]["destination"][power_index] for method in powers
+            },
+        }
+    return {
+        "cases": cases, "replay_episodes": len(speedups),
+        "source": {
+            name: {"sha256": file_hash(evidence / name)}
+            for name in ("scenarios.csv", "migration_stages.csv")
+        },
+    }
+
+
+def manifest_rows():
+    episodes = [
+        {"episode_id": f"{path.stem}-seed-{seed}", "kind": "trace",
+         "workload": str(path.relative_to(ROOT)), "seed": seed}
+        for path in WORKLOADS for seed in range(3)
+    ] + [
+        {"episode_id": f"anchor-{context}", "kind": "anchor",
+         "anchor_tokens": context, "seed": 0}
+        for context in ANCHORS
+    ]
+    rows = []
+    for episode in episodes:
+        for bandwidth in BANDWIDTHS_MBPS:
+            for deadline in DEADLINES_S:
+                for target in TARGETS:
+                    for policy in POLICIES:
+                        rows.append({**episode, "case": "central",
+                                     "bandwidth_mbps": bandwidth,
+                                     "deadline_s": deadline,
+                                     "target_fraction": target, "policy": policy})
+    for path in WORKLOADS:
+        episode = {"episode_id": f"{path.stem}-seed-0", "kind": "trace",
+                   "workload": str(path.relative_to(ROOT)), "seed": 0}
+        for case in ("conservative", "optimistic"):
+            for bandwidth in (1000, 10000):
+                for deadline in (60, 300, 3600, 14400):
+                    for target in (.25, 1.0):
+                        for policy in POLICIES:
+                            rows.append({**episode, "case": case,
+                                         "bandwidth_mbps": bandwidth,
+                                         "deadline_s": deadline,
+                                         "target_fraction": target, "policy": policy})
+    for index, row in enumerate(rows):
+        row["row_id"] = f"v5-{index:05d}"
+        row["shard"] = index % SHARDS
+    if len(rows) != 12_336:
+        raise RuntimeError("unexpected campaign grid size")
+    return rows
+
+
+def prepare(out=OUT, model_path=MODEL):
+    out.mkdir(parents=True, exist_ok=True)
+    if any(out.iterdir()):
+        raise FileExistsError(f"output directory is not empty: {out}")
+    profile = ModelProfile.load(model_path)
+    rows = manifest_rows()
+    git_sha = subprocess.run(
+        ("git", "rev-parse", "HEAD"), cwd=ROOT, check=True,
+        capture_output=True, text=True,
+    ).stdout.strip()
+    dirty = bool(subprocess.run(
+        ("git", "status", "--porcelain"), cwd=ROOT, check=True,
+        capture_output=True, text=True,
+    ).stdout)
+    manifest = {
+        "schema": SCHEMA, "sessions": SESSIONS, "shards": SHARDS,
+        "rows": rows, "fits": fit_hardware(profile),
+        "model": {"path": str(model_path.relative_to(ROOT)),
+                  "sha256": file_hash(model_path)},
+        "workloads": {
+            str(path.relative_to(ROOT)): {"sha256": file_hash(path)}
+            for path in WORKLOADS
+        },
+        "anchor_fit": {
+            "contexts": list(ANCHORS),
+            "records": "uniform sample over all three trace record sets",
+            "log_bytes": "per-record trace log-bytes/context ratio",
+        },
+        "source": {"git_sha": git_sha, "dirty": dirty},
+        "assumptions": {
+            "workload": "exact idle trace snapshot; no arrivals or growth",
+            "wan": "fixed site aggregate",
+            "replay": "fully divisible destination-fleet fluid pool",
+            "kv": "all bytes consume WAN and per-replica ingest",
+            "destination": "matched idle fleet; free intra-site relocation",
+            "destination_spare_fraction": 1.0,
+            "evidence": "simulated sensitivity",
+        },
+    }
+    (out / "manifest.json").write_text(json.dumps(manifest, indent=2) + "\n")
+    return manifest
+
+
+def _profile_case(profile, case):
+    return replace(profile, profile_id=f"{profile.profile_id}-{case}",
+                   cases={"central": profile.case("central")})
+
+
+def _workload(row):
+    if row["kind"] == "trace":
+        return WorkloadProfile.load(ROOT / row["workload"])
+    sources = [WorkloadProfile.load(path) for path in WORKLOADS]
+    base = sources[0]
+    records = tuple(replace(
+        record, context_tokens=row["anchor_tokens"],
+        log_bytes=max(1, round(
+            row["anchor_tokens"] * record.log_bytes / record.context_tokens
+        )),
+    ) for workload in sources for record in workload.records)
+    return replace(base, profile_id=row["episode_id"], records=records)
+
+
+def _architecture(profile, scenario, fit):
+    destinations = tuple(
+        instance.instance_id for instance in scenario.instances
+        if instance.instance_id.startswith("dest-")
     )
-
-
-def aggregate_planning_profile(profile, bandwidth_mbps, replay_caps, kv_caps):
-    cases = {}
-    for case_id, case in profile.cases.items():
-        x, y = case.replay.by_concurrency[1]
-        replay = RateCurve({1: (x, np.minimum(y, replay_caps[case_id]))})
-        transfer = replace(
-            case.kv_transfer,
-            destination_bytes_per_s=min(
-                case.kv_transfer.destination_bytes_per_s,
-                kv_caps[case_id][float(bandwidth_mbps)],
-            ),
-        )
-        cases[case_id] = replace(
-            case, replay=replay, kv_transfer=transfer
-        )
-    return replace(
-        profile, max_destination_replays=1,
-        max_destination_kv_streams=1, cases=cases,
+    architecture = dedicated_sink_architecture(profile, destinations, ("wan",))
+    service = FluidMigrationService(
+        fit["replay_speedup"], profile.case().kv_transfer.destination_bytes_per_s,
+        fit["source_power_w"], fit["destination_power_w"],
+        "width8-10g-successful-replay-and-action-power",
     )
+    return replace(architecture, pools=(replace(
+        architecture.pools[0], fluid_migration=service,
+    ),))
 
 
-def shared_kv_profile(profile, bandwidth_mbps, concurrency, kv_caps):
-    if concurrency <= 1:
-        return profile
-    cases = {}
-    for case_id, case in profile.cases.items():
-        cap = kv_caps[case_id][float(bandwidth_mbps)]
-        transfer = replace(
-            case.kv_transfer,
-            destination_bytes_per_s=min(
-                case.kv_transfer.destination_bytes_per_s, cap
-            ),
-        )
-        cases[case_id] = replace(case, kv_transfer=transfer)
-    return replace(profile, cases=cases)
+def attainment_time(power, target, window, end):
+    if end < window:
+        return None
+    points = sorted({window, end} | {
+        value for time, *_ in power for value in (time, time + window)
+        if window <= value <= end
+    })
+    prior, prior_value = points[0], step_average(power, points[0], window)
+    if prior_value <= target:
+        return prior
+    for current in points[1:]:
+        value = step_average(power, current, window)
+        if value <= target:
+            lo, hi = prior, current
+            for _ in range(60):
+                mid = (lo + hi) / 2
+                if step_average(power, mid, window) <= target:
+                    hi = mid
+                else:
+                    lo = mid
+            return hi
+        prior, prior_value = current, value
+    return None
 
 
-def write_csv(path, rows):
+def run_row(row, manifest):
+    base = ModelProfile.load(ROOT / manifest["model"]["path"])
+    if file_hash(ROOT / manifest["model"]["path"]) != manifest["model"]["sha256"]:
+        raise RuntimeError("model changed after prepare")
+    if any(file_hash(ROOT / path) != record["sha256"]
+           for path, record in manifest["workloads"].items()):
+        raise RuntimeError("workload changed after prepare")
+    profile = _profile_case(base, row["case"])
+    bandwidth = row["bandwidth_mbps"] * 125_000
+    scenario, _ = build_scenario(
+        _workload(row), profile, manifest["sessions"], row["seed"], 0,
+        row["deadline_s"], row["deadline_s"], bandwidth,
+        idle_snapshot=True,
+    )
+    scenario = replace(scenario, links=(NetworkLink("wan", bandwidth),))
+    power = ExpectedPower(scenario, profile)
+    initial = power.power(True)
+    idle = source_power(
+        scenario, profile, [session.session_id for session in scenario.sessions],
+    )
+    removable = initial - idle
+    limit = initial - row["target_fraction"] * removable
+    scenario = replace(scenario, power_limit_w=limit)
+    architecture = _architecture(
+        profile, scenario, manifest["fits"]["cases"][row["case"]],
+    )
+    seed = stable_seed(row["episode_id"], row["bandwidth_mbps"],
+                       row["deadline_s"], row["target_fraction"], row["policy"],
+                       row["case"])
+    planned = plan(
+        scenario, profile, {}, SOLVERS.get(row["policy"], row["policy"]),
+        seed=seed, destination=architecture,
+    )
+    result = execute(scenario, profile, planned.moves, destination=architecture)
+    at_deadline = step_average(result.power, row["deadline_s"], WINDOW_S)
+    attained = float(np.clip((initial - at_deadline) / removable, 0, 1))
+    attained_at = attainment_time(result.power, limit, WINDOW_S, row["deadline_s"])
+    commits = [item.committed_s for item in result.sessions if item.committed_s is not None]
+    return {
+        **row, "planner_seed": seed, "sessions": len(scenario.sessions),
+        "source_replicas": sum(instance.instance_id.startswith("source-")
+                               for instance in scenario.instances),
+        "destination_replicas": sum(instance.instance_id.startswith("dest-")
+                                    for instance in scenario.instances),
+        "initial_source_power_w": initial, "idle_source_power_w": idle,
+        "target_power_w": limit, "power_at_deadline_w": at_deadline,
+        "attained_shed_fraction": attained,
+        "steady_state_shed_fraction": (initial - planned.planned_source_power_w) / removable,
+        "target_attainment_s": attained_at if attained_at is not None else "",
+        "target_attained": attained_at is not None,
+        "censored": attained_at is None,
+        "last_commit_s": max(commits) if commits else "",
+        "admitted_moves": len(planned.moves), "committed_moves": len(commits),
+        "replay_moves": sum(move.method == "replay" for move in planned.moves),
+        "kv_moves": sum(move.method == "kv_transfer" for move in planned.moves),
+        "planner_feasible": planned.feasible,
+        "packing_repair_count": planned.packing_repair_count,
+        "packing_repair_s": planned.packing_repair_s,
+        "deadline_repair_count": planned.deadline_repair_count,
+        "deadline_repair_s": planned.deadline_repair_s,
+        "result_evidence": "simulated_sensitivity",
+    }
+
+
+def _write_csv(path, rows):
+    if not rows:
+        raise ValueError("cannot write an empty CSV")
+    fields = tuple(dict.fromkeys(key for row in rows for key in row))
     with path.open("w", newline="") as stream:
-        writer = csv.DictWriter(stream, tuple(rows[0]), lineterminator="\n")
+        writer = csv.DictWriter(stream, fields, lineterminator="\n")
         writer.writeheader()
         writer.writerows(rows)
 
 
-def coupled_architecture(profile):
-    case = profile.case()
-    fingerprint = CompatibilityFingerprint(
-        profile.model, "gpt-oss-pinned", "source-dc-log", "lmcache-mp-v7",
-    )
-    def rate(curve):
-        return ContextRate(*(
-            tuple(map(float, values))
-            for values in curve.by_concurrency[1]
-        ))
-    contexts = tuple(map(float, case.prefill.by_concurrency[1][0]))
-    loaded = LoadedCoefficients(
-        (0, 1), (1, 1), (contexts[0], contexts[-1]),
-        (125_000_000, 1_250_000_000),
-        "simulated-pareto-zero-load-sensitivity",
-    )
-    destination_type = DestinationType(
-        "gpt-oss-20b-a100-tp1", fingerprint, rate(case.prefill),
-        rate(case.decode), ((1, 1),),
-        {mode: (1,) for mode in ("normal", "emergency", "stable")},
-        profile.kv_capacity_tokens,
-        {"replay": loaded, "kv_transfer": loaded}, (0, 1),
-        "simulated-pareto-zero-load-sensitivity", True,
-        case.kv_transfer.block_tokens,
-    )
-    pool = DestinationPool(
-        "coupled-pool", destination_type.type_id,
-        (DestinationReplica("destination"),), "source-to-destination", ("link",),
-    )
-    return DestinationArchitecture(
-        DESTINATION_SCHEMA, fingerprint, (destination_type,), (pool,),
-    )
-
-
-def admitted_moves(policy, scenario, routes, profile, seed, destination=None):
-    solver = {"queue_haul": "lp_work_first"}.get(policy, policy)
-    return tuple(
-        replace(
-            move, rate_limit_bytes_per_s=None, quiesce_s=None,
-        )
-        for move in plan(
-            scenario, profile, routes, solver, seed=seed,
-            destination=destination,
-        ).moves
-    )
-
-
-def frontier_metrics(commits, total_sessions, budget_s, power_curve, power_window_s):
-    attainment = deadline_attainment(
-        commits, total_sessions, [budget_s], power_curve, power_window_s
-    )[0]["power_attainment_fraction"]
-    return attainment, max(commits, default=0.0)
-
-
-def workload_grid(fixed_plan, hardware_plan):
-    fixed = {}
-    for row in fixed_plan["scenarios"]:
-        if row["policy"] == "control":
-            fixed.setdefault(row["context_profile"], row)
-    hardware = {}
-    for row in hardware_plan["scenarios"]:
-        if row["policy"] == "control":
-            hardware.setdefault(row["sample_id"], row)
-    bandwidths = sorted({
-        row["bandwidth_mbps"] for row in fixed_plan["scenarios"]
-        if row["policy"] == "control"
-    })
-    return [
-        (source, row, bandwidth)
-        for source, samples in (
-            ("fixed_anchor", fixed.values()),
-            ("measured_workload_mix", hardware.values()),
-        )
-        for row in samples
-        for bandwidth in bandwidths
-    ]
-
-
-def simulate(plan_path=DEFAULT_PLAN, model_path=DEFAULT_MODEL,
-             crossover_path=DEFAULT_CROSSOVER, width8=DEFAULT_WIDTH8,
-             time_budgets_s=TIME_BUDGETS_S):
-    plan_ = json.loads(plan_path.read_text())
-    validate_policy_plan(plan_)
-    hardware_plan = json.loads((width8 / "plan.json").read_text())
-    validate_policy_plan(hardware_plan)
-    if profiler.file_hash(model_path) != plan_["model_profile"]["sha256"]:
-        raise RuntimeError("model profile changed after planning")
-    base_profile = ModelProfile.load(model_path)
-    replay_caps, _ = measured_replay_caps(width8)
-    kv_caps, _ = measured_kv_caps(
-        width8, crossover_path.parent, base_profile
-    )
-    profile = parallel_profile(
-        base_profile, plan_["sessions_per_episode"], replay_caps
-    )
-    crossover = json.loads(crossover_path.read_text())
-    anchors = set(crossover["contexts"])
-    rows = []
-    for configuration, (workload_source, base, bandwidth) in enumerate(
-            workload_grid(plan_, hardware_plan)):
-        evidence = context_evidence(
-            (row["initial_tokens"] for row in base["sessions"]), anchors
-        )
-        for budget_s in time_budgets_s:
-            scenario, routes = _problem(
-                profile, base["sessions"], bandwidth, budget_s,
-            )
-            scenario = replace(scenario, end_s=max(OBSERVATION_S, budget_s))
-            planning_profile = aggregate_planning_profile(
-                base_profile, bandwidth, replay_caps, kv_caps
-            )
-            match_id = profiler.object_hash([
-                base["sample_id"], bandwidth, budget_s,
-            ])[:16]
-            for policy in POLICIES:
-                destination = coupled_architecture(planning_profile) \
-                    if policy == "greedy_coupled" else None
-                moves = admitted_moves(
-                    policy, scenario, routes, planning_profile,
-                    profiler.stable_seed(
-                        plan_["seed"], base["sample_id"],
-                        bandwidth, budget_s, policy,
-                    ),
-                    destination,
-                )
-                execution_profile = shared_kv_profile(
-                    profile, bandwidth,
-                    sum(move.method == "kv_transfer" for move in moves), kv_caps,
-                )
-                result = execute(
-                    scenario, execution_profile, moves,
-                    destination=destination,
-                )
-                commits = [row.committed_s for row in result.sessions
-                           if row.committed_s is not None]
-                if len(commits) != len(moves):
-                    raise RuntimeError(
-                        f"configuration {configuration} budget {budget_s:g}s "
-                        f"{policy} committed {len(commits)}/{len(moves)} admitted"
-                    )
-                attainment, completion = frontier_metrics(
-                    commits, len(scenario.sessions), budget_s,
-                    profile.case().power_curve, profile.power_window_s,
-                )
-                rows.append({
-                    "configuration": configuration, "match_id": match_id,
-                    "sample_id": base["sample_id"],
-                    "context_profile": base["context_profile"],
-                    "workload_source": workload_source,
-                    "bandwidth_mbps": bandwidth,
-                    "time_budget_s": budget_s, "policy": policy,
-                    "power_attainment_fraction": attainment,
-                    "completion_s": completion,
-                    "completion_budget_ratio": completion / budget_s,
-                    "full_shed_by_budget": meets_deadline(
-                        attainment, completion, budget_s
-                    ),
-                    "admitted_moves": len(moves),
-                    "replay_moves": sum(row.method == "replay"
-                                        for row in result.sessions),
-                    "kv_moves": sum(row.method == "kv_transfer"
-                                    for row in result.sessions),
-                    "context_evidence": evidence,
-                    "replay_contention_evidence":
-                        "measured_width8_aggregate_throughput_cap",
-                    "kv_contention_evidence":
-                        "measured_bandwidth_specific_aggregate_throughput_cap",
-                    "power_evidence": "modeled",
-                    "result_evidence": "simulated",
-                    "planning_evidence":
-                        "deadline_specific_admitted_set_with_aggregate_caps",
-                    "destination_contract":
-                        "single_pool_zero_load_service_sensitivity"
-                        if destination else "aggregate_migration_caps_only",
-                })
-    pareto_flags(rows, ("match_id",))
-    for row in rows:
-        row["paired_pareto"] = row.pop("pareto")
+def run_shard(out=OUT, shard=0):
+    manifest = json.loads((out / "manifest.json").read_text())
+    if manifest["schema"] != SCHEMA or not 0 <= shard < manifest["shards"]:
+        raise ValueError("invalid manifest or shard")
+    rows = [run_row(row, manifest) for row in manifest["rows"]
+            if row["shard"] == shard]
+    _write_csv(out / f"shard-{shard:02d}.csv", rows)
     return rows
 
 
-def summarize(rows):
-    output = []
-    for policy in POLICIES:
-        selected = [row for row in rows if row["policy"] == policy]
-        output.append({
-            "policy": policy, "scenarios": len(selected),
-            "median_power_attainment_fraction": float(np.median([
-                row["power_attainment_fraction"] for row in selected
-            ])),
-            "median_completion_budget_ratio": float(np.median([
-                row["completion_budget_ratio"] for row in selected
-            ])),
-            "deadline_met_fraction": float(np.mean([
-                row["full_shed_by_budget"] for row in selected
-            ])),
-            "paired_pareto_fraction": float(np.mean([
-                row["paired_pareto"] for row in selected
-            ])),
-            "median_admitted_moves": float(np.median([
-                row["admitted_moves"] for row in selected
-            ])),
-        })
-    return output
-
-
-def full_attainment_cdf(rows, policy, threshold=.99):
-    values = sorted(
-        row["completion_budget_ratio"] for row in rows
-        if row["policy"] == policy
-        and row["power_attainment_fraction"] >= threshold
-    )
-    return np.asarray(values), np.arange(1, len(values) + 1) / len(values) \
-        if values else np.array([])
-
-
-def policy_coordinates(rows, policy, normalized):
-    selected = [row for row in rows if row["policy"] == policy]
-    return (
-        [100 * row["power_attainment_fraction"] for row in selected],
-        [row["completion_budget_ratio" if normalized else "completion_s"]
-         for row in selected],
-    )
-
-
-def plot(rows, out):
-    colors = dict(zip(POLICIES, plt.get_cmap("tab10").colors))
-    markers = dict(zip(POLICIES, ("o", "s", "P", "^", "D", "x")))
-    fig, axes = plt.subplots(1, 2, figsize=(12, 5.5))
-    cloud, raw = axes
-    for policy in (*POLICIES[1:], POLICIES[0]):
-        style = {
-            "s": 26, "alpha": .6, "facecolors": "none",
-            "edgecolors": colors[policy], "linewidths": 1, "zorder": 4,
-        } if policy == "queue_haul" else {
-            "s": 18, "alpha": .3, "color": colors[policy],
-        }
-        for axis, normalized in ((cloud, True), (raw, False)):
-            axis.scatter(
-                *policy_coordinates(rows, policy, normalized),
-                marker=markers[policy], label=LABELS[policy], **style,
+def pareto_flags(rows):
+    groups = {}
+    for row in rows:
+        groups.setdefault((row["episode_id"], row["bandwidth_mbps"], row["case"]), []).append(row)
+    for peers in groups.values():
+        for row in peers:
+            row["pareto"] = row["target_attained"] and not any(
+                other["target_attained"] and (
+                    not row["target_attained"]
+                    or float(other["attained_shed_fraction"])
+                    >= float(row["attained_shed_fraction"])
+                    and float(other["target_attainment_s"])
+                    <= float(row["target_attainment_s"])
+                    and (float(other["attained_shed_fraction"])
+                         > float(row["attained_shed_fraction"])
+                         or float(other["target_attainment_s"])
+                         < float(row["target_attainment_s"]))
+                ) for other in peers if other is not row
             )
-    cloud.axhline(1, color="0.35", linestyle=":", linewidth=1)
-    cloud.set(
-        title="Matched scenario–budget outcomes",
-        xlabel="Modeled maximum source-power shed by deadline (%)",
-        ylabel="Admitted-set completion / time budget",
-        xlim=(-2, 102),
-    )
-    cloud.grid(alpha=.2)
-    raw.set(
-        title="All admitted-set completions",
-        xlabel="Modeled maximum source-power shed by deadline (%)",
-        ylabel="Admitted-set completion (s)",
-        xlim=(-2, 102),
-    )
-    raw.grid(alpha=.2)
-    handles, labels = cloud.get_legend_handles_labels()
-    fig.legend(handles, labels, loc="upper center", frameon=False, ncol=3)
-    cloud.text(
-        .01, .01,
-        "2/4/8/16/24/32K replay anchors; fixed anchors + measured workload mixes\n"
-        "non-anchor rates interpolated; action power extrapolated; power modeled",
-        transform=cloud.transAxes, fontsize=8, va="bottom",
-    )
-    fig.tight_layout(rect=(0, 0, 1, .82))
+
+
+def _parse_rows(path):
+    rows = _csv(path)
+    for row in rows:
+        for key in ("bandwidth_mbps", "deadline_s", "shard", "sessions"):
+            row[key] = int(float(row[key]))
+        for key in ("target_fraction", "attained_shed_fraction"):
+            row[key] = float(row[key])
+        for key in ("target_attained", "censored"):
+            row[key] = row[key].lower() == "true"
+    return rows
+
+
+def _plot(rows, out, kind):
+    selected = [row for row in rows if row["kind"] == kind and row["case"] == "central"]
+    names = sorted({row["episode_id"].split("-seed-")[0] for row in selected})
+    fig, axes = plt.subplots(len(names), 2, figsize=(10, 3 * len(names)), squeeze=False)
+    for axis_row, name in zip(axes, names):
+        members = [row for row in selected if row["episode_id"].startswith(name)]
+        for axis, regime in zip(axis_row, ((0, 300), (900, 14400))):
+            for policy in POLICIES:
+                points = [row for row in members if row["policy"] == policy
+                          and regime[0] <= row["deadline_s"] <= regime[1]
+                          and row["target_attained"]]
+                axis.scatter([100 * row["attained_shed_fraction"] for row in points],
+                             [float(row["target_attainment_s"]) for row in points],
+                             s=8, alpha=.45, label=policy)
+            axis.set(title=f"{name}: {regime[0]}–{regime[1]} s",
+                     xlabel="attained shed (%)", ylabel="target attainment (s)")
+            axis.grid(alpha=.2)
+    axes[0, 0].legend(fontsize=7, ncol=2)
+    fig.tight_layout()
     for suffix in ("png", "pdf"):
-        fig.savefig(out / f"simulated_width8_pareto.{suffix}", dpi=220)
+        fig.savefig(out / f"pareto-{kind}.{suffix}", dpi=200)
     plt.close(fig)
 
 
-def run(plan_path=DEFAULT_PLAN, model_path=DEFAULT_MODEL,
-        crossover_path=DEFAULT_CROSSOVER, width8=DEFAULT_WIDTH8,
-        out=DEFAULT_OUT):
-    out.mkdir(parents=True, exist_ok=True)
-    rows = simulate(plan_path, model_path, crossover_path, width8)
-    summary = summarize(rows)
-    replay_caps, replay_episodes = measured_replay_caps(width8)
-    profile = ModelProfile.load(model_path)
-    kv_caps, kv_episodes = measured_kv_caps(
-        width8, crossover_path.parent, profile
-    )
-    write_csv(out / "simulated_pareto.csv", rows)
-    write_csv(out / "policy_summary.csv", summary)
-    plot(rows, out)
-    metadata = {
-        "schema": "queue-haul-simulated-pareto-v2",
-        "axes": {
-            "x": "deadline-integrated source-power shed / removable power",
-            "y": "last admitted route commit time",
-            "raw_panel": "one point per matched scenario-budget-policy result",
-        },
-        "policies": list(POLICIES),
-        "scenarios": len(rows),
-        "paired_episodes": len(rows) // len(POLICIES),
-        "time_budgets_s": list(TIME_BUDGETS_S),
-        "observation_s": OBSERVATION_S,
-        "planning_contract":
-            "deadline-specific admitted set; no appended cleanup moves; eager execution",
-        "greedy_coupled_contract":
-            "one destination replica and measured link; zero background load and "
-            "destination service headroom are sensitivity inputs",
-        "workload_contract":
-            "five fixed anchors plus 18 measured width-8 workload mixes, crossed "
-            "with every bandwidth and time budget",
-        "plan": {
-            "path": _portable_path(plan_path),
-            "sha256": profiler.file_hash(plan_path),
-        },
-        "model": {
-            "path": _portable_path(model_path),
-            "sha256": profiler.file_hash(model_path),
-        },
-        "crossover": {
-            "path": _portable_path(crossover_path),
-            "sha256": profiler.file_hash(crossover_path),
-        },
-        "width8_replay_cap": {
-            "plan": {
-                "path": _portable_path(width8 / "plan.json"),
-                "sha256": profiler.file_hash(width8 / "plan.json"),
-            },
-            "episodes": {
-                "path": _portable_path(width8 / "policy_episodes.csv"),
-                "sha256": profiler.file_hash(width8 / "policy_episodes.csv"),
-            },
-            "complete_replay_only_episodes": replay_episodes,
-            "aggregate_tokens_per_s": replay_caps,
-        },
-        "kv_aggregate_caps": {
-            "crossover_migrations": kv_episodes["serial"],
-            "width8_episodes": kv_episodes["width8"],
-            "aggregate_bytes_per_s_by_case_and_bandwidth": kv_caps,
-        },
-        "evidence": {
-            "context_anchors": "measured",
-            "in_range_nonanchors": "interpolated",
-            "width8_launch": "measured in policy-hardware-width8-frontier-20260730",
-            "width8_replay_aggregate_rate":
-                "measured replay-only episode context / completion time",
-            "kv_aggregate_rate":
-                "serial at 1/2.5 Gbit/s; width-8 at 5/10 Gbit/s",
-            "width8_action_power": "extrapolated from serial calibration",
-            "power_attainment": "modeled from commit times",
-            "results": "simulated",
-        },
-        "paired_pareto": "dominance is evaluated only within each matched episode",
-    }
+def _hero_plot(rows, out):
+    selected = [row for row in rows if row["episode_id"] == HERO[0]
+                and row["bandwidth_mbps"] == HERO[1] and row["case"] == "central"]
+    frontier = {}
+    for row in selected:
+        if row["pareto"]:
+            point = (100 * row["attained_shed_fraction"],
+                     float(row["target_attainment_s"]))
+            frontier.setdefault(point, set()).add(row["policy"])
+    if not frontier:
+        raise ValueError("hero slice has no Pareto frontier")
+
+    fig, axis = plt.subplots(figsize=(8, 5.5))
+    background = [row for row in selected if row["target_attained"] and not row["pareto"]]
+    axis.scatter([100 * row["attained_shed_fraction"] for row in background],
+                 [float(row["target_attainment_s"]) for row in background],
+                 color="0.65", alpha=.22, s=24, label="Dominated outcomes")
+    points = sorted(frontier)
+    axis.plot([point[0] for point in points], [point[1] for point in points],
+              color="0.15", linewidth=3, label="Pareto frontier")
+    for policy, label, marker, color, size in (
+        ("isolated_fastest", "Shared endpoint: all four", "o", "0.5", 150),
+        ("queue_haul", "Queue-Haul LP", "o", "#0072B2", 180),
+        ("greedy", "Queue-Haul greedy", "*", "#D55E00", 280),
+    ):
+        members = [point for point, policies in frontier.items() if policy in policies]
+        axis.scatter([point[0] for point in members], [point[1] for point in members],
+                     s=size, marker=marker, facecolors="none" if marker == "*" else color,
+                     edgecolors=color, linewidths=2.2, label=label, zorder=3)
+    shared = [point for point, policies in frontier.items() if {
+        "queue_haul", "greedy", "isolated_fastest", "replay_only",
+    } <= policies]
+    if len(shared) != 1:
+        raise ValueError("hero slice requires one four-policy shared endpoint")
+    axis.annotate("all four policies", xy=shared[0], xytext=(72, 240),
+                  arrowprops={"arrowstyle": "->", "color": "0.3"}, color="0.3")
+    axis.set(xlabel="Attained power shed (%)  →", ylabel="Time to target (s)  ↓",
+             title="Example Pareto frontier · interactive coding seed 1 · 10 Gb/s")
+    axis.set_yscale("log")
+    axis.invert_yaxis()
+    axis.grid(alpha=.18)
+    axis.legend(frameon=False, ncol=2)
+    fig.text(.5, .01, "Seed 1, central hardware fit; repeated identical points are collapsed.",
+             ha="center", fontsize=9, color="0.35")
+    fig.tight_layout(rect=(0, .04, 1, 1))
+    for suffix in ("png", "pdf"):
+        fig.savefig(out / f"pareto-hero.{suffix}", dpi=240)
+    plt.close(fig)
+
+
+def reduce(out=OUT):
+    manifest = json.loads((out / "manifest.json").read_text())
+    paths = [out / f"shard-{shard:02d}.csv" for shard in range(manifest["shards"])]
+    missing = [path.name for path in paths if not path.exists()]
+    if missing:
+        raise FileNotFoundError(f"missing shards: {', '.join(missing)}")
+    rows = [row for path in paths for row in _parse_rows(path)]
+    expected = {row["row_id"] for row in manifest["rows"]}
+    actual = [row["row_id"] for row in rows]
+    if len(actual) != len(set(actual)) or set(actual) != expected:
+        raise ValueError("shards contain duplicate or unexpected rows")
+    expected_rows = {row["row_id"]: row for row in manifest["rows"]}
+    for path, shard in zip(paths, range(manifest["shards"])):
+        for row in _parse_rows(path):
+            expected_row = expected_rows[row["row_id"]]
+            if row["shard"] != shard or any(
+                key not in row or str(row[key]) != str(value)
+                for key, value in expected_row.items()
+            ):
+                raise ValueError("shard row disagrees with manifest")
+    pareto_flags(rows)
+    rows.sort(key=lambda row: row["row_id"])
+    _write_csv(out / "pareto.csv", rows)
+    summary = [{
+        "policy": policy,
+        "rows": len(selected := [row for row in rows if row["policy"] == policy]),
+        "target_attained_fraction": float(np.mean([row["target_attained"] for row in selected])),
+        "median_attained_shed_fraction": float(np.median([
+            row["attained_shed_fraction"] for row in selected
+        ])),
+        "pareto_fraction": float(np.mean([row["pareto"] for row in selected])),
+    } for policy in POLICIES]
+    _write_csv(out / "policy_summary.csv", summary)
+    _plot(rows, out, "trace")
+    _plot(rows, out, "anchor")
+    _hero_plot(rows, out)
+    metadata = {key: manifest[key] for key in (
+        "schema", "sessions", "shards", "fits", "model", "workloads",
+        "anchor_fit", "source", "assumptions",
+    )}
+    metadata.update(rows=len(rows), evidence_label="simulated sensitivity",
+                    power_metric="first trailing 5-second target window",
+                    completion_metric="last commit reported separately",
+                    censoring="deadline misses remain denominators and cannot dominate successes")
     (out / "run_metadata.json").write_text(json.dumps(metadata, indent=2) + "\n")
     files = sorted(path for path in out.iterdir() if path.name != "SHA256SUMS")
     (out / "SHA256SUMS").write_text("".join(
         f"{hashlib.sha256(path.read_bytes()).hexdigest()}  {path.name}\n"
         for path in files
     ))
-    return rows, summary
+    return rows
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--plan", type=Path, default=DEFAULT_PLAN)
-    parser.add_argument("--model-profile", type=Path, default=DEFAULT_MODEL)
-    parser.add_argument("--crossover-plan", type=Path, default=DEFAULT_CROSSOVER)
-    parser.add_argument("--width8-run", type=Path, default=DEFAULT_WIDTH8)
-    parser.add_argument("--out", type=Path, default=DEFAULT_OUT)
+    sub = parser.add_subparsers(dest="command", required=True)
+    for name in ("prepare", "reduce"):
+        command = sub.add_parser(name)
+        command.add_argument("--out", type=Path, default=OUT)
+    command = sub.add_parser("run-shard")
+    command.add_argument("--out", type=Path, default=OUT)
+    command.add_argument("--shard", type=int, required=True)
     args = parser.parse_args()
-    run(
-        args.plan, args.model_profile, args.crossover_plan,
-        args.width8_run, args.out,
-    )
+    if args.command == "prepare":
+        prepare(args.out)
+    elif args.command == "run-shard":
+        run_shard(args.out, args.shard)
+    else:
+        reduce(args.out)
 
 
 if __name__ == "__main__":

@@ -10,11 +10,24 @@ dependencies = [
   "pandas>=2.3.3",
   "seaborn>=0.13",
   "cvxpy>=1.7.5",
+  "highspy>=1.14.0",
 ]
 
 [tool.pytest.ini_options]
 testpaths = ["tests", "evacuation/tests", "queue-haul/tests"]
 norecursedirs = ["runs", ".venv", ".git", "dist", "build", "kv-transfer-early-experiment", "long-term-plans"]
 
+[tool.uv.workspace]
+members = [
+    "queue-haul/native",
+]
+
+[tool.uv.sources]
+queue-haul-native = { workspace = true }
+
 [dependency-groups]
-dev = ["pytest>=8"]
+dev = [
+    "maturin>=1.14.1",
+    "pytest>=8",
+    "queue-haul-native",
+]

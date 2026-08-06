@@ -25,6 +25,8 @@ Plausible wrong implementations:
 - Transfer an unsealed partial block or commit without reconstructing its tail.
 - Omit measured replay completion time or emit duplicate network-start events.
 - Treat an unused or completed private link as an active bottleneck.
+- Cap divisible site reconstruction at the calibration batch width.
+- Stall fluid completion when a sub-ULP finish increment follows a large arrival time.
 """
 
 import json
@@ -36,7 +38,41 @@ import simulate
 from profiles import ModelProfile
 from simulate import (ExecutionScenario, ExecutionSimulator, NetworkLink, PlannedMove,
                       PowerNode, ServingInstance, SimRequest, SimSession, execute,
-                      fair_link_rates, step_average)
+                      fair_link_rates, fluid_pipeline_completion,
+                      fluid_service_completion, step_average)
+
+
+def test_fluid_service_uses_full_site_capacity_and_is_split_invariant():
+    whole = fluid_service_completion([80], 8)
+    split = fluid_service_completion([30, 50], 8)
+
+    assert whole.tolist() == pytest.approx([10])
+    assert max(split) == pytest.approx(10)
+    assert max(fluid_service_completion([5] * 16, 8)) == pytest.approx(10)
+
+
+def test_fluid_service_shares_with_staggered_arrivals():
+    completed = fluid_service_completion([10, 10], 10, [0, 1])
+
+    assert completed.tolist() == pytest.approx([1, 2])
+
+
+def test_fluid_service_advances_at_large_arrival_times():
+    count, work, capacity, arrival = 836, .525594358, 2569.9189051686362, 8244.6711704
+
+    completed = fluid_service_completion([work] * count, capacity, [arrival] * count)
+
+    assert (completed - arrival).tolist() == pytest.approx(
+        [count * work / capacity] * count, rel=0, abs=1e-12,
+    )
+
+
+def test_fluid_pipeline_preserves_causality_and_split_invariance():
+    heterogeneous = fluid_pipeline_completion([1, 10], [0, 1], [1, 2], 2)
+    split = fluid_pipeline_completion([1, 5, 5], [0, 1, 1.5], [1, 1.5, 2], 2)
+
+    assert heterogeneous.tolist() == pytest.approx([1, 6])
+    assert split[-1] == pytest.approx(heterogeneous[-1])
 
 
 def model(tmp_path, switch=1, destination_rate=1e12, shutdown=2, setup=0, tp=2,

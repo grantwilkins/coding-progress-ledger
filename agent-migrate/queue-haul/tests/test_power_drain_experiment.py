@@ -15,6 +15,7 @@ Plausible wrong implementations:
 - Drop planned pool debt, recovery, or binding-resource evidence from summaries.
 - Drop the physical resource ledger or selected destination pool from raw output.
 - Fail to write plots when a valid plan contains no migrations.
+- Let an idle migration snapshot generate requests or context growth.
 """
 
 import csv
@@ -63,6 +64,24 @@ def test_active_load_does_not_use_cold_reactivation_probability():
             * (1 + workload.source.relative_error)
         )
         assert session.wake_probability == 0
+
+
+def test_idle_snapshot_preserves_sample_and_disables_future_activity():
+    model = ModelProfile.load(experiment.DEFAULT_MODEL)
+    workload = WorkloadProfile.load(experiment.DEFAULT_WORKLOADS[0])
+    scenario, _ = experiment.build_scenario(
+        workload, model, 12, 3, 0, 60, 60, idle_snapshot=True,
+    )
+    records = workload.sample(12, 3)
+
+    assert [session.context_tokens for session in scenario.sessions] == [
+        record.context_tokens for record in records
+    ]
+    assert [session.log_bytes for session in scenario.sessions] == [
+        record.log_bytes for record in records
+    ]
+    assert all(not session.requests and not session.expected_growth_tokens_per_s
+               for session in scenario.sessions)
 
 
 def test_scenario_preserves_cold_sessions_without_gpu_load():

@@ -20,7 +20,7 @@ ready to paste into the paper.
 | \(v_q(j)\), \(b_r^q\), and \(c_q(j,a,k)\) | Delete from the default greedy, whose values and scarcity prices are computed once. |
 | “scores the remaining moves again” | Replace with one global static candidate ordering. |
 | \(\mathcal F_q\) includes current queue simulation | Delete. Greedy checks aggregate rows; packing and the event simulator validate the completed plan. |
-| “Crossing power knees” as Queue-Haul default | Relabel as opt-in experimental `greedy_bundle`; it is implemented but not the default policy. |
+| “Crossing power knees” as Queue-Haul default | Describe supported `greedy_lagrangian` separately from static `greedy`. |
 | “priority list” implies serial service | State that order controls launch and simultaneous queue ties; selected moves otherwise launch eagerly and overlap. |
 | “which move receives [route] service first” | Replace with work-conserving shared-link contention; endpoint queues use FIFO order for simultaneous arrivals. |
 | “added queueing-delay bound” | Replace with service-debt budget and required-recovery validation; V1 does not predict TTFT/TPOT bounds. |
@@ -139,12 +139,11 @@ Delete the dynamic quantities \(L_i^q\), \(b_r^q\), \(v_q\), \(c_q\), and
 prices after each choice and does not append candidates to the fluid simulator
 during selection.
 
-Replace “Crossing power knees” with a short implementation-status paragraph:
-prefixes of length two and three plus the full feasible instance drain are
-available as the opt-in `greedy_bundle` policy. They dynamically use current
-exact drain gain and remaining resource slack, but are not the default
-Queue-Haul controller. Report them as an experimental policy until they are
-validated on representative fleet traces.
+Replace “Crossing power knees” with the supported `greedy_lagrangian` policy:
+it iterates aggregate-resource prices, evaluates exact nonlinear source-local
+prefixes, retains a bounded prefix frontier, and performs target-capped,
+packing-checked recovery. Static `greedy` remains the one-price, one-order
+policy; neither policy claims global optimality.
 
 Replace the final priority-list paragraph with:
 

@@ -164,6 +164,25 @@ class DestinationReplica:
 
 
 @dataclass(frozen=True)
+class FluidMigrationService:
+    replay_speedup: float
+    kv_ingest_bytes_per_s: float
+    source_power_w: dict[str, float]
+    destination_power_w: dict[str, float]
+    provenance: str
+
+    def __post_init__(self):
+        methods = {"replay", "kv_transfer"}
+        if not 0 < self.replay_speedup <= 8 or self.kv_ingest_bytes_per_s <= 0 \
+                or set(self.source_power_w) != methods \
+                or set(self.destination_power_w) != methods \
+                or min(*self.source_power_w.values(),
+                       *self.destination_power_w.values()) < 0 \
+                or not self.provenance:
+            raise ValueError("invalid fluid migration service")
+
+
+@dataclass(frozen=True)
 class DestinationPool:
     pool_id: str
     type_id: str
@@ -173,6 +192,7 @@ class DestinationPool:
     methods: tuple[str, ...] = ("replay", "kv_transfer")
     event_flex_fraction: float | None = None
     service_debt_fraction: float = 0.0
+    fluid_migration: FluidMigrationService | None = None
 
     def __post_init__(self):
         if not self.pool_id or not self.type_id or not self.replicas or not self.route_id \
@@ -248,6 +268,8 @@ class DestinationArchitecture:
             tuple(item.get("methods", ("replay", "kv_transfer"))),
             item.get("event_flex_fraction"),
             item.get("service_debt_fraction", 0),
+            FluidMigrationService(**item["fluid_migration"])
+            if "fluid_migration" in item else None,
         ) for item in raw["pools"])
         return cls(raw["schema"], fingerprint(raw["source_compatibility"]),
                    tuple(types), pools, raw.get("residency_horizon_s"))
@@ -255,3 +277,40 @@ class DestinationArchitecture:
     @property
     def type_by_id(self) -> dict[str, DestinationType]:
         return {q.type_id: q for q in self.types}
+
+
+def dedicated_sink_architecture(profile, replica_id: str | tuple[str, ...],
+                                route: tuple[str, ...]) -> DestinationArchitecture:
+    """Advertise an idle dedicated sink without claiming shared-service headroom."""
+    case = profile.case()
+    fingerprint = CompatibilityFingerprint(
+        profile.model, "gpt-oss-pinned", "source-dc-log", "lmcache-mp-v7",
+    )
+
+    def rate(curve):
+        return ContextRate(*(
+            tuple(map(float, values)) for values in curve.by_concurrency[1]
+        ))
+
+    contexts = tuple(map(float, case.prefill.by_concurrency[1][0]))
+    loaded = LoadedCoefficients(
+        (0, 1), (1, 1), (contexts[0], contexts[-1]),
+        (1, 1e15), "dedicated-idle-sink-sensitivity",
+    )
+    destination_type = DestinationType(
+        f"{profile.model}-{profile.hardware}-tp{profile.tensor_parallel}",
+        fingerprint, rate(case.prefill), rate(case.decode), ((1, 1),),
+        {mode: (1,) for mode in MODES}, profile.kv_capacity_tokens,
+        {method: loaded for method in ("replay", "kv_transfer")}, (0, 1),
+        "dedicated-idle-sink-sensitivity", True,
+        case.kv_transfer.block_tokens,
+    )
+    replica_ids = (replica_id,) if isinstance(replica_id, str) else replica_id
+    pool = DestinationPool(
+        "dedicated-sink", destination_type.type_id,
+        tuple(DestinationReplica(value) for value in replica_ids),
+        "dedicated-route", route,
+    )
+    return DestinationArchitecture(
+        DESTINATION_SCHEMA, fingerprint, (destination_type,), (pool,),
+    )

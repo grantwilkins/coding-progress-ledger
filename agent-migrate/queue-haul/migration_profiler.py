@@ -1138,8 +1138,10 @@ class LiveRuntime:
 
 
 class PowerSampler:
-    def __init__(self, path: Path):
-        self.path, self.stop = path, threading.Event()
+    def __init__(self, path: Path, interval_s: float = .25):
+        if interval_s <= 0:
+            raise ValueError("power sample interval must be positive")
+        self.path, self.interval_s, self.stop = path, interval_s, threading.Event()
         self.error: Exception | None = None
         self.thread = threading.Thread(target=self._run, daemon=True)
 
@@ -1154,6 +1156,7 @@ class PowerSampler:
                 devices = b.allocated_gpu_ids()
                 query = ["--query-gpu=power.draw,utilization.gpu,memory.used",
                          "--format=csv,noheader,nounits"]
+                next_sample = time.monotonic()
                 while not self.stop.is_set():
                     outputs = [subprocess.check_output(
                         ["nvidia-smi", "-i", device, *query], text=True
@@ -1168,7 +1171,8 @@ class PowerSampler:
                         values = [value.strip() for value in line.split(",")]
                         valid = all(value not in {"N/A", "[N/A]"} for value in values)
                         writer.writerow([mono, wall, gpu, *values, int(valid)])
-                    self.stop.wait(.25)
+                    next_sample += self.interval_s
+                    self.stop.wait(max(0, next_sample - time.monotonic()))
         except Exception as exc:
             self.error = exc
 

@@ -25,11 +25,13 @@ from pathlib import Path
 from service_curve_runner import shell
 
 MODEL = "openai/gpt-oss-20b"
+MODEL_REVISION = "6cee5e81ee83917806bbde320786a8fb61efebee"
 SANDBOX = Path("/scratch/users/gfw/ptsim/vllm-openai-v0.10.1.1.sandbox")
 MP_IMAGE = Path("/scratch/users/gfw/ptsim/lmcache-v0.5.1-vllm0.22.0-cu129-primary.sif")
 REDIS_IMAGE = Path("/scratch/users/gfw/ptsim/redis-7.4.2-bookworm.sif")
 RUNTIME_VERSIONS = ("0.10.1.1", "0.3.3")
 MP_RUNTIME_VERSIONS = ("0.22.0+cu129", "0.5.1")
+NATIVE_RUNTIME_VERSIONS = ("0.22.0", "0.5.1")
 LMCACHE_CLEAR_MARKER = '"operation":"clear"'
 
 
@@ -40,7 +42,18 @@ def lmcache_mode() -> str:
     return mode
 
 
+def runtime_mode() -> str:
+    mode = os.environ.get("QH_RUNTIME", "apptainer")
+    if mode not in {"apptainer", "native"}:
+        raise ValueError(f"unknown QH_RUNTIME: {mode}")
+    if mode == "native" and lmcache_mode() != "mp":
+        raise ValueError("native runtime requires QH_LMCACHE_MODE=mp")
+    return mode
+
+
 def expected_runtime_versions() -> tuple[str, str]:
+    if runtime_mode() == "native":
+        return NATIVE_RUNTIME_VERSIONS
     return MP_RUNTIME_VERSIONS if lmcache_mode() == "mp" else RUNTIME_VERSIONS
 
 
@@ -60,9 +73,9 @@ def port_default(base: int) -> int:
     return base + port_offset()
 
 
-HF_HOME = Path("/scratch/users/gfw/ptsim/hf")
+HF_HOME = Path(os.environ.get("HF_HOME", "/scratch/users/gfw/ptsim/hf"))
 SCRATCH_BIND = Path("/scratch/users/gfw")
-CACHE_ROOT = Path("/scratch/users/gfw/ptsim/cache")
+CACHE_ROOT = Path(os.environ.get("QH_CACHE_ROOT", "/scratch/users/gfw/ptsim/cache"))
 LMCACHE_COMPAT = Path(__file__).with_name("lmcache_compat").resolve()
 CHUNK = 65536
 LMCACHE_MAX_LOCAL_CPU_GB = "4"
@@ -117,7 +130,7 @@ class Config:
     kv_proxy_port: int = field(default_factory=lambda: port_default(8300))
     api_proxy_port: int = field(default_factory=lambda: port_default(8400))
     smoke_port: int = field(default_factory=lambda: port_default(8120))
-    src_lmc_port: int = field(default_factory=lambda: port_default(5555))
+    src_lmc_port: int = field(default_factory=lambda: port_default(5557))
     sink_lmc_port: int = field(default_factory=lambda: port_default(5556))
     src_lmc_http_port: int = field(default_factory=lambda: port_default(8080))
     sink_lmc_http_port: int = field(default_factory=lambda: port_default(8081))
@@ -176,6 +189,10 @@ def model_snapshot_dir(hf_home: Path, model: str) -> Path:
     return hf_home / "hub" / f"models--{model.replace('/', '--')}" / "snapshots"
 
 
+def model_path(cfg: Config) -> Path:
+    return model_snapshot_dir(cfg.hf_home, cfg.model) / MODEL_REVISION
+
+
 def cache_dirs(cfg: Config, role: str) -> dict[str, Path]:
     root = cfg.cache_root / f"stage1b-{role}"
     return {
@@ -208,7 +225,7 @@ def kv_config(engine_id: str, kv_role: str, kv_port: int, rpc_port: str) -> str:
             "kv_role": kv_role,
             "kv_connector_extra_config": {
                 "lmcache.mp.host": "tcp://127.0.0.1",
-                "lmcache.mp.port": port_default(5555 if engine_id != "d0" else 5556),
+                "lmcache.mp.port": port_default(5557 if engine_id != "d0" else 5556),
                 "lmcache.mp.mp_transfer_mode": "engine_driven",
             },
         }, separators=(",", ":"))
@@ -256,7 +273,8 @@ def vllm_exports(cfg: Config, role: str, remote_url: str) -> list[str]:
         "/usr/local/cuda-12.9/targets/x86_64-linux/lib:"
         "/usr/local/cuda/targets/x86_64-linux/lib"
     )
-    exports.append(f"export LD_LIBRARY_PATH={library_path}:${{LD_LIBRARY_PATH:-}}")
+    if runtime_mode() == "apptainer":
+        exports.append(f"export LD_LIBRARY_PATH={library_path}:${{LD_LIBRARY_PATH:-}}")
     return exports
 
 
@@ -266,6 +284,13 @@ def allocated_gpu_ids() -> list[str]:
 
 
 def apptainer_cmd(cfg: Config, script: str, gpu: int | None = None, nv: bool = True) -> list[str]:
+    if runtime_mode() == "native":
+        script = f"export PATH={shlex.quote(str(Path(sys.executable).parent))}:$PATH\n{script}"
+        if gpu is None:
+            return ["bash", "-lc", script]
+        devices = allocated_gpu_ids()
+        device = devices[gpu] if devices else str(gpu)
+        return ["env", f"CUDA_VISIBLE_DEVICES={device}", "bash", "-lc", script]
     cmd = ["apptainer", "exec", "--bind", f"{cfg.scratch_bind}:{cfg.scratch_bind}", cfg.sandbox, "bash", "-lc", script]
     if nv:
         mode = os.environ.get("QH_APPTAINER_GPU_MODE", "nv")
@@ -288,28 +313,46 @@ def redis_maxmemory_gb() -> int:
 
 
 def redis_cmd(cfg: Config) -> list[str]:
+<<<<<<< HEAD
     """L2 store. Unbounded by default; bound it when both engines are kv_both,
     which otherwise duplicates the whole L1 working set into RAM."""
     cap = redis_maxmemory_gb()
+=======
+    if runtime_mode() == "native":
+        return ["valkey-server", "--bind", cfg.host, "--port", str(cfg.lmc_port),
+                "--save", "", "--appendonly", "no"]
+>>>>>>> 6bf8f39f85e3b53e6b60c9b132d81acbc54ec7ef
     return ["apptainer", "exec", REDIS_IMAGE, "redis-server", "--bind", cfg.host,
             "--port", str(cfg.lmc_port), "--save", "", "--appendonly", "no",
             *(["--maxmemory", f"{cap}gb", "--maxmemory-policy", "allkeys-lru"]
               if cap else [])]
 
 
-def mp_server_cmd(cfg: Config, role: str) -> list[str]:
+def mp_server_cmd(cfg: Config, role: str, *, bind_host: str | None = None,
+                  http_host: str | None = None, l2_host: str | None = None,
+                  l2_port: int | None = None) -> list[str]:
     if role == "source":
-        port, http_port, l2_port = cfg.src_lmc_port, cfg.src_lmc_http_port, cfg.kv_proxy_port
+        port, http_port, default_l2_port = (
+            cfg.src_lmc_port, cfg.src_lmc_http_port, cfg.kv_proxy_port)
     elif role == "sink":
-        port, http_port, l2_port = cfg.sink_lmc_port, cfg.sink_lmc_http_port, cfg.kv_proxy_port
+        port, http_port, default_l2_port = (
+            cfg.sink_lmc_port, cfg.sink_lmc_http_port, cfg.kv_proxy_port)
     else:
         raise ValueError(f"unknown MP server role: {role}")
-    adapter = json.dumps({"type": "resp", "host": cfg.host, "port": l2_port,
+    l2_port = l2_port or default_l2_port
+    adapter = json.dumps({"type": "resp", "host": l2_host or cfg.host,
+                          "port": l2_port,
                           "num_workers": 8}, separators=(",", ":"))
+    bind_host, http_host = bind_host or cfg.host, http_host or cfg.host
     serve = [
         "lmcache", "server", "--instance-id", f"queue-haul-{role}",
+<<<<<<< HEAD
         "--host", cfg.host, "--port", port, "--http-host", cfg.host,
         "--http-port", http_port, "--l1-size-gb", lmcache_l1_gb(), "--eviction-policy", "LRU",
+=======
+        "--host", bind_host, "--port", port, "--http-host", http_host,
+        "--http-port", http_port, "--l1-size-gb", 32, "--eviction-policy", "LRU",
+>>>>>>> 6bf8f39f85e3b53e6b60c9b132d81acbc54ec7ef
         "--chunk-size", 256, "--max-workers", 8,
         "--supported-transfer-mode", "engine_driven", "--l2-adapter", adapter,
     ]
@@ -320,13 +363,20 @@ def mp_server_cmd(cfg: Config, role: str) -> list[str]:
     return apptainer_cmd(cfg, script, nv=False)
 
 
-def vllm_cmd(cfg: Config, role: str, extra: list[str] | None = None) -> list[str]:
+def vllm_cmd(cfg: Config, role: str, extra: list[str] | None = None, *,
+             gpu_index: int | None = None,
+             bind_host: str | None = None,
+             sleep_mode: bool | None = None) -> list[str]:
     reject_duplicate_extra(extra or [])
     if role == "source":
         port, gpu, engine_id, kv_port, rpc_port = cfg.src_port, 0, "s0", port_default(14579), "src"
         remote_url, cache_role = f"lm://{cfg.host}:{cfg.lmc_port}", "src"
     elif role == "sink":
+<<<<<<< HEAD
         port, gpu, engine_id, kv_port, rpc_port = cfg.sink_port, 1, "d0", port_default(14580), "sink"
+=======
+        port, gpu, engine_id, kv_role, kv_port, rpc_port = cfg.sink_port, 1, "d0", "kv_both", port_default(14580), "sink"
+>>>>>>> 6bf8f39f85e3b53e6b60c9b132d81acbc54ec7ef
         remote_url, cache_role = f"lm://{cfg.host}:{cfg.kv_proxy_port}", "sink"
     elif role == "smoke1":
         port, gpu, engine_id, kv_port, rpc_port = cfg.smoke_port, 0, "e0", port_default(14579), "smk"
@@ -339,9 +389,9 @@ def vllm_cmd(cfg: Config, role: str, extra: list[str] | None = None) -> list[str
     serve = [
         "vllm",
         "serve",
-        cfg.model,
+        model_path(cfg),
         "--host",
-        cfg.host,
+        bind_host or cfg.host,
         "--port",
         port,
         "--served-model-name",
@@ -361,14 +411,16 @@ def vllm_cmd(cfg: Config, role: str, extra: list[str] | None = None) -> list[str
         "--enable-chunked-prefill",
         "--enable-prefix-caching",
         "--enforce-eager",
-        *(["--enable-sleep-mode"] if role == "source" and lmcache_mode() == "legacy" else []),
+        *(["--enable-sleep-mode"] if role == "source" and (
+            sleep_mode if sleep_mode is not None else lmcache_mode() == "legacy"
+        ) else []),
         *(["--gpu-memory-utilization", 0.75, "--disable-hybrid-kv-cache-manager", "--enable-prompt-tokens-details"] if lmcache_mode() == "mp" else []),
         "--kv-transfer-config",
         kv_config(engine_id, kv_role, kv_port, rpc_port),
         *(extra or []),
     ]
     script = "\n".join([f"mkdir -p {dirs}", *vllm_exports(cfg, cache_role, remote_url), shell(serve)])
-    return apptainer_cmd(cfg, script, gpu)
+    return apptainer_cmd(cfg, script, gpu if gpu_index is None else gpu_index)
 
 
 def proxy_routes(cfg: Config) -> list[Route]:
@@ -431,20 +483,30 @@ def runtime_versions(cfg: Config) -> tuple[str, str]:
 def preflight(cfg: Config, required_gpus: int = 1) -> list[str]:
     validate_ports(cfg)
     failures = []
-    if not shutil.which("apptainer"):
-        failures.append("apptainer not found")
-    if not cfg.sandbox.exists():
-        failures.append(f"sandbox missing: {cfg.sandbox}")
-    if lmcache_mode() == "mp" and not REDIS_IMAGE.exists():
-        failures.append(f"Redis image missing: {REDIS_IMAGE}")
-    elif shutil.which("apptainer"):
+    native = runtime_mode() == "native"
+    if native:
+        runtime_bin = str(Path(sys.executable).parent)
+        for executable in ("vllm", "lmcache"):
+            if not shutil.which(executable, path=runtime_bin):
+                failures.append(f"{executable} not found in {runtime_bin}")
+        if not shutil.which("valkey-server"):
+            failures.append("valkey-server not found")
+    else:
+        if not shutil.which("apptainer"):
+            failures.append("apptainer not found")
+        if not cfg.sandbox.exists():
+            failures.append(f"sandbox missing: {cfg.sandbox}")
+        if lmcache_mode() == "mp" and not REDIS_IMAGE.exists():
+            failures.append(f"Redis image missing: {REDIS_IMAGE}")
+    if not failures:
         versions = runtime_versions(cfg)
         expected = expected_runtime_versions()
         if versions != expected:
             failures.append(f"need vLLM/LMCache {expected}, saw {versions}")
-    snapshots = model_snapshot_dir(cfg.hf_home, cfg.model)
-    if not snapshots.exists() or not any(snapshots.iterdir()):
-        failures.append(f"model snapshot missing: {snapshots}")
+    snapshot = model_path(cfg)
+    if not snapshot.is_dir() or not all((snapshot / name).exists() for name in (
+            "config.json", "model.safetensors.index.json", "tokenizer.json")):
+        failures.append(f"model snapshot missing: {snapshot}")
     for path in [tmpdir("src"), tmpdir("sink"), tmpdir("smoke1")]:
         if len(str(path)) > 20:
             failures.append(f"TMPDIR too long for LMCache IPC: {path}")
@@ -460,14 +522,15 @@ def preflight(cfg: Config, required_gpus: int = 1) -> list[str]:
     if failures:
         raise RuntimeError("\n".join(failures))
     return [
+        f"runtime={runtime_mode()}",
         f"apptainer={shutil.which('apptainer')}",
         f"gpus={seen_gpus}",
         f"docker_present={bool(shutil.which('docker'))}",
         "real_tc=disabled_no_cap_net_admin",
-        f"sandbox={cfg.sandbox}",
+        f"runtime_path={Path(sys.executable).parent}" if native else f"sandbox={cfg.sandbox}",
         f"vllm={expected_runtime_versions()[0]}",
         f"lmcache={expected_runtime_versions()[1]}",
-        f"model_snapshots={snapshots}",
+        f"model_snapshot={snapshot}",
     ]
 
 
@@ -503,6 +566,33 @@ class TokenBucket:
             await asyncio.sleep(delay)
 
 
+class BandwidthLimiter:
+    def __init__(self, aggregate_bps: float | None,
+                 route_bps: dict[str, float] | None = None):
+        self.aggregate = TokenBucket(aggregate_bps) if aggregate_bps else None
+        self.routes = {
+            route: TokenBucket(rate) for route, rate in (route_bps or {}).items()
+        }
+        self.lock = asyncio.Lock()
+
+    def reserve(self, route: str, direction: str, nbytes: int,
+                now: float) -> float:
+        if not billable(route, direction):
+            return 0.0
+        buckets = [bucket for bucket in (
+            self.aggregate,
+            self.routes.get(route) or self.routes.get(route.rsplit("/", 1)[-1]),
+        ) if bucket]
+        return max((bucket.reserve(nbytes, now) for bucket in buckets),
+                   default=0.0)
+
+    async def wait(self, route: str, direction: str, nbytes: int) -> None:
+        async with self.lock:
+            delay = self.reserve(route, direction, nbytes, time.monotonic())
+        if delay:
+            await asyncio.sleep(delay)
+
+
 class ByteLog:
     interval_ns = 250_000_000
 
@@ -514,7 +604,13 @@ class ByteLog:
         connections = path.with_name("proxy_connections.csv")
         self.connections = connections.open("w", newline="", buffering=1)
         self.connection_writer = csv.writer(self.connections)
-        self.connection_writer.writerow(["connection_id", "route", "key_hash", "start_ns", "end_ns", "client_to_target_bytes", "target_to_client_bytes"])
+        self.connection_writer.writerow([
+            "connection_id", "route", "key_hash", "start_ns", "end_ns",
+            "client_to_target_bytes", "target_to_client_bytes",
+            "client_rtt_us", "client_rttvar_us", "client_snd_cwnd",
+            "client_total_retrans", "target_rtt_us", "target_rttvar_us",
+            "target_snd_cwnd", "target_total_retrans",
+        ])
         self.transfers = path.with_name("resp_transfers.csv").open("w", newline="", buffering=1)
         self.transfer_writer = csv.writer(self.transfers)
         self.transfer_writer.writerow(["connection_id", "command", "key_hashes", "start_ns", "end_ns", "request_wire_bytes", "response_wire_bytes", "request_body_bytes", "payload_bytes"])
@@ -541,10 +637,16 @@ class ByteLog:
             self.idle.clear()
 
     async def connection(self, connection_id: str, route: str, key_hash: str,
-                         start_ns: int, counts: tuple[int, int]) -> None:
+                         start_ns: int, counts: tuple[int, int],
+                         tcp: tuple[dict, dict] = ({}, {})) -> None:
         async with self.lock:
             self.connection_writer.writerow([
-                connection_id, route, key_hash, start_ns, time.monotonic_ns(), *counts
+                connection_id, route, key_hash, start_ns, time.monotonic_ns(),
+                *counts,
+                *(tcp[0].get(key, "") for key in (
+                    "rtt_us", "rttvar_us", "snd_cwnd", "total_retrans")),
+                *(tcp[1].get(key, "") for key in (
+                    "rtt_us", "rttvar_us", "snd_cwnd", "total_retrans")),
             ])
             self.active -= 1
             if not self.active:
@@ -581,7 +683,24 @@ class ByteLog:
 
 
 def billable(route: str, direction: str) -> bool:
-    return (route, direction) in BILLED_DIRECTIONS
+    return (route.split("/", 1)[0], direction) in BILLED_DIRECTIONS
+
+
+def parse_tcp_info(blob: bytes) -> dict[str, int]:
+    if len(blob) < 104:
+        return {}
+    value = lambda offset: int.from_bytes(blob[offset:offset + 4], "little")
+    return {
+        "rtt_us": value(68), "rttvar_us": value(72),
+        "snd_cwnd": value(80), "total_retrans": value(100),
+    }
+
+
+def stream_tcp_info(writer: asyncio.StreamWriter) -> dict[str, int]:
+    sock = writer.get_extra_info("socket")
+    if not sock or not hasattr(socket, "TCP_INFO"):
+        return {}
+    return parse_tcp_info(sock.getsockopt(socket.IPPROTO_TCP, socket.TCP_INFO, 104))
 
 
 def kv_key_hash(header: bytes) -> str:
@@ -749,8 +868,8 @@ def resp_request(frame: RespFrame) -> tuple[str, list[str]]:
 
 async def relay_resp(client_r: asyncio.StreamReader, client_w: asyncio.StreamWriter,
                      target_r: asyncio.StreamReader, target_w: asyncio.StreamWriter,
-                     bucket: TokenBucket, log: ByteLog | None,
-                     connection_id: str) -> tuple[int, int]:
+                     limiter: BandwidthLimiter, log: ByteLog | None,
+                     connection_id: str, route: str) -> tuple[int, int]:
     pending: asyncio.Queue = asyncio.Queue()
     counts = [0, 0]
 
@@ -764,7 +883,7 @@ async def relay_resp(client_r: asyncio.StreamReader, client_w: asyncio.StreamWri
                 await target_w.drain()
                 counts[0] += len(frame.raw)
                 if log:
-                    await log.add(connection_id, "kv", "client_to_target", len(frame.raw), False)
+                    await log.add(connection_id, route, "client_to_target", len(frame.raw), False)
                 await pending.put((command, keys, start, len(frame.raw), frame.body_bytes()))
         except asyncio.IncompleteReadError:
             if target_w.can_write_eof():
@@ -780,13 +899,13 @@ async def relay_resp(client_r: asyncio.StreamReader, client_w: asyncio.StreamWri
                     return
                 command, keys, start, request_wire, request_body = request
                 frame = await read_resp(target_r)
-                await bucket.wait(len(frame.raw))
+                await limiter.wait(route, "target_to_client", len(frame.raw))
                 client_w.write(frame.raw)
                 await client_w.drain()
                 end = time.monotonic_ns()
                 counts[1] += len(frame.raw)
                 if log:
-                    await log.add(connection_id, "kv", "target_to_client", len(frame.raw), True)
+                    await log.add(connection_id, route, "target_to_client", len(frame.raw), True)
                     await log.resp_transfer([connection_id, command, ";".join(keys), start, end,
                                              request_wire, len(frame.raw), request_body, frame.body_bytes()])
                 pending.task_done()
@@ -797,7 +916,7 @@ async def relay_resp(client_r: asyncio.StreamReader, client_w: asyncio.StreamWri
     return tuple(counts)
 
 async def relay(reader: asyncio.StreamReader, writer: asyncio.StreamWriter,
-                bucket: TokenBucket, log: ByteLog | None, connection_id: str,
+                limiter: BandwidthLimiter, log: ByteLog | None, connection_id: str,
                 route: str, direction: str, initial: bytes = b"") -> int:
     total = 0
     try:
@@ -805,7 +924,7 @@ async def relay(reader: asyncio.StreamReader, writer: asyncio.StreamWriter,
         data = initial or await reader.read(CHUNK)
         while data:
             if charged:
-                await bucket.wait(len(data))
+                await limiter.wait(route, direction, len(data))
             writer.write(data)
             await writer.drain()
             total += len(data)
@@ -818,7 +937,9 @@ async def relay(reader: asyncio.StreamReader, writer: asyncio.StreamWriter,
     return total
 
 
-async def handle_proxy(client_r: asyncio.StreamReader, client_w: asyncio.StreamWriter, route: Route, bucket: TokenBucket, log: ByteLog | None) -> None:
+async def handle_proxy(client_r: asyncio.StreamReader, client_w: asyncio.StreamWriter,
+                       route: Route, limiter: BandwidthLimiter,
+                       log: ByteLog | None) -> None:
     start = time.monotonic_ns()
     connection_id = hashlib.sha256(f"{route.name}:{start}".encode()).hexdigest()[:16]
     target_r, target_w = await asyncio.open_connection(route.target_host, route.target_port)
@@ -830,21 +951,29 @@ async def handle_proxy(client_r: asyncio.StreamReader, client_w: asyncio.StreamW
         await log.opened()
     counts = (0, 0)
     try:
-        counts = await relay_resp(client_r, client_w, target_r, target_w, bucket, log, connection_id) if route.protocol == "resp" else tuple(await asyncio.gather(
-            relay(client_r, target_w, bucket, log, connection_id, route.name,
+        counts = await relay_resp(
+            client_r, client_w, target_r, target_w, limiter, log,
+            connection_id, route.name,
+        ) if route.protocol == "resp" else tuple(await asyncio.gather(
+            relay(client_r, target_w, limiter, log, connection_id, route.name,
                   "client_to_target", initial),
-            relay(target_r, client_w, bucket, log, connection_id, route.name,
+            relay(target_r, client_w, limiter, log, connection_id, route.name,
                   "target_to_client"),
         ))
     finally:
+        tcp = stream_tcp_info(client_w), stream_tcp_info(target_w)
         target_w.close()
         client_w.close()
         if log:
-            await log.connection(connection_id, route.name, key_hash, start, counts)
+            await log.connection(
+                connection_id, route.name, key_hash, start, counts, tcp)
 
 
-async def start_proxy(routes: list[Route], rate_bps: float, log: Path | None = None) -> tuple[list[asyncio.AbstractServer], ByteLog | None]:
-    bucket = TokenBucket(rate_bps)
+async def start_proxy(routes: list[Route], rate_bps: float | None,
+                      log: Path | None = None,
+                      route_bps: dict[str, float] | None = None
+                      ) -> tuple[list[asyncio.AbstractServer], ByteLog | None]:
+    limiter = BandwidthLimiter(rate_bps, route_bps)
     byte_log = ByteLog(log) if log else None
     if byte_log:
         await byte_log.start()
@@ -852,7 +981,8 @@ async def start_proxy(routes: list[Route], rate_bps: float, log: Path | None = N
     for route in routes:
         servers.append(
             await asyncio.start_server(
-                lambda r, w, route=route: handle_proxy(r, w, route, bucket, byte_log),
+                lambda r, w, route=route: handle_proxy(
+                    r, w, route, limiter, byte_log),
                 route.listen_host,
                 route.listen_port,
             )
@@ -860,8 +990,10 @@ async def start_proxy(routes: list[Route], rate_bps: float, log: Path | None = N
     return servers, byte_log
 
 
-async def run_proxy(routes: list[Route], rate_bps: float, log: Path | None = None) -> None:
-    servers, byte_log = await start_proxy(routes, rate_bps, log)
+async def run_proxy(routes: list[Route], rate_bps: float | None,
+                    log: Path | None = None,
+                    route_bps: dict[str, float] | None = None) -> None:
+    servers, byte_log = await start_proxy(routes, rate_bps, log, route_bps)
     try:
         await asyncio.gather(*(server.serve_forever() for server in servers))
     finally:
@@ -1498,9 +1630,41 @@ def parse_args(argv: list[str] | None = None):
     sp.add_argument("--kv-target", default="127.0.0.1:5655")
     sp.add_argument("--api-listen", default="127.0.0.1:8400")
     sp.add_argument("--api-target", default="127.0.0.1:8200")
-    sp.add_argument("--mbps", type=float, required=True)
+    sp.add_argument("--mbps", type=float)
+    sp.add_argument("--routes-json")
+    sp.add_argument("--aggregate-mbps", type=float)
+    sp.add_argument("--route-mbps-json")
     sp.add_argument("--log", type=Path)
     return p.parse_args(argv)
+
+
+def proxy_config(args) -> tuple[list[Route], float | None, dict[str, float]]:
+    if args.routes_json:
+        routes = [Route(**raw) for raw in json.loads(args.routes_json)]
+        if args.mbps is not None:
+            raise ValueError("network routes use --aggregate-mbps, not --mbps")
+        aggregate = args.aggregate_mbps
+        rates = json.loads(args.route_mbps_json or "{}")
+    else:
+        if args.mbps is None:
+            raise ValueError("legacy proxy requires --mbps")
+        kv_listen = parse_addr(args.kv_listen)
+        kv_target = parse_addr(args.kv_target)
+        api_listen = parse_addr(args.api_listen)
+        api_target = parse_addr(args.api_target)
+        routes = [Route("kv", *kv_listen, *kv_target,
+                        "resp" if lmcache_mode() == "mp" else "lmcache"),
+                  Route("api", *api_listen, *api_target)]
+        aggregate, rates = args.mbps, {}
+    route_keys = {route.name for route in routes}
+    route_keys |= {route.rsplit("/", 1)[-1] for route in route_keys}
+    if aggregate is not None and aggregate <= 0 \
+            or any(float(rate) <= 0 for rate in rates.values()) \
+            or set(rates) - route_keys:
+        raise ValueError("invalid proxy bandwidth contract")
+    return routes, (aggregate * 1_000_000 / 8 if aggregate else None), {
+        route: float(rate) * 1_000_000 / 8 for route, rate in rates.items()
+    }
 
 
 def main(argv: list[str] | None = None) -> None:
@@ -1509,14 +1673,8 @@ def main(argv: list[str] | None = None) -> None:
         run_lmcache_server(args.host, args.port, args.max_bytes)
         return
     if args.cmd == "proxy":
-        kv_listen = parse_addr(args.kv_listen)
-        kv_target = parse_addr(args.kv_target)
-        api_listen = parse_addr(args.api_listen)
-        api_target = parse_addr(args.api_target)
-        routes = [Route("kv", *kv_listen, *kv_target,
-                        "resp" if lmcache_mode() == "mp" else "lmcache"),
-                  Route("api", *api_listen, *api_target)]
-        asyncio.run(run_proxy(routes, args.mbps * 1_000_000 / 8, args.log))
+        routes, aggregate, rates = proxy_config(args)
+        asyncio.run(run_proxy(routes, aggregate, args.log, rates))
         return
 
     cfg = config_from_args(args)

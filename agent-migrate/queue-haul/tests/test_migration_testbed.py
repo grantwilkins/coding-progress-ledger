@@ -43,6 +43,9 @@ def test_vllm_commands_pin_validated_sandbox_flags_and_roles():
     sink = cmd_text(s.vllm_cmd(cfg, "sink"))
     smoke = cmd_text(s.vllm_cmd(cfg, "smoke1"))
 
+    assert str(s.model_path(cfg)) in source
+    assert "--served-model-name openai/gpt-oss-20b" in source
+
     assert "vllm-openai-v0.10.1.1.sandbox" in source
     assert "CUDA_VISIBLE_DEVICES=0" in source
     assert "APPTAINERENV_CUDA_VISIBLE_DEVICES=0" in source
@@ -55,7 +58,7 @@ def test_vllm_commands_pin_validated_sandbox_flags_and_roles():
     assert "LMCacheConnectorV1" in source
     assert "LMCacheMPConnector" not in source
     assert "kv_producer" in source and "engine_id\":\"s0" in source
-    assert "kv_consumer" in sink and "engine_id\":\"d0" in sink
+    assert "kv_both" in sink and "engine_id\":\"d0" in sink
     assert "kv_both" in smoke and "engine_id\":\"e0" in smoke
     assert "LMCACHE_REMOTE_URL=lm://127.0.0.1:5655" in source
     assert "LMCACHE_REMOTE_URL=lm://127.0.0.1:8300" in sink
@@ -99,6 +102,57 @@ def test_mp_runtime_uses_release_image_and_shipped_connector(monkeypatch):
     assert "--enable-prompt-tokens-details" in source
     assert "--enable-sleep-mode" not in source
     assert s.expected_runtime_versions() == ("0.22.0+cu129", "0.5.1")
+
+
+def test_native_mp_runtime_uses_host_stack_and_gpu_assignment(monkeypatch):
+    monkeypatch.setenv("QH_RUNTIME", "native")
+    monkeypatch.setenv("QH_LMCACHE_MODE", "mp")
+    monkeypatch.setenv("CUDA_VISIBLE_DEVICES", "2,3")
+
+    source = cmd_text(s.vllm_cmd(s.Config(), "source"))
+    sink = cmd_text(s.vllm_cmd(s.Config(), "sink"))
+    cache = cmd_text(s.mp_server_cmd(s.Config(), "source"))
+    redis = cmd_text(s.redis_cmd(s.Config()))
+
+    assert "apptainer" not in source + sink + cache + redis
+    assert "CUDA_VISIBLE_DEVICES=2" in source
+    assert "CUDA_VISIBLE_DEVICES=3" in sink
+    assert str(Path(s.sys.executable).parent) in source
+    assert "LD_LIBRARY_PATH" not in source
+    assert redis.startswith("valkey-server --bind 127.0.0.1 --port 5655")
+    assert s.expected_runtime_versions() == ("0.22.0", "0.5.1")
+
+
+def test_native_runtime_rejects_legacy_and_unknown_modes(monkeypatch):
+    monkeypatch.setenv("QH_RUNTIME", "native")
+    with pytest.raises(ValueError, match="requires QH_LMCACHE_MODE=mp"):
+        s.runtime_mode()
+
+    monkeypatch.setenv("QH_RUNTIME", "other")
+    with pytest.raises(ValueError, match="unknown QH_RUNTIME"):
+        s.runtime_mode()
+
+
+def test_native_preflight_requires_host_commands_and_pinned_versions(monkeypatch, tmp_path):
+    monkeypatch.setenv("QH_RUNTIME", "native")
+    monkeypatch.setenv("QH_LMCACHE_MODE", "mp")
+    snapshot = tmp_path / "snapshot"
+    snapshot.mkdir()
+    (snapshot / "config.json").touch()
+    monkeypatch.setattr(s, "model_snapshot_dir", lambda *_args: snapshot)
+    monkeypatch.setattr(s, "port_free", lambda *_args: True)
+    monkeypatch.setattr(s, "gpu_count", lambda: 2)
+    monkeypatch.setattr(s.shutil, "which", lambda *_args, **_kwargs: None)
+
+    with pytest.raises(RuntimeError) as error:
+        s.preflight(s.Config(), 2)
+    for executable in ("vllm", "lmcache", "valkey-server"):
+        assert f"{executable} not found" in str(error.value)
+
+    monkeypatch.setattr(s.shutil, "which", lambda executable, **_kwargs: f"/bin/{executable}")
+    monkeypatch.setattr(s, "runtime_versions", lambda _cfg: ("0.22.1", "0.5.1"))
+    with pytest.raises(RuntimeError, match="need vLLM/LMCache.*0.22.1"):
+        s.preflight(s.Config(), 2)
 
 
 def test_health_timeout_is_configurable(monkeypatch):
@@ -259,10 +313,11 @@ def test_mp_cache_services_use_redis_l2_through_proxy(monkeypatch):
 
     assert "redis-7.4.2-bookworm.sif" in redis
     assert "--port 5655" in redis
-    assert "lmcache server" in source and "--port 5555" in source
+    assert "lmcache server" in source and "--port 5557" in source
     assert "--supported-transfer-mode engine_driven" in source
     assert '"port":8300' in source
     assert "--port 5556" in sink
+    assert "--l1-size-gb 32" in sink
     assert '"port":8300' in sink
     assert "--http-port 8080" in source and "--http-port 8081" in sink
     assert "--nv" not in source and "CUDA_VISIBLE_DEVICES=" in source

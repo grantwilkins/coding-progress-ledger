@@ -1,0 +1,2125 @@
+{
+  "calibration": {
+    "path": "/datadrive/queue-haul-network/control/calibration-east-post-west-001.json",
+    "sha256": "e9e9b412194d3fd276a21de2a1011adc00e4e2244838e0b6e591f9e0ab1c93bf"
+  },
+  "cluster": {
+    "destinations": [
+      {
+        "host": "10.1.0.4",
+        "id": "east",
+        "region": "eastus2",
+        "repo_root": "/home/azureuser/coding-progress-ledger/agent-migrate",
+        "run_root": "/datadrive/queue-haul-network",
+        "ssh_port": 22,
+        "ssh_user": "azureuser"
+      }
+    ],
+    "schema": "queue-haul-azure-cluster-v1",
+    "source": {
+      "host": "10.0.0.4",
+      "id": "sweden",
+      "region": "swedencentral",
+      "repo_root": "/home/azureuser/coding-progress-ledger/agent-migrate",
+      "run_root": "/datadrive/queue-haul-network",
+      "ssh_port": 22,
+      "ssh_user": "azureuser"
+    }
+  },
+  "conditions": [],
+  "design": "isolated",
+  "manifest": {
+    "path": "queue-haul/outputs/coding-manifest.json",
+    "sha256": "faf321a6eab01f7f36c325dbd6e725d43b72cdffefd7ee060ef6f7cef20f1435"
+  },
+  "model_profile": {
+    "path": "/home/azureuser/coding-progress-ledger/agent-migrate/queue-haul/profiles/gpt_oss_20b_a100_tp1.json",
+    "sha256": "b2756d1e69079e3de2d25057ecd7a838ba162318b6b79e2f1dc9afafc4656ab8"
+  },
+  "network_contract": {
+    "aggregate": {
+      "controlled_mbps": {
+        "40": 800,
+        "80": 1700
+      },
+      "natural_mbps": 2156.442281566448
+    },
+    "paths": {
+      "east": {
+        "controlled_mbps": {
+          "40": 800,
+          "80": 1700
+        },
+        "natural_mbps": 2156.442281566448,
+        "rtt_ms": 102.0
+      }
+    },
+    "schema": "queue-haul-network-contract-v1"
+  },
+  "policies": [
+    "queue_haul",
+    "greedy",
+    "greedy_lagrangian",
+    "kv_only",
+    "replay_only",
+    "random"
+  ],
+  "repeats": 3,
+  "scenarios": [
+    {
+      "background": {
+        "east": [
+          0,
+          0
+        ]
+      },
+      "bandwidth": "controlled_80",
+      "bandwidth_mbps": 1700,
+      "condition_index": 8192,
+      "context_size": 8192,
+      "deadline_s": 180,
+      "design": "isolated",
+      "destination": "east",
+      "method": "replay",
+      "moves": [
+        {
+          "deadline_admitted": true,
+          "destination_instance": "east",
+          "method": "replay",
+          "order": 0,
+          "session_id": "claude:e2fd4f89-016f-29f0-48a1-3b2f1991b287"
+        }
+      ],
+      "policy": "replay",
+      "repeat": 2,
+      "scenario_id": "faea7381fb94d2d6",
+      "sessions": [
+        {
+          "initial_tokens": 7680,
+          "job_class": "coding",
+          "order": 0,
+          "session_id": "claude:e2fd4f89-016f-29f0-48a1-3b2f1991b287",
+          "turn_index": 0
+        }
+      ],
+      "workload": "agentic_tool_loop"
+    },
+    {
+      "background": {
+        "east": [
+          0,
+          0
+        ]
+      },
+      "bandwidth": "controlled_80",
+      "bandwidth_mbps": 1700,
+      "condition_index": 2048,
+      "context_size": 2048,
+      "deadline_s": 180,
+      "design": "isolated",
+      "destination": "east",
+      "method": "kv_transfer",
+      "moves": [
+        {
+          "deadline_admitted": true,
+          "destination_instance": "east",
+          "method": "kv_transfer",
+          "order": 0,
+          "session_id": "claude:e2fd4f89-016f-29f0-48a1-3b2f1991b287"
+        }
+      ],
+      "policy": "kv_transfer",
+      "repeat": 2,
+      "scenario_id": "accb36868d0d208a",
+      "sessions": [
+        {
+          "initial_tokens": 1536,
+          "job_class": "coding",
+          "order": 0,
+          "session_id": "claude:e2fd4f89-016f-29f0-48a1-3b2f1991b287",
+          "turn_index": 0
+        }
+      ],
+      "workload": "agentic_tool_loop"
+    },
+    {
+      "background": {
+        "east": [
+          0,
+          0
+        ]
+      },
+      "bandwidth": "controlled_80",
+      "bandwidth_mbps": 1700,
+      "condition_index": 32768,
+      "context_size": 32768,
+      "deadline_s": 180,
+      "design": "isolated",
+      "destination": "east",
+      "method": "replay",
+      "moves": [
+        {
+          "deadline_admitted": true,
+          "destination_instance": "east",
+          "method": "replay",
+          "order": 0,
+          "session_id": "codex:e381cc89-38ef-e67e-79b9-4b800369b4f5"
+        }
+      ],
+      "policy": "replay",
+      "repeat": 2,
+      "scenario_id": "97a7cda91263cdb4",
+      "sessions": [
+        {
+          "initial_tokens": 32256,
+          "job_class": "coding",
+          "order": 0,
+          "session_id": "codex:e381cc89-38ef-e67e-79b9-4b800369b4f5",
+          "turn_index": 0
+        }
+      ],
+      "workload": "agentic_tool_loop"
+    },
+    {
+      "background": {
+        "east": [
+          0,
+          0
+        ]
+      },
+      "bandwidth": "controlled_80",
+      "bandwidth_mbps": 1700,
+      "condition_index": 32768,
+      "context_size": 32768,
+      "deadline_s": 180,
+      "design": "isolated",
+      "destination": "east",
+      "method": "kv_transfer",
+      "moves": [
+        {
+          "deadline_admitted": true,
+          "destination_instance": "east",
+          "method": "kv_transfer",
+          "order": 0,
+          "session_id": "codex:e381cc89-38ef-e67e-79b9-4b800369b4f5"
+        }
+      ],
+      "policy": "kv_transfer",
+      "repeat": 2,
+      "scenario_id": "9a40f64e45abad94",
+      "sessions": [
+        {
+          "initial_tokens": 32256,
+          "job_class": "coding",
+          "order": 0,
+          "session_id": "codex:e381cc89-38ef-e67e-79b9-4b800369b4f5",
+          "turn_index": 0
+        }
+      ],
+      "workload": "agentic_tool_loop"
+    },
+    {
+      "background": {
+        "east": [
+          0,
+          0
+        ]
+      },
+      "bandwidth": "controlled_80",
+      "bandwidth_mbps": 1700,
+      "condition_index": 8192,
+      "context_size": 8192,
+      "deadline_s": 180,
+      "design": "isolated",
+      "destination": "east",
+      "method": "kv_transfer",
+      "moves": [
+        {
+          "deadline_admitted": true,
+          "destination_instance": "east",
+          "method": "kv_transfer",
+          "order": 0,
+          "session_id": "claude:e2fd4f89-016f-29f0-48a1-3b2f1991b287"
+        }
+      ],
+      "policy": "kv_transfer",
+      "repeat": 1,
+      "scenario_id": "eeb6a353507636db",
+      "sessions": [
+        {
+          "initial_tokens": 7680,
+          "job_class": "coding",
+          "order": 0,
+          "session_id": "claude:e2fd4f89-016f-29f0-48a1-3b2f1991b287",
+          "turn_index": 0
+        }
+      ],
+      "workload": "agentic_tool_loop"
+    },
+    {
+      "background": {
+        "east": [
+          0,
+          0
+        ]
+      },
+      "bandwidth": "controlled_80",
+      "bandwidth_mbps": 1700,
+      "condition_index": 2048,
+      "context_size": 2048,
+      "deadline_s": 180,
+      "design": "isolated",
+      "destination": "east",
+      "method": "replay",
+      "moves": [
+        {
+          "deadline_admitted": true,
+          "destination_instance": "east",
+          "method": "replay",
+          "order": 0,
+          "session_id": "claude:eaad8d63-63bf-7139-f930-0ef47fa45253"
+        }
+      ],
+      "policy": "replay",
+      "repeat": 0,
+      "scenario_id": "cbddc5368848bf1d",
+      "sessions": [
+        {
+          "initial_tokens": 1536,
+          "job_class": "coding",
+          "order": 0,
+          "session_id": "claude:eaad8d63-63bf-7139-f930-0ef47fa45253",
+          "turn_index": 0
+        }
+      ],
+      "workload": "agentic_tool_loop"
+    },
+    {
+      "background": {
+        "east": [
+          0,
+          0
+        ]
+      },
+      "bandwidth": "controlled_80",
+      "bandwidth_mbps": 1700,
+      "condition_index": 32768,
+      "context_size": 32768,
+      "deadline_s": 180,
+      "design": "isolated",
+      "destination": "east",
+      "method": "kv_transfer",
+      "moves": [
+        {
+          "deadline_admitted": true,
+          "destination_instance": "east",
+          "method": "kv_transfer",
+          "order": 0,
+          "session_id": "claude:eaad8d63-63bf-7139-f930-0ef47fa45253"
+        }
+      ],
+      "policy": "kv_transfer",
+      "repeat": 1,
+      "scenario_id": "3e9bb2cad33baf1f",
+      "sessions": [
+        {
+          "initial_tokens": 32256,
+          "job_class": "coding",
+          "order": 0,
+          "session_id": "claude:eaad8d63-63bf-7139-f930-0ef47fa45253",
+          "turn_index": 0
+        }
+      ],
+      "workload": "agentic_tool_loop"
+    },
+    {
+      "background": {
+        "east": [
+          0,
+          0
+        ]
+      },
+      "bandwidth": "controlled_80",
+      "bandwidth_mbps": 1700,
+      "condition_index": 32768,
+      "context_size": 32768,
+      "deadline_s": 180,
+      "design": "isolated",
+      "destination": "east",
+      "method": "replay",
+      "moves": [
+        {
+          "deadline_admitted": true,
+          "destination_instance": "east",
+          "method": "replay",
+          "order": 0,
+          "session_id": "claude:eaad8d63-63bf-7139-f930-0ef47fa45253"
+        }
+      ],
+      "policy": "replay",
+      "repeat": 1,
+      "scenario_id": "332435abaefe6bf9",
+      "sessions": [
+        {
+          "initial_tokens": 32256,
+          "job_class": "coding",
+          "order": 0,
+          "session_id": "claude:eaad8d63-63bf-7139-f930-0ef47fa45253",
+          "turn_index": 0
+        }
+      ],
+      "workload": "agentic_tool_loop"
+    },
+    {
+      "background": {
+        "east": [
+          0,
+          0
+        ]
+      },
+      "bandwidth": "controlled_80",
+      "bandwidth_mbps": 1700,
+      "condition_index": 2048,
+      "context_size": 2048,
+      "deadline_s": 180,
+      "design": "isolated",
+      "destination": "east",
+      "method": "kv_transfer",
+      "moves": [
+        {
+          "deadline_admitted": true,
+          "destination_instance": "east",
+          "method": "kv_transfer",
+          "order": 0,
+          "session_id": "claude:92cc24b6-ac8d-5231-bb2d-33b876557766"
+        }
+      ],
+      "policy": "kv_transfer",
+      "repeat": 1,
+      "scenario_id": "dc1df1b309cb46eb",
+      "sessions": [
+        {
+          "initial_tokens": 1536,
+          "job_class": "coding",
+          "order": 0,
+          "session_id": "claude:92cc24b6-ac8d-5231-bb2d-33b876557766",
+          "turn_index": 0
+        }
+      ],
+      "workload": "agentic_tool_loop"
+    },
+    {
+      "background": {
+        "east": [
+          0,
+          0
+        ]
+      },
+      "bandwidth": "controlled_80",
+      "bandwidth_mbps": 1700,
+      "condition_index": 8192,
+      "context_size": 8192,
+      "deadline_s": 180,
+      "design": "isolated",
+      "destination": "east",
+      "method": "replay",
+      "moves": [
+        {
+          "deadline_admitted": true,
+          "destination_instance": "east",
+          "method": "replay",
+          "order": 0,
+          "session_id": "claude:1534babd-9b9e-68e0-057e-d9ce7e08adf0"
+        }
+      ],
+      "policy": "replay",
+      "repeat": 0,
+      "scenario_id": "95d5718c00c68d59",
+      "sessions": [
+        {
+          "initial_tokens": 7680,
+          "job_class": "coding",
+          "order": 0,
+          "session_id": "claude:1534babd-9b9e-68e0-057e-d9ce7e08adf0",
+          "turn_index": 0
+        }
+      ],
+      "workload": "agentic_tool_loop"
+    },
+    {
+      "background": {
+        "east": [
+          0,
+          0
+        ]
+      },
+      "bandwidth": "controlled_80",
+      "bandwidth_mbps": 1700,
+      "condition_index": 8192,
+      "context_size": 8192,
+      "deadline_s": 180,
+      "design": "isolated",
+      "destination": "east",
+      "method": "kv_transfer",
+      "moves": [
+        {
+          "deadline_admitted": true,
+          "destination_instance": "east",
+          "method": "kv_transfer",
+          "order": 0,
+          "session_id": "claude:e2fd4f89-016f-29f0-48a1-3b2f1991b287"
+        }
+      ],
+      "policy": "kv_transfer",
+      "repeat": 2,
+      "scenario_id": "2208ceea2eafe47b",
+      "sessions": [
+        {
+          "initial_tokens": 7680,
+          "job_class": "coding",
+          "order": 0,
+          "session_id": "claude:e2fd4f89-016f-29f0-48a1-3b2f1991b287",
+          "turn_index": 0
+        }
+      ],
+      "workload": "agentic_tool_loop"
+    },
+    {
+      "background": {
+        "east": [
+          0,
+          0
+        ]
+      },
+      "bandwidth": "controlled_80",
+      "bandwidth_mbps": 1700,
+      "condition_index": 32768,
+      "context_size": 32768,
+      "deadline_s": 180,
+      "design": "isolated",
+      "destination": "east",
+      "method": "kv_transfer",
+      "moves": [
+        {
+          "deadline_admitted": true,
+          "destination_instance": "east",
+          "method": "kv_transfer",
+          "order": 0,
+          "session_id": "codex:e381cc89-38ef-e67e-79b9-4b800369b4f5"
+        }
+      ],
+      "policy": "kv_transfer",
+      "repeat": 0,
+      "scenario_id": "cbdcb35ca0c0e087",
+      "sessions": [
+        {
+          "initial_tokens": 32256,
+          "job_class": "coding",
+          "order": 0,
+          "session_id": "codex:e381cc89-38ef-e67e-79b9-4b800369b4f5",
+          "turn_index": 0
+        }
+      ],
+      "workload": "agentic_tool_loop"
+    },
+    {
+      "background": {
+        "east": [
+          0,
+          0
+        ]
+      },
+      "bandwidth": "controlled_80",
+      "bandwidth_mbps": 1700,
+      "condition_index": 32768,
+      "context_size": 32768,
+      "deadline_s": 180,
+      "design": "isolated",
+      "destination": "east",
+      "method": "replay",
+      "moves": [
+        {
+          "deadline_admitted": true,
+          "destination_instance": "east",
+          "method": "replay",
+          "order": 0,
+          "session_id": "codex:e381cc89-38ef-e67e-79b9-4b800369b4f5"
+        }
+      ],
+      "policy": "replay",
+      "repeat": 0,
+      "scenario_id": "e47f0ca40398e32d",
+      "sessions": [
+        {
+          "initial_tokens": 32256,
+          "job_class": "coding",
+          "order": 0,
+          "session_id": "codex:e381cc89-38ef-e67e-79b9-4b800369b4f5",
+          "turn_index": 0
+        }
+      ],
+      "workload": "agentic_tool_loop"
+    },
+    {
+      "background": {
+        "east": [
+          0,
+          0
+        ]
+      },
+      "bandwidth": "controlled_80",
+      "bandwidth_mbps": 1700,
+      "condition_index": 8192,
+      "context_size": 8192,
+      "deadline_s": 180,
+      "design": "isolated",
+      "destination": "east",
+      "method": "kv_transfer",
+      "moves": [
+        {
+          "deadline_admitted": true,
+          "destination_instance": "east",
+          "method": "kv_transfer",
+          "order": 0,
+          "session_id": "claude:1534babd-9b9e-68e0-057e-d9ce7e08adf0"
+        }
+      ],
+      "policy": "kv_transfer",
+      "repeat": 0,
+      "scenario_id": "c8681ece05a8ea1c",
+      "sessions": [
+        {
+          "initial_tokens": 7680,
+          "job_class": "coding",
+          "order": 0,
+          "session_id": "claude:1534babd-9b9e-68e0-057e-d9ce7e08adf0",
+          "turn_index": 0
+        }
+      ],
+      "workload": "agentic_tool_loop"
+    },
+    {
+      "background": {
+        "east": [
+          0,
+          0
+        ]
+      },
+      "bandwidth": "controlled_80",
+      "bandwidth_mbps": 1700,
+      "condition_index": 2048,
+      "context_size": 2048,
+      "deadline_s": 180,
+      "design": "isolated",
+      "destination": "east",
+      "method": "kv_transfer",
+      "moves": [
+        {
+          "deadline_admitted": true,
+          "destination_instance": "east",
+          "method": "kv_transfer",
+          "order": 0,
+          "session_id": "claude:eaad8d63-63bf-7139-f930-0ef47fa45253"
+        }
+      ],
+      "policy": "kv_transfer",
+      "repeat": 0,
+      "scenario_id": "73997749c2321791",
+      "sessions": [
+        {
+          "initial_tokens": 1536,
+          "job_class": "coding",
+          "order": 0,
+          "session_id": "claude:eaad8d63-63bf-7139-f930-0ef47fa45253",
+          "turn_index": 0
+        }
+      ],
+      "workload": "agentic_tool_loop"
+    },
+    {
+      "background": {
+        "east": [
+          0,
+          0
+        ]
+      },
+      "bandwidth": "controlled_80",
+      "bandwidth_mbps": 1700,
+      "condition_index": 8192,
+      "context_size": 8192,
+      "deadline_s": 180,
+      "design": "isolated",
+      "destination": "east",
+      "method": "replay",
+      "moves": [
+        {
+          "deadline_admitted": true,
+          "destination_instance": "east",
+          "method": "replay",
+          "order": 0,
+          "session_id": "claude:e2fd4f89-016f-29f0-48a1-3b2f1991b287"
+        }
+      ],
+      "policy": "replay",
+      "repeat": 1,
+      "scenario_id": "542980d07d4c222a",
+      "sessions": [
+        {
+          "initial_tokens": 7680,
+          "job_class": "coding",
+          "order": 0,
+          "session_id": "claude:e2fd4f89-016f-29f0-48a1-3b2f1991b287",
+          "turn_index": 0
+        }
+      ],
+      "workload": "agentic_tool_loop"
+    },
+    {
+      "background": {
+        "east": [
+          0,
+          0
+        ]
+      },
+      "bandwidth": "controlled_80",
+      "bandwidth_mbps": 1700,
+      "condition_index": 2048,
+      "context_size": 2048,
+      "deadline_s": 180,
+      "design": "isolated",
+      "destination": "east",
+      "method": "replay",
+      "moves": [
+        {
+          "deadline_admitted": true,
+          "destination_instance": "east",
+          "method": "replay",
+          "order": 0,
+          "session_id": "claude:92cc24b6-ac8d-5231-bb2d-33b876557766"
+        }
+      ],
+      "policy": "replay",
+      "repeat": 1,
+      "scenario_id": "f9d2fb8958563048",
+      "sessions": [
+        {
+          "initial_tokens": 1536,
+          "job_class": "coding",
+          "order": 0,
+          "session_id": "claude:92cc24b6-ac8d-5231-bb2d-33b876557766",
+          "turn_index": 0
+        }
+      ],
+      "workload": "agentic_tool_loop"
+    },
+    {
+      "background": {
+        "east": [
+          0,
+          0
+        ]
+      },
+      "bandwidth": "controlled_80",
+      "bandwidth_mbps": 1700,
+      "condition_index": 2048,
+      "context_size": 2048,
+      "deadline_s": 180,
+      "design": "isolated",
+      "destination": "east",
+      "method": "replay",
+      "moves": [
+        {
+          "deadline_admitted": true,
+          "destination_instance": "east",
+          "method": "replay",
+          "order": 0,
+          "session_id": "claude:e2fd4f89-016f-29f0-48a1-3b2f1991b287"
+        }
+      ],
+      "policy": "replay",
+      "repeat": 2,
+      "scenario_id": "cbacebf1220e0c09",
+      "sessions": [
+        {
+          "initial_tokens": 1536,
+          "job_class": "coding",
+          "order": 0,
+          "session_id": "claude:e2fd4f89-016f-29f0-48a1-3b2f1991b287",
+          "turn_index": 0
+        }
+      ],
+      "workload": "agentic_tool_loop"
+    },
+    {
+      "background": {
+        "east": [
+          0,
+          0
+        ]
+      },
+      "bandwidth": "controlled_40",
+      "bandwidth_mbps": 800,
+      "condition_index": 2048,
+      "context_size": 2048,
+      "deadline_s": 180,
+      "design": "isolated",
+      "destination": "east",
+      "method": "replay",
+      "moves": [
+        {
+          "deadline_admitted": true,
+          "destination_instance": "east",
+          "method": "replay",
+          "order": 0,
+          "session_id": "claude:e2fd4f89-016f-29f0-48a1-3b2f1991b287"
+        }
+      ],
+      "policy": "replay",
+      "repeat": 2,
+      "scenario_id": "506204087ff2d417",
+      "sessions": [
+        {
+          "initial_tokens": 1536,
+          "job_class": "coding",
+          "order": 0,
+          "session_id": "claude:e2fd4f89-016f-29f0-48a1-3b2f1991b287",
+          "turn_index": 0
+        }
+      ],
+      "workload": "agentic_tool_loop"
+    },
+    {
+      "background": {
+        "east": [
+          0,
+          0
+        ]
+      },
+      "bandwidth": "controlled_40",
+      "bandwidth_mbps": 800,
+      "condition_index": 32768,
+      "context_size": 32768,
+      "deadline_s": 180,
+      "design": "isolated",
+      "destination": "east",
+      "method": "kv_transfer",
+      "moves": [
+        {
+          "deadline_admitted": true,
+          "destination_instance": "east",
+          "method": "kv_transfer",
+          "order": 0,
+          "session_id": "claude:eaad8d63-63bf-7139-f930-0ef47fa45253"
+        }
+      ],
+      "policy": "kv_transfer",
+      "repeat": 1,
+      "scenario_id": "623689834a525d06",
+      "sessions": [
+        {
+          "initial_tokens": 32256,
+          "job_class": "coding",
+          "order": 0,
+          "session_id": "claude:eaad8d63-63bf-7139-f930-0ef47fa45253",
+          "turn_index": 0
+        }
+      ],
+      "workload": "agentic_tool_loop"
+    },
+    {
+      "background": {
+        "east": [
+          0,
+          0
+        ]
+      },
+      "bandwidth": "controlled_40",
+      "bandwidth_mbps": 800,
+      "condition_index": 2048,
+      "context_size": 2048,
+      "deadline_s": 180,
+      "design": "isolated",
+      "destination": "east",
+      "method": "replay",
+      "moves": [
+        {
+          "deadline_admitted": true,
+          "destination_instance": "east",
+          "method": "replay",
+          "order": 0,
+          "session_id": "claude:92cc24b6-ac8d-5231-bb2d-33b876557766"
+        }
+      ],
+      "policy": "replay",
+      "repeat": 1,
+      "scenario_id": "dd36e211d7d2408c",
+      "sessions": [
+        {
+          "initial_tokens": 1536,
+          "job_class": "coding",
+          "order": 0,
+          "session_id": "claude:92cc24b6-ac8d-5231-bb2d-33b876557766",
+          "turn_index": 0
+        }
+      ],
+      "workload": "agentic_tool_loop"
+    },
+    {
+      "background": {
+        "east": [
+          0,
+          0
+        ]
+      },
+      "bandwidth": "controlled_40",
+      "bandwidth_mbps": 800,
+      "condition_index": 8192,
+      "context_size": 8192,
+      "deadline_s": 180,
+      "design": "isolated",
+      "destination": "east",
+      "method": "replay",
+      "moves": [
+        {
+          "deadline_admitted": true,
+          "destination_instance": "east",
+          "method": "replay",
+          "order": 0,
+          "session_id": "claude:1534babd-9b9e-68e0-057e-d9ce7e08adf0"
+        }
+      ],
+      "policy": "replay",
+      "repeat": 0,
+      "scenario_id": "78f88dd3a0ac98b9",
+      "sessions": [
+        {
+          "initial_tokens": 7680,
+          "job_class": "coding",
+          "order": 0,
+          "session_id": "claude:1534babd-9b9e-68e0-057e-d9ce7e08adf0",
+          "turn_index": 0
+        }
+      ],
+      "workload": "agentic_tool_loop"
+    },
+    {
+      "background": {
+        "east": [
+          0,
+          0
+        ]
+      },
+      "bandwidth": "controlled_40",
+      "bandwidth_mbps": 800,
+      "condition_index": 32768,
+      "context_size": 32768,
+      "deadline_s": 180,
+      "design": "isolated",
+      "destination": "east",
+      "method": "kv_transfer",
+      "moves": [
+        {
+          "deadline_admitted": true,
+          "destination_instance": "east",
+          "method": "kv_transfer",
+          "order": 0,
+          "session_id": "codex:e381cc89-38ef-e67e-79b9-4b800369b4f5"
+        }
+      ],
+      "policy": "kv_transfer",
+      "repeat": 0,
+      "scenario_id": "a3eb6dbfc6928dad",
+      "sessions": [
+        {
+          "initial_tokens": 32256,
+          "job_class": "coding",
+          "order": 0,
+          "session_id": "codex:e381cc89-38ef-e67e-79b9-4b800369b4f5",
+          "turn_index": 0
+        }
+      ],
+      "workload": "agentic_tool_loop"
+    },
+    {
+      "background": {
+        "east": [
+          0,
+          0
+        ]
+      },
+      "bandwidth": "controlled_40",
+      "bandwidth_mbps": 800,
+      "condition_index": 32768,
+      "context_size": 32768,
+      "deadline_s": 180,
+      "design": "isolated",
+      "destination": "east",
+      "method": "replay",
+      "moves": [
+        {
+          "deadline_admitted": true,
+          "destination_instance": "east",
+          "method": "replay",
+          "order": 0,
+          "session_id": "codex:e381cc89-38ef-e67e-79b9-4b800369b4f5"
+        }
+      ],
+      "policy": "replay",
+      "repeat": 0,
+      "scenario_id": "6279bcaa0a1e3511",
+      "sessions": [
+        {
+          "initial_tokens": 32256,
+          "job_class": "coding",
+          "order": 0,
+          "session_id": "codex:e381cc89-38ef-e67e-79b9-4b800369b4f5",
+          "turn_index": 0
+        }
+      ],
+      "workload": "agentic_tool_loop"
+    },
+    {
+      "background": {
+        "east": [
+          0,
+          0
+        ]
+      },
+      "bandwidth": "controlled_40",
+      "bandwidth_mbps": 800,
+      "condition_index": 2048,
+      "context_size": 2048,
+      "deadline_s": 180,
+      "design": "isolated",
+      "destination": "east",
+      "method": "kv_transfer",
+      "moves": [
+        {
+          "deadline_admitted": true,
+          "destination_instance": "east",
+          "method": "kv_transfer",
+          "order": 0,
+          "session_id": "claude:92cc24b6-ac8d-5231-bb2d-33b876557766"
+        }
+      ],
+      "policy": "kv_transfer",
+      "repeat": 1,
+      "scenario_id": "5c80070e3991b261",
+      "sessions": [
+        {
+          "initial_tokens": 1536,
+          "job_class": "coding",
+          "order": 0,
+          "session_id": "claude:92cc24b6-ac8d-5231-bb2d-33b876557766",
+          "turn_index": 0
+        }
+      ],
+      "workload": "agentic_tool_loop"
+    },
+    {
+      "background": {
+        "east": [
+          0,
+          0
+        ]
+      },
+      "bandwidth": "controlled_40",
+      "bandwidth_mbps": 800,
+      "condition_index": 32768,
+      "context_size": 32768,
+      "deadline_s": 180,
+      "design": "isolated",
+      "destination": "east",
+      "method": "kv_transfer",
+      "moves": [
+        {
+          "deadline_admitted": true,
+          "destination_instance": "east",
+          "method": "kv_transfer",
+          "order": 0,
+          "session_id": "codex:e381cc89-38ef-e67e-79b9-4b800369b4f5"
+        }
+      ],
+      "policy": "kv_transfer",
+      "repeat": 2,
+      "scenario_id": "73308cee6732d120",
+      "sessions": [
+        {
+          "initial_tokens": 32256,
+          "job_class": "coding",
+          "order": 0,
+          "session_id": "codex:e381cc89-38ef-e67e-79b9-4b800369b4f5",
+          "turn_index": 0
+        }
+      ],
+      "workload": "agentic_tool_loop"
+    },
+    {
+      "background": {
+        "east": [
+          0,
+          0
+        ]
+      },
+      "bandwidth": "controlled_40",
+      "bandwidth_mbps": 800,
+      "condition_index": 32768,
+      "context_size": 32768,
+      "deadline_s": 180,
+      "design": "isolated",
+      "destination": "east",
+      "method": "replay",
+      "moves": [
+        {
+          "deadline_admitted": true,
+          "destination_instance": "east",
+          "method": "replay",
+          "order": 0,
+          "session_id": "codex:e381cc89-38ef-e67e-79b9-4b800369b4f5"
+        }
+      ],
+      "policy": "replay",
+      "repeat": 2,
+      "scenario_id": "b52e9b3aba204738",
+      "sessions": [
+        {
+          "initial_tokens": 32256,
+          "job_class": "coding",
+          "order": 0,
+          "session_id": "codex:e381cc89-38ef-e67e-79b9-4b800369b4f5",
+          "turn_index": 0
+        }
+      ],
+      "workload": "agentic_tool_loop"
+    },
+    {
+      "background": {
+        "east": [
+          0,
+          0
+        ]
+      },
+      "bandwidth": "controlled_40",
+      "bandwidth_mbps": 800,
+      "condition_index": 8192,
+      "context_size": 8192,
+      "deadline_s": 180,
+      "design": "isolated",
+      "destination": "east",
+      "method": "replay",
+      "moves": [
+        {
+          "deadline_admitted": true,
+          "destination_instance": "east",
+          "method": "replay",
+          "order": 0,
+          "session_id": "claude:e2fd4f89-016f-29f0-48a1-3b2f1991b287"
+        }
+      ],
+      "policy": "replay",
+      "repeat": 2,
+      "scenario_id": "fd978e3659b90cc9",
+      "sessions": [
+        {
+          "initial_tokens": 7680,
+          "job_class": "coding",
+          "order": 0,
+          "session_id": "claude:e2fd4f89-016f-29f0-48a1-3b2f1991b287",
+          "turn_index": 0
+        }
+      ],
+      "workload": "agentic_tool_loop"
+    },
+    {
+      "background": {
+        "east": [
+          0,
+          0
+        ]
+      },
+      "bandwidth": "controlled_40",
+      "bandwidth_mbps": 800,
+      "condition_index": 8192,
+      "context_size": 8192,
+      "deadline_s": 180,
+      "design": "isolated",
+      "destination": "east",
+      "method": "kv_transfer",
+      "moves": [
+        {
+          "deadline_admitted": true,
+          "destination_instance": "east",
+          "method": "kv_transfer",
+          "order": 0,
+          "session_id": "claude:e2fd4f89-016f-29f0-48a1-3b2f1991b287"
+        }
+      ],
+      "policy": "kv_transfer",
+      "repeat": 2,
+      "scenario_id": "58d4866836a50060",
+      "sessions": [
+        {
+          "initial_tokens": 7680,
+          "job_class": "coding",
+          "order": 0,
+          "session_id": "claude:e2fd4f89-016f-29f0-48a1-3b2f1991b287",
+          "turn_index": 0
+        }
+      ],
+      "workload": "agentic_tool_loop"
+    },
+    {
+      "background": {
+        "east": [
+          0,
+          0
+        ]
+      },
+      "bandwidth": "controlled_40",
+      "bandwidth_mbps": 800,
+      "condition_index": 2048,
+      "context_size": 2048,
+      "deadline_s": 180,
+      "design": "isolated",
+      "destination": "east",
+      "method": "replay",
+      "moves": [
+        {
+          "deadline_admitted": true,
+          "destination_instance": "east",
+          "method": "replay",
+          "order": 0,
+          "session_id": "claude:eaad8d63-63bf-7139-f930-0ef47fa45253"
+        }
+      ],
+      "policy": "replay",
+      "repeat": 0,
+      "scenario_id": "8a91d887aff63f51",
+      "sessions": [
+        {
+          "initial_tokens": 1536,
+          "job_class": "coding",
+          "order": 0,
+          "session_id": "claude:eaad8d63-63bf-7139-f930-0ef47fa45253",
+          "turn_index": 0
+        }
+      ],
+      "workload": "agentic_tool_loop"
+    },
+    {
+      "background": {
+        "east": [
+          0,
+          0
+        ]
+      },
+      "bandwidth": "controlled_40",
+      "bandwidth_mbps": 800,
+      "condition_index": 2048,
+      "context_size": 2048,
+      "deadline_s": 180,
+      "design": "isolated",
+      "destination": "east",
+      "method": "kv_transfer",
+      "moves": [
+        {
+          "deadline_admitted": true,
+          "destination_instance": "east",
+          "method": "kv_transfer",
+          "order": 0,
+          "session_id": "claude:e2fd4f89-016f-29f0-48a1-3b2f1991b287"
+        }
+      ],
+      "policy": "kv_transfer",
+      "repeat": 2,
+      "scenario_id": "ca1de1fcad5cd46a",
+      "sessions": [
+        {
+          "initial_tokens": 1536,
+          "job_class": "coding",
+          "order": 0,
+          "session_id": "claude:e2fd4f89-016f-29f0-48a1-3b2f1991b287",
+          "turn_index": 0
+        }
+      ],
+      "workload": "agentic_tool_loop"
+    },
+    {
+      "background": {
+        "east": [
+          0,
+          0
+        ]
+      },
+      "bandwidth": "controlled_40",
+      "bandwidth_mbps": 800,
+      "condition_index": 2048,
+      "context_size": 2048,
+      "deadline_s": 180,
+      "design": "isolated",
+      "destination": "east",
+      "method": "kv_transfer",
+      "moves": [
+        {
+          "deadline_admitted": true,
+          "destination_instance": "east",
+          "method": "kv_transfer",
+          "order": 0,
+          "session_id": "claude:eaad8d63-63bf-7139-f930-0ef47fa45253"
+        }
+      ],
+      "policy": "kv_transfer",
+      "repeat": 0,
+      "scenario_id": "80480faa1be2af75",
+      "sessions": [
+        {
+          "initial_tokens": 1536,
+          "job_class": "coding",
+          "order": 0,
+          "session_id": "claude:eaad8d63-63bf-7139-f930-0ef47fa45253",
+          "turn_index": 0
+        }
+      ],
+      "workload": "agentic_tool_loop"
+    },
+    {
+      "background": {
+        "east": [
+          0,
+          0
+        ]
+      },
+      "bandwidth": "controlled_40",
+      "bandwidth_mbps": 800,
+      "condition_index": 8192,
+      "context_size": 8192,
+      "deadline_s": 180,
+      "design": "isolated",
+      "destination": "east",
+      "method": "kv_transfer",
+      "moves": [
+        {
+          "deadline_admitted": true,
+          "destination_instance": "east",
+          "method": "kv_transfer",
+          "order": 0,
+          "session_id": "claude:e2fd4f89-016f-29f0-48a1-3b2f1991b287"
+        }
+      ],
+      "policy": "kv_transfer",
+      "repeat": 1,
+      "scenario_id": "2caf5e97a2008d37",
+      "sessions": [
+        {
+          "initial_tokens": 7680,
+          "job_class": "coding",
+          "order": 0,
+          "session_id": "claude:e2fd4f89-016f-29f0-48a1-3b2f1991b287",
+          "turn_index": 0
+        }
+      ],
+      "workload": "agentic_tool_loop"
+    },
+    {
+      "background": {
+        "east": [
+          0,
+          0
+        ]
+      },
+      "bandwidth": "controlled_40",
+      "bandwidth_mbps": 800,
+      "condition_index": 8192,
+      "context_size": 8192,
+      "deadline_s": 180,
+      "design": "isolated",
+      "destination": "east",
+      "method": "kv_transfer",
+      "moves": [
+        {
+          "deadline_admitted": true,
+          "destination_instance": "east",
+          "method": "kv_transfer",
+          "order": 0,
+          "session_id": "claude:1534babd-9b9e-68e0-057e-d9ce7e08adf0"
+        }
+      ],
+      "policy": "kv_transfer",
+      "repeat": 0,
+      "scenario_id": "1e171566ad21c6a3",
+      "sessions": [
+        {
+          "initial_tokens": 7680,
+          "job_class": "coding",
+          "order": 0,
+          "session_id": "claude:1534babd-9b9e-68e0-057e-d9ce7e08adf0",
+          "turn_index": 0
+        }
+      ],
+      "workload": "agentic_tool_loop"
+    },
+    {
+      "background": {
+        "east": [
+          0,
+          0
+        ]
+      },
+      "bandwidth": "controlled_40",
+      "bandwidth_mbps": 800,
+      "condition_index": 8192,
+      "context_size": 8192,
+      "deadline_s": 180,
+      "design": "isolated",
+      "destination": "east",
+      "method": "replay",
+      "moves": [
+        {
+          "deadline_admitted": true,
+          "destination_instance": "east",
+          "method": "replay",
+          "order": 0,
+          "session_id": "claude:e2fd4f89-016f-29f0-48a1-3b2f1991b287"
+        }
+      ],
+      "policy": "replay",
+      "repeat": 1,
+      "scenario_id": "d5287aea2e012884",
+      "sessions": [
+        {
+          "initial_tokens": 7680,
+          "job_class": "coding",
+          "order": 0,
+          "session_id": "claude:e2fd4f89-016f-29f0-48a1-3b2f1991b287",
+          "turn_index": 0
+        }
+      ],
+      "workload": "agentic_tool_loop"
+    },
+    {
+      "background": {
+        "east": [
+          0,
+          0
+        ]
+      },
+      "bandwidth": "controlled_40",
+      "bandwidth_mbps": 800,
+      "condition_index": 32768,
+      "context_size": 32768,
+      "deadline_s": 180,
+      "design": "isolated",
+      "destination": "east",
+      "method": "replay",
+      "moves": [
+        {
+          "deadline_admitted": true,
+          "destination_instance": "east",
+          "method": "replay",
+          "order": 0,
+          "session_id": "claude:eaad8d63-63bf-7139-f930-0ef47fa45253"
+        }
+      ],
+      "policy": "replay",
+      "repeat": 1,
+      "scenario_id": "477d5aa10d1599cd",
+      "sessions": [
+        {
+          "initial_tokens": 32256,
+          "job_class": "coding",
+          "order": 0,
+          "session_id": "claude:eaad8d63-63bf-7139-f930-0ef47fa45253",
+          "turn_index": 0
+        }
+      ],
+      "workload": "agentic_tool_loop"
+    },
+    {
+      "background": {
+        "east": [
+          0,
+          0
+        ]
+      },
+      "bandwidth": "natural",
+      "bandwidth_mbps": 2156.442281566448,
+      "condition_index": 2048,
+      "context_size": 2048,
+      "deadline_s": 180,
+      "design": "isolated",
+      "destination": "east",
+      "method": "replay",
+      "moves": [
+        {
+          "deadline_admitted": true,
+          "destination_instance": "east",
+          "method": "replay",
+          "order": 0,
+          "session_id": "claude:92cc24b6-ac8d-5231-bb2d-33b876557766"
+        }
+      ],
+      "policy": "replay",
+      "repeat": 1,
+      "scenario_id": "4a6531c1ec791322",
+      "sessions": [
+        {
+          "initial_tokens": 1536,
+          "job_class": "coding",
+          "order": 0,
+          "session_id": "claude:92cc24b6-ac8d-5231-bb2d-33b876557766",
+          "turn_index": 0
+        }
+      ],
+      "workload": "agentic_tool_loop"
+    },
+    {
+      "background": {
+        "east": [
+          0,
+          0
+        ]
+      },
+      "bandwidth": "natural",
+      "bandwidth_mbps": 2156.442281566448,
+      "condition_index": 2048,
+      "context_size": 2048,
+      "deadline_s": 180,
+      "design": "isolated",
+      "destination": "east",
+      "method": "kv_transfer",
+      "moves": [
+        {
+          "deadline_admitted": true,
+          "destination_instance": "east",
+          "method": "kv_transfer",
+          "order": 0,
+          "session_id": "claude:eaad8d63-63bf-7139-f930-0ef47fa45253"
+        }
+      ],
+      "policy": "kv_transfer",
+      "repeat": 0,
+      "scenario_id": "c91e745b733dfb74",
+      "sessions": [
+        {
+          "initial_tokens": 1536,
+          "job_class": "coding",
+          "order": 0,
+          "session_id": "claude:eaad8d63-63bf-7139-f930-0ef47fa45253",
+          "turn_index": 0
+        }
+      ],
+      "workload": "agentic_tool_loop"
+    },
+    {
+      "background": {
+        "east": [
+          0,
+          0
+        ]
+      },
+      "bandwidth": "natural",
+      "bandwidth_mbps": 2156.442281566448,
+      "condition_index": 8192,
+      "context_size": 8192,
+      "deadline_s": 180,
+      "design": "isolated",
+      "destination": "east",
+      "method": "kv_transfer",
+      "moves": [
+        {
+          "deadline_admitted": true,
+          "destination_instance": "east",
+          "method": "kv_transfer",
+          "order": 0,
+          "session_id": "claude:e2fd4f89-016f-29f0-48a1-3b2f1991b287"
+        }
+      ],
+      "policy": "kv_transfer",
+      "repeat": 2,
+      "scenario_id": "0b3d4fb2c282a30f",
+      "sessions": [
+        {
+          "initial_tokens": 7680,
+          "job_class": "coding",
+          "order": 0,
+          "session_id": "claude:e2fd4f89-016f-29f0-48a1-3b2f1991b287",
+          "turn_index": 0
+        }
+      ],
+      "workload": "agentic_tool_loop"
+    },
+    {
+      "background": {
+        "east": [
+          0,
+          0
+        ]
+      },
+      "bandwidth": "natural",
+      "bandwidth_mbps": 2156.442281566448,
+      "condition_index": 8192,
+      "context_size": 8192,
+      "deadline_s": 180,
+      "design": "isolated",
+      "destination": "east",
+      "method": "replay",
+      "moves": [
+        {
+          "deadline_admitted": true,
+          "destination_instance": "east",
+          "method": "replay",
+          "order": 0,
+          "session_id": "claude:1534babd-9b9e-68e0-057e-d9ce7e08adf0"
+        }
+      ],
+      "policy": "replay",
+      "repeat": 0,
+      "scenario_id": "6fc4f715badd8068",
+      "sessions": [
+        {
+          "initial_tokens": 7680,
+          "job_class": "coding",
+          "order": 0,
+          "session_id": "claude:1534babd-9b9e-68e0-057e-d9ce7e08adf0",
+          "turn_index": 0
+        }
+      ],
+      "workload": "agentic_tool_loop"
+    },
+    {
+      "background": {
+        "east": [
+          0,
+          0
+        ]
+      },
+      "bandwidth": "natural",
+      "bandwidth_mbps": 2156.442281566448,
+      "condition_index": 32768,
+      "context_size": 32768,
+      "deadline_s": 180,
+      "design": "isolated",
+      "destination": "east",
+      "method": "kv_transfer",
+      "moves": [
+        {
+          "deadline_admitted": true,
+          "destination_instance": "east",
+          "method": "kv_transfer",
+          "order": 0,
+          "session_id": "codex:e381cc89-38ef-e67e-79b9-4b800369b4f5"
+        }
+      ],
+      "policy": "kv_transfer",
+      "repeat": 0,
+      "scenario_id": "da46cedb153ea239",
+      "sessions": [
+        {
+          "initial_tokens": 32256,
+          "job_class": "coding",
+          "order": 0,
+          "session_id": "codex:e381cc89-38ef-e67e-79b9-4b800369b4f5",
+          "turn_index": 0
+        }
+      ],
+      "workload": "agentic_tool_loop"
+    },
+    {
+      "background": {
+        "east": [
+          0,
+          0
+        ]
+      },
+      "bandwidth": "natural",
+      "bandwidth_mbps": 2156.442281566448,
+      "condition_index": 8192,
+      "context_size": 8192,
+      "deadline_s": 180,
+      "design": "isolated",
+      "destination": "east",
+      "method": "kv_transfer",
+      "moves": [
+        {
+          "deadline_admitted": true,
+          "destination_instance": "east",
+          "method": "kv_transfer",
+          "order": 0,
+          "session_id": "claude:e2fd4f89-016f-29f0-48a1-3b2f1991b287"
+        }
+      ],
+      "policy": "kv_transfer",
+      "repeat": 1,
+      "scenario_id": "633ab9a522c77246",
+      "sessions": [
+        {
+          "initial_tokens": 7680,
+          "job_class": "coding",
+          "order": 0,
+          "session_id": "claude:e2fd4f89-016f-29f0-48a1-3b2f1991b287",
+          "turn_index": 0
+        }
+      ],
+      "workload": "agentic_tool_loop"
+    },
+    {
+      "background": {
+        "east": [
+          0,
+          0
+        ]
+      },
+      "bandwidth": "natural",
+      "bandwidth_mbps": 2156.442281566448,
+      "condition_index": 2048,
+      "context_size": 2048,
+      "deadline_s": 180,
+      "design": "isolated",
+      "destination": "east",
+      "method": "replay",
+      "moves": [
+        {
+          "deadline_admitted": true,
+          "destination_instance": "east",
+          "method": "replay",
+          "order": 0,
+          "session_id": "claude:eaad8d63-63bf-7139-f930-0ef47fa45253"
+        }
+      ],
+      "policy": "replay",
+      "repeat": 0,
+      "scenario_id": "5fb0102112e9b944",
+      "sessions": [
+        {
+          "initial_tokens": 1536,
+          "job_class": "coding",
+          "order": 0,
+          "session_id": "claude:eaad8d63-63bf-7139-f930-0ef47fa45253",
+          "turn_index": 0
+        }
+      ],
+      "workload": "agentic_tool_loop"
+    },
+    {
+      "background": {
+        "east": [
+          0,
+          0
+        ]
+      },
+      "bandwidth": "natural",
+      "bandwidth_mbps": 2156.442281566448,
+      "condition_index": 2048,
+      "context_size": 2048,
+      "deadline_s": 180,
+      "design": "isolated",
+      "destination": "east",
+      "method": "replay",
+      "moves": [
+        {
+          "deadline_admitted": true,
+          "destination_instance": "east",
+          "method": "replay",
+          "order": 0,
+          "session_id": "claude:e2fd4f89-016f-29f0-48a1-3b2f1991b287"
+        }
+      ],
+      "policy": "replay",
+      "repeat": 2,
+      "scenario_id": "9e6d05465b345fd7",
+      "sessions": [
+        {
+          "initial_tokens": 1536,
+          "job_class": "coding",
+          "order": 0,
+          "session_id": "claude:e2fd4f89-016f-29f0-48a1-3b2f1991b287",
+          "turn_index": 0
+        }
+      ],
+      "workload": "agentic_tool_loop"
+    },
+    {
+      "background": {
+        "east": [
+          0,
+          0
+        ]
+      },
+      "bandwidth": "natural",
+      "bandwidth_mbps": 2156.442281566448,
+      "condition_index": 32768,
+      "context_size": 32768,
+      "deadline_s": 180,
+      "design": "isolated",
+      "destination": "east",
+      "method": "kv_transfer",
+      "moves": [
+        {
+          "deadline_admitted": true,
+          "destination_instance": "east",
+          "method": "kv_transfer",
+          "order": 0,
+          "session_id": "claude:eaad8d63-63bf-7139-f930-0ef47fa45253"
+        }
+      ],
+      "policy": "kv_transfer",
+      "repeat": 1,
+      "scenario_id": "83a4a121e7c946b8",
+      "sessions": [
+        {
+          "initial_tokens": 32256,
+          "job_class": "coding",
+          "order": 0,
+          "session_id": "claude:eaad8d63-63bf-7139-f930-0ef47fa45253",
+          "turn_index": 0
+        }
+      ],
+      "workload": "agentic_tool_loop"
+    },
+    {
+      "background": {
+        "east": [
+          0,
+          0
+        ]
+      },
+      "bandwidth": "natural",
+      "bandwidth_mbps": 2156.442281566448,
+      "condition_index": 8192,
+      "context_size": 8192,
+      "deadline_s": 180,
+      "design": "isolated",
+      "destination": "east",
+      "method": "replay",
+      "moves": [
+        {
+          "deadline_admitted": true,
+          "destination_instance": "east",
+          "method": "replay",
+          "order": 0,
+          "session_id": "claude:e2fd4f89-016f-29f0-48a1-3b2f1991b287"
+        }
+      ],
+      "policy": "replay",
+      "repeat": 2,
+      "scenario_id": "c62770f352339bf9",
+      "sessions": [
+        {
+          "initial_tokens": 7680,
+          "job_class": "coding",
+          "order": 0,
+          "session_id": "claude:e2fd4f89-016f-29f0-48a1-3b2f1991b287",
+          "turn_index": 0
+        }
+      ],
+      "workload": "agentic_tool_loop"
+    },
+    {
+      "background": {
+        "east": [
+          0,
+          0
+        ]
+      },
+      "bandwidth": "natural",
+      "bandwidth_mbps": 2156.442281566448,
+      "condition_index": 32768,
+      "context_size": 32768,
+      "deadline_s": 180,
+      "design": "isolated",
+      "destination": "east",
+      "method": "replay",
+      "moves": [
+        {
+          "deadline_admitted": true,
+          "destination_instance": "east",
+          "method": "replay",
+          "order": 0,
+          "session_id": "codex:e381cc89-38ef-e67e-79b9-4b800369b4f5"
+        }
+      ],
+      "policy": "replay",
+      "repeat": 0,
+      "scenario_id": "0ec211e9c637bd0e",
+      "sessions": [
+        {
+          "initial_tokens": 32256,
+          "job_class": "coding",
+          "order": 0,
+          "session_id": "codex:e381cc89-38ef-e67e-79b9-4b800369b4f5",
+          "turn_index": 0
+        }
+      ],
+      "workload": "agentic_tool_loop"
+    },
+    {
+      "background": {
+        "east": [
+          0,
+          0
+        ]
+      },
+      "bandwidth": "natural",
+      "bandwidth_mbps": 2156.442281566448,
+      "condition_index": 2048,
+      "context_size": 2048,
+      "deadline_s": 180,
+      "design": "isolated",
+      "destination": "east",
+      "method": "kv_transfer",
+      "moves": [
+        {
+          "deadline_admitted": true,
+          "destination_instance": "east",
+          "method": "kv_transfer",
+          "order": 0,
+          "session_id": "claude:e2fd4f89-016f-29f0-48a1-3b2f1991b287"
+        }
+      ],
+      "policy": "kv_transfer",
+      "repeat": 2,
+      "scenario_id": "a9808b98cc634259",
+      "sessions": [
+        {
+          "initial_tokens": 1536,
+          "job_class": "coding",
+          "order": 0,
+          "session_id": "claude:e2fd4f89-016f-29f0-48a1-3b2f1991b287",
+          "turn_index": 0
+        }
+      ],
+      "workload": "agentic_tool_loop"
+    },
+    {
+      "background": {
+        "east": [
+          0,
+          0
+        ]
+      },
+      "bandwidth": "natural",
+      "bandwidth_mbps": 2156.442281566448,
+      "condition_index": 2048,
+      "context_size": 2048,
+      "deadline_s": 180,
+      "design": "isolated",
+      "destination": "east",
+      "method": "kv_transfer",
+      "moves": [
+        {
+          "deadline_admitted": true,
+          "destination_instance": "east",
+          "method": "kv_transfer",
+          "order": 0,
+          "session_id": "claude:92cc24b6-ac8d-5231-bb2d-33b876557766"
+        }
+      ],
+      "policy": "kv_transfer",
+      "repeat": 1,
+      "scenario_id": "8393acc55157a8d7",
+      "sessions": [
+        {
+          "initial_tokens": 1536,
+          "job_class": "coding",
+          "order": 0,
+          "session_id": "claude:92cc24b6-ac8d-5231-bb2d-33b876557766",
+          "turn_index": 0
+        }
+      ],
+      "workload": "agentic_tool_loop"
+    },
+    {
+      "background": {
+        "east": [
+          0,
+          0
+        ]
+      },
+      "bandwidth": "natural",
+      "bandwidth_mbps": 2156.442281566448,
+      "condition_index": 8192,
+      "context_size": 8192,
+      "deadline_s": 180,
+      "design": "isolated",
+      "destination": "east",
+      "method": "replay",
+      "moves": [
+        {
+          "deadline_admitted": true,
+          "destination_instance": "east",
+          "method": "replay",
+          "order": 0,
+          "session_id": "claude:e2fd4f89-016f-29f0-48a1-3b2f1991b287"
+        }
+      ],
+      "policy": "replay",
+      "repeat": 1,
+      "scenario_id": "0b044b5e5fa1538e",
+      "sessions": [
+        {
+          "initial_tokens": 7680,
+          "job_class": "coding",
+          "order": 0,
+          "session_id": "claude:e2fd4f89-016f-29f0-48a1-3b2f1991b287",
+          "turn_index": 0
+        }
+      ],
+      "workload": "agentic_tool_loop"
+    },
+    {
+      "background": {
+        "east": [
+          0,
+          0
+        ]
+      },
+      "bandwidth": "natural",
+      "bandwidth_mbps": 2156.442281566448,
+      "condition_index": 32768,
+      "context_size": 32768,
+      "deadline_s": 180,
+      "design": "isolated",
+      "destination": "east",
+      "method": "kv_transfer",
+      "moves": [
+        {
+          "deadline_admitted": true,
+          "destination_instance": "east",
+          "method": "kv_transfer",
+          "order": 0,
+          "session_id": "codex:e381cc89-38ef-e67e-79b9-4b800369b4f5"
+        }
+      ],
+      "policy": "kv_transfer",
+      "repeat": 2,
+      "scenario_id": "6aa9b62e8b6b8798",
+      "sessions": [
+        {
+          "initial_tokens": 32256,
+          "job_class": "coding",
+          "order": 0,
+          "session_id": "codex:e381cc89-38ef-e67e-79b9-4b800369b4f5",
+          "turn_index": 0
+        }
+      ],
+      "workload": "agentic_tool_loop"
+    },
+    {
+      "background": {
+        "east": [
+          0,
+          0
+        ]
+      },
+      "bandwidth": "natural",
+      "bandwidth_mbps": 2156.442281566448,
+      "condition_index": 32768,
+      "context_size": 32768,
+      "deadline_s": 180,
+      "design": "isolated",
+      "destination": "east",
+      "method": "replay",
+      "moves": [
+        {
+          "deadline_admitted": true,
+          "destination_instance": "east",
+          "method": "replay",
+          "order": 0,
+          "session_id": "claude:eaad8d63-63bf-7139-f930-0ef47fa45253"
+        }
+      ],
+      "policy": "replay",
+      "repeat": 1,
+      "scenario_id": "5902b901b8e88f8a",
+      "sessions": [
+        {
+          "initial_tokens": 32256,
+          "job_class": "coding",
+          "order": 0,
+          "session_id": "claude:eaad8d63-63bf-7139-f930-0ef47fa45253",
+          "turn_index": 0
+        }
+      ],
+      "workload": "agentic_tool_loop"
+    },
+    {
+      "background": {
+        "east": [
+          0,
+          0
+        ]
+      },
+      "bandwidth": "natural",
+      "bandwidth_mbps": 2156.442281566448,
+      "condition_index": 8192,
+      "context_size": 8192,
+      "deadline_s": 180,
+      "design": "isolated",
+      "destination": "east",
+      "method": "kv_transfer",
+      "moves": [
+        {
+          "deadline_admitted": true,
+          "destination_instance": "east",
+          "method": "kv_transfer",
+          "order": 0,
+          "session_id": "claude:1534babd-9b9e-68e0-057e-d9ce7e08adf0"
+        }
+      ],
+      "policy": "kv_transfer",
+      "repeat": 0,
+      "scenario_id": "ea45e65c3850956f",
+      "sessions": [
+        {
+          "initial_tokens": 7680,
+          "job_class": "coding",
+          "order": 0,
+          "session_id": "claude:1534babd-9b9e-68e0-057e-d9ce7e08adf0",
+          "turn_index": 0
+        }
+      ],
+      "workload": "agentic_tool_loop"
+    },
+    {
+      "background": {
+        "east": [
+          0,
+          0
+        ]
+      },
+      "bandwidth": "natural",
+      "bandwidth_mbps": 2156.442281566448,
+      "condition_index": 32768,
+      "context_size": 32768,
+      "deadline_s": 180,
+      "design": "isolated",
+      "destination": "east",
+      "method": "replay",
+      "moves": [
+        {
+          "deadline_admitted": true,
+          "destination_instance": "east",
+          "method": "replay",
+          "order": 0,
+          "session_id": "codex:e381cc89-38ef-e67e-79b9-4b800369b4f5"
+        }
+      ],
+      "policy": "replay",
+      "repeat": 2,
+      "scenario_id": "d6a1a894b1c005f2",
+      "sessions": [
+        {
+          "initial_tokens": 32256,
+          "job_class": "coding",
+          "order": 0,
+          "session_id": "codex:e381cc89-38ef-e67e-79b9-4b800369b4f5",
+          "turn_index": 0
+        }
+      ],
+      "workload": "agentic_tool_loop"
+    }
+  ],
+  "schema": "queue-haul-network-plan-v2",
+  "seed": 1,
+  "sessions_per_scenario": 8
+}
