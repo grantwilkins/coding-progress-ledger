@@ -554,12 +554,20 @@ without failures in 8:08:22. Its checksum-pinned reduced bundle is under
 `outputs/policy-hardware-width8-packing-20260730/`; compressed results, GPU
 samples, proxy byte counters, and RESP transfer records retain the raw evidence
 without runtime debug logs. The matched 120-episode, 240-scenario baseline plan is pinned under
-`outputs/policy-hardware-width8-isolated-fastest-plan/`. Its bandwidth-grouped order needs four model-stack starts instead of 93. Its
-launcher reduces all episodes, hard-validates three complete repetitions per condition and clean
+`outputs/policy-hardware-width8-isolated-fastest-plan/`. Its bandwidth-grouped
+order has four bandwidth blocks instead of 93 bandwidth runs; the 30-scenario
+hygiene rotation yields eight model-stack starts. Its launcher reduces all
+episodes, hard-validates three complete repetitions per condition and clean
 plan/profile provenance, writes checksums, and rebuilds the comparison from the
 common packing cohort only (120 observations per method). The comparison uses
 ±5 percentage points relative to Queue-Haul LP for better/similar/worse and
-shows every sample count; frontier and partial-network rows are excluded.
+shows every sample count; frontier and partial-network rows are excluded. The
+completed allocation 37874352 produced 240/240 scenarios with no failures and
+120 validated attainment rows across 40 conditions with three repetitions each.
+Its reduced, checksum-pinned bundle is under
+`outputs/policy-hardware-width8-isolated-fastest-20260806/`, including the
+common-cohort chart and compressed result, power, proxy-byte, and RESP-transfer
+evidence.
 Its bandwidth-faceted destination-TTFT CDF pools
 all five workloads, both deadlines, and three episodes within each bandwidth;
 the companion pooled CDF combines all four bandwidths. Regenerate that CDF
