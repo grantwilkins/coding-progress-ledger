@@ -14,6 +14,7 @@ Plausible wrong implementations:
 - Omit the fixed-method controls or aggregate source power once per migration.
 - Count commits just after the deadline or linearize the nonlinear power curve.
 - Drop failed full-target episodes or forget the trailing power window.
+- Clip full-target completions at the deadline instead of extending the CDF.
 - Mix 19-second plans into the 30-second attainment curve.
 - Plot destination-only prefill instead of migration-to-first-token latency.
 - Average committed-session fractions instead of nonlinear episode power.
@@ -493,7 +494,7 @@ def test_common_packing_chart_uses_120_matched_rows_and_five_point_band(
     assert (out / "policy_hardware_common_packing.pdf").exists()
 
 
-def test_full_power_attainment_keeps_failures_and_power_window():
+def test_full_power_attainment_includes_late_events_and_power_window():
     summaries = [
         {"policy": policy, "required_deadline_s": deadline,
          "commit_100_s": commit}
@@ -506,8 +507,8 @@ def test_full_power_attainment_keeps_failures_and_power_window():
 
     x, y = full_power_attainment_curve(summaries, "queue_haul", 30, 5)
 
-    assert x.tolist() == [0, 10, 30]
-    assert y.tolist() == [0, .25, .5]
+    assert x.tolist() == [0, 10, 30, 31]
+    assert y.tolist() == [0, .25, .5, .75]
 
 
 def test_full_power_attainment_legend_is_plain_and_upper_left(
@@ -518,10 +519,13 @@ def test_full_power_attainment_legend_is_plain_and_upper_left(
         "commit_100_s": 5,
     }], 5, tmp_path)
 
-    legend = campaign.plt.gcf().axes[0].get_legend()
+    ax = campaign.plt.gcf().axes[0]
+    legend = ax.get_legend()
     assert [text.get_text() for text in legend.texts] \
         == [CDF_LABELS["queue_haul"]]
     assert legend._loc == 2
+    assert list(ax.lines[-1].get_xdata()) == [30, 30]
+    assert ax.lines[-1].get_linestyle() == "--"
 
 
 def test_destination_ttft_cdf_includes_migration_time(tmp_path, monkeypatch):

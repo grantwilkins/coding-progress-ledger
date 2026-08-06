@@ -644,12 +644,9 @@ def full_power_attainment_curve(summaries, policy, deadline_s,
     events = sorted(
         float(row["commit_100_s"]) + power_window_s for row in selected
         if row["commit_100_s"] not in (None, "")
-        and float(row["commit_100_s"]) + power_window_s <= deadline_s
     )
     x = np.r_[0, events]
     y = np.r_[0, np.arange(1, len(events) + 1) / len(selected)]
-    if not events or events[-1] < deadline_s:
-        x, y = np.r_[x, deadline_s], np.r_[y, y[-1]]
     return x, y
 
 
@@ -721,16 +718,17 @@ def plot_full_power_attainment(summaries, power_window_s, out,
                 linestyle=CDF_LINESTYLES[policy], linewidth=3,
                 label=CDF_LABELS[policy],
             )
+    ax.axvline(deadline_s, color="black", linestyle="--", linewidth=1.5)
     ax.set(
         xlabel="Time to Full Power-Shed Attainment (s)",
-        ylabel=f"Fraction of {deadline_s:g}-s Episodes",
-        xlim=(0, deadline_s), ylim=(0, 1.02),
+        ylabel="Cumulative Distribution", ylim=(0, 1.02),
     )
+    ax.set_xlim(left=0)
     ax.tick_params(labelsize=15)
     ax.xaxis.label.set_size(15)
     ax.yaxis.label.set_size(15)
     ax.grid(alpha=.25)
-    if ax.lines:
+    if ax.get_legend_handles_labels()[0]:
         ax.legend(frameon=False, fontsize=11, loc="upper left")
     fig.tight_layout()
     for suffix in ("png", "pdf"):
