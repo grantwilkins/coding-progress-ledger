@@ -11,6 +11,7 @@ Plausible wrong implementations:
 - Include unmeasured missing scenarios as zero-achievement observations.
 - Pool methods, flip the error sign, or mark equality as an undershoot.
 - Retain excluded methods or sort displayed methods by the wrong statistic.
+- Apply a relative 5% tolerance or exclude either exact five-point boundary.
 """
 
 import csv
@@ -74,8 +75,9 @@ def test_outcomes_classify_the_error_sign_and_equality_boundary():
     rows = [
         {"method": method, "requested_percent": 50,
          "achieved_percent": achieved}
-        for method, achieved in (("queue_haul", 40), ("queue_haul", 50),
-                                 ("queue_haul", 60), ("greedy", 50),
+        for method, achieved in (("queue_haul", 44), ("queue_haul", 45),
+                                 ("queue_haul", 50), ("queue_haul", 55),
+                                 ("queue_haul", 56), ("greedy", 50),
                                  ("random", 50))
     ]
 
@@ -86,8 +88,8 @@ def test_outcomes_classify_the_error_sign_and_equality_boundary():
             ("Above target", 0, 0),
         ]),
         ("queue_haul", [
-            ("Below target", 1, 100 / 3),
-            ("On target", 1, 100 / 3),
-            ("Above target", 1, 100 / 3),
+            ("Below target", 1, 20),
+            ("On target", 3, 60),
+            ("Above target", 1, 20),
         ]),
     ]

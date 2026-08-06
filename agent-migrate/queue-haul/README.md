@@ -410,8 +410,9 @@ slow reconstruction completes with `deadline_met=false` instead of restarting.
 network scenarios into stacked power-target outcome bars for Queue-Haul LP,
 Queue-Haul Greedy, KV-only, and replay-only, sorted by target attainment.
 Each bar reports below, on, or above the normalized deadline-admitted shed.
-Achieved shed uses the trailing power window from hardware completion times;
-the two three-node handoffs use measured Sweden pre/post power. Run
+On target includes deviations within ±5 percentage points. Achieved shed uses
+the trailing power window from hardware completion times; the two three-node
+handoffs use measured Sweden pre/post power. Run
 `uv run python queue-haul/plot_hardware_power_parity.py`.
 
 Reduction runs automatically and can also be repeated without hardware:

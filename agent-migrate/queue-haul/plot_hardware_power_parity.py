@@ -24,6 +24,7 @@ NETWORK_ROOT = OUTPUTS / "network-campaign-20260805"
 METHODS = ("queue_haul", "greedy", "greedy_lagrangian", "kv_only",
            "replay_only", "random")
 PLOT_METHODS = ("queue_haul", "greedy", "kv_only", "replay_only")
+TARGET_TOLERANCE_PP = 5
 METHOD_LABELS = {
     "queue_haul": "Queue-Haul LP", "greedy": "Queue-Haul Greedy",
     "greedy_lagrangian": "Lagrangian greedy", "kv_only": "KV only",
@@ -39,7 +40,7 @@ def _point(campaign: str, scenario: str, method: str, requested: float,
     return {
         "campaign": campaign, "scenario_id": scenario, "method": method,
         "requested_percent": requested, "achieved_percent": achieved,
-        "marker": "x" if achieved < requested - 1e-9 else "o",
+        "marker": "x" if achieved < requested - TARGET_TOLERANCE_PP else "o",
     }
 
 
@@ -113,8 +114,9 @@ def outcomes(rows: list[dict]) -> list[tuple[str, int, float]]:
     counts = {"Below target": 0, "On target": 0, "Above target": 0}
     for row in rows:
         error = row["achieved_percent"] - row["requested_percent"]
-        counts["Below target" if error < -1e-9 else
-               "Above target" if error > 1e-9 else "On target"] += 1
+        counts["Below target" if error < -TARGET_TOLERANCE_PP else
+               "Above target" if error > TARGET_TOLERANCE_PP
+               else "On target"] += 1
     return [(name, count, 100 * count / len(rows))
             for name, count in counts.items()]
 
