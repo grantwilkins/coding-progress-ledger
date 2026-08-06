@@ -1,3 +1,17 @@
+"""
+Claim:
+Power samples are averaged independently in fixed, half-open 1 s bins, and the
+three highlighted intervals retain their measured event boundaries.
+
+Plausible wrong implementations:
+- Use a rolling average instead of fixed bins.
+- Put a boundary sample in the preceding bin.
+- Sum samples or mis-scale milliseconds as seconds.
+- Include samples before the trace origin.
+- Highlight the wrong migration or traffic-switch boundaries.
+- Conflate route switching with source power-down.
+"""
+
 from __future__ import annotations
 
 import importlib.util
@@ -10,6 +24,28 @@ PATH = Path(__file__).parents[1] / "outputs/live-power-shed/driver.py"
 SPEC = importlib.util.spec_from_file_location("live_power_shed", PATH)
 driver = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(driver)
+
+
+def test_power_uses_fixed_one_second_mean_bins():
+    rows = [
+        {"timestamp": f"2026/01/01 00:00:{second}", "power.draw [W]": watts}
+        for second, watts in (("00.000", "900"), ("01.000", "100"),
+                              ("01.999", "300"), ("02.000", "600"))
+    ]
+    origin = driver.parse_wall(rows[1]["timestamp"])
+
+    times, watts = driver.bin_power(rows, origin)
+
+    assert times == pytest.approx([.5, 1.5])
+    assert watts == pytest.approx([200, 600])
+
+
+def test_highlights_use_measured_migration_switch_and_power_down_boundaries():
+    assert [(start, end, label) for _, start, end, _, _, label in driver.WINDOWS] == [
+        ("migration_start", "migration_complete", "Migration"),
+        ("switch_start", "traffic_switched", "Switch"),
+        ("traffic_switched", "source_drained", "Power down"),
+    ]
 
 
 def test_power_pairing_uses_query_interval_and_drops_one_torn_tick(tmp_path):

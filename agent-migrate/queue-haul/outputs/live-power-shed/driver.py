@@ -52,14 +52,13 @@ SOURCE_RPS, DEST_RPS = 4.0, 1.0
 BUSY_APPEND_TOKENS, BUSY_OUTPUT_TOKENS = 2048, 32
 SOURCE_INFLIGHT, DEST_INFLIGHT = 64, 48
 STEADY_S, POST_S, MIGRATION_DEADLINE_S = 300, 300, 30
-SOURCE, DESTINATION = "#B22E2E", "#00799B"
+SOURCE, DESTINATION = "#E98300", "#007C92"
 WINDOWS = (
-    ("migration", "migration_start", "migration_complete", "#E98300", None,
+    ("migration", "migration_start", "migration_complete", "#DAD7CB", .5,
      "Migration"),
-    ("switch", "switch_start", "traffic_switched", "#7B5EA7", None,
-     "Traffic switch"),
-    ("source_fall", "traffic_switched", "source_drained", "#4F5B66", "///",
-     "Source power fall"),
+    ("switch", "switch_start", "traffic_switched", "#007C92", .12, "Switch"),
+    ("source_fall", "traffic_switched", "source_drained", "#6F4E7C", .12,
+     "Power down"),
 )
 
 
@@ -297,6 +296,16 @@ def series(by_uuid, uuid, origin):
             [float(row["power.draw [W]"]) for row in by_uuid[uuid]])
 
 
+def bin_power(rows: list[dict], origin: float) -> tuple[list[float], list[float]]:
+    bins = collections.defaultdict(list)
+    for row in rows:
+        elapsed = parse_wall(row["timestamp"]) - origin
+        if elapsed >= 0:
+            bins[int(elapsed)].append(float(row["power.draw [W]"]))
+    return ([second + .5 for second in sorted(bins)],
+            [statistics.mean(bins[second]) for second in sorted(bins)])
+
+
 def settle_time(times, watts, start, floor, band=15.0, dwell=5.0):
     """First time after `start` that power stays within `band` W of `floor`."""
     since = None
@@ -417,55 +426,32 @@ def reduce_power(run_root: Path, markers, role_uuids: list[str]) -> dict:
 def plot_power(run_root: Path, markers, by_uuid, role_uuids, summary) -> None:
     origin = markers.rows[0]["wall_ns"] / 1e9
     marker = {row["event"]: row["wall_ns"] / 1e9 - origin for row in markers.rows}
-    fig, ax = plt.subplots(figsize=(11, 5))
-    ax.set_facecolor("#ffffff")
-    top = max(float(row["power.draw [W]"])
-              for uuid in role_uuids for row in by_uuid[uuid])
-
-    # Rotated in-band labels sit inside their own span, so narrow windows cannot
-    # collide with their neighbours the way centred horizontal labels do.
-    for name, start, end, color, hatch, label in WINDOWS:
-        left, right = marker[start], marker[end]
-        if name == "switch" and right - left < 2:
-            center = (left + right) / 2
-            left, right = max(0, center - 1), center + 1
-        ax.axvspan(left, right, facecolor=color,
-                   alpha=.14 if hatch else .20, lw=0, zorder=0, hatch=hatch,
-                   edgecolor=color)
-        ax.text((left + right) * .5, top * .06,
-                label, rotation=90, ha="center", va="bottom", fontsize=8,
-                color="#3f3f42", zorder=3)
+    fig, ax = plt.subplots(figsize=(9, 4))
 
     for label, uuid, color in (
-        ("Source GPU", role_uuids[0], SOURCE),
-        ("Destination GPU", role_uuids[1], DESTINATION),
+        ("Source", role_uuids[0], SOURCE),
+        ("Destination", role_uuids[1], DESTINATION),
     ):
-        ax.plot(*series(by_uuid, uuid, origin), lw=.7, label=label, color=color,
-                zorder=2, solid_joinstyle="round")
+        ax.plot(*bin_power(by_uuid[uuid], origin), lw=1.2, label=label,
+                color=color, zorder=2)
+    for name, start, end, color, alpha, label in WINDOWS:
+        left, right = marker[start], marker[end]
+        if name == "switch" and right - left < 2:
+            left, right = (left + right) / 2 - 1, (left + right) / 2 + 1
+        ax.axvspan(left, right, color=color, alpha=alpha, label=label, zorder=0)
+    for event in dict.fromkeys(name for window in WINDOWS for name in window[1:3]):
+        ax.axvline(marker[event], color="black", lw=.7, ls=":", zorder=1)
 
-    ax.grid(axis="y", color="#e6e6e4", lw=.6, zorder=1)
-    ax.set_axisbelow(True)
-    for spine in ("top", "right"):
-        ax.spines[spine].set_visible(False)
-    for spine in ("left", "bottom"):
-        ax.spines[spine].set_color("#c9c9c6")
-    ax.tick_params(colors="#5f5f63", labelsize=9)
-    ax.set_xlabel("Elapsed time (s)", color="#3f3f42")
-    ax.set_ylabel("GPU power (W)", color="#3f3f42")
-    ax.set_title(
-        f"Full-shed migration under live load: source {SOURCE_RPS:g} rps, "
-        f"destination {DEST_RPS:g} rps",
-        color="#1f1f22", fontsize=12, pad=26, loc="left",
-    )
-    ax.set_ylim(0, top * 1.06)
+    ax.set(xlabel="Time (s)", ylabel="Power per GPU (W)")
     ax.set_xlim(0, marker["measurement_complete"])
-    handles, labels = ax.get_legend_handles_labels()
-    handles += [plt.Rectangle((0, 0), 1, 1, facecolor=color, edgecolor=color,
-                              alpha=.14 if hatch else .20, hatch=hatch)
-                for _, _, _, color, hatch, _ in WINDOWS]
-    labels += [f"{label} window" for *_, label in WINDOWS]
-    ax.legend(handles, labels, frameon=False, ncol=5, fontsize=9,
-              loc="upper center", bbox_to_anchor=(.5, -.14), labelcolor="#3f3f42")
+    ax.grid(alpha=.25)
+    ax.tick_params(labelsize=11)
+    ax.xaxis.label.set_size(13)
+    ax.yaxis.label.set_size(13)
+    for spine in ax.spines.values():
+        spine.set_color("black")
+    ax.legend(frameon=False, ncol=5, fontsize=11, loc="upper center",
+              bbox_to_anchor=(.5, -.2), columnspacing=1.4, handlelength=2.3)
     fig.tight_layout()
     for suffix in ("png", "pdf"):
         fig.savefig(run_root / f"power_curve.{suffix}", dpi=220,
