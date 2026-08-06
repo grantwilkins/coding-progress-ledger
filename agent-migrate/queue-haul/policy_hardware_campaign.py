@@ -607,6 +607,9 @@ def reduce_run(run_root: Path, out: Path | None = None):
         plot_hardware_pareto(attainment, summaries, out)
         plot_disruption(migrations, summaries, power_curve, out)
         plot_migration_time_per_watt(summaries, power_curve, out)
+        plot_max_session_ttft_per_watt(
+            migrations, summaries, power_curve, out
+        )
         plot_full_power_attainment(summaries, power_window_s, out)
     for condition in sorted({row["condition"] for row in summaries}):
         plot(
@@ -719,11 +722,10 @@ def max_session_ttft_points(rows, summaries):
             == int(row["planned_migrations"])]
 
 
-def plot_max_session_ttft(rows, summaries, out):
-    points = max_session_ttft_points(rows, summaries)
+def _plot_max_session_cdf(points, key, xlabel, filename, out):
     fig, ax = plt.subplots(figsize=CDF_FIGSIZE)
     for policy in POLICIES:
-        values = sorted(row["max_session_ttft_s"] for row in points
+        values = sorted(row[key] for row in points
                         if row["policy"] == policy)
         if values:
             ax.step(np.r_[0, values], np.r_[0, np.arange(1, len(values) + 1)
@@ -731,7 +733,7 @@ def plot_max_session_ttft(rows, summaries, out):
                     color=CDF_COLORS[policy],
                     linestyle=CDF_LINESTYLES[policy], linewidth=3,
                     label=CDF_LABELS[policy])
-    ax.set(xlabel="Maximum Session Migration + TTFT (s)",
+    ax.set(xlabel=xlabel,
            ylabel="Cumulative Distribution", ylim=(0, 1.02))
     ax.tick_params(labelsize=15)
     ax.xaxis.label.set_size(15)
@@ -740,9 +742,31 @@ def plot_max_session_ttft(rows, summaries, out):
     ax.legend(frameon=False, fontsize=13)
     fig.tight_layout()
     for suffix in ("png", "pdf"):
-        fig.savefig(out / f"policy_hardware_max_session_ttft_cdf.{suffix}",
-                    dpi=220)
+        fig.savefig(out / f"{filename}.{suffix}", dpi=220)
     plt.close(fig)
+
+
+def plot_max_session_ttft(rows, summaries, out):
+    _plot_max_session_cdf(
+        max_session_ttft_points(rows, summaries), "max_session_ttft_s",
+        "Maximum Session Migration + TTFT (s)",
+        "policy_hardware_max_session_ttft_cdf", out,
+    )
+
+
+def max_session_ttft_per_watt_points(rows, summaries, power_curve):
+    saved = power_curve.power(.4) - power_curve.power(0)
+    return [{"policy": row["policy"],
+             "max_session_s_per_w": row["max_session_ttft_s"] / saved}
+            for row in max_session_ttft_points(rows, summaries)]
+
+
+def plot_max_session_ttft_per_watt(rows, summaries, power_curve, out):
+    _plot_max_session_cdf(
+        max_session_ttft_per_watt_points(rows, summaries, power_curve),
+        "max_session_s_per_w", "Max Session Migration + TTFT (s/W)",
+        "policy_hardware_max_session_ttft_per_watt_cdf", out,
+    )
 
 
 def plot_full_power_attainment(summaries, power_window_s, out,
@@ -1188,6 +1212,9 @@ def plot_reduced(out, model_path=DEFAULT_MODEL, pooled_with=()):
     plot_disruption(rows + pooled_rows, summaries + pooled_summaries,
                     power_curve, out)
     plot_migration_time_per_watt(summaries + pooled_summaries, power_curve, out)
+    plot_max_session_ttft_per_watt(
+        rows + pooled_rows, summaries + pooled_summaries, power_curve, out
+    )
     plot_full_power_attainment(
         summaries + pooled_summaries, model.power_window_s, out
     )

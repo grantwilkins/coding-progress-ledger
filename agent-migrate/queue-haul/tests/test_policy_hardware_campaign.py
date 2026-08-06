@@ -18,6 +18,7 @@ Plausible wrong implementations:
 - Mix 19-second plans into the 30-second attainment curve.
 - Plot destination-only prefill instead of migration-to-first-token latency.
 - Average or pool migrations instead of taking each complete episode's maximum.
+- Divide by a shed percentage or linear load instead of modeled watts.
 - Average committed-session fractions instead of nonlinear episode power.
 - Compute Pareto dominance across unmatched episodes or requested targets.
 - Use migration duration instead of service pause for disruption.
@@ -50,6 +51,7 @@ from policy_hardware_campaign import (
     disruption_points,
     full_power_attainment_curve,
     make_plan,
+    max_session_ttft_per_watt_points,
     max_session_ttft_points,
     migration_time_per_watt_points,
     pareto_points,
@@ -574,6 +576,11 @@ def test_destination_ttft_cdf_includes_migration_time(tmp_path, monkeypatch):
 
 def test_max_session_ttft_uses_slowest_session_in_each_complete_episode(
         tmp_path, monkeypatch):
+    class QuadraticPower:
+        @staticmethod
+        def power(load):
+            return 100 + 100 * load ** 2
+
     rows = [
         {"scenario_id": scenario, "migration_ttft_s": value}
         for scenario, value in (("a", 3), ("a", 5), ("b", 7),
@@ -592,11 +599,23 @@ def test_max_session_ttft_uses_slowest_session_in_each_complete_episode(
         {"policy": "queue_haul", "max_session_ttft_s": 5},
         {"policy": "kv_only", "max_session_ttft_s": 2},
     ]
+    assert max_session_ttft_per_watt_points(
+        rows, summaries, QuadraticPower()
+    ) == [
+        {"policy": "queue_haul", "max_session_s_per_w": 5 / 16},
+        {"policy": "kv_only", "max_session_s_per_w": 2 / 16},
+    ]
     monkeypatch.setattr(campaign.plt, "close", lambda _: None)
     campaign.plot_max_session_ttft(rows, summaries, tmp_path)
     ax = campaign.plt.gcf().axes[0]
     assert ax.lines[0].get_xdata().tolist() == [0, 5]
     assert ax.get_xlabel() == "Maximum Session Migration + TTFT (s)"
+    campaign.plot_max_session_ttft_per_watt(
+        rows, summaries, QuadraticPower(), tmp_path
+    )
+    ax = campaign.plt.gcf().axes[0]
+    assert ax.lines[0].get_xdata().tolist() == [0, 5 / 16]
+    assert ax.get_xlabel() == "Max Session Migration + TTFT (s/W)"
 
 
 def test_migration_time_per_watt_cdf_uses_compact_paper_dimensions(
