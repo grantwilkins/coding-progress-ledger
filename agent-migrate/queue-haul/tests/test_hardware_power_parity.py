@@ -15,7 +15,7 @@ import csv
 import json
 from types import SimpleNamespace
 
-from plot_hardware_power_parity import load_network, load_policy, summarize
+from plot_hardware_power_parity import load_network, load_policy, outcomes
 
 
 def _scenario(scenario_id="s", policy="queue_haul", admitted=4):
@@ -68,24 +68,14 @@ def test_network_uses_completion_times_and_omits_missing_cases(tmp_path):
     assert rows[0]["marker"] == "o"
 
 
-def test_summary_keeps_methods_and_request_levels_separate():
+def test_outcomes_classify_the_error_sign_and_equality_boundary():
     rows = [
-        {"method": method, "requested_percent": requested,
-         "achieved_percent": achieved}
-        for method, requested, achieved in (
-            ("queue_haul", 50, 40), ("queue_haul", 50, 60),
-            ("queue_haul", 100, 80), ("greedy", 50, 25),
-        )
+        {"requested_percent": 50, "achieved_percent": achieved}
+        for achieved in (40, 50, 60, 50)
     ]
 
-    assert summarize(rows) == [
-        {"method": "greedy", "requested_percent": 50,
-         "achieved_percent": 25.0, "low_percent": 25.0,
-         "high_percent": 25.0, "samples": 1, "marker": "x"},
-        {"method": "queue_haul", "requested_percent": 50,
-         "achieved_percent": 50.0, "low_percent": 42.0,
-         "high_percent": 58.0, "samples": 2, "marker": "o"},
-        {"method": "queue_haul", "requested_percent": 100,
-         "achieved_percent": 80.0, "low_percent": 80.0,
-         "high_percent": 80.0, "samples": 1, "marker": "x"},
+    assert outcomes(rows) == [
+        ("Below target", 1, 25),
+        ("On target", 2, 50),
+        ("Above target", 1, 25),
     ]

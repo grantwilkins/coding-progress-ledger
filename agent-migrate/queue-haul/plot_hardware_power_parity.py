@@ -11,8 +11,6 @@ import matplotlib
 
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
-from matplotlib.lines import Line2D
-import numpy as np
 
 from policy_hardware_campaign import deadline_attainment
 from profiles import ModelProfile
@@ -25,13 +23,6 @@ POLICY_ROOTS = tuple(OUTPUTS / f"policy-hardware-width8-{name}-20260730"
 NETWORK_ROOT = OUTPUTS / "network-campaign-20260805"
 METHODS = ("queue_haul", "greedy", "greedy_lagrangian", "kv_only",
            "replay_only", "random")
-LABELS = {
-    "queue_haul": "Queue-Haul LP", "greedy": "Greedy",
-    "greedy_lagrangian": "Lagrangian greedy", "kv_only": "KV only",
-    "replay_only": "Replay only", "random": "Random",
-}
-COLORS = dict(zip(METHODS, ("#B1040E", "#008566", "#620059", "#006CB8",
-                            "#E98300", "#767676")))
 
 
 def _point(campaign: str, scenario: str, method: str, requested: float,
@@ -112,59 +103,37 @@ def load_handoff(root: Path, idle_power_w: float) -> dict:
                   achieved)
 
 
-def summarize(rows: list[dict]) -> list[dict]:
-    groups = {}
+def outcomes(rows: list[dict]) -> list[tuple[str, int, float]]:
+    counts = {"Below target": 0, "On target": 0, "Above target": 0}
     for row in rows:
-        groups.setdefault((row["method"], row["requested_percent"]), []).append(
-            row["achieved_percent"])
-    output = []
-    for (method, requested), values in sorted(groups.items()):
-        low, median, high = np.percentile(values, (10, 50, 90))
-        output.append({
-            "method": method, "requested_percent": requested,
-            "achieved_percent": median, "low_percent": low,
-            "high_percent": high, "samples": len(values),
-            "marker": "x" if median < requested - 1e-9 else "o",
-        })
-    return output
+        error = row["achieved_percent"] - row["requested_percent"]
+        counts["Below target" if error < -1e-9 else
+               "Above target" if error > 1e-9 else "On target"] += 1
+    return [(name, count, 100 * count / len(rows))
+            for name, count in counts.items()]
 
 
 def write_plot(rows: list[dict], out: Path) -> None:
-    summaries = summarize(rows)
-    methods = [method for method in METHODS
-               if any(row["method"] == method for row in summaries)]
-    fig, axes = plt.subplots(2, 3, figsize=(9, 6.5), sharex=True, sharey=True)
-    for axis, method in zip(axes.flat, methods):
-        selected = [row for row in summaries if row["method"] == method]
-        for row in selected:
-            x, y = row["requested_percent"], row["achieved_percent"]
-            axis.errorbar(
-                x, y, yerr=((y - row["low_percent"],),
-                            (row["high_percent"] - y,)),
-                fmt="none", color=COLORS[method], capsize=3, lw=1.4,
-            )
-            axis.plot((x, x), (x, y), color=COLORS[method], alpha=.35, lw=1)
-            axis.scatter(x, y, color=COLORS[method], marker=row["marker"],
-                         s=42, linewidths=1.4, clip_on=False, zorder=3)
-        axis.plot((0, 100), (0, 100), color="black", ls="--", lw=.8)
-        axis.set_title(f"{LABELS[method]} (n={sum(row['samples'] for row in selected)})",
-                       color=COLORS[method], fontsize=11)
-        axis.set(xlim=(0, 100), ylim=(0, 100))
-        axis.set_aspect("equal", adjustable="box")
-        axis.grid(alpha=.2)
-    for axis in axes[-1]:
-        axis.set_xlabel("Requested shed (%)")
-    for axis in axes[:, 0]:
-        axis.set_ylabel("Achieved shed (%)")
-    fig.legend(handles=(
-        Line2D([], [], marker="x", ls="", color="black",
-               label="Median below request"),
-        Line2D([], [], marker="o", ls="", color="black",
-               label="Median at/above request"),
-        Line2D([], [], marker="|", ls="-", color="black",
-               label="10th–90th percentile"),
-    ), frameon=False, ncol=3, loc="lower center")
-    fig.tight_layout(rect=(0, .06, 1, 1))
+    summary = outcomes(rows)
+    colors = ("#B1040E", "#006CB8", "#008566")
+    labels = {"Below target": "Shortfall", "Above target": "Exceeded"}
+    fig, axis = plt.subplots(figsize=(8, 2.6))
+    left = 0
+    for (name, count, percent), color in zip(summary, colors):
+        axis.barh(0, percent, left=left, height=.55, color=color,
+                  label=f"{name} ({count})")
+        axis.text(left + percent / 2, 0,
+                  f"{labels.get(name, name)}\n{percent:.1f}%",
+                  color="white", ha="center", va="center", weight="bold")
+        left += percent
+    met = summary[1][2] + summary[2][2]
+    axis.set(xlim=(0, 100), ylim=(-.65, .65), yticks=(),
+             xlabel="Share of hardware scenarios (%)",
+             title=f"{met:.1f}% meet or exceed the requested power shed  (n={len(rows)})")
+    axis.spines[["left", "right", "top"]].set_visible(False)
+    axis.tick_params(axis="x", length=0)
+    axis.grid(axis="x", alpha=.2, zorder=0)
+    fig.tight_layout()
     out.parent.mkdir(parents=True, exist_ok=True)
     for suffix in ("png", "pdf"):
         fig.savefig(out.with_suffix(f".{suffix}"), dpi=220)
