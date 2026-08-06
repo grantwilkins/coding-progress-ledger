@@ -413,7 +413,8 @@ destination-method selections. Run
 
 `plot_hardware_power_parity.py` groups the completed width-8 policy and joint
 network scenarios into stacked power-target outcome bars for Queue-Haul LP,
-Queue-Haul Greedy, KV-only, and replay-only, sorted by target attainment.
+Queue-Haul Greedy, per-session fastest, KV-only, and replay-only, sorted by
+target attainment.
 Each bar reports below, on, or above the normalized deadline-admitted shed.
 On target includes deviations within ±5 percentage points. Achieved shed uses
 the trailing power window from hardware completion times; the two three-node

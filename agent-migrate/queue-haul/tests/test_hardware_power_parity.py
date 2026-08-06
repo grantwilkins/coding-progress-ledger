@@ -32,18 +32,18 @@ def _scenario(scenario_id="s", policy="queue_haul", admitted=4):
 
 
 def test_policy_uses_per_episode_admitted_and_achieved_shed(tmp_path):
-    scenario = _scenario()
+    scenario = _scenario(policy="isolated_fastest")
     (tmp_path / "plan.json").write_text(json.dumps({"scenarios": [scenario]}))
     with (tmp_path / "policy_attainment.csv").open("w", newline="") as handle:
         writer = csv.DictWriter(handle, fieldnames=(
             "scenario_id", "policy", "power_attainment_fraction"))
         writer.writeheader()
-        writer.writerow({"scenario_id": "s", "policy": "queue_haul",
+        writer.writerow({"scenario_id": "s", "policy": "isolated_fastest",
                          "power_attainment_fraction": .375})
 
     assert load_policy(tmp_path)[0] == {
         "campaign": tmp_path.name, "scenario_id": "s",
-        "method": "queue_haul", "requested_percent": 50,
+        "method": "isolated_fastest", "requested_percent": 50,
         "achieved_percent": 37.5, "marker": "x",
     }
 
@@ -78,11 +78,17 @@ def test_outcomes_classify_the_error_sign_and_equality_boundary():
         for method, achieved in (("queue_haul", 44), ("queue_haul", 45),
                                  ("queue_haul", 50), ("queue_haul", 55),
                                  ("queue_haul", 56), ("greedy", 50),
+                                 ("isolated_fastest", 50),
                                  ("random", 50))
     ]
 
     assert method_outcomes(rows) == [
         ("greedy", [
+            ("Below target", 0, 0),
+            ("On target", 1, 100),
+            ("Above target", 0, 0),
+        ]),
+        ("isolated_fastest", [
             ("Below target", 0, 0),
             ("On target", 1, 100),
             ("Above target", 0, 0),
