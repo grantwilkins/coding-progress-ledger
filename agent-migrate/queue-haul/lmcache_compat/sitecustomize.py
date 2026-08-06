@@ -1,4 +1,6 @@
-from connector_patch import patch_adapter, patch_lmcache, patch_on_import
+from connector_patch import patch_adapter, patch_lmcache
+import os
 
-patch_lmcache()
-patch_on_import("lmcache.integration.vllm.vllm_v1_adapter", patch_adapter)
+if os.environ.get("QH_LMCACHE_MODE", "legacy") == "legacy":
+    patch_lmcache()
+    patch_adapter()

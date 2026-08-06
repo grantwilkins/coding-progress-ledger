@@ -513,15 +513,17 @@ The separate live power-drain evidence in
 `outputs/power_drain_live_20260714/` includes planned and measured source-power
 reductions; `plot_migration_results.py` writes their shared-axis parity plot.
 The parity plot compares Queue-Haul LP with greedy only.
-`outputs/live-power-shed/` retains the 2026-08-05 two-A100 full-shed run: the
-Queue-Haul LP arm moved all eight sessions under 4 rps source and 1 rps
-destination agentic load with `kv_both` and 34 GB L1 pools. The reduced trace
-separates the 36.2 s migration, route-switch, and 34.8 s source-fall windows;
-it includes the five-minute post-switch hold and phase-level engine queue depth.
-Two orphaned samplers overlapped the run, so reduction pairs rows by query
-interval and deterministically reconstructs one 10 Hz stream; the retained
-coverage is 96.2% with a 2.103 s maximum gap. `migration_profiler.py` now runs
-per-session continuation verification concurrently, outside migration timing.
+`outputs/live-power-shed/` retains the 2026-08-06 two-A100 seamless full-shed
+run. The Queue-Haul LP arm moved all eight sessions under continuous 4 rps
+source and 1 rps destination agentic load with `kv_both` and 33 GB L1 pools;
+there is no pre-migration flush, pause, or drain. After 300 s with both sites
+serving, the parallel migration took 4.656 s, the traffic switch took 70 us,
+and the source drained naturally in 3.002 s before a stable five-minute
+destination hold. Mean source power fell from 255.8 W to 85.8 W while mean
+destination power rose from 128.2 W to 283.4 W. The three replay moves
+recomputed 10,662 tokens; the five KV moves computed 713 tokens while reusing
+2.72 GB of KV. The retained paired 10 Hz samples have 95.6% coverage and the
+bundle includes phase-level engine queue depth and checksum-pinned raw data.
 `migration_profiler.py make-crossover` creates paired single-session replay/KV
 measurements for each nominal context, bandwidth, and repeat. The synthetic body
 reserves 192 tokens for message overhead, and the first 32K replay is a fail-fast

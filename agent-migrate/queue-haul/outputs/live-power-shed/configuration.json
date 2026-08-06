@@ -1,18 +1,23 @@
 {
   "destination_max_inflight": 48,
   "destination_rps": 1.0,
+  "foreground_append_tokens": 2048,
+  "foreground_cache_policy": "unique_skip_save",
   "foreground_mean_context": 22744,
+  "foreground_output_tokens": 32,
   "foreground_sessions": 12,
   "gpu_uuids": {
     "destination": "GPU-03a84180-d660-dbdc-17f4-0e0655717066",
     "source": "GPU-e2681f6e-8d94-2d66-484f-43ea602335f9"
   },
+  "inline_continuation_verification": false,
   "job_class": "agentic_tool_loop",
   "kv_roles": {
     "sink": "kv_both",
     "source": "kv_both"
   },
-  "lmcache_l1_gb": 34,
+  "lmcache_l1_gb": 33,
+  "migration_deadline_s": 30,
   "move_method_by_context": [
     [
       2048,
@@ -54,6 +59,7 @@
   "plan_sha256": "e20ff148aded9b63458a65d378a2103579974a64fe0b3a8b05fd3bf4079cdba8",
   "policy": "queue_haul",
   "post_switch_s": 300,
+  "reset_caches_during_migration": false,
   "scenario_id": "p-09cfe127f6c1e59f",
   "scenario_method": "mixed",
   "shed_contexts": [
@@ -67,8 +73,8 @@
     14336
   ],
   "shed_moves": 8,
-  "source_max_inflight": 128,
+  "source_max_inflight": 64,
   "source_rps": 4.0,
   "steady_s": 300,
-  "work_per_request_s": 0.8864123156008303
+  "work_per_request_s": 0.53638873840978
 }

@@ -2,12 +2,17 @@ from __future__ import annotations
 
 import asyncio
 import builtins
+import os
 import socket
 import threading
 
 
 def bypass_lmcache(request) -> bool:
-    return bool((getattr(request, "kv_transfer_params", None) or {}).get("qh_bypass_lmcache"))
+    direct = getattr(request, "kv_transfer_params", None)
+    extra = getattr(getattr(request, "sampling_params", None), "extra_args", None) or {}
+    return bool(extra.get("qh_bypass_lmcache") or
+                (direct or extra.get("kv_transfer_params") or {}).get("qh_bypass_lmcache"))
+
 
 
 def patch_on_import(module: str, patch) -> None:
@@ -141,3 +146,28 @@ def patch_adapter() -> None:
 
     LMCacheConnectorV1Impl.get_num_new_matched_tokens = lookup
     LMCacheConnectorV1Impl._qh_bypass_patched = True
+
+
+def patch_mp_connector() -> None:
+    from lmcache.integration.vllm.lmcache_mp_connector import LMCacheMPConnector, logger
+
+    if getattr(LMCacheMPConnector, "_qh_bypass_patched", False):
+        return
+    original_lookup = LMCacheMPConnector.get_num_new_matched_tokens
+
+    def lookup(self, request, num_computed_tokens):
+        if not bypass_lmcache(request):
+            return original_lookup(self, request, num_computed_tokens)
+        tracker = self._get_or_create_request_tracker(request)
+        tracker.num_stored_tokens = 2**63
+        logger.info("Reqid: %s, Total tokens %d, LMCache hit tokens: 0",
+                    request.request_id, request.num_tokens)
+        return 0, False
+
+    LMCacheMPConnector.get_num_new_matched_tokens = lookup
+    LMCacheMPConnector._qh_bypass_patched = True
+
+
+if os.environ.get("QH_LMCACHE_MODE") == "mp":
+    patch_mp_connector()
+    from lmcache.integration.vllm.lmcache_mp_connector import LMCacheMPConnector

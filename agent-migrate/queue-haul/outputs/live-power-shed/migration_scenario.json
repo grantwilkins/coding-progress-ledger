@@ -7,7 +7,7 @@
   "condition": "mixed-fixed-10000mbps-30s",
   "context_profile": "mixed",
   "copy_policy": "initial_final",
-  "deadline_s": 180.0,
+  "deadline_s": 30,
   "episode": 95,
   "final_state": "awake",
   "kind": "migration",
@@ -106,10 +106,13 @@
   ],
   "policy": "queue_haul",
   "power_target_fraction": 1.0,
+  "prestage_all": true,
   "repeat": 95,
   "request_schedule": [],
   "required_deadline_s": 30.0,
+  "reset_caches": false,
   "sample_id": "7d1b0ab854d9df69",
+  "sample_power": false,
   "scenario_id": "p-09cfe127f6c1e59f",
   "serving_concurrency": 1,
   "sessions": [
@@ -171,5 +174,9 @@
     }
   ],
   "split": "measurement",
-  "token_distribution": "fixed"
+  "token_distribution": "fixed",
+  "verify_continuations": false,
+  "wait_cache_idle": false,
+  "warm_concurrency": 8,
+  "warm_on_move": false
 }

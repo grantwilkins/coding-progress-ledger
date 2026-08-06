@@ -1051,7 +1051,7 @@ class ExecutionSimulator:
                 self.node_ready[node] for node in drained
             ])
         ) if migrations_complete and state_complete else None
-        deadline_met = at_deadline <= self.scenario.power_limit_w \
+        deadline_met = at_deadline <= self.scenario.power_limit_w + 1e-8 \
             and migration_makespan is not None \
             and migration_makespan <= self.scenario.deadline_s \
             and final_ready is not None and final_ready <= self.scenario.deadline_s
@@ -1194,7 +1194,7 @@ def _run_fluid(scenario, profile, moves, case_id, destination, detailed):
     complete = all(commit <= scenario.end_s for commit in commits)
     makespan = float(max(commits, default=start)) if complete else None
     deadline_met = complete and makespan <= scenario.deadline_s \
-        and at_deadline <= scenario.power_limit_w
+        and at_deadline <= scenario.power_limit_w + 1e-8
     network = tuple(NetworkExecution(
         move.session_id, "initial", int(route_bytes[i]), int(route_bytes[i]), 0,
         move.path, start, float(network_done[i]),

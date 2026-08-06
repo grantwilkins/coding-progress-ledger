@@ -42,6 +42,13 @@ def lmcache_mode() -> str:
     return mode
 
 
+def prefix_caching() -> bool:
+    mode = os.environ.get("QH_PREFIX_CACHING", "on")
+    if mode not in {"on", "off"}:
+        raise ValueError(f"unknown QH_PREFIX_CACHING: {mode}")
+    return mode == "on"
+
+
 def runtime_mode() -> str:
     mode = os.environ.get("QH_RUNTIME", "apptainer")
     if mode not in {"apptainer", "native"}:
@@ -221,7 +228,7 @@ def kv_config(engine_id: str, kv_role: str, kv_port: int, rpc_port: str) -> str:
     if lmcache_mode() == "mp":
         return json.dumps({
             "kv_connector": "LMCacheMPConnector",
-            "kv_connector_module_path": "lmcache.integration.vllm.lmcache_mp_connector",
+            "kv_connector_module_path": "connector_patch",
             "kv_role": kv_role,
             "kv_connector_extra_config": {
                 "lmcache.mp.host": "tcp://127.0.0.1",
@@ -261,8 +268,7 @@ def vllm_exports(cfg: Config, role: str, remote_url: str) -> list[str]:
         "LMCACHE_MAX_LOCAL_CPU_SIZE": LMCACHE_MAX_LOCAL_CPU_GB,
         **{k: str(v) for k, v in cache_dirs(cfg, role).items()},
     }
-    if lmcache_mode() == "legacy":
-        env["PYTHONPATH"] = str(LMCACHE_COMPAT)
+    env["PYTHONPATH"] = str(LMCACHE_COMPAT)
     exports = [f"export {k}={shlex.quote(v)}" for k, v in env.items()]
     library_path = (
         "/usr/local/cuda-12.9/compat:/opt/venv/lib/python3.12/site-packages/nvidia/cuda_runtime/lib:"
@@ -313,17 +319,12 @@ def redis_maxmemory_gb() -> int:
 
 
 def redis_cmd(cfg: Config) -> list[str]:
-<<<<<<< HEAD
-    """L2 store. Unbounded by default; bound it when both engines are kv_both,
-    which otherwise duplicates the whole L1 working set into RAM."""
     cap = redis_maxmemory_gb()
-=======
-    if runtime_mode() == "native":
-        return ["valkey-server", "--bind", cfg.host, "--port", str(cfg.lmc_port),
-                "--save", "", "--appendonly", "no"]
->>>>>>> 6bf8f39f85e3b53e6b60c9b132d81acbc54ec7ef
-    return ["apptainer", "exec", REDIS_IMAGE, "redis-server", "--bind", cfg.host,
-            "--port", str(cfg.lmc_port), "--save", "", "--appendonly", "no",
+    command = (["valkey-server", "--bind", cfg.host, "--port", str(cfg.lmc_port)]
+               if runtime_mode() == "native" else
+               ["apptainer", "exec", REDIS_IMAGE, "redis-server", "--bind",
+                cfg.host, "--port", str(cfg.lmc_port)])
+    return [*command, "--save", "", "--appendonly", "no",
             *(["--maxmemory", f"{cap}gb", "--maxmemory-policy", "allkeys-lru"]
               if cap else [])]
 
@@ -346,13 +347,9 @@ def mp_server_cmd(cfg: Config, role: str, *, bind_host: str | None = None,
     bind_host, http_host = bind_host or cfg.host, http_host or cfg.host
     serve = [
         "lmcache", "server", "--instance-id", f"queue-haul-{role}",
-<<<<<<< HEAD
-        "--host", cfg.host, "--port", port, "--http-host", cfg.host,
-        "--http-port", http_port, "--l1-size-gb", lmcache_l1_gb(), "--eviction-policy", "LRU",
-=======
         "--host", bind_host, "--port", port, "--http-host", http_host,
-        "--http-port", http_port, "--l1-size-gb", 32, "--eviction-policy", "LRU",
->>>>>>> 6bf8f39f85e3b53e6b60c9b132d81acbc54ec7ef
+        "--http-port", http_port, "--l1-size-gb", lmcache_l1_gb(),
+        "--eviction-policy", "LRU",
         "--chunk-size", 256, "--max-workers", 8,
         "--supported-transfer-mode", "engine_driven", "--l2-adapter", adapter,
     ]
@@ -372,11 +369,7 @@ def vllm_cmd(cfg: Config, role: str, extra: list[str] | None = None, *,
         port, gpu, engine_id, kv_port, rpc_port = cfg.src_port, 0, "s0", port_default(14579), "src"
         remote_url, cache_role = f"lm://{cfg.host}:{cfg.lmc_port}", "src"
     elif role == "sink":
-<<<<<<< HEAD
         port, gpu, engine_id, kv_port, rpc_port = cfg.sink_port, 1, "d0", port_default(14580), "sink"
-=======
-        port, gpu, engine_id, kv_role, kv_port, rpc_port = cfg.sink_port, 1, "d0", "kv_both", port_default(14580), "sink"
->>>>>>> 6bf8f39f85e3b53e6b60c9b132d81acbc54ec7ef
         remote_url, cache_role = f"lm://{cfg.host}:{cfg.kv_proxy_port}", "sink"
     elif role == "smoke1":
         port, gpu, engine_id, kv_port, rpc_port = cfg.smoke_port, 0, "e0", port_default(14579), "smk"
@@ -409,7 +402,7 @@ def vllm_cmd(cfg: Config, role: str, extra: list[str] | None = None, *,
         "--block-size",
         16,
         "--enable-chunked-prefill",
-        "--enable-prefix-caching",
+        "--enable-prefix-caching" if prefix_caching() else "--no-enable-prefix-caching",
         "--enforce-eager",
         *(["--enable-sleep-mode"] if role == "source" and (
             sleep_mode if sleep_mode is not None else lmcache_mode() == "legacy"
@@ -470,8 +463,11 @@ def gpu_count() -> int:
 
 def runtime_versions(cfg: Config) -> tuple[str, str]:
     if lmcache_mode() == "mp":
-        check = "from importlib.metadata import version; from lmcache.integration.vllm.lmcache_mp_connector import LMCacheMPConnector; print('QH_RUNTIME_VERSIONS', version('vllm'), version('lmcache'))"
-        script = shell(["python", "-c", check])
+        check = "from importlib.metadata import version; from connector_patch import LMCacheMPConnector; assert LMCacheMPConnector._qh_bypass_patched; print('QH_RUNTIME_VERSIONS', version('vllm'), version('lmcache'))"
+        script = "\n".join([
+            f"export PYTHONPATH={shlex.quote(str(LMCACHE_COMPAT))}",
+            shell(["python", "-c", check]),
+        ])
     else:
         check = "from importlib.metadata import version; from lmcache.v1.storage_backend.connector.lm_connector import LMCServerConnector; from lmcache.integration.vllm.vllm_v1_adapter import LMCacheConnectorV1Impl; assert LMCServerConnector._qh_patched and LMCacheConnectorV1Impl._qh_bypass_patched; print('QH_RUNTIME_VERSIONS', version('vllm'), version('lmcache'))"
         script = "\n".join([f"export PYTHONPATH={shlex.quote(str(LMCACHE_COMPAT))}", shell(["/usr/bin/python3", "-c", check])])
@@ -698,7 +694,7 @@ def parse_tcp_info(blob: bytes) -> dict[str, int]:
 
 def stream_tcp_info(writer: asyncio.StreamWriter) -> dict[str, int]:
     sock = writer.get_extra_info("socket")
-    if not sock or not hasattr(socket, "TCP_INFO"):
+    if not sock or sock.fileno() < 0 or not hasattr(socket, "TCP_INFO"):
         return {}
     return parse_tcp_info(sock.getsockopt(socket.IPPROTO_TCP, socket.TCP_INFO, 104))
 

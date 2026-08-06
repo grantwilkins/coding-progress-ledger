@@ -58,7 +58,7 @@ def test_vllm_commands_pin_validated_sandbox_flags_and_roles():
     assert "LMCacheConnectorV1" in source
     assert "LMCacheMPConnector" not in source
     assert "kv_producer" in source and "engine_id\":\"s0" in source
-    assert "kv_both" in sink and "engine_id\":\"d0" in sink
+    assert "kv_consumer" in sink and "engine_id\":\"d0" in sink
     assert "kv_both" in smoke and "engine_id\":\"e0" in smoke
     assert "LMCACHE_REMOTE_URL=lm://127.0.0.1:5655" in source
     assert "LMCACHE_REMOTE_URL=lm://127.0.0.1:8300" in sink
@@ -85,16 +85,28 @@ def test_vllm_commands_pin_validated_sandbox_flags_and_roles():
     assert "stage1b-src" in source and "stage1b-sink" in sink
 
 
+def test_vllm_commands_can_disable_local_prefix_cache(monkeypatch):
+    monkeypatch.setenv("QH_PREFIX_CACHING", "off")
+
+    assert "--no-enable-prefix-caching" in cmd_text(
+        s.vllm_cmd(s.Config(), "source")
+    )
+
+    monkeypatch.setenv("QH_PREFIX_CACHING", "invalid")
+    with pytest.raises(ValueError, match="QH_PREFIX_CACHING"):
+        s.vllm_cmd(s.Config(), "source")
+
+
 def test_mp_runtime_uses_release_image_and_shipped_connector(monkeypatch):
     monkeypatch.setenv("QH_LMCACHE_MODE", "mp")
     source = cmd_text(s.vllm_cmd(s.Config(), "source"))
 
     assert "lmcache-v0.5.1-vllm0.22.0-cu129-primary.sif" in source
     assert "LMCacheMPConnector" in source
-    assert "lmcache.integration.vllm.lmcache_mp_connector" in source
+    assert "connector_patch" in source
     assert "lmcache.mp.host" in source and "lmcache.mp.port" in source
     assert "engine_driven" in source
-    assert "lmcache_compat" not in source
+    assert "PYTHONPATH=" in source and "lmcache_compat" in source
     assert "cuda-12.9/compat" in source
     assert "--gpu-memory-utilization 0.75" in source
     assert "--block-size 16" in source
@@ -317,7 +329,7 @@ def test_mp_cache_services_use_redis_l2_through_proxy(monkeypatch):
     assert "--supported-transfer-mode engine_driven" in source
     assert '"port":8300' in source
     assert "--port 5556" in sink
-    assert "--l1-size-gb 32" in sink
+    assert "--l1-size-gb 16" in sink
     assert '"port":8300' in sink
     assert "--http-port 8080" in source and "--http-port 8081" in sink
     assert "--nv" not in source and "CUDA_VISIBLE_DEVICES=" in source
@@ -514,6 +526,21 @@ def test_runtime_versions_are_pinned(monkeypatch):
     assert s.runtime_versions(s.Config()) == s.RUNTIME_VERSIONS
     assert "LMCServerConnector._qh_patched" in s.shell(commands[0])
     assert "LMCacheConnectorV1Impl._qh_bypass_patched" in s.shell(commands[0])
+    assert "lmcache_compat" in s.shell(commands[0])
+
+
+def test_mp_runtime_requires_lookup_bypass_patch(monkeypatch):
+    commands = []
+    monkeypatch.setenv("QH_LMCACHE_MODE", "mp")
+    monkeypatch.setattr(
+        s.subprocess, "check_output",
+        lambda command, **_kwargs: commands.append(command)
+        or "QH_RUNTIME_VERSIONS 0.22.0+cu129 0.5.1\n",
+    )
+
+    assert s.runtime_versions(s.Config()) == s.MP_RUNTIME_VERSIONS
+    assert "LMCacheMPConnector._qh_bypass_patched" in s.shell(commands[0])
+    assert "lmcache_compat" in s.shell(commands[0])
 
 
 def test_duplicate_ports_and_passthrough_overrides_hard_fail():

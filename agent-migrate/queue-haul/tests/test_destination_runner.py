@@ -74,6 +74,17 @@ def test_prewarm_rejects_status_200_without_token_work(monkeypatch):
         runner.prewarm("h", 1, "m", [runner.Session("s", 4, 2, 3, 100, 0)])
 
 
+def test_agentic_chat_turn_is_unique_and_compute_heavy():
+    session = runner.Session("s", 4, 2048, 32, 100, 0)
+
+    first = runner.agentic_messages(session, 1)
+    second = runner.agentic_messages(session, 2)
+
+    assert first != second and first != runner.agentic_messages(session, 33)
+    assert first[0]["role"] == "system"
+    assert first[1]["content"].count(" x") == 2048
+
+
 def test_service_reset_clears_remote_and_local_caches(monkeypatch, tmp_path):
     calls = []
     stack = SimpleNamespace(run_root=tmp_path)

@@ -17,7 +17,10 @@ import statistics
 import subprocess
 import sys
 import time
+from concurrent.futures import ThreadPoolExecutor
+from dataclasses import replace
 from pathlib import Path
+import threading
 
 import matplotlib
 
@@ -46,18 +49,17 @@ JOB_CLASS = "agentic_tool_loop"
 # leave room for an uncapped-enough L2, which the kv_transfer moves ride on.
 SPLITS = ("validation", "tune")
 SOURCE_RPS, DEST_RPS = 4.0, 1.0
-SOURCE_INFLIGHT, DEST_INFLIGHT = 128, 48
-DEST_ONLY_S, STEADY_S, POST_S = 60, 300, 300
+BUSY_APPEND_TOKENS, BUSY_OUTPUT_TOKENS = 2048, 32
+SOURCE_INFLIGHT, DEST_INFLIGHT = 64, 48
+STEADY_S, POST_S, MIGRATION_DEADLINE_S = 300, 300, 30
 SOURCE, DESTINATION = "#B22E2E", "#00799B"
-# The captured run predates parallel continuation verification, so its
-# moves_complete marker excludes that check from the migration window.
 WINDOWS = (
-    ("migration", "migration_start", "moves_complete", "#E98300", None,
+    ("migration", "migration_start", "migration_complete", "#E98300", None,
      "Migration"),
-    ("switch", "migration_complete", "source_admission_stopped", "#7B5EA7", None,
-     "Switch"),
-    ("source_fall", "source_admission_stopped", "source_drained", "#4F5B66", "///",
-     "Source drain"),
+    ("switch", "switch_start", "traffic_switched", "#7B5EA7", None,
+     "Traffic switch"),
+    ("source_fall", "traffic_switched", "source_drained", "#4F5B66", "///",
+     "Source power fall"),
 )
 
 
@@ -136,21 +138,6 @@ def check(load: destination.DestinationLoad, label: str) -> None:
         raise RuntimeError(f"{label} failed") from (load.failure or load.sampler.error)
 
 
-def wait_queue(load: destination.DestinationLoad, seconds: float = 180,
-               label: str = "source") -> None:
-    """A saturating load must hold a standing queue before we call it steady."""
-    deadline = time.monotonic() + seconds
-    while time.monotonic() < deadline:
-        check(load, label)
-        rows = load.sampler.rows[-10:]
-        if len(rows) == 10 and all(
-            row["vllm:num_requests_waiting"] > 0 for row in rows
-        ):
-            return
-        time.sleep(.25)
-    raise RuntimeError(f"{label} load did not establish a persistent queue")
-
-
 def wait_serving(load: destination.DestinationLoad, completions: int = 5,
                  seconds: float = 300, label: str = "destination") -> None:
     """A below-capacity background load is ready once it is completing requests."""
@@ -195,6 +182,12 @@ def hold(loads: list[destination.DestinationLoad], seconds: int, label: str) -> 
         time.sleep(min(30, max(0, remaining)))
 
 
+def busy_sessions(sessions):
+    return [replace(session, append_tokens=BUSY_APPEND_TOKENS,
+                   output_tokens=BUSY_OUTPUT_TOKENS)
+            for session in sessions]
+
+
 def load_inputs():
     plan = json.loads(PLAN.read_text())
     scenario = next(
@@ -214,6 +207,7 @@ def load_inputs():
         destination.manifest_sessions(bundle, JOB_CLASS, split, 201088, 7)
         for split in SPLITS
     ), [])
+    sessions = busy_sessions(sessions)
     context = round(statistics.mean(row.prefix_tokens for row in sessions))
     rates = (
         destination.profile_rate(profile, "prefill", context),
@@ -229,8 +223,23 @@ def load_inputs():
 def make_load(cfg, port, sessions, rates, work, root, seed, rps, inflight):
     return destination.DestinationLoad(
         cfg.host, port, cfg.model, sessions, rps * work, *rates, root, seed,
-        rps=rps, max_inflight=inflight,
+        rps=rps, max_inflight=inflight, bypass_lmcache=True, chat=True,
     )
+
+
+def live_scenario(scenario):
+    return {**scenario, "reset_caches": False,
+            "verify_continuations": False, "wait_cache_idle": False,
+            "warm_on_move": False, "prestage_all": True,
+            "warm_concurrency": 8, "sample_power": False, "final_state": "awake",
+            "deadline_s": MIGRATION_DEADLINE_S}
+
+
+def switch_traffic(source, takeover, markers):
+    markers.add("switch_start")
+    takeover.resume()
+    source.pause()
+    markers.add("traffic_switched")
 
 
 def parse_wall(value: str) -> float:
@@ -303,16 +312,16 @@ def settle_time(times, watts, start, floor, band=15.0, dwell=5.0):
     return None
 
 
-def moves_complete(run_root: Path, markers) -> float:
-    """Wall time of the last move's switch, from the migration result.
-
-    run_scenario's window also covers a sequential per-session continuation
-    check, which is verification and would otherwise inflate the shaded
-    migration window several-fold.
-    """
-    anchor = next(row for row in markers.rows if row["event"] == "migration_start")
-    last = move_end_ns(run_root)
-    return (anchor["wall_ns"] + (last - anchor["monotonic_ns"])) / 1e9
+def phase_mean(samples, start, end, event=False):
+    if event:
+        center = (start + end) / 2
+        values = [watts for _, watts in
+                  sorted(samples, key=lambda row: abs(row[0] - center))[:10]]
+    else:
+        values = [watts for moment, watts in samples if start <= moment <= end]
+    if len(values) < 10:
+        raise RuntimeError(f"power phase has only {len(values)} samples")
+    return statistics.mean(values)
 
 
 def reduce_power(run_root: Path, markers, role_uuids: list[str]) -> dict:
@@ -339,39 +348,33 @@ def reduce_power(run_root: Path, markers, role_uuids: list[str]) -> dict:
         raise RuntimeError(f"100 ms cadence gate failed: {summary}")
 
     event = {row["event"]: row["wall_ns"] / 1e9 for row in markers.rows}
-    event["moves_complete"] = moves_complete(run_root, markers)
     monotonic = {row["event"]: row["monotonic_ns"] / 1e9 for row in markers.rows}
-    monotonic["moves_complete"] = move_end_ns(run_root) / 1e9
 
-    def mean_power(uuid: str, start: float, end: float) -> float:
-        values = [float(row["power.draw [W]"]) for row in by_uuid[uuid]
-                  if start <= parse_wall(row["timestamp"]) <= end]
-        if len(values) < 10:
-            raise RuntimeError(f"power phase has only {len(values)} samples")
-        return statistics.mean(values)
+    def mean_power(uuid: str, start: float, end: float, event=False) -> float:
+        samples = [(parse_wall(row["timestamp"]),
+                    float(row["power.draw [W]"])) for row in by_uuid[uuid]]
+        return phase_mean(samples, start, end, event)
 
     origin = markers.rows[0]["wall_ns"] / 1e9
     source_times, source_watts = series(by_uuid, role_uuids[0], origin)
     idle_floor = mean_power(role_uuids[0], event["idle_start"] + 5,
-                            event["destination_prewarm_start"])
+                            event["loads_prewarm_start"])
     settled = settle_time(source_times, source_watts,
-                          event["source_admission_stopped"] - origin, idle_floor)
+                          event["traffic_switched"] - origin, idle_floor)
     summary["source_fall_settle_s"] = None if settled is None else \
-        settled - (event["source_admission_stopped"] - origin)
+        settled - (event["traffic_switched"] - origin)
 
     phases = {
-        "loaded_idle": (event["idle_start"] + 5, event["destination_prewarm_start"]),
-        "destination_only": (event["destination_steady"], event["source_prewarm_start"]),
-        "both_busy": (event["source_steady"], event["steady_hold_complete"]),
-        "migration": (event["migration_start"], event["moves_complete"]),
-        "verification": (event["moves_complete"], event["migration_complete"]),
-        "switch": (event["migration_complete"], event["source_admission_stopped"]),
-        "source_fall": (event["source_admission_stopped"], event["source_drained"]),
+        "loaded_idle": (event["idle_start"] + 5, event["loads_prewarm_start"]),
+        "both_busy": (event["both_steady"], event["steady_hold_complete"]),
+        "migration": (event["migration_start"], event["migration_complete"]),
+        "switch": (event["switch_start"], event["traffic_switched"]),
+        "source_fall": (event["traffic_switched"], event["source_drained"]),
         "post_switch": (event["source_drained"] + 5, event["measurement_complete"]),
     }
     summary["phase_seconds"] = {name: end - start for name, (start, end) in phases.items()}
     summary["mean_power_w"] = {
-        name: {role: mean_power(uuid, *window)
+        name: {role: mean_power(uuid, *window, event=name == "switch")
                for role, uuid in zip(("source", "destination"), role_uuids)}
         for name, window in phases.items()
     }
@@ -382,8 +385,8 @@ def reduce_power(run_root: Path, markers, role_uuids: list[str]) -> dict:
         for role, uuid in zip(("source", "destination"), role_uuids)
     }
     queue_phases = {
-        "both_busy": (monotonic["source_steady"], monotonic["steady_hold_complete"]),
-        "migration": (monotonic["migration_start"], monotonic["moves_complete"]),
+        "both_busy": (monotonic["both_steady"], monotonic["steady_hold_complete"]),
+        "migration": (monotonic["migration_start"], monotonic["migration_complete"]),
         "post_switch": (monotonic["source_drained"], monotonic["measurement_complete"]),
     }
     summary["engine_queue"] = {
@@ -400,7 +403,7 @@ def reduce_power(run_root: Path, markers, role_uuids: list[str]) -> dict:
         failures.append("source did not shed at least 50 W")
     if watts["both_busy"]["destination"] - watts["loaded_idle"]["destination"] < 10:
         failures.append("destination was not carrying background load")
-    if watts["post_switch"]["destination"] - watts["destination_only"]["destination"] < 10:
+    if watts["post_switch"]["destination"] - watts["both_busy"]["destination"] < 10:
         failures.append("destination did not take on the shed load")
     if abs(summary["post_switch_tail_drift_w"]["destination"]) > 25:
         failures.append("destination power drifted across the final two minutes")
@@ -414,7 +417,6 @@ def reduce_power(run_root: Path, markers, role_uuids: list[str]) -> dict:
 def plot_power(run_root: Path, markers, by_uuid, role_uuids, summary) -> None:
     origin = markers.rows[0]["wall_ns"] / 1e9
     marker = {row["event"]: row["wall_ns"] / 1e9 - origin for row in markers.rows}
-    marker["moves_complete"] = moves_complete(run_root, markers) - origin
     fig, ax = plt.subplots(figsize=(11, 5))
     ax.set_facecolor("#ffffff")
     top = max(float(row["power.draw [W]"])
@@ -422,11 +424,15 @@ def plot_power(run_root: Path, markers, by_uuid, role_uuids, summary) -> None:
 
     # Rotated in-band labels sit inside their own span, so narrow windows cannot
     # collide with their neighbours the way centred horizontal labels do.
-    for _, start, end, color, hatch, label in WINDOWS:
-        ax.axvspan(marker[start], marker[end], facecolor=color,
+    for name, start, end, color, hatch, label in WINDOWS:
+        left, right = marker[start], marker[end]
+        if name == "switch" and right - left < 2:
+            center = (left + right) / 2
+            left, right = max(0, center - 1), center + 1
+        ax.axvspan(left, right, facecolor=color,
                    alpha=.14 if hatch else .20, lw=0, zorder=0, hatch=hatch,
                    edgecolor=color)
-        ax.text(marker[start] + (marker[end] - marker[start]) * .5, top * .06,
+        ax.text((left + right) * .5, top * .06,
                 label, rotation=90, ha="center", va="bottom", fontsize=8,
                 color="#3f3f42", zorder=3)
 
@@ -474,6 +480,7 @@ def main() -> None:
     run_root.mkdir(parents=True, exist_ok=True)
     markers = Markers(run_root / "events.jsonl")
     scenario, manifest, sessions, context, rates, work = load_inputs()
+    scenario = live_scenario(scenario)
     cfg = testbed.Config()
     devices = testbed.allocated_gpu_ids()
     role_uuids = gpu_uuids(devices)
@@ -498,134 +505,95 @@ def main() -> None:
         "source_max_inflight": SOURCE_INFLIGHT,
         "destination_max_inflight": DEST_INFLIGHT,
         "work_per_request_s": work,
+        "foreground_cache_policy": "unique_skip_save",
+        "foreground_append_tokens": BUSY_APPEND_TOKENS,
+        "foreground_output_tokens": BUSY_OUTPUT_TOKENS,
         "kv_roles": {role: testbed.kv_role_for(role) for role in ("source", "sink")},
         "lmcache_l1_gb": testbed.lmcache_l1_gb(),
         "steady_s": STEADY_S, "post_switch_s": POST_S,
+        "migration_deadline_s": MIGRATION_DEADLINE_S,
+        "reset_caches_during_migration": scenario["reset_caches"],
+        "inline_continuation_verification": scenario["verify_continuations"],
         "gpu_uuids": {"source": role_uuids[0], "destination": role_uuids[1]},
         "plan_sha256": profiler.file_hash(PLAN),
     })
 
     stack = source = dest = takeover = None
     power_proc = power_handle = power_stderr = None
-    original_idle = profiler.b.mp_wait_idle
+    migration_pool = future = move_gate = None
     try:
         testbed.preflight(cfg, 2)
         stack = testbed.start_stack(cfg, run_root / "testbed", 10_000, [])
         testbed.start_sink(stack, cfg, [])
         testbed.run_smoke2_probe(cfg, stack.run_root, 10_000)
+        move_gate, contexts_ready = threading.Event(), threading.Event()
+
+        def release_moves():
+            contexts_ready.set()
+            move_gate.wait()
+            markers.add("migration_start")
+
+        migration_pool = ThreadPoolExecutor(max_workers=1)
+        future = migration_pool.submit(
+            profiler.run_scenario, stack, cfg, manifest, scenario,
+            run_root / "migration", "live-power-shed", None, False,
+            release_moves,
+        )
+        if not contexts_ready.wait(180):
+            move_gate.set()
+            future.result()
+            raise RuntimeError("context setup exceeded 180 s")
+
         markers.add("stack_ready")
         power_proc, power_handle, power_stderr = start_power(local_root, devices)
         time.sleep(2)
         markers.add("idle_start")
         time.sleep(30)
 
-        testbed.flush_lmcache(stack, cfg)
-        testbed.reset_vllm_caches(
-            cfg, (stack.run_root / "source.log", stack.run_root / "sink.log")
-        )
-
         dest = make_load(cfg, cfg.sink_port, sessions, rates, work,
                          run_root / "destination_background", 11, DEST_RPS,
                          DEST_INFLIGHT)
-        markers.add("destination_prewarm_start", offered_rps=DEST_RPS)
-        dest.start()
-        wait_serving(dest, label="destination background")
-        markers.add("destination_steady")
-        hold([dest], DEST_ONLY_S, "destination-only background load")
-
         source = make_load(cfg, cfg.src_port, sessions, rates, work,
                            run_root / "source_foreground", 1, SOURCE_RPS,
                            SOURCE_INFLIGHT)
-        markers.add("source_prewarm_start", offered_rps=SOURCE_RPS)
+        takeover = make_load(cfg, cfg.sink_port, sessions, rates, work,
+                             run_root / "destination_takeover", 21, SOURCE_RPS,
+                             SOURCE_INFLIGHT)
+        markers.add("loads_prewarm_start", source_rps=SOURCE_RPS,
+                    destination_rps=DEST_RPS)
+        dest.start()
+        wait_serving(dest, label="destination background")
         source.start()
-        wait_queue(source, label="source foreground")
-        markers.add("source_steady")
+        wait_serving(source, label="source foreground")
+        takeover.pause()
+        takeover.start()
+        wait_serving(dest, len(dest.rows) + 3, label="destination background")
+        markers.add("both_steady")
 
-        hold([source, dest], STEADY_S, "both-busy steady load")
+        hold([source, dest, takeover], STEADY_S,
+             "both-busy steady load")
         markers.add("steady_hold_complete")
-
-        # run_scenario flushes the shared LMCache. Any request in flight when that
-        # happens loses its KV entries underneath it and wedges the engine's KV
-        # connector, so both engines must be quiet across the flush window.
-        markers.add("loads_paused_for_shed")
-        source.pause()
-        dest.pause()
-        markers.add(
-            "loads_drained_for_shed",
-            source_stranded=wait_drained(source, label="source foreground"),
-            destination_stranded=wait_drained(dest, label="destination background"),
-        )
-
-        original_flush = profiler.b.flush_lmcache
-        original_reset = profiler.b.reset_vllm_caches
-        original_with_load = profiler.with_destination_load
-        flush_count = 0
-
-        def coordinated_flush(*args, **kwargs):
-            nonlocal flush_count
-            flush_count += 1
-            result = original_flush(*args, **kwargs)
-            if flush_count == 2:
-                markers.add("kv_sessions_warming")
-            elif flush_count != 1:
-                raise RuntimeError(f"unexpected scenario flush {flush_count}")
-            return result
-
-        def source_only_reset(reset_cfg, logs):
-            """The destination keeps serving its tenants across the shed."""
-            original_reset(reset_cfg, logs[:1], (reset_cfg.src_port,))
-
-        def resume_then_move(load, action):
-            """Resume both sites immediately before the moves.
-
-            The kv_transfer sessions are warmed serially just before this, and
-            foreground churn evicts their freshly written KV from L2 within
-            seconds. Resuming any earlier loses the state the moves depend on.
-            """
-            markers.add("loads_resumed")
-            source.resume()
-            dest.resume()
-            wait_queue(source, label="source foreground")
-            wait_serving(dest, len(dest.rows) + 3, label="destination background")
-            markers.add("migration_start")
-            return original_with_load(load, action)
-
-        profiler.b.flush_lmcache = coordinated_flush
-        profiler.b.reset_vllm_caches = source_only_reset
-        profiler.with_destination_load = resume_then_move
-        profiler.b.mp_wait_idle = lambda *_args, **_kwargs: None
-        markers.add("shed_start")
-        try:
-            result = profiler.run_scenario(
-                stack, cfg, manifest, scenario, run_root / "migration",
-                "live-power-shed", configure_proxy=False,
-            )
-        finally:
-            profiler.b.flush_lmcache = original_flush
-            profiler.b.reset_vllm_caches = original_reset
-            profiler.with_destination_load = original_with_load
+        move_gate.set()
+        result = future.result()
         if result["status"] != "complete" or len(result["migrations"]) != 8 \
                 or not all(row["error"] is None for row in result["migrations"]):
             raise RuntimeError("full-shed migration did not complete")
         markers.add("migration_complete")
+        migration_s = (markers.rows[-1]["monotonic_ns"]
+                       - markers.rows[-2]["monotonic_ns"]) / 1e9
+        if migration_s > MIGRATION_DEADLINE_S:
+            raise RuntimeError(
+                f"migration missed {MIGRATION_DEADLINE_S} s deadline: "
+                f"{migration_s:.3f} s"
+            )
 
-        takeover = make_load(cfg, cfg.sink_port, sessions, rates, work,
-                             run_root / "destination_takeover", 21, SOURCE_RPS,
-                             SOURCE_INFLIGHT)
-        markers.add("takeover_prewarm_start", offered_rps=SOURCE_RPS)
-        takeover.start()
-        wait_queue(takeover, label="destination takeover")
-        markers.add("takeover_steady")
-
-        markers.add("source_admission_stopped")
-        source.pause()
+        switch_traffic(source, takeover, markers)
         markers.add("source_drained",
                     stranded=wait_drained(source, label="source foreground"))
 
         hold([dest, takeover], POST_S, "post-switch destination hold")
         markers.add("measurement_complete")
     finally:
-        profiler.b.mp_wait_idle = original_idle
         try:
             for name, load in (("source_foreground", source),
                                ("destination_background", dest),
@@ -634,6 +602,10 @@ def main() -> None:
                     load.close()
                     write_json(run_root / f"{name}_summary.json", load.summary())
         finally:
+            if move_gate:
+                move_gate.set()
+            if migration_pool:
+                migration_pool.shutdown(wait=True)
             if power_proc:
                 markers.add("power_logger_stopped",
                             returncode=stop_power(power_proc, power_handle, power_stderr))
@@ -672,12 +644,6 @@ def engine_queue(path: Path, start: float, end: float) -> dict:
             ("waiting", "vllm:num_requests_waiting"),
         )
     }
-
-
-
-def move_end_ns(run_root: Path) -> int:
-    return max(row["switch_end_ns"] for row in json.loads(
-        (run_root / "migration/result.json").read_text())["migrations"])
 
 
 if __name__ == "__main__":

@@ -291,7 +291,7 @@ def _summary(run: ExperimentRun) -> dict:
         and result.migration_makespan_s <= scenario.deadline_s
     final_ready = result.final_state_ready_s is not None \
         and result.final_state_ready_s <= scenario.deadline_s
-    power_met = result.modeled_source_power_at_deadline_w <= scenario.power_limit_w
+    power_met = result.modeled_source_power_at_deadline_w <= scenario.power_limit_w + 1e-8
     pauses = [row.committed_s - row.pause_s for row in completed if row.pause_s is not None]
     wakes = [row.wake_ready_s - row.wake_start_s for row in result.sessions
              if row.wake_ready_s is not None]

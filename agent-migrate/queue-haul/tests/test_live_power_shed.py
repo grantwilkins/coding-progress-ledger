@@ -40,6 +40,14 @@ def test_power_pairing_rejects_multiple_incomplete_ticks(tmp_path):
         driver.load_power(tmp_path, ["a", "b"])
 
 
+def test_subtick_event_uses_nearest_power_samples():
+    samples = [(index / 10, float(index)) for index in range(20)]
+
+    assert driver.phase_mean(samples, .95, .95005, event=True) == pytest.approx(9.5)
+    with pytest.raises(RuntimeError, match="power phase"):
+        driver.phase_mean(samples, .95, .95005)
+
+
 def test_engine_queue_summary_accounts_for_depth(tmp_path):
     path = tmp_path / "engine.csv"
     path.write_text(
@@ -53,3 +61,57 @@ def test_engine_queue_summary_accounts_for_depth(tmp_path):
     }
     with pytest.raises(RuntimeError, match="no engine samples"):
         driver.engine_queue(path, 4, 5)
+
+
+def test_busy_sessions_have_unique_compute_heavy_turns():
+    session = driver.destination.Session("s", 4, 2, 3, 100, 0)
+
+    busy = driver.busy_sessions([session])[0]
+
+    assert busy.append_tokens == driver.BUSY_APPEND_TOKENS == 2048
+    assert busy.output_tokens == driver.BUSY_OUTPUT_TOKENS == 32
+    assert busy.prefix_tokens == session.prefix_tokens
+
+
+def test_live_scenario_has_no_reset_or_inline_verification():
+    scenario = driver.live_scenario({"sessions": [{}, {}]})
+
+    assert scenario["reset_caches"] is False
+    assert scenario["verify_continuations"] is False
+    assert scenario["wait_cache_idle"] is False
+    assert scenario["warm_on_move"] is False
+    assert scenario["prestage_all"] is True
+    assert scenario["warm_concurrency"] == 8
+    assert scenario["sample_power"] is False
+    assert scenario["final_state"] == "awake"
+    assert scenario["deadline_s"] == driver.MIGRATION_DEADLINE_S
+    assert driver.MIGRATION_DEADLINE_S == 30
+    assert driver.SOURCE_INFLIGHT == 64
+    assert "flush_lmcache" not in PATH.read_text()
+
+
+def test_traffic_switch_stops_source_and_releases_prepared_takeover():
+    calls = []
+
+    class Load:
+        def __init__(self, name):
+            self.name = name
+
+        def pause(self):
+            calls.append((self.name, "pause"))
+
+        def resume(self):
+            calls.append((self.name, "resume"))
+
+    class Markers:
+        def add(self, event):
+            calls.append(("marker", event))
+
+    driver.switch_traffic(Load("source"), Load("takeover"), Markers())
+
+    assert calls == [
+        ("marker", "switch_start"),
+        ("takeover", "resume"),
+        ("source", "pause"),
+        ("marker", "traffic_switched"),
+    ]
