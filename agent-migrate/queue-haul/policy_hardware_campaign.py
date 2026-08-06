@@ -719,6 +719,11 @@ def plot_full_power_attainment(summaries, power_window_s, out,
                 label=CDF_LABELS[policy],
             )
     ax.axvline(deadline_s, color="black", linestyle="--", linewidth=1.5)
+    ax.text(
+        deadline_s, 1.01, f"{deadline_s:g} s Deadline",
+        transform=ax.get_xaxis_transform(), ha="center", va="bottom",
+        fontsize=11,
+    )
     ax.set(
         xlabel="Time to Full Power-Shed Attainment (s)",
         ylabel="Cumulative Distribution", ylim=(0, 1.02),
@@ -729,7 +734,7 @@ def plot_full_power_attainment(summaries, power_window_s, out,
     ax.yaxis.label.set_size(15)
     ax.grid(alpha=.25)
     if ax.get_legend_handles_labels()[0]:
-        ax.legend(frameon=False, fontsize=11, loc="upper left")
+        ax.legend(frameon=False, fontsize=11, loc="lower right")
     fig.tight_layout()
     for suffix in ("png", "pdf"):
         fig.savefig(

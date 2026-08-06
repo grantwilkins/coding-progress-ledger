@@ -511,7 +511,7 @@ def test_full_power_attainment_includes_late_events_and_power_window():
     assert y.tolist() == [0, .25, .5, .75]
 
 
-def test_full_power_attainment_legend_is_plain_and_upper_left(
+def test_full_power_attainment_marks_deadline_and_moves_legend(
         tmp_path, monkeypatch):
     monkeypatch.setattr(campaign.plt, "close", lambda _: None)
     campaign.plot_full_power_attainment([{
@@ -523,9 +523,11 @@ def test_full_power_attainment_legend_is_plain_and_upper_left(
     legend = ax.get_legend()
     assert [text.get_text() for text in legend.texts] \
         == [CDF_LABELS["queue_haul"]]
-    assert legend._loc == 2
+    assert legend._loc == 4
     assert list(ax.lines[-1].get_xdata()) == [30, 30]
     assert ax.lines[-1].get_linestyle() == "--"
+    assert [text.get_text() for text in ax.texts] == ["30 s Deadline"]
+    assert ax.texts[0].get_position() == (30, 1.01)
 
 
 def test_destination_ttft_cdf_includes_migration_time(tmp_path, monkeypatch):
