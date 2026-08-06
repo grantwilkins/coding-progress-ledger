@@ -133,6 +133,9 @@ def test_plan_pairs_every_policy_on_the_same_complete_episode(
     assert {row["bandwidth_mbps"] for row in plan["scenarios"]} \
         == {5_000, 10_000}
     assert set(bandwidths) == {5_000, 10_000}
+    scenario_bandwidths = [row["bandwidth_mbps"] for row in plan["scenarios"]]
+    assert sum(i == 0 or value != scenario_bandwidths[i - 1]
+               for i, value in enumerate(scenario_bandwidths)) == 2
     queue_moves = [
         move for row in plan["scenarios"] if row["policy"] == "queue_haul"
         for move in row["moves"] if move["method"] == "kv_transfer"

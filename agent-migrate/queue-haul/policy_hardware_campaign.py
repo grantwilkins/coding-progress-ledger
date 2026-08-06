@@ -303,6 +303,7 @@ def make_plan(manifest_path: Path, model_path: Path = DEFAULT_MODEL,
     for block in blocks:
         rng.shuffle(block)
     rng.shuffle(blocks)
+    blocks.sort(key=lambda block: block[0]["bandwidth_mbps"])
     scenarios = [row for block in blocks for row in block]
     output = {
         "schema": profiler.PLAN_SCHEMA,

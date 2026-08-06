@@ -554,8 +554,8 @@ without failures in 8:08:22. Its checksum-pinned reduced bundle is under
 `outputs/policy-hardware-width8-packing-20260730/`; compressed results, GPU
 samples, proxy byte counters, and RESP transfer records retain the raw evidence
 without runtime debug logs. The matched 120-episode, 240-scenario baseline plan is pinned under
-`outputs/policy-hardware-width8-isolated-fastest-plan/`. Its launcher reduces
-all episodes, hard-validates three complete repetitions per condition and clean
+`outputs/policy-hardware-width8-isolated-fastest-plan/`. Its bandwidth-grouped order needs four model-stack starts instead of 93. Its
+launcher reduces all episodes, hard-validates three complete repetitions per condition and clean
 plan/profile provenance, writes checksums, and rebuilds the comparison from the
 common packing cohort only (120 observations per method). The comparison uses
 ±5 percentage points relative to Queue-Haul LP for better/similar/worse and
