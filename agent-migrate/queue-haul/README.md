@@ -406,6 +406,11 @@ output tokens; a successful HTTP response without the code hard-fails the attemp
 The 600-second HTTP timeout is independent of the measured scenario deadline;
 slow reconstruction completes with `deadline_met=false` instead of restarting.
 
+`plot_network_action_breakdown.py` writes one grouped stacked-bar figure for
+East and West isolated faster-method outcomes and the completed joint planner's
+recorded destination-method selections. Run
+`uv run python queue-haul/plot_network_action_breakdown.py`.
+
 `plot_hardware_power_parity.py` groups the completed width-8 policy and joint
 network scenarios into stacked power-target outcome bars for Queue-Haul LP,
 Queue-Haul Greedy, KV-only, and replay-only, sorted by target attainment.

@@ -1,0 +1,33 @@
+group,label,unit,total,site,method,count,share_percent
+East validation,Faster measured action,matched cells,27,east,replay,27,100.0
+East validation,Faster measured action,matched cells,27,east,kv_transfer,0,0.0
+East validation,Faster measured action,matched cells,27,west,replay,0,0.0
+East validation,Faster measured action,matched cells,27,west,kv_transfer,0,0.0
+West validation,Faster measured action,matched cells,27,east,replay,0,0.0
+West validation,Faster measured action,matched cells,27,east,kv_transfer,0,0.0
+West validation,Faster measured action,matched cells,27,west,replay,18,66.66666666666667
+West validation,Faster measured action,matched cells,27,west,kv_transfer,9,33.333333333333336
+Joint selection,Queue-Haul LP,sessions,112,east,replay,2,1.7857142857142858
+Joint selection,Queue-Haul LP,sessions,112,east,kv_transfer,4,3.5714285714285716
+Joint selection,Queue-Haul LP,sessions,112,west,replay,18,16.071428571428573
+Joint selection,Queue-Haul LP,sessions,112,west,kv_transfer,88,78.57142857142857
+Joint selection,Queue-Haul Greedy,sessions,120,east,replay,9,7.5
+Joint selection,Queue-Haul Greedy,sessions,120,east,kv_transfer,3,2.5
+Joint selection,Queue-Haul Greedy,sessions,120,west,replay,29,24.166666666666668
+Joint selection,Queue-Haul Greedy,sessions,120,west,kv_transfer,79,65.83333333333333
+Joint selection,Lagrangian greedy,sessions,104,east,replay,13,12.5
+Joint selection,Lagrangian greedy,sessions,104,east,kv_transfer,0,0.0
+Joint selection,Lagrangian greedy,sessions,104,west,replay,4,3.8461538461538463
+Joint selection,Lagrangian greedy,sessions,104,west,kv_transfer,87,83.65384615384616
+Joint selection,KV only,sessions,120,east,replay,0,0.0
+Joint selection,KV only,sessions,120,east,kv_transfer,18,15.0
+Joint selection,KV only,sessions,120,west,replay,0,0.0
+Joint selection,KV only,sessions,120,west,kv_transfer,102,85.0
+Joint selection,Replay only,sessions,120,east,replay,51,42.5
+Joint selection,Replay only,sessions,120,east,kv_transfer,0,0.0
+Joint selection,Replay only,sessions,120,west,replay,69,57.5
+Joint selection,Replay only,sessions,120,west,kv_transfer,0,0.0
+Joint selection,Random,sessions,112,east,replay,21,18.75
+Joint selection,Random,sessions,112,east,kv_transfer,30,26.785714285714285
+Joint selection,Random,sessions,112,west,replay,29,25.892857142857142
+Joint selection,Random,sessions,112,west,kv_transfer,32,28.571428571428573
