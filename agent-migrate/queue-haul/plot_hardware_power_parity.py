@@ -18,21 +18,16 @@ from profiles import ModelProfile
 
 ROOT = Path(__file__).parent
 OUTPUTS = ROOT / "outputs"
-POLICY_ROOTS = (
-    *(OUTPUTS / f"policy-hardware-width8-{name}-20260730"
-      for name in ("frontier", "packing")),
-    OUTPUTS / "policy-hardware-width8-isolated-fastest-20260806",
-)
+POLICY_ROOTS = tuple(OUTPUTS / f"policy-hardware-width8-{name}-20260730"
+                     for name in ("frontier", "packing"))
 NETWORK_ROOT = OUTPUTS / "network-campaign-20260805"
-METHODS = ("queue_haul", "greedy", "greedy_lagrangian", "isolated_fastest",
-           "kv_only", "replay_only", "random")
-PLOT_METHODS = ("queue_haul", "greedy", "isolated_fastest", "kv_only",
-                "replay_only")
+METHODS = ("queue_haul", "greedy", "greedy_lagrangian", "kv_only",
+           "replay_only", "random")
+PLOT_METHODS = ("queue_haul", "greedy", "kv_only", "replay_only")
 TARGET_TOLERANCE_PP = 5
 METHOD_LABELS = {
     "queue_haul": "Queue-Haul LP", "greedy": "Queue-Haul Greedy",
-    "greedy_lagrangian": "Lagrangian greedy",
-    "isolated_fastest": "Per-session fastest", "kv_only": "KV only",
+    "greedy_lagrangian": "Lagrangian greedy", "kv_only": "KV only",
     "replay_only": "Replay only", "random": "Random",
 }
 

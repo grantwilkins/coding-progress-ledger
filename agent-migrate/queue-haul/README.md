@@ -413,8 +413,7 @@ destination-method selections. Run
 
 `plot_hardware_power_parity.py` groups the completed width-8 policy and joint
 network scenarios into stacked power-target outcome bars for Queue-Haul LP,
-Queue-Haul Greedy, per-session fastest, KV-only, and replay-only, sorted by
-target attainment.
+Queue-Haul Greedy, KV-only, and replay-only, sorted by target attainment.
 Each bar reports below, on, or above the normalized deadline-admitted shed.
 On target includes deviations within ±5 percentage points. Achieved shed uses
 the trailing power window from hardware completion times; the two three-node
@@ -768,10 +767,8 @@ all five workloads, both deadlines, and three episodes within each bandwidth;
 the companion pooled CDF combines all four bandwidths. Regenerate that CDF
 with the earlier trace-sampled 5/10-Gbit/s frontier rows included at raw-sample
 weight using `plot-reduced --out <packing-results> --pooled-with
-<frontier-results> <isolated-fastest-results>`; this pooling also applies to the
-maximum-session, maximum-session-per-watt, and existing per-watt CDFs. The
-retained maximum-session CDF includes one slowest-migration sample from each of
-the 120 isolated-fastest episodes.
+<frontier-results>`; this pooling also applies to the maximum-session,
+maximum-session-per-watt, and existing per-watt CDFs.
 `simulated_pareto_campaign.py` creates 64 deterministic shards for 14 exact
 10K-session idle snapshots: three trace seeds for each workload and five
 trace-derived context anchors. It compares Queue-Haul, static and Lagrangian
