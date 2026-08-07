@@ -724,9 +724,9 @@ Sweden-to-East-US-2/West-Germany campaign with 80% source and 50% load at each
 destination. Queue Haul admitted all eight sessions in 29.669 s and KV-only in
 25.159 s; replay-only admitted six before the fixed 30-second deadline. The
 bundle includes raw `power.csv`, load and transfer telemetry, separate 500 ms
-mean regional-power plots focused on each completed arm's migration and the
-post-switch flush until measured source power reaches its idle band, and the
-exact plan and composed non-formal calibration used.
+mean regional-power plots covering each completed arm's full trace, with the
+post-switch flush ending when measured source power reaches its idle band, and
+the exact plan and composed non-formal calibration used.
 `migration_profiler.py make-crossover` creates paired single-session replay/KV
 measurements for each nominal context, bandwidth, and repeat. The synthetic body
 reserves 192 tokens for message overhead, and the first 32K replay is a fail-fast

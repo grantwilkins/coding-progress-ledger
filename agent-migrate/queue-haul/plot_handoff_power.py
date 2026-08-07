@@ -109,7 +109,7 @@ def reduce(run_root: Path) -> list[dict]:
     idle_s = next(seconds for seconds, watts in zip(*bin_mean(power["sweden"]))
                   if seconds >= marker["traffic_switched"]
                   and watts <= idle_w + IDLE_MARGIN_W)
-    xlim = (marker["handoff_start"] - BIN_S, idle_s + BIN_S)
+    xlim = (0, marker["post_end"])
     plt.style.use("default")
     figure, axis = plt.subplots(figsize=(9, 4))
     for node, points in power.items():

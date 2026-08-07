@@ -1,7 +1,7 @@
 """
 Claim:
-Handoff plots align each region's 500 ms power means to event timestamps and
-show the post-switch shutdown flush until source power reaches its idle band.
+Handoff plots show the full trace as regional 500 ms power means aligned to
+event timestamps, with shutdown flush ending when source power reaches idle.
 
 Plausible wrong implementations:
 - use the wrong event as the shared time origin
@@ -10,6 +10,7 @@ Plausible wrong implementations:
 - aggregate power across regions instead of within each region and time bin
 - hide the sub-second traffic switch by rendering it as a zero-width span
 - extend shutdown to a control event instead of measured idle power
+- crop out the pre-handoff or steady post-handoff measurements
 """
 
 import csv
@@ -66,7 +67,7 @@ def test_reduce_aligns_power_regions_and_queue_depth(tmp_path, monkeypatch):
     assert len(queue) == 12
     assert (tmp_path / "power_handoff.png").is_file()
     axis = p.plt.gcf().axes[0]
-    assert axis.get_xlim() == (.5, 3.25)
+    assert axis.get_xlim() == (0, 3)
     switch = next(line for line in axis.lines if line.get_label() == "Switch")
     assert list(switch.get_xdata()) == [1.5001, 1.5001]
     shutdown = next(patch for patch in axis.patches
