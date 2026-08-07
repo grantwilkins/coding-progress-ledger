@@ -474,7 +474,9 @@ def main() -> None:
     parser.add_argument("--run-root", type=Path)
     parser.add_argument("--allow-dirty", action="store_true")
     args = parser.parse_args()
-    campaign = write_campaign(args.campaign, args.out, args.calibration, args.profile)
+    campaign = json.loads((args.out / "plan.json").read_text()) \
+        if args.run_root and (args.out / "plan.json").exists() \
+        else write_campaign(args.campaign, args.out, args.calibration, args.profile)
     if args.live_template:
         write_live_plan(campaign, args.live_template, args.out)
     if args.run_root:
