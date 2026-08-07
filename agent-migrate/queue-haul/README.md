@@ -94,7 +94,8 @@ The node map across the provided cluster files is:
 | optional destination | Germany West Central | `10.3.0.4` |
 
 Use `azure_network_cluster_germany.json` for an isolated Germany run when West
-Europe is unavailable.
+Europe is unavailable, or `azure_network_cluster_east_germany.json` for the
+two-destination East US 2 and Germany campaign.
 
 `check` compares every selected entry with Azure IMDS and hard-fails before
 calibration if an address assignment differs. Correct the selected node record;
@@ -273,30 +274,52 @@ node identity, model, or runtime changed. A synchronized commit update remains
 visible in the audit checks. Azure Scheduled Events are
 logged on all three hosts and an active Spot event fails the attempt.
 
-After the joint campaign, run the Queue-Haul three-node handoff with a 30-second
-full-shed deadline, 100-ms power sampling, five-minute pre/post windows, natural
-links, and 50% destination load:
+The handoff accepts any validated two-destination cluster. For East US 2 and
+Germany West Central, create one fresh calibration and matched plan after East
+comes online, then pass the same repeat to Queue-Haul, KV-only, and replay-only:
 
 ```bash
-uv run python queue-haul/network_campaign.py handoff \
-  --cluster queue-haul/azure_network_cluster.json \
+uv run python queue-haul/network_campaign.py check \
+  --cluster queue-haul/azure_network_cluster_east_germany.json \
+  --ssh-key ~/.ssh/azrs
+uv run python queue-haul/network_campaign.py calibrate \
+  --cluster queue-haul/azure_network_cluster_east_germany.json \
   --ssh-key ~/.ssh/azrs \
-  --calibration /datadrive/queue-haul-network/control/calibration-post-west-001.json \
-  --plan /datadrive/queue-haul-network/control/plan-joint-001.json \
+  --out /datadrive/queue-haul-network/control/calibration-east-germany-001.json
+uv run python queue-haul/network_campaign.py prepare --design joint \
+  --cluster queue-haul/azure_network_cluster_east_germany.json \
+  --calibration /datadrive/queue-haul-network/control/calibration-east-germany-001.json \
   --manifest queue-haul/outputs/coding-manifest.json \
-  --run-root /datadrive/queue-haul-network/handoff-001
-uv run python queue-haul/plot_handoff_power.py \
-  --run-root /datadrive/queue-haul-network/handoff-001
+  --out /datadrive/queue-haul-network/control/plan-east-germany-001.json
+uv run python queue-haul/network_campaign.py smoke \
+  --cluster queue-haul/azure_network_cluster_east_germany.json \
+  --ssh-key ~/.ssh/azrs \
+  --calibration /datadrive/queue-haul-network/control/calibration-east-germany-001.json \
+  --bandwidth natural \
+  --run-root /datadrive/queue-haul-network/smoke-east-germany-natural-001
+
+for policy in queue_haul kv_only replay_only; do
+  uv run python queue-haul/network_campaign.py handoff \
+    --cluster queue-haul/azure_network_cluster_east_germany.json \
+    --ssh-key ~/.ssh/azrs \
+    --calibration /datadrive/queue-haul-network/control/calibration-east-germany-001.json \
+    --plan /datadrive/queue-haul-network/control/plan-east-germany-001.json \
+    --manifest queue-haul/outputs/coding-manifest.json \
+    --policy "$policy" --repeat 0 \
+    --run-root "/datadrive/queue-haul-network/handoff-east-germany-$policy-001"
+  uv run python queue-haul/plot_handoff_power.py \
+    --run-root "/datadrive/queue-haul-network/handoff-east-germany-$policy-001"
+done
 ```
 
-The harness keeps eight pinned agentic sessions plus an independent 80%-load
-agentic stream serving on Sweden for five minutes while both destinations sustain
-50% background inference. The 30-second handoff clock starts before live metrics
-and Queue-Haul LP planning, covers all parallel replay/KV reconstruction, and
-hard-fails unless all eight sessions are admitted and complete by the deadline.
+Each policy uses the same eight pinned agentic sessions. An independent 80%-load
+stream serves on Sweden while both destinations sustain 50% background inference.
+The 30-second handoff clock includes live metrics, policy planning, and parallel
+reconstruction, and hard-fails unless all sessions are admitted and complete.
 Destination background service never pauses. At the traffic switch, destination
-session service starts immediately while source admissions stop and Sweden drains
-and sleeps concurrently.
+service starts immediately while source admissions stop and Sweden drains and
+sleeps concurrently. Defaults retain five-minute pre/post windows and 100-ms
+power sampling.
 
 Handoff processes pin `kv_both`, 33 GB L1 pools, a 32 GB Redis cap, and disabled
 vLLM prefix caching. Unrelated source and destination loads bypass LMCache so

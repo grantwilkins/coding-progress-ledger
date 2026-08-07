@@ -116,6 +116,13 @@ def test_cluster_pins_actual_roles_and_rejects_ambiguous_hosts(tmp_path):
     assert [(node.id, node.region, node.host) for node in germany.destinations] == [
         ("germany", "germanywestcentral", "10.3.0.4")]
 
+    east_germany = n.Cluster.load(
+        n.ROOT / "azure_network_cluster_east_germany.json")
+    assert [(node.id, node.region, node.host)
+            for node in east_germany.destinations] == [
+        ("east", "eastus2", "10.1.0.4"),
+        ("germany", "germanywestcentral", "10.3.0.4")]
+
 
 def test_contract_uses_simultaneous_route_and_aggregate_goodput():
     contract = n.freeze_contract(calibration())
@@ -165,6 +172,8 @@ def test_targeted_design_has_seven_cells_and_126_policy_migrations():
     assert n.POLICIES[-1] == "random"
     assert len(cells) * n.REPEATS * len(n.POLICIES) == 126
     assert n.REQUEST_TIMEOUT_S > max(cell["deadline_s"] for cell in cells)
+    assert {node for cell in n.target_conditions(("east", "germany"))
+            for node in cell["background"]} == {"east", "germany"}
 
 
 def test_hierarchical_limiter_enforces_route_and_source_caps():
@@ -292,6 +301,13 @@ def test_network_smoke_prompt_fits_model_context():
         "smoke", "--cluster", "cluster.json", "--calibration", "c.json",
         "--run-root", "run",
     ]).words == 1024
+
+    handoff = n.parse_args([
+        "handoff", "--cluster", "cluster.json", "--calibration", "c.json",
+        "--plan", "p.json", "--manifest", "m.json", "--run-root", "run",
+        "--policy", "kv_only", "--repeat", "2",
+    ])
+    assert (handoff.policy, handoff.repeat) == ("kv_only", 2)
 
 
 def test_cluster_routes_keep_data_private_and_share_destination_caps(tmp_path):
@@ -519,14 +535,20 @@ def test_serve_window_routes_every_session(monkeypatch):
 
 
 def test_handoff_uses_queue_haul_deadline_and_cache_isolated_load(monkeypatch, tmp_path):
-    plan = {"scenarios": [
-        {"policy": "kv_only", "bandwidth": "natural", "deadline_s": 30},
-        {"policy": "queue_haul", "bandwidth": "natural", "deadline_s": 30},
-    ]}
-    scenario = n.handoff_scenario(plan, cluster(tmp_path), .5)
-    assert scenario["policy"] == "queue_haul"
-    assert scenario["deadline_s"] == 30
-    assert scenario["background"] == {"east": [.5, 0], "west": [.5, 0]}
+    shared = {"bandwidth": "natural", "deadline_s": 30,
+              "condition_index": 5, "repeat": 1, "sessions": [{"session_id": "s"}]}
+    plan = {"scenarios": [{**shared, "policy": policy}
+                           for policy in ("queue_haul", "kv_only", "replay_only")]}
+    scenarios = [n.handoff_scenario(
+        plan, cluster(tmp_path), .5, policy, 1)
+        for policy in ("queue_haul", "kv_only", "replay_only")]
+    assert [row["policy"] for row in scenarios] == [
+        "queue_haul", "kv_only", "replay_only"]
+    assert {tuple(row["sessions"][0].items()) for row in scenarios} == {
+        (("session_id", "s"),)}
+    assert all(row["deadline_s"] == 30 for row in scenarios)
+    assert all(row["background"] == {"east": [.5, 0], "west": [.5, 0]}
+               for row in scenarios)
     assert n.HANDOFF_ENV == {
         "QH_KV_ROLE_SOURCE": "kv_both", "QH_KV_ROLE_SINK": "kv_both",
         "QH_LMCACHE_L1_GB": "33", "QH_PREFIX_CACHING": "off",

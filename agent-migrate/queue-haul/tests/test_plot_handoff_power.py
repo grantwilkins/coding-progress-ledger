@@ -14,10 +14,12 @@ def test_reduce_aligns_power_regions_and_queue_depth(tmp_path):
     }.items()}
     (tmp_path / "result.json").write_text(json.dumps({
         "schema": "queue-haul-three-node-handoff-v2", "phases": phases,
+        "scenario": {"policy": "kv_only",
+                     "background": {"east": [.5, 0], "germany": [.5, 0]}},
     }))
     powers = {"sweden": (220, 230, 120, 80),
               "east": (100, 160, 170, 180),
-              "west": (110, 150, 160, 170)}
+              "germany": (110, 150, 160, 170)}
     moments = (1_500_000_000, 2_250_000_000,
                2_750_000_000, 3_500_000_000)
     for node, values in powers.items():

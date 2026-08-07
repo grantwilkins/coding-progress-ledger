@@ -54,6 +54,7 @@ WORKLOAD_PATHS = {name: ROOT / f"profiles/{name}.json" for name in (
 )}
 EXPECTED_RUNTIME = {"vllm": "0.22.0", "lmcache": "0.5.1"}
 HANDOFF_DEADLINE_S = 30
+HANDOFF_POLICIES = ("queue_haul", "kv_only", "replay_only")
 HANDOFF_ENV = {
     "QH_KV_ROLE_SOURCE": "kv_both", "QH_KV_ROLE_SINK": "kv_both",
     "QH_LMCACHE_L1_GB": "33", "QH_PREFIX_CACHING": "off",
@@ -410,16 +411,18 @@ def calibrate(cluster: Cluster, key: Path, out: Path, seconds: int = 60,
     return result
 
 
-def target_conditions() -> list[dict]:
+def target_conditions(destinations: tuple[str, str] = ("east", "west")
+                      ) -> list[dict]:
+    first, second = destinations
     anchor = {
         "workload": "agentic_tool_loop", "bandwidth": "controlled_80",
-        "background": {"east": (.2, .2), "west": (.2, .2)},
+        "background": {first: (.2, .2), second: (.2, .2)},
         "deadline_s": 30,
     }
     changes = (
-        {}, {"background": {"east": (0, 0), "west": (0, 0)}},
-        {"background": {"east": (.2, .4), "west": (.4, .2)}},
-        {"background": {"east": (.4, .2), "west": (.2, .4)}},
+        {}, {"background": {first: (0, 0), second: (0, 0)}},
+        {"background": {first: (.2, .4), second: (.4, .2)}},
+        {"background": {first: (.4, .2), second: (.2, .4)}},
         {"bandwidth": "controlled_40"}, {"bandwidth": "natural"},
         {"deadline_s": 19},
     )
@@ -482,7 +485,7 @@ def make_plan(manifest_path: Path, contract: dict, seed: int = 1,
                                        "deadline_admitted": True}],
                         })
     else:
-        for condition_index, condition in enumerate(target_conditions()):
+        for condition_index, condition in enumerate(target_conditions(destinations)):
             workload = WorkloadProfile.load(WORKLOAD_PATHS[condition["workload"]])
             for repeat in range(REPEATS):
                 rng = random.Random(profiler.stable_seed(
@@ -521,7 +524,8 @@ def make_plan(manifest_path: Path, contract: dict, seed: int = 1,
         "model_profile": {"path": str(MODEL_PATH),
                           "sha256": profiler.file_hash(MODEL_PATH)},
         "network_contract": contract, "policies": list(POLICIES),
-        "conditions": target_conditions() if design == "joint" else [], "repeats": REPEATS,
+        "conditions": target_conditions(destinations) if design == "joint" else [],
+        "repeats": REPEATS,
         "sessions_per_scenario": sessions, "scenarios": scenarios,
     }
     validate_plan(output)
@@ -1269,11 +1273,15 @@ def observed_demand(rows: list[dict], seconds: float) -> dict[str, tuple[float, 
             for session_id, values in demand.items()}
 
 
-def handoff_scenario(plan: dict, cluster: Cluster, destination_load: float) -> dict:
-    scenario = next(row for row in plan["scenarios"]
-                    if row["policy"] == "queue_haul"
-                    and row["bandwidth"] == "natural"
-                    and row["deadline_s"] == HANDOFF_DEADLINE_S)
+def handoff_scenario(plan: dict, cluster: Cluster, destination_load: float,
+                     policy: str = "queue_haul", repeat: int = 0) -> dict:
+    matches = [row for row in plan["scenarios"]
+               if row["policy"] == policy and row["repeat"] == repeat
+               and row["bandwidth"] == "natural"
+               and row["deadline_s"] == HANDOFF_DEADLINE_S]
+    if len(matches) != 1:
+        raise ValueError("handoff policy and repeat must select one scenario")
+    scenario = matches[0]
     return {**scenario, "deadline_s": HANDOFF_DEADLINE_S,
             "background": {node.id: [destination_load, 0]
                            for node in cluster.destinations}}
@@ -1282,7 +1290,8 @@ def handoff_scenario(plan: dict, cluster: Cluster, destination_load: float) -> d
 def run_handoff(cluster: Cluster, key: Path, calibration_path: Path,
                 plan_path: Path, manifest_path: Path, run_root: Path,
                 window_s: float = 300, destination_load: float = .5,
-                power_interval_s: float = .1) -> dict:
+                power_interval_s: float = .1, policy: str = "queue_haul",
+                repeat: int = 0) -> dict:
     if run_root.exists() or window_s <= 0 or not 0 < destination_load < 1:
         raise ValueError("handoff requires a new root and positive windows/load")
     plan, manifest = (json.loads(path.read_text())
@@ -1295,7 +1304,8 @@ def run_handoff(cluster: Cluster, key: Path, calibration_path: Path,
     calibration = json.loads(calibration_path.read_text())
     validate_resume(plan["network_contract"], freeze_contract(calibration))
     host_check(cluster, key)
-    scenario = handoff_scenario(plan, cluster, destination_load)
+    scenario = handoff_scenario(
+        plan, cluster, destination_load, policy, repeat)
     os.environ.update(HANDOFF_ENV)
     stack = start_cluster(cluster, key, plan["network_contract"], "natural",
                           run_root, power_interval_s)
@@ -1352,7 +1362,7 @@ def run_handoff(cluster: Cluster, key: Path, calibration_path: Path,
         write_checkpoint(run_root / "decision.json", {
             "background": snapshots, "moves": moves})
         if not moves or not all(move["deadline_admitted"] for move in moves):
-            raise RuntimeError("Queue-Haul did not admit the full 30-second shed")
+            raise RuntimeError("handoff policy did not admit the full 30-second shed")
         routes = {move["session_id"]: (
             move["destination_instance"],
             stack.ports[move["destination_instance"]]["api"])
@@ -1685,6 +1695,9 @@ def parse_args(argv=None):
     command.add_argument("--window-s", type=float, default=300)
     command.add_argument("--destination-load", type=float, default=.5)
     command.add_argument("--power-interval-s", type=float, default=.1)
+    command.add_argument("--policy", choices=HANDOFF_POLICIES,
+                         default="queue_haul")
+    command.add_argument("--repeat", type=int, choices=range(REPEATS), default=0)
     return parser.parse_args(argv)
 
 
@@ -1728,6 +1741,7 @@ def main(argv=None) -> None:
             Cluster.load(args.cluster), args.ssh_key.expanduser(),
             args.calibration, args.plan, args.manifest, args.run_root,
             args.window_s, args.destination_load, args.power_interval_s,
+            args.policy, args.repeat,
         ), indent=2, sort_keys=True))
 
 
