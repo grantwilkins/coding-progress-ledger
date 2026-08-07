@@ -516,17 +516,23 @@ evidence also includes an episode migration-makespan-per-modeled-watt CDF and
 supports timing and projected, not realized, power attainment.
 The pinned 2026-07-30 bundles predate `greedy_lagrangian`; they do not constitute
 hardware evidence for it. A new two-A100 run is required for that claim.
-`capacity_sweep_campaign.py` runs two separate fixed-30-second capacity
-campaigns: normalized destination offered load at 10 Gbit/s and measured
-effective goodput at an idle destination. Both freeze the mixed eight-session
-context pack and a 4 rps source workload split into eight equal 128-input,
-2-output streams. The modeled grid reports maximum executable nonlinear source
-power shed for Queue-Haul LP, static greedy, replay-only, and KV-only; the
-companion chart uses two-group Shapley values for exact replay/KV attribution.
-Only a route commit and destination continuation token by 30 seconds earn
-credit. Live episodes may queue and finish through 180 seconds, retain late work
-as an observation, and sample both GPUs at 10 Hz. Each live campaign runs three
-repeats of all four policies at the two LP knee cells (24 episodes).
+capacity_sweep_campaign.py keeps the completed two-point load run as a
+pilot and builds the publication load curve at
+0,.25,.50,.65,.75,.80,.85,.875,.90,.925,.95,.975. Normalized offered load is
+scheduled prefill GPU-seconds plus decode GPU-seconds per second, using the
+checksum-pinned independent destination calibration; it is not achieved
+throughput or RPS. Each load has ten randomized, paired repeats with the same
+pre-generated deterministic trace for Queue-Haul LP, static greedy,
+replay-only, and KV-only. All eight source sessions are offered to each policy,
+the destination warms for 30 seconds before migration, and arrivals continue
+through the full 30-second deadline. A session earns shed credit only when its
+route commits and first destination continuation token both arrive by the
+deadline. The live figure uses trace-derived load, median shed, bootstrap 95%
+confidence bands, and the 147.2 W requested-shed line; LP and Greedy component
+panels report replay, KV, and unmet watts. After the dense base run, add
+midpoints where shed changes by more than 5 W and extend knee cells to 20--30
+repeats while a 95% interval remains wider than 5 W. All 480 base episodes are
+checkpointed independently and completed scenario IDs are skipped on resume.
 
 ```
 uv run python queue-haul/capacity_sweep_campaign.py load --out queue-haul/outputs/capacity-load-20260806 --calibration load-calibration.json --live-template queue-haul/outputs/policy-hardware-width8-packing-plan/plan.json

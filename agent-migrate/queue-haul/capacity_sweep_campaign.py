@@ -4,13 +4,14 @@ from __future__ import annotations
 
 import argparse
 import json
+import random
 import statistics
-import time
 from dataclasses import asdict, replace
 from pathlib import Path
 
 import matplotlib
 
+import numpy as np
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
@@ -26,14 +27,17 @@ ROOT = Path(__file__).parent
 DEFAULT_PROFILE = ROOT / "profiles/gpt_oss_20b_a100_tp1_crossover.json"
 SCHEMA = "queue-haul-capacity-sweep-v1"
 COMMIT_DEADLINE_S = 30
-PLANNER_DEADLINE_S = 35
+PLANNER_DEADLINE_S = 30
 RUN_TIMEOUT_S = 180
 CONTEXTS = (2048, 4096, 4096, 8192, 8192, 12288, 12288, 14336)
 GOODPUT_CAPS_MBPS = (1000, 1600, 2500, 4000, 5000, 7000, 10000)
 DEFAULT_TEMPLATE = ROOT / "outputs/policy-hardware-width8-packing-plan/plan.json"
 DEFAULT_BUNDLE = ROOT / "outputs/destination-v7-20260722/content-free-manifest.json"
 DEFAULT_SERVICE_PROFILE = ROOT / "outputs/destination-v7-20260722/baseline-profile.json"
-LOAD_BASE_FRACTIONS = (0, .25, .5, .7, .85, .95)
+LOAD_BASE_FRACTIONS = (0, .25, .5, .65, .75, .8, .85, .875,
+                       .9, .925, .95, .975)
+LIVE_REPEATS = 10
+LOAD_WARMUP_S = LOAD_WINDOW_S = 30
 POLICIES = {
     "lp": "lp_work_first", "greedy": "greedy",
     "replay_only": "replay_only", "kv_only": "kv_only",
@@ -69,13 +73,11 @@ def shapley_watts(value) -> tuple[float, float]:
 
 def adaptive_load_fractions(lp_watts, target_w: float) -> tuple[float, ...]:
     if len(lp_watts) != len(LOAD_BASE_FRACTIONS) or target_w <= 0:
-        raise ValueError("load adaptation needs six LP observations and a target")
-    crossing = next((i for i in range(1, len(lp_watts))
-                     if lp_watts[i - 1] >= target_w > lp_watts[i]), None)
-    extra = ((LOAD_BASE_FRACTIONS[crossing - 1]
-              + LOAD_BASE_FRACTIONS[crossing]) / 2 if crossing is not None
-             else 1 if all(value >= target_w for value in lp_watts) else .125)
-    return tuple(sorted({*LOAD_BASE_FRACTIONS, extra}))
+        raise ValueError("load adaptation needs the dense grid and a target")
+    extra = {(a + b) / 2 for a, b, x, y in zip(
+        LOAD_BASE_FRACTIONS, LOAD_BASE_FRACTIONS[1:], lp_watts, lp_watts[1:])
+             if abs(x - y) > 5}
+    return tuple(sorted({*LOAD_BASE_FRACTIONS, *extra}))
 
 
 def knee_indices(watts, target_w: float, feasible_first: bool) -> tuple[int, int]:
@@ -175,17 +177,54 @@ def _goodput_cells(calibration: dict | None):
     return [(cap, measured.get(cap, cap)) for cap in GOODPUT_CAPS_MBPS]
 
 
+def _load_calibration(calibration: dict | None) -> dict:
+    service = json.loads(DEFAULT_SERVICE_PROFILE.read_text())
+    rates = {metric: float(np.interp(
+        2048, *zip(*service["cases"]["central"][f"{metric}_tps"]["1"])
+    )) for metric in ("prefill", "decode")}
+    times = {"prefill": 2048 / rates["prefill"],
+             "decode": 32 / rates["decode"]}
+    return {**(calibration or {}), "service_calibration": {
+        "path": str(DEFAULT_SERVICE_PROFILE),
+        "sha256": profiler.file_hash(DEFAULT_SERVICE_PROFILE),
+        "prefill_tokens_per_s": rates["prefill"],
+        "decode_tokens_per_s": rates["decode"],
+        "prefill_s": times["prefill"], "decode_s": times["decode"],
+        "total_s": sum(times.values()),
+    }}
+
+
+def arrival_trace(rho: float, repeat: int, calibration: dict,
+                  repeats: int = LIVE_REPEATS) -> dict:
+    if not 0 <= rho < 1 or not 0 <= repeat < repeats:
+        raise ValueError("stationary load trace must have rho < 1 and a valid repeat")
+    service = calibration["service_calibration"]
+    total = float(service["total_s"])
+    offsets = []
+    if rho:
+        interval = total / rho
+        value = (repeat + .5) / repeats * interval
+        while value < LOAD_WARMUP_S + LOAD_WINDOW_S:
+            offsets.append(value); value += interval
+    measured = sum(LOAD_WARMUP_S <= value < LOAD_WARMUP_S + LOAD_WINDOW_S
+                   for value in offsets)
+    prefill = measured * float(service["prefill_s"]) / LOAD_WINDOW_S
+    decode = measured * float(service["decode_s"]) / LOAD_WINDOW_S
+    trace = {"offsets_s": offsets, "rho_prefill": prefill,
+             "rho_decode": decode, "rho": prefill + decode}
+    trace["trace_id"] = profiler.object_hash([rho, repeat, trace])[:16]
+    return trace
+
+
 def make_campaign(kind: str, calibration: dict | None = None,
                   profile_path: Path = DEFAULT_PROFILE) -> dict:
     if kind not in {"load", "goodput"}:
         raise ValueError("campaign must be load or goodput")
     profile = ModelProfile.load(profile_path)
     if kind == "load":
-        base = [_model_cell(profile, "lp", fraction, 10_000, 10_000)
-                for fraction in LOAD_BASE_FRACTIONS]
-        fractions = adaptive_load_fractions(
-            [row["achieved_shed_w"] for row in base], base[0]["requested_shed_w"])
-        cells = [(fraction, 10_000, 10_000) for fraction in fractions]
+        calibration = _load_calibration(calibration)
+        cells = [(fraction, 10_000, 10_000)
+                 for fraction in LOAD_BASE_FRACTIONS]
     else:
         cells = [(0, configured, measured)
                  for configured, measured in _goodput_cells(calibration)]
@@ -208,7 +247,8 @@ def make_campaign(kind: str, calibration: dict | None = None,
         "profile": {"path": str(profile_path),
                     "sha256": profiler.file_hash(profile_path)},
         "calibration": calibration,
-        "live_validation": {"repeats": 3, "lp_knee_indices": list(knees),
+        "live_validation": {"repeats": LIVE_REPEATS if kind == "load" else 3,
+                            "lp_knee_indices": list(knees),
                             "policies": list(POLICIES)},
         "rows": rows,
     }
@@ -224,9 +264,10 @@ def make_live_plan(campaign: dict, template: dict) -> dict:
         raise ValueError("template does not contain the frozen context pack")
     by_index = {f"s{i}": row for i, row in enumerate(frozen)}
     lp = [row for row in campaign["rows"] if row["policy"] == "lp"]
+    chosen = (range(len(lp)) if campaign["campaign"] == "load"
+              else campaign["live_validation"]["lp_knee_indices"])
     keys = {(lp[i]["load_fraction"], lp[i]["configured_goodput_mbps"],
-             lp[i]["measured_goodput_mbps"])
-            for i in campaign["live_validation"]["lp_knee_indices"]}
+             lp[i]["measured_goodput_mbps"]) for i in chosen}
     selected = [row for row in campaign["rows"]
                 if (row["load_fraction"], row["configured_goodput_mbps"],
                     row["measured_goodput_mbps"]) in keys]
@@ -237,10 +278,17 @@ def make_live_plan(campaign: dict, template: dict) -> dict:
                       "method": move["method"], "order": order}
                      for order, move in enumerate(row["moves"])]
             if not moves:
-                raise ValueError("live knee has no executable moves")
-            ids = {move["session_id"] for move in moves}
-            sessions = [{**item, "source_index": i} for i, item in enumerate(frozen)
-                        if item["session_id"] in ids]
+                raise ValueError("live cell has no executable moves")
+            sessions = [{**item, "source_index": i}
+                        for i, item in enumerate(frozen)]
+            trace = (arrival_trace(row["load_fraction"], repeat,
+                                   campaign["calibration"])
+                     if campaign["campaign"] == "load" else {
+                         "offsets_s": [], "rho_prefill": 0, "rho_decode": 0,
+                         "rho": 0, "trace_id": profiler.object_hash(
+                             ["goodput", row["configured_goodput_mbps"], repeat]
+                         )[:16],
+                     })
             methods = {move["method"] for move in moves}
             cell = (row["load_fraction"], row["configured_goodput_mbps"])
             match_id = profiler.object_hash([campaign["campaign"], cell, repeat])[:16]
@@ -251,7 +299,7 @@ def make_live_plan(campaign: dict, template: dict) -> dict:
                 "split": "measurement", "condition": campaign["campaign"],
                 "policy": row["policy"],
                 "method": next(iter(methods)) if len(methods) == 1 else "mixed",
-                "load_fraction": row["load_fraction"],
+                "load_fraction": row["load_fraction"], "arrival_trace": trace,
                 "configured_goodput_mbps": row["configured_goodput_mbps"],
                 "planned_measured_goodput_mbps": row["measured_goodput_mbps"],
                 "bandwidth_mbps": row["configured_goodput_mbps"],
@@ -264,13 +312,13 @@ def make_live_plan(campaign: dict, template: dict) -> dict:
                 "copy_policy": "initial_final", "final_state": "awake",
                 "reset_caches": True, "verify_continuations": True,
                 "wait_cache_idle": True, "prestage_all": True,
-                "warm_concurrency": len(moves),
-                "power_interval_s": .1,
+                "warm_concurrency": len(moves), "power_interval_s": .1,
             })
     expected = (len(keys) * len(campaign["live_validation"]["policies"])
                 * campaign["live_validation"]["repeats"])
     if len(scenarios) != expected:
         raise ValueError("live validation matrix is incomplete")
+    random.Random(0).shuffle(scenarios)
     return {"schema": profiler.PLAN_SCHEMA, "manifest": template["manifest"],
             "profile": campaign["profile"], "capacity_campaign": campaign["campaign"],
             "calibration": campaign.get("calibration"),
@@ -290,7 +338,6 @@ def write_campaign(kind: str, out: Path, calibration_path: Path | None = None,
                                        "planner_power_deadline_s", "live_validation")
     })
     return campaign
-
 
 def plot_campaign(campaign: dict, out: Path) -> None:
     rows, kind = campaign["rows"], campaign["campaign"]
@@ -351,7 +398,9 @@ def execute_live(plan_path: Path, run_root: Path, allow_dirty: bool = False) -> 
 
     plan_ = json.loads(plan_path.read_text())
     calibration = plan_.get("calibration") or {}
-    stable = float(calibration.get("stable_bound", 0))
+    service_calibration = calibration.get("service_calibration")
+    if plan_["capacity_campaign"] == "load" and not service_calibration:
+        raise ValueError("loaded hardware run requires independent service calibration")
     bundle = json.loads(DEFAULT_BUNDLE.read_text())
     service = json.loads(DEFAULT_SERVICE_PROFILE.read_text())
     background = sum((
@@ -360,38 +409,27 @@ def execute_live(plan_path: Path, run_root: Path, allow_dirty: bool = False) -> 
     ), [])
     background = [replace(row, prefix_tokens=1, append_tokens=2048,
                           output_tokens=32) for row in background]
-    rates = (destination.profile_rate(service, "prefill", 2048),
-             destination.profile_rate(service, "decode", 2048))
-    work = statistics.mean(2048 / rates[0] + 32 / rates[1]
-                           for _row in background)
+    rates = (
+        float(service_calibration["prefill_tokens_per_s"]),
+        float(service_calibration["decode_tokens_per_s"]),
+    ) if service_calibration else (
+        destination.profile_rate(service, "prefill", 2048),
+        destination.profile_rate(service, "decode", 2048),
+    )
+    work = float(service_calibration["total_s"]) if service_calibration else 1
     original = profiler.run_scenario
 
     def run_loaded(stack, cfg, manifest, scenario, root, run_id, **kwargs):
         fraction = float(scenario["load_fraction"])
-        if fraction and stable <= 0:
-            raise ValueError("loaded hardware run requires calibration.stable_bound")
+        trace = scenario["arrival_trace"]
         load = None if not fraction else destination.DestinationLoad(
             cfg.host, cfg.sink_port, cfg.model, background, fraction, *rates,
             root / "destination_load", 1000 + scenario["repeat"],
-            normal_bound=stable, rps=fraction * stable / work, max_inflight=64,
+            normal_bound=1, rps=fraction / work, max_inflight=256,
             bypass_lmcache=True, chat=True,
+            arrival_schedule=tuple(trace["offsets_s"]),
+            warmup_s=LOAD_WARMUP_S, measurement_s=LOAD_WINDOW_S,
         )
-        if load:
-            def wait_observed():
-                deadline = time.monotonic() + 90
-                while time.monotonic() < deadline and not load.failure:
-                    metrics = load.sampler.rows
-                    if len(metrics) > 1 and (
-                        metrics[-1]["monotonic_ns"] - metrics[0]["monotonic_ns"]
-                    ) >= 30e9:
-                        load.achieved = destination.measured_rho(
-                            metrics, *rates, stable,
-                        )
-                        return
-                    time.sleep(.25)
-                raise RuntimeError("destination load observation failed") \
-                    from load.failure
-            load.wait_ready = wait_observed
         return original(stack, cfg, manifest, scenario, root, run_id,
                         destination_load=load, **kwargs)
 
@@ -403,10 +441,79 @@ def execute_live(plan_path: Path, run_root: Path, allow_dirty: bool = False) -> 
         profiler.run_scenario = original
 
 
+def median_ci(values, seed: int = 0,
+              samples: int = 4000) -> tuple[float, float, float]:
+    if not values or samples < 1:
+        raise ValueError("median confidence interval needs observations")
+    values = np.asarray(values, dtype=float)
+    rng = np.random.default_rng(seed)
+    draws = np.median(rng.choice(values, (samples, len(values))), axis=1)
+    low, high = np.quantile(draws, (.025, .975))
+    return float(np.median(values)), float(low), float(high)
+
+
+def plot_live(rows: list[dict], out: Path, kind: str) -> None:
+    if kind != "load":
+        return
+    loads = sorted({row["load_fraction"] for row in rows})
+    expected = {(load, repeat, policy) for load in loads
+                for repeat in range(LIVE_REPEATS) for policy in POLICIES}
+    actual = {(row["load_fraction"], row["repeat"], row["policy"]) for row in rows}
+    if actual != expected:
+        raise RuntimeError("live load results are not a complete common-trace matrix")
+    for load in loads:
+        for repeat in range(LIVE_REPEATS):
+            if len({row["trace_id"] for row in rows
+                    if row["load_fraction"] == load
+                    and row["repeat"] == repeat}) != 1:
+                raise RuntimeError("policies did not share an arrival trace")
+    target = rows[0]["requested_shed_w"]
+    fig, ax = plt.subplots(figsize=(6.4, 4.2))
+    for policy in POLICIES:
+        x, center, low, high = [], [], [], []
+        for load in loads:
+            selected = [row for row in rows if row["policy"] == policy
+                        and row["load_fraction"] == load]
+            x.append(statistics.median(row["offered_rho"] for row in selected))
+            seed = int(profiler.object_hash([policy, load])[:8], 16)
+            a, b, c = median_ci(
+                [row["achieved_shed_w"] for row in selected], seed)
+            center.append(a); low.append(b); high.append(c)
+        ax.plot(x, center, marker="o", color=COLORS[policy], label=LABELS[policy])
+        ax.fill_between(x, low, high, color=COLORS[policy], alpha=.16)
+    ax.axhline(target, color="black", linestyle="--",
+               label=f"Requested shed ({target:.1f} W)")
+    ax.set(xlabel="Trace-derived normalized offered load",
+           ylabel="Median executable shed by 30 s (W)")
+    ax.grid(alpha=.25); ax.legend(frameon=False)
+    fig.tight_layout()
+    for suffix in ("png", "pdf"):
+        fig.savefig(out / f"load_capacity_live.{suffix}", dpi=220)
+    plt.close(fig)
+
+    fig, axes = plt.subplots(2, 1, figsize=(6.4, 6.4), sharex=True)
+    for ax, policy in zip(axes, ("lp", "greedy")):
+        selected = [row for row in rows if row["policy"] == policy]
+        x = [statistics.median(row["offered_rho"] for row in selected
+                              if row["load_fraction"] == load) for load in loads]
+        for field, label, color in (("replay_w", "Replay", "#E98300"),
+                                    ("kv_w", "KV transfer", "#006CB8"),
+                                    ("unmet_w", "Unmet", "#999999")):
+            ax.plot(x, [statistics.median(row[field] for row in selected
+                                          if row["load_fraction"] == load)
+                        for load in loads], marker="o", label=label, color=color)
+        ax.set_title(LABELS[policy]); ax.set_ylabel("Power (W)"); ax.grid(alpha=.25)
+    axes[0].legend(frameon=False, ncol=3)
+    axes[-1].set_xlabel("Trace-derived normalized offered load")
+    fig.tight_layout()
+    for suffix in ("png", "pdf"):
+        fig.savefig(out / f"load_capacity_components_live.{suffix}", dpi=220)
+    plt.close(fig)
+
+
 def reduce_live(run_root: Path, campaign: dict, out: Path) -> list[dict]:
     live = json.loads((run_root / "plan.json").read_text())
-    profile_path = Path(live["profile"]["path"])
-    profile = ModelProfile.load(profile_path)
+    profile = ModelProfile.load(Path(live["profile"]["path"]))
     scenario = _scenario(profile, 10_000)
     initial = source_power(scenario, profile)
     target = initial - source_power(
@@ -445,11 +552,19 @@ def reduce_live(run_root: Path, campaign: dict, out: Path) -> list[dict]:
         achieved = value(("replay", "kv"))
         start = min(row["initial_start_ns"] for row in raw)
         end = max(row["switch_end_ns"] for row in raw)
-        network = profiler.network_measurements(path.parent / "proxy_bytes.csv",
-                                                start, end)
+        network = profiler.network_measurements(
+            path.parent / "proxy_bytes.csv", start, end)
+        load = result.get("destination_load") or {}
+        trace = spec["arrival_trace"]
+        rho_prefill = load.get("offered_rho_prefill", trace["rho_prefill"])
+        rho_decode = load.get("offered_rho_decode", trace["rho_decode"])
         rows.append({
             "scenario_id": spec["scenario_id"], "policy": spec["policy"],
             "repeat": spec["repeat"], "load_fraction": spec["load_fraction"],
+            "trace_id": trace["trace_id"],
+            "offered_rho_prefill": rho_prefill,
+            "offered_rho_decode": rho_decode,
+            "offered_rho": rho_prefill + rho_decode,
             "configured_goodput_mbps": spec["configured_goodput_mbps"],
             "measured_goodput_mbps": network["measured_kv_throughput_mbps"],
             "requested_shed_w": target, "achieved_shed_w": achieved,
@@ -457,11 +572,10 @@ def reduce_live(run_root: Path, campaign: dict, out: Path) -> list[dict]:
             "unmet_w": max(0, target - achieved),
             "credited_sessions": len(credited), "planned_sessions": len(raw),
             "episode_elapsed_s": result["elapsed_s"],
-            "measured_load_fraction": (result.get("destination_load") or {}).get(
-                "achieved_rho", 0),
+            "queue_at_start": load.get("queue_at_start"),
             "deadline_miss_sessions": len(raw) - len(credited),
             "right_censored": result["elapsed_s"] >= RUN_TIMEOUT_S,
-            "destination_load": result.get("destination_load"),
+            "destination_load": load or None,
         })
     if live["capacity_campaign"] == "goodput":
         measured = {
@@ -474,14 +588,19 @@ def reduce_live(run_root: Path, campaign: dict, out: Path) -> list[dict]:
             row["measured_goodput_mbps"] = measured[row["configured_goodput_mbps"]]
     out.mkdir(parents=True, exist_ok=True)
     profiler.write_csv(out / "live_capacity.csv", rows)
+    plot_live(rows, out, live["capacity_campaign"])
     profiler.write_json(out / "live_summary.json", {
         "schema": SCHEMA, "campaign": live["capacity_campaign"],
         "episodes": len(rows), "complete": len(rows),
+        "load_points": len({row["load_fraction"] for row in rows}),
+        "repeats_per_cell": min(
+            sum(row["policy"] == "lp" and row["load_fraction"] == load
+                for row in rows)
+            for load in {row["load_fraction"] for row in rows}),
         "deadline_credited_sessions": sum(row["credited_sessions"] for row in rows),
         "right_censored_episodes": sum(row["right_censored"] for row in rows),
     })
     return rows
-
 
 def main() -> None:
     parser = argparse.ArgumentParser()

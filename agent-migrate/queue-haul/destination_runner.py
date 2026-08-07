@@ -334,7 +334,9 @@ class DestinationLoad:
                  root: Path, seed: int, chunk_s: float = 15, normal_bound: float = 1,
                  timeout_s: float = 720, rps: float | None = None,
                  max_inflight: int = 0, prewarm_timeout_s: float = 300,
-                 bypass_lmcache: bool = False, chat: bool = False):
+                 bypass_lmcache: bool = False, chat: bool = False,
+                 arrival_schedule: tuple[float, ...] | None = None,
+                 warmup_s: float = 0, measurement_s: float = 0):
         work = np.mean([s.append_tokens / prefill_rate + s.output_tokens / decode_rate
                         for s in sessions])
         if min(target_rho, work, normal_bound) <= 0:
@@ -343,6 +345,12 @@ class DestinationLoad:
             raise ValueError("open-loop arrival rate must be positive")
         if (rps is None) != (max_inflight <= 0):
             raise ValueError("open-loop mode needs both rps and max_inflight")
+        if arrival_schedule is not None and (
+                not rps or warmup_s <= 0 or measurement_s <= 0
+                or tuple(sorted(arrival_schedule)) != arrival_schedule
+                or any(value < 0 or value >= warmup_s + measurement_s
+                       for value in arrival_schedule)):
+            raise ValueError("invalid deterministic arrival trace")
         self.host, self.port, self.model, self.sessions = host, port, model, sessions
         self.target, self.prefill_rate, self.decode_rate = target_rho, prefill_rate, decode_rate
         self.normal_bound = normal_bound
@@ -352,6 +360,9 @@ class DestinationLoad:
         self.request = issue_chat if chat else issue
         self.rate = rps if rps else target_rho * normal_bound / work
         self.work, self.max_inflight = float(work), max_inflight
+        self.arrival_schedule = arrival_schedule
+        self.warmup_s, self.measurement_s = warmup_s, measurement_s
+        self.epoch, self.queue_at_start = None, None
         self.stop, self.rows = threading.Event(), []
         self.admit, self.blocked_arrivals = threading.Event(), 0
         self.admit.set()
@@ -399,18 +410,36 @@ class DestinationLoad:
             index += 1
 
     def _run_open(self):
-        """Poisson arrivals that never wait on completions, capped by max_inflight."""
-        rng, gate, lock = random.Random(self.seed), threading.Semaphore(self.max_inflight), threading.Lock()
+        """Open-loop arrivals never wait on completions."""
+        rng = random.Random(self.seed)
+        gate = threading.Semaphore(self.max_inflight)
+        lock = threading.Lock()
+
         def one(index, scheduled_ns):
             try:
-                row = getattr(self, "request", issue)(self.host, self.port, self.model,
-                            self.sessions[index % len(self.sessions)], index,
-                            scheduled_ns, self.timeout_s, getattr(self, "bypass_lmcache", False))
+                row = getattr(self, "request", issue)(
+                    self.host, self.port, self.model,
+                    self.sessions[index % len(self.sessions)], index,
+                    scheduled_ns, self.timeout_s,
+                    getattr(self, "bypass_lmcache", False),
+                )
                 with lock:
                     self.rows.append(row)
             finally:
                 gate.release()
+
         with ThreadPoolExecutor(max_workers=self.max_inflight) as pool:
+            self.epoch = time.monotonic()
+            schedule = getattr(self, "arrival_schedule", None)
+            if schedule is not None:
+                for index, offset in enumerate(schedule):
+                    scheduled = self.epoch + offset
+                    if self.stop.wait(max(0, scheduled - time.monotonic())):
+                        return
+                    if time.monotonic() - scheduled > .25 or not gate.acquire(blocking=False):
+                        raise RuntimeError("deterministic arrival trace slipped")
+                    pool.submit(one, index, time.time_ns())
+                return
             index = 0
             while not self.stop.wait(rng.expovariate(self.rate)):
                 while not self.admit.is_set():
@@ -426,6 +455,17 @@ class DestinationLoad:
                 index += 1
 
     def wait_ready(self):
+        if getattr(self, "arrival_schedule", None) is not None:
+            while self.epoch is None and not self.failure:
+                time.sleep(.01)
+            deadline = self.epoch + self.warmup_s
+            while time.monotonic() < deadline and not self.failure:
+                time.sleep(min(.1, deadline - time.monotonic()))
+            if self.failure:
+                raise RuntimeError("deterministic destination load failed") from self.failure
+            self.queue_at_start = self.sampler.rows[-1].get(
+                "vllm:num_requests_waiting") if self.sampler.rows else None
+            return
         deadline = time.monotonic() + 90
         while time.monotonic() < deadline and not self.failure:
             if len(self.sampler.rows) > 1 and (self.sampler.rows[-1]["monotonic_ns"] -
@@ -439,22 +479,43 @@ class DestinationLoad:
             f"destination rho {self.achieved} misses target {self.target}"
         ) from self.failure
 
+    def wait_deadline(self):
+        if getattr(self, "arrival_schedule", None) is None:
+            return
+        deadline = self.epoch + self.warmup_s + self.measurement_s
+        while time.monotonic() < deadline and not self.failure:
+            time.sleep(min(.1, deadline - time.monotonic()))
+        if self.failure:
+            raise RuntimeError("deterministic destination load failed") from self.failure
+
     def close(self):
         self.stop.set()
         if getattr(self.thread, "ident", 1) is None:
-            return  # start() raised before the arrival thread ran; nothing to join
+            return
         self.thread.join(self.chunk_s + self.timeout_s + 10); self.sampler.close()
         if self.thread.is_alive() or self.failure:
             raise RuntimeError("destination foreground failed") from self.failure
         (self.root / "requests.json").write_text(json.dumps(self.rows, indent=2) + "\n")
 
     def summary(self):
-        return {"target_rho": self.target, "achieved_rho": self.achieved,
-                "offered_rps": self.rate, "max_inflight": self.max_inflight,
-                "blocked_arrivals": self.blocked_arrivals,
-                "work_per_request_s": self.work, "request_count": len(self.rows),
-                "queue_at_start": self.sampler.rows[0].get("vllm:num_requests_waiting") if self.sampler.rows else None}
-
+        schedule = getattr(self, "arrival_schedule", None)
+        warmup = getattr(self, "warmup_s", 0)
+        measurement = getattr(self, "measurement_s", 0)
+        selected = [self.sessions[index % len(self.sessions)]
+                    for index, offset in enumerate(schedule or ())
+                    if warmup <= offset < warmup + measurement]
+        prefill = sum(row.append_tokens / self.prefill_rate for row in selected) / measurement if selected else 0
+        decode = sum(row.output_tokens / self.decode_rate for row in selected) / measurement if selected else 0
+        return {
+            "target_rho": self.target, "achieved_rho": self.achieved,
+            "offered_rho_prefill": prefill, "offered_rho_decode": decode,
+            "offered_rho": prefill + decode, "offered_rps": self.rate,
+            "max_inflight": self.max_inflight,
+            "blocked_arrivals": self.blocked_arrivals,
+            "work_per_request_s": self.work, "request_count": len(self.rows),
+            "queue_at_start": getattr(self, "queue_at_start", None) if schedule is not None
+            else self.sampler.rows[0].get("vllm:num_requests_waiting") if self.sampler.rows else None,
+        }
 
 def offered_work(rows: list[dict], duration_s: float) -> tuple[float, float]:
     if duration_s <= 0:
@@ -474,7 +535,6 @@ def measured_rho(rows: list[dict], prefill_rate: float, decode_rate: float,
     prompt = float(last["vllm:prompt_tokens_total"] - first["vllm:prompt_tokens_total"]) / seconds
     decode = float(last["vllm:generation_tokens_total"] - first["vllm:generation_tokens_total"]) / seconds
     return (prompt / prefill_rate + decode / decode_rate) / normal_bound
-
 
 def require_rho(rows: list[dict], target: float, prefill_rate: float,
                 decode_rate: float, normal_bound: float = 1,

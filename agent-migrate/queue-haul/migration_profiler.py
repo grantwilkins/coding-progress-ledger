@@ -1416,7 +1416,7 @@ def with_destination_load(load, action):
         load.close()
 
 
-def verify_continuations(scenario, sessions, cfg):
+def verify_continuations(scenario, sessions, cfg, session_ids=None):
     expected_port = cfg.api_proxy_port if scenario["kind"] == "migration" \
         else cfg.src_port
 
@@ -1432,7 +1432,9 @@ def verify_continuations(scenario, sessions, cfg):
             **asdict(request),
         }
 
-    ordered = sorted(scenario["sessions"], key=lambda row: row["order"])
+    ordered = sorted((row for row in scenario["sessions"]
+                      if session_ids is None or row["session_id"] in session_ids),
+                     key=lambda row: row["order"])
     with ThreadPoolExecutor(max_workers=len(ordered)) as pool:
         return list(pool.map(verify, ordered))
 
@@ -1499,13 +1501,15 @@ def run_scenario(stack: b.Stack, cfg: b.Config, manifest: dict, scenario: dict,
             item.get("initial_tokens"),
         ) for item in scenario["sessions"]}
         method_by_session = {row["session_id"]: row["method"] for row in scenario["moves"]} or {session_id: scenario["method"] for session_id in sessions}
-        replay = [session for session_id, session in sessions.items() if method_by_session[session_id] == "replay"]
-        kv = [session for session in sessions.values() if session not in replay]
+        replay = [sessions[session_id] for session_id, method in method_by_session.items()
+                  if method == "replay"]
+        kv = [sessions[session_id] for session_id, method in method_by_session.items()
+              if method != "replay"]
         warm_on_move = scenario.get("warm_on_move", False)
         if not warm_on_move:
             warm_concurrency = scenario.get("warm_concurrency", 1)
             if scenario.get("prestage_all", False):
-                warm_sessions(list(sessions.values()), warm_concurrency)
+                warm_sessions(replay + kv, warm_concurrency)
             else:
                 warm_sessions(replay, warm_concurrency)
                 if replay and scenario.get("reset_caches", True):
@@ -1550,7 +1554,19 @@ def run_scenario(stack: b.Stack, cfg: b.Config, manifest: dict, scenario: dict,
                 with ThreadPoolExecutor(max_workers=len(sessions)) as pool:
                     list(pool.map(runtime.run_activities, sessions))
             return []
-        migration_results = with_destination_load(destination_load, action)
+        continuations = []
+        def action_and_verify():
+            nonlocal continuations
+            result = action()
+            selected = {row["session_id"] for row in scenario["moves"]} \
+                if scenario["kind"] == "migration" else None
+            continuations = verify_continuations(
+                scenario, sessions, cfg, selected,
+            ) if scenario.get("verify_continuations", True) else []
+            if destination_load and hasattr(destination_load, "wait_deadline"):
+                destination_load.wait_deadline()
+            return result
+        migration_results = with_destination_load(destination_load, action_and_verify)
         full_drain = scenario["kind"] == "migration" and set(sessions) == {row["id"] for row in manifest["sessions"]} and all(row.succeeded for row in migration_results)
         sleep_times = None
         final_state = scenario.get("final_state", "sleep")
@@ -1561,8 +1577,6 @@ def run_scenario(stack: b.Stack, cfg: b.Config, manifest: dict, scenario: dict,
             sleep_end = time.monotonic_ns()
             sleep_times = [sleep_start, sleep_end]
             event_log.write("source_sleep", start_ns=sleep_start, end_ns=sleep_end)
-        continuations = verify_continuations(scenario, sessions, cfg) \
-            if scenario.get("verify_continuations", True) else []
         if b.lmcache_mode() == "mp" and scenario.get("wait_cache_idle", True):
             b.mp_wait_idle(cache_log)
         activities = []

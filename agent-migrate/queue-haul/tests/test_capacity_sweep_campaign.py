@@ -7,12 +7,15 @@ from capacity_sweep_campaign import (
     COMMIT_DEADLINE_S,
     CONTEXTS,
     GOODPUT_CAPS_MBPS,
+    LIVE_REPEATS,
     LOAD_BASE_FRACTIONS,
     adaptive_load_fractions,
+    arrival_trace,
     credited_sessions,
     knee_indices,
     make_campaign,
     make_live_plan,
+    median_ci,
     shapley_watts,
     source_session_rates,
     write_campaign,
@@ -40,13 +43,12 @@ def test_two_group_shapley_exactly_attributes_nonlinear_power_shed():
     assert replay + kv == 15
 
 
-def test_load_grid_adds_one_lp_crossing_bracket_midpoint():
-    assert LOAD_BASE_FRACTIONS == (0, .25, .5, .7, .85, .95)
-    assert adaptive_load_fractions([150, 140, 110, 90, 60, 20], 100) == (
-        0, .25, .5, .6, .7, .85, .95,
-    )
-    assert adaptive_load_fractions([150] * 6, 100)[-1] == 1
-    assert .125 in adaptive_load_fractions([90] * 6, 100)
+def test_load_grid_is_dense_below_saturation_and_refines_rapid_changes():
+    assert LOAD_BASE_FRACTIONS == (
+        0, .25, .5, .65, .75, .8, .85, .875, .9, .925, .95, .975)
+    watts = [150] * len(LOAD_BASE_FRACTIONS); watts[6:] = [100] * 6
+    assert .825 in adaptive_load_fractions(watts, 147.2)
+    assert adaptive_load_fractions([150] * 12, 147.2) == LOAD_BASE_FRACTIONS
 
 
 def test_knees_bracket_capacity_in_each_sweep_direction():
@@ -68,7 +70,7 @@ def test_sweep_points_are_fixed_and_inside_profiled_goodput_range():
     assert GOODPUT_CAPS_MBPS == (1000, 1600, 2500, 4000, 5000, 7000, 10000)
 
 
-def test_live_plan_is_two_knees_four_policies_three_repeats(tmp_path):
+def test_live_plan_is_dense_common_trace_matrix_with_complete_source_set(tmp_path):
     manifest = tmp_path / "manifest.json"
     manifest.write_text("{}")
     template = {
@@ -91,16 +93,33 @@ def test_live_plan_is_two_knees_four_policies_three_repeats(tmp_path):
     campaign = {
         "schema": "queue-haul-capacity-sweep-v1", "campaign": "load",
         "rows": rows, "profile": {"path": "profile", "sha256": "hash"},
-        "live_validation": {"lp_knee_indices": [1, 2], "repeats": 3,
+        "calibration": {"service_calibration": {
+            "prefill_s": .3, "decode_s": .1, "total_s": .4,
+        }},
+        "live_validation": {"lp_knee_indices": [1, 2], "repeats": LIVE_REPEATS,
                             "policies": ["lp", "greedy", "replay_only", "kv_only"]},
     }
     plan = make_live_plan(campaign, template)
-    assert len(plan["scenarios"]) == 24
+    assert len(plan["scenarios"]) == 4 * 4 * LIVE_REPEATS
     assert {row["required_deadline_s"] for row in plan["scenarios"]} == {30}
     assert {row["deadline_s"] for row in plan["scenarios"]} == {180}
-    assert all(len(row["sessions"]) == len(row["moves"]) == 1
+    assert all(len(row["sessions"]) == 8 and len(row["moves"]) == 1
                for row in plan["scenarios"])
-    assert {row["load_fraction"] for row in plan["scenarios"]} == {.25, .5}
+    assert {row["load_fraction"] for row in plan["scenarios"]} == {0, .25, .5, .75}
+    for load in (0, .25, .5, .75):
+        for repeat in range(LIVE_REPEATS):
+            assert len({row["arrival_trace"]["trace_id"] for row in plan["scenarios"]
+                        if row["load_fraction"] == load
+                        and row["repeat"] == repeat}) == 1
+
+
+def test_trace_rho_is_scheduled_service_work_and_median_ci_is_exact_for_constants():
+    calibration = {"service_calibration": {
+        "prefill_s": .3, "decode_s": .1, "total_s": .4}}
+    trace = arrival_trace(.8, 0, calibration)
+    assert trace["rho"] == pytest.approx(trace["rho_prefill"] + trace["rho_decode"])
+    assert trace["rho"] == pytest.approx(.8, abs=.4 / 30)
+    assert median_ci([7] * 10) == (7, 7, 7)
 
 
 def test_generated_campaign_has_positive_target_and_is_json_serializable():
