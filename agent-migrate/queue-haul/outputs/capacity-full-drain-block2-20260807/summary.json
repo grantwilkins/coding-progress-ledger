@@ -1,0 +1,50 @@
+{
+  "bandwidths_mbps": [
+    1000,
+    2500,
+    5000,
+    10000
+  ],
+  "calibration": {
+    "service_calibration": {
+      "decode_s": 0.01248291993728262,
+      "decode_tokens_per_s": 2563.502783064874,
+      "path": "/home/groups/ramr/gfw/coding-progress-ledger/agent-migrate/queue-haul/outputs/destination-v7-20260722/baseline-profile.json",
+      "prefill_s": 0.36695230442001076,
+      "prefill_tokens_per_s": 5581.106795982606,
+      "sha256": "212aaf2fe754af3dc85c4fa78aef76a41778117f3d2c236cb1fb04e5ad5915aa",
+      "total_s": 0.3794352243572934
+    }
+  },
+  "campaign": "full_drain",
+  "commit_deadline_s": 30,
+  "hardware_timeout_s": 180,
+  "loads": [
+    0.85,
+    0.875,
+    0.8875,
+    0.9,
+    0.9125,
+    0.925,
+    0.9375,
+    0.95,
+    0.9625,
+    0.975
+  ],
+  "policies": [
+    "replay_only",
+    "kv_only"
+  ],
+  "profile": {
+    "path": "/home/groups/ramr/gfw/coding-progress-ledger/agent-migrate/queue-haul/profiles/gpt_oss_20b_a100_tp1_crossover.json",
+    "sha256": "99ec3d2e3099f01103e7a0609a9d99beabfe7ec86eeb372d65f5829090658ab8"
+  },
+  "repeat_block": 2,
+  "repeat_indices": [
+    4,
+    5
+  ],
+  "repeats": 2,
+  "schema": "queue-haul-capacity-sweep-v1",
+  "trace_horizon_s": 210
+}
