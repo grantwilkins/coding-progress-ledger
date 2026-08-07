@@ -19,7 +19,7 @@ COLORS = {"sweden": "#8C1515", "east": "#006CB8",
 REGIONS = {"sweden": "sweden-central", "east": "eastus-2",
            "west": "west-europe", "germany": "germany-west-central"}
 SPANS = (("Migration", "handoff_start", "handoff_end", "#DAD7CB", .5),)
-BIN_S = 1
+BIN_S = .5
 IDLE_MARGIN_W = 5
 
 
